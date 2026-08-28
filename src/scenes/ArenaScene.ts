@@ -144,6 +144,7 @@ import {
   unlockStoredCoopDefenseClassesAfterVictory,
   unlockStoredCoopDefenseItemsAfterVictory,
   unlockStoredCoopDefenseMapAfterVictory,
+  unlockStoredPersistentBaseAfterVictory,
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
 import {
@@ -5320,6 +5321,7 @@ export class ArenaScene extends Phaser.Scene {
     const completedMapId = roundState.coopDefenseMapId;
     let unlockedNewMap = false;
     let unlockedItems = false;
+    let unlockedPersistentBase = false;
     if (roundState.status === 'victory' && completedMapId) {
       const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
       if (completedMapConfig.boss) {
@@ -5327,6 +5329,9 @@ export class ArenaScene extends Phaser.Scene {
       }
       unlockStoredCoopDefenseClassesAfterVictory(completedMapId);
       unlockedItems = unlockStoredCoopDefenseItemsAfterVictory(completedMapId);
+      // Ein eigenstaendiges Entitlement neben dem Mapfortschritt: Ab jetzt traegt die LobbyWorld
+      // ihren Basiskern, unabhaengig davon, welche Map als naechstes offen ist.
+      unlockedPersistentBase = unlockStoredPersistentBaseAfterVictory(completedMapId);
       unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
 
       // Jeder Spieler wuerfelt sein eigenes Angebot lokal; der Sieg steht bereits reliable im
@@ -5366,6 +5371,7 @@ export class ArenaScene extends Phaser.Scene {
       sharedRoundXp,
       unlockedMapName,
       unlockedItems,
+      unlockedPersistentBase,
     );
   }
 }

@@ -64,12 +64,13 @@ export class BaseManager {
     metrics: WorldMetrics,
     destructionHooks: BaseDestructionHooks = {},
     presentation = true,
+    damageable = true,
   ) {
     this.presentation = presentation;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
     for (const spec of baseSpecs) {
-      const entity = new BaseEntity(scene, spec, metrics, presentation);
+      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);

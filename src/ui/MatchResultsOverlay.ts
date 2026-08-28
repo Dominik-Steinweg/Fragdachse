@@ -1499,6 +1499,14 @@ function describeRewards(
   itemReward: MatchItemRewardPresentation | null,
 ): RewardDescriptor[] {
   const descriptors: RewardDescriptor[] = [];
+  if (progress.persistentBaseUnlocked) {
+    descriptors.push({
+      glyph: '🏰',
+      label: t('ui.reward.persistentBaseUnlocked'),
+      color: COLORS.GOLD_1,
+      tooltip: t('ui.reward.persistentBaseUnlockedHint'),
+    });
+  }
   if (progress.itemsUnlocked) {
     descriptors.push({
       glyph: '🔓',

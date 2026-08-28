@@ -15,7 +15,7 @@ Der Adapter normalisiert nicht erneut, materialisiert keine Defaults und ersetzt
 
 Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder activity-unabhängig resident gehalten werden.
 
-Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und verwendet persistentBase.baseId als Verweis auf eine bestehende authored freundliche Main-Base. Die Map-Normalisierung prüft die Referenz und räumliche Reservierung; sie ist kein freier Runtime- oder Campaign-Key.
+Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt ausschließlich die Stelle des Basiskerns: baseId, Anker, Ausrichtung und Grunddauerhaftigkeit. Seine Form ist Code-Definition; die Map-Normalisierung erzeugt daraus den bases-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in bases beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
 
 **Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 

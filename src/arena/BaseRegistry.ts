@@ -342,14 +342,32 @@ export function resolveCoopDefenseBases(
   return resolveWorldBases(worldDefinition, metrics);
 }
 
+/** Steuert, ob eine World-Instanz ihren persistenten Basiskern tatsaechlich traegt. */
+export interface WorldBaseResolutionOptions {
+  /**
+   * `false` laesst den Kern samt seiner Reservierung aus. Gedacht fuer eine World, deren
+   * Definition die Stelle zwar kennt, deren Instanz sie aber nicht besitzt - der Regelfall der
+   * LobbyWorld vor der Freischaltung. Ohne Angabe traegt die Instanz ihren Kern.
+   */
+  readonly includePersistentBaseCore?: boolean;
+}
+
 /** Loest World-Basen direkt aus dem kanonischen authored World-Vertrag auf. */
 export function resolveWorldBases(
   worldDefinition: WorldDefinition,
   worldMetrics: WorldMetrics,
+  options: WorldBaseResolutionOptions = {},
 ): readonly BaseSpec[] {
-  const resolved = worldDefinition.bases.map((baseConfig) => resolveWorldBaseSpec(baseConfig, worldMetrics));
   const persistentBaseId = worldDefinition.persistentBaseSite?.baseId;
-  if (!persistentBaseId) return resolved;
+  const includeCore = options.includePersistentBaseCore ?? true;
+  // Ein ausgelassener Kern existiert gar nicht: keine Kollision, keine Reservierung, kein
+  // HP-Ziel. Ihn nur unsichtbar zu schalten wuerde eine Basis hinterlassen, die alles blockiert,
+  // was die World sonst zulaesst.
+  const baseConfigs = persistentBaseId && !includeCore
+    ? worldDefinition.bases.filter((baseConfig) => baseConfig.id !== persistentBaseId)
+    : worldDefinition.bases;
+  const resolved = baseConfigs.map((baseConfig) => resolveWorldBaseSpec(baseConfig, worldMetrics));
+  if (!persistentBaseId || !includeCore) return resolved;
   return addPersistentBaseReservation(resolved, persistentBaseId);
 }
 

@@ -134,6 +134,14 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(isSameWorldInstance(withRadius, world)).toBe(false);
     expect(isSameWorldInstance(withRadius, { ...world, parameters: { persistentBaseRadiusCells: 7 } })).toBe(false);
     expect(isSameWorldInstance(world, { ...world, parameters: {} })).toBe(true);
+
+    // Dasselbe gilt fuer die Freischaltung: Eine Lobby mit Basiskern und eine ohne sind zwei
+    // verschiedene Welten, auch wenn ihre authored Definition und ihr Layout identisch sind.
+    const unlocked = { ...world, parameters: { persistentBaseUnlocked: true } };
+    expect(isSameWorldInstance(unlocked, { ...unlocked })).toBe(true);
+    expect(isSameWorldInstance(unlocked, world)).toBe(false);
+    expect(isSameWorldInstance(unlocked, { ...world, parameters: { persistentBaseUnlocked: false } }))
+      .toBe(false);
   });
 
   it('vergleicht jeden deklarierten World-Parameter', () => {
@@ -159,6 +167,19 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     // Unbrauchbare Parameter loeschen nicht die World, sie entfallen.
     expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseRadiusCells: -1 } }))
       .toEqual({ ...world, parameters: undefined });
+    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseUnlocked: 'yes' } }))
+      .toEqual({ ...world, parameters: undefined });
+
+    // Jedes Feld reist auch allein: Eine gesperrte Lobby fuehrt keinen Radius, eine
+    // freigeschaltete beide Werte.
+    for (const parameters of [
+      { persistentBaseUnlocked: true },
+      { persistentBaseUnlocked: false },
+      { persistentBaseUnlocked: true, persistentBaseRadiusCells: 5 },
+    ]) {
+      const descriptor = { ...world, parameters };
+      expect(parseWorldDescriptor(JSON.parse(JSON.stringify(descriptor)))).toEqual(descriptor);
+    }
   });
 });
 

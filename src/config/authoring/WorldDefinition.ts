@@ -6,6 +6,7 @@ import type {
   CoopBaseRole,
   CoopBaseShape,
   CoopBaseTurretConfig,
+  CoopDefenseMapPersistentBaseConfig,
   CoopDefenseMapRockFieldConfig,
   CoopDefenseMapRockWallConfig,
   CoopDefenseMapTrackMode,
@@ -150,10 +151,16 @@ export interface WorldBaseDefinition {
   readonly spawnCenter?: CoopBaseCellOffset;
 }
 
-/** Verweist auf eine Basis derselben WorldDefinition, die als persistenter Anker dient. */
-export interface WorldPersistentBaseSiteDefinition {
-  readonly baseId: string;
-}
+/**
+ * Die persistente Basisstelle dieser World: wo der kanonische Basiskern steht.
+ *
+ * Sie traegt bewusst keine Geometrie. Die Form des Kerns ist Code-Definition
+ * ({@link import('../../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}),
+ * die World steuert nur Lage, Ausrichtung und Grunddauerhaftigkeit bei. Die zugehoerige Basis
+ * mit `baseId` wird daraus erzeugt und steht anschliessend als gewoehnlicher Eintrag in
+ * {@link WorldDefinition.bases}.
+ */
+export type WorldPersistentBaseSiteDefinition = CoopDefenseMapPersistentBaseConfig;
 
 /** Loest den Ankerbau einer persistenten Basis innerhalb ihrer eigenen World auf. */
 export function resolveWorldPersistentBaseAnchorBase(world: WorldDefinition): WorldBaseDefinition | null {

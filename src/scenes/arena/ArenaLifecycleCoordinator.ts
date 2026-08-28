@@ -146,7 +146,7 @@ import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
-import { getStoredPersistentBaseState } from '../../utils/localPreferences';
+import { getStoredPersistentBaseState, getStoredPersistentBaseUnlocked } from '../../utils/localPreferences';
 import { PersistentBaseRepository } from '../../persistentBase/PersistentBaseRepository';
 import { PersistentBaseSession } from '../../persistentBase/PersistentBaseSession';
 import { PersistentBaseRoomState, type GuestPersistentConstruction } from '../../persistentBase/PersistentBaseRoomState';
@@ -252,6 +252,15 @@ export class ArenaLifecycleCoordinator {
    * dieser Wert wird weder repliziert noch als Gameplay-SSOT verwendet.
    */
   private lobbyWorldModeAtRevision: GameMode | null = null;
+  /**
+   * Nur Vergleichsmarker fuer das Entitlement, mit dem die aktuelle LobbyWorld eroeffnet wurde.
+   *
+   * Der erste Sieg auf der Freischaltmap faellt zwischen zwei Lobby-Instanzen; ohne diesen
+   * Marker haette die Reihenfolge von Sieg-Verbuchung und Lobby-Aufbau entschieden, ob die Basis
+   * erscheint. Aendert sich der Wert, wird die LobbyWorld neu instanziiert - ihre Neuerzeugung
+   * ist ohnehin ihr Reset.
+   */
+  private lobbyWorldPersistentBaseUnlockedAtRevision: boolean | null = null;
   /** Lokaler Uebergang: alte LobbyWorld ist beendet, neue Descriptor-Runtime wird gebunden. */
   private pendingLobbyWorldReinstance = false;
   private localArenaLoadReady = false;
@@ -629,13 +638,16 @@ export class ArenaLifecycleCoordinator {
     if (bridge.getGamePhase() !== 'LOBBY' || this.roundStartPending) return;
 
     const currentMode = bridge.getActiveGameMode();
+    const persistentBaseUnlocked = getStoredPersistentBaseUnlocked();
     const currentWorld = this.worldLifecycle.descriptor;
     if (currentWorld !== null) {
       if (isLobbyWorldDefinitionId(currentWorld.definitionId)
         && bridge.getActivityDescriptor() === null) {
         if (this.lobbyWorldModeAtRevision === null) {
           this.lobbyWorldModeAtRevision = currentMode;
-        } else if (this.lobbyWorldModeAtRevision !== currentMode) {
+          this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+        } else if (this.lobbyWorldModeAtRevision !== currentMode
+          || this.lobbyWorldPersistentBaseUnlockedAtRevision !== persistentBaseUnlocked) {
           const previousRevision = currentWorld.worldRevision;
           this.prepareLobbyWorldReinstance();
           const worldRevision = nextMonotonicRevision(
@@ -644,13 +656,19 @@ export class ArenaLifecycleCoordinator {
           );
           this.lastRoundRevision = worldRevision;
           this.lobbyWorldModeAtRevision = currentMode;
+          this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
           this.worldLifecycle.beginCreate(
-            createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, worldRevision),
+            createAuthoredWorldDescriptor(
+              LOBBY_WORLD_DEFINITION_ID,
+              worldRevision,
+              resolveLobbyWorldParameters(persistentBaseUnlocked),
+            ),
             null,
           );
         }
       } else {
         this.lobbyWorldModeAtRevision = null;
+        this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
       }
       return;
     }
@@ -663,8 +681,13 @@ export class ArenaLifecycleCoordinator {
     const worldRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = worldRevision;
     this.lobbyWorldModeAtRevision = currentMode;
+    this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
     this.worldLifecycle.beginCreate(
-      createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, worldRevision),
+      createAuthoredWorldDescriptor(
+        LOBBY_WORLD_DEFINITION_ID,
+        worldRevision,
+        resolveLobbyWorldParameters(persistentBaseUnlocked),
+      ),
       null,
     );
   }
@@ -743,6 +766,7 @@ export class ArenaLifecycleCoordinator {
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
+    this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
@@ -760,8 +784,14 @@ export class ArenaLifecycleCoordinator {
       gameMode: bridge.getGameMode(),
       mapConfig: coopDefenseMapConfig,
       seed,
+      // Auf einer Kampagnenkarte ist der Basiskern Map-Inhalt: Wer die Karte erreicht, hat die
+      // Basis laengst freigeschaltet. Nur die LobbyWorld fragt das Entitlement ab, weil dort
+      // "besitzt der Spieler eine Basis" die eigentliche Aussage ist.
       worldParameters: coopDefenseMapConfig?.persistentBase
-        ? { persistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells }
+        ? {
+          persistentBaseUnlocked: true,
+          persistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells,
+        }
         : undefined,
     };
     const roundState: RoundState = {
@@ -1042,6 +1072,7 @@ export class ArenaLifecycleCoordinator {
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
+    this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
@@ -1081,6 +1112,7 @@ export class ArenaLifecycleCoordinator {
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
+    this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     bridge.hostResetRoundParticipation();
     bridge.hostResetAllLobbyReady();
@@ -1492,6 +1524,7 @@ export class ArenaLifecycleCoordinator {
     this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;
     this.lobbyWorldModeAtRevision = null;
+    this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
 
     // A technical abort can happen before the normal round-conclusion path runs. Never carry a
@@ -1759,7 +1792,7 @@ export class ArenaLifecycleCoordinator {
         worldMetrics: world.metrics,
         // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
         presentation,
-        enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
+        enablePersistentBaseGravel: Boolean(world.persistentBaseSite),
         persistentBaseGravel: persistentBaseSite
           ? {
             seed: worldDescriptor.seed,
@@ -1781,7 +1814,10 @@ export class ArenaLifecycleCoordinator {
       coopDefenseBases,
     );
     this.ctx.persistentBaseSession = null;
-    if (bridge.isHost() && world.definition?.persistentBaseSite) {
+    // Der Basiskern gehoert der World, die Konstruktionen darauf der Activity. Eine World ohne
+    // Activity - die LobbyWorld - materialisiert deshalb den Kern, oeffnet aber keine Working
+    // Copy: Es gibt dort nichts wiederherzustellen und nichts zu committen.
+    if (bridge.isHost() && activityDescriptor !== null && world.definition?.persistentBaseSite) {
       if (!isValidPersistentBaseSite(persistentBaseSite)) {
         throw new Error(
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on world ${world.descriptor.definitionId}`,
@@ -1869,7 +1905,9 @@ export class ArenaLifecycleCoordinator {
             }
           }
           : undefined,
-      }, presentation)
+      // Ohne Activity kennt keine Struktur dieser World Schaden: Sie steht als Bauwerk da, nicht
+      // als Missionsziel. Das ist derselbe Grund, aus dem hier keine Working Copy entsteht.
+      }, presentation, activityDescriptor !== null)
       : null;
     this.ctx.baseManager?.setLightingSystem(this.renderers.lighting);
     this.ctx.enemyManager = isCoopMission && coopDefenseEnemyConfigs
@@ -4641,6 +4679,7 @@ export class ArenaLifecycleCoordinator {
     this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;
     this.lobbyWorldModeAtRevision = null;
+    this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.isLocalReady = false;
     bridge.setLocalReady(false);
@@ -5542,6 +5581,21 @@ function compareGuestRestoreBlueprints(
  * nötig – das gilt auch für den lokalen Debug-Regler, der bewusst nur den eigenen Client
  * betrifft.
  */
+/**
+ * World-Parameter der LobbyWorld.
+ *
+ * Der Radius reist nur mit, wenn der Kern ueberhaupt existiert: Eine gesperrte Lobby traegt gar
+ * keine persistente Basisstelle, und ein Radius ohne Stelle waere eine Konfiguration fuer etwas,
+ * das es in dieser Instanz nicht gibt.
+ */
+function resolveLobbyWorldParameters(persistentBaseUnlocked: boolean): WorldParameters | undefined {
+  if (!persistentBaseUnlocked) return undefined;
+  return {
+    persistentBaseUnlocked: true,
+    persistentBaseRadiusCells: getStoredPersistentBaseState().radiusCells,
+  };
+}
+
 function resolveRoundTimeOfDayMinutes(mapConfig: CoopDefenseMapConfig | null, lobbyMinutes: number): number {
   const configured = mapConfig?.timeOfDay;
   if (configured === undefined) return lobbyMinutes;

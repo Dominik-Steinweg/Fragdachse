@@ -3,7 +3,7 @@ import type { ArenaGenerationInput, ArenaGenerationMapConfig } from '../arena/Ar
 import { buildLobbyWorldLayout } from '../arena/LobbyWorldLayout';
 import { LOBBY_WORLD_DEFINITION_ID } from '../config/authoring/lobbyWorld';
 import type { ArenaLayout } from '../types';
-import type { WorldDescriptor } from './WorldDescriptor';
+import type { WorldDescriptor, WorldParameters } from './WorldDescriptor';
 
 /**
  * Die eine Stelle, an der die Geometrie einer World entsteht.
@@ -50,17 +50,19 @@ export function generateWorldLayout(input: WorldLayoutInput): ArenaLayout {
 export function createAuthoredWorldDescriptor(
   definitionId: string,
   worldRevision: number,
+  parameters?: WorldParameters,
 ): WorldDescriptor {
   const authored = AUTHORED_WORLD_LAYOUTS.get(definitionId);
   if (!authored) {
     throw new Error(`[WorldLayout] World ${definitionId} has no authored layout`);
   }
   const layout = authored();
-  return {
+  const descriptor: WorldDescriptor = {
     worldRevision,
     definitionId,
     seed: layout.seed,
     generatorVersion: ARENA_GENERATOR_VERSION,
     layoutFingerprint: ArenaGenerator.fingerprint(layout),
   };
+  return parameters ? { ...descriptor, parameters } : descriptor;
 }

@@ -3,56 +3,85 @@
   "arenaWidthCells": 70,
   "arenaHeightCells": 39,
   "timeOfDay": "05:00",
-    "tutorialPersistent": true,
+  "tutorialPersistent": true,
   "rockFillRatio": 0.15,
   "trackPosition": "center",
-  "mapEvents": [{
-    "id": "train-rhythm",
-    "type": "train",
-    "start": { "type": "after-encounter", "encounterId": "west-introduction" }
-  }],
-  "balanceReferenceDurationSec": 60,
-  "objective": "repel-assault",
-  "bases": [
+  "mapEvents": [
     {
-      "id": "coop-base-rear",
-      "hpMax": 1650,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": 0,
-        "dyCells": 0
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 3,
-        "heightCells": 3
+      "id": "train-rhythm",
+      "type": "train",
+      "start": {
+        "type": "after-encounter",
+        "encounterId": "west-introduction"
       }
     }
   ],
+  "balanceReferenceDurationSec": 60,
+  "objective": "repel-assault",
+  "bases": [],
   "powerUps": [],
   "encounters": [
     {
       "id": "west-introduction",
-      "start": { "type": "time", "atMs": 0 },
+      "start": {
+        "type": "time",
+        "atMs": 0
+      },
       "restAfterMs": 5000,
-      "groups": [{ "enemyKind": "zombie-badger", "count": 7, "front": "west" }]
+      "groups": [
+        {
+          "enemyKind": "zombie-badger",
+          "count": 7,
+          "front": "west"
+        }
+      ]
     },
     {
       "id": "north-arrival",
-      "start": { "type": "after-previous" },
+      "start": {
+        "type": "after-previous"
+      },
       "restAfterMs": 5000,
       "groups": [
-        { "enemyKind": "demon-badger", "count": 5, "front": "east" },
-        { "enemyKind": "zombie-badger", "count": 5, "delayMs": 800, "front": "east" }
+        {
+          "enemyKind": "demon-badger",
+          "count": 5,
+          "front": "east"
+        },
+        {
+          "enemyKind": "zombie-badger",
+          "count": 5,
+          "delayMs": 800,
+          "front": "east"
+        }
       ]
     },
     {
       "id": "two-front-crossfire",
-      "start": { "type": "after-previous" },
+      "start": {
+        "type": "after-previous"
+      },
       "groups": [
-        { "enemyKind": "zombie-badger", "count": 5, "front": "west" },
-        { "enemyKind": "demon-badger", "count": 5, "delayMs": 1000, "front": "east" }
+        {
+          "enemyKind": "zombie-badger",
+          "count": 5,
+          "front": "west"
+        },
+        {
+          "enemyKind": "demon-badger",
+          "count": 5,
+          "delayMs": 1000,
+          "front": "east"
+        }
       ]
     }
-  ]
+  ],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 34,
+      "gridY": 20
+    },
+    "hpMax": 1650
+  }
 }

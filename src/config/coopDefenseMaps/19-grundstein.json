@@ -4,22 +4,25 @@
   "arenaHeightCells": 40,
   "timeOfDay": "13:30",
   "trackMode": "void-fire",
-  "trackPosition": { "kind": "grid", "gridX": 48 },
+  "trackPosition": {
+    "kind": "grid",
+    "gridX": 48
+  },
   "rockFillRatio": 0,
   "treeCount": 0,
   "surviveDurationSec": 45,
   "balanceReferenceDurationSec": 45,
   "objective": "survive",
   "respawnsPerPlayer": 3,
-  "persistentBase": { "baseId": "cornerstone-main" },
-  "bases": [
-    {
-      "id": "cornerstone-main",
-      "hpMax": 6000,
-      "anchor": { "kind": "grid", "gridX": 30, "gridY": 19 },
-      "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 3 }
-    }
-  ],
+  "persistentBase": {
+    "baseId": "cornerstone-main",
+    "anchor": {
+      "gridX": 31,
+      "gridY": 20
+    },
+    "hpMax": 6000
+  },
+  "bases": [],
   "powerUps": [],
   "encounters": [],
   "persistentSpawns": [],

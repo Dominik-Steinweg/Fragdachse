@@ -59,6 +59,14 @@ export class BaseEntity {
   private readonly scene: Phaser.Scene;
   private readonly metrics: WorldMetrics;
   private readonly presentation: boolean;
+  /**
+   * Ob diese Struktur ueberhaupt Schaden kennt.
+   *
+   * HP sind eine Aussage einer laufenden Activity: Eine Basis kann fallen, weil eine Mission
+   * darum gespielt wird. Ohne Activity gibt es kein Missionsziel, also auch keinen HP-Balken und
+   * keinen Schaden - das Bauwerk bleibt trotzdem solide und blockiert wie jedes andere.
+   */
+  private readonly damageable: boolean;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
@@ -85,10 +93,17 @@ export class BaseEntity {
   private onDestroyed: (() => void) | null = null;
   private vulnerableMarker: Phaser.GameObjects.Graphics | null = null;
 
-  constructor(scene: Phaser.Scene, spec: BaseSpec, metrics: WorldMetrics, presentation = true) {
+  constructor(
+    scene: Phaser.Scene,
+    spec: BaseSpec,
+    metrics: WorldMetrics,
+    presentation = true,
+    damageable = true,
+  ) {
     this.scene = scene;
     this.metrics = metrics;
     this.presentation = presentation;
+    this.damageable = damageable;
     this.id = spec.id;
     this.spec = spec;
     this.faction = spec.faction;
@@ -186,6 +201,9 @@ export class BaseEntity {
     }
 
     // ── 2) HP-Bar (eine pro Basis, unter der Bounding-Box) ─────────────
+    // Eine unverwundbare Struktur bekommt keine: Ein Balken, der sich nie bewegt, behauptet ein
+    // Missionsziel, das es hier nicht gibt.
+    if (!this.damageable) return;
     const bounds = getBaseWorldBounds(this.spec.region, this.metrics);
     const centerX = bounds.x + bounds.width / 2;
     const hpBarY = bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
@@ -394,12 +412,14 @@ export class BaseEntity {
    * Host-only: Schaden anwenden und HP-Bar-Visual aktualisieren.
    */
   applyDamage(damage: number): void {
-    if (damage <= 0 || this.isInert()) return;
+    if (damage <= 0 || this.isInert() || !this.damageable) return;
     this.setHp(Math.max(0, this.currentHp - damage));
   }
 
   /** Setzt die HP (Host nach Schaden, Client beim State-Apply). */
   setHp(hp: number): void {
+    // Auch ein fremder Snapshot darf eine unverwundbare Struktur nicht fallen lassen.
+    if (!this.damageable) return;
     const clamped = Math.max(0, Math.min(this.maxHp, hp));
     if (clamped === this.currentHp) return;
     this.currentHp = clamped;

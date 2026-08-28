@@ -41,9 +41,12 @@ function contextForMap(mapId: string, overrides: Partial<WorldDescriptor> = {}) 
   const mapConfig = getCoopDefenseMapConfig(mapId);
   return createWorldRuntimeContext({
     descriptor: descriptorFor(`world:coop-defense:${mapId}`, {
-      // Eine World mit persistenter Basis fuehrt ihren Radius selbst; ohne ihn schlaegt der
-      // Aufbau bewusst fehl (siehe eigener Test).
-      ...(mapConfig.persistentBase ? { parameters: { persistentBaseRadiusCells: 4 } } : {}),
+      // Eine World mit persistenter Basis fuehrt Freischaltung und Radius selbst: ohne die
+      // Freischaltung traegt die Instanz den Kern gar nicht, ohne den Radius schlaegt der Aufbau
+      // bewusst fehl (siehe eigene Tests).
+      ...(mapConfig.persistentBase
+        ? { parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 4 } }
+        : {}),
       ...overrides,
     }),
     metricsProfile: getArenaMetricsProfile(
@@ -135,18 +138,37 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
   });
 
   it('loest die persistente Basisstelle aus den eigenen Basen und dem World-Parameter auf', () => {
-    const withParameter = contextForMap('18', { parameters: { persistentBaseRadiusCells: 7 } });
+    const withParameter = contextForMap('18', {
+      parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 7 },
+    });
     expect(withParameter.persistentBaseSite).toMatchObject({
       baseId: 'foundation-main',
       radiusCells: 7,
     });
-    expect(withParameter.persistentBaseSite?.anchor).toEqual({ gridX: 24, gridY: 19 });
+    // Der Anker ist die Mittelzelle der kanonischen 5x5-Grundflaeche, also exakt der authored
+    // Wert der Map – nicht die Mitte einer je Map beschriebenen Form.
+    expect(withParameter.persistentBaseSite?.anchor)
+      .toEqual(getCoopDefenseMapConfig('18').persistentBase?.anchor);
     expect(isValidPersistentBaseSite(withParameter.persistentBaseSite)).toBe(true);
 
     expect(contextForMap('18').persistentBaseSite?.radiusCells).toBe(4);
     // Eine World ohne authored Stelle hat auch keine.
     expect(contextForMap('1').persistentBaseSite).toBeNull();
     expect(isValidPersistentBaseSite(null)).toBe(false);
+  });
+
+  it('traegt den Basiskern nur, wenn die World-Instanz ihn freigeschaltet mitbringt', () => {
+    // Die authored Definition kennt die Stelle in beiden Faellen; ueber ihr Dasein entscheidet
+    // allein der replizierte Parameter. Ein gesperrter Kern existiert gar nicht: keine
+    // Basisstelle, keine Kollisionszellen, keine Reservierung.
+    const locked = contextForMap('18', { parameters: { persistentBaseRadiusCells: 4 } });
+    expect(locked.definition?.persistentBaseSite?.baseId).toBe('foundation-main');
+    expect(locked.persistentBaseSite).toBeNull();
+    expect(locked.bases).toEqual([]);
+
+    const unlocked = contextForMap('18');
+    expect(unlocked.bases.map((base) => base.id)).toEqual(['foundation-main']);
+    expect(unlocked.bases[0]?.persistentReservationRadiusCells).toBeGreaterThan(0);
   });
 
   it('erkennt eine Basisstelle, die keine eigene Hauptbasis ist', () => {
@@ -185,7 +207,9 @@ describe('WorldRuntimeContext – eine Metrikquelle', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/world/WorldRuntimeContext.ts'), 'utf8');
     const factoryStart = source.indexOf('export function createWorldRuntimeContext(');
     const factory = source.slice(factoryStart, source.indexOf('\n}', factoryStart));
-    expect(factory).toContain('resolveWorldBases(definition, metrics)');
+    // Die Basen loesen gegen genau die Metrik auf, die dieser Kontext fuehrt; weitere Argumente
+    // duerfen dazukommen, eine zweite Metrikquelle nicht.
+    expect(factory).toContain('resolveWorldBases(definition, metrics,');
     expect(source).not.toContain('humanPlayerCount');
     expect((factory.match(/resolveWorldMetrics\(/g) ?? []).length).toBe(1);
   });
@@ -211,7 +235,9 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     // Genau der Fehler, den die Lobby-Kopplung erzeugen wuerde: die World meint Map 18, der
     // Aufbau brachte Map 19 mit.
     expect(() => createWorldRuntimeContext({
-      descriptor: descriptorFor('world:coop-defense:18', { parameters: { persistentBaseRadiusCells: 4 } }),
+      descriptor: descriptorFor('world:coop-defense:18', {
+        parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 4 },
+      }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
       definition: toWorldDefinition(getCoopDefenseMapConfig('19')),
     })).toThrow(/cannot be built from/);
@@ -227,7 +253,9 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     // Ein Ersatzwert aus dem lokalen Speicher waere pro Peer verschieden – aus einem
     // Uebertragungsfehler wuerden still zwei verschiedene Welten.
     expect(() => createWorldRuntimeContext({
-      descriptor: descriptorFor('world:coop-defense:18'),
+      descriptor: descriptorFor('world:coop-defense:18', {
+        parameters: { persistentBaseUnlocked: true },
+      }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
       definition: toWorldDefinition(getCoopDefenseMapConfig('18')),
     })).toThrow(/no replicated radius/);

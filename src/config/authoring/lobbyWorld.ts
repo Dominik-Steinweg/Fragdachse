@@ -4,7 +4,8 @@ import {
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
 } from '../../arena/LobbyWorldLayout';
-import type { WorldDefinition } from './WorldDefinition';
+import { buildPersistentBaseCoreBaseConfig } from '../../persistentBase/PersistentBaseCore';
+import type { WorldDefinition, WorldPersistentBaseSiteDefinition } from './WorldDefinition';
 
 /**
  * Die LobbyWorld als regulaere authored World.
@@ -32,6 +33,28 @@ export function isLobbyWorldDefinitionId(definitionId: string): boolean {
   return definitionId === LOBBY_WORLD_DEFINITION_ID;
 }
 
+/** Basis-ID des persistenten Basiskerns in der LobbyWorld. */
+export const LOBBY_PERSISTENT_BASE_ID = 'lobby-persistent-base';
+
+/**
+ * Die persistente Basis der Lobby steht in der Mitte der World.
+ *
+ * Das ist genau die Flaeche, die `LOBBY_UI_RESERVED_ZONES` seit jeher von Geometrie freihaelt,
+ * und zugleich der authored Spawn-Fokus: Weil der Anker die Mittelzelle des Innenhofs ist,
+ * materialisiert im eigenen Hof, wer das Testgelaende betritt.
+ *
+ * Die Basis existiert in dieser Definition unabhaengig davon, ob der Spieler sie besitzt. Ob sie
+ * tatsaechlich aufgebaut wird, entscheidet der host-autoritative World-Parameter
+ * `persistentBaseUnlocked` – eine Definition ist keine Progression.
+ */
+const LOBBY_PERSISTENT_BASE_SITE: WorldPersistentBaseSiteDefinition = {
+  baseId: LOBBY_PERSISTENT_BASE_ID,
+  anchor: { gridX: LOBBY_SPAWN_FOCUS_CELL.gridX, gridY: LOBBY_SPAWN_FOCUS_CELL.gridY },
+  // Ohne Activity nimmt der Kern ohnehin keinen Schaden; der Wert ist die Grunddauerhaftigkeit
+  // des Bauwerks, nicht die HP eines Missionsziels.
+  hpMax: 5000,
+};
+
 const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   id: LOBBY_WORLD_DEFINITION_ID,
   metrics: {
@@ -40,7 +63,10 @@ const LOBBY_WORLD_DEFINITION: WorldDefinition = {
   },
   // Die Geometrie ist vollstaendig authored; es gibt nichts zu generieren.
   terrain: {},
-  bases: [],
+  // Die einzige Struktur der Lobby ist der persistente Basiskern; seine Form kommt aus der
+  // kanonischen Kerngeometrie, nicht aus dieser Datei.
+  bases: [buildPersistentBaseCoreBaseConfig(LOBBY_PERSISTENT_BASE_SITE)],
+  persistentBaseSite: LOBBY_PERSISTENT_BASE_SITE,
   // Die LobbyWorld folgt dem aktuell gewaehlten Spielmodus. Sie ist damit im Deathmatch
   // frei fuer alle, in Coop kooperativ und in Team-Modi teambezogen – ohne Fake-Activity.
   actionPolicy: { combat: true, playerRelationships: 'game-mode' },

@@ -23,6 +23,12 @@ import { normalizeCoopDefensePlayerScalingFactor } from './coopDefenseScaling';
 import type { GroundFireVisualStyle, SpawnFront } from '../types';
 import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
+import {
+  buildPersistentBaseCoreBaseConfig,
+  isPersistentBaseOrientation,
+  type PersistentBaseOrientation,
+} from '../persistentBase/PersistentBaseCore';
+import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
@@ -647,8 +653,22 @@ export interface CoopDefenseMapTutorialStepConfig {
   readonly durationMs?: number;
 }
 
+/**
+ * Die persistente Basisstelle einer Map.
+ *
+ * Sie beschreibt ausschliesslich *wo* der Basiskern steht, nie *wie* er aussieht: Seine Form
+ * kommt aus {@link import('../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}.
+ * Deshalb traegt keine Map eigene Basiszellen, und zwei Maps koennen ihre Basisdefinition nicht
+ * auseinanderlaufen lassen. Die Normalisierung erzeugt aus diesem Block den `bases`-Eintrag mit
+ * der angegebenen `baseId`; ein gleichnamiger authored Eintrag ist ein Fehler.
+ */
 export interface CoopDefenseMapPersistentBaseConfig {
   readonly baseId: string;
+  /** Kanonischer Bezugspunkt des Kerns: die Mittelzelle seiner 5x5-Grundflaeche. */
+  readonly anchor: PersistentBaseAnchor;
+  /** Ohne Angabe die kanonische, nach links geoeffnete Ausrichtung. */
+  readonly orientation?: PersistentBaseOrientation;
+  readonly hpMax: number;
 }
 
 export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMapTutorialStepConfig {
@@ -1049,13 +1069,34 @@ function normalizeMapRegistry(registry: CoopDefenseMapRegistryFile): CoopDefense
 
 export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): CoopDefenseMapConfig {
   const uniqueBaseIds = new Set<string>();
-  const bases = mapConfig.bases.map((baseConfig) => {
+  const authoredBases = mapConfig.bases.map((baseConfig) => {
     if (uniqueBaseIds.has(baseConfig.id)) {
       throw new Error(`[coopDefenseMaps] Duplicate base id in map ${mapConfig.mapId}: ${baseConfig.id}`);
     }
     uniqueBaseIds.add(baseConfig.id);
     return normalizeBaseConfig(baseConfig);
   });
+  // Die Arena-Masse stehen vor den Basen, weil die persistente Basisstelle ihren Anker gegen sie
+  // prueft und ihr Kern anschliessend eine ganz normale Basis dieser Map ist.
+  const arenaWidthCells = normalizeCoopDefenseArenaWidthCells(
+    mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
+  );
+  const arenaHeightCells = normalizeCoopDefenseArenaHeightCells(
+    mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
+  );
+  const persistentBaseCore = normalizePersistentBaseConfig(
+    mapConfig.mapId,
+    mapConfig.persistentBase,
+    authoredBases,
+    arenaWidthCells,
+    arenaHeightCells,
+  );
+  const persistentBase = persistentBaseCore?.site;
+  // Der Kern ist ab hier eine gewoehnliche Basis: Missionsziel, Overlays, Generator-Clearance und
+  // Flow-Field sehen keinen Unterschied zu einer authored Hauptbasis.
+  const bases = persistentBaseCore
+    ? [...authoredBases, persistentBaseCore.base]
+    : authoredBases;
   const boss = normalizeBossConfig(mapConfig);
   const objective = normalizeObjective(mapConfig.mapId, mapConfig.objective, bases, boss);
   const persistentSpawns = Array.isArray(mapConfig.persistentSpawns) ? mapConfig.persistentSpawns : [];
@@ -1066,19 +1107,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
   const balanceReferenceDurationSec = normalizeBalanceReferenceDurationSec(
     mapConfig.mapId,
     mapConfig.balanceReferenceDurationSec,
-  );
-  const arenaWidthCells = normalizeCoopDefenseArenaWidthCells(
-    mapConfig.arenaWidthCells ?? DEFAULT_COOP_DEFENSE_ARENA_WIDTH_CELLS,
-  );
-  const arenaHeightCells = normalizeCoopDefenseArenaHeightCells(
-    mapConfig.arenaHeightCells ?? DEFAULT_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
-  );
-  const persistentBase = normalizePersistentBaseConfig(
-    mapConfig.mapId,
-    mapConfig.persistentBase,
-    bases,
-    arenaWidthCells,
-    arenaHeightCells,
   );
   const encounters = normalizeEncounterConfigs(mapConfig.mapId, mapConfig.encounters, {
     bases,
@@ -1225,40 +1253,62 @@ function validateFriendlyMainBase(mapId: string, bases: readonly CoopBaseConfig[
   }
 }
 
+/**
+ * Prueft die authored Basisstelle und erzeugt daraus die Basiskonfiguration des Kerns.
+ *
+ * Die Map beschreibt nur den Anker; die Zellen kommen aus der kanonischen Kerngeometrie. Ein
+ * authored `bases`-Eintrag mit derselben ID waere eine zweite, konkurrierende Beschreibung
+ * derselben Basis und wird deshalb abgelehnt.
+ */
 function normalizePersistentBaseConfig(
   mapId: string,
   config: CoopDefenseMapPersistentBaseConfig | undefined,
-  bases: readonly CoopBaseConfig[],
+  authoredBases: readonly CoopBaseConfig[],
   arenaWidthCells: number,
   arenaHeightCells: number,
-): CoopDefenseMapPersistentBaseConfig | undefined {
+): { site: CoopDefenseMapPersistentBaseConfig; base: CoopBaseConfig } | undefined {
   if (config === undefined) return undefined;
   if (typeof config.baseId !== 'string' || config.baseId.trim().length === 0) {
     throw new Error(`[coopDefenseMaps] Persistent base on map ${mapId} needs a non-empty baseId`);
   }
   const baseId = config.baseId.trim();
-  const base = bases.find((candidate) => candidate.id === baseId);
-  if (!base) throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} references an unknown base`);
-  if (base.faction === 'hostile' || (base.role ?? 'main') !== 'main') {
-    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} must reference a friendly main base`);
+  if (authoredBases.some((candidate) => candidate.id === baseId)) {
+    throw new Error(
+      `[coopDefenseMaps] Persistent base ${mapId}:${baseId} must not also be authored in bases; `
+      + 'its geometry comes from the canonical core',
+    );
+  }
+  const anchor = config.anchor;
+  if (!anchor
+    || !Number.isSafeInteger(anchor.gridX)
+    || !Number.isSafeInteger(anchor.gridY)) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs an integer grid anchor`);
+  }
+  if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an unknown orientation`);
+  }
+  if (!Number.isFinite(config.hpMax) || config.hpMax <= 0) {
+    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs a positive hpMax`);
   }
 
-  const dimensions = getBaseShapeDimensions(base.shape);
-  const origin = getBaseOriginForArena(base.anchor, dimensions.width, dimensions.height, arenaWidthCells, arenaHeightCells);
-  const anchorGridX = origin.gridX + Math.floor((dimensions.width - 1) / 2);
-  const anchorGridY = origin.gridY + Math.floor((dimensions.height - 1) / 2);
   const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
   if (
-    anchorGridX - reservationRadius < 0
-    || anchorGridX + reservationRadius >= arenaWidthCells
-    || anchorGridY - reservationRadius < 0
-    || anchorGridY + reservationRadius >= arenaHeightCells
+    anchor.gridX - reservationRadius < 0
+    || anchor.gridX + reservationRadius >= arenaWidthCells
+    || anchor.gridY - reservationRadius < 0
+    || anchor.gridY + reservationRadius >= arenaHeightCells
   ) {
     throw new Error(
       `[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs ${reservationRadius} free cells around its anchor`,
     );
   }
-  return { baseId };
+  const site: CoopDefenseMapPersistentBaseConfig = {
+    baseId,
+    anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
+    ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
+    hpMax: config.hpMax,
+  };
+  return { site, base: normalizeBaseConfig(buildPersistentBaseCoreBaseConfig(site)) };
 }
 
 function getBaseShapeDimensions(shape: CoopBaseShape): { width: number; height: number } {

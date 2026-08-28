@@ -4,22 +4,25 @@
   "arenaHeightCells": 38,
   "timeOfDay": "12:00",
   "trackMode": "void-fire",
-  "trackPosition": { "kind": "grid", "gridX": 4 },
+  "trackPosition": {
+    "kind": "grid",
+    "gridX": 4
+  },
   "rockFillRatio": 0,
   "treeCount": 0,
   "surviveDurationSec": 30,
   "balanceReferenceDurationSec": 30,
   "objective": "survive",
   "respawnsPerPlayer": 3,
-  "persistentBase": { "baseId": "foundation-main" },
-  "bases": [
-    {
-      "id": "foundation-main",
-      "hpMax": 5000,
-      "anchor": { "kind": "grid", "gridX": 23, "gridY": 18 },
-      "shape": { "kind": "rectangle", "widthCells": 3, "heightCells": 3 }
-    }
-  ],
+  "persistentBase": {
+    "baseId": "foundation-main",
+    "anchor": {
+      "gridX": 24,
+      "gridY": 20
+    },
+    "hpMax": 5000
+  },
+  "bases": [],
   "powerUps": [],
   "encounters": [],
   "persistentSpawns": [],

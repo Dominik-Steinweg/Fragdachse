@@ -53,9 +53,18 @@ describe('Coop defense arena generation', () => {
 
   it('accepts a safe authored grid lane and rejects one inside base clearance', () => {
     const baseSpecs = resolveCoopDefenseBases(map);
+    // Eine persistente Basis sperrt nicht nur ihre eigene Flaeche, sondern ihre gesamte
+    // Reservierung: Dort darf spaeter gebaut werden, also darf dort kein Gleis liegen.
     const safeGridX = Math.max(
       0,
-      Math.min(...baseSpecs.map((base) => base.region.minGridX))
+      Math.min(...baseSpecs.map((base) => (
+        base.persistentReservationRadiusCells === undefined
+          ? base.region.minGridX
+          : Math.min(
+            base.region.minGridX,
+            (base.anchorGridX ?? base.region.minGridX) - base.persistentReservationRadiusCells,
+          )
+      )))
         - COOP_DEFENSE_BASE_TRACK_CLEARANCE_CELLS - 2,
     );
     const safeMap = { ...map, trackPosition: { kind: 'grid' as const, gridX: safeGridX } };

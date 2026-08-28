@@ -465,8 +465,11 @@ describe('LobbyWorld – World-Ende raeumt ihre Teilnehmer', () => {
     expect(start).toBeGreaterThanOrEqual(0);
     // Der Abbau steht ganz vorn: die Detach-Module brauchen die Fachsysteme noch.
     expect(lifecycle.slice(start, start + 600)).toContain('this.detachAllWorldPlayers();');
-    // Und der Matchstart schneidet die LobbyWorld samt Teilnehmern ab.
-    const roundStart = lifecycle.indexOf('    this.detachAllWorldPlayers();\n    this.worldLifecycle.endInstance();');
-    expect(roundStart).toBeGreaterThanOrEqual(0);
+    // Und der Matchstart schneidet die LobbyWorld samt Teilnehmern ab. Der Zeilenumbruch bleibt
+    // offen: Ob die Arbeitskopie mit LF oder CRLF ausgecheckt ist, ist keine Aussage ueber den
+    // Lifecycle.
+    expect(lifecycle).toMatch(
+      / {4}this\.detachAllWorldPlayers\(\);\r?\n {4}this\.worldLifecycle\.endInstance\(\);/,
+    );
   });
 });

@@ -59,21 +59,61 @@ describe('Coop defense map progression', () => {
   it('validates persistent anchors and resolves map-relative reservation geometry', () => {
     const map18 = getCoopDefenseMapConfig('18');
     const map19 = getCoopDefenseMapConfig('19');
-    expect(map18.persistentBase).toEqual({ baseId: 'foundation-main' });
-    expect(map19.persistentBase).toEqual({ baseId: 'cornerstone-main' });
+    // Die Map beschreibt nur die Stelle; ihre Zellen kommen aus der kanonischen Kerngeometrie.
+    expect(map18.persistentBase).toEqual({
+      baseId: 'foundation-main',
+      anchor: { gridX: 24, gridY: 20 },
+      hpMax: 5000,
+    });
+    expect(map19.persistentBase?.baseId).toBe('cornerstone-main');
 
     const anchor18 = resolveCoopDefenseBases(map18).find((base) => base.id === 'foundation-main');
     const anchor19 = resolveCoopDefenseBases(map19).find((base) => base.id === 'cornerstone-main');
-    expect(anchor18).toMatchObject({ anchorGridX: 24, anchorGridY: 19 });
-    expect(anchor19).toMatchObject({ anchorGridX: 31, anchorGridY: 20 });
-    expect(anchor18 && isPersistentBaseReservationCell(36, 19, [anchor18])).toBe(true);
-    expect(anchor18 && isPersistentBaseReservationCell(37, 19, [anchor18])).toBe(false);
+    // Der aufgeloeste Anker ist exakt der authored: Die Bounding-Box des Kerns ist immer die
+    // volle 5x5-Flaeche, ihre Mitte deshalb die Ankerzelle.
+    expect(anchor18).toMatchObject({ anchorGridX: 24, anchorGridY: 20 });
+    expect(anchor19).toMatchObject({
+      anchorGridX: map19.persistentBase!.anchor.gridX,
+      anchorGridY: map19.persistentBase!.anchor.gridY,
+    });
+    expect(anchor18 && isPersistentBaseReservationCell(36, 20, [anchor18])).toBe(true);
+    expect(anchor18 && isPersistentBaseReservationCell(37, 20, [anchor18])).toBe(false);
 
-    expect(() => normalizeCoopDefenseMapConfig({
+    // Die Kernzellen bilden das nach links geoeffnete U, nicht ein Rechteck.
+    expect(anchor18!.cells).toHaveLength(13);
+    expect(anchor18!.region).toEqual({
+      minGridX: 22, maxGridX: 26, minGridY: 18, maxGridY: 22,
+    });
+    // Der Eingang liegt links: die drei mittleren Zellen der linken Spalte bleiben frei.
+    for (const gridY of [19, 20, 21]) {
+      expect(anchor18!.cells.some((cell) => cell.gridX === 22 && cell.gridY === gridY)).toBe(false);
+    }
+
+    // Der Kern steht nach der Normalisierung als gewoehnliche Basis in `bases`; die Rohkarte
+    // beschreibt ihn nicht. Deshalb ist die Vorlage fuer die Negativfaelle die Karte ohne ihn.
+    const rawMap18 = {
       ...map18,
+      bases: map18.bases.filter((base) => base.id !== map18.persistentBase!.baseId),
+    };
+
+    // Eine Map darf ihre persistente Basis nicht zusaetzlich selbst beschreiben.
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...rawMap18,
       mapId: 'persistent-anchor-validation',
-      persistentBase: { baseId: 'missing-main' },
-    })).toThrow(/unknown base/);
+      bases: [{
+        id: 'foundation-main',
+        hpMax: 1,
+        anchor: { kind: 'grid', gridX: 1, gridY: 1 },
+        shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
+      }],
+    })).toThrow(/must not also be authored in bases/);
+
+    // Und sie braucht ringsum Platz fuer die Reservierung.
+    expect(() => normalizeCoopDefenseMapConfig({
+      ...rawMap18,
+      mapId: 'persistent-anchor-bounds',
+      persistentBase: { ...map18.persistentBase!, anchor: { gridX: 3, gridY: 3 } },
+    })).toThrow(/free cells around its anchor/);
   });
 
   it('gives every persistent-base map an anchor that the mission lifecycle can resolve', () => {
@@ -296,7 +336,10 @@ describe('Coop defense map progression', () => {
 
     const map2 = getCoopDefenseMapConfig('2');
     expect(map2.persistentSpawns).toEqual([]);
-    expect(map2.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
+    // Map 2 traegt keine eigene Hauptbasis mehr: Ihre Hauptbasis ist der persistente Basiskern,
+    // den sie ueber ihre Basisstelle platziert.
+    expect(map2.persistentBase?.baseId).toBe('coop-base-rear');
+    expect(map2.bases.map((base) => base.id)).toEqual(['coop-base-rear']);
     expect(map2.encounters?.flatMap((encounter) => encounter.groups)
       .every((group) => getCoopDefenseEnemyConfig(group.enemyKind).movementTarget === 'bases')).toBe(true);
 

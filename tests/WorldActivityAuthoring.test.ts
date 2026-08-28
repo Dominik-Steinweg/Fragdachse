@@ -220,7 +220,10 @@ describe('World-/Activity-Authoring – World ohne Activity', () => {
       widthCells: mapConfig.arenaWidthCells,
       heightCells: mapConfig.arenaHeightCells,
     });
-    expect(scenario.world.persistentBaseSite).toEqual({ baseId: 'foundation-main' });
+    // Die World traegt die Stelle, nicht die Geometrie: Lage, Ausrichtung und
+    // Grunddauerhaftigkeit, aber keine einzige Zelle.
+    expect(scenario.world.persistentBaseSite).toEqual(mapConfig.persistentBase);
+    expect(scenario.world.persistentBaseSite?.baseId).toBe('foundation-main');
     expect(scenario.world.initialTimeOfDay).toBe(mapConfig.timeOfDay);
     // Das Bauwerk bleibt vollstaendig, sein Missionsanteil faellt mit der Activity weg.
     expect(scenario.world.bases.map((base) => base.id)).toEqual(mapConfig.bases.map((base) => base.id));

@@ -47,6 +47,7 @@ import {
   maxHighestUnlockedCoopDefenseMapId,
   sanitizeHighestUnlockedCoopDefenseMapId,
 } from '../config/coopDefenseMapUnlocks';
+import { PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID } from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
 import { isLocale, resolveBrowserLocale, type Locale } from '../i18n/types';
@@ -97,6 +98,14 @@ export interface CoopDefenseProgressPreferences {
   profilesByClass: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
   /** Das Item-System bleibt bis zum Sieg auf Map 10 verborgen. */
   itemsUnlocked: boolean;
+  /**
+   * Besitzt der Spieler die persistente Basis?
+   *
+   * Ein eigenstaendiges Entitlement, kein abgeleiteter Mapfortschritt: Es entscheidet, ob die
+   * LobbyWorld ihren Basiskern aufbaut, und ist damit die eine Stelle, an der "wir haben eine
+   * Basis" gespeichert ist. Die Form der Basis ist Code, ihre Lage World-Konfiguration.
+   */
+  persistentBaseUnlocked: boolean;
   /**
    * Gesamter Item-Besitz inklusive der ausgeruesteten Teile. Eine einzige Liste plus
    * {@link equippedItemIds} statt getrennter Stash-/Equipped-Listen: damit kann ein Item
@@ -175,6 +184,8 @@ export interface LocalProgressDocument {
     profilesByClass?: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>>;
     loadoutsByClass?: LocalPreferences['loadoutByClass'];
     itemsUnlocked: boolean;
+    /** Fehlt in Saves, die vor der persistenten Basis geschrieben wurden; der Decoder leitet ab. */
+    persistentBaseUnlocked?: boolean;
     items: CoopDefenseItem[];
     equippedItemIds: CoopDefenseEquippedItemIds;
     pendingItemRewards: CoopDefensePendingItemReward[];
@@ -224,6 +235,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
     inspector_gadachs: buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'),
   },
   itemsUnlocked: false,
+  persistentBaseUnlocked: false,
   items: [],
   equippedItemIds: {},
   pendingItemRewards: [],
@@ -715,6 +727,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.highestUnlockedMapId !== 'string'
     || typeof coop.classesUnlocked !== 'boolean'
     || typeof coop.itemsUnlocked !== 'boolean'
+    || (coop.persistentBaseUnlocked !== undefined && typeof coop.persistentBaseUnlocked !== 'boolean')
     || !Array.isArray(coop.items)
     || !isRecord(coop.equippedItemIds)
     || (coop.pendingItemRewards !== undefined && !Array.isArray(coop.pendingItemRewards))
@@ -814,6 +827,11 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
           COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID,
           highestUnlockedMapId,
         ),
+        // Einmalige Ableitung fuer Saves ohne das Feld: Wer die Freischaltmap bereits geschlagen
+        // hat - erkennbar an der dadurch geoeffneten Folgemap - besitzt die Basis. Danach traegt
+        // sich das Entitlement selbst und wird nie wieder aus dem Mapfortschritt gelesen.
+        persistentBaseUnlocked: coop.persistentBaseUnlocked
+          ?? hasEarnedPersistentBaseByMapProgress(highestUnlockedMapId),
         items,
         equippedItemIds,
         pendingItemRewards,
@@ -875,6 +893,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
       loadoutsByClass: progress.unlockedClassIds.length > 0 && Object.keys(preferences.loadoutByClass).length > 0
         ? sanitizeStoredLoadoutsByClass(preferences.loadoutByClass) : undefined,
       itemsUnlocked: progress.itemsUnlocked,
+      persistentBaseUnlocked: progress.persistentBaseUnlocked,
       items: [...progress.items],
       equippedItemIds: { ...progress.equippedItemIds },
       pendingItemRewards: progress.pendingItemRewards.map((reward) => ({
@@ -1285,6 +1304,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     selectedClassId: progress.selectedClassId,
     profilesByClass: cloneProfilesByClass(progress.profilesByClass),
     itemsUnlocked: progress.itemsUnlocked,
+    persistentBaseUnlocked: progress.persistentBaseUnlocked,
     unseenItems: progress.unseenItems,
     persistentBase: clonePersistentBaseState(progress.persistentBase),
     ...cloneCoopDefenseItemState(progress),
@@ -1675,6 +1695,43 @@ export function setStoredCoopDefenseItemsUnlocked(unlocked: boolean): boolean {
 export function unlockStoredCoopDefenseItemsAfterVictory(completedMapId: string): boolean {
   return completedMapId.trim() === COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID
     && setStoredCoopDefenseItemsUnlocked(true);
+}
+
+// -- Persistente Basis: Entitlement -----------------------------------------
+
+/**
+ * True, wenn der Mapfortschritt beweist, dass die Freischaltmap bereits gewonnen wurde.
+ *
+ * Ausschliesslich fuer die einmalige Migration alter Saves. Der laufende Betrieb liest das
+ * Entitlement direkt und nie aus dem Mapfortschritt.
+ */
+function hasEarnedPersistentBaseByMapProgress(highestUnlockedMapId: string): boolean {
+  const unlockedByVictory = getCoopDefenseMapUnlockedByVictoryOn(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID);
+  return unlockedByVictory !== null && isCoopDefenseMapUnlocked(unlockedByVictory, highestUnlockedMapId);
+}
+
+export function getStoredPersistentBaseUnlocked(): boolean {
+  return readPreferences().progression.coopDefense.persistentBaseUnlocked;
+}
+
+/** Gibt zurueck, ob sich der Freischaltstand tatsaechlich geaendert hat. */
+export function setStoredPersistentBaseUnlocked(unlocked: boolean): boolean {
+  const current = readPreferences();
+  if (current.progression.coopDefense.persistentBaseUnlocked === unlocked) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: { ...current.progression.coopDefense, persistentBaseUnlocked: unlocked },
+    },
+  });
+  return true;
+}
+
+/** Analog zur Item-Freischaltung: genau ein Map-Sieg vergibt das Entitlement dauerhaft. */
+export function unlockStoredPersistentBaseAfterVictory(completedMapId: string): boolean {
+  return completedMapId.trim() === PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID
+    && setStoredPersistentBaseUnlocked(true);
 }
 
 export function getStoredCoopDefenseItems(): CoopDefenseItem[] {

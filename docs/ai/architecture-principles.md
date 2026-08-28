@@ -1,233 +1,191 @@
 # Architektur-Leitbild
 
-## Zweck und Geltungsbereich
+## Rolle dieses Dokuments
 
-Diese Seite beschreibt, **wie Fragdachse Architekturentscheidungen trifft**. Sie ist der
-Entscheidungsfilter für neue Features, Refactorings und neue systemübergreifende Verträge –
-keine Klassenreferenz und keine Implementierungschronik.
+Diese Seite beschreibt das **Architektur-Zielbild und die Entscheidungsrichtung** von
+Fragdachse. Sie ist normativ: Neue Features, Systeme, Zustände, Abstraktionen und Refactorings
+sollen nach diesen Prinzipien gestaltet werden.
 
-Die konkrete Runtime-Landkarte steht in [architecture.md](architecture.md). Je nach Änderung
-kommen [gameplay.md](gameplay.md), [networking.md](networking.md),
-[content-and-config.md](content-and-config.md), [rendering.md](rendering.md) oder
-[local-persistence.md](local-persistence.md) hinzu. Bei Widersprüchen gilt weiterhin: aktueller
-Quellcode, öffentliche Types und Validatoren, passende Tests, authored Daten, erst danach diese
-Seiten.
+Die drei Dokumentationsebenen beantworten unterschiedliche Fragen:
 
-## Leitbild in einem Satz
+```text
+Code
+→ Was funktioniert aktuell tatsächlich?
 
-Fragdachse entwickelt eine host-authoritative, identitäts- und lifecycle-bewusste Runtime, in der
-World, Activity, Teilnahme, Simulation, Replikation, Persistenz und lokale Darstellung jeweils
-einen klaren Owner haben und über explizite Verträge zusammenspielen.
+architecture-principles.md
+→ Nach welchen Prinzipien sollen neue Architekturentscheidungen getroffen werden?
 
-## Grundsätze
+architecture.md und Fachseiten
+→ Welche bewusst etablierten aktuellen Verträge existieren?
+```
 
-### 1. Erst fachliche Authority, dann Datenstruktur
+Historisch gewachsener, temporärer oder migrationsbedingter Code kann vom Zielbild abweichen.
+Eine solche Abweichung ist weder Präzedenzfall für neuen Code noch automatisch ein Auftrag zum
+sofortigen Refactoring. Für technische Fakten gilt weiterhin die Quellenhierarchie aus
+[index.md](index.md); die konkrete Runtime beschreibt [architecture.md](architecture.md).
 
-Für jeden veränderlichen fachlichen Zustand muss vor der Implementierung feststehen:
+## Leitbild
 
-- Wer besitzt ihn und wer ist der authoritative Writer?
-- In welchem Scope und mit welcher Lifetime lebt er?
-- Ist er kanonischer Zustand oder nur Snapshot, Cache, Read Model, UI-Projektion oder Save?
-- Wie wird eine Projektion aktualisiert, invalidiert und beim Teardown entfernt?
+Fragdachse bevorzugt eindeutige Ownership und Authority, explizite Lifecycles und Verträge,
+klare Abhängigkeitsgrenzen und einfache konkrete Lösungen. Fachliche Wahrheiten haben einen
+bestimmbaren Owner; Replikation, Persistenz und Darstellung bleiben davon abgeleitete Grenzen.
 
-Single Source of Truth bedeutet semantische Authority, nicht physische Einmaligkeit. Mehrere
-Kopien sind zulässig, wenn ihre Richtung und ihr Rückweg eindeutig sind. Ein replizierter
-Client-Snapshot, eine lokale Presentation oder ein persistierter Baseline-Snapshot wird dadurch
-nicht zur fachlichen Authority.
+## Kernprinzipien
 
-Verwandte Zustände werden nur dann gemeinsam gehalten, wenn sie dieselbe fachliche Identität,
-Lifetime und Änderungsentscheidung besitzen. World und Activity bleiben getrennte Zustände;
-eine Activity darf nur an eine passende World gebunden sein.
+### 1. Authority, Ownership und Single Source of Truth
 
-### 2. Den kleinsten passenden Scope wählen
+Für veränderlichen fachlichen Zustand muss bestimmbar sein:
 
-Jeder Zustand gehört dem kleinsten Scope, der seine fachliche Lifetime vollständig abdeckt:
-Application, Room, Scene, World, Activity, Participation, Round, Entity oder Presentation.
+- Wer besitzt ihn?
+- Wer darf ihn verändern?
+- Welche Darstellung ist kanonisch?
+- Welche Kopien sind nur Snapshots, Caches, Read Models oder Projektionen?
+- Wie werden diese Kopien aktualisiert, invalidiert und zerstört?
 
-Room-Mitgliedschaft ist nicht World-Teilnahme; World-Teilnahme ist nicht Round-Teilnahme; lokale
-Sichtbarkeit ist nicht Eingaberecht. Eine World darf ohne Activity oder Round existieren, eine
-Activity nicht ohne ihre World. Ein längerer Scope darf keinen kürzeren Zustand dauerhaft
-besitzen oder aus globalen Variablen rekonstruieren.
+Single Source of Truth bedeutet eine fachliche Authority, nicht zwingend eine physische Kopie.
+Mehrere Repräsentationen sind legitim, wenn ihre Ableitungsrichtung eindeutig ist und kein
+zweiter Writer dieselbe Entscheidung unabhängig trifft.
 
-Ein `GameMode` ist Auswahl- oder Authoring-Information, aber kein Ersatz für den Activity-
-Lifecycle. Activity-Systeme werden aus dem Activity-Vertrag aktiviert, nicht aus verstreuten
-Mode-Flags oder Nullable-Zufallszuständen.
+### 2. Lifetime und Scope sind explizit
 
-Scope-Wechsel werden über stabile Identitäten, Deskriptoren und Revisionen gebunden. Kein Array-
-Index, Phasenflag, lokaler Scene-Verweis oder zufälliger Default darf diese Identität ersetzen.
-Veraltete oder nicht zusammengehörige Zustände werden an der Vertragsgrenze verworfen oder
-sichtbar abgelehnt.
+Zustand gehört in den kleinsten Scope, der seine vollständige fachliche Lifetime abdeckt. Ein
+langlebiger Owner soll kurzlebigen Zustand weder implizit besitzen noch aus indirekten Flags
+rekonstruieren. Entstehung, Übergänge, Invalidierung und Teardown sind Teil des Vertrags.
 
-Ein Context oder Bundle darf Abhängigkeiten für einen Scope bündeln. Es ist dadurch noch kein
-neuer Owner: fachlicher Zustand bleibt in seinem Lifecycle, System oder Repository. Insbesondere
-darf `WorldRuntimeContext` nicht zum Sammelbecken für Activity- oder Round-State werden.
-Entity- und Player-Eintritt beziehungsweise -Austritt laufen über den Owner des jeweiligen
-Lifecycles; ein teilweiser Attach wird bei Fehlern zurückgerollt.
+Konkrete Beziehungen zwischen Room-, World-, Activity-, Participation-, Round- und
+Presentation-Scope stehen in [architecture.md](architecture.md) und [gameplay.md](gameplay.md).
+Für neue Scopes gilt dasselbe Prinzip: Beziehung und Lifetime werden modelliert, nicht erraten.
 
-### 3. Composition Roots orchestrieren; Systeme besitzen Regeln
+### 3. Klare Grenzen und Abhängigkeitsrichtung
 
 Die bevorzugte Abhängigkeitsrichtung für neuen Code ist:
 
 ```text
 Composition / Scene
         ↓
-Lifecycle-, Use-Case- und Update-Orchestrierung
+Lifecycle / Use Cases / Orchestration
         ↓
-Runtime, Entities und Simulationssysteme
+Runtime / Domain / Simulation
         ↓
-fachliche Regeln und reine Policies
+Pure Rules / Policies
 ```
 
-Netzwerk, Persistenz und Presentation sind explizite Adapter- beziehungsweise Ausgabengrenzen:
+Scenes und Coordinatoren verdrahten und ordnen Abläufe; fachliche Regeln gehören ihren Domain-
+und Runtime-Ownern. Untere Regeln sollen nicht von oberen Composition-Details abhängen.
+Abhängigkeiten über Grenzen werden als möglichst kleine, stabile Verträge ausgedrückt.
 
-- `NetworkBridge` und darunterliegende Transport-/Codec-Grenzen validieren, replizieren und
-  übertragen Verträge.
-- Repositories lesen und schreiben validierte Dokumente.
-- Renderer, UI und Effects konsumieren Runtime- oder Netzwerk-Projektionen.
+### 4. Eine Verantwortung, aber keine künstlich kleinen Klassen
 
-Diese Adapter werden von der Orchestrierung über stabile Verträge genutzt; neue Regel- und
-Policy-Logik soll nicht von PeerJS, Wire-Channels, Storage-Keys oder konkreten Sprites abhängen.
-Bestehende direkte Kopplungen sind Migrationskandidaten, aber kein Anlass für eine kosmetische
-Sofortaufteilung.
+SRP wird nach Owner, Authority, Lifetime und unabhängigem Änderungsgrund beurteilt. Dateigröße,
+Importanzahl oder viele konkrete Abhängigkeiten sind allein kein Architekturproblem.
+Composition Roots und echte Coordinatoren dürfen bewusst breit sein.
 
-### 4. Breite Composition ist erlaubt, breite fachliche Authority nicht
-
-Eine Scene, ein Lifecycle-Coordinator oder ein Dependency-Bundle darf viele konkrete Systeme
-kennen. Dateigröße, Importanzahl und die bloße Zahl von Feldern sind für sich kein
-Refactoring-Kriterium.
-
-Eine natürliche Extraktion liegt vor, wenn eine Klasse mehrere unabhängige Authorities,
-Lifecycles, fachliche Zustände oder Änderungsgründe besitzt. Ziel ist ein eigenständiger Owner
-mit verständlichem Vertrag – nicht eine Gruppe eng gekoppelter Helper, die nur die Zeilenzahl
-verteilt.
-
-Die Leitfrage lautet:
+Eine Extraktion braucht einen eigenständigen Owner oder Vertrag. Eine God Class nur in eng
+gekoppelte Helper-Dateien zu verteilen verbessert die Architektur nicht. Die Leitfrage lautet:
 
 > Kann der Zweck der Einheit in einem kurzen Satz beschrieben werden, ohne mehrere unabhängige
 > „und“-Verantwortlichkeiten aufzuzählen?
 
-### 5. Simulation ist unabhängig von Presentation
+### 5. Semantic DRY – eine Regel, ein Owner
 
-Gameplay und Simulationszustand dürfen keine Darstellung voraussetzen. Treffer, Kollision,
-Ressourcen, Spawns, Bewegung und Ablaufregeln lesen explizite Runtime-Geometrie und fachliche
-Zustände – nicht Sprite-Größen, UI-Zustände oder lokale Kameraeffekte.
+Dieselbe fachliche Entscheidung soll nicht an mehreren Stellen unabhängig getroffen werden.
+Problematisch sind insbesondere mehrfach implementierte Gameplay-Regeln, Defaults,
+Validierungen, Mappings oder mehrere Authorities für denselben Zustand. UI, Network und
+Persistence dürfen eine Domain-Regel transportieren oder projizieren, aber nicht nochmals selbst
+entscheiden.
 
-Der Host muss die World auch ohne lokale World-Presentation simulieren können. Renderer und UI
-beobachten Runtime oder replizierte Projektionen; sie besitzen keine Treffer-, Spawn-, Rechte-
-oder Ressourcen-Authority. Presentation- und Input-Policies leiten lokale Angebote ab, erteilen
-aber keine Host-Rechte.
+Snapshots, Caches, Read Models, replizierte Kopien, UI-Projektionen und syntaktisch ähnlicher
+lokaler Code können dagegen legitim sein. Eine gemeinsame Abstraktion entsteht nicht allein,
+weil zwei Implementierungen ähnlich aussehen.
 
-### 6. Netzwerk ist eine Grenze, kein Ersatz für Gameplay
+> SSOT schützt Zustand und Authority. Semantic DRY schützt Regeln und Entscheidungen.
 
-Die Netzwerkgrenze verantwortet Transport, Wire-Format, Parsing und Validation, Channel- und
-Snapshot-Semantik, Revisionen, Baselines und Replikation. Die fachliche Entscheidung über
-Simulation, Treffer, Ressourcen, Spawns, Rundenzustand und Layout bleibt beim Host und seinen
-Simulationssystemen.
+Wiederhole nicht dieselbe fachliche Wahrheit. Abstrahiere aber auch nicht bloß ähnliche
+Implementierung.
 
-Gameplay spricht über `NetworkBridge`; PeerJS und konkrete Transportobjekte dürfen nicht in
-Gameplay leaken. World- und Activity-Verträge werden mit passender Identität gebunden, World-
-und Activity-Wechsel nicht aus lokalen Defaults rekonstruiert. Für jeden neuen replizierten
-Zustand sind mindestens Owner, Identität, Revision, Channel, Baseline, Update-Semantik und
-Lebensdauer festzulegen.
+### 6. KISS und pragmatische Abstraktion
 
-### 7. Persistenz liefert Baselines, nicht laufende Runtime-Authority
+Eine neue Registry, Event-Schicht, generische Pipeline, Basisklasse oder Schnittstelle braucht
+einen konkreten aktuellen Druck: einen stabilen gemeinsamen Vertrag, einen echten zweiten
+Consumer, eine notwendige Austauschgrenze oder eine nachgewiesene Kopplung.
 
-Settings, Progress und Persistent-Base-Dokumente werden an der Persistenzgrenze gelesen,
-validiert, migriert und atomar geschrieben. Runtime-Systeme greifen nicht auf Storage-Keys zu.
+Spekulative Variabilität ist kein ausreichender Grund. Zunächst gilt das kleinste verständliche
+Modell. SOLID dient als Diagnosewerkzeug; Dependency Injection bedeutet weder einen Container
+noch ein Interface für jede Klasse. Semantic DRY verhindert doppelte fachliche Entscheidungen,
+KISS verhindert vorschnelle Abstraktionen über bloß ähnliche Implementierung.
 
-Während einer Session ist der typisierte Runtime- beziehungsweise Session-Zustand kanonisch.
-Eine Persistenzkopie, eine missionslokale Working Copy und host-authoritativer Room-State sind
-unterschiedliche Zustände mit explizitem Commit-, Discard- oder Rollback-Vertrag. Temporäre
-Runtime-IDs, HP, Cooldowns und Renderobjekte gehören nicht in einen dauerhaften Blueprint.
-Fehlgeschlagene Speicherung darf weder still eine zweite Authority erzeugen noch einen gültigen
-In-Memory-Zustand unbrauchbar machen.
+### 7. Domain-State bleibt unabhängig von Adaptern
 
-### 8. Authored Content und deterministische Auflösung sind Verträge
+Presentation stellt dar, Network transportiert und repliziert, Persistence speichert. Diese
+Grenzen übernehmen keine fachliche Authority, die einem Domain- oder Runtime-Owner gehört.
 
-World- und Activity-Inhalte bleiben in authored Definitionen, Registries und Validatoren.
-Resolver liefern daraus einen typisierten Runtime-Vertrag; Scenes und Systems erfinden keine
-parallelen Config-Kopien, versteckten Map-Defaults oder zufälligen Fallbacks.
+```text
+                  Presentation
+                       ↑ liest
+                       │
+Network ⇄ Verträge ⇄ Domain / Runtime ⇄ Verträge ⇄ Persistence
+```
 
-Eine konkrete World besitzt eine eindeutige Layout- und Metrics-Quelle. Activity-Inhalte dürfen
-World-Geometrie nicht heimlich duplizieren. Identität, Seed, Generator-/Layout-Vertrag und
-relevante Parameter werden explizit weitergereicht, damit Host und Client dieselbe World meinen.
-Unbekannte, inkonsistente oder nicht zur aktuellen Identität gehörende Daten werden abgelehnt.
+Das Diagramm beschreibt Ownership, nicht zwingend synchrone Aufrufrichtung.
 
-### 9. Reihenfolge und fachliche Zeit bleiben sichtbar
+- Presentation beobachtet fachlichen Zustand; Simulation hängt nicht von Sprites, UI oder
+  lokalen Effekten ab. Die etablierte Player-/World-Trennung illustriert dieses Prinzip in
+  [rendering.md](rendering.md).
+- Network validiert und überträgt Zustände und Aktionen, entscheidet aber keine Gameplay-Regel
+  ein zweites Mal. Konkrete Autoritäts-, Identitäts- und Snapshot-Verträge stehen in
+  [networking.md](networking.md).
+- Persistence liest und schreibt validierte langlebige Dokumente. Laufender Runtime-State und
+  Commit-/Migrationssemantik beschreibt [local-persistence.md](local-persistence.md).
+- Authored Content wird über seine Resolver und Validatoren eingebunden; konkrete Definitionen
+  und Auflösungsregeln stehen in [content-and-config.md](content-and-config.md).
 
-Wenn Interleaving, Lifecycle-Reihenfolge oder Update-Phasen das Gameplay beeinflussen, gehört die
-Reihenfolge in eine lesbare Orchestrierung und in einen Contract-Test. Eine explizite Pipeline ist
-zu bevorzugen, wenn ein generischer Scheduler oder EventBus die Kausalität verdecken würde.
+### 8. Explizite Verträge und kontrollierte Migrationen
 
-Fachliche Entscheidungen verwenden die definierte Simulationszeit und replizierte Zeitpunkte,
-nicht die lokale Wanduhr. Presentation darf interpolieren. Kurzlebige replizierte Effekte
-verwenden bei Bedarf absolute Endzeitpunkte oder monotone Sequenzen; kontinuierliche Zustände
-brauchen keine künstliche Ereignisgeschichte.
+Identität, gültige Zustände, Fehlergrenzen und fachlich relevante Reihenfolge müssen im Code
+sichtbar sein. Wo Interleaving Verhalten verändert, ist explizite Orchestrierung einer
+verdeckenden Event- oder Scheduler-Magie vorzuziehen. Wichtige Invarianten gehören in Types,
+Validatoren oder passende Contract-Tests.
 
-### 10. Abstraktionen müssen ein aktuelles Problem lösen
-
-Vor einer neuen Registry, Event-Schicht, generischen Pipeline, Base-Class-Hierarchie oder einem
-neuen Interface ist der konkrete heutige Druck zu benennen. Abstrahiert wird primär gemeinsames
-fachliches Verhalten oder ein stabiler Boundary-Vertrag – nicht bloß ähnliche Syntax.
-
-KISS ist ein Architektur-Veto gegen vorweggenommene Variabilität. Ein derzeit einzelner
-Aktivitätstyp rechtfertigt kein generisches Framework ohne realen zweiten Owner oder Vertrag.
-SOLID bleibt ein Diagnosewerkzeug: Eine Composition Root darf konkrete Abhängigkeiten kennen;
-Dependency Injection und Interfaces werden dort eingesetzt, wo sie Ownership, Testbarkeit oder
-eine echte Austauschgrenze verbessern.
-
-### 11. Compatibility Code ist ein Übergang, keine zweite Wahrheit
-
-Adapter und Fassaden sind bei Migrationen erlaubt, wenn sie eine klar gerichtete Übergangsgrenze
-bilden. Der Authority-Cutover wird sichtbar gemacht, alte Aufrufer werden schrittweise migriert
-und der alte Zustand bleibt danach kein versteckter Fallback.
-
-Bei fehlender oder inkonsistenter kanonischer Quelle ist ein sichtbarer Fehler oder Fail-fast
-dem stillen Rekonstruieren aus Legacy-State vorzuziehen. Eine Migration erhält relevantes
-Verhalten und Reihenfolge, aber sie konserviert keine historische Misch-Authority als Zielbild.
+Compatibility-Code ist eine gerichtete Übergangsgrenze, keine zweite Wahrheit. Bei einem
+Cutover wird ein neuer Owner eingeführt, Aufrufer werden schrittweise migriert und alte Pfade
+anschließend entfernt oder sichtbar abgelehnt. Kein versteckter Legacy-Fallback darf fehlende
+Authority kaschieren. Verhalten, relevante Reihenfolge und Fehlersemantik bleiben während der
+Migration erhalten; Big-Bang-Rewrites brauchen einen zwingenden Grund.
 
 ## Prüfliste vor einem größeren Feature
 
-1. Welches fachliche Problem und welcher Zustand werden eingeführt oder verändert?
-2. Wer ist Owner, authoritative Writer und Leser dieses Zustands?
-3. In welchem Scope lebt er; wann entsteht er, wann wird er invalidiert und wann abgebaut?
-4. Ist er kanonisch oder eine Projektion? Wenn Projektion: aus welcher Quelle und mit welcher
-   Reconciliation-/Refresh-Semantik?
-5. Gehört das Verhalten zu World, Activity, Participation, Round, Entity, Network, Persistence
-   oder Presentation?
-6. Welche Identität, Revision, Baseline und fachliche Zeit binden den Vertrag?
-7. Existiert bereits ein passender Owner, Resolver, Codec, Policy-, Registry- oder Callback-
-   Vertrag? Wenn nein: welches konkrete Problem rechtfertigt einen neuen?
-8. Welche Reihenfolge, Autoritätsgrenze und Fehlerfälle müssen sichtbar bleiben?
-9. Erweitert die Änderung eine Einheit um einen unabhängigen Änderungsgrund? Falls ja, welche
-   natürliche fachliche Grenze kann neben der bestehenden Struktur eingeführt werden?
-10. Welche Invariante gehört in Types, Validatoren oder einen bestehenden Contract-/Domain-Test?
+1. Welche fachliche Wahrheit oder welcher Zustand wird eingeführt?
+2. Wer besitzt ihn und wer ist der authoritative Writer?
+3. Welche Lifetime und welchen Scope besitzt er?
+4. Ist er kanonisch oder eine Projektion; wie wird diese synchronisiert und invalidiert?
+5. Existiert dieselbe fachliche Regel oder Authority bereits an anderer Stelle?
+6. Welche Domain-, Adapter- oder Composition-Grenze ist betroffen?
+7. Erweitert die Änderung eine Einheit um einen unabhängigen Änderungsgrund?
+8. Ist eine neue Abstraktion durch einen konkreten aktuellen Druck gerechtfertigt?
+9. Welche Reihenfolge, Identität und Fehlergrenze müssen explizit bleiben?
+10. Welche Invariante gehört in Types, Validatoren oder Tests?
+
+Danach die kleinste passende Vertragsseite im [AI-Router](index.md) lesen.
 
 ## Refactoring-Grundsätze für gewachsene Strukturen
 
-- Nicht nach Dateigröße refactoren, sondern nach Authority, Lifetime, Änderungsgrund und
-  Abhängigkeitsrichtung.
-- Zuerst Verantwortlichkeiten und echte fachliche Grenzen kartieren; Composition Roots und
-  notwendige Koordinatoren nicht reflexhaft zerlegen.
-- Einen neuen Owner neben der bestehenden Struktur einführen, den Vertrag festlegen und alte
-  Aufrufer schrittweise migrieren.
-- Während der Migration nur eine fachliche Authority zulassen. Eine Kompatibilitätsfassade darf
-  übersetzen, aber nicht parallel entscheiden.
-- Bestehendes Verhalten, Fehlersemantik und relevante Update-/Teardown-Reihenfolge erhalten und
-  durch passende bestehende Tests absichern.
-- Keine Big-Bang-Rewrites und keine generischen Zwischenlagen, deren einziger Zweck die
-  Verteilung einer God Class ist.
+- Nicht nach Dateigröße refactoren, sondern nach Authority, Lifetime, Zuständigkeit,
+  Änderungsgrund und Abhängigkeitsrichtung.
+- Composition Roots und echte Coordinatoren dürfen breit bleiben. Eine Extraktion braucht einen
+  neuen Owner oder einen eigenständigen Vertrag.
+- Verantwortlichkeiten zuerst kartieren; nicht lediglich Methoden in Helper-Dateien verschieben.
+- Neue Owner möglichst neben der bestehenden Struktur einführen und Aufrufer schrittweise
+  migrieren.
+- Während der Migration nur eine fachliche Authority zulassen. Temporäre Fassaden übersetzen,
+  entscheiden aber nicht parallel.
+- Verhalten, relevante Reihenfolge und Fehlersemantik durch bestehende Types, Validatoren und
+  Tests erhalten.
 - Nach dem Cutover alte Pfade entfernen oder sichtbar fehlschlagen lassen; kein stiller
-  Legacy-Fallback, der Inkonsistenzen verdeckt.
+  Legacy-Fallback und kein Big-Bang-Rewrite ohne zwingenden Grund.
 
-## Verhältnis zu Code und Dokumentation
+## Verhältnis zu Code und Fachseiten
 
 Dieses Leitbild ersetzt weder Code, Types, Validatoren, authored Daten, Tests noch lokale
-Kommentare. Es enthält nur Regeln, die systemübergreifend und längerfristig als
-Entscheidungsgrundlage gelten. Konkrete Balancewerte, Dateigrößen, Bug-Historie, temporäre
-Implementierungsdetails und To-do-Listen gehören nicht hierher.
-
-Bei einer neuen Änderung zuerst diese Seite für die Entscheidungsrichtung und danach die kleinste
-maßgebliche Vertragsseite lesen. Wenn Code und Leitbild auseinanderlaufen, wird nicht der Code
-an die Dokumentation angepasst, sondern die tatsächliche Authority geklärt und – falls dauerhaft
-– die Dokumentation aktualisiert.
+Kommentare. Es enthält nur langlebige Entscheidungsregeln. Konkrete Runtime-Beziehungen,
+Wire-Verträge, Renderer-Pipelines, Persistenzformate, Balancewerte und Migrationsdetails gehören
+in [architecture.md](architecture.md), die jeweilige Fachseite oder den Code.

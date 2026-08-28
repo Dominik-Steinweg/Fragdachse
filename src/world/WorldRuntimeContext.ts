@@ -71,13 +71,21 @@ export function createWorldRuntimeContext(input: WorldRuntimeContextInput): Worl
   // Genau eine Metrikquelle fuer diese World. Wuerde die Basisaufloesung ihre eigene ableiten,
   // koennten Geometrie und `metrics` bei einem unpassenden Profil still auseinanderlaufen.
   const metrics = resolveWorldMetrics(input.metricsProfile);
-  const bases = definition ? resolveWorldBases(definition, metrics) : [];
+  // Ob der Basiskern zu dieser Instanz gehoert, entscheidet ausschliesslich der replizierte
+  // Parameter. Geometrie und Basisstelle folgen derselben Antwort, damit eine gesperrte World
+  // nicht doch die Kollisionszellen einer Basis traegt, die es fuer sie nicht gibt.
+  const includePersistentBaseCore = descriptor.parameters?.persistentBaseUnlocked === true;
+  const bases = definition
+    ? resolveWorldBases(definition, metrics, { includePersistentBaseCore })
+    : [];
   return {
     descriptor,
     definition,
     metrics,
     bases,
-    persistentBaseSite: resolvePersistentBaseSite(descriptor, definition, bases),
+    persistentBaseSite: includePersistentBaseCore
+      ? resolvePersistentBaseSite(descriptor, definition, bases)
+      : null,
   };
 }
 
@@ -99,6 +107,9 @@ export function isValidPersistentBaseSite(site: WorldPersistentBaseSite | null):
  * dem Descriptor. Ein lokaler Ersatzwert waere pro Peer verschieden und wuerde aus einem
  * Uebertragungsfehler still zwei verschiedene Welten machen – deshalb schlaegt der Aufbau hier
  * fehl, statt zu raten.
+ *
+ * Aufgerufen wird die Funktion nur fuer eine Instanz, die ihren Kern besitzt; die Freischaltung
+ * selbst wird eine Ebene hoeher entschieden.
  */
 function resolvePersistentBaseSite(
   descriptor: WorldDescriptor,

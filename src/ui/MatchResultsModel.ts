@@ -30,6 +30,11 @@ export interface MatchProgressDelta {
    * deshalb nicht wie `classesUnlocked` aus before/after ableiten – er kommt vom Sieg-Verbuchen.
    */
   itemsUnlocked: boolean;
+  /**
+   * Der erste Sieg auf der Freischaltmap hat die persistente Basis vergeben. Wie
+   * {@link itemsUnlocked} ein Ergebnis des Sieg-Verbuchens, kein Feld des Fortschritts-Schnappschusses.
+   */
+  persistentBaseUnlocked: boolean;
 }
 
 /** Ein angebotenes Item samt allem, was der Auswahlbildschirm dafuer braucht. */
@@ -132,6 +137,7 @@ export function createMatchProgressDelta(
   xpGained: number,
   unlockedMapName: string | null,
   itemsUnlocked = false,
+  persistentBaseUnlocked = false,
 ): MatchProgressDelta {
   return {
     before,
@@ -143,6 +149,7 @@ export function createMatchProgressDelta(
     classesUnlocked: before.unlockedClassIds.length === 0 && after.unlockedClassIds.length > 0,
     newlyUnlockedClassIds: after.unlockedClassIds.filter((classId) => !before.unlockedClassIds.includes(classId)),
     itemsUnlocked,
+    persistentBaseUnlocked,
   };
 }
 

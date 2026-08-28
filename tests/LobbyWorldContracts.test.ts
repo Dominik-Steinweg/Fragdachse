@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   LOBBY_LAYOUT_GRID,
+  LOBBY_SPAWN_FOCUS_CELL,
   LOBBY_WORLD_HEIGHT_CELLS,
   LOBBY_WORLD_WIDTH_CELLS,
   buildLobbyWorldLayout,
@@ -11,10 +12,13 @@ import {
 import { RockHpRegistry } from '../src/arena/RockHpRegistry';
 import { getWorldDefinition } from '../src/config/authoring/authoredScenarios';
 import {
+  LOBBY_PERSISTENT_BASE_ID,
   LOBBY_WORLD_DEFINITION_ID,
   getLobbyWorldDefinition,
   isLobbyWorldDefinitionId,
 } from '../src/config/authoring/lobbyWorld';
+import { getPersistentBaseCoreSurfaceOffsets } from '../src/persistentBase/PersistentBaseCore';
+import { isValidPersistentBaseSite } from '../src/world/WorldRuntimeContext';
 import { ROCK_HP_MAX } from '../src/config';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
@@ -53,11 +57,27 @@ describe('LobbyWorld – Authoring', () => {
     // Sie loest ueber dieselbe Registry auf wie jede adaptierte Coop-World.
     expect(getWorldDefinition(LOBBY_WORLD_DEFINITION_ID)).toBe(world);
 
-    // Keine Coop-Map-Vorlage, keine Strukturen, keine Gleise: reine World-Geometrie.
+    // Keine Coop-Map-Vorlage und keine Gleise: reine World-Geometrie.
     expect(world.sourceMapId).toBeUndefined();
-    expect(world.bases).toEqual([]);
     expect(world.tracks).toBeUndefined();
-    expect(world.persistentBaseSite).toBeUndefined();
+
+    // Ihre einzige Struktur ist der persistente Basiskern. Die Definition beschreibt ihn nicht
+    // selbst, sondern nur seine Stelle - die Form kommt aus der kanonischen Kerngeometrie.
+    expect(world.persistentBaseSite?.baseId).toBe(LOBBY_PERSISTENT_BASE_ID);
+    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID]);
+    const core = world.bases[0];
+    expect(core?.faction).toBe('friendly');
+    expect(core?.role).toBe('main');
+    expect(core?.shape).toEqual({
+      kind: 'cells',
+      cells: getPersistentBaseCoreSurfaceOffsets(),
+    });
+    // Der Anker der Stelle ist die Mittelzelle; der Shape-Ursprung liegt zwei Zellen davor.
+    expect(core?.anchor).toEqual({
+      kind: 'grid',
+      gridX: world.persistentBaseSite!.anchor.gridX - 2,
+      gridY: world.persistentBaseSite!.anchor.gridY - 2,
+    });
 
     // Kampf ist eine ausdrueckliche World-Policy, keine Nebenwirkung einer laufenden Activity.
     expect(world.actionPolicy?.combat).toBe(true);
@@ -190,6 +210,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
   });
 
   it('baut einen regulaeren WorldRuntimeContext ohne Basen und ohne persistente Basis', () => {
+    // Ohne Freischaltung: Die Definition kennt die Stelle, diese Instanz besitzt sie nicht.
     const definition = getLobbyWorldDefinition();
     const world = createWorldRuntimeContext({
       descriptor: createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7),
@@ -204,6 +225,49 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(world.persistentBaseSite).toBeNull();
     expect(world.metrics.gridCols).toBe(LOBBY_WORLD_WIDTH_CELLS);
     expect(world.metrics.gridRows).toBe(LOBBY_WORLD_HEIGHT_CELLS);
+  });
+
+  it('materialisiert den Basiskern erst mit der freigeschalteten Instanz', () => {
+    const definition = getLobbyWorldDefinition();
+    const world = createWorldRuntimeContext({
+      descriptor: createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 8, {
+        persistentBaseUnlocked: true,
+        persistentBaseRadiusCells: 5,
+      }),
+      metricsProfile: getAuthoredWorldMetricsProfile(
+        definition.metrics.widthCells,
+        definition.metrics.heightCells,
+      ),
+      definition,
+    });
+
+    expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID]);
+    expect(world.persistentBaseSite).toMatchObject({
+      baseId: LOBBY_PERSISTENT_BASE_ID,
+      radiusCells: 5,
+    });
+    // Der Anker ist die authored Mitte der World und damit zugleich ihr Spawn-Fokus: Wer das
+    // Testgelaende betritt, steht im eigenen Hof.
+    expect(world.persistentBaseSite?.anchor).toEqual({
+      gridX: LOBBY_SPAWN_FOCUS_CELL.gridX,
+      gridY: LOBBY_SPAWN_FOCUS_CELL.gridY,
+    });
+    expect(isValidPersistentBaseSite(world.persistentBaseSite)).toBe(true);
+    // Das nach links geoeffnete U: 13 feste Zellen, der Hof bleibt begehbar.
+    expect(world.bases[0]?.cells).toHaveLength(13);
+    expect(world.bases[0]?.cells.some((cell) => (
+      cell.gridX === LOBBY_SPAWN_FOCUS_CELL.gridX && cell.gridY === LOBBY_SPAWN_FOCUS_CELL.gridY
+    ))).toBe(false);
+  });
+
+  it('haelt Konstruktionen an der Activity, nicht an der World', () => {
+    // Die LobbyWorld traegt den Kern, hat aber keine Activity - und damit weder eine Working
+    // Copy noch einen Restore noch einen Commit. Ebenso wenig kennt ihre Struktur Schaden.
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(lifecycle).toContain(
+      "if (bridge.isHost() && activityDescriptor !== null && world.definition?.persistentBaseSite) {",
+    );
+    expect(lifecycle).toContain('}, presentation, activityDescriptor !== null)');
   });
 });
 
@@ -379,7 +443,8 @@ describe('LobbyWorld – keine zweite Lobby-Simulation', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     // Die LobbyWorld nimmt denselben Weg wie jede andere World-Instanz.
     expect(lifecycle).toContain('this.worldLifecycle.beginCreate(');
-    expect(lifecycle).toContain('createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, worldRevision)');
+    expect(lifecycle).toContain('createAuthoredWorldDescriptor(');
+    expect(lifecycle).toContain('LOBBY_WORLD_DEFINITION_ID,');
     // Und sie ist keine Activity.
     expect(lifecycle).not.toContain("kind: 'lobby'");
   });

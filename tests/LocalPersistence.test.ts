@@ -15,6 +15,7 @@ import {
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseTotalXp,
+  setStoredPersistentBaseUnlocked,
   setStoredPersistentBaseState,
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
@@ -108,6 +109,24 @@ describe('local progress generation', () => {
     setStoredPersistentBaseState({ schemaVersion: 1, radiusCells: 5, revision: 0, constructions: [] });
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
     expect(getStoredPersistentBaseState()).toEqual(state);
+  });
+
+  it('carries the persistent-base entitlement through export and import', () => {
+    expect(getStoredCoopDefenseProgress().persistentBaseUnlocked).toBe(false);
+    setStoredPersistentBaseUnlocked(true);
+
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    expect(exported.progress.coopDefense.persistentBaseUnlocked).toBe(true);
+
+    setStoredPersistentBaseUnlocked(false);
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredCoopDefenseProgress().persistentBaseUnlocked).toBe(true);
+
+    // Ein kaputter Wert macht den Import ungueltig, statt still auf einen Default zu fallen.
+    const corrupt = structuredClone(exported);
+    corrupt.progress.coopDefense.persistentBaseUnlocked = 'yes';
+    expect(importStoredGameProgressJson(JSON.stringify(corrupt)).ok).toBe(false);
+    expect(getStoredCoopDefenseProgress().persistentBaseUnlocked).toBe(true);
   });
 
   it('rejects V2 progress exports, duplicate persistent IDs and corrupt persistent-base data', () => {

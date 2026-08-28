@@ -33,6 +33,15 @@ export interface WorldDescriptor {
  * eine World-Konfiguration und reist deshalb hier statt in einem Activity- oder Round-Vertrag.
  */
 export interface WorldParameters {
+  /**
+   * Traegt diese World-Instanz ihren persistenten Basiskern?
+   *
+   * Die authored {@link import('../config/authoring/WorldDefinition').WorldDefinition} sagt nur,
+   * *wo* der Kern stuende. Ob er tatsaechlich existiert, entscheidet der Host aus dem
+   * Entitlement des Spielers - und genau deshalb reist die Antwort hier mit: Zwei Peers mit
+   * unterschiedlichem Wert haben nicht dieselbe World gebaut.
+   */
+  readonly persistentBaseUnlocked?: boolean;
   /** Aktiver Radius der persistenten Basis dieser World-Instanz in Zellen. */
   readonly persistentBaseRadiusCells?: number;
 }
@@ -52,7 +61,10 @@ export function isProceduralWorldDefinitionId(definitionId: string): boolean {
  * Felder, die eine World-Instanz konfigurieren. Sie sind Teil ihrer Identitaet: zwei Peers mit
  * unterschiedlichen Parametern haben nicht dieselbe World gebaut.
  */
-export const WORLD_PARAMETER_FIELDS = ['persistentBaseRadiusCells'] as const satisfies readonly (keyof WorldParameters)[];
+export const WORLD_PARAMETER_FIELDS = [
+  'persistentBaseUnlocked',
+  'persistentBaseRadiusCells',
+] as const satisfies readonly (keyof WorldParameters)[];
 
 /**
  * Netzwerkgrenze fuer eingehende World-Identitaeten. Ungueltige Nutzlast wird verworfen statt
@@ -98,13 +110,32 @@ export function haveSameWorldParameters(
   return WORLD_PARAMETER_FIELDS.every((field) => (left?.[field] ?? null) === (right?.[field] ?? null));
 }
 
+/**
+ * Jedes Feld wird einzeln geprueft; ein ungueltiger Wert verwirft die ganze Nutzlast, statt
+ * still auf einen lokalen Ersatzwert zu fallen. Bleibt kein Feld uebrig, traegt diese World
+ * schlicht keine Parameter.
+ */
 function parseWorldParameters(raw: unknown): WorldParameters | null {
   if (!raw || typeof raw !== 'object') return null;
   const candidate = raw as Partial<WorldParameters>;
+  const parameters: {
+    persistentBaseUnlocked?: boolean;
+    persistentBaseRadiusCells?: number;
+  } = {};
+
+  const unlocked = candidate.persistentBaseUnlocked;
+  if (unlocked !== undefined) {
+    if (typeof unlocked !== 'boolean') return null;
+    parameters.persistentBaseUnlocked = unlocked;
+  }
+
   const radiusCells = candidate.persistentBaseRadiusCells;
-  if (radiusCells === undefined) return null;
-  if (!isSafeInteger(radiusCells) || radiusCells < 0) return null;
-  return { persistentBaseRadiusCells: radiusCells };
+  if (radiusCells !== undefined) {
+    if (!isSafeInteger(radiusCells) || radiusCells < 0) return null;
+    parameters.persistentBaseRadiusCells = radiusCells;
+  }
+
+  return Object.keys(parameters).length > 0 ? parameters : null;
 }
 
 function isSafeInteger(value: unknown): value is number {
