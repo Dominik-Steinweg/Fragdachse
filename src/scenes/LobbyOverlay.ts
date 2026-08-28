@@ -1201,7 +1201,6 @@ export class LobbyOverlay {
       severity: 'error',
       title: t('ui.lobby.alertConnectionError'),
       message: `${message ?? t('ui.lobby.hostLeft')} ${t('ui.lobby.reloadForNewRoom')}`,
-      persistent: true,
       priority: 100,
     });
   }
@@ -1212,8 +1211,7 @@ export class LobbyOverlay {
     this.showAlert({
       severity: 'error',
       title: t('ui.lobby.alertArenaError'),
-      message: `${message ?? t('ui.lobby.hostLeft')} ${t('ui.lobby.reloadForNewRoom')}`,
-      persistent: true,
+      message: `${message ?? t('ui.lobby.arenaStartFailed')} ${t('ui.lobby.reloadForNewRoom')}`,
       priority: 100,
     });
   }
@@ -1515,7 +1513,6 @@ export class LobbyOverlay {
         severity: 'error',
         title: t('ui.lobby.alertError'),
         message: t('ui.lobby.kickFailed'),
-        persistent: true,
         priority: 40,
       });
     }

@@ -44,7 +44,7 @@ import { EnemyAiTargetCatalog } from '../../systems/EnemyAiTargetCatalog';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
-import { getLocale } from '../../i18n';
+import { getLocale, t } from '../../i18n';
 import { getMapName } from '../../i18n/contentPresentation';
 import { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
 import { RepairDroneSystem } from '../../systems/RepairDroneSystem';
@@ -4675,7 +4675,7 @@ export class ArenaLifecycleCoordinator {
         this.onTransitionToArena();
       } catch (error) {
         console.error('[ArenaLifecycleCoordinator] Lokale Arena konnte nicht aufgebaut werden:', error);
-        this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');
+        this.terminateMatch(t('ui.lobby.arenaBuildFailed'));
       }
     });
   }
@@ -4726,7 +4726,7 @@ export class ArenaLifecycleCoordinator {
       this.layoutRetryCount++;
       if (this.layoutRetryCount >= ArenaLifecycleCoordinator.LAYOUT_RETRY_LIMIT) {
         this.layoutRetryCount = 0;
-        this.terminateMatch('World-Descriptor oder Activity-Zustand wurde nicht rechtzeitig repliziert.');
+        this.terminateMatch(t('ui.lobby.arenaTransitionTimeout'));
         return;
       }
       this.scene.time.delayedCall(16, () => this.onTransitionToArena());
@@ -4753,7 +4753,7 @@ export class ArenaLifecycleCoordinator {
       );
     } catch (error) {
       console.error('[ArenaLifecycleCoordinator] Lokale Arena konnte nicht aufgebaut werden:', error);
-      this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');
+      this.terminateMatch(t('ui.lobby.arenaBuildFailed'));
       return;
     }
     this.pendingLobbyWorldReinstance = false;
@@ -4824,7 +4824,7 @@ export class ArenaLifecycleCoordinator {
       }).build();
     } catch (error) {
       console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot konnte nicht gestartet werden:', error);
-      if (isCurrent()) this.terminateMatch('Terrain-Farb-Snapshot konnte nicht gestartet werden.');
+      if (isCurrent()) this.terminateMatch(t('ui.lobby.terrainSnapshotStartFailed'));
       return;
     }
 
@@ -4835,7 +4835,7 @@ export class ArenaLifecycleCoordinator {
     }).catch((error: unknown) => {
       if (!isCurrent()) return;
       console.error('[ArenaLifecycleCoordinator] Terrain-Farb-Snapshot fehlgeschlagen:', error);
-      this.terminateMatch('Terrain-Farb-Snapshot konnte nicht erstellt werden.');
+      this.terminateMatch(t('ui.lobby.terrainSnapshotCreateFailed'));
     });
   }
 

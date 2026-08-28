@@ -161,7 +161,11 @@ describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
       .toBeLessThan(cleanupBody.indexOf('this.worldLifecycle.endInstance();'));
     expect(cleanupBody.indexOf('this.worldLifecycle.endInstance();'))
       .toBeLessThan(cleanupBody.indexOf('this.clearWorldAdmission();'));
-    expect(source).toContain("this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');");
+    expect(source).toContain("this.terminateMatch(t('ui.lobby.arenaBuildFailed'));");
+    expect(source).toContain("this.terminateMatch(t('ui.lobby.arenaTransitionTimeout'));");
+    expect(source).toContain("this.terminateMatch(t('ui.lobby.terrainSnapshotStartFailed'));");
+    expect(source).toContain("this.terminateMatch(t('ui.lobby.terrainSnapshotCreateFailed'));");
+    expect(source).not.toContain("this.terminateMatch('Lokale Arena konnte nicht aufgebaut werden.');");
     expect(source).not.toContain('Generator/Fingerprint abweichend');
   });
 });

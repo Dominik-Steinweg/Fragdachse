@@ -10,7 +10,6 @@ export interface LobbyAlert {
   readonly severity: LobbyAlertSeverity;
   readonly title: string;
   readonly message: string;
-  readonly persistent?: boolean;
   /** Meldungen mit hoeherer Prioritaet duerfen eine aktive Meldung ersetzen. */
   readonly priority?: number;
 }
@@ -44,7 +43,7 @@ const SEVERITY_STYLE: Readonly<Record<LobbyAlertSeverity, {
 };
 
 /**
- * Einzelne, persistente Fehlermeldung der Lobby.
+ * Einzelne, zentrale Fehlermeldung der Lobby.
  *
  * Der Root wird vom LobbyOverlay in dessen Clarity-Container gehaengt. Dadurch bleibt der
  * Banner bildschirmfest, liegt ueber der Weltkamera und wird beim Lobby-Neuaufbau gemeinsam mit
@@ -112,7 +111,6 @@ export class LobbyAlertBanner {
       alert.severity,
       alert.title,
       alert.message,
-      alert.persistent === true,
       priority,
     ].join('|');
     if (signature === this.activeSignature) return;
