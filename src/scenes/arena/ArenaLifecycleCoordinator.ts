@@ -1558,7 +1558,8 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost()) bridge.setGamePhase('LOBBY');
 
     this.lobbyOverlay.setReadyButtonState(false);
-    this.lobbyOverlay.showHostDisconnectedMessage(reason);
+    if (reason) this.lobbyOverlay.showArenaFailureMessage(reason);
+    else this.lobbyOverlay.showHostDisconnectedMessage();
   }
 
   // ── Arena build / teardown ────────────────────────────────────────────────

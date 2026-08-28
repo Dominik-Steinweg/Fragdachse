@@ -1652,7 +1652,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
     bridge.onSpectatorEntered(id => this.lifecycle.handleSpectatorEntered(id));
     bridge.onKicked(() => {
-      this.lobbyOverlay.showHostDisconnectedMessage('Du wurdest vom Host aus dem Raum entfernt.');
+      this.lobbyOverlay.showHostDisconnectedMessage(t('ui.lobby.kickedFromRoom'));
     });
     this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
       if (status.state === 'reconnecting' || status.state === 'resumed') {
@@ -3849,6 +3849,7 @@ export class ArenaScene extends Phaser.Scene {
     keyboard.on('keydown-M', this.timeOfDayHotkeyHandler);
 
     this.events.once('shutdown', () => {
+      this.lobbyOverlay?.destroy();
       this.persistentBaseVisuals?.destroy();
       if (this.escapeHotkeyHandler) {
         keyboard.off('keydown-ESC', this.escapeHotkeyHandler);

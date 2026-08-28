@@ -36,6 +36,7 @@ import {
   type LivingBarPalette,
 } from '../ui/LivingBarEffect';
 import { UiButton } from '../ui/UiButton';
+import { LobbyAlertBanner, type LobbyAlert } from '../ui/LobbyAlertBanner';
 import { BORDER, getPingColor, MOTION, SPACE, TEXT, textStyle } from '../ui/uiTheme';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
@@ -272,6 +273,7 @@ export class LobbyOverlay {
   private upgradeBtnEffect: LivingBarEffect | null = null;
   private itemsBtnEffect: LivingBarEffect | null = null;
   private itemsTooltip: UiTooltip | null = null;
+  private lobbyAlertBanner: LobbyAlertBanner | null = null;
   private coopItemsUnlocked = false;
   private coopItemsSignature: string | null = null;
   private visible         = false;
@@ -504,6 +506,10 @@ export class LobbyOverlay {
     this.playerNameTooltip = new UiTooltip(this.scene, 180);
     this.playerNameTooltipRoot = this.playerNameTooltip.build();
     this.container.add(this.playerNameTooltipRoot);
+    // Im Normalzustand unsichtbar; im Fehlerfall sitzt der Banner ueber dem Panel, ohne dessen
+    // Geometrie oder die Hoehe der Liste zu veraendern.
+    this.lobbyAlertBanner = new LobbyAlertBanner(this.scene);
+    this.container.add(this.lobbyAlertBanner.build());
     this.container.setVisible(this.visible);
 
     this.systemBar = this.scene.add.container(0, 0, [
@@ -721,6 +727,8 @@ export class LobbyOverlay {
     this.playerNameTooltip?.destroy();
     this.playerNameTooltip = null;
     this.playerNameTooltipRoot = null;
+    this.lobbyAlertBanner?.destroy();
+    this.lobbyAlertBanner = null;
 
     // Die Effekte haengen an Containern, die gleich zerstoert werden – vorher abbauen.
     this.upgradeBtnEffect?.destroy();
@@ -823,6 +831,12 @@ export class LobbyOverlay {
     this.itemsBtnEffect?.stop();
     this.itemsTooltip?.hide();
     this.coopBarEffect?.stop();
+  }
+
+  /** Endgueltiger Scene-Abbau; build() verwendet denselben idempotenten Pfad. */
+  destroy(): void {
+    this.visible = false;
+    this.teardown();
   }
 
   isVisible(): boolean {
@@ -1152,18 +1166,46 @@ export class LobbyOverlay {
     this.updateRoomActionButtons();
   }
 
+  /** Zentrale Fehler-API der Lobby; gleichzeitig bleibt hoechstens eine Meldung sichtbar. */
+  showAlert(alert: LobbyAlert): void {
+    this.lobbyAlertBanner?.showAlert(alert);
+  }
+
+  clearAlert(): void {
+    this.lobbyAlertBanner?.clearAlert();
+  }
+
   /**
-   * Zeigt eine permanente Fehlermeldung, wenn die Partie nicht mehr weiterlaufen kann –
-   * Host weg, Verbindung verloren, kein direkter Weg. Deaktiviert den BEREIT-Button,
-   * bis das Overlay neu gebaut wird (build()).
+   * Zeigt eine permanente Fehlermeldung, wenn die Verbindung zur Lobby nicht mehr weiterlaufen
+   * kann. BEENDET bleibt der kurze Status; die Erklaerung gehoert ausschliesslich in den Banner.
    */
   showHostDisconnectedMessage(message?: string): void {
+    this.markConnectionEnded();
+    this.showAlert({
+      severity: 'error',
+      title: t('ui.lobby.alertConnectionError'),
+      message: `${message ?? t('ui.lobby.hostLeft')} ${t('ui.lobby.reloadForNewRoom')}`,
+      persistent: true,
+      priority: 100,
+    });
+  }
+
+  /** Technischer Arena-Abbruch mit eigener, zentraler Bannersemantik. */
+  showArenaFailureMessage(message?: string): void {
+    this.markConnectionEnded();
+    this.showAlert({
+      severity: 'error',
+      title: t('ui.lobby.alertArenaError'),
+      message: `${message ?? t('ui.lobby.hostLeft')} ${t('ui.lobby.reloadForNewRoom')}`,
+      persistent: true,
+      priority: 100,
+    });
+  }
+
+  private markConnectionEnded(): void {
     this.playerContextMenu?.close();
     this.connectionEnded = true;
     this.statusText.setText(t('ui.lobby.ended')).setColor(toCssColor(COLORS.RED_2));
-    this.roomQualityText
-      .setText(`${message ?? t('ui.lobby.hostLeft')} ${t('ui.lobby.reloadForNewRoom')}`)
-      .setColor(toCssColor(COLORS.RED_2));
     this.btnLocked = true;
     this.readyBtn.setEnabled(false).setLabel(t('ui.lobby.ended'));
     this.stopReadyGlow();
@@ -1452,9 +1494,14 @@ export class LobbyOverlay {
   private async confirmKick(playerId: string): Promise<void> {
     if (!this.canKickPlayer(playerId)) return;
     const result = await this.bridge.kickPlayer(playerId);
-    if (!result.ok && this.visible && this.roomQualityText.scene) {
-      this.roomQualityText.setText(t('ui.lobby.kickFailed'))
-        .setColor(toCssColor(COLORS.RED_2));
+    if (!result.ok && this.visible) {
+      this.showAlert({
+        severity: 'error',
+        title: t('ui.lobby.alertError'),
+        message: t('ui.lobby.kickFailed'),
+        persistent: true,
+        priority: 40,
+      });
     }
   }
 
