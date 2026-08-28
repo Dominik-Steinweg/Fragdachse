@@ -317,6 +317,14 @@ export class ShadowSystem {
     for (const bucket of this.layers.values()) bucket.dynamicGraphics.setVisible(visible);
   }
 
+  /**
+   * Leert nur die pro Frame erzeugten Schatten. Gebackene statische Chunks bleiben dabei
+   * erhalten, damit ein World-Rebind unveraenderte Presentation weiterverwenden kann.
+   */
+  clearDynamicShadows(): void {
+    this.clearDynamic();
+  }
+
   private syncStaticSurfaceVisibility(): void {
     this.staticSurface?.setVisible(this.shadowsVisible && this.staticHasLayout);
   }

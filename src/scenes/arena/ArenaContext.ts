@@ -93,9 +93,10 @@ interface PlayerStatusRingLike {
  * Scene-lifetime systems are readonly – they exist from create() until the scene
  * is destroyed and never change identity.
  *
- * Round-scoped systems are writable and null outside an active round. They are
- * populated by ArenaLifecycleCoordinator.buildArena() and cleared by tearDownArena().
- * Coordinators must always null-check these before use.
+ * World-, Activity- und Round-scoped systems are writable and may have different
+ * lifetimes. World-Runtime can exist without an Activity or Round; Activity- and
+ * Round-Runtime is created and cleared only for the corresponding activity lifecycle.
+ * Coordinators must always null-check nullable fields before use.
  */
 export interface ArenaContext {
   // ── Scene-lifetime (always present after create()) ────────────────────────
@@ -119,7 +120,7 @@ export interface ArenaContext {
   readonly arenaCountdown:    ArenaCountdownOverlay | null;
   readonly playerStatusRing:  PlayerStatusRingLike | null;
 
-  // ── Round-scoped (null outside a round; managed by ArenaLifecycleCoordinator) ──
+  // ── World-/Activity-scoped (managed by ArenaLifecycleCoordinator) ───────────────
   /**
    * Kanonischer Kontext der laufenden World-Instanz: Identitaet, Metrik, Basen und die
    * persistente Basisstelle. World-scoped Zustand wird hierueber gelesen, nicht aus mutablen
@@ -145,7 +146,7 @@ export interface ArenaContext {
   baseManager: BaseManager | null;
   enemyManager: EnemyManager | null;
 
-  // Host-only round systems (null on clients and null outside a round)
+  // Host-only Activity-/Round-systems (null on clients and outside their lifetime)
   resourceSystem:    ResourceSystem    | null;
   burrowSystem:      BurrowSystem      | null;
   loadoutManager:    LoadoutManager    | null;

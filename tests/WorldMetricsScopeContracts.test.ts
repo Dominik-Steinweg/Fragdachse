@@ -210,7 +210,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
   it('baut World-Systeme ausschliesslich aus Descriptor und WorldRuntimeContext', () => {
     const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     const start = source.indexOf('  private resolveWorldLayout(');
-    const end = source.indexOf('\n  tearDownArena(): void {', start);
+    const end = source.indexOf('\n  tearDownArena(', start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
     const buildArena = source.slice(start, end);

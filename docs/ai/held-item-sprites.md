@@ -22,7 +22,7 @@ Generische Fallbacks für bekannte, bildfähige Gattungen sind ein Darstellungsv
 
 [HeldItemVisual.ts](../../src/entities/HeldItemVisual.ts) hält pro Figur ein eigenständiges Image. Ein Waffenwechsel tauscht die Textur und erzeugt kein neues Game Object pro Wechsel. Das Bild entsteht lazy beim ersten sichtbaren Item, wird mit der Figur synchronisiert und beim Teardown zerstört.
 
-Das Image bleibt bewusst außerhalb des Player-Sprites: PlayerEntity.sprite ist Physik-, Treffer-, Beleuchtungs- und Clarity-Referenz. Der Held-Item-Renderer kann sein eigenes Clarity- oder Scroll-Verhalten erhalten, ohne den Player-Body in einen Container zu verschieben.
+Das Image bleibt bewusst außerhalb des Player-Sprites. PlayerBody beziehungsweise die Player-Runtime ist die kanonische Quelle für Position, Ausrichtung, Bounds, Physik und Collision-/Hit-Geometrie; PlayerEntity kapselt die optionale Presentation. Der Held-Item-Renderer kann eigene Clarity-, Depth- oder Scroll-Regeln erhalten, ohne die Runtime oder ihre Geometrie an ein Sprite zu binden.
 
 Die zentrale Asset-Preload-Funktion lädt jede verwendete Textur höchstens einmal. Ist ein Asset beim Setzen noch nicht resident, darf der nächste Sync-Versuch die Zuordnung erneut anbieten, statt ein dauerhaft leeres Item zu merken.
 

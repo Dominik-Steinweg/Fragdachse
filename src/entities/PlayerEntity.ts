@@ -29,7 +29,7 @@ import {
 /**
  * Aufbauoptionen der Figur. Der Presentation-Modus liefert dieselbe Darstellung ohne die
  * Aufbauten, die einen echten Matchzustand voraussetzen (Name, HP-/Rüstungsbalken). Er
- * traegt die Ambient-Dachse der Lobby, die weder Spieleridentitaet noch HUD besitzen.
+ * traegt eine lokale Presentation ohne Spieleridentitaet oder HUD eines echten Matches.
  */
 /** Darstellungsanteil des replizierten Todeseffekts. */
 export interface PlayerDeathVisual {

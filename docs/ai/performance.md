@@ -18,6 +18,14 @@ Statische, große Flächen werden chunked und viewportnah gestreamt. Chunk- und 
 
 Die Verträge dafür liegen bei [ChunkedRenderSurface.ts](../../src/arena/chunks/ChunkedRenderSurface.ts), [GroundSurfaceStreamer.ts](../../src/arena/chunks/GroundSurfaceStreamer.ts), [RockOverlayStreamer.ts](../../src/arena/chunks/RockOverlayStreamer.ts) und im Test [ChunkedRenderSurface.test.ts](../../tests/ChunkedRenderSurface.test.ts).
 
+## Verifizierte Phaser-Fallen
+
+Für Phaser 4.2.1 gelten bei großen World-Darstellungen besonders diese drei Grenzen:
+
+- Ein `Layer` ist eine eigene Display-Liste, deren Renderer seine Kinder selbst durchläuft. Die Camera-Culling-Stufe filtert die Scene-Liste; sie macht die verschachtelten Layer-Kinder nicht automatisch zu einer viewport-indexierten Liste.
+- Scene- und Layer-Listen bleiben listenförmige Renderarbeit: Kamera-Prüfung, `willRender` und bei Bedarf Depth-Sort laufen über die enthaltenen Einträge. Viele dauerhaft versteckte Objekte kosten daher weiterhin Arbeit, auch wenn nur wenige sichtbar sind.
+- `Graphics` hält Zeichenbefehle und zerlegt komplexe Pfade bei der WebGL-Darstellung in Geometrie. Ein eigenes `dirty`-Flag spart höchstens unnötigen Command-Aufbau im Anwendungscode; es ersetzt weder das Caching stabiler Geometrie noch das Baken statischer Formen in eine Textur. Häufig wechselnde Geometrie sollte dagegen nicht in jedem Frame neue Texturen erzeugen.
+
 ## Hotpaths und Allokationen
 
 Update-, Sichtbarkeits-, Kollisions- und Snapshot-Pfade dürfen nicht unkontrolliert temporäre Objekte oder vollständige World-Scans erzeugen. Vorhandene ArenaCell-, Point-, Rock-, Obstacle- und LightOccluder-Indizes werden wiederverwendet und sind an die aktuelle World-Geometrie gebunden.

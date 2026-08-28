@@ -153,8 +153,8 @@ describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Fla
       resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
     );
-    const start = source.indexOf('  buildWorld(worldDescriptor: WorldDescriptor, activityDescriptor: ActivityDescriptor | null): void {');
-    const end = source.indexOf('  tearDownArena(): void {');
+    const start = source.indexOf('  buildWorld(');
+    const end = source.indexOf('  tearDownArena(', start);
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const body = source.slice(start, end);

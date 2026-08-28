@@ -34,7 +34,7 @@ function collectRoundScopedFields(): string[] {
 
 function readTearDownArenaBody(): string {
   const source = read(COORDINATOR_PATH);
-  const start = source.indexOf('  tearDownArena(): void {');
+  const start = source.indexOf('  tearDownArena(');
   expect(start, `${COORDINATOR_PATH} must declare tearDownArena()`).toBeGreaterThan(0);
   const end = source.indexOf('\n  private restorePersistentBase(', start);
   expect(end, `${COORDINATOR_PATH} must keep restorePersistentBase() after tearDownArena()`).toBeGreaterThan(start);

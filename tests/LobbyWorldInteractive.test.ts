@@ -392,7 +392,7 @@ describe('LobbyWorld – Teilnahme im Mehrspielerraum', () => {
 describe('LobbyWorld – World-Ende raeumt ihre Teilnehmer', () => {
   it('loest jede Player-Runtime im World-Teardown, nicht erst beim Rundenende', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const start = lifecycle.indexOf('  tearDownArena(): void {');
+    const start = lifecycle.indexOf('  tearDownArena(');
     expect(start).toBeGreaterThanOrEqual(0);
     // Der Abbau steht ganz vorn: die Detach-Module brauchen die Fachsysteme noch.
     expect(lifecycle.slice(start, start + 600)).toContain('this.detachAllWorldPlayers();');

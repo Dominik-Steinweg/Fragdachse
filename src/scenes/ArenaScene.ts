@@ -182,7 +182,7 @@ import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
-import { toGameMode, toMapId } from '../world/arenaDescriptorAdapter';
+import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
@@ -1905,8 +1905,8 @@ export class ArenaScene extends Phaser.Scene {
       ? sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs)
       : 0;
 
-    // Live-Builds und Moduswechsel wirken in derselben World-Instanz. Der Host reconciled sie
-    // vor jedem Simulationspfad; dabei bleiben PlayerRuntime und Entity-Identitaet erhalten.
+    // Same-Mode-Live-Builds bleiben in derselben LobbyWorld reconciled. Ein vollstaendiger
+    // GameMode-Wechsel wurde davor bereits als neue World-Instanz orchestriert.
     if (worldActive && bridge.isHost() && !terminated) {
       this.lifecycle.syncHostLoadoutsFromCommittedSelections();
     }
@@ -4196,11 +4196,12 @@ export class ArenaScene extends Phaser.Scene {
 
   private resolveConfiguredGameMode(phase = bridge.getGamePhase()): GameMode {
     const activity = bridge.getActivityDescriptor();
-    if (activity) return toGameMode(activity.kind);
-    // Eine authored Coop-World ohne Runde bleibt eine Coop-World.
     const descriptor = this.resolveRoundWorldDescriptor(phase);
-    if (descriptor && toMapId(descriptor.definitionId) !== null) return COOP_DEFENSE_MODE;
-    return bridge.getGameMode();
+    return resolveActiveGameMode({
+      activityKind: activity?.kind ?? null,
+      roomGameMode: bridge.getGameMode(),
+      worldDefinitionId: descriptor?.definitionId ?? null,
+    });
   }
 
   /** Active Worlds use their definition id; the Lobby map is only a creation input. */

@@ -25,10 +25,12 @@ import type { LobbyLoadoutPreviewState, PlayerNetState, SyncedPlaceableRock, Syn
 import { resolvePlayerCapabilities } from '../src/world/PlayerCapabilities';
 import { PlayerWorldRuntime, resolvePlayerRuntimeFeatures } from '../src/world/PlayerWorldRuntime';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
+import { resolveActiveGameMode, toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
 import { worldCellCenter } from '../src/world/WorldMetrics';
 import { resolveWorldPresentation } from '../src/world/WorldPresentation';
 import { consumesWorldReplication } from '../src/world/WorldReplication';
 import { createWorldRuntimeContext } from '../src/world/WorldRuntimeContext';
+import { WorldLifecycle } from '../src/world/WorldLifecycle';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
 
 const LOBBY_WORLD = getLobbyWorldDefinition();
@@ -373,8 +375,9 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
     expect(host.areTeammates(blueIds[0], redIds[0])).toBe(false);
     expect(host.isEnemyPair(blueIds[0], redIds[0])).toBe(true);
 
-    // Modewechsel veraendert nur die Lobby-Semantik, nicht die laufende World-Instanz.
-    expect(host.getWorldDescriptor()?.worldRevision).toBe(7302);
+    // Die Bridge verwaltet hier nur die kanonische Raum-Auswahl und ihre bestehenden
+    // Nebenwirkungen; die World-Reinstance-Orchestrierung gehoert dem Lifecycle-Coordinator.
+    expect(host.getGameMode()).toBe('capture_the_beer');
   });
 
   it('repliziert den Live-Coop-Build getrennt vom Commit und raeumt ihn beim Moduswechsel auf', async () => {
@@ -502,5 +505,119 @@ describe('LobbyWorld L3 – Placement und Dismantle', () => {
       'guest-session',
     )).toMatchObject({ id: placed!.id });
     expect(placement.getNetSnapshot()).toEqual([]);
+  });
+});
+
+describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
+  it('startet eine neue World ohne Activity und leert die World-Teilnahme', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const host = bridgeFor(hostRoom);
+    const client = bridgeFor(clientRoom);
+
+    useRoom(hostRoom);
+    host.publishWorldAndActivity(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7310), null);
+    host.hostPublishWorldParticipation({ p0: 'interactive', p1: 'interactive' });
+    useRoom(clientRoom);
+    client.sendLocalInput({ dx: 1, dy: 0, aim: 0.5, dashHeld: true });
+
+    useRoom(hostRoom);
+    host.publishGameState(worldSnapshot(
+      { p0: playerState(100, 100), p1: playerState(200, 200) },
+      { full: true, count: 0, upserts: [], removals: [] },
+      [placeable(77, 'p0')],
+    ), true);
+    useRoom(clientRoom);
+    expect(client.getLatestGameState()?.worldRevision).toBe(7310);
+    expect(client.getLocalWorldParticipation()).toBe('interactive');
+
+    useRoom(hostRoom);
+    host.publishWorldAndActivity(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7311), null);
+    expect(host.getActivityDescriptor()).toBeNull();
+    expect(host.getWorldParticipation('p0')).toBe('none');
+    expect(host.getWorldParticipation('p1')).toBe('none');
+    expect(host.getPlayerInput('p1')).toBeUndefined();
+
+    useRoom(clientRoom);
+    expect(client.getWorldDescriptor()?.worldRevision).toBe(7311);
+    expect(client.getActivityDescriptor()).toBeNull();
+    expect(client.getLocalWorldParticipation()).toBe('none');
+    expect(client.getLatestGameState()).toBeUndefined();
+    expect(resolveWorldPresentation({
+      participation: client.getLocalWorldParticipation(),
+      worldActive: true,
+      previewWithoutParticipation: true,
+    }).mode).toBe('preview');
+
+    useRoom(hostRoom);
+    host.publishGameState(worldSnapshot(
+      { p0: playerState(300, 300), p1: playerState(400, 400) },
+      { full: true, count: 0, upserts: [], removals: [] },
+      [],
+    ), true);
+    useRoom(clientRoom);
+    expect(client.getLatestGameState()).toMatchObject({
+      worldRevision: 7311,
+      players: { p0: { x: 300 }, p1: { x: 400 } },
+      placeableRocks: [],
+    });
+  });
+
+  it('loest die drei fachlichen Mode-Faelle ueber denselben Resolver', () => {
+    expect(resolveActiveGameMode({
+      activityKind: 'deathmatch',
+      roomGameMode: 'coop_defense',
+      worldDefinitionId: toWorldDefinitionId('18'),
+    })).toBe('deathmatch');
+    expect(resolveActiveGameMode({
+      activityKind: null,
+      roomGameMode: 'team_deathmatch',
+      worldDefinitionId: LOBBY_WORLD_DEFINITION_ID,
+    })).toBe('team_deathmatch');
+    expect(resolveActiveGameMode({
+      activityKind: null,
+      roomGameMode: 'deathmatch',
+      worldDefinitionId: toWorldDefinitionId('18'),
+    })).toBe('coop_defense');
+  });
+
+  it('haelt bei schnellen Ersetzungen genau eine aktuelle World-Instanz', () => {
+    const calls: string[] = [];
+    const lifecycle = new WorldLifecycle({
+      publish: (world) => calls.push(`publish:${world.worldRevision}`),
+      clear: () => calls.push('clear'),
+      attach: () => calls.push('attach'),
+      detach: () => calls.push('detach'),
+    });
+    lifecycle.beginCreate(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7312), null);
+    lifecycle.beginCreate(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7313), null);
+    lifecycle.beginCreate(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7314), null);
+
+    expect(lifecycle.descriptor?.worldRevision).toBe(7314);
+    expect(lifecycle.phase).toBe('creating');
+    expect(calls).toEqual(['publish:7312', 'publish:7313', 'publish:7314']);
+  });
+
+  it('trennt Orchestrierung, Teardown und Presentation-Rebind', () => {
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(lifecycle).toContain('this.prepareLobbyWorldReinstance();');
+    expect(lifecycle).toContain('Math.max(this.lastRoundRevision, previousRevision)');
+    expect(lifecycle).toContain('this.worldLifecycle.endInstance();');
+    expect(lifecycle).toContain('builder.rebindWorldRuntime(');
+    expect(lifecycle).toContain('this.tearDownArena(reusableArenaResult !== null);');
+
+    const bridge = read('src/network/NetworkBridge.ts');
+    const start = bridge.indexOf('  setGameMode(mode: GameMode): void {');
+    const end = bridge.indexOf('\n  getCoopDefenseMapId(): string {', start);
+    const modeSetter = bridge.slice(start, end);
+    expect(modeSetter).not.toContain('WorldRuntime');
+    expect(modeSetter).not.toContain('ArenaBuilder');
+    expect(modeSetter).not.toContain('Presentation');
+
+    const builder = read('src/arena/ArenaBuilder.ts');
+    expect(builder).toContain('replaceArenaLayoutContents(layout, authoredLayout);');
+    expect(builder).toContain('result.rockOverlaySurface?.refreshAll();');
+    expect(builder).toContain('result.rockVisualSystem?.flush();');
   });
 });

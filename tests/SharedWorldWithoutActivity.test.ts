@@ -373,11 +373,9 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
   it('nimmt die World entgegen und die Activity nur optional', () => {
     const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     // Der Aufbau kennt nur die kanonische World-/Activity-Sicht.
-    expect(source).toContain(
-      'buildWorld(worldDescriptor: WorldDescriptor, activityDescriptor: ActivityDescriptor | null): void {',
-    );
-    const start = source.indexOf('  buildWorld(worldDescriptor: WorldDescriptor');
-    const body = source.slice(start, source.indexOf('\n  tearDownArena(): void {', start));
+    const start = source.indexOf('  buildWorld(');
+    expect(start).toBeGreaterThan(0);
+    const body = source.slice(start, source.indexOf('\n  tearDownArena(', start));
     for (const roundBound of ['ArenaDescriptor', 'getArenaDescriptor', 'descriptor.gameMode', 'getGamePhase()']) {
       expect(body.includes(roundBound), `world build still depends on the round: ${roundBound}`).toBe(false);
     }

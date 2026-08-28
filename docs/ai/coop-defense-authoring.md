@@ -13,9 +13,11 @@ Coop Defense ist eine Activity auf einer World. Diese Seite beschreibt die stabi
 
 Der Adapter validiert diese Domänengrenze nicht durch implizite Defaults. Änderungen am Eingabeformat werden am normalisierten Map-Vertrag und am Round-Trip abgesichert; die Quelle bleibt die authored Definition, nicht die Adapterimplementierung.
 
-Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder für eine spätere Activity resident gehalten werden.
+Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder activity-unabhängig resident gehalten werden.
 
 Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und verwendet persistentBase.baseId als Verweis auf eine bestehende authored freundliche Main-Base. Die Map-Normalisierung prüft die Referenz und räumliche Reservierung; sie ist kein freier Runtime- oder Campaign-Key.
+
+**Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
 ## Basen und Overlays
 
@@ -29,6 +31,8 @@ Der Host besitzt Objective, Pressure, Wellen, Gegner, Events, Missionsprogress u
 
 Fachliche Zeit folgt der Activity-/Round-Simulation und den replizierten Zuständen. Date.now, lokale Renderzeit und Browser-Takt dürfen keine Entscheidungen über Sieg, Niederlage, Spawns oder Missionsfortschritt treffen. Darstellung darf zwischen validierten Zuständen interpolieren.
 
+`after-defense` bedeutet, dass die referenzierte Defense terminal aufgelöst ist: `completed` oder `failed`. Es bedeutet nicht „nach erfolgreicher Defense“. Ob ein fehlgeschlagenes Hold die gesamte Mission beendet, entscheidet separat das authored Flag `failureEndsMission`.
+
 ## Persistente Base
 
 Die persistente Base ist eine World-Site mit mission-local working copy:
@@ -40,11 +44,6 @@ Die persistente Base ist eine World-Site mit mission-local working copy:
 - [PersistentBaseRestorePlanner.ts](../../src/persistentBase/PersistentBaseRestorePlanner.ts) stellt Pläne deterministisch wieder her und behandelt gesperrte, unbekannte, außerhalb liegende oder kollidierende Einträge ohne stillen Weltumbau.
 
 Persistiert werden nur validierte, permanente host-owned Platzierungen. Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem PersistentBase-Blueprint heraus. Die authored Site liefert Radius und räumliche Bindung; der Laufzeitzustand gehört in die lokale Progress- und Room-Grenze.
-
-Eine spaetere LobbyWorld-Integration darf eine authored PersistentBase-Site nur materialisieren, wenn
-`selectedGameMode === coop_defense` und `persistentBaseUnlocked === true` gelten. Ein leerer oder
-nicht freigeschalteter PersistentBase-Zustand setzt diese Freischaltung nicht. L1-L3 implementieren
-diese Materialisierung und keine neue L4-Lifecycle-Architektur.
 
 ## Erweiterung einer Mission
 

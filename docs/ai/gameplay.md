@@ -24,11 +24,20 @@ World-Zustand umfasst dauerhafte Geometrie, Basen, World-Sites, World-Identität
 
 World Loading ist an worldRevision gebunden. Round Loading wartet auf die World-Readiness und die für den Aktivitätsstart nötigen Teilnehmer, bleibt aber ein eigener Vertrag. Siehe [WorldLoadReady.ts](../../src/world/WorldLoadReady.ts) und [WorldRoundLoadingContracts.test.ts](../../tests/WorldRoundLoadingContracts.test.ts).
 
+## RoundParticipation bleibt separat
+
+[RoundParticipationPolicy.ts](../../src/scenes/arena/RoundParticipationPolicy.ts) bildet den Teilnehmer-Snapshot einer laufenden Runde ab und ist nicht mit WorldParticipation zu vermischen:
+
+- `participantIds` ist die unveränderliche Kohorte beim Rundenstart. Ein Late Joiner wird nur Spectator und nicht rückwirkend Teilnehmer dieser Runde.
+- Ein aktiver Teilnehmer kann während derselben Runde nach `spectatorIds` wechseln; die historische Zugehörigkeit in `participantIds` bleibt erhalten.
+- Spawn, Respawn, Reward und Ergebnisberechtigung verwenden die effektive aktuelle Rolle. Ein separates authored Respawn-Budget oder andere Eligibility-Regeln bleiben davon unabhängig.
+- Die nächste Runde erzeugt einen neuen Teilnehmer-Snapshot. WorldParticipation beantwortet weiterhin die World-Aufnahme und ist kein Ersatz für diese Rundengrenze.
+
 ## Player-Runtime
 
 [PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts) liefert eine gemeinsame Feature-Beschreibung für Entity, Navigation, Combat, Ressourcen, Loadout, Targeting, World-scoped Player-Build und Missionsstatus. Autoritative Simulationsfeatures sind hostgebunden; ein Client darf keinen Serverzustand aus einer lokalen Visualisierung herstellen. Build- und Item-Modifikatoren können in einer Activity-losen World laufen, während Missionsstatus Activity-spezifisch bleibt.
 
-Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody ist der kanonische physische Körper; PlayerEntity und Sprite sind Präsentation. Attach- und Detach-Operationen sind atomar und müssen bei einem Fehler zurückrollen.
+Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody ist der kanonische physische Körper; PlayerEntity kapselt ihn und die optionale Sprite-Präsentation. Attach- und Detach-Operationen sind atomar und müssen bei einem Fehler zurückrollen.
 
 ## Eingaben und Aktionen
 

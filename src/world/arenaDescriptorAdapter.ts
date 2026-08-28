@@ -3,6 +3,7 @@ import {
   getCoopMissionDefinitionId,
   getWorldDefinitionId,
 } from '../config/authoring/coopDefenseAuthoringAdapter';
+import { COOP_DEFENSE_MODE } from '../gameModes';
 import type { GameMode } from '../types';
 import {
   PROCEDURAL_ARENA_WORLD_DEFINITION_ID,
@@ -36,6 +37,24 @@ export function toActivityKind(mode: GameMode): ActivityKind {
 
 export function toGameMode(kind: ActivityKind): GameMode {
   return GAME_MODE_BY_ACTIVITY_KIND[kind];
+}
+
+/**
+ * Reine Aufloesung des fachlich aktiven GameModes.
+ *
+ * Eine Activity ist immer staerker als die Raum-Auswahl. Ohne Activity bleibt die
+ * Raum-Auswahl fuer die Lobby massgeblich; eine authored Coop-World traegt ihren Modus
+ * dagegen aus ihrer World-Definition. Die WorldDescriptor-Struktur selbst bekommt dadurch
+ * kein GameMode-Feld.
+ */
+export function resolveActiveGameMode(input: {
+  readonly activityKind: ActivityKind | null;
+  readonly roomGameMode: GameMode;
+  readonly worldDefinitionId?: string | null;
+}): GameMode {
+  if (input.activityKind !== null) return toGameMode(input.activityKind);
+  if (input.worldDefinitionId && toMapId(input.worldDefinitionId) !== null) return COOP_DEFENSE_MODE;
+  return input.roomGameMode;
 }
 
 /** Eine Runde ohne authored Map realisiert die prozedurale Arena-World. */

@@ -12,7 +12,7 @@ Fragdachse ist ein browserbasierter 2D-Arena-Shooter mit Phaser 4 und direkten W
 
 - Phaser ist auf 4.2.1 festgelegt. `import * as Phaser from 'phaser'` verwenden und keine Phaser-3-Muster übernehmen.
 - `peerjs` darf nur in `src/network/peer/PeerJsTransport.ts` importiert werden. Gameplay spricht über `NetworkBridge`, nie über das Transportsubstrat. Der Host entscheidet Simulation, Treffer, Ressourcen, Spawns, Rundenzustand und Layout; Clients senden Eingaben/Aktionen und visualisieren replizierten Zustand.
-- `ArenaContext` trennt Scene- und Round-Lifetime. Round-Ressourcen werden in `ArenaLifecycleCoordinator.buildArena()` erzeugt, in `tearDownArena()` vollständig entkoppelt und außerhalb einer Runde als `null` behandelt.
+- `ArenaContext` trennt langlebige Scene-Systeme von World-, Activity- und Round-Runtime. Die Scene bleibt bestehen; eine World kann ohne Activity/Round existieren. Activity-/Round-Ressourcen werden vom `ArenaLifecycleCoordinator` in der passenden Lifecycle-Phase erzeugt, vollständig entkoppelt und außerhalb ihrer Lifetime als `null` behandelt.
 - Scenes und Coordinators orchestrieren. Regeln gehören in `src/systems/`, Entity-Lifecycle in `src/entities/` und Darstellung in `src/effects/`, `src/arena/` oder `src/ui/`. Bestehende Manager, Resolver, Registry- und Callback-Verträge vor neuen Abstraktionen prüfen.
 - Authored Content bleibt in JSON/Registries und wird durch die vorhandenen Loader/Validatoren aufgelöst. Wire- und Ready-Snapshots führen IDs bzw. vertraglich definierte Zustände, keine zufällig rekonstruierten Konfigurationen.
 

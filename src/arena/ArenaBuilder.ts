@@ -257,7 +257,6 @@ export class ArenaBuilder {
       cols: worldMetrics.gridCols,
       rows: worldMetrics.gridRows,
     });
-    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
 
     // Gleise (vor Felsen zeichnen, damit depth-Reihenfolge stimmt)
     const trackObjects = presentation ? this.buildTracks(layout.tracks ?? [], worldMetrics) : [];
@@ -275,23 +274,10 @@ export class ArenaBuilder {
       const { gridX, gridY } = layout.rocks[i];
       const worldX = worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
       const worldY = worldMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
-      const mask   = AutoTiler.computeMask(gridX, gridY, isOccupied);
-      const autoTileFrame = AutoTiler.getFrame(mask, ROCK_AUTOTILE);
-      rockVisualStates.add({
-        id: i,
-        gridX,
-        gridY,
-        x: worldX,
-        y: worldY,
-        active: true,
-        frame: autoTileFrame,
-        cornerTints: resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
-        damageTint: 0xffffff,
-        ownerTintStrength: 0,
-        alpha: 1,
-        scaleX: 1,
-        scaleY: 1,
-      }, false);
+      rockVisualStates.add(
+        ArenaBuilder.createAuthoredRockVisualState(i, layout.rocks[i], worldMetrics, rockGrid),
+        false,
+      );
       const proxy = createRockPhysicsProxy(this.scene, worldX, worldY);
       rockGroup.add(proxy);
       (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
@@ -384,6 +370,118 @@ export class ArenaBuilder {
       });
     }
     return result;
+  }
+
+  /**
+   * Bindet eine neue World-Instanz an die unveraenderte authored Presentation.
+   *
+   * Nur die statischen Render-/Physics-Container bleiben erhalten. Rock-Zustaende, Proxy-Slots,
+   * Spatial Index und Overlay-Quelle werden vollstaendig aus der authored Baseline neu gesetzt;
+   * damit ist dies kein State-Migrationspfad fuer die alte World.
+   */
+  rebindWorldRuntime(
+    result: ArenaBuilderResult,
+    layout: ArenaLayout,
+    authoredLayout: ArenaLayout,
+    worldMetrics: WorldMetrics,
+    presentation = true,
+  ): void {
+    replaceArenaLayoutContents(layout, authoredLayout);
+
+    const baselineRockCount = layout.rocks.length;
+    const previousStates = result.rockVisualStates.states.slice();
+    const previousProxies = result.rockPhysicsProxies.slice();
+
+    // Nur alte, zusaetzlich platzierte Proxy-Slots muessen entfernt werden. Aktive authored
+    // Felsen behalten ihren Physics-Proxy; zerstoerte Felsen bekommen einen neuen.
+    for (let id = baselineRockCount; id < previousProxies.length; id += 1) {
+      const proxy = previousProxies[id];
+      if (proxy?.active) proxy.destroy();
+    }
+    result.rockPhysicsProxies.length = baselineRockCount;
+    result.rockGrid = new RockGridIndex(layout.rocks, {
+      cols: worldMetrics.gridCols,
+      rows: worldMetrics.gridRows,
+    });
+    for (let id = 0; id < baselineRockCount; id += 1) {
+      const cell = layout.rocks[id];
+      const worldX = worldMetrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
+      const worldY = worldMetrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
+      const previous = previousProxies[id];
+      if (previous?.active) {
+        result.rockPhysicsProxies[id] = previous;
+        continue;
+      }
+      const proxy = createRockPhysicsProxy(this.scene, worldX, worldY);
+      result.rockGroup.add(proxy);
+      (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
+      result.rockPhysicsProxies[id] = proxy;
+    }
+
+    result.rockVisualStates.clear();
+    // Persistent-GPU-Slots fuer alte dynamische IDs werden explizit auf "tot" gesetzt. Danach
+    // duerfen sie als freie IDs erneut belegt werden, ohne alte Pixel zu hinterlassen.
+    for (const state of previousStates) {
+      if (!state || state.id < baselineRockCount) continue;
+      result.rockVisualStates.add({
+        ...state,
+        active: false,
+        damageTint: 0xffffff,
+        ownerColor: undefined,
+        ownerTintStrength: 0,
+        alpha: 0,
+        scaleX: 0,
+        scaleY: 0,
+      }, true);
+    }
+    for (let id = 0; id < baselineRockCount; id += 1) {
+      result.rockVisualStates.add(
+        ArenaBuilder.createAuthoredRockVisualState(id, layout.rocks[id], worldMetrics, result.rockGrid),
+        true,
+      );
+    }
+
+    result.rockOverlaySource.cells.length = 0;
+    result.rockOverlaySource.keys.clear();
+    syncRockOverlaySource(result.rockOverlaySource, layout.rocks);
+    result.rockOverlaySurface?.refreshAll();
+    result.rockVisualSystem?.flush();
+
+    // CTB-Basisflaechen sind eine kleine modusbezogene Presentation-Ausnahme. Die unveraenderte
+    // World-Geometrie bleibt erhalten, nur diese beiden farbigen Zonen werden neu gebunden.
+    for (const zone of result.baseZoneObjects) {
+      if (zone.active) zone.destroy();
+    }
+    result.baseZoneObjects.length = 0;
+    if (presentation) result.baseZoneObjects.push(...this.buildCaptureTheBeerBaseZones());
+  }
+
+  private static createAuthoredRockVisualState(
+    id: number,
+    cell: RockCell,
+    worldMetrics: WorldMetrics,
+    rockGrid: RockGridIndex,
+  ): RockVisualState {
+    const { gridX, gridY } = cell;
+    const worldX = worldMetrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2;
+    const worldY = worldMetrics.offsetY + gridY * CELL_SIZE + CELL_SIZE / 2;
+    const isOccupied = (gx: number, gy: number) => rockGrid.isOccupiedWithBorder(gx, gy);
+    const mask = AutoTiler.computeMask(gridX, gridY, isOccupied);
+    return {
+      id,
+      gridX,
+      gridY,
+      x: worldX,
+      y: worldY,
+      active: true,
+      frame: AutoTiler.getFrame(mask, ROCK_AUTOTILE),
+      cornerTints: resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, isOccupied),
+      damageTint: 0xffffff,
+      ownerTintStrength: 0,
+      alpha: 1,
+      scaleX: 1,
+      scaleY: 1,
+    };
   }
 
   /**
@@ -899,4 +997,31 @@ export class ArenaBuilder {
       ARENA_HEIGHT,
     );
   }
+}
+
+/** Aktualisiert die Arrays eines bereits beobachteten Layout-Objekts ohne dessen Identitaet zu wechseln. */
+function replaceArrayContents<T>(target: T[], source: readonly T[]): void {
+  target.length = source.length;
+  for (let index = 0; index < source.length; index += 1) target[index] = source[index];
+}
+
+/**
+ * Die Chunk-Streamer halten bewusst Referenzen auf die Layout-Arrays. Beim Fast-Reinstance muss
+ * deshalb der authored Inhalt in-place ersetzt werden, statt ein neues Layout-Objekt zu setzen.
+ */
+function replaceArenaLayoutContents(target: ArenaLayout, authored: ArenaLayout): void {
+  target.seed = authored.seed;
+  replaceArrayContents(target.rocks, authored.rocks);
+  replaceArrayContents(target.trees, authored.trees);
+  replaceArrayContents(target.tracks, authored.tracks);
+  replaceArrayContents(target.dirt, authored.dirt);
+  replaceArrayContents(target.powerUpPedestals, authored.powerUpPedestals);
+
+  if (authored.decals) {
+    if (!target.decals) target.decals = [];
+    replaceArrayContents(target.decals, authored.decals);
+  } else if (target.decals) {
+    target.decals.length = 0;
+  }
+  target.groundHazardZones = authored.groundHazardZones;
 }

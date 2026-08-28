@@ -161,9 +161,9 @@ import {
 } from '../../persistentBase/PersistentBaseRestorePlanner';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import {
+  resolveActiveGameMode,
   toActivityDefinitionId,
   toActivityKind,
-  toGameMode,
   toMapId,
   toWorldDefinitionId,
 } from '../../world/arenaDescriptorAdapter';
@@ -201,11 +201,11 @@ import type { PersistentBaseAnchor, PersistentToolRef } from '../../persistentBa
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
 /**
- * Manages the arena round lifecycle.
+ * Manages the World and Activity lifecycles inside the arena scene.
  *
  * Responsibilities: buildArena / tearDownArena, LOBBY ↔ ARENA phase transitions,
  * host quality checks, round result saving, train event setup.
- * Mutates ArenaContext round-scoped fields (arenaResult, currentLayout, etc.).
+ * Mutates World-/Activity-scoped ArenaContext fields (arenaResult, currentLayout, etc.).
  */
 export class ArenaLifecycleCoordinator {
   private matchTerminated   = false;
@@ -245,6 +245,14 @@ export class ArenaLifecycleCoordinator {
    * zweite Instanz dann als bereits beendet zurueck.
    */
   private lastRoundRevision = 0;
+  /**
+   * Nur Vergleichsmarker fuer den bei der aktuellen LobbyWorld eroeffneten Raum-Modus.
+   * Die fachliche Aufloesung bleibt `resolveActiveGameMode`/`bridge.getActiveGameMode()`;
+   * dieser Wert wird weder repliziert noch als Gameplay-SSOT verwendet.
+   */
+  private lobbyWorldModeAtRevision: GameMode | null = null;
+  /** Lokaler Uebergang: alte LobbyWorld ist beendet, neue Descriptor-Runtime wird gebunden. */
+  private pendingLobbyWorldReinstance = false;
   private localArenaLoadReady = false;
   private terrainSnapshotReady = false;
   private terrainSnapshotGenerationId = 0;
@@ -561,6 +569,21 @@ export class ArenaLifecycleCoordinator {
     // Pruefung bliebe nach einem LobbyWorld-Reset die alte Runtime stehen: es gibt eine World,
     // aber die lokal gebaute meint eine andere.
     if (this.arenaBuilt && this.builtWorldRevision !== world.worldRevision) {
+      const previousDefinitionId = this.ctx.world?.descriptor.definitionId;
+      const canFastReinstance = this.pendingLobbyWorldReinstance
+        || (isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+          && isLobbyWorldDefinitionId(world.definitionId)
+          && bridge.getActivityDescriptor() === null
+          && this.ctx.arenaResult !== null
+          && this.ctx.currentLayout !== null);
+      if (canFastReinstance) {
+        // Clients still hold the old local lifecycle when the reliable replacement arrives.
+        // The host already ended it while publishing the new descriptor; both paths converge
+        // here before the new runtime is attached.
+        if (!this.pendingLobbyWorldReinstance) this.prepareLobbyWorldReinstance();
+        this.onTransitionToArena();
+        return;
+      }
       this.onTransitionToLobby();
       return;
     }
@@ -578,17 +601,74 @@ export class ArenaLifecycleCoordinator {
   hostSyncLobbyWorld(): void {
     if (!bridge.isHost() || this.matchTerminated) return;
     if (bridge.getGamePhase() !== 'LOBBY' || this.roundStartPending) return;
-    // Solange noch eine World-Runtime steht - etwa waehrend der Arena-Ausblendung nach dem
-    // Rundenende - entsteht keine neue Instanz. Sonst risse ihr Aufbau die noch sichtbare Arena
-    // mitten in der Blende weg.
-    if (this.worldLifecycle.descriptor !== null || this.arenaBuilt) return;
+
+    const currentMode = bridge.getActiveGameMode();
+    const currentWorld = this.worldLifecycle.descriptor;
+    if (currentWorld !== null) {
+      if (isLobbyWorldDefinitionId(currentWorld.definitionId)
+        && bridge.getActivityDescriptor() === null) {
+        if (this.lobbyWorldModeAtRevision === null) {
+          this.lobbyWorldModeAtRevision = currentMode;
+        } else if (this.lobbyWorldModeAtRevision !== currentMode) {
+          const previousRevision = currentWorld.worldRevision;
+          this.prepareLobbyWorldReinstance();
+          const worldRevision = nextMonotonicRevision(
+            Math.max(this.lastRoundRevision, previousRevision),
+            Date.now(),
+          );
+          this.lastRoundRevision = worldRevision;
+          this.lobbyWorldModeAtRevision = currentMode;
+          this.worldLifecycle.beginCreate(
+            createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, worldRevision),
+            null,
+          );
+        }
+      } else {
+        this.lobbyWorldModeAtRevision = null;
+      }
+      return;
+    }
+
+    // Solange noch eine Arena-Runtime steht - etwa waehrend der Lobby-Ausblendung nach dem
+    // Rundenende - entsteht keine neue LobbyWorld. Sonst wuerde ihr Aufbau die alte Arena
+    // mitten in der Transition ersetzen.
+    if (this.arenaBuilt) return;
 
     const worldRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = worldRevision;
+    this.lobbyWorldModeAtRevision = currentMode;
     this.worldLifecycle.beginCreate(
       createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, worldRevision),
       null,
     );
+  }
+
+  /**
+   * Schliesst die alte LobbyWorld sofort und oeffnet ein kleines lokales Rebind-Fenster.
+   * `buildWorld()` uebernimmt anschliessend den neuen World-Runtime-Aufbau; bis dahin bleiben
+   * weder Spieler-Runtimes noch World-Aktionen an die alte Revision gebunden.
+   */
+  private prepareLobbyWorldReinstance(): void {
+    this.pendingLobbyWorldReinstance = true;
+    this.detachAllWorldPlayers();
+    this.worldLifecycle.endInstance();
+    this.clearWorldAdmission();
+    this.hostUpdate.setActive(false);
+    this.localArenaLoadReady = false;
+    this.terrainSnapshotReady = false;
+    this.roundStartPrepared = false;
+    this.isLocalReady = false;
+    bridge.setLocalReady(false);
+    bridge.sendLocalPlacementPreview(null);
+    this.ctx.arenaCountdown?.clear();
+    this.localPlayerState.spectator = false;
+    this.localPlayerState.overlayTrackedAlive = null;
+    this.clientUpdate.clientUtilityOverride = null;
+    this.resetLocalArenaHudState();
+    this.ctx.gameAudioSystem.playMusic('music_lobby');
+    this.syncLobbySurface(true);
+    this.ctx.leftPanel.setLobbyFieldsLocked(false);
+    this.syncLobbyTimeOfDay();
   }
 
   // ── Host helpers called from ArenaScene.update() ─────────────────────────
@@ -638,6 +718,8 @@ export class ArenaLifecycleCoordinator {
     this.detachAllWorldPlayers();
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
+    this.lobbyWorldModeAtRevision = null;
+    this.pendingLobbyWorldReinstance = false;
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
@@ -774,8 +856,8 @@ export class ArenaLifecycleCoordinator {
   }
 
   spawnReadyPlayers(): void {
-    // The phase switches to ARENA before host generation now. Do not create round entities until
-    // buildArena has installed the matching layout and round-scoped systems.
+    // The phase switches to ARENA before host generation now. Do not create activity/round
+    // entities until buildArena has installed the matching layout and runtime systems.
     if (!bridge.isHost() || !this.arenaBuilt) return;
     // Die Features eines Spielers haengen an seiner Teilnahme. Sie muss aktuell sein, bevor
     // hier jemand eintritt - sonst bekaeme ein frisch Zugelassener die Module von gestern.
@@ -935,6 +1017,8 @@ export class ArenaLifecycleCoordinator {
     // replizierter Weltzustand stehen, den eine spaetere Instanz faelschlich uebernehmen koennte.
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
+    this.lobbyWorldModeAtRevision = null;
+    this.pendingLobbyWorldReinstance = false;
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -972,6 +1056,8 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseRespawnBudgetState(null);
     this.worldLifecycle.endInstance();
     this.clearWorldAdmission();
+    this.lobbyWorldModeAtRevision = null;
+    this.pendingLobbyWorldReinstance = false;
     bridge.hostResetRoundParticipation();
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
@@ -1367,6 +1453,8 @@ export class ArenaLifecycleCoordinator {
     this.arenaBuilt = false;
     this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;
+    this.lobbyWorldModeAtRevision = null;
+    this.pendingLobbyWorldReinstance = false;
 
     // A technical abort can happen before the normal round-conclusion path runs. Never carry a
     // half-written mission working state into a later round in the same room.
@@ -1431,9 +1519,11 @@ export class ArenaLifecycleCoordinator {
     // Die authored World gehoert der World-Identitaet. Sie loest ueber dieselbe Registry auf,
     // ob sie aus einer Coop-Map adaptiert wurde oder – wie die LobbyWorld – nativ authoriert ist.
     const definition = getWorldDefinition(world.definitionId);
-    const mode: GameMode = activity
-      ? toGameMode(activity.kind)
-      : (mapConfig !== null ? COOP_DEFENSE_MODE : 'deathmatch');
+    const mode = resolveActiveGameMode({
+      activityKind: activity?.kind ?? null,
+      roomGameMode: bridge.getActiveGameMode(),
+      worldDefinitionId: world.definitionId,
+    });
     return {
       mode,
       mapConfig,
@@ -1446,15 +1536,25 @@ export class ArenaLifecycleCoordinator {
     };
   }
 
-  buildWorld(worldDescriptor: WorldDescriptor, activityDescriptor: ActivityDescriptor | null): void {
+  buildWorld(
+    worldDescriptor: WorldDescriptor,
+    activityDescriptor: ActivityDescriptor | null,
+    preserveLobbyPresentation = false,
+  ): void {
     if (worldDescriptor.generatorVersion !== ARENA_GENERATOR_VERSION) {
       throw new Error(
         `[ArenaLifecycleCoordinator] Unsupported arena generator version ${worldDescriptor.generatorVersion}; expected ${ARENA_GENERATOR_VERSION}`,
       );
     }
 
+    const reusableArenaResult = preserveLobbyPresentation
+      && isLobbyWorldDefinitionId(worldDescriptor.definitionId)
+      && activityDescriptor === null
+      ? this.ctx.arenaResult
+      : null;
+    const reusableLayout = reusableArenaResult ? this.ctx.currentLayout : null;
     const prepared = this.preparedRoundLayout;
-    this.tearDownArena();
+    this.tearDownArena(reusableArenaResult !== null);
 
     // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
@@ -1543,7 +1643,13 @@ export class ArenaLifecycleCoordinator {
         `[ArenaLifecycleCoordinator] Arena fingerprint mismatch: expected ${worldDescriptor.layoutFingerprint}, got ${actualFingerprint}`,
       );
     }
-    const layout = locallyGeneratedLayout;
+    const canReuseLobbyPresentation = reusableArenaResult !== null
+      && reusableLayout !== null
+      && presentation
+      && reusableArenaResult.groundSurface !== null
+      && reusableArenaResult.rockOverlaySurface !== null
+      && reusableArenaResult.rockVisualSystem !== null;
+    const layout = canReuseLobbyPresentation ? reusableLayout : locallyGeneratedLayout;
     this.renderers.leafBlower.setTerrainMaterialLayout(
       layout,
       coopDefenseBases.flatMap((base) => base.cells),
@@ -1599,19 +1705,30 @@ export class ArenaLifecycleCoordinator {
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     const persistentBaseSite = world.persistentBaseSite;
-    this.ctx.arenaResult = builder.buildDynamic(layout, {
-      worldMetrics: world.metrics,
-      // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
-      presentation,
-      enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
-      persistentBaseGravel: persistentBaseSite
-        ? {
-          seed: worldDescriptor.seed,
-          anchor: persistentBaseSite.anchor,
-          radiusCells: persistentBaseSite.radiusCells,
-        }
-        : undefined,
-    });
+    if (canReuseLobbyPresentation) {
+      builder.rebindWorldRuntime(
+        reusableArenaResult,
+        reusableLayout,
+        locallyGeneratedLayout,
+        world.metrics,
+        presentation,
+      );
+      this.ctx.arenaResult = reusableArenaResult;
+    } else {
+      this.ctx.arenaResult = builder.buildDynamic(layout, {
+        worldMetrics: world.metrics,
+        // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
+        presentation,
+        enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
+        persistentBaseGravel: persistentBaseSite
+          ? {
+            seed: worldDescriptor.seed,
+            anchor: persistentBaseSite.anchor,
+            radiusCells: persistentBaseSite.radiusCells,
+          }
+          : undefined,
+      });
+    }
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
     // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
@@ -3583,7 +3700,7 @@ export class ArenaLifecycleCoordinator {
       });
     }
 
-    // Round-scoped renderers (all clients)
+    // World-/Activity-renderers (all clients)
     this.renderers.train = presentation ? new TrainRenderer(this.scene) : null;
     this.renderers.train?.setAudioSystem(this.ctx.gameAudioSystem);
     this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.scene) : null;
@@ -3635,14 +3752,15 @@ export class ArenaLifecycleCoordinator {
     this.trainDestroyedShown = false;
   }
 
-  tearDownArena(): void {
+  tearDownArena(preserveAuthoredPresentation = false): void {
     // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
     // Schiessstand-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
     // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die
     // Detach-Module genau diese Systeme noch brauchen.
     this.detachAllWorldPlayers();
     this.terrainSnapshotGenerationId += 1;
-    this.terrainSnapshotReady = false;
+    const preserveTerrainSnapshot = preserveAuthoredPresentation && this.terrainSnapshotReady;
+    if (!preserveTerrainSnapshot) this.terrainSnapshotReady = false;
     this.cancelPendingHostArenaGeneration();
     this.localArenaLoadReady = false;
     this.roundStartPrepared = false;
@@ -3713,7 +3831,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseMissionBarrierManager?.destroy();
     this.ctx.coopDefenseMissionBarrierManager = null;
 
-    if (this.ctx.arenaResult) {
+    if (this.ctx.arenaResult && !preserveAuthoredPresentation) {
       ArenaBuilder.destroyDynamic(this.ctx.arenaResult);
       this.ctx.arenaResult = null;
     }
@@ -3926,7 +4044,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.ctx.hostPhysics.setBaseGroup(null);
-    this.renderers.leafBlower.setTerrainColorSnapshot(null);
+    if (!preserveAuthoredPresentation) this.renderers.leafBlower.setTerrainColorSnapshot(null);
     this.renderers.leafBlower.setTerrainMaterialLayout(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
@@ -3978,7 +4096,8 @@ export class ArenaLifecycleCoordinator {
     this.renderers.train?.destroy();
     this.renderers.train = null;
     this.renderers.beer.clear();
-    this.renderers.shadow.clear();
+    if (preserveAuthoredPresentation) this.renderers.shadow.clearDynamicShadows();
+    else this.renderers.shadow.clear();
     this.renderers.lighting.setActive(false);
     this.renderers.lighting.setOccluderIndex(null);
     this.ctx.lightOccluderIndex = null;
@@ -4357,20 +4476,27 @@ export class ArenaLifecycleCoordinator {
       coopDefenseMapConfig?.arenaWidthCells,
       coopDefenseMapConfig?.arenaHeightCells,
     );
+    const preserveLobbyPresentation = this.pendingLobbyWorldReinstance;
+    const preserveTerrainSnapshot = preserveLobbyPresentation && this.terrainSnapshotReady;
     try {
-      this.buildWorld(worldDescriptor, activityDescriptor);
+      this.buildWorld(
+        worldDescriptor,
+        activityDescriptor,
+        preserveLobbyPresentation,
+      );
     } catch (error) {
       console.error('[ArenaLifecycleCoordinator] Lokale Arena-Erzeugung fehlgeschlagen:', error);
       this.terminateMatch('Lokale Arena-Erzeugung fehlgeschlagen (Generator/Fingerprint abweichend).');
       return;
     }
+    this.pendingLobbyWorldReinstance = false;
     this.arenaBuilt = true;
     this.builtWorldRevision = worldDescriptor.worldRevision;
     this.localArenaLoadReady = false;
-    this.terrainSnapshotReady = false;
-    if (this.getLocalWorldPresentation().required) {
+    this.terrainSnapshotReady = preserveTerrainSnapshot;
+    if (this.getLocalWorldPresentation().required && !this.terrainSnapshotReady) {
       this.startTerrainSnapshotBuild(worldDescriptor.worldRevision);
-    } else {
+    } else if (!this.getLocalWorldPresentation().required) {
       this.terrainSnapshotReady = true;
     }
 
@@ -4452,6 +4578,8 @@ export class ArenaLifecycleCoordinator {
     this.arenaBuilt = false;
     this.builtWorldRevision = 0;
     this.arenaEnteredAt = 0;
+    this.lobbyWorldModeAtRevision = null;
+    this.pendingLobbyWorldReinstance = false;
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;
@@ -5315,7 +5443,12 @@ export class ArenaLifecycleCoordinator {
    */
   private resolveConfiguredGameMode(): GameMode {
     const activity = bridge.getActivityDescriptor();
-    return activity ? toGameMode(activity.kind) : bridge.getGameMode();
+    const descriptor = bridge.getWorldDescriptor();
+    return resolveActiveGameMode({
+      activityKind: activity?.kind ?? null,
+      roomGameMode: bridge.getGameMode(),
+      worldDefinitionId: descriptor?.definitionId ?? null,
+    });
   }
 
   /** World-first Map-Aufloesung; der Lobby-Wert ist nur vor der World-Erzeugung zulaessig. */

@@ -44,9 +44,17 @@ Participation wird host-authoritativ über den zuverlässigen World-Kanal veröf
 
 Die Zuverlässigkeit kommt vom Channel, nicht aus einem Payload-Feld. Fast-Nachrichten dürfen bei geschlossener Verbindung oder Überlast verworfen werden; ein Sender darf dort keinen dauerhaften Zustandsfortschritt voraussetzen.
 
-Game-State wird als vollständiger Bootstrap oder als Delta übertragen. Deltas dürfen unveränderte oder leere Slices auslassen; Clients mergen sie in ihren Cache. Ein vollständiger Bootstrap muss alle erforderlichen Slices enthalten und wird durch [FullGameStateBootstrap.ts](../../src/network/FullGameStateBootstrap.ts) validiert. Nach World- oder Round-Wechsel wird der Delta-Cache zurückgesetzt.
+Game-State wird als vollständiger Bootstrap oder als Delta übertragen. Deltas lassen Slice-spezifisch unveränderte Werte aus; ein vollständiger Bootstrap muss alle erforderlichen Slices enthalten und wird durch [FullGameStateBootstrap.ts](../../src/network/FullGameStateBootstrap.ts) validiert. Nach World- oder Round-Wechsel wird der Delta-Cache zurückgesetzt.
 
 Replizierte Entities und langlebige Zustände brauchen stabile Identitäten. Bei einem neuen Zustand sind Owner, Channel, Update-Frequenz, Lebensdauer und Baseline zu klären; ein Array-Index oder eine lokale Scene-Referenz ist keine Netzidentität.
+
+Bei delta-gemergten Slices bedeutet ein fehlender Slice unverändert, nicht leer. Der Übergang auf eine leere Sammlung muss im Slice-Vertrag ausdrücklich codiert werden, etwa als leere Voll-Liste, explizite Removals oder vollständiger Snapshot. Eine abweichende Semantik ist nur zulässig, wenn der konkrete Codec sie ausdrücklich definiert.
+
+Ein veränderlicher Zustand darf nicht nur einmal über den Fast-Kanal gesendet werden: `PeerLink` darf Fast-Pakete bei Überlast oder geschlossenem Kanal verwerfen. Ohne erneute Sendung geht ein solcher Zustand verloren. Geeignete Verträge sind wiederholte Vollzustände oder Refreshes, Deltas mit expliziten Entfernungen oder der zuverlässige Kanal.
+
+Zeitlich begrenzte replizierte Zustände verwenden bevorzugt einen absoluten fachlichen Endzeitpunkt wie `expiresAt` statt ausschließlich einer Restdauer. Clients können daraus zwischen Snapshots herunterzählen, ohne dass Paketlatenz die Lebensdauer neu startet; das ist eine passende Option, kein Zwang für jeden Zustand.
+
+Wiederkehrende Host-Ereignisse tragen eine monotone Entitäts- oder Zustandsrevision, zum Beispiel `pulseSequence` beim Tesla-Dome. Renderer lösen den Effekt aus, wenn die Sequenz voranschreitet, nicht aus der lokalen Aktivierungsdauer; ein initialer Snapshot setzt nur die Baseline und spielt vergangene Pulse nicht nach.
 
 ## Join, Resume und Sichtbarkeit
 

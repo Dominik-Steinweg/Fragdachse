@@ -13,7 +13,7 @@
  * zwischen Client und Host, PeerJS ausschließlich als Signaling-Broker.
  */
 import { isActivityOfWorld, parseActivityDescriptor, type ActivityDescriptor } from '../world/ActivityDescriptor';
-import { toGameMode } from '../world/arenaDescriptorAdapter';
+import { resolveActiveGameMode } from '../world/arenaDescriptorAdapter';
 import {
   normalizeWorldLoadProgress,
   parseWorldLoadReadyState,
@@ -276,6 +276,8 @@ export interface RoundState {
 }
 
 export interface GameState {
+  /** World-Instanz, zu der dieser Snapshot gehoert. */
+  worldRevision: number;
   roundStartTime: number;
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectile[];
@@ -314,6 +316,8 @@ export interface GameState {
 }
 
 interface OutboundGameState {
+  /** Optionaler Test-/Host-Anker; die Bridge schreibt immer die aktuelle World-Revision. */
+  worldRevision?: number;
   roundStartTime: number;
   players:      Record<string, PlayerNetState>;
   projectiles:  SyncedProjectileSnapshot | null;
@@ -1111,10 +1115,14 @@ export class NetworkBridge {
     return (getState(KEY_GAME_MODE) as GameMode | undefined) ?? COOP_DEFENSE_MODE;
   }
 
-  /** Runtime-Modus der aktiven Activity; vor einer World bleibt die Lobby-Auswahl massgeblich. */
+  /** Fachlich aktiver Modus aus Activity, authored World-Kontext oder Raum-Lobby. */
   getActiveGameMode(): GameMode {
     const activity = this.getActivityDescriptor();
-    return activity ? toGameMode(activity.kind) : this.getGameMode();
+    return resolveActiveGameMode({
+      activityKind: activity?.kind ?? null,
+      roomGameMode: this.getGameMode(),
+      worldDefinitionId: this.getWorldDescriptor()?.definitionId ?? null,
+    });
   }
 
   setGameMode(mode: GameMode): void {
@@ -1384,7 +1392,10 @@ export class NetworkBridge {
     // einzige lokale Eintrittsentscheidung; Round-Phase und Round-Eligibility sind dafuer
     // keine Ersatzquelle.
     const worldRevision = this.getWorldDescriptor()?.worldRevision;
-    if (worldRevision !== undefined && !maySendWorldInput(this.getLocalWorldParticipation())) {
+    // Zwischen alter und neuer LobbyWorld gibt es bewusst kein World-Input-Fallback. Dadurch
+    // kann ein bereits laufender Input-Loop die gerade beendete Instanz nicht wiederbeleben.
+    if (worldRevision === undefined) return;
+    if (!maySendWorldInput(this.getLocalWorldParticipation())) {
       input = {
         dx: 0,
         dy: 0,
@@ -1392,9 +1403,7 @@ export class NetworkBridge {
         dashHeld: false,
         worldRevision,
       } satisfies PlayerInput;
-    } else if (worldRevision !== undefined) {
-      input = { ...input, worldRevision };
-    }
+    } else input = { ...input, worldRevision };
     const now = Date.now();
     if (now - this.lastInputSentAtMs < NET_INPUT_KEEPALIVE_MS && isSamePlayerInput(input, this.lastSentInput)) {
       return;
@@ -1425,7 +1434,7 @@ export class NetworkBridge {
   getPlayerInput(playerId: string): PlayerInput | undefined {
     const input = this.playerStateMap.get(playerId)?.getState(KEY_INPUT) as PlayerInput | undefined;
     const world = this.getWorldDescriptor();
-    if (!world) return input?.worldRevision === undefined ? input : undefined;
+    if (!world) return undefined;
     return input?.worldRevision !== undefined
       && isCurrentWorldRevision(world.worldRevision, input.worldRevision)
       ? input
@@ -2321,6 +2330,8 @@ export class NetworkBridge {
 
   // Client-seitiger Cache für Partial-State-Merge (leere Arrays werden nicht gesendet)
   private cachedGameState: GameState | undefined;
+  /** Revision des World-Snapshots, auf dem der Merge-Cache basiert. */
+  private cachedGameStateWorldRevision: number | null = null;
   // Host-seitige Sequenznummer: wird bei jedem publishGameState() inkrementiert
   private publishSeq = 0;
   private burningGroundPublishTicks = 0;
@@ -2346,6 +2357,7 @@ export class NetworkBridge {
    */
   resetGameStateCache(): void {
     this.cachedGameState = undefined;
+    this.cachedGameStateWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
     this.lastSeenSeq = -1;
     this.burningGroundPublishTicks = 0;
     this.lastPublishedBurningGround.clear();
@@ -2360,11 +2372,18 @@ export class NetworkBridge {
    * Enthält eine Sequenznummer (_s) für zuverlässige Change-Detection auf Clients.
    */
   publishGameState(state: OutboundGameState, fullSnapshot = false): void {
+    const worldRevision = this.getWorldDescriptor()?.worldRevision;
+    if (worldRevision === undefined) return;
+    if (state.worldRevision !== undefined && state.worldRevision !== worldRevision) return;
     if (fullSnapshot) {
-      this.publishFullGameState(state);
+      this.publishFullGameState(state, worldRevision);
       return;
     }
-    const payload: Record<string, unknown> = { p: encodePlayerStates(state.players), _s: ++this.publishSeq };
+    const payload: Record<string, unknown> = {
+      wr: worldRevision,
+      p: encodePlayerStates(state.players),
+      _s: ++this.publishSeq,
+    };
     payload.rt = state.roundStartTime;
     // Fehlender Schluessel heisst hier "keine aktiven Projektile": der Dynamik-Strom fuehrt jeden
     // Tick alle aktiven Projektile, ein leerer Snapshot kann also nur eine leere Arena bedeuten.
@@ -2462,8 +2481,9 @@ export class NetworkBridge {
   }
 
   /** Baut einen vollstaendigen Bootstrap-Payload und veroeffentlicht ihn reliable. */
-  private publishFullGameState(state: OutboundGameState): void {
+  private publishFullGameState(state: OutboundGameState, worldRevision: number): void {
     const payload: Record<string, unknown> = {
+      wr: worldRevision,
       p: encodePlayerStates(state.players),
       _s: ++this.publishSeq,
       _full: true,
@@ -2508,12 +2528,16 @@ export class NetworkBridge {
   }
 
   getLatestGameState(): GameState | undefined {
+    const expectedWorldRevision = this.getWorldDescriptor()?.worldRevision ?? null;
+    this.ensureGameStateWorldRevision(expectedWorldRevision);
+    if (expectedWorldRevision === null) return undefined;
+
     const fastRaw = getState(KEY_GAME_STATE) as Record<string, unknown> | undefined;
     const initialRaw = getState(KEY_GAME_STATE_INITIAL) as Record<string, unknown> | undefined;
     const expectedRoundStartTime = this.getArenaStartTime();
     const inArena = this.getGamePhase() === 'ARENA' && expectedRoundStartTime > 0;
     const isCurrentRound = (candidate: Record<string, unknown> | undefined): boolean => {
-      if (!candidate || !candidate.p) return false;
+      if (!candidate || !candidate.p || !isCurrentWorldRevision(expectedWorldRevision, candidate.wr)) return false;
       if (!inArena) return true;
       return candidate.rt === expectedRoundStartTime;
     };
@@ -2569,6 +2593,7 @@ export class NetworkBridge {
     );
 
     const state: GameState = {
+      worldRevision: expectedWorldRevision,
       roundStartTime,
       players:       decodePlayerStates(raw.p as Parameters<typeof decodePlayerStates>[0]),
       projectiles:   applyProjectileSnapshot(
@@ -2610,6 +2635,14 @@ export class NetworkBridge {
     this.cachedGameState = state;
     this.gameStateVersion++;
     return state;
+  }
+
+  private ensureGameStateWorldRevision(worldRevision: number | null): void {
+    if (this.cachedGameStateWorldRevision === worldRevision) return;
+    this.cachedGameStateWorldRevision = worldRevision;
+    this.cachedGameState = undefined;
+    this.lastSeenSeq = -1;
+    this.projectileStaticCache.clear();
   }
 
   private mergePowerUpSnapshot(snapshot: SyncedPowerUpSnapshot | undefined, previous: readonly SyncedPowerUp[]): SyncedPowerUp[] {
