@@ -286,7 +286,7 @@ export class MatchResultsOverlay {
 
     const objects: Phaser.GameObjects.GameObject[] = [];
 
-    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 0.88)
+    const backdrop = this.scene.add.rectangle(CX, CY, GAME_WIDTH, GAME_HEIGHT, COLORS.GREY_10, 1)
       .setScrollFactor(0)
       .setInteractive();
     backdrop.on('pointerdown', () => this.skipAnimations());
@@ -427,7 +427,9 @@ export class MatchResultsOverlay {
     const style = OUTCOME_STYLE[presentation.outcome];
     this.applyAccent(style.color);
 
-    this.container!.setVisible(true).setAlpha(0);
+    // Der Backdrop gehoert ab dem ersten sichtbaren Frame dem Results-Screen. Die innere
+    // Sequenz animiert weiterhin Panel, Text und Belohnungen separat.
+    this.container!.setVisible(true).setAlpha(1);
     this.panel?.setScale(0.96);
     this.outcomeText?.setText(t(style.labelKey)).setAlpha(0).setScale(0.7);
     this.outcomeFlash?.setText(t(style.labelKey)).setAlpha(0).setScale(1).setVisible(false);
@@ -1003,8 +1005,7 @@ export class MatchResultsOverlay {
   // ── Sequenz ────────────────────────────────────────────────────────────────
 
   private startSequence(style: OutcomeStyle): void {
-    // 1. Panel fährt heran, damit der Layer wie ein eigenes Fenster aufgeht.
-    this.addTween({ targets: this.container, alpha: 1, duration: 180, ease: 'Sine.easeOut' });
+    // 1. Panel fährt heran, waehrend der opake Results-Backdrop bereits den Bildschirm besitzt.
     this.addTween({
       targets: this.panel,
       scale: 1,
