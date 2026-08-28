@@ -621,7 +621,9 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'gore-normal',
     depth: DEPTH_FX - 0.1,
     blendMode: Phaser.BlendModes.NORMAL,
-    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    // CubicInOut traegt die Fragmentbewegung; CubicIn bleibt fuer Alpha und Skala. Der Death-
+    // Fragment-Glow erbt beide Kurven, deshalb ist GoreAdd identisch vorgewaermt.
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn, GpuVfxEase.CubicInOut],
     frameAnimations: [GpuVfxFrameAnimationId.DeathDisintegration],
     capacity: 4096,
     maxLifetimeMs: 1400,
@@ -632,7 +634,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + 'Streaks und Tropfen bleiben untereinander bewusst reihenfolgearm; eine zweite Lane '
       + 'fuer minimale Depth-Unterschiede wuerde nur GPU-Kapazitaet duplizieren.',
     capacityRationale:
-      'Die 1,4-s-Death-Lifetime erlaubt bei 48 Haupt- plus hoechstens 30 dekorativen Dust-Membern '
+      'Die 1,4-s-Death-Lifetime erlaubt bei 48 Haupt- plus hoechstens 22 kurzlebigen Dust-Membern '
       + 'rund 52 voll ueberlappende Todesfaelle neben schwerem Blut-Spray. 4096 bleibt begrenzt '
       + 'und reserviert 512 Slots fuer Hauptfragmente und Hauptspray gegen Mikrodetails.',
   },
@@ -641,7 +643,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'gore-add',
     depth: DEPTH_FX + 0.05,
     blendMode: Phaser.BlendModes.ADD,
-    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn, GpuVfxEase.CubicInOut],
     capacity: 1024,
     maxLifetimeMs: 1400,
     order: 'add-over-opaque',

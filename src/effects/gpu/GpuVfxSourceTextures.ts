@@ -96,6 +96,10 @@ export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
     ctx.fillRect(20.8, 10.8, 4.8, 2.8);
   });
 
+  // Ab hier mischen sich weiche Koerner unter die harten Massen. Die Framefolge kann nicht
+  // ueberblenden, jeder Wechsel ist ein harter Schnitt - der Uebergang muss deshalb im Motiv
+  // selbst liegen: aufeinanderfolgende Frames teilen sich ihr Vokabular, damit der Sprung
+  // zwischen ihnen klein bleibt.
   ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 48, 48, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillRect(12.8, 14.4, 9.6, 8.4);
@@ -106,6 +110,10 @@ export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
     ctx.fillRect(35.6, 19.2, 4.8, 4.4);
     ctx.fillRect(8.8, 26.8, 5.2, 3.6);
     ctx.fillRect(24.4, 34, 3.6, 4.4);
+    // Erste weiche Absplitterungen: sie kuendigen das Kornvokabular der spaeteren Frames an.
+    drawSoftDeathMote(ctx, 10.6, 10.4, 1.9, 1.5, 0.3, 0.34);
+    drawSoftDeathMote(ctx, 38.4, 30.6, 1.6, 2.0, -0.4, 0.3);
+    drawSoftDeathMote(ctx, 19.2, 39.4, 2.0, 1.6, 0.5, 0.28);
   });
 
   ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_FRAGMENTED, 48, 48, (ctx) => {
@@ -115,15 +123,24 @@ export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
     ctx.fillRect(30.4, 18, 8.4, 6.8);
     ctx.fillRect(16.8, 21.2, 8.8, 8.8);
     ctx.fillRect(26.8, 28, 7.2, 8);
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.fillRect(6, 25.2, 4.8, 4.4);
-    ctx.fillRect(16, 34, 4.4, 4.8);
-    ctx.fillRect(38, 28.4, 3.6, 5.2);
+    // Die drei kleinen Randstuecke sind jetzt weich: dieselben Massen wie zuvor, aber schon im
+    // Kornvokabular des naechsten Frames.
+    drawSoftDeathMote(ctx, 8.4, 27.4, 2.4, 2.2, -0.25, 0.5);
+    drawSoftDeathMote(ctx, 18.2, 36.4, 2.2, 2.4, 0.4, 0.5);
+    drawSoftDeathMote(ctx, 39.8, 31, 1.8, 2.6, -0.5, 0.46);
+    drawSoftDeathMote(ctx, 13.4, 8.6, 1.8, 1.5, 0.2, 0.4);
+    drawSoftDeathMote(ctx, 34.2, 11.6, 1.6, 2.0, -0.35, 0.36);
+    drawSoftDeathMote(ctx, 11.8, 32.4, 2.0, 1.6, 0.55, 0.34);
+    drawSoftDeathMote(ctx, 30.4, 38.6, 1.7, 2.1, -0.15, 0.32);
   });
 
-  // Ab hier traegt kein `fillRect` mehr: der Zerfall laeuft ueber weiche Koerner, deren kleinster
-  // Radius bewusst oberhalb eines Texels bleibt.
+  // Ab hier traegt kein `fillRect` mehr. Die drei ersten Eintraege sind bewusst grosse, weiche
+  // Ballen an den Massepositionen des Fragmented-Frames: sie halten die Erinnerung an die
+  // Bruchstuecke, waehrend der Rest schon reines Korn ist.
   drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_DUST, [
+    [14.6, 16, 4.6, 3.6, -0.2, 0.34],
+    [21.2, 25.6, 4.4, 4.4, 0.3, 0.3],
+    [30.4, 32, 3.6, 4, -0.45, 0.28],
     [7.4, 12.6, 2.9, 2.1, -0.3, 0.76],
     [14.8, 7.8, 2.1, 2.84, 0.5, 0.63],
     [23.8, 11.6, 2.8, 1.84, -0.4, 0.69],
@@ -160,7 +177,12 @@ export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
     [43.4, 40, 1.04, 1.3, -0.5, 0.2],
   ]);
 
+  // Die beiden ersten Eintraege sind ein sehr schwacher Wolkenansatz an den Lappenpositionen des
+  // Haze-Frames. Er ist hier kaum sichtbar, macht den anschliessenden Wechsel auf die volle
+  // Staubwolke aber zu einer Verdichtung statt zu einem Motivwechsel.
   drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_FINE_DUST, [
+    [21, 23, 10, 8, -0.2, 0.08],
+    [28, 28, 8, 9, 0.3, 0.07],
     [5.2, 8.8, 1.42, 1.06, -0.3, 0.42],
     [11, 4.4, 1.08, 1.32, 0.1, 0.34],
     [16.4, 10.2, 1.5, 1.04, 0.5, 0.29],
@@ -209,35 +231,34 @@ export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
     [45, 38.6, 1.22, 1.02, -0.35, 0.16],
   ]);
 
-  // Uebergang von Korn zu Wolke: wenige breite, sehr schwache Lappen tragen die Flaeche, ein Rest
-  // an Koernern haelt den Fragmentcharakter noch lesbar.
+  // Die tragende Staubwolke. Sieben stark ueberlappende Lappen um die Frame-Mitte ergeben eine
+  // zusammenhaengende Flaeche statt einzelner Blasen; die restlichen Koerner sind bewusst gross
+  // und schwach, damit sie als Textur innerhalb der Wolke lesen und nicht als Punkte davor.
+  // Das Member-Alpha steht in dieser Phase nur noch bei rund 0,88 bis 0,33 (CubicIn), deshalb
+  // liegen die Texturwerte deutlich hoeher als bei den kornigen Frames davor.
   drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_HAZE, [
-    [16, 18, 11, 8.5, -0.35, 0.16],
-    [30, 20, 9, 11, 0.4, 0.14],
-    [22, 32, 12, 8, 0.15, 0.13],
-    [36, 33, 7, 6, -0.5, 0.11],
-    [11, 31, 6.5, 7.5, 0.55, 0.12],
-    [26, 10, 7.5, 5.5, -0.2, 0.1],
-    [6.4, 16.2, 1.3, 1, 0.3, 0.22],
-    [13.2, 9.4, 1.1, 1.4, -0.4, 0.19],
-    [21, 6.6, 1.4, 1.05, 0.2, 0.17],
-    [34.6, 9.8, 1.05, 1.35, 0.5, 0.16],
-    [42, 17.4, 1.25, 1, -0.3, 0.15],
-    [3.6, 26.8, 1, 1.3, 0.15, 0.14],
-    [44.2, 29.6, 1.35, 1.05, -0.55, 0.13],
-    [8.2, 40.2, 1.1, 1.4, 0.35, 0.15],
-    [18.4, 43, 1.3, 1, -0.2, 0.14],
-    [30.8, 43.4, 1.05, 1.3, 0.45, 0.13],
-    [40.6, 40, 1.2, 1, -0.4, 0.12],
-    [24.4, 20.6, 1.4, 1.1, 0.25, 0.2],
+    [20, 21, 13, 10, -0.3, 0.34],
+    [28, 24, 11, 13, 0.4, 0.3],
+    [22, 30, 14, 10, 0.15, 0.28],
+    [31, 31, 9, 8, -0.5, 0.24],
+    [15, 28, 9, 10, 0.55, 0.26],
+    [26, 16, 10, 7.5, -0.2, 0.22],
+    [17, 17, 8, 9, 0.35, 0.2],
+    [8.6, 15.4, 2.4, 1.8, 0.3, 0.13],
+    [38.4, 18.2, 2, 2.6, -0.4, 0.12],
+    [12.2, 36.8, 2.6, 1.9, 0.5, 0.12],
+    [36.6, 35.4, 1.9, 2.4, -0.25, 0.11],
+    [24.8, 8.4, 2.2, 1.7, 0.2, 0.1],
+    [23.6, 40.2, 1.8, 2.3, -0.55, 0.1],
   ]);
 
-  // Reiner Auslauf: nur noch drei sehr breite, fast durchsichtige Lappen. Die Alpha-Kurve des
-  // Members loescht das Fragment waehrend dieses Frames ohnehin aus.
+  // Reiner Auslauf: vier sehr breite Lappen ohne jedes Korn. Das Member-Alpha faellt hier von
+  // rund 0,33 auf 0, der Tail bleibt also duenn, obwohl die Texturwerte hoeher liegen als zuvor.
   drawDeathMorphDustTexture(scene, TEX_DEATH_MORPH_VAPOR, [
-    [21, 23, 19, 15, -0.25, 0.1],
-    [31, 28, 14, 17, 0.45, 0.08],
-    [16, 31, 13, 12, 0.2, 0.07],
+    [22, 24, 19, 16, -0.25, 0.26],
+    [30, 27, 15, 18, 0.45, 0.22],
+    [17, 29, 14, 13, 0.2, 0.2],
+    [25, 18, 13, 11, 0.5, 0.16],
   ]);
 }
 

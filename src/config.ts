@@ -397,6 +397,11 @@ export const BLOOD_HIT_VFX = {
 export const DEATH_DISINTEGRATION_VFX = {
   durationMs: 1350,
   lifetimeVarianceMs: 70,
+  /** Micro-Motes sind Uebergangsdetail: sie erloeschen, bevor die Hauptmasse zur Haze-Phase kommt. */
+  microLifetimeMinMs: 360,
+  microLifetimeMaxMs: 640,
+  /** Obergrenze der Morph-Streckung je Hauptfragment; 1 waere ein synchron schaltender Burst. */
+  morphDesyncMaxScale: 1.32,
   /** Sofortiger gemeinsamer Treffer-Drift, bevor die spaete Cubic-In-Freigabe sichtbar wird. */
   cohesionHitDriftPx: 1.6,
   /** Display-Groesse, auf die `chunkSizePx` als World-Space-Fragmentmass kalibriert ist. */

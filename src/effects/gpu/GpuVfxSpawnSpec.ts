@@ -34,6 +34,19 @@ export interface GpuVfxSpawnSpec {
   frame: GpuVfxFrameId;
   /** Optionale, laneweit vorgewaermte GPU-One-Shot-Framefolge; -1 behaelt den statischen Frame. */
   frameAnimation: GpuVfxFrameAnimationId | -1;
+  /**
+   * Streckt die Framefolge gegenueber `lifeMs`; 1 laesst sie exakt mit dem Member enden.
+   *
+   * Damit laufen sonst identische Partikel ihre Morph-Phasen zu verschiedenen Zeitpunkten durch,
+   * ohne dass sich ihre Bewegung oder Lebensdauer aendert – ein Burst zerfaellt als Welle statt
+   * synchron umzuschalten.
+   *
+   * **Nur Werte >= 1.** Phaser 4.2.1 laesst `loop: false` bei der Frame-Animation fallen; eine
+   * kuerzere Folge als der Member wuerde am Ende wieder auf den ersten Frame springen. Das
+   * Backend klemmt entsprechend. Groessere Werte sind unbedenklich: das Partikel stirbt dann
+   * vor dem letzten Frame, was bei einem gegen 0 laufenden Alpha nicht sichtbar ist.
+   */
+  frameAnimationDurationScale: number;
 
   lifeMs: number;
   x: number;

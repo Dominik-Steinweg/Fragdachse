@@ -42,6 +42,16 @@ export function evaluateFakeAnimation(anim: FakeGpuAnimation, t: number): number
     const repeats = loop ? 0 : Math.floor(amplitude);
     return base + amplitude * time * time * time + repeats * amplitude;
   }
+  if (ease === 'Cubic.easeInOut') {
+    // Zeichengleich zu `SpriteGPULayer.vert`, Zweig `type == 22`.
+    let time = (t % 1) * 2;
+    const repeats = loop ? 0 : Math.floor(amplitude);
+    if (time < 1) {
+      return base + amplitude * time * time * time * 0.5 + repeats * amplitude;
+    }
+    time -= 2;
+    return base + amplitude * 0.5 * (time * time * time + 2) + repeats * amplitude;
+  }
   throw new Error(`Test-Helper kennt die Ease nicht: ${ease}`);
 }
 

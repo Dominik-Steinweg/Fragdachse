@@ -156,6 +156,7 @@ export class GpuVfxSystem {
       lane: spec.lane,
       frame: spec.frame,
       frameAnimation: GPU_VFX_NO_FRAME_ANIMATION,
+      frameAnimationDurationScale: 1,
       lifeMs: 0,
       x: 0, y: 0, vx: 0, vy: 0,
       positionEase: 0,

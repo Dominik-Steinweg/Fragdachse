@@ -530,13 +530,20 @@ export class CombatGoreGpuRenderer {
       + Math.sin(angle) * travel
       + (rng() - 0.5) * jitter
       + hitY * hitImpulse;
-    const lifeMs = randomBetween(
-      rng,
-      micro
-        ? DEATH_DISINTEGRATION_VFX.durationMs - 300
-        : DEATH_DISINTEGRATION_VFX.durationMs - DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
-      DEATH_DISINTEGRATION_VFX.durationMs + DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
-    );
+    // Die Micro-Motes sind nur das Uebergangsdetail der herausbrechenden Koerner, nicht der
+    // Schluss des Effekts: sie sind lange erloschen, bevor die Hauptmasse ihre Haze-Phase
+    // erreicht. Sonst dominieren am Ende einzelne Punkte statt der zusammenhaengenden Wolke.
+    const lifeMs = micro
+      ? randomBetween(
+        rng,
+        DEATH_DISINTEGRATION_VFX.microLifetimeMinMs,
+        DEATH_DISINTEGRATION_VFX.microLifetimeMaxMs,
+      )
+      : randomBetween(
+        rng,
+        DEATH_DISINTEGRATION_VFX.durationMs - DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
+        DEATH_DISINTEGRATION_VFX.durationMs + DEATH_DISINTEGRATION_VFX.lifetimeVarianceMs,
+      );
     // The template deliberately stays on the fixed 4x4 source-pixel analysis grid. Convert
     // only the visible chunk size here so a source block occupies the same World-space size
     // across 32x32, 64x64 and higher-resolution frames. Chunk offsets remain normalized and
@@ -588,13 +595,24 @@ export class CombatGoreGpuRenderer {
     spec.frameAnimation = micro
       ? GPU_VFX_NO_FRAME_ANIMATION
       : GpuVfxFrameAnimationId.DeathDisintegration;
+    // Ohne Streckung durchlaufen alle Fragmente eines Bursts ihre Morph-Phasen gleichzeitig - der
+    // gesamte Burst schaltet dann als Block von Korn auf Wolke um. Die Streuung laesst denselben
+    // Uebergang als Welle ueber die Fragmente laufen, ohne Bewegung oder Lebensdauer anzufassen.
+    // Die langsamsten Fragmente sterben mitten in der Haze-Phase, was bei einem gegen 0 laufenden
+    // Alpha nicht auffaellt.
+    spec.frameAnimationDurationScale = micro
+      ? 1
+      : randomBetween(rng, 1, DEATH_DISINTEGRATION_VFX.morphDesyncMaxScale);
     spec.x = originX + startX;
     spec.y = originY + startY;
     spec.vx = (endX - startX) * 1000 / lifeMs;
     spec.vy = (endY - startY) * 1000 / lifeMs;
-    // Cubic-In haelt nach rund 400 ms erst wenige Prozent der Gesamtstrecke zurueck. Der kleine
-    // gemeinsame Startversatz oben reagiert trotzdem sofort auf die Treffer-Richtung.
-    spec.positionEase = GpuVfxEase.CubicIn;
+    // Cubic-InOut statt Cubic-In: die Cohesion haelt am Anfang genauso, der Burst oeffnet sich in
+    // der Mitte und laeuft zum Ende wieder aus. Cubic-In liess das Fragment bei seiner
+    // Hoechstgeschwindigkeit verschwinden - genau der harte Schnitt, der das Tempo abgehackt
+    // wirken liess. Der kleine gemeinsame Startversatz oben reagiert weiter sofort auf die
+    // Treffer-Richtung.
+    spec.positionEase = GpuVfxEase.CubicInOut;
     spec.yMode = GpuVfxEase.Linear;
     spec.gravityFactor = 1;
     spec.rotation = entityRotation + (rng() - 0.5) * (micro ? 1.2 : 0.18);
@@ -602,7 +620,9 @@ export class CombatGoreGpuRenderer {
     spec.angularVelocity = (rng() - 0.5)
       * (micro ? 2.4 : DEATH_DISINTEGRATION_VFX.rotationMaxDeg * Math.PI / 180 * 2)
       * rotationFactor;
-    spec.rotationEase = GpuVfxEase.CubicIn;
+    // Dieselbe Kurve wie die Position: die Drehung laeuft mit dem Burst aus, statt am Ende
+    // aufzudrehen und dann abgeschnitten zu werden.
+    spec.rotationEase = GpuVfxEase.CubicInOut;
     spec.scaleStart = morphScale * (micro ? 0.72 : 1);
     spec.scaleEnd = micro
       ? spec.scaleStart * 0.62
@@ -656,12 +676,12 @@ export class CombatGoreGpuRenderer {
 
 function resolveDeathProfile(maxDimension: number, chunkCount: number): DeathProfile {
   const profile = maxDimension <= 24
-    ? { main: 24, micro: 8, glow: 2, travelScale: 0.78 }
+    ? { main: 24, micro: 6, glow: 2, travelScale: 0.78 }
     : maxDimension <= 36
-      ? { main: 36, micro: 14, glow: 3, travelScale: 0.94 }
+      ? { main: 36, micro: 10, glow: 3, travelScale: 0.94 }
       : maxDimension <= 64
-        ? { main: 44, micro: 22, glow: 5, travelScale: 1.14 }
-        : { main: 48, micro: 30, glow: 8, travelScale: 1.34 };
+        ? { main: 44, micro: 16, glow: 5, travelScale: 1.14 }
+        : { main: 48, micro: 22, glow: 8, travelScale: 1.34 };
   return {
     main: Math.min(chunkCount, Math.min(DEATH_DISINTEGRATION_VFX.maxChunksPerEffect, profile.main)),
     micro: Math.min(chunkCount, profile.micro),

@@ -165,7 +165,10 @@ export function writeGpuVfxMember(
     // Phaser 4.2.1 laesst `loop` bei seiner internen Frame-Animation leider fallen. Ein um 1 ms
     // laengerer GPU-Zyklus als der Pool-Member macht den One-Shot trotzdem sichtbar strikt
     // vorwaerts: der Slot wird stillgelegt, bevor der Shader den Anfang wieder erreichen kann.
-    animFrame.duration = life + 1;
+    // Aus demselben Grund darf `frameAnimationDurationScale` die Folge nur strecken, nie kuerzen
+    // - ein Wert unter 1 liesse den Morph am Ende auf den ersten Frame zurueckspringen.
+    const scale = spec.frameAnimationDurationScale > 1 ? spec.frameAnimationDurationScale : 1;
+    animFrame.duration = Math.round(life * scale) + 1;
     MEMBER.animation = animFrame;
   } else {
     MEMBER.animation = undefined;

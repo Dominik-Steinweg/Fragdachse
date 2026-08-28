@@ -206,7 +206,7 @@ describe('gpu vfx member: frame animation', () => {
     };
 
     expect(frame.base).toBe('death-disintegration');
-    expect(frame.amplitude).toBe(8);
+    expect(frame.amplitude).toBe(16);
     expect(frame.duration).toBe(1351);
     expect(frame.loop).toBe(false);
     expect(frame.yoyo).toBe(false);

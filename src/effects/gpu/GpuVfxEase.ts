@@ -18,6 +18,12 @@ export const GpuVfxEase = {
   Gravity: 2,
   /** `Cubic.In(v) = v^3`; haelt Cohesion lange und beschleunigt den spaeten Release. */
   CubicIn: 3,
+  /**
+   * `Cubic.InOut`; Geschwindigkeit null am Anfang *und* am Ende. Haelt die Cohesion wie
+   * `CubicIn`, oeffnet den Burst in der Mitte und laesst ihn wieder auslaufen, statt das
+   * Partikel bei Hoechstgeschwindigkeit verschwinden zu lassen.
+   */
+  CubicInOut: 4,
 } as const;
 
 export type GpuVfxEase = (typeof GpuVfxEase)[keyof typeof GpuVfxEase];
@@ -27,7 +33,7 @@ export type GpuVfxEase = (typeof GpuVfxEase)[keyof typeof GpuVfxEase];
  * teilen sich einen Code (`Power0` und `Linear` sind beide 1).
  */
 export const GPU_VFX_EASE_NAMES: readonly string[] = [
-  'Linear', 'Quad.easeOut', 'Gravity', 'Cubic.easeIn',
+  'Linear', 'Quad.easeOut', 'Gravity', 'Cubic.easeIn', 'Cubic.easeInOut',
 ];
 
 /** Nur `Linear` rechnet ohne den `repeats`-Term des Shaders (siehe `gpuVfxEasedBase`). */

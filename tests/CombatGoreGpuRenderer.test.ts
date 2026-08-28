@@ -297,40 +297,49 @@ describe('combat gore gpu renderer', () => {
     expect(primary.alpha.ease).toBe('Cubic.easeIn');
     expect(primary.frameAnimation).toMatchObject({
       name: 'death-disintegration',
-      amplitude: 8,
+      amplitude: 16,
       loop: false,
       yoyo: false,
     });
   });
 
-  it('holds cohesion through 400 ms, then accelerates into the directed release', () => {
+  it('holds cohesion, opens the burst in the middle and settles again at the end', () => {
     const sample = playFullDeath(64, 32, { dirX: 1, dirY: 0 });
     const primary = sample.main[0]!;
     const lifeMs = primary.x.duration;
-    const at = (animation: typeof primary.x, ms: number) => (
-      evaluateFakeAnimation(animation, ms / lifeMs)
+    const startX = evaluateFakeAnimation(primary.x, 0);
+    const startY = evaluateFakeAnimation(primary.y, 0);
+    const travelAt = (t: number) => Math.hypot(
+      evaluateFakeAnimation(primary.x, t) - startX,
+      evaluateFakeAnimation(primary.y, t) - startY,
     );
-    const startX = at(primary.x, 0);
-    const startY = at(primary.y, 0);
-    const cohesionTravel = Math.hypot(
-      at(primary.x, 400) - startX,
-      at(primary.y, 400) - startY,
-    );
-    const releaseTravel = Math.hypot(
-      at(primary.x, 900) - startX,
-      at(primary.y, 900) - startY,
-    );
+    // Anteile der Gesamtstrecke statt Pixelbetraegen: der Vertrag ist die Form der Kurve, nicht
+    // die Reichweite, die von Sprite-Groesse und Treffer-Impuls abhaengt.
+    const total = travelAt(1);
+    const fraction = (t: number) => travelAt(t) / total;
 
     expect(lifeMs).toBeGreaterThanOrEqual(1280);
     expect(lifeMs).toBeLessThanOrEqual(1420);
-    expect(primary.x.ease).toBe('Cubic.easeIn');
-    expect(cohesionTravel).toBeLessThan(9);
-    expect(releaseTravel).toBeGreaterThan(cohesionTravel * 6);
+    expect(primary.x.ease).toBe('Cubic.easeInOut');
+
+    // Cohesion: nach 400 ms haelt die Silhouette noch weitgehend zusammen.
+    expect(fraction(400 / lifeMs)).toBeLessThan(0.15);
+    // Release: die Mitte traegt den Burst.
+    expect(fraction(900 / lifeMs)).toBeGreaterThan(0.6);
+    // Auslauf: das letzte Viertel legt deutlich weniger Strecke zurueck als das mittlere. Genau
+    // das fehlte bei Cubic-In, wo das Fragment bei Hoechstgeschwindigkeit verschwand.
+    const middleQuarter = fraction(0.625) - fraction(0.375);
+    const lastQuarter = fraction(1) - fraction(0.75);
+    expect(lastQuarter).toBeLessThan(middleQuarter * 0.5);
+
     expect(evaluateFakeAnimation(primary.alpha, 400 / lifeMs)).toBeGreaterThan(0.94);
-    expect(Math.abs(
-      evaluateFakeAnimation(primary.rotation, 400 / lifeMs)
-        - evaluateFakeAnimation(primary.rotation, 0),
-    )).toBeLessThan(0.12);
+    // Die Drehung folgt derselben Kurve und bleibt in der Cohesion-Phase entsprechend klein.
+    const rotationStart = evaluateFakeAnimation(primary.rotation, 0);
+    const rotationTotal = Math.abs(evaluateFakeAnimation(primary.rotation, 1) - rotationStart);
+    expect(primary.rotation.ease).toBe('Cubic.easeInOut');
+    expect(
+      Math.abs(evaluateFakeAnimation(primary.rotation, 400 / lifeMs) - rotationStart),
+    ).toBeLessThan(rotationTotal * 0.15);
   });
 
   it('uses 32–48 dominant fragments and only decorative dust motes', () => {
@@ -350,7 +359,14 @@ describe('combat gore gpu renderer', () => {
     ))).toBe(true);
     expect(normal.micro.every((member) => member.frameAnimation === null)).toBe(true);
     expect(normal.micro.every((member) => evaluateFakeAnimation(member.alpha, 0) < 0.5)).toBe(true);
-    expect(normal.micro.every((member) => member.alpha.duration >= 1050)).toBe(true);
+    // Micro-Motes sind Uebergangsdetail und muessen deutlich vor der Haze-Phase der Hauptmasse
+    // erloschen sein, damit am Ende keine Einzelpunkte vor der Staubwolke stehen.
+    expect(normal.micro.every((member) => (
+      member.alpha.duration >= DEATH_DISINTEGRATION_VFX.microLifetimeMinMs
+    ))).toBe(true);
+    expect(normal.micro.every((member) => (
+      member.alpha.duration <= DEATH_DISINTEGRATION_VFX.microLifetimeMaxMs
+    ))).toBe(true);
   });
 
   it('keeps death morphing deterministic for seed, texture and frame', () => {
