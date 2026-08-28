@@ -32,7 +32,7 @@ import type { ChunkSamplingMode } from './ChunkedRenderSurface';
 import type {
   ChunkBakeRegion,
   ChunkBakeSink,
-  ChunkedRenderWorkingSetStats,
+  ChunkedRenderWorkingSet,
   ChunkedSurfaceLayerSpec,
 } from './ChunkedRenderSurface';
 import type { ChunkWorldFrame, ChunkWorldRect } from './ArenaChunkGrid';
@@ -244,8 +244,8 @@ export class GroundSurfaceStreamer {
     return this.surface.getStats();
   }
 
-  getWorkingSetStats(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSetStats {
-    return this.surface.getWorkingSetStats(view, includePrefetch);
+  getWorkingSet(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSet {
+    return this.surface.getWorkingSet(view, includePrefetch);
   }
 
   /** Rastergeometrie der residenten Chunks – fuer Diagnose und Tests. */

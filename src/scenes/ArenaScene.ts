@@ -1815,7 +1815,6 @@ export class ArenaScene extends Phaser.Scene {
     // dazukommt.
     if (presentationPolicy.showWorld) {
       const worldView = getVisibleWorldView(this.cameras.main);
-      this.lifecycle.recordArenaResidencyView(worldView);
       ArenaBuilder.updateSurfaceResidency(this.ctx?.arenaResult ?? null, worldView);
       this.renderers?.shadow.updateStaticResidency(worldView);
     }

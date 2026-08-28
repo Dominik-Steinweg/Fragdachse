@@ -188,33 +188,28 @@ describe('chunked render surface', () => {
     expect(surface.isReady(0, 0)).toBe(true);
     expect((surface.getChunkTexture('a', 0, 0) as unknown as FakeRenderTexture).visible).toBe(true);
 
-    const workingSet = surface.getWorkingSetStats(VIEW);
-    expect(workingSet.missingChunks).toBe(0);
-    expect(workingSet.notReadyChunks).toBe(0);
+    const workingSet = surface.getWorkingSet(VIEW);
+    expect(workingSet.pendingWork).toBe(0);
     expect(workingSet.ready).toBe(true);
   });
 
   it('counts a required but completely missing chunk as pending working-set work', () => {
     const { surface } = createSurface();
 
-    const workingSet = surface.getWorkingSetStats(VIEW, false);
+    const workingSet = surface.getWorkingSet(VIEW, false);
 
-    expect(workingSet.requiredChunks).toBeGreaterThan(0);
     expect(workingSet.residentChunks).toBe(0);
-    expect(workingSet.missingChunks).toBe(workingSet.requiredChunks);
     expect(workingSet.pendingWork).toBeGreaterThan(0);
     expect(workingSet.ready).toBe(false);
   });
 
-  it('reports resident chunks with unfinished bake work separately', () => {
+  it('reports resident chunks with unfinished bake work as pending', () => {
     const { surface } = createSurface();
     surface.updateResidency(VIEW);
 
-    const workingSet = surface.getWorkingSetStats(VIEW);
+    const workingSet = surface.getWorkingSet(VIEW);
 
-    expect(workingSet.missingChunks).toBe(0);
-    expect(workingSet.notReadyChunks).toBeGreaterThan(0);
-    expect(workingSet.pendingRegions + workingSet.pendingTextureAcquisitions).toBeGreaterThan(0);
+    expect(workingSet.residentChunks).toBeGreaterThan(0);
     expect(workingSet.pendingWork).toBeGreaterThan(0);
     expect(workingSet.ready).toBe(false);
   });
@@ -508,12 +503,9 @@ describe('chunked render surface', () => {
     updateSurface(surface, scene, VIEW);
 
     const readyView = { x: 4_096, y: 12, width: 100, height: 100 };
-    const workingSet = surface.getWorkingSetStats(readyView);
+    const workingSet = surface.getWorkingSet(readyView);
 
-    expect(workingSet.requiredChunks).toBeGreaterThan(workingSet.residentChunks);
-    expect(workingSet.missingChunks).toBeGreaterThan(0);
-    expect(workingSet.missingChunkCoords.length).toBeGreaterThan(0);
-    expect(workingSet.missingChunkCoords.length).toBeLessThanOrEqual(16);
+    expect(workingSet.pendingWork).toBeGreaterThan(0);
     expect(workingSet.ready).toBe(false);
   });
 

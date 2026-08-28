@@ -167,31 +167,13 @@ export interface ChunkedRenderSurfaceStats {
   readonly allocatedPixels: number;
 }
 
-export interface ChunkCoordBounds {
-  readonly minCx: number;
-  readonly maxCx: number;
-  readonly minCy: number;
-  readonly maxCy: number;
-}
-
-export interface ChunkedRenderWorkingSetStats {
-  readonly requiredChunks: number;
-  /** Nur die Chunks, die fuer diesen Working Set resident sind. */
+/** The view-specific work used by the load-progress and readiness barriers. */
+export interface ChunkedRenderWorkingSet {
   readonly residentChunks: number;
-  readonly missingChunks: number;
-  /** Resident, aber fuer diesen Working Set noch nicht vollstaendig nutzbar. */
-  readonly notReadyChunks: number;
-  readonly pendingRegions: number;
-  readonly pendingTextureAcquisitions: number;
   /** Offene Arbeitseinheiten ohne Doppelzaehlung von Chunk und seinen Regionen. */
   readonly pendingWork: number;
   readonly ready: boolean;
-  readonly requiredChunkBounds: ChunkCoordBounds | null;
-  readonly missingChunkCoords: readonly ArenaChunkCoord[];
-  readonly notReadyChunkCoords: readonly ArenaChunkCoord[];
 }
-
-const WORKING_SET_COORD_LIMIT = 16;
 
 /**
  * Kleine Reserve je Layer fuer den Uebergang zwischen zwei Residency-Fenstern und fuer einen
@@ -370,73 +352,37 @@ export class ChunkedRenderSurface {
     return this.resident.get(this.grid.key(cx, cy))?.ready ?? false;
   }
 
-  /**
-   * Liefert die Diagnose fuer exakt denselben Chunk-Satz, den `isReadyForView()` prueft.
-   * Fehlende Renderziele sind dabei echte offene Arbeit und werden nicht nur als `resident = 0`
-   * sichtbar.
-   */
-  getWorkingSetStats(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSetStats {
+  /** Liefert Fortschritt und Readiness fuer exakt denselben Chunk-Satz wie `isReadyForView()`. */
+  getWorkingSet(view: ChunkWorldRect, includePrefetch = true): ChunkedRenderWorkingSet {
     const required = this.getRequiredWorkingSet(view, includePrefetch);
     let residentChunks = 0;
-    let missingChunks = 0;
-    let notReadyChunks = 0;
-    let pendingRegions = 0;
-    let pendingTextureAcquisitions = 0;
     let pendingWork = 0;
-    const missingChunkCoords: ArenaChunkCoord[] = [];
-    const notReadyChunkCoords: ArenaChunkCoord[] = [];
+    let ready = true;
 
     for (const coord of required) {
       const chunk = this.resident.get(this.grid.key(coord.cx, coord.cy));
       if (!chunk) {
-        missingChunks += 1;
+        ready = false;
         pendingWork += 1;
-        if (missingChunkCoords.length < WORKING_SET_COORD_LIMIT) missingChunkCoords.push(coord);
         continue;
       }
 
       residentChunks += 1;
       const chunkPendingRegions = chunk.pendingRegions.size;
       const chunkPendingTextures = chunk.pendingTextureLayers.size;
-      pendingRegions += chunkPendingRegions;
-      pendingTextureAcquisitions += chunkPendingTextures;
-      const notReady = !chunk.ready || chunkPendingRegions > 0 || chunkPendingTextures > 0;
-      if (!notReady) continue;
+      if (chunk.ready && chunkPendingRegions === 0 && chunkPendingTextures === 0) continue;
 
-      notReadyChunks += 1;
-      if (notReadyChunkCoords.length < WORKING_SET_COORD_LIMIT) notReadyChunkCoords.push(coord);
+      ready = false;
       // Region-/Texture-Arbeit repraesentiert den konkreten Aufwand bereits. Nur ein residenter
       // Chunk ohne sichtbare Unterarbeit braucht die zusaetzliche Fallback-Einheit.
       const chunkPendingWork = chunkPendingRegions + chunkPendingTextures;
       pendingWork += chunkPendingWork > 0 ? chunkPendingWork : 1;
     }
 
-    const requiredChunkBounds = required.length === 0
-      ? null
-      : required.reduce<ChunkCoordBounds>((bounds, coord) => ({
-        minCx: Math.min(bounds.minCx, coord.cx),
-        maxCx: Math.max(bounds.maxCx, coord.cx),
-        minCy: Math.min(bounds.minCy, coord.cy),
-        maxCy: Math.max(bounds.maxCy, coord.cy),
-      }), {
-        minCx: required[0].cx,
-        maxCx: required[0].cx,
-        minCy: required[0].cy,
-        maxCy: required[0].cy,
-      });
-
     return {
-      requiredChunks: required.length,
       residentChunks,
-      missingChunks,
-      notReadyChunks,
-      pendingRegions,
-      pendingTextureAcquisitions,
       pendingWork,
-      ready: !this.destroyed && missingChunks === 0 && notReadyChunks === 0,
-      requiredChunkBounds,
-      missingChunkCoords,
-      notReadyChunkCoords,
+      ready: !this.destroyed && ready,
     };
   }
 
