@@ -4,8 +4,8 @@ import {
 } from '../config';
 import type { WorldMetrics } from '../world/WorldMetrics';
 
-export const GRID_CORNER_ASSIST_LOOKAHEAD_PX = 8;
-export const GRID_CORNER_ASSIST_MAX_CORRECTION_PX = 8;
+export const GRID_CORNER_ASSIST_LOOKAHEAD_PX = 10;
+export const GRID_CORNER_ASSIST_MAX_CORRECTION_PX = 16;
 
 const PLAYER_RADIUS = PLAYER_SIZE * 0.5;
 const TANGENCY_EPSILON_PX = 0.000001;
