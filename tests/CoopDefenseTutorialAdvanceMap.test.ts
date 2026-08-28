@@ -109,7 +109,6 @@ describe('Map 1 as the guided advance tutorial', () => {
         && !trackColumns.has(rock.gridX)
       ));
       expect(rocksUnderPanel.length, step.id).toBeGreaterThan(0);
-      expect(rocksUnderPanel.every((rock) => rock.armorDropMult === undefined), step.id).toBe(true);
     }
   });
 
@@ -211,11 +210,11 @@ describe('Map 1 as the guided advance tutorial', () => {
           expect(rocks.has(`${wall.gridX}:${gridY}`), `${seed} ${wall.id} ${gridY}`).toBe(true);
         }
       }
-      // Die Waende sind gewoehnliche Felsen: kein Tutorial-Armor-Marker, kein Sonderstatus.
+      // Die Waende sind gewoehnliche Felsen.
       const wallColumns = new Set((MAP.rockWalls ?? []).map((wall) => wall.gridX));
       for (const rock of layout.rocks) {
         if (!wallColumns.has(rock.gridX)) continue;
-        expect(rock.armorDropMult).toBeUndefined();
+        expect(rock.indestructible).toBeUndefined();
       }
       // Reservierte Barrierezellen bleiben frei von generiertem Fels.
       for (const barrier of MISSION.barriers) {

@@ -108,6 +108,4 @@ export interface CoopMissionTutorialDefinition {
   readonly showControls: boolean;
   readonly anchor?: CoopDefenseMapTutorialAnchorConfig;
   readonly steps?: readonly ResolvedCoopDefenseMapTutorialStepConfig[];
-  /** Multiplikator auf die Armor-Drop-Chance der Felsen unter dem Tutorial-Fenster. */
-  readonly rockArmorDropMult?: number;
 }

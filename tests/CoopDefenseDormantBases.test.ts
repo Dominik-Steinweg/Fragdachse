@@ -393,6 +393,34 @@ describe('Coop-Defense dormant mission structures', () => {
       .every(([key]) => !String(key).includes(dormant.id))).toBe(true);
   });
 
+  it('caches only active base cells and invalidates the lookup on activation or destruction', () => {
+    const { scene } = makeScene();
+    const active: BaseSpec = {
+      ...makeBaseSpec('active-outpost'),
+      cells: [{ gridX: 10, gridY: 10 }],
+      region: { minGridX: 10, maxGridX: 10, minGridY: 10, maxGridY: 10 },
+    };
+    const dormant: BaseSpec = {
+      ...makeBaseSpec('dormant-outpost', {
+        dormant: true,
+        dormantObjectiveId: 'reveal-outpost',
+      }),
+      cells: [{ gridX: 11, gridY: 10 }],
+      region: { minGridX: 11, maxGridX: 11, minGridY: 10, maxGridY: 10 },
+    };
+    const manager = new BaseManager(scene, [active, dormant], TEST_WORLD_METRICS, {}, false);
+
+    expect(manager.isMovementBlockedCell(10, 10)).toBe(true);
+    expect(manager.isMovementBlockedCell(11, 10)).toBe(false);
+
+    manager.setSecondaryObjectiveStateProvider(() => 'active');
+    expect(manager.isMovementBlockedCell(11, 10)).toBe(true);
+
+    manager.applyDamage(active.id, active.hpMax);
+    expect(manager.isMovementBlockedCell(10, 10)).toBe(false);
+    expect(manager.isMovementBlockedCell(11, 10)).toBe(true);
+  });
+
   it('activates exactly once, restores turrets and increments obstacles', () => {
     const { scene, groupObjects } = makeScene();
     const dormant = makeBaseSpec('dormant-outpost', {

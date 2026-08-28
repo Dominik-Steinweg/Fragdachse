@@ -57,6 +57,10 @@ export class BaseManager {
   private lighting: LightingSystem | null = null;
   private readonly litBaseKeys = new Set<string>();
   private readonly destructionRenderer: BaseDestructionRenderer | null;
+  private readonly worldMetrics: WorldMetrics;
+  /** Projection of the live base entities, rebuilt only when obstacleGeneration changes. */
+  private movementBlockedCells: Set<number> | null = null;
+  private movementBlockedCellsGeneration = -1;
 
   constructor(
     scene: Phaser.Scene,
@@ -67,6 +71,7 @@ export class BaseManager {
     damageable = true,
   ) {
     this.presentation = presentation;
+    this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
     for (const spec of baseSpecs) {
@@ -169,6 +174,37 @@ export class BaseManager {
   /** StaticGroup für Player/Projektil-Collider-Injection. */
   getBaseGroup(): Phaser.Physics.Arcade.StaticGroup {
     return this.group;
+  }
+
+  /** Live movement lookup; dormant and destroyed bases are not blockers. */
+  isMovementBlockedCell(gridX: number, gridY: number): boolean {
+    if (
+      !Number.isInteger(gridX)
+      || !Number.isInteger(gridY)
+      || gridX < 0
+      || gridY < 0
+      || gridX >= this.worldMetrics.gridCols
+      || gridY >= this.worldMetrics.gridRows
+    ) {
+      return false;
+    }
+
+    if (
+      this.movementBlockedCells === null
+      || this.movementBlockedCellsGeneration !== this.obstacleGeneration
+    ) {
+      const cells = new Set<number>();
+      for (const entity of this.entities) {
+        if (entity.isInert()) continue;
+        for (const cell of entity.spec.cells) {
+          cells.add(cell.gridY * this.worldMetrics.gridCols + cell.gridX);
+        }
+      }
+      this.movementBlockedCells = cells;
+      this.movementBlockedCellsGeneration = this.obstacleGeneration;
+    }
+
+    return this.movementBlockedCells.has(gridY * this.worldMetrics.gridCols + gridX);
   }
 
   /**
@@ -349,6 +385,8 @@ export class BaseManager {
     this.entities.length = 0;
     this.byId.clear();
     this.turretOwners.clear();
+    this.movementBlockedCells = null;
+    this.movementBlockedCellsGeneration = -1;
     this.group.destroy(true);
   }
 }

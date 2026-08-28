@@ -6,7 +6,6 @@
   "tutorialDurationMs": 10000,
   "rockFillRatio": 0.4,
   "trackPosition": "center",
-  "tutorialRockArmorDropMult": 0.02,
   "mapEvents": [{
     "id": "opening-barrage",
     "type": "airstrike",

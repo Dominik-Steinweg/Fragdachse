@@ -16,6 +16,7 @@ import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { CombatSystem } from '../src/systems/CombatSystem';
 import type { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
+import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 
 function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
   const setVelocity = vi.fn();
@@ -88,10 +89,11 @@ function createHarness() {
   const hasEnemy = vi.fn((id: string) => enemies.has(id));
   const getEnemy = vi.fn((id: string) => enemies.get(id));
 
+  const getPlayerInput = vi.fn(() => ({ dx: 1, dy: 0 }));
   const bridge = {
     isHost: () => true,
     getWorldParticipation: () => 'interactive',
-    getPlayerInput: () => ({ dx: 1, dy: 0 }),
+    getPlayerInput,
   } as unknown as NetworkBridge;
 
   const combatSystem = {
@@ -138,6 +140,8 @@ function createHarness() {
     forEachEnemy,
     combatSystem,
     colliderDestroySpies,
+    bridge,
+    getPlayerInput,
   };
 }
 
@@ -242,6 +246,55 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     const call = player1.setVelocity.mock.calls[0];
     expect(call[0]).toBeGreaterThan(-50);
     expect(call[1]).toBeGreaterThan(-50);
+  });
+
+  it('applies corner assistance only to the normal input path', () => {
+    const { system, players, getPlayerInput } = createHarness();
+    const metrics = resolveActiveArenaWorldMetrics();
+    const player1 = createMockPlayer(
+      'player-1',
+      metrics.offsetX + 16,
+      metrics.offsetY + 16,
+    );
+    players.set('player-1', player1);
+    getPlayerInput.mockReturnValue({ dx: 1, dy: 1 });
+
+    system.setWorldMetrics(metrics);
+    system.setMovementBlockedCellResolver((gridX, gridY) => (
+      (gridX === 1 && gridY === 1) || (gridX === 1 && gridY === 0)
+    ));
+    system.setRunSpeedResolver(() => 100);
+    system.update(false);
+
+    const [vx, vy] = player1.setVelocity.mock.calls[0];
+    expect(vx).toBeLessThan(vy);
+    expect(Math.hypot(vx, vy)).toBeCloseTo(100);
+  });
+
+  it('does not apply corner assistance to dash or forced movement', () => {
+    const { system, players, getPlayerInput } = createHarness();
+    const metrics = resolveActiveArenaWorldMetrics();
+    const player1 = createMockPlayer(
+      'player-1',
+      metrics.offsetX + 16,
+      metrics.offsetY + 16,
+    );
+    players.set('player-1', player1);
+    getPlayerInput.mockReturnValue({ dx: 1, dy: 1 });
+    system.setWorldMetrics(metrics);
+    system.setMovementBlockedCellResolver(() => true);
+    system.setRunSpeedResolver(() => 100);
+
+    system.handleDashRPC('player-1', 1, 1);
+    system.update(false);
+    const [dashVx, dashVy] = player1.setVelocity.mock.calls[0];
+    expect(dashVx).toBeCloseTo(dashVy);
+    expect(dashVx).toBeGreaterThan(0);
+
+    player1.setVelocity.mockClear();
+    system.setForcedMovement('player-1', -50, -25);
+    system.update(false);
+    expect(player1.setVelocity).toHaveBeenCalledWith(-50, -25);
   });
 
   it('does not call enemy.syncBar() during update – visual sync is deferred to EnemyManager.syncHostVisuals()', () => {

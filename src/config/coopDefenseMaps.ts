@@ -47,14 +47,6 @@ const MIN_CORRIDOR_RADIUS_CELLS = 1.05;
 /** Standardfenster, in dem die Gegner einer Encounter-Gruppe einzeln eintreffen. */
 export const DEFAULT_COOP_DEFENSE_ENCOUNTER_SPAWN_STAGGER_MS = 1_500;
 
-/**
- * Standard-Multiplikator auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (0…1).
- * Diese Felsen werden nur zugebaut, um den Bereich unter dem Tutorial-Hinweisfenster zu füllen,
- * und anschliessend vom Eröffnungs-Luftangriff planmässig weggesprengt – ohne Reduktion würden
- * Spieler dadurch quasi-garantiert Armor geschenkt bekommen.
- */
-const DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT = 0.15;
-
 /** Standard-HP-Faktor fuer jede zusaetzliche Spielerin bzw. jeden zusaetzlichen Spieler an Feindstrukturen. */
 export const DEFAULT_COOP_DEFENSE_STRUCTURE_HP_FACTOR_PER_ADDITIONAL_PLAYER = 0.5;
 
@@ -731,7 +723,7 @@ export interface CoopDefenseMapConfig {
    * ihre Sichtbarkeit leitet sich aus den replizierten Checkpoint-Aktivierungen ab.
    */
   readonly tutorialSteps?: readonly ResolvedCoopDefenseMapTutorialStepConfig[]
-  | readonly CoopDefenseMapTutorialStepConfig[];
+    | readonly CoopDefenseMapTutorialStepConfig[];
   /** Standard `rails`; `void-fire` reserviert denselben Korridor, erzeugt aber keine Gleise. */
   readonly trackMode?: CoopDefenseMapTrackMode;
   /** Position der zweispaltigen Gleise; Standard `center`. `gridX` bezeichnet die linke Spalte. */
@@ -752,12 +744,6 @@ export interface CoopDefenseMapConfig {
   readonly timeOfDay?: string;
   /** Optionale kontinuierliche bzw. gescriptete Laufzeitsteuerung; ohne Angabe bleibt die Map statisch. */
   readonly dynamicTimeOfDay?: CoopDefenseDynamicTimeOfDayConfig;
-  /**
-   * Multiplikator (0…1) auf die Armor-Drop-Chance von Felsen der Tutorial-Formation (siehe
-   * `tutorialText`). Nur relevant, wenn die Map eine Tutorial-Formation erzeugt. Standard:
-   * `DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT` – kann pro Map zum Finetuning überschrieben werden.
-   */
-  readonly tutorialRockArmorDropMult?: number;
   /** Echte Rundendauer; nur fuer `survive` gesetzt und siegrelevant. */
   readonly surviveDurationSec?: number;
   /** Explizite, reine Balancing-Referenz fuer Druck-/Drop-Normalisierung. */
@@ -1205,7 +1191,6 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     mapEvents,
     timeOfDay: normalizeTimeOfDayValue(mapConfig.mapId, mapConfig.timeOfDay),
     dynamicTimeOfDay: normalizeDynamicTimeOfDayConfig(mapConfig.mapId, mapConfig.dynamicTimeOfDay, boss),
-    tutorialRockArmorDropMult: normalizeTutorialRockArmorDropMult(mapConfig.tutorialRockArmorDropMult),
     surviveDurationSec,
     balanceReferenceDurationSec,
     bases,
@@ -3407,11 +3392,6 @@ function normalizeRockFillRatio(rockFillRatio: number | undefined): number {
 function normalizeTreeCount(treeCount: number | undefined): number | undefined {
   if (treeCount === undefined || !Number.isFinite(treeCount)) return undefined;
   return Math.max(0, Math.floor(treeCount));
-}
-
-function normalizeTutorialRockArmorDropMult(mult: number | undefined): number {
-  if (typeof mult !== 'number' || !Number.isFinite(mult)) return DEFAULT_TUTORIAL_ROCK_ARMOR_DROP_MULT;
-  return Math.max(0, Math.min(1, mult));
 }
 
 function normalizePowerUpConfig(

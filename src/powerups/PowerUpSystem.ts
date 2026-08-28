@@ -359,7 +359,7 @@ export class PowerUpSystem {
     if (!rock) return;
     const wx = this.cellToWorldX(rock.gridX);
     const wy = this.cellToWorldY(rock.gridY);
-    this.spawnFromTable('ROCK_DESTROY', wx, wy, rock.armorDropMult ?? 1);
+    this.spawnFromTable('ROCK_DESTROY', wx, wy);
   }
 
   // ── Pickup ──────────────────────────────────────────────────────────────

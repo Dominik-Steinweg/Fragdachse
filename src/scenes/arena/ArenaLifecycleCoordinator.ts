@@ -2901,6 +2901,14 @@ export class ArenaLifecycleCoordinator {
       this.ctx.arenaResult.trunkGroup,
     );
     this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
+    this.ctx.hostPhysics.setWorldMetrics(world.metrics);
+    this.ctx.hostPhysics.setMovementBlockedCellResolver((gridX, gridY) => {
+      const arenaResult = this.ctx.arenaResult;
+      const rockId = arenaResult?.rockGrid.getIndex(gridX, gridY) ?? -1;
+      if (rockId >= 0 && arenaResult?.rockPhysicsProxies[rockId]?.active === true) return true;
+      if (this.ctx.baseManager?.isMovementBlockedCell(gridX, gridY) === true) return true;
+      return this.ctx.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false;
+    });
     this.ctx.hostPhysics.setEnemyManager(this.ctx.enemyManager);
     this.ctx.hostPhysics.setRunSpeedResolver((playerId) => {
       const base = this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED;
@@ -4229,6 +4237,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     this.ctx.hostPhysics.setRockGroup(null, null);
     this.ctx.hostPhysics.setBaseGroup(null);
+    this.ctx.hostPhysics.setMovementBlockedCellResolver(null);
+    this.ctx.hostPhysics.setWorldMetrics(null);
     if (!preserveAuthoredPresentation) this.renderers.leafBlower.setTerrainColorSnapshot(null);
     this.renderers.leafBlower.setTerrainMaterialLayout(null);
     this.ctx.tunnelSystem?.clear();

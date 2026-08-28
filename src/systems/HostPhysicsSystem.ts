@@ -14,6 +14,12 @@ import { TRAIN } from '../train/TrainConfig';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import { getDashBurstTiming } from '../utils/dashTiming';
 import { maySendWorldInput } from '../world/WorldParticipation';
+import type { WorldMetrics } from '../world/WorldMetrics';
+import {
+  applyGridCornerAssist,
+  type GridCornerAssistOutput,
+  type MovementBlockedCell,
+} from './GridCornerAssist';
 
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType   = {
@@ -118,6 +124,9 @@ export class HostPhysicsSystem {
   private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
   private enemyRockContactCallback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null = null;
   private canMoveResolver: ((playerId: string) => boolean) | null = null;
+  private movementBlockedCellResolver: MovementBlockedCell | null = null;
+  private worldMetrics: WorldMetrics | null = null;
+  private readonly gridCornerAssistOutput: GridCornerAssistOutput = { dx: 0, dy: 0 };
 
   // Dash-Zustand pro Spieler (2-Phasen Speed-Debt-Modell)
   private dashStates       = new Map<string, DashState>();
@@ -164,6 +173,10 @@ export class HostPhysicsSystem {
   setDashGroundFireHandler(handler: DashGroundFireHandler | null): void { this.dashGroundFireHandler = handler; }
   setDashHoldEnabledResolver(resolver: ((playerId: string) => boolean) | null): void { this.dashHoldEnabledResolver = resolver; }
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
+  setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
+  setMovementBlockedCellResolver(resolver: MovementBlockedCell | null): void {
+    this.movementBlockedCellResolver = resolver;
+  }
   setEnemyRockContactCallback(
     callback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null,
   ): void {
@@ -450,6 +463,8 @@ export class HostPhysicsSystem {
       this.pendingRecoils.clear();
       this.recentImpulseSources.clear();
       this.forcedMovement.clear();
+      this.movementBlockedCellResolver = null;
+      this.worldMetrics = null;
     }
     this.rockGroup  = rockGroup;
     this.trunkGroup = trunkGroup;
@@ -700,8 +715,25 @@ export class HostPhysicsSystem {
 
       // ── 3. Normaler Input mit optionalem Burrow-Speed-Faktor ─────────
       const input = this.bridge.getPlayerInput(player.id);
-      const dx    = input?.dx ?? 0;
-      const dy    = input?.dy ?? 0;
+      let dx    = input?.dx ?? 0;
+      let dy    = input?.dy ?? 0;
+      if (
+        !this.burrowSystem?.isBurrowed(player.id)
+        && this.worldMetrics
+        && this.movementBlockedCellResolver
+      ) {
+        applyGridCornerAssist(
+          player.x,
+          player.y,
+          dx,
+          dy,
+          this.worldMetrics,
+          this.movementBlockedCellResolver,
+          this.gridCornerAssistOutput,
+        );
+        dx = this.gridCornerAssistOutput.dx;
+        dy = this.gridCornerAssistOutput.dy;
+      }
       const len   = Math.sqrt(dx * dx + dy * dy);
 
       const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;

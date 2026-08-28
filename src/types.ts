@@ -1544,8 +1544,6 @@ export interface TrackedProjectile {
 export interface RockCell {
   gridX: number;
   gridY: number;
-  /** Multiplikator (0…1) auf die Armor-Drop-Chance bei Zerstörung; fehlt = normale Chance. */
-  armorDropMult?: number;
   /**
    * Authored Struktur statt Ziel: dieser Fels nimmt keinen Schaden und wird nicht zerstört.
    * Die Regel liegt in `RockHpRegistry`, damit sie für jede Schadensquelle identisch gilt;

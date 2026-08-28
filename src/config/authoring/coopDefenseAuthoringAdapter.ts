@@ -96,7 +96,6 @@ export const COOP_MISSION_SOURCE_FIELDS = [
   'tutorialShowControls',
   'tutorialAnchor',
   'tutorialSteps',
-  'tutorialRockArmorDropMult',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
 /** Gemeinsamer Schluessel beider Seiten; er ist Identitaet, nicht Inhalt. */
@@ -184,7 +183,6 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
       showControls: mapConfig.tutorialShowControls === true,
       anchor: mapConfig.tutorialAnchor,
       steps: mapConfig.tutorialSteps as CoopMissionTutorialDefinition['steps'],
-      rockArmorDropMult: mapConfig.tutorialRockArmorDropMult,
     },
   };
 }
@@ -234,7 +232,6 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     // Nur hier setzt sich eine Basis wieder aus Bauwerk und Missionsanteil zusammen.
     timeOfDay: world.initialTimeOfDay,
     dynamicTimeOfDay: activity.dynamicTimeOfDay,
-    tutorialRockArmorDropMult: tutorial?.rockArmorDropMult,
     surviveDurationSec: activity.surviveDurationSec,
     balanceReferenceDurationSec: activity.balanceReferenceDurationSec,
     bases: world.bases.map((base) => toCoopBaseConfig(base, overlaysByBaseId.get(base.id))),

@@ -284,7 +284,6 @@ export class ArenaGenerator {
 
       // 3. map auf blocked übertragen und rocks-Array befüllen
       //    Gleis-Spalten bleiben frei (trackCols sind begehbar)
-      const tutorialRockArmorDropMult = coopMapConfig?.tutorialRockArmorDropMult;
       const rocks: RockCell[] = [];
       for (let gy = 0; gy < this.metrics.gridRows; gy++) {
         for (let gx = 0; gx < this.metrics.gridCols; gx++) {
@@ -295,11 +294,9 @@ export class ArenaGenerator {
             && !missionBarrierCells.has(`${gx}_${gy}`)
           ) {
             blocked[gy][gx] = true;
-            const isTutorialRock = tutorialRockCells?.has(`${gx}_${gy}`) ?? false;
             rocks.push({
               gridX: gx,
               gridY: gy,
-              armorDropMult: isTutorialRock ? tutorialRockArmorDropMult : undefined,
             });
           }
         }
@@ -1183,11 +1180,11 @@ export class ArenaGenerator {
     // Tutorial-Rüstungsdrop-Marker. Neue lokale Steps bekommen denselben World-Space-Unterbau,
     // aber ausschließlich normale Felsen ohne Sondermarker.
     const anchors = [
-      { anchor: tutorialAnchor, markAsStartTutorial: true },
-      ...tutorialStepAnchors.map((anchor) => ({ anchor, markAsStartTutorial: false })),
+      tutorialAnchor,
+      ...tutorialStepAnchors,
     ];
     const seenAnchors = new Set<string>();
-    for (const { anchor, markAsStartTutorial } of anchors) {
+    for (const anchor of anchors) {
       const anchorKey = anchor ? `${anchor.gridX}_${anchor.gridY}` : 'default';
       if (seenAnchors.has(anchorKey)) continue;
       seenAnchors.add(anchorKey);
@@ -1204,7 +1201,7 @@ export class ArenaGenerator {
       });
       for (const { gridX, gridY } of cells) {
         map[gridY][gridX] = true;
-        if (markAsStartTutorial) tutorialRockCells.add(`${gridX}_${gridY}`);
+        tutorialRockCells.add(`${gridX}_${gridY}`);
       }
     }
     return tutorialRockCells;

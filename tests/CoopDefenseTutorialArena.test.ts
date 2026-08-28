@@ -68,13 +68,18 @@ describe('Coop defense tutorial arena formation', () => {
     );
     const layout = generateArenaWithActiveMetrics(42_424, mapConfig);
     const rocks = new Set(layout.rocks.map((rock) => `${rock.gridX}:${rock.gridY}`));
-    const tutorialRocks = layout.rocks.filter((rock) => rock.armorDropMult !== undefined);
+    const region = getCoopDefenseTutorialRockRegion(true, mapConfig.tutorialAnchor);
+    const tutorialRocks = layout.rocks.filter((rock) => (
+      rock.gridX >= region.minGridX - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
+      && rock.gridX <= region.maxGridX + COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
+      && rock.gridY >= region.minGridY - COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
+      && rock.gridY <= region.maxGridY + COOP_DEFENSE_TUTORIAL_ROCK_HALO_CELLS
+    ));
     const trackColumns = new Set<number>();
     for (const track of layout.tracks) {
       trackColumns.add(track.gridX);
       trackColumns.add(track.gridX + 1);
     }
-    const region = getCoopDefenseTutorialRockRegion(true, mapConfig.tutorialAnchor);
     for (let gy = region.minGridY; gy <= region.maxGridY; gy++) {
       for (let gx = region.minGridX; gx <= region.maxGridX; gx++) {
         if (!trackColumns.has(gx)) expect(rocks.has(`${gx}:${gy}`)).toBe(true);

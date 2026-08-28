@@ -313,9 +313,9 @@ describe('combat gore gpu renderer', () => {
       evaluateFakeAnimation(primary.x, t) - startX,
       evaluateFakeAnimation(primary.y, t) - startY,
     );
-    // Anteile der Gesamtstrecke statt Pixelbetraegen: der Vertrag ist die Form der Kurve, nicht
-    // die Reichweite, die von Sprite-Groesse und Treffer-Impuls abhaengt.
-    const total = travelAt(1);
+    // Die Amplituden sind die Gesamtdeltas. Direkt bei t = 1 zu messen ginge nicht: der Shader
+    // rechnet fuer nicht-lineare Eases mit mod(t, 1) und faellt dort auf die Basis zurueck.
+    const total = Math.hypot(primary.x.amplitude, primary.y.amplitude);
     const fraction = (t: number) => travelAt(t) / total;
 
     expect(lifeMs).toBeGreaterThanOrEqual(1280);
@@ -329,13 +329,13 @@ describe('combat gore gpu renderer', () => {
     // Auslauf: das letzte Viertel legt deutlich weniger Strecke zurueck als das mittlere. Genau
     // das fehlte bei Cubic-In, wo das Fragment bei Hoechstgeschwindigkeit verschwand.
     const middleQuarter = fraction(0.625) - fraction(0.375);
-    const lastQuarter = fraction(1) - fraction(0.75);
+    const lastQuarter = fraction(0.9999) - fraction(0.75);
     expect(lastQuarter).toBeLessThan(middleQuarter * 0.5);
 
     expect(evaluateFakeAnimation(primary.alpha, 400 / lifeMs)).toBeGreaterThan(0.94);
     // Die Drehung folgt derselben Kurve und bleibt in der Cohesion-Phase entsprechend klein.
     const rotationStart = evaluateFakeAnimation(primary.rotation, 0);
-    const rotationTotal = Math.abs(evaluateFakeAnimation(primary.rotation, 1) - rotationStart);
+    const rotationTotal = Math.abs(primary.rotation.amplitude);
     expect(primary.rotation.ease).toBe('Cubic.easeInOut');
     expect(
       Math.abs(evaluateFakeAnimation(primary.rotation, 400 / lifeMs) - rotationStart),

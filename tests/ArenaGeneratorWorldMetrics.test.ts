@@ -15,7 +15,7 @@ describe('ArenaGenerator world-scoped metrics', () => {
     }> = [
       { mode: 'deathmatch', seed: 0x1020_3040, legacyFingerprint: '3c917cc9' },
       { mode: 'capture_the_beer', seed: 0x5060_7080, legacyFingerprint: 'f95a334a' },
-      { mode: 'coop_defense', seed: 0x1234_5678, mapId: '1', legacyFingerprint: '8ab7db1a' },
+      { mode: 'coop_defense', seed: 0x1234_5678, mapId: '1', legacyFingerprint: '2583b3a0' },
     ];
 
     for (const { mode, seed, mapId, legacyFingerprint } of cases) {
