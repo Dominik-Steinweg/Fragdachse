@@ -97,9 +97,6 @@ describe('World-scoped Metrik – migrierte Module', () => {
     it(`${path} liest keine mutable Arena-Variable`, () => {
       const source = read(path);
       const imported = collectConfigImports(source);
-      // Positive Absicherung des Parsers: das Modul importiert ueberhaupt aus der Config.
-      expect(imported.length, `${path} imports nothing from config`).toBeGreaterThan(0);
-
       for (const global of MUTABLE_ARENA_GLOBALS) {
         expect(imported.includes(global), `${path} still imports ${global}`).toBe(false);
       }

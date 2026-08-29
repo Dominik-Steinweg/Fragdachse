@@ -103,6 +103,9 @@
     }
   ],
   "powerUps": [],
+  "persistentBasePreview": {
+    "checkpointId": "final-extraction"
+  },
   "rockWalls": [
     {
       "id": "utility-wall",

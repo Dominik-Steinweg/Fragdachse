@@ -110,6 +110,7 @@ import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
 import type { RockVisualHelper }      from './RockVisualHelper';
 import type { PlacementPreviewRenderer } from './PlacementPreviewRenderer';
+import type { PersistentBasePreviewRenderer } from './PersistentBasePreviewRenderer';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
@@ -216,6 +217,11 @@ import type {
   PersistentToolRef,
 } from '../../persistentBase/PersistentBaseTypes';
 import type { PersistentBaseBuildArea } from '../../persistentBase/PersistentBaseCore';
+import {
+  resolvePersistentBaseVisualSite,
+  toPersistentBaseGravelZone,
+  type PersistentBaseVisualSite,
+} from '../../persistentBase/PersistentBasePresentation';
 
 type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -464,6 +470,7 @@ export class ArenaLifecycleCoordinator {
   private readonly persistentBaseCompositeBuildSignatures = new Map<string, string>();
   private persistentBaseAnchor: PersistentBaseAnchor | null = null;
   private persistentBaseBuildArea: PersistentBaseBuildArea | null = null;
+  private persistentBaseVisualSite: PersistentBaseVisualSite | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
   private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;
   private static readonly TERRAIN_SNAPSHOT_MAX_RETRIES = 1;
@@ -474,6 +481,7 @@ export class ArenaLifecycleCoordinator {
     private readonly renderers: RendererBundle,
     private readonly rockVisualHelper: RockVisualHelper,
     private readonly placementPreview: PlacementPreviewRenderer,
+    private readonly persistentBasePreviewRenderer: PersistentBasePreviewRenderer,
     private readonly lobbyOverlay: LobbyOverlay,
     private readonly hostUpdate: HostUpdateCoordinator,
     private readonly clientUpdate: ClientUpdateCoordinator,
@@ -542,6 +550,10 @@ export class ArenaLifecycleCoordinator {
   }
   getIsLocalReady(): boolean   { return this.isLocalReady; }
   isTrainDestroyedShown(): boolean { return this.trainDestroyedShown; }
+
+  getPersistentBaseVisualSite(): PersistentBaseVisualSite | null {
+    return this.persistentBaseVisualSite;
+  }
 
   setIsLocalReady(v: boolean): void {
     this.isLocalReady = v;
@@ -1893,6 +1905,19 @@ export class ArenaLifecycleCoordinator {
     this.ctx.currentLayout = layout;
     const builder = new ArenaBuilder(this.scene);
     const persistentBaseSite = world.persistentBaseSite;
+    const persistentBaseVisualSite = resolvePersistentBaseVisualSite(
+      missionMapConfig,
+      persistentBaseSite,
+      worldDescriptor.seed,
+    );
+    const persistentBaseGravel = persistentBaseVisualSite
+      ? toPersistentBaseGravelZone(persistentBaseVisualSite, worldDescriptor.seed)
+      : null;
+    this.persistentBaseVisualSite = persistentBaseVisualSite;
+    this.persistentBasePreviewRenderer.sync(
+      persistentBaseSite === null ? persistentBaseVisualSite : null,
+      world.metrics,
+    );
     if (canReuseLobbyPresentation) {
       builder.rebindWorldRuntime(
         reusableArenaResult,
@@ -1907,30 +1932,16 @@ export class ArenaLifecycleCoordinator {
         worldMetrics: world.metrics,
         // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
         presentation,
-        // Die LobbyWorld traegt die Gravel-Layer auch ohne materialisierten Kern, damit der
-        // bestehende Fast-Reinstance beim Moduswechsel Coop <-> Nicht-Coop dieselbe Presentation
-        // wiederverwenden kann. Ohne Site bleibt der State leer; die Basis wird dadurch nicht
-        // sichtbar und nicht als World-Geometrie materialisiert.
-        enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),
-        persistentBaseGravel: persistentBaseSite
-          ? {
-            seed: worldDescriptor.seed,
-            anchor: persistentBaseSite.anchor,
-            buildArea: persistentBaseSite.buildArea,
-          }
-          : undefined,
+        // Nur eine aktive World-Stelle oder eine Activity-Vorschau bekommt die Gravel-Layer;
+        // die Vorschau bleibt trotzdem ohne Basis-Runtime und ohne persistenten Working State.
+        enablePersistentBaseGravel: persistentBaseGravel !== null,
+        persistentBaseGravel: persistentBaseGravel ?? undefined,
       });
     }
     // Beim Fast-Reinstance muss der wiederverwendete Ground-Streamer vor dem ersten Residency-
     // Bake bereits den neuen World-Zustand sehen; der regulaere Scene-Sync bestaetigt ihn danach.
     this.ctx.arenaResult.groundSurface?.setPersistentBaseGravel(
-      persistentBaseSite
-        ? {
-          seed: worldDescriptor.seed,
-          anchor: persistentBaseSite.anchor,
-          buildArea: persistentBaseSite.buildArea,
-        }
-        : null,
+      persistentBaseGravel,
     );
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
@@ -3978,6 +3989,8 @@ export class ArenaLifecycleCoordinator {
     this.preparedRoundLayout = null;
     this.boundRoundStartTime = 0;
     this.pendingClassicTrainEvent = null;
+    this.persistentBasePreviewRenderer.clear();
+    this.persistentBaseVisualSite = null;
     this.cancelTrainExplosionTimers();
     // Event-Handler besitzen occurrence-/sourcebezogene Zustaende. Sie muessen vor dem
     // Fachsystem-Cleanup laufen, damit Ground-Hazard-Quellen sauber aus dem FireSystem entfernt

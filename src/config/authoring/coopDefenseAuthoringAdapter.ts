@@ -96,6 +96,7 @@ export const COOP_MISSION_SOURCE_FIELDS = [
   'tutorialShowControls',
   'tutorialAnchor',
   'tutorialSteps',
+  'persistentBasePreview',
 ] as const satisfies readonly (keyof CoopDefenseMapConfig)[];
 
 /** Gemeinsamer Schluessel beider Seiten; er ist Identitaet, nicht Inhalt. */
@@ -176,6 +177,7 @@ export function toCoopMissionDefinition(mapConfig: CoopDefenseMapConfig): CoopMi
     baseOverlays: mapConfig.bases.map(toCoopMissionBaseOverlay),
     powerUps: mapConfig.powerUps,
     itemDrop: mapConfig.itemDrop,
+    persistentBasePreview: mapConfig.persistentBasePreview,
     dynamicTimeOfDay: mapConfig.dynamicTimeOfDay,
     tutorial: {
       durationMs: mapConfig.tutorialDurationMs,
@@ -244,6 +246,7 @@ export function toCoopDefenseMapConfig(scenario: AuthoredScenario): CoopDefenseM
     objective: activity.objective,
     respawnsPerPlayer: activity.respawnsPerPlayer,
     itemDrop: activity.itemDrop,
+    persistentBasePreview: activity.persistentBasePreview,
     persistentBase: world.persistentBaseSite,
   };
 }

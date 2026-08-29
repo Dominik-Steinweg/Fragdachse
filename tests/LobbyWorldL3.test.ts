@@ -627,7 +627,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(lifecycle).toContain('this.worldLifecycle.endInstance();');
     expect(lifecycle).toContain('builder.rebindWorldRuntime(');
     expect(lifecycle).toContain('this.tearDownArena(reusableArenaResult !== null);');
-    expect(lifecycle).toContain('enablePersistentBaseGravel: Boolean(world.definition?.persistentBaseSite),');
+    expect(lifecycle).toContain('enablePersistentBaseGravel: persistentBaseGravel !== null,');
     expect(lifecycle).toContain('this.ctx.arenaResult.groundSurface?.setPersistentBaseGravel(');
 
     const bridge = read('src/network/NetworkBridge.ts');

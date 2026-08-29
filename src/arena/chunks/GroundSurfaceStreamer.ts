@@ -71,7 +71,7 @@ export interface GroundSurfaceStreamerOptions {
   readonly frame: ChunkWorldFrame;
   readonly layout: ArenaLayout;
   readonly groundCoverPlacements: readonly GroundCoverPlacement[];
-  /** Nur Persistent-Base-Maps reservieren die zusaetzlichen Gravel-Layer. */
+  /** Nur aktive Persistent Bases oder Activity-Vorschauen reservieren die zusaetzlichen Gravel-Layer. */
   readonly enablePersistentBaseGravel?: boolean;
   /** Optionaler Initialzustand, damit der erste Chunk bereits mit Kies gebacken wird. */
   readonly persistentBaseGravel?: GroundSurfacePersistentBaseGravelZone;

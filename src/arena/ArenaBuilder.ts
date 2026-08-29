@@ -145,7 +145,7 @@ export interface ArenaBuilderDynamicOptions {
    * nicht erst - die Runtime der Baeume bleibt davon unberuehrt.
    */
   readonly presentation?: boolean;
-  /** Nur Maps mit Persistent-Base-Konfiguration bekommen die Gravel-Renderziele. */
+  /** Aktive Persistent Base oder Activity-Vorschau bekommt die Gravel-Renderziele. */
   readonly enablePersistentBaseGravel?: boolean;
   /** Optionaler Zustand fuer den ersten Chunk-Bake. */
   readonly persistentBaseGravel?: GroundSurfacePersistentBaseGravelZone;

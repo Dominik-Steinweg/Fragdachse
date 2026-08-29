@@ -198,8 +198,10 @@ import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefe
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_DISMANTLE_RANGE, getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
+import { toPersistentBaseGravelZone } from '../persistentBase/PersistentBasePresentation';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
+import { PersistentBasePreviewRenderer } from './arena/PersistentBasePreviewRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
 import { PerformanceAblationController } from './arena/PerformanceAblation';
@@ -336,6 +338,7 @@ export class ArenaScene extends Phaser.Scene {
   private projectileLightScratch = new Set<number>();
   private placementPreview!: PlacementPreviewRenderer;
   private persistentBaseVisuals!: PersistentBaseVisuals;
+  private persistentBasePreviewRenderer!: PersistentBasePreviewRenderer;
   private tunnelRenderer!: TunnelRenderer;
   private gaussWarning!: GaussWarningRenderer;
   private hostUpdate!: HostUpdateCoordinator;
@@ -1222,6 +1225,7 @@ export class ArenaScene extends Phaser.Scene {
     this.secondaryObjectiveHud.build();
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.persistentBaseVisuals = new PersistentBaseVisuals(this);
+    this.persistentBasePreviewRenderer = new PersistentBasePreviewRenderer(this, this.renderers.lighting);
     this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(
       this,
@@ -1620,6 +1624,7 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle      = new ArenaLifecycleCoordinator(
       this, this.ctx, this.renderers,
       this.rockVisualHelper, this.placementPreview,
+      this.persistentBasePreviewRenderer,
       this.lobbyOverlay, this.hostUpdate, this.clientUpdate,
       this.roomQualityMonitor,
     );
@@ -2300,13 +2305,10 @@ export class ArenaScene extends Phaser.Scene {
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
     const activeWorld = inArena ? this.ctx.world : null;
     const persistentBaseSite = activeWorld?.persistentBaseSite ?? null;
+    const persistentBaseVisualSite = inArena ? this.lifecycle.getPersistentBaseVisualSite() : null;
     this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
-      persistentBaseSite && this.ctx.currentLayout
-        ? {
-          seed: this.ctx.currentLayout.seed,
-          anchor: persistentBaseSite.anchor,
-          buildArea: persistentBaseSite.buildArea,
-        }
+      persistentBaseVisualSite && this.ctx.currentLayout
+        ? toPersistentBaseGravelZone(persistentBaseVisualSite, this.ctx.currentLayout.seed)
         : null,
     );
     this.persistentBaseVisuals.sync(
@@ -3897,6 +3899,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once('shutdown', () => {
       this.lobbyOverlay?.destroy();
       this.persistentBaseVisuals?.destroy();
+      this.persistentBasePreviewRenderer?.destroy();
       if (this.escapeHotkeyHandler) {
         keyboard.off('keydown-ESC', this.escapeHotkeyHandler);
         this.escapeHotkeyHandler = null;
@@ -4506,6 +4509,7 @@ export class ArenaScene extends Phaser.Scene {
 
     if (inArena) this.ctx.baseManager?.syncLights();
     else this.ctx.baseManager?.releaseLights();
+    this.persistentBasePreviewRenderer.syncLights(inArena);
 
     lighting.update();
   }

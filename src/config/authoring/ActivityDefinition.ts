@@ -9,6 +9,7 @@ import type {
   CoopDefenseMapObjective,
   CoopDefenseMapPersistentSpawnConfig,
   CoopDefenseMapPowerUpConfig,
+  CoopDefenseMapPersistentBasePreviewConfig,
   CoopDefenseMapSecondaryObjectiveConfig,
   CoopDefenseMapTutorialAnchorConfig,
   ResolvedCoopDefenseMapMissionProgressConfig,
@@ -74,6 +75,8 @@ export interface CoopMissionDefinition {
   // ── Belohnung und Nachschub ───────────────────────────────────────────────
   readonly powerUps: readonly CoopDefenseMapPowerUpConfig[];
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
+  /** Rein visuelle kanonische Persistent-Base-Vorschau innerhalb dieser Activity. */
+  readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
 
   /**
    * Activity-getriggerte Weltveraenderung: der Uhrverlauf laeuft gegen den Rundenstart und

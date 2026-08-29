@@ -1,10 +1,14 @@
 import * as Phaser from 'phaser';
-import { TEAM_BLUE_COLOR, TEAM_RED_COLOR } from '../config';
 import type { SyncedBaseState } from '../types';
 import type { CoopBaseFaction } from '../config/coopDefenseMaps';
 import type { BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
-import { mixColors } from '../effects/EffectUtils';
+import {
+  BASE_LIGHT_COLOR,
+  BASE_TURRET_LIGHT_COLOR,
+  HOSTILE_BASE_LIGHT_COLOR,
+  HOSTILE_BASE_TURRET_LIGHT_COLOR,
+} from './BaseVisuals';
 import type { LightingSystem } from '../effects/LightingSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../types';
 import {
@@ -12,14 +16,6 @@ import {
   type BaseDestructionHooks,
 } from '../effects/BaseDestructionRenderer';
 import type { WorldMetrics } from '../world/WorldMetrics';
-
-/** Aufgehellte Teamfarbe der Basis: als Licht braucht es alle drei Kanäle. */
-const BASE_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.5);
-/** Basistürme lesen sich mit einem helleren, konzentrierteren Kern klar vom Sockel ab. */
-const BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_BLUE_COLOR, 0xffffff, 0.72);
-/** Gegnerbasen leuchten in derselben Helligkeit, aber in der Farbe des roten Teams. */
-const HOSTILE_BASE_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.5);
-const HOSTILE_BASE_TURRET_LIGHT_COLOR = mixColors(TEAM_RED_COLOR, 0xffffff, 0.72);
 
 /**
  * Verwaltet alle aktiven Coop-Defense-Basen einer Runde.

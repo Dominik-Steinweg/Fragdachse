@@ -25,6 +25,8 @@ import { DEFAULT_SPAWN_FRONT, isSpawnFront } from '../utils/spawnFront';
 import { MAX_PERSISTENT_BASE_RADIUS_CELLS, PERSISTENT_BASE_CLEARANCE_CELLS } from './persistentBase';
 import {
   buildPersistentBaseCoreBaseConfig,
+  DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+  DEFAULT_PERSISTENT_BASE_ORIENTATION,
   isPersistentBaseBuildArea,
   isPersistentBaseOrientation,
   type PersistentBaseBuildArea,
@@ -668,6 +670,26 @@ export interface CoopDefenseMapPersistentBaseConfig {
   readonly hpMax: number;
 }
 
+/**
+ * Rein visuelle Vorschau des kanonischen Persistent-Base-Kerns innerhalb einer laufenden Mission.
+ *
+ * Die Vorschau besitzt bewusst weder `baseId` noch HP oder einen eigenen Baubereich: Ihre Lage
+ * kommt aus einem vorhandenen Missions-Checkpoint und ihr aktueller Baubereich bleibt an den
+ * gemeinsamen 3x3-Default gebunden. Dadurch kann sie keine World-Basis und keinen persistenten
+ * Working State erzeugen.
+ */
+export interface CoopDefenseMapPersistentBasePreviewConfig {
+  readonly checkpointId: string;
+  readonly orientation?: PersistentBaseOrientation;
+}
+
+export interface ResolvedCoopDefenseMapPersistentBasePreviewConfig
+  extends CoopDefenseMapPersistentBasePreviewConfig {
+  readonly anchor: PersistentBaseAnchor;
+  readonly orientation: PersistentBaseOrientation;
+  readonly buildArea: PersistentBaseBuildArea;
+}
+
 export interface ResolvedCoopDefenseMapTutorialStepConfig extends CoopDefenseMapTutorialStepConfig {
   readonly durationMs: number;
 }
@@ -765,6 +787,8 @@ export interface CoopDefenseMapConfig {
   readonly respawnsPerPlayer?: number;
   /** Gesetzt: Ein Sieg auf dieser Map bietet dem Spieler drei Items zur Auswahl an. */
   readonly itemDrop?: CoopDefenseMapItemDropConfig;
+  /** Rein visuelle kanonische Persistent-Base-Vorschau; erzeugt keine World-Struktur. */
+  readonly persistentBasePreview?: CoopDefenseMapPersistentBasePreviewConfig;
   /** Reuses the authored friendly main base as the persistent anchor. */
   readonly persistentBase?: CoopDefenseMapPersistentBaseConfig;
 }
@@ -798,6 +822,24 @@ export function resolveCoopDefenseMapMissionProgress(
   mapConfig: CoopDefenseMapConfig,
 ): ResolvedCoopDefenseMapMissionProgressConfig | undefined {
   return mapConfig.missionProgress as ResolvedCoopDefenseMapMissionProgressConfig | undefined;
+}
+
+/** Löst die rein visuelle Basisvorschau gegen den authored Checkpoint der Activity auf. */
+export function resolveCoopDefenseMapPersistentBasePreview(
+  mapConfig: CoopDefenseMapConfig,
+): ResolvedCoopDefenseMapPersistentBasePreviewConfig | undefined {
+  const preview = mapConfig.persistentBasePreview;
+  if (!preview) return undefined;
+  const checkpoint = resolveCoopDefenseMapMissionProgress(mapConfig)?.checkpoints.find(
+    (candidate) => candidate.id === preview.checkpointId,
+  );
+  if (!checkpoint) return undefined;
+  return {
+    checkpointId: preview.checkpointId,
+    anchor: { gridX: checkpoint.gridX, gridY: checkpoint.gridY },
+    orientation: preview.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION,
+    buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+  };
 }
 
 /** Gemeinsame Tutorial-Schritte der Map; leer, solange keine authoriert sind. */
@@ -1139,6 +1181,11 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     encounters ?? [],
     secondaryObjectives ?? [],
   );
+  const persistentBasePreview = normalizePersistentBasePreviewConfig(
+    mapConfig.mapId,
+    mapConfig.persistentBasePreview,
+    missionProgress,
+  );
   validateMissionDependencyGraph(
     mapConfig.mapId,
     encounters ?? [],
@@ -1207,6 +1254,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
       mapConfig.respawnsPerPlayer,
     ),
     itemDrop,
+    persistentBasePreview,
     persistentBase,
   };
 }
@@ -1303,6 +1351,30 @@ function normalizePersistentBaseConfig(
     hpMax: config.hpMax,
   };
   return { site, base: normalizeBaseConfig(buildPersistentBaseCoreBaseConfig(site)) };
+}
+
+function normalizePersistentBasePreviewConfig(
+  mapId: string,
+  config: CoopDefenseMapPersistentBasePreviewConfig | undefined,
+  missionProgress: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+): CoopDefenseMapPersistentBasePreviewConfig | undefined {
+  if (config === undefined) return undefined;
+  const checkpointId = normalizeRequiredId(
+    config.checkpointId,
+    `[coopDefenseMaps] Persistent base preview on map ${mapId} needs a checkpointId`,
+  );
+  if (!(missionProgress?.checkpoints.some((checkpoint) => checkpoint.id === checkpointId) ?? false)) {
+    throw new Error(
+      `[coopDefenseMaps] Persistent base preview on map ${mapId} references unknown checkpoint: ${checkpointId}`,
+    );
+  }
+  if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
+    throw new Error(`[coopDefenseMaps] Persistent base preview on map ${mapId} has an unknown orientation`);
+  }
+  return {
+    checkpointId,
+    ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
+  };
 }
 
 function getBaseShapeDimensions(shape: CoopBaseShape): { width: number; height: number } {

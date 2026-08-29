@@ -489,6 +489,7 @@ export function createFakePhaserModule(): Record<string, unknown> {
     BlendModes: { NORMAL: 0, MULTIPLY: 1, ADD: 2, ERASE: 17, SKIP_CHECK: -1 },
     Math: {
       Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
+      Linear: (a: number, b: number, t: number) => a + (b - a) * t,
       Between: (min: number) => min,
       FloatBetween: () => 0.5,
       Angle: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1) },

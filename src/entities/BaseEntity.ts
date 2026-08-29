@@ -14,14 +14,11 @@ import {
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
 import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
-import { AutoTiler, BASE_AUTOTILE } from '../arena/AutoTiler';
 import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
+import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
 
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
-const BASE_LIGHT_SPACING = CELL_SIZE * 4.5;
-const BASE_LIGHT_OVERHANG = CELL_SIZE * 1.25;
-const BASE_LIGHT_RADIUS = BASE_LIGHT_SPACING * 1.35;
 const VULNERABLE_MARKER_COLOR = 0xc86bff;
 
 export interface BaseTurretRuntimeState {
@@ -117,7 +114,7 @@ export class BaseEntity {
     this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;
     const bounds = getBaseWorldBounds(spec.region, metrics);
     this.hpBarWidth = bounds.width;
-    this.lightSpots = BaseEntity.buildLightSpots(bounds);
+    this.lightSpots = getBaseLightSpots(bounds);
     for (const turret of this.spec.turrets) this.turretAngles.set(turret.id, turret.initialAngle);
     if (!this.dormant) {
       this.createRuntimeRepresentation();
@@ -150,21 +147,7 @@ export class BaseEntity {
     const cellTexture = hostile ? 'base_hostile' : 'base';
 
     // ── 1) 47-Blob-Sprites pro Zelle ────────────────────────────────────
-    const cellKeySet = new Set<number>();
-    const keyOf = (gx: number, gy: number) => gy * 100000 + gx;
-    for (const cell of this.spec.cells) cellKeySet.add(keyOf(cell.gridX, cell.gridY));
-    const isOccupied = (gx: number, gy: number) => cellKeySet.has(keyOf(gx, gy));
-
-    for (const cell of this.spec.cells) {
-      const worldX = this.metrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = this.metrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      const mask = AutoTiler.computeMask(cell.gridX, cell.gridY, isOccupied);
-      const frame = AutoTiler.getFrame(mask, BASE_AUTOTILE);
-      const image = this.scene.add.image(worldX, worldY, cellTexture, frame);
-      image.setDisplaySize(CELL_SIZE, CELL_SIZE);
-      image.setDepth(DEPTH.BASES);
-      this.cellImages.push(image);
-    }
+    this.cellImages.push(...createBaseSurfaceImages(this.scene, this.spec.cells, this.metrics, cellTexture));
 
     // Basistürme sind reine Anbauten: keine eigenen Bodies und keine eigenen HP.
     for (const turret of this.spec.turrets) {
@@ -230,34 +213,6 @@ export class BaseEntity {
     registerGraphicsObject(this.scene, 'baseMarkers', hpBarFg);
     this.hpBarFg = hpBarFg;
     this.refreshHpBar();
-  }
-
-  /**
-   * Verteilt wenige große Lichtpunkte zentriert auf einem gleichmäßigen Raster. Durch die
-   * Zentrierung reichen für die üblichen Basen zwei bis vier Lichter statt eines dichten
-   * Gitters entlang der Außenkanten.
-   */
-  private static buildLightSpots(
-    bounds: { x: number; y: number; width: number; height: number },
-  ): { x: number; y: number; radius: number }[] {
-    const minX = bounds.x - BASE_LIGHT_OVERHANG;
-    const minY = bounds.y - BASE_LIGHT_OVERHANG;
-    const spanX = bounds.width + BASE_LIGHT_OVERHANG * 2;
-    const spanY = bounds.height + BASE_LIGHT_OVERHANG * 2;
-    const cols = Math.max(1, Math.ceil(spanX / BASE_LIGHT_SPACING));
-    const rows = Math.max(1, Math.ceil(spanY / BASE_LIGHT_SPACING));
-
-    const spots: { x: number; y: number; radius: number }[] = [];
-    for (let row = 0; row < rows; row += 1) {
-      for (let col = 0; col < cols; col += 1) {
-        spots.push({
-          x: minX + ((col + 0.5) / cols) * spanX,
-          y: minY + ((row + 0.5) / rows) * spanY,
-          radius: BASE_LIGHT_RADIUS,
-        });
-      }
-    }
-    return spots;
   }
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
