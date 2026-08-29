@@ -58,7 +58,7 @@ function lobbyWorldContextFor(mode: GameMode, persistentBaseUnlocked: boolean) {
       LOBBY_WORLD_DEFINITION_ID,
       ownsPersistentBase ? 9 : 10,
       ownsPersistentBase
-        ? { persistentBaseUnlocked: true, persistentBaseRadiusCells: 5 }
+        ? { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 }
         : undefined,
     ),
     metricsProfile: getAuthoredWorldMetricsProfile(
@@ -252,7 +252,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     const world = createWorldRuntimeContext({
       descriptor: createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 8, {
         persistentBaseUnlocked: true,
-        persistentBaseRadiusCells: 5,
+        persistentBaseAreaStage: 0,
       }),
       metricsProfile: getAuthoredWorldMetricsProfile(
         definition.metrics.widthCells,
@@ -264,7 +264,8 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(world.bases.map((base) => base.id)).toEqual([LOBBY_PERSISTENT_BASE_ID]);
     expect(world.persistentBaseSite).toMatchObject({
       baseId: LOBBY_PERSISTENT_BASE_ID,
-      radiusCells: 5,
+      areaStage: 0,
+      buildArea: { kind: 'square', sizeCells: 3 },
     });
     // Der Anker ist die authored Mitte der World und damit zugleich ihr Spawn-Fokus: Wer das
     // Testgelaende betritt, steht im eigenen Hof.

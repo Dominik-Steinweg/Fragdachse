@@ -63,7 +63,7 @@ function activityDescriptor(overrides: Partial<ActivityDescriptor> = {}): Activi
 
 describe('WorldDescriptor – kanonische World-Identitaet', () => {
   it('traegt ausschliesslich World-Identitaet und World-Konfiguration', () => {
-    const world = worldDescriptor({ parameters: { persistentBaseRadiusCells: 6 } });
+    const world = worldDescriptor({ parameters: { persistentBaseAreaStage: 0 } });
     expect(Object.keys(world).sort()).toEqual([
       'definitionId', 'generatorVersion', 'layoutFingerprint', 'parameters', 'seed', 'worldRevision',
     ]);
@@ -127,12 +127,12 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(isSameWorldInstance(world, { ...world, layoutFingerprint: 'other' })).toBe(false);
     expect(isSameWorldInstance(world, { ...world, seed: world.seed + 1 })).toBe(false);
 
-    // World-Parameter sind Teil der Instanz: zwei Peers mit verschiedenem Radius haben nicht
+    // World-Parameter sind Teil der Instanz: zwei Peers mit verschiedener Area-Stufe haben nicht
     // dieselbe World gebaut.
-    const withRadius = { ...world, parameters: { persistentBaseRadiusCells: 6 } };
-    expect(isSameWorldInstance(withRadius, { ...withRadius })).toBe(true);
-    expect(isSameWorldInstance(withRadius, world)).toBe(false);
-    expect(isSameWorldInstance(withRadius, { ...world, parameters: { persistentBaseRadiusCells: 7 } })).toBe(false);
+    const withStage = { ...world, parameters: { persistentBaseAreaStage: 0 } };
+    expect(isSameWorldInstance(withStage, { ...withStage })).toBe(true);
+    expect(isSameWorldInstance(withStage, world)).toBe(false);
+    expect(isSameWorldInstance(withStage, { ...world, parameters: { persistentBaseAreaStage: 1 } })).toBe(false);
     expect(isSameWorldInstance(world, { ...world, parameters: {} })).toBe(true);
 
     // Dasselbe gilt fuer die Freischaltung: Eine Lobby mit Basiskern und eine ohne sind zwei
@@ -156,7 +156,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
   });
 
   it('verwirft unvollstaendige World-Nutzlast an der Netzwerkgrenze', () => {
-    const world = worldDescriptor({ parameters: { persistentBaseRadiusCells: 6 } });
+    const world = worldDescriptor({ parameters: { persistentBaseAreaStage: 0 } });
     expect(parseWorldDescriptor(JSON.parse(JSON.stringify(world)))).toEqual(world);
     expect(parseWorldDescriptor(null)).toBeNull();
     expect(parseWorldDescriptor({ ...world, worldRevision: 0 })).toBeNull();
@@ -165,17 +165,17 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
     expect(parseWorldDescriptor({ ...world, layoutFingerprint: '' })).toBeNull();
     expect(parseWorldDescriptor({ ...world, seed: Number.NaN })).toBeNull();
     // Unbrauchbare Parameter loeschen nicht die World, sie entfallen.
-    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseRadiusCells: -1 } }))
+    expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseAreaStage: 2 } }))
       .toEqual({ ...world, parameters: undefined });
     expect(parseWorldDescriptor({ ...world, parameters: { persistentBaseUnlocked: 'yes' } }))
       .toEqual({ ...world, parameters: undefined });
 
-    // Jedes Feld reist auch allein: Eine gesperrte Lobby fuehrt keinen Radius, eine
+    // Jedes Feld reist auch allein: Eine gesperrte Lobby fuehrt keine Area-Stufe, eine
     // freigeschaltete beide Werte.
     for (const parameters of [
       { persistentBaseUnlocked: true },
       { persistentBaseUnlocked: false },
-      { persistentBaseUnlocked: true, persistentBaseRadiusCells: 5 },
+      { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
     ]) {
       const descriptor = { ...world, parameters };
       expect(parseWorldDescriptor(JSON.parse(JSON.stringify(descriptor)))).toEqual(descriptor);

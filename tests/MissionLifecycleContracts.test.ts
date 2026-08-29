@@ -43,7 +43,7 @@ function hostStartMission(host: NetworkBridge, roundRevision: number): void {
       seed: 99,
       generatorVersion: 1,
       layoutFingerprint: 'cafebabe',
-      parameters: { persistentBaseRadiusCells: 6 },
+      parameters: { persistentBaseAreaStage: 0 },
     },
     {
       activityRevision: roundRevision,
@@ -117,7 +117,7 @@ describe('mission lifecycle – Start und Freigabe', () => {
       expect(client.getWorldDescriptor()).toMatchObject({
         worldRevision: 4711,
         definitionId: 'world:coop-defense:1',
-        parameters: { persistentBaseRadiusCells: 6 },
+        parameters: { persistentBaseAreaStage: 0 },
       });
       expect(client.getActivityDescriptor()?.kind).toBe('coop-mission');
       expect(client.getMatchHostId()).toBe('p0');

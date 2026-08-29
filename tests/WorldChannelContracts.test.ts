@@ -57,10 +57,10 @@ describe('World-Kanal – Replikation', () => {
       const host = bridgeFor(hostRoom);
       expect(host.getWorldDescriptor()).toBeNull();
 
-      host.publishWorldAndActivity(world({ parameters: { persistentBaseRadiusCells: 6 } }), activity());
+      host.publishWorldAndActivity(world({ parameters: { persistentBaseAreaStage: 0 } }), activity());
 
       const client = bridgeFor(clientRoom);
-      expect(client.getWorldDescriptor()).toEqual(world({ parameters: { persistentBaseRadiusCells: 6 } }));
+      expect(client.getWorldDescriptor()).toEqual(world({ parameters: { persistentBaseAreaStage: 0 } }));
       expect(client.getActivityDescriptor()).toEqual(activity());
       // Genau ein World-Kanal: der frueher parallel gefuehrte Arena-Descriptor existiert nicht mehr.
       expect(clientRoom.room.getGlobal('ard')).toBeUndefined();

@@ -138,7 +138,7 @@ function testSite(): WorldPersistentBaseSite {
     },
     anchor: { gridX: 5, gridY: 5 },
     orientation: 'open-left',
-    radiusCells: 5,
+    areaStage: 0,
     buildArea: DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   };
 }

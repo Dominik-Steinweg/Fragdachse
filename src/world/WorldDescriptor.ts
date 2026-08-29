@@ -1,3 +1,8 @@
+import {
+  isPersistentBaseAreaStage,
+  type PersistentBaseAreaStage,
+} from '../persistentBase/PersistentBaseCore';
+
 /**
  * Kanonische replizierte World-Identitaet.
  *
@@ -29,7 +34,7 @@ export interface WorldDescriptor {
 /**
  * Host-autoritative Parameter einer konkreten World-Instanz.
  *
- * Sie unterscheiden zwei Instanzen derselben WorldDefinition. Der persistente Basisradius ist
+ * Sie unterscheiden zwei Instanzen derselben WorldDefinition. Die semantische Area-Stufe ist
  * eine World-Konfiguration und reist deshalb hier statt in einem Activity- oder Round-Vertrag.
  */
 export interface WorldParameters {
@@ -42,8 +47,8 @@ export interface WorldParameters {
    * unterschiedlichem Wert haben nicht dieselbe World gebaut.
    */
   readonly persistentBaseUnlocked?: boolean;
-  /** Aktiver Radius der persistenten Basis dieser World-Instanz in Zellen. */
-  readonly persistentBaseRadiusCells?: number;
+  /** Semantische, fuer diese World-Instanz eingefrorene Area-Stufe der persistenten Basis. */
+  readonly persistentBaseAreaStage?: PersistentBaseAreaStage;
 }
 
 /**
@@ -63,7 +68,7 @@ export function isProceduralWorldDefinitionId(definitionId: string): boolean {
  */
 export const WORLD_PARAMETER_FIELDS = [
   'persistentBaseUnlocked',
-  'persistentBaseRadiusCells',
+  'persistentBaseAreaStage',
 ] as const satisfies readonly (keyof WorldParameters)[];
 
 /**
@@ -124,6 +129,16 @@ export function hasPersistentBaseUnlockStatusChanged(
     !== (right?.parameters?.persistentBaseUnlocked === true);
 }
 
+/** True, wenn sich die fuer die persistente Basis sichtbare World-Konfiguration veraendert. */
+export function hasPersistentBaseConfigurationChanged(
+  left: Pick<WorldDescriptor, 'parameters'> | null | undefined,
+  right: Pick<WorldDescriptor, 'parameters'> | null | undefined,
+): boolean {
+  return hasPersistentBaseUnlockStatusChanged(left, right)
+    || (left?.parameters?.persistentBaseAreaStage ?? null)
+      !== (right?.parameters?.persistentBaseAreaStage ?? null);
+}
+
 /**
  * Jedes Feld wird einzeln geprueft; ein ungueltiger Wert verwirft die ganze Nutzlast, statt
  * still auf einen lokalen Ersatzwert zu fallen. Bleibt kein Feld uebrig, traegt diese World
@@ -134,7 +149,7 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
   const candidate = raw as Partial<WorldParameters>;
   const parameters: {
     persistentBaseUnlocked?: boolean;
-    persistentBaseRadiusCells?: number;
+    persistentBaseAreaStage?: PersistentBaseAreaStage;
   } = {};
 
   const unlocked = candidate.persistentBaseUnlocked;
@@ -143,10 +158,10 @@ function parseWorldParameters(raw: unknown): WorldParameters | null {
     parameters.persistentBaseUnlocked = unlocked;
   }
 
-  const radiusCells = candidate.persistentBaseRadiusCells;
-  if (radiusCells !== undefined) {
-    if (!isSafeInteger(radiusCells) || radiusCells < 0) return null;
-    parameters.persistentBaseRadiusCells = radiusCells;
+  const areaStage = candidate.persistentBaseAreaStage;
+  if (areaStage !== undefined) {
+    if (!isPersistentBaseAreaStage(areaStage)) return null;
+    parameters.persistentBaseAreaStage = areaStage;
   }
 
   return Object.keys(parameters).length > 0 ? parameters : null;

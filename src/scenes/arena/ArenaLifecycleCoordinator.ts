@@ -153,7 +153,7 @@ import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
   getStoredLocalOwnerId,
-  getStoredPersistentBaseRadiusCells,
+  getStoredPersistentBaseAreaStage,
   getStoredPersistentBaseUnlocked,
   getStoredPersonalBaseContribution,
   setStoredPersonalBaseContribution,
@@ -182,6 +182,7 @@ import {
   isCellInsidePersistentBaseBuildArea,
   resolvePersistentBaseCell,
   type PersistentBaseBuildArea,
+  type PersistentBaseAreaStage,
 } from '../../persistentBase/PersistentBaseCore';
 import {
   mergePersistentBaseComposite,
@@ -234,7 +235,7 @@ import { resolvePlayerCapabilities, type PlayerCapabilities } from '../../world/
 import { resolveWorldPresentation, type WorldPresentationRequirement } from '../../world/WorldPresentation';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
 import {
-  hasPersistentBaseUnlockStatusChanged,
+  hasPersistentBaseConfigurationChanged,
   isSameWorldInstance,
   type WorldDescriptor,
   type WorldParameters,
@@ -305,15 +306,17 @@ export class ArenaLifecycleCoordinator {
    */
   private lobbyWorldModeAtRevision: GameMode | null = null;
   /**
-   * Nur Vergleichsmarker fuer den effektiven Lobby-Base-Stand (Coop plus gespeichertes
-   * Entitlement), mit dem die aktuelle LobbyWorld eroeffnet wurde.
+   * Nur Vergleichsmarker fuer den effektiven Lobby-Base-Stand (Coop plus gespeicherte
+   * Entitlements), mit dem die aktuelle LobbyWorld eroeffnet wurde.
    *
    * Der erste Sieg auf der Freischaltmap faellt zwischen zwei Lobby-Instanzen; ohne diesen
    * Marker haette die Reihenfolge von Sieg-Verbuchung und Lobby-Aufbau entschieden, ob die Basis
    * erscheint. Aendert sich der Wert, wird die LobbyWorld neu instanziiert - ihre Neuerzeugung
    * ist ohnehin ihr Reset.
-   */
+  */
   private lobbyWorldPersistentBaseUnlockedAtRevision: boolean | null = null;
+  /** Area-Stage-Marker der aktuellen LobbyWorld; ein Wechsel erzwingt eine neue World. */
+  private lobbyWorldPersistentBaseAreaStageAtRevision: PersistentBaseAreaStage | null = null;
   /** Lokaler Uebergang: alte LobbyWorld ist beendet, neue Descriptor-Runtime wird gebunden. */
   private pendingLobbyWorldReinstance = false;
   /** True, wenn der Lobby-Reinstance neue strukturelle Base-Presentation benoetigt. */
@@ -704,7 +707,7 @@ export class ArenaLifecycleCoordinator {
         && isLobbyWorldDefinitionId(world.definitionId);
       const lobbyPresentationStructureChanged = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
         && isLobbyWorldDefinitionId(world.definitionId)
-        && hasPersistentBaseUnlockStatusChanged(previousWorld, world);
+        && hasPersistentBaseConfigurationChanged(previousWorld, world);
       // Waehren des expliziten Arena-Exit-Fades bleibt die lokale Match-World bestehen, auch
       // wenn der Host bereits den WorldDescriptor entfernt oder der Lobby-Descriptor frueh ankommt.
       if (deferredMatchToLobby && matchToLobby) return;
@@ -753,6 +756,9 @@ export class ArenaLifecycleCoordinator {
     const currentMode = bridge.getActiveGameMode();
     const persistentBaseUnlocked = isCoopDefenseMode(currentMode)
       && getStoredPersistentBaseUnlocked();
+    const persistentBaseAreaStage = isCoopDefenseMode(currentMode)
+      ? getStoredPersistentBaseAreaStage()
+      : null;
     const currentWorld = this.worldLifecycle.descriptor;
     if (currentWorld !== null) {
       if (isLobbyWorldDefinitionId(currentWorld.definitionId)
@@ -760,8 +766,10 @@ export class ArenaLifecycleCoordinator {
         if (this.lobbyWorldModeAtRevision === null) {
           this.lobbyWorldModeAtRevision = currentMode;
           this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+          this.lobbyWorldPersistentBaseAreaStageAtRevision = persistentBaseAreaStage;
         } else if (this.lobbyWorldModeAtRevision !== currentMode
-          || this.lobbyWorldPersistentBaseUnlockedAtRevision !== persistentBaseUnlocked) {
+          || this.lobbyWorldPersistentBaseUnlockedAtRevision !== persistentBaseUnlocked
+          || this.lobbyWorldPersistentBaseAreaStageAtRevision !== persistentBaseAreaStage) {
           const previousRevision = currentWorld.worldRevision;
           const worldRevision = nextMonotonicRevision(
             Math.max(this.lastRoundRevision, previousRevision),
@@ -771,20 +779,22 @@ export class ArenaLifecycleCoordinator {
           const nextWorld = createAuthoredWorldDescriptor(
             LOBBY_WORLD_DEFINITION_ID,
             worldRevision,
-            resolveLobbyWorldParameters(persistentBaseUnlocked),
+            resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage),
           );
-          const lobbyPresentationStructureChanged = hasPersistentBaseUnlockStatusChanged(
+          const lobbyPresentationStructureChanged = hasPersistentBaseConfigurationChanged(
             currentWorld,
             nextWorld,
           );
           this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);
           this.lobbyWorldModeAtRevision = currentMode;
           this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+          this.lobbyWorldPersistentBaseAreaStageAtRevision = persistentBaseAreaStage;
           this.worldLifecycle.beginCreate(nextWorld, null);
         }
       } else {
         this.lobbyWorldModeAtRevision = null;
         this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+        this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
       }
       return;
     }
@@ -798,11 +808,12 @@ export class ArenaLifecycleCoordinator {
     this.lastRoundRevision = worldRevision;
     this.lobbyWorldModeAtRevision = currentMode;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
+    this.lobbyWorldPersistentBaseAreaStageAtRevision = persistentBaseAreaStage;
     this.worldLifecycle.beginCreate(
       createAuthoredWorldDescriptor(
         LOBBY_WORLD_DEFINITION_ID,
         worldRevision,
-        resolveLobbyWorldParameters(persistentBaseUnlocked),
+        resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage),
       ),
       null,
     );
@@ -884,6 +895,7 @@ export class ArenaLifecycleCoordinator {
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
@@ -908,7 +920,7 @@ export class ArenaLifecycleCoordinator {
       worldParameters: coopDefenseMapConfig?.persistentBase
         ? {
           persistentBaseUnlocked: true,
-          persistentBaseRadiusCells: getStoredPersistentBaseRadiusCells(),
+          persistentBaseAreaStage: getStoredPersistentBaseAreaStage(),
         }
         : undefined,
     };
@@ -1227,6 +1239,7 @@ export class ArenaLifecycleCoordinator {
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
     bridge.hostResetRoundParticipation();
@@ -1269,6 +1282,7 @@ export class ArenaLifecycleCoordinator {
     this.clearWorldAdmission();
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
     bridge.hostResetRoundParticipation();
@@ -1977,6 +1991,7 @@ export class ArenaLifecycleCoordinator {
     this.arenaEnteredAt = 0;
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
 
@@ -5737,6 +5752,7 @@ export class ArenaLifecycleCoordinator {
     this.arenaEnteredAt = 0;
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
+    this.lobbyWorldPersistentBaseAreaStageAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
     this.pendingLobbyWorldPresentationRebuild = false;
     this.isLocalReady = false;
@@ -6710,15 +6726,18 @@ function resolveCompositeToolUnavailability(
 /**
  * World-Parameter der LobbyWorld.
  *
- * Der Radius reist nur mit, wenn der Kern ueberhaupt existiert: Eine gesperrte Lobby traegt gar
- * keine persistente Basisstelle, und ein Radius ohne Stelle waere eine Konfiguration fuer etwas,
- * das es in dieser Instanz nicht gibt.
+ * Die Area-Stufe reist nur mit, wenn der Kern ueberhaupt existiert: Eine gesperrte Lobby traegt
+ * gar keine persistente Basisstelle, und eine Stufe ohne Stelle waere eine Konfiguration fuer
+ * etwas, das es in dieser Instanz nicht gibt.
  */
-function resolveLobbyWorldParameters(persistentBaseUnlocked: boolean): WorldParameters | undefined {
-  if (!persistentBaseUnlocked) return undefined;
+function resolveLobbyWorldParameters(
+  persistentBaseUnlocked: boolean,
+  areaStage: PersistentBaseAreaStage | null,
+): WorldParameters | undefined {
+  if (!persistentBaseUnlocked || areaStage === null) return undefined;
   return {
     persistentBaseUnlocked: true,
-    persistentBaseRadiusCells: getStoredPersistentBaseRadiusCells(),
+    persistentBaseAreaStage: areaStage,
   };
 }
 

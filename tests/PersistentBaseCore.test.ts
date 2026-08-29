@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CANONICAL_PERSISTENT_BASE_CORE_CELLS,
+  DEFAULT_PERSISTENT_BASE_AREA_STAGE,
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
   PERSISTENT_BASE_CORE_SIZE_CELLS,
@@ -11,8 +12,10 @@ import {
   getPersistentBaseCoreSurfaceOffsets,
   isCellInsidePersistentBaseBuildArea,
   isPersistentBaseBuildArea,
+  isPersistentBaseAreaStage,
   isPersistentBaseOrientation,
   resolvePersistentBaseCell,
+  resolvePersistentBaseBuildAreaForStage,
   resolvePersistentBaseCoreCells,
   type PersistentBaseCellDomain,
 } from '../src/persistentBase/PersistentBaseCore';
@@ -84,7 +87,13 @@ describe('PersistentBaseCore – kanonische Form', () => {
     ]);
   });
 
-  it('beschreibt den aktuellen Baubereich als genaues 3x3-Quadrat und erlaubt spaeter Radien', () => {
+  it('beschreibt die Area-Stufen zentral als 3x3-Quadrat bzw. Radius 5', () => {
+    expect(DEFAULT_PERSISTENT_BASE_AREA_STAGE).toBe(0);
+    expect(isPersistentBaseAreaStage(0)).toBe(true);
+    expect(isPersistentBaseAreaStage(1)).toBe(true);
+    expect(isPersistentBaseAreaStage(2)).toBe(false);
+    expect(resolvePersistentBaseBuildAreaForStage(0)).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(resolvePersistentBaseBuildAreaForStage(1)).toEqual({ kind: 'radius', radiusCells: 5 });
     expect(DEFAULT_PERSISTENT_BASE_BUILD_AREA).toEqual({ kind: 'square', sizeCells: 3 });
     expect(isPersistentBaseBuildArea(DEFAULT_PERSISTENT_BASE_BUILD_AREA)).toBe(true);
     expect(isPersistentBaseBuildArea({ kind: 'square', sizeCells: 4 })).toBe(false);

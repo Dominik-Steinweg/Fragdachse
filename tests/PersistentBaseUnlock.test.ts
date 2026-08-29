@@ -3,13 +3,19 @@ import {
   LOCAL_PROGRESS_STORAGE_KEY,
   getStoredCoopDefenseProgress,
   getStoredHighestUnlockedCoopDefenseMapId,
+  getStoredPersistentBaseAreaStage,
   getStoredPersistentBaseUnlocked,
   invalidateLocalStorageCache,
   setStoredPersistentBaseUnlocked,
+  setStoredPersistentBaseAreaStage,
   unlockStoredCoopDefenseMapAfterVictory,
   unlockStoredPersistentBaseAfterVictory,
+  unlockStoredPersistentBaseAreaStageAfterVictory,
 } from '../src/utils/localPreferences';
-import { PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID } from '../src/config/persistentBase';
+import {
+  PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID,
+  PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
+} from '../src/config/persistentBase';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../src/config/coopDefenseMapUnlocks';
 
 /**
@@ -52,6 +58,20 @@ describe('Persistente Basis – Freischaltung', () => {
     expect(getStoredHighestUnlockedCoopDefenseMapId())
       .toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
     expect(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID).toBe(INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID);
+    expect(getStoredPersistentBaseAreaStage()).toBe(0);
+  });
+
+  it('vergibt Area Stage 1 nur beim Sieg auf Map 10 und niemals rueckwaerts', () => {
+    expect(PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID).toBe('10');
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('9')).toBe(false);
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('11')).toBe(false);
+    expect(getStoredPersistentBaseAreaStage()).toBe(0);
+
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('10')).toBe(true);
+    expect(getStoredPersistentBaseAreaStage()).toBe(1);
+    expect(unlockStoredPersistentBaseAreaStageAfterVictory('10')).toBe(false);
+    expect(setStoredPersistentBaseAreaStage(0)).toBe(false);
+    expect(getStoredPersistentBaseAreaStage()).toBe(1);
   });
 
   it('vergibt sie beim Sieg auf der Freischaltmap und nur dort', () => {
@@ -90,7 +110,7 @@ describe('Persistente Basis – Freischaltung', () => {
     expect(getStoredPersistentBaseUnlocked()).toBe(true);
   });
 
-  it('backfillt fehlende V4-Felder nicht aus dem Mapfortschritt', () => {
+  it('backfillt fehlende V5-Felder nicht aus dem Mapfortschritt', () => {
     const write = (coopDefense: Record<string, unknown>): void => {
       const raw = JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!);
       raw.coopDefense = { ...raw.coopDefense, ...coopDefense };
@@ -107,7 +127,7 @@ describe('Persistente Basis – Freischaltung', () => {
     expect(getStoredPersistentBaseUnlocked()).toBe(false);
 
     // Auch wer sie laengst geschlagen hat, bekommt durch ein unvollstaendiges Dokument nichts
-    // rueckwirkend gutgeschrieben. Der Decoder setzt kontrolliert einen frischen V4-Stand.
+    // rueckwirkend gutgeschrieben. Der Decoder setzt kontrolliert einen frischen V5-Stand.
     write({ highestUnlockedMapId: '5' });
     expect(getStoredPersistentBaseUnlocked()).toBe(false);
   });

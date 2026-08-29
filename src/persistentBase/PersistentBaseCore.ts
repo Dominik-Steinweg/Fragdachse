@@ -4,6 +4,7 @@ import type {
   CoopBaseConfig,
   CoopBaseShape,
 } from '../config/coopDefenseMaps';
+import { DEFAULT_PERSISTENT_BASE_RADIUS_CELLS } from '../config/persistentBase';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 
 /**
@@ -50,11 +51,36 @@ export type PersistentBaseBuildArea =
   | { readonly kind: 'square'; readonly sizeCells: number }
   | { readonly kind: 'radius'; readonly radiusCells: number };
 
+/** Semantische Ausbau-Stufe der persistenten Basis. */
+export type PersistentBaseAreaStage = 0 | 1;
+
+export const DEFAULT_PERSISTENT_BASE_AREA_STAGE: PersistentBaseAreaStage = 0;
+
+/** Authoritative Stage-Werte an der Persistenz- und Netzwerkgrenze. */
+export const PERSISTENT_BASE_AREA_STAGES = [0, 1] as const satisfies readonly PersistentBaseAreaStage[];
+
 /** Aktueller Baubereich: genau die neun Innenhofzellen im 5x5-Kern. */
 export const DEFAULT_PERSISTENT_BASE_BUILD_AREA = Object.freeze({
   kind: 'square',
   sizeCells: 3,
 } as const satisfies PersistentBaseBuildArea);
+
+/** Authoring-/Wire-Grenze fuer die semantische Area-Stufe. */
+export function isPersistentBaseAreaStage(value: unknown): value is PersistentBaseAreaStage {
+  return value === 0 || value === 1;
+}
+
+/** Leitet die aktive Build-Area genau einmal aus der persistenten Area-Stufe ab. */
+export function resolvePersistentBaseBuildAreaForStage(
+  areaStage: PersistentBaseAreaStage,
+): PersistentBaseBuildArea {
+  switch (areaStage) {
+    case 0:
+      return DEFAULT_PERSISTENT_BASE_BUILD_AREA;
+    case 1:
+      return { kind: 'radius', radiusCells: DEFAULT_PERSISTENT_BASE_RADIUS_CELLS };
+  }
+}
 
 /** Authoring-Grenze fuer Baubereiche; unbekannte Formen werden nicht still ersetzt. */
 export function isPersistentBaseBuildArea(value: unknown): value is PersistentBaseBuildArea {

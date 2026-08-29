@@ -7,6 +7,7 @@ import {
   exportStoredGameProgressJson,
   getStoredLocalOwnerId,
   getStoredPersistentBaseState,
+  getStoredPersistentBaseAreaStage,
   getStoredPersonalBaseContribution,
   setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
@@ -19,6 +20,7 @@ import {
   resetStoredCoopDefenseCharacter,
   setStoredCoopDefenseTotalXp,
   setStoredPersistentBaseUnlocked,
+  setStoredPersistentBaseAreaStage,
   setStoredPersistentBaseState,
   setStoredCoopDefenseUpgradeProfile,
   setStoredGraphicsQuality,
@@ -175,6 +177,25 @@ describe('local progress generation', () => {
     corrupt.progress.coopDefense.persistentBaseUnlocked = 'yes';
     expect(importStoredGameProgressJson(JSON.stringify(corrupt)).ok).toBe(false);
     expect(getStoredCoopDefenseProgress().persistentBaseUnlocked).toBe(true);
+  });
+
+  it('carries the semantic persistent-base area stage through export and import', () => {
+    expect(getStoredPersistentBaseAreaStage()).toBe(0);
+    expect(setStoredPersistentBaseAreaStage(1)).toBe(true);
+    expect(getStoredPersistentBaseAreaStage()).toBe(1);
+
+    const exported = JSON.parse(exportStoredGameProgressJson());
+    expect(exported.progress.coopDefense.persistentBaseAreaStage).toBe(1);
+
+    resetStoredCoopDefenseCharacter();
+    expect(getStoredPersistentBaseAreaStage()).toBe(0);
+    expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
+    expect(getStoredPersistentBaseAreaStage()).toBe(1);
+
+    const corrupt = structuredClone(exported);
+    corrupt.progress.coopDefense.persistentBaseAreaStage = 2;
+    expect(importStoredGameProgressJson(JSON.stringify(corrupt)).ok).toBe(false);
+    expect(getStoredPersistentBaseAreaStage()).toBe(1);
   });
 
   it('rejects V2 progress exports, duplicate persistent IDs and corrupt persistent-base data', () => {

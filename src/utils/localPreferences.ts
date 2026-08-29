@@ -49,6 +49,7 @@ import {
 } from '../config/coopDefenseMapUnlocks';
 import {
   PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
+  PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID,
 } from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
@@ -86,15 +87,20 @@ import {
   type PersistentBaseRewardId,
   type PersistentBaseRewardState,
 } from '../persistentBase/PersistentBaseRewardTypes';
+import {
+  DEFAULT_PERSISTENT_BASE_AREA_STAGE,
+  isPersistentBaseAreaStage,
+  type PersistentBaseAreaStage,
+} from '../persistentBase/PersistentBaseCore';
 
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
-export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v4';
+export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v5';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
-export const LOCAL_PROGRESS_SCHEMA_VERSION = 4;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 5;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 4;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 5;
 export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
 export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
@@ -122,6 +128,8 @@ export interface CoopDefenseProgressPreferences {
    * Basis" gespeichert ist. Die Form der Basis ist Code, ihre Lage World-Konfiguration.
    */
   persistentBaseUnlocked: boolean;
+  /** Semantische Ausbau-Stufe; niemals aus der aktuellen oder hoechsten Map rekonstruiert. */
+  persistentBaseAreaStage: PersistentBaseAreaStage;
   /** Personal reward ownership; never used as host placement authority. */
   persistentBaseRewardUnlocks: PersistentBaseRewardId[];
   /**
@@ -205,7 +213,7 @@ interface LocalSettingsDocumentV2 {
 }
 
 export interface LocalProgressDocument {
-  schemaVersion: 4;
+  schemaVersion: 5;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
   coopDefense: {
@@ -221,6 +229,7 @@ export interface LocalProgressDocument {
     loadoutsByClass?: LocalPreferences['loadoutByClass'];
     itemsUnlocked: boolean;
     persistentBaseUnlocked: boolean;
+    persistentBaseAreaStage: PersistentBaseAreaStage;
     persistentBaseRewardUnlocks: PersistentBaseRewardId[];
     items: CoopDefenseItem[];
     equippedItemIds: CoopDefenseEquippedItemIds;
@@ -274,6 +283,7 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   },
   itemsUnlocked: false,
   persistentBaseUnlocked: false,
+  persistentBaseAreaStage: DEFAULT_PERSISTENT_BASE_AREA_STAGE,
   persistentBaseRewardUnlocks: [],
   items: [],
   equippedItemIds: {},
@@ -779,6 +789,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.classesUnlocked !== 'boolean'
     || typeof coop.itemsUnlocked !== 'boolean'
     || typeof coop.persistentBaseUnlocked !== 'boolean'
+    || !isPersistentBaseAreaStage(coop.persistentBaseAreaStage)
     || !Array.isArray(coop.persistentBaseRewardUnlocks)
     || !Array.isArray(coop.items)
     || !isRecord(coop.equippedItemIds)
@@ -875,7 +886,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     profile: {
       playerName: typeof document.profile.playerName === 'string'
         ? sanitizePlayerName(document.profile.playerName) || null : null,
-      // V4 requires the stable owner identity so personal contributions cannot change owners.
+      // V5 requires the stable owner identity so personal contributions cannot change owners.
       ownerId,
     },
     loadout,
@@ -896,6 +907,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
           highestUnlockedMapId,
         ),
         persistentBaseUnlocked: coop.persistentBaseUnlocked,
+        persistentBaseAreaStage: coop.persistentBaseAreaStage,
         persistentBaseRewardUnlocks,
         items,
         equippedItemIds,
@@ -961,6 +973,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
         ? sanitizeStoredLoadoutsByClass(preferences.loadoutByClass) : undefined,
       itemsUnlocked: progress.itemsUnlocked,
       persistentBaseUnlocked: progress.persistentBaseUnlocked,
+      persistentBaseAreaStage: progress.persistentBaseAreaStage,
       persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
       items: [...progress.items],
       equippedItemIds: { ...progress.equippedItemIds },
@@ -1378,6 +1391,7 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     profilesByClass: cloneProfilesByClass(progress.profilesByClass),
     itemsUnlocked: progress.itemsUnlocked,
     persistentBaseUnlocked: progress.persistentBaseUnlocked,
+    persistentBaseAreaStage: progress.persistentBaseAreaStage,
     persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
     unseenItems: progress.unseenItems,
     persistentBase: clonePersistentBaseState(progress.persistentBase),
@@ -1465,14 +1479,29 @@ export function setStoredPersonalBaseContribution(contribution: PersistentPlayer
   return true;
 }
 
+/** Die semantische, persoenliche Ausbau-Stufe der persistenten Basis. */
+export function getStoredPersistentBaseAreaStage(): PersistentBaseAreaStage {
+  return readPreferences().progression.coopDefense.persistentBaseAreaStage;
+}
+
 /**
- * Der aktive Progressionsradius der persistenten Basis.
- *
- * Er beschreibt, wie weit die Basis ausgebaut ist, und ist ausdruecklich keine Aussage darueber,
- * wem eine Konstruktion gehoert. Besitz steht ausschliesslich im persoenlichen Beitrag.
+ * Setzt die Area-Stufe monoton. Ein Ruecksprung kann nur ueber den expliziten Charakter-Reset
+ * erfolgen; Mapfortschritt oder fremde World-Daten koennen die persoenliche Freischaltung nicht
+ * verkleinern.
  */
-export function getStoredPersistentBaseRadiusCells(): number {
-  return readPreferences().progression.coopDefense.persistentBase.radiusCells;
+export function setStoredPersistentBaseAreaStage(areaStage: PersistentBaseAreaStage): boolean {
+  if (!isPersistentBaseAreaStage(areaStage)) return false;
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (areaStage <= progress.persistentBaseAreaStage) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: { ...progress, persistentBaseAreaStage: areaStage },
+    },
+  });
+  return true;
 }
 
 /** Typed persistence port used by the persistent-base domain; no caller needs LocalStorage. */
@@ -1480,7 +1509,7 @@ export function getStoredPersistentBaseState(): PersistentBaseState {
   return clonePersistentBaseState(readPreferences().progression.coopDefense.persistentBase);
 }
 
-/** Atomically replaces only the committed persistent-base value inside the V4 progress document. */
+/** Atomically replaces only the committed persistent-base value inside the V5 progress document. */
 export function setStoredPersistentBaseState(state: PersistentBaseState): void {
   const sanitized = sanitizePersistentBaseState(state);
   if (!sanitized) return;
@@ -1956,6 +1985,12 @@ export function setStoredPersistentBaseUnlocked(unlocked: boolean): boolean {
 export function unlockStoredPersistentBaseAfterVictory(completedMapId: string): boolean {
   return completedMapId.trim() === PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID
     && setStoredPersistentBaseUnlocked(true);
+}
+
+/** Analog zur Klassenfreischaltung: Map 10 vergibt Area Stage 1 dauerhaft. */
+export function unlockStoredPersistentBaseAreaStageAfterVictory(completedMapId: string): boolean {
+  return completedMapId.trim() === PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID
+    && setStoredPersistentBaseAreaStage(1);
 }
 
 export function getStoredCoopDefenseItems(): CoopDefenseItem[] {

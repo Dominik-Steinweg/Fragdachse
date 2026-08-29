@@ -145,6 +145,7 @@ import {
   unlockStoredCoopDefenseItemsAfterVictory,
   unlockStoredCoopDefenseMapAfterVictory,
   unlockStoredPersistentBaseAfterVictory,
+  unlockStoredPersistentBaseAreaStageAfterVictory,
   type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
 import {
@@ -5443,6 +5444,10 @@ export class ArenaScene extends Phaser.Scene {
       // Ein eigenstaendiges Entitlement neben dem Mapfortschritt: Ab jetzt traegt die LobbyWorld
       // ihren Basiskern, unabhaengig davon, welche Map als naechstes offen ist.
       unlockedPersistentBase = unlockStoredPersistentBaseAfterVictory(completedMapId);
+      // Die Area-Stufe ist ein eigenes, monotones Campaign-Entitlement. Sie wird wie alle lokalen
+      // Progressionsdaten pro berechtigtem Spieler verbucht, aber erst in der naechsten World
+      // aus dem Host-Stand aufgeloest.
+      unlockStoredPersistentBaseAreaStageAfterVictory(completedMapId);
       unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
 
       // Jeder Spieler wuerfelt sein eigenes Angebot lokal; der Sieg steht bereits reliable im

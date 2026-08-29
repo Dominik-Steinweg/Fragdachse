@@ -25,7 +25,7 @@ export const COOP_DEFENSE_CLASS_IDS: readonly CoopDefenseClassId[] = [
 
 export const DEFAULT_COOP_DEFENSE_CLASS_ID: CoopDefenseClassId = 'dachs_nukem';
 
-/** Legacy alias retained for older callers; Inspector Gadachs unlocks on Map 8. */
+/** Legacy alias retained for older callers; class-specific definitions remain authoritative. */
 export const COOP_DEFENSE_CLASS_UNLOCK_AFTER_MAP_ID = '5';
 
 export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId, CoopDefenseClassDefinition>> =
@@ -56,7 +56,7 @@ export const COOP_DEFENSE_CLASS_DEFINITIONS: Readonly<Record<CoopDefenseClassId,
     },
     inspector_gadachs: {
       id: 'inspector_gadachs',
-      unlockAfterMapId: '8',
+      unlockAfterMapId: '10',
       outgoingDamageMultiplier: 1,
       criticalChance: 0,
       criticalDamageMultiplier: 1,

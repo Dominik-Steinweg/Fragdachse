@@ -627,7 +627,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     const unlockedDescriptor = createAuthoredWorldDescriptor(
       LOBBY_WORLD_DEFINITION_ID,
       7316,
-      { persistentBaseUnlocked: true, persistentBaseRadiusCells: 5 },
+      { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 },
     );
     const definition = getLobbyWorldDefinition();
     const metricsProfile = getAuthoredWorldMetricsProfile(

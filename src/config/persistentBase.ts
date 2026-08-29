@@ -14,6 +14,9 @@ export const PERSISTENT_BASE_CLEARANCE_CELLS = 2;
  */
 export const PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID = '1';
 
+/** Map-Sieg, der die naechste semantische Area-Stufe dauerhaft freischaltet. */
+export const PERSISTENT_BASE_AREA_STAGE_UNLOCK_AFTER_MAP_ID = '10';
+
 /**
  * Schemaversion des persoenlichen Basisbeitrags.
  *

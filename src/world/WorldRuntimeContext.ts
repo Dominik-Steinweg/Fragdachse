@@ -3,10 +3,11 @@ import type { ArenaMetricsProfile } from '../config';
 import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import {
-  resolvePersistentBaseBuildArea,
+  resolvePersistentBaseBuildAreaForStage,
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
   type PersistentBaseOrientation,
   type PersistentBaseBuildArea,
+  type PersistentBaseAreaStage,
 } from '../persistentBase/PersistentBaseCore';
 import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
 import { isProceduralWorldDefinitionId, type WorldDescriptor } from './WorldDescriptor';
@@ -43,8 +44,8 @@ export interface WorldPersistentBaseSite {
   readonly base: BaseSpec;
   readonly anchor: PersistentBaseAnchor;
   readonly orientation: PersistentBaseOrientation;
-  /** Host-autoritativer Progressionsradius; relevant fuer radiusbasierte Area-Regeln. */
-  readonly radiusCells: number;
+  /** Host-autoritative, fuer diese World-Instanz eingefrorene Area-Stufe. */
+  readonly areaStage: PersistentBaseAreaStage;
   /** Aktuelle Regel fuer die bebaubare Flaeche dieser Instanz. */
   readonly buildArea: PersistentBaseBuildArea;
 }
@@ -112,7 +113,7 @@ export function isValidPersistentBaseSite(site: WorldPersistentBaseSite | null):
 }
 
 /**
- * Der aktive Radius ist host-autoritative World-Konfiguration und kommt ausschliesslich aus
+ * Die aktive Area-Stufe ist host-autoritative World-Konfiguration und kommt ausschliesslich aus
  * dem Descriptor. Ein lokaler Ersatzwert waere pro Peer verschieden und wuerde aus einem
  * Uebertragungsfehler still zwei verschiedene Welten machen – deshalb schlaegt der Aufbau hier
  * fehl, statt zu raten.
@@ -127,24 +128,21 @@ function resolvePersistentBaseSite(
 ): WorldPersistentBaseSite | null {
   const baseId = definition?.persistentBaseSite?.baseId;
   if (!baseId) return null;
-  const radiusCells = descriptor.parameters?.persistentBaseRadiusCells;
-  if (radiusCells === undefined) {
+  const areaStage = descriptor.parameters?.persistentBaseAreaStage;
+  if (areaStage === undefined) {
     throw new Error(
-      `[WorldRuntimeContext] World ${descriptor.definitionId} has a persistent base site but no replicated radius`,
+      `[WorldRuntimeContext] World ${descriptor.definitionId} has a persistent base site but no replicated area stage`,
     );
   }
   const base = bases.find((candidate) => candidate.id === baseId);
   if (!base) return null;
-  const buildArea = resolvePersistentBaseBuildArea(
-    definition.persistentBaseSite?.buildArea,
-    radiusCells,
-  );
+  const buildArea = resolvePersistentBaseBuildAreaForStage(areaStage);
   return {
     baseId,
     base,
     anchor: getPersistentBaseAnchor(base),
     orientation: definition.persistentBaseSite?.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION,
-    radiusCells,
+    areaStage,
     buildArea,
   };
 }
