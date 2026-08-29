@@ -14,7 +14,7 @@ export const PERSISTENT_BASE_REWARD_IDS = [
 export type PersistentBaseRewardId = typeof PERSISTENT_BASE_REWARD_IDS[number];
 
 export type PersistentBaseRewardCategory = 'basePedestal' | 'baseTurret';
-export type PersistentBaseRewardPlacementRule = 'base-surface' | 'courtyard-build-area';
+export type PersistentBaseRewardPlacementRule = 'base-surface' | 'persistent-build-area';
 
 export interface PersistentBaseRewardPlacement {
   readonly rewardId: PersistentBaseRewardId;
@@ -78,6 +78,17 @@ export function sanitizePersistentBaseRewardIds(value: unknown): PersistentBaseR
     if (!isPersistentBaseRewardId(rawId) || seen.has(rawId)) return null;
     seen.add(rawId);
     result.push(rawId);
+  }
+  return result;
+}
+
+/** Validates one grant request and removes duplicate IDs while preserving request order. */
+export function sanitizePersistentBaseRewardGrantIds(value: unknown): PersistentBaseRewardId[] | null {
+  if (!Array.isArray(value)) return null;
+  const result: PersistentBaseRewardId[] = [];
+  for (const rawId of value) {
+    if (!isPersistentBaseRewardId(rawId)) return null;
+    if (!result.includes(rawId)) result.push(rawId);
   }
   return result;
 }

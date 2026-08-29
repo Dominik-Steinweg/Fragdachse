@@ -3,12 +3,16 @@ import {
   getPersistentBaseRewardDefinition,
   PERSISTENT_BASE_REWARD_DEFINITIONS,
 } from '../src/persistentBase/PersistentBaseRewardCatalog';
-import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
+import {
+  PersistentBaseRewardGrantService,
+  type PersistentBaseRewardGrantRecipients,
+} from '../src/persistentBase/PersistentBaseRewardGrant';
 import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
 import {
   DEFAULT_PERSISTENT_BASE_REWARD_STATE,
   getPersistentBaseRewardStatus,
   sanitizePersistentBaseRewardState,
+  type PersistentBaseRewardId,
 } from '../src/persistentBase/PersistentBaseRewardTypes';
 
 describe('Persistent Base Reward-Katalog', () => {
@@ -20,32 +24,32 @@ describe('Persistent Base Reward-Katalog', () => {
       'base_rocket_turret',
       'base_holy_hand_grenade_pedestal',
     ]);
-    expect(getPersistentBaseRewardDefinition('base_adrenaline_pedestal').runtime).toMatchObject({
-      powerUpDefId: 'ADRENALINE',
+    expect(getPersistentBaseRewardDefinition('base_adrenaline_pedestal').gameplaySource).toEqual({
+      kind: 'power-up-definition', powerUpDefId: 'ADRENALINE',
     });
     expect(getPersistentBaseRewardDefinition('base_adrenaline_pedestal').initialState)
       .toEqual({ respawnMs: 10_000, spawnOnArenaStart: true });
     expect(getPersistentBaseRewardDefinition('base_adrenaline_pedestal')).toMatchObject({
-      category: 'basePedestal', placementRule: 'courtyard-build-area',
+      category: 'basePedestal', placementRule: 'persistent-build-area',
     });
-    expect(getPersistentBaseRewardDefinition('base_health_pedestal').runtime).toMatchObject({
-      powerUpDefId: 'HEALTH_PACK',
+    expect(getPersistentBaseRewardDefinition('base_health_pedestal').gameplaySource).toEqual({
+      kind: 'power-up-definition', powerUpDefId: 'HEALTH_PACK',
     });
     expect(getPersistentBaseRewardDefinition('base_health_pedestal').initialState)
       .toEqual({ respawnMs: 5_000, spawnOnArenaStart: true });
-    expect(getPersistentBaseRewardDefinition('base_holy_hand_grenade_pedestal').runtime).toMatchObject({
-      powerUpDefId: 'HOLY_HAND_GRENADE',
+    expect(getPersistentBaseRewardDefinition('base_holy_hand_grenade_pedestal').gameplaySource).toEqual({
+      kind: 'power-up-definition', powerUpDefId: 'HOLY_HAND_GRENADE',
     });
     expect(getPersistentBaseRewardDefinition('base_holy_hand_grenade_pedestal').initialState)
       .toEqual({ respawnMs: 30_000, spawnOnArenaStart: true });
-    expect(getPersistentBaseRewardDefinition('base_spore_turret').runtime).toEqual({
-      kind: 'construction', constructionId: 'spore_turret',
+    expect(getPersistentBaseRewardDefinition('base_spore_turret').gameplaySource).toEqual({
+      kind: 'construction-definition', constructionId: 'spore_turret',
     });
     expect(getPersistentBaseRewardDefinition('base_spore_turret')).toMatchObject({
       category: 'baseTurret', placementRule: 'base-surface',
     });
-    expect(getPersistentBaseRewardDefinition('base_rocket_turret').runtime).toEqual({
-      kind: 'construction', constructionId: 'rocket_turret',
+    expect(getPersistentBaseRewardDefinition('base_rocket_turret').gameplaySource).toEqual({
+      kind: 'construction-definition', constructionId: 'rocket_turret',
     });
   });
 });
@@ -126,12 +130,24 @@ describe('PersistentBaseRewardStore', () => {
 describe('PersistentBaseRewardGrantService', () => {
   it('deduplicates rewards and only publishes new grants for eligible players', () => {
     const local: string[] = [];
-    const confirmations: Array<{ playerId: string; revision: number; rewardIds: readonly string[] }> = [];
+    const localUnlocks = new Set<PersistentBaseRewardId>();
+    const remoteUnlocks = new Set<PersistentBaseRewardId>();
+    const confirmations: Array<{ playerId: string; rewardIds: readonly string[] }> = [];
     const service = new PersistentBaseRewardGrantService();
-    const recipients = {
+    const recipients: PersistentBaseRewardGrantRecipients = {
       localPlayerId: 'host',
-      applyLocal: (ids: readonly string[]) => local.push(...ids),
-      confirmForPlayer: (playerId: string, grant: { revision: number; rewardIds: readonly string[] }) => confirmations.push({ playerId, ...grant }),
+      applyLocal: (ids) => {
+        const newlyGranted = ids.filter((id) => !localUnlocks.has(id));
+        newlyGranted.forEach((id) => localUnlocks.add(id));
+        local.push(...newlyGranted);
+        return newlyGranted;
+      },
+      confirmForPlayer: (playerId, ids) => {
+        const newlyGranted = ids.filter((id) => !remoteUnlocks.has(id));
+        newlyGranted.forEach((id) => remoteUnlocks.add(id));
+        if (newlyGranted.length > 0) confirmations.push({ playerId, rewardIds: [...remoteUnlocks] });
+        return newlyGranted;
+      },
     };
     const first = service.grant(
       ['base_health_pedestal', 'base_health_pedestal'] as const,
@@ -141,9 +157,7 @@ describe('PersistentBaseRewardGrantService', () => {
     expect(first.newlyGrantedByPlayerId.get('host')).toEqual(['base_health_pedestal']);
     expect(first.newlyGrantedByPlayerId.get('guest')).toEqual(['base_health_pedestal']);
     expect(local).toEqual(['base_health_pedestal']);
-    expect(confirmations).toEqual([{
-      playerId: 'guest', revision: 1, rewardIds: ['base_health_pedestal'],
-    }]);
+    expect(confirmations).toEqual([{ playerId: 'guest', rewardIds: ['base_health_pedestal'] }]);
 
     service.grant(['base_health_pedestal'] as const, ['host', 'guest'], recipients);
     expect(local).toEqual(['base_health_pedestal']);

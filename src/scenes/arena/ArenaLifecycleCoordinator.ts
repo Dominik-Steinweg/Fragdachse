@@ -4723,9 +4723,10 @@ export class ArenaLifecycleCoordinator {
     if (!cell) return null;
     const ownerId = COOP_DEFENSE_BASE_TURRET_OWNER_ID;
     const ownerColor = TEAM_BLUE_COLOR;
-    const runtime = definition.runtime.kind === 'construction' && definition.runtime.constructionId
+    const runtime = definition.gameplaySource.kind === 'construction-definition'
+      && definition.gameplaySource.constructionId
       ? placementSystem.materializePersistentBaseReward(
-        getCoopDefenseConstructionDefinition(definition.runtime.constructionId),
+        getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId),
         placement.rewardId,
         cell.gridX,
         cell.gridY,
@@ -4743,11 +4744,11 @@ export class ArenaLifecycleCoordinator {
       );
     if (!runtime) return null;
 
-    if (definition.runtime.kind === 'power-up-pedestal') {
+    if (definition.gameplaySource.kind === 'power-up-definition') {
       const world = this.rockVisualHelper.gridToWorld(cell.gridX, cell.gridY);
       const registered = this.ctx.powerUpSystem?.registerPersistentBaseRewardPedestal(
         placement.rewardId,
-        definition.runtime.powerUpDefId ?? '',
+        definition.gameplaySource.powerUpDefId,
         world.x,
         world.y,
         definition.initialState.respawnMs,

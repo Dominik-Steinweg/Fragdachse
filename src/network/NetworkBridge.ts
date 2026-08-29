@@ -54,11 +54,13 @@ import {
 } from '../persistentBase/PersistentBaseTypes';
 import {
   clonePersistentBaseRewardGrant,
+  sanitizePersistentBaseRewardGrantIds,
   sanitizePersistentBaseRewardGrant,
   clonePersistentBaseRewardSessionState,
   sanitizePersistentBaseRewardPlacementRequest,
   sanitizePersistentBaseRewardSessionState,
   type PersistentBaseRewardGrant,
+  type PersistentBaseRewardId,
   type PersistentBaseRewardPlacementRequest,
   type PersistentBaseRewardSessionState,
 } from '../persistentBase/PersistentBaseRewardTypes';
@@ -2445,6 +2447,28 @@ export class NetworkBridge {
     )) return;
     if (current && sanitized.revision === current.revision) return;
     player.setState(KEY_PB_REWARD_GRANT, clonePersistentBaseRewardGrant(sanitized), true);
+  }
+
+  /**
+   * Host-side grant operation. The reliable per-player state is the only cumulative history:
+   * every call reads it, appends only missing IDs, and confirms the merged state.
+   */
+  hostGrantPersistentBaseRewards(
+    playerId: string,
+    rewardIds: readonly PersistentBaseRewardId[],
+  ): readonly PersistentBaseRewardId[] {
+    if (!isHost() || typeof playerId !== 'string' || !this.playerStateMap.has(playerId)) return [];
+    const normalized = sanitizePersistentBaseRewardGrantIds(rewardIds);
+    if (!normalized) return [];
+    const current = this.getPlayerPersistentBaseRewardGrant(playerId);
+    const previousIds = current?.rewardIds ?? [];
+    const newlyGranted = normalized.filter((rewardId) => !previousIds.includes(rewardId));
+    if (newlyGranted.length === 0) return [];
+    this.hostConfirmPersistentBaseRewardGrant(playerId, {
+      revision: (current?.revision ?? 0) + 1,
+      rewardIds: [...previousIds, ...newlyGranted],
+    });
+    return newlyGranted;
   }
 
   /** Host-side read of the state offered by one player; invalid payloads are ignored. */

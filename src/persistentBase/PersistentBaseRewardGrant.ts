@@ -1,14 +1,20 @@
 import {
-  clonePersistentBaseRewardGrant,
-  isPersistentBaseRewardId,
-  type PersistentBaseRewardGrant,
+  sanitizePersistentBaseRewardGrantIds,
   type PersistentBaseRewardId,
 } from './PersistentBaseRewardTypes';
 
 export interface PersistentBaseRewardGrantRecipients {
   readonly localPlayerId: string;
-  readonly applyLocal: (rewardIds: readonly PersistentBaseRewardId[]) => void;
-  readonly confirmForPlayer: (playerId: string, grant: PersistentBaseRewardGrant) => void;
+  /** Applies the request to local persistence and returns IDs newly accepted there. */
+  readonly applyLocal: (rewardIds: readonly PersistentBaseRewardId[]) => readonly PersistentBaseRewardId[];
+  /**
+   * Hands the request to the confirmation layer. That layer owns the cumulative/revision
+   * state and returns IDs newly accepted there.
+   */
+  readonly confirmForPlayer: (
+    playerId: string,
+    rewardIds: readonly PersistentBaseRewardId[],
+  ) => readonly PersistentBaseRewardId[];
 }
 
 export interface PersistentBaseRewardGrantResult {
@@ -18,39 +24,26 @@ export interface PersistentBaseRewardGrantResult {
 
 /** Shared idempotent grant path for map victory and secondary-objective authoring. */
 export class PersistentBaseRewardGrantService {
-  private readonly cumulativeByPlayer = new Map<string, Set<PersistentBaseRewardId>>();
-  private readonly revisionByPlayer = new Map<string, number>();
-
   grant(
     rewardIds: readonly PersistentBaseRewardId[],
     eligiblePlayerIds: readonly string[],
     recipients: PersistentBaseRewardGrantRecipients,
   ): PersistentBaseRewardGrantResult {
-    if (!Array.isArray(rewardIds) || rewardIds.some((rewardId) => !isPersistentBaseRewardId(rewardId))) {
+    const normalizedIds = sanitizePersistentBaseRewardGrantIds(rewardIds);
+    if (!normalizedIds || !Array.isArray(eligiblePlayerIds) || normalizedIds.length === 0) {
       return { rewardIds: [], newlyGrantedByPlayerId: new Map() };
     }
-    const normalizedIds = [...new Set(rewardIds)] as PersistentBaseRewardId[];
     const newlyGrantedByPlayerId = new Map<string, readonly PersistentBaseRewardId[]>();
     const seenPlayers = new Set<string>();
     for (const playerId of eligiblePlayerIds) {
       if (typeof playerId !== 'string' || playerId.trim().length === 0 || seenPlayers.has(playerId)) continue;
       seenPlayers.add(playerId);
-      const granted = this.cumulativeByPlayer.get(playerId) ?? new Set<PersistentBaseRewardId>();
-      const newlyGranted = normalizedIds.filter((id) => !granted.has(id));
-      if (newlyGranted.length === 0) continue;
-      for (const id of newlyGranted) granted.add(id);
-      this.cumulativeByPlayer.set(playerId, granted);
-      newlyGrantedByPlayerId.set(playerId, newlyGranted);
-      if (playerId === recipients.localPlayerId) {
-        recipients.applyLocal(newlyGranted);
-      } else {
-        const nextGrant: PersistentBaseRewardGrant = {
-          revision: (this.revisionByPlayer.get(playerId) ?? 0) + 1,
-          rewardIds: [...granted].filter(isPersistentBaseRewardId),
-        };
-        this.revisionByPlayer.set(playerId, nextGrant.revision);
-        recipients.confirmForPlayer(playerId, clonePersistentBaseRewardGrant(nextGrant));
-      }
+      const accepted = playerId === recipients.localPlayerId
+        ? recipients.applyLocal(normalizedIds)
+        : recipients.confirmForPlayer(playerId, normalizedIds);
+      const newlyGranted = (sanitizePersistentBaseRewardGrantIds(accepted) ?? [])
+        .filter((rewardId) => normalizedIds.includes(rewardId));
+      if (newlyGranted.length > 0) newlyGrantedByPlayerId.set(playerId, newlyGranted);
     }
     return { rewardIds: normalizedIds, newlyGrantedByPlayerId };
   }

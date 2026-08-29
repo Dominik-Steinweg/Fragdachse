@@ -9,11 +9,14 @@ import {
 export interface PersistentBaseRewardDefinition {
   readonly id: PersistentBaseRewardId;
   readonly category: PersistentBaseRewardCategory;
-  readonly runtime: {
-    readonly kind: 'power-up-pedestal' | 'construction';
-    readonly powerUpDefId?: string;
-    readonly constructionId?: 'spore_turret' | 'rocket_turret';
-  };
+  /**
+   * Existing gameplay definitions are references only. The reward category remains the
+   * authority for whether this is a base pedestal or a base turret; this is not a personal
+   * construction-runtime contract.
+   */
+  readonly gameplaySource:
+    | { readonly kind: 'power-up-definition'; readonly powerUpDefId: string }
+    | { readonly kind: 'construction-definition'; readonly constructionId: 'spore_turret' | 'rocket_turret' };
   readonly initialState: {
     readonly respawnMs: number | null;
     readonly spawnOnArenaStart: boolean;
@@ -29,18 +32,18 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
   {
     id: 'base_adrenaline_pedestal',
     category: 'basePedestal',
-    runtime: {
-      kind: 'power-up-pedestal',
+    gameplaySource: {
+      kind: 'power-up-definition',
       powerUpDefId: 'ADRENALINE',
     },
     initialState: { respawnMs: 10_000, spawnOnArenaStart: true },
-    placementRule: 'courtyard-build-area',
+    placementRule: 'persistent-build-area',
     presentation: { labelKey: 'powerup.ADRENALINE.name', iconKey: 'powerup_adr' },
   },
   {
     id: 'base_spore_turret',
     category: 'baseTurret',
-    runtime: { kind: 'construction', constructionId: 'spore_turret' },
+    gameplaySource: { kind: 'construction-definition', constructionId: 'spore_turret' },
     initialState: { respawnMs: null, spawnOnArenaStart: true },
     placementRule: 'base-surface',
     presentation: { labelKey: 'loadout.SPORE_TURRET.name', iconKey: 'UPGRADE_UNLOCK_FLIEGENPILZ' },
@@ -48,18 +51,18 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
   {
     id: 'base_health_pedestal',
     category: 'basePedestal',
-    runtime: {
-      kind: 'power-up-pedestal',
+    gameplaySource: {
+      kind: 'power-up-definition',
       powerUpDefId: 'HEALTH_PACK',
     },
     initialState: { respawnMs: 5_000, spawnOnArenaStart: true },
-    placementRule: 'courtyard-build-area',
+    placementRule: 'persistent-build-area',
     presentation: { labelKey: 'powerup.HEALTH_PACK.name', iconKey: 'powerup_hp' },
   },
   {
     id: 'base_rocket_turret',
     category: 'baseTurret',
-    runtime: { kind: 'construction', constructionId: 'rocket_turret' },
+    gameplaySource: { kind: 'construction-definition', constructionId: 'rocket_turret' },
     initialState: { respawnMs: null, spawnOnArenaStart: true },
     placementRule: 'base-surface',
     presentation: { labelKey: 'construction.rocket_turret.name', iconKey: 'UPGRADE_UNLOCK_ROCKET_TURRET' },
@@ -67,12 +70,12 @@ export const PERSISTENT_BASE_REWARD_DEFINITIONS: readonly PersistentBaseRewardDe
   {
     id: 'base_holy_hand_grenade_pedestal',
     category: 'basePedestal',
-    runtime: {
-      kind: 'power-up-pedestal',
+    gameplaySource: {
+      kind: 'power-up-definition',
       powerUpDefId: 'HOLY_HAND_GRENADE',
     },
     initialState: { respawnMs: 30_000, spawnOnArenaStart: true },
-    placementRule: 'courtyard-build-area',
+    placementRule: 'persistent-build-area',
     presentation: { labelKey: 'powerup.HOLY_HAND_GRENADE.name', iconKey: 'powerup_hhg' },
   },
 ]);

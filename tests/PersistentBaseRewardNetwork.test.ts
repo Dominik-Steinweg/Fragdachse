@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
+import type { PersistentBaseRewardId } from '../src/persistentBase/PersistentBaseRewardTypes';
 import { LOBBY_WORLD_DEFINITION_ID } from '../src/config/authoring/lobbyWorld';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
@@ -90,10 +91,65 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       const confirmed: unknown[] = [];
       service.grant(['base_health_pedestal'] as const, [clientId], {
         localPlayerId: host.getLocalPlayerId(),
-        applyLocal: () => undefined,
-        confirmForPlayer: (_playerId, grant) => confirmed.push(grant),
+        applyLocal: () => [],
+        confirmForPlayer: (_playerId, rewardIds) => {
+          confirmed.push([...rewardIds]);
+          return rewardIds;
+        },
       });
       expect(confirmed).toHaveLength(1);
+    } finally {
+      hostRoom.room.leave();
+      clientRoom.room.leave();
+    }
+  });
+
+  it('merges through the reliable state across service restarts and keeps repeats idempotent', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      const client = bridgeFor(clientRoom);
+      const clientId = client.getLocalPlayerId();
+      const grant = (service: PersistentBaseRewardGrantService, ids: readonly PersistentBaseRewardId[]) => {
+        useRoom(hostRoom);
+        const result = service.grant(ids, [clientId], {
+          localPlayerId: host.getLocalPlayerId(),
+          applyLocal: () => [],
+          confirmForPlayer: (playerId, rewardIds) => host.hostGrantPersistentBaseRewards(playerId, rewardIds),
+        });
+        useRoom(clientRoom);
+        return result;
+      };
+
+      expect(grant(new PersistentBaseRewardGrantService(), ['base_health_pedestal'])
+        .newlyGrantedByPlayerId.get(clientId)).toEqual(['base_health_pedestal']);
+      expect(client.getConfirmedPersistentBaseRewardGrant()).toEqual({
+        revision: 1,
+        rewardIds: ['base_health_pedestal'],
+      });
+
+      expect(grant(new PersistentBaseRewardGrantService(), ['base_spore_turret'])
+        .newlyGrantedByPlayerId.get(clientId)).toEqual(['base_spore_turret']);
+      expect(grant(new PersistentBaseRewardGrantService(), ['base_health_pedestal'])
+        .newlyGrantedByPlayerId.has(clientId)).toBe(false);
+      expect(grant(new PersistentBaseRewardGrantService(), ['base_rocket_turret'])
+        .newlyGrantedByPlayerId.get(clientId)).toEqual(['base_rocket_turret']);
+      expect(client.getConfirmedPersistentBaseRewardGrant()).toEqual({
+        revision: 3,
+        rewardIds: ['base_health_pedestal', 'base_spore_turret', 'base_rocket_turret'],
+      });
+
+      useRoom(hostRoom);
+      host.hostConfirmPersistentBaseRewardGrant(clientId, {
+        revision: 4,
+        rewardIds: ['base_health_pedestal'],
+      });
+      expect(host.getPlayerPersistentBaseRewardGrant(clientId)).toEqual({
+        revision: 3,
+        rewardIds: ['base_health_pedestal', 'base_spore_turret', 'base_rocket_turret'],
+      });
     } finally {
       hostRoom.room.leave();
       clientRoom.room.leave();
