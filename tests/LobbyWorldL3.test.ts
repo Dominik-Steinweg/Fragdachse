@@ -28,7 +28,10 @@ import { PlayerWorldRuntime, resolvePlayerRuntimeFeatures } from '../src/world/P
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
 import { resolveActiveGameMode, toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
 import { worldCellCenter } from '../src/world/WorldMetrics';
-import { hasPersistentBaseUnlockStatusChanged } from '../src/world/WorldDescriptor';
+import {
+  hasPersistentBaseConfigurationChanged,
+  hasPersistentBaseUnlockStatusChanged,
+} from '../src/world/WorldDescriptor';
 import { resolveWorldPresentation } from '../src/world/WorldPresentation';
 import { consumesWorldReplication } from '../src/world/WorldReplication';
 import { createWorldRuntimeContext } from '../src/world/WorldRuntimeContext';
@@ -668,6 +671,46 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
     expect(lifecycle).toContain('this.ctx.arenaResult = builder.buildDynamic(layout, {');
     expect(lifecycle).toContain('builder.rebindWorldRuntime(');
+  });
+
+  it('aktiviert Stage 1 erst in der ersetzten LobbyWorld und laesst die alte Area unveraendert', () => {
+    const stage0Descriptor = createAuthoredWorldDescriptor(
+      LOBBY_WORLD_DEFINITION_ID,
+      7318,
+      { persistentBaseUnlocked: true, persistentBaseAreaStage: 0 },
+    );
+    const stage1Descriptor = createAuthoredWorldDescriptor(
+      LOBBY_WORLD_DEFINITION_ID,
+      7319,
+      { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
+    );
+    const definition = getLobbyWorldDefinition();
+    const metricsProfile = getAuthoredWorldMetricsProfile(
+      definition.metrics.widthCells,
+      definition.metrics.heightCells,
+    );
+    const stage0World = createWorldRuntimeContext({
+      descriptor: stage0Descriptor,
+      metricsProfile,
+      definition,
+    });
+    const stage1World = createWorldRuntimeContext({
+      descriptor: stage1Descriptor,
+      metricsProfile,
+      definition,
+    });
+
+    expect(stage0World.persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(stage1World.persistentBaseSite?.buildArea).toEqual({ kind: 'radius', radiusCells: 5 });
+    expect(stage0World.persistentBaseSite?.areaStage).toBe(0);
+    expect(stage1World.persistentBaseSite?.areaStage).toBe(1);
+    expect(hasPersistentBaseConfigurationChanged(stage0Descriptor, stage1Descriptor)).toBe(true);
+    expect(stage0World.persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(lifecycle).toContain('lobbyWorldPersistentBaseAreaStageAtRevision');
+    expect(lifecycle).toContain('resolveLobbyWorldParameters(persistentBaseUnlocked, persistentBaseAreaStage)');
+    expect(lifecycle).toContain('hasPersistentBaseConfigurationChanged(');
   });
 
   it('trennt Orchestrierung, Teardown und Presentation-Rebind', () => {

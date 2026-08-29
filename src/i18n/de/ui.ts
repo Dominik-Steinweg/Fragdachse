@@ -236,6 +236,8 @@ export const deUi = {
   "ui.boot.reconnecting": "Verbindung wird wiederhergestellt …",
   "ui.reward.persistentBaseUnlocked": "NEUE FUNKTION FREIGESCHALTET: EURE BASIS",
   "ui.reward.persistentBaseUnlockedHint": "Ihr besitzt ab jetzt eine eigene Basis. Sie steht im Testgelände und ist auf jeder weiteren Karte eure Hauptbasis.",
+  "ui.reward.persistentBaseAreaExpanded": "BASISGELÄNDE ERWEITERT",
+  "ui.reward.persistentBaseAreaExpandedHint": "Eure bebaubare Basisfläche wurde auf Radius 5 erweitert. Die Erweiterung ist ab der nächsten LobbyWorld aktiv.",
   "ui.reward.itemsUnlocked": "NEUE FUNKTION FREIGESCHALTET: ITEMS",
   "ui.reward.itemsUnlockedHint": "Siege lassen ab jetzt dauerhafte Ausrüstung fallen. Verwalten kannst du sie in der Lobby über den Items-Button.",
   "ui.reward.itemChoice": "1 VON {count} ITEMS WÄHLEN · MINDESTENS {guarantee} EPISCH GARANTIERT",

@@ -5428,6 +5428,7 @@ export class ArenaScene extends Phaser.Scene {
     let unlockedNewMap = false;
     let unlockedItems = false;
     let unlockedPersistentBase = false;
+    let unlockedPersistentBaseAreaStage = false;
     if (roundState.status === 'victory' && completedMapId) {
       const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
       if (completedMapConfig.boss) {
@@ -5447,7 +5448,7 @@ export class ArenaScene extends Phaser.Scene {
       // Die Area-Stufe ist ein eigenes, monotones Campaign-Entitlement. Sie wird wie alle lokalen
       // Progressionsdaten pro berechtigtem Spieler verbucht, aber erst in der naechsten World
       // aus dem Host-Stand aufgeloest.
-      unlockStoredPersistentBaseAreaStageAfterVictory(completedMapId);
+      unlockedPersistentBaseAreaStage = unlockStoredPersistentBaseAreaStageAfterVictory(completedMapId);
       unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
 
       // Jeder Spieler wuerfelt sein eigenes Angebot lokal; der Sieg steht bereits reliable im
@@ -5492,6 +5493,7 @@ export class ArenaScene extends Phaser.Scene {
       unlockedMapName,
       unlockedItems,
       unlockedPersistentBase,
+      unlockedPersistentBaseAreaStage,
     );
   }
 }

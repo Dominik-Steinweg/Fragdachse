@@ -23,7 +23,7 @@ class MemoryStorage implements Storage {
   setItem(key: string, value: string): void { this.values.set(key, value); }
 }
 
-describe('Persistent-Base-Rewards – V4-Persistenz', () => {
+describe('Persistent-Base-Rewards – V5-Persistenz', () => {
   let storage: MemoryStorage;
 
   beforeEach(() => {
@@ -77,7 +77,7 @@ describe('Persistent-Base-Rewards – V4-Persistenz', () => {
     expect(getStoredPersistentBaseRewardState().revision).toBe(1);
   });
 
-  it('rejects V3 and incomplete or cross-document V4 imports without backfill', () => {
+  it('rejects V3 and incomplete or cross-document V5 imports without backfill', () => {
     const exported = JSON.parse(exportStoredGameProgressJson());
     expect(importStoredGameProgressJson(JSON.stringify({ ...exported, formatVersion: 3 }))).toEqual({
       ok: false,

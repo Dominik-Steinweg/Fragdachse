@@ -158,6 +158,25 @@ describe('PersistentBaseComposite – Baubereich ist die einzige Geometriequelle
     expect(result.active.map((entry) => entry.blueprint.persistentId)).toEqual(['far']);
   });
 
+  it('bewahrt gespeicherte Konstruktionen ausserhalb der aktiven Area als Konflikt', () => {
+    const saved = contribution('owner-host', [blueprint('future-expansion', 6, 0)]);
+    const result = merge({
+      buildArea: { kind: 'radius', radiusCells: 5 },
+      hostContribution: saved,
+    });
+
+    expect(result.active).toEqual([]);
+    expect(result.conflicts).toEqual([
+      {
+        ownerId: 'owner-host',
+        persistentId: 'future-expansion',
+        toolId: 'rock_barrier',
+        reason: 'outside-build-area',
+      },
+    ]);
+    expect(saved.constructions).toHaveLength(1);
+  });
+
   it('behandelt authored Geometrie als eigene Kollisionsart', () => {
     const result = merge({
       hostContribution: contribution('owner-host', [blueprint('on-authored', 0, 0)]),

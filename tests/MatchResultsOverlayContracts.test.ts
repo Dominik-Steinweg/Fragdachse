@@ -46,3 +46,13 @@ describe('MatchResultsOverlay replay close contract', () => {
     expect(source.slice(closeStart, closeEnd)).toContain('if (!wasReplay) this.onContinue();');
   });
 });
+
+describe('MatchResultsOverlay persistent-base reward contract', () => {
+  it('renders the area expansion through the existing reward-chip path', () => {
+    const source = readFileSync(OVERLAY_PATH, 'utf8');
+    expect(source).toContain('const MAX_REWARD_CHIPS = 8;');
+    expect(source).toContain('if (progress.persistentBaseAreaStageUnlocked)');
+    expect(source).toContain("t('ui.reward.persistentBaseAreaExpanded')");
+    expect(source).toContain("t('ui.reward.persistentBaseAreaExpandedHint')");
+  });
+});

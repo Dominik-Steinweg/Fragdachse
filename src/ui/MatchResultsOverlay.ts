@@ -112,7 +112,7 @@ const XP_TEXT_Y = 408;
 const PROGRESS_DIVIDER_Y = 446;
 const REWARD_TITLE_Y = 484;
 const REWARD_START_Y = 530;
-const MAX_REWARD_CHIPS = 7;
+const MAX_REWARD_CHIPS = 8;
 /** Unterkante, an der die Belohnungsliste enden muss – daraus folgt der Zeilenabstand. */
 const REWARD_LIMIT_Y = SECTION_BOTTOM - 8;
 /** Vorschau der drei angebotenen Teile, rechts in der Item-Zeile. */
@@ -1506,6 +1506,14 @@ function describeRewards(
       label: t('ui.reward.persistentBaseUnlocked'),
       color: COLORS.GOLD_1,
       tooltip: t('ui.reward.persistentBaseUnlockedHint'),
+    });
+  }
+  if (progress.persistentBaseAreaStageUnlocked) {
+    descriptors.push({
+      glyph: '↗',
+      label: t('ui.reward.persistentBaseAreaExpanded'),
+      color: COLORS.GOLD_1,
+      tooltip: t('ui.reward.persistentBaseAreaExpandedHint'),
     });
   }
   if (progress.itemsUnlocked) {

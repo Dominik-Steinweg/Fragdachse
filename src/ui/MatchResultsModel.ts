@@ -35,6 +35,8 @@ export interface MatchProgressDelta {
    * {@link itemsUnlocked} ein Ergebnis des Sieg-Verbuchens, kein Feld des Fortschritts-Schnappschusses.
    */
   persistentBaseUnlocked: boolean;
+  /** Der erstmalige Map-10-Sieg hat die aktive Persistent-Base-Area erweitert. */
+  persistentBaseAreaStageUnlocked: boolean;
 }
 
 /** Ein angebotenes Item samt allem, was der Auswahlbildschirm dafuer braucht. */
@@ -138,6 +140,7 @@ export function createMatchProgressDelta(
   unlockedMapName: string | null,
   itemsUnlocked = false,
   persistentBaseUnlocked = false,
+  persistentBaseAreaStageUnlocked = false,
 ): MatchProgressDelta {
   return {
     before,
@@ -150,6 +153,7 @@ export function createMatchProgressDelta(
     newlyUnlockedClassIds: after.unlockedClassIds.filter((classId) => !before.unlockedClassIds.includes(classId)),
     itemsUnlocked,
     persistentBaseUnlocked,
+    persistentBaseAreaStageUnlocked,
   };
 }
 

@@ -101,6 +101,14 @@ describe('MatchResultsModel', () => {
     expect(createMatchProgressDelta(progress, progress, 0, null, true).itemsUnlocked).toBe(true);
   });
 
+  it('carries the first persistent-base area expansion as its own reward delta', () => {
+    const progress = getCoopDefenseProgressSnapshot(0);
+    expect(createMatchProgressDelta(progress, progress, 0, null).persistentBaseAreaStageUnlocked)
+      .toBe(false);
+    expect(createMatchProgressDelta(progress, progress, 0, null, false, false, true))
+      .toMatchObject({ persistentBaseAreaStageUnlocked: true });
+  });
+
   it('keeps a zero-XP match stable and waits when the local result is missing', () => {
     const progress = getCoopDefenseProgressSnapshot(42);
     expect(createMatchProgressDelta(progress, progress, 0, null)).toMatchObject({

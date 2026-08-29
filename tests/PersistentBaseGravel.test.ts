@@ -18,7 +18,10 @@ import {
   getPersistentBaseGravelCells,
   persistentBaseGravelCellKey,
 } from '../src/arena/PersistentBaseGravelField';
-import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import {
+  DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+  resolvePersistentBaseBuildAreaForStage,
+} from '../src/persistentBase/PersistentBaseCore';
 import { GRAVEL_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { isCellInsidePersistentBaseZone } from '../src/persistentBase/PersistentBaseZone';
 import {
@@ -94,6 +97,17 @@ describe('persistent-base gravel field', () => {
 
     expect(cells).toEqual(expected);
     expect(cells).toHaveLength(13);
+  });
+
+  it('renders the resolved Stage-1 radius without a separate visual path', () => {
+    const anchor = { gridX: 20, gridY: 12 };
+    const buildArea = resolvePersistentBaseBuildAreaForStage(1);
+    const cells = getPersistentBaseGravelCells(anchor, buildArea, 40, 30);
+
+    expect(buildArea).toEqual({ kind: 'radius', radiusCells: 5 });
+    expect(cells).toHaveLength(81);
+    expect(cells).toContainEqual({ gridX: anchor.gridX + 5, gridY: anchor.gridY });
+    expect(cells).not.toContainEqual({ gridX: anchor.gridX + 6, gridY: anchor.gridY });
   });
 
   it('keeps complete 47-blob neighbour context across a 128-px chunk boundary', () => {
