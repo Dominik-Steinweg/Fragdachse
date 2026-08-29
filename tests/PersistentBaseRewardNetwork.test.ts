@@ -203,6 +203,50 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
     }
   });
 
+  it('deduplicates identical snapshots and emits the null transition only once', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      const client = bridgeFor(clientRoom);
+      const world = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 406);
+      const state = {
+        worldRevision: 406,
+        revision: 2,
+        availableRewardIds: ['base_health_pedestal'] as PersistentBaseRewardId[],
+        placements: [],
+        everPlacedRewardIds: [],
+      };
+
+      useRoom(hostRoom);
+      host.publishWorldAndActivity(world, null);
+      host.publishPersistentBaseRewardSessionState(state);
+      host.publishPersistentBaseRewardSessionState(state);
+      const sessionWrites = () => hostRoom.transport.links
+        .flatMap((link) => link.sent)
+        .filter(({ channel, message }) => channel === 'rel'
+          && message.t === 'b'
+          && message.g?.some(([key]) => key === 'pbrs'));
+      expect(sessionWrites()).toHaveLength(1);
+
+      useRoom(clientRoom);
+      expect(client.getPersistentBaseRewardSessionState()).toEqual(state);
+
+      useRoom(hostRoom);
+      host.publishPersistentBaseRewardSessionState(null);
+      host.publishPersistentBaseRewardSessionState(null);
+      host.publishPersistentBaseRewardSessionState(null);
+      expect(sessionWrites()).toHaveLength(2);
+
+      useRoom(clientRoom);
+      expect(client.getPersistentBaseRewardSessionState()).toBeNull();
+    } finally {
+      hostRoom.room.leave();
+      clientRoom.room.leave();
+    }
+  });
+
   it('routes host-local placement requests through the registered handler', async () => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network);

@@ -21,7 +21,7 @@ const MISSION_PICKUP = {
   x: 0,
   y: 0,
   pickupKind: 'objective-placement' as const,
-  objectiveId: 'hold-supply-base',
+  objectiveId: 'hold-placement-reward-test',
 };
 
 function makeCoordinator(): ClientUpdateCoordinator & {
@@ -86,12 +86,12 @@ describe('B6 client mission reward reconciliation', () => {
 
     vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
       kind: 'objective-placement',
-      objectiveId: 'hold-supply-base',
+      objectiveId: 'hold-placement-reward-test',
       powerUpDefId: 'HOLY_HAND_GRENADE',
     });
     (coordinator as any).reconcileClientUtilityOverride();
     expect(coordinator.clientUtilityOverride).toEqual(
-      createCoopDefensePlaceablePedestalUtility('hold-supply-base', 'HOLY_HAND_GRENADE'),
+      createCoopDefensePlaceablePedestalUtility('hold-placement-reward-test', 'HOLY_HAND_GRENADE'),
     );
   });
 
@@ -99,15 +99,15 @@ describe('B6 client mission reward reconciliation', () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
     vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
     vi.spyOn(bridge, 'canPlayerAct').mockReturnValue(true);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('COOP_DEFENSE_MISSION_PEDESTAL:hold-supply-base');
+    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('COOP_DEFENSE_MISSION_PEDESTAL:hold-placement-reward-test');
     vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
       kind: 'objective-placement',
-      objectiveId: 'hold-supply-base',
+      objectiveId: 'hold-placement-reward-test',
       powerUpDefId: 'HOLY_HAND_GRENADE',
     });
     const coordinator = makeCoordinator();
     coordinator.clientUtilityOverride = createCoopDefensePlaceablePedestalUtility(
-      'hold-supply-base',
+      'hold-placement-reward-test',
       'HOLY_HAND_GRENADE',
     );
 

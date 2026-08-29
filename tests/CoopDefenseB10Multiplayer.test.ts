@@ -63,7 +63,7 @@ function carryObjective(): ResolvedCoopDefenseMapSecondaryObjectiveConfig {
 
 function holdObjectiveWithPedestal(): ResolvedCoopDefenseMapSecondaryObjectiveConfig {
   return {
-    id: 'hold-supply-base',
+    id: 'hold-placement-reward-test',
     type: 'hold',
     start: { type: 'time', atMs: 0 },
     holdUntil: { type: 'time', atMs: 10_000 },
@@ -254,25 +254,25 @@ describe('Coop Defense B10 – Reward-Eligibility', () => {
       releaseUtilityOverride,
     });
 
-    rewards.activate('hold-supply-base');
-    expect(rewards.claim('hold-supply-base', 'latejoiner')).toBe(false);
-    expect(rewards.getState('hold-supply-base')).toBe('available');
+    rewards.activate('hold-placement-reward-test');
+    expect(rewards.claim('hold-placement-reward-test', 'latejoiner')).toBe(false);
+    expect(rewards.getState('hold-placement-reward-test')).toBe('available');
 
-    expect(rewards.claim('hold-supply-base', 'participant')).toBe(true);
+    expect(rewards.claim('hold-placement-reward-test', 'participant')).toBe(true);
     // Teamweite Ladung: Ein zweiter Anspruch auf dieselbe Ladung scheitert.
-    expect(rewards.claim('hold-supply-base', 'participant')).toBe(false);
+    expect(rewards.claim('hold-placement-reward-test', 'participant')).toBe(false);
 
     // Disconnect vor der Platzierung: Die Ladung kehrt an ihre Missionsbasis zurueck.
     rewards.handlePlayerUnavailable('participant');
     expect(releaseUtilityOverride).toHaveBeenCalledWith('participant');
-    expect(rewards.getState('hold-supply-base')).toBe('available');
-    expect(rewards.getCarrierId('hold-supply-base')).toBeNull();
+    expect(rewards.getState('hold-placement-reward-test')).toBe('available');
+    expect(rewards.getCarrierId('hold-placement-reward-test')).toBeNull();
     expect(spawnPickup).toHaveBeenCalledTimes(2);
 
     // Erst die erfolgreiche Platzierung verbraucht sie – und zwar genau einmal.
-    rewards.claim('hold-supply-base', 'participant');
-    expect(rewards.consume('hold-supply-base', 'participant')).toBe(true);
-    expect(rewards.consume('hold-supply-base', 'participant')).toBe(false);
-    expect(rewards.canPlace('hold-supply-base', 'participant')).toBe(false);
+    rewards.claim('hold-placement-reward-test', 'participant');
+    expect(rewards.consume('hold-placement-reward-test', 'participant')).toBe(true);
+    expect(rewards.consume('hold-placement-reward-test', 'participant')).toBe(false);
+    expect(rewards.canPlace('hold-placement-reward-test', 'participant')).toBe(false);
   });
 });

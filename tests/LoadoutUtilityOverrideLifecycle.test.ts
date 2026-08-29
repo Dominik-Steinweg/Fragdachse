@@ -73,14 +73,14 @@ describe('temporäre Utility-Override-Lifecycle', () => {
   it('publiziert den B6-Descriptor und leert ihn genauso beim Round-Loadout-Reset', () => {
     const { manager, bridge } = makeManager();
     const missionUtility = createCoopDefensePlaceablePedestalUtility(
-      'hold-supply-base',
+      'hold-placement-reward-test',
       'HOLY_HAND_GRENADE',
     );
 
     expect(manager.overrideUtility('player-a', missionUtility, 1)).toBe(true);
     expect(bridge.publishUtilityOverrideDescriptor).toHaveBeenLastCalledWith('player-a', {
       kind: 'objective-placement',
-      objectiveId: 'hold-supply-base',
+      objectiveId: 'hold-placement-reward-test',
       powerUpDefId: 'HOLY_HAND_GRENADE',
     });
 

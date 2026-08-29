@@ -35,7 +35,7 @@ const EMPTY_LAYOUT: ArenaLayout = {
   powerUpPedestals: [],
 };
 
-/** Authored Hold-Mission mit Ablage-Belohnung – der Vertrag, den B6 tatsaechlich traegt. */
+/** Generische Hold-Mission mit Ablage-Belohnung; Map 12 traegt seit Phase 3D einen anderen Reward-Pfad. */
 const REWARD_MAP = {
   mapId: 'placement-reward-test',
   balanceReferenceDurationSec: 60,
@@ -65,7 +65,7 @@ const REWARD_MAP = {
   ],
   secondaryObjectives: [
     {
-      id: 'hold-supply-base',
+      id: 'hold-placement-reward-test',
       type: 'hold',
       start: { type: 'after-encounter', encounterId: 'reveal' },
       holdUntil: { type: 'after-encounter', encounterId: 'defend' },
@@ -80,7 +80,7 @@ const REWARD_MAP = {
 
 function makeObjective(overrides: Partial<Parameters<typeof CoopDefenseObjectivePlacementRewardSystem>[0][number]> = {}) {
   return {
-    id: 'hold-supply-base',
+    id: 'hold-placement-reward-test',
     type: 'hold' as const,
     start: { type: 'time' as const, atMs: 0 },
     holdUntil: { type: 'time' as const, atMs: 1_000 },
@@ -145,7 +145,7 @@ describe('B6 objective placement rewards', () => {
   it('spawns an authored supply-base reward after Hold completion', () => {
     const map = normalizeCoopDefenseMapConfig(REWARD_MAP);
     const objective = resolveCoopDefenseMapSecondaryObjectives(map)
-      .find((entry) => entry.id === 'hold-supply-base');
+      .find((entry) => entry.id === 'hold-placement-reward-test');
     const bases = resolveCoopDefenseActivityBases(map, 1);
     const supplyBase = bases.find((base) => base.id === 'supply-base');
     expect(objective?.rewards?.placeablePedestalOnComplete?.powerUpDefId).toBe('HOLY_HAND_GRENADE');
@@ -173,10 +173,10 @@ describe('B6 objective placement rewards', () => {
       releaseUtilityOverride: () => undefined,
     });
 
-    expect(rewardSystem.activate('hold-supply-base')).toBe(true);
-    expect(rewardSystem.getState('hold-supply-base')).toBe('available');
+    expect(rewardSystem.activate('hold-placement-reward-test')).toBe(true);
+    expect(rewardSystem.getState('hold-placement-reward-test')).toBe('available');
     expect(spawned).toEqual([{
-      objectiveId: 'hold-supply-base',
+      objectiveId: 'hold-placement-reward-test',
       defId: 'HOLY_HAND_GRENADE',
       x: position.x,
       y: position.y,

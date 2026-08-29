@@ -2260,7 +2260,7 @@ export class NetworkBridge {
     setState(KEY_ACTIVITY_DESCRIPTOR, null, true);
     setState(KEY_WORLD_DESCRIPTOR, null, true);
     setState(KEY_WORLD_PARTICIPATION, null, true);
-    setState(KEY_PB_REWARD_SESSION, null, true);
+    this.publishPersistentBaseRewardSessionState(null);
   }
 
   getWorldDescriptor(): WorldDescriptor | null {
@@ -2490,6 +2490,7 @@ export class NetworkBridge {
       const sanitized = sanitizePersistentBaseRewardSessionState(state);
       if (!sanitized) return;
       const current = sanitizePersistentBaseRewardSessionState(getState(KEY_PB_REWARD_SESSION));
+      if (current && JSON.stringify(sanitized) === JSON.stringify(current)) return;
       if (current && current.worldRevision === sanitized.worldRevision
         && (sanitized.revision < current.revision
           || (sanitized.revision === current.revision
@@ -2497,6 +2498,8 @@ export class NetworkBridge {
       setState(KEY_PB_REWARD_SESSION, clonePersistentBaseRewardSessionState(sanitized), true);
       return;
     }
+    const current = getState(KEY_PB_REWARD_SESSION);
+    if (current === null || current === undefined) return;
     setState(KEY_PB_REWARD_SESSION, null, true);
   }
 
