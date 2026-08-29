@@ -62,7 +62,6 @@ const LAYOUT: ArenaLayout = {
 class MemoryRepository implements PersistentBaseRepositoryPort {
   state: PersistentBaseState = {
     schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
-    radiusCells: 7,
     revision: 0,
     constructions: [],
   };

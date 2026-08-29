@@ -39,7 +39,14 @@ Die Lobby ist eine normale authored World mit world:lobby. Sie hat keine authore
 
 ## Persistent World-Sites
 
-Eine persistente Base-Site ist World-Inhalt: Die World bindet Site, kanonischen Basiskern, Lage, Ausrichtung, Baubereich-Regel, Grunddauerhaftigkeit und ihre World-Geometrie. Sie trägt keine einzelnen persönlichen Konstruktionen. Der Build-Area-Vertrag unterstützt `square` und `radius`; ohne explizite authored Regel gilt der definierte Default. Die zugehörige Basis wird aus der Site erzeugt und darf nicht zusätzlich authored sein; Radius, Clearance und Arena-Grenzen werden durch den Validator geprüft. Konkrete Base-IDs gehören in authored Daten und Tests, nicht in diese Übersicht.
+Eine persistente Base-Site ist World-Inhalt: Die World bindet Site, kanonischen Basiskern, Lage,
+Ausrichtung, Grunddauerhaftigkeit und ihre World-Geometrie. Sie trägt keine einzelnen persönlichen
+Konstruktionen und authoriert keine Build Area. Die aktive Build Area wird ausschließlich aus der
+host-autoritativ eingefrorenen `PersistentBaseAreaStage` über
+`resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die zugehörige Basis wird aus der Site
+erzeugt und darf nicht zusätzlich authored sein; die maximale Reservierungsfläche, Clearance und
+Arena-Grenzen werden durch den Validator geprüft. Konkrete Base-IDs gehören in authored Daten und
+Tests, nicht in diese Übersicht.
 
 Ob eine World-Instanz ihren Basiskern tatsächlich trägt, ist keine Aussage der Definition, sondern ein host-autoritativ gebundener World-Parameter. Die dauerhaften Blueprint-Konstruktionen gehören zum persönlichen Progress beziehungsweise Contribution des jeweiligen Besitzers. Eine Runtime oder Working Copy materialisiert und bearbeitet diesen Zustand nur für ihren aktuellen Lebenszyklus; ein Activity-/Round-Ausgang kann den Arbeitsstand committen oder verwerfen. Host-Authority über Materialisierung und Validierung ist kein fachlicher Besitz. Eine World ohne Activity kann den Basiskern und persönliche Konstruktionen daher weiterhin materialisieren oder bearbeiten, sofern ihr aktueller World-Runtime-Vertrag diese Aktion erlaubt.
 

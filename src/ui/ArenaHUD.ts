@@ -22,7 +22,8 @@ import {
   COLORS, toCssColor, GAME_HEIGHT,
 } from '../config';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
-import type { InspectorUtilityAction, ShieldBuffHudState } from '../types';
+import type { ShieldBuffHudState } from '../types';
+import type { RadialManagementAction } from '../systems/RadialActionModel';
 import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import {
@@ -259,7 +260,7 @@ export interface ArenaHUDData {
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
   utilityId?:               string;
-  utilityAction?:           InspectorUtilityAction;
+  utilityAction?:           RadialManagementAction;
   persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?:     number;
   adrenalineSyringeActive?: boolean;
@@ -274,11 +275,12 @@ export interface ArenaHUDData {
 
 export function getUtilityHudDisplayName(
   utilityId: string | undefined,
-  utilityAction: InspectorUtilityAction | undefined,
+  utilityAction: RadialManagementAction | undefined,
   persistentBaseRewardId?: PersistentBaseRewardId,
 ): string {
   if (utilityAction === 'dismantle') return t('ui.radial.dismantle');
-  if (utilityAction === 'global-dismantle') return t('ui.radial.dismantleAll');
+  if (utilityAction === 'dismantle-own-all') return t('ui.radial.dismantleAll');
+  if (utilityAction === 'reposition') return t('ui.radial.reposition');
   if (persistentBaseRewardId) {
     return t(getPersistentBaseRewardDefinition(persistentBaseRewardId).presentation.labelKey);
   }

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ConstructionId, InspectorUtilityAction, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, ConstructionId, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -9,7 +9,16 @@ import {
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
-import { InspectorToolRadialMenu, type InspectorRadialSelection } from '../ui/InspectorToolRadialMenu';
+import { RadialActionMenu } from '../ui/RadialActionMenu';
+import {
+  cloneRadialActionRef,
+  isSameRadialActionRef,
+  radialActionRefFromTool,
+  resolveRadialActions,
+  type RadialActionRef,
+  type RadialActionState,
+  type RadialManagementAction,
+} from './RadialActionModel';
 import type { CameraFeedbackController } from '../effects/camera/CameraFeedbackController';
 import { chargeRumble } from '../effects/camera/cameraFeedbackPresets';
 import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
@@ -74,7 +83,6 @@ export class InputSystem {
   private keyR!:     Phaser.Input.Keyboard.Key;
   private keyB!:     Phaser.Input.Keyboard.Key;
   private keyN!:     Phaser.Input.Keyboard.Key;
-  private constructionKeys: Phaser.Input.Keyboard.Key[] = [];
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
@@ -110,40 +118,41 @@ export class InputSystem {
   /** RMB pressed while LMB had priority; consume it only once Waffe 2 gets the turn. */
   private pendingRightInputStarted = false;
   private suppressWeapon1UntilLeftRelease = false;
-  private selectedConstructionId: ConstructionId = 'rocket_turret';
-  private getAvailableConstructionIds: (() => readonly ConstructionId[]) | null = null;
   private getConstructionPlacementPreviewProvider: ((
     constructionId: ConstructionId,
   ) => UtilityPlacementPreviewState | undefined) | null = null;
-  private constructionWheelHandler: ((event: WheelEvent) => void) | null = null;
-  private inspectorGetTools: (() => readonly LoadoutToolRef[]) | null = null;
-  private inspectorGetSelectedTool: (() => LoadoutToolRef | null) | null = null;
-  private inspectorSetSelectedTool: ((tool: LoadoutToolRef) => void) | null = null;
+  private radialGetTools: (() => readonly LoadoutToolRef[]) | null = null;
+  private radialGetSelectedTool: (() => LoadoutToolRef | null) | null = null;
+  private radialSetSelectedTool: ((tool: LoadoutToolRef) => void) | null = null;
   private inspectorModeProvider: (() => boolean) | null = null;
   private inspectorUtilityOverrideProvider: (() => boolean) | null = null;
-  private inspectorRadialMenu: InspectorToolRadialMenu | null = null;
-  private inspectorConstructionPlacementActive = false;
-  /** Rueckbau ist eine reine Client-Auswahl und wandert nie in das persistierte Loadout. */
-  private inspectorDismantleSelected = false;
-  private inspectorGlobalDismantleSelected = false;
-  private inspectorDismantlePlacementActive = false;
+  private radialActionMenu: RadialActionMenu | null = null;
+  private selectedRadialAction: RadialActionRef | null = null;
+  private radialCancelAwaitingRelease = false;
+  private constructionPlacementActive = false;
+  private dismantlePlacementActive = false;
   private globalDismantleHoldStartedAt: number | null = null;
   private activeHeldActionId: string | null = null;
   private heldActionSequence = 0;
   /** Liefert Verbrauch und persoenliches Maximum als Paar, damit beide nie auseinanderlaufen. */
-  private inspectorGetCapacity: (() => { used: number; max: number }) | null = null;
+  private radialGetCapacity: (() => { used: number; max: number }) | null = null;
+  private radialGetCooldownUntil: ((ref: RadialActionRef) => number) | null = null;
+  private radialGetCapabilities: (() => {
+    canUseUtility: boolean;
+    canPlace: boolean;
+    canManage: boolean;
+  }) | null = null;
+  private radialGetManagementActions: (() => readonly RadialManagementAction[]) | null = null;
   private getDismantlePreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
-  private getInspectorPersistentRewardIdsProvider: (() => readonly PersistentBaseRewardId[]) | null = null;
+  private getPersistentRewardIdsProvider: (() => readonly PersistentBaseRewardId[]) | null = null;
   private getPersistentRewardPlacementPreviewProvider: ((
     rewardId: PersistentBaseRewardId,
   ) => UtilityPlacementPreviewState | undefined) | null = null;
-  private getInspectorDismantleTargetProvider: (() => boolean) | null = null;
   private placePersistentRewardProvider: ((
     rewardId: PersistentBaseRewardId,
     preview: UtilityPlacementPreviewState,
   ) => Promise<LoadoutUseResult>) | null = null;
-  private inspectorPersistentRewardId: PersistentBaseRewardId | null = null;
-  private inspectorPersistentRewardPlacementActive = false;
+  private persistentRewardPlacementActive = false;
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
@@ -165,7 +174,7 @@ export class InputSystem {
   private localIsBurrowed = false;
   private localBurrowPhase: BurrowPhase = 'idle';
   private inputEnabled    = true;
-  private inspectorRadialEnabled = false;
+  private radialEnabled = false;
   private aimEnabled      = true;
 
   constructor(
@@ -191,39 +200,16 @@ export class InputSystem {
     this.keyR     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.R, false);
     this.keyB     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.B, false);
     this.keyN     = kb.addKey(Phaser.Input.Keyboard.KeyCodes.N, false);
-    this.constructionKeys = [
-      Phaser.Input.Keyboard.KeyCodes.ONE,
-      Phaser.Input.Keyboard.KeyCodes.TWO,
-      Phaser.Input.Keyboard.KeyCodes.THREE,
-      Phaser.Input.Keyboard.KeyCodes.FOUR,
-      Phaser.Input.Keyboard.KeyCodes.FIVE,
-    ].map((keyCode) => kb.addKey(keyCode, false));
-
     // Kontextmenü deaktivieren damit Rechtsklick im Spiel registriert wird
     this.scene.input.mouse?.disableContextMenu();
-    this.inspectorRadialMenu = new InspectorToolRadialMenu(this.scene);
-    this.constructionWheelHandler = (event: WheelEvent) => {
-      const available = this.getAvailableConstructionIds?.() ?? [];
-      if (!this.inputEnabled || this.isInspectorMode() || available.length < 2) return;
-      event.preventDefault();
-      const current = Math.max(0, available.indexOf(this.getSelectedConstructionId()));
-      const direction = event.deltaY >= 0 ? 1 : -1;
-      this.selectedConstructionId = available[
-        (current + direction + available.length) % available.length
-      ];
-    };
-    this.scene.game.canvas.addEventListener('wheel', this.constructionWheelHandler, { passive: false });
+    this.radialActionMenu = new RadialActionMenu(this.scene);
     this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      if (this.constructionWheelHandler) {
-        this.scene.game.canvas.removeEventListener('wheel', this.constructionWheelHandler);
-        this.constructionWheelHandler = null;
-      }
-      this.inspectorRadialMenu?.destroy();
-      this.inspectorRadialMenu = null;
+      this.radialActionMenu?.destroy();
+      this.radialActionMenu = null;
     });
   }
 
-  setupInspectorToolProvider(
+  setupRadialActionProviders(
     getTools: () => readonly LoadoutToolRef[],
     getSelected: () => LoadoutToolRef | null,
     setSelected: (tool: LoadoutToolRef) => void,
@@ -231,61 +217,49 @@ export class InputSystem {
     isUtilityOverrideActive?: () => boolean,
     getCapacity?: () => { used: number; max: number },
     getDismantlePreview?: () => UtilityPlacementPreviewState | undefined,
+    getCooldownUntil?: (ref: RadialActionRef) => number,
+    getCapabilities?: () => { canUseUtility: boolean; canPlace: boolean; canManage: boolean },
+    getManagementActions?: () => readonly RadialManagementAction[],
   ): void {
-    this.inspectorGetTools = getTools;
-    this.inspectorGetSelectedTool = getSelected;
-    this.inspectorSetSelectedTool = setSelected;
+    this.radialGetTools = getTools;
+    this.radialGetSelectedTool = getSelected;
+    this.radialSetSelectedTool = setSelected;
     this.inspectorModeProvider = isInspectorMode ?? null;
     this.inspectorUtilityOverrideProvider = isUtilityOverrideActive ?? null;
-    this.inspectorGetCapacity = getCapacity ?? null;
+    this.radialGetCapacity = getCapacity ?? null;
     this.getDismantlePreviewProvider = getDismantlePreview ?? null;
+    this.radialGetCooldownUntil = getCooldownUntil ?? null;
+    this.radialGetCapabilities = getCapabilities ?? null;
+    this.radialGetManagementActions = getManagementActions ?? null;
   }
 
-  setupInspectorPersistentRewardProvider(
+  setupPersistentRewardActionProvider(
     getRewardIds: () => readonly PersistentBaseRewardId[],
     getPreview: (rewardId: PersistentBaseRewardId) => UtilityPlacementPreviewState | undefined,
     place: (
       rewardId: PersistentBaseRewardId,
       preview: UtilityPlacementPreviewState,
     ) => Promise<LoadoutUseResult>,
-    hasDismantleTarget?: () => boolean,
   ): void {
-    this.getInspectorPersistentRewardIdsProvider = getRewardIds;
+    this.getPersistentRewardIdsProvider = getRewardIds;
     this.getPersistentRewardPlacementPreviewProvider = getPreview;
     this.placePersistentRewardProvider = place;
-    this.getInspectorDismantleTargetProvider = hasDismantleTarget ?? null;
   }
 
-  setupConstructionProviders(
-    getAvailable: () => readonly ConstructionId[],
+  setupConstructionPlacementPreviewProvider(
     getPreview: (constructionId: ConstructionId) => UtilityPlacementPreviewState | undefined,
   ): void {
-    this.getAvailableConstructionIds = getAvailable;
     this.getConstructionPlacementPreviewProvider = getPreview;
   }
 
-  getSelectedConstructionId(): ConstructionId {
-    const available = this.getAvailableConstructionIds?.() ?? [];
-    if (available.length > 0 && !available.includes(this.selectedConstructionId)) {
-      this.selectedConstructionId = available[0];
-    }
-    return this.selectedConstructionId;
-  }
-
-  private getInspectorTools(): readonly LoadoutToolRef[] {
-    return this.inspectorGetTools?.() ?? [];
+  private getRadialTools(): readonly LoadoutToolRef[] {
+    return this.radialGetTools?.() ?? [];
   }
 
   private getConstructionToolRefs(): readonly LoadoutToolRef[] {
-    const source = this.isInspectorMode()
-      ? this.getInspectorTools()
-      : (() => {
-        const constructionId = getConstructionIdForUtility(this.getLocalUtilityConfig?.()?.id);
-        return constructionId ? [{ kind: 'construction', id: constructionId } satisfies LoadoutToolRef] : [];
-      })();
     const result: LoadoutToolRef[] = [];
     const seen = new Set<ConstructionId>();
-    for (const tool of source) {
+    for (const tool of this.getRadialTools()) {
       const constructionId = normalizeConstructionId(tool.id);
       if (!constructionId || seen.has(constructionId)) continue;
       seen.add(constructionId);
@@ -294,21 +268,17 @@ export class InputSystem {
     return result;
   }
 
-  private getInspectorPersistentRewardIds(): readonly PersistentBaseRewardId[] {
-    return this.getInspectorPersistentRewardIdsProvider?.() ?? [];
+  private getPersistentRewardIds(): readonly PersistentBaseRewardId[] {
+    return this.getPersistentRewardIdsProvider?.() ?? [];
   }
 
   private getSelectedPersistentRewardId(): PersistentBaseRewardId | null {
-    const rewardId = this.inspectorPersistentRewardId;
-    if (!rewardId) return null;
-    if (this.getInspectorPersistentRewardIds().includes(rewardId)) return rewardId;
-    this.inspectorPersistentRewardId = null;
-    this.inspectorPersistentRewardPlacementActive = false;
+    const selected = this.selectedRadialAction;
+    if (selected?.kind !== 'persistent-reward') return null;
+    if (this.getPersistentRewardIds().includes(selected.rewardId)) return selected.rewardId;
+    this.selectedRadialAction = null;
+    this.persistentRewardPlacementActive = false;
     return null;
-  }
-
-  getSelectedInspectorPersistentRewardForHud(): PersistentBaseRewardId | null {
-    return this.getSelectedPersistentRewardId();
   }
 
   private hasActiveConstructionTools(): boolean {
@@ -316,134 +286,130 @@ export class InputSystem {
   }
 
   private getSelectedConstructionToolRef(): LoadoutToolRef | null {
-    if (this.getSelectedPersistentRewardId()) return null;
-    const selected = this.getSelectedInspectorTool();
-    const selectedId = selected ? normalizeConstructionId(selected.id) : null;
-    if (selectedId && this.getConstructionToolRefs().some((tool) => tool.id === selectedId)) {
-      return { kind: 'construction', id: selectedId };
+    const selected = this.selectedRadialAction;
+    return selected?.kind === 'construction'
+      ? { kind: 'construction', id: selected.constructionId }
+      : null;
+  }
+
+  private getSelectedToolRef(): LoadoutToolRef | null {
+    const selected = this.selectedRadialAction;
+    if (selected?.kind === 'construction') {
+      return { kind: 'construction', id: selected.constructionId };
     }
-    const available = this.getConstructionToolRefs();
-    return available[0] ? { ...available[0] } : null;
-  }
-
-  private getSelectedInspectorTool(): LoadoutToolRef | null {
-    return this.inspectorPersistentRewardId
-      || this.inspectorDismantleSelected || this.inspectorGlobalDismantleSelected
-      ? null
-      : (this.inspectorGetSelectedTool?.()
-        ?? (this.isInspectorMode()
-          ? null
-          : this.getConstructionToolRefs().find((tool) => tool.id === normalizeConstructionId(this.selectedConstructionId))
-            ?? this.getConstructionToolRefs()[0]
-          ));
-  }
-
-  getSelectedInspectorToolForHud(): LoadoutToolRef | null {
-    return this.getSelectedInspectorTool();
-  }
-
-  /** Liefert die festen Rueckbau-Eintraege fuer die HUD-Anzeige separat vom Loadout-Tool. */
-  getSelectedInspectorUtilityActionForHud(): InspectorUtilityAction | null {
-    if (!this.isInspectorMode() && !this.hasActiveConstructionTools()) return null;
-    if (this.inspectorDismantleSelected) return 'dismantle';
-    if (this.inspectorGlobalDismantleSelected) return 'global-dismantle';
+    if (selected?.kind === 'utility') return { kind: 'utility', id: selected.utilityId };
     return null;
   }
 
-  /** Ist aktuell der Rueckbau statt eines Werkzeugs im Rad gewaehlt? */
-  isInspectorDismantleSelected(): boolean {
-    return (this.isInspectorMode() || this.hasActiveConstructionTools()) && this.inspectorDismantleSelected;
+  getSelectedRadialActionForHud(): RadialActionRef | null {
+    const actions = this.getRadialActionStates();
+    this.ensureSelectedRadialAction(actions);
+    return this.selectedRadialAction ? cloneRadialActionRef(this.selectedRadialAction) : null;
   }
 
-  private getSelectedInspectorRadialSelection(): InspectorRadialSelection | null {
-    if (this.inspectorDismantleSelected) return { kind: 'dismantle' };
-    if (this.inspectorGlobalDismantleSelected) return { kind: 'global-dismantle' };
-    const rewardId = this.getSelectedPersistentRewardId();
-    if (rewardId) return { kind: 'persistent-reward', rewardId };
-    const tool = this.getSelectedConstructionToolRef();
-    return tool ? { kind: 'tool', tool } : null;
+  private getSelectedRadialActionState(now = Date.now()): RadialActionState | null {
+    const actions = this.getRadialActionStates(now);
+    this.ensureSelectedRadialAction(actions);
+    return actions.find((entry) => isSameRadialActionRef(entry.ref, this.selectedRadialAction)) ?? null;
   }
 
-  private applyInspectorRadialSelection(selection: InspectorRadialSelection): void {
-    if (selection.kind === 'dismantle') {
-      this.inspectorPersistentRewardId = null;
-      this.inspectorDismantleSelected = true;
-      this.inspectorGlobalDismantleSelected = false;
-      return;
+  private getRadialActionStates(now = Date.now()): RadialActionState[] {
+    const capacity = this.radialGetCapacity?.();
+    const capabilities = this.radialGetCapabilities?.() ?? {
+      canUseUtility: this.inputEnabled,
+      canPlace: this.inputEnabled,
+      canManage: this.inputEnabled,
+    };
+    return resolveRadialActions({
+      gameMode: this.bridge.getActiveGameMode(),
+      tools: this.getRadialTools(),
+      persistentRewardIds: this.getPersistentRewardIds(),
+      usedCapacity: capacity?.used ?? 0,
+      capacityMax: capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+      now,
+      ...capabilities,
+      managementActions: this.radialGetManagementActions?.() ?? [],
+      getCooldownUntil: (ref) => this.radialGetCooldownUntil?.(ref) ?? 0,
+    });
+  }
+
+  private ensureSelectedRadialAction(actions: readonly RadialActionState[]): void {
+    if (this.selectedRadialAction && actions.some((entry) => (
+      isSameRadialActionRef(entry.ref, this.selectedRadialAction)
+    ))) return;
+    const persistedTool = this.isInspectorMode() ? this.radialGetSelectedTool?.() ?? null : null;
+    const persistedRef = persistedTool ? radialActionRefFromTool(persistedTool) : null;
+    const fallback = persistedRef
+      ? actions.find((entry) => isSameRadialActionRef(entry.ref, persistedRef))
+      : undefined;
+    this.selectedRadialAction = fallback?.ref
+      ? cloneRadialActionRef(fallback.ref)
+      : actions[0]?.ref
+        ? cloneRadialActionRef(actions[0].ref)
+        : null;
+    if (!this.selectedRadialAction || this.selectedRadialAction.kind !== 'persistent-reward') {
+      this.persistentRewardPlacementActive = false;
     }
-    if (selection.kind === 'global-dismantle') {
-      this.inspectorPersistentRewardId = null;
-      this.inspectorDismantleSelected = false;
-      this.inspectorGlobalDismantleSelected = true;
-      return;
-    }
-    if (selection.kind === 'persistent-reward') {
-      this.inspectorPersistentRewardId = selection.rewardId;
-      this.inspectorDismantleSelected = false;
-      this.inspectorGlobalDismantleSelected = false;
-      return;
-    }
-    this.inspectorPersistentRewardId = null;
-    this.inspectorDismantleSelected = false;
-    this.inspectorGlobalDismantleSelected = false;
-    if (this.isInspectorMode()) this.inspectorSetSelectedTool?.(selection.tool);
-    else {
-      const constructionId = normalizeConstructionId(selection.tool.id);
-      if (constructionId) this.selectedConstructionId = constructionId;
+  }
+
+  private applyRadialSelection(selection: RadialActionRef): void {
+    this.selectedRadialAction = cloneRadialActionRef(selection);
+    if (!this.isInspectorMode()) return;
+    if (selection.kind === 'construction') {
+      this.radialSetSelectedTool?.({ kind: 'construction', id: selection.constructionId });
+    } else if (selection.kind === 'utility') {
+      this.radialSetSelectedTool?.({ kind: 'utility', id: selection.utilityId });
     }
   }
 
   /**
-   * Verarbeitet das Inspector-Rad vor dem Gameplay-Input-Gate. Damit bleibt es im
+   * Verarbeitet das gemeinsame Action-Rad vor dem Gameplay-Input-Gate. Damit bleibt es im
    * Countdown bedienbar, ohne dass dadurch Bewegung, Waffen oder Bauaktionen frei werden.
    */
-  private updateInspectorRadialMenu(): boolean {
-    const constructionTools = this.getConstructionToolRefs();
-    const persistentRewardIds = this.getInspectorPersistentRewardIds();
-    const hasDismantleTarget = this.getInspectorDismantleTargetProvider?.() ?? false;
-    this.getSelectedPersistentRewardId();
-    if (!this.inspectorRadialEnabled || (constructionTools.length === 0 && persistentRewardIds.length === 0 && !hasDismantleTarget)) {
-      if (!this.inspectorRadialEnabled) this.inspectorRadialMenu?.close();
+  private updateRadialActionMenu(): boolean {
+    if (!this.radialEnabled) {
+      this.radialActionMenu?.close();
+      this.radialCancelAwaitingRelease = false;
       return false;
     }
 
     const pointer = this.scene.input.activePointer;
-    const inspectorModeActive = this.utilityPlacementActive
+    if (this.radialCancelAwaitingRelease) {
+      if (this.keyR.isDown) return true;
+      this.radialCancelAwaitingRelease = false;
+      return false;
+    }
+
+    const interactionActive = this.utilityPlacementActive
       || this.utilityTargetingActive
       || this.utilityHoldActive
       || this.globalDismantleHoldStartedAt !== null
-      || this.inspectorConstructionPlacementActive
-      || this.inspectorDismantlePlacementActive
-      || this.inspectorPersistentRewardPlacementActive;
-    if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
-      if (inspectorModeActive) this.cancelUtilityInteraction();
-      const capacity = this.inspectorGetCapacity?.();
-      this.inspectorRadialMenu?.open(
-        pointer.x,
-        pointer.y,
-        constructionTools,
-        persistentRewardIds,
-        this.getSelectedInspectorRadialSelection(),
-        capacity?.used ?? 0,
-        capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
-        constructionTools.length > 0 || hasDismantleTarget,
-      );
+      || this.constructionPlacementActive
+      || this.dismantlePlacementActive
+      || this.persistentRewardPlacementActive;
+    if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.radialActionMenu?.isOpen) {
+      if (interactionActive) {
+        this.cancelUtilityInteraction();
+        this.radialCancelAwaitingRelease = true;
+        return true;
+      }
+      const actions = this.getRadialActionStates();
+      this.ensureSelectedRadialAction(actions);
+      this.radialActionMenu?.open(pointer.x, pointer.y, actions, this.selectedRadialAction);
     }
 
-    if (!this.inspectorRadialMenu?.isOpen) return false;
+    if (!this.radialActionMenu?.isOpen) return false;
     if (this.keyR.isDown) {
-      this.inspectorRadialMenu.update(pointer.x, pointer.y);
+      this.radialActionMenu.update(pointer.x, pointer.y);
     } else {
-      const selected = this.inspectorRadialMenu.close(pointer.x, pointer.y);
-      if (selected) this.applyInspectorRadialSelection(selected);
+      const selected = this.radialActionMenu.close(pointer.x, pointer.y);
+      if (selected) this.applyRadialSelection(selected);
     }
     return true;
   }
 
   private getInspectorUtilityParams(): LoadoutUseParams | undefined {
-    const tool = this.isInspectorMode()
-      ? this.getSelectedInspectorTool()
-      : this.getSelectedConstructionToolRef();
+    const tool = this.getSelectedToolRef();
     // A special pickup temporarily replaces E; let it use the normal utility
     // slot and restore the Inspector selection afterwards.
     const activeConfig = this.getLocalUtilityConfig?.();
@@ -454,7 +420,7 @@ export class InputSystem {
       )
       : undefined;
     const activeConstructionId = getConstructionIdForUtility(activeConfig?.id);
-    if (tool?.kind === 'construction' && activeConstructionId === tool.id && !this.isInspectorUtilityOverrideActive()) {
+    if (tool?.kind === 'construction' && activeConstructionId === tool.id && !this.isUtilityOverrideActive()) {
       return { toolRef: tool };
     }
     return this.isInspectorMode() && tool?.kind === 'utility'
@@ -468,56 +434,42 @@ export class InputSystem {
   }
 
   private isInspectorMode(): boolean {
-    return this.inspectorModeProvider?.() ?? (this.inspectorGetTools !== null && this.getInspectorTools().length > 0);
+    return this.inspectorModeProvider?.() ?? false;
   }
 
-  private isInspectorUtilityOverrideActive(): boolean {
-    return this.isInspectorMode() && (this.inspectorUtilityOverrideProvider?.() ?? false);
+  private isUtilityOverrideActive(): boolean {
+    return this.inspectorUtilityOverrideProvider?.() ?? false;
   }
 
-  isInspectorConstructionPlacementActive(): boolean {
+  isConstructionPlacementActive(): boolean {
     return this.hasActiveConstructionTools()
-      && this.inspectorConstructionPlacementActive
-      && !this.isInspectorUtilityOverrideActive();
+      && this.constructionPlacementActive
+      && !this.isUtilityOverrideActive();
   }
 
-  isInspectorDismantlePlacementActive(): boolean {
-    return (this.hasActiveConstructionTools() || this.isInspectorMode())
-      && this.inspectorDismantlePlacementActive
-      && !this.isInspectorUtilityOverrideActive();
+  isDismantlePlacementActive(): boolean {
+    return this.dismantlePlacementActive
+      && !this.isUtilityOverrideActive();
   }
 
-  isInspectorPersistentRewardPlacementActive(): boolean {
+  isPersistentRewardPlacementActive(): boolean {
     return this.getSelectedPersistentRewardId() !== null
-      && this.inspectorPersistentRewardPlacementActive
-      && !this.isInspectorUtilityOverrideActive();
+      && this.persistentRewardPlacementActive
+      && !this.isUtilityOverrideActive();
   }
 
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
     const rewardId = this.getSelectedPersistentRewardId();
-    if (this.isInspectorPersistentRewardPlacementActive() && rewardId) {
+    if (this.isPersistentRewardPlacementActive() && rewardId) {
       return this.getPersistentRewardPlacementPreviewProvider?.(rewardId);
     }
-    if (this.isInspectorDismantlePlacementActive()) return this.getDismantlePreviewProvider?.();
-    if (this.hasActiveConstructionTools() && !this.isInspectorConstructionPlacementActive()) return undefined;
+    if (this.isDismantlePlacementActive()) return this.getDismantlePreviewProvider?.();
+    if (!this.isConstructionPlacementActive()) return undefined;
     const constructionTool = this.getSelectedConstructionToolRef();
     if (constructionTool?.kind === 'construction') {
       return this.getConstructionPlacementPreviewProvider?.(constructionTool.id);
     }
-    const available = this.getAvailableConstructionIds?.() ?? [];
-    if (available.length === 0) return undefined;
-    return this.getConstructionPlacementPreviewProvider?.(this.getSelectedConstructionId());
-  }
-
-  private updateConstructionHotkeys(): void {
-    if (this.isInspectorMode()) return;
-    const available = this.getAvailableConstructionIds?.() ?? [];
-    if (available.length === 0) return;
-    for (let index = 0; index < this.constructionKeys.length; index += 1) {
-      if (Phaser.Input.Keyboard.JustDown(this.constructionKeys[index]) && available[index]) {
-        this.selectedConstructionId = available[index];
-      }
-    }
+    return undefined;
   }
 
   /**
@@ -622,13 +574,13 @@ export class InputSystem {
   }
 
   /**
-   * Schaltet Gameplay-Input; das Inspector-Rad kann im Arena-Countdown als einzige
+   * Schaltet Gameplay-Input; das Action-Rad kann im Arena-Countdown als einzige
    * Aktion trotzdem aktiv bleiben, damit die Auswahl vor Rundenbeginn vorbereitet wird.
    */
-  setInputEnabled(enabled: boolean, allowInspectorRadial = enabled): void {
+  setInputEnabled(enabled: boolean, allowRadial = enabled): void {
     const wasEnabled = this.inputEnabled;
     this.inputEnabled = enabled;
-    this.inspectorRadialEnabled = allowInspectorRadial;
+    this.radialEnabled = allowRadial;
     if (enabled && !wasEnabled) {
       // Der Gesture, der die UI verlassen und Gameplay aktiviert hat, gehoert weiterhin der UI.
       // Das gilt fuer alle aktuell gehaltenen Pointerbuttons, nicht nur fuer Waffe 1.
@@ -645,10 +597,10 @@ export class InputSystem {
       this.scopeChargeProgress = 0;
       this.tunnelPlacementAnchor = null;
       this.placementPreviewState = null;
-      this.inspectorConstructionPlacementActive = false;
-      this.inspectorDismantlePlacementActive = false;
-      this.inspectorPersistentRewardPlacementActive = false;
-      if (!allowInspectorRadial) this.inspectorRadialMenu?.close();
+      this.constructionPlacementActive = false;
+      this.dismantlePlacementActive = false;
+      this.persistentRewardPlacementActive = false;
+      if (!allowRadial) this.radialActionMenu?.close();
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
       this.prevRightPointerDown = false;
@@ -679,9 +631,9 @@ export class InputSystem {
       || this.utilityTargetingActive
       || this.utilityPlacementActive
       || this.globalDismantleHoldStartedAt !== null
-      || this.inspectorConstructionPlacementActive
-      || this.inspectorDismantlePlacementActive
-      || this.inspectorPersistentRewardPlacementActive;
+      || this.constructionPlacementActive
+      || this.dismantlePlacementActive
+      || this.persistentRewardPlacementActive;
   }
 
   isUtilityChargePreviewActive(): boolean {
@@ -878,17 +830,14 @@ export class InputSystem {
 
     // Process debug hotkeys first (regardless of input enabled state)
     this.updateDebugHotkeys();
-    this.updateConstructionHotkeys();
 
     // ── 1. Blickrichtung (auch bei gesperrter Eingabe) ─────────────────────
     // Drehen bleibt während des Arena-Countdowns erlaubt und wird über den
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
-    const selectedConstructionTool = this.getSelectedConstructionToolRef();
-    const constructionPreview = (this.isInspectorPersistentRewardPlacementActive()
-      || (this.hasActiveConstructionTools()
-        && ((this.isInspectorConstructionPlacementActive() && selectedConstructionTool?.kind === 'construction')
-          || this.isInspectorDismantlePlacementActive())))
+    const constructionPreview = (this.isPersistentRewardPlacementActive()
+      || this.isConstructionPlacementActive()
+      || this.isDismantlePlacementActive())
       ? this.getConstructionPlacementPreviewState()
       : undefined;
     if (constructionPreview) this.syncPlacementPreviewState(constructionPreview);
@@ -910,8 +859,8 @@ export class InputSystem {
     };
     this.bridge.sendLocalInput(input);
 
-    const inspectorRadialHandled = this.updateInspectorRadialMenu();
-    if (!this.inputEnabled || inspectorRadialHandled) return;
+    const radialHandled = this.updateRadialActionMenu();
+    if (!this.inputEnabled || radialHandled) return;
 
     // ── 3. Stun: keine weiteren Aktionen ───────────────────────────────────
     if (this.localIsStunned) {
@@ -992,29 +941,28 @@ export class InputSystem {
       || this.ultimatePlacementActive;
     const ultimateCfg = this.getLocalUltimateConfig?.();
 
-    // Inspector: RMB gehoert der Waffe 2. Ein laufender Bau- oder Rueckbaumodus wird
-    // von der Eingabe zuerst abgebrochen.
-    if (this.isInspectorMode()) {
-      const inspectorModeActive = this.utilityPlacementActive
-        || this.utilityTargetingActive
-        || this.utilityHoldActive
-        || this.globalDismantleHoldStartedAt !== null
-        || this.inspectorConstructionPlacementActive
-        || this.inspectorDismantlePlacementActive
-        || this.inspectorPersistentRewardPlacementActive;
-      if (rightInputStarted && inspectorModeActive) {
-        this.cancelUtilityInteraction();
-        this.prevRightPointerDown = rightPointerDown;
-        this.suppressWeapon1UntilLeftRelease = false;
-        return;
-      }
+    // RMB cancels every E-action interaction before weapon 2 sees the gesture. The button stays
+    // consumed until release, so the same physical click cannot both cancel and fire.
+    const radialInteractionActive = this.utilityPlacementActive
+      || this.utilityTargetingActive
+      || this.utilityHoldActive
+      || this.globalDismantleHoldStartedAt !== null
+      || this.constructionPlacementActive
+      || this.dismantlePlacementActive
+      || this.persistentRewardPlacementActive;
+    if (rightInputStarted && radialInteractionActive) {
+      this.consumeRightClickForModeCancellation();
+      this.cancelUtilityInteraction();
+      this.prevRightPointerDown = false;
+      this.suppressWeapon1UntilLeftRelease = false;
+      return;
     }
 
-    if ((this.hasActiveConstructionTools() || this.isInspectorMode()) && this.inspectorDismantlePlacementActive) {
+    if (this.dismantlePlacementActive) {
       const preview = constructionPreview;
       this.syncPlacementPreviewState(preview);
       if (!preview) {
-        this.cancelInspectorConstructionPlacement();
+        this.cancelRadialPlacement();
         return;
       }
       if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
@@ -1025,17 +973,17 @@ export class InputSystem {
             dismantle: true,
           });
         }
-        this.cancelInspectorConstructionPlacement();
+        this.cancelRadialPlacement();
         return;
       }
       return;
     }
 
-    if (this.isInspectorPersistentRewardPlacementActive()) {
+    if (this.isPersistentRewardPlacementActive()) {
       const preview = constructionPreview;
       this.syncPlacementPreviewState(preview);
       if (!preview) {
-        this.cancelInspectorConstructionPlacement();
+        this.cancelRadialPlacement();
         return;
       }
       if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
@@ -1043,22 +991,24 @@ export class InputSystem {
         const rewardId = this.getSelectedPersistentRewardId();
         if (rewardId && preview.isValid && this.placePersistentRewardProvider) {
           void this.placePersistentRewardProvider(rewardId, preview).then((result) => {
-            if (result.ok && this.inspectorPersistentRewardId === rewardId) {
-              this.inspectorPersistentRewardId = null;
+            if (result.ok
+              && this.selectedRadialAction?.kind === 'persistent-reward'
+              && this.selectedRadialAction.rewardId === rewardId) {
+              this.selectedRadialAction = null;
             }
           }).catch(() => undefined);
         }
-        this.cancelInspectorConstructionPlacement();
+        this.cancelRadialPlacement();
         return;
       }
       return;
     }
 
-    if (this.hasActiveConstructionTools() && this.inspectorConstructionPlacementActive) {
+    if (this.hasActiveConstructionTools() && this.constructionPlacementActive) {
       const preview = constructionPreview;
       this.syncPlacementPreviewState(preview);
       if (!preview) {
-        this.cancelInspectorConstructionPlacement();
+        this.cancelRadialPlacement();
         return;
       }
       if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
@@ -1073,7 +1023,7 @@ export class InputSystem {
             });
           }
         }
-        this.cancelInspectorConstructionPlacement();
+        this.cancelRadialPlacement();
         return;
       }
       return;
@@ -1281,7 +1231,15 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      if (this.hasActiveConstructionTools() && this.inspectorGlobalDismantleSelected && !this.isInspectorUtilityOverrideActive()) {
+      const utilityOverrideActive = this.isUtilityOverrideActive();
+      const selectedAction = utilityOverrideActive ? null : this.getSelectedRadialActionState(now);
+      if (!utilityOverrideActive && !selectedAction) return;
+      if (selectedAction && !selectedAction.available) {
+        if (selectedAction.disabledReason === 'cooldown') this.onUtilityPressedDuringCooldown?.();
+        return;
+      }
+      if (selectedAction?.ref.kind === 'management'
+        && selectedAction.ref.action === 'dismantle-own-all') {
         this.cancelUtilityInteraction();
         const actionId = this.createHeldActionId('global-dismantle');
         this.activeHeldActionId = actionId;
@@ -1289,35 +1247,33 @@ export class InputSystem {
         this.bridge.sendHeldActionStart(actionId, 'global_dismantle', 1_000);
         return;
       }
-      if ((this.hasActiveConstructionTools() || this.isInspectorMode())
-        && this.isInspectorDismantleSelected()
-        && !this.isInspectorUtilityOverrideActive()) {
+      if (selectedAction?.ref.kind === 'management'
+        && selectedAction.ref.action === 'dismantle') {
         this.cancelUtilityInteraction();
-        this.inspectorDismantlePlacementActive = true;
+        this.dismantlePlacementActive = true;
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
+      if (selectedAction?.ref.kind === 'management') return;
       const persistentRewardId = this.getSelectedPersistentRewardId();
-      if (persistentRewardId && this.isInspectorMode() && !this.isInspectorUtilityOverrideActive()) {
+      if (persistentRewardId && !utilityOverrideActive) {
         this.cancelUtilityInteraction();
-        this.inspectorPersistentRewardPlacementActive = true;
+        this.persistentRewardPlacementActive = true;
         this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
-      const inspectorTool = this.getSelectedConstructionToolRef();
-      if (this.hasActiveConstructionTools() && !inspectorTool) return;
-      if (this.hasActiveConstructionTools()
-        && inspectorTool?.kind === 'construction'
-        && !this.isInspectorUtilityOverrideActive()) {
+      const constructionTool = this.getSelectedConstructionToolRef();
+      if (constructionTool?.kind === 'construction' && !utilityOverrideActive) {
         this.cancelUtilityInteraction();
-        this.inspectorConstructionPlacementActive = true;
+        this.constructionPlacementActive = true;
         this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
       if (this.getEffectiveUtilityCooldownUntil() > now) {
         this.onUtilityPressedDuringCooldown?.();
+        return;
       }
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
@@ -1600,6 +1556,11 @@ export class InputSystem {
     this.suppressWeapon1UntilLeftRelease = true;
   }
 
+  private consumeRightClickForModeCancellation(): void {
+    this.consumedPointerButtons |= SECONDARY_POINTER_BUTTON;
+    this.pendingRightInputStarted = false;
+  }
+
   private cancelUtilityTargeting(): void {
     this.utilityTargetingActive = false;
   }
@@ -1619,14 +1580,14 @@ export class InputSystem {
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
     this.cancelUtilityPlacement();
-    this.cancelInspectorConstructionPlacement();
+    this.cancelRadialPlacement();
     this.cancelGlobalDismantleHold();
   }
 
-  private cancelInspectorConstructionPlacement(): void {
-    this.inspectorConstructionPlacementActive = false;
-    this.inspectorDismantlePlacementActive = false;
-    this.inspectorPersistentRewardPlacementActive = false;
+  private cancelRadialPlacement(): void {
+    this.constructionPlacementActive = false;
+    this.dismantlePlacementActive = false;
+    this.persistentRewardPlacementActive = false;
     this.placementPreviewState = null;
   }
 
@@ -1662,9 +1623,9 @@ export class InputSystem {
 
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
     if ((!this.utilityPlacementActive
-      && !this.inspectorConstructionPlacementActive
-      && !this.inspectorDismantlePlacementActive
-      && !this.inspectorPersistentRewardPlacementActive) || !preview) {
+      && !this.constructionPlacementActive
+      && !this.dismantlePlacementActive
+      && !this.persistentRewardPlacementActive) || !preview) {
       this.placementPreviewState = null;
       return;
     }

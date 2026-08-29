@@ -15,7 +15,7 @@ Der Adapter normalisiert nicht erneut, materialisiert keine Defaults und ersetzt
 
 Eine Activity referenziert ihre World über worldDefinitionId und liefert keine alternative Layout- oder Metrics-Quelle. Dadurch kann dieselbe World ohne Activity geladen, angezeigt oder activity-unabhängig resident gehalten werden.
 
-Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt die Stelle des Basiskerns sowie seine Baubereich-Regel: baseId, Anker, Ausrichtung, optional ein `square`- oder `radius`-Bereich und Grunddauerhaftigkeit. Ohne explizite authored Regel gilt der definierte Default. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
+Die optionale World-seitige persistentBase-Konfiguration entspricht CoopDefenseMapPersistentBaseConfig und beschreibt nur die Stelle des Basiskerns: baseId, Anker, Ausrichtung und Grunddauerhaftigkeit. Sie authoriert keine Build Area; diese wird ausschließlich aus der host-autoritativ eingefrorenen `PersistentBaseAreaStage` über `resolvePersistentBaseBuildAreaForStage()` abgeleitet. Die Kernform ist Code-Definition; die Map-Normalisierung erzeugt daraus den `bases`-Eintrag und prüft die räumliche Reservierung. Eine Map, die dieselbe baseId zusätzlich selbst in `bases` beschreibt, wird abgelehnt: Zwei Beschreibungen derselben Basis könnten über Maps hinweg auseinanderlaufen.
 
 **Bereits normalisierte Coop-Configs nicht erneut normalisieren.** `normalizeCoopDefenseMapConfig()` ist nicht idempotent: Der erste Lauf materialisiert zum Beispiel den Default für `front`; zusammen mit einer authored `spawnArea` kann ein zweiter Lauf an der gegenseitigen Ausschließlichkeit scheitern. Adapter erhalten daher bereits normalisierte Configs.
 
@@ -48,7 +48,9 @@ Die Priorität des Merges ist authored Geometrie, dann der Beitrag des Raum-Host
 
 Der Host hat die Authority über Materialisierung, Validierung, Merge-Ergebnis und laufende Simulation. Diese Authority macht ihn nicht zum fachlichen Eigentümer der Beiträge. Eine Activity oder Runde liefert nur Laufzeitregeln und kann den aktuellen Arbeitsstand committen oder verwerfen.
 
-Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem Blueprint heraus. Die authored Site liefert Anker und Build Area; Generator-Reservation und Baurecht bleiben getrennte Begriffe.
+Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem Blueprint heraus. Die
+authored Site liefert den Anker; die aktive Build Area kommt aus der World-Stage. Generator-
+Reservation und Baurecht bleiben getrennte Begriffe.
 
 ## Erweiterung einer Mission
 

@@ -219,7 +219,6 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
     ];
     const state: PersistentBaseState = {
       schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
-      radiusCells: 5,
       revision: 3,
       constructions: [
         blueprint('base-cell', 'construction', 'rocket_turret', 0, 0, 0),

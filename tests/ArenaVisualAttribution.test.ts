@@ -482,7 +482,7 @@ const GRAPHICS_ARC_LEGACY_SOURCES: Readonly<Record<string, string>> = {
   'src/scenes/arena/RockVisualHelper.ts': 'Reichweitenkreis, noch nicht umgestellt.',
   'src/ui/CoopDefenseObjectiveAnnouncement.ts': 'Einmalig gezeichneter Rahmenschmuck, kein Pro-Frame-Pfad.',
   'src/ui/HostileBaseIndicator.ts': 'Pfeilspitze, noch nicht umgestellt.',
-  'src/ui/InspectorToolRadialMenu.ts': 'Radialmenue, zeichnet nur bei geoeffnetem Menue.',
+  'src/ui/RadialActionMenu.ts': 'Radialmenue, zeichnet nur bei geoeffnetem Menue.',
 };
 
 /** `ctx`/`context` sind der Canvas-2D-Kontext beim Backen und damit ausdruecklich erlaubt. */

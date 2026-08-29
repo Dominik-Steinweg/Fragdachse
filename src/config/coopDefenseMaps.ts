@@ -27,7 +27,6 @@ import {
   buildPersistentBaseCoreBaseConfig,
   DEFAULT_PERSISTENT_BASE_BUILD_AREA,
   DEFAULT_PERSISTENT_BASE_ORIENTATION,
-  isPersistentBaseBuildArea,
   isPersistentBaseOrientation,
   type PersistentBaseBuildArea,
   type PersistentBaseOrientation,
@@ -658,8 +657,8 @@ export interface CoopDefenseMapTutorialStepConfig {
 /**
  * Die persistente Basisstelle einer Map.
  *
- * Sie beschreibt ausschliesslich *wo* der Basiskern steht und welche Baubereich-Regel gilt, nie
- * einzelne Kernzellen: Seine Form kommt aus
+ * Sie beschreibt ausschliesslich *wo* der Basiskern steht, nie einzelne Kernzellen oder die
+ * aktive Baubereich-Regel: Seine Form kommt aus
  * {@link import('../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}.
  * Deshalb traegt keine Map eigene Basiszellen, und zwei Maps koennen ihre Basisdefinition nicht
  * auseinanderlaufen lassen. Die Normalisierung erzeugt aus diesem Block den `bases`-Eintrag mit
@@ -671,8 +670,6 @@ export interface CoopDefenseMapPersistentBaseConfig {
   readonly anchor: PersistentBaseAnchor;
   /** Ohne Angabe die kanonische Ausrichtung. */
   readonly orientation?: PersistentBaseOrientation;
-  /** Ohne Angabe der aktuelle feste 3x3-Innenhof; spaetere Stufen koennen einen Radius nutzen. */
-  readonly buildArea?: PersistentBaseBuildArea;
   readonly hpMax: number;
 }
 
@@ -1346,9 +1343,6 @@ function normalizePersistentBaseConfig(
   if (config.orientation !== undefined && !isPersistentBaseOrientation(config.orientation)) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an unknown orientation`);
   }
-  if (config.buildArea !== undefined && !isPersistentBaseBuildArea(config.buildArea)) {
-    throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} has an invalid build area`);
-  }
   if (!Number.isFinite(config.hpMax) || config.hpMax <= 0) {
     throw new Error(`[coopDefenseMaps] Persistent base ${mapId}:${baseId} needs a positive hpMax`);
   }
@@ -1368,7 +1362,6 @@ function normalizePersistentBaseConfig(
     baseId,
     anchor: { gridX: anchor.gridX, gridY: anchor.gridY },
     ...(config.orientation === undefined ? {} : { orientation: config.orientation }),
-    ...(config.buildArea === undefined ? {} : { buildArea: config.buildArea }),
     hpMax: config.hpMax,
   };
   return { site, base: normalizeBaseConfig(buildPersistentBaseCoreBaseConfig(site)) };

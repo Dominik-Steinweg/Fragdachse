@@ -154,9 +154,11 @@ export interface WorldBaseDefinition {
 /**
  * Die persistente Basisstelle dieser World: wo der kanonische Basiskern steht.
  *
- * Sie traegt bewusst keine Geometrie. Die Form des Kerns ist Code-Definition
+ * Sie traegt bewusst weder Kerngeometrie noch eine Build-Area-Regel. Die Form des Kerns ist
+ * Code-Definition
  * ({@link import('../../persistentBase/PersistentBaseCore').CANONICAL_PERSISTENT_BASE_CORE_CELLS}),
- * die World steuert nur Lage, Ausrichtung, Baubereich-Regel und Grunddauerhaftigkeit bei. Die
+ * die World steuert nur Lage, Ausrichtung und Grunddauerhaftigkeit bei. Die aktive Build Area
+ * wird aus dem host-autoritativen World-Parameter `persistentBaseAreaStage` aufgeloest. Die
  * zugehoerige Basis mit `baseId` wird daraus erzeugt und steht anschliessend als gewoehnlicher
  * Eintrag in {@link WorldDefinition.bases}.
  */

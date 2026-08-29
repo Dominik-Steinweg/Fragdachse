@@ -57,7 +57,13 @@ Simulation und Präsentation sind entkoppelt. World- und Player-Runtime müssen 
 - Renderer beobachten Runtime-Zustand und besitzen weder Treffer-, Ressourcen- noch Spawn-Autorität.
 - PlayerWorldRuntime beschreibt die gemeinsam benötigten Features und macht sichtbar, welche Simulation nur der Host ausführt. World-scoped Player-Build- oder Item-Zustände dürfen auch ohne Activity existieren; missionsgebundener Zustand bleibt Activity-spezifisch.
 
-Für PersistentBase trennt derselbe Vertrag die Ebenen: Die World bindet Site, Basiskern, Lage, Baubereich und World-Parameter; persönlicher Progress besitzt die dauerhaften Blueprints; Runtime/Working Copy materialisiert den aktuellen bearbeitbaren Zustand. Ohne aktive Mission committed der Host validierte Änderungen sofort; eine Activity/Round kann ihren Working State committen oder verwerfen. Der Host hat Authority über Materialisierung, Validierung, Merge und Simulation, ist dadurch aber nicht fachlicher Eigentümer der Konstruktionen.
+Für PersistentBase trennt derselbe Vertrag die Ebenen: Die World bindet Site, Basiskern, Lage und
+World-Parameter; aus diesem Parameter wird der unveränderliche Baubereich der World-Instanz
+aufgelöst. Persönlicher Progress besitzt die dauerhaften Blueprints; Runtime/Working Copy
+materialisiert den aktuellen bearbeitbaren Zustand. Ohne aktive Mission committed der Host
+validierte Änderungen sofort; eine Activity/Round kann ihren Working State committen oder
+verwerfen. Der Host hat Authority über Materialisierung, Validierung, Merge und Simulation, ist
+dadurch aber nicht fachlicher Eigentümer der Konstruktionen.
 
 Die Verträge sind in [PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts), [PlayerCapabilities.ts](../../src/world/PlayerCapabilities.ts) und den Tests [PlayerTreeRuntimeContracts.test.ts](../../tests/PlayerTreeRuntimeContracts.test.ts), [WorldPresentationContracts.test.ts](../../tests/WorldPresentationContracts.test.ts) und [WorldWithoutActivityProof.test.ts](../../tests/WorldWithoutActivityProof.test.ts) verankert.
 

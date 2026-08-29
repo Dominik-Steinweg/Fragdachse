@@ -181,15 +181,10 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     expect(isValidPersistentBaseSite(null)).toBe(false);
   });
 
-  it('leitet die spaetere radiusbasierte Baubereich-Regel aus Stage 1 ab', () => {
+  it('leitet Stage 1 ohne authored Baubereich-Regel als Radius 5 ab', () => {
     const mapConfig = getCoopDefenseMapConfig('17');
-    const definition = toWorldDefinition({
-      ...mapConfig,
-      persistentBase: {
-        ...mapConfig.persistentBase!,
-        buildArea: { kind: 'radius', radiusCells: 2 },
-      },
-    });
+    expect(mapConfig.persistentBase).not.toHaveProperty('buildArea');
+    const definition = toWorldDefinition(mapConfig);
     const world = createWorldRuntimeContext({
       descriptor: descriptorFor(definition.id, {
         parameters: { persistentBaseUnlocked: true, persistentBaseAreaStage: 1 },
@@ -204,6 +199,17 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     });
 
     expect(world.persistentBaseSite?.buildArea).toEqual({ kind: 'radius', radiusCells: 5 });
+  });
+
+  it('enthaelt keine alternative authored Area-Aufloesung mehr', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/persistentBase/PersistentBaseCore.ts'), 'utf8');
+    expect(source).not.toContain('resolvePersistentBaseBuildArea(');
+    expect(source).not.toContain('authoredBuildArea');
+    for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
+      if (mapConfig.persistentBase) {
+        expect(mapConfig.persistentBase).not.toHaveProperty('buildArea');
+      }
+    }
   });
 
   it('traegt den Basiskern nur, wenn die World-Instanz ihn freigeschaltet mitbringt', () => {

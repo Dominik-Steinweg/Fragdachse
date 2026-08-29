@@ -102,7 +102,7 @@ import {
   applyArenaModeFlags,
   applyArenaWorldMetrics,
 } from '../config';
-import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../loadout/LoadoutConfig';
+import { DEFAULT_LOADOUT, LOADOUT_CATALOG_ENTRIES, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS, getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { preloadHeldItemAssets } from '../loadout/HeldItemVisuals';
 import { preloadTrainMaterialAssets } from '../train/TrainRenderer';
 import {
@@ -1256,13 +1256,16 @@ export class ArenaScene extends Phaser.Scene {
         this.clientUpdate.getLocalUtilityCooldownId(),
       );
     });
-    inputSystem.setupInspectorToolProvider(
+    inputSystem.setupRadialActionProviders(
       () => {
+        if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
         const localId = bridge.getLocalPlayerId();
         const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
         return currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? this.clientUpdate.getLocalInspectorTools()
-          : this.lifecycle?.getActiveConstructionToolsForPlayer(localId) ?? [];
+          : currentLoadout?.utility
+            ? [{ kind: 'utility' as const, id: currentLoadout.utility }]
+            : [];
       },
       () => this.clientUpdate.getLocalInspectorSelectedTool(),
       (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
@@ -1294,9 +1297,38 @@ export class ArenaScene extends Phaser.Scene {
           COOP_DEFENSE_DISMANTLE_RANGE,
         );
       },
-    );
-    inputSystem.setupInspectorPersistentRewardProvider(
+      (ref) => {
+        const localId = bridge.getLocalPlayerId();
+        if (ref.kind === 'construction') {
+          return bridge.getPlayerUtilityCooldownUntil(localId, ref.constructionId);
+        }
+        if (ref.kind === 'utility') {
+          const resolved = getUtilityConfigForMode(ref.utilityId, bridge.getActiveGameMode());
+          return bridge.getPlayerUtilityCooldownUntil(localId, resolved?.id ?? ref.utilityId);
+        }
+        return 0;
+      },
       () => {
+        const capabilities = this.lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId());
+        return {
+          canUseUtility: capabilities.canInteract && capabilities.canUseCombat,
+          canPlace: capabilities.canInteract && capabilities.canPlace,
+          canManage: capabilities.canInteract && capabilities.canDismantle,
+        };
+      },
+      () => {
+        if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
+        const localId = bridge.getLocalPlayerId();
+        const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
+        const hasConstruction = (this.lifecycle?.getActiveConstructionToolsForPlayer(localId).length ?? 0) > 0;
+        return hasConstruction || currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          ? ['dismantle', 'dismantle-own-all'] as const
+          : [];
+      },
+    );
+    inputSystem.setupPersistentRewardActionProvider(
+      () => {
+        if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
         const localId = bridge.getLocalPlayerId();
         return this.lifecycle?.getPersistentBaseRewardIdsForPlayer(localId) ?? [];
       },
@@ -1312,10 +1344,6 @@ export class ArenaScene extends Phaser.Scene {
       },
       (rewardId, preview) => this.lifecycle?.requestPersistentBaseRewardPlacement(rewardId, preview)
         ?? Promise.resolve({ ok: false, reason: 'blocked' as const }),
-      () => bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs'
-        && (this.ctx.placementSystem?.getAllRuntimeRocks().some((rock) => (
-          rock.ownership === 'base-owned' && rock.persistentRewardId !== undefined
-        )) ?? false),
     );
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
@@ -1407,13 +1435,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     inputSystem.setupUtilityPlacementPreviewProvider(() => this.getLocalPlacementPreview());
     inputSystem.setupUltimatePlacementPreviewProvider(() => this.getLocalUltimatePlacementPreview());
-    inputSystem.setupConstructionProviders(
-      () => {
-        if (!this.lifecycle?.getPlayerCapabilities(bridge.getLocalPlayerId()).canPlace) return [];
-        return this.lifecycle?.getActiveConstructionToolsForPlayer(bridge.getLocalPlayerId())
-          .filter((tool): tool is { kind: 'construction'; id: ConstructionId } => tool.kind === 'construction')
-          .map((tool) => tool.id) ?? [];
-      },
+    inputSystem.setupConstructionPlacementPreviewProvider(
       (constructionId) => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
         const placementSystem = this.ctx.placementSystem;
@@ -1436,16 +1458,18 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.onUtilityPressedDuringCooldown = () => {
       const localId       = bridge.getLocalPlayerId();
       const config = this.clientUpdate.getLocalUtilityConfig();
-      const utilityId = this.clientUpdate.getLocalUtilityCooldownId();
-      const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, utilityId);
+      const selected = inputSystem.getSelectedRadialActionForHud();
+      const cooldownId = selected?.kind === 'construction'
+        ? selected.constructionId
+        : this.clientUpdate.getLocalUtilityCooldownId();
+      const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, cooldownId);
       const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
-      const selected = this.clientUpdate.getLocalInspectorSelectedTool();
       const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUpdate.clientUtilityOverride !== null;
       const cooldown = selected?.kind === 'construction' && !hasOverride
-        ? getCoopDefenseConstructionDefinition(selected.id).buildCooldownMs
+        ? getCoopDefenseConstructionDefinition(selected.constructionId).buildCooldownMs
         : config.cooldown;
       const frac          = cooldown > 0 ? Math.min(1, remaining / cooldown) : 0.8;
-      const displayName   = config?.id ?? 'UTILITY';
+      const displayName   = selected?.kind === 'construction' ? selected.constructionId : config?.id ?? 'UTILITY';
       this.ctx.centerHUD.flashUtilityCooldown(frac, displayName);
     };
     inputSystem.onUltimatePressedWithoutRage = () => {
@@ -2344,8 +2368,8 @@ export class ArenaScene extends Phaser.Scene {
         && !spectator
         && (
           this.ctx.inputSystem.isUtilityPlacementActive()
-          || this.ctx.inputSystem.isInspectorConstructionPlacementActive()
-          || this.ctx.inputSystem.isInspectorPersistentRewardPlacementActive()
+          || this.ctx.inputSystem.isConstructionPlacementActive()
+          || this.ctx.inputSystem.isPersistentRewardPlacementActive()
         ),
     );
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
@@ -2356,8 +2380,8 @@ export class ArenaScene extends Phaser.Scene {
       && !this.localPlayerState.burrowed
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
       && !this.ctx.inputSystem.isUtilityPlacementActive()
-      && !this.ctx.inputSystem.isInspectorConstructionPlacementActive()
-      && !this.ctx.inputSystem.isInspectorPersistentRewardPlacementActive()
+      && !this.ctx.inputSystem.isConstructionPlacementActive()
+      && !this.ctx.inputSystem.isPersistentRewardPlacementActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     const aimPreviewMs = diagnosticsActive ? performance.now() - aimPreviewStartedAt : 0;

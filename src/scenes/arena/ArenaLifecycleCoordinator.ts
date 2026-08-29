@@ -1496,13 +1496,13 @@ export class ArenaLifecycleCoordinator {
   /** Liefert die lokale Reward-Vorschau aus dem verlaesslichen Session-Snapshot. */
   getPersistentBaseRewardIdsForPlayer(playerId: string): PersistentBaseRewardId[] {
     const site = this.ctx.world?.persistentBaseSite ?? null;
-    const player = this.ctx.playerManager.getPlayer(playerId);
     const session = bridge.getPersistentBaseRewardSessionState();
-    if (!site || !player || !player.active
-      || bridge.getPlayerCurrentLoadoutSnapshot(playerId)?.coopDefenseClassId !== 'inspector_gadachs'
-      || !this.getPlayerCapabilities(playerId).canPlace
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)) return [];
+    // Enumeration and temporary availability are deliberately separate: an unlocked, unplaced
+    // reward remains visible in the radial while the player is dead, burrowed or otherwise
+    // unable to place. The action resolver supplies the disabled state; preview/host validation
+    // below still enforce the capability contract.
+    if (!site
+      || bridge.getPlayerCurrentLoadoutSnapshot(playerId)?.coopDefenseClassId !== 'inspector_gadachs') return [];
 
     const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
     const availableRewardIds = hostState
@@ -6579,10 +6579,11 @@ export class ArenaLifecycleCoordinator {
 
   private resetLocalArenaHudState(): void {
     const config = this.clientUpdate.getLocalUltimateConfig();
-    const inspectorUtilityAction = this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
-    const persistentBaseRewardId = inspectorUtilityAction
-      ? null
-      : this.ctx.inputSystem.getSelectedInspectorPersistentRewardForHud();
+    const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
+    const managementAction = radialAction?.kind === 'management' ? radialAction.action : null;
+    const persistentBaseRewardId = radialAction?.kind === 'persistent-reward'
+      ? radialAction.rewardId
+      : null;
     const hudData = buildInitialLocalArenaHudData({
       maxArmor: this.clientUpdate.getLocalMaxArmor(),
       maxAdrenaline: this.clientUpdate.getLocalMaxAdrenaline(),
@@ -6590,10 +6591,10 @@ export class ArenaLifecycleCoordinator {
       ultimateRequiredRage: config.rageRequired,
       ultimateThresholds:   this.clientUpdate.getLocalUltimateThresholds(),
       ultimateId:            config.id,
-      utilityId:             inspectorUtilityAction || persistentBaseRewardId
+      utilityId:             managementAction || persistentBaseRewardId
         ? undefined
         : this.clientUpdate.getLocalUtilityConfig().id,
-      utilityAction:         inspectorUtilityAction ?? undefined,
+      utilityAction:         managementAction ?? undefined,
       persistentBaseRewardId: persistentBaseRewardId ?? undefined,
       weapon2AdrenalineCost: this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
     });

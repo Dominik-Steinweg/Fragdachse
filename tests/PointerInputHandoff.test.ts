@@ -10,8 +10,8 @@ vi.mock('phaser', () => ({
 vi.mock('../src/graphics/cameraBaseScroll', () => ({
   getUnshakenPointerWorldPoint: () => ({ x: 0, y: 0 }),
 }));
-vi.mock('../src/ui/InspectorToolRadialMenu', () => ({
-  InspectorToolRadialMenu: class {},
+vi.mock('../src/ui/RadialActionMenu', () => ({
+  RadialActionMenu: class {},
 }));
 
 import { resolvePointerButtonHandoff } from '../src/systems/InputSystem';

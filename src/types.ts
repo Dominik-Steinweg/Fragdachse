@@ -784,9 +784,6 @@ export interface RoomQualitySnapshot {
 /** Loadout-Slot-Bezeichner */
 export type LoadoutSlot = 'weapon1' | 'weapon2' | 'utility' | 'ultimate';
 
-/** Feste Inspector-Aktionen aus dem Utility-Rad, die keinen LoadoutToolRef besitzen. */
-export type InspectorUtilityAction = 'dismantle' | 'global-dismantle';
-
 /** Audio-Key eines data-driven Schuss-/Dry-Trigger-Sounds. */
 export type ShotAudioKey = string;
 

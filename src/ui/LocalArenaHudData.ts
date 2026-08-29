@@ -1,6 +1,6 @@
 import { ADRENALINE_MAX, HP_MAX, RAGE_MAX } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
-import type { InspectorUtilityAction } from '../types';
+import type { RadialManagementAction } from '../systems/RadialActionModel';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 
 export interface LocalArenaHudData extends ArenaHUDData {
@@ -24,7 +24,7 @@ interface BuildLocalArenaHudDataParams {
   weapon2CooldownFrac: number;
   utilityCooldownFrac: number;
   utilityId?: string;
-  utilityAction?: InspectorUtilityAction;
+  utilityAction?: RadialManagementAction;
   persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?: number;
   adrenalineSyringeActive?: boolean;
@@ -44,7 +44,7 @@ interface BuildInitialLocalArenaHudDataParams {
   ultimateThresholds: number[];
   ultimateId?: string;
   utilityId?: string;
-  utilityAction?: InspectorUtilityAction;
+  utilityAction?: RadialManagementAction;
   persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?: number;
   weapon2AdrenalineCost?: number;

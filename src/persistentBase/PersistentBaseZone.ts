@@ -9,7 +9,7 @@ import {
 } from './PersistentBaseCore';
 import type { PersistentBaseAnchor } from './PersistentBaseTypes';
 
-/** Aktuelle feste Build-Area oder der historische Radiusvertrag. */
+/** Aufgeloeste Build-Area oder der feste Radius der maximalen Reservierungsflaeche. */
 export type PersistentBaseBuildAreaInput = PersistentBaseBuildArea | number;
 
 /** Kreisfoermige Zone in relativen Rasterkoordinaten; Randzellen sind eingeschlossen. */

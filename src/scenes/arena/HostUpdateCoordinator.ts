@@ -905,37 +905,32 @@ export class HostUpdateCoordinator {
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
       const gameMode = bridge.getActiveGameMode();
       const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
-      const inspectorUtilityAction = hasUtilityOverride
-        ? null
-        : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
-      const inspectorRewardId = hasUtilityOverride || inspectorUtilityAction
-        ? null
-        : this.ctx.inputSystem.getSelectedInspectorPersistentRewardForHud();
-      const selectedInspectorTool = hasUtilityOverride || inspectorUtilityAction || inspectorRewardId ? undefined
-        : (this.ctx.inputSystem.getSelectedInspectorToolForHud() ?? currentLoadout?.coopDefenseProfile?.selectedTool);
-      const selectedInspectorUtilityBase = selectedInspectorTool?.kind === 'utility'
-        ? getUtilityConfigForMode(selectedInspectorTool.id, gameMode)
+      const radialAction = hasUtilityOverride ? null : this.ctx.inputSystem.getSelectedRadialActionForHud();
+      const managementAction = radialAction?.kind === 'management' ? radialAction.action : null;
+      const rewardId = radialAction?.kind === 'persistent-reward' ? radialAction.rewardId : null;
+      const selectedTool = radialAction?.kind === 'construction'
+        ? { kind: 'construction' as const, id: radialAction.constructionId }
+        : radialAction?.kind === 'utility'
+          ? { kind: 'utility' as const, id: radialAction.utilityId }
+          : undefined;
+      const selectedUtilityBase = selectedTool?.kind === 'utility'
+        ? getUtilityConfigForMode(selectedTool.id, gameMode)
         : undefined;
-      const selectedInspectorUtility = selectedInspectorUtilityBase
-        ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedInspectorUtilityBase) ?? selectedInspectorUtilityBase
+      const selectedUtility = selectedUtilityBase
+        ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedUtilityBase) ?? selectedUtilityBase
         : undefined;
-      const selectedInspectorConstruction = selectedInspectorTool?.kind === 'construction'
-        ? getCoopDefenseConstructionDefinition(selectedInspectorTool.id)
+      const selectedConstruction = selectedTool?.kind === 'construction'
+        ? getCoopDefenseConstructionDefinition(selectedTool.id)
         : undefined;
-      const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
-        ? selectedInspectorTool
-        : currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
-          ? null
-          : getActiveConstructionToolRefs(getConstructionAccessContext(gameMode, currentLoadout))
-            .find((tool) => tool.kind === 'construction') ?? null;
-      const utilCfg   = selectedInspectorUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+      const activeConstructionTool = selectedTool?.kind === 'construction' ? selectedTool : null;
+      const utilCfg   = selectedUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
       const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
-      const utilityId = inspectorUtilityAction || inspectorRewardId
+      const utilityId = managementAction || rewardId
         ? undefined
-        : selectedInspectorConstruction
-          ? `construction.${selectedInspectorConstruction.id}`
+        : selectedConstruction
+          ? `construction.${selectedConstruction.id}`
           : utilCfg?.id;
       const ultCfg    = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
       const weapon2Cfg = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, 'weapon2');
@@ -968,8 +963,8 @@ export class HostUpdateCoordinator {
         weapon2CooldownFrac:     this.ctx.loadoutManager?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
         utilityId,
-        utilityAction:            inspectorUtilityAction ?? undefined,
-        persistentBaseRewardId:   inspectorRewardId ?? undefined,
+        utilityAction:            managementAction ?? undefined,
+        persistentBaseRewardId:   rewardId ?? undefined,
         utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
         isUtilityOverridden:     bridge.getPlayerUtilityOverrideId(localId) !== '',
@@ -2483,26 +2478,23 @@ export class HostUpdateCoordinator {
 
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
     const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
-    if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud() !== null) return 0;
-    if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorPersistentRewardForHud() !== null) return 0;
-    const selected = hasOverride ? undefined : (this.ctx.inputSystem.getSelectedInspectorToolForHud()
-      ?? currentLoadout?.coopDefenseProfile?.selectedTool);
+    const radialAction = hasOverride ? null : this.ctx.inputSystem.getSelectedRadialActionForHud();
+    if (radialAction?.kind === 'management' || radialAction?.kind === 'persistent-reward') return 0;
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
     const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    const selectedConfigBase = selected?.kind === 'utility'
-      ? getUtilityConfigForMode(selected.id, bridge.getActiveGameMode())
+    const selectedConfigBase = radialAction?.kind === 'utility'
+      ? getUtilityConfigForMode(radialAction.utilityId, bridge.getActiveGameMode())
       : undefined;
     const selectedConfig = selectedConfigBase
       ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedConfigBase) ?? selectedConfigBase
       : undefined;
-    const itemId = selected?.kind === 'construction'
-      ? selected.id
+    const itemId = radialAction?.kind === 'construction'
+      ? radialAction.constructionId
       : (selectedConfig?.id ?? fallbackConfig?.id ?? '__default__');
-    const cooldown = selected?.kind === 'construction'
-      ? getCoopDefenseConstructionDefinition(selected.id).buildCooldownMs
+    const cooldown = radialAction?.kind === 'construction'
+      ? getCoopDefenseConstructionDefinition(radialAction.constructionId).buildCooldownMs
       : selectedConfig?.cooldown ?? fallbackConfig?.cooldown ?? 0;
     if (cooldown <= 0) return 0;
     const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();

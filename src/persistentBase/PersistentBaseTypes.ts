@@ -1,6 +1,4 @@
 import {
-  DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
-  MAX_PERSISTENT_BASE_RADIUS_CELLS,
   MAX_PERSISTENT_CONSTRUCTIONS_PER_CONTRIBUTION,
   PERSISTENT_BASE_STATE_SCHEMA_VERSION,
   PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
@@ -25,7 +23,6 @@ export interface PersistentConstruction {
 
 export interface PersistentBaseState {
   readonly schemaVersion: typeof PERSISTENT_BASE_STATE_SCHEMA_VERSION;
-  readonly radiusCells: number;
   readonly revision: number;
   readonly constructions: readonly PersistentConstruction[];
 }
@@ -146,7 +143,6 @@ export interface PersistentBaseAnchor {
 
 export const DEFAULT_PERSISTENT_BASE_STATE: PersistentBaseState = Object.freeze({
   schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
-  radiusCells: DEFAULT_PERSISTENT_BASE_RADIUS_CELLS,
   revision: 0,
   constructions: Object.freeze([]),
 });
@@ -165,7 +161,6 @@ export function clonePersistentConstruction(construction: PersistentConstruction
 export function clonePersistentBaseState(state: PersistentBaseState): PersistentBaseState {
   return {
     schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
-    radiusCells: state.radiusCells,
     revision: state.revision,
     constructions: state.constructions.map(clonePersistentConstruction),
   };
@@ -216,7 +211,6 @@ export function sanitizePersistentConstructions(value: unknown): PersistentConst
 export function sanitizePersistentBaseState(value: unknown): PersistentBaseState | null {
   if (!isRecord(value)
     || value.schemaVersion !== PERSISTENT_BASE_STATE_SCHEMA_VERSION
-    || !isSafeIntegerInRange(value.radiusCells, 0, MAX_PERSISTENT_BASE_RADIUS_CELLS)
     || !isSafeIntegerInRange(value.revision, 0, Number.MAX_SAFE_INTEGER)) {
     return null;
   }
@@ -225,7 +219,6 @@ export function sanitizePersistentBaseState(value: unknown): PersistentBaseState
 
   return {
     schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
-    radiusCells: value.radiusCells,
     revision: value.revision,
     constructions,
   };

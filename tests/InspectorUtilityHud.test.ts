@@ -19,8 +19,8 @@ vi.mock('../src/graphics/cameraBaseScroll', () => ({
   getUnshakenPointerWorldPoint: () => ({ x: 100, y: 0 }),
 }));
 
-vi.mock('../src/ui/InspectorToolRadialMenu', () => ({
-  InspectorToolRadialMenu: class {},
+vi.mock('../src/ui/RadialActionMenu', () => ({
+  RadialActionMenu: class {},
 }));
 
 import { getUtilityHudDisplayName } from '../src/ui/ArenaHUD';
@@ -37,14 +37,14 @@ function createInputSystem(): InputSystem {
       activePointer: { x: 100, y: 0 },
     },
   };
-  const bridge = {};
+  const bridge = { getActiveGameMode: () => 'coop_defense' };
   return new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
 }
 
 describe('Inspector utility action HUD state', () => {
   it('uses the actual radial action label instead of a stale construction label', () => {
     expect(getUtilityHudDisplayName(undefined, 'dismantle')).toBe(t('ui.radial.dismantle'));
-    expect(getUtilityHudDisplayName(undefined, 'global-dismantle')).toBe(t('ui.radial.dismantleAll'));
+    expect(getUtilityHudDisplayName(undefined, 'dismantle-own-all')).toBe(t('ui.radial.dismantleAll'));
   });
 
   it('exposes global dismantle as a one-second utility charge while held', () => {
@@ -52,12 +52,16 @@ describe('Inspector utility action HUD state', () => {
     vi.setSystemTime(1_500);
     const system = createInputSystem();
     Object.assign(system as never as Record<string, unknown>, {
-      inspectorModeProvider: () => true,
-      inspectorGlobalDismantleSelected: true,
+      selectedRadialAction: { kind: 'management', action: 'dismantle-own-all' },
+      radialGetManagementActions: () => ['dismantle-own-all'],
+      radialGetCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
       globalDismantleHoldStartedAt: 1_000,
     });
 
-    expect(system.getSelectedInspectorUtilityActionForHud()).toBe('global-dismantle');
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'management',
+      action: 'dismantle-own-all',
+    });
     expect(system.isUtilityHudDisplayActive()).toBe(true);
     expect(system.isUtilityChargePreviewActive()).toBe(true);
     expect(system.getUtilityChargePreviewState()).toMatchObject({

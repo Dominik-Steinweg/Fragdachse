@@ -43,9 +43,9 @@ export type PersistentBaseCellDomain =
 /**
  * Regel, die den bebaubaren Bereich relativ zum persistenten Basisanker beschreibt.
  *
- * Der aktuelle Ausbau nutzt bewusst ein festes 3x3-Quadrat. Ein spaeterer Ausbau kann dieselbe
- * Schnittstelle mit einer radiusgesteuerten Zone verwenden, ohne Platzierung, Restore und
- * Darstellung erneut anpassen zu muessen.
+ * Die aktive Regel wird ausschliesslich aus der semantischen Area-Stufe aufgeloest: Stage 0 nutzt
+ * das feste 3x3-Quadrat, Stage 1 die zentrale Radius-5-Regel. Platzierung, Restore und Darstellung
+ * erhalten danach dieselbe aufgeloeste Geometrie.
  */
 export type PersistentBaseBuildArea =
   | { readonly kind: 'square'; readonly sizeCells: number }
@@ -82,7 +82,7 @@ export function resolvePersistentBaseBuildAreaForStage(
   }
 }
 
-/** Authoring-Grenze fuer Baubereiche; unbekannte Formen werden nicht still ersetzt. */
+/** Validierungsgrenze fuer aufgeloeste Baubereiche; unbekannte Formen werden nicht still ersetzt. */
 export function isPersistentBaseBuildArea(value: unknown): value is PersistentBaseBuildArea {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const candidate = value as { kind?: unknown; sizeCells?: unknown; radiusCells?: unknown };
@@ -101,22 +101,6 @@ export function isPersistentBaseBuildArea(value: unknown): value is PersistentBa
 /** Radius der Bounding-Box, die zum Iterieren ueber einen Baubereich benoetigt wird. */
 export function getPersistentBaseBuildAreaExtentCells(area: PersistentBaseBuildArea): number {
   return area.kind === 'square' ? (area.sizeCells - 1) / 2 : Math.ceil(area.radiusCells);
-}
-
-/**
- * Loest die authored Regel fuer eine World-Instanz auf.
- *
- * Ein authored Radius beschreibt nur die spaetere Regelart; sein aktiver Wert kommt aus dem
- * replizierten Progressionsradius. Das feste Quadrat bleibt davon unberuehrt.
- */
-export function resolvePersistentBaseBuildArea(
-  authoredBuildArea: PersistentBaseBuildArea | undefined,
-  activeRadiusCells: number,
-): PersistentBaseBuildArea {
-  const area = authoredBuildArea ?? DEFAULT_PERSISTENT_BASE_BUILD_AREA;
-  return area.kind === 'radius'
-    ? { kind: 'radius', radiusCells: activeRadiusCells }
-    : area;
 }
 
 /** True, wenn die relative Rasterzelle zum angegebenen Baubereich gehoert. */
@@ -321,8 +305,6 @@ export interface PersistentBaseCoreSite {
   readonly baseId: string;
   readonly anchor: PersistentBaseAnchor;
   readonly orientation?: PersistentBaseOrientation;
-  /** Ohne Angabe gilt der aktuelle 3x3-Innenhof; spaetere Stufen koennen einen Radius waehlen. */
-  readonly buildArea?: PersistentBaseBuildArea;
   readonly hpMax: number;
 }
 

@@ -29,6 +29,7 @@ import {
 } from '../src/utils/localPreferences';
 import { resolveBrowserLocale } from '../src/i18n/types';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
+import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 
 class MemoryStorage implements Storage {
@@ -91,10 +92,9 @@ describe('local progress generation', () => {
     expect(getStoredCoopDefenseProgress().totalXp).toBe(77);
   });
 
-  it('stores the V3 persistent base in the progress document and restores it through export/import', () => {
+  it('stores the persistent base in the progress document and restores it through export/import', () => {
     const state: PersistentBaseState = {
-      schemaVersion: 1,
-      radiusCells: 7,
+      schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
       revision: 4,
       constructions: [{
         persistentId: 'pb-test-1',
@@ -111,7 +111,11 @@ describe('local progress generation', () => {
     expect(exported.progress.schemaVersion).toBe(LOCAL_PROGRESS_SCHEMA_VERSION);
     expect(exported.progress.coopDefense.persistentBase).toEqual(state);
 
-    setStoredPersistentBaseState({ schemaVersion: 1, radiusCells: 5, revision: 0, constructions: [] });
+    setStoredPersistentBaseState({
+      schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
+      revision: 0,
+      constructions: [],
+    });
     expect(importStoredGameProgressJson(JSON.stringify(exported)).ok).toBe(true);
     expect(getStoredPersistentBaseState()).toEqual(state);
   });
@@ -232,7 +236,12 @@ describe('local progress generation', () => {
     });
 
     const corrupt = structuredClone(envelope);
-    corrupt.progress.coopDefense.persistentBase = { schemaVersion: 1, radiusCells: 99, revision: 0, constructions: [] };
+    corrupt.progress.coopDefense.persistentBase = {
+      schemaVersion: 1,
+      radiusCells: 99,
+      revision: 0,
+      constructions: [],
+    };
     expect(importStoredGameProgressJson(JSON.stringify(corrupt))).toEqual({
       ok: false,
       messageKey: 'ui.lobby.saveInvalid',
@@ -241,15 +250,13 @@ describe('local progress generation', () => {
 
   it('resets the persistent base with the character progress', () => {
     setStoredPersistentBaseState({
-      schemaVersion: 1,
-      radiusCells: 8,
+      schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
       revision: 3,
       constructions: [],
     });
     resetStoredCoopDefenseCharacter();
     expect(getStoredPersistentBaseState()).toEqual({
-      schemaVersion: 1,
-      radiusCells: 5,
+      schemaVersion: PERSISTENT_BASE_STATE_SCHEMA_VERSION,
       revision: 0,
       constructions: [],
     });
