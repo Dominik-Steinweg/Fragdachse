@@ -177,7 +177,15 @@ export class RpcCoordinator {
   }
 
   private registerHeldActionHandler(): void {
-    bridge.registerHeldActionHandler((playerId, operation, actionId, kind, _durationMs, toolRef) => {
+    bridge.registerHeldActionHandler((
+      playerId,
+      operation,
+      actionId,
+      kind,
+      _durationMs,
+      toolRef,
+      temporaryUtilityInstanceId,
+    ) => {
       if (!bridge.isHost()) return false;
       const system = this.ctx.hostHeldActionSystem;
       if (!system) return false;
@@ -191,10 +199,11 @@ export class RpcCoordinator {
         || this.ctx.burrowSystem?.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
-        if (toolRef || !this.hasActiveConstructionTool(playerId)) return false;
+        if (toolRef || temporaryUtilityInstanceId || !this.hasActiveConstructionTool(playerId)) return false;
         return system.start(playerId, actionId, kind, 1_000, Date.now());
       }
       let utility: UtilityConfig | undefined;
+      if (toolRef && temporaryUtilityInstanceId) return false;
       if (toolRef) {
         const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
         if (toolRef.kind === 'construction') return false;
@@ -207,6 +216,8 @@ export class RpcCoordinator {
           toolRef.id,
           bridge.getActiveGameMode(),
         );
+      } else if (temporaryUtilityInstanceId) {
+        utility = this.ctx.loadoutManager?.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
       } else {
         utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
       }
@@ -224,8 +235,18 @@ export class RpcCoordinator {
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       let authoritativeParams = params;
+      const temporaryUtilityInstanceId = params?.temporaryUtilityInstanceId;
+      if (temporaryUtilityInstanceId !== undefined
+        && (slot !== 'utility'
+          || typeof temporaryUtilityInstanceId !== 'string'
+          || temporaryUtilityInstanceId.length === 0
+          || temporaryUtilityInstanceId.length > 80
+          || temporaryUtilityInstanceId.trim() !== temporaryUtilityInstanceId)) {
+        return { ok: false, reason: 'invalid' };
+      }
       if (params?.globalDismantle) {
         if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle
+          || params.temporaryUtilityInstanceId
           || !this.hasActiveConstructionTool(senderId)) {
           return { ok: false, reason: 'invalid' };
         }
@@ -242,19 +263,19 @@ export class RpcCoordinator {
       }
       // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
       if (params?.dismantle) {
-        if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined) {
+        if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined
+          || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
         return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)
           ?? { ok: false, reason: 'blocked' };
       }
       if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
-        && slot === 'utility' && !params?.toolRef
-        && bridge.getPlayerUtilityOverrideId(senderId) === '') {
+        && slot === 'utility' && !params?.toolRef && !params?.temporaryUtilityInstanceId) {
         return { ok: false, reason: 'blocked' };
       }
       if (params?.toolRef) {
-        if (slot !== 'utility') {
+        if (slot !== 'utility' || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
         if (params.toolRef.kind === 'construction') {
@@ -290,7 +311,12 @@ export class RpcCoordinator {
         ) ?? { ok: false, reason: 'blocked' };
       }
       if (slot === 'utility') {
-        const utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(senderId);
+        const utility = params?.temporaryUtilityInstanceId
+          ? this.ctx.loadoutManager?.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
+          : this.ctx.loadoutManager?.getEquippedUtilityConfig(senderId);
+        if (params?.temporaryUtilityInstanceId && !utility) {
+          return { ok: false, reason: 'invalid' };
+        }
         const isTranslocatorRecall = utility?.type === 'translocator'
           && this.ctx.translocatorSystem?.getActivePuckId(senderId) !== undefined;
         if (isTranslocatorRecall) {

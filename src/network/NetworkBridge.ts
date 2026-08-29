@@ -96,7 +96,7 @@ import { sanitizeCoopDefenseUpgradeProfile } from '../utils/coopDefenseUpgrades'
 import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
-import type { UtilityOverrideDescriptor } from '../types';
+import type { TemporaryUtilityInstanceDescriptor } from '../types';
 import {
   canRoundPlayerReceiveRewards,
   canRoundPlayerSpawnOrRespawn,
@@ -184,8 +184,8 @@ const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitS
 const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufender Live-Build {c: classId, p: profile, i: items, t: tool refs}
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
-const KEY_UTILITY_OVERRIDE_ID = 'uon'; // per-player: string (stable utility ID, empty = no override)
-const KEY_UTILITY_OVERRIDE_DESCRIPTOR = 'uod'; // per-player: mission override metadata or null
+const KEY_HELD_UTILITY_ID = 'hui'; // per-player: konkrete zuletzt erfolgreich verwendete Utility-ID
+const KEY_TEMPORARY_UTILITIES = 'tus'; // per-player reliable: TemporaryUtilityInstanceDescriptor[]
 const KEY_ADR_SYRINGE  = 'asr';   // per-player: boolean (Adrenalinspritze aktiv, regen multiplier > 1)
 const KEY_ACTIVE_BUFFS = 'abf';   // per-player: {defId,remainingFrac}[] (aktive Buffs für HUD)
 const KEY_SHIELD_BUFF  = 'sbf';   // per-player: ShieldBuffHudState (HUD-State des Energie-Schild-Buffs)
@@ -717,6 +717,7 @@ export class NetworkBridge {
     kind?: HostHeldActionKind,
     durationMs?: number,
     toolRef?: LoadoutToolRef,
+    temporaryUtilityInstanceId?: string,
   ) => boolean) | null = null;
   private explosionEffectHandler: ExplosionEffectHandler | null = null;
   private slimeBloomEffectHandler: SlimeBloomEffectHandler | null = null;
@@ -2980,13 +2981,34 @@ export class NetworkBridge {
 
   // ── Loadout-RPC: Client → Host ────────────────────────────────────────────
 
-  sendHeldActionStart(actionId: string, kind: HostHeldActionKind, durationMs: number, toolRef?: LoadoutToolRef): void {
+  sendHeldActionStart(
+    actionId: string,
+    kind: HostHeldActionKind,
+    durationMs: number,
+    toolRef?: LoadoutToolRef,
+    temporaryUtilityInstanceId?: string,
+  ): void {
     if (this.getWorldActionRevision() === null) return;
     if (isHost()) {
-      this.heldActionHandler?.(myPlayer().id, 'start', actionId, kind, durationMs, toolRef);
+      this.heldActionHandler?.(
+        myPlayer().id,
+        'start',
+        actionId,
+        kind,
+        durationMs,
+        toolRef,
+        temporaryUtilityInstanceId,
+      );
       return;
     }
-    this.sendWorldRpc('hact', { op: 'start', aid: actionId, kind, dur: durationMs, toolRef });
+    this.sendWorldRpc('hact', {
+      op: 'start',
+      aid: actionId,
+      kind,
+      dur: durationMs,
+      toolRef,
+      tui: temporaryUtilityInstanceId,
+    });
   }
 
   sendHeldActionCancel(actionId: string): void {
@@ -3006,17 +3028,19 @@ export class NetworkBridge {
       kind?: HostHeldActionKind,
       durationMs?: number,
       toolRef?: LoadoutToolRef,
+      temporaryUtilityInstanceId?: string,
     ) => boolean,
   ): void {
     this.heldActionHandler = handler;
     this.registerHostRpcHandler('hact', (data: unknown, caller: PlayerState): boolean => {
       if (!isHost() || !this.acceptsWorldRpc(data)) return false;
-      const { op, aid, kind, dur, toolRef: rawToolRef } = data as {
+      const { op, aid, kind, dur, toolRef: rawToolRef, tui } = data as {
         op?: unknown;
         aid?: unknown;
         kind?: unknown;
         dur?: unknown;
         toolRef?: unknown;
+        tui?: unknown;
       };
       if ((op !== 'start' && op !== 'cancel')
         || typeof aid !== 'string' || aid.length === 0 || aid.length > 80 || aid.trim() !== aid) return false;
@@ -3030,7 +3054,17 @@ export class NetworkBridge {
       const toolRef = rawToolRef === undefined
         ? undefined
         : { kind: 'utility' as const, id: (rawToolRef as { id: string }).id };
-      return this.heldActionHandler?.(caller.id, op, aid, kind, dur, toolRef) === true;
+      if (tui !== undefined && (typeof tui !== 'string' || tui.length === 0 || tui.length > 80)) return false;
+      if (toolRef !== undefined && tui !== undefined) return false;
+      return this.heldActionHandler?.(
+        caller.id,
+        op,
+        aid,
+        kind,
+        dur,
+        toolRef,
+        tui as string | undefined,
+      ) === true;
     });
   }
 
@@ -4106,59 +4140,74 @@ export class NetworkBridge {
    * Loadout-Item-ID, die die Figur eines Spielers sichtbar traegt, oder `null`.
    *
    * Der verbindliche Ready-Snapshot hat Vorrang vor der laufenden Lobby-Auswahl: waehrend einer
-   * Runde zaehlt, womit der Spieler angetreten ist. Ein temporaeres Utility-Override (Heilige
-   * Handgranate, Missions-Item) ersetzt den Utility-Slot, weil genau dieses Item geworfen wird.
+   * Runde zaehlt, womit der Spieler angetreten ist. Bei einer temporaeren Utility-Instanz liefert
+   * der separate Held-State dagegen die konkret verwendete Utility-ID.
    */
   getPlayerHeldItemId(playerId: string): string | null {
     const slot = this.getPlayerHeldItemSlot(playerId);
     if (slot === 'utility') {
-      const override = this.getPlayerUtilityOverrideDescriptor(playerId);
-      if (override?.kind === 'utility') return override.utilityId;
+      const heldUtilityId = this.playerStateMap.get(playerId)?.getState(KEY_HELD_UTILITY_ID);
+      if (typeof heldUtilityId === 'string' && heldUtilityId.length > 0) return heldUtilityId;
     }
     return this.getPlayerCommittedLoadoutSlot(playerId, slot)
       ?? this.getPlayerLoadoutSlot(playerId, slot)
       ?? null;
   }
 
-  /** Host-only: Publishes the stable ID of a temporary utility override. */
-  publishUtilityOverrideId(playerId: string, utilityId: string): void {
+  /** Host-only: Publiziert die konkrete Utility-ID des kurzen Held-Item-Fensters. */
+  publishHeldUtilityId(playerId: string, utilityId: string): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
-    ps.setState(KEY_UTILITY_OVERRIDE_ID, utilityId, true);
+    ps.setState(KEY_HELD_UTILITY_ID, utilityId, true);
   }
 
-  /** Reads the current stable utility override ID (empty = no override). */
-  getPlayerUtilityOverrideId(playerId: string): string {
-    return (this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_ID) as string | undefined) ?? '';
-  }
-
-  /** Host-only: Publishes the metadata required to reconstruct a temporary utility override. */
-  publishUtilityOverrideDescriptor(playerId: string, descriptor: UtilityOverrideDescriptor | null): void {
+  /** Host-only: Repliziert die vollstaendige, geordnete Temporary-Utility-Collection. */
+  publishTemporaryUtilityInstances(
+    playerId: string,
+    instances: readonly TemporaryUtilityInstanceDescriptor[],
+  ): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
     if (!ps) return;
-    ps.setState(KEY_UTILITY_OVERRIDE_DESCRIPTOR, descriptor, true);
+    ps.setState(KEY_TEMPORARY_UTILITIES, instances.map((instance) => ({ ...instance })), true);
   }
 
-  /** Reads the authoritative temporary utility override, if one is active. */
-  getPlayerUtilityOverrideDescriptor(playerId: string): UtilityOverrideDescriptor | null {
-    const value = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_OVERRIDE_DESCRIPTOR);
-    if (!isRecord(value) || typeof value.kind !== 'string') return null;
-    if (value.kind === 'utility') {
-      if (typeof value.utilityId !== 'string' || value.utilityId.length === 0) return null;
-      return { kind: 'utility', utilityId: value.utilityId };
-    }
-    if (value.kind === 'objective-placement') {
-      if (typeof value.objectiveId !== 'string' || value.objectiveId.length === 0
-        || typeof value.powerUpDefId !== 'string' || value.powerUpDefId.length === 0) return null;
-      return {
-        kind: 'objective-placement',
-        objectiveId: value.objectiveId,
-        powerUpDefId: value.powerUpDefId,
+  /** Liest eine validierte Projektion der host-autoritativen Temporary-Utility-Collection. */
+  getPlayerTemporaryUtilityInstances(playerId: string): TemporaryUtilityInstanceDescriptor[] {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_TEMPORARY_UTILITIES);
+    if (!Array.isArray(value)) return [];
+    return value.flatMap((raw): TemporaryUtilityInstanceDescriptor[] => {
+      if (!isRecord(raw)
+        || (raw.kind !== 'utility' && raw.kind !== 'objective-placement')
+        || typeof raw.instanceId !== 'string' || raw.instanceId.length === 0
+        || typeof raw.utilityId !== 'string' || raw.utilityId.length === 0
+        || !Number.isSafeInteger(raw.charges) || (raw.charges as number) <= 0
+        || !isFiniteNumber(raw.cooldownUntil) || (raw.cooldownUntil as number) < 0
+        || !isFiniteNumber(raw.cooldownDurationMs) || (raw.cooldownDurationMs as number) < 0
+        || !Number.isSafeInteger(raw.acquisitionOrder) || (raw.acquisitionOrder as number) < 0) {
+        return [];
+      }
+      const common = {
+        instanceId: raw.instanceId,
+        utilityId: raw.utilityId,
+        charges: raw.charges as number,
+        cooldownUntil: raw.cooldownUntil as number,
+        cooldownDurationMs: raw.cooldownDurationMs as number,
+        acquisitionOrder: raw.acquisitionOrder as number,
       };
-    }
-    return null;
+      if (raw.kind === 'objective-placement') {
+        if (typeof raw.objectiveId !== 'string' || raw.objectiveId.length === 0
+          || typeof raw.powerUpDefId !== 'string' || raw.powerUpDefId.length === 0) return [];
+        return [{
+          ...common,
+          kind: 'objective-placement',
+          objectiveId: raw.objectiveId,
+          powerUpDefId: raw.powerUpDefId,
+        }];
+      }
+      return [{ ...common, kind: 'utility' }];
+    }).sort((left, right) => left.acquisitionOrder - right.acquisitionOrder);
   }
 
   /** Host-only: Publiziert ob die Adrenalinspritze eines Spielers aktiv ist. */

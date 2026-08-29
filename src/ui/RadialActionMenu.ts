@@ -148,6 +148,15 @@ export class RadialActionMenu {
         }).setOrigin(0.5).setAlpha(available ? (active ? 1 : 0.75) : 0.9));
         detailY += 10;
       }
+      if (entry.charges !== undefined) {
+        this.container.add(this.scene.add.text(labelX, detailY, `×${entry.charges}`, {
+          fontSize: '8px',
+          fontFamily: 'monospace',
+          fontStyle: 'bold',
+          color: toCssColor(entry.disabledReason === 'no-charges' ? COLORS.RED_2 : COLORS.GOLD_2),
+        }).setOrigin(0.5).setAlpha(available ? (active ? 1 : 0.8) : 0.9));
+        detailY += 10;
+      }
       if (cooldownActive) {
         this.container.add(this.scene.add.text(labelX, detailY, t('ui.radial.cooldown', {
           seconds: formatNumber(cooldownRemaining / 1000, getLocale(), {

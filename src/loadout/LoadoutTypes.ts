@@ -662,7 +662,7 @@ export interface PlaceablePedestalPlacementConfig extends PlaceablePlacementConf
   readonly kind: 'pedestal';
 }
 
-/** Einmaliger Missions-Override: setzt genau ein Runtime-PowerUp-Podest. */
+/** Einmalige Missions-Utility: setzt genau ein Runtime-PowerUp-Podest. */
 export interface PlaceablePedestalUtilityConfig extends BaseUtilityConfig {
   readonly type: 'placeable_pedestal';
   readonly activation: PlacementModeUtilityActivationConfig;

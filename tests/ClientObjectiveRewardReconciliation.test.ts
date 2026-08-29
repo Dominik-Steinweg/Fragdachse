@@ -14,6 +14,7 @@ import { createCoopDefensePlaceablePedestalUtility } from '../src/loadout/CoopDe
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { bridge } from '../src/network/bridge';
 import { ClientUpdateCoordinator } from '../src/scenes/arena/ClientUpdateCoordinator';
+import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS } from '../src/utils/coopDefenseStats';
 
 const MISSION_PICKUP = {
   uid: 7,
@@ -36,14 +37,15 @@ function makeCoordinator(): ClientUpdateCoordinator & {
   };
   coordinator.pickupCooldownUntil = 0;
   coordinator.pendingPickupUids = new Set();
-  coordinator.clientUtilityOverride = null;
   coordinator.ctx = {
     playerManager: {
       getPlayer: () => (fakeEntity({ active: true, x: 0, y: 0 })),
     },
     burrowSystem: null,
     leftPanel: { flashSlot: vi.fn() },
+    inputSystem: { getSelectedRadialActionForHud: vi.fn(() => null) },
   };
+  (coordinator as any).getLocalEffectTotals = () => EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
   return coordinator;
 }
 
@@ -60,64 +62,59 @@ function deferred<T>() {
 describe('B6 client mission reward reconciliation', () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it('does not create a local override when the host rejects the claim', async () => {
+  it('does not create local temporary state when the host rejects the claim', async () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
     vi.spyOn(bridge, 'isHost').mockReturnValue(false);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('');
     vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(false);
     const coordinator = makeCoordinator();
 
     (coordinator as any).checkLocalPickup([MISSION_PICKUP]);
     await Promise.resolve();
 
-    expect(coordinator.clientUtilityOverride).toBeNull();
+    expect(coordinator.pendingPickupUids).not.toContain(MISSION_PICKUP.uid);
   });
 
-  it('reconstructs the mission utility only from the accepted host descriptor', async () => {
+  it('reconstructs the mission utility only from the host collection entry', async () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
     vi.spyOn(bridge, 'isHost').mockReturnValue(false);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('');
     vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(true);
     const coordinator = makeCoordinator();
 
     (coordinator as any).checkLocalPickup([MISSION_PICKUP]);
     await Promise.resolve();
-    expect(coordinator.clientUtilityOverride).toBeNull();
-
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
-      kind: 'objective-placement',
+    const instance = {
+      kind: 'objective-placement' as const,
+      instanceId: 'temporary-utility-1',
+      utilityId: 'COOP_DEFENSE_MISSION_PEDESTAL:hold-placement-reward-test',
+      charges: 1,
+      cooldownUntil: 0,
+      cooldownDurationMs: 0,
+      acquisitionOrder: 0,
       objectiveId: 'hold-placement-reward-test',
       powerUpDefId: 'HOLY_HAND_GRENADE',
+    };
+    vi.spyOn(bridge, 'getPlayerTemporaryUtilityInstances').mockReturnValue([instance]);
+    coordinator.ctx.inputSystem.getSelectedRadialActionForHud.mockReturnValue({
+      kind: 'temporary-utility', instanceId: instance.instanceId, utilityId: instance.utilityId,
     });
-    (coordinator as any).reconcileClientUtilityOverride();
-    expect(coordinator.clientUtilityOverride).toEqual(
+
+    expect(coordinator.getLocalUtilityConfig()).toEqual(
       createCoopDefensePlaceablePedestalUtility('hold-placement-reward-test', 'HOLY_HAND_GRENADE'),
     );
   });
 
-  it('keeps a carried mission override after a failed placement and clears it on host release', () => {
+  it('falls back when the selected temporary instance is no longer host-confirmed', () => {
     vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
-    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('ARENA');
-    vi.spyOn(bridge, 'canPlayerAct').mockReturnValue(true);
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('COOP_DEFENSE_MISSION_PEDESTAL:hold-placement-reward-test');
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
-      kind: 'objective-placement',
-      objectiveId: 'hold-placement-reward-test',
-      powerUpDefId: 'HOLY_HAND_GRENADE',
-    });
+    vi.spyOn(bridge, 'getPlayerTemporaryUtilityInstances').mockReturnValue([]);
     const coordinator = makeCoordinator();
-    coordinator.clientUtilityOverride = createCoopDefensePlaceablePedestalUtility(
-      'hold-placement-reward-test',
-      'HOLY_HAND_GRENADE',
-    );
+    coordinator.ctx.inputSystem.getSelectedRadialActionForHud.mockReturnValue({
+      kind: 'temporary-utility', instanceId: 'gone', utilityId: 'BFG',
+    });
+    vi.spyOn(bridge, 'getActiveGameMode').mockReturnValue('deathmatch');
+    vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue(null);
+    vi.spyOn(bridge, 'getPlayerLobbyLoadoutPreview').mockReturnValue(null);
 
-    coordinator.notifyUtilityFired();
-    expect(coordinator.clientUtilityOverride?.type).toBe('placeable_pedestal');
-
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideId').mockReturnValue('');
-    vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue(null);
-    (coordinator as any).reconcileClientUtilityOverride();
-    expect(coordinator.clientUtilityOverride).toBeNull();
+    expect(coordinator.getLocalUtilityConfig()).toEqual(UTILITY_CONFIGS.HE_GRENADE);
   });
 
   describe('generischer Pickup-Pfad', () => {
@@ -134,8 +131,6 @@ describe('B6 client mission reward reconciliation', () => {
 
       expect(send).toHaveBeenCalledOnce();
       expect(tryPickup).not.toHaveBeenCalled();
-      expect(coordinator.clientUtilityOverride).toBeNull();
-
       ack.resolve(true);
       await Promise.resolve();
     });
@@ -172,8 +167,8 @@ describe('B6 client mission reward reconciliation', () => {
     });
   });
 
-  describe('temporäre Utility-Overrides', () => {
-    it.each(['BFG', 'HOLY_HAND_GRENADE'])('rekonstruiert %s erst aus dem Host-Descriptor', async (utilityId) => {
+  describe('temporäre Utility-Instanzen', () => {
+    it.each(['BFG', 'HOLY_HAND_GRENADE'])('rekonstruiert %s erst aus der Host-Collection', async (utilityId) => {
       vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
       vi.spyOn(bridge, 'isHost').mockReturnValue(false);
       vi.spyOn(bridge, 'getGameMode').mockReturnValue('deathmatch');
@@ -183,42 +178,53 @@ describe('B6 client mission reward reconciliation', () => {
       const coordinator = makeCoordinator();
 
       (coordinator as any).checkLocalPickup([makePickup(utilityId)]);
-      expect(coordinator.clientUtilityOverride).toBeNull();
 
       ack.resolve(true);
       await Promise.resolve();
-      expect(coordinator.clientUtilityOverride).toBeNull();
-
-      vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue({
+      vi.spyOn(bridge, 'getPlayerTemporaryUtilityInstances').mockReturnValue([{
         kind: 'utility',
+        instanceId: 'temporary-utility-2',
         utilityId,
+        charges: 1,
+        cooldownUntil: 0,
+        cooldownDurationMs: UTILITY_CONFIGS[utilityId].cooldown,
+        acquisitionOrder: 0,
+      }]);
+      coordinator.ctx.inputSystem.getSelectedRadialActionForHud.mockReturnValue({
+        kind: 'temporary-utility', instanceId: 'temporary-utility-2', utilityId,
       });
-      (coordinator as any).reconcileClientUtilityOverride();
-      expect(coordinator.clientUtilityOverride).toEqual(UTILITY_CONFIGS[utilityId]);
+      expect(coordinator.getLocalUtilityConfig()).toEqual(UTILITY_CONFIGS[utilityId]);
     });
 
-    it('erzeugt bei abgelehntem Utility-Pickup keinen Override', async () => {
+    it('erzeugt bei abgelehntem Utility-Pickup keine lokale Instanz', async () => {
       vi.spyOn(bridge, 'getLocalPlayerId').mockReturnValue('player-a');
       vi.spyOn(bridge, 'isHost').mockReturnValue(false);
       vi.spyOn(bridge, 'sendPickupPowerUp').mockResolvedValue(false);
-      vi.spyOn(bridge, 'getPlayerUtilityOverrideDescriptor').mockReturnValue(null);
+      vi.spyOn(bridge, 'getPlayerTemporaryUtilityInstances').mockReturnValue([]);
       const coordinator = makeCoordinator();
 
       (coordinator as any).checkLocalPickup([makePickup('BFG')]);
       await Promise.resolve();
-      (coordinator as any).reconcileClientUtilityOverride();
-
-      expect(coordinator.clientUtilityOverride).toBeNull();
+      expect(bridge.getPlayerTemporaryUtilityInstances('player-a')).toEqual([]);
     });
 
-    it('entfernt einen Utility-Override nicht lokal vor der Host-Bestätigung des Einsatzes', () => {
+    it('entfernt eine Instanz nicht lokal vor der Host-Bestätigung des Einsatzes', () => {
       vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
       const coordinator = makeCoordinator();
-      coordinator.clientUtilityOverride = UTILITY_CONFIGS.BFG;
+      const instances = [{
+        kind: 'utility' as const,
+        instanceId: 'temporary-utility-3',
+        utilityId: 'BFG',
+        charges: 1,
+        cooldownUntil: 0,
+        cooldownDurationMs: UTILITY_CONFIGS.BFG.cooldown,
+        acquisitionOrder: 0,
+      }];
+      vi.spyOn(bridge, 'getPlayerTemporaryUtilityInstances').mockReturnValue(instances);
 
       coordinator.notifyUtilityFired();
 
-      expect(coordinator.clientUtilityOverride).toBe(UTILITY_CONFIGS.BFG);
+      expect(bridge.getPlayerTemporaryUtilityInstances('player-a')).toEqual(instances);
     });
   });
 });

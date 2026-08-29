@@ -904,8 +904,7 @@ export class HostUpdateCoordinator {
       const now = Date.now();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
       const gameMode = bridge.getActiveGameMode();
-      const hasUtilityOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
-      const radialAction = hasUtilityOverride ? null : this.ctx.inputSystem.getSelectedRadialActionForHud();
+      const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
       const managementAction = radialAction?.kind === 'management' ? radialAction.action : null;
       const rewardId = radialAction?.kind === 'persistent-reward' ? radialAction.rewardId : null;
       const selectedTool = radialAction?.kind === 'construction'
@@ -916,9 +915,11 @@ export class HostUpdateCoordinator {
       const selectedUtilityBase = selectedTool?.kind === 'utility'
         ? getUtilityConfigForMode(selectedTool.id, gameMode)
         : undefined;
-      const selectedUtility = selectedUtilityBase
-        ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedUtilityBase) ?? selectedUtilityBase
-        : undefined;
+      const selectedUtility = radialAction?.kind === 'temporary-utility'
+        ? this.ctx.loadoutManager?.getTemporaryUtilityConfig(localId, radialAction.instanceId)
+        : selectedUtilityBase
+          ? this.ctx.loadoutManager?.resolveUtilityConfig(localId, selectedUtilityBase) ?? selectedUtilityBase
+          : undefined;
       const selectedConstruction = selectedTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedTool.id)
         : undefined;
@@ -967,7 +968,7 @@ export class HostUpdateCoordinator {
         persistentBaseRewardId:   rewardId ?? undefined,
         utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
-        isUtilityOverridden:     bridge.getPlayerUtilityOverrideId(localId) !== '',
+        isUtilityOverridden:     radialAction?.kind === 'temporary-utility',
         activePowerUps:          [
           ...activePowerUps,
           ...(teamBuff ? [teamBuff] : []),
@@ -2478,9 +2479,15 @@ export class HostUpdateCoordinator {
 
   private getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '';
-    const radialAction = hasOverride ? null : this.ctx.inputSystem.getSelectedRadialActionForHud();
+    const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'management' || radialAction?.kind === 'persistent-reward') return 0;
+    if (radialAction?.kind === 'temporary-utility') {
+      const descriptor = bridge.getPlayerTemporaryUtilityInstances(localId)
+        .find((instance) => instance.instanceId === radialAction.instanceId);
+      if (!descriptor || descriptor.cooldownDurationMs <= 0) return 0;
+      const remaining = descriptor.cooldownUntil - bridge.getSynchronizedNow();
+      return remaining <= 0 ? 0 : Math.min(1, remaining / descriptor.cooldownDurationMs);
+    }
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
     const fallbackConfig = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);

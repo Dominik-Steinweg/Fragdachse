@@ -1250,18 +1250,13 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setup();
     inputSystem.setAudioSystem(gameAudioSystem);
     inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
-    inputSystem.setupUtilityCooldownProvider(() => {
-      return bridge.getPlayerUtilityCooldownUntil(
-        bridge.getLocalPlayerId(),
-        this.clientUpdate.getLocalUtilityCooldownId(),
-      );
-    });
+    inputSystem.setupUtilityCooldownProvider(() => this.clientUpdate.getLocalUtilityCooldownUntil());
     inputSystem.setupRadialActionProviders(
       () => {
-        if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
         const localId = bridge.getLocalPlayerId();
         const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
-        return currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+        return isCoopDefenseMode(bridge.getActiveGameMode())
+          && currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
           ? this.clientUpdate.getLocalInspectorTools()
           : currentLoadout?.utility
             ? [{ kind: 'utility' as const, id: currentLoadout.utility }]
@@ -1270,8 +1265,6 @@ export class ArenaScene extends Phaser.Scene {
       () => this.clientUpdate.getLocalInspectorSelectedTool(),
       (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
       () => bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
-      () => bridge.getPlayerUtilityOverrideId(bridge.getLocalPlayerId()) !== ''
-        || this.clientUpdate.clientUtilityOverride !== null,
       // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
       // belegte Baukapazitaet lokal berechnet werden. Das Maximum kommt aus denselben
       // Effekt-Summen wie das HUD, damit das Radialmenue nichts als baubar anzeigt, was das
@@ -1325,6 +1318,9 @@ export class ArenaScene extends Phaser.Scene {
           ? ['dismantle', 'dismantle-own-all'] as const
           : [];
       },
+    );
+    inputSystem.setupTemporaryUtilityProvider(
+      () => bridge.getPlayerTemporaryUtilityInstances(bridge.getLocalPlayerId()),
     );
     inputSystem.setupPersistentRewardActionProvider(
       () => {
@@ -1462,10 +1458,11 @@ export class ArenaScene extends Phaser.Scene {
       const cooldownId = selected?.kind === 'construction'
         ? selected.constructionId
         : this.clientUpdate.getLocalUtilityCooldownId();
-      const cooldownUntil = bridge.getPlayerUtilityCooldownUntil(localId, cooldownId);
+      const cooldownUntil = selected?.kind === 'temporary-utility'
+        ? this.clientUpdate.getLocalUtilityCooldownUntil()
+        : bridge.getPlayerUtilityCooldownUntil(localId, cooldownId);
       const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
-      const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUpdate.clientUtilityOverride !== null;
-      const cooldown = selected?.kind === 'construction' && !hasOverride
+      const cooldown = selected?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selected.constructionId).buildCooldownMs
         : config.cooldown;
       const frac          = cooldown > 0 ? Math.min(1, remaining / cooldown) : 0.8;
@@ -1551,8 +1548,10 @@ export class ArenaScene extends Phaser.Scene {
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
         const config = this.clientUpdate.getLocalUtilityConfig();
         const utilityId = this.clientUpdate.getLocalUtilityCooldownId();
-        const utilityCooldownUntil = bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
-        if (utilityCooldownUntil > Date.now()) {
+        const utilityCooldownUntil = params?.temporaryUtilityInstanceId
+          ? this.clientUpdate.getLocalUtilityCooldownUntil()
+          : bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
+        if (utilityCooldownUntil > bridge.getSynchronizedNow()) {
           if (inputStarted) {
             const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;
             gameAudioSystem.playLocalSound(utilityShotAudio?.failureKey);
@@ -1591,11 +1590,13 @@ export class ArenaScene extends Phaser.Scene {
           && params?.tunnelAction === 'commit';
       const isInspectorConstructionAction = params?.toolRef?.kind === 'construction';
       const isInspectorUtilityAction = params?.toolRef?.kind === 'utility';
+      const isTemporaryUtilityAction = params?.temporaryUtilityInstanceId !== undefined;
       const isInspectorDismantleAction = params?.dismantle === true;
       const awaitResult = isUtilityPlacementAction
         || isUltimatePlacementAction
         || isInspectorConstructionAction
         || isInspectorUtilityAction
+        || isTemporaryUtilityAction
         || isInspectorDismantleAction;
       const awaitFailureResult = inputStarted
         && !params?.constructionId

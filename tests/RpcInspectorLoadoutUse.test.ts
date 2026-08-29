@@ -6,7 +6,6 @@ const bridgeMock = vi.hoisted(() => ({
   getGamePhase: vi.fn(() => 'ARENA'),
   getGameMode: vi.fn(() => 'coop_defense'),
   getActiveGameMode: vi.fn(() => 'coop_defense'),
-  getPlayerUtilityOverrideId: vi.fn(() => ''),
   getPlayerCommittedLoadout: vi.fn(),
   getPlayerCurrentLoadoutSnapshot: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
@@ -44,6 +43,7 @@ type HeldActionHandler = (
   kind?: HostHeldActionKind,
   durationMs?: number,
   toolRef?: LoadoutToolRef,
+  temporaryUtilityInstanceId?: string,
 ) => boolean;
 
 const INSPECTOR_COMMITTED = {
@@ -65,9 +65,12 @@ function createFixture() {
   const start = vi.fn(() => true);
   const clearPlayer = vi.fn();
   const getEquippedUtilityConfig = vi.fn(() => UTILITY_CONFIGS.HE_GRENADE);
+  const getTemporaryUtilityConfig = vi.fn((_playerId: string, instanceId: string) => (
+    instanceId === 'temporary-utility-7' ? UTILITY_CONFIGS.BFG : null
+  ));
   const use = vi.fn((): LoadoutUseResult => ({ ok: true }));
   const ctx = {
-    loadoutManager: { getEquippedUtilityConfig, use },
+    loadoutManager: { getEquippedUtilityConfig, getTemporaryUtilityConfig, use },
     hostHeldActionSystem: { consume, start, clearPlayer },
     translocatorSystem: { getActivePuckId: vi.fn(() => undefined) },
     combatSystem: { isAlive: vi.fn(() => true) },
@@ -100,7 +103,7 @@ function createFixture() {
   );
   coordinator.setLifecycle(lifecycle as never);
 
-  return { coordinator, ctx, lifecycle, consume, start, getEquippedUtilityConfig, use };
+  return { coordinator, ctx, lifecycle, consume, start, getEquippedUtilityConfig, getTemporaryUtilityConfig, use };
 }
 
 function registerLoadoutHandler(coordinator: RpcCoordinator): LoadoutHandler {
@@ -121,7 +124,6 @@ beforeEach(() => {
   bridgeMock.isArenaCountdownActive.mockReturnValue(false);
   bridgeMock.getGamePhase.mockReturnValue('ARENA');
   bridgeMock.getGameMode.mockReturnValue('coop_defense');
-  bridgeMock.getPlayerUtilityOverrideId.mockReturnValue('');
   bridgeMock.getPlayerCommittedLoadout.mockReturnValue(INSPECTOR_COMMITTED);
   bridgeMock.getPlayerCurrentLoadoutSnapshot.mockImplementation(() => bridgeMock.getPlayerCommittedLoadout());
 });
@@ -237,6 +239,39 @@ describe('Inspector loadout-use RPC classification', () => {
       'charged_gate',
       getUtilityConfigForMode('BFG', 'coop_defense')?.activation.fullChargeDuration,
       expect.any(Number),
+    );
+  });
+
+  it('validates and routes a temporary utility by instance identity', () => {
+    const fixture = createFixture();
+    fixture.consume.mockReturnValue({ elapsedMs: 900, chargeFraction: 1 });
+    const handler = registerLoadoutHandler(fixture.coordinator);
+
+    const result = handler('utility', 0, 220, 180, 'p1', undefined, {
+      temporaryUtilityInstanceId: 'temporary-utility-7',
+      heldActionId: 'temporary-bfg-action',
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(fixture.getTemporaryUtilityConfig).toHaveBeenCalledWith('p1', 'temporary-utility-7');
+    expect(fixture.consume).toHaveBeenCalledWith(
+      'p1',
+      'temporary-bfg-action',
+      'charged_gate',
+      UTILITY_CONFIGS.BFG.activation.fullChargeDuration,
+      expect.any(Number),
+    );
+    expect(fixture.use).toHaveBeenCalledWith(
+      'utility',
+      'p1',
+      0,
+      220,
+      180,
+      expect.any(Number),
+      undefined,
+      expect.objectContaining({ temporaryUtilityInstanceId: 'temporary-utility-7' }),
+      undefined,
+      undefined,
     );
   });
 });

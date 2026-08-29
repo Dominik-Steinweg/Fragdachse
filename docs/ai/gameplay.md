@@ -43,6 +43,8 @@ Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody i
 
 World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem Handler zentral geprüft. Activity- oder Round-Aktionen erhalten zusätzlich die fachlich nötige Activity-/Round-Identität. Ein alter Client kann so weder nach einem World-Wechsel noch nach einem Activity-Wechsel veraltete Aktionen ausführen.
 
+Temporäre Utilities sind keine Mutation des ausgerüsteten Utility-Slots. [TemporaryUtilityCollection.ts](../../src/loadout/TemporaryUtilityCollection.ts) besitzt hostseitig jede Aufnahme als eigene Instanz mit stabiler `instanceId`, Erwerbsreihenfolge, Charges und Cooldown. Auswahl, Use-RPC, Radialzustand und Objective-Placement referenzieren diese Instanzidentität; mehrere Instanzen desselben Utility-Typs bleiben deshalb unabhängig. Clients rekonstruieren daraus nur Präsentation und Auswahl und erzeugen weder beim Pickup-ACK noch beim lokalen Einsatz eigenen Bestand.
+
 Für ein neues Eingabefeld oder eine neue Aktion zuerst festlegen:
 
 - Welcher Capability-Bereich ist betroffen?
@@ -62,3 +64,5 @@ Aktivitäts- und Rundensysteme arbeiten mit ihrer definierten Simulationszeit un
 - [tests/PlayerCapabilityContracts.test.ts](../../tests/PlayerCapabilityContracts.test.ts)
 - [tests/PlayerWorldRuntimeContracts.test.ts](../../tests/PlayerWorldRuntimeContracts.test.ts)
 - [tests/SharedWorldWithoutActivity.test.ts](../../tests/SharedWorldWithoutActivity.test.ts)
+- [tests/LoadoutUtilityOverrideLifecycle.test.ts](../../tests/LoadoutUtilityOverrideLifecycle.test.ts)
+- [tests/RadialActionInput.test.ts](../../tests/RadialActionInput.test.ts)

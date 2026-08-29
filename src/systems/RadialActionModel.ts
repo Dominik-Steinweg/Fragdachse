@@ -4,12 +4,14 @@ import {
   getToolCapacityCost,
   normalizeConstructionId,
 } from '../config/coopDefenseConstructions';
-import { t } from '../i18n';
+import { getLocale, t } from '../i18n';
+import { getPowerUpName } from '../i18n/contentPresentation';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
 import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
-import type { ConstructionId, GameMode, LoadoutToolRef } from '../types';
+import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
+import type { ConstructionId, GameMode, LoadoutToolRef, TemporaryUtilityInstanceDescriptor } from '../types';
 
 export type RadialActionCategory =
   | 'utility'
@@ -55,6 +57,7 @@ export interface RadialActionState {
 export interface ResolveRadialActionsInput {
   readonly gameMode: GameMode;
   readonly tools: readonly LoadoutToolRef[];
+  readonly temporaryUtilities?: readonly TemporaryUtilityInstanceDescriptor[];
   readonly persistentRewardIds: readonly PersistentBaseRewardId[];
   readonly usedCapacity: number;
   readonly capacityMax: number;
@@ -153,6 +156,47 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
       sourceOrder,
     });
   });
+
+  for (const instance of input.temporaryUtilities ?? []) {
+    const ref: RadialActionRef = {
+      kind: 'temporary-utility',
+      instanceId: instance.instanceId,
+      utilityId: instance.utilityId,
+    };
+    const key = radialActionKey(ref);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const utilityPresentation = describeLoadoutTool({ kind: 'utility', id: instance.utilityId });
+    const powerUp = instance.kind === 'objective-placement'
+      ? POWERUP_DEFS[instance.powerUpDefId]
+      : undefined;
+    const capabilityAllowed = input.canUseUtility;
+    const hasCharges = instance.charges > 0;
+    const cooldownReady = instance.cooldownUntil <= input.now;
+    const disabledReason = !capabilityAllowed
+      ? 'player-blocked'
+      : !hasCharges
+        ? 'no-charges'
+        : !cooldownReady
+          ? 'cooldown'
+          : undefined;
+    entries.push({
+      ref,
+      category: 'temporaryUtility',
+      label: instance.kind === 'objective-placement'
+        ? getPowerUpName(instance.powerUpDefId, getLocale())
+        : utilityPresentation.displayName,
+      iconKey: powerUp?.spriteKey ?? utilityPresentation.textureKey,
+      accentColor: powerUp?.color ?? utilityPresentation.accentColor,
+      visible: true,
+      available: disabledReason === undefined,
+      ...(disabledReason ? { disabledReason } : {}),
+      cooldownUntil: instance.cooldownUntil,
+      cooldownDurationMs: instance.cooldownDurationMs,
+      charges: instance.charges,
+      sourceOrder: instance.acquisitionOrder,
+    });
+  }
 
   input.persistentRewardIds.forEach((rewardId, sourceOrder) => {
     const ref: RadialActionRef = { kind: 'persistent-reward', rewardId };

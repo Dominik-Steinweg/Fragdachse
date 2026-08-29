@@ -96,7 +96,6 @@ describe('Radial Menu V2 input', () => {
       () => null,
       () => undefined,
       () => false,
-      () => false,
       undefined,
       undefined,
       () => 0,
@@ -113,6 +112,70 @@ describe('Radial Menu V2 input', () => {
 
     expect(uses).toHaveBeenCalledTimes(1);
     expect(uses.mock.calls[0]?.[0]).toBe('utility');
+  });
+
+  it('auto-selects new temporary instances and restores nested selection history', () => {
+    const { system } = createSystem();
+    let temporaryUtilities: Array<{
+      kind: 'utility'; instanceId: string; utilityId: string; charges: number;
+      cooldownUntil: number; cooldownDurationMs: number; acquisitionOrder: number;
+    }> = [];
+    system.setupRadialActionProviders(
+      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      () => ({ kind: 'utility', id: 'STINK_CLOUD' }),
+      () => undefined,
+      () => false,
+      undefined,
+      undefined,
+      () => 0,
+      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    );
+    system.setupTemporaryUtilityProvider(() => temporaryUtilities);
+
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    temporaryUtilities = [{
+      kind: 'utility', instanceId: 'temp-1', utilityId: 'BFG', charges: 1,
+      cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
+    }];
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'temporary-utility', instanceId: 'temp-1', utilityId: 'BFG',
+    });
+    temporaryUtilities = [...temporaryUtilities, {
+      kind: 'utility', instanceId: 'temp-2', utilityId: 'BFG', charges: 1,
+      cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 1,
+    }];
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'temporary-utility', instanceId: 'temp-2', utilityId: 'BFG',
+    });
+
+    temporaryUtilities = temporaryUtilities.filter((instance) => instance.instanceId !== 'temp-2');
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'temporary-utility', instanceId: 'temp-1', utilityId: 'BFG',
+    });
+    temporaryUtilities = [];
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+  });
+
+  it('clears temporary return history after explicit selection', () => {
+    const { system } = createSystem();
+    let temporaryUtilities = [{
+      kind: 'utility' as const, instanceId: 'temp-1', utilityId: 'BFG', charges: 1,
+      cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
+    }];
+    system.setupRadialActionProviders(
+      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      () => ({ kind: 'utility', id: 'STINK_CLOUD' }),
+      () => undefined,
+      () => false,
+    );
+    system.setupTemporaryUtilityProvider(() => temporaryUtilities);
+    expect(system.getSelectedRadialActionForHud()?.kind).toBe('temporary-utility');
+
+    (system as any).applyRadialSelection({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    temporaryUtilities = [];
+
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    expect((system as any).radialSelectionHistory).toEqual([]);
   });
 
   it('uses an R press only to cancel an active interaction and requires a fresh press to open', () => {

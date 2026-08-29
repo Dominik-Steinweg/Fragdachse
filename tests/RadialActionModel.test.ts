@@ -82,6 +82,38 @@ describe('Radial Action Model', () => {
     });
   });
 
+  it('keeps every temporary instance in pickup order with independent state', () => {
+    const actions = resolveRadialActions({
+      gameMode: 'coop_defense',
+      tools: [{ kind: 'utility', id: 'HE_GRENADE' }],
+      temporaryUtilities: [
+        {
+          kind: 'utility', instanceId: 'temp-2', utilityId: 'BFG', charges: 1,
+          cooldownUntil: 0, cooldownDurationMs: 500, acquisitionOrder: 2,
+        },
+        {
+          kind: 'utility', instanceId: 'temp-1', utilityId: 'BFG', charges: 3,
+          cooldownUntil: 6_000, cooldownDurationMs: 1_000, acquisitionOrder: 1,
+        },
+      ],
+      persistentRewardIds: [],
+      usedCapacity: 0,
+      capacityMax: 0,
+      now: 5_000,
+      canUseUtility: true,
+      canPlace: true,
+      canManage: true,
+    });
+
+    expect(actions.map((entry) => radialActionKey(entry.ref))).toEqual([
+      'utility:HE_GRENADE',
+      'temporaryUtility:temp-1',
+      'temporaryUtility:temp-2',
+    ]);
+    expect(actions[1]).toMatchObject({ charges: 3, available: false, disabledReason: 'cooldown' });
+    expect(actions[2]).toMatchObject({ charges: 1, available: true });
+  });
+
   it('uses stable value identity rather than UI object identity', () => {
     const ref: RadialActionRef = { kind: 'construction', constructionId: 'rocket_turret' };
     const clone = cloneRadialActionRef(ref);

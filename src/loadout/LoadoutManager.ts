@@ -60,6 +60,10 @@ import { HeldItemSlotTracker, type HeldItemSlot } from './HeldItemSlotTracker';
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
+import {
+  TemporaryUtilityCollection,
+  type TemporaryUtilityRuntimeInstance,
+} from './TemporaryUtilityCollection';
 import { EnergyShieldWeapon } from './EnergyShieldWeapon';
 import { TeslaDomeWeapon } from './TeslaDomeWeapon';
 import type { BaseWeapon }   from './BaseWeapon';
@@ -269,9 +273,8 @@ export class LoadoutManager {
 
   private readonly okResult: LoadoutUseResult = { ok: true };
 
-  // ── Utility-Override (Heilige Handgranate etc.) ─────────────────────────
-  private savedUtilities    = new Map<string, { config: UtilityConfig; lastUsedAt: number }>();
-  private utilityAmmo       = new Map<string, number>(); // playerId → verbleibende Einsätze (-1/absent = unbegrenzt)
+  // ── Temporaere Utilities (host-autoritative Multi-Instance-Collection) ───
+  private readonly temporaryUtilities = new TemporaryUtilityCollection();
 
   constructor(
     private playerManager:     PlayerManager,
@@ -309,12 +312,10 @@ export class LoadoutManager {
       auraLingerUntil: 0,
       gaussChargeStartedAt: null,
     });
-    // Eventuell gespeichertes Utility-Override aufräumen (z.B. Tod während HHG)
-    this.savedUtilities.delete(playerId);
-    this.utilityAmmo.delete(playerId);
+    this.temporaryUtilities.clearPlayer(playerId);
     this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
-    this.bridge.publishUtilityOverrideDescriptor(playerId, null);
-    this.bridge.publishUtilityOverrideId(playerId, '');
+    this.bridge.publishTemporaryUtilityInstances(playerId, []);
+    this.bridge.publishHeldUtilityId(playerId, '');
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.getActiveWeaponSlots().set(playerId, 'weapon1');
@@ -366,13 +367,12 @@ export class LoadoutManager {
     this.inspectorConstructionCooldowns.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
-    this.savedUtilities.delete(playerId);
-    this.utilityAmmo.delete(playerId);
+    this.temporaryUtilities.clearPlayer(playerId);
     // Per-player network state survives a round reset while the player remains connected.
-    // Clear the temporary utility metadata before the next loadout is created.
+    // Clear the temporary utility collection before the next loadout is created.
     this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
-    this.bridge.publishUtilityOverrideDescriptor(playerId, null);
-    this.bridge.publishUtilityOverrideId(playerId, '');
+    this.bridge.publishTemporaryUtilityInstances(playerId, []);
+    this.bridge.publishHeldUtilityId(playerId, '');
     this.heldFireSlots.delete(playerId);
     this.activeWeaponSlots?.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
@@ -781,6 +781,7 @@ export class LoadoutManager {
     const didUse = this.useUtility(utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
     if (!didUse) return { ok: false, reason: 'blocked' };
     this.heldItemSlots.noteUtilityUsed(playerId, now);
+    this.bridge.publishHeldUtilityId(playerId, effectiveConfig.id);
     return this.okResult;
   }
 
@@ -799,92 +800,44 @@ export class LoadoutManager {
     perPlayer.set(constructionId, now + getCoopDefenseConstructionDefinition(constructionId).buildCooldownMs);
   }
 
-  // ── Utility-Override (temporärer Slot-Tausch, z.B. Heilige Handgranate) ──
+  // ── Temporaere Utility-Instanzen ─────────────────────────────────────────
 
-  /**
-   * Überschreibt den Utility-Slot eines Spielers temporär.
-   * Der aktuelle Zustand (Config + Cooldown) wird zwischengespeichert.
-   */
-  overrideUtility(playerId: string, config: UtilityConfig, ammo: number): boolean {
-    const loadout = this.loadouts.get(playerId);
-    if (!loadout || this.savedUtilities.has(playerId)) return false;
-
-    this.savedUtilities.set(playerId, {
-      config:     loadout.utility.config,
-      lastUsedAt: loadout.utility.getLastUsedAt(),
-    });
-
-    // Neues Utility einsetzen
+  addTemporaryUtility(playerId: string, config: UtilityConfig, charges: number): string | null {
+    if (!this.loadouts.has(playerId)) return null;
     const modifierSource = this.utilityConfigModifierSource?.(playerId);
     const effectiveConfig = modifierSource ? applyCoopDefenseModifiersToUtilityConfig(config, modifierSource) : config;
-    loadout.utility = new GenericUtility(effectiveConfig);
-    this.utilityAmmo.set(playerId, ammo);
-    this.bridge.publishUtilityOverrideDescriptor(
+    const instance = this.temporaryUtilities.add(
       playerId,
+      effectiveConfig,
+      charges,
       config.type === 'placeable_pedestal'
-        ? {
-          kind: 'objective-placement',
-          objectiveId: config.rewardObjectiveId,
-          powerUpDefId: config.powerUpDefId,
-        }
-        : {
-          kind: 'utility',
-          utilityId: config.id,
-        },
+        ? { kind: 'objective-placement', objectiveId: config.rewardObjectiveId, powerUpDefId: config.powerUpDefId }
+        : { kind: 'utility' },
     );
-    this.bridge.publishUtilityCooldownUntil(playerId, 0, config.id); // sofort einsatzbereit
-    this.bridge.publishUtilityOverrideId(playerId, effectiveConfig.id);
-    return true;
+    if (!instance) return null;
+    this.publishTemporaryUtilities(playerId);
+    return instance.instanceId;
   }
 
-  /** True, solange der Utility-Slot bereits durch ein temporaeres Item belegt ist. */
-  hasUtilityOverride(playerId: string): boolean {
-    return this.savedUtilities.has(playerId);
+  getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null {
+    return this.temporaryUtilities.get(playerId, instanceId)?.utility.config ?? null;
   }
 
-  /** Bricht einen temporaeren Utility-Override bei Tod, Spectator-Wechsel oder Disconnect ab. */
-  releaseUtilityOverride(playerId: string): void {
-    this.restoreUtility(playerId);
+  releaseTemporaryUtilityForObjective(playerId: string, objectiveId: string): void {
+    if (!this.temporaryUtilities.removeForObjective(playerId, objectiveId)) return;
+    this.publishTemporaryUtilities(playerId);
   }
 
-  /**
-   * Stellt das zuvor gespeicherte Utility wieder her.
-   * Wird automatisch aufgerufen wenn die Ammo aufgebraucht ist.
-   */
-  private restoreUtility(playerId: string): void {
-    const saved = this.savedUtilities.get(playerId);
-    if (!saved) {
-      this.utilityAmmo.delete(playerId);
-      this.bridge.publishUtilityOverrideDescriptor(playerId, null);
-      this.bridge.publishUtilityOverrideId(playerId, '');
-      return;
-    }
+  clearTemporaryUtilities(playerId: string): void {
+    this.temporaryUtilities.clearPlayer(playerId);
+    this.publishTemporaryUtilities(playerId);
+  }
 
-    const loadout = this.loadouts.get(playerId);
-    if (!loadout) {
-      this.savedUtilities.delete(playerId);
-      this.utilityAmmo.delete(playerId);
-      this.bridge.publishUtilityOverrideDescriptor(playerId, null);
-      this.bridge.publishUtilityOverrideId(playerId, '');
-      return;
-    }
-
-    const restored = new GenericUtility(saved.config);
-    restored.setLastUsedAt(saved.lastUsedAt);
-    loadout.utility = restored;
-
-    this.savedUtilities.delete(playerId);
-    this.utilityAmmo.delete(playerId);
-
-    // Cooldown-Status an Clients publizieren
-    const now = Date.now();
-    const inspectorUtility = this.inspectorUtilities.get(playerId)?.get(saved.config.id);
-    const restoredConfig = inspectorUtility?.config ?? saved.config;
-    const restoredLastUsedAt = inspectorUtility?.getLastUsedAt() ?? saved.lastUsedAt;
-    const remaining = restoredConfig.cooldown - (now - restoredLastUsedAt);
-    this.bridge.publishUtilityOverrideDescriptor(playerId, null);
-    this.bridge.publishUtilityCooldownUntil(playerId, remaining > 0 ? now + remaining : 0, saved.config.id);
-    this.bridge.publishUtilityOverrideId(playerId, ''); // Override aufgehoben
+  private publishTemporaryUtilities(playerId: string): void {
+    this.bridge.publishTemporaryUtilityInstances(
+      playerId,
+      this.temporaryUtilities.getDescriptors(playerId),
+    );
   }
 
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
@@ -948,11 +901,33 @@ export class LoadoutManager {
       }
 
       case 'utility': {
-        if (loadout.utility.config.type !== 'decoy') {
+        const temporaryInstance = params?.temporaryUtilityInstanceId
+          ? this.temporaryUtilities.get(playerId, params.temporaryUtilityInstanceId)
+          : null;
+        if (params?.temporaryUtilityInstanceId && !temporaryInstance) {
+          return { ok: false, reason: 'invalid' };
+        }
+        const utility = temporaryInstance?.utility ?? loadout.utility;
+        if (utility.config.type !== 'decoy') {
           this.decoySystem?.breakStealth(playerId, now);
         }
-        const didUse = this.useUtility(loadout.utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
-        if (didUse) this.heldItemSlots.noteUtilityUsed(playerId, now);
+        const didUse = this.useUtility(
+          utility,
+          x,
+          y,
+          angle,
+          targetX,
+          targetY,
+          playerId,
+          now,
+          player.color,
+          params,
+          temporaryInstance,
+        );
+        if (didUse) {
+          this.heldItemSlots.noteUtilityUsed(playerId, now);
+          this.bridge.publishHeldUtilityId(playerId, utility.config.id);
+        }
         return didUse ? this.okResult : { ok: false, reason: 'blocked' };
       }
 
@@ -1416,7 +1391,7 @@ export class LoadoutManager {
     return this.loadouts.get(playerId)?.[slot].config;
   }
 
-  /** Gibt die Config der tatsächlich ausgerüsteten Utility zurück (inkl. Override). */
+  /** Gibt ausschließlich die Config der tatsächlich ausgerüsteten Utility zurück. */
   getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined {
     return this.loadouts.get(playerId)?.utility.config;
   }
@@ -1881,12 +1856,10 @@ export class LoadoutManager {
     now: number,
     playerColor: number,
     params?: LoadoutUseParams,
+    temporaryInstance?: TemporaryUtilityRuntimeInstance | null,
   ): boolean {
     if (utility.isOnCooldown(now)) return false;
-
-    // Ammo-Check (falls Ammo-Tracking aktiv, z.B. Heilige Handgranate)
-    const ammo = this.utilityAmmo.get(playerId);
-    if (ammo !== undefined && ammo <= 0) return false;
+    if (temporaryInstance && (temporaryInstance.charges <= 0 || temporaryInstance.cooldownUntil > now)) return false;
 
     const cfg = utility.config;
     const gameplayMuzzleOrigin = this.getGameplayMuzzleOrigin(playerId, cfg.id, x, y, angle);
@@ -1962,21 +1935,12 @@ export class LoadoutManager {
       this.utilityUsedCallback?.(playerId, cfg.type);
       this.utilityUsedObserver?.(playerId, cfg.type);
 
-      // skipCooldownPublish: kein recordUse/publishCooldown für Ammo-basierte Einmal-Items,
-      // damit der Cooldown der wiederhergestellten Utility nicht überschrieben wird.
-      if (!cfg.skipCooldownPublish) {
+      if (temporaryInstance) {
+        this.temporaryUtilities.recordSuccessfulUse(playerId, temporaryInstance.instanceId, now);
+        this.publishTemporaryUtilities(playerId);
+      } else if (!cfg.skipCooldownPublish) {
         utility.recordUse(now);
         this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown, cfg.id);
-      }
-
-      // Ammo dekrementieren und ggf. altes Utility wiederherstellen
-      if (ammo !== undefined) {
-        const remaining = ammo - 1;
-        if (remaining <= 0) {
-          this.restoreUtility(playerId);
-        } else {
-          this.utilityAmmo.set(playerId, remaining);
-        }
       }
     }
 

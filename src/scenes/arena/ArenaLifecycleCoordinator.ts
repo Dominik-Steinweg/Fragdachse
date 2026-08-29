@@ -838,7 +838,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.arenaCountdown?.clear();
     this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
-    this.clientUpdate.clientUtilityOverride = null;
     this.resetLocalArenaHudState();
     this.ctx.gameAudioSystem.playMusic('music_lobby');
     this.syncLobbySurface(true);
@@ -2664,8 +2663,12 @@ export class ArenaLifecycleCoordinator {
           spawnPickup: (objectiveId, powerUpDefId, x, y) => (
             this.ctx.powerUpSystem?.spawnObjectiveRewardPickup(objectiveId, powerUpDefId, x, y) !== null
           ),
-          overrideUtility: (playerId, config) => this.ctx.loadoutManager?.overrideUtility(playerId, config, 1) ?? false,
-          releaseUtilityOverride: (playerId) => this.ctx.loadoutManager?.releaseUtilityOverride(playerId),
+          addTemporaryUtility: (playerId, config) => (
+            this.ctx.loadoutManager?.addTemporaryUtility(playerId, config, 1) !== null
+          ),
+          releaseTemporaryUtility: (playerId, objectiveId) => (
+            this.ctx.loadoutManager?.releaseTemporaryUtilityForObjective(playerId, objectiveId)
+          ),
         })
         : null;
       this.ctx.coopDefenseSecondaryObjectiveSystem = coopDefenseSecondaryObjectiveConfigs.length > 0
@@ -3920,7 +3923,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
         onPickupCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
         onNukePickup: (playerId) => {
-          return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.NUKE, 1) ?? false;
+          return this.ctx.loadoutManager?.addTemporaryUtility(playerId, UTILITY_CONFIGS.NUKE, 1) !== null;
         },
         onNukeExploded: (x, y, radius, triggeredBy) => {
           this.runtimeDiagnosticEventSink?.('nuke:explode', { variant: 'standard', radius, triggeredBy });
@@ -3938,10 +3941,10 @@ export class ArenaLifecycleCoordinator {
           this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike);
         },
         onHolyHandGrenadePickup: (playerId) => {
-          return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1) ?? false;
+          return this.ctx.loadoutManager?.addTemporaryUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1) !== null;
         },
         onBfgPickup: (playerId) => {
-          return this.ctx.loadoutManager?.overrideUtility(playerId, UTILITY_CONFIGS.BFG, 1) ?? false;
+          return this.ctx.loadoutManager?.addTemporaryUtility(playerId, UTILITY_CONFIGS.BFG, 1) !== null;
         },
         onObjectiveRewardPickup: (objectiveId, playerId) => (
           this.ctx.coopDefenseObjectivePlacementRewardSystem?.claim(objectiveId, playerId) ?? false
@@ -4535,10 +4538,10 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
     this.ctx.loadoutManager?.resetAllUltimateStates();
     // Temporary utility state belongs to the round. Clear it centrally before the manager is
-    // detached so neither saved ammo nor the replicated descriptor can enter the next round.
+    // detached so neither runtime instances nor their replicated collection enter the next round.
     if (bridge.isHost()) {
       for (const profile of bridge.getConnectedPlayers()) {
-        this.ctx.loadoutManager?.releaseUtilityOverride(profile.id);
+        this.ctx.loadoutManager?.clearTemporaryUtilities(profile.id);
       }
     }
     this.ctx.loadoutManager = null;
@@ -4692,7 +4695,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setTrainGroup(null);
     this.ctx.projectileManager.setTrainHitCallback(null);
     this.ctx.centerHUD.hideTrainWidget();
-    this.clientUpdate.clientUtilityOverride = null;
     this.ctx.playerManager.setWorldGeometry(null);
   }
 
@@ -5760,7 +5762,6 @@ export class ArenaLifecycleCoordinator {
     this.roundStartPending = false;
     this.localPlayerState.spectator = false;
     this.localPlayerState.overlayTrackedAlive = null;
-    this.clientUpdate.clientUtilityOverride = null;
     this.ctx.arenaCountdown?.clear();
     this.resetLocalArenaHudState();
     this.ctx.gameAudioSystem.playMusic('music_lobby');

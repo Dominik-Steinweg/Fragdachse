@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ConstructionId, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, ConstructionId, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, TemporaryUtilityInstanceDescriptor, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -125,9 +125,11 @@ export class InputSystem {
   private radialGetSelectedTool: (() => LoadoutToolRef | null) | null = null;
   private radialSetSelectedTool: ((tool: LoadoutToolRef) => void) | null = null;
   private inspectorModeProvider: (() => boolean) | null = null;
-  private inspectorUtilityOverrideProvider: (() => boolean) | null = null;
+  private radialGetTemporaryUtilities: (() => readonly TemporaryUtilityInstanceDescriptor[]) | null = null;
   private radialActionMenu: RadialActionMenu | null = null;
   private selectedRadialAction: RadialActionRef | null = null;
+  private readonly knownTemporaryUtilityIds = new Set<string>();
+  private readonly radialSelectionHistory: RadialActionRef[] = [];
   private radialCancelAwaitingRelease = false;
   private constructionPlacementActive = false;
   private dismantlePlacementActive = false;
@@ -214,7 +216,6 @@ export class InputSystem {
     getSelected: () => LoadoutToolRef | null,
     setSelected: (tool: LoadoutToolRef) => void,
     isInspectorMode?: () => boolean,
-    isUtilityOverrideActive?: () => boolean,
     getCapacity?: () => { used: number; max: number },
     getDismantlePreview?: () => UtilityPlacementPreviewState | undefined,
     getCooldownUntil?: (ref: RadialActionRef) => number,
@@ -225,12 +226,17 @@ export class InputSystem {
     this.radialGetSelectedTool = getSelected;
     this.radialSetSelectedTool = setSelected;
     this.inspectorModeProvider = isInspectorMode ?? null;
-    this.inspectorUtilityOverrideProvider = isUtilityOverrideActive ?? null;
     this.radialGetCapacity = getCapacity ?? null;
     this.getDismantlePreviewProvider = getDismantlePreview ?? null;
     this.radialGetCooldownUntil = getCooldownUntil ?? null;
     this.radialGetCapabilities = getCapabilities ?? null;
     this.radialGetManagementActions = getManagementActions ?? null;
+  }
+
+  setupTemporaryUtilityProvider(
+    getInstances: () => readonly TemporaryUtilityInstanceDescriptor[],
+  ): void {
+    this.radialGetTemporaryUtilities = getInstances;
   }
 
   setupPersistentRewardActionProvider(
@@ -320,9 +326,10 @@ export class InputSystem {
       canPlace: this.inputEnabled,
       canManage: this.inputEnabled,
     };
-    return resolveRadialActions({
+    const actions = resolveRadialActions({
       gameMode: this.bridge.getActiveGameMode(),
       tools: this.getRadialTools(),
+      temporaryUtilities: this.radialGetTemporaryUtilities?.() ?? [],
       persistentRewardIds: this.getPersistentRewardIds(),
       usedCapacity: capacity?.used ?? 0,
       capacityMax: capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
@@ -331,21 +338,34 @@ export class InputSystem {
       managementActions: this.radialGetManagementActions?.() ?? [],
       getCooldownUntil: (ref) => this.radialGetCooldownUntil?.(ref) ?? 0,
     });
+    this.reconcileTemporaryUtilitySelection(actions);
+    return actions;
   }
 
   private ensureSelectedRadialAction(actions: readonly RadialActionState[]): void {
     if (this.selectedRadialAction && actions.some((entry) => (
       isSameRadialActionRef(entry.ref, this.selectedRadialAction)
     ))) return;
+    const lostTemporarySelection = this.selectedRadialAction?.kind === 'temporary-utility';
+    while (this.radialSelectionHistory.length > 0) {
+      const candidate = this.radialSelectionHistory.pop() ?? null;
+      if (candidate && actions.some((entry) => isSameRadialActionRef(entry.ref, candidate))) {
+        this.selectedRadialAction = cloneRadialActionRef(candidate);
+        return;
+      }
+    }
     const persistedTool = this.isInspectorMode() ? this.radialGetSelectedTool?.() ?? null : null;
     const persistedRef = persistedTool ? radialActionRefFromTool(persistedTool) : null;
-    const fallback = persistedRef
+    const fallback = !lostTemporarySelection && persistedRef
       ? actions.find((entry) => isSameRadialActionRef(entry.ref, persistedRef))
       : undefined;
+    const ordinaryUtility = actions.find((entry) => entry.ref.kind === 'utility');
     this.selectedRadialAction = fallback?.ref
       ? cloneRadialActionRef(fallback.ref)
-      : actions[0]?.ref
-        ? cloneRadialActionRef(actions[0].ref)
+      : ordinaryUtility?.ref
+        ? cloneRadialActionRef(ordinaryUtility.ref)
+        : actions[0]?.ref
+          ? cloneRadialActionRef(actions[0].ref)
         : null;
     if (!this.selectedRadialAction || this.selectedRadialAction.kind !== 'persistent-reward') {
       this.persistentRewardPlacementActive = false;
@@ -354,12 +374,34 @@ export class InputSystem {
 
   private applyRadialSelection(selection: RadialActionRef): void {
     this.selectedRadialAction = cloneRadialActionRef(selection);
+    this.radialSelectionHistory.length = 0;
     if (!this.isInspectorMode()) return;
     if (selection.kind === 'construction') {
       this.radialSetSelectedTool?.({ kind: 'construction', id: selection.constructionId });
     } else if (selection.kind === 'utility') {
       this.radialSetSelectedTool?.({ kind: 'utility', id: selection.utilityId });
     }
+  }
+
+  private reconcileTemporaryUtilitySelection(actions: readonly RadialActionState[]): void {
+    const temporary = actions
+      .filter((entry): entry is RadialActionState & {
+        readonly ref: Extract<RadialActionRef, { kind: 'temporary-utility' }>;
+      } => entry.ref.kind === 'temporary-utility')
+      .sort((left, right) => {
+        const leftInstance = this.radialGetTemporaryUtilities?.().find((entry) => entry.instanceId === left.ref.instanceId);
+        const rightInstance = this.radialGetTemporaryUtilities?.().find((entry) => entry.instanceId === right.ref.instanceId);
+        return (leftInstance?.acquisitionOrder ?? 0) - (rightInstance?.acquisitionOrder ?? 0);
+      });
+    for (const entry of temporary) {
+      if (this.knownTemporaryUtilityIds.has(entry.ref.instanceId)) continue;
+      if (this.selectedRadialAction) {
+        this.radialSelectionHistory.push(cloneRadialActionRef(this.selectedRadialAction));
+      }
+      this.selectedRadialAction = cloneRadialActionRef(entry.ref);
+    }
+    this.knownTemporaryUtilityIds.clear();
+    for (const entry of temporary) this.knownTemporaryUtilityIds.add(entry.ref.instanceId);
   }
 
   /**
@@ -408,10 +450,11 @@ export class InputSystem {
     return true;
   }
 
-  private getInspectorUtilityParams(): LoadoutUseParams | undefined {
+  private getSelectedUtilityParams(): LoadoutUseParams | undefined {
+    if (this.selectedRadialAction?.kind === 'temporary-utility') {
+      return { temporaryUtilityInstanceId: this.selectedRadialAction.instanceId };
+    }
     const tool = this.getSelectedToolRef();
-    // A special pickup temporarily replaces E; let it use the normal utility
-    // slot and restore the Inspector selection afterwards.
     const activeConfig = this.getLocalUtilityConfig?.();
     const resolvedToolConfig = tool?.kind === 'utility'
       ? getUtilityConfigForMode(
@@ -420,14 +463,12 @@ export class InputSystem {
       )
       : undefined;
     const activeConstructionId = getConstructionIdForUtility(activeConfig?.id);
-    if (tool?.kind === 'construction' && activeConstructionId === tool.id && !this.isUtilityOverrideActive()) {
+    if (tool?.kind === 'construction' && activeConstructionId === tool.id) {
       return { toolRef: tool };
     }
     return this.isInspectorMode() && tool?.kind === 'utility'
       // Coop commits the concrete `*_COOP` variant while the Inspector keeps
       // the user-facing base ID. Treat both IDs as the same tool, but keep
-      // temporary utility overrides (which resolve to a different config)
-      // on the ordinary utility path.
       && (!activeConfig || activeConfig.id === resolvedToolConfig?.id)
       ? { toolRef: tool }
       : undefined;
@@ -437,25 +478,18 @@ export class InputSystem {
     return this.inspectorModeProvider?.() ?? false;
   }
 
-  private isUtilityOverrideActive(): boolean {
-    return this.inspectorUtilityOverrideProvider?.() ?? false;
-  }
-
   isConstructionPlacementActive(): boolean {
     return this.hasActiveConstructionTools()
-      && this.constructionPlacementActive
-      && !this.isUtilityOverrideActive();
+      && this.constructionPlacementActive;
   }
 
   isDismantlePlacementActive(): boolean {
-    return this.dismantlePlacementActive
-      && !this.isUtilityOverrideActive();
+    return this.dismantlePlacementActive;
   }
 
   isPersistentRewardPlacementActive(): boolean {
     return this.getSelectedPersistentRewardId() !== null
-      && this.persistentRewardPlacementActive
-      && !this.isUtilityOverrideActive();
+      && this.persistentRewardPlacementActive;
   }
 
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
@@ -1045,7 +1079,7 @@ export class InputSystem {
         if (leftInputStarted) {
           this.consumeLeftClickForModeConfirmation();
           this.predictedUtilityCooldownUntil = now + targetedCfg.cooldown;
-          this.onLoadoutUse('utility', targetAngle, target.x, target.y, this.getInspectorUtilityParams());
+          this.onLoadoutUse('utility', targetAngle, target.x, target.y, this.getSelectedUtilityParams());
           this.cancelUtilityTargeting();
           return;
         }
@@ -1105,7 +1139,7 @@ export class InputSystem {
           this.consumeLeftClickForModeConfirmation();
         }
         if (preview.isValid) {
-          this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, this.getInspectorUtilityParams());
+          this.onLoadoutUse('utility', preview.angle, preview.targetX, preview.targetY, this.getSelectedUtilityParams());
         }
         this.cancelUtilityPlacement();
         return;
@@ -1231,9 +1265,8 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      const utilityOverrideActive = this.isUtilityOverrideActive();
-      const selectedAction = utilityOverrideActive ? null : this.getSelectedRadialActionState(now);
-      if (!utilityOverrideActive && !selectedAction) return;
+      const selectedAction = this.getSelectedRadialActionState(now);
+      if (!selectedAction) return;
       if (selectedAction && !selectedAction.available) {
         if (selectedAction.disabledReason === 'cooldown') this.onUtilityPressedDuringCooldown?.();
         return;
@@ -1256,7 +1289,7 @@ export class InputSystem {
       }
       if (selectedAction?.ref.kind === 'management') return;
       const persistentRewardId = this.getSelectedPersistentRewardId();
-      if (persistentRewardId && !utilityOverrideActive) {
+      if (persistentRewardId) {
         this.cancelUtilityInteraction();
         this.persistentRewardPlacementActive = true;
         this.bridge.sendDecoyStealthBreakRequest();
@@ -1264,7 +1297,7 @@ export class InputSystem {
         return;
       }
       const constructionTool = this.getSelectedConstructionToolRef();
-      if (constructionTool?.kind === 'construction' && !utilityOverrideActive) {
+      if (constructionTool?.kind === 'construction') {
         this.cancelUtilityInteraction();
         this.constructionPlacementActive = true;
         this.bridge.sendDecoyStealthBreakRequest();
@@ -1277,7 +1310,7 @@ export class InputSystem {
       }
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
-        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getInspectorUtilityParams());
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getSelectedUtilityParams());
         return;
       }
       if (this.beginPlacementUtilityAim(now)) {
@@ -1288,7 +1321,7 @@ export class InputSystem {
         return;
       }
       if (!this.beginChargedUtilityHold(now)) {
-        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getInspectorUtilityParams());
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getSelectedUtilityParams());
       }
     }
 
@@ -1478,7 +1511,8 @@ export class InputSystem {
 
     // BFG charge sound (charged_gate utilities)
     const utCfg = this.getChargeableUtilityConfig();
-    const inspectorTool = this.getInspectorUtilityParams()?.toolRef;
+    const utilityParams = this.getSelectedUtilityParams();
+    const inspectorTool = utilityParams?.toolRef;
     if (utCfg) {
       const actionId = this.createHeldActionId(utCfg.activation.type);
       this.activeHeldActionId = actionId;
@@ -1487,6 +1521,7 @@ export class InputSystem {
         utCfg.activation.type,
         utCfg.activation.fullChargeDuration,
         inspectorTool,
+        utilityParams?.temporaryUtilityInstanceId,
       );
     }
     if (utCfg?.activation.type === 'charged_gate') {
@@ -1515,7 +1550,7 @@ export class InputSystem {
     this.predictedUtilityCooldownUntil = now + cfg.cooldown;
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
-      ...this.getInspectorUtilityParams(),
+      ...this.getSelectedUtilityParams(),
       utilityChargeFraction: chargeFraction,
       heldActionId: actionId,
     });
@@ -1533,7 +1568,7 @@ export class InputSystem {
 
   private getEffectiveUtilityCooldownUntil(): number {
     const authoritative = this.getLocalUtilityCooldownUntil?.() ?? 0;
-    // Wenn der Host den Cooldown aktiv zurückgesetzt hat (z.B. Utility-Override),
+    // Wenn der Host den Cooldown aktiv zurückgesetzt hat (z.B. bei einem Runtime-Wechsel),
     // darf die lokale Prediction nicht mehr blockieren.
     if (authoritative < this.predictedUtilityCooldownUntil && Date.now() >= authoritative) {
       this.predictedUtilityCooldownUntil = 0;

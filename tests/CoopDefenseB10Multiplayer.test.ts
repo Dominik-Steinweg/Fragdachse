@@ -243,15 +243,15 @@ describe('Coop Defense B10 – Reward-Eligibility', () => {
   it('laesst nur einen berechtigten Teilnehmer die einmalige Missions-Ladung beanspruchen', () => {
     const eligible = new Set(['participant']);
     const spawnPickup = vi.fn().mockReturnValue(true);
-    const releaseUtilityOverride = vi.fn();
+    const releaseTemporaryUtility = vi.fn();
     const rewards = new CoopDefenseObjectivePlacementRewardSystem([holdObjectiveWithPedestal()], {
       isEligiblePlayer: (playerId) => eligible.has(playerId),
       getBasePosition: () => ({ x: 320, y: 160 }),
       spawnMarker: () => true,
       removeMarker: () => {},
       spawnPickup,
-      overrideUtility: () => true,
-      releaseUtilityOverride,
+      addTemporaryUtility: () => true,
+      releaseTemporaryUtility,
     });
 
     rewards.activate('hold-placement-reward-test');
@@ -264,7 +264,7 @@ describe('Coop Defense B10 – Reward-Eligibility', () => {
 
     // Disconnect vor der Platzierung: Die Ladung kehrt an ihre Missionsbasis zurueck.
     rewards.handlePlayerUnavailable('participant');
-    expect(releaseUtilityOverride).toHaveBeenCalledWith('participant');
+    expect(releaseTemporaryUtility).toHaveBeenCalledWith('participant', 'hold-placement-reward-test');
     expect(rewards.getState('hold-placement-reward-test')).toBe('available');
     expect(rewards.getCarrierId('hold-placement-reward-test')).toBeNull();
     expect(spawnPickup).toHaveBeenCalledTimes(2);

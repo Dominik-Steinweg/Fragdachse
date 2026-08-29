@@ -926,6 +926,8 @@ export interface LoadoutUseParams {
   tunnelStartGridY?: number;
   constructionId?: ConstructionId;
   toolRef?: LoadoutToolRef;
+  /** Konkrete host-autoritativ replizierte Temporary-Utility-Instanz. */
+  temporaryUtilityInstanceId?: string;
   /** Rueckbau eines eigenen Konstrukts; belegt keinen Ausruestungsplatz. */
   dismantle?: boolean;
   /** Finaler Commit einer zuvor auf dem Host gestarteten Hold-Aktion. */
@@ -1987,19 +1989,29 @@ export interface SyncedPowerUp {
   objectiveId?: string;
 }
 
-/** Host-published metadata needed to reconstruct a temporary utility on clients. */
-export interface UtilityOverrideDescriptorBase {
-  readonly kind: 'utility';
+/** Gemeinsamer replizierter Zustand einer einzelnen temporaeren Utility-Instanz. */
+export interface TemporaryUtilityInstanceDescriptorBase {
+  readonly instanceId: string;
   readonly utilityId: string;
+  readonly charges: number;
+  readonly cooldownUntil: number;
+  readonly cooldownDurationMs: number;
+  readonly acquisitionOrder: number;
 }
 
-export interface ObjectivePlacementUtilityOverrideDescriptor {
+export interface TemporaryUtilityDescriptor extends TemporaryUtilityInstanceDescriptorBase {
+  readonly kind: 'utility';
+}
+
+export interface ObjectivePlacementTemporaryUtilityDescriptor extends TemporaryUtilityInstanceDescriptorBase {
   readonly kind: 'objective-placement';
   readonly objectiveId: string;
   readonly powerUpDefId: string;
 }
 
-export type UtilityOverrideDescriptor = UtilityOverrideDescriptorBase | ObjectivePlacementUtilityOverrideDescriptor;
+export type TemporaryUtilityInstanceDescriptor =
+  | TemporaryUtilityDescriptor
+  | ObjectivePlacementTemporaryUtilityDescriptor;
 
 /** Snapshot-Hülle für Boden-Power-Ups mit Spawn-/Pickup-Deltas. */
 export interface SyncedPowerUpSnapshot {

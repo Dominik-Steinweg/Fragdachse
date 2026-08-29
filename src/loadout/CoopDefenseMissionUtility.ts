@@ -1,8 +1,8 @@
 import type { PlaceablePedestalUtilityConfig } from './LoadoutTypes';
 
 /**
- * Erzeugt den kurzlebigen Utility-Override fuer einen konfigurierten Missionsreward.
- * Der Override ist absichtlich kein Katalogeintrag: Er darf weder als Loadout-Auswahl noch als
+ * Erzeugt die Config einer kurzlebigen Utility-Instanz fuer einen konfigurierten Missionsreward.
+ * Die Instanz ist absichtlich kein Katalogeintrag: Sie darf weder als Loadout-Auswahl noch als
  * Inspector-Werkzeug oder persistenter Fortschritt auftauchen.
  */
 export function createCoopDefensePlaceablePedestalUtility(

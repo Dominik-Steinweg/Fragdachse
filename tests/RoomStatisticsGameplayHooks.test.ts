@@ -22,8 +22,6 @@ function makeLoadoutHookHarness() {
   manager.bridge = {
     publishUtilityCooldownUntil: vi.fn(),
   };
-  manager.utilityAmmo = new Map();
-  manager.savedUtilities = new Map();
   manager.heldItemSlots = new HeldItemSlotTracker();
   manager.decoySystem = { activate: vi.fn(() => true) };
   manager.placeableRockHandler = vi.fn(() => true);

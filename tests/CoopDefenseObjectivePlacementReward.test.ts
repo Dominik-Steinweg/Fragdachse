@@ -100,25 +100,25 @@ function makeRewardSystem(options: {
   spawnMarker?: (objectiveId: string, defId: string, x: number, y: number) => boolean;
   removeMarker?: (objectiveId: string) => void;
   spawnPickup?: (objectiveId: string, defId: string, x: number, y: number) => boolean;
-  overrideUtility?: (playerId: string, config: Parameters<NonNullable<ConstructorParameters<typeof CoopDefenseObjectivePlacementRewardSystem>[1]['overrideUtility']>>[1]) => boolean;
-  releaseUtilityOverride?: (playerId: string) => void;
+  addTemporaryUtility?: (playerId: string, config: Parameters<NonNullable<ConstructorParameters<typeof CoopDefenseObjectivePlacementRewardSystem>[1]['addTemporaryUtility']>>[1]) => boolean;
+  releaseTemporaryUtility?: (playerId: string, objectiveId: string) => void;
 } = {}) {
   const objective = options.objective ?? makeObjective();
   const spawnMarker = options.spawnMarker ?? vi.fn(() => true);
   const removeMarker = options.removeMarker ?? vi.fn();
   const spawnPickup = options.spawnPickup ?? vi.fn(() => true);
-  const overrideUtility = options.overrideUtility ?? vi.fn(() => true);
-  const releaseUtilityOverride = options.releaseUtilityOverride ?? vi.fn();
+  const addTemporaryUtility = options.addTemporaryUtility ?? vi.fn(() => true);
+  const releaseTemporaryUtility = options.releaseTemporaryUtility ?? vi.fn();
   const system = new CoopDefenseObjectivePlacementRewardSystem([objective], {
     isEligiblePlayer: () => true,
     getBasePosition: () => options.basePosition ?? { x: 100, y: 100 },
     spawnMarker,
     removeMarker,
     spawnPickup,
-    overrideUtility,
-    releaseUtilityOverride,
+    addTemporaryUtility,
+    releaseTemporaryUtility,
   });
-  return { system, objective, spawnMarker, removeMarker, spawnPickup, overrideUtility, releaseUtilityOverride };
+  return { system, objective, spawnMarker, removeMarker, spawnPickup, addTemporaryUtility, releaseTemporaryUtility };
 }
 
 function makePowerUpSystem(options: ConstructorParameters<typeof PowerUpSystem>[3] = {}) {
@@ -169,8 +169,8 @@ describe('B6 objective placement rewards', () => {
         spawned.push({ objectiveId, defId, x, y });
         return true;
       },
-      overrideUtility: () => true,
-      releaseUtilityOverride: () => undefined,
+      addTemporaryUtility: () => true,
+      releaseTemporaryUtility: () => undefined,
     });
 
     expect(rewardSystem.activate('hold-placement-reward-test')).toBe(true);
@@ -242,29 +242,29 @@ describe('B6 objective placement rewards', () => {
   });
 
   it('allows exactly one carrier for competing claims', () => {
-    const { system, objective, overrideUtility } = makeRewardSystem();
+    const { system, objective, addTemporaryUtility } = makeRewardSystem();
     expect(system.activate(objective.id)).toBe(true);
     expect(system.claim(objective.id, 'player-a')).toBe(true);
     expect(system.claim(objective.id, 'player-b')).toBe(false);
     expect(system.getCarrierId(objective.id)).toBe('player-a');
     expect(system.getState(objective.id)).toBe('carried');
-    expect(overrideUtility).toHaveBeenCalledOnce();
+    expect(addTemporaryUtility).toHaveBeenCalledOnce();
   });
 
   it('keeps a rejected claim available without creating an override', () => {
-    const overrideUtility = vi.fn(() => false);
-    const { system, objective } = makeRewardSystem({ overrideUtility });
+    const addTemporaryUtility = vi.fn(() => false);
+    const { system, objective } = makeRewardSystem({ addTemporaryUtility });
     expect(system.activate(objective.id)).toBe(true);
     expect(system.claim(objective.id, 'player-a')).toBe(false);
     expect(system.getState(objective.id)).toBe('available');
     expect(system.getCarrierId(objective.id)).toBeNull();
-    expect(overrideUtility).toHaveBeenCalledOnce();
+    expect(addTemporaryUtility).toHaveBeenCalledOnce();
   });
 
   it.each(['death', 'spectator', 'disconnect'] as const)(
     'returns the charge to available with exactly one pickup after %s',
     () => {
-      const { system, objective, spawnPickup, releaseUtilityOverride } = makeRewardSystem();
+      const { system, objective, spawnPickup, releaseTemporaryUtility } = makeRewardSystem();
       expect(system.activate(objective.id)).toBe(true);
       expect(system.claim(objective.id, 'player-a')).toBe(true);
 
@@ -273,7 +273,7 @@ describe('B6 objective placement rewards', () => {
 
       expect(system.getState(objective.id)).toBe('available');
       expect(system.getCarrierId(objective.id)).toBeNull();
-      expect(releaseUtilityOverride).toHaveBeenCalledOnce();
+      expect(releaseTemporaryUtility).toHaveBeenCalledWith('player-a', objective.id);
       expect(spawnPickup).toHaveBeenCalledTimes(2);
     },
   );

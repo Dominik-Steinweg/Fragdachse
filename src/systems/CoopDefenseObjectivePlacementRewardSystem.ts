@@ -10,8 +10,8 @@ export interface CoopDefenseObjectivePlacementRewardDeps {
   readonly spawnMarker: (objectiveId: string, powerUpDefId: string, x: number, y: number) => boolean;
   readonly removeMarker: (objectiveId: string) => void;
   readonly spawnPickup: (objectiveId: string, powerUpDefId: string, x: number, y: number) => boolean;
-  readonly overrideUtility: (playerId: string, config: PlaceablePedestalUtilityConfig) => boolean;
-  readonly releaseUtilityOverride: (playerId: string) => void;
+  readonly addTemporaryUtility: (playerId: string, config: PlaceablePedestalUtilityConfig) => boolean;
+  readonly releaseTemporaryUtility: (playerId: string, objectiveId: string) => void;
 }
 
 interface PlacementRewardRuntime {
@@ -83,7 +83,7 @@ export class CoopDefenseObjectivePlacementRewardSystem {
     const runtime = this.rewards.get(objectiveId);
     if (!runtime || runtime.state !== 'available' || !this.deps.isEligiblePlayer(playerId)) return false;
     const utility = createCoopDefensePlaceablePedestalUtility(objectiveId, runtime.powerUpDefId);
-    if (!this.deps.overrideUtility(playerId, utility)) return false;
+    if (!this.deps.addTemporaryUtility(playerId, utility)) return false;
     runtime.state = 'carried';
     runtime.carrierId = playerId;
     return true;
@@ -108,7 +108,7 @@ export class CoopDefenseObjectivePlacementRewardSystem {
   handlePlayerUnavailable(playerId: string): void {
     for (const runtime of this.rewards.values()) {
       if (runtime.state !== 'carried' || runtime.carrierId !== playerId) continue;
-      this.deps.releaseUtilityOverride(playerId);
+      this.deps.releaseTemporaryUtility(playerId, runtime.objectiveId);
       runtime.state = 'available';
       runtime.carrierId = null;
       const position = this.deps.getBasePosition(runtime.baseId);

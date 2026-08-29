@@ -17,7 +17,7 @@ import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerProfile, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerProfile, SyncedPowerUp, TemporaryUtilityInstanceDescriptor, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
@@ -142,8 +142,6 @@ export class ClientUpdateCoordinator {
   private performanceMetricsEnabled = false;
   private coarsePerformanceMetricsEnabled = false;
 
-  /** Locally reconstructed utility override from the host-published descriptor. */
-  clientUtilityOverride: UtilityConfig | null = null;
   private inspectorSelectedTool: LoadoutToolRef | null = null;
 
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
@@ -263,7 +261,6 @@ export class ClientUpdateCoordinator {
       return;
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
-    this.reconcileClientUtilityOverride();
     this.ctx.coopDefenseMissionBarrierManager?.syncPresentationState(
       bridge.getCoopDefenseMissionProgressPresentationState(),
     );
@@ -506,9 +503,7 @@ export class ClientUpdateCoordinator {
       const localUtilityConfig  = this.getLocalUtilityConfig();
       const localUltimateConfig = this.getLocalUltimateConfig();
       const ultimateThresholds  = this.getLocalUltimateThresholds();
-      const overrideId = bridge.getPlayerUtilityOverrideId(localId2);
-      const hasUtilityOverride = overrideId !== '' || this.clientUtilityOverride !== null;
-      const radialAction = hasUtilityOverride ? null : this.ctx.inputSystem.getSelectedRadialActionForHud();
+      const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
       const managementAction = radialAction?.kind === 'management' ? radialAction.action : null;
       const rewardId = radialAction?.kind === 'persistent-reward' ? radialAction.rewardId : null;
       const selectedTool: LoadoutToolRef | null = radialAction?.kind === 'construction'
@@ -517,7 +512,9 @@ export class ClientUpdateCoordinator {
           ? { kind: 'utility', id: radialAction.utilityId }
           : null;
       const activeConstructionTool = selectedTool?.kind === 'construction' ? selectedTool : null;
-      const selectedUtilityConfig = selectedTool?.kind === 'utility'
+      const selectedUtilityConfig = radialAction?.kind === 'temporary-utility'
+        ? localUtilityConfig
+        : selectedTool?.kind === 'utility'
         ? getUtilityConfigForMode(
           selectedTool.id,
           bridge.getActiveGameMode(),
@@ -532,11 +529,9 @@ export class ClientUpdateCoordinator {
       const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
       const baseUtilityId = managementAction || rewardId
         ? undefined
-        : overrideId
-          || this.clientUtilityOverride?.id
-          || (selectedConstruction ? `construction.${selectedConstruction.id}` : undefined)
-          || selectedUtilityConfig?.id
-          || localUtilityConfig.id;
+        : (selectedConstruction ? `construction.${selectedConstruction.id}` : undefined)
+          ?? selectedUtilityConfig?.id
+          ?? localUtilityConfig.id;
       const activePowerUps = bridge.getPlayerActiveBuffs(localId2).map((buff) => ({
         ...buff,
         valueText: getHudBuffValueText(buff, getLocale()),
@@ -562,7 +557,7 @@ export class ClientUpdateCoordinator {
         persistentBaseRewardId:  rewardId ?? undefined,
         utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
-        isUtilityOverridden:     overrideId !== '' || this.clientUtilityOverride !== null,
+        isUtilityOverridden:     radialAction?.kind === 'temporary-utility',
         activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
         weapon2AdrenalineCost:   this.getLocalWeaponAdrenalineCost('weapon2'),
@@ -733,7 +728,6 @@ export class ClientUpdateCoordinator {
     this.pickupCooldownUntil = 0;
     this.pendingPickupUids.clear();
     this.committedSelectionCache = null;
-    this.clientUtilityOverride = null;
     this.inspectorSelectedTool = null;
     this.localPlayerState.alive = false;
     this.localPlayerState.burrowed = false;
@@ -753,11 +747,15 @@ export class ClientUpdateCoordinator {
 
   getLocalUtilityConfig(): UtilityConfig {
     const localId = bridge.getLocalPlayerId();
-    if (this.clientUtilityOverride) {
-      return applyCoopDefenseModifiersToUtilityConfig(this.clientUtilityOverride, this.getLocalEffectTotals());
+    const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
+    if (radialAction?.kind === 'temporary-utility') {
+      const descriptor = this.getLocalTemporaryUtility(radialAction.instanceId);
+      const temporaryConfig = descriptor ? this.resolveTemporaryUtilityConfig(descriptor) : undefined;
+      if (temporaryConfig) {
+        return applyCoopDefenseModifiersToUtilityConfig(temporaryConfig, this.getLocalEffectTotals());
+      }
     }
     const equipped = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    if (bridge.getPlayerUtilityOverrideId(localId) && equipped) return equipped;
     const inspectorConfig = this.getLocalInspectorUtilityConfig();
     if (inspectorConfig) return inspectorConfig;
     if (equipped) return equipped;
@@ -1100,9 +1098,14 @@ export class ClientUpdateCoordinator {
 
   getLocalUtilityCooldownFrac(): number {
     const localId = bridge.getLocalPlayerId();
-    const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUtilityOverride !== null;
-    const radialAction = hasOverride ? null : this.ctx.inputSystem.getSelectedRadialActionForHud();
+    const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'management' || radialAction?.kind === 'persistent-reward') return 0;
+    if (radialAction?.kind === 'temporary-utility') {
+      const descriptor = this.getLocalTemporaryUtility(radialAction.instanceId);
+      if (!descriptor || descriptor.cooldownDurationMs <= 0) return 0;
+      const remaining = descriptor.cooldownUntil - bridge.getSynchronizedNow();
+      return remaining <= 0 ? 0 : Math.min(1, remaining / descriptor.cooldownDurationMs);
+    }
     const config = this.getLocalUtilityConfig();
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
@@ -1243,7 +1246,7 @@ export class ClientUpdateCoordinator {
   getLocalInspectorUtilityConfig(): UtilityConfig | undefined {
     const tool = this.getLocalInspectorSelectedTool();
     if (tool?.kind !== 'utility') return undefined;
-    const base = this.clientUtilityOverride ?? getUtilityConfigForMode(
+    const base = getUtilityConfigForMode(
       tool.id,
       bridge.getActiveGameMode(),
     );
@@ -1254,12 +1257,21 @@ export class ClientUpdateCoordinator {
 
   /** Concrete utility ID used for the host-published cooldown channel. */
   getLocalUtilityCooldownId(): string {
-    const localId = bridge.getLocalPlayerId();
+    const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
+    if (radialAction?.kind === 'temporary-utility') return radialAction.instanceId;
     const config = this.getLocalUtilityConfig();
-    const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUtilityOverride !== null;
     const selected = this.getLocalInspectorSelectedTool();
-    if (selected?.kind === 'construction' && !hasOverride) return selected.id;
+    if (selected?.kind === 'construction') return selected.id;
     return config.id;
+  }
+
+  getLocalUtilityCooldownUntil(): number {
+    const localId = bridge.getLocalPlayerId();
+    const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
+    if (radialAction?.kind === 'temporary-utility') {
+      return this.getLocalTemporaryUtility(radialAction.instanceId)?.cooldownUntil ?? 0;
+    }
+    return bridge.getPlayerUtilityCooldownUntil(localId, this.getLocalUtilityCooldownId());
   }
 
   private getLocalCoopDefenseClassId() {
@@ -1311,7 +1323,6 @@ export class ClientUpdateCoordinator {
     this.pickupCooldownUntil = 0;
     this.pendingPickupUids.clear();
     if (this.moveLoopHandle) { this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
-    this.clientUtilityOverride = null;
   }
 
   private applyDashVisual(player: PlayerEntity, id: string, curPhase: 1 | 2): void {
@@ -1392,34 +1403,17 @@ export class ClientUpdateCoordinator {
     }
   }
 
-  private reconcileClientUtilityOverride(): void {
-    const localId = bridge.getLocalPlayerId();
-    const descriptor = bridge.getPlayerUtilityOverrideDescriptor(localId);
-    if (descriptor?.kind === 'utility') {
-      const config = getUtilityConfigForMode(
-        descriptor.utilityId,
-        bridge.getActiveGameMode(),
-      );
-      this.clientUtilityOverride = config ?? null;
-      return;
-    }
+  private getLocalTemporaryUtility(instanceId: string): TemporaryUtilityInstanceDescriptor | undefined {
+    return bridge.getPlayerTemporaryUtilityInstances(bridge.getLocalPlayerId())
+      .find((instance) => instance.instanceId === instanceId);
+  }
 
-    if (descriptor?.kind === 'objective-placement') {
-      const current = this.clientUtilityOverride;
-      if (
-        current?.type !== 'placeable_pedestal'
-        || current.rewardObjectiveId !== descriptor.objectiveId
-        || current.powerUpDefId !== descriptor.powerUpDefId
-      ) {
-        this.clientUtilityOverride = createCoopDefensePlaceablePedestalUtility(
-          descriptor.objectiveId,
-          descriptor.powerUpDefId,
-        );
-      }
-      return;
-    }
-
-    this.clientUtilityOverride = null;
+  private resolveTemporaryUtilityConfig(
+    descriptor: TemporaryUtilityInstanceDescriptor,
+  ): UtilityConfig | undefined {
+    return descriptor.kind === 'objective-placement'
+      ? createCoopDefensePlaceablePedestalUtility(descriptor.objectiveId, descriptor.powerUpDefId)
+      : getUtilityConfigForMode(descriptor.utilityId, bridge.getActiveGameMode());
   }
 
   private playPredictedLocalHitscanTracer(

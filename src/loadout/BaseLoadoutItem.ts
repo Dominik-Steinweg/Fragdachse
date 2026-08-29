@@ -18,7 +18,7 @@ export abstract class BaseLoadoutItem<T extends { cooldown: number }> {
     this.lastUsedAt = now;
   }
 
-  /** Cooldown-Zustand wiederherstellen (z.B. nach temporärem Utility-Override). */
+  /** Cooldown-Zustand aus einem autoritativen Runtime-State wiederherstellen. */
   setLastUsedAt(ts: number): void {
     this.lastUsedAt = ts;
   }
