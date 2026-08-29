@@ -1540,17 +1540,12 @@ export class ArenaScene extends Phaser.Scene {
       }
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
-        const config = this.clientUpdate.getLocalUtilityConfig();
+        // The InputSystem has already checked keyed local prediction before dispatch. This
+        // synchronous callback must only gate against the authoritative state; otherwise the
+        // prediction created by this very request would reject the request itself.
         const utilityCooldownUntil = params?.temporaryUtilityInstanceId
-          ? Math.max(
-            this.clientUpdate.getLocalUtilityCooldownUntil(params.temporaryUtilityInstanceId),
-            this.ctx.inputSystem.getPredictedUtilityCooldownUntil?.({
-              kind: 'temporary-utility',
-              instanceId: params.temporaryUtilityInstanceId,
-              utilityId: config.id,
-            }) ?? 0,
-          )
-          : this.ctx.inputSystem.getSelectedUtilityCooldownUntil();
+          ? this.clientUpdate.getLocalUtilityCooldownUntil(params.temporaryUtilityInstanceId)
+          : this.clientUpdate.getLocalUtilityCooldownUntil();
         if (utilityCooldownUntil > bridge.getSynchronizedNow()) {
           if (inputStarted) {
             const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;

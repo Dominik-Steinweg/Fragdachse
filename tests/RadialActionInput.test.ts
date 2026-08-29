@@ -43,6 +43,10 @@ function createSystem() {
     getActiveGameMode: () => 'coop_defense',
     sendLocalInput: vi.fn(),
     sendLocalPlacementPreview: vi.fn(),
+    sendLoadoutUse: vi.fn(),
+    sendHeldActionStart: vi.fn(),
+    sendHeldActionCancel: vi.fn(),
+    sendDecoyStealthBreakRequest: vi.fn(),
     getLocalPlayerId: () => 'p1',
   };
   const scene = { input: { activePointer: pointer } };
@@ -112,6 +116,189 @@ describe('Radial Menu V2 input', () => {
 
     expect(uses).toHaveBeenCalledTimes(1);
     expect(uses.mock.calls[0]?.[0]).toBe('utility');
+  });
+
+  it('does not let the prediction block the instant request that creates it', () => {
+    const { system, keys, bridge } = createSystem();
+    let authoritativeCooldown = 0;
+    const dispatches = vi.fn();
+    system.setupRadialActionProviders(
+      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      () => null,
+      () => undefined,
+      () => false,
+      undefined,
+      undefined,
+      () => authoritativeCooldown,
+      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    );
+    system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD);
+    system.setupUtilityCooldownProvider(() => authoritativeCooldown);
+    // Mirrors ArenaScene's synchronous request gate: only authoritative state decides whether
+    // this already-admitted request reaches the transport.
+    system.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      if (authoritativeCooldown > Date.now()) return;
+      bridge.sendLoadoutUse(slot, angle, targetX, targetY, params);
+      dispatches();
+    });
+
+    keys.keyE.isDown = true;
+    keys.keyE.justDown = true;
+    system.update();
+
+    expect(dispatches).toHaveBeenCalledTimes(1);
+    expect(bridge.sendLoadoutUse).toHaveBeenCalledTimes(1);
+    expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'STINK_CLOUD' }))
+      .toBeGreaterThan(Date.now());
+
+    // The prediction now blocks a second InputSystem dispatch even though the host snapshot is
+    // still ready. The synchronous gate must not be the only protection against duplicates.
+    system.update();
+    expect(dispatches).toHaveBeenCalledTimes(1);
+    expect(bridge.sendLoadoutUse).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not self-block a targeted utility confirmation', () => {
+    const { system, keys, pointerState } = createSystem();
+    let authoritativeCooldown = 0;
+    const dispatches = vi.fn();
+    const nukeConfig = { ...UTILITY_CONFIGS.NUKE, cooldown: 2_000 };
+    system.setupRadialActionProviders(
+      () => [{ kind: 'utility', id: 'NUKE' }],
+      () => null,
+      () => undefined,
+      () => false,
+      undefined,
+      undefined,
+      () => authoritativeCooldown,
+      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    );
+    system.setupUtilityConfigProvider(() => nukeConfig);
+    system.setupUtilityCooldownProvider(() => authoritativeCooldown);
+    system.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      if (authoritativeCooldown > Date.now()) return;
+      dispatches(slot, angle, targetX, targetY, params);
+    });
+
+    keys.keyE.isDown = true;
+    keys.keyE.justDown = true;
+    system.update();
+    expect(dispatches).not.toHaveBeenCalled();
+
+    keys.keyE.isDown = false;
+    keys.keyE.justDown = false;
+    pointerState.left = true;
+    system.update();
+    expect(dispatches).toHaveBeenCalledTimes(1);
+    expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'NUKE' }))
+      .toBeGreaterThan(Date.now());
+
+    pointerState.left = false;
+    system.update();
+    keys.keyE.isDown = true;
+    keys.keyE.justDown = true;
+    system.update();
+    expect(dispatches).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps first-use dispatch independent for equal temporary instances', () => {
+    const { system, keys } = createSystem();
+    const temporaryUtilities = [
+      {
+        kind: 'utility' as const, instanceId: 'temp-a', utilityId: 'STINK_CLOUD', charges: 2,
+        cooldownUntil: 0, cooldownDurationMs: 8_000, acquisitionOrder: 0,
+      },
+      {
+        kind: 'utility' as const, instanceId: 'temp-b', utilityId: 'STINK_CLOUD', charges: 1,
+        cooldownUntil: 0, cooldownDurationMs: 8_000, acquisitionOrder: 1,
+      },
+    ];
+    const dispatches = vi.fn();
+    system.setupRadialActionProviders(
+      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      () => null,
+      () => undefined,
+      () => false,
+      undefined,
+      undefined,
+      () => 0,
+      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    );
+    system.setupTemporaryUtilityProvider(() => temporaryUtilities);
+    system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD);
+    system.setupUtilityCooldownProvider(() => 0);
+    system.setupLoadoutListener((_slot, _angle, _targetX, _targetY, params) => {
+      if (params?.temporaryUtilityInstanceId) dispatches(params.temporaryUtilityInstanceId);
+    });
+    const actionA = { kind: 'temporary-utility' as const, instanceId: 'temp-a', utilityId: 'STINK_CLOUD' };
+    const actionB = { kind: 'temporary-utility' as const, instanceId: 'temp-b', utilityId: 'STINK_CLOUD' };
+    system.getSelectedRadialActionForHud();
+    (system as any).applyRadialSelection(actionA);
+
+    keys.keyE.isDown = true;
+    keys.keyE.justDown = true;
+    system.update();
+    expect(dispatches).toHaveBeenLastCalledWith('temp-a');
+    expect(system.getPredictedUtilityCooldownUntil(actionA)).toBeGreaterThan(Date.now());
+
+    (system as any).applyRadialSelection(actionB);
+    system.update();
+    expect(dispatches).toHaveBeenLastCalledWith('temp-b');
+    expect(dispatches).toHaveBeenCalledTimes(2);
+    expect(system.getPredictedUtilityCooldownUntil(actionB)).toBeGreaterThan(Date.now());
+  });
+
+  it('dispatches a charged temporary release before its prediction gates later input', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    try {
+      const { system, keys, bridge } = createSystem();
+      const bfgConfig = { ...UTILITY_CONFIGS.BFG, cooldown: 2_000 };
+      const temporaryUtilities = [{
+        kind: 'utility' as const, instanceId: 'temp-bfg', utilityId: 'BFG', charges: 1,
+        cooldownUntil: 0, cooldownDurationMs: 2_000, acquisitionOrder: 0,
+      }];
+      const dispatches = vi.fn();
+      system.setupRadialActionProviders(
+        () => [],
+        () => null,
+        () => undefined,
+        () => false,
+        undefined,
+        undefined,
+        () => 0,
+        () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      );
+      system.setupTemporaryUtilityProvider(() => temporaryUtilities);
+      system.setupUtilityConfigProvider(() => bfgConfig);
+      system.setupUtilityCooldownProvider(() => 0);
+      system.setupLoadoutListener((_slot, _angle, _targetX, _targetY, params) => {
+        dispatches(params);
+      });
+      const action = { kind: 'temporary-utility' as const, instanceId: 'temp-bfg', utilityId: 'BFG' };
+      (system as any).applyRadialSelection(action);
+
+      keys.keyE.isDown = true;
+      keys.keyE.justDown = true;
+      system.update();
+      expect(bridge.sendHeldActionStart).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(900);
+      keys.keyE.isDown = false;
+      keys.keyE.justDown = false;
+      keys.keyE.justUp = true;
+      system.update();
+
+      expect(dispatches).toHaveBeenCalledTimes(1);
+      expect(dispatches.mock.calls[0]?.[0]).toMatchObject({
+        temporaryUtilityInstanceId: 'temp-bfg',
+        heldActionId: expect.any(String),
+        utilityChargeFraction: 1,
+      });
+      expect(system.getPredictedUtilityCooldownUntil(action)).toBe(3_900);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('auto-selects new temporary instances and restores nested selection history', () => {
