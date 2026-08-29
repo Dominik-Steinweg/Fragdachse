@@ -5,6 +5,7 @@ import {
   ADRENALINE_REGEN_PAUSE_MS,
   RAGE_MAX,
 } from '../config';
+import { resolveEffectiveAdrenalineCost } from './AdrenalineCost';
 
 type PowerUpSystemType = { getRegenMultiplier(id: string): number };
 
@@ -15,6 +16,7 @@ type PowerUpSystemType = { getRegenMultiplier(id: string): number };
  */
 export class ResourceSystem {
   private adrenaline:        Map<string, number> = new Map();
+  private adrenalineRevision: Map<string, number> = new Map();
   private rage:              Map<string, number> = new Map();
   private regenPausedUntil:  Map<string, number> = new Map(); // ms-Timestamp
   private powerUpSystem:     PowerUpSystemType | null = null;
@@ -69,23 +71,29 @@ export class ResourceSystem {
 
   initPlayer(id: string): void {
     this.adrenaline.set(id, this.getSpawnAdrenaline(id));
+    this.adrenalineRevision.set(id, 0);
     this.rage.set(id, 0);
     this.regenPausedUntil.set(id, 0);
   }
 
   /** Setzt Adrenalin auf den Spawn-Wert zurueck (fuer Respawn). */
   resetAdrenalineForSpawn(id: string): void {
-    this.adrenaline.set(id, this.getSpawnAdrenaline(id));
+    this.writeAdrenaline(id, this.getSpawnAdrenaline(id));
   }
 
   removePlayer(id: string): void {
     this.adrenaline.delete(id);
+    this.adrenalineRevision.delete(id);
     this.rage.delete(id);
     this.regenPausedUntil.delete(id);
   }
 
   getAdrenaline(id: string): number {
     return this.adrenaline.get(id) ?? 0;
+  }
+
+  getAdrenalineRevision(id: string): number {
+    return this.adrenalineRevision.get(id) ?? 0;
   }
 
   getMaxAdrenaline(id: string): number {
@@ -103,7 +111,7 @@ export class ResourceSystem {
   /** Klemmt laufende Ressourcen an neue live aus Build/Modus aufgeloeste Maxima. */
   reconcilePlayerLimits(id: string): void {
     if (this.adrenaline.has(id)) {
-      this.adrenaline.set(id, Math.min(this.getMaxAdrenaline(id), Math.max(0, this.adrenaline.get(id) ?? 0)));
+      this.writeAdrenaline(id, Math.min(this.getMaxAdrenaline(id), Math.max(0, this.adrenaline.get(id) ?? 0)));
     }
     if (this.rage.has(id)) {
       this.rage.set(id, Math.min(this.getMaxRage(id), Math.max(0, this.rage.get(id) ?? 0)));
@@ -122,7 +130,7 @@ export class ResourceSystem {
     const adjustedAmount = amount > 0 ? amount * Math.max(0, this.adrenalineGainMultiplierResolver?.(id) ?? 1) : amount;
     const previous = this.adrenaline.get(id) ?? 0;
     const cur = Math.min(this.getMaxAdrenaline(id), previous + adjustedAmount);
-    this.adrenaline.set(id, cur);
+    this.writeAdrenaline(id, cur);
     const gainedAmount = cur - previous;
     for (const observer of this.adrenalineGainObservers) {
       observer(id, amount, gainedAmount);
@@ -131,16 +139,14 @@ export class ResourceSystem {
 
   /** Berechnet die tatsaechlichen Kosten inklusive spielerweiter Verbrauchsmodifikatoren. */
   resolveAdrenalineCost(id: string, amount: number): number {
-    return amount > 0
-      ? amount * Math.max(0, this.adrenalineCostMultiplierResolver?.(id) ?? 1)
-      : amount;
+    return resolveEffectiveAdrenalineCost(amount, this.adrenalineCostMultiplierResolver?.(id) ?? 1);
   }
 
   /** Exakte Erstattung bereits bezahlter Kosten; Gewinnmodifikatoren werden bewusst nicht erneut angewendet. */
   refundAdrenaline(id: string, amount: number): void {
     if (amount <= 0) return;
     const cur = Math.min(this.getMaxAdrenaline(id), (this.adrenaline.get(id) ?? 0) + amount);
-    this.adrenaline.set(id, cur);
+    this.writeAdrenaline(id, cur);
   }
 
   /**
@@ -151,7 +157,7 @@ export class ResourceSystem {
     const adjustedAmount = this.resolveAdrenalineCost(id, amount);
     const previous = this.adrenaline.get(id) ?? 0;
     const cur = Math.max(0, previous - adjustedAmount);
-    this.adrenaline.set(id, cur);
+    this.writeAdrenaline(id, cur);
     const drainedAmount = previous - cur;
     for (const observer of this.adrenalineDrainObservers) {
       observer(id, amount, drainedAmount);
@@ -186,11 +192,21 @@ export class ResourceSystem {
       this.getMaxAdrenaline(id),
       (this.adrenaline.get(id) ?? 0) + regenRate * regenMult * delta / 1000,
     );
-    this.adrenaline.set(id, cur);
+    this.writeAdrenaline(id, cur);
   }
 
   /** Setzt Adrenalin direkt (z. B. bei Respawn). */
   setAdrenaline(id: string, val: number): void {
-    this.adrenaline.set(id, Math.max(0, Math.min(this.getMaxAdrenaline(id), val)));
+    this.writeAdrenaline(id, Math.max(0, Math.min(this.getMaxAdrenaline(id), val)));
+  }
+
+  private writeAdrenaline(id: string, value: number): void {
+    const previous = this.adrenaline.get(id);
+    this.adrenaline.set(id, value);
+    if (previous !== undefined && previous !== value) {
+      this.adrenalineRevision.set(id, (this.adrenalineRevision.get(id) ?? 0) + 1);
+    } else if (!this.adrenalineRevision.has(id)) {
+      this.adrenalineRevision.set(id, 0);
+    }
   }
 }

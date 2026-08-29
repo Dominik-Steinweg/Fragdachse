@@ -29,6 +29,8 @@ interface CompactPlayerState {
   m: number;   // maxHp
   a: number;   // armor
   d: number;   // adrenaline
+  ar?: number;  // adrenalineRevision
+  wa?: number;  // weapon2PredictionAck
   g: number;   // rage
   b: number;   // burnStacks
   bv?: number; // burnVisualStyle: 1 = void, fehlt = normal
@@ -63,6 +65,8 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
     m: state.maxHp,
     a: state.armor,
     d: state.adrenaline,
+    ar: state.adrenalineRevision,
+    wa: state.weapon2PredictionAck,
     g: state.rage,
     b: state.burnStacks,
     p: state.dashPhase,
@@ -101,6 +105,8 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
     armor: compact.a,
     alive: (flags & FLAG_ALIVE) !== 0,
     adrenaline: compact.d,
+    adrenalineRevision: compact.ar ?? 0,
+    weapon2PredictionAck: compact.wa ?? 0,
     rage: compact.g,
     isBurrowed: (flags & FLAG_BURROWED) !== 0,
     isStunned: (flags & FLAG_STUNNED) !== 0,

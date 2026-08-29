@@ -17,7 +17,7 @@ import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot, LoadoutToolRef, PlayerProfile, SyncedPowerUp, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerProfile, SyncedPowerUp, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
@@ -37,9 +37,44 @@ import { getHudBuffValueText } from '../../i18n/hudPresentation';
 import { emitArenaMapGridChanged } from './ArenaEvents';
 import type { WorldPresentationRequirement } from '../../world/WorldPresentation';
 import { consumesWorldReplication } from '../../world/WorldReplication';
+import { resolveEffectiveAdrenalineCost } from '../../systems/AdrenalineCost';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
 const EMPTY_EFFECT_TOTALS = EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
+
+export type LocalWeaponPredictionResult =
+  | { fired: false }
+  | { fired: true; predictionId: number; shotId?: number };
+
+export interface PredictedWeapon2Request {
+  angle: number;
+  targetX: number;
+  targetY: number;
+  shotId?: number;
+  params?: LoadoutUseParams;
+  clientX?: number;
+  clientY?: number;
+  clientNow?: number;
+}
+
+type PendingWeapon2Prediction = {
+  worldRevision: number;
+  predictionId: number;
+  amount: number;
+  request: PredictedWeapon2Request;
+  status: 'pending' | 'uncertain' | 'acknowledged';
+  retryInFlight: boolean;
+  retryTimer: ReturnType<typeof setTimeout> | null;
+  retryDelayMs: number;
+  onReject?: (result: LoadoutUseResult) => void;
+};
+
+type LocalFirePrediction = {
+  worldRevision: number;
+  predictionId?: number;
+  firedAt: number;
+  status: 'pending' | 'processed' | 'accepted' | 'rejected';
+};
 
 export interface ClientUpdatePerformanceMetrics {
   totalMs: number;
@@ -84,10 +119,18 @@ export class ClientUpdateCoordinator {
   private storedProfileFallback: CoopDefenseUpgradeProfile | null = null;
   private storedItemsFallback: readonly CoopDefenseItem[] | null = null;
   private storedClassIdFallback: CoopDefenseClassId | null = null;
-  private predictedHitscanCooldownUntil: Record<WeaponSlot, number> = { weapon1: 0, weapon2: 0 };
-  private predictedLocalAdrenaline: number | null = null;
-  private predictedLocalAdrenalineSnapshot: number | null = null;
-  private predictedLocalAdrenalineSnapshotVersion = -1;
+  private authoritativeAdrenaline: {
+    worldRevision: number;
+    value: number;
+    revision: number;
+    weapon2PredictionAck: number;
+  } | null = null;
+  private readonly pendingAdrenalineSpends = new Map<number, PendingWeapon2Prediction>();
+  private readonly localFirePredictions: Record<'weapon1' | 'weapon2', LocalFirePrediction[]> = {
+    weapon1: [],
+    weapon2: [],
+  };
+  private nextPredictionId = 1;
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
   private moveLoopHandle: string | null = null;
@@ -238,6 +281,10 @@ export class ClientUpdateCoordinator {
       }
       return;
     }
+
+    // Ressourcen-Baseline und replaybarer Weapon2-ACK werden unabhängig von der Renderphase
+    // verarbeitet. Ein Reconnect kann dabei einen ACK liefern, ohne eine RPC-Antwort zu liefern.
+    this.reconcileAuthoritativeAdrenalineFromSnapshot();
 
     const lerpFactor = 1 - Math.exp(-delta / NET_SMOOTH_TIME_MS);
 
@@ -497,17 +544,12 @@ export class ClientUpdateCoordinator {
         ...buff,
         valueText: getHudBuffValueText(buff, getLocale()),
       }));
-      const localWeapon2Config = this.getLocalWeaponConfig('weapon2');
-      const fireSuperiorityAvailable = localWeapon2Config.id === 'AK47'
-        && activePowerUps.some((buff) => (
-          buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0
-        ));
       const hudData = buildLocalArenaHudData({
         hp:                      localState.hp,
         maxHp:                   localState.maxHp,
         armor:                   localState.armor,
         maxArmor:                this.getLocalMaxArmor(),
-        adrenaline:              localState.adrenaline,
+        adrenaline:              this.getLocalAdrenaline(),
         maxAdrenaline:           this.getLocalMaxAdrenaline(),
         rage:                    localState.rage,
         maxRage:                 this.getLocalMaxRage(),
@@ -525,7 +567,7 @@ export class ClientUpdateCoordinator {
         isUtilityOverridden:     overrideId !== '' || this.clientUtilityOverride !== null,
         activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
-        weapon2AdrenalineCost:   fireSuperiorityAvailable ? 0 : (localWeapon2Config.adrenalinCost ?? 0),
+        weapon2AdrenalineCost:   this.getLocalWeaponAdrenalineCost('weapon2'),
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
           getConstructionAccessContext(
@@ -585,46 +627,63 @@ export class ClientUpdateCoordinator {
 
   /**
    * Called from the input listener in ArenaScene when the local player fires.
-   * Returns the shotId for hitscan traces (undefined for non-hitscan weapons).
+   * A rejected local cooldown attempt is deliberately distinct from a predicted fire.
    */
-  notifyLoadoutFired(slot: WeaponSlot, angle: number, targetX: number, targetY: number): number | undefined {
-    void targetX;
-    void targetY;
-
-    if (slot !== 'weapon1' && slot !== 'weapon2') return undefined;
+  notifyLoadoutFired(slot: WeaponSlot, angle: number, targetX: number, targetY: number): LocalWeaponPredictionResult {
+    if (slot !== 'weapon1' && slot !== 'weapon2') return { fired: false };
     const now = Date.now();
     const lastFired = this.weaponLastFired[slot];
     const wepConfig = this.getLocalWeaponConfig(slot);
-    if (lastFired > 0 && now - lastFired < wepConfig.cooldown) return undefined; // still on cooldown
+    if (lastFired > 0 && now - lastFired < wepConfig.cooldown) return { fired: false };
 
+    this.ensureCurrentPredictionWorld();
     this.ctx.aimSystem?.notifyShot(slot);
     const shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
     if (shotId === undefined && !bridge.isHost()) {
-      // Projektil-Waffen: Audio sofort lokal abspielen (Prediction),
-      // da spawnProjectile nur auf dem Host läuft und Network-Jitter sonst
-      // unregelmäßige Abstände verursacht.
-      // Melee wird hier NICHT behandelt – der Swing-RPC übernimmt das Audio.
+      // Projektil-Waffen: Audio sofort lokal abspielen (Prediction). Melee wird hier NICHT
+      // behandelt – der Swing-RPC übernimmt das Audio.
       const config = this.getLocalWeaponConfig(slot);
       const fireType = config.fire.type;
       if (fireType === 'projectile' || fireType === 'flamethrower') {
-        const localId    = bridge.getLocalPlayerId();
+        const localId = bridge.getLocalPlayerId();
         const localState = bridge.getLatestGameState()?.players[localId];
-        const isDashing  = (localState?.dashPhase ?? 0) === 1;
-        const adrenaline = localState?.adrenaline ?? 0;
-        const hasAdrenaline = (config.adrenalinCost ?? 0) <= adrenaline;
+        const isDashing = (localState?.dashPhase ?? 0) === 1;
+        const hasAdrenaline = this.getLocalAdrenaline() >= this.getLocalWeaponAdrenalineCost(slot);
         if (!isDashing && hasAdrenaline) {
           this.ctx.effectSystem.playLocalShotAudio(config.shotAudio?.successKey);
         }
       }
     }
+
+    const predictionId = slot === 'weapon2' ? this.nextPredictionId++ : undefined;
+    this.localFirePredictions[slot].push({
+      worldRevision: this.getPredictionWorldRevision(),
+      predictionId,
+      firedAt: now,
+      status: 'pending',
+    });
     this.weaponLastFired[slot] = now;
     this.ctx.leftPanel.flashSlot(slot);
-    return shotId;
+    return predictionId === undefined
+      ? { fired: true, predictionId: 0, shotId }
+      : { fired: true, predictionId, shotId };
   }
 
-  rollbackRejectedLoadoutFire(slot: WeaponSlot): void {
-    this.weaponLastFired[slot] = 0;
-    this.predictedHitscanCooldownUntil[slot] = 0;
+  rollbackRejectedLoadoutFire(slot: WeaponSlot, predictionId?: number): void {
+    if (slot !== 'weapon1' && slot !== 'weapon2') return;
+    const predictions = this.localFirePredictions[slot];
+    const candidate = predictionId === undefined
+      ? [...predictions].reverse().find((prediction) => prediction.status === 'pending')
+      : predictions.find((prediction) => prediction.predictionId === predictionId);
+    if (candidate) candidate.status = 'rejected';
+    this.recomputeWeaponLastFired(slot);
+  }
+
+  private recomputeWeaponLastFired(slot: 'weapon1' | 'weapon2'): void {
+    const latest = [...this.localFirePredictions[slot]]
+      .reverse()
+      .find((prediction) => prediction.status !== 'rejected');
+    this.weaponLastFired[slot] = latest?.firedAt ?? 0;
   }
 
   notifyUtilityFired(): void {
@@ -668,10 +727,11 @@ export class ClientUpdateCoordinator {
     if (this.moveLoopHandle) this.ctx.gameAudioSystem.stopLoop(this.moveLoopHandle);
     this.moveLoopHandle = null;
     this.weaponLastFired = { weapon1: 0, weapon2: 0 };
-    this.predictedHitscanCooldownUntil = { weapon1: 0, weapon2: 0 };
-    this.predictedLocalAdrenaline = null;
-    this.predictedLocalAdrenalineSnapshot = null;
-    this.predictedLocalAdrenalineSnapshotVersion = -1;
+    for (const pending of this.pendingAdrenalineSpends.values()) this.removePendingWeapon2Prediction(pending);
+    this.localFirePredictions.weapon1.length = 0;
+    this.localFirePredictions.weapon2.length = 0;
+    this.authoritativeAdrenaline = null;
+    this.nextPredictionId = 1;
     this.pickupCooldownUntil = 0;
     this.pendingPickupUids.clear();
     this.committedSelectionCache = null;
@@ -750,42 +810,294 @@ export class ClientUpdateCoordinator {
 
   getLocalAdrenaline(): number {
     const localId = bridge.getLocalPlayerId();
-    // Der Host besitzt den autoritativen Wert bereits lokal. Der replizierte 20-Hz-Snapshot
-    // kann nach einem Schuss noch einen Frame lang veraltet sein und darf deshalb dort kein
-    // zweites, anschliessend abgelehntes Prediction-Feuer freigeben.
     if (bridge.isHost() && this.ctx.resourceSystem) {
       return this.ctx.resourceSystem.getAdrenaline(localId);
     }
-
-    const snapshotAdrenaline = bridge.getLatestGameState()?.players[localId]?.adrenaline ?? 0;
-    const snapshotVersion = bridge.getGameStateVersion();
-    if (this.predictedLocalAdrenaline === null || this.predictedLocalAdrenalineSnapshot === null) {
-      this.predictedLocalAdrenaline = snapshotAdrenaline;
-      this.predictedLocalAdrenalineSnapshot = snapshotAdrenaline;
-      this.predictedLocalAdrenalineSnapshotVersion = snapshotVersion;
-    } else if (snapshotVersion !== this.predictedLocalAdrenalineSnapshotVersion) {
-      const snapshotDelta = snapshotAdrenaline - this.predictedLocalAdrenalineSnapshot;
-      if (snapshotDelta < 0) {
-        // Autoritative Verbraeuche koennen den Schattenwert nur senken. Ein vor dem Schuss
-        // erzeugter Snapshot darf eine bereits lokal reservierte Ausgabe nicht zuruecknehmen.
-        this.predictedLocalAdrenaline = Math.min(this.predictedLocalAdrenaline, snapshotAdrenaline);
-      } else if (snapshotDelta > 0) {
-        // Regeneration und Belohnungen werden als Delta uebernommen. So kann gehaltenes Feuer
-        // wieder anlaufen, ohne einen noch nicht bestaetigten Verbrauch zu vergessen.
-        this.predictedLocalAdrenaline = Math.min(
-          this.getLocalMaxAdrenaline(),
-          this.predictedLocalAdrenaline + snapshotDelta,
-        );
+    this.ensureCurrentPredictionWorld();
+    this.reconcileAuthoritativeAdrenalineFromSnapshot();
+    const baseline = this.authoritativeAdrenaline;
+    if (!baseline) return 0;
+    let pending = 0;
+    for (const reservation of this.pendingAdrenalineSpends.values()) {
+      if (reservation.worldRevision === baseline.worldRevision && reservation.status !== 'acknowledged') {
+        pending += reservation.amount;
       }
-      this.predictedLocalAdrenalineSnapshot = snapshotAdrenaline;
-      this.predictedLocalAdrenalineSnapshotVersion = snapshotVersion;
     }
-    return this.predictedLocalAdrenaline;
+    return Math.max(0, baseline.value - pending);
   }
 
-  recordPredictedAdrenalineSpend(amount: number): void {
-    if (bridge.isHost() || amount <= 0) return;
-    this.predictedLocalAdrenaline = Math.max(0, this.getLocalAdrenaline() - amount);
+  getLocalWeaponAdrenalineCost(slot: 'weapon1' | 'weapon2' = 'weapon2'): number {
+    const config = this.getLocalWeaponConfig(slot);
+    if (slot === 'weapon2' && this.isLocalAk47FireSuperiorityAvailable()) return 0;
+    const multiplier = 1 + (this.getLocalEffectTotals().percentage['player.adrenalineCost'] ?? 0);
+    return resolveEffectiveAdrenalineCost(config.adrenalinCost ?? 0, multiplier);
+  }
+
+  beginPredictedWeapon2Use(
+    predictionId: number,
+    request: PredictedWeapon2Request,
+    amount: number,
+    onReject: (result: LoadoutUseResult) => void,
+  ): void {
+    if (bridge.isHost() || amount < 0) return;
+    const worldRevision = this.getPredictionWorldRevision();
+    const pending: PendingWeapon2Prediction = {
+      worldRevision,
+      predictionId,
+      amount,
+      request: {
+        ...request,
+        params: request.params ? { ...request.params } : undefined,
+      },
+      status: 'pending',
+      retryInFlight: false,
+      retryTimer: null,
+      retryDelayMs: 250,
+      onReject,
+    };
+    this.pendingAdrenalineSpends.set(predictionId, pending);
+    void this.sendPendingWeapon2Prediction(pending, false, onReject);
+  }
+
+  /** Wird nach einer Resume-Meldung aufgerufen; ACK-abgedeckte IDs werden nicht erneut gesendet. */
+  retryUnresolvedWeapon2Predictions(): void {
+    this.reconcileAuthoritativeAdrenalineFromSnapshot();
+    const worldRevision = this.getCurrentSnapshotWorldRevision();
+    const ack = this.authoritativeAdrenaline?.worldRevision === worldRevision
+      ? this.authoritativeAdrenaline.weapon2PredictionAck
+      : 0;
+    for (const pending of [...this.pendingAdrenalineSpends.values()]) {
+      if (pending.worldRevision !== worldRevision) {
+        this.removePendingWeapon2Prediction(pending);
+        continue;
+      }
+      if (pending.predictionId <= ack) {
+        this.acknowledgePendingPrediction(pending);
+        continue;
+      }
+      if (pending.retryTimer !== null) {
+        clearTimeout(pending.retryTimer);
+        pending.retryTimer = null;
+      }
+      void this.sendPendingWeapon2Prediction(pending, true);
+    }
+  }
+
+  private sendPendingWeapon2Prediction(
+    pending: PendingWeapon2Prediction,
+    isRetry: boolean,
+    onReject?: (result: LoadoutUseResult) => void,
+  ): Promise<void> {
+    if (pending.retryInFlight || this.pendingAdrenalineSpends.get(pending.predictionId) !== pending) {
+      return Promise.resolve();
+    }
+    if (this.getPredictionWorldRevision() !== pending.worldRevision) {
+      this.removePendingWeapon2Prediction(pending);
+      return Promise.resolve();
+    }
+    this.reconcileAuthoritativeAdrenalineFromSnapshot();
+    if (this.authoritativeAdrenaline?.worldRevision === pending.worldRevision
+      && pending.predictionId <= this.authoritativeAdrenaline.weapon2PredictionAck) {
+      this.acknowledgePendingPrediction(pending);
+      return Promise.resolve();
+    }
+
+    pending.retryInFlight = true;
+    if (isRetry) pending.status = 'uncertain';
+    const request = pending.request;
+    return bridge.sendLoadoutUse(
+      'weapon2',
+      request.angle,
+      request.targetX,
+      request.targetY,
+      request.shotId,
+      request.params,
+      request.clientX,
+      request.clientY,
+      request.clientNow,
+      true,
+      pending.predictionId,
+    ).then((result) => {
+      if (result) this.resolvePredictedWeapon2Use(pending.worldRevision, pending.predictionId, result, onReject ?? pending.onReject);
+      else this.markPredictedWeapon2Timeout(pending);
+    }).catch(() => {
+      this.markPredictedWeapon2Timeout(pending);
+    }).finally(() => {
+      pending.retryInFlight = false;
+    });
+  }
+
+  private markPredictedWeapon2Timeout(pending: PendingWeapon2Prediction): void {
+    if (this.pendingAdrenalineSpends.get(pending.predictionId) !== pending) return;
+    pending.status = 'uncertain';
+    if (pending.retryTimer !== null) clearTimeout(pending.retryTimer);
+    const delay = pending.retryDelayMs;
+    pending.retryDelayMs = Math.min(1_000, delay * 2);
+    pending.retryTimer = setTimeout(() => {
+      pending.retryTimer = null;
+      void this.sendPendingWeapon2Prediction(pending, true);
+    }, delay);
+  }
+
+  private resolvePredictedWeapon2Use(
+    worldRevision: number,
+    predictionId: number,
+    result: LoadoutUseResult,
+    onReject?: (result: LoadoutUseResult) => void,
+  ): void {
+    if (this.getPredictionWorldRevision() !== worldRevision) return;
+    if (result.worldRevision !== undefined && result.worldRevision !== worldRevision) return;
+    this.applyAuthoritativeAdrenalineResult(result, worldRevision);
+    const prediction = this.localFirePredictions.weapon2.find((entry) => (
+      entry.worldRevision === worldRevision && entry.predictionId === predictionId
+    ));
+    if (result.ok) {
+      if (prediction) prediction.status = 'accepted';
+    } else {
+      if (prediction) prediction.status = 'rejected';
+      this.recomputeWeaponLastFired('weapon2');
+      onReject?.(result);
+    }
+    const pending = this.pendingAdrenalineSpends.get(predictionId);
+    if (pending) this.acknowledgePendingPrediction(pending);
+  }
+
+  private reconcileAuthoritativeAdrenalineFromSnapshot(): void {
+    const state = bridge.getLatestGameState();
+    const localId = bridge.getLocalPlayerId();
+    const player = state?.players[localId];
+    if (!state || !player) return;
+    const bridgeWorldRevision = (bridge as unknown as {
+      getCurrentWorldRevision?: () => number | null;
+    }).getCurrentWorldRevision?.();
+    // During a World transition the bridge may still expose the previous cached snapshot. It is
+    // not a valid baseline for the new World and therefore must not reinitialize old state.
+    if (bridgeWorldRevision !== null && bridgeWorldRevision !== undefined
+      && state.worldRevision !== bridgeWorldRevision) return;
+    const incomingWorldRevision = state.worldRevision
+      ?? bridgeWorldRevision
+      ?? 0;
+    if (!Number.isSafeInteger(incomingWorldRevision)) return;
+    const incomingRevision = Number.isSafeInteger(player.adrenalineRevision)
+      ? player.adrenalineRevision!
+      : 0;
+    const incomingAck = Number.isSafeInteger(player.weapon2PredictionAck)
+      ? player.weapon2PredictionAck!
+      : 0;
+    const current = this.authoritativeAdrenaline;
+    if (current && incomingWorldRevision < current.worldRevision) return;
+    if (!current) {
+      this.authoritativeAdrenaline = {
+        worldRevision: incomingWorldRevision,
+        value: player.adrenaline,
+        revision: incomingRevision,
+        weapon2PredictionAck: incomingAck,
+      };
+    } else if (incomingWorldRevision > current.worldRevision) {
+      this.resetPredictionStateForWorld(incomingWorldRevision);
+      this.authoritativeAdrenaline = {
+        worldRevision: incomingWorldRevision,
+        value: player.adrenaline,
+        revision: incomingRevision,
+        weapon2PredictionAck: incomingAck,
+      };
+    } else {
+      if (incomingRevision > current.revision) {
+        current.value = player.adrenaline;
+        current.revision = incomingRevision;
+      }
+      current.weapon2PredictionAck = Math.max(current.weapon2PredictionAck, incomingAck);
+    }
+    this.resolvePendingPredictionsThroughAck();
+  }
+
+  private applyAuthoritativeAdrenalineResult(result: LoadoutUseResult, fallbackWorldRevision: number): void {
+    const worldRevision = result.worldRevision ?? fallbackWorldRevision;
+    if (this.getPredictionWorldRevision() !== worldRevision) return;
+    const current = this.authoritativeAdrenaline;
+    if (result.authoritativeAdrenaline === undefined && result.adrenalineRevision === undefined
+      && result.weapon2PredictionAck === undefined) return;
+    if (!current || current.worldRevision < worldRevision) {
+      this.authoritativeAdrenaline = {
+        worldRevision,
+        value: result.authoritativeAdrenaline ?? 0,
+        revision: result.adrenalineRevision ?? 0,
+        weapon2PredictionAck: result.weapon2PredictionAck ?? 0,
+      };
+    } else if (current.worldRevision === worldRevision) {
+      if ((result.adrenalineRevision ?? -1) > current.revision) {
+        current.value = result.authoritativeAdrenaline ?? current.value;
+        current.revision = result.adrenalineRevision!;
+      }
+      if (result.weapon2PredictionAck !== undefined) {
+        current.weapon2PredictionAck = Math.max(current.weapon2PredictionAck, result.weapon2PredictionAck);
+      }
+    }
+    this.resolvePendingPredictionsThroughAck();
+  }
+
+  private resolvePendingPredictionsThroughAck(): void {
+    const ack = this.authoritativeAdrenaline?.weapon2PredictionAck ?? 0;
+    for (const pending of [...this.pendingAdrenalineSpends.values()]) {
+      if (pending.worldRevision === this.authoritativeAdrenaline?.worldRevision
+        && pending.predictionId <= ack) {
+        this.acknowledgePendingPrediction(pending);
+      }
+    }
+  }
+
+  private acknowledgePendingPrediction(pending: PendingWeapon2Prediction): void {
+    if (pending.retryTimer !== null) clearTimeout(pending.retryTimer);
+    pending.retryTimer = null;
+    pending.status = 'acknowledged';
+    pending.retryInFlight = false;
+    this.pendingAdrenalineSpends.delete(pending.predictionId);
+    const prediction = this.localFirePredictions.weapon2.find((entry) => (
+      entry.worldRevision === pending.worldRevision && entry.predictionId === pending.predictionId
+    ));
+    if (prediction && prediction.status === 'pending') prediction.status = 'processed';
+  }
+
+  private removePendingWeapon2Prediction(pending: PendingWeapon2Prediction): void {
+    if (pending.retryTimer !== null) clearTimeout(pending.retryTimer);
+    pending.retryTimer = null;
+    pending.retryInFlight = false;
+    this.pendingAdrenalineSpends.delete(pending.predictionId);
+  }
+
+  private resetPredictionStateForWorld(worldRevision: number): void {
+    for (const pending of this.pendingAdrenalineSpends.values()) this.removePendingWeapon2Prediction(pending);
+    this.localFirePredictions.weapon1.length = 0;
+    this.localFirePredictions.weapon2.length = 0;
+    this.weaponLastFired = { weapon1: 0, weapon2: 0 };
+    this.nextPredictionId = 1;
+    this.authoritativeAdrenaline = null;
+    void worldRevision;
+  }
+
+  private getCurrentSnapshotWorldRevision(): number {
+    const bridgeWorldRevision = (bridge as unknown as {
+      getCurrentWorldRevision?: () => number | null;
+    }).getCurrentWorldRevision?.();
+    return bridgeWorldRevision
+      ?? bridge.getLatestGameState()?.worldRevision
+      ?? this.authoritativeAdrenaline?.worldRevision
+      ?? 0;
+  }
+
+  private getPredictionWorldRevision(): number {
+    return this.getCurrentSnapshotWorldRevision();
+  }
+
+  private ensureCurrentPredictionWorld(): void {
+    const worldRevision = this.getPredictionWorldRevision();
+    if (this.authoritativeAdrenaline && this.authoritativeAdrenaline.worldRevision !== worldRevision) {
+      this.resetPredictionStateForWorld(worldRevision);
+      return;
+    }
+    for (const pending of [...this.pendingAdrenalineSpends.values()]) {
+      if (pending.worldRevision !== worldRevision) this.removePendingWeapon2Prediction(pending);
+    }
   }
 
   getLocalUtilityCooldownFrac(): number {
@@ -992,10 +1304,11 @@ export class ClientUpdateCoordinator {
     this.dashTrailTimers.clear();
     this.enemyDashVisuals.reset();
     this.weaponLastFired = { weapon1: 0, weapon2: 0 };
-    this.predictedHitscanCooldownUntil = { weapon1: 0, weapon2: 0 };
-    this.predictedLocalAdrenaline = null;
-    this.predictedLocalAdrenalineSnapshot = null;
-    this.predictedLocalAdrenalineSnapshotVersion = -1;
+    for (const pending of this.pendingAdrenalineSpends.values()) this.removePendingWeapon2Prediction(pending);
+    this.localFirePredictions.weapon1.length = 0;
+    this.localFirePredictions.weapon2.length = 0;
+    this.authoritativeAdrenaline = null;
+    this.nextPredictionId = 1;
     this.nextPredictedHitscanShotId = 1;
     this.pickupCooldownUntil = 0;
     this.pendingPickupUids.clear();
@@ -1120,10 +1433,6 @@ export class ClientUpdateCoordinator {
     const config = this.getLocalWeaponConfig(slot);
     if (config.fire.type !== 'hitscan') return undefined;
 
-    const now = Date.now();
-    if (now < this.predictedHitscanCooldownUntil[slot]) return undefined;
-    this.predictedHitscanCooldownUntil[slot] = now + config.cooldown;
-
     const localPlayer = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
     if (!localPlayer) return undefined;
 
@@ -1182,6 +1491,15 @@ export class ClientUpdateCoordinator {
     );
 
     return shotId;
+  }
+
+  private isLocalAk47FireSuperiorityAvailable(): boolean {
+    const localId = bridge.getLocalPlayerId();
+    return this.ctx.loadoutManager?.isAk47FireSuperiorityAvailable(localId)
+      ?? (this.getLocalWeaponConfig('weapon2').id === 'AK47'
+        && bridge.getPlayerActiveBuffs(localId).some((buff) => (
+          buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0
+        )));
   }
 
   private getClientWeaponCooldownFrac(slot: 'weapon1' | 'weapon2'): number {

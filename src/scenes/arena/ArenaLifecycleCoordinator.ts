@@ -410,7 +410,10 @@ export class ArenaLifecycleCoordinator {
       {
         id: 'combat-resources',
         feature: 'combatResources',
-        run: (playerId) => { this.ctx.resourceSystem?.removePlayer(playerId); },
+        run: (playerId) => {
+          this.ctx.resourceSystem?.removePlayer(playerId);
+          bridge.clearWeapon2PredictionState(playerId);
+        },
       },
       {
         id: 'player-build',

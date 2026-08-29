@@ -33,4 +33,18 @@ describe('ResourceSystem diagnostic observers', () => {
     resources.drainAdrenaline('player-1', 10);
     expect(observer).toHaveBeenCalledTimes(1);
   });
+
+  it('increments the adrenaline revision only when the stored value changes', () => {
+    const resources = new ResourceSystem();
+    resources.initPlayer('player-1');
+    expect(resources.getAdrenalineRevision('player-1')).toBe(0);
+
+    resources.addAdrenaline('player-1', 0);
+    expect(resources.getAdrenalineRevision('player-1')).toBe(0);
+
+    resources.drainAdrenaline('player-1', 10);
+    expect(resources.getAdrenalineRevision('player-1')).toBe(1);
+    resources.setAdrenaline('player-1', resources.getAdrenaline('player-1'));
+    expect(resources.getAdrenalineRevision('player-1')).toBe(1);
+  });
 });

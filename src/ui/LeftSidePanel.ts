@@ -213,6 +213,7 @@ export class LeftSidePanel {
   private gameContainer!:  Phaser.GameObjects.Container;
   private puContainer!:    Phaser.GameObjects.Container;
   private arenaHUD!:       ArenaHUD;
+  private adrenalineCostProvider: (() => number) | null = null;
   private arenaOverlayVisible = false;
   private localNameText!:  Phaser.GameObjects.Text;
   private playerLabelText!: Phaser.GameObjects.Text;
@@ -783,6 +784,11 @@ export class LeftSidePanel {
   /** Per-frame arena HUD update with all player vitals. */
   updateArenaHUD(data: ArenaHUDData): void {
     this.arenaHUD.update(data);
+  }
+
+  setAdrenalineCostProvider(provider: (() => number) | null): void {
+    this.adrenalineCostProvider = provider;
+    if (provider) this.arenaHUD?.setAdrenalinTickCost(provider());
   }
 
   /** Trigger fire-highlight on a weapon/utility slot. */
@@ -1760,7 +1766,7 @@ export class LeftSidePanel {
 
     // Weapon 2 adrenaline cost → tick marks on adrenaline bar
     const w2Cfg = w2Id ? WEAPON_CONFIGS[w2Id as keyof typeof WEAPON_CONFIGS] : undefined;
-    this.arenaHUD.setAdrenalinTickCost(w2Cfg?.adrenalinCost ?? 0);
+    this.arenaHUD.setAdrenalinTickCost(this.adrenalineCostProvider?.() ?? w2Cfg?.adrenalinCost ?? 0);
   }
 
   private applyStoredPlayerNamePreference(): void {

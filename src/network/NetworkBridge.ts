@@ -435,6 +435,12 @@ type LoadoutUseHandler = (
   clientNow?: number,
 ) => LoadoutUseResult;
 
+interface Weapon2PredictionState {
+  nextContiguousAck: number;
+  completedPredictionIds: Set<number>;
+  finalResults: Map<number, LoadoutUseResult>;
+}
+
 type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
 type SlimeBloomEffectHandler = (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
 /** `lifetimeMs <= 0` bedeutet: Leiche verbraucht, Marker sofort entfernen. */
@@ -680,6 +686,8 @@ export class NetworkBridge {
   private pingController: NetworkPingController;
   private hostRpcHandlers = new Map<string, (payload: unknown, caller: PlayerState) => Promise<unknown> | unknown>();
   private allRpcHandlers = new Map<string, (payload: unknown) => Promise<unknown> | unknown>();
+  /** Host-only, feature-specific exactly-once state for predicted Weapon2 requests. */
+  private readonly weapon2PredictionStates = new Map<number, Map<string, Weapon2PredictionState>>();
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private heldActionHandler: ((
@@ -909,6 +917,7 @@ export class NetworkBridge {
         this.connectedPlayers.delete(state.id);
         this.connectedPlayersCacheDirty = true;
         this.pingController.removePlayer(state.id);
+        this.clearWeapon2PredictionState(state.id);
         if (hadColor) this.reconcileColorPool();
         this.quitCbs.forEach(cb => cb(state.id));
         this.hostPublishLobbySync();
@@ -950,6 +959,23 @@ export class NetworkBridge {
       const index = this.reconnectStatusCbs.indexOf(callback);
       if (index >= 0) this.reconnectStatusCbs.splice(index, 1);
     };
+  }
+
+  /** Die einzige World-Identitaet, die auch RPC-Antworten und Ressourcenrevisionen bindet. */
+  getCurrentWorldRevision(): number | null {
+    return this.getWorldDescriptor()?.worldRevision ?? null;
+  }
+
+  /** Host-seitiger, zusammenhaengender ACK des lokalen Weapon2-Prediction-Stroms eines Spielers. */
+  getWeapon2PredictionAck(playerId: string): number {
+    const worldRevision = this.getCurrentWorldRevision();
+    if (worldRevision === null) return 0;
+    return this.getWeapon2PredictionState(worldRevision, playerId).nextContiguousAck;
+  }
+
+  /** Wird beim Verlassen der World bzw. des Raums aufgerufen; alte Prediction-IDs sind dann wertlos. */
+  clearWeapon2PredictionState(playerId: string): void {
+    for (const players of this.weapon2PredictionStates.values()) players.delete(playerId);
   }
 
   onKicked(callback: () => void): void {
@@ -2873,6 +2899,7 @@ export class NetworkBridge {
     clientY?: number,
     clientNow?: number,
     awaitResult = false,
+    predictionId?: number,
   ): Promise<LoadoutUseResult | null> {
     const worldRevision = this.getWorldActionRevision();
     if (worldRevision === null) return { ok: false, reason: 'blocked' };
@@ -2889,6 +2916,7 @@ export class NetworkBridge {
       px: clientX,
       py: clientY,
       ts: clientNow,
+      pid: predictionId,
       // Every client action is bound to the World it was created in. The host rejects it if the
       // World was restarted while the RPC was in flight.
       wr: worldRevision,
@@ -2920,7 +2948,6 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      if (!this.acceptsWorldRpc(data)) return { ok: false, reason: 'blocked' };
       const { slot, angle, tx, ty, sid, prm, px, py, ts, wr } = data as {
         slot: LoadoutSlot;
         angle: number;
@@ -2932,7 +2959,41 @@ export class NetworkBridge {
         py?: number;
         ts?: number;
         wr?: number;
+        pid?: number;
       };
+      const predictionId = (data as { pid?: unknown }).pid;
+      const isWeapon2Prediction = slot === 'weapon2'
+        && Number.isSafeInteger(predictionId)
+        && (predictionId as number) > 0
+        && Number.isSafeInteger(wr);
+      const finish = (result: LoadoutUseResult): LoadoutUseResult => {
+        const withWorld = isWeapon2Prediction
+          ? { ...result, worldRevision: wr } satisfies LoadoutUseResult
+          : result;
+        if (!isWeapon2Prediction || !this.acceptsWorldRpc(data)) return withWorld;
+        const state = this.getWeapon2PredictionState(wr as number, caller.id);
+        const id = predictionId as number;
+        const cached = state.finalResults.get(id);
+        if (cached) {
+          this.recordWeapon2PredictionCompleted(state, id);
+          return {
+            ...cached,
+            worldRevision: wr,
+            weapon2PredictionAck: state.nextContiguousAck,
+          };
+        }
+        const finalResult = {
+          ...withWorld,
+          weapon2PredictionAck: state.nextContiguousAck,
+        } satisfies LoadoutUseResult;
+        state.finalResults.set(id, finalResult);
+        this.recordWeapon2PredictionCompleted(state, id);
+        return {
+          ...finalResult,
+          weapon2PredictionAck: state.nextContiguousAck,
+        };
+      };
+      if (!this.acceptsWorldRpc(data)) return { ok: false, reason: 'blocked' };
       if (!['weapon1', 'weapon2', 'utility', 'ultimate'].includes(slot)
         || !isFiniteNumber(angle)
         || !isFiniteNumber(tx)
@@ -2942,13 +3003,25 @@ export class NetworkBridge {
         || (py !== undefined && !isFiniteNumber(py))
         || (ts !== undefined && !isFiniteNumber(ts))
         || (prm !== undefined && !isRecord(prm))) {
-        return { ok: false, reason: 'invalid' };
+        return finish({ ok: false, reason: 'invalid' });
+      }
+      if (isWeapon2Prediction) {
+        const state = this.getWeapon2PredictionState(wr as number, caller.id);
+        const cached = state.finalResults.get(predictionId as number);
+        if (cached) {
+          this.recordWeapon2PredictionCompleted(state, predictionId as number);
+          return {
+            ...cached,
+            worldRevision: wr,
+            weapon2PredictionAck: state.nextContiguousAck,
+          };
+        }
       }
       // Verwende Client-Timestamp für Cooldown-Tracking (verhindert Schussverlust bei variierender RPC-Latenz).
       // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
       const hostNow = Date.now();
       const clientNow = (typeof ts === 'number' && Math.abs(hostNow - ts) <= 200) ? ts : hostNow;
-      return loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow);
+      return finish(loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow));
     });
   }
 
@@ -4500,6 +4573,37 @@ export class NetworkBridge {
     const world = this.getWorldDescriptor();
     if (!world || !maySendWorldInput(this.getLocalWorldParticipation())) return null;
     return world.worldRevision;
+  }
+
+  private getWeapon2PredictionState(worldRevision: number, playerId: string): Weapon2PredictionState {
+    let players = this.weapon2PredictionStates.get(worldRevision);
+    if (!players) {
+      players = new Map();
+      this.weapon2PredictionStates.set(worldRevision, players);
+    }
+    let state = players.get(playerId);
+    if (!state) {
+      state = {
+        nextContiguousAck: 0,
+        completedPredictionIds: new Set(),
+        finalResults: new Map(),
+      };
+      players.set(playerId, state);
+    }
+    // There is no useful cross-World cache. Keep only the active World so an old response or
+    // a reused predictionId can never be mistaken for a new World request.
+    for (const revision of this.weapon2PredictionStates.keys()) {
+      if (revision !== worldRevision) this.weapon2PredictionStates.delete(revision);
+    }
+    return state;
+  }
+
+  private recordWeapon2PredictionCompleted(state: Weapon2PredictionState, predictionId: number): void {
+    state.completedPredictionIds.add(predictionId);
+    while (state.completedPredictionIds.has(state.nextContiguousAck + 1)) {
+      state.completedPredictionIds.delete(state.nextContiguousAck + 1);
+      state.nextContiguousAck += 1;
+    }
   }
 
   private sendWorldRpc(type: string, payload: Readonly<Record<string, unknown>>): boolean {

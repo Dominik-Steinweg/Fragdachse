@@ -222,6 +222,10 @@ export interface PlayerNetState {
   armor:      number;
   alive:      boolean;
   adrenaline: number;   // 0–ADRENALINE_MAX
+  /** Monotone autoritative Ressourcenrevision innerhalb von GameState.worldRevision. */
+  adrenalineRevision?: number;
+  /** Hoechste zusammenhaengend verarbeitete Weapon2-Prediction dieses Spielers. */
+  weapon2PredictionAck?: number;
   rage:       number;   // 0–RAGE_MAX
   isBurrowed: boolean;
   isStunned:  boolean;
@@ -941,6 +945,11 @@ export interface LoadoutUseResult {
   ok: boolean;
   reason?: LoadoutUseFailureReason;
   resourceKind?: LoadoutUseResourceKind;
+  /** World- und Ressourcenordnung der autoritativen Antwort. */
+  worldRevision?: number;
+  authoritativeAdrenaline?: number;
+  adrenalineRevision?: number;
+  weapon2PredictionAck?: number;
 }
 
 /** Lokaler Preview-State für aufladbare Utility-Aktionen. */

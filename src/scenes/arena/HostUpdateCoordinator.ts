@@ -977,7 +977,7 @@ export class HostUpdateCoordinator {
         shieldBuff,
         weapon2AdrenalineCost:   this.ctx.loadoutManager?.isAk47FireSuperiorityAvailable(localId)
           ? 0
-          : (weapon2Cfg?.adrenalinCost ?? 0),
+          : this.ctx.resourceSystem?.resolveAdrenalineCost(localId, weapon2Cfg?.adrenalinCost ?? 0) ?? 0,
         constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
           getConstructionAccessContext(gameMode, currentLoadout),
@@ -1128,6 +1128,8 @@ export class HostUpdateCoordinator {
         armor,
         alive,
         adrenaline: Math.round(adrenaline),
+        adrenalineRevision: this.ctx.resourceSystem?.getAdrenalineRevision(player.id) ?? 0,
+        weapon2PredictionAck: bridge.getWeapon2PredictionAck(player.id),
         rage: Math.round(rage),
         isBurrowed,
         isStunned,

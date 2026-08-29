@@ -1662,8 +1662,11 @@ export class LoadoutManager {
     const fireSuperiorityCanFire = (ak47State?.fireSuperiorityShotsAvailable ?? 0) > 0;
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
-    if (!fireSuperiorityCanFire && cfg.adrenalinCost > 0) {
-      if (this.resourceSystem.getAdrenaline(playerId) < cfg.adrenalinCost) {
+    const effectiveAdrenalineCost = fireSuperiorityCanFire
+      ? 0
+      : this.resourceSystem.resolveAdrenalineCost(playerId, cfg.adrenalinCost);
+    if (effectiveAdrenalineCost > 0) {
+      if (this.resourceSystem.getAdrenaline(playerId) < effectiveAdrenalineCost) {
         // Zu wenig Adrenalin fuer den naechsten Schuss = Dauerfeuer vorbei.
         // Sofort beenden, damit nachtropfendes Adrenalin den Streak nicht am Leben haelt.
         if (cfg.id === 'NEGEV') {
@@ -1844,7 +1847,7 @@ export class LoadoutManager {
     }
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
-    if (!fireSuperiorityCanFire && cfg.adrenalinCost > 0) {
+    if (effectiveAdrenalineCost > 0) {
       this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
     }
 

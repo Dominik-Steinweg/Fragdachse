@@ -5,7 +5,7 @@ import type { RendererBundle }      from './RendererBundle';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
-import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
+import type { ExplosionVisualStyle, LoadoutUseParams, LoadoutUseResult } from '../../types';
 import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
@@ -295,8 +295,25 @@ export class RpcCoordinator {
         }
       }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
-      return this.ctx.loadoutManager?.use(slot, senderId, angle, targetX, targetY, clientNow ?? Date.now(), shotId, authoritativeParams, clientX, clientY)
-        ?? { ok: false, reason: 'blocked' };
+      const result = this.ctx.loadoutManager?.use(
+        slot,
+        senderId,
+        angle,
+        targetX,
+        targetY,
+        clientNow ?? Date.now(),
+        shotId,
+        authoritativeParams,
+        clientX,
+        clientY,
+      ) ?? { ok: false, reason: 'blocked' } satisfies LoadoutUseResult;
+      if (slot !== 'weapon2') return result;
+      return {
+        ...result,
+        worldRevision: bridge.getCurrentWorldRevision() ?? undefined,
+        authoritativeAdrenaline: this.ctx.resourceSystem?.getAdrenaline(senderId),
+        adrenalineRevision: this.ctx.resourceSystem?.getAdrenalineRevision(senderId),
+      };
     });
   }
 

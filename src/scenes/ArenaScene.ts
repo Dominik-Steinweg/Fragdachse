@@ -1231,6 +1231,7 @@ export class ArenaScene extends Phaser.Scene {
     // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
     this.clientUpdate = new ClientUpdateCoordinator(this, this.ctx, this.localPlayerState, this.rockVisualHelper);
+    leftPanel.setAdrenalineCostProvider(() => this.clientUpdate.getLocalWeaponAdrenalineCost('weapon2'));
     this.runtimeProfiler.subscribeDiagnostics((enabled) => {
       // Coordinators interpret this as the cheap whole-step Companion metric; their internal
       // phase timers remain disabled until a future detailed mode is explicitly introduced.
@@ -1322,14 +1323,7 @@ export class ArenaScene extends Phaser.Scene {
       }
     };
     const getLocalWeapon2AdrenalineCost = (): number => {
-      const localId = bridge.getLocalPlayerId();
-      const weapon2Config = this.clientUpdate.getLocalWeaponConfig('weapon2');
-      const fireSuperiorityAvailable = this.ctx.loadoutManager?.isAk47FireSuperiorityAvailable(localId)
-        ?? (weapon2Config.id === 'AK47'
-          && bridge.getPlayerActiveBuffs(localId).some((buff) => (
-            buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0
-          )));
-      return fireSuperiorityAvailable ? 0 : (weapon2Config.adrenalinCost ?? 0);
+      return this.clientUpdate.getLocalWeaponAdrenalineCost('weapon2');
     };
     const isWeapon2AdrenalineInsufficient = (assumeRecentLocalShot = false): boolean => {
       const adrenalineCost = getLocalWeapon2AdrenalineCost();
@@ -1369,8 +1363,9 @@ export class ArenaScene extends Phaser.Scene {
       const wepConfig = this.clientUpdate.getLocalWeaponConfig('weapon2');
       const lastFired = this.clientUpdate.weaponLastFiredRecord()['weapon2'];
       const cooldownOk = lastFired === 0 || Date.now() - lastFired >= wepConfig.cooldown;
-      const adrenalineOk = wepConfig.adrenalinCost === 0
-        || this.clientUpdate.getLocalAdrenaline() >= wepConfig.adrenalinCost;
+      const adrenalineCost = getLocalWeapon2AdrenalineCost();
+      const adrenalineOk = adrenalineCost === 0
+        || this.clientUpdate.getLocalAdrenaline() >= adrenalineCost;
       if (!cooldownOk) {
         handleLocalFailureFeedback('weapon2', 'cooldown', true, undefined, true);
         return false;
@@ -1431,6 +1426,7 @@ export class ArenaScene extends Phaser.Scene {
       slot: LoadoutSlot,
       result: LoadoutUseResult | null,
       inputStarted: boolean,
+      predictionId?: number,
     ): void => {
       if (!result || result.ok) return;
 
@@ -1439,7 +1435,7 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       if ((slot === 'weapon1' || slot === 'weapon2') && (result.reason === 'cooldown' || result.reason === 'resource')) {
-        this.clientUpdate.rollbackRejectedLoadoutFire(slot);
+        this.clientUpdate.rollbackRejectedLoadoutFire(slot, predictionId);
       }
 
       if (result.reason === 'cooldown' || result.reason === 'resource') {
@@ -1466,6 +1462,7 @@ export class ArenaScene extends Phaser.Scene {
       if (!this.localPlayerState.alive || this.localPlayerState.burrowed) return;
 
       let shotId: number | undefined;
+      let predictedWeapon2Id: number | undefined;
       const inputStarted = params?.inputStarted === true;
 
       if ((slot === 'weapon1' || slot === 'weapon2') && !params?.constructionId) {
@@ -1489,10 +1486,13 @@ export class ArenaScene extends Phaser.Scene {
           handleLocalFailureFeedback(slot, 'resource', inputStarted, 'adrenaline');
           return;
         }
-        shotId = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
-        if (slot === 'weapon2') {
-          this.clientUpdate.recordPredictedAdrenalineSpend(getLocalWeapon2AdrenalineCost());
+        const localFire = this.clientUpdate.notifyLoadoutFired(slot, angle, targetX, targetY);
+        if (!localFire.fired) {
+          handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
+          return;
         }
+        shotId = localFire.shotId;
+        if (slot === 'weapon2') predictedWeapon2Id = localFire.predictionId;
       }
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
@@ -1510,6 +1510,26 @@ export class ArenaScene extends Phaser.Scene {
       }
 
       const localSprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
+      if (slot === 'weapon2' && predictedWeapon2Id !== undefined && !bridge.isHost()) {
+        const localX = localSprite?.x;
+        const localY = localSprite?.y;
+        this.clientUpdate.beginPredictedWeapon2Use(
+          predictedWeapon2Id,
+          {
+            angle,
+            targetX,
+            targetY,
+            shotId,
+            params,
+            clientX: localX,
+            clientY: localY,
+            clientNow: Date.now(),
+          },
+          getLocalWeapon2AdrenalineCost(),
+          (result) => handleLocalLoadoutFailure('weapon2', result, inputStarted, predictedWeapon2Id),
+        );
+        return;
+      }
       const isUtilityPlacementAction = slot === 'utility'
         && inputSystem.isUtilityPlacementActive()
         && this.clientUpdate.getLocalUtilityConfig().activation.type === 'placement_mode';
@@ -1526,7 +1546,7 @@ export class ArenaScene extends Phaser.Scene {
         || isInspectorDismantleAction;
       const awaitFailureResult = inputStarted
         && !params?.constructionId
-        && (slot === 'weapon2' || slot === 'ultimate');
+        && (slot === 'weapon1' || slot === 'ultimate' || (slot === 'weapon2' && bridge.isHost()));
       const loadoutPromise = bridge.sendLoadoutUse(slot, angle, targetX, targetY, shotId, params, localSprite?.x, localSprite?.y, Date.now(), awaitResult || awaitFailureResult);
       if (awaitFailureResult) {
         void loadoutPromise.then((result) => {
@@ -1672,6 +1692,9 @@ export class ArenaScene extends Phaser.Scene {
     this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
       if (status.state === 'reconnecting' || status.state === 'resumed') {
         this.mapEventAnnouncementPresenter?.resetForHydration();
+      }
+      if (status.state === 'resumed') {
+        this.clientUpdate.retryUnresolvedWeapon2Predictions();
       }
       if (status.state === 'player-expired') {
         this.lifecycle.handleGuestSessionOwnerRemoved(status.playerId);
