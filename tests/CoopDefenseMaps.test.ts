@@ -812,6 +812,7 @@ describe('Coop defense map progression', () => {
     expect(campaignObjectives.map((objective) => `${objective.type}:${objective.id}`)).toEqual([
       'hold:hold-tutorial-outpost',
       'hold:hold-dimension-bastion',
+      'hold:hold-supply-base',
       'destroy:destroy-brutbomben-front',
       'hold:hold-zeitzunder-middle-outpost',
       'carry:carry-beer-to-rear-base',

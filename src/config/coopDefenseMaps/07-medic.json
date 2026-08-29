@@ -80,6 +80,7 @@
     },
     "hpMax": 1650
   },
+  "persistentBaseRewardsOnVictory": ["base_health_pedestal"],
   "powerUps": [
     {
       "defId": "HEALTH_PACK",

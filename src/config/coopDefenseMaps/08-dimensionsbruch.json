@@ -137,6 +137,7 @@
     },
     "hpMax": 1650
   },
+  "persistentBaseRewardsOnVictory": ["base_rocket_turret"],
   "powerUps": [
     {
       "defId": "HEALTH_PACK",

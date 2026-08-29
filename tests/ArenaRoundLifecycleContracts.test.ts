@@ -120,4 +120,32 @@ describe('arena round lifecycle contract', () => {
     expect(body.indexOf('applyPersistentBaseRoundOutcome')).toBeLessThan(body.indexOf('this.worldLifecycle.endInstance();'));
     expect(body).toContain('this.publishConfirmedPersistentBaseContributions(');
   });
+
+  it('bindet Map- und Objective-Rewards an den gemeinsamen host-autoritativen Grant-Pfad', () => {
+    const source = read(COORDINATOR_PATH);
+    expect(source).toContain(
+      'this.grantAuthoredPersistentBaseRewards(mapConfig.persistentBaseRewardsOnVictory);',
+    );
+    expect(source).toContain(
+      'this.grantAuthoredPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);',
+    );
+
+    const helperStart = source.indexOf('  private grantAuthoredPersistentBaseRewards(');
+    const helperEnd = source.indexOf('\n  /**', helperStart + 1);
+    expect(helperStart).toBeGreaterThan(0);
+    expect(helperEnd).toBeGreaterThan(helperStart);
+    const helperBody = source.slice(helperStart, helperEnd);
+    expect(helperBody).toContain('bridge.getRoundResultEligiblePlayerIds()');
+    expect(helperBody).toContain('grantStoredPersistentBaseRewards');
+    expect(helperBody).toContain('bridge.hostGrantPersistentBaseRewards');
+
+    const syncStart = source.indexOf('  syncPersistentBaseRewards(): void');
+    const syncEnd = source.indexOf('\n  /**', syncStart + 1);
+    expect(syncStart).toBeGreaterThan(0);
+    expect(syncEnd).toBeGreaterThan(syncStart);
+    const syncBody = source.slice(syncStart, syncEnd);
+    expect(syncBody.indexOf('bridge.getConfirmedPersistentBaseRewardGrant()')).toBeGreaterThanOrEqual(0);
+    expect(syncBody.indexOf('grantStoredPersistentBaseRewards(confirmed.rewardIds)'))
+      .toBeLessThan(syncBody.indexOf('if (!bridge.isHost()) return;'));
+  });
 });

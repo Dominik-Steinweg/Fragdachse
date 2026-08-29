@@ -159,10 +159,12 @@ import {
   setStoredPersonalBaseContribution,
   getStoredPersistentBaseRewardState,
   getStoredPersistentBaseRewardUnlocks,
+  grantStoredPersistentBaseRewards,
   setStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
 import { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
+import { PersistentBaseRewardGrantService } from '../../persistentBase/PersistentBaseRewardGrant';
 import {
   getPersistentBaseRewardDefinition,
   isKnownPersistentBaseRewardId,
@@ -487,6 +489,8 @@ export class ArenaLifecycleCoordinator {
   private readonly persistentBaseContributions = new PersistentBaseContributionStore();
   /** Host-only committed/working reward state; clients receive the reliable session projection. */
   private readonly persistentBaseRewards = new PersistentBaseRewardStore();
+  /** Shared idempotent grant path for authored map-victory and objective rewards. */
+  private readonly persistentBaseRewardGrantService = new PersistentBaseRewardGrantService();
   private readonly persistentBaseRewardRuntimeBindings = new Map<PersistentBaseRewardId, {
     runtimeId: number;
     gridX: number;
@@ -1180,6 +1184,10 @@ export class ArenaLifecycleCoordinator {
   hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const roundEndedAt = Date.now();
+    if (roundConclusion === 'victory' && isCoopDefenseMode(this.resolveConfiguredGameMode())) {
+      const mapConfig = getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId());
+      this.grantAuthoredPersistentBaseRewards(mapConfig.persistentBaseRewardsOnVictory);
+    }
     // Defeat, abort and non-Coop completion discard the round-local working copy.
     this.publishConfirmedPersistentBaseContributions(
       applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
@@ -1315,6 +1323,23 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
+  /** Grants authored persistent-base rewards to the frozen round participants. */
+  private grantAuthoredPersistentBaseRewards(
+    rewardIds: readonly PersistentBaseRewardId[] | undefined,
+  ): void {
+    if (!bridge.isHost() || !rewardIds || rewardIds.length === 0) return;
+    const result = this.persistentBaseRewardGrantService.grant(
+      rewardIds,
+      bridge.getRoundResultEligiblePlayerIds(),
+      {
+        localPlayerId: bridge.getLocalPlayerId(),
+        applyLocal: grantStoredPersistentBaseRewards,
+        confirmForPlayer: (playerId, ids) => bridge.hostGrantPersistentBaseRewards(playerId, ids),
+      },
+    );
+    if (result.newlyGrantedByPlayerId.size > 0) this.publishPersistentBaseRewardSessionState();
+  }
+
   /**
    * Haelt persoenlichen Beitrag und Host-Bestaetigung in Fluss.
    *
@@ -1338,10 +1363,13 @@ export class ArenaLifecycleCoordinator {
   }
 
   /**
-   * Keeps the host-owned reward projection and the reliable full session state in sync. Clients do
-   * not write reward persistence; their runtime arrives through the ordinary full GameState.
+   * Keeps personal host confirmations and the host-owned reward projection in sync. Clients only
+   * persist the reliable cumulative grant state; the host publishes the current-world projection.
    */
   syncPersistentBaseRewards(): void {
+    const confirmed = bridge.getConfirmedPersistentBaseRewardGrant();
+    if (confirmed) grantStoredPersistentBaseRewards(confirmed.rewardIds);
+
     if (!bridge.isHost()) return;
     const site = this.ctx.world?.persistentBaseSite ?? null;
     if (!site || !this.ctx.persistentBaseRewards) {
@@ -2650,9 +2678,9 @@ export class ArenaLifecycleCoordinator {
           },
           onObjectiveCompleted: (objectiveId) => {
             if (!bridge.isHost()) return;
-            const reward = coopDefenseSecondaryObjectiveConfigs
-              .find((entry) => entry.id === objectiveId)
-              ?.rewards?.teamBuffOnComplete;
+            const config = coopDefenseSecondaryObjectiveConfigs.find((entry) => entry.id === objectiveId);
+            this.grantAuthoredPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);
+            const reward = config?.rewards?.teamBuffOnComplete;
             if (reward) this.ctx.coopDefenseTeamBuffSystem?.activate(reward, Date.now());
           },
           onHoldFailed: (objectiveId) => {

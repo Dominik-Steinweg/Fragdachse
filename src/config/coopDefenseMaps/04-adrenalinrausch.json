@@ -104,6 +104,7 @@
     },
     "hpMax": 1650
   },
+  "persistentBaseRewardsOnVictory": ["base_adrenaline_pedestal"],
   "powerUps": [
     {
       "defId": "BFG",

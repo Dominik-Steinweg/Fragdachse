@@ -132,6 +132,23 @@
       }
     },
     {
+      "id": "supply-base",
+      "role": "outpost",
+      "dormant": true,
+      "startHpFactor": 0.35,
+      "hpMax": 1400,
+      "anchor": {
+        "kind": "grid",
+        "gridX": 30,
+        "gridY": 12
+      },
+      "shape": {
+        "kind": "rectangle",
+        "widthCells": 2,
+        "heightCells": 2
+      }
+    },
+    {
       "id": "friendly-outpost-rocket",
       "role": "outpost",
       "hpMax": 900,
@@ -166,6 +183,44 @@
     },
     "hpMax": 1650
   },
+  "encounters": [
+    {
+      "id": "reveal",
+      "start": { "type": "time", "atMs": 0 },
+      "restAfterMs": 5000,
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 2 }
+      ]
+    },
+    {
+      "id": "defend",
+      "start": { "type": "after-previous" },
+      "restAfterMs": 5000,
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 3 }
+      ]
+    },
+    {
+      "id": "closing",
+      "start": { "type": "after-previous" },
+      "groups": [
+        { "enemyKind": "zombie-badger", "count": 3 }
+      ]
+    }
+  ],
+  "secondaryObjectives": [
+    {
+      "id": "hold-supply-base",
+      "type": "hold",
+      "start": { "type": "after-encounter", "encounterId": "reveal" },
+      "holdUntil": { "type": "after-encounter", "encounterId": "defend" },
+      "targets": ["supply-base"],
+      "rewards": {
+        "repairTargetOnComplete": false,
+        "persistentBaseRewardsOnComplete": ["base_holy_hand_grenade_pedestal"]
+      }
+    }
+  ],
   "powerUps": [
     {
       "defId": "HEALTH_PACK",
@@ -184,12 +239,6 @@
       "region": "rear",
       "respawnMs": 10000,
       "spawnOnArenaStart": true
-    },
-    {
-      "defId": "HOLY_HAND_GRENADE",
-      "region": "rear",
-      "respawnMs": 30000,
-      "spawnOnArenaStart": false
     }
   ],
   "persistentSpawns": [
