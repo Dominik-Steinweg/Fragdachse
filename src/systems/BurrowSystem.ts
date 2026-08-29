@@ -1,10 +1,11 @@
-import * as Phaser from 'phaser';
 import type { PlayerManager }      from '../entities/PlayerManager';
 import type { CombatSystem }       from './CombatSystem';
 import type { HostPhysicsSystem }  from './HostPhysicsSystem';
 import type { NetworkBridge }      from '../network/NetworkBridge';
 import type { ResourceSystem }     from './ResourceSystem';
 import type { BurrowPhase }        from '../types';
+import type { WorldMetrics }       from '../world/WorldMetrics';
+import { resolveBurrowExitPosition } from './BurrowExitPositionResolver';
 import {
   BURROW_DRAIN_AMOUNT_PER_TICK,
   BURROW_DRAIN_INTERVAL_MS,
@@ -15,7 +16,7 @@ import {
   BURROW_WINDUP_DURATION_MS,
   BURROW_WINDUP_SPEED_FACTOR,
   SHOCKWAVE_RADIUS, SHOCKWAVE_DAMAGE, SHOCKWAVE_KNOCKBACK,
-  PLAYER_SIZE, TRUNK_RADIUS,
+  PLAYER_SIZE,
 } from '../config';
 
 interface BurrowStateData {
@@ -35,16 +36,10 @@ export class BurrowSystem {
   private shockwaveDamageResolver: ((playerId: string) => number) | null = null;
   private shockwaveRadiusResolver: ((playerId: string) => number) | null = null;
 
-  private rockGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
-  private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
-  /**
-   * Coop-Defense-Basis-Gruppe. Burrow-Auftauchen wird hier genauso blockiert
-   * wie auf Felsen/Trunks (Spieler bleibt unterirdisch bzw. wird beim Depleted
-   * in den 'trapped'-Zustand versetzt).
-   */
-  private baseGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private stinkCloudSystem: StinkCloudSystemType | null = null;
   private onBurrowStartCb: ((playerId: string) => void) | null = null;
+  private worldMetrics: WorldMetrics | null = null;
+  private onPositionResetCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onTunnelTransitEndedCb: ((playerId: string) => void) | null = null;
 
   constructor(
@@ -55,16 +50,8 @@ export class BurrowSystem {
     private bridge:       NetworkBridge,
   ) {}
 
-  // ── Obstacle-Gruppen (nach Arena-Aufbau setzen) ───────────────────────────
-
-  setGroups(
-    rock:  Phaser.Physics.Arcade.StaticGroup | null,
-    trunk: Phaser.Physics.Arcade.StaticGroup | null,
-    base:  Phaser.Physics.Arcade.StaticGroup | null = null,
-  ): void {
-    this.rockGroup  = rock;
-    this.trunkGroup = trunk;
-    this.baseGroup  = base;
+  setWorldMetrics(metrics: WorldMetrics | null): void {
+    this.worldMetrics = metrics;
   }
 
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void {
@@ -73,6 +60,10 @@ export class BurrowSystem {
 
   setBurrowStartCallback(cb: ((playerId: string) => void) | null): void {
     this.onBurrowStartCb = cb;
+  }
+
+  setPositionResetCallback(cb: ((playerId: string, x: number, y: number) => void) | null): void {
+    this.onPositionResetCb = cb;
   }
 
   setTunnelTransitEndedCallback(cb: ((playerId: string) => void) | null): void {
@@ -221,9 +212,7 @@ export class BurrowSystem {
       state.stuckDamageAccum -= damage;
     }
 
-    if (!this.isOverlappingStatic(id)) {
-      this.finalizeExit(id);
-    }
+    this.tryFinalizeExit(id);
   }
 
   // ── Privat ─────────────────────────────────────────────────────────────────
@@ -259,12 +248,12 @@ export class BurrowSystem {
     if (!state || state.phase !== 'underground') return;
 
     if (state.isTunnelTransit) {
-      if (this.isOverlappingStatic(id)) return;
+      if (this.isCurrentPositionBlocked(id)) return;
       this.finalizeTunnelTransit(id);
       return;
     }
 
-    if (this.isOverlappingStatic(id)) {
+    if (!this.tryFinalizeExit(id)) {
       if (reason === 'depleted') {
         this.states.set(id, {
           phase: 'trapped',
@@ -275,8 +264,39 @@ export class BurrowSystem {
       }
       return;
     }
+  }
 
+  private tryFinalizeExit(id: string): boolean {
+    const player = this.playerMgr.getPlayer(id);
+    if (!player) {
+      // Preserve teardown-safe behavior: a missing player runtime was previously treated as
+      // non-blocking by the static check.
+      this.finalizeExit(id);
+      return true;
+    }
+
+    const input = this.bridge.getPlayerInput(id);
+    const resolved = this.worldMetrics
+      ? resolveBurrowExitPosition(
+        this.worldMetrics,
+        this.combat.getObstacleIndex(),
+        player.x,
+        player.y,
+        player.getCollisionRadius(),
+        input?.dx ?? 0,
+        input?.dy ?? 0,
+      )
+      : this.isCurrentPositionBlocked(id)
+        ? null
+        : { x: player.x, y: player.y };
+    if (!resolved) return false;
+
+    if (resolved.x !== player.x || resolved.y !== player.y) {
+      player.setPosition(resolved.x, resolved.y);
+      this.onPositionResetCb?.(id, resolved.x, resolved.y);
+    }
     this.finalizeExit(id);
+    return true;
   }
 
   private finalizeExit(id: string): void {
@@ -336,51 +356,15 @@ export class BurrowSystem {
     }
   }
 
-  /**
-   * Prüft ob der Spieler-Sprite ein Rock- oder Trunk-Objekt überlappt.
-   */
-  private isOverlappingStatic(id: string): boolean {
+  /** Prüft nur die aktuelle Player-Kreisposition gegen den gemeinsamen Hindernis-Index. */
+  private isCurrentPositionBlocked(id: string): boolean {
     const player = this.playerMgr.getPlayer(id);
     if (!player) return false;
-
-    const bounds = player.getBounds();
-
-    // Felsen-Overlap (Rechteck-Bounds)
-    if (this.rockGroup) {
-      for (const child of this.rockGroup.getChildren()) {
-        if (!child.active) continue;
-        const rock = child as Phaser.GameObjects.Image;
-        if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, rock.getBounds())) {
-          return true;
-        }
-      }
-    }
-
-    // Trunk-Overlap (Kreisdistanz)
-    if (this.trunkGroup) {
-      for (const child of this.trunkGroup.getChildren()) {
-        if (!child.active) continue;
-        const trunk = child as Phaser.GameObjects.Arc;
-        const dx    = player.x - trunk.x;
-        const dy    = player.y - trunk.y;
-        if (Math.sqrt(dx * dx + dy * dy) < TRUNK_RADIUS + PLAYER_SIZE / 2) {
-          return true;
-        }
-      }
-    }
-
-    // Coop-Defense-Basis-Overlap (Rechteck-Bounds, analog zu Felsen)
-    if (this.baseGroup) {
-      for (const child of this.baseGroup.getChildren()) {
-        if (!child.active) continue;
-        const base = child as Phaser.GameObjects.Rectangle;
-        if (Phaser.Geom.Intersects.RectangleToRectangle(bounds, base.getBounds())) {
-          return true;
-        }
-      }
-    }
-
-    return false;
+    return this.combat.getObstacleIndex().isCircleBlocked(
+      player.x,
+      player.y,
+      player.getCollisionRadius(),
+    );
   }
 
   /**

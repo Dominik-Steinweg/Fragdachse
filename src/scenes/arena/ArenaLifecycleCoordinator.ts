@@ -3202,6 +3202,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.hostPhysics,
         bridge,
       );
+      this.ctx.burrowSystem.setWorldMetrics(world.metrics);
       this.ctx.burrowSystem.setUndergroundSpeedResolver((playerId) => {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.burrowSpeed', 1.3) ?? 1.3;
       });
@@ -3214,11 +3215,9 @@ export class ArenaLifecycleCoordinator {
       this.ctx.burrowSystem.setShockwaveRadiusResolver((playerId) => {
         return this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.unburrowShockwaveRadius', SHOCKWAVE_RADIUS) ?? SHOCKWAVE_RADIUS;
       });
-      this.ctx.burrowSystem.setGroups(
-        this.ctx.arenaResult.rockGroup,
-        this.ctx.arenaResult.trunkGroup,
-        this.ctx.baseManager?.getBaseGroup() ?? null,
-      );
+      this.ctx.burrowSystem.setPositionResetCallback((playerId, x, y) => {
+        this.ctx.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
+      });
       this.ctx.burrowSystem.setBurrowStartCallback((playerId) => {
         this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId);
       });
@@ -4143,6 +4142,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.resourceSystem?.setPowerUpSystem(null);
     this.ctx.resourceSystem?.setAdrenalineRegenRateResolver(null);
     this.ctx.resourceSystem  = null;
+    this.ctx.burrowSystem?.setPositionResetCallback(null);
+    this.ctx.burrowSystem?.setWorldMetrics(null);
     this.ctx.burrowSystem?.setTunnelTransitEndedCallback(null);
     this.ctx.burrowSystem    = null;
     this.ctx.combatSystem.setDetonationSystem(null);

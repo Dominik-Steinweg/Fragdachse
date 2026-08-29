@@ -3,6 +3,7 @@
 import type * as Phaser from 'phaser';
 
 const BUCKET_SIZE = 128;
+const TANGENCY_EPSILON_PX = 0.000001;
 
 export const OBSTACLE_ROCK = 1;
 export const OBSTACLE_BASE = 2;
@@ -111,6 +112,37 @@ function overlapsBox(
   return true;
 }
 
+function circleOverlapsRectangle(
+  centerX: number,
+  centerY: number,
+  radius: number,
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): boolean {
+  const closestX = centerX < left ? left : centerX > right ? right : centerX;
+  const closestY = centerY < top ? top : centerY > bottom ? bottom : centerY;
+  const dx = centerX - closestX;
+  const dy = centerY - closestY;
+  const effectiveRadius = Math.max(0, radius - TANGENCY_EPSILON_PX);
+  return dx * dx + dy * dy < effectiveRadius * effectiveRadius;
+}
+
+function circlesOverlap(
+  firstX: number,
+  firstY: number,
+  firstRadius: number,
+  secondX: number,
+  secondY: number,
+  secondRadius: number,
+): boolean {
+  const dx = firstX - secondX;
+  const dy = firstY - secondY;
+  const effectiveRadius = Math.max(0, firstRadius + secondRadius - TANGENCY_EPSILON_PX);
+  return dx * dx + dy * dy < effectiveRadius * effectiveRadius;
+}
+
 /**
  * Räumlicher Index der schussblockierenden Hindernisse einer Runde.
  *
@@ -187,6 +219,71 @@ export class ArenaObstacleIndex {
    */
   prepare(): void {
     if (this.needsRebuild()) this.rebuild();
+  }
+
+  /**
+   * Prüft eine Player-Kreisposition gegen alle aktiven statischen Hindernisse.
+   * Die Bucket-Vorauswahl bleibt dieselbe wie bei Segmentabfragen; die exakte Formprüfung
+   * erfolgt erst hier, damit Rocks, Basen und Barrieren Rechtecke und Trunks Kreise bleiben.
+   */
+  isCircleBlocked(centerX: number, centerY: number, radius: number): boolean {
+    if (!Number.isFinite(centerX) || !Number.isFinite(centerY) || !Number.isFinite(radius) || radius < 0) {
+      return true;
+    }
+    if (this.needsRebuild()) this.rebuild();
+    if (this.bucketCols === 0 || this.bucketRows === 0) return false;
+
+    const minX = centerX - radius;
+    const maxX = centerX + radius;
+    const minY = centerY - radius;
+    const maxY = centerY + radius;
+    const minCol = Math.max(0, Math.floor((minX - this.originX) / BUCKET_SIZE));
+    const maxCol = Math.min(this.bucketCols - 1, Math.floor((maxX - this.originX) / BUCKET_SIZE));
+    const minRow = Math.max(0, Math.floor((minY - this.originY) / BUCKET_SIZE));
+    const maxRow = Math.min(this.bucketRows - 1, Math.floor((maxY - this.originY) / BUCKET_SIZE));
+    if (minCol > maxCol || minRow > maxRow) return false;
+
+    const stamp = ++this.queryStamp;
+    for (let row = minRow; row <= maxRow; row += 1) {
+      for (let col = minCol; col <= maxCol; col += 1) {
+        const bucket = row * this.bucketCols + col;
+        const start = this.bucketStart[bucket];
+        const end = this.bucketStart[bucket + 1];
+        for (let i = start; i < end; i += 1) {
+          const entry = this.bucketEntries[i];
+          if (this.entryStamp[entry] === stamp) continue;
+          this.entryStamp[entry] = stamp;
+
+          if (entry < this.rectCount) {
+            if (!this.rectSource[entry]?.active) continue;
+            const offset = entry * 4;
+            if (circleOverlapsRectangle(
+              centerX,
+              centerY,
+              radius,
+              this.rectData[offset],
+              this.rectData[offset + 1],
+              this.rectData[offset + 2],
+              this.rectData[offset + 3],
+            )) return true;
+            continue;
+          }
+
+          const circle = entry - this.rectCount;
+          if (!this.circleSource[circle]?.active) continue;
+          const offset = circle * 3;
+          if (circlesOverlap(
+            centerX,
+            centerY,
+            radius,
+            this.circleData[offset],
+            this.circleData[offset + 1],
+            this.circleData[offset + 2],
+          )) return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**

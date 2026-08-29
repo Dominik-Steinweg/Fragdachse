@@ -945,6 +945,7 @@ export const BURROW_DRAIN_AMOUNT_PER_TICK = 5;
 export const BURROW_DRAIN_INTERVAL_MS    = 60;
 export const BURROW_STUCK_DAMAGE_PER_SEC = 25;
 export const BURROW_POPOUT_WEAPON_LOCK_MS = 300;
+export const BURROW_EXIT_ASSIST_MAX_DISTANCE_PX = 8;
 
 export interface MuzzleOrigin {
   x: number;

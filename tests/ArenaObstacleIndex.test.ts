@@ -27,6 +27,16 @@ class FakeBox {
   }
 }
 
+class FakeCircle {
+  active = true;
+
+  constructor(
+    readonly x: number,
+    readonly y: number,
+    readonly radius: number,
+  ) {}
+}
+
 function worldPosition(gridX: number, gridY: number): { x: number; y: number } {
   return {
     x: ARENA_OFFSET_X + gridX * CELL_SIZE + CELL_SIZE / 2,
@@ -231,6 +241,49 @@ describe('ArenaObstacleIndex', () => {
     });
 
     expect(visit(index, spot.x - 100, spot.y, spot.x + 100, spot.y).circleCount).toBe(1);
+  });
+
+  it('prüft Player-Kreise gegen Rechteck-Hindernisse', () => {
+    const spot = worldPosition(12, 7);
+    const createIndex = (source: 'rock' | 'base' | 'barrier'): ArenaObstacleIndex => new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
+      rocks: () => source === 'rock' ? [new FakeBox(spot.x, spot.y) as AnyBox] : null,
+      trunks: () => null,
+      bases: () => source === 'base' ? [new FakeBox(spot.x, spot.y) as AnyBox] : null,
+      barriers: () => source === 'barrier' ? [new FakeBox(spot.x, spot.y) as AnyBox] : null,
+    });
+
+    expect(createIndex('rock').isCircleBlocked(spot.x, spot.y, 16)).toBe(true);
+    expect(createIndex('base').isCircleBlocked(spot.x, spot.y, 16)).toBe(true);
+    expect(createIndex('barrier').isCircleBlocked(spot.x, spot.y, 16)).toBe(true);
+  });
+
+  it('prüft Trunks als Kreise und liest active live', () => {
+    const spot = worldPosition(13, 7);
+    const trunk = new FakeCircle(spot.x, spot.y, 10);
+    const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
+      rocks: () => null,
+      trunks: () => [trunk as AnyBox],
+      bases: () => null,
+    });
+
+    expect(index.isCircleBlocked(spot.x, spot.y, 16)).toBe(true);
+    trunk.active = false;
+    expect(index.isCircleBlocked(spot.x, spot.y, 16)).toBe(false);
+  });
+
+  it('wertet reine Tangentialberührung als frei', () => {
+    const spot = worldPosition(14, 7);
+    const rock = new FakeBox(spot.x, spot.y);
+    const index = new ArenaObstacleIndex({
+      bounds: () => TEST_BOUNDS,
+      rocks: () => [rock as AnyBox],
+      trunks: () => null,
+      bases: () => null,
+    });
+
+    expect(index.isCircleBlocked(spot.x + 32, spot.y, 16)).toBe(false);
   });
 
   it('queries neighboring buckets for a padded collision corridor', () => {
