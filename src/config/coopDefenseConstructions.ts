@@ -416,6 +416,7 @@ export function sumPlaceableCapacity(
   let used = 0;
   for (const rock of rocks) {
     if (rock.ownerId !== ownerId) continue;
+    if (rock.ownership === 'base-owned') continue;
     used += getPlaceableCapacityCost(rock);
   }
   return used;

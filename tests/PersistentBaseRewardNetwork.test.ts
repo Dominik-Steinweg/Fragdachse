@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
+import { LOBBY_WORLD_DEFINITION_ID } from '../src/config/authoring/lobbyWorld';
+import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
 
 function bridgeFor(room: TestRoom): NetworkBridge {
@@ -95,6 +97,89 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
     } finally {
       hostRoom.room.leave();
       clientRoom.room.leave();
+    }
+  });
+
+  it('replicates the complete current-world placement projection and ignores stale revisions', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      const client = bridgeFor(clientRoom);
+      const world = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 404);
+
+      useRoom(hostRoom);
+      host.publishWorldAndActivity(world, null);
+      host.publishPersistentBaseRewardSessionState({
+        worldRevision: 404,
+        revision: 2,
+        availableRewardIds: ['base_spore_turret', 'base_health_pedestal'],
+        placements: [{
+          rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
+        }],
+      });
+
+      useRoom(clientRoom);
+      expect(client.getPersistentBaseRewardSessionState()).toEqual({
+        worldRevision: 404,
+        revision: 2,
+        availableRewardIds: ['base_spore_turret', 'base_health_pedestal'],
+        placements: [{
+          rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
+        }],
+      });
+
+      useRoom(hostRoom);
+      host.publishPersistentBaseRewardSessionState({
+        worldRevision: 404,
+        revision: 1,
+        availableRewardIds: ['base_spore_turret'],
+        placements: [],
+      });
+      useRoom(clientRoom);
+      expect(client.getPersistentBaseRewardSessionState()?.revision).toBe(2);
+    } finally {
+      hostRoom.room.leave();
+      clientRoom.room.leave();
+    }
+  });
+
+  it('routes host-local placement requests through the registered handler', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      const world = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 405);
+      const calls: Array<{ playerId: string; rewardId: string; x: number; y: number }> = [];
+
+      useRoom(hostRoom);
+      host.publishWorldAndActivity(world, null);
+      host.registerPersistentBaseRewardPlacementHandler((playerId, request) => {
+        calls.push({
+          playerId,
+          rewardId: request.rewardId,
+          x: request.relativeGridX,
+          y: request.relativeGridY,
+        });
+        return { ok: true };
+      });
+
+      await expect(host.sendPersistentBaseRewardPlacement({
+        worldRevision: 405,
+        rewardId: 'base_health_pedestal',
+        relativeGridX: 1,
+        relativeGridY: 2,
+        angle: 0,
+      })).resolves.toEqual({ ok: true });
+      expect(calls).toEqual([{
+        playerId: host.getLocalPlayerId(),
+        rewardId: 'base_health_pedestal',
+        x: 1,
+        y: 2,
+      }]);
+    } finally {
+      hostRoom.room.leave();
     }
   });
 });

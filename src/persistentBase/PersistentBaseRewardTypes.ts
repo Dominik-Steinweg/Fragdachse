@@ -27,6 +27,25 @@ export interface PersistentBaseRewardState {
   readonly schemaVersion: typeof PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION;
   readonly revision: number;
   readonly placements: readonly PersistentBaseRewardPlacement[];
+  /** Rewards that have already occupied the base once; used by the later dismantle contract. */
+  readonly everPlacedRewardIds?: readonly PersistentBaseRewardId[];
+}
+
+/** Complete host-owned reward projection shared with every peer. */
+export interface PersistentBaseRewardSessionState {
+  readonly worldRevision: number;
+  readonly revision: number;
+  readonly availableRewardIds: readonly PersistentBaseRewardId[];
+  readonly placements: readonly PersistentBaseRewardPlacement[];
+}
+
+/** World-bound host request for a first-time reward placement. */
+export interface PersistentBaseRewardPlacementRequest {
+  readonly worldRevision: number;
+  readonly rewardId: PersistentBaseRewardId;
+  readonly relativeGridX: number;
+  readonly relativeGridY: number;
+  readonly angle: number;
 }
 
 export interface PersistentBaseRewardGrant {
@@ -42,6 +61,7 @@ export const DEFAULT_PERSISTENT_BASE_REWARD_STATE: PersistentBaseRewardState = O
   schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
   revision: 0,
   placements: Object.freeze([]),
+  everPlacedRewardIds: Object.freeze([]),
 });
 
 export function isPersistentBaseRewardId(value: unknown): value is PersistentBaseRewardId {
@@ -95,11 +115,22 @@ export function sanitizePersistentBaseRewardState(value: unknown): PersistentBas
     seen.add(placement.rewardId);
     placements.push(placement);
   }
-  return {
+  const rawEverPlaced = value.everPlacedRewardIds === undefined
+    ? placements.map((placement) => placement.rewardId)
+    : sanitizePersistentBaseRewardIds(value.everPlacedRewardIds);
+  if (!rawEverPlaced) return null;
+  const everPlacedRewardIds = [...new Set(rawEverPlaced)] as PersistentBaseRewardId[];
+  if (placements.some((placement) => !everPlacedRewardIds.includes(placement.rewardId))) return null;
+  const normalized: PersistentBaseRewardState = {
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: value.revision,
     placements,
+    ...(value.everPlacedRewardIds === undefined ? {} : { everPlacedRewardIds }),
   };
+  // Keep the 3D-1 wire/save shape backward-compatible when reading a legacy state. The store
+  // treats the placement list as the implicit history in that case; new writes include the
+  // explicit one-time-placement marker.
+  return normalized;
 }
 
 export function sanitizePersistentBaseRewardGrant(value: unknown): PersistentBaseRewardGrant | null {
@@ -123,7 +154,52 @@ export function clonePersistentBaseRewardState(
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: state.revision,
     placements: state.placements.map(clonePersistentBaseRewardPlacement),
+    everPlacedRewardIds: [...(state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId))],
   };
+}
+
+export function clonePersistentBaseRewardSessionState(
+  state: PersistentBaseRewardSessionState,
+): PersistentBaseRewardSessionState {
+  return {
+    worldRevision: state.worldRevision,
+    revision: state.revision,
+    availableRewardIds: [...state.availableRewardIds],
+    placements: state.placements.map(clonePersistentBaseRewardPlacement),
+  };
+}
+
+export function sanitizePersistentBaseRewardSessionState(
+  value: unknown,
+): PersistentBaseRewardSessionState | null {
+  if (!isRecord(value)
+    || !isSafeIntegerInRange(value.worldRevision, 0, Number.MAX_SAFE_INTEGER)
+    || !isSafeIntegerInRange(value.revision, 0, Number.MAX_SAFE_INTEGER)) return null;
+  const availableRewardIds = sanitizePersistentBaseRewardIds(value.availableRewardIds);
+  if (!availableRewardIds || !Array.isArray(value.placements)) return null;
+  const placements = sanitizePersistentBaseRewardState({
+    schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
+    revision: value.revision,
+    placements: value.placements,
+  });
+  if (!placements) return null;
+  if (placements.placements.some((placement) => !availableRewardIds.includes(placement.rewardId))) return null;
+  return {
+    worldRevision: value.worldRevision,
+    revision: value.revision,
+    availableRewardIds,
+    placements: placements.placements,
+  };
+}
+
+export function sanitizePersistentBaseRewardPlacementRequest(
+  value: unknown,
+): PersistentBaseRewardPlacementRequest | null {
+  if (!isRecord(value)
+    || !isSafeIntegerInRange(value.worldRevision, 0, Number.MAX_SAFE_INTEGER)) return null;
+  const placement = sanitizePersistentBaseRewardPlacement(value);
+  if (!placement) return null;
+  return { worldRevision: value.worldRevision, ...placement };
 }
 
 export function clonePersistentBaseRewardGrant(

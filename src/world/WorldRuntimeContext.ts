@@ -4,6 +4,8 @@ import type { WorldDefinition } from '../config/authoring/WorldDefinition';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import {
   resolvePersistentBaseBuildArea,
+  DEFAULT_PERSISTENT_BASE_ORIENTATION,
+  type PersistentBaseOrientation,
   type PersistentBaseBuildArea,
 } from '../persistentBase/PersistentBaseCore';
 import { getPersistentBaseAnchor } from '../persistentBase/PersistentBaseZone';
@@ -40,6 +42,7 @@ export interface WorldPersistentBaseSite {
   /** Die Basis dieser World, die als Anker dient. */
   readonly base: BaseSpec;
   readonly anchor: PersistentBaseAnchor;
+  readonly orientation: PersistentBaseOrientation;
   /** Host-autoritativer Progressionsradius; relevant fuer radiusbasierte Area-Regeln. */
   readonly radiusCells: number;
   /** Aktuelle Regel fuer die bebaubare Flaeche dieser Instanz. */
@@ -136,5 +139,12 @@ function resolvePersistentBaseSite(
     definition.persistentBaseSite?.buildArea,
     radiusCells,
   );
-  return { baseId, base, anchor: getPersistentBaseAnchor(base), radiusCells, buildArea };
+  return {
+    baseId,
+    base,
+    anchor: getPersistentBaseAnchor(base),
+    orientation: definition.persistentBaseSite?.orientation ?? DEFAULT_PERSISTENT_BASE_ORIENTATION,
+    radiusCells,
+    buildArea,
+  };
 }

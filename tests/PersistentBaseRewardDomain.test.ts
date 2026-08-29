@@ -81,6 +81,26 @@ describe('PersistentBaseRewardState', () => {
       placements: [{ rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 }],
     });
   });
+
+  it('keeps a one-time placement marker when a placement is rolled back', () => {
+    const store = new PersistentBaseRewardStore();
+    expect(store.placeReward({
+      rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0,
+    })).toBe(true);
+    expect(store.getState().everPlacedRewardIds).toEqual(['base_spore_turret']);
+
+    store.beginMission();
+    expect(store.dismantleReward('base_spore_turret')).toBe(true);
+    store.rollback();
+    expect(store.getState().placements).toHaveLength(1);
+    expect(store.getState().everPlacedRewardIds).toEqual(['base_spore_turret']);
+
+    store.beginMission();
+    expect(store.dismantleReward('base_spore_turret')).toBe(true);
+    store.commit();
+    expect(store.getState().placements).toEqual([]);
+    expect(store.canPlaceReward('base_spore_turret', ['base_spore_turret'])).toBe(false);
+  });
 });
 
 describe('PersistentBaseRewardStore', () => {

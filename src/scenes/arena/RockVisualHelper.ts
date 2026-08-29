@@ -87,7 +87,7 @@ export class RockVisualHelper {
   ): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
 
-    const materialization = rocks.filter((rock) => rock.kind !== 'pedestal');
+    const materialization = rocks.filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none');
     for (const rock of rocks) this.ensureRuntimeRockSlot(rock);
     for (const rock of materialization) {
       this.ctx.arenaResult.rockGrid.set(rock.gridX, rock.gridY, rock.id);
@@ -144,6 +144,24 @@ export class RockVisualHelper {
         refreshStaticShadows: false,
         requiresObstacleIndexRebuild: false,
         hasStalePedestalProxy: Boolean(staleProxy),
+      };
+    }
+
+    // Persistent reward turrets are visible and targetable, but deliberately have neither a
+    // physics proxy nor an ArenaBuilder obstacle footprint. Their cell remains reserved in the
+    // PlacementSystem grid and is therefore still unavailable to player construction.
+    if (rock.collisionMode === 'none') {
+      this.destroyRockProxyIfPresent(rock.id);
+      if (rock.kind === 'turret' && presentation) this.createOrUpdateTurretVisual(rock);
+      if (playSpawnFx && presentation) {
+        const world = this.gridToWorld(rock.gridX, rock.gridY);
+        this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
+        this.ctx.gameAudioSystem.playSound('sfx_place_spore_turret', world.x, world.y, rock.ownerId);
+      }
+      return {
+        refreshStaticShadows: false,
+        requiresObstacleIndexRebuild: false,
+        hasStalePedestalProxy: false,
       };
     }
 
@@ -220,6 +238,15 @@ export class RockVisualHelper {
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
     const currentProxy = this.ctx.arenaResult.rockPhysicsProxies[rock.id];
+    if (rock.collisionMode === 'none') {
+      if (playDust) {
+        const world = this.gridToWorld(rock.gridX, rock.gridY);
+        this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
+      }
+      this.destroyTurretVisual(rock.id);
+      this.destroyRockProxyIfPresent(rock.id);
+      return;
+    }
     if (rock.kind === 'pedestal') {
       if (currentProxy) {
         ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
@@ -261,6 +288,10 @@ export class RockVisualHelper {
     if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
     const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock?.kind === 'pedestal') return;
+    if (runtimeRock?.collisionMode === 'none') {
+      if (runtimeRock.kind === 'turret') this.createOrUpdateTurretVisual({ ...runtimeRock, hp });
+      return;
+    }
     if (runtimeRock && runtimeRock.kind !== 'rock') {
       ArenaBuilder.updateRockVisual(
         this.ctx.arenaResult,
@@ -281,6 +312,12 @@ export class RockVisualHelper {
       runtimeRock?.ownerColor,
       runtimeRock ? this.getPlaceableRockConfig(runtimeRock).placeable.ownerTintStrength : 0,
     );
+  }
+
+  private destroyRockProxyIfPresent(rockId: number): void {
+    if (this.ctx.arenaResult?.rockPhysicsProxies[rockId]) {
+      ArenaBuilder.destroyRock(this.ctx.arenaResult, rockId);
+    }
   }
 
   applyObstacleDamageById(rockId: number, damage: number, attackerId: string): number {
@@ -338,7 +375,11 @@ export class RockVisualHelper {
         this.spawnTurretDeathCloud(runtimeRock);
       }
       if (runtimeRock.kind === 'pedestal') {
-        this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
+        if (runtimeRock.persistentRewardId !== undefined) {
+          this.ctx.powerUpSystem?.unregisterPersistentBaseRewardPedestal(runtimeRock.persistentRewardId);
+        } else {
+          this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
+        }
       }
       if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
         const world = this.gridToWorld(runtimeRock.gridX, runtimeRock.gridY);

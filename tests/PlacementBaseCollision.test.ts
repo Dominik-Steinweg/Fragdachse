@@ -17,12 +17,14 @@ import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../src/config';
 import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBase';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
+import { COOP_DEFENSE_BASE_TURRET_OWNER_ID } from '../src/config';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { getUtilityConfigForMode } from '../src/loadout/LoadoutConfig';
 import type { PersistentRestoreToolDefinition } from '../src/persistentBase/PersistentBaseTools';
 import { mergePersistentBaseComposite } from '../src/persistentBase/PersistentBaseComposite';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { resolvePersistentBaseCoreCells } from '../src/persistentBase/PersistentBaseCore';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { ArenaLayout } from '../src/types';
 
@@ -272,5 +274,43 @@ describe('PlacementSystem Coop-Defense base collision contract', () => {
       'inspector',
       0x52d273,
     )).toMatchObject({ gridX: 11, gridY: 10 });
+  });
+
+  it('allows only the explicit reward path on all twelve surface cells without capacity or collision', () => {
+    const anchor = { gridX: 20, gridY: 20 };
+    const core = resolvePersistentBaseCoreCells(anchor);
+    const surface = core.filter((cell) => cell.domain === 'base-surface');
+    expect(surface).toHaveLength(12);
+    const placement = createPlacement([
+      makeBase('main', core.map((cell) => ({
+        gridX: cell.gridX,
+        gridY: cell.gridY,
+      }))),
+    ]);
+
+    for (const cell of surface) {
+      expect(placement.canPlaceSingleCell(cell.gridX, cell.gridY)).toBe(false);
+      expect(placement.canMaterializePersistentBaseRewardCell(cell.gridX, cell.gridY)).toBe(true);
+    }
+
+    const first = surface[0]!;
+    const runtime = placement.materializePersistentBaseReward(
+      COOP_DEFENSE_CONSTRUCTIONS.spore_turret,
+      'base_spore_turret',
+      first.gridX,
+      first.gridY,
+      0,
+      COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+      0x52d273,
+    );
+    expect(runtime).toMatchObject({
+      ownership: 'base-owned',
+      persistentRewardId: 'base_spore_turret',
+      collisionMode: 'none',
+      indestructible: true,
+    });
+    expect(placement.getRuntimeRockAt(first.gridX, first.gridY)).toMatchObject({
+      persistentRewardId: 'base_spore_turret',
+    });
   });
 });

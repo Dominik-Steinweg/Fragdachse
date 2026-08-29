@@ -1,6 +1,7 @@
 import type { RoundConclusion } from '../network/NetworkBridge';
 import type { PersistentBaseContributionStore } from './PersistentBaseContributionStore';
 import type { PersistentPlayerBaseContribution } from './PersistentBaseTypes';
+import type { PersistentBaseRewardStore } from './PersistentBaseRewardStore';
 
 /**
  * Wie eine beendete Runde mit dem persistenten Arbeitsstand umgeht. Nur ein Sieg schreibt fort;
@@ -21,6 +22,8 @@ export interface PersistentBaseRoundTargets {
   readonly contributions: PersistentBaseContributionStoreLike;
   /** Nur noch lebende Runtime-Objekte werden fortgeschrieben. */
   readonly isRuntimeObjectAlive: (runtimeId: number) => boolean;
+  /** Persistent reward store follows the same victory/rollback boundary as contributions. */
+  readonly rewards?: Pick<PersistentBaseRewardStore, 'hasActiveMission' | 'commit' | 'rollback'>;
 }
 
 export function resolvePersistentBaseRoundOutcome(
@@ -41,8 +44,15 @@ export function applyPersistentBaseRoundOutcome(
   targets: PersistentBaseRoundTargets,
 ): readonly PersistentPlayerBaseContribution[] {
   const { contributions, isRuntimeObjectAlive } = targets;
-  if (!contributions.hasActiveMission) return [];
-  if (outcome === 'commit') return contributions.commit(isRuntimeObjectAlive);
-  contributions.rollback();
+  const contributionActive = contributions.hasActiveMission;
+  const rewardsActive = targets.rewards?.hasActiveMission === true;
+  if (!contributionActive && !rewardsActive) return [];
+  if (outcome === 'commit') {
+    const confirmed = contributionActive ? contributions.commit(isRuntimeObjectAlive) : [];
+    if (rewardsActive) targets.rewards?.commit();
+    return confirmed;
+  }
+  if (contributionActive) contributions.rollback();
+  if (rewardsActive) targets.rewards?.rollback();
   return [];
 }

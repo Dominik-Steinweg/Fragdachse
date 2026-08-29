@@ -4,6 +4,7 @@ import {
   POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
 } from '../config';
 import type { ArenaLayout, ExplosionDamageTarget, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem }  from '../systems/CombatSystem';
 import {
@@ -37,6 +38,7 @@ interface WorldItem {
 interface PedestalRuntime {
   id: number;
   constructionId?: number;
+  persistentRewardId?: PersistentBaseRewardId;
   def: PowerUpDef;
   x: number;
   y: number;
@@ -130,6 +132,7 @@ export class PowerUpSystem {
   private pedestals   = new Map<number, PedestalRuntime>();
   private itemToPedestal = new Map<number, number>();
   private readonly constructionPedestalIds = new Map<number, number>();
+  private readonly persistentRewardPedestalIds = new Map<PersistentBaseRewardId, number>();
   private nextDynamicPedestalId = 0;
   private nextUid     = 1;
   private nextNukeId  = 1;
@@ -161,6 +164,12 @@ export class PowerUpSystem {
     this.arenaStartTime = ts;
     this.pedestalsActivated = false;
     for (const pedestal of this.pedestals.values()) {
+      if (pedestal.currentUid !== null) {
+        this.worldItems.delete(pedestal.currentUid);
+        this.netSnapshotCache.delete(pedestal.currentUid);
+        this.pendingRemovalUids.add(pedestal.currentUid);
+        this.itemToPedestal.delete(pedestal.currentUid);
+      }
       pedestal.currentUid = null;
       pedestal.nextRespawnAt = pedestal.spawnOnArenaStart ? 0 : (ts > 0 ? ts + pedestal.respawnMs : 0);
     }
@@ -176,10 +185,14 @@ export class PowerUpSystem {
     this.activeBuffs.clear();
     this.activeNukes.clear();
     this.itemToPedestal.clear();
-    for (const pedestalId of this.constructionPedestalIds.values()) {
+    for (const pedestalId of [
+      ...this.constructionPedestalIds.values(),
+      ...this.persistentRewardPedestalIds.values(),
+    ]) {
       this.pedestals.delete(pedestalId);
     }
     this.constructionPedestalIds.clear();
+    this.persistentRewardPedestalIds.clear();
     this.nextDynamicPedestalId = this.getInitialDynamicPedestalId();
     this.nextUid = 1;
     this.nextNukeId = 1;
@@ -257,6 +270,50 @@ export class PowerUpSystem {
     const pedestalId = this.constructionPedestalIds.get(constructionId);
     if (pedestalId === undefined) return false;
     this.constructionPedestalIds.delete(constructionId);
+    return this.removePedestal(pedestalId);
+  }
+
+  /** Registers a persistent reward pedestal with its authored reward lifecycle. */
+  registerPersistentBaseRewardPedestal(
+    persistentRewardId: PersistentBaseRewardId,
+    defId: string,
+    x: number,
+    y: number,
+    respawnMs: number | null,
+    spawnOnArenaStart: boolean,
+    ownerColor?: number,
+  ): boolean {
+    const existingId = this.persistentRewardPedestalIds.get(persistentRewardId);
+    if (existingId !== undefined) return this.pedestals.has(existingId);
+    const def = POWERUP_DEFS[defId];
+    if (!def || respawnMs === null || !Number.isFinite(respawnMs) || respawnMs <= 0) return false;
+
+    while (this.pedestals.has(this.nextDynamicPedestalId)) this.nextDynamicPedestalId += 1;
+    const pedestalId = this.nextDynamicPedestalId++;
+    const pedestal: PedestalRuntime = {
+      id: pedestalId,
+      persistentRewardId,
+      def,
+      x,
+      y,
+      ownerColor,
+      respawnMs: Math.max(1, Math.floor(respawnMs)),
+      spawnOnArenaStart,
+      currentUid: null,
+      nextRespawnAt: 0,
+    };
+    this.pedestals.set(pedestalId, pedestal);
+    this.persistentRewardPedestalIds.set(persistentRewardId, pedestalId);
+    this.pendingPedestalRemovalIds.delete(pedestalId);
+    this.spawnPedestalItem(pedestal);
+    return true;
+  }
+
+  /** Removes a persistent reward pedestal and its currently spawned item. */
+  unregisterPersistentBaseRewardPedestal(persistentRewardId: PersistentBaseRewardId): boolean {
+    const pedestalId = this.persistentRewardPedestalIds.get(persistentRewardId);
+    if (pedestalId === undefined) return false;
+    this.persistentRewardPedestalIds.delete(persistentRewardId);
     return this.removePedestal(pedestalId);
   }
 
@@ -679,6 +736,7 @@ export class PowerUpSystem {
         x: pedestal.x,
         y: pedestal.y,
         ...(pedestal.ownerColor === undefined ? {} : { ownerColor: pedestal.ownerColor }),
+        ...(pedestal.persistentRewardId === undefined ? {} : { persistentRewardId: pedestal.persistentRewardId }),
         hasPowerUp: pedestal.currentUid !== null,
         nextRespawnAt: pedestal.currentUid === null ? pedestal.nextRespawnAt : 0,
       });

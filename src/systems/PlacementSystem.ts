@@ -14,6 +14,7 @@ import {
   type WorldMetrics,
 } from '../world/WorldMetrics';
 import type { ArenaLayout, ConstructionOwnership, LoadoutToolRef, PlaceableKind, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../types';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import {
   getCoopDefenseConstructionDefinition,
   getConstructionIdForUtility,
@@ -133,6 +134,18 @@ export class PlacementSystem {
 
   getRuntimeRock(id: number): SyncedPlaceableRock | undefined {
     return this.runtimeRocks.get(id);
+  }
+
+  getRuntimeRockAt(gridX: number, gridY: number): SyncedPlaceableRock | undefined {
+    const id = this.rockGrid.getIndex(gridX, gridY);
+    return id >= 0 ? this.runtimeRocks.get(id) : undefined;
+  }
+
+  /** Removes the runtime object bound to one persistent reward, if it is materialized. */
+  removePersistentBaseReward(persistentRewardId: PersistentBaseRewardId): SyncedPlaceableRock | undefined {
+    const runtime = [...this.runtimeRocks.values()]
+      .find((rock) => rock.persistentRewardId === persistentRewardId);
+    return runtime ? this.removeRock(runtime.id) : undefined;
   }
 
   getAllRuntimeRocks(): readonly SyncedPlaceableRock[] {
@@ -415,6 +428,87 @@ export class PlacementSystem {
     return { ...rock };
   }
 
+  /**
+   * Host-only reward restore path. The base-domain rule is deliberately explicit here: normal
+   * player placement still rejects all base cells, while this path only bypasses that one rule
+   * after the lifecycle has validated the canonical reward domain.
+   */
+  canMaterializePersistentBaseRewardCell(gridX: number, gridY: number, allowRuntimeReplacement = false): boolean {
+    return this.canPlaceCells([{ dx: 0, dy: 0 }], gridX, gridY, false, true, allowRuntimeReplacement);
+  }
+
+  materializePersistentBaseReward(
+    cfg: CoopDefenseConstructionDefinition,
+    persistentRewardId: PersistentBaseRewardId,
+    gridX: number,
+    gridY: number,
+    angle: number,
+    ownerId: string,
+    ownerColor: number,
+  ): SyncedPlaceableRock | null {
+    if (cfg.kind !== 'turret' || cfg.footprint.length !== 1
+      || cfg.footprint[0].dx !== 0 || cfg.footprint[0].dy !== 0
+      || !this.canMaterializePersistentBaseRewardCell(gridX, gridY)) return null;
+
+    const maxHp = Math.max(1, cfg.maxHp);
+    const rock: RuntimeRockRecord = {
+      id: this.nextRockId++,
+      kind: 'turret',
+      constructionId: cfg.id,
+      gridX,
+      gridY,
+      hp: maxHp,
+      maxHp,
+      ownerId,
+      ownerColor,
+      expiresAt: 0,
+      warningStartsAt: 0,
+      angle: Number.isFinite(angle) ? angle : 0,
+      ownership: 'base-owned',
+      persistentRewardId,
+      collisionMode: 'none',
+      indestructible: true,
+      targetRange: cfg.targetRange,
+      turretWeaponId: cfg.weaponId,
+      toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
+      energyInjectorEffect: undefined,
+    };
+    this.runtimeRocks.set(rock.id, rock);
+    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    return { ...rock };
+  }
+
+  materializePersistentBaseRewardPedestal(
+    persistentRewardId: PersistentBaseRewardId,
+    gridX: number,
+    gridY: number,
+    angle: number,
+    ownerId: string,
+    ownerColor: number,
+  ): SyncedPlaceableRock | null {
+    if (!this.canMaterializePersistentBaseRewardCell(gridX, gridY)) return null;
+    const rock: RuntimeRockRecord = {
+      id: this.nextRockId++,
+      kind: 'pedestal',
+      gridX,
+      gridY,
+      hp: 1,
+      maxHp: 1,
+      ownerId,
+      ownerColor,
+      expiresAt: 0,
+      warningStartsAt: 0,
+      angle: Number.isFinite(angle) ? angle : 0,
+      ownership: 'base-owned',
+      persistentRewardId,
+      collisionMode: 'none',
+      indestructible: true,
+    };
+    this.runtimeRocks.set(rock.id, rock);
+    this.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+    return { ...rock };
+  }
+
   getConstructionPlacementPreview(
     cfg: CoopDefenseConstructionDefinition,
     originX: number,
@@ -572,6 +666,8 @@ export class PlacementSystem {
         || current.indestructible !== incoming.indestructible
         || current.constructionId !== incoming.constructionId
         || current.ownership !== incoming.ownership
+        || current.persistentRewardId !== incoming.persistentRewardId
+        || current.collisionMode !== incoming.collisionMode
         || current.toolRef?.kind !== incoming.toolRef?.kind
         || current.toolRef?.id !== incoming.toolRef?.id
         || current.turretWeaponId !== incoming.turretWeaponId
@@ -735,13 +831,18 @@ export class PlacementSystem {
     gx: number,
     gy: number,
     checkPlayers = true,
+    allowPersistentBaseCells = false,
+    allowRuntimeReplacement = false,
   ): boolean {
     for (const cell of footprint) {
       const tx = gx + cell.dx;
       const ty = gy + cell.dy;
       if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return false;
-      if (isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
-      if (this.rockGrid.isOccupied(tx, ty)) return false;
+      if (!allowPersistentBaseCells && isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
+      if (this.rockGrid.isOccupied(tx, ty)) {
+        const occupiedId = this.rockGrid.getIndex(tx, ty);
+        if (!allowRuntimeReplacement || !this.runtimeRocks.has(occupiedId)) return false;
+      }
       if (this.treeCells.has(this.key(tx, ty))) return false;
       if (this.trackCells.has(this.key(tx, ty))) return false;
       if (this.pedestalCells.has(this.key(tx, ty))) return false;

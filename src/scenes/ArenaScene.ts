@@ -996,7 +996,7 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // World-/Activity-scoped (start null)
-      world: null, arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseContributions: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      world: null, arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseContributions: null, persistentBaseRewards: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
@@ -1763,6 +1763,7 @@ export class ArenaScene extends Phaser.Scene {
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.lifecycle.syncPersistentBaseContributions();
+    this.lifecycle.syncPersistentBaseRewards();
     this.lifecycle.detectWorldChange(deferArenaExit);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;

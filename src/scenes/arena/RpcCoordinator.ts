@@ -106,6 +106,7 @@ export class RpcCoordinator {
     this.registerDecoyStealthBreakHandler();
     this.registerHeldActionHandler();
     this.registerLoadoutUseHandler();
+    this.registerPersistentBaseRewardPlacementHandler();
     this.registerCaptureTheBeerFxHandler();
     this.registerCoopDefenseCarryDeliveredFxHandler();
     this.registerExplosionEffectHandler();
@@ -128,6 +129,13 @@ export class RpcCoordinator {
     this.registerTrainDestroyedHandler();
     this.registerPickupPowerUpHandler();
     this.registerWorldParticipationRequestHandler();
+  }
+
+  private registerPersistentBaseRewardPlacementHandler(): void {
+    bridge.registerPersistentBaseRewardPlacementHandler((playerId, request) => (
+      this.lifecycle?.placePersistentBaseReward(playerId, request)
+      ?? { ok: false, reason: 'blocked' }
+    ));
   }
 
   /**

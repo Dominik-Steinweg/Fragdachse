@@ -55,7 +55,12 @@ import {
 import {
   clonePersistentBaseRewardGrant,
   sanitizePersistentBaseRewardGrant,
+  clonePersistentBaseRewardSessionState,
+  sanitizePersistentBaseRewardPlacementRequest,
+  sanitizePersistentBaseRewardSessionState,
   type PersistentBaseRewardGrant,
+  type PersistentBaseRewardPlacementRequest,
+  type PersistentBaseRewardSessionState,
 } from '../persistentBase/PersistentBaseRewardTypes';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
@@ -212,6 +217,7 @@ const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-S
 const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
 const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
 const KEY_PB_REWARD_GRANT = 'pbr'; // per-player reliable: host-bestaetigte kumulative Reward-IDs
+const KEY_PB_REWARD_SESSION = 'pbrs'; // global reliable: host-autoritativer Placement-Vollzustand
 
 export interface NetworkPingSample {
   m: number;
@@ -439,6 +445,11 @@ type LoadoutUseHandler = (
   clientX?: number,
   clientY?: number,
   clientNow?: number,
+) => LoadoutUseResult;
+
+type PersistentBaseRewardPlacementHandler = (
+  playerId: string,
+  request: PersistentBaseRewardPlacementRequest,
 ) => LoadoutUseResult;
 
 interface Weapon2PredictionState {
@@ -696,6 +707,7 @@ export class NetworkBridge {
   private readonly weapon2PredictionStates = new Map<number, Map<string, Weapon2PredictionState>>();
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
+  private persistentBaseRewardPlacementHandler: PersistentBaseRewardPlacementHandler | null = null;
   private heldActionHandler: ((
     playerId: string,
     operation: 'start' | 'cancel',
@@ -2246,6 +2258,7 @@ export class NetworkBridge {
     setState(KEY_ACTIVITY_DESCRIPTOR, null, true);
     setState(KEY_WORLD_DESCRIPTOR, null, true);
     setState(KEY_WORLD_PARTICIPATION, null, true);
+    setState(KEY_PB_REWARD_SESSION, null, true);
   }
 
   getWorldDescriptor(): WorldDescriptor | null {
@@ -2442,6 +2455,75 @@ export class NetworkBridge {
   /** Reads only the locally owned, host-confirmed grant state. */
   getConfirmedPersistentBaseRewardGrant(): PersistentBaseRewardGrant | null {
     return sanitizePersistentBaseRewardGrant(myPlayer().getState(KEY_PB_REWARD_GRANT));
+  }
+
+  /** Publishes the complete host-owned reward projection for the current World. */
+  publishPersistentBaseRewardSessionState(state: PersistentBaseRewardSessionState | null): void {
+    if (!isHost()) return;
+    if (state !== null) {
+      const world = this.getWorldDescriptor();
+      if (!world || state.worldRevision !== world.worldRevision) return;
+      const sanitized = sanitizePersistentBaseRewardSessionState(state);
+      if (!sanitized) return;
+      const current = sanitizePersistentBaseRewardSessionState(getState(KEY_PB_REWARD_SESSION));
+      if (current && current.worldRevision === sanitized.worldRevision
+        && (sanitized.revision < current.revision
+          || (sanitized.revision === current.revision
+            && JSON.stringify(sanitized) !== JSON.stringify(current)))) return;
+      setState(KEY_PB_REWARD_SESSION, clonePersistentBaseRewardSessionState(sanitized), true);
+      return;
+    }
+    setState(KEY_PB_REWARD_SESSION, null, true);
+  }
+
+  /** Reads the current complete reward projection, rejecting stale World revisions. */
+  getPersistentBaseRewardSessionState(): PersistentBaseRewardSessionState | null {
+    const world = this.getWorldDescriptor();
+    if (!world) return null;
+    const state = sanitizePersistentBaseRewardSessionState(getState(KEY_PB_REWARD_SESSION));
+    return state?.worldRevision === world.worldRevision ? state : null;
+  }
+
+  /** Sends one world-bound placement request; the host invokes its handler synchronously. */
+  async sendPersistentBaseRewardPlacement(
+    request: PersistentBaseRewardPlacementRequest,
+  ): Promise<LoadoutUseResult> {
+    const sanitized = sanitizePersistentBaseRewardPlacementRequest(request);
+    const world = this.getWorldDescriptor();
+    if (!sanitized || !world || sanitized.worldRevision !== world.worldRevision) {
+      return { ok: false, reason: 'blocked' };
+    }
+    if (isHost()) {
+      const handler = this.persistentBaseRewardPlacementHandler;
+      return handler?.(myPlayer().id, sanitized) ?? { ok: false, reason: 'blocked' };
+    }
+    const result = await this.callHostRpc('pbrp', {
+      wr: sanitized.worldRevision,
+      rid: sanitized.rewardId,
+      gx: sanitized.relativeGridX,
+      gy: sanitized.relativeGridY,
+      angle: sanitized.angle,
+    }, 1200);
+    return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
+  }
+
+  registerPersistentBaseRewardPlacementHandler(
+    handler: PersistentBaseRewardPlacementHandler,
+  ): void {
+    this.persistentBaseRewardPlacementHandler = handler;
+    this.registerHostRpcHandler('pbrp', (data: unknown, caller: PlayerState): LoadoutUseResult => {
+      if (!isHost() || !this.acceptsWorldRpc(data)) return { ok: false, reason: 'blocked' };
+      const payload = data as Record<string, unknown>;
+      const request = sanitizePersistentBaseRewardPlacementRequest({
+        worldRevision: payload.wr,
+        rewardId: payload.rid,
+        relativeGridX: payload.gx,
+        relativeGridY: payload.gy,
+        angle: payload.angle,
+      });
+      if (!request) return { ok: false, reason: 'invalid' };
+      return handler(caller.id, request);
+    });
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

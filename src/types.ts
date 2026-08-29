@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import type { MuzzleOrigin } from './config';
+import type { PersistentBaseRewardId } from './persistentBase/PersistentBaseRewardTypes';
 
 /** Authored edge from which a Coop-Defense attack enters the arena. */
 export type SpawnFront = 'west' | 'north' | 'east' | 'south';
@@ -1768,6 +1769,10 @@ export interface SyncedPlaceableRock {
   constructionId?: ConstructionId;
   /** Explicit lifetime owner; absent on unrelated temporary placeables and authored scenery. */
   ownership?: ConstructionOwnership;
+  /** Host-owned provenance for a persistent-base reward placement. */
+  persistentRewardId?: PersistentBaseRewardId;
+  /** Collision policy for authored/runtime presentation. Reward turrets are render-only. */
+  collisionMode?: 'obstacle' | 'none';
   /** Beim Platzieren eingefrorene, typisierte Energieinjektor-Wirkung. */
   energyInjectorEffect?: EnergyInjectorConstructionEffect;
   toolRef?: LoadoutToolRef;
@@ -2015,6 +2020,8 @@ export interface SyncedPowerUpPedestal {
   y: number;
   /** Nur bei gebauten Podesten gesetzt: die Farbe des Besitzers. */
   ownerColor?: number;
+  /** Host-owned provenance for a persistent-base reward pedestal. */
+  persistentRewardId?: PersistentBaseRewardId;
   hasPowerUp: boolean;
   nextRespawnAt: number;
 }

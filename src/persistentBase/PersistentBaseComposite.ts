@@ -92,6 +92,8 @@ export interface PersistentBaseCompositeMergeInput {
   readonly capacityMaxByOwner?: ReadonlyMap<string, number>;
   /** Bereits belegte Zellen: authored Weltgeometrie und feste Basisflaeche. */
   readonly isCellBlocked?: (gridX: number, gridY: number) => boolean;
+  /** Cells already reserved by higher-priority authored/base-owned rewards. */
+  readonly reservedCells?: ReadonlySet<string>;
 }
 
 export interface PersistentBaseCompositeMergeResult {
@@ -116,7 +118,7 @@ export function mergePersistentBaseComposite(
     .sort((left, right) => compareIds(left.ownerId, right.ownerId));
   for (const contribution of guests) appendContribution(candidates, contribution, 'guest');
 
-  const occupied = new Set<string>();
+  const occupied = new Set<string>(input.reservedCells ?? []);
   const usedCapacity = new Map<string, number>();
   const active: PersistentCompositeActiveEntry[] = [];
   const conflicts: PersistentCompositeConflict[] = [];
