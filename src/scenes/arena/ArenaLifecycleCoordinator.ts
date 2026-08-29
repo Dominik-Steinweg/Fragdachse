@@ -1195,6 +1195,7 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
     const mapId = this.resolveConfiguredCoopDefenseMapId();
     if (!isWeaponBalanceLabMapId(mapId)) return;
+    this.rollbackPersistentBaseMissionIfActive();
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
@@ -1657,12 +1658,7 @@ export class ArenaLifecycleCoordinator {
 
     // A technical abort can happen before the normal round-conclusion path runs. Never carry a
     // half-written mission working state into a later round in the same room.
-    if (bridge.isHost()) {
-      applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(null), {
-        contributions: this.persistentBaseContributions,
-        isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
-      });
-    }
+    this.rollbackPersistentBaseMissionIfActive();
 
     this.isLocalReady = false;
     bridge.setLocalReady(false);
@@ -3973,6 +3969,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(preserveAuthoredPresentation = false): void {
+    this.rollbackPersistentBaseMissionIfActive();
     // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
     // Testgelaende-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
     // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die
@@ -4338,6 +4335,15 @@ export class ArenaLifecycleCoordinator {
     this.ctx.centerHUD.hideTrainWidget();
     this.clientUpdate.clientUtilityOverride = null;
     this.ctx.playerManager.setWorldGeometry(null);
+  }
+
+  /** Verwirft einen offenen Missions-Working-State vor einem technischen World-Teardown. */
+  private rollbackPersistentBaseMissionIfActive(): void {
+    if (!bridge.isHost()) return;
+    applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(null), {
+      contributions: this.persistentBaseContributions,
+      isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+    });
   }
 
   /**

@@ -193,6 +193,30 @@ describe('Persoenlicher Basisbeitrag – host-bestaetigter Commit', () => {
     }
   });
 
+  it('haelt host-bestaetigte Zustandsuebertragung als per-player State fuer spaete Clients vor', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      const client = bridgeFor(clientRoom);
+      const clientId = client.getLocalPlayerId();
+      const confirmed = contribution('owner-a', [blueprint('late-join', 2, 1)], 11);
+
+      useRoom(hostRoom);
+      host.hostConfirmPersistentBaseContribution(clientId, confirmed);
+
+      // Das ist ein Zustand statt eines einmaligen Events: ein erneuter Bridge-Aufbau kann die
+      // Bestaetigung weiterhin lesen und damit den lokalen Save monoton fortschreiben.
+      useRoom(clientRoom);
+      expect(client.getConfirmedPersistentBaseContribution()).toEqual(confirmed);
+      expect(client.getConfirmedPersistentBaseContribution()).toEqual(confirmed);
+    } finally {
+      hostRoom.room.leave();
+      clientRoom.room.leave();
+    }
+  });
+
   it('laesst einen Gast keine Bestaetigung fuer sich selbst aussprechen', async () => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network);

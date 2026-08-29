@@ -97,4 +97,27 @@ describe('arena round lifecycle contract', () => {
 
     expect(body).toContain('this.ctx.persistentBaseContributions = null');
   });
+
+  it('rollt einen offenen Working State vor technischem Teardown zurueck', () => {
+    const source = read(COORDINATOR_PATH);
+    const teardownStart = source.indexOf('  tearDownArena(');
+    const rollback = source.indexOf('this.rollbackPersistentBaseMissionIfActive();', teardownStart);
+    const runtimeDetach = source.indexOf('this.detachAllWorldPlayers();', teardownStart);
+    expect(rollback).toBeGreaterThan(teardownStart);
+    expect(runtimeDetach).toBeGreaterThan(teardownStart);
+    expect(rollback).toBeLessThan(runtimeDetach);
+    expect(source).toContain('private rollbackPersistentBaseMissionIfActive(): void');
+  });
+
+  it('wendet Victory/Defeat vor dem Ende der World-Instanz an', () => {
+    const source = read(COORDINATOR_PATH);
+    const start = source.indexOf('  hostCompleteRound(');
+    const end = source.indexOf('\n  /**', start + 1);
+    expect(start).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(start);
+    const body = source.slice(start, end);
+    expect(body.indexOf('applyPersistentBaseRoundOutcome')).toBeGreaterThanOrEqual(0);
+    expect(body.indexOf('applyPersistentBaseRoundOutcome')).toBeLessThan(body.indexOf('this.worldLifecycle.endInstance();'));
+    expect(body).toContain('this.publishConfirmedPersistentBaseContributions(');
+  });
 });

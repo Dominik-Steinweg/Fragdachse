@@ -269,6 +269,24 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     expect(store.commit(() => true)[0]?.constructions).toEqual([]);
   });
 
+  it('haelt eine zerstoerte Runtime bis zum Round Outcome gebunden', () => {
+    const store = new PersistentBaseContributionStore();
+    const restored = blueprint('destroyed', 0);
+    store.offerContribution(contribution('owner-a', [restored], 4));
+    store.beginMission();
+    store.registerRestored('owner-a', restored, 21);
+
+    // Der Destruction-Pfad entfernt nur das Runtime-Objekt; die Bindung bleibt erhalten, damit
+    // Commit und Rollback denselben Blueprint unterschiedlich behandeln koennen.
+    expect(store.getRuntimeBindings()).toEqual([{
+      runtimeId: 21,
+      ownerId: 'owner-a',
+      blueprint: restored,
+    }]);
+    expect(store.commit((runtimeId) => runtimeId !== 21)[0]?.constructions).toEqual([]);
+    expect(store.getCommittedContribution('owner-a')?.revision).toBe(5);
+  });
+
   it('haelt den Rollback beim zuletzt bestaetigten Stand jedes Besitzers', () => {
     const store = new PersistentBaseContributionStore();
     store.offerContribution(contribution('owner-a', [blueprint('kept', 0)], 4));

@@ -7,6 +7,7 @@ import {
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import type { SyncedPlaceableRock } from '../src/types';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
+import type { PersistentPlayerBaseContribution } from '../src/persistentBase/PersistentBaseTypes';
 
 /**
  * Phase 3B – der Rundenausgang entscheidet ueber alle persoenlichen Beitraege gemeinsam.
@@ -38,12 +39,42 @@ function runtime(id: number, ownerId: string, gridX: number): SyncedPlaceableRoc
   };
 }
 
+function contribution(
+  ownerId: string,
+  constructions: readonly PersistentPlayerBaseContribution['constructions'][number][],
+  revision = 1,
+): PersistentPlayerBaseContribution {
+  return {
+    schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+    ownerId,
+    revision,
+    constructions,
+  };
+}
+
 /** Ein Missionsstart mit je einem Neubau des Hosts und eines Gastes im Innenhof. */
 function startMission(): PersistentBaseContributionStore {
   const store = new PersistentBaseContributionStore();
   store.beginMission();
   store.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, anchor, buildArea);
   store.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, anchor, buildArea);
+  return store;
+}
+
+function startMissionFromCommittedConstruction(): PersistentBaseContributionStore {
+  const store = new PersistentBaseContributionStore();
+  store.offerContribution(contribution('owner-host', [
+    {
+      persistentId: 'restored',
+      tool,
+      relativeGridX: 0,
+      relativeGridY: 0,
+      angle: 0,
+      placementOrder: 0,
+    },
+  ], 4));
+  store.beginMission();
+  store.registerRestored('owner-host', store.getContribution('owner-host')!.constructions[0]!, 10);
   return store;
 }
 
@@ -130,6 +161,92 @@ describe('persistent base round outcome', () => {
     const byOwner = new Map(confirmed.map((entry) => [entry.ownerId, entry]));
     expect(byOwner.get('owner-host')?.constructions).toHaveLength(1);
     expect(byOwner.get('owner-guest')?.constructions).toEqual([]);
+  });
+
+  it('validiert Neubau, Rueckbau und Runtime-Zerstoerung ueber alle Abschlussarten', () => {
+    const mutations = ['build', 'dismantle', 'destruction'] as const;
+    const conclusions = ['victory', 'defeat', 'aborted', null] as const;
+
+    for (const mutation of mutations) {
+      for (const conclusion of conclusions) {
+        const store = startMissionFromCommittedConstruction();
+        if (mutation === 'build') {
+          store.registerNew('owner-host', runtime(11, 'host', 11), tool, footprint, anchor, buildArea);
+        } else if (mutation === 'dismantle') {
+          expect(store.removeByRuntimeId(10), `${mutation}/${conclusion}`).toBe(true);
+        }
+        // Eine Zerstoerung entfernt nur das Runtime-Objekt. Die Bindung bleibt bis zum Outcome
+        // erhalten, damit Victory sie entfernt und Rollback sie aus dem Baseline-Stand restauriert.
+        const destroyed = mutation === 'destruction';
+        const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
+          contributions: store,
+          isRuntimeObjectAlive: (runtimeId) => !(destroyed && runtimeId === 10),
+        });
+
+        const expectedIds = conclusion === 'victory'
+          ? mutation === 'build' ? ['restored', expect.any(String)] : mutation === 'dismantle' ? [] : []
+          : ['restored'];
+        const committedIds = store.getCommittedContribution('owner-host')?.constructions
+          .map((entry) => entry.persistentId) ?? [];
+        if (mutation === 'build' && conclusion === 'victory') {
+          expect(committedIds).toHaveLength(2);
+          expect(committedIds[0]).toBe('restored');
+        } else {
+          expect(committedIds, `${mutation}/${conclusion}`).toEqual(expectedIds);
+        }
+        expect(confirmed.length, `${mutation}/${conclusion}`).toBe(conclusion === 'victory' ? 1 : 0);
+
+        // Der folgende Missionsstart muss genau den zuletzt bestaetigten Stand materialisieren
+        // koennen; der Working State der abgeschlossenen Mission darf nicht hineinleaken.
+        store.beginMission();
+        const nextMissionIds = store.getContribution('owner-host')?.constructions
+          .map((entry) => entry.persistentId) ?? [];
+        if (mutation === 'build' && conclusion === 'victory') {
+          expect(nextMissionIds).toHaveLength(2);
+          expect(nextMissionIds[0]).toBe('restored');
+        } else {
+          expect(nextMissionIds, `${mutation}/${conclusion}`).toEqual(expectedIds);
+        }
+      }
+    }
+  });
+
+  it('schliesst einen Ausgang idempotent ohne eine zweite Revision zu erzeugen', () => {
+    const store = startMission();
+    const first = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
+      contributions: store,
+      isRuntimeObjectAlive: () => true,
+    });
+    expect(first).toHaveLength(2);
+    expect(store.getCommittedContribution('owner-host')?.revision).toBe(1);
+
+    expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
+      contributions: store,
+      isRuntimeObjectAlive: () => true,
+    })).toEqual([]);
+    expect(store.getCommittedContribution('owner-host')?.revision).toBe(1);
+  });
+
+  it('haelt Runtime- und Core-HP aus dem bestaetigten Contribution-State heraus', () => {
+    const store = startMissionFromCommittedConstruction();
+    const runtimeObject = runtime(10, 'host', 10);
+    runtimeObject.hp = 17;
+    runtimeObject.maxHp = 1650;
+    const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
+      contributions: store,
+      isRuntimeObjectAlive: () => true,
+    });
+
+    expect(confirmed[0]).toMatchObject({
+      ownerId: 'owner-host',
+      revision: 5,
+      constructions: [expect.objectContaining({ persistentId: 'restored' })],
+    });
+    expect(JSON.stringify(confirmed)).not.toMatch(/"(?:hp|maxHp|runtimeId)"/);
+    // Der Runtime-Stand bleibt absichtlich ausserhalb des Stores; die lokale Variable stellt
+    // sicher, dass der Test keinen Core-/Konstrukt-HP-Wert mit dem Blueprint verwechselt.
+    expect(runtimeObject.hp).toBe(17);
+    expect(runtimeObject.maxHp).toBe(1650);
   });
 
   it('laesst eine verworfene Runde nicht in den naechsten Lauf leaken', () => {
