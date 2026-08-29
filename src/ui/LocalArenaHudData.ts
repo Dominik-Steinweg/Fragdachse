@@ -1,6 +1,7 @@
 import { ADRENALINE_MAX, HP_MAX, RAGE_MAX } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
 import type { InspectorUtilityAction } from '../types';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 
 export interface LocalArenaHudData extends ArenaHUDData {
   weapon2AdrenalineCost: number;
@@ -24,6 +25,7 @@ interface BuildLocalArenaHudDataParams {
   utilityCooldownFrac: number;
   utilityId?: string;
   utilityAction?: InspectorUtilityAction;
+  persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?: number;
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?: boolean;
@@ -43,6 +45,7 @@ interface BuildInitialLocalArenaHudDataParams {
   ultimateId?: string;
   utilityId?: string;
   utilityAction?: InspectorUtilityAction;
+  persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?: number;
   weapon2AdrenalineCost?: number;
 }
@@ -66,6 +69,7 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     utilityCooldownFrac: params.utilityCooldownFrac,
     utilityId: params.utilityId,
     utilityAction: params.utilityAction,
+    persistentBaseRewardId: params.persistentBaseRewardId,
     utilityCapacityCost: params.utilityCapacityCost ?? 0,
     adrenalineSyringeActive: params.adrenalineSyringeActive ?? false,
     isUtilityOverridden: params.isUtilityOverridden ?? false,
@@ -98,6 +102,7 @@ export function buildInitialLocalArenaHudData(
     utilityCooldownFrac: 0,
     utilityId: params.utilityId,
     utilityAction: params.utilityAction,
+    persistentBaseRewardId: params.persistentBaseRewardId,
     utilityCapacityCost: params.utilityCapacityCost ?? 0,
     adrenalineSyringeActive: false,
     isUtilityOverridden: false,

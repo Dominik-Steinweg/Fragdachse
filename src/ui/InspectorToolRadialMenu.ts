@@ -5,6 +5,8 @@ import { toDesignSpace } from '../graphics/RenderResolution';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { describeLoadoutTool } from '../loadout/LoadoutCatalog';
 import type { LoadoutToolRef } from '../types';
+import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { getInspectorToolRadialSegmentIndex } from './InspectorToolRadialGeometry';
 import { promoteToClarityCamera } from '../scenes/arena/ClarityCameraRegistry';
 import { formatNumber, getLocale, t } from '../i18n';
@@ -20,6 +22,7 @@ const LABEL_RADIUS = 76;
  */
 export type InspectorRadialSelection =
   | { kind: 'tool'; tool: LoadoutToolRef }
+  | { kind: 'persistent-reward'; rewardId: PersistentBaseRewardId }
   | { kind: 'dismantle' }
   | { kind: 'global-dismantle' };
 
@@ -43,6 +46,11 @@ export function isSameInspectorRadialSelection(
   right: InspectorRadialSelection | null,
 ): boolean {
   if (!left || !right) return left === right;
+  if (left.kind === 'persistent-reward' || right.kind === 'persistent-reward') {
+    return left.kind === 'persistent-reward'
+      && right.kind === 'persistent-reward'
+      && left.rewardId === right.rewardId;
+  }
   if (left.kind !== 'tool' || right.kind !== 'tool') return left.kind === right.kind;
   return left.tool.kind === right.tool.kind && left.tool.id === right.tool.id;
 }
@@ -66,14 +74,16 @@ export class InspectorToolRadialMenu {
     originX: number,
     originY: number,
     tools: readonly LoadoutToolRef[],
+    persistentRewardIds: readonly PersistentBaseRewardId[],
     selected: InspectorRadialSelection | null,
     usedCapacity: number,
     // Bewusst ohne Default: ein stiller Rueckfall auf die Grundkapazitaet wuerde Item-Boni
     // verschlucken und Bauplaetze als nicht bezahlbar anzeigen, die der Host akzeptiert.
     capacityMax: number,
+    includeDismantleActions = true,
   ): void {
     this.close();
-    this.entries = buildEntries(tools, usedCapacity, capacityMax);
+    this.entries = buildEntries(tools, persistentRewardIds, usedCapacity, capacityMax, includeDismantleActions);
     if (this.entries.length === 0) return;
     this.origin = {
       x: toDesignSpace(this.scene.scale, originX),
@@ -200,8 +210,10 @@ export class InspectorToolRadialMenu {
  */
 function buildEntries(
   tools: readonly LoadoutToolRef[],
+  persistentRewardIds: readonly PersistentBaseRewardId[],
   usedCapacity: number,
   capacityMax: number,
+  includeDismantleActions: boolean,
 ): RadialEntry[] {
   const free = Math.max(0, capacityMax - usedCapacity);
   const entries: RadialEntry[] = tools.map((tool) => {
@@ -219,7 +231,20 @@ function buildEntries(
       affordable: capacityCost <= free,
     };
   });
-  if (entries.length === 0) return entries;
+  for (const rewardId of persistentRewardIds) {
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    entries.push({
+      selection: { kind: 'persistent-reward', rewardId },
+      displayName: t(definition.presentation.labelKey),
+      textureKey: definition.presentation.iconKey,
+      accentColor: COLORS.GOLD_2,
+      capacityCost: 0,
+      cooldownMs: 0,
+      affordable: true,
+    });
+  }
+  if (entries.length === 0 && !includeDismantleActions) return entries;
+  if (!includeDismantleActions) return entries;
   entries.push({
     selection: { kind: 'dismantle' },
     displayName: t('ui.radial.dismantle'),
@@ -244,6 +269,9 @@ function buildEntries(
 function cloneSelection(selection: InspectorRadialSelection): InspectorRadialSelection {
   if (selection.kind === 'dismantle') return { kind: 'dismantle' };
   if (selection.kind === 'global-dismantle') return { kind: 'global-dismantle' };
+  if (selection.kind === 'persistent-reward') {
+    return { kind: 'persistent-reward', rewardId: selection.rewardId };
+  }
   return { kind: 'tool', tool: { ...selection.tool } };
 }
 

@@ -174,6 +174,7 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
         placements: [{
           rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
         }],
+        everPlacedRewardIds: ['base_spore_turret'],
       });
 
       useRoom(clientRoom);
@@ -184,6 +185,7 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
         placements: [{
           rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0.5,
         }],
+        everPlacedRewardIds: ['base_spore_turret'],
       });
 
       useRoom(hostRoom);

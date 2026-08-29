@@ -141,7 +141,7 @@ import {
   normalizeConstructionId,
   resolveConstructionCapacity,
 } from '../../config/coopDefenseConstructions';
-import type { ConstructionId, ConstructionOwnership, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock } from '../../types';
+import type { ConstructionId, ConstructionOwnership, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
 import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveConstructionAccess } from '../../systems/ConstructionAccessResolver';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
@@ -176,6 +176,7 @@ import type {
 } from '../../persistentBase/PersistentBaseRewardTypes';
 import { sanitizePersistentBaseRewardPlacementRequest } from '../../persistentBase/PersistentBaseRewardTypes';
 import {
+  getPersistentBaseBuildAreaExtentCells,
   isCellInsidePersistentBaseBuildArea,
   resolvePersistentBaseCell,
   type PersistentBaseBuildArea,
@@ -1367,7 +1368,9 @@ export class ArenaLifecycleCoordinator {
     }
     if (!isKnownPersistentBaseRewardId(sanitizedRequest.rewardId)) return { ok: false, reason: 'invalid' };
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (!player || !player.active || !this.getPlayerCapabilities(playerId).canPlace
+    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+    if (!player || !player.active || currentLoadout?.coopDefenseClassId !== 'inspector_gadachs'
+      || !this.getPlayerCapabilities(playerId).canPlace
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
@@ -1381,6 +1384,10 @@ export class ArenaLifecycleCoordinator {
     }
     const cell = this.resolvePersistentBaseRewardCell(site, sanitizedRequest);
     if (!cell || !this.isPersistentBaseRewardPlacementInDomain(definition, site, sanitizedRequest)) {
+      return { ok: false, reason: 'placement' };
+    }
+    const cellWorld = placementSystem.getWorldPointForCell(cell.gridX, cell.gridY);
+    if (Math.hypot(player.x - cellWorld.x, player.y - cellWorld.y) > COOP_DEFENSE_DISMANTLE_RANGE) {
       return { ok: false, reason: 'placement' };
     }
     if (store.getState().placements.some((entry) => {
@@ -1442,6 +1449,132 @@ export class ArenaLifecycleCoordinator {
     this.publishPersistentBaseRewardSessionState();
     this.hostRefreshPersistentBaseComposite();
     return { ok: true };
+  }
+
+  /** Liefert die lokale Reward-Vorschau aus dem verlaesslichen Session-Snapshot. */
+  getPersistentBaseRewardIdsForPlayer(playerId: string): PersistentBaseRewardId[] {
+    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    const session = bridge.getPersistentBaseRewardSessionState();
+    if (!site || !player || !player.active
+      || bridge.getPlayerCurrentLoadoutSnapshot(playerId)?.coopDefenseClassId !== 'inspector_gadachs'
+      || !this.getPlayerCapabilities(playerId).canPlace
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)) return [];
+
+    const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
+    const availableRewardIds = hostState
+      ? getStoredPersistentBaseRewardUnlocks()
+      : session?.availableRewardIds;
+    const placements = hostState?.placements ?? session?.placements ?? [];
+    const everPlacedRewardIds = hostState?.everPlacedRewardIds
+      ?? session?.everPlacedRewardIds
+      ?? placements.map((placement) => placement.rewardId);
+    if (!availableRewardIds) return [];
+    return availableRewardIds.filter((rewardId) => (
+      !placements.some((placement) => placement.rewardId === rewardId)
+      && !everPlacedRewardIds.includes(rewardId)
+      && (getPersistentBaseRewardDefinition(rewardId).category !== 'baseTurret'
+        || this.isPersistentBaseRuntimeActive(site))
+    ));
+  }
+
+  /** Liefert die lokale Reward-Vorschau aus dem verlaesslichen Session-Snapshot. */
+  getPersistentBaseRewardPlacementPreview(
+    playerId: string,
+    rewardId: PersistentBaseRewardId,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined {
+    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const placementSystem = this.ctx.placementSystem;
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    const session = bridge.getPersistentBaseRewardSessionState();
+    if (!site || !placementSystem || !player || !player.active
+      || bridge.getPlayerCurrentLoadoutSnapshot(playerId)?.coopDefenseClassId !== 'inspector_gadachs'
+      || !this.getPlayerCapabilities(playerId).canPlace
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)
+      || !isKnownPersistentBaseRewardId(rewardId)) return undefined;
+
+    const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
+    const placements = hostState?.placements ?? session?.placements ?? [];
+    if (!this.getPersistentBaseRewardIdsForPlayer(playerId).includes(rewardId)) return undefined;
+
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    if (definition.category === 'baseTurret' && !this.isPersistentBaseRuntimeActive(site)) return undefined;
+    const targetCell = placementSystem.getClampedTargetCell(
+      player.x,
+      player.y,
+      pointerX,
+      pointerY,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+    );
+    if (!targetCell) return undefined;
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY);
+    const angle = Math.atan2(targetCell.y - player.y, targetCell.x - player.x);
+    const placement: PersistentBaseRewardPlacement | null = relative
+      ? {
+          rewardId,
+          relativeGridX: relative.relativeGridX,
+          relativeGridY: relative.relativeGridY,
+          angle,
+        }
+      : null;
+    const domainValid = placement !== null
+      && this.isPersistentBaseRewardPlacementInDomain(definition, site, placement);
+    const duplicateCell = placement !== null && placements.some((candidate) => {
+      const occupied = this.resolvePersistentBaseRewardCell(site, candidate);
+      return occupied?.gridX === targetCell.gridX && occupied.gridY === targetCell.gridY;
+    });
+    const occupant = placementSystem.getRuntimeRockAt(targetCell.gridX, targetCell.gridY);
+    const persistentContribution = occupant
+      ? this.ctx.persistentBaseContributions?.getRuntimeBindings()
+        .some((binding) => binding.runtimeId === occupant.id) === true
+      : false;
+    const conflictAllowed = !occupant || occupant.ownership === 'base-owned' || persistentContribution;
+    const isValid = domainValid
+      && !duplicateCell
+      && conflictAllowed
+      && placementSystem.canMaterializePersistentBaseRewardCell(targetCell.gridX, targetCell.gridY, true);
+    return {
+      angle,
+      targetX: targetCell.x,
+      targetY: targetCell.y,
+      gridX: targetCell.gridX,
+      gridY: targetCell.gridY,
+      isValid,
+      frame: 0,
+      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
+      sourceSlot: 'utility',
+      constructionId: definition.gameplaySource.kind === 'construction-definition'
+        ? definition.gameplaySource.constructionId
+        : undefined,
+      powerUpDefId: definition.gameplaySource.kind === 'power-up-definition'
+        ? definition.gameplaySource.powerUpDefId
+        : undefined,
+      mode: 'place',
+    };
+  }
+
+  /** Sendet eine Preview-Auswahl ueber den dedizierten Reward-Pfad zum Host. */
+  async requestPersistentBaseRewardPlacement(
+    rewardId: PersistentBaseRewardId,
+    preview: Pick<UtilityPlacementPreviewState, 'gridX' | 'gridY' | 'angle'>,
+  ): Promise<LoadoutUseResult> {
+    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const world = bridge.getWorldDescriptor();
+    if (!site || !world || !isKnownPersistentBaseRewardId(rewardId)) return { ok: false, reason: 'blocked' };
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY);
+    if (!relative) return { ok: false, reason: 'placement' };
+    return bridge.sendPersistentBaseRewardPlacement({
+      worldRevision: world.worldRevision,
+      rewardId,
+      relativeGridX: relative.relativeGridX,
+      relativeGridY: relative.relativeGridY,
+      angle: preview.angle,
+    });
   }
 
   /** Host callback fuer den atomaren Rollenwechsel; kein CombatSystem-Tod. */
@@ -4635,6 +4768,7 @@ export class ArenaLifecycleCoordinator {
       worldRevision: world.worldRevision,
       availableRewardIds,
       placements: state.placements,
+      everPlacedRewardIds: state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId),
     });
     if (signature === this.persistentBaseRewardSessionSignature) return;
     this.persistentBaseRewardSessionSignature = signature;
@@ -4647,6 +4781,7 @@ export class ArenaLifecycleCoordinator {
       revision: this.persistentBaseRewardSessionRevision,
       availableRewardIds,
       placements: state.placements,
+      everPlacedRewardIds: state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId),
     };
     bridge.publishPersistentBaseRewardSessionState(session);
   }
@@ -4669,6 +4804,29 @@ export class ArenaLifecycleCoordinator {
       site.orientation,
       site.buildArea,
     );
+  }
+
+  private resolvePersistentBaseRewardRelativeCell(
+    site: WorldPersistentBaseSite,
+    gridX: number,
+    gridY: number,
+  ): { relativeGridX: number; relativeGridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
+    const extent = Math.max(2, getPersistentBaseBuildAreaExtentCells(site.buildArea));
+    for (let relativeGridY = -extent; relativeGridY <= extent; relativeGridY += 1) {
+      for (let relativeGridX = -extent; relativeGridX <= extent; relativeGridX += 1) {
+        const cell = resolvePersistentBaseCell(
+          site.anchor,
+          relativeGridX,
+          relativeGridY,
+          site.orientation,
+          site.buildArea,
+        );
+        if (cell?.gridX === gridX && cell.gridY === gridY) {
+          return { relativeGridX, relativeGridY, domain: cell.domain };
+        }
+      }
+    }
+    return null;
   }
 
   private isPersistentBaseRewardPlacementInDomain(
@@ -6120,7 +6278,11 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
     const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout)).length === 0) {
+    const isInspector = currentLoadout?.coopDefenseClassId === 'inspector_gadachs';
+    const hasConstructionTool = getActiveConstructionToolRefs(
+      getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
+    ).length > 0;
+    if (!isInspector && !hasConstructionTool) {
       return { ok: false, reason: 'blocked' };
     }
     const player = this.ctx.playerManager.getPlayer(playerId);
@@ -6140,11 +6302,24 @@ export class ArenaLifecycleCoordinator {
       COOP_DEFENSE_DISMANTLE_RANGE,
     );
     if (!cell) return { ok: false, reason: 'blocked' };
+    const target = this.ctx.placementSystem?.getRuntimeRockAt(cell.gridX, cell.gridY);
+    const persistentRewardId = target?.ownership === 'base-owned'
+      ? target.persistentRewardId
+      : undefined;
+    if (persistentRewardId !== undefined) {
+      if (!isInspector || !isKnownPersistentBaseRewardId(persistentRewardId)
+        || !this.ctx.persistentBaseRewards?.getState().placements.some(
+          (placement) => placement.rewardId === persistentRewardId,
+        )) {
+        return { ok: false, reason: 'blocked' };
+      }
+    }
     const removed = this.ctx.placementSystem?.removeRockAt(
       cell.gridX,
       cell.gridY,
       playerId,
-      this.getConstructionOwnership(playerId),
+      persistentRewardId !== undefined ? 'base-owned' : this.getConstructionOwnership(playerId),
+      persistentRewardId !== undefined,
     );
     if (!removed) return { ok: false, reason: 'blocked' };
 
@@ -6196,6 +6371,17 @@ export class ArenaLifecycleCoordinator {
   }
 
   private finalizeDismantledConstruction(removed: SyncedPlaceableRock, playDust: boolean): void {
+    if (removed.persistentRewardId !== undefined) {
+      this.persistentBaseRewardRuntimeBindings.delete(removed.persistentRewardId);
+      const rewardStore = this.ctx.persistentBaseRewards;
+      if (rewardStore?.dismantleReward(removed.persistentRewardId)) {
+        this.persistCurrentCommittedPersistentBaseRewards();
+        this.publishPersistentBaseRewardSessionState();
+        this.hostRefreshPersistentBaseComposite();
+      }
+      this.releasePlaceableRuntime(removed, playDust);
+      return;
+    }
     // Abriss gibt den Besitz auf. Ohne diesen Schritt bliebe der Blueprint als dormant stehen und
     // erschiene bei der naechsten Mission wieder - der Spieler koennte nichts dauerhaft abbauen.
     const store = this.ctx.persistentBaseContributions;
@@ -6350,6 +6536,9 @@ export class ArenaLifecycleCoordinator {
   private resetLocalArenaHudState(): void {
     const config = this.clientUpdate.getLocalUltimateConfig();
     const inspectorUtilityAction = this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
+    const persistentBaseRewardId = inspectorUtilityAction
+      ? null
+      : this.ctx.inputSystem.getSelectedInspectorPersistentRewardForHud();
     const hudData = buildInitialLocalArenaHudData({
       maxArmor: this.clientUpdate.getLocalMaxArmor(),
       maxAdrenaline: this.clientUpdate.getLocalMaxAdrenaline(),
@@ -6357,8 +6546,11 @@ export class ArenaLifecycleCoordinator {
       ultimateRequiredRage: config.rageRequired,
       ultimateThresholds:   this.clientUpdate.getLocalUltimateThresholds(),
       ultimateId:            config.id,
-      utilityId:             inspectorUtilityAction ? undefined : this.clientUpdate.getLocalUtilityConfig().id,
+      utilityId:             inspectorUtilityAction || persistentBaseRewardId
+        ? undefined
+        : this.clientUpdate.getLocalUtilityConfig().id,
       utilityAction:         inspectorUtilityAction ?? undefined,
+      persistentBaseRewardId: persistentBaseRewardId ?? undefined,
       weapon2AdrenalineCost: this.clientUpdate.getLocalWeaponConfig('weapon2').adrenalinCost ?? 0,
     });
     this.ctx.leftPanel.updateArenaHUD(hudData);

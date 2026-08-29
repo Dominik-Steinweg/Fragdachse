@@ -212,6 +212,7 @@ import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
 import type { FlowFieldDiagnostics } from '../systems/flowfield/FlowFieldCoordinator';
 import type { PersistentGpuWorldDiagnostics } from '../arena/rocks/PersistentGpuWorldSystem';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 
 import {
   type ArenaContext,
@@ -1293,6 +1294,28 @@ export class ArenaScene extends Phaser.Scene {
         );
       },
     );
+    inputSystem.setupInspectorPersistentRewardProvider(
+      () => {
+        const localId = bridge.getLocalPlayerId();
+        return this.lifecycle?.getPersistentBaseRewardIdsForPlayer(localId) ?? [];
+      },
+      (rewardId: PersistentBaseRewardId) => {
+        const localId = bridge.getLocalPlayerId();
+        const pointer = this.getPointerWorldPoint();
+        return this.lifecycle?.getPersistentBaseRewardPlacementPreview(
+          localId,
+          rewardId,
+          pointer.x,
+          pointer.y,
+        );
+      },
+      (rewardId, preview) => this.lifecycle?.requestPersistentBaseRewardPlacement(rewardId, preview)
+        ?? Promise.resolve({ ok: false, reason: 'blocked' as const }),
+      () => bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs'
+        && (this.ctx.placementSystem?.getAllRuntimeRocks().some((rock) => (
+          rock.ownership === 'base-owned' && rock.persistentRewardId !== undefined
+        )) ?? false),
+    );
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
 
@@ -2321,6 +2344,7 @@ export class ArenaScene extends Phaser.Scene {
         && (
           this.ctx.inputSystem.isUtilityPlacementActive()
           || this.ctx.inputSystem.isInspectorConstructionPlacementActive()
+          || this.ctx.inputSystem.isInspectorPersistentRewardPlacementActive()
         ),
     );
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
@@ -2332,6 +2356,7 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
       && !this.ctx.inputSystem.isUtilityPlacementActive()
       && !this.ctx.inputSystem.isInspectorConstructionPlacementActive()
+      && !this.ctx.inputSystem.isInspectorPersistentRewardPlacementActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     const aimPreviewMs = diagnosticsActive ? performance.now() - aimPreviewStartedAt : 0;

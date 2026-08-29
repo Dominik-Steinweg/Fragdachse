@@ -23,6 +23,8 @@ import {
 } from '../config';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { InspectorUtilityAction, ShieldBuffHudState } from '../types';
+import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import {
   type LivingBarPalette,
   rgbStr, createGradientTexture,
@@ -258,6 +260,7 @@ export interface ArenaHUDData {
   utilityCooldownFrac:      number;
   utilityId?:               string;
   utilityAction?:           InspectorUtilityAction;
+  persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?:     number;
   adrenalineSyringeActive?: boolean;
   isUtilityOverridden?:     boolean;
@@ -272,9 +275,13 @@ export interface ArenaHUDData {
 export function getUtilityHudDisplayName(
   utilityId: string | undefined,
   utilityAction: InspectorUtilityAction | undefined,
+  persistentBaseRewardId?: PersistentBaseRewardId,
 ): string {
   if (utilityAction === 'dismantle') return t('ui.radial.dismantle');
   if (utilityAction === 'global-dismantle') return t('ui.radial.dismantleAll');
+  if (persistentBaseRewardId) {
+    return t(getPersistentBaseRewardDefinition(persistentBaseRewardId).presentation.labelKey);
+  }
   return utilityId ? getContentDisplayName(utilityId, getLocale()) : t('ui.common.unknown');
 }
 
@@ -607,8 +614,12 @@ export class ArenaHUD {
       this.setAdrenalinTickCost(data.weapon2AdrenalineCost ?? 0);
     }
 
-    if (data.utilityId || data.utilityAction) {
-      const utilityName = getUtilityHudDisplayName(data.utilityId, data.utilityAction);
+    if (data.utilityId || data.utilityAction || data.persistentBaseRewardId) {
+      const utilityName = getUtilityHudDisplayName(
+        data.utilityId,
+        data.utilityAction,
+        data.persistentBaseRewardId,
+      );
       const capacitySuffix = (data.utilityCapacityCost ?? 0) > 0
         ? ` · ${t('ui.hud.capacityCost', { cost: data.utilityCapacityCost ?? 0 })}`
         : '';

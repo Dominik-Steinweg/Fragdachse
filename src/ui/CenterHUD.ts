@@ -1789,6 +1789,7 @@ export class CenterHUD {
 
     const showUtility = utilityHeld
       || data.utilityAction !== undefined
+      || data.persistentBaseRewardId !== undefined
       || data.utilityCooldownFrac > 0.001
       || now < this.utilityRevealUntil
       || (data.isUtilityOverridden ?? false);
@@ -1816,7 +1817,9 @@ export class CenterHUD {
     if (showUtility) {
       this.showLowerSection(
         this.utilitySection,
-        t('ui.hud.utility', { name: getUtilityHudDisplayName(data.utilityId, data.utilityAction) }),
+        t('ui.hud.utility', {
+          name: getUtilityHudDisplayName(data.utilityId, data.utilityAction, data.persistentBaseRewardId),
+        }),
         Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
         CENTER_X,
         nextBottom - BOTTOM_STACK_TOTAL_H,

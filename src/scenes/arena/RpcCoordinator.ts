@@ -242,8 +242,7 @@ export class RpcCoordinator {
       }
       // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
       if (params?.dismantle) {
-        if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined
-          || !this.hasActiveConstructionTool(senderId)) {
+        if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined) {
           return { ok: false, reason: 'invalid' };
         }
         return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)

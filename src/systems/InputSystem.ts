@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { BurrowPhase, ConstructionId, InspectorUtilityAction, LoadoutToolRef, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
+import type { BurrowPhase, ConstructionId, InspectorUtilityAction, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
 import {
   DASH_T1_S, DASH_T2_S,
   clampPointToArena,
@@ -14,6 +14,7 @@ import type { CameraFeedbackController } from '../effects/camera/CameraFeedbackC
 import { chargeRumble } from '../effects/camera/cameraFeedbackPresets';
 import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 import { maySendWorldInput } from '../world/WorldParticipation';
+import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 
 const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
 import type {
@@ -132,6 +133,17 @@ export class InputSystem {
   /** Liefert Verbrauch und persoenliches Maximum als Paar, damit beide nie auseinanderlaufen. */
   private inspectorGetCapacity: (() => { used: number; max: number }) | null = null;
   private getDismantlePreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
+  private getInspectorPersistentRewardIdsProvider: (() => readonly PersistentBaseRewardId[]) | null = null;
+  private getPersistentRewardPlacementPreviewProvider: ((
+    rewardId: PersistentBaseRewardId,
+  ) => UtilityPlacementPreviewState | undefined) | null = null;
+  private getInspectorDismantleTargetProvider: (() => boolean) | null = null;
+  private placePersistentRewardProvider: ((
+    rewardId: PersistentBaseRewardId,
+    preview: UtilityPlacementPreviewState,
+  ) => Promise<LoadoutUseResult>) | null = null;
+  private inspectorPersistentRewardId: PersistentBaseRewardId | null = null;
+  private inspectorPersistentRewardPlacementActive = false;
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
@@ -229,6 +241,21 @@ export class InputSystem {
     this.getDismantlePreviewProvider = getDismantlePreview ?? null;
   }
 
+  setupInspectorPersistentRewardProvider(
+    getRewardIds: () => readonly PersistentBaseRewardId[],
+    getPreview: (rewardId: PersistentBaseRewardId) => UtilityPlacementPreviewState | undefined,
+    place: (
+      rewardId: PersistentBaseRewardId,
+      preview: UtilityPlacementPreviewState,
+    ) => Promise<LoadoutUseResult>,
+    hasDismantleTarget?: () => boolean,
+  ): void {
+    this.getInspectorPersistentRewardIdsProvider = getRewardIds;
+    this.getPersistentRewardPlacementPreviewProvider = getPreview;
+    this.placePersistentRewardProvider = place;
+    this.getInspectorDismantleTargetProvider = hasDismantleTarget ?? null;
+  }
+
   setupConstructionProviders(
     getAvailable: () => readonly ConstructionId[],
     getPreview: (constructionId: ConstructionId) => UtilityPlacementPreviewState | undefined,
@@ -267,11 +294,29 @@ export class InputSystem {
     return result;
   }
 
+  private getInspectorPersistentRewardIds(): readonly PersistentBaseRewardId[] {
+    return this.getInspectorPersistentRewardIdsProvider?.() ?? [];
+  }
+
+  private getSelectedPersistentRewardId(): PersistentBaseRewardId | null {
+    const rewardId = this.inspectorPersistentRewardId;
+    if (!rewardId) return null;
+    if (this.getInspectorPersistentRewardIds().includes(rewardId)) return rewardId;
+    this.inspectorPersistentRewardId = null;
+    this.inspectorPersistentRewardPlacementActive = false;
+    return null;
+  }
+
+  getSelectedInspectorPersistentRewardForHud(): PersistentBaseRewardId | null {
+    return this.getSelectedPersistentRewardId();
+  }
+
   private hasActiveConstructionTools(): boolean {
     return this.getConstructionToolRefs().length > 0;
   }
 
   private getSelectedConstructionToolRef(): LoadoutToolRef | null {
+    if (this.getSelectedPersistentRewardId()) return null;
     const selected = this.getSelectedInspectorTool();
     const selectedId = selected ? normalizeConstructionId(selected.id) : null;
     if (selectedId && this.getConstructionToolRefs().some((tool) => tool.id === selectedId)) {
@@ -282,7 +327,8 @@ export class InputSystem {
   }
 
   private getSelectedInspectorTool(): LoadoutToolRef | null {
-    return this.inspectorDismantleSelected || this.inspectorGlobalDismantleSelected
+    return this.inspectorPersistentRewardId
+      || this.inspectorDismantleSelected || this.inspectorGlobalDismantleSelected
       ? null
       : (this.inspectorGetSelectedTool?.()
         ?? (this.isInspectorMode()
@@ -312,21 +358,32 @@ export class InputSystem {
   private getSelectedInspectorRadialSelection(): InspectorRadialSelection | null {
     if (this.inspectorDismantleSelected) return { kind: 'dismantle' };
     if (this.inspectorGlobalDismantleSelected) return { kind: 'global-dismantle' };
+    const rewardId = this.getSelectedPersistentRewardId();
+    if (rewardId) return { kind: 'persistent-reward', rewardId };
     const tool = this.getSelectedConstructionToolRef();
     return tool ? { kind: 'tool', tool } : null;
   }
 
   private applyInspectorRadialSelection(selection: InspectorRadialSelection): void {
     if (selection.kind === 'dismantle') {
+      this.inspectorPersistentRewardId = null;
       this.inspectorDismantleSelected = true;
       this.inspectorGlobalDismantleSelected = false;
       return;
     }
     if (selection.kind === 'global-dismantle') {
+      this.inspectorPersistentRewardId = null;
       this.inspectorDismantleSelected = false;
       this.inspectorGlobalDismantleSelected = true;
       return;
     }
+    if (selection.kind === 'persistent-reward') {
+      this.inspectorPersistentRewardId = selection.rewardId;
+      this.inspectorDismantleSelected = false;
+      this.inspectorGlobalDismantleSelected = false;
+      return;
+    }
+    this.inspectorPersistentRewardId = null;
     this.inspectorDismantleSelected = false;
     this.inspectorGlobalDismantleSelected = false;
     if (this.isInspectorMode()) this.inspectorSetSelectedTool?.(selection.tool);
@@ -341,7 +398,11 @@ export class InputSystem {
    * Countdown bedienbar, ohne dass dadurch Bewegung, Waffen oder Bauaktionen frei werden.
    */
   private updateInspectorRadialMenu(): boolean {
-    if (!this.inspectorRadialEnabled || !this.hasActiveConstructionTools()) {
+    const constructionTools = this.getConstructionToolRefs();
+    const persistentRewardIds = this.getInspectorPersistentRewardIds();
+    const hasDismantleTarget = this.getInspectorDismantleTargetProvider?.() ?? false;
+    this.getSelectedPersistentRewardId();
+    if (!this.inspectorRadialEnabled || (constructionTools.length === 0 && persistentRewardIds.length === 0 && !hasDismantleTarget)) {
       if (!this.inspectorRadialEnabled) this.inspectorRadialMenu?.close();
       return false;
     }
@@ -352,17 +413,20 @@ export class InputSystem {
       || this.utilityHoldActive
       || this.globalDismantleHoldStartedAt !== null
       || this.inspectorConstructionPlacementActive
-      || this.inspectorDismantlePlacementActive;
+      || this.inspectorDismantlePlacementActive
+      || this.inspectorPersistentRewardPlacementActive;
     if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.inspectorRadialMenu?.isOpen) {
       if (inspectorModeActive) this.cancelUtilityInteraction();
       const capacity = this.inspectorGetCapacity?.();
       this.inspectorRadialMenu?.open(
         pointer.x,
         pointer.y,
-        this.getConstructionToolRefs(),
+        constructionTools,
+        persistentRewardIds,
         this.getSelectedInspectorRadialSelection(),
         capacity?.used ?? 0,
         capacity?.max ?? COOP_DEFENSE_CONSTRUCTION_CAPACITY,
+        constructionTools.length > 0 || hasDismantleTarget,
       );
     }
 
@@ -418,12 +482,22 @@ export class InputSystem {
   }
 
   isInspectorDismantlePlacementActive(): boolean {
-    return this.hasActiveConstructionTools()
+    return (this.hasActiveConstructionTools() || this.isInspectorMode())
       && this.inspectorDismantlePlacementActive
       && !this.isInspectorUtilityOverrideActive();
   }
 
+  isInspectorPersistentRewardPlacementActive(): boolean {
+    return this.getSelectedPersistentRewardId() !== null
+      && this.inspectorPersistentRewardPlacementActive
+      && !this.isInspectorUtilityOverrideActive();
+  }
+
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
+    const rewardId = this.getSelectedPersistentRewardId();
+    if (this.isInspectorPersistentRewardPlacementActive() && rewardId) {
+      return this.getPersistentRewardPlacementPreviewProvider?.(rewardId);
+    }
     if (this.isInspectorDismantlePlacementActive()) return this.getDismantlePreviewProvider?.();
     if (this.hasActiveConstructionTools() && !this.isInspectorConstructionPlacementActive()) return undefined;
     const constructionTool = this.getSelectedConstructionToolRef();
@@ -573,6 +647,7 @@ export class InputSystem {
       this.placementPreviewState = null;
       this.inspectorConstructionPlacementActive = false;
       this.inspectorDismantlePlacementActive = false;
+      this.inspectorPersistentRewardPlacementActive = false;
       if (!allowInspectorRadial) this.inspectorRadialMenu?.close();
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
@@ -605,7 +680,8 @@ export class InputSystem {
       || this.utilityPlacementActive
       || this.globalDismantleHoldStartedAt !== null
       || this.inspectorConstructionPlacementActive
-      || this.inspectorDismantlePlacementActive;
+      || this.inspectorDismantlePlacementActive
+      || this.inspectorPersistentRewardPlacementActive;
   }
 
   isUtilityChargePreviewActive(): boolean {
@@ -809,9 +885,10 @@ export class InputSystem {
     // Input-Kanal repliziert; Bewegung und Aktionen bleiben gesperrt.
     const aimTarget = this.updateAimFromPointer();
     const selectedConstructionTool = this.getSelectedConstructionToolRef();
-    const constructionPreview = this.hasActiveConstructionTools()
-      && ((this.isInspectorConstructionPlacementActive() && selectedConstructionTool?.kind === 'construction')
-        || this.isInspectorDismantlePlacementActive())
+    const constructionPreview = (this.isInspectorPersistentRewardPlacementActive()
+      || (this.hasActiveConstructionTools()
+        && ((this.isInspectorConstructionPlacementActive() && selectedConstructionTool?.kind === 'construction')
+          || this.isInspectorDismantlePlacementActive())))
       ? this.getConstructionPlacementPreviewState()
       : undefined;
     if (constructionPreview) this.syncPlacementPreviewState(constructionPreview);
@@ -923,7 +1000,8 @@ export class InputSystem {
         || this.utilityHoldActive
         || this.globalDismantleHoldStartedAt !== null
         || this.inspectorConstructionPlacementActive
-        || this.inspectorDismantlePlacementActive;
+        || this.inspectorDismantlePlacementActive
+        || this.inspectorPersistentRewardPlacementActive;
       if (rightInputStarted && inspectorModeActive) {
         this.cancelUtilityInteraction();
         this.prevRightPointerDown = rightPointerDown;
@@ -932,7 +1010,7 @@ export class InputSystem {
       }
     }
 
-    if (this.hasActiveConstructionTools() && this.inspectorDismantlePlacementActive) {
+    if ((this.hasActiveConstructionTools() || this.isInspectorMode()) && this.inspectorDismantlePlacementActive) {
       const preview = constructionPreview;
       this.syncPlacementPreviewState(preview);
       if (!preview) {
@@ -946,6 +1024,29 @@ export class InputSystem {
             inputStarted: true,
             dismantle: true,
           });
+        }
+        this.cancelInspectorConstructionPlacement();
+        return;
+      }
+      return;
+    }
+
+    if (this.isInspectorPersistentRewardPlacementActive()) {
+      const preview = constructionPreview;
+      this.syncPlacementPreviewState(preview);
+      if (!preview) {
+        this.cancelInspectorConstructionPlacement();
+        return;
+      }
+      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+        if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
+        const rewardId = this.getSelectedPersistentRewardId();
+        if (rewardId && preview.isValid && this.placePersistentRewardProvider) {
+          void this.placePersistentRewardProvider(rewardId, preview).then((result) => {
+            if (result.ok && this.inspectorPersistentRewardId === rewardId) {
+              this.inspectorPersistentRewardId = null;
+            }
+          }).catch(() => undefined);
         }
         this.cancelInspectorConstructionPlacement();
         return;
@@ -1188,9 +1289,19 @@ export class InputSystem {
         this.bridge.sendHeldActionStart(actionId, 'global_dismantle', 1_000);
         return;
       }
-      if (this.hasActiveConstructionTools() && this.isInspectorDismantleSelected() && !this.isInspectorUtilityOverrideActive()) {
+      if ((this.hasActiveConstructionTools() || this.isInspectorMode())
+        && this.isInspectorDismantleSelected()
+        && !this.isInspectorUtilityOverrideActive()) {
         this.cancelUtilityInteraction();
         this.inspectorDismantlePlacementActive = true;
+        this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
+        return;
+      }
+      const persistentRewardId = this.getSelectedPersistentRewardId();
+      if (persistentRewardId && this.isInspectorMode() && !this.isInspectorUtilityOverrideActive()) {
+        this.cancelUtilityInteraction();
+        this.inspectorPersistentRewardPlacementActive = true;
+        this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
@@ -1515,6 +1626,7 @@ export class InputSystem {
   private cancelInspectorConstructionPlacement(): void {
     this.inspectorConstructionPlacementActive = false;
     this.inspectorDismantlePlacementActive = false;
+    this.inspectorPersistentRewardPlacementActive = false;
     this.placementPreviewState = null;
   }
 
@@ -1551,7 +1663,8 @@ export class InputSystem {
   private syncPlacementPreviewState(preview: UtilityPlacementPreviewState | undefined): void {
     if ((!this.utilityPlacementActive
       && !this.inspectorConstructionPlacementActive
-      && !this.inspectorDismantlePlacementActive) || !preview) {
+      && !this.inspectorDismantlePlacementActive
+      && !this.inspectorPersistentRewardPlacementActive) || !preview) {
       this.placementPreviewState = null;
       return;
     }

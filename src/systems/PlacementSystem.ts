@@ -261,22 +261,26 @@ export class PlacementSystem {
     return sumPlaceableCapacity(this.runtimeRocks.values(), ownerId);
   }
 
-  /** Rueckbau: entfernt ein Konstrukt nur, wenn es dem anfragenden Spieler gehoert. */
+  /** Rueckbau: persoenliche Konstrukte oder explizit freigegebene Base-Rewards. */
   removeRockAt(
     gridX: number,
     gridY: number,
     ownerId: string,
     expectedOwnership?: ConstructionOwnership,
+    allowPersistentBaseReward = false,
   ): SyncedPlaceableRock | undefined {
     // Der Grid-Index fuehrt statische Layout-Felsen und platzierte Objekte gemeinsam; nur
     // Letztere stehen in `runtimeRocks` und sind damit ueberhaupt rueckbaubar.
     const id = this.rockGrid.getIndex(gridX, gridY);
     if (id < 0) return undefined;
     const rock = this.runtimeRocks.get(id);
+    const isPersistentBaseReward = rock?.ownership === 'base-owned'
+      && rock.persistentRewardId !== undefined;
     if (
       !rock
-      || rock.ownerId !== ownerId
-      || rock.ownership === 'base-owned'
+      || (isPersistentBaseReward
+        ? !allowPersistentBaseReward
+        : rock.ownerId !== ownerId || rock.ownership === 'base-owned')
       || (expectedOwnership !== undefined && rock.ownership !== expectedOwnership)
     ) return undefined;
     return this.removeRock(id);
@@ -558,7 +562,8 @@ export class PlacementSystem {
       targetY: targetWorld.y,
       gridX: targetCell.gridX,
       gridY: targetCell.gridY,
-      isValid: rock?.ownerId === ownerId,
+      isValid: rock?.ownerId === ownerId
+        || (rock?.ownership === 'base-owned' && rock.persistentRewardId !== undefined),
       frame: 0,
       range,
       kind: rock?.kind ?? 'rock',

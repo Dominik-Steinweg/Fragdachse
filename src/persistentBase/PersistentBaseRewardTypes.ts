@@ -37,6 +37,8 @@ export interface PersistentBaseRewardSessionState {
   readonly revision: number;
   readonly availableRewardIds: readonly PersistentBaseRewardId[];
   readonly placements: readonly PersistentBaseRewardPlacement[];
+  /** Rewards that were already placed once and therefore cannot be selected again in 3D. */
+  readonly everPlacedRewardIds: readonly PersistentBaseRewardId[];
 }
 
 /** World-bound host request for a first-time reward placement. */
@@ -177,6 +179,9 @@ export function clonePersistentBaseRewardSessionState(
     revision: state.revision,
     availableRewardIds: [...state.availableRewardIds],
     placements: state.placements.map(clonePersistentBaseRewardPlacement),
+    everPlacedRewardIds: [
+      ...(state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId)),
+    ],
   };
 }
 
@@ -195,11 +200,19 @@ export function sanitizePersistentBaseRewardSessionState(
   });
   if (!placements) return null;
   if (placements.placements.some((placement) => !availableRewardIds.includes(placement.rewardId))) return null;
+  // Older peers did not publish placement history. Their current placement list is the only
+  // safe history available to us; new writers always send the explicit field.
+  const rawEverPlaced = value.everPlacedRewardIds === undefined
+    ? placements.placements.map((placement) => placement.rewardId)
+    : sanitizePersistentBaseRewardIds(value.everPlacedRewardIds);
+  if (!rawEverPlaced || rawEverPlaced.some((rewardId) => !availableRewardIds.includes(rewardId))) return null;
+  if (placements.placements.some((placement) => !rawEverPlaced.includes(placement.rewardId))) return null;
   return {
     worldRevision: value.worldRevision,
     revision: value.revision,
     availableRewardIds,
     placements: placements.placements,
+    everPlacedRewardIds: rawEverPlaced,
   };
 }
 

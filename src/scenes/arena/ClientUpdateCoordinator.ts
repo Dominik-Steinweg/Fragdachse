@@ -511,7 +511,12 @@ export class ClientUpdateCoordinator {
       const inspectorUtilityAction = hasUtilityOverride
         ? null
         : this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud();
-      const selectedInspectorTool = inspectorUtilityAction ? null : this.getLocalInspectorSelectedTool();
+      const inspectorRewardId = hasUtilityOverride || inspectorUtilityAction
+        ? null
+        : this.ctx.inputSystem.getSelectedInspectorPersistentRewardForHud();
+      const selectedInspectorTool = inspectorUtilityAction || inspectorRewardId
+        ? null
+        : this.getLocalInspectorSelectedTool();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId2);
       const activeConstructionTool = selectedInspectorTool?.kind === 'construction'
         ? selectedInspectorTool
@@ -534,7 +539,7 @@ export class ClientUpdateCoordinator {
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
       const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
-      const baseUtilityId = inspectorUtilityAction
+      const baseUtilityId = inspectorUtilityAction || inspectorRewardId
         ? undefined
         : overrideId
           || this.clientUtilityOverride?.id
@@ -563,6 +568,7 @@ export class ClientUpdateCoordinator {
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
         utilityId:               baseUtilityId,
         utilityAction:            inspectorUtilityAction ?? undefined,
+        persistentBaseRewardId:  inspectorRewardId ?? undefined,
         utilityCapacityCost:     inspectorCapacityCost,
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
         isUtilityOverridden:     overrideId !== '' || this.clientUtilityOverride !== null,
@@ -1105,6 +1111,7 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const hasOverride = bridge.getPlayerUtilityOverrideId(localId) !== '' || this.clientUtilityOverride !== null;
     if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorUtilityActionForHud() !== null) return 0;
+    if (!hasOverride && this.ctx.inputSystem.getSelectedInspectorPersistentRewardForHud() !== null) return 0;
     const selected = this.getLocalInspectorSelectedTool();
     const config = this.getLocalUtilityConfig();
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
