@@ -137,6 +137,28 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     expect(findWorldBase(world, 'does-not-exist')).toBeNull();
   });
 
+  it('traegt die Persistent Base auf allen produktiven Campaign Maps und nicht auf Map 9', () => {
+    for (const mapId of [
+      '2', '3', '4', '5', '6', '7', '8',
+      '10', '11', '12', '13', '14', '15', '16', '17',
+    ]) {
+      const mapConfig = getCoopDefenseMapConfig(mapId);
+      const world = contextForMap(mapId);
+      expect(world.persistentBaseSite, mapId).toMatchObject({
+        baseId: mapConfig.persistentBase!.baseId,
+        anchor: mapConfig.persistentBase!.anchor,
+      });
+      expect(findWorldBase(world, mapConfig.persistentBase!.baseId), mapId).toMatchObject({
+        faction: 'friendly',
+        role: 'main',
+      });
+    }
+
+    const map9 = contextForMap('9');
+    expect(map9.persistentBaseSite).toBeNull();
+    expect(map9.bases).toEqual([]);
+  });
+
   it('loest die persistente Basisstelle aus den eigenen Basen und dem World-Parameter auf', () => {
     const withParameter = contextForMap('18', {
       parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 7 },

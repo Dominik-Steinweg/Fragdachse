@@ -485,7 +485,7 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(powerUps.getPedestalSnapshot()).toHaveLength(1);
   });
 
-  it('keeps authored pedestals of an active base through layout generation and arena start', () => {
+  it('does not carry legacy home-base pedestals into the persistent core', () => {
     const map = getCoopDefenseMapConfig('6');
     const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);
     const layout = ArenaGenerator.generate(
@@ -497,6 +497,13 @@ describe('Coop-Defense dormant mission structures', () => {
       .find((base) => base.id === 'coop-base-rear')?.powerUpPedestals ?? [];
     const linked = layout.powerUpPedestals.filter((pedestal) => pedestal.linkedBaseId === 'coop-base-rear');
 
+    expect(map.persistentBase).toEqual({
+      baseId: 'coop-base-rear',
+      anchor: { gridX: 49, gridY: 22 },
+      hpMax: 1650,
+    });
+    expect(authored).toEqual([]);
+    expect(linked).toEqual([]);
     expect(linked.map(({ defId, gridX, gridY, spawnOnArenaStart }) => ({
       defId,
       gridX,

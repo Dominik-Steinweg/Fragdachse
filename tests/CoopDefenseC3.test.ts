@@ -156,6 +156,7 @@ describe('Coop Defense C3 configuration', () => {
     const bossMap = getCoopDefenseMapConfig('15');
     expect(() => normalizeCoopDefenseMapConfig({
       ...bossMap,
+      bases: bossMap.bases.filter((base) => base.id !== bossMap.persistentBase?.baseId),
       mapEvents: [makeEvent({ start: { type: 'boss-phase', phase: 2 } })],
     })).not.toThrow();
 
@@ -177,6 +178,7 @@ describe('Coop Defense C3 configuration', () => {
     // dormant. Ein Layout-Retry bis zum Abbruch waere fuer einen Authoring-Fehler unverhaeltnismaessig.
     const withUnreachableHazard = normalizeCoopDefenseMapConfig({
       ...map,
+      bases: map.bases.filter((base) => base.id !== map.persistentBase?.baseId),
       mapEvents: [
         ...(map.mapEvents ?? []),
         makeEvent({

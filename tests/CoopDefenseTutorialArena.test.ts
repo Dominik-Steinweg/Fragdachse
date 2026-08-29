@@ -172,8 +172,11 @@ describe('Coop defense tutorial arena formation', () => {
       }
 
       const mainBases = bases.filter((base) => base.role === 'main');
+      // Der kanonische 5x5-Persistent-Core ist auf Map 3 am unteren Rand eine Zelle groesser als
+      // die fruehere 4x4-Home-Base; die Tutorial- und Clearance-Flaechen bleiben trotzdem getrennt.
+      const minimumBottomGap = map.persistentBase === undefined ? 15 : 14;
       expect(
-        mainBases.every((base) => GRID_ROWS - 1 - base.region.maxGridY >= 15),
+        mainBases.every((base) => GRID_ROWS - 1 - base.region.maxGridY >= minimumBottomGap),
         `Map ${map.mapId} moves a main base too close to the lower arena edge`,
       ).toBe(true);
     }

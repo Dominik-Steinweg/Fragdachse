@@ -280,119 +280,6 @@
       ]
     },
     {
-      "id": "coop-base-rear",
-      "hpMax": 4500,
-      "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 3,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 3,
-            "gridY": 3
-          },
-          {
-            "gridX": 0,
-            "gridY": 4
-          },
-          {
-            "gridX": 1,
-            "gridY": 4
-          },
-          {
-            "gridX": 2,
-            "gridY": 4
-          },
-          {
-            "gridX": 3,
-            "gridY": 4
-          }
-        ]
-      },
-      "powerUpPedestals": [
-        {
-          "id": "health-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "armor-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
-          "defId": "ARMOR",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "adrenaline-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
-          },
-          "defId": "ADRENALINE",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        }
-      ]
-    },
-    {
       "id": "friendly-rear-mushroom-1",
       "role": "outpost",
       "hpMax": 950,
@@ -689,6 +576,14 @@
       }
     }
   ],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 91,
+      "gridY": 19
+    },
+    "hpMax": 1650
+  },
   "powerUps": [
     {
       "defId": "HEALTH_PACK",

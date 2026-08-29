@@ -13,123 +13,15 @@
   }],
   "balanceReferenceDurationSec": 115,
   "objective": "repel-assault",
-  "bases": [
-    {
-      "id": "coop-base-rear",
-      "hpMax": 3500,
-      "anchor": {
-        "kind": "center-offset",
-        "dxCells": 0,
-        "dyCells": 0
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          { "gridX": 0, "gridY": 0 },
-          { "gridX": 1, "gridY": 0 },
-          { "gridX": 3, "gridY": 0 },
-          { "gridX": 4, "gridY": 0 },
-          { "gridX": 0, "gridY": 1 },
-          { "gridX": 1, "gridY": 1 },
-          { "gridX": 2, "gridY": 1 },
-          { "gridX": 3, "gridY": 1 },
-          { "gridX": 4, "gridY": 1 },
-          { "gridX": 1, "gridY": 2 },
-          { "gridX": 2, "gridY": 2 },
-          { "gridX": 3, "gridY": 2 },
-          { "gridX": 0, "gridY": 3 },
-          { "gridX": 1, "gridY": 3 },
-          { "gridX": 2, "gridY": 3 },
-          { "gridX": 3, "gridY": 3 },
-          { "gridX": 4, "gridY": 3 },
-          { "gridX": 0, "gridY": 4 },
-          { "gridX": 1, "gridY": 4 },
-          { "gridX": 3, "gridY": 4 },
-          { "gridX": 4, "gridY": 4 }
-        ]
-      },
-      "turrets": [
-        {
-          "id": "rocket-northwest",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "top",
-          "weaponId": "TURRET_ROCKET_BURST"
-        },
-        {
-          "id": "spore-northeast",
-          "cellOffset": {
-            "gridX": 4,
-            "gridY": 0
-          },
-          "mountSide": "top",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "spore-southwest",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 4
-          },
-          "mountSide": "bottom",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "rocket-southeast",
-          "cellOffset": {
-            "gridX": 4,
-            "gridY": 4
-          },
-          "mountSide": "bottom",
-          "weaponId": "TURRET_ROCKET_BURST"
-        }
-      ],
-      "powerUpPedestals": [
-        {
-          "id": "health-station-top",
-          "cellOffset": {
-            "gridX": 2,
-            "gridY": 0
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "adrenaline-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
-          "defId": "ADRENALINE",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "armor-station",
-          "cellOffset": {
-            "gridX": 2,
-            "gridY": 4
-          },
-          "defId": "ARMOR",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "double-damage-station",
-          "cellOffset": {
-            "gridX": 4,
-            "gridY": 2
-          },
-          "defId": "DOUBLE_DAMAGE",
-          "respawnMs": 20000,
-          "spawnOnArenaStart": false
-        }
-      ]
-    }
-  ],
+  "bases": [],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 49,
+      "gridY": 22
+    },
+    "hpMax": 1650
+  },
   "powerUps": [
     {
       "defId": "ADRENALINE",

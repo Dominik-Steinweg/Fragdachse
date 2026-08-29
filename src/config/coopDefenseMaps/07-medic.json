@@ -15,117 +15,6 @@
   "objective": "repel-assault",
   "bases": [
     {
-      "id": "coop-base-rear",
-      "hpMax": 2000,
-      "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
-      },
-      "shape": {
-        "kind": "cells",
-        "cells": [
-          {
-            "gridX": 0,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 0
-          },
-          {
-            "gridX": 2,
-            "gridY": 0
-          },
-          {
-            "gridX": 3,
-            "gridY": 0
-          },
-          {
-            "gridX": 1,
-            "gridY": 1
-          },
-          {
-            "gridX": 2,
-            "gridY": 1
-          },
-          {
-            "gridX": 3,
-            "gridY": 1
-          },
-          {
-            "gridX": 1,
-            "gridY": 2
-          },
-          {
-            "gridX": 2,
-            "gridY": 2
-          },
-          {
-            "gridX": 3,
-            "gridY": 2
-          },
-          {
-            "gridX": 0,
-            "gridY": 3
-          },
-          {
-            "gridX": 1,
-            "gridY": 3
-          },
-          {
-            "gridX": 2,
-            "gridY": 3
-          },
-          {
-            "gridX": 3,
-            "gridY": 3
-          }
-        ]
-      },
-      "turrets": [
-        {
-          "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        }
-      ],
-      "powerUpPedestals": [
-        {
-          "id": "health-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 1
-          },
-          "defId": "HEALTH_PACK",
-          "respawnMs": 5000,
-          "spawnOnArenaStart": true
-        },
-        {
-          "id": "armor-station",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 2
-          },
-          "defId": "ARMOR",
-          "respawnMs": 10000,
-          "spawnOnArenaStart": true
-        }
-      ]
-    },
-    {
       "id": "coop-base-middle",
       "hpMax": 850,
       "anchor": {
@@ -183,6 +72,14 @@
       ]
     }
   ],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 67,
+      "gridY": 18
+    },
+    "hpMax": 1650
+  },
   "powerUps": [
     {
       "defId": "HEALTH_PACK",

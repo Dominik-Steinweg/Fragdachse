@@ -19,7 +19,7 @@ describe('Map 16 - Zeitzünder', () => {
     applyArenaMetricsForMode(COOP_DEFENSE_MODE, 'ARENA', map.arenaWidthCells, map.arenaHeightCells);
   });
 
-  it('keeps the rear base fortified with linked and free power-ups', () => {
+  it('keeps the migrated persistent rear core and independent support bases', () => {
     const map = getCoopDefenseMapConfig('16');
     const rearBase = map.bases.find((base) => base.id === 'coop-base-rear');
     const middleBase = map.bases.find((base) => base.id === 'coop-base-middle');
@@ -28,14 +28,15 @@ describe('Map 16 - Zeitzünder', () => {
       timeOfDay: '05:00',
       trackMode: 'void-fire',
       objective: 'repel-assault',
+      persistentBase: {
+        baseId: 'coop-base-rear',
+        anchor: { gridX: 91, gridY: 19 },
+        hpMax: 1650,
+      },
     });
     expect(rearBase?.hpMax).toBeGreaterThan(0);
-    expect(rearBase?.turrets).toHaveLength(0);
-    expect(rearBase?.powerUpPedestals?.map((pedestal) => pedestal.defId)).toEqual(expect.arrayContaining([
-      'HEALTH_PACK',
-      'ARMOR',
-      'ADRENALINE',
-    ]));
+    expect(rearBase?.turrets).toEqual([]);
+    expect(rearBase?.powerUpPedestals).toEqual([]);
     expect(middleBase?.hpMax).toBeGreaterThan(0);
     const friendlyOutpostTurrets = map.bases
       .filter((base) => base.role === 'outpost' && base.faction !== 'hostile')

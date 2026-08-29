@@ -15,39 +15,6 @@
   "balanceReferenceDurationSec": 105,
   "bases": [
     {
-      "id": "coop-base-rear",
-      "hpMax": 4000,
-      "anchor": {
-        "kind": "right-center",
-        "edgeInsetCells": 0
-      },
-      "shape": {
-        "kind": "rectangle",
-        "widthCells": 4,
-        "heightCells": 4
-      },
-      "turrets": [
-        {
-          "id": "front-top",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 0
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        },
-        {
-          "id": "front-bottom",
-          "cellOffset": {
-            "gridX": 0,
-            "gridY": 3
-          },
-          "mountSide": "front",
-          "weaponId": "BASE_SPORES"
-        }
-      ]
-    },
-    {
       "id": "coop-base-middle",
       "hpMax": 850,
       "anchor": {
@@ -94,6 +61,14 @@
       ]
     }
   ],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 61,
+      "gridY": 18
+    },
+    "hpMax": 1650
+  },
   "powerUps": [
     {
       "defId": "ADRENALINE",

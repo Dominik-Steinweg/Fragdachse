@@ -30,12 +30,6 @@
   "objective": "destroy-hostile-bases",
   "bases": [
     {
-      "id": "coop-base-rear",
-      "hpMax": 4200,
-      "anchor": { "kind": "right-center", "edgeInsetCells": 0 },
-      "shape": { "kind": "rectangle", "widthCells": 4, "heightCells": 4 }
-    },
-    {
       "id": "coop-base-middle",
       "hpMax": 1900,
       "anchor": { "kind": "center-offset", "dxCells": -5, "dyCells": -2 },
@@ -107,6 +101,14 @@
       "spawnCenter": { "gridX": 1, "gridY": 1 }
     }
   ],
+  "persistentBase": {
+    "baseId": "coop-base-rear",
+    "anchor": {
+      "gridX": 99,
+      "gridY": 21
+    },
+    "hpMax": 1650
+  },
   "powerUps": [
     { "defId": "HEALTH_PACK", "region": "front", "respawnMs": 5000, "spawnOnArenaStart": true },
     { "defId": "ARMOR", "region": "middle", "respawnMs": 10000, "spawnOnArenaStart": true },

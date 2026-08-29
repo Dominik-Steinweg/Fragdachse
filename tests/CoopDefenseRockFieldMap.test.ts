@@ -110,13 +110,14 @@ describe('Map 14 rock field', () => {
 
     for (const seed of SEEDS) {
       const blocked = buildBlockedGrid(seed);
-      // Spalte 15 liegt zwischen Spawnrand und mittlerer Basis, Spalte 48 zwischen den Basen.
-      // Die Gleisspalten liegen in beiden Fällen nicht dazwischen.
+      // Spalte 15 liegt zwischen Spawnrand und mittlerer Basis. Spalte 48 liegt jetzt in der
+      // zusammenhängenden Persistent-Base-Reservierung am Kartenende; die beiden authored
+      // Rear-Korridore werden dort deshalb bewusst zu einem offenen Run verbunden.
       // Tutorial rocks are intentionally merged with the authored field on Map 14. The
       // The taller authored arena can expose one additional run at this probe column.
       expect(countOpenRuns(blocked, 15)).toBeGreaterThanOrEqual(3);
       expect(countOpenRuns(blocked, 15)).toBeLessThanOrEqual(5);
-      expect(countOpenRuns(blocked, 48)).toBe(2);
+      expect(countOpenRuns(blocked, 48)).toBe(1);
     }
   });
 

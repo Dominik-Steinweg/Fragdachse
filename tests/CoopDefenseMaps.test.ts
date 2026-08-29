@@ -22,6 +22,10 @@ import {
   MAX_COOP_DEFENSE_ARENA_HEIGHT_CELLS,
   MAX_COOP_DEFENSE_ARENA_WIDTH_CELLS,
 } from '../src/config';
+import {
+  MAX_PERSISTENT_BASE_RADIUS_CELLS,
+  PERSISTENT_BASE_CLEARANCE_CELLS,
+} from '../src/config/persistentBase';
 import { shouldDelayFirstPedestalSpawn } from '../src/powerups/PowerUpConfig';
 import { formatTimeOfDay, parseTimeOfDay, resolveSkyState } from '../src/effects/TimeOfDay';
 import { getMapName, getMapTutorial, getSecondaryObjectiveReward } from '../src/i18n/contentPresentation';
@@ -116,15 +120,78 @@ describe('Coop defense map progression', () => {
     })).toThrow(/free cells around its anchor/);
   });
 
-  it('gives every persistent-base map an anchor that the mission lifecycle can resolve', () => {
-    const persistentMaps = COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.persistentBase);
-    expect(persistentMaps.length).toBeGreaterThan(0);
-    for (const map of persistentMaps) {
-      const anchorBase = resolveCoopDefenseBases(map).find((base) => base.id === map.persistentBase!.baseId);
-      // ArenaLifecycleCoordinator.buildArena() wirft, wenn der Anker keine eigene Hauptbasis ist.
-      expect(anchorBase, map.mapId).toBeDefined();
-      expect(anchorBase!.faction, map.mapId).toBe('friendly');
-      expect(anchorBase!.role, map.mapId).toBe('main');
+  it('integrates the Phase 3C persistent base into the productive campaign maps', () => {
+    const expectedPersistentBases = {
+      '2': { baseId: 'coop-base-rear', anchor: { gridX: 34, gridY: 20 } },
+      '3': { baseId: 'coop-base-rear', anchor: { gridX: 38, gridY: 20 } },
+      '4': { baseId: 'coop-base-rear', anchor: { gridX: 69, gridY: 19 } },
+      '5': { baseId: 'coop-base-rear', anchor: { gridX: 61, gridY: 18 } },
+      '6': { baseId: 'coop-base-rear', anchor: { gridX: 49, gridY: 22 } },
+      '7': { baseId: 'coop-base-rear', anchor: { gridX: 67, gridY: 18 } },
+      '8': { baseId: 'coop-base-rear', anchor: { gridX: 79, gridY: 25 } },
+      '10': { baseId: 'coop-base-middle', anchor: { gridX: 43, gridY: 16 } },
+      '11': { baseId: 'coop-base-middle', anchor: { gridX: 25, gridY: 21 } },
+      '12': { baseId: 'coop-base-rear', anchor: { gridX: 99, gridY: 20 } },
+      '13': { baseId: 'coop-base-rear', anchor: { gridX: 122, gridY: 20 } },
+      '14': { baseId: 'coop-base-rear', anchor: { gridX: 47, gridY: 20 } },
+      '15': { baseId: 'coop-base-center', anchor: { gridX: 45, gridY: 20 } },
+      '16': { baseId: 'coop-base-rear', anchor: { gridX: 91, gridY: 19 } },
+      '17': { baseId: 'coop-base-rear', anchor: { gridX: 99, gridY: 21 } },
+    } as const;
+    const campaignMapIds = Object.keys(expectedPersistentBases);
+    expect(campaignMapIds).toEqual([
+      '2', '3', '4', '5', '6', '7', '8',
+      '10', '11', '12', '13', '14', '15', '16', '17',
+    ]);
+    expect(getCoopDefenseMapConfig('9').persistentBase).toBeUndefined();
+    expect(getCoopDefenseMapConfig('9').bases).toEqual([]);
+
+    const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
+    for (const mapId of campaignMapIds) {
+      const map = getCoopDefenseMapConfig(mapId);
+      const expected = expectedPersistentBases[mapId as keyof typeof expectedPersistentBases];
+      expect(map.persistentBase, mapId).toEqual({
+        ...expected,
+        hpMax: 1650,
+      });
+
+      const resolvedBases = resolveCoopDefenseBases(map);
+      const persistentBase = resolvedBases.find((base) => base.id === expected.baseId);
+      expect(persistentBase, mapId).toBeDefined();
+      expect(persistentBase, mapId).toMatchObject({
+        anchorGridX: expected.anchor.gridX,
+        anchorGridY: expected.anchor.gridY,
+        faction: 'friendly',
+        role: 'main',
+        hpMax: 1650,
+        persistentReservationRadiusCells: reservationRadius,
+      });
+      expect(persistentBase!.cells).toHaveLength(12);
+      expect(persistentBase!.turrets, mapId).toEqual([]);
+      expect(persistentBase!.powerUpPedestals, mapId).toEqual([]);
+      expect(map.bases.filter((base) => base.id === expected.baseId), mapId).toHaveLength(1);
+    }
+  });
+
+  it('keeps the persistent reservation separate from independent authored structures', () => {
+    const campaignMapIds = [
+      '2', '3', '4', '5', '6', '7', '8',
+      '10', '11', '12', '13', '14', '15', '16', '17',
+    ];
+    for (const mapId of campaignMapIds) {
+      const map = getCoopDefenseMapConfig(mapId);
+      const bases = resolveCoopDefenseBases(map);
+      const persistentBase = bases.find((base) => base.id === map.persistentBase?.baseId);
+      expect(persistentBase, mapId).toBeDefined();
+      const independentBases = bases.filter((base) => base.id !== persistentBase!.id);
+      for (const base of independentBases) {
+        for (const cell of base.cells) {
+          expect(
+            isPersistentBaseReservationCell(cell.gridX, cell.gridY, bases),
+            `${mapId}/${base.id} overlaps the persistent base reservation`,
+          ).toBe(false);
+        }
+      }
     }
   });
 
@@ -293,24 +360,17 @@ describe('Coop defense map progression', () => {
     const bomberMap = getCoopDefenseMapConfig('11');
     expect(bomberMap.objective).toBe('repel-assault');
     expect(bomberMap.persistentSpawns).toEqual([]);
+    expect(bomberMap.persistentBase).toEqual({
+      baseId: 'coop-base-middle',
+      anchor: { gridX: 25, gridY: 21 },
+      hpMax: 1650,
+    });
     expect(bomberMap.bases).toHaveLength(1);
     expect(bomberMap.bases[0]?.id).toBe('coop-base-middle');
-    expect(bomberMap.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: -4, dyCells: 2 });
+    expect(bomberMap.bases[0]?.anchor).toEqual({ kind: 'grid', gridX: 23, gridY: 19 });
     expect(getShapeBounds(bomberMap.bases[0]!.shape)).toEqual({ width: 5, height: 5 });
-    expect(bomberMap.bases[0]?.turrets?.map((turret) => ({
-      weaponId: turret.weaponId,
-      cellOffset: turret.cellOffset,
-    }))).toEqual([
-      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 0, gridY: 4 } },
-      { weaponId: 'BASE_SPORES', cellOffset: { gridX: 4, gridY: 4 } },
-    ]);
-    expect(bomberMap.bases[0]?.powerUpPedestals?.map((pedestal) => ({
-      defId: pedestal.defId,
-      cellOffset: pedestal.cellOffset,
-    }))).toEqual([
-      { defId: 'HEALTH_PACK', cellOffset: { gridX: 0, gridY: 2 } },
-      { defId: 'ADRENALINE', cellOffset: { gridX: 4, gridY: 2 } },
-    ]);
+    expect(bomberMap.bases[0]?.turrets).toEqual([]);
+    expect(bomberMap.bases[0]?.powerUpPedestals).toEqual([]);
     expect(bomberMap.mapEvents?.some((event) => event.type === 'train')).toBe(false);
     expect(bomberMap.encounters?.map((encounter) => encounter.start.type)).toEqual([
       'time',
@@ -344,7 +404,8 @@ describe('Coop defense map progression', () => {
       .every((group) => getCoopDefenseEnemyConfig(group.enemyKind).movementTarget === 'bases')).toBe(true);
 
     const map3 = getCoopDefenseMapConfig('3');
-    expect(map3.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 2 });
+    expect(map3.persistentBase?.anchor).toEqual({ gridX: 38, gridY: 20 });
+    expect(map3.bases[0]?.anchor).toEqual({ kind: 'grid', gridX: 36, gridY: 18 });
     expect(map3.encounters?.flatMap((encounter) => encounter.groups)
       .every((group) => group.front === 'west' || group.front === 'east')).toBe(true);
     expect(map3.encounters?.flatMap((encounter) => encounter.groups)
@@ -376,7 +437,8 @@ describe('Coop defense map progression', () => {
 
     const map10 = getCoopDefenseMapConfig('10');
     expect(map10.bases.filter((base) => (base.role ?? 'main') === 'main')).toHaveLength(1);
-    expect(map10.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: -6, dyCells: 0 });
+    expect(map10.persistentBase?.anchor).toEqual({ gridX: 43, gridY: 16 });
+    expect(map10.bases[0]?.anchor).toEqual({ kind: 'grid', gridX: 41, gridY: 14 });
 
     const map11 = getCoopDefenseMapConfig('11');
     const map11Fronts = new Set(map11.encounters?.flatMap((encounter) => encounter.groups.map((group) => group.front)));
@@ -582,49 +644,15 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('keeps authored base pickups on the enlarged bases of maps 6 and 8', () => {
-    for (const mapId of ['6', '8']) {
-      const rearBase = getCoopDefenseMapConfig(mapId).bases.find((base) => base.id === 'coop-base-rear');
-      expect(rearBase).toBeDefined();
-      const bounds = getShapeBounds(rearBase!.shape);
-      expect(bounds.width).toBeGreaterThan(0);
-      expect(bounds.height).toBeGreaterThan(0);
-      expect(rearBase!.powerUpPedestals?.map((pedestal) => pedestal.defId)).toEqual(expect.arrayContaining([
-        'HEALTH_PACK',
-        'ADRENALINE',
-        'ARMOR',
-      ]));
+  it('uses the canonical core without legacy home-base turrets or pickups', () => {
+    for (const mapId of ['3', '6', '10', '11', '15']) {
+      const map = getCoopDefenseMapConfig(mapId);
+      const base = map.bases.find((candidate) => candidate.id === map.persistentBase?.baseId);
+      expect(base, mapId).toBeDefined();
+      expect(getShapeBounds(base!.shape), mapId).toEqual({ width: 5, height: 5 });
+      expect(base!.turrets, mapId).toEqual([]);
+      expect(base!.powerUpPedestals, mapId).toEqual([]);
     }
-
-    const map6 = getCoopDefenseMapConfig('6');
-    expect(map6.bases).toHaveLength(1);
-    expect(map6.bases[0]?.anchor).toEqual({ kind: 'center-offset', dxCells: 0, dyCells: 0 });
-    expect(map6.bases[0]?.hpMax).toBeGreaterThan(0);
-    expect(map6.bases[0]?.powerUpPedestals?.map((pedestal) => pedestal.defId)).toEqual(expect.arrayContaining([
-      'HEALTH_PACK',
-      'ADRENALINE',
-      'ARMOR',
-      'DOUBLE_DAMAGE',
-    ]));
-    expect(map6.bases[0]?.turrets?.map((turret) => ({
-      id: turret.id,
-      cellOffset: turret.cellOffset,
-      weaponId: turret.weaponId,
-    }))).toEqual([
-      { id: 'rocket-northwest', cellOffset: { gridX: 0, gridY: 0 }, weaponId: 'TURRET_ROCKET_BURST' },
-      { id: 'spore-northeast', cellOffset: { gridX: 4, gridY: 0 }, weaponId: 'BASE_SPORES' },
-      { id: 'spore-southwest', cellOffset: { gridX: 0, gridY: 4 }, weaponId: 'BASE_SPORES' },
-      { id: 'rocket-southeast', cellOffset: { gridX: 4, gridY: 4 }, weaponId: 'TURRET_ROCKET_BURST' },
-    ]);
-    expect(map6.bases[0]?.powerUpPedestals?.map((pedestal) => ({
-      defId: pedestal.defId,
-      cellOffset: pedestal.cellOffset,
-    }))).toEqual([
-      { defId: 'HEALTH_PACK', cellOffset: { gridX: 2, gridY: 0 } },
-      { defId: 'ADRENALINE', cellOffset: { gridX: 0, gridY: 2 } },
-      { defId: 'ARMOR', cellOffset: { gridX: 2, gridY: 4 } },
-      { defId: 'DOUBLE_DAMAGE', cellOffset: { gridX: 4, gridY: 2 } },
-    ]);
   });
 
   it('gives every map a valid time of day', () => {
@@ -679,6 +707,7 @@ describe('Coop defense map progression', () => {
     })).toThrow(/dynamic time target/i);
     expect(() => normalizeCoopDefenseMapConfig({
       ...getCoopDefenseMapConfig('15'),
+      persistentBase: undefined,
       dynamicTimeOfDay: {
         transitions: [{
           start: { type: 'boss-phase', phase: 2 },

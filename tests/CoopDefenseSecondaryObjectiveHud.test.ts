@@ -242,6 +242,7 @@ describe('Coop defense secondary objective labels', () => {
     const base = getCoopDefenseMapConfig('17');
     const withObjective = (displayName: string) => ({
       ...base,
+      bases: base.bases.filter((candidate) => candidate.id !== base.persistentBase?.baseId),
       secondaryObjectives: (base.secondaryObjectives ?? []).map((objective) => ({ ...objective, displayName })),
     });
     expect(normalizeCoopDefenseMapConfig(withObjective('   ')).secondaryObjectives?.[0]).not.toHaveProperty('displayName');
