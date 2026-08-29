@@ -16,6 +16,7 @@ vi.mock('../src/network/bridge', () => ({ bridge: bridgeMock }));
 
 import { getUtilityConfigForMode, UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { RpcCoordinator } from '../src/scenes/arena/RpcCoordinator';
+import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
 import type {
   HostHeldActionKind,
   LoadoutToolRef,
@@ -66,7 +67,9 @@ function createFixture() {
   const clearPlayer = vi.fn();
   const getEquippedUtilityConfig = vi.fn(() => UTILITY_CONFIGS.HE_GRENADE);
   const getTemporaryUtilityConfig = vi.fn((_playerId: string, instanceId: string) => (
-    instanceId === 'temporary-utility-7' ? UTILITY_CONFIGS.BFG : null
+    instanceId === 'temporary-utility-7' || instanceId === 'temporary-utility-8'
+      ? UTILITY_CONFIGS.BFG
+      : null
   ));
   const use = vi.fn((): LoadoutUseResult => ({ ok: true }));
   const ctx = {
@@ -189,6 +192,7 @@ describe('Inspector loadout-use RPC classification', () => {
       'charged_gate',
       getUtilityConfigForMode('BFG', 'coop_defense')?.activation.fullChargeDuration,
       expect.any(Number),
+      { toolRef: { kind: 'utility', id: 'BFG' } },
     );
     expect(fixture.lifecycle.useInspectorUtility).toHaveBeenCalledWith(
       'p1',
@@ -239,6 +243,7 @@ describe('Inspector loadout-use RPC classification', () => {
       'charged_gate',
       getUtilityConfigForMode('BFG', 'coop_defense')?.activation.fullChargeDuration,
       expect.any(Number),
+      { toolRef: { kind: 'utility', id: 'BFG' } },
     );
   });
 
@@ -260,6 +265,7 @@ describe('Inspector loadout-use RPC classification', () => {
       'charged_gate',
       UTILITY_CONFIGS.BFG.activation.fullChargeDuration,
       expect.any(Number),
+      { temporaryUtilityInstanceId: 'temporary-utility-7' },
     );
     expect(fixture.use).toHaveBeenCalledWith(
       'utility',
@@ -273,5 +279,28 @@ describe('Inspector loadout-use RPC classification', () => {
       undefined,
       undefined,
     );
+  });
+
+  it('rejects a held charge when the release names another equal temporary instance', () => {
+    const fixture = createFixture();
+    fixture.ctx.hostHeldActionSystem = new HostHeldActionSystem();
+    const start = registerHeldActionHandler(fixture.coordinator);
+    const use = registerLoadoutHandler(fixture.coordinator);
+
+    expect(start(
+      'p1',
+      'start',
+      'temporary-bfg-a',
+      'charged_gate',
+      900,
+      undefined,
+      'temporary-utility-7',
+    )).toBe(true);
+
+    expect(use('utility', 0, 220, 180, 'p1', undefined, {
+      temporaryUtilityInstanceId: 'temporary-utility-8',
+      heldActionId: 'temporary-bfg-a',
+    })).toEqual({ ok: false, reason: 'blocked' });
+    expect(fixture.use).not.toHaveBeenCalled();
   });
 });

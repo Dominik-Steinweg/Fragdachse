@@ -133,6 +133,7 @@ describe('Radial Menu V2 input', () => {
     system.setupTemporaryUtilityProvider(() => temporaryUtilities);
 
     expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBe('STINK_CLOUD');
     temporaryUtilities = [{
       kind: 'utility', instanceId: 'temp-1', utilityId: 'BFG', charges: 1,
       cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
@@ -140,6 +141,7 @@ describe('Radial Menu V2 input', () => {
     expect(system.getSelectedRadialActionForHud()).toEqual({
       kind: 'temporary-utility', instanceId: 'temp-1', utilityId: 'BFG',
     });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBe('BFG');
     temporaryUtilities = [...temporaryUtilities, {
       kind: 'utility', instanceId: 'temp-2', utilityId: 'BFG', charges: 1,
       cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 1,
@@ -147,13 +149,16 @@ describe('Radial Menu V2 input', () => {
     expect(system.getSelectedRadialActionForHud()).toEqual({
       kind: 'temporary-utility', instanceId: 'temp-2', utilityId: 'BFG',
     });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBe('BFG');
 
     temporaryUtilities = temporaryUtilities.filter((instance) => instance.instanceId !== 'temp-2');
     expect(system.getSelectedRadialActionForHud()).toEqual({
       kind: 'temporary-utility', instanceId: 'temp-1', utilityId: 'BFG',
     });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBe('BFG');
     temporaryUtilities = [];
     expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBe('STINK_CLOUD');
   });
 
   it('clears temporary return history after explicit selection', () => {
@@ -176,6 +181,101 @@ describe('Radial Menu V2 input', () => {
 
     expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
     expect((system as any).radialSelectionHistory).toEqual([]);
+  });
+
+  it('revalidates a radial candidate against the current temporary collection on close', () => {
+    const { system, keys } = createSystem();
+    let temporaryUtilities = [
+      {
+        kind: 'utility' as const, instanceId: 'temp-a', utilityId: 'BFG', charges: 1,
+        cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
+      },
+      {
+        kind: 'utility' as const, instanceId: 'temp-b', utilityId: 'BFG', charges: 1,
+        cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 1,
+      },
+    ];
+    const menu = {
+      isOpen: false,
+      open: vi.fn(function (this: { isOpen: boolean }) { this.isOpen = true; }),
+      update: vi.fn(),
+      close: vi.fn(function (this: { isOpen: boolean }) {
+        this.isOpen = false;
+        return { kind: 'temporary-utility' as const, instanceId: 'temp-a', utilityId: 'BFG' };
+      }),
+    };
+    Object.assign(system as never as Record<string, unknown>, {
+      radialActionMenu: menu,
+      radialGetTools: () => [],
+      radialGetSelectedTool: () => null,
+      radialGetCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
+    system.setupTemporaryUtilityProvider(() => temporaryUtilities);
+    system.getSelectedRadialActionForHud();
+    (system as any).applyRadialSelection({
+      kind: 'temporary-utility', instanceId: 'temp-a', utilityId: 'BFG',
+    });
+
+    keys.keyR.isDown = true;
+    keys.keyR.justDown = true;
+    expect((system as never as { updateRadialActionMenu(): boolean }).updateRadialActionMenu()).toBe(true);
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'temporary-utility', instanceId: 'temp-a', utilityId: 'BFG',
+    });
+
+    temporaryUtilities = [temporaryUtilities[1]!];
+    keys.keyR.isDown = false;
+    keys.keyR.justDown = false;
+    expect((system as never as { updateRadialActionMenu(): boolean }).updateRadialActionMenu()).toBe(true);
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'temporary-utility', instanceId: 'temp-b', utilityId: 'BFG',
+    });
+  });
+
+  it('keeps cooldown prediction per action and converges without an early ready reset', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    try {
+      const { system } = createSystem();
+      let temporaryUtilities = [
+        {
+          kind: 'utility' as const, instanceId: 'temp-a', utilityId: 'BFG', charges: 2,
+          cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
+        },
+        {
+          kind: 'utility' as const, instanceId: 'temp-b', utilityId: 'BFG', charges: 1,
+          cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 1,
+        },
+      ];
+      let authoritativeCooldown = 0;
+      system.setupTemporaryUtilityProvider(() => temporaryUtilities);
+      system.setupUtilityCooldownProvider(() => authoritativeCooldown);
+      const actionA = { kind: 'temporary-utility' as const, instanceId: 'temp-a', utilityId: 'BFG' };
+      const actionB = { kind: 'temporary-utility' as const, instanceId: 'temp-b', utilityId: 'BFG' };
+      system.getSelectedRadialActionForHud();
+      (system as any).applyRadialSelection(actionA);
+      (system as any).predictUtilityCooldown(actionA, 2_500);
+
+      const actions = (system as any).getRadialActionStates(1_000) as Array<{
+        ref: typeof actionA; available: boolean; cooldownUntil: number;
+      }>;
+      expect(actions.find((entry) => entry.ref.instanceId === 'temp-a')).toMatchObject({
+        available: false,
+        cooldownUntil: 2_500,
+      });
+      expect(actions.find((entry) => entry.ref.instanceId === 'temp-b')).toMatchObject({ available: true });
+      expect((system as any).getEffectiveUtilityCooldownUntil()).toBe(2_500);
+
+      authoritativeCooldown = 3_000;
+      expect((system as any).getEffectiveUtilityCooldownUntil()).toBe(3_000);
+      expect(system.getPredictedUtilityCooldownUntil(actionA)).toBe(0);
+
+      temporaryUtilities = [temporaryUtilities[1]!];
+      expect(system.getSelectedRadialActionForHud()).toEqual(actionB);
+      expect(system.getPredictedUtilityCooldownUntil(actionA)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('uses an R press only to cancel an active interaction and requires a fresh press to open', () => {

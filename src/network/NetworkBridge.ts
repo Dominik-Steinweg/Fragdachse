@@ -3054,7 +3054,7 @@ export class NetworkBridge {
       const toolRef = rawToolRef === undefined
         ? undefined
         : { kind: 'utility' as const, id: (rawToolRef as { id: string }).id };
-      if (tui !== undefined && (typeof tui !== 'string' || tui.length === 0 || tui.length > 80)) return false;
+      if (tui !== undefined && (typeof tui !== 'string' || tui.length === 0 || tui.length > 80 || tui.trim() !== tui)) return false;
       if (toolRef !== undefined && tui !== undefined) return false;
       return this.heldActionHandler?.(
         caller.id,

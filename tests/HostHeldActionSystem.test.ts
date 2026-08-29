@@ -30,6 +30,40 @@ describe('HostHeldActionSystem', () => {
     expect(system.consume('p1', 'throw-new', 'charged_throw', 1_000, 3_000)?.chargeFraction).toBe(1);
   });
 
+  it('binds a charged action to the temporary utility instance that started it', () => {
+    const system = new HostHeldActionSystem();
+    const bfgA = { temporaryUtilityInstanceId: 'temporary-utility-a' } as const;
+    const bfgB = { temporaryUtilityInstanceId: 'temporary-utility-b' } as const;
+
+    expect(system.start('p1', 'bfg-a', 'charged_gate', 1_000, 5_000, bfgA)).toBe(true);
+    expect(system.consume('p1', 'bfg-a', 'charged_gate', 1_000, 6_000, bfgA))
+      .toEqual({ elapsedMs: 1_000, chargeFraction: 1 });
+
+    expect(system.start('p1', 'bfg-a-again', 'charged_gate', 1_000, 7_000, bfgA)).toBe(true);
+    expect(system.consume('p1', 'bfg-a-again', 'charged_gate', 1_000, 8_000, bfgB)).toBeNull();
+  });
+
+  it('keeps equal utility types distinct through their instance identities', () => {
+    const system = new HostHeldActionSystem();
+    expect(system.start(
+      'p1',
+      'bfg-b',
+      'charged_gate',
+      1_000,
+      10_000,
+      { temporaryUtilityInstanceId: 'temporary-utility-2' },
+    )).toBe(true);
+
+    expect(system.consume(
+      'p1',
+      'bfg-b',
+      'charged_gate',
+      1_000,
+      11_000,
+      { temporaryUtilityInstanceId: 'temporary-utility-1' },
+    )).toBeNull();
+  });
+
   it('clears actions on cancel, player invalidation and timeout', () => {
     const system = new HostHeldActionSystem();
     system.start('p1', 'a', 'charged_throw', 1_000, 0);

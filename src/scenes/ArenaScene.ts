@@ -1452,15 +1452,9 @@ export class ArenaScene extends Phaser.Scene {
       return this.ctx.translocatorSystem?.getActivePuckId(bridge.getLocalPlayerId()) !== undefined;
     });
     inputSystem.onUtilityPressedDuringCooldown = () => {
-      const localId       = bridge.getLocalPlayerId();
       const config = this.clientUpdate.getLocalUtilityConfig();
       const selected = inputSystem.getSelectedRadialActionForHud();
-      const cooldownId = selected?.kind === 'construction'
-        ? selected.constructionId
-        : this.clientUpdate.getLocalUtilityCooldownId();
-      const cooldownUntil = selected?.kind === 'temporary-utility'
-        ? this.clientUpdate.getLocalUtilityCooldownUntil()
-        : bridge.getPlayerUtilityCooldownUntil(localId, cooldownId);
+      const cooldownUntil = inputSystem.getSelectedUtilityCooldownUntil();
       const remaining     = Math.max(0, cooldownUntil - bridge.getSynchronizedNow());
       const cooldown = selected?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selected.constructionId).buildCooldownMs
@@ -1547,10 +1541,16 @@ export class ArenaScene extends Phaser.Scene {
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
         const config = this.clientUpdate.getLocalUtilityConfig();
-        const utilityId = this.clientUpdate.getLocalUtilityCooldownId();
         const utilityCooldownUntil = params?.temporaryUtilityInstanceId
-          ? this.clientUpdate.getLocalUtilityCooldownUntil()
-          : bridge.getPlayerUtilityCooldownUntil(bridge.getLocalPlayerId(), utilityId);
+          ? Math.max(
+            this.clientUpdate.getLocalUtilityCooldownUntil(params.temporaryUtilityInstanceId),
+            this.ctx.inputSystem.getPredictedUtilityCooldownUntil?.({
+              kind: 'temporary-utility',
+              instanceId: params.temporaryUtilityInstanceId,
+              utilityId: config.id,
+            }) ?? 0,
+          )
+          : this.ctx.inputSystem.getSelectedUtilityCooldownUntil();
         if (utilityCooldownUntil > bridge.getSynchronizedNow()) {
           if (inputStarted) {
             const utilityShotAudio = this.clientUpdate.getLocalUtilityConfig()?.shotAudio;
@@ -3638,7 +3638,12 @@ export class ArenaScene extends Phaser.Scene {
     const localId = bridge.getLocalPlayerId();
     const playerStates = bridge.getLatestGameState()?.players;
     for (const player of this.ctx.playerManager.getAllPlayers()) {
-      player.setHeldItemId(bridge.getPlayerHeldItemId(player.id));
+      const selectedHeldItemId = player.id === localId
+        ? this.ctx.inputSystem.getSelectedHeldItemIdForPresentation?.()
+        : undefined;
+      player.setHeldItemId(
+        selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(player.id) : selectedHeldItemId,
+      );
       const netState = playerStates?.[player.id];
       const aim = player.id === localId
         ? this.ctx.inputSystem.getAimAngle()

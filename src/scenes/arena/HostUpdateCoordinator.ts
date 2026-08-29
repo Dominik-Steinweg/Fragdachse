@@ -811,7 +811,12 @@ export class HostUpdateCoordinator {
       // derselben Quelle ab, statt der Host aus dem LoadoutManager und die Clients aus dem Netz.
       const heldSlot = this.ctx.loadoutManager?.getHeldItemSlot(player.id, now);
       if (heldSlot) bridge.publishHeldItemSlot(player.id, heldSlot);
-      player.setHeldItemId(bridge.getPlayerHeldItemId(player.id));
+      const selectedHeldItemId = player.id === bridge.getLocalPlayerId()
+        ? this.ctx.inputSystem.getSelectedHeldItemIdForPresentation?.()
+        : undefined;
+      player.setHeldItemId(
+        selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(player.id) : selectedHeldItemId,
+      );
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
       const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;
@@ -2485,7 +2490,11 @@ export class HostUpdateCoordinator {
       const descriptor = bridge.getPlayerTemporaryUtilityInstances(localId)
         .find((instance) => instance.instanceId === radialAction.instanceId);
       if (!descriptor || descriptor.cooldownDurationMs <= 0) return 0;
-      const remaining = descriptor.cooldownUntil - bridge.getSynchronizedNow();
+      const cooldownUntil = Math.max(
+        descriptor.cooldownUntil,
+        this.ctx.inputSystem.getPredictedUtilityCooldownUntil?.(radialAction) ?? 0,
+      );
+      const remaining = cooldownUntil - bridge.getSynchronizedNow();
       return remaining <= 0 ? 0 : Math.min(1, remaining / descriptor.cooldownDurationMs);
     }
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
@@ -2504,7 +2513,11 @@ export class HostUpdateCoordinator {
       ? getCoopDefenseConstructionDefinition(radialAction.constructionId).buildCooldownMs
       : selectedConfig?.cooldown ?? fallbackConfig?.cooldown ?? 0;
     if (cooldown <= 0) return 0;
-    const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();
+    const cooldownUntil = Math.max(
+      bridge.getPlayerUtilityCooldownUntil(localId, itemId),
+      this.ctx.inputSystem.getPredictedUtilityCooldownUntil?.(radialAction ?? { kind: 'utility', utilityId: itemId }) ?? 0,
+    );
+    const remaining = cooldownUntil - bridge.getSynchronizedNow();
     return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);
   }
 

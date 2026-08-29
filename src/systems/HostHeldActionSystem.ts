@@ -1,8 +1,15 @@
-import type { HostHeldActionKind } from '../types';
+import type { HostHeldActionKind, LoadoutToolRef } from '../types';
+
+/** Stable identity of the loadout action that started a held action. */
+export interface HeldActionIdentity {
+  readonly toolRef?: LoadoutToolRef;
+  readonly temporaryUtilityInstanceId?: string;
+}
 
 interface ActiveHeldAction {
   readonly actionId: string;
   readonly kind: HostHeldActionKind;
+  readonly identity?: HeldActionIdentity;
   readonly startedAtHostMs: number;
   readonly timeoutAtHostMs: number;
 }
@@ -24,13 +31,16 @@ export class HostHeldActionSystem {
     kind: HostHeldActionKind,
     expectedDurationMs: number,
     hostNowMs: number,
+    identity?: HeldActionIdentity,
   ): boolean {
     if (!isValidActionId(actionId) || !isHeldActionKind(kind)
       || !Number.isFinite(expectedDurationMs) || expectedDurationMs <= 0
-      || !Number.isFinite(hostNowMs)) return false;
+      || !Number.isFinite(hostNowMs)
+      || !isValidHeldActionIdentity(identity)) return false;
     this.actions.set(playerId, {
       actionId,
       kind,
+      ...(identity ? { identity: cloneHeldActionIdentity(identity) } : {}),
       startedAtHostMs: hostNowMs,
       timeoutAtHostMs: hostNowMs + Math.max(1, expectedDurationMs) + ACTION_TIMEOUT_GRACE_MS,
     });
@@ -49,12 +59,15 @@ export class HostHeldActionSystem {
     kind: HostHeldActionKind,
     fullChargeDurationMs: number,
     hostNowMs: number,
+    expectedIdentity?: HeldActionIdentity,
   ): ConsumedHeldAction | null {
     const action = this.actions.get(playerId);
     // Ein verspaeteter Commit einer ersetzten Action darf die neuere Action nicht loeschen.
     if (!action || !actionId || action.actionId !== actionId) return null;
     this.actions.delete(playerId);
     if (action.kind !== kind
+      || !isValidHeldActionIdentity(expectedIdentity)
+      || getHeldActionIdentityKey(action.identity) !== getHeldActionIdentityKey(expectedIdentity)
       || !Number.isFinite(fullChargeDurationMs) || fullChargeDurationMs <= 0
       || !Number.isFinite(hostNowMs) || hostNowMs < action.startedAtHostMs
       || hostNowMs > action.timeoutAtHostMs) return null;
@@ -86,4 +99,33 @@ export function isHeldActionKind(value: unknown): value is HostHeldActionKind {
 
 function isValidActionId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= 80 && value.trim() === value;
+}
+
+function isValidHeldActionIdentity(value: HeldActionIdentity | undefined): boolean {
+  if (!value) return true;
+  if (value.toolRef !== undefined && value.temporaryUtilityInstanceId !== undefined) return false;
+  if (value.temporaryUtilityInstanceId !== undefined && !isValidActionId(value.temporaryUtilityInstanceId)) return false;
+  if (value.toolRef !== undefined) {
+    if (value.toolRef.kind !== 'utility' && value.toolRef.kind !== 'construction') return false;
+    if (!isValidActionId(value.toolRef.id)) return false;
+  }
+  return true;
+}
+
+function cloneHeldActionIdentity(identity: HeldActionIdentity): HeldActionIdentity {
+  return {
+    ...(identity.toolRef ? { toolRef: { ...identity.toolRef } } : {}),
+    ...(identity.temporaryUtilityInstanceId !== undefined
+      ? { temporaryUtilityInstanceId: identity.temporaryUtilityInstanceId }
+      : {}),
+  } as HeldActionIdentity;
+}
+
+function getHeldActionIdentityKey(identity: HeldActionIdentity | undefined): string {
+  if (!identity) return 'equipped-utility';
+  if (identity.temporaryUtilityInstanceId !== undefined) {
+    return `temporary-utility:${identity.temporaryUtilityInstanceId}`;
+  }
+  if (identity.toolRef) return `tool:${identity.toolRef.kind}:${identity.toolRef.id}`;
+  return 'equipped-utility';
 }

@@ -6,13 +6,14 @@ import {
   clampPointToArena,
   COLORS,
 } from '../config';
-import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, normalizeConstructionId } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_CONSTRUCTION_CAPACITY, getConstructionIdForUtility, getUtilityIdForConstruction, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { quantizeAngle } from '../utils/angle';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { RadialActionMenu } from '../ui/RadialActionMenu';
 import {
   cloneRadialActionRef,
   isSameRadialActionRef,
+  radialActionKey,
   radialActionRefFromTool,
   resolveRadialActions,
   type RadialActionRef,
@@ -43,6 +44,7 @@ import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
 type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig;
+type ChargeableUtilityConfig = UtilityConfig & { activation: ChargeableActivation };
 type TargetedActivation = TargetedClickUtilityActivationConfig;
 type PlacementActivation = PlacementModeUtilityActivationConfig;
 
@@ -96,12 +98,16 @@ export class InputSystem {
   private getLocalUtilityCooldownUntil: (() => number) | null = null;
   private getLocalUltimateConfig: (() => UltimateConfig | undefined) | null = null;
   private getLocalRage: (() => number) | null = null;
-  private predictedUtilityCooldownUntil = 0;
+  /** Optimistic cooldowns keyed by the same stable identity used by the radial action model. */
+  private readonly predictedUtilityCooldownUntil = new Map<string, number>();
   public onUtilityPressedDuringCooldown: (() => void) | null = null;
   public onUltimatePressedWithoutRage: (() => void) | null = null;
   private utilityHoldActive = false;
   private utilityChargeEligibleAt: number | null = null;
   private utilityChargeStartedAt: number | null = null;
+  private utilityChargeAction: RadialActionRef | null = null;
+  private utilityChargeConfig: ChargeableUtilityConfig | null = null;
+  private utilityChargeParams: LoadoutUseParams | undefined;
   private utilityTargetingActive = false;
   private utilityPlacementActive = false;
   private ultimatePlacementActive = false;
@@ -313,6 +319,36 @@ export class InputSystem {
     return this.selectedRadialAction ? cloneRadialActionRef(this.selectedRadialAction) : null;
   }
 
+  /**
+   * Resolves the held-item projection from the canonical radial selection. `undefined` means
+   * that no radial action is selected and the host's use/animation state may be used as a
+   * fallback; `null` deliberately hides the item for actions without a hand-held visual.
+   */
+  getSelectedHeldItemIdForPresentation(): string | null | undefined {
+    const selected = this.getSelectedRadialActionForHud();
+    if (!selected) return undefined;
+    switch (selected.kind) {
+      case 'utility':
+        return selected.utilityId;
+      case 'temporary-utility':
+        return selected.utilityId;
+      case 'construction':
+        return getUtilityIdForConstruction(selected.constructionId);
+      case 'management':
+      case 'persistent-reward':
+        return null;
+    }
+  }
+
+  /** Prediction-only view used by HUD projections; authoritative cooldown remains in the bridge. */
+  getPredictedUtilityCooldownUntil(ref: RadialActionRef): number {
+    return this.predictedUtilityCooldownUntil.get(radialActionKey(ref)) ?? 0;
+  }
+
+  getSelectedUtilityCooldownUntil(): number {
+    return this.getSelectedRadialActionState(Date.now())?.cooldownUntil ?? 0;
+  }
+
   private getSelectedRadialActionState(now = Date.now()): RadialActionState | null {
     const actions = this.getRadialActionStates(now);
     this.ensureSelectedRadialAction(actions);
@@ -338,8 +374,41 @@ export class InputSystem {
       managementActions: this.radialGetManagementActions?.() ?? [],
       getCooldownUntil: (ref) => this.radialGetCooldownUntil?.(ref) ?? 0,
     });
+    this.reconcilePredictedUtilityCooldowns(actions, now);
     this.reconcileTemporaryUtilitySelection(actions);
-    return actions;
+    return this.applyPredictedUtilityCooldowns(actions, now);
+  }
+
+  private reconcilePredictedUtilityCooldowns(
+    actions: readonly RadialActionState[],
+    now: number,
+  ): void {
+    const authoritativeReadyAt = new Map(
+      actions.map((entry) => [radialActionKey(entry.ref), entry.cooldownUntil]),
+    );
+    for (const [key, readyAt] of this.predictedUtilityCooldownUntil) {
+      const current = authoritativeReadyAt.get(key);
+      if (current === undefined || readyAt <= now || current >= readyAt) {
+        this.predictedUtilityCooldownUntil.delete(key);
+      }
+    }
+  }
+
+  private applyPredictedUtilityCooldowns(
+    actions: readonly RadialActionState[],
+    now: number,
+  ): RadialActionState[] {
+    return actions.map((entry) => {
+      const predicted = this.predictedUtilityCooldownUntil.get(radialActionKey(entry.ref)) ?? 0;
+      if (predicted <= now || predicted <= entry.cooldownUntil
+        || (!entry.available && entry.disabledReason !== 'cooldown')) return entry;
+      return {
+        ...entry,
+        available: false,
+        disabledReason: 'cooldown',
+        cooldownUntil: predicted,
+      };
+    });
   }
 
   private ensureSelectedRadialAction(actions: readonly RadialActionState[]): void {
@@ -444,8 +513,16 @@ export class InputSystem {
     if (this.keyR.isDown) {
       this.radialActionMenu.update(pointer.x, pointer.y);
     } else {
-      const selected = this.radialActionMenu.close(pointer.x, pointer.y);
-      if (selected) this.applyRadialSelection(selected);
+      const candidate = this.radialActionMenu.close(pointer.x, pointer.y);
+      if (candidate) {
+        // The menu owns only an open-time snapshot. Re-resolve against the current collection
+        // before changing the canonical selection so a removed temporary instance cannot be
+        // selected for one frame after the host update.
+        const currentActions = this.getRadialActionStates();
+        const current = currentActions.find((entry) => isSameRadialActionRef(entry.ref, candidate));
+        if (current) this.applyRadialSelection(current.ref);
+        else this.ensureSelectedRadialAction(currentActions);
+      }
     }
     return true;
   }
@@ -621,7 +698,7 @@ export class InputSystem {
       this.consumedPointerButtons = this.scene.input.activePointer?.buttons ?? 0;
     }
     if (!enabled) {
-      this.predictedUtilityCooldownUntil = 0;
+      this.predictedUtilityCooldownUntil.clear();
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
       this.cancelUltimatePlacement();
@@ -765,7 +842,7 @@ export class InputSystem {
     }
     if (!this.utilityHoldActive) return undefined;
     const sprite = this.getLocalSprite();
-    const cfg = this.getChargeableUtilityConfig();
+    const cfg = this.utilityChargeConfig ?? this.getChargeableUtilityConfig();
     if (!sprite || !cfg) return undefined;
 
     const now = Date.now();
@@ -1078,7 +1155,7 @@ export class InputSystem {
 
         if (leftInputStarted) {
           this.consumeLeftClickForModeConfirmation();
-          this.predictedUtilityCooldownUntil = now + targetedCfg.cooldown;
+          this.predictSelectedUtilityCooldown(now + targetedCfg.cooldown);
           this.onLoadoutUse('utility', targetAngle, target.x, target.y, this.getSelectedUtilityParams());
           this.cancelUtilityTargeting();
           return;
@@ -1310,6 +1387,7 @@ export class InputSystem {
       }
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
+        this.predictCurrentUtilityCooldown(now);
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getSelectedUtilityParams());
         return;
       }
@@ -1321,6 +1399,7 @@ export class InputSystem {
         return;
       }
       if (!this.beginChargedUtilityHold(now)) {
+        this.predictCurrentUtilityCooldown(now);
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getSelectedUtilityParams());
       }
     }
@@ -1331,7 +1410,7 @@ export class InputSystem {
 
     // Screenshake während Gate-Charge (BFG Auflade-Feedback)
     if (this.utilityHoldActive && this.utilityChargeStartedAt !== null) {
-      const chargeCfg = this.getChargeableUtilityConfig();
+      const chargeCfg = this.utilityChargeConfig ?? this.getChargeableUtilityConfig();
       if (chargeCfg?.activation.type === 'charged_gate') {
         this.cameraFeedback?.request(chargeRumble('utility', 0.003));
       }
@@ -1422,7 +1501,7 @@ export class InputSystem {
     return cfg?.type === 'tunnel' ? cfg : undefined;
   }
 
-  private getChargeableUtilityConfig(): (UtilityConfig & { activation: ChargeableActivation }) | undefined {
+  private getChargeableUtilityConfig(): ChargeableUtilityConfig | undefined {
     const cfg = this.getLocalUtilityConfig?.();
     if (!cfg || (cfg.activation.type !== 'charged_throw' && cfg.activation.type !== 'charged_gate')) return undefined;
     return cfg as UtilityConfig & { activation: ChargeableActivation };
@@ -1489,10 +1568,16 @@ export class InputSystem {
     const cfg = this.getChargeableUtilityConfig();
     if (!cfg) return false;
 
+    const selected = this.getSelectedRadialActionState(now);
+    if (!selected) return false;
+
     const cooldownUntil = this.getEffectiveUtilityCooldownUntil();
     this.utilityHoldActive = true;
     this.utilityChargeEligibleAt = now < cooldownUntil ? cooldownUntil : now;
     this.utilityChargeStartedAt = null;
+    this.utilityChargeAction = cloneRadialActionRef(selected.ref);
+    this.utilityChargeConfig = cfg;
+    this.utilityChargeParams = this.getSelectedUtilityParams();
     this.maybeStartHeldUtilityCharge(now);
     this.bridge.sendDecoyStealthBreakRequest();
     return true;
@@ -1510,8 +1595,8 @@ export class InputSystem {
     this.utilityChargeEligibleAt = null;
 
     // BFG charge sound (charged_gate utilities)
-    const utCfg = this.getChargeableUtilityConfig();
-    const utilityParams = this.getSelectedUtilityParams();
+    const utCfg = this.utilityChargeConfig ?? this.getChargeableUtilityConfig();
+    const utilityParams = this.utilityChargeParams;
     const inspectorTool = utilityParams?.toolRef;
     if (utCfg) {
       const actionId = this.createHeldActionId(utCfg.activation.type);
@@ -1530,9 +1615,11 @@ export class InputSystem {
   }
 
   private releaseChargedUtility(angle: number, targetX: number, targetY: number, now: number): void {
-    const cfg = this.getChargeableUtilityConfig();
+    const cfg = this.utilityChargeConfig ?? this.getChargeableUtilityConfig();
     const startedAt = this.utilityChargeStartedAt;
     const actionId = this.activeHeldActionId;
+    const chargeAction = this.utilityChargeAction;
+    const chargeParams = this.utilityChargeParams;
     this.cancelUtilityCharge(false);
     if (!cfg || startedAt === null || !actionId) {
       if (actionId) this.bridge.sendHeldActionCancel(actionId);
@@ -1547,10 +1634,10 @@ export class InputSystem {
       return;
     }
 
-    this.predictedUtilityCooldownUntil = now + cfg.cooldown;
+    this.predictUtilityCooldown(chargeAction, now + cfg.cooldown);
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
-      ...this.getSelectedUtilityParams(),
+      ...chargeParams,
       utilityChargeFraction: chargeFraction,
       heldActionId: actionId,
     });
@@ -1568,17 +1655,42 @@ export class InputSystem {
 
   private getEffectiveUtilityCooldownUntil(): number {
     const authoritative = this.getLocalUtilityCooldownUntil?.() ?? 0;
-    // Wenn der Host den Cooldown aktiv zurückgesetzt hat (z.B. bei einem Runtime-Wechsel),
-    // darf die lokale Prediction nicht mehr blockieren.
-    if (authoritative < this.predictedUtilityCooldownUntil && Date.now() >= authoritative) {
-      this.predictedUtilityCooldownUntil = 0;
-    }
-    const effective = Math.max(authoritative, this.predictedUtilityCooldownUntil);
-    if (Date.now() >= effective) {
-      this.predictedUtilityCooldownUntil = 0;
+    const now = Date.now();
+    const key = this.getUtilityPredictionKey();
+    const predicted = this.predictedUtilityCooldownUntil.get(key) ?? 0;
+    // An older snapshot may still say ready (cooldownUntil=0) while the use request is in
+    // flight. Keep the newer local prediction for this action until it expires or the host
+    // confirms an equal/later readyAt. A different action has a different key and is unaffected.
+    if (authoritative >= predicted && predicted > 0) {
+      this.predictedUtilityCooldownUntil.delete(key);
       return authoritative;
     }
-    return effective;
+    if (now >= predicted) {
+      this.predictedUtilityCooldownUntil.delete(key);
+      return authoritative;
+    }
+    return Math.max(authoritative, predicted);
+  }
+
+  private getUtilityPredictionKey(): string {
+    if (this.selectedRadialAction) return radialActionKey(this.selectedRadialAction);
+    return `utility:${this.getLocalUtilityConfig?.()?.id ?? '__default__'}`;
+  }
+
+  private predictSelectedUtilityCooldown(readyAt: number): void {
+    this.predictUtilityCooldown(this.selectedRadialAction, readyAt);
+  }
+
+  private predictCurrentUtilityCooldown(now: number): void {
+    const cooldown = this.getLocalUtilityConfig?.()?.cooldown ?? 0;
+    if (cooldown > 0) this.predictSelectedUtilityCooldown(now + cooldown);
+  }
+
+  private predictUtilityCooldown(action: RadialActionRef | null, readyAt: number): void {
+    if (!Number.isFinite(readyAt) || readyAt <= 0) return;
+    const key = action ? radialActionKey(action) : this.getUtilityPredictionKey();
+    const current = this.predictedUtilityCooldownUntil.get(key) ?? 0;
+    this.predictedUtilityCooldownUntil.set(key, Math.max(current, readyAt));
   }
 
   private isUtilityBlocked(now: number): boolean {
@@ -1632,6 +1744,9 @@ export class InputSystem {
     this.utilityHoldActive = false;
     this.utilityChargeEligibleAt = null;
     this.utilityChargeStartedAt = null;
+    this.utilityChargeAction = null;
+    this.utilityChargeConfig = null;
+    this.utilityChargeParams = undefined;
     if (this.chargeLoopHandle) {
       this.audioSystem?.stopLoop(this.chargeLoopHandle);
       this.chargeLoopHandle = null;

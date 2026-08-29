@@ -2,8 +2,9 @@
  * Bildzuordnung fuer getragene Loadout-Items.
  *
  * Die Spielerfigur haelt genau ein Item in den Pfoten. Welches das ist, entscheidet
- * `HeldItemSlotTracker`; welches Bild dazu gehoert, entscheidet diese Datei. Beides ist bewusst
- * getrennt: Der Slot ist replizierter Spielzustand, die Textur reine Darstellung.
+ * Die lokale Radial-Auswahl beziehungsweise der hostseitige `HeldItemSlotTracker` bestimmen,
+ * welches Bild dazu gehoert; die Zuordnung entscheidet diese Datei. Beides ist bewusst getrennt:
+ * Die Action-/Slot-Identity ist Zustand, die Textur reine Darstellung.
  *
  * Vertrag fuer neue Waffen – eine Zeile in `HELD_ITEM_SPRITES` und eine Pixelkarte in
  * `scripts/generate-held-item-sprites.mjs`:

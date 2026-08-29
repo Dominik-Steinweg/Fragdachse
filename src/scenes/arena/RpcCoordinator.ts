@@ -9,6 +9,7 @@ import type { ExplosionVisualStyle, LoadoutUseParams, LoadoutUseResult } from '.
 import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
+import type { HeldActionIdentity } from '../../systems/HostHeldActionSystem';
 
 // SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
 // distance 0.  Explosions are world events, not remote-player gunshots, so we compensate
@@ -59,13 +60,23 @@ function validateHostUtilityCharge(
 ): HostChargeValidation {
   if (!isChargeableUtilityConfig(utility)) return { ok: true, authoritativeParams: params };
 
-  const held = ctx.hostHeldActionSystem?.consume(
-    senderId,
-    params?.heldActionId,
-    utility.activation.type,
-    utility.activation.fullChargeDuration,
-    Date.now(),
-  );
+  const identity = getHeldActionIdentity(params);
+  const held = identity
+    ? ctx.hostHeldActionSystem?.consume(
+      senderId,
+      params?.heldActionId,
+      utility.activation.type,
+      utility.activation.fullChargeDuration,
+      Date.now(),
+      identity,
+    )
+    : ctx.hostHeldActionSystem?.consume(
+      senderId,
+      params?.heldActionId,
+      utility.activation.type,
+      utility.activation.fullChargeDuration,
+      Date.now(),
+    );
   if (!held || (utility.activation.type === 'charged_gate' && held.chargeFraction < 1)) {
     return { ok: false, reason: 'blocked' };
   }
@@ -76,6 +87,14 @@ function validateHostUtilityCharge(
       utilityChargeFraction: held.chargeFraction,
     },
   };
+}
+
+function getHeldActionIdentity(params?: LoadoutUseParams): HeldActionIdentity | undefined {
+  if (params?.temporaryUtilityInstanceId !== undefined) {
+    return { temporaryUtilityInstanceId: params.temporaryUtilityInstanceId };
+  }
+  if (params?.toolRef !== undefined) return { toolRef: params.toolRef };
+  return undefined;
 }
 
 /**
@@ -222,7 +241,14 @@ export class RpcCoordinator {
         utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
       }
       if (!utility || utility.activation.type !== kind) return false;
-      return system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
+      const identity = toolRef
+        ? { toolRef }
+        : temporaryUtilityInstanceId !== undefined
+          ? { temporaryUtilityInstanceId }
+          : undefined;
+      return identity
+        ? system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now(), identity)
+        : system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
     });
   }
 

@@ -12,12 +12,15 @@ export type HeldItemSlot = WeaponSlot | 'utility';
 export const HELD_UTILITY_DISPLAY_MS = 450;
 
 /**
- * Verfolgt je Spieler, welches Loadout-Item die Figur gerade traegt.
+ * Verfolgt je Spieler, welches Loadout-Item die Figur als Use-/Animationsfallback gerade traegt.
+ * Die lokale Radial-Auswahl wird fuer den eigenen Spieler darueber projiziert; fuer entfernte
+ * Spieler bleibt dieser host-autoritativ replizierte Tracker die sichtbare Quelle.
  *
  * Reine Zustandslogik ohne Phaser- oder Netzwerkbezug: der Host fuettert sie aus tatsaechlich
- * erfolgreichen Einsaetzen, das Ergebnis wird als Slot repliziert und von beiden Seiten in
- * dieselbe Darstellung uebersetzt. Waffenslots sind klebrig, die Utility ist ein kurzes Fenster –
- * sonst liefe ein Spieler nach einem einzigen Granatenwurf dauerhaft mit der Granate herum.
+ * erfolgreichen Einsaetzen, das Ergebnis wird als Slot repliziert und fuer Spieler ohne lokale
+ * Radial-Projektion in dieselbe Darstellung uebersetzt. Waffenslots sind klebrig, die Utility ist
+ * ein kurzes Fenster – sonst liefe ein Spieler nach einem einzigen Granatenwurf dauerhaft mit der
+ * Granate herum.
  */
 export class HeldItemSlotTracker {
   private readonly lastWeaponSlot = new Map<string, WeaponSlot>();

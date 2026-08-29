@@ -237,6 +237,10 @@ export class ClientUpdateCoordinator {
       return;
     }
     const state = bridge.getLatestGameState();
+    // Selection is local presentation state and can change between network snapshots. Keep the
+    // local held item in sync every frame; remote players remain driven by the host-published
+    // use/animation state below.
+    this.syncLocalHeldItemPresentation();
     // Participation-Transitions sind ein eigener reliable Kanal. Sie muessen vor jedem
     // Replication-/Presentation-Gate laufen, damit insbesondere `interactive -> none` die lokale
     // Runtime noch abbaut, bevor der Peer nur noch eine Preview konsumiert.
@@ -326,7 +330,12 @@ export class ClientUpdateCoordinator {
         }
         player.setDecoyStealth(isStealthed);
         this.prevStealthStates.set(id, isStealthed);
-        player.setHeldItemId(bridge.getPlayerHeldItemId(id));
+        const selectedHeldItemId = id === localId
+          ? this.ctx.inputSystem.getSelectedHeldItemIdForPresentation?.()
+          : undefined;
+        player.setHeldItemId(
+          selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(id) : selectedHeldItemId,
+        );
 
         const curPhase = ps.dashPhase ?? 0;
         if (curPhase === 1 && (this.prevDashPhases.get(id) ?? 0) === 0) {
@@ -1103,7 +1112,11 @@ export class ClientUpdateCoordinator {
     if (radialAction?.kind === 'temporary-utility') {
       const descriptor = this.getLocalTemporaryUtility(radialAction.instanceId);
       if (!descriptor || descriptor.cooldownDurationMs <= 0) return 0;
-      const remaining = descriptor.cooldownUntil - bridge.getSynchronizedNow();
+      const cooldownUntil = Math.max(
+        descriptor.cooldownUntil,
+        this.ctx.inputSystem.getPredictedUtilityCooldownUntil?.(radialAction) ?? 0,
+      );
+      const remaining = cooldownUntil - bridge.getSynchronizedNow();
       return remaining <= 0 ? 0 : Math.min(1, remaining / descriptor.cooldownDurationMs);
     }
     const config = this.getLocalUtilityConfig();
@@ -1115,7 +1128,11 @@ export class ClientUpdateCoordinator {
       ? getCoopDefenseConstructionDefinition(radialAction.constructionId).buildCooldownMs
       : config.cooldown;
     if (cooldown <= 0) return 0;
-    const remaining = bridge.getPlayerUtilityCooldownUntil(localId, itemId) - bridge.getSynchronizedNow();
+    const cooldownUntil = Math.max(
+      bridge.getPlayerUtilityCooldownUntil(localId, itemId),
+      this.ctx.inputSystem.getPredictedUtilityCooldownUntil?.(radialAction ?? { kind: 'utility', utilityId: itemId }) ?? 0,
+    );
+    const remaining = cooldownUntil - bridge.getSynchronizedNow();
     return remaining <= 0 ? 0 : Math.min(1, remaining / cooldown);
   }
 
@@ -1265,8 +1282,11 @@ export class ClientUpdateCoordinator {
     return config.id;
   }
 
-  getLocalUtilityCooldownUntil(): number {
+  getLocalUtilityCooldownUntil(temporaryUtilityInstanceId?: string): number {
     const localId = bridge.getLocalPlayerId();
+    if (temporaryUtilityInstanceId !== undefined) {
+      return this.getLocalTemporaryUtility(temporaryUtilityInstanceId)?.cooldownUntil ?? 0;
+    }
     const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'temporary-utility') {
       return this.getLocalTemporaryUtility(radialAction.instanceId)?.cooldownUntil ?? 0;
@@ -1406,6 +1426,16 @@ export class ClientUpdateCoordinator {
   private getLocalTemporaryUtility(instanceId: string): TemporaryUtilityInstanceDescriptor | undefined {
     return bridge.getPlayerTemporaryUtilityInstances(bridge.getLocalPlayerId())
       .find((instance) => instance.instanceId === instanceId);
+  }
+
+  private syncLocalHeldItemPresentation(): void {
+    const localId = bridge.getLocalPlayerId();
+    const player = this.ctx.playerManager.getPlayer(localId);
+    if (!player) return;
+    const selectedHeldItemId = this.ctx.inputSystem.getSelectedHeldItemIdForPresentation?.();
+    player.setHeldItemId(
+      selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(localId) : selectedHeldItemId,
+    );
   }
 
   private resolveTemporaryUtilityConfig(
