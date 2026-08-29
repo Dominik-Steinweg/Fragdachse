@@ -184,8 +184,8 @@ describe('World-/Activity-Authoring – Compatibility-Adapter', () => {
   });
 
   it('laesst World und Activity zweier verschiedener Worlds nicht kombinieren', () => {
-    const first = toAuthoredScenario(getCoopDefenseMapConfig('18'));
-    const second = toAuthoredScenario(getCoopDefenseMapConfig('19'));
+    const first = toAuthoredScenario(getCoopDefenseMapConfig('16'));
+    const second = toAuthoredScenario(getCoopDefenseMapConfig('17'));
     expect(isActivityOfWorldDefinition(first.activity!, first.world)).toBe(true);
     expect(isActivityOfWorldDefinition(second.activity!, first.world)).toBe(false);
 
@@ -208,13 +208,13 @@ describe('World-/Activity-Authoring – Compatibility-Adapter', () => {
 
 describe('World-/Activity-Authoring – World ohne Activity', () => {
   it('beschreibt eine persistente Basis vollstaendig ohne Missionsfelder', () => {
-    // Map 18 ist heute eine Welt mit einer nur formal vorhandenen 30-Sekunden-Mission. Genau
-    // dieser Anteil laesst sich jetzt abtrennen: die World allein bleibt vollstaendig.
-    const world = getWorldDefinitionForMap('18');
+    // Eine produktive Persistent-Base-Map bleibt auch ohne laufende Activity eine vollstaendige
+    // World; die Missionsfelder verbleiben ausschliesslich in der Activity.
+    const world = getWorldDefinitionForMap('17');
     expect(world).not.toBeNull();
     const scenario: AuthoredScenario = { world: world!, activity: null };
 
-    const mapConfig = getCoopDefenseMapConfig('18');
+    const mapConfig = getCoopDefenseMapConfig('17');
     expect(hasAuthoredActivity(scenario)).toBe(false);
     expect(scenario.world.metrics).toEqual({
       widthCells: mapConfig.arenaWidthCells,
@@ -223,7 +223,7 @@ describe('World-/Activity-Authoring – World ohne Activity', () => {
     // Die World traegt die Stelle, nicht die Geometrie: Lage, Ausrichtung und
     // Grunddauerhaftigkeit, aber keine einzige Zelle.
     expect(scenario.world.persistentBaseSite).toEqual(mapConfig.persistentBase);
-    expect(scenario.world.persistentBaseSite?.baseId).toBe('foundation-main');
+    expect(scenario.world.persistentBaseSite?.baseId).toBe(mapConfig.persistentBase?.baseId);
     expect(scenario.world.initialTimeOfDay).toBe(mapConfig.timeOfDay);
     // Das Bauwerk bleibt vollstaendig, sein Missionsanteil faellt mit der Activity weg.
     expect(scenario.world.bases.map((base) => base.id)).toEqual(mapConfig.bases.map((base) => base.id));
@@ -238,33 +238,13 @@ describe('World-/Activity-Authoring – World ohne Activity', () => {
 
     // Der Anker loest innerhalb derselben World auf – ohne Umweg ueber Mission oder Lobby.
     const anchorBase = resolveWorldPersistentBaseAnchorBase(scenario.world);
-    expect(anchorBase?.id).toBe('foundation-main');
+    expect(anchorBase?.id).toBe(mapConfig.persistentBase?.baseId);
     expect(anchorBase?.faction).toBe('friendly');
     expect(anchorBase?.role).toBe('main');
   });
 
-  it('zeigt an den Persistent-Base-Maps, welche Missionsfelder rein formal sind', () => {
-    // Maps 18 und 19 sind heute Welten mit einer Alibi-Mission. Nach der Trennung steht genau
-    // das in der Activity und nirgends sonst – die World bleibt davon unberuehrt.
-    for (const mapId of ['18', '19']) {
-      const activity = toCoopMissionDefinition(getCoopDefenseMapConfig(mapId));
-      expect(activity.objective, mapId).toBe('survive');
-      expect(activity.surviveDurationSec, mapId).toBeGreaterThan(0);
-      expect(activity.respawnsPerPlayer, mapId).toBeGreaterThan(0);
-      // Kein echter Missionsinhalt: das ist der Anteil, den eine World ohne Activity ersatzlos
-      // verliert, statt ihn wie heute leer authoren zu muessen.
-      expect(activity.encounters, mapId).toEqual([]);
-      expect(activity.persistentSpawns, mapId).toEqual([]);
-      expect(activity.mapEvents, mapId).toEqual([]);
-      expect(activity.secondaryObjectives, mapId).toEqual([]);
-      expect(activity.boss, mapId).toBeUndefined();
-      expect(activity.missionProgress, mapId).toBeUndefined();
-      expect(activity.itemDrop, mapId).toBeUndefined();
-    }
-  });
-
   it('kennt fuer eine World ohne Coop-Mission keinen CoopDefenseMapConfig', () => {
-    const world = getWorldDefinitionForMap('18')!;
+    const world = getWorldDefinitionForMap('17')!;
     expect(() => toCoopDefenseMapConfig({ world, activity: null })).toThrow(/no coop mission activity/);
   });
 

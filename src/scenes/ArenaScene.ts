@@ -175,6 +175,7 @@ import {
   type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
+import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { ConstructionId, CoopDefenseClassId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GameMode, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LoadoutUseResult, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
@@ -5406,7 +5407,13 @@ export class ArenaScene extends Phaser.Scene {
         markStoredCoopDefenseBossMapCompleted(completedMapId);
       }
       unlockStoredCoopDefenseClassesAfterVictory(completedMapId);
-      unlockedItems = unlockStoredCoopDefenseItemsAfterVictory(completedMapId);
+      const itemsWereUnlockedBeforeVictory = getStoredCoopDefenseItemsUnlocked();
+      const shouldAtomicallyUnlockItems = completedMapId === COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID
+        && !itemsWereUnlockedBeforeVictory
+        && completedMapConfig.itemDrop !== undefined;
+      if (!shouldAtomicallyUnlockItems) {
+        unlockedItems = unlockStoredCoopDefenseItemsAfterVictory(completedMapId);
+      }
       // Ein eigenstaendiges Entitlement neben dem Mapfortschritt: Ab jetzt traegt die LobbyWorld
       // ihren Basiskern, unabhaengig davon, welche Map als naechstes offen ist.
       unlockedPersistentBase = unlockStoredPersistentBaseAfterVictory(completedMapId);
@@ -5415,7 +5422,7 @@ export class ArenaScene extends Phaser.Scene {
       // Jeder Spieler wuerfelt sein eigenes Angebot lokal; der Sieg steht bereits reliable im
       // RoundState, deshalb braucht die Belohnung keinen Netzwerkpfad. Persistiert, damit sie
       // Reload und Verbindungsabbruch waehrend der Auswahl uebersteht.
-      if (completedMapConfig.itemDrop && getStoredCoopDefenseItemsUnlocked()) {
+      if (completedMapConfig.itemDrop && (getStoredCoopDefenseItemsUnlocked() || shouldAtomicallyUnlockItems)) {
         // Klassengebundene Affixe rollen nur fuer die Klasse, mit der die Runde tatsaechlich
         // gespielt wurde. Das committete Loadout ist dafuer die Wahrheit: es ist seit "Bereit"
         // eingefroren, waehrend die Klassenauswahl im Speicher schon wieder wandern koennte.
@@ -5429,7 +5436,11 @@ export class ArenaScene extends Phaser.Scene {
           epicGuaranteeCount,
           offers: applyCoopDefenseEpicGuarantee(offers, epicGuaranteeCount, playedClassId),
         };
-        setStoredPendingCoopDefenseItemReward(reward);
+        if (shouldAtomicallyUnlockItems) {
+          unlockedItems = unlockStoredCoopDefenseItemsAfterVictory(completedMapId, reward);
+        } else {
+          setStoredPendingCoopDefenseItemReward(reward);
+        }
         // Bei einem Retry derselben Runde kann die Queue bereits existieren. Dann wird genau
         // dieser vorhandene Reward wieder als Match-Reward markiert, ohne neu zu wuerfeln.
         this.coopDefenseMatchItemReward = getStoredPendingCoopDefenseItemRewards()

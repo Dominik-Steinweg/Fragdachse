@@ -234,6 +234,6 @@
     "spawnAtMs": 2500
   },
   "itemDrop": {
-    "itemLevel": 3
+    "itemLevel": 1
   }
 }

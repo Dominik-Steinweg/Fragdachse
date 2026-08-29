@@ -11,10 +11,10 @@ import { COOP_DEFENSE_MODE } from '../src/gameModes';
 const ATTACK_MAP_IDS = ['12', '13', '17'] as const;
 
 describe('coop-defense hostile bases', () => {
-  it('uses maps 12, 13 and 17 as attack maps and ends on map 19', () => {
+  it('uses maps 12, 13 and 17 as attack maps and ends on map 17', () => {
     expect(COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId)).toContain('17');
-    expect(COOP_DEFENSE_MAP_CONFIGS.at(-1)?.mapId).toBe('19');
-    expect(getCoopDefenseMapUnlockedByVictoryOn('19')).toBeNull();
+    expect(COOP_DEFENSE_MAP_CONFIGS.at(-1)?.mapId).toBe('17');
+    expect(getCoopDefenseMapUnlockedByVictoryOn('17')).toBeNull();
     expect(COOP_DEFENSE_MAP_CONFIGS
       .filter((map) => map.objective === 'destroy-hostile-bases')
       .map((map) => map.mapId)).toEqual(ATTACK_MAP_IDS);

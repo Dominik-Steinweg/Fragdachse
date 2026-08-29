@@ -105,15 +105,15 @@ describe('WorldMetrics – derselbe Wert, nur an eine World gebunden', () => {
 
   it('beschreibt zwei Worlds gleichzeitig, was eine globale Metrik nicht kann', () => {
     const small = contextForMap('1');
-    const large = contextForMap('18');
+    const large = contextForMap('17');
     expect(small.metrics).not.toEqual(large.metrics);
     // Beide Werte bleiben gueltig; keiner ueberschreibt den anderen.
     expect(small.metrics.gridCols).toBe(getCoopDefenseMapConfig('1').arenaWidthCells);
-    expect(large.metrics.gridCols).toBe(getCoopDefenseMapConfig('18').arenaWidthCells);
+    expect(large.metrics.gridCols).toBe(getCoopDefenseMapConfig('17').arenaWidthCells);
   });
 
   it('rechnet Rasterzellen gegen die eigene World, nicht gegen eine globale Arena', () => {
-    const world = contextForMap('18');
+    const world = contextForMap('17');
     const origin = worldCellOrigin(world.metrics, 2, 3);
     expect(origin).toEqual({
       x: world.metrics.offsetX + 2 * config.CELL_SIZE,
@@ -129,11 +129,11 @@ describe('WorldMetrics – derselbe Wert, nur an eine World gebunden', () => {
 
 describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
   it('bindet Identitaet, Definition und Basen an dieselbe World', () => {
-    const world = contextForMap('18');
-    expect(world.descriptor.definitionId).toBe('world:coop-defense:18');
-    expect(world.definition?.sourceMapId).toBe('18');
-    expect(world.bases.map((base) => base.id)).toEqual(['foundation-main']);
-    expect(findWorldBase(world, 'foundation-main')?.id).toBe('foundation-main');
+    const world = contextForMap('17');
+    expect(world.descriptor.definitionId).toBe('world:coop-defense:17');
+    expect(world.definition?.sourceMapId).toBe('17');
+    expect(world.bases.map((base) => base.id)).toContain('coop-base-rear');
+    expect(findWorldBase(world, 'coop-base-rear')?.id).toBe('coop-base-rear');
     expect(findWorldBase(world, 'does-not-exist')).toBeNull();
   });
 
@@ -160,29 +160,29 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
   });
 
   it('loest die persistente Basisstelle aus den eigenen Basen und dem World-Parameter auf', () => {
-    const withParameter = contextForMap('18', {
+    const withParameter = contextForMap('17', {
       parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 7 },
     });
     expect(withParameter.persistentBaseSite).toMatchObject({
-      baseId: 'foundation-main',
+      baseId: 'coop-base-rear',
       radiusCells: 7,
       buildArea: { kind: 'square', sizeCells: 3 },
     });
     // Der Anker ist die Mittelzelle der kanonischen 5x5-Grundflaeche, also exakt der authored
     // Wert der Map – nicht die Mitte einer je Map beschriebenen Form.
     expect(withParameter.persistentBaseSite?.anchor)
-      .toEqual(getCoopDefenseMapConfig('18').persistentBase?.anchor);
+      .toEqual(getCoopDefenseMapConfig('17').persistentBase?.anchor);
     expect(isValidPersistentBaseSite(withParameter.persistentBaseSite)).toBe(true);
 
-    expect(contextForMap('18').persistentBaseSite?.radiusCells).toBe(4);
-    expect(contextForMap('18').persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
+    expect(contextForMap('17').persistentBaseSite?.radiusCells).toBe(4);
+    expect(contextForMap('17').persistentBaseSite?.buildArea).toEqual({ kind: 'square', sizeCells: 3 });
     // Eine World ohne authored Stelle hat auch keine.
     expect(contextForMap('1').persistentBaseSite).toBeNull();
     expect(isValidPersistentBaseSite(null)).toBe(false);
   });
 
   it('kann eine spaetere radiusbasierte Baubereich-Regel an den replizierten Radius binden', () => {
-    const mapConfig = getCoopDefenseMapConfig('18');
+    const mapConfig = getCoopDefenseMapConfig('17');
     const definition = toWorldDefinition({
       ...mapConfig,
       persistentBase: {
@@ -210,18 +210,19 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     // Die authored Definition kennt die Stelle in beiden Faellen; ueber ihr Dasein entscheidet
     // allein der replizierte Parameter. Ein gesperrter Kern existiert gar nicht: keine
     // Basisstelle, keine Kollisionszellen, keine Reservierung.
-    const locked = contextForMap('18', { parameters: { persistentBaseRadiusCells: 4 } });
-    expect(locked.definition?.persistentBaseSite?.baseId).toBe('foundation-main');
+    const locked = contextForMap('17', { parameters: { persistentBaseRadiusCells: 4 } });
+    expect(locked.definition?.persistentBaseSite?.baseId).toBe('coop-base-rear');
     expect(locked.persistentBaseSite).toBeNull();
-    expect(locked.bases).toEqual([]);
+    expect(locked.bases.some((base) => base.id === 'coop-base-rear')).toBe(false);
 
-    const unlocked = contextForMap('18');
-    expect(unlocked.bases.map((base) => base.id)).toEqual(['foundation-main']);
-    expect(unlocked.bases[0]?.persistentReservationRadiusCells).toBeGreaterThan(0);
+    const unlocked = contextForMap('17');
+    expect(unlocked.bases.map((base) => base.id)).toContain('coop-base-rear');
+    expect(unlocked.bases.find((base) => base.id === 'coop-base-rear')?.persistentReservationRadiusCells)
+      .toBeGreaterThan(0);
   });
 
   it('erkennt eine Basisstelle, die keine eigene Hauptbasis ist', () => {
-    const world = contextForMap('18');
+    const world = contextForMap('17');
     const site = world.persistentBaseSite!;
     expect(isValidPersistentBaseSite({ ...site, base: { ...site.base, faction: 'hostile' } })).toBe(false);
     expect(isValidPersistentBaseSite({ ...site, base: { ...site.base, role: 'outpost' } })).toBe(false);
@@ -241,8 +242,8 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
 
 describe('WorldRuntimeContext – eine Metrikquelle', () => {
   it('loest Basisgeometrie gegen dieselbe Metrik auf, die der Kontext fuehrt', () => {
-    const mapConfig = getCoopDefenseMapConfig('18');
-    const world = contextForMap('18');
+    const mapConfig = getCoopDefenseMapConfig('17');
+    const world = contextForMap('17');
     // Der Kontext leitet die Metrik einmal ab und reicht sie an die Basisaufloesung weiter.
     // Wuerde die Aufloesung ihre eigene ableiten, koennten beide auseinanderlaufen.
     for (const base of world.bases) {
@@ -270,25 +271,25 @@ describe('WorldRuntimeContext – World-Basen und Activity-Overlays', () => {
     expect(source).toContain('export function resolveWorldBases(');
     expect(source).toContain('export function resolveCoopDefenseActivityBases(');
 
-    const world = contextForMap('18');
+    const world = contextForMap('17');
     expect(world.bases[0]).not.toHaveProperty('startHp');
     expect(world.bases[0]).not.toHaveProperty('dormant');
     expect(world.bases[0]).not.toHaveProperty('dormantObjectiveId');
     expect(world.bases[0]?.powerUpPedestals).toEqual([]);
-    expect(resolveCoopDefenseActivityBases(getCoopDefenseMapConfig('18'), 4)[0]?.hpMax)
+    expect(resolveCoopDefenseActivityBases(getCoopDefenseMapConfig('17'), 4)[0]?.hpMax)
       .toBe(world.bases[0]?.hpMax);
   });
 });
 describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
   it('weist eine Map ab, die nicht zu dieser World-Identitaet gehoert', () => {
-    // Genau der Fehler, den die Lobby-Kopplung erzeugen wuerde: die World meint Map 18, der
-    // Aufbau brachte Map 19 mit.
+    // Genau der Fehler, den die Lobby-Kopplung erzeugen wuerde: die World meint Map 17, der
+    // Aufbau brachte Map 16 mit.
     expect(() => createWorldRuntimeContext({
-      descriptor: descriptorFor('world:coop-defense:18', {
+      descriptor: descriptorFor('world:coop-defense:17', {
         parameters: { persistentBaseUnlocked: true, persistentBaseRadiusCells: 4 },
       }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
-      definition: toWorldDefinition(getCoopDefenseMapConfig('19')),
+      definition: toWorldDefinition(getCoopDefenseMapConfig('16')),
     })).toThrow(/cannot be built from/);
 
     expect(() => createWorldRuntimeContext({
@@ -302,18 +303,18 @@ describe('WorldRuntimeContext – Aufbau nur aus der eigenen World', () => {
     // Ein Ersatzwert aus dem lokalen Speicher waere pro Peer verschieden – aus einem
     // Uebertragungsfehler wuerden still zwei verschiedene Welten.
     expect(() => createWorldRuntimeContext({
-      descriptor: descriptorFor('world:coop-defense:18', {
+      descriptor: descriptorFor('world:coop-defense:17', {
         parameters: { persistentBaseUnlocked: true },
       }),
       metricsProfile: getArenaMetricsProfile('coop_defense', 'ARENA'),
-      definition: toWorldDefinition(getCoopDefenseMapConfig('18')),
+      definition: toWorldDefinition(getCoopDefenseMapConfig('17')),
     })).toThrow(/no replicated radius/);
   });
 });
 
 describe('WorldRuntimeContext – Unabhaengigkeit von der Lobby', () => {
   it('behaelt Metrik, Basen und Basisstelle trotz Aenderung des globalen Kompatibilitaetsspiegels', () => {
-    const world = contextForMap('18');
+    const world = contextForMap('17');
     try {
       // Simuliert eine nachtraegliche Lobby-Auswahl mit inkompatibler Groesse. Die bereits
       // erzeugte World behaelt ihre immutable Ableitungen.
@@ -325,10 +326,10 @@ describe('WorldRuntimeContext – Unabhaengigkeit von der Lobby', () => {
         foreignMap.arenaHeightCells,
       );
 
-      expect(world.metrics.gridCols).toBe(getCoopDefenseMapConfig('18').arenaWidthCells);
+      expect(world.metrics.gridCols).toBe(getCoopDefenseMapConfig('17').arenaWidthCells);
       expect(world.metrics.widthPx).not.toBe(config.ARENA_WIDTH);
-      expect(world.bases.map((base) => base.id)).toEqual(['foundation-main']);
-      expect(world.persistentBaseSite?.baseId).toBe('foundation-main');
+      expect(world.bases.map((base) => base.id)).toContain('coop-base-rear');
+      expect(world.persistentBaseSite?.baseId).toBe('coop-base-rear');
     } finally {
       applyArenaMetricsForMode('deathmatch', 'LOBBY');
     }

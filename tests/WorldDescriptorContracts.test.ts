@@ -76,7 +76,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
   });
 
   it('verweist auf genau die WorldDefinition aus dem Authoring', () => {
-    for (const mapId of ['0', '7', '18', 'weapon-balance-lab']) {
+    for (const mapId of ['0', '7', '17', 'weapon-balance-lab']) {
       const definitionId = toWorldDefinitionId(mapId);
       expect(definitionId).toBe(getWorldDefinitionId(mapId));
       // Eine kanonische Identitaet: dieselbe ID loest im Authoring-Registry auf.
@@ -96,7 +96,7 @@ describe('WorldDescriptor – kanonische World-Identitaet', () => {
 
   it('erzeugt nur IDs, die entweder authored aufloesen oder ausdruecklich prozedural sind', () => {
     for (const gameMode of GAME_MODES) {
-      for (const mapId of [null, '0', '18', 'weapon-balance-lab']) {
+      for (const mapId of [null, '0', '17', 'weapon-balance-lab']) {
         const worldDefinitionId = toWorldDefinitionId(mapId);
         const kind = toActivityKind(gameMode);
         const activityDefinitionId = toActivityDefinitionId(kind, mapId);

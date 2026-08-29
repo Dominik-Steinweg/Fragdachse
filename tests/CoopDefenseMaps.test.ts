@@ -44,7 +44,7 @@ describe('Coop defense map progression', () => {
     const mapIds = COOP_DEFENSE_MAP_CONFIGS.map((map) => map.mapId);
     expect(mapIds).toEqual([
       '0', '1', '2', '3', '4', '5', '6', '7', '8',
-      '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+      '9', '10', '11', '12', '13', '14', '15', '16', '17',
     ]);
     expect(DEFAULT_COOP_DEFENSE_MAP_ID).toBe('1');
     expect(mapIds.every((mapId) => mapId.trim().length > 0)).toBe(true);
@@ -61,51 +61,60 @@ describe('Coop defense map progression', () => {
   });
 
   it('validates persistent anchors and resolves map-relative reservation geometry', () => {
-    const map18 = getCoopDefenseMapConfig('18');
-    const map19 = getCoopDefenseMapConfig('19');
+    const map = getCoopDefenseMapConfig('17');
     // Die Map beschreibt nur die Stelle; ihre Zellen kommen aus der kanonischen Kerngeometrie.
-    expect(map18.persistentBase).toEqual({
-      baseId: 'foundation-main',
-      anchor: { gridX: 24, gridY: 20 },
-      hpMax: 5000,
+    expect(map.persistentBase).toEqual({
+      baseId: 'coop-base-rear',
+      anchor: { gridX: 99, gridY: 21 },
+      hpMax: 1650,
     });
-    expect(map19.persistentBase?.baseId).toBe('cornerstone-main');
 
-    const anchor18 = resolveCoopDefenseBases(map18).find((base) => base.id === 'foundation-main');
-    const anchor19 = resolveCoopDefenseBases(map19).find((base) => base.id === 'cornerstone-main');
+    const anchor = resolveCoopDefenseBases(map).find((base) => base.id === map.persistentBase?.baseId);
     // Der aufgeloeste Anker ist exakt der authored: Die Bounding-Box des Kerns ist immer die
     // volle 5x5-Flaeche, ihre Mitte deshalb die Ankerzelle.
-    expect(anchor18).toMatchObject({ anchorGridX: 24, anchorGridY: 20 });
-    expect(anchor19).toMatchObject({
-      anchorGridX: map19.persistentBase!.anchor.gridX,
-      anchorGridY: map19.persistentBase!.anchor.gridY,
+    expect(anchor).toMatchObject({
+      anchorGridX: map.persistentBase!.anchor.gridX,
+      anchorGridY: map.persistentBase!.anchor.gridY,
     });
-    expect(anchor18 && isPersistentBaseReservationCell(36, 20, [anchor18])).toBe(true);
-    expect(anchor18 && isPersistentBaseReservationCell(37, 20, [anchor18])).toBe(false);
+    const reservationRadius = MAX_PERSISTENT_BASE_RADIUS_CELLS + PERSISTENT_BASE_CLEARANCE_CELLS;
+    expect(anchor && isPersistentBaseReservationCell(
+      map.persistentBase!.anchor.gridX + reservationRadius,
+      map.persistentBase!.anchor.gridY,
+      [anchor],
+    )).toBe(true);
+    expect(anchor && isPersistentBaseReservationCell(
+      map.persistentBase!.anchor.gridX + reservationRadius + 1,
+      map.persistentBase!.anchor.gridY,
+      [anchor],
+    )).toBe(false);
 
     // Die Kernzellen bilden die vierseitig offene Kernform, nicht ein Rechteck.
-    expect(anchor18!.cells).toHaveLength(12);
-    expect(anchor18!.region).toEqual({
-      minGridX: 22, maxGridX: 26, minGridY: 18, maxGridY: 22,
-    });
+    expect(anchor!.cells).toHaveLength(12);
+    expect(anchor!.region.maxGridX - anchor!.region.minGridX).toBe(4);
+    expect(anchor!.region.maxGridY - anchor!.region.minGridY).toBe(4);
     // Die vier mittleren Randzellen bleiben als je ein Rasterfeld grosser Eingang frei.
-    for (const [gridX, gridY] of [[24, 18], [22, 20], [26, 20], [24, 22]]) {
-      expect(anchor18!.cells.some((cell) => cell.gridX === gridX && cell.gridY === gridY)).toBe(false);
+    for (const [gridX, gridY] of [
+      [map.persistentBase!.anchor.gridX, map.persistentBase!.anchor.gridY - 2],
+      [map.persistentBase!.anchor.gridX - 2, map.persistentBase!.anchor.gridY],
+      [map.persistentBase!.anchor.gridX + 2, map.persistentBase!.anchor.gridY],
+      [map.persistentBase!.anchor.gridX, map.persistentBase!.anchor.gridY + 2],
+    ]) {
+      expect(anchor!.cells.some((cell) => cell.gridX === gridX && cell.gridY === gridY)).toBe(false);
     }
 
     // Der Kern steht nach der Normalisierung als gewoehnliche Basis in `bases`; die Rohkarte
     // beschreibt ihn nicht. Deshalb ist die Vorlage fuer die Negativfaelle die Karte ohne ihn.
-    const rawMap18 = {
-      ...map18,
-      bases: map18.bases.filter((base) => base.id !== map18.persistentBase!.baseId),
+    const rawMap = {
+      ...map,
+      bases: map.bases.filter((base) => base.id !== map.persistentBase!.baseId),
     };
 
     // Eine Map darf ihre persistente Basis nicht zusaetzlich selbst beschreiben.
     expect(() => normalizeCoopDefenseMapConfig({
-      ...rawMap18,
+      ...rawMap,
       mapId: 'persistent-anchor-validation',
       bases: [{
-        id: 'foundation-main',
+        id: map.persistentBase!.baseId,
         hpMax: 1,
         anchor: { kind: 'grid', gridX: 1, gridY: 1 },
         shape: { kind: 'rectangle', widthCells: 1, heightCells: 1 },
@@ -114,9 +123,9 @@ describe('Coop defense map progression', () => {
 
     // Und sie braucht ringsum Platz fuer die Reservierung.
     expect(() => normalizeCoopDefenseMapConfig({
-      ...rawMap18,
+      ...rawMap,
       mapId: 'persistent-anchor-bounds',
-      persistentBase: { ...map18.persistentBase!, anchor: { gridX: 3, gridY: 3 } },
+      persistentBase: { ...map.persistentBase!, anchor: { gridX: 3, gridY: 3 } },
     })).toThrow(/free cells around its anchor/);
   });
 
@@ -201,10 +210,8 @@ describe('Coop defense map progression', () => {
     expect(getCoopDefenseMapConfig('6').trackPosition).toBe('left');
     expect(getCoopDefenseMapConfig('7').trackPosition).toBe('right');
     expect(getCoopDefenseMapConfig('8').trackPosition).toBe('left');
-    expect(COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'void-fire' && !['18', '19'].includes(map.mapId))
+    expect(COOP_DEFENSE_MAP_CONFIGS.filter((map) => map.trackMode === 'void-fire')
       .every((map) => map.trackPosition === 'center')).toBe(true);
-    expect(getCoopDefenseMapConfig('18').trackPosition).toEqual({ kind: 'grid', gridX: 4 });
-    expect(getCoopDefenseMapConfig('19').trackPosition).toEqual({ kind: 'grid', gridX: 48 });
 
     const base = {
       mapId: 'track-position-test',
@@ -237,6 +244,13 @@ describe('Coop defense map progression', () => {
       expect(Number.isInteger(map.itemDrop.itemLevel), map.mapId).toBe(true);
       expect(map.itemDrop.itemLevel, map.mapId).toBeGreaterThan(0);
     }
+
+    for (const mapId of ['10', '11', '12', '13', '14']) {
+      expect(getCoopDefenseMapConfig(mapId).itemDrop, mapId).toBeUndefined();
+    }
+    expect(getCoopDefenseMapConfig('15').itemDrop).toEqual({ itemLevel: 1 });
+    expect(getCoopDefenseMapConfig('16').itemDrop).toEqual({ itemLevel: 1 });
+    expect(getCoopDefenseMapConfig('17').itemDrop).toEqual({ itemLevel: 2 });
   });
 
   it('keeps the B8 Carry reward observable without changing item unlock progression', () => {
@@ -269,10 +283,10 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('exposes the complete Map 0-19 campaign audit and key GDD semantics', () => {
+  it('exposes the complete Map 0-17 campaign audit and key GDD semantics', () => {
     const audit = getCoopDefenseCampaignAudit();
     expect(audit.map((entry) => entry.mapId)).toEqual([
-      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+      '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17',
     ]);
     expect(audit.find((entry) => entry.mapId === '9')).toMatchObject({
       objective: 'survive',
@@ -481,7 +495,7 @@ describe('Coop defense map progression', () => {
 
   it('requires the bounded survival contract on every survival map', () => {
     const survivalMaps = COOP_DEFENSE_MAP_CONFIGS.filter(({ objective }) => objective === 'survive');
-    expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9', '14', '18', '19']);
+    expect(survivalMaps.map((map) => map.mapId)).toEqual(['0', '9', '14']);
     for (const map of survivalMaps) {
       expect(map.surviveDurationSec).toBeGreaterThan(0);
       expect(map.respawnsPerPlayer).toBeGreaterThanOrEqual(0);

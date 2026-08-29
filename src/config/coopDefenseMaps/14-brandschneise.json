@@ -279,9 +279,6 @@
     "hpMax": 1650
   },
   "powerUps": [],
-  "itemDrop": {
-    "itemLevel": 3
-  },
   "encounters": [
     {
       "id": "front-opening",

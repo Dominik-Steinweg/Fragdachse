@@ -15,7 +15,7 @@ import type { CoopDefenseUpgradeEffectMode } from '../utils/coopDefenseUpgrades'
  */
 
 /** Ein Sieg auf dieser Map schaltet das Item-System dauerhaft frei. */
-export const COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID = '10';
+export const COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID = '15';
 
 /** Nicht ausgeruestete Items je Kategorie. Ausgeruestete Items zaehlen nicht mit. */
 export const COOP_DEFENSE_ITEM_STASH_LIMIT_PER_SLOT = 10;

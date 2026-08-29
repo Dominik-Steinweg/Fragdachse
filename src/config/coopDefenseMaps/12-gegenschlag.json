@@ -192,9 +192,6 @@
       "spawnOnArenaStart": false
     }
   ],
-  "itemDrop": {
-    "itemLevel": 2
-  },
   "persistentSpawns": [
     {
       "id": "map-12-pressure-0",

@@ -1822,10 +1822,42 @@ export function setStoredCoopDefenseItemsUnlocked(unlocked: boolean): boolean {
   return true;
 }
 
-/** Analog zur Klassenfreischaltung: genau ein Map-Sieg oeffnet das System dauerhaft. */
-export function unlockStoredCoopDefenseItemsAfterVictory(completedMapId: string): boolean {
-  return completedMapId.trim() === COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID
-    && setStoredCoopDefenseItemsUnlocked(true);
+/**
+ * Analog zur Klassenfreischaltung: genau ein Map-Sieg oeffnet das System dauerhaft.
+ *
+ * Wenn beim Freischaltsieg bereits das erste Angebot feststeht, wird beides in derselben
+ * Progress-Schreiboperation persistiert. So kann der Unlock nicht ohne das zugehoerige Angebot
+ * sichtbar werden.
+ */
+export function unlockStoredCoopDefenseItemsAfterVictory(
+  completedMapId: string,
+  firstReward?: CoopDefensePendingItemReward,
+): boolean {
+  if (completedMapId.trim() !== COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID) return false;
+
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  const hasReward = firstReward !== undefined
+    && progress.pendingItemRewards.some((entry) => entry.roundEndedAt === firstReward.roundEndedAt);
+  const nextPendingItemRewards = firstReward !== undefined && !hasReward
+    ? [...progress.pendingItemRewards, clonePendingItemReward(firstReward)]
+    : progress.pendingItemRewards;
+  const itemsWereAlreadyUnlocked = progress.itemsUnlocked;
+  const rewardWasAdded = nextPendingItemRewards.length !== progress.pendingItemRewards.length;
+  if (itemsWereAlreadyUnlocked && !rewardWasAdded) return false;
+
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...progress,
+        itemsUnlocked: true,
+        pendingItemRewards: nextPendingItemRewards,
+      },
+    },
+  });
+  return !itemsWereAlreadyUnlocked;
 }
 
 // -- Persistente Basis: Entitlement -----------------------------------------

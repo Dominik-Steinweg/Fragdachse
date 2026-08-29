@@ -93,10 +93,10 @@ describe('World-Kanal – Replikation', () => {
       const expectedWorld = host.getWorldDescriptor();
       const expectedActivity = host.getActivityDescriptor();
 
-      host.setCoopDefenseMapId('19');
+      host.setCoopDefenseMapId('17');
       host.setGameMode('deathmatch');
 
-      expect(host.getCoopDefenseMapId()).toBe('19');
+      expect(host.getCoopDefenseMapId()).toBe('17');
       expect(host.getGameMode()).toBe('deathmatch');
       expect(host.getWorldDescriptor()).toEqual(expectedWorld);
       expect(host.getActivityDescriptor()).toEqual(expectedActivity);

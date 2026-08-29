@@ -43,7 +43,7 @@ import type { ArenaLayout } from '../src/types';
 
 const WORLD: WorldDescriptor = {
   worldRevision: 2201,
-  definitionId: 'world:coop-defense:18',
+  definitionId: 'world:coop-defense:17',
   seed: 2201,
   generatorVersion: 1,
   layoutFingerprint: 'step-22-proof',
@@ -133,7 +133,7 @@ function useRoom(room: TestRoom): void {
 }
 
 function createWorld(descriptor: WorldDescriptor): WorldRuntimeContext {
-  const mapConfig = getCoopDefenseMapConfig('18');
+  const mapConfig = getCoopDefenseMapConfig('17');
   return createWorldRuntimeContext({
     descriptor,
     metricsProfile: getArenaMetricsProfile(
@@ -255,13 +255,13 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       expect(hostLifecycle.activity.phase).toBe('none');
       expect(host.getActivityDescriptor()).toBeNull();
       expect(host.getRoundState()).toBeNull();
-      expect(hostWorldState.context?.definition?.sourceMapId).toBe('18');
+      expect(hostWorldState.context?.definition?.sourceMapId).toBe('17');
       expect(hostWorldState.context?.persistentBaseSite).not.toBeNull();
 
       useRoom(clientRoom);
       expect(client.getWorldDescriptor()).toEqual(WORLD);
       const clientWorld = createWorld(client.getWorldDescriptor()!);
-      expect(clientWorld.definition?.sourceMapId).toBe('18');
+      expect(clientWorld.definition?.sourceMapId).toBe('17');
       clientLifecycle.attachRuntime(clientWorld, client.getActivityDescriptor());
       expect(clientLifecycle.activity.phase).toBe('none');
 

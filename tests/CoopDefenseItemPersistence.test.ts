@@ -81,18 +81,41 @@ describe('coop-defense item persistence', () => {
     expect(unlockStoredCoopDefenseItemsAfterVictory(COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID)).toBe(false);
   });
 
+  it('atomically unlocks items with the first level-one offer on map 15', () => {
+    const firstReward = {
+      roundEndedAt: 1500,
+      mapId: '15',
+      offers: [item({ uid: 'map15-first-offer', itemLevel: 1 })],
+    };
+
+    expect(unlockStoredCoopDefenseItemsAfterVictory('14', firstReward)).toBe(false);
+    expect(getStoredCoopDefenseItemsUnlocked()).toBe(false);
+    expect(getStoredPendingCoopDefenseItemRewards()).toEqual([]);
+
+    expect(unlockStoredCoopDefenseItemsAfterVictory('15', firstReward)).toBe(true);
+    expect(getStoredCoopDefenseItemsUnlocked()).toBe(true);
+    expect(getStoredPendingCoopDefenseItemRewards()).toEqual([firstReward]);
+
+    // Ein Retry derselben Runde darf das Angebot weder neu wuerfeln noch duplizieren.
+    expect(unlockStoredCoopDefenseItemsAfterVictory('15', {
+      ...firstReward,
+      offers: [item({ uid: 'map15-retry-offer', itemLevel: 1 })],
+    })).toBe(false);
+    expect(getStoredPendingCoopDefenseItemRewards()).toEqual([firstReward]);
+  });
+
   it('round-trips items, equipment and pending rewards through storage', () => {
     setStoredCoopDefenseItemsUnlocked(true);
     expect(addStoredCoopDefenseItem(item({ uid: 'armor-1' }))).toBe(true);
     expect(addStoredCoopDefenseItem(item({ uid: 'boots-1', slot: 'boots', baseValue: 0.05 }))).toBe(true);
     expect(equipStoredCoopDefenseItem('armor-1')).toBe(true);
-    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 42, mapId: '10', offers: [item({ uid: 'offer-1' })] });
+    setStoredPendingCoopDefenseItemReward({ roundEndedAt: 42, mapId: '15', offers: [item({ uid: 'offer-1' })] });
 
     expect(getStoredCoopDefenseItems().map((entry) => entry.uid)).toEqual(['armor-1', 'boots-1']);
     expect(getStoredCoopDefenseEquippedItemIds()).toEqual({ armor: 'armor-1' });
     expect(getStoredEquippedCoopDefenseItems().map((entry) => entry.uid)).toEqual(['armor-1']);
     expect(getStoredPendingCoopDefenseItemReward()?.roundEndedAt).toBe(42);
-    expect(getStoredPendingCoopDefenseItemReward()?.mapId).toBe('10');
+    expect(getStoredPendingCoopDefenseItemReward()?.mapId).toBe('15');
 
     expect(unequipStoredCoopDefenseItem('armor')).toBe(true);
     expect(getStoredCoopDefenseEquippedItemIds()).toEqual({});

@@ -56,7 +56,7 @@ describe('Persistente Basis – Freischaltung', () => {
 
   it('vergibt sie beim Sieg auf der Freischaltmap und nur dort', () => {
     expect(unlockStoredPersistentBaseAfterVictory('2')).toBe(false);
-    expect(unlockStoredPersistentBaseAfterVictory('18')).toBe(false);
+    expect(unlockStoredPersistentBaseAfterVictory('17')).toBe(false);
     expect(getStoredPersistentBaseUnlocked()).toBe(false);
 
     expect(unlockStoredPersistentBaseAfterVictory(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID)).toBe(true);

@@ -589,7 +589,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(resolveActiveGameMode({
       activityKind: 'deathmatch',
       roomGameMode: 'coop_defense',
-      worldDefinitionId: toWorldDefinitionId('18'),
+      worldDefinitionId: toWorldDefinitionId('17'),
     })).toBe('deathmatch');
     expect(resolveActiveGameMode({
       activityKind: null,
@@ -599,7 +599,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(resolveActiveGameMode({
       activityKind: null,
       roomGameMode: 'deathmatch',
-      worldDefinitionId: toWorldDefinitionId('18'),
+      worldDefinitionId: toWorldDefinitionId('17'),
     })).toBe('coop_defense');
   });
 
