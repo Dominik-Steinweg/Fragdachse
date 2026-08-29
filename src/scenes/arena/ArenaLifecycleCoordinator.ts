@@ -177,8 +177,7 @@ import type {
 import { sanitizePersistentBaseRewardPlacementRequest } from '../../persistentBase/PersistentBaseRewardTypes';
 import {
   isCellInsidePersistentBaseBuildArea,
-  rotatePersistentBaseCoreOffset,
-  resolvePersistentBaseCoreCellsRelative,
+  resolvePersistentBaseCell,
   type PersistentBaseBuildArea,
 } from '../../persistentBase/PersistentBaseCore';
 import {
@@ -1377,6 +1376,9 @@ export class ArenaLifecycleCoordinator {
     const unlocks = getStoredPersistentBaseRewardUnlocks();
     if (!store.canPlaceReward(sanitizedRequest.rewardId, unlocks)) return { ok: false, reason: 'blocked' };
     const definition = getPersistentBaseRewardDefinition(sanitizedRequest.rewardId);
+    if (definition.category === 'baseTurret' && !this.isPersistentBaseRuntimeActive(site)) {
+      return { ok: false, reason: 'blocked' };
+    }
     const cell = this.resolvePersistentBaseRewardCell(site, sanitizedRequest);
     if (!cell || !this.isPersistentBaseRewardPlacementInDomain(definition, site, sanitizedRequest)) {
       return { ok: false, reason: 'placement' };
@@ -1392,8 +1394,15 @@ export class ArenaLifecycleCoordinator {
     // A reward has higher composite priority than personal contributions. Remove only the
     // conflicting runtime object and release its runtime binding; the owner's blueprint remains.
     const occupant = placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
+    let displacedPersonalRuntimeId: number | null = null;
     if (occupant && occupant.ownership !== 'base-owned') {
+      const isPersistentContribution = this.ctx.persistentBaseContributions?.getRuntimeBindings()
+        .some((binding) => binding.runtimeId === occupant.id) === true;
+      // A reward may displace a persistent contribution, but must never silently delete an
+      // unrelated live utility for which there is no blueprint to reconstruct on rollback.
+      if (!isPersistentContribution) return { ok: false, reason: 'placement' };
       this.releasePersonalRuntimeForRewardConflict(occupant.id);
+      displacedPersonalRuntimeId = occupant.id;
     }
     const placement: PersistentBaseRewardPlacement = {
       rewardId: sanitizedRequest.rewardId,
@@ -1402,10 +1411,32 @@ export class ArenaLifecycleCoordinator {
       angle: sanitizedRequest.angle,
     };
     if (!store.placeReward(placement)) return { ok: false, reason: 'blocked' };
-    const runtime = this.materializePersistentBaseReward(site, definition, placement);
+    let runtime: SyncedPlaceableRock | null = null;
+    try {
+      runtime = this.materializePersistentBaseReward(site, definition, placement);
+    } catch {
+      // Keep the request transactional even if a provider throws instead of returning null.
+      runtime = null;
+    }
     if (!runtime) {
       store.rollbackPlacement(sanitizedRequest.rewardId);
+      // Re-run the existing deterministic composite after every failed materialization. This
+      // restores the displaced personal runtime from its unchanged blueprint, including any
+      // pedestal registration, instead of maintaining a second reconstruction path here.
+      this.hostRefreshPersistentBaseComposite();
+      if (displacedPersonalRuntimeId !== null) {
+        emitArenaMapGridChanged(this.scene.game.events, {
+          reason: 'placeables_batch_removed',
+          source: 'placeable_rock',
+        });
+      }
       return { ok: false, reason: 'placement' };
+    }
+    if (displacedPersonalRuntimeId !== null) {
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeables_batch_removed',
+        source: 'placeable_rock',
+      });
     }
     this.persistCurrentCommittedPersistentBaseRewards();
     this.publishPersistentBaseRewardSessionState();
@@ -2566,6 +2597,9 @@ export class ArenaLifecycleCoordinator {
             );
           }
           this.ctx.powerUpSystem?.activatePedestalsLinkedToBase(activatedBase.id);
+          if (activatedBase.id === this.ctx.world?.persistentBaseSite?.baseId) {
+            this.hostRefreshPersistentBaseComposite();
+          }
           syncActiveBaseIds();
         });
         // Flow fields are created from the complete prebuilt base list; remove dormant mission
@@ -2578,6 +2612,7 @@ export class ArenaLifecycleCoordinator {
         this.fireObstacleIndex?.removeBase(destroyedBase.id);
         this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
         this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
+        this.removePersistentBaseRewardTurretsForBase(destroyedBase.id);
         this.ctx.powerUpSystem?.destroyPedestalsLinkedToBase(destroyedBase.id);
 
         if (bridge.isHost()) {
@@ -2705,7 +2740,9 @@ export class ArenaLifecycleCoordinator {
         && event.gridX !== undefined
         && event.gridY !== undefined) {
         if (event.reason === 'placeable_added') {
-          fireObstacleIndex.addPlaceableRock(event.obstacleId, event.gridX, event.gridY);
+          if (event.collisionMode !== 'none') {
+            fireObstacleIndex.addPlaceableRock(event.obstacleId, event.gridX, event.gridY);
+          }
         } else {
           fireObstacleIndex.removePlaceableRock(event.obstacleId);
         }
@@ -4625,24 +4662,13 @@ export class ArenaLifecycleCoordinator {
     site: WorldPersistentBaseSite,
     placement: Pick<PersistentBaseRewardPlacement, 'relativeGridX' | 'relativeGridY'>,
   ): { gridX: number; gridY: number; domain: 'base-surface' | 'courtyard-build-area' | 'entrance' } | null {
-    const relative = resolvePersistentBaseCoreCellsRelative(site.orientation)
-      .find((candidate) => candidate.relativeGridX === placement.relativeGridX
-        && candidate.relativeGridY === placement.relativeGridY);
-    if (!relative && !isCellInsidePersistentBaseBuildArea(
-      placement.relativeGridX,
-      placement.relativeGridY,
-      site.buildArea,
-    )) return null;
-    const offset = relative ?? rotatePersistentBaseCoreOffset(
+    return resolvePersistentBaseCell(
+      site.anchor,
       placement.relativeGridX,
       placement.relativeGridY,
       site.orientation,
+      site.buildArea,
     );
-    return {
-      gridX: site.anchor.gridX + offset.relativeGridX,
-      gridY: site.anchor.gridY + offset.relativeGridY,
-      domain: relative?.domain ?? 'courtyard-build-area',
-    };
   }
 
   private isPersistentBaseRewardPlacementInDomain(
@@ -4679,6 +4705,8 @@ export class ArenaLifecycleCoordinator {
   private materializePersistentBaseRewards(site: WorldPersistentBaseSite | null): void {
     if (!bridge.isHost() || !site || !this.ctx.persistentBaseRewards || !this.ctx.placementSystem) return;
     const placementSystem = this.ctx.placementSystem;
+    const persistentBaseActive = this.isPersistentBaseRuntimeActive(site);
+    if (!persistentBaseActive) this.removePersistentBaseRewardTurretsForBase(site.baseId);
     const desired = new Map(
       this.ctx.persistentBaseRewards.getState().placements.map((placement) => [placement.rewardId, placement]),
     );
@@ -4687,6 +4715,7 @@ export class ArenaLifecycleCoordinator {
       const placement = desired.get(rewardId);
       const runtime = placementSystem.getRuntimeRock(binding.runtimeId);
       if (!placement || !runtime
+        || (!persistentBaseActive && runtime.kind === 'turret')
         || binding.gridX !== this.resolvePersistentBaseRewardCell(site, placement)?.gridX
         || binding.gridY !== this.resolvePersistentBaseRewardCell(site, placement)?.gridY) {
         this.releasePersistentBaseRewardRuntime(rewardId);
@@ -4697,6 +4726,7 @@ export class ArenaLifecycleCoordinator {
     for (const placement of desired.values()) {
       if (!isKnownPersistentBaseRewardId(placement.rewardId)) continue;
       const definition = getPersistentBaseRewardDefinition(placement.rewardId);
+      if (!persistentBaseActive && definition.category === 'baseTurret') continue;
       const cell = this.resolvePersistentBaseRewardCell(site, placement);
       if (!cell || !this.isPersistentBaseRewardPlacementInDomain(definition, site, placement)) continue;
       const key = cellKey(cell.gridX, cell.gridY);
@@ -4712,6 +4742,47 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
+  /** A destroyed/dormant persistent core keeps its reward placement, but not turret gameplay. */
+  private isPersistentBaseRuntimeActive(site: WorldPersistentBaseSite): boolean {
+    const baseManager = this.ctx.baseManager;
+    if (!baseManager) return true;
+    const base = baseManager.getBase(site.baseId);
+    return base !== undefined && !base.isInert();
+  }
+
+  /** Removes only reward-turret runtime for a destroyed core; the persisted placement is untouched. */
+  private removePersistentBaseRewardTurretsForBase(baseId: string): void {
+    const site = this.ctx.world?.persistentBaseSite;
+    const placementSystem = this.ctx.placementSystem;
+    if (!site || site.baseId !== baseId || !placementSystem) return;
+
+    let removedCount = 0;
+    for (const rock of placementSystem.getAllRuntimeRocks()) {
+      if (rock.kind !== 'turret'
+        || rock.ownership !== 'base-owned'
+        || rock.persistentRewardId === undefined) continue;
+      const binding = this.persistentBaseRewardRuntimeBindings.get(rock.persistentRewardId);
+      if (binding?.runtimeId === rock.id) this.persistentBaseRewardRuntimeBindings.delete(rock.persistentRewardId);
+      const removed = placementSystem.removeRock(rock.id);
+      if (!removed) continue;
+      this.releasePlaceableRuntime(removed, false);
+      removedCount += 1;
+    }
+
+    // A client has no host binding map; a host can still have a stale binding after a snapshot
+    // race. In either case, no turret binding may survive the destruction transition.
+    for (const [rewardId, binding] of [...this.persistentBaseRewardRuntimeBindings]) {
+      const runtime = placementSystem.getRuntimeRock(binding.runtimeId);
+      if (!runtime || runtime.kind === 'turret') this.persistentBaseRewardRuntimeBindings.delete(rewardId);
+    }
+    if (removedCount > 0) {
+      emitArenaMapGridChanged(this.scene.game.events, {
+        reason: 'placeables_batch_removed',
+        source: 'placeable_turret',
+      });
+    }
+  }
+
   private materializePersistentBaseReward(
     site: WorldPersistentBaseSite,
     definition: PersistentBaseRewardDefinition,
@@ -4719,11 +4790,13 @@ export class ArenaLifecycleCoordinator {
   ): SyncedPlaceableRock | null {
     const placementSystem = this.ctx.placementSystem;
     if (!placementSystem) return null;
+    if (definition.category === 'baseTurret' && !this.isPersistentBaseRuntimeActive(site)) return null;
     const cell = this.resolvePersistentBaseRewardCell(site, placement);
     if (!cell) return null;
     const ownerId = COOP_DEFENSE_BASE_TURRET_OWNER_ID;
     const ownerColor = TEAM_BLUE_COLOR;
-    const runtime = definition.gameplaySource.kind === 'construction-definition'
+    const runtime = definition.category === 'baseTurret'
+      && definition.gameplaySource.kind === 'construction-definition'
       && definition.gameplaySource.constructionId
       ? placementSystem.materializePersistentBaseReward(
         getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId),
@@ -4734,40 +4807,61 @@ export class ArenaLifecycleCoordinator {
         ownerId,
         ownerColor,
       )
-      : placementSystem.materializePersistentBaseRewardPedestal(
-        placement.rewardId,
-        cell.gridX,
-        cell.gridY,
-        placement.angle,
-        ownerId,
-        ownerColor,
-      );
+      : definition.category === 'basePedestal'
+        ? placementSystem.materializePersistentBaseRewardPedestal(
+          placement.rewardId,
+          cell.gridX,
+          cell.gridY,
+          placement.angle,
+          ownerId,
+          ownerColor,
+        )
+        : null;
     if (!runtime) return null;
 
-    if (definition.gameplaySource.kind === 'power-up-definition') {
-      const world = this.rockVisualHelper.gridToWorld(cell.gridX, cell.gridY);
-      const registered = this.ctx.powerUpSystem?.registerPersistentBaseRewardPedestal(
-        placement.rewardId,
-        definition.gameplaySource.powerUpDefId,
-        world.x,
-        world.y,
-        definition.initialState.respawnMs,
-        definition.initialState.spawnOnArenaStart,
-        ownerColor,
-      ) ?? false;
-      if (!registered) {
-        placementSystem.removeRock(runtime.id);
-        return null;
+    const cleanupFailedMaterialization = (): void => {
+      this.persistentBaseRewardRuntimeBindings.delete(placement.rewardId);
+      // Registration can fail after partially allocating a pedestal in a future provider; the
+      // idempotent removal is therefore part of the same failure cleanup.
+      this.ctx.powerUpSystem?.unregisterPersistentBaseRewardPedestal(placement.rewardId);
+      const removed = placementSystem.removeRock(runtime.id);
+      if (removed) this.releasePlaceableRuntime(removed, false);
+      else this.rockVisualHelper.removePlaceableRockVisual(runtime, false);
+    };
+
+    try {
+      if (definition.category === 'basePedestal') {
+        if (definition.gameplaySource.kind !== 'power-up-definition') {
+          cleanupFailedMaterialization();
+          return null;
+        }
+        const world = this.rockVisualHelper.gridToWorld(cell.gridX, cell.gridY);
+        const registered = this.ctx.powerUpSystem?.registerPersistentBaseRewardPedestal(
+          placement.rewardId,
+          definition.gameplaySource.powerUpDefId,
+          world.x,
+          world.y,
+          definition.initialState.respawnMs,
+          definition.initialState.spawnOnArenaStart,
+          ownerColor,
+        ) ?? false;
+        if (!registered) {
+          cleanupFailedMaterialization();
+          return null;
+        }
       }
+      this.persistentBaseRewardRuntimeBindings.set(placement.rewardId, {
+        runtimeId: runtime.id,
+        gridX: cell.gridX,
+        gridY: cell.gridY,
+      });
+      this.rockVisualHelper.materializePlaceableRock(runtime, false);
+      this.emitPersistentRestoreAdded(runtime);
+      return runtime;
+    } catch {
+      cleanupFailedMaterialization();
+      return null;
     }
-    this.persistentBaseRewardRuntimeBindings.set(placement.rewardId, {
-      runtimeId: runtime.id,
-      gridX: cell.gridX,
-      gridY: cell.gridY,
-    });
-    this.rockVisualHelper.materializePlaceableRock(runtime, false);
-    this.emitPersistentRestoreAdded(runtime);
-    return runtime;
   }
 
   private releasePersistentBaseRewardRuntime(rewardId: PersistentBaseRewardId): void {
@@ -4971,6 +5065,7 @@ export class ArenaLifecycleCoordinator {
       obstacleId: runtime.id,
       gridX: runtime.gridX,
       gridY: runtime.gridY,
+      collisionMode: runtime.collisionMode,
     });
   }
 

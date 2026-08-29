@@ -92,7 +92,9 @@ export function resolveGridChange(
   return {
     gridX: event.gridX,
     gridY: event.gridY,
-    occupied: event.reason === 'placeable_added' && event.source !== 'placeable_pedestal',
+    occupied: event.reason === 'placeable_added'
+      && event.source !== 'placeable_pedestal'
+      && event.collisionMode !== 'none',
   };
 }
 

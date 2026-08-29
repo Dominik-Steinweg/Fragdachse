@@ -76,6 +76,9 @@ export class PersistentBaseRewardStore {
     if (!current.placements.some((entry) => entry.rewardId === rewardId)) return false;
     this.replaceCurrent({
       ...current,
+      // A lobby placement increments the committed revision before runtime materialization. A
+      // failed request must restore the complete pre-request value, not just its placement list.
+      revision: Math.max(0, current.revision - (this.working ? 0 : 1)),
       placements: current.placements.filter((entry) => entry.rewardId !== rewardId),
       everPlacedRewardIds: (current.everPlacedRewardIds ?? []).filter((id) => id !== rewardId),
     });

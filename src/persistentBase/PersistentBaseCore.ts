@@ -245,6 +245,34 @@ export function resolvePersistentBaseCoreCells(
 }
 
 /**
+ * Loest eine gespeicherte kanonische Offset-Koordinate in die aktuelle World-Zelle auf.
+ *
+ * Persistenz kennt nur den kanonischen Offset. Die Ausrichtung wird erst hier, genau einmal,
+ * angewendet; dadurch bleiben Domain-Pruefung und World-Aufloesung fuer alle Reward-Kategorien
+ * identisch.
+ */
+export function resolvePersistentBaseCell(
+  anchor: PersistentBaseAnchor,
+  relativeGridX: number,
+  relativeGridY: number,
+  orientation: PersistentBaseOrientation = DEFAULT_PERSISTENT_BASE_ORIENTATION,
+  buildArea: PersistentBaseBuildArea = DEFAULT_PERSISTENT_BASE_BUILD_AREA,
+): PersistentBaseCoreWorldCell | null {
+  const canonical = CANONICAL_PERSISTENT_BASE_CORE_CELLS.find((cell) => (
+    cell.relativeGridX === relativeGridX && cell.relativeGridY === relativeGridY
+  ));
+  if (!canonical && !isCellInsidePersistentBaseBuildArea(relativeGridX, relativeGridY, buildArea)) {
+    return null;
+  }
+  const offset = rotatePersistentBaseCoreOffset(relativeGridX, relativeGridY, orientation);
+  return {
+    gridX: anchor.gridX + offset.relativeGridX,
+    gridY: anchor.gridY + offset.relativeGridY,
+    domain: canonical?.domain ?? 'courtyard-build-area',
+  };
+}
+
+/**
  * Die feste Basisflaeche als Shape-Offsets, auf den Ursprung `(0, 0)` normalisiert.
  *
  * Das ist der Uebergang von der Kerngeometrie in den bestehenden Basisvertrag: `shape.kind`

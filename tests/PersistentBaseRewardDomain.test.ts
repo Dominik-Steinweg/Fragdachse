@@ -125,6 +125,21 @@ describe('PersistentBaseRewardStore', () => {
     expect(committed?.placements).toEqual([]);
     expect(store.commit()).toBeNull();
   });
+
+  it('restores the exact revision when a lobby placement is rolled back', () => {
+    const store = new PersistentBaseRewardStore({
+      ...DEFAULT_PERSISTENT_BASE_REWARD_STATE,
+      revision: 7,
+    });
+    expect(store.placeReward({
+      rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0,
+    })).toBe(true);
+    expect(store.rollbackPlacement('base_health_pedestal')).toBe(true);
+    expect(store.getState()).toEqual({
+      ...DEFAULT_PERSISTENT_BASE_REWARD_STATE,
+      revision: 7,
+    });
+  });
 });
 
 describe('PersistentBaseRewardGrantService', () => {

@@ -7,6 +7,7 @@ import {
   buildStaticKindRaster,
   createFlowFieldTuning,
   goalCellsToIndexes,
+  resolveGridChange,
 } from '../src/systems/flowfield/FlowFieldSources';
 import type { ArenaEventBus, ArenaMapGridChangedEvent } from '../src/scenes/arena/ArenaEvents';
 import type { ArenaLayout } from '../src/types';
@@ -89,6 +90,22 @@ function createEventBus(): ArenaEventBus & { emitGridChange(event: ArenaMapGridC
 }
 
 describe('Enemy navigation geometry', () => {
+  it('treats collisionless placeables as placement reservations, not flowfield obstacles', () => {
+    expect(resolveGridChange({
+      reason: 'placeable_added',
+      source: 'placeable_turret',
+      gridX: 3,
+      gridY: 3,
+      collisionMode: 'none',
+    })).toEqual({ gridX: 3, gridY: 3, occupied: false });
+    expect(resolveGridChange({
+      reason: 'placeable_added',
+      source: 'placeable_turret',
+      gridX: 3,
+      gridY: 3,
+    })).toEqual({ gridX: 3, gridY: 3, occupied: true });
+  });
+
   it('keeps a 30px body inside a designated one-cell corridor', () => {
     const service = new EnemyFlowFieldService(
       createLayout(),

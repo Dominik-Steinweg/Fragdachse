@@ -12,6 +12,7 @@ import {
   isCellInsidePersistentBaseBuildArea,
   isPersistentBaseBuildArea,
   isPersistentBaseOrientation,
+  resolvePersistentBaseCell,
   resolvePersistentBaseCoreCells,
   type PersistentBaseCellDomain,
 } from '../src/persistentBase/PersistentBaseCore';
@@ -144,6 +145,35 @@ describe('PersistentBaseCore – Ausrichtung', () => {
         '42:40',
       ]);
     }
+  });
+
+  it('loest Reward-Offsets immer kanonisch und genau einmal in World-Zellen auf', () => {
+    const anchor = { gridX: 40, gridY: 40 };
+    const canonicalSurfaceCell = { relativeGridX: -2, relativeGridY: -1 };
+    const openLeft = resolvePersistentBaseCell(
+      anchor,
+      canonicalSurfaceCell.relativeGridX,
+      canonicalSurfaceCell.relativeGridY,
+      'open-left',
+    );
+    const openUp = resolvePersistentBaseCell(
+      anchor,
+      canonicalSurfaceCell.relativeGridX,
+      canonicalSurfaceCell.relativeGridY,
+      'open-up',
+    );
+
+    expect(openLeft).toEqual({ gridX: 38, gridY: 39, domain: 'base-surface' });
+    expect(openUp).toEqual({ gridX: 41, gridY: 38, domain: 'base-surface' });
+
+    const canonicalPedestalCell = { relativeGridX: 1, relativeGridY: 0 };
+    const pedestalOpenUp = resolvePersistentBaseCell(
+      anchor,
+      canonicalPedestalCell.relativeGridX,
+      canonicalPedestalCell.relativeGridY,
+      'open-up',
+    );
+    expect(pedestalOpenUp).toEqual({ gridX: 40, gridY: 41, domain: 'courtyard-build-area' });
   });
 });
 

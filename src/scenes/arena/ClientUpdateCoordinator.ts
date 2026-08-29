@@ -403,6 +403,7 @@ export class ClientUpdateCoordinator {
             obstacleId: rock.id,
             gridX: rock.gridX,
             gridY: rock.gridY,
+            collisionMode: rock.collisionMode,
           });
         }
         for (const rock of placementChanges.updated) {
