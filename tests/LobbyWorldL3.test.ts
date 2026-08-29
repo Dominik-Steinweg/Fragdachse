@@ -11,6 +11,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { buildLobbyWorldLayout } from '../src/arena/LobbyWorldLayout';
+import { getPersistentBaseGravelCells } from '../src/arena/PersistentBaseGravelField';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { getAuthoredWorldMetricsProfile, HP_MAX } from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
@@ -27,6 +28,7 @@ import { PlayerWorldRuntime, resolvePlayerRuntimeFeatures } from '../src/world/P
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
 import { resolveActiveGameMode, toWorldDefinitionId } from '../src/world/arenaDescriptorAdapter';
 import { worldCellCenter } from '../src/world/WorldMetrics';
+import { hasPersistentBaseUnlockStatusChanged } from '../src/world/WorldDescriptor';
 import { resolveWorldPresentation } from '../src/world/WorldPresentation';
 import { consumesWorldReplication } from '../src/world/WorldReplication';
 import { createWorldRuntimeContext } from '../src/world/WorldRuntimeContext';
@@ -620,9 +622,57 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(calls).toEqual(['publish:7312', 'publish:7313', 'publish:7314']);
   });
 
+  it('baut nach Map-1-Unlock beim Lobby-Reinstance Basiskern und Gravel-Baubereich neu', () => {
+    const lockedDescriptor = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 7315);
+    const unlockedDescriptor = createAuthoredWorldDescriptor(
+      LOBBY_WORLD_DEFINITION_ID,
+      7316,
+      { persistentBaseUnlocked: true, persistentBaseRadiusCells: 5 },
+    );
+    const definition = getLobbyWorldDefinition();
+    const metricsProfile = getAuthoredWorldMetricsProfile(
+      definition.metrics.widthCells,
+      definition.metrics.heightCells,
+    );
+    const lockedWorld = createWorldRuntimeContext({
+      descriptor: lockedDescriptor,
+      metricsProfile,
+      definition,
+    });
+    const unlockedWorld = createWorldRuntimeContext({
+      descriptor: unlockedDescriptor,
+      metricsProfile,
+      definition,
+    });
+
+    expect(lockedWorld.persistentBaseSite).toBeNull();
+    expect(unlockedWorld.persistentBaseSite).not.toBeNull();
+    expect(hasPersistentBaseUnlockStatusChanged(lockedDescriptor, unlockedDescriptor)).toBe(true);
+    expect(hasPersistentBaseUnlockStatusChanged(unlockedDescriptor, {
+      ...unlockedDescriptor,
+      worldRevision: 7317,
+    })).toBe(false);
+
+    const gravelCells = getPersistentBaseGravelCells(
+      unlockedWorld.persistentBaseSite!.anchor,
+      unlockedWorld.persistentBaseSite!.buildArea,
+      unlockedWorld.metrics.gridCols,
+      unlockedWorld.metrics.gridRows,
+    );
+    expect(gravelCells).toHaveLength(9);
+
+    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(lifecycle).toContain('const preserveLobbyPresentation = this.pendingLobbyWorldReinstance');
+    expect(lifecycle).toContain('&& !this.pendingLobbyWorldPresentationRebuild;');
+    expect(lifecycle).toContain('this.pendingLobbyWorldPresentationRebuild = true;');
+    expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
+    expect(lifecycle).toContain('this.ctx.arenaResult = builder.buildDynamic(layout, {');
+    expect(lifecycle).toContain('builder.rebindWorldRuntime(');
+  });
+
   it('trennt Orchestrierung, Teardown und Presentation-Rebind', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    expect(lifecycle).toContain('this.prepareLobbyWorldReinstance();');
+    expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
     expect(lifecycle).toContain('Math.max(this.lastRoundRevision, previousRevision)');
     expect(lifecycle).toContain('this.worldLifecycle.endInstance();');
     expect(lifecycle).toContain('builder.rebindWorldRuntime(');

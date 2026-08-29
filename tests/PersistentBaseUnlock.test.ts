@@ -90,7 +90,7 @@ describe('Persistente Basis – Freischaltung', () => {
     expect(getStoredPersistentBaseUnlocked()).toBe(true);
   });
 
-  it('leitet den Stand fuer Saves ohne das Feld einmalig aus dem Mapfortschritt ab', () => {
+  it('backfillt fehlende V4-Felder nicht aus dem Mapfortschritt', () => {
     const write = (coopDefense: Record<string, unknown>): void => {
       const raw = JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!);
       raw.coopDefense = { ...raw.coopDefense, ...coopDefense };
@@ -106,8 +106,9 @@ describe('Persistente Basis – Freischaltung', () => {
     write({ highestUnlockedMapId: INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID });
     expect(getStoredPersistentBaseUnlocked()).toBe(false);
 
-    // Wer sie laengst geschlagen hat, muss sie nicht erneut spielen.
+    // Auch wer sie laengst geschlagen hat, bekommt durch ein unvollstaendiges Dokument nichts
+    // rueckwirkend gutgeschrieben. Der Decoder setzt kontrolliert einen frischen V4-Stand.
     write({ highestUnlockedMapId: '5' });
-    expect(getStoredPersistentBaseUnlocked()).toBe(true);
+    expect(getStoredPersistentBaseUnlocked()).toBe(false);
   });
 });

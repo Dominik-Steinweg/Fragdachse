@@ -33,6 +33,10 @@ import {
   type PersistentBaseOrientation,
 } from '../persistentBase/PersistentBaseCore';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
+import {
+  sanitizePersistentBaseRewardIds,
+  type PersistentBaseRewardId,
+} from '../persistentBase/PersistentBaseRewardTypes';
 
 /** Mittag: helle Arena ohne Lightmap-Kosten. Gilt auch für alle Nicht-Coop-Modi. */
 const DEFAULT_MAP_TIME_OF_DAY = formatTimeOfDay(DEFAULT_TIME_OF_DAY_MINUTES);
@@ -285,6 +289,8 @@ export interface CoopDefenseMapSecondaryObjectiveRewards {
   readonly placeablePedestalOnComplete?: {
     readonly powerUpDefId: string;
   };
+  /** Stable personal persistent-base rewards granted when this objective completes. */
+  readonly persistentBaseRewardsOnComplete?: readonly PersistentBaseRewardId[];
 }
 
 export interface CoopDefenseMapSecondaryObjectiveConfig {
@@ -778,6 +784,8 @@ export interface CoopDefenseMapConfig {
   readonly encounters?: readonly CoopDefenseMapEncounterConfig[];
   /** Optionale, host-autoritativ aktivierte Nebenmissionen ohne Einfluss auf den Mapsieg. */
   readonly secondaryObjectives?: readonly CoopDefenseMapSecondaryObjectiveConfig[];
+  /** Stable personal persistent-base rewards granted when the map is won. */
+  readonly persistentBaseRewardsOnVictory?: readonly PersistentBaseRewardId[];
   /** Optionaler, geordneter Vorstoss-Pfad. Verteidigung selbst bleibt ein Hold-Secondary-Objective. */
   readonly missionProgress?: ResolvedCoopDefenseMapMissionProgressConfig | CoopDefenseMapMissionProgressConfig;
   readonly boss?: CoopDefenseMapBossConfig;
@@ -1005,7 +1013,14 @@ export function resolveCoopDefenseMapSecondaryObjectives(
       ? objective.carry.itemCount ?? 1
       : objective.targets.length),
     ...(objective.carry ? { carry: cloneCarryConfig(objective.carry) } : {}),
-    ...(objective.rewards ? { rewards: { ...objective.rewards } } : {}),
+    ...(objective.rewards ? {
+      rewards: {
+        ...objective.rewards,
+        ...(objective.rewards.persistentBaseRewardsOnComplete
+          ? { persistentBaseRewardsOnComplete: [...objective.rewards.persistentBaseRewardsOnComplete] }
+          : {}),
+      },
+    } : {}),
   }));
 }
 
@@ -1173,6 +1188,11 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     arenaWidthCells,
     arenaHeightCells,
   });
+  const persistentBaseRewardsOnVictory = normalizePersistentBaseRewardIds(
+    mapConfig.mapId,
+    'persistentBaseRewardsOnVictory',
+    mapConfig.persistentBaseRewardsOnVictory,
+  );
   const missionProgress = normalizeMissionProgressConfig(
     mapConfig.mapId,
     mapConfig.missionProgress,
@@ -1245,6 +1265,7 @@ export function normalizeCoopDefenseMapConfig(mapConfig: CoopDefenseMapConfig): 
     persistentSpawns: normalizePersistentSpawnConfigs(mapConfig.mapId, persistentSpawns, bases),
     encounters,
     secondaryObjectives,
+    persistentBaseRewardsOnVictory,
     missionProgress,
     boss,
     objective,
@@ -1888,6 +1909,19 @@ function normalizeSecondaryObjectiveTrigger(
   }
 }
 
+function normalizePersistentBaseRewardIds(
+  mapId: string,
+  fieldName: string,
+  value: readonly PersistentBaseRewardId[] | undefined,
+): readonly PersistentBaseRewardId[] | undefined {
+  if (value === undefined) return undefined;
+  const normalized = sanitizePersistentBaseRewardIds(value);
+  if (!normalized) {
+    throw new Error(`[coopDefenseMaps] Map ${mapId} has invalid or duplicate ${fieldName}`);
+  }
+  return normalized;
+}
+
 function normalizeSecondaryObjectiveRewards(
   mapId: string,
   objectiveId: string,
@@ -1980,8 +2014,16 @@ function normalizeSecondaryObjectiveRewards(
     ? { itemMetaRewardOnComplete: rewards.itemMetaRewardOnComplete === true }
     : {};
   const teamBuff = teamBuffReward === undefined ? {} : { teamBuffOnComplete: teamBuffReward };
+  const persistentBaseRewards = normalizePersistentBaseRewardIds(
+    mapId,
+    `secondary objective ${objectiveId} rewards.persistentBaseRewardsOnComplete`,
+    rewards.persistentBaseRewardsOnComplete,
+  );
+  const persistentBaseRewardField = persistentBaseRewards === undefined
+    ? {}
+    : { persistentBaseRewardsOnComplete: persistentBaseRewards };
   if (!Object.prototype.hasOwnProperty.call(rewards, 'xpPerTarget')) {
-    return { ...repair, ...itemMetaReward, ...teamBuff, ...placement };
+    return { ...repair, ...itemMetaReward, ...teamBuff, ...placement, ...persistentBaseRewardField };
   }
   const value = rewards.xpPerTarget;
   return {
@@ -1989,6 +2031,7 @@ function normalizeSecondaryObjectiveRewards(
     ...itemMetaReward,
     ...teamBuff,
     ...placement,
+    ...persistentBaseRewardField,
     xpPerTarget: typeof value === 'number' && Number.isFinite(value)
       ? Math.max(0, Math.floor(value))
       : 0,

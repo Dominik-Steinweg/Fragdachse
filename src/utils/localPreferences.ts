@@ -49,7 +49,6 @@ import {
 } from '../config/coopDefenseMapUnlocks';
 import {
   PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
-  PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
 } from '../config/persistentBase';
 import { sanitizePlayerName } from './playerName';
 import { isGraphicsQuality, type GraphicsQuality } from '../graphics/GraphicsQuality';
@@ -78,15 +77,24 @@ import {
   DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION,
   type PersistentPlayerBaseContribution,
 } from '../persistentBase/PersistentBaseTypes';
+import {
+  clonePersistentBaseRewardState,
+  DEFAULT_PERSISTENT_BASE_REWARD_STATE,
+  isPersistentBaseRewardId,
+  sanitizePersistentBaseRewardIds,
+  sanitizePersistentBaseRewardState,
+  type PersistentBaseRewardId,
+  type PersistentBaseRewardState,
+} from '../persistentBase/PersistentBaseRewardTypes';
 
 /** Einmalige Alpha-Generation. Nur Einstellungen werden daraus uebernommen. */
 export const LEGACY_LOCAL_PREFERENCES_KEY = 'fragdachse_local_preferences';
 export const LOCAL_SETTINGS_STORAGE_KEY = 'fragdachse_settings_v1';
-export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v3';
+export const LOCAL_PROGRESS_STORAGE_KEY = 'fragdachse_progress_v4';
 export const LOCAL_SETTINGS_SCHEMA_VERSION = 2;
-export const LOCAL_PROGRESS_SCHEMA_VERSION = 3;
+export const LOCAL_PROGRESS_SCHEMA_VERSION = 4;
 export const LOCAL_PROGRESS_EXPORT_FORMAT = 'fragdachse-progress';
-export const LOCAL_PROGRESS_EXPORT_VERSION = 3;
+export const LOCAL_PROGRESS_EXPORT_VERSION = 4;
 export const LOCAL_BALANCE_LAB_STORAGE_KEY = COOP_DEFENSE_BALANCE_STORAGE_KEY;
 export const LOCAL_BALANCE_LAB_SCHEMA_VERSION = COOP_DEFENSE_BALANCE_STORAGE_SCHEMA_VERSION;
 const CHEAT_BOSS_MAP_ID_PREFIX = '__cheat_boss_point_';
@@ -114,6 +122,8 @@ export interface CoopDefenseProgressPreferences {
    * Basis" gespeichert ist. Die Form der Basis ist Code, ihre Lage World-Konfiguration.
    */
   persistentBaseUnlocked: boolean;
+  /** Personal reward ownership; never used as host placement authority. */
+  persistentBaseRewardUnlocks: PersistentBaseRewardId[];
   /**
    * Gesamter Item-Besitz inklusive der ausgeruesteten Teile. Eine einzige Liste plus
    * {@link equippedItemIds} statt getrennter Stash-/Equipped-Listen: damit kann ein Item
@@ -134,6 +144,8 @@ export interface CoopDefenseProgressPreferences {
   unseenItems: boolean;
   /** Committed, map-relative Inspector constructions. */
   persistentBase: PersistentBaseState;
+  /** Host-owned placement state, persisted separately from personal reward ownership. */
+  persistentBaseRewardState: PersistentBaseRewardState;
   /**
    * Der persoenliche Beitrag dieses Spielers zur persistenten Basis.
    *
@@ -193,7 +205,7 @@ interface LocalSettingsDocumentV2 {
 }
 
 export interface LocalProgressDocument {
-  schemaVersion: 3;
+  schemaVersion: 4;
   profile: LocalPreferences['profile'];
   loadout: LocalPreferences['loadout'];
   coopDefense: {
@@ -208,8 +220,8 @@ export interface LocalProgressDocument {
     profilesByClass?: Partial<Record<CoopDefenseClassId, CompactUpgradeProfile>>;
     loadoutsByClass?: LocalPreferences['loadoutByClass'];
     itemsUnlocked: boolean;
-    /** Fehlt in Saves, die vor der persistenten Basis geschrieben wurden; der Decoder leitet ab. */
-    persistentBaseUnlocked?: boolean;
+    persistentBaseUnlocked: boolean;
+    persistentBaseRewardUnlocks: PersistentBaseRewardId[];
     items: CoopDefenseItem[];
     equippedItemIds: CoopDefenseEquippedItemIds;
     pendingItemRewards: CoopDefensePendingItemReward[];
@@ -217,8 +229,8 @@ export interface LocalProgressDocument {
     pendingItemReward?: CoopDefensePendingItemReward | null;
     unseenItems: boolean;
     persistentBase: PersistentBaseState;
-    /** Fehlt in Saves vor den persoenlichen Beitraegen; der Decoder migriert sie dann. */
-    personalBaseContribution?: PersistentPlayerBaseContribution;
+    personalBaseContribution: PersistentPlayerBaseContribution;
+    persistentBaseRewardState: PersistentBaseRewardState;
   };
 }
 
@@ -262,12 +274,14 @@ const DEFAULT_COOP_DEFENSE_PROGRESS: CoopDefenseProgressPreferences = {
   },
   itemsUnlocked: false,
   persistentBaseUnlocked: false,
+  persistentBaseRewardUnlocks: [],
   items: [],
   equippedItemIds: {},
   pendingItemRewards: [],
   unseenItems: false,
   persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
   personalBaseContribution: clonePersistentPlayerBaseContribution(DEFAULT_PERSISTENT_PLAYER_BASE_CONTRIBUTION),
+  persistentBaseRewardState: clonePersistentBaseRewardState(DEFAULT_PERSISTENT_BASE_REWARD_STATE),
 };
 
 /**
@@ -400,10 +414,6 @@ function sanitizeCompletedBossMapIds(value: unknown): string[] {
     .filter((entry) => entry.length > 0))];
 }
 
-/**
- * Staende ohne gespeicherten Freischaltstand stammen aus der Zeit vor der Map-Freischaltung: dort
- * ist die Sieg-Historie der Bossmaps der einzige Beleg fuer bereits geschaffte Maps.
- */
 /**
  * Erzeugt eine neue dauerhafte Besitzeridentitaet.
  *
@@ -759,6 +769,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || !isRecord(document.coopDefense)) return null;
   const coop = document.coopDefense as unknown as Record<string, unknown>;
   if ((document.profile.playerName !== null && typeof document.profile.playerName !== 'string')
+    || !isStableOwnerId(document.profile.ownerId)
     || typeof coop.totalXp !== 'number' || !Number.isFinite(coop.totalXp)
     || (coop.lastProcessedRoundEndedAt !== null
       && (typeof coop.lastProcessedRoundEndedAt !== 'number' || !Number.isFinite(coop.lastProcessedRoundEndedAt)))
@@ -767,7 +778,8 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     || typeof coop.highestUnlockedMapId !== 'string'
     || typeof coop.classesUnlocked !== 'boolean'
     || typeof coop.itemsUnlocked !== 'boolean'
-    || (coop.persistentBaseUnlocked !== undefined && typeof coop.persistentBaseUnlocked !== 'boolean')
+    || typeof coop.persistentBaseUnlocked !== 'boolean'
+    || !Array.isArray(coop.persistentBaseRewardUnlocks)
     || !Array.isArray(coop.items)
     || !isRecord(coop.equippedItemIds)
     || (coop.pendingItemRewards !== undefined && !Array.isArray(coop.pendingItemRewards))
@@ -780,24 +792,18 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (unlockedClassIds === null) return null;
   const persistentBase = sanitizePersistentBaseState(coop.persistentBase);
   if (!persistentBase) return null;
-  const ownerId = isStableOwnerId(document.profile.ownerId)
-    ? document.profile.ownerId
-    : createStableOwnerId();
-  // Ein Save vor den persoenlichen Beitraegen fuehrt seine Konstruktionen noch im alten
-  // Einzelbesitzer-Zustand. Er wird hier einmalig unter die neue Besitzeridentitaet gehoben; ein
-  // ungueltiger Beitrag macht dagegen das ganze Dokument ungueltig, statt still zu leeren.
-  const migratedContribution = coop.personalBaseContribution === undefined;
-  const personalBaseContribution = migratedContribution
-    ? ({
-      schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
-      ownerId,
-      revision: persistentBase.revision,
-      constructions: persistentBase.constructions,
-    } satisfies PersistentPlayerBaseContribution)
-    : sanitizePersistentPlayerBaseContribution(coop.personalBaseContribution);
+  const persistentBaseRewardUnlocks = sanitizePersistentBaseRewardIds(coop.persistentBaseRewardUnlocks);
+  if (!persistentBaseRewardUnlocks) return null;
+  const persistentBaseRewardState = sanitizePersistentBaseRewardState(coop.persistentBaseRewardState);
+  if (!persistentBaseRewardState) return null;
+  const ownerId = document.profile.ownerId;
+  const personalBaseContribution = sanitizePersistentPlayerBaseContribution(coop.personalBaseContribution);
   // Der Beitrag gehoert genau diesem Profil. Eine fremde ownerId waere ein Save aus einem anderen
   // Profil; sein Besitz darf nicht still uebernommen werden.
   if (!personalBaseContribution || personalBaseContribution.ownerId !== ownerId) return null;
+  if (persistentBaseRewardState.placements.some((placement) => (
+    !persistentBaseRewardUnlocks.includes(placement.rewardId)
+  ))) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
   if (!defaultCompact) return null;
@@ -867,9 +873,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     profile: {
       playerName: typeof document.profile.playerName === 'string'
         ? sanitizePlayerName(document.profile.playerName) || null : null,
-      // Ein Save ohne Besitzeridentitaet stammt aus der Zeit vor den persoenlichen Beitraegen.
-      // Er bekommt jetzt eine und behaelt sie ab dann; ein spaeterer Wechsel wuerde den Besitz
-      // aller bereits gebauten Konstruktionen verlieren.
+      // V4 requires the stable owner identity so personal contributions cannot change owners.
       ownerId,
     },
     loadout,
@@ -889,20 +893,15 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
           COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID,
           highestUnlockedMapId,
         ),
-        // Einmalige Ableitung fuer Saves ohne das Feld: Wer die Freischaltmap bereits geschlagen
-        // hat - erkennbar an der dadurch geoeffneten Folgemap - besitzt die Basis. Danach traegt
-        // sich das Entitlement selbst und wird nie wieder aus dem Mapfortschritt gelesen.
-        persistentBaseUnlocked: coop.persistentBaseUnlocked
-          ?? hasEarnedPersistentBaseByMapProgress(highestUnlockedMapId),
+        persistentBaseUnlocked: coop.persistentBaseUnlocked,
+        persistentBaseRewardUnlocks,
         items,
         equippedItemIds,
         pendingItemRewards,
         unseenItems: coop.unseenItems && items.length > 0,
-        // Nach der Migration traegt der alte Zustand nur noch den Progressionsradius. Seine
-        // Konstruktionen leben ab jetzt ausschliesslich im persoenlichen Beitrag; sie hier
-        // stehen zu lassen waere eine zweite, nie wieder gelesene Wahrheit ueber denselben Besitz.
-        persistentBase: migratedContribution ? { ...persistentBase, constructions: [] } : persistentBase,
+        persistentBase,
         personalBaseContribution: clonePersistentPlayerBaseContribution(personalBaseContribution),
+        persistentBaseRewardState,
       },
     },
   };
@@ -960,6 +959,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
         ? sanitizeStoredLoadoutsByClass(preferences.loadoutByClass) : undefined,
       itemsUnlocked: progress.itemsUnlocked,
       persistentBaseUnlocked: progress.persistentBaseUnlocked,
+      persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
       items: [...progress.items],
       equippedItemIds: { ...progress.equippedItemIds },
       pendingItemRewards: progress.pendingItemRewards.map((reward) => ({
@@ -972,6 +972,7 @@ function encodeProgressDocument(preferences: LocalPreferences): LocalProgressDoc
         ...progress.personalBaseContribution,
         ownerId: preferences.profile.ownerId,
       }),
+      persistentBaseRewardState: clonePersistentBaseRewardState(progress.persistentBaseRewardState),
     },
   };
 }
@@ -1375,15 +1376,22 @@ export function getStoredCoopDefenseProgress(): CoopDefenseProgressPreferences {
     profilesByClass: cloneProfilesByClass(progress.profilesByClass),
     itemsUnlocked: progress.itemsUnlocked,
     persistentBaseUnlocked: progress.persistentBaseUnlocked,
+    persistentBaseRewardUnlocks: [...progress.persistentBaseRewardUnlocks],
     unseenItems: progress.unseenItems,
     persistentBase: clonePersistentBaseState(progress.persistentBase),
     personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
+    persistentBaseRewardState: clonePersistentBaseRewardState(progress.persistentBaseRewardState),
     ...cloneCoopDefenseItemState(progress),
   };
 }
 
 /** Stellt einen zuvor gelesenen, bereits validierten Fortschrittsstand atomar wieder her. */
 export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPreferences): void {
+  const rewardUnlocks = sanitizePersistentBaseRewardIds(progress.persistentBaseRewardUnlocks);
+  const rewardState = sanitizePersistentBaseRewardState(progress.persistentBaseRewardState);
+  if (!rewardUnlocks || !rewardState || rewardState.placements.some((placement) => (
+    !rewardUnlocks.includes(placement.rewardId)
+  ))) return;
   updatePreferences((current) => ({
     ...current,
     progression: {
@@ -1398,6 +1406,8 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
         profilesByClass: cloneProfilesByClass(progress.profilesByClass),
         persistentBase: clonePersistentBaseState(progress.persistentBase),
         personalBaseContribution: clonePersistentPlayerBaseContribution(progress.personalBaseContribution),
+        persistentBaseRewardUnlocks: rewardUnlocks,
+        persistentBaseRewardState: rewardState,
         ...cloneCoopDefenseItemState(progress),
       },
     },
@@ -1468,7 +1478,7 @@ export function getStoredPersistentBaseState(): PersistentBaseState {
   return clonePersistentBaseState(readPreferences().progression.coopDefense.persistentBase);
 }
 
-/** Atomically replaces only the committed persistent-base value inside the V3 progress document. */
+/** Atomically replaces only the committed persistent-base value inside the V4 progress document. */
 export function setStoredPersistentBaseState(state: PersistentBaseState): void {
   const sanitized = sanitizePersistentBaseState(state);
   if (!sanitized) return;
@@ -1482,6 +1492,62 @@ export function setStoredPersistentBaseState(state: PersistentBaseState): void {
       },
     },
   }));
+}
+
+/** Personal reward ownership; this is deliberately independent of the host placement document. */
+export function getStoredPersistentBaseRewardUnlocks(): PersistentBaseRewardId[] {
+  return [...readPreferences().progression.coopDefense.persistentBaseRewardUnlocks];
+}
+
+/** Adds only new, known reward IDs and leaves the cumulative unlock set idempotent. */
+export function grantStoredPersistentBaseRewards(
+  rewardIds: readonly PersistentBaseRewardId[],
+): readonly PersistentBaseRewardId[] {
+  if (!Array.isArray(rewardIds) || rewardIds.some((rewardId) => !isPersistentBaseRewardId(rewardId))) return [];
+  const normalized = [...new Set(rewardIds)] as PersistentBaseRewardId[];
+  const current = readPreferences();
+  const stored = current.progression.coopDefense.persistentBaseRewardUnlocks;
+  const newlyGranted = normalized.filter((rewardId) => !stored.includes(rewardId));
+  if (newlyGranted.length === 0) return [];
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...current.progression.coopDefense,
+        persistentBaseRewardUnlocks: [...stored, ...newlyGranted],
+      },
+    },
+  });
+  return newlyGranted;
+}
+
+/** Host-owned placement state; guests must never replace it with their personal unlock list. */
+export function getStoredPersistentBaseRewardState(): PersistentBaseRewardState {
+  return clonePersistentBaseRewardState(readPreferences().progression.coopDefense.persistentBaseRewardState);
+}
+
+/** Stores only a valid, unlock-compatible, monotone host placement revision. */
+export function setStoredPersistentBaseRewardState(state: PersistentBaseRewardState): boolean {
+  const sanitized = sanitizePersistentBaseRewardState(state);
+  if (!sanitized) return false;
+  const current = readPreferences();
+  const progress = current.progression.coopDefense;
+  if (sanitized.placements.some((placement) => (
+    !progress.persistentBaseRewardUnlocks.includes(placement.rewardId)
+  ))) return false;
+  if (sanitized.revision <= progress.persistentBaseRewardState.revision) return false;
+  writePreferences({
+    ...current,
+    progression: {
+      ...current.progression,
+      coopDefense: {
+        ...progress,
+        persistentBaseRewardState: sanitized,
+      },
+    },
+  });
+  return true;
 }
 
 /** Setzt den lokalen Coop-Charakter inklusive Skills, Klassen und Kampagnenstand auf frisch. */
@@ -1501,6 +1567,8 @@ export function resetStoredCoopDefenseCharacter(): void {
         ),
         profilesByClass: cloneProfilesByClass(DEFAULT_COOP_DEFENSE_PROGRESS.profilesByClass),
         persistentBase: clonePersistentBaseState(DEFAULT_PERSISTENT_BASE_STATE),
+        persistentBaseRewardUnlocks: [],
+        persistentBaseRewardState: clonePersistentBaseRewardState(DEFAULT_PERSISTENT_BASE_REWARD_STATE),
         ...cloneCoopDefenseItemState(DEFAULT_COOP_DEFENSE_PROGRESS),
       },
     },
@@ -1861,17 +1929,6 @@ export function unlockStoredCoopDefenseItemsAfterVictory(
 }
 
 // -- Persistente Basis: Entitlement -----------------------------------------
-
-/**
- * True, wenn der Mapfortschritt beweist, dass die Freischaltmap bereits gewonnen wurde.
- *
- * Ausschliesslich fuer die einmalige Migration alter Saves. Der laufende Betrieb liest das
- * Entitlement direkt und nie aus dem Mapfortschritt.
- */
-function hasEarnedPersistentBaseByMapProgress(highestUnlockedMapId: string): boolean {
-  const unlockedByVictory = getCoopDefenseMapUnlockedByVictoryOn(PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID);
-  return unlockedByVictory !== null && isCoopDefenseMapUnlocked(unlockedByVictory, highestUnlockedMapId);
-}
 
 export function getStoredPersistentBaseUnlocked(): boolean {
   return readPreferences().progression.coopDefense.persistentBaseUnlocked;

@@ -52,6 +52,11 @@ import {
   sanitizePersistentPlayerBaseContribution,
   type PersistentPlayerBaseContribution,
 } from '../persistentBase/PersistentBaseTypes';
+import {
+  clonePersistentBaseRewardGrant,
+  sanitizePersistentBaseRewardGrant,
+  type PersistentBaseRewardGrant,
+} from '../persistentBase/PersistentBaseRewardTypes';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
   NET_TICK_RATE_HZ,
@@ -206,6 +211,7 @@ const KEY_ROOM_QUALITY   = 'rql'; // global reliable: aktuelle Lobby-Raumqualita
 const KEY_LOBBY_SYNC     = 'lsy'; // global reliable: host-autoritativer Lobby-Snapshot {m:mode, c:mapId, p:playerIds} für den Bereit-Konsistenz-Check
 const KEY_PB_CONTRIBUTION = 'pbo'; // per-player reliable: angebotener PersistentPlayerBaseContribution
 const KEY_PB_CONFIRMED   = 'pbk'; // per-player reliable: host-bestaetigter Beitrag nach einem Sieg
+const KEY_PB_REWARD_GRANT = 'pbr'; // per-player reliable: host-bestaetigte kumulative Reward-IDs
 
 export interface NetworkPingSample {
   m: number;
@@ -2405,6 +2411,37 @@ export class NetworkBridge {
   /** Der host-bestaetigte eigene Beitrag; nur er darf lokal persistiert werden. */
   getConfirmedPersistentBaseContribution(): PersistentPlayerBaseContribution | null {
     return sanitizePersistentPlayerBaseContribution(myPlayer().getState(KEY_PB_CONFIRMED));
+  }
+
+  /** Host-only: confirms the cumulative personal reward grant for exactly one player. */
+  hostConfirmPersistentBaseRewardGrant(
+    playerId: string,
+    grant: PersistentBaseRewardGrant,
+  ): void {
+    if (!isHost()) return;
+    const sanitized = sanitizePersistentBaseRewardGrant(grant);
+    if (!sanitized) return;
+    const player = this.playerStateMap.get(playerId);
+    if (!player) return;
+    const current = sanitizePersistentBaseRewardGrant(player.getState(KEY_PB_REWARD_GRANT));
+    if (current && (
+      sanitized.revision < current.revision
+      || (sanitized.revision === current.revision
+        && JSON.stringify(sanitized) !== JSON.stringify(current))
+      || current.rewardIds.some((rewardId) => !sanitized.rewardIds.includes(rewardId))
+    )) return;
+    if (current && sanitized.revision === current.revision) return;
+    player.setState(KEY_PB_REWARD_GRANT, clonePersistentBaseRewardGrant(sanitized), true);
+  }
+
+  /** Host-side read of the state offered by one player; invalid payloads are ignored. */
+  getPlayerPersistentBaseRewardGrant(playerId: string): PersistentBaseRewardGrant | null {
+    return sanitizePersistentBaseRewardGrant(this.playerStateMap.get(playerId)?.getState(KEY_PB_REWARD_GRANT));
+  }
+
+  /** Reads only the locally owned, host-confirmed grant state. */
+  getConfirmedPersistentBaseRewardGrant(): PersistentBaseRewardGrant | null {
+    return sanitizePersistentBaseRewardGrant(myPlayer().getState(KEY_PB_REWARD_GRANT));
   }
 
   // ── Game State: Host → Alle (global, unreliable) ──────────────────────────

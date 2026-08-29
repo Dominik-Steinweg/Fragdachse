@@ -111,6 +111,20 @@ export function haveSameWorldParameters(
 }
 
 /**
+ * True, wenn der effektive Freischaltungsstatus der persistenten Basis wechselt.
+ *
+ * Der Status wird bewusst als effektiver Boolean verglichen: Ein fehlender Parameter bedeutet
+ * fuer die Lobby denselben gesperrten Zustand wie `persistentBaseUnlocked: false`.
+ */
+export function hasPersistentBaseUnlockStatusChanged(
+  left: Pick<WorldDescriptor, 'parameters'> | null | undefined,
+  right: Pick<WorldDescriptor, 'parameters'> | null | undefined,
+): boolean {
+  return (left?.parameters?.persistentBaseUnlocked === true)
+    !== (right?.parameters?.persistentBaseUnlocked === true);
+}
+
+/**
  * Jedes Feld wird einzeln geprueft; ein ungueltiger Wert verwirft die ganze Nutzlast, statt
  * still auf einen lokalen Ersatzwert zu fallen. Bleibt kein Feld uebrig, traegt diese World
  * schlicht keine Parameter.

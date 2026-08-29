@@ -209,7 +209,12 @@ import {
 import { resolvePlayerCapabilities, type PlayerCapabilities } from '../../world/PlayerCapabilities';
 import { resolveWorldPresentation, type WorldPresentationRequirement } from '../../world/WorldPresentation';
 import { resolveWorldMetrics } from '../../world/WorldMetrics';
-import { isSameWorldInstance, type WorldDescriptor, type WorldParameters } from '../../world/WorldDescriptor';
+import {
+  hasPersistentBaseUnlockStatusChanged,
+  isSameWorldInstance,
+  type WorldDescriptor,
+  type WorldParameters,
+} from '../../world/WorldDescriptor';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type {
   PersistentBaseAnchor,
@@ -288,6 +293,8 @@ export class ArenaLifecycleCoordinator {
   private lobbyWorldPersistentBaseUnlockedAtRevision: boolean | null = null;
   /** Lokaler Uebergang: alte LobbyWorld ist beendet, neue Descriptor-Runtime wird gebunden. */
   private pendingLobbyWorldReinstance = false;
+  /** True, wenn der Lobby-Reinstance neue strukturelle Base-Presentation benoetigt. */
+  private pendingLobbyWorldPresentationRebuild = false;
   private localArenaLoadReady = false;
   private terrainSnapshotReady = false;
   private terrainSnapshotGenerationId = 0;
@@ -655,11 +662,15 @@ export class ArenaLifecycleCoordinator {
       || (localWorld !== null && !isSameWorldInstance(localWorld, world))
     );
     if (worldChanged) {
-      const previousDefinitionId = localWorld?.definitionId ?? this.ctx.world?.descriptor.definitionId;
+      const previousWorld = localWorld ?? this.ctx.world?.descriptor ?? null;
+      const previousDefinitionId = previousWorld?.definitionId;
       const lobbyToMatch = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
         && !isLobbyWorldDefinitionId(world.definitionId);
       const matchToLobby = !isLobbyWorldDefinitionId(previousDefinitionId ?? '')
         && isLobbyWorldDefinitionId(world.definitionId);
+      const lobbyPresentationStructureChanged = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+        && isLobbyWorldDefinitionId(world.definitionId)
+        && hasPersistentBaseUnlockStatusChanged(previousWorld, world);
       // Waehren des expliziten Arena-Exit-Fades bleibt die lokale Match-World bestehen, auch
       // wenn der Host bereits den WorldDescriptor entfernt oder der Lobby-Descriptor frueh ankommt.
       if (deferredMatchToLobby && matchToLobby) return;
@@ -674,7 +685,12 @@ export class ArenaLifecycleCoordinator {
         // Clients still hold the old local lifecycle when the reliable replacement arrives.
         // The host already ended it while publishing the new descriptor; both paths converge
         // here before the new runtime is attached.
-        if (!this.pendingLobbyWorldReinstance) this.prepareLobbyWorldReinstance();
+        if (lobbyPresentationStructureChanged) {
+          this.pendingLobbyWorldPresentationRebuild = true;
+        }
+        if (!this.pendingLobbyWorldReinstance) {
+          this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);
+        }
         this.onTransitionToArena();
         return;
       }
@@ -713,22 +729,24 @@ export class ArenaLifecycleCoordinator {
         } else if (this.lobbyWorldModeAtRevision !== currentMode
           || this.lobbyWorldPersistentBaseUnlockedAtRevision !== persistentBaseUnlocked) {
           const previousRevision = currentWorld.worldRevision;
-          this.prepareLobbyWorldReinstance();
           const worldRevision = nextMonotonicRevision(
             Math.max(this.lastRoundRevision, previousRevision),
             Date.now(),
           );
           this.lastRoundRevision = worldRevision;
+          const nextWorld = createAuthoredWorldDescriptor(
+            LOBBY_WORLD_DEFINITION_ID,
+            worldRevision,
+            resolveLobbyWorldParameters(persistentBaseUnlocked),
+          );
+          const lobbyPresentationStructureChanged = hasPersistentBaseUnlockStatusChanged(
+            currentWorld,
+            nextWorld,
+          );
+          this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);
           this.lobbyWorldModeAtRevision = currentMode;
           this.lobbyWorldPersistentBaseUnlockedAtRevision = persistentBaseUnlocked;
-          this.worldLifecycle.beginCreate(
-            createAuthoredWorldDescriptor(
-              LOBBY_WORLD_DEFINITION_ID,
-              worldRevision,
-              resolveLobbyWorldParameters(persistentBaseUnlocked),
-            ),
-            null,
-          );
+          this.worldLifecycle.beginCreate(nextWorld, null);
         }
       } else {
         this.lobbyWorldModeAtRevision = null;
@@ -761,8 +779,9 @@ export class ArenaLifecycleCoordinator {
    * `buildWorld()` uebernimmt anschliessend den neuen World-Runtime-Aufbau; bis dahin bleiben
    * weder Spieler-Runtimes noch World-Aktionen an die alte Revision gebunden.
    */
-  private prepareLobbyWorldReinstance(): void {
+  private prepareLobbyWorldReinstance(presentationStructureChanged = false): void {
     this.pendingLobbyWorldReinstance = true;
+    this.pendingLobbyWorldPresentationRebuild = presentationStructureChanged;
     this.synchronizeLocalWorldLifecycle(null);
     this.hostUpdate.setActive(false);
     this.localArenaLoadReady = false;
@@ -832,6 +851,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
+    this.pendingLobbyWorldPresentationRebuild = false;
     const roundRevision = nextMonotonicRevision(this.lastRoundRevision, Date.now());
     this.lastRoundRevision = roundRevision;
     bridge.hostStartRoundParticipants(bridge.getConnectedPlayerIds(), 0, roundRevision);
@@ -1167,6 +1187,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
+    this.pendingLobbyWorldPresentationRebuild = false;
     bridge.hostResetRoundParticipation();
     // Alle Spieler host-autoritativ auf "nicht bereit" setzen, BEVOR die Lobby-Phase greift. So ist der
     // Host-Zustandsspeicher garantiert sauber (auch wenn ein Client seinen Ready-Status nicht selbst
@@ -1208,6 +1229,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
+    this.pendingLobbyWorldPresentationRebuild = false;
     bridge.hostResetRoundParticipation();
     bridge.hostResetAllLobbyReady();
     bridge.setGamePhase('LOBBY');
@@ -1655,6 +1677,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
+    this.pendingLobbyWorldPresentationRebuild = false;
 
     // A technical abort can happen before the normal round-conclusion path runs. Never carry a
     // half-written mission working state into a later round in the same room.
@@ -4934,7 +4957,8 @@ export class ArenaLifecycleCoordinator {
       coopDefenseMapConfig?.arenaWidthCells,
       coopDefenseMapConfig?.arenaHeightCells,
     );
-    const preserveLobbyPresentation = this.pendingLobbyWorldReinstance;
+    const preserveLobbyPresentation = this.pendingLobbyWorldReinstance
+      && !this.pendingLobbyWorldPresentationRebuild;
     const preserveTerrainSnapshot = preserveLobbyPresentation && this.terrainSnapshotReady;
     try {
       this.synchronizeLocalWorldLifecycle(worldDescriptor);
@@ -4949,6 +4973,7 @@ export class ArenaLifecycleCoordinator {
       return;
     }
     this.pendingLobbyWorldReinstance = false;
+    this.pendingLobbyWorldPresentationRebuild = false;
     this.arenaBuilt = true;
     this.builtWorldRevision = worldDescriptor.worldRevision;
     this.localArenaLoadReady = false;
@@ -5099,6 +5124,7 @@ export class ArenaLifecycleCoordinator {
     this.lobbyWorldModeAtRevision = null;
     this.lobbyWorldPersistentBaseUnlockedAtRevision = null;
     this.pendingLobbyWorldReinstance = false;
+    this.pendingLobbyWorldPresentationRebuild = false;
     this.isLocalReady = false;
     bridge.setLocalReady(false);
     this.roundStartPending = false;

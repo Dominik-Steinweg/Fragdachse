@@ -24,3 +24,9 @@ export const PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION = 1;
 
 /** Obergrenze eines einzelnen Beitrags an der Speicher- und Netzwerkgrenze. */
 export const MAX_PERSISTENT_CONSTRUCTIONS_PER_CONTRIBUTION = 512;
+
+/** Version of the host-owned persistent-base reward placement document. */
+export const PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION = 1;
+
+/** A base has one placement slot per unlocked reward in 3D-1. */
+export const MAX_PERSISTENT_BASE_REWARD_PLACEMENTS = 32;

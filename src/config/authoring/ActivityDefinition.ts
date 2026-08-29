@@ -15,6 +15,7 @@ import type {
   ResolvedCoopDefenseMapMissionProgressConfig,
   ResolvedCoopDefenseMapTutorialStepConfig,
 } from '../coopDefenseMaps';
+import type { PersistentBaseRewardId } from '../../persistentBase/PersistentBaseRewardTypes';
 
 /**
  * Authoring-Vertrag einer Activity.
@@ -64,6 +65,7 @@ export interface CoopMissionDefinition {
   readonly persistentSpawns?: readonly CoopDefenseMapPersistentSpawnConfig[];
   readonly mapEvents?: readonly CoopDefenseMapEventConfig[];
   readonly secondaryObjectives?: readonly CoopDefenseMapSecondaryObjectiveConfig[];
+  readonly persistentBaseRewardsOnVictory?: readonly PersistentBaseRewardId[];
   readonly missionProgress?: ResolvedCoopDefenseMapMissionProgressConfig;
   readonly boss?: CoopDefenseMapBossConfig;
   /**
