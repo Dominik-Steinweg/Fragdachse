@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 const OVERLAY_PATH = 'src/ui/MatchResultsOverlay.ts';
 
 describe('MatchResultsOverlay visual ownership', () => {
-  it('keeps the backdrop opaque and does not fade the root container', () => {
+  it('restores the translucent backdrop without fading the root container', () => {
     const source = readFileSync(OVERLAY_PATH, 'utf8');
     const buildStart = source.indexOf('  build(): void {');
     const presentStart = source.indexOf('  private present(');
@@ -16,7 +16,7 @@ describe('MatchResultsOverlay visual ownership', () => {
     expect(sequenceStart).toBeGreaterThan(presentStart);
     expect(sequenceEnd).toBeGreaterThan(sequenceStart);
     expect(source.slice(buildStart, presentStart)).toContain(
-      'GAME_HEIGHT, COLORS.GREY_10, 1)',
+      'GAME_HEIGHT, COLORS.GREY_10, 0.88)',
     );
     expect(source.slice(presentStart, sequenceStart)).toContain(
       'this.container!.setVisible(true).setAlpha(1);',

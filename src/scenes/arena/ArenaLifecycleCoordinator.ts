@@ -616,13 +616,17 @@ export class ArenaLifecycleCoordinator {
    * Startzeitpunkt kommen aus der Runde. Eine World **ohne** Activity hat keinen Phasenwechsel,
    * auf den sie warten koennte - sie entsteht und vergeht mit ihrem Descriptor.
    */
-  detectWorldChange(): void {
+  detectWorldChange(deferArenaToLobby = false): void {
     if (this.matchTerminated) return;
+    const deferredMatchToLobby = deferArenaToLobby
+      && bridge.getGamePhase() === 'LOBBY'
+      && this.lastPhase === 'ARENA';
     const world = bridge.getWorldDescriptor();
     if (!world) {
       if (this.arenaBuilt
         && !this.worldLifecycle.activity.isActive()
-        && bridge.getGamePhase() === 'LOBBY') {
+        && bridge.getGamePhase() === 'LOBBY'
+        && !deferredMatchToLobby) {
         this.onTransitionToLobby();
       }
       return;
@@ -637,6 +641,13 @@ export class ArenaLifecycleCoordinator {
     );
     if (worldChanged) {
       const previousDefinitionId = localWorld?.definitionId ?? this.ctx.world?.descriptor.definitionId;
+      const lobbyToMatch = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+        && !isLobbyWorldDefinitionId(world.definitionId);
+      const matchToLobby = !isLobbyWorldDefinitionId(previousDefinitionId ?? '')
+        && isLobbyWorldDefinitionId(world.definitionId);
+      // Waehren des expliziten Arena-Exit-Fades bleibt die lokale Match-World bestehen, auch
+      // wenn der Host bereits den WorldDescriptor entfernt oder der Lobby-Descriptor frueh ankommt.
+      if (deferredMatchToLobby && matchToLobby) return;
       const canFastReinstance = bridge.getGamePhase() !== 'ARENA'
         && isLobbyWorldDefinitionId(world.definitionId)
         && (this.pendingLobbyWorldReinstance
@@ -652,10 +663,6 @@ export class ArenaLifecycleCoordinator {
         this.onTransitionToArena();
         return;
       }
-      const lobbyToMatch = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
-        && !isLobbyWorldDefinitionId(world.definitionId);
-      const matchToLobby = !isLobbyWorldDefinitionId(previousDefinitionId ?? '')
-        && isLobbyWorldDefinitionId(world.definitionId);
       if (lobbyToMatch || (bridge.getGamePhase() === 'ARENA' && !matchToLobby)) {
         this.onTransitionToArena();
         return;

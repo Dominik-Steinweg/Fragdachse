@@ -399,7 +399,7 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
       .toBe(false);
 
     // Und die World baut sich am eigenen Kanal auf, nicht am Phasenwechsel.
-    expect(source).toContain('detectWorldChange(): void {');
+    expect(source).toContain('detectWorldChange(deferArenaToLobby = false): void {');
     expect(source).toContain('if (this.arenaBuilt || bridge.getActivityDescriptor() !== null) return;');
     expect(source).toContain("import { isArenaTransitionReady } from './ArenaTransitionReadiness';");
   });

@@ -1734,7 +1734,7 @@ export class ArenaScene extends Phaser.Scene {
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.lifecycle.syncPersistentBaseContributions();
-    this.lifecycle.detectWorldChange();
+    this.lifecycle.detectWorldChange(deferArenaExit);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
     const configuredGameMode = this.resolveConfiguredGameMode(configuredPhase);

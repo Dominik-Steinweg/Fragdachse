@@ -196,12 +196,64 @@ describe('Arena-Transition-Bereitschaft', () => {
 });
 
 describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
+  it('reicht das Deferred-Exit-Fenster bis zur World-Erkennung weiter', () => {
+    const scene = readFileSync(
+      resolve(process.cwd(), 'src/scenes/ArenaScene.ts'),
+      'utf8',
+    );
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+
+    expect(scene).toContain('this.lifecycle.detectWorldChange(deferArenaExit);');
+    expect(source).toContain('detectWorldChange(deferArenaToLobby = false): void {');
+    expect(source).toContain('const deferredMatchToLobby = deferArenaToLobby');
+    expect(source).toContain("&& bridge.getGamePhase() === 'LOBBY'");
+    expect(source).toContain("&& this.lastPhase === 'ARENA';");
+  });
+
+  it('haelt den Host-Teardown bei fehlendem WorldDescriptor waehrend Deferred zurueck', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const detectStart = source.indexOf('  detectWorldChange(deferArenaToLobby = false): void {');
+    const noWorldStart = source.indexOf('    if (!world) {', detectStart);
+    const noWorldEnd = source.indexOf('\n    // Eine neue Instanz', noWorldStart);
+    const noWorldBody = source.slice(noWorldStart, noWorldEnd);
+
+    expect(detectStart).toBeGreaterThanOrEqual(0);
+    expect(noWorldEnd).toBeGreaterThan(noWorldStart);
+    expect(noWorldBody).toContain('&& !deferredMatchToLobby)');
+    expect(noWorldBody).toContain('this.onTransitionToLobby();');
+  });
+
+  it('blockiert nur Match→Lobby und laesst Reinstancing sowie den normalen Handoff frei', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const detectStart = source.indexOf('  detectWorldChange(deferArenaToLobby = false): void {');
+    const detectEnd = source.indexOf('\n  /**', detectStart);
+    const detectBody = source.slice(detectStart, detectEnd);
+    const matchGuard = detectBody.indexOf('if (deferredMatchToLobby && matchToLobby) return;');
+    const fastReinstance = detectBody.indexOf('const canFastReinstance =');
+
+    expect(matchGuard).toBeGreaterThan(0);
+    expect(fastReinstance).toBeGreaterThan(matchGuard);
+    expect(detectBody).toContain('const lobbyToMatch =');
+    expect(detectBody).toContain('const matchToLobby =');
+    expect(detectBody).toContain("if (lobbyToMatch || (bridge.getGamePhase() === 'ARENA' && !matchToLobby))");
+    expect(detectBody).toContain('this.onTransitionToLobby();');
+  });
+
   it('leitet LobbyWorld → MatchWorld nicht ueber den Lobby-Teardown um', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
     );
-    const detectStart = source.indexOf('  detectWorldChange(): void {');
+    const detectStart = source.indexOf('  detectWorldChange(deferArenaToLobby = false): void {');
     const detectEnd = source.indexOf('\n  /**', detectStart);
     const detectBody = source.slice(detectStart, detectEnd);
     const transitionStart = source.indexOf('  private onTransitionToArena(): void {');
