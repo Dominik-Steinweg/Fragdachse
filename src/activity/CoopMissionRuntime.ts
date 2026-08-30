@@ -331,6 +331,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   }
 
   ensureAllyFlowField(playerId: string): void {
+    if (this.destroyed) return;
     const coordinator = this.navigationOwner?.coordinator;
     if (!coordinator || this.allyFlowFields.has(playerId)) return;
     this.allyFlowFields.set(
@@ -340,6 +341,18 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
       ),
     );
     this.publishBindings();
+  }
+
+  /** Entfernt ein persoenliches Ally-Feld aus Map und Coordinator; wiederholt wirkungslos. */
+  removeAllyFlowField(playerId: string): void {
+    const flowField = this.allyFlowFields.get(playerId);
+    if (!flowField) return;
+    this.allyFlowFields.delete(playerId);
+    this.navigationOwner?.coordinator.unregisterField(allyFlowFieldId(playerId));
+    flowField.destroy();
+    // Beim Activity-Destroy ist der Compatibility-Pfad bereits geloest. Ein erneutes Publish
+    // wuerde den sterbenden Runtime-Owner sonst sichtbar machen.
+    if (!this.destroyed) this.publishBindings();
   }
 
   /**
@@ -422,8 +435,11 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.bindingsChanged(null);
 
     // Der Missionsanteil der Spieler faellt zuerst: Sein Abbau gibt gehaltene Ziele frei und
-    // braucht sie dafuer noch.
+    // entfernt dabei die persoenlichen Ally-Felder, solange Navigation noch lebt.
     this.playerActivityOwner?.destroy();
+    // Defensive Restbereinigung fuer Felder, die ohne Player-Ledger materialisiert wurden. Auch
+    // dieser Pfad deregistriert jedes Feld einzeln, bevor der Coordinator faellt.
+    for (const playerId of [...this.allyFlowFields.keys()]) this.removeAllyFlowField(playerId);
 
     // Ziele und Fortschritt folgen: Sie steuern Directors und Druck, nicht umgekehrt.
     this.objectiveOwner?.carry?.destroy();
@@ -460,8 +476,6 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.navigationOwner?.player.destroy();
     this.navigationOwner?.strategic.destroy();
     this.navigationOwner?.boss?.destroy();
-    for (const flowField of this.allyFlowFields.values()) flowField.destroy();
-    this.allyFlowFields.clear();
     this.navigationOwner?.releaseGridChanges();
     this.navigationOwner?.coordinator.destroy();
 

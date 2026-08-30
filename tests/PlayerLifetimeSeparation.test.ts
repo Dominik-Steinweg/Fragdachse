@@ -73,6 +73,9 @@ function missionPlayers(
   return new CoopMissionPlayerRuntime({
     respawnBudget,
     releaseMissionObjectives: (id) => { calls.push(`${label}:release:${id}`); },
+    // Ally-Flowfield-Lifetime wird in den konkreten Navigation-Contracts separat verifiziert.
+    ensureAllyFlowField: () => {},
+    removeAllyFlowField: () => {},
     publishRespawnBudget: () => { calls.push(`${label}:publish`); },
   });
 }
@@ -242,9 +245,9 @@ describe('Phase 7 – Ownership im Koordinator', () => {
   });
 
   it('materialisiert den Missionsanteil der Spieler mit der Activity', () => {
-    expect(coordinator).toContain('const createMissionPlayerActivity = (): CoopMissionPlayerRuntime => {');
-    expect(coordinator).toContain('coopMissionRuntime.setPlayerActivity(createMissionPlayerActivity());');
-    expect(coordinator).toContain('runtime.setPlayerActivity(createMissionPlayerActivity());');
+    expect(coordinator).toContain('const createMissionPlayerActivity = (activityRuntime: CoopMissionRuntime): CoopMissionPlayerRuntime => {');
+    expect(coordinator).toContain('coopMissionRuntime.setPlayerActivity(createMissionPlayerActivity(coopMissionRuntime));');
+    expect(coordinator).toContain('runtime.setPlayerActivity(createMissionPlayerActivity(runtime));');
     // Beim Wechsel in derselben World nimmt die neue Mission die stehende Besetzung auf.
     expect(coordinator).toContain("for (const playerId of this.worldRuntime?.players?.attachedPlayerIds() ?? []) {");
   });
@@ -263,6 +266,8 @@ describe('Phase 7 – Ownership im Koordinator', () => {
 
   it('kennt keinen missionsgebundenen Player-State mehr im World-Lifecycle', () => {
     expect(coordinator).not.toContain("feature: 'missionStatus'");
+    expect(coordinator).not.toContain("id: 'ally-flow-field'");
+    expect(coordinator).not.toContain('this.ensureAllyFlowField(');
     expect(coordinator).not.toContain('this.ctx.coopDefenseRespawnBudgetSystem');
     const worldRuntimeSource = readFileSync(
       resolve(process.cwd(), 'src/world/PlayerWorldRuntime.ts'),

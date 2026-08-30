@@ -37,7 +37,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 **Aktive Phase:** `keine – Phase 8 abgeschlossen; Phase 9 nicht begonnen`
 **Gesamtstatus:** `Phasen 1–8 abgeschlossen; Integrations-Checkpoints A und B automatisiert abgeschlossen; manuelle Browser-Abnahme durch den User ausstehend (Prüfliste in Abschnitt 7)`
-**Letzter Integrations-Checkpoint:** `Checkpoint B; Phase 8 zusätzlich über npm run check (Checkpoint C folgt nach Phase 10)`
+**Letzter Integrations-Checkpoint:** `Checkpoint B; Phase 8 plus Ally-Flowfield-Lifetime über npm run check (Checkpoint C folgt nach Phase 10)`
 **Nächster Schritt:** User führt die manuelle Sichtprüfung aus; Phase 9 erst mit einem neuen Auftrag beginnen.
 
 | Phase | Status | Kurznotiz |
@@ -50,7 +50,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 5 Coop Encounter / Enemy Ownership | ✅ abgeschlossen | `CoopMissionRuntime` besitzt Enemy, Coop-Navigation/Flowfields, Encounter/Spawn, Boss, Enemy-Behaviour und Map-Directors; A→B materialisiert alle Child-Owner frisch. |
 | – Stabilisierung / Checkpoint A | ✅ automatisiert abgeschlossen | Host-/Client-Lifecycle, same-world Activity-Wechsel, scoped Detach, reiner Handoff und Exit-Presentation vertraglich geprüft. Browser-Sichtprüfung ist User-Abnahme. |
 | 6 Coop Objectives / Update / Presentation | ✅ abgeschlossen | `CoopMissionRuntime` besitzt zusätzlich Objectives, Mission Progress, Barrieren, Carry, Repair/Placement-Reward und die Abschlussermittlung. Host- und Client-Frame kennen nur benannte Activity-Schritte; sieben Felder sind aus `ArenaContext` verschwunden. |
-| 7 Player-Lifetimes | ✅ abgeschlossen | `PlayerWorldRuntime` gehört der `WorldRuntime` und kennt nur world-scoped Module; Detach folgt einem Materialisierungs-Ledger. `CoopMissionPlayerRuntime` trägt Lebensbudget und Zielfreigabe der Mission. |
+| 7 Player-Lifetimes | ✅ abgeschlossen | `PlayerWorldRuntime` gehört der `WorldRuntime` und kennt nur world-scoped Module; Detach folgt einem Materialisierungs-Ledger. `CoopMissionPlayerRuntime` trägt Lebensbudget, Zielfreigabe und das activity-scoped Ally-Flowfield seiner Mission. |
 | – Checkpoint B | ✅ automatisiert abgeschlossen | Coop create/update/destroy, Activity-Wechsel in derselben World, `PlayerWorldRuntime` bleibt / `PlayerActivityRuntime` wird ersetzt, Activity-Presentation folgt der Activity-Lifetime. Browser-Sichtprüfung ist User-Abnahme. |
 | 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand, Player↔Owner-Bindungen, angenommene Contribution-Revisionsstände) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
 | 9 Completion / ResultApplication | ⬜ offen | |
@@ -114,7 +114,7 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | 326 Testdateien, 2743 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` | grün | 327 Testdateien, 2762 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 | `git diff --check` | grün | Keine Whitespace-Fehler. |
 | Browser-/Sichtprüfung | ausstehend – User-Abnahme | Von Coding-KIs gemäß Prüfregel nicht auszuführen. Prüfliste siehe Abschnitt 7. |
 
@@ -192,9 +192,13 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 - Ownership: `WorldRuntime.players`, erzeugt im World-Lifecycle-Sink. `WorldRuntime.destroy()`
   löst die Spieler **vor** `activity.close()` – ihr Abbau gibt gehaltene Missionsziele frei.
 - `src/activity/CoopMissionPlayerRuntime.ts` – activity-scoped Spielerzustand: authored
-  Respawn-Budget, Zielfreigabe, eigenes Ledger. Erreichbar über `CoopMissionRuntime.playerActivity`.
+  Respawn-Budget, Zielfreigabe und Ally-Flowfield-Ensure/Remove über das eigene Ledger.
+  `src/activity/CoopMissionRuntime.ts` hält die konkrete Feld-/Coordinator-Registrierung und
+  räumt sie einzeln auf. Erreichbar über `CoopMissionRuntime.playerActivity`.
 - Attach/Detach-Reihenfolge im Koordinator: World zuerst hinein, Activity zuerst hinaus.
-- Verträge: `tests/PlayerLifetimeSeparation.test.ts`, `tests/PlayerWorldRuntimeContracts.test.ts`.
+- Verträge: `tests/PlayerLifetimeSeparation.test.ts`, `tests/PlayerWorldRuntimeContracts.test.ts`,
+  `tests/AllyFlowFieldLifetime.test.ts` (Join, Doppel-Ensure, Leave, Rejoin, Activity A→B,
+  Activity-Destroy nach Leave und World ohne Activity).
 
 **Owner-Landkarte nach Phase 8:**
 - `src/persistentBase/PersistentBaseRoomSession.ts` – der raumlanglebige Owner. Er hält die
@@ -240,6 +244,12 @@ world-lokale Referenz `persistentBaseWorldBinding` sowie Runtime-/Composite-Bind
 Compatibility-/Orchestrierungspfade auf `WorldRuntime`/`PersistentBaseWorldBinding` und sind keine
 zweite Room-State-Quelle. Verbleibende Transitional Debt ist in TD-1, TD-2, TD-4, TD-5, TD-6 und
 TD-8 aufgeführt.
+
+Der offene Ally-Flowfield-Lifetime-Punkt aus Phase 7 ist behoben: `CoopMissionPlayerRuntime`
+verantwortet den activity-scoped Attach/Detach-Aufruf, `CoopMissionRuntime` erzeugt und entfernt
+das persönliche Feld samt `FlowFieldCoordinator`-Registrierung. Der individuelle Leave-Pfad und
+der Activity-Destroy sind idempotent; die bestehende Transitional Debt bleibt unverändert, neue
+Debt entsteht nicht.
 
 **Manuelle Browser-Prüfliste für den User:**
 - Host und Client: Matchstart aus der LobbyWorld; keine leere oder doppelte World;

@@ -11,6 +11,10 @@ export interface CoopMissionPlayerRuntimeOptions {
   readonly respawnBudget: CoopDefenseRespawnBudgetSystem | null;
   /** Der Spieler steht der Mission nicht mehr zur Verfuegung: Ziele, Traglasten, Reservierungen. */
   readonly releaseMissionObjectives: (playerId: string) => void;
+  /** Erzeugt bzw. bestaetigt das persoenliche, activity-scoped Ally-Flowfield. */
+  readonly ensureAllyFlowField: (playerId: string) => void;
+  /** Entfernt das persoenliche Ally-Flowfield vollstaendig aus dieser Activity. */
+  readonly removeAllyFlowField: (playerId: string) => void;
   /** Repliziert den Budgetstand. Nur der Host publiziert; der Aufrufer kennt die Regel. */
   readonly publishRespawnBudget: (state: CoopDefenseRespawnBudgetState | null) => void;
 }
@@ -52,14 +56,28 @@ export class CoopMissionPlayerRuntime {
    */
   attach(playerId: string, reconnectAfterDeath = false): void {
     if (this.destroyed || this.attachedPlayers.has(playerId)) return;
-    this.attachedPlayers.add(playerId);
-    if (!reconnectAfterDeath) this.options.respawnBudget?.registerInitialSpawn(playerId);
+    try {
+      this.options.ensureAllyFlowField(playerId);
+      if (!reconnectAfterDeath) this.options.respawnBudget?.registerInitialSpawn(playerId);
+      this.attachedPlayers.add(playerId);
+    } catch (error) {
+      // Der Activity-Player-Attach ist atomar: auch ein fehlgeschlagenes Budget-Modul darf kein
+      // bereits angefordertes Ally-Feld als halben Player-State zuruecklassen.
+      this.options.removeAllyFlowField(playerId);
+      throw error;
+    }
   }
 
   /** Loest genau einen Spieler aus dieser Mission. Wiederholtes Leave ist ein No-op. */
   detach(playerId: string): void {
     if (!this.attachedPlayers.delete(playerId)) return;
-    this.options.releaseMissionObjectives(playerId);
+    try {
+      this.options.releaseMissionObjectives(playerId);
+    } finally {
+      // Der Activity-Player-Detach besitzt den symmetrischen Resource-Teardown. Der Callback ist
+      // bewusst auch waehrend des Activity-Destroy gueltig, solange Navigation noch lebt.
+      this.options.removeAllyFlowField(playerId);
+    }
   }
 
   detachAll(): void {

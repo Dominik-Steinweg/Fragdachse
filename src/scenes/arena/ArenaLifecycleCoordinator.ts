@@ -556,13 +556,6 @@ export class ArenaLifecycleCoordinator {
         },
       },
       {
-        // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
-        // Arenaaufbau existierten sie noch nicht.
-        id: 'ally-flow-field',
-        feature: 'navigation',
-        run: ({ profile }) => { this.ensureAllyFlowField(profile.id); },
-      },
-      {
         id: 'combat-resources',
         feature: 'combatResources',
         run: ({ profile }) => { this.ctx.resourceSystem?.initPlayer(profile.id); },
@@ -3567,13 +3560,7 @@ export class ArenaLifecycleCoordinator {
         coopMissionRuntime.setNavigation(createCoopNavigation());
         coopMissionRuntime.addMaterializationStep((runtime) => {
           runtime.setNavigation(createCoopNavigation());
-          for (const player of this.ctx.playerManager.getAllPlayers()) runtime.ensureAllyFlowField(player.id);
         });
-        // Ally-Felder gibt es fuer alle bereits vorhandenen Spieler; Nachzuegler registriert
-        // `ensureAllyFlowField` beim Spawn nach.
-        for (const player of this.ctx.playerManager.getAllPlayers()) {
-          this.ensureAllyFlowField(player.id);
-        }
       }
       if (
         coopMissionRuntime
@@ -3840,13 +3827,15 @@ export class ArenaLifecycleCoordinator {
      * Er wird mit der Activity materialisiert und nimmt dabei auf, wer bereits in der World
      * steht - beim Erstaufbau niemand, bei einem Activity-Wechsel die vorhandene Besetzung.
      */
-    const createMissionPlayerActivity = (): CoopMissionPlayerRuntime => {
+    const createMissionPlayerActivity = (activityRuntime: CoopMissionRuntime): CoopMissionPlayerRuntime => {
       const playerActivity = new CoopMissionPlayerRuntime({
         respawnBudget: createMissionRespawnBudget(),
         releaseMissionObjectives: (playerId) => {
-          this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
-          this.coopMissionRuntime?.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
+          activityRuntime.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
+          activityRuntime.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
         },
+        ensureAllyFlowField: (playerId) => { activityRuntime.ensureAllyFlowField(playerId); },
+        removeAllyFlowField: (playerId) => { activityRuntime.removeAllyFlowField(playerId); },
         publishRespawnBudget: (state) => { bridge.publishCoopDefenseRespawnBudgetState(state); },
       });
       for (const playerId of this.worldRuntime?.players?.attachedPlayerIds() ?? []) {
@@ -3858,10 +3847,10 @@ export class ArenaLifecycleCoordinator {
     };
     if (coopMissionRuntime) {
       coopMissionRuntime.setObjectives(createMissionObjectives());
-      coopMissionRuntime.setPlayerActivity(createMissionPlayerActivity());
+      coopMissionRuntime.setPlayerActivity(createMissionPlayerActivity(coopMissionRuntime));
       coopMissionRuntime.addMaterializationStep((runtime) => {
         runtime.setObjectives(createMissionObjectives());
-        runtime.setPlayerActivity(createMissionPlayerActivity());
+        runtime.setPlayerActivity(createMissionPlayerActivity(runtime));
       });
     } else {
       bridge.publishCoopDefenseRespawnBudgetState(null);
@@ -6833,15 +6822,6 @@ export class ArenaLifecycleCoordinator {
   private nextFlowFieldGenerationId(): number {
     this.flowFieldGenerationId += 1;
     return this.flowFieldGenerationId;
-  }
-
-  /**
-   * Legt das Ally-Flowfield eines Spielers an, falls es noch fehlt. Wird sowohl beim Arenaaufbau
-   * als auch beim Nachspawnen gerufen: Spieler, die erst nach `buildArena()` dazukommen (Reconnect,
-   * verspaetetes Loadout), hatten frueher dauerhaft kein eigenes Feld.
-   */
-  ensureAllyFlowField(playerId: string): void {
-    this.coopMissionRuntime?.ensureAllyFlowField(playerId);
   }
 
   private getEnemyNavigationFlowField(): EnemyFlowFieldService | null {
