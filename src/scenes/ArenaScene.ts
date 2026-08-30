@@ -1853,8 +1853,9 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.detectPhaseChange(deferArenaExit);
     // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
     // ihrem eigenen Kanal. Der Host haelt waehrend der Lobby genau eine LobbyWorld offen; jeder
-    // Peer baut sie danach ueber denselben Kanal wie jede Match-World.
-    this.lifecycle.hostSyncLobbyWorld();
+    // Peer baut sie danach ueber denselben Kanal wie jede Match-World. Waehrend des lokalen
+    // Arena-Exit-Fades bleibt die Match-World unveraendert, bis der normale Teardown gelaufen ist.
+    if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.lifecycle.syncPersistentBaseContributions();

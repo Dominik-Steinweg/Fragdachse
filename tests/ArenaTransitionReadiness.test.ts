@@ -196,6 +196,33 @@ describe('Arena-Transition-Bereitschaft', () => {
 });
 
 describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
+  it('haelt den Host-Lobby-Sync waehrend des Arena-Exit-Fades zurueck', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/ArenaScene.ts'),
+      'utf8',
+    );
+    const deferStart = source.indexOf('const deferArenaExit');
+    const phaseChange = source.indexOf(
+      'this.lifecycle.detectPhaseChange(deferArenaExit);',
+      deferStart,
+    );
+    const lobbySync = source.indexOf(
+      'this.lifecycle.hostSyncLobbyWorld();',
+      phaseChange,
+    );
+    const worldChange = source.indexOf(
+      'this.lifecycle.detectWorldChange(deferArenaExit);',
+      lobbySync,
+    );
+
+    expect(deferStart).toBeGreaterThanOrEqual(0);
+    expect(phaseChange).toBeGreaterThan(deferStart);
+    expect(lobbySync).toBeGreaterThan(phaseChange);
+    expect(worldChange).toBeGreaterThan(lobbySync);
+    expect(source).toContain('if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();');
+    expect([...source.matchAll(/this\.lifecycle\.hostSyncLobbyWorld\(\);/g)]).toHaveLength(1);
+  });
+
   it('reicht das Deferred-Exit-Fenster bis zur World-Erkennung weiter', () => {
     const scene = readFileSync(
       resolve(process.cwd(), 'src/scenes/ArenaScene.ts'),
