@@ -346,16 +346,16 @@ export class InputSystem {
   }
 
   getSelectedUtilityCooldownUntil(): number {
-    return this.getSelectedRadialActionState(Date.now())?.cooldownUntil ?? 0;
+    return this.getSelectedRadialActionState(this.getCooldownNow())?.cooldownUntil ?? 0;
   }
 
-  private getSelectedRadialActionState(now = Date.now()): RadialActionState | null {
+  private getSelectedRadialActionState(now = this.getCooldownNow()): RadialActionState | null {
     const actions = this.getRadialActionStates(now);
     this.ensureSelectedRadialAction(actions);
     return actions.find((entry) => isSameRadialActionRef(entry.ref, this.selectedRadialAction)) ?? null;
   }
 
-  private getRadialActionStates(now = Date.now()): RadialActionState[] {
+  private getRadialActionStates(now = this.getCooldownNow()): RadialActionState[] {
     const capacity = this.radialGetCapacity?.();
     const capabilities = this.radialGetCapabilities?.() ?? {
       canUseUtility: this.inputEnabled,
@@ -409,6 +409,10 @@ export class InputSystem {
         cooldownUntil: predicted,
       };
     });
+  }
+
+  private getCooldownNow(): number {
+    return this.bridge.getSynchronizedNow();
   }
 
   private ensureSelectedRadialAction(actions: readonly RadialActionState[]): void {
@@ -858,8 +862,8 @@ export class InputSystem {
       chargeFraction: startedAt === null
         ? 0
         : this.computeUtilityChargeFraction(startedAt, cfg.activation, now),
-      cooldownFrac: this.isUtilityBlocked(now) ? 1 : 0,
-      isBlocked: this.isUtilityBlocked(now),
+      cooldownFrac: this.isUtilityBlocked() ? 1 : 0,
+      isBlocked: this.isUtilityBlocked(),
       minThrowSpeed: isGate ? 0 : (cfg.activation as ChargedThrowUtilityActivationConfig).minThrowSpeed,
       maxThrowSpeed: isGate ? 0 : cfg.projectileSpeed,
       isGateCharge: isGate,
@@ -1342,7 +1346,7 @@ export class InputSystem {
     }
 
     if (!utilityBlocked && Phaser.Input.Keyboard.JustDown(this.keyE)) {
-      const selectedAction = this.getSelectedRadialActionState(now);
+      const selectedAction = this.getSelectedRadialActionState(this.getCooldownNow());
       if (!selectedAction) return;
       if (selectedAction && !selectedAction.available) {
         if (selectedAction.disabledReason === 'cooldown') this.onUtilityPressedDuringCooldown?.();
@@ -1381,25 +1385,26 @@ export class InputSystem {
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
-      if (this.getEffectiveUtilityCooldownUntil() > now) {
+      const cooldownNow = this.getCooldownNow();
+      if (this.getEffectiveUtilityCooldownUntil(cooldownNow) > cooldownNow) {
         this.onUtilityPressedDuringCooldown?.();
         return;
       }
       // Translocator-Recall: Puck aktiv → sofort beamen (kein Aufladen)
       if (this.isTranslocatorRecallReady?.()) {
-        this.predictCurrentUtilityCooldown(now);
+        this.predictCurrentUtilityCooldown();
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getSelectedUtilityParams());
         return;
       }
-      if (this.beginPlacementUtilityAim(now)) {
+      if (this.beginPlacementUtilityAim()) {
         this.syncPlacementPreviewState(this.getUtilityPlacementPreviewState());
         return;
       }
-      if (this.beginTargetedUtilityAim(now)) {
+      if (this.beginTargetedUtilityAim()) {
         return;
       }
       if (!this.beginChargedUtilityHold(now)) {
-        this.predictCurrentUtilityCooldown(now);
+        this.predictCurrentUtilityCooldown();
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, this.getSelectedUtilityParams());
       }
     }
@@ -1519,10 +1524,11 @@ export class InputSystem {
     return cfg as UtilityConfig & { activation: PlacementActivation };
   }
 
-  private beginPlacementUtilityAim(now: number): boolean {
+  private beginPlacementUtilityAim(): boolean {
     const cfg = this.getPlacementUtilityConfig();
     if (!cfg) return false;
-    if (now < this.getEffectiveUtilityCooldownUntil()) return true;
+    const cooldownNow = this.getCooldownNow();
+    if (cooldownNow < this.getEffectiveUtilityCooldownUntil(cooldownNow)) return true;
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
     this.utilityPlacementActive = true;
@@ -1552,11 +1558,12 @@ export class InputSystem {
     return target;
   }
 
-  private beginTargetedUtilityAim(now: number): boolean {
+  private beginTargetedUtilityAim(): boolean {
     const cfg = this.getTargetedUtilityConfig();
     if (!cfg) return false;
 
-    if (now < this.getEffectiveUtilityCooldownUntil()) return true;
+    const cooldownNow = this.getCooldownNow();
+    if (cooldownNow < this.getEffectiveUtilityCooldownUntil(cooldownNow)) return true;
 
     this.cancelUtilityCharge();
     this.utilityTargetingActive = true;
@@ -1568,12 +1575,13 @@ export class InputSystem {
     const cfg = this.getChargeableUtilityConfig();
     if (!cfg) return false;
 
-    const selected = this.getSelectedRadialActionState(now);
+    const cooldownNow = this.getCooldownNow();
+    const selected = this.getSelectedRadialActionState(cooldownNow);
     if (!selected) return false;
 
-    const cooldownUntil = this.getEffectiveUtilityCooldownUntil();
+    const cooldownUntil = this.getEffectiveUtilityCooldownUntil(cooldownNow);
     this.utilityHoldActive = true;
-    this.utilityChargeEligibleAt = now < cooldownUntil ? cooldownUntil : now;
+    this.utilityChargeEligibleAt = cooldownNow < cooldownUntil ? cooldownUntil : cooldownNow;
     this.utilityChargeStartedAt = null;
     this.utilityChargeAction = cloneRadialActionRef(selected.ref);
     this.utilityChargeConfig = cfg;
@@ -1586,8 +1594,9 @@ export class InputSystem {
   private maybeStartHeldUtilityCharge(now: number): void {
     if (!this.utilityHoldActive || this.utilityChargeStartedAt !== null) return;
 
-    const eligibleAt = this.utilityChargeEligibleAt ?? now;
-    if (now < eligibleAt) return;
+    const cooldownNow = this.getCooldownNow();
+    const eligibleAt = this.utilityChargeEligibleAt ?? cooldownNow;
+    if (cooldownNow < eligibleAt) return;
 
     // Die Host-Aktion beginnt erst mit diesem Request. Auch die lokale Prediction startet
     // deshalb am aktuellen Frame und nicht rueckwirkend am bereits verstrichenen Cooldown-Ende.
@@ -1634,7 +1643,7 @@ export class InputSystem {
       return;
     }
 
-    this.predictUtilityCooldown(chargeAction, now + cfg.cooldown);
+    this.predictUtilityCooldown(chargeAction, this.getCooldownNow() + cfg.cooldown);
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
       ...chargeParams,
@@ -1653,9 +1662,8 @@ export class InputSystem {
     return Math.max(0, Math.min(1, elapsed / activation.fullChargeDuration));
   }
 
-  private getEffectiveUtilityCooldownUntil(): number {
+  private getEffectiveUtilityCooldownUntil(now = this.getCooldownNow()): number {
     const authoritative = this.getLocalUtilityCooldownUntil?.() ?? 0;
-    const now = Date.now();
     const key = this.getUtilityPredictionKey();
     const predicted = this.predictedUtilityCooldownUntil.get(key) ?? 0;
     // An older snapshot may still say ready (cooldownUntil=0) while the use request is in
@@ -1681,9 +1689,9 @@ export class InputSystem {
     this.predictUtilityCooldown(this.selectedRadialAction, readyAt);
   }
 
-  private predictCurrentUtilityCooldown(now: number): void {
+  private predictCurrentUtilityCooldown(): void {
     const cooldown = this.getLocalUtilityConfig?.()?.cooldown ?? 0;
-    if (cooldown > 0) this.predictSelectedUtilityCooldown(now + cooldown);
+    if (cooldown > 0) this.predictSelectedUtilityCooldown(this.getCooldownNow() + cooldown);
   }
 
   private predictUtilityCooldown(action: RadialActionRef | null, readyAt: number): void {
@@ -1693,10 +1701,11 @@ export class InputSystem {
     this.predictedUtilityCooldownUntil.set(key, Math.max(current, readyAt));
   }
 
-  private isUtilityBlocked(now: number): boolean {
+  private isUtilityBlocked(): boolean {
     if (!this.utilityHoldActive || this.utilityChargeStartedAt !== null) return false;
-    const eligibleAt = this.utilityChargeEligibleAt ?? this.getEffectiveUtilityCooldownUntil();
-    return now < eligibleAt;
+    const cooldownNow = this.getCooldownNow();
+    const eligibleAt = this.utilityChargeEligibleAt ?? this.getEffectiveUtilityCooldownUntil(cooldownNow);
+    return cooldownNow < eligibleAt;
   }
 
   private consumeLeftClickForModeConfirmation(): void {

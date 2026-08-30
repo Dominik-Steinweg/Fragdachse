@@ -37,6 +37,7 @@ function createInput(getWeapon2Config: () => typeof WEAPON_CONFIGS.TESLA_DOME | 
     getGamePhase: () => 'ARENA',
     canPlayerAct: () => true,
     getWorldDescriptor: () => null,
+    getSynchronizedNow: () => Date.now(),
     getLocalPlayerId: () => 'player-1',
     sendLocalInput: vi.fn(),
   };

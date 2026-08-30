@@ -37,7 +37,10 @@ function createInputSystem(): InputSystem {
       activePointer: { x: 100, y: 0 },
     },
   };
-  const bridge = { getActiveGameMode: () => 'coop_defense' };
+  const bridge = {
+    getActiveGameMode: () => 'coop_defense',
+    getSynchronizedNow: () => Date.now(),
+  };
   return new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
 }
 
