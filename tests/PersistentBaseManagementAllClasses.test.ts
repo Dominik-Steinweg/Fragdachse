@@ -26,6 +26,7 @@ import {
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
 import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
@@ -36,6 +37,8 @@ import type { WorldPersistentBaseSite } from '../src/world/WorldRuntimeContext';
 import { FakeNetwork, createHostRoom, type TestRoom } from './fakePeerNetwork';
 
 const WORLD_REVISION = 911;
+const ACTIVITY_A_REVISION = 7;
+const ACTIVITY_B_REVISION = 8;
 const ANCHOR = { gridX: 20, gridY: 20 } as const;
 const METRICS = resolveActiveArenaWorldMetrics();
 
@@ -125,8 +128,9 @@ function createHarness(classId: string) {
     { getAllPlayers: () => [] } as never,
     METRICS,
   );
-  const contributionStore = new PersistentBaseContributionStore();
-  const rewardStore = new PersistentBaseRewardStore();
+  const persistentBaseSession = new PersistentBaseRoomSession();
+  const contributionStore = persistentBaseSession.contributions;
+  const rewardStore = persistentBaseSession.rewards;
   const loadoutManager = new LoadoutManager();
   const playerId = bridge.getLocalPlayerId();
   const playerCell = rewardCell(0, 0);
@@ -167,6 +171,7 @@ function createHarness(classId: string) {
       releaseRewardRuntime: () => { /* dito */ },
     }),
     persistentBaseOwnerByPlayerId: new Map(),
+    persistentBaseSession,
     persistentBaseRewardSessionSignature: null,
     persistentBaseRewardSessionRevision: 0,
     persistentBaseRewardGrantService: new PersistentBaseRewardGrantService(),
@@ -178,7 +183,16 @@ function createHarness(classId: string) {
   coordinator.publishPersistentBaseRewardSessionState = vi.fn();
   coordinator.publishImmediatePersistentBaseContribution = vi.fn();
 
-  return { coordinator, contributionStore, rewardStore, placementSystem, loadoutManager, playerId, site };
+  return {
+    coordinator,
+    contributionStore,
+    rewardStore,
+    persistentBaseSession,
+    placementSystem,
+    loadoutManager,
+    playerId,
+    site,
+  };
 }
 
 function useClientPreviewState(
@@ -542,6 +556,132 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 },
     ]);
     expect(coordinator.hostRefreshPersistentBaseComposite).not.toHaveBeenCalled();
+  });
+
+  it('lehnt stale Move-A nach Activity A → B ab und akzeptiert danach nur Move-B', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, persistentBaseSession, rewardStore, placementSystem, playerId } = harness;
+    const source = placeRewardPedestal(harness, 0, 0);
+    persistentBaseSession.beginTransaction({
+      worldRevision: WORLD_REVISION,
+      activityRevision: ACTIVITY_A_REVISION,
+    });
+    persistentBaseSession.beginTransaction({
+      worldRevision: WORLD_REVISION,
+      activityRevision: ACTIVITY_B_REVISION,
+    });
+
+    const stale = coordinator.movePersistentBaseObject(
+      playerId,
+      moveRequest(source, rewardCell(1, 1), { activityRevision: ACTIVITY_A_REVISION }),
+    );
+    expect(stale).toEqual({ ok: false, reason: 'blocked' });
+    expect(rewardStore.getState().placements).toEqual([
+      { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 },
+    ]);
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({
+      id: source.id,
+      gridX: source.gridX,
+      gridY: source.gridY,
+    });
+
+    const current = coordinator.movePersistentBaseObject(
+      playerId,
+      moveRequest(source, rewardCell(1, 1), { activityRevision: ACTIVITY_B_REVISION }),
+    );
+    expect(current).toEqual({ ok: true });
+    expect(rewardStore.getState().placements).toEqual([
+      {
+        rewardId: 'base_health_pedestal',
+        relativeGridX: 1,
+        relativeGridY: 1,
+        angle: Math.PI / 4,
+      },
+    ]);
+  });
+
+  it('lehnt einen stale Construction-Dismantle aus A nach B vor jeder Runtime-Mutation ab', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, contributionStore, persistentBaseSession, placementSystem, playerId } = harness;
+    const blueprint = {
+      persistentId: 'pb-dismantle-a',
+      tool: { kind: 'construction', id: 'rock_barrier' } as const,
+      relativeGridX: 0,
+      relativeGridY: 0,
+      angle: 0,
+      placementOrder: 0,
+    };
+    contributionStore.offerContribution({
+      schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
+      ownerId: playerId,
+      revision: 1,
+      constructions: [blueprint],
+    });
+    persistentBaseSession.beginTransaction({
+      worldRevision: WORLD_REVISION,
+      activityRevision: ACTIVITY_A_REVISION,
+    });
+    const sourceCell = rewardCell(0, 0);
+    const source = placementSystem.materializePersistentPlaceable(
+      getCoopDefenseConstructionDefinition('rock_barrier'),
+      sourceCell.gridX,
+      sourceCell.gridY,
+      0,
+      playerId,
+      0xffffff,
+      'host-persistent',
+    );
+    if (!source) throw new Error('setup failed: construction was not materialized');
+    contributionStore.registerRestored(playerId, blueprint, source.id);
+    persistentBaseSession.beginTransaction({
+      worldRevision: WORLD_REVISION,
+      activityRevision: ACTIVITY_B_REVISION,
+    });
+    const target = worldCellCenter(METRICS, source.gridX, source.gridY);
+
+    expect(coordinator.dismantleConstruction(
+      playerId,
+      target.x,
+      target.y,
+      ACTIVITY_A_REVISION,
+    )).toEqual({ ok: false, reason: 'blocked' });
+    expect(placementSystem.getRuntimeRock(source.id)).toBeDefined();
+    expect(contributionStore.getContribution(playerId)?.constructions).toEqual([blueprint]);
+
+    expect(coordinator.dismantleConstruction(
+      playerId,
+      target.x,
+      target.y,
+      ACTIVITY_B_REVISION,
+    )).toEqual({ ok: true });
+    expect(placementSystem.getRuntimeRock(source.id)).toBeUndefined();
+    expect(contributionStore.getContribution(playerId)?.constructions).toEqual([]);
+  });
+
+  it('lehnt A nach Activity-Ende auch gegen den committed Lobby-Stand ab', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, persistentBaseSession, rewardStore, placementSystem, playerId } = harness;
+    const source = placeRewardPedestal(harness, 0, 0);
+    persistentBaseSession.beginTransaction({
+      worldRevision: WORLD_REVISION,
+      activityRevision: ACTIVITY_A_REVISION,
+    });
+    persistentBaseSession.completeTransaction('rollback', () => true, {
+      worldRevision: WORLD_REVISION,
+      activityRevision: ACTIVITY_A_REVISION,
+    });
+
+    expect(coordinator.movePersistentBaseObject(
+      playerId,
+      moveRequest(source, rewardCell(1, 1), { activityRevision: ACTIVITY_A_REVISION }),
+    )).toEqual({ ok: false, reason: 'blocked' });
+    expect(rewardStore.getState().placements).toEqual([
+      { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 },
+    ]);
+    expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({
+      gridX: source.gridX,
+      gridY: source.gridY,
+    });
   });
 });
 

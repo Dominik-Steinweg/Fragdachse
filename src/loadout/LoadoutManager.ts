@@ -159,7 +159,7 @@ export class LoadoutManager {
   private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
   private decoySystem: import('../systems/DecoySystem').DecoySystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
-  private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null = null;
+  private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
   private utilityUsedObserver: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
@@ -664,7 +664,7 @@ export class LoadoutManager {
     this.actionBlockedChecker = checker;
   }
 
-  setPlaceableRockHandler(handler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number) => boolean) | null): void {
+  setPlaceableRockHandler(handler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null): void {
     this.placeableRockHandler = handler;
   }
 
@@ -1922,7 +1922,7 @@ export class LoadoutManager {
 
       case 'placement_mode':
         if (cfg.type === 'placeable_rock' || cfg.type === 'placeable_turret' || cfg.type === 'placeable_pedestal') {
-          didUse = this.placeableRockHandler?.(cfg as PlaceableUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor) ?? false;
+          didUse = this.placeableRockHandler?.(cfg as PlaceableUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor, params) ?? false;
         }
         break;
 

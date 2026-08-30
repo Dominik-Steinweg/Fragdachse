@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { NetworkBridge } from '../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import type { PersistentBaseRewardId } from '../src/persistentBase/PersistentBaseRewardTypes';
 import { LOBBY_WORLD_DEFINITION_ID } from '../src/config/authoring/lobbyWorld';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
@@ -279,6 +280,98 @@ describe('Persistent-Base-Reward-Grant – reliable host confirmation', () => {
       }]);
     } finally {
       hostRoom.room.leave();
+    }
+  });
+
+  it('bindet dedizierte und generische Requests an die aktuelle Activity-Identity', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      const host = bridgeFor(hostRoom);
+      bridgeFor(clientRoom);
+      const world = createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, 407);
+      const activity = {
+        activityRevision: 8,
+        worldRevision: 407,
+        kind: 'coop-mission' as const,
+        definitionId: 'activity:coop-mission:network',
+      };
+      const session = new PersistentBaseRoomSession();
+      session.beginTransaction({ worldRevision: 407, activityRevision: 8 });
+
+      useRoom(hostRoom);
+      host.publishWorldAndActivity(world, activity);
+      host.hostPublishWorldParticipation({ [host.getLocalPlayerId()]: 'interactive' });
+      host.registerPersistentBaseRewardPlacementHandler((_playerId, request) => (
+        session.acceptsMutation(request)
+          ? { ok: true }
+          : { ok: false, reason: 'blocked' }
+      ));
+      host.registerLoadoutUseHandler((_slot, _angle, _targetX, _targetY, _senderId, _shotId, params) => (
+        session.acceptsMutation({
+          worldRevision: 407,
+          activityRevision: params?.activityRevision,
+        })
+          ? { ok: true }
+          : { ok: false, reason: 'blocked' }
+      ));
+
+      useRoom(hostRoom);
+      // An explicit stale identifier remains stale; only a missing identifier is filled from B.
+      const staleResult = await host.sendPersistentBaseRewardPlacement({
+        worldRevision: 407,
+        activityRevision: 7,
+        rewardId: 'base_health_pedestal',
+        relativeGridX: 0,
+        relativeGridY: 0,
+        angle: 0,
+      });
+      const currentRewardResult = await host.sendPersistentBaseRewardPlacement({
+        worldRevision: 407,
+        rewardId: 'base_health_pedestal',
+        relativeGridX: 0,
+        relativeGridY: 0,
+        angle: 0,
+      });
+      const currentLoadoutResult = await host.sendLoadoutUse(
+        'weapon1', 0, 0, 0, undefined, undefined, undefined, undefined, undefined, true,
+      );
+      expect(staleResult).toEqual({ ok: false, reason: 'blocked' });
+      expect(currentRewardResult).toEqual({ ok: true });
+      expect(currentLoadoutResult).toEqual({ ok: true });
+
+      // A delayed A-request reaches the real host RPC adapter but cannot address B's state.
+      useRoom(hostRoom);
+      await expect(clientRoom.room.callHost('pbrp', {
+        wr: 407,
+        ar: 7,
+        rid: 'base_health_pedestal',
+        gx: 0,
+        gy: 0,
+        angle: 0,
+      }, 1_000)).resolves.toEqual({ ok: false, reason: 'blocked' });
+      await expect(clientRoom.room.callHost('lu', {
+        wr: 407,
+        slot: 'weapon1',
+        angle: 0,
+        tx: 0,
+        ty: 0,
+        prm: { activityRevision: 7 },
+      }, 1_000)).resolves.toEqual({ ok: false, reason: 'blocked' });
+
+      // Invalid wire identifiers are rejected before the host callback.
+      await expect(clientRoom.room.callHost('pbrp', {
+        wr: 407,
+        ar: '8',
+        rid: 'base_health_pedestal',
+        gx: 0,
+        gy: 0,
+        angle: 0,
+      }, 1_000)).resolves.toEqual({ ok: false, reason: 'invalid' });
+    } finally {
+      hostRoom.room.leave();
+      clientRoom.room.leave();
     }
   });
 });

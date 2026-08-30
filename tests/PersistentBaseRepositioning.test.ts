@@ -306,11 +306,17 @@ describe('Move-Request an der Netzwerkgrenze', () => {
       targetGridY: 21,
     };
     expect(sanitizePersistentBaseMoveRequest(valid)).toEqual(valid);
+    expect(sanitizePersistentBaseMoveRequest({ ...valid, activityRevision: 7 })).toEqual({
+      ...valid,
+      activityRevision: 7,
+    });
     // Der Winkel gehoert nicht zur Anfrage; der Host leitet ihn aus seiner eigenen Vorschau ab.
     expect(sanitizePersistentBaseMoveRequest({ ...valid, angle: 0.5 })).toEqual(valid);
     expect(sanitizePersistentBaseMoveRequest({ ...valid, targetGridX: 1.5 })).toBeNull();
     expect(sanitizePersistentBaseMoveRequest({ ...valid, sourceRuntimeId: -1 })).toBeNull();
     expect(sanitizePersistentBaseMoveRequest({ ...valid, worldRevision: undefined })).toBeNull();
+    expect(sanitizePersistentBaseMoveRequest({ ...valid, activityRevision: 0 })).toBeNull();
+    expect(sanitizePersistentBaseMoveRequest({ ...valid, activityRevision: '7' })).toBeNull();
     expect(sanitizePersistentBaseMoveRequest(null)).toBeNull();
   });
 });

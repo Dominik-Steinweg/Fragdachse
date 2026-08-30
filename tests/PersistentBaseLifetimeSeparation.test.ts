@@ -196,6 +196,23 @@ describe('PersistentBaseRoomSession – der Raum ueberlebt seine Activities', ()
 });
 
 describe('PersistentBaseTransaction – genau ein terminaler Abschluss', () => {
+  it('akzeptiert Mutationen nur fuer die offene Activity und erlaubt danach nur Lobby-Requests', () => {
+    const session = new PersistentBaseRoomSession();
+    session.beginTransaction(MISSION_A);
+
+    expect(session.acceptsMutation(MISSION_A)).toBe(true);
+    expect(session.acceptsMutation({ worldRevision: WORLD.worldRevision })).toBe(false);
+    expect(session.acceptsMutation(MISSION_B)).toBe(false);
+    expect(session.acceptsMutation({
+      worldRevision: WORLD.worldRevision,
+      activityRevision: Number.NaN,
+    })).toBe(false);
+
+    session.completeTransaction('rollback', () => true, MISSION_A);
+    expect(session.acceptsMutation({ worldRevision: WORLD.worldRevision })).toBe(true);
+    expect(session.acceptsMutation(MISSION_A)).toBe(false);
+  });
+
   it('bucht denselben Arbeitsstand kein zweites Mal', () => {
     const session = new PersistentBaseRoomSession();
     const store = session.contributions;

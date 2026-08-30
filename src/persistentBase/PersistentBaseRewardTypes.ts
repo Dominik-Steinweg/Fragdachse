@@ -2,6 +2,7 @@ import {
   MAX_PERSISTENT_BASE_REWARD_PLACEMENTS,
   PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
 } from '../config/persistentBase';
+import type { PersistentBaseMutationIdentity } from './PersistentBaseTransaction';
 
 export const PERSISTENT_BASE_REWARD_IDS = [
   'base_adrenaline_pedestal',
@@ -44,8 +45,7 @@ export interface PersistentBaseRewardSessionState {
  * only the target cell and angle ever travel. The host decides from its own placement state
  * whether the request is a first placement or a move.
  */
-export interface PersistentBaseRewardPlacementRequest {
-  readonly worldRevision: number;
+export interface PersistentBaseRewardPlacementRequest extends PersistentBaseMutationIdentity {
   readonly rewardId: PersistentBaseRewardId;
   readonly relativeGridX: number;
   readonly relativeGridY: number;
@@ -198,10 +198,15 @@ export function sanitizePersistentBaseRewardPlacementRequest(
   value: unknown,
 ): PersistentBaseRewardPlacementRequest | null {
   if (!isRecord(value)
-    || !isSafeIntegerInRange(value.worldRevision, 0, Number.MAX_SAFE_INTEGER)) return null;
+    || !isSafeIntegerInRange(value.worldRevision, 0, Number.MAX_SAFE_INTEGER)
+    || !isOptionalActivityRevision(value.activityRevision)) return null;
   const placement = sanitizePersistentBaseRewardPlacement(value);
   if (!placement) return null;
-  return { worldRevision: value.worldRevision, ...placement };
+  return {
+    worldRevision: value.worldRevision,
+    ...(value.activityRevision === undefined ? {} : { activityRevision: value.activityRevision }),
+    ...placement,
+  };
 }
 
 export function clonePersistentBaseRewardGrant(
@@ -230,4 +235,9 @@ function isSafeIntegerInRange(value: unknown, min: number, max: number): value i
 
 function isRecord(value: unknown): value is Record<string, any> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isOptionalActivityRevision(value: unknown): value is number | undefined {
+  return value === undefined
+    || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
 }

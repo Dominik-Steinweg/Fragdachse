@@ -291,7 +291,10 @@ export class RpcCoordinator {
           Date.now(),
         );
         if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
-        return this.lifecycle?.dismantleAllOwnedConstructions(senderId)
+        const activityRevision = params?.activityRevision;
+        return (activityRevision === undefined
+          ? this.lifecycle?.dismantleAllOwnedConstructions(senderId)
+          : this.lifecycle?.dismantleAllOwnedConstructions(senderId, activityRevision))
           ?? { ok: false, reason: 'blocked' };
       }
       // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
@@ -300,7 +303,10 @@ export class RpcCoordinator {
           || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
-        return this.lifecycle?.dismantleConstruction(senderId, targetX, targetY)
+        const activityRevision = params?.activityRevision;
+        return (activityRevision === undefined
+          ? this.lifecycle?.dismantleConstruction(senderId, targetX, targetY)
+          : this.lifecycle?.dismantleConstruction(senderId, targetX, targetY, activityRevision))
           ?? { ok: false, reason: 'blocked' };
       }
       if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
@@ -316,12 +322,21 @@ export class RpcCoordinator {
             || normalizeConstructionId(params.toolRef.id) !== normalizeConstructionId(params.constructionId)) {
             return { ok: false, reason: 'invalid' };
           }
-          return this.lifecycle?.placeInspectorConstruction(
-            senderId,
-            params.constructionId,
-            targetX,
-            targetY,
-          ) ?? { ok: false, reason: 'blocked' };
+          const activityRevision = params.activityRevision;
+          return activityRevision === undefined
+            ? this.lifecycle?.placeInspectorConstruction(
+              senderId,
+              params.constructionId,
+              targetX,
+              targetY,
+            ) ?? { ok: false, reason: 'blocked' }
+            : this.lifecycle?.placeInspectorConstruction(
+              senderId,
+              params.constructionId,
+              targetX,
+              targetY,
+              activityRevision,
+            ) ?? { ok: false, reason: 'blocked' };
         }
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
         if (currentLoadout?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };

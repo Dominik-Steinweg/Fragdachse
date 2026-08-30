@@ -83,6 +83,14 @@ Nur temporäre Migrationspfade eintragen.
 Die in der Phase-8-Prüfung erkannte implizite Kopplung des Transaction-Starts an `buildWorld()`
 ist behoben; daraus entsteht keine neue Transitional Debt.
 
+Problem 2 aus dem Phase-8-Review ist behoben: PB-Mutationsrequests tragen die kanonische
+Activity-/World-Identity (`worldRevision` + `activityRevision`), und der Host prüft sie vor
+Placement, Move/Repositioning und Dismantle einschließlich generischer Construction-RPCs gegen
+die offene `PersistentBaseTransaction`. Ohne Activity/Transaction bleibt der Activity-Identifier
+weg; Lobby-Operationen dürfen den committed Stand direkt ändern. Tests decken A→B, A→keine
+Activity, aktuelle B-Operation, Lobby und manipulierte Wire-Werte ab. Der generische Loadout-RPC
+führt das Feld bis Phase 11 als fachliches Request-Parameterfeld weiter.
+
 ---
 
 ## 4. Offene Regressionen / Risiken

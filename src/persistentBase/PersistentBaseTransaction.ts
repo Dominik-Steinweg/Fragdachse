@@ -7,6 +7,13 @@ import {
   type PersistentBaseRewardState,
 } from './PersistentBaseRewardTypes';
 
+/** Identitaet, die eine host-seitig angenommene PB-Mutation beschreibt. */
+export interface PersistentBaseMutationIdentity {
+  readonly worldRevision: number;
+  /** Fehlt bewusst fuer World-Operationen ohne laufende Activity/Transaction. */
+  readonly activityRevision?: number;
+}
+
 /**
  * Die Instanz, fuer die ein Arbeitsstand geoeffnet wurde.
  *

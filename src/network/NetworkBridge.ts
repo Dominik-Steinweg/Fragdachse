@@ -2531,16 +2531,23 @@ export class NetworkBridge {
     if (!sanitized || !world || sanitized.worldRevision !== world.worldRevision) {
       return { ok: false, reason: 'blocked' };
     }
+    const activityRevision = this.getActivityDescriptor()?.activityRevision;
+    const requestForCurrentActivity = sanitized.activityRevision !== undefined || activityRevision === undefined
+      ? sanitized
+      : { ...sanitized, activityRevision };
     if (isHost()) {
       const handler = this.persistentBaseRewardPlacementHandler;
-      return handler?.(myPlayer().id, sanitized) ?? { ok: false, reason: 'blocked' };
+      return handler?.(myPlayer().id, requestForCurrentActivity) ?? { ok: false, reason: 'blocked' };
     }
     const result = await this.callHostRpc('pbrp', {
-      wr: sanitized.worldRevision,
-      rid: sanitized.rewardId,
-      gx: sanitized.relativeGridX,
-      gy: sanitized.relativeGridY,
-      angle: sanitized.angle,
+      wr: requestForCurrentActivity.worldRevision,
+      rid: requestForCurrentActivity.rewardId,
+      gx: requestForCurrentActivity.relativeGridX,
+      gy: requestForCurrentActivity.relativeGridY,
+      angle: requestForCurrentActivity.angle,
+      ...(requestForCurrentActivity.activityRevision === undefined
+        ? {}
+        : { ar: requestForCurrentActivity.activityRevision }),
     }, 1200);
     return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
   }
@@ -2557,17 +2564,24 @@ export class NetworkBridge {
     if (!sanitized || !world || sanitized.worldRevision !== world.worldRevision) {
       return { ok: false, reason: 'blocked' };
     }
+    const activityRevision = this.getActivityDescriptor()?.activityRevision;
+    const requestForCurrentActivity = sanitized.activityRevision !== undefined || activityRevision === undefined
+      ? sanitized
+      : { ...sanitized, activityRevision };
     if (isHost()) {
       const handler = this.persistentBaseMoveHandler;
-      return handler?.(myPlayer().id, sanitized) ?? { ok: false, reason: 'blocked' };
+      return handler?.(myPlayer().id, requestForCurrentActivity) ?? { ok: false, reason: 'blocked' };
     }
     const result = await this.callHostRpc('pbmv', {
-      wr: sanitized.worldRevision,
-      rid: sanitized.sourceRuntimeId,
-      sx: sanitized.sourceGridX,
-      sy: sanitized.sourceGridY,
-      tx: sanitized.targetGridX,
-      ty: sanitized.targetGridY,
+      wr: requestForCurrentActivity.worldRevision,
+      rid: requestForCurrentActivity.sourceRuntimeId,
+      sx: requestForCurrentActivity.sourceGridX,
+      sy: requestForCurrentActivity.sourceGridY,
+      tx: requestForCurrentActivity.targetGridX,
+      ty: requestForCurrentActivity.targetGridY,
+      ...(requestForCurrentActivity.activityRevision === undefined
+        ? {}
+        : { ar: requestForCurrentActivity.activityRevision }),
     }, 1200);
     return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
   }
@@ -2579,6 +2593,7 @@ export class NetworkBridge {
       const payload = data as Record<string, unknown>;
       const request = sanitizePersistentBaseMoveRequest({
         worldRevision: payload.wr,
+        activityRevision: payload.ar,
         sourceRuntimeId: payload.rid,
         sourceGridX: payload.sx,
         sourceGridY: payload.sy,
@@ -2599,6 +2614,7 @@ export class NetworkBridge {
       const payload = data as Record<string, unknown>;
       const request = sanitizePersistentBaseRewardPlacementRequest({
         worldRevision: payload.wr,
+        activityRevision: payload.ar,
         rewardId: payload.rid,
         relativeGridX: payload.gx,
         relativeGridY: payload.gy,
@@ -3138,8 +3154,14 @@ export class NetworkBridge {
   ): Promise<LoadoutUseResult | null> {
     const worldRevision = this.getWorldActionRevision();
     if (worldRevision === null) return { ok: false, reason: 'blocked' };
+    // The current Activity-Identity travels with every loadout request. The host only consumes
+    // it for Persistent-Base mutations; other actions keep their existing semantics.
+    const activityRevision = this.getActivityDescriptor()?.activityRevision;
+    const requestParams = params?.activityRevision !== undefined || activityRevision === undefined
+      ? params
+      : { ...params, activityRevision };
     if (isHost()) {
-      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, params, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
+      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
     }
     const payload = {
       slot,
@@ -3147,7 +3169,7 @@ export class NetworkBridge {
       tx: targetX,
       ty: targetY,
       sid: shotId,
-      prm: params,
+      prm: requestParams,
       px: clientX,
       py: clientY,
       ts: clientNow,

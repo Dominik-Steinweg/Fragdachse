@@ -893,6 +893,27 @@ export class ArenaLifecycleCoordinator {
   }
 
   /**
+   * Host-Gate fuer eine PB-Mutation gegen die aktuell offene Activity-Transaction.
+   *
+   * `PersistentBaseRoomSession` bleibt die einzige Source of Truth. Der World-Teil wird hier
+   * bewusst mitgeprueft, damit dieser Gate sowohl fuer dedizierte Requests als auch fuer den
+   * generischen Loadout-RPC dieselbe World-Revision schuetzt.
+   */
+  private acceptsPersistentBaseMutation(
+    worldRevision: number,
+    activityRevision?: number,
+  ): boolean {
+    if (bridge.getCurrentWorldRevision() !== worldRevision) return false;
+    return this.persistentBaseSession.acceptsMutation({ worldRevision, activityRevision });
+  }
+
+  private acceptsCurrentPersistentBaseMutation(activityRevision?: number): boolean {
+    const worldRevision = bridge.getCurrentWorldRevision();
+    return worldRevision !== null
+      && this.persistentBaseSession.acceptsMutation({ worldRevision, activityRevision });
+  }
+
+  /**
    * Oeffnet den PB-Working-State an der fachlichen Activity-Identity – nicht an ihrer lokalen
    * Runtime. Der Host bereitet den committed Raumstand hier vor, damit auch ein Activity-Start
    * ohne World-Rebuild eine frische Baseline erhaelt.
@@ -1818,6 +1839,10 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
     const sanitizedRequest = sanitizePersistentBaseRewardPlacementRequest(request);
     if (!sanitizedRequest) return { ok: false, reason: 'invalid' };
+    if (!this.acceptsPersistentBaseMutation(
+      sanitizedRequest.worldRevision,
+      sanitizedRequest.activityRevision,
+    )) return { ok: false, reason: 'blocked' };
     const site = this.ctx.world?.persistentBaseSite ?? null;
     const store = this.ctx.persistentBaseRewards;
     const placementSystem = this.ctx.placementSystem;
@@ -2172,6 +2197,9 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     const sanitized = sanitizePersistentBaseMoveRequest(request);
     if (!sanitized) return { ok: false, reason: 'invalid' };
+    if (!this.acceptsPersistentBaseMutation(sanitized.worldRevision, sanitized.activityRevision)) {
+      return { ok: false, reason: 'blocked' };
+    }
     const world = bridge.getWorldDescriptor();
     const placementSystem = this.ctx.placementSystem;
     if (!world || !placementSystem || sanitized.worldRevision !== world.worldRevision) {
@@ -4967,8 +4995,8 @@ export class ArenaLifecycleCoordinator {
           this.ctx.coopDefenseEnemyAttackSystem?.recordObstacleContact(enemyId, rock, now);
         });
       }
-      this.ctx.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor) => {
-        return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor);
+      this.ctx.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor, params) => {
+        return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor, params);
       });
       this.ctx.tunnelSystem = new TunnelSystem(
         this.ctx.playerManager,
@@ -7036,6 +7064,7 @@ export class ArenaLifecycleCoordinator {
     targetY: number,
     now: number,
     playerColor: number,
+    params?: LoadoutUseParams,
   ): boolean {
     if (cfg.type === 'placeable_pedestal') {
       const rewardSystem = this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem ?? null;
@@ -7081,6 +7110,8 @@ export class ArenaLifecycleCoordinator {
 
     const constructionId = getConstructionIdForUtility(cfg.id);
     if (constructionId) {
+      if (this.ctx.world?.persistentBaseSite
+        && !this.acceptsCurrentPersistentBaseMutation(params?.activityRevision)) return false;
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
       const access = resolveConstructionAccess(
         constructionId,
@@ -7121,9 +7152,14 @@ export class ArenaLifecycleCoordinator {
     constructionId: ConstructionId,
     targetX: number,
     targetY: number,
+    activityRevision?: number,
   ): LoadoutUseResult {
     const canonicalConstructionId = normalizeConstructionId(constructionId);
     if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
+    if (this.ctx.world?.persistentBaseSite
+      && !this.acceptsCurrentPersistentBaseMutation(activityRevision)) {
+      return { ok: false, reason: 'blocked' };
+    }
     if (!this.getPlayerCapabilities(playerId).canPlace) return { ok: false, reason: 'blocked' };
     constructionId = canonicalConstructionId;
     const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
@@ -7350,6 +7386,7 @@ export class ArenaLifecycleCoordinator {
     playerId: string,
     targetX: number,
     targetY: number,
+    activityRevision?: number,
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
@@ -7379,6 +7416,13 @@ export class ArenaLifecycleCoordinator {
     const persistentRewardId = target?.ownership === 'base-owned'
       ? target.persistentRewardId
       : undefined;
+    const isPersistentContribution = target !== undefined
+      && this.ctx.persistentBaseContributions?.getRuntimeBindings()
+        .some((binding) => binding.runtimeId === target.id) === true;
+    if ((persistentRewardId !== undefined || isPersistentContribution)
+      && !this.acceptsCurrentPersistentBaseMutation(activityRevision)) {
+      return { ok: false, reason: 'blocked' };
+    }
     // Base-owned Rewards gehoeren der Basis: Jeder berechtigte Coop-Spieler darf sie
     // zurueckbauen. Persoenliche Konstruktionen bleiben strikt owner-basiert; darueber
     // entscheidet allein die Ownership-Pruefung in `removeRockAt`.
@@ -7415,8 +7459,15 @@ export class ArenaLifecycleCoordinator {
   }
 
   /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
-  dismantleAllOwnedConstructions(playerId: string): LoadoutUseResult {
+  dismantleAllOwnedConstructions(
+    playerId: string,
+    activityRevision?: number,
+  ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
+    if (this.ctx.world?.persistentBaseSite
+      && !this.acceptsCurrentPersistentBaseMutation(activityRevision)) {
+      return { ok: false, reason: 'blocked' };
+    }
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);
     // Der globale Rueckbau steht allen Coop-Klassen offen und entfernt ausschliesslich die

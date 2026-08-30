@@ -3,6 +3,7 @@ import { PersistentBaseRewardStore } from './PersistentBaseRewardStore';
 import type { PersistentBaseRuntimeBindings } from './PersistentBaseRuntimeBindings';
 import {
   PersistentBaseTransaction,
+  type PersistentBaseMutationIdentity,
   type PersistentBaseTransactionIdentity,
   type PersistentBaseTransactionOutcome,
 } from './PersistentBaseTransaction';
@@ -44,6 +45,27 @@ export class PersistentBaseRoomSession {
 
   get hasOpenTransaction(): boolean {
     return this.openTransaction?.isOpen === true;
+  }
+
+  /**
+   * Prueft die fachliche Zugehoerigkeit einer laufenden PB-Mutation.
+   *
+   * Ohne Activity darf eine World-Operation keinen kuenstlichen Identifier benoetigen. Sobald
+   * aber eine Transaction offen ist, ist ein fehlender oder fremder Activity-Identifier stale.
+   * Die offene Transaction bleibt dabei die einzige Source of Truth fuer diese Entscheidung.
+   */
+  acceptsMutation(identity: PersistentBaseMutationIdentity): boolean {
+    const activityRevision = identity.activityRevision;
+    if (activityRevision !== undefined
+      && (!Number.isSafeInteger(activityRevision) || activityRevision <= 0)) return false;
+
+    const transaction = this.openTransaction;
+    if (!transaction?.isOpen) return activityRevision === undefined;
+    return activityRevision !== undefined
+      && transaction.belongsTo({
+        worldRevision: identity.worldRevision,
+        activityRevision,
+      });
   }
 
   /**

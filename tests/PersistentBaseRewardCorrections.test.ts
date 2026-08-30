@@ -229,8 +229,9 @@ function testCoordinator(
 } {
   useBehaviorHost();
   const site = testSite();
-  const contributionStore = new PersistentBaseContributionStore();
-  const rewardStore = new PersistentBaseRewardStore();
+  const persistentBaseSession = new PersistentBaseRoomSession();
+  const contributionStore = persistentBaseSession.contributions;
+  const rewardStore = persistentBaseSession.rewards;
   const fakePlacement = fakePlacementSystem(initialRocks);
   const playerId = bridge.getLocalPlayerId();
   const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as ArenaLifecycleCoordinator & Record<string, any>;
@@ -260,6 +261,7 @@ function testCoordinator(
       releaseRewardRuntime: () => { /* dito */ },
     }),
     persistentBaseOwnerByPlayerId: new Map(),
+    persistentBaseSession,
     persistentBaseRewardSessionSignature: null,
     persistentBaseRewardSessionRevision: 0,
     persistentBaseRewardGrantService: new PersistentBaseRewardGrantService(),
