@@ -224,11 +224,18 @@ import {
 } from '../../world/WorldRuntimeContext';
 import { WorldLifecycle } from '../../world/WorldLifecycle';
 import { WorldMaterialization } from '../../world/WorldMaterialization';
+import { WorldPresentationBinding } from '../../world/WorldPresentationBinding';
+import { WorldPresentationHandoff } from '../../world/WorldPresentationHandoff';
+import {
+  PersistentBaseWorldBinding,
+  type PersistentBaseRewardRuntimeBinding,
+} from '../../world/PersistentBaseWorldBinding';
 import { WorldRuntime } from '../../world/WorldRuntime';
 import {
   PlayerWorldRuntime,
   resolvePlayerRuntimeFeatures,
   type PlayerRuntimeFeatures,
+  type PlayerWorldRuntimeSteps,
 } from '../../world/PlayerWorldRuntime';
 import {
   hasWorldFigure,
@@ -376,20 +383,30 @@ export class ArenaLifecycleCoordinator {
     detach: () => {
       const runtime = this.worldRuntime;
       this.worldRuntime = null;
-      // Der Abbau der gebauten World haengt heute nicht am Ende ihrer Instanz: Exit-Fade,
-      // Lobby-Fast-Reinstance und Rundenstart beenden die Instanz, waehrend die Arena noch
-      // steht. Der Aufbau wird deshalb ausdruecklich uebernommen und erst von
-      // `tearDownArena()` abgeraeumt (Transitional Debt TD-3).
-      runtime?.releaseMaterialization();
+      // Die Darstellung verlaesst die World zuerst: Ein Uebergang zeigt sie weiter oder
+      // verwendet sie erneut, waehrend der Gameplay-State dieser Instanz vollstaendig faellt.
+      // Nach der Uebergabe sieht kein world-scoped Consumer sie mehr.
+      this.ctx.worldPresentation = null;
+      this.worldPresentationHandoff.release(runtime?.releasePresentation() ?? null);
       runtime?.destroy();
+      this.persistentBaseWorldBinding = null;
+      this.ctx.worldMaterialization = null;
       this.ctx.world = null;
     },
   });
   /**
-   * Gemeinsamer Player-Lifecycle dieser World. Es gibt genau einen Weg hinein und einen hinaus;
-   * welche Module laufen, entscheidet {@link resolvePlayerRuntimeFeatures} aus Rolle und Activity.
+   * Traegt die Darstellung einer endenden World-Runtime ueber einen Uebergang: Match-Exit,
+   * Rundenstart, Lobby-Fast-Reinstance und Lobby-Rueckkehr nehmen denselben Weg.
    */
-  private readonly playerRuntime = new PlayerWorldRuntime({
+  private readonly worldPresentationHandoff = new WorldPresentationHandoff();
+  /**
+   * Gemeinsamer Player-Lifecycle einer World. Es gibt genau einen Weg hinein und einen hinaus;
+   * welche Module laufen, entscheidet {@link resolvePlayerRuntimeFeatures} aus Rolle und Activity.
+   *
+   * Die Schritte sind scene-langlebig; wer tatsaechlich in einer World steht, fuehrt die
+   * `WorldRuntime` – mit ihrem Ende steht niemand mehr in ihr.
+   */
+  private readonly playerRuntimeSteps: PlayerWorldRuntimeSteps = ({
     attach: [
       {
         id: 'player-entity',
@@ -510,6 +527,12 @@ export class ArenaLifecycleCoordinator {
       },
     ],
   });
+  /**
+   * Der gemeinsame Player-Lifecycle. Er bleibt vorerst scene-langlebig: Der Exit-Fade zeigt die
+   * letzte Arenaansicht einschliesslich ihrer Figuren, waehrend die World-Instanz bereits beendet
+   * ist. Die Trennung von World- und Presentation-Lifetime des Spielers gehoert zu Phase 7.
+   */
+  private readonly playerRuntime = new PlayerWorldRuntime(this.playerRuntimeSteps);
   /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
   /**
    * Host-seitiger Arbeitsstand aller persoenlichen Beitraege dieses Raums.
@@ -523,11 +546,27 @@ export class ArenaLifecycleCoordinator {
   private readonly persistentBaseRewards = new PersistentBaseRewardStore();
   /** Shared idempotent grant path for authored map-victory and objective rewards. */
   private readonly persistentBaseRewardGrantService = new PersistentBaseRewardGrantService();
-  private readonly persistentBaseRewardRuntimeBindings = new Map<PersistentBaseRewardId, {
-    runtimeId: number;
-    gridX: number;
-    gridY: number;
-  }>();
+  /**
+   * Die world-lokale Materialisierung der persistenten Basis dieser Instanz. Sie gehoert der
+   * `WorldRuntime`; ausserhalb einer World gibt es keine world-lokalen Runtime-IDs.
+   */
+  private persistentBaseWorldBinding: PersistentBaseWorldBinding | null = null;
+  /** Leerstand ohne World: Ohne Instanz existiert nichts world-lokal Materialisiertes. */
+  private readonly noWorldRewardRuntimes = new Map<PersistentBaseRewardId, PersistentBaseRewardRuntimeBinding>();
+  private readonly noWorldCompositeSignatures = new Map<string, string>();
+  private get persistentBaseRewardRuntimeBindings(): Map<PersistentBaseRewardId, PersistentBaseRewardRuntimeBinding> {
+    return this.persistentBaseWorldBinding?.rewardRuntimes ?? this.noWorldRewardRuntimes;
+  }
+  /** Letzter fuer das Composite relevanter Live-Build je Besitzer. */
+  private get persistentBaseCompositeBuildSignatures(): Map<string, string> {
+    return this.persistentBaseWorldBinding?.compositeSignatures ?? this.noWorldCompositeSignatures;
+  }
+  private get persistentBaseAnchor(): PersistentBaseAnchor | null {
+    return this.persistentBaseWorldBinding?.anchor ?? null;
+  }
+  private get persistentBaseBuildArea(): PersistentBaseBuildArea | null {
+    return this.persistentBaseWorldBinding?.buildArea ?? null;
+  }
   private persistentBaseRewardSessionRevision = 0;
   private persistentBaseRewardSessionSignature: string | null = null;
   /** Zuletzt angebotene Beitragsrevision je Spieler; verhindert wiederholtes Uebernehmen. */
@@ -539,10 +578,6 @@ export class ArenaLifecycleCoordinator {
    * Freischaltungen; die Besitzeridentitaet gilt fuer das Bauwerk und ueberlebt jeden Raum.
    */
   private readonly persistentBaseOwnerByPlayerId = new Map<string, string>();
-  /** Letzter fuer das Composite relevanter Live-Build je Besitzer. */
-  private readonly persistentBaseCompositeBuildSignatures = new Map<string, string>();
-  private persistentBaseAnchor: PersistentBaseAnchor | null = null;
-  private persistentBaseBuildArea: PersistentBaseBuildArea | null = null;
   private persistentBaseVisualSite: PersistentBaseVisualSite | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
   private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;
@@ -698,43 +733,33 @@ export class ArenaLifecycleCoordinator {
   }
 
   /**
-   * Raeumt den gebauten Zustand der zuletzt materialisierten World ab.
+   * Beendet die lokale World-Runtime und entscheidet ueber die uebergebene Darstellung.
    *
-   * Der Aufbau gehoert der `WorldRuntime`; steht er nach deren Ende noch (Exit-Fade,
-   * Lobby-Fast-Reinstance, Rundenstart), faellt er hier. Idempotent, weil `tearDownArena()`
-   * auch ohne gebaute World laufen darf.
+   * Der Gameplay-State der World faellt mit ihrer Runtime. Ihre Darstellung geht dabei in den
+   * Handoff; nur ein Uebergang, der sie weiterverwendet, laesst sie stehen.
    */
-  private destroyWorldMaterialization(preservePresentation: boolean): void {
-    const materialization = this.ctx.worldMaterialization;
-    if (!materialization || materialization.isDestroyed()) {
-      // Ohne gebaute World gibt es keine Runtime-Objekte mehr, die eine Runde ueberlebt haetten.
-      this.ctx.worldMaterialization = null;
-      this.releasePersistentBaseRuntimeObjects(null);
-      return;
-    }
-    // Die Referenz bleibt waehrend des Abbaus stehen: Die Aufraeumschritte darin lesen die
-    // Bau-Runtime weiterhin ueber `ctx`, und der Owner selbst meldet seine Teile bereits ab.
-    materialization.destroy({
-      preservePresentation,
-      beforePlacementRelease: (placement) => this.releasePersistentBaseRuntimeObjects(placement),
-    });
-    this.ctx.worldMaterialization = null;
+  private releaseWorldRuntime(preservePresentation: boolean): void {
+    const hadRuntime = this.worldRuntime !== null;
+    this.worldLifecycle.detachRuntime();
+    if (!preservePresentation) this.worldPresentationHandoff.discard();
+    // Der Abschluss des Bestands gehoert dem Persistent-Base-Binding und faellt mit der Runtime.
+    // Ein Teardown ohne laufende Runtime hat keinen solchen Owner, muss den Bestand aber genauso
+    // abschliessen.
+    if (!hadRuntime) this.finalizePersistentBaseRuntimeObjects();
   }
 
   /**
    * Schliesst den persistenten Basisbestand dieser World ab: Was als Runtime-Objekt noch steht,
    * bleibt im Arbeitsstand; alles andere faellt heraus.
    *
-   * Der Schritt gehoert genau zwischen Geometrieabbau und Freigabe der Bau-Runtime – danach
-   * waere jedes Objekt "zerstoert" und der Arbeitsstand leer.
+   * Laeuft im Abbau des Persistent-Base-Bindings – mit noch lebender Bau-Runtime, aber ohne
+   * Darstellung. Danach waere jedes Objekt "zerstoert" und der Arbeitsstand leer.
    */
-  private releasePersistentBaseRuntimeObjects(placement: PlacementSystem | null): void {
+  private finalizePersistentBaseRuntimeObjects(): void {
+    const placement = this.ctx.worldMaterialization?.placement ?? null;
     this.persistentBaseContributions.detachRuntimeObjects(
       (runtimeId) => placement?.hasRuntimeRock(runtimeId) === true,
     );
-    for (const rewardId of [...this.persistentBaseRewardRuntimeBindings.keys()]) {
-      this.releasePersistentBaseRewardRuntime(rewardId);
-    }
   }
 
   /**
@@ -791,13 +816,17 @@ export class ArenaLifecycleCoordinator {
       // Waehren des expliziten Arena-Exit-Fades bleibt die lokale Match-World bestehen, auch
       // wenn der Host bereits den WorldDescriptor entfernt oder der Lobby-Descriptor frueh ankommt.
       if (deferredMatchToLobby && matchToLobby) return;
+      // Eine weiterverwendbare Darstellung steht entweder noch in der laufenden Runtime – so
+      // erreicht ein Client den Wechsel – oder liegt bereits im Handoff, weil der Host seine
+      // Instanz zuvor beendet hat.
+      const reusablePresentation = this.ctx.worldPresentation
+        ?? this.worldPresentationHandoff.pending;
       const canFastReinstance = bridge.getGamePhase() !== 'ARENA'
         && isLobbyWorldDefinitionId(world.definitionId)
         && (this.pendingLobbyWorldReinstance
           || (isLobbyWorldDefinitionId(previousDefinitionId ?? '')
             && bridge.getActivityDescriptor() === null
-            && this.ctx.arenaResult !== null
-            && this.ctx.currentLayout !== null));
+            && reusablePresentation !== null));
       if (canFastReinstance) {
         // Clients still hold the old local lifecycle when the reliable replacement arrives.
         // The host already ended it while publishing the new descriptor; both paths converge
@@ -2610,12 +2639,15 @@ export class ArenaLifecycleCoordinator {
       );
     }
 
-    const reusableArenaResult = preserveLobbyPresentation
+    // Die Darstellung des Vorgaengers steht entweder noch in seiner Runtime oder liegt bereits
+    // im Handoff – ein Uebergang endet nicht zwingend im selben Frame, in dem er beginnt.
+    const reusablePresentation = preserveLobbyPresentation
       && isLobbyWorldDefinitionId(worldDescriptor.definitionId)
       && activityDescriptor === null
-      ? this.ctx.arenaResult
+      ? this.ctx.worldPresentation ?? this.worldPresentationHandoff.pending
       : null;
-    const reusableLayout = reusableArenaResult ? this.ctx.currentLayout : null;
+    const reusableArenaResult = reusablePresentation?.arena ?? null;
+    const reusableLayout = reusablePresentation?.layout ?? null;
     const prepared = this.preparedRoundLayout;
     this.tearDownArena(reusableArenaResult !== null);
 
@@ -2767,13 +2799,37 @@ export class ArenaLifecycleCoordinator {
     } else {
       this.ctx.coopDefenseRespawnBudgetSystem = null;
     }
-    // Ab hier entsteht der gebaute Zustand dieser World-Instanz. Er gehoert der WorldRuntime;
-    // `ctx` liest ihn nur noch.
-    const materialization = new WorldMaterialization(layout, {
-      destroyPresentation: (arena) => { ArenaBuilder.destroyDynamic(arena); },
-    });
+    // Ab hier entsteht der Gameplay-State dieser World-Instanz. Er gehoert der WorldRuntime und
+    // faellt mit ihr; `ctx` liest ihn nur noch.
+    const materialization = new WorldMaterialization();
     this.ctx.worldMaterialization = materialization;
     this.worldRuntime?.materialize(materialization);
+    // Die world-lokale Materialisierung der persistenten Basis. Sie entsteht fuer jede World,
+    // auch fuer eine ohne Basiskern: Ihr Abbau schliesst den Bestand ab, und der gilt fuer jede
+    // World, die Runtime-Objekte gefuehrt haben koennte.
+    const persistentBaseBinding = new PersistentBaseWorldBinding({
+      finalizeRuntimeObjects: () => { this.finalizePersistentBaseRuntimeObjects(); },
+      releaseRewardRuntime: (rewardId) => { this.releasePersistentBaseRewardRuntime(rewardId); },
+    });
+    this.persistentBaseWorldBinding = persistentBaseBinding;
+    this.worldRuntime?.setPersistentBase(persistentBaseBinding);
+    // Scene-langlebige Shared Services bekommen die Geometrie dieser World im Aufbaupass unten.
+    // Die Bindung selbst gehoert der World: Ohne Instanz kennt kein Shared System mehr ihre
+    // Metrik, ihre Hindernisse oder ihre Basen.
+    this.worldRuntime?.bind({
+      destroy: () => {
+        this.ctx.combatSystem.setWorldMetrics(null);
+        this.ctx.combatSystem.setArenaObstacles(null, null);
+        this.ctx.combatSystem.setBaseObstacles(null);
+        this.ctx.decoySystem.setWorldMetrics(null);
+            this.ctx.projectileManager.setRockGroup(null, null, null);
+            this.ctx.projectileManager.setObstacleIndex(null);
+        this.ctx.hostPhysics.setRockGroup(null, null);
+        this.ctx.hostPhysics.setBaseGroup(null);
+        this.ctx.hostPhysics.setMovementBlockedCellResolver(null);
+        this.ctx.hostPhysics.setWorldMetrics(null);
+          },
+    });
     const builder = new ArenaBuilder(this.scene);
     const persistentBaseSite = world.persistentBaseSite;
     const persistentBaseVisualSite = resolvePersistentBaseVisualSite(
@@ -2790,6 +2846,9 @@ export class ArenaLifecycleCoordinator {
       world.metrics,
     );
     let arenaResult: ArenaBuilderResult;
+    // Genau ein terminaler Ausgang je uebergebener Darstellung: Der Fast-Reinstance uebernimmt
+    // sie, jeder andere Aufbau verwirft sie.
+    let adoptedPresentation: WorldPresentationBinding | null = null;
     if (canReuseLobbyPresentation) {
       builder.rebindWorldRuntime(
         reusableArenaResult,
@@ -2799,7 +2858,9 @@ export class ArenaLifecycleCoordinator {
         presentation,
       );
       arenaResult = reusableArenaResult;
+      adoptedPresentation = this.worldPresentationHandoff.adopt();
     } else {
+      this.worldPresentationHandoff.discard();
       arenaResult = builder.buildDynamic(layout, {
         worldMetrics: world.metrics,
         // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
@@ -2810,7 +2871,14 @@ export class ArenaLifecycleCoordinator {
         persistentBaseGravel: persistentBaseGravel ?? undefined,
       });
     }
-    materialization.setArena(arenaResult);
+    // Die Darstellung dieser World: gebauter Baum und der Geometriepuffer, den er adressiert.
+    // Sie hat eine eigene Lifetime und ist der einzige Teil, der einen Uebergang ueberleben kann.
+    const presentationBinding = adoptedPresentation
+      ?? new WorldPresentationBinding(layout, arenaResult, {
+        destroyPresentation: (arena) => { ArenaBuilder.destroyDynamic(arena); },
+      });
+    this.ctx.worldPresentation = presentationBinding;
+    this.worldRuntime?.setPresentation(presentationBinding);
     // Beim Fast-Reinstance muss der wiederverwendete Ground-Streamer vor dem ersten Residency-
     // Bake bereits den neuen World-Zustand sehen; der regulaere Scene-Sync bestaetigt ihn danach.
     arenaResult.groundSurface?.setPersistentBaseGravel(
@@ -2851,11 +2919,9 @@ export class ArenaLifecycleCoordinator {
       this.persistentBaseRewards.replaceCommittedState(getStoredPersistentBaseRewardState());
       if (activityDescriptor !== null) this.persistentBaseRewards.beginMission();
       this.ctx.persistentBaseRewards = this.persistentBaseRewards;
-      this.persistentBaseAnchor = persistentBaseSite.anchor;
-      this.persistentBaseBuildArea = persistentBaseSite.buildArea;
+      persistentBaseBinding.setSite(persistentBaseSite.anchor, persistentBaseSite.buildArea);
     } else {
-      this.persistentBaseAnchor = null;
-      this.persistentBaseBuildArea = null;
+      persistentBaseBinding.setSite(null, null);
     }
     this.ctx.coopDefenseMissionBarrierManager = missionProgressConfig
       ? new CoopDefenseMissionBarrierManager(this.scene, missionProgressConfig, world.metrics, {
@@ -5008,16 +5074,14 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setHealingReceivedHandler(null);
     this.ctx.combatSystem.setArmorReceivedHandler(null);
     this.ctx.combatSystem.setPlayerOutgoingDamageResolver(null);
-    // Die lokale World-Runtime faellt; sie gibt den gebauten World-Zustand dabei frei.
-    this.worldLifecycle.detachRuntime();
-    // Geometrie, Presentation, Fels-/Bau-Runtime und Basen fallen gemeinsam und in umgekehrter
-    // Aufbaureihenfolge. Der Lobby-Fast-Reinstance behaelt allein die authored Presentation.
-    this.destroyWorldMaterialization(preserveAuthoredPresentation);
+    // Die lokale World-Runtime faellt: Bau-Runtime, Basen und die world-lokale Persistent-Base
+    // fallen mit ihr. Ihre Darstellung geht in den Handoff und bleibt nur stehen, wenn der
+    // naechste Aufbau sie uebernimmt.
+    this.releaseWorldRuntime(preserveAuthoredPresentation);
+    this.persistentBaseWorldBinding = null;
     this.ctx.persistentBaseContributions = null;
     this.ctx.persistentBaseRewards = null;
     bridge.publishPersistentBaseRewardSessionState(null);
-    this.persistentBaseAnchor = null;
-    this.persistentBaseBuildArea = null;
     this.ctx.turretSystem?.setTurretDamageBuffProvider(null);
     this.ctx.turretSystem?.setTurretDamageMultiplierProvider(null);
     this.ctx.turretSystem?.setFocusTargetProvider(null);
@@ -5079,10 +5143,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setDecoySystem(null);
     this.ctx.combatSystem.setPowerUpSystem(null);
     this.ctx.combatSystem.setStinkCloudSystem(null);
-    this.ctx.combatSystem.setArenaObstacles(null, null);
-    this.ctx.combatSystem.setWorldMetrics(null);
-    this.ctx.decoySystem.setWorldMetrics(null);
-    this.ctx.combatSystem.setBaseObstacles(null);
     this.ctx.combatSystem.setBarrierObstacles(null);
     this.ctx.combatSystem.setBaseManager(null);
     this.ctx.combatSystem.setEnemyManager(null);
@@ -5141,8 +5201,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);
     this.ctx.decoySystem.setObstacleGroups(null, null);
-    this.ctx.projectileManager.setRockGroup(null, null, null);
-    this.ctx.projectileManager.setObstacleIndex(null);
     this.ctx.projectileManager.setObstacleKindResolver(null);
     this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
@@ -5154,10 +5212,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setMiniRocketDestroyedCallback(null);
     this.ctx.projectileManager.setProximityPulseCallback(null);
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
-    this.ctx.hostPhysics.setRockGroup(null, null);
-    this.ctx.hostPhysics.setBaseGroup(null);
-    this.ctx.hostPhysics.setMovementBlockedCellResolver(null);
-    this.ctx.hostPhysics.setWorldMetrics(null);
     if (!preserveAuthoredPresentation) this.renderers.leafBlower.setTerrainColorSnapshot(null);
     this.renderers.leafBlower.setTerrainMaterialLayout(null);
     this.ctx.tunnelSystem?.clear();

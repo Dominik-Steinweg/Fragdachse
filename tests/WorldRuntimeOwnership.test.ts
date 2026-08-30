@@ -36,7 +36,11 @@ function activity(worldRevision = 21): ActivityDescriptor {
   };
 }
 
-/** Nur die Identitaet zaehlt hier; der materialisierte Rest gehoert spaeteren Phasen. */
+function worldRuntime(world: WorldDescriptor = descriptor()): WorldRuntime {
+  return new WorldRuntime(context(world));
+}
+
+/** Nur die Identitaet zaehlt hier; der materialisierte Rest gehoert seinen eigenen Ownern. */
 function context(world: WorldDescriptor = descriptor()): WorldRuntimeContext {
   return { descriptor: world } as WorldRuntimeContext;
 }
@@ -75,97 +79,49 @@ function activityRuntime(id: string, calls: string[]): RecordedActivityRuntime {
 
 describe('WorldRuntime – Composition Owner einer World', () => {
   it('traegt die Identitaet ihrer World und startet ohne belegte Slots', () => {
-    const runtime = new WorldRuntime(context());
+    const runtime = worldRuntime();
     expect(runtime.descriptor.worldRevision).toBe(21);
     expect(runtime.isDestroyed()).toBe(false);
     expect(runtime.activity.isAttached()).toBe(false);
     expect(runtime.activity.descriptor).toBeNull();
+    expect(runtime.materialization).toBeNull();
+    expect(runtime.presentation).toBeNull();
   });
 
   it('taktet die eigenen Child-Owner in Aufbaureihenfolge – die Activity zuletzt', () => {
     const calls: string[] = [];
-    const runtime = new WorldRuntime(context());
-    runtime.setPersistentBaseBinding(binding('persistentBase', calls));
-    runtime.setPresentationBinding(binding('presentation', calls));
+    const runtime = worldRuntime();
+    runtime.bind(binding('worldBinding', calls));
     runtime.activity.attach(activity(), activityRuntime('activity', calls));
 
     runtime.update(16);
 
-    expect(calls).toEqual([
-      'update:persistentBase:16',
-      'update:presentation:16',
-      'update:activity:16',
-    ]);
+    expect(calls).toEqual(['update:worldBinding:16', 'update:activity:16']);
   });
 
   it('taktet auch ohne Activity und ohne Bindings ohne Sonderpfad', () => {
-    const runtime = new WorldRuntime(context());
+    const runtime = worldRuntime();
     expect(() => runtime.update(16)).not.toThrow();
-  });
-
-  it('raeumt in umgekehrter Aufbaureihenfolge ab und ist idempotent', () => {
-    const calls: string[] = [];
-    const persistentBase = binding('persistentBase', calls);
-    const presentation = binding('presentation', calls);
-    const mission = activityRuntime('activity', calls);
-    const runtime = new WorldRuntime(context());
-    runtime.setPersistentBaseBinding(persistentBase);
-    runtime.setPresentationBinding(presentation);
-    runtime.activity.attach(activity(), mission);
-
-    runtime.destroy();
-    runtime.destroy();
-
-    expect(calls).toEqual(['destroy:activity', 'destroy:presentation', 'destroy:persistentBase']);
-    expect(mission.destroyCount).toBe(1);
-    expect(presentation.destroyCount).toBe(1);
-    expect(persistentBase.destroyCount).toBe(1);
-    expect(runtime.isDestroyed()).toBe(true);
-    expect(runtime.activity.isAttached()).toBe(false);
   });
 
   it('taktet nach dem Teardown nicht mehr', () => {
     const calls: string[] = [];
-    const runtime = new WorldRuntime(context());
-    const presentation = binding('presentation', calls);
-    runtime.setPresentationBinding(presentation);
+    const runtime = worldRuntime();
+    const bound = binding('worldBinding', calls);
+    runtime.bind(bound);
     runtime.destroy();
 
     runtime.update(16);
 
-    expect(presentation.updates).toBe(0);
-  });
-
-  it('fuehrt pro Slot genau ein Binding und zerstoert das ersetzte', () => {
-    const calls: string[] = [];
-    const first = binding('first', calls);
-    const second = binding('second', calls);
-    const runtime = new WorldRuntime(context());
-
-    runtime.setPresentationBinding(first);
-    runtime.setPresentationBinding(first);
-    expect(first.destroyCount).toBe(0);
-
-    runtime.setPresentationBinding(second);
-    expect(first.destroyCount).toBe(1);
-
-    runtime.update(16);
-    expect(first.updates).toBe(0);
-    expect(second.updates).toBe(1);
-
-    runtime.setPresentationBinding(null);
-    expect(second.destroyCount).toBe(1);
-    runtime.update(16);
-    expect(second.updates).toBe(1);
+    expect(bound.updates).toBe(0);
   });
 
   it('nimmt nach dem Teardown keinen neuen Child-Owner mehr auf', () => {
     const calls: string[] = [];
-    const runtime = new WorldRuntime(context());
+    const runtime = worldRuntime();
     runtime.destroy();
 
-    expect(() => runtime.setPresentationBinding(binding('late', calls))).toThrow(/destroyed runtime/);
-    expect(() => runtime.setPersistentBaseBinding(binding('late', calls))).toThrow(/destroyed runtime/);
+    expect(() => runtime.bind(binding('late', calls))).toThrow(/destroyed runtime/);
     expect(() => runtime.activity.attach(activity(), activityRuntime('late', calls))).toThrow(/closed slot/);
     expect(calls).toEqual([]);
   });

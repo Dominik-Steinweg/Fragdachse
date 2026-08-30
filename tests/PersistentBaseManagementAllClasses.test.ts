@@ -8,6 +8,7 @@ vi.mock('phaser', async () => {
 });
 
 import { ArenaLifecycleCoordinator } from '../src/scenes/arena/ArenaLifecycleCoordinator';
+import { PersistentBaseWorldBinding } from '../src/world/PersistentBaseWorldBinding';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { LOBBY_WORLD_DEFINITION_ID } from '../src/config/authoring/lobbyWorld';
 import { COOP_DEFENSE_MODE } from '../src/gameModes';
@@ -159,8 +160,12 @@ function createHarness(classId: string) {
       materializePlaceableRock: vi.fn(),
       removePlaceableRockVisual: vi.fn(),
     },
-    persistentBaseRewardRuntimeBindings: new Map(),
-    persistentBaseCompositeBuildSignatures: new Map(),
+    // Die world-lokalen Runtime-IDs gehoeren der World-Runtime; der Test stellt genau diese
+    // Bindung, nicht mehr zwei lose Maps.
+    persistentBaseWorldBinding: new PersistentBaseWorldBinding({
+      finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
+      releaseRewardRuntime: () => { /* dito */ },
+    }),
     persistentBaseOwnerByPlayerId: new Map(),
     persistentBaseRewardSessionSignature: null,
     persistentBaseRewardSessionRevision: 0,

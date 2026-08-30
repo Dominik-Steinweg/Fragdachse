@@ -7,17 +7,21 @@ import type { LightOccluderIndex } from '../src/effects/LightOccluderIndex';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlacementSystem } from '../src/systems/PlacementSystem';
 import type { ArenaLayout } from '../src/types';
-import type { WorldDescriptor } from '../src/world/WorldDescriptor';
+import { PersistentBaseWorldBinding } from '../src/world/PersistentBaseWorldBinding';
 import { WorldMaterialization } from '../src/world/WorldMaterialization';
+import { WorldPresentationBinding } from '../src/world/WorldPresentationBinding';
+import { WorldPresentationHandoff } from '../src/world/WorldPresentationHandoff';
+import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
 import { WorldRuntime } from '../src/world/WorldRuntime';
+import type { WorldDescriptor } from '../src/world/WorldDescriptor';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 
 /**
- * Der gebaute Zustand einer World hat genau einen Owner.
+ * World-Gameplay-State und World-Darstellung haben getrennte Lifetimes.
  *
- * Vorher lagen Layout, Presentation, Fels-/Bau-Runtime, Basen und Verdeckungsindex als sechs
- * unabhaengige nullable Felder im `ArenaContext`, und ihre Abbaureihenfolge war nur aus dem
- * Teardown-Pfad zu rekonstruieren. Diese Tests halten die Reihenfolge und die Idempotenz fest.
+ * Der mutable Gameplay-State faellt mit seiner `WorldRuntime` – ohne World-Instanz simuliert ihn
+ * niemand mehr. Die Darstellung kann einen Uebergang ueberleben, aber ausschliesslich ueber den
+ * ausdruecklichen Handoff. Diese Tests halten beide Seiten und ihre Reihenfolge fest.
  */
 
 interface Recorder {
@@ -46,191 +50,311 @@ function recorder(): Recorder {
   };
 }
 
-function fullMaterialization(parts: Recorder): WorldMaterialization {
-  const materialization = new WorldMaterialization(parts.layout, {
-    destroyPresentation: () => { parts.calls.push('presentation.destroy'); },
-  });
-  materialization.setArena(parts.arena);
-  materialization.setPlacement(parts.placement);
-  materialization.setBases(parts.bases);
-  materialization.setRocks(parts.rocks);
-  materialization.setLightOccluders(parts.occluders);
-  return materialization;
+function materialization(parts: Recorder): WorldMaterialization {
+  const built = new WorldMaterialization();
+  built.setPlacement(parts.placement);
+  built.setBases(parts.bases);
+  built.setRocks(parts.rocks);
+  built.setLightOccluders(parts.occluders);
+  return built;
 }
 
-describe('WorldMaterialization – ein Owner fuer den gebauten World-Zustand', () => {
+function presentation(parts: Recorder): WorldPresentationBinding {
+  return new WorldPresentationBinding(parts.layout, parts.arena, {
+    destroyPresentation: () => { parts.calls.push('presentation.destroy'); },
+  });
+}
+
+function descriptor(): WorldDescriptor {
+  return {
+    worldRevision: 21,
+    definitionId: 'world:coop-defense:3',
+    seed: 909,
+    generatorVersion: 3,
+    layoutFingerprint: 'abc123',
+  };
+}
+
+function runtime(): WorldRuntime {
+  return new WorldRuntime({ descriptor: descriptor() } as WorldRuntimeContext);
+}
+
+describe('WorldMaterialization – der mutable World-Gameplay-State', () => {
   it('haelt die im Aufbaupass entstandenen Teile zusammen', () => {
     const parts = recorder();
-    const materialization = fullMaterialization(parts);
+    const built = materialization(parts);
 
-    expect(materialization.layout).toBe(parts.layout);
-    expect(materialization.arena).toBe(parts.arena);
-    expect(materialization.placement).toBe(parts.placement);
-    expect(materialization.bases).toBe(parts.bases);
-    expect(materialization.rocks).toBe(parts.rocks);
-    expect(materialization.lightOccluders).toBe(parts.occluders);
-    expect(materialization.isDestroyed()).toBe(false);
+    expect(built.placement).toBe(parts.placement);
+    expect(built.bases).toBe(parts.bases);
+    expect(built.rocks).toBe(parts.rocks);
+    expect(built.lightOccluders).toBe(parts.occluders);
+    expect(built.isDestroyed()).toBe(false);
   });
 
   it('raeumt in umgekehrter Aufbaureihenfolge ab und ist idempotent', () => {
     const parts = recorder();
-    const materialization = fullMaterialization(parts);
+    const built = materialization(parts);
 
-    materialization.destroy({ preservePresentation: false });
-    materialization.destroy({ preservePresentation: false });
+    built.destroy();
+    built.destroy();
 
-    expect(parts.calls).toEqual([
-      'placement.clearRuntimeRocks',
-      'bases.destroy',
-      'presentation.destroy',
-    ]);
-    expect(materialization.isDestroyed()).toBe(true);
-    expect(materialization.layout).toBeNull();
-    expect(materialization.arena).toBeNull();
-    expect(materialization.placement).toBeNull();
-    expect(materialization.bases).toBeNull();
-    expect(materialization.rocks).toBeNull();
-    expect(materialization.lightOccluders).toBeNull();
-  });
-
-  it('laesst allein die Presentation stehen, wenn der naechste Aufbau sie uebernimmt', () => {
-    const parts = recorder();
-    const materialization = fullMaterialization(parts);
-
-    materialization.destroy({ preservePresentation: true });
-
-    // Die Presentation ueberlebt; Bau-Runtime und Basen fallen trotzdem.
     expect(parts.calls).toEqual(['placement.clearRuntimeRocks', 'bases.destroy']);
-  });
-
-  it('gibt dem Abschluss-Schritt eine World ohne Geometrie, aber mit lebender Bau-Runtime', () => {
-    const parts = recorder();
-    const materialization = fullMaterialization(parts);
-    const seen: {
-      placement: PlacementSystem | null;
-      layout: ArenaLayout | null;
-      arena: ArenaBuilderResult | null;
-      aliveRuntimeObject: boolean;
-    }[] = [];
-
-    materialization.destroy({
-      preservePresentation: true,
-      beforePlacementRelease: (placement) => {
-        seen.push({
-          placement,
-          layout: materialization.layout,
-          arena: materialization.arena,
-          aliveRuntimeObject: placement?.hasRuntimeRock(7) === true,
-        });
-        parts.calls.push('beforePlacementRelease');
-      },
-    });
-
-    expect(seen).toHaveLength(1);
-    // Geometrie und Presentation sind abgemeldet – ein Aufraeumschritt kann eine erhaltene
-    // Darstellung hier nicht mehr veraendern.
-    expect(seen[0].layout).toBeNull();
-    expect(seen[0].arena).toBeNull();
-    // Die Bau-Runtime steht dagegen noch: nur hier ist "hat das Objekt ueberlebt?" beantwortbar.
-    expect(seen[0].placement).toBe(parts.placement);
-    expect(seen[0].aliveRuntimeObject).toBe(true);
-    expect(parts.calls).toEqual([
-      'beforePlacementRelease',
-      'placement.clearRuntimeRocks',
-      'bases.destroy',
-    ]);
+    expect(built.isDestroyed()).toBe(true);
+    expect(built.placement).toBeNull();
+    expect(built.bases).toBeNull();
+    expect(built.rocks).toBeNull();
+    expect(built.lightOccluders).toBeNull();
   });
 
   it('raeumt nur ab, was tatsaechlich entstanden ist', () => {
     const parts = recorder();
-    const materialization = new WorldMaterialization(parts.layout, {
-      destroyPresentation: () => { parts.calls.push('presentation.destroy'); },
-    });
+    const built = new WorldMaterialization();
 
-    expect(() => materialization.destroy({ preservePresentation: false })).not.toThrow();
+    expect(() => built.destroy()).not.toThrow();
     expect(parts.calls).toEqual([]);
   });
 
   it('nimmt nach dem Abbau keinen neuen Teil mehr auf', () => {
     const parts = recorder();
-    const materialization = fullMaterialization(parts);
-    materialization.destroy({ preservePresentation: false });
+    const built = materialization(parts);
+    built.destroy();
 
-    expect(() => materialization.setArena(parts.arena)).toThrow(/destroyed world materialization/);
-    expect(() => materialization.setPlacement(parts.placement)).toThrow(/destroyed world materialization/);
-    expect(() => materialization.setBases(parts.bases)).toThrow(/destroyed world materialization/);
-    expect(() => materialization.setRocks(parts.rocks)).toThrow(/destroyed world materialization/);
-    expect(() => materialization.setLightOccluders(null)).toThrow(/destroyed world materialization/);
+    expect(() => built.setPlacement(parts.placement)).toThrow(/destroyed world materialization/);
+    expect(() => built.setBases(parts.bases)).toThrow(/destroyed world materialization/);
+    expect(() => built.setRocks(parts.rocks)).toThrow(/destroyed world materialization/);
+    expect(() => built.setLightOccluders(null)).toThrow(/destroyed world materialization/);
   });
 });
 
-describe('WorldRuntime – Besitz des gebauten World-Zustands', () => {
-  function runtime(): WorldRuntime {
-    const world: WorldDescriptor = {
-      worldRevision: 21,
-      definitionId: 'world:coop-defense:3',
-      seed: 909,
-      generatorVersion: 3,
-      layoutFingerprint: 'abc123',
-    };
-    return new WorldRuntime({ descriptor: world } as WorldRuntimeContext);
-  }
-
-  it('materialisiert genau einmal', () => {
+describe('WorldPresentationHandoff – genau ein terminaler Ausgang', () => {
+  it('uebergibt die Darstellung an den naechsten Aufbau', () => {
     const parts = recorder();
-    const owner = runtime();
-    const materialization = fullMaterialization(parts);
+    const handoff = new WorldPresentationHandoff();
+    const binding = presentation(parts);
 
-    expect(owner.materialization).toBeNull();
-    owner.materialize(materialization);
-    expect(owner.materialization).toBe(materialization);
-    expect(() => owner.materialize(fullMaterialization(recorder()))).toThrow(/already materialized/);
-  });
+    handoff.release(binding);
+    expect(handoff.pending).toBe(binding);
 
-  it('raeumt den gebauten World-Zustand mit der Runtime ab', () => {
-    const parts = recorder();
-    const owner = runtime();
-    const materialization = fullMaterialization(parts);
-    owner.materialize(materialization);
-
-    owner.destroy();
-
-    expect(materialization.isDestroyed()).toBe(true);
-    expect(owner.materialization).toBeNull();
-    expect(parts.calls).toContain('presentation.destroy');
-  });
-
-  it('raeumt einen freigegebenen Aufbau nicht mehr ab', () => {
-    const parts = recorder();
-    const owner = runtime();
-    const materialization = fullMaterialization(parts);
-    owner.materialize(materialization);
-
-    // Exit-Fade, Lobby-Fast-Reinstance und Rundenstart beenden die Instanz, waehrend die Arena
-    // noch steht: Wer sie weiterfuehrt, uebernimmt sie ausdruecklich.
-    expect(owner.releaseMaterialization()).toBe(materialization);
-    expect(owner.materialization).toBeNull();
-    owner.destroy();
-
-    expect(materialization.isDestroyed()).toBe(false);
+    expect(handoff.adopt()).toBe(binding);
+    expect(handoff.pending).toBeNull();
+    // Uebernommen heisst weiterverwendet: Die Darstellung steht noch.
+    expect(binding.isDestroyed()).toBe(false);
     expect(parts.calls).toEqual([]);
   });
 
-  it('nimmt nach dem Teardown keinen Aufbau mehr auf', () => {
+  it('verwirft eine Darstellung, die niemand uebernimmt – und bleibt dabei idempotent', () => {
     const parts = recorder();
-    const owner = runtime();
-    owner.destroy();
+    const handoff = new WorldPresentationHandoff();
+    const binding = presentation(parts);
 
-    expect(() => owner.materialize(fullMaterialization(parts))).toThrow(/destroyed runtime/);
+    handoff.release(binding);
+    handoff.discard();
+    handoff.discard();
+
+    expect(binding.isDestroyed()).toBe(true);
+    expect(handoff.pending).toBeNull();
+    expect(parts.calls).toEqual(['presentation.destroy']);
+  });
+
+  it('haelt nie zwei Darstellungen gleichzeitig', () => {
+    const first = recorder();
+    const second = recorder();
+    const handoff = new WorldPresentationHandoff();
+    const firstBinding = presentation(first);
+
+    handoff.release(firstBinding);
+    handoff.release(presentation(second));
+
+    // Die erste hat mit der Verdraengung ihren Ausgang gefunden.
+    expect(firstBinding.isDestroyed()).toBe(true);
+    expect(first.calls).toEqual(['presentation.destroy']);
+    expect(second.calls).toEqual([]);
   });
 });
 
-describe('Arena-Anbindung des gebauten World-Zustands', () => {
-  it('liest den gebauten Zustand ausschliesslich ueber seinen Owner', () => {
+describe('WorldRuntime – Gameplay faellt, Darstellung kann uebergehen', () => {
+  it('raeumt Gameplay-State und Darstellung gemeinsam ab, wenn nichts uebergeben wurde', () => {
+    const parts = recorder();
+    const owner = runtime();
+    const built = materialization(parts);
+    const shown = presentation(parts);
+    owner.materialize(built);
+    owner.setPresentation(shown);
+
+    owner.destroy();
+
+    expect(built.isDestroyed()).toBe(true);
+    expect(shown.isDestroyed()).toBe(true);
+    expect(owner.materialization).toBeNull();
+    expect(owner.presentation).toBeNull();
+  });
+
+  it('laesst eine uebergebene Darstellung stehen und raeumt nur das Gameplay ab', () => {
+    const parts = recorder();
+    const owner = runtime();
+    const built = materialization(parts);
+    const shown = presentation(parts);
+    owner.materialize(built);
+    owner.setPresentation(shown);
+
+    expect(owner.releasePresentation()).toBe(shown);
+    owner.destroy();
+
+    expect(shown.isDestroyed()).toBe(false);
+    expect(built.isDestroyed()).toBe(true);
+    expect(parts.calls).not.toContain('presentation.destroy');
+  });
+
+  it('schliesst den persistenten Basisbestand ohne Darstellung, aber mit lebender Bau-Runtime ab', () => {
+    const parts = recorder();
+    const owner = runtime();
+    const built = materialization(parts);
+    const shown = presentation(parts);
+    const seen: { placementAlive: boolean; presentationGone: boolean }[] = [];
+    const persistentBase = new PersistentBaseWorldBinding({
+      finalizeRuntimeObjects: () => {
+        seen.push({
+          placementAlive: built.placement !== null,
+          presentationGone: owner.presentation === null,
+        });
+        parts.calls.push('persistentBase.finalize');
+      },
+      releaseRewardRuntime: () => { parts.calls.push('persistentBase.releaseReward'); },
+    });
+    persistentBase.bindRewardRuntime('base_health_pedestal', { runtimeId: 4, gridX: 1, gridY: 2 });
+    owner.materialize(built);
+    owner.setPresentation(shown);
+    owner.setPersistentBase(persistentBase);
+
+    owner.destroy();
+
+    expect(seen).toEqual([{ placementAlive: true, presentationGone: true }]);
+    // Die Darstellung geht zuerst, dann der Bestand, dann die Bau-Runtime.
+    expect(parts.calls).toEqual([
+      'presentation.destroy',
+      'persistentBase.finalize',
+      'persistentBase.releaseReward',
+      'placement.clearRuntimeRocks',
+      'bases.destroy',
+    ]);
+    expect(persistentBase.rewardRuntimes.size).toBe(0);
+  });
+
+  it('loest world-scoped Bindings scene-langlebiger Systeme in umgekehrter Reihenfolge', () => {
+    const calls: string[] = [];
+    const owner = runtime();
+    owner.bind({ destroy: () => { calls.push('first'); } });
+    owner.bind({ destroy: () => { calls.push('second'); } });
+
+    owner.destroy();
+
+    expect(calls).toEqual(['second', 'first']);
+  });
+
+  it('materialisiert genau einmal und nimmt nach dem Teardown nichts mehr auf', () => {
+    const parts = recorder();
+    const owner = runtime();
+    owner.materialize(materialization(parts));
+    expect(() => owner.materialize(materialization(recorder()))).toThrow(/already materialized/);
+
+    owner.destroy();
+    expect(() => owner.materialize(materialization(recorder()))).toThrow(/destroyed runtime/);
+    expect(() => owner.setPresentation(presentation(recorder()))).toThrow(/destroyed runtime/);
+    expect(() => owner.bind({ destroy: () => { /* noop */ } })).toThrow(/destroyed runtime/);
+  });
+
+});
+
+describe('Uebergaenge – die Darstellung reist, der Gameplay-State nicht', () => {
+  /** Dieselbe Verdrahtung wie im Arena-Coordinator: Der Sink uebergibt, bevor er zerstoert. */
+  function createOwner(): {
+    readonly lifecycle: WorldLifecycle;
+    readonly handoff: WorldPresentationHandoff;
+    readonly build: (parts: Recorder) => { built: WorldMaterialization; shown: WorldPresentationBinding };
+  } {
+    const handoff = new WorldPresentationHandoff();
+    let current: WorldRuntime | null = null;
+    const sink: WorldLifecycleSink = {
+      publish: () => { /* Wire-Verhalten ist hier nicht Gegenstand */ },
+      clear: () => { /* dito */ },
+      attach: (worldContext) => { current = new WorldRuntime(worldContext); },
+      detach: () => {
+        const owner = current;
+        current = null;
+        handoff.release(owner?.releasePresentation() ?? null);
+        owner?.destroy();
+      },
+    };
+    return {
+      lifecycle: new WorldLifecycle(sink),
+      handoff,
+      build: (parts) => {
+        const built = materialization(parts);
+        // Ein Uebergang, der die Darstellung uebernimmt, fuehrt genau dieselbe weiter.
+        const shown = handoff.adopt() ?? presentation(parts);
+        current!.materialize(built);
+        current!.setPresentation(shown);
+        return { built, shown };
+      },
+    };
+  }
+
+  it('laesst beim Instanzende nur die Darstellung stehen', () => {
+    const parts = recorder();
+    const owner = createOwner();
+    owner.lifecycle.beginCreate(descriptor(), null);
+    owner.lifecycle.attachRuntime({ descriptor: descriptor() } as WorldRuntimeContext);
+    const { built, shown } = owner.build(parts);
+
+    // Rundenstart, Match-Exit und Lobby-Fast-Reinstance beenden alle die Instanz.
+    owner.lifecycle.endInstance();
+
+    expect(built.isDestroyed()).toBe(true);
+    expect(shown.isDestroyed()).toBe(false);
+    expect(owner.handoff.pending).toBe(shown);
+    expect(parts.calls).toEqual(['placement.clearRuntimeRocks', 'bases.destroy']);
+  });
+
+  it('fuehrt beim Fast-Reinstance dieselbe Darstellung weiter und baut den Gameplay-State neu', () => {
+    const parts = recorder();
+    const owner = createOwner();
+    owner.lifecycle.beginCreate(descriptor(), null);
+    owner.lifecycle.attachRuntime({ descriptor: descriptor() } as WorldRuntimeContext);
+    const first = owner.build(parts);
+    owner.lifecycle.endInstance();
+
+    const next = { ...descriptor(), worldRevision: 22 };
+    owner.lifecycle.beginCreate(next, null);
+    owner.lifecycle.attachRuntime({ descriptor: next } as WorldRuntimeContext);
+    const second = owner.build(parts);
+
+    expect(second.shown).toBe(first.shown);
+    expect(second.built).not.toBe(first.built);
+    expect(owner.handoff.pending).toBeNull();
+    expect(first.shown.isDestroyed()).toBe(false);
+  });
+
+  it('verwirft die Darstellung, wenn kein Uebergang sie uebernimmt', () => {
+    const parts = recorder();
+    const owner = createOwner();
+    owner.lifecycle.beginCreate(descriptor(), null);
+    owner.lifecycle.attachRuntime({ descriptor: descriptor() } as WorldRuntimeContext);
+    const { shown } = owner.build(parts);
+    owner.lifecycle.endInstance();
+
+    // Lobby-Rueckkehr: Der Teardown verwirft, was niemand weiterfuehrt.
+    owner.handoff.discard();
+
+    expect(shown.isDestroyed()).toBe(true);
+    expect(parts.calls).toContain('presentation.destroy');
+  });
+});
+
+describe('Arena-Anbindung der getrennten Lifetimes', () => {
+  it('liest Gameplay-State und Darstellung ueber ihre jeweiligen Owner', () => {
     const scene = readFileSync(resolve(__dirname, '../src/scenes/ArenaScene.ts'), 'utf8');
-    // Die alten Einzelfelder sind reine Lesefassaden auf den Owner.
-    expect(scene).toContain('get arenaResult() { return this.worldMaterialization?.arena ?? null; }');
-    expect(scene).toContain('get currentLayout() { return this.worldMaterialization?.layout ?? null; }');
+    expect(scene).toContain('get arenaResult() { return this.worldPresentation?.arena ?? null; }');
+    expect(scene).toContain('get currentLayout() { return this.worldPresentation?.layout ?? null; }');
     expect(scene).toContain('get placementSystem() { return this.worldMaterialization?.placement ?? null; }');
     expect(scene).toContain('get rockRegistry() { return this.worldMaterialization?.rocks ?? null; }');
     expect(scene).toContain('get baseManager() { return this.worldMaterialization?.bases ?? null; }');
@@ -240,13 +364,18 @@ describe('Arena-Anbindung des gebauten World-Zustands', () => {
       resolve(__dirname, '../src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
     );
-    // Genau ein Aufbau und genau ein Abbau – beide ueber den Owner.
+    // Genau ein Aufbau je Owner, und der Gameplay-State faellt ausschliesslich mit der Runtime.
     expect([...lifecycle.matchAll(/new WorldMaterialization\(/g)]).toHaveLength(1);
+    expect([...lifecycle.matchAll(/new WorldPresentationBinding\(/g)]).toHaveLength(1);
     expect(lifecycle).toContain('this.worldRuntime?.materialize(materialization);');
-    expect([...lifecycle.matchAll(/this\.destroyWorldMaterialization\(/g)]).toHaveLength(1);
-    // Der Abbau haengt am World-Teardown, nicht am Ende der Instanz (TD-3).
-    expect(lifecycle).toContain('runtime?.releaseMaterialization();');
-    expect(lifecycle).toContain('this.destroyWorldMaterialization(preserveAuthoredPresentation);');
+    expect(lifecycle).toContain('this.worldRuntime?.setPresentation(presentationBinding);');
+    expect(lifecycle).toContain('this.worldRuntime?.setPersistentBase(persistentBaseBinding);');
+    // Der Handoff ist der einzige Weg, auf dem etwas die Runtime ueberlebt.
+    expect(lifecycle).toContain('this.worldPresentationHandoff.release(runtime?.releasePresentation() ?? null);');
+    expect(lifecycle).toContain('this.worldPresentationHandoff.adopt();');
+    expect(lifecycle).toContain('this.worldPresentationHandoff.discard();');
+    // Der Gameplay-State reist nicht mehr mit: Es gibt keine Freigabe der Materialisierung.
+    expect(lifecycle).not.toContain('releaseMaterialization');
 
     const context = readFileSync(
       resolve(__dirname, '../src/scenes/arena/ArenaContext.ts'),

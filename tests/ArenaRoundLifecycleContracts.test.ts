@@ -47,8 +47,11 @@ function readTearDownArenaBody(): string {
  * Lifecycle zurueckgesetzt – der Aufruf steht stellvertretend fuer die Ruecksetzung.
  */
 const OWNED_ROUND_FIELDS: Readonly<Record<string, string>> = {
-  world: 'this.worldLifecycle.detachRuntime()',
-  worldMaterialization: 'this.destroyWorldMaterialization(',
+  world: 'this.releaseWorldRuntime(',
+  // Gameplay-State, Darstellung und die world-lokale Persistent-Base fallen gemeinsam mit der
+  // World-Runtime; genau ein Aufruf setzt sie zurueck.
+  worldMaterialization: 'this.releaseWorldRuntime(',
+  worldPresentation: 'this.releaseWorldRuntime(',
 };
 
 /** Erlaubte Ruecksetzformen: Referenz loeschen, Liste leeren, Sammlung leeren oder Besitzeraufruf. */
@@ -99,7 +102,7 @@ describe('arena round lifecycle contract', () => {
     // Round-Teardown ist auch der Map-Wechsel innerhalb einer laufenden Mission.
     // Der Abschluss laeuft im Abbau des gebauten World-Zustands – genau dort, wo die Bau-Runtime
     // noch beantworten kann, welche Objekte die Runde ueberlebt haben.
-    expect(body).toContain('this.destroyWorldMaterialization(preserveAuthoredPresentation);');
+    expect(body).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');
     expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseContributions.detachRuntimeObjects(');
 
     expect(body).toContain('this.ctx.persistentBaseContributions = null');

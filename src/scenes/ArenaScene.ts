@@ -1021,12 +1021,14 @@ export class ArenaScene extends Phaser.Scene {
       playerStatusRing: this.playerStatusRing,
       // World-/Activity-scoped (start null)
       world: null,
-      // Der gebaute World-Zustand gehoert der `WorldRuntime`. Die Felder darunter lesen ihn nur
-      // – ein Consumer, der `ctx.arenaResult` liest, sieht damit garantiert denselben Aufbau,
-      // den der World-Owner gerade fuehrt.
+      // Gameplay-State und Darstellung der World haben getrennte Lifetimes und deshalb getrennte
+      // Owner. Die Felder darunter lesen sie nur – ein Consumer, der `ctx.arenaResult` liest,
+      // sieht damit garantiert die Darstellung, die der World-Owner gerade fuehrt, und nach
+      // deren Uebergabe an einen Uebergang gar keine mehr.
       worldMaterialization: null,
-      get arenaResult() { return this.worldMaterialization?.arena ?? null; },
-      get currentLayout() { return this.worldMaterialization?.layout ?? null; },
+      worldPresentation: null,
+      get arenaResult() { return this.worldPresentation?.arena ?? null; },
+      get currentLayout() { return this.worldPresentation?.layout ?? null; },
       get placementSystem() { return this.worldMaterialization?.placement ?? null; },
       get rockRegistry() { return this.worldMaterialization?.rocks ?? null; },
       get baseManager() { return this.worldMaterialization?.bases ?? null; },

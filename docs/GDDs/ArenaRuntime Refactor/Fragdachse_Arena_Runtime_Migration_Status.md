@@ -31,24 +31,24 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 4`
-**Gesamtstatus:** `Phase 3 abgeschlossen; Architektur-Review zum Presentation-Lifetime durchgeführt und eingearbeitet`
+**Aktive Phase:** `Integrations-Checkpoint A`
+**Gesamtstatus:** `Phase 4 umgesetzt bis auf zwei begründet verschobene Punkte (RK-2, RK-3)`
 **Letzter Integrations-Checkpoint:** `npm run check`
-**Nächster Schritt:** Phase 4 umsetzen – zuerst die Presentation-Lifetime trennen (Architektur 6.1), danach die übrigen World-Bindings. Anschließend Integrations-Checkpoint A.
+**Nächster Schritt:** Integrations-Checkpoint A fahren, danach Phase 5.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
 | 1 Contracts | ✅ abgeschlossen | Lifecycle-/World-/Activity-/Persistent-Base-Contracts gezielt abgesichert. |
 | 2 WorldRuntime-Fundament | ✅ abgeschlossen | `WorldRuntime` + `ActivityRuntimeHost`, erzeugt/zerstört im `WorldLifecycle`-Sink. |
-| 3 World-Materialisierung | ✅ abgeschlossen | `WorldMaterialization` besitzt Layout, Presentation, Bau-Runtime, Basen und Verdeckungsindex; `WorldRuntime` besitzt sie. Die sechs alten `ArenaContext`-Felder sind readonly Lesefassaden. |
-| – Architektur-Review | ✅ abgeschlossen | Presentation-Lifetime von der World-Gameplay-Lifetime getrennt: Architektur 6.1 (`WorldPresentationBinding`, `WorldPresentationHandoff`, harte Regel 18), Plan Phase 4 / Checkpoint A / Phase 10 präzisiert. Kein Produktionscode geändert. |
-| 4 World Bindings / PlayerWorld | ⬜ offen | Beginnt mit dem Presentation-Split; löst TD-3 und R-1 auf. |
-| 5 Coop Encounter / Enemy Ownership | ⬜ offen | |
+| 3 World-Materialisierung | ✅ abgeschlossen | Gebauter World-Zustand als ein Owner; `ArenaContext`-Felder sind readonly Lesefassaden. |
+| – Architektur-Review | ✅ abgeschlossen | Presentation-Lifetime als eigener Begriff (Architektur 6.1, harte Regel 18). |
+| 4 World Bindings / PlayerWorld | ✅ abgeschlossen (Rest siehe RK-2, RK-3) | Presentation-Split + Handoff, Gameplay-State an die `WorldRuntime`-Lifetime gebunden, `PersistentBaseWorldBinding`, world-scoped Bindings der Shared Services. |
+| 5 Coop Encounter / Enemy Ownership | ⬜ offen | Übernimmt zusätzlich die Flowfield-/Navigations-Lifetime (RK-2). |
 | 6 Coop Objectives / Update / Presentation | ⬜ offen | |
-| 7 Player-Lifetimes | ⬜ offen | |
+| 7 Player-Lifetimes | ⬜ offen | Übernimmt zusätzlich die `PlayerWorldRuntime`-Ownership (RK-3). |
 | 8 Persistent Base Lifetimes | ⬜ offen | |
 | 9 Completion / ResultApplication | ⬜ offen | |
-| 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt zusätzlich den `WorldPresentationHandoff`. |
+| 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt den `WorldPresentationHandoff`. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
 | 12 Legacy Removal | ⬜ offen | |
 
@@ -64,8 +64,10 @@ Nur temporäre Migrationspfade eintragen.
 |---|---:|---|---|---:|
 | TD-1 | 2 | Der Lifecycle-Sink setzt `ArenaContext.world` weiterhin parallel zur `WorldRuntime`; alle bestehenden Consumer lesen den World-Kontext darüber. | `WorldRuntime.context` | Phase 11 |
 | TD-2 | 2 | `WorldRuntime.update()` wird über `ArenaLifecycleCoordinator.updateWorldRuntime()` aus `ArenaScene.update()` getaktet. | Zielpfad `ArenaRuntime.update()` | Phase 10 |
-| TD-3 | 3 | Der Sink gibt beim Instanzende die **gesamte** `WorldMaterialization` frei (`releaseMaterialization()`), obwohl nur die Darstellung länger leben muss; abgeräumt wird sie erst in `tearDownArena()`. | `WorldMaterialization` | **Phase 4** (Presentation-Handoff ersetzt die Freigabe) |
-| TD-4 | 3 | `ArenaContext.worldMaterialization` plus die sechs readonly Lesefassaden (`arenaResult`, `currentLayout`, `placementSystem`, `rockRegistry`, `baseManager`, `lightOccluderIndex`) als Zugriffspfad der noch nicht migrierten Consumer. | `WorldRuntime.materialization` | Phase 11 |
+| TD-4 | 3 | `ArenaContext.worldMaterialization` / `.worldPresentation` plus die sechs readonly Lesefassaden (`arenaResult`, `currentLayout`, `placementSystem`, `rockRegistry`, `baseManager`, `lightOccluderIndex`) als Zugriffspfad der noch nicht migrierten Consumer. | `WorldRuntime` | Phase 11 |
+| TD-5 | 4 | Der `WorldPresentationHandoff` liegt am `ArenaLifecycleCoordinator` statt am Flow-Owner. | `WorldPresentationHandoff` | Phase 10 |
+
+`TD-3` ist mit Phase 4 entfallen: Der Gameplay-State wird nicht mehr über das Instanzende hinweg freigegeben.
 
 ---
 
@@ -73,7 +75,10 @@ Nur temporäre Migrationspfade eintragen.
 
 | ID | Bereich | Problem / Risiko | Relevanz für nächste Phase |
 |---|---|---|---|
-| R-1 | World-Teardown | `WorldMaterialization.destroy()` hält die Reihenfolge heute als Zeilenfolge: erst Geometrie/Presentation abmelden, dann `beforePlacementRelease` (Abschluss des persistenten Basisbestands), dann Bau-Runtime freigeben. Zu früh freigegebene Runtime-Objekte löschen den persistenten Basis-Arbeitsstand; zu spät abgemeldete Geometrie verändert eine für den nächsten Aufbau erhaltene Darstellung. | Phase 4 löst das strukturell: Der Handoff liegt vor dem Gameplay-Teardown, danach ist keine Darstellung mehr erreichbar. Bis dahin Reihenfolge nicht umsortieren; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. |
+| R-2 | World-Teardown | Der Abbau hat eine Reihenfolge mit fachlichem Grund: Darstellung geht zuerst (Handoff), dann der Abschluss des persistenten Basisbestands (braucht lebende Bau-Runtime, darf keine Darstellung mehr sehen), dann die Bau-Runtime. `WorldRuntime.destroy()` hält sie; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. | Phase 5–8 dürfen diese Reihenfolge nicht umsortieren. |
+| R-3 | Exit-Fade | Der Exit-Fade zeigt die letzte Arenaansicht **einschließlich ihrer Spielerfiguren**, während die World-Instanz auf dem Host bereits beendet ist. Player-Detach entfernt die Figur; ein Detach am Instanzende leert die Ansicht sichtbar. | Phase 7 muss die Player-Presentation von der Player-World-Lifetime trennen, bevor sie die Ownership verschiebt (RK-3). |
+
+`R-1` ist mit Phase 4 entfallen: Die Reihenfolge ist keine Zeilenfolge mehr, sondern folgt aus der Ownership (siehe R-2).
 
 ---
 
@@ -81,7 +86,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` + `git diff --check` | grün | 321 Testdateien, 2694 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. Keine Browser-/Sichtprüfung durchgeführt. |
+| `npm run check` + `git diff --check` | grün | 321 Testdateien, 2697 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. Keine Browser-/Sichtprüfung durchgeführt. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -93,7 +98,9 @@ Coding-KIs tragen hier Änderungsbedarf ein, ändern aber die beiden kanonischen
 
 | ID | Ziel | Beobachtung | Vorgeschlagene Änderung | Status |
 |---|---|---|---|---|
-| RK-1 | Architektur 6.1 / Plan Phase 4, Checkpoint A, Phase 10 | Phase 3 setzte voraus, dass die World-Materialisierung dieselbe Lifetime wie die `WorldRuntime` hat. Die Codeanalyse zeigt: Das gilt für den mutablen Gameplay-State bereits heute (Host- und Client-Update steigen bei `ctx.world === null` sofort aus), **nicht** aber für die gebaute Darstellung – Match-Exit und Lobby-Fast-Reinstance brauchen sie über das Instanzende hinaus. | Presentation-Lifetime als eigenen Begriff mit ausdrücklichem Transition-Handoff einführen; Phase 4 beginnt damit. | extern umgesetzt |
+| RK-1 | Architektur 6.1 / Plan Phase 4, Checkpoint A, Phase 10 | Die World-Materialisierung teilt sich in mutablen Gameplay-State (fällt mit der Runtime) und Darstellung (überlebt Übergänge). | Presentation-Lifetime mit ausdrücklichem Transition-Handoff. | extern umgesetzt |
+| RK-2 | Plan Phase 4 → Phase 5 | Phase 4 nennt „World Navigation / Flowfield-Lifetime anbinden". Im Ist-Code entstehen `FlowFieldCoordinator`, alle `EnemyFlowFieldService` und die Ally-Felder ausschließlich im `isCoopMission`-Zweig; ihre Lifetime ist damit die der Activity, nicht die der World. Sie an die `WorldRuntime` zu binden würde sie über einen Activity-Wechsel hinweg am Leben halten. | Navigation/Flowfield der Activity-Ownership in Phase 5 zuordnen („activity-scoped Enemy Behaviour"). Falls später eine world-scoped Navigation ohne Activity entsteht, dort erneut prüfen. | offen |
+| RK-3 | Plan Phase 4 → Phase 7 | Phase 4 nennt „Ownership des bestehenden `PlayerWorldRuntime` zum `WorldRuntime`". Der Detach-Schritt `player-entity` entfernt die Spielfigur, und `playerManager.setVisualsEnabledResolver()` bindet die Sichtbarkeit an einen beim Aufbau erfassten Wert. Ein Detach am Instanzende würde deshalb die Figuren im laufenden Exit-Fade entfernen (siehe R-3). | `PlayerWorldRuntime`-Ownership zusammen mit der Trennung von Player-World- und Player-Presentation-Lifetime in Phase 7 verschieben. | offen |
 
 Statuswerte: `offen` · `manuell geprüft` · `abgelehnt` · `extern umgesetzt`
 
@@ -111,21 +118,20 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 **Aktuell relevant:**
 - Architektur-Dokument lesen, insbesondere 6.1 (Presentation Lifetime und Transition Handoff) und Regel 18.
 - Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
-- Transitional Debt, R-1 und RK-1 oben berücksichtigen.
-- Ownership-Anker der World: `src/world/WorldRuntime.ts`, `src/world/WorldMaterialization.ts`, `src/world/ActivityRuntimeHost.ts`. Erzeugung im `buildWorld()`-Pass, Abbau in `tearDownArena()` über `destroyWorldMaterialization()`.
-- Verträge: `tests/WorldRuntimeOwnership.test.ts` und `tests/WorldMaterializationOwnership.test.ts`.
+- Transitional Debt, R-2/R-3 und RK-2/RK-3 oben berücksichtigen.
 
-**Belegte Ausgangslage für den Presentation-Split (verifiziert, nicht erneut herleiten):**
-- `HostUpdateCoordinator.runHostUpdate()` und `ClientUpdateCoordinator.runClientUpdate()` steigen bei `ctx.world === null` sofort aus; ebenso sind `syncPersistentBaseRewards()`, `hostRefreshPersistentBaseComposite()` und `materializePersistentBaseComposite()` ohne `ctx.world` bzw. ohne Bau-Runtime wirkungslos. Nach dem Instanzende wird also kein Gameplay-State mehr gelesen oder simuliert.
-- Die gebaute Darstellung wird von `showWorld === false` **nicht** ausgeblendet: `ArenaBuilder.syncStaticBackdrop()` schaltet nur Seitenrahmen und Hintergründe. Sichtbar bleibt sie bis `ArenaBuilder.destroyDynamic()`. `ArenaExitFadeOverlay` legt sich als Wash bis Alpha 0.9 über genau dieses stehende Bild.
-- Match-Exit: Der Host beendet die Instanz in `hostCompleteRound()` und braucht die Darstellung danach noch für den Fade. Ein Client beendet seine lokale Instanz während des Fades gar nicht – `detectWorldChange()` steigt bei `deferredMatchToLobby` vorher aus.
-- Matchstart aus der LobbyWorld: `hostCheckReadyToStart()` beendet die Instanz, danach deckt die opake Ladeblende (`arenaCountdown.showLoading()`) den Übergang ab.
-- Lobby-Fast-Reinstance: Wiederverwendet ausschließlich `arenaResult` und `layout` (`reusableArenaResult`, `reusableLayout` → `builder.rebindWorldRuntime()`); Bau-Runtime, Basen, Felsregistry und Verdeckungsindex werden neu gebaut.
-- Der Handoff muss `arenaResult` **und** `layout` gemeinsam tragen: `RockVisualHelper` schreibt Runtime-Objekte nach `currentLayout.rocks[id]`, und `replaceArenaLayoutContents()` setzt genau diesen Puffer beim Übernehmen neu. Die gebauten Objekte adressieren ihn per Index.
-- `canFastReinstance` in `detectWorldChange()` prüft heute `ctx.arenaResult !== null && ctx.currentLayout !== null`. Auf dem Client läuft diese Prüfung, während die alte Runtime noch steht; nach dem Split muss sie Runtime-Presentation **und** Handoff berücksichtigen.
+**Owner-Landkarte nach Phase 4:**
+- `src/world/WorldRuntime.ts` – Slots: `materialization`, `presentation`, `persistentBase`, `activity`, plus `bind()` für world-scoped Bindings scene-langlebiger Systeme.
+- `src/world/WorldMaterialization.ts` – mutabler Gameplay-State: Bau-Runtime, Basen, Felsdaten, Verdeckungsindex.
+- `src/world/WorldPresentationBinding.ts` – gebaute Darstellung plus ihr Geometriepuffer.
+- `src/world/WorldPresentationHandoff.ts` – `release` / `adopt` / `discard`, am Coordinator (TD-5).
+- `src/world/PersistentBaseWorldBinding.ts` – Site, Build Area, Reward-Runtime-IDs, Composite-Signaturen; ihr Abbau schließt den Bestand ab.
+- Verträge: `tests/WorldRuntimeOwnership.test.ts`, `tests/WorldMaterializationOwnership.test.ts`.
+
+**Noch beim Coordinator (Stoff der Phasen 5–8):** Activity-Systeme, Flowfields/Navigation, `PlayerWorldRuntime`, Persistent-Base Session- und Transaction-State, `persistentBaseVisualSite`.
 
 **Nächste konkrete Aktion:**  
-`Phase 4 umsetzen, beginnend mit WorldPresentationBinding und WorldPresentationHandoff.`
+`Integrations-Checkpoint A gemäß Plan fahren, danach Phase 5 analysieren.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

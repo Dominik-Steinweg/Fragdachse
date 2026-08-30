@@ -1,6 +1,8 @@
 import { ActivityRuntimeHost } from './ActivityRuntimeHost';
+import type { PersistentBaseWorldBinding } from './PersistentBaseWorldBinding';
 import type { WorldDescriptor } from './WorldDescriptor';
 import type { WorldMaterialization } from './WorldMaterialization';
+import type { WorldPresentationBinding } from './WorldPresentationBinding';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 
 /**
@@ -13,6 +15,10 @@ import type { WorldRuntimeContext } from './WorldRuntimeContext';
  *
  * Der Owner ist kein Dependency-Container. Er wird nicht an Systeme weitergereicht; er erzeugt,
  * taktet und zerstoert ausschliesslich seine eigenen direkten Child-Owner.
+ *
+ * Mutabler World-Gameplay-State ueberlebt diese Runtime nicht. Die einzige Ausnahme ist die
+ * Darstellung, und sie geht dafuer ausdruecklich ueber {@link releasePresentation} in den
+ * `WorldPresentationHandoff` – nicht dadurch, dass beim Teardown ein Feld stehenbleibt.
  */
 
 /** Gemeinsamer Lebenszyklus aller Child-Owner, die genau mit dieser World leben und sterben. */
@@ -23,23 +29,6 @@ export interface WorldScopedBinding {
   readonly destroy: () => void;
 }
 
-/**
- * Lokale Darstellung dieser World.
- *
- * Presentation besitzt keine Gameplay-Authority und ist keine Voraussetzung der Simulation: ein
- * Host kann dieselbe World autoritativ simulieren, ohne dieses Binding zu materialisieren.
- */
-export type WorldPresentationBinding = WorldScopedBinding;
-
-/**
- * World-lokale Materialisierung der persistenten Basis: Site, Build Area, Runtime IDs und
- * World-Konflikte.
- *
- * Sie stirbt vollstaendig mit dieser Runtime. Der raumlanglebige Session-State der persistenten
- * Basis lebt ausdruecklich ausserhalb und ueberlebt einen World-Wechsel.
- */
-export type PersistentBaseWorldBinding = WorldScopedBinding;
-
 export class WorldRuntime {
   /** Der Activity-Slot dieser World. Eine World ohne Activity laesst ihn schlicht leer. */
   readonly activity: ActivityRuntimeHost;
@@ -47,6 +36,7 @@ export class WorldRuntime {
   private materializedWorld: WorldMaterialization | null = null;
   private presentationBinding: WorldPresentationBinding | null = null;
   private persistentBaseBinding: PersistentBaseWorldBinding | null = null;
+  private worldScopedBindings: WorldScopedBinding[] = [];
   private destroyed = false;
 
   constructor(readonly context: WorldRuntimeContext) {
@@ -62,9 +52,19 @@ export class WorldRuntime {
     return this.destroyed;
   }
 
-  /** Der physisch materialisierte Zustand dieser World; `null`, solange nichts gebaut ist. */
+  /** Der mutable World-Gameplay-State dieser Instanz; `null`, solange nichts gebaut ist. */
   get materialization(): WorldMaterialization | null {
     return this.materializedWorld;
+  }
+
+  /** Die lokale Darstellung dieser World; `null` ohne eigene Presentation. */
+  get presentation(): WorldPresentationBinding | null {
+    return this.presentationBinding;
+  }
+
+  /** Die world-lokale Materialisierung der persistenten Basis; `null`, wenn diese World keine fuehrt. */
+  get persistentBase(): PersistentBaseWorldBinding | null {
+    return this.persistentBaseBinding;
   }
 
   /**
@@ -82,38 +82,45 @@ export class WorldRuntime {
   }
 
   /**
-   * Gibt den gebauten World-Zustand aus dem Besitz dieser Runtime frei und liefert ihn zurueck.
-   *
-   * Der Abbau der Arena haengt heute nicht am Ende der World-Instanz: Exit-Fade,
-   * Lobby-Fast-Reinstance und Rundenstart lassen die gebaute World bewusst stehen, nachdem ihre
-   * Instanz beendet wurde. Wer sie weiterfuehrt, uebernimmt sie hierueber ausdruecklich – danach
-   * raeumt {@link destroy} sie nicht mehr ab.
+   * Setzt die Darstellung dieser World. Eine bereits vorhandene wird zuvor zerstoert – der Slot
+   * fuehrt genau eine Darstellung.
    */
-  releaseMaterialization(): WorldMaterialization | null {
-    const released = this.materializedWorld;
-    this.materializedWorld = null;
-    return released;
-  }
-
-  /**
-   * Setzt das Presentation-Binding dieser World. Ein bereits vorhandenes wird zuvor zerstoert –
-   * der Slot fuehrt genau eine Darstellung.
-   */
-  setPresentationBinding(binding: WorldPresentationBinding | null): void {
-    this.assertAlive('presentation binding');
+  setPresentation(binding: WorldPresentationBinding | null): void {
+    this.assertAlive('presentation');
     if (binding === this.presentationBinding) return;
     const previous = this.presentationBinding;
     this.presentationBinding = binding;
     previous?.destroy();
   }
 
+  /**
+   * Gibt die Darstellung aus dem Besitz dieser Runtime frei und liefert sie zurueck.
+   *
+   * Das ist der einzige Weg, auf dem etwas diese Runtime ueberlebt. Wer sie uebernimmt, besitzt
+   * sie danach; {@link destroy} raeumt sie nicht mehr ab.
+   */
+  releasePresentation(): WorldPresentationBinding | null {
+    const released = this.presentationBinding;
+    this.presentationBinding = null;
+    return released;
+  }
+
   /** Setzt das Persistent-Base-Binding dieser World; ein vorhandenes wird zuvor zerstoert. */
-  setPersistentBaseBinding(binding: PersistentBaseWorldBinding | null): void {
+  setPersistentBase(binding: PersistentBaseWorldBinding | null): void {
     this.assertAlive('persistent base binding');
     if (binding === this.persistentBaseBinding) return;
     const previous = this.persistentBaseBinding;
     this.persistentBaseBinding = binding;
     previous?.destroy();
+  }
+
+  /**
+   * Bindet ein scene-langlebiges Shared System an diese World. Das Binding faellt mit ihr; das
+   * gebundene System bleibt bestehen.
+   */
+  bind(binding: WorldScopedBinding): void {
+    this.assertAlive('world-scoped binding');
+    this.worldScopedBindings.push(binding);
   }
 
   /**
@@ -124,32 +131,37 @@ export class WorldRuntime {
    */
   update(deltaMs: number): void {
     if (this.destroyed) return;
-    this.persistentBaseBinding?.update?.(deltaMs);
-    this.presentationBinding?.update?.(deltaMs);
+    for (const binding of this.worldScopedBindings) binding.update?.(deltaMs);
     this.activity.update(deltaMs);
   }
 
   /**
-   * Raeumt den vollstaendigen lokalen World-State ab – in umgekehrter Aufbaureihenfolge, weil
-   * Activity und Presentation auf der World-Materialisierung stehen.
+   * Raeumt den vollstaendigen lokalen World-State ab. Idempotent: Rundenende, Lobby-Rueckkehr und
+   * technischer Abbruch nehmen denselben Weg.
    *
-   * Idempotent: Rundenende, Lobby-Rueckkehr und technischer Abbruch nehmen denselben Weg.
+   * Die Darstellung verlaesst die World zuerst. Danach raeumt die Gameplay-Seite in umgekehrter
+   * Aufbaureihenfolge ab – und kann dabei per Konstruktion keine Darstellung mehr erreichen, die
+   * ein Uebergang weiterzeigt oder weiterverwendet. Der Abschluss des persistenten Basisbestands
+   * laeuft deshalb vor dem Abbau der Bau-Runtime, aber nach dem Abgang der Darstellung.
    */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.activity.close();
     const presentation = this.presentationBinding;
     const persistentBase = this.persistentBaseBinding;
     const materialization = this.materializedWorld;
+    const bindings = this.worldScopedBindings;
     this.presentationBinding = null;
     this.persistentBaseBinding = null;
     this.materializedWorld = null;
+    this.worldScopedBindings = [];
+    // Nur was diese Runtime noch besitzt: eine zuvor freigegebene Darstellung gehoert bereits
+    // jemand anderem und wird hier nicht abgeraeumt.
     presentation?.destroy();
+    this.activity.close();
     persistentBase?.destroy();
-    // Nur was diese Runtime noch besitzt: ein zuvor freigegebener Aufbau gehoert bereits jemand
-    // anderem und wird hier nicht abgeraeumt.
-    materialization?.destroy({ preservePresentation: false });
+    for (const binding of [...bindings].reverse()) binding.destroy();
+    materialization?.destroy();
   }
 
   private assertAlive(slot: string): void {

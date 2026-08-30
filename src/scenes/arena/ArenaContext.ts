@@ -82,6 +82,7 @@ import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
 import type { WorldMaterialization } from '../../world/WorldMaterialization';
+import type { WorldPresentationBinding } from '../../world/WorldPresentationBinding';
 import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 
 interface PlayerStatusRingLike {
@@ -130,12 +131,17 @@ export interface ArenaContext {
    */
   world:             WorldRuntimeContext | null;
   /**
-   * Der gebaute Zustand der laufenden World-Instanz. Er gehoert der `WorldRuntime`, solange sie
-   * lebt; dieses Feld ist der Zugriffspfad der noch nicht migrierten Consumer.
-   *
-   * Die Felder darunter sind reine Lesefassaden darauf und werden ausschliesslich hier gesetzt.
+   * Der mutable World-Gameplay-State der laufenden Instanz. Er gehoert der `WorldRuntime` und
+   * faellt mit ihr; dieses Feld ist der Zugriffspfad der noch nicht migrierten Consumer.
    */
   worldMaterialization: WorldMaterialization | null;
+  /**
+   * Die lokale Darstellung der laufenden World-Instanz.
+   *
+   * Sie folgt der `WorldRuntime`, nicht dem Handoff: Sobald eine Darstellung an einen Uebergang
+   * uebergeben wurde, sieht kein world-scoped Consumer sie mehr.
+   */
+  worldPresentation: WorldPresentationBinding | null;
   readonly arenaResult:   ArenaBuilderResult | null;
   readonly currentLayout: ArenaLayout        | null;
   readonly placementSystem: PlacementSystem  | null;
