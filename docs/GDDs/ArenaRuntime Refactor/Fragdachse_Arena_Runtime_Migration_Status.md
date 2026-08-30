@@ -35,10 +35,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `keine – konsolidierter Architektur-/Stabilisierungs-Schritt nach Phase 5 abgeschlossen; Phase 6 nicht begonnen`
-**Gesamtstatus:** `Phase 4/5 stabilisiert; Integrations-Checkpoint A automatisiert abgeschlossen; manuelle Browser-Abnahme durch den User ausstehend`
-**Letzter Integrations-Checkpoint:** `Checkpoint A erweitert um Activity-Lifetime, npm run check`
-**Nächster Schritt:** User führt die manuelle Sichtprüfung aus; Phase 6 erst mit einem neuen Auftrag beginnen.
+**Aktive Phase:** `keine – Phase 6 abgeschlossen; Phase 7 nicht begonnen`
+**Gesamtstatus:** `Phasen 1–6 abgeschlossen; Integrations-Checkpoint A automatisiert abgeschlossen; manuelle Browser-Abnahme durch den User ausstehend (Prüfliste in Abschnitt 7)`
+**Letzter Integrations-Checkpoint:** `Checkpoint A erweitert um Activity-Lifetime; Phase 6 zusätzlich über npm run check`
+**Nächster Schritt:** User führt die manuelle Sichtprüfung aus; Phase 7 erst mit einem neuen Auftrag beginnen.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -49,7 +49,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 4 World Bindings / Materialisierung | ✅ abgeschlossen | Handoff trägt nur `ArenaPresentationResult`; Physics/Gameplay fallen mit `WorldMaterialization`. Exit-Fade nutzt reine Entity-Presentation. |
 | 5 Coop Encounter / Enemy Ownership | ✅ abgeschlossen | `CoopMissionRuntime` besitzt Enemy, Coop-Navigation/Flowfields, Encounter/Spawn, Boss, Enemy-Behaviour und Map-Directors; A→B materialisiert alle Child-Owner frisch. |
 | – Stabilisierung / Checkpoint A | ✅ automatisiert abgeschlossen | Host-/Client-Lifecycle, same-world Activity-Wechsel, scoped Detach, reiner Handoff und Exit-Presentation vertraglich geprüft. Browser-Sichtprüfung ist User-Abnahme. |
-| 6 Coop Objectives / Update / Presentation | ⬜ offen | |
+| 6 Coop Objectives / Update / Presentation | ✅ abgeschlossen | `CoopMissionRuntime` besitzt zusätzlich Objectives, Mission Progress, Barrieren, Carry, Repair/Placement-Reward und die Abschlussermittlung. Host- und Client-Frame kennen nur benannte Activity-Schritte; sieben Felder sind aus `ArenaContext` verschwunden. |
 | 7 Player-Lifetimes | ⬜ offen | Übernimmt zusätzlich die `PlayerWorldRuntime`-Ownership (RK-3). |
 | 8 Persistent Base Lifetimes | ⬜ offen | |
 | 9 Completion / ResultApplication | ⬜ offen | |
@@ -71,10 +71,13 @@ Nur temporäre Migrationspfade eintragen.
 | TD-2 | 2 | `WorldRuntime.update()` wird über `ArenaLifecycleCoordinator.updateWorldRuntime()` aus `ArenaScene.update()` getaktet. | Zielpfad `ArenaRuntime.update()` | Phase 10 |
 | TD-4 | 3 | `ArenaContext.worldMaterialization` / `.worldPresentation` plus die sechs readonly Lesefassaden (`arenaResult`, `currentLayout`, `placementSystem`, `rockRegistry`, `baseManager`, `lightOccluderIndex`) als Zugriffspfad der noch nicht migrierten Consumer. | `WorldRuntime` | Phase 11 |
 | TD-5 | 4 | Der `WorldPresentationHandoff` liegt am `ArenaLifecycleCoordinator` statt am Flow-Owner. | `WorldPresentationHandoff` | Phase 10 |
-| TD-6 | 5 | Migrierte Enemy-/Encounter-/Boss-/Flowfield-Felder im `ArenaContext` sind gerichtete Compatibility-Fassaden für Scene, Host- und Client-Update. Nur `syncCoopMissionCompatibilityBindings()` schreibt sie. | `CoopMissionRuntime` | Phase 11 |
-| TD-7 | 5 | Die fachliche Coop-Update-Reihenfolge liest die Runtime-Child-Owner noch über `HostUpdateCoordinator`/`ClientUpdateCoordinator`; `CoopMissionRuntime.update()` ist bis zum Phase-6-Cutover nur der angebundene Lifecycle-Tick. | `CoopMissionRuntime` | Phase 6 |
+| TD-6 | 5 | Migrierte Enemy-/Encounter-/Boss-/Flowfield-Felder im `ArenaContext` sind gerichtete Compatibility-Fassaden für Scene und Renderer. Nur `syncCoopMissionCompatibilityBindings()` schreibt sie. | `CoopMissionRuntime` | Phase 11 |
+| TD-8 | 6 | Die Reihenfolge der Coop-Simulation gehört der `CoopMissionRuntime`; ihre **Frame-Position** liegt weiter bei `HostUpdateCoordinator`/`ClientUpdateCoordinator`/`ArenaScene`, die die benannten Schritte (`hostSimulationStep`, `hostPrePhysicsStep`, `hostCarrySnapshot`, `hostResolveCompletion`, `clientPresentationStep`) aufrufen. Kein Frame-Owner kennt noch ein Missionssystem. | `CoopMissionRuntime` | Phase 10 (zusammen mit TD-2) |
 
 `TD-3` ist mit Phase 4 entfallen: Der Gameplay-State wird nicht mehr über das Instanzende hinweg freigegeben.
+
+`TD-7` ist mit Phase 6 entfallen: Die fachliche Coop-Update-Reihenfolge liegt in
+`src/activity/CoopMissionHostUpdate.ts`; verbleibt nur noch die Frage der Aufrufstelle (TD-8).
 
 ---
 
@@ -83,6 +86,7 @@ Nur temporäre Migrationspfade eintragen.
 | ID | Bereich | Problem / Risiko | Relevanz für nächste Phase |
 |---|---|---|---|
 | R-2 | World-Teardown | Der Abbau hat eine Reihenfolge mit fachlichem Grund: Darstellung geht zuerst (Handoff), dann der Abschluss des persistenten Basisbestands (braucht lebende Bau-Runtime, darf keine Darstellung mehr sehen), dann die Bau-Runtime. `WorldRuntime.destroy()` hält sie; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. | Phase 5–8 dürfen diese Reihenfolge nicht umsortieren. |
+| R-4 | Host-Frame | Der Weltanteil `decoySystem.hostUpdateLifecycle()` steht seit Phase 6 **vor** dem Missionsschritt statt zwischen zwei Coop-Phasen; nur so ist die Activity-Reihenfolge zusammenhängend. Fachlich gleichwertig, weil ausschließlich die Navigation und die Kampfphase Köder und Tarnung lesen. Vertrag in `tests/HostUpdatePhaseContracts.test.ts`. | Phase 7–11: Weltanteil nicht wieder in die Activity-Reihenfolge einsortieren. |
 
 `R-1` ist mit Phase 4 entfallen: Die Reihenfolge ist keine Zeilenfolge mehr, sondern folgt aus der Ownership (siehe R-2).
 
@@ -97,7 +101,7 @@ in RK-3 beschlossen Stoff von Phase 7.
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | 323 Testdateien, 2708 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` | grün | 324 Testdateien, 2718 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 | `git diff --check` | grün | Keine Whitespace-Fehler. |
 | Browser-/Sichtprüfung | ausstehend – User-Abnahme | Von Coding-KIs gemäß Prüfregel nicht auszuführen. Prüfliste siehe Abschnitt 7. |
 
@@ -114,6 +118,7 @@ Coding-KIs tragen hier Änderungsbedarf ein, ändern aber die beiden kanonischen
 | RK-1 | Architektur 6.1 / Plan Phase 4, Checkpoint A, Phase 10 | Die World-Materialisierung teilt sich in mutablen Gameplay-State (fällt mit der Runtime) und Darstellung (überlebt Übergänge). | Presentation-Lifetime mit ausdrücklichem Transition-Handoff. | extern umgesetzt |
 | RK-2 | Plan Phase 4 → Phase 5 | Die heutige `FlowFieldCoordinator`-/Enemy-/Ally-/Boss-Navigation entsteht ausschließlich für Coop-Missionen und überlebt keinen Activity-Wechsel. Eine künftig echte activity-unabhängige World-Navigation bliebe dagegen world-scoped. | Aktuelle Coop-Navigation Phase 5 zuordnen; Phase 4 nur für nachweislich world-scoped Navigation formulieren. | extern umgesetzt |
 | RK-3 | Plan Phase 4 → Phase 7 | `PlayerWorldRuntime`-Detach entfernt die Player-Entity. Der Exit-Fade braucht dafür keinen längeren Gameplay-Owner, sondern eine getrennte Entity-Presentation. Die Ownership-Verschiebung bleibt dennoch Teil der Player-Lifetime-Trennung. | `PlayerWorldRuntime`-Ownership in Phase 7 verschieben; Exit-Darstellung schon vorher als reine Transition-Presentation absichern. | extern umgesetzt |
+| RK-4 | Plan Phase 6 / Phase 10, Architektur 10 | Die Coop-Simulation hat eine fachlich notwendige Frame-Position (nach Netzwerksync, innerhalb `gameplayActive`/`countdownActive`), die der heutige Runtime-Tick `ArenaScene.update() → updateWorldRuntime()` nicht trifft. Phase 6 konnte die Reihenfolge deshalb in den Activity-Owner verschieben, den Aufruf aber nicht in die Runtime-Kette. | Plan Phase 6 als "Reihenfolge und Systeme in den Activity-Owner" formulieren und die Aufrufstelle ausdrücklich Phase 10 (`ArenaRuntime.update()`, zusammen mit TD-2) zuordnen. | offen |
 
 Statuswerte: `offen` · `manuell geprüft` · `abgelehnt` · `extern umgesetzt`
 
@@ -130,7 +135,7 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 
 **Aktuell relevant:**
 - Architektur-Dokument und Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
-- Transitional Debt TD-6/TD-7 und R-2 berücksichtigen; RK-2/RK-3 sind in den kanonischen Dokumenten synchronisiert.
+- Transitional Debt TD-6/TD-8 sowie R-2/R-4 berücksichtigen; RK-2/RK-3 sind in den kanonischen Dokumenten synchronisiert, RK-4 ist offen.
 
 **Owner-Landkarte nach Phase 4:**
 - `src/world/WorldRuntime.ts` – Slots: `materialization`, `presentation`, `persistentBase`, `activity`, plus `bind()` für world-scoped Bindings scene-langlebiger Systeme.
@@ -145,10 +150,28 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 - `src/activity/CoopMissionRuntime.ts` – konkrete Activity-Runtime für EnemyManager, Navigation/Flowfields, Encounter/Spawn, Boss, Enemy-Behaviour, Necromancy und Map-Directors; idempotenter Teardown in Abhängigkeitsreihenfolge.
 - `ActivityLifecycle` bindet sie über `WorldRuntime.activity`; same-world A→B zerstört A und führt den gespeicherten realen Materialisierungspfad für B vollständig erneut aus.
 - Activity-scoped Bindings lösen Combat, Physics, Train, Energy Shield sowie die langlebigen Enemy-Consumer vor dem Child-Teardown; Map-Event-Handler und Train-Runtime werden für B frisch erzeugt.
-- `ArenaContext`-Felder der übernommenen Systeme sind nur Compatibility-Fassaden (TD-6); ihre Updates laufen noch über die bisherigen Coordinator-Phasen (TD-7).
+- `ArenaContext`-Felder der übernommenen Systeme sind nur Compatibility-Fassaden (TD-6).
 - Vertrag: `tests/CoopMissionRuntimeOwnership.test.ts`; der Source-Ratchet in `tests/ArenaRoundLifecycleContracts.test.ts` kennt den delegierten Owner-Teardown.
 
-**Noch beim Coordinator (Stoff der Phasen 6–8):** Coop Objectives/Progress/Presentation und Update-Orchestrierung, `PlayerWorldRuntime`, Persistent-Base Session- und Transaction-State, `persistentBaseVisualSite`.
+**Owner-Landkarte nach Phase 6:**
+- `CoopMissionRuntime` besitzt zusätzlich einen `objectives`-Slot: Secondary Objectives, Mission
+  Progress, Fortschrittsbarrieren, Carry, Objective-Repair, Placement-Reward und die
+  host-autoritative Abschlussermittlung. Teardown: Ziele zuerst, dann Directors, Gegner, Navigation.
+- `src/activity/CoopMissionHostUpdate.ts` – die activity-interne Host-Reihenfolge (Fortschritt →
+  Navigation/Flowfields → Gegnerkampf) samt Presentation-Publikation. Sie liest ausschließlich
+  eigene Child-Owner und den `CoopMissionHostUpdatePort`; kein `ArenaContext`, kein `bridge`.
+- `CoopMissionRuntimePorts` werden mit der Runtime übergeben (Closures am Coordinator), damit ein
+  Activity-Wechsel in derselben World dieselben Fragen ohne Neuverkabelung stellt.
+- Frame-Owner kennen nur `CoopMissionActivityStep` (`hostPrepareStartupCaches`, `hostSimulationStep`,
+  `hostPrePhysicsStep`, `hostCarrySnapshot`, `hostResolveCompletion`, `hostApplyDebugBaseDamage`,
+  `clientPresentationStep`) über `ArenaLifecycleCoordinator.getActivityStep()` (TD-8).
+- Das Missionsergebnis ist `CoopMissionOutcome`; die Runtime ermittelt es und wendet es nicht an –
+  die Folgen bleiben bis Phase 9 beim Coordinator.
+- Verträge: `tests/CoopMissionObjectiveOwnership.test.ts`, `tests/HostUpdatePhaseContracts.test.ts`.
+
+**Noch beim Coordinator (Stoff der Phasen 7–9):** `PlayerWorldRuntime`, Persistent-Base Session- und
+Transaction-State, `persistentBaseVisualSite`, Respawn-Budget/Team-Buff/Held-Action, sowie die
+Anwendung des Missionsergebnisses (Reward, Progression, Persistent-Base-Outcome).
 
 **Manuelle Browser-Prüfliste für den User:**
 - Host und Client: Matchstart aus der LobbyWorld; keine leere oder doppelte World;
@@ -158,9 +181,14 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   Physics und Interaktion stammen aus der neuen World;
 - falls über Diagnose/Entwicklungsweg auslösbar: Coop-Activity A→B in derselben World; Gegner,
   Navigation und Map-Events gehören ausschließlich zu B.
+- **Neu nach Phase 6 (Coop-Runde auf einer Map mit Missionsfortschritt, z. B. `advance`):**
+  Checkpoints lösen aus, Fortschrittsbarrieren öffnen auf Host und Client gleichzeitig und
+  blockieren vorher Weg, Schuss und Bauen; Nebenmissionen (Hold/Carry/Destroy) aktivieren sich,
+  ihre Belohnungen (Pedestal, Reparatur, Team-Buff) erscheinen; Sieg und Niederlage beenden die
+  Runde wie zuvor; Gegnerbewegung, Ausweichschritte und Boss-Verhalten unverändert.
 
 **Nächste konkrete Aktion nach User-Abnahme:**
-`Phase 6 nur auf neuen Auftrag analysieren; dabei TD-7 durch die Activity-interne Update-Reihenfolge ablösen.`
+`Phase 7 nur auf neuen Auftrag analysieren; dabei RK-3 (PlayerWorldRuntime-Ownership) mitnehmen.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

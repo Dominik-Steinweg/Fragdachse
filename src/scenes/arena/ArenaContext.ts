@@ -53,19 +53,12 @@ import type { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItem
 import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
 import type { Ak47StrategicTargetSystem } from '../../systems/Ak47StrategicTargetSystem';
 import type { NecromancySystem } from '../../systems/NecromancySystem';
-import type { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
 import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import type { CoopDefenseMapEventDirector } from '../../systems/CoopDefenseMapEventDirector';
-import type { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
-import type { CoopDefenseObjectivePlacementRewardSystem } from '../../systems/CoopDefenseObjectivePlacementRewardSystem';
-import type { CoopDefenseSecondaryObjectiveSystem } from '../../systems/CoopDefenseSecondaryObjectiveSystem';
-import type { CoopDefenseMissionProgressSystem } from '../../systems/CoopDefenseMissionProgressSystem';
-import type { CoopDefenseMissionBarrierManager } from '../../systems/CoopDefenseMissionBarrierManager';
 import type { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
-import type { CoopDefenseCarrySystem } from '../../systems/CoopDefenseCarrySystem';
 import type { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
 import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
@@ -196,17 +189,12 @@ export interface ArenaContext {
   coopDefenseVoidHunterSystem: CoopDefenseVoidHunterSystem | null;
   coopDefenseTimebombSystem: CoopDefenseTimebombSystem | null;
   coopDefenseRespawnBudgetSystem: CoopDefenseRespawnBudgetSystem | null;
-  coopDefenseRoundStateSystem: CoopDefenseRoundStateSystem | null;
   coopDefenseSpawnExecutor: CoopDefenseSpawnExecutor | null;
   coopDefensePersistentPressureSystem: CoopDefensePersistentPressureSystem | null;
   coopDefenseBossSystem: CoopDefenseBossSystem | null;
   coopDefenseMapDirector: CoopDefenseMapDirector | null;
   coopDefenseMapEventDirector: CoopDefenseMapEventDirector | null;
-  coopDefenseSecondaryObjectiveSystem: CoopDefenseSecondaryObjectiveSystem | null;
-  coopDefenseMissionProgressSystem: CoopDefenseMissionProgressSystem | null;
-  coopDefenseMissionBarrierManager: CoopDefenseMissionBarrierManager | null;
   hostHeldActionSystem: HostHeldActionSystem | null;
-  coopDefenseCarrySystem: CoopDefenseCarrySystem | null;
   /** Host-only: one shared, round-local team buff end timestamp. */
   coopDefenseTeamBuffSystem: CoopDefenseTeamBuffSystem | null;
   /**
@@ -221,10 +209,6 @@ export interface ArenaContext {
    * Weltmarkierung liest sie hier, statt sie erneut aus zwei Rollenpfaden zu beziehen.
    */
   coopDefenseCarryItems: readonly SyncedCoopDefenseCarryItem[];
-  /** Host-only: Wiederherstellung eines gehaltenen Missionsziels. */
-  coopDefenseObjectiveRepairSystem: CoopDefenseObjectiveRepairSystem | null;
-  /** Host-only: one-shot placement rewards from completed Hold objectives. */
-  coopDefenseObjectivePlacementRewardSystem: CoopDefenseObjectivePlacementRewardSystem | null;
   translocatorSystem: TranslocatorSystem | null;
   tunnelSystem:      TunnelSystem      | null;
   trainManager:      TrainManager      | null;

@@ -97,7 +97,21 @@ describe('arena round lifecycle contract', () => {
     // sind reine Lesefassaden darauf und koennen deshalb nicht mehr einzeln leaken.
     expect(roundScopedFields).toContain('worldMaterialization');
     expect(roundScopedFields).toContain('persistentBaseContributions');
-    expect(roundScopedFields).toContain('coopDefenseRoundStateSystem');
+    // Ziele, Fortschritt und Missionsabschluss stehen seit Phase 6 nicht mehr im Kontext; sie
+    // gehoeren der CoopMissionRuntime. Der Parser bleibt an einem weiterhin round-scoped Feld
+    // verankert.
+    expect(roundScopedFields).toContain('coopDefenseRespawnBudgetSystem');
+    for (const migratedToActivity of [
+      'coopDefenseRoundStateSystem',
+      'coopDefenseSecondaryObjectiveSystem',
+      'coopDefenseMissionProgressSystem',
+      'coopDefenseMissionBarrierManager',
+      'coopDefenseCarrySystem',
+      'coopDefenseObjectiveRepairSystem',
+      'coopDefenseObjectivePlacementRewardSystem',
+    ]) {
+      expect(roundScopedFields).not.toContain(migratedToActivity);
+    }
     expect(roundScopedFields).not.toContain('playerManager');
     expect(roundScopedFields).not.toContain('combatSystem');
   });

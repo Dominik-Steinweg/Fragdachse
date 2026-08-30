@@ -1,11 +1,6 @@
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { EMPTY_FULL_PROJECTILE_SNAPSHOT } from '../../network/projectileSnapshotCodec';
-import {
-  ENEMY_FLOW_FIELD_IDS,
-  type FlowFieldCoordinator,
-} from '../../systems/flowfield/FlowFieldCoordinator';
-import { goalCellsToIndexes } from '../../systems/flowfield/FlowFieldSources';
 import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
@@ -21,6 +16,7 @@ import { PICKUP_RADIUS, NUKE_CONFIG } from '../../powerups/PowerUpConfig';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
 import { buildCountdownGroundFirePreview } from '../../effects/CountdownGroundFirePreview';
+import type { CoopMissionActivityStep } from '../../activity/CoopMissionRuntime';
 import type { ArenaContext }      from './ArenaContext';
 import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
@@ -35,7 +31,6 @@ import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import type { HitscanSupportImpact } from '../../systems/CombatSystem';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
-import type { EnemyAiTargetCandidate } from '../../systems/EnemyAiTargetCatalog';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
 import { COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../../systems/CoopDefenseAirstrikeEventHandler';
@@ -119,15 +114,13 @@ export class HostUpdateCoordinator {
   private readonly heldActionUtilityIds = new Map<string, string | null>();
   private moveLoopHandle: string | null = null;
   private classicTrainSpawned = false;
-  private lastEncounterPresentationSignature: string | null = null;
-  private lastMapEventPresentationState: ReturnType<NonNullable<ArenaContext['coopDefenseMapEventDirector']>['getPresentationState']> | null | undefined;
-  private lastSecondaryObjectivePresentationSignature: string | null = null;
   private readonly blackHoleSystem: BlackHoleSystem;
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private lastPerformance = emptyHostUpdatePerformanceMetrics();
   private performanceMetricsEnabled = false;
   private coarsePerformanceMetricsEnabled = false;
   private playerCapabilitiesResolver: ((playerId: string) => PlayerCapabilities) | null = null;
+  private activityStepResolver: (() => CoopMissionActivityStep | null) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -152,6 +145,20 @@ export class HostUpdateCoordinator {
 
   setPlayerCapabilitiesResolver(resolver: (playerId: string) => PlayerCapabilities): void {
     this.playerCapabilitiesResolver = resolver;
+  }
+
+  /**
+   * Der Missionsanteil dieses Frames.
+   *
+   * Der Host-Tick kennt den Schritt, nicht die Systeme dahinter: Ohne laufende Activity gibt es
+   * ihn schlicht nicht, und eine neue Coop-Mechanik erzeugt hier keinen neuen Zweig.
+   */
+  setActivityStepResolver(resolver: () => CoopMissionActivityStep | null): void {
+    this.activityStepResolver = resolver;
+  }
+
+  private activityStep(): CoopMissionActivityStep | null {
+    return this.activityStepResolver?.() ?? null;
   }
 
   /**
@@ -208,9 +215,6 @@ export class HostUpdateCoordinator {
     this.heldActionUtilityIds.clear();
     if (this.moveLoopHandle) { this.audio?.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.classicTrainSpawned = false;
-    this.lastEncounterPresentationSignature = null;
-    this.lastMapEventPresentationState = undefined;
-    this.lastSecondaryObjectivePresentationSignature = null;
     this.blackHoleSystem.clear();
     this.enemyDashVisuals.reset();
     this.lastPerformance = emptyHostUpdatePerformanceMetrics();
@@ -225,7 +229,7 @@ export class HostUpdateCoordinator {
   prepareStartupCaches(now: number): void {
     if (!bridge.isHost()) return;
     this.ctx.combatSystem.getObstacleIndex().prepare();
-    this.updateEnemyFlowFields(now, 0, true);
+    this.activityStep()?.hostPrepareStartupCaches(now);
   }
 
   runHostUpdate(delta: number): void {
@@ -273,17 +277,14 @@ export class HostUpdateCoordinator {
       }
     }
 
-    // Activity: Missionsfortschritt, Ziele und der daraus folgende Druck.
-    if (coopMission) this.runCoopMissionProgressPhase(delta, now, countdownActive, weaponBalanceLabActive);
+    // World: Koeder und Tarnung leben unabhaengig von jeder Activity und stehen deshalb vor dem
+    // Missionsschritt, der sie als Ziele liest.
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
-    const navStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-    this.updateEnemyFlowFields(now, delta);
-    if (metrics) {
-      metrics.navFlowFieldMs = performance.now() - navStartedAt;
-      metrics.navWorkerComputeMs = this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0;
+    // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
+    // Activity; dieser Frame kennt nur den Schritt.
+    if (coopMission) {
+      this.activityStep()?.hostSimulationStep(delta, now, countdownActive, weaponBalanceLabActive, metrics);
     }
-    // Activity: Gegner-Navigation, Bewegung und Kampf.
-    if (coopMission) this.runCoopMissionCombatPhase(delta, now, countdownActive, weaponBalanceLabActive);
     if (metrics) metrics.enemyAiMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
@@ -349,7 +350,7 @@ export class HostUpdateCoordinator {
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
-    if (!countdownActive) this.ctx.coopDefenseEnemyDodgeSystem?.hostUpdate(now);
+    if (!countdownActive) this.activityStep()?.hostPrePhysicsStep(now);
     this.ctx.hostPhysics.update(countdownActive);
     if (!countdownActive) {
       this.ctx.reinforcementMatrixSystem?.update(now);
@@ -853,7 +854,7 @@ export class HostUpdateCoordinator {
     const meteors     = this.ctx.armageddonSystem?.getSnapshot()       ?? [];
     const train     = this.ctx.trainManager?.getNetSnapshot()        ?? null;
     const captureTheBeer = this.ctx.captureTheBeerSystem?.hostUpdate(!countdownActive) ?? null;
-    const coopDefenseCarry = this.ctx.coopDefenseCarrySystem?.hostUpdate(!countdownActive) ?? [];
+    const coopDefenseCarry = this.activityStep()?.hostCarrySnapshot(!countdownActive) ?? [];
     this.ctx.coopDefenseCarryItems = coopDefenseCarry;
     const syncedNow = bridge.getSynchronizedNow();
 
@@ -1236,124 +1237,6 @@ export class HostUpdateCoordinator {
         navWorkerComputeMs: this.ctx.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0,
       };
     }
-  }
-
-  /**
-   * Activity Update – Missionsfortschritt und Ziele.
-   *
-   * Position und Reihenfolge im Host-Tick sind unveraendert; neu ist allein, dass die Gruppe
-   * durch die laufende Activity aktiviert wird statt durch die Nullbarkeit ihrer Systeme.
-   */
-  private runCoopMissionProgressPhase(
-    delta: number,
-    now: number,
-    countdownActive: boolean,
-    weaponBalanceLabActive: boolean,
-  ): void {
-    this.ctx.coopDefenseBossSystem?.hostUpdate(delta, countdownActive, now);
-    this.ctx.coopDefenseMissionProgressSystem?.hostUpdate(
-      delta,
-      countdownActive || weaponBalanceLabActive,
-      this.ctx.playerManager.getAllPlayers().map((player) => ({
-        playerId: player.id,
-        x: player.x,
-        y: player.y,
-        eligible: (this.playerCapabilitiesResolver?.(player.id).canUseMissionActions
-          ?? false) && this.ctx.combatSystem.isAlive(player.id),
-      })),
-    );
-    this.ctx.coopDefenseMapDirector?.hostUpdate(delta, countdownActive);
-    this.ctx.coopDefenseMapEventDirector?.hostUpdate(delta, countdownActive);
-    this.ctx.coopDefenseSecondaryObjectiveSystem?.hostUpdate(delta, countdownActive);
-    this.publishCoopDefenseEncounterPresentation();
-    this.publishCoopDefenseMapEventPresentation();
-    this.publishCoopDefenseSecondaryObjectivePresentation();
-    // The objective snapshot is now current; activate prebuilt mission structures before
-    // flow-field refresh and enemy movement in this same host frame.
-    this.ctx.baseManager?.syncDormantStates();
-    // Reward-Ausführung nach dem Zustandswechsel und vor dem Basis-Snapshot dieses Frames.
-    this.ctx.coopDefenseObjectiveRepairSystem?.hostUpdate(delta, countdownActive);
-    // Read active structure sources after the objective transition so pressure starts in the same
-    // host frame in which its linked dormant base becomes active.
-    this.ctx.coopDefensePersistentPressureSystem?.hostUpdate(delta, countdownActive);
-  }
-
-  /** Activity Update – Gegner-Navigation, Bewegung und Kampf. */
-  private runCoopMissionCombatPhase(
-    delta: number,
-    now: number,
-    countdownActive: boolean,
-    weaponBalanceLabActive: boolean,
-  ): void {
-    if (!countdownActive) this.ctx.coopDefenseTimebombSystem?.hostUpdate(now);
-    // Vor der Bewegung: Wer hat freien Boden erreicht bzw. seine maximale Grabzeit erschöpft?
-    if (!countdownActive) this.ctx.coopDefenseEnemyBurrowSystem?.hostUpdate(now);
-    // Gefechtsabstand vor der Bewegung bestimmen: das Ergebnis ersetzt für Fernkämpfer die
-    // Wegfindung im selben Frame.
-    if (!countdownActive) this.ctx.coopDefenseEnemyCombatPositioningSystem?.hostUpdate();
-    this.ctx.enemyManager?.hostUpdateMovement(
-      this.ctx.enemyFlowFieldService,
-      this.ctx.enemyPlayerFlowFieldService,
-      this.ctx.enemyStrategicFlowFieldService,
-      this.ctx.enemyBossFlowFieldService,
-      countdownActive || weaponBalanceLabActive,
-      now,
-      delta,
-      this.ctx.fireSystem,
-      (enemyId, at) => this.ctx.combatSystem.getActiveBurnSources(enemyId, at),
-      this.ctx.coopDefenseEnemyTrainAwarenessSystem,
-      this.ctx.coopDefenseEnemyBurrowSystem,
-      this.ctx.coopDefenseEnemyCombatPositioningSystem,
-      this.ctx.coopDefenseTimebombSystem,
-      this.ctx.smokeSystem,
-    );
-    if (!countdownActive) this.ctx.necromancySystem?.hostUpdate(now, delta);
-    if (!countdownActive && !weaponBalanceLabActive) {
-      this.ctx.coopDefenseVoidHunterSystem?.hostUpdate(now);
-      this.ctx.coopDefenseEnemyAbilitySystem?.hostUpdate(now);
-      this.ctx.coopDefenseEnemyAttackSystem?.hostUpdate(delta, now);
-    }
-  }
-
-  private publishCoopDefenseEncounterPresentation(): void {
-    const state = this.ctx.coopDefenseMapDirector?.getPresentationState() ?? null;
-    const signature = state
-      ? [
-        state.encounterId,
-        state.sequenceIndex,
-        state.sequenceCount,
-        state.phase,
-        state.phaseStartedAtMs,
-        state.phaseEndsAtMs ?? 'open',
-        state.spawnComplete ?? 'unknown',
-        state.encounterFronts.join(','),
-        state.fronts.join(','),
-        // Jeder erledigte Gegner ist ein echter Anzeigewechsel und muss repliziert werden.
-        state.enemiesDefeated ?? 'none',
-        state.enemiesTotal ?? 'none',
-      ].join('|')
-      : null;
-    if (signature === this.lastEncounterPresentationSignature) return;
-    this.lastEncounterPresentationSignature = signature;
-    bridge.publishCoopDefenseEncounterPresentationState(state);
-  }
-
-  private publishCoopDefenseMapEventPresentation(): void {
-    const state = this.ctx.coopDefenseMapEventDirector?.getPresentationState() ?? null;
-    // Der Director cached den immutable-looking Presentation-State bis zum echten
-    // Lifecycle-Wechsel. Referenzvergleich verhindert sowohl JSON-Serialisierung als auch
-    // eine neue reliable Publikation pro Renderframe.
-    if (state === this.lastMapEventPresentationState) return;
-    this.lastMapEventPresentationState = state;
-    bridge.publishCoopDefenseMapEventPresentationState(state);
-  }
-
-  private publishCoopDefenseSecondaryObjectivePresentation(): void {
-    const state = this.ctx.coopDefenseSecondaryObjectiveSystem?.getPresentationState() ?? null;
-    const signature = state ? JSON.stringify(state) : null;
-    if (signature === this.lastSecondaryObjectivePresentationSignature) return;
-    this.lastSecondaryObjectivePresentationSignature = signature;
-    bridge.publishCoopDefenseSecondaryObjectivePresentationState(state);
   }
 
   getPerformanceMetrics(): HostUpdatePerformanceMetrics {
@@ -2312,174 +2195,6 @@ export class HostUpdateCoordinator {
         return;
       }
     }
-  }
-
-  /**
-   * Sammelt die Ziel-Eingaben aller Flowfields und uebergibt sie dem Coordinator. Gerechnet und
-   * aktiviert wird ausschliesslich an dessen Nav-Ticks; dieser Aufruf bleibt pro Frame billig.
-   *
-   * `deltaMs` treibt den Nav-Takt. `force` ist der Arena-Erstaufbau: Dort wird einmalig synchron
-   * gerechnet, damit der erste Gameplay-Frame vollstaendige Felder vorfindet.
-   */
-  private updateEnemyFlowFields(now: number, deltaMs: number, force = false): void {
-    const flowFieldCoordinator = this.ctx.flowFieldCoordinator;
-    const playerFlowFieldService = this.ctx.enemyPlayerFlowFieldService;
-    const bossFlowFieldService = this.ctx.enemyBossFlowFieldService;
-    const strategicFlowFieldService = this.ctx.enemyStrategicFlowFieldService;
-    const strategicTargetService = this.ctx.enemyStrategicTargetService;
-
-    const targetCatalog = this.ctx.enemyAiTargetCatalog;
-    const strategicGrid = strategicFlowFieldService ?? playerFlowFieldService;
-    if (targetCatalog) {
-      const candidates: EnemyAiTargetCandidate[] = [];
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        const goal = strategicGrid?.worldToGrid(player.x, player.y);
-        candidates.push({
-          kind: 'player',
-          id: player.id,
-          x: player.x,
-          y: player.y,
-          goalCells: goal ? [goal] : [],
-          resolvePosition: () => {
-            const current = this.ctx.playerManager.getPlayer(player.id);
-            return current ? { x: current.x, y: current.y } : null;
-          },
-          isTargetable: () => (
-            player.active
-            && this.ctx.combatSystem.isAlive(player.id)
-            && !(this.ctx.burrowSystem?.isBurrowed(player.id) ?? false)
-            && !this.ctx.decoySystem.isStealthed(player.id)
-          ),
-        });
-      }
-
-      for (const decoy of this.ctx.decoySystem.getHostTargets()) {
-        const goal = strategicGrid?.worldToGrid(decoy.sprite.x, decoy.sprite.y);
-        candidates.push({
-          kind: 'decoy',
-          id: String(decoy.id),
-          ownerId: decoy.ownerId,
-          x: decoy.sprite.x,
-          y: decoy.sprite.y,
-          radius: Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5,
-          goalCells: goal ? [goal] : [],
-          resolvePosition: () => {
-            const current = this.ctx.decoySystem.getHostTarget(decoy.id);
-            return current ? { x: current.sprite.x, y: current.sprite.y } : null;
-          },
-          isTargetable: () => this.ctx.decoySystem.getHostTarget(decoy.id) !== null,
-        });
-      }
-
-      if (strategicFlowFieldService) {
-        for (const construction of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-          if (construction.hp <= 0 || construction.kind !== 'turret') continue;
-          const world = strategicFlowFieldService.gridToWorld(construction.gridX, construction.gridY);
-          if (!world) continue;
-          candidates.push({
-            kind: 'armed-construct',
-            id: String(construction.id),
-            x: world.x,
-            y: world.y,
-            goalCells: this.buildAdjacentGoalCells([{ gridX: construction.gridX, gridY: construction.gridY }]),
-            isTargetable: () => construction.hp > 0,
-          });
-        }
-
-        for (const base of this.ctx.baseManager?.getBasesByFaction('friendly') ?? []) {
-          if (base.role !== 'outpost' || base.isInert?.() === true || base.getHp() <= 0 || base.getTurrets().length === 0) continue;
-          const turret = base.getTurrets()[0];
-          candidates.push({
-            kind: 'armed-outpost',
-            id: base.id,
-            x: turret.x,
-            y: turret.y,
-            goalCells: this.buildAdjacentGoalCells(base.getSpec().cells),
-            resolvePosition: (fromX, fromY) => {
-              const surface = base.getNearestSurfacePoint(fromX, fromY);
-              return surface ? { x: surface.x, y: surface.y } : null;
-            },
-            isTargetable: () => (
-              base.isInert?.() !== true && base.getHp() > 0 && base.getTurrets().length > 0
-            ),
-          });
-        }
-      }
-      targetCatalog.updateTargets(candidates);
-      if (strategicFlowFieldService && strategicTargetService && flowFieldCoordinator) {
-        // Zielzuordnung und Zielmenge reisen als ein Paket: Der Coordinator uebernimmt die
-        // Zuordnung erst in dem Moment, in dem er das daraus gerechnete Feld aktiviert.
-        const prepared = strategicTargetService.prepareTargets(targetCatalog.getStrategicCandidates());
-        flowFieldCoordinator.setGoalCells(
-          ENEMY_FLOW_FIELD_IDS.strategic,
-          goalCellsToIndexes(prepared.goalCells, flowFieldCoordinator.metrics),
-          prepared,
-        );
-      }
-    }
-
-    if (!flowFieldCoordinator) return;
-    if (!playerFlowFieldService) {
-      this.advanceFlowFields(flowFieldCoordinator, deltaMs, force);
-      return;
-    }
-
-    const playerGoalCells: { gridX: number; gridY: number }[] = [];
-    if (targetCatalog) {
-      targetCatalog.forEachTarget('player-like', (target) => {
-        const position = target.resolvePosition?.(0, 0) ?? { x: target.x, y: target.y };
-        const goalCell = playerFlowFieldService.worldToGrid(position.x, position.y);
-        if (!goalCell) return;
-        playerGoalCells.push(goalCell);
-      });
-    } else {
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        if (!player.active) continue;
-        if (!this.ctx.combatSystem.isAlive(player.id)) continue;
-        if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
-        if (this.ctx.decoySystem.isStealthed(player.id)) continue;
-        const goalCell = playerFlowFieldService.worldToGrid(player.x, player.y);
-        if (!goalCell) continue;
-        playerGoalCells.push(goalCell);
-      }
-    }
-
-    const playerGoalIndexes = goalCellsToIndexes(playerGoalCells, flowFieldCoordinator.metrics);
-    flowFieldCoordinator.setGoalCells(ENEMY_FLOW_FIELD_IDS.player, playerGoalIndexes);
-    if (bossFlowFieldService) {
-      flowFieldCoordinator.setGoalCells(ENEMY_FLOW_FIELD_IDS.boss, playerGoalIndexes);
-    }
-
-    // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den
-    // aktuellen Gegner oder, beim Leash-Rueckzug, auf den Besitzer. Ein zweites
-    // Ziel-Update hier wuerde das Angriffsziel jeden Frame wieder ueberschreiben.
-
-    this.advanceFlowFields(flowFieldCoordinator, deltaMs, force);
-  }
-
-  private advanceFlowFields(
-    flowFieldCoordinator: FlowFieldCoordinator,
-    deltaMs: number,
-    force: boolean,
-  ): void {
-    // Der Erstaufbau laeuft im verborgenen Ladezustand einmalig synchron durch denselben Kernel.
-    if (force) flowFieldCoordinator.prepareNow();
-    else flowFieldCoordinator.advance(deltaMs);
-  }
-
-  private buildAdjacentGoalCells(
-    occupiedCells: readonly { gridX: number; gridY: number }[],
-  ): { gridX: number; gridY: number }[] {
-    const result: { gridX: number; gridY: number }[] = [];
-    for (const cell of occupiedCells) {
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dx = -1; dx <= 1; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          result.push({ gridX: cell.gridX + dx, gridY: cell.gridY + dy });
-        }
-      }
-    }
-    return result;
   }
 
   private getLocalUtilityCooldownFrac(): number {

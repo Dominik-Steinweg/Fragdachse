@@ -1038,7 +1038,7 @@ export class ArenaScene extends Phaser.Scene {
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,
       timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseRespawnBudgetSystem: null, coopDefenseRoundStateSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, coopDefenseSecondaryObjectiveSystem: null, coopDefenseMissionProgressSystem: null, coopDefenseMissionBarrierManager: null, hostHeldActionSystem: null, coopDefenseCarrySystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], coopDefenseObjectiveRepairSystem: null, coopDefenseObjectivePlacementRewardSystem: null, translocatorSystem: null, tunnelSystem: null, trainManager: null,
+      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseRespawnBudgetSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, hostHeldActionSystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], translocatorSystem: null, tunnelSystem: null, trainManager: null,
       flowFieldCoordinator: null,
       enemyFlowFieldService: null,
       enemyPlayerFlowFieldService: null,
@@ -1747,6 +1747,9 @@ export class ArenaScene extends Phaser.Scene {
     this.hostUpdate.setPlayerCapabilitiesResolver(
       (playerId) => this.lifecycle.getPlayerCapabilities(playerId),
     );
+    // Beide Frame-Owner kennen nur den Missionsschritt; seine Reihenfolge gehoert der Activity.
+    this.hostUpdate.setActivityStepResolver(() => this.lifecycle.getActivityStep());
+    this.clientUpdate.setActivityStepResolver(() => this.lifecycle.getActivityStep());
     this.ctx.hostPhysics.setCanMoveResolver(
       (playerId) => this.lifecycle.getPlayerCapabilities(playerId).canMove,
     );
@@ -2150,11 +2153,11 @@ export class ArenaScene extends Phaser.Scene {
           && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
           && !this.ctx.leftPanel.isHotkeyInputBlocked()
           && !countdownActive) {
-          this.ctx.coopDefenseRoundStateSystem?.applyDebugBaseDamage(50);
+          this.lifecycle.getActivityStep()?.hostApplyDebugBaseDamage(50);
         }
         this.hostUpdate.runHostUpdate(delta);
         const coopRoundOutcome = gameplayActive
-          ? this.ctx.coopDefenseRoundStateSystem?.update() ?? null
+          ? this.lifecycle.getActivityStep()?.hostResolveCompletion() ?? null
           : null;
         if (coopRoundOutcome) {
           this.prepareCoopDefenseBalanceRound(coopRoundOutcome);

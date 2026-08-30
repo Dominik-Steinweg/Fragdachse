@@ -14,6 +14,7 @@ import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
+import type { CoopMissionActivityStep } from '../../activity/CoopMissionRuntime';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
@@ -146,6 +147,7 @@ export class ClientUpdateCoordinator {
     ((profile: PlayerProfile, spawn: { readonly x: number; readonly y: number }) => boolean) | null = null;
   private detachPlayerFromWorld: ((playerId: string) => void) | null = null;
   private getWorldPresentation: (() => WorldPresentationRequirement) | null = null;
+  private activityStepResolver: (() => CoopMissionActivityStep | null) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -176,6 +178,16 @@ export class ClientUpdateCoordinator {
   /** Verbindet Snapshot-Konsum mit derselben kanonischen Presentation wie die Scene. */
   setWorldPresentationResolver(resolve: () => WorldPresentationRequirement): void {
     this.getWorldPresentation = resolve;
+  }
+
+  /**
+   * Der Missionsanteil dieses Frames.
+   *
+   * Der Client-Tick kennt den Schritt, nicht die Systeme dahinter: Was eine Mission lokal
+   * darstellt, entscheidet ihre eigene Runtime.
+   */
+  setActivityStepResolver(resolver: () => CoopMissionActivityStep | null): void {
+    this.activityStepResolver = resolver;
   }
 
   setPerformanceMetricsEnabled(enabled: boolean): void {
@@ -262,9 +274,8 @@ export class ClientUpdateCoordinator {
       return;
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
-    this.ctx.coopDefenseMissionBarrierManager?.syncPresentationState(
-      bridge.getCoopDefenseMissionProgressPresentationState(),
-    );
+    // Activity: Was diese Mission lokal darstellt, folgt ihrer eigenen Reihenfolge.
+    this.activityStepResolver?.()?.clientPresentationStep();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.ctx.baseManager?.syncDormantStates();

@@ -6,8 +6,15 @@ import type { CoopDefenseEnemyBurrowSystem } from '../systems/CoopDefenseEnemyBu
 import type { CoopDefenseEnemyCombatPositioningSystem } from '../systems/CoopDefenseEnemyCombatPositioningSystem';
 import type { CoopDefenseEnemyDodgeSystem } from '../systems/CoopDefenseEnemyDodgeSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
+import type { CoopDefenseCarrySystem } from '../systems/CoopDefenseCarrySystem';
 import type { CoopDefenseMapDirector } from '../systems/CoopDefenseMapDirector';
 import type { CoopDefenseMapEventDirector } from '../systems/CoopDefenseMapEventDirector';
+import type { CoopDefenseMissionBarrierManager } from '../systems/CoopDefenseMissionBarrierManager';
+import type { CoopDefenseMissionProgressSystem } from '../systems/CoopDefenseMissionProgressSystem';
+import type { CoopDefenseObjectivePlacementRewardSystem } from '../systems/CoopDefenseObjectivePlacementRewardSystem';
+import type { CoopDefenseObjectiveRepairSystem } from '../systems/CoopDefenseObjectiveRepairSystem';
+import type { CoopDefenseRoundStateSystem } from '../systems/CoopDefenseRoundStateSystem';
+import type { CoopDefenseSecondaryObjectiveSystem } from '../systems/CoopDefenseSecondaryObjectiveSystem';
 import type { CoopDefensePersistentPressureSystem } from '../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseSpawnExecutor } from '../systems/CoopDefenseSpawnExecutor';
 import type { CoopDefenseTimebombSystem } from '../systems/CoopDefenseTimebombSystem';
@@ -17,8 +24,14 @@ import type { EnemyAiTargetCatalog } from '../systems/EnemyAiTargetCatalog';
 import type { EnemyStrategicTargetService } from '../systems/EnemyStrategicTargetService';
 import { allyFlowFieldId, type FlowFieldCoordinator } from '../systems/flowfield/FlowFieldCoordinator';
 import type { NecromancySystem } from '../systems/NecromancySystem';
+import type { CoopDefenseMissionProgressPresentationState, SyncedCoopDefenseCarryState } from '../types';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { ActivityRuntime } from '../world/ActivityRuntimeHost';
+import {
+  CoopMissionHostUpdate,
+  type CoopMissionHostUpdatePort,
+  type CoopMissionNavigationMetrics,
+} from './CoopMissionHostUpdate';
 
 export interface CoopMissionNavigationRuntime {
   readonly coordinator: FlowFieldCoordinator;
@@ -52,6 +65,73 @@ export interface CoopMissionEnemySpecialRuntime {
   readonly voidHunter: CoopDefenseVoidHunterSystem | null;
 }
 
+/**
+ * Das fachliche Ergebnis einer Coop-Mission.
+ *
+ * Die Activity ermittelt es und wendet es nicht an; welche Folgen es hat, entscheidet ein
+ * nachgelagerter Owner. Deshalb steht der Begriff hier und nicht am Transport.
+ */
+export type CoopMissionOutcome = 'victory' | 'defeat';
+
+/**
+ * Ziele, Fortschritt und Abschluss genau dieser Mission.
+ *
+ * Sie stehen zusammen, weil sie dieselbe Lifetime und dieselbe fachliche Frage teilen: Was ist in
+ * dieser Mission zu tun, wie weit ist es getan und wann ist sie vorbei. Der Abschluss selbst
+ * bleibt ein reines Ergebnis; was daraus folgt, entscheidet ein nachgelagerter Owner.
+ */
+export interface CoopMissionObjectiveRuntime {
+  readonly secondaryObjectives: CoopDefenseSecondaryObjectiveSystem | null;
+  readonly missionProgress: CoopDefenseMissionProgressSystem | null;
+  /** Lokale Darstellung und Kollision der Fortschrittsbarrieren dieser Mission. */
+  readonly barriers: CoopDefenseMissionBarrierManager | null;
+  readonly carry: CoopDefenseCarrySystem | null;
+  readonly repair: CoopDefenseObjectiveRepairSystem | null;
+  readonly placementReward: CoopDefenseObjectivePlacementRewardSystem | null;
+  /** Host-autoritative Ermittlung von Sieg und Niederlage dieser Mission. */
+  readonly roundState: CoopDefenseRoundStateSystem | null;
+}
+
+/** Was dieser Peer aus dem replizierten Missionsstand lokal darstellt. */
+export interface CoopMissionClientPresentationPort {
+  readonly getMissionProgressPresentationState: () => CoopDefenseMissionProgressPresentationState | null;
+}
+
+/**
+ * Die Aussenanschluesse der Mission.
+ *
+ * Sie werden mit der Runtime uebergeben und nicht nachtraeglich gesetzt: Ein Activity-Wechsel in
+ * derselben World materialisiert die Mission neu, ihre Fragen an World und Scene bleiben dabei
+ * dieselben.
+ */
+export interface CoopMissionRuntimePorts {
+  readonly hostUpdate: CoopMissionHostUpdatePort;
+  readonly clientPresentation: CoopMissionClientPresentationPort;
+}
+
+/**
+ * Der Missionsanteil eines Frames, so weit ein Frame-Owner ihn kennt.
+ *
+ * Bewusst nur benannte Schritte: Welche Systeme dahinter laufen und in welcher Reihenfolge,
+ * entscheidet die Activity. Eine neue Coop-Mechanik braucht deshalb keinen neuen globalen
+ * Update-Zweig.
+ */
+export interface CoopMissionActivityStep {
+  readonly hostPrepareStartupCaches: (nowMs: number) => void;
+  readonly hostSimulationStep: (
+    deltaMs: number,
+    nowMs: number,
+    countdownActive: boolean,
+    weaponBalanceLabActive: boolean,
+    metrics?: CoopMissionNavigationMetrics | null,
+  ) => void;
+  readonly hostPrePhysicsStep: (nowMs: number) => void;
+  readonly hostCarrySnapshot: (interactionsEnabled: boolean) => SyncedCoopDefenseCarryState;
+  readonly hostResolveCompletion: () => CoopMissionOutcome | null;
+  readonly hostApplyDebugBaseDamage: (amount: number) => void;
+  readonly clientPresentationStep: () => void;
+}
+
 export type CoopMissionRuntimeBindingsChanged = (runtime: CoopMissionRuntime | null) => void;
 
 /** Gerichtete Bindung eines langlebigeren Systems an genau diese Activity. */
@@ -70,7 +150,7 @@ export type CoopMissionMaterializationStep = (runtime: CoopMissionRuntime) => vo
  * Die scene-langlebigen Combat-/Projectile-/Physics-/Fire-Systeme werden nur referenziert und
  * bleiben ausserhalb dieses Teardowns.
  */
-export class CoopMissionRuntime implements ActivityRuntime {
+export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityStep {
   private enemyOwner: EnemyManager | null = null;
   private navigationOwner: CoopMissionNavigationRuntime | null = null;
   private encounterOwner: CoopMissionEncounterRuntime | null = null;
@@ -78,9 +158,12 @@ export class CoopMissionRuntime implements ActivityRuntime {
   private enemySpecialOwner: CoopMissionEnemySpecialRuntime | null = null;
   private necromancyOwner: NecromancySystem | null = null;
   private mapEventOwner: CoopDefenseMapEventDirector | null = null;
+  private objectiveOwner: CoopMissionObjectiveRuntime | null = null;
   private scopedBindings: CoopMissionScopedBinding[] = [];
   private materializationSteps: CoopMissionMaterializationStep[] = [];
   private destroyed = false;
+  /** Die activity-interne Host-Reihenfolge; ohne Ports laeuft diese Mission nicht als Host. */
+  private readonly hostUpdateOwner: CoopMissionHostUpdate | null;
 
   /** Ally-Felder werden mit der Activity erzeugt und bei ihrem Ende vollstaendig verworfen. */
   readonly allyFlowFields = new Map<string, EnemyFlowFieldService>();
@@ -88,12 +171,14 @@ export class CoopMissionRuntime implements ActivityRuntime {
   constructor(
     readonly descriptor: ActivityDescriptor,
     private readonly bindingsChanged: CoopMissionRuntimeBindingsChanged = () => { /* noop */ },
+    private readonly ports: CoopMissionRuntimePorts | null = null,
   ) {
     if (descriptor.kind !== 'coop-mission') {
       throw new Error(
         `[CoopMissionRuntime] Activity ${descriptor.definitionId} is ${descriptor.kind}, not coop-mission`,
       );
     }
+    this.hostUpdateOwner = ports ? new CoopMissionHostUpdate(this, ports.hostUpdate) : null;
   }
 
   get enemyManager(): EnemyManager | null { return this.enemyOwner; }
@@ -140,6 +225,24 @@ export class CoopMissionRuntime implements ActivityRuntime {
     return this.enemySpecialOwner?.voidHunter ?? null;
   }
   get necromancySystem(): NecromancySystem | null { return this.necromancyOwner; }
+  get coopDefenseSecondaryObjectiveSystem(): CoopDefenseSecondaryObjectiveSystem | null {
+    return this.objectiveOwner?.secondaryObjectives ?? null;
+  }
+  get coopDefenseMissionProgressSystem(): CoopDefenseMissionProgressSystem | null {
+    return this.objectiveOwner?.missionProgress ?? null;
+  }
+  get coopDefenseMissionBarrierManager(): CoopDefenseMissionBarrierManager | null {
+    return this.objectiveOwner?.barriers ?? null;
+  }
+  get coopDefenseCarrySystem(): CoopDefenseCarrySystem | null {
+    return this.objectiveOwner?.carry ?? null;
+  }
+  get coopDefenseObjectiveRepairSystem(): CoopDefenseObjectiveRepairSystem | null {
+    return this.objectiveOwner?.repair ?? null;
+  }
+  get coopDefenseObjectivePlacementRewardSystem(): CoopDefenseObjectivePlacementRewardSystem | null {
+    return this.objectiveOwner?.placementReward ?? null;
+  }
 
   setEnemyManager(manager: EnemyManager): void {
     this.claimEmptySlot('enemy manager', this.enemyOwner);
@@ -183,6 +286,12 @@ export class CoopMissionRuntime implements ActivityRuntime {
     this.publishBindings();
   }
 
+  setObjectives(runtime: CoopMissionObjectiveRuntime): void {
+    this.claimEmptySlot('objective runtime', this.objectiveOwner);
+    this.objectiveOwner = runtime;
+    this.publishBindings();
+  }
+
   /** Bindet einen laenger lebenden Consumer; Detach loest ihn vor allen Child-Ownern. */
   bind(binding: CoopMissionScopedBinding): void {
     this.claimEmptySlot('scoped binding', null);
@@ -219,11 +328,69 @@ export class CoopMissionRuntime implements ActivityRuntime {
   }
 
   /**
-   * Der Activity-Tick laeuft bereits ueber `ActivityRuntimeHost`. Phase 6 uebernimmt die heute
-   * noch in Host-/Client-Coordinatoren liegende fachliche Update-Reihenfolge in diesen Owner.
+   * Lifecycle-Tick ueber den `ActivityRuntimeHost`.
+   *
+   * Der fachliche Simulationsschritt der Mission haengt an der Rolle und an einer festen Stelle
+   * des Frames; er laeuft ueber {@link hostSimulationStep} und {@link clientPresentationStep}.
+   * Beide Reihenfolgen gehoeren dieser Runtime - der Aufrufer kennt nur den Schritt.
    */
   update(_deltaMs: number): void {
     if (this.destroyed) return;
+  }
+
+  /** Einmaliger synchroner Navigationsaufbau im verborgenen Ladezustand. */
+  hostPrepareStartupCaches(nowMs: number): void {
+    if (this.destroyed) return;
+    this.hostUpdateOwner?.prepareStartupCaches(nowMs);
+  }
+
+  /** Ein vollstaendiger Simulationsschritt der Mission: Fortschritt, Navigation, Gegner. */
+  hostSimulationStep(
+    deltaMs: number,
+    nowMs: number,
+    countdownActive: boolean,
+    weaponBalanceLabActive: boolean,
+    metrics: CoopMissionNavigationMetrics | null = null,
+  ): void {
+    if (this.destroyed) return;
+    this.hostUpdateOwner?.run(deltaMs, nowMs, countdownActive, weaponBalanceLabActive, metrics);
+  }
+
+  /** Missionsanteil unmittelbar vor der Physik dieses Frames. */
+  hostPrePhysicsStep(nowMs: number): void {
+    if (this.destroyed) return;
+    this.hostUpdateOwner?.runPrePhysicsStep(nowMs);
+  }
+
+  /** Getragene Missionsziele fuer den Snapshot dieses Frames. */
+  hostCarrySnapshot(interactionsEnabled: boolean): SyncedCoopDefenseCarryState {
+    if (this.destroyed) return [];
+    return this.objectiveOwner?.carry?.hostUpdate(interactionsEnabled) ?? [];
+  }
+
+  /**
+   * Das fachliche Ergebnis dieser Mission, sobald es feststeht.
+   *
+   * Die Runtime ermittelt es und wendet es nicht an: Was daraus folgt, entscheidet der Owner der
+   * Uebergaenge.
+   */
+  hostResolveCompletion(): CoopMissionOutcome | null {
+    if (this.destroyed) return null;
+    return this.objectiveOwner?.roundState?.update() ?? null;
+  }
+
+  /** Diagnoseweg auf den Missionsabschluss; ohne laufende Mission wirkungslos. */
+  hostApplyDebugBaseDamage(amount: number): void {
+    if (this.destroyed) return;
+    this.objectiveOwner?.roundState?.applyDebugBaseDamage(amount);
+  }
+
+  /** Lokale Darstellung des replizierten Missionsstands auf einem Client. */
+  clientPresentationStep(): void {
+    if (this.destroyed || !this.ports) return;
+    this.objectiveOwner?.barriers?.syncPresentationState(
+      this.ports.clientPresentation.getMissionProgressPresentationState(),
+    );
   }
 
   /** Vollstaendiger, idempotenter Teardown aller in Phase 5 uebernommenen Child-Owner. */
@@ -238,6 +405,14 @@ export class CoopMissionRuntime implements ActivityRuntime {
     // Compatibility-Consumer sehen die Activity ab jetzt nicht mehr. Das geschieht vor dem
     // Entity-Teardown, damit kein Destroy-Callback ueber einen langlebigeren Service zurueckgreift.
     this.bindingsChanged(null);
+
+    // Ziele und Fortschritt fallen zuerst: Sie steuern Directors und Druck, nicht umgekehrt.
+    this.objectiveOwner?.carry?.destroy();
+    this.objectiveOwner?.placementReward?.reset();
+    this.objectiveOwner?.repair?.reset();
+    this.objectiveOwner?.secondaryObjectives?.reset();
+    this.objectiveOwner?.missionProgress?.reset();
+    this.objectiveOwner?.barriers?.destroy();
 
     // Abhaengige Directors und Behaviour-Systeme fallen vor Gegnern und Navigation.
     this.mapEventOwner?.reset();
@@ -271,6 +446,7 @@ export class CoopMissionRuntime implements ActivityRuntime {
     this.navigationOwner?.releaseGridChanges();
     this.navigationOwner?.coordinator.destroy();
 
+    this.objectiveOwner = null;
     this.mapEventOwner = null;
     this.necromancyOwner = null;
     this.enemySpecialOwner = null;
