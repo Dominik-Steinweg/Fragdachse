@@ -118,7 +118,7 @@ export interface CoopDefenseProgressPreferences {
   defaultProfile: CoopDefenseUpgradeProfile;
   selectedClassId: CoopDefenseClassId;
   profilesByClass: Record<CoopDefenseClassId, CoopDefenseUpgradeProfile>;
-  /** Das Item-System bleibt bis zum Sieg auf Map 10 verborgen. */
+  /** Das Item-System bleibt bis zum Sieg auf Map 15 verborgen. */
   itemsUnlocked: boolean;
   /**
    * Besitzt der Spieler die persistente Basis?

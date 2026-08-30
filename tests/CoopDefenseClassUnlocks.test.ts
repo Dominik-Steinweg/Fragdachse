@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  addStoredCoopDefenseXp,
   getStoredCoopDefenseLoadout,
   getStoredCoopDefenseProgress,
   markStoredCoopDefenseBossMapCompleted,
@@ -124,6 +125,17 @@ describe('coop-defense class unlock progression', () => {
     expect(getStoredCoopDefenseProgress().unlockedClassIds).toEqual([
       'dachs_nukem', 'dachs_of_steel', 'inspector_gadachs',
     ]);
+  });
+
+  it('does not derive the Inspector unlock from map progress when adding XP', () => {
+    expect(unlockStoredCoopDefenseClassesAfterVictory('5')).toBe(true);
+    setStoredHighestUnlockedCoopDefenseMapId('15');
+
+    expect(addStoredCoopDefenseXp(250)).toBe(250);
+
+    const progress = getStoredCoopDefenseProgress();
+    expect(progress.highestUnlockedMapId).toBe('15');
+    expect(progress.unlockedClassIds).toEqual(['dachs_nukem', 'dachs_of_steel']);
   });
 
   it('keeps existing class profiles and loadouts unchanged when Inspector unlocks on Map 10', () => {
