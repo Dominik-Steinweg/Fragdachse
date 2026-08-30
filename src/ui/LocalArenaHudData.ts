@@ -28,7 +28,7 @@ interface BuildLocalArenaHudDataParams {
   persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?: number;
   adrenalineSyringeActive?: boolean;
-  isUtilityOverridden?: boolean;
+  isTemporaryUtilitySelected?: boolean;
   activePowerUps?: ArenaHUDData['activePowerUps'];
   shieldBuff?: ArenaHUDData['shieldBuff'];
   weapon2AdrenalineCost?: number;
@@ -72,7 +72,7 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     persistentBaseRewardId: params.persistentBaseRewardId,
     utilityCapacityCost: params.utilityCapacityCost ?? 0,
     adrenalineSyringeActive: params.adrenalineSyringeActive ?? false,
-    isUtilityOverridden: params.isUtilityOverridden ?? false,
+    isTemporaryUtilitySelected: params.isTemporaryUtilitySelected ?? false,
     activePowerUps: params.activePowerUps ?? [],
     shieldBuff: params.shieldBuff,
     weapon2AdrenalineCost: params.weapon2AdrenalineCost ?? 0,
@@ -105,7 +105,7 @@ export function buildInitialLocalArenaHudData(
     persistentBaseRewardId: params.persistentBaseRewardId,
     utilityCapacityCost: params.utilityCapacityCost ?? 0,
     adrenalineSyringeActive: false,
-    isUtilityOverridden: false,
+    isTemporaryUtilitySelected: false,
     activePowerUps: [],
     weapon2AdrenalineCost: params.weapon2AdrenalineCost ?? 0,
   });

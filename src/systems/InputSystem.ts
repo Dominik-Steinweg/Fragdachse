@@ -14,7 +14,6 @@ import {
   cloneRadialActionRef,
   isSameRadialActionRef,
   radialActionKey,
-  radialActionRefFromTool,
   resolveRadialActions,
   type RadialActionRef,
   type RadialActionState,
@@ -67,6 +66,21 @@ export function resolvePointerButtonHandoff(
     gameplayButtons: heldButtons & ~stillConsumed,
     consumedButtons: stillConsumed,
   };
+}
+
+interface RadialActionProviders {
+  readonly getTools: () => readonly LoadoutToolRef[];
+  readonly getCapacity?: () => { used: number; max: number };
+  readonly getDismantlePreview?: () => UtilityPlacementPreviewState | undefined;
+  readonly getCooldownUntil?: (ref: RadialActionRef) => number;
+  readonly getCapabilities?: () => {
+    canUseUtility: boolean;
+    canPlace: boolean;
+    canManage: boolean;
+  };
+  readonly getManagementActions?: () => readonly RadialManagementAction[];
+  /** Domain hook for utility actions that belong to a tool loadout instead of the utility slot. */
+  readonly utilityUsesToolRef?: (utilityId: string) => boolean;
 }
 
 export class InputSystem {
@@ -128,9 +142,7 @@ export class InputSystem {
     constructionId: ConstructionId,
   ) => UtilityPlacementPreviewState | undefined) | null = null;
   private radialGetTools: (() => readonly LoadoutToolRef[]) | null = null;
-  private radialGetSelectedTool: (() => LoadoutToolRef | null) | null = null;
-  private radialSetSelectedTool: ((tool: LoadoutToolRef) => void) | null = null;
-  private inspectorModeProvider: (() => boolean) | null = null;
+  private radialUtilityUsesToolRef: ((utilityId: string) => boolean) | null = null;
   private radialGetTemporaryUtilities: (() => readonly TemporaryUtilityInstanceDescriptor[]) | null = null;
   private radialActionMenu: RadialActionMenu | null = null;
   private selectedRadialAction: RadialActionRef | null = null;
@@ -233,26 +245,14 @@ export class InputSystem {
     });
   }
 
-  setupRadialActionProviders(
-    getTools: () => readonly LoadoutToolRef[],
-    getSelected: () => LoadoutToolRef | null,
-    setSelected: (tool: LoadoutToolRef) => void,
-    isInspectorMode?: () => boolean,
-    getCapacity?: () => { used: number; max: number },
-    getDismantlePreview?: () => UtilityPlacementPreviewState | undefined,
-    getCooldownUntil?: (ref: RadialActionRef) => number,
-    getCapabilities?: () => { canUseUtility: boolean; canPlace: boolean; canManage: boolean },
-    getManagementActions?: () => readonly RadialManagementAction[],
-  ): void {
-    this.radialGetTools = getTools;
-    this.radialGetSelectedTool = getSelected;
-    this.radialSetSelectedTool = setSelected;
-    this.inspectorModeProvider = isInspectorMode ?? null;
-    this.radialGetCapacity = getCapacity ?? null;
-    this.getDismantlePreviewProvider = getDismantlePreview ?? null;
-    this.radialGetCooldownUntil = getCooldownUntil ?? null;
-    this.radialGetCapabilities = getCapabilities ?? null;
-    this.radialGetManagementActions = getManagementActions ?? null;
+  setupRadialActionProviders(providers: RadialActionProviders): void {
+    this.radialGetTools = providers.getTools;
+    this.radialGetCapacity = providers.getCapacity ?? null;
+    this.getDismantlePreviewProvider = providers.getDismantlePreview ?? null;
+    this.radialGetCooldownUntil = providers.getCooldownUntil ?? null;
+    this.radialGetCapabilities = providers.getCapabilities ?? null;
+    this.radialGetManagementActions = providers.getManagementActions ?? null;
+    this.radialUtilityUsesToolRef = providers.utilityUsesToolRef ?? null;
   }
 
   setupTemporaryUtilityProvider(
@@ -449,7 +449,6 @@ export class InputSystem {
     if (this.selectedRadialAction && actions.some((entry) => (
       isSameRadialActionRef(entry.ref, this.selectedRadialAction)
     ))) return;
-    const lostTemporarySelection = this.selectedRadialAction?.kind === 'temporary-utility';
     while (this.radialSelectionHistory.length > 0) {
       const candidate = this.radialSelectionHistory.pop() ?? null;
       if (candidate && actions.some((entry) => isSameRadialActionRef(entry.ref, candidate))) {
@@ -457,18 +456,11 @@ export class InputSystem {
         return;
       }
     }
-    const persistedTool = this.isInspectorMode() ? this.radialGetSelectedTool?.() ?? null : null;
-    const persistedRef = persistedTool ? radialActionRefFromTool(persistedTool) : null;
-    const fallback = !lostTemporarySelection && persistedRef
-      ? actions.find((entry) => isSameRadialActionRef(entry.ref, persistedRef))
-      : undefined;
     const ordinaryUtility = actions.find((entry) => entry.ref.kind === 'utility');
-    this.selectedRadialAction = fallback?.ref
-      ? cloneRadialActionRef(fallback.ref)
-      : ordinaryUtility?.ref
-        ? cloneRadialActionRef(ordinaryUtility.ref)
-        : actions[0]?.ref
-          ? cloneRadialActionRef(actions[0].ref)
+    this.selectedRadialAction = ordinaryUtility?.ref
+      ? cloneRadialActionRef(ordinaryUtility.ref)
+      : actions[0]?.ref
+        ? cloneRadialActionRef(actions[0].ref)
         : null;
     if (!this.selectedRadialAction || this.selectedRadialAction.kind !== 'persistent-reward') {
       this.persistentRewardPlacementActive = false;
@@ -478,12 +470,6 @@ export class InputSystem {
   private applyRadialSelection(selection: RadialActionRef): void {
     this.selectedRadialAction = cloneRadialActionRef(selection);
     this.radialSelectionHistory.length = 0;
-    if (!this.isInspectorMode()) return;
-    if (selection.kind === 'construction') {
-      this.radialSetSelectedTool?.({ kind: 'construction', id: selection.constructionId });
-    } else if (selection.kind === 'utility') {
-      this.radialSetSelectedTool?.({ kind: 'utility', id: selection.utilityId });
-    }
   }
 
   private reconcileTemporaryUtilitySelection(actions: readonly RadialActionState[]): void {
@@ -578,16 +564,13 @@ export class InputSystem {
     if (tool?.kind === 'construction' && activeConstructionId === tool.id) {
       return { toolRef: tool };
     }
-    return this.isInspectorMode() && tool?.kind === 'utility'
-      // Coop commits the concrete `*_COOP` variant while the Inspector keeps
-      // the user-facing base ID. Treat both IDs as the same tool, but keep
+    return tool?.kind === 'utility'
+      // Tool loadouts keep the user-facing base ID while Coop may resolve a concrete
+      // mode variant. The domain provider decides whether this action needs a toolRef.
+      && this.radialUtilityUsesToolRef?.(tool.id) === true
       && (!activeConfig || activeConfig.id === resolvedToolConfig?.id)
       ? { toolRef: tool }
       : undefined;
-  }
-
-  private isInspectorMode(): boolean {
-    return this.inspectorModeProvider?.() ?? false;
   }
 
   isConstructionPlacementActive(): boolean {
@@ -1161,7 +1144,9 @@ export class InputSystem {
             dismantle: true,
           });
         }
-        this.cancelRadialPlacement();
+        // Rueckbau bleibt bis zum expliziten Abbruch oder Action-Wechsel aktiv. Der Host
+        // entscheidet weiterhin autoritativ ueber Ownership und den 100-ms-Cooldown.
+        this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
       return;
@@ -1687,7 +1672,7 @@ export class InputSystem {
     // BFG charge sound (charged_gate utilities)
     const utCfg = this.utilityChargeConfig ?? this.getChargeableUtilityConfig();
     const utilityParams = this.utilityChargeParams;
-    const inspectorTool = utilityParams?.toolRef;
+    const toolRef = utilityParams?.toolRef;
     if (utCfg) {
       const actionId = this.createHeldActionId(utCfg.activation.type);
       this.activeHeldActionId = actionId;
@@ -1695,7 +1680,7 @@ export class InputSystem {
         actionId,
         utCfg.activation.type,
         utCfg.activation.fullChargeDuration,
-        inspectorTool,
+        toolRef,
         utilityParams?.temporaryUtilityInstanceId,
       );
     }

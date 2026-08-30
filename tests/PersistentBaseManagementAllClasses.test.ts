@@ -144,7 +144,11 @@ function createHarness(classId: string) {
       playerManager: { getPlayer: () => player },
       combatSystem: { isAlive: () => true, isBurrowed: () => false },
       gameAudioSystem: { playSound: vi.fn() },
-      powerUpSystem: { repositionPersistentBaseRewardPedestal: vi.fn(() => true), repositionConstructionPedestal: vi.fn(() => true) },
+      powerUpSystem: {
+        repositionPersistentBaseRewardPedestal: vi.fn(() => true),
+        repositionConstructionPedestal: vi.fn(() => true),
+        unregisterPersistentBaseRewardPedestal: vi.fn(() => true),
+      },
       targetStatusSystem: null,
       energyInjectorSystem: null,
     },
@@ -237,6 +241,28 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(coordinator.getPersistentBaseRewardIdsForPlayer(playerId)).toEqual(['base_health_pedestal']);
   });
 
+  it('zeigt und bestaetigt Base-Reward-Rueckbau fuer eine Nicht-Inspector-Klasse', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, placementSystem, rewardStore, playerId } = harness;
+    const reward = placeRewardPedestal(harness, 1, 0);
+    const originCell = rewardCell(0, 0);
+    const origin = worldCellCenter(METRICS, originCell.gridX, originCell.gridY);
+    const target = worldCellCenter(METRICS, reward.gridX, reward.gridY);
+
+    expect(placementSystem.getDismantlePreview(
+      playerId,
+      origin.x,
+      origin.y,
+      target.x,
+      target.y,
+      1_000,
+    )).toMatchObject({ isValid: true, sourceRuntimeId: reward.id, mode: 'dismantle' });
+
+    expect(coordinator.dismantleConstruction(playerId, target.x, target.y)).toEqual({ ok: true });
+    expect(placementSystem.getRuntimeRock(reward.id)).toBeUndefined();
+    expect(rewardStore.getState().placements).toEqual([]);
+  });
+
   it('verschiebt ein Base-Reward-Podest atomar und erhaelt seinen Runtime- und Podestzustand', () => {
     const harness = createHarness('assault_dachs');
     const { coordinator, rewardStore, placementSystem, playerId } = harness;
@@ -269,7 +295,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     });
     const powerUpSystem = coordinator.ctx.powerUpSystem;
     expect(powerUpSystem.repositionPersistentBaseRewardPedestal).toHaveBeenCalledTimes(1);
-    expect(powerUpSystem.unregisterPersistentBaseRewardPedestal).toBeUndefined();
+    expect(powerUpSystem.unregisterPersistentBaseRewardPedestal).not.toHaveBeenCalled();
     // Das Composite wird genau einmal gegen den neuen Zustand aufgeloest.
     expect(coordinator.hostRefreshPersistentBaseComposite).toHaveBeenCalledTimes(1);
   });
@@ -434,6 +460,24 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
       gridX: foreign.gridX,
       gridY: foreign.gridY,
     });
+  });
+
+  it('markiert nur eigene persoenliche Konstruktionen als rueckbaubar', () => {
+    const harness = createHarness('assault_dachs');
+    const { placementSystem, playerId } = harness;
+    const own = placeOwnConstruction(harness, playerId, 1, 0);
+    const foreign = placeOwnConstruction(harness, 'someone-else', -1, 0);
+    const originCell = rewardCell(0, 0);
+    const origin = worldCellCenter(METRICS, originCell.gridX, originCell.gridY);
+    const ownTarget = worldCellCenter(METRICS, own.gridX, own.gridY);
+    const foreignTarget = worldCellCenter(METRICS, foreign.gridX, foreign.gridY);
+
+    expect(placementSystem.getDismantlePreview(
+      playerId, origin.x, origin.y, ownTarget.x, ownTarget.y, 1_000,
+    )?.isValid).toBe(true);
+    expect(placementSystem.getDismantlePreview(
+      playerId, origin.x, origin.y, foreignTarget.x, foreignTarget.y, 1_000,
+    )?.isValid).toBe(false);
   });
 
   it('haelt einen persistenten Beitrag beim Verschieben im Baubereich', () => {

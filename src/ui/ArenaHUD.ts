@@ -264,7 +264,7 @@ export interface ArenaHUDData {
   persistentBaseRewardId?: PersistentBaseRewardId;
   utilityCapacityCost?:     number;
   adrenalineSyringeActive?: boolean;
-  isUtilityOverridden?:     boolean;
+  isTemporaryUtilitySelected?: boolean;
   activePowerUps?:          ActivePowerUpInfo[];
   shieldBuff?:              ShieldBuffHudState;
   weapon2AdrenalineCost?:   number;
@@ -331,7 +331,7 @@ export class ArenaHUD {
   private utilWobbleGlow:     GlowHandle | null = null;
   private utilWobbleTween:    Phaser.Tweens.Tween | null = null;
   private utilLabelPulseTween: Phaser.Tweens.Tween | null = null;
-  private wasUtilityOverridden = false;
+  private wasTemporaryUtilitySelected = false;
 
   private currentUtilityName = '';
 
@@ -628,7 +628,7 @@ export class ArenaHUD {
       const displayName = `${utilityName}${capacitySuffix}`;
       if (displayName !== this.currentUtilityName) this.onUtilityNameChanged(displayName);
     }
-    this.updateUtilityOverrideVisual(data.isUtilityOverridden ?? false);
+    this.updateTemporaryUtilityVisual(data.isTemporaryUtilitySelected ?? false);
     this.updatePersistentPowerUps(data);
   }
 
@@ -749,7 +749,7 @@ export class ArenaHUD {
     this.removeAdrSyringe();
     this.removeUtilWobble();
     this.wasSyringeActive = false;
-    this.wasUtilityOverridden = false;
+    this.wasTemporaryUtilitySelected = false;
     this.w2Insufficient = false;
     this.w2RedOverlay.setAlpha(0);
     for (const mark of this.adrTickMarks) mark.destroy();
@@ -1041,7 +1041,7 @@ export class ArenaHUD {
     bundle.prevFrac = readyFrac;
   }
 
-  // ── Utility override visual ───────────────────────────────────────────────
+  // ── Temporary-utility selection visual ───────────────────────────────────
 
   private onUtilityNameChanged(newName: string): void {
     this.currentUtilityName = newName;
@@ -1058,11 +1058,11 @@ export class ArenaHUD {
     });
   }
 
-  private updateUtilityOverrideVisual(isOverridden: boolean): void {
-    this.setBarEnergized(this.util, isOverridden);
-    if (isOverridden && !this.wasUtilityOverridden) this.startUtilWobble();
-    else if (!isOverridden && this.wasUtilityOverridden) this.removeUtilWobble();
-    this.wasUtilityOverridden = isOverridden;
+  private updateTemporaryUtilityVisual(isSelected: boolean): void {
+    this.setBarEnergized(this.util, isSelected);
+    if (isSelected && !this.wasTemporaryUtilitySelected) this.startUtilWobble();
+    else if (!isSelected && this.wasTemporaryUtilitySelected) this.removeUtilWobble();
+    this.wasTemporaryUtilitySelected = isSelected;
   }
 
   private startUtilWobble(): void {

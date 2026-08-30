@@ -801,8 +801,6 @@ export interface CoopDefenseUpgradeProfile {
   upgrades: Record<string, CoopDefenseUpgradeState>;
   /** Gemeinsame Utility-Slots (Konstrukte und Utilities), pro Klassenprofil gespeichert. */
   toolLoadout?: LoadoutToolRef[];
-  /** Zuletzt gewaehlte Utility fuer die E-Taste. */
-  selectedTool?: LoadoutToolRef | null;
 }
 
 /** Dauerhafte Coop-Defense-Klassenspezialisierung. */

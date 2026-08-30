@@ -44,7 +44,7 @@ function createInputSystem(): InputSystem {
   return new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
 }
 
-describe('Inspector utility action HUD state', () => {
+describe('radial action HUD state', () => {
   it('uses the actual radial action label instead of a stale construction label', () => {
     expect(getUtilityHudDisplayName(undefined, 'dismantle')).toBe(t('ui.radial.dismantle'));
     expect(getUtilityHudDisplayName(undefined, 'dismantle-own-all')).toBe(t('ui.radial.dismantleAll'));

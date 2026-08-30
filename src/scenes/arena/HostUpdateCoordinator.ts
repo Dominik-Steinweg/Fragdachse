@@ -932,7 +932,7 @@ export class HostUpdateCoordinator {
       const utilCfg   = selectedUtility ?? this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
-      const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
+      const constructionCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
       const utilityId = managementAction || rewardId
         ? undefined
         : selectedConstruction
@@ -971,9 +971,9 @@ export class HostUpdateCoordinator {
         utilityId,
         utilityAction:            managementAction ?? undefined,
         persistentBaseRewardId:   rewardId ?? undefined,
-        utilityCapacityCost:     inspectorCapacityCost,
+        utilityCapacityCost:     constructionCapacityCost,
         adrenalineSyringeActive: (this.ctx.powerUpSystem?.getRegenMultiplier(localId) ?? 1) > 1,
-        isUtilityOverridden:     radialAction?.kind === 'temporary-utility',
+        isTemporaryUtilitySelected: radialAction?.kind === 'temporary-utility',
         activePowerUps:          [
           ...activePowerUps,
           ...(teamBuff ? [teamBuff] : []),

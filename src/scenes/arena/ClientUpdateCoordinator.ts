@@ -17,14 +17,13 @@ import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutCommitSnapshot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerProfile, SyncedPowerUp, TemporaryUtilityInstanceDescriptor, WeaponSlot } from '../../types';
+import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerProfile, SyncedPowerUp, TemporaryUtilityInstanceDescriptor, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
 import {
   getStoredCoopDefenseProgress,
   getStoredEquippedCoopDefenseItems,
-  setStoredCoopDefenseUpgradeProfile,
 } from '../../utils/localPreferences';
 import { getCoopDefenseCommittedEffectTotals } from '../../utils/coopDefenseItemEffects';
 import { EMPTY_COOP_DEFENSE_EFFECT_TOTALS, resolveCoopDefenseStat } from '../../utils/coopDefenseStats';
@@ -141,8 +140,6 @@ export class ClientUpdateCoordinator {
   };
   private performanceMetricsEnabled = false;
   private coarsePerformanceMetricsEnabled = false;
-
-  private inspectorSelectedTool: LoadoutToolRef | null = null;
 
   private readonly enemyDashVisuals: EnemyDashVisualTracker;
   private attachPlayerToWorld:
@@ -550,7 +547,7 @@ export class ClientUpdateCoordinator {
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId2);
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
-      const inspectorCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
+      const constructionCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
       const baseUtilityId = managementAction || rewardId
         ? undefined
         : (selectedConstruction ? `construction.${selectedConstruction.id}` : undefined)
@@ -579,9 +576,9 @@ export class ClientUpdateCoordinator {
         utilityId:               baseUtilityId,
         utilityAction:            managementAction ?? undefined,
         persistentBaseRewardId:  rewardId ?? undefined,
-        utilityCapacityCost:     inspectorCapacityCost,
+        utilityCapacityCost:     constructionCapacityCost,
         adrenalineSyringeActive: bridge.getPlayerAdrSyringeActive(localId2),
-        isUtilityOverridden:     radialAction?.kind === 'temporary-utility',
+        isTemporaryUtilitySelected: radialAction?.kind === 'temporary-utility',
         activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
         weapon2AdrenalineCost:   this.getLocalWeaponAdrenalineCost('weapon2'),
@@ -752,7 +749,6 @@ export class ClientUpdateCoordinator {
     this.pickupCooldownUntil = 0;
     this.pendingPickupUids.clear();
     this.committedSelectionCache = null;
-    this.inspectorSelectedTool = null;
     this.localPlayerState.alive = false;
     this.localPlayerState.burrowed = false;
   }
@@ -779,9 +775,16 @@ export class ClientUpdateCoordinator {
         return applyCoopDefenseModifiersToUtilityConfig(temporaryConfig, this.getLocalEffectTotals());
       }
     }
+    if (radialAction?.kind === 'utility') {
+      const radialUtility = getUtilityConfigForMode(
+        radialAction.utilityId,
+        bridge.getActiveGameMode(),
+      );
+      if (radialUtility) {
+        return applyCoopDefenseModifiersToUtilityConfig(radialUtility, this.getLocalEffectTotals());
+      }
+    }
     const equipped = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
-    const inspectorConfig = this.getLocalInspectorUtilityConfig();
-    if (inspectorConfig) return inspectorConfig;
     if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
@@ -1232,69 +1235,16 @@ export class ClientUpdateCoordinator {
     return current?.tools ?? this.getLocalCoopDefenseProfile()?.toolLoadout ?? [];
   }
 
-  getLocalInspectorSelectedTool(): LoadoutToolRef | null {
-    const tools = this.getLocalInspectorTools();
-    const localId = bridge.getLocalPlayerId();
-    const classId = this.getLocalCoopDefenseClassId();
-    const current = bridge.getPlayerCurrentLoadoutSnapshot(localId);
-    const resolvedLoadout: LoadoutCommitSnapshot | null = current
-      ? {
-        ...current,
-        coopDefenseClassId: classId,
-        coopDefenseProfile: this.getLocalCoopDefenseProfile() ?? null,
-        tools: [...this.getLocalInspectorTools()],
-        equippedItems: current.equippedItems ?? [],
-      }
-      : null;
-    if (classId !== 'inspector_gadachs') {
-      return getActiveConstructionToolRefs(
-        getConstructionAccessContext(
-          bridge.getActiveGameMode(),
-          resolvedLoadout,
-        ),
-      ).find((tool) => tool.kind === 'construction') ?? null;
-    }
-    if (this.inspectorSelectedTool && tools.some((tool) => (
-      tool.kind === this.inspectorSelectedTool?.kind && tool.id === this.inspectorSelectedTool?.id
-    ))) return this.inspectorSelectedTool;
-    const profileSelected = this.getLocalCoopDefenseProfile()?.selectedTool;
-    const selected = profileSelected && tools.some((tool) => tool.kind === profileSelected.kind && tool.id === profileSelected.id)
-      ? profileSelected
-      : tools[0] ?? null;
-    this.inspectorSelectedTool = selected ? { ...selected } : null;
-    return this.inspectorSelectedTool;
-  }
-
-  setLocalInspectorSelectedTool(tool: LoadoutToolRef): void {
-    if (this.getLocalInspectorTools().some((entry) => entry.kind === tool.kind && entry.id === tool.id)) {
-      this.inspectorSelectedTool = { ...tool };
-      const progress = getStoredCoopDefenseProgress();
-      const profile = progress.profilesByClass.inspector_gadachs;
-      setStoredCoopDefenseUpgradeProfile({ ...profile, selectedTool: { ...tool } }, 'inspector_gadachs');
-      this.refreshStoredProgressFallback();
-    }
-  }
-
-  getLocalInspectorUtilityConfig(): UtilityConfig | undefined {
-    const tool = this.getLocalInspectorSelectedTool();
-    if (tool?.kind !== 'utility') return undefined;
-    const base = getUtilityConfigForMode(
-      tool.id,
-      bridge.getActiveGameMode(),
-    );
-    if (!base) return undefined;
-    const modified = applyCoopDefenseModifiersToUtilityConfig(base, this.getLocalEffectTotals());
-    return modified;
-  }
-
   /** Concrete utility ID used for the host-published cooldown channel. */
   getLocalUtilityCooldownId(): string {
     const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'temporary-utility') return radialAction.instanceId;
-    const config = this.getLocalUtilityConfig();
-    const selected = this.getLocalInspectorSelectedTool();
-    if (selected?.kind === 'construction') return selected.id;
-    return config.id;
+    if (radialAction?.kind === 'construction') return radialAction.constructionId;
+    if (radialAction?.kind === 'utility') {
+      return getUtilityConfigForMode(radialAction.utilityId, bridge.getActiveGameMode())?.id
+        ?? radialAction.utilityId;
+    }
+    return this.getLocalUtilityConfig().id;
   }
 
   getLocalUtilityCooldownUntil(temporaryUtilityInstanceId?: string): number {

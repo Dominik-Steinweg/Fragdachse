@@ -58,7 +58,6 @@ export interface CoopDefenseProgressSnapshot {
   unlockedItemsBySlot: Readonly<Record<LoadoutSlot, readonly LoadoutItemRef[]>>;
   toolSlotCapacity: number;
   toolLoadout: readonly LoadoutToolRef[];
-  selectedTool: LoadoutToolRef | null;
 }
 
 export interface CoopDefenseUpgradeRequirementSnapshot {
@@ -166,7 +165,6 @@ export function getCoopDefenseProgressSnapshot(
     unlockedItemsBySlot: buildUnlockedItemsBySlot(safeProfile, classId),
     toolSlotCapacity: classId === 'inspector_gadachs' ? getCoopDefenseToolCapacity(safeProfile) : 0,
     toolLoadout: classId === 'inspector_gadachs' ? (safeProfile.toolLoadout ?? []) : [],
-    selectedTool: classId === 'inspector_gadachs' ? (safeProfile.selectedTool ?? null) : null,
   };
 }
 

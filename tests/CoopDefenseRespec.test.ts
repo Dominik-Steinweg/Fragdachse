@@ -54,7 +54,7 @@ describe('coop-defense respec', () => {
       { kind: 'construction', id: 'rocket_turret' },
       { kind: 'construction', id: 'machine_gun_turret' },
     ];
-    profile = setLoadoutToolSlots(profile, tools, tools[1]);
+    profile = setLoadoutToolSlots(profile, tools);
 
     const reset = respecCoopDefenseUpgradeCategory(profile, 'construction', 'inspector_gadachs');
 
@@ -63,7 +63,6 @@ describe('coop-defense respec', () => {
     expect(getLoadoutToolSlots(reset!)).toEqual([
       { kind: 'construction', id: 'rocket_turret' },
     ]);
-    expect(reset!.selectedTool).toEqual({ kind: 'construction', id: 'rocket_turret' });
   });
 
   describe('persistent full respec', () => {

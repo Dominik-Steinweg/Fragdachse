@@ -64,5 +64,5 @@ Aktivitäts- und Rundensysteme arbeiten mit ihrer definierten Simulationszeit un
 - [tests/PlayerCapabilityContracts.test.ts](../../tests/PlayerCapabilityContracts.test.ts)
 - [tests/PlayerWorldRuntimeContracts.test.ts](../../tests/PlayerWorldRuntimeContracts.test.ts)
 - [tests/SharedWorldWithoutActivity.test.ts](../../tests/SharedWorldWithoutActivity.test.ts)
-- [tests/LoadoutUtilityOverrideLifecycle.test.ts](../../tests/LoadoutUtilityOverrideLifecycle.test.ts)
+- [tests/TemporaryUtilityLifecycle.test.ts](../../tests/TemporaryUtilityLifecycle.test.ts)
 - [tests/RadialActionInput.test.ts](../../tests/RadialActionInput.test.ts)

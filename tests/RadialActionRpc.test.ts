@@ -94,8 +94,8 @@ function createFixture() {
     })),
     placeInspectorConstruction: vi.fn((): LoadoutUseResult => ({ ok: true })),
     useInspectorUtility: vi.fn((): LoadoutUseResult => ({ ok: true })),
-    dismantleInspectorConstruction: vi.fn((): LoadoutUseResult => ({ ok: true })),
-    dismantleAllInspectorConstructions: vi.fn((): LoadoutUseResult => ({ ok: true })),
+    dismantleConstruction: vi.fn((): LoadoutUseResult => ({ ok: true })),
+    dismantleAllOwnedConstructions: vi.fn((): LoadoutUseResult => ({ ok: true })),
   };
   const coordinator = new RpcCoordinator(
     undefined as never,
@@ -131,7 +131,7 @@ beforeEach(() => {
   bridgeMock.getPlayerCurrentLoadoutSnapshot.mockImplementation(() => bridgeMock.getPlayerCommittedLoadout());
 });
 
-describe('Inspector loadout-use RPC classification', () => {
+describe('radial action RPC classification', () => {
   it('places rocket_turret without consulting or consuming the regular charged utility', () => {
     const fixture = createFixture();
     const handler = registerLoadoutHandler(fixture.coordinator);
@@ -211,7 +211,7 @@ describe('Inspector loadout-use RPC classification', () => {
 
     expect(handler('utility', 0, 220, 180, 'p1', undefined, { dismantle: true }))
       .toEqual({ ok: true });
-    expect(fixture.lifecycle.dismantleInspectorConstruction).toHaveBeenCalledWith('p1', 220, 180);
+    expect(fixture.lifecycle.dismantleConstruction).toHaveBeenCalledWith('p1', 220, 180);
     expect(fixture.getEquippedUtilityConfig).not.toHaveBeenCalled();
     expect(fixture.consume).not.toHaveBeenCalled();
 
@@ -220,7 +220,7 @@ describe('Inspector loadout-use RPC classification', () => {
       globalDismantle: true,
       heldActionId: 'global-action',
     })).toEqual({ ok: true });
-    expect(fixture.lifecycle.dismantleAllInspectorConstructions).toHaveBeenCalledWith('p1');
+    expect(fixture.lifecycle.dismantleAllOwnedConstructions).toHaveBeenCalledWith('p1');
     expect(fixture.consume).toHaveBeenCalledWith(
       'p1',
       'global-action',

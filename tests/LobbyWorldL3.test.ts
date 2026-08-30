@@ -403,7 +403,6 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
       coopDefenseProfile: {
         upgrades: { hp: { unlocked: true, level: 2 } },
         toolLoadout: [{ kind: 'construction', id: 'rock_barrier' }],
-        selectedTool: { kind: 'construction', id: 'rock_barrier' },
       },
       equippedItems: [{
         uid: 'live-helmet',

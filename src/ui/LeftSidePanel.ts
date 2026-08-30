@@ -1202,8 +1202,7 @@ export class LeftSidePanel {
     } else if (slotIndex < next.length) {
       next.splice(slotIndex, 1);
     }
-    const selected = tool ?? next[Math.min(slotIndex, next.length - 1)] ?? null;
-    setStoredCoopDefenseUpgradeProfile(setLoadoutToolSlots(profile, next, selected), 'inspector_gadachs');
+    setStoredCoopDefenseUpgradeProfile(setLoadoutToolSlots(profile, next), 'inspector_gadachs');
     this.onProgressImported?.();
     this.renderLoadoutControls();
   }

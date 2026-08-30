@@ -604,7 +604,7 @@ export class PlacementSystem {
     };
   }
 
-  /** Vorschau fuer den Rueckbau: gueltig genau dann, wenn dort ein eigenes Konstrukt steht. */
+  /** Vorschau fuer den Rueckbau nach demselben all-class Ownership-Vertrag wie der Host. */
   getDismantlePreview(
     ownerId: string,
     originX: number,
@@ -642,7 +642,9 @@ export class PlacementSystem {
       targetY: targetWorld.y,
       gridX: targetCell.gridX,
       gridY: targetCell.gridY,
-      isValid: rock?.ownerId === ownerId
+      isValid: (rock?.ownerId === ownerId
+        && rock.constructionId !== undefined
+        && rock.ownership !== 'base-owned')
         || (rock?.ownership === 'base-owned' && rock.persistentRewardId !== undefined),
       frame: 0,
       range,

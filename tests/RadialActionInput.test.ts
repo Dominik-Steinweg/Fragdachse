@@ -66,7 +66,7 @@ function createSystem() {
 describe('Radial Menu V2 input', () => {
   it.each(['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'] as const)(
     'opens the same action model with R for %s',
-    (classId) => {
+    (_classId) => {
       const { system, keys } = createSystem();
       const menu = {
         isOpen: false,
@@ -77,8 +77,6 @@ describe('Radial Menu V2 input', () => {
       Object.assign(system as never as Record<string, unknown>, {
         radialActionMenu: menu,
         radialGetTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-        radialGetSelectedTool: () => ({ kind: 'utility', id: 'STINK_CLOUD' }),
-        inspectorModeProvider: () => classId === 'inspector_gadachs',
         radialGetCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
       });
       keys.keyR.isDown = true;
@@ -96,16 +94,11 @@ describe('Radial Menu V2 input', () => {
 
   it('dispatches the canonically selected normal utility on E', () => {
     const { system, keys } = createSystem();
-    system.setupRadialActionProviders(
-      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-      () => null,
-      () => undefined,
-      () => false,
-      undefined,
-      undefined,
-      () => 0,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
     system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD);
     system.setupUtilityCooldownProvider(() => 0);
     const uses = vi.fn();
@@ -119,6 +112,28 @@ describe('Radial Menu V2 input', () => {
     expect(uses.mock.calls[0]?.[0]).toBe('utility');
   });
 
+  it('delegates tool-loadout utility identity without a parallel selection state', () => {
+    const { system, keys } = createSystem();
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      utilityUsesToolRef: (utilityId) => utilityId === 'STINK_CLOUD',
+    });
+    system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD);
+    system.setupUtilityCooldownProvider(() => 0);
+    const uses = vi.fn();
+    system.setupLoadoutListener(uses);
+    keys.keyE.justDown = true;
+    keys.keyE.isDown = true;
+
+    system.update();
+
+    expect(uses).toHaveBeenCalledTimes(1);
+    expect(uses.mock.calls[0]?.[4]).toMatchObject({
+      toolRef: { kind: 'utility', id: 'STINK_CLOUD' },
+    });
+  });
+
   it('evaluates authoritative cooldowns on the synchronized clock when the client clock is behind', () => {
     vi.useFakeTimers();
     vi.setSystemTime(95_000);
@@ -127,16 +142,11 @@ describe('Radial Menu V2 input', () => {
       let synchronizedNow = 100_000;
       let authoritativeCooldown = 101_000;
       bridge.getSynchronizedNow = () => synchronizedNow;
-      system.setupRadialActionProviders(
-        () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-        () => null,
-        () => undefined,
-        () => false,
-        undefined,
-        undefined,
-        () => authoritativeCooldown,
-        () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      );
+      system.setupRadialActionProviders({
+        getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+        getCooldownUntil: () => authoritativeCooldown,
+        getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      });
       system.setupUtilityCooldownProvider(() => authoritativeCooldown);
 
       const getStates = () => (system as any).getRadialActionStates() as Array<{
@@ -169,16 +179,11 @@ describe('Radial Menu V2 input', () => {
       let synchronizedNow = 100_000;
       let authoritativeCooldown = 101_000;
       bridge.getSynchronizedNow = () => synchronizedNow;
-      system.setupRadialActionProviders(
-        () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-        () => null,
-        () => undefined,
-        () => false,
-        undefined,
-        undefined,
-        () => authoritativeCooldown,
-        () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      );
+      system.setupRadialActionProviders({
+        getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+        getCooldownUntil: () => authoritativeCooldown,
+        getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      });
       system.setupUtilityCooldownProvider(() => authoritativeCooldown);
 
       const getStates = () => (system as any).getRadialActionStates() as Array<{
@@ -211,16 +216,11 @@ describe('Radial Menu V2 input', () => {
       bridge.getSynchronizedNow = () => 100_000;
       const utilityConfig = { ...UTILITY_CONFIGS.STINK_CLOUD, cooldown: 8_000 };
       const uses = vi.fn();
-      system.setupRadialActionProviders(
-        () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-        () => null,
-        () => undefined,
-        () => false,
-        undefined,
-        undefined,
-        () => 0,
-        () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      );
+      system.setupRadialActionProviders({
+        getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+        getCooldownUntil: () => 0,
+        getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      });
       system.setupUtilityConfigProvider(() => utilityConfig);
       system.setupUtilityCooldownProvider(() => 0);
       system.setupLoadoutListener(uses);
@@ -241,16 +241,11 @@ describe('Radial Menu V2 input', () => {
     const { system, keys, bridge } = createSystem();
     let authoritativeCooldown = 0;
     const dispatches = vi.fn();
-    system.setupRadialActionProviders(
-      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-      () => null,
-      () => undefined,
-      () => false,
-      undefined,
-      undefined,
-      () => authoritativeCooldown,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCooldownUntil: () => authoritativeCooldown,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
     system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD);
     system.setupUtilityCooldownProvider(() => authoritativeCooldown);
     // Mirrors ArenaScene's synchronous request gate: only authoritative state decides whether
@@ -282,16 +277,11 @@ describe('Radial Menu V2 input', () => {
     let authoritativeCooldown = 0;
     const dispatches = vi.fn();
     const nukeConfig = { ...UTILITY_CONFIGS.NUKE, cooldown: 2_000 };
-    system.setupRadialActionProviders(
-      () => [{ kind: 'utility', id: 'NUKE' }],
-      () => null,
-      () => undefined,
-      () => false,
-      undefined,
-      undefined,
-      () => authoritativeCooldown,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'NUKE' }],
+      getCooldownUntil: () => authoritativeCooldown,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
     system.setupUtilityConfigProvider(() => nukeConfig);
     system.setupUtilityCooldownProvider(() => authoritativeCooldown);
     system.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
@@ -338,16 +328,11 @@ describe('Radial Menu V2 input', () => {
         },
       ];
       const dispatches = vi.fn();
-      system.setupRadialActionProviders(
-        () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-        () => null,
-        () => undefined,
-        () => false,
-        undefined,
-        undefined,
-        () => 0,
-        () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      );
+      system.setupRadialActionProviders({
+        getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+        getCooldownUntil: () => 0,
+        getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      });
       system.setupTemporaryUtilityProvider(() => temporaryUtilities);
       system.setupUtilityConfigProvider(() => utilityConfig);
       system.setupUtilityCooldownProvider(() => 0);
@@ -386,16 +371,11 @@ describe('Radial Menu V2 input', () => {
         cooldownUntil: 0, cooldownDurationMs: 2_000, acquisitionOrder: 0,
       }];
       const dispatches = vi.fn();
-      system.setupRadialActionProviders(
-        () => [],
-        () => null,
-        () => undefined,
-        () => false,
-        undefined,
-        undefined,
-        () => 0,
-        () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      );
+      system.setupRadialActionProviders({
+        getTools: () => [],
+        getCooldownUntil: () => 0,
+        getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      });
       system.setupTemporaryUtilityProvider(() => temporaryUtilities);
       system.setupUtilityConfigProvider(() => bfgConfig);
       system.setupUtilityCooldownProvider(() => 0);
@@ -434,16 +414,11 @@ describe('Radial Menu V2 input', () => {
       kind: 'utility'; instanceId: string; utilityId: string; charges: number;
       cooldownUntil: number; cooldownDurationMs: number; acquisitionOrder: number;
     }> = [];
-    system.setupRadialActionProviders(
-      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-      () => ({ kind: 'utility', id: 'STINK_CLOUD' }),
-      () => undefined,
-      () => false,
-      undefined,
-      undefined,
-      () => 0,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
     system.setupTemporaryUtilityProvider(() => temporaryUtilities);
 
     expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
@@ -491,16 +466,11 @@ describe('Radial Menu V2 input', () => {
         cooldownUntil: 0, cooldownDurationMs: 8_000, acquisitionOrder: 2,
       },
     ];
-    system.setupRadialActionProviders(
-      () => [],
-      () => null,
-      () => undefined,
-      () => false,
-      undefined,
-      undefined,
-      () => 0,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
     system.setupTemporaryUtilityProvider(() => temporaryUtilities);
 
     const actions = (system as any).getRadialActionStates() as Array<{
@@ -521,12 +491,9 @@ describe('Radial Menu V2 input', () => {
       kind: 'utility' as const, instanceId: 'temp-1', utilityId: 'BFG', charges: 1,
       cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
     }];
-    system.setupRadialActionProviders(
-      () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
-      () => ({ kind: 'utility', id: 'STINK_CLOUD' }),
-      () => undefined,
-      () => false,
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+    });
     system.setupTemporaryUtilityProvider(() => temporaryUtilities);
     expect(system.getSelectedRadialActionForHud()?.kind).toBe('temporary-utility');
 
@@ -561,7 +528,6 @@ describe('Radial Menu V2 input', () => {
     Object.assign(system as never as Record<string, unknown>, {
       radialActionMenu: menu,
       radialGetTools: () => [],
-      radialGetSelectedTool: () => null,
       radialGetCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
     });
     system.setupTemporaryUtilityProvider(() => temporaryUtilities);
@@ -685,17 +651,12 @@ describe('Radial Menu V2 input', () => {
       mode: 'move-target' as const, sourceRuntimeId: 77,
     };
     const requestMove = vi.fn(() => Promise.resolve({ ok: true as const }));
-    system.setupRadialActionProviders(
-      () => [],
-      () => null,
-      () => undefined,
-      () => false,
-      undefined,
-      undefined,
-      () => 0,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      () => ['reposition'],
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      getManagementActions: () => ['reposition'],
+    });
     system.setupRepositionActionProvider(
       () => sourcePreview,
       (sourceRuntimeId) => (sourceRuntimeId === 77 ? targetPreview : undefined),
@@ -734,12 +695,12 @@ describe('Radial Menu V2 input', () => {
       mode: 'move-source' as const, sourceRuntimeId: 77,
     };
     const requestMove = vi.fn(() => Promise.resolve({ ok: true as const }));
-    system.setupRadialActionProviders(
-      () => [], () => null, () => undefined, () => false, undefined, undefined,
-      () => 0,
-      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
-      () => ['reposition'],
-    );
+    system.setupRadialActionProviders({
+      getTools: () => [],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      getManagementActions: () => ['reposition'],
+    });
     system.setupRepositionActionProvider(
       () => sourcePreview,
       () => ({ ...sourcePreview, mode: 'move-target' as const, isValid: false }),
@@ -758,6 +719,45 @@ describe('Radial Menu V2 input', () => {
 
     expect(requestMove).not.toHaveBeenCalled();
     expect(system.isRepositionActive()).toBe(true);
+  });
+
+  it('keeps dismantle targeting active until an explicit cancel', () => {
+    const { system, keys } = createSystem();
+    const preview = {
+      angle: 0, targetX: 20, targetY: 20, gridX: 6, gridY: 5,
+      isValid: true, frame: 0, range: 320, kind: 'rock' as const,
+      mode: 'dismantle' as const, sourceRuntimeId: 77,
+    };
+    system.setupRadialActionProviders({
+      getTools: () => [],
+      getDismantlePreview: () => preview,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      getManagementActions: () => ['dismantle'],
+    });
+    const uses = vi.fn();
+    system.setupLoadoutListener(uses);
+    Object.assign(system as never as Record<string, unknown>, {
+      selectedRadialAction: { kind: 'management', action: 'dismantle' },
+    });
+
+    keys.keyE.justDown = true;
+    keys.keyE.isDown = true;
+    system.update();
+    system.update();
+
+    expect(uses).toHaveBeenCalledWith('utility', 0, 20, 20, {
+      inputStarted: true,
+      dismantle: true,
+    });
+    expect(system.isDismantlePlacementActive()).toBe(true);
+
+    keys.keyE.justDown = false;
+    keys.keyE.isDown = false;
+    keys.keyR.justDown = true;
+    keys.keyR.isDown = true;
+    system.update();
+
+    expect(system.isDismantlePlacementActive()).toBe(false);
   });
 
   it('ends a running move preview when its source is gone', () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getRadialMenuSegmentIndex } from '../src/ui/RadialMenuGeometry';
 
-describe('Inspector tool radial geometry', () => {
+describe('radial menu geometry', () => {
   it('keeps the current selection while the pointer is in the dead zone', () => {
     expect(getRadialMenuSegmentIndex(0, 0, 6, 34)).toBeNull();
     expect(getRadialMenuSegmentIndex(20, -20, 6, 34)).toBeNull();
@@ -14,7 +14,7 @@ describe('Inspector tool radial geometry', () => {
     expect(getRadialMenuSegmentIndex(-80, 0, 4, 34)).toBe(3);
   });
 
-  it('supports the complete six-slot Inspector capacity', () => {
+  it('supports a complete six-entry action ring', () => {
     const directions = [
       [40, -70],
       [80, 0],

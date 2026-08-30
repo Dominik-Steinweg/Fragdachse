@@ -1251,8 +1251,8 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setAudioSystem(gameAudioSystem);
     inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
     inputSystem.setupUtilityCooldownProvider(() => this.clientUpdate.getLocalUtilityCooldownUntil());
-    inputSystem.setupRadialActionProviders(
-      () => {
+    inputSystem.setupRadialActionProviders({
+      getTools: () => {
         const localId = bridge.getLocalPlayerId();
         const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
         return isCoopDefenseMode(bridge.getActiveGameMode())
@@ -1262,21 +1262,18 @@ export class ArenaScene extends Phaser.Scene {
             ? [{ kind: 'utility' as const, id: currentLoadout.utility }]
             : [];
       },
-      () => this.clientUpdate.getLocalInspectorSelectedTool(),
-      (tool) => this.clientUpdate.setLocalInspectorSelectedTool(tool),
-      () => bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId())?.coopDefenseClassId === 'inspector_gadachs',
       // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
       // belegte Baukapazitaet lokal berechnet werden. Das Maximum kommt aus denselben
       // Effekt-Summen wie das HUD, damit das Radialmenue nichts als baubar anzeigt, was das
       // Host-Gate anschliessend ablehnt.
-      () => ({
+      getCapacity: () => ({
         used: this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
         max: bridge.isHost()
           ? this.lifecycle?.getConstructionCapacityForPlayer(bridge.getLocalPlayerId())
             ?? this.clientUpdate.getLocalConstructionCapacity()
           : this.clientUpdate.getLocalConstructionCapacity(),
       }),
-      () => {
+      getDismantlePreview: () => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
         const placementSystem = this.ctx.placementSystem;
         if (!player || !placementSystem) return undefined;
@@ -1290,7 +1287,7 @@ export class ArenaScene extends Phaser.Scene {
           COOP_DEFENSE_DISMANTLE_RANGE,
         );
       },
-      (ref) => {
+      getCooldownUntil: (ref) => {
         const localId = bridge.getLocalPlayerId();
         if (ref.kind === 'construction') {
           return bridge.getPlayerUtilityCooldownUntil(localId, ref.constructionId);
@@ -1304,7 +1301,7 @@ export class ArenaScene extends Phaser.Scene {
         }
         return 0;
       },
-      () => {
+      getCapabilities: () => {
         const capabilities = this.lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId());
         return {
           canUseUtility: capabilities.canInteract && capabilities.canUseCombat,
@@ -1315,10 +1312,15 @@ export class ArenaScene extends Phaser.Scene {
       // Persistent-Base-Management ist nach 3F keine Klassenfrage mehr: Base-owned Rewards
       // gehoeren der Basis, und persoenliche Konstruktionen bleiben ueber die Ownership-Pruefung
       // des Hosts geschuetzt. Angeboten wird die Verwaltung deshalb im gesamten Coop-Defense-Modus.
-      () => (isCoopDefenseMode(bridge.getActiveGameMode())
+      getManagementActions: () => (isCoopDefenseMode(bridge.getActiveGameMode())
         ? ['reposition', 'dismantle', 'dismantle-own-all'] as const
         : []),
-    );
+      utilityUsesToolRef: (utilityId) => {
+        const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(bridge.getLocalPlayerId());
+        return currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          && (currentLoadout.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === utilityId);
+      },
+    });
     inputSystem.setupTemporaryUtilityProvider(
       () => bridge.getPlayerTemporaryUtilityInstances(bridge.getLocalPlayerId()),
     );
@@ -1513,7 +1515,7 @@ export class ArenaScene extends Phaser.Scene {
         handleLocalFailureFeedback(slot, result.reason, inputStarted, result.resourceKind);
       }
     };
-    const getInspectorConstructionFailureMessage = (reason: LoadoutUseResult['reason']): string => {
+    const getConstructionFailureMessage = (reason: LoadoutUseResult['reason']): string => {
       switch (reason) {
         case 'capacity': return t('ui.errors.capacity');
         case 'cooldown': return t('ui.errors.cooldown');
@@ -1610,16 +1612,16 @@ export class ArenaScene extends Phaser.Scene {
       const isUltimatePlacementAction = slot === 'ultimate'
           && inputSystem.isUltimatePlacementActive()
           && params?.tunnelAction === 'commit';
-      const isInspectorConstructionAction = params?.toolRef?.kind === 'construction';
-      const isInspectorUtilityAction = params?.toolRef?.kind === 'utility';
+      const isConstructionAction = params?.toolRef?.kind === 'construction';
+      const isToolUtilityAction = params?.toolRef?.kind === 'utility';
       const isTemporaryUtilityAction = params?.temporaryUtilityInstanceId !== undefined;
-      const isInspectorDismantleAction = params?.dismantle === true;
+      const isDismantleAction = params?.dismantle === true;
       const awaitResult = isUtilityPlacementAction
         || isUltimatePlacementAction
-        || isInspectorConstructionAction
-        || isInspectorUtilityAction
+        || isConstructionAction
+        || isToolUtilityAction
         || isTemporaryUtilityAction
-        || isInspectorDismantleAction;
+        || isDismantleAction;
       const awaitFailureResult = inputStarted
         && !params?.constructionId
         && (slot === 'weapon1' || slot === 'ultimate' || (slot === 'weapon2' && bridge.isHost()));
@@ -1632,13 +1634,13 @@ export class ArenaScene extends Phaser.Scene {
       if (awaitResult) {
         void loadoutPromise.then((result) => {
           if (result?.ok) return;
-          if (isInspectorDismantleAction) {
+          if (isDismantleAction) {
             this.placementPreview.showPlacementError(t('ui.errors.dismantleFailed'));
             return;
           }
-          if (isInspectorConstructionAction) {
+          if (isConstructionAction) {
             this.placementPreview.showPlacementError(
-              getInspectorConstructionFailureMessage(result?.reason),
+              getConstructionFailureMessage(result?.reason),
             );
             return;
           }
@@ -1650,7 +1652,7 @@ export class ArenaScene extends Phaser.Scene {
           }
           handleLocalLoadoutFailure(slot, result, inputStarted);
         }).catch(() => {
-          if (isInspectorConstructionAction) {
+          if (isConstructionAction) {
             this.placementPreview.showPlacementError(t('ui.errors.blocked'));
           } else if (isUtilityPlacementAction || isUltimatePlacementAction) {
             this.placementPreview.showPlacementError(t('ui.errors.buildFailed'));
@@ -3390,11 +3392,7 @@ export class ArenaScene extends Phaser.Scene {
       if (!getUnlockedLoadoutToolRefs(profile).some((entry) => entry.kind === tool.kind && entry.id === tool.id)) return false;
       current.push({ ...tool });
     }
-    const selected = profile.selectedTool
-      && current.some((entry) => entry.kind === profile.selectedTool?.kind && entry.id === profile.selectedTool?.id)
-      ? profile.selectedTool
-      : current[0] ?? null;
-    const nextProfile = setLoadoutToolSlots(profile, current, selected);
+    const nextProfile = setLoadoutToolSlots(profile, current);
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
     setStoredCoopDefenseUpgradeProfile(nextProfile, 'inspector_gadachs');
@@ -3417,11 +3415,7 @@ export class ArenaScene extends Phaser.Scene {
       return false;
     }
 
-    const previous = profile.selectedTool;
-    const selected = previous && tools.some((tool) => tool.kind === previous.kind && tool.id === previous.id)
-      ? previous
-      : tools[0] ?? null;
-    const nextProfile = setLoadoutToolSlots(profile, tools.map((tool) => ({ ...tool })), selected);
+    const nextProfile = setLoadoutToolSlots(profile, tools.map((tool) => ({ ...tool })));
     setStoredCoopDefenseUpgradeProfile(nextProfile, 'inspector_gadachs');
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
@@ -5081,10 +5075,6 @@ export class ArenaScene extends Phaser.Scene {
     if (before.unlockedClassIds.join('|') !== after.unlockedClassIds.join('|')) return true;
     if (before.toolLoadout.map((tool) => `${tool.kind}:${tool.id}`).join('|')
       !== after.toolLoadout.map((tool) => `${tool.kind}:${tool.id}`).join('|')) return true;
-    const beforeSelectedTool = before.selectedTool ? `${before.selectedTool.kind}:${before.selectedTool.id}` : '';
-    const afterSelectedTool = after.selectedTool ? `${after.selectedTool.kind}:${after.selectedTool.id}` : '';
-    if (beforeSelectedTool !== afterSelectedTool) return true;
-
     for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
       const beforeItems = before.unlockedItemsBySlot[slot].map((item) => item.id).join('|');
       const afterItems = after.unlockedItemsBySlot[slot].map((item) => item.id).join('|');

@@ -1792,7 +1792,7 @@ export class CenterHUD {
       || data.persistentBaseRewardId !== undefined
       || data.utilityCooldownFrac > 0.001
       || now < this.utilityRevealUntil
-      || (data.isUtilityOverridden ?? false);
+      || (data.isTemporaryUtilitySelected ?? false);
     const isUltimateReady = data.isUltimateActive || data.rage >= data.ultimateRequiredRage;
     const showUltimate = isUltimateReady || now < this.ultimateRevealUntil;
     const showArmor = data.armor > 0;
@@ -1824,7 +1824,7 @@ export class CenterHUD {
         CENTER_X,
         nextBottom - BOTTOM_STACK_TOTAL_H,
       );
-      this.setUtilityAttention(data.isUtilityOverridden ?? false);
+      this.setUtilityAttention(data.isTemporaryUtilitySelected ?? false);
       nextBottom = this.utilitySection.container.y - BOTTOM_STACK_GAP;
     } else {
       this.setUtilityAttention(false);

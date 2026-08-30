@@ -36,12 +36,10 @@ describe('shared tool slots', () => {
   it('allows manual removal and re-equipping without a minimum fill', () => {
     const profile = buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs');
     const onlyUtility: LoadoutToolRef[] = [{ kind: 'utility', id: 'HE_GRENADE' }];
-    const changed = setLoadoutToolSlots(profile, onlyUtility, onlyUtility[0]);
+    const changed = setLoadoutToolSlots(profile, onlyUtility);
     expect(getLoadoutToolSlots(changed)).toEqual(onlyUtility);
-    expect(changed.selectedTool).toEqual(onlyUtility[0]);
-    const empty = setLoadoutToolSlots(profile, [], null);
+    const empty = setLoadoutToolSlots(profile, []);
     expect(getLoadoutToolSlots(empty)).toEqual([]);
-    expect(empty.selectedTool).toBeNull();
   });
 
   it('maps construction and utility upgrades to the same shared tool contract', () => {
@@ -123,18 +121,6 @@ describe('shared tool slots', () => {
     );
   });
 
-  it('still reads tool slots stored under the legacy inspector keys', () => {
-    const legacy = {
-      ...buildDefaultCoopDefenseUpgradeProfile('inspector_gadachs'),
-      toolLoadout: undefined,
-      selectedTool: undefined,
-      inspectorTools: [{ kind: 'utility', id: 'HE_GRENADE' }],
-      inspectorSelectedTool: { kind: 'utility', id: 'HE_GRENADE' },
-    };
-    const migrated = sanitizeCoopDefenseUpgradeProfile(legacy, 'inspector_gadachs');
-    expect(migrated.toolLoadout).toEqual([{ kind: 'utility', id: 'HE_GRENADE' }]);
-    expect(migrated.selectedTool).toEqual({ kind: 'utility', id: 'HE_GRENADE' });
-  });
 });
 
 describe('category naming per class', () => {

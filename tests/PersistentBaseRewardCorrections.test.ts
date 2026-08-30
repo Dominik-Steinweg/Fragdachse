@@ -319,10 +319,6 @@ function personalContribution(ownerId: string): {
   };
 }
 
-/**
- * Phase 3F scope note: temporary utility overrides and the non-inspector dismantle preview keep
- * their current behavior until their shared radial/access contract is designed.
- */
 describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
   it('verwendet die zentrale kanonische World-Zellen-Aufloesung', () => {
     const source = readLifecycle();

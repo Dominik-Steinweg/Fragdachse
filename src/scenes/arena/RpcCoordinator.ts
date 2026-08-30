@@ -291,7 +291,7 @@ export class RpcCoordinator {
           Date.now(),
         );
         if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
-        return this.lifecycle?.dismantleAllInspectorConstructions(senderId)
+        return this.lifecycle?.dismantleAllOwnedConstructions(senderId)
           ?? { ok: false, reason: 'blocked' };
       }
       // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
@@ -300,7 +300,7 @@ export class RpcCoordinator {
           || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
-        return this.lifecycle?.dismantleInspectorConstruction(senderId, targetX, targetY)
+        return this.lifecycle?.dismantleConstruction(senderId, targetX, targetY)
           ?? { ok: false, reason: 'blocked' };
       }
       if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'

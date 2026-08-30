@@ -141,7 +141,7 @@ export class LoadoutManager {
   /** Inspector utilities keep an independent cooldown state per player and utility id. */
   private inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
   /** Constructions bypass GenericUtility, so their build cooldown is tracked separately. */
-  private inspectorConstructionCooldowns = new Map<string, Map<ConstructionId, number>>();
+  private constructionCooldowns = new Map<string, Map<ConstructionId, number>>();
   /** Kurzer Doppelinput-Schutz je Management-Aktion; derselbe keyed Cooldown-Vertrag wie Bauen. */
   private readonly managementActionCooldowns = new Map<string, Map<string, number>>();
   private ultimateStates    = new Map<string, UltimateState>();
@@ -301,7 +301,7 @@ export class LoadoutManager {
       ultimate: new GenericUltimate(ultCfg),
     });
     this.inspectorUtilities.set(playerId, new Map());
-    this.inspectorConstructionCooldowns.set(playerId, new Map());
+    this.constructionCooldowns.set(playerId, new Map());
     this.managementActionCooldowns.set(playerId, new Map());
     this.ultimateStates.set(playerId, {
       active:    false,
@@ -367,7 +367,7 @@ export class LoadoutManager {
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
     this.inspectorUtilities.delete(playerId);
-    this.inspectorConstructionCooldowns.delete(playerId);
+    this.constructionCooldowns.delete(playerId);
     this.managementActionCooldowns.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
@@ -794,13 +794,13 @@ export class LoadoutManager {
   // der jeweiligen Konstruktsdefinition.
 
   isConstructionOnCooldown(playerId: string, constructionId: ConstructionId, now: number): boolean {
-    const readyAt = this.inspectorConstructionCooldowns.get(playerId)?.get(constructionId) ?? 0;
+    const readyAt = this.constructionCooldowns.get(playerId)?.get(constructionId) ?? 0;
     return now < readyAt;
   }
 
   markConstructionUsed(playerId: string, constructionId: ConstructionId, now: number): void {
-    const perPlayer = this.inspectorConstructionCooldowns.get(playerId) ?? new Map<ConstructionId, number>();
-    this.inspectorConstructionCooldowns.set(playerId, perPlayer);
+    const perPlayer = this.constructionCooldowns.get(playerId) ?? new Map<ConstructionId, number>();
+    this.constructionCooldowns.set(playerId, perPlayer);
     perPlayer.set(constructionId, now + getCoopDefenseConstructionDefinition(constructionId).buildCooldownMs);
   }
 

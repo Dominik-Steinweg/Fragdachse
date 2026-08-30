@@ -100,7 +100,7 @@ export function cloneRadialActionRef(ref: RadialActionRef): RadialActionRef {
   return { ...ref } as RadialActionRef;
 }
 
-/** Converts legacy shared tool slots into the canonical action identity. */
+/** Converts authored loadout-tool entries into the canonical action identity. */
 export function radialActionRefFromTool(tool: LoadoutToolRef): RadialToolActionRef {
   const constructionId = normalizeConstructionId(tool.id);
   return constructionId

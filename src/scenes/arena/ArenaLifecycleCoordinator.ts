@@ -6755,7 +6755,7 @@ export class ArenaLifecycleCoordinator {
    * Rueckbau eines eigenen Konstrukts. Gibt die Kapazitaet sofort frei und laeuft bewusst
    * nicht ueber den Zerstoerungspfad: Es gibt weder Explosion noch Sporenwolke.
    */
-  dismantleInspectorConstruction(
+  dismantleConstruction(
     playerId: string,
     targetX: number,
     targetY: number,
@@ -6824,7 +6824,7 @@ export class ArenaLifecycleCoordinator {
   }
 
   /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
-  dismantleAllInspectorConstructions(playerId: string): LoadoutUseResult {
+  dismantleAllOwnedConstructions(playerId: string): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);

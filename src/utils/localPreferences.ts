@@ -196,7 +196,6 @@ interface CompactUpgradeProfile {
   /** Ausschliesslich Level, die vom aktuellen Klassenstandard abweichen. */
   levels?: Record<string, number>;
   toolLoadout?: LoadoutToolRef[];
-  selectedTool?: LoadoutToolRef;
 }
 
 interface LocalSettingsDocumentV1 {
@@ -764,11 +763,6 @@ function sanitizeCompactProfile(raw: unknown): CompactUpgradeProfile | null {
     if (tools.some((tool) => tool === null)) return null;
     result.toolLoadout = tools as LoadoutToolRef[];
   }
-  if (raw.selectedTool !== undefined) {
-    const selected = sanitizeTool(raw.selectedTool);
-    if (!selected) return null;
-    result.selectedTool = selected;
-  }
   return result;
 }
 
@@ -826,7 +820,6 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
         id, { level, unlocked: false },
       ])),
       toolLoadout: compact.toolLoadout,
-      selectedTool: compact.selectedTool,
     };
     return constrainCoopDefenseUpgradeProfileToBossPoints(
       sanitizeCoopDefenseUpgradeProfile(rawProfile, classId), bossPoints, classId,
@@ -936,9 +929,6 @@ function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefense
   const defaultTools = defaults.toolLoadout ?? [];
   if (tools.map(toolKey).join('|') !== defaultTools.map(toolKey).join('|')) {
     result.toolLoadout = tools.map((tool) => ({ ...tool }));
-  }
-  if (toolKey(safe.selectedTool) !== toolKey(defaults.selectedTool)) {
-    if (safe.selectedTool) result.selectedTool = { ...safe.selectedTool };
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }

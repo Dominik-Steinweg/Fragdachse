@@ -439,7 +439,6 @@ function buildProfileFromRequestedLevels(
   requestedLevels: Readonly<Record<string, number>>,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
   rawToolLoadout?: unknown,
-  rawSelectedTool?: unknown,
   autoEquipTools?: readonly LoadoutToolRef[],
 ): CoopDefenseUpgradeProfile {
   const resolvedLevels: Record<string, number> = {};
@@ -477,13 +476,7 @@ function buildProfileFromRequestedLevels(
 
   const capacity = getConstructionSlotCapacity(resolvedLevels);
   const toolLoadout = sanitizeToolLoadout(rawToolLoadout, resolvedLevels, capacity, autoEquipTools);
-  const selectedKey = rawSelectedTool && typeof rawSelectedTool === 'object'
-    ? toolRefKey(rawSelectedTool as LoadoutToolRef)
-    : '';
-  const selectedTool = toolLoadout.find((tool) => toolRefKey(tool) === selectedKey)
-    ?? toolLoadout[0]
-    ?? null;
-  return { upgrades, toolLoadout, selectedTool };
+  return { upgrades, toolLoadout };
 }
 
 function sanitizeRequestedLevel(value: unknown, definition: CoopDefenseUpgradeDefinition): number {
@@ -689,7 +682,6 @@ export function respecCoopDefenseUpgradeCategory(
     nextRequestedLevels,
     classId,
     safeProfile.toolLoadout,
-    safeProfile.selectedTool,
   );
 }
 
@@ -705,7 +697,6 @@ export function cloneCoopDefenseUpgradeProfile(
   return {
     upgrades,
     toolLoadout: safeProfile.toolLoadout?.map((tool) => ({ ...tool })),
-    selectedTool: safeProfile.selectedTool ? { ...safeProfile.selectedTool } : null,
   };
 }
 
@@ -735,9 +726,6 @@ export function isCoopDefenseUpgradeProfileEqual(
   for (let index = 0; index < leftTools.length; index += 1) {
     if (toolRefKey(leftTools[index]) !== toolRefKey(rightTools[index])) return false;
   }
-  if (toolRefKey(normalizedLeft.selectedTool as LoadoutToolRef)
-    !== toolRefKey(normalizedRight.selectedTool as LoadoutToolRef)) return false;
-
   return true;
 }
 
@@ -790,14 +778,10 @@ function buildSanitizedCoopDefenseUpgradeProfile(
     }
   }
 
-  // `inspectorTools`/`inspectorSelectedTool` sind die Alt-Schluessel gespeicherter Profile und
-  // aelterer Peers; gelesen wird beides, geschrieben nur noch die klassenneutralen Namen.
   const source = raw && typeof raw === 'object'
-    ? raw as { toolLoadout?: unknown; selectedTool?: unknown; inspectorTools?: unknown; inspectorSelectedTool?: unknown }
+    ? raw as { toolLoadout?: unknown }
     : null;
-  const rawToolLoadout = source?.toolLoadout ?? source?.inspectorTools;
-  const rawSelectedTool = source?.selectedTool ?? source?.inspectorSelectedTool;
-  return buildProfileFromRequestedLevels(requestedLevels, classId, rawToolLoadout, rawSelectedTool);
+  return buildProfileFromRequestedLevels(requestedLevels, classId, source?.toolLoadout);
 }
 
 /** Removes boss-priced levels that are not backed by earned unique boss-map completions. */
@@ -830,7 +814,6 @@ export function constrainCoopDefenseUpgradeProfileToBossPoints(
     requestedLevels,
     classId,
     safeProfile.toolLoadout,
-    safeProfile.selectedTool,
   );
 }
 
@@ -967,7 +950,6 @@ export function levelUpCoopDefenseUpgrade(
     nextRequestedLevels,
     classId,
     safeProfile.toolLoadout,
-    safeProfile.selectedTool,
     autoEquipTools,
   );
 }
@@ -1015,7 +997,6 @@ export function levelDownCoopDefenseUpgrade(
     nextRequestedLevels,
     classId,
     safeProfile.toolLoadout,
-    safeProfile.selectedTool,
   );
 }
 
@@ -1040,7 +1021,6 @@ export function getLoadoutToolSlots(
 export function setLoadoutToolSlots(
   profile: CoopDefenseUpgradeProfile,
   tools: readonly LoadoutToolRef[],
-  selectedTool?: LoadoutToolRef | null,
 ): CoopDefenseUpgradeProfile {
   const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs');
   const levels = Object.fromEntries(
@@ -1050,7 +1030,6 @@ export function setLoadoutToolSlots(
     levels,
     'inspector_gadachs',
     tools,
-    selectedTool,
   );
 }
 
