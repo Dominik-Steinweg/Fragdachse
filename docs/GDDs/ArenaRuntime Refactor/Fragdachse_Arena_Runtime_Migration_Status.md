@@ -32,22 +32,23 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 ## 2. Aktueller Stand
 
 **Aktive Phase:** `Phase 4`
-**Gesamtstatus:** `Phase 3 abgeschlossen`
+**Gesamtstatus:** `Phase 3 abgeschlossen; Architektur-Review zum Presentation-Lifetime durchgeführt und eingearbeitet`
 **Letzter Integrations-Checkpoint:** `npm run check`
-**Nächster Schritt:** Phase 4 gegen aktuellen Branch verifizieren und umsetzen; danach Integrations-Checkpoint A.
+**Nächster Schritt:** Phase 4 umsetzen – zuerst die Presentation-Lifetime trennen (Architektur 6.1), danach die übrigen World-Bindings. Anschließend Integrations-Checkpoint A.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
 | 1 Contracts | ✅ abgeschlossen | Lifecycle-/World-/Activity-/Persistent-Base-Contracts gezielt abgesichert. |
-| 2 WorldRuntime-Fundament | ✅ abgeschlossen | `WorldRuntime` + `ActivityRuntimeHost`, erzeugt/zerstört im `WorldLifecycle`-Sink. Presentation-/Persistent-Base-Slots sind Verträge und noch unbelegt. |
-| 3 World-Materialisierung | ✅ abgeschlossen | `WorldMaterialization` besitzt Layout, Presentation, Fels-/Bau-Runtime, Basen und Verdeckungsindex; `WorldRuntime` besitzt sie. Die sechs alten `ArenaContext`-Felder sind readonly Lesefassaden. |
-| 4 World Bindings / PlayerWorld | ⬜ offen | |
+| 2 WorldRuntime-Fundament | ✅ abgeschlossen | `WorldRuntime` + `ActivityRuntimeHost`, erzeugt/zerstört im `WorldLifecycle`-Sink. |
+| 3 World-Materialisierung | ✅ abgeschlossen | `WorldMaterialization` besitzt Layout, Presentation, Bau-Runtime, Basen und Verdeckungsindex; `WorldRuntime` besitzt sie. Die sechs alten `ArenaContext`-Felder sind readonly Lesefassaden. |
+| – Architektur-Review | ✅ abgeschlossen | Presentation-Lifetime von der World-Gameplay-Lifetime getrennt: Architektur 6.1 (`WorldPresentationBinding`, `WorldPresentationHandoff`, harte Regel 18), Plan Phase 4 / Checkpoint A / Phase 10 präzisiert. Kein Produktionscode geändert. |
+| 4 World Bindings / PlayerWorld | ⬜ offen | Beginnt mit dem Presentation-Split; löst TD-3 und R-1 auf. |
 | 5 Coop Encounter / Enemy Ownership | ⬜ offen | |
 | 6 Coop Objectives / Update / Presentation | ⬜ offen | |
 | 7 Player-Lifetimes | ⬜ offen | |
 | 8 Persistent Base Lifetimes | ⬜ offen | |
 | 9 Completion / ResultApplication | ⬜ offen | |
-| 10 Flow / ArenaRuntime | ⬜ offen | |
+| 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt zusätzlich den `WorldPresentationHandoff`. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
 | 12 Legacy Removal | ⬜ offen | |
 
@@ -63,7 +64,7 @@ Nur temporäre Migrationspfade eintragen.
 |---|---:|---|---|---:|
 | TD-1 | 2 | Der Lifecycle-Sink setzt `ArenaContext.world` weiterhin parallel zur `WorldRuntime`; alle bestehenden Consumer lesen den World-Kontext darüber. | `WorldRuntime.context` | Phase 11 |
 | TD-2 | 2 | `WorldRuntime.update()` wird über `ArenaLifecycleCoordinator.updateWorldRuntime()` aus `ArenaScene.update()` getaktet. | Zielpfad `ArenaRuntime.update()` | Phase 10 |
-| TD-3 | 3 | Der Sink gibt die `WorldMaterialization` beim Instanzende frei (`releaseMaterialization()`), weil die gebaute Arena das Ende ihrer World-Instanz überlebt; abgeräumt wird sie erst in `tearDownArena()`. Siehe Review-Kandidat RK-1. | `WorldMaterialization` | Phase 10 |
+| TD-3 | 3 | Der Sink gibt beim Instanzende die **gesamte** `WorldMaterialization` frei (`releaseMaterialization()`), obwohl nur die Darstellung länger leben muss; abgeräumt wird sie erst in `tearDownArena()`. | `WorldMaterialization` | **Phase 4** (Presentation-Handoff ersetzt die Freigabe) |
 | TD-4 | 3 | `ArenaContext.worldMaterialization` plus die sechs readonly Lesefassaden (`arenaResult`, `currentLayout`, `placementSystem`, `rockRegistry`, `baseManager`, `lightOccluderIndex`) als Zugriffspfad der noch nicht migrierten Consumer. | `WorldRuntime.materialization` | Phase 11 |
 
 ---
@@ -72,7 +73,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | ID | Bereich | Problem / Risiko | Relevanz für nächste Phase |
 |---|---|---|---|
-| R-1 | World-Teardown | `WorldMaterialization.destroy()` hat eine harte Reihenfolge: erst Geometrie/Presentation abmelden, dann `beforePlacementRelease` (Persistent-Base-Abschluss), dann Bau-Runtime freigeben. Zu früh freigegebene Runtime-Objekte löschen den persistenten Basis-Arbeitsstand; zu spät abgemeldete Geometrie verändert eine für den Fast-Reinstance erhaltene Presentation. Vertrag liegt in `tests/WorldMaterializationOwnership.test.ts`. | Phase 4 und Phase 8 dürfen diese Reihenfolge nicht umsortieren. |
+| R-1 | World-Teardown | `WorldMaterialization.destroy()` hält die Reihenfolge heute als Zeilenfolge: erst Geometrie/Presentation abmelden, dann `beforePlacementRelease` (Abschluss des persistenten Basisbestands), dann Bau-Runtime freigeben. Zu früh freigegebene Runtime-Objekte löschen den persistenten Basis-Arbeitsstand; zu spät abgemeldete Geometrie verändert eine für den nächsten Aufbau erhaltene Darstellung. | Phase 4 löst das strukturell: Der Handoff liegt vor dem Gameplay-Teardown, danach ist keine Darstellung mehr erreichbar. Bis dahin Reihenfolge nicht umsortieren; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. |
 
 ---
 
@@ -92,7 +93,7 @@ Coding-KIs tragen hier Änderungsbedarf ein, ändern aber die beiden kanonischen
 
 | ID | Ziel | Beobachtung | Vorgeschlagene Änderung | Status |
 |---|---|---|---|---|
-| RK-1 | Plan, Phase 3 / Phase 10 | Phase 3 setzt voraus, dass die World-Materialisierung dieselbe Lifetime wie die `WorldRuntime` hat. Im Ist-Code endet die World-Instanz an mehreren Stellen, bevor die Arena abgebaut wird: Rundenstart (`hostCheckReadyToStart`), Rundenende/Discard (Exit-Fade), Lobby-Fast-Reinstance und `onTransitionToLobby`. Ein Abbau am Instanzende würde die Exit-Fade-Darstellung und die Wiederverwendung der Lobby-Presentation zerstören. | Phase 3 auf den Owner-Schnitt beschränken (umgesetzt) und die Angleichung der Lifetimes ausdrücklich Phase 10 zuordnen: Der Flow-Owner besitzt die Übergangsreihenfolge und kann `tearDownArena()` und `endInstance()` zusammenführen. Danach entfällt TD-3. | offen |
+| RK-1 | Architektur 6.1 / Plan Phase 4, Checkpoint A, Phase 10 | Phase 3 setzte voraus, dass die World-Materialisierung dieselbe Lifetime wie die `WorldRuntime` hat. Die Codeanalyse zeigt: Das gilt für den mutablen Gameplay-State bereits heute (Host- und Client-Update steigen bei `ctx.world === null` sofort aus), **nicht** aber für die gebaute Darstellung – Match-Exit und Lobby-Fast-Reinstance brauchen sie über das Instanzende hinaus. | Presentation-Lifetime als eigenen Begriff mit ausdrücklichem Transition-Handoff einführen; Phase 4 beginnt damit. | extern umgesetzt |
 
 Statuswerte: `offen` · `manuell geprüft` · `abgelehnt` · `extern umgesetzt`
 
@@ -108,15 +109,23 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 ## 7. Übergabe an die nächste KI
 
 **Aktuell relevant:**
-- Architektur-Dokument lesen.
+- Architektur-Dokument lesen, insbesondere 6.1 (Presentation Lifetime und Transition Handoff) und Regel 18.
 - Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
 - Transitional Debt, R-1 und RK-1 oben berücksichtigen.
-- Ownership-Anker der World: `src/world/WorldRuntime.ts` (Slots `activity`, `materialization`, Presentation- und Persistent-Base-Binding), `src/world/WorldMaterialization.ts` und `src/world/ActivityRuntimeHost.ts`. Erzeugung im `buildWorld()`-Pass, Abbau in `tearDownArena()` über `destroyWorldMaterialization()`.
+- Ownership-Anker der World: `src/world/WorldRuntime.ts`, `src/world/WorldMaterialization.ts`, `src/world/ActivityRuntimeHost.ts`. Erzeugung im `buildWorld()`-Pass, Abbau in `tearDownArena()` über `destroyWorldMaterialization()`.
 - Verträge: `tests/WorldRuntimeOwnership.test.ts` und `tests/WorldMaterializationOwnership.test.ts`.
-- Noch beim Coordinator: World-Navigation/Flowfields, `PlayerWorldRuntime`, Persistent-Base-Anker/Build-Area und die World-Presentation-Synchronisation. Das ist der Stoff von Phase 4.
+
+**Belegte Ausgangslage für den Presentation-Split (verifiziert, nicht erneut herleiten):**
+- `HostUpdateCoordinator.runHostUpdate()` und `ClientUpdateCoordinator.runClientUpdate()` steigen bei `ctx.world === null` sofort aus; ebenso sind `syncPersistentBaseRewards()`, `hostRefreshPersistentBaseComposite()` und `materializePersistentBaseComposite()` ohne `ctx.world` bzw. ohne Bau-Runtime wirkungslos. Nach dem Instanzende wird also kein Gameplay-State mehr gelesen oder simuliert.
+- Die gebaute Darstellung wird von `showWorld === false` **nicht** ausgeblendet: `ArenaBuilder.syncStaticBackdrop()` schaltet nur Seitenrahmen und Hintergründe. Sichtbar bleibt sie bis `ArenaBuilder.destroyDynamic()`. `ArenaExitFadeOverlay` legt sich als Wash bis Alpha 0.9 über genau dieses stehende Bild.
+- Match-Exit: Der Host beendet die Instanz in `hostCompleteRound()` und braucht die Darstellung danach noch für den Fade. Ein Client beendet seine lokale Instanz während des Fades gar nicht – `detectWorldChange()` steigt bei `deferredMatchToLobby` vorher aus.
+- Matchstart aus der LobbyWorld: `hostCheckReadyToStart()` beendet die Instanz, danach deckt die opake Ladeblende (`arenaCountdown.showLoading()`) den Übergang ab.
+- Lobby-Fast-Reinstance: Wiederverwendet ausschließlich `arenaResult` und `layout` (`reusableArenaResult`, `reusableLayout` → `builder.rebindWorldRuntime()`); Bau-Runtime, Basen, Felsregistry und Verdeckungsindex werden neu gebaut.
+- Der Handoff muss `arenaResult` **und** `layout` gemeinsam tragen: `RockVisualHelper` schreibt Runtime-Objekte nach `currentLayout.rocks[id]`, und `replaceArenaLayoutContents()` setzt genau diesen Puffer beim Übernehmen neu. Die gebauten Objekte adressieren ihn per Index.
+- `canFastReinstance` in `detectWorldChange()` prüft heute `ctx.arenaResult !== null && ctx.currentLayout !== null`. Auf dem Client läuft diese Prüfung, während die alte Runtime noch steht; nach dem Split muss sie Runtime-Presentation **und** Handoff berücksichtigen.
 
 **Nächste konkrete Aktion:**  
-`Phase 4 analysieren und gegen den aktuellen Stand verifizieren.`
+`Phase 4 umsetzen, beginnend mit WorldPresentationBinding und WorldPresentationHandoff.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

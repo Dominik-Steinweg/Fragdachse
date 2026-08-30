@@ -35,6 +35,7 @@ ArenaScene
     ├── ParticipationCoordinator
     ├── ResultApplication
     ├── PersistentBaseRoomSession
+    ├── WorldPresentationHandoff
     ├── ArenaFlowCoordinator oder entsprechend reduzierter bestehender Flow-Owner
     │
     └── WorldLifecycle
@@ -178,11 +179,15 @@ Typische direkte Ownership:
 - World-scoped Bindings;
 - `PlayerWorldRuntime`;
 - `PersistentBaseWorldBinding`;
-- optionale World Presentation;
+- optionales `WorldPresentationBinding` (siehe 6.1);
 - `ActivityRuntimeHost`.
 
 `WorldRuntime.update()` tickt nur eigene direkte Child-Owner.  
 `WorldRuntime.destroy()` räumt den kompletten materialisierten World-State idempotent ab.
+
+Mutabler World-Gameplay-State überlebt die `WorldRuntime` nicht. Die einzige Ausnahme ist die
+lokale Darstellung, und sie überlebt nur über den ausdrücklichen Handoff aus 6.1 – nicht dadurch,
+dass ein Feld beim Teardown stehenbleibt.
 
 ### 4.6 `WorldRuntimeContext`
 
@@ -309,6 +314,53 @@ Presentation besitzt keine Gameplay-Authority.
 
 Scene-langlebig bleibt nur die Presentation-Infrastruktur.  
 World- und Activity-spezifische Darstellung erfolgt über entsprechende Bindings.
+
+### 6.1 World Presentation Lifetime und Transition Handoff
+
+World-Gameplay-Lifetime und World-Presentation-Lifetime sind **nicht** identisch.
+
+Der Grund ist fachlich, nicht technisch: Ein Übergang zwischen zwei World-Instanzen ist für den
+Spieler ein Bild und nicht ein Schnitt. Ein Match-Exit blendet die zuletzt gesehene World aus,
+nachdem ihre Instanz beendet ist; ein Wechsel innerhalb derselben authored World kann dieselbe
+gebaute Darstellung weiterverwenden, statt sie identisch neu zu bauen.
+
+Verbindlich:
+
+```text
+World-Instanz beendet
+      ↓
+World-Gameplay-Runtime endet sofort
+      ↓
+World Presentation endet erst mit ihrem Handoff
+```
+
+Die Gameplay-Seite darf daraus keinen Aufschub ableiten. Simulation, Bau-Runtime, Basen,
+Navigation und abgeleitete Indizes enden mit der `WorldRuntime`, auch wenn die Darstellung noch
+steht.
+
+**`WorldPresentationBinding`** ist die lokale Darstellung genau einer `WorldRuntime`. Es trägt die
+gebaute Darstellung samt des Geometriepuffers, den sie adressiert – beides zusammen, weil die
+gebauten Objekte in diesen Puffer indexieren.
+
+**`WorldPresentationHandoff`** liegt oberhalb der `WorldRuntime` und hält höchstens eine
+freigegebene Presentation. Sein Vertrag ist klein und terminal:
+
+```text
+release   – die endende WorldRuntime gibt ihre Presentation ab
+adopt     – die nächste WorldRuntime übernimmt sie und setzt ihren Geometriepuffer neu
+discard   – niemand übernimmt sie; sie wird zerstört
+```
+
+Regeln:
+- eine freigegebene Presentation hat genau einen terminalen Ausgang: `adopt` oder `discard`;
+- solange sie im Handoff liegt, gehört sie keiner `WorldRuntime`; World-scoped Consumer sehen
+  deshalb **keine** Presentation mehr;
+- der Handoff trägt keinen Gameplay-State und keine World-Identität, sondern nur die Darstellung,
+  die ein Übergang weiterzeigt oder weiterverwendet;
+- eine Presentation im Handoff wird nicht getickt und nicht simuliert. Sie steht nur noch da.
+
+Der letzte Punkt ist zugleich die Teardown-Sicherung: Ein Aufräumschritt der Gameplay-Seite kann
+eine übergebene Darstellung nicht mehr erreichen und deshalb auch nicht mehr verändern.
 
 ---
 
@@ -458,7 +510,9 @@ Regeln:
 - `destroy()` / `detach()` ist idempotent;
 - tatsächlich materialisierter State wird entfernt;
 - Child-Owner werden bei Abhängigkeit in umgekehrter Aufbau-Reihenfolge zerstört;
-- nach Teardown bleiben keine alten Timer, Listener, Callbacks, Runtime IDs, scoped Bindings oder Referenzen aktiv.
+- nach Teardown bleiben keine alten Timer, Listener, Callbacks, Runtime IDs, scoped Bindings oder Referenzen aktiv;
+- was einen Owner überleben soll, wird vor dessen Teardown ausdrücklich übergeben. Ein Teardown, der
+  einen Teil bewusst nicht abräumt, ist keine Übergabe, sondern ein unbenannter Besitzer.
 
 ---
 
@@ -481,6 +535,7 @@ Regeln:
 15. Neuer World-/Activity-Runtime-Code importiert `ArenaContext` nicht; neuer Runtime-/Domain-Code importiert `NetworkBridge` oder `bridge` nicht direkt.
 16. Keine allgemeine DI-, Event-Bus-, Registry-, Service-Locator- oder Plugin-Infrastruktur ohne konkreten Bedarf.
 17. Wire- und Authority-Verhalten werden während dieses Ownership-Refactorings nicht nebenbei neu designt.
+18. Mutabler World-Gameplay-State überlebt seine `WorldRuntime` nicht. Nur die World Presentation kann länger leben, und ausschließlich über den Handoff aus 6.1.
 
 ### Stop/Go-Regel
 
@@ -499,6 +554,7 @@ Das Refactoring ist architektonisch erfolgreich, wenn:
 - ein neuer Gegner keine Änderungen an Arena-Lifecycle, Flow oder Persistent Base benötigt;
 - Activity-Wechsel innerhalb derselben World ohne künstlichen World-Rebuild möglich sind;
 - lokale WorldRuntime detach/reattach kann, während die World Identity bestehen bleibt;
+- ein World-Übergang seine Darstellung weiterzeigen oder weiterverwenden kann, ohne dass dafür mutabler World-Gameplay-State stehen bleibt;
 - `PlayerWorldRuntime` den Activity-Wechsel überlebt, `PlayerActivityRuntime` nicht;
 - PB RoomSession einen World-Wechsel überlebt, WorldBinding nicht;
 - stale Completion-/Transaction-Daten keine Progression oder Commits auslösen;

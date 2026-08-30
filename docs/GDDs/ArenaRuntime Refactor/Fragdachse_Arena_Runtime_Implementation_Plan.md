@@ -53,7 +53,12 @@ Prüft:
 - World ohne Activity;
 - World Identity bleibt bei lokalem Runtime-Rebuild bestehen;
 - World-scoped Teardown;
-- Host/Client-Grundpfad weiterhin konsistent.
+- Host/Client-Grundpfad weiterhin konsistent;
+- Presentation-Handoff über alle bestehenden Übergänge: Matchstart aus der LobbyWorld, Match-Exit
+  auf Host und Client, Lobby-Fast-Reinstance und Lobby-Rückkehr;
+- jede freigegebene Presentation erreicht genau einen terminalen Ausgang – `adopt` oder `discard`;
+- nach dem Ende einer World-Instanz existiert kein mutabler World-Gameplay-State mehr;
+- der Abschluss des persistenten Basisbestands verändert keine übergebene Darstellung.
 
 ### Integrations-Checkpoint B – nach Phase 7
 
@@ -181,6 +186,10 @@ Schrittweise gemeinsam mit Create/Destroy:
 
 World-Geometrie und ihre lokale Materialisierung besitzen einen eindeutigen World-Lifetime-Owner.
 
+Die Darstellung darf hier noch gemeinsam mit dem übrigen materialisierten World-State geführt
+werden. Ihre eigene Lifetime bekommt sie in Phase 4 (Architektur 6.1); bis dahin ist ein benannter
+Compatibility-Pfad für die bestehenden Übergänge zulässig.
+
 ---
 
 ## Phase 4 – World Bindings, Navigation und Player-World-Ownership
@@ -191,22 +200,40 @@ Die verbleibenden world-scoped Runtime-Verbindungen dem `WorldRuntime` zuordnen.
 
 ### Umsetzen
 
+Zuerst die Presentation-Lifetime trennen (Architektur 6.1); erst danach die restlichen Bindings:
+
+- `WorldPresentationBinding` aus der bestehenden World-Materialisierung herauslösen: es trägt die
+  gebaute Darstellung samt des Geometriepuffers, den sie adressiert;
+- `WorldPresentationHandoff` oberhalb der `WorldRuntime` mit `release` / `adopt` / `discard`;
+- die verbleibende World-Materialisierung – Bau-Runtime, Basen, Fels- und Verdeckungsindizes –
+  endgültig an die `WorldRuntime`-Lifetime binden: sie fällt mit dem Ende der World-Instanz und
+  nicht erst mit dem nächsten Arena-Teardown;
+- die bestehenden Übergänge auf den Handoff umstellen: Matchstart aus der LobbyWorld, Match-Exit,
+  Lobby-Fast-Reinstance und Lobby-Rückkehr;
 - World Navigation / Flowfield-Lifetime anbinden;
 - benötigte Bindings scene-langlebiger Shared Services;
 - Ownership des bestehenden `PlayerWorldRuntime` zum `WorldRuntime`;
 - `PersistentBaseWorldBinding` zunächst für echte World-Materialisierung;
-- `WorldPresentationBinding` soweit bestehende Presentation dies benötigt;
 - Update-Verantwortung der übernommenen world-scoped Bereiche verschieben;
 - vollständigen WorldRuntime-Teardown testen.
+
+Der Abschluss des persistenten Basisbestands – welche Runtime-Objekte die Runde überlebt haben –
+läuft im Gameplay-Teardown und liegt hinter dem Presentation-Handoff. Er darf keine Darstellung
+mehr erreichen; diese Reihenfolge ist ein Vertrag und keine Zeilenfolge.
 
 ### Nicht tun
 
 - Activity-spezifischen Player-State noch nicht final trennen;
-- Persistent-Base Room-/Transaction-State noch nicht umbauen.
+- Persistent-Base Room-/Transaction-State noch nicht umbauen;
+- die Übergangsreihenfolge selbst nicht neu erfinden: der Handoff bildet die bestehenden Übergänge
+  ab, er ersetzt sie nicht. Der Flow-Owner entsteht erst in Phase 10.
 
 ### Endzustand
 
 `WorldRuntime` ist der erkennbare Owner der lokalen World. Globale Owner müssen übernommene world-scoped Systeme nicht mehr einzeln erzeugen, ticken oder zerstören.
+
+Mutabler World-Gameplay-State überlebt seine `WorldRuntime` nicht mehr; eine länger sichtbare
+Darstellung existiert ausschließlich als übergebene Presentation.
 
 **Danach: Integrations-Checkpoint A.**
 
@@ -387,7 +414,9 @@ Flow besitzt nur Übergangsreihenfolge:
 - Participation;
 - Completion;
 - Result Application;
-- Lobby-/Next-World-Transition.
+- Lobby-/Next-World-Transition;
+- den in Phase 4 eingeführten `WorldPresentationHandoff`: Er gehört fachlich dem Owner der
+  Übergänge und wird hier von der Zwischenlösung am bestehenden Coordinator übernommen.
 
 Zusätzlich `ArenaRuntime` als kleinen Top-Level Composition Owner einführen, sofern dafür nun ein realer klarer Scope existiert.
 
