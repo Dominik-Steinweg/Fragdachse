@@ -669,7 +669,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(lifecycle).toContain('this.pendingLobbyWorldPresentationRebuild = true;');
     expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
     expect(lifecycle).toContain('arenaResult = builder.buildDynamic(layout, {');
-    expect(lifecycle).toContain('builder.rebindWorldRuntime(');
+    expect(lifecycle).toContain('builder.rebindPresentation(');
   });
 
   it('aktiviert Stage 1 erst in der ersetzten LobbyWorld und laesst die alte Area unveraendert', () => {
@@ -717,8 +717,8 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
     expect(lifecycle).toContain('Math.max(this.lastRoundRevision, previousRevision)');
     expect(lifecycle).toContain('this.worldLifecycle.endInstance();');
-    expect(lifecycle).toContain('builder.rebindWorldRuntime(');
-    expect(lifecycle).toContain('this.tearDownArena(reusableArenaResult !== null);');
+    expect(lifecycle).toContain('builder.rebindPresentation(');
+    expect(lifecycle).toContain('this.tearDownArena(reusableArenaPresentation !== null);');
     expect(lifecycle).toContain('enablePersistentBaseGravel: persistentBaseGravel !== null,');
     expect(lifecycle).toContain('arenaResult.groundSurface?.setPersistentBaseGravel(');
 
@@ -731,8 +731,8 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(modeSetter).not.toContain('Presentation');
 
     const builder = read('src/arena/ArenaBuilder.ts');
-    const rebindStart = builder.indexOf('  rebindWorldRuntime(');
-    const rebindEnd = builder.indexOf('\n  private static createAuthoredRockVisualState', rebindStart);
+    const rebindStart = builder.indexOf('  rebindPresentation(');
+    const rebindEnd = builder.indexOf('\n  /** Erstellt die reine Presentation-Projektion', rebindStart);
     const rebind = builder.slice(rebindStart, rebindEnd);
     expect(rebind).toContain('replaceArenaLayoutContents(layout, authoredLayout);');
     expect(rebind).toContain('collectRockRebindDirtyIds(');

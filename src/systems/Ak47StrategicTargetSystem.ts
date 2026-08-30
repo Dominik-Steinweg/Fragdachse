@@ -34,13 +34,20 @@ interface Candidate {
 /** Host-authoritative AK target state; the renderer only consumes its compact snapshot. */
 export class Ak47StrategicTargetSystem {
   private readonly states = new Map<string, StrategicTargetState>();
+  private enemyManager: EnemyManager | null;
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly enemyManager: EnemyManager,
+    enemyManager: EnemyManager,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,
-  ) {}
+  ) {
+    this.enemyManager = enemyManager;
+  }
+
+  setEnemyManager(enemyManager: EnemyManager | null): void {
+    this.enemyManager = enemyManager;
+  }
 
   hostUpdate(now: number): void {
     for (const player of this.playerManager.getAllPlayers()) {
@@ -156,7 +163,7 @@ export class Ak47StrategicTargetSystem {
   private getCandidates(playerId: string, playerX: number, playerY: number, rotation: number): Candidate[] {
     const cursorX = playerX + Math.cos(rotation) * CURSOR_DISTANCE_PX;
     const cursorY = playerY + Math.sin(rotation) * CURSOR_DISTANCE_PX;
-    return this.enemyManager.getAllEnemies()
+    return (this.enemyManager?.getAllEnemies() ?? [])
       .filter(enemy => this.isLivingEnemy(enemy.id) && this.combatSystem.canDamageTarget(playerId, enemy.id))
       .map(enemy => ({
         enemy,
@@ -167,7 +174,7 @@ export class Ak47StrategicTargetSystem {
   }
 
   private isLivingEnemy(enemyId: string): boolean {
-    const enemy = this.enemyManager.getEnemy(enemyId);
+    const enemy = this.enemyManager?.getEnemy(enemyId);
     return !!enemy && enemy.sprite.active && enemy.getHp() > 0 && !enemy.isBurrowed();
   }
 }

@@ -1,4 +1,4 @@
-import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
+import type { ArenaPresentationResult } from '../arena/ArenaBuilder';
 import type { ArenaLayout } from '../types';
 
 /**
@@ -15,7 +15,7 @@ import type { ArenaLayout } from '../types';
 
 /** Infrastrukturgrenze der Darstellung: der gebaute Baum ist Phaser-gebunden. */
 export interface WorldPresentationSink {
-  readonly destroyPresentation: (arena: ArenaBuilderResult) => void;
+  readonly destroyPresentation: (arena: ArenaPresentationResult) => void;
 }
 
 export class WorldPresentationBinding {
@@ -25,7 +25,7 @@ export class WorldPresentationBinding {
     /** Geometriepuffer, den die gebaute Darstellung adressiert. */
     readonly layout: ArenaLayout,
     /** Gebaute Darstellung: Boden, Felsen, Staemme, Kronen, Overlays. */
-    readonly arena: ArenaBuilderResult,
+    readonly arena: ArenaPresentationResult,
     private readonly sink: WorldPresentationSink,
   ) {}
 

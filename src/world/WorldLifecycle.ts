@@ -166,6 +166,13 @@ export class WorldLifecycle {
     if (hadContext) this.sink.detach();
   }
 
+  /** Synchronisiert einen beobachteten Activity-Wechsel, ohne die bestehende World neu zu bauen. */
+  syncObservedActivity(activity: ActivityDescriptor | null): void {
+    if (!this.instanceDescriptor || !this.currentContext) return;
+    assertActivityBelongsToWorld(this.instanceDescriptor, activity);
+    this.syncActivity(activity, true, true);
+  }
+
   /**
    * Beendet die World-Instanz vollstaendig: lokale Runtime und replizierter Kanal. Idempotent,
    * damit Rundenabschluss, Diagnose-Abbruch und technischer Abbruch denselben Weg nehmen koennen.

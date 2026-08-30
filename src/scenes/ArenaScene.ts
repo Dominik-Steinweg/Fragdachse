@@ -1027,7 +1027,7 @@ export class ArenaScene extends Phaser.Scene {
       // deren Uebergabe an einen Uebergang gar keine mehr.
       worldMaterialization: null,
       worldPresentation: null,
-      get arenaResult() { return this.worldPresentation?.arena ?? null; },
+      get arenaResult() { return this.worldMaterialization?.arena ?? null; },
       get currentLayout() { return this.worldPresentation?.layout ?? null; },
       get placementSystem() { return this.worldMaterialization?.placement ?? null; },
       get rockRegistry() { return this.worldMaterialization?.rocks ?? null; },
@@ -1867,7 +1867,8 @@ export class ArenaScene extends Phaser.Scene {
     // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
     // ihrem eigenen Kanal. Der Host haelt waehrend der Lobby genau eine LobbyWorld offen; jeder
     // Peer baut sie danach ueber denselben Kanal wie jede Match-World. Waehrend des lokalen
-    // Arena-Exit-Fades bleibt die Match-World unveraendert, bis der normale Teardown gelaufen ist.
+    // Arena-Exit-Fades bleibt nur die freigegebene Match-Presentation sichtbar; ihre Runtime ist
+    // bereits vollstaendig beendet.
     if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
@@ -1910,11 +1911,12 @@ export class ArenaScene extends Phaser.Scene {
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
     const worldActive = this.ctx?.world !== null && this.ctx?.world !== undefined;
     const activityActive = bridge.getActivityDescriptor() !== null;
+    const exitPresentationActive = deferArenaExit && this.lifecycle.isArenaExitPresentationActive();
     const localWorldPresentation = this.lifecycle.getLocalWorldPresentation();
     const presentationPolicy = resolvePresentationPolicy({
       inLobby: phase === 'LOBBY' && !deferArenaExit,
       worldPresentation: localWorldPresentation,
-      worldVisible: worldActive && (!activityActive || arenaVisible),
+      worldVisible: exitPresentationActive || (worldActive && (!activityActive || arenaVisible)),
       gameplayActive: worldActive && (!activityActive || gameplayActive),
       roundRole: spectator ? 'spectator' : 'participant',
       matchTerminated: terminated,
@@ -5215,8 +5217,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   /**
-   * Verzoegert nur den lokalen Arena-Abbau. Der Host hat Ergebnis und LOBBY-Phase bereits
-   * publiziert; Simulation und Eingabe bleiben deshalb aus, waehrend das letzte Bild ausfadet.
+   * Haelt den sichtbaren Lobby-Uebergang, waehrend World-/Activity-Gameplay bereits beendet ist.
+   * Nur World-Presentation und eingefrorene Player-/Enemy-Snapshots bleiben bis zum Fade-Ende.
    */
   private syncArenaExitFade(phase: GamePhase): boolean {
     if (phase === 'ARENA') {
@@ -5255,6 +5257,7 @@ export class ArenaScene extends Phaser.Scene {
         this.arenaExitFadeComplete = true;
         return false;
       }
+      this.lifecycle.beginArenaExitPresentation();
       overlay.play(outcome, () => {
         this.arenaExitFadeComplete = true;
       });

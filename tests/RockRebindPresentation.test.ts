@@ -3,8 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => (await import('./fakeArenaRenderScene')).createFakePhaserModule());
 
 import { ArenaBuilder, collectRockRebindDirtyIds } from '../src/arena/ArenaBuilder';
-import type { ArenaBuilderResult } from '../src/arena/ArenaBuilder';
-import { RockGridIndex } from '../src/arena/RockGridIndex';
+import type { ArenaPresentationResult } from '../src/arena/ArenaBuilder';
 import { createRockOverlaySource, syncRockOverlaySource } from '../src/arena/RockOverlayRegions';
 import type { RockCell } from '../src/types';
 import { RockVisualStateStore, type RockVisualState } from '../src/arena/rocks/RockVisualState';
@@ -47,40 +46,21 @@ function makeState(id: number, cell: RockCell, active: boolean, frame = 36): Roc
   };
 }
 
-function makeProxy(active: boolean) {
-  return {
-    active,
-    body: { updateFromGameObject: vi.fn() },
-    destroy: vi.fn(function destroy(this: { active: boolean }) {
-      this.active = false;
-    }),
-  };
-}
-
-function buildResult(layout: ReturnType<typeof makeLayout>, states: RockVisualState[], proxies: unknown[]) {
+function buildResult(layout: ReturnType<typeof makeLayout>, states: RockVisualState[]) {
   const rockVisualStates = new RockVisualStateStore();
   for (const state of states) rockVisualStates.add(state, false);
 
-  const rockGroup = {
-    add: vi.fn((child: { body?: unknown }) => {
-      child.body ??= { updateFromGameObject: vi.fn() };
-      return rockGroup;
-    }),
-  };
   const overlaySource = createRockOverlaySource();
   syncRockOverlaySource(overlaySource, layout.rocks);
   const refreshRegions = vi.fn();
   const refreshAll = vi.fn();
   const result = {
     baseZoneObjects: [],
-    rockGroup,
-    rockPhysicsProxies: proxies,
     rockVisualStates,
     rockVisualSystem: null,
-    rockGrid: new RockGridIndex(layout.rocks, { cols: METRICS.gridCols, rows: METRICS.gridRows }),
     rockOverlaySource: overlaySource,
     rockOverlaySurface: { refreshRegions, refreshAll },
-  } as unknown as ArenaBuilderResult;
+  } as unknown as ArenaPresentationResult;
   return { result, overlaySource, refreshRegions, refreshAll };
 }
 
@@ -88,10 +68,9 @@ function rebind(
   layout: ReturnType<typeof makeLayout>,
   authoredLayout: ReturnType<typeof makeLayout>,
   states: RockVisualState[],
-  proxies: unknown[],
 ) {
-  const fixture = buildResult(layout, states, proxies);
-  new ArenaBuilder({} as never).rebindWorldRuntime(
+  const fixture = buildResult(layout, states);
+  new ArenaBuilder({} as never).rebindPresentation(
     fixture.result,
     layout,
     authoredLayout,
@@ -102,13 +81,40 @@ function rebind(
 }
 
 describe('LobbyWorld fast reinstance rock overlay rebind', () => {
+  it('projects no Gameplay or Physics state into the presentation handoff', () => {
+    const projected = ArenaBuilder.presentationOf({
+      baseZoneObjects: [],
+      rockGroup: { gameplay: true },
+      rockPhysicsProxies: [{ body: {} }],
+      rockVisualStates: new RockVisualStateStore(),
+      rockVisualSystem: null,
+      rockGrid: { gameplay: true },
+      trunkGroup: { gameplay: true },
+      trunkBodies: [{ body: {} }],
+      trunkVisuals: [],
+      canopyObjects: [],
+      trackObjects: [],
+      groundSurface: null,
+      groundCoverPlacements: [],
+      rockOverlaySurface: null,
+      rockOverlaySource: createRockOverlaySource(),
+      rockMossPlacements: [],
+      rockVegetationPlacements: [],
+    } as never);
+
+    expect(projected).not.toHaveProperty('rockGroup');
+    expect(projected).not.toHaveProperty('rockPhysicsProxies');
+    expect(projected).not.toHaveProperty('rockGrid');
+    expect(projected).not.toHaveProperty('trunkGroup');
+    expect(projected).not.toHaveProperty('trunkBodies');
+  });
+
   it('does not rebuild overlays for unchanged authored rocks', () => {
     const authored = [{ gridX: 1, gridY: 1 }];
     const fixture = rebind(
       makeLayout(authored.map((cell) => ({ ...cell }))),
       makeLayout(authored.map((cell) => ({ ...cell }))),
       [makeState(0, authored[0], true)],
-      [makeProxy(true)],
     );
 
     expect(fixture.refreshRegions).not.toHaveBeenCalled();
@@ -121,7 +127,6 @@ describe('LobbyWorld fast reinstance rock overlay rebind', () => {
       makeLayout(authored.map((cell) => ({ ...cell }))),
       makeLayout(authored.map((cell) => ({ ...cell }))),
       [makeState(0, authored[0], false)],
-      [null],
     );
 
     expect(fixture.refreshRegions).toHaveBeenCalledTimes(1);
@@ -136,7 +141,6 @@ describe('LobbyWorld fast reinstance rock overlay rebind', () => {
       makeLayout([{ ...authored }, { ...runtime }]),
       makeLayout([{ ...authored }]),
       [makeState(0, authored, true), makeState(1, runtime, false)],
-      [makeProxy(true), null],
     );
 
     expect(fixture.refreshRegions).toHaveBeenCalledTimes(1);
@@ -150,9 +154,7 @@ describe('LobbyWorld fast reinstance rock overlay rebind', () => {
     const next = { gridX: 2, gridY: 1 };
     const dirty = collectRockRebindDirtyIds(
       [makeState(0, previous, true, 3)],
-      [makeProxy(true)],
       [makeState(0, next, true, 4)],
-      [makeProxy(true)],
       1,
     );
 

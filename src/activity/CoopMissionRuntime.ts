@@ -54,6 +54,14 @@ export interface CoopMissionEnemySpecialRuntime {
 
 export type CoopMissionRuntimeBindingsChanged = (runtime: CoopMissionRuntime | null) => void;
 
+/** Gerichtete Bindung eines langlebigeren Systems an genau diese Activity. */
+export interface CoopMissionScopedBinding {
+  readonly attach: (runtime: CoopMissionRuntime) => void;
+  readonly detach: () => void;
+}
+
+export type CoopMissionMaterializationStep = (runtime: CoopMissionRuntime) => void;
+
 /**
  * Lokale Realisierung genau einer Coop-Mission.
  *
@@ -70,6 +78,8 @@ export class CoopMissionRuntime implements ActivityRuntime {
   private enemySpecialOwner: CoopMissionEnemySpecialRuntime | null = null;
   private necromancyOwner: NecromancySystem | null = null;
   private mapEventOwner: CoopDefenseMapEventDirector | null = null;
+  private scopedBindings: CoopMissionScopedBinding[] = [];
+  private materializationSteps: CoopMissionMaterializationStep[] = [];
   private destroyed = false;
 
   /** Ally-Felder werden mit der Activity erzeugt und bei ihrem Ende vollstaendig verworfen. */
@@ -173,6 +183,29 @@ export class CoopMissionRuntime implements ActivityRuntime {
     this.publishBindings();
   }
 
+  /** Bindet einen laenger lebenden Consumer; Detach loest ihn vor allen Child-Ownern. */
+  bind(binding: CoopMissionScopedBinding): void {
+    this.claimEmptySlot('scoped binding', null);
+    this.scopedBindings.push(binding);
+    binding.attach(this);
+  }
+
+  /** Merkt den echten Aufbaupfad eines Child-Owners fuer Activity-Wechsel in derselben World. */
+  addMaterializationStep(step: CoopMissionMaterializationStep): void {
+    this.claimEmptySlot('materialization step', null);
+    this.materializationSteps.push(step);
+  }
+
+  exportMaterialization(): readonly CoopMissionMaterializationStep[] {
+    return [...this.materializationSteps];
+  }
+
+  materialize(steps: readonly CoopMissionMaterializationStep[]): void {
+    this.claimEmptySlot('activity materialization', null);
+    for (const step of steps) step(this);
+    this.materializationSteps = [...steps];
+  }
+
   ensureAllyFlowField(playerId: string): void {
     const coordinator = this.navigationOwner?.coordinator;
     if (!coordinator || this.allyFlowFields.has(playerId)) return;
@@ -197,6 +230,14 @@ export class CoopMissionRuntime implements ActivityRuntime {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+
+    const scopedBindings = this.scopedBindings;
+    this.scopedBindings = [];
+    this.materializationSteps = [];
+    for (const binding of [...scopedBindings].reverse()) binding.detach();
+    // Compatibility-Consumer sehen die Activity ab jetzt nicht mehr. Das geschieht vor dem
+    // Entity-Teardown, damit kein Destroy-Callback ueber einen langlebigeren Service zurueckgreift.
+    this.bindingsChanged(null);
 
     // Abhaengige Directors und Behaviour-Systeme fallen vor Gegnern und Navigation.
     this.mapEventOwner?.reset();
@@ -237,7 +278,6 @@ export class CoopMissionRuntime implements ActivityRuntime {
     this.encounterOwner = null;
     this.navigationOwner = null;
     this.enemyOwner = null;
-    this.bindingsChanged(null);
   }
 
   private claimEmptySlot(name: string, current: object | null): void {
@@ -251,5 +291,6 @@ export class CoopMissionRuntime implements ActivityRuntime {
 
   private publishBindings(): void {
     this.bindingsChanged(this);
+    for (const binding of this.scopedBindings) binding.attach(this);
   }
 }

@@ -47,10 +47,11 @@ export type FireUpgradeStatResolver = (playerId: string, stat: string, baseValue
 export class FlamethrowerUpgradeSystem {
   private lastRingContactTick = -1;
   private readonly pendingChunkLandings: PendingFireChunkLanding[] = [];
+  private enemyManager: EnemyManager | null;
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly enemyManager: EnemyManager,
+    enemyManager: EnemyManager,
     private readonly projectileManager: ProjectileManager,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,
@@ -66,7 +67,13 @@ export class FlamethrowerUpgradeSystem {
       landsAt: number,
       visualStyle: GroundFireVisualStyle,
     ) => void,
-  ) {}
+  ) {
+    this.enemyManager = enemyManager;
+  }
+
+  setEnemyManager(enemyManager: EnemyManager | null): void {
+    this.enemyManager = enemyManager;
+  }
 
   /** Must run before CombatSystem.update so a swept projectile is imbued before a same-frame hit. */
   prepareProjectileBurns(now: number): void {
@@ -114,7 +121,7 @@ export class FlamethrowerUpgradeSystem {
     this.lastRingContactTick = contactTick;
 
     const rings = this.getActiveRings();
-    for (const enemy of this.enemyManager.getAllEnemies()) {
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!this.combatSystem.isAlive(enemy.id)) continue;
       for (const ring of this.findRingContacts(enemy, rings)) {
         this.combatSystem.applyBurnHit(

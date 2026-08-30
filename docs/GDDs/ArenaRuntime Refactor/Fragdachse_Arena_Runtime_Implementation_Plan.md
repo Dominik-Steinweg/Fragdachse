@@ -21,6 +21,11 @@ Nach jeder Phase:
 4. erkannten Änderungsbedarf an Architektur oder Plan **nur im Status-Dokument als Review-Kandidat eintragen**;
 5. Architektur- und Plan-Dokument niemals automatisch ändern.
 
+Browser-/Sichtprüfungen sind bei diesem Refactoring eine manuelle User-Abnahme. Coding-KIs
+starten dafür keinen Dev-Server oder Browser. Nach erfolgreich abgeschlossenen automatisierten
+Checks nennen sie dem User die visuell zu prüfenden Übergänge; eine noch ausstehende manuelle
+Sichtprüfung ist transparent zu dokumentieren, aber kein Fehlschlag des automatisierten Gates.
+
 ### Stop/Go-Regel
 
 Eine geplante Abstraktion wird nur implementiert, wenn sie beim aktuellen Umbau einen realen Zweck erfüllt. Wenn der bestehende Owner nach vorherigen Phasen bereits die Zielverantwortung sauber erfüllt, wird er bevorzugt reduziert oder transformiert statt durch einen neuen Wrapper ersetzt.
@@ -59,6 +64,20 @@ Prüft:
 - jede freigegebene Presentation erreicht genau einen terminalen Ausgang – `adopt` oder `discard`;
 - nach dem Ende einer World-Instanz existiert kein mutabler World-Gameplay-State mehr;
 - der Abschluss des persistenten Basisbestands verändert keine übergebene Darstellung.
+
+Wird Checkpoint A nach einer Stabilisierung von Phase 4/5 konsolidiert nachgeholt, prüft er
+zusätzlich:
+- vollständiger Wechsel `Activity A → Activity B` innerhalb derselben World ohne World-Rebuild;
+- alle Child-Owner von B sind frisch materialisiert und A ist vollständig zerstört;
+- keine Referenz, kein Callback und kein scoped State von A verbleibt in Shared Services;
+- der Presentation-Handoff enthält weder aktiven Gameplay- noch Physics-State;
+- Matchstart, Match-Exit, Lobby-Rückkehr und Lobby-Fast-Reinstance sind für Host und Client durch
+  Contracts beziehungsweise vorhandene Integrationspfade abgesichert;
+- Exit-Fade beendet World-, Player- und Enemy-Gameplay sofort und hält ausschließlich die
+  erwartete eingefrorene Darstellung.
+
+Die visuelle Kontrolle von World-, Player- und Enemy-Darstellung im Exit-Fade führt anschließend
+der User manuell im Browser durch; Coding-KIs führen diese Browserprüfung nicht aus.
 
 ### Integrations-Checkpoint B – nach Phase 7
 
@@ -192,7 +211,7 @@ Compatibility-Pfad für die bestehenden Übergänge zulässig.
 
 ---
 
-## Phase 4 – World Bindings, Navigation und Player-World-Ownership
+## Phase 4 – World Bindings und World-Materialisierung
 
 ### Ziel
 
@@ -203,16 +222,17 @@ Die verbleibenden world-scoped Runtime-Verbindungen dem `WorldRuntime` zuordnen.
 Zuerst die Presentation-Lifetime trennen (Architektur 6.1); erst danach die restlichen Bindings:
 
 - `WorldPresentationBinding` aus der bestehenden World-Materialisierung herauslösen: es trägt die
-  gebaute Darstellung samt des Geometriepuffers, den sie adressiert;
+  reine gebaute Darstellung samt des Geometriepuffers, den sie adressiert, aber keine Physics-
+  Gruppen, Collision-Proxies, Runtime-Indizes oder anderen Gameplay-State;
 - `WorldPresentationHandoff` oberhalb der `WorldRuntime` mit `release` / `adopt` / `discard`;
 - die verbleibende World-Materialisierung – Bau-Runtime, Basen, Fels- und Verdeckungsindizes –
   endgültig an die `WorldRuntime`-Lifetime binden: sie fällt mit dem Ende der World-Instanz und
   nicht erst mit dem nächsten Arena-Teardown;
 - die bestehenden Übergänge auf den Handoff umstellen: Matchstart aus der LobbyWorld, Match-Exit,
   Lobby-Fast-Reinstance und Lobby-Rückkehr;
-- World Navigation / Flowfield-Lifetime anbinden;
+- nur tatsächlich activity-unabhängige World-Navigation anbinden; die heutige Coop-spezifische
+  Enemy-/Ally-/Boss-Flowfield-Lifetime gehört in Phase 5;
 - benötigte Bindings scene-langlebiger Shared Services;
-- Ownership des bestehenden `PlayerWorldRuntime` zum `WorldRuntime`;
 - `PersistentBaseWorldBinding` zunächst für echte World-Materialisierung;
 - Update-Verantwortung der übernommenen world-scoped Bereiche verschieben;
 - vollständigen WorldRuntime-Teardown testen.
@@ -224,6 +244,8 @@ mehr erreichen; diese Reihenfolge ist ein Vertrag und keine Zeilenfolge.
 ### Nicht tun
 
 - Activity-spezifischen Player-State noch nicht final trennen;
+- Ownership des bestehenden `PlayerWorldRuntime` noch nicht verschieben; sie wird zusammen mit
+  der Player-World-/Presentation-Trennung in Phase 7 behandelt;
 - Persistent-Base Room-/Transaction-State noch nicht umbauen;
 - die Übergangsreihenfolge selbst nicht neu erfinden: der Handoff bildet die bestehenden Übergänge
   ab, er ersetzt sie nicht. Der Flow-Owner entsteht erst in Phase 10.
@@ -250,10 +272,15 @@ Einen echten Owner für die Coop-Activity einführen und den ersten großen Acti
 - konkrete `CoopMissionRuntime`;
 - Attach/Update/Destroy-Vertrag über `ActivityRuntimeHost`;
 - Encounter-/Spawn-Runtime;
+- Coop-spezifische Enemy-/Ally-/Boss-Navigation und Flowfields;
 - activity-scoped Enemy Behaviour;
 - Boss-/mission-spezifische Enemy Runtime;
 - mission-spezifische Directors, soweit sie zu diesem Scope gehören;
-- tatsächliche Ownership samt Teardown verschieben.
+- tatsächliche Ownership samt Teardown verschieben;
+- den realen Materialisierungspfad als Activity-Factory/Blueprint erhalten, sodass ein Attach von
+  Activity B in derselben World alle Child-Owner frisch erzeugt und keinen World-Rebuild braucht;
+- Bindings scene-langlebiger Shared Services an Activity-Owner gerichtet anbinden und beim Detach
+  vor dem Child-Teardown vollständig lösen.
 
 Generische Combat-/Projectile-/Physics-/Fire-Mechaniken bleiben bei ihren Domain-Ownern.
 
@@ -265,6 +292,9 @@ Generische Combat-/Projectile-/Physics-/Fire-Mechaniken bleiben bei ihren Domain
 ### Endzustand
 
 Enemy-/Encounter-/Boss-Lifecycle der Coop-Mission ist unter `CoopMissionRuntime` erkennbar gekapselt und wird nicht mehr als globale Activity-Systemliste verwaltet.
+
+Ein erneuter Attach in derselben World erzeugt eine vollständig materialisierte Coop-Activity;
+kein Child-Owner oder direkter Shared-Service-Verweis der Vorgänger-Activity überlebt.
 
 ---
 
@@ -308,6 +338,8 @@ World- und Activity-spezifischen Player-State sauber trennen und policyabhängig
 - Materialization Ledger / äquivalentes Tracking tatsächlich erzeugter Player-Module;
 - Attach-Rollback und idempotenten Detach absichern;
 - Activity-Wechsel in derselben World testen.
+- `PlayerWorldRuntime`-Ownership zum `WorldRuntime` verschieben, nachdem sichtbare
+  Player-Presentation als eigener Transition-State abgesichert ist.
 
 ### Nicht tun
 

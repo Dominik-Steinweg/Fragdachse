@@ -82,7 +82,6 @@ export interface RockOverlayStreamerOptions {
   readonly frame: ChunkWorldFrame;
   readonly layout: ArenaLayout;
   /** Paralleles Array zu `layout.rocks`; wird von aussen in-place mutiert. */
-  readonly rockPhysicsProxies: readonly ({ readonly active: boolean } | null)[];
   readonly rockVisualStates: readonly (RockVisualState | undefined)[];
   readonly overlaySource: RockOverlaySource;
   readonly mossPlacements: readonly RockMossPlacement[];
@@ -94,7 +93,6 @@ export class RockOverlayStreamer {
   private readonly scene: Phaser.Scene;
   private readonly frame: ChunkWorldFrame;
   private readonly layout: ArenaLayout;
-  private readonly rockPhysicsProxies: readonly ({ readonly active: boolean } | null)[];
   private readonly rockVisualStates: readonly (RockVisualState | undefined)[];
   private readonly overlaySource: RockOverlaySource;
   private readonly mossPlacements: readonly RockMossPlacement[];
@@ -137,7 +135,6 @@ export class RockOverlayStreamer {
     this.scene = options.scene;
     this.frame = options.frame;
     this.layout = options.layout;
-    this.rockPhysicsProxies = options.rockPhysicsProxies;
     this.rockVisualStates = options.rockVisualStates;
     this.overlaySource = options.overlaySource;
     this.mossPlacements = options.mossPlacements;
@@ -350,9 +347,8 @@ export class RockOverlayStreamer {
       this.rockCandidates,
     )) {
       const cell = this.layout.rocks[id];
-      const proxy = this.rockPhysicsProxies[id];
       const visualState = this.rockVisualStates[id];
-      if (!cell || !proxy?.active || !visualState?.active) continue;
+      if (!cell || !visualState?.active) continue;
       activeCellKeys.add(rockCellKey(cell));
 
       const cellMinX = cell.gridX * CELL_SIZE;

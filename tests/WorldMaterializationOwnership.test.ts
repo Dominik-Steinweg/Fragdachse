@@ -52,6 +52,7 @@ function recorder(): Recorder {
 
 function materialization(parts: Recorder): WorldMaterialization {
   const built = new WorldMaterialization();
+  built.setArena(parts.arena, () => { parts.calls.push('arenaGameplay.destroy'); });
   built.setPlacement(parts.placement);
   built.setBases(parts.bases);
   built.setRocks(parts.rocks);
@@ -85,6 +86,7 @@ describe('WorldMaterialization – der mutable World-Gameplay-State', () => {
     const built = materialization(parts);
 
     expect(built.placement).toBe(parts.placement);
+    expect(built.arena).toBe(parts.arena);
     expect(built.bases).toBe(parts.bases);
     expect(built.rocks).toBe(parts.rocks);
     expect(built.lightOccluders).toBe(parts.occluders);
@@ -98,9 +100,10 @@ describe('WorldMaterialization – der mutable World-Gameplay-State', () => {
     built.destroy();
     built.destroy();
 
-    expect(parts.calls).toEqual(['placement.clearRuntimeRocks', 'bases.destroy']);
+    expect(parts.calls).toEqual(['placement.clearRuntimeRocks', 'bases.destroy', 'arenaGameplay.destroy']);
     expect(built.isDestroyed()).toBe(true);
     expect(built.placement).toBeNull();
+    expect(built.arena).toBeNull();
     expect(built.bases).toBeNull();
     expect(built.rocks).toBeNull();
     expect(built.lightOccluders).toBeNull();
@@ -120,6 +123,7 @@ describe('WorldMaterialization – der mutable World-Gameplay-State', () => {
     built.destroy();
 
     expect(() => built.setPlacement(parts.placement)).toThrow(/destroyed world materialization/);
+    expect(() => built.setArena(parts.arena, () => {})).toThrow(/destroyed world materialization/);
     expect(() => built.setBases(parts.bases)).toThrow(/destroyed world materialization/);
     expect(() => built.setRocks(parts.rocks)).toThrow(/destroyed world materialization/);
     expect(() => built.setLightOccluders(null)).toThrow(/destroyed world materialization/);
@@ -236,6 +240,7 @@ describe('WorldRuntime – Gameplay faellt, Darstellung kann uebergehen', () => 
       'persistentBase.releaseReward',
       'placement.clearRuntimeRocks',
       'bases.destroy',
+      'arenaGameplay.destroy',
     ]);
     expect(persistentBase.rewardRuntimes.size).toBe(0);
   });
@@ -312,7 +317,7 @@ describe('Uebergaenge – die Darstellung reist, der Gameplay-State nicht', () =
     expect(built.isDestroyed()).toBe(true);
     expect(shown.isDestroyed()).toBe(false);
     expect(owner.handoff.pending).toBe(shown);
-    expect(parts.calls).toEqual(['placement.clearRuntimeRocks', 'bases.destroy']);
+    expect(parts.calls).toEqual(['placement.clearRuntimeRocks', 'bases.destroy', 'arenaGameplay.destroy']);
   });
 
   it('fuehrt beim Fast-Reinstance dieselbe Darstellung weiter und baut den Gameplay-State neu', () => {
@@ -353,7 +358,7 @@ describe('Uebergaenge – die Darstellung reist, der Gameplay-State nicht', () =
 describe('Arena-Anbindung der getrennten Lifetimes', () => {
   it('liest Gameplay-State und Darstellung ueber ihre jeweiligen Owner', () => {
     const scene = readFileSync(resolve(__dirname, '../src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('get arenaResult() { return this.worldPresentation?.arena ?? null; }');
+    expect(scene).toContain('get arenaResult() { return this.worldMaterialization?.arena ?? null; }');
     expect(scene).toContain('get currentLayout() { return this.worldPresentation?.layout ?? null; }');
     expect(scene).toContain('get placementSystem() { return this.worldMaterialization?.placement ?? null; }');
     expect(scene).toContain('get rockRegistry() { return this.worldMaterialization?.rocks ?? null; }');
@@ -368,6 +373,7 @@ describe('Arena-Anbindung der getrennten Lifetimes', () => {
     expect([...lifecycle.matchAll(/new WorldMaterialization\(/g)]).toHaveLength(1);
     expect([...lifecycle.matchAll(/new WorldPresentationBinding\(/g)]).toHaveLength(1);
     expect(lifecycle).toContain('this.worldRuntime?.materialize(materialization);');
+    expect(lifecycle).toContain('materialization.setArena(arenaResult');
     expect(lifecycle).toContain('this.worldRuntime?.setPresentation(presentationBinding);');
     expect(lifecycle).toContain('this.worldRuntime?.setPersistentBase(persistentBaseBinding);');
     // Der Handoff ist der einzige Weg, auf dem etwas die Runtime ueberlebt.

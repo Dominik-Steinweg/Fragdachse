@@ -148,6 +148,49 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
     expect(update).toHaveBeenCalledExactlyOnceWith(16);
     expect(destroy).toHaveBeenCalledTimes(1);
   });
+
+  it('materialisiert Activity B in derselben World frisch und loest Bindings vor alten Entities', () => {
+    const calls: string[] = [];
+    let generation = 0;
+    const recipe = (runtime: CoopMissionRuntime): void => {
+      const id = ++generation;
+      runtime.setEnemyManager({
+        destroy: () => { calls.push(`enemy:${id}:destroy`); },
+        setLethalDamageGuard: () => {},
+        setEnemySpawnedCallback: () => {},
+        setVisualSink: () => {},
+      } as unknown as EnemyManager);
+    };
+    const bind = (runtime: CoopMissionRuntime, label: string): void => {
+      runtime.bind({
+        attach: (current) => {
+          calls.push(`${label}:attach:${current.enemyManager ? 'enemy' : 'empty'}`);
+        },
+        detach: () => {
+          calls.push(`${label}:detach:${runtime.enemyManager ? 'enemy' : 'empty'}`);
+        },
+      });
+    };
+
+    const host = new ActivityRuntimeHost(21);
+    const first = new CoopMissionRuntime(descriptor());
+    first.addMaterializationStep(recipe);
+    recipe(first);
+    bind(first, 'A');
+    host.attach(descriptor(), first);
+    const blueprint = first.exportMaterialization();
+
+    const second = new CoopMissionRuntime({ ...descriptor(), activityRevision: 32 });
+    bind(second, 'B');
+    host.attach({ ...descriptor(), activityRevision: 32 }, second);
+    second.materialize(blueprint);
+
+    expect(generation).toBe(2);
+    expect(second.enemyManager).not.toBeNull();
+    expect(calls).toContain('A:detach:enemy');
+    expect(calls.indexOf('A:detach:enemy')).toBeLessThan(calls.indexOf('enemy:1:destroy'));
+    expect(calls).toContain('B:attach:enemy');
+  });
 });
 
 describe('CoopMissionRuntime – Migrationsgrenzen', () => {
@@ -166,6 +209,8 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     );
     expect(source).toContain('activity: {');
     expect(source).toContain('worldRuntime.activity.attach(activity, runtime);');
+    expect(source).toContain('runtime.materialize(this.coopMissionMaterialization);');
+    expect(source).toContain('this.worldLifecycle.syncObservedActivity(bridge.getActivityDescriptor());');
     const teardownStart = source.indexOf('  tearDownArena(');
     const teardownEnd = source.indexOf('\n  /**', teardownStart);
     const teardown = source.slice(teardownStart, teardownEnd);
@@ -207,6 +252,54 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
         [...source.matchAll(new RegExp(`this\\.ctx\\.${compatibilityField}\\s*=`, 'g'))],
         `${compatibilityField} gained another writer`,
       ).toHaveLength(1);
+    }
+  });
+
+  it('loest alle laenger lebenden direkten EnemyManager-Bindings am Activity-Detach', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const start = source.indexOf('    runtime.bind({');
+    const end = source.indexOf('    this.syncCoopMissionCompatibilityBindings(runtime);', start);
+    const binding = source.slice(start, end);
+    for (const consumer of [
+      'combatSystem',
+      'hostPhysics',
+      'trainManager',
+      'energyShieldSystem',
+      'guardianSpiritSystem',
+      'slimeTrailSystem',
+      'flamethrowerUpgradeSystem',
+      'weaponUpgradeSystem',
+      'ak47StrategicTargetSystem',
+    ]) {
+      expect(binding).toContain(`this.ctx.${consumer}`);
+      expect(binding).toMatch(new RegExp(`this\\.ctx\\.${consumer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\??\\.setEnemyManager\\(null\\)`));
+    }
+    expect(binding).toContain('this.ctx.airstrikeSystem?.setResolvedCallback(null);');
+    expect(binding).toContain('this.ctx.hostPhysics.setEnemyRockContactCallback(null);');
+    expect(binding).toContain('this.ctx.trainManager?.destroy();');
+    expect(binding).toContain('this.ctx.projectileManager.setTrainGroup(null);');
+
+    const mapEventFactory = source.slice(
+      source.indexOf('          const createMapEventDirector = () => {'),
+      source.indexOf('          const mapEventDirector = createMapEventDirector();'),
+    );
+    expect(mapEventFactory).toContain('this.setupCoopTrainEventHandler(trackCell.gridX)');
+    expect(mapEventFactory).toContain('createCoopDefenseAirstrikeEventHandler?.()');
+    expect(mapEventFactory).toContain('createCoopDefenseGroundHazardEventHandler?.()');
+
+    for (const system of [
+      'Ak47StrategicTargetSystem',
+      'FlamethrowerUpgradeSystem',
+      'GuardianSpiritSystem',
+      'SlimeTrailSystem',
+      'WeaponUpgradeSystem',
+    ]) {
+      const implementation = readFileSync(resolve(process.cwd(), `src/systems/${system}.ts`), 'utf8');
+      expect(implementation).toContain('setEnemyManager(enemyManager: EnemyManager | null): void');
+      expect(implementation).not.toContain('private readonly enemyManager: EnemyManager');
     }
   });
 });

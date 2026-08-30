@@ -79,14 +79,21 @@ export class SlimeTrailSystem {
   private readonly affectedEnemies = new Map<string, SlimedEnemyState>();
   private readonly lastOwnerCells = new Map<string, LastOwnerCell>();
   private nextCellId = 1;
+  private enemyManager: EnemyManager | null;
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly enemyManager: EnemyManager,
+    enemyManager: EnemyManager,
     private readonly combatSystem: CombatSystem,
     private readonly resolveStat: SlimeTrailStatResolver,
     private readonly isNormallyWalking: SlimeTrailWalkingResolver,
-  ) {}
+  ) {
+    this.enemyManager = enemyManager;
+  }
+
+  setEnemyManager(enemyManager: EnemyManager | null): void {
+    this.enemyManager = enemyManager;
+  }
 
   hostUpdate(now: number): SyncedSlimeTrailSnapshot {
     this.removeExpiredCells(now);
@@ -270,7 +277,7 @@ export class SlimeTrailSystem {
   }
 
   private refreshEnemyContacts(now: number): void {
-    for (const enemy of this.enemyManager.getAllEnemies()) {
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       const cell = this.findTouchingCell(enemy);
       if (!cell) continue;
@@ -332,7 +339,7 @@ export class SlimeTrailSystem {
 
   private updateAffectedEnemies(now: number): void {
     for (const [enemyId, state] of this.affectedEnemies) {
-      const enemy = this.enemyManager.getEnemy(enemyId);
+      const enemy = this.enemyManager?.getEnemy(enemyId);
       if (!enemy || !enemy.sprite.active || enemy.getHp() <= 0) {
         this.affectedEnemies.delete(enemyId);
         continue;
@@ -347,10 +354,10 @@ export class SlimeTrailSystem {
         }, { damageKind: 'ground' });
         state.nextTickAt += state.tickIntervalMs;
         tickCount += 1;
-        if (!this.enemyManager.hasEnemy(enemyId)) break;
+        if (!this.enemyManager?.hasEnemy(enemyId)) break;
       }
 
-      if (!this.enemyManager.hasEnemy(enemyId) || now >= state.expiresAt) {
+      if (!this.enemyManager?.hasEnemy(enemyId) || now >= state.expiresAt) {
         this.affectedEnemies.delete(enemyId);
       }
     }
@@ -383,7 +390,7 @@ export class SlimeTrailSystem {
         })),
       affectedEnemies: [...this.affectedEnemies.values()]
         .map(state => {
-          const enemy = this.enemyManager.getEnemy(state.enemyId);
+          const enemy = this.enemyManager?.getEnemy(state.enemyId);
           if (!enemy) return null;
           return {
             enemyId: state.enemyId,

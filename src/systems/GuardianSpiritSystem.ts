@@ -48,13 +48,20 @@ export class GuardianSpiritSystem {
   private readonly spirits = new Map<number, GuardianSpiritRuntime>();
   private readonly owners = new Map<string, GuardianSpiritOwnerRuntime>();
   private nextSpiritId = 1;
+  private enemyManager: EnemyManager | null;
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly enemyManager: EnemyManager,
+    enemyManager: EnemyManager,
     private readonly combatSystem: CombatSystem,
     private readonly resolveStat: GuardianSpiritStatResolver,
-  ) {}
+  ) {
+    this.enemyManager = enemyManager;
+  }
+
+  setEnemyManager(enemyManager: EnemyManager | null): void {
+    this.enemyManager = enemyManager;
+  }
 
   hostUpdate(now: number, deltaMs: number): SyncedGuardianSpirit[] {
     const deltaSeconds = Math.max(0, Math.min(deltaMs, 100)) / 1000;
@@ -133,7 +140,7 @@ export class GuardianSpiritSystem {
         continue;
       }
 
-      const target = spirit.targetId ? this.enemyManager.getEnemy(spirit.targetId) : undefined;
+      const target = spirit.targetId ? this.enemyManager?.getEnemy(spirit.targetId) : undefined;
       if (!target || !this.combatSystem.isAlive(target.id)) {
         spirit.phase = 'returning';
         spirit.targetId = undefined;
@@ -193,7 +200,7 @@ export class GuardianSpiritSystem {
   private findNearestTarget(ownerX: number, ownerY: number, radius: number) {
     let nearest: ReturnType<EnemyManager['getEnemy']>;
     let nearestDistance = radius;
-    for (const enemy of this.enemyManager.getAllEnemies()) {
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!this.combatSystem.isAlive(enemy.id)) continue;
       const distance = Phaser.Math.Distance.Between(ownerX, ownerY, enemy.sprite.x, enemy.sprite.y);
       if (distance > nearestDistance) continue;

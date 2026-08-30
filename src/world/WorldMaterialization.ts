@@ -1,4 +1,5 @@
 import type { RockRegistry } from '../arena/RockRegistry';
+import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import type { BaseManager } from '../entities/BaseManager';
 import type { LightOccluderIndex } from '../effects/LightOccluderIndex';
 import type { PlacementSystem } from '../systems/PlacementSystem';
@@ -17,11 +18,18 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
  * sie leben in der Activity Runtime.
  */
 export class WorldMaterialization {
+  private arenaValue: ArenaBuilderResult | null = null;
+  private destroyArenaGameplay: ((arena: ArenaBuilderResult) => void) | null = null;
   private placementValue: PlacementSystem | null = null;
   private basesValue: BaseManager | null = null;
   private rocksValue: RockRegistry | null = null;
   private lightOccludersValue: LightOccluderIndex | null = null;
   private destroyed = false;
+
+  /** Aktive Aufbau-Fassade; der Handoff erhaelt davon ausschliesslich die Presentation-Projektion. */
+  get arena(): ArenaBuilderResult | null {
+    return this.arenaValue;
+  }
 
   /** Bau- und Runtime-Objekt-Raster dieser World. */
   get placement(): PlacementSystem | null {
@@ -50,6 +58,13 @@ export class WorldMaterialization {
   setPlacement(placement: PlacementSystem): void {
     this.assertAlive('placement');
     this.placementValue = placement;
+  }
+
+  setArena(arena: ArenaBuilderResult, destroyGameplay: (arena: ArenaBuilderResult) => void): void {
+    this.assertAlive('arena gameplay runtime');
+    if (this.arenaValue) throw new Error('[WorldMaterialization] Arena gameplay runtime is already attached');
+    this.arenaValue = arena;
+    this.destroyArenaGameplay = destroyGameplay;
   }
 
   setBases(bases: BaseManager | null): void {
@@ -84,6 +99,11 @@ export class WorldMaterialization {
     this.placementValue = null;
     this.basesValue?.destroy();
     this.basesValue = null;
+    const arena = this.arenaValue;
+    const destroyArenaGameplay = this.destroyArenaGameplay;
+    this.arenaValue = null;
+    this.destroyArenaGameplay = null;
+    if (arena) destroyArenaGameplay?.(arena);
   }
 
   private assertAlive(part: string): void {

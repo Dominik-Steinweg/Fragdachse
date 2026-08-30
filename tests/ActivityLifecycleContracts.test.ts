@@ -47,6 +47,7 @@ function createSinks() {
   };
   const world: WorldLifecycleSink = {
     publish: (w) => { calls.push(`world:publish:${w.worldRevision}`); },
+    publishActivity: (a) => { calls.push(`world:activity:${a?.activityRevision ?? 'none'}`); },
     clear: () => { calls.push('world:clear'); },
     attach: (c) => { calls.push(`world:attach:${c.descriptor.worldRevision}`); },
     detach: () => { calls.push('world:detach'); },
@@ -173,6 +174,39 @@ describe('ActivityLifecycle – Reihenfolge gegenueber der World', () => {
     expect(lifecycle.activity.isActive()).toBe(true);
     expect(lifecycle.activity.kind).toBe('coop-mission');
     expect(calls).toEqual(['world:attach:12', 'activity:attach:31']);
+  });
+
+  it('ersetzt Activity A durch B auf Host und Client ohne World-Rebuild', () => {
+    const nextMission = { ...mission(), activityRevision: 32 };
+
+    const hostSinks = createSinks();
+    const host = new WorldLifecycle(hostSinks.world);
+    host.beginCreate(descriptor(), mission());
+    host.attachRuntime(runtime(descriptor()));
+    host.beginCreate(descriptor(), nextMission);
+    expect(host.context).not.toBeNull();
+    expect(host.activity.descriptor).toBe(nextMission);
+    expect(hostSinks.calls).toEqual([
+      'world:publish:12',
+      'world:attach:12',
+      'activity:attach:31',
+      'world:activity:32',
+      'activity:detach',
+      'activity:attach:32',
+    ]);
+
+    const clientSinks = createSinks();
+    const client = new WorldLifecycle(clientSinks.world);
+    client.attachRuntime(runtime(descriptor()), mission());
+    client.syncObservedActivity(nextMission);
+    expect(client.context).not.toBeNull();
+    expect(client.activity.descriptor).toBe(nextMission);
+    expect(clientSinks.calls).toEqual([
+      'world:attach:12',
+      'activity:attach:31',
+      'activity:detach',
+      'activity:attach:32',
+    ]);
   });
 });
 

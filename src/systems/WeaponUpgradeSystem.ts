@@ -30,14 +30,25 @@ interface CorridorDotState {
 /** Host-autoritative Flugbahneffekte fuer spezielle Waffen-Upgrades. */
 export class WeaponUpgradeSystem {
   private corridorDots: CorridorDotState[] = [];
+  private enemyManager: EnemyManager | null;
 
   constructor(
     private readonly projectileManager: ProjectileManager,
-    private readonly enemyManager: EnemyManager,
+    enemyManager: EnemyManager,
     private readonly combatSystem: WeaponUpgradeCombat,
     private readonly hostPhysics: HostPhysicsSystem,
     private readonly fireSystem: FireSystem,
-  ) {}
+  ) {
+    this.enemyManager = enemyManager;
+  }
+
+  setEnemyManager(enemyManager: EnemyManager | null): void {
+    this.enemyManager = enemyManager;
+  }
+
+  clear(): void {
+    this.corridorDots.length = 0;
+  }
 
   hostUpdate(now = Date.now()): void {
     for (const projectile of this.projectileManager.getActiveProjectiles()) {
@@ -96,7 +107,7 @@ export class WeaponUpgradeSystem {
     const normalX = -dy / length;
     const normalY = dx / length;
 
-    for (const enemy of this.enemyManager.getAllEnemies()) {
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (projectile.awpCorridorHitIds?.has(enemy.id)) continue;
       if (!this.combatSystem.canDamageTarget(projectile.ownerId, enemy.id, false)) continue;
       const relativeX = enemy.sprite.x - fromX;
@@ -159,7 +170,7 @@ export class WeaponUpgradeSystem {
     let writeIndex = 0;
     for (const dot of this.corridorDots) {
       while (dot.ticksRemaining > 0 && now >= dot.nextTickAt) {
-        const enemy = this.enemyManager.getEnemy(dot.enemyId);
+        const enemy = this.enemyManager?.getEnemy(dot.enemyId);
         if (!enemy) {
           dot.ticksRemaining = 0;
           break;

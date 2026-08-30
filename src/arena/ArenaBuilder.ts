@@ -67,17 +67,11 @@ export function getArenaRockWorldFrame(): RockWorldFrame {
   return { offsetX: ARENA_OFFSET_X, offsetY: ARENA_OFFSET_Y, width: ARENA_WIDTH, height: ARENA_HEIGHT };
 }
 
-export interface ArenaBuilderResult {
-  /** CTB-Basis-Tintflächen dieser World (reine Presentation). Coop-Defense-Basen leben in BaseManager. */
-  baseZoneObjects: Phaser.GameObjects.Rectangle[];
+export interface ArenaGameplayRuntime {
   /** StaticGroup mit nicht rendernden Fels-Proxies. */
   rockGroup:    Phaser.Physics.Arcade.StaticGroup;
   /** Paralleles Array zu layout.rocks; null bedeutet physisch nicht vorhanden. */
   rockPhysicsProxies: (RockPhysicsProxy | null)[];
-  /** Rendererunabhaengige Source of Truth samt dedupliziertem Dirty-Trichter. */
-  rockVisualStates: RockVisualStateStore;
-  /** Umschaltbarer Classic-/SpriteGPU-Consumer der Visual States. */
-  rockVisualSystem: RockVisualSystem | null;
   /** Spatial Index für Grid-basierte Nachbar-Lookups (Autotiling) */
   rockGrid:     RockGridIndex;
   /** StaticGroup mit nicht rendernden Baumstamm-Proxies. */
@@ -87,6 +81,16 @@ export interface ArenaBuilderResult {
    * Hindernisabfragen lesen ausschliesslich hier - nie am sichtbaren Stamm.
    */
   trunkBodies: TreePhysicsProxy[];
+}
+
+/** Reine, nicht simulierende Darstellung einer World. */
+export interface ArenaPresentationResult {
+  /** CTB-Basis-Tintflächen dieser World. Coop-Defense-Basen leben in BaseManager. */
+  baseZoneObjects: Phaser.GameObjects.Rectangle[];
+  /** Rendererunabhaengige visuelle Projektion samt dedupliziertem Dirty-Trichter. */
+  rockVisualStates: RockVisualStateStore;
+  /** Umschaltbarer Classic-/SpriteGPU-Consumer der Visual States. */
+  rockVisualSystem: RockVisualSystem | null;
   /** Sichtbare Staemme; reine Darstellung ueber der Runtime und ohne sie entbehrlich. */
   trunkVisuals: Phaser.GameObjects.Arc[];
   /** Baumkronen-Sprites für Transparenz-Update; ebenfalls reine Darstellung. */
@@ -136,6 +140,9 @@ export interface ArenaBuilderResult {
    */
   rockVegetationPlacements: RockVegetationPlacement[];
 }
+
+/** Aktive Aufbau-Fassade; Ownership bleibt zwischen Runtime und Presentation getrennt. */
+export interface ArenaBuilderResult extends ArenaGameplayRuntime, ArenaPresentationResult {}
 
 export interface ArenaBuilderDynamicOptions {
   /** Die World-Metrik ist die einzige räumliche Quelle fuer den dynamischen Aufbau. */
@@ -362,7 +369,6 @@ export class ArenaBuilder {
         scene: this.scene,
         frame,
         layout,
-        rockPhysicsProxies,
         rockVisualStates: rockVisualStates.states,
         overlaySource: result.rockOverlaySource,
         mossPlacements: result.rockMossPlacements,
@@ -375,49 +381,26 @@ export class ArenaBuilder {
   /**
    * Bindet eine neue World-Instanz an die unveraenderte authored Presentation.
    *
-   * Nur die statischen Render-/Physics-Container bleiben erhalten. Rock-Zustaende, Proxy-Slots,
-   * Spatial Index und Overlay-Quelle werden aus der authored Baseline neu gebunden; bereits
-   * fertige Overlay-Chunks werden nur in betroffenen Regionen ersetzt. Damit ist dies kein
-   * State-Migrationspfad fuer die alte World.
+   * Nur die statische Darstellung bleibt erhalten. Rock-Visualzustand und Overlay-Quelle werden
+   * aus der authored Baseline neu gebunden; bereits fertige Overlay-Chunks werden nur in
+   * betroffenen Regionen ersetzt. Physics und Spatial Index entstehen separat frisch fuer die
+   * neue World. Damit ist dies kein State-Migrationspfad fuer die alte Runtime.
    */
-  rebindWorldRuntime(
-    result: ArenaBuilderResult,
+  rebindPresentation(
+    result: ArenaPresentationResult,
     layout: ArenaLayout,
     authoredLayout: ArenaLayout,
     worldMetrics: WorldMetrics,
     presentation = true,
   ): void {
     const previousStates = result.rockVisualStates.states.slice();
-    const previousProxies = result.rockPhysicsProxies.slice();
     replaceArenaLayoutContents(layout, authoredLayout);
 
     const baselineRockCount = layout.rocks.length;
-
-    // Nur alte, zusaetzlich platzierte Proxy-Slots muessen entfernt werden. Aktive authored
-    // Felsen behalten ihren Physics-Proxy; zerstoerte Felsen bekommen einen neuen.
-    for (let id = baselineRockCount; id < previousProxies.length; id += 1) {
-      const proxy = previousProxies[id];
-      if (proxy?.active) proxy.destroy();
-    }
-    result.rockPhysicsProxies.length = baselineRockCount;
-    result.rockGrid = new RockGridIndex(layout.rocks, {
+    const rockGrid = new RockGridIndex(layout.rocks, {
       cols: worldMetrics.gridCols,
       rows: worldMetrics.gridRows,
     });
-    for (let id = 0; id < baselineRockCount; id += 1) {
-      const cell = layout.rocks[id];
-      const worldX = worldMetrics.offsetX + cell.gridX * CELL_SIZE + CELL_SIZE / 2;
-      const worldY = worldMetrics.offsetY + cell.gridY * CELL_SIZE + CELL_SIZE / 2;
-      const previous = previousProxies[id];
-      if (previous?.active) {
-        result.rockPhysicsProxies[id] = previous;
-        continue;
-      }
-      const proxy = createRockPhysicsProxy(this.scene, worldX, worldY);
-      result.rockGroup.add(proxy);
-      (proxy.body as Phaser.Physics.Arcade.StaticBody).updateFromGameObject();
-      result.rockPhysicsProxies[id] = proxy;
-    }
 
     result.rockVisualStates.clear();
     // Persistent-GPU-Slots fuer alte dynamische IDs werden explizit auf "tot" gesetzt. Danach
@@ -437,16 +420,14 @@ export class ArenaBuilder {
     }
     for (let id = 0; id < baselineRockCount; id += 1) {
       result.rockVisualStates.add(
-        ArenaBuilder.createAuthoredRockVisualState(id, layout.rocks[id], worldMetrics, result.rockGrid),
+        ArenaBuilder.createAuthoredRockVisualState(id, layout.rocks[id], worldMetrics, rockGrid),
         true,
       );
     }
 
     const dirtyRockIds = collectRockRebindDirtyIds(
       previousStates,
-      previousProxies,
       result.rockVisualStates.states,
-      result.rockPhysicsProxies,
       baselineRockCount,
     );
     if (dirtyRockIds.size > 0) result.rockOverlaySurface?.refreshRegions(dirtyRockIds);
@@ -466,6 +447,32 @@ export class ArenaBuilder {
     }
     result.baseZoneObjects.length = 0;
     if (presentation) result.baseZoneObjects.push(...this.buildCaptureTheBeerBaseZones());
+  }
+
+  /** Erstellt die reine Presentation-Projektion fuer Runtime-Handoff und Exit-Transition. */
+  static presentationOf(result: ArenaBuilderResult): ArenaPresentationResult {
+    return {
+      baseZoneObjects: result.baseZoneObjects,
+      rockVisualStates: result.rockVisualStates,
+      rockVisualSystem: result.rockVisualSystem,
+      trunkVisuals: result.trunkVisuals,
+      canopyObjects: result.canopyObjects,
+      trackObjects: result.trackObjects,
+      groundSurface: result.groundSurface,
+      groundCoverPlacements: result.groundCoverPlacements,
+      rockOverlaySurface: result.rockOverlaySurface,
+      rockOverlaySource: result.rockOverlaySource,
+      rockMossPlacements: result.rockMossPlacements,
+      rockVegetationPlacements: result.rockVegetationPlacements,
+    };
+  }
+
+  /** Verbindet eine frisch gebaute Gameplay-Runtime mit einer adoptierten Presentation. */
+  static compose(
+    runtime: ArenaGameplayRuntime,
+    presentation: ArenaPresentationResult,
+  ): ArenaBuilderResult {
+    return { ...runtime, ...presentation };
   }
 
   private static createAuthoredRockVisualState(
@@ -811,30 +818,34 @@ export class ArenaBuilder {
    * Zerstört alle dynamisch erstellten Objekte (Felsen, Trunks, Canopies).
    * Sidebars/Gras bleiben erhalten (diese sind statisch).
    */
-  static destroyDynamic(result: ArenaBuilderResult): void {
-    for (const zone of result.baseZoneObjects) {
-      if (zone.active) zone.destroy();
-    }
-    result.baseZoneObjects.length = 0;
-
-    // Felsen: Visuals und Physics haben getrennte Besitzer.
-    result.rockVisualSystem?.destroy();
+  static destroyGameplay(result: ArenaGameplayRuntime): void {
     for (const proxy of result.rockPhysicsProxies) {
       if (proxy?.active) proxy.destroy();
     }
     result.rockPhysicsProxies.length = 0;
     result.rockGroup.destroy(true);
 
-    // Trunks: erst die Darstellung, dann die Runtime.
-    for (const trunk of result.trunkVisuals) {
-      if (trunk.active) trunk.destroy();
-    }
-    result.trunkVisuals.length = 0;
     for (const trunk of result.trunkBodies) {
       if (trunk.active) trunk.destroy();
     }
     result.trunkBodies.length = 0;
     result.trunkGroup.destroy(true);
+  }
+
+  static destroyPresentation(result: ArenaPresentationResult): void {
+    for (const zone of result.baseZoneObjects) {
+      if (zone.active) zone.destroy();
+    }
+    result.baseZoneObjects.length = 0;
+
+    // Felsen: Die Physics gehoert nicht zu diesem Owner.
+    result.rockVisualSystem?.destroy();
+
+    // Trunks: ausschliesslich die Darstellung.
+    for (const trunk of result.trunkVisuals) {
+      if (trunk.active) trunk.destroy();
+    }
+    result.trunkVisuals.length = 0;
 
     // Canopies
     for (const { gfx } of result.canopyObjects) {
@@ -859,6 +870,12 @@ export class ArenaBuilder {
     result.rockOverlaySource.keys.clear();
     result.rockMossPlacements.length = 0;
     result.rockVegetationPlacements.length = 0;
+  }
+
+  /** Kompatibilitaets-Cleanup fuer isolierte Builder-Consumer. */
+  static destroyDynamic(result: ArenaBuilderResult): void {
+    ArenaBuilder.destroyGameplay(result);
+    ArenaBuilder.destroyPresentation(result);
   }
 
   // ── Private Factory-Methoden ───────────────────────────────────────────────
@@ -1075,9 +1092,7 @@ function retainAuthoredRockOverlaySource(
  */
 export function collectRockRebindDirtyIds(
   previousStates: readonly (RockVisualState | undefined)[],
-  previousProxies: readonly ({ readonly active: boolean } | null)[],
   nextStates: readonly (RockVisualState | undefined)[],
-  nextProxies: readonly ({ readonly active: boolean } | null)[],
   baselineRockCount: number,
 ): Set<number> {
   const dirtyRockIds = new Set<number>();
@@ -1085,8 +1100,8 @@ export function collectRockRebindDirtyIds(
   for (let id = 0; id < baselineRockCount; id += 1) {
     const previousState = previousStates[id];
     const nextState = nextStates[id];
-    const wasVisible = previousState?.active === true && previousProxies[id]?.active === true;
-    const isVisible = nextState?.active === true && nextProxies[id]?.active === true;
+    const wasVisible = previousState?.active === true;
+    const isVisible = nextState?.active === true;
     if (
       wasVisible !== isVisible
       || previousState?.gridX !== nextState?.gridX
@@ -1097,9 +1112,9 @@ export function collectRockRebindDirtyIds(
     }
   }
 
-  const previousSlotCount = Math.max(previousStates.length, previousProxies.length);
+  const previousSlotCount = previousStates.length;
   for (let id = baselineRockCount; id < previousSlotCount; id += 1) {
-    if (previousStates[id] || previousProxies[id]) dirtyRockIds.add(id);
+    if (previousStates[id]) dirtyRockIds.add(id);
   }
 
   return dirtyRockIds;

@@ -153,6 +153,7 @@ Regeln:
 - kein versteckter State alter Worlds oder Activities;
 - Scope-Bindung erfolgt explizit;
 - Detach entfernt den scoped State vollständig;
+- direkte Referenzen und Callbacks auf Activity-Owner werden vor deren Teardown gelöst;
 - der Container selbst wird nicht als Dependency weitergereicht.
 
 ### 4.4 `WorldLifecycle`
@@ -174,7 +175,7 @@ Besitzt die lokale Realisierung genau einer World.
 Typische direkte Ownership:
 - Layout / Geometrie;
 - Placement / Rocks;
-- World Navigation;
+- wirklich world-scoped Navigation, falls sie unabhängig von einer Activity existiert;
 - Bases;
 - World-scoped Bindings;
 - `PlayerWorldRuntime`;
@@ -220,6 +221,11 @@ detach / destroy
 
 Der Host kennt keine internen Systeme einer konkreten Activity.
 
+Ein Wechsel `Activity A → Activity B` innerhalb derselben World muss B vollständig neu
+materialisieren. Ein leerer Runtime-Wrapper ohne seine Child-Owner erfüllt den Attach-Vertrag
+nicht. A wird einschließlich aller Bindings und Child-Owner gelöst, bevor B veröffentlicht und
+getickt werden darf; ein World-Rebuild ist dafür weder erforderlich noch zulässig.
+
 ### 4.8 `ActivityRuntime`
 
 Besitzt ausschließlich State und Systeme, deren Lifetime an die konkrete Activity gebunden ist.
@@ -235,6 +241,8 @@ CaptureTheBeerRuntime
 
 Eine Coop-Mission kann unter anderem besitzen:
 - Encounter / Spawn Runtime;
+- ihre Enemy-/Ally-/Boss-Flowfields und die zugehörige Navigation, solange diese ausschließlich
+  der Coop-Activity dienen;
 - activity-scoped Enemy Behaviour;
 - Boss Runtime;
 - Objectives;
@@ -255,7 +263,7 @@ Enthält nur State, der einen Activity-Wechsel innerhalb derselben World überle
 
 Beispiele:
 - Player Entity;
-- world-scoped Navigation;
+- wirklich world-scoped Player-Navigation, falls sie einen Activity-Wechsel fachlich überlebt;
 - World Targeting;
 - world-scoped Build-/Loadout-/Combat-State, soweit fachlich tatsächlich world-langlebig.
 
@@ -340,7 +348,11 @@ steht.
 
 **`WorldPresentationBinding`** ist die lokale Darstellung genau einer `WorldRuntime`. Es trägt die
 gebaute Darstellung samt des Geometriepuffers, den sie adressiert – beides zusammen, weil die
-gebauten Objekte in diesen Puffer indexieren.
+gebauten Objekte in diesen Puffer indexieren. Es trägt ausdrücklich keine Gameplay-/Physics-
+Container, keine Collision-Proxies, keinen Runtime-Spatial-Index und keine Entity-Manager. Eine
+gemeinsame Builder-Rückgabe darf im aktiven Aufbau als Fassade existieren, muss vor dem Handoff
+aber in eine reine Presentation-Projektion und eine mit der `WorldRuntime` fallende Gameplay-
+Runtime getrennt werden.
 
 **`WorldPresentationHandoff`** liegt oberhalb der `WorldRuntime` und hält höchstens eine
 freigegebene Presentation. Sein Vertrag ist klein und terminal:
@@ -358,6 +370,15 @@ Regeln:
 - der Handoff trägt keinen Gameplay-State und keine World-Identität, sondern nur die Darstellung,
   die ein Übergang weiterzeigt oder weiterverwendet;
 - eine Presentation im Handoff wird nicht getickt und nicht simuliert. Sie steht nur noch da.
+
+Ein sichtbarer Exit-Fade verlängert keine Gameplay-Lifetime. Player- und Enemy-Runtimes enden am
+Beginn des Fades; falls ihre letzte Darstellung sichtbar bleiben soll, wird sie zuvor als
+eingefrorene, physik- und managerfreie Entity-Presentation projiziert und am Fade-Ende verworfen.
+Die World-Darstellung folgt währenddessen ausschließlich dem normalen Handoff-Vertrag.
+
+Visuelle Transitionen werden nach den automatisierten Contracts manuell durch den User im
+Browser abgenommen. Coding-KIs starten für dieses Refactoring keinen Browser und melden die
+konkrete manuelle Prüfliste im Abschluss.
 
 Der letzte Punkt ist zugleich die Teardown-Sicherung: Ein Aufräumschritt der Gameplay-Seite kann
 eine übergebene Darstellung nicht mehr erreichen und deshalb auch nicht mehr verändern.
@@ -536,6 +557,8 @@ Regeln:
 16. Keine allgemeine DI-, Event-Bus-, Registry-, Service-Locator- oder Plugin-Infrastruktur ohne konkreten Bedarf.
 17. Wire- und Authority-Verhalten werden während dieses Ownership-Refactorings nicht nebenbei neu designt.
 18. Mutabler World-Gameplay-State überlebt seine `WorldRuntime` nicht. Nur die World Presentation kann länger leben, und ausschließlich über den Handoff aus 6.1.
+19. Ein Activity-Attach materialisiert den vollständigen Runtime-Graph; Detach löst alle scoped Bindings und Referenzen vor den Child-Ownern.
+20. Ein sichtbarer Exit-Fade verlängert keine World-, Player- oder Enemy-Gameplay-Lifetime, sondern verwendet ausschließlich Presentation-Projektionen.
 
 ### Stop/Go-Regel
 

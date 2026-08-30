@@ -20,7 +20,7 @@ import {
   rockOverlayMottleLayerId,
 } from '../src/arena/chunks/RockOverlayStreamer';
 import { CHUNK_SAMPLING_GUTTER_PX, ChunkedRenderSurface } from '../src/arena/chunks/ChunkedRenderSurface';
-import { createFakeArenaScene, fakeRockImage, FakeRenderTexture } from './fakeArenaRenderScene';
+import { createFakeArenaScene, FakeRenderTexture } from './fakeArenaRenderScene';
 
 /**
  * Die gestreamten Fels-Overlays.
@@ -72,8 +72,6 @@ function buildFixture(options: FixtureOptions = {}) {
   const rocks = options.rocks ?? ROW_ROCKS;
   const decals = options.decals ?? [];
   const layout = { seed: 7, rocks, trees: [], decals } as unknown as ArenaLayout;
-  const rockObjects: Array<ReturnType<typeof fakeRockImage> | null> =
-    rocks.map((cell) => fakeRockImage(cell.gridX, cell.gridY, CELL_SIZE, FRAME.offsetX, FRAME.offsetY));
   const rockVisualStates = rocks.map((cell, id) => ({
     id,
     gridX: cell.gridX,
@@ -100,7 +98,6 @@ function buildFixture(options: FixtureOptions = {}) {
     scene: scene as never,
     frame: FRAME,
     layout,
-    rockPhysicsProxies: rockObjects,
     rockVisualStates,
     overlaySource,
     mossPlacements: [{
@@ -128,7 +125,16 @@ function buildFixture(options: FixtureOptions = {}) {
   streamer.updateResidency(FULL_VIEW);
   ChunkedRenderSurface.drainBakeQueue(scene as never);
 
-  return { scene, layout, streamer, rockObjects, rockVisualStates, overlaySource };
+  return { scene, layout, streamer, rockVisualStates, overlaySource };
+}
+
+function deactivateRock(states: ReturnType<typeof buildFixture>['rockVisualStates'], id: number): void {
+  const state = states[id];
+  if (!state) return;
+  state.active = false;
+  state.alpha = 0;
+  state.scaleX = 0;
+  state.scaleY = 0;
 }
 
 function chunkTexture(streamer: RockOverlayStreamer, layerId: string, cx: number, cy: number): FakeRenderTexture {
@@ -177,10 +183,10 @@ describe('rock overlay streamer', () => {
   });
 
   it('does not leak the previous chunk into a chunk without any placements', () => {
-    const { scene, streamer, rockObjects } = buildFixture();
+    const { scene, streamer, rockVisualStates } = buildFixture();
     expect(chunkTexture(streamer, ROCK_OVERLAY_MOSS_LAYER_ID, 1, 0).visible).toBe(true);
 
-    rockObjects[2] = null; // Zelle (2, 1) zerstoert
+    deactivateRock(rockVisualStates, 2); // Zelle (2, 1) zerstoert
     streamer.refreshRegions(new Set([2]));
     ChunkedRenderSurface.drainBakeQueue(scene as never);
 
@@ -196,7 +202,7 @@ describe('rock overlay streamer', () => {
   });
 
   it('keeps finished chunks visible while rebuilding a removed runtime slot', () => {
-    const { scene, layout, streamer, rockObjects, rockVisualStates, overlaySource } = buildFixture({
+    const { scene, layout, streamer, rockVisualStates, overlaySource } = buildFixture({
       rocks: [...ROW_ROCKS, { gridX: 4, gridY: 1 }],
     });
     const dynamicId = ROW_ROCKS.length;
@@ -206,7 +212,6 @@ describe('rock overlay streamer', () => {
     // Das ist der Zustand direkt nach dem Rebind: der Runtime-Slot ist aus dem Layout entfernt,
     // sein alter VisualState bleibt als inaktiver Slot fuer die regionale Bereinigung erhalten.
     layout.rocks.length = dynamicId;
-    rockObjects[dynamicId] = null;
     const previousState = rockVisualStates[dynamicId];
     expect(previousState).toBeTruthy();
     previousState!.active = false;
@@ -262,11 +267,11 @@ describe('rock overlay streamer', () => {
   });
 
   it('keeps the material source stable across destruction', () => {
-    const { scene, streamer, rockObjects, overlaySource } = buildFixture();
+    const { scene, streamer, rockVisualStates, overlaySource } = buildFixture();
     const before = [...overlaySource.cells];
 
-    rockObjects[1] = null;
-    rockObjects[2] = null;
+    deactivateRock(rockVisualStates, 1);
+    deactivateRock(rockVisualStates, 2);
     streamer.refreshRegions(new Set([1, 2]));
     ChunkedRenderSurface.drainBakeQueue(scene as never);
 
@@ -346,9 +351,9 @@ describe('rock decal cutout inside the streamer', () => {
   });
 
   it('keeps a large mat whose anchor cell fell and drops the small decal on it', () => {
-    const { scene, streamer, rockObjects } = buildDecalFixture();
+    const { scene, streamer, rockVisualStates } = buildDecalFixture();
 
-    rockObjects[CENTER_ID] = null;
+    deactivateRock(rockVisualStates, CENTER_ID);
     streamer.refreshRegions(new Set([CENTER_ID]));
     ChunkedRenderSurface.drainBakeQueue(scene as never);
 
@@ -362,11 +367,11 @@ describe('rock decal cutout inside the streamer', () => {
   });
 
   it('erases exactly the square of the fallen cell, nothing else', () => {
-    const { scene, streamer, rockObjects } = buildDecalFixture();
+    const { scene, streamer, rockVisualStates } = buildDecalFixture();
     const texture = chunkTexture(streamer, ROCK_OVERLAY_DECAL_LAYER_ID, 0, 0);
     const before = texture.snapshotPixels();
 
-    rockObjects[CENTER_ID] = null;
+    deactivateRock(rockVisualStates, CENTER_ID);
     streamer.refreshRegions(new Set([CENTER_ID]));
     ChunkedRenderSurface.drainBakeQueue(scene as never);
     const after = texture.snapshotPixels();
