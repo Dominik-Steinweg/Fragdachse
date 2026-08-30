@@ -1,4 +1,8 @@
-import { ActivityLifecycle, type ActivityLifecycleSink } from './ActivityLifecycle';
+import {
+  ActivityLifecycle,
+  type ActivityIdentityLifecycleSink,
+  type ActivityLifecycleSink,
+} from './ActivityLifecycle';
 import type { ActivityDescriptor } from './ActivityDescriptor';
 import { isSameWorldInstance, type WorldDescriptor } from './WorldDescriptor';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
@@ -28,6 +32,8 @@ export interface WorldLifecycleSink {
   readonly attach: (context: WorldRuntimeContext) => void;
   /** Loest die lokale World-Runtime. */
   readonly detach: () => void;
+  /** Activity-Identity: getrennt von Attach/Detach der lokalen Activity-Runtime. */
+  readonly activityIdentity?: ActivityIdentityLifecycleSink;
   /** Lokale Runtime der Activity dieser World; fehlt fuer eine World ohne Activity. */
   readonly activity?: ActivityLifecycleSink;
 }
@@ -59,6 +65,7 @@ export class WorldLifecycle {
     this.activity = new ActivityLifecycle(
       sink.activity ?? INERT_ACTIVITY_SINK,
       () => this.descriptor !== null,
+      sink.activityIdentity,
     );
   }
 

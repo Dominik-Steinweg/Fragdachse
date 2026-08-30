@@ -310,10 +310,13 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     // ohne Activity weiterhin keinen Schaden.
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     expect(lifecycle).toContain('if (bridge.isHost() && persistentBaseSite !== null) {');
-    // Genau eine Activity oeffnet genau einen Arbeitsstand - mit der Identitaet ihrer Instanz.
-    expect(lifecycle).toContain('if (activityDescriptor !== null) {');
-    expect(lifecycle).toContain('this.persistentBaseSession.beginTransaction({');
-    expect(lifecycle).toContain('activityRevision: activityDescriptor.activityRevision,');
+    // Genau eine Activity oeffnet genau einen Arbeitsstand - am Identity-Lifecycle und nicht im
+    // lokalen World-Aufbau.
+    expect(lifecycle).toContain('activityIdentity: {');
+    expect(lifecycle).toContain('this.beginPersistentBaseTransaction(activity);');
+    const buildStart = lifecycle.indexOf('  buildWorld(');
+    const buildEnd = lifecycle.indexOf('  tearDownArena(', buildStart);
+    expect(lifecycle.slice(buildStart, buildEnd)).not.toContain('beginTransaction(');
     expect(lifecycle).toContain('if (store && registered && !store.hasActiveMission) {');
     expect(lifecycle).toContain('if (store && ownerId && removedPersistentBlueprint && !store.hasActiveMission) {');
     expect(lifecycle).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');

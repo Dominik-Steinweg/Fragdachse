@@ -14,6 +14,11 @@ import type {
   PersistentPlayerBaseContribution,
 } from '../src/persistentBase/PersistentBaseTypes';
 import type { SyncedPlaceableRock } from '../src/types';
+import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
+import { ActivityRuntimeHost } from '../src/world/ActivityRuntimeHost';
+import type { WorldDescriptor } from '../src/world/WorldDescriptor';
+import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
+import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 
 /**
  * Phase 8: Drei Lifetimes, drei Owner.
@@ -30,6 +35,31 @@ const tool = { kind: 'construction', id: 'rock_barrier' } as const;
 
 const MISSION_A = { worldRevision: 21, activityRevision: 7 } as const;
 const MISSION_B = { worldRevision: 21, activityRevision: 8 } as const;
+
+const WORLD: WorldDescriptor = {
+  worldRevision: 21,
+  definitionId: 'world:coop-defense:7',
+  seed: 4242,
+  generatorVersion: 3,
+  layoutFingerprint: 'deadbeef',
+  parameters: {
+    persistentBaseUnlocked: true,
+    persistentBaseAreaStage: 1,
+  },
+};
+
+function activityDescriptor(activityRevision: number): ActivityDescriptor {
+  return {
+    activityRevision,
+    worldRevision: WORLD.worldRevision,
+    kind: 'coop-mission',
+    definitionId: 'activity:coop-mission:7',
+  };
+}
+
+function worldContext(): WorldRuntimeContext {
+  return { descriptor: WORLD } as WorldRuntimeContext;
+}
 
 function runtime(id: number, gridX: number): SyncedPlaceableRock {
   return {
@@ -69,6 +99,59 @@ function contribution(
     ownerId,
     revision,
     constructions: [...constructions],
+  };
+}
+
+function createLifecycleSessionHarness(): {
+  readonly lifecycle: WorldLifecycle;
+  readonly session: PersistentBaseRoomSession;
+  readonly identityBegins: number[];
+  readonly identityEnds: number[];
+  readonly runtimes: ActivityRuntimeHost;
+} {
+  const session = new PersistentBaseRoomSession();
+  const identityBegins: number[] = [];
+  const identityEnds: number[] = [];
+  const runtimes = new ActivityRuntimeHost(WORLD.worldRevision);
+  const sink: WorldLifecycleSink = {
+    publish: () => {},
+    publishActivity: () => {},
+    clear: () => {},
+    attach: () => {},
+    detach: () => {},
+    activityIdentity: {
+      begin: (activity) => {
+        identityBegins.push(activity.activityRevision);
+        session.beginTransaction({
+          worldRevision: activity.worldRevision,
+          activityRevision: activity.activityRevision,
+        });
+      },
+      end: (activity) => {
+        identityEnds.push(activity.activityRevision);
+        applyPersistentBaseRoundOutcome('rollback', {
+          session,
+          isRuntimeObjectAlive: () => true,
+          identity: {
+            worldRevision: activity.worldRevision,
+            activityRevision: activity.activityRevision,
+          },
+        });
+      },
+    },
+    activity: {
+      attach: (activity) => {
+        runtimes.attach(activity, { destroy: () => {} });
+      },
+      detach: () => { runtimes.detach(); },
+    },
+  };
+  return {
+    lifecycle: new WorldLifecycle(sink),
+    session,
+    identityBegins,
+    identityEnds,
+    runtimes,
   };
 }
 
@@ -170,6 +253,81 @@ describe('PersistentBaseTransaction – genau ein terminaler Abschluss', () => {
   });
 });
 
+describe('PersistentBaseTransaction – Activity-Identity folgt dem echten World-Lifecycle', () => {
+  it('beendet A und oeffnet B innerhalb derselben World ohne A-Working-State', () => {
+    const harness = createLifecycleSessionHarness();
+    const store = harness.session.contributions;
+    store.offerContribution(contribution('owner-a', [blueprint('committed')], 4));
+
+    harness.lifecycle.beginCreate(WORLD, activityDescriptor(MISSION_A.activityRevision));
+    harness.lifecycle.attachRuntime(worldContext());
+    const transactionA = harness.session.transaction;
+    expect(transactionA?.identity).toEqual(MISSION_A);
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+
+    harness.lifecycle.beginCreate(WORLD, activityDescriptor(MISSION_B.activityRevision));
+
+    expect(transactionA?.isOpen).toBe(false);
+    expect(transactionA?.outcome).toBe('rollback');
+    expect(harness.session.transaction?.identity).toEqual(MISSION_B);
+    expect(store.getContribution('owner-a')?.constructions.map((entry) => entry.persistentId))
+      .toEqual(['committed']);
+    expect(harness.identityBegins).toEqual([MISSION_A.activityRevision, MISSION_B.activityRevision]);
+    expect(harness.identityEnds).toEqual([MISSION_A.activityRevision]);
+  });
+
+  it('rollt A bei Activity-los zurueck und schreibt danach wieder committed', () => {
+    const harness = createLifecycleSessionHarness();
+    const store = harness.session.contributions;
+    store.offerContribution(contribution('owner-a', [blueprint('committed')], 4));
+
+    harness.lifecycle.beginCreate(WORLD, activityDescriptor(MISSION_A.activityRevision));
+    harness.lifecycle.attachRuntime(worldContext());
+    store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
+
+    harness.lifecycle.beginCreate(WORLD, null);
+
+    expect(harness.session.hasOpenTransaction).toBe(false);
+    expect(store.hasActiveMission).toBe(false);
+    store.registerNew('owner-a', runtime(2, 11), tool, footprint, anchor, buildArea);
+    expect(store.getCommittedContribution('owner-a')?.constructions.map((entry) => entry.persistentId))
+      .toEqual(['committed', 'pb-owner-a-5-1']);
+    expect(harness.identityEnds).toEqual([MISSION_A.activityRevision]);
+  });
+
+  it('behaelt dieselbe Transaction bei lokalem ActivityRuntime-Detach und Reattach', () => {
+    const harness = createLifecycleSessionHarness();
+    harness.lifecycle.beginCreate(WORLD, activityDescriptor(MISSION_A.activityRevision));
+    harness.lifecycle.attachRuntime(worldContext());
+    const transaction = harness.session.transaction;
+
+    harness.lifecycle.detachRuntime();
+    expect(harness.lifecycle.activity.descriptor?.activityRevision).toBe(MISSION_A.activityRevision);
+    expect(harness.session.transaction).toBe(transaction);
+    expect(harness.session.hasOpenTransaction).toBe(true);
+
+    harness.lifecycle.attachRuntime(worldContext());
+    expect(harness.session.transaction).toBe(transaction);
+    expect(harness.identityBegins).toEqual([MISSION_A.activityRevision]);
+    expect(harness.identityEnds).toEqual([]);
+    expect(harness.runtimes.isAttached()).toBe(true);
+  });
+
+  it('behandelt wiederholtes Synchronisieren derselben Activity-Identity idempotent', () => {
+    const harness = createLifecycleSessionHarness();
+    const activity = activityDescriptor(MISSION_A.activityRevision);
+    harness.lifecycle.attachRuntime(worldContext(), activity);
+    const transaction = harness.session.transaction;
+
+    harness.lifecycle.syncObservedActivity({ ...activity });
+    harness.lifecycle.syncObservedActivity({ ...activity });
+
+    expect(harness.session.transaction).toBe(transaction);
+    expect(harness.identityBegins).toEqual([MISSION_A.activityRevision]);
+    expect(harness.identityEnds).toEqual([]);
+  });
+});
+
 describe('PersistentBaseRuntimeBindings – die Objekte gehoeren der World', () => {
   it('verliert mit der World ihre Objekte, aber nie die Blueprints', () => {
     const session = new PersistentBaseRoomSession();
@@ -224,6 +382,12 @@ describe('Phase 8 – Ownership im Koordinator', () => {
     expect(coordinator).toContain('this.persistentBaseSession.beginTransaction({');
     expect(coordinator).toContain('identity: this.resolvePersistentBaseTransactionIdentity(),');
     expect(coordinator).toContain('private resolvePersistentBaseTransactionIdentity(): PersistentBaseTransactionIdentity | undefined {');
+    expect(coordinator).toContain('activityIdentity: {');
+    expect(coordinator).toContain('private beginPersistentBaseTransaction(activity: ActivityDescriptor): void {');
+    expect(coordinator).toContain('private endPersistentBaseTransaction(activity: ActivityDescriptor): void {');
+    const buildStart = coordinator.indexOf('  buildWorld(');
+    const buildEnd = coordinator.indexOf('  tearDownArena(', buildStart);
+    expect(coordinator.slice(buildStart, buildEnd)).not.toContain('beginTransaction(');
   });
 
   it('bindet die Runtime-Objekte an die World-Instanz', () => {

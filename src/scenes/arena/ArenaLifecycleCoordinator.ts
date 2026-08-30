@@ -504,6 +504,10 @@ export class ArenaLifecycleCoordinator {
       this.ctx.worldMaterialization = null;
       this.ctx.world = null;
     },
+    activityIdentity: {
+      begin: (activity) => { this.beginPersistentBaseTransaction(activity); },
+      end: (activity) => { this.endPersistentBaseTransaction(activity); },
+    },
     activity: {
       attach: (activity) => { this.attachActivityRuntime(activity); },
       detach: () => { this.detachActivityRuntime(); },
@@ -886,6 +890,48 @@ export class ArenaLifecycleCoordinator {
     return activity
       ? { worldRevision: activity.worldRevision, activityRevision: activity.activityRevision }
       : undefined;
+  }
+
+  /**
+   * Oeffnet den PB-Working-State an der fachlichen Activity-Identity – nicht an ihrer lokalen
+   * Runtime. Der Host bereitet den committed Raumstand hier vor, damit auch ein Activity-Start
+   * ohne World-Rebuild eine frische Baseline erhaelt.
+   */
+  private beginPersistentBaseTransaction(activity: ActivityDescriptor): void {
+    if (!bridge.isHost() || !this.hasPersistentBaseForCurrentWorld()) return;
+    this.ingestOfferedPersistentBaseContributions();
+    this.persistentBaseRewards.replaceCommittedState(getStoredPersistentBaseRewardState());
+    this.persistentBaseSession.beginTransaction({
+      worldRevision: activity.worldRevision,
+      activityRevision: activity.activityRevision,
+    });
+  }
+
+  /**
+   * Beendet den PB-Working-State beim Ende der Activity-Identity. Ein vorher explizit
+   * angewendetes Round-Ergebnis hat die Transaction bereits terminal geschlossen und ist daher
+   * idempotent. Ein Activity-Wechsel ohne Ergebnis rollt den alten Working-State zurueck.
+   */
+  private endPersistentBaseTransaction(activity: ActivityDescriptor): void {
+    if (!bridge.isHost() || !this.persistentBaseSession.hasOpenTransaction) return;
+    applyPersistentBaseRoundOutcome('rollback', {
+      session: this.persistentBaseSession,
+      isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+      identity: {
+        worldRevision: activity.worldRevision,
+        activityRevision: activity.activityRevision,
+      },
+    });
+    this.publishPersistentBaseRewardSessionState();
+  }
+
+  /** Prueft die PB-Site auch beim Identity-Start vor der lokalen World-Materialisierung. */
+  private hasPersistentBaseForCurrentWorld(): boolean {
+    const context = this.worldLifecycle.context;
+    if (context) return context.persistentBaseSite !== null;
+    const descriptor = this.worldLifecycle.descriptor;
+    if (!descriptor?.parameters?.persistentBaseUnlocked) return false;
+    return getWorldDefinition(descriptor.definitionId)?.persistentBaseSite !== undefined;
   }
 
   /**
@@ -3232,17 +3278,17 @@ export class ArenaLifecycleCoordinator {
           `[ArenaLifecycleCoordinator] Persistent base anchor cannot resolve on world ${world.descriptor.definitionId}`,
         );
       }
-      // Erst alle aktuell angebotenen Beitraege einsammeln. Eine Mission startet danach ihren
-      // Working State genau bei diesem committed Stand; ohne Activity bleibt er direkt editierbar.
-      this.ingestOfferedPersistentBaseContributions();
-      this.persistentBaseRewards.replaceCommittedState(getStoredPersistentBaseRewardState());
-      // Eine Activity oeffnet genau einen Arbeitsstand - mit der Identitaet ihrer Instanz.
-      // Ohne Activity gibt es keinen: Die LobbyWorld bearbeitet den committed Stand direkt.
-      if (activityDescriptor !== null) {
-        this.persistentBaseSession.beginTransaction({
-          worldRevision: activityDescriptor.worldRevision,
-          activityRevision: activityDescriptor.activityRevision,
-        });
+      // Der Identity-Hook bereitet den committed Stand vor und oeffnet den Working State bereits
+      // beim Activity-Beginn. Nur eine Activity-lose World muss ihren committed Raumstand hier
+      // rehydrieren; der World-Aufbau startet oder beendet keine Transaction.
+      if (!this.persistentBaseSession.hasOpenTransaction) {
+        this.ingestOfferedPersistentBaseContributions();
+        this.persistentBaseRewards.replaceCommittedState(getStoredPersistentBaseRewardState());
+      }
+      if (activityDescriptor !== null && !this.persistentBaseSession.hasOpenTransaction) {
+        throw new Error(
+          '[ArenaLifecycleCoordinator] Activity identity has no PersistentBase transaction',
+        );
       }
       this.ctx.persistentBaseContributions = this.persistentBaseContributions;
       this.ctx.persistentBaseRewards = this.persistentBaseRewards;
@@ -5418,7 +5464,6 @@ export class ArenaLifecycleCoordinator {
   }
 
   tearDownArena(preserveAuthoredPresentation = false): void {
-    this.rollbackPersistentBaseMissionIfActive();
     // Mit der World fallen ihre Spieler. Das gilt fuer jede Instanz und auf jedem Peer: ein
     // Testgelaende-Teilnehmer darf beim Matchstart genauso wenig stehen bleiben wie ein
     // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die

@@ -52,7 +52,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 6 Coop Objectives / Update / Presentation | ✅ abgeschlossen | `CoopMissionRuntime` besitzt zusätzlich Objectives, Mission Progress, Barrieren, Carry, Repair/Placement-Reward und die Abschlussermittlung. Host- und Client-Frame kennen nur benannte Activity-Schritte; sieben Felder sind aus `ArenaContext` verschwunden. |
 | 7 Player-Lifetimes | ✅ abgeschlossen | `PlayerWorldRuntime` gehört der `WorldRuntime` und kennt nur world-scoped Module; Detach folgt einem Materialisierungs-Ledger. `CoopMissionPlayerRuntime` trägt Lebensbudget und Zielfreigabe der Mission. |
 | – Checkpoint B | ✅ automatisiert abgeschlossen | Coop create/update/destroy, Activity-Wechsel in derselben World, `PlayerWorldRuntime` bleibt / `PlayerActivityRuntime` wird ersetzt, Activity-Presentation folgt der Activity-Lifetime. Browser-Sichtprüfung ist User-Abnahme. |
-| 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Beitrags- und Reward-Speicher halten nur noch den committed Stand. |
+| 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
 | 9 Completion / ResultApplication | ⬜ offen | |
 | 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt den `WorldPresentationHandoff`. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
@@ -80,6 +80,9 @@ Nur temporäre Migrationspfade eintragen.
 `TD-7` ist mit Phase 6 entfallen: Die fachliche Coop-Update-Reihenfolge liegt in
 `src/activity/CoopMissionHostUpdate.ts`; verbleibt nur noch die Frage der Aufrufstelle (TD-8).
 
+Die in der Phase-8-Prüfung erkannte implizite Kopplung des Transaction-Starts an `buildWorld()`
+ist behoben; daraus entsteht keine neue Transitional Debt.
+
 ---
 
 ## 4. Offene Regressionen / Risiken
@@ -103,7 +106,7 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | 326 Testdateien, 2739 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` | grün | 326 Testdateien, 2743 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 | `git diff --check` | grün | Keine Whitespace-Fehler. |
 | Browser-/Sichtprüfung | ausstehend – User-Abnahme | Von Coding-KIs gemäß Prüfregel nicht auszuführen. Prüfliste siehe Abschnitt 7. |
 
@@ -194,12 +197,18 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   Leere. `beginTransaction` einer anderen Instanz verwirft einen noch offenen zuvor.
 - `src/persistentBase/PersistentBaseRuntimeBindings.ts` – die Runtime-Objekte einer World,
   gehalten von `PersistentBaseWorldBinding.constructionRuntimes` und mit ihr abgeräumt.
+- `ActivityLifecycle`/`WorldLifecycle` – der getrennte `activityIdentity`-Sink öffnet und beendet
+  die PB-Transaction an der Activity-Identity; der `ActivityRuntimeHost` bleibt für lokale
+  Runtime-Materialisierung und Runtime-Detach/Reattach zuständig.
 - Beitrags- und Reward-Speicher sind die Lesefassaden auf genau eine Lifetime (committed);
   Arbeitsstand und Runtime-Objekte werden ihnen über `useTransaction` / `useWorldRuntimes`
   geliehen. `hasActiveMission` bleibt als Prädikat erhalten.
 - `applyPersistentBaseRoundOutcome` nimmt jetzt `{ session, isRuntimeObjectAlive, identity }`;
   der Koordinator übergibt die Identität der endenden Activity.
-- Verträge: `tests/PersistentBaseLifetimeSeparation.test.ts`, `tests/PersistentBaseRoundOutcome.test.ts`.
+- Verträge: `tests/PersistentBaseLifetimeSeparation.test.ts` schützt A→B, A→keine Activity,
+  Runtime-Detach/Reattach und idempotente Synchronisierung über den echten `WorldLifecycle`;
+  `tests/PersistentBaseRoundOutcome.test.ts` schützt weiterhin Ergebnis- und stale-Identity-
+  Semantik.
 
 **Noch beim Coordinator (Stoff der Phase 9):** `persistentBaseVisualSite`,
 Team-Buff/Held-Action sowie die Anwendung des Missionsergebnisses (Reward, Progression,

@@ -18,6 +18,21 @@ export interface ActivityLifecycleSink {
   readonly detach: () => void;
 }
 
+/**
+ * Die fachliche Activity-Identity beginnt oder endet. Dieser Vertrag ist bewusst vom lokalen
+ * Runtime-Sink getrennt: Ein Runtime-Detach darf die Identity und ihren langlebigen Working State
+ * nicht beenden.
+ */
+export interface ActivityIdentityLifecycleSink {
+  readonly begin: (activity: ActivityDescriptor) => void;
+  readonly end: (activity: ActivityDescriptor) => void;
+}
+
+const INERT_ACTIVITY_IDENTITY_SINK: ActivityIdentityLifecycleSink = {
+  begin: () => { /* noop */ },
+  end: () => { /* noop */ },
+};
+
 export class ActivityLifecycle {
   private currentPhase: ActivityLifecyclePhase = 'none';
   private currentDescriptor: ActivityDescriptor | null = null;
@@ -29,6 +44,7 @@ export class ActivityLifecycle {
   constructor(
     private readonly sink: ActivityLifecycleSink,
     private readonly hasWorld: () => boolean,
+    private readonly identitySink: ActivityIdentityLifecycleSink = INERT_ACTIVITY_IDENTITY_SINK,
   ) {}
 
   get phase(): ActivityLifecyclePhase {
@@ -63,6 +79,7 @@ export class ActivityLifecycle {
     }
     if (this.currentDescriptor && isSameActivity(this.currentDescriptor, activity)) return;
     if (this.currentDescriptor) this.end();
+    this.identitySink.begin(activity);
     this.currentDescriptor = activity;
     this.currentPhase = 'creating';
   }
@@ -90,10 +107,12 @@ export class ActivityLifecycle {
   /** Beendet die Activity vollstaendig. Idempotent; wird auch vom Ende der World ausgeloest. */
   end(): void {
     if (!this.currentDescriptor && this.currentPhase === 'none') return;
+    const endingDescriptor = this.currentDescriptor;
     const wasActive = this.currentPhase === 'active';
     this.currentPhase = 'ending';
     this.currentDescriptor = null;
     if (wasActive) this.sink.detach();
+    if (endingDescriptor) this.identitySink.end(endingDescriptor);
     this.currentPhase = 'none';
   }
 }

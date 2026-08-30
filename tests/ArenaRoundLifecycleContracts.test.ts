@@ -145,15 +145,15 @@ describe('arena round lifecycle contract', () => {
     expect(body).toContain('this.ctx.persistentBaseContributions = null');
   });
 
-  it('rollt einen offenen Working State vor technischem Teardown zurueck', () => {
+  it('beendet den Working State am Activity-Identity-Ende statt am Runtime-Teardown', () => {
     const source = read(COORDINATOR_PATH);
     const teardownStart = source.indexOf('  tearDownArena(');
     const rollback = source.indexOf('this.rollbackPersistentBaseMissionIfActive();', teardownStart);
     const runtimeDetach = source.indexOf('this.detachAllWorldPlayers();', teardownStart);
-    expect(rollback).toBeGreaterThan(teardownStart);
+    expect(rollback).toBe(-1);
     expect(runtimeDetach).toBeGreaterThan(teardownStart);
-    expect(rollback).toBeLessThan(runtimeDetach);
-    expect(source).toContain('private rollbackPersistentBaseMissionIfActive(): void');
+    expect(source).toContain('activityIdentity: {');
+    expect(source).toContain('private endPersistentBaseTransaction(activity: ActivityDescriptor): void');
   });
 
   it('wendet Victory/Defeat vor dem Ende der World-Instanz an', () => {
