@@ -165,6 +165,62 @@ export class PersistentBaseContributionStore {
     return { persistentId, placementOrder, origin: 'new' };
   }
 
+  /**
+   * Verschiebt eine vorhandene Konstruktion ihres Besitzers auf eine neue Zelle.
+   *
+   * Ausdruecklich keine Kombination aus Abriss und Neubau: `persistentId`, Werkzeug, Besitz und
+   * `placementOrder` bleiben unveraendert, es aendern sich nur Position und Winkel. Der Aufrufer
+   * hat das Ziel bereits gegen die Welt geprueft; die Pruefung hier ist die letzte Zusicherung,
+   * dass nichts ausserhalb des Baubereichs persistent wird.
+   */
+  moveConstruction(
+    ownerId: string,
+    persistentId: string,
+    target: { readonly relativeGridX: number; readonly relativeGridY: number; readonly angle: number },
+    footprint: readonly { readonly dx: number; readonly dy: number }[],
+    buildArea: PersistentBaseBuildArea,
+  ): PersistentConstruction | null {
+    if (!ownerId
+      || !Number.isSafeInteger(target.relativeGridX)
+      || !Number.isSafeInteger(target.relativeGridY)) return null;
+    const inside = (footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }]).every((offset) => (
+      isCellInsidePersistentBaseBuildArea(
+        target.relativeGridX + offset.dx,
+        target.relativeGridY + offset.dy,
+        buildArea,
+      )
+    ));
+    if (!inside) return null;
+
+    const store = this.working ?? this.committed;
+    const current = store.get(ownerId);
+    const existing = current?.constructions.find((entry) => entry.persistentId === persistentId);
+    if (!current || !existing) return null;
+
+    const moved: PersistentConstruction = {
+      ...existing,
+      tool: { ...existing.tool },
+      relativeGridX: target.relativeGridX,
+      relativeGridY: target.relativeGridY,
+      angle: Number.isFinite(target.angle) ? target.angle : existing.angle,
+    };
+    store.set(ownerId, {
+      ...current,
+      // Wie bei Bau und Abriss: Lobby-Aenderungen sind bereits der host-bestaetigte Commit, eine
+      // Mission erhoeht ihre Revision erst gesammelt beim Victory-Commit.
+      revision: this.working ? current.revision : current.revision + 1,
+      constructions: current.constructions.map((entry) => (
+        entry.persistentId === persistentId ? moved : entry
+      )),
+    });
+    // Dieselbe Runtime traegt weiterhin denselben Blueprint; nur sein Inhalt ist jetzt aktuell.
+    for (const [runtimeId, binding] of this.runtimeBlueprints) {
+      if (binding.ownerId !== ownerId || binding.blueprint.persistentId !== persistentId) continue;
+      this.runtimeBlueprints.set(runtimeId, { ownerId, blueprint: { ...moved, tool: { ...moved.tool } } });
+    }
+    return moved;
+  }
+
   /** True, wenn dieser Blueprint bereits ein Runtime-Objekt in der Welt hat. */
   isMaterialized(ownerId: string, persistentId: string): boolean {
     return this.findRuntimeId(ownerId, persistentId) !== undefined;

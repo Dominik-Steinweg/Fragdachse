@@ -27,8 +27,6 @@ export interface PersistentBaseRewardState {
   readonly schemaVersion: typeof PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION;
   readonly revision: number;
   readonly placements: readonly PersistentBaseRewardPlacement[];
-  /** Rewards that have already occupied the base once; used by the later dismantle contract. */
-  readonly everPlacedRewardIds?: readonly PersistentBaseRewardId[];
 }
 
 /** Complete host-owned reward projection shared with every peer. */
@@ -37,11 +35,15 @@ export interface PersistentBaseRewardSessionState {
   readonly revision: number;
   readonly availableRewardIds: readonly PersistentBaseRewardId[];
   readonly placements: readonly PersistentBaseRewardPlacement[];
-  /** Rewards that were already placed once and therefore cannot be selected again in 3D. */
-  readonly everPlacedRewardIds: readonly PersistentBaseRewardId[];
 }
 
-/** World-bound host request for a first-time reward placement. */
+/**
+ * World-bound host request for a reward placement.
+ *
+ * The same shape carries a repositioning request: a reward keeps its identity across a move, so
+ * only the target cell and angle ever travel. The host decides from its own placement state
+ * whether the request is a first placement or a move.
+ */
 export interface PersistentBaseRewardPlacementRequest {
   readonly worldRevision: number;
   readonly rewardId: PersistentBaseRewardId;
@@ -63,7 +65,6 @@ export const DEFAULT_PERSISTENT_BASE_REWARD_STATE: PersistentBaseRewardState = O
   schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
   revision: 0,
   placements: Object.freeze([]),
-  everPlacedRewardIds: Object.freeze([]),
 });
 
 export function isPersistentBaseRewardId(value: unknown): value is PersistentBaseRewardId {
@@ -128,22 +129,11 @@ export function sanitizePersistentBaseRewardState(value: unknown): PersistentBas
     seen.add(placement.rewardId);
     placements.push(placement);
   }
-  const rawEverPlaced = value.everPlacedRewardIds === undefined
-    ? placements.map((placement) => placement.rewardId)
-    : sanitizePersistentBaseRewardIds(value.everPlacedRewardIds);
-  if (!rawEverPlaced) return null;
-  const everPlacedRewardIds = [...new Set(rawEverPlaced)] as PersistentBaseRewardId[];
-  if (placements.some((placement) => !everPlacedRewardIds.includes(placement.rewardId))) return null;
-  const normalized: PersistentBaseRewardState = {
+  return {
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: value.revision,
     placements,
-    ...(value.everPlacedRewardIds === undefined ? {} : { everPlacedRewardIds }),
   };
-  // Keep the 3D-1 wire/save shape backward-compatible when reading a legacy state. The store
-  // treats the placement list as the implicit history in that case; new writes include the
-  // explicit one-time-placement marker.
-  return normalized;
 }
 
 export function sanitizePersistentBaseRewardGrant(value: unknown): PersistentBaseRewardGrant | null {
@@ -167,7 +157,6 @@ export function clonePersistentBaseRewardState(
     schemaVersion: PERSISTENT_BASE_REWARD_STATE_SCHEMA_VERSION,
     revision: state.revision,
     placements: state.placements.map(clonePersistentBaseRewardPlacement),
-    everPlacedRewardIds: [...(state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId))],
   };
 }
 
@@ -179,9 +168,6 @@ export function clonePersistentBaseRewardSessionState(
     revision: state.revision,
     availableRewardIds: [...state.availableRewardIds],
     placements: state.placements.map(clonePersistentBaseRewardPlacement),
-    everPlacedRewardIds: [
-      ...(state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId)),
-    ],
   };
 }
 
@@ -200,19 +186,11 @@ export function sanitizePersistentBaseRewardSessionState(
   });
   if (!placements) return null;
   if (placements.placements.some((placement) => !availableRewardIds.includes(placement.rewardId))) return null;
-  // Older peers did not publish placement history. Their current placement list is the only
-  // safe history available to us; new writers always send the explicit field.
-  const rawEverPlaced = value.everPlacedRewardIds === undefined
-    ? placements.placements.map((placement) => placement.rewardId)
-    : sanitizePersistentBaseRewardIds(value.everPlacedRewardIds);
-  if (!rawEverPlaced || rawEverPlaced.some((rewardId) => !availableRewardIds.includes(rewardId))) return null;
-  if (placements.placements.some((placement) => !rawEverPlaced.includes(placement.rewardId))) return null;
   return {
     worldRevision: value.worldRevision,
     revision: value.revision,
     availableRewardIds,
     placements: placements.placements,
-    everPlacedRewardIds: rawEverPlaced,
   };
 }
 

@@ -86,24 +86,65 @@ describe('PersistentBaseRewardState', () => {
     });
   });
 
-  it('keeps a one-time placement marker when a placement is rolled back', () => {
+  it('derives placeability only from unlock and current placement, so a dismantled reward returns', () => {
     const store = new PersistentBaseRewardStore();
     expect(store.placeReward({
       rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0,
     })).toBe(true);
-    expect(store.getState().everPlacedRewardIds).toEqual(['base_spore_turret']);
+    expect(store.canPlaceReward('base_spore_turret', ['base_spore_turret'])).toBe(false);
 
     store.beginMission();
     expect(store.dismantleReward('base_spore_turret')).toBe(true);
     store.rollback();
     expect(store.getState().placements).toHaveLength(1);
-    expect(store.getState().everPlacedRewardIds).toEqual(['base_spore_turret']);
 
     store.beginMission();
     expect(store.dismantleReward('base_spore_turret')).toBe(true);
     store.commit();
     expect(store.getState().placements).toEqual([]);
-    expect(store.canPlaceReward('base_spore_turret', ['base_spore_turret'])).toBe(false);
+    expect(store.canPlaceReward('base_spore_turret', ['base_spore_turret'])).toBe(true);
+    expect(store.placeReward({
+      rewardId: 'base_spore_turret', relativeGridX: 1, relativeGridY: 1, angle: 0,
+    })).toBe(true);
+    expect(store.getState().placements).toEqual([
+      { rewardId: 'base_spore_turret', relativeGridX: 1, relativeGridY: 1, angle: 0 },
+    ]);
+  });
+
+  it('moves an existing placement without touching identity or list position', () => {
+    const store = new PersistentBaseRewardStore();
+    expect(store.placeReward({ rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0 })).toBe(true);
+    expect(store.placeReward({ rewardId: 'base_health_pedestal', relativeGridX: 1, relativeGridY: 0, angle: 0 })).toBe(true);
+    const revisionBeforeMove = store.getState().revision;
+
+    expect(store.moveReward({ rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 0, angle: 1.5 })).toBe(true);
+    expect(store.getState().placements).toEqual([
+      { rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 0, angle: 1.5 },
+      { rewardId: 'base_health_pedestal', relativeGridX: 1, relativeGridY: 0, angle: 0 },
+    ]);
+    expect(store.getState().revision).toBe(revisionBeforeMove + 1);
+
+    // Ein nicht platziertes Reward besitzt nichts, was verschoben werden koennte.
+    expect(store.moveReward({ rewardId: 'base_rocket_turret', relativeGridX: 0, relativeGridY: 0, angle: 0 })).toBe(false);
+  });
+
+  it('keeps a mission move in working state until the outcome decides', () => {
+    const store = new PersistentBaseRewardStore();
+    expect(store.placeReward({ rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0 })).toBe(true);
+
+    store.beginMission();
+    expect(store.moveReward({ rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 2, angle: 0 })).toBe(true);
+    store.rollback();
+    expect(store.getState().placements).toEqual([
+      { rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0 },
+    ]);
+
+    store.beginMission();
+    expect(store.moveReward({ rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 2, angle: 0 })).toBe(true);
+    store.commit();
+    expect(store.getState().placements).toEqual([
+      { rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 2, angle: 0 },
+    ]);
   });
 });
 

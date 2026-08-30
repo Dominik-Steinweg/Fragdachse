@@ -416,6 +416,21 @@ export class ClientUpdateCoordinator {
           this.rockVisualHelper.materializePlaceableRock(rock, false);
           this.rockVisualHelper.updateRockVisualById(rock.id, rock.hp);
         }
+        // Ein verschobenes Objekt behaelt seine Runtime-ID, deshalb muss seine alte Zelle
+        // ausdruecklich geraeumt werden, bevor die Darstellung auf der neuen entsteht.
+        for (const change of placementChanges.relocated) {
+          this.rockVisualHelper.removePlaceableRockVisual(change.previous, false);
+          this.rockVisualHelper.materializePlaceableRock(change.next, false);
+          this.rockVisualHelper.updateRockVisualById(change.next.id, change.next.hp);
+        }
+        if (placementChanges.relocated.length > 0) {
+          // Zwei Zellen je Objekt haben sich geaendert; die unvollstaendige Payload erzwingt
+          // bewusst genau einen Flowfield-/Fire-Resync fuer den ganzen Batch.
+          emitArenaMapGridChanged(this.scene.game.events, {
+            reason: 'placeables_batch_removed',
+            source: 'placeable_rock',
+          });
+        }
         for (const rock of placementChanges.removed) {
           const expired = bridge.getSynchronizedNow() >= rock.expiresAt;
           this.rockVisualHelper.removePlaceableRockVisual(

@@ -1299,6 +1299,9 @@ export class ArenaScene extends Phaser.Scene {
           const resolved = getUtilityConfigForMode(ref.utilityId, bridge.getActiveGameMode());
           return bridge.getPlayerUtilityCooldownUntil(localId, resolved?.id ?? ref.utilityId);
         }
+        if (ref.kind === 'management') {
+          return bridge.getPlayerUtilityCooldownUntil(localId, `management:${ref.action}`);
+        }
         return 0;
       },
       () => {
@@ -1309,15 +1312,12 @@ export class ArenaScene extends Phaser.Scene {
           canManage: capabilities.canInteract && capabilities.canDismantle,
         };
       },
-      () => {
-        if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
-        const localId = bridge.getLocalPlayerId();
-        const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
-        const hasConstruction = (this.lifecycle?.getActiveConstructionToolsForPlayer(localId).length ?? 0) > 0;
-        return hasConstruction || currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
-          ? ['dismantle', 'dismantle-own-all'] as const
-          : [];
-      },
+      // Persistent-Base-Management ist nach 3F keine Klassenfrage mehr: Base-owned Rewards
+      // gehoeren der Basis, und persoenliche Konstruktionen bleiben ueber die Ownership-Pruefung
+      // des Hosts geschuetzt. Angeboten wird die Verwaltung deshalb im gesamten Coop-Defense-Modus.
+      () => (isCoopDefenseMode(bridge.getActiveGameMode())
+        ? ['reposition', 'dismantle', 'dismantle-own-all'] as const
+        : []),
     );
     inputSystem.setupTemporaryUtilityProvider(
       () => bridge.getPlayerTemporaryUtilityInstances(bridge.getLocalPlayerId()),
@@ -1340,6 +1340,33 @@ export class ArenaScene extends Phaser.Scene {
       },
       (rewardId, preview) => this.lifecycle?.requestPersistentBaseRewardPlacement(rewardId, preview)
         ?? Promise.resolve({ ok: false, reason: 'blocked' as const }),
+    );
+    inputSystem.setupRepositionActionProvider(
+      () => {
+        const pointer = this.getPointerWorldPoint();
+        return this.lifecycle?.getPersistentBaseMoveSourcePreview(
+          bridge.getLocalPlayerId(),
+          pointer.x,
+          pointer.y,
+        );
+      },
+      (sourceRuntimeId: number) => {
+        const pointer = this.getPointerWorldPoint();
+        return this.lifecycle?.getPersistentBaseMoveTargetPreview(
+          bridge.getLocalPlayerId(),
+          sourceRuntimeId,
+          pointer.x,
+          pointer.y,
+        );
+      },
+      (sourceRuntimeId, preview) => {
+        const request = this.lifecycle?.requestPersistentBaseMove(sourceRuntimeId, preview)
+          ?? Promise.resolve({ ok: false, reason: 'blocked' as const });
+        return request.then((result) => {
+          if (!result.ok) this.placementPreview.showPlacementError(t('ui.errors.moveFailed'));
+          return result;
+        });
+      },
     );
     inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
     inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
@@ -2366,6 +2393,7 @@ export class ArenaScene extends Phaser.Scene {
           this.ctx.inputSystem.isUtilityPlacementActive()
           || this.ctx.inputSystem.isConstructionPlacementActive()
           || this.ctx.inputSystem.isPersistentRewardPlacementActive()
+          || this.ctx.inputSystem.isRepositionActive()
         ),
     );
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
@@ -2378,6 +2406,7 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isUtilityPlacementActive()
       && !this.ctx.inputSystem.isConstructionPlacementActive()
       && !this.ctx.inputSystem.isPersistentRewardPlacementActive()
+      && !this.ctx.inputSystem.isRepositionActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
     const aimPreviewMs = diagnosticsActive ? performance.now() - aimPreviewStartedAt : 0;

@@ -43,9 +43,10 @@ export class PersistentBaseRewardStore {
     unlocks: readonly PersistentBaseRewardPlacement['rewardId'][],
   ): boolean {
     const current = this.working ?? this.committed;
+    // Canonical 3F placement gate: unlocked and currently unplaced. A dismantled reward becomes
+    // placeable again; there is deliberately no placement history that could block a re-place.
     return unlocks.includes(rewardId)
-      && !current.placements.some((entry) => entry.rewardId === rewardId)
-      && !(current.everPlacedRewardIds ?? []).includes(rewardId);
+      && !current.placements.some((entry) => entry.rewardId === rewardId);
   }
 
   beginMission(): void {
@@ -59,13 +60,32 @@ export class PersistentBaseRewardStore {
     if (!sanitized) return false;
     const current = this.working ?? this.committed;
     if (current.placements.some((entry) => entry.rewardId === sanitized.rewardId)) return false;
-    if ((current.everPlacedRewardIds ?? []).includes(sanitized.rewardId)) return false;
     this.replaceCurrent({
       ...current,
       // Mission edits remain working state; one revision is allocated at the outcome commit.
       revision: current.revision + (this.working ? 0 : 1),
       placements: [...current.placements, sanitized],
-      everPlacedRewardIds: [...(current.everPlacedRewardIds ?? []), sanitized.rewardId],
+    });
+    return true;
+  }
+
+  /**
+   * Repositions an already placed reward.
+   *
+   * Deliberately not `dismantleReward` + `placeReward`: the reward keeps its identity, its
+   * unlock and its position in the placement list, and only its cell and angle change.
+   */
+  moveReward(placement: PersistentBaseRewardPlacement): boolean {
+    const sanitized = sanitizePersistentBaseRewardPlacement(placement);
+    if (!sanitized) return false;
+    const current = this.working ?? this.committed;
+    if (!current.placements.some((entry) => entry.rewardId === sanitized.rewardId)) return false;
+    this.replaceCurrent({
+      ...current,
+      revision: current.revision + (this.working ? 0 : 1),
+      placements: current.placements.map((entry) => (
+        entry.rewardId === sanitized.rewardId ? sanitized : entry
+      )),
     });
     return true;
   }
@@ -80,7 +100,6 @@ export class PersistentBaseRewardStore {
       // failed request must restore the complete pre-request value, not just its placement list.
       revision: Math.max(0, current.revision - (this.working ? 0 : 1)),
       placements: current.placements.filter((entry) => entry.rewardId !== rewardId),
-      everPlacedRewardIds: (current.everPlacedRewardIds ?? []).filter((id) => id !== rewardId),
     });
     return true;
   }

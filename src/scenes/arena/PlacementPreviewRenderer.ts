@@ -96,8 +96,9 @@ export class PlacementPreviewRenderer {
     }
 
     const ownerColor = bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0];
-    if (preview.mode === 'dismantle') {
-      // Rueckbau zeigt kein Bau-Ghost, sondern markiert das anvisierte eigene Konstrukt.
+    if (preview.mode === 'dismantle' || preview.mode === 'move-source') {
+      // Rueckbau und Move-Quellwahl zeigen kein Bau-Ghost, sondern markieren das anvisierte
+      // vorhandene Objekt. Das Original bleibt dabei unveraendert in der Welt stehen.
       this.localPlacementPreviewImage?.setVisible(false);
       this.localTurretPreviewImage?.setVisible(false);
       this.hideTunnelPreview(this.localTunnelPreview);
@@ -296,6 +297,12 @@ export class PlacementPreviewRenderer {
     if (preview?.mode === 'dismantle') {
       this.placeableUtilityHintTitle.setText(t('ui.placement.dismantleTitle'));
       this.placeableUtilityHintSubtitle.setText(t('ui.placement.dismantleHint'));
+    } else if (preview?.mode === 'move-source') {
+      this.placeableUtilityHintTitle.setText(t('ui.placement.moveSourceTitle'));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.moveSourceHint'));
+    } else if (preview?.mode === 'move-target') {
+      this.placeableUtilityHintTitle.setText(t('ui.placement.moveTargetTitle'));
+      this.placeableUtilityHintSubtitle.setText(t('ui.placement.moveTargetHint'));
     } else if (preview?.kind === 'tunnel') {
       this.placeableUtilityHintTitle.setText(t('ui.placement.tunnelTitle', { stage: preview.stage ?? 1 }));
       this.placeableUtilityHintSubtitle.setText(t('ui.placement.tunnelHint'));

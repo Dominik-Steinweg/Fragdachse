@@ -29,6 +29,13 @@ export interface PlacementSyncResult {
   added: SyncedPlaceableRock[];
   updated: SyncedPlaceableRock[];
   removed: SyncedPlaceableRock[];
+  /**
+   * Objekte, deren Zelle sich geaendert hat.
+   *
+   * Ein Move behaelt seine Runtime-ID, deshalb reicht der neue Snapshot allein nicht: Die
+   * Darstellung muss ihre alte Zelle kennen, um sie zu raeumen.
+   */
+  relocated: { previous: SyncedPlaceableRock; next: SyncedPlaceableRock }[];
 }
 
 export class PlacementSystem {
@@ -286,6 +293,39 @@ export class PlacementSystem {
     return this.removeRock(id);
   }
 
+  /**
+   * Verschiebt ein vorhandenes Runtime-Objekt atomar auf eine neue Zelle.
+   *
+   * Ausdruecklich kein Entfernen mit anschliessendem Neuanlegen: Runtime-ID, HP, Besitz und alle
+   * uebrigen Laufzeitwerte bleiben dieselben, es wechselt nur die Grid-Bindung. Damit bleiben
+   * Referenzen anderer Systeme auf dieses Objekt gueltig und ein Move heilt nichts.
+   */
+  relocateRock(
+    id: number,
+    gridX: number,
+    gridY: number,
+    angle: number,
+    footprint: readonly { readonly dx: number; readonly dy: number }[] = [{ dx: 0, dy: 0 }],
+  ): SyncedPlaceableRock | undefined {
+    const rock = this.runtimeRocks.get(id);
+    if (!rock) return undefined;
+    if (!Number.isSafeInteger(gridX) || !Number.isSafeInteger(gridY)) return undefined;
+    const cells = footprint.length > 0 ? footprint : [{ dx: 0, dy: 0 }];
+    for (const cell of cells) {
+      const tx = gridX + cell.dx;
+      const ty = gridY + cell.dy;
+      if (tx < 0 || tx >= this.metrics.gridCols || ty < 0 || ty >= this.metrics.gridRows) return undefined;
+      const occupiedId = this.rockGrid.getIndex(tx, ty);
+      if (occupiedId >= 0 && occupiedId !== id) return undefined;
+    }
+    this.rockGrid.remove(rock.gridX, rock.gridY);
+    rock.gridX = gridX;
+    rock.gridY = gridY;
+    if (Number.isFinite(angle)) rock.angle = angle;
+    this.rockGrid.set(gridX, gridY, id);
+    return { ...rock };
+  }
+
   tryPlaceConstruction(
     cfg: CoopDefenseConstructionDefinition,
     maxHp: number,
@@ -437,8 +477,21 @@ export class PlacementSystem {
    * player placement still rejects all base cells, while this path only bypasses that one rule
    * after the lifecycle has validated the canonical reward domain.
    */
-  canMaterializePersistentBaseRewardCell(gridX: number, gridY: number, allowRuntimeReplacement = false): boolean {
-    return this.canPlaceCells([{ dx: 0, dy: 0 }], gridX, gridY, false, true, allowRuntimeReplacement);
+  canMaterializePersistentBaseRewardCell(
+    gridX: number,
+    gridY: number,
+    allowRuntimeReplacement = false,
+    movableSourceId?: number,
+  ): boolean {
+    return this.canPlaceCells(
+      [{ dx: 0, dy: 0 }],
+      gridX,
+      gridY,
+      false,
+      true,
+      allowRuntimeReplacement,
+      movableSourceId,
+    );
   }
 
   materializePersistentBaseReward(
@@ -519,6 +572,7 @@ export class PlacementSystem {
     originY: number,
     pointerX: number,
     pointerY: number,
+    movableSourceId?: number,
   ): UtilityPlacementPreviewState | undefined {
     const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, cfg.placementRange);
     if (!targetCell) return undefined;
@@ -533,7 +587,15 @@ export class PlacementSystem {
       targetY: targetWorld.y,
       gridX: targetCell.gridX,
       gridY: targetCell.gridY,
-      isValid: this.canPlaceCells(cfg.footprint, targetCell.gridX, targetCell.gridY),
+      isValid: this.canPlaceCells(
+        cfg.footprint,
+        targetCell.gridX,
+        targetCell.gridY,
+        true,
+        false,
+        false,
+        movableSourceId,
+      ),
       frame: cfg.kind === 'turret' ? AutoTiler.getFrame(mask, ROCK_AUTOTILE) : 0,
       range: cfg.placementRange,
       kind: cfg.kind,
@@ -550,6 +612,24 @@ export class PlacementSystem {
     pointerX: number,
     pointerY: number,
     range: number,
+  ): UtilityPlacementPreviewState | undefined {
+    return this.getManagementSourcePreview(ownerId, originX, originY, pointerX, pointerY, range, 'dismantle');
+  }
+
+  /**
+   * Vorschau fuer Rueckbau und Move-Quellwahl.
+   *
+   * Beide verwenden ausdruecklich dieselbe Ownership-Domain: eigenes Konstrukt oder ein
+   * base-owned Persistent-Base-Reward. Nur die Beschriftung des Modus unterscheidet sich.
+   */
+  getManagementSourcePreview(
+    ownerId: string,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+    range: number,
+    mode: 'dismantle' | 'move-source',
   ): UtilityPlacementPreviewState | undefined {
     const targetCell = this.resolveTargetCell(originX, originY, pointerX, pointerY, range);
     if (!targetCell) return undefined;
@@ -568,7 +648,8 @@ export class PlacementSystem {
       range,
       kind: rock?.kind ?? 'rock',
       sourceSlot: 'utility',
-      mode: 'dismantle',
+      mode,
+      ...(rock === undefined ? {} : { sourceRuntimeId: rock.id }),
     };
   }
 
@@ -640,6 +721,7 @@ export class PlacementSystem {
     const added: SyncedPlaceableRock[] = [];
     const updated: SyncedPlaceableRock[] = [];
     const removed: SyncedPlaceableRock[] = [];
+    const relocated: { previous: SyncedPlaceableRock; next: SyncedPlaceableRock }[] = [];
 
     for (const [id, existing] of this.runtimeRocks) {
       if (next.has(id)) continue;
@@ -678,16 +760,19 @@ export class PlacementSystem {
         || current.turretWeaponId !== incoming.turretWeaponId
         || current.targetRange !== incoming.targetRange
       ) {
+        const previous = { ...current };
         this.runtimeRocks.set(incoming.id, { ...incoming });
         if (current.gridX !== incoming.gridX || current.gridY !== incoming.gridY) {
           this.rockGrid.remove(current.gridX, current.gridY);
           this.rockGrid.set(incoming.gridX, incoming.gridY, incoming.id);
+          relocated.push({ previous, next: { ...incoming } });
+          continue;
         }
         updated.push({ ...incoming });
       }
     }
 
-    return { added, updated, removed };
+    return { added, updated, removed, relocated };
   }
 
   getPlacementPreview(
@@ -838,6 +923,7 @@ export class PlacementSystem {
     checkPlayers = true,
     allowPersistentBaseCells = false,
     allowRuntimeReplacement = false,
+    movableSourceId?: number,
   ): boolean {
     for (const cell of footprint) {
       const tx = gx + cell.dx;
@@ -846,7 +932,10 @@ export class PlacementSystem {
       if (!allowPersistentBaseCells && isCoopDefenseBaseCell(tx, ty, this.coopDefenseBases)) return false;
       if (this.rockGrid.isOccupied(tx, ty)) {
         const occupiedId = this.rockGrid.getIndex(tx, ty);
-        if (!allowRuntimeReplacement || !this.runtimeRocks.has(occupiedId)) return false;
+        // Das zu verschiebende Objekt darf seine eigene Belegung nicht als Zielkonflikt
+        // verursachen; jede andere Occupancy-Regel bleibt unveraendert in Kraft.
+        if (occupiedId !== movableSourceId
+          && (!allowRuntimeReplacement || !this.runtimeRocks.has(occupiedId))) return false;
       }
       if (this.treeCells.has(this.key(tx, ty))) return false;
       if (this.trackCells.has(this.key(tx, ty))) return false;

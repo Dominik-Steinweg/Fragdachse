@@ -126,6 +126,7 @@ export class RpcCoordinator {
     this.registerHeldActionHandler();
     this.registerLoadoutUseHandler();
     this.registerPersistentBaseRewardPlacementHandler();
+    this.registerPersistentBaseMoveHandler();
     this.registerCaptureTheBeerFxHandler();
     this.registerCoopDefenseCarryDeliveredFxHandler();
     this.registerExplosionEffectHandler();
@@ -153,6 +154,13 @@ export class RpcCoordinator {
   private registerPersistentBaseRewardPlacementHandler(): void {
     bridge.registerPersistentBaseRewardPlacementHandler((playerId, request) => (
       this.lifecycle?.placePersistentBaseReward(playerId, request)
+      ?? { ok: false, reason: 'blocked' }
+    ));
+  }
+
+  private registerPersistentBaseMoveHandler(): void {
+    bridge.registerPersistentBaseMoveHandler((playerId, request) => (
+      this.lifecycle?.movePersistentBaseObject(playerId, request)
       ?? { ok: false, reason: 'blocked' }
     ));
   }
@@ -218,7 +226,7 @@ export class RpcCoordinator {
         || this.ctx.burrowSystem?.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
-        if (toolRef || temporaryUtilityInstanceId || !this.hasActiveConstructionTool(playerId)) return false;
+        if (toolRef || temporaryUtilityInstanceId) return false;
         return system.start(playerId, actionId, kind, 1_000, Date.now());
       }
       let utility: UtilityConfig | undefined;
@@ -272,8 +280,7 @@ export class RpcCoordinator {
       }
       if (params?.globalDismantle) {
         if (slot !== 'utility' || params.toolRef || params.constructionId !== undefined || params.dismantle
-          || params.temporaryUtilityInstanceId
-          || !this.hasActiveConstructionTool(senderId)) {
+          || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
         const held = this.ctx.hostHeldActionSystem?.consume(
@@ -374,10 +381,6 @@ export class RpcCoordinator {
         adrenalineRevision: this.ctx.resourceSystem?.getAdrenalineRevision(senderId),
       };
     });
-  }
-
-  private hasActiveConstructionTool(playerId: string): boolean {
-    return (this.lifecycle?.getActiveConstructionToolsForPlayer(playerId).length ?? 0) > 0;
   }
 
   private registerCaptureTheBeerFxHandler(): void {

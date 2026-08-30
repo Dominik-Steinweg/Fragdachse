@@ -161,6 +161,22 @@ export class InputSystem {
     preview: UtilityPlacementPreviewState,
   ) => Promise<LoadoutUseResult>) | null = null;
   private persistentRewardPlacementActive = false;
+  /**
+   * Zweistufiger Verschiebe-Modus: erst Quelle waehlen, dann Ziel bestaetigen.
+   *
+   * `null` bedeutet Quellwahl, ein Wert die laufende Zielvorschau. Das Original bleibt in
+   * beiden Stufen vollstaendig in der Welt; verschoben wird erst der host-bestaetigte Commit.
+   */
+  private repositionActive = false;
+  private repositionSourceRuntimeId: number | null = null;
+  private getMoveSourcePreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
+  private getMoveTargetPreviewProvider: ((
+    sourceRuntimeId: number,
+  ) => UtilityPlacementPreviewState | undefined) | null = null;
+  private requestMoveProvider: ((
+    sourceRuntimeId: number,
+    preview: UtilityPlacementPreviewState,
+  ) => Promise<LoadoutUseResult>) | null = null;
 
   // Audio
   private audioSystem: GameAudioSystem | null = null;
@@ -243,6 +259,20 @@ export class InputSystem {
     getInstances: () => readonly TemporaryUtilityInstanceDescriptor[],
   ): void {
     this.radialGetTemporaryUtilities = getInstances;
+  }
+
+  /** Providers fuer die zweistufige Verschiebe-Aktion; Quelle, Ziel und Host-Request. */
+  setupRepositionActionProvider(
+    getSourcePreview: () => UtilityPlacementPreviewState | undefined,
+    getTargetPreview: (sourceRuntimeId: number) => UtilityPlacementPreviewState | undefined,
+    requestMove: (
+      sourceRuntimeId: number,
+      preview: UtilityPlacementPreviewState,
+    ) => Promise<LoadoutUseResult>,
+  ): void {
+    this.getMoveSourcePreviewProvider = getSourcePreview;
+    this.getMoveTargetPreviewProvider = getTargetPreview;
+    this.requestMoveProvider = requestMove;
   }
 
   setupPersistentRewardActionProvider(
@@ -501,7 +531,8 @@ export class InputSystem {
       || this.globalDismantleHoldStartedAt !== null
       || this.constructionPlacementActive
       || this.dismantlePlacementActive
-      || this.persistentRewardPlacementActive;
+      || this.persistentRewardPlacementActive
+      || this.repositionActive;
     if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.radialActionMenu?.isOpen) {
       if (interactionActive) {
         this.cancelUtilityInteraction();
@@ -573,8 +604,17 @@ export class InputSystem {
       && this.persistentRewardPlacementActive;
   }
 
+  isRepositionActive(): boolean {
+    return this.repositionActive;
+  }
+
   getConstructionPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
     const rewardId = this.getSelectedPersistentRewardId();
+    if (this.repositionActive) {
+      return this.repositionSourceRuntimeId === null
+        ? this.getMoveSourcePreviewProvider?.()
+        : this.getMoveTargetPreviewProvider?.(this.repositionSourceRuntimeId);
+    }
     if (this.isPersistentRewardPlacementActive() && rewardId) {
       return this.getPersistentRewardPlacementPreviewProvider?.(rewardId);
     }
@@ -715,6 +755,8 @@ export class InputSystem {
       this.constructionPlacementActive = false;
       this.dismantlePlacementActive = false;
       this.persistentRewardPlacementActive = false;
+      this.repositionActive = false;
+      this.repositionSourceRuntimeId = null;
       if (!allowRadial) this.radialActionMenu?.close();
       this.suppressWeapon1UntilLeftRelease = false;
       this.prevLeftPointerDown = false;
@@ -748,7 +790,8 @@ export class InputSystem {
       || this.globalDismantleHoldStartedAt !== null
       || this.constructionPlacementActive
       || this.dismantlePlacementActive
-      || this.persistentRewardPlacementActive;
+      || this.persistentRewardPlacementActive
+      || this.repositionActive;
   }
 
   isUtilityChargePreviewActive(): boolean {
@@ -952,7 +995,8 @@ export class InputSystem {
     const aimTarget = this.updateAimFromPointer();
     const constructionPreview = (this.isPersistentRewardPlacementActive()
       || this.isConstructionPlacementActive()
-      || this.isDismantlePlacementActive())
+      || this.isDismantlePlacementActive()
+      || this.repositionActive)
       ? this.getConstructionPlacementPreviewState()
       : undefined;
     if (constructionPreview) this.syncPlacementPreviewState(constructionPreview);
@@ -1064,12 +1108,41 @@ export class InputSystem {
       || this.globalDismantleHoldStartedAt !== null
       || this.constructionPlacementActive
       || this.dismantlePlacementActive
-      || this.persistentRewardPlacementActive;
+      || this.persistentRewardPlacementActive
+      || this.repositionActive;
     if (rightInputStarted && radialInteractionActive) {
       this.consumeRightClickForModeCancellation();
       this.cancelUtilityInteraction();
       this.prevRightPointerDown = false;
       this.suppressWeapon1UntilLeftRelease = false;
+      return;
+    }
+
+    if (this.repositionActive) {
+      const preview = constructionPreview;
+      this.syncPlacementPreviewState(preview);
+      if (!preview) {
+        // Quelle oder Ziel sind nicht mehr aufloesbar; die Aktion bleibt ausgewaehlt, die
+        // laufende Vorschau endet.
+        this.endRepositionInteraction();
+        return;
+      }
+      if (leftInputStarted || Phaser.Input.Keyboard.JustDown(this.keyE)) {
+        if (leftInputStarted) this.consumeLeftClickForModeConfirmation();
+        if (!preview.isValid) return;
+        if (this.repositionSourceRuntimeId === null) {
+          if (preview.sourceRuntimeId === undefined) return;
+          this.repositionSourceRuntimeId = preview.sourceRuntimeId;
+          this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
+          return;
+        }
+        const sourceRuntimeId = this.repositionSourceRuntimeId;
+        // Nach einem erfolgreichen Move bleibt `Verschieben` ausgewaehlt; nur die Quellwahl
+        // beginnt von vorn, damit direkt das naechste Objekt verschoben werden kann.
+        this.endRepositionInteraction();
+        void this.requestMoveProvider?.(sourceRuntimeId, preview).catch(() => undefined);
+        return;
+      }
       return;
     }
 
@@ -1365,6 +1438,14 @@ export class InputSystem {
         && selectedAction.ref.action === 'dismantle') {
         this.cancelUtilityInteraction();
         this.dismantlePlacementActive = true;
+        this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
+        return;
+      }
+      if (selectedAction?.ref.kind === 'management'
+        && selectedAction.ref.action === 'reposition') {
+        this.cancelUtilityInteraction();
+        this.repositionActive = true;
+        this.repositionSourceRuntimeId = null;
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
@@ -1744,6 +1825,8 @@ export class InputSystem {
     this.constructionPlacementActive = false;
     this.dismantlePlacementActive = false;
     this.persistentRewardPlacementActive = false;
+    this.repositionActive = false;
+    this.repositionSourceRuntimeId = null;
     this.placementPreviewState = null;
   }
 
@@ -1760,6 +1843,13 @@ export class InputSystem {
       this.audioSystem?.stopLoop(this.chargeLoopHandle);
       this.chargeLoopHandle = null;
     }
+  }
+
+  /** Beendet die laufende Verschiebe-Interaktion; die Action `Verschieben` bleibt ausgewaehlt. */
+  private endRepositionInteraction(): void {
+    this.repositionSourceRuntimeId = null;
+    this.repositionActive = false;
+    this.placementPreviewState = null;
   }
 
   private cancelGlobalDismantleHold(): void {
@@ -1784,7 +1874,8 @@ export class InputSystem {
     if ((!this.utilityPlacementActive
       && !this.constructionPlacementActive
       && !this.dismantlePlacementActive
-      && !this.persistentRewardPlacementActive) || !preview) {
+      && !this.persistentRewardPlacementActive
+      && !this.repositionActive) || !preview) {
       this.placementPreviewState = null;
       return;
     }

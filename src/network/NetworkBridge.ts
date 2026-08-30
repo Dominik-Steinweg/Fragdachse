@@ -64,6 +64,10 @@ import {
   type PersistentBaseRewardPlacementRequest,
   type PersistentBaseRewardSessionState,
 } from '../persistentBase/PersistentBaseRewardTypes';
+import {
+  sanitizePersistentBaseMoveRequest,
+  type PersistentBaseMoveRequest,
+} from '../persistentBase/PersistentBaseMove';
 import type { SyncedAk47StrategicTarget } from '../types';
 import {
   NET_TICK_RATE_HZ,
@@ -454,6 +458,11 @@ type PersistentBaseRewardPlacementHandler = (
   request: PersistentBaseRewardPlacementRequest,
 ) => LoadoutUseResult;
 
+type PersistentBaseMoveHandler = (
+  playerId: string,
+  request: PersistentBaseMoveRequest,
+) => LoadoutUseResult;
+
 interface Weapon2PredictionState {
   nextContiguousAck: number;
   completedPredictionIds: Set<number>;
@@ -710,6 +719,7 @@ export class NetworkBridge {
 
   private loadoutUseHandler: LoadoutUseHandler | null = null;
   private persistentBaseRewardPlacementHandler: PersistentBaseRewardPlacementHandler | null = null;
+  private persistentBaseMoveHandler: PersistentBaseMoveHandler | null = null;
   private heldActionHandler: ((
     playerId: string,
     operation: 'start' | 'cancel',
@@ -2533,6 +2543,51 @@ export class NetworkBridge {
       angle: sanitized.angle,
     }, 1200);
     return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
+  }
+
+  /**
+   * Sends one world-bound repositioning request; the host invokes its handler synchronously.
+   *
+   * Deliberately the same round trip as a placement: a move is a single host-authoritative
+   * mutation, and concurrent requests are resolved as first-valid-wins on the host.
+   */
+  async sendPersistentBaseMove(request: PersistentBaseMoveRequest): Promise<LoadoutUseResult> {
+    const sanitized = sanitizePersistentBaseMoveRequest(request);
+    const world = this.getWorldDescriptor();
+    if (!sanitized || !world || sanitized.worldRevision !== world.worldRevision) {
+      return { ok: false, reason: 'blocked' };
+    }
+    if (isHost()) {
+      const handler = this.persistentBaseMoveHandler;
+      return handler?.(myPlayer().id, sanitized) ?? { ok: false, reason: 'blocked' };
+    }
+    const result = await this.callHostRpc('pbmv', {
+      wr: sanitized.worldRevision,
+      rid: sanitized.sourceRuntimeId,
+      sx: sanitized.sourceGridX,
+      sy: sanitized.sourceGridY,
+      tx: sanitized.targetGridX,
+      ty: sanitized.targetGridY,
+    }, 1200);
+    return (result as LoadoutUseResult | undefined) ?? { ok: false, reason: 'invalid' };
+  }
+
+  registerPersistentBaseMoveHandler(handler: PersistentBaseMoveHandler): void {
+    this.persistentBaseMoveHandler = handler;
+    this.registerHostRpcHandler('pbmv', (data: unknown, caller: PlayerState): LoadoutUseResult => {
+      if (!isHost() || !this.acceptsWorldRpc(data)) return { ok: false, reason: 'blocked' };
+      const payload = data as Record<string, unknown>;
+      const request = sanitizePersistentBaseMoveRequest({
+        worldRevision: payload.wr,
+        sourceRuntimeId: payload.rid,
+        sourceGridX: payload.sx,
+        sourceGridY: payload.sy,
+        targetGridX: payload.tx,
+        targetGridY: payload.ty,
+      });
+      if (!request) return { ok: false, reason: 'invalid' };
+      return handler(caller.id, request);
+    });
   }
 
   registerPersistentBaseRewardPlacementHandler(

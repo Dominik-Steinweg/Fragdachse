@@ -1,5 +1,6 @@
 import { COLORS } from '../config';
 import {
+  COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
   getCoopDefenseConstructionDefinition,
   getToolCapacityCost,
   normalizeConstructionId,
@@ -224,6 +225,15 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     const key = radialActionKey(ref);
     if (seen.has(key)) continue;
     seen.add(key);
+    // Verschieben und Einzel-Rueckbau tragen denselben festen Doppelinput-Schutz; der globale
+    // Rueckbau ist eine Halteaktion und kennt keinen Cooldown.
+    const cooldownDurationMs = action === 'dismantle-own-all' ? 0 : COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS;
+    const cooldownUntil = Math.max(0, input.getCooldownUntil?.(ref) ?? 0);
+    const disabledReason = !input.canManage
+      ? 'player-blocked'
+      : cooldownUntil > input.now
+        ? 'cooldown'
+        : undefined;
     entries.push({
       ref,
       category: 'managementAction',
@@ -231,10 +241,10 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
       iconKey: null,
       accentColor: action === 'dismantle-own-all' ? COLORS.GOLD_2 : COLORS.GREY_3,
       visible: true,
-      available: input.canManage,
-      ...(!input.canManage ? { disabledReason: 'player-blocked' as const } : {}),
-      cooldownUntil: 0,
-      cooldownDurationMs: 0,
+      available: disabledReason === undefined,
+      ...(disabledReason ? { disabledReason } : {}),
+      cooldownUntil,
+      cooldownDurationMs,
       sourceOrder: MANAGEMENT_ORDER[action],
     });
   }

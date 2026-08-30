@@ -142,6 +142,8 @@ export class LoadoutManager {
   private inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
   /** Constructions bypass GenericUtility, so their build cooldown is tracked separately. */
   private inspectorConstructionCooldowns = new Map<string, Map<ConstructionId, number>>();
+  /** Kurzer Doppelinput-Schutz je Management-Aktion; derselbe keyed Cooldown-Vertrag wie Bauen. */
+  private readonly managementActionCooldowns = new Map<string, Map<string, number>>();
   private ultimateStates    = new Map<string, UltimateState>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
@@ -300,6 +302,7 @@ export class LoadoutManager {
     });
     this.inspectorUtilities.set(playerId, new Map());
     this.inspectorConstructionCooldowns.set(playerId, new Map());
+    this.managementActionCooldowns.set(playerId, new Map());
     this.ultimateStates.set(playerId, {
       active:    false,
       startTime: 0,
@@ -365,6 +368,7 @@ export class LoadoutManager {
     this.loadouts.delete(playerId);
     this.inspectorUtilities.delete(playerId);
     this.inspectorConstructionCooldowns.delete(playerId);
+    this.managementActionCooldowns.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.temporaryUtilities.clearPlayer(playerId);
@@ -798,6 +802,26 @@ export class LoadoutManager {
     const perPlayer = this.inspectorConstructionCooldowns.get(playerId) ?? new Map<ConstructionId, number>();
     this.inspectorConstructionCooldowns.set(playerId, perPlayer);
     perPlayer.set(constructionId, now + getCoopDefenseConstructionDefinition(constructionId).buildCooldownMs);
+  }
+
+  /**
+   * Endzeitpunkt des Doppelinput-Schutzes einer Management-Aktion.
+   *
+   * Der Wert haengt bewusst an der Aktion und nicht am bewegten Objekt: Verschieben und
+   * Einzel-Rueckbau verwenden denselben festen Schutz, unabhaengig vom Konstruktionstyp.
+   */
+  getManagementActionCooldownUntil(playerId: string, action: string): number {
+    return this.managementActionCooldowns.get(playerId)?.get(action) ?? 0;
+  }
+
+  isManagementActionOnCooldown(playerId: string, action: string, now: number): boolean {
+    return now < this.getManagementActionCooldownUntil(playerId, action);
+  }
+
+  markManagementActionUsed(playerId: string, action: string, now: number, cooldownMs: number): void {
+    const perPlayer = this.managementActionCooldowns.get(playerId) ?? new Map<string, number>();
+    this.managementActionCooldowns.set(playerId, perPlayer);
+    perPlayer.set(action, now + Math.max(0, cooldownMs));
   }
 
   // ── Temporaere Utility-Instanzen ─────────────────────────────────────────

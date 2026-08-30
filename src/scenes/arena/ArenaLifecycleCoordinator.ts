@@ -133,6 +133,7 @@ import {
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
   COOP_DEFENSE_CONSTRUCTION_IDS,
   COOP_DEFENSE_DISMANTLE_RANGE,
+  COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
   getCoopDefenseConstructionDefinition,
   getConstructionIdForUtility,
@@ -177,6 +178,10 @@ import type {
   PersistentBaseRewardSessionState,
 } from '../../persistentBase/PersistentBaseRewardTypes';
 import { sanitizePersistentBaseRewardPlacementRequest } from '../../persistentBase/PersistentBaseRewardTypes';
+import {
+  sanitizePersistentBaseMoveRequest,
+  type PersistentBaseMoveRequest,
+} from '../../persistentBase/PersistentBaseMove';
 import {
   getPersistentBaseBuildAreaExtentCells,
   isCellInsidePersistentBaseBuildArea,
@@ -1409,8 +1414,7 @@ export class ArenaLifecycleCoordinator {
     }
     if (!isKnownPersistentBaseRewardId(sanitizedRequest.rewardId)) return { ok: false, reason: 'invalid' };
     const player = this.ctx.playerManager.getPlayer(playerId);
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    if (!player || !player.active || currentLoadout?.coopDefenseClassId !== 'inspector_gadachs'
+    if (!player || !player.active || !this.mayManagePersistentBase(playerId)
       || !this.getPlayerCapabilities(playerId).canPlace
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {
@@ -1500,24 +1504,34 @@ export class ArenaLifecycleCoordinator {
     // reward remains visible in the radial while the player is dead, burrowed or otherwise
     // unable to place. The action resolver supplies the disabled state; preview/host validation
     // below still enforce the capability contract.
-    if (!site
-      || bridge.getPlayerCurrentLoadoutSnapshot(playerId)?.coopDefenseClassId !== 'inspector_gadachs') return [];
+    if (!site || !this.mayManagePersistentBase(playerId)) return [];
 
     const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
     const availableRewardIds = hostState
       ? getStoredPersistentBaseRewardUnlocks()
       : session?.availableRewardIds;
     const placements = hostState?.placements ?? session?.placements ?? [];
-    const everPlacedRewardIds = hostState?.everPlacedRewardIds
-      ?? session?.everPlacedRewardIds
-      ?? placements.map((placement) => placement.rewardId);
     if (!availableRewardIds) return [];
+    // Kanonisches Placement-Gate nach 3F: freigeschaltet und aktuell nicht platziert. Ein
+    // zurueckgebautes Reward ist damit wieder platzierbar; eine Platzierungshistorie existiert
+    // nicht mehr.
     return availableRewardIds.filter((rewardId) => (
       !placements.some((placement) => placement.rewardId === rewardId)
-      && !everPlacedRewardIds.includes(rewardId)
       && (getPersistentBaseRewardDefinition(rewardId).category !== 'baseTurret'
         || this.isPersistentBaseRuntimeActive(site))
     ));
+  }
+
+  /**
+   * Ob ein Spieler in dieser World ueberhaupt Persistent-Base-Management ausfuehren darf.
+   *
+   * Nach 3F ist das keine Klassenfrage mehr: Base-owned Rewards gehoeren der Host-Basis, nicht
+   * dem ausfuehrenden Spieler, und jede Coop-Defense-Klasse darf sie platzieren, verschieben und
+   * zurueckbauen. Persoenliche Konstruktionen bleiben davon unberuehrt strikt owner-basiert.
+   */
+  private mayManagePersistentBase(playerId: string): boolean {
+    return isCoopDefenseMode(this.resolveConfiguredGameMode())
+      && bridge.getPlayerCurrentLoadoutSnapshot(playerId) !== undefined;
   }
 
   /** Liefert die lokale Reward-Vorschau aus dem verlaesslichen Session-Snapshot. */
@@ -1532,7 +1546,7 @@ export class ArenaLifecycleCoordinator {
     const player = this.ctx.playerManager.getPlayer(playerId);
     const session = bridge.getPersistentBaseRewardSessionState();
     if (!site || !placementSystem || !player || !player.active
-      || bridge.getPlayerCurrentLoadoutSnapshot(playerId)?.coopDefenseClassId !== 'inspector_gadachs'
+      || !this.mayManagePersistentBase(playerId)
       || !this.getPlayerCapabilities(playerId).canPlace
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)
@@ -1616,6 +1630,434 @@ export class ArenaLifecycleCoordinator {
       relativeGridY: relative.relativeGridY,
       angle: preview.angle,
     });
+  }
+
+  // ── Repositioning ─────────────────────────────────────────────────────────
+
+  /**
+   * Vorschau der Quellwahl: Was der Spieler unter dem Cursor verschieben darf.
+   *
+   * Bewusst dieselbe Ownership-Domain wie der Rueckbau: eigene persoenliche Konstruktion oder
+   * ein base-owned Persistent-Base-Reward. Ein fremder Beitrag, authored Weltgeometrie und
+   * nicht als Konstruktion gefuehrte Runtime-Objekte sind keine gueltigen Quellen.
+   */
+  getPersistentBaseMoveSourcePreview(
+    playerId: string,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined {
+    const placementSystem = this.ctx.placementSystem;
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    if (!placementSystem || !player || !player.active
+      || !this.mayManagePersistentBase(playerId)
+      // Dieselben Bedingungen wie beim Host-Commit: Eine Vorschau darf nie gueltig aussehen,
+      // wenn der Host die Aktion anschliessend ablehnen wuerde.
+      || !this.getPlayerCapabilities(playerId).canDismantle
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)) return undefined;
+    const preview = placementSystem.getManagementSourcePreview(
+      playerId,
+      player.x,
+      player.y,
+      pointerX,
+      pointerY,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+      'move-source',
+    );
+    if (!preview) return undefined;
+    const source = preview.sourceRuntimeId === undefined
+      ? undefined
+      : placementSystem.getRuntimeRock(preview.sourceRuntimeId);
+    return { ...preview, isValid: this.isMovablePersistentBaseSource(playerId, source) };
+  }
+
+  /** Zielvorschau einer bereits gewaehlten Quelle; ohne gueltige Quelle gibt es keine Vorschau. */
+  getPersistentBaseMoveTargetPreview(
+    playerId: string,
+    sourceRuntimeId: number,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined {
+    const placementSystem = this.ctx.placementSystem;
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    const site = this.ctx.world?.persistentBaseSite ?? null;
+    if (!placementSystem || !player || !player.active
+      || !this.mayManagePersistentBase(playerId)
+      // Dieselben Bedingungen wie beim Host-Commit: Eine Vorschau darf nie gueltig aussehen,
+      // wenn der Host die Aktion anschliessend ablehnen wuerde.
+      || !this.getPlayerCapabilities(playerId).canDismantle
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)) return undefined;
+    const source = placementSystem.getRuntimeRock(sourceRuntimeId);
+    if (!this.isMovablePersistentBaseSource(playerId, source) || !source) return undefined;
+
+    const rewardId = source.persistentRewardId;
+    if (rewardId !== undefined) {
+      if (!site || !isKnownPersistentBaseRewardId(rewardId)) return undefined;
+      return this.buildPersistentBaseRewardMovePreview(site, rewardId, source, player, pointerX, pointerY);
+    }
+
+    const constructionId = normalizeConstructionId(source.constructionId);
+    if (!constructionId) return undefined;
+    const definition = getCoopDefenseConstructionDefinition(constructionId);
+    const preview = placementSystem.getConstructionPlacementPreview(
+      definition,
+      player.x,
+      player.y,
+      pointerX,
+      pointerY,
+      source.id,
+    );
+    if (!preview) return undefined;
+    // Ein persistenter Beitrag ist genau ein Beitrag innerhalb des Baubereichs. Verliesse er
+    // ihn, koennte der Store ihn nicht mehr halten - das waere ein Abriss und kein Move.
+    const staysPersistent = !this.isPersistentBaseBuildAreaCell(site, source.gridX, source.gridY)
+      || this.isPersistentBaseBuildAreaCell(site, preview.gridX, preview.gridY);
+    return { ...preview, isValid: preview.isValid && staysPersistent, mode: 'move-target', sourceRuntimeId };
+  }
+
+  /** Sendet eine Zielvorschau ueber den dedizierten Move-Pfad zum Host. */
+  async requestPersistentBaseMove(
+    sourceRuntimeId: number,
+    preview: Pick<UtilityPlacementPreviewState, 'gridX' | 'gridY'>,
+  ): Promise<LoadoutUseResult> {
+    const world = bridge.getWorldDescriptor();
+    const source = this.ctx.placementSystem?.getRuntimeRock(sourceRuntimeId);
+    if (!world || !source) return { ok: false, reason: 'blocked' };
+    return bridge.sendPersistentBaseMove({
+      worldRevision: world.worldRevision,
+      sourceRuntimeId,
+      sourceGridX: source.gridX,
+      sourceGridY: source.gridY,
+      targetGridX: preview.gridX,
+      targetGridY: preview.gridY,
+    });
+  }
+
+  /**
+   * Host-Einstiegspunkt fuer das Verschieben persistenter Basisobjekte.
+   *
+   * Der Host validiert vollstaendig neu, bevor er mutiert; konkurrierende Anfragen entscheidet
+   * damit die erste vom Host akzeptierte Mutation. Ein Fehlschlag laesst die Quelle in jedem
+   * Fall unveraendert - es entsteht kein teilweise verschobener Zustand.
+   */
+  movePersistentBaseObject(playerId: string, request: PersistentBaseMoveRequest): LoadoutUseResult {
+    if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
+    const sanitized = sanitizePersistentBaseMoveRequest(request);
+    if (!sanitized) return { ok: false, reason: 'invalid' };
+    const world = bridge.getWorldDescriptor();
+    const placementSystem = this.ctx.placementSystem;
+    if (!world || !placementSystem || sanitized.worldRevision !== world.worldRevision) {
+      return { ok: false, reason: 'blocked' };
+    }
+    const player = this.ctx.playerManager.getPlayer(playerId);
+    if (!player || !player.active
+      || !this.mayManagePersistentBase(playerId)
+      || !this.getPlayerCapabilities(playerId).canDismantle
+      || !this.ctx.combatSystem.isAlive(playerId)
+      || this.ctx.combatSystem.isBurrowed(playerId)) {
+      return { ok: false, reason: 'blocked' };
+    }
+    const now = Date.now();
+    if (this.ctx.loadoutManager?.isManagementActionOnCooldown(playerId, 'reposition', now)) {
+      return { ok: false, reason: 'cooldown' };
+    }
+
+    const source = placementSystem.getRuntimeRock(sanitized.sourceRuntimeId);
+    // Die Quelle muss beim Commit noch dasselbe Objekt an derselben Zelle sein; sonst wurde sie
+    // zwischen Vorschau und Bestaetigung zerstoert, zurueckgebaut oder ersetzt.
+    if (!source
+      || source.gridX !== sanitized.sourceGridX
+      || source.gridY !== sanitized.sourceGridY
+      || !this.isMovablePersistentBaseSource(playerId, source)) {
+      return { ok: false, reason: 'blocked' };
+    }
+
+    // Zielpruefung ueber genau dieselbe Vorschau, die auch der Client sieht: Der Host baut damit
+    // keine zweite, vereinfachte Placement-Regel nach.
+    const targetWorld = placementSystem.getWorldPointForCell(sanitized.targetGridX, sanitized.targetGridY);
+    const preview = this.getPersistentBaseMoveTargetPreview(
+      playerId,
+      source.id,
+      targetWorld.x,
+      targetWorld.y,
+    );
+    if (!preview
+      || !preview.isValid
+      || preview.gridX !== sanitized.targetGridX
+      || preview.gridY !== sanitized.targetGridY) {
+      return { ok: false, reason: 'placement' };
+    }
+
+    const result = source.persistentRewardId === undefined
+      ? this.hostMovePersonalConstruction(playerId, source, preview)
+      : this.hostMovePersistentBaseReward(source, preview);
+    if (result.ok) this.markManagementActionUsed(playerId, 'reposition', now);
+    return result;
+  }
+
+  /** Eigene persoenliche Konstruktion: Runtime und Blueprint wandern gemeinsam auf die neue Zelle. */
+  private hostMovePersonalConstruction(
+    playerId: string,
+    source: SyncedPlaceableRock,
+    preview: UtilityPlacementPreviewState,
+  ): LoadoutUseResult {
+    const placementSystem = this.ctx.placementSystem;
+    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const store = this.ctx.persistentBaseContributions;
+    const constructionId = normalizeConstructionId(source.constructionId);
+    if (!placementSystem || !constructionId) return { ok: false, reason: 'blocked' };
+    const footprint = getCoopDefenseConstructionDefinition(constructionId).footprint;
+    const previous: SyncedPlaceableRock = { ...source };
+
+    const relocated = placementSystem.relocateRock(
+      source.id,
+      preview.gridX,
+      preview.gridY,
+      preview.angle,
+      footprint,
+    );
+    if (!relocated) return { ok: false, reason: 'placement' };
+
+    const binding = store?.getRuntimeBindings().find((entry) => entry.runtimeId === source.id);
+    if (binding && store && site) {
+      const moved = store.moveConstruction(
+        binding.ownerId,
+        binding.blueprint.persistentId,
+        {
+          relativeGridX: preview.gridX - site.anchor.gridX,
+          relativeGridY: preview.gridY - site.anchor.gridY,
+          angle: preview.angle,
+        },
+        footprint,
+        site.buildArea,
+      );
+      if (!moved) {
+        placementSystem.relocateRock(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
+        return { ok: false, reason: 'placement' };
+      }
+      if (!store.hasActiveMission) this.publishImmediatePersistentBaseContribution(binding.ownerId);
+    }
+
+    const targetWorld = this.rockVisualHelper.gridToWorld(relocated.gridX, relocated.gridY);
+    if (previous.kind === 'pedestal') {
+      this.ctx.powerUpSystem?.repositionConstructionPedestal(source.id, targetWorld.x, targetWorld.y);
+    }
+    this.relocatePlaceableRuntimePresentation(previous, relocated);
+    this.ctx.gameAudioSystem.playSound('sfx_place_rock', targetWorld.x, targetWorld.y, playerId);
+    // Die freigewordene Quellzelle kann eine bisher verdraengte Konstruktion wieder tragen.
+    this.hostRefreshPersistentBaseComposite();
+    return { ok: true };
+  }
+
+  /** Base-owned Reward: Store-Placement, Runtime, Podest und Composite wandern in einem Schritt. */
+  private hostMovePersistentBaseReward(
+    source: SyncedPlaceableRock,
+    preview: UtilityPlacementPreviewState,
+  ): LoadoutUseResult {
+    const placementSystem = this.ctx.placementSystem;
+    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const store = this.ctx.persistentBaseRewards;
+    const rewardId = source.persistentRewardId;
+    if (!placementSystem || !site || !store || rewardId === undefined) return { ok: false, reason: 'blocked' };
+    const previousPlacement = store.getState().placements.find((entry) => entry.rewardId === rewardId);
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY);
+    if (!previousPlacement || !relative) return { ok: false, reason: 'placement' };
+
+    // Ein Reward hat hoehere Composite-Prioritaet als persoenliche Beitraege. Verdraengt wird nur
+    // das Runtime-Objekt; der Blueprint seines Besitzers bleibt gespeichert.
+    const occupant = placementSystem.getRuntimeRockAt(preview.gridX, preview.gridY);
+    let displacedPersonalRuntime = false;
+    if (occupant && occupant.id !== source.id && occupant.ownership !== 'base-owned') {
+      const isPersistentContribution = this.ctx.persistentBaseContributions?.getRuntimeBindings()
+        .some((binding) => binding.runtimeId === occupant.id) === true;
+      if (!isPersistentContribution) return { ok: false, reason: 'placement' };
+      this.releasePersonalRuntimeForRewardConflict(occupant.id);
+      displacedPersonalRuntime = true;
+    }
+
+    const previous: SyncedPlaceableRock = { ...source };
+    if (!store.moveReward({
+      rewardId,
+      relativeGridX: relative.relativeGridX,
+      relativeGridY: relative.relativeGridY,
+      angle: preview.angle,
+    })) {
+      if (displacedPersonalRuntime) this.hostRefreshPersistentBaseComposite();
+      return { ok: false, reason: 'blocked' };
+    }
+    const relocated = placementSystem.relocateRock(source.id, preview.gridX, preview.gridY, preview.angle);
+    if (!relocated) {
+      store.moveReward(previousPlacement);
+      this.hostRefreshPersistentBaseComposite();
+      return { ok: false, reason: 'placement' };
+    }
+
+    this.persistentBaseRewardRuntimeBindings.set(rewardId, {
+      runtimeId: relocated.id,
+      gridX: relocated.gridX,
+      gridY: relocated.gridY,
+    });
+    if (previous.kind === 'pedestal') {
+      const world = this.rockVisualHelper.gridToWorld(relocated.gridX, relocated.gridY);
+      this.ctx.powerUpSystem?.repositionPersistentBaseRewardPedestal(rewardId, world.x, world.y);
+    }
+    this.relocatePlaceableRuntimePresentation(previous, relocated);
+    this.persistCurrentCommittedPersistentBaseRewards();
+    this.publishPersistentBaseRewardSessionState();
+    // Ein einziger Composite-Lauf gegen den neuen Zustand: Die Quellzelle wird wieder frei, die
+    // Zielzelle bleibt reserviert.
+    this.hostRefreshPersistentBaseComposite();
+    return { ok: true };
+  }
+
+  /** Gueltige Move-Quelle: eigenes Konstrukt oder base-owned Persistent-Base-Reward. */
+  private isMovablePersistentBaseSource(
+    playerId: string,
+    source: SyncedPlaceableRock | undefined,
+  ): boolean {
+    if (!source) return false;
+    if (source.ownership === 'base-owned') {
+      return source.persistentRewardId !== undefined
+        && isKnownPersistentBaseRewardId(source.persistentRewardId);
+    }
+    return source.ownerId === playerId
+      && normalizeConstructionId(source.constructionId) !== null
+      && source.expiresAt <= 0;
+  }
+
+  /** True, wenn diese absolute Rasterzelle im aktiven Baubereich der persistenten Basis liegt. */
+  private isPersistentBaseBuildAreaCell(
+    site: WorldPersistentBaseSite | null,
+    gridX: number,
+    gridY: number,
+  ): boolean {
+    return site !== null && isCellInsidePersistentBaseBuildArea(
+      gridX - site.anchor.gridX,
+      gridY - site.anchor.gridY,
+      site.buildArea,
+    );
+  }
+
+  /** Zielvorschau eines bereits platzierten Rewards; seine eigene Zelle ist kein Zielkonflikt. */
+  private buildPersistentBaseRewardMovePreview(
+    site: WorldPersistentBaseSite,
+    rewardId: PersistentBaseRewardId,
+    source: SyncedPlaceableRock,
+    player: { readonly x: number; readonly y: number },
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined {
+    const placementSystem = this.ctx.placementSystem;
+    if (!placementSystem) return undefined;
+    const definition = getPersistentBaseRewardDefinition(rewardId);
+    const targetCell = placementSystem.getClampedTargetCell(
+      player.x,
+      player.y,
+      pointerX,
+      pointerY,
+      COOP_DEFENSE_DISMANTLE_RANGE,
+    );
+    if (!targetCell) return undefined;
+    const relative = this.resolvePersistentBaseRewardRelativeCell(site, targetCell.gridX, targetCell.gridY);
+    const angle = Math.atan2(targetCell.y - player.y, targetCell.x - player.x);
+    const placement: PersistentBaseRewardPlacement | null = relative
+      ? {
+          rewardId,
+          relativeGridX: relative.relativeGridX,
+          relativeGridY: relative.relativeGridY,
+          angle,
+        }
+      : null;
+    const session = bridge.getPersistentBaseRewardSessionState();
+    const placements = (bridge.isHost() ? this.ctx.persistentBaseRewards?.getState().placements : undefined)
+      ?? session?.placements
+      ?? [];
+    const duplicateCell = placement !== null && placements.some((candidate) => {
+      if (candidate.rewardId === rewardId) return false;
+      const occupied = this.resolvePersistentBaseRewardCell(site, candidate);
+      return occupied?.gridX === targetCell.gridX && occupied.gridY === targetCell.gridY;
+    });
+    const occupant = placementSystem.getRuntimeRockAt(targetCell.gridX, targetCell.gridY);
+    const persistentContribution = occupant
+      ? this.ctx.persistentBaseContributions?.getRuntimeBindings()
+        .some((binding) => binding.runtimeId === occupant.id) === true
+      : false;
+    const conflictAllowed = !occupant
+      || occupant.id === source.id
+      || occupant.ownership === 'base-owned'
+      || persistentContribution;
+    const isValid = placement !== null
+      && this.isPersistentBaseRewardPlacementInDomain(definition, site, placement)
+      && !duplicateCell
+      && conflictAllowed
+      && (definition.category !== 'baseTurret' || this.isPersistentBaseRuntimeActive(site))
+      && placementSystem.canMaterializePersistentBaseRewardCell(
+        targetCell.gridX,
+        targetCell.gridY,
+        true,
+        source.id,
+      );
+    return {
+      angle,
+      targetX: targetCell.x,
+      targetY: targetCell.y,
+      gridX: targetCell.gridX,
+      gridY: targetCell.gridY,
+      isValid,
+      frame: 0,
+      range: COOP_DEFENSE_DISMANTLE_RANGE,
+      kind: definition.category === 'baseTurret' ? 'turret' : 'pedestal',
+      sourceSlot: 'utility',
+      constructionId: definition.gameplaySource.kind === 'construction-definition'
+        ? definition.gameplaySource.constructionId
+        : undefined,
+      powerUpDefId: definition.gameplaySource.kind === 'power-up-definition'
+        ? definition.gameplaySource.powerUpDefId
+        : undefined,
+      mode: 'move-target',
+      sourceRuntimeId: source.id,
+    };
+  }
+
+  /**
+   * Setzt die Darstellung eines verschobenen Runtime-Objekts auf seine neue Zelle um.
+   *
+   * Nur Darstellung: Runtime-ID, HP, Besitz und alle registrierten Systemreferenzen bleiben
+   * bestehen. `releasePlaceableRuntime` waere hier ausdruecklich falsch - es wuerde Podeste und
+   * Zielverfolgung abmelden, die dieser Move gerade erhalten soll.
+   */
+  private relocatePlaceableRuntimePresentation(
+    previous: SyncedPlaceableRock,
+    next: SyncedPlaceableRock,
+  ): void {
+    this.rockVisualHelper.removePlaceableRockVisual(previous, false);
+    this.rockVisualHelper.materializePlaceableRock(next, false);
+    // Zwei Zellen haben sich geaendert; die unvollstaendige Payload erzwingt bewusst genau einen
+    // Flowfield-/Fire-Resync fuer beide.
+    emitArenaMapGridChanged(this.scene.game.events, {
+      reason: 'placeables_batch_removed',
+      source: next.kind === 'rock'
+        ? 'placeable_rock'
+        : next.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
+    });
+  }
+
+  /** Startet den kurzen Doppelinput-Schutz einer Management-Aktion und repliziert ihn. */
+  private markManagementActionUsed(playerId: string, action: 'reposition' | 'dismantle', now: number): void {
+    this.ctx.loadoutManager?.markManagementActionUsed(
+      playerId,
+      action,
+      now,
+      COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
+    );
+    // Ueber denselben keyed Kanal wie Utility- und Bau-Cooldowns, damit das Radial denselben
+    // echten Zustand darstellt.
+    bridge.publishUtilityCooldownUntil(
+      playerId,
+      now + COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
+      `management:${action}`,
+    );
   }
 
   /** Host callback fuer den atomaren Rollenwechsel; kein CombatSystem-Tod. */
@@ -4813,7 +5255,6 @@ export class ArenaLifecycleCoordinator {
       worldRevision: world.worldRevision,
       availableRewardIds,
       placements: state.placements,
-      everPlacedRewardIds: state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId),
     });
     if (signature === this.persistentBaseRewardSessionSignature) return;
     this.persistentBaseRewardSessionSignature = signature;
@@ -4826,7 +5267,6 @@ export class ArenaLifecycleCoordinator {
       revision: this.persistentBaseRewardSessionRevision,
       availableRewardIds,
       placements: state.placements,
-      everPlacedRewardIds: state.everPlacedRewardIds ?? state.placements.map((placement) => placement.rewardId),
     };
     bridge.publishPersistentBaseRewardSessionState(session);
   }
@@ -6322,14 +6762,7 @@ export class ArenaLifecycleCoordinator {
   ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    const isInspector = currentLoadout?.coopDefenseClassId === 'inspector_gadachs';
-    const hasConstructionTool = getActiveConstructionToolRefs(
-      getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
-    ).length > 0;
-    if (!isInspector && !hasConstructionTool) {
-      return { ok: false, reason: 'blocked' };
-    }
+    if (!this.mayManagePersistentBase(playerId)) return { ok: false, reason: 'blocked' };
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (
       !player
@@ -6338,6 +6771,10 @@ export class ArenaLifecycleCoordinator {
       || this.ctx.combatSystem.isBurrowed(playerId)
     ) {
       return { ok: false, reason: 'blocked' };
+    }
+    const now = Date.now();
+    if (this.ctx.loadoutManager?.isManagementActionOnCooldown(playerId, 'dismantle', now)) {
+      return { ok: false, reason: 'cooldown' };
     }
     const cell = this.ctx.placementSystem?.getClampedTargetCell(
       player.x,
@@ -6351,8 +6788,11 @@ export class ArenaLifecycleCoordinator {
     const persistentRewardId = target?.ownership === 'base-owned'
       ? target.persistentRewardId
       : undefined;
+    // Base-owned Rewards gehoeren der Basis: Jeder berechtigte Coop-Spieler darf sie
+    // zurueckbauen. Persoenliche Konstruktionen bleiben strikt owner-basiert; darueber
+    // entscheidet allein die Ownership-Pruefung in `removeRockAt`.
     if (persistentRewardId !== undefined) {
-      if (!isInspector || !isKnownPersistentBaseRewardId(persistentRewardId)
+      if (!isKnownPersistentBaseRewardId(persistentRewardId)
         || !this.ctx.persistentBaseRewards?.getState().placements.some(
           (placement) => placement.rewardId === persistentRewardId,
         )) {
@@ -6368,6 +6808,7 @@ export class ArenaLifecycleCoordinator {
     );
     if (!removed) return { ok: false, reason: 'blocked' };
 
+    this.markManagementActionUsed(playerId, 'dismantle', now);
     this.finalizeDismantledConstruction(removed, true);
     this.ctx.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
     emitArenaMapGridChanged(this.scene.game.events, {
@@ -6386,9 +6827,10 @@ export class ArenaLifecycleCoordinator {
   dismantleAllInspectorConstructions(playerId: string): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
     const player = this.ctx.playerManager.getPlayer(playerId);
-    if (getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout)).length === 0
+    // Der globale Rueckbau steht allen Coop-Klassen offen und entfernt ausschliesslich die
+    // eigenen persoenlichen Konstruktionen; Base Rewards und fremde Beitraege bleiben unberuehrt.
+    if (!this.mayManagePersistentBase(playerId)
       || !player?.active
       || !this.ctx.combatSystem.isAlive(playerId)
       || this.ctx.combatSystem.isBurrowed(playerId)) {

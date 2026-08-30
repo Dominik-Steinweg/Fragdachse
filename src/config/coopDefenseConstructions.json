@@ -1,6 +1,6 @@
 {
   "rock_barrier": { "buildCooldownMs": 100 },
-  "spore_turret": { "buildCooldownMs": 10000 },
+  "spore_turret": { "buildCooldownMs": 100 },
   "rocket_turret": { "buildCooldownMs": 100 },
   "machine_gun_turret": { "buildCooldownMs": 100 },
   "flame_turret": { "buildCooldownMs": 100 },

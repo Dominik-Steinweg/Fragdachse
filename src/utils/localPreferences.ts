@@ -814,8 +814,6 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   if (!personalBaseContribution || personalBaseContribution.ownerId !== ownerId) return null;
   if (persistentBaseRewardState.placements.some((placement) => (
     !persistentBaseRewardUnlocks.includes(placement.rewardId)
-  )) || (persistentBaseRewardState.everPlacedRewardIds ?? []).some((rewardId) => (
-    !persistentBaseRewardUnlocks.includes(rewardId)
   ))) return null;
   if (coop.selectedClassId !== undefined && !COOP_DEFENSE_CLASS_IDS.includes(coop.selectedClassId as CoopDefenseClassId)) return null;
   const defaultCompact = sanitizeCompactProfile(coop.defaultProfile);
@@ -1406,8 +1404,7 @@ export function restoreStoredCoopDefenseProgress(progress: CoopDefenseProgressPr
   const rewardUnlocks = sanitizePersistentBaseRewardIds(progress.persistentBaseRewardUnlocks);
   const rewardState = sanitizePersistentBaseRewardState(progress.persistentBaseRewardState);
   if (!rewardUnlocks || !rewardState
-    || rewardState.placements.some((placement) => !rewardUnlocks.includes(placement.rewardId))
-    || (rewardState.everPlacedRewardIds ?? []).some((rewardId) => !rewardUnlocks.includes(rewardId))) return;
+    || rewardState.placements.some((placement) => !rewardUnlocks.includes(placement.rewardId))) return;
   updatePreferences((current) => ({
     ...current,
     progression: {
@@ -1566,8 +1563,6 @@ export function setStoredPersistentBaseRewardState(state: PersistentBaseRewardSt
   const progress = current.progression.coopDefense;
   if (sanitized.placements.some((placement) => (
     !progress.persistentBaseRewardUnlocks.includes(placement.rewardId)
-  )) || (sanitized.everPlacedRewardIds ?? []).some((rewardId) => (
-    !progress.persistentBaseRewardUnlocks.includes(rewardId)
   ))) return false;
   if (sanitized.revision <= progress.persistentBaseRewardState.revision) return false;
   writePreferences({

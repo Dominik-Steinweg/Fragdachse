@@ -1003,8 +1003,15 @@ export interface UtilityPlacementPreviewState {
   constructionId?: ConstructionId;
   /** Missions-Podest: welches Power-Up auf dem Runtime-Podest erscheint. */
   powerUpDefId?: string;
-  /** 'dismantle' markiert ein eigenes Konstrukt zum Rueckbau statt eine Bauflaeche. */
-  mode?: 'place' | 'dismantle';
+  /**
+   * Fachliche Bedeutung der Vorschau.
+   *
+   * 'dismantle' und 'move-source' markieren ein vorhandenes Objekt statt einer Bauflaeche;
+   * 'move-target' ist die Zielvorschau eines bereits gewaehlten Verschiebe-Objekts.
+   */
+  mode?: 'place' | 'dismantle' | 'move-source' | 'move-target';
+  /** Runtime-Objekt unter dem Cursor; nur bei Quell-Vorschauen gesetzt. */
+  sourceRuntimeId?: number;
 }
 
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */

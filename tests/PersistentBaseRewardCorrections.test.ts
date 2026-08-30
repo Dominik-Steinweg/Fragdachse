@@ -403,7 +403,6 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
 
     expect(result).toEqual({ ok: false, reason: 'placement' });
     expect(rewardStore.getState().placements).toEqual([]);
-    expect(rewardStore.getState().everPlacedRewardIds).toEqual([]);
     expect(contributionStore.getCommittedContribution(ownerId)).toEqual(contribution);
     expect(contributionStore.isMaterialized(ownerId, blueprint.persistentId)).toBe(true);
     expect(rocks.get(17)).toBeUndefined();
@@ -441,7 +440,6 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     coordinator.materializePersistentBaseRewards(site);
     expect([...rocks.values()]).toEqual([]);
     expect(rewardStore.getState().placements).toHaveLength(1);
-    expect(rewardStore.getState().everPlacedRewardIds).toEqual(['base_spore_turret']);
     expect(coordinator.persistentBaseRewardRuntimeBindings.size).toBe(0);
 
     coordinator.materializePersistentBaseRewards(site);

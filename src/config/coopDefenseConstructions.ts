@@ -132,6 +132,15 @@ const COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS = loadConstructionBuildCooldowns
 /** Reichweite, in der eigene Konstrukte zurueckgebaut werden koennen. */
 export const COOP_DEFENSE_DISMANTLE_RANGE = 320;
 
+/**
+ * Fester Doppelinput-Schutz fuer Verschieben und Einzel-Rueckbau.
+ *
+ * Bewusst unabhaengig vom Objekttyp und nicht aus einem individuellen Build-Cooldown abgeleitet:
+ * Management kostet keine Ressourcen, der Wert schuetzt nur vor einem versehentlich doppelt
+ * ausgeloesten Klick.
+ */
+export const COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS = 100;
+
 const SINGLE_CELL_FOOTPRINT = Object.freeze([{ dx: 0, dy: 0 }]);
 
 export const COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS = 3;

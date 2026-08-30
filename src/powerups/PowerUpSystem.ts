@@ -265,6 +265,11 @@ export class PowerUpSystem {
     return true;
   }
 
+  /** Verschiebt ein gebautes Podest samt vorhandenem Item, ohne seinen Respawn-Zyklus anzutasten. */
+  repositionConstructionPedestal(constructionId: number, x: number, y: number): boolean {
+    return this.movePedestal(this.constructionPedestalIds.get(constructionId), x, y);
+  }
+
   /** Entfernt ein gebautes Podest samt eventuell darauf liegendem Item. */
   unregisterConstructionPedestal(constructionId: number): boolean {
     const pedestalId = this.constructionPedestalIds.get(constructionId);
@@ -306,6 +311,45 @@ export class PowerUpSystem {
     this.persistentRewardPedestalIds.set(persistentRewardId, pedestalId);
     this.pendingPedestalRemovalIds.delete(pedestalId);
     this.spawnPedestalItem(pedestal);
+    return true;
+  }
+
+  /**
+   * Moves a persistent reward pedestal to a new world position.
+   *
+   * Deliberately not `unregister` + `register`: that path would allocate a new pedestal runtime
+   * id, drop the current item and restart the respawn cycle. A move keeps the pedestal identity,
+   * `currentUid`, `nextRespawnAt` and the respawn configuration; a power-up that still exists
+   * travels with the pedestal under the same uid, and one collected in the meantime is not
+   * recreated.
+   */
+  repositionPersistentBaseRewardPedestal(
+    persistentRewardId: PersistentBaseRewardId,
+    x: number,
+    y: number,
+  ): boolean {
+    return this.movePedestal(this.persistentRewardPedestalIds.get(persistentRewardId), x, y);
+  }
+
+  private movePedestal(pedestalId: number | undefined, x: number, y: number): boolean {
+    if (pedestalId === undefined) return false;
+    const pedestal = this.pedestals.get(pedestalId);
+    if (!pedestal || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+    pedestal.x = x;
+    pedestal.y = y;
+    const item = pedestal.currentUid === null ? undefined : this.worldItems.get(pedestal.currentUid);
+    if (item) {
+      item.x = x;
+      item.y = y;
+      // Der Delta-Cache haelt die zuletzt gesendete Position; ohne dieses Verwerfen bliebe das
+      // Item bei den Clients bis zum naechsten Vollsnapshot an seiner alten Stelle liegen.
+      this.netSnapshotCache.delete(item.uid);
+    } else if (pedestal.currentUid !== null) {
+      // Das Item ist zwischen Vorschau und Commit verschwunden; der laufende Respawn-Timer
+      // gehoert weiterhin diesem Podest und wird nicht neu gestartet.
+      pedestal.currentUid = null;
+    }
+    this.pedestalNetCache.delete(pedestalId);
     return true;
   }
 
@@ -756,8 +800,9 @@ export class PowerUpSystem {
 
     for (const entry of this.getPedestalSnapshot()) {
       currentIds.add(entry.id);
-      // Position/Typ sind statisch – nur der veränderliche Zustand bestimmt die Delta-Signatur.
-      const signature = `${entry.ownerColor ?? ''}:${entry.hasPowerUp ? 1 : 0}:${entry.nextRespawnAt}`;
+      // Ein Reward-Podest kann verschoben werden, deshalb gehoert seine Position mit in die
+      // Delta-Signatur; ohne sie bliebe es bei Clients bis zum naechsten Vollsnapshot stehen.
+      const signature = `${entry.x}:${entry.y}:${entry.ownerColor ?? ''}:${entry.hasPowerUp ? 1 : 0}:${entry.nextRespawnAt}`;
       if (full || this.pedestalNetCache.get(entry.id) !== signature) {
         upserts.push(entry);
         this.pedestalNetCache.set(entry.id, signature);

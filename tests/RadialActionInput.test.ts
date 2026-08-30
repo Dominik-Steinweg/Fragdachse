@@ -672,6 +672,109 @@ describe('Radial Menu V2 input', () => {
     expect(menu.open).toHaveBeenCalledTimes(1);
   });
 
+  it('confirms a move in two stages and keeps the reposition action selected afterwards', () => {
+    const { system, keys } = createSystem();
+    const sourcePreview = {
+      angle: 0, targetX: 10, targetY: 10, gridX: 4, gridY: 4,
+      isValid: true, frame: 0, range: 320, kind: 'rock' as const,
+      mode: 'move-source' as const, sourceRuntimeId: 77,
+    };
+    const targetPreview = {
+      angle: 0, targetX: 20, targetY: 20, gridX: 6, gridY: 5,
+      isValid: true, frame: 0, range: 320, kind: 'rock' as const,
+      mode: 'move-target' as const, sourceRuntimeId: 77,
+    };
+    const requestMove = vi.fn(() => Promise.resolve({ ok: true as const }));
+    system.setupRadialActionProviders(
+      () => [],
+      () => null,
+      () => undefined,
+      () => false,
+      undefined,
+      undefined,
+      () => 0,
+      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      () => ['reposition'],
+    );
+    system.setupRepositionActionProvider(
+      () => sourcePreview,
+      (sourceRuntimeId) => (sourceRuntimeId === 77 ? targetPreview : undefined),
+      requestMove,
+    );
+    system.setupLoadoutListener(vi.fn());
+    Object.assign(system as never as Record<string, unknown>, {
+      selectedRadialAction: { kind: 'management', action: 'reposition' },
+    });
+
+    keys.keyE.justDown = true;
+    keys.keyE.isDown = true;
+    system.update();
+    expect(system.isRepositionActive()).toBe(true);
+    expect(system.getConstructionPlacementPreviewState()).toBe(sourcePreview);
+
+    // Erste Bestaetigung waehlt nur die Quelle; das Original bleibt unveraendert in der Welt.
+    system.update();
+    expect(requestMove).not.toHaveBeenCalled();
+    expect(system.getConstructionPlacementPreviewState()).toBe(targetPreview);
+
+    // Zweite Bestaetigung schickt den Move; die Aktion bleibt danach ausgewaehlt.
+    system.update();
+    expect(requestMove).toHaveBeenCalledTimes(1);
+    expect(requestMove.mock.calls[0]).toEqual([77, targetPreview]);
+    expect(system.isRepositionActive()).toBe(false);
+    expect((system as never as { selectedRadialAction: unknown }).selectedRadialAction)
+      .toEqual({ kind: 'management', action: 'reposition' });
+  });
+
+  it('sends no move request for an invalid target and leaves the source untouched', () => {
+    const { system, keys } = createSystem();
+    const sourcePreview = {
+      angle: 0, targetX: 10, targetY: 10, gridX: 4, gridY: 4,
+      isValid: true, frame: 0, range: 320, kind: 'rock' as const,
+      mode: 'move-source' as const, sourceRuntimeId: 77,
+    };
+    const requestMove = vi.fn(() => Promise.resolve({ ok: true as const }));
+    system.setupRadialActionProviders(
+      () => [], () => null, () => undefined, () => false, undefined, undefined,
+      () => 0,
+      () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+      () => ['reposition'],
+    );
+    system.setupRepositionActionProvider(
+      () => sourcePreview,
+      () => ({ ...sourcePreview, mode: 'move-target' as const, isValid: false }),
+      requestMove,
+    );
+    system.setupLoadoutListener(vi.fn());
+    Object.assign(system as never as Record<string, unknown>, {
+      selectedRadialAction: { kind: 'management', action: 'reposition' },
+    });
+
+    keys.keyE.justDown = true;
+    keys.keyE.isDown = true;
+    system.update();
+    system.update();
+    system.update();
+
+    expect(requestMove).not.toHaveBeenCalled();
+    expect(system.isRepositionActive()).toBe(true);
+  });
+
+  it('ends a running move preview when its source is gone', () => {
+    const { system } = createSystem();
+    system.setupRepositionActionProvider(() => undefined, () => undefined, vi.fn());
+    system.setupLoadoutListener(vi.fn());
+    Object.assign(system as never as Record<string, unknown>, {
+      selectedRadialAction: { kind: 'management', action: 'reposition' },
+      repositionActive: true,
+      repositionSourceRuntimeId: 77,
+    });
+
+    system.update();
+
+    expect(system.isRepositionActive()).toBe(false);
+  });
+
   it('consumes an RMB cancel gesture until release before weapon 2 can fire', () => {
     const { system, pointerState } = createSystem();
     const uses = vi.fn();

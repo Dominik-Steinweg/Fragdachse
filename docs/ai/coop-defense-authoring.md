@@ -52,6 +52,29 @@ Runtime-IDs, HP, Cooldowns und temporäre Beziehungsdaten bleiben aus dem Bluepr
 authored Site liefert den Anker; die aktive Build Area kommt aus der World-Stage. Generator-
 Reservation und Baurecht bleiben getrennte Begriffe.
 
+Verwaltungsrechte hängen an der Herkunft des Objekts, nicht an der Klasse des handelnden Spielers.
+Ein base-owned Reward gehört der Host-Basis; jeder berechtigte Coop-Spieler darf es platzieren,
+verschieben und zurückbauen, ohne dadurch persönliches Ownership zu erwerben. Persönliche
+Konstruktionen bleiben davon unberührt strikt owner-basiert, und der globale Rückbau entfernt
+ausschließlich die eigenen Beiträge des auslösenden Spielers. Die Platzierbarkeit eines Rewards
+leitet sich ausschließlich aus Freischaltung und aktuellem Placement ab: Ein zurückgebautes Reward
+ist wieder platzierbar, und es gibt bewusst kein historisches Placeability-Feld.
+
+Das Verschieben ist eine atomare Mutation des vorhandenen Objekts und ausdrücklich kein Rückbau
+mit anschließendem Neubau. Die Runtime behält ihre ID, HP und alle Systemregistrierungen
+([`PlacementSystem.relocateRock`](../../src/systems/PlacementSystem.ts)); der Blueprint behält
+`persistentId`, Owner und `placementOrder`
+([`PersistentBaseContributionStore.moveConstruction`](../../src/persistentBase/PersistentBaseContributionStore.ts)),
+ein Reward seine Identität und Freischaltung
+([`PersistentBaseRewardStore.moveReward`](../../src/persistentBase/PersistentBaseRewardStore.ts)),
+und ein Reward-Podest seinen Item- und Respawn-Zustand
+([`PowerUpSystem.repositionPersistentBaseRewardPedestal`](../../src/powerups/PowerUpSystem.ts)).
+Ein Ab- und Neuanmelden über die vorhandenen Remove-/Register-Pfade wäre hier falsch: Es würde
+neue Identitäten, volle HP und neue Lifecycle-Effekte erzeugen. Nur die Darstellung darf neu
+aufgebaut werden. Der Host validiert Quelle und Ziel unmittelbar vor der Mutation erneut gegen
+dieselbe Vorschau, die der Client sieht; bei konkurrierenden Anfragen gewinnt die erste vom Host
+akzeptierte Mutation, und ein Fehlschlag lässt die Quelle vollständig unverändert.
+
 ## Erweiterung einer Mission
 
 Bei einer neuen Activity oder Map zuerst entscheiden, welche Daten World-weit und welche Activity-spezifisch sind. Danach:
@@ -75,3 +98,5 @@ Neue Map-Geometrie in Activity-Systemen, lokale Mission-Uhren oder konkrete Test
 - [tests/PersistentBaseContributionStore.test.ts](../../tests/PersistentBaseContributionStore.test.ts)
 - [tests/PersistentBaseRoundOutcome.test.ts](../../tests/PersistentBaseRoundOutcome.test.ts)
 - [tests/PersistentBaseComposite.test.ts](../../tests/PersistentBaseComposite.test.ts)
+- [tests/PersistentBaseRepositioning.test.ts](../../tests/PersistentBaseRepositioning.test.ts)
+- [tests/PersistentBaseManagementAllClasses.test.ts](../../tests/PersistentBaseManagementAllClasses.test.ts)
