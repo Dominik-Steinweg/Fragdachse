@@ -3,16 +3,12 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Struktureller Schutz des Round-Lifetime-Vertrags aus `AGENTS.md`:
- *
- * > Round-Ressourcen werden in `ArenaLifecycleCoordinator.buildArena()` erzeugt, in
- * > `tearDownArena()` vollstaendig entkoppelt und ausserhalb einer Runde als `null` behandelt.
- *
  * `ArenaLifecycleCoordinator` ist Phaser-gebunden und laesst sich nicht ohne kompletten
  * Scene-Stack instanziieren. Der Vertrag ist aber rein strukturell: jedes round-scoped Feld des
- * `ArenaContext` muss beim Teardown zurueckgesetzt und beim Aufbau der Scene leer initialisiert
- * werden. Genau das prueft dieser Test – damit ein spaeteres Runtime-Refactoring kein neues
- * Round-Feld einfuehren kann, das in die Lobby oder in die naechste Runde leakt.
+ * `ArenaContext` muss entweder direkt oder ueber seinen Runtime-Owner beim Teardown zurueckgesetzt
+ * und beim Aufbau der Scene leer initialisiert werden. Genau das prueft dieser Test – damit ein
+ * spaeteres Runtime-Refactoring kein neues Feld einfuehren kann, das in die Lobby oder in die
+ * naechste Runde leakt.
  */
 
 const CONTEXT_PATH = 'src/scenes/arena/ArenaContext.ts';
@@ -52,6 +48,32 @@ const OWNED_ROUND_FIELDS: Readonly<Record<string, string>> = {
   // World-Runtime; genau ein Aufruf setzt sie zurueck.
   worldMaterialization: 'this.releaseWorldRuntime(',
   worldPresentation: 'this.releaseWorldRuntime(',
+  // Phase-5-Compatibility: Diese Felder sind nur Lesefassaden auf CoopMissionRuntime. Der eine
+  // Activity-Detach zerstoert Enemy-, Encounter-, Boss- und Navigation-State und nullt sie ueber
+  // den gerichteten Binding-Callback; ein manueller Einzel-Teardown waere wieder Doppelbesitz.
+  enemyManager: 'this.detachLocalActivityForTeardown();',
+  necromancySystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseEnemyAttackSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseEnemyAbilitySystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseEnemyTrainAwarenessSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseEnemyBurrowSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseEnemyDodgeSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseEnemyCombatPositioningSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseVoidHunterSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseTimebombSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseSpawnExecutor: 'this.detachLocalActivityForTeardown();',
+  coopDefensePersistentPressureSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseBossSystem: 'this.detachLocalActivityForTeardown();',
+  coopDefenseMapDirector: 'this.detachLocalActivityForTeardown();',
+  coopDefenseMapEventDirector: 'this.detachLocalActivityForTeardown();',
+  flowFieldCoordinator: 'this.detachLocalActivityForTeardown();',
+  enemyFlowFieldService: 'this.detachLocalActivityForTeardown();',
+  enemyPlayerFlowFieldService: 'this.detachLocalActivityForTeardown();',
+  enemyStrategicFlowFieldService: 'this.detachLocalActivityForTeardown();',
+  enemyAiTargetCatalog: 'this.detachLocalActivityForTeardown();',
+  enemyStrategicTargetService: 'this.detachLocalActivityForTeardown();',
+  enemyBossFlowFieldService: 'this.detachLocalActivityForTeardown();',
+  allyFlowFieldServices: 'this.detachLocalActivityForTeardown();',
 };
 
 /** Erlaubte Ruecksetzformen: Referenz loeschen, Liste leeren, Sammlung leeren oder Besitzeraufruf. */

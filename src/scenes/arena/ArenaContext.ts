@@ -123,7 +123,10 @@ export interface ArenaContext {
   readonly arenaCountdown:    ArenaCountdownOverlay | null;
   readonly playerStatusRing:  PlayerStatusRingLike | null;
 
-  // ── World-/Activity-scoped (managed by ArenaLifecycleCoordinator) ───────────────
+  // ── World-/Activity-scoped Compatibility-Fassaden ─────────────────────────
+  // World-State gehoert der WorldRuntime. Die in Phase 5 migrierten Enemy-/Encounter-/Flowfield-
+  // Felder werden ausschliesslich aus CoopMissionRuntime gespiegelt, bis ihre Consumer in den
+  // folgenden Phasen auf kleine Owner-Vertraege umgestellt sind.
   /**
    * Kanonischer Kontext der laufenden World-Instanz: Identitaet, Metrik, Basen und die
    * persistente Basisstelle. World-scoped Zustand wird hierueber gelesen, nicht aus mutablen

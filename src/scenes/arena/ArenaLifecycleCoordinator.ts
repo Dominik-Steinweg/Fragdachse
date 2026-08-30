@@ -22,7 +22,6 @@ import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import {
   ENEMY_FLOW_FIELD_IDS,
   FlowFieldCoordinator,
-  allyFlowFieldId,
 } from '../../systems/flowfield/FlowFieldCoordinator';
 import { createFlowFieldRunner } from '../../systems/flowfield/FlowFieldRunnerFactory';
 import {
@@ -127,6 +126,7 @@ import {
   getBaseDestructionBlast,
 } from '../../effects/BaseDestructionPlan';
 import { EnemyManager } from '../../entities/EnemyManager';
+import { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { ARENA_MAP_GRID_CHANGED_EVENT, emitArenaMapGridChanged, type ArenaMapGridChangedEvent } from './ArenaEvents';
 import {
@@ -291,7 +291,6 @@ export class ArenaLifecycleCoordinator {
    * die alte Generation und kann deshalb nie mehr aktiviert werden.
    */
   private flowFieldGenerationId = 0;
-  private flowFieldGridListener: ((event: ArenaMapGridChangedEvent) => void) | null = null;
   private fireObstacleGridListener: ((event: ArenaMapGridChangedEvent) => void) | null = null;
   private fireObstacleIndex: FireObstacleIndex | null = null;
 
@@ -366,6 +365,8 @@ export class ArenaLifecycleCoordinator {
    * Ausserhalb ihrer Lifetime ist sie `null` und wird nicht als Dependency weitergereicht.
    */
   private worldRuntime: WorldRuntime | null = null;
+  /** Lokale Realisierung der optionalen Coop-Activity; ihr Besitzer ist der ActivityRuntimeHost. */
+  private coopMissionRuntime: CoopMissionRuntime | null = null;
   /**
    * Besitzer der laufenden World-Instanz. Erzeugung, lokale Runtime und Ende laufen
    * ausschliesslich hierueber; `ArenaContext.world` wird nur von diesem Sink geschrieben.
@@ -392,6 +393,10 @@ export class ArenaLifecycleCoordinator {
       this.persistentBaseWorldBinding = null;
       this.ctx.worldMaterialization = null;
       this.ctx.world = null;
+    },
+    activity: {
+      attach: (activity) => { this.attachActivityRuntime(activity); },
+      detach: () => { this.detachActivityRuntime(); },
     },
   });
   /**
@@ -771,6 +776,71 @@ export class ArenaLifecycleCoordinator {
    */
   updateWorldRuntime(deltaMs: number): void {
     this.worldRuntime?.update(deltaMs);
+  }
+
+  /** Bindet die konkrete Coop-Runtime an den Activity-Slot der laufenden World. */
+  private attachActivityRuntime(activity: ActivityDescriptor): void {
+    if (activity.kind !== 'coop-mission') return;
+    const worldRuntime = this.worldRuntime;
+    if (!worldRuntime) {
+      throw new Error(
+        `[ArenaLifecycleCoordinator] Cannot attach Coop activity ${activity.definitionId} without WorldRuntime`,
+      );
+    }
+    const runtime = new CoopMissionRuntime(activity, (current) => {
+      if (current === null && this.coopMissionRuntime === runtime) this.coopMissionRuntime = null;
+      this.syncCoopMissionCompatibilityBindings(current);
+    });
+    this.coopMissionRuntime = runtime;
+    worldRuntime.activity.attach(activity, runtime);
+    this.syncCoopMissionCompatibilityBindings(runtime);
+  }
+
+  /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
+  private detachActivityRuntime(): void {
+    const runtime = this.coopMissionRuntime;
+    if (!runtime) return;
+    if (this.worldRuntime?.activity.isAttached()) this.worldRuntime.activity.detach();
+    else runtime.destroy();
+  }
+
+  /** Teardown-Einstieg ausserhalb des Lifecycles; haelt dessen Runtime-Phase synchron. */
+  private detachLocalActivityForTeardown(): void {
+    if (this.worldLifecycle.activity.isActive()) {
+      this.worldLifecycle.activity.detachRuntime();
+      return;
+    }
+    this.detachActivityRuntime();
+  }
+
+  /**
+   * Transitional Compatibility fuer noch nicht migrierte Consumer in Scene/Host-/Client-Update.
+   * Die einzige mutable Wahrheit bleibt der konkrete CoopMissionRuntime-Owner.
+   */
+  private syncCoopMissionCompatibilityBindings(runtime: CoopMissionRuntime | null): void {
+    this.ctx.enemyManager = runtime?.enemyManager ?? null;
+    this.ctx.flowFieldCoordinator = runtime?.flowFieldCoordinator ?? null;
+    this.ctx.enemyFlowFieldService = runtime?.enemyFlowFieldService ?? null;
+    this.ctx.enemyPlayerFlowFieldService = runtime?.enemyPlayerFlowFieldService ?? null;
+    this.ctx.enemyStrategicFlowFieldService = runtime?.enemyStrategicFlowFieldService ?? null;
+    this.ctx.enemyBossFlowFieldService = runtime?.enemyBossFlowFieldService ?? null;
+    this.ctx.enemyAiTargetCatalog = runtime?.enemyAiTargetCatalog ?? null;
+    this.ctx.enemyStrategicTargetService = runtime?.enemyStrategicTargetService ?? null;
+    this.ctx.allyFlowFieldServices = runtime?.allyFlowFields ?? new Map();
+    this.ctx.coopDefenseSpawnExecutor = runtime?.coopDefenseSpawnExecutor ?? null;
+    this.ctx.coopDefensePersistentPressureSystem = runtime?.coopDefensePersistentPressureSystem ?? null;
+    this.ctx.coopDefenseBossSystem = runtime?.coopDefenseBossSystem ?? null;
+    this.ctx.coopDefenseMapDirector = runtime?.coopDefenseMapDirector ?? null;
+    this.ctx.coopDefenseMapEventDirector = runtime?.coopDefenseMapEventDirector ?? null;
+    this.ctx.coopDefenseEnemyTrainAwarenessSystem = runtime?.coopDefenseEnemyTrainAwarenessSystem ?? null;
+    this.ctx.coopDefenseEnemyBurrowSystem = runtime?.coopDefenseEnemyBurrowSystem ?? null;
+    this.ctx.coopDefenseEnemyDodgeSystem = runtime?.coopDefenseEnemyDodgeSystem ?? null;
+    this.ctx.coopDefenseEnemyCombatPositioningSystem = runtime?.coopDefenseEnemyCombatPositioningSystem ?? null;
+    this.ctx.coopDefenseEnemyAbilitySystem = runtime?.coopDefenseEnemyAbilitySystem ?? null;
+    this.ctx.coopDefenseEnemyAttackSystem = runtime?.coopDefenseEnemyAttackSystem ?? null;
+    this.ctx.coopDefenseTimebombSystem = runtime?.coopDefenseTimebombSystem ?? null;
+    this.ctx.coopDefenseVoidHunterSystem = runtime?.coopDefenseVoidHunterSystem ?? null;
+    this.ctx.necromancySystem = runtime?.necromancySystem ?? null;
   }
 
   /**
@@ -2691,6 +2761,10 @@ export class ArenaLifecycleCoordinator {
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
     // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
     this.worldLifecycle.attachRuntime(world, activityDescriptor);
+    const coopMissionRuntime = isCoopMission ? this.coopMissionRuntime : null;
+    if (isCoopMission && !coopMissionRuntime) {
+      throw new Error('[ArenaLifecycleCoordinator] Coop activity runtime was not attached');
+    }
     // Die World laeuft ab hier. Wer an ihr teilnimmt, entscheidet der Host sofort - sonst
     // haette die neue Instanz einen Frame lang gar keinen Teilnahmestand.
     this.hostSyncWorldParticipation();
@@ -2989,9 +3063,10 @@ export class ArenaLifecycleCoordinator {
       : null;
     materialization.setBases(baseManager);
     baseManager?.setLightingSystem(this.renderers.lighting);
-    this.ctx.enemyManager = isCoopMission && coopDefenseEnemyConfigs
+    const enemyManager = isCoopMission && coopDefenseEnemyConfigs
       ? new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
+    if (enemyManager) coopMissionRuntime?.setEnemyManager(enemyManager);
     this.ctx.enemyManager?.setWorldMetrics(world.metrics);
     // Buddel- und Spawn-Visuals der Gegner laufen über dieselbe Effekt-Schicht wie die der
     // Spieler – auf Host und Client, da beide Seiten Entstehung und Einbuddel-Zustand aus dem
@@ -3082,7 +3157,7 @@ export class ArenaLifecycleCoordinator {
 
       // Ein Coordinator fuer alle Runtime-Flowfields. Er haelt den Topologiespiegel, taktet die
       // Nav-Ticks und besitzt den Worker; die Services sind nur noch synchrone Lesefassaden.
-      if (isCoopMission) {
+      if (coopMissionRuntime) {
         const bossConfig = missionMapConfig?.boss
           ? getCoopDefenseEnemyConfig(missionMapConfig.boss.enemyKind)
           : null;
@@ -3102,26 +3177,25 @@ export class ArenaLifecycleCoordinator {
           navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS,
           generationId: this.nextFlowFieldGenerationId(),
         });
-        this.ctx.flowFieldCoordinator = flowFieldCoordinator;
         // Einmalige Ansage, welches Substrat wirklich laeuft. Ohne sie greift der Inline-Fallback
         // still, und ein Trace zeigt dann faelschlich "die Verlagerung hat nichts gebracht".
         console.info(`[flowfield] runner=${flowFieldCoordinator.getDiagnostics().runnerKind}`);
 
-        this.ctx.enemyFlowFieldService = EnemyFlowFieldService.fromView(
+        const enemyFlowFieldService = EnemyFlowFieldService.fromView(
           flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.base, { goalMode: 'bases' }),
         );
-        this.ctx.enemyPlayerFlowFieldService = EnemyFlowFieldService.fromView(
+        const enemyPlayerFlowFieldService = EnemyFlowFieldService.fromView(
           flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.player, {
             goalMode: 'dynamic-fallback-bases',
           }),
         );
-        this.ctx.enemyStrategicFlowFieldService = EnemyFlowFieldService.fromView(
+        const enemyStrategicFlowFieldService = EnemyFlowFieldService.fromView(
           flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.strategic, {
             goalMode: 'dynamic',
             tickDivisor: COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC,
           }),
         );
-        this.ctx.enemyBossFlowFieldService = bossConfig
+        const enemyBossFlowFieldService = bossConfig
           ? EnemyFlowFieldService.fromView(
             flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.boss, {
               goalMode: bossConfig.movementTarget === 'players' ? 'dynamic-fallback-bases' : 'bases',
@@ -3129,42 +3203,43 @@ export class ArenaLifecycleCoordinator {
             }),
           )
           : null;
-        // Ally-Felder gibt es fuer alle bereits vorhandenen Spieler; Nachzuegler registriert
-        // `ensureAllyFlowField` beim Spawn nach.
-        this.ctx.allyFlowFieldServices.clear();
-        for (const player of this.ctx.playerManager.getAllPlayers()) {
-          this.ensureAllyFlowField(player.id);
-        }
-
-        this.flowFieldGridListener = (event: ArenaMapGridChangedEvent): void => {
+        const enemyStrategicTargetService = new EnemyStrategicTargetService(
+          enemyStrategicFlowFieldService,
+        );
+        const enemyAiTargetCatalog = new EnemyAiTargetCatalog();
+        const flowFieldGridListener = (event: ArenaMapGridChangedEvent): void => {
           const change = resolveGridChange(event);
           if (change) flowFieldCoordinator.patchCell(change.gridX, change.gridY, change.occupied);
           else flowFieldCoordinator.requestFullResync();
         };
-        this.scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.flowFieldGridListener);
-      } else {
-        this.ctx.enemyFlowFieldService = null;
-        this.ctx.enemyPlayerFlowFieldService = null;
-        this.ctx.enemyStrategicFlowFieldService = null;
-        this.ctx.enemyBossFlowFieldService = null;
-        this.ctx.allyFlowFieldServices.clear();
-      }
-      this.ctx.enemyStrategicTargetService = this.ctx.enemyStrategicFlowFieldService
-        ? new EnemyStrategicTargetService(this.ctx.enemyStrategicFlowFieldService)
-        : null;
-      if (this.ctx.enemyStrategicTargetService && this.ctx.flowFieldCoordinator) {
+        this.scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, flowFieldGridListener);
+        coopMissionRuntime.setNavigation({
+          coordinator: flowFieldCoordinator,
+          enemy: enemyFlowFieldService,
+          player: enemyPlayerFlowFieldService,
+          strategic: enemyStrategicFlowFieldService,
+          boss: enemyBossFlowFieldService,
+          targetCatalog: enemyAiTargetCatalog,
+          strategicTarget: enemyStrategicTargetService,
+          releaseGridChanges: () => {
+            this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, flowFieldGridListener);
+          },
+        });
         // Die Zielzuordnung wird exakt mit dem Feld aktiv, aus dessen Zielmenge sie stammt.
-        this.ctx.flowFieldCoordinator.getFieldView(ENEMY_FLOW_FIELD_IDS.strategic)?.onActivated(
+        flowFieldCoordinator.getFieldView(ENEMY_FLOW_FIELD_IDS.strategic)?.onActivated(
           (payload) => {
-            if (payload) {
-              this.ctx.enemyStrategicTargetService?.activate(payload as PreparedStrategicTargets);
-            }
+            if (payload) enemyStrategicTargetService.activate(payload as PreparedStrategicTargets);
           },
         );
+        // Ally-Felder gibt es fuer alle bereits vorhandenen Spieler; Nachzuegler registriert
+        // `ensureAllyFlowField` beim Spawn nach.
+        for (const player of this.ctx.playerManager.getAllPlayers()) {
+          this.ensureAllyFlowField(player.id);
+        }
       }
-      this.ctx.enemyAiTargetCatalog = new EnemyAiTargetCatalog();
       if (
-        this.ctx.enemyManager
+        coopMissionRuntime
+        && this.ctx.enemyManager
         && this.ctx.enemyFlowFieldService
         && (
           coopDefensePersistentSpawnConfigs.length > 0
@@ -3172,26 +3247,26 @@ export class ArenaLifecycleCoordinator {
           || missionMapConfig?.boss !== undefined
         )
       ) {
-        this.ctx.coopDefenseSpawnExecutor = new CoopDefenseSpawnExecutor(
+        const spawnExecutor = new CoopDefenseSpawnExecutor(
           this.ctx.enemyManager,
           this.ctx.enemyFlowFieldService,
           this.ctx.enemyBossFlowFieldService,
           this.ctx.enemyPlayerFlowFieldService,
           this.ctx.enemyStrategicFlowFieldService,
         );
-        this.ctx.coopDefensePersistentPressureSystem = coopDefensePersistentSpawnConfigs.length > 0
+        const persistentPressure = coopDefensePersistentSpawnConfigs.length > 0
           ? new CoopDefensePersistentPressureSystem(
             coopDefensePersistentSpawnConfigs,
-            this.ctx.coopDefenseSpawnExecutor,
+            spawnExecutor,
             coopDefenseBases,
             () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
           )
           : null;
-        this.ctx.coopDefenseBossSystem = missionMapConfig?.boss
+        const bossSystem = missionMapConfig?.boss
           ? new CoopDefenseBossSystem(
             missionMapConfig.boss,
             this.ctx.enemyManager,
-            this.ctx.coopDefenseSpawnExecutor,
+            spawnExecutor,
             (spawnedAtMs) => {
               this.runtimeDiagnosticEventSink?.('boss:spawn', { spawnedAtMs });
               const current = bridge.getRoundState();
@@ -3203,11 +3278,12 @@ export class ArenaLifecycleCoordinator {
             },
           )
           : null;
+        let mapDirector: CoopDefenseMapDirector | null = null;
         if (coopDefenseEncounterConfigs.length > 0) {
-          this.ctx.coopDefenseMapDirector = new CoopDefenseMapDirector(
+          mapDirector = new CoopDefenseMapDirector(
             coopDefenseEncounterConfigs,
-            (enemyKind, count, originId, front, spawnArea) => this.ctx.coopDefenseSpawnExecutor
-              ?.hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
+            (enemyKind, count, originId, front, spawnArea) => spawnExecutor
+              .hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
             {
               mode: missionMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
               showComplete: missionMapConfig?.objective === 'repel-assault',
@@ -3242,6 +3318,12 @@ export class ArenaLifecycleCoordinator {
             },
           );
         }
+        coopMissionRuntime.setEncounter({
+          spawnExecutor,
+          persistentPressure,
+          boss: bossSystem,
+          director: mapDirector,
+        });
       }
       this.ctx.coopDefenseObjectiveRepairSystem = bridge.isHost() && baseManager
         ? new CoopDefenseObjectiveRepairSystem({
@@ -4265,7 +4347,7 @@ export class ArenaLifecycleCoordinator {
           `negev-killstreak:${event.ownerId}:${Date.now()}`,
         );
       });
-      this.ctx.necromancySystem = this.ctx.enemyManager
+      const necromancySystem = this.ctx.enemyManager
         && this.ctx.coopDefensePlayerModifierSystem
         ? new NecromancySystem(
           this.ctx.playerManager,
@@ -4276,6 +4358,7 @@ export class ArenaLifecycleCoordinator {
           (playerId, stat, baseValue) => this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
         )
         : null;
+      if (necromancySystem) coopMissionRuntime?.setNecromancy(necromancySystem);
       if (this.ctx.necromancySystem) {
         // Leichen-Marker laufen ueber denselben Weg wie andere Host-Effekte: lokal ueber den
         // Broadcast-Loopback, damit Host und Clients dieselbe Darstellung zeigen.
@@ -4413,24 +4496,24 @@ export class ArenaLifecycleCoordinator {
           },
         );
       });
-      if (this.ctx.enemyManager && this.ctx.baseManager) {
-        this.ctx.coopDefenseEnemyTrainAwarenessSystem = new CoopDefenseEnemyTrainAwarenessSystem(
+      if (coopMissionRuntime && this.ctx.enemyManager && this.ctx.baseManager) {
+        const enemyTrainAwarenessSystem = new CoopDefenseEnemyTrainAwarenessSystem(
           () => this.ctx.trainManager,
           () => bridge.getTrainEvent(),
           (enemy, now) => enemy.getMoveSpeed()
             * this.ctx.hostPhysics.getWorldMovementFactorAt(enemy.sprite.x, enemy.sprite.y, now),
         );
-        this.ctx.coopDefenseEnemyBurrowSystem = new CoopDefenseEnemyBurrowSystem(
+        const enemyBurrowSystem = new CoopDefenseEnemyBurrowSystem(
           this.ctx.enemyManager,
           (enemyId, enabled) => this.ctx.hostPhysics.setEnemyBurrowed(enemyId, !enabled),
           (x, y, radius) => this.isSafeEnemyGroundAt(x, y, radius),
           (x, y, radius, maxRadiusCells) => this.findSafeEnemyGroundPosition(x, y, radius, maxRadiusCells),
         );
-        this.ctx.coopDefenseEnemyTrainAwarenessSystem.setBurrowSource(this.ctx.coopDefenseEnemyBurrowSystem);
+        enemyTrainAwarenessSystem.setBurrowSource(enemyBurrowSystem);
         this.ctx.enemyManager.setEnemySpawnedCallback((enemy, options) => {
-          this.ctx.coopDefenseEnemyBurrowSystem?.notifyEnemySpawned(enemy, options);
+          enemyBurrowSystem.notifyEnemySpawned(enemy, options);
         });
-        this.ctx.coopDefenseEnemyDodgeSystem = new CoopDefenseEnemyDodgeSystem(
+        const enemyDodgeSystem = new CoopDefenseEnemyDodgeSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.projectileManager,
@@ -4439,7 +4522,7 @@ export class ArenaLifecycleCoordinator {
           (x, y, radius) => this.isFreeEnemyGroundAt(x, y, radius),
           (fromX, fromY, toX, toY, radius) => this.hasWalkableEnemyCircleLine(fromX, fromY, toX, toY, radius),
         );
-        this.ctx.coopDefenseEnemyCombatPositioningSystem = new CoopDefenseEnemyCombatPositioningSystem(
+        const enemyCombatPositioningSystem = new CoopDefenseEnemyCombatPositioningSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.combatSystem,
@@ -4447,7 +4530,7 @@ export class ArenaLifecycleCoordinator {
           (fromX, fromY, toX, toY, radius) => this.hasWalkableEnemyCircleLine(fromX, fromY, toX, toY, radius),
           this.ctx.enemyAiTargetCatalog,
         );
-        this.ctx.coopDefenseEnemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
+        const enemyAbilitySystem = new CoopDefenseEnemyAbilitySystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.projectileManager,
@@ -4459,7 +4542,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.enemyAiTargetCatalog,
           this.ctx.decoySystem,
         );
-        this.ctx.coopDefenseEnemyAttackSystem = new CoopDefenseEnemyAttackSystem(
+        const enemyAttackSystem = new CoopDefenseEnemyAttackSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.baseManager,
@@ -4470,6 +4553,14 @@ export class ArenaLifecycleCoordinator {
           this.ctx.placementSystem,
           this.ctx.enemyAiTargetCatalog,
         );
+        coopMissionRuntime.setEnemyBehaviour({
+          trainAwareness: enemyTrainAwarenessSystem,
+          burrow: enemyBurrowSystem,
+          dodge: enemyDodgeSystem,
+          combatPositioning: enemyCombatPositioningSystem,
+          ability: enemyAbilitySystem,
+          attack: enemyAttackSystem,
+        });
         this.ctx.hostPhysics.setEnemyRockContactCallback((enemyId, rock, now) => {
           this.ctx.coopDefenseEnemyAttackSystem?.recordObstacleContact(enemyId, rock, now);
         });
@@ -4589,6 +4680,7 @@ export class ArenaLifecycleCoordinator {
       this.ctx.armageddonSystem = new ArmageddonSystem(world.metrics);
       this.ctx.armageddonSystem.setRockGrid(arenaResult.rockGrid);
       this.ctx.loadoutManager.setArmageddonSystem(this.ctx.armageddonSystem);
+      let timebombSystem: CoopDefenseTimebombSystem | null = null;
       if (
         this.ctx.enemyManager
         && this.ctx.baseManager
@@ -4596,7 +4688,7 @@ export class ArenaLifecycleCoordinator {
         && this.ctx.enemyStrategicTargetService
         && this.ctx.enemyStrategicFlowFieldService
       ) {
-        this.ctx.coopDefenseTimebombSystem = new CoopDefenseTimebombSystem(
+        timebombSystem = new CoopDefenseTimebombSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.baseManager,
@@ -4628,12 +4720,13 @@ export class ArenaLifecycleCoordinator {
           this.ctx.decoySystem,
         );
       }
+      let voidHunterSystem: CoopDefenseVoidHunterSystem | null = null;
       if (
         this.ctx.enemyManager
         && this.ctx.coopDefenseEnemyBurrowSystem
         && this.ctx.flamethrowerUpgradeSystem
       ) {
-        this.ctx.coopDefenseVoidHunterSystem = new CoopDefenseVoidHunterSystem(
+        voidHunterSystem = new CoopDefenseVoidHunterSystem(
           this.ctx.enemyManager,
           this.ctx.playerManager,
           this.ctx.combatSystem,
@@ -4646,6 +4739,12 @@ export class ArenaLifecycleCoordinator {
           (phase: number) => this.runtimeDiagnosticEventSink?.('boss:phase', { phase }),
           world.metrics,
         );
+      }
+      if (coopMissionRuntime && (timebombSystem || voidHunterSystem)) {
+        coopMissionRuntime.setEnemySpecials({
+          timebomb: timebombSystem,
+          voidHunter: voidHunterSystem,
+        });
       }
       this.ctx.coopDefenseEnemyAttackSystem?.setActionBlockedChecker((enemyId) => (
         (this.ctx.coopDefenseVoidHunterSystem?.blocksRegularAttacks(enemyId) ?? false)
@@ -4843,7 +4942,7 @@ export class ArenaLifecycleCoordinator {
         if (coopDefenseAirstrikeEventHandler) mapEventHandlers.push(coopDefenseAirstrikeEventHandler);
         if (coopDefenseGroundHazardEventHandler) mapEventHandlers.push(coopDefenseGroundHazardEventHandler);
         if (coopDefenseMapEvents.length > 0) {
-          this.ctx.coopDefenseMapEventDirector = new CoopDefenseMapEventDirector(
+          const mapEventDirector = new CoopDefenseMapEventDirector(
             coopDefenseMapEvents,
             mapEventHandlers,
             {
@@ -4860,6 +4959,7 @@ export class ArenaLifecycleCoordinator {
                     : false,
             },
           );
+          coopMissionRuntime?.setMapEventDirector(mapEventDirector);
         } else {
           bridge.clearTrainEvent();
         }
@@ -4938,6 +5038,10 @@ export class ArenaLifecycleCoordinator {
     // Rundenteilnehmer beim Rundenende. Der Abbau laeuft vor dem Fachsystem-Cleanup, weil die
     // Detach-Module genau diese Systeme noch brauchen.
     this.detachAllWorldPlayers();
+    // Danach faellt die konkrete Activity als ein Owner. Ihre Event-Handler werden dabei noch
+    // vor den scene-langlebigen Fire-/Airstrike-Systemen geloest; Enemy-State und Navigation
+    // erreichen den anschliessenden globalen Cleanup nicht mehr als manuelle Systemliste.
+    this.detachLocalActivityForTeardown();
     this.terrainSnapshotGenerationId += 1;
     const preserveTerrainSnapshot = preserveAuthoredPresentation && this.terrainSnapshotReady;
     if (!preserveTerrainSnapshot) {
@@ -4952,24 +5056,12 @@ export class ArenaLifecycleCoordinator {
     this.persistentBasePreviewRenderer.clear();
     this.persistentBaseVisualSite = null;
     this.cancelTrainExplosionTimers();
-    // Event-Handler besitzen occurrence-/sourcebezogene Zustaende. Sie muessen vor dem
-    // Fachsystem-Cleanup laufen, damit Ground-Hazard-Quellen sauber aus dem FireSystem entfernt
-    // und Airstrike-/Train-Callbacks entkoppelt werden koennen.
-    this.ctx.coopDefenseMapEventDirector?.reset();
-    this.ctx.coopDefenseMapEventDirector = null;
     this.timeOfDayController = null;
     this.appliedRuntimeTimeOfDayMinutes = null;
     this.roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
     // Beim World-Teardown gibt es keinen gebundenen Runtime-Zustand; neutral zurücksetzen, damit
     // die nächste World ihre Beleuchtung selbst setzt.
     setEmissiveScale(1);
-    this.ctx.coopDefenseEnemyAbilitySystem?.clear();
-    this.ctx.coopDefenseEnemyBurrowSystem?.clear();
-    this.ctx.coopDefenseEnemyDodgeSystem?.clear();
-    this.ctx.coopDefenseEnemyCombatPositioningSystem?.clear();
-    this.ctx.coopDefenseVoidHunterSystem?.clear();
-    this.ctx.coopDefenseTimebombSystem?.clear();
-    this.ctx.coopDefenseEnemyTrainAwarenessSystem?.clear();
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
     if (this.fireObstacleGridListener) {
@@ -5017,21 +5109,6 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.captureTheBeerSystem?.destroy();
     this.ctx.captureTheBeerSystem = null;
-    this.ctx.necromancySystem?.setCorpseSink(null);
-    this.ctx.necromancySystem?.clear();
-    this.ctx.necromancySystem = null;
-    this.ctx.enemyManager?.setLethalDamageGuard(null);
-    this.ctx.enemyManager?.setEnemySpawnedCallback(null);
-    this.ctx.enemyManager?.destroy();
-    this.ctx.enemyManager?.setVisualSink(null);
-    this.ctx.enemyManager = null;
-    this.ctx.coopDefenseEnemyAbilitySystem = null;
-    this.ctx.coopDefenseEnemyBurrowSystem = null;
-    this.ctx.coopDefenseEnemyDodgeSystem = null;
-    this.ctx.coopDefenseEnemyCombatPositioningSystem = null;
-    this.ctx.coopDefenseVoidHunterSystem = null;
-    this.ctx.coopDefenseTimebombSystem = null;
-    this.ctx.coopDefenseEnemyTrainAwarenessSystem = null;
     this.ctx.coopDefensePlayerModifierSystem?.clear();
     this.ctx.coopDefensePlayerModifierSystem = null;
     this.ctx.coopDefenseItemRuntimeSystem?.clear();
@@ -5165,9 +5242,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.hostPhysics.setDashGroundFireDurationResolver(null);
     this.ctx.hostPhysics.setDashGroundFireHandler(null);
     this.ctx.hostPhysics.setDashHoldEnabledResolver(null);
-    this.ctx.coopDefenseEnemyAttackSystem = null;
-    this.ctx.coopDefenseMapDirector?.reset();
-    this.ctx.coopDefenseMapDirector = null;
     this.ctx.coopDefenseSecondaryObjectiveSystem?.reset();
     this.ctx.coopDefenseSecondaryObjectiveSystem = null;
     this.ctx.coopDefenseMissionProgressSystem?.reset();
@@ -5192,11 +5266,6 @@ export class ArenaLifecycleCoordinator {
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
-    this.ctx.coopDefensePersistentPressureSystem?.reset();
-    this.ctx.coopDefensePersistentPressureSystem = null;
-    this.ctx.coopDefenseBossSystem?.reset();
-    this.ctx.coopDefenseBossSystem = null;
-    this.ctx.coopDefenseSpawnExecutor = null;
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);
@@ -5239,28 +5308,6 @@ export class ArenaLifecycleCoordinator {
 
     this.ctx.trainManager?.destroy();
     this.ctx.trainManager = null;
-    if (this.flowFieldGridListener) {
-      this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.flowFieldGridListener);
-      this.flowFieldGridListener = null;
-    }
-    this.ctx.enemyFlowFieldService?.destroy();
-    this.ctx.enemyFlowFieldService = null;
-    this.ctx.enemyPlayerFlowFieldService?.destroy();
-    this.ctx.enemyPlayerFlowFieldService = null;
-    this.ctx.enemyStrategicTargetService?.clear();
-    this.ctx.enemyStrategicTargetService = null;
-    this.ctx.enemyAiTargetCatalog?.clear();
-    this.ctx.enemyAiTargetCatalog = null;
-    this.ctx.enemyStrategicFlowFieldService?.destroy();
-    this.ctx.enemyStrategicFlowFieldService = null;
-    this.ctx.enemyBossFlowFieldService?.destroy();
-    this.ctx.enemyBossFlowFieldService = null;
-    for (const flowField of this.ctx.allyFlowFieldServices.values()) flowField.destroy();
-    this.ctx.allyFlowFieldServices.clear();
-    // Zuletzt: erhoeht die Generation und beendet den Worker, wodurch jedes noch unterwegs
-    // befindliche Ergebnis dieser Runde unbrauchbar wird.
-    this.ctx.flowFieldCoordinator?.destroy();
-    this.ctx.flowFieldCoordinator = null;
     this.renderers.train?.destroy();
     this.renderers.train = null;
     this.renderers.beer.clear();
@@ -6370,14 +6417,7 @@ export class ArenaLifecycleCoordinator {
    * verspaetetes Loadout), hatten frueher dauerhaft kein eigenes Feld.
    */
   ensureAllyFlowField(playerId: string): void {
-    const coordinator = this.ctx.flowFieldCoordinator;
-    if (!coordinator || this.ctx.allyFlowFieldServices.has(playerId)) return;
-    this.ctx.allyFlowFieldServices.set(
-      playerId,
-      EnemyFlowFieldService.fromView(
-        coordinator.registerField(allyFlowFieldId(playerId), { goalMode: 'dynamic-fallback-bases' }),
-      ),
-    );
+    this.coopMissionRuntime?.ensureAllyFlowField(playerId);
   }
 
   private getEnemyNavigationFlowField(): EnemyFlowFieldService | null {
