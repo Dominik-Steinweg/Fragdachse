@@ -1,4 +1,3 @@
-import type { ActivityKind } from '../config/authoring/ActivityDefinition';
 import type { PlayerProfile } from '../types';
 import type { WorldParticipation } from './WorldParticipation';
 
@@ -7,13 +6,19 @@ import type { WorldParticipation } from './WorldParticipation';
  *
  * Es gibt genau einen Weg hinein und einen hinaus – kein getrennter Mission-, Editor- oder
  * PvP-Pfad. Welche Module dabei laufen, entscheidet nicht mehr "welches System ist gerade nicht
- * null", sondern ein expliziter Kontext: Rolle und laufende Activity.
+ * null", sondern ein expliziter Kontext aus Rolle und Teilnahme. Missionsgebundene Module
+ * gehoeren nicht hierher: Sie wuerden einen Activity-Wechsel in derselben World nicht ueberleben.
  *
  * Der Attach ist atomar. Bricht ein Modul ab, werden die bereits angehaengten in umgekehrter
  * Reihenfolge zurueckgenommen; ein Spieler bleibt nie halb initialisiert zurueck.
  */
 
-/** Runtime-Bausteine, die ein Spieler in einer World haben kann. */
+/**
+ * Runtime-Bausteine, die ein Spieler in einer World haben kann.
+ *
+ * Ausschliesslich world-scoped: Was ein Activity-Wechsel in derselben World nicht ueberleben
+ * soll, gehoert nicht hierher, sondern in die Player-Runtime der jeweiligen Activity.
+ */
 export type PlayerRuntimeFeature =
   /** Spielfigur, Physikkoerper und ihre Darstellung. */
   | 'entity'
@@ -28,15 +33,11 @@ export type PlayerRuntimeFeature =
   /** Coop-Build-Modifikatoren und Item-Laufzeitzustaende; auch ohne Activity erlaubt. */
   | 'playerBuild'
   /** Zielmarkierung und Fokus – world-scoped Zustand ueber den Spieler als Ziel. */
-  | 'worldTargeting'
-  /** Missionsgebundener Spielerzustand: Respawn-Budget, Items, Missionsziele. */
-  | 'missionStatus';
+  | 'worldTargeting';
 
 export type PlayerRuntimeFeatures = Readonly<Record<PlayerRuntimeFeature, boolean>>;
 
 export interface PlayerRuntimeContextInput {
-  /** Activity dieser World; `null` fuer eine World ohne Mission. */
-  readonly activityKind: ActivityKind | null;
   /** Nur der Host fuehrt die autoritative Simulation eines Spielers. */
   readonly isHost: boolean;
   /**
@@ -47,15 +48,14 @@ export interface PlayerRuntimeContextInput {
 }
 
 /**
- * Leitet die Player-Features aus dem World-/Activity-Kontext ab.
+ * Leitet die world-scoped Player-Features aus Rolle und Teilnahme ab.
  *
- * Der gemeinsame Lifecycle initialisiert damit ausdruecklich **nicht** automatisch den
- * vollstaendigen Mission-Player-Stack: eine World ohne Coop-Mission fuehrt keinen
- * missionsgebundenen Spielerzustand, und ein Client fuehrt keine autoritative Simulation.
+ * Die laufende Activity kommt hier nicht mehr vor: Ein Modul, dessen Antwort von ihr abhinge,
+ * waere activity-scoped und gehoerte damit in die Player-Runtime der Activity.
  */
 export function resolvePlayerRuntimeFeatures(input: PlayerRuntimeContextInput): PlayerRuntimeFeatures {
   // Ein Beobachter steht in der World, handelt darin aber nicht – er braucht deshalb keine
-  // Kampf-, Ressourcen- oder Missionsmodule.
+  // Kampf- und Ressourcenmodule.
   const simulation = input.isHost && input.participation !== 'observer';
   return {
     entity: true,
@@ -65,7 +65,6 @@ export function resolvePlayerRuntimeFeatures(input: PlayerRuntimeContextInput): 
     combatResources: simulation,
     loadoutTools: simulation,
     playerBuild: simulation,
-    missionStatus: simulation && input.activityKind === 'coop-mission',
   };
 }
 
@@ -103,12 +102,26 @@ export interface PlayerWorldRuntimeSteps {
 }
 
 export class PlayerWorldRuntime {
-  private readonly attachedPlayers = new Set<string>();
+  /**
+   * Materialisierungs-Ledger: Zu jedem angehaengten Spieler die Module, die er beim Attach
+   * tatsaechlich bekommen hat.
+   *
+   * Der Detach liest ausschliesslich hier. Er rekonstruiert nicht aus einer inzwischen
+   * moeglicherweise anderen Policy, was einmal erzeugt worden sein koennte – ein Beobachter, der
+   * zwischenzeitlich Teilnehmer geworden waere, wuerde sonst Module abbauen, die er nie hatte,
+   * und ein Teilnehmer wuerde seine behalten.
+   */
+  private readonly materializedFeatures = new Map<string, PlayerRuntimeFeatures>();
 
   constructor(private readonly steps: PlayerWorldRuntimeSteps) {}
 
   isAttached(playerId: string): boolean {
-    return this.attachedPlayers.has(playerId);
+    return this.materializedFeatures.has(playerId);
+  }
+
+  /** Alle Spieler, die diese World-Runtime aktuell traegt. */
+  attachedPlayerIds(): readonly string[] {
+    return [...this.materializedFeatures.keys()];
   }
 
   /**
@@ -117,7 +130,7 @@ export class PlayerWorldRuntime {
    */
   attach(context: PlayerAttachContext, features: PlayerRuntimeFeatures): boolean {
     const playerId = context.profile.id;
-    if (this.attachedPlayers.has(playerId)) return true;
+    if (this.materializedFeatures.has(playerId)) return true;
 
     const completed: PlayerAttachStep[] = [];
     for (const step of this.steps.attach) {
@@ -135,7 +148,7 @@ export class PlayerWorldRuntime {
       }
       completed.push(step);
     }
-    this.attachedPlayers.add(playerId);
+    this.materializedFeatures.set(playerId, { ...features });
     return true;
   }
 
@@ -143,12 +156,19 @@ export class PlayerWorldRuntime {
    * Loest einen Spieler genau einmal von der World. Wiederholtes Leave ist ein No-op; ein
    * spaeterer Rejoin muss zuerst einen neuen erfolgreichen Attach durchlaufen.
    */
-  detach(playerId: string, features: PlayerRuntimeFeatures): void {
-    if (!this.attachedPlayers.delete(playerId)) return;
+  detach(playerId: string): void {
+    const features = this.materializedFeatures.get(playerId);
+    if (!features) return;
+    this.materializedFeatures.delete(playerId);
     for (const step of this.steps.detach) {
       if (!features[step.feature]) continue;
       step.run(playerId);
     }
+  }
+
+  /** Loest jeden getragenen Spieler. Mit dem Ende der World steht niemand mehr in ihr. */
+  detachAll(): void {
+    for (const playerId of this.attachedPlayerIds()) this.detach(playerId);
   }
 
   private rollback(completed: readonly PlayerAttachStep[], context: PlayerAttachContext): void {

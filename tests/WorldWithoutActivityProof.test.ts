@@ -318,11 +318,6 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
             feature,
             run: () => { hostFeatureSteps.push(feature); },
           })),
-          {
-            id: 'mission-runtime',
-            feature: 'missionStatus',
-            run: () => { throw new Error('World ohne Activity darf keine Mission Runtime erzeugen'); },
-          },
         ],
         detach: [{
           id: 'entity',
@@ -348,17 +343,16 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       const profile = host.getConnectedPlayers().find((candidate) => candidate.id === clientId);
       if (!profile) throw new Error('Client-Profil fehlt im Host-Roster');
       const hostFeatures = resolvePlayerRuntimeFeatures({
-        activityKind: null,
         isHost: true,
         participation: 'interactive',
       });
       const clientFeatures = resolvePlayerRuntimeFeatures({
-        activityKind: null,
         isHost: false,
         participation: 'interactive',
       });
-      expect(hostFeatures.missionStatus).toBe(false);
-      expect(clientFeatures.missionStatus).toBe(false);
+      // Missionsgebundene Spielermodule gibt es hier nicht einmal als Feature: Sie gehoeren
+      // seit der Player-Lifetime-Trennung der Activity und nicht der World.
+      expect(Object.keys(hostFeatures)).not.toContain('missionStatus');
       expect(hostFeatures.playerBuild).toBe(true);
       expect(clientFeatures.playerBuild).toBe(false);
       expect(resolvePlayerCapabilities({ participation: 'interactive', activityKind: null, worldCombatAllowed: false })).toMatchObject({
@@ -552,11 +546,11 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
       expect(contributions.removeByRuntimeId(repositioned!.id)).toBe(true);
       expect(contributions.commit((id) => hostPlacement.hasRuntimeRock(id))[0]?.constructions).toEqual([]);
       host.publishGameState(worldSnapshot({}, hostPlacement.getNetSnapshot()), true);
-      hostPlayerRuntime.detach(clientId, hostFeatures);
+      hostPlayerRuntime.detach(clientId);
       useRoom(clientRoom);
       replicated = client.getLatestGameState();
       clientPlacement.syncFromSnapshot(replicated!.placeableRocks);
-      clientPlayerRuntime.detach(clientId, clientFeatures);
+      clientPlayerRuntime.detach(clientId);
       expect(clientPlacement.getAllRuntimeRocks()).toEqual([]);
       expect(hostPlayers.has(clientId)).toBe(false);
       expect(clientPlayers.has(clientId)).toBe(false);

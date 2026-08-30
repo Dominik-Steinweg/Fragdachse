@@ -100,10 +100,21 @@ describe('ArenaExitEntityPresentation', () => {
       coordinator.indexOf('  beginArenaExitPresentation(): void'),
       coordinator.indexOf('  private clearArenaExitPresentation()', coordinator.indexOf('  beginArenaExitPresentation(): void')),
     );
-    expect(method.indexOf('new ArenaExitEntityPresentation('))
+    // Einfrieren, dann Instanz beenden, dann abraeumen – in genau dieser Reihenfolge.
+    expect(method.indexOf('this.captureArenaExitEntityPresentation();'))
       .toBeLessThan(method.indexOf('this.synchronizeLocalWorldLifecycle(null);'));
     expect(method.indexOf('this.synchronizeLocalWorldLifecycle(null);'))
       .toBeLessThan(method.indexOf('this.tearDownArena(true);'));
+    expect(method).toContain('new ArenaExitEntityPresentation(');
+
+    // Der Host beendet seine World-Instanz schon beim Rundenabschluss. Player- und
+    // Enemy-Runtime fallen mit ihr, deshalb steht das eingefrorene Bild dort vorher.
+    const completeRound = coordinator.slice(
+      coordinator.indexOf('  hostCompleteRound('),
+      coordinator.indexOf('\n  /**', coordinator.indexOf('  hostCompleteRound(')),
+    );
+    expect(completeRound.indexOf('this.captureArenaExitEntityPresentation();'))
+      .toBeLessThan(completeRound.indexOf('this.worldLifecycle.endInstance();'));
     expect(coordinator).toContain('this.arenaExitEntityPresentation && this.worldPresentationHandoff.pending');
     expect(presentation).not.toMatch(/EnemyManager|PlayerManager|Physics\.Arcade|NetworkBridge/);
   });

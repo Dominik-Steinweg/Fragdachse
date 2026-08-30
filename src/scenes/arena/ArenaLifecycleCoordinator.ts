@@ -137,6 +137,7 @@ import type {
   CoopMissionArmedConstructionView,
   CoopMissionArmedOutpostView,
 } from '../../activity/CoopMissionHostUpdate';
+import { CoopMissionPlayerRuntime } from '../../activity/CoopMissionPlayerRuntime';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { ARENA_MAP_GRID_CHANGED_EVENT, emitArenaMapGridChanged, type ArenaMapGridChangedEvent } from './ArenaEvents';
 import {
@@ -478,6 +479,9 @@ export class ArenaLifecycleCoordinator {
     clear: () => bridge.clearWorldAndActivity(),
     attach: (context) => {
       this.worldRuntime = new WorldRuntime(context);
+      // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
+      // ueberlebt darin jeden Activity-Wechsel.
+      this.worldRuntime.setPlayers(new PlayerWorldRuntime(this.playerRuntimeSteps));
       // Compatibility-Pfad waehrend der Migration: Source of Truth ist die WorldRuntime, aber
       // die bestehenden Consumer lesen den Kontext weiterhin ueber `ctx.world`.
       this.ctx.world = context;
@@ -543,13 +547,6 @@ export class ArenaLifecycleCoordinator {
         },
       },
       {
-        id: 'respawn-budget',
-        feature: 'missionStatus',
-        run: ({ profile, reconnectAfterDeath }) => {
-          if (!reconnectAfterDeath) this.ctx.coopDefenseRespawnBudgetSystem?.registerInitialSpawn(profile.id);
-        },
-      },
-      {
         // Nachzuegler (Reconnect, verspaetetes Loadout) bekommen ihr Ally-Flowfield hier; beim
         // Arenaaufbau existierten sie noch nicht.
         id: 'ally-flow-field',
@@ -591,14 +588,6 @@ export class ArenaLifecycleCoordinator {
           this.ctx.energyInjectorSystem?.removeOwner(playerId);
         },
       },
-      {
-        id: 'mission-objectives',
-        feature: 'missionStatus',
-        run: (playerId) => {
-          this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
-          this.coopMissionRuntime?.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
-        },
-      },
       { id: 'combat-state', feature: 'combat', run: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); } },
       {
         id: 'combat-resources',
@@ -635,8 +624,19 @@ export class ArenaLifecycleCoordinator {
       },
     ],
   });
-  /** Gemeinsamer Player-Lifecycle; beim Exit ueberlebt nur sein eingefrorener Presentation-Snapshot. */
-  private readonly playerRuntime = new PlayerWorldRuntime(this.playerRuntimeSteps);
+  /**
+   * Der Player-Lifecycle der laufenden World; `null`, solange keine World lokal materialisiert
+   * ist. Er gehoert der `WorldRuntime`; beim Exit ueberlebt nur der eingefrorene
+   * Presentation-Snapshot.
+   */
+  private get playerRuntime(): PlayerWorldRuntime | null {
+    return this.worldRuntime?.players ?? null;
+  }
+
+  /** Der activity-spezifische Spielerzustand der laufenden Mission; `null` ohne Coop-Activity. */
+  private get playerActivityRuntime(): CoopMissionPlayerRuntime | null {
+    return this.coopMissionRuntime?.playerActivity ?? null;
+  }
   /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
   /**
    * Host-seitiger Arbeitsstand aller persoenlichen Beitraege dieses Raums.
@@ -1419,7 +1419,7 @@ export class ArenaLifecycleCoordinator {
     this.hostSyncWorldParticipation();
     for (const profile of bridge.getConnectedPlayers()) {
       const canInitialSpawn = bridge.canPlayerInitialSpawn(profile.id);
-      const reconnectAfterDeath = this.ctx.coopDefenseRespawnBudgetSystem !== null
+      const reconnectAfterDeath = (this.playerActivityRuntime?.hasRespawnBudget ?? false)
         && bridge.canPlayerRespawn(profile.id);
       if ((canInitialSpawn || reconnectAfterDeath)
         && bridge.getPlayerReady(profile.id)
@@ -1574,6 +1574,12 @@ export class ArenaLifecycleCoordinator {
 
     this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
     bridge.publishCoopDefenseRespawnBudgetState(null);
+    // Ein regulaerer Ausgang blendet die letzte Ansicht aus. Sie wird hier eingefroren, weil die
+    // World-Instanz gleich endet und Player- wie Enemy-Runtime mit ihr fallen; der Fade zeigt
+    // danach ausschliesslich diese Projektion.
+    if (roundConclusion === 'victory' || roundConclusion === 'defeat') {
+      this.captureArenaExitEntityPresentation();
+    }
     // Diese Match-World endet hier gemeinsam mit ihrem Durchlauf. Ohne Phase, Activity und World bleibt kein
     // replizierter Weltzustand stehen, den eine spaetere Instanz faelschlich uebernehmen koennte.
     this.worldLifecycle.endInstance();
@@ -2574,7 +2580,7 @@ export class ArenaLifecycleCoordinator {
 
   /** True, wenn der gemeinsame PlayerWorldRuntime-Lifecycle diesen Spieler wirklich traegt. */
   isPlayerAttachedToWorld(playerId: string): boolean {
-    return this.playerRuntime.isAttached(playerId);
+    return this.playerRuntime?.isAttached(playerId) ?? false;
   }
 
   /**
@@ -2703,6 +2709,21 @@ export class ArenaLifecycleCoordinator {
    * Der World-Handoff behaelt nur die reine Darstellung; die Snapshots tragen keine Physics.
    */
   beginArenaExitPresentation(): void {
+    // Auf dem Client steht die World hier noch; der Host hat sie mit dem Rundenabschluss bereits
+    // beendet und sein Bild dort eingefroren. Beide Wege enden in derselben Projektion.
+    this.captureArenaExitEntityPresentation();
+    this.synchronizeLocalWorldLifecycle(null);
+    this.tearDownArena(true);
+  }
+
+  /**
+   * Friert das aktuelle Entity-Bild als reine Darstellung ein.
+   *
+   * Sie muss stehen, **bevor** die World-Instanz endet: Player- und Enemy-Runtime fallen mit ihr,
+   * und ein sichtbarer Exit verlaengert keine Gameplay-Lifetime, sondern zeigt nur noch diese
+   * physik- und managerfreie Projektion. Idempotent – wer zuerst kommt, friert ein.
+   */
+  private captureArenaExitEntityPresentation(): void {
     if (this.arenaExitEntityPresentation) return;
     const playerSprites = this.ctx.playerManager.getAllPlayers()
       .map((player) => player.displayObject)
@@ -2712,8 +2733,6 @@ export class ArenaLifecycleCoordinator {
       this.scene,
       [...playerSprites, ...enemySprites],
     );
-    this.synchronizeLocalWorldLifecycle(null);
-    this.tearDownArena(true);
   }
 
   private clearArenaExitPresentation(): void {
@@ -2761,12 +2780,13 @@ export class ArenaLifecycleCoordinator {
   }
 
   /**
-   * Kontext des Player-Lifecycles: Rolle, laufende Activity und die Teilnahme dieses Spielers.
-   * Er entscheidet, welche Runtime-Module ein Spieler ueberhaupt bekommt.
+   * Kontext des world-scoped Player-Lifecycles: Rolle und Teilnahme dieses Spielers.
+   *
+   * Die laufende Activity kommt hier nicht mehr vor - ihr Spieleranteil gehoert der
+   * {@link CoopMissionPlayerRuntime} und faellt mit ihr.
    */
   private resolvePlayerFeatures(participation: WorldParticipation): PlayerRuntimeFeatures {
     return resolvePlayerRuntimeFeatures({
-      activityKind: this.worldLifecycle.activity.kind,
       isHost: bridge.isHost(),
       participation,
     });
@@ -2783,28 +2803,33 @@ export class ArenaLifecycleCoordinator {
     reconnectAfterDeath = false,
     spawn?: { readonly x: number; readonly y: number },
   ): boolean {
-    return this.playerRuntime.attach(
+    const playerRuntime = this.playerRuntime;
+    if (!playerRuntime) return false;
+    const attached = playerRuntime.attach(
       { profile, reconnectAfterDeath, spawn },
       this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
     );
+    // Erst die World, dann ihre Activity: Der Missionsanteil setzt eine stehende Figur voraus.
+    if (attached) this.playerActivityRuntime?.attach(profile.id, reconnectAfterDeath);
+    return attached;
   }
 
   /** Einziger Detach-Pfad fuer Host und Client; der volle Abbau bleibt idempotent. */
   detachPlayerFromWorld(playerId: string): void {
-    this.playerRuntime.detach(playerId, this.resolvePlayerFeatures('interactive'));
+    // Umgekehrte Reihenfolge: Der Missionsanteil geht zuerst, solange seine Ziele noch stehen.
+    this.playerActivityRuntime?.detach(playerId);
+    this.playerRuntime?.detach(playerId);
   }
 
   /**
    * Loest jede Player-Runtime dieser World.
    *
-   * Der Abbau laeuft bewusst immer mit dem vollen Modulanteil, damit von einem Beobachter kein
-   * Kampfzustand stehen bleibt. Idempotent, und fuer Host wie Client gueltig.
+   * Der Abbau folgt dem Materialisierungs-Ledger jedes Spielers, nicht einer erneut aufgeloesten
+   * Policy. Idempotent, und fuer Host wie Client gueltig.
    */
   private detachAllWorldPlayers(): void {
-    const playerFeatures = this.resolvePlayerFeatures('interactive');
-    for (const player of [...this.ctx.playerManager.getAllPlayers()]) {
-      this.playerRuntime.detach(player.id, playerFeatures);
-    }
+    this.playerActivityRuntime?.detachAll();
+    this.playerRuntime?.detachAll();
   }
 
   terminateMatch(reason?: string): void {
@@ -3046,26 +3071,23 @@ export class ArenaLifecycleCoordinator {
       ? new CoopDefenseTeamBuffSystem()
       : null;
     this.ctx.coopDefenseSecondaryObjectiveConfigs = coopDefenseSecondaryObjectiveConfigs;
-    if (bridge.isHost()) {
-      if (missionMapConfig && objectiveUsesRespawnBudget(missionMapConfig.objective)) {
-        const respawnsPerPlayer = missionMapConfig.respawnsPerPlayer;
-        if (respawnsPerPlayer === undefined) {
-          throw new Error(`[ArenaLifecycleCoordinator] Map ${missionMapConfig.mapId} has no respawnsPerPlayer`);
-        }
-        const participantIds = bridge.getRoundParticipation()?.participantIds
-          ?? bridge.getConnectedPlayerIds();
-        this.ctx.coopDefenseRespawnBudgetSystem = new CoopDefenseRespawnBudgetSystem({
-          respawnsPerPlayer,
-          participantIds,
-        });
-        bridge.publishCoopDefenseRespawnBudgetState(this.ctx.coopDefenseRespawnBudgetSystem.getSnapshot());
-      } else {
-        this.ctx.coopDefenseRespawnBudgetSystem = null;
-        bridge.publishCoopDefenseRespawnBudgetState(null);
+    /**
+     * Das authored Lebensbudget dieser Mission. Es gehoert der Activity: Eine neue Mission in
+     * derselben World beginnt mit einem neuen Budget, eine World ohne Mission fuehrt keines.
+     */
+    const createMissionRespawnBudget = (): CoopDefenseRespawnBudgetSystem | null => {
+      if (!bridge.isHost() || !missionMapConfig || !objectiveUsesRespawnBudget(missionMapConfig.objective)) {
+        return null;
       }
-    } else {
-      this.ctx.coopDefenseRespawnBudgetSystem = null;
-    }
+      const respawnsPerPlayer = missionMapConfig.respawnsPerPlayer;
+      if (respawnsPerPlayer === undefined) {
+        throw new Error(`[ArenaLifecycleCoordinator] Map ${missionMapConfig.mapId} has no respawnsPerPlayer`);
+      }
+      return new CoopDefenseRespawnBudgetSystem({
+        respawnsPerPlayer,
+        participantIds: bridge.getRoundParticipation()?.participantIds ?? bridge.getConnectedPlayerIds(),
+      });
+    };
     // Ab hier entsteht der Gameplay-State dieser World-Instanz. Er gehoert der WorldRuntime und
     // faellt mit ihr; `ctx` liest ihn nur noch.
     const materialization = new WorldMaterialization();
@@ -3301,14 +3323,10 @@ export class ArenaLifecycleCoordinator {
         isAssaultRepelled: () => this.coopMissionRuntime?.coopDefenseMapDirector?.isAssaultRepelled() ?? false,
         // Dieselbe Quelle fuer survive und advance: das authored Respawn-Budget entscheidet,
         // wann ein Team-Wipe endgueltig ist.
-        isTeamWipedOut: () => {
-          const budget = this.ctx.coopDefenseRespawnBudgetSystem;
-          if (!budget) return false;
-          return budget.isTeamWiped(
-            bridge.getConnectedPlayerIds(),
-            bridge.getRoundParticipation()?.spectatorIds ?? [],
-          );
-        },
+        isTeamWipedOut: () => this.playerActivityRuntime?.isTeamWiped(
+          bridge.getConnectedPlayerIds(),
+          bridge.getRoundParticipation()?.spectatorIds ?? [],
+        ) ?? false,
         // Der Vorstoss-Sieg gehoert vollstaendig dem Missionsfortschritt.
         isAdvanceComplete: () => this.coopMissionRuntime?.coopDefenseMissionProgressSystem?.isRouteComplete() ?? false,
         isAdvanceFailed: () => this.coopMissionRuntime?.coopDefenseMissionProgressSystem?.isMissionFailed() ?? false,
@@ -3717,12 +3735,37 @@ export class ArenaLifecycleCoordinator {
         roundState: createMissionRoundState(),
       };
     };
+    /**
+     * Der Spieleranteil dieser Mission: Lebensbudget und die Freigabe gehaltener Missionsziele.
+     *
+     * Er wird mit der Activity materialisiert und nimmt dabei auf, wer bereits in der World
+     * steht - beim Erstaufbau niemand, bei einem Activity-Wechsel die vorhandene Besetzung.
+     */
+    const createMissionPlayerActivity = (): CoopMissionPlayerRuntime => {
+      const playerActivity = new CoopMissionPlayerRuntime({
+        respawnBudget: createMissionRespawnBudget(),
+        releaseMissionObjectives: (playerId) => {
+          this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
+          this.coopMissionRuntime?.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
+        },
+        publishRespawnBudget: (state) => { bridge.publishCoopDefenseRespawnBudgetState(state); },
+      });
+      for (const playerId of this.worldRuntime?.players?.attachedPlayerIds() ?? []) {
+        playerActivity.attach(playerId);
+      }
+      // Der Budgetstand ist repliziert; er entsteht mit der Mission und nicht mit der World.
+      playerActivity.publishRespawnBudget();
+      return playerActivity;
+    };
     if (coopMissionRuntime) {
       coopMissionRuntime.setObjectives(createMissionObjectives());
+      coopMissionRuntime.setPlayerActivity(createMissionPlayerActivity());
       coopMissionRuntime.addMaterializationStep((runtime) => {
         runtime.setObjectives(createMissionObjectives());
+        runtime.setPlayerActivity(createMissionPlayerActivity());
       });
     } else {
+      bridge.publishCoopDefenseRespawnBudgetState(null);
       // Ohne Mission gibt es keinen Fortschritt zu zeigen; ein stehengebliebener Stand waere das
       // Bild der letzten Runde.
       bridge.publishCoopDefenseMissionProgressPresentationState(null);
@@ -3911,13 +3954,9 @@ export class ArenaLifecycleCoordinator {
         ? bridge.canPlayerRespawn(playerId)
         : hasWorldFigure(this.getWorldParticipation(playerId))
     ));
-    this.ctx.combatSystem.setRespawnCallback((playerId) => {
-      const survival = this.ctx.coopDefenseRespawnBudgetSystem;
-      if (!survival) return true;
-      const consumed = survival.consumeRespawn(playerId);
-      if (consumed) bridge.publishCoopDefenseRespawnBudgetState(survival.getSnapshot());
-      return consumed;
-    });
+    this.ctx.combatSystem.setRespawnCallback(
+      (playerId) => this.playerActivityRuntime?.consumeRespawn(playerId) ?? true,
+    );
     this.ctx.combatSystem.setAuthoritativePositionResetCallback((playerId, x, y) => {
       this.coopMissionRuntime?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
     });
@@ -4206,10 +4245,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setDeathCallback((playerId, x, y) => {
       bridge.recordPlayerDeath(playerId);
       this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
-      this.ctx.coopDefenseRespawnBudgetSystem?.handlePlayerDeath(playerId);
-      if (this.ctx.coopDefenseRespawnBudgetSystem) {
-        bridge.publishCoopDefenseRespawnBudgetState(this.ctx.coopDefenseRespawnBudgetSystem.getSnapshot());
-      }
+      this.playerActivityRuntime?.handlePlayerDeath(playerId);
       this.ctx.flamethrowerUpgradeSystem?.handlePlayerDeath(playerId, x, y);
       this.ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y);
       this.coopMissionRuntime?.coopDefenseCarrySystem?.dropForPlayer(playerId, x, y);
@@ -5436,7 +5472,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.flamethrowerUpgradeSystem?.clear();
     this.ctx.flamethrowerUpgradeSystem = null;
     this.ctx.weaponUpgradeSystem = null;
-    this.ctx.coopDefenseRespawnBudgetSystem = null;
     this.ctx.projectileManager.setNaturalFlameExpiryCallback(null);
     this.ctx.hostPhysics.setEnemyMovementFactorResolver(null);
     this.ctx.combatSystem.setDeathCallback(null);

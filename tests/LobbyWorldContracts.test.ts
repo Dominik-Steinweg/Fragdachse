@@ -409,14 +409,15 @@ describe('LobbyWorld – Teilnahme none, Presentation preview', () => {
       aim: false,
     });
 
-    // Auch der Host fuehrt fuer sie keinen Spielerzustand: es gibt keinen Teilnehmer, dessen
-    // Runtime ueberhaupt angehaengt wuerde.
+    // Auch der Host fuehrt fuer sie keinen Spielerzustand: Ohne Eintrag in der World wird gar
+    // keine Runtime angehaengt, und was der Modulkontext ergaebe, kommt nie zum Tragen.
+    expect(hasWorldRuntimeEntry('none')).toBe(false);
     const features = resolvePlayerRuntimeFeatures({
-      activityKind: null,
       isHost: true,
       participation: 'none',
     });
-    expect(features.missionStatus).toBe(false);
+    // Missionsgebundene Module gibt es hier ohnehin nicht mehr; sie gehoeren der Activity.
+    expect(Object.keys(features)).not.toContain('missionStatus');
   });
 });
 

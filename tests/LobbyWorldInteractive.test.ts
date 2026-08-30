@@ -232,10 +232,11 @@ describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
 
   it('baut die Player-Runtime ohne missionsgebundene Module auf', () => {
     const features = resolvePlayerRuntimeFeatures({
-      activityKind: null,
       isHost: true,
       participation: 'interactive',
     });
+    // Kein Fake-Missionszustand, nur weil eine Figur existiert: Missionsmodule sind seit der
+    // Player-Lifetime-Trennung ueberhaupt kein World-Feature mehr.
     expect(features).toEqual({
       entity: true,
       worldTargeting: true,
@@ -244,8 +245,6 @@ describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
       combatResources: true,
       loadoutTools: true,
       playerBuild: true,
-      // Kein Fake-Missionszustand, nur weil eine Figur existiert.
-      missionStatus: false,
     });
   });
 

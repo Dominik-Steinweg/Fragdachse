@@ -24,6 +24,7 @@ import type { EnemyAiTargetCatalog } from '../systems/EnemyAiTargetCatalog';
 import type { EnemyStrategicTargetService } from '../systems/EnemyStrategicTargetService';
 import { allyFlowFieldId, type FlowFieldCoordinator } from '../systems/flowfield/FlowFieldCoordinator';
 import type { NecromancySystem } from '../systems/NecromancySystem';
+import type { CoopMissionPlayerRuntime } from './CoopMissionPlayerRuntime';
 import type { CoopDefenseMissionProgressPresentationState, SyncedCoopDefenseCarryState } from '../types';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { ActivityRuntime } from '../world/ActivityRuntimeHost';
@@ -159,6 +160,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   private necromancyOwner: NecromancySystem | null = null;
   private mapEventOwner: CoopDefenseMapEventDirector | null = null;
   private objectiveOwner: CoopMissionObjectiveRuntime | null = null;
+  private playerActivityOwner: CoopMissionPlayerRuntime | null = null;
   private scopedBindings: CoopMissionScopedBinding[] = [];
   private materializationSteps: CoopMissionMaterializationStep[] = [];
   private destroyed = false;
@@ -243,6 +245,13 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   get coopDefenseObjectivePlacementRewardSystem(): CoopDefenseObjectivePlacementRewardSystem | null {
     return this.objectiveOwner?.placementReward ?? null;
   }
+  /**
+   * Der activity-spezifische Spielerzustand dieser Mission.
+   *
+   * Er existiert nur, solange sie laeuft: Ein Activity-Wechsel in derselben World zerstoert ihn
+   * und materialisiert ihn fuer die neue Mission neu, waehrend die `PlayerWorldRuntime` steht.
+   */
+  get playerActivity(): CoopMissionPlayerRuntime | null { return this.playerActivityOwner; }
 
   setEnemyManager(manager: EnemyManager): void {
     this.claimEmptySlot('enemy manager', this.enemyOwner);
@@ -289,6 +298,12 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   setObjectives(runtime: CoopMissionObjectiveRuntime): void {
     this.claimEmptySlot('objective runtime', this.objectiveOwner);
     this.objectiveOwner = runtime;
+    this.publishBindings();
+  }
+
+  setPlayerActivity(runtime: CoopMissionPlayerRuntime): void {
+    this.claimEmptySlot('player activity runtime', this.playerActivityOwner);
+    this.playerActivityOwner = runtime;
     this.publishBindings();
   }
 
@@ -406,7 +421,11 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     // Entity-Teardown, damit kein Destroy-Callback ueber einen langlebigeren Service zurueckgreift.
     this.bindingsChanged(null);
 
-    // Ziele und Fortschritt fallen zuerst: Sie steuern Directors und Druck, nicht umgekehrt.
+    // Der Missionsanteil der Spieler faellt zuerst: Sein Abbau gibt gehaltene Ziele frei und
+    // braucht sie dafuer noch.
+    this.playerActivityOwner?.destroy();
+
+    // Ziele und Fortschritt folgen: Sie steuern Directors und Druck, nicht umgekehrt.
     this.objectiveOwner?.carry?.destroy();
     this.objectiveOwner?.placementReward?.reset();
     this.objectiveOwner?.repair?.reset();
@@ -446,6 +465,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.navigationOwner?.releaseGridChanges();
     this.navigationOwner?.coordinator.destroy();
 
+    this.playerActivityOwner = null;
     this.objectiveOwner = null;
     this.mapEventOwner = null;
     this.necromancyOwner = null;

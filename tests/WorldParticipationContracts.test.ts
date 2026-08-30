@@ -192,9 +192,12 @@ describe('WorldParticipation – kanonisch repliziert', () => {
     expect(body).toContain("bridge.getRoundRole(profile.id) === 'participant'");
     expect(body).not.toContain('this.getPlayerCapabilities(profile.id).canMove');
 
-    // Der Attach fragt die Teilnahme; der Abbau raeumt bewusst immer den vollen Anteil ab.
+    // Der Attach fragt die Teilnahme; der Abbau liest sie nicht erneut, sondern folgt dem
+    // Materialisierungs-Ledger des Spielers.
     expect(source).toContain('this.resolvePlayerFeatures(this.getWorldParticipation(profile.id))');
-    expect(source).toContain("this.resolvePlayerFeatures('interactive')");
+    expect(source).not.toContain("this.resolvePlayerFeatures('interactive')");
+    expect(source).toContain('this.playerRuntime?.detach(playerId);');
+    expect(source).toContain('this.playerRuntime?.detachAll();');
   });
 
   it('bindet den Stand an die World-Instanz, aus der er stammt', () => {

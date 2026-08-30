@@ -1,5 +1,6 @@
 import { ActivityRuntimeHost } from './ActivityRuntimeHost';
 import type { PersistentBaseWorldBinding } from './PersistentBaseWorldBinding';
+import type { PlayerWorldRuntime } from './PlayerWorldRuntime';
 import type { WorldDescriptor } from './WorldDescriptor';
 import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldPresentationBinding } from './WorldPresentationBinding';
@@ -36,6 +37,7 @@ export class WorldRuntime {
   private materializedWorld: WorldMaterialization | null = null;
   private presentationBinding: WorldPresentationBinding | null = null;
   private persistentBaseBinding: PersistentBaseWorldBinding | null = null;
+  private playerRuntime: PlayerWorldRuntime | null = null;
   private worldScopedBindings: WorldScopedBinding[] = [];
   private destroyed = false;
 
@@ -65,6 +67,25 @@ export class WorldRuntime {
   /** Die world-lokale Materialisierung der persistenten Basis; `null`, wenn diese World keine fuehrt. */
   get persistentBase(): PersistentBaseWorldBinding | null {
     return this.persistentBaseBinding;
+  }
+
+  /**
+   * Wer in dieser World steht.
+   *
+   * Die Player-Runtime gehoert der World und ueberlebt deshalb einen Activity-Wechsel in ihr;
+   * mit dem Ende der World steht dagegen niemand mehr in ihr.
+   */
+  get players(): PlayerWorldRuntime | null {
+    return this.playerRuntime;
+  }
+
+  /** Setzt die Player-Runtime dieser World; eine vorhandene loest zuvor alle ihre Spieler. */
+  setPlayers(runtime: PlayerWorldRuntime | null): void {
+    this.assertAlive('player runtime');
+    if (runtime === this.playerRuntime) return;
+    const previous = this.playerRuntime;
+    this.playerRuntime = runtime;
+    previous?.detachAll();
   }
 
   /**
@@ -143,6 +164,9 @@ export class WorldRuntime {
    * Aufbaureihenfolge ab – und kann dabei per Konstruktion keine Darstellung mehr erreichen, die
    * ein Uebergang weiterzeigt oder weiterverwendet. Der Abschluss des persistenten Basisbestands
    * laeuft deshalb vor dem Abbau der Bau-Runtime, aber nach dem Abgang der Darstellung.
+   *
+   * Die Spieler verlassen die World vor ihrer Activity: Ihr Abbau gibt noch gehaltene
+   * Missionsziele frei und braucht die Activity dafuer.
    */
   destroy(): void {
     if (this.destroyed) return;
@@ -150,14 +174,17 @@ export class WorldRuntime {
     const presentation = this.presentationBinding;
     const persistentBase = this.persistentBaseBinding;
     const materialization = this.materializedWorld;
+    const players = this.playerRuntime;
     const bindings = this.worldScopedBindings;
     this.presentationBinding = null;
     this.persistentBaseBinding = null;
     this.materializedWorld = null;
+    this.playerRuntime = null;
     this.worldScopedBindings = [];
     // Nur was diese Runtime noch besitzt: eine zuvor freigegebene Darstellung gehoert bereits
     // jemand anderem und wird hier nicht abgeraeumt.
     presentation?.destroy();
+    players?.detachAll();
     this.activity.close();
     persistentBase?.destroy();
     for (const binding of [...bindings].reverse()) binding.destroy();

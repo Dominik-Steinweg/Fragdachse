@@ -30,7 +30,6 @@ function features(overrides: Partial<PlayerRuntimeFeatures> = {}): PlayerRuntime
     combatResources: true,
     loadoutTools: true,
     playerBuild: true,
-    missionStatus: true,
     ...overrides,
   };
 }
@@ -58,13 +57,9 @@ function detachStep(id: string, feature: PlayerRuntimeFeature, calls: string[]):
 }
 
 describe('Player-Lifecycle – kontextgesteuerte Module', () => {
-  it('leitet die Module aus Rolle und Activity ab', () => {
-    const hostMission = resolvePlayerRuntimeFeatures({
-      activityKind: 'coop-mission',
-      isHost: true,
-      participation: 'interactive',
-    });
-    expect(hostMission).toEqual({
+  it('leitet ausschliesslich world-scoped Module aus Rolle und Teilnahme ab', () => {
+    const host = resolvePlayerRuntimeFeatures({ isHost: true, participation: 'interactive' });
+    expect(host).toEqual({
       entity: true,
       worldTargeting: true,
       navigation: true,
@@ -72,45 +67,20 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       combatResources: true,
       loadoutTools: true,
       playerBuild: true,
-      missionStatus: true,
     });
 
-    // Eine World ohne Activity fuehrt keinen missionsgebundenen Spielerzustand – der gemeinsame
-    // Lifecycle initialisiert eben nicht automatisch den vollen Mission-Stack.
-    const hostPeacefulWorld = resolvePlayerRuntimeFeatures({
-      activityKind: null,
-      isHost: true,
-      participation: 'interactive',
-    });
-    expect(hostPeacefulWorld.missionStatus).toBe(false);
-    expect(hostPeacefulWorld.entity).toBe(true);
-    expect(hostPeacefulWorld.combat).toBe(true);
-
-    // PvP hat eine Activity, aber keine Mission.
-    expect(resolvePlayerRuntimeFeatures({
-      activityKind: 'deathmatch',
-      isHost: true,
-      participation: 'interactive',
-    }).missionStatus).toBe(false);
+    // Missionsgebundener Spielerzustand ist hier kein Feature mehr: Er wuerde einen
+    // Activity-Wechsel in derselben World nicht ueberleben und gehoert deshalb der Activity.
+    expect(Object.keys(host)).not.toContain('missionStatus');
 
     // Ein Beobachter steht in der World, simuliert darin aber nicht.
-    const observer = resolvePlayerRuntimeFeatures({
-      activityKind: 'coop-mission',
-      isHost: true,
-      participation: 'observer',
-    });
+    const observer = resolvePlayerRuntimeFeatures({ isHost: true, participation: 'observer' });
     expect(observer.entity).toBe(true);
     expect(observer.worldTargeting).toBe(true);
     expect(observer.combat).toBe(false);
-    expect(observer.missionStatus).toBe(false);
 
     // Ein Client fuehrt keine autoritative Simulation, aber seine Spielfigur.
-    const client = resolvePlayerRuntimeFeatures({
-      activityKind: 'coop-mission',
-      isHost: false,
-      participation: 'interactive',
-    });
-    expect(client).toEqual({
+    expect(resolvePlayerRuntimeFeatures({ isHost: false, participation: 'interactive' })).toEqual({
       entity: true,
       worldTargeting: true,
       navigation: false,
@@ -118,8 +88,49 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       combatResources: false,
       loadoutTools: false,
       playerBuild: false,
-      missionStatus: false,
     });
+  });
+
+  it('baut beim Detach genau die Module ab, die der Attach materialisiert hat', () => {
+    const calls: string[] = [];
+    const runtime = new PlayerWorldRuntime({
+      attach: [step('entity', 'entity', calls), step('combat', 'combat', calls)],
+      detach: [
+        detachStep('combat', 'combat', calls),
+        detachStep('targeting', 'worldTargeting', calls),
+        detachStep('entity', 'entity', calls),
+      ],
+    });
+
+    // Ein Beobachter bekommt keinen Kampfzustand ...
+    const observer = resolvePlayerRuntimeFeatures({ isHost: true, participation: 'observer' });
+    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, observer)).toBe(true);
+    expect(calls).toEqual(['attach:entity']);
+
+    // ... und baut auch dann keinen ab, wenn die Policy ihn inzwischen als Teilnehmer sehen
+    // wuerde. Der Detach liest das Ledger, nicht die Policy von jetzt.
+    calls.length = 0;
+    runtime.detach('p1');
+    expect(calls).toEqual(['detach:targeting', 'detach:entity']);
+    expect(runtime.isAttached('p1')).toBe(false);
+  });
+
+  it('loest ueber detachAll jeden getragenen Spieler genau einmal', () => {
+    const calls: string[] = [];
+    const runtime = new PlayerWorldRuntime({
+      attach: [step('entity', 'entity', calls)],
+      detach: [detachStep('entity', 'entity', calls)],
+    });
+    const features = resolvePlayerRuntimeFeatures({ isHost: true, participation: 'interactive' });
+    runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features);
+    runtime.attach({ profile: { ...PROFILE, id: 'p2' }, reconnectAfterDeath: false }, features);
+    expect(runtime.attachedPlayerIds()).toEqual(['p1', 'p2']);
+
+    calls.length = 0;
+    runtime.detachAll();
+    runtime.detachAll();
+    expect(calls).toEqual(['detach:entity', 'detach:entity']);
+    expect(runtime.attachedPlayerIds()).toEqual([]);
   });
 
   it('laesst nur die Module laufen, deren Feature aktiv ist', () => {
@@ -128,21 +139,21 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       attach: [
         step('entity', 'entity', calls),
         step('combat', 'combat', calls),
-        step('mission', 'missionStatus', calls),
+        step('loadout', 'loadoutTools', calls),
       ],
       detach: [
-        detachStep('mission', 'missionStatus', calls),
+        detachStep('loadout', 'loadoutTools', calls),
         detachStep('combat', 'combat', calls),
         detachStep('entity', 'entity', calls),
       ],
     });
 
-    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features({ missionStatus: false })))
+    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features({ loadoutTools: false })))
       .toBe(true);
     expect(calls).toEqual(['attach:entity', 'attach:combat']);
 
     calls.length = 0;
-    runtime.detach('p1', features({ missionStatus: false }));
+    runtime.detach('p1');
     expect(calls).toEqual(['detach:combat', 'detach:entity']);
   });
 
@@ -152,7 +163,7 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       attach: [],
       detach: [detachStep('entity', 'entity', calls), detachStep('combat', 'combat', calls)],
     });
-    runtime.detach('p1', features({ combat: false }));
+    runtime.detach('p1');
     expect(calls).toEqual([]);
   });
 });
@@ -206,8 +217,8 @@ describe('Player-Lifecycle – atomarer Attach', () => {
     expect(runtime.attach(context, features())).toBe(true);
     expect(calls).toEqual(['attach:entity']);
 
-    runtime.detach('p1', features());
-    runtime.detach('p1', features());
+    runtime.detach('p1');
+    runtime.detach('p1');
     expect(runtime.isAttached('p1')).toBe(false);
     expect(runtime.attach(context, features())).toBe(true);
     expect(calls).toEqual(['attach:entity', 'detach:entity', 'attach:entity']);
@@ -238,8 +249,13 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
         .toHaveLength(1);
     }
 
-    // Der Kontext kommt aus der Activity, nicht aus einer Modusabfrage.
-    expect(source).toContain('activityKind: this.worldLifecycle.activity.kind');
+    // Der world-scoped Kontext kennt die Activity nicht mehr: Ihr Spieleranteil gehoert der
+    // Activity-Runtime und faellt mit ihr.
+    const featureStart = source.indexOf('  private resolvePlayerFeatures(');
+    const featureBody = source.slice(featureStart, source.indexOf('\n  }', featureStart));
+    expect(featureStart).toBeGreaterThan(0);
+    expect(featureBody).not.toContain('activityKind');
+    expect(source).toContain('this.playerActivityRuntime?.attach(profile.id, reconnectAfterDeath)');
   });
 
   it('fuehrt auch Startbesetzung und Client-Roster ueber denselben Lifecycle', () => {
