@@ -5,6 +5,7 @@ import {
   getStoredCoopDefenseProgress,
   markStoredCoopDefenseBossMapCompleted,
   resetStoredCoopDefenseCharacter,
+  setStoredCoopDefenseCheatProgress,
   setStoredCoopDefenseClassesUnlocked,
   setStoredCoopDefenseLoadoutSlot,
   setStoredCoopDefenseTotalXp,
@@ -136,6 +137,16 @@ describe('coop-defense class unlock progression', () => {
     const progress = getStoredCoopDefenseProgress();
     expect(progress.highestUnlockedMapId).toBe('15');
     expect(progress.unlockedClassIds).toEqual(['dachs_nukem', 'dachs_of_steel']);
+  });
+
+  it('derives debug class unlocks from the selected highest map', () => {
+    for (const mapId of ['5', '10', '1'] as const) {
+      setStoredCoopDefenseCheatProgress(0, 0, mapId);
+      const progress = getStoredCoopDefenseProgress();
+      const expectedClassIds = getUnlockedCoopDefenseClassIds(mapId);
+      expect(progress.unlockedClassIds).toEqual(expectedClassIds);
+      expect(progress.classesUnlocked).toBe(expectedClassIds.length > 0);
+    }
   });
 
   it('keeps existing class profiles and loadouts unchanged when Inspector unlocks on Map 10', () => {

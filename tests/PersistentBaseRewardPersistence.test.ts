@@ -12,6 +12,7 @@ import {
   setStoredPersistentBaseRewardState,
 } from '../src/utils/localPreferences';
 import { DEFAULT_PERSISTENT_BASE_REWARD_STATE } from '../src/persistentBase/PersistentBaseRewardTypes';
+import { getPersistentBaseRewardIds } from '../src/persistentBase/PersistentBaseRewardCatalog';
 
 class MemoryStorage implements Storage {
   readonly values = new Map<string, string>();
@@ -44,6 +45,14 @@ describe('Persistent-Base-Rewards – V5-Persistenz', () => {
       .toEqual(['base_health_pedestal']);
     expect(grantStoredPersistentBaseRewards(['base_health_pedestal'] as const)).toEqual([]);
     expect(getStoredPersistentBaseRewardState().placements).toEqual([]);
+  });
+
+  it('grants every catalog reward and keeps repeated grants idempotent', () => {
+    const rewardIds = getPersistentBaseRewardIds();
+    expect(grantStoredPersistentBaseRewards(rewardIds)).toEqual(rewardIds);
+    expect(getStoredPersistentBaseRewardUnlocks()).toEqual(rewardIds);
+    expect(grantStoredPersistentBaseRewards(rewardIds)).toEqual([]);
+    expect(getStoredPersistentBaseRewardUnlocks()).toHaveLength(rewardIds.length);
   });
 
   it('rejects unknown and unowned placements, then round-trips a valid host state', () => {

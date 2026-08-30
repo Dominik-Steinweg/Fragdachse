@@ -17,6 +17,7 @@ import {
   PERSISTENT_BASE_UNLOCK_AFTER_MAP_ID,
 } from '../src/config/persistentBase';
 import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../src/config/coopDefenseMapUnlocks';
+import { resolvePersistentBaseBuildAreaForStage } from '../src/persistentBase/PersistentBaseCore';
 
 /**
  * Phase 3A – die persistente Basis ist ein eigenstaendiges Entitlement.
@@ -72,6 +73,19 @@ describe('Persistente Basis – Freischaltung', () => {
     expect(unlockStoredPersistentBaseAreaStageAfterVictory('10')).toBe(false);
     expect(setStoredPersistentBaseAreaStage(0)).toBe(false);
     expect(getStoredPersistentBaseAreaStage()).toBe(1);
+  });
+
+  it('unterstuetzt die lokalen Debug-Schalter fuer Basis und Baubereich', () => {
+    expect(setStoredPersistentBaseUnlocked(true)).toBe(true);
+    expect(setStoredPersistentBaseAreaStage(1)).toBe(true);
+
+    const progress = getStoredCoopDefenseProgress();
+    expect(progress.persistentBaseUnlocked).toBe(true);
+    expect(progress.persistentBaseAreaStage).toBe(1);
+    expect(resolvePersistentBaseBuildAreaForStage(progress.persistentBaseAreaStage)).toEqual({
+      kind: 'radius',
+      radiusCells: 5,
+    });
   });
 
   it('vergibt sie beim Sieg auf der Freischaltmap und nur dort', () => {

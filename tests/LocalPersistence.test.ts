@@ -18,7 +18,10 @@ import {
   importStoredGameProgressJson,
   invalidateLocalStorageCache,
   resetStoredCoopDefenseCharacter,
+  setStoredCoopDefenseCheatProgress,
+  setStoredCoopDefenseItemsUnlocked,
   setStoredCoopDefenseTotalXp,
+  grantStoredPersistentBaseRewards,
   setStoredPersistentBaseUnlocked,
   setStoredPersistentBaseAreaStage,
   setStoredPersistentBaseState,
@@ -31,6 +34,7 @@ import { resolveBrowserLocale } from '../src/i18n/types';
 import { buildDefaultCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 import { PERSISTENT_BASE_STATE_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type { PersistentBaseState } from '../src/persistentBase/PersistentBaseTypes';
+import { getPersistentBaseRewardIds } from '../src/persistentBase/PersistentBaseRewardCatalog';
 
 class MemoryStorage implements Storage {
   readonly values = new Map<string, string>();
@@ -260,6 +264,28 @@ describe('local progress generation', () => {
       revision: 0,
       constructions: [],
     });
+  });
+
+  it('resets the complete coop debug progress to its defaults', () => {
+    setStoredCoopDefenseCheatProgress(12_345, 4, '10');
+    setStoredCoopDefenseItemsUnlocked(true);
+    setStoredPersistentBaseUnlocked(true);
+    setStoredPersistentBaseAreaStage(1);
+    grantStoredPersistentBaseRewards(getPersistentBaseRewardIds());
+
+    resetStoredCoopDefenseCharacter();
+
+    const progress = getStoredCoopDefenseProgress();
+    expect(progress.totalXp).toBe(0);
+    expect(progress.highestUnlockedMapId).toBe('1');
+    expect(progress.completedBossMapIds).toEqual([]);
+    expect(progress.unlockedClassIds).toEqual([]);
+    expect(progress.classesUnlocked).toBe(false);
+    expect(progress.itemsUnlocked).toBe(false);
+    expect(progress.items).toEqual([]);
+    expect(progress.persistentBaseUnlocked).toBe(false);
+    expect(progress.persistentBaseAreaStage).toBe(0);
+    expect(progress.persistentBaseRewardUnlocks).toEqual([]);
   });
 
   it('ignores progress under the previous storage key and preserves settings', () => {

@@ -41,7 +41,7 @@ import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { HostileBaseIndicator, getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { countSceneDisplayObjects, forEachSceneDisplayObject } from './arena/sceneDisplayObjects';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
-import { CoopDefenseXpDebugOverlay } from '../ui/CoopDefenseXpDebugOverlay';
+import { CoopDefenseDebugOverlay } from '../ui/CoopDefenseDebugOverlay';
 import { CoopDefenseBalanceReportOverlay } from '../ui/CoopDefenseBalanceReportOverlay';
 import { CoopDefenseBalanceTracker, buildBalanceBuildSnapshot } from '../debug/coopDefenseBalance/tracker';
 import {
@@ -128,7 +128,6 @@ import {
   restoreStoredCoopDefenseProgress,
   setStoredCoopDefenseCheatProgress,
   getStoredCoopDefenseLoadout,
-  setStoredCoopDefenseClassesUnlocked,
   setStoredCoopDefenseLoadoutSlot,
   switchStoredCoopDefenseClassLoadout,
   setStoredLoadoutSlot,
@@ -136,10 +135,14 @@ import {
   resetStoredCoopDefenseUpgradeProfiles,
   claimStoredPendingCoopDefenseItemReward,
   equipStoredCoopDefenseItem,
+  grantStoredPersistentBaseRewards,
   getStoredCoopDefenseItemsUnlocked,
   getStoredPendingCoopDefenseItemRewards,
   salvageStoredCoopDefenseItem,
   setStoredPendingCoopDefenseItemReward,
+  setStoredCoopDefenseItemsUnlocked,
+  setStoredPersistentBaseAreaStage,
+  setStoredPersistentBaseUnlocked,
   unequipStoredCoopDefenseItem,
   unlockStoredCoopDefenseClassesAfterVictory,
   unlockStoredCoopDefenseItemsAfterVictory,
@@ -214,6 +217,7 @@ import { dequantizeAngle } from '../utils/angle';
 import type { FlowFieldDiagnostics } from '../systems/flowfield/FlowFieldCoordinator';
 import type { PersistentGpuWorldDiagnostics } from '../arena/rocks/PersistentGpuWorldSystem';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
+import { getPersistentBaseRewardIds } from '../persistentBase/PersistentBaseRewardCatalog';
 
 import {
   type ArenaContext,
@@ -376,7 +380,7 @@ export class ArenaScene extends Phaser.Scene {
   private netDebugOverlay: NetDebugOverlay | null = null;
   private performanceDiagnosticsOverlay: PerformanceDiagnosticsOverlay | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
-  private coopDefenseXpDebugOverlay: CoopDefenseXpDebugOverlay | null = null;
+  private coopDefenseDebugOverlay: CoopDefenseDebugOverlay | null = null;
   private coopDefenseBalanceTracker!: CoopDefenseBalanceTracker;
   private coopDefenseBalanceReportOverlay: CoopDefenseBalanceReportOverlay | null = null;
   private weaponBalanceLabOverlay: WeaponBalanceLabOverlay | null = null;
@@ -880,29 +884,47 @@ export class ArenaScene extends Phaser.Scene {
         this.matchResultsOverlay?.setBalanceFeedbackVisible(true);
       },
     );
-    this.coopDefenseXpDebugOverlay = new CoopDefenseXpDebugOverlay(
+    this.coopDefenseDebugOverlay = new CoopDefenseDebugOverlay(
       () => {
         const stored = getStoredCoopDefenseProgress();
         return {
           totalXp: stored.totalXp,
           bossPoints: stored.completedBossMapIds.length,
           highestUnlockedMapId: stored.highestUnlockedMapId,
-          classesUnlocked: stored.classesUnlocked,
+          unlockedClassIds: [...stored.unlockedClassIds],
+          itemsUnlocked: stored.itemsUnlocked,
+          persistentBaseUnlocked: stored.persistentBaseUnlocked,
+          persistentBaseAreaStage: stored.persistentBaseAreaStage,
+          persistentBaseRewardUnlocks: [...stored.persistentBaseRewardUnlocks],
         };
       },
-      (totalXp, bossPoints, highestUnlockedMapId, classesUnlocked) => {
+      (totalXp, bossPoints, highestUnlockedMapId) => {
         setStoredCoopDefenseCheatProgress(totalXp, bossPoints, highestUnlockedMapId);
-        setStoredCoopDefenseClassesUnlocked(classesUnlocked);
-        this.refreshStoredCoopDefenseProgress();
-        this.applyDefaultCoopDefenseMapSelection();
-        this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+        this.refreshCoopDefenseDebugState({ applyMapSelection: true });
       },
       () => {
         resetStoredCoopDefenseCharacter();
-        this.refreshStoredCoopDefenseProgress();
-        this.applyDefaultCoopDefenseMapSelection();
-        this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-        this.ctx.leftPanel.refreshColorIndicator();
+        this.refreshCoopDefenseDebugState({ applyMapSelection: true });
+      },
+      () => {
+        setStoredPersistentBaseUnlocked(true);
+        this.refreshCoopDefenseDebugState();
+      },
+      () => {
+        setStoredPersistentBaseAreaStage(1);
+        this.refreshCoopDefenseDebugState();
+      },
+      (rewardId) => {
+        grantStoredPersistentBaseRewards([rewardId]);
+        this.refreshCoopDefenseDebugState();
+      },
+      () => {
+        grantStoredPersistentBaseRewards(getPersistentBaseRewardIds());
+        this.refreshCoopDefenseDebugState();
+      },
+      () => {
+        setStoredCoopDefenseItemsUnlocked(true);
+        this.refreshCoopDefenseDebugState();
       },
       () => this.coopDefenseBalanceTracker.isRecordingEnabled(),
       (enabled) => this.coopDefenseBalanceTracker.setRecordingEnabled(enabled),
@@ -1886,11 +1908,11 @@ export class ArenaScene extends Phaser.Scene {
     if (phase === 'LOBBY' && !deferArenaExit) {
       this.clearDebugModes();
       if (!isCoopDefenseMode(bridge.getGameMode())) {
-        this.coopDefenseXpDebugOverlay?.hide();
+        this.coopDefenseDebugOverlay?.hide();
         this.coopDefenseUpgradesOverlay?.hide();
       }
     } else {
-      this.coopDefenseXpDebugOverlay?.hide();
+      this.coopDefenseDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
     }
 
@@ -2025,7 +2047,7 @@ export class ArenaScene extends Phaser.Scene {
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
       if (diagnosticsActive) lobbyUiMs = performance.now() - lobbyUiStartedAt;
     } else {
-      this.coopDefenseXpDebugOverlay?.hide();
+      this.coopDefenseDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
       this.lobbyOverlay.setCoopDefenseProgress(null);
       this.lastLobbySidebarSignature = null;
@@ -3192,7 +3214,7 @@ export class ArenaScene extends Phaser.Scene {
     if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
     if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) return;
 
-    this.coopDefenseXpDebugOverlay?.hide();
+    this.coopDefenseDebugOverlay?.hide();
     // Einmal validieren und danach waehrend des offenen Menues den kontrollierten Scene-State
     // verwenden. Der unveraenderte Objektstand dient zugleich als Cancel-Snapshot.
     this.refreshStoredCoopDefenseProgress({ refreshOverlay: false });
@@ -3210,7 +3232,7 @@ export class ArenaScene extends Phaser.Scene {
     // Zweite Verteidigungslinie neben der Button-Sperre.
     if (!getStoredCoopDefenseItemsUnlocked()) return;
 
-    this.coopDefenseXpDebugOverlay?.hide();
+    this.coopDefenseDebugOverlay?.hide();
     // Ab hier hat der Spieler seine Teile gesehen; der Hinweis am Button erlischt.
     markStoredCoopDefenseItemsSeen();
     this.refreshCoopDefenseItemsButton();
@@ -3233,6 +3255,17 @@ export class ArenaScene extends Phaser.Scene {
       isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
     );
     this.refreshCoopDefenseItemsButton();
+  }
+
+  /** Hält die lokale Lobby-Projektion nach einer Aktion im Coop-Debug-Overlay synchron. */
+  private refreshCoopDefenseDebugState(options: { applyMapSelection?: boolean } = {}): void {
+    this.refreshStoredCoopDefenseProgress();
+    if (options.applyMapSelection) this.applyDefaultCoopDefenseMapSelection();
+    this.lobbyOverlay.setCoopDefenseProgress(
+      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
+    );
+    this.refreshCoopDefenseItemsButton();
+    this.clientUpdate.refreshStoredProgressFallback();
   }
 
   private refreshCoopDefenseItemsButton(): void {
@@ -3825,8 +3858,8 @@ export class ArenaScene extends Phaser.Scene {
         event.preventDefault();
         return;
       }
-      if (this.coopDefenseXpDebugOverlay?.isOpen()) {
-        this.coopDefenseXpDebugOverlay.hide();
+      if (this.coopDefenseDebugOverlay?.isOpen()) {
+        this.coopDefenseDebugOverlay.hide();
         event.preventDefault();
         return;
       }
@@ -3891,7 +3924,7 @@ export class ArenaScene extends Phaser.Scene {
       if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
       if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
       if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
-      if (this.coopDefenseXpDebugOverlay?.isOpen()) return;
+      if (this.coopDefenseDebugOverlay?.isOpen()) return;
       if (this.weaponBalanceLabOverlay?.isOpen()) return;
 
       this.ctx.leftPanel.toggleOptionsOverlay();
@@ -3915,7 +3948,7 @@ export class ArenaScene extends Phaser.Scene {
       if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
       if (this.weaponBalanceLabOverlay?.isOpen()) return;
 
-      this.coopDefenseXpDebugOverlay?.toggle();
+      this.coopDefenseDebugOverlay?.toggle();
     };
 
     keyboard.on('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
@@ -3930,7 +3963,7 @@ export class ArenaScene extends Phaser.Scene {
       if (!isCoopDefenseMode(bridge.getGameMode())) return;
       if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
       if (this.ctx.leftPanel.isHelpOverlayOpen() || this.ctx.leftPanel.isOptionsOverlayOpen()) return;
-      if (this.coopDefenseUpgradesOverlay?.isOpen() || this.coopDefenseXpDebugOverlay?.isOpen()) return;
+      if (this.coopDefenseUpgradesOverlay?.isOpen() || this.coopDefenseDebugOverlay?.isOpen()) return;
       event.preventDefault();
       this.weaponBalanceLabOverlay?.toggle();
     };
@@ -4009,8 +4042,8 @@ export class ArenaScene extends Phaser.Scene {
       this.weaponBalanceLabRuntime?.cancel();
       this.weaponBalanceLabOverlay?.destroy();
       this.weaponBalanceLabOverlay = null;
-      this.coopDefenseXpDebugOverlay?.destroy();
-      this.coopDefenseXpDebugOverlay = null;
+      this.coopDefenseDebugOverlay?.destroy();
+      this.coopDefenseDebugOverlay = null;
       this.coopDefenseUpgradesOverlay?.destroy();
       this.coopDefenseUpgradesOverlay = null;
       this.hostileBaseIndicator?.destroy();
