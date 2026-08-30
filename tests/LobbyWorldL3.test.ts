@@ -668,7 +668,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(lifecycle).toContain('&& !this.pendingLobbyWorldPresentationRebuild;');
     expect(lifecycle).toContain('this.pendingLobbyWorldPresentationRebuild = true;');
     expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
-    expect(lifecycle).toContain('this.ctx.arenaResult = builder.buildDynamic(layout, {');
+    expect(lifecycle).toContain('arenaResult = builder.buildDynamic(layout, {');
     expect(lifecycle).toContain('builder.rebindWorldRuntime(');
   });
 
@@ -720,7 +720,7 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(lifecycle).toContain('builder.rebindWorldRuntime(');
     expect(lifecycle).toContain('this.tearDownArena(reusableArenaResult !== null);');
     expect(lifecycle).toContain('enablePersistentBaseGravel: persistentBaseGravel !== null,');
-    expect(lifecycle).toContain('this.ctx.arenaResult.groundSurface?.setPersistentBaseGravel(');
+    expect(lifecycle).toContain('arenaResult.groundSurface?.setPersistentBaseGravel(');
 
     const bridge = read('src/network/NetworkBridge.ts');
     const start = bridge.indexOf('  setGameMode(mode: GameMode): void {');

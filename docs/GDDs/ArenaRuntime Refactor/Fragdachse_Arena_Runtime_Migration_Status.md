@@ -31,16 +31,16 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 3`
-**Gesamtstatus:** `Phase 2 abgeschlossen`
+**Aktive Phase:** `Phase 4`
+**Gesamtstatus:** `Phase 3 abgeschlossen`
 **Letzter Integrations-Checkpoint:** `npm run check`
-**Nächster Schritt:** Phase 3 gegen aktuellen Branch verifizieren und umsetzen.
+**Nächster Schritt:** Phase 4 gegen aktuellen Branch verifizieren und umsetzen; danach Integrations-Checkpoint A.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
 | 1 Contracts | ✅ abgeschlossen | Lifecycle-/World-/Activity-/Persistent-Base-Contracts gezielt abgesichert. |
-| 2 WorldRuntime-Fundament | ✅ abgeschlossen | `WorldRuntime` + `ActivityRuntimeHost` in `src/world/`, erzeugt/zerstört im `WorldLifecycle`-Sink des `ArenaLifecycleCoordinator`. Slots für Presentation und Persistent Base sind Verträge und noch unbelegt. |
-| 3 World-Materialisierung | ⬜ offen | |
+| 2 WorldRuntime-Fundament | ✅ abgeschlossen | `WorldRuntime` + `ActivityRuntimeHost`, erzeugt/zerstört im `WorldLifecycle`-Sink. Presentation-/Persistent-Base-Slots sind Verträge und noch unbelegt. |
+| 3 World-Materialisierung | ✅ abgeschlossen | `WorldMaterialization` besitzt Layout, Presentation, Fels-/Bau-Runtime, Basen und Verdeckungsindex; `WorldRuntime` besitzt sie. Die sechs alten `ArenaContext`-Felder sind readonly Lesefassaden. |
 | 4 World Bindings / PlayerWorld | ⬜ offen | |
 | 5 Coop Encounter / Enemy Ownership | ⬜ offen | |
 | 6 Coop Objectives / Update / Presentation | ⬜ offen | |
@@ -63,6 +63,8 @@ Nur temporäre Migrationspfade eintragen.
 |---|---:|---|---|---:|
 | TD-1 | 2 | Der Lifecycle-Sink setzt `ArenaContext.world` weiterhin parallel zur `WorldRuntime`; alle bestehenden Consumer lesen den World-Kontext darüber. | `WorldRuntime.context` | Phase 11 |
 | TD-2 | 2 | `WorldRuntime.update()` wird über `ArenaLifecycleCoordinator.updateWorldRuntime()` aus `ArenaScene.update()` getaktet. | Zielpfad `ArenaRuntime.update()` | Phase 10 |
+| TD-3 | 3 | Der Sink gibt die `WorldMaterialization` beim Instanzende frei (`releaseMaterialization()`), weil die gebaute Arena das Ende ihrer World-Instanz überlebt; abgeräumt wird sie erst in `tearDownArena()`. Siehe Review-Kandidat RK-1. | `WorldMaterialization` | Phase 10 |
+| TD-4 | 3 | `ArenaContext.worldMaterialization` plus die sechs readonly Lesefassaden (`arenaResult`, `currentLayout`, `placementSystem`, `rockRegistry`, `baseManager`, `lightOccluderIndex`) als Zugriffspfad der noch nicht migrierten Consumer. | `WorldRuntime.materialization` | Phase 11 |
 
 ---
 
@@ -70,7 +72,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | ID | Bereich | Problem / Risiko | Relevanz für nächste Phase |
 |---|---|---|---|
-| – | – | – | – |
+| R-1 | World-Teardown | `WorldMaterialization.destroy()` hat eine harte Reihenfolge: erst Geometrie/Presentation abmelden, dann `beforePlacementRelease` (Persistent-Base-Abschluss), dann Bau-Runtime freigeben. Zu früh freigegebene Runtime-Objekte löschen den persistenten Basis-Arbeitsstand; zu spät abgemeldete Geometrie verändert eine für den Fast-Reinstance erhaltene Presentation. Vertrag liegt in `tests/WorldMaterializationOwnership.test.ts`. | Phase 4 und Phase 8 dürfen diese Reihenfolge nicht umsortieren. |
 
 ---
 
@@ -78,7 +80,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` + `git diff --check` | grün | 320 Testdateien, 2683 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` + `git diff --check` | grün | 321 Testdateien, 2694 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. Keine Browser-/Sichtprüfung durchgeführt. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -90,7 +92,7 @@ Coding-KIs tragen hier Änderungsbedarf ein, ändern aber die beiden kanonischen
 
 | ID | Ziel | Beobachtung | Vorgeschlagene Änderung | Status |
 |---|---|---|---|---|
-| – | Architektur / Plan | – | – | – |
+| RK-1 | Plan, Phase 3 / Phase 10 | Phase 3 setzt voraus, dass die World-Materialisierung dieselbe Lifetime wie die `WorldRuntime` hat. Im Ist-Code endet die World-Instanz an mehreren Stellen, bevor die Arena abgebaut wird: Rundenstart (`hostCheckReadyToStart`), Rundenende/Discard (Exit-Fade), Lobby-Fast-Reinstance und `onTransitionToLobby`. Ein Abbau am Instanzende würde die Exit-Fade-Darstellung und die Wiederverwendung der Lobby-Presentation zerstören. | Phase 3 auf den Owner-Schnitt beschränken (umgesetzt) und die Angleichung der Lifetimes ausdrücklich Phase 10 zuordnen: Der Flow-Owner besitzt die Übergangsreihenfolge und kann `tearDownArena()` und `endInstance()` zusammenführen. Danach entfällt TD-3. | offen |
 
 Statuswerte: `offen` · `manuell geprüft` · `abgelehnt` · `extern umgesetzt`
 
@@ -108,12 +110,13 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 **Aktuell relevant:**
 - Architektur-Dokument lesen.
 - Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
-- Transitional Debt und offene Risiken oben berücksichtigen.
-- Ownership-Anker der World: `src/world/WorldRuntime.ts` (Slot `activity` plus Presentation- und Persistent-Base-Binding) und `src/world/ActivityRuntimeHost.ts`. Erzeugung und Teardown liegen ausschließlich im `WorldLifecycle`-Sink des `ArenaLifecycleCoordinator`; die Verträge stehen in `tests/WorldRuntimeOwnership.test.ts`.
-- Die World-Materialisierung liegt weiterhin in `ArenaLifecycleCoordinator.buildWorld()` und `tearDownArena()`; Phase 3 verschiebt sie in diesen Owner.
+- Transitional Debt, R-1 und RK-1 oben berücksichtigen.
+- Ownership-Anker der World: `src/world/WorldRuntime.ts` (Slots `activity`, `materialization`, Presentation- und Persistent-Base-Binding), `src/world/WorldMaterialization.ts` und `src/world/ActivityRuntimeHost.ts`. Erzeugung im `buildWorld()`-Pass, Abbau in `tearDownArena()` über `destroyWorldMaterialization()`.
+- Verträge: `tests/WorldRuntimeOwnership.test.ts` und `tests/WorldMaterializationOwnership.test.ts`.
+- Noch beim Coordinator: World-Navigation/Flowfields, `PlayerWorldRuntime`, Persistent-Base-Anker/Build-Area und die World-Presentation-Synchronisation. Das ist der Stoff von Phase 4.
 
 **Nächste konkrete Aktion:**  
-`Phase 3 analysieren und gegen den aktuellen Stand verifizieren.`
+`Phase 4 analysieren und gegen den aktuellen Stand verifizieren.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

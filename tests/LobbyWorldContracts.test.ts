@@ -313,7 +313,9 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(lifecycle).toContain('if (activityDescriptor !== null) this.persistentBaseContributions.beginMission();');
     expect(lifecycle).toContain('if (store && registered && !store.hasActiveMission) {');
     expect(lifecycle).toContain('if (store && ownerId && removedPersistentBlueprint && !store.hasActiveMission) {');
-    expect(lifecycle).toContain('detachedPlacementSystem?.clearRuntimeRocks();');
+    expect(lifecycle).toContain('this.destroyWorldMaterialization(preserveAuthoredPresentation);');
+    // Die Bau-Runtime gibt ihre Zellen mit dem gebauten World-Zustand frei.
+    expect(read('src/world/WorldMaterialization.ts')).toContain('placement?.clearRuntimeRocks();');
     expect(lifecycle).toContain('}, presentation, activityDescriptor !== null)');
   });
 });

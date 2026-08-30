@@ -1,5 +1,6 @@
 import { ActivityRuntimeHost } from './ActivityRuntimeHost';
 import type { WorldDescriptor } from './WorldDescriptor';
+import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 
 /**
@@ -43,6 +44,7 @@ export class WorldRuntime {
   /** Der Activity-Slot dieser World. Eine World ohne Activity laesst ihn schlicht leer. */
   readonly activity: ActivityRuntimeHost;
 
+  private materializedWorld: WorldMaterialization | null = null;
   private presentationBinding: WorldPresentationBinding | null = null;
   private persistentBaseBinding: PersistentBaseWorldBinding | null = null;
   private destroyed = false;
@@ -58,6 +60,39 @@ export class WorldRuntime {
 
   isDestroyed(): boolean {
     return this.destroyed;
+  }
+
+  /** Der physisch materialisierte Zustand dieser World; `null`, solange nichts gebaut ist. */
+  get materialization(): WorldMaterialization | null {
+    return this.materializedWorld;
+  }
+
+  /**
+   * Uebernimmt den gebauten World-Zustand. Eine Runtime materialisiert genau einmal; ein zweiter
+   * Aufbau gehoert zu einer neuen Runtime.
+   */
+  materialize(materialization: WorldMaterialization): void {
+    this.assertAlive('materialization');
+    if (this.materializedWorld) {
+      throw new Error(
+        `[WorldRuntime] World ${this.descriptor.definitionId} is already materialized`,
+      );
+    }
+    this.materializedWorld = materialization;
+  }
+
+  /**
+   * Gibt den gebauten World-Zustand aus dem Besitz dieser Runtime frei und liefert ihn zurueck.
+   *
+   * Der Abbau der Arena haengt heute nicht am Ende der World-Instanz: Exit-Fade,
+   * Lobby-Fast-Reinstance und Rundenstart lassen die gebaute World bewusst stehen, nachdem ihre
+   * Instanz beendet wurde. Wer sie weiterfuehrt, uebernimmt sie hierueber ausdruecklich – danach
+   * raeumt {@link destroy} sie nicht mehr ab.
+   */
+  releaseMaterialization(): WorldMaterialization | null {
+    const released = this.materializedWorld;
+    this.materializedWorld = null;
+    return released;
   }
 
   /**
@@ -106,10 +141,15 @@ export class WorldRuntime {
     this.activity.close();
     const presentation = this.presentationBinding;
     const persistentBase = this.persistentBaseBinding;
+    const materialization = this.materializedWorld;
     this.presentationBinding = null;
     this.persistentBaseBinding = null;
+    this.materializedWorld = null;
     presentation?.destroy();
     persistentBase?.destroy();
+    // Nur was diese Runtime noch besitzt: ein zuvor freigegebener Aufbau gehoert bereits jemand
+    // anderem und wird hier nicht abgeraeumt.
+    materialization?.destroy({ preservePresentation: false });
   }
 
   private assertAlive(slot: string): void {

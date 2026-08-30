@@ -81,6 +81,7 @@ import type { FlowFieldCoordinator } from '../../systems/flowfield/FlowFieldCoor
 import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
+import type { WorldMaterialization } from '../../world/WorldMaterialization';
 import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 
 interface PlayerStatusRingLike {
@@ -128,24 +129,31 @@ export interface ArenaContext {
    * Modulvariablen oder erneut aus der Lobby-Auswahl.
    */
   world:             WorldRuntimeContext | null;
-  arenaResult:       ArenaBuilderResult | null;
-  currentLayout:     ArenaLayout        | null;
-  placementSystem:   PlacementSystem    | null;
+  /**
+   * Der gebaute Zustand der laufenden World-Instanz. Er gehoert der `WorldRuntime`, solange sie
+   * lebt; dieses Feld ist der Zugriffspfad der noch nicht migrierten Consumer.
+   *
+   * Die Felder darunter sind reine Lesefassaden darauf und werden ausschliesslich hier gesetzt.
+   */
+  worldMaterialization: WorldMaterialization | null;
+  readonly arenaResult:   ArenaBuilderResult | null;
+  readonly currentLayout: ArenaLayout        | null;
+  readonly placementSystem: PlacementSystem  | null;
   persistentBaseContributions: PersistentBaseContributionStore | null;
   persistentBaseRewards: PersistentBaseRewardStore | null;
   reinforcementMatrixSystem: ReinforcementMatrixSystem | null;
   energyInjectorSystem: EnergyInjectorSystem | null;
   targetStatusSystem: TargetStatusSystem | null;
-  rockRegistry:      RockRegistry       | null;
+  readonly rockRegistry: RockRegistry     | null;
   /**
    * Cache der lichtblockierenden Hindernisse. Wird aus denselben Referenzen aufgebaut,
    * die `CombatSystem` für Line-of-Sight nutzt, und über
    * `RockVisualHelper.refreshObstacleVisuals()` invalidiert – demselben Trichter, der
    * auch die statischen Sonnenschatten neu zeichnet.
    */
-  lightOccluderIndex: LightOccluderIndex | null;
+  readonly lightOccluderIndex: LightOccluderIndex | null;
   captureTheBeerSystem: CaptureTheBeerSystem | null;
-  baseManager: BaseManager | null;
+  readonly baseManager: BaseManager | null;
   enemyManager: EnemyManager | null;
 
   // Host-only Activity-/Round-systems (null on clients and outside their lifetime)

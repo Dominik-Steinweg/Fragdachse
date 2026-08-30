@@ -1020,7 +1020,18 @@ export class ArenaScene extends Phaser.Scene {
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
       // World-/Activity-scoped (start null)
-      world: null, arenaResult: null, currentLayout: null, placementSystem: null, persistentBaseContributions: null, persistentBaseRewards: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, rockRegistry: null, lightOccluderIndex: null, captureTheBeerSystem: null, baseManager: null, enemyManager: null,
+      world: null,
+      // Der gebaute World-Zustand gehoert der `WorldRuntime`. Die Felder darunter lesen ihn nur
+      // – ein Consumer, der `ctx.arenaResult` liest, sieht damit garantiert denselben Aufbau,
+      // den der World-Owner gerade fuehrt.
+      worldMaterialization: null,
+      get arenaResult() { return this.worldMaterialization?.arena ?? null; },
+      get currentLayout() { return this.worldMaterialization?.layout ?? null; },
+      get placementSystem() { return this.worldMaterialization?.placement ?? null; },
+      get rockRegistry() { return this.worldMaterialization?.rocks ?? null; },
+      get baseManager() { return this.worldMaterialization?.bases ?? null; },
+      get lightOccluderIndex() { return this.worldMaterialization?.lightOccluders ?? null; },
+      persistentBaseContributions: null, persistentBaseRewards: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, captureTheBeerSystem: null, enemyManager: null,
       resourceSystem: null, burrowSystem: null, loadoutManager: null,
       powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
       shieldBuffSystem: null, energyShieldSystem: null,

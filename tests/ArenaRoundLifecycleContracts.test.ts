@@ -48,6 +48,7 @@ function readTearDownArenaBody(): string {
  */
 const OWNED_ROUND_FIELDS: Readonly<Record<string, string>> = {
   world: 'this.worldLifecycle.detachRuntime()',
+  worldMaterialization: 'this.destroyWorldMaterialization(',
 };
 
 /** Erlaubte Ruecksetzformen: Referenz loeschen, Liste leeren, Sammlung leeren oder Besitzeraufruf. */
@@ -66,7 +67,10 @@ describe('arena round lifecycle contract', () => {
   it('kennt die round-scoped Felder des ArenaContext', () => {
     // Reine Absicherung des Parsers: eine leere Liste wuerde die Pruefungen unten wertlos machen.
     expect(roundScopedFields.length).toBeGreaterThan(30);
-    expect(roundScopedFields).toContain('arenaResult');
+    // Der gebaute World-Zustand steht als genau ein Owner im Kontext; die frueheren Einzelfelder
+    // (arenaResult, currentLayout, placementSystem, rockRegistry, baseManager, lightOccluderIndex)
+    // sind reine Lesefassaden darauf und koennen deshalb nicht mehr einzeln leaken.
+    expect(roundScopedFields).toContain('worldMaterialization');
     expect(roundScopedFields).toContain('persistentBaseContributions');
     expect(roundScopedFields).toContain('coopDefenseRoundStateSystem');
     expect(roundScopedFields).not.toContain('playerManager');
@@ -93,7 +97,10 @@ describe('arena round lifecycle contract', () => {
     const body = readTearDownArenaBody();
     // Die Mission-Session darf ihre Runtime-IDs verlieren, aber nicht ihren Arbeitsstand: der
     // Round-Teardown ist auch der Map-Wechsel innerhalb einer laufenden Mission.
-    expect(body).toContain('this.persistentBaseContributions.detachRuntimeObjects(');
+    // Der Abschluss laeuft im Abbau des gebauten World-Zustands – genau dort, wo die Bau-Runtime
+    // noch beantworten kann, welche Objekte die Runde ueberlebt haben.
+    expect(body).toContain('this.destroyWorldMaterialization(preserveAuthoredPresentation);');
+    expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseContributions.detachRuntimeObjects(');
 
     expect(body).toContain('this.ctx.persistentBaseContributions = null');
   });
