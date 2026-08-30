@@ -140,7 +140,7 @@ describe('arena round lifecycle contract', () => {
     // Der Abschluss laeuft im Abbau des gebauten World-Zustands – genau dort, wo die Bau-Runtime
     // noch beantworten kann, welche Objekte die Runde ueberlebt haben.
     expect(body).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');
-    expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseContributions.detachRuntimeObjects(');
+    expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseSession.finalizeWorldRuntimeObjects(');
 
     expect(body).toContain('this.ctx.persistentBaseContributions = null');
   });

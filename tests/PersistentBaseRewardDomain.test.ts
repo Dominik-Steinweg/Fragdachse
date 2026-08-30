@@ -8,6 +8,7 @@ import {
   type PersistentBaseRewardGrantRecipients,
 } from '../src/persistentBase/PersistentBaseRewardGrant';
 import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import {
   DEFAULT_PERSISTENT_BASE_REWARD_STATE,
   getPersistentBaseRewardStatus,
@@ -54,6 +55,9 @@ describe('Persistent Base Reward-Katalog', () => {
   });
 });
 
+/** Die Instanz, zu der ein Arbeitsstand in diesen Tests gehoert. */
+const MISSION = { worldRevision: 21, activityRevision: 7 } as const;
+
 describe('PersistentBaseRewardState', () => {
   it('derives locked, unplaced and placed without storing a status', () => {
     const state = {
@@ -87,20 +91,21 @@ describe('PersistentBaseRewardState', () => {
   });
 
   it('derives placeability only from unlock and current placement, so a dismantled reward returns', () => {
-    const store = new PersistentBaseRewardStore();
+    const session = new PersistentBaseRoomSession();
+    const store = session.rewards;
     expect(store.placeReward({
       rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0,
     })).toBe(true);
     expect(store.canPlaceReward('base_spore_turret', ['base_spore_turret'])).toBe(false);
 
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.dismantleReward('base_spore_turret')).toBe(true);
-    store.rollback();
+    session.completeTransaction('rollback', () => true);
     expect(store.getState().placements).toHaveLength(1);
 
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.dismantleReward('base_spore_turret')).toBe(true);
-    store.commit();
+    session.completeTransaction('commit', () => true);
     expect(store.getState().placements).toEqual([]);
     expect(store.canPlaceReward('base_spore_turret', ['base_spore_turret'])).toBe(true);
     expect(store.placeReward({
@@ -129,19 +134,20 @@ describe('PersistentBaseRewardState', () => {
   });
 
   it('keeps a mission move in working state until the outcome decides', () => {
-    const store = new PersistentBaseRewardStore();
+    const session = new PersistentBaseRoomSession();
+    const store = session.rewards;
     expect(store.placeReward({ rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0 })).toBe(true);
 
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.moveReward({ rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 2, angle: 0 })).toBe(true);
-    store.rollback();
+    session.completeTransaction('rollback', () => true);
     expect(store.getState().placements).toEqual([
       { rewardId: 'base_spore_turret', relativeGridX: -2, relativeGridY: 0, angle: 0 },
     ]);
 
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.moveReward({ rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 2, angle: 0 })).toBe(true);
-    store.commit();
+    session.completeTransaction('commit', () => true);
     expect(store.getState().placements).toEqual([
       { rewardId: 'base_spore_turret', relativeGridX: 2, relativeGridY: 2, angle: 0 },
     ]);
@@ -150,21 +156,24 @@ describe('PersistentBaseRewardState', () => {
 
 describe('PersistentBaseRewardStore', () => {
   it('commits lobby changes and rolls mission changes back or forward', () => {
-    const store = new PersistentBaseRewardStore();
+    const session = new PersistentBaseRoomSession();
+    const store = session.rewards;
     expect(store.placeReward({ rewardId: 'base_health_pedestal', relativeGridX: 1, relativeGridY: 2, angle: 0 })).toBe(true);
     expect(store.placeReward({ rewardId: 'base_health_pedestal', relativeGridX: 3, relativeGridY: 4, angle: 0 })).toBe(false);
     expect(store.getState().revision).toBe(1);
 
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.dismantleReward('base_health_pedestal')).toBe(true);
-    store.rollback();
+    session.completeTransaction('rollback', () => true);
     expect(store.getState().placements).toHaveLength(1);
 
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.dismantleReward('base_health_pedestal')).toBe(true);
-    const committed = store.commit();
-    expect(committed?.placements).toEqual([]);
-    expect(store.commit()).toBeNull();
+    session.completeTransaction('commit', () => true);
+    expect(store.getState().placements).toEqual([]);
+    // Genau ein terminaler Abschluss: Der zweite trifft keinen offenen Arbeitsstand mehr.
+    expect(session.hasOpenTransaction).toBe(false);
+    expect(session.completeTransaction('commit', () => true)).toEqual([]);
   });
 
   it('restores the exact revision when a lobby placement is rolled back', () => {

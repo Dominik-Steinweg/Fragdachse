@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
@@ -54,16 +55,18 @@ function contribution(
 }
 
 /** Ein Missionsstart mit je einem Neubau des Hosts und eines Gastes im Innenhof. */
-function startMission(): PersistentBaseContributionStore {
-  const store = new PersistentBaseContributionStore();
-  store.beginMission();
+function startMission(): PersistentBaseRoomSession {
+  const session = new PersistentBaseRoomSession();
+  const store = session.contributions;
+  session.beginTransaction(MISSION);
   store.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, anchor, buildArea);
   store.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, anchor, buildArea);
-  return store;
+  return session;
 }
 
-function startMissionFromCommittedConstruction(): PersistentBaseContributionStore {
-  const store = new PersistentBaseContributionStore();
+function startMissionFromCommittedConstruction(): PersistentBaseRoomSession {
+  const session = new PersistentBaseRoomSession();
+  const store = session.contributions;
   store.offerContribution(contribution('owner-host', [
     {
       persistentId: 'restored',
@@ -74,10 +77,14 @@ function startMissionFromCommittedConstruction(): PersistentBaseContributionStor
       placementOrder: 0,
     },
   ], 4));
-  store.beginMission();
+  session.beginTransaction(MISSION);
   store.registerRestored('owner-host', store.getContribution('owner-host')!.constructions[0]!, 10);
-  return store;
+  return session;
 }
+
+
+/** Die Instanz, zu der ein Arbeitsstand in diesen Tests gehoert. */
+const MISSION = { worldRevision: 21, activityRevision: 7 } as const;
 
 describe('persistent base round outcome', () => {
   it('schreibt ausschliesslich einen Sieg fort', () => {
@@ -89,10 +96,11 @@ describe('persistent base round outcome', () => {
   });
 
   it('bestaetigt bei Sieg jedem Besitzer genau einen fortgeschriebenen Beitrag', () => {
-    const store = startMission();
+    const session = startMission();
+    const store = session.contributions;
 
     const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     });
 
@@ -106,10 +114,11 @@ describe('persistent base round outcome', () => {
 
   it('verwirft bei Niederlage, Host-Abbruch und technischem Abbruch alle Arbeitsstaende', () => {
     for (const conclusion of ['defeat', 'aborted', null] as const) {
-      const store = startMission();
+      const session = startMission();
+    const store = session.contributions;
 
       const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
-        contributions: store,
+        session,
         isRuntimeObjectAlive: () => true,
       });
 
@@ -123,7 +132,8 @@ describe('persistent base round outcome', () => {
 
   it('laesst bei Niederlage oder Abbruch einen zuvor in der Lobby committed Stand unveraendert', () => {
     for (const conclusion of ['defeat', 'aborted', null] as const) {
-      const store = new PersistentBaseContributionStore();
+      const session = new PersistentBaseRoomSession();
+      const store = session.contributions;
       store.offerContribution({
         schemaVersion: PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION,
         ownerId: 'owner-host',
@@ -137,11 +147,11 @@ describe('persistent base round outcome', () => {
           placementOrder: 0,
         }],
       });
-      store.beginMission();
+      session.beginTransaction(MISSION);
       store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, anchor, buildArea);
 
       expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
-        contributions: store,
+        session: session,
         isRuntimeObjectAlive: () => true,
       })).toEqual([]);
       expect(store.getCommittedContribution('owner-host')).toMatchObject({
@@ -153,8 +163,13 @@ describe('persistent base round outcome', () => {
 
   it('entscheidet Contributions und Rewards gemeinsam, atomar und idempotent', () => {
     for (const conclusion of ['victory', 'defeat', 'aborted', null] as const) {
-      const contributions = startMission();
-      const rewards = new PersistentBaseRewardStore();
+      // Ein Raum, ein Arbeitsstand: Beitraege und Belohnungen teilen ihn und damit ihren
+      // Abschluss. Zwei getrennte Ausgaenge kann es gar nicht mehr geben.
+      const session = startMission();
+      const contributions = session.contributions;
+      const rewards = session.rewards;
+      const openMission = session.transaction;
+      session.completeTransaction('rollback', () => true);
       expect(rewards.placeReward({
         rewardId: 'base_health_pedestal',
         relativeGridX: 0,
@@ -162,13 +177,15 @@ describe('persistent base round outcome', () => {
         angle: 0,
       }), String(conclusion)).toBe(true);
       const committedRewards = rewards.getState();
+      expect(openMission?.isOpen, String(conclusion)).toBe(false);
 
-      rewards.beginMission();
+      session.beginTransaction(MISSION);
+      contributions.registerNew('owner-host', runtime(1, 'host', 11), tool, footprint, anchor, buildArea);
+      contributions.registerNew('owner-guest', runtime(2, 'guest-a', 9), tool, footprint, anchor, buildArea);
       expect(rewards.dismantleReward('base_health_pedestal'), String(conclusion)).toBe(true);
       const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
-        contributions,
+        session,
         isRuntimeObjectAlive: () => true,
-        rewards,
       });
 
       const expectedRewards = conclusion === 'victory'
@@ -182,28 +199,26 @@ describe('persistent base round outcome', () => {
       // Ein zweiter Abschluss darf weder eine weitere Revision noch einen zweiten Store-Aufruf
       // erzeugen, nachdem beide Arbeitsstaende gemeinsam abgeschlossen wurden.
       expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
-        contributions,
+        session,
         isRuntimeObjectAlive: () => true,
-        rewards,
       }), String(conclusion)).toEqual([]);
       expect(rewards.getState(), String(conclusion)).toEqual(expectedRewards);
 
       // Der naechste Missionslauf startet ausschliesslich aus dem gemeinsamen Ergebnis.
-      contributions.beginMission();
-      rewards.beginMission();
+      session.beginTransaction(MISSION);
       expect(contributions.getContributions(), String(conclusion))
         .toHaveLength(conclusion === 'victory' ? 2 : 0);
       expect(rewards.getState(), String(conclusion)).toEqual(expectedRewards);
-      contributions.rollback();
-      rewards.rollback();
+      session.completeTransaction('rollback', () => true);
     }
   });
 
   it('schreibt nur noch lebende Runtime-Objekte fort', () => {
-    const store = startMission();
+    const session = startMission();
+    const store = session.contributions;
 
     const confirmed = applyPersistentBaseRoundOutcome('commit', {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: (runtimeId) => runtimeId === 1,
     });
 
@@ -218,7 +233,8 @@ describe('persistent base round outcome', () => {
 
     for (const mutation of mutations) {
       for (const conclusion of conclusions) {
-        const store = startMissionFromCommittedConstruction();
+        const session = startMissionFromCommittedConstruction();
+        const store = session.contributions;
         if (mutation === 'build') {
           store.registerNew('owner-host', runtime(11, 'host', 11), tool, footprint, anchor, buildArea);
         } else if (mutation === 'dismantle') {
@@ -228,7 +244,7 @@ describe('persistent base round outcome', () => {
         // erhalten, damit Victory sie entfernt und Rollback sie aus dem Baseline-Stand restauriert.
         const destroyed = mutation === 'destruction';
         const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
-          contributions: store,
+          session,
           isRuntimeObjectAlive: (runtimeId) => !(destroyed && runtimeId === 10),
         });
 
@@ -247,7 +263,7 @@ describe('persistent base round outcome', () => {
 
         // Der folgende Missionsstart muss genau den zuletzt bestaetigten Stand materialisieren
         // koennen; der Working State der abgeschlossenen Mission darf nicht hineinleaken.
-        store.beginMission();
+        session.beginTransaction(MISSION);
         const nextMissionIds = store.getContribution('owner-host')?.constructions
           .map((entry) => entry.persistentId) ?? [];
         if (mutation === 'build' && conclusion === 'victory') {
@@ -261,28 +277,30 @@ describe('persistent base round outcome', () => {
   });
 
   it('schliesst einen Ausgang idempotent ohne eine zweite Revision zu erzeugen', () => {
-    const store = startMission();
+    const session = startMission();
+    const store = session.contributions;
     const first = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     });
     expect(first).toHaveLength(2);
     expect(store.getCommittedContribution('owner-host')?.revision).toBe(1);
 
     expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     })).toEqual([]);
     expect(store.getCommittedContribution('owner-host')?.revision).toBe(1);
   });
 
   it('haelt Runtime- und Core-HP aus dem bestaetigten Contribution-State heraus', () => {
-    const store = startMissionFromCommittedConstruction();
+    const session = startMissionFromCommittedConstruction();
+    const store = session.contributions;
     const runtimeObject = runtime(10, 'host', 10);
     runtimeObject.hp = 17;
     runtimeObject.maxHp = 1650;
     const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('victory'), {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     });
 
@@ -299,21 +317,24 @@ describe('persistent base round outcome', () => {
   });
 
   it('laesst eine verworfene Runde nicht in den naechsten Lauf leaken', () => {
-    const store = startMission();
+    const session = startMission();
+    const store = session.contributions;
     applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('defeat'), {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     });
 
     // Der naechste Lauf beginnt beim zuletzt bestaetigten Stand - hier also beim leeren.
-    store.beginMission();
+    session.beginTransaction(MISSION);
     expect(store.getContributions()).toEqual([]);
+    // Die Runtime-Objekte gehoerten der beendeten World; mit ihr sind sie weg.
+    session.useWorldRuntimes(null);
     expect(store.getRuntimeMetadata(1)).toBeNull();
 
     // Und ein Sieg im zweiten Lauf schreibt genau eine Revision fort, nicht zwei.
     store.registerNew('owner-host', runtime(3, 'host', 9), tool, footprint, anchor, buildArea);
     const confirmed = applyPersistentBaseRoundOutcome('commit', {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     });
     expect(confirmed).toHaveLength(1);
@@ -322,9 +343,10 @@ describe('persistent base round outcome', () => {
   });
 
   it('ignoriert einen Ausgang, wenn gar keine Mission lief', () => {
-    const store = new PersistentBaseContributionStore();
+    const session = new PersistentBaseRoomSession();
+    const store = session.contributions;
     expect(applyPersistentBaseRoundOutcome('commit', {
-      contributions: store,
+      session,
       isRuntimeObjectAlive: () => true,
     })).toEqual([]);
     expect(store.hasActiveMission).toBe(false);

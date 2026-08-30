@@ -37,6 +37,7 @@ import {
 } from '../src/config/coopDefenseMaps';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
@@ -499,12 +500,11 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
       });
     }
 
-    const roundRewards = new PersistentBaseRewardStore();
-    roundRewards.beginMission();
+    const roundSession = new PersistentBaseRoomSession();
+    roundSession.beginTransaction({ worldRevision: 21, activityRevision: 7 });
     applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome('defeat'), {
-      contributions: new PersistentBaseContributionStore(),
+      session: roundSession,
       isRuntimeObjectAlive: () => true,
-      rewards: roundRewards,
     });
     bridge.clearWorldAndActivity();
     expect(getStoredPersistentBaseRewardUnlocks()).toContain('base_holy_hand_grenade_pedestal');

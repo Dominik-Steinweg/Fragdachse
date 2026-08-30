@@ -13,38 +13,71 @@ import {
   isCellInsidePersistentBaseBuildArea,
   type PersistentBaseBuildArea,
 } from './PersistentBaseCore';
+import {
+  PersistentBaseRuntimeBindings,
+  type PersistentRuntimeBinding,
+} from './PersistentBaseRuntimeBindings';
+import type { PersistentBaseTransaction } from './PersistentBaseTransaction';
+
+export type { PersistentRuntimeBinding } from './PersistentBaseRuntimeBindings';
 
 /**
- * Host-seitiger Zustand aller persoenlichen Beitraege einer persistenten Basis.
+ * Der committed Beitragsstand aller Besitzer einer persistenten Basis.
  *
  * Verbindlicher Zweck: **Ein einziger Besitzpfad.** Ob ein Beitrag dem Host oder einem Gast
  * gehoert, ist hier nur noch eine Besitzeridentitaet - es gibt keine zweite Datenstruktur mehr,
  * die Gaeste anders behandelt als den Host.
  *
- * Der Store ist bewusst frei von lokaler Persistenz: Ohne aktive Mission schreibt eine vom Host
- * akzeptierte Aenderung sofort den committed Stand fort. In einer Mission bleibt sie dagegen im
- * Working State, bis der Rundenausgang ueber Commit oder Rollback entscheidet. Speichern darf den
- * host-bestaetigten Stand ausschliesslich der jeweilige Besitzer auf seinem eigenen Geraet.
+ * Der Speicher haelt genau eine Lifetime: den raumlanglebigen committed Stand. Der Arbeitsstand
+ * einer laufenden Activity gehoert der {@link PersistentBaseTransaction}, die Runtime-Objekte
+ * gehoeren der World. Beides wird hier nur benutzt, solange es existiert - ohne Transaktion
+ * schreibt eine vom Host akzeptierte Aenderung sofort den committed Stand fort.
+ *
+ * Der Store ist bewusst frei von lokaler Persistenz: Speichern darf den host-bestaetigten Stand
+ * ausschliesslich der jeweilige Besitzer auf seinem eigenen Geraet.
  */
-/** Ein materialisierter Blueprint und das Runtime-Objekt, das ihn gerade darstellt. */
-export interface PersistentRuntimeBinding {
-  readonly runtimeId: number;
-  readonly ownerId: string;
-  readonly blueprint: PersistentConstruction;
-}
-
 export class PersistentBaseContributionStore {
-  /** Vom Besitzer angebotener und vom Host akzeptierter Stand, ausserhalb einer Mission. */
+  /** Vom Besitzer angebotener und vom Host akzeptierter Stand; er ueberlebt jede Activity. */
   private readonly committed = new Map<string, PersistentPlayerBaseContribution>();
-  /** Stand bei Missionsbeginn; die Rollback-Quelle. */
-  private baseline: Map<string, PersistentPlayerBaseContribution> | null = null;
-  /** Laufender Missionsstand, der bei Sieg fortgeschrieben wird. */
-  private working: Map<string, PersistentPlayerBaseContribution> | null = null;
-  private readonly runtimeBlueprints = new Map<number, { ownerId: string; blueprint: PersistentConstruction }>();
+  /**
+   * Der Arbeitsstand der laufenden Activity. Er gehoert der Transaktion, nicht diesem Speicher:
+   * Was dort steht, endet mit ihrem Abschluss.
+   */
+  private transaction: PersistentBaseTransaction | null = null;
+  /**
+   * Die Runtime-Objekte der laufenden World-Instanz. Sie gehoeren ihr; ausserhalb einer World
+   * gibt es schlicht keine, und dieser leere Ersatz haelt jede Abfrage ohne Sonderfall am Leben.
+   */
+  private runtimeBindings: PersistentBaseRuntimeBindings = new PersistentBaseRuntimeBindings();
   private newIdCounter = 0;
 
   get hasActiveMission(): boolean {
     return this.working !== null;
+  }
+
+  /** Der committed Raumstand; die Ausgangslage jeder neuen Transaktion. */
+  get committedContributions(): ReadonlyMap<string, PersistentPlayerBaseContribution> {
+    return this.committed;
+  }
+
+  /**
+   * Bindet den Arbeitsstand dieser Activity ein oder loest ihn wieder.
+   *
+   * Der Speicher besitzt ihn nicht: Ein abgeschlossener oder abgeloester Arbeitsstand ist fuer
+   * ihn sofort unsichtbar, und jede Aenderung trifft wieder den committed Stand.
+   */
+  useTransaction(transaction: PersistentBaseTransaction | null): void {
+    this.transaction = transaction;
+  }
+
+  /**
+   * Bindet die Runtime-Objekte der laufenden World-Instanz.
+   *
+   * `null` bedeutet: keine World, also keine materialisierten Objekte. Der Speicher fuehrt dann
+   * einen leeren Ersatz und keine eigenen Bindungen.
+   */
+  useWorldRuntimes(runtimeBindings: PersistentBaseRuntimeBindings | null): void {
+    this.runtimeBindings = runtimeBindings ?? new PersistentBaseRuntimeBindings();
   }
 
   get ownerIds(): readonly string[] {
@@ -66,12 +99,13 @@ export class PersistentBaseContributionStore {
       return arePersistentContributionsEqual(stored, contribution);
     }
     this.committed.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
-    if (!this.working) return true;
+    const working = this.working;
+    if (!working) return true;
     // Ein Beitrag, der waehrend der Mission neu dazukommt, gilt ab sofort mit; ein bereits
     // laufender Arbeitsstand wird dagegen nicht rueckwirkend ersetzt.
-    if (!this.working.has(contribution.ownerId)) {
-      this.working.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
-      this.baseline?.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
+    if (!working.has(contribution.ownerId)) {
+      working.set(contribution.ownerId, clonePersistentPlayerBaseContribution(contribution));
+      this.transaction?.adoptContributionAtStart(clonePersistentPlayerBaseContribution(contribution));
     }
     return true;
   }
@@ -94,20 +128,9 @@ export class PersistentBaseContributionStore {
       .sort((left, right) => compareIds(left.ownerId, right.ownerId));
   }
 
-  beginMission(): void {
-    if (this.working) return;
-    this.baseline = cloneMap(this.committed);
-    this.working = cloneMap(this.committed);
-    this.runtimeBlueprints.clear();
-  }
-
   /** Bindet ein materialisiertes Runtime-Objekt an seinen Blueprint. */
   registerRestored(ownerId: string, blueprint: PersistentConstruction, runtimeId: number): void {
-    for (const [existingId, existing] of this.runtimeBlueprints) {
-      if (existing.ownerId !== ownerId || existing.blueprint.persistentId !== blueprint.persistentId) continue;
-      this.runtimeBlueprints.delete(existingId);
-    }
-    this.runtimeBlueprints.set(runtimeId, { ownerId, blueprint: { ...blueprint, tool: { ...blueprint.tool } } });
+    this.runtimeBindings.rebind(runtimeId, ownerId, blueprint);
   }
 
   /**
@@ -134,7 +157,8 @@ export class PersistentBaseContributionStore {
     ));
     if (!inside) return null;
 
-    const target = this.working ?? this.committed;
+    const working = this.working;
+    const target = working ?? this.committed;
     const current = target.get(ownerId)
       ?? emptyContribution(ownerId, this.committed.get(ownerId)?.revision ?? 0);
     const placementOrder = current.constructions.reduce(
@@ -158,10 +182,10 @@ export class PersistentBaseContributionStore {
       ...current,
       // Lobby-Aenderungen sind bereits der host-bestaetigte Commit. Eine Mission erhoeht ihre
       // Revision weiterhin erst gesammelt beim Victory-Commit.
-      revision: this.working ? current.revision : current.revision + 1,
+      revision: working ? current.revision : current.revision + 1,
       constructions: [...current.constructions, blueprint],
     });
-    this.runtimeBlueprints.set(runtime.id, { ownerId, blueprint });
+    this.runtimeBindings.bind(runtime.id, ownerId, blueprint);
     return { persistentId, placementOrder, origin: 'new' };
   }
 
@@ -192,7 +216,8 @@ export class PersistentBaseContributionStore {
     ));
     if (!inside) return null;
 
-    const store = this.working ?? this.committed;
+    const working = this.working;
+    const store = working ?? this.committed;
     const current = store.get(ownerId);
     const existing = current?.constructions.find((entry) => entry.persistentId === persistentId);
     if (!current || !existing) return null;
@@ -208,31 +233,24 @@ export class PersistentBaseContributionStore {
       ...current,
       // Wie bei Bau und Abriss: Lobby-Aenderungen sind bereits der host-bestaetigte Commit, eine
       // Mission erhoeht ihre Revision erst gesammelt beim Victory-Commit.
-      revision: this.working ? current.revision : current.revision + 1,
+      revision: working ? current.revision : current.revision + 1,
       constructions: current.constructions.map((entry) => (
         entry.persistentId === persistentId ? moved : entry
       )),
     });
     // Dieselbe Runtime traegt weiterhin denselben Blueprint; nur sein Inhalt ist jetzt aktuell.
-    for (const [runtimeId, binding] of this.runtimeBlueprints) {
-      if (binding.ownerId !== ownerId || binding.blueprint.persistentId !== persistentId) continue;
-      this.runtimeBlueprints.set(runtimeId, { ownerId, blueprint: { ...moved, tool: { ...moved.tool } } });
-    }
+    this.runtimeBindings.updateBlueprint(ownerId, moved);
     return moved;
   }
 
   /** True, wenn dieser Blueprint bereits ein Runtime-Objekt in der Welt hat. */
   isMaterialized(ownerId: string, persistentId: string): boolean {
-    return this.findRuntimeId(ownerId, persistentId) !== undefined;
+    return this.runtimeBindings.findRuntimeId(ownerId, persistentId) !== undefined;
   }
 
   /** Alle aktuell materialisierten Blueprints samt ihrer Runtime-Bindung. */
   getRuntimeBindings(): readonly PersistentRuntimeBinding[] {
-    return [...this.runtimeBlueprints.entries()].map(([runtimeId, entry]) => ({
-      runtimeId,
-      ownerId: entry.ownerId,
-      blueprint: entry.blueprint,
-    }));
+    return this.runtimeBindings.entries();
   }
 
   /**
@@ -243,11 +261,11 @@ export class PersistentBaseContributionStore {
    * sobald der Grund entfaellt.
    */
   releaseRuntimeBinding(runtimeId: number): boolean {
-    return this.runtimeBlueprints.delete(runtimeId);
+    return this.runtimeBindings.release(runtimeId);
   }
 
   getRuntimeMetadata(runtimeId: number): PersistentRuntimeMetadata | null {
-    const entry = this.runtimeBlueprints.get(runtimeId);
+    const entry = this.runtimeBindings.get(runtimeId);
     if (!entry) return null;
     const baselineEntry = this.baseline?.get(entry.ownerId)?.constructions
       .some((candidate) => candidate.persistentId === entry.blueprint.persistentId);
@@ -266,9 +284,9 @@ export class PersistentBaseContributionStore {
    * Besitz stehen, ein Abriss gibt ihn auf.
    */
   removeByRuntimeId(runtimeId: number): boolean {
-    const entry = this.runtimeBlueprints.get(runtimeId);
+    const entry = this.runtimeBindings.get(runtimeId);
     if (!entry) return false;
-    this.runtimeBlueprints.delete(runtimeId);
+    this.runtimeBindings.release(runtimeId);
     this.removeFromCurrent(entry.ownerId, entry.blueprint.persistentId);
     return true;
   }
@@ -281,29 +299,23 @@ export class PersistentBaseContributionStore {
    */
   removeOwner(ownerId: string): readonly number[] {
     this.committed.delete(ownerId);
-    this.baseline?.delete(ownerId);
-    this.working?.delete(ownerId);
-    const runtimeIds: number[] = [];
-    for (const [runtimeId, entry] of this.runtimeBlueprints) {
-      if (entry.ownerId !== ownerId) continue;
-      runtimeIds.push(runtimeId);
-      this.runtimeBlueprints.delete(runtimeId);
-    }
-    return runtimeIds;
+    this.transaction?.removeOwner(ownerId);
+    return this.runtimeBindings.releaseOwner(ownerId);
   }
 
-  /** Loest Runtime-Bindungen beim Kartenwechsel, ohne den Arbeitsstand zu verlieren. */
-  detachRuntimeObjects(isRuntimeObjectAlive: (runtimeId: number) => boolean): void {
-    if (!this.working) {
-      this.runtimeBlueprints.clear();
-      return;
+  /**
+   * Schliesst den Bestand der endenden World ab, ohne den Arbeitsstand zu verlieren.
+   *
+   * Ein Objekt, das die World nicht ueberlebt hat, faellt aus dem Arbeitsstand; ein Sieg schreibt
+   * es dann nicht fort. Die Runtime-Bindungen selbst gehoeren der World und werden von ihr
+   * abgeraeumt.
+   */
+  finalizeWorldRuntimeObjects(isRuntimeObjectAlive: (runtimeId: number) => boolean): void {
+    if (!this.working) return;
+    for (const binding of this.runtimeBindings.entries()) {
+      if (isRuntimeObjectAlive(binding.runtimeId)) continue;
+      this.removeFromCurrent(binding.ownerId, binding.blueprint.persistentId);
     }
-    for (const [runtimeId, entry] of this.runtimeBlueprints) {
-      if (isRuntimeObjectAlive(runtimeId)) continue;
-      // Ein zerstoertes Objekt faellt aus dem Arbeitsstand; ein Sieg schreibt es dann nicht fort.
-      this.removeFromCurrent(entry.ownerId, entry.blueprint.persistentId);
-    }
-    this.runtimeBlueprints.clear();
   }
 
   /**
@@ -312,12 +324,13 @@ export class PersistentBaseContributionStore {
    * Nur der Host darf das Ergebnis erzeugen; gespeichert wird es anschliessend von jedem
    * Besitzer auf seinem eigenen Geraet. Genau deshalb steigt die Revision hier und nicht dort.
    */
-  commit(isRuntimeObjectAlive: (runtimeId: number) => boolean): readonly PersistentPlayerBaseContribution[] {
-    if (!this.working || !this.baseline) return [];
+  commitTransaction(isRuntimeObjectAlive: (runtimeId: number) => boolean): readonly PersistentPlayerBaseContribution[] {
+    const working = this.working;
+    if (!working) return [];
     const next = new Map<string, PersistentPlayerBaseContribution>();
-    for (const [ownerId, contribution] of this.working) {
+    for (const [ownerId, contribution] of working) {
       const constructions = contribution.constructions.filter((blueprint) => {
-        const runtimeId = this.findRuntimeId(ownerId, blueprint.persistentId);
+        const runtimeId = this.runtimeBindings.findRuntimeId(ownerId, blueprint.persistentId);
         // Ohne Runtime-Objekt war der Blueprint in dieser Runde dormant - etwa wegen eines
         // Konflikts. Er ueberlebt unveraendert; ein Konflikt loescht keinen Besitz.
         return runtimeId === undefined || isRuntimeObjectAlive(runtimeId);
@@ -331,41 +344,41 @@ export class PersistentBaseContributionStore {
     }
     this.committed.clear();
     for (const [ownerId, contribution] of next) this.committed.set(ownerId, contribution);
-    this.baseline = null;
-    this.working = null;
-    this.runtimeBlueprints.clear();
     return [...next.values()].sort((left, right) => compareIds(left.ownerId, right.ownerId));
   }
 
-  /** Verwirft den Arbeitsstand. Der zuletzt bestaetigte Beitrag jedes Besitzers bleibt stehen. */
-  rollback(): void {
-    if (this.baseline) {
-      this.committed.clear();
-      for (const [ownerId, contribution] of this.baseline) {
-        this.committed.set(ownerId, clonePersistentPlayerBaseContribution(contribution));
-      }
+  /** Verwirft den Arbeitsstand. Der bei Missionsbeginn bestaetigte Beitrag bleibt stehen. */
+  rollbackTransaction(): void {
+    const baseline = this.baseline;
+    if (!baseline) return;
+    this.committed.clear();
+    for (const [ownerId, contribution] of baseline) {
+      this.committed.set(ownerId, clonePersistentPlayerBaseContribution(contribution));
     }
-    this.baseline = null;
-    this.working = null;
-    this.runtimeBlueprints.clear();
+  }
+
+  /** Der laufende Arbeitsstand, solange die Transaktion offen ist. */
+  private get working(): Map<string, PersistentPlayerBaseContribution> | null {
+    const transaction = this.transaction;
+    return transaction?.isOpen === true ? transaction.contributions : null;
+  }
+
+  /** Die Ausgangslage der offenen Transaktion; die Rollback-Quelle. */
+  private get baseline(): ReadonlyMap<string, PersistentPlayerBaseContribution> | null {
+    const transaction = this.transaction;
+    return transaction?.isOpen === true ? transaction.contributionsAtStart : null;
   }
 
   private removeFromCurrent(ownerId: string, persistentId: string): void {
-    const target = this.working ?? this.committed;
+    const working = this.working;
+    const target = working ?? this.committed;
     const current = target.get(ownerId);
     if (!current) return;
     target.set(ownerId, {
       ...current,
-      revision: this.working ? current.revision : current.revision + 1,
+      revision: working ? current.revision : current.revision + 1,
       constructions: current.constructions.filter((entry) => entry.persistentId !== persistentId),
     });
-  }
-
-  private findRuntimeId(ownerId: string, persistentId: string): number | undefined {
-    for (const [runtimeId, entry] of this.runtimeBlueprints) {
-      if (entry.ownerId === ownerId && entry.blueprint.persistentId === persistentId) return runtimeId;
-    }
-    return undefined;
   }
 
   private hasPersistentId(ownerId: string, persistentId: string): boolean {
@@ -383,15 +396,6 @@ function emptyContribution(ownerId: string, revision: number): PersistentPlayerB
     revision,
     constructions: [],
   };
-}
-
-function cloneMap(
-  source: ReadonlyMap<string, PersistentPlayerBaseContribution>,
-): Map<string, PersistentPlayerBaseContribution> {
-  return new Map([...source.entries()].map(([ownerId, contribution]) => [
-    ownerId,
-    clonePersistentPlayerBaseContribution(contribution),
-  ]));
 }
 
 function compareConstructions(left: PersistentConstruction, right: PersistentConstruction): number {

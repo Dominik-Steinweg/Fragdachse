@@ -174,8 +174,10 @@ import {
   grantStoredPersistentBaseRewards,
   setStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
-import { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
-import { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
+import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
+import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
+import { PersistentBaseRoomSession } from '../../persistentBase/PersistentBaseRoomSession';
+import type { PersistentBaseTransactionIdentity } from '../../persistentBase/PersistentBaseTransaction';
 import { PersistentBaseRewardGrantService } from '../../persistentBase/PersistentBaseRewardGrant';
 import {
   getPersistentBaseRewardDefinition,
@@ -495,6 +497,9 @@ export class ArenaLifecycleCoordinator {
       this.ctx.worldPresentation = null;
       this.worldPresentationHandoff.release(runtime?.releasePresentation() ?? null);
       runtime?.destroy();
+      // Mit der World enden ihre Runtime-Objekte. Der Raumzustand haelt danach keine mehr - er
+      // haelt weiter die Blueprints, aber nichts, was sie in einer Welt darstellte.
+      this.persistentBaseSession.useWorldRuntimes(null);
       this.persistentBaseWorldBinding = null;
       this.ctx.worldMaterialization = null;
       this.ctx.world = null;
@@ -637,17 +642,21 @@ export class ArenaLifecycleCoordinator {
   private get playerActivityRuntime(): CoopMissionPlayerRuntime | null {
     return this.coopMissionRuntime?.playerActivity ?? null;
   }
-  /** Host-only room lifetime; never stored in local preferences and never cleared by map teardown. */
   /**
-   * Host-seitiger Arbeitsstand aller persoenlichen Beitraege dieses Raums.
+   * Der raumlanglebige Zustand der persistenten Basis: committed Beitraege, committed
+   * Belohnungen und der Arbeitsstand einer laufenden Activity.
    *
-   * Genau ein Besitzpfad fuer Host und Gaeste. Er lebt laenger als eine Runde, weil ein Spieler
-   * ueber einen Kartenwechsel hinweg Besitzer seiner Konstruktionen bleibt, und stirbt mit dem
-   * Raum - nie mit einer Runde.
+   * Genau ein Besitzpfad fuer Host und Gaeste. Er lebt laenger als jede World und jede Runde,
+   * weil ein Spieler ueber einen Kartenwechsel hinweg Besitzer seiner Konstruktionen bleibt,
+   * und stirbt mit dem Raum. Er wird nie lokal gespeichert und nie vom Kartenabbau geleert.
    */
-  private readonly persistentBaseContributions = new PersistentBaseContributionStore();
-  /** Host-only committed/working reward state; clients receive the reliable session projection. */
-  private readonly persistentBaseRewards = new PersistentBaseRewardStore();
+  private readonly persistentBaseSession = new PersistentBaseRoomSession();
+  private get persistentBaseContributions(): PersistentBaseContributionStore {
+    return this.persistentBaseSession.contributions;
+  }
+  private get persistentBaseRewards(): PersistentBaseRewardStore {
+    return this.persistentBaseSession.rewards;
+  }
   /** Shared idempotent grant path for authored map-victory and objective rewards. */
   private readonly persistentBaseRewardGrantService = new PersistentBaseRewardGrantService();
   /**
@@ -861,9 +870,22 @@ export class ArenaLifecycleCoordinator {
    */
   private finalizePersistentBaseRuntimeObjects(): void {
     const placement = this.ctx.worldMaterialization?.placement ?? null;
-    this.persistentBaseContributions.detachRuntimeObjects(
+    this.persistentBaseSession.finalizeWorldRuntimeObjects(
       (runtimeId) => placement?.hasRuntimeRock(runtimeId) === true,
     );
+  }
+
+  /**
+   * Die Instanz, zu der ein Persistent-Base-Abschluss gehoert.
+   *
+   * World- und Activity-Revision zusammen: Ein Abschluss, der zu einer anderen Instanz
+   * gehoert, laeuft ins Leere, statt einen inzwischen neuen Arbeitsstand zu treffen.
+   */
+  private resolvePersistentBaseTransactionIdentity(): PersistentBaseTransactionIdentity | undefined {
+    const activity = this.worldLifecycle.activity.descriptor;
+    return activity
+      ? { worldRevision: activity.worldRevision, activityRevision: activity.activityRevision }
+      : undefined;
   }
 
   /**
@@ -1544,9 +1566,11 @@ export class ArenaLifecycleCoordinator {
     // Defeat, abort and non-Coop completion discard the round-local working copy.
     this.publishConfirmedPersistentBaseContributions(
       applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
-        contributions: this.persistentBaseContributions,
+        session: this.persistentBaseSession,
         isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
-        rewards: this.persistentBaseRewards,
+        // Der Abschluss gehoert genau der Activity, die gerade endet. Ein verspaeteter
+        // Abschluss trifft damit keine inzwischen neue.
+        identity: this.resolvePersistentBaseTransactionIdentity(),
       }),
     );
     this.persistCurrentCommittedPersistentBaseRewards();
@@ -2446,7 +2470,7 @@ export class ArenaLifecycleCoordinator {
 
   private removeGuestSessionOwner(playerId: string): void {
     if (!bridge.isHost() || playerId === bridge.getLocalPlayerId()) return;
-    const runtimeIds = this.persistentBaseContributions.removeOwner(this.resolveOwnerId(playerId));
+    const runtimeIds = this.persistentBaseSession.removeOwner(this.resolveOwnerId(playerId));
     this.ingestedContributionRevisions.delete(playerId);
     // Mit dem Spieler faellt sein Anspruch auf die Besitzeridentitaet; ein spaeterer Beitritt
     // darf sie wieder fuehren.
@@ -3102,6 +3126,9 @@ export class ArenaLifecycleCoordinator {
     });
     this.persistentBaseWorldBinding = persistentBaseBinding;
     this.worldRuntime?.setPersistentBase(persistentBaseBinding);
+    // Die Runtime-Objekte der persoenlichen Beitraege gehoeren dieser World-Instanz. Der
+    // Raumzustand liest sie, solange sie steht, und verliert sie mit ihrem Ende.
+    this.persistentBaseSession.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);
     // Scene-langlebige Shared Services bekommen die Geometrie dieser World im Aufbaupass unten.
     // Die Bindung selbst gehoert der World: Ohne Instanz kennt kein Shared System mehr ihre
     // Metrik, ihre Hindernisse oder ihre Basen.
@@ -3208,10 +3235,16 @@ export class ArenaLifecycleCoordinator {
       // Erst alle aktuell angebotenen Beitraege einsammeln. Eine Mission startet danach ihren
       // Working State genau bei diesem committed Stand; ohne Activity bleibt er direkt editierbar.
       this.ingestOfferedPersistentBaseContributions();
-      if (activityDescriptor !== null) this.persistentBaseContributions.beginMission();
-      this.ctx.persistentBaseContributions = this.persistentBaseContributions;
       this.persistentBaseRewards.replaceCommittedState(getStoredPersistentBaseRewardState());
-      if (activityDescriptor !== null) this.persistentBaseRewards.beginMission();
+      // Eine Activity oeffnet genau einen Arbeitsstand - mit der Identitaet ihrer Instanz.
+      // Ohne Activity gibt es keinen: Die LobbyWorld bearbeitet den committed Stand direkt.
+      if (activityDescriptor !== null) {
+        this.persistentBaseSession.beginTransaction({
+          worldRevision: activityDescriptor.worldRevision,
+          activityRevision: activityDescriptor.activityRevision,
+        });
+      }
+      this.ctx.persistentBaseContributions = this.persistentBaseContributions;
       this.ctx.persistentBaseRewards = this.persistentBaseRewards;
       persistentBaseBinding.setSite(persistentBaseSite.anchor, persistentBaseSite.buildArea);
     } else {
@@ -5664,9 +5697,8 @@ export class ArenaLifecycleCoordinator {
   private rollbackPersistentBaseMissionIfActive(): void {
     if (!bridge.isHost()) return;
     applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(null), {
-      contributions: this.persistentBaseContributions,
+      session: this.persistentBaseSession,
       isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
-      rewards: this.persistentBaseRewards,
     });
     this.publishPersistentBaseRewardSessionState();
   }
@@ -5699,7 +5731,7 @@ export class ArenaLifecycleCoordinator {
     }
     // Ein waehrend der Mission eingetroffener Beitrag traegt sofort bei, statt bis zur naechsten
     // World zu warten.
-    if (ingestedSomething && this.persistentBaseContributions.hasActiveMission) {
+    if (ingestedSomething && this.persistentBaseSession.hasOpenTransaction) {
       this.hostRefreshPersistentBaseComposite();
     }
   }

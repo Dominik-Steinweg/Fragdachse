@@ -35,10 +35,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `keine – Phase 7 abgeschlossen; Phase 8 nicht begonnen`
-**Gesamtstatus:** `Phasen 1–7 abgeschlossen; Integrations-Checkpoints A und B automatisiert abgeschlossen; manuelle Browser-Abnahme durch den User ausstehend (Prüfliste in Abschnitt 7)`
-**Letzter Integrations-Checkpoint:** `Checkpoint B (Coop-Lifecycle, Activity-Wechsel, getrennte Player-Lifetimes, Activity-Presentation) über npm run check`
-**Nächster Schritt:** User führt die manuelle Sichtprüfung aus; Phase 8 erst mit einem neuen Auftrag beginnen.
+**Aktive Phase:** `keine – Phase 8 abgeschlossen; Phase 9 nicht begonnen`
+**Gesamtstatus:** `Phasen 1–8 abgeschlossen; Integrations-Checkpoints A und B automatisiert abgeschlossen; manuelle Browser-Abnahme durch den User ausstehend (Prüfliste in Abschnitt 7)`
+**Letzter Integrations-Checkpoint:** `Checkpoint B; Phase 8 zusätzlich über npm run check (Checkpoint C folgt nach Phase 10)`
+**Nächster Schritt:** User führt die manuelle Sichtprüfung aus; Phase 9 erst mit einem neuen Auftrag beginnen.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -52,7 +52,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 6 Coop Objectives / Update / Presentation | ✅ abgeschlossen | `CoopMissionRuntime` besitzt zusätzlich Objectives, Mission Progress, Barrieren, Carry, Repair/Placement-Reward und die Abschlussermittlung. Host- und Client-Frame kennen nur benannte Activity-Schritte; sieben Felder sind aus `ArenaContext` verschwunden. |
 | 7 Player-Lifetimes | ✅ abgeschlossen | `PlayerWorldRuntime` gehört der `WorldRuntime` und kennt nur world-scoped Module; Detach folgt einem Materialisierungs-Ledger. `CoopMissionPlayerRuntime` trägt Lebensbudget und Zielfreigabe der Mission. |
 | – Checkpoint B | ✅ automatisiert abgeschlossen | Coop create/update/destroy, Activity-Wechsel in derselben World, `PlayerWorldRuntime` bleibt / `PlayerActivityRuntime` wird ersetzt, Activity-Presentation folgt der Activity-Lifetime. Browser-Sichtprüfung ist User-Abnahme. |
-| 8 Persistent Base Lifetimes | ⬜ offen | |
+| 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Beitrags- und Reward-Speicher halten nur noch den committed Stand. |
 | 9 Completion / ResultApplication | ⬜ offen | |
 | 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt den `WorldPresentationHandoff`. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
@@ -86,7 +86,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | ID | Bereich | Problem / Risiko | Relevanz für nächste Phase |
 |---|---|---|---|
-| R-2 | World-Teardown | Der Abbau hat eine Reihenfolge mit fachlichem Grund: Darstellung geht zuerst (Handoff), dann der Abschluss des persistenten Basisbestands (braucht lebende Bau-Runtime, darf keine Darstellung mehr sehen), dann die Bau-Runtime. `WorldRuntime.destroy()` hält sie; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. | Phase 5–8 dürfen diese Reihenfolge nicht umsortieren. |
+| R-2 | World-Teardown | Der Abbau hat eine Reihenfolge mit fachlichem Grund: Darstellung geht zuerst (Handoff), dann der Abschluss des persistenten Basisbestands (braucht lebende Bau-Runtime, darf keine Darstellung mehr sehen), dann die Bau-Runtime. `WorldRuntime.destroy()` hält sie; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. | Phase 9–11 dürfen diese Reihenfolge nicht umsortieren. |
 | R-4 | Host-Frame | Der Weltanteil `decoySystem.hostUpdateLifecycle()` steht seit Phase 6 **vor** dem Missionsschritt statt zwischen zwei Coop-Phasen; nur so ist die Activity-Reihenfolge zusammenhängend. Fachlich gleichwertig, weil ausschließlich die Navigation und die Kampfphase Köder und Tarnung lesen. Vertrag in `tests/HostUpdatePhaseContracts.test.ts`. | Phase 8–11: Weltanteil nicht wieder in die Activity-Reihenfolge einsortieren. |
 | R-5 | Exit-Fade | Player- und Enemy-Runtime fallen mit der World-Instanz. Das eingefrorene Entity-Bild muss deshalb **vor** `worldLifecycle.endInstance()` stehen; auf dem Host geschieht das in `hostCompleteRound`, auf dem Client in `beginArenaExitPresentation`. Wer eine neue Stelle einführt, an der eine World-Instanz endet, muss diese Reihenfolge mitführen. | Phase 10 übernimmt die Übergangsreihenfolge und damit diesen Vertrag. |
 
@@ -103,7 +103,7 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | 325 Testdateien, 2729 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` | grün | 326 Testdateien, 2739 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 | `git diff --check` | grün | Keine Whitespace-Fehler. |
 | Browser-/Sichtprüfung | ausstehend – User-Abnahme | Von Coding-KIs gemäß Prüfregel nicht auszuführen. Prüfliste siehe Abschnitt 7. |
 
@@ -138,6 +138,7 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 **Aktuell relevant:**
 - Architektur-Dokument und Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
 - Transitional Debt TD-6/TD-8 sowie R-2/R-4/R-5 berücksichtigen; RK-2/RK-3 sind in den kanonischen Dokumenten synchronisiert, RK-4 ist offen.
+- Phase 9 findet den Missionsabschluss bereits als `CoopMissionOutcome` vor; seine Persistenzfolge läuft heute noch direkt im `hostCompleteRound` des Koordinators.
 
 **Owner-Landkarte nach Phase 4:**
 - `src/world/WorldRuntime.ts` – Slots: `materialization`, `presentation`, `persistentBase`, `activity`, plus `bind()` für world-scoped Bindings scene-langlebiger Systeme.
@@ -184,9 +185,25 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 - Attach/Detach-Reihenfolge im Koordinator: World zuerst hinein, Activity zuerst hinaus.
 - Verträge: `tests/PlayerLifetimeSeparation.test.ts`, `tests/PlayerWorldRuntimeContracts.test.ts`.
 
-**Noch beim Coordinator (Stoff der Phasen 8–9):** Persistent-Base Session- und Transaction-State,
-`persistentBaseVisualSite`, Team-Buff/Held-Action, sowie die Anwendung des Missionsergebnisses
-(Reward, Progression, Persistent-Base-Outcome).
+**Owner-Landkarte nach Phase 8:**
+- `src/persistentBase/PersistentBaseRoomSession.ts` – der raumlanglebige Owner. Er hält die
+  committed Beiträge und Belohnungen und ist die **einzige** Stelle, die einen Arbeitsstand
+  öffnet (`beginTransaction`) und abschließt (`completeTransaction`).
+- `src/persistentBase/PersistentBaseTransaction.ts` – Baseline, Working State, World-/Activity-
+  Identität und ID. `close()` ist terminal: Ein zweiter oder verspäteter Abschluss läuft ins
+  Leere. `beginTransaction` einer anderen Instanz verwirft einen noch offenen zuvor.
+- `src/persistentBase/PersistentBaseRuntimeBindings.ts` – die Runtime-Objekte einer World,
+  gehalten von `PersistentBaseWorldBinding.constructionRuntimes` und mit ihr abgeräumt.
+- Beitrags- und Reward-Speicher sind die Lesefassaden auf genau eine Lifetime (committed);
+  Arbeitsstand und Runtime-Objekte werden ihnen über `useTransaction` / `useWorldRuntimes`
+  geliehen. `hasActiveMission` bleibt als Prädikat erhalten.
+- `applyPersistentBaseRoundOutcome` nimmt jetzt `{ session, isRuntimeObjectAlive, identity }`;
+  der Koordinator übergibt die Identität der endenden Activity.
+- Verträge: `tests/PersistentBaseLifetimeSeparation.test.ts`, `tests/PersistentBaseRoundOutcome.test.ts`.
+
+**Noch beim Coordinator (Stoff der Phase 9):** `persistentBaseVisualSite`,
+Team-Buff/Held-Action sowie die Anwendung des Missionsergebnisses (Reward, Progression,
+Persistent-Base-Outcome, Statistik) direkt in `hostCompleteRound`.
 
 **Manuelle Browser-Prüfliste für den User:**
 - Host und Client: Matchstart aus der LobbyWorld; keine leere oder doppelte World;
@@ -201,6 +218,11 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   blockieren vorher Weg, Schuss und Bauen; Nebenmissionen (Hold/Carry/Destroy) aktivieren sich,
   ihre Belohnungen (Pedestal, Reparatur, Team-Buff) erscheinen; Sieg und Niederlage beenden die
   Runde wie zuvor; Gegnerbewegung, Ausweichschritte und Boss-Verhalten unverändert.
+- **Neu nach Phase 8 (persistente Basis):** In der LobbyWorld gebaute und verschobene
+  Konstruktionen und Belohnungen bleiben nach Kartenwechsel und Neustart erhalten; ein
+  Missionssieg schreibt den Rundenstand fort, Niederlage und Abbruch verwerfen ihn und lassen
+  den Lobby-Stand unverändert; ein Gast, der den Raum verlässt und zurückkommt, bringt seinen
+  Beitrag wieder mit.
 - **Neu nach Phase 7 (Leben und Exit-Bild):** Auf einer Map mit Respawn-Budget (`survive`,
   `advance`) zeigt die Lebensanzeige nach Tod und Respawn denselben Stand wie zuvor, der
   Team-Wipe beendet die Runde weiterhin; Spieler, die während der Runde beitreten oder gehen,
@@ -209,7 +231,7 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   zeigen – der Host friert sein Bild jetzt schon beim Rundenabschluss ein.
 
 **Nächste konkrete Aktion nach User-Abnahme:**
-`Phase 8 nur auf neuen Auftrag analysieren; PersistentBaseRoomSession/Transaction/WorldBinding trennen.`
+`Phase 9 nur auf neuen Auftrag analysieren; ActivityCompletion und ResultApplication aus hostCompleteRound lösen.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

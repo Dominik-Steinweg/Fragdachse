@@ -6,12 +6,18 @@ import {
   type PersistentBaseRewardState,
   DEFAULT_PERSISTENT_BASE_REWARD_STATE,
 } from './PersistentBaseRewardTypes';
+import type { PersistentBaseTransaction } from './PersistentBaseTransaction';
 
-/** Host-side value store for reward placements; it deliberately knows no world or renderer. */
+/**
+ * Host-side value store for reward placements; it deliberately knows no world or renderer.
+ *
+ * Wie beim Beitragsspeicher haelt er genau eine Lifetime: den committed Raumstand. Der
+ * Arbeitsstand einer laufenden Activity gehoert der {@link PersistentBaseTransaction}; ohne sie
+ * schreibt jede akzeptierte Aenderung sofort fort.
+ */
 export class PersistentBaseRewardStore {
   private committed: PersistentBaseRewardState;
-  private baseline: PersistentBaseRewardState | null = null;
-  private working: PersistentBaseRewardState | null = null;
+  private transaction: PersistentBaseTransaction | null = null;
 
   constructor(initialState: PersistentBaseRewardState = DEFAULT_PERSISTENT_BASE_REWARD_STATE) {
     const sanitized = sanitizePersistentBaseRewardState(initialState);
@@ -21,6 +27,16 @@ export class PersistentBaseRewardStore {
 
   get hasActiveMission(): boolean {
     return this.working !== null;
+  }
+
+  /** Der committed Raumstand; die Ausgangslage jeder neuen Transaktion. */
+  get committedState(): PersistentBaseRewardState {
+    return clonePersistentBaseRewardState(this.committed);
+  }
+
+  /** Bindet den Arbeitsstand dieser Activity ein oder loest ihn wieder. */
+  useTransaction(transaction: PersistentBaseTransaction | null): void {
+    this.transaction = transaction;
   }
 
   getState(): PersistentBaseRewardState {
@@ -33,8 +49,6 @@ export class PersistentBaseRewardStore {
     const sanitized = sanitizePersistentBaseRewardState(state);
     if (!sanitized) return false;
     this.committed = clonePersistentBaseRewardState(sanitized);
-    this.baseline = null;
-    this.working = null;
     return true;
   }
 
@@ -47,12 +61,6 @@ export class PersistentBaseRewardStore {
     // placeable again; there is deliberately no placement history that could block a re-place.
     return unlocks.includes(rewardId)
       && !current.placements.some((entry) => entry.rewardId === rewardId);
-  }
-
-  beginMission(): void {
-    if (this.working) return;
-    this.baseline = clonePersistentBaseRewardState(this.committed);
-    this.working = clonePersistentBaseRewardState(this.committed);
   }
 
   placeReward(placement: PersistentBaseRewardPlacement): boolean {
@@ -115,29 +123,34 @@ export class PersistentBaseRewardStore {
     return true;
   }
 
-  /** Commits a lobby edit or mission result and returns the new committed value. */
-  commit(): PersistentBaseRewardState | null {
-    if (!this.working) return null;
+  /** Commits the mission result and returns the new committed value. */
+  commitTransaction(): PersistentBaseRewardState | null {
+    const working = this.working;
+    if (!working) return null;
     this.committed = {
-      ...clonePersistentBaseRewardState(this.working),
-      revision: this.working.revision + 1,
+      ...clonePersistentBaseRewardState(working),
+      revision: working.revision + 1,
     };
-    this.working = null;
-    this.baseline = null;
     return clonePersistentBaseRewardState(this.committed);
   }
 
-  rollback(): void {
-    if (!this.working) return;
-    this.committed = clonePersistentBaseRewardState(this.baseline ?? this.committed);
-    this.working = null;
-    this.baseline = null;
+  /** Verwirft den Arbeitsstand; der bei Missionsbeginn bestaetigte Stand bleibt stehen. */
+  rollbackTransaction(): void {
+    const baseline = this.transaction?.isOpen === true ? this.transaction.rewardsAtStart : null;
+    if (!baseline) return;
+    this.committed = clonePersistentBaseRewardState(baseline);
+  }
+
+  /** Der laufende Arbeitsstand, solange die Transaktion offen ist. */
+  private get working(): PersistentBaseRewardState | null {
+    const transaction = this.transaction;
+    return transaction?.isOpen === true ? transaction.rewards : null;
   }
 
   private replaceCurrent(next: PersistentBaseRewardState): void {
     const sanitized = sanitizePersistentBaseRewardState(next);
     if (!sanitized) throw new Error('Invalid persistent-base reward placement');
-    if (this.working) this.working = sanitized;
+    if (this.working) this.transaction?.setRewards(sanitized);
     else this.committed = sanitized;
   }
 }

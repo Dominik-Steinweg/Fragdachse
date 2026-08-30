@@ -15,6 +15,7 @@ import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/confi
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import { sanitizePersistentBaseMoveRequest } from '../src/persistentBase/PersistentBaseMove';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
@@ -87,6 +88,9 @@ function contributionWith(construction: PersistentConstruction): PersistentPlaye
     constructions: [construction],
   };
 }
+
+/** Die Instanz, zu der ein Arbeitsstand in diesen Tests gehoert. */
+const MISSION = { worldRevision: 21, activityRevision: 7 } as const;
 
 describe('PlacementSystem – atomarer Relocate-Pfad', () => {
   it('behaelt Runtime-ID, HP und Besitz und gibt die Quellzelle frei', () => {
@@ -178,7 +182,7 @@ describe('PlacementSystem – atomarer Relocate-Pfad', () => {
 
 describe('PersistentBaseContributionStore – Move-Mutation', () => {
   it('erhaelt persistentId, Owner und placementOrder und aendert nur Position und Winkel', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     const construction = blueprint();
     store.offerContribution(contributionWith(construction));
     store.registerRestored(OWNER_ID, construction, 42);
@@ -207,7 +211,7 @@ describe('PersistentBaseContributionStore – Move-Mutation', () => {
   });
 
   it('lehnt ein Ziel ausserhalb des Baubereichs ab und laesst den Beitrag unveraendert', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     const construction = blueprint();
     store.offerContribution(contributionWith(construction));
 
@@ -222,7 +226,7 @@ describe('PersistentBaseContributionStore – Move-Mutation', () => {
   });
 
   it('kennt keinen fremden Blueprint als Move-Quelle', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     const construction = blueprint();
     store.offerContribution(contributionWith(construction));
 
@@ -248,18 +252,22 @@ describe('PersistentBaseContributionStore – Move-Mutation', () => {
       )).not.toBeNull();
     };
 
-    const defeated = new PersistentBaseContributionStore();
+    const defeatedSession = new PersistentBaseRoomSession();
+
+    const defeated = defeatedSession.contributions;
     defeated.offerContribution(contributionWith(construction));
-    defeated.beginMission();
+    defeatedSession.beginTransaction(MISSION);
     move(defeated);
-    defeated.rollback();
+    defeatedSession.completeTransaction('rollback', () => true);
     expect(defeated.getContribution(OWNER_ID)?.constructions).toEqual([construction]);
 
-    const won = new PersistentBaseContributionStore();
+    const wonSession = new PersistentBaseRoomSession();
+
+    const won = wonSession.contributions;
     won.offerContribution(contributionWith(construction));
-    won.beginMission();
+    wonSession.beginTransaction(MISSION);
     move(won);
-    expect(won.commit(() => true)[0].constructions).toEqual([
+    expect(wonSession.completeTransaction('commit', () => true)[0].constructions).toEqual([
       { ...construction, relativeGridX: -1, relativeGridY: -1, angle: 0 },
     ]);
   });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
+import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type {
@@ -62,9 +63,13 @@ function contribution(
   };
 }
 
+
+/** Die Instanz, zu der ein Arbeitsstand in diesen Tests gehoert. */
+const MISSION = { worldRevision: 21, activityRevision: 7 } as const;
+
 describe('PersistentBaseContributionStore – Angebot und Revision', () => {
   it('nimmt jeden Beitrag unter seiner eigenen Besitzeridentitaet auf', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     expect(store.offerContribution(contribution('owner-a', [blueprint('a-1', 0)]))).toBe(true);
     expect(store.offerContribution(contribution('owner-b', [blueprint('b-1', 1)]))).toBe(true);
 
@@ -73,7 +78,7 @@ describe('PersistentBaseContributionStore – Angebot und Revision', () => {
   });
 
   it('weist eine veraltete Revision ab und behaelt den neueren Stand', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     store.offerContribution(contribution('owner-a', [blueprint('new', 0)], 5));
 
     expect(store.offerContribution(contribution('owner-a', [blueprint('stale', 1)], 4))).toBe(false);
@@ -85,7 +90,7 @@ describe('PersistentBaseContributionStore – Angebot und Revision', () => {
   });
 
   it('laesst dieselbe Revision keinen abweichenden Inhalt bedeuten', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     store.offerContribution(contribution('owner-a', [blueprint('original', 0)], 5));
 
     // Sonst koennte ein Client einen bereits akzeptierten Stand still austauschen, ohne dass die
@@ -96,9 +101,10 @@ describe('PersistentBaseContributionStore – Angebot und Revision', () => {
   });
 
   it('nimmt einen waehrend der Mission beitretenden Spieler auf, ohne laufende Staende zu ersetzen', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('a-1', 0)]));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
 
     store.offerContribution(contribution('owner-b', [blueprint('b-1', 1)]));
@@ -110,9 +116,10 @@ describe('PersistentBaseContributionStore – Angebot und Revision', () => {
 
 describe('PersistentBaseContributionStore – Verlassen und Wiederkommen', () => {
   it('entfernt beim Verlassen die Runtime-Objekte und den Raumzustand des Besitzers', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-guest', [blueprint('g-1', 0)]));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerRestored('owner-guest', blueprint('g-1', 0), 42);
 
     expect(store.removeOwner('owner-guest')).toEqual([42]);
@@ -123,7 +130,7 @@ describe('PersistentBaseContributionStore – Verlassen und Wiederkommen', () =>
   });
 
   it('nimmt denselben Besitzer nach einem erneuten Angebot wieder auf', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     store.offerContribution(contribution('owner-guest', [blueprint('g-1', 0)], 3));
     store.removeOwner('owner-guest');
 
@@ -136,7 +143,7 @@ describe('PersistentBaseContributionStore – Verlassen und Wiederkommen', () =>
 
 describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
   it('committed eine host-validierte Platzierung sofort und erhoeht die Revision', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     store.offerContribution(contribution('owner-a', [], 4));
 
     expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
@@ -150,7 +157,7 @@ describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
   });
 
   it('committed den Abriss eines eigenen materialisierten Blueprints sofort', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     const restored = blueprint('lobby-object', 1);
     store.offerContribution(contribution('owner-a', [restored], 5));
     store.registerRestored('owner-a', restored, 12);
@@ -164,18 +171,18 @@ describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
   });
 
   it('verwendet den bestaetigten Stand nach erneutem Betreten als neue Grundlage', () => {
-    const firstVisit = new PersistentBaseContributionStore();
+    const firstVisit = new PersistentBaseRoomSession().contributions;
     firstVisit.offerContribution(contribution('owner-a', [], 2));
     firstVisit.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
     const confirmed = firstVisit.getCommittedContribution('owner-a')!;
 
-    const reload = new PersistentBaseContributionStore();
+    const reload = new PersistentBaseRoomSession().contributions;
     expect(reload.offerContribution(confirmed)).toBe(true);
     expect(reload.getContribution('owner-a')).toEqual(confirmed);
   });
 
   it('schreibt eine Gastplatzierung nur in den Beitrag ihres Besitzers', () => {
-    const store = new PersistentBaseContributionStore();
+    const store = new PersistentBaseRoomSession().contributions;
     store.offerContribution(contribution('owner-host', [blueprint('host-kept', 0)], 9));
     store.offerContribution(contribution('owner-guest', [], 3));
 
@@ -194,8 +201,9 @@ describe('PersistentBaseContributionStore – Lobby-Sofort-Commit', () => {
 
 describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
   it('nimmt nur Neubauten innerhalb des Baubereichs auf', () => {
-    const store = new PersistentBaseContributionStore();
-    store.beginMission();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
+    storeSession.beginTransaction(MISSION);
 
     expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
       .toMatchObject({ origin: 'new' });
@@ -206,9 +214,10 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
   });
 
   it('laesst den committed Stand waehrend einer Mission bis zum Sieg unveraendert', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('lobby-kept', 0)], 4));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
 
     expect(store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea))
       .toMatchObject({ origin: 'new' });
@@ -217,13 +226,14 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
       contribution('owner-a', [blueprint('lobby-kept', 0)], 4),
     );
 
-    expect(store.commit(() => true)[0]).toMatchObject({ revision: 5 });
+    expect(storeSession.completeTransaction('commit', () => true)[0]).toMatchObject({ revision: 5 });
   });
 
   it('unterscheidet wiederhergestellte und neue Runtime-Objekte', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('restored', 1)]));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerRestored('owner-a', blueprint('restored', 1), 7);
     store.registerNew('owner-a', runtime(8, 9), tool, footprint, anchor, buildArea);
 
@@ -233,19 +243,21 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
   });
 
   it('laesst einen Blueprint ohne Runtime-Objekt unangetastet stehen', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     // Ein Blueprint, den der Merge wegen eines Konflikts gar nicht materialisiert hat.
     store.offerContribution(contribution('owner-a', [blueprint('dormant', 0)]));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
 
-    const confirmed = store.commit(() => false);
+    const confirmed = storeSession.completeTransaction('commit', () => false);
     expect(confirmed[0]?.constructions.map((entry) => entry.persistentId)).toEqual(['dormant']);
   });
 
   it('gibt beim Verdraengen nur die Runtime-Bindung auf, nicht den Besitz', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('suppressed', 0)]));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerRestored('owner-a', blueprint('suppressed', 0), 21);
 
     expect(store.getRuntimeBindings().map((entry) => entry.runtimeId)).toEqual([21]);
@@ -254,26 +266,28 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
     expect(store.isMaterialized('owner-a', 'suppressed')).toBe(false);
 
     // Der Blueprint ueberlebt die Verdraengung und wird bei Sieg unveraendert fortgeschrieben.
-    expect(store.commit(() => true)[0]?.constructions.map((entry) => entry.persistentId))
+    expect(storeSession.completeTransaction('commit', () => true)[0]?.constructions.map((entry) => entry.persistentId))
       .toEqual(['suppressed']);
   });
 
   it('unterscheidet Abriss von Konflikt', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('torn-down', 0)]));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerRestored('owner-a', blueprint('torn-down', 0), 12);
 
     expect(store.removeByRuntimeId(12)).toBe(true);
     expect(store.removeByRuntimeId(12)).toBe(false);
-    expect(store.commit(() => true)[0]?.constructions).toEqual([]);
+    expect(storeSession.completeTransaction('commit', () => true)[0]?.constructions).toEqual([]);
   });
 
   it('haelt eine zerstoerte Runtime bis zum Round Outcome gebunden', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     const restored = blueprint('destroyed', 0);
     store.offerContribution(contribution('owner-a', [restored], 4));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerRestored('owner-a', restored, 21);
 
     // Der Destruction-Pfad entfernt nur das Runtime-Objekt; die Bindung bleibt erhalten, damit
@@ -283,17 +297,18 @@ describe('PersistentBaseContributionStore – Missionsarbeitsstand', () => {
       ownerId: 'owner-a',
       blueprint: restored,
     }]);
-    expect(store.commit((runtimeId) => runtimeId !== 21)[0]?.constructions).toEqual([]);
+    expect(storeSession.completeTransaction('commit', (runtimeId) => runtimeId !== 21)[0]?.constructions).toEqual([]);
     expect(store.getCommittedContribution('owner-a')?.revision).toBe(5);
   });
 
   it('haelt den Rollback beim zuletzt bestaetigten Stand jedes Besitzers', () => {
-    const store = new PersistentBaseContributionStore();
+    const storeSession = new PersistentBaseRoomSession();
+    const store = storeSession.contributions;
     store.offerContribution(contribution('owner-a', [blueprint('kept', 0)], 4));
-    store.beginMission();
+    storeSession.beginTransaction(MISSION);
     store.registerNew('owner-a', runtime(1, 11), tool, footprint, anchor, buildArea);
 
-    store.rollback();
+    storeSession.completeTransaction('rollback', () => true);
     const kept = store.getCommittedContribution('owner-a');
     expect(kept?.revision).toBe(4);
     expect(kept?.constructions.map((entry) => entry.persistentId)).toEqual(['kept']);

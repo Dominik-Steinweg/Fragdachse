@@ -1,7 +1,7 @@
 import type { RoundConclusion } from '../network/NetworkBridge';
-import type { PersistentBaseContributionStore } from './PersistentBaseContributionStore';
+import type { PersistentBaseRoomSession } from './PersistentBaseRoomSession';
+import type { PersistentBaseTransactionIdentity } from './PersistentBaseTransaction';
 import type { PersistentPlayerBaseContribution } from './PersistentBaseTypes';
-import type { PersistentBaseRewardStore } from './PersistentBaseRewardStore';
 
 /**
  * Wie eine beendete Runde mit dem persistenten Arbeitsstand umgeht. Nur ein Sieg schreibt fort;
@@ -9,21 +9,26 @@ import type { PersistentBaseRewardStore } from './PersistentBaseRewardStore';
  */
 export type PersistentBaseRoundOutcome = 'commit' | 'rollback';
 
-/** Nur der Anteil des Beitragsspeichers, den der Rundenabschluss braucht. */
-type PersistentBaseContributionStoreLike =
-  Pick<PersistentBaseContributionStore, 'hasActiveMission' | 'commit' | 'rollback'>;
+/** Nur der Anteil des Raumzustands, den der Rundenabschluss braucht. */
+type PersistentBaseRoomSessionLike =
+  Pick<PersistentBaseRoomSession, 'hasOpenTransaction' | 'completeTransaction'>;
 
 export interface PersistentBaseRoundTargets {
   /**
-   * Host-seitiger Arbeitsstand aller Beitraege. Er lebt laenger als eine Runde - ein Gast bleibt
-   * ueber einen Kartenwechsel hinweg Besitzer seiner Konstruktionen - und wird deshalb immer
-   * uebergeben, auch wenn gerade keine Mission laeuft.
+   * Der raumlanglebige Zustand der persistenten Basis. Er lebt laenger als eine Runde - ein Gast
+   * bleibt ueber einen Kartenwechsel hinweg Besitzer seiner Konstruktionen - und wird deshalb
+   * immer uebergeben, auch wenn gerade keine Mission laeuft.
    */
-  readonly contributions: PersistentBaseContributionStoreLike;
+  readonly session: PersistentBaseRoomSessionLike;
   /** Nur noch lebende Runtime-Objekte werden fortgeschrieben. */
   readonly isRuntimeObjectAlive: (runtimeId: number) => boolean;
-  /** Persistent reward store follows the same victory/rollback boundary as contributions. */
-  readonly rewards?: Pick<PersistentBaseRewardStore, 'hasActiveMission' | 'commit' | 'rollback'>;
+  /**
+   * Die Instanz, deren Abschluss das hier ist.
+   *
+   * Ohne Angabe gilt der Abschluss fuer den gerade offenen Arbeitsstand; mit Angabe laeuft ein
+   * verspaeteter Abschluss ins Leere, statt eine inzwischen neue Activity zu treffen.
+   */
+  readonly identity?: PersistentBaseTransactionIdentity;
 }
 
 export function resolvePersistentBaseRoundOutcome(
@@ -33,26 +38,22 @@ export function resolvePersistentBaseRoundOutcome(
 }
 
 /**
- * Wendet den Ausgang auf alle persoenlichen Beitraege gemeinsam an.
+ * Wendet den Ausgang auf den offenen Arbeitsstand an.
  *
  * Ein Sieg liefert je Besitzer genau einen bestaetigten neuen Beitrag; der Aufrufer stellt ihn
  * dem jeweiligen Besitzer zu, der ihn dann - und nur dann - lokal speichern darf. Jeder andere
  * Ausgang liefert nichts: Der zuletzt bestaetigte Stand jedes Besitzers bleibt unveraendert.
+ *
+ * Beitraege und Belohnungen teilen sich denselben Arbeitsstand und damit denselben Abschluss.
  */
 export function applyPersistentBaseRoundOutcome(
   outcome: PersistentBaseRoundOutcome,
   targets: PersistentBaseRoundTargets,
 ): readonly PersistentPlayerBaseContribution[] {
-  const { contributions, isRuntimeObjectAlive } = targets;
-  const contributionActive = contributions.hasActiveMission;
-  const rewardsActive = targets.rewards?.hasActiveMission === true;
-  if (!contributionActive && !rewardsActive) return [];
-  if (outcome === 'commit') {
-    const confirmed = contributionActive ? contributions.commit(isRuntimeObjectAlive) : [];
-    if (rewardsActive) targets.rewards?.commit();
-    return confirmed;
-  }
-  if (contributionActive) contributions.rollback();
-  if (rewardsActive) targets.rewards?.rollback();
-  return [];
+  if (!targets.session.hasOpenTransaction) return [];
+  return targets.session.completeTransaction(
+    outcome,
+    targets.isRuntimeObjectAlive,
+    targets.identity,
+  );
 }
