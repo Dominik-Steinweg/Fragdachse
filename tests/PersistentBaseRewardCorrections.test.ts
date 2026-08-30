@@ -260,10 +260,9 @@ function testCoordinator(
       finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
       releaseRewardRuntime: () => { /* dito */ },
     }),
-    persistentBaseOwnerByPlayerId: new Map(),
     persistentBaseSession,
-    persistentBaseRewardSessionSignature: null,
-    persistentBaseRewardSessionRevision: 0,
+    persistentBaseRewardProjectionSignature: null,
+    persistentBaseRewardProjectionRevision: 0,
     persistentBaseRewardGrantService: new PersistentBaseRewardGrantService(),
   });
 

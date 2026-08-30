@@ -684,17 +684,13 @@ export class ArenaLifecycleCoordinator {
   private get persistentBaseBuildArea(): PersistentBaseBuildArea | null {
     return this.persistentBaseWorldBinding?.buildArea ?? null;
   }
-  private persistentBaseRewardSessionRevision = 0;
-  private persistentBaseRewardSessionSignature: string | null = null;
-  /** Zuletzt angebotene Beitragsrevision je Spieler; verhindert wiederholtes Uebernehmen. */
-  private readonly ingestedContributionRevisions = new Map<string, number>();
   /**
-   * Raum-Spieler-ID zu dauerhafter Besitzeridentitaet.
-   *
-   * Beides bleibt getrennt: Die Spieler-ID gilt fuer diesen Raum und bestimmt Farbe, Loadout und
-   * Freischaltungen; die Besitzeridentitaet gilt fuer das Bauwerk und ueberlebt jeden Raum.
+   * Technischer Network-/Projection-Cache: monotone Revision des zuletzt publizierten Reward-
+   * Snapshots. Die fachliche Reward-Revision bleibt im `PersistentBaseRewardStore`.
    */
-  private readonly persistentBaseOwnerByPlayerId = new Map<string, string>();
+  private persistentBaseRewardProjectionRevision = 0;
+  /** Technischer Network-/Projection-Dedup-Cache, keine zweite fachliche Reward-Wahrheit. */
+  private persistentBaseRewardProjectionSignature: string | null = null;
   private persistentBaseVisualSite: PersistentBaseVisualSite | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
   private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;
@@ -2544,11 +2540,7 @@ export class ArenaLifecycleCoordinator {
 
   private removeGuestSessionOwner(playerId: string): void {
     if (!bridge.isHost() || playerId === bridge.getLocalPlayerId()) return;
-    const runtimeIds = this.persistentBaseSession.removeOwner(this.resolveOwnerId(playerId));
-    this.ingestedContributionRevisions.delete(playerId);
-    // Mit dem Spieler faellt sein Anspruch auf die Besitzeridentitaet; ein spaeterer Beitritt
-    // darf sie wieder fuehren.
-    this.persistentBaseOwnerByPlayerId.delete(playerId);
+    const runtimeIds = this.persistentBaseSession.removePlayerOwner(playerId);
     let removedCount = 0;
     for (const runtimeId of runtimeIds) {
       const removed = this.ctx.placementSystem?.removeRock(runtimeId);
@@ -5785,22 +5777,21 @@ export class ArenaLifecycleCoordinator {
    */
   private ingestOfferedPersistentBaseContributions(): void {
     if (!bridge.isHost()) return;
+    // Die Profilidentitaet des Hosts ist der erste Claim. Dadurch ist sie fuer Gastangebote
+    // reserviert, ohne dass der Coordinator selbst eine zweite Binding-Map fuehrt.
+    this.persistentBaseSession.bindPlayerOwner(
+      bridge.getLocalPlayerId(),
+      getStoredLocalOwnerId(),
+    );
     let ingestedSomething = false;
     for (const playerId of bridge.getConnectedPlayerIds()) {
       const offered = playerId === bridge.getLocalPlayerId()
         ? getStoredPersonalBaseContribution()
         : bridge.getPlayerPersistentBaseContribution(playerId);
       if (!offered) continue;
-      // Eine Besitzeridentitaet gehoert in diesem Raum genau einem Spieler. Zwei Spieler mit
-      // derselben - geklonter Speicherstand oder Manipulation - wuerden sonst gegenseitig ihre
-      // Beitraege ueberschreiben; wer die Identitaet des Hosts uebernaehme, koennte ihm sogar
-      // seinen eigenen Save ueberschreiben lassen. Der erste Anspruch gilt, jeder weitere nicht.
-      if (!this.canClaimPersistentBaseOwnerId(playerId, offered.ownerId)) continue;
-      if (this.ingestedContributionRevisions.get(playerId) === offered.revision) continue;
-      if (!this.persistentBaseContributions.offerContribution(offered)) continue;
-      this.ingestedContributionRevisions.set(playerId, offered.revision);
-      this.persistentBaseOwnerByPlayerId.set(playerId, offered.ownerId);
-      ingestedSomething = true;
+      // Claim, Contribution und Annahme-Revision gehoeren gemeinsam in die RoomSession.
+      ingestedSomething = this.persistentBaseSession.acceptContributionOffer(playerId, offered)
+        || ingestedSomething;
     }
     // Ein waehrend der Mission eingetroffener Beitrag traegt sofort bei, statt bis zur naechsten
     // World zu warten.
@@ -5809,24 +5800,16 @@ export class ArenaLifecycleCoordinator {
     }
   }
 
-  /**
-   * Ob dieser Spieler die angebotene Besitzeridentitaet in diesem Raum fuehren darf.
-   *
-   * Die Identitaet des Hosts ist dabei gesetzt, bevor irgendein Gast etwas anbieten kann: Sie
-   * kommt aus dem lokalen Profil und nicht aus dem Netz.
-   */
-  private canClaimPersistentBaseOwnerId(playerId: string, ownerId: string): boolean {
-    if (playerId !== bridge.getLocalPlayerId() && ownerId === getStoredLocalOwnerId()) return false;
-    const claimedBy = this.resolvePlayerIdForOwner(ownerId);
-    return claimedBy === null || claimedBy === playerId;
-  }
-
   /** Die dauerhafte Besitzeridentitaet hinter einer Raum-Spieler-ID; leer, wenn keine bekannt ist. */
   private resolveOwnerId(playerId: string): string {
-    if (playerId === bridge.getLocalPlayerId()) return getStoredLocalOwnerId();
-    return this.persistentBaseOwnerByPlayerId.get(playerId)
-      ?? bridge.getPlayerPersistentBaseContribution(playerId)?.ownerId
-      ?? '';
+    this.ensureLocalPersistentBaseOwnerBinding(playerId);
+    return this.persistentBaseSession.getOwnerIdForPlayer(playerId) ?? '';
+  }
+
+  /** Der lokale Profil-Owner ist der erste Raum-Claim, auch wenn noch kein Angebot vorliegt. */
+  private ensureLocalPersistentBaseOwnerBinding(playerId: string): void {
+    if (playerId !== bridge.getLocalPlayerId()) return;
+    this.persistentBaseSession.bindPlayerOwner(playerId, getStoredLocalOwnerId());
   }
 
   /**
@@ -5837,11 +5820,8 @@ export class ArenaLifecycleCoordinator {
    * aus einer Besitzeridentitaet erraten wird.
    */
   private resolvePlayerIdForOwner(ownerId: string): string | null {
-    if (ownerId === getStoredLocalOwnerId()) return bridge.getLocalPlayerId();
-    for (const [playerId, candidate] of this.persistentBaseOwnerByPlayerId) {
-      if (candidate === ownerId && playerId !== bridge.getLocalPlayerId()) return playerId;
-    }
-    return null;
+    this.ensureLocalPersistentBaseOwnerBinding(bridge.getLocalPlayerId());
+    return this.persistentBaseSession.getPlayerIdForOwner(ownerId);
   }
 
   /**
@@ -5881,15 +5861,15 @@ export class ArenaLifecycleCoordinator {
       availableRewardIds,
       placements: state.placements,
     });
-    if (signature === this.persistentBaseRewardSessionSignature) return;
-    this.persistentBaseRewardSessionSignature = signature;
-    this.persistentBaseRewardSessionRevision = Math.max(
+    if (signature === this.persistentBaseRewardProjectionSignature) return;
+    this.persistentBaseRewardProjectionSignature = signature;
+    this.persistentBaseRewardProjectionRevision = Math.max(
       state.revision,
-      this.persistentBaseRewardSessionRevision + 1,
+      this.persistentBaseRewardProjectionRevision + 1,
     );
     const session: PersistentBaseRewardSessionState = {
       worldRevision: world.worldRevision,
-      revision: this.persistentBaseRewardSessionRevision,
+      revision: this.persistentBaseRewardProjectionRevision,
       availableRewardIds,
       placements: state.placements,
     };

@@ -339,9 +339,10 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
   });
 
   it('laesst eine Besitzeridentitaet nur einem Spieler des Raums', () => {
-    expect(lifecycle).toContain('if (!this.canClaimPersistentBaseOwnerId(playerId, offered.ownerId)) continue;');
     expect(lifecycle).toContain(
-      "if (playerId !== bridge.getLocalPlayerId() && ownerId === getStoredLocalOwnerId()) return false;",
+      'this.persistentBaseSession.acceptContributionOffer(playerId, offered)',
     );
+    expect(lifecycle).not.toContain('persistentBaseOwnerByPlayerId');
+    expect(lifecycle).not.toContain('ingestedContributionRevisions');
   });
 });

@@ -156,6 +156,77 @@ function createLifecycleSessionHarness(): {
 }
 
 describe('PersistentBaseRoomSession – der Raum ueberlebt seine Activities', () => {
+  it('haelt Owner-Bindungen ueber World-Ende und neuen World-Beginn', () => {
+    const harness = createLifecycleSessionHarness();
+    expect(harness.session.bindPlayerOwner('player-guest', 'owner-guest')).toBe(true);
+
+    harness.lifecycle.beginCreate(WORLD, null);
+    harness.lifecycle.endInstance();
+    const nextWorld = { ...WORLD, worldRevision: WORLD.worldRevision + 1 };
+    harness.lifecycle.beginCreate(nextWorld, null);
+
+    expect(harness.session.getOwnerIdForPlayer('player-guest')).toBe('owner-guest');
+    expect(harness.session.getPlayerIdForOwner('owner-guest')).toBe('player-guest');
+  });
+
+  it('haelt Owner-Bindungen ueber einen Activity-Wechsel innerhalb derselben World', () => {
+    const session = new PersistentBaseRoomSession();
+    expect(session.bindPlayerOwner('player-guest', 'owner-guest')).toBe(true);
+
+    session.beginTransaction(MISSION_A);
+    session.beginTransaction(MISSION_B);
+
+    expect(session.getOwnerIdForPlayer('player-guest')).toBe('owner-guest');
+    expect(session.getPlayerIdForOwner('owner-guest')).toBe('player-guest');
+  });
+
+  it('loest Leave-Bindung und Room-State, ohne den persoenlichen Save zu loeschen, und erlaubt Rejoin', () => {
+    const session = new PersistentBaseRoomSession();
+    const personalSave = contribution('owner-guest', [blueprint('guest-save')], 4);
+
+    expect(session.acceptContributionOffer('player-guest', personalSave)).toBe(true);
+    expect(session.removePlayerOwner('player-guest')).toEqual([]);
+    expect(session.getOwnerIdForPlayer('player-guest')).toBeNull();
+    expect(session.contributions.getContribution('owner-guest')).toBeNull();
+
+    // Der Save lebt ausserhalb der RoomSession und kann nach dem Rejoin wieder angeboten werden.
+    expect(personalSave.ownerId).toBe('owner-guest');
+    expect(session.acceptContributionOffer('player-guest', personalSave)).toBe(true);
+    expect(session.getOwnerIdForPlayer('player-guest')).toBe('owner-guest');
+  });
+
+  it('schuetzt Owner-Claims vor Kollisionen, ohne den bestehenden Room-State zu veraendern', () => {
+    const session = new PersistentBaseRoomSession();
+    const first = contribution('owner-guest', [blueprint('first')], 2);
+    const second = contribution('owner-guest', [blueprint('collision')], 3);
+
+    expect(session.acceptContributionOffer('player-a', first)).toBe(true);
+    expect(session.acceptContributionOffer('player-b', second)).toBe(false);
+    expect(session.getPlayerIdForOwner('owner-guest')).toBe('player-a');
+    expect(session.getOwnerIdForPlayer('player-b')).toBeNull();
+    expect(session.contributions.getContribution('owner-guest')?.constructions[0]?.persistentId)
+      .toBe('first');
+  });
+
+  it('wendet gleiche und stale Contribution-Revisionen nicht doppelt an und behaelt den Ingest-Stand', () => {
+    const session = new PersistentBaseRoomSession();
+    const first = contribution('owner-a', [blueprint('first')], 2);
+    const same = contribution('owner-a', [blueprint('first')], 2);
+    const stale = contribution('owner-a', [blueprint('stale')], 1);
+    const newer = contribution('owner-a', [blueprint('newer')], 3);
+
+    expect(session.acceptContributionOffer('player-a', first)).toBe(true);
+    expect(session.acceptContributionOffer('player-a', same)).toBe(false);
+    expect(session.acceptContributionOffer('player-a', stale)).toBe(false);
+
+    session.beginTransaction(MISSION_A);
+    session.beginTransaction(MISSION_B);
+    expect(session.acceptContributionOffer('player-a', same)).toBe(false);
+    expect(session.acceptContributionOffer('player-a', newer)).toBe(true);
+    expect(session.getOwnerIdForPlayer('player-a')).toBe('owner-a');
+    expect(session.contributions.getCommittedContribution('owner-a')?.revision).toBe(3);
+  });
+
   it('haelt den committed Stand und oeffnet je Activity genau einen Arbeitsstand', () => {
     const session = new PersistentBaseRoomSession();
     const store = session.contributions;
@@ -393,6 +464,28 @@ describe('Phase 8 – Ownership im Koordinator', () => {
     expect(coordinator).toContain('private readonly persistentBaseSession = new PersistentBaseRoomSession();');
     expect(coordinator).not.toContain('new PersistentBaseContributionStore()');
     expect(coordinator).not.toContain('new PersistentBaseRewardStore()');
+  });
+
+  it('haelt fachliche Player-Owner-Bindungen und Contribution-Ingest im Room-Owner', () => {
+    const session = readFileSync(
+      resolve(process.cwd(), 'src/persistentBase/PersistentBaseRoomSession.ts'),
+      'utf8',
+    );
+    expect(session).toContain('private readonly persistentBaseOwnerByPlayerId');
+    expect(session).toContain('private readonly ingestedContributionRevisions');
+    expect(session).toContain('bindPlayerOwner(');
+    expect(session).toContain('acceptContributionOffer(');
+    expect(session).toContain('removePlayerOwner(');
+    expect(coordinator).not.toContain('private readonly persistentBaseOwnerByPlayerId');
+    expect(coordinator).not.toContain('private readonly ingestedContributionRevisions');
+    expect(coordinator).not.toContain('private canClaimPersistentBaseOwnerId(');
+  });
+
+  it('kennzeichnet Reward-Revision und Signatur als reine Projection-Caches', () => {
+    expect(coordinator).toContain('private persistentBaseRewardProjectionRevision = 0;');
+    expect(coordinator).toContain('private persistentBaseRewardProjectionSignature: string | null = null;');
+    expect(coordinator).not.toContain('persistentBaseRewardSessionRevision');
+    expect(coordinator).not.toContain('persistentBaseRewardSessionSignature');
   });
 
   it('oeffnet den Arbeitsstand mit der Identitaet der Activity und schliesst ihn damit ab', () => {

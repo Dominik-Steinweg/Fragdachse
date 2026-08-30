@@ -52,7 +52,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 6 Coop Objectives / Update / Presentation | ✅ abgeschlossen | `CoopMissionRuntime` besitzt zusätzlich Objectives, Mission Progress, Barrieren, Carry, Repair/Placement-Reward und die Abschlussermittlung. Host- und Client-Frame kennen nur benannte Activity-Schritte; sieben Felder sind aus `ArenaContext` verschwunden. |
 | 7 Player-Lifetimes | ✅ abgeschlossen | `PlayerWorldRuntime` gehört der `WorldRuntime` und kennt nur world-scoped Module; Detach folgt einem Materialisierungs-Ledger. `CoopMissionPlayerRuntime` trägt Lebensbudget und Zielfreigabe der Mission. |
 | – Checkpoint B | ✅ automatisiert abgeschlossen | Coop create/update/destroy, Activity-Wechsel in derselben World, `PlayerWorldRuntime` bleibt / `PlayerActivityRuntime` wird ersetzt, Activity-Presentation folgt der Activity-Lifetime. Browser-Sichtprüfung ist User-Abnahme. |
-| 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
+| 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand, Player↔Owner-Bindungen, angenommene Contribution-Revisionsstände) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
 | 9 Completion / ResultApplication | ⬜ offen | |
 | 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt den `WorldPresentationHandoff`. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
@@ -221,6 +221,25 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 **Noch beim Coordinator (Stoff der Phase 9):** `persistentBaseVisualSite`,
 Team-Buff/Held-Action sowie die Anwendung des Missionsergebnisses (Reward, Progression,
 Persistent-Base-Outcome, Statistik) direkt in `hostCompleteRound`.
+
+**Phase-8-Review Problem 3 (korrigiert):** `persistentBaseOwnerByPlayerId` und
+`ingestedContributionRevisions` waren fachlicher room-langlebiger State und liegen jetzt gemeinsam
+mit der Gegenrichtung `playerIdByPersistentBaseOwnerId` in `PersistentBaseRoomSession`. Die Session
+validiert und registriert Player↔Owner-Claims, nimmt Contribution-Stände revisionsgebunden an und
+löst Bindung, Room-Contribution und Ingest-Stand beim Leave; der persönliche Save bleibt unangetastet
+und kann beim Rejoin erneut angeboten werden. Dadurch bleiben Bindungen über World- und
+Activity-Wechsel bei genau einem Owner erhalten. Collision-/stale-/Dedup-Verträge sowie World-,
+Activity- und Leave/Rejoin-Lifetimes schützt `tests/PersistentBaseLifetimeSeparation.test.ts`;
+`tests/PersistentBaseComposite.test.ts` schützt zusätzlich den Coordinator-Ownership-Ratchet.
+
+`persistentBaseRewardProjectionRevision` und `persistentBaseRewardProjectionSignature` bleiben
+bewusst im Coordinator: Sie sind ausschließlich monotone Network-/Projection-Publishing- und
+Dedup-Caches für `PersistentBaseRewardSessionState`; die fachliche Reward-Revision bleibt im
+`PersistentBaseRewardStore`. `persistentBaseVisualSite` bleibt Presentation-State. Die
+world-lokale Referenz `persistentBaseWorldBinding` sowie Runtime-/Composite-Bindings bleiben
+Compatibility-/Orchestrierungspfade auf `WorldRuntime`/`PersistentBaseWorldBinding` und sind keine
+zweite Room-State-Quelle. Verbleibende Transitional Debt ist in TD-1, TD-2, TD-4, TD-5, TD-6 und
+TD-8 aufgeführt.
 
 **Manuelle Browser-Prüfliste für den User:**
 - Host und Client: Matchstart aus der LobbyWorld; keine leere oder doppelte World;

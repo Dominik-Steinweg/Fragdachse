@@ -170,10 +170,9 @@ function createHarness(classId: string) {
       finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
       releaseRewardRuntime: () => { /* dito */ },
     }),
-    persistentBaseOwnerByPlayerId: new Map(),
     persistentBaseSession,
-    persistentBaseRewardSessionSignature: null,
-    persistentBaseRewardSessionRevision: 0,
+    persistentBaseRewardProjectionSignature: null,
+    persistentBaseRewardProjectionRevision: 0,
     persistentBaseRewardGrantService: new PersistentBaseRewardGrantService(),
   });
   coordinator.resolveConfiguredGameMode = () => COOP_DEFENSE_MODE;
