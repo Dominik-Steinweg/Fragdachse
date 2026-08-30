@@ -1,4 +1,6 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('./fakeArenaRenderScene');
@@ -142,7 +144,7 @@ function createHarness(classId: string) {
       placementSystem,
       loadoutManager,
       playerManager: { getPlayer: () => player },
-      combatSystem: { isAlive: () => true, isBurrowed: () => false },
+      combatSystem: { isAlive: vi.fn(() => true), isBurrowed: vi.fn(() => false) },
       gameAudioSystem: { playSound: vi.fn() },
       powerUpSystem: {
         repositionPersistentBaseRewardPedestal: vi.fn(() => true),
@@ -172,6 +174,23 @@ function createHarness(classId: string) {
   coordinator.publishImmediatePersistentBaseContribution = vi.fn();
 
   return { coordinator, contributionStore, rewardStore, placementSystem, loadoutManager, playerId, site };
+}
+
+function useClientPreviewState(
+  playerId: string,
+  state: { alive: boolean; isBurrowed: boolean },
+): void {
+  vi.spyOn(bridge, 'isHost').mockReturnValue(false);
+  vi.spyOn(bridge, 'getLatestGameState').mockReturnValue({
+    worldRevision: WORLD_REVISION,
+    players: { [playerId]: state },
+  } as never);
+  vi.spyOn(bridge, 'getPersistentBaseRewardSessionState').mockReturnValue({
+    worldRevision: WORLD_REVISION,
+    revision: 1,
+    availableRewardIds: ['base_health_pedestal'],
+    placements: [],
+  } as never);
 }
 
 /** Platziert das Health-Podest im Store und materialisiert seine Runtime an derselben Zelle. */
@@ -222,6 +241,118 @@ function moveRequest(
 }
 
 describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
+  it('verwendet beim Client die replizierte Verfuegbarkeit fuer die Move-Quellvorschau', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, placementSystem, playerId } = harness;
+    const source = placeRewardPedestal(harness, 1, 0);
+    const sourceWorld = worldCellCenter(METRICS, source.gridX, source.gridY);
+    useClientPreviewState(playerId, { alive: true, isBurrowed: false });
+
+    const preview = coordinator.getPersistentBaseMoveSourcePreview(
+      playerId,
+      sourceWorld.x,
+      sourceWorld.y,
+    );
+
+    expect(preview).toMatchObject({
+      isValid: true,
+      mode: 'move-source',
+      sourceRuntimeId: source.id,
+    });
+    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+    expect(placementSystem.getRuntimeRock(source.id)).toBeDefined();
+
+    const target = rewardCell(-1, 1);
+    const targetWorld = worldCellCenter(METRICS, target.gridX, target.gridY);
+    expect(coordinator.getPersistentBaseMoveTargetPreview(
+      playerId,
+      source.id,
+      targetWorld.x,
+      targetWorld.y,
+    )).toMatchObject({
+      isValid: true,
+      mode: 'move-target',
+      sourceRuntimeId: source.id,
+      gridX: target.gridX,
+      gridY: target.gridY,
+    });
+    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ alive: false, isBurrowed: false }, 'toten'],
+    [{ alive: true, isBurrowed: true }, 'eingegrabenen'],
+  ] as const)('lehnt die Move-Quellvorschau fuer einen %s Client ab', (state) => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, playerId } = harness;
+    useClientPreviewState(playerId, state);
+
+    expect(coordinator.getPersistentBaseMoveSourcePreview(playerId, 0, 0)).toBeUndefined();
+    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+  });
+
+  it('verwendet beim Client die replizierte Verfuegbarkeit fuer Reward-Placement', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, playerId } = harness;
+    const target = rewardCell(1, 1);
+    const targetWorld = worldCellCenter(METRICS, target.gridX, target.gridY);
+    useClientPreviewState(playerId, { alive: true, isBurrowed: false });
+
+    const preview = coordinator.getPersistentBaseRewardPlacementPreview(
+      playerId,
+      'base_health_pedestal',
+      targetWorld.x,
+      targetWorld.y,
+    );
+
+    expect(preview).toMatchObject({ isValid: true, mode: 'place', gridX: target.gridX, gridY: target.gridY });
+    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+  });
+
+  it('laesst Client-Commits trotz lokaler Preview nicht autoritativ durch', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, playerId } = harness;
+    useClientPreviewState(playerId, { alive: true, isBurrowed: false });
+
+    expect(coordinator.movePersistentBaseObject(playerId, {
+      worldRevision: WORLD_REVISION,
+      sourceRuntimeId: 1,
+      sourceGridX: 1,
+      sourceGridY: 1,
+      targetGridX: 2,
+      targetGridY: 2,
+    })).toEqual({ ok: false, reason: 'invalid' });
+  });
+
+  it('behandelt null als fehlendes Loadout im Management-Gate', () => {
+    const harness = createHarness('assault_dachs');
+    const { coordinator, playerId } = harness;
+    vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue(null);
+
+    expect(coordinator.getPersistentBaseRewardIdsForPlayer(playerId)).toEqual([]);
+  });
+
+  it('bindet Rueckbau in Management-Overlay ein und unterdrueckt dabei das normale Aim', () => {
+    const source = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
+    const overlayStart = source.indexOf('this.persistentBaseVisuals.sync(');
+    const overlayEnd = source.indexOf('const ultimatePreview', overlayStart);
+    const showAimStart = source.indexOf('const showAim =');
+    const showAimEnd = source.indexOf('const scopeProgress', showAimStart);
+
+    expect(overlayStart).toBeGreaterThanOrEqual(0);
+    expect(overlayEnd).toBeGreaterThan(overlayStart);
+    expect(source.slice(overlayStart, overlayEnd)).toContain('isDismantlePlacementActive()');
+    expect(showAimStart).toBeGreaterThanOrEqual(0);
+    expect(showAimEnd).toBeGreaterThan(showAimStart);
+    expect(source.slice(showAimStart, showAimEnd)).toContain(
+      '&& !this.ctx.inputSystem.isDismantlePlacementActive()',
+    );
+  });
+
   it('bietet unplatzierte Rewards auch ohne Inspector-Klasse an', () => {
     const { coordinator, playerId } = createHarness('assault_dachs');
 

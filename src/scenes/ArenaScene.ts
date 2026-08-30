@@ -2417,6 +2417,7 @@ export class ArenaScene extends Phaser.Scene {
         && (
           this.ctx.inputSystem.isUtilityPlacementActive()
           || this.ctx.inputSystem.isConstructionPlacementActive()
+          || this.ctx.inputSystem.isDismantlePlacementActive()
           || this.ctx.inputSystem.isPersistentRewardPlacementActive()
           || this.ctx.inputSystem.isRepositionActive()
         ),
@@ -2430,6 +2431,7 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isUtilityChargePreviewActive()
       && !this.ctx.inputSystem.isUtilityPlacementActive()
       && !this.ctx.inputSystem.isConstructionPlacementActive()
+      && !this.ctx.inputSystem.isDismantlePlacementActive()
       && !this.ctx.inputSystem.isPersistentRewardPlacementActive()
       && !this.ctx.inputSystem.isRepositionActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();

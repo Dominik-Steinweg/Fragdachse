@@ -1531,7 +1531,24 @@ export class ArenaLifecycleCoordinator {
    */
   private mayManagePersistentBase(playerId: string): boolean {
     return isCoopDefenseMode(this.resolveConfiguredGameMode())
-      && bridge.getPlayerCurrentLoadoutSnapshot(playerId) !== undefined;
+      && bridge.getPlayerCurrentLoadoutSnapshot(playerId) !== null;
+  }
+
+  /**
+   * Verfuegbarkeit fuer eine lokale Persistent-Base-Vorschau.
+   *
+   * Der Host liest den autoritativen Combat-Runtime-State. Ein Client hat bewusst keinen lokalen
+   * Combat-Runtime-State und verwendet deshalb den zuletzt replizierten PlayerNetState. Diese
+   * Entscheidung gilt nur fuer Preview/UI; Commit-Pfade validieren weiterhin hostseitig separat.
+   */
+  private isPlayerAvailableForPersistentBaseAction(playerId: string): boolean {
+    if (bridge.isHost()) {
+      return this.ctx.combatSystem.isAlive(playerId)
+        && !this.ctx.combatSystem.isBurrowed(playerId);
+    }
+
+    const state = bridge.getLatestGameState()?.players[playerId];
+    return state?.alive === true && state.isBurrowed !== true;
   }
 
   /** Liefert die lokale Reward-Vorschau aus dem verlaesslichen Session-Snapshot. */
@@ -1548,8 +1565,7 @@ export class ArenaLifecycleCoordinator {
     if (!site || !placementSystem || !player || !player.active
       || !this.mayManagePersistentBase(playerId)
       || !this.getPlayerCapabilities(playerId).canPlace
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)
+      || !this.isPlayerAvailableForPersistentBaseAction(playerId)
       || !isKnownPersistentBaseRewardId(rewardId)) return undefined;
 
     const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
@@ -1650,11 +1666,10 @@ export class ArenaLifecycleCoordinator {
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (!placementSystem || !player || !player.active
       || !this.mayManagePersistentBase(playerId)
-      // Dieselben Bedingungen wie beim Host-Commit: Eine Vorschau darf nie gueltig aussehen,
-      // wenn der Host die Aktion anschliessend ablehnen wuerde.
+      // Host und Client verwenden dieselbe Availability-Regel; die Quelle des Zustands bleibt
+      // dabei role-aware: autoritativer Combat-State beim Host, replizierter Player-State beim Client.
       || !this.getPlayerCapabilities(playerId).canDismantle
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)) return undefined;
+      || !this.isPlayerAvailableForPersistentBaseAction(playerId)) return undefined;
     const preview = placementSystem.getManagementSourcePreview(
       playerId,
       player.x,
@@ -1683,11 +1698,10 @@ export class ArenaLifecycleCoordinator {
     const site = this.ctx.world?.persistentBaseSite ?? null;
     if (!placementSystem || !player || !player.active
       || !this.mayManagePersistentBase(playerId)
-      // Dieselben Bedingungen wie beim Host-Commit: Eine Vorschau darf nie gueltig aussehen,
-      // wenn der Host die Aktion anschliessend ablehnen wuerde.
+      // Host und Client verwenden dieselbe Availability-Regel; die Quelle des Zustands bleibt
+      // dabei role-aware: autoritativer Combat-State beim Host, replizierter Player-State beim Client.
       || !this.getPlayerCapabilities(playerId).canDismantle
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)) return undefined;
+      || !this.isPlayerAvailableForPersistentBaseAction(playerId)) return undefined;
     const source = placementSystem.getRuntimeRock(sourceRuntimeId);
     if (!this.isMovablePersistentBaseSource(playerId, source) || !source) return undefined;
 
