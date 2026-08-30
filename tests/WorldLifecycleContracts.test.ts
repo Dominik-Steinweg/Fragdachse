@@ -210,7 +210,10 @@ describe('WorldLifecycle – genau ein Besitzer im Koordinator', () => {
     // `ctx.world` wird nur vom Sink des Lifecycles geschrieben – genau die beiden Zuweisungen dort.
     expect([...source.matchAll(/this\.ctx\.world\s*=/g)], 'ctx.world assigned past the lifecycle')
       .toHaveLength(2);
-    expect(source).toContain('attach: (context) => { this.ctx.world = context; }');
-    expect(source).toContain('detach: () => { this.ctx.world = null; }');
+    // Der Sink besitzt die lokale Runtime; `ctx.world` ist daneben nur noch der
+    // Compatibility-Pfad fuer die noch nicht migrierten Consumer.
+    expect(source).toContain('this.worldRuntime = new WorldRuntime(context);');
+    expect(source).toContain('      this.ctx.world = context;');
+    expect(source).toContain('      this.ctx.world = null;');
   });
 });

@@ -1861,6 +1861,9 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.syncPersistentBaseContributions();
     this.lifecycle.syncPersistentBaseRewards();
     this.lifecycle.detectWorldChange(deferArenaExit);
+    // Erst steht fest, welche World lokal laeuft - dann taktet ihre Runtime. Sie taktet nur die
+    // eigenen Child-Owner; Rundenphase und Rolle entscheiden darueber nichts.
+    this.lifecycle.updateWorldRuntime(delta);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
     const configuredGameMode = this.resolveConfiguredGameMode(configuredPhase);

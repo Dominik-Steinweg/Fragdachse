@@ -31,15 +31,15 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 2`
-**Gesamtstatus:** `Phase 1 abgeschlossen`
+**Aktive Phase:** `Phase 3`
+**Gesamtstatus:** `Phase 2 abgeschlossen`
 **Letzter Integrations-Checkpoint:** `npm run check`
-**Nächster Schritt:** Phase 2 gegen aktuellen Branch verifizieren und umsetzen.
+**Nächster Schritt:** Phase 3 gegen aktuellen Branch verifizieren und umsetzen.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
 | 1 Contracts | ✅ abgeschlossen | Lifecycle-/World-/Activity-/Persistent-Base-Contracts gezielt abgesichert. |
-| 2 WorldRuntime-Fundament | ⬜ offen | |
+| 2 WorldRuntime-Fundament | ✅ abgeschlossen | `WorldRuntime` + `ActivityRuntimeHost` in `src/world/`, erzeugt/zerstört im `WorldLifecycle`-Sink des `ArenaLifecycleCoordinator`. Slots für Presentation und Persistent Base sind Verträge und noch unbelegt. |
 | 3 World-Materialisierung | ⬜ offen | |
 | 4 World Bindings / PlayerWorld | ⬜ offen | |
 | 5 Coop Encounter / Enemy Ownership | ⬜ offen | |
@@ -61,7 +61,8 @@ Nur temporäre Migrationspfade eintragen.
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| – | – | – | – | – |
+| TD-1 | 2 | Der Lifecycle-Sink setzt `ArenaContext.world` weiterhin parallel zur `WorldRuntime`; alle bestehenden Consumer lesen den World-Kontext darüber. | `WorldRuntime.context` | Phase 11 |
+| TD-2 | 2 | `WorldRuntime.update()` wird über `ArenaLifecycleCoordinator.updateWorldRuntime()` aus `ArenaScene.update()` getaktet. | Zielpfad `ArenaRuntime.update()` | Phase 10 |
 
 ---
 
@@ -77,7 +78,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` + `git diff --check` | grün | 319 Testdateien, 2669 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` + `git diff --check` | grün | 320 Testdateien, 2683 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -108,9 +109,11 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 - Architektur-Dokument lesen.
 - Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
 - Transitional Debt und offene Risiken oben berücksichtigen.
+- Ownership-Anker der World: `src/world/WorldRuntime.ts` (Slot `activity` plus Presentation- und Persistent-Base-Binding) und `src/world/ActivityRuntimeHost.ts`. Erzeugung und Teardown liegen ausschließlich im `WorldLifecycle`-Sink des `ArenaLifecycleCoordinator`; die Verträge stehen in `tests/WorldRuntimeOwnership.test.ts`.
+- Die World-Materialisierung liegt weiterhin in `ArenaLifecycleCoordinator.buildWorld()` und `tearDownArena()`; Phase 3 verschiebt sie in diesen Owner.
 
 **Nächste konkrete Aktion:**  
-`Phase 2 analysieren und gegen den aktuellen Stand verifizieren.`
+`Phase 3 analysieren und gegen den aktuellen Stand verifizieren.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

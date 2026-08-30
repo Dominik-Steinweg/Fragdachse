@@ -223,6 +223,7 @@ import {
   type WorldPersistentBaseSite,
 } from '../../world/WorldRuntimeContext';
 import { WorldLifecycle } from '../../world/WorldLifecycle';
+import { WorldRuntime } from '../../world/WorldRuntime';
 import {
   PlayerWorldRuntime,
   resolvePlayerRuntimeFeatures,
@@ -351,6 +352,13 @@ export class ArenaLifecycleCoordinator {
     readonly plan: TrainEventPlan;
   } | null = null;
   /**
+   * Lokale Realisierung der laufenden World-Instanz. Sie entsteht und vergeht mit dem Attach und
+   * Detach des Lifecycles; dieselbe World-Instanz kann sie verlieren und eine neue bekommen.
+   *
+   * Ausserhalb ihrer Lifetime ist sie `null` und wird nicht als Dependency weitergereicht.
+   */
+  private worldRuntime: WorldRuntime | null = null;
+  /**
    * Besitzer der laufenden World-Instanz. Erzeugung, lokale Runtime und Ende laufen
    * ausschliesslich hierueber; `ArenaContext.world` wird nur von diesem Sink geschrieben.
    */
@@ -358,8 +366,18 @@ export class ArenaLifecycleCoordinator {
     publish: (world, activity) => bridge.publishWorldAndActivity(world, activity),
     publishActivity: (activity) => bridge.publishActivity(activity),
     clear: () => bridge.clearWorldAndActivity(),
-    attach: (context) => { this.ctx.world = context; },
-    detach: () => { this.ctx.world = null; },
+    attach: (context) => {
+      this.worldRuntime = new WorldRuntime(context);
+      // Compatibility-Pfad waehrend der Migration: Source of Truth ist die WorldRuntime, aber
+      // die bestehenden Consumer lesen den Kontext weiterhin ueber `ctx.world`.
+      this.ctx.world = context;
+    },
+    detach: () => {
+      const runtime = this.worldRuntime;
+      this.worldRuntime = null;
+      runtime?.destroy();
+      this.ctx.world = null;
+    },
   });
   /**
    * Gemeinsamer Player-Lifecycle dieser World. Es gibt genau einen Weg hinein und einen hinaus;
@@ -671,6 +689,17 @@ export class ArenaLifecycleCoordinator {
       this.onTransitionToArena();
     }
     if (prev === 'ARENA' && current === 'LOBBY') this.onTransitionToLobby();
+  }
+
+  /**
+   * Taktet die lokale World-Runtime dieses Frames.
+   *
+   * Update folgt Ownership: Wer einen world-scoped Child-Owner besitzt, taktet ihn auch. Ohne
+   * lokale Runtime taktet niemand – eine World ohne Activity und ein Peer ohne Runtime bleiben
+   * damit ausdruecklich ohne Sonderpfad.
+   */
+  updateWorldRuntime(deltaMs: number): void {
+    this.worldRuntime?.update(deltaMs);
   }
 
   /**
