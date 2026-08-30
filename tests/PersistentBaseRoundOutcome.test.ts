@@ -5,6 +5,7 @@ import {
   resolvePersistentBaseRoundOutcome,
 } from '../src/persistentBase/PersistentBaseRoundOutcome';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
+import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
 import type { SyncedPlaceableRock } from '../src/types';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 import type { PersistentPlayerBaseContribution } from '../src/persistentBase/PersistentBaseTypes';
@@ -147,6 +148,54 @@ describe('persistent base round outcome', () => {
         revision: 7,
         constructions: [expect.objectContaining({ persistentId: 'lobby-kept' })],
       });
+    }
+  });
+
+  it('entscheidet Contributions und Rewards gemeinsam, atomar und idempotent', () => {
+    for (const conclusion of ['victory', 'defeat', 'aborted', null] as const) {
+      const contributions = startMission();
+      const rewards = new PersistentBaseRewardStore();
+      expect(rewards.placeReward({
+        rewardId: 'base_health_pedestal',
+        relativeGridX: 0,
+        relativeGridY: 0,
+        angle: 0,
+      }), String(conclusion)).toBe(true);
+      const committedRewards = rewards.getState();
+
+      rewards.beginMission();
+      expect(rewards.dismantleReward('base_health_pedestal'), String(conclusion)).toBe(true);
+      const confirmed = applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
+        contributions,
+        isRuntimeObjectAlive: () => true,
+        rewards,
+      });
+
+      const expectedRewards = conclusion === 'victory'
+        ? { ...committedRewards, revision: committedRewards.revision + 1, placements: [] }
+        : committedRewards;
+      expect(confirmed, String(conclusion)).toHaveLength(conclusion === 'victory' ? 2 : 0);
+      expect(contributions.hasActiveMission, String(conclusion)).toBe(false);
+      expect(rewards.hasActiveMission, String(conclusion)).toBe(false);
+      expect(rewards.getState(), String(conclusion)).toEqual(expectedRewards);
+
+      // Ein zweiter Abschluss darf weder eine weitere Revision noch einen zweiten Store-Aufruf
+      // erzeugen, nachdem beide Arbeitsstaende gemeinsam abgeschlossen wurden.
+      expect(applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(conclusion), {
+        contributions,
+        isRuntimeObjectAlive: () => true,
+        rewards,
+      }), String(conclusion)).toEqual([]);
+      expect(rewards.getState(), String(conclusion)).toEqual(expectedRewards);
+
+      // Der naechste Missionslauf startet ausschliesslich aus dem gemeinsamen Ergebnis.
+      contributions.beginMission();
+      rewards.beginMission();
+      expect(contributions.getContributions(), String(conclusion))
+        .toHaveLength(conclusion === 'victory' ? 2 : 0);
+      expect(rewards.getState(), String(conclusion)).toEqual(expectedRewards);
+      contributions.rollback();
+      rewards.rollback();
     }
   });
 

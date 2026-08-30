@@ -120,6 +120,35 @@ describe('ActivityLifecycle – Reihenfolge gegenueber der World', () => {
     expect(calls.filter((call) => call === 'activity:attach:31')).toHaveLength(2);
   });
 
+  it('behandelt wiederholtes Aktivieren, lokales Detach und Ende idempotent', () => {
+    const { calls, world } = createSinks();
+    const lifecycle = new WorldLifecycle(world);
+    const worldDescriptor = descriptor();
+    const activityDescriptor = mission();
+    lifecycle.beginCreate(worldDescriptor, activityDescriptor);
+    lifecycle.attachRuntime(runtime(worldDescriptor));
+
+    lifecycle.activity.activate();
+    lifecycle.activity.activate();
+    expect(lifecycle.activity.descriptor).toBe(activityDescriptor);
+
+    lifecycle.activity.detachRuntime();
+    lifecycle.activity.detachRuntime();
+    expect(lifecycle.activity.phase).toBe('creating');
+    expect(lifecycle.activity.descriptor).toBe(activityDescriptor);
+
+    lifecycle.activity.end();
+    lifecycle.activity.end();
+    expect(lifecycle.activity.phase).toBe('none');
+    expect(lifecycle.activity.descriptor).toBeNull();
+    expect(calls).toEqual([
+      'world:publish:12',
+      'world:attach:12',
+      'activity:attach:31',
+      'activity:detach',
+    ]);
+  });
+
   it('vererbt die Mission der Vorgaengerin nicht an eine friedliche World', () => {
     const { world } = createSinks();
     const lifecycle = new WorldLifecycle(world);

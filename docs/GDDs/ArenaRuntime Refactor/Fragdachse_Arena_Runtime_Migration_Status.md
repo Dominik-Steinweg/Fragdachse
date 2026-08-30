@@ -31,14 +31,14 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `–`  
-**Gesamtstatus:** `nicht gestartet`  
-**Letzter Integrations-Checkpoint:** `–`  
-**Nächster Schritt:** Phase 1 gegen aktuellen Branch verifizieren und umsetzen.
+**Aktive Phase:** `Phase 2`
+**Gesamtstatus:** `Phase 1 abgeschlossen`
+**Letzter Integrations-Checkpoint:** `npm run check`
+**Nächster Schritt:** Phase 2 gegen aktuellen Branch verifizieren und umsetzen.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
-| 1 Contracts | ⬜ offen | |
+| 1 Contracts | ✅ abgeschlossen | Lifecycle-/World-/Activity-/Persistent-Base-Contracts gezielt abgesichert. |
 | 2 WorldRuntime-Fundament | ⬜ offen | |
 | 3 World-Materialisierung | ⬜ offen | |
 | 4 World Bindings / PlayerWorld | ⬜ offen | |
@@ -77,7 +77,7 @@ Nur temporäre Migrationspfade eintragen.
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| – | – | – |
+| `npm run check` + `git diff --check` | grün | 319 Testdateien, 2669 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -110,7 +110,7 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 - Transitional Debt und offene Risiken oben berücksichtigen.
 
 **Nächste konkrete Aktion:**  
-`Phase 1 analysieren und mit minimalem zusätzlichen Contract-Sicherheitsnetz umsetzen.`
+`Phase 2 analysieren und gegen den aktuellen Stand verifizieren.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

@@ -134,6 +134,30 @@ describe('WorldLifecycle – Teardown und Instanzende sind verschieden', () => {
     expect(lifecycle.descriptor).toBeNull();
   });
 
+  it('behandelt lokales Runtime-Detach idempotent und erlaubt Reattach derselben World', () => {
+    const sink = createSink();
+    const lifecycle = new WorldLifecycle(sink);
+    const worldDescriptor = descriptor();
+    const activityDescriptor = activity();
+    lifecycle.beginCreate(worldDescriptor, activityDescriptor);
+    lifecycle.attachRuntime(runtime(worldDescriptor));
+
+    lifecycle.detachRuntime();
+    lifecycle.detachRuntime();
+    expect(lifecycle.phase).toBe('creating');
+    expect(lifecycle.context).toBeNull();
+    expect(lifecycle.descriptor).toBe(worldDescriptor);
+    expect(lifecycle.activity.descriptor).toBe(activityDescriptor);
+
+    lifecycle.attachRuntime(runtime(worldDescriptor));
+    expect(lifecycle.phase).toBe('active');
+    expect(lifecycle.descriptor).toBe(worldDescriptor);
+    expect(lifecycle.activity.descriptor).toBe(activityDescriptor);
+
+    lifecycle.detachRuntime();
+    expect(sink.calls).toEqual(['publish:12', 'attach:12', 'detach', 'attach:12', 'detach']);
+  });
+
   it('beendet die Instanz idempotent und ohne beobachtbaren Reststand', () => {
     const sink = createSink();
     const lifecycle = new WorldLifecycle(sink);
