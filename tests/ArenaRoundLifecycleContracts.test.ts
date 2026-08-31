@@ -163,16 +163,22 @@ describe('arena round lifecycle contract', () => {
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const body = source.slice(start, end);
-    expect(body.indexOf('applyPersistentBaseRoundOutcome')).toBeGreaterThanOrEqual(0);
-    expect(body.indexOf('applyPersistentBaseRoundOutcome')).toBeLessThan(body.indexOf('this.worldLifecycle.endInstance();'));
-    expect(body).toContain('this.publishConfirmedPersistentBaseContributions(');
+    expect(body.indexOf('createCoopMissionCompletion')).toBeGreaterThanOrEqual(0);
+    expect(body.indexOf('this.resultApplication.apply')).toBeGreaterThanOrEqual(0);
+    expect(body.indexOf('this.resultApplication.apply')).toBeLessThan(body.indexOf('this.worldLifecycle.endInstance();'));
+    // Der Coordinator orchestriert den Abschluss nur noch. Persistent-Base-Outcome und
+    // Victory-Rewards werden vom revisionsgebundenen ResultApplication-Owner entschieden.
+    const coopBranchStart = body.indexOf("if (activity?.kind === 'coop-mission'");
+    const legacyBranchStart = body.indexOf('} else {', coopBranchStart);
+    expect(body.slice(coopBranchStart, legacyBranchStart)).not.toContain('applyPersistentBaseRoundOutcome');
+    expect(body.slice(coopBranchStart, legacyBranchStart)).not.toContain('grantAuthoredPersistentBaseRewards');
   });
 
   it('bindet Map- und Objective-Rewards an den gemeinsamen host-autoritativen Grant-Pfad', () => {
     const source = read(COORDINATOR_PATH);
-    expect(source).toContain(
-      'this.grantAuthoredPersistentBaseRewards(mapConfig.persistentBaseRewardsOnVictory);',
-    );
+    expect(source).toContain('getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []');
+    expect(source).toContain('grantPersistentBaseRewards: (rewardIds) => {');
+    expect(source).toContain('this.grantAuthoredPersistentBaseRewards(rewardIds);');
     expect(source).toContain(
       'this.grantAuthoredPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);',
     );

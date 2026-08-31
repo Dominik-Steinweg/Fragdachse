@@ -138,6 +138,12 @@ import type {
   CoopMissionArmedOutpostView,
 } from '../../activity/CoopMissionHostUpdate';
 import { CoopMissionPlayerRuntime } from '../../activity/CoopMissionPlayerRuntime';
+import {
+  createCoopMissionCompletion,
+  getCoopMissionConclusion,
+  type CoopMissionActivityCompletion,
+} from '../../activity/ActivityCompletion';
+import { ResultApplication } from '../../activity/ResultApplication';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
 import { ARENA_MAP_GRID_CHANGED_EVENT, emitArenaMapGridChanged, type ArenaMapGridChangedEvent } from './ArenaEvents';
 import {
@@ -225,7 +231,7 @@ import {
   toWorldDefinitionId,
 } from '../../world/arenaDescriptorAdapter';
 import { toWorldGenerationConfig } from '../../config/authoring/coopDefenseAuthoringAdapter';
-import { getWorldDefinition } from '../../config/authoring/authoredScenarios';
+import { getActivityDefinition, getWorldDefinition } from '../../config/authoring/authoredScenarios';
 import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
 import type { WorldDefinition } from '../../config/authoring/WorldDefinition';
 import { createAuthoredWorldDescriptor, generateWorldLayout } from '../../world/WorldLayout';
@@ -656,6 +662,34 @@ export class ArenaLifecycleCoordinator {
   }
   /** Shared idempotent grant path for authored map-victory and objective rewards. */
   private readonly persistentBaseRewardGrantService = new PersistentBaseRewardGrantService();
+  /**
+   * Wendet einen revisionsgebundenen Coop-Abschluss auf seine realen nachgelagerten Consumer an.
+   * Die Closures bilden die Infrastrukturgrenze; der Owner selbst kennt weder Bridge noch Scene.
+   */
+  private readonly resultApplication = new ResultApplication({
+    getCurrentActivity: () => this.worldLifecycle.activity.descriptor,
+    resolveVictoryRewardIds: (definitionId) => (
+      getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []
+    ),
+    grantPersistentBaseRewards: (rewardIds) => {
+      this.grantAuthoredPersistentBaseRewards(rewardIds);
+    },
+    applyPersistentBaseOutcome: (outcome, identity) => {
+      this.publishConfirmedPersistentBaseContributions(
+        applyPersistentBaseRoundOutcome(outcome, {
+          session: this.persistentBaseSession,
+          isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+          identity,
+        }),
+      );
+      this.persistCurrentCommittedPersistentBaseRewards();
+      this.publishPersistentBaseRewardSessionState();
+    },
+    clearActivityPresentation: () => { this.clearCoopMissionPresentationState(); },
+    publishCompletion: (completion, endedAt) => {
+      this.publishCoopMissionCompletion(completion, endedAt);
+    },
+  });
   /**
    * Die world-lokale Materialisierung der persistenten Basis dieser Instanz. Sie gehoert der
    * `WorldRuntime`; ausserhalb einer World gibt es keine world-lokalen Runtime-IDs.
@@ -1612,30 +1646,30 @@ export class ArenaLifecycleCoordinator {
     bridge.hostPublishRoomStatistics();
   }
 
-  hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
-    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
-    const roundEndedAt = Date.now();
-    if (roundConclusion === 'victory' && isCoopDefenseMode(this.resolveConfiguredGameMode())) {
-      const mapConfig = getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId());
-      this.grantAuthoredPersistentBaseRewards(mapConfig.persistentBaseRewardsOnVictory);
-    }
-    // Defeat, abort and non-Coop completion discard the round-local working copy.
-    this.publishConfirmedPersistentBaseContributions(
-      applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
-        session: this.persistentBaseSession,
-        isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
-        // Der Abschluss gehoert genau der Activity, die gerade endet. Ein verspaeteter
-        // Abschluss trifft damit keine inzwischen neue.
-        identity: this.resolvePersistentBaseTransactionIdentity(),
-      }),
-    );
-    this.persistCurrentCommittedPersistentBaseRewards();
-    this.publishPersistentBaseRewardSessionState();
+  /** Entfernt ausschliesslich die replizierte Darstellung der beendeten Coop-Activity. */
+  private clearCoopMissionPresentationState(): void {
     bridge.publishCoopDefenseEncounterPresentationState(null);
     bridge.publishCoopDefenseMapEventPresentationState(null);
     bridge.publishCoopDefenseSecondaryObjectivePresentationState(null);
     bridge.publishCoopDefenseMissionProgressPresentationState(null);
+  }
 
+  /** Publiziert den bestehenden Wire-Vertrag eines angewendeten, aktuellen Coop-Abschlusses. */
+  private publishCoopMissionCompletion(
+    completion: CoopMissionActivityCompletion,
+    roundEndedAt: number,
+  ): void {
+    const conclusion = getCoopMissionConclusion(completion);
+    this.publishRoundConclusion(conclusion, roundEndedAt);
+    // Ein Abbruch liefert weiterhin die bis dahin erspielten Coop-XP, zaehlt aber nicht als
+    // abgeschlossene PvP-Partie. Die lokale Progression bleibt Consumer dieses Snapshots.
+    this.hostSaveRoundResults(roundEndedAt, conclusion !== 'aborted');
+  }
+
+  private publishRoundConclusion(
+    roundConclusion: RoundConclusion | null,
+    roundEndedAt: number,
+  ): void {
     if (roundConclusion) {
       const currentRoundState = bridge.getRoundState();
       bridge.publishRoundState({
@@ -1651,8 +1685,34 @@ export class ArenaLifecycleCoordinator {
     } else {
       bridge.publishRoundState(null);
     }
+  }
 
-    this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
+  hostCompleteRound(roundConclusion: RoundConclusion | null = null): void {
+    if (!bridge.isHost() || bridge.getGamePhase() !== 'ARENA') return;
+    const roundEndedAt = Date.now();
+    const activity = this.worldLifecycle.activity.descriptor;
+    if (activity?.kind === 'coop-mission' && roundConclusion !== null) {
+      const completion = createCoopMissionCompletion(activity, roundConclusion);
+      // Der aktuelle Descriptor wurde gerade in den Completion-Vertrag kopiert. Ein false kann
+      // deshalb nur einen bereits angewendeten oder inzwischen abgeloesten Abschluss bedeuten;
+      // in beiden Faellen darf auch der Flow kein zweites Mal fortschreiten.
+      if (!this.resultApplication.apply(completion, roundEndedAt)) return;
+    } else {
+      // PvP und der bestehende ergebnislose Ablauf besitzen heute keinen eigenen Activity-Result-
+      // Consumer. Sie behalten ihren bisherigen Abschlussweg, ohne eine leere Abstraktion zu bauen.
+      this.publishConfirmedPersistentBaseContributions(
+        applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(roundConclusion), {
+          session: this.persistentBaseSession,
+          isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+          identity: this.resolvePersistentBaseTransactionIdentity(),
+        }),
+      );
+      this.persistCurrentCommittedPersistentBaseRewards();
+      this.publishPersistentBaseRewardSessionState();
+      this.clearCoopMissionPresentationState();
+      this.publishRoundConclusion(roundConclusion, roundEndedAt);
+      this.hostSaveRoundResults(roundEndedAt, roundConclusion !== 'aborted');
+    }
     bridge.publishCoopDefenseRespawnBudgetState(null);
     // Ein regulaerer Ausgang blendet die letzte Ansicht aus. Sie wird hier eingefroren, weil die
     // World-Instanz gleich endet und Player- wie Enemy-Runtime mit ihr fallen; der Fade zeigt
