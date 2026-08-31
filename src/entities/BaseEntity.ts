@@ -13,7 +13,11 @@ import {
 } from '../config';
 import type { CoopBaseFaction, CoopBaseTurretWeaponId } from '../config/coopDefenseMaps';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
-import { getBaseWorldBounds, type BaseSpec } from '../arena/BaseRegistry';
+import {
+  getBaseWorldBounds,
+  type BaseActivityOverlay,
+  type BaseSpec,
+} from '../arena/BaseRegistry';
 import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
@@ -63,7 +67,7 @@ export class BaseEntity {
    * darum gespielt wird. Ohne Activity gibt es kein Missionsziel, also auch keinen HP-Balken und
    * keinen Schaden - das Bauwerk bleibt trotzdem solide und blockiert wie jedes andere.
    */
-  private readonly damageable: boolean;
+  private damageable: boolean;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
@@ -86,6 +90,7 @@ export class BaseEntity {
   private currentHp: number;
   private maxHp: number;
   private dormant: boolean;
+  private activityOverlay: BaseActivityOverlay | null;
   private destroyedBroadcasted = false;
   private onDestroyed: (() => void) | null = null;
   private vulnerableMarker: Phaser.GameObjects.Graphics | null = null;
@@ -95,21 +100,22 @@ export class BaseEntity {
     spec: BaseSpec,
     metrics: WorldMetrics,
     presentation = true,
-    damageable = true,
+    damageable = false,
   ) {
     this.scene = scene;
     this.metrics = metrics;
     this.presentation = presentation;
-    this.damageable = damageable;
     this.id = spec.id;
     this.spec = spec;
     this.faction = spec.faction;
     this.role = spec.role ?? 'main';
-    this.maxHp = spec.hpMax;
+    this.activityOverlay = damageable ? toActivityOverlay(spec) : null;
+    this.damageable = damageable;
+    this.maxHp = this.activityOverlay?.hpMax ?? spec.hpMax;
     // Ein authored beschaedigter Startzustand ist Teil der Map und damit auf beiden Peers identisch;
     // repliziert wird erst die spaetere HP-Aenderung.
-    this.currentHp = Math.max(1, Math.min(this.maxHp, spec.startHp ?? spec.hpMax));
-    this.dormant = spec.dormant === true;
+    this.currentHp = this.activityOverlay?.startHp ?? spec.hpMax;
+    this.dormant = this.activityOverlay?.dormant ?? false;
     const hostile = spec.faction === 'hostile';
     this.hpBarFill = hostile ? COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL : COOP_DEFENSE_BASE_HP_BAR_FILL;
     const bounds = getBaseWorldBounds(spec.region, metrics);
@@ -295,7 +301,56 @@ export class BaseEntity {
   }
 
   getSpec(): BaseSpec {
-    return this.spec;
+    const overlay = this.activityOverlay;
+    if (!overlay) return this.spec;
+    // Die View bleibt abgeleitet. `spec` selbst ist die unveraenderliche World-Grundlage und
+    // wird niemals mit Activity-State ueberschrieben.
+    const {
+      startHp: _worldStartHp,
+      dormant: _worldDormant,
+      dormantObjectiveId: _worldDormantObjectiveId,
+      powerUpPedestals: _worldPowerUpPedestals,
+      ...worldSpec
+    } = this.spec;
+    return {
+      ...worldSpec,
+      hpMax: overlay.hpMax,
+      startHp: overlay.startHp,
+      dormant: this.dormant,
+      ...(overlay.dormantObjectiveId === undefined ? {} : { dormantObjectiveId: overlay.dormantObjectiveId }),
+      powerUpPedestals: overlay.powerUpPedestals,
+    };
+  }
+
+  /** Activity-Binding fuer den BaseManager; nicht als World-State gespeichert. */
+  applyActivityOverlay(overlay: BaseActivityOverlay): void {
+    this.resetRepresentation();
+    this.resetTurretAngles();
+    this.activityOverlay = overlay;
+    this.damageable = true;
+    this.maxHp = overlay.hpMax;
+    this.currentHp = Math.max(1, Math.min(this.maxHp, overlay.startHp));
+    this.dormant = overlay.dormant;
+    this.destroyedBroadcasted = false;
+    if (!this.dormant) {
+      this.createRuntimeRepresentation();
+      if (this.presentation) this.createPresentationRepresentation();
+    }
+  }
+
+  /** Entfernt den Activity-Zustand und stellt die World-Grundlage wieder her. */
+  clearActivityOverlay(): void {
+    if (this.activityOverlay === null) return;
+    this.resetRepresentation();
+    this.resetTurretAngles();
+    this.activityOverlay = null;
+    this.damageable = false;
+    this.maxHp = this.spec.hpMax;
+    this.currentHp = this.spec.hpMax;
+    this.dormant = false;
+    this.destroyedBroadcasted = false;
+    this.createRuntimeRepresentation();
+    if (this.presentation) this.createPresentationRepresentation();
   }
 
   getSpawnCenterWorldPosition(): { x: number; y: number } | null {
@@ -353,6 +408,9 @@ export class BaseEntity {
   activate(): boolean {
     if (!this.dormant || this.isDestroyed()) return false;
     this.dormant = false;
+    if (this.activityOverlay) {
+      this.activityOverlay = { ...this.activityOverlay, dormant: false };
+    }
     this.createRuntimeRepresentation();
     if (this.presentation) this.createPresentationRepresentation();
     return true;
@@ -440,4 +498,45 @@ export class BaseEntity {
     if (this.hpBarBg?.active) this.hpBarBg.destroy();
     if (this.hpBarFg?.active) this.hpBarFg.destroy();
   }
+
+  private resetRepresentation(): void {
+    for (const image of this.cellImages) {
+      if (image.active) image.destroy();
+    }
+    this.cellImages.length = 0;
+    for (const body of this.cellBodies) {
+      if (body.active) body.destroy();
+    }
+    this.cellBodies.length = 0;
+    for (const image of this.turretImages.values()) {
+      if (image.active) image.destroy();
+    }
+    this.turretImages.clear();
+    this.vulnerableMarker?.destroy();
+    this.vulnerableMarker = null;
+    this.spawnCenterTween?.stop();
+    this.spawnCenterTween = null;
+    if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
+    this.spawnCenterMarker = null;
+    if (this.hpBarBg?.active) this.hpBarBg.destroy();
+    if (this.hpBarFg?.active) this.hpBarFg.destroy();
+    this.hpBarBg = null;
+    this.hpBarFg = null;
+  }
+
+  private resetTurretAngles(): void {
+    this.turretAngles.clear();
+    for (const turret of this.spec.turrets) this.turretAngles.set(turret.id, turret.initialAngle);
+  }
+}
+
+function toActivityOverlay(spec: BaseSpec): BaseActivityOverlay {
+  return {
+    baseId: spec.id,
+    hpMax: spec.hpMax,
+    startHp: Math.max(1, Math.min(spec.hpMax, spec.startHp ?? spec.hpMax)),
+    dormant: spec.dormant === true,
+    ...(spec.dormantObjectiveId === undefined ? {} : { dormantObjectiveId: spec.dormantObjectiveId }),
+    powerUpPedestals: spec.powerUpPedestals,
+  };
 }

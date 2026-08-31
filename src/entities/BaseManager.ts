@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { SyncedBaseState } from '../types';
 import type { CoopBaseFaction } from '../config/coopDefenseMaps';
-import type { BaseSpec } from '../arena/BaseRegistry';
+import type { BaseActivityOverlay, BaseSpec } from '../arena/BaseRegistry';
 import { BaseEntity, type BaseTurretRuntimeState } from './BaseEntity';
 import {
   BASE_LIGHT_COLOR,
@@ -18,12 +18,11 @@ import {
 import type { WorldMetrics } from '../world/WorldMetrics';
 
 /**
- * Verwaltet alle aktiven Coop-Defense-Basen einer Runde.
+ * Verwaltet die world-owned Base-Geometrie und bindet bei Bedarf genau einen Activity-Overlay.
  *
  * Lebenszyklus:
- *   - Erstellt in ArenaLifecycleCoordinator.buildArena() nur, wenn der Coop-
- *     Defense-Modus aktiv ist.
- *   - Zerstört in tearDownArena().
+ *   - Erstellt in ArenaLifecycleCoordinator.buildWorld() mit World-Grundwerten.
+ *   - Ein Coop-Activity-Overlay wird separat angelegt und bei Activity-Ende verworfen.
  *
  * Authorität:
  *   - Host: applyDamage() mutiert HP und broadcasted via HostUpdateCoordinator
@@ -31,7 +30,8 @@ import type { WorldMetrics } from '../world/WorldMetrics';
  *   - Clients: applySnapshot() konsumiert per-Tick die HP-Werte vom Host.
  *
  * Skalierung:
- *   - Anzahl/Form/HP der Basen kommt aus `WorldRuntimeContext.bases`. Keine Annahme über eine
+ *   - Anzahl/Form/World-Identitaet der Basen kommt aus `WorldRuntimeContext.bases`. Activity-
+ *     Werte wie HP, Dormanz und Podeste leben nur im gebundenen Overlay. Keine Annahme über eine
  *     bestimmte Anzahl und kein Rueckgriff auf die aktive Lobby-Map. Lookup by id O(1) via Map.
  *
  * Zerstörung:
@@ -54,6 +54,8 @@ export class BaseManager {
   private readonly litBaseKeys = new Set<string>();
   private readonly destructionRenderer: BaseDestructionRenderer | null;
   private readonly worldMetrics: WorldMetrics;
+  private activeActivityBinding: BaseActivityBinding | null = null;
+  private destroyed = false;
   /** Projection of the live base entities, rebuilt only when obstacleGeneration changes. */
   private movementBlockedCells: Set<number> | null = null;
   private movementBlockedCellsGeneration = -1;
@@ -64,7 +66,7 @@ export class BaseManager {
     metrics: WorldMetrics,
     destructionHooks: BaseDestructionHooks = {},
     presentation = true,
-    damageable = true,
+    damageable = false,
   ) {
     this.presentation = presentation;
     this.worldMetrics = metrics;
@@ -103,10 +105,55 @@ export class BaseManager {
     this.syncDormantStates();
   }
 
+  /** Liefert die aktuelle, aus World-Grundlage und Activity-Overlay abgeleitete Base-Sicht. */
+  getBaseSpecs(): readonly BaseSpec[] {
+    return this.entities.map((entity) => entity.getSpec());
+  }
+
+  /**
+   * Erzeugt eine Activity-Bindung, ohne Activity-State im World-Manager festzuschreiben.
+   *
+   * Das Handle ist tokenisiert: Ein verspätetes Detach einer alten Activity kann niemals den
+   * Overlay-State einer inzwischen gebundenen neuen Activity entfernen.
+   */
+  createActivityBinding(
+    overlays: readonly BaseActivityOverlay[],
+    onChanged: () => void = () => { /* noop */ },
+  ): BaseActivityBinding {
+    const overlayById = new Map(overlays.map((overlay) => [overlay.baseId, overlay]));
+    if (overlayById.size !== this.entities.length
+      || this.entities.some((entity) => !overlayById.has(entity.id))) {
+      throw new Error('[BaseManager] Activity base overlay does not match the World bases');
+    }
+
+    let attached = false;
+    const binding: BaseActivityBinding = {
+      attach: () => {
+        if (this.destroyed || (attached && this.activeActivityBinding === binding)) return;
+        this.activeActivityBinding?.detach();
+        attached = true;
+        this.activeActivityBinding = binding;
+        for (const entity of this.entities) entity.applyActivityOverlay(overlayById.get(entity.id)!);
+        this.rebuildActivityIndexes();
+        onChanged();
+      },
+      detach: () => {
+        if (!attached) return;
+        attached = false;
+        if (this.activeActivityBinding !== binding) return;
+        this.activeActivityBinding = null;
+        for (const entity of this.entities) entity.clearActivityOverlay();
+        this.rebuildActivityIndexes();
+        onChanged();
+      },
+    };
+    return binding;
+  }
+
   /** Activates each dormant base once the linked objective has left `dormant`. */
   syncDormantStates(): void {
     for (const entity of this.entities) {
-      const objectiveId = entity.spec.dormantObjectiveId;
+      const objectiveId = entity.getSpec().dormantObjectiveId;
       if (!entity.isDormant() || !objectiveId) continue;
       const objectiveState = this.getSecondaryObjectiveState?.(objectiveId) ?? null;
       if (!objectiveState || objectiveState === 'dormant') continue;
@@ -114,7 +161,7 @@ export class BaseManager {
       for (const body of entity.getCellBodies()) this.group.add(body);
       for (const turret of entity.getTurrets()) this.turretOwners.set(turret.id, entity);
       this.obstacleGeneration += 1;
-      this.onBaseActivated?.(entity.spec);
+      this.onBaseActivated?.(entity.getSpec());
     }
   }
 
@@ -325,11 +372,12 @@ export class BaseManager {
 
   private handleBaseDestroyed(entity: BaseEntity): void {
     this.obstacleGeneration += 1;
+    this.movementBlockedCells = null;
     this.destructionRenderer?.play(
-      entity.spec,
+      entity.getSpec(),
       (cellIndex) => entity.destroyCellVisual(cellIndex),
     );
-    this.onBaseDestroyed?.(entity.spec);
+    this.onBaseDestroyed?.(entity.getSpec());
   }
 
   /**
@@ -375,6 +423,9 @@ export class BaseManager {
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.activeActivityBinding?.detach();
+    this.destroyed = true;
     this.releaseLights();
     this.destructionRenderer?.destroy();
     for (const entity of this.entities) entity.destroy();
@@ -385,6 +436,23 @@ export class BaseManager {
     this.movementBlockedCellsGeneration = -1;
     this.group.destroy(true);
   }
+
+  private rebuildActivityIndexes(): void {
+    this.destructionRenderer?.reset();
+    this.turretOwners.clear();
+    for (const entity of this.entities) {
+      for (const body of entity.getCellBodies()) this.group.add(body);
+      for (const turret of entity.getTurrets()) this.turretOwners.set(turret.id, entity);
+    }
+    this.obstacleGeneration += 1;
+    this.movementBlockedCells = null;
+    this.movementBlockedCellsGeneration = -1;
+  }
+}
+
+export interface BaseActivityBinding {
+  readonly attach: () => void;
+  readonly detach: () => void;
 }
 
 function baseLightKey(baseId: string, index: number): string {

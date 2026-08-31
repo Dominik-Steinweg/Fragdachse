@@ -96,6 +96,22 @@ export interface BaseSpec {
   };
 }
 
+/**
+ * Activity-spezifische Projektion einer World-Basis.
+ *
+ * Die Geometrie, Fraktion, Rolle und Tuerme bleiben im world-owned `BaseSpec`. Diese Projektion
+ * wird nur waehrend einer Coop-Activity an den bestehenden `BaseManager` gebunden und beim
+ * Activity-Ende wieder verworfen.
+ */
+export interface BaseActivityOverlay {
+  readonly baseId: string;
+  readonly hpMax: number;
+  readonly startHp: number;
+  readonly dormant: boolean;
+  readonly dormantObjectiveId?: string;
+  readonly powerUpPedestals: readonly BasePowerUpPedestalSpec[];
+}
+
 // ── Anker- & Shape-Auflösung ───────────────────────────────────────────────
 
 function resolveShape(shape: CoopBaseShape): {
@@ -398,6 +414,22 @@ export function resolveCoopDefenseActivityBases(
   const persistentBaseId = mapConfig.persistentBase?.baseId;
   if (!persistentBaseId) return resolved;
   return addPersistentBaseReservation(resolved, persistentBaseId);
+}
+
+/** Loest ausschliesslich den Activity-Anteil der Coop-Basen auf. */
+export function resolveCoopDefenseActivityBaseOverlays(
+  mapConfig: ArenaGenerationMapConfig,
+  humanPlayerCount = 1,
+  worldMetrics?: WorldMetrics,
+): readonly BaseActivityOverlay[] {
+  return resolveCoopDefenseActivityBases(mapConfig, humanPlayerCount, worldMetrics).map((base) => ({
+    baseId: base.id,
+    hpMax: base.hpMax,
+    startHp: base.startHp ?? base.hpMax,
+    dormant: base.dormant === true,
+    ...(base.dormantObjectiveId === undefined ? {} : { dormantObjectiveId: base.dormantObjectiveId }),
+    powerUpPedestals: base.powerUpPedestals,
+  }));
 }
 
 function resolveWorldBaseSpec(config: WorldBaseDefinition, metrics: WorldMetrics): BaseSpec {

@@ -88,6 +88,12 @@ export class BaseDestructionRenderer {
     }
   }
 
+  /** Bricht nur ausstehende Activity-Effekte ab; der Renderer bleibt fuer die naechste Activity nutzbar. */
+  reset(): void {
+    for (const timer of this.timers) timer.remove(false);
+    this.timers.clear();
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

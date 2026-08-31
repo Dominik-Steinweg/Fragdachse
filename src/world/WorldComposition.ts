@@ -2,7 +2,6 @@ import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../arena/ArenaGenerator';
 import type { BaseSpec } from '../arena/BaseRegistry';
-import { resolveCoopDefenseActivityBases } from '../arena/BaseRegistry';
 import { RockRegistry } from '../arena/RockRegistry';
 import type { GroundSurfacePersistentBaseGravelZone } from '../arena/chunks/GroundSurfaceStreamer';
 import {
@@ -114,9 +113,9 @@ export function prepareWorldComposition(input: PrepareWorldCompositionInput): Pr
     ? Math.max(1, Math.floor(input.humanPlayerCount))
     : 1;
   const world = createWorldRuntimeContext({ descriptor, metricsProfile, definition });
-  const bases = isCoopMission && mapConfig
-    ? resolveCoopDefenseActivityBases(mapConfig, humanPlayerCount, world.metrics)
-    : world.bases;
+  // Activity-Overlays werden erst an die bereits materialisierte World-Basis gebunden. Die
+  // World-Composition gibt deshalb ausschliesslich die World-Grundlage weiter.
+  const bases = world.bases;
   const generationMapConfig = isCoopMission && mapConfig
     ? mapConfig
     : definition
@@ -164,7 +163,6 @@ export interface MaterializeWorldCompositionInput {
   readonly persistentBaseSink: PersistentBaseWorldBindingSink;
   readonly baseDestructionHooks: BaseDestructionHooks;
   readonly lighting: LightingSystem;
-  readonly damageBases: boolean;
   readonly createRockRegistry: boolean;
 }
 
@@ -254,7 +252,7 @@ export function materializeWorldComposition(
       world.metrics,
       input.baseDestructionHooks,
       presentationRequired,
-      input.damageBases,
+      false,
     )
     : null;
   materialization.setBases(baseManager);

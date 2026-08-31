@@ -322,7 +322,8 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     expect(lifecycle).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');
     // Die Bau-Runtime gibt ihre Zellen mit dem gebauten World-Zustand frei.
     expect(read('src/world/WorldMaterialization.ts')).toContain('this.placementValue?.clearRuntimeRocks();');
-    expect(lifecycle).toContain('damageBases: activityDescriptor !== null,');
+    expect(lifecycle).toContain('this.attachCoopMissionBaseBinding(activityDescriptor, coopMissionRuntime);');
+    expect(lifecycle).not.toContain('damageBases: activityDescriptor !== null,');
   });
 });
 

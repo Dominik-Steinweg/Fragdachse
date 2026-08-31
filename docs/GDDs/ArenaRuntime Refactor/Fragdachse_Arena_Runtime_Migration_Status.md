@@ -35,10 +35,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `keine – Phase 10A abgeschlossen; 10B nicht begonnen`
-**Gesamtstatus:** `Phasen 1–10A abgeschlossen; Checkpoints A/B automatisiert abgeschlossen; Phase-9-Baseline vom User manuell erfolgreich geprüft; Checkpoint C folgt nach 10C.`
-**Letzter Integrations-Checkpoint:** `Phase 10A: npm run check grün; manuelle Browserprüfung bleibt User-Aufgabe.`
-**Nächster Schritt:** `Phase 10B – Activity/PB/Gameplay-Composition` auf neuem Auftrag umsetzen; 10C nicht vorziehen.
+**Aktive Phase:** `10B.1 – Base-Activity-Lifetime abgeschlossen; 10B.2 nicht begonnen`
+**Gesamtstatus:** `Phasen 1–10A sowie 10B.1 abgeschlossen; Checkpoints A/B automatisiert abgeschlossen; Phase-9-Baseline vom User manuell erfolgreich geprüft; Checkpoint C folgt nach 10C.`
+**Letzter Integrations-Checkpoint:** `Phase 10B.1: npm run check grün; manuelle Browserprüfung bleibt User-Aufgabe.`
+**Nächster Schritt:** `Phase 10B.2 – weitere Activity/PB/Gameplay-Composition` auf separatem Auftrag umsetzen; 10C nicht vorziehen.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -55,7 +55,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand, Player↔Owner-Bindungen, angenommene Contribution-Revisionsstände) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
 | 9 Completion / ResultApplication | ✅ abgeschlossen | `ActivityCompletion` bindet Coop-Result/Abort an World-/Activity-Revision. `ResultApplication` verwirft stale/doppelte Abschlüsse und besitzt Victory-Reward, Persistent-Base-Outcome sowie die Publikation an Progression/Statistik. |
 | 10A World Composition | ✅ abgeschlossen | World-Kontext/-Materialisierung, Presentation/PB-Child, Player-Rezept und Geometrie-/Shared-Service-Bindings an konkrete Composition-Grenzen delegiert; `WorldRuntime` besitzt den symmetrischen Teardown. |
-| 10B Activity/PB/Gameplay Composition | ⬜ offen | Coop-Runtime-Graph, PB-World-Materialisierung sowie Construction-/weitere Domain-Composition aus dem globalen Flow lösen. |
+| 10B Activity/PB/Gameplay Composition | 🟨 aktiv | 10B.1 Base-Activity-Lifetime abgeschlossen; Coop-Runtime-Graph, PB-World-Materialisierung sowie Construction-/weitere Domain-Composition bleiben offen. |
 | 10C Flow / ArenaRuntime | ⬜ offen | Echten Flow formen, Handoff und Frame-Orchestrierung übernehmen; danach Checkpoint C und GO/NO-GO. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
 | 12 Legacy Removal | ⬜ offen | |
@@ -117,8 +117,8 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | Phase-10A-Stand: 328 Testdateien, 2770 Tests bestanden, 15 übersprungen; Build mit 611 Modulen erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
-| `git diff --check` | grün | Phase-10A-Stand ohne Whitespace-Fehler. |
+| `npm run check` | grün | Phase-10B.1: 328 Testdateien, 2772 Tests bestanden, 15 übersprungen; Build mit 611 Modulen erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `git diff --check` | grün | Phase-10B.1-Stand ohne Whitespace-Fehler. |
 | Browser-/Sichtprüfung | ✅ erfolgreich | Phase-9-Baseline am 31.08.2026 vom User manuell erfolgreich geprüft. Coding-KIs führen diese Prüfung weiterhin nicht selbst aus. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
@@ -151,7 +151,7 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 ## 7. Übergabe an die nächste KI
 
 **Aktuell relevant:**
-- Architektur-Dokument und Implementierungsplan wurden nach Phase 9 manuell rebaselined; 10A ist abgeschlossen, 10B/10C bleiben getrennte Phasen.
+- Architektur-Dokument und Implementierungsplan wurden nach Phase 9 manuell rebaselined; 10A und 10B.1 sind abgeschlossen, 10B.2/10C bleiben getrennte Phasen.
 - Transitional Debt TD-1/TD-2/TD-4/TD-5/TD-6/TD-8/TD-9 sowie R-2/R-4/R-5 berücksichtigen.
 - Phase 9 liefert `ActivityCompletion` und `ResultApplication`; deren fachliche Outcome-Anwendung ist aus dem Completion-Pfad getrennt.
 - Der `ArenaLifecycleCoordinator` enthält weiterhin große Activity-/PB-/Construction-Composition und ist noch kein nahezu fertiger Flow-Owner; die World-Composition ist seit 10A delegiert.
@@ -267,6 +267,21 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 Diese Restmischung ist TD-9; die 10A-Grenzen dürfen in 10B/10C nicht zu einem God-Composer
 zusammengezogen werden.
 
+**Phase-10B.1-Ergebnis – Base-Activity-Lifetime:**
+- `resolveWorldBases()` liefert ausschließlich Identität, Geometrie, World-Fraktion/Rolle, fest
+  verbaute Türme und Persistent-Base-Reservierung. `WorldComposition` materialisiert diese
+  Grundlage mit World-only Default (`damageable = false`).
+- `BaseManager` bleibt als World-Owner bestehen. `BaseActivityBinding` projiziert pro Coop-Activity
+  nur HP/Start-HP, Damageability, Dormanz, Objective-Verknüpfung und missionsabhängige Podeste;
+  Attach/Detach ersetzt bzw. entfernt diese Projektion ohne World-Rebuild.
+- `Activity A → B` liest die aktuelle Base-View beim erneuten Materialisieren; ein verspätetes
+  Detach der alten Bindung kann den neuen Overlay-State nicht entfernen. World-Geometrie-Consumer
+  bleiben an `worldBases` gebunden.
+- Vertragsabdeckung: `tests/CoopDefenseDormantBases.test.ts` schützt World-only, World→A, A→B,
+  B→none, Overlay-Projektion, Objective-Aktivierung und idempotentes/stales Detach; ergänzend
+  schützen die World-/Lobby-Ownership-Contracts die Composition-Grenze.
+- Keine neue Transitional Debt; TD-9 bleibt für die noch offene restliche 10B-Composition bestehen.
+
 **Phase-8-Review Problem 3 (korrigiert):** `persistentBaseOwnerByPlayerId` und
 `ingestedContributionRevisions` waren fachlicher room-langlebiger State und liegen jetzt gemeinsam
 mit der Gegenrichtung `playerIdByPersistentBaseOwnerId` in `PersistentBaseRoomSession`. Die Session
@@ -309,7 +324,7 @@ Debt entsteht nicht.
   starten, sondern Gesamtrefactoring erneut bewerten.
 
 **Nächste konkrete Aktion:**
-`Phase 10B – Activity/PB/Gameplay-Composition umsetzen; Phase 10C nicht vorziehen.`
+`Phase 10B.2 – weitere Activity/PB/Gameplay-Composition umsetzen; Phase 10C nicht vorziehen.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

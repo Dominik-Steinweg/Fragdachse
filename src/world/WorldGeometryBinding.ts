@@ -145,6 +145,18 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     this.fireObstacles.removeBase(baseId);
   }
 
+  /** Aktualisiert world-scoped Feuer-/LoS-Hindernisse nach einem Activity-Base-Overlay. */
+  syncBaseObstacles(): void {
+    if (this.destroyed) return;
+    for (const base of this.input.baseManager?.getBases() ?? []) {
+      if (base.isInert()) this.fireObstacles.removeBase(base.id);
+      else this.fireObstacles.setBase(
+        base.id,
+        base.getCellBodies().map((body) => body.getBounds()),
+      );
+    }
+  }
+
   /** Bindet den reinen Presentation-Index, sobald Activity-Barrieren materialisiert sind. */
   attachLightOccluders(
     materialization: WorldMaterialization,

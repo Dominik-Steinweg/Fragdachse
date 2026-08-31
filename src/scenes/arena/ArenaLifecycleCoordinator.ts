@@ -91,7 +91,11 @@ import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { getBaseRewardPickupWorldPosition, getBaseWorldBounds } from '../../arena/BaseRegistry';
+import {
+  getBaseRewardPickupWorldPosition,
+  getBaseWorldBounds,
+  resolveCoopDefenseActivityBaseOverlays,
+} from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
@@ -995,10 +999,43 @@ export class ArenaLifecycleCoordinator {
         this.ctx.combatSystem.setEnemyManager(null);
       },
     });
+    this.attachCoopMissionBaseBinding(activity, runtime);
     this.syncCoopMissionCompatibilityBindings(runtime);
     if (this.ctx.worldMaterialization?.arena && this.coopMissionMaterialization.length > 0) {
       runtime.materialize(this.coopMissionMaterialization);
     }
+  }
+
+  /** Bindet nur den aktuellen Coop-Overlay-State an die world-owned Base-Grundlage. */
+  private attachCoopMissionBaseBinding(
+    activity: ActivityDescriptor,
+    runtime: CoopMissionRuntime,
+  ): void {
+    if (activity.kind !== 'coop-mission') return;
+    const baseManager = this.ctx.baseManager;
+    const world = this.worldRuntime?.context;
+    const mapId = world?.definition?.sourceMapId
+      ?? (world ? toMapId(world.descriptor.definitionId) : null);
+    if (!baseManager || !world || mapId === null) return;
+
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    const humanPlayerCount = Math.max(
+      1,
+      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
+    );
+    const overlays = resolveCoopDefenseActivityBaseOverlays(
+      mapConfig,
+      humanPlayerCount,
+      world.metrics,
+    );
+    const binding = baseManager.createActivityBinding(overlays, () => {
+      this.ctx.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
+      this.worldGeometryBinding?.syncBaseObstacles();
+    });
+    runtime.bind({
+      attach: () => { binding.attach(); },
+      detach: () => { binding.detach(); },
+    });
   }
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
@@ -2997,7 +3034,7 @@ export class ArenaLifecycleCoordinator {
       mapConfig: coopDefenseMapConfig,
       isCoopMission,
       humanPlayerCount: coopDefenseHumanPlayerCount,
-      bases: coopDefenseBases,
+      bases: worldBases,
       locallyGeneratedLayout,
     } = preparedWorld;
     // Die authored Map gehoert der World - Missionssysteme entstehen aber nur mit laufender
@@ -3115,7 +3152,6 @@ export class ArenaLifecycleCoordinator {
           : undefined,
       },
       lighting: this.renderers.lighting,
-      damageBases: activityDescriptor !== null,
       createRockRegistry: bridge.isHost(),
     });
     const {
@@ -3130,6 +3166,12 @@ export class ArenaLifecycleCoordinator {
     this.ctx.worldPresentation = builtWorld.presentation;
     this.persistentBaseWorldBinding = persistentBaseBinding;
     this.persistentBaseSession.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);
+    if (coopMissionRuntime && baseManager && missionMapConfig && activityDescriptor) {
+      this.attachCoopMissionBaseBinding(activityDescriptor, coopMissionRuntime);
+    }
+    // Activity-Child-Owner muessen bei A -> B die aktuell gebundene Base-View lesen; eine beim
+    // World-Aufbau eingefangene Array-Projektion wuerde A-State in B weiterreichen.
+    const getCoopDefenseBaseSpecs = () => baseManager?.getBaseSpecs() ?? worldBases;
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     this.ctx.persistentBaseContributions = null;
     this.ctx.persistentBaseRewards = null;
@@ -3188,7 +3230,7 @@ export class ArenaLifecycleCoordinator {
       scene: this.scene,
       world,
       layout,
-      bases: coopDefenseBases,
+      bases: worldBases,
       arena: arenaResult,
       placement: placementSystem,
       baseManager,
@@ -3332,9 +3374,9 @@ export class ArenaLifecycleCoordinator {
           metrics: flowFieldMetrics,
           tuning: createFlowFieldTuning(),
           staticKind: buildStaticKindRaster(layout, flowFieldMetrics),
-          bases: buildBaseDescriptors(coopDefenseBases),
+          bases: buildBaseDescriptors(getCoopDefenseBaseSpecs()),
           activeBaseIds: this.ctx.baseManager?.getActiveBaseIds()
-            ?? new Set(coopDefenseBases.map((spec) => spec.id)),
+            ?? new Set(getCoopDefenseBaseSpecs().map((spec) => spec.id)),
           obstacleCellProvider,
           barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
           runner: createFlowFieldRunner(),
@@ -3430,7 +3472,7 @@ export class ArenaLifecycleCoordinator {
             ? new CoopDefensePersistentPressureSystem(
               coopDefensePersistentSpawnConfigs,
               spawnExecutor,
-              coopDefenseBases,
+              getCoopDefenseBaseSpecs(),
               () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
             )
             : null;
@@ -4040,7 +4082,7 @@ export class ArenaLifecycleCoordinator {
       // applyDamage() aus, und der bucht die Bonus-XP bereits gegen diese Anrechnung. Der
       // Bonus gehört dem Team der laufenden Runde – ein Ziel, das nur Schaden von Spectators
       // oder Latejoinern erhält, bleibt Fortschritt, erzeugt aber keine XP.
-      const objectiveId = base?.spec.dormantObjectiveId;
+      const objectiveId = base?.getSpec().dormantObjectiveId;
       if (objectiveId && bridge.canPlayerReceiveRoundRewards(attackerId)) {
         this.coopMissionRuntime?.coopDefenseSecondaryObjectiveSystem?.reportTargetContribution(objectiveId, baseId);
       }
@@ -4920,7 +4962,7 @@ export class ArenaLifecycleCoordinator {
           isProtectedBasePoint: (x, y) => isPointNearBaseRegion(
             x,
             y,
-            coopDefenseBases.map((base) => getBaseWorldBounds(base.region, world.metrics)),
+            worldBases.map((base) => getBaseWorldBounds(base.region, world.metrics)),
           ),
           playStrikeAudio: (x, y) => {
             this.ctx.gameAudioSystem.playSound('sfx_airstrike_countdown', x, y);

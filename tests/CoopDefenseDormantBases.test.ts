@@ -13,7 +13,12 @@ import {
   type CoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaGenerator';
-import { resolveCoopDefenseActivityBases, type BaseSpec } from '../src/arena/BaseRegistry';
+import {
+  resolveCoopDefenseActivityBaseOverlays,
+  resolveCoopDefenseActivityBases,
+  type BaseActivityOverlay,
+  type BaseSpec,
+} from '../src/arena/BaseRegistry';
 import { BaseManager } from '../src/entities/BaseManager';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { LightingSystem } from '../src/effects/LightingSystem';
@@ -182,7 +187,7 @@ describe('Coop-Defense dormant mission structures', () => {
       role: 'spawn-point',
       spawnCenter: { gridX: 10, gridY: 10, x: 336, y: 336 },
     };
-    const manager = new BaseManager(scene, [worldBase], TEST_WORLD_METRICS, {}, false);
+    const manager = new BaseManager(scene, [worldBase], TEST_WORLD_METRICS, {}, false, false);
     const entity = manager.getBase(worldBase.id)!;
 
     expect(entity.getCellBodies()).toHaveLength(1);
@@ -203,15 +208,96 @@ describe('Coop-Defense dormant mission structures', () => {
     manager.setTurretAngle(`${worldBase.id}-turret`, 1.25);
     manager.applyDamage(worldBase.id, 10);
     expect(entity.getTurrets()[0]?.angle).toBe(1.25);
-    expect(entity.getHp()).toBe(90);
-    expect(manager.getNetSnapshot()).toMatchObject([{
-      id: worldBase.id,
-      hp: 90,
-      maxHp: worldBase.hpMax,
-    }]);
+    expect(entity.getHp()).toBe(worldBase.hpMax);
+    expect(manager.getNetSnapshot().some((entry) => (
+      entry.id === worldBase.id && entry.hp < worldBase.hpMax
+    ))).toBe(false);
 
     manager.applyDamage(worldBase.id, 90);
     expect(presentationCalls).toEqual({ image: 0, rectangle: 1, graphics: 0, tween: 0 });
+  });
+
+  it('binds and clears activity Base state on one World manager across A to B', () => {
+    const { scene } = makeScene();
+    const worldBase = makeBaseSpec('activity-lifetime-base', { turret: true });
+    const manager = new BaseManager(scene, [worldBase], TEST_WORLD_METRICS, {}, false, false);
+    const entity = manager.getBase(worldBase.id)!;
+    const changes = vi.fn();
+    let objectiveState: CoopDefenseSecondaryObjectiveState | null = null;
+    manager.setSecondaryObjectiveStateProvider(() => objectiveState);
+    const activityA: BaseActivityOverlay = {
+      baseId: worldBase.id,
+      hpMax: 80,
+      startHp: 40,
+      dormant: true,
+      dormantObjectiveId: 'objective-a',
+      powerUpPedestals: [],
+    };
+    const activityB: BaseActivityOverlay = {
+      baseId: worldBase.id,
+      hpMax: 60,
+      startHp: 45,
+      dormant: false,
+      dormantObjectiveId: 'objective-b',
+      powerUpPedestals: [],
+    };
+
+    const bindingA = manager.createActivityBinding([activityA], changes);
+    const bindingB = manager.createActivityBinding([activityB], changes);
+    bindingA.attach();
+    expect(entity.getHp()).toBe(40);
+    expect(entity.getMaxHp()).toBe(80);
+    expect(entity.isDormant()).toBe(true);
+    expect(entity.getSpec().dormantObjectiveId).toBe('objective-a');
+    expect(entity.getCellBodies()).toHaveLength(0);
+    objectiveState = 'active';
+    manager.syncDormantStates();
+    expect(entity.isDormant()).toBe(false);
+    expect(entity.getCellBodies()).toHaveLength(1);
+
+    bindingB.attach();
+    expect(entity.getHp()).toBe(45);
+    expect(entity.getMaxHp()).toBe(60);
+    expect(entity.isDormant()).toBe(false);
+    expect(entity.getSpec().dormantObjectiveId).toBe('objective-b');
+    expect(entity.getCellBodies()).toHaveLength(1);
+    manager.applyDamage(worldBase.id, 5);
+    expect(entity.getHp()).toBe(40);
+
+    // Das alte A-Handle darf den inzwischen gebundenen B-State nicht loeschen.
+    bindingA.detach();
+    expect(entity.getMaxHp()).toBe(60);
+    expect(entity.getHp()).toBe(40);
+    expect(changes).toHaveBeenCalledTimes(3);
+
+    bindingB.detach();
+    expect(entity.getHp()).toBe(worldBase.hpMax);
+    expect(entity.getMaxHp()).toBe(worldBase.hpMax);
+    expect(entity.isDormant()).toBe(false);
+    expect(entity.getSpec().dormantObjectiveId).toBeUndefined();
+    expect(entity.getCellBodies()).toHaveLength(1);
+    manager.applyDamage(worldBase.id, 5);
+    expect(entity.getHp()).toBe(worldBase.hpMax);
+    bindingB.detach();
+    expect(changes).toHaveBeenCalledTimes(4);
+  });
+
+  it('resolves only activity values into the Base overlay', () => {
+    const map = makeDormantMap();
+    const overlays = resolveCoopDefenseActivityBaseOverlays(map, 2, TEST_WORLD_METRICS);
+    const dormant = overlays.find((overlay) => overlay.baseId === DORMANT_BASE_ID);
+
+    expect(dormant).toMatchObject({
+      baseId: DORMANT_BASE_ID,
+      hpMax: 1500,
+      startHp: 1500,
+      dormant: true,
+      dormantObjectiveId: DORMANT_OBJECTIVE_ID,
+      powerUpPedestals: [],
+    });
+    expect(dormant).not.toHaveProperty('cells');
+    expect(dormant).not.toHaveProperty('region');
+    expect(dormant).not.toHaveProperty('turrets');
   });
 
   it('resolves a dormant base with its single linked objective', () => {
@@ -297,7 +383,7 @@ describe('Coop-Defense dormant mission structures', () => {
       dormant: true,
       dormantObjectiveId: 'reveal-outpost',
     }), startHp: 25 };
-    const manager = new BaseManager(scene, [damaged], TEST_WORLD_METRICS);
+    const manager = new BaseManager(scene, [damaged], TEST_WORLD_METRICS, {}, true, true);
     const entity = manager.getBase(damaged.id)!;
 
     expect(entity.getHp()).toBe(25);
@@ -323,7 +409,7 @@ describe('Coop-Defense dormant mission structures', () => {
   it('includes a destroyed active structure as an explicit zero-hp snapshot', () => {
     const { scene } = makeScene();
     const active = makeBaseSpec('destroyed-active-outpost');
-    const manager = new BaseManager(scene, [active], TEST_WORLD_METRICS);
+    const manager = new BaseManager(scene, [active], TEST_WORLD_METRICS, {}, true, true);
 
     manager.applyDamage(active.id, active.hpMax);
 
@@ -335,11 +421,11 @@ describe('Coop-Defense dormant mission structures', () => {
   it('applies an explicit zero-hp snapshot to the client as a destroyed state', () => {
     const { scene: hostScene } = makeScene();
     const active = makeBaseSpec('destroyed-active-outpost');
-    const host = new BaseManager(hostScene, [active], TEST_WORLD_METRICS);
+    const host = new BaseManager(hostScene, [active], TEST_WORLD_METRICS, {}, true, true);
     host.applyDamage(active.id, active.hpMax);
 
     const { scene: clientScene } = makeScene();
-    const client = new BaseManager(clientScene, [active], TEST_WORLD_METRICS);
+    const client = new BaseManager(clientScene, [active], TEST_WORLD_METRICS, {}, true, true);
     client.applySnapshot(host.getNetSnapshot());
 
     const clientBase = client.getBase(active.id)!;
@@ -350,11 +436,11 @@ describe('Coop-Defense dormant mission structures', () => {
   it('does not revive a client-destroyed structure when a later delta omits it', () => {
     const { scene: hostScene } = makeScene();
     const active = makeBaseSpec('destroyed-active-outpost');
-    const host = new BaseManager(hostScene, [active], TEST_WORLD_METRICS);
+    const host = new BaseManager(hostScene, [active], TEST_WORLD_METRICS, {}, true, true);
     host.applyDamage(active.id, active.hpMax);
 
     const { scene: clientScene } = makeScene();
-    const client = new BaseManager(clientScene, [active], TEST_WORLD_METRICS);
+    const client = new BaseManager(clientScene, [active], TEST_WORLD_METRICS, {}, true, true);
     client.applySnapshot(host.getNetSnapshot());
     client.applySnapshot([]);
 
@@ -371,7 +457,7 @@ describe('Coop-Defense dormant mission structures', () => {
       dormantObjectiveId: 'reveal-outpost',
       turret: true,
     });
-    const manager = new BaseManager(scene, [active, dormant], TEST_WORLD_METRICS);
+    const manager = new BaseManager(scene, [active, dormant], TEST_WORLD_METRICS, {}, true, true);
     const dormantEntity = manager.getBase(dormant.id)!;
 
     expect(dormantEntity.isDormant()).toBe(true);
@@ -408,7 +494,7 @@ describe('Coop-Defense dormant mission structures', () => {
       cells: [{ gridX: 11, gridY: 10 }],
       region: { minGridX: 11, maxGridX: 11, minGridY: 10, maxGridY: 10 },
     };
-    const manager = new BaseManager(scene, [active, dormant], TEST_WORLD_METRICS, {}, false);
+    const manager = new BaseManager(scene, [active, dormant], TEST_WORLD_METRICS, {}, false, true);
 
     expect(manager.isMovementBlockedCell(10, 10)).toBe(true);
     expect(manager.isMovementBlockedCell(11, 10)).toBe(false);
@@ -428,7 +514,7 @@ describe('Coop-Defense dormant mission structures', () => {
       dormantObjectiveId: 'reveal-outpost',
       turret: true,
     });
-    const manager = new BaseManager(scene, [dormant], TEST_WORLD_METRICS);
+    const manager = new BaseManager(scene, [dormant], TEST_WORLD_METRICS, {}, true, true);
     const activated = vi.fn();
     manager.setOnBaseActivated(activated);
     const state: CoopDefenseSecondaryObjectiveState = 'active';
