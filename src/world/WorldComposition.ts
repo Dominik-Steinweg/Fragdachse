@@ -160,7 +160,7 @@ export interface MaterializeWorldCompositionInput {
   readonly handoff: WorldPresentationHandoff;
   readonly persistentBaseGravel: GroundSurfacePersistentBaseGravelZone | null;
   readonly playerManager: PlayerManager;
-  readonly persistentBaseSink: PersistentBaseWorldBindingSink;
+  readonly persistentBaseSink?: PersistentBaseWorldBindingSink;
   readonly baseDestructionHooks: BaseDestructionHooks;
   readonly lighting: LightingSystem;
   readonly createRockRegistry: boolean;
@@ -199,7 +199,10 @@ export function materializeWorldComposition(
 
   const materialization = new WorldMaterialization();
   input.runtime.materialize(materialization);
-  const persistentBase = new PersistentBaseWorldBinding(input.persistentBaseSink);
+  const persistentBase = new PersistentBaseWorldBinding(input.persistentBaseSink ?? {
+    finalizeRuntimeObjects: () => { /* World materializer owns production teardown. */ },
+    releaseRewardRuntime: () => { /* World materializer owns production teardown. */ },
+  });
   input.runtime.setPersistentBase(persistentBase);
 
   const builder = new ArenaBuilder(input.scene);

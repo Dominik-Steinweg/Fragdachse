@@ -32,8 +32,8 @@ function readTearDownArenaBody(): string {
   const source = read(COORDINATOR_PATH);
   const start = source.indexOf('  tearDownArena(');
   expect(start, `${COORDINATOR_PATH} must declare tearDownArena()`).toBeGreaterThan(0);
-  const end = source.indexOf('\n  private materializePersistentBaseComposite(', start);
-  expect(end, `${COORDINATOR_PATH} must keep materializePersistentBaseComposite() after tearDownArena()`).toBeGreaterThan(start);
+  const end = source.indexOf('\n  private ', start + 1);
+  expect(end, `${COORDINATOR_PATH} must keep a private method after tearDownArena()`).toBeGreaterThan(start);
   // Ausrichtungs-Leerzeichen im Quelltext duerfen die Zuweisungssuche nicht stoeren.
   return source.slice(start, end).replace(/[ \t]+/g, ' ');
 }
@@ -48,6 +48,7 @@ const OWNED_ROUND_FIELDS: Readonly<Record<string, string>> = {
   // World-Runtime; genau ein Aufruf setzt sie zurueck.
   worldMaterialization: 'this.releaseWorldRuntime(',
   worldPresentation: 'this.releaseWorldRuntime(',
+  coopDefenseTeamBuffSystem: 'this.detachLocalActivityForTeardown();',
   // Phase-5-Compatibility: Diese Felder sind nur Lesefassaden auf CoopMissionRuntime. Der eine
   // Activity-Detach zerstoert Enemy-, Encounter-, Boss- und Navigation-State und nullt sie ueber
   // den gerichteten Binding-Callback; ein manueller Einzel-Teardown waere wieder Doppelbesitz.
@@ -140,7 +141,7 @@ describe('arena round lifecycle contract', () => {
     // Der Abschluss laeuft im Abbau des gebauten World-Zustands – genau dort, wo die Bau-Runtime
     // noch beantworten kann, welche Objekte die Runde ueberlebt haben.
     expect(body).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');
-    expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseSession.finalizeWorldRuntimeObjects(');
+    expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseWorldBinding?.finalizeWorldRuntimeObjects();');
 
     expect(body).toContain('this.ctx.persistentBaseContributions = null');
   });

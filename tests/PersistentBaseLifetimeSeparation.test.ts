@@ -511,6 +511,14 @@ describe('Phase 8 – Ownership im Koordinator', () => {
     expect(worldBinding).toContain('this.constructionRuntimeBindings.clear();');
   });
 
+  it('erzeugt ohne World keine mutable Ersatz-Bindings im Coordinator', () => {
+    expect(coordinator).not.toContain('noWorldRewardRuntimes');
+    expect(coordinator).not.toContain('noWorldCompositeSignatures');
+    expect(coordinator).not.toContain('persistentBaseRewardRuntimeBindings.set(');
+    expect(coordinator).not.toContain('persistentBaseCompositeBuildSignatures.set(');
+    expect(coordinator).toContain('this.persistentBaseWorldBinding?.reconcile();');
+  });
+
   it('haelt die drei Lifetimes in getrennten Modulen', () => {
     const contributionStore = readFileSync(
       resolve(process.cwd(), 'src/persistentBase/PersistentBaseContributionStore.ts'),

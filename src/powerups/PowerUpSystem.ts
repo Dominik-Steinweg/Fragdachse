@@ -147,7 +147,9 @@ export class PowerUpSystem {
   private readonly activityPedestalIds = new Map<string, number>();
   private readonly activityPedestalSpecs = new Map<string, BasePowerUpPedestalSpec>();
   private activeActivityPedestalBinding: object | null = null;
-  private activityPedestalStartTime = 0;
+  /** Null means that the Activity is attached before the authoritative arena anchor exists. */
+  private activityPedestalStartTime: number | null = null;
+  private activityPedestalStartPending = false;
   private nextDynamicPedestalId = 0;
   private nextUid     = 1;
   private nextNukeId  = 1;
@@ -178,6 +180,16 @@ export class PowerUpSystem {
   setArenaStartTime(ts: number): void {
     this.arenaStartTime = ts;
     this.pedestalsActivated = false;
+    if (this.activeActivityPedestalBinding !== null
+      && this.activityPedestalStartPending
+      && ts > 0) {
+      this.activityPedestalStartTime = Math.max(0, Math.floor(ts));
+      for (const pedestalId of this.activityPedestalIds.values()) {
+        const pedestal = this.pedestals.get(pedestalId);
+        if (pedestal) pedestal.activityStartTime = this.activityPedestalStartTime;
+      }
+      this.activityPedestalStartPending = false;
+    }
     for (const pedestal of this.pedestals.values()) {
       if (pedestal.currentUid !== null) {
         this.worldItems.delete(pedestal.currentUid);
@@ -189,7 +201,9 @@ export class PowerUpSystem {
       if (pedestal.activityStartTime !== undefined) {
         pedestal.activityInitialSpawnPending = true;
       }
-      pedestal.nextRespawnAt = pedestal.activityStartTime !== undefined
+      pedestal.nextRespawnAt = this.activityPedestalStartPending
+        ? 0
+        : pedestal.activityStartTime !== undefined
         ? this.resolveActivityPedestalRespawnAt(pedestal)
         : (pedestal.spawnOnArenaStart ? 0 : (ts > 0 ? ts + pedestal.respawnMs : 0));
     }
@@ -217,7 +231,8 @@ export class PowerUpSystem {
     this.activityPedestalIds.clear();
     this.activityPedestalSpecs.clear();
     this.activeActivityPedestalBinding = null;
-    this.activityPedestalStartTime = 0;
+    this.activityPedestalStartTime = null;
+    this.activityPedestalStartPending = false;
     this.nextDynamicPedestalId = this.getInitialDynamicPedestalId();
     this.nextUid = 1;
     this.nextNukeId = 1;
@@ -256,7 +271,7 @@ export class PowerUpSystem {
    */
   createActivityPedestalBinding(
     specs: readonly BasePowerUpPedestalSpec[],
-    activityStartTime = this.arenaStartTime > 0 ? this.arenaStartTime : Date.now(),
+    activityStartTime?: number,
   ): PowerUpActivityPedestalBinding {
     const token = {};
     return {
@@ -264,7 +279,13 @@ export class PowerUpSystem {
         if (this.activeActivityPedestalBinding === token) return;
         this.detachActivityPedestalBinding(this.activeActivityPedestalBinding);
         this.activeActivityPedestalBinding = token;
-        this.activityPedestalStartTime = Math.max(0, Math.floor(activityStartTime));
+        const resolvedStartTime = activityStartTime ?? (this.arenaStartTime > 0
+          ? this.arenaStartTime
+          : null);
+        this.activityPedestalStartPending = resolvedStartTime === null;
+        this.activityPedestalStartTime = resolvedStartTime === null
+          ? null
+          : Math.max(0, Math.floor(resolvedStartTime));
         this.activityPedestalSpecs.clear();
         for (const spec of specs) this.activityPedestalSpecs.set(spec.id, spec);
         for (const spec of this.activityPedestalSpecs.values()) {
@@ -436,7 +457,9 @@ export class PowerUpSystem {
     // 2) Activity-Podeste folgen ihrem eigenen Zeitursprung. Das ist absichtlich unabhängig vom
     // Aufrufzeitpunkt von setArenaStartTime(), damit World- und Activity-Aufbau vertauschbar sind.
     for (const pedestal of this.pedestals.values()) {
-      if (pedestal.currentUid !== null || pedestal.activityStartTime === undefined) continue;
+      if (this.activityPedestalStartPending
+        || pedestal.currentUid !== null
+        || pedestal.activityStartTime === undefined) continue;
       if (pedestal.activityInitialSpawnPending) {
         pedestal.nextRespawnAt = this.resolveActivityPedestalRespawnAt(pedestal);
       }
@@ -1050,7 +1073,7 @@ export class PowerUpSystem {
       respawnMs: Math.max(1, Math.floor(spec.respawnMs ?? cfg.respawnMs)),
       spawnOnArenaStart: spec.spawnOnArenaStart ?? cfg.spawnOnArenaStart,
       linkedBaseId: spec.baseId,
-      activityStartTime: this.activityPedestalStartTime,
+      activityStartTime: this.activityPedestalStartTime ?? undefined,
       activityInitialSpawnPending: true,
       currentUid: null,
       nextRespawnAt: 0,
@@ -1058,7 +1081,8 @@ export class PowerUpSystem {
     this.activityPedestalIds.set(spec.id, pedestalId);
     this.pendingPedestalRemovalIds.delete(pedestalId);
     const pedestal = this.pedestals.get(pedestalId);
-    if (pedestal && Date.now() >= this.resolveActivityPedestalRespawnAt(pedestal)) {
+    if (pedestal && !this.activityPedestalStartPending
+      && Date.now() >= this.resolveActivityPedestalRespawnAt(pedestal)) {
       this.spawnPedestalItem(pedestal);
     }
   }
@@ -1069,7 +1093,8 @@ export class PowerUpSystem {
     for (const pedestalId of this.activityPedestalIds.values()) this.removePedestal(pedestalId);
     this.activityPedestalIds.clear();
     this.activityPedestalSpecs.clear();
-    this.activityPedestalStartTime = 0;
+    this.activityPedestalStartTime = null;
+    this.activityPedestalStartPending = false;
   }
 
   private addLayoutPedestal(cell: ArenaLayout['powerUpPedestals'][number]): void {

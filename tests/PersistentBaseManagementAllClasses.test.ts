@@ -28,6 +28,7 @@ import { PersistentBaseContributionStore } from '../src/persistentBase/Persisten
 import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
 import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
+import { PersistentBaseWorldMaterializer } from '../src/world/PersistentBaseWorldMaterializer';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
@@ -140,6 +141,10 @@ function createHarness(classId: string) {
   vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue({ coopDefenseClassId: classId } as never);
 
   const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as ArenaLifecycleCoordinator & Record<string, any>;
+  const persistentBaseWorldBinding = new PersistentBaseWorldBinding({
+    finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
+    releaseRewardRuntime: () => { /* dito */ },
+  });
   Object.assign(coordinator, {
     scene: { game: { events: { emit: vi.fn() } } },
     ctx: {
@@ -166,10 +171,7 @@ function createHarness(classId: string) {
     },
     // Die world-lokalen Runtime-IDs gehoeren der World-Runtime; der Test stellt genau diese
     // Bindung, nicht mehr zwei lose Maps.
-    persistentBaseWorldBinding: new PersistentBaseWorldBinding({
-      finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
-      releaseRewardRuntime: () => { /* dito */ },
-    }),
+    persistentBaseWorldBinding,
     persistentBaseSession,
     persistentBaseRewardProjectionSignature: null,
     persistentBaseRewardProjectionRevision: 0,
@@ -177,10 +179,36 @@ function createHarness(classId: string) {
   });
   coordinator.resolveConfiguredGameMode = () => COOP_DEFENSE_MODE;
   coordinator.getPlayerCapabilities = () => ({ canPlace: true, canDismantle: true, canInteract: true } as never);
-  coordinator.hostRefreshPersistentBaseComposite = vi.fn();
   coordinator.persistCurrentCommittedPersistentBaseRewards = vi.fn();
   coordinator.publishPersistentBaseRewardSessionState = vi.fn();
   coordinator.publishImmediatePersistentBaseContribution = vi.fn();
+
+  persistentBaseWorldBinding.setSite(site.anchor, site.buildArea);
+  persistentBaseWorldBinding.setMaterializer(new PersistentBaseWorldMaterializer({
+    binding: persistentBaseWorldBinding,
+    contributions: contributionStore,
+    rewards: rewardStore,
+    placementSystem,
+    powerUpSystem: coordinator.ctx.powerUpSystem,
+    baseManager: null,
+    getSite: () => site,
+    rockVisualHelper: coordinator.rockVisualHelper,
+    isHost: () => bridge.isHost(),
+    getMapId: () => 'management-test',
+    getLocalOwnerId: () => 'owner-local',
+    resolvePlayerIdForOwner: () => playerId,
+    getPlayerColor: () => 0xffffff,
+    getConstructionCapacity: () => 100,
+    getConstructionOwnership: () => 'host-persistent',
+    buildRestoreTools: () => [],
+    materializeRestoreCandidate: () => null,
+    releasePlaceableRuntime: () => { /* PlacementSystem already removed the runtime. */ },
+    emitRestoreAdded: () => { /* not relevant for reward-management tests */ },
+    emitGridChanged: () => { /* not relevant for reward-management tests */ },
+    onDiagnosticEvent: () => { /* not relevant for reward-management tests */ },
+  }));
+
+  coordinator.persistentBaseWorldBinding.reconcile = vi.fn();
 
   return {
     coordinator,
@@ -234,7 +262,7 @@ function placeRewardPedestal(
     0xffffff,
   );
   if (!runtime) throw new Error('setup failed: reward pedestal was not materialized');
-  coordinator.persistentBaseRewardRuntimeBindings.set('base_health_pedestal', {
+  coordinator.persistentBaseWorldBinding.rewardRuntimes.set('base_health_pedestal', {
     runtimeId: runtime.id,
     gridX: runtime.gridX,
     gridY: runtime.gridY,
@@ -437,7 +465,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     });
     expect(placementSystem.getRuntimeRockAt(source.gridX, source.gridY)).toBeUndefined();
     expect(placementSystem.getAllRuntimeRocks()).toHaveLength(1);
-    expect(coordinator.persistentBaseRewardRuntimeBindings.get('base_health_pedestal')).toEqual({
+    expect(coordinator.persistentBaseWorldBinding.rewardRuntimes.get('base_health_pedestal')).toEqual({
       runtimeId: source.id,
       gridX: target.gridX,
       gridY: target.gridY,
@@ -446,7 +474,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(powerUpSystem.repositionPersistentBaseRewardPedestal).toHaveBeenCalledTimes(1);
     expect(powerUpSystem.unregisterPersistentBaseRewardPedestal).not.toHaveBeenCalled();
     // Das Composite wird genau einmal gegen den neuen Zustand aufgeloest.
-    expect(coordinator.hostRefreshPersistentBaseComposite).toHaveBeenCalledTimes(1);
+    expect(coordinator.persistentBaseWorldBinding.reconcile).toHaveBeenCalledTimes(1);
   });
 
   it('schuetzt aufeinanderfolgende Moves mit 100 ms und laesst die Quelle dabei unveraendert', () => {
@@ -539,7 +567,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(contributionStore.getContribution('owner-a')?.constructions).toEqual([blueprint]);
     expect(contributionStore.getRuntimeBindings()).toEqual([]);
     // Genau ein Composite-Lauf loest den neuen Zustand auf, inklusive der freigewordenen Quelle.
-    expect(coordinator.hostRefreshPersistentBaseComposite).toHaveBeenCalledTimes(1);
+    expect(coordinator.persistentBaseWorldBinding.reconcile).toHaveBeenCalledTimes(1);
   });
 
   it('lehnt eine Anfrage aus einer alten World ab', () => {
@@ -554,7 +582,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(rewardStore.getState().placements).toEqual([
       { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 },
     ]);
-    expect(coordinator.hostRefreshPersistentBaseComposite).not.toHaveBeenCalled();
+    expect(coordinator.persistentBaseWorldBinding.reconcile).not.toHaveBeenCalled();
   });
 
   it('lehnt stale Move-A nach Activity A → B ab und akzeptiert danach nur Move-B', () => {

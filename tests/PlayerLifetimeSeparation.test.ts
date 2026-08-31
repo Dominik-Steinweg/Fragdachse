@@ -252,7 +252,8 @@ describe('Phase 7 – Ownership im Koordinator', () => {
       resolve(process.cwd(), 'src/activity/CoopMissionPlayerComposition.ts'),
       'utf8',
     );
-    expect(coordinator).toContain('new CoopMissionPlayerComposition(');
+    expect(coordinator).toContain('this.coopMissionComposition.materialize(');
+    expect(coordinator).not.toContain('new CoopMissionPlayerComposition(');
     expect(activityComposition).toContain('runtime.setPlayerActivity(playerActivity);');
     // Beim Wechsel in derselben World nimmt die neue Mission die stehende Besetzung auf.
     expect(activityComposition).toContain("for (const playerId of this.options.playerWorldRuntime?.attachedPlayerIds() ?? []) {");

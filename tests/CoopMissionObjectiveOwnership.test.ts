@@ -9,6 +9,7 @@ import {
 import type { CoopMissionHostUpdatePort } from '../src/activity/CoopMissionHostUpdate';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
+import { CoopDefenseTeamBuffSystem } from '../src/systems/CoopDefenseTeamBuffSystem';
 
 /**
  * Phase 6: Ziele, Fortschritt, Abschluss und die lokale Missionsdarstellung gehoeren der
@@ -143,6 +144,30 @@ describe('CoopMissionRuntime – Ziele, Fortschritt und Abschluss', () => {
     expect(second.coopDefenseMissionProgressSystem).not.toBeNull();
     expect(calls.filter((entry) => entry.startsWith('objectives:1:'))).toHaveLength(6);
   });
+
+  it('besitzt fuer Activity B einen frischen TeamBuff und leert den alten beim A-Teardown', () => {
+    const first = new CoopMissionRuntime(descriptor(), () => { /* noop */ }, ports());
+    const firstBuff = new CoopDefenseTeamBuffSystem();
+    first.setObjectives(objectives([], 1, { teamBuff: firstBuff }));
+
+    expect(first.coopDefenseTeamBuffSystem).toBe(firstBuff);
+    expect(firstBuff.activate({
+      defId: 'test-buff',
+      durationMs: 10_000,
+      hpRegenPerSecond: 1,
+      adrenalineRegenMultiplier: 1.2,
+    }, 100)).toBe(true);
+    first.destroy();
+    expect(first.coopDefenseTeamBuffSystem).toBeNull();
+    expect(firstBuff.getBuffEndsAt()).toBeNull();
+
+    const second = new CoopMissionRuntime(descriptor(32), () => { /* noop */ }, ports());
+    const secondBuff = new CoopDefenseTeamBuffSystem();
+    second.setObjectives(objectives([], 2, { teamBuff: secondBuff }));
+
+    expect(second.coopDefenseTeamBuffSystem).toBe(secondBuff);
+    expect(secondBuff).not.toBe(firstBuff);
+  });
 });
 
 describe('CoopMissionRuntime – Missionsschritte des Frames', () => {
@@ -226,8 +251,11 @@ describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
       resolve(process.cwd(), 'src/activity/CoopMissionObjectiveComposition.ts'),
       'utf8',
     );
-    expect(coordinator).toContain('new CoopMissionObjectiveComposition(');
+    expect(coordinator).toContain('this.coopMissionComposition.materialize(');
+    expect(coordinator).not.toContain('new CoopMissionObjectiveComposition(');
     expect(composition).toContain('runtime.setObjectives({');
+    expect(composition).toContain('new CoopDefenseTeamBuffSystem()');
+    expect(coordinator).toContain('this.syncCoopMissionCompatibilityBindings(runtime);');
   });
 
   it('haelt die migrierten Missionssysteme aus dem ArenaContext heraus', () => {

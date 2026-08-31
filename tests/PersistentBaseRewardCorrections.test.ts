@@ -44,6 +44,7 @@ import {
 } from '../src/persistentBase/PersistentBaseRoundOutcome';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
 import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseRewardStore';
+import { PersistentBaseWorldMaterializer } from '../src/world/PersistentBaseWorldMaterializer';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 import { bridge } from '../src/network/bridge';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
@@ -235,6 +236,9 @@ function testCoordinator(
   const fakePlacement = fakePlacementSystem(initialRocks);
   const playerId = bridge.getLocalPlayerId();
   const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as ArenaLifecycleCoordinator & Record<string, any>;
+  const baseManager = {
+    getBase: () => ({ isInert: () => false }),
+  };
 
   Object.assign(coordinator, {
     scene: { game: { events: { emit: vi.fn() } } },
@@ -248,6 +252,7 @@ function testCoordinator(
       targetStatusSystem: null,
       energyInjectorSystem: null,
       powerUpSystem: null,
+      baseManager,
     },
     rockVisualHelper: {
       gridToWorld: () => ({ x: 0, y: 0 }),
@@ -293,6 +298,34 @@ function testCoordinator(
     fakePlacement.rocks.set(rock.id, rock);
     return rock;
   };
+
+  const persistentBaseWorldBinding = coordinator.persistentBaseWorldBinding as PersistentBaseWorldBinding;
+  persistentBaseWorldBinding.setSite(site.anchor, site.buildArea);
+  persistentBaseWorldBinding.setMaterializer(new PersistentBaseWorldMaterializer({
+    binding: persistentBaseWorldBinding,
+    contributions: contributionStore,
+    rewards: rewardStore,
+    placementSystem: fakePlacement.placementSystem as never,
+    powerUpSystem: null,
+    baseManager: baseManager as never,
+    getSite: () => site,
+    rockVisualHelper: coordinator.rockVisualHelper,
+    isHost: () => bridge.isHost(),
+    getMapId: () => 'corrections-test',
+    getLocalOwnerId: () => getStoredLocalOwnerId(),
+    resolvePlayerIdForOwner: () => playerId,
+    getPlayerColor: () => 0xffffff,
+    getConstructionCapacity: () => coordinator.getConstructionCapacity(playerId),
+    getConstructionOwnership: () => 'host-persistent',
+    buildRestoreTools: () => coordinator.buildPersistentRestoreTools(playerId),
+    materializeRestoreCandidate: (candidate, ownerId, ownerColor, ownership) => (
+      coordinator.materializePersistentRestoreCandidate(candidate, ownerId, ownerColor, ownership)
+    ),
+    releasePlaceableRuntime: () => { /* fake placement owns the map entry in this test */ },
+    emitRestoreAdded: () => { /* not relevant for this contract */ },
+    emitGridChanged: () => { /* not relevant for this contract */ },
+    onDiagnosticEvent: () => { /* not relevant for this contract */ },
+  }));
 
   return {
     coordinator,
@@ -340,26 +373,30 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
 
   it('entfernt bei Basiszerstoerung nur die Reward-Turret-Runtime', () => {
     const source = readLifecycle();
+    const materializer = readFileSync(
+      resolve(process.cwd(), 'src/world/PersistentBaseWorldMaterializer.ts'),
+      'utf8',
+    );
     const destroyedStart = source.indexOf('baseManager.setOnBaseDestroyed((destroyedBase) => {');
     const destroyedEnd = source.indexOf('\n      });\n      return;', destroyedStart);
     expect(destroyedStart).toBeGreaterThanOrEqual(0);
     expect(destroyedEnd).toBeGreaterThan(destroyedStart);
     expect(source.slice(destroyedStart, destroyedEnd)).toContain(
-      'this.removePersistentBaseRewardTurretsForBase(destroyedBase.id);',
+      'this.reconcilePersistentBaseWorld();',
     );
 
-    const removalStart = source.indexOf('  private removePersistentBaseRewardTurretsForBase(');
-    const removalEnd = source.indexOf('\n  private materializePersistentBaseReward(', removalStart);
+    const removalStart = materializer.indexOf('  private removeRewardTurretsForBase(');
+    const removalEnd = materializer.indexOf('\n  private isPersistentBaseRuntimeActive(', removalStart);
     expect(removalStart).toBeGreaterThanOrEqual(0);
     expect(removalEnd).toBeGreaterThan(removalStart);
-    const removal = source.slice(removalStart, removalEnd);
+    const removal = materializer.slice(removalStart, removalEnd);
     expect(removal).toContain("rock.kind !== 'turret'");
     expect(removal).toContain("rock.ownership !== 'base-owned'");
     expect(removal).toContain('rock.persistentRewardId === undefined');
-    expect(removal).toContain('placementSystem.removeRock(rock.id)');
-    expect(removal).toContain('this.releasePlaceableRuntime(removed, false);');
+    expect(removal).toContain('this.options.placementSystem.removeRock(rock.id)');
+    expect(removal).toContain('this.options.releasePlaceableRuntime(removed, false);');
     expect(removal).not.toContain('dismantleReward');
-    expect(source).toContain("if (!persistentBaseActive) this.removePersistentBaseRewardTurretsForBase(site.baseId);");
+    expect(materializer).toContain('if (!persistentBaseActive) this.removeRewardTurretsForBase(site.baseId);');
   });
 
   it('baut nach einem Materialisierungsfehler das unveraenderte Composite wieder auf', () => {
@@ -370,7 +407,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     expect(placementEnd).toBeGreaterThan(placementStart);
     const placement = source.slice(placementStart, placementEnd);
     const rollbackAt = placement.indexOf('store.rollbackPlacement(sanitizedRequest.rewardId);');
-    const refreshAt = placement.indexOf('this.hostRefreshPersistentBaseComposite();', rollbackAt);
+    const refreshAt = placement.indexOf('this.reconcilePersistentBaseWorld();', rollbackAt);
     expect(placement).toContain('isPersistentContribution');
     expect(rollbackAt).toBeGreaterThanOrEqual(0);
     expect(refreshAt).toBeGreaterThan(rollbackAt);
@@ -394,7 +431,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
       coopDefenseClassId: 'inspector_gadachs',
     } as any);
     vi.spyOn(bridge, 'getPlayerColor').mockReturnValue(0xffffff);
-    coordinator.materializePersistentBaseReward = vi.fn(() => null);
+    coordinator.persistentBaseWorldBinding.materializeRewardPlacement = vi.fn(() => null);
 
     const result = coordinator.placePersistentBaseReward(bridge.getLocalPlayerId(), {
       worldRevision: 407,
@@ -423,14 +460,14 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     const { coordinator, rewardStore, rocks, site } = testCoordinator();
     expect(rewardStore.placeReward({
       rewardId: 'base_spore_turret',
-      relativeGridX: 0,
-      relativeGridY: 0,
+      relativeGridX: 2,
+      relativeGridY: 1,
       angle: 0,
     })).toBe(true);
     let baseInert = false;
-    coordinator.ctx.baseManager = { getBase: () => ({ isInert: () => baseInert }) };
+    coordinator.ctx.baseManager.getBase = () => ({ isInert: () => baseInert });
 
-    coordinator.materializePersistentBaseRewards(site);
+    coordinator.persistentBaseWorldBinding.reconcile();
     expect([...rocks.values()]).toHaveLength(1);
     expect([...rocks.values()][0]).toMatchObject({
       kind: 'turret',
@@ -440,12 +477,12 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     });
 
     baseInert = true;
-    coordinator.materializePersistentBaseRewards(site);
+    coordinator.persistentBaseWorldBinding.reconcile();
     expect([...rocks.values()]).toEqual([]);
     expect(rewardStore.getState().placements).toHaveLength(1);
-    expect(coordinator.persistentBaseRewardRuntimeBindings.size).toBe(0);
+    expect(coordinator.persistentBaseWorldBinding.rewardRuntimes.size).toBe(0);
 
-    coordinator.materializePersistentBaseRewards(site);
+    coordinator.persistentBaseWorldBinding.reconcile();
     expect([...rocks.values()]).toEqual([]);
     expect(rewardStore.getState().placements).toHaveLength(1);
   });

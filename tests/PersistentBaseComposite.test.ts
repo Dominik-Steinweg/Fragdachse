@@ -284,25 +284,29 @@ describe('PersistentBaseComposite – erneuter Merge auf einer laufenden Welt', 
 });
 
 describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
-  const lifecycle = readFileSync(
-    resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-    'utf8',
-  );
+    const lifecycle = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const materializer = readFileSync(
+      resolve(process.cwd(), 'src/world/PersistentBaseWorldMaterializer.ts'),
+      'utf8',
+    );
 
   it('nimmt bereits materialisierte Zellen aus der statischen Kollision heraus', () => {
-    expect(lifecycle).toContain('isCellBlocked: (gridX, gridY) => !materializedCells.has(cellKey(gridX, gridY))');
+    expect(materializer).toContain('isCellBlocked: (gridX, gridY) => !materializedCells.has(cellKey(gridX, gridY))');
   });
 
   it('entmaterialisiert, was das Composite nicht mehr traegt, ohne den Besitz zu loeschen', () => {
     // Die Reihenfolge ist der ganze Unterschied: Erst die Bindung loesen, dann abbauen. Sonst
     // wertet der gemeinsame Abbaupfad die Verdraengung als Abriss und loescht den Blueprint.
-    expect(lifecycle).toContain('store.releaseRuntimeBinding(binding.runtimeId);');
-    const releaseAt = lifecycle.indexOf('store.releaseRuntimeBinding(binding.runtimeId);');
-    const removeAt = lifecycle.indexOf('const removed = this.ctx.placementSystem.removeRock(binding.runtimeId);');
+    expect(materializer).toContain('store.releaseRuntimeBinding(binding.runtimeId);');
+    const releaseAt = materializer.indexOf('store.releaseRuntimeBinding(binding.runtimeId);');
+    const removeAt = materializer.indexOf('const removed = this.options.placementSystem.removeRock(binding.runtimeId);');
     expect(releaseAt).toBeGreaterThanOrEqual(0);
     expect(removeAt).toBeGreaterThan(releaseAt);
     // Der Konfliktpfad benutzt den besitzneutralen Abbau, nicht den Abriss.
-    expect(lifecycle).toContain('this.releasePlaceableRuntime(removed, false);');
+    expect(materializer).toContain('this.options.releasePlaceableRuntime(removed, false);');
   });
 
   it('rechnet nach einem Austritt neu, damit Unterdruecktes zurueckkommt', () => {
@@ -310,7 +314,7 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
     const end = lifecycle.indexOf('\n  /** Gemeinsamer Entkopplungspfad', start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(lifecycle.slice(start, end)).toContain('this.hostRefreshPersistentBaseComposite();');
+    expect(lifecycle.slice(start, end)).toContain('this.reconcilePersistentBaseWorld();');
   });
 
   it('reconciled nach einer relevanten Live-Build-Aenderung ohne die Loadout-Dormancy aufzuweichen', () => {
@@ -319,19 +323,16 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
     expect(syncStart).toBeGreaterThanOrEqual(0);
     expect(syncEnd).toBeGreaterThan(syncStart);
     expect(lifecycle.slice(syncStart, syncEnd)).toContain(
-      'this.hostRefreshPersistentBaseCompositeForRelevantBuildChanges();',
+      'this.persistentBaseWorldBinding?.refreshForRelevantBuildChanges();',
     );
 
-    const refreshStart = lifecycle.indexOf(
-      '  private hostRefreshPersistentBaseCompositeForRelevantBuildChanges(): void {',
+    const refresh = materializer.slice(
+      materializer.indexOf('  refreshForRelevantBuildChanges(): void {'),
+      materializer.indexOf('\n  materializeRewardPlacement(', materializer.indexOf('  refreshForRelevantBuildChanges(): void {')),
     );
-    const refreshEnd = lifecycle.indexOf('\n  private materializePersistentBaseComposite(', refreshStart);
-    expect(refreshStart).toBeGreaterThanOrEqual(0);
-    expect(refreshEnd).toBeGreaterThan(refreshStart);
-    const refresh = lifecycle.slice(refreshStart, refreshEnd);
-    expect(refresh).toContain('capacityMax: this.getConstructionCapacity(playerId)');
-    expect(refresh).toContain('tools: this.buildPersistentRestoreTools(playerId)');
-    expect(refresh).toContain('if (changed) this.hostRefreshPersistentBaseComposite();');
+    expect(refresh).toContain('capacityMax: this.resolveCapacity(playerId)');
+    expect(refresh).toContain('tools: this.options.buildRestoreTools(playerId)');
+    expect(refresh).toContain('if (changed) this.reconcile();');
 
     // Die bestehende Zugriffsauflosung bleibt die Quelle fuer `active`; ein nicht ausgeruestetes
     // Werkzeug wird daher weiter als dormant behandelt und nicht pauschal materialisiert.

@@ -19,7 +19,7 @@ import { CoopDefenseObjectivePlacementRewardSystem } from '../systems/CoopDefens
 import { CoopDefenseObjectiveRepairSystem } from '../systems/CoopDefenseObjectiveRepairSystem';
 import { CoopDefenseRoundStateSystem } from '../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseSecondaryObjectiveSystem } from '../systems/CoopDefenseSecondaryObjectiveSystem';
-import type { CoopDefenseTeamBuffSystem } from '../systems/CoopDefenseTeamBuffSystem';
+import { CoopDefenseTeamBuffSystem } from '../systems/CoopDefenseTeamBuffSystem';
 import type { CoopMissionActivityConfiguration } from './CoopMissionActivityConfig';
 import type { CoopMissionObjectiveRuntime, CoopMissionRuntime } from './CoopMissionRuntime';
 import type { PlayerCapabilities } from '../world/PlayerCapabilities';
@@ -39,7 +39,6 @@ export interface CoopMissionObjectiveCompositionOptions {
   readonly combatSystem: CombatSystem;
   readonly powerUpSystem: PowerUpSystem | null;
   readonly loadoutManager: LoadoutManager | null;
-  readonly teamBuffSystem: CoopDefenseTeamBuffSystem | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
   readonly getSecondsLeft: () => number;
   readonly getConnectedPlayerIds: () => readonly string[];
@@ -130,7 +129,7 @@ export class CoopMissionObjectiveComposition {
           const config = objectives.find((entry) => entry.id === objectiveId);
           this.options.grantPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);
           const reward = config?.rewards?.teamBuffOnComplete;
-          if (reward) this.options.teamBuffSystem?.activate(reward, Date.now());
+          if (reward) runtime.coopDefenseTeamBuffSystem?.activate(reward, Date.now());
         },
         onHoldFailed: (objectiveId) => {
           runtime.coopDefenseObjectivePlacementRewardSystem?.cancel(objectiveId);
@@ -180,6 +179,7 @@ export class CoopMissionObjectiveComposition {
     const roundState = this.options.isHost && baseManager
       ? this.createRoundState(runtime, baseManager)
       : null;
+    const teamBuff = this.options.isHost ? new CoopDefenseTeamBuffSystem() : null;
     runtime.setObjectives({
       secondaryObjectives,
       missionProgress,
@@ -188,6 +188,7 @@ export class CoopMissionObjectiveComposition {
       repair,
       placementReward,
       roundState,
+      teamBuff,
     });
   }
 

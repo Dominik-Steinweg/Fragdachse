@@ -15,6 +15,7 @@ import type { CoopDefenseObjectivePlacementRewardSystem } from '../systems/CoopD
 import type { CoopDefenseObjectiveRepairSystem } from '../systems/CoopDefenseObjectiveRepairSystem';
 import type { CoopDefenseRoundStateSystem } from '../systems/CoopDefenseRoundStateSystem';
 import type { CoopDefenseSecondaryObjectiveSystem } from '../systems/CoopDefenseSecondaryObjectiveSystem';
+import type { CoopDefenseTeamBuffSystem } from '../systems/CoopDefenseTeamBuffSystem';
 import type { CoopDefensePersistentPressureSystem } from '../systems/CoopDefensePersistentPressureSystem';
 import type { CoopDefenseSpawnExecutor } from '../systems/CoopDefenseSpawnExecutor';
 import type { CoopDefenseTimebombSystem } from '../systems/CoopDefenseTimebombSystem';
@@ -91,6 +92,8 @@ export interface CoopMissionObjectiveRuntime {
   readonly placementReward: CoopDefenseObjectivePlacementRewardSystem | null;
   /** Host-autoritative Ermittlung von Sieg und Niederlage dieser Mission. */
   readonly roundState: CoopDefenseRoundStateSystem | null;
+  /** Round-local team reward buff; it must not survive an Activity change. */
+  readonly teamBuff: CoopDefenseTeamBuffSystem | null;
 }
 
 /** Was dieser Peer aus dem replizierten Missionsstand lokal darstellt. */
@@ -241,6 +244,9 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   }
   get coopDefenseObjectivePlacementRewardSystem(): CoopDefenseObjectivePlacementRewardSystem | null {
     return this.objectiveOwner?.placementReward ?? null;
+  }
+  get coopDefenseTeamBuffSystem(): CoopDefenseTeamBuffSystem | null {
+    return this.objectiveOwner?.teamBuff ?? null;
   }
   /**
    * Der activity-spezifische Spielerzustand dieser Mission.
@@ -427,6 +433,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.objectiveOwner?.repair?.reset();
     this.objectiveOwner?.secondaryObjectives?.reset();
     this.objectiveOwner?.missionProgress?.reset();
+    this.objectiveOwner?.teamBuff?.reset();
     this.objectiveOwner?.barriers?.destroy();
 
     // Abhaengige Directors und Behaviour-Systeme fallen vor Gegnern und Navigation.

@@ -4,6 +4,10 @@ import type {
 import { PersistentBaseRuntimeBindings } from '../persistentBase/PersistentBaseRuntimeBindings';
 import type { PersistentBaseAnchor } from '../persistentBase/PersistentBaseTypes';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
+import type { PersistentBaseRewardDefinition } from '../persistentBase/PersistentBaseRewardCatalog';
+import type { PersistentBaseRewardPlacement } from '../persistentBase/PersistentBaseRewardTypes';
+import type { SyncedPlaceableRock } from '../types';
+import type { PersistentBaseWorldMaterializer } from './PersistentBaseWorldMaterializer';
 
 /**
  * Die world-lokale Materialisierung der persistenten Basis.
@@ -45,6 +49,7 @@ export class PersistentBaseWorldBinding {
   private readonly constructionRuntimeBindings = new PersistentBaseRuntimeBindings();
   /** Bausignaturen, aus denen der aktuelle Composite dieser World entstanden ist. */
   private readonly compositeBuildSignatures = new Map<string, string>();
+  private materializer: PersistentBaseWorldMaterializer | null = null;
   private anchorValue: PersistentBaseAnchor | null = null;
   private buildAreaValue: PersistentBaseBuildArea | null = null;
   private destroyed = false;
@@ -78,6 +83,35 @@ export class PersistentBaseWorldBinding {
   get compositeSignatures(): Map<string, string> {
     return this.compositeBuildSignatures;
   }
+
+  setMaterializer(materializer: PersistentBaseWorldMaterializer | null): void {
+    if (this.destroyed) {
+      throw new Error('[PersistentBaseWorldBinding] Cannot attach a materializer to a destroyed binding');
+    }
+    if (materializer === this.materializer) return;
+    this.materializer?.destroy();
+    this.materializer = materializer;
+  }
+
+  reconcile(): void { this.materializer?.reconcile(); }
+  refreshForRelevantBuildChanges(): void { this.materializer?.refreshForRelevantBuildChanges(); }
+  finalizeWorldRuntimeObjects(): void { this.materializer?.finalizeWorldRuntimeObjects(); }
+  materializeRewardPlacement(
+    placement: PersistentBaseRewardPlacement,
+    definition?: PersistentBaseRewardDefinition,
+  ): SyncedPlaceableRock | null {
+    return this.materializer?.materializeRewardPlacement(placement, definition) ?? null;
+  }
+  releaseRewardRuntime(rewardId: PersistentBaseRewardId): void {
+    this.materializer?.releaseRewardRuntime(rewardId);
+  }
+  releasePersonalRuntimeForRewardConflict(runtimeId: number): void {
+    this.materializer?.releasePersonalRuntimeForRewardConflict(runtimeId);
+  }
+  relocateRewardRuntime(rewardId: PersistentBaseRewardId, runtime: SyncedPlaceableRock): void {
+    this.materializer?.relocateRewardRuntime(rewardId, runtime);
+  }
+  onRewardRemoved(rewardId: PersistentBaseRewardId): void { this.materializer?.onRewardRemoved(rewardId); }
 
   isDestroyed(): boolean {
     return this.destroyed;
@@ -117,10 +151,20 @@ export class PersistentBaseWorldBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.sink.finalizeRuntimeObjects();
-    for (const rewardId of [...this.rewardRuntimeBindings.keys()]) {
-      this.sink.releaseRewardRuntime(rewardId);
+    const materializer = this.materializer;
+    if (materializer) {
+      materializer.finalizeWorldRuntimeObjects();
+      for (const rewardId of [...this.rewardRuntimeBindings.keys()]) {
+        materializer.releaseRewardRuntime(rewardId);
+      }
+      materializer.destroy();
+    } else {
+      this.sink.finalizeRuntimeObjects();
+      for (const rewardId of [...this.rewardRuntimeBindings.keys()]) {
+        this.sink.releaseRewardRuntime(rewardId);
+      }
     }
+    this.materializer = null;
     this.rewardRuntimeBindings.clear();
     this.constructionRuntimeBindings.clear();
     this.compositeBuildSignatures.clear();

@@ -302,7 +302,8 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     );
     expect(source).toContain('activity: {');
     expect(source).toContain('worldRuntime.activity.attach(activity, runtime);');
-    expect(source).toContain('this.materializeCoopMissionActivityCompositions(');
+    expect(source).toContain('this.coopMissionComposition.materialize(');
+    expect(source).not.toContain('materializeCoopMissionActivityCompositions');
     expect(source).toContain('this.worldLifecycle.syncObservedActivity(bridge.getActivityDescriptor());');
     const teardownStart = source.indexOf('  tearDownArena(');
     const teardownEnd = source.indexOf('\n  /**', teardownStart);
@@ -405,6 +406,10 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       resolve(process.cwd(), 'src/activity/CoopMissionCombatComposition.ts'),
       'utf8',
     );
+    const activityComposition = readFileSync(
+      resolve(process.cwd(), 'src/activity/CoopMissionComposition.ts'),
+      'utf8',
+    );
     for (const constructor of [
       'new EnemyManager',
       'new FlowFieldCoordinator',
@@ -416,10 +421,25 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       expect(coordinator, `${constructor} leaked back into coordinator`).not.toContain(constructor);
       expect(composition).toContain(constructor);
     }
-    expect(composition).toContain('getBaseSpecs()');
-    expect(composition).toContain('getActiveBaseIds()');
+    expect(activityComposition).toContain('getBaseSpecs()');
+    expect(activityComposition).toContain('getActiveBaseIds()');
     expect(composition).toContain('releaseGridChanges');
     expect(composition).toContain('scene.game.events.off');
-    expect(coordinator).toContain('createCoopMissionCombatComposition(activityDescriptor, layout)');
+    expect(activityComposition).toContain('new CoopMissionCombatComposition');
+    for (const child of [
+      'new CoopMissionObjectiveComposition',
+      'new CoopMissionPlayerComposition',
+      'new CoopMissionEnemyBehaviourComposition',
+      'new CoopMissionEnemySupportComposition',
+      'new CoopMissionMapEventComposition',
+    ]) {
+      expect(activityComposition).toContain(child);
+    }
+    expect(coordinator).toContain('this.coopMissionComposition.createCombatComposition(activityConfiguration, layout)');
+    expect(coordinator).not.toContain('new CoopMissionEnemyBehaviourComposition(');
+    expect(coordinator).not.toContain('new CoopMissionEnemySupportComposition(');
+    expect(coordinator).not.toContain('new CoopMissionMapEventComposition(');
+    expect(coordinator).not.toContain('new CoopMissionPlayerComposition(');
+    expect(coordinator).not.toContain('new CoopMissionObjectiveComposition(');
   });
 });
