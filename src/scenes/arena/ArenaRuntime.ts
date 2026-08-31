@@ -94,24 +94,34 @@ export class ArenaRuntime {
     this.flow.updateWorldRuntime(deltaMs);
   }
 
-  /** Die autoritative Host-Frame-Phase dieser World. */
-  runHostFrame(deltaMs: number): void {
+  /**
+   * Der raumlanglebige Anteil dieses Frames.
+   *
+   * Er haengt am Raum und nicht an World, Activity oder Rundenphase: Jeder Peer bietet seinen
+   * persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm bestaetigt hat. Welche
+   * raumlanglebigen Owner das betrifft, entscheidet dieser Top-Level-Owner - nicht die Scene.
+   */
+  syncRoomOwners(): void {
+    this.persistentBase.syncPersistentBaseContributions();
+    this.persistentBase.syncPersistentBaseRewards();
+  }
+
+  /**
+   * Die autoritative Host-Frame-Phase dieser World; liefert den Abschluss der laufenden Activity.
+   *
+   * Der Frame-Owner fuehrt die Host-Phase aus und fragt danach genau einen benannten
+   * Activity-Schritt. Die *Anwendung* des Abschlusses bleibt bewusst beim Aufrufer: Sie beendet
+   * die World-Instanz, und die letzte Momentaufnahme dieser Runde muss davor entstehen.
+   */
+  runHostFrame(deltaMs: number, gameplayActive = false): CoopMissionOutcome | null {
     this.hostUpdate.runHostUpdate(deltaMs);
+    if (!gameplayActive) return null;
+    return this.flow.getActivityStep()?.hostResolveCompletion() ?? null;
   }
 
   /** Die darstellende Client-Frame-Phase dieser World. */
   runClientFrame(deltaMs: number): void {
     this.clientUpdate.runClientUpdate(deltaMs);
-  }
-
-  /**
-   * Benannter Activity-Schritt: Hat die laufende Activity ihren Abschluss erreicht?
-   *
-   * Der Frame-Owner kennt nur diese Frage. Wie sie beantwortet wird - Ziele, Gegner, Fortschritt -
-   * gehoert der Activity-Runtime.
-   */
-  resolveActivityCompletion(): CoopMissionOutcome | null {
-    return this.flow.getActivityStep()?.hostResolveCompletion() ?? null;
   }
 
   /** Debug-Eingriff auf die laufende Activity; ohne Activity passiert nichts. */

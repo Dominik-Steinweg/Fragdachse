@@ -92,7 +92,7 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     expect(clientUpdate.activityStepResolver).toBeTypeOf('function');
     // Ohne Activity gibt es keinen Schritt - und keinen Sonderpfad.
     expect(hostUpdate.activityStepResolver?.()).toBeNull();
-    expect(runtime.resolveActivityCompletion()).toBeNull();
+    expect(runtime.runHostFrame(16, true)).toBeNull();
     runtime.applyDebugBaseDamage(50);
 
     const step = {
@@ -102,9 +102,39 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     vi.spyOn(runtime.flow, 'getActivityStep').mockReturnValue(step as never);
     expect(hostUpdate.activityStepResolver?.()).toBe(step);
     expect(clientUpdate.activityStepResolver?.()).toBe(step);
-    expect(runtime.resolveActivityCompletion()).toBe('victory');
     runtime.applyDebugBaseDamage(50);
     expect(step.hostApplyDebugBaseDamage).toHaveBeenCalledWith(50);
+  });
+
+  it('fragt den Abschluss nur im laufenden Gameplay und wendet ihn nicht selbst an', () => {
+    const { runtime, hostUpdate } = createArenaRuntime();
+    const step = { hostResolveCompletion: vi.fn(() => 'defeat' as const) };
+    vi.spyOn(runtime.flow, 'getActivityStep').mockReturnValue(step as never);
+    const completeRound = vi.spyOn(runtime.flow, 'hostCompleteRound').mockImplementation(() => {});
+
+    // Ohne laufendes Gameplay läuft nur die Host-Phase; der Abschluss wird nicht gefragt.
+    expect(runtime.runHostFrame(16)).toBeNull();
+    expect(hostUpdate.runHostUpdate).toHaveBeenCalledWith(16);
+    expect(step.hostResolveCompletion).not.toHaveBeenCalled();
+
+    // Im laufenden Gameplay liefert der Frame-Owner den Abschluss zurück, wendet ihn aber nicht
+    // an: Die letzte Momentaufnahme der Runde entsteht beim Aufrufer davor.
+    expect(runtime.runHostFrame(16, true)).toBe('defeat');
+    expect(step.hostResolveCompletion).toHaveBeenCalledTimes(1);
+    expect(completeRound).not.toHaveBeenCalled();
+  });
+
+  it('taktet die raumlanglebigen Owner selbst', () => {
+    const { runtime } = createArenaRuntime();
+    const contributions = vi.spyOn(runtime.persistentBase, 'syncPersistentBaseContributions')
+      .mockImplementation(() => {});
+    const rewards = vi.spyOn(runtime.persistentBase, 'syncPersistentBaseRewards')
+      .mockImplementation(() => {});
+
+    runtime.syncRoomOwners();
+
+    expect(contributions).toHaveBeenCalledTimes(1);
+    expect(rewards).toHaveBeenCalledTimes(1);
   });
 
   it('taktet die World-Runtime ueber den Frame-Owner und laesst die Phasen ihre Arbeit tun', () => {
@@ -137,11 +167,29 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     // Die Scene ruft nur noch den Frame-Owner.
     expect(scene).toContain('this.arenaRuntime.update(delta);');
     expect(scene).toContain('this.arenaRuntime.runHostFrame(delta);');
+    expect(scene).toContain('this.arenaRuntime.runHostFrame(delta, gameplayActive)');
     expect(scene).toContain('this.arenaRuntime.runClientFrame(delta);');
-    expect(scene).toContain('this.arenaRuntime.resolveActivityCompletion()');
     expect(scene).not.toContain('setActivityStepResolver');
     expect(scene).not.toContain('this.hostUpdate.runHostUpdate(');
     expect(scene).not.toContain('this.clientUpdate.runClientUpdate(');
+  });
+
+  it('laesst die Scene keinen Top-Level-Owner der ArenaRuntime selbst takten', () => {
+    const scene = read(SCENE_PATH);
+    // Der raumlanglebige Persistent-Base-Owner wird vom Frame-Owner getaktet; die Scene bestimmt
+    // nur noch die Frame-Position.
+    expect(scene).toContain('this.arenaRuntime.syncRoomOwners();');
+    expect(scene).not.toContain('persistentBase.syncPersistentBase');
+    // Vorschau, Radial und RPC duerfen den Owner weiterhin fragen - das ist keine Taktung.
+    for (const drivenWork of [
+      'persistentBase.applyRoundOutcome',
+      'persistentBase.applyRoundConclusion',
+      'persistentBase.reconcilePersistentBaseWorld',
+      'persistentBase.rollbackPersistentBaseMissionIfActive',
+      'persistentBase.useWorldRuntimes',
+    ]) {
+      expect(scene, drivenWork).not.toContain(drivenWork);
+    }
   });
 });
 

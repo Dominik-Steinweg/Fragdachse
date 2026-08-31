@@ -1881,8 +1881,7 @@ export class ArenaScene extends Phaser.Scene {
     if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
-    this.arenaRuntime.persistentBase.syncPersistentBaseContributions();
-    this.arenaRuntime.persistentBase.syncPersistentBaseRewards();
+    this.arenaRuntime.syncRoomOwners();
     this.lifecycle.detectWorldChange(deferArenaExit);
     // Erst steht fest, welche World lokal laeuft - dann taktet ihre Runtime. Sie taktet nur die
     // eigenen Child-Owner; Rundenphase und Rolle entscheiden darueber nichts.
@@ -2161,11 +2160,10 @@ export class ArenaScene extends Phaser.Scene {
           && !countdownActive) {
           this.arenaRuntime.applyDebugBaseDamage(50);
         }
-        this.arenaRuntime.runHostFrame(delta);
-        const coopRoundOutcome = gameplayActive
-          ? this.arenaRuntime.resolveActivityCompletion()
-          : null;
+        const coopRoundOutcome = this.arenaRuntime.runHostFrame(delta, gameplayActive);
         if (coopRoundOutcome) {
+          // Die Momentaufnahme der Runde entsteht vor ihrem Abschluss: `hostCompleteRound()`
+          // beendet die World-Instanz, und danach gibt es weder Basen noch Spielerzustand.
           this.prepareCoopDefenseBalanceRound(coopRoundOutcome);
           this.lifecycle.hostCompleteRound(coopRoundOutcome);
         } else if (!isCoopDefenseMode(configuredGameMode) && !countdownActive && secs <= 0) {

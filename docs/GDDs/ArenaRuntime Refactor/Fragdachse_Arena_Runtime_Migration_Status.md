@@ -37,7 +37,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 **Aktive Phase:** `10C – Arena Flow / Frame / Top-Level Composition abgeschlossen`
 **Gesamtstatus:** `Phasen 1–10 abgeschlossen; Checkpoints A/B/C automatisiert abgeschlossen; Phase-9-Baseline vom User manuell erfolgreich geprüft; die manuelle Checkpoint-C-Abnahme steht aus.`
-**Letzter Integrations-Checkpoint:** `Checkpoint C nach 10C: npm run check grün (332 Testdateien, 2.809 Tests, Build ok); manuelle Browserprüfung bleibt User-Aufgabe.`
+**Letzter Integrations-Checkpoint:** `Checkpoint C nach 10C: npm run check grün (332 Testdateien, 2.812 Tests, Build ok); manuelle Browserprüfung bleibt User-Aufgabe.`
 **Nächster Schritt:** `Phase 11 – ArenaContext-/Dependency-Cutover`; erst nach der manuellen Checkpoint-C-Abnahme beginnen.
 
 | Phase | Status | Kurznotiz |
@@ -127,7 +127,7 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | Phase-10C: 332 Testdateien, 2.809 Tests bestanden, 15 übersprungen; Build mit 637 transformierten Modulen erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `npm run check` | grün | Phase-10C: 332 Testdateien, 2.812 Tests bestanden, 15 übersprungen; Build mit 637 transformierten Modulen erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
 | `git diff --check` | grün | Phase-10C-Stand ohne Whitespace-Fehler. |
 | Browser-/Sichtprüfung | ⬜ ausstehend | Zuletzt erfolgreich auf dem Phase-9-Stand (31.08.2026). Die Checkpoint-C-Abnahme gegen diese Baseline steht aus; Coding-KIs führen sie nicht selbst aus. |
 
@@ -171,11 +171,14 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   materialisiert keinen Gameplay-Graphen mehr.
 
 **Endgültige Top-Level-Owner nach Phase 10C:**
-- `src/scenes/arena/ArenaRuntime.ts` (121 LOC) – scene-langlebiger Top-Level-Owner: er besitzt den
-  Flow und den raumlanglebigen Persistent-Base-Owner, taktet die World-Runtime (`update`), treibt
-  die beiden Frame-Phasen (`runHostFrame` / `runClientFrame`) und kennt von einer Activity nur ihre
-  benannten Schritte (`resolveActivityCompletion`, `applyDebugBaseDamage`, Step-Resolver für beide
-  Frame-Phasen). Kein Dependency-Container, kein Gameplay-State.
+- `src/scenes/arena/ArenaRuntime.ts` (131 LOC) – scene-langlebiger Top-Level-Owner: er besitzt den
+  Flow und den raumlanglebigen Persistent-Base-Owner und taktet beide selbst – die World-Runtime
+  über `update()`, die raumlanglebigen Owner über `syncRoomOwners()`. Er treibt die beiden
+  Frame-Phasen (`runHostFrame` / `runClientFrame`) und kennt von einer Activity nur ihre benannten
+  Schritte (Abschlussermittlung im Host-Frame, `applyDebugBaseDamage`, Step-Resolver für beide
+  Frame-Phasen). Die *Anwendung* eines Abschlusses bleibt beim Aufrufer, weil sie die
+  World-Instanz beendet und die letzte Momentaufnahme der Runde davor entstehen muss. Kein
+  Dependency-Container, kein Gameplay-State.
 - `src/scenes/arena/ArenaLifecycleCoordinator.ts` (3.197 LOC) – der Arena-Flow: World-/Activity-
   Identität und Übergänge, Readiness/Loading, Participation, Completion und Aufruf der
   `ResultApplication`, Lobby-/Next-World-Transitions, `WorldPresentationHandoff`, Exit-Presentation
@@ -195,12 +198,17 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   hält die gemeinsamen Weltabfragen (Bodenfreiheit, Hindernisschaden, Zielflächen).
 
 **Phase-10C-Ergebnis:**
-- LOC: `ArenaLifecycleCoordinator` 4.840 → 3.197; zusammen mit `ArenaRuntime` (121) liegt der Flow
-  bei **3.318 LOC** und damit im Zielbereich von ≤ 3.000–3.500. Aus dem Flow verschwanden die
+- LOC: `ArenaLifecycleCoordinator` 4.840 → 3.197; zusammen mit `ArenaRuntime` (131) liegt der Flow
+  bei **3.328 LOC** und damit im Zielbereich von ≤ 3.000–3.500. Aus dem Flow verschwanden die
   World-Gameplay-Composition (~500), die Persistent-Base-Management-Regeln (~1.000) und der
   manuelle Renderer-/Kontext-Teardown.
 - Kein neuer God-Composer: die größte Composition-Datei hat 206 LOC; die größte neue Klasse ist der
   Persistent-Base-Owner (Domain, keine Composition).
+- Frame-Grenze nachgezogen: Die Scene taktet keinen Top-Level-Owner der `ArenaRuntime` mehr selbst.
+  Sie bestimmt weiterhin die fachlich notwendige Frame-Position und bleibt Owner von Phaser, Input,
+  Presentation, HUD und Diagnostics; Vorschau-, Radial- und RPC-Pfade dürfen den
+  Persistent-Base-Owner weiterhin fragen. R-4 bleibt unverändert: Die Host-Phase läuft an
+  derselben Stelle, die Abschlussermittlung unmittelbar danach.
 - `tearDownArena()` ist owner-getrieben: Player, Activity und `WorldRuntime` fallen als Owner, die
   Renderer räumen ihren eigenen Bestand ab, und die 25 Compatibility-Projektionen im `ArenaContext`
   werden ausschließlich von ihren World-Ownern genullt (Vertrag in
@@ -382,7 +390,7 @@ Debt entsteht nicht.
   Pfad sollen sichtbar gegen diese Baseline verglichen werden.
 
 **Phase-10-GO/NO-GO – Ergebnis:**
-- LOC-Gate erfüllt: Flow (3.197) plus `ArenaRuntime` (121) liegen bei 3.318 LOC; Ziel war
+- LOC-Gate erfüllt: Flow (3.197) plus `ArenaRuntime` (131) liegen bei 3.328 LOC; Ziel war
   ≤ 3.000–3.500.
 - Keine Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/Train-Systemliste mehr im Flow,
   kein großer globaler manueller Teardown, kein neuer God-Composer (größte Composition-Datei
