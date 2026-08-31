@@ -1,7 +1,7 @@
 # Fragdachse – Arena Runtime Architecture
 
 **Status:** Verbindliche Zielarchitektur für das Arena-/World-/Activity-Refactoring  
-**Repository-Basis:** `Dominik-Steinweg/Fragdachse`, Branch `architecture-refactor-pre-phase3`
+**Repository-Basis:** `Dominik-Steinweg/Fragdachse`, Branch `main`, Rebaseline nach Phase 9 auf Commit `324fee4ae2952f12077f6053bd6119c8a7aa8eee`
 
 ## 1. Ziel
 
@@ -110,6 +110,41 @@ new SomeSystem(worldRuntime)
 new SomeSystem(sharedRuntimeServices)
 ```
 
+### 3.4 Lifetime-Ownership und Composition sind getrennte Verantwortungen
+
+Ein Runtime-Owner beantwortet **wer den entstandenen mutable State besitzt und wann er endet**. Die
+konkrete Erzeugung eines größeren Runtime-Graphs ist eine davon getrennte Composition-Aufgabe.
+
+Verbindlich:
+
+```text
+Flow / Lifecycle
+    ↓ fordert Instanz an
+konkrete Composition-Grenze
+    ↓ erzeugt und verdrahtet
+Runtime-Owner
+    ↓ besitzt State, Update-Vertrag und Teardown
+```
+
+Eine Composition-Grenze kann eine kleine Factory, ein Materializer, ein Builder oder eine bereits
+vorhandene konkrete Funktion sein. Der Klassenname ist nicht Teil des Vertrags. Eine neue Klasse
+entsteht nur, wenn der reale Aufbau dadurch lokaler und verständlicher wird.
+
+Beispiele für den Zielzustand:
+
+- World-Flow kennt `WorldDescriptor`, Readiness und Übergänge, aber nicht die konkrete Liste aus
+  Placement, Bases, Rock Registry, Light Occluders oder Shared-Service-Callbacks;
+- Coop-Flow kennt `ActivityDescriptor` und den Activity-Lifecycle, aber nicht die konkrete Liste aus
+  Flowfields, Encounter, Boss, Objectives und Enemy-Behaviour;
+- `PersistentBaseWorldBinding` besitzt seine world-lokale Runtime-Realisierung; Composite-/Reward-
+  Materialisierung und World-Konflikte dürfen nicht als fachfremde Flow-Logik verbleiben;
+- Shared-Service-Bindings werden als konkrete scoped Bindings erzeugt und vom passenden Runtime-
+  Owner wieder gelöst.
+
+Der Composer selbst besitzt keinen langlebigen Gameplay-State und wird nicht als Service Locator
+weitergereicht. Ein monolithischer `WorldComposer`, der nur den bisherigen God-Coordinator unter
+neuem Namen reproduziert, erfüllt dieses Ziel ausdrücklich nicht.
+
 ---
 
 ## 4. Runtime-Owner
@@ -156,6 +191,11 @@ Regeln:
 - direkte Referenzen und Callbacks auf Activity-Owner werden vor deren Teardown gelöst;
 - der Container selbst wird nicht als Dependency weitergereicht.
 
+`SharedRuntimeServices` ist ein **architektonischer Scope-Begriff**, keine Pflicht zu einem großen
+Container. Wenn konkrete World-/Activity-Bindings die reale Abhängigkeit klarer ausdrücken, sind
+sie einem neuen Sammelobjekt vorzuziehen. Insbesondere darf `ArenaContext` nicht lediglich unter
+einem neuen Namen reproduziert werden.
+
 ### 4.4 `WorldLifecycle`
 
 Besitzt World-Identität und Revision.
@@ -189,6 +229,11 @@ Typische direkte Ownership:
 Mutabler World-Gameplay-State überlebt die `WorldRuntime` nicht. Die einzige Ausnahme ist die
 lokale Darstellung, und sie überlebt nur über den ausdrücklichen Handoff aus 6.1 – nicht dadurch,
 dass ein Feld beim Teardown stehenbleibt.
+
+Die konkrete World-Composition darf aus `WorldRuntime` heraus an eine kleine Composition-Grenze
+delegiert werden, wenn der Aufbau viele konkrete Domain-Systeme verbindet. Diese Grenze erzeugt
+den Runtime-Graph; `WorldRuntime` bleibt dessen Lifetime-Owner und darf nicht zum Dependency-Bag
+für seine Consumer werden.
 
 ### 4.6 `WorldRuntimeContext`
 
@@ -252,6 +297,11 @@ Eine Coop-Mission kann unter anderem besitzen:
 - `ActivityPresentationBinding`.
 
 Eine neue Activity erzeugt keine neue globale Update-Liste und keine neuen Lifecycle-Sonderpfade in `ArenaScene`.
+
+Die konkrete Activity-Composition darf in einer activity-spezifischen Factory/Materializer-Grenze
+liegen. Für Coop bedeutet das insbesondere: Navigation/Flowfields, Encounter, Objectives,
+Enemy-Behaviour und Specials werden nicht im globalen Flow materialisiert. Der `ActivityRuntimeHost`
+kennt weiterhin nur den Lifecycle-Vertrag der fertigen Runtime.
 
 ---
 
@@ -432,6 +482,11 @@ World-lokale Materialisierung:
 
 Stirbt vollständig mit der WorldRuntime. Die RoomSession darf weiterleben.
 
+Die zugehörige world-lokale Materialisierungslogik – insbesondere Composite-/Reward-Realisierung,
+Runtime-Bindings und Konfliktbehandlung – liegt am Binding oder an einem unmittelbar von diesem
+Scope besessenen konkreten Collaborator. Der Top-Level-Flow darf diese PB-Details nicht selbst
+implementieren.
+
 ---
 
 ## 8. Activity Completion und Result Application
@@ -503,17 +558,38 @@ Nicht Bestandteil dieses Refactorings:
 
 ### Update
 
+Ownership bestimmt **wer die Update-Semantik eines Scopes besitzt**. Sie erzwingt nicht, dass jede
+Runtime mit genau einem beliebigen `update()` an irgendeiner Frame-Stelle vollständig simuliert
+werden kann.
+
+Standardfall:
+
 ```text
 ArenaRuntime.update()
 └── direkte Top-Level-Owner
 
 WorldRuntime.update()
 └── world-scoped Child-Owner
-    └── ActivityRuntimeHost
-
-ActivityRuntime.update()
-└── Activity-interne Child-Owner
 ```
+
+Für fachlich frame-positionierte Activity-Schritte gilt zusätzlich:
+
+```text
+ArenaRuntime / bestehender Frame-Owner
+    └── benannter Activity-Step an definierter Frame-Position
+            └── ActivityRuntime besitzt interne Reihenfolge und Child-Systeme
+```
+
+Das ist insbesondere für die aktuelle Coop-Simulation verbindlich: Netzwerk-Synchronisation,
+Countdown-/Gameplay-Gates, World-Anteile wie `decoySystem.hostUpdateLifecycle()` und Physik geben
+eine reale Frame-Position vor. Der globale Frame-Owner darf deshalb benannte Activity-Schritte wie
+`hostSimulationStep` oder `hostPrePhysicsStep` aufrufen, kennt aber **keine** Enemy-, Objective-,
+Navigation- oder sonstige interne Systemliste.
+
+`ActivityRuntime.update()` darf für eine Activity leer oder nur für generische Lifetime-Ticks
+zuständig sein, wenn ihre reale Simulation über solche benannten Schritte läuft. Entscheidend ist:
+Die Activity besitzt die Reihenfolge innerhalb ihres Schritts und eine neue Coop-Mechanik erzeugt
+keinen neuen globalen Update-Branch.
 
 Ein Parent tickt keine internen Systeme seiner Child-Owner einzeln.
 
@@ -559,6 +635,10 @@ Regeln:
 18. Mutabler World-Gameplay-State überlebt seine `WorldRuntime` nicht. Nur die World Presentation kann länger leben, und ausschließlich über den Handoff aus 6.1.
 19. Ein Activity-Attach materialisiert den vollständigen Runtime-Graph; Detach löst alle scoped Bindings und Referenzen vor den Child-Ownern.
 20. Ein sichtbarer Exit-Fade verlängert keine World-, Player- oder Enemy-Gameplay-Lifetime, sondern verwendet ausschließlich Presentation-Projektionen.
+21. Flow/Lifecycle entscheidet **wann** World oder Activity entsteht; konkrete Gameplay-Runtime-Graphs werden an fachlich passende Composition-Grenzen delegiert.
+22. Ein finaler Flow-Owner importiert oder materialisiert keine konkreten Enemy-, Objective-, Flowfield-, Persistent-Base-Composite-, Construction- oder Train-Systemlisten.
+23. Composition-Extraktion darf keinen neuen monolithischen Dependency-Bag erzeugen; Ziel ist Context Locality, nicht bloße Dateiverschiebung.
+24. Frame-positionierte Activity-Schritte sind zulässig, solange der Frame-Owner nur den benannten Activity-Vertrag kennt und die interne Reihenfolge beim Activity-Owner bleibt.
 
 ### Stop/Go-Regel
 
@@ -582,7 +662,9 @@ Das Refactoring ist architektonisch erfolgreich, wenn:
 - PB RoomSession einen World-Wechsel überlebt, WorldBinding nicht;
 - stale Completion-/Transaction-Daten keine Progression oder Commits auslösen;
 - Host-Simulation ohne lokale Presentation und Preview ohne WorldParticipation weiterhin möglich sind;
-- globale nullable Runtime-Felder und manuelle Teardown-/Update-Listen nicht mehr die primäre Lifecycle-Modellierung bilden.
+- globale nullable Runtime-Felder und manuelle Teardown-/Update-Listen nicht mehr die primäre Lifecycle-Modellierung bilden;
+- der Top-Level-Flow keine konkreten World-/Coop-/PB-/Construction-Systemgraphs mehr materialisiert;
+- große Composition-Blöcke nicht lediglich in einen neuen God-Composer verschoben wurden, sondern über kleine fachliche Grenzen lokal verständlich sind.
 
 Qualitative Context-Locality-Probe:
 

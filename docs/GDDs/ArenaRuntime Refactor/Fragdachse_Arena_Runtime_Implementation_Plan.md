@@ -88,14 +88,20 @@ Prüft zusätzlich:
 - keine offensichtlichen Activity-State-Leaks;
 - Activity Presentation folgt Activity-Lifetime.
 
-### Integrations-Checkpoint C – nach Phase 10
+### Integrations-Checkpoint C – nach Phase 10C
 
 Prüft zusätzlich:
 - Completion / Result Application;
 - Persistent-Base Commit / Rollback;
 - stale Revision / stale Completion;
 - übergeordnete World-/Activity-Transitions;
-- Lobby-Rückkehr.
+- Lobby-Rückkehr;
+- Matchstart, Match-Exit, Lobby-Fast-Reinstance und Lobby-Rückkehr behalten ihre Presentation-/Teardown-Reihenfolge;
+- `WorldPresentationHandoff` liegt am tatsächlichen Flow-Owner;
+- die Coop-Simulation behält ihre fachlich notwendige Frame-Position, ohne dass der Frame-Owner interne Missionssysteme kennt;
+- der verbleibende Flow materialisiert keine konkrete Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/Train-Systemliste;
+- der bisherige globale manuelle Arena-Teardown ist auf Owner-Teardown bzw. wenige echte Top-Level-Schritte reduziert;
+- alter Lifecycle-Coordinator plus eventueller neuer Flow liegen zusammen im Review-Zielbereich von höchstens ca. 3.000–3.500 LOC. Die Zahl ist ein Warn-Gate, kein Selbstzweck: Ein kleinerer Flow durch bloßes Verschieben in einen neuen God-Composer gilt nicht als Erfolg.
 
 ### Finaler Abnahme-Gate – nach Phase 12
 
@@ -426,41 +432,199 @@ Coop erzeugt ein fachliches Ergebnis. Nachgelagerte Owner entscheiden über dess
 
 ---
 
-## Phase 10 – Arena Flow und Top-Level-Composition ordnen
+## Phase 10 – Composition aus dem God-Coordinator lösen und echten Arena-Flow formen
 
-### Ziel
+### Ausgangslage / Decision Gate nach Phase 9
 
-Nach der Ownership-Migration die verbleibende übergeordnete Orchestrierung auf ihre tatsächliche Verantwortung reduzieren.
+Phase 10 startet **nicht** von einem bereits kleinen Flow-Owner. Auf dem Rebaseline-Stand
+`324fee4ae2952f12077f6053bd6119c8a7aa8eee` hat `ArenaLifecycleCoordinator.ts` 7.856 Zeilen und
+liegt gegenüber dem Pre-Refactor-Baseline-Commit `254f3c763ce1d58c35c138c2c14e59d8e6b84dbc`
+bei `+1317 / -669`, also netto **+648 Zeilen**.
 
-### Umsetzen
+Die bisherige Migration hat die Lifetime-/State-Ownership wesentlich verbessert, die konkrete
+Composition aber noch nicht ausreichend nachgezogen. Im Coordinator liegen weiterhin unter
+anderem:
 
-Zuerst Decision Gate:
-- prüfen, was vom `ArenaLifecycleCoordinator` übrig ist;
-- bestehenden Coordinator bevorzugt transformieren, wenn er bereits sauber zum Flow-Owner reduzierbar ist;
-- nur bei echtem Nutzen separaten `ArenaFlowCoordinator` erzeugen.
+- `buildWorld()` mit World-Geometrie, Placement, Bases, Presentation und umfangreichem Shared-Service-Wiring;
+- konkrete Coop-Materialisierung wie Navigation/Flowfields, Encounter, Objectives, Enemy-Behaviour und Specials;
+- Persistent-Base-Composite-/Reward-Materialisierung und World-Konfliktbehandlung;
+- Construction-/Inspector-/Dismantle-Gameplay-Pfade und weitere fachliche Helfer;
+- ein großer manueller `tearDownArena()`-Pfad;
+- Readiness, Participation, World-/Activity-Transitions und Presentation-Handoff, die tatsächlich Flow sind.
 
-Flow besitzt nur Übergangsreihenfolge:
-- World;
-- Activity;
-- Readiness;
+Deshalb wird Phase 10 in drei getrennte Implementierungsschritte mit je eigenem Commit und Review
+geteilt. Ein Schritt wird erst freigegeben, wenn er **alten globalen Code tatsächlich entfernt**;
+neue Owner oder Composer vor unverändertem God-Coordinator sind kein erfolgreicher Zwischenstand.
+
+### Phase 10A – World-Composition und world-scoped Bindings
+
+#### Ziel
+
+Den konkreten Aufbau einer World aus dem globalen Lifecycle-Flow lösen, ohne Phase 11
+(`ArenaContext`-/Dependency-Cutover) vorwegzunehmen.
+
+#### Umsetzen
+
+Aus `ArenaLifecycleCoordinator` herauslösen bzw. an eine kleine konkrete World-Composition-Grenze
+delegieren:
+
+- Auflösung des World-Runtime-Contexts und materialisierten World-Graphs;
+- `WorldMaterialization` mit Arena-Gameplay-Runtime, Placement, Bases, Rocks und world-lokalen Indizes;
+- `WorldPresentationBinding`-Erzeugung bzw. Adoption einer vorhandenen Presentation;
+- `PersistentBaseWorldBinding`-Anlage als Child der World;
+- `PlayerWorldRuntime`-Aufbaurezept, soweit es echte World-Composition ist;
+- world-scoped Bindings scene-langlebiger Systeme, einschließlich symmetrischem Detach;
+- die Teile des heutigen `tearDownArena()`, die durch `WorldRuntime.destroy()` bzw. ihre konkreten Bindings ersetzt werden können.
+
+Eine Composition-Grenze darf z. B. Factory/Materializer/Builder sein; der Name ist nicht
+vorgegeben. Sie besitzt keinen langlebigen Gameplay-State und wird nicht als Dependency-Bag an
+Consumer weitergereicht.
+
+`buildWorld()` muss am Ende entweder verschwunden oder auf eine kleine Flow-/Composition-
+Orchestrierung reduziert sein. Der Flow darf nicht selbst wissen, wie Placement, Bases, Rock
+Registry, Light Occluders oder konkrete Shared-Service-Callbacks aufgebaut werden.
+
+#### Bewusst noch erlaubt
+
+- bestehende `ArenaContext`-Compatibility-Felder und Getter, solange ihre Source of Truth die neuen
+  Owner bleiben – Entfernung folgt in Phase 11;
+- vorhandene Network-/RPC-Adapter;
+- activity-spezifische Composition, soweit sie erst in 10B verschoben wird.
+
+#### Nicht tun
+
+- keinen universellen `WorldComposer` als neuen God-Container bauen;
+- keine Gameplay-Regeln ändern;
+- keine Wire-/Authority-/Tickrate-Änderungen;
+- Phase-11-Context-Cutover nicht nebenbei vollständig durchführen.
+
+#### 10A-Gate
+
+- neuer World-Code wird an World-Ownern/Composition-Grenzen lokal verständlich;
+- World-Teardown folgt überwiegend den tatsächlichen Ownern statt einer globalen Reset-Liste;
+- der Coordinator verliert netto deutlich Code; reine Wrapper-Extraktion ohne Löschung des alten
+  Aufbaus ist nicht ausreichend;
+- R-2 (Presentation → PB-Finalisierung → World-Gameplay-Teardown) bleibt unverändert geschützt.
+
+### Phase 10B – Activity-, Persistent-Base- und Gameplay-Composition
+
+#### Ziel
+
+Die großen fachlichen Runtime-Graphs aus dem globalen Coordinator entfernen, die bereits klare
+Lifetime-Owner besitzen oder einen konkreten Domain-Owner brauchen.
+
+#### Umsetzen
+
+**Coop-Activity:**
+- den gespeicherten realen Materialisierungspfad aus globalen Closures in eine konkrete
+  Coop-Composition-Grenze verschieben;
+- Navigation/Flowfields, Encounter/Spawn, Boss, Enemy-Behaviour, Enemy-Specials, Objectives,
+  PlayerActivityRuntime und Map-Event-Runtime dort erzeugen;
+- `CoopMissionRuntime` bleibt Lifetime-Owner; eine Factory/Materializer-Grenze baut den Graph, ohne
+  selbst zum langlebigen Runtime-Container zu werden;
+- A→B in derselben World materialisiert B weiterhin vollständig frisch.
+
+**Persistent Base / World:**
+- world-lokale Composite-/Reward-Materialisierung, Runtime-Bindings und Konfliktbehandlung aus dem
+  Flow lösen;
+- Verhalten an `PersistentBaseWorldBinding` oder einen unmittelbar von diesem World-Scope
+  besessenen konkreten Collaborator binden;
+- `PersistentBaseRoomSession` und `PersistentBaseTransaction` bleiben unverändert ihre jeweiligen
+  Sources of Truth.
+
+**Construction und weitere fachliche Composition:**
+- Construction-/Inspector-/Dismantle-/Repositioning-Gameplay nicht im Flow belassen;
+- Train-/Map-Event-/PowerUp-spezifische Composition dort lösen, wo sie tatsächlich World- oder
+  Activity-Domain ist;
+- scene-langlebige generische Systeme wie Combat/Projectiles/Physics/Fire nicht künstlich in eine
+  Activity verschieben; nur ihre scoped Bindings werden passend angebunden.
+
+#### Nicht tun
+
+- keine allgemeine Activity-Registry für hypothetische Modi;
+- keine neue generische Construction-/PB-/Train-Service-Locator-Schicht;
+- keine Phase-11-RPC-/Context-Portierung erzwingen, sofern sie für die Composition nicht nötig ist;
+- keine Gameplay-Balance oder fachliche Regeln ändern.
+
+#### 10B-Gate
+
+Der verbleibende Flow-/Lifecycle-Code importiert oder materialisiert keine konkrete Liste aus:
+- `EnemyManager` und Coop-Enemy-Systemen;
+- `FlowFieldCoordinator`/Enemy-Flowfield-Services;
+- Coop-Objectives/Encounter/Directors;
+- Persistent-Base-Composite-/Reward-Katalog- und Runtime-Materialisierung;
+- Construction-Definitionen und konkrete Placement-Regeln;
+- `TrainManager` oder konkrete Train-Event-Runtime.
+
+Eine neue Coop-Mechanik darf danach keinen neuen Materialisierungszweig im globalen Arena-Flow
+benötigen.
+
+### Phase 10C – Arena Flow, Frame-Position und Top-Level-Composition
+
+#### Ziel
+
+Erst nachdem die fachfremde Composition entfernt ist, den tatsächlich verbleibenden
+Top-Level-Owner formen.
+
+#### Decision Gate
+
+- bestehenden `ArenaLifecycleCoordinator` bevorzugt transformieren/reduzieren, wenn sein Rest
+  kohärent Flow ist;
+- nur bei echtem Nutzen separaten `ArenaFlowCoordinator` erzeugen;
+- `ArenaRuntime` nur dann als kleinen scene-langlebigen Top-Level-Composition-Owner einführen, wenn
+  er die nun real vorhandenen Top-Level-Owner bündelt; nie als neuen `ArenaContext`.
+
+#### Flow besitzt nur übergeordnete Orchestrierung
+
+- World Identity / World-Wechsel;
+- Activity Identity / Activity-Wechsel;
+- Readiness / Loading-Sequencing;
 - Participation;
-- Completion;
-- Result Application;
+- Completion und Aufruf von `ResultApplication`;
 - Lobby-/Next-World-Transition;
-- den in Phase 4 eingeführten `WorldPresentationHandoff`: Er gehört fachlich dem Owner der
-  Übergänge und wird hier von der Zwischenlösung am bestehenden Coordinator übernommen.
+- `WorldPresentationHandoff`;
+- Top-Level-Frame-Orchestrierung.
 
-Zusätzlich `ArenaRuntime` als kleinen Top-Level Composition Owner einführen, sofern dafür nun ein realer klarer Scope existiert.
+#### Frame-Position / RK-4
 
-### Nicht tun
+Die Coop-Simulation kann nicht korrekt in einen beliebigen `WorldRuntime.update()`-Zeitpunkt
+verschoben werden. Ihre reale Frame-Position nach Netzwerksync und innerhalb der bestehenden
+Countdown-/Gameplay-Gates bleibt erhalten.
+
+Phase 10C verschiebt daher die **Aufrufstelle** auf den zukünftigen Arena-Runtime-/Frame-Owner, ohne
+die interne Missionsreihenfolge wieder global zu machen:
+
+```text
+ArenaRuntime / Frame-Owner
+    ├ world-scoped Frame-Anteile
+    ├ benannter Activity-Step (`hostSimulationStep`, `hostPrePhysicsStep`, ...)
+    └ weitere globale Frame-Phasen
+```
+
+Der Frame-Owner kennt ausschließlich den benannten Activity-Vertrag. Welche Objectives,
+Flowfields oder Enemy-Systeme darin laufen, bleibt Eigentum der `CoopMissionRuntime`.
+
+#### Nicht tun
 
 - keine Gameplay-Regeln in den Flow;
-- `ArenaRuntime` nicht als neuen Service Locator verwenden;
-- keinen Wrapper nur wegen des Zielklassennamens erzeugen.
+- `ArenaRuntime` nicht als Service Locator verwenden;
+- keinen Wrapper nur wegen des Zielklassennamens erzeugen;
+- keine bereits korrekte Presentation-/Teardown-Reihenfolge umsortieren.
 
-### Endzustand
+#### 10C-Gate / Erfolgskriterium Phase 10
 
-Top-Level-Composition und Übergangsreihenfolge sind klar, ohne den alten God-Coordinator lediglich umzubenennen.
+Neben Checkpoint C gilt:
+
+- alter `ArenaLifecycleCoordinator` plus eventueller neuer Flow zusammen Ziel **≤ ca. 3.000–3.500 LOC**;
+- die LOC-Grenze ist ein Review-Warnsystem, kein Selbstzweck: ein 2.000-Zeilen-Flow plus 4.000-Zeilen-
+  God-Composer besteht das Gate nicht;
+- kein großer manueller globaler System-Teardown mehr;
+- `WorldPresentationHandoff` liegt am tatsächlichen Flow-Owner;
+- TD-2, TD-5 und TD-8 sind geschlossen;
+- Flow und ArenaRuntime kennen nur ihre echten Top-Level-Verantwortungen.
+
+Wenn diese Punkte nach einer ernsthaften 10A–10C-Umsetzung nicht erreichbar sind, Phase 11 **nicht**
+automatisch beginnen, sondern das Gesamtrefactoring erneut als GO/NO-GO bewerten.
 
 **Danach: Integrations-Checkpoint C.**
 
@@ -471,6 +635,10 @@ Top-Level-Composition und Übergangsreihenfolge sind klar, ohne den alten God-Co
 ### Ziel
 
 Die durch neue Owner gewonnene Ownership auch in echte Context Locality übersetzen.
+
+Phase 11 setzt voraus, dass Phase 10 die fachliche Composition bereits aus dem Flow entfernt hat.
+Sie ist **kein Ersatz für eine unvollständige Phase 10**: Hier werden Zugriffspfade und
+Compatibility abgebaut, nicht erst die großen World-/Activity-Graphs erfunden.
 
 ### Umsetzen
 
@@ -547,3 +715,17 @@ Nach Phase 12 gilt:
 8. Alle temporären Compatibility-Pfade sind entfernt oder als bewusst verbleibende Infrastruktur begründet.
 9. Die relevanten Multiplayer-, Lifecycle-, Persistence- und Leak-Regressionen sind grün.
 10. Eine zukünftige Activity wie From Dachs Till Dawn kann primär in eigenem Runtime-/Presentation-/Result-Scope implementiert werden.
+11. Der finale Flow materialisiert keine konkreten World-/Coop-/PB-/Construction-/Train-Systemlisten.
+12. Große Composition-Blöcke wurden nicht lediglich in neue God-Composer verschoben; typische Feature-Arbeit bleibt fachlich lokal.
+
+### Größen-/Locality-Review nach Phase 12
+
+Als **Review-Metrik**, nicht als Selbstzweck, gilt für den finalen Flow-/Lifecycle-Owner ein
+Zielbereich von ungefähr **1.200–2.000 LOC**. Ein kohärenter Owner darf darüber liegen, wenn seine
+Verantwortung tatsächlich zusammengehört; ab etwa **2.500 LOC** ist aber explizit zu begründen,
+warum weitere fachliche Zerlegung keinen Locality-Gewinn bringt. Umgekehrt ist ein künstliches
+Unterschreiten der Zahl durch Helper-/Forwarder-/God-Composer-Aufteilung kein Erfolg.
+
+Entscheidend bleibt die Architekturprobe: Eine typische Coop-, Enemy-, Persistent-Base- oder
+Construction-Änderung soll den Top-Level-Flow weder lesen noch ändern müssen, sofern sie keine
+echte Transition oder Top-Level-Policy betrifft.

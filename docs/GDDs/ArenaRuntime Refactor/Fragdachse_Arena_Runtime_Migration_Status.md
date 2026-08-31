@@ -35,10 +35,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `keine – Phase 9 abgeschlossen; Phase 10 nicht begonnen`
-**Gesamtstatus:** `Phasen 1–9 abgeschlossen; Integrations-Checkpoints A und B automatisiert abgeschlossen; manuelle Browser-Abnahme durch den User ausstehend (Prüfliste in Abschnitt 7)`
-**Letzter Integrations-Checkpoint:** `Checkpoint B; Phase 9 über npm run check abgeschlossen (Checkpoint C folgt nach Phase 10)`
-**Nächster Schritt:** User führt die manuelle Sichtprüfung aus; Phase 10 erst mit einem neuen Auftrag beginnen.
+**Aktive Phase:** `keine – Phase 9 abgeschlossen; Phase-10-Rebaseline dokumentiert; 10A nicht begonnen`
+**Gesamtstatus:** `Phasen 1–9 abgeschlossen; Checkpoints A/B automatisiert abgeschlossen; Phase-9-Baseline vom User manuell erfolgreich geprüft; Phase 10 ist in 10A/10B/10C neu gegliedert.`
+**Letzter Integrations-Checkpoint:** `Phase 9: npm run check grün plus erfolgreiche manuelle User-Abnahme; Checkpoint C folgt nach Phase 10C.`
+**Nächster Schritt:** `Phase 10A – World-Composition und world-scoped Bindings` auf neuem Auftrag umsetzen.
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -54,7 +54,9 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | – Checkpoint B | ✅ automatisiert abgeschlossen | Coop create/update/destroy, Activity-Wechsel in derselben World, `PlayerWorldRuntime` bleibt / `PlayerActivityRuntime` wird ersetzt, Activity-Presentation folgt der Activity-Lifetime. Browser-Sichtprüfung ist User-Abnahme. |
 | 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand, Player↔Owner-Bindungen, angenommene Contribution-Revisionsstände) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
 | 9 Completion / ResultApplication | ✅ abgeschlossen | `ActivityCompletion` bindet Coop-Result/Abort an World-/Activity-Revision. `ResultApplication` verwirft stale/doppelte Abschlüsse und besitzt Victory-Reward, Persistent-Base-Outcome sowie die Publikation an Progression/Statistik. |
-| 10 Flow / ArenaRuntime | ⬜ offen | Übernimmt den `WorldPresentationHandoff`. |
+| 10A World Composition | ⬜ offen | `buildWorld()` und world-scoped Bindings aus dem God-Coordinator lösen; Context-Compatibility darf bis Phase 11 bleiben. |
+| 10B Activity/PB/Gameplay Composition | ⬜ offen | Coop-Runtime-Graph, PB-World-Materialisierung sowie Construction-/weitere Domain-Composition aus dem globalen Flow lösen. |
+| 10C Flow / ArenaRuntime | ⬜ offen | Echten Flow formen, Handoff und Frame-Orchestrierung übernehmen; danach Checkpoint C und GO/NO-GO. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
 | 12 Legacy Removal | ⬜ offen | |
 
@@ -74,6 +76,7 @@ Nur temporäre Migrationspfade eintragen.
 | TD-5 | 4 | Der `WorldPresentationHandoff` liegt am `ArenaLifecycleCoordinator` statt am Flow-Owner. | `WorldPresentationHandoff` | Phase 10 |
 | TD-6 | 5 | Migrierte Enemy-/Encounter-/Boss-/Flowfield-Felder im `ArenaContext` sind gerichtete Compatibility-Fassaden für Scene und Renderer. Nur `syncCoopMissionCompatibilityBindings()` schreibt sie. | `CoopMissionRuntime` | Phase 11 |
 | TD-8 | 6 | Die Reihenfolge der Coop-Simulation gehört der `CoopMissionRuntime`; ihre **Frame-Position** liegt weiter bei `HostUpdateCoordinator`/`ClientUpdateCoordinator`/`ArenaScene`, die die benannten Schritte (`hostSimulationStep`, `hostPrePhysicsStep`, `hostCarrySnapshot`, `hostResolveCompletion`, `clientPresentationStep`) aufrufen. Kein Frame-Owner kennt noch ein Missionssystem. | `CoopMissionRuntime` | Phase 10 (zusammen mit TD-2) |
+| TD-9 | 9/Rebaseline | Lifetime-/State-Owner sind weitgehend vorhanden, aber große konkrete Composition liegt weiter im `ArenaLifecycleCoordinator`: `buildWorld()`, Coop-Materialisierung, PB-Composite/Reward-Runtime, Construction-/Train-/Shared-Service-Wiring und globaler Teardown. | `WorldRuntime` / `CoopMissionRuntime` / `PersistentBaseWorldBinding` plus fachliche Domain-Owner; Composition-Grenzen bauen nur den Graph. | Phase 10A/10B |
 
 `TD-3` ist mit Phase 4 entfallen: Der Gameplay-State wird nicht mehr über das Instanzende hinweg freigegeben.
 
@@ -97,9 +100,9 @@ führt das Feld bis Phase 11 als fachliches Request-Parameterfeld weiter.
 
 | ID | Bereich | Problem / Risiko | Relevanz für nächste Phase |
 |---|---|---|---|
-| R-2 | World-Teardown | Der Abbau hat eine Reihenfolge mit fachlichem Grund: Darstellung geht zuerst (Handoff), dann der Abschluss des persistenten Basisbestands (braucht lebende Bau-Runtime, darf keine Darstellung mehr sehen), dann die Bau-Runtime. `WorldRuntime.destroy()` hält sie; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. | Phase 10–11 dürfen diese Reihenfolge nicht umsortieren. |
-| R-4 | Host-Frame | Der Weltanteil `decoySystem.hostUpdateLifecycle()` steht seit Phase 6 **vor** dem Missionsschritt statt zwischen zwei Coop-Phasen; nur so ist die Activity-Reihenfolge zusammenhängend. Fachlich gleichwertig, weil ausschließlich die Navigation und die Kampfphase Köder und Tarnung lesen. Vertrag in `tests/HostUpdatePhaseContracts.test.ts`. | Phase 10–11: Weltanteil nicht wieder in die Activity-Reihenfolge einsortieren. |
-| R-5 | Exit-Fade | Player- und Enemy-Runtime fallen mit der World-Instanz. Das eingefrorene Entity-Bild muss deshalb **vor** `worldLifecycle.endInstance()` stehen; auf dem Host geschieht das in `hostCompleteRound`, auf dem Client in `beginArenaExitPresentation`. Wer eine neue Stelle einführt, an der eine World-Instanz endet, muss diese Reihenfolge mitführen. | Phase 10 übernimmt die Übergangsreihenfolge und damit diesen Vertrag. |
+| R-2 | World-Teardown | Der Abbau hat eine Reihenfolge mit fachlichem Grund: Darstellung geht zuerst (Handoff), dann der Abschluss des persistenten Basisbestands (braucht lebende Bau-Runtime, darf keine Darstellung mehr sehen), dann die Bau-Runtime. `WorldRuntime.destroy()` hält sie; Vertrag in `tests/WorldMaterializationOwnership.test.ts`. | Phase 10A–11 dürfen diese Reihenfolge nicht umsortieren. |
+| R-4 | Host-Frame | Der Weltanteil `decoySystem.hostUpdateLifecycle()` steht seit Phase 6 **vor** dem Missionsschritt statt zwischen zwei Coop-Phasen; nur so ist die Activity-Reihenfolge zusammenhängend. Fachlich gleichwertig, weil ausschließlich die Navigation und die Kampfphase Köder und Tarnung lesen. Vertrag in `tests/HostUpdatePhaseContracts.test.ts`. | Phase 10C–11: Frame-Position beibehalten; nur die Aufrufstelle darf wandern. |
+| R-5 | Exit-Fade | Player- und Enemy-Runtime fallen mit der World-Instanz. Das eingefrorene Entity-Bild muss deshalb **vor** `worldLifecycle.endInstance()` stehen; auf dem Host geschieht das im Completion-/Exit-Pfad, auf dem Client in `beginArenaExitPresentation`. Wer eine neue Stelle einführt, an der eine World-Instanz endet, muss diese Reihenfolge mitführen. | Phase 10C übernimmt die Übergangsreihenfolge und damit diesen Vertrag. |
 
 `R-1` ist mit Phase 4 entfallen: Die Reihenfolge ist keine Zeilenfolge mehr, sondern folgt aus der Ownership (siehe R-2).
 
@@ -114,9 +117,9 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | 328 Testdateien, 2769 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
-| `git diff --check` | grün | Keine Whitespace-Fehler. |
-| Browser-/Sichtprüfung | ausstehend – User-Abnahme | Von Coding-KIs gemäß Prüfregel nicht auszuführen. Prüfliste siehe Abschnitt 7. |
+| `npm run check` | grün | Phase-9-Stand: 328 Testdateien, 2769 Tests bestanden, 15 übersprungen; Build erfolgreich. Bekannte Font-Auflösungswarnungen sind nicht blockierend. |
+| `git diff --check` | grün | Phase-9-Stand ohne Whitespace-Fehler. |
+| Browser-/Sichtprüfung | ✅ erfolgreich | Phase-9-Baseline am 31.08.2026 vom User manuell erfolgreich geprüft. Coding-KIs führen diese Prüfung weiterhin nicht selbst aus. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -131,7 +134,8 @@ Coding-KIs tragen hier Änderungsbedarf ein, ändern aber die beiden kanonischen
 | RK-1 | Architektur 6.1 / Plan Phase 4, Checkpoint A, Phase 10 | Die World-Materialisierung teilt sich in mutablen Gameplay-State (fällt mit der Runtime) und Darstellung (überlebt Übergänge). | Presentation-Lifetime mit ausdrücklichem Transition-Handoff. | extern umgesetzt |
 | RK-2 | Plan Phase 4 → Phase 5 | Die heutige `FlowFieldCoordinator`-/Enemy-/Ally-/Boss-Navigation entsteht ausschließlich für Coop-Missionen und überlebt keinen Activity-Wechsel. Eine künftig echte activity-unabhängige World-Navigation bliebe dagegen world-scoped. | Aktuelle Coop-Navigation Phase 5 zuordnen; Phase 4 nur für nachweislich world-scoped Navigation formulieren. | extern umgesetzt |
 | RK-3 | Plan Phase 4 → Phase 7 | `PlayerWorldRuntime`-Detach entfernt die Player-Entity. Der Exit-Fade braucht dafür keinen längeren Gameplay-Owner, sondern eine getrennte Entity-Presentation. Die Ownership-Verschiebung bleibt dennoch Teil der Player-Lifetime-Trennung. | `PlayerWorldRuntime`-Ownership in Phase 7 verschieben; Exit-Darstellung schon vorher als reine Transition-Presentation absichern. | extern umgesetzt |
-| RK-4 | Plan Phase 6 / Phase 10, Architektur 10 | Die Coop-Simulation hat eine fachlich notwendige Frame-Position (nach Netzwerksync, innerhalb `gameplayActive`/`countdownActive`), die der heutige Runtime-Tick `ArenaScene.update() → updateWorldRuntime()` nicht trifft. Phase 6 konnte die Reihenfolge deshalb in den Activity-Owner verschieben, den Aufruf aber nicht in die Runtime-Kette. | Plan Phase 6 als "Reihenfolge und Systeme in den Activity-Owner" formulieren und die Aufrufstelle ausdrücklich Phase 10 (`ArenaRuntime.update()`, zusammen mit TD-2) zuordnen. | offen |
+| RK-4 | Plan Phase 6 / Phase 10C, Architektur 10 | Die Coop-Simulation hat eine fachlich notwendige Frame-Position nach Netzwerksync und innerhalb der Countdown-/Gameplay-Gates. `CoopMissionRuntime.update()` ist deshalb bewusst kein vollständiger Simulationsschritt; der Frame-Owner ruft benannte Activity-Schritte. | Architektur beschreibt jetzt frame-positionierte Activity-Steps; 10C verschiebt nur die Aufrufstelle auf den Arena-Runtime-/Frame-Owner, nicht die interne Missionsreihenfolge. | Dokument-Rebaseline umgesetzt; Code in 10C |
+| RK-5 | Architektur 3.4 / Plan Phase 10 | Nach Phase 9 besitzt der richtige Runtime-Owner häufig bereits den State, während der `ArenaLifecycleCoordinator` weiterhin den konkreten Runtime-Graph baut und verdrahtet. Dadurch ist der Coordinator mit 7.856 LOC größer als vor dem Refactor. | Lifetime-Ownership und Composition explizit trennen; Phase 10 in 10A World-Composition, 10B Activity/PB/Gameplay-Composition und 10C Flow/ArenaRuntime teilen. | Dokument-Rebaseline umgesetzt |
 
 Statuswerte: `offen` · `manuell geprüft` · `abgelehnt` · `extern umgesetzt`
 
@@ -147,10 +151,10 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 ## 7. Übergabe an die nächste KI
 
 **Aktuell relevant:**
-- Architektur-Dokument und Implementierungsplan: nur aktive Phase plus direkte Voraussetzungen lesen.
-- Transitional Debt TD-6/TD-8 sowie R-2/R-4/R-5 berücksichtigen; RK-2/RK-3 sind in den kanonischen Dokumenten synchronisiert, RK-4 ist offen.
-- Phase 10 findet den revisionsgebundenen `ActivityCompletion`- und `ResultApplication`-Pfad vor;
-  der Coordinator enthält nur noch dessen Infrastrukturadapter und die übergeordnete Transition.
+- Architektur-Dokument und Implementierungsplan wurden nach Phase 9 manuell rebaselined; Phase 10 besteht verbindlich aus 10A/10B/10C.
+- Transitional Debt TD-1/TD-2/TD-4/TD-5/TD-6/TD-8/TD-9 sowie R-2/R-4/R-5 berücksichtigen.
+- Phase 9 liefert `ActivityCompletion` und `ResultApplication`; deren fachliche Outcome-Anwendung ist aus dem Completion-Pfad getrennt.
+- **Nicht vom alten Statussatz täuschen lassen:** Der `ArenaLifecycleCoordinator` enthält weiterhin große World-/Activity-/PB-/Construction-Composition und ist noch kein nahezu fertiger Flow-Owner.
 
 **Owner-Landkarte nach Phase 4:**
 - `src/world/WorldRuntime.ts` – Slots: `materialization`, `presentation`, `persistentBase`, `activity`, plus `bind()` für world-scoped Bindings scene-langlebiger Systeme.
@@ -237,8 +241,19 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   `tests/ArenaRoundLifecycleContracts.test.ts` schützt Anwendung vor World-Ende und verbietet die
   direkten Coop-Folgen wieder in `hostCompleteRound`.
 
-**Noch beim Coordinator (Stoff der Phasen 10/11):** `persistentBaseVisualSite`,
-Team-Buff/Held-Action sowie die Flow-/Network-Adapter des ResultApplication-Owners.
+**Phase-10-Rebaseline des `ArenaLifecycleCoordinator`:**
+- aktueller Head `324fee4ae2952f12077f6053bd6119c8a7aa8eee`, Branch `main`;
+- 7.856 Zeilen; gegenüber Pre-Refactor `254f3c763ce1d58c35c138c2c14e59d8e6b84dbc`: `+1317 / -669` = netto **+648 LOC**;
+- weiterhin großer `buildWorld()`-Pfad mit World-Geometrie, Placement/Bases/Presentation, Shared-Service-Wiring und Activity-Anbindung;
+- konkrete Coop-Composition weiterhin global: Navigation/Flowfields, Encounter, Objectives, Enemy-Behaviour/Specials und Materialization-Steps;
+- PB-World-Verhalten weiterhin teilweise global: Composite-/Reward-Materialisierung, Restore-/Konfliktpfade;
+- Construction-/Inspector-/Dismantle-/Repositioning- sowie Train-/weitere Gameplay-Composition liegen weiterhin im Coordinator;
+- `tearDownArena()` enthält noch umfangreichen manuellen globalen Cleanup;
+- echte Flow-Verantwortungen sind ebenfalls vorhanden: Readiness/Loading, Participation, World-/Activity-Transition, Completion/ResultApplication-Adapter, Lobby-/Next-World-Transition und Presentation-Handoff.
+
+Diese Mischung ist der konkrete Grund für TD-9 und für die Aufteilung 10A/10B/10C. Ziel ist nicht,
+die 7.856 Zeilen lediglich in neue Großdateien zu verschieben, sondern die fachfremde Composition
+an kleine konkrete Grenzen zu delegieren und den verbleibenden Flow anschließend stark zu reduzieren.
 
 **Phase-8-Review Problem 3 (korrigiert):** `persistentBaseOwnerByPlayerId` und
 `ingestedContributionRevisions` waren fachlicher room-langlebiger State und liegen jetzt gemeinsam
@@ -265,37 +280,24 @@ das persönliche Feld samt `FlowFieldCoordinator`-Registrierung. Der individuell
 der Activity-Destroy sind idempotent; die bestehende Transitional Debt bleibt unverändert, neue
 Debt entsteht nicht.
 
-**Manuelle Browser-Prüfliste für den User:**
-- Host und Client: Matchstart aus der LobbyWorld; keine leere oder doppelte World;
-- Host und Client: Match-Exit und Lobby-Rückkehr; Exit-Fade zeigt World, Player und Gegner bis
-  zum Fade-Ende, ohne sichtbares vorzeitiges Verschwinden oder Nachsimulation;
-- Lobby-Fast-Reinstance bei Modus-/Map-/Persistent-Base-Änderung; Darstellung bleibt stabil,
-  Physics und Interaktion stammen aus der neuen World;
-- falls über Diagnose/Entwicklungsweg auslösbar: Coop-Activity A→B in derselben World; Gegner,
-  Navigation und Map-Events gehören ausschließlich zu B.
-- **Neu nach Phase 6 (Coop-Runde auf einer Map mit Missionsfortschritt, z. B. `advance`):**
-  Checkpoints lösen aus, Fortschrittsbarrieren öffnen auf Host und Client gleichzeitig und
-  blockieren vorher Weg, Schuss und Bauen; Nebenmissionen (Hold/Carry/Destroy) aktivieren sich,
-  ihre Belohnungen (Pedestal, Reparatur, Team-Buff) erscheinen; Sieg und Niederlage beenden die
-  Runde wie zuvor; Gegnerbewegung, Ausweichschritte und Boss-Verhalten unverändert.
-- **Neu nach Phase 8 (persistente Basis):** In der LobbyWorld gebaute und verschobene
-  Konstruktionen und Belohnungen bleiben nach Kartenwechsel und Neustart erhalten; ein
-  Missionssieg schreibt den Rundenstand fort, Niederlage und Abbruch verwerfen ihn und lassen
-  den Lobby-Stand unverändert; ein Gast, der den Raum verlässt und zurückkommt, bringt seinen
-  Beitrag wieder mit.
-- **Neu nach Phase 7 (Leben und Exit-Bild):** Auf einer Map mit Respawn-Budget (`survive`,
-  `advance`) zeigt die Lebensanzeige nach Tod und Respawn denselben Stand wie zuvor, der
-  Team-Wipe beendet die Runde weiterhin; Spieler, die während der Runde beitreten oder gehen,
-  verlieren keine Ziele und hinterlassen keine gehaltenen Traglasten. **Besonders wichtig:** Der
-  Exit-Fade muss auf **Host und Client** weiterhin Welt **und Spielfiguren** bis zum Fade-Ende
-  zeigen – der Host friert sein Bild jetzt schon beim Rundenabschluss ein.
-- **Neu nach Phase 9 (Missionsabschluss):** Sieg vergibt weiterhin authored Persistent-Base-
-  Rewards, committet den Rundenstand und verbucht XP/Unlocks/Statistik genau einmal; Niederlage
-  und Host-Abbruch rollen den Rundenstand zurück, wobei der Abbruch die bis dahin erspielten XP
-  weiterhin anzeigt. Danach Lobby-Rückkehr und Ergebnisanzeige auf Host und Client prüfen.
+**Manuelle Baseline vor Phase 10:**
+- Phase-9-Stand wurde am 31.08.2026 vom User erfolgreich im Browser getestet.
+- Diese erfolgreiche Baseline ist die Referenz für die große strukturelle Phase 10.
+- Nach 10C wird Checkpoint C erneut manuell geprüft; mindestens Matchstart, Match-Exit/Exit-Fade,
+  Lobby-Rückkehr, Lobby-Fast-Reinstance sowie ein repräsentativer Persistent-Base-Commit/Rollback-
+  Pfad sollen sichtbar gegen diese Baseline verglichen werden.
 
-**Nächste konkrete Aktion nach User-Abnahme:**
-`Phase 10 nur auf neuen Auftrag analysieren; Arena-Flow und Top-Level-Composition ordnen.`
+**Phase-10-GO/NO-GO:**
+- Nach 10C sollen alter Lifecycle-Coordinator plus eventueller neuer Flow zusammen im Zielbereich
+  von höchstens ca. 3.000–3.500 LOC liegen.
+- Wichtiger als die Zahl: keine konkrete Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/
+  Train-Systemliste im Flow, kein großer globaler manueller Teardown und kein neu entstandener
+  God-Composer.
+- Wird dieses Gate trotz ernsthafter 10A–10C-Umsetzung deutlich verfehlt, Phase 11 nicht automatisch
+  starten, sondern Gesamtrefactoring erneut bewerten.
+
+**Nächste konkrete Aktion:**
+`Phase 10A – World-Composition und world-scoped Bindings umsetzen; Phase 10B/10C nicht vorziehen.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`
