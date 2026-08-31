@@ -133,13 +133,11 @@ describe('CoopMissionRuntime – Ziele, Fortschritt und Abschluss', () => {
     };
 
     const first = new CoopMissionRuntime(descriptor(), () => { /* noop */ }, ports());
-    first.addMaterializationStep(recipe);
     recipe(first);
-    const blueprint = first.exportMaterialization();
     first.destroy();
 
     const second = new CoopMissionRuntime(descriptor(32), () => { /* noop */ }, ports());
-    second.materialize(blueprint);
+    recipe(second);
 
     expect(generation).toBe(2);
     expect(second.coopDefenseMissionProgressSystem).not.toBeNull();
@@ -223,12 +221,13 @@ describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
     'utf8',
   );
 
-  it('erzeugt die Ziele als Child-Owner der Activity und merkt den Aufbaupfad', () => {
-    expect(coordinator).toContain('const createMissionObjectives = (): CoopMissionObjectiveRuntime => {');
-    expect(coordinator).toContain('coopMissionRuntime.setObjectives(createMissionObjectives());');
-    expect(coordinator).toContain('runtime.setObjectives(createMissionObjectives());');
-    // Genau ein Writer: der Activity-Owner. Ein zweiter waere wieder Doppelbesitz.
-    expect([...coordinator.matchAll(/setObjectives\(/g)]).toHaveLength(2);
+  it('erzeugt die Ziele als Child-Owner der Activity ueber die Activity-Composition', () => {
+    const composition = readFileSync(
+      resolve(process.cwd(), 'src/activity/CoopMissionObjectiveComposition.ts'),
+      'utf8',
+    );
+    expect(coordinator).toContain('new CoopMissionObjectiveComposition(');
+    expect(composition).toContain('runtime.setObjectives({');
   });
 
   it('haelt die migrierten Missionssysteme aus dem ArenaContext heraus', () => {

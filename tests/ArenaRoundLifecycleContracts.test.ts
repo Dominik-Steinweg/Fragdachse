@@ -176,11 +176,14 @@ describe('arena round lifecycle contract', () => {
 
   it('bindet Map- und Objective-Rewards an den gemeinsamen host-autoritativen Grant-Pfad', () => {
     const source = read(COORDINATOR_PATH);
+    const objectiveComposition = read(
+      resolve(process.cwd(), 'src/activity/CoopMissionObjectiveComposition.ts'),
+    );
     expect(source).toContain('getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []');
     expect(source).toContain('grantPersistentBaseRewards: (rewardIds) => {');
     expect(source).toContain('this.grantAuthoredPersistentBaseRewards(rewardIds);');
-    expect(source).toContain(
-      'this.grantAuthoredPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);',
+    expect(objectiveComposition).toContain(
+      'this.options.grantPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);',
     );
 
     const helperStart = source.indexOf('  private grantAuthoredPersistentBaseRewards(');

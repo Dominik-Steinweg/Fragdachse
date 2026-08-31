@@ -141,8 +141,6 @@ export interface CoopMissionScopedBinding {
   readonly detach: () => void;
 }
 
-export type CoopMissionMaterializationStep = (runtime: CoopMissionRuntime) => void;
-
 /**
  * Lokale Realisierung genau einer Coop-Mission.
  *
@@ -162,7 +160,6 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   private objectiveOwner: CoopMissionObjectiveRuntime | null = null;
   private playerActivityOwner: CoopMissionPlayerRuntime | null = null;
   private scopedBindings: CoopMissionScopedBinding[] = [];
-  private materializationSteps: CoopMissionMaterializationStep[] = [];
   private destroyed = false;
   /** Die activity-interne Host-Reihenfolge; ohne Ports laeuft diese Mission nicht als Host. */
   private readonly hostUpdateOwner: CoopMissionHostUpdate | null;
@@ -314,22 +311,6 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     binding.attach(this);
   }
 
-  /** Merkt den echten Aufbaupfad eines Child-Owners fuer Activity-Wechsel in derselben World. */
-  addMaterializationStep(step: CoopMissionMaterializationStep): void {
-    this.claimEmptySlot('materialization step', null);
-    this.materializationSteps.push(step);
-  }
-
-  exportMaterialization(): readonly CoopMissionMaterializationStep[] {
-    return [...this.materializationSteps];
-  }
-
-  materialize(steps: readonly CoopMissionMaterializationStep[]): void {
-    this.claimEmptySlot('activity materialization', null);
-    for (const step of steps) step(this);
-    this.materializationSteps = [...steps];
-  }
-
   ensureAllyFlowField(playerId: string): void {
     if (this.destroyed) return;
     const coordinator = this.navigationOwner?.coordinator;
@@ -428,7 +409,6 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
 
     const scopedBindings = this.scopedBindings;
     this.scopedBindings = [];
-    this.materializationSteps = [];
     for (const binding of [...scopedBindings].reverse()) binding.detach();
     // Compatibility-Consumer sehen die Activity ab jetzt nicht mehr. Das geschieht vor dem
     // Entity-Teardown, damit kein Destroy-Callback ueber einen langlebigeren Service zurueckgreift.

@@ -640,6 +640,43 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(powerUps.getPedestalSnapshot()).toHaveLength(2);
   });
 
+  it('startet ein Activity-Podest am Activity-Zeitursprung und nicht beim Arena-Aufruf', () => {
+    vi.useFakeTimers();
+    try {
+      const activityStartTime = Date.now();
+      const layout = { powerUpPedestals: [], rocks: [], trees: [], tracks: [] } as any;
+      const powerUps = new PowerUpSystem(null as any, {
+        healToFull: vi.fn(),
+        addArmor: vi.fn(),
+        isAlive: vi.fn(() => true),
+        isBurrowed: vi.fn(() => false),
+        applyDamage: vi.fn(),
+        applyExplosionDamage: vi.fn(),
+      } as any, layout, {}, TEST_WORLD_METRICS);
+
+      const binding = powerUps.createActivityPedestalBinding([{
+        id: 'activity-timer',
+        baseId: 'base-a',
+        gridX: 10,
+        gridY: 8,
+        defId: 'HEALTH_PACK',
+        respawnMs: 30_000,
+        spawnOnArenaStart: false,
+      }], activityStartTime);
+      binding.attach();
+
+      vi.setSystemTime(activityStartTime + 29_999);
+      powerUps.update(0);
+      expect(powerUps.getPedestalSnapshot()[0]?.hasPowerUp).toBe(false);
+
+      vi.setSystemTime(activityStartTime + 30_000);
+      powerUps.update(0);
+      expect(powerUps.getPedestalSnapshot()[0]?.hasPowerUp).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not carry legacy home-base pedestals into the persistent core', () => {
     const map = getCoopDefenseMapConfig('6');
     const metrics = resolveCoopDefenseWorldMetrics(map.arenaWidthCells, map.arenaHeightCells);

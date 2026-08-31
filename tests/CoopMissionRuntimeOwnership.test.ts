@@ -7,7 +7,9 @@ import {
   type CoopMissionEnemySpecialRuntime,
   type CoopMissionEncounterRuntime,
   type CoopMissionNavigationRuntime,
+  type CoopMissionObjectiveRuntime,
 } from '../src/activity/CoopMissionRuntime';
+import type { CoopMissionPlayerRuntime } from '../src/activity/CoopMissionPlayerRuntime';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapEventDirector';
 import type { NecromancySystem } from '../src/systems/NecromancySystem';
@@ -174,22 +176,113 @@ describe('CoopMissionRuntime – konkrete Activity-Ownership', () => {
 
     const host = new ActivityRuntimeHost(21);
     const first = new CoopMissionRuntime(descriptor());
-    first.addMaterializationStep(recipe);
     recipe(first);
     bind(first, 'A');
     host.attach(descriptor(), first);
-    const blueprint = first.exportMaterialization();
 
     const second = new CoopMissionRuntime({ ...descriptor(), activityRevision: 32 });
     bind(second, 'B');
     host.attach({ ...descriptor(), activityRevision: 32 }, second);
-    second.materialize(blueprint);
+    recipe(second);
 
     expect(generation).toBe(2);
     expect(second.enemyManager).not.toBeNull();
     expect(calls).toContain('A:detach:enemy');
     expect(calls.indexOf('A:detach:enemy')).toBeLessThan(calls.indexOf('enemy:1:destroy'));
     expect(calls).toContain('B:attach:enemy');
+  });
+
+  it('trennt den vollstaendigen Activity-Graphen bei A -> B und entfernt A-Callbacks', () => {
+    const calls: string[] = [];
+    let activeCallback: string | null = null;
+    const host = new ActivityRuntimeHost(21);
+
+    const materialize = (runtime: CoopMissionRuntime, label: string) => {
+      const enemy = {
+        setLethalDamageGuard: () => {},
+        setEnemySpawnedCallback: () => {},
+        destroy: () => { calls.push(`${label}:enemy`); },
+        setVisualSink: () => {},
+      } as unknown as EnemyManager;
+      const navigation = {
+        coordinator: { destroy: () => { calls.push(`${label}:navigation`); } },
+        enemy: flowField(`${label}:flow-enemy`, calls),
+        player: flowField(`${label}:flow-player`, calls),
+        strategic: flowField(`${label}:flow-strategic`, calls),
+        boss: flowField(`${label}:flow-boss`, calls),
+        targetCatalog: clearable(`${label}:catalog`, calls),
+        strategicTarget: clearable(`${label}:strategic-target`, calls),
+        releaseGridChanges: () => { calls.push(`${label}:grid-listener`); },
+      } as unknown as CoopMissionNavigationRuntime;
+      const objectives = {
+        secondaryObjectives: resettable(`${label}:secondary`, calls),
+        missionProgress: resettable(`${label}:progress`, calls),
+        barriers: { destroy: () => { calls.push(`${label}:barriers`); } },
+        carry: { destroy: () => { calls.push(`${label}:carry`); } },
+        repair: resettable(`${label}:repair`, calls),
+        placementReward: resettable(`${label}:placement`, calls),
+        roundState: null,
+      } as unknown as CoopMissionObjectiveRuntime;
+
+      runtime.setEnemyManager(enemy);
+      runtime.setNavigation(navigation);
+      runtime.setEncounter({
+        spawnExecutor: {},
+        persistentPressure: resettable(`${label}:pressure`, calls),
+        boss: resettable(`${label}:boss`, calls),
+        director: resettable(`${label}:director`, calls),
+      } as unknown as CoopMissionEncounterRuntime);
+      runtime.setEnemyBehaviour({
+        trainAwareness: clearable(`${label}:train`, calls),
+        burrow: clearable(`${label}:burrow`, calls),
+        dodge: clearable(`${label}:dodge`, calls),
+        combatPositioning: clearable(`${label}:positioning`, calls),
+        ability: clearable(`${label}:ability`, calls),
+        attack: {},
+      } as unknown as CoopMissionEnemyBehaviourRuntime);
+      runtime.setEnemySpecials({
+        timebomb: clearable(`${label}:timebomb`, calls),
+        voidHunter: clearable(`${label}:void-hunter`, calls),
+      } as unknown as CoopMissionEnemySpecialRuntime);
+      runtime.setNecromancy({
+        setCorpseSink: () => {},
+        clear: () => { calls.push(`${label}:necromancy`); },
+      } as unknown as NecromancySystem);
+      runtime.setObjectives(objectives);
+      runtime.setPlayerActivity({
+        destroy: () => { calls.push(`${label}:player-activity`); },
+      } as unknown as CoopMissionPlayerRuntime);
+      runtime.setMapEventDirector(
+        resettable(`${label}:map-events`, calls) as unknown as CoopDefenseMapEventDirector,
+      );
+      runtime.bind({
+        attach: () => { activeCallback = label; },
+        detach: () => { if (activeCallback === label) activeCallback = null; },
+      });
+      return { enemy, navigation, objectives };
+    };
+
+    const first = new CoopMissionRuntime(descriptor());
+    const graphA = materialize(first, 'A');
+    host.attach(descriptor(), first);
+
+    const second = new CoopMissionRuntime({ ...descriptor(), activityRevision: 32 });
+    const graphB = materialize(second, 'B');
+    host.attach({ ...descriptor(), activityRevision: 32 }, second);
+
+    expect(graphB.enemy).not.toBe(graphA.enemy);
+    expect(graphB.navigation).not.toBe(graphA.navigation);
+    expect(graphB.objectives).not.toBe(graphA.objectives);
+    expect(first.enemyManager).toBeNull();
+    expect(first.flowFieldCoordinator).toBeNull();
+    expect(first.coopDefenseMissionProgressSystem).toBeNull();
+    expect(second.enemyManager).toBe(graphB.enemy);
+    expect(second.flowFieldCoordinator).toBe(graphB.navigation.coordinator);
+    expect(second.coopDefenseMissionProgressSystem).toBe(graphB.objectives.missionProgress);
+    expect(activeCallback).toBe('B');
+    expect(calls).toContain('A:enemy');
+    expect(calls).toContain('A:navigation');
+    expect(calls).toContain('A:map-events');
   });
 });
 
@@ -209,7 +302,7 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     );
     expect(source).toContain('activity: {');
     expect(source).toContain('worldRuntime.activity.attach(activity, runtime);');
-    expect(source).toContain('runtime.materialize(this.coopMissionMaterialization);');
+    expect(source).toContain('this.materializeCoopMissionActivityCompositions(');
     expect(source).toContain('this.worldLifecycle.syncObservedActivity(bridge.getActivityDescriptor());');
     const teardownStart = source.indexOf('  tearDownArena(');
     const teardownEnd = source.indexOf('\n  /**', teardownStart);
@@ -282,13 +375,13 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     expect(binding).toContain('this.ctx.trainManager?.destroy();');
     expect(binding).toContain('this.ctx.projectileManager.setTrainGroup(null);');
 
-    const mapEventFactory = source.slice(
-      source.indexOf('          const createMapEventDirector = () => {'),
-      source.indexOf('          const mapEventDirector = createMapEventDirector();'),
+    const mapEventComposition = readFileSync(
+      resolve(process.cwd(), 'src/activity/CoopMissionMapEventComposition.ts'),
+      'utf8',
     );
-    expect(mapEventFactory).toContain('this.setupCoopTrainEventHandler(trackCell.gridX)');
-    expect(mapEventFactory).toContain('createCoopDefenseAirstrikeEventHandler?.()');
-    expect(mapEventFactory).toContain('createCoopDefenseGroundHazardEventHandler?.()');
+    expect(mapEventComposition).toContain('new CoopDefenseTrainEventHandler');
+    expect(mapEventComposition).toContain('new CoopDefenseAirstrikeEventHandler');
+    expect(mapEventComposition).toContain('new CoopDefenseGroundHazardEventHandler');
 
     for (const system of [
       'Ak47StrategicTargetSystem',

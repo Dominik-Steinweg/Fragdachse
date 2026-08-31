@@ -7,10 +7,12 @@ import {
   type ResolvedCoopDefenseEnemyConfigs,
 } from '../config/coopDefenseEnemies';
 import type {
-  CoopDefenseMapBossConfig,
-  CoopDefenseMapObjective,
   ResolvedCoopDefenseMapEncounterConfig,
   ResolvedCoopDefenseMapPersistentSpawnConfig,
+} from '../config/coopDefenseMaps';
+import {
+  resolveCoopDefenseMapEncounterConfigs,
+  resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../config/coopDefenseMaps';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import type { LightingSystem } from '../effects/LightingSystem';
@@ -41,6 +43,7 @@ import type {
   CoopMissionNavigationRuntime,
   CoopMissionRuntime,
 } from './CoopMissionRuntime';
+import type { CoopMissionActivityConfiguration } from './CoopMissionActivityConfig';
 
 interface BaseStatePort {
   isDestroyed(): boolean;
@@ -48,7 +51,10 @@ interface BaseStatePort {
 
 export interface CoopMissionCombatCompositionOptions {
   readonly scene: Phaser.Scene;
+  /** Already validated against the current WorldDefinition; mapConfig is only its adapter. */
+  readonly activity: CoopMissionActivityConfiguration;
   readonly enemyConfigs: ResolvedCoopDefenseEnemyConfigs;
+  readonly humanPlayerCount: number;
   readonly worldMetrics: WorldMetrics;
   readonly layout: ArenaLayout;
   readonly isHost: boolean;
@@ -57,10 +63,6 @@ export interface CoopMissionCombatCompositionOptions {
   readonly getBase: (baseId: string) => BaseStatePort | null;
   readonly obstacleCellProvider: () => ReadonlyArray<{ gridX: number; gridY: number }>;
   readonly barrierCells: readonly { gridX: number; gridY: number }[];
-  readonly boss: CoopDefenseMapBossConfig | undefined;
-  readonly objective: CoopDefenseMapObjective;
-  readonly persistentSpawnConfigs: readonly ResolvedCoopDefenseMapPersistentSpawnConfig[];
-  readonly encounterConfigs: readonly ResolvedCoopDefenseMapEncounterConfig[];
   readonly nextGenerationId: () => number;
   readonly visualSink: EnemyVisualSink | null;
   readonly lighting: LightingSystem | null;
@@ -84,12 +86,21 @@ export class CoopMissionCombatComposition {
 
     const navigation = this.createNavigation();
     runtime.setNavigation(navigation);
+    const activity = this.options.activity.mapConfig;
+    const persistentSpawnConfigs = resolveCoopDefenseMapPersistentSpawnConfigs(
+      activity,
+      this.options.humanPlayerCount,
+    );
+    const encounterConfigs = resolveCoopDefenseMapEncounterConfigs(
+      activity,
+      this.options.humanPlayerCount,
+    );
     if (
-      this.options.persistentSpawnConfigs.length > 0
-      || this.options.encounterConfigs.length > 0
-      || this.options.boss !== undefined
+      persistentSpawnConfigs.length > 0
+      || encounterConfigs.length > 0
+      || activity.boss !== undefined
     ) {
-      runtime.setEncounter(this.createEncounter(runtime, navigation));
+      runtime.setEncounter(this.createEncounter(runtime, navigation, persistentSpawnConfigs, encounterConfigs));
     }
   }
 
@@ -103,8 +114,8 @@ export class CoopMissionCombatComposition {
   }
 
   private createNavigation(): CoopMissionNavigationRuntime {
-    const bossConfig = this.options.boss
-      ? getCoopDefenseEnemyConfig(this.options.boss.enemyKind)
+    const bossConfig = this.options.activity.mapConfig.boss
+      ? getCoopDefenseEnemyConfig(this.options.activity.mapConfig.boss.enemyKind)
       : null;
     const bossClearanceCells = bossConfig
       ? Math.ceil(Math.max(0, bossConfig.size * 0.5 - CELL_SIZE * 0.5) / CELL_SIZE)
@@ -187,6 +198,8 @@ export class CoopMissionCombatComposition {
   private createEncounter(
     runtime: CoopMissionRuntime,
     navigation: CoopMissionNavigationRuntime,
+    persistentSpawnConfigs: readonly ResolvedCoopDefenseMapPersistentSpawnConfig[],
+    encounterConfigs: readonly ResolvedCoopDefenseMapEncounterConfig[],
   ): CoopMissionEncounterRuntime {
     const enemyManager = runtime.enemyManager;
     if (!enemyManager) {
@@ -199,30 +212,30 @@ export class CoopMissionCombatComposition {
       navigation.player,
       navigation.strategic,
     );
-    const persistentPressure = this.options.persistentSpawnConfigs.length > 0
+    const persistentPressure = persistentSpawnConfigs.length > 0
       ? new CoopDefensePersistentPressureSystem(
-        this.options.persistentSpawnConfigs,
+        persistentSpawnConfigs,
         spawnExecutor,
         this.options.getBaseSpecs(),
         this.options.getActiveBaseIds,
       )
       : null;
-    const bossSystem = this.options.boss
+    const bossSystem = this.options.activity.mapConfig.boss
       ? new CoopDefenseBossSystem(
-        this.options.boss,
+        this.options.activity.mapConfig.boss,
         enemyManager,
         spawnExecutor,
         this.options.onBossSpawned,
       )
       : null;
-    const mapDirector = this.options.encounterConfigs.length > 0
+    const mapDirector = encounterConfigs.length > 0
       ? new CoopDefenseMapDirector(
-        this.options.encounterConfigs,
+        encounterConfigs,
         (enemyKind, count, originId, front, spawnArea) => spawnExecutor
           .hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
         {
-          mode: this.options.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
-          showComplete: this.options.objective === 'repel-assault',
+          mode: this.options.activity.mapConfig.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
+          showComplete: this.options.activity.mapConfig.objective === 'repel-assault',
           isEnemyActive: (enemyId) => enemyManager.getEnemy(enemyId)?.sprite.active === true,
           isEncounterStartSatisfied: (start) => {
             switch (start.type) {

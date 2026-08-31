@@ -138,14 +138,12 @@ describe('Player-Lifetimes – World bleibt, Activity wird ersetzt', () => {
 
     const activityA = new CoopMissionRuntime(activityDescriptor(1));
     recipe(activityA);
-    activityA.addMaterializationStep(recipe);
     world.activity.attach(activityDescriptor(1), activityA);
-    const blueprint = activityA.exportMaterialization();
 
     calls.length = 0;
     const activityB = new CoopMissionRuntime(activityDescriptor(2));
     world.activity.attach(activityDescriptor(2), activityB);
-    activityB.materialize(blueprint);
+    recipe(activityB);
 
     expect(generation).toBe(2);
     expect(calls).toEqual([
@@ -250,11 +248,14 @@ describe('Phase 7 – Ownership im Koordinator', () => {
   });
 
   it('materialisiert den Missionsanteil der Spieler mit der Activity', () => {
-    expect(coordinator).toContain('const createMissionPlayerActivity = (activityRuntime: CoopMissionRuntime): CoopMissionPlayerRuntime => {');
-    expect(coordinator).toContain('coopMissionRuntime.setPlayerActivity(createMissionPlayerActivity(coopMissionRuntime));');
-    expect(coordinator).toContain('runtime.setPlayerActivity(createMissionPlayerActivity(runtime));');
+    const activityComposition = readFileSync(
+      resolve(process.cwd(), 'src/activity/CoopMissionPlayerComposition.ts'),
+      'utf8',
+    );
+    expect(coordinator).toContain('new CoopMissionPlayerComposition(');
+    expect(activityComposition).toContain('runtime.setPlayerActivity(playerActivity);');
     // Beim Wechsel in derselben World nimmt die neue Mission die stehende Besetzung auf.
-    expect(coordinator).toContain("for (const playerId of this.worldRuntime?.players?.attachedPlayerIds() ?? []) {");
+    expect(activityComposition).toContain("for (const playerId of this.options.playerWorldRuntime?.attachedPlayerIds() ?? []) {");
   });
 
   it('haelt Attach und Detach in der richtigen Reihenfolge', () => {
