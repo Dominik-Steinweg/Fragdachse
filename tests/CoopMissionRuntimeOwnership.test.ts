@@ -302,4 +302,31 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       expect(implementation).not.toContain('private readonly enemyManager: EnemyManager');
     }
   });
+
+  it('hält die konkrete 10B.2-Kampfkonstruktion in der Activity-Composition', () => {
+    const coordinator = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
+      'utf8',
+    );
+    const composition = readFileSync(
+      resolve(process.cwd(), 'src/activity/CoopMissionCombatComposition.ts'),
+      'utf8',
+    );
+    for (const constructor of [
+      'new EnemyManager',
+      'new FlowFieldCoordinator',
+      'new CoopDefenseSpawnExecutor',
+      'new CoopDefensePersistentPressureSystem',
+      'new CoopDefenseBossSystem',
+      'new CoopDefenseMapDirector',
+    ]) {
+      expect(coordinator, `${constructor} leaked back into coordinator`).not.toContain(constructor);
+      expect(composition).toContain(constructor);
+    }
+    expect(composition).toContain('getBaseSpecs()');
+    expect(composition).toContain('getActiveBaseIds()');
+    expect(composition).toContain('releaseGridChanges');
+    expect(composition).toContain('scene.game.events.off');
+    expect(coordinator).toContain('createCoopMissionCombatComposition(activityDescriptor, layout)');
+  });
 });

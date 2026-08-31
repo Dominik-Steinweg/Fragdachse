@@ -16,6 +16,7 @@ import { ArenaGenerator, resolveArenaGenerationInput } from '../src/arena/ArenaG
 import {
   resolveCoopDefenseActivityBaseOverlays,
   resolveCoopDefenseActivityBases,
+  type BasePowerUpPedestalSpec,
   type BaseActivityOverlay,
   type BaseSpec,
 } from '../src/arena/BaseRegistry';
@@ -569,6 +570,74 @@ describe('Coop-Defense dormant mission structures', () => {
     expect(powerUps.getPedestalSnapshot()).toHaveLength(1);
     powerUps.activatePedestalsLinkedToBase('dormant-outpost');
     expect(powerUps.getPedestalSnapshot()).toHaveLength(1);
+  });
+
+  it('bindet Activity-Podeste frisch und schützt die neue Bindung vor altem Detach', () => {
+    let activeBases = new Set<string>();
+    const activityPedestal = (id: string, baseId: string, gridX: number): BasePowerUpPedestalSpec => ({
+      id,
+      baseId,
+      gridX,
+      gridY: 8,
+      defId: 'HEALTH_PACK',
+      respawnMs: 1_000,
+      spawnOnArenaStart: false,
+    });
+    const layout = {
+      powerUpPedestals: [{
+        id: 7,
+        defId: 'HEALTH_PACK',
+        gridX: 12,
+        gridY: 8,
+        linkedBaseId: 'world-base',
+      }],
+      rocks: [],
+      trees: [],
+      tracks: [],
+    } as any;
+    const deps = {
+      healToFull: vi.fn(),
+      addArmor: vi.fn(),
+      isAlive: vi.fn(() => true),
+      isBurrowed: vi.fn(() => false),
+      applyDamage: vi.fn(),
+      applyExplosionDamage: vi.fn(),
+    } as any;
+    const powerUps = new PowerUpSystem(null as any, deps, layout, {
+      isLinkedBaseActive: (baseId) => activeBases.has(baseId),
+      includeActivityLinkedPedestals: false,
+    }, TEST_WORLD_METRICS);
+    expect(powerUps.getPedestalSnapshot()).toHaveLength(0);
+    expect(powerUps.registerConstructionPedestal(11, 'HEALTH_PACK', 100, 100)).toBe(true);
+    expect(powerUps.registerPersistentBaseRewardPedestal(
+      'base_health_pedestal',
+      'HEALTH_PACK',
+      200,
+      200,
+      1_000,
+      false,
+    )).toBe(true);
+
+    activeBases = new Set(['base-a']);
+    const bindingA = powerUps.createActivityPedestalBinding([
+      activityPedestal('a-pedestal', 'base-a', 10),
+    ]);
+    bindingA.attach();
+    expect(powerUps.getPedestalSnapshot()).toHaveLength(3);
+
+    activeBases = new Set(['base-b']);
+    const bindingB = powerUps.createActivityPedestalBinding([
+      activityPedestal('b-pedestal', 'base-b', 20),
+    ]);
+    bindingB.attach();
+    expect(powerUps.getPedestalSnapshot()).toHaveLength(3);
+    expect(powerUps.getPedestalSnapshot().some((pedestal) => pedestal.x === TEST_WORLD_METRICS.offsetX + 10 * 32 + 16)).toBe(false);
+    expect(powerUps.getPedestalSnapshot().some((pedestal) => pedestal.x === TEST_WORLD_METRICS.offsetX + 20 * 32 + 16)).toBe(true);
+
+    bindingA.detach();
+    expect(powerUps.getPedestalSnapshot()).toHaveLength(3);
+    bindingB.detach();
+    expect(powerUps.getPedestalSnapshot()).toHaveLength(2);
   });
 
   it('does not carry legacy home-base pedestals into the persistent core', () => {

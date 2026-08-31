@@ -3,6 +3,7 @@ import {
   CELL_SIZE,
   POWERUP_NET_FULL_SNAPSHOT_INTERVAL_TICKS,
 } from '../config';
+import type { BasePowerUpPedestalSpec } from '../arena/BaseRegistry';
 import type { ArenaLayout, ExplosionDamageTarget, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -95,6 +96,13 @@ interface PowerUpSystemOptions {
   getAdrenalineSyringeDurationMultiplier?: (playerId: string) => number;
   /** B2 gate for linked pedestals; unlinked pedestals remain unchanged. */
   isLinkedBaseActive?: (baseId: string) => boolean;
+  /** Production World-builds defer activity-linked pedestal registration to the Activity binding. */
+  includeActivityLinkedPedestals?: boolean;
+}
+
+export interface PowerUpActivityPedestalBinding {
+  readonly attach: () => void;
+  readonly detach: () => void;
 }
 
 // ── Helper: Gewichtungsbasierte Zufallsauswahl ─────────────────────────────
@@ -133,6 +141,9 @@ export class PowerUpSystem {
   private itemToPedestal = new Map<number, number>();
   private readonly constructionPedestalIds = new Map<number, number>();
   private readonly persistentRewardPedestalIds = new Map<PersistentBaseRewardId, number>();
+  private readonly activityPedestalIds = new Map<string, number>();
+  private readonly activityPedestalSpecs = new Map<string, BasePowerUpPedestalSpec>();
+  private activeActivityPedestalBinding: object | null = null;
   private nextDynamicPedestalId = 0;
   private nextUid     = 1;
   private nextNukeId  = 1;
@@ -220,6 +231,34 @@ export class PowerUpSystem {
       if (pedestal.linkedBaseId !== baseId) continue;
       this.removePedestal(pedestalId);
     }
+  }
+
+  /**
+   * Bindet die vertragliche Pedestal-Projektion genau einer Activity.
+   *
+   * Die Bindung ist tokenisiert: Ein verspätetes Detach der alten Activity kann die inzwischen
+   * gebundene Projektion nicht entfernen. Construction- und Persistent-Reward-Podeste bleiben
+   * außerhalb dieses Lifecycles und werden von diesem Pfad nicht berührt.
+   */
+  createActivityPedestalBinding(
+    specs: readonly BasePowerUpPedestalSpec[],
+  ): PowerUpActivityPedestalBinding {
+    const token = {};
+    return {
+      attach: () => {
+        if (this.activeActivityPedestalBinding === token) return;
+        this.detachActivityPedestalBinding(this.activeActivityPedestalBinding);
+        this.activeActivityPedestalBinding = token;
+        this.activityPedestalSpecs.clear();
+        for (const spec of specs) this.activityPedestalSpecs.set(spec.id, spec);
+        for (const spec of this.activityPedestalSpecs.values()) {
+          if (this.isLinkedBaseActive(spec.baseId)) this.addActivityPedestal(spec);
+        }
+      },
+      detach: () => {
+        this.detachActivityPedestalBinding(token);
+      },
+    };
   }
 
   setConstructionRespawnMultiplierProvider(provider: ((constructionId: number) => number) | null): void {
@@ -930,6 +969,10 @@ export class PowerUpSystem {
     for (const cell of this.layout.powerUpPedestals) {
       if (
         cell.linkedBaseId !== undefined
+        && this.options.includeActivityLinkedPedestals === false
+      ) continue;
+      if (
+        cell.linkedBaseId !== undefined
         && this.options.isLinkedBaseActive !== undefined
         && !this.options.isLinkedBaseActive(cell.linkedBaseId)
       ) continue;
@@ -940,7 +983,12 @@ export class PowerUpSystem {
 
   /** Registers linked pedestals when their dormant base becomes active. */
   activatePedestalsLinkedToBase(baseId: string): void {
+    for (const spec of this.activityPedestalSpecs.values()) {
+      if (spec.baseId !== baseId || this.activityPedestalIds.has(spec.id)) continue;
+      this.addActivityPedestal(spec);
+    }
     for (const cell of this.layout.powerUpPedestals) {
+      if (cell.linkedBaseId !== undefined && this.options.includeActivityLinkedPedestals === false) continue;
       if (cell.linkedBaseId !== baseId || this.pedestals.has(cell.id)) continue;
       this.addLayoutPedestal(cell);
       const pedestal = this.pedestals.get(cell.id);
@@ -949,6 +997,45 @@ export class PowerUpSystem {
         this.spawnPedestalItem(pedestal);
       }
     }
+  }
+
+  private isLinkedBaseActive(baseId: string): boolean {
+    return this.options.isLinkedBaseActive?.(baseId) ?? true;
+  }
+
+  private addActivityPedestal(spec: BasePowerUpPedestalSpec): void {
+    if (this.activityPedestalIds.has(spec.id)) return;
+    const def = POWERUP_DEFS[spec.defId];
+    const cfg = TIMED_POWERUP_PEDESTAL_CONFIGS[spec.defId];
+    if (!def || !cfg) return;
+
+    while (this.pedestals.has(this.nextDynamicPedestalId)) this.nextDynamicPedestalId += 1;
+    const pedestalId = this.nextDynamicPedestalId++;
+    this.pedestals.set(pedestalId, {
+      id: pedestalId,
+      def,
+      x: this.cellToWorldX(spec.gridX),
+      y: this.cellToWorldY(spec.gridY),
+      respawnMs: Math.max(1, Math.floor(spec.respawnMs ?? cfg.respawnMs)),
+      spawnOnArenaStart: spec.spawnOnArenaStart ?? cfg.spawnOnArenaStart,
+      linkedBaseId: spec.baseId,
+      currentUid: null,
+      nextRespawnAt: 0,
+    });
+    this.activityPedestalIds.set(spec.id, pedestalId);
+    this.pendingPedestalRemovalIds.delete(pedestalId);
+    const pedestal = this.pedestals.get(pedestalId);
+    if (pedestal && this.pedestalsActivated && pedestal.spawnOnArenaStart) {
+      this.spawnPedestalItem(pedestal);
+    }
+  }
+
+  private detachActivityPedestalBinding(token: object | null): void {
+    if (token === null || this.activeActivityPedestalBinding !== token) return;
+    this.activeActivityPedestalBinding = null;
+    for (const pedestalId of this.activityPedestalIds.values()) this.removePedestal(pedestalId);
+    this.activityPedestalIds.clear();
+    this.activityPedestalSpecs.clear();
   }
 
   private addLayoutPedestal(cell: ArenaLayout['powerUpPedestals'][number]): void {

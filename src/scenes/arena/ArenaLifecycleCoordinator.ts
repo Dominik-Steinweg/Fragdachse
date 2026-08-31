@@ -15,18 +15,6 @@ import { TurretSystem, type AutomatedTurretId } from '../../systems/TurretSystem
 import { BurrowSystem }      from '../../systems/BurrowSystem';
 import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { TunnelSystem } from '../../systems/TunnelSystem';
-import { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
-import {
-  ENEMY_FLOW_FIELD_IDS,
-  FlowFieldCoordinator,
-} from '../../systems/flowfield/FlowFieldCoordinator';
-import { createFlowFieldRunner } from '../../systems/flowfield/FlowFieldRunnerFactory';
-import {
-  buildBaseDescriptors,
-  buildStaticKindRaster,
-  createFlowFieldTuning,
-  resolveGridChange,
-} from '../../systems/flowfield/FlowFieldSources';
 import { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
@@ -35,8 +23,6 @@ import { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodge
 import { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
 import { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
 import { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
-import { EnemyStrategicTargetService, type PreparedStrategicTargets } from '../../systems/EnemyStrategicTargetService';
-import { EnemyAiTargetCatalog } from '../../systems/EnemyAiTargetCatalog';
 import { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
@@ -51,14 +37,10 @@ import { Ak47StrategicTargetSystem } from '../../systems/Ak47StrategicTargetSyst
 import { NecromancySystem } from '../../systems/NecromancySystem';
 import { CoopDefenseRoundStateSystem } from '../../systems/CoopDefenseRoundStateSystem';
 import { CoopDefenseRespawnBudgetSystem } from '../../systems/CoopDefenseRespawnBudgetSystem';
-import { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
-import { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
-import { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
 import {
   ArenaTimeOfDayController,
   type ArenaTimeOfDaySignals,
 } from '../../systems/ArenaTimeOfDayController';
-import { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
 import { CoopDefenseMapEventDirector, type CoopDefenseMapEventHandler } from '../../systems/CoopDefenseMapEventDirector';
 import { CoopDefenseGroundHazardEventHandler } from '../../systems/CoopDefenseGroundHazardEventHandler';
 import { CoopDefenseObjectiveRepairSystem } from '../../systems/CoopDefenseObjectiveRepairSystem';
@@ -98,7 +80,7 @@ import {
 } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -122,7 +104,6 @@ import {
   BASE_DESTRUCTION_GROUND_FIRE_DURATION_MS,
   getBaseDestructionBlast,
 } from '../../effects/BaseDestructionPlan';
-import { EnemyManager } from '../../entities/EnemyManager';
 import {
   CoopMissionRuntime,
   type CoopMissionActivityStep,
@@ -142,7 +123,8 @@ import {
 } from '../../activity/ActivityCompletion';
 import { ResultApplication } from '../../activity/ResultApplication';
 import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../../config/coopDefenseEnemies';
-import { ARENA_MAP_GRID_CHANGED_EVENT, emitArenaMapGridChanged, type ArenaMapGridChangedEvent } from './ArenaEvents';
+import { emitArenaMapGridChanged } from './ArenaEvents';
+import { CoopMissionCombatComposition } from '../../activity/CoopMissionCombatComposition';
 import {
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
   COOP_DEFENSE_CONSTRUCTION_IDS,
@@ -1001,8 +983,13 @@ export class ArenaLifecycleCoordinator {
     });
     this.attachCoopMissionBaseBinding(activity, runtime);
     this.syncCoopMissionCompatibilityBindings(runtime);
-    if (this.ctx.worldMaterialization?.arena && this.coopMissionMaterialization.length > 0) {
-      runtime.materialize(this.coopMissionMaterialization);
+    if (this.ctx.worldMaterialization?.arena) {
+      this.attachCoopMissionPowerUpBinding(activity, runtime);
+      const composition = this.createCoopMissionCombatComposition(activity);
+      if (composition) composition.materialize(runtime);
+      if (this.coopMissionMaterialization.length > 0) {
+        runtime.materialize(this.coopMissionMaterialization);
+      }
     }
   }
 
@@ -1035,6 +1022,105 @@ export class ArenaLifecycleCoordinator {
     runtime.bind({
       attach: () => { binding.attach(); },
       detach: () => { binding.detach(); },
+    });
+  }
+
+  /** Bindet die linked Pedestal-Projektion an die Activity, ohne World-Geometrie neu aufzubauen. */
+  private attachCoopMissionPowerUpBinding(
+    activity: ActivityDescriptor,
+    runtime: CoopMissionRuntime,
+  ): void {
+    if (activity.kind !== 'coop-mission') return;
+    const powerUpSystem = this.ctx.powerUpSystem;
+    const world = this.worldRuntime?.context;
+    const mapId = world?.definition?.sourceMapId
+      ?? (world ? toMapId(world.descriptor.definitionId) : null);
+    if (!powerUpSystem || !world || mapId === null) return;
+
+    const humanPlayerCount = Math.max(
+      1,
+      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
+    );
+    const overlays = resolveCoopDefenseActivityBaseOverlays(
+      getCoopDefenseMapConfig(mapId),
+      humanPlayerCount,
+      world.metrics,
+    );
+    const binding = powerUpSystem.createActivityPedestalBinding(
+      overlays.flatMap((overlay) => overlay.powerUpPedestals),
+    );
+    runtime.bind({
+      attach: () => { binding.attach(); },
+      detach: () => { binding.detach(); },
+    });
+  }
+
+  /**
+   * Baut die activity-nahe Kampf-Composition aus dem aktuellen World-Snapshot.
+   * Die Callback-Ports lesen absichtlich die aktuelle Base-Projektion; sie frieren keinen
+   * Activity-State aus dem World-Aufbau ein.
+   */
+  private createCoopMissionCombatComposition(
+    activity: ActivityDescriptor | null,
+    layoutOverride: ArenaLayout | null = null,
+  ): CoopMissionCombatComposition | null {
+    if (activity?.kind !== 'coop-mission') return null;
+    const world = this.worldRuntime?.context;
+    const layout = layoutOverride ?? this.ctx.currentLayout;
+    const arenaResult = this.ctx.arenaResult;
+    if (!world || !layout || !arenaResult) return null;
+    const mapId = world.definition?.sourceMapId
+      ?? toMapId(world.descriptor.definitionId);
+    if (mapId === null) return null;
+
+    const mapConfig = getCoopDefenseMapConfig(mapId);
+    const humanPlayerCount = Math.max(
+      1,
+      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
+    );
+    const missionProgressConfig = resolveCoopDefenseMapMissionProgress(mapConfig);
+    const baseManager = this.ctx.baseManager;
+    const obstacleCellProvider = () => {
+      const staticRockCells = layout.rocks.flatMap((rock, index) => {
+        const isActive = arenaResult.rockPhysicsProxies[index]?.active ?? false;
+        return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
+      });
+      const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
+        .filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none')
+        .map((rock) => ({ gridX: rock.gridX, gridY: rock.gridY }));
+      return [...staticRockCells, ...runtimeRockCells];
+    };
+
+    return new CoopMissionCombatComposition({
+      scene: this.scene,
+      enemyConfigs: resolveCoopDefenseEnemyConfigs(humanPlayerCount),
+      worldMetrics: world.metrics,
+      layout,
+      isHost: bridge.isHost(),
+      getBaseSpecs: () => baseManager?.getBaseSpecs() ?? world.bases,
+      getActiveBaseIds: () => baseManager?.getActiveBaseIds()
+        ?? new Set(world.bases.map((spec) => spec.id)),
+      getBase: (baseId) => baseManager?.getBase(baseId) ?? null,
+      obstacleCellProvider,
+      barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
+      boss: mapConfig.boss,
+      objective: mapConfig.objective,
+      persistentSpawnConfigs: resolveCoopDefenseMapPersistentSpawnConfigs(mapConfig, humanPlayerCount),
+      encounterConfigs: resolveCoopDefenseMapEncounterConfigs(mapConfig, humanPlayerCount),
+      nextGenerationId: () => this.nextFlowFieldGenerationId(),
+      visualSink: this.ctx.effectSystem,
+      lighting: this.renderers.lighting,
+      entityBurnGpuController: this.renderers.entityBurnGpu,
+      onBossSpawned: (spawnedAtMs) => {
+        this.runtimeDiagnosticEventSink?.('boss:spawn', { spawnedAtMs });
+        const current = bridge.getRoundState();
+        if (!current || current.status !== 'active') return;
+        bridge.publishRoundState({
+          ...current,
+          coopDefenseBossSpawnedAtMs: spawnedAtMs,
+        });
+      },
+      onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
     });
   }
 
@@ -3014,6 +3100,9 @@ export class ArenaLifecycleCoordinator {
       : null;
     const prepared = this.preparedRoundLayout;
     this.tearDownArena(reusablePresentation !== null);
+    // Materialisierungsrezepte gehören zur vorherigen Activity/World und dürfen eine neue World
+    // ohne Activity nicht in eine spätere Mission hineinvererben.
+    this.coopMissionMaterialization = [];
 
     // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
@@ -3041,9 +3130,6 @@ export class ArenaLifecycleCoordinator {
     // Mission. Ohne diese getrennte Sicht wuerde eine Coop-World ohne Activity Bosse, Ziele und
     // Respawn-Budgets aufbauen, fuer die es keine Runde gibt.
     const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;
-    const coopDefenseEnemyConfigs = isCoopMission
-      ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
-      : null;
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
     // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
     this.worldLifecycle.attachRuntime(world, activityDescriptor);
@@ -3169,9 +3255,6 @@ export class ArenaLifecycleCoordinator {
     if (coopMissionRuntime && baseManager && missionMapConfig && activityDescriptor) {
       this.attachCoopMissionBaseBinding(activityDescriptor, coopMissionRuntime);
     }
-    // Activity-Child-Owner muessen bei A -> B die aktuell gebundene Base-View lesen; eine beim
-    // World-Aufbau eingefangene Array-Projektion wuerde A-State in B weiterreichen.
-    const getCoopDefenseBaseSpecs = () => baseManager?.getBaseSpecs() ?? worldBases;
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     this.ctx.persistentBaseContributions = null;
     this.ctx.persistentBaseRewards = null;
@@ -3261,30 +3344,6 @@ export class ArenaLifecycleCoordinator {
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
 
-    const createEnemyManager = isCoopMission && coopDefenseEnemyConfigs
-      ? () => new EnemyManager(this.scene, coopDefenseEnemyConfigs)
-      : null;
-    const enemyManager = createEnemyManager?.() ?? null;
-    if (enemyManager && coopMissionRuntime && createEnemyManager) {
-      coopMissionRuntime.setEnemyManager(enemyManager);
-      coopMissionRuntime.addMaterializationStep((runtime) => {
-        const replacement = createEnemyManager();
-        runtime.setEnemyManager(replacement);
-        replacement.setWorldMetrics(world.metrics);
-        replacement.setVisualSink(this.ctx.effectSystem);
-        replacement.setLightingSystem(this.renderers.lighting);
-        replacement.setEntityBurnGpuController(this.renderers.entityBurnGpu);
-      });
-    }
-    this.ctx.enemyManager?.setWorldMetrics(world.metrics);
-    // Buddel- und Spawn-Visuals der Gegner laufen über dieselbe Effekt-Schicht wie die der
-    // Spieler – auf Host und Client, da beide Seiten Entstehung und Einbuddel-Zustand aus dem
-    // Snapshot kennen.
-    this.ctx.enemyManager?.setVisualSink(this.ctx.effectSystem);
-    // Brennende Gegner leuchten wie brennende Projektile; das Licht hängt am
-    // EntityBurnRenderer der jeweiligen Entity.
-    this.ctx.enemyManager?.setLightingSystem(this.renderers.lighting);
-    this.ctx.enemyManager?.setEntityBurnGpuController(this.renderers.entityBurnGpu);
     const missionBaseManager = this.ctx.baseManager;
     const createMissionRoundState = (): CoopDefenseRoundStateSystem | null => (bridge.isHost()
       && missionBaseManager
@@ -3310,10 +3369,13 @@ export class ArenaLifecycleCoordinator {
     // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
     // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
     const syncActiveBaseIds = (): void => {
-      this.ctx.flowFieldCoordinator?.setActiveBaseIds(
+      this.coopMissionRuntime?.flowFieldCoordinator?.setActiveBaseIds(
         baseManager?.getActiveBaseIds() ?? new Set<string>(),
       );
     };
+    if (coopMissionRuntime && isCoopMission) {
+      this.createCoopMissionCombatComposition(activityDescriptor, layout)?.materialize(coopMissionRuntime);
+    }
     if (bridge.isHost()) {
       // Der Coop-Build gehoert zur laufenden World und kann deshalb auch in einer Activity-losen
       // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
@@ -3339,211 +3401,6 @@ export class ArenaLifecycleCoordinator {
       this.ctx.coopDefenseItemRuntimeSystem?.setTargetStatusSystem(this.ctx.targetStatusSystem);
       this.syncHostCoopDefensePlayerModifiersFromCurrentBuild();
 
-      const obstacleCellProvider = () => {
-        const staticRockCells = layout.rocks.flatMap((rock, index) => {
-          const isActive = this.ctx.arenaResult?.rockPhysicsProxies[index]?.active ?? false;
-          return isActive ? [{ gridX: rock.gridX, gridY: rock.gridY }] : [];
-        });
-        const runtimeRockCells = (this.ctx.placementSystem?.getAllRuntimeRocks() ?? [])
-          .filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none')
-          .map((rock) => ({
-            gridX: rock.gridX,
-            gridY: rock.gridY,
-          }));
-
-        return [...staticRockCells, ...runtimeRockCells];
-      };
-      const flowFieldMetrics = {
-        cols: world.metrics.gridCols,
-        rows: world.metrics.gridRows,
-        cellSize: CELL_SIZE,
-        arenaOffsetX: world.metrics.offsetX,
-        arenaOffsetY: world.metrics.offsetY,
-      };
-
-      // Ein Coordinator fuer alle Runtime-Flowfields. Derselbe Factory-Schritt materialisiert
-      // bei A -> B eine neue Navigation, ohne die World-Geometrie neu zu bauen.
-      const createCoopNavigation = () => {
-        const bossConfig = missionMapConfig?.boss
-          ? getCoopDefenseEnemyConfig(missionMapConfig.boss.enemyKind)
-          : null;
-        const bossClearanceCells = bossConfig
-          ? Math.ceil(Math.max(0, bossConfig.size * 0.5 - CELL_SIZE * 0.5) / CELL_SIZE)
-          : 0;
-        const flowFieldCoordinator = new FlowFieldCoordinator({
-          metrics: flowFieldMetrics,
-          tuning: createFlowFieldTuning(),
-          staticKind: buildStaticKindRaster(layout, flowFieldMetrics),
-          bases: buildBaseDescriptors(getCoopDefenseBaseSpecs()),
-          activeBaseIds: this.ctx.baseManager?.getActiveBaseIds()
-            ?? new Set(getCoopDefenseBaseSpecs().map((spec) => spec.id)),
-          obstacleCellProvider,
-          barrierCells: missionProgressConfig?.barriers.flatMap((barrier) => barrier.cells) ?? [],
-          runner: createFlowFieldRunner(),
-          navTickIntervalMs: COOP_DEFENSE_NAV_TICK_INTERVAL_MS,
-          generationId: this.nextFlowFieldGenerationId(),
-        });
-        // Einmalige Ansage, welches Substrat wirklich laeuft. Ohne sie greift der Inline-Fallback
-        // still, und ein Trace zeigt dann faelschlich "die Verlagerung hat nichts gebracht".
-        console.info(`[flowfield] runner=${flowFieldCoordinator.getDiagnostics().runnerKind}`);
-
-        const enemyFlowFieldService = EnemyFlowFieldService.fromView(
-          flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.base, { goalMode: 'bases' }),
-        );
-        const enemyPlayerFlowFieldService = EnemyFlowFieldService.fromView(
-          flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.player, {
-            goalMode: 'dynamic-fallback-bases',
-          }),
-        );
-        const enemyStrategicFlowFieldService = EnemyFlowFieldService.fromView(
-          flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.strategic, {
-            goalMode: 'dynamic',
-            tickDivisor: COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC,
-          }),
-        );
-        const enemyBossFlowFieldService = bossConfig
-          ? EnemyFlowFieldService.fromView(
-            flowFieldCoordinator.registerField(ENEMY_FLOW_FIELD_IDS.boss, {
-              goalMode: bossConfig.movementTarget === 'players' ? 'dynamic-fallback-bases' : 'bases',
-              clearanceCells: bossClearanceCells,
-            }),
-          )
-          : null;
-        const enemyStrategicTargetService = new EnemyStrategicTargetService(
-          enemyStrategicFlowFieldService,
-        );
-        const enemyAiTargetCatalog = new EnemyAiTargetCatalog();
-        const flowFieldGridListener = (event: ArenaMapGridChangedEvent): void => {
-          const change = resolveGridChange(event);
-          if (change) flowFieldCoordinator.patchCell(change.gridX, change.gridY, change.occupied);
-          else flowFieldCoordinator.requestFullResync();
-        };
-        this.scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, flowFieldGridListener);
-        const navigation = {
-          coordinator: flowFieldCoordinator,
-          enemy: enemyFlowFieldService,
-          player: enemyPlayerFlowFieldService,
-          strategic: enemyStrategicFlowFieldService,
-          boss: enemyBossFlowFieldService,
-          targetCatalog: enemyAiTargetCatalog,
-          strategicTarget: enemyStrategicTargetService,
-          releaseGridChanges: () => {
-            this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, flowFieldGridListener);
-          },
-        };
-        // Die Zielzuordnung wird exakt mit dem Feld aktiv, aus dessen Zielmenge sie stammt.
-        flowFieldCoordinator.getFieldView(ENEMY_FLOW_FIELD_IDS.strategic)?.onActivated(
-          (payload) => {
-            if (payload) enemyStrategicTargetService.activate(payload as PreparedStrategicTargets);
-          },
-        );
-        return navigation;
-      };
-      if (coopMissionRuntime) {
-        coopMissionRuntime.setNavigation(createCoopNavigation());
-        coopMissionRuntime.addMaterializationStep((runtime) => {
-          runtime.setNavigation(createCoopNavigation());
-        });
-      }
-      if (
-        coopMissionRuntime
-        && this.ctx.enemyManager
-        && this.ctx.enemyFlowFieldService
-        && (
-          coopDefensePersistentSpawnConfigs.length > 0
-          || coopDefenseEncounterConfigs.length > 0
-          || missionMapConfig?.boss !== undefined
-        )
-      ) {
-        const createEncounter = () => {
-          const currentEnemyManager = this.ctx.enemyManager;
-          const currentEnemyFlowField = this.ctx.enemyFlowFieldService;
-          if (!currentEnemyManager || !currentEnemyFlowField) {
-            throw new Error('[ArenaLifecycleCoordinator] Coop encounter needs materialized enemy navigation');
-          }
-          const spawnExecutor = new CoopDefenseSpawnExecutor(
-            currentEnemyManager,
-            currentEnemyFlowField,
-            this.ctx.enemyBossFlowFieldService,
-            this.ctx.enemyPlayerFlowFieldService,
-            this.ctx.enemyStrategicFlowFieldService,
-          );
-          const persistentPressure = coopDefensePersistentSpawnConfigs.length > 0
-            ? new CoopDefensePersistentPressureSystem(
-              coopDefensePersistentSpawnConfigs,
-              spawnExecutor,
-              getCoopDefenseBaseSpecs(),
-              () => this.ctx.baseManager?.getActiveBaseIds() ?? new Set<string>(),
-            )
-            : null;
-          const bossSystem = missionMapConfig?.boss
-            ? new CoopDefenseBossSystem(
-              missionMapConfig.boss,
-              currentEnemyManager,
-              spawnExecutor,
-              (spawnedAtMs) => {
-                this.runtimeDiagnosticEventSink?.('boss:spawn', { spawnedAtMs });
-                const current = bridge.getRoundState();
-                if (!current || current.status !== 'active') return;
-                bridge.publishRoundState({
-                  ...current,
-                  coopDefenseBossSpawnedAtMs: spawnedAtMs,
-                });
-              },
-            )
-            : null;
-          let mapDirector: CoopDefenseMapDirector | null = null;
-          if (coopDefenseEncounterConfigs.length > 0) {
-            mapDirector = new CoopDefenseMapDirector(
-              coopDefenseEncounterConfigs,
-              (enemyKind, count, originId, front, spawnArea) => spawnExecutor
-                .hostSpawnEncounterGroup(enemyKind, count, originId, front, spawnArea),
-              {
-                mode: missionMapConfig?.objective === 'repel-assault' ? 'repel-assault' : 'scheduled',
-                showComplete: missionMapConfig?.objective === 'repel-assault',
-                isEnemyActive: (enemyId) => this.ctx.enemyManager?.getEnemy(enemyId)?.sprite.active === true,
-                isEncounterStartSatisfied: (start) => {
-                  switch (start.type) {
-                    case 'after-event':
-                      return this.ctx.coopDefenseMapEventDirector?.isEventCompleted(start.eventId) ?? false;
-                    case 'boss-phase':
-                      return this.ctx.coopDefenseVoidHunterSystem?.hasReachedPhase(start.phase) ?? false;
-                    case 'after-encounter':
-                      return this.ctx.coopDefenseMapDirector?.isEncounterCleared(start.encounterId) ?? false;
-                    case 'after-checkpoint':
-                      return this.coopMissionRuntime?.coopDefenseMissionProgressSystem?.isCheckpointActivated(start.checkpointId) ?? false;
-                    case 'after-defense':
-                      return this.coopMissionRuntime?.coopDefenseMissionProgressSystem?.isDefenseResolved(start.defenseId) ?? false;
-                    case 'base-destroyed':
-                      return this.ctx.baseManager?.getBase(start.baseId)?.isDestroyed() ?? false;
-                    case 'time':
-                    case 'after-previous':
-                      return false;
-                  }
-                },
-                isEnemyOriginActive: (originId) => this.ctx.enemyManager?.hasActiveEnemyOrigin(originId) ?? false,
-                getActiveEnemyIdsForOrigin: (originId) => this.ctx.enemyManager?.getActiveEnemyIdsForOrigin(originId) ?? [],
-                isEnemyTechnicallyStuck: (enemyId) => {
-                  const enemy = this.ctx.enemyManager?.getEnemy(enemyId);
-                  return enemy?.sprite.active === true && enemy.getHp() > 0 && enemy.isPathBlocked();
-                },
-                removeEnemy: (enemyId) => (this.ctx.enemyManager?.hostRemoveWithoutKill(enemyId) ?? null) !== null,
-                onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
-              },
-            );
-          }
-          return {
-            spawnExecutor,
-            persistentPressure,
-            boss: bossSystem,
-            director: mapDirector,
-          };
-        };
-        coopMissionRuntime.setEncounter(createEncounter());
-        coopMissionRuntime.addMaterializationStep((runtime) => {
-          runtime.setEncounter(createEncounter());
-        });
-      }
       // Wenn eine Basis zerstört wird, soll die Wegfindung sich neu orientieren:
       // Goal-Cells werden nur noch aus den verbleibenden Basen aufgebaut, so dass
       // Gegner zur nächstgelegenen aktiven Basis laufen.
@@ -4839,6 +4696,7 @@ export class ArenaLifecycleCoordinator {
           1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
         ),
         isLinkedBaseActive: (baseId) => this.ctx.baseManager?.getActiveBaseIds().has(baseId) ?? false,
+        includeActivityLinkedPedestals: false,
       }, world.metrics);
       this.ctx.powerUpSystem.setConstructionRespawnMultiplierProvider((constructionId) => {
         const rock = this.ctx.placementSystem?.getRuntimeRock(constructionId);
@@ -4847,6 +4705,9 @@ export class ArenaLifecycleCoordinator {
         return this.ctx.energyInjectorSystem?.getPowerUpRespawnMultiplierAt(world.x, world.y) ?? 1;
       });
       this.ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
+      if (coopMissionRuntime && activityDescriptor?.kind === 'coop-mission') {
+        this.attachCoopMissionPowerUpBinding(activityDescriptor, coopMissionRuntime);
+      }
       this.ctx.combatSystem.setPowerUpSystem(this.ctx.powerUpSystem);
       this.ctx.resourceSystem.setPowerUpSystem(this.ctx.powerUpSystem);
 
@@ -6571,7 +6432,7 @@ export class ArenaLifecycleCoordinator {
     return this.flowFieldGenerationId;
   }
 
-  private getEnemyNavigationFlowField(): EnemyFlowFieldService | null {
+  private getEnemyNavigationFlowField(): NonNullable<CoopMissionRuntime['enemyPlayerFlowFieldService']> | null {
     return this.ctx.enemyPlayerFlowFieldService ?? this.ctx.enemyFlowFieldService;
   }
 
