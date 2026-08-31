@@ -155,6 +155,16 @@ export class AirstrikeSystem {
     return result;
   }
 
+  /** Removes only authored map strikes; player-triggered strikes remain untouched. */
+  clearAuthoredActivityStrikes(eventIds?: ReadonlySet<string>): void {
+    for (const [id, strike] of this.strikes) {
+      const eventId = strike.metadata?.eventId;
+      if (eventId === undefined) continue;
+      if (eventIds !== undefined && !eventIds.has(eventId)) continue;
+      this.strikes.delete(id);
+    }
+  }
+
   clear(): void {
     this.strikes.clear();
   }

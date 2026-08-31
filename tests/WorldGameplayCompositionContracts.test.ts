@@ -22,6 +22,7 @@ describe('Phase 10B.6 – World gameplay composition', () => {
       'src/world/WorldPlayerGameplayRuntime.ts',
       'src/world/WorldCombatGameplayBinding.ts',
       'src/world/WorldSupportGameplayRuntime.ts',
+      'src/activity/CaptureTheBeerActivityRuntime.ts',
     ]) {
       const source = read(path);
       expect(source, path).not.toContain('ArenaContext');
@@ -60,6 +61,7 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(build).toContain('worldRuntime.bind(playerGameplayRuntime);');
     expect(build).toContain('worldRuntime.bind(combatGameplayBinding);');
     expect(build).toContain('worldRuntime.bind(supportGameplayRuntime);');
+    expect(build).not.toContain('new CaptureTheBeerSystem');
 
     const teardownEnd = coordinator.indexOf('\n  private ', teardownStart);
     const teardown = coordinator.slice(teardownStart, teardownEnd);
@@ -79,6 +81,18 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     ]) {
       expect(teardown, migratedCleanup).not.toContain(migratedCleanup);
     }
+  });
+
+  it('liest den Coop-Activity-State dynamisch und besitzt das Barrier-Projection-API', () => {
+    const combat = read('src/world/WorldCombatGameplayBinding.ts');
+    const coordinator = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(combat).not.toContain('readonly isCoopMission: boolean');
+    expect(combat).toContain('readonly isCoopMission: () => boolean');
+    expect(combat).toContain('updateActivityBindings(): void');
+    expect(combat).toContain('clearActivityBindings(): void');
+    expect(coordinator).toContain('isCoopMission: () => this.worldLifecycle.activity.is(\'coop-mission\')');
+    expect(coordinator).toContain('this.worldCombatGameplayBinding?.updateActivityBindings()');
+    expect(coordinator).toContain('this.worldCombatGameplayBinding?.clearActivityBindings()');
   });
 
   it('clears target systems and releases their projections exactly at World-owner teardown', () => {

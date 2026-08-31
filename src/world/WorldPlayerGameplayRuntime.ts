@@ -141,14 +141,12 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
     );
 
     const enemyManager = options.getEnemyManager();
-    const guardianSpirit = enemyManager
-      ? new GuardianSpiritSystem(
-        options.playerManager,
-        enemyManager,
-        options.combatSystem,
-        (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
-      )
-      : null;
+    const guardianSpirit = new GuardianSpiritSystem(
+      options.playerManager,
+      enemyManager,
+      options.combatSystem,
+      (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
+    );
     const repairDrone = new RepairDroneSystem(
       options.playerManager,
       options.combatSystem,
@@ -158,58 +156,50 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
         && (playerModifier.getCommittedProfile(playerId)?.upgrades[COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID]?.level ?? 0) > 0
       ),
     );
-    const slimeTrail = enemyManager
-      ? new SlimeTrailSystem(
-        options.playerManager,
-        enemyManager,
-        options.combatSystem,
-        (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
-        (playerId) => {
-          const input = options.network.input.getPlayerInput(playerId);
-          return options.hostPhysics.getDashPhase(playerId) === 0
-            && !burrow.isBurrowed(playerId)
-            && Math.hypot(input?.dx ?? 0, input?.dy ?? 0) > 0.01;
-        },
-      )
-      : null;
-    const flamethrowerUpgrade = enemyManager
-      ? new FlamethrowerUpgradeSystem(
-        options.playerManager,
-        enemyManager,
-        options.projectileManager,
-        options.combatSystem,
-        loadout,
-        options.fireSystem,
-        (playerId) => burrow.isBurrowed(playerId),
-        (firstPlayerId, secondPlayerId) => !options.network.teams.isEnemyPair(firstPlayerId, secondPlayerId),
-        (x, y, radius) => options.network.presentation.broadcastExplosionEffect(x, y, radius, 0xff6600),
-        (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
-        (x, y, targets, landsAt, visualStyle) => options.network.presentation.broadcastFireChunkEffect(
-          x,
-          y,
-          targets,
-          landsAt,
-          visualStyle,
-        ),
-      )
-      : null;
-    const weaponUpgrade = enemyManager
-      ? new WeaponUpgradeSystem(
-        options.projectileManager,
-        enemyManager,
-        options.combatSystem,
-        options.hostPhysics,
-        options.fireSystem,
-      )
-      : null;
-    const ak47StrategicTarget = enemyManager
-      ? new Ak47StrategicTargetSystem(
-        options.playerManager,
-        enemyManager,
-        options.combatSystem,
-        loadout,
-      )
-      : null;
+    const slimeTrail = new SlimeTrailSystem(
+      options.playerManager,
+      enemyManager,
+      options.combatSystem,
+      (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
+      (playerId) => {
+        const input = options.network.input.getPlayerInput(playerId);
+        return options.hostPhysics.getDashPhase(playerId) === 0
+          && !burrow.isBurrowed(playerId)
+          && Math.hypot(input?.dx ?? 0, input?.dy ?? 0) > 0.01;
+      },
+    );
+    const flamethrowerUpgrade = new FlamethrowerUpgradeSystem(
+      options.playerManager,
+      enemyManager,
+      options.projectileManager,
+      options.combatSystem,
+      loadout,
+      options.fireSystem,
+      (playerId) => burrow.isBurrowed(playerId),
+      (firstPlayerId, secondPlayerId) => !options.network.teams.isEnemyPair(firstPlayerId, secondPlayerId),
+      (x, y, radius) => options.network.presentation.broadcastExplosionEffect(x, y, radius, 0xff6600),
+      (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
+      (x, y, targets, landsAt, visualStyle) => options.network.presentation.broadcastFireChunkEffect(
+        x,
+        y,
+        targets,
+        landsAt,
+        visualStyle,
+      ),
+    );
+    const weaponUpgrade = new WeaponUpgradeSystem(
+      options.projectileManager,
+      enemyManager,
+      options.combatSystem,
+      options.hostPhysics,
+      options.fireSystem,
+    );
+    const ak47StrategicTarget = new Ak47StrategicTargetSystem(
+      options.playerManager,
+      enemyManager,
+      options.combatSystem,
+      loadout,
+    );
 
     this.systems = {
       playerModifier,
@@ -227,7 +217,7 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
       ak47StrategicTarget,
     };
     options.onSystemsChanged(this.systems);
-    this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel, ak47StrategicTarget, flamethrowerUpgrade);
+    this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {
@@ -341,16 +331,14 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
     burrow: BurrowSystem,
     translocator: TranslocatorSystem,
     tunnel: TunnelSystem,
-    ak47StrategicTarget: Ak47StrategicTargetSystem | null,
-    flamethrowerUpgrade: FlamethrowerUpgradeSystem | null,
   ): void {
     loadout.setCombatSystem(this.options.combatSystem);
     loadout.setDashBurstChecker((playerId) => this.options.hostPhysics.isDashBurst(playerId));
     loadout.setPhysicsSystem(this.options.hostPhysics);
-    loadout.setAk47StrategicTargetHitResolver((playerId, enemyId) => ak47StrategicTarget?.isCurrentTarget(playerId, enemyId) ?? false);
+    loadout.setAk47StrategicTargetHitResolver((playerId, enemyId) => this.systems.ak47StrategicTarget?.isCurrentTarget(playerId, enemyId) ?? false);
     loadout.setNegevKillstreakExplosionHandler((event: NegevKillstreakExplosionEvent) => {
       this.options.network.presentation.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
-      flamethrowerUpgrade?.hostCreateFireChunkBurst(event.ownerId, event.x, event.y, {
+      this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(event.ownerId, event.x, event.y, {
         count: event.kills,
         searchRadius: event.radius,
         flightMs: 320,

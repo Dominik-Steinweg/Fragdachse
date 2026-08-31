@@ -262,6 +262,11 @@ export class PowerUpSystem {
     }
   }
 
+  /** Rebinds the Activity-local XP reference while retaining this World-owned system. */
+  setCoopDefenseMapXpReference(reference: number | null): void {
+    this.options.coopDefenseMapXpReference = reference ?? 1;
+  }
+
   /**
    * Bindet die vertragliche Pedestal-Projektion genau einer Activity.
    *

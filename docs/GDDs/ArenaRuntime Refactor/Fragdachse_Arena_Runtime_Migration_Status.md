@@ -35,9 +35,9 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `10B.6 – Remaining World Gameplay Bindings abgeschlossen`
-**Gesamtstatus:** `Phasen 1–10A sowie 10B.1–10B.6 abgeschlossen; Checkpoints A/B automatisiert abgeschlossen; Phase-9-Baseline vom User manuell erfolgreich geprüft; Checkpoint C folgt nach 10C.`
-**Letzter Integrations-Checkpoint:** `Phase 10B.6: npm run check grün; manuelle Browserprüfung bleibt User-Aufgabe.`
+**Aktive Phase:** `10B.7 – Activity Rebinding & Lifetime Closure abgeschlossen`
+**Gesamtstatus:** `Phasen 1–10A sowie 10B.1–10B.7 abgeschlossen; Checkpoints A/B automatisiert abgeschlossen; Phase-9-Baseline vom User manuell erfolgreich geprüft; Checkpoint C folgt nach 10C.`
+**Letzter Integrations-Checkpoint:** `Phase 10B.7: npm run check grün; manuelle Browserprüfung bleibt User-Aufgabe.`
 **Nächster Schritt:** `Phase 10C – Arena Flow / Frame Position / Top-Level Composition`; 11 nicht vorziehen.
 
 | Phase | Status | Kurznotiz |
@@ -55,7 +55,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 8 Persistent Base Lifetimes | ✅ abgeschlossen | `PersistentBaseRoomSession` (committed Raumstand, Player↔Owner-Bindungen, angenommene Contribution-Revisionsstände) · `PersistentBaseTransaction` (Arbeitsstand, Identität, genau ein terminaler Abschluss) · `PersistentBaseRuntimeBindings` am `PersistentBaseWorldBinding` (Runtime-Objekte). Die Transaction folgt jetzt der Activity-Identity; Runtime-Detach/Reattach und World-Rebuild öffnen oder beenden sie nicht. |
 | 9 Completion / ResultApplication | ✅ abgeschlossen | `ActivityCompletion` bindet Coop-Result/Abort an World-/Activity-Revision. `ResultApplication` verwirft stale/doppelte Abschlüsse und besitzt Victory-Reward, Persistent-Base-Outcome sowie die Publikation an Progression/Statistik. |
 | 10A World Composition | ✅ abgeschlossen | World-Kontext/-Materialisierung, Presentation/PB-Child, Player-Rezept und Geometrie-/Shared-Service-Bindings an konkrete Composition-Grenzen delegiert; `WorldRuntime` besitzt den symmetrischen Teardown. |
-| 10B Activity/PB/Gameplay Composition | ✅ abgeschlossen | 10B.1–10B.6 abgeschlossen: Base-Activity-Lifetime, Coop-/PB-Composition sowie Construction-, Train-, World-PowerUp- und World-Gameplay-Bindings sind delegiert; TD-10 bleibt bewusst offen. |
+| 10B Activity/PB/Gameplay Composition | ✅ abgeschlossen | 10B.1–10B.7 abgeschlossen: Base-Activity-Lifetime, Coop-/PB-Composition, World-Gameplay-Bindings und Activity-Rebinding/Lifetime-Closure sind umgesetzt; TD-10 bleibt bewusst offen. |
 | 10C Flow / ArenaRuntime | ⬜ offen | Echten Flow formen, Handoff und Frame-Orchestrierung übernehmen; danach Checkpoint C und GO/NO-GO. |
 | 11 Context / Dependency Cutover | ⬜ offen | |
 | 12 Legacy Removal | ⬜ offen | |
@@ -335,7 +335,7 @@ zusammengezogen werden.
 - R-2 bleibt durch die bestehende `WorldRuntime.destroy()`-Reihenfolge unverändert; R-4 und R-5 bleiben unverändert. `WorldRuntime` überlebt A→B mitsamt Player-/Construction-/PowerUp-/Classic-Train-/Gameplay-Ownern, während Activity-Children und authored Activity-Train frisch materialisiert werden. World ohne Activity erzeugt weiterhin keine Coop-Child-Runtime.
 - Vertragsabdeckung: `tests/WorldGameplayCompositionContracts.test.ts` schützt die neuen Owner-Grenzen, Train-Port-Import-Hygiene, Coordinator-/Teardown-Ratchets und Targeting-Detach-Verhalten; bestehende Activity-, Lobby-, Player-, Train-, PB- und R-2/R-4/R-5-Contracts bleiben grün.
 - TD-10 bleibt bewusst offen. Für 10C verbleiben ausschließlich Arena-Flow, Frame-Position, Readiness/Loading-Sequencing, Handoff-/Transition-Orchestrierung und die Top-Level-Composition; Phase 10C und Phase 11 wurden nicht begonnen.
-- `Phase 10B vollständig abgeschlossen: JA`; `Phase 10C kann beginnen: JA`.
+- `Phase 10B.6 abgeschlossen; Phase 10B.7 war der nächste gezielte Lifetime-Schritt.`
 
 **Owner-Landkarte nach Phase 10B.6:**
 - `src/activity/CoopMissionComposition.ts` – activity-spezifische Orchestrierungsgrenze für die fokussierten Coop-Composer; kein Lifetime-State.
@@ -343,6 +343,16 @@ zusammengezogen werden.
 - `src/world/ConstructionWorldRuntime.ts` – World-Construction und Loadout-Handler; `src/world/WorldTrainRuntime.ts` – World-Train plus Activity-Train-Child über `WorldTrainNetworkPort`; `src/world/WorldPowerUpRuntime.ts` – World-PowerUp-Composition.
 - `src/world/WorldTargetingRuntime.ts` – World-Targeting; `src/world/WorldPlayerGameplayRuntime.ts` – World-Player-/Loadout-/Build-Gameplay; `src/world/WorldCombatGameplayBinding.ts` – World-Combat-/Physics-/Projectile-/Base-/Turret-/Tesla-Projektionen; `src/world/WorldSupportGameplayRuntime.ts` – World-Support-Systeme.
 - `ArenaLifecycleCoordinator` – World-/Activity-Übergang, Compatibility-Sync, Network-/Projection-Ports und fachliche Mutation-Validierung; keine konkrete Coop-Composer-Liste, Construction-Implementierung, Train-Runtime, PowerUp-System-Konfiguration oder große World-Gameplay-Binding-Liste mehr.
+
+**Phase-10B.7-Ergebnis – Activity Rebinding & Lifetime Closure:**
+- `CaptureTheBeerActivityRuntime` besitzt das Capture-the-Beer-System jetzt exakt für die Activity-Lifetime. Der Coordinator setzt nur noch die bestehende Compatibility-Fassade; Activity-Ende löst Predicate, FX-Handler und Systemzustand vollständig und idempotent.
+- `WorldCombatGameplayBinding` liest `isCoopMission()` dynamisch aus der aktuellen Activity und besitzt die Combat-Seite der Barrier-Projektion. Nach Objective-/Barrier-Materialisierung wird erneut gebunden; Activity-Ende setzt die Projektion auf `null`. `HostUpdateCoordinator` ist dabei durch den schmalen lokalen `WorldCombatImpactPort` ersetzt.
+- `WorldPlayerGameplayRuntime` materialisiert Guardian, Slime, Flamethrower, Weapon und AK bereits World-scoped mit nullablem EnemyManager und rebinding-fähigem `setEnemyManager(null/A/B)`. Der World-Owner bleibt bei A→B identisch.
+- Authored Activity-Airstrikes werden beim Map-Event-Detach anhand ihrer Event-IDs entfernt; unabhängige Player-Airstrikes bleiben erhalten. `WorldPowerUpRuntime` aktualisiert die Coop-XP-Reference für die aktuelle Activity und setzt sie bei `none` neutral zurück.
+- Echte Runtime-Contracts in `tests/ActivityRebindingContracts.test.ts` decken none→A, A→B, A→none, Barrier-Materialisierung inklusive stale A-Detach, Enemy-Rebinding, Airstrike-Cleanup, XP-Rebinding und CTB ab. R-2/R-4/R-5 bleiben unverändert; TD-10 bleibt offen.
+- `ArenaLifecycleCoordinator`: 4.810 LOC vor 10B.7, 4.840 LOC danach (+30). Relevante Owner danach: `CaptureTheBeerActivityRuntime` 33, `WorldPlayerGameplayRuntime` 393, `WorldCombatGameplayBinding` 812, `WorldPowerUpRuntime` 110, `CoopMissionMapEventComposition` 125 und `AirstrikeSystem` 171 LOC.
+- `npm run check`: 331 Testdateien, 2.798 Tests bestanden, 15 übersprungen; Build mit 628 transformierten Modulen erfolgreich. Bekannte Font-Auflösungswarnungen bleiben nicht blockierend. Browser-/Sichtprüfung bleibt User-Aufgabe.
+- `Phase 10B vollständig abgeschlossen: JA`; `Phase 10C kann beginnen: JA`.
 
 **Historische Owner-Landkarte nach Phase 10B.3 (vor 10B.4):**
 - `src/activity/CoopMissionActivityConfig.ts` – eine validierte Activity-Sicht; `getActivityDefinition()` ist die Quelle, der bestehende Adapter nur die Compatibility-Form.

@@ -491,7 +491,7 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
     expect(host.getRoundResultEligiblePlayerIds()).toEqual([]);
 
     const lifecycle = read('src/world/WorldCombatGameplayBinding.ts');
-    expect(lifecycle).toContain('const allowKillDrop = o.isActivityActive() && !o.isCoopMission;');
+    expect(lifecycle).toContain('const allowKillDrop = o.isActivityActive() && !o.isCoopMission();');
   });
 });
 

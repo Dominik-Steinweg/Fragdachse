@@ -6,7 +6,7 @@ import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatSystem, HitscanSupportImpact } from '../systems/CombatSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 import type { BurrowSystem } from '../systems/BurrowSystem';
@@ -19,13 +19,15 @@ import type { WorldGeometryBinding } from './WorldGeometryBinding';
 import type { WorldParticipation } from './WorldParticipation';
 import { hasWorldFigure } from './WorldParticipation';
 import type { WorldPlayerGameplaySystems } from './WorldPlayerGameplayRuntime';
-import type { HostUpdateCoordinator } from '../scenes/arena/HostUpdateCoordinator';
 import type {
   ExplosionVisualStyle,
   FireChunkTarget,
   GroundFireVisualStyle,
+  HitscanSupportEffect,
+  LoadoutSlot,
   PlayerProfile,
   SlimeBloomTarget,
+  SupportProjectileImpact,
   TrackedProjectile,
 } from '../types';
 import type { TargetStatusTarget } from '../systems/TargetStatusSystem';
@@ -117,6 +119,34 @@ export interface WorldCombatGameplaySystems {
   readonly turret: TurretSystem;
 }
 
+export interface WorldCombatImpactPort {
+  readonly applyEnergyInjectorTargetHit: (
+    targetType: 'player' | 'enemy' | 'construction' | 'base',
+    targetId: string,
+    x: number,
+    y: number,
+    projectile: TrackedProjectile,
+  ) => void;
+  readonly applyHitscanSupportImpact: (
+    impact: HitscanSupportImpact,
+    effect: HitscanSupportEffect,
+    attackerId: string,
+    sourceSlot?: LoadoutSlot,
+  ) => void;
+  readonly applySupportProjectileImpact: (
+    projectile: TrackedProjectile,
+    impact: SupportProjectileImpact,
+  ) => void;
+  readonly applyTeslaRockDamage: (index: number, damage: number, ownerId: string) => void;
+  readonly applyTeslaTurretDamage: (id: number, damage: number, ownerId: string) => void;
+  readonly resolveProjectileProximityPulse: (
+    projectile: TrackedProjectile,
+  ) => { lines: { sx: number; sy: number; ex: number; ey: number }[] };
+  readonly resolveBfgPlayerProximityPulse: (
+    projectile: TrackedProjectile,
+  ) => { sx: number; sy: number; ex: number; ey: number }[];
+}
+
 export interface WorldCombatGameplayBindingOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
@@ -128,7 +158,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly placementSystem: PlacementSystem;
   readonly baseManager: BaseManager | null;
   readonly worldMetrics: WorldMetrics;
-  readonly isCoopMission: boolean;
+  readonly isCoopMission: () => boolean;
   readonly isActivityActive: () => boolean;
   readonly getWorldParticipation: (playerId: string) => WorldParticipation;
   readonly getPlayerCapabilities: (playerId: string) => { canUseCombat: boolean };
@@ -162,7 +192,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
-  readonly hostUpdate: Pick<HostUpdateCoordinator, 'applyEnergyInjectorTargetHit' | 'applyHitscanSupportImpact' | 'applySupportProjectileImpact' | 'applyTeslaRockDamage' | 'applyTeslaTurretDamage' | 'resolveProjectileProximityPulse' | 'resolveBfgPlayerProximityPulse'>;
+  readonly hostUpdate: WorldCombatImpactPort;
   readonly createEnergyShieldSystem: (resourceSystem: ResourceSystem, shieldBuffSystem: ShieldBuffSystem) => EnergyShieldSystem;
   readonly network: WorldCombatNetworkPort;
   readonly respawnPlayer: (playerId: string) => boolean;
@@ -200,12 +230,25 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.systems?.energyShield.setEnemyManager(enemyManager);
   }
 
+  /** Projects the currently materialized Activity barrier into the World-owned CombatSystem. */
+  updateActivityBindings(): void {
+    if (this.destroyed) return;
+    this.options.combatSystem.setBarrierObstacles(this.options.getMissionBarrierObstacles());
+  }
+
+  /** Removes the Activity projection without touching the World-owned CombatSystem itself. */
+  clearActivityBindings(): void {
+    if (this.destroyed) return;
+    this.options.combatSystem.setBarrierObstacles(null);
+  }
+
   setPowerUpSystem(powerUpSystem: PowerUpSystem | null): void {
     this.options.combatSystem.setPowerUpSystem(powerUpSystem);
   }
 
   destroy(): void {
     if (this.destroyed) return;
+    this.clearActivityBindings();
     this.destroyed = true;
     const { combatSystem, hostPhysics, projectileManager, decoySystem, baseManager } = this.options;
     baseManager?.setOnBaseActivated(null);
@@ -217,7 +260,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setEnergyShieldSystem(null);
     combatSystem.setPowerUpSystem(null);
     combatSystem.setDecoySystem(null);
-    combatSystem.setBarrierObstacles(null);
     combatSystem.setEnemyManager(null);
     combatSystem.setRockDamageCallback(null);
     combatSystem.setBaseDamageCallback(null);
@@ -312,7 +354,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   private bindSharedSystems(): void {
     const o = this.options;
     const { combatSystem: combat, hostPhysics, projectileManager: projectiles, baseManager } = o;
-    combat.setBarrierObstacles(o.getMissionBarrierObstacles());
     combat.setEnemyManager(o.getEnemyManager());
     combat.setPlayerMaxHpResolver((playerId) => o.getPlayerSystems()?.playerModifier.getMaxHp(playerId) ?? HP_MAX);
     combat.setInitialSpawnAllowedResolver((playerId) => (
@@ -417,7 +458,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (!o.network.authority.getPlayerProfile(attackerId)) return;
       if (targetType === 'enemy') {
         if (o.getEnemyManager()?.getEnemy(targetId)?.faction !== 'hostile') return;
-      } else if (o.isCoopMission || !o.network.authority.isEnemyPair(attackerId, targetId)) return;
+      } else if (o.isCoopMission() || !o.network.authority.isEnemyPair(attackerId, targetId)) return;
       o.network.stats.addPlayerRoomDamage(attackerId, damage);
     });
     combat.setHealingReceivedHandler((playerId, amount) => o.network.stats.recordHealingReceived(playerId, amount));
@@ -487,7 +528,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         }
       }
       o.getPlayerSystems()?.loadout.handleKill(killerId, sourceId, x, y, source);
-      if (o.isCoopMission && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
+      if (o.isCoopMission() && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
         o.handleCoopItemKill(killerId, victimId, x, y);
         o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
         for (const profile of o.network.authority.getConnectedPlayers()) {
@@ -495,7 +536,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
           if (gain > 0) o.getPlayerSystems()?.resource.addAdrenaline(profile.id, gain);
         }
       }
-      const allowKillDrop = o.isActivityActive() && !o.isCoopMission;
+      const allowKillDrop = o.isActivityActive() && !o.isCoopMission();
       if (killerId === '__train__' || killerId === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID) {
         if (killerId === '__train__' && allowKillDrop) o.getPowerUpSystem()?.onPlayerKilled(x, y);
         const victimProfile = o.network.authority.getConnectedPlayers().find(profile => profile.id === victimId);

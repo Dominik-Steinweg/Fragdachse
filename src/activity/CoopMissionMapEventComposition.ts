@@ -46,6 +46,10 @@ export class CoopMissionMapEventComposition {
       return;
     }
 
+    const authoredAirstrikeEventIds = new Set(
+      events.filter((event) => event.type === 'airstrike').map((event) => event.id),
+    );
+
     const handlers: CoopDefenseMapEventHandler[] = [];
     const trackCell = this.options.layout.tracks?.[0];
     if (trackCell !== undefined && events.some((event) => event.type === 'train')) {
@@ -113,6 +117,7 @@ export class CoopMissionMapEventComposition {
       },
       detach: () => {
         this.options.airstrikeSystem.setResolvedCallback(null);
+        this.options.airstrikeSystem.clearAuthoredActivityStrikes(authoredAirstrikeEventIds);
         this.options.train.releaseActivityTrain();
       },
     });

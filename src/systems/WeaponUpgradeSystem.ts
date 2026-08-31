@@ -34,7 +34,7 @@ export class WeaponUpgradeSystem {
 
   constructor(
     private readonly projectileManager: ProjectileManager,
-    enemyManager: EnemyManager,
+    enemyManager: EnemyManager | null,
     private readonly combatSystem: WeaponUpgradeCombat,
     private readonly hostPhysics: HostPhysicsSystem,
     private readonly fireSystem: FireSystem,

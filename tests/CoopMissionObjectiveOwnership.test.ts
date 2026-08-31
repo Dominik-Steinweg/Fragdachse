@@ -282,7 +282,7 @@ describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
     const start = coordinator.indexOf('    runtime.bind({');
     const end = coordinator.indexOf('    this.syncCoopMissionCompatibilityBindings(runtime);', start);
     const binding = coordinator.slice(start, end);
-    expect(binding).toContain('current.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null');
-    expect(binding).toContain('this.ctx.combatSystem.setBarrierObstacles(null);');
+    expect(binding).toContain('this.worldCombatGameplayBinding?.updateActivityBindings();');
+    expect(binding).toContain('this.worldCombatGameplayBinding?.clearActivityBindings();');
   });
 });

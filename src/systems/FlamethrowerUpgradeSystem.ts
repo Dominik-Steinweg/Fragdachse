@@ -51,7 +51,7 @@ export class FlamethrowerUpgradeSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    enemyManager: EnemyManager,
+    enemyManager: EnemyManager | null,
     private readonly projectileManager: ProjectileManager,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,

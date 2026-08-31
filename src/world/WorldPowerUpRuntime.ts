@@ -56,6 +56,11 @@ export class WorldPowerUpRuntime implements WorldScopedBinding {
     );
   }
 
+  setCoopDefenseMapXpReference(reference: number | null): void {
+    if (this.destroyed) return;
+    this.system.setCoopDefenseMapXpReference(reference);
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

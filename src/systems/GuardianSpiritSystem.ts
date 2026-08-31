@@ -52,7 +52,7 @@ export class GuardianSpiritSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    enemyManager: EnemyManager,
+    enemyManager: EnemyManager | null,
     private readonly combatSystem: CombatSystem,
     private readonly resolveStat: GuardianSpiritStatResolver,
   ) {

@@ -38,7 +38,7 @@ export class Ak47StrategicTargetSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    enemyManager: EnemyManager,
+    enemyManager: EnemyManager | null,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,
   ) {

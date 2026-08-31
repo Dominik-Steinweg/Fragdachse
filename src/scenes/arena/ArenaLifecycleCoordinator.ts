@@ -8,7 +8,6 @@ import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBui
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { BurrowSystem }      from '../../systems/BurrowSystem';
-import { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import { getLocale, t } from '../../i18n';
 import { getMapName } from '../../i18n/contentPresentation';
@@ -61,6 +60,7 @@ import type {
   CoopMissionArmedOutpostView,
 } from '../../activity/CoopMissionHostUpdate';
 import { CoopMissionPlayerRuntime } from '../../activity/CoopMissionPlayerRuntime';
+import { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
 import {
   createCoopMissionCompletion,
   getCoopMissionConclusion,
@@ -333,6 +333,8 @@ export class ArenaLifecycleCoordinator {
   private constructionWorldRuntime: ConstructionWorldRuntime | null = null;
   /** Lokale Realisierung der optionalen Coop-Activity; ihr Besitzer ist der ActivityRuntimeHost. */
   private coopMissionRuntime: CoopMissionRuntime | null = null;
+  /** Activity-owned Capture-the-Beer rules; the World keeps only this compatibility projection. */
+  private captureTheBeerActivityRuntime: CaptureTheBeerActivityRuntime | null = null;
   /** Activity-specific orchestration; focused composers remain behind this boundary. */
   private readonly coopMissionComposition: CoopMissionComposition;
   /**
@@ -958,13 +960,34 @@ export class ArenaLifecycleCoordinator {
 
   /** Bindet die konkrete Coop-Runtime an den Activity-Slot der laufenden World. */
   private attachActivityRuntime(activity: ActivityDescriptor): void {
-    if (activity.kind !== 'coop-mission') return;
     const worldRuntime = this.worldRuntime;
     if (!worldRuntime) {
       throw new Error(
-        `[ArenaLifecycleCoordinator] Cannot attach Coop activity ${activity.definitionId} without WorldRuntime`,
+        `[ArenaLifecycleCoordinator] Cannot attach activity ${activity.definitionId} without WorldRuntime`,
       );
     }
+    if (activity.kind === 'capture-the-beer') {
+      const runtime = new CaptureTheBeerActivityRuntime({
+        playerManager: this.ctx.playerManager,
+        isPlayerInteractionAllowed: (playerId) => (
+          this.ctx.combatSystem.isAlive(playerId)
+          && !(this.ctx.burrowSystem?.isBurrowed(playerId) ?? false)
+        ),
+        onFx: (event) => {
+          if (bridge.isHost()) bridge.broadcastCaptureTheBeerFx(event);
+        },
+        onDestroy: () => {
+          if (this.captureTheBeerActivityRuntime !== runtime) return;
+          this.captureTheBeerActivityRuntime = null;
+          if (this.ctx.captureTheBeerSystem === runtime.system) this.ctx.captureTheBeerSystem = null;
+        },
+      });
+      this.captureTheBeerActivityRuntime = runtime;
+      this.ctx.captureTheBeerSystem = runtime.system;
+      worldRuntime.activity.attach(activity, runtime);
+      return;
+    }
+    if (activity.kind !== 'coop-mission') return;
     const runtime = new CoopMissionRuntime(activity, (current) => {
       if (current === null && this.coopMissionRuntime === runtime) this.coopMissionRuntime = null;
       this.syncCoopMissionCompatibilityBindings(current);
@@ -974,10 +997,9 @@ export class ArenaLifecycleCoordinator {
     runtime.bind({
       attach: (current) => {
         const enemyManager = current.enemyManager;
-        // Die Missionsbarrieren blockieren Sicht und Schuss, solange genau diese Mission laeuft.
-        this.ctx.combatSystem.setBarrierObstacles(
-          current.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
-        );
+        // The World combat owner projects the current Activity barrier; objective materialization
+        // republishes this binding once the actual BarrierManager exists.
+        this.worldCombatGameplayBinding?.updateActivityBindings();
         this.ctx.combatSystem.setEnemyManager(enemyManager);
         this.ctx.hostPhysics.setEnemyManager(enemyManager);
         this.worldTrainRuntime?.setEnemyManager(enemyManager);
@@ -985,7 +1007,7 @@ export class ArenaLifecycleCoordinator {
         this.worldPlayerGameplayRuntime?.updateEnemyManager(enemyManager);
       },
       detach: () => {
-        this.ctx.combatSystem.setBarrierObstacles(null);
+        this.worldCombatGameplayBinding?.clearActivityBindings();
         this.worldTrainRuntime?.setEnemyManager(null);
         this.worldPlayerGameplayRuntime?.updateEnemyManager(null);
         this.worldCombatGameplayBinding?.updateEnemyManager(null);
@@ -1077,10 +1099,12 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
-    const runtime = this.coopMissionRuntime;
-    if (!runtime) return;
-    if (this.worldRuntime?.activity.isAttached()) this.worldRuntime.activity.detach();
-    else runtime.destroy();
+    if (this.worldRuntime?.activity.isAttached()) {
+      this.worldRuntime.activity.detach();
+      return;
+    }
+    this.coopMissionRuntime?.destroy();
+    this.captureTheBeerActivityRuntime?.destroy();
   }
 
   /** Teardown-Einstieg ausserhalb des Lifecycles; haelt dessen Runtime-Phase synchron. */
@@ -1121,6 +1145,29 @@ export class ArenaLifecycleCoordinator {
     this.ctx.coopDefenseVoidHunterSystem = runtime?.coopDefenseVoidHunterSystem ?? null;
     this.ctx.necromancySystem = runtime?.necromancySystem ?? null;
     this.ctx.coopDefenseTeamBuffSystem = runtime?.coopDefenseTeamBuffSystem ?? null;
+    this.worldCombatGameplayBinding?.updateActivityBindings();
+    this.syncCoopDefenseMapXpReference(runtime);
+  }
+
+  private syncCoopDefenseMapXpReference(runtime: CoopMissionRuntime | null): void {
+    const powerUpRuntime = this.worldPowerUpRuntime;
+    if (!powerUpRuntime) return;
+    const activity = this.worldLifecycle.activity.descriptor;
+    const world = this.worldRuntime?.context;
+    if (!runtime || !activity || activity.kind !== 'coop-mission' || !world) {
+      powerUpRuntime.setCoopDefenseMapXpReference(null);
+      return;
+    }
+    const configuration = resolveCoopMissionActivityConfiguration(activity, world.definition);
+    const humanPlayerCount = Math.max(
+      1,
+      Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
+    );
+    powerUpRuntime.setCoopDefenseMapXpReference(getCoopDefenseMapXpReference(
+      configuration.mapConfig,
+      resolveCoopDefenseMapPersistentSpawnConfigs(configuration.mapConfig, humanPlayerCount),
+      humanPlayerCount,
+    ));
   }
 
   /**
@@ -3195,9 +3242,6 @@ export class ArenaLifecycleCoordinator {
     });
     this.worldTargetingRuntime = targetingRuntime;
     worldRuntime.bind(targetingRuntime);
-    this.ctx.captureTheBeerSystem = activityDescriptor?.kind === 'capture-the-beer'
-      ? new CaptureTheBeerSystem(this.ctx.playerManager)
-      : null;
 
     // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
     // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
@@ -3350,7 +3394,7 @@ export class ArenaLifecycleCoordinator {
       placementSystem,
       baseManager,
       worldMetrics: world.metrics,
-      isCoopMission,
+      isCoopMission: () => this.worldLifecycle.activity.is('coop-mission'),
       isActivityActive: () => this.worldLifecycle.activity.isActive(),
       getWorldParticipation: (playerId) => this.getWorldParticipation(playerId),
       getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
@@ -3442,12 +3486,6 @@ export class ArenaLifecycleCoordinator {
       bridge.publishCoopDefenseMissionProgressPresentationState(null);
     }
     if (bridge.isHost()) {
-      this.ctx.captureTheBeerSystem?.setFxHandler((event) => {
-        bridge.broadcastCaptureTheBeerFx(event);
-      });
-    }
-
-    if (bridge.isHost()) {
       const powerUpRuntime = new WorldPowerUpRuntime({
         playerManager: this.ctx.playerManager,
         combatSystem: this.ctx.combatSystem,
@@ -3468,13 +3506,7 @@ export class ArenaLifecycleCoordinator {
           this.hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy)
         ),
         notifyVoidHunterNuke: (strike) => this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike),
-        coopDefenseMapXpReference: missionMapConfig
-          ? getCoopDefenseMapXpReference(
-            missionMapConfig,
-            coopDefensePersistentSpawnConfigs,
-            coopDefenseHumanPlayerCount,
-          )
-          : 1,
+        coopDefenseMapXpReference: 1,
         isAdrenalineDropEnabled: (playerId) => (
           (this.ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
         ),
@@ -3500,6 +3532,7 @@ export class ArenaLifecycleCoordinator {
       worldRuntime.bind(powerUpRuntime);
       this.ctx.powerUpSystem = powerUpRuntime.system;
       this.ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
+      this.syncCoopDefenseMapXpReference(this.coopMissionRuntime);
       this.worldPlayerGameplayRuntime?.setPowerUpSystem(this.ctx.powerUpSystem);
       const loadoutManager = this.ctx.loadoutManager;
       const burrowSystem = this.ctx.burrowSystem;
@@ -3663,10 +3696,6 @@ export class ArenaLifecycleCoordinator {
         bridge.clearTrainEvent();
       }
 
-      this.ctx.captureTheBeerSystem?.setInteractionPredicate((playerId) => {
-        return this.ctx.combatSystem.isAlive(playerId)
-          && !(this.ctx.burrowSystem?.isBurrowed(playerId) ?? false);
-      });
     }
 
     if (coopMissionRuntime && activityConfiguration) {
@@ -3780,8 +3809,6 @@ export class ArenaLifecycleCoordinator {
     this.placementPreview.clearForTeardown();
     this.rockVisualHelper.destroyAllTurretVisuals();
 
-    this.ctx.captureTheBeerSystem?.destroy();
-    this.ctx.captureTheBeerSystem = null;
     // Die lokale World-Runtime faellt: Bau-Runtime, Basen und die world-lokale Persistent-Base
     // fallen mit ihr. Ihre Darstellung geht in den Handoff und bleibt nur stehen, wenn der
     // naechste Aufbau sie uebernimmt.
@@ -3809,6 +3836,9 @@ export class ArenaLifecycleCoordinator {
     this.ctx.airstrikeSystem = null;
     this.ctx.coopDefensePlayerModifierSystem = null;
     this.ctx.coopDefenseItemRuntimeSystem = null;
+    // Compatibility facade only: the ActivityRuntimeHost already destroyed the actual owner
+    // above, but the legacy context must not expose its former system during World teardown.
+    this.ctx.captureTheBeerSystem = null;
     this.ctx.guardianSpiritSystem = null;
     this.ctx.repairDroneSystem = null;
     this.ctx.slimeTrailSystem = null;
