@@ -262,7 +262,11 @@ describe('Arena-Anbindung', () => {
     expect(source).toContain('runtime?.destroy();');
     expect(source).toContain('this.worldRuntime?.update(deltaMs);');
 
+    // Phase 10C: Der Frame-Owner taktet die World-Runtime; die Scene ruft nur ihn.
+    const runtime = readFileSync(resolve(__dirname, '../src/scenes/arena/ArenaRuntime.ts'), 'utf8');
+    expect(runtime).toContain('this.flow.updateWorldRuntime(deltaMs);');
     const scene = readFileSync(resolve(__dirname, '../src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('this.lifecycle.updateWorldRuntime(delta);');
+    expect(scene).toContain('this.arenaRuntime.update(delta);');
+    expect(scene).not.toContain('updateWorldRuntime');
   });
 });

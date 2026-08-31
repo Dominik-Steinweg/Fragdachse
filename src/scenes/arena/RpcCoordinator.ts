@@ -4,6 +4,7 @@ import type { ArenaContext }        from './ArenaContext';
 import type { RendererBundle }      from './RendererBundle';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
+import type { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
 import type { ExplosionVisualStyle, LoadoutUseParams, LoadoutUseResult } from '../../types';
 import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
@@ -106,6 +107,8 @@ function getHeldActionIdentity(params?: LoadoutUseParams): HeldActionIdentity | 
  */
 export class RpcCoordinator {
   private lifecycle: ArenaLifecycleCoordinator | null = null;
+  /** Der raumlanglebige Persistent-Base-Owner; er beantwortet seine eigenen RPCs. */
+  private persistentBase: ArenaPersistentBaseSession | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -117,6 +120,10 @@ export class RpcCoordinator {
 
   setLifecycle(lifecycle: ArenaLifecycleCoordinator): void {
     this.lifecycle = lifecycle;
+  }
+
+  setPersistentBaseSession(session: ArenaPersistentBaseSession): void {
+    this.persistentBase = session;
   }
 
   registerAll(): void {
@@ -153,14 +160,14 @@ export class RpcCoordinator {
 
   private registerPersistentBaseRewardPlacementHandler(): void {
     bridge.registerPersistentBaseRewardPlacementHandler((playerId, request) => (
-      this.lifecycle?.placePersistentBaseReward(playerId, request)
+      this.persistentBase?.placePersistentBaseReward(playerId, request)
       ?? { ok: false, reason: 'blocked' }
     ));
   }
 
   private registerPersistentBaseMoveHandler(): void {
     bridge.registerPersistentBaseMoveHandler((playerId, request) => (
-      this.lifecycle?.movePersistentBaseObject(playerId, request)
+      this.persistentBase?.movePersistentBaseObject(playerId, request)
       ?? { ok: false, reason: 'blocked' }
     ));
   }

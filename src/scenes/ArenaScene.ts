@@ -229,6 +229,7 @@ import {
   HostUpdateCoordinator,
   RpcCoordinator,
   ArenaLifecycleCoordinator,
+  ArenaRuntime,
   GaussWarningRenderer,
   createRendererBundle,
   wireRenderersToProjManager,
@@ -351,7 +352,9 @@ export class ArenaScene extends Phaser.Scene {
   private hostUpdate!: HostUpdateCoordinator;
   private clientUpdate!: ClientUpdateCoordinator;
   private rpcCoordinator!: RpcCoordinator;
-  private lifecycle!: ArenaLifecycleCoordinator;
+  private arenaRuntime!: ArenaRuntime;
+  /** Der Arena-Flow der laufenden Szene; sein Owner ist die `ArenaRuntime`. */
+  private get lifecycle(): ArenaLifecycleCoordinator { return this.arenaRuntime.flow; }
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -1304,7 +1307,7 @@ export class ArenaScene extends Phaser.Scene {
       getCapacity: () => ({
         used: this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
         max: bridge.isHost()
-          ? this.lifecycle?.getConstructionCapacityForPlayer(bridge.getLocalPlayerId())
+          ? this.arenaRuntime?.flow.getConstructionCapacityForPlayer(bridge.getLocalPlayerId())
             ?? this.clientUpdate.getLocalConstructionCapacity()
           : this.clientUpdate.getLocalConstructionCapacity(),
       }),
@@ -1363,25 +1366,25 @@ export class ArenaScene extends Phaser.Scene {
       () => {
         if (!isCoopDefenseMode(bridge.getActiveGameMode())) return [];
         const localId = bridge.getLocalPlayerId();
-        return this.lifecycle?.getPersistentBaseRewardIdsForPlayer(localId) ?? [];
+        return this.arenaRuntime?.persistentBase.getPersistentBaseRewardIdsForPlayer(localId) ?? [];
       },
       (rewardId: PersistentBaseRewardId) => {
         const localId = bridge.getLocalPlayerId();
         const pointer = this.getPointerWorldPoint();
-        return this.lifecycle?.getPersistentBaseRewardPlacementPreview(
+        return this.arenaRuntime?.persistentBase.getPersistentBaseRewardPlacementPreview(
           localId,
           rewardId,
           pointer.x,
           pointer.y,
         );
       },
-      (rewardId, preview) => this.lifecycle?.requestPersistentBaseRewardPlacement(rewardId, preview)
+      (rewardId, preview) => this.arenaRuntime?.persistentBase.requestPersistentBaseRewardPlacement(rewardId, preview)
         ?? Promise.resolve({ ok: false, reason: 'blocked' as const }),
     );
     inputSystem.setupRepositionActionProvider(
       () => {
         const pointer = this.getPointerWorldPoint();
-        return this.lifecycle?.getPersistentBaseMoveSourcePreview(
+        return this.arenaRuntime?.persistentBase.getPersistentBaseMoveSourcePreview(
           bridge.getLocalPlayerId(),
           pointer.x,
           pointer.y,
@@ -1389,7 +1392,7 @@ export class ArenaScene extends Phaser.Scene {
       },
       (sourceRuntimeId: number) => {
         const pointer = this.getPointerWorldPoint();
-        return this.lifecycle?.getPersistentBaseMoveTargetPreview(
+        return this.arenaRuntime?.persistentBase.getPersistentBaseMoveTargetPreview(
           bridge.getLocalPlayerId(),
           sourceRuntimeId,
           pointer.x,
@@ -1397,7 +1400,7 @@ export class ArenaScene extends Phaser.Scene {
         );
       },
       (sourceRuntimeId, preview) => {
-        const request = this.lifecycle?.requestPersistentBaseMove(sourceRuntimeId, preview)
+        const request = this.arenaRuntime?.persistentBase.requestPersistentBaseMove(sourceRuntimeId, preview)
           ?? Promise.resolve({ ok: false, reason: 'blocked' as const });
         return request.then((result) => {
           if (!result.ok) this.placementPreview.showPlacementError(t('ui.errors.moveFailed'));
@@ -1730,13 +1733,18 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── RPC + Lifecycle coordinators ──────────────────────────────────────
     this.rpcCoordinator = new RpcCoordinator(this, this.ctx, this.renderers, this.clientUpdate, leftPanel);
-    this.lifecycle      = new ArenaLifecycleCoordinator(
-      this, this.ctx, this.renderers,
-      this.rockVisualHelper, this.placementPreview,
-      this.persistentBasePreviewRenderer,
-      this.lobbyOverlay, this.hostUpdate, this.clientUpdate,
-      this.roomQualityMonitor,
-    );
+    this.arenaRuntime   = new ArenaRuntime({
+      scene: this,
+      ctx: this.ctx,
+      renderers: this.renderers,
+      rockVisualHelper: this.rockVisualHelper,
+      placementPreview: this.placementPreview,
+      persistentBasePreviewRenderer: this.persistentBasePreviewRenderer,
+      lobbyOverlay: this.lobbyOverlay,
+      hostUpdate: this.hostUpdate,
+      clientUpdate: this.clientUpdate,
+      roomQualityMonitor: this.roomQualityMonitor,
+    });
     this.clientUpdate.setPlayerWorldRuntime(
       (profile, spawn) => this.lifecycle.attachPlayerToWorld(profile, false, spawn),
       (playerId) => this.lifecycle.detachPlayerFromWorld(playerId),
@@ -1747,9 +1755,6 @@ export class ArenaScene extends Phaser.Scene {
     this.hostUpdate.setPlayerCapabilitiesResolver(
       (playerId) => this.lifecycle.getPlayerCapabilities(playerId),
     );
-    // Beide Frame-Owner kennen nur den Missionsschritt; seine Reihenfolge gehoert der Activity.
-    this.hostUpdate.setActivityStepResolver(() => this.lifecycle.getActivityStep());
-    this.clientUpdate.setActivityStepResolver(() => this.lifecycle.getActivityStep());
     this.ctx.hostPhysics.setCanMoveResolver(
       (playerId) => this.lifecycle.getPlayerCapabilities(playerId).canMove,
     );
@@ -1781,6 +1786,7 @@ export class ArenaScene extends Phaser.Scene {
       (request) => this.startWeaponBalanceLab(request),
     );
     this.rpcCoordinator.setLifecycle(this.lifecycle);
+    this.rpcCoordinator.setPersistentBaseSession(this.arenaRuntime.persistentBase);
     this.rpcCoordinator.registerAll();
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
     leftPanel.setAbortMatchBinding({
@@ -1875,12 +1881,12 @@ export class ArenaScene extends Phaser.Scene {
     if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
-    this.lifecycle.syncPersistentBaseContributions();
-    this.lifecycle.syncPersistentBaseRewards();
+    this.arenaRuntime.persistentBase.syncPersistentBaseContributions();
+    this.arenaRuntime.persistentBase.syncPersistentBaseRewards();
     this.lifecycle.detectWorldChange(deferArenaExit);
     // Erst steht fest, welche World lokal laeuft - dann taktet ihre Runtime. Sie taktet nur die
     // eigenen Child-Owner; Rundenphase und Rolle entscheiden darueber nichts.
-    this.lifecycle.updateWorldRuntime(delta);
+    this.arenaRuntime.update(delta);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
     const configuredGameMode = this.resolveConfiguredGameMode(configuredPhase);
@@ -2089,9 +2095,9 @@ export class ArenaScene extends Phaser.Scene {
 
     if (worldActive && !activityActive && !terminated) {
       const worldStepStartMs = diagnosticsActive ? performance.now() : 0;
-      if (bridge.isHost()) this.hostUpdate.runHostUpdate(delta);
+      if (bridge.isHost()) this.arenaRuntime.runHostFrame(delta);
       else {
-        this.clientUpdate.runClientUpdate(delta);
+        this.arenaRuntime.runClientFrame(delta);
         this.syncClientWorldSnapshotPresentation(delta, false, null);
       }
       if (diagnosticsActive) primaryStepMs += performance.now() - worldStepStartMs;
@@ -2153,11 +2159,11 @@ export class ArenaScene extends Phaser.Scene {
           && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
           && !this.ctx.leftPanel.isHotkeyInputBlocked()
           && !countdownActive) {
-          this.lifecycle.getActivityStep()?.hostApplyDebugBaseDamage(50);
+          this.arenaRuntime.applyDebugBaseDamage(50);
         }
-        this.hostUpdate.runHostUpdate(delta);
+        this.arenaRuntime.runHostFrame(delta);
         const coopRoundOutcome = gameplayActive
-          ? this.lifecycle.getActivityStep()?.hostResolveCompletion() ?? null
+          ? this.arenaRuntime.resolveActivityCompletion()
           : null;
         if (coopRoundOutcome) {
           this.prepareCoopDefenseBalanceRound(coopRoundOutcome);
@@ -2168,7 +2174,7 @@ export class ArenaScene extends Phaser.Scene {
         if (diagnosticsActive) primaryStepMs += performance.now() - hostStepStartMs;
       } else {
         const clientStepStartMs = diagnosticsActive ? performance.now() : 0;
-        this.clientUpdate.runClientUpdate(delta);
+        this.arenaRuntime.runClientFrame(delta);
 
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
         const clientRendererSyncStartedAt = diagnosticsActive ? performance.now() : 0;
@@ -4148,7 +4154,7 @@ export class ArenaScene extends Phaser.Scene {
     this.flowFieldDebugOverlay = null;
   }
 
-  private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.lifecycle?.isMatchTerminated()): void {
+  private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.arenaRuntime?.flow.isMatchTerminated()): void {
     if (!this.ctx) return;
     const shouldShow = inArena && this.arenaPanelsHeld;
     this.syncArenaPanelOverlay(shouldShow);

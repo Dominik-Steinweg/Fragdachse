@@ -6,6 +6,8 @@ export { ClientUpdateCoordinator }       from './ClientUpdateCoordinator';
 export { HostUpdateCoordinator }         from './HostUpdateCoordinator';
 export { RpcCoordinator }               from './RpcCoordinator';
 export { ArenaLifecycleCoordinator }    from './ArenaLifecycleCoordinator';
+export { ArenaRuntime }                 from './ArenaRuntime';
+export { ArenaPersistentBaseSession }   from './ArenaPersistentBaseSession';
 export { GaussWarningRenderer }         from './GaussWarningRenderer';
 export { createRendererBundle, wireRenderersToProjManager, wireRenderersToEffectSystem, wireRenderersToAudioSystem, wireRenderersToCameraFeedback, wireRenderersToDistortion } from './RendererBundle';
 export type { RendererBundle }           from './RendererBundle';

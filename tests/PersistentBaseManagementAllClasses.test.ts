@@ -7,7 +7,7 @@ vi.mock('phaser', async () => {
   return createFakePhaserModule();
 });
 
-import { ArenaLifecycleCoordinator } from '../src/scenes/arena/ArenaLifecycleCoordinator';
+import { ArenaPersistentBaseSession } from '../src/scenes/arena/ArenaPersistentBaseSession';
 import { PersistentBaseWorldBinding } from '../src/world/PersistentBaseWorldBinding';
 import { RockGridIndex } from '../src/arena/RockGridIndex';
 import { LOBBY_WORLD_DEFINITION_ID } from '../src/config/authoring/lobbyWorld';
@@ -141,7 +141,8 @@ function createHarness(classId: string) {
 
   vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue({ coopDefenseClassId: classId } as never);
 
-  const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as ArenaLifecycleCoordinator & Record<string, any>;
+  // Phase 10C: Die host-seitigen Persistent-Base-Anfragen gehoeren dem raumlanglebigen Owner.
+  const coordinator = Object.create(ArenaPersistentBaseSession.prototype) as ArenaPersistentBaseSession & Record<string, any>;
   const persistentBaseWorldBinding = new PersistentBaseWorldBinding({
     finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
     releaseRewardRuntime: () => { /* dito */ },
@@ -172,13 +173,19 @@ function createHarness(classId: string) {
     },
     // Die world-lokalen Runtime-IDs gehoeren der World-Runtime; der Test stellt genau diese
     // Bindung, nicht mehr zwei lose Maps.
-    persistentBaseWorldBinding,
-    persistentBaseSession,
-    persistentBaseRewardProjectionSignature: null,
-    persistentBaseRewardProjectionRevision: 0,
-    persistentBaseRewardGrantService: new PersistentBaseRewardGrantService(),
+    session: persistentBaseSession,
+    projectionSignature: null,
+    projectionRevision: 0,
+    grantService: new PersistentBaseRewardGrantService(),
+    world: {
+      getWorldBinding: () => persistentBaseWorldBinding,
+      getConstructionRuntime: () => coordinator.constructionWorldRuntime,
+      getPlayerCapabilities: () => ({ canPlace: true, canDismantle: true, canInteract: true } as never),
+      hasPersistentBaseSite: () => true,
+      getConfiguredGameMode: () => COOP_DEFENSE_MODE,
+    },
   });
-  coordinator.resolveConfiguredGameMode = () => COOP_DEFENSE_MODE;
+  coordinator.persistentBaseWorldBinding = persistentBaseWorldBinding;
   coordinator.getPlayerCapabilities = () => ({ canPlace: true, canDismantle: true, canInteract: true } as never);
   coordinator.persistCurrentCommittedPersistentBaseRewards = vi.fn();
   coordinator.publishPersistentBaseRewardSessionState = vi.fn();
@@ -481,7 +488,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       1_000,
     )).toMatchObject({ isValid: true, sourceRuntimeId: reward.id, mode: 'dismantle' });
 
-    expect(coordinator.dismantleConstruction(playerId, target.x, target.y)).toEqual({ ok: true });
+    expect(coordinator.constructionWorldRuntime.dismantleConstruction(playerId, target.x, target.y)).toEqual({ ok: true });
     expect(placementSystem.getRuntimeRock(reward.id)).toBeUndefined();
     expect(rewardStore.getState().placements).toEqual([]);
   });
@@ -712,7 +719,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     });
     const target = worldCellCenter(METRICS, source.gridX, source.gridY);
 
-    expect(coordinator.dismantleConstruction(
+    expect(coordinator.constructionWorldRuntime.dismantleConstruction(
       playerId,
       target.x,
       target.y,
@@ -721,7 +728,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(placementSystem.getRuntimeRock(source.id)).toBeDefined();
     expect(contributionStore.getContribution(playerId)?.constructions).toEqual([blueprint]);
 
-    expect(coordinator.dismantleConstruction(
+    expect(coordinator.constructionWorldRuntime.dismantleConstruction(
       playerId,
       target.x,
       target.y,

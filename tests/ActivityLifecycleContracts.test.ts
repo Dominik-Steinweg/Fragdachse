@@ -315,7 +315,17 @@ describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Fla
     expect(composition).toContain("const isCoopMission = activity?.kind === 'coop-mission';");
     expect([...composition.matchAll(/const isCoopMission =/g)]).toHaveLength(1);
     expect(body).toContain('isCoopMission,');
-    expect([...body.matchAll(/\bisCoopMission\b/g)].length).toBeGreaterThanOrEqual(10);
+    // Phase 10C: Die Verbraucher dieser einen Entscheidung stehen an der World-Gameplay-
+    // Composition-Grenze; der Flow reicht sie nur weiter.
+    const worldGameplay = [
+      'src/scenes/arena/ArenaWorldGameplayComposition.ts',
+      'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
+      'src/scenes/arena/ArenaWorldPlayerComposition.ts',
+      'src/scenes/arena/ArenaWorldCombatComposition.ts',
+      'src/scenes/arena/ArenaWorldConstructionComposition.ts',
+    ].map((path) => readFileSync(resolve(process.cwd(), path), 'utf8')).join('\n');
+    expect([...`${body}${worldGameplay}`.matchAll(/\bisCoopMission\b/g)].length)
+      .toBeGreaterThanOrEqual(10);
 
     // Und keine verstreute Modus-Abfrage mehr im Aufbau der Runtime.
     expect(

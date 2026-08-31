@@ -438,7 +438,7 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     ]) {
       expect(activityComposition).toContain(child);
     }
-    expect(coordinator).toContain('this.coopMissionComposition.materializeCore(activityConfiguration, coopMissionRuntime, layout)');
+    expect(coordinator).toContain('this.coopMissionComposition.materializeCore(configuration, runtime, layout)');
     expect(coordinator).not.toContain('createCombatComposition(');
     expect(coordinator).not.toContain('new CoopMissionEnemyBehaviourComposition(');
     expect(coordinator).not.toContain('new CoopMissionEnemySupportComposition(');

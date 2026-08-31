@@ -13,6 +13,14 @@ import { describe, expect, it } from 'vitest';
 
 const CONTEXT_PATH = 'src/scenes/arena/ArenaContext.ts';
 const COORDINATOR_PATH = 'src/scenes/arena/ArenaLifecycleCoordinator.ts';
+const PERSISTENT_BASE_PATH = 'src/scenes/arena/ArenaPersistentBaseSession.ts';
+const WORLD_GAMEPLAY_PATHS = [
+  'src/scenes/arena/ArenaWorldGameplayComposition.ts',
+  'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
+  'src/scenes/arena/ArenaWorldPlayerComposition.ts',
+  'src/scenes/arena/ArenaWorldCombatComposition.ts',
+  'src/scenes/arena/ArenaWorldConstructionComposition.ts',
+];
 const SCENE_PATH = 'src/scenes/ArenaScene.ts';
 
 function read(path: string): string {
@@ -49,6 +57,36 @@ const OWNED_ROUND_FIELDS: Readonly<Record<string, string>> = {
   worldMaterialization: 'this.releaseWorldRuntime(',
   worldPresentation: 'this.releaseWorldRuntime(',
   coopDefenseTeamBuffSystem: 'this.detachLocalActivityForTeardown();',
+  // Phase-10C: Die World-Gameplay-Owner nullen ihre Compatibility-Projektionen selbst, sobald
+  // die `WorldRuntime` sie zerstoert. Ein zusaetzlicher manueller Reset im Flow waere wieder
+  // Doppelbesitz - genau das soll dieser Vertrag verhindern.
+  reinforcementMatrixSystem: 'this.releaseWorldRuntime(',
+  energyInjectorSystem: 'this.releaseWorldRuntime(',
+  targetStatusSystem: 'this.releaseWorldRuntime(',
+  resourceSystem: 'this.releaseWorldRuntime(',
+  burrowSystem: 'this.releaseWorldRuntime(',
+  loadoutManager: 'this.releaseWorldRuntime(',
+  powerUpSystem: 'this.releaseWorldRuntime(',
+  detonationSystem: 'this.releaseWorldRuntime(',
+  armageddonSystem: 'this.releaseWorldRuntime(',
+  airstrikeSystem: 'this.releaseWorldRuntime(',
+  shieldBuffSystem: 'this.releaseWorldRuntime(',
+  energyShieldSystem: 'this.releaseWorldRuntime(',
+  timeBubbleSystem: 'this.releaseWorldRuntime(',
+  teslaDomeSystem: 'this.releaseWorldRuntime(',
+  turretSystem: 'this.releaseWorldRuntime(',
+  coopDefensePlayerModifierSystem: 'this.releaseWorldRuntime(',
+  coopDefenseItemRuntimeSystem: 'this.releaseWorldRuntime(',
+  guardianSpiritSystem: 'this.releaseWorldRuntime(',
+  repairDroneSystem: 'this.releaseWorldRuntime(',
+  slimeTrailSystem: 'this.releaseWorldRuntime(',
+  flamethrowerUpgradeSystem: 'this.releaseWorldRuntime(',
+  weaponUpgradeSystem: 'this.releaseWorldRuntime(',
+  ak47StrategicTargetSystem: 'this.releaseWorldRuntime(',
+  translocatorSystem: 'this.releaseWorldRuntime(',
+  tunnelSystem: 'this.releaseWorldRuntime(',
+  // Die Capture-the-Beer-Runtime gehoert der Activity; ihr Detach nullt die Fassade.
+  captureTheBeerSystem: 'this.detachLocalActivityForTeardown();',
   // Phase-5-Compatibility: Diese Felder sind nur Lesefassaden auf CoopMissionRuntime. Der eine
   // Activity-Detach zerstoert Enemy-, Encounter-, Boss- und Navigation-State und nullt sie ueber
   // den gerichteten Binding-Callback; ein manueller Einzel-Teardown waere wieder Doppelbesitz.
@@ -124,6 +162,24 @@ describe('arena round lifecycle contract', () => {
     expect(leaking, 'round-scoped ArenaContext fields left behind by tearDownArena()').toEqual([]);
   });
 
+  it('laesst die World-Gameplay-Projektionen ausschliesslich von ihrem Owner zuruecksetzen', () => {
+    const coordinator = read(COORDINATOR_PATH);
+    const worldGameplay = WORLD_GAMEPLAY_PATHS.map(read).join('\n');
+    const ownerCleared = Object.entries(OWNED_ROUND_FIELDS)
+      .filter(([field, owner]) => (
+        owner === 'this.releaseWorldRuntime('
+        && !['world', 'worldMaterialization', 'worldPresentation'].includes(field)
+      ))
+      .map(([field]) => field);
+    expect(ownerCleared.length).toBeGreaterThan(20);
+    for (const field of ownerCleared) {
+      // Genau ein Schreiber: die World-Composition setzt die Projektion und nullt sie mit dem
+      // Owner-Teardown. Ein zweiter Reset im Flow waere wieder Doppelbesitz.
+      expect(worldGameplay, field).toContain(`ctx.${field} = `);
+      expect(coordinator, field).not.toContain(`this.ctx.${field} = `);
+    }
+  });
+
   it('initialisiert jedes round-scoped Feld beim Scene-Aufbau leer', () => {
     const source = read(SCENE_PATH).replace(/[ \t]+/g, ' ');
     const missing = roundScopedFields.filter((field) => !(
@@ -154,7 +210,8 @@ describe('arena round lifecycle contract', () => {
     expect(rollback).toBe(-1);
     expect(runtimeDetach).toBeGreaterThan(teardownStart);
     expect(source).toContain('activityIdentity: {');
-    expect(source).toContain('private endPersistentBaseTransaction(activity: ActivityDescriptor): void');
+    expect(read(PERSISTENT_BASE_PATH))
+      .toContain('endPersistentBaseTransaction(activity: ActivityDescriptor): void');
   });
 
   it('wendet Victory/Defeat vor dem Ende der World-Instanz an', () => {
@@ -177,30 +234,31 @@ describe('arena round lifecycle contract', () => {
 
   it('bindet Map- und Objective-Rewards an den gemeinsamen host-autoritativen Grant-Pfad', () => {
     const source = read(COORDINATOR_PATH);
+    const persistentBase = read(PERSISTENT_BASE_PATH);
     const objectiveComposition = read(
       resolve(process.cwd(), 'src/activity/CoopMissionObjectiveComposition.ts'),
     );
     expect(source).toContain('getActivityDefinition(definitionId)?.persistentBaseRewardsOnVictory ?? []');
     expect(source).toContain('grantPersistentBaseRewards: (rewardIds) => {');
-    expect(source).toContain('this.grantAuthoredPersistentBaseRewards(rewardIds);');
+    expect(source).toContain('this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds);');
     expect(objectiveComposition).toContain(
       'this.options.grantPersistentBaseRewards(config?.rewards?.persistentBaseRewardsOnComplete);',
     );
 
-    const helperStart = source.indexOf('  private grantAuthoredPersistentBaseRewards(');
-    const helperEnd = source.indexOf('\n  /**', helperStart + 1);
+    const helperStart = persistentBase.indexOf('  grantAuthoredPersistentBaseRewards(');
+    const helperEnd = persistentBase.indexOf('\n  /**', helperStart + 1);
     expect(helperStart).toBeGreaterThan(0);
     expect(helperEnd).toBeGreaterThan(helperStart);
-    const helperBody = source.slice(helperStart, helperEnd);
+    const helperBody = persistentBase.slice(helperStart, helperEnd);
     expect(helperBody).toContain('bridge.getRoundResultEligiblePlayerIds()');
     expect(helperBody).toContain('grantStoredPersistentBaseRewards');
     expect(helperBody).toContain('bridge.hostGrantPersistentBaseRewards');
 
-    const syncStart = source.indexOf('  syncPersistentBaseRewards(): void');
-    const syncEnd = source.indexOf('\n  /**', syncStart + 1);
+    const syncStart = persistentBase.indexOf('  syncPersistentBaseRewards(): void');
+    const syncEnd = persistentBase.indexOf('\n  /**', syncStart + 1);
     expect(syncStart).toBeGreaterThan(0);
     expect(syncEnd).toBeGreaterThan(syncStart);
-    const syncBody = source.slice(syncStart, syncEnd);
+    const syncBody = persistentBase.slice(syncStart, syncEnd);
     expect(syncBody.indexOf('bridge.getConfirmedPersistentBaseRewardGrant()')).toBeGreaterThanOrEqual(0);
     expect(syncBody.indexOf('grantStoredPersistentBaseRewards(confirmed.rewardIds)'))
       .toBeLessThan(syncBody.indexOf('if (!bridge.isHost()) return;'));

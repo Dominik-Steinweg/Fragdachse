@@ -3,6 +3,15 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WorldTargetingRuntime } from '../src/world/WorldTargetingRuntime';
 
+const NEWLINE = String.fromCharCode(10);
+const COMPOSITION_PATHS = [
+  'src/scenes/arena/ArenaWorldGameplayComposition.ts',
+  'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
+  'src/scenes/arena/ArenaWorldPlayerComposition.ts',
+  'src/scenes/arena/ArenaWorldCombatComposition.ts',
+  'src/scenes/arena/ArenaWorldConstructionComposition.ts',
+];
+
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
 }
@@ -34,11 +43,25 @@ describe('Phase 10B.6 – World gameplay composition', () => {
 
   it('leaves the remaining World gameplay graph to focused owners', () => {
     const coordinator = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const buildStart = coordinator.indexOf('\n  buildWorld(');
-    const teardownStart = coordinator.indexOf('\n  tearDownArena(', buildStart);
-    expect(buildStart).toBeGreaterThan(0);
-    expect(teardownStart).toBeGreaterThan(buildStart);
-    const build = coordinator.slice(buildStart, teardownStart);
+    // Phase 10C: Der konkrete Graph entsteht an der World-Gameplay-Composition-Grenze; der Flow
+    // ruft sie genau einmal und kennt weder Owner-Konstruktoren noch ihre Verdrahtung.
+    const build = COMPOSITION_PATHS.map(read).join(NEWLINE);
+    const buildCall = coordinator.indexOf('composeArenaWorldGameplay({');
+    expect(buildCall).toBeGreaterThan(0);
+    for (const owner of [
+      'new WorldGeometryBinding',
+      'new WorldTargetingRuntime',
+      'new WorldTrainRuntime',
+      'new WorldPlayerGameplayRuntime',
+      'new WorldCombatGameplayBinding',
+      'new WorldPowerUpRuntime',
+      'new ConstructionWorldRuntime',
+      'new WorldSupportGameplayRuntime',
+      'new PersistentBaseWorldMaterializer',
+    ]) {
+      expect(coordinator, `${owner} leaked back into the flow`).not.toContain(owner);
+      expect(build, owner).toContain(owner);
+    }
     for (const legacyConstructor of [
       'new ReinforcementMatrixSystem',
       'new EnergyInjectorSystem',
@@ -63,7 +86,9 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(build).toContain('worldRuntime.bind(supportGameplayRuntime);');
     expect(build).not.toContain('new CaptureTheBeerSystem');
 
+    const teardownStart = coordinator.indexOf('\n  tearDownArena(');
     const teardownEnd = coordinator.indexOf('\n  private ', teardownStart);
+    expect(teardownStart).toBeGreaterThan(0);
     const teardown = coordinator.slice(teardownStart, teardownEnd);
     for (const migratedCleanup of [
       'this.ctx.combatSystem.set',
@@ -86,11 +111,15 @@ describe('Phase 10B.6 – World gameplay composition', () => {
   it('liest den Coop-Activity-State dynamisch und besitzt das Barrier-Projection-API', () => {
     const combat = read('src/world/WorldCombatGameplayBinding.ts');
     const coordinator = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const composition = COMPOSITION_PATHS.map(read).join(NEWLINE);
     expect(combat).not.toContain('readonly isCoopMission: boolean');
     expect(combat).toContain('readonly isCoopMission: () => boolean');
     expect(combat).toContain('updateActivityBindings(): void');
     expect(combat).toContain('clearActivityBindings(): void');
-    expect(coordinator).toContain('isCoopMission: () => this.worldLifecycle.activity.is(\'coop-mission\')');
+    // Die Composition fragt den Flow nach der laufenden Activity; der Flow selbst beantwortet sie
+    // aus dem Activity-Lifecycle und materialisiert dafuer kein Kampfsystem.
+    expect(composition).toContain('isCoopMission: () => flow.isCoopMissionActivity()');
+    expect(coordinator).toContain('isCoopMissionActivity: () => this.worldLifecycle.activity.is(\'coop-mission\')');
     expect(coordinator).toContain('this.worldCombatGameplayBinding?.updateActivityBindings()');
     expect(coordinator).toContain('this.worldCombatGameplayBinding?.clearActivityBindings()');
   });

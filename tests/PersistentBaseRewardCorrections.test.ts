@@ -28,7 +28,7 @@ vi.mock('phaser', () => {
   });
 });
 
-import { ArenaLifecycleCoordinator } from '../src/scenes/arena/ArenaLifecycleCoordinator';
+import { ArenaPersistentBaseSession } from '../src/scenes/arena/ArenaPersistentBaseSession';
 import { PersistentBaseWorldBinding } from '../src/world/PersistentBaseWorldBinding';
 import { LOBBY_WORLD_DEFINITION_ID } from '../src/config/authoring/lobbyWorld';
 import {
@@ -47,6 +47,7 @@ import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseR
 import { PersistentBaseWorldMaterializer } from '../src/world/PersistentBaseWorldMaterializer';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
 import { bridge } from '../src/network/bridge';
+import { COOP_DEFENSE_MODE } from '../src/gameModes';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { CoopDefenseSecondaryObjectiveSystem } from '../src/systems/CoopDefenseSecondaryObjectiveSystem';
 import {
@@ -61,7 +62,7 @@ import type { WorldPersistentBaseSite } from '../src/world/WorldRuntimeContext';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
 
-const LIFECYCLE_PATH = resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts');
+const LIFECYCLE_PATH = resolve(process.cwd(), 'src/scenes/arena/ArenaPersistentBaseSession.ts');
 
 function readLifecycle(): string {
   return readFileSync(LIFECYCLE_PATH, 'utf8');
@@ -222,7 +223,7 @@ function fakePlacementSystem(initialRocks: readonly SyncedPlaceableRock[] = []) 
 function testCoordinator(
   initialRocks: readonly SyncedPlaceableRock[] = [],
 ): {
-  coordinator: ArenaLifecycleCoordinator & Record<string, any>;
+  coordinator: ArenaPersistentBaseSession & Record<string, any>;
   contributionStore: PersistentBaseContributionStore;
   rewardStore: PersistentBaseRewardStore;
   rocks: Map<number, SyncedPlaceableRock>;
@@ -235,7 +236,8 @@ function testCoordinator(
   const rewardStore = persistentBaseSession.rewards;
   const fakePlacement = fakePlacementSystem(initialRocks);
   const playerId = bridge.getLocalPlayerId();
-  const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as ArenaLifecycleCoordinator & Record<string, any>;
+  // Phase 10C: Die host-seitigen Persistent-Base-Anfragen gehoeren dem raumlanglebigen Owner.
+  const coordinator = Object.create(ArenaPersistentBaseSession.prototype) as ArenaPersistentBaseSession & Record<string, any>;
   const baseManager = {
     getBase: () => ({ isInert: () => false }),
   };
@@ -265,10 +267,17 @@ function testCoordinator(
       finalizeRuntimeObjects: () => { /* nicht Gegenstand dieses Tests */ },
       releaseRewardRuntime: () => { /* dito */ },
     }),
-    persistentBaseSession,
-    persistentBaseRewardProjectionSignature: null,
-    persistentBaseRewardProjectionRevision: 0,
-    persistentBaseRewardGrantService: new PersistentBaseRewardGrantService(),
+    session: persistentBaseSession,
+    projectionSignature: null,
+    projectionRevision: 0,
+    grantService: new PersistentBaseRewardGrantService(),
+    world: {
+      getWorldBinding: () => coordinator.persistentBaseWorldBinding,
+      getConstructionRuntime: () => null,
+      getPlayerCapabilities: () => coordinator.getPlayerCapabilities(),
+      hasPersistentBaseSite: () => true,
+      getConfiguredGameMode: () => COOP_DEFENSE_MODE,
+    },
   });
 
   coordinator.getPlayerCapabilities = () => ({ canPlace: true, canDismantle: true } as any);
@@ -375,8 +384,8 @@ function personalContribution(ownerId: string): {
 describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
   it('verwendet die zentrale kanonische World-Zellen-Aufloesung', () => {
     const source = readLifecycle();
-    const resolverStart = source.indexOf('  private resolvePersistentBaseRewardCell(');
-    const resolverEnd = source.indexOf('\n  private isPersistentBaseRewardPlacementInDomain(', resolverStart);
+    const resolverStart = source.indexOf('  resolvePersistentBaseRewardCell(');
+    const resolverEnd = source.indexOf('\n  resolvePersistentBaseRewardRelativeCell(', resolverStart);
     expect(resolverStart).toBeGreaterThanOrEqual(0);
     expect(resolverEnd).toBeGreaterThan(resolverStart);
     const resolver = source.slice(resolverStart, resolverEnd);
@@ -423,7 +432,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
   it('baut nach einem Materialisierungsfehler das unveraenderte Composite wieder auf', () => {
     const source = readLifecycle();
     const placementStart = source.indexOf('  placePersistentBaseReward(');
-    const placementEnd = source.indexOf('\n  /** Host callback fuer den atomaren Rollenwechsel', placementStart);
+    const placementEnd = source.indexOf('\n  /** Liefert die lokale Reward-Vorschau', placementStart);
     expect(placementStart).toBeGreaterThanOrEqual(0);
     expect(placementEnd).toBeGreaterThan(placementStart);
     const placement = source.slice(placementStart, placementEnd);

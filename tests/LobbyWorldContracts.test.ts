@@ -313,7 +313,7 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     // Genau eine Activity oeffnet genau einen Arbeitsstand - am Identity-Lifecycle und nicht im
     // lokalen World-Aufbau.
     expect(lifecycle).toContain('activityIdentity: {');
-    expect(lifecycle).toContain('this.beginPersistentBaseTransaction(activity);');
+    expect(lifecycle).toContain('this.persistentBase.beginPersistentBaseTransaction(activity);');
     const buildStart = lifecycle.indexOf('  buildWorld(');
     const buildEnd = lifecycle.indexOf('  tearDownArena(', buildStart);
     expect(lifecycle.slice(buildStart, buildEnd)).not.toContain('beginTransaction(');

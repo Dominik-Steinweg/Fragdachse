@@ -296,6 +296,11 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
       resolve(process.cwd(), 'src/world/PersistentBaseWorldMaterializer.ts'),
       'utf8',
     );
+    // Phase 10C: Raum-Session-Regeln liegen beim Persistent-Base-Owner, nicht im Flow.
+    const persistentBase = readFileSync(
+      resolve(process.cwd(), 'src/scenes/arena/ArenaPersistentBaseSession.ts'),
+      'utf8',
+    );
 
   it('nimmt bereits materialisierte Zellen aus der statischen Kollision heraus', () => {
     expect(materializer).toContain('isCellBlocked: (gridX, gridY) => !materializedCells.has(cellKey(gridX, gridY))');
@@ -314,11 +319,11 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
   });
 
   it('rechnet nach einem Austritt neu, damit Unterdruecktes zurueckkommt', () => {
-    const start = lifecycle.indexOf('  private removeGuestSessionOwner(playerId: string): void {');
-    const end = lifecycle.indexOf('\n  /** Gemeinsamer Entkopplungspfad', start);
+    const start = persistentBase.indexOf('  removeGuestSessionOwner(playerId: string): void {');
+    const end = persistentBase.indexOf('\n  /** Verwirft einen offenen Missions-Working-State', start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(lifecycle.slice(start, end)).toContain('this.reconcilePersistentBaseWorld();');
+    expect(persistentBase.slice(start, end)).toContain('this.reconcilePersistentBaseWorld();');
   });
 
   it('reconciled nach einer relevanten Live-Build-Aenderung ohne die Loadout-Dormancy aufzuweichen', () => {
@@ -344,10 +349,11 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
   });
 
   it('laesst eine Besitzeridentitaet nur einem Spieler des Raums', () => {
-    expect(lifecycle).toContain(
-      'this.persistentBaseSession.acceptContributionOffer(playerId, offered)',
+    expect(persistentBase).toContain(
+      'this.session.acceptContributionOffer(playerId, offered)',
     );
-    expect(lifecycle).not.toContain('persistentBaseOwnerByPlayerId');
-    expect(lifecycle).not.toContain('ingestedContributionRevisions');
+    expect(persistentBase).not.toContain('persistentBaseOwnerByPlayerId');
+    expect(persistentBase).not.toContain('ingestedContributionRevisions');
+    expect(lifecycle).not.toContain('acceptContributionOffer');
   });
 });

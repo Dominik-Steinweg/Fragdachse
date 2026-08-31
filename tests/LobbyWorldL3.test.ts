@@ -334,7 +334,7 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
       scene.indexOf('if (worldActive && !activityActive && !terminated)'),
       scene.indexOf('if ((gameplayActive || countdownActive) && !terminated)'),
     );
-    expect(noActivity).toContain('this.clientUpdate.runClientUpdate(delta);');
+    expect(noActivity).toContain('this.arenaRuntime.runClientFrame(delta);');
     expect(noActivity).toContain('this.syncClientWorldSnapshotPresentation(delta, false, null);');
     expect(scene).toContain('if (!this.lifecycle.getLocalWorldPresentation().required) return;');
   });

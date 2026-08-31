@@ -459,11 +459,17 @@ describe('Phase 8 – Ownership im Koordinator', () => {
     resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
     'utf8',
   );
+  // Phase 10C: Der raumlanglebige Persistent-Base-Owner liegt nicht mehr im Flow.
+  const persistentBase = readFileSync(
+    resolve(process.cwd(), 'src/scenes/arena/ArenaPersistentBaseSession.ts'),
+    'utf8',
+  );
 
   it('fuehrt genau einen Raum-Owner statt zweier loser Speicher', () => {
-    expect(coordinator).toContain('private readonly persistentBaseSession = new PersistentBaseRoomSession();');
-    expect(coordinator).not.toContain('new PersistentBaseContributionStore()');
-    expect(coordinator).not.toContain('new PersistentBaseRewardStore()');
+    expect(persistentBase).toContain('readonly session = new PersistentBaseRoomSession();');
+    expect(coordinator).not.toContain('new PersistentBaseRoomSession()');
+    expect(persistentBase).not.toContain('new PersistentBaseContributionStore()');
+    expect(persistentBase).not.toContain('new PersistentBaseRewardStore()');
   });
 
   it('haelt fachliche Player-Owner-Bindungen und Contribution-Ingest im Room-Owner', () => {
@@ -476,33 +482,35 @@ describe('Phase 8 – Ownership im Koordinator', () => {
     expect(session).toContain('bindPlayerOwner(');
     expect(session).toContain('acceptContributionOffer(');
     expect(session).toContain('removePlayerOwner(');
-    expect(coordinator).not.toContain('private readonly persistentBaseOwnerByPlayerId');
-    expect(coordinator).not.toContain('private readonly ingestedContributionRevisions');
-    expect(coordinator).not.toContain('private canClaimPersistentBaseOwnerId(');
+    expect(persistentBase).not.toContain('private readonly persistentBaseOwnerByPlayerId');
+    expect(persistentBase).not.toContain('private readonly ingestedContributionRevisions');
+    expect(persistentBase).not.toContain('private canClaimPersistentBaseOwnerId(');
   });
 
   it('kennzeichnet Reward-Revision und Signatur als reine Projection-Caches', () => {
-    expect(coordinator).toContain('private persistentBaseRewardProjectionRevision = 0;');
-    expect(coordinator).toContain('private persistentBaseRewardProjectionSignature: string | null = null;');
+    expect(persistentBase).toContain('private projectionRevision = 0;');
+    expect(persistentBase).toContain('private projectionSignature: string | null = null;');
+    expect(persistentBase).not.toContain('persistentBaseRewardSessionRevision');
+    expect(persistentBase).not.toContain('persistentBaseRewardSessionSignature');
     expect(coordinator).not.toContain('persistentBaseRewardSessionRevision');
     expect(coordinator).not.toContain('persistentBaseRewardSessionSignature');
   });
 
   it('oeffnet den Arbeitsstand mit der Identitaet der Activity und schliesst ihn damit ab', () => {
-    expect(coordinator).toContain('this.persistentBaseSession.beginTransaction({');
-    expect(coordinator).toContain('identity: this.resolvePersistentBaseTransactionIdentity(),');
+    expect(persistentBase).toContain('this.session.beginTransaction({');
+    expect(coordinator).toContain('this.resolvePersistentBaseTransactionIdentity(),');
     expect(coordinator).toContain('private resolvePersistentBaseTransactionIdentity(): PersistentBaseTransactionIdentity | undefined {');
     expect(coordinator).toContain('activityIdentity: {');
-    expect(coordinator).toContain('private beginPersistentBaseTransaction(activity: ActivityDescriptor): void {');
-    expect(coordinator).toContain('private endPersistentBaseTransaction(activity: ActivityDescriptor): void {');
+    expect(persistentBase).toContain('beginPersistentBaseTransaction(activity: ActivityDescriptor): void {');
+    expect(persistentBase).toContain('endPersistentBaseTransaction(activity: ActivityDescriptor): void {');
     const buildStart = coordinator.indexOf('  buildWorld(');
     const buildEnd = coordinator.indexOf('  tearDownArena(', buildStart);
     expect(coordinator.slice(buildStart, buildEnd)).not.toContain('beginTransaction(');
   });
 
   it('bindet die Runtime-Objekte an die World-Instanz', () => {
-    expect(coordinator).toContain('this.persistentBaseSession.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);');
-    expect(coordinator).toContain('this.persistentBaseSession.useWorldRuntimes(null);');
+    expect(coordinator).toContain('this.persistentBase.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);');
+    expect(coordinator).toContain('this.persistentBase.useWorldRuntimes(null);');
     const worldBinding = readFileSync(
       resolve(process.cwd(), 'src/world/PersistentBaseWorldBinding.ts'),
       'utf8',
@@ -512,11 +520,11 @@ describe('Phase 8 – Ownership im Koordinator', () => {
   });
 
   it('erzeugt ohne World keine mutable Ersatz-Bindings im Coordinator', () => {
-    expect(coordinator).not.toContain('noWorldRewardRuntimes');
-    expect(coordinator).not.toContain('noWorldCompositeSignatures');
-    expect(coordinator).not.toContain('persistentBaseRewardRuntimeBindings.set(');
-    expect(coordinator).not.toContain('persistentBaseCompositeBuildSignatures.set(');
-    expect(coordinator).toContain('this.persistentBaseWorldBinding?.reconcile();');
+    expect(persistentBase).not.toContain('noWorldRewardRuntimes');
+    expect(persistentBase).not.toContain('noWorldCompositeSignatures');
+    expect(persistentBase).not.toContain('persistentBaseRewardRuntimeBindings.set(');
+    expect(persistentBase).not.toContain('persistentBaseCompositeBuildSignatures.set(');
+    expect(persistentBase).toContain('this.world.getWorldBinding()?.reconcile();');
   });
 
   it('haelt die drei Lifetimes in getrennten Modulen', () => {
