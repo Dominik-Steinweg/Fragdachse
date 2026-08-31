@@ -369,19 +369,40 @@ describe('Arena-Anbindung der getrennten Lifetimes', () => {
       resolve(__dirname, '../src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
     );
+    const composition = readFileSync(
+      resolve(__dirname, '../src/world/WorldComposition.ts'),
+      'utf8',
+    );
     // Genau ein Aufbau je Owner, und der Gameplay-State faellt ausschliesslich mit der Runtime.
-    expect([...lifecycle.matchAll(/new WorldMaterialization\(/g)]).toHaveLength(1);
-    expect([...lifecycle.matchAll(/new WorldPresentationBinding\(/g)]).toHaveLength(1);
-    expect(lifecycle).toContain('this.worldRuntime?.materialize(materialization);');
-    expect(lifecycle).toContain('materialization.setArena(arenaResult');
-    expect(lifecycle).toContain('this.worldRuntime?.setPresentation(presentationBinding);');
-    expect(lifecycle).toContain('this.worldRuntime?.setPersistentBase(persistentBaseBinding);');
+    expect([...composition.matchAll(/new WorldMaterialization\(/g)]).toHaveLength(1);
+    expect([...composition.matchAll(/new WorldPresentationBinding\(/g)]).toHaveLength(1);
+    expect(composition).toContain('input.runtime.materialize(materialization);');
+    expect(composition).toContain('materialization.setArena(arena');
+    expect(composition).toContain('input.runtime.setPresentation(presentation);');
+    expect(composition).toContain('input.runtime.setPersistentBase(persistentBase);');
+    expect(lifecycle).toContain('materializeWorldComposition({');
     // Der Handoff ist der einzige Weg, auf dem etwas die Runtime ueberlebt.
     expect(lifecycle).toContain('this.worldPresentationHandoff.release(runtime?.releasePresentation() ?? null);');
-    expect(lifecycle).toContain('this.worldPresentationHandoff.adopt();');
-    expect(lifecycle).toContain('this.worldPresentationHandoff.discard();');
+    expect(composition).toContain('input.handoff.adopt();');
+    expect(composition).toContain('input.handoff.discard();');
     // Der Gameplay-State reist nicht mehr mit: Es gibt keine Freigabe der Materialisierung.
-    expect(lifecycle).not.toContain('releaseMaterialization');
+    expect(lifecycle + composition).not.toContain('releaseMaterialization');
+
+    // Der Flow kennt weder konkrete World-Kinder noch deren Shared-Service-Bindungen.
+    for (const concreteConstruction of [
+      'new WorldMaterialization(',
+      'new WorldPresentationBinding(',
+      'new PlacementSystem(',
+      'new BaseManager(',
+      'new RockRegistry(',
+      'new FireObstacleIndex(',
+      'new LightOccluderIndex(',
+    ]) {
+      expect(lifecycle, concreteConstruction).not.toContain(concreteConstruction);
+    }
+    expect(composition).toContain('new PlacementSystem(');
+    expect(composition).toContain('new BaseManager(');
+    expect(composition).toContain('new RockRegistry(');
 
     const context = readFileSync(
       resolve(__dirname, '../src/scenes/arena/ArenaContext.ts'),

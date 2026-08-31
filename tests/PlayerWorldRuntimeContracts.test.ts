@@ -10,6 +10,7 @@ import {
   type PlayerRuntimeFeature,
   type PlayerRuntimeFeatures,
 } from '../src/world/PlayerWorldRuntime';
+import { composePlayerWorldRuntime } from '../src/world/PlayerWorldRuntimeComposition';
 
 /**
  * Gemeinsamer, kontextgesteuerter Player-Lifecycle.
@@ -222,6 +223,52 @@ describe('Player-Lifecycle – atomarer Attach', () => {
     expect(runtime.isAttached('p1')).toBe(false);
     expect(runtime.attach(context, features())).toBe(true);
     expect(calls).toEqual(['attach:entity', 'detach:entity', 'attach:entity']);
+  });
+});
+
+describe('Player-Lifecycle – konkrete World-Komposition', () => {
+  it('haelt die feste Attach- und Detach-Reihenfolge ausserhalb des Coordinators', () => {
+    const calls: string[] = [];
+    const runtime = composePlayerWorldRuntime({
+      attachEntity: () => { calls.push('attach:entity'); },
+      detachEntity: () => { calls.push('detach:entity'); },
+      attachCombat: () => { calls.push('attach:combat'); return true; },
+      detachCombat: () => { calls.push('detach:combat'); },
+      attachCombatResources: () => { calls.push('attach:resources'); },
+      detachCombatResources: () => { calls.push('detach:resources'); },
+      attachPlayerBuild: () => { calls.push('attach:build'); },
+      detachPlayerBuild: () => { calls.push('detach:build'); },
+      attachBurrow: () => { calls.push('attach:burrow'); },
+      detachBurrow: () => { calls.push('detach:burrow'); },
+      attachLoadout: () => { calls.push('attach:loadout'); },
+      detachLoadout: () => { calls.push('detach:loadout'); },
+      detachWorldTargeting: () => { calls.push('detach:targeting'); },
+    });
+
+    expect(runtime.attach(
+      { profile: PROFILE, reconnectAfterDeath: false },
+      features(),
+    )).toBe(true);
+    expect(calls).toEqual([
+      'attach:entity',
+      'attach:combat',
+      'attach:resources',
+      'attach:build',
+      'attach:burrow',
+      'attach:loadout',
+    ]);
+
+    calls.length = 0;
+    runtime.detach(PROFILE.id);
+    expect(calls).toEqual([
+      'detach:targeting',
+      'detach:combat',
+      'detach:resources',
+      'detach:build',
+      'detach:burrow',
+      'detach:loadout',
+      'detach:entity',
+    ]);
   });
 });
 

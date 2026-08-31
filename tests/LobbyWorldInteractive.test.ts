@@ -346,8 +346,8 @@ describe('LobbyWorld – Spawn gehoert der World', () => {
   });
 
   it('reicht den authored Ausschluss an die World-Geometrie des PlayerManagers durch', () => {
-    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    expect(lifecycle).toContain('spawnExclusionZones: world.definition?.spawnExclusionZones');
+    const binding = read('src/world/WorldGeometryBinding.ts');
+    expect(binding).toContain('spawnExclusionZones: world.definition?.spawnExclusionZones');
     const playerManager = read('src/entities/PlayerManager.ts');
     // Der Ausschluss sperrt den Start, nicht das Betreten.
     expect(playerManager).toContain('this.worldGeometry?.spawnExclusionZones ?? []');

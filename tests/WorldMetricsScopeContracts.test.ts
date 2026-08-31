@@ -140,6 +140,8 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
     const persistentVisuals = read('src/scenes/arena/PersistentBaseVisuals.ts');
     const combatSystem = read('src/systems/CombatSystem.ts');
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const composition = read('src/world/WorldComposition.ts');
+    const geometryBinding = read('src/world/WorldGeometryBinding.ts');
     const arenaScene = read('src/scenes/ArenaScene.ts');
 
     for (const [path, source] of [
@@ -151,9 +153,9 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
       expect(source.includes('resolveCoopDefenseBases'), `${path} re-resolves bases outside its World`).toBe(false);
     }
 
-    expect(lifecycle).toContain('new BaseManager(this.scene, coopDefenseBases, world.metrics');
-    expect(lifecycle).toContain('const baseManager = coopDefenseBases.length > 0');
-    expect(lifecycle).toContain('this.ctx.playerManager.setWorldGeometry({');
+    expect(composition).toContain('new BaseManager(');
+    expect(composition).toContain('const baseManager = bases.length > 0');
+    expect(geometryBinding).toContain('playerManager.setWorldGeometry({');
     expect(lifecycle).toContain('this.materializePersistentBaseComposite(world.persistentBaseSite');
     expect(lifecycle).not.toContain('getPersistentBaseAnchor');
     expect(arenaScene).toContain('const persistentBaseSite = activeWorld?.persistentBaseSite ?? null');
@@ -205,19 +207,15 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
 
 describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
   it('baut World-Systeme ausschliesslich aus Descriptor und WorldRuntimeContext', () => {
-    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const start = source.indexOf('  private resolveWorldLayout(');
-    const end = source.indexOf('\n  tearDownArena(', start);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    const buildArena = source.slice(start, end);
+    const composition = read('src/world/WorldComposition.ts');
+    const geometryBinding = read('src/world/WorldGeometryBinding.ts');
+    const buildArena = composition + geometryBinding;
 
     expect(buildArena).not.toContain('bridge.getGameMode()');
     expect(buildArena).not.toContain('bridge.getCoopDefenseMapId()');
     expect(buildArena).not.toContain('roundState?.coopDefenseMapId');
     expect(buildArena).not.toMatch(/\b(?:GRID_COLS|GRID_ROWS|ARENA_OFFSET_X|ARENA_OFFSET_Y|ARENA_WIDTH|ARENA_HEIGHT)\b/);
-    expect(buildArena).toContain('const mapId = toMapId(world.definitionId);');
-    expect(buildArena).toContain('cols: world.metrics.gridCols');
+    expect(buildArena).toContain('const mapId = toMapId(descriptor.definitionId);');
     expect(buildArena).toContain('worldOriginX: world.metrics.offsetX');
   });
 

@@ -1,12 +1,9 @@
 import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
-import { ArenaBuilder, type ArenaBuilderResult } from '../../arena/ArenaBuilder';
+import { ArenaBuilder } from '../../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../../arena/ArenaGenerator';
 import { TerrainColorSnapshotBuilder } from '../../arena/TerrainColorSnapshotBuilder';
-import { getVisibleWorldView } from '../../ui/HostileBaseIndicator';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
-import { RockRegistry }      from '../../arena/RockRegistry';
-import { PlacementSystem }   from '../../systems/PlacementSystem';
 import { ReinforcementMatrixSystem, type TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import { EnergyInjectorSystem } from '../../systems/EnergyInjectorSystem';
 import { TargetStatusSystem } from '../../systems/TargetStatusSystem';
@@ -89,18 +86,15 @@ import { TrainManager }      from '../../train/TrainManager';
 import { CoopDefenseTrainEventHandler } from '../../train/CoopDefenseTrainEventHandler';
 import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
-import { GROUND_FIRE_CELL_SIZE } from '../../effects/FireSystem';
-import { FireObstacleIndex } from '../../effects/FireObstacleIndex';
-import { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
 import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
-import { getBaseRewardPickupWorldPosition, getBaseWorldBounds, resolveCoopDefenseActivityBases } from '../../arena/BaseRegistry';
+import { getBaseRewardPickupWorldPosition, getBaseWorldBounds } from '../../arena/BaseRegistry';
 import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceLabMapId, objectiveUsesRespawnBudget, resolveCoopDefenseMapEncounterConfigs, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapPersistentSpawnConfigs, resolveCoopDefenseMapSecondaryObjectives, type CoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
-import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, getAuthoredWorldMetricsProfile, type ArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
+import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile, COOP_DEFENSE_NAV_TICK_INTERVAL_MS, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
 import { TRAIN }             from '../../train/TrainConfig';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
@@ -118,7 +112,6 @@ import type { RoundConclusion, RoundResult, RoundState } from '../../network/Net
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
-import { BaseManager } from '../../entities/BaseManager';
 import {
   BASE_DESTRUCTION_GROUND_BURN_DAMAGE_PER_TICK,
   BASE_DESTRUCTION_GROUND_BURN_DURATION_MS,
@@ -230,20 +223,16 @@ import {
   toMapId,
   toWorldDefinitionId,
 } from '../../world/arenaDescriptorAdapter';
-import { toWorldGenerationConfig } from '../../config/authoring/coopDefenseAuthoringAdapter';
 import { getActivityDefinition, getWorldDefinition } from '../../config/authoring/authoredScenarios';
 import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
 import type { WorldDefinition } from '../../config/authoring/WorldDefinition';
-import { createAuthoredWorldDescriptor, generateWorldLayout } from '../../world/WorldLayout';
+import { createAuthoredWorldDescriptor } from '../../world/WorldLayout';
 import { isArenaTransitionReady } from './ArenaTransitionReadiness';
 import {
-  createWorldRuntimeContext,
   isValidPersistentBaseSite,
   type WorldPersistentBaseSite,
 } from '../../world/WorldRuntimeContext';
 import { WorldLifecycle } from '../../world/WorldLifecycle';
-import { WorldMaterialization } from '../../world/WorldMaterialization';
-import { WorldPresentationBinding } from '../../world/WorldPresentationBinding';
 import { WorldPresentationHandoff } from '../../world/WorldPresentationHandoff';
 import { ArenaExitEntityPresentation } from '../../world/ArenaExitEntityPresentation';
 import {
@@ -255,8 +244,14 @@ import {
   PlayerWorldRuntime,
   resolvePlayerRuntimeFeatures,
   type PlayerRuntimeFeatures,
-  type PlayerWorldRuntimeSteps,
 } from '../../world/PlayerWorldRuntime';
+import { composePlayerWorldRuntime } from '../../world/PlayerWorldRuntimeComposition';
+import {
+  materializeWorldComposition,
+  prepareWorldComposition,
+  resolveWorldCompositionProfile,
+} from '../../world/WorldComposition';
+import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
 import {
   hasWorldFigure,
   hasWorldRuntimeEntry,
@@ -315,8 +310,8 @@ export class ArenaLifecycleCoordinator {
    * die alte Generation und kann deshalb nie mehr aktiviert werden.
    */
   private flowFieldGenerationId = 0;
-  private fireObstacleGridListener: ((event: ArenaMapGridChangedEvent) => void) | null = null;
-  private fireObstacleIndex: FireObstacleIndex | null = null;
+  /** Scoped Sicht scene-langlebiger Geometrie-Consumer auf die aktuelle World. */
+  private worldGeometryBinding: WorldGeometryBinding | null = null;
 
   private layoutRetryCount = 0;
   private arenaEnteredAt   = 0;
@@ -489,7 +484,7 @@ export class ArenaLifecycleCoordinator {
       this.worldRuntime = new WorldRuntime(context);
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
-      this.worldRuntime.setPlayers(new PlayerWorldRuntime(this.playerRuntimeSteps));
+      this.worldRuntime.setPlayers(this.composePlayerRuntime());
       // Compatibility-Pfad waehrend der Migration: Source of Truth ist die WorldRuntime, aber
       // die bestehenden Consumer lesen den Kontext weiterhin ueber `ctx.world`.
       this.ctx.world = context;
@@ -526,112 +521,54 @@ export class ArenaLifecycleCoordinator {
   private readonly worldPresentationHandoff = new WorldPresentationHandoff();
   /** Reine Player-/Enemy-Snapshots waehrend des sichtbaren Match-Exit-Fades. */
   private arenaExitEntityPresentation: ArenaExitEntityPresentation | null = null;
-  /**
-   * Gemeinsamer Player-Lifecycle einer World. Es gibt genau einen Weg hinein und einen hinaus;
-   * welche Module laufen, entscheidet {@link resolvePlayerRuntimeFeatures} aus Rolle und Activity.
-   *
-   * Die Schritte sind scene-langlebig; wer tatsaechlich in einer World steht, fuehrt die
-   * `WorldRuntime` – mit ihrem Ende steht niemand mehr in ihr.
-   */
-  private readonly playerRuntimeSteps: PlayerWorldRuntimeSteps = ({
-    attach: [
-      {
-        id: 'player-entity',
-        feature: 'entity',
-        // Spawns entscheidet der Host. Ein Client setzt die Figur ausschliesslich auf die
-        // replizierte Position; kennt er sie beim Eintritt noch nicht, entsteht sie still - ein
-        // Materialisierungseffekt an einer selbst gewuerfelten Stelle waere schlicht falsch.
-        run: ({ profile, spawn }) => {
-          const authoritativeSpawn = bridge.isHost() ? undefined : spawn;
-          this.ctx.playerManager.addPlayer(
-            profile,
-            bridge.isHost() || authoritativeSpawn
-              ? { spawn: authoritativeSpawn }
-              : { spawnEffect: false },
-          );
-        },
-        rollback: ({ profile }) => { this.ctx.playerManager.removePlayer(profile.id); },
+  /** Baut das feste PlayerWorldRuntime-Rezept aus konkreten Scene-Operationen. */
+  private composePlayerRuntime(): PlayerWorldRuntime {
+    return composePlayerWorldRuntime({
+      attachEntity: ({ profile, spawn }) => {
+        const authoritativeSpawn = bridge.isHost() ? undefined : spawn;
+        this.ctx.playerManager.addPlayer(
+          profile,
+          bridge.isHost() || authoritativeSpawn
+            ? { spawn: authoritativeSpawn }
+            : { spawnEffect: false },
+        );
       },
-      {
-        id: 'combat-state',
-        feature: 'combat',
-        run: ({ profile, reconnectAfterDeath }) => {
-          if (reconnectAfterDeath) return this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id);
-          this.ctx.combatSystem.initPlayer(profile.id);
-          return true;
-        },
+      detachEntity: (playerId) => {
+        this.ctx.effectSystem.clearBurrowState(playerId);
+        this.clientUpdate.removePlayerState(playerId);
+        this.ctx.hostPhysics.removePlayer(playerId);
+        this.ctx.playerManager.removePlayer(playerId);
       },
-      {
-        id: 'combat-resources',
-        feature: 'combatResources',
-        run: ({ profile }) => { this.ctx.resourceSystem?.initPlayer(profile.id); },
+      attachCombat: (profile, reconnectAfterDeath) => {
+        if (reconnectAfterDeath) return this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id);
+        this.ctx.combatSystem.initPlayer(profile.id);
+        return true;
       },
-      {
-        // Coop-Build und Item-Affixe sind World-Gameplay; sie brauchen keine laufende Mission.
-        id: 'player-build',
-        feature: 'playerBuild',
-        run: ({ profile }) => { this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(profile.id); },
+      detachCombat: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); },
+      attachCombatResources: (playerId) => { this.ctx.resourceSystem?.initPlayer(playerId); },
+      detachCombatResources: (playerId) => {
+        this.ctx.resourceSystem?.removePlayer(playerId);
+        bridge.clearWeapon2PredictionState(playerId);
       },
-      {
-        id: 'burrow-state',
-        feature: 'combatResources',
-        run: ({ profile }) => { this.ctx.burrowSystem?.initPlayer(profile.id); },
+      attachPlayerBuild: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(playerId); },
+      detachPlayerBuild: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId); },
+      attachBurrow: (playerId) => { this.ctx.burrowSystem?.initPlayer(playerId); },
+      detachBurrow: (playerId) => { this.ctx.burrowSystem?.removePlayer(playerId); },
+      attachLoadout: (playerId) => {
+        this.ctx.loadoutManager?.resetUltimateState(playerId);
+        this.ctx.loadoutManager?.assignDefaultLoadout(playerId, this.resolveCommittedLoadoutSelection(playerId));
       },
-      {
-        id: 'loadout',
-        feature: 'loadoutTools',
-        run: ({ profile }) => {
-          this.ctx.loadoutManager?.resetUltimateState(profile.id);
-          this.ctx.loadoutManager?.assignDefaultLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
-        },
+      detachLoadout: (playerId) => {
+        this.ctx.loadoutManager?.removePlayer(playerId);
+        this.ctx.powerUpSystem?.removePlayer(playerId);
+        this.ctx.tunnelSystem?.removePlayer(playerId);
       },
-    ],
-    detach: [
-      {
-        // Zielstatus und Injector-Fokus gehoeren zur laufenden Runde, nicht zur Lobby-Persona.
-        id: 'world-targeting',
-        feature: 'worldTargeting',
-        run: (playerId) => {
-          this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
-          this.ctx.energyInjectorSystem?.removeOwner(playerId);
-        },
+      detachWorldTargeting: (playerId) => {
+        this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
+        this.ctx.energyInjectorSystem?.removeOwner(playerId);
       },
-      { id: 'combat-state', feature: 'combat', run: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); } },
-      {
-        id: 'combat-resources',
-        feature: 'combatResources',
-        run: (playerId) => {
-          this.ctx.resourceSystem?.removePlayer(playerId);
-          bridge.clearWeapon2PredictionState(playerId);
-        },
-      },
-      {
-        id: 'player-build',
-        feature: 'playerBuild',
-        run: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId); },
-      },
-      { id: 'burrow-state', feature: 'combatResources', run: (playerId) => { this.ctx.burrowSystem?.removePlayer(playerId); } },
-      {
-        id: 'loadout',
-        feature: 'loadoutTools',
-        run: (playerId) => {
-          this.ctx.loadoutManager?.removePlayer(playerId);
-          this.ctx.powerUpSystem?.removePlayer(playerId);
-          this.ctx.tunnelSystem?.removePlayer(playerId);
-        },
-      },
-      {
-        id: 'player-entity',
-        feature: 'entity',
-        run: (playerId) => {
-          this.ctx.effectSystem.clearBurrowState(playerId);
-          this.clientUpdate.removePlayerState(playerId);
-          this.ctx.hostPhysics.removePlayer(playerId);
-          this.ctx.playerManager.removePlayer(playerId);
-        },
-      },
-    ],
-  });
+    });
+  }
   /**
    * Der Player-Lifecycle der laufenden World; `null`, solange keine World lokal materialisiert
    * ist. Er gehoert der `WorldRuntime`; beim Exit ueberlebt nur der eingefrorene
@@ -3026,55 +2963,11 @@ export class ArenaLifecycleCoordinator {
    * `WorldDescriptor`. Eine Activity ist optional und haengt nur ihre eigenen Systeme an -
    * ohne sie entsteht eine vollstaendige, betretbare World ohne Runde.
    */
-  /**
-   * Modus und authored Map dieser World.
-   *
-   * Metrik und Layout sind Weltanteile. Solange der Modus sie traegt, leitet ihn eine laufende
-   * Activity ab; ohne Activity antwortet die World aus ihrer eigenen Identitaet. Die authored
-   * Map gehoert immer der World - eine Coop-World ohne Mission bleibt eine Coop-World.
-   */
-  private resolveWorldLayout(
-    world: WorldDescriptor,
-    activity: ActivityDescriptor | null,
-  ): {
-    mode: GameMode;
-    mapConfig: CoopDefenseMapConfig | null;
-    definition: WorldDefinition | null;
-    metricsProfile: ArenaMetricsProfile;
-  } {
-    const mapId = toMapId(world.definitionId);
-    const mapConfig = mapId !== null ? getCoopDefenseMapConfig(mapId) : null;
-    // Die authored World gehoert der World-Identitaet. Sie loest ueber dieselbe Registry auf,
-    // ob sie aus einer Coop-Map adaptiert wurde oder – wie die LobbyWorld – nativ authoriert ist.
-    const definition = getWorldDefinition(world.definitionId);
-    const mode = resolveActiveGameMode({
-      activityKind: activity?.kind ?? null,
-      roomGameMode: bridge.getActiveGameMode(),
-      worldDefinitionId: world.definitionId,
-    });
-    return {
-      mode,
-      mapConfig,
-      definition,
-      // Eine authored World bringt ihr Mass selbst mit; nur die prozedurale Arena leitet es
-      // noch aus dem Modus ab.
-      metricsProfile: definition
-        ? getAuthoredWorldMetricsProfile(definition.metrics.widthCells, definition.metrics.heightCells)
-        : getArenaMetricsProfile(mode, 'ARENA'),
-    };
-  }
-
   buildWorld(
     worldDescriptor: WorldDescriptor,
     activityDescriptor: ActivityDescriptor | null,
     preserveLobbyPresentation = false,
   ): void {
-    if (worldDescriptor.generatorVersion !== ARENA_GENERATOR_VERSION) {
-      throw new Error(
-        `[ArenaLifecycleCoordinator] Unsupported arena generator version ${worldDescriptor.generatorVersion}; expected ${ARENA_GENERATOR_VERSION}`,
-      );
-    }
-
     // Die Darstellung des Vorgaengers steht entweder noch in seiner Runtime oder liegt bereits
     // im Handoff – ein Uebergang endet nicht zwingend im selben Frame, in dem er beginnt.
     const reusablePresentation = preserveLobbyPresentation
@@ -3082,48 +2975,38 @@ export class ArenaLifecycleCoordinator {
       && activityDescriptor === null
       ? this.ctx.worldPresentation ?? this.worldPresentationHandoff.pending
       : null;
-    const reusableArenaPresentation = reusablePresentation?.arena ?? null;
-    const reusableLayout = reusablePresentation?.layout ?? null;
     const prepared = this.preparedRoundLayout;
-    this.tearDownArena(reusableArenaPresentation !== null);
+    this.tearDownArena(reusablePresentation !== null);
 
     // Merge-Baseline der Delta-Slices (rocks/powerups/pedestals) verwerfen, damit keine Zustände aus
     // der Vorrunde in die neue Runde lecken (z. B. beschädigte Felsen direkt zu Match-Beginn).
     bridge.resetGameStateCache();
 
-    // Activity-Systeme entstehen, weil eine Activity laeuft – nicht, weil ein Modus-Flag gesetzt
-    // ist. Diese eine Entscheidung traegt alle Activity-Gates dieses Aufbaus.
-    const isCoopMission = activityDescriptor?.kind === 'coop-mission';
+    // Spielerzahl und Gegnerbesetzung sind Activity-Zustand und existieren nur mit ihr.
+    const roundState = activityDescriptor ? bridge.getRoundState() : null;
+    const preparedWorld = prepareWorldComposition({
+      descriptor: worldDescriptor,
+      activity: activityDescriptor,
+      roomGameMode: bridge.getActiveGameMode(),
+      humanPlayerCount: roundState?.coopDefenseHumanPlayerCount ?? 1,
+      preparedLayout: prepared,
+    });
     const {
+      world,
       mode: layoutMode,
       mapConfig: coopDefenseMapConfig,
-      definition: worldDefinition,
-      metricsProfile,
-    } = this.resolveWorldLayout(worldDescriptor, activityDescriptor);
-    if (isCoopMission && coopDefenseMapConfig === null) {
-      throw new Error(`[ArenaLifecycleCoordinator] Coop activity has no authored World map`);
-    }
+      isCoopMission,
+      humanPlayerCount: coopDefenseHumanPlayerCount,
+      bases: coopDefenseBases,
+      locallyGeneratedLayout,
+    } = preparedWorld;
     // Die authored Map gehoert der World - Missionssysteme entstehen aber nur mit laufender
     // Mission. Ohne diese getrennte Sicht wuerde eine Coop-World ohne Activity Bosse, Ziele und
     // Respawn-Budgets aufbauen, fuer die es keine Runde gibt.
     const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;
-
-    // Spielerzahl und Gegnerbesetzung sind Activity-Zustand und existieren nur mit ihr.
-    const roundState = activityDescriptor ? bridge.getRoundState() : null;
-    const coopDefenseHumanPlayerCount = isCoopMission
-      ? Math.max(1, Math.floor(roundState?.coopDefenseHumanPlayerCount ?? 1))
-      : 1;
     const coopDefenseEnemyConfigs = isCoopMission
       ? resolveCoopDefenseEnemyConfigs(coopDefenseHumanPlayerCount)
       : null;
-
-    // Kanonischer Kontext dieser World-Instanz. Metrik, Basen und die persistente Basisstelle
-    // haengen ab hier an der World, nicht an der Lobby-Auswahl oder an globalen Variablen.
-    const world = createWorldRuntimeContext({
-      descriptor: worldDescriptor,
-      metricsProfile,
-      definition: worldDefinition,
-    });
     // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
     // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
     this.worldLifecycle.attachRuntime(world, activityDescriptor);
@@ -3135,62 +3018,6 @@ export class ArenaLifecycleCoordinator {
     // haette die neue Instanz einen Frame lang gar keinen Teilnahmestand.
     this.hostSyncWorldParticipation();
     const presentation = this.getLocalWorldPresentation().required;
-    // Figuren entstehen nur sichtbar, wenn dieser Peer die World ueberhaupt darstellt.
-    this.ctx.playerManager.setVisualsEnabledResolver(
-      () => presentation,
-    );
-    this.ctx.combatSystem.setWorldMetrics(world.metrics);
-    this.ctx.decoySystem.setWorldMetrics(world.metrics);
-    this.scene.physics.world.setBounds(
-      world.metrics.offsetX,
-      world.metrics.offsetY,
-      world.metrics.widthPx,
-      world.metrics.heightPx,
-    );
-    const coopDefenseBases = isCoopMission && coopDefenseMapConfig
-      ? resolveCoopDefenseActivityBases(coopDefenseMapConfig, coopDefenseHumanPlayerCount, world.metrics)
-      : world.bases;
-    const generationMapConfig = isCoopMission && coopDefenseMapConfig
-      ? coopDefenseMapConfig
-      : world.definition
-        ? toWorldGenerationConfig(world.definition)
-        : undefined;
-    this.ctx.playerManager.setWorldGeometry({
-      metrics: world.metrics,
-      bases: coopDefenseBases,
-      captureTheBeerBasesActive: layoutMode === CAPTURE_THE_BEER_MODE,
-      // Authored Startverbot dieser World; begehbar bleibt die Flaeche trotzdem.
-      spawnExclusionZones: world.definition?.spawnExclusionZones,
-      // Authored Wunschmitte dieser World; ein Missionsfokus sticht sie.
-      spawnFocusCell: world.definition?.spawnFocusCell,
-    });
-    const locallyGeneratedLayout = prepared
-      && prepared.descriptor.seed === worldDescriptor.seed
-      && prepared.descriptor.layoutFingerprint === worldDescriptor.layoutFingerprint
-      ? prepared.layout
-      : generateWorldLayout({
-        definitionId: worldDescriptor.definitionId,
-        seed: worldDescriptor.seed,
-        generation: resolveArenaGenerationInput(layoutMode, world.metrics),
-        mapConfig: generationMapConfig,
-      });
-    const actualFingerprint = ArenaGenerator.fingerprint(locallyGeneratedLayout);
-    if (actualFingerprint !== worldDescriptor.layoutFingerprint) {
-      throw new Error(
-        `[ArenaLifecycleCoordinator] Arena fingerprint mismatch: expected ${worldDescriptor.layoutFingerprint}, got ${actualFingerprint}`,
-      );
-    }
-    const canReuseLobbyPresentation = reusableArenaPresentation !== null
-      && reusableLayout !== null
-      && presentation
-      && reusableArenaPresentation.groundSurface !== null
-      && reusableArenaPresentation.rockOverlaySurface !== null
-      && reusableArenaPresentation.rockVisualSystem !== null;
-    const layout = canReuseLobbyPresentation ? reusableLayout : locallyGeneratedLayout;
-    this.renderers.leafBlower.setTerrainMaterialLayout(
-      layout,
-      coopDefenseBases.flatMap((base) => base.cells),
-    );
     this.preparedRoundLayout = null;
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 35, 'building');
     const coopDefensePersistentSpawnConfigs = missionMapConfig
@@ -3231,41 +3058,6 @@ export class ArenaLifecycleCoordinator {
         participantIds: bridge.getRoundParticipation()?.participantIds ?? bridge.getConnectedPlayerIds(),
       });
     };
-    // Ab hier entsteht der Gameplay-State dieser World-Instanz. Er gehoert der WorldRuntime und
-    // faellt mit ihr; `ctx` liest ihn nur noch.
-    const materialization = new WorldMaterialization();
-    this.ctx.worldMaterialization = materialization;
-    this.worldRuntime?.materialize(materialization);
-    // Die world-lokale Materialisierung der persistenten Basis. Sie entsteht fuer jede World,
-    // auch fuer eine ohne Basiskern: Ihr Abbau schliesst den Bestand ab, und der gilt fuer jede
-    // World, die Runtime-Objekte gefuehrt haben koennte.
-    const persistentBaseBinding = new PersistentBaseWorldBinding({
-      finalizeRuntimeObjects: () => { this.finalizePersistentBaseRuntimeObjects(); },
-      releaseRewardRuntime: (rewardId) => { this.releasePersistentBaseRewardRuntime(rewardId); },
-    });
-    this.persistentBaseWorldBinding = persistentBaseBinding;
-    this.worldRuntime?.setPersistentBase(persistentBaseBinding);
-    // Die Runtime-Objekte der persoenlichen Beitraege gehoeren dieser World-Instanz. Der
-    // Raumzustand liest sie, solange sie steht, und verliert sie mit ihrem Ende.
-    this.persistentBaseSession.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);
-    // Scene-langlebige Shared Services bekommen die Geometrie dieser World im Aufbaupass unten.
-    // Die Bindung selbst gehoert der World: Ohne Instanz kennt kein Shared System mehr ihre
-    // Metrik, ihre Hindernisse oder ihre Basen.
-    this.worldRuntime?.bind({
-      destroy: () => {
-        this.ctx.combatSystem.setWorldMetrics(null);
-        this.ctx.combatSystem.setArenaObstacles(null, null);
-        this.ctx.combatSystem.setBaseObstacles(null);
-        this.ctx.decoySystem.setWorldMetrics(null);
-        this.ctx.projectileManager.setRockGroup(null, null, null);
-        this.ctx.projectileManager.setObstacleIndex(null);
-        this.ctx.hostPhysics.setRockGroup(null, null);
-        this.ctx.hostPhysics.setBaseGroup(null);
-        this.ctx.hostPhysics.setMovementBlockedCellResolver(null);
-        this.ctx.hostPhysics.setWorldMetrics(null);
-      },
-    });
-    const builder = new ArenaBuilder(this.scene);
     const persistentBaseSite = world.persistentBaseSite;
     const persistentBaseVisualSite = resolvePersistentBaseVisualSite(
       missionMapConfig,
@@ -3280,65 +3072,65 @@ export class ArenaLifecycleCoordinator {
       persistentBaseSite === null ? persistentBaseVisualSite : null,
       world.metrics,
     );
-    let arenaResult: ArenaBuilderResult;
-    // Genau ein terminaler Ausgang je uebergebener Darstellung: Der Fast-Reinstance uebernimmt
-    // sie, jeder andere Aufbau verwirft sie.
-    let adoptedPresentation: WorldPresentationBinding | null = null;
-    if (canReuseLobbyPresentation) {
-      const freshRuntime = builder.buildDynamic(locallyGeneratedLayout, {
-        worldMetrics: world.metrics,
-        presentation: false,
-      });
-      builder.rebindPresentation(
-        reusableArenaPresentation,
-        reusableLayout,
-        locallyGeneratedLayout,
-        world.metrics,
-        presentation,
-      );
-      arenaResult = ArenaBuilder.compose(freshRuntime, reusableArenaPresentation);
-      adoptedPresentation = this.worldPresentationHandoff.adopt();
-    } else {
-      this.worldPresentationHandoff.discard();
-      arenaResult = builder.buildDynamic(layout, {
-        worldMetrics: world.metrics,
-        // Ohne lokale World-Presentation entstehen Staemme und Kronen gar nicht erst.
-        presentation,
-        // Nur eine aktive World-Stelle oder eine Activity-Vorschau bekommt die Gravel-Layer;
-        // die Vorschau bleibt trotzdem ohne Basis-Runtime und ohne persistenten Working State.
-        enablePersistentBaseGravel: persistentBaseGravel !== null,
-        persistentBaseGravel: persistentBaseGravel ?? undefined,
-      });
-    }
-    // Die Darstellung dieser World: gebauter Baum und der Geometriepuffer, den er adressiert.
-    // Sie hat eine eigene Lifetime und ist der einzige Teil, der einen Uebergang ueberleben kann.
-    const presentationBinding = adoptedPresentation
-      ?? new WorldPresentationBinding(layout, ArenaBuilder.presentationOf(arenaResult), {
-        destroyPresentation: (arena) => { ArenaBuilder.destroyPresentation(arena); },
-      });
-    this.ctx.worldPresentation = presentationBinding;
-    this.worldRuntime?.setPresentation(presentationBinding);
-    materialization.setArena(arenaResult, (arena) => { ArenaBuilder.destroyGameplay(arena); });
-    // Beim Fast-Reinstance muss der wiederverwendete Ground-Streamer vor dem ersten Residency-
-    // Bake bereits den neuen World-Zustand sehen; der regulaere Scene-Sync bestaetigt ihn danach.
-    arenaResult.groundSurface?.setPersistentBaseGravel(
+    const worldRuntime = this.worldRuntime;
+    if (!worldRuntime) throw new Error('[ArenaLifecycleCoordinator] WorldRuntime was not attached');
+    const builtWorld = materializeWorldComposition({
+      scene: this.scene,
+      runtime: worldRuntime,
+      prepared: preparedWorld,
+      presentationRequired: presentation,
+      reusablePresentation,
+      handoff: this.worldPresentationHandoff,
       persistentBaseGravel,
-    );
-    bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
-    // Die gestreamten Weltschichten haben nach dem Bau noch keinen residenten Chunk. Ohne diesen
-    // Aufruf zeigte der erste Frame einen leeren Boden – die Kamera steht hier bereits.
-    ArenaBuilder.updateSurfaceResidency(
-      arenaResult,
-      getVisibleWorldView(this.scene.cameras.main),
-    );
-    const placementSystem = new PlacementSystem(
+      playerManager: this.ctx.playerManager,
+      persistentBaseSink: {
+        finalizeRuntimeObjects: () => { this.finalizePersistentBaseRuntimeObjects(); },
+        releaseRewardRuntime: (rewardId) => { this.releasePersistentBaseRewardRuntime(rewardId); },
+      },
+      baseDestructionHooks: {
+        playExplosion: (x, y, radius, color) => {
+          this.ctx.effectSystem.playExplosionEffect(x, y, radius, color);
+        },
+        playExplosionSound: (x, y, volumeScale) => {
+          this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);
+        },
+        playFireChunks: (x, y, targets, landsAt, now) => {
+          this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets, landsAt, now);
+        },
+        onFireChunksLanded: bridge.isHost()
+          ? (baseId, _cellIndex, targets, landedAt) => {
+            for (const target of targets) {
+              this.ctx.fireSystem.hostRefreshGroundCell(target.x, target.y, {
+                sourceKey: `base-destruction:${baseId}`,
+                ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+                durationMs: BASE_DESTRUCTION_GROUND_FIRE_DURATION_MS,
+                burn: {
+                  durationMs: BASE_DESTRUCTION_GROUND_BURN_DURATION_MS,
+                  damagePerTick: BASE_DESTRUCTION_GROUND_BURN_DAMAGE_PER_TICK,
+                },
+                sourceId: 'ground_fire.base_destruction',
+              }, landedAt);
+            }
+          }
+          : undefined,
+      },
+      lighting: this.renderers.lighting,
+      damageBases: activityDescriptor !== null,
+      createRockRegistry: bridge.isHost(),
+    });
+    const {
+      materialization,
+      persistentBase: persistentBaseBinding,
       layout,
-      arenaResult.rockGrid,
-      this.ctx.playerManager,
-      world.metrics,
-      coopDefenseBases,
-    );
-    materialization.setPlacement(placementSystem);
+      arena: arenaResult,
+      placement: placementSystem,
+      bases: baseManager,
+    } = builtWorld;
+    this.ctx.worldMaterialization = materialization;
+    this.ctx.worldPresentation = builtWorld.presentation;
+    this.persistentBaseWorldBinding = persistentBaseBinding;
+    this.persistentBaseSession.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);
+    bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
     this.ctx.persistentBaseContributions = null;
     this.ctx.persistentBaseRewards = null;
     this.persistentBaseCompositeBuildSignatures.clear();
@@ -3392,6 +3184,33 @@ export class ArenaLifecycleCoordinator {
         ?.find((candidate) => candidate.eventId === eventId);
       return entry === undefined ? true : entry.state !== 'dormant';
     });
+    const worldGeometryBinding = new WorldGeometryBinding({
+      scene: this.scene,
+      world,
+      layout,
+      bases: coopDefenseBases,
+      arena: arenaResult,
+      placement: placementSystem,
+      baseManager,
+      presentationRequired: presentation,
+      playerManager: this.ctx.playerManager,
+      combatSystem: this.ctx.combatSystem,
+      decoySystem: this.ctx.decoySystem,
+      projectileManager: this.ctx.projectileManager,
+      hostPhysics: this.ctx.hostPhysics,
+      fireSystem: this.ctx.fireSystem,
+      leafBlower: this.renderers.leafBlower,
+      lighting: this.renderers.lighting,
+      isCaptureTheBeer: layoutMode === CAPTURE_THE_BEER_MODE,
+      getBarrierCellBlocked: (gridX, gridY) => (
+        this.coopMissionRuntime?.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false
+      ),
+      onDestroy: (binding) => {
+        if (this.worldGeometryBinding === binding) this.worldGeometryBinding = null;
+      },
+    });
+    this.worldGeometryBinding = worldGeometryBinding;
+    worldRuntime.bind(worldGeometryBinding);
     // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.
     this.ctx.reinforcementMatrixSystem = new ReinforcementMatrixSystem();
     this.ctx.energyInjectorSystem = new EnergyInjectorSystem();
@@ -3400,44 +3219,6 @@ export class ArenaLifecycleCoordinator {
       ? new CaptureTheBeerSystem(this.ctx.playerManager)
       : null;
 
-    // Coop-Defense: BaseManager besitzt die Basis-Entities (Visual + Physik + HP + Sync).
-    // Host und Client erzeugen identische BaseEntities aus der gemeinsamen Registry –
-    // HP-Werte fließen über GameState.bases (Host → Client).
-    const baseManager = coopDefenseBases.length > 0
-      ? new BaseManager(this.scene, coopDefenseBases, world.metrics, {
-        playExplosion: (x, y, radius, color) => {
-          this.ctx.effectSystem.playExplosionEffect(x, y, radius, color);
-        },
-        playExplosionSound: (x, y, volumeScale) => {
-          this.ctx.gameAudioSystem.playSound('sfx_explosion_he', x, y, undefined, volumeScale);
-        },
-        playFireChunks: (x, y, targets, landsAt, now) => {
-          this.renderers.flamethrowerUpgrades.playFireChunkBurst(x, y, targets, landsAt, now);
-        },
-        onFireChunksLanded: bridge.isHost()
-          ? (baseId, _cellIndex, targets, landedAt) => {
-            for (const target of targets) {
-              this.ctx.fireSystem.hostRefreshGroundCell(target.x, target.y, {
-                // Gleiche Rasterzellen frischen sich auf, statt pro Brocken
-                // separate Schadens-/Brandquellen zu stapeln.
-                sourceKey: `base-destruction:${baseId}`,
-                ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
-                durationMs: BASE_DESTRUCTION_GROUND_FIRE_DURATION_MS,
-                burn: {
-                  durationMs: BASE_DESTRUCTION_GROUND_BURN_DURATION_MS,
-                  damagePerTick: BASE_DESTRUCTION_GROUND_BURN_DAMAGE_PER_TICK,
-                },
-                sourceId: 'ground_fire.base_destruction',
-              }, landedAt);
-            }
-          }
-          : undefined,
-      // Ohne Activity kennt keine Struktur dieser World Schaden: Sie steht als Bauwerk da, nicht
-      // als Missionsziel. Das ist derselbe Grund, aus dem hier keine Working Copy entsteht.
-      }, presentation, activityDescriptor !== null)
-      : null;
-    materialization.setBases(baseManager);
-    baseManager?.setLightingSystem(this.renderers.lighting);
     const createEnemyManager = isCoopMission && coopDefenseEnemyConfigs
       ? () => new EnemyManager(this.scene, coopDefenseEnemyConfigs)
       : null;
@@ -3729,7 +3510,7 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
           const activatedEntity = baseManager.getBases().find((base) => base.id === activatedBase.id);
           if (activatedEntity) {
-            this.fireObstacleIndex?.setBase(
+            this.worldGeometryBinding?.setBase(
               activatedEntity.id,
               activatedEntity.getCellBodies().map((body) => body.getBounds()),
             );
@@ -3920,7 +3701,7 @@ export class ArenaLifecycleCoordinator {
     }
     if (baseManager) {
       baseManager.setOnBaseDestroyed((destroyedBase) => {
-        this.fireObstacleIndex?.removeBase(destroyedBase.id);
+        this.worldGeometryBinding?.removeBase(destroyedBase.id);
         this.ctx.targetStatusSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
         this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
         this.removePersistentBaseRewardTurretsForBase(destroyedBase.id);
@@ -3957,7 +3738,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
         const activatedEntity = this.ctx.baseManager?.getBases().find((base) => base.id === activatedBase.id);
         if (activatedEntity) {
-          this.fireObstacleIndex?.setBase(
+          this.worldGeometryBinding?.setBase(
             activatedEntity.id,
             activatedEntity.getCellBodies().map((body) => body.getBounds()),
           );
@@ -3978,112 +3759,7 @@ export class ArenaLifecycleCoordinator {
       });
     }
 
-    this.ctx.playerManager.setLayout(layout);
-
-    this.ctx.projectileManager.setRockGroup(
-      arenaResult.rockGroup,
-      arenaResult.rockPhysicsProxies,
-      arenaResult.trunkGroup,
-    );
-    this.ctx.projectileManager.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
-    this.ctx.decoySystem.setObstacleGroups(
-      arenaResult.rockGroup,
-      arenaResult.trunkGroup,
-    );
-    this.ctx.combatSystem.setArenaObstacles(arenaResult.rockPhysicsProxies, arenaResult.trunkBodies);
-    this.ctx.combatSystem.setBaseObstacles(this.ctx.baseManager?.getObstacleRectangles() ?? null);
     this.ctx.combatSystem.setBarrierObstacles(this.coopMissionRuntime?.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null);
-    // Dieselbe Index-Instanz, damit Sichtlinie und Projektil-Kollision denselben Stand sehen.
-    this.ctx.projectileManager.setObstacleIndex(this.ctx.combatSystem.getObstacleIndex());
-    // Brandraster-Hindernisse werden einmalig in 16-px-Zellen projiziert. Danach werden nur
-    // die Footprints der betroffenen Map-Zellen gepatcht; Fire-Cell-Lookups bleiben konstant.
-    if (this.fireObstacleGridListener) {
-      this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.fireObstacleGridListener);
-      this.fireObstacleGridListener = null;
-    }
-    this.fireObstacleIndex?.reset();
-    const fireObstacleIndex = new FireObstacleIndex({
-      width: Math.ceil((world.metrics.offsetX + world.metrics.widthPx) / GROUND_FIRE_CELL_SIZE),
-      height: Math.ceil((world.metrics.offsetY + world.metrics.heightPx) / GROUND_FIRE_CELL_SIZE),
-      fireCellSize: GROUND_FIRE_CELL_SIZE,
-      worldOriginX: world.metrics.offsetX,
-      worldOriginY: world.metrics.offsetY,
-      worldCellSize: CELL_SIZE,
-    });
-    this.fireObstacleIndex = fireObstacleIndex;
-
-    const rebuildFireObstacleIndex = (): void => {
-      fireObstacleIndex.reset();
-      for (let rockId = 0; rockId < (this.ctx.arenaResult?.rockPhysicsProxies.length ?? 0); rockId += 1) {
-        const rock = this.ctx.arenaResult?.rockPhysicsProxies[rockId];
-        if (!rock?.active) continue;
-        fireObstacleIndex.addStaticRock(rockId, rock.getBounds());
-      }
-      for (const rock of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
-        if (rock.kind !== 'pedestal' && rock.collisionMode !== 'none') {
-          fireObstacleIndex.addPlaceableRock(rock.id, rock.gridX, rock.gridY);
-        }
-      }
-      for (const trunk of this.ctx.arenaResult?.trunkBodies ?? []) {
-        if (trunk?.active) fireObstacleIndex.addLineOfSightBounds(trunk.getBounds());
-      }
-      for (const base of this.ctx.baseManager?.getBases() ?? []) {
-        if (base.isInert()) continue;
-        fireObstacleIndex.setBase(
-          base.id,
-          base.getCellBodies().map((body) => body.getBounds()),
-        );
-      }
-    };
-    rebuildFireObstacleIndex();
-    this.fireObstacleGridListener = (event: ArenaMapGridChangedEvent): void => {
-      if (event.source === 'placeable_pedestal') return;
-      if (event.source === 'static_rock'
-        && event.reason === 'static_rock_destroyed'
-        && event.obstacleId !== undefined) {
-        fireObstacleIndex.removeStaticRock(event.obstacleId);
-        return;
-      }
-      if ((event.reason === 'placeable_added'
-        || event.reason === 'placeable_removed'
-        || event.reason === 'placeable_expired')
-        && event.obstacleId !== undefined
-        && event.gridX !== undefined
-        && event.gridY !== undefined) {
-        if (event.reason === 'placeable_added') {
-          if (event.collisionMode !== 'none') {
-            fireObstacleIndex.addPlaceableRock(event.obstacleId, event.gridX, event.gridY);
-          }
-        } else {
-          fireObstacleIndex.removePlaceableRock(event.obstacleId);
-        }
-        return;
-      }
-      // Unknown map-grid payloads are handled outside the FireSystem call stack. This keeps
-      // the normal resolver hotpath free of a hidden full-map fallback.
-      rebuildFireObstacleIndex();
-    };
-    this.scene.game.events.on(ARENA_MAP_GRID_CHANGED_EVENT, this.fireObstacleGridListener);
-    this.ctx.fireSystem.setGroundResolvers(
-      (bounds) => fireObstacleIndex.isCellBlocked(
-        Math.floor(bounds.centerX / GROUND_FIRE_CELL_SIZE),
-        Math.floor(bounds.centerY / GROUND_FIRE_CELL_SIZE),
-      ),
-      (startX, startY, endX, endY) => {
-        const dx = endX - startX;
-        const dy = endY - startY;
-        const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / GROUND_FIRE_CELL_SIZE));
-        for (let step = 1; step < steps; step += 1) {
-          const t = step / steps;
-          const gridX = Math.floor((startX + dx * t) / GROUND_FIRE_CELL_SIZE);
-          const gridY = Math.floor((startY + dy * t) / GROUND_FIRE_CELL_SIZE);
-          if (fireObstacleIndex.hasLineOfSightObstacle(gridX, gridY)) return false;
-        }
-        return true;
-      },
-      () => fireObstacleIndex.revision,
-    );
-    this.ctx.combatSystem.setBaseManager(this.ctx.baseManager);
     this.ctx.combatSystem.setEnemyManager(this.ctx.enemyManager);
     this.ctx.combatSystem.setPlayerMaxHpResolver((playerId) => {
       return this.ctx.coopDefensePlayerModifierSystem?.getMaxHp(playerId) ?? HP_MAX;
@@ -4401,19 +4077,6 @@ export class ArenaLifecycleCoordinator {
     });
     this.ctx.projectileManager.setProjectileImpactCallback((proj, x, y) => {
       this.spawnImpactCloudFromProjectile(proj, x, y);
-    });
-    this.ctx.hostPhysics.setRockGroup(
-      arenaResult.rockGroup,
-      arenaResult.trunkGroup,
-    );
-    this.ctx.hostPhysics.setBaseGroup(this.ctx.baseManager?.getBaseGroup() ?? null);
-    this.ctx.hostPhysics.setWorldMetrics(world.metrics);
-    this.ctx.hostPhysics.setMovementBlockedCellResolver((gridX, gridY) => {
-      const arenaResult = this.ctx.arenaResult;
-      const rockId = arenaResult?.rockGrid.getIndex(gridX, gridY) ?? -1;
-      if (rockId >= 0 && arenaResult?.rockPhysicsProxies[rockId]?.active === true) return true;
-      if (this.ctx.baseManager?.isMovementBlockedCell(gridX, gridY) === true) return true;
-      return this.coopMissionRuntime?.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false;
     });
     this.ctx.hostPhysics.setEnemyManager(this.ctx.enemyManager);
     this.ctx.hostPhysics.setRunSpeedResolver((playerId) => {
@@ -5388,8 +5051,6 @@ export class ArenaLifecycleCoordinator {
         }
       });
 
-      materialization.setRocks(new RockRegistry(layout));
-
       this.ctx.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
         if (!this.ctx.arenaResult) return;
         const resolvedDamage = this.resolveObstacleDamage(rockId, damage, attackerId);
@@ -5505,17 +5166,11 @@ export class ArenaLifecycleCoordinator {
         preserveLobbyPresentation,
       );
     }
-    // Lichtverdeckung liest dieselben Hindernis-Referenzen wie `CombatSystem`
-    // (siehe setArenaObstacles/setBaseObstacles weiter oben) – keine eigene Liste.
-    materialization.setLightOccluders(presentation ? new LightOccluderIndex({
-      rocks: () => this.ctx.arenaResult?.rockPhysicsProxies ?? null,
-      trunks: () => this.ctx.arenaResult?.trunkBodies ?? null,
-      baseCells: () => this.ctx.baseManager?.getObstacleRectangles() ?? null,
-      barrierCells: () => this.coopMissionRuntime?.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
-      baseGeneration: () => this.ctx.baseManager?.getObstacleGeneration() ?? 0,
-    }) : null);
+    this.worldGeometryBinding?.attachLightOccluders(
+      materialization,
+      () => this.coopMissionRuntime?.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
+    );
     this.materializePersistentBaseComposite(world.persistentBaseSite, world.definition?.sourceMapId ?? null);
-    this.renderers.lighting.setOccluderIndex(this.ctx.lightOccluderIndex);
     this.renderers.lighting.setTimeOfDay(runtimeTimeOfDayMinutes);
     this.renderers.lighting.setActive(true);
     // Additive Effektgrafiken liegen teils über dem Lightmap-Overlay und werden vom
@@ -5564,14 +5219,7 @@ export class ArenaLifecycleCoordinator {
     setEmissiveScale(1);
     this.ctx.projectileManager.destroyAll();
     this.ctx.smokeSystem.destroyAll();
-    if (this.fireObstacleGridListener) {
-      this.scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.fireObstacleGridListener);
-      this.fireObstacleGridListener = null;
-    }
-    this.fireObstacleIndex?.reset();
-    this.fireObstacleIndex = null;
     this.ctx.fireSystem.destroyAll();
-    this.ctx.fireSystem.setGroundResolvers(null, null);
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.timeBubbleSystem?.destroyAll();
     this.ctx.decoySystem.clearAll();
@@ -5717,7 +5365,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setPowerUpSystem(null);
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setBarrierObstacles(null);
-    this.ctx.combatSystem.setBaseManager(null);
     this.ctx.combatSystem.setEnemyManager(null);
     this.ctx.combatSystem.setTrainSegments(null);
     this.ctx.combatSystem.setRockDamageCallback(null);
@@ -5755,9 +5402,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.decoySystem.setCombatStateReader(null);
     this.ctx.decoySystem.setRunSpeedResolver(null);
     this.ctx.decoySystem.setCooldownStarter(null);
-    this.ctx.decoySystem.setObstacleGroups(null, null);
     this.ctx.projectileManager.setObstacleKindResolver(null);
-    this.ctx.projectileManager.setBaseGroup(null);
     this.ctx.projectileManager.setRockHitCallback(() => { /* noop */ });
     this.ctx.projectileManager.setBaseHitCallback(null);
     this.ctx.projectileManager.setSupportImpactCallback(null);
@@ -5768,7 +5413,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.projectileManager.setProximityPulseCallback(null);
     this.ctx.projectileManager.setTimeBubbleFactorProvider(null);
     if (!preserveAuthoredPresentation) this.renderers.leafBlower.setTerrainColorSnapshot(null);
-    this.renderers.leafBlower.setTerrainMaterialLayout(null);
     this.ctx.tunnelSystem?.clear();
     this.ctx.tunnelSystem = null;
     // Der Translocator haelt Puck-IDs der Runde. Ohne Entkopplung meldete er in der Lobby und in
@@ -5799,12 +5443,10 @@ export class ArenaLifecycleCoordinator {
     if (preserveAuthoredPresentation) this.renderers.shadow.clearDynamicShadows();
     else this.renderers.shadow.clear();
     this.renderers.lighting.setActive(false);
-    this.renderers.lighting.setOccluderIndex(null);
     this.renderers.translocatorTeleport = null;
     this.ctx.projectileManager.setTrainGroup(null);
     this.ctx.projectileManager.setTrainHitCallback(null);
     this.ctx.centerHUD.hideTrainWidget();
-    this.ctx.playerManager.setWorldGeometry(null);
   }
 
   /** Verwirft einen offenen Missions-Working-State vor einem technischen World-Teardown. */
@@ -6674,8 +6316,11 @@ export class ArenaLifecycleCoordinator {
     }
     this.layoutRetryCount = 0;
 
-    const { mode: layoutMode, mapConfig: coopDefenseMapConfig } =
-      this.resolveWorldLayout(worldDescriptor, activityDescriptor);
+    const { mode: layoutMode, mapConfig: coopDefenseMapConfig } = resolveWorldCompositionProfile(
+      worldDescriptor,
+      activityDescriptor,
+      bridge.getActiveGameMode(),
+    );
     applyArenaMetricsForMode(
       layoutMode,
       'ARENA',

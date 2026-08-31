@@ -664,12 +664,13 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
     expect(gravelCells).toHaveLength(9);
 
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const composition = read('src/world/WorldComposition.ts');
     expect(lifecycle).toContain('const preserveLobbyPresentation = this.pendingLobbyWorldReinstance');
     expect(lifecycle).toContain('&& !this.pendingLobbyWorldPresentationRebuild;');
     expect(lifecycle).toContain('this.pendingLobbyWorldPresentationRebuild = true;');
     expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
-    expect(lifecycle).toContain('arenaResult = builder.buildDynamic(layout, {');
-    expect(lifecycle).toContain('builder.rebindPresentation(');
+    expect(composition).toContain('arena = builder.buildDynamic(layout, {');
+    expect(composition).toContain('builder.rebindPresentation(');
   });
 
   it('aktiviert Stage 1 erst in der ersetzten LobbyWorld und laesst die alte Area unveraendert', () => {
@@ -714,13 +715,14 @@ describe('LobbyWorld L4 – Fast-Reinstance bei GameMode-Wechsel', () => {
 
   it('trennt Orchestrierung, Teardown und Presentation-Rebind', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const composition = read('src/world/WorldComposition.ts');
     expect(lifecycle).toContain('this.prepareLobbyWorldReinstance(lobbyPresentationStructureChanged);');
     expect(lifecycle).toContain('Math.max(this.lastRoundRevision, previousRevision)');
     expect(lifecycle).toContain('this.worldLifecycle.endInstance();');
-    expect(lifecycle).toContain('builder.rebindPresentation(');
-    expect(lifecycle).toContain('this.tearDownArena(reusableArenaPresentation !== null);');
-    expect(lifecycle).toContain('enablePersistentBaseGravel: persistentBaseGravel !== null,');
-    expect(lifecycle).toContain('arenaResult.groundSurface?.setPersistentBaseGravel(');
+    expect(composition).toContain('builder.rebindPresentation(');
+    expect(lifecycle).toContain('this.tearDownArena(reusablePresentation !== null);');
+    expect(composition).toContain('enablePersistentBaseGravel: input.persistentBaseGravel !== null,');
+    expect(composition).toContain('arena.groundSurface?.setPersistentBaseGravel(input.persistentBaseGravel);');
 
     const bridge = read('src/network/NetworkBridge.ts');
     const start = bridge.indexOf('  setGameMode(mode: GameMode): void {');

@@ -236,11 +236,16 @@ describe('Phase 7 – Ownership im Koordinator', () => {
     resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
     'utf8',
   );
+  const composition = readFileSync(
+    resolve(process.cwd(), 'src/world/PlayerWorldRuntimeComposition.ts'),
+    'utf8',
+  );
 
   it('erzeugt die Player-Runtime mit der World-Instanz', () => {
-    expect(coordinator).toContain('this.worldRuntime.setPlayers(new PlayerWorldRuntime(this.playerRuntimeSteps));');
+    expect(coordinator).toContain('this.worldRuntime.setPlayers(this.composePlayerRuntime());');
+    expect(coordinator).toContain('return composePlayerWorldRuntime({');
     // Genau ein Erzeuger: die World. Ein scene-langlebiges Feld waere wieder eine zweite Lifetime.
-    expect([...coordinator.matchAll(/new PlayerWorldRuntime\(/g)]).toHaveLength(1);
+    expect([...composition.matchAll(/new PlayerWorldRuntime\(/g)]).toHaveLength(1);
     expect(coordinator).toContain('return this.worldRuntime?.players ?? null;');
   });
 

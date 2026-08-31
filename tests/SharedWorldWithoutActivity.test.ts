@@ -372,6 +372,7 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
 
   it('nimmt die World entgegen und die Activity nur optional', () => {
     const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const composition = read('src/world/WorldComposition.ts');
     // Der Aufbau kennt nur die kanonische World-/Activity-Sicht.
     const start = source.indexOf('  buildWorld(');
     expect(start).toBeGreaterThan(0);
@@ -381,7 +382,7 @@ describe('Shared World ohne Activity – der Aufbau gehoert der World', () => {
     }
 
     // Die authored Map gehoert der World; Missionssysteme tragen eine eigene Activity-Sicht.
-    expect(source).toContain('const mapId = toMapId(world.definitionId);');
+    expect(composition).toContain('const mapId = toMapId(descriptor.definitionId);');
     expect(body).toContain('const missionMapConfig = isCoopMission ? coopDefenseMapConfig : null;');
   });
 

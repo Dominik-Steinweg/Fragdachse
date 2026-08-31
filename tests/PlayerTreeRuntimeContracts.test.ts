@@ -232,9 +232,9 @@ describe('Baeume – Runtime und Darstellung getrennt', () => {
   });
 
   it('laesst Hindernis- und Lichtindex die Runtime lesen', () => {
-    const coordinator = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    expect(coordinator).toContain('setArenaObstacles(arenaResult.rockPhysicsProxies, arenaResult.trunkBodies)');
-    expect(coordinator).toContain('trunks: () => this.ctx.arenaResult?.trunkBodies ?? null');
+    const binding = read('src/world/WorldGeometryBinding.ts');
+    expect(binding).toContain('combatSystem.setArenaObstacles(arena.rockPhysicsProxies, arena.trunkBodies)');
+    expect(binding).toContain('trunks: () => this.input.arena.trunkBodies');
     // Und beide Indices sprechen denselben Geometrie-Vertrag.
     expect(read('src/systems/CombatSystem.ts'))
       .toContain('private trunkObjects: readonly ObstacleCircleBody[] | null = null;');

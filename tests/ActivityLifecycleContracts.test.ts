@@ -221,11 +221,16 @@ describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Fla
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
     const body = source.slice(start, end);
+    const composition = readFileSync(
+      resolve(process.cwd(), 'src/world/WorldComposition.ts'),
+      'utf8',
+    );
 
     // Eine Entscheidung, viele Verbraucher. Die Activity kommt als Parameter herein: der Aufbau
     // gehoert der World, die Activity ist ausdruecklich optional.
-    expect(body).toContain("const isCoopMission = activityDescriptor?.kind === 'coop-mission';");
-    expect([...body.matchAll(/const isCoopMission =/g)]).toHaveLength(1);
+    expect(composition).toContain("const isCoopMission = activity?.kind === 'coop-mission';");
+    expect([...composition.matchAll(/const isCoopMission =/g)]).toHaveLength(1);
+    expect(body).toContain('isCoopMission,');
     expect([...body.matchAll(/\bisCoopMission\b/g)].length).toBeGreaterThan(10);
 
     // Und keine verstreute Modus-Abfrage mehr im Aufbau der Runtime.
