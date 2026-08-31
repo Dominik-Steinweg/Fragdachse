@@ -1,0 +1,108 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { WorldTargetingRuntime } from '../src/world/WorldTargetingRuntime';
+
+function read(path: string): string {
+  return readFileSync(resolve(process.cwd(), path), 'utf8');
+}
+
+describe('Phase 10B.6 – World gameplay composition', () => {
+  it('keeps WorldTrainRuntime behind a fachlich grouped network port', () => {
+    const train = read('src/world/WorldTrainRuntime.ts');
+    expect(train).toContain('export interface WorldTrainNetworkPort');
+    expect(train).not.toContain("from '../network/bridge'");
+    expect(train).not.toContain('NetworkBridge');
+    expect(train).not.toMatch(/\bbridge\b/);
+  });
+
+  it('keeps new World owners independent from ArenaContext and the network bridge', () => {
+    for (const path of [
+      'src/world/WorldTargetingRuntime.ts',
+      'src/world/WorldPlayerGameplayRuntime.ts',
+      'src/world/WorldCombatGameplayBinding.ts',
+      'src/world/WorldSupportGameplayRuntime.ts',
+    ]) {
+      const source = read(path);
+      expect(source, path).not.toContain('ArenaContext');
+      expect(source, path).not.toContain('NetworkBridge');
+      expect(source, path).not.toMatch(/from ['"].*network\/bridge['"]/);
+      expect(source, path).not.toMatch(/\bbridge\b/);
+    }
+  });
+
+  it('leaves the remaining World gameplay graph to focused owners', () => {
+    const coordinator = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    const buildStart = coordinator.indexOf('\n  buildWorld(');
+    const teardownStart = coordinator.indexOf('\n  tearDownArena(', buildStart);
+    expect(buildStart).toBeGreaterThan(0);
+    expect(teardownStart).toBeGreaterThan(buildStart);
+    const build = coordinator.slice(buildStart, teardownStart);
+    for (const legacyConstructor of [
+      'new ReinforcementMatrixSystem',
+      'new EnergyInjectorSystem',
+      'new TargetStatusSystem',
+      'new ResourceSystem',
+      'new TeslaDomeSystem',
+      'new TurretSystem',
+      'new DetonationSystem',
+      'new ArmageddonSystem',
+      'new AirstrikeSystem',
+      'new GuardianSpiritSystem',
+      'new RepairDroneSystem',
+      'new SlimeTrailSystem',
+      'new FlamethrowerUpgradeSystem',
+      'new WeaponUpgradeSystem',
+      'new Ak47StrategicTargetSystem',
+    ]) {
+      expect(build, legacyConstructor).not.toContain(legacyConstructor);
+    }
+    expect(build).toContain('worldRuntime.bind(playerGameplayRuntime);');
+    expect(build).toContain('worldRuntime.bind(combatGameplayBinding);');
+    expect(build).toContain('worldRuntime.bind(supportGameplayRuntime);');
+
+    const teardownEnd = coordinator.indexOf('\n  private ', teardownStart);
+    const teardown = coordinator.slice(teardownStart, teardownEnd);
+    for (const migratedCleanup of [
+      'this.ctx.combatSystem.set',
+      'this.ctx.projectileManager.set',
+      'this.ctx.decoySystem.set',
+      'this.ctx.decoySystem.clearAll',
+      'this.ctx.timeBubbleSystem?.destroyAll',
+      'this.ctx.resourceSystem?.',
+      'this.ctx.loadoutManager?.',
+      'this.ctx.translocatorSystem?.',
+      'this.ctx.tunnelSystem?.',
+      'this.ctx.detonationSystem?.',
+      'this.ctx.armageddonSystem?.',
+      'this.ctx.airstrikeSystem?.',
+    ]) {
+      expect(teardown, migratedCleanup).not.toContain(migratedCleanup);
+    }
+  });
+
+  it('clears target systems and releases their projections exactly at World-owner teardown', () => {
+    const projections: unknown[] = [];
+    const runtime = new WorldTargetingRuntime({
+      onSystemsChanged: (systems) => projections.push(systems),
+    });
+
+    runtime.systems.reinforcementMatrix.spawnMatrix('p1', 0, 0, 20, 1_000, 0.2, 0.1, 0xffffff, 0);
+    runtime.systems.energyInjector.setFocusTarget('p1', { targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
+    runtime.systems.targetStatus.applyVulnerability({ targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
+
+    expect(projections).toHaveLength(1);
+    expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(1);
+    expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(1);
+    expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(1);
+
+    runtime.destroy();
+    runtime.destroy();
+
+    expect(projections).toHaveLength(2);
+    expect(projections[1]).toBeNull();
+    expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(0);
+    expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(0);
+    expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(0);
+  });
+});

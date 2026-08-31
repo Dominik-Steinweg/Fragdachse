@@ -1,5 +1,4 @@
 import * as Phaser from 'phaser';
-import { bridge } from '../network/bridge';
 import { CELL_SIZE } from '../config';
 import { TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
@@ -22,6 +21,47 @@ import { CoopDefenseTrainEventHandler } from '../train/CoopDefenseTrainEventHand
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../train/TrainEvent';
 import type { CoopTrainPort } from '../activity/CoopTrainPort';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
+import type { ExplosionVisualStyle, PlayerProfile, TrainEventConfig } from '../types';
+
+export interface WorldTrainKillEvent {
+  readonly killerId: string;
+  readonly killerName: string;
+  readonly killerColor: number;
+  readonly sourceId: string;
+  readonly victimId: string;
+  readonly victimName: string;
+  readonly victimColor: number;
+}
+
+/** Small fachliche network ports used by the World-owned train. */
+export interface WorldTrainNetworkPort {
+  readonly clock: {
+    readonly getArenaStartTime: () => number;
+    readonly now: () => number;
+  };
+  readonly trainEvents: {
+    readonly isHost: () => boolean;
+    readonly get: () => TrainEventConfig | undefined;
+    readonly publish: (event: TrainEventConfig) => void;
+    readonly clear: () => void;
+  };
+  readonly matchEvents: {
+    readonly addPlayerFrags: (playerId: string, amount: number) => void;
+    readonly getConnectedPlayers: () => readonly PlayerProfile[];
+    readonly broadcastKillEvent: (event: WorldTrainKillEvent) => void;
+    readonly broadcastTrainDestroyed: () => void;
+  };
+  readonly effects: {
+    readonly broadcastTrainBurrowSparks: (x: number, y: number) => void;
+    readonly broadcastExplosionEffect: (
+      x: number,
+      y: number,
+      radius: number,
+      color?: number,
+      visualStyle?: ExplosionVisualStyle,
+    ) => void;
+  };
+}
 
 export interface WorldTrainRuntimeOptions {
   readonly scene: Phaser.Scene;
@@ -32,6 +72,7 @@ export interface WorldTrainRuntimeOptions {
   readonly worldMetrics: WorldMetrics;
   readonly presentationRequired: boolean;
   readonly gameAudioSystem: GameAudioSystem;
+  readonly network: WorldTrainNetworkPort;
   readonly getEnemyManager: () => EnemyManager | null;
   readonly getBurrowSystem: () => BurrowSystem | null;
   readonly getTimeBubbleSystem: () => TimeBubbleSystem | null;
@@ -71,7 +112,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.classicTrain = this.createTrain(trackX, direction, plan);
     this.options.setCurrentTrain(this.classicTrain);
     this.options.setClassicTrainSpawned(false);
-    this.publishClassicEventIfReady(bridge.getArenaStartTime());
+    this.publishClassicEventIfReady(this.options.network.clock.getArenaStartTime());
   }
 
   bindRoundStart(arenaStartTime: number): void {
@@ -102,7 +143,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
   }
 
   getCurrentTrainEvent() {
-    return bridge.getTrainEvent();
+    return this.options.network.trainEvents.get();
   }
 
   releaseActivityTrain(): void {
@@ -128,7 +169,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
   }
 
   clearTrainEvent(): void {
-    bridge.clearTrainEvent();
+    this.options.network.trainEvents.clear();
   }
 
   setEnemyManager(manager: EnemyManager | null): void {
@@ -198,15 +239,17 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       return collision ? { destroysTrain: !isRevivedAlly && collision.destroysTrain } : undefined;
     });
     train.setIsPlayerBurrowedCallback((playerId) => this.options.getBurrowSystem()?.isBurrowed(playerId) ?? false);
-    train.setOnBurrowDamageDealtCallback((_playerId, x, y) => bridge.broadcastTrainBurrowSparks(x, y));
+    train.setOnBurrowDamageDealtCallback((_playerId, x, y) => {
+      this.options.network.effects.broadcastTrainBurrowSparks(x, y);
+    });
     train.setDestroyCallback((result) => this.handleDestroyed(result, this.options.worldMetrics));
     if (classicPlan) {
       train.setExitedCallback(() => {
-        const event = bridge.getTrainEvent();
+        const event = this.options.network.trainEvents.get();
         if (!event) return;
-        const spawnAt = getNextClassicTrainArrivalAt(Date.now(), classicPlan);
+        const spawnAt = getNextClassicTrainArrivalAt(this.options.network.clock.now(), classicPlan);
         const nextDirection: 1 | -1 = event.direction === 1 ? -1 : 1;
-        bridge.publishTrainEvent({ trackX: event.trackX, direction: nextDirection, spawnAt });
+        this.options.network.trainEvents.publish({ trackX: event.trackX, direction: nextDirection, spawnAt });
         train.prepareReentry(nextDirection);
         this.options.setClassicTrainSpawned(false);
       });
@@ -215,17 +258,19 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
   }
 
   private publishClassicEventIfReady(arenaStartTime: number): void {
-    if (!this.pendingClassic || !bridge.isHost() || arenaStartTime <= 0 || this.classicRoundStart === arenaStartTime) return;
+    if (!this.pendingClassic || !this.options.network.trainEvents.isHost()
+      || arenaStartTime <= 0 || this.classicRoundStart === arenaStartTime) return;
     this.classicRoundStart = arenaStartTime;
     const { trackX, direction, plan } = this.pendingClassic;
-    bridge.publishTrainEvent({ trackX, direction, spawnAt: arenaStartTime + plan.firstArrivalDelayMs });
+    this.options.network.trainEvents.publish({ trackX, direction, spawnAt: arenaStartTime + plan.firstArrivalDelayMs });
   }
 
   private handleDestroyed(result: TrainDestroyResult, worldMetrics: WorldMetrics): void {
     if (result.lastHitterId) {
-      bridge.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);
-      const hitter = bridge.getConnectedPlayers().find((player) => player.id === result.lastHitterId);
-      if (hitter) bridge.broadcastKillEvent({
+      this.options.network.matchEvents.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);
+      const hitter = this.options.network.matchEvents.getConnectedPlayers()
+        .find((player) => player.id === result.lastHitterId);
+      if (hitter) this.options.network.matchEvents.broadcastKillEvent({
         killerId: hitter.id,
         killerName: hitter.name,
         killerColor: hitter.colorHex,
@@ -257,14 +302,14 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       if (!segment) continue;
       powerUps?.spawnFromTable('TRAIN_DESTROY', segment.x + (Math.random() - 0.5) * 28, segment.y + (Math.random() - 0.5) * 28);
     }
-    bridge.broadcastTrainDestroyed();
+    this.options.network.matchEvents.broadcastTrainDestroyed();
   }
 
   private scheduleExplosion(x: number, y: number, radius: number, delayMs: number): void {
     let timer: Phaser.Time.TimerEvent;
     timer = this.options.scene.time.delayedCall(delayMs, () => {
       this.explosionTimers = this.explosionTimers.filter((candidate) => candidate !== timer);
-      bridge.broadcastExplosionEffect(x, y, radius, undefined, 'train');
+      this.options.network.effects.broadcastExplosionEffect(x, y, radius, undefined, 'train');
     });
     this.explosionTimers.push(timer);
   }

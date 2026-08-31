@@ -385,18 +385,26 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
   });
 
   it('entfernt bei Basiszerstoerung nur die Reward-Turret-Runtime', () => {
-    const source = readLifecycle();
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/world/WorldCombatGameplayBinding.ts'),
+      'utf8',
+    );
     const materializer = readFileSync(
       resolve(process.cwd(), 'src/world/PersistentBaseWorldMaterializer.ts'),
       'utf8',
     );
-    const destroyedStart = source.indexOf('baseManager.setOnBaseDestroyed((destroyedBase) => {');
-    const destroyedEnd = source.indexOf('\n      });\n      return;', destroyedStart);
+    const destroyedStart = source.indexOf('o.baseManager?.setOnBaseDestroyed((destroyedBase) => {');
+    const destroyedEnd = source.indexOf('\n    });', destroyedStart);
     expect(destroyedStart).toBeGreaterThanOrEqual(0);
     expect(destroyedEnd).toBeGreaterThan(destroyedStart);
-    expect(source.slice(destroyedStart, destroyedEnd)).toContain(
-      'this.reconcilePersistentBaseWorld();',
-    );
+    const destroyed = source.slice(destroyedStart, destroyedEnd);
+    expect(destroyed).toContain('o.getTargetStatusSystem()?.removeTarget');
+    expect(destroyed).toContain('o.getEnergyInjectorSystem()?.removeTarget');
+    expect(destroyed).toContain('o.getPowerUpSystem()?.destroyPedestalsLinkedToBase');
+    expect(destroyed).toContain('o.reconcilePersistentBaseWorld();');
+    expect(destroyed).toContain('o.reportTargetDestroyed');
+    expect(destroyed).toContain('o.hostPhysics.applyRadialImpulse');
+    expect(destroyed).toContain('o.syncActiveBaseIds();');
 
     const removalStart = materializer.indexOf('  private removeRewardTurretsForBase(');
     const removalEnd = materializer.indexOf('\n  private isPersistentBaseRuntimeActive(', removalStart);

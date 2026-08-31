@@ -350,7 +350,7 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     }
   });
 
-  it('loest alle laenger lebenden direkten EnemyManager-Bindings am Activity-Detach', () => {
+  it('loest alle laenger lebenden EnemyManager-Bindings ueber ihre World-Owner am Activity-Detach', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',
@@ -361,19 +361,22 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     for (const consumer of [
       'combatSystem',
       'hostPhysics',
-      'energyShieldSystem',
-      'guardianSpiritSystem',
-      'slimeTrailSystem',
-      'flamethrowerUpgradeSystem',
-      'weaponUpgradeSystem',
-      'ak47StrategicTargetSystem',
     ]) {
       expect(binding).toContain(`this.ctx.${consumer}`);
       expect(binding).toMatch(new RegExp(`this\\.ctx\\.${consumer.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\??\\.setEnemyManager\\(null\\)`));
     }
-    expect(binding).toContain('this.ctx.airstrikeSystem?.setResolvedCallback(null);');
     expect(binding).toContain('this.ctx.hostPhysics.setEnemyRockContactCallback(null);');
     expect(binding).toContain('this.worldTrainRuntime?.setEnemyManager(null);');
+
+    expect(binding).toContain('this.worldCombatGameplayBinding?.updateEnemyManager(null);');
+    expect(binding).toContain('this.worldPlayerGameplayRuntime?.updateEnemyManager(null);');
+    const playerOwner = readFileSync(resolve(process.cwd(), 'src/world/WorldPlayerGameplayRuntime.ts'), 'utf8');
+    for (const system of ['guardianSpirit', 'slimeTrail', 'flamethrowerUpgrade', 'weaponUpgrade', 'ak47StrategicTarget']) {
+      expect(playerOwner).toContain(`this.systems.${system}?.clear();`);
+      expect(playerOwner).toContain(`this.systems.${system}?.setEnemyManager(enemyManager);`);
+    }
+    expect(readFileSync(resolve(process.cwd(), 'src/world/WorldCombatGameplayBinding.ts'), 'utf8'))
+      .toContain('this.systems?.energyShield.setEnemyManager(enemyManager);');
 
     const mapEventComposition = readFileSync(
       resolve(process.cwd(), 'src/activity/CoopMissionMapEventComposition.ts'),

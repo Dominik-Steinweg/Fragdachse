@@ -106,9 +106,13 @@ describe('Capability Policy – host-autoritativ verdrahtet', () => {
     expect(body).toContain('participation: this.getWorldParticipation(playerId)');
     expect(body).toContain('activityKind: this.worldLifecycle.activity.kind');
 
-    // Kampf, Gegenstandsnutzung und der Wechsel in den Zuschauermodus fragen jetzt spezifisch.
-    expect(source).toContain('this.getPlayerCapabilities(playerId).canUseCombat');
-    expect(source).toContain('this.getPlayerCapabilities(playerId).canInteract');
+    // World-Owner fragen die fachlich passende Capability selbst ab; der Coordinator reicht nur
+    // die schmale Policy-Funktion in ihre Composition-Portfolios.
+    expect(source).toContain('getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId)');
+    expect(readFileSync(resolve(process.cwd(), 'src/world/WorldCombatGameplayBinding.ts'), 'utf8'))
+      .toContain('o.getPlayerCapabilities(playerId).canUseCombat');
+    expect(readFileSync(resolve(process.cwd(), 'src/world/WorldPlayerGameplayRuntime.ts'), 'utf8'))
+      .toContain('this.options.getPlayerCapabilities(playerId).canInteract');
     expect(source).toContain('maySendWorldInput(this.getWorldParticipation(localId))');
   });
 });

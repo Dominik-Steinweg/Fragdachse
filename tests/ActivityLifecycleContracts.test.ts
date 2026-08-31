@@ -315,7 +315,7 @@ describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Fla
     expect(composition).toContain("const isCoopMission = activity?.kind === 'coop-mission';");
     expect([...composition.matchAll(/const isCoopMission =/g)]).toHaveLength(1);
     expect(body).toContain('isCoopMission,');
-    expect([...body.matchAll(/\bisCoopMission\b/g)].length).toBeGreaterThan(10);
+    expect([...body.matchAll(/\bisCoopMission\b/g)].length).toBeGreaterThanOrEqual(10);
 
     // Und keine verstreute Modus-Abfrage mehr im Aufbau der Runtime.
     expect(

@@ -249,18 +249,18 @@ describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
   });
 
   it('loest die Spielfigur ohne Activity aus der World-Teilnahme statt aus der Runde', () => {
-    const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const start = lifecycle.indexOf('    this.ctx.combatSystem.setInitialSpawnAllowedResolver(');
-    const end = lifecycle.indexOf('this.ctx.combatSystem.setRespawnCallback(', start);
+    const lifecycle = read('src/world/WorldCombatGameplayBinding.ts');
+    const start = lifecycle.indexOf('    combat.setInitialSpawnAllowedResolver(');
+    const end = lifecycle.indexOf('combat.setRespawnCallback(', start);
     expect(start).toBeGreaterThanOrEqual(0);
     const spawnGate = lifecycle.slice(start, end);
 
     // Mit Runde bleibt die Runde die Quelle ...
-    expect(spawnGate).toContain('bridge.canPlayerInitialSpawn(playerId)');
-    expect(spawnGate).toContain('bridge.canPlayerRespawn(playerId)');
+    expect(spawnGate).toContain('o.network.round.canPlayerInitialSpawn(playerId)');
+    expect(spawnGate).toContain('o.network.round.canPlayerRespawn(playerId)');
     // ... ohne Runde traegt die World-Teilnahme die Antwort.
-    expect(spawnGate).toContain('this.worldLifecycle.activity.isActive()');
-    expect(spawnGate).toContain('hasWorldFigure(this.getWorldParticipation(playerId))');
+    expect(spawnGate).toContain('o.isActivityActive()');
+    expect(spawnGate).toContain('hasWorldFigure(o.getWorldParticipation(playerId))');
   });
 });
 
