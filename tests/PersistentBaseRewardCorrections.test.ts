@@ -315,13 +315,26 @@ function testCoordinator(
     getLocalOwnerId: () => getStoredLocalOwnerId(),
     resolvePlayerIdForOwner: () => playerId,
     getPlayerColor: () => 0xffffff,
-    getConstructionCapacity: () => coordinator.getConstructionCapacity(playerId),
-    getConstructionOwnership: () => 'host-persistent',
-    buildRestoreTools: () => coordinator.buildPersistentRestoreTools(playerId),
-    materializeRestoreCandidate: (candidate, ownerId, ownerColor, ownership) => (
+    construction: {
+      getCapacity: () => coordinator.getConstructionCapacity(playerId),
+      getOwnership: () => 'host-persistent',
+      resolveRestoreTools: () => coordinator.buildPersistentRestoreTools(playerId),
+      materializeRestoreCandidate: (candidate, ownerId, ownerColor, ownership) => (
       coordinator.materializePersistentRestoreCandidate(candidate, ownerId, ownerColor, ownership)
-    ),
-    releasePlaceableRuntime: () => { /* fake placement owns the map entry in this test */ },
+      ),
+      materializeRewardConstruction: (_constructionId, rewardId, gridX, gridY, angle, ownerId, ownerColor) => (
+        fakePlacement.placementSystem.materializePersistentBaseReward(
+          {} as never,
+          rewardId,
+          gridX,
+          gridY,
+          angle,
+          ownerId,
+          ownerColor,
+        )
+      ),
+      releaseRuntime: () => { /* fake placement owns the map entry in this test */ },
+    },
     emitRestoreAdded: () => { /* not relevant for this contract */ },
     emitGridChanged: () => { /* not relevant for this contract */ },
     onDiagnosticEvent: () => { /* not relevant for this contract */ },
@@ -394,7 +407,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
     expect(removal).toContain("rock.ownership !== 'base-owned'");
     expect(removal).toContain('rock.persistentRewardId === undefined');
     expect(removal).toContain('this.options.placementSystem.removeRock(rock.id)');
-    expect(removal).toContain('this.options.releasePlaceableRuntime(removed, false);');
+    expect(removal).toContain('this.options.construction.releaseRuntime(removed, false);');
     expect(removal).not.toContain('dismantleReward');
     expect(materializer).toContain('if (!persistentBaseActive) this.removeRewardTurretsForBase(site.baseId);');
   });

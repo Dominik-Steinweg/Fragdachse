@@ -83,6 +83,16 @@ export class WorldLifecycle {
     return this.instanceDescriptor;
   }
 
+  /** Stable wall-clock anchor of the current Activity identity, if one exists. */
+  get activityStartAnchor(): number | null {
+    return this.activity.startAnchor;
+  }
+
+  /** Binds a host-authoritative round start without recreating the Activity runtime. */
+  bindActivityStartAnchor(startAnchor: number): void {
+    this.activity.bindStartAnchor(startAnchor);
+  }
+
   isActive(): boolean {
     return this.currentPhase === 'active';
   }
@@ -206,7 +216,9 @@ export class WorldLifecycle {
   ): void {
     if (observedActivity) {
       if (!this.activity.descriptor || !isSameActivity(this.activity.descriptor, observedActivity)) {
-        this.activity.end();
+        // ActivityLifecycle.begin() owns the replacement transition and deliberately receives
+        // the previous identity so its new start anchor is fresh for A -> B. Calling end()
+        // here first would erase that identity context and incorrectly reuse arenaStartTime.
         this.activity.begin(observedActivity);
       }
       if (runtimeAttached) this.activity.activate();

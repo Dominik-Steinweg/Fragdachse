@@ -10,15 +10,14 @@ import {
   isPointNearBaseRegion,
 } from '../systems/CoopDefenseAirstrikeEventHandler';
 import { CoopDefenseGroundHazardEventHandler } from '../systems/CoopDefenseGroundHazardEventHandler';
-import { CoopDefenseTrainEventHandler } from '../train/CoopDefenseTrainEventHandler';
 import type { AirstrikeSystem, AirstrikeStrikeResolution } from '../systems/AirstrikeSystem';
 import type { BaseManager } from '../entities/BaseManager';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { FireSystem } from '../effects/FireSystem';
-import type { TrainManager } from '../train/TrainManager';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type { CoopTrainPort } from './CoopTrainPort';
 
 export interface CoopMissionMapEventCompositionOptions {
   readonly activity: CoopMissionActivityConfiguration;
@@ -31,8 +30,7 @@ export interface CoopMissionMapEventCompositionOptions {
   readonly fireSystem: FireSystem;
   readonly airstrikeSystem: AirstrikeSystem;
   readonly gameAudioSystem: GameAudioSystem;
-  readonly setupCoopTrainManager: (trackGridX: number, direction: 1 | -1) => TrainManager;
-  readonly clearTrainEvent: () => void;
+  readonly train: CoopTrainPort;
   readonly getNowMs: () => number;
 }
 
@@ -43,7 +41,8 @@ export class CoopMissionMapEventComposition {
   materialize(runtime: CoopMissionRuntime): void {
     const events = this.options.activity.mapConfig.mapEvents ?? [];
     if (events.length === 0) {
-      this.options.clearTrainEvent();
+      this.options.train.releaseActivityTrain();
+      this.options.train.clearTrainEvent();
       return;
     }
 
@@ -51,12 +50,7 @@ export class CoopMissionMapEventComposition {
     const trackCell = this.options.layout.tracks?.[0];
     if (trackCell !== undefined && events.some((event) => event.type === 'train')) {
       const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
-      const trainManager = this.options.setupCoopTrainManager(trackCell.gridX, direction);
-      handlers.push(new CoopDefenseTrainEventHandler(
-        trainManager,
-        this.options.combatSystem,
-        direction,
-      ));
+      handlers.push(this.options.train.materializeAuthoredTrain(trackCell.gridX, direction));
     }
 
     let airstrikeHandler: CoopDefenseAirstrikeEventHandler | null = null;
@@ -119,6 +113,7 @@ export class CoopMissionMapEventComposition {
       },
       detach: () => {
         this.options.airstrikeSystem.setResolvedCallback(null);
+        this.options.train.releaseActivityTrain();
       },
     });
   }

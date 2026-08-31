@@ -214,12 +214,14 @@ describe('WorldRuntime – Gameplay faellt, Darstellung kann uebergehen', () => 
     const owner = runtime();
     const built = materialization(parts);
     const shown = presentation(parts);
-    const seen: { placementAlive: boolean; presentationGone: boolean }[] = [];
+    const seen: { placementAlive: boolean; presentationGone: boolean; constructionAlive: boolean }[] = [];
+    let constructionAlive = true;
     const persistentBase = new PersistentBaseWorldBinding({
       finalizeRuntimeObjects: () => {
         seen.push({
           placementAlive: built.placement !== null,
           presentationGone: owner.presentation === null,
+          constructionAlive,
         });
         parts.calls.push('persistentBase.finalize');
       },
@@ -229,15 +231,22 @@ describe('WorldRuntime – Gameplay faellt, Darstellung kann uebergehen', () => 
     owner.materialize(built);
     owner.setPresentation(shown);
     owner.setPersistentBase(persistentBase);
+    owner.bind({
+      destroy: () => {
+        constructionAlive = false;
+        parts.calls.push('construction.destroy');
+      },
+    });
 
     owner.destroy();
 
-    expect(seen).toEqual([{ placementAlive: true, presentationGone: true }]);
+    expect(seen).toEqual([{ placementAlive: true, presentationGone: true, constructionAlive: true }]);
     // Die Darstellung geht zuerst, dann der Bestand, dann die Bau-Runtime.
     expect(parts.calls).toEqual([
       'presentation.destroy',
       'persistentBase.finalize',
       'persistentBase.releaseReward',
+      'construction.destroy',
       'placement.clearRuntimeRocks',
       'bases.destroy',
       'arenaGameplay.destroy',

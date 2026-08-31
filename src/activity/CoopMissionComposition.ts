@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
-import type { ArenaLayout, TrainEventConfig } from '../types';
+import type { ArenaLayout } from '../types';
 import type { BaseManager } from '../entities/BaseManager';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -41,6 +41,7 @@ import {
 } from '../config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
+import type { CoopTrainPort } from './CoopTrainPort';
 
 export interface CoopMissionCompositionOptions {
   readonly scene: Phaser.Scene;
@@ -66,8 +67,7 @@ export interface CoopMissionCompositionOptions {
   readonly getLightingSystem: () => LightingSystem;
   readonly getPlayerModifierSystem: () => CoopDefensePlayerModifierSystem | null;
   readonly getPlayerWorldRuntime: () => PlayerWorldRuntime | null;
-  readonly getTrainManager: () => import('../train/TrainManager').TrainManager | null;
-  readonly getTrainEvent: () => TrainEventConfig | undefined;
+  readonly train: CoopTrainPort;
   readonly isHost: () => boolean;
   readonly getHumanPlayerCount: () => number;
   readonly getParticipantIds: () => readonly string[];
@@ -96,7 +96,6 @@ export interface CoopMissionCompositionOptions {
     radius: number,
   ) => boolean;
   readonly damageConstruction: (id: number, damage: number, attackerId: string) => void;
-  readonly setupCoopTrainManager: (trackGridX: number, direction: 1 | -1) => import('../train/TrainManager').TrainManager;
   readonly releaseMissionObjectives: (runtime: CoopMissionRuntime, playerId: string) => void;
   readonly publishMissionProgress: (state: CoopDefenseMissionProgressPresentationState | null) => void;
   readonly broadcastCarryDeliveredFx: (x: number, y: number) => void;
@@ -108,7 +107,6 @@ export interface CoopMissionCompositionOptions {
   readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop') => void;
   readonly broadcastCorpseMarker: (corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number) => void;
   readonly removeCorpseMarker: (corpseId: number) => void;
-  readonly clearTrainEvent: () => void;
   readonly getNowMs: () => number;
   readonly onDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
   readonly onBossSpawned: (spawnedAtMs: number) => void;
@@ -125,15 +123,17 @@ export interface CoopMissionCompositionOptions {
 export class CoopMissionComposition {
   constructor(private readonly options: CoopMissionCompositionOptions) {}
 
-  createCombatComposition(
+  /** Materializes the private core combat child without exposing its concrete type. */
+  materializeCore(
     activity: CoopMissionActivityConfiguration | null,
+    runtime: CoopMissionRuntime,
     layoutOverride: ArenaLayout | null = null,
-  ): CoopMissionCombatComposition | null {
-    if (!activity) return null;
+  ): void {
+    if (!activity) return;
     const world = this.options.getWorld();
     const layout = layoutOverride ?? this.options.getLayout();
     const arenaResult = this.options.getArenaResult();
-    if (!world || !layout || !arenaResult) return null;
+    if (!world || !layout || !arenaResult) return;
     const humanPlayerCount = this.options.getHumanPlayerCount();
     const missionProgressConfig = resolveCoopDefenseMapMissionProgress(activity.mapConfig);
     const baseManager = this.options.getBaseManager();
@@ -148,7 +148,7 @@ export class CoopMissionComposition {
       return [...staticRockCells, ...runtimeRockCells];
     };
 
-    return new CoopMissionCombatComposition({
+    new CoopMissionCombatComposition({
       scene: this.options.scene,
       activity,
       enemyConfigs: resolveCoopDefenseEnemyConfigs(humanPlayerCount),
@@ -168,10 +168,11 @@ export class CoopMissionComposition {
       entityBurnGpuController: this.options.entityBurnGpuController,
       onBossSpawned: this.options.onBossSpawned,
       onDiagnosticEvent: this.options.onDiagnosticEvent,
-    });
+    }).materialize(runtime);
   }
 
-  materialize(
+  /** Materializes dependent Activity children after the core combat owner exists. */
+  materializeDependents(
     activity: CoopMissionActivityConfiguration,
     runtime: CoopMissionRuntime,
   ): void {
@@ -189,6 +190,13 @@ export class CoopMissionComposition {
     const powerUpSystem = this.options.getPowerUpSystem();
     const loadoutManager = this.options.getLoadoutManager();
     const placementSystem = this.options.getPlacementSystem();
+    // The concrete train child lives behind the World owner's Activity slot. Register the
+    // release before any dependent event composition so it is always removed on Activity end,
+    // including maps without an AirstrikeSystem.
+    runtime.bind({
+      attach: () => { /* train is materialized by the map-event composition */ },
+      detach: () => { this.options.train.releaseActivityTrain(); },
+    });
     this.options.setSecondaryObjectiveConfigs(
       resolveCoopDefenseMapSecondaryObjectives(activityMapConfig, humanPlayerCount),
     );
@@ -241,8 +249,8 @@ export class CoopMissionComposition {
       flamethrowerUpgradeSystem: this.options.getFlamethrowerUpgradeSystem(),
       fireSystem: this.options.getFireSystem(),
       decoySystem: this.options.getDecoySystem(),
-      getTrainManager: this.options.getTrainManager,
-      getTrainEvent: this.options.getTrainEvent,
+      getTrainManager: this.options.train.getCurrentTrain,
+      getTrainEvent: this.options.train.getCurrentTrainEvent,
       isSafeEnemyGroundAt: this.options.isSafeEnemyGroundAt,
       findSafeEnemyGroundPosition: this.options.findSafeEnemyGroundPosition,
       isFreeEnemyGroundAt: this.options.isFreeEnemyGroundAt,
@@ -284,8 +292,7 @@ export class CoopMissionComposition {
       fireSystem: this.options.getFireSystem(),
       airstrikeSystem,
       gameAudioSystem: this.options.getGameAudioSystem(),
-      setupCoopTrainManager: this.options.setupCoopTrainManager,
-      clearTrainEvent: this.options.clearTrainEvent,
+      train: this.options.train,
       getNowMs: this.options.getNowMs,
     }).materialize(runtime);
   }

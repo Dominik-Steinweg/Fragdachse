@@ -3,7 +3,6 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { ConstructionOwnership, SyncedPlaceableRock } from '../types';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, TEAM_BLUE_COLOR } from '../config';
-import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import {
   getPersistentBaseBuildAreaExtentCells,
   isCellInsidePersistentBaseBuildArea,
@@ -46,19 +45,33 @@ export interface PersistentBaseWorldMaterializerOptions {
   readonly getLocalOwnerId: () => string;
   readonly resolvePlayerIdForOwner: (ownerId: string) => string | null;
   readonly getPlayerColor: (playerId: string) => number;
-  readonly getConstructionCapacity: (playerId: string) => number;
-  readonly getConstructionOwnership: (playerId: string) => ConstructionOwnership;
-  readonly buildRestoreTools: (playerId: string) => readonly PersistentRestoreToolDefinition[];
+  readonly construction: PersistentBaseConstructionPort;
+  readonly emitRestoreAdded: (runtime: SyncedPlaceableRock) => void;
+  readonly emitGridChanged: (source: 'placeable_rock' | 'placeable_turret') => void;
+  readonly onDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
+}
+
+/** Small bridge from PB materialization to the World-owned Construction runtime. */
+export interface PersistentBaseConstructionPort {
+  readonly getCapacity: (playerId: string) => number;
+  readonly getOwnership: (playerId: string) => ConstructionOwnership;
+  readonly resolveRestoreTools: (playerId: string) => readonly PersistentRestoreToolDefinition[];
   readonly materializeRestoreCandidate: (
     candidate: PersistentRestoreCandidate,
     playerId: string,
     ownerColor: number,
     ownership: ConstructionOwnership,
   ) => SyncedPlaceableRock | null;
-  readonly releasePlaceableRuntime: (runtime: SyncedPlaceableRock, playDust: boolean) => void;
-  readonly emitRestoreAdded: (runtime: SyncedPlaceableRock) => void;
-  readonly emitGridChanged: (source: 'placeable_rock' | 'placeable_turret') => void;
-  readonly onDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
+  readonly materializeRewardConstruction: (
+    constructionId: 'spore_turret' | 'rocket_turret',
+    rewardId: PersistentBaseRewardId,
+    gridX: number,
+    gridY: number,
+    angle: number,
+    ownerId: string,
+    ownerColor: number,
+  ) => SyncedPlaceableRock | null;
+  readonly releaseRuntime: (runtime: SyncedPlaceableRock, playDust: boolean) => void;
 }
 
 /**
@@ -90,7 +103,7 @@ export class PersistentBaseWorldMaterializer {
       if (!playerId) continue;
       next.set(ownerId, JSON.stringify({
         capacityMax: this.resolveCapacity(playerId),
-        tools: this.options.buildRestoreTools(playerId),
+        tools: this.options.construction.resolveRestoreTools(playerId),
       }));
     }
     let changed = next.size !== signatures.size;
@@ -123,7 +136,7 @@ export class PersistentBaseWorldMaterializer {
     this.options.powerUpSystem?.unregisterPersistentBaseRewardPedestal(rewardId);
     const runtime = this.options.placementSystem.removePersistentBaseReward(rewardId)
       ?? this.options.placementSystem.removeRock(binding.runtimeId);
-    if (runtime) this.options.releasePlaceableRuntime(runtime, false);
+    if (runtime) this.options.construction.releaseRuntime(runtime, false);
   }
 
   releasePersonalRuntimeForRewardConflict(runtimeId: number): void {
@@ -132,7 +145,7 @@ export class PersistentBaseWorldMaterializer {
       .find((candidate) => candidate.runtimeId === runtimeId);
     if (binding) this.options.contributions.releaseRuntimeBinding(runtimeId);
     const removed = this.options.placementSystem.removeRock(runtimeId);
-    if (removed) this.options.releasePlaceableRuntime(removed, false);
+    if (removed) this.options.construction.releaseRuntime(removed, false);
   }
 
   relocateRewardRuntime(rewardId: PersistentBaseRewardId, runtime: SyncedPlaceableRock): void {
@@ -225,7 +238,7 @@ export class PersistentBaseWorldMaterializer {
       const playerId = this.options.resolvePlayerIdForOwner(ownerId);
       const tools = new Map<string, PersistentRestoreToolDefinition>();
       if (playerId) {
-        for (const tool of this.options.buildRestoreTools(playerId)) tools.set(tool.id, tool);
+        for (const tool of this.options.construction.resolveRestoreTools(playerId)) tools.set(tool.id, tool);
       }
       toolCache.set(ownerId, tools);
       return tools;
@@ -273,7 +286,7 @@ export class PersistentBaseWorldMaterializer {
       store.releaseRuntimeBinding(binding.runtimeId);
       const removed = this.options.placementSystem.removeRock(binding.runtimeId);
       if (!removed) continue;
-      this.options.releasePlaceableRuntime(removed, false);
+      this.options.construction.releaseRuntime(removed, false);
       dematerializedCount += 1;
     }
     if (dematerializedCount > 0) this.options.emitGridChanged('placeable_rock');
@@ -283,11 +296,11 @@ export class PersistentBaseWorldMaterializer {
       const playerId = this.options.resolvePlayerIdForOwner(entry.ownerId);
       const tool = resolveOwnerTools(entry.ownerId).get(entry.blueprint.tool.id);
       if (!playerId || !tool) continue;
-      const runtime = this.options.materializeRestoreCandidate(
+      const runtime = this.options.construction.materializeRestoreCandidate(
         { blueprint: entry.blueprint, tool, gridX: entry.gridX, gridY: entry.gridY },
         playerId,
         this.options.getPlayerColor(playerId),
-        this.options.getConstructionOwnership(playerId),
+        this.options.construction.getOwnership(playerId),
       );
       if (!runtime) continue;
       store.registerRestored(entry.ownerId, entry.blueprint, runtime.id);
@@ -330,8 +343,8 @@ export class PersistentBaseWorldMaterializer {
       runtime = definition.category === 'baseTurret'
         && definition.gameplaySource.kind === 'construction-definition'
         && definition.gameplaySource.constructionId
-        ? this.options.placementSystem.materializePersistentBaseReward(
-          getCoopDefenseConstructionDefinition(definition.gameplaySource.constructionId),
+        ? this.options.construction.materializeRewardConstruction(
+          definition.gameplaySource.constructionId,
           placement.rewardId,
           cell.gridX,
           cell.gridY,
@@ -359,7 +372,7 @@ export class PersistentBaseWorldMaterializer {
       this.options.binding.unbindRewardRuntime(placement.rewardId);
       this.options.powerUpSystem?.unregisterPersistentBaseRewardPedestal(placement.rewardId);
       const removed = this.options.placementSystem.removeRock(runtime.id);
-      if (removed) this.options.releasePlaceableRuntime(removed, false);
+      if (removed) this.options.construction.releaseRuntime(removed, false);
     };
     try {
       if (definition.category === 'basePedestal') {
@@ -409,7 +422,7 @@ export class PersistentBaseWorldMaterializer {
       this.options.binding.unbindRewardRuntime(rock.persistentRewardId);
       const removed = this.options.placementSystem.removeRock(rock.id);
       if (!removed) continue;
-      this.options.releasePlaceableRuntime(removed, false);
+      this.options.construction.releaseRuntime(removed, false);
       removedCount += 1;
     }
     for (const [rewardId, binding] of [...this.options.binding.rewardRuntimes]) {
@@ -454,7 +467,7 @@ export class PersistentBaseWorldMaterializer {
   }
 
   private resolveCapacity(playerId: string): number {
-    return this.options.getConstructionCapacity(playerId);
+    return this.options.construction.getCapacity(playerId);
   }
 }
 

@@ -83,7 +83,7 @@ export interface ConfiguredNukeStrike {
   readonly variant?: 'normal' | 'void';
 }
 
-interface PowerUpSystemOptions {
+export interface PowerUpSystemOptions {
   onPickupCollected?: (playerId: string) => void;
   onNukePickup?: (playerId: string) => boolean | void;
   onNukeExploded?: (x: number, y: number, radius: number, triggeredBy: string) => void;

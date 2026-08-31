@@ -27,6 +27,10 @@ import type {
 
 const anchor = { gridX: 20, gridY: 20 };
 const buildArea = DEFAULT_PERSISTENT_BASE_BUILD_AREA;
+const constructionRuntime = readFileSync(
+  resolve(process.cwd(), 'src/world/ConstructionWorldRuntime.ts'),
+  'utf8',
+);
 
 function blueprint(
   persistentId: string,
@@ -306,7 +310,7 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
     expect(releaseAt).toBeGreaterThanOrEqual(0);
     expect(removeAt).toBeGreaterThan(releaseAt);
     // Der Konfliktpfad benutzt den besitzneutralen Abbau, nicht den Abriss.
-    expect(materializer).toContain('this.options.releasePlaceableRuntime(removed, false);');
+    expect(materializer).toContain('this.options.construction.releaseRuntime(removed, false);');
   });
 
   it('rechnet nach einem Austritt neu, damit Unterdruecktes zurueckkommt', () => {
@@ -331,12 +335,12 @@ describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
       materializer.indexOf('\n  materializeRewardPlacement(', materializer.indexOf('  refreshForRelevantBuildChanges(): void {')),
     );
     expect(refresh).toContain('capacityMax: this.resolveCapacity(playerId)');
-    expect(refresh).toContain('tools: this.options.buildRestoreTools(playerId)');
+    expect(refresh).toContain('tools: this.options.construction.resolveRestoreTools(playerId)');
     expect(refresh).toContain('if (changed) this.reconcile();');
 
     // Die bestehende Zugriffsauflosung bleibt die Quelle fuer `active`; ein nicht ausgeruestetes
     // Werkzeug wird daher weiter als dormant behandelt und nicht pauschal materialisiert.
-    expect(lifecycle).toContain('active: access.active');
+    expect(constructionRuntime).toContain('active: access.active');
   });
 
   it('laesst eine Besitzeridentitaet nur einem Spieler des Raums', () => {

@@ -29,6 +29,7 @@ import { PersistentBaseRewardStore } from '../src/persistentBase/PersistentBaseR
 import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
 import { PersistentBaseRewardGrantService } from '../src/persistentBase/PersistentBaseRewardGrant';
 import { PersistentBaseWorldMaterializer } from '../src/world/PersistentBaseWorldMaterializer';
+import { ConstructionWorldRuntime } from '../src/world/ConstructionWorldRuntime';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 import { createAuthoredWorldDescriptor } from '../src/world/WorldLayout';
@@ -182,6 +183,48 @@ function createHarness(classId: string) {
   coordinator.persistCurrentCommittedPersistentBaseRewards = vi.fn();
   coordinator.publishPersistentBaseRewardSessionState = vi.fn();
   coordinator.publishImmediatePersistentBaseContribution = vi.fn();
+  coordinator.resolveOwnerId = (ownerId: string) => ownerId;
+  coordinator.relocatePlaceableRuntimePresentation = vi.fn();
+  coordinator.reconcilePersistentBaseWorld = () => coordinator.persistentBaseWorldBinding.reconcile();
+  coordinator.constructionWorldRuntime = new ConstructionWorldRuntime({
+    scene: coordinator.scene,
+    playerManager: coordinator.ctx.playerManager,
+    combatSystem: coordinator.ctx.combatSystem,
+    placementSystem,
+    loadoutManager,
+    targetStatusSystem: null,
+    energyInjectorSystem: null,
+    powerUpSystem: coordinator.ctx.powerUpSystem as never,
+    modifierSystem: null,
+    burrowSystem: null,
+    tunnelSystem: null,
+    gameAudioSystem: coordinator.ctx.gameAudioSystem,
+    getGameMode: () => COOP_DEFENSE_MODE,
+    getPlayerCapabilities: (id) => coordinator.getPlayerCapabilities(id),
+    getCurrentLoadout: (id) => bridge.getPlayerCurrentLoadoutSnapshot(id),
+    getPersistentBaseContext: () => ({
+      anchor: site.anchor,
+      buildArea: site.buildArea,
+      contributions: contributionStore,
+      rewards: rewardStore,
+    }),
+    persistentBaseBinding: persistentBaseWorldBinding,
+    resolveOwnerId: (id) => id,
+    getLocalPlayerId: () => playerId,
+    isHost: () => bridge.isHost(),
+    acceptsPersistentBaseMutation: (activityRevision) => coordinator.acceptsCurrentPersistentBaseMutation(activityRevision),
+    mayManagePersistentBase: (id) => coordinator.mayManagePersistentBase(id),
+    getRewardPlacementRuntime: () => null,
+    emitGridChanged: () => { /* not relevant for management tests */ },
+    relocatePresentation: (previous, next) => coordinator.relocatePlaceableRuntimePresentation(previous, next),
+    reconcilePersistentBaseWorld: () => coordinator.reconcilePersistentBaseWorld(),
+    publishImmediateContribution: (ownerId) => coordinator.publishImmediatePersistentBaseContribution(ownerId),
+    persistRewards: () => coordinator.persistCurrentCommittedPersistentBaseRewards(),
+    publishRewardSessionState: () => coordinator.publishPersistentBaseRewardSessionState(),
+    publishUtilityCooldown: vi.fn(),
+    recordConstructionBuilt: vi.fn(),
+    rockVisualHelper: coordinator.rockVisualHelper,
+  });
 
   persistentBaseWorldBinding.setSite(site.anchor, site.buildArea);
   persistentBaseWorldBinding.setMaterializer(new PersistentBaseWorldMaterializer({
@@ -198,11 +241,14 @@ function createHarness(classId: string) {
     getLocalOwnerId: () => 'owner-local',
     resolvePlayerIdForOwner: () => playerId,
     getPlayerColor: () => 0xffffff,
-    getConstructionCapacity: () => 100,
-    getConstructionOwnership: () => 'host-persistent',
-    buildRestoreTools: () => [],
-    materializeRestoreCandidate: () => null,
-    releasePlaceableRuntime: () => { /* PlacementSystem already removed the runtime. */ },
+    construction: {
+      getCapacity: () => 100,
+      getOwnership: () => 'host-persistent',
+      resolveRestoreTools: () => [],
+      materializeRestoreCandidate: () => null,
+      materializeRewardConstruction: () => null,
+      releaseRuntime: () => { /* PlacementSystem already removed the runtime. */ },
+    },
     emitRestoreAdded: () => { /* not relevant for reward-management tests */ },
     emitGridChanged: () => { /* not relevant for reward-management tests */ },
     onDiagnosticEvent: () => { /* not relevant for reward-management tests */ },

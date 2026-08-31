@@ -16,7 +16,7 @@ import type { DecoySystem } from '../systems/DecoySystem';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
-import type { TrainManager } from '../train/TrainManager';
+import type { TrainAwarenessSource } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
 import type { TrainEventConfig } from '../types';
 
@@ -33,7 +33,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
   readonly fireSystem: FireSystem;
   readonly decoySystem: DecoySystem | null;
-  readonly getTrainManager: () => TrainManager | null;
+  readonly getTrainManager: () => TrainAwarenessSource | null;
   readonly getTrainEvent: () => TrainEventConfig | undefined;
   readonly isSafeEnemyGroundAt: (x: number, y: number, radius: number) => boolean;
   readonly findSafeEnemyGroundPosition: (

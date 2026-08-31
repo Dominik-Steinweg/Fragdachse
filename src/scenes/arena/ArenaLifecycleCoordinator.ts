@@ -32,21 +32,17 @@ import {
 } from '../../systems/ArenaTimeOfDayController';
 import { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
 import { LoadoutManager }    from '../../loadout/LoadoutManager';
-import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import { TimeBubbleSystem }  from '../../systems/TimeBubbleSystem';
 import { TranslocatorSystem } from '../../systems/TranslocatorSystem';
-import { PowerUpSystem }     from '../../powerups/PowerUpSystem';
 import { DetonationSystem }  from '../../systems/DetonationSystem';
 import { ArmageddonSystem }  from '../../systems/ArmageddonSystem';
 import { AirstrikeSystem }   from '../../systems/AirstrikeSystem';
-import { TrainManager }      from '../../train/TrainManager';
-import { TrainRenderer }     from '../../train/TrainRenderer';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
-import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
-import type { PlaceableUtilityConfig, PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
+import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS, DEFAULT_LOADOUT } from '../../loadout/LoadoutConfig';
+import type { PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import {
   resolveCoopDefenseActivityBaseOverlays,
@@ -55,9 +51,6 @@ import { getCoopDefenseMapConfig, getCoopDefenseMapXpReference, isWeaponBalanceL
 import { buildInitialLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { ARENA_DURATION_SEC, HP_MAX, PLAYER_COLORS, COLORS, CELL_SIZE, TEAM_BLUE_COLOR, TEAM_RED_COLOR, COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID, applyArenaMetricsForMode, getArenaMetricsProfile } from '../../config';
 import { DASH_GROUND_FIRE_BURN_DURATION_MS, DASH_GROUND_FIRE_DAMAGE_PER_TICK, DASH_T2_S, PLAYER_SPEED, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../../config';
-import { TRAIN }             from '../../train/TrainConfig';
-import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../../train/TrainEvent';
-import { TRAIN_DROP_COUNT }  from '../../powerups/PowerUpConfig';
 import type { ArenaContext }          from './ArenaContext';
 import type { RendererBundle }        from './RendererBundle';
 import type { RockVisualHelper }      from './RockVisualHelper';
@@ -98,20 +91,11 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import { resolveCoopMissionActivityConfiguration } from '../../activity/CoopMissionActivityConfig';
 import { CoopMissionComposition } from '../../activity/CoopMissionComposition';
 import {
-  COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
-  COOP_DEFENSE_CONSTRUCTION_IDS,
   COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
-  getCoopDefenseConstructionDefinition,
-  getConstructionIdForUtility,
-  getUtilityIdForConstruction,
-  getToolCapacityCost,
-  normalizeConstructionId,
-  resolveConstructionCapacity,
 } from '../../config/coopDefenseConstructions';
-import type { ConstructionId, ConstructionOwnership, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
-import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveConstructionAccess } from '../../systems/ConstructionAccessResolver';
+import type { ConstructionId, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import {
@@ -163,10 +147,6 @@ import {
   applyPersistentBaseRoundOutcome,
   resolvePersistentBaseRoundOutcome,
 } from '../../persistentBase/PersistentBaseRoundOutcome';
-import type {
-  PersistentRestoreCandidate,
-  PersistentRestoreToolDefinition,
-} from '../../persistentBase/PersistentBaseTools';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import {
   resolveActiveGameMode,
@@ -192,6 +172,10 @@ import {
 } from '../../world/PersistentBaseWorldBinding';
 import { PersistentBaseWorldMaterializer } from '../../world/PersistentBaseWorldMaterializer';
 import { WorldRuntime } from '../../world/WorldRuntime';
+import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
+import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
+import { ConstructionWorldRuntime, type ConstructionPersistentBaseContext } from '../../world/ConstructionWorldRuntime';
+import type { CoopTrainPort } from '../../activity/CoopTrainPort';
 import {
   PlayerWorldRuntime,
   resolvePlayerRuntimeFeatures,
@@ -229,7 +213,6 @@ import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type {
   PersistentBaseAnchor,
   PersistentPlayerBaseContribution,
-  PersistentToolRef,
 } from '../../persistentBase/PersistentBaseTypes';
 import {
   resolvePersistentBaseVisualSite,
@@ -255,7 +238,6 @@ export class ArenaLifecycleCoordinator {
   private isLocalReady      = false;
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
   private trainDestroyedShown = false;
-  private trainExplosionTimers: Phaser.Time.TimerEvent[] = [];
 
   /**
    * Zaehlt ueber Runden hinweg hoch. Ein verspaetetes Worker-Ergebnis aus einer alten Arena traegt
@@ -324,11 +306,6 @@ export class ArenaLifecycleCoordinator {
   private runtimeDiagnosticEventSink: RuntimeDiagnosticEventSink | null = null;
   private hostArenaGenerationTimer: Phaser.Time.TimerEvent | null = null;
   private boundRoundStartTime = 0;
-  private pendingClassicTrainEvent: {
-    readonly trackX: number;
-    readonly direction: 1 | -1;
-    readonly plan: TrainEventPlan;
-  } | null = null;
   /**
    * Lokale Realisierung der laufenden World-Instanz. Sie entsteht und vergeht mit dem Attach und
    * Detach des Lifecycles; dieselbe World-Instanz kann sie verlieren und eine neue bekommen.
@@ -336,6 +313,23 @@ export class ArenaLifecycleCoordinator {
    * Ausserhalb ihrer Lifetime ist sie `null` und wird nicht als Dependency weitergereicht.
    */
   private worldRuntime: WorldRuntime | null = null;
+  /** World-owned PowerUp runtime; the context field below is only a compatibility facade. */
+  private worldPowerUpRuntime: WorldPowerUpRuntime | null = null;
+  /** Stable narrow port passed to the Activity composition; implementation lives in WorldTrainRuntime. */
+  private readonly coopTrainPort: CoopTrainPort = {
+    materializeAuthoredTrain: (trackGridX, direction) => {
+      if (!this.worldTrainRuntime) throw new Error('[ArenaLifecycleCoordinator] Train WorldRuntime is missing');
+      return this.worldTrainRuntime.materializeAuthoredTrain(trackGridX, direction);
+    },
+    getCurrentTrain: () => this.worldTrainRuntime?.getCurrentTrain() ?? null,
+    getCurrentTrainEvent: () => this.worldTrainRuntime?.getCurrentTrainEvent(),
+    releaseActivityTrain: () => { this.worldTrainRuntime?.releaseActivityTrain(); },
+    clearTrainEvent: () => { this.worldTrainRuntime?.clearTrainEvent(); },
+  };
+  /** World-owned train runtime; its Activity train child is released on Activity detach. */
+  private worldTrainRuntime: WorldTrainRuntime | null = null;
+  /** World-owned construction rules and Loadout handlers. */
+  private constructionWorldRuntime: ConstructionWorldRuntime | null = null;
   /** Lokale Realisierung der optionalen Coop-Activity; ihr Besitzer ist der ActivityRuntimeHost. */
   private coopMissionRuntime: CoopMissionRuntime | null = null;
   /** Activity-specific orchestration; focused composers remain behind this boundary. */
@@ -458,6 +452,11 @@ export class ArenaLifecycleCoordinator {
       this.ctx.world = null;
     },
     activityIdentity: {
+      resolveStartAnchor: (_activity, previousActivity) => {
+        if (previousActivity) return bridge.getSynchronizedNow();
+        const arenaStartTime = bridge.getArenaStartTime();
+        return arenaStartTime > 0 ? arenaStartTime : null;
+      },
       begin: (activity) => { this.beginPersistentBaseTransaction(activity); },
       end: (activity) => { this.endPersistentBaseTransaction(activity); },
     },
@@ -628,6 +627,7 @@ export class ArenaLifecycleCoordinator {
       getPlacementSystem: () => this.ctx.placementSystem,
       getLoadoutManager: () => this.ctx.loadoutManager,
       getPowerUpSystem: () => this.ctx.powerUpSystem,
+      getPlayerModifierSystem: () => this.ctx.coopDefensePlayerModifierSystem,
       getEnergyShieldSystem: () => this.ctx.energyShieldSystem,
       getStinkCloudSystem: () => this.ctx.stinkCloudSystem,
       getFlamethrowerUpgradeSystem: () => this.ctx.flamethrowerUpgradeSystem,
@@ -637,10 +637,8 @@ export class ArenaLifecycleCoordinator {
       getAirstrikeSystem: () => this.ctx.airstrikeSystem,
       getGameAudioSystem: () => this.ctx.gameAudioSystem,
       getLightingSystem: () => this.renderers.lighting,
-      getPlayerModifierSystem: () => this.ctx.coopDefensePlayerModifierSystem,
       getPlayerWorldRuntime: () => this.worldRuntime?.players ?? null,
-      getTrainManager: () => this.ctx.trainManager,
-      getTrainEvent: () => bridge.getTrainEvent(),
+      train: this.coopTrainPort,
       isHost: () => bridge.isHost(),
       getHumanPlayerCount: () => Math.max(
         1,
@@ -668,7 +666,6 @@ export class ArenaLifecycleCoordinator {
         const hp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, attackerId);
         if (hp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', attackerId);
       },
-      setupCoopTrainManager: (trackGridX, direction) => this.setupTrainManager(trackGridX, null, direction),
       releaseMissionObjectives: (runtime, playerId) => {
         runtime.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
         runtime.coopDefenseCarrySystem?.handlePlayerUnavailable(playerId);
@@ -685,7 +682,6 @@ export class ArenaLifecycleCoordinator {
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)
       ),
       removeCorpseMarker: (corpseId) => bridge.broadcastCorpseMarkerRemoval(corpseId),
-      clearTrainEvent: () => bridge.clearTrainEvent(),
       getNowMs: () => Date.now(),
       onDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
       onBossSpawned: (spawnedAtMs) => {
@@ -983,7 +979,7 @@ export class ArenaLifecycleCoordinator {
         );
         this.ctx.combatSystem.setEnemyManager(enemyManager);
         this.ctx.hostPhysics.setEnemyManager(enemyManager);
-        this.ctx.trainManager?.setEnemyManager(enemyManager);
+        this.worldTrainRuntime?.setEnemyManager(enemyManager);
         this.ctx.energyShieldSystem?.setEnemyManager(enemyManager);
         this.ctx.guardianSpiritSystem?.setEnemyManager(enemyManager);
         this.ctx.slimeTrailSystem?.setEnemyManager(enemyManager);
@@ -995,13 +991,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.combatSystem.setBarrierObstacles(null);
         this.ctx.airstrikeSystem?.clear();
         this.ctx.airstrikeSystem?.setResolvedCallback(null);
-        this.ctx.combatSystem.setTrainSegments(null);
-        this.ctx.projectileManager.setTrainHitCallback(null);
-        this.ctx.projectileManager.setTrainGroup(null);
-        this.ctx.translocatorSystem?.setTrainManager(null);
-        this.ctx.trainManager?.setEnemyManager(null);
-        this.ctx.trainManager?.destroy();
-        this.ctx.trainManager = null;
+        this.worldTrainRuntime?.setEnemyManager(null);
         this.ctx.ak47StrategicTargetSystem?.clear();
         this.ctx.ak47StrategicTargetSystem?.setEnemyManager(null);
         this.ctx.weaponUpgradeSystem?.clear();
@@ -1024,15 +1014,14 @@ export class ArenaLifecycleCoordinator {
       this.attachCoopMissionPowerUpBinding(
         activity,
         runtime,
-        bridge.getArenaStartTime() > 0 ? bridge.getSynchronizedNow() : undefined,
+        this.worldLifecycle.activityStartAnchor ?? undefined,
       );
       const activityConfiguration = resolveCoopMissionActivityConfiguration(
         activity,
         this.worldRuntime?.context.definition ?? null,
       );
-      const composition = this.coopMissionComposition.createCombatComposition(activityConfiguration);
-      if (composition) composition.materialize(runtime);
-      this.coopMissionComposition.materialize(activityConfiguration, runtime);
+      this.coopMissionComposition.materializeCore(activityConfiguration, runtime);
+      this.coopMissionComposition.materializeDependents(activityConfiguration, runtime);
       // Objective composition creates the Activity-owned TeamBuff. Refresh the compatibility
       // facade only after all Activity children exist; the Coordinator remains its single writer.
       this.syncCoopMissionCompatibilityBindings(runtime);
@@ -1525,14 +1514,6 @@ export class ArenaLifecycleCoordinator {
       bridge.publishRoundState({ ...currentRoundState, roundStartTime: arenaStartTime });
     }
     this.syncAuthoritativeRoundStartAnchors();
-    if (this.pendingClassicTrainEvent) {
-      const { trackX, direction, plan } = this.pendingClassicTrainEvent;
-      bridge.publishTrainEvent({
-        trackX,
-        direction,
-        spawnAt: arenaStartTime + plan.firstArrivalDelayMs,
-      });
-    }
     this.hostUpdate.setActive(true);
   }
 
@@ -1541,6 +1522,8 @@ export class ArenaLifecycleCoordinator {
     if (roundStartTime <= 0 || roundStartTime === this.boundRoundStartTime) return;
     this.boundRoundStartTime = roundStartTime;
     this.timeOfDayController?.setRoundStartTime(roundStartTime);
+    this.worldLifecycle.bindActivityStartAnchor(roundStartTime);
+    this.worldTrainRuntime?.bindRoundStart(roundStartTime);
     this.ctx.powerUpSystem?.setArenaStartTime(roundStartTime);
   }
 
@@ -2240,9 +2223,8 @@ export class ArenaLifecycleCoordinator {
       return this.buildPersistentBaseRewardMovePreview(site, rewardId, source, player, pointerX, pointerY);
     }
 
-    const constructionId = normalizeConstructionId(source.constructionId);
-    if (!constructionId) return undefined;
-    const definition = getCoopDefenseConstructionDefinition(constructionId);
+    const definition = this.constructionWorldRuntime?.getDefinition(source.constructionId);
+    if (!definition) return undefined;
     const preview = placementSystem.getConstructionPlacementPreview(
       definition,
       player.x,
@@ -2342,58 +2324,14 @@ export class ArenaLifecycleCoordinator {
     return result;
   }
 
-  /** Eigene persoenliche Konstruktion: Runtime und Blueprint wandern gemeinsam auf die neue Zelle. */
+  /** Thin PB adapter; construction relocation is owned by the World runtime. */
   private hostMovePersonalConstruction(
     playerId: string,
     source: SyncedPlaceableRock,
     preview: UtilityPlacementPreviewState,
   ): LoadoutUseResult {
-    const placementSystem = this.ctx.placementSystem;
-    const site = this.ctx.world?.persistentBaseSite ?? null;
-    const store = this.ctx.persistentBaseContributions;
-    const constructionId = normalizeConstructionId(source.constructionId);
-    if (!placementSystem || !constructionId) return { ok: false, reason: 'blocked' };
-    const footprint = getCoopDefenseConstructionDefinition(constructionId).footprint;
-    const previous: SyncedPlaceableRock = { ...source };
-
-    const relocated = placementSystem.relocateRock(
-      source.id,
-      preview.gridX,
-      preview.gridY,
-      preview.angle,
-      footprint,
-    );
-    if (!relocated) return { ok: false, reason: 'placement' };
-
-    const binding = store?.getRuntimeBindings().find((entry) => entry.runtimeId === source.id);
-    if (binding && store && site) {
-      const moved = store.moveConstruction(
-        binding.ownerId,
-        binding.blueprint.persistentId,
-        {
-          relativeGridX: preview.gridX - site.anchor.gridX,
-          relativeGridY: preview.gridY - site.anchor.gridY,
-          angle: preview.angle,
-        },
-        footprint,
-        site.buildArea,
-      );
-      if (!moved) {
-        placementSystem.relocateRock(source.id, previous.gridX, previous.gridY, previous.angle, footprint);
-        return { ok: false, reason: 'placement' };
-      }
-      if (!store.hasActiveMission) this.publishImmediatePersistentBaseContribution(binding.ownerId);
-    }
-
-    const targetWorld = this.rockVisualHelper.gridToWorld(relocated.gridX, relocated.gridY);
-    if (previous.kind === 'pedestal') {
-      this.ctx.powerUpSystem?.repositionConstructionPedestal(source.id, targetWorld.x, targetWorld.y);
-    }
-    this.relocatePlaceableRuntimePresentation(previous, relocated);
-    this.ctx.gameAudioSystem.playSound('sfx_place_rock', targetWorld.x, targetWorld.y, playerId);
-    // Die freigewordene Quellzelle kann eine bisher verdraengte Konstruktion wieder tragen.
-    this.reconcilePersistentBaseWorld();
-    return { ok: true };
+    return this.constructionWorldRuntime?.movePersonalConstruction(playerId, source, preview)
+      ?? { ok: false, reason: 'blocked' };
   }
 
   /** Base-owned Reward: Store-Placement, Runtime, Podest und Composite wandern in einem Schritt. */
@@ -2459,9 +2397,7 @@ export class ArenaLifecycleCoordinator {
       return source.persistentRewardId !== undefined
         && isKnownPersistentBaseRewardId(source.persistentRewardId);
     }
-    return source.ownerId === playerId
-      && normalizeConstructionId(source.constructionId) !== null
-      && source.expiresAt <= 0;
+    return this.constructionWorldRuntime?.isMovableConstructionSource(playerId, source) ?? false;
   }
 
   /** True, wenn diese absolute Rasterzelle im aktiven Baubereich der persistenten Basis liegt. */
@@ -2617,12 +2553,11 @@ export class ArenaLifecycleCoordinator {
   }
 
   getActiveConstructionToolsForPlayer(playerId: string): readonly LoadoutToolRef[] {
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    return getActiveConstructionToolRefs(getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout));
+    return this.constructionWorldRuntime?.getActiveTools(playerId) ?? [];
   }
 
   getConstructionCapacityForPlayer(playerId: string): number {
-    return this.getConstructionCapacity(playerId);
+    return this.constructionWorldRuntime?.getCapacity(playerId) ?? 0;
   }
 
   private removeGuestSessionOwner(playerId: string): void {
@@ -2632,7 +2567,7 @@ export class ArenaLifecycleCoordinator {
     for (const runtimeId of runtimeIds) {
       const removed = this.ctx.placementSystem?.removeRock(runtimeId);
       if (!removed) continue;
-      this.finalizeDismantledConstruction(removed, false);
+      this.constructionWorldRuntime?.finalizeDismantledConstruction(removed, false);
       removedCount += 1;
     }
     // Guest constructions outside a persistent base are still World-owned runtime objects and
@@ -2643,7 +2578,7 @@ export class ArenaLifecycleCoordinator {
       if (construction.ownership === 'base-owned') continue;
       const removed = this.ctx.placementSystem?.removeRock(construction.id);
       if (!removed) continue;
-      this.finalizeDismantledConstruction(removed, false);
+      this.constructionWorldRuntime?.finalizeDismantledConstruction(removed, false);
       removedCount += 1;
     }
     if (removedCount > 0) {
@@ -3283,9 +3218,30 @@ export class ArenaLifecycleCoordinator {
       const activityConfiguration = activityDescriptor
         ? resolveCoopMissionActivityConfiguration(activityDescriptor, world.definition)
         : null;
-      this.coopMissionComposition.createCombatComposition(activityConfiguration, layout)
-        ?.materialize(coopMissionRuntime);
+      this.coopMissionComposition.materializeCore(activityConfiguration, coopMissionRuntime, layout);
     }
+    // The renderer is World-scoped on every peer; authoritative train setup is owned by the
+    // World train runtime after the systems it references have been bound.
+    const trainRuntime = new WorldTrainRuntime({
+      scene: this.scene,
+      playerManager: this.ctx.playerManager,
+      projectileManager: this.ctx.projectileManager,
+      combatSystem: this.ctx.combatSystem,
+      hostPhysics: this.ctx.hostPhysics,
+      worldMetrics: world.metrics,
+      presentationRequired: presentation,
+      gameAudioSystem: this.ctx.gameAudioSystem,
+      getEnemyManager: () => this.ctx.enemyManager,
+      getBurrowSystem: () => this.ctx.burrowSystem,
+      getTimeBubbleSystem: () => this.ctx.timeBubbleSystem,
+      getTranslocatorSystem: () => this.ctx.translocatorSystem,
+      getPowerUpSystem: () => this.ctx.powerUpSystem,
+      setCurrentTrain: (train) => { this.ctx.trainManager = train; },
+      setClassicTrainSpawned: (spawned) => { this.hostUpdate.setClassicTrainSpawned(spawned); },
+      onRendererChanged: (renderer) => { this.renderers.train = renderer; },
+    });
+    this.worldTrainRuntime = trainRuntime;
+    worldRuntime.bind(trainRuntime);
     if (bridge.isHost()) {
       // Der Coop-Build gehoert zur laufenden World und kann deshalb auch in einer Activity-losen
       // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
@@ -3695,7 +3651,7 @@ export class ArenaLifecycleCoordinator {
         damage,
         false,
       ).amount ?? damage;
-      this.ctx.trainManager?.applyDamage(resolvedDamage, attackerId);
+      this.worldTrainRuntime?.applyDamage(resolvedDamage, attackerId);
     });
     this.ctx.combatSystem.setProjectileImpactCallback((projectileId, x, y) => {
       const projectile = this.ctx.projectileManager.getProjectileById(projectileId);
@@ -3825,10 +3781,7 @@ export class ArenaLifecycleCoordinator {
               secondProjectileDamageFactor: rock.secondProjectileDamageFactor,
               targetRange: rock.targetRange,
               muzzleOffset: rock.constructionId
-                ? (() => {
-                  const definition = getCoopDefenseConstructionDefinition(rock.constructionId!);
-                  return definition.kind === 'turret' ? definition.muzzleOffset : undefined;
-                })()
+                ? this.constructionWorldRuntime?.getMuzzleOffset(rock.constructionId)
                 : undefined,
               weaponId: rock.turretWeaponId ?? ('SPORES' as const),
               ignoreBaseObstacles: rock.ownership === 'base-owned',
@@ -3950,8 +3903,8 @@ export class ArenaLifecycleCoordinator {
       );
       this.ctx.teslaDomeSystem.setEnergyShieldSystem(this.ctx.energyShieldSystem);
       this.ctx.teslaDomeSystem.setTrainCallbacks(
-        () => this.ctx.trainManager?.getNetSnapshot()?.alive ? this.ctx.trainManager.getSegmentPositions() : [],
-        (damage, ownerId) => this.ctx.trainManager?.applyDamage(damage, ownerId),
+        () => this.worldTrainRuntime?.getActiveSegmentPositions() ?? [],
+        (damage, ownerId) => this.worldTrainRuntime?.applyDamage(damage, ownerId),
       );
       // Gewitterentladung: reguläre Projektile über die bestehende Projektil-/Homing-Infrastruktur.
       this.ctx.teslaDomeSystem.setStormProjectileSpawner((request) => {
@@ -4213,9 +4166,6 @@ export class ArenaLifecycleCoordinator {
           },
         );
       });
-      this.ctx.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor, params) => {
-        return this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor, params);
-      });
       this.ctx.tunnelSystem = new TunnelSystem(
         this.ctx.playerManager,
         this.ctx.combatSystem,
@@ -4232,9 +4182,6 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.burrowSystem.setTunnelTransitEndedCallback((playerId) => {
         this.ctx.tunnelSystem?.notifyTransitEnded(playerId);
-      });
-      this.ctx.loadoutManager.setTunnelPlacementHandler((cfg, playerId, x, y, targetX, targetY, playerColor, params) => {
-        return this.placeTunnel(cfg, playerId, x, y, targetX, targetY, playerColor, params);
       });
       this.ctx.loadoutManager.setActionBlockedChecker((playerId, slot) => {
         if (!this.getPlayerCapabilities(playerId).canInteract) return true;
@@ -4265,35 +4212,26 @@ export class ArenaLifecycleCoordinator {
       });
       this.ctx.combatSystem.setDecoySystem(this.ctx.decoySystem);
 
-      this.ctx.powerUpSystem = new PowerUpSystem(this.ctx.playerManager, this.ctx.combatSystem, layout, {
-        onPickupCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
-        onNukePickup: (playerId) => {
-          return this.ctx.loadoutManager?.addTemporaryUtility(playerId, UTILITY_CONFIGS.NUKE, 1) !== null;
-        },
-        onNukeExploded: (x, y, radius, triggeredBy) => {
-          this.runtimeDiagnosticEventSink?.('nuke:explode', { variant: 'standard', radius, triggeredBy });
-          bridge.broadcastExplosionEffect(x, y, radius, 0xffd26a, 'nuke');
-          this.hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy);
-        },
-        onConfiguredNukeExploded: (strike) => {
-          if (strike.variant !== 'void') return;
-          this.runtimeDiagnosticEventSink?.('nuke:explode', {
-            variant: strike.variant,
-            radius: strike.radius,
-            triggeredBy: strike.triggeredBy,
-          });
-          bridge.broadcastExplosionEffect(strike.x, strike.y, strike.radius, 0xa631ff, 'void_nuke');
-          this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike);
-        },
-        onHolyHandGrenadePickup: (playerId) => {
-          return this.ctx.loadoutManager?.addTemporaryUtility(playerId, UTILITY_CONFIGS.HOLY_HAND_GRENADE, 1) !== null;
-        },
-        onBfgPickup: (playerId) => {
-          return this.ctx.loadoutManager?.addTemporaryUtility(playerId, UTILITY_CONFIGS.BFG, 1) !== null;
-        },
-        onObjectiveRewardPickup: (objectiveId, playerId) => (
+      const powerUpRuntime = new WorldPowerUpRuntime({
+        playerManager: this.ctx.playerManager,
+        combatSystem: this.ctx.combatSystem,
+        layout,
+        worldMetrics: world.metrics,
+        recordPowerUpCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
+        addTemporaryUtility: (playerId, config) => (
+          this.ctx.loadoutManager?.addTemporaryUtility(playerId, config, 1) !== null
+        ),
+        claimObjectiveReward: (objectiveId, playerId) => (
           this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem?.claim(objectiveId, playerId) ?? false
         ),
+        reportDiagnosticEvent: (type, fields) => this.runtimeDiagnosticEventSink?.(type, fields),
+        broadcastExplosion: (x, y, radius, color, style) => (
+          bridge.broadcastExplosionEffect(x, y, radius, color, style)
+        ),
+        applyNukeEnvironmentDamage: (x, y, radius, triggeredBy) => (
+          this.hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy)
+        ),
+        notifyVoidHunterNuke: (strike) => this.ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike),
         coopDefenseMapXpReference: missionMapConfig
           ? getCoopDefenseMapXpReference(
             missionMapConfig,
@@ -4311,15 +4249,89 @@ export class ArenaLifecycleCoordinator {
           1 + (this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
         ),
         isLinkedBaseActive: (baseId) => this.ctx.baseManager?.getActiveBaseIds().has(baseId) ?? false,
-        includeActivityLinkedPedestals: false,
-      }, world.metrics);
-      this.ctx.powerUpSystem.setConstructionRespawnMultiplierProvider((constructionId) => {
-        const rock = this.ctx.placementSystem?.getRuntimeRock(constructionId);
-        if (!rock) return 1;
-        const world = this.rockVisualHelper.gridToWorld(rock.gridX, rock.gridY);
-        return this.ctx.energyInjectorSystem?.getPowerUpRespawnMultiplierAt(world.x, world.y) ?? 1;
+        getConstructionRespawnMultiplier: (constructionId) => {
+          const rock = this.ctx.placementSystem?.getRuntimeRock(constructionId);
+          if (!rock) return 1;
+          const rockWorld = this.rockVisualHelper.gridToWorld(rock.gridX, rock.gridY);
+          return this.ctx.energyInjectorSystem?.getPowerUpRespawnMultiplierAt(rockWorld.x, rockWorld.y) ?? 1;
+        },
+        onDestroy: () => {
+          if (this.worldPowerUpRuntime === powerUpRuntime) this.worldPowerUpRuntime = null;
+          if (this.ctx.powerUpSystem === powerUpRuntime.system) this.ctx.powerUpSystem = null;
+        },
       });
+      this.worldPowerUpRuntime = powerUpRuntime;
+      worldRuntime.bind(powerUpRuntime);
+      this.ctx.powerUpSystem = powerUpRuntime.system;
       this.ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
+      const constructionRuntime = new ConstructionWorldRuntime({
+        scene: this.scene,
+        playerManager: this.ctx.playerManager,
+        combatSystem: this.ctx.combatSystem,
+        placementSystem,
+        loadoutManager: this.ctx.loadoutManager,
+        targetStatusSystem: this.ctx.targetStatusSystem,
+        energyInjectorSystem: this.ctx.energyInjectorSystem,
+        powerUpSystem: this.ctx.powerUpSystem,
+        modifierSystem: this.ctx.coopDefensePlayerModifierSystem,
+        burrowSystem: this.ctx.burrowSystem,
+        tunnelSystem: this.ctx.tunnelSystem,
+        gameAudioSystem: this.ctx.gameAudioSystem,
+        getGameMode: () => this.resolveConfiguredGameMode(),
+        getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
+        getCurrentLoadout: (playerId) => bridge.getPlayerCurrentLoadoutSnapshot(playerId),
+        getPersistentBaseContext: (): ConstructionPersistentBaseContext | null => {
+          const anchor = this.persistentBaseAnchor;
+          const buildArea = this.persistentBaseBuildArea;
+          return anchor && buildArea
+            ? {
+              anchor,
+              buildArea,
+              contributions: this.persistentBaseContributions,
+              rewards: this.persistentBaseRewards,
+            }
+            : null;
+        },
+        persistentBaseBinding,
+        resolveOwnerId: (playerId) => this.resolveOwnerId(playerId),
+        getLocalPlayerId: () => bridge.getLocalPlayerId(),
+        isHost: () => bridge.isHost(),
+        acceptsPersistentBaseMutation: (activityRevision) => this.acceptsCurrentPersistentBaseMutation(activityRevision),
+        mayManagePersistentBase: (playerId) => this.mayManagePersistentBase(playerId),
+        getRewardPlacementRuntime: () => {
+          const runtime = this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem;
+          return runtime
+            ? { canPlace: (objectiveId, playerId) => runtime.canPlace(objectiveId, playerId), consume: (objectiveId, playerId) => runtime.consume(objectiveId, playerId) }
+            : null;
+        },
+        emitGridChanged: (event) => emitArenaMapGridChanged(this.scene.game.events, {
+          reason: event.reason,
+          source: event.source,
+          ...(event.runtime ? {
+            obstacleId: event.runtime.id,
+            gridX: event.runtime.gridX,
+            gridY: event.runtime.gridY,
+            collisionMode: event.runtime.collisionMode,
+          } : {}),
+        }),
+        relocatePresentation: (previous, next) => this.relocatePlaceableRuntimePresentation(previous, next),
+        reconcilePersistentBaseWorld: () => this.reconcilePersistentBaseWorld(),
+        publishImmediateContribution: (ownerId) => this.publishImmediatePersistentBaseContribution(ownerId),
+        persistRewards: () => this.persistCurrentCommittedPersistentBaseRewards(),
+        publishRewardSessionState: () => this.publishPersistentBaseRewardSessionState(),
+        publishUtilityCooldown: (playerId, until, key) => bridge.publishUtilityCooldownUntil(playerId, until, key),
+        recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
+        onDestroy: () => {
+          if (this.constructionWorldRuntime === constructionRuntime) this.constructionWorldRuntime = null;
+        },
+        rockVisualHelper: {
+          gridToWorld: (gridX, gridY) => this.rockVisualHelper.gridToWorld(gridX, gridY),
+          materializePlaceableRock: (runtime, playDust) => this.rockVisualHelper.materializePlaceableRock(runtime, playDust),
+          removePlaceableRockVisual: (runtime, playDust) => this.rockVisualHelper.removePlaceableRockVisual(runtime, playDust),
+        },
+      });
+      this.constructionWorldRuntime = constructionRuntime;
+      worldRuntime.bind(constructionRuntime);
       persistentBaseBinding.setMaterializer(new PersistentBaseWorldMaterializer({
         binding: persistentBaseBinding,
         contributions: this.persistentBaseContributions,
@@ -4327,20 +4339,36 @@ export class ArenaLifecycleCoordinator {
         placementSystem,
         powerUpSystem: this.ctx.powerUpSystem,
         baseManager,
-        getSite: () => this.worldRuntime?.context.persistentBaseSite ?? null,
+        // The WorldLifecycle sink clears its local runtime slot before destroying the runtime.
+        // Read the descriptor context until that destruction has completed so PB finalization
+        // still sees the live World site and can keep R-2's Construction-before-PB order.
+        getSite: () => this.ctx.world?.persistentBaseSite ?? null,
         rockVisualHelper: this.rockVisualHelper,
         isHost: () => bridge.isHost(),
         getMapId: () => this.worldRuntime?.context.definition?.sourceMapId ?? null,
         getLocalOwnerId: () => getStoredLocalOwnerId(),
         resolvePlayerIdForOwner: (ownerId) => this.resolvePlayerIdForOwner(ownerId),
         getPlayerColor: (playerId) => bridge.getPlayerColor(playerId) ?? PLAYER_COLORS[0],
-        getConstructionCapacity: (playerId) => this.getConstructionCapacity(playerId),
-        getConstructionOwnership: (playerId) => this.getConstructionOwnership(playerId),
-        buildRestoreTools: (playerId) => this.buildPersistentRestoreTools(playerId),
-        materializeRestoreCandidate: (candidate, playerId, ownerColor, ownership) => (
-          this.materializePersistentRestoreCandidate(candidate, playerId, ownerColor, ownership)
-        ),
-        releasePlaceableRuntime: (runtime, playDust) => this.releasePlaceableRuntime(runtime, playDust),
+        construction: {
+          getCapacity: (playerId) => constructionRuntime.getCapacity(playerId),
+          getOwnership: (playerId) => constructionRuntime.getOwnership(playerId),
+          resolveRestoreTools: (playerId) => constructionRuntime.buildRestoreTools(playerId),
+          materializeRestoreCandidate: (candidate, playerId, ownerColor, ownership) => (
+            constructionRuntime.materializeRestoreCandidate(candidate, playerId, ownerColor, ownership)
+          ),
+          materializeRewardConstruction: (constructionId, rewardId, gridX, gridY, angle, ownerId, ownerColor) => (
+            constructionRuntime.materializeRewardConstruction(
+              constructionId,
+              rewardId,
+              gridX,
+              gridY,
+              angle,
+              ownerId,
+              ownerColor,
+            )
+          ),
+          releaseRuntime: (runtime, playDust) => constructionRuntime.releaseRuntime(runtime, playDust),
+        },
         emitRestoreAdded: (runtime) => this.emitPersistentRestoreAdded(runtime),
         emitGridChanged: (source) => emitArenaMapGridChanged(this.scene.game.events, {
           reason: 'placeables_batch_removed',
@@ -4352,7 +4380,7 @@ export class ArenaLifecycleCoordinator {
         this.attachCoopMissionPowerUpBinding(
           activityDescriptor,
           coopMissionRuntime,
-          bridge.getArenaStartTime() > 0 ? bridge.getSynchronizedNow() : undefined,
+          this.worldLifecycle.activityStartAnchor ?? undefined,
         );
       }
       this.ctx.combatSystem.setPowerUpSystem(this.ctx.powerUpSystem);
@@ -4423,14 +4451,14 @@ export class ArenaLifecycleCoordinator {
         // Power-up-Drops sind eine Match-Konsequenz. Eine Activity-lose World fuehrt echten
         // Combat aus, erzeugt daraus aber weder Belohnung noch einen impliziten Match-Loop.
         const allowKillDrop = activityDescriptor !== null && !isCoopMission;
-        if (killerId === TRAIN.TRAIN_KILLER_ID) {
+        if (killerId === '__train__') {
           if (allowKillDrop) {
             this.ctx.powerUpSystem?.onPlayerKilled(x, y);
           }
           const victimProfile = bridge.getConnectedPlayers().find(p => p.id === victimId);
           if (victimProfile) {
             bridge.broadcastKillEvent({
-              killerId:    TRAIN.TRAIN_KILLER_ID,
+              killerId:    '__train__',
               killerName:  'RB 54',
               killerColor: 0xcf573c,
               sourceId:    'environment.train_push',
@@ -4505,7 +4533,7 @@ export class ArenaLifecycleCoordinator {
       const trackCell = layout.tracks?.[0];
       if (!isCoopMission && trackCell !== undefined) {
         // Nicht-Coop-Modi behalten ihren klassischen, wiederholbaren Zugrhythmus.
-        this.setupTrainManager(trackCell.gridX, getClassicTrainEventPlan());
+        trainRuntime.setupClassicTrain(trackCell.gridX);
       } else if (!isCoopMission) {
         // Das Zug-Event ist reliable und überlebt den Rundenwechsel; ohne aktives Löschen
         // würde eine zuglose Map das HUD der Vorrunde weiterspielen.
@@ -4519,13 +4547,11 @@ export class ArenaLifecycleCoordinator {
     }
 
     if (coopMissionRuntime && activityConfiguration) {
-      this.coopMissionComposition.materialize(activityConfiguration, coopMissionRuntime);
+      this.coopMissionComposition.materializeDependents(activityConfiguration, coopMissionRuntime);
       this.syncCoopMissionCompatibilityBindings(coopMissionRuntime);
     }
 
-    // World-/Activity-renderers (all clients)
-    this.renderers.train = presentation ? new TrainRenderer(this.scene) : null;
-    this.renderers.train?.setAudioSystem(this.ctx.gameAudioSystem);
+    // World-/Activity-renderers are owned by WorldTrainRuntime.
     this.renderers.translocatorTeleport = presentation ? new TranslocatorTeleportRenderer(this.scene) : null;
     this.renderers.translocatorTeleport?.setLightingSystem(this.renderers.lighting);
     // Uhrzeit vor dem Schattenaufbau setzen: zur Nacht hin werden die statischen
@@ -4591,10 +4617,8 @@ export class ArenaLifecycleCoordinator {
     this.roundStartPrepared = false;
     this.preparedRoundLayout = null;
     this.boundRoundStartTime = 0;
-    this.pendingClassicTrainEvent = null;
     this.persistentBasePreviewRenderer.clear();
     this.persistentBaseVisualSite = null;
-    this.cancelTrainExplosionTimers();
     this.timeOfDayController = null;
     this.appliedRuntimeTimeOfDayMinutes = null;
     this.roundTimeOfDayMinutes = DEFAULT_TIME_OF_DAY_MINUTES;
@@ -4686,6 +4710,7 @@ export class ArenaLifecycleCoordinator {
     this.persistentBaseWorldBinding = null;
     this.ctx.persistentBaseContributions = null;
     this.ctx.persistentBaseRewards = null;
+    this.ctx.powerUpSystem = null;
     bridge.publishPersistentBaseRewardSessionState(null);
     this.ctx.turretSystem?.setTurretDamageBuffProvider(null);
     this.ctx.turretSystem?.setTurretDamageMultiplierProvider(null);
@@ -4698,9 +4723,8 @@ export class ArenaLifecycleCoordinator {
     this.ctx.energyInjectorSystem = null;
     this.ctx.targetStatusSystem?.clear();
     this.ctx.targetStatusSystem = null;
-    this.ctx.powerUpSystem?.setConstructionRespawnMultiplierProvider(null);
-    this.ctx.powerUpSystem?.reset();
-    this.ctx.powerUpSystem  = null;
+    // WorldPowerUpRuntime owns the PowerUpSystem teardown. It runs from WorldRuntime after
+    // Persistent-Base finalization and after ConstructionWorldRuntime has released its bindings.
     this.ctx.shieldBuffSystem = null;
     this.ctx.energyShieldSystem = null;
     this.ctx.timeBubbleSystem = null;
@@ -4724,8 +4748,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.loadoutManager?.setShieldBuffSystem(null);
     this.ctx.loadoutManager?.setNegevKillstreakExplosionHandler(null);
     this.ctx.loadoutManager?.setDecoySystem(null);
-    this.ctx.loadoutManager?.setPlaceableRockHandler(null);
-    this.ctx.loadoutManager?.setTunnelPlacementHandler(null);
     this.ctx.loadoutManager?.setUtilityUsedObserver(null);
     this.ctx.loadoutManager?.setUltimateUsedObserver(null);
     this.ctx.loadoutManager?.setActionBlockedChecker(null);
@@ -4750,7 +4772,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.combatSystem.setStinkCloudSystem(null);
     this.ctx.combatSystem.setBarrierObstacles(null);
     this.ctx.combatSystem.setEnemyManager(null);
-    this.ctx.combatSystem.setTrainSegments(null);
     this.ctx.combatSystem.setRockDamageCallback(null);
     this.ctx.combatSystem.setTrainDamageCallback(null);
     this.ctx.combatSystem.setProjectileImpactCallback(null);
@@ -4799,7 +4820,6 @@ export class ArenaLifecycleCoordinator {
     this.ctx.tunnelSystem = null;
     // Der Translocator haelt Puck-IDs der Runde. Ohne Entkopplung meldete er in der Lobby und in
     // der naechsten Runde noch Pucks, deren Projektile hier laengst zerstoert wurden.
-    this.ctx.translocatorSystem?.setTrainManager(null);
     this.ctx.translocatorSystem?.setUseCallback(null);
     this.ctx.translocatorSystem?.setRadialImpulseCallback(null);
     this.ctx.translocatorSystem?.setPositionResetCallback(null);
@@ -4817,17 +4837,14 @@ export class ArenaLifecycleCoordinator {
     this.ctx.airstrikeSystem?.setResolvedCallback(null);
     this.ctx.airstrikeSystem = null;
 
-    this.ctx.trainManager?.destroy();
-    this.ctx.trainManager = null;
-    this.renderers.train?.destroy();
-    this.renderers.train = null;
     this.renderers.beer.clear();
     if (preserveAuthoredPresentation) this.renderers.shadow.clearDynamicShadows();
     else this.renderers.shadow.clear();
     this.renderers.lighting.setActive(false);
     this.renderers.translocatorTeleport = null;
-    this.ctx.projectileManager.setTrainGroup(null);
-    this.ctx.projectileManager.setTrainHitCallback(null);
+    // Transitional ArenaContext facade: the WorldTrainRuntime already owns destruction; only
+    // clear the legacy reference here so no round-scoped object remains observable.
+    this.ctx.trainManager = null;
     this.ctx.centerHUD.hideTrainWidget();
   }
 
@@ -5032,158 +5049,6 @@ export class ArenaLifecycleCoordinator {
       gridY: runtime.gridY,
       collisionMode: runtime.collisionMode,
     });
-  }
-
-  private buildPersistentRestoreTools(
-    playerId: string,
-  ): PersistentRestoreToolDefinition[] {
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    const accessContext = getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout);
-    const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
-    const constructionHpMultiplier = 1 + (
-      this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
-    );
-    const tools: PersistentRestoreToolDefinition[] = [];
-
-    for (const constructionId of COOP_DEFENSE_CONSTRUCTION_IDS) {
-      const definition = getCoopDefenseConstructionDefinition(constructionId);
-      const access = resolveConstructionAccess(constructionId, accessContext);
-      const utilityId = getUtilityIdForConstruction(constructionId);
-      let footprint = definition.footprint;
-      let maxHp = definition.maxHp;
-      if (utilityId) {
-        const config = getUtilityConfigForMode(utilityId, this.resolveConfiguredGameMode());
-        if (config && 'placeable' in config) {
-          const effectiveConfig = modifiers
-            ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, {
-              additive: modifiers.additiveStats,
-              percentage: modifiers.percentageStats,
-            }) as PlaceableUtilityConfig
-            : config as PlaceableUtilityConfig;
-          footprint = effectiveConfig.placeable.footprint;
-          maxHp = effectiveConfig.placeable.maxHp;
-        }
-      }
-      tools.push({
-        kind: 'construction',
-        id: constructionId,
-        footprint,
-        capacityCost: definition.capacityCost,
-        maxHp: utilityId ? maxHp : maxHp * (definition.indestructible ? 1 : constructionHpMultiplier),
-        unlocked: access.unlocked,
-        active: access.active,
-        unavailableReason: access.reason === 'class-not-allowed' || access.reason === 'mode-not-allowed'
-          ? access.reason
-          : undefined,
-      });
-    }
-    return tools;
-  }
-
-  private materializePersistentRestoreCandidate(
-    candidate: PersistentRestoreCandidate,
-    ownerId: string,
-    ownerColor: number,
-    ownership: ConstructionOwnership,
-  ): SyncedPlaceableRock | null {
-    if (!this.ctx.placementSystem) return null;
-    const constructionId = normalizeConstructionId(candidate.tool.id);
-    if (constructionId) {
-      const utilityId = getUtilityIdForConstruction(constructionId);
-      if (utilityId) {
-        const config = getUtilityConfigForMode(utilityId, this.resolveConfiguredGameMode());
-        if (!config || !('placeable' in config)) return null;
-        const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(ownerId);
-        const modifiedConfig = modifiers
-          ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, {
-            additive: modifiers.additiveStats,
-            percentage: modifiers.percentageStats,
-          }) as PlaceableUtilityConfig
-          : config as PlaceableUtilityConfig;
-        const effectiveConfig = {
-          ...modifiedConfig,
-          id: utilityId,
-          placeable: {
-            ...modifiedConfig.placeable,
-            lifetimeMs: 0,
-            maxHp: candidate.tool.maxHp,
-          },
-        } as PlaceableUtilityConfig;
-        const runtime = this.ctx.placementSystem.materializePersistentPlaceable(
-          effectiveConfig,
-          candidate.gridX,
-          candidate.gridY,
-          candidate.blueprint.angle,
-          ownerId,
-          ownerColor,
-          ownership,
-        );
-        if (!runtime) return null;
-        this.rockVisualHelper.materializePlaceableRock(runtime, false);
-        return runtime;
-      }
-
-      const definition = getCoopDefenseConstructionDefinition(constructionId);
-      const effectiveDefinition = {
-        ...definition,
-        maxHp: candidate.tool.maxHp,
-      };
-      const runtime = this.ctx.placementSystem.materializePersistentPlaceable(
-        effectiveDefinition,
-        candidate.gridX,
-        candidate.gridY,
-        candidate.blueprint.angle,
-        ownerId,
-        ownerColor,
-        ownership,
-      );
-      if (!runtime) return null;
-      if (definition.kind === 'pedestal') {
-        const world = this.rockVisualHelper.gridToWorld(runtime.gridX, runtime.gridY);
-        const registered = this.ctx.powerUpSystem?.registerConstructionPedestal(
-          runtime.id,
-          definition.powerUpDefId,
-          world.x,
-          world.y,
-          ownerColor,
-        ) ?? false;
-        if (!registered) {
-          this.ctx.placementSystem.removeRock(runtime.id);
-          return null;
-        }
-      }
-      this.rockVisualHelper.materializePlaceableRock(runtime, false);
-      return runtime;
-    }
-    return null;
-  }
-
-  private registerNewPersistentPlaceable(
-    runtime: SyncedPlaceableRock,
-    tool: PersistentToolRef,
-    footprint: readonly { readonly dx: number; readonly dy: number }[],
-  ): void {
-    const constructionId = normalizeConstructionId(runtime.constructionId) ?? normalizeConstructionId(tool.id);
-    const normalizedTool: PersistentToolRef = constructionId
-      ? { kind: 'construction', id: constructionId }
-      : { ...tool };
-    if (!this.persistentBaseAnchor || !this.persistentBaseBuildArea) return;
-    // Ein einziger Besitzpfad: Ob die Konstruktion dem Host oder einem Gast gehoert, ist nur noch
-    // eine Frage der Besitzeridentitaet.
-    const ownerId = this.resolveOwnerId(runtime.ownerId);
-    if (!ownerId) return;
-    const store = this.ctx.persistentBaseContributions;
-    const registered = store?.registerNew(
-      ownerId,
-      runtime,
-      normalizedTool,
-      footprint,
-      this.persistentBaseAnchor,
-      this.persistentBaseBuildArea,
-    );
-    if (store && registered && !store.hasActiveMission) {
-      this.publishImmediatePersistentBaseContribution(ownerId);
-    }
   }
 
   /** Bestaetigt genau die bereits host-validierte Lobby-Aenderung ihres Besitzers. */
@@ -5592,246 +5457,6 @@ export class ArenaLifecycleCoordinator {
     return this.getEnemyNavigationFlowField()?.hasWalkableCircleLine(fromX, fromY, toX, toY, radius) ?? true;
   }
 
-  private setupTrainManager(
-    trackGridX: number,
-    plan: TrainEventPlan | null,
-    direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1,
-  ): TrainManager {
-    const world = this.ctx.world;
-    if (!world) {
-      throw new Error('[ArenaLifecycleCoordinator] Cannot create a train without an active World');
-    }
-    const trackX     = world.metrics.offsetX + trackGridX * CELL_SIZE + CELL_SIZE;
-    const arenaStartTime = bridge.getArenaStartTime();
-    const spawnAt    = plan && arenaStartTime > 0
-      ? arenaStartTime + plan.firstArrivalDelayMs
-      : null;
-
-    if (plan) {
-      this.pendingClassicTrainEvent = { trackX, direction, plan };
-      if (spawnAt !== null && bridge.isHost()) bridge.publishTrainEvent({ trackX, direction, spawnAt });
-    }
-
-    this.ctx.trainManager = new TrainManager(
-      this.scene,
-      this.ctx.playerManager,
-      trackX,
-      direction,
-      world.metrics,
-    );
-    this.ctx.trainManager.setTimeBubbleSystem(this.ctx.timeBubbleSystem);
-    this.ctx.trainManager.setEnemyManager(this.ctx.enemyManager);
-    this.ctx.translocatorSystem?.setTrainManager(this.ctx.trainManager);
-    if (plan) this.hostUpdate.setClassicTrainSpawned(false);
-
-    this.ctx.projectileManager.setTrainGroup(this.ctx.trainManager.getGroup());
-    this.ctx.projectileManager.setTrainHitCallback((damage, attackerId) => {
-      this.ctx.trainManager?.applyDamage(damage, attackerId);
-    });
-
-    this.ctx.trainManager.setCanHitPlayerCallback((playerId) => {
-      return !this.ctx.burrowSystem?.isBurrowed(playerId);
-    });
-    this.ctx.trainManager.setPlayerHitCallback((playerId, sourceX, sourceY) => {
-      const recentPusherId = this.ctx.hostPhysics.getRecentImpulseSource(playerId);
-      const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
-      const sourceId = recentPusherId ? 'environment.train_push' : 'environment.train';
-      this.ctx.combatSystem.applyDamage(playerId, 9999, true, attackerId, sourceId, {
-        sourceX,
-        sourceY,
-      });
-    });
-    this.ctx.trainManager.setEnemyHitCallback((enemyId, sourceX, sourceY) => {
-      const enemy = this.ctx.enemyManager?.getEnemy(enemyId);
-      const trainCollision = enemy
-        ? getCoopDefenseEnemyConfig(enemy.kind).trainCollision
-        : undefined;
-      const isRevivedAlly = enemy?.faction === 'allied';
-      const recentPusherId = this.ctx.hostPhysics.getRecentImpulseSource(enemyId);
-      const attackerId = recentPusherId ?? TRAIN.TRAIN_KILLER_ID;
-      const sourceId = recentPusherId ? 'environment.train_push' : 'environment.train';
-      const collisionDamage = isRevivedAlly
-        ? Math.max(9999, enemy?.getHp() ?? 0)
-        : (trainCollision?.damageToEnemy ?? 9999);
-      this.ctx.combatSystem.applyDamage(enemyId, collisionDamage, true, attackerId, sourceId, {
-        sourceX,
-        sourceY,
-      }, { allowTeamDamage: isRevivedAlly });
-      return trainCollision
-        ? { destroysTrain: !isRevivedAlly && trainCollision.destroysTrain }
-        : undefined;
-    });
-
-    this.ctx.trainManager.setIsPlayerBurrowedCallback((playerId) => {
-      return this.ctx.burrowSystem?.isBurrowed(playerId) ?? false;
-    });
-    this.ctx.trainManager.setOnBurrowDamageDealtCallback((_playerId, x, y) => {
-      bridge.broadcastTrainBurrowSparks(x, y);
-    });
-
-    this.ctx.trainManager.setDestroyCallback((result) => {
-      if (result.lastHitterId) {
-        bridge.addPlayerFrags(result.lastHitterId, TRAIN.KILL_FRAGS);
-        const allPlayers = bridge.getConnectedPlayers();
-        const hitter = allPlayers.find(p => p.id === result.lastHitterId);
-        if (hitter) {
-          bridge.broadcastKillEvent({
-            killerId:    hitter.id,
-            killerName:  hitter.name,
-            killerColor: hitter.colorHex,
-            sourceId:    'environment.train',
-            victimId:    '__train__',
-            victimName:  'RB 54',
-            victimColor: 0xcf573c,
-          });
-        }
-      }
-      let latestWagonDelay = 0;
-      for (const seg of result.segmentPositions) {
-        const delay = Math.round(Math.random() * TRAIN.EXPLOSION_WAGON_DELAY_MAX_MS);
-        latestWagonDelay = Math.max(latestWagonDelay, delay);
-        this.scheduleTrainExplosion(seg.x, seg.y, 80, delay);
-      }
-      this.scheduleTrainExplosion(
-        result.centerX,
-        result.centerY,
-        160,
-        latestWagonDelay + TRAIN.EXPLOSION_CENTER_DELAY_MS,
-      );
-
-      const arenaTop    = world.metrics.offsetY;
-      const arenaBottom = world.metrics.offsetY + world.metrics.heightPx;
-      const validSegs = result.segmentPositions.filter(seg => seg.y >= arenaTop && seg.y <= arenaBottom);
-      const dropSegs  = validSegs.length > 0 ? validSegs : result.segmentPositions;
-      for (let i = 0; i < TRAIN_DROP_COUNT; i++) {
-        const idx     = Math.floor(i * dropSegs.length / TRAIN_DROP_COUNT);
-        const seg     = dropSegs[idx];
-        const scatter = 28;
-        const ox = (Math.random() - 0.5) * scatter;
-        const oy = (Math.random() - 0.5) * scatter;
-        this.ctx.powerUpSystem?.spawnFromTable('TRAIN_DESTROY', seg.x + ox, seg.y + oy);
-      }
-      bridge.broadcastTrainDestroyed();
-    });
-
-    if (plan) this.ctx.trainManager.setExitedCallback(() => {
-      const currentEvent = bridge.getTrainEvent();
-      if (!currentEvent) return;
-      const newSpawnAt = getNextClassicTrainArrivalAt(Date.now(), plan);
-      const newDirection: 1 | -1 = currentEvent.direction === 1 ? -1 : 1;
-      bridge.publishTrainEvent({ trackX: currentEvent.trackX, direction: newDirection, spawnAt: newSpawnAt });
-      this.ctx.trainManager?.prepareReentry(newDirection);
-      this.hostUpdate.setClassicTrainSpawned(false);
-    });
-    return this.ctx.trainManager;
-  }
-
-  private scheduleTrainExplosion(x: number, y: number, radius: number, delayMs: number): void {
-    let timer: Phaser.Time.TimerEvent;
-    timer = this.scene.time.delayedCall(delayMs, () => {
-      this.trainExplosionTimers = this.trainExplosionTimers.filter(candidate => candidate !== timer);
-      bridge.broadcastExplosionEffect(x, y, radius, undefined, 'train');
-    });
-    this.trainExplosionTimers.push(timer);
-  }
-
-  private cancelTrainExplosionTimers(): void {
-    for (const timer of this.trainExplosionTimers) timer.remove();
-    this.trainExplosionTimers.length = 0;
-  }
-
-  private placePlaceableRock(
-    cfg: PlaceableUtilityConfig,
-    playerId: string,
-    originX: number,
-    originY: number,
-    targetX: number,
-    targetY: number,
-    now: number,
-    playerColor: number,
-    params?: LoadoutUseParams,
-  ): boolean {
-    if (cfg.type === 'placeable_pedestal') {
-      const rewardSystem = this.coopMissionRuntime?.coopDefenseObjectivePlacementRewardSystem ?? null;
-      if (!rewardSystem?.canPlace(cfg.rewardObjectiveId, playerId)) return false;
-
-      const pedestal = this.ctx.placementSystem?.tryPlaceRock(
-        cfg,
-        playerId,
-        playerColor,
-        originX,
-        originY,
-        targetX,
-        targetY,
-        now,
-      );
-      if (!pedestal) return false;
-
-      const world = this.rockVisualHelper.gridToWorld(pedestal.gridX, pedestal.gridY);
-      const registered = this.ctx.powerUpSystem?.registerConstructionPedestal(
-        pedestal.id,
-        cfg.powerUpDefId,
-        world.x,
-        world.y,
-        playerColor,
-      ) ?? false;
-      if (!registered || !rewardSystem.consume(cfg.rewardObjectiveId, playerId)) {
-        if (registered) this.ctx.powerUpSystem?.unregisterConstructionPedestal(pedestal.id);
-        this.ctx.placementSystem?.removeRock(pedestal.id);
-        return false;
-      }
-
-      this.rockVisualHelper.materializePlaceableRock(pedestal, true);
-      // Mission reward pedestals are intentionally not part of the persistent-base utility set.
-      emitArenaMapGridChanged(this.scene.game.events, {
-        reason: 'placeable_added',
-        source: 'placeable_pedestal',
-        obstacleId: pedestal.id,
-        gridX: pedestal.gridX,
-        gridY: pedestal.gridY,
-      });
-      return true;
-    }
-
-    const constructionId = getConstructionIdForUtility(cfg.id);
-    if (constructionId) {
-      if (this.ctx.world?.persistentBaseSite
-        && !this.acceptsCurrentPersistentBaseMutation(params?.activityRevision)) return false;
-      const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-      const access = resolveConstructionAccess(
-        constructionId,
-        getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
-      );
-      if (!access.allowed || !this.hasFreeConstructionCapacity(playerId, access.definition?.capacityCost ?? 0)) return false;
-    }
-    const rock = this.ctx.placementSystem?.tryPlaceRock(
-      cfg,
-      playerId,
-      playerColor,
-      originX,
-      originY,
-      targetX,
-      targetY,
-      now,
-      constructionId ? this.getConstructionOwnership(playerId) : undefined,
-    );
-    if (!rock) return false;
-    this.rockVisualHelper.materializePlaceableRock(rock, true);
-    this.registerNewPersistentPlaceable(
-      rock,
-      constructionId ? { kind: 'construction', id: constructionId } : { kind: 'utility', id: cfg.id },
-      cfg.placeable.footprint,
-    );
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'placeable_added',
-      source: rock.kind === 'turret' ? 'placeable_turret' : 'placeable_rock',
-      obstacleId: rock.id,
-      gridX: rock.gridX,
-      gridY: rock.gridY,
-    });
-    return true;
-  }
-
   placeInspectorConstruction(
     playerId: string,
     constructionId: ConstructionId,
@@ -5839,104 +5464,13 @@ export class ArenaLifecycleCoordinator {
     targetY: number,
     activityRevision?: number,
   ): LoadoutUseResult {
-    const canonicalConstructionId = normalizeConstructionId(constructionId);
-    if (!bridge.isHost() || !canonicalConstructionId) return { ok: false, reason: 'invalid' };
-    if (this.ctx.world?.persistentBaseSite
-      && !this.acceptsCurrentPersistentBaseMutation(activityRevision)) {
-      return { ok: false, reason: 'blocked' };
-    }
-    if (!this.getPlayerCapabilities(playerId).canPlace) return { ok: false, reason: 'blocked' };
-    constructionId = canonicalConstructionId;
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    const access = resolveConstructionAccess(
+    return this.constructionWorldRuntime?.placeInspectorConstruction(
+      playerId,
       constructionId,
-      getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
-    );
-    if (!access.allowed) return { ok: false, reason: access.reason === 'locked' ? 'invalid' : 'blocked' };
-    const player = this.ctx.playerManager.getPlayer(playerId);
-    if (
-      !player
-      || !player.active
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)
-    ) {
-      return { ok: false, reason: 'blocked' };
-    }
-    const definition = getCoopDefenseConstructionDefinition(constructionId);
-    if (this.ctx.loadoutManager?.isConstructionOnCooldown(playerId, constructionId, Date.now())) {
-      return { ok: false, reason: 'cooldown' };
-    }
-    if (!this.hasFreeConstructionCapacity(playerId, definition.capacityCost)) {
-      return { ok: false, reason: 'capacity' };
-    }
-    const hpMultiplier = definition.indestructible
-      ? 1
-      : 1 + (
-        this.ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0
-      );
-    const ownership = this.getConstructionOwnership(playerId);
-    const utilityId = getUtilityIdForConstruction(constructionId);
-    const utilityConfig = utilityId ? this.getEffectiveConstructionUtilityConfig(playerId, constructionId) : null;
-    const construction = utilityConfig
-      ? this.ctx.placementSystem?.tryPlaceRock(
-        utilityConfig,
-        playerId,
-        player.color,
-        player.x,
-        player.y,
-        targetX,
-        targetY,
-        Date.now(),
-        ownership,
-      )
-      : this.ctx.placementSystem?.tryPlaceConstruction(
-        definition,
-        definition.maxHp * hpMultiplier,
-        playerId,
-        player.color,
-        player.x,
-        player.y,
-        targetX,
-        targetY,
-        ownership,
-      );
-    if (!construction) return { ok: false, reason: 'placement' };
-
-    if (definition.kind === 'pedestal') {
-      const world = this.rockVisualHelper.gridToWorld(construction.gridX, construction.gridY);
-      const registered = this.ctx.powerUpSystem?.registerConstructionPedestal(
-        construction.id,
-        definition.powerUpDefId,
-        world.x,
-        world.y,
-        player.color,
-      ) ?? false;
-      if (!registered) {
-        this.ctx.placementSystem?.removeRock(construction.id);
-        return { ok: false, reason: 'placement' };
-      }
-    }
-
-    const placedAt = Date.now();
-    this.ctx.loadoutManager?.markConstructionUsed(playerId, constructionId, placedAt);
-    // Ueber denselben Kanal wie Utility-Cooldowns, damit auch Clients den Bau-Cooldown
-    // des gewaehlten Konstrukts im HUD sehen.
-    bridge.publishUtilityCooldownUntil(playerId, placedAt + definition.buildCooldownMs, constructionId);
-    this.rockVisualHelper.materializePlaceableRock(construction, true);
-    this.registerNewPersistentPlaceable(
-      construction,
-      { kind: 'construction', id: constructionId },
-      definition.footprint,
-    );
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'placeable_added',
-      source: 'placeable_turret',
-      obstacleId: construction.id,
-      gridX: construction.gridX,
-      gridY: construction.gridY,
-    });
-    bridge.recordConstructionBuilt(playerId);
-    return { ok: true };
+      targetX,
+      targetY,
+      activityRevision,
+    ) ?? { ok: false, reason: 'blocked' };
   }
 
   useInspectorUtility(
@@ -5948,35 +5482,9 @@ export class ArenaLifecycleCoordinator {
     now: number,
     params?: LoadoutUseParams,
   ): LoadoutUseResult {
-    if (!bridge.isHost() || tool.kind !== 'utility') return { ok: false, reason: 'invalid' };
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    if (!currentLoadout || currentLoadout.coopDefenseClassId !== 'inspector_gadachs') {
-      return { ok: false, reason: 'blocked' };
-    }
-    if (!(currentLoadout.tools ?? []).some((entry) => (
-      entry.kind === 'utility' && (entry.id === tool.id || normalizeConstructionId(entry.id) === normalizeConstructionId(tool.id))
-    ))) {
-      return { ok: false, reason: 'blocked' };
-    }
-    const config = getUtilityConfigForMode(tool.id, this.resolveConfiguredGameMode()) as UtilityConfig | undefined;
-    if (!config) return { ok: false, reason: 'invalid' };
-    const constructionId = getConstructionIdForUtility(tool.id);
-    if (constructionId) {
-      const access = resolveConstructionAccess(
-        constructionId,
-        getConstructionAccessContext(this.resolveConfiguredGameMode(), currentLoadout),
-      );
-      if (!access.allowed) return { ok: false, reason: 'blocked' };
-    }
-    // Platzierbare Utilities (Mauer, Fliegenpilz) sind Konstrukte und belegen Kapazitaet;
-    // Granaten und andere Utilities nicht.
-    const capacityCost = getToolCapacityCost(tool);
-    if (capacityCost > 0 && !this.hasFreeConstructionCapacity(playerId, capacityCost)) {
-      return { ok: false, reason: 'capacity' };
-    }
-    return this.ctx.loadoutManager?.useInspectorUtility(
+    return this.constructionWorldRuntime?.useInspectorUtility(
       playerId,
-      config,
+      tool,
       angle,
       targetX,
       targetY,
@@ -6016,131 +5524,19 @@ export class ArenaLifecycleCoordinator {
     }, `item-fire-chunks:${killerId}`);
   }
 
-  private hasFreeConstructionCapacity(playerId: string, capacityCost: number): boolean {
-    const used = this.ctx.placementSystem?.getUsedCapacity(playerId) ?? 0;
-    return used + capacityCost <= this.getConstructionCapacity(playerId);
-  }
-
-  /** Persoenliches Kapazitaetsmaximum inklusive Item-Boni. Host-Autoritaet fuer das Bau-Gate. */
-  private getConstructionCapacity(playerId: string): number {
-    const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-    return resolveConstructionCapacity({
-      gameMode: this.resolveConfiguredGameMode(),
-      classId: currentLoadout?.coopDefenseClassId,
-      modifiers: this.ctx.coopDefensePlayerModifierSystem?.getNumericStat(
-        playerId,
-        COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
-      ) ?? 0,
-    });
-  }
-
-  private getConstructionOwnership(playerId: string): ConstructionOwnership {
-    return playerId === bridge.getLocalPlayerId() ? 'host-persistent' : 'guest-session';
-  }
-
-  private getEffectiveConstructionUtilityConfig(
-    playerId: string,
-    constructionId: ConstructionId,
-  ): PlaceableUtilityConfig | null {
-    const utilityId = getUtilityIdForConstruction(constructionId);
-    if (!utilityId) return null;
-    const base = getUtilityConfigForMode(utilityId, this.resolveConfiguredGameMode());
-    if (!base || !('placeable' in base)) return null;
-    const modifiers = this.ctx.coopDefensePlayerModifierSystem?.getModifiers(playerId);
-    const effective = modifiers
-      ? applyCoopDefenseModifiersToUtilityConfig(base as PlaceableUtilityConfig, {
-        additive: modifiers.additiveStats,
-        percentage: modifiers.percentageStats,
-      }) as PlaceableUtilityConfig
-      : base as PlaceableUtilityConfig;
-    return {
-      ...effective,
-      id: utilityId,
-      placeable: {
-        ...effective.placeable,
-        lifetimeMs: 0,
-      },
-    } as PlaceableUtilityConfig;
-  }
-
-  /**
-   * Rueckbau eines eigenen Konstrukts. Gibt die Kapazitaet sofort frei und laeuft bewusst
-   * nicht ueber den Zerstoerungspfad: Es gibt weder Explosion noch Sporenwolke.
-   */
+  /** Thin RPC adapter; construction rules live in the World owner. */
   dismantleConstruction(
     playerId: string,
     targetX: number,
     targetY: number,
     activityRevision?: number,
   ): LoadoutUseResult {
-    if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
-    if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
-    if (!this.mayManagePersistentBase(playerId)) return { ok: false, reason: 'blocked' };
-    const player = this.ctx.playerManager.getPlayer(playerId);
-    if (
-      !player
-      || !player.active
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)
-    ) {
-      return { ok: false, reason: 'blocked' };
-    }
-    const now = Date.now();
-    if (this.ctx.loadoutManager?.isManagementActionOnCooldown(playerId, 'dismantle', now)) {
-      return { ok: false, reason: 'cooldown' };
-    }
-    const cell = this.ctx.placementSystem?.getClampedTargetCell(
-      player.x,
-      player.y,
+    return this.constructionWorldRuntime?.dismantleConstruction(
+      playerId,
       targetX,
       targetY,
-      COOP_DEFENSE_DISMANTLE_RANGE,
-    );
-    if (!cell) return { ok: false, reason: 'blocked' };
-    const target = this.ctx.placementSystem?.getRuntimeRockAt(cell.gridX, cell.gridY);
-    const persistentRewardId = target?.ownership === 'base-owned'
-      ? target.persistentRewardId
-      : undefined;
-    const isPersistentContribution = target !== undefined
-      && this.ctx.persistentBaseContributions?.getRuntimeBindings()
-        .some((binding) => binding.runtimeId === target.id) === true;
-    if ((persistentRewardId !== undefined || isPersistentContribution)
-      && !this.acceptsCurrentPersistentBaseMutation(activityRevision)) {
-      return { ok: false, reason: 'blocked' };
-    }
-    // Base-owned Rewards gehoeren der Basis: Jeder berechtigte Coop-Spieler darf sie
-    // zurueckbauen. Persoenliche Konstruktionen bleiben strikt owner-basiert; darueber
-    // entscheidet allein die Ownership-Pruefung in `removeRockAt`.
-    if (persistentRewardId !== undefined) {
-      if (!isKnownPersistentBaseRewardId(persistentRewardId)
-        || !this.ctx.persistentBaseRewards?.getState().placements.some(
-          (placement) => placement.rewardId === persistentRewardId,
-        )) {
-        return { ok: false, reason: 'blocked' };
-      }
-    }
-    const removed = this.ctx.placementSystem?.removeRockAt(
-      cell.gridX,
-      cell.gridY,
-      playerId,
-      persistentRewardId !== undefined ? 'base-owned' : this.getConstructionOwnership(playerId),
-      persistentRewardId !== undefined,
-    );
-    if (!removed) return { ok: false, reason: 'blocked' };
-
-    this.markManagementActionUsed(playerId, 'dismantle', now);
-    this.finalizeDismantledConstruction(removed, true);
-    this.ctx.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'placeable_removed',
-      source: removed.kind === 'rock'
-        ? 'placeable_rock'
-        : removed.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
-      obstacleId: removed.id,
-      gridX: removed.gridX,
-      gridY: removed.gridY,
-    });
-    return { ok: true };
+      activityRevision,
+    ) ?? { ok: false, reason: 'blocked' };
   }
 
   /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
@@ -6148,109 +5544,10 @@ export class ArenaLifecycleCoordinator {
     playerId: string,
     activityRevision?: number,
   ): LoadoutUseResult {
-    if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
-    if (this.ctx.world?.persistentBaseSite
-      && !this.acceptsCurrentPersistentBaseMutation(activityRevision)) {
-      return { ok: false, reason: 'blocked' };
-    }
-    if (!this.getPlayerCapabilities(playerId).canDismantle) return { ok: false, reason: 'blocked' };
-    const player = this.ctx.playerManager.getPlayer(playerId);
-    // Der globale Rueckbau steht allen Coop-Klassen offen und entfernt ausschliesslich die
-    // eigenen persoenlichen Konstruktionen; Base Rewards und fremde Beitraege bleiben unberuehrt.
-    if (!this.mayManagePersistentBase(playerId)
-      || !player?.active
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)) {
-      return { ok: false, reason: 'blocked' };
-    }
-
-    const removed = this.ctx.placementSystem?.removeOwnedConstructions(
+    return this.constructionWorldRuntime?.dismantleAllOwnedConstructions(
       playerId,
-      this.getConstructionOwnership(playerId),
-    ) ?? [];
-    for (const construction of removed) {
-      // Die visuellen Einzelobjekte muessen verschwinden; deren teure Schatten-/Occluder-
-      // Aktualisierung wird vom RockVisualHelper auf genau einen POST_UPDATE-Flush gebuendelt.
-      this.finalizeDismantledConstruction(construction, false);
-    }
-    if (removed.length > 0) {
-      // Unvollstaendige Payload erzwingt bewusst genau einen Flowfield-/Fire-Resync fuer den Batch.
-      emitArenaMapGridChanged(this.scene.game.events, {
-        reason: 'placeables_batch_removed',
-        source: 'placeable_rock',
-      });
-      this.ctx.gameAudioSystem.playSound('sfx_place_rock', player.x, player.y, playerId);
-    }
-    return { ok: true };
-  }
-
-  private finalizeDismantledConstruction(removed: SyncedPlaceableRock, playDust: boolean): void {
-    if (removed.persistentRewardId !== undefined) {
-      this.persistentBaseWorldBinding?.onRewardRemoved(removed.persistentRewardId);
-      const rewardStore = this.ctx.persistentBaseRewards;
-      if (rewardStore?.dismantleReward(removed.persistentRewardId)) {
-        this.persistCurrentCommittedPersistentBaseRewards();
-        this.publishPersistentBaseRewardSessionState();
-        this.reconcilePersistentBaseWorld();
-      }
-      this.releasePlaceableRuntime(removed, playDust);
-      return;
-    }
-    // Abriss gibt den Besitz auf. Ohne diesen Schritt bliebe der Blueprint als dormant stehen und
-    // erschiene bei der naechsten Mission wieder - der Spieler koennte nichts dauerhaft abbauen.
-    const store = this.ctx.persistentBaseContributions;
-    const ownerId = store?.getRuntimeBindings()
-      .find((binding) => binding.runtimeId === removed.id)?.ownerId;
-    const removedPersistentBlueprint = store?.removeByRuntimeId(removed.id) === true;
-    if (store && ownerId && removedPersistentBlueprint && !store.hasActiveMission) {
-      this.publishImmediatePersistentBaseContribution(ownerId);
-    }
-    this.releasePlaceableRuntime(removed, playDust);
-  }
-
-  /**
-   * Raeumt das Runtime-Objekt einer Konstruktion ab, ohne ihren Besitz anzutasten.
-   *
-   * Der Unterschied zum Abriss ist der ganze Punkt: Eine durch einen Konflikt verdraengte
-   * Konstruktion verschwindet aus der Welt, bleibt aber im persoenlichen Beitrag ihres Besitzers.
-   */
-  private releasePlaceableRuntime(removed: SyncedPlaceableRock, playDust: boolean): void {
-    this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
-    this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
-    if (removed.persistentRewardId !== undefined) {
-      this.ctx.powerUpSystem?.unregisterPersistentBaseRewardPedestal(removed.persistentRewardId);
-    } else if (removed.kind === 'pedestal') {
-      this.ctx.powerUpSystem?.unregisterConstructionPedestal(removed.id);
-    }
-    this.rockVisualHelper.removePlaceableRockVisual(removed, playDust);
-  }
-
-  private placeTunnel(
-    cfg: import('../../loadout/LoadoutConfig').TunnelUltimateConfig,
-    playerId: string,
-    originX: number,
-    originY: number,
-    targetX: number,
-    targetY: number,
-    playerColor: number,
-    params?: LoadoutUseParams,
-  ): boolean {
-    if (params?.tunnelStartGridX === undefined || params.tunnelStartGridY === undefined) return false;
-    const placed = this.ctx.tunnelSystem?.tryPlaceTunnel(
-      cfg,
-      playerId,
-      playerColor,
-      originX,
-      originY,
-      params.tunnelStartGridX,
-      params.tunnelStartGridY,
-      targetX,
-      targetY,
-    ) ?? false;
-    if (placed) {
-      this.ctx.gameAudioSystem.playSound('sfx_place_dachstunnel', originX, originY, playerId);
-    }
-    return placed;
+      activityRevision,
+    ) ?? { ok: false, reason: 'blocked' };
   }
 
   private spawnImpactCloudFromProjectile(proj: import('../../types').TrackedProjectile, x: number, y: number): void {

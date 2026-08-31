@@ -317,8 +317,9 @@ describe('LobbyWorld – World-Aufbau ueber die kanonischen Mechanismen', () => 
     const buildStart = lifecycle.indexOf('  buildWorld(');
     const buildEnd = lifecycle.indexOf('  tearDownArena(', buildStart);
     expect(lifecycle.slice(buildStart, buildEnd)).not.toContain('beginTransaction(');
-    expect(lifecycle).toContain('if (store && registered && !store.hasActiveMission) {');
-    expect(lifecycle).toContain('if (store && ownerId && removedPersistentBlueprint && !store.hasActiveMission) {');
+    const construction = read('src/world/ConstructionWorldRuntime.ts');
+    expect(construction).toContain('if (registered && !context.contributions.hasActiveMission)');
+    expect(construction).toContain('if (context && ownerId && removedBlueprint && !context.contributions.hasActiveMission)');
     expect(lifecycle).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');
     // Die Bau-Runtime gibt ihre Zellen mit dem gebauten World-Zustand frei.
     expect(read('src/world/WorldMaterialization.ts')).toContain('this.placementValue?.clearRuntimeRocks();');

@@ -302,7 +302,8 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     );
     expect(source).toContain('activity: {');
     expect(source).toContain('worldRuntime.activity.attach(activity, runtime);');
-    expect(source).toContain('this.coopMissionComposition.materialize(');
+    expect(source).toContain('this.coopMissionComposition.materializeCore(');
+    expect(source).toContain('this.coopMissionComposition.materializeDependents(');
     expect(source).not.toContain('materializeCoopMissionActivityCompositions');
     expect(source).toContain('this.worldLifecycle.syncObservedActivity(bridge.getActivityDescriptor());');
     const teardownStart = source.indexOf('  tearDownArena(');
@@ -360,7 +361,6 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     for (const consumer of [
       'combatSystem',
       'hostPhysics',
-      'trainManager',
       'energyShieldSystem',
       'guardianSpiritSystem',
       'slimeTrailSystem',
@@ -373,14 +373,14 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     }
     expect(binding).toContain('this.ctx.airstrikeSystem?.setResolvedCallback(null);');
     expect(binding).toContain('this.ctx.hostPhysics.setEnemyRockContactCallback(null);');
-    expect(binding).toContain('this.ctx.trainManager?.destroy();');
-    expect(binding).toContain('this.ctx.projectileManager.setTrainGroup(null);');
+    expect(binding).toContain('this.worldTrainRuntime?.setEnemyManager(null);');
 
     const mapEventComposition = readFileSync(
       resolve(process.cwd(), 'src/activity/CoopMissionMapEventComposition.ts'),
       'utf8',
     );
-    expect(mapEventComposition).toContain('new CoopDefenseTrainEventHandler');
+    expect(mapEventComposition).toContain('this.options.train.materializeAuthoredTrain');
+    expect(mapEventComposition).toContain('this.options.train.releaseActivityTrain');
     expect(mapEventComposition).toContain('new CoopDefenseAirstrikeEventHandler');
     expect(mapEventComposition).toContain('new CoopDefenseGroundHazardEventHandler');
 
@@ -435,11 +435,21 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     ]) {
       expect(activityComposition).toContain(child);
     }
-    expect(coordinator).toContain('this.coopMissionComposition.createCombatComposition(activityConfiguration, layout)');
+    expect(coordinator).toContain('this.coopMissionComposition.materializeCore(activityConfiguration, coopMissionRuntime, layout)');
+    expect(coordinator).not.toContain('createCombatComposition(');
     expect(coordinator).not.toContain('new CoopMissionEnemyBehaviourComposition(');
     expect(coordinator).not.toContain('new CoopMissionEnemySupportComposition(');
     expect(coordinator).not.toContain('new CoopMissionMapEventComposition(');
     expect(coordinator).not.toContain('new CoopMissionPlayerComposition(');
     expect(coordinator).not.toContain('new CoopMissionObjectiveComposition(');
+    for (const concreteWorldGraph of [
+      'TrainManager',
+      'TrainRenderer',
+      'new PowerUpSystem',
+      'getCoopDefenseConstructionDefinition',
+      'COOP_DEFENSE_CONSTRUCTION_IDS',
+    ]) {
+      expect(coordinator, `${concreteWorldGraph} leaked into coordinator`).not.toContain(concreteWorldGraph);
+    }
   });
 });

@@ -208,6 +208,90 @@ describe('ActivityLifecycle – Reihenfolge gegenueber der World', () => {
       'activity:attach:32',
     ]);
   });
+
+  it('haelt den identitaetsgebundenen Pedestal-Anker pending bis zum autoritativen Start', () => {
+    const anchors: Array<number | null> = [];
+    const lifecycle = new WorldLifecycle({
+      ...createSinks().world,
+      activityIdentity: {
+        resolveStartAnchor: () => null,
+        begin: () => {},
+        end: () => {},
+      },
+    });
+    lifecycle.beginCreate(descriptor(), mission());
+    lifecycle.attachRuntime(runtime(descriptor()));
+    anchors.push(lifecycle.activityStartAnchor);
+    lifecycle.bindActivityStartAnchor(1_000);
+    anchors.push(lifecycle.activityStartAnchor);
+    expect(anchors).toEqual([null, 1_000]);
+    expect(lifecycle.activity.isStartAnchorPending).toBe(false);
+  });
+
+  it('nimmt beim spaeten initialen Attach den bestehenden arenaStartTime-Anker', () => {
+    const lifecycle = new WorldLifecycle({
+      ...createSinks().world,
+      activityIdentity: {
+        resolveStartAnchor: () => 2_000,
+        begin: () => {},
+        end: () => {},
+      },
+    });
+    lifecycle.attachRuntime(runtime(descriptor()), mission());
+    expect(lifecycle.activityStartAnchor).toBe(2_000);
+  });
+
+  it('bewahrt denselben Anker bei technischem Activity-Detach und Reattach', () => {
+    const lifecycle = new WorldLifecycle({
+      ...createSinks().world,
+      activityIdentity: {
+        resolveStartAnchor: () => 3_000,
+        begin: () => {},
+        end: () => {},
+      },
+    });
+    lifecycle.beginCreate(descriptor(), mission());
+    lifecycle.attachRuntime(runtime(descriptor()));
+    lifecycle.detachRuntime();
+    lifecycle.attachRuntime(runtime(descriptor()), mission());
+    expect(lifecycle.activityStartAnchor).toBe(3_000);
+  });
+
+  it('vergibt fuer Activity B in derselben World einen frischen Anker', () => {
+    let nextAnchor = 4_000;
+    const lifecycle = new WorldLifecycle({
+      ...createSinks().world,
+      activityIdentity: {
+        resolveStartAnchor: (_activity, previous) => previous ? nextAnchor : 3_000,
+        begin: () => {},
+        end: () => {},
+      },
+    });
+    lifecycle.beginCreate(descriptor(), mission());
+    lifecycle.attachRuntime(runtime(descriptor()));
+    nextAnchor = 4_000;
+    lifecycle.syncObservedActivity({ ...mission(), activityRevision: 32 });
+    expect(lifecycle.activityStartAnchor).toBe(4_000);
+  });
+
+  it('laesst einen stale Detach von Activity A den Anker von B unveraendert', () => {
+    const lifecycle = new WorldLifecycle({
+      ...createSinks().world,
+      activityIdentity: {
+        resolveStartAnchor: (_activity, previous) => previous ? 6_000 : 5_000,
+        begin: () => {},
+        end: () => {},
+      },
+    });
+    lifecycle.beginCreate(descriptor(), mission());
+    lifecycle.attachRuntime(runtime(descriptor()));
+    lifecycle.syncObservedActivity({ ...mission(), activityRevision: 32 });
+    lifecycle.activity.detachRuntime();
+    expect(lifecycle.activity.descriptor?.activityRevision).toBe(32);
+    expect(lifecycle.activityStartAnchor).toBe(6_000);
+    lifecycle.activity.bindStartAnchor(7_000);
+    expect(lifecycle.activityStartAnchor).toBe(6_000);
+  });
 });
 
 describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Flag', () => {

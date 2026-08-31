@@ -24,6 +24,11 @@ export interface ActivityLifecycleSink {
  * nicht beenden.
  */
 export interface ActivityIdentityLifecycleSink {
+  /** Resolves the stable round anchor when a new Activity identity begins. */
+  readonly resolveStartAnchor?: (
+    activity: ActivityDescriptor,
+    previousActivity: ActivityDescriptor | null,
+  ) => number | null;
   readonly begin: (activity: ActivityDescriptor) => void;
   readonly end: (activity: ActivityDescriptor) => void;
 }
@@ -36,6 +41,7 @@ const INERT_ACTIVITY_IDENTITY_SINK: ActivityIdentityLifecycleSink = {
 export class ActivityLifecycle {
   private currentPhase: ActivityLifecyclePhase = 'none';
   private currentDescriptor: ActivityDescriptor | null = null;
+  private currentStartAnchor: number | null = null;
 
   /**
    * @param hasWorld Meldet, ob eine World-Instanz existiert. Ohne sie gibt es keine Activity –
@@ -61,6 +67,16 @@ export class ActivityLifecycle {
     return this.currentDescriptor?.kind ?? null;
   }
 
+  /** Stable anchor of this Activity identity; it survives local runtime detach/reattach. */
+  get startAnchor(): number | null {
+    return this.currentStartAnchor;
+  }
+
+  /** True before the authoritative round start binds an initially pending Activity. */
+  get isStartAnchorPending(): boolean {
+    return this.currentDescriptor !== null && this.currentStartAnchor === null;
+  }
+
   isActive(): boolean {
     return this.currentPhase === 'active';
   }
@@ -78,7 +94,11 @@ export class ActivityLifecycle {
       );
     }
     if (this.currentDescriptor && isSameActivity(this.currentDescriptor, activity)) return;
-    if (this.currentDescriptor) this.end();
+    const previousActivity = this.currentDescriptor;
+    if (previousActivity) this.end();
+    this.currentStartAnchor = normalizeStartAnchor(
+      this.identitySink.resolveStartAnchor?.(activity, previousActivity) ?? null,
+    );
     this.identitySink.begin(activity);
     this.currentDescriptor = activity;
     this.currentPhase = 'creating';
@@ -97,6 +117,13 @@ export class ActivityLifecycle {
     this.sink.attach(this.currentDescriptor);
   }
 
+  /** Binds the authoritative round start without recreating the Activity runtime. */
+  bindStartAnchor(startAnchor: number): void {
+    if (!this.currentDescriptor || this.currentStartAnchor !== null || !Number.isFinite(startAnchor)) return;
+    const normalized = normalizeStartAnchor(startAnchor);
+    if (normalized !== null) this.currentStartAnchor = normalized;
+  }
+
   /** Loest nur die lokale Runtime; die Activity-Instanz bleibt bestehen. */
   detachRuntime(): void {
     if (this.currentPhase !== 'active') return;
@@ -113,8 +140,14 @@ export class ActivityLifecycle {
     this.currentDescriptor = null;
     if (wasActive) this.sink.detach();
     if (endingDescriptor) this.identitySink.end(endingDescriptor);
+    this.currentStartAnchor = null;
     this.currentPhase = 'none';
   }
+}
+
+function normalizeStartAnchor(value: number | null): number | null {
+  if (value === null || !Number.isFinite(value) || value <= 0) return null;
+  return Math.floor(value);
 }
 
 function isSameActivity(left: ActivityDescriptor, right: ActivityDescriptor): boolean {

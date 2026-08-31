@@ -3,7 +3,20 @@ import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { TrainEventConfig } from '../types';
 import { TRAIN } from '../train/TrainConfig';
-import type { TrainManager } from '../train/TrainManager';
+export interface TrainAwarenessSource {
+  readonly isDestroyed: () => boolean;
+  readonly getTrackX: () => number;
+  readonly getCrossingHazardWindowAt: (
+    worldY: number,
+    actorRadius: number,
+    now: number,
+    spawnAt: number,
+  ) => { readonly startsAt: number; readonly endsAt: number } | null;
+  readonly getNearestAttackPoint: (
+    fromX: number,
+    fromY: number,
+  ) => { readonly x: number; readonly y: number; readonly distance: number } | null;
+}
 
 type TrainAwarenessMode = 'normal' | 'approaching' | 'waiting' | 'crossing' | 'escaping';
 
@@ -40,7 +53,7 @@ export class CoopDefenseEnemyTrainAwarenessSystem {
   private burrowSource: TrainCrossingBurrowSource | null = null;
 
   constructor(
-    private readonly getTrainManager: () => TrainManager | null,
+    private readonly getTrainManager: () => TrainAwarenessSource | null,
     private readonly getTrainEvent: () => TrainEventConfig | undefined,
     private readonly getEffectiveMoveSpeed: (enemy: EnemyEntity, now: number) => number,
   ) {}

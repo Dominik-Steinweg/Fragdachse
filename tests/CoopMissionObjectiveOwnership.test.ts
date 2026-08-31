@@ -251,7 +251,7 @@ describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
       resolve(process.cwd(), 'src/activity/CoopMissionObjectiveComposition.ts'),
       'utf8',
     );
-    expect(coordinator).toContain('this.coopMissionComposition.materialize(');
+    expect(coordinator).toContain('this.coopMissionComposition.materializeDependents(');
     expect(coordinator).not.toContain('new CoopMissionObjectiveComposition(');
     expect(composition).toContain('runtime.setObjectives({');
     expect(composition).toContain('new CoopDefenseTeamBuffSystem()');
