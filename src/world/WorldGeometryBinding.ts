@@ -162,7 +162,10 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     materialization: WorldMaterialization,
     getBarrierObstacles: () => readonly Phaser.GameObjects.Rectangle[] | null,
   ): LightOccluderIndex | null {
-    if (this.destroyed || !this.input.presentationRequired) {
+    // Ein totes Binding darf keine scene-langlebigen Consumer mehr anfassen: eine bereits
+    // nachfolgende World kann ihren eigenen Occluder-Index installiert haben.
+    if (this.destroyed) return null;
+    if (!this.input.presentationRequired) {
       materialization.setLightOccluders(null);
       this.input.lighting.setOccluderIndex(null);
       return null;

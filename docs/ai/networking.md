@@ -12,13 +12,15 @@ Bei PersistentBase-Daten entscheidet der Host über Materialisierung, Validierun
 
 PeerJS wird nur in [PeerJsTransport.ts](../../src/network/peer/PeerJsTransport.ts) importiert. [PeerRoom.ts](../../src/network/peer/PeerRoom.ts) kennt eine Transport-Schnittstelle; Gameplay kennt nur NetworkBridge.
 
-## Fachliche Systeme kennen Ports, nicht die Bridge
+## Fachliche Systeme und die Netzwerkgrenze
 
-Die fachlichen Runtime-/Domain-Schichten `src/activity/`, `src/effects/`, `src/entities/`, `src/loadout/`, `src/powerups/`, `src/systems/`, `src/train/` und `src/world/` importieren [bridge](../../src/network/bridge.ts) nicht. Ein Regelsystem bekommt stattdessen die kleine fachliche Sicht, die es wirklich braucht - einen benannten Port oder Callback wie `WorldTrainNetworkPort`, `TranslocatorNetworkPort` oder `CaptureTheBeerRosterPort`.
+Keine der fachlichen Runtime-/Domain-Schichten `src/activity/`, `src/effects/`, `src/entities/`, `src/loadout/`, `src/powerups/`, `src/systems/`, `src/train/` und `src/world/` importiert das Modul-Singleton [bridge](../../src/network/bridge.ts). Der Zugang zum Transportsubstrat entsteht ausschließlich an den expliziten Composition-/Adapter-Grenzen (`ArenaLifecycleCoordinator`, `src/scenes/arena/Arena*Composition.ts`, `CoopMission*Composition`).
 
-Befüllt werden diese Ports ausschließlich an den expliziten Composition-/Adapter-Grenzen (`ArenaLifecycleCoordinator`, `src/scenes/arena/Arena*Composition.ts`, `CoopMission*Composition`). Ein Owner, der schon eine Portgruppe besitzt, setzt die Sicht seines Kindes daraus zusammen, statt eine zweite Adapterkette zu eröffnen.
+Die im Arena-Runtime-Refactor migrierten Owner-Grenzen bekommen von dort die kleine fachliche Sicht, die sie wirklich brauchen - einen benannten Port oder Callback wie `WorldTrainNetworkPort`, `TranslocatorNetworkPort` oder `CaptureTheBeerRosterPort`. Ein Owner, der schon eine Portgruppe besitzt, setzt die Sicht seines Kindes daraus zusammen, statt eine zweite Adapterkette zu eröffnen. Neue Runtime-Owner folgen diesem Muster und sollen keine direkte Bridge kennen.
 
-Das hält Regeln vom Transportsubstrat unabhängig und testbar: Ein Test übergibt den Port direkt und braucht kein Modulmock der Bridge. [tests/WorldGameplayCompositionContracts.test.ts](../../tests/WorldGameplayCompositionContracts.test.ts) hält die Grenze fest.
+Einige ältere Kernsysteme bekommen weiterhin eine konkrete `NetworkBridge` per Constructor-Injection von der Composition-Grenze: `CombatSystem`, `InputSystem`, `HostPhysicsSystem`, `DecoySystem`, `EffectSystem`, `EnergyShieldSystem`, `LoadoutManager` und `BurrowSystem`. Diese Menge ist eine bewusst eingefrorene Legacy-Grenze - sie wird nicht allein für architektonische Reinheit auf Ports umgebaut, darf aber auch nicht wachsen.
+
+Das hält Regeln testbar: Ein Test übergibt den Port direkt und braucht kein Modulmock der Bridge. [tests/WorldGameplayCompositionContracts.test.ts](../../tests/WorldGameplayCompositionContracts.test.ts) hält beide Grenzen fest - den fehlenden Singleton-Import und die eingefrorene Liste der konkreten Consumer.
 
 ## World- und Activity-Store
 

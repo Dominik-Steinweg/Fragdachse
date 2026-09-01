@@ -280,4 +280,35 @@ describe('WorldGeometryBinding – Lifetime-Symmetrie', () => {
     expect(shared.fire.groundBlocked).toBeNull();
     expect(shared.listeners.get(ARENA_MAP_GRID_CHANGED_EVENT)?.size).toBe(0);
   });
+
+  it('laesst ein totes Binding den Occluder-Index der naechsten World nicht auf null setzen', () => {
+    const shared = createSceneScopedCollaborators();
+
+    const worldA = createBinding(shared, { gridX: 2, gridY: 2 });
+    worldA.destroy();
+
+    // World B installiert ihren eigenen scene-langlebigen Occluder-Index.
+    const worldB = createBinding(shared, { gridX: 7, gridY: 7 });
+    const materializationB = { setLightOccluders: vi.fn() };
+    const indexB = worldB.attachLightOccluders(materializationB as never, () => null);
+    expect(indexB).not.toBeNull();
+    expect(shared.lighting.occluderIndex).toBe(indexB);
+    expect(materializationB.setLightOccluders).toHaveBeenLastCalledWith(indexB);
+
+    // Staler Aufruf auf dem toten Binding A darf Bs Index nicht mehr zuruecksetzen.
+    const materializationA = { setLightOccluders: vi.fn() };
+    expect(worldA.attachLightOccluders(materializationA as never, () => null)).toBeNull();
+
+    expect(shared.lighting.occluderIndex).toBe(indexB);
+    expect(materializationA.setLightOccluders).not.toHaveBeenCalled();
+    expect(materializationB.setLightOccluders).toHaveBeenCalledTimes(1);
+
+    // World B bleibt vollstaendig intakt.
+    expect(isFireCellBlocked(shared, 7, 7)).toBe(true);
+    expect(shared.hostPhysics.movementBlockedResolver?.(7, 7)).toBe(true);
+    expect(shared.listeners.get(ARENA_MAP_GRID_CHANGED_EVENT)?.size).toBe(1);
+
+    worldB.destroy();
+    expect(shared.lighting.occluderIndex).toBeNull();
+  });
 });

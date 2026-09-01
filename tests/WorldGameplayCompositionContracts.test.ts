@@ -47,13 +47,37 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(train).not.toMatch(/\bbridge\b/);
   });
 
-  it('keeps every domain layer free of the network bridge module', () => {
-    // Fachliche Systeme kennen nur ihre eigene kleine Port-/Callback-Sicht. Das Transportsubstrat
-    // haengt ausschliesslich an den expliziten Composition-/Adapter-Grenzen.
+  it('keeps every domain layer free of the network bridge singleton module', () => {
+    // Kein fachliches System importiert das Modul-Singleton `network/bridge`. Der Zugang zum
+    // Transportsubstrat haengt ausschliesslich an den expliziten Composition-/Adapter-Grenzen.
     const offenders = DOMAIN_ROOTS
       .flatMap(listTypeScriptFiles)
       .filter((path) => read(path).includes("network/bridge'"));
     expect(offenders).toEqual([]);
+  });
+
+  it('pins the frozen set of legacy consumers that still take a concrete NetworkBridge', () => {
+    // Die im Arena-Runtime-Refactor migrierten Owner-Grenzen nutzen kleine fachliche Ports und
+    // kennen NetworkBridge nicht (siehe folgenden Contract). Aeltere Kernsysteme bekommen NetworkBridge
+    // weiterhin per Constructor-Injection von der Composition-Grenze. Diese Menge ist bewusst
+    // eingefroren: ein neuer Consumer muss hier sichtbar werden, statt das Muster still
+    // auszuweiten, und ein wegportierter Consumer faellt hier ebenfalls auf.
+    const concreteConsumers = DOMAIN_ROOTS
+      .flatMap(listTypeScriptFiles)
+      .filter((path) => (
+        /import[^;]*\bNetworkBridge\b[^;]*from ['"][^'"]*network\/NetworkBridge['"]/.test(read(path))
+      ))
+      .sort();
+    expect(concreteConsumers).toEqual([
+      'src/effects/EffectSystem.ts',
+      'src/loadout/LoadoutManager.ts',
+      'src/systems/BurrowSystem.ts',
+      'src/systems/CombatSystem.ts',
+      'src/systems/DecoySystem.ts',
+      'src/systems/EnergyShieldSystem.ts',
+      'src/systems/HostPhysicsSystem.ts',
+      'src/systems/InputSystem.ts',
+    ]);
   });
 
   it('keeps new World owners independent from ArenaContext and the network bridge', () => {
