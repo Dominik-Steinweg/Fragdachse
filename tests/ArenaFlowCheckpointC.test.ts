@@ -173,6 +173,23 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     expect(scene).toContain('this.arenaRuntime.runHostFrame(delta);');
     expect(scene).toContain('this.arenaRuntime.runHostFrame(delta, gameplayActive)');
     expect(scene).toContain('this.arenaRuntime.runClientFrame(delta);');
+    // Die fachliche Frame-Reihenfolge im Top-Level-Frame bleibt erhalten: Owner-Sync vor Update,
+    // Update vor der ersten Host- bzw. Client-Frame-Ausfuehrung.
+    const syncRoomOwnersIndex = scene.indexOf('this.arenaRuntime.syncRoomOwners();');
+    const updateIndex = scene.indexOf('this.arenaRuntime.update(delta);');
+    const firstRunHostFrameIndex = scene.indexOf('this.arenaRuntime.runHostFrame(');
+    const firstRunClientFrameIndex = scene.indexOf('this.arenaRuntime.runClientFrame(');
+    expect(syncRoomOwnersIndex, 'syncRoomOwners fehlt').toBeGreaterThan(-1);
+    expect(updateIndex, 'update fehlt').toBeGreaterThan(-1);
+    expect(firstRunHostFrameIndex, 'runHostFrame fehlt').toBeGreaterThan(-1);
+    expect(firstRunClientFrameIndex, 'runClientFrame fehlt').toBeGreaterThan(-1);
+    expect(syncRoomOwnersIndex, 'syncRoomOwners muss vor update(delta) stehen').toBeLessThan(updateIndex);
+    expect(updateIndex, 'update(delta) muss vor dem ersten runHostFrame stehen').toBeLessThan(
+      firstRunHostFrameIndex,
+    );
+    expect(updateIndex, 'update(delta) muss vor dem ersten runClientFrame stehen').toBeLessThan(
+      firstRunClientFrameIndex,
+    );
     expect(scene).not.toContain('setActivityStepResolver');
     expect(scene).not.toContain('this.hostUpdate.runHostUpdate(');
     expect(scene).not.toContain('this.clientUpdate.runClientUpdate(');

@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { resolve, relative, join, sep } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   CoopMissionRuntime,
@@ -15,6 +15,19 @@ import type { CoopDefenseMapEventDirector } from '../src/systems/CoopDefenseMapE
 import type { NecromancySystem } from '../src/systems/NecromancySystem';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import { ActivityRuntimeHost } from '../src/world/ActivityRuntimeHost';
+
+/** Minimaler, deterministischer .ts-Sammler fuer die Source-Ratchet-Pruefung unten. */
+function collectTypeScriptFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry);
+    if (statSync(full).isDirectory()) {
+      collectTypeScriptFiles(full, out);
+      continue;
+    }
+    if (entry.endsWith('.ts')) out.push(full);
+  }
+  return out;
+}
 
 function descriptor(kind: ActivityDescriptor['kind'] = 'coop-mission'): ActivityDescriptor {
   return {
@@ -450,6 +463,23 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       'COOP_DEFENSE_CONSTRUCTION_IDS',
     ]) {
       expect(coordinator, `${concreteWorldGraph} leaked into coordinator`).not.toContain(concreteWorldGraph);
+    }
+  });
+
+  it('taktet die Activity-Client-Presentation ueber genau einen kanonischen Schritt', () => {
+    const CLIENT_UPDATE_PATH = 'src/scenes/arena/ClientUpdateCoordinator.ts';
+    const clientUpdate = readFileSync(resolve(process.cwd(), CLIENT_UPDATE_PATH), 'utf8');
+    // Spiegelbild zum Host-Pendant (tests/HostUpdatePhaseContracts.test.ts): der Frame-Owner
+    // kennt den Praesentations-Schritt der Activity nur an genau einer Stelle.
+    expect([...clientUpdate.matchAll(/clientPresentationStep\(/g)]).toHaveLength(1);
+
+    // Ausserhalb des Frame-Owners darf kein weiterer Aufruf des kanonischen Schritts entstehen.
+    for (const dir of ['src/scenes', 'src/world']) {
+      for (const file of collectTypeScriptFiles(resolve(process.cwd(), dir))) {
+        const relativePath = relative(process.cwd(), file).split(sep).join('/');
+        if (relativePath === CLIENT_UPDATE_PATH) continue;
+        expect(readFileSync(file, 'utf8'), relativePath).not.toContain('clientPresentationStep(');
+      }
     }
   });
 });

@@ -120,11 +120,14 @@ type DamageHandler = (targetType: string, targetId: string, attackerId: string, 
 function combatBindingHarness(
   isCoopMission: () => boolean,
   getMissionBarrierObstacles: () => unknown = () => null,
+  // Optional bereits bestehender Fake-CombatSystem samt Aufzeichnung, damit ein Test dieselbe
+  // scene-langlebige Instanz ueber mehrere Worlds hinweg teilen kann.
+  existing?: { combat: CombatSystem; barriers: unknown[] },
 ) {
   let damageHandler: DamageHandler | null = null;
-  const barriers: unknown[] = [];
+  const barriers: unknown[] = existing?.barriers ?? [];
   const stats = { addPlayerRoomDamage: vi.fn() };
-  const combat = service({
+  const combat = existing?.combat ?? service({
     setDamageDealtHandler: (handler: DamageHandler) => { damageHandler = handler; },
     setBarrierObstacles: (obstacles: unknown) => { barriers.push(obstacles); },
   });
@@ -212,6 +215,7 @@ function combatBindingHarness(
   return {
     binding: new WorldCombatGameplayBinding(options),
     barriers,
+    combat: combat as CombatSystem,
     damage: () => damageHandler?.('player', 'victim', 'attacker', 10),
     stats,
   };
@@ -476,5 +480,27 @@ describe('Phase 10B.7 – Activity rebinding', () => {
     expect(runtimeB.system).not.toBe(runtimeA.system);
     world.activity.detach();
     expect(world.isDestroyed()).toBe(false);
+  });
+});
+
+describe('WorldCombatGameplayBinding – Lifetime-Symmetrie', () => {
+  it('laesst ein zerstoertes Combat-Binding die naechste World nicht mehr beeinflussen', () => {
+    const harnessA = combatBindingHarness(() => false);
+    harnessA.binding.destroy();
+
+    // World B teilt sich den scene-langlebigen CombatSystem mit A.
+    const harnessB = combatBindingHarness(() => false, () => null, {
+      combat: harnessA.combat,
+      barriers: harnessA.barriers,
+    });
+    harnessB.binding.updateActivityBindings();
+    const barrierCallsAfterB = harnessB.barriers.length;
+
+    // Die staleen Aufrufe des zerstoerten Bindings A duerfen den gemeinsamen CombatSystem nicht
+    // mehr erreichen.
+    harnessA.binding.updateActivityBindings();
+    harnessA.binding.clearActivityBindings();
+
+    expect(harnessB.barriers.length).toBe(barrierCallsAfterB);
   });
 });

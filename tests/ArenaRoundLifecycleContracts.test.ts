@@ -21,7 +21,6 @@ const WORLD_GAMEPLAY_PATHS = [
   'src/scenes/arena/ArenaWorldCombatComposition.ts',
   'src/scenes/arena/ArenaWorldConstructionComposition.ts',
 ];
-const SCENE_PATH = 'src/scenes/ArenaScene.ts';
 const RUNTIME_PATH = 'src/scenes/arena/ArenaRuntime.ts';
 
 function read(path: string): string {

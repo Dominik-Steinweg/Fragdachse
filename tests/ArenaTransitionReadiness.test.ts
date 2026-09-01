@@ -149,6 +149,39 @@ describe('Arena-Transition-Bereitschaft', () => {
     }))).toBe(true);
   });
 
+  it('haengt die Activity-lose LobbyWorld-Bereitschaft nicht an einem WorldParticipation-Snapshot', () => {
+    expect(isArenaTransitionReady(readiness({
+      phase: 'LOBBY',
+      worldDescriptor: world(18, 'world:lobby'),
+      activityDescriptor: null,
+      roundState: null,
+      participation: null,
+      // Der Snapshot traegt eine fremde World-Revision - ausserhalb ARENA ohne Activity irrelevant.
+      worldParticipationState: worldParticipation(999),
+    }))).toBe(true);
+  });
+
+  it('haengt die Activity-lose LobbyWorld-Bereitschaft nicht an einem gesetzten Participation-Snapshot', () => {
+    expect(isArenaTransitionReady(readiness({
+      phase: 'LOBBY',
+      worldDescriptor: world(18, 'world:lobby'),
+      activityDescriptor: null,
+      roundState: null,
+      participation: participation(19),
+    }))).toBe(true);
+  });
+
+  it('verwirft dieselbe Activity-lose Konstellation innerhalb ARENA (Gegenprobe)', () => {
+    expect(isArenaTransitionReady(readiness({
+      phase: 'ARENA',
+      worldDescriptor: world(18, 'world:lobby'),
+      activityDescriptor: null,
+      roundState: null,
+      participation: participation(19),
+      worldParticipationState: worldParticipation(999),
+    }))).toBe(false);
+  });
+
   it('verlangt beim LobbyWorld-zu-MatchWorld-Race ein Ende der alten Instanz', () => {
     const calls: string[] = [];
     const sink: WorldLifecycleSink = {
