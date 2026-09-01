@@ -10,7 +10,6 @@ import {
   ArenaTimeOfDayController,
   type ArenaTimeOfDaySignals,
 } from '../../systems/ArenaTimeOfDayController';
-import { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
 import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleportRenderer';
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
@@ -36,7 +35,7 @@ import type { PersistentBasePreviewRenderer } from './PersistentBasePreviewRende
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, LoadoutUseParams, PlayerProfile, RoomQualitySnapshot } from '../../types';
+import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, PlayerProfile, RoomQualitySnapshot } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -84,7 +83,7 @@ import {
   COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
 } from '../../config/coopDefenseConstructions';
-import type { ConstructionId, LoadoutToolRef, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
+import type { LoadoutToolRef, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import {
   resolveWorldRenderWork,
@@ -2356,8 +2355,6 @@ export class ArenaLifecycleCoordinator {
       : [];
     // Ziele, Fortschritt und Barrieren gehoeren der Coop-Activity; sie entstehen und fallen mit
     // ihr und brauchen deshalb kein Zuruecksetzen im World-Aufbau.
-    this.ctx.hostHeldActionSystem?.reset();
-    this.ctx.hostHeldActionSystem = bridge.isHost() ? new HostHeldActionSystem() : null;
     const persistentBaseSite = world.persistentBaseSite;
     const persistentBaseVisualSite = resolvePersistentBaseVisualSite(
       missionMapConfig,
@@ -2576,8 +2573,6 @@ export class ArenaLifecycleCoordinator {
     // naechste Aufbau sie uebernimmt.
     this.releaseWorldRuntime(preserveAuthoredPresentation);
     this.persistentBaseWorldBinding = null;
-    this.ctx.hostHeldActionSystem?.reset();
-    this.ctx.hostHeldActionSystem = null;
     if (bridge.isHost()) {
       for (const player of bridge.getConnectedPlayers()) bridge.publishActiveBuffs(player.id, []);
     }
@@ -2947,68 +2942,6 @@ export class ArenaLifecycleCoordinator {
   private nextFlowFieldGenerationId(): number {
     this.flowFieldGenerationId += 1;
     return this.flowFieldGenerationId;
-  }
-
-  placeInspectorConstruction(
-    playerId: string,
-    constructionId: ConstructionId,
-    targetX: number,
-    targetY: number,
-    activityRevision?: number,
-  ): LoadoutUseResult {
-    return this.constructionWorldRuntime?.placeInspectorConstruction(
-      playerId,
-      constructionId,
-      targetX,
-      targetY,
-      activityRevision,
-    ) ?? { ok: false, reason: 'blocked' };
-  }
-
-  useInspectorUtility(
-    playerId: string,
-    tool: LoadoutToolRef,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    now: number,
-    params?: LoadoutUseParams,
-  ): LoadoutUseResult {
-    return this.constructionWorldRuntime?.useInspectorUtility(
-      playerId,
-      tool,
-      angle,
-      targetX,
-      targetY,
-      now,
-      params,
-    ) ?? { ok: false, reason: 'blocked' };
-  }
-
-  /** Thin RPC adapter; construction rules live in the World owner. */
-  dismantleConstruction(
-    playerId: string,
-    targetX: number,
-    targetY: number,
-    activityRevision?: number,
-  ): LoadoutUseResult {
-    return this.constructionWorldRuntime?.dismantleConstruction(
-      playerId,
-      targetX,
-      targetY,
-      activityRevision,
-    ) ?? { ok: false, reason: 'blocked' };
-  }
-
-  /** Host-autorisierter Batch-Rueckbau ohne Reichweitenpruefung und ohne N-fache Finalisierung. */
-  dismantleAllOwnedConstructions(
-    playerId: string,
-    activityRevision?: number,
-  ): LoadoutUseResult {
-    return this.constructionWorldRuntime?.dismantleAllOwnedConstructions(
-      playerId,
-      activityRevision,
-    ) ?? { ok: false, reason: 'blocked' };
   }
 
   private resetLocalArenaHudState(): void {

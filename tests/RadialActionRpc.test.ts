@@ -10,6 +10,11 @@ const bridgeMock = vi.hoisted(() => ({
   getPlayerCurrentLoadoutSnapshot: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
   registerHeldActionHandler: vi.fn(),
+  registerPersistentBaseRewardPlacementHandler: vi.fn(),
+  registerPersistentBaseMoveHandler: vi.fn(),
+  registerWorldParticipationRequestHandler: vi.fn(),
+  registerTrainDestroyedHandler: vi.fn(),
+  registerPickupPowerUpHandler: vi.fn(),
 }));
 
 vi.mock('../src/network/bridge', () => ({ bridge: bridgeMock }));
@@ -72,7 +77,7 @@ function createFixture() {
       : null
   ));
   const use = vi.fn((): LoadoutUseResult => ({ ok: true }));
-  const ctx = {
+  const ctx: any = {
     loadoutManager: { getEquippedUtilityConfig, getTemporaryUtilityConfig, use },
     hostHeldActionSystem: { consume, start, clearPlayer },
     translocatorSystem: { getActivePuckId: vi.fn(() => undefined) },
@@ -105,16 +110,61 @@ function createFixture() {
     dismantleConstruction: vi.fn((): LoadoutUseResult => ({ ok: true })),
     dismantleAllOwnedConstructions: vi.fn((): LoadoutUseResult => ({ ok: true })),
   };
+  const player = { x: 12, y: 34 };
+  const playerManager = { getPlayer: vi.fn(() => player) };
+  const centerHUD = { showTrainDestroyed: vi.fn() };
+  const gameAudioSystem = { playSound: vi.fn(), playLocalSound: vi.fn() };
+  const participation = { handleRequest: vi.fn(() => true) };
+  const persistentBase = {
+    placeReward: vi.fn((): LoadoutUseResult => ({ ok: true })),
+    moveObject: vi.fn((): LoadoutUseResult => ({ ok: true })),
+  };
+  const powerUpSystem = { tryPickup: vi.fn(() => true) };
+  const train = { markDestroyed: vi.fn() };
   const coordinator = new RpcCoordinator(
     undefined as never,
-    ctx as never,
     {} as never,
     {} as never,
     {} as never,
+    {} as never,
+    centerHUD as never,
+    playerManager as never,
+    {} as never,
+    ctx.combatSystem as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    gameAudioSystem as never,
+    participation,
+    { get: lifecycle.getPlayerCapabilities },
+    lifecycle,
+    persistentBase,
+    {
+      getBurrowSystem: () => ctx.burrowSystem,
+      getLoadoutManager: () => ctx.loadoutManager,
+      getTranslocatorSystem: () => ctx.translocatorSystem,
+      getResourceSystem: () => null,
+      getPowerUpSystem: () => powerUpSystem as never,
+    },
+    { getSystem: () => ctx.hostHeldActionSystem },
+    train,
   );
-  coordinator.setLifecycle(lifecycle as never);
 
-  return { coordinator, ctx, lifecycle, consume, start, getEquippedUtilityConfig, getTemporaryUtilityConfig, use };
+  return {
+    coordinator,
+    ctx,
+    lifecycle,
+    consume,
+    start,
+    getEquippedUtilityConfig,
+    getTemporaryUtilityConfig,
+    use,
+    participation,
+    persistentBase,
+    powerUpSystem,
+    train,
+    gameAudioSystem,
+  };
 }
 
 function registerLoadoutHandler(coordinator: RpcCoordinator): LoadoutHandler {
@@ -140,6 +190,39 @@ beforeEach(() => {
 });
 
 describe('radial action RPC classification', () => {
+  it('routes participation, persistent-base, pickup and train handlers through their domain ports', () => {
+    const fixture = createFixture();
+    const coordinator = fixture.coordinator as unknown as Record<string, () => void>;
+    coordinator.registerWorldParticipationRequestHandler();
+    coordinator.registerPersistentBaseRewardPlacementHandler();
+    coordinator.registerPersistentBaseMoveHandler();
+    coordinator.registerPickupPowerUpHandler();
+    coordinator.registerTrainDestroyedHandler();
+
+    const participation = bridgeMock.registerWorldParticipationRequestHandler.mock.calls.at(-1)?.[0];
+    expect(participation?.('p1', true)).toBe(true);
+    expect(fixture.participation.handleRequest).toHaveBeenCalledWith('p1', true);
+
+    const placeReward = bridgeMock.registerPersistentBaseRewardPlacementHandler.mock.calls.at(-1)?.[0];
+    const rewardRequest = { rewardId: 'reward-1' };
+    expect(placeReward?.('p1', rewardRequest)).toEqual({ ok: true });
+    expect(fixture.persistentBase.placeReward).toHaveBeenCalledWith('p1', rewardRequest);
+
+    const moveObject = bridgeMock.registerPersistentBaseMoveHandler.mock.calls.at(-1)?.[0];
+    const moveRequest = { sourceRuntimeId: 'runtime-1' };
+    expect(moveObject?.('p1', moveRequest)).toEqual({ ok: true });
+    expect(fixture.persistentBase.moveObject).toHaveBeenCalledWith('p1', moveRequest);
+
+    const pickup = bridgeMock.registerPickupPowerUpHandler.mock.calls.at(-1)?.[0];
+    expect(pickup?.(7, 'p1')).toBe(true);
+    expect(fixture.powerUpSystem.tryPickup).toHaveBeenCalledWith('p1', 7, 12, 34);
+    expect(fixture.gameAudioSystem.playSound).toHaveBeenCalledWith('sfx_pickup_powerup', 12, 34, 'p1');
+
+    bridgeMock.registerTrainDestroyedHandler.mock.calls.at(-1)?.[0]?.();
+    expect(fixture.train.markDestroyed).toHaveBeenCalledTimes(1);
+    expect(fixture.gameAudioSystem.playLocalSound).toHaveBeenCalledWith('sfx_train_explode');
+  });
+
   it('places rocket_turret without consulting or consuming the regular charged utility', () => {
     const fixture = createFixture();
     const handler = registerLoadoutHandler(fixture.coordinator);

@@ -15,7 +15,6 @@ import type { CenterHUD }           from '../../ui/CenterHUD';
 import type { AimSystem }           from '../../ui/AimSystem';
 import type { ArenaCountdownOverlay } from '../../ui/ArenaCountdownOverlay';
 import type { LocalArenaHudData }   from '../../ui/LocalArenaHudData';
-import type { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
 import type { DecoySystem }         from '../../systems/DecoySystem';
 
 interface PlayerStatusRingLike {
@@ -53,9 +52,4 @@ export interface ArenaContext {
   readonly aimSystem:         AimSystem | null;
   readonly arenaCountdown:    ArenaCountdownOverlay | null;
   readonly playerStatusRing:  PlayerStatusRingLike | null;
-
-  // ── Transitional RPC state ────────────────────────────────────────────────
-  // Nicht Teil des 11A-Runtime-Cutovers: RpcCoordinator wird erst in 11B auf seinen kleinen
-  // fachlichen Port umgestellt. Dieses Feld spiegelt keinen bereits migrierten Runtime-Owner.
-  hostHeldActionSystem: HostHeldActionSystem | null;
 }

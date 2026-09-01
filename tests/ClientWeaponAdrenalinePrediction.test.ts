@@ -43,9 +43,16 @@ type TestCoordinator = ClientUpdateCoordinator & {
 function makeCoordinator(authoritativeAdrenaline?: () => number): TestCoordinator {
   const coordinator = Object.create(ClientUpdateCoordinator.prototype) as TestCoordinator;
   coordinator.ctx = {};
-  coordinator.setWorldPlayerGameplayRuntimeResolver(() => (authoritativeAdrenaline
-    ? { systems: { resource: { getAdrenaline: () => authoritativeAdrenaline() } } } as never
-    : null));
+  coordinator.setWorldFramePort({
+    getWorldRuntime: () => null,
+    getTargetingRuntime: () => null,
+  });
+  coordinator.setPlayerFramePort({
+    getPlayerGameplayRuntime: () => (authoritativeAdrenaline
+      ? { systems: { resource: { getAdrenaline: () => authoritativeAdrenaline() } } } as never
+      : null),
+    getPowerUpRuntime: () => null,
+  });
   (coordinator as unknown as { authoritativeAdrenaline: null }).authoritativeAdrenaline = null;
   (coordinator as unknown as { pendingAdrenalineSpends: Map<unknown, unknown> }).pendingAdrenalineSpends = new Map();
   (coordinator as unknown as { localFirePredictions: unknown }).localFirePredictions = {

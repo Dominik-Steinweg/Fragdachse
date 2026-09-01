@@ -48,17 +48,12 @@ function bodyOf(source: string, start: string, end: string): string {
 
 function fakeFrameCoordinator() {
   return {
-    activityStepResolver: null as (() => unknown) | null,
-    setActivityStepResolver(resolver: () => unknown) { this.activityStepResolver = resolver; },
-    setWorldRuntimeResolver: vi.fn(),
-    setWorldTargetingRuntimeResolver: vi.fn(),
-    setWorldTrainRuntimeResolver: vi.fn(),
-    setWorldPlayerGameplayRuntimeResolver: vi.fn(),
-    setWorldCombatGameplayBindingResolver: vi.fn(),
-    setWorldPowerUpRuntimeResolver: vi.fn(),
-    setWorldSupportGameplayRuntimeResolver: vi.fn(),
-    setCoopMissionRuntimeResolver: vi.fn(),
-    setCaptureTheBeerRuntimeResolver: vi.fn(),
+    activityFramePort: null as { getStep(): unknown } | null,
+    worldFramePort: null as object | null,
+    setActivityFramePort(port: { getStep(): unknown }) { this.activityFramePort = port; },
+    setWorldFramePort(port: object) { this.worldFramePort = port; },
+    setPlayerFramePort: vi.fn(),
+    setCombatFramePort: vi.fn(),
     runHostUpdate: vi.fn(),
     runClientUpdate: vi.fn(),
   };
@@ -97,10 +92,10 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
 
   it('gibt den benannten Activity-Schritt vom Frame-Owner an beide Frame-Phasen', () => {
     const { runtime, hostUpdate, clientUpdate } = createArenaRuntime();
-    expect(hostUpdate.activityStepResolver).toBeTypeOf('function');
-    expect(clientUpdate.activityStepResolver).toBeTypeOf('function');
+    expect(hostUpdate.activityFramePort?.getStep).toBeTypeOf('function');
+    expect(clientUpdate.activityFramePort?.getStep).toBeTypeOf('function');
     // Ohne Activity gibt es keinen Schritt - und keinen Sonderpfad.
-    expect(hostUpdate.activityStepResolver?.()).toBeNull();
+    expect(hostUpdate.activityFramePort?.getStep()).toBeNull();
     expect(runtime.runHostFrame(16, true)).toBeNull();
     runtime.applyDebugBaseDamage(50);
 
@@ -109,8 +104,8 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
       hostApplyDebugBaseDamage: vi.fn(),
     };
     vi.spyOn(runtime.flow, 'getActivityStep').mockReturnValue(step as never);
-    expect(hostUpdate.activityStepResolver?.()).toBe(step);
-    expect(clientUpdate.activityStepResolver?.()).toBe(step);
+    expect(hostUpdate.activityFramePort?.getStep()).toBe(step);
+    expect(clientUpdate.activityFramePort?.getStep()).toBe(step);
     runtime.applyDebugBaseDamage(50);
     expect(step.hostApplyDebugBaseDamage).toHaveBeenCalledWith(50);
   });

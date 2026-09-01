@@ -81,6 +81,32 @@ export interface HostUpdatePerformanceMetrics {
   explosionEventCount: number;
 }
 
+/** World-owned reads needed by the host frame, scoped to this coordinator. */
+export interface HostWorldFramePort {
+  getWorldRuntime(): WorldRuntime | null;
+  getTrainRuntime(): WorldTrainRuntime | null;
+}
+
+/** World-owned player/loadout reads used by the host frame. */
+export interface HostPlayerFramePort {
+  getPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null;
+  getPowerUpRuntime(): WorldPowerUpRuntime | null;
+}
+
+/** World-owned combat and support reads used by the host simulation. */
+export interface HostCombatFramePort {
+  getTargetingRuntime(): WorldTargetingRuntime | null;
+  getCombatGameplayBinding(): WorldCombatGameplayBinding | null;
+  getSupportGameplayRuntime(): WorldSupportGameplayRuntime | null;
+}
+
+/** Activity-owned reads needed by the host frame, absent outside an Activity. */
+export interface HostActivityFramePort {
+  getStep(): CoopMissionActivityStep | null;
+  getCoopMissionRuntime(): CoopMissionRuntime | null;
+  getCaptureTheBeerRuntime(): CaptureTheBeerActivityRuntime | null;
+}
+
 function emptyHostUpdatePerformanceMetrics(): HostUpdatePerformanceMetrics {
   return {
     totalMs: 0,
@@ -129,16 +155,10 @@ export class HostUpdateCoordinator {
   private performanceMetricsEnabled = false;
   private coarsePerformanceMetricsEnabled = false;
   private playerCapabilitiesResolver: ((playerId: string) => PlayerCapabilities) | null = null;
-  private activityStepResolver: (() => CoopMissionActivityStep | null) | null = null;
-  private worldRuntimeResolver: (() => WorldRuntime | null) | null = null;
-  private targetingRuntimeResolver: (() => WorldTargetingRuntime | null) | null = null;
-  private trainRuntimeResolver: (() => WorldTrainRuntime | null) | null = null;
-  private playerGameplayRuntimeResolver: (() => WorldPlayerGameplayRuntime | null) | null = null;
-  private combatGameplayBindingResolver: (() => WorldCombatGameplayBinding | null) | null = null;
-  private powerUpRuntimeResolver: (() => WorldPowerUpRuntime | null) | null = null;
-  private supportGameplayRuntimeResolver: (() => WorldSupportGameplayRuntime | null) | null = null;
-  private coopMissionRuntimeResolver: (() => CoopMissionRuntime | null) | null = null;
-  private captureTheBeerRuntimeResolver: (() => CaptureTheBeerActivityRuntime | null) | null = null;
+  private worldFramePort: HostWorldFramePort | null = null;
+  private playerFramePort: HostPlayerFramePort | null = null;
+  private combatFramePort: HostCombatFramePort | null = null;
+  private activityFramePort: HostActivityFramePort | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -171,39 +191,33 @@ export class HostUpdateCoordinator {
    * Der Host-Tick kennt den Schritt, nicht die Systeme dahinter: Ohne laufende Activity gibt es
    * ihn schlicht nicht, und eine neue Coop-Mechanik erzeugt hier keinen neuen Zweig.
    */
-  setActivityStepResolver(resolver: () => CoopMissionActivityStep | null): void {
-    this.activityStepResolver = resolver;
+  setActivityFramePort(port: HostActivityFramePort): void {
+    this.activityFramePort = port;
   }
 
-  setWorldRuntimeResolver(resolver: () => WorldRuntime | null): void { this.worldRuntimeResolver = resolver; }
-  setWorldTargetingRuntimeResolver(resolver: () => WorldTargetingRuntime | null): void { this.targetingRuntimeResolver = resolver; }
-  setWorldTrainRuntimeResolver(resolver: () => WorldTrainRuntime | null): void { this.trainRuntimeResolver = resolver; }
-  setWorldPlayerGameplayRuntimeResolver(resolver: () => WorldPlayerGameplayRuntime | null): void { this.playerGameplayRuntimeResolver = resolver; }
-  setWorldCombatGameplayBindingResolver(resolver: () => WorldCombatGameplayBinding | null): void { this.combatGameplayBindingResolver = resolver; }
-  setWorldPowerUpRuntimeResolver(resolver: () => WorldPowerUpRuntime | null): void { this.powerUpRuntimeResolver = resolver; }
-  setWorldSupportGameplayRuntimeResolver(resolver: () => WorldSupportGameplayRuntime | null): void { this.supportGameplayRuntimeResolver = resolver; }
-  setCoopMissionRuntimeResolver(resolver: () => CoopMissionRuntime | null): void { this.coopMissionRuntimeResolver = resolver; }
-  setCaptureTheBeerRuntimeResolver(resolver: () => CaptureTheBeerActivityRuntime | null): void { this.captureTheBeerRuntimeResolver = resolver; }
+  setWorldFramePort(port: HostWorldFramePort): void { this.worldFramePort = port; }
+  setPlayerFramePort(port: HostPlayerFramePort): void { this.playerFramePort = port; }
+  setCombatFramePort(port: HostCombatFramePort): void { this.combatFramePort = port; }
 
-  private get worldRuntime(): WorldRuntime | null { return this.worldRuntimeResolver?.() ?? null; }
+  private get worldRuntime(): WorldRuntime | null { return this.worldFramePort?.getWorldRuntime() ?? null; }
   private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
   private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
-  private get targetingSystems() { return this.targetingRuntimeResolver?.()?.systems ?? null; }
-  private get playerSystems() { return this.playerGameplayRuntimeResolver?.()?.systems ?? null; }
-  private get combatSystems() { return this.combatGameplayBindingResolver?.()?.systems ?? null; }
-  private get supportSystems() { return this.supportGameplayRuntimeResolver?.()?.systems ?? null; }
-  private get powerUpSystem() { return this.powerUpRuntimeResolver?.()?.system ?? null; }
-  private get trainManager() { return this.trainRuntimeResolver?.()?.getCurrentTrain() ?? null; }
-  private get coopMissionRuntime() { return this.coopMissionRuntimeResolver?.() ?? null; }
+  private get targetingSystems() { return this.combatFramePort?.getTargetingRuntime()?.systems ?? null; }
+  private get playerSystems() { return this.playerFramePort?.getPlayerGameplayRuntime()?.systems ?? null; }
+  private get combatSystems() { return this.combatFramePort?.getCombatGameplayBinding()?.systems ?? null; }
+  private get supportSystems() { return this.combatFramePort?.getSupportGameplayRuntime()?.systems ?? null; }
+  private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
+  private get trainManager() { return this.worldFramePort?.getTrainRuntime()?.getCurrentTrain() ?? null; }
+  private get coopMissionRuntime() { return this.activityFramePort?.getCoopMissionRuntime() ?? null; }
   private get enemyManager() { return this.coopMissionRuntime?.enemyManager ?? null; }
-  private get captureTheBeerSystem() { return this.captureTheBeerRuntimeResolver?.()?.system ?? null; }
+  private get captureTheBeerSystem() { return this.activityFramePort?.getCaptureTheBeerRuntime()?.system ?? null; }
 
   private activityStep(): CoopMissionActivityStep | null {
-    return this.activityStepResolver?.() ?? null;
+    return this.activityFramePort?.getStep() ?? null;
   }
 
   /**
@@ -301,7 +315,7 @@ export class HostUpdateCoordinator {
     const now = Date.now();
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
-    const heldActions = this.ctx.hostHeldActionSystem;
+    const heldActions = this.playerSystems?.heldAction;
     heldActions?.clearExpired(now);
     if (countdownActive) {
       heldActions?.reset();

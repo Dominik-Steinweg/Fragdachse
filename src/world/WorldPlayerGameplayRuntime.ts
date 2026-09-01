@@ -24,6 +24,7 @@ import { SlimeTrailSystem } from '../systems/SlimeTrailSystem';
 import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
+import { HostHeldActionSystem } from '../systems/HostHeldActionSystem';
 import type { FireChunkTarget, GroundFireVisualStyle, PlayerInput } from '../types';
 import type { NegevKillstreakExplosionEvent } from '../loadout/LoadoutManager';
 import {
@@ -59,6 +60,7 @@ export interface WorldPlayerGameplayNetworkPort {
 }
 
 export interface WorldPlayerGameplaySystems {
+  readonly heldAction: HostHeldActionSystem;
   readonly playerModifier: CoopDefensePlayerModifierSystem;
   readonly itemRuntime: CoopDefenseItemRuntimeSystem;
   readonly resource: ResourceSystem;
@@ -101,6 +103,7 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
   private destroyed = false;
 
   constructor(private readonly options: WorldPlayerGameplayRuntimeOptions) {
+    const heldAction = new HostHeldActionSystem();
     const playerModifier = new CoopDefensePlayerModifierSystem();
     const itemRuntime = new CoopDefenseItemRuntimeSystem({
       getAffixValue: (playerId, affixId) => playerModifier.getItemAffixValue(playerId, affixId),
@@ -201,6 +204,7 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
     );
 
     this.systems = {
+      heldAction,
       playerModifier,
       itemRuntime,
       resource,
@@ -257,6 +261,7 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
     systems.loadout.setNukeStrikeHandler(null);
     systems.loadout.setStinkCloudSystem(null);
     systems.loadout.resetAllUltimateStates();
+    systems.heldAction.reset();
     systems.guardianSpirit?.clear();
     systems.repairDrone?.clear();
     systems.slimeTrail?.clear();

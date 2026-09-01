@@ -148,9 +148,10 @@ describe('arena round lifecycle contract', () => {
 
   it('verdrahtet Frame-Consumer mit den tatsaechlichen Ownern', () => {
     const runtime = read(RUNTIME_PATH);
-    expect(runtime).toContain('setWorldRuntimeResolver(() => this.flow.getWorldRuntime())');
-    expect(runtime).toContain('setWorldPlayerGameplayRuntimeResolver(');
-    expect(runtime).toContain('setCoopMissionRuntimeResolver(() => this.flow.getCoopMissionRuntime())');
+    expect(runtime).toContain('setWorldFramePort({');
+    expect(runtime).toContain('getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime()');
+    expect(runtime).toContain('setActivityFramePort({');
+    expect(runtime).toContain('getCoopMissionRuntime: () => this.flow.getCoopMissionRuntime()');
     expect(runtime).not.toContain('RuntimeContext');
     expect(runtime).not.toContain('ArenaServices');
   });

@@ -93,6 +93,24 @@ export interface ClientUpdatePerformanceMetrics {
   newSnapshot: boolean;
 }
 
+/** World-owned reads needed by the client frame, scoped to this coordinator. */
+export interface ClientWorldFramePort {
+  getWorldRuntime(): WorldRuntime | null;
+  getTargetingRuntime(): WorldTargetingRuntime | null;
+}
+
+/** World-owned player/loadout reads used by the client frame. */
+export interface ClientPlayerFramePort {
+  getPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null;
+  getPowerUpRuntime(): WorldPowerUpRuntime | null;
+}
+
+/** Activity-owned reads needed by the client frame, absent outside an Activity. */
+export interface ClientActivityFramePort {
+  getStep(): CoopMissionActivityStep | null;
+  getCoopMissionRuntime(): CoopMissionRuntime | null;
+}
+
 /**
  * Runs every frame on non-host clients.
  *
@@ -152,12 +170,9 @@ export class ClientUpdateCoordinator {
     ((profile: PlayerProfile, spawn: { readonly x: number; readonly y: number }) => boolean) | null = null;
   private detachPlayerFromWorld: ((playerId: string) => void) | null = null;
   private getWorldPresentation: (() => WorldPresentationRequirement) | null = null;
-  private activityStepResolver: (() => CoopMissionActivityStep | null) | null = null;
-  private worldRuntimeResolver: (() => WorldRuntime | null) | null = null;
-  private targetingRuntimeResolver: (() => WorldTargetingRuntime | null) | null = null;
-  private playerGameplayRuntimeResolver: (() => WorldPlayerGameplayRuntime | null) | null = null;
-  private powerUpRuntimeResolver: (() => WorldPowerUpRuntime | null) | null = null;
-  private coopMissionRuntimeResolver: (() => CoopMissionRuntime | null) | null = null;
+  private worldFramePort: ClientWorldFramePort | null = null;
+  private playerFramePort: ClientPlayerFramePort | null = null;
+  private activityFramePort: ClientActivityFramePort | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -196,26 +211,23 @@ export class ClientUpdateCoordinator {
    * Der Client-Tick kennt den Schritt, nicht die Systeme dahinter: Was eine Mission lokal
    * darstellt, entscheidet ihre eigene Runtime.
    */
-  setActivityStepResolver(resolver: () => CoopMissionActivityStep | null): void {
-    this.activityStepResolver = resolver;
+  setActivityFramePort(port: ClientActivityFramePort): void {
+    this.activityFramePort = port;
   }
 
-  setWorldRuntimeResolver(resolver: () => WorldRuntime | null): void { this.worldRuntimeResolver = resolver; }
-  setWorldTargetingRuntimeResolver(resolver: () => WorldTargetingRuntime | null): void { this.targetingRuntimeResolver = resolver; }
-  setWorldPlayerGameplayRuntimeResolver(resolver: () => WorldPlayerGameplayRuntime | null): void { this.playerGameplayRuntimeResolver = resolver; }
-  setWorldPowerUpRuntimeResolver(resolver: () => WorldPowerUpRuntime | null): void { this.powerUpRuntimeResolver = resolver; }
-  setCoopMissionRuntimeResolver(resolver: () => CoopMissionRuntime | null): void { this.coopMissionRuntimeResolver = resolver; }
+  setWorldFramePort(port: ClientWorldFramePort): void { this.worldFramePort = port; }
+  setPlayerFramePort(port: ClientPlayerFramePort): void { this.playerFramePort = port; }
 
-  private get worldRuntime(): WorldRuntime | null { return this.worldRuntimeResolver?.() ?? null; }
+  private get worldRuntime(): WorldRuntime | null { return this.worldFramePort?.getWorldRuntime() ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
   private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
   private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
-  private get targetingSystems() { return this.targetingRuntimeResolver?.()?.systems ?? null; }
-  private get playerSystems() { return this.playerGameplayRuntimeResolver?.()?.systems ?? null; }
-  private get powerUpSystem() { return this.powerUpRuntimeResolver?.()?.system ?? null; }
-  private get coopMissionRuntime() { return this.coopMissionRuntimeResolver?.() ?? null; }
+  private get targetingSystems() { return this.worldFramePort?.getTargetingRuntime()?.systems ?? null; }
+  private get playerSystems() { return this.playerFramePort?.getPlayerGameplayRuntime()?.systems ?? null; }
+  private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
+  private get coopMissionRuntime() { return this.activityFramePort?.getCoopMissionRuntime() ?? null; }
   private get enemyManager() { return this.coopMissionRuntime?.enemyManager ?? null; }
 
   setPerformanceMetricsEnabled(enabled: boolean): void {
@@ -303,7 +315,7 @@ export class ClientUpdateCoordinator {
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     // Activity: Was diese Mission lokal darstellt, folgt ihrer eigenen Reihenfolge.
-    this.activityStepResolver?.()?.clientPresentationStep();
+    this.activityFramePort?.getStep()?.clientPresentationStep();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.baseManager?.syncDormantStates();

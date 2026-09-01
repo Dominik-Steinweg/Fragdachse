@@ -80,24 +80,36 @@ export class ArenaRuntime {
       input.roomQualityMonitor,
       this.persistentBase,
     );
-    // Die Frame-Phasen bekommen den benannten Activity-Schritt vom Frame-Owner - nicht die Scene
-    // und nicht ein Missionssystem.
-    this.hostUpdate.setActivityStepResolver(() => this.flow.getActivityStep());
-    this.clientUpdate.setActivityStepResolver(() => this.flow.getActivityStep());
-    this.hostUpdate.setWorldRuntimeResolver(() => this.flow.getWorldRuntime());
-    this.hostUpdate.setWorldTargetingRuntimeResolver(() => this.flow.getWorldTargetingRuntime());
-    this.hostUpdate.setWorldTrainRuntimeResolver(() => this.flow.getWorldTrainRuntime());
-    this.hostUpdate.setWorldPlayerGameplayRuntimeResolver(() => this.flow.getWorldPlayerGameplayRuntime());
-    this.hostUpdate.setWorldCombatGameplayBindingResolver(() => this.flow.getWorldCombatGameplayBinding());
-    this.hostUpdate.setWorldPowerUpRuntimeResolver(() => this.flow.getWorldPowerUpRuntime());
-    this.hostUpdate.setWorldSupportGameplayRuntimeResolver(() => this.flow.getWorldSupportGameplayRuntime());
-    this.hostUpdate.setCoopMissionRuntimeResolver(() => this.flow.getCoopMissionRuntime());
-    this.hostUpdate.setCaptureTheBeerRuntimeResolver(() => this.flow.getCaptureTheBeerActivityRuntime());
-    this.clientUpdate.setWorldRuntimeResolver(() => this.flow.getWorldRuntime());
-    this.clientUpdate.setWorldTargetingRuntimeResolver(() => this.flow.getWorldTargetingRuntime());
-    this.clientUpdate.setWorldPlayerGameplayRuntimeResolver(() => this.flow.getWorldPlayerGameplayRuntime());
-    this.clientUpdate.setWorldPowerUpRuntimeResolver(() => this.flow.getWorldPowerUpRuntime());
-    this.clientUpdate.setCoopMissionRuntimeResolver(() => this.flow.getCoopMissionRuntime());
+    this.hostUpdate.setWorldFramePort({
+      getWorldRuntime: () => this.flow.getWorldRuntime(),
+      getTrainRuntime: () => this.flow.getWorldTrainRuntime(),
+    });
+    this.hostUpdate.setPlayerFramePort({
+      getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
+      getPowerUpRuntime: () => this.flow.getWorldPowerUpRuntime(),
+    });
+    this.hostUpdate.setCombatFramePort({
+      getTargetingRuntime: () => this.flow.getWorldTargetingRuntime(),
+      getCombatGameplayBinding: () => this.flow.getWorldCombatGameplayBinding(),
+      getSupportGameplayRuntime: () => this.flow.getWorldSupportGameplayRuntime(),
+    });
+    this.hostUpdate.setActivityFramePort({
+      getStep: () => this.flow.getActivityStep(),
+      getCoopMissionRuntime: () => this.flow.getCoopMissionRuntime(),
+      getCaptureTheBeerRuntime: () => this.flow.getCaptureTheBeerActivityRuntime(),
+    });
+    this.clientUpdate.setWorldFramePort({
+      getWorldRuntime: () => this.flow.getWorldRuntime(),
+      getTargetingRuntime: () => this.flow.getWorldTargetingRuntime(),
+    });
+    this.clientUpdate.setPlayerFramePort({
+      getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
+      getPowerUpRuntime: () => this.flow.getWorldPowerUpRuntime(),
+    });
+    this.clientUpdate.setActivityFramePort({
+      getStep: () => this.flow.getActivityStep(),
+      getCoopMissionRuntime: () => this.flow.getCoopMissionRuntime(),
+    });
   }
 
   /**

@@ -1,16 +1,31 @@
 import type Phaser from 'phaser';
 import { bridge }            from '../../network/bridge';
-import type { ArenaContext }        from './ArenaContext';
 import type { RendererBundle }      from './RendererBundle';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
-import type { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
-import type { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import type { LeftSidePanel }       from '../../ui/LeftSidePanel';
+import type { RightSidePanel } from '../../ui/RightSidePanel';
+import type { CenterHUD } from '../../ui/CenterHUD';
+import type { PlayerManager } from '../../entities/PlayerManager';
+import type { HostPhysicsSystem } from '../../systems/HostPhysicsSystem';
+import type { CombatSystem } from '../../systems/CombatSystem';
+import type { DecoySystem } from '../../systems/DecoySystem';
+import type { EffectSystem } from '../../effects/EffectSystem';
+import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
+import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import type { ExplosionVisualStyle, LoadoutUseParams, LoadoutUseResult } from '../../types';
 import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
-import type { HeldActionIdentity } from '../../systems/HostHeldActionSystem';
+import type { HeldActionIdentity, HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
+import type {
+  ConstructionRpcPort,
+  HeldActionRpcPort,
+  PersistentBaseRpcPort,
+  PlayerCapabilitiesRpcPort,
+  PlayerLoadoutRpcPort,
+  TrainRpcPort,
+  WorldParticipationRpcPort,
+} from './ArenaRpcPorts';
 
 // SHOT_AUDIO_REMOTE_CLOSE_VOLUME (0.58) caps all spatial sounds at ~58 % volume even at
 // distance 0.  Explosions are world events, not remote-player gunshots, so we compensate
@@ -54,7 +69,7 @@ function isChargeableUtilityConfig(config: UtilityConfig | undefined): config is
 
 /** Consumes the host-held action only for a utility that actually requires one. */
 function validateHostUtilityCharge(
-  ctx: ArenaContext,
+  heldActionSystem: HostHeldActionSystem | null,
   senderId: string,
   utility: UtilityConfig | undefined,
   params?: LoadoutUseParams,
@@ -63,7 +78,7 @@ function validateHostUtilityCharge(
 
   const identity = getHeldActionIdentity(params);
   const held = identity
-    ? ctx.hostHeldActionSystem?.consume(
+    ? heldActionSystem?.consume(
       senderId,
       params?.heldActionId,
       utility.activation.type,
@@ -71,7 +86,7 @@ function validateHostUtilityCharge(
       Date.now(),
       identity,
     )
-    : ctx.hostHeldActionSystem?.consume(
+    : heldActionSystem?.consume(
       senderId,
       params?.heldActionId,
       utility.activation.type,
@@ -101,37 +116,35 @@ function getHeldActionIdentity(params?: LoadoutUseParams): HeldActionIdentity | 
 /**
  * Registers all bridge RPC handlers in one place.
  *
- * Handlers that need the lifecycle coordinator (e.g., train-destroyed) receive it
- * via setLifecycle() after construction to avoid circular dependencies between
- * RpcCoordinator and ArenaLifecycleCoordinator.
+ * Runtime- und Domain-Zugriffe laufen ueber kleine fachliche Ports; die Bridge bleibt als
+ * expliziter Netzwerkadapter an dieser Grenze.
  */
 export class RpcCoordinator {
-  private lifecycle: ArenaLifecycleCoordinator | null = null;
-  /** Der raumlanglebige Persistent-Base-Owner; er beantwortet seine eigenen RPCs. */
-  private persistentBase: ArenaPersistentBaseSession | null = null;
-
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly ctx: ArenaContext,
     private readonly renderers: RendererBundle,
     private readonly clientUpdate: ClientUpdateCoordinator,
     private readonly leftPanel: LeftSidePanel,
+    private readonly rightPanel: RightSidePanel,
+    private readonly centerHUD: CenterHUD,
+    private readonly playerManager: PlayerManager,
+    private readonly hostPhysics: HostPhysicsSystem,
+    private readonly combatSystem: CombatSystem,
+    private readonly decoySystem: DecoySystem,
+    private readonly effectSystem: EffectSystem,
+    private readonly visualFeedback: VisualFeedbackDirector,
+    private readonly gameAudioSystem: GameAudioSystem,
+    private readonly participation: WorldParticipationRpcPort,
+    private readonly capabilities: PlayerCapabilitiesRpcPort,
+    private readonly construction: ConstructionRpcPort,
+    private readonly persistentBase: PersistentBaseRpcPort,
+    private readonly playerLoadout: PlayerLoadoutRpcPort,
+    private readonly heldActions: HeldActionRpcPort,
+    private readonly train: TrainRpcPort,
   ) {}
 
-  setLifecycle(lifecycle: ArenaLifecycleCoordinator): void {
-    this.lifecycle = lifecycle;
-  }
-
-  setPersistentBaseSession(session: ArenaPersistentBaseSession): void {
-    this.persistentBase = session;
-  }
-
-  private get playerSystems() {
-    return this.lifecycle?.getWorldPlayerGameplayRuntime()?.systems ?? null;
-  }
-
   private get powerUpSystem() {
-    return this.lifecycle?.getWorldPowerUpRuntime()?.system ?? null;
+    return this.playerLoadout.getPowerUpSystem();
   }
 
   registerAll(): void {
@@ -168,15 +181,13 @@ export class RpcCoordinator {
 
   private registerPersistentBaseRewardPlacementHandler(): void {
     bridge.registerPersistentBaseRewardPlacementHandler((playerId, request) => (
-      this.persistentBase?.placePersistentBaseReward(playerId, request)
-      ?? { ok: false, reason: 'blocked' }
+      this.persistentBase.placeReward(playerId, request)
     ));
   }
 
   private registerPersistentBaseMoveHandler(): void {
     bridge.registerPersistentBaseMoveHandler((playerId, request) => (
-      this.persistentBase?.movePersistentBaseObject(playerId, request)
-      ?? { ok: false, reason: 'blocked' }
+      this.persistentBase.moveObject(playerId, request)
     ));
   }
 
@@ -186,35 +197,35 @@ export class RpcCoordinator {
    */
   private registerWorldParticipationRequestHandler(): void {
     bridge.registerWorldParticipationRequestHandler((playerId, join) => {
-      return this.lifecycle?.hostHandleWorldParticipationRequest(playerId, join) === true;
+      return this.participation.handleRequest(playerId, join);
     });
   }
 
   private registerDashHandler(): void {
     bridge.registerDashHandler((playerId, dx, dy) => {
       if (!bridge.isHost()) return;
-      if (!this.lifecycle?.getPlayerCapabilities(playerId).canMove) return;
+      if (!this.capabilities.get(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.ctx.hostPhysics.handleDashRPC(playerId, dx, dy);
+      this.hostPhysics.handleDashRPC(playerId, dx, dy);
     });
   }
 
   private registerBurrowRpcHandler(): void {
     bridge.registerBurrowHandler((playerId, wantsBurrowed) => {
       if (!bridge.isHost()) return;
-      if (!this.lifecycle?.getPlayerCapabilities(playerId).canMove) return;
+      if (!this.capabilities.get(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.playerSystems?.burrow?.handleBurrowRequest(playerId, wantsBurrowed);
+      this.playerLoadout.getBurrowSystem()?.handleBurrowRequest(playerId, wantsBurrowed);
     });
   }
 
   private registerDecoyStealthBreakHandler(): void {
     bridge.registerDecoyStealthBreakHandler((playerId) => {
       if (!bridge.isHost()) return;
-      if (!this.lifecycle?.getPlayerCapabilities(playerId).canUseCombat) return;
-      const player = this.ctx.playerManager.getPlayer(playerId);
-      if (player) this.ctx.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
-      this.ctx.decoySystem.breakStealth(playerId, Date.now());
+      if (!this.capabilities.get(playerId).canUseCombat) return;
+      const player = this.playerManager.getPlayer(playerId);
+      if (player) this.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
+      this.decoySystem.breakStealth(playerId, Date.now());
     });
   }
 
@@ -229,16 +240,16 @@ export class RpcCoordinator {
       temporaryUtilityInstanceId,
     ) => {
       if (!bridge.isHost()) return false;
-      const system = this.ctx.hostHeldActionSystem;
+      const system = this.heldActions.getSystem();
       if (!system) return false;
       if (operation === 'cancel') {
         system.cancel(playerId, actionId);
         return true;
       }
-      if (!kind || !this.lifecycle?.getPlayerCapabilities(playerId).canInteract || bridge.isArenaCountdownActive()
-        || !this.ctx.combatSystem.isAlive(playerId)
-        || this.playerSystems?.burrow?.isBurrowed(playerId)
-        || this.playerSystems?.burrow?.isStunned(playerId)) return false;
+      if (!kind || !this.capabilities.get(playerId).canInteract || bridge.isArenaCountdownActive()
+        || !this.combatSystem.isAlive(playerId)
+        || this.playerLoadout.getBurrowSystem()?.isBurrowed(playerId)
+        || this.playerLoadout.getBurrowSystem()?.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
         if (toolRef || temporaryUtilityInstanceId) return false;
@@ -259,9 +270,9 @@ export class RpcCoordinator {
           bridge.getActiveGameMode(),
         );
       } else if (temporaryUtilityInstanceId) {
-        utility = this.playerSystems?.loadout?.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
+        utility = this.playerLoadout.getLoadoutManager()?.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
       } else {
-        utility = this.playerSystems?.loadout?.getEquippedUtilityConfig(playerId);
+        utility = this.playerLoadout.getLoadoutManager()?.getEquippedUtilityConfig(playerId);
       }
       if (!utility || utility.activation.type !== kind) return false;
       const identity = toolRef
@@ -278,7 +289,7 @@ export class RpcCoordinator {
   private registerLoadoutUseHandler(): void {
     bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
-      const capabilities = this.lifecycle?.getPlayerCapabilities(senderId);
+      const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
@@ -298,7 +309,7 @@ export class RpcCoordinator {
           || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
-        const held = this.ctx.hostHeldActionSystem?.consume(
+        const held = this.heldActions.getSystem()?.consume(
           senderId,
           params.heldActionId,
           'global_dismantle',
@@ -308,9 +319,8 @@ export class RpcCoordinator {
         if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
         const activityRevision = params?.activityRevision;
         return (activityRevision === undefined
-          ? this.lifecycle?.dismantleAllOwnedConstructions(senderId)
-          : this.lifecycle?.dismantleAllOwnedConstructions(senderId, activityRevision))
-          ?? { ok: false, reason: 'blocked' };
+          ? this.construction.dismantleAllOwnedConstructions(senderId)
+          : this.construction.dismantleAllOwnedConstructions(senderId, activityRevision));
       }
       // Rueckbau belegt keinen Ausruestungsplatz und traegt deshalb keinen toolRef.
       if (params?.dismantle) {
@@ -320,9 +330,8 @@ export class RpcCoordinator {
         }
         const activityRevision = params?.activityRevision;
         return (activityRevision === undefined
-          ? this.lifecycle?.dismantleConstruction(senderId, targetX, targetY)
-          : this.lifecycle?.dismantleConstruction(senderId, targetX, targetY, activityRevision))
-          ?? { ok: false, reason: 'blocked' };
+          ? this.construction.dismantleConstruction(senderId, targetX, targetY)
+          : this.construction.dismantleConstruction(senderId, targetX, targetY, activityRevision));
       }
       if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
         && slot === 'utility' && !params?.toolRef && !params?.temporaryUtilityInstanceId) {
@@ -339,19 +348,19 @@ export class RpcCoordinator {
           }
           const activityRevision = params.activityRevision;
           return activityRevision === undefined
-            ? this.lifecycle?.placeInspectorConstruction(
+            ? this.construction.placeInspectorConstruction(
               senderId,
               params.constructionId,
               targetX,
               targetY,
-            ) ?? { ok: false, reason: 'blocked' }
-            : this.lifecycle?.placeInspectorConstruction(
+            )
+            : this.construction.placeInspectorConstruction(
               senderId,
               params.constructionId,
               targetX,
               targetY,
               activityRevision,
-            ) ?? { ok: false, reason: 'blocked' };
+            );
         }
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
         if (currentLoadout?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };
@@ -361,9 +370,9 @@ export class RpcCoordinator {
           bridge.getActiveGameMode(),
         );
         if (!inspectorUtility) return { ok: false, reason: 'invalid' };
-        const charge = validateHostUtilityCharge(this.ctx, senderId, inspectorUtility, params);
+        const charge = validateHostUtilityCharge(this.heldActions.getSystem(), senderId, inspectorUtility, params);
         if (!charge.ok) return charge;
-        return this.lifecycle?.useInspectorUtility(
+        return this.construction.useInspectorUtility(
           senderId,
           params.toolRef,
           angle,
@@ -371,27 +380,27 @@ export class RpcCoordinator {
           targetY,
           Date.now(),
           charge.authoritativeParams,
-        ) ?? { ok: false, reason: 'blocked' };
+        );
       }
       if (slot === 'utility') {
         const utility = params?.temporaryUtilityInstanceId
-          ? this.playerSystems?.loadout?.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
-          : this.playerSystems?.loadout?.getEquippedUtilityConfig(senderId);
+          ? this.playerLoadout.getLoadoutManager()?.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
+          : this.playerLoadout.getLoadoutManager()?.getEquippedUtilityConfig(senderId);
         if (params?.temporaryUtilityInstanceId && !utility) {
           return { ok: false, reason: 'invalid' };
         }
         const isTranslocatorRecall = utility?.type === 'translocator'
-          && this.playerSystems?.translocator?.getActivePuckId(senderId) !== undefined;
+          && this.playerLoadout.getTranslocatorSystem()?.getActivePuckId(senderId) !== undefined;
         if (isTranslocatorRecall) {
-          this.ctx.hostHeldActionSystem?.clearPlayer(senderId);
+          this.heldActions.getSystem()?.clearPlayer(senderId);
         } else {
-          const charge = validateHostUtilityCharge(this.ctx, senderId, utility, params);
+          const charge = validateHostUtilityCharge(this.heldActions.getSystem(), senderId, utility, params);
           if (!charge.ok) return charge;
           authoritativeParams = charge.authoritativeParams;
         }
       }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
-      const result = this.playerSystems?.loadout?.use(
+      const result = this.playerLoadout.getLoadoutManager()?.use(
         slot,
         senderId,
         angle,
@@ -407,8 +416,8 @@ export class RpcCoordinator {
       return {
         ...result,
         worldRevision: bridge.getCurrentWorldRevision() ?? undefined,
-        authoritativeAdrenaline: this.playerSystems?.resource?.getAdrenaline(senderId),
-        adrenalineRevision: this.playerSystems?.resource?.getAdrenalineRevision(senderId),
+        authoritativeAdrenaline: this.playerLoadout.getResourceSystem()?.getAdrenaline(senderId),
+        adrenalineRevision: this.playerLoadout.getResourceSystem()?.getAdrenalineRevision(senderId),
       };
     });
   }
@@ -417,8 +426,8 @@ export class RpcCoordinator {
     bridge.registerCaptureTheBeerFxHandler((event) => {
       this.renderers.beer.playFx(event);
       if (event.kind === 'score') {
-        this.ctx.centerHUD.showBeerCaptured(event.scorerName, event.scorerColor);
-        this.ctx.gameAudioSystem.playLocalSound('sfx_ctb_score');
+        this.centerHUD.showBeerCaptured(event.scorerName, event.scorerColor);
+        this.gameAudioSystem.playLocalSound('sfx_ctb_score');
       }
     });
   }
@@ -426,15 +435,15 @@ export class RpcCoordinator {
   private registerCoopDefenseCarryDeliveredFxHandler(): void {
     bridge.registerCoopDefenseCarryDeliveredFxHandler((x, y) => {
       this.renderers.beer.playCoopDefenseCarryDeliveredFx(x, y);
-      this.ctx.gameAudioSystem.playLocalSound('sfx_ctb_score');
+      this.gameAudioSystem.playLocalSound('sfx_ctb_score');
     });
   }
 
   private registerExplosionEffectHandler(): void {
     bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle) => {
-      this.ctx.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
+      this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
       const audio = resolveExplosionAudio(visualStyle);
-      if (audio) this.ctx.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
+      if (audio) this.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
       // Die Nuke pulst nicht von hier: ihre Detonation ist Phase B der Choreografie, die das
       // Effektsystem startet. Ein Puls daneben liefe doppelt.
     });
@@ -486,7 +495,7 @@ export class RpcCoordinator {
 
   private registerGrenadeCountdownHandler(): void {
     bridge.registerGrenadeCountdownHandler((x, y, value) => {
-      this.ctx.effectSystem.playCountdownText(x, y, value);
+      this.effectSystem.playCountdownText(x, y, value);
     });
   }
 
@@ -498,7 +507,7 @@ export class RpcCoordinator {
       // den XP-Zuwachs als eigene Belohnung wahrnimmt.
       if (bridge.getGamePhase() === 'ARENA'
         && !bridge.canPlayerReceiveRoundRewards(bridge.getLocalPlayerId())) return;
-      this.ctx.effectSystem.playCoopDefenseXpText(x, y, xp);
+      this.effectSystem.playCoopDefenseXpText(x, y, xp);
     });
   }
 
@@ -514,7 +523,7 @@ export class RpcCoordinator {
       } else if (visualPreset !== 'asmd_primary') {
         // Compatibility fallback for batches emitted by older peers without a projectile ID.
         for (const line of lines) {
-          this.ctx.effectSystem.playHitscanTracer(line.sx, line.sy, line.ex, line.ey, color, 2);
+          this.effectSystem.playHitscanTracer(line.sx, line.sy, line.ex, line.ey, color, 2);
         }
       }
     });
@@ -522,13 +531,13 @@ export class RpcCoordinator {
 
   private registerBurrowVisualHandler(): void {
     bridge.registerBurrowVisualHandler((playerId, phase) => {
-      const entity = this.ctx.playerManager.getPlayer(playerId);
+      const entity = this.playerManager.getPlayer(playerId);
       if (!entity) return;
       if (phase === 'windup' || phase === 'recovery') {
-        this.ctx.effectSystem.playBurrowPhaseEffect(entity.x, entity.y, phase);
+        this.effectSystem.playBurrowPhaseEffect(entity.x, entity.y, phase);
       }
       entity.setBurrowPhase(phase, true);
-      if (entity.displayObject) this.ctx.effectSystem.syncBurrowState(playerId, phase, entity.displayObject);
+      if (entity.displayObject) this.effectSystem.syncBurrowState(playerId, phase, entity.displayObject);
       // Keep client coordinator in sync so applyBurrowVisual() doesn't re-trigger
       this.clientUpdate.setBurrowPhase(playerId, phase);
     });
@@ -536,13 +545,13 @@ export class RpcCoordinator {
 
   private registerShockwaveEffectHandler(): void {
     bridge.registerShockwaveEffectHandler((x, y) => {
-      this.ctx.effectSystem.playShockwaveEffect(x, y);
+      this.effectSystem.playShockwaveEffect(x, y);
     });
   }
 
   private registerTrainBurrowSparksHandler(): void {
     bridge.registerTrainBurrowSparksHandler((x, y) => {
-      this.ctx.effectSystem.playTrainBurrowSparks(x, y);
+      this.effectSystem.playTrainBurrowSparks(x, y);
     });
   }
 
@@ -551,7 +560,7 @@ export class RpcCoordinator {
       if (shooterId !== bridge.getLocalPlayerId()) return;
       // Rückstoß bleibt ungerichtet: die RPC trägt nur Dauer und Stärke, keine Schussrichtung.
       // `legacyShakeAmplitudePx` hält die aus der Waffenkonfiguration stammenden Werte gültig.
-      this.ctx.visualFeedback.camera.request({
+      this.visualFeedback.camera.request({
         channel: 'impact',
         amplitudePx: legacyShakeAmplitudePx(intensity),
         durationMs: duration,
@@ -565,11 +574,11 @@ export class RpcCoordinator {
     bridge.registerTranslocatorFlashHandler((x, y, color, type, subjectId) => {
       this.renderers.translocatorTeleport?.playFlash(x, y, color, type);
       if (type === 'end') {
-        this.ctx.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);
+        this.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);
         // Globale Bildreaktion nur beim eigenen Sprung – ein fremder Teleport am anderen
         // Arenaende darf das eigene Bild nicht umfärben.
         if (subjectId === bridge.getLocalPlayerId()) {
-          this.ctx.visualFeedback.pulsePostFx('teleport');
+          this.visualFeedback.pulsePostFx('teleport');
         }
       }
     });
@@ -597,7 +606,7 @@ export class RpcCoordinator {
 
   private registerKillEventHandler(): void {
     bridge.registerKillEventHandler(event => {
-      this.ctx.rightPanel.addKillFeedEntry(
+      this.rightPanel.addKillFeedEntry(
         event.killerName, event.killerColor,
         event.sourceId,
         event.victimName, event.victimColor,
@@ -605,31 +614,31 @@ export class RpcCoordinator {
 
       const localId = bridge.getLocalPlayerId();
       if (event.victimId === localId) {
-        this.ctx.centerHUD.showFraggedBy(event.killerName, event.sourceId, event.killerColor);
+        this.centerHUD.showFraggedBy(event.killerName, event.sourceId, event.killerColor);
         return;
       }
       if (event.killerId === localId) {
-        this.ctx.centerHUD.showYouFragged(event.victimName, event.victimColor);
+        this.centerHUD.showYouFragged(event.victimName, event.victimColor);
       }
     });
   }
 
   private registerTrainDestroyedHandler(): void {
     bridge.registerTrainDestroyedHandler(() => {
-      this.lifecycle?.onTrainDestroyed();
-      this.ctx.centerHUD.showTrainDestroyed();
-      this.ctx.gameAudioSystem.playLocalSound('sfx_train_explode');
+      this.train.markDestroyed();
+      this.centerHUD.showTrainDestroyed();
+      this.gameAudioSystem.playLocalSound('sfx_train_explode');
     });
   }
 
   private registerPickupPowerUpHandler(): void {
     bridge.registerPickupPowerUpHandler((uid, playerId) => {
       if (bridge.isArenaCountdownActive()) return false;
-      if (!this.lifecycle?.getPlayerCapabilities(playerId).canInteract) return false;
-      const player = this.ctx.playerManager.getPlayer(playerId);
+      if (!this.capabilities.get(playerId).canInteract) return false;
+      const player = this.playerManager.getPlayer(playerId);
       if (!player) return false;
       const pickedUp = this.powerUpSystem?.tryPickup(playerId, uid, player.x, player.y) ?? false;
-      if (pickedUp) this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);
+      if (pickedUp) this.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);
       return pickedUp;
     });
   }

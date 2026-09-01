@@ -238,6 +238,7 @@ import {
   wireRenderersToCameraFeedback,
   wireRenderersToDistortion,
 } from './arena';
+import { resolveCoopDefenseCarryPresentationSnapshot } from './arena/CoopDefenseCarryPresentation';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
   const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
@@ -373,7 +374,14 @@ export class ArenaScene extends Phaser.Scene {
   private get captureTheBeerSystem() {
     return this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()?.system ?? null;
   }
-  private coopDefenseCarryItems: readonly import('../types').SyncedCoopDefenseCarryItem[] = [];
+  private replicatedCoopDefenseCarryItems: readonly import('../types').SyncedCoopDefenseCarryItem[] = [];
+  private get coopDefenseCarryPresentationItems() {
+    return resolveCoopDefenseCarryPresentationSnapshot(
+      bridge.isHost(),
+      this.coopMissionRuntime?.coopDefenseCarrySystem ?? null,
+      this.replicatedCoopDefenseCarryItems,
+    );
+  }
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -1041,7 +1049,6 @@ export class ArenaScene extends Phaser.Scene {
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
-      hostHeldActionSystem: null,
     };
 
     playerManager.setSpawnContextProvider((playerId) => {
@@ -1736,7 +1743,6 @@ export class ArenaScene extends Phaser.Scene {
     this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
     // ── RPC + Lifecycle coordinators ──────────────────────────────────────
-    this.rpcCoordinator = new RpcCoordinator(this, this.ctx, this.renderers, this.clientUpdate, leftPanel);
     this.arenaRuntime   = new ArenaRuntime({
       scene: this,
       ctx: this.ctx,
@@ -1791,8 +1797,76 @@ export class ArenaScene extends Phaser.Scene {
       }),
       (request) => this.startWeaponBalanceLab(request),
     );
-    this.rpcCoordinator.setLifecycle(this.lifecycle);
-    this.rpcCoordinator.setPersistentBaseSession(this.arenaRuntime.persistentBase);
+    this.rpcCoordinator = new RpcCoordinator(
+      this,
+      this.renderers,
+      this.clientUpdate,
+      leftPanel,
+      rightPanel,
+      this.ctx.centerHUD,
+      this.ctx.playerManager,
+      this.ctx.hostPhysics,
+      this.ctx.combatSystem,
+      this.ctx.decoySystem,
+      this.ctx.effectSystem,
+      this.ctx.visualFeedback,
+      this.ctx.gameAudioSystem,
+      { handleRequest: (playerId, join) => this.lifecycle.hostHandleWorldParticipationRequest(playerId, join) },
+      { get: (playerId) => this.lifecycle.getPlayerCapabilities(playerId) },
+      {
+        placeInspectorConstruction: (playerId, constructionId, targetX, targetY, activityRevision) => (
+          this.lifecycle.getConstructionWorldRuntime()?.placeInspectorConstruction(
+            playerId,
+            constructionId,
+            targetX,
+            targetY,
+            activityRevision,
+          ) ?? { ok: false, reason: 'blocked' }
+        ),
+        useInspectorUtility: (playerId, tool, angle, targetX, targetY, now, params) => (
+          this.lifecycle.getConstructionWorldRuntime()?.useInspectorUtility(
+            playerId,
+            tool,
+            angle,
+            targetX,
+            targetY,
+            now,
+            params,
+          ) ?? { ok: false, reason: 'blocked' }
+        ),
+        dismantleConstruction: (playerId, targetX, targetY, activityRevision) => (
+          this.lifecycle.getConstructionWorldRuntime()?.dismantleConstruction(
+            playerId,
+            targetX,
+            targetY,
+            activityRevision,
+          ) ?? { ok: false, reason: 'blocked' }
+        ),
+        dismantleAllOwnedConstructions: (playerId, activityRevision) => (
+          this.lifecycle.getConstructionWorldRuntime()?.dismantleAllOwnedConstructions(
+            playerId,
+            activityRevision,
+          ) ?? { ok: false, reason: 'blocked' }
+        ),
+      },
+      {
+        placeReward: (playerId, request) => (
+          this.arenaRuntime.persistentBase.placePersistentBaseReward(playerId, request)
+        ),
+        moveObject: (playerId, request) => (
+          this.arenaRuntime.persistentBase.movePersistentBaseObject(playerId, request)
+        ),
+      },
+      {
+        getBurrowSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.burrow ?? null,
+        getLoadoutManager: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.loadout ?? null,
+        getTranslocatorSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.translocator ?? null,
+        getResourceSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.resource ?? null,
+        getPowerUpSystem: () => this.lifecycle.getWorldPowerUpRuntime()?.system ?? null,
+      },
+      { getSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.heldAction ?? null },
+      { markDestroyed: () => this.lifecycle.onTrainDestroyed() },
+    );
     this.rpcCoordinator.registerAll();
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
     leftPanel.setAbortMatchBinding({
@@ -2334,7 +2408,7 @@ export class ArenaScene extends Phaser.Scene {
       secondaryObjectivePresentation,
       (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
       this.baseManager,
-      this.coopDefenseCarryItems,
+      this.coopDefenseCarryPresentationItems,
       secondaryObjectivesActive,
     );
     this.renderers.missionProgress.sync(
@@ -4299,8 +4373,8 @@ export class ArenaScene extends Phaser.Scene {
     if (state) {
       this.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
       this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
-      this.coopDefenseCarryItems = state.coopDefenseCarry ?? [];
-      this.renderers.beer.syncCoopDefenseCarry(this.coopDefenseCarryItems);
+      this.replicatedCoopDefenseCarryItems = state.coopDefenseCarry ?? [];
+      this.renderers.beer.syncCoopDefenseCarry(this.replicatedCoopDefenseCarryItems);
       this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
       this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
       this.renderers.energyShield.syncVisuals(state.energyShields ?? []);

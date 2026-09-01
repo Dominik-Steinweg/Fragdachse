@@ -35,10 +35,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `11A – ArenaContext Runtime Facade Cutover abgeschlossen; Review-Gate vor 11B`
-**Gesamtstatus:** `Phasen 1–10 und 11A abgeschlossen; Checkpoint C wurde automatisiert und vom User manuell erfolgreich abgenommen.`
-**Letzter Integrations-Checkpoint:** `Phase 11A: npm run check grün (332 Testdateien, 2.811 Tests bestanden, 15 übersprungen, Build ok).`
-**Nächster Schritt:** `Review von 11A; danach 11B – Coordinator / RPC / Network Dependency Cutover.`
+**Aktive Phase:** `11B – Coordinator / RPC / Network Dependency Cutover abgeschlossen`
+**Gesamtstatus:** `Phasen 1–11 abgeschlossen; Checkpoint C wurde vom User manuell erfolgreich abgenommen.`
+**Letzter Integrations-Checkpoint:** `Phase 11B: npm run check grün (334 Testdateien, 2.819 Tests bestanden, 15 übersprungen, Build ok).`
+**Nächster Schritt:** `Review und manuelle Sichtprüfung von 11B; danach eigener Entscheid für Phase 12.`
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -59,7 +59,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 10C Flow / ArenaRuntime | ✅ abgeschlossen | `ArenaRuntime` ist der Top-Level-Owner (Flow, raumlanglebiger Persistent-Base-Owner, Frame-Orchestrierung); der reduzierte `ArenaLifecycleCoordinator` ist der Flow und behält den `WorldPresentationHandoff`. World-Gameplay-Composition und Persistent-Base-Management liegen bei eigenen Grenzen bzw. Ownern. |
 | – Checkpoint C | ✅ automatisiert abgeschlossen | World-/Activity-Transitions, Completion/`ResultApplication`, stale Completion, PB Commit/Rollback, Matchstart, Host-/Client-Matchende, Exit-Fade und Presentation-Handoff, Lobby-Rückkehr, Lobby-Fast-Reinstance, Frame-Position der Coop-Simulation und owner-getriebener Teardown sind vertraglich geprüft. Browser-Sichtprüfung ist User-Abnahme. |
 | 11A ArenaContext Runtime Facade Cutover | ✅ abgeschlossen | Migrierter World-/Activity-State und Compatibility-Fassaden aus `ArenaContext` entfernt; Consumer lesen konkrete Owner oder kleine fachliche Ports. TD-1, TD-4 und TD-6 geschlossen. |
-| 11B Coordinator / RPC / Network Dependency Cutover | ⬜ offen | Host-/Client-Dependencies reduzieren, `RpcCoordinator` entkoppeln, TD-9 schließen und adressierte Runtime-/Domain-Grenzen über fachliche Network-/RPC-Ports anbinden. |
+| 11B Coordinator / RPC / Network Dependency Cutover | ✅ abgeschlossen | `RpcCoordinator` von Context/Flow/PB-Klasse und Runtime-Gettern entkoppelt; Held Actions beim World-Player-Owner; Frame-Reads auf kleine Ports reduziert; TD-9 geschlossen. |
 | 12 Legacy Removal | ⬜ offen | |
 
 Statuswerte: `⬜ offen` · `🟨 aktiv` · `🟧 blockiert` · `✅ abgeschlossen`
@@ -72,7 +72,6 @@ Nur temporäre Migrationspfade eintragen.
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| TD-9 | 9/Rebaseline | Im Flow verbleiben vier dünne RPC-Adapter auf den Construction-Owner (`placeInspectorConstruction`, `useInspectorUtility`, `dismantleConstruction`, `dismantleAllOwnedConstructions`). `RpcCoordinator` hängt weiterhin am großen Lifecycle-/Context-Zugriff; Host-/Client-Frame-Owner tragen bis 11B noch breite, einzeln verdrahtete Owner-Resolver. | `ConstructionWorldRuntime` / fachliche RPC-/Network-Ports | Phase 11B |
 | TD-10 | 10B.3 | Freie/mapweite Activity-PowerUps werden über die bestehende World-Layout-Generierung aus dem transitional `CoopDefenseMapConfig` in `ArenaLayout.powerUpPedestals` gebacken. Das Activity-Binding korrigiert nur die linked Base-Podeste; ein Wechsel A→B in derselben World kann freie PowerUps ohne größeren Generator-/Placement-Umbau nicht sauber austauschen. | Eigene Activity-PowerUp-/Placement-Composition mit World-Geometrie als Input; kein World-Rebuild als Workaround. | eigener Folgeentscheid vor dem Authoring-Cutover |
 
 `TD-3` ist mit Phase 4 entfallen: Der Gameplay-State wird nicht mehr über das Instanzende hinweg freigegeben.
@@ -86,7 +85,7 @@ Nur temporäre Migrationspfade eintragen.
 - **TD-5** – Der `WorldPresentationHandoff` liegt beim tatsächlichen Flow-Owner; weder
   `ArenaRuntime` noch eine Composition-Grenze kennt ihn.
 - **TD-8** – Die Frame-Position der benannten Activity-Schritte gehört dem Frame-Owner: Er
-  installiert den Step-Resolver auf beiden Frame-Phasen und ruft Completion sowie Debug-Schritt
+  stellt den Schritt beiden Frame-Phasen über ihren Activity-Port bereit und ruft Completion sowie Debug-Schritt
   selbst; die Scene resolved keinen Activity-Schritt mehr. Die Ausführung von
   `hostSimulationStep`/`hostPrePhysicsStep` bleibt bewusst an ihrer fachlichen Stelle im Host-Frame
   (R-4) – verschoben ist der Besitz, nicht die Reihenfolge.
@@ -94,6 +93,12 @@ Nur temporäre Migrationspfade eintragen.
 `TD-1`, `TD-4` und `TD-6` sind mit Phase 11A entfallen: `ArenaContext` enthält keinen
 migrierten World-/Activity-Runtime-State mehr. World-/Activity-Consumer lesen `WorldRuntime`,
 die fokussierten World-Owner oder `CoopMissionRuntime` direkt; der Compatibility-Sync ist entfernt.
+
+`TD-9` ist mit Phase 11B entfallen: Die vier Construction-RPC-Adapter sind aus dem Flow entfernt;
+`RpcCoordinator` konsumiert Participation, Capabilities, Construction, Persistent Base,
+Player/Loadout, Held Actions und Train über fachliche Ports und kennt weder `ArenaContext` noch den
+gesamten Flow oder den konkreten Persistent-Base-Owner. Host-/Client-Frame-Reads sind in kleine
+World-, Player-, Combat- und Activity-Ports gegliedert.
 
 Die in der Phase-8-Prüfung erkannte implizite Kopplung des Transaction-Starts an `buildWorld()`
 ist behoben; daraus entsteht keine neue Transitional Debt.
@@ -104,7 +109,7 @@ Placement, Move/Repositioning und Dismantle einschließlich generischer Construc
 die offene `PersistentBaseTransaction`. Ohne Activity/Transaction bleibt der Activity-Identifier
 weg; Lobby-Operationen dürfen den committed Stand direkt ändern. Tests decken A→B, A→keine
 Activity, aktuelle B-Operation, Lobby und manipulierte Wire-Werte ab. Der generische Loadout-RPC
-führt das Feld bis zum 11B-RPC-Cutover als fachliches Request-Parameterfeld weiter.
+führt das Feld fachlich unverändert über den `ConstructionRpcPort` weiter.
 
 ---
 
@@ -116,8 +121,10 @@ führt das Feld bis zum 11B-RPC-Cutover als fachliches Request-Parameterfeld wei
 | R-4 | Host-Frame | Der Weltanteil `decoySystem.hostUpdateLifecycle()` steht seit Phase 6 **vor** dem Missionsschritt statt zwischen zwei Coop-Phasen; nur so ist die Activity-Reihenfolge zusammenhängend. Fachlich gleichwertig, weil ausschließlich die Navigation und die Kampfphase Köder und Tarnung lesen. Vertrag in `tests/HostUpdatePhaseContracts.test.ts`. | Mit 10C besitzt `ArenaRuntime` die Aufrufstelle; die Ausführungsreihenfolge im Host-Frame bleibt unverändert. |
 | R-5 | Exit-Fade | Player- und Enemy-Runtime fallen mit der World-Instanz. Das eingefrorene Entity-Bild muss deshalb **vor** `worldLifecycle.endInstance()` stehen; auf dem Host geschieht das im Completion-/Exit-Pfad, auf dem Client in `beginArenaExitPresentation`. Wer eine neue Stelle einführt, an der eine World-Instanz endet, muss diese Reihenfolge mitführen. | Nach 10C zusätzlich in `tests/ArenaFlowCheckpointC.test.ts` verankert. |
 
-Phase 11A hat keine neue fachliche Regression oder Transitional Debt erzeugt. Die breiten
-Frame-/RPC-Abhängigkeiten sind der ausdrücklich verbleibende 11B-Scope (TD-9), kein neuer Owner.
+Phase 11B hat keine neue fachliche Regression oder Transitional Debt erzeugt. Der Carry-
+Presentation-Fehler aus 11A ist behoben: Host liest den aktuellen autoritativen Snapshot des
+`CoopDefenseCarrySystem`, Clients lesen weiterhin den replizierten Snapshot. TD-10 bleibt
+unverändert; R-2, R-4 und R-5 gelten unverändert.
 
 `R-1` ist mit Phase 4 entfallen: Die Reihenfolge ist keine Zeilenfolge mehr, sondern folgt aus der Ownership (siehe R-2).
 
@@ -132,9 +139,9 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | Phase 11A: 332 Testdateien, 2.811 Tests bestanden, 15 übersprungen; Build mit 637 transformierten Modulen erfolgreich. |
-| `git diff --check` | grün | Phase-11A-Stand ohne Whitespace-Fehler. |
-| Browser-/Sichtprüfung | ✅ erfolgreich | Checkpoint C wurde vor Beginn von 11A vom User manuell erfolgreich abgenommen. 11A selbst ändert keine Gameplay-Regeln oder sichtbaren Abläufe. |
+| `npm run check` | grün | Phase 11B: 334 Testdateien, 2.819 Tests bestanden, 15 übersprungen; Build mit 638 transformierten Modulen erfolgreich. |
+| `git diff --check` | grün | Phase-11B-Stand ohne Whitespace-Fehler. |
+| Browser-/Sichtprüfung | offen | Checkpoint C ist die manuell erfolgreiche Baseline; Carry-Presentation und RPC-/Participation-Pfade aus 11B sind noch manuell zu prüfen. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -167,26 +174,25 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
 ## 7. Übergabe an die nächste KI
 
 **Aktuell relevant:**
-- Architektur-Dokument und Implementierungsplan wurden nach Phase 9 manuell rebaselined; Phase 10
-  und 11A sind abgeschlossen. Checkpoint C wurde vom User manuell erfolgreich abgenommen.
-- Offene Transitional Debt: TD-9 und TD-10; R-2/R-4/R-5 weiter berücksichtigen. TD-1, TD-4 und
-  TD-6 sind mit 11A geschlossen.
+- Architektur-Dokument und Implementierungsplan wurden nach Phase 9 manuell rebaselined; Phase 10,
+  11A und 11B sind abgeschlossen. Checkpoint C wurde vom User manuell erfolgreich abgenommen.
+- Offene Transitional Debt: nur TD-10; R-2/R-4/R-5 weiter berücksichtigen. TD-1, TD-4, TD-6 und
+  TD-9 sind geschlossen.
 - Der Top-Level-Owner ist `ArenaRuntime`; der `ArenaLifecycleCoordinator` ist der Arena-Flow und
   materialisiert keinen Gameplay-Graphen mehr.
-- `ArenaContext` enthält nur scene-langlebige Infrastruktur sowie den ausdrücklich bis 11B
-  verbleibenden RPC-Übergang `hostHeldActionSystem`; es ist kein Zugriffspfad auf migrierten
-  World-/Activity-State mehr.
+- `ArenaContext` enthält ausschließlich scene-langlebige Infrastruktur. `hostHeldActionSystem`
+  gehört jetzt der `WorldPlayerGameplayRuntime`; es gibt keinen Runtime-Übergang mehr im Context.
 
 **Endgültige Top-Level-Owner nach Phase 10C:**
-- `src/scenes/arena/ArenaRuntime.ts` (131 LOC) – scene-langlebiger Top-Level-Owner: er besitzt den
+- `src/scenes/arena/ArenaRuntime.ts` (159 LOC) – scene-langlebiger Top-Level-Owner: er besitzt den
   Flow und den raumlanglebigen Persistent-Base-Owner und taktet beide selbst – die World-Runtime
   über `update()`, die raumlanglebigen Owner über `syncRoomOwners()`. Er treibt die beiden
   Frame-Phasen (`runHostFrame` / `runClientFrame`) und kennt von einer Activity nur ihre benannten
-  Schritte (Abschlussermittlung im Host-Frame, `applyDebugBaseDamage`, Step-Resolver für beide
-  Frame-Phasen). Die *Anwendung* eines Abschlusses bleibt beim Aufrufer, weil sie die
+  Schritte (Abschlussermittlung im Host-Frame, `applyDebugBaseDamage`, kleine World-/Player-/
+  Combat-/Activity-Ports für beide Frame-Phasen). Die *Anwendung* eines Abschlusses bleibt beim Aufrufer, weil sie die
   World-Instanz beendet und die letzte Momentaufnahme der Runde davor entstehen muss. Kein
   Dependency-Container, kein Gameplay-State.
-- `src/scenes/arena/ArenaLifecycleCoordinator.ts` (3.197 LOC) – der Arena-Flow: World-/Activity-
+- `src/scenes/arena/ArenaLifecycleCoordinator.ts` (3.104 LOC) – der Arena-Flow: World-/Activity-
   Identität und Übergänge, Readiness/Loading, Participation, Completion und Aufruf der
   `ResultApplication`, Lobby-/Next-World-Transitions, `WorldPresentationHandoff`, Exit-Presentation
   und die Orchestrierung von `buildWorld()`/`tearDownArena()`.
@@ -230,8 +236,28 @@ Ein Kandidat ist sinnvoll, wenn z. B.:
   Exit-Fade (`tests/ArenaExitEntityPresentation.test.ts`) und Host-Frame-Phasen
   (`tests/HostUpdatePhaseContracts.test.ts`).
 
-**Manuelle Prüfliste für die Checkpoint-C-Abnahme (User, im Browser):**
+**Phase-11B-Ergebnis:**
+- Carry-Regression aus 11A behoben: Host-Marker lesen live aus `CoopDefenseCarrySystem`, Client-
+  Marker aus dem replizierten Snapshot; kein Context-Feld und keine zweite mutable Wahrheit.
+- `RpcCoordinator` (645 LOC) kennt weder `ArenaContext`, `ArenaLifecycleCoordinator`, den konkreten
+  Persistent-Base-Owner noch konkrete Runtime-Getter. `ArenaRpcPorts.ts` (72 LOC) definiert die
+  fachlichen RPC-Grenzen; die Scene adaptiert sie an die bestehenden Owner.
+- `hostHeldActionSystem` liegt als `heldAction` beim bestehenden `WorldPlayerGameplayRuntime` und
+  wird mit dessen World-Lifetime zerstört. Die vier Construction-RPC-Adapter sind aus dem Flow
+  entfernt; `ArenaLifecycleCoordinator` liegt bei 3.104 LOC, zusammen mit `ArenaRuntime` (159 LOC)
+  bei 3.263 LOC.
+- Host-Frame: vier kleine World-/Player-/Combat-/Activity-Ports statt zehn Runtime-Resolvern;
+  Client-Frame: drei World-/Player-/Activity-Ports statt sechs Runtime-Resolvern. Keine globale
+  Dependency Bag, kein neues Ownership-Modell und keine Wire-/Authority-Änderung.
+- Verträge: `tests/CoopDefenseCarryPresentation.test.ts`, `tests/RadialActionRpc.test.ts`,
+  `tests/Phase11DependencyCutover.test.ts` sowie Checkpoint-C-, Activity-Rebinding-,
+  World-ohne-Activity-, Participation-, PB- und Teardown-Verträge.
+
+**Manuelle Prüfliste für die 11B-Abnahme (User, im Browser):**
 - Matchstart aus der LobbyWorld inklusive Ladeschirm und Countdown;
+- Carry-Nebenmission auf Host und Client: liegende Items, Delivery-Zone und Edge-Arrows sichtbar;
+- aufladbare Utility starten/abbrechen/auslösen sowie Construction platzieren/einzeln und global
+  zurückbauen; World-Leave/-Rejoin auf Host und Client;
 - Match-Exit auf Host und Client: Exit-Fade zeigt das eingefrorene Bild, danach Lobby;
 - Lobby-Rückkehr mit Rundenergebnis und Raumstatistik;
 - Lobby-Fast-Reinstance (Modus-/Basis-Wechsel in der Lobby) ohne sichtbaren Neuaufbau;
@@ -384,7 +410,7 @@ bleibt im `PersistentBaseRewardStore`. `persistentBaseVisualSite` bleibt Present
 Flow. Die
 world-lokale Referenz `persistentBaseWorldBinding` sowie Runtime-/Composite-Bindings bleiben
 Compatibility-/Orchestrierungspfade auf `WorldRuntime`/`PersistentBaseWorldBinding` und sind keine
-zweite Room-State-Quelle. Verbleibende Transitional Debt ist in TD-9 und TD-10 aufgeführt.
+zweite Room-State-Quelle. Verbleibende Transitional Debt ist ausschließlich TD-10.
 
 Der offene Ally-Flowfield-Lifetime-Punkt aus Phase 7 ist behoben: `CoopMissionPlayerRuntime`
 verantwortet den activity-scoped Attach/Detach-Aufruf, `CoopMissionRuntime` erzeugt und entfernt
@@ -403,12 +429,12 @@ Debt entsteht nicht.
 - Keine Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/Train-Systemliste mehr im Flow,
   kein großer globaler manueller Teardown, kein neuer God-Composer (größte Composition-Datei
   206 LOC, verteilt auf fünf fokussierte Grenzen).
-- TD-1, TD-2, TD-4, TD-5, TD-6 und TD-8 sind geschlossen; TD-9 bleibt für 11B, TD-10 für den
-  eigenen Folgeentscheid offen.
-- `Phase 11A vollständig abgeschlossen: JA`; `Phase 11B kann nach Review beginnen: JA`.
+- TD-1, TD-2, TD-4, TD-5, TD-6, TD-8 und TD-9 sind geschlossen; TD-10 bleibt für den eigenen
+  Folgeentscheid offen.
+- `Phase 11B vollständig abgeschlossen: JA`; `Phase 12 kann nach Review beginnen: JA`.
 
 **Nächste konkrete Aktion:**
-`Review von Phase 11A, danach Phase 11B – Coordinator / RPC / Network Dependency Cutover.`
+`Review und manuelle Sichtprüfung von Phase 11B; danach eigener Phase-12-Entscheid.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`
