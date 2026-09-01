@@ -134,6 +134,11 @@ function createHarness(classId: string) {
   const contributionStore = persistentBaseSession.contributions;
   const rewardStore = persistentBaseSession.rewards;
   const loadoutManager = new LoadoutManager();
+  const powerUpSystem = {
+    repositionPersistentBaseRewardPedestal: vi.fn(() => true),
+    repositionConstructionPedestal: vi.fn(() => true),
+    unregisterPersistentBaseRewardPedestal: vi.fn(() => true),
+  };
   const playerId = bridge.getLocalPlayerId();
   const playerCell = rewardCell(0, 0);
   const playerWorld = worldCellCenter(METRICS, playerCell.gridX, playerCell.gridY);
@@ -150,21 +155,9 @@ function createHarness(classId: string) {
   Object.assign(coordinator, {
     scene: { game: { events: { emit: vi.fn() } } },
     ctx: {
-      world: { persistentBaseSite: site, definition: { sourceMapId: 'management-test' } },
-      persistentBaseContributions: contributionStore,
-      persistentBaseRewards: rewardStore,
-      placementSystem,
-      loadoutManager,
       playerManager: { getPlayer: () => player },
       combatSystem: { isAlive: vi.fn(() => true), isBurrowed: vi.fn(() => false) },
       gameAudioSystem: { playSound: vi.fn() },
-      powerUpSystem: {
-        repositionPersistentBaseRewardPedestal: vi.fn(() => true),
-        repositionConstructionPedestal: vi.fn(() => true),
-        unregisterPersistentBaseRewardPedestal: vi.fn(() => true),
-      },
-      targetStatusSystem: null,
-      energyInjectorSystem: null,
     },
     rockVisualHelper: {
       gridToWorld: (gridX: number, gridY: number) => worldCellCenter(METRICS, gridX, gridY),
@@ -178,6 +171,13 @@ function createHarness(classId: string) {
     projectionRevision: 0,
     grantService: new PersistentBaseRewardGrantService(),
     world: {
+      getWorldRuntime: () => ({
+        context: { persistentBaseSite: site, definition: { sourceMapId: 'management-test' } },
+        materialization: { placement: placementSystem, bases: null },
+      }),
+      getPlayerGameplayRuntime: () => ({
+        systems: { loadout: loadoutManager, targetStatus: null, energyInjector: null },
+      }),
       getWorldBinding: () => persistentBaseWorldBinding,
       getConstructionRuntime: () => coordinator.constructionWorldRuntime,
       getPlayerCapabilities: () => ({ canPlace: true, canDismantle: true, canInteract: true } as never),
@@ -201,7 +201,7 @@ function createHarness(classId: string) {
     loadoutManager,
     targetStatusSystem: null,
     energyInjectorSystem: null,
-    powerUpSystem: coordinator.ctx.powerUpSystem as never,
+    powerUpSystem: powerUpSystem as never,
     modifierSystem: null,
     burrowSystem: null,
     tunnelSystem: null,
@@ -239,7 +239,7 @@ function createHarness(classId: string) {
     contributions: contributionStore,
     rewards: rewardStore,
     placementSystem,
-    powerUpSystem: coordinator.ctx.powerUpSystem,
+    powerUpSystem,
     baseManager: null,
     getSite: () => site,
     rockVisualHelper: coordinator.rockVisualHelper,
@@ -270,6 +270,7 @@ function createHarness(classId: string) {
     persistentBaseSession,
     placementSystem,
     loadoutManager,
+    powerUpSystem,
     playerId,
     site,
   };
@@ -523,7 +524,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       gridX: target.gridX,
       gridY: target.gridY,
     });
-    const powerUpSystem = coordinator.ctx.powerUpSystem;
+    const { powerUpSystem } = harness;
     expect(powerUpSystem.repositionPersistentBaseRewardPedestal).toHaveBeenCalledTimes(1);
     expect(powerUpSystem.unregisterPersistentBaseRewardPedestal).not.toHaveBeenCalled();
     // Das Composite wird genau einmal gegen den neuen Zustand aufgeloest.

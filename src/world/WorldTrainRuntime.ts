@@ -78,7 +78,6 @@ export interface WorldTrainRuntimeOptions {
   readonly getTimeBubbleSystem: () => TimeBubbleSystem | null;
   readonly getTranslocatorSystem: () => TranslocatorSystem | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
-  readonly setCurrentTrain: (train: TrainManager | null) => void;
   readonly setClassicTrainSpawned: (spawned: boolean) => void;
   readonly onRendererChanged: (renderer: TrainRenderer | null) => void;
 }
@@ -110,7 +109,6 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     const direction: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
     this.pendingClassic = { trackX, direction, plan };
     this.classicTrain = this.createTrain(trackX, direction, plan);
-    this.options.setCurrentTrain(this.classicTrain);
     this.options.setClassicTrainSpawned(false);
     this.publishClassicEventIfReady(this.options.network.clock.getArenaStartTime());
   }
@@ -125,7 +123,6 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     const train = this.createTrain(trackX, direction, null);
     this.activityTrain = train;
     this.activityHandler = new CoopDefenseTrainEventHandler(train, this.options.combatSystem, direction);
-    this.options.setCurrentTrain(train);
     return this.activityHandler;
   }
 
@@ -158,13 +155,11 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
         this.classicTrain?.applyDamage(damage, attackerId);
       });
       this.options.getTranslocatorSystem()?.setTrainManager(this.classicTrain);
-      this.options.setCurrentTrain(this.classicTrain);
     } else {
       this.options.combatSystem.setTrainSegments(null);
       this.options.projectileManager.setTrainHitCallback(null);
       this.options.projectileManager.setTrainGroup(null);
       this.options.getTranslocatorSystem()?.setTrainManager(null);
-      this.options.setCurrentTrain(null);
     }
   }
 
@@ -192,7 +187,6 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.renderer?.destroy();
     this.renderer = null;
     this.options.onRendererChanged(null);
-    this.options.setCurrentTrain(null);
   }
 
   private createTrain(trackX: number, direction: 1 | -1, classicPlan: TrainEventPlan | null): TrainManager {

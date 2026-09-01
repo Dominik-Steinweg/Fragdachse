@@ -245,16 +245,8 @@ function testCoordinator(
   Object.assign(coordinator, {
     scene: { game: { events: { emit: vi.fn() } } },
     ctx: {
-      world: { persistentBaseSite: site, definition: { sourceMapId: 'corrections-test' } },
-      persistentBaseContributions: contributionStore,
-      persistentBaseRewards: rewardStore,
-      placementSystem: fakePlacement.placementSystem,
       playerManager: { getPlayer: () => ({ id: playerId, active: true, x: 0, y: 0 }) },
       combatSystem: { isAlive: () => true, isBurrowed: () => false },
-      targetStatusSystem: null,
-      energyInjectorSystem: null,
-      powerUpSystem: null,
-      baseManager,
     },
     rockVisualHelper: {
       gridToWorld: () => ({ x: 0, y: 0 }),
@@ -272,6 +264,11 @@ function testCoordinator(
     projectionRevision: 0,
     grantService: new PersistentBaseRewardGrantService(),
     world: {
+      getWorldRuntime: () => ({
+        context: { persistentBaseSite: site, definition: { sourceMapId: 'corrections-test' } },
+        materialization: { placement: fakePlacement.placementSystem, bases: baseManager },
+      }),
+      getPlayerGameplayRuntime: () => null,
       getWorldBinding: () => coordinator.persistentBaseWorldBinding,
       getConstructionRuntime: () => null,
       getPlayerCapabilities: () => coordinator.getPlayerCapabilities(),
@@ -355,6 +352,7 @@ function testCoordinator(
     rewardStore,
     rocks: fakePlacement.rocks,
     site,
+    baseManager,
   };
 }
 
@@ -487,7 +485,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
   it('entfernt bei einer zerstoerten Basis nur die Reward-Turret-Runtime und materialisiert sie nicht erneut', () => {
     useBehaviorHost();
     publishBehaviorWorld(408);
-    const { coordinator, rewardStore, rocks, site } = testCoordinator();
+    const { coordinator, rewardStore, rocks, site, baseManager } = testCoordinator();
     expect(rewardStore.placeReward({
       rewardId: 'base_spore_turret',
       relativeGridX: 2,
@@ -495,7 +493,7 @@ describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
       angle: 0,
     })).toBe(true);
     let baseInert = false;
-    coordinator.ctx.baseManager.getBase = () => ({ isInert: () => baseInert });
+    baseManager.getBase = () => ({ isInert: () => baseInert });
 
     coordinator.persistentBaseWorldBinding.reconcile();
     expect([...rocks.values()]).toHaveLength(1);

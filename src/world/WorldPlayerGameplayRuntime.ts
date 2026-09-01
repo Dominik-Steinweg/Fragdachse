@@ -93,7 +93,6 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly createLoadoutManager: (resourceSystem: ResourceSystem) => LoadoutManager;
   readonly createBurrowSystem: (resourceSystem: ResourceSystem) => BurrowSystem;
   readonly network: WorldPlayerGameplayNetworkPort;
-  readonly onSystemsChanged: (systems: WorldPlayerGameplaySystems | null) => void;
 }
 
 /** World-owned player/loadout state and its ability-side bindings. */
@@ -216,7 +215,6 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
       weaponUpgrade,
       ak47StrategicTarget,
     };
-    options.onSystemsChanged(this.systems);
     this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
   }
 
@@ -293,7 +291,6 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
     systems.burrow.setShockwaveRadiusResolver(null);
     systems.playerModifier.clear();
     systems.itemRuntime.clear();
-    this.options.onSystemsChanged(null);
   }
 
   private configureResource(

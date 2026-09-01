@@ -124,17 +124,13 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(coordinator).toContain('this.worldCombatGameplayBinding?.clearActivityBindings()');
   });
 
-  it('clears target systems and releases their projections exactly at World-owner teardown', () => {
-    const projections: unknown[] = [];
-    const runtime = new WorldTargetingRuntime({
-      onSystemsChanged: (systems) => projections.push(systems),
-    });
+  it('clears target systems exactly at World-owner teardown', () => {
+    const runtime = new WorldTargetingRuntime();
 
     runtime.systems.reinforcementMatrix.spawnMatrix('p1', 0, 0, 20, 1_000, 0.2, 0.1, 0xffffff, 0);
     runtime.systems.energyInjector.setFocusTarget('p1', { targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
     runtime.systems.targetStatus.applyVulnerability({ targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
 
-    expect(projections).toHaveLength(1);
     expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(1);
     expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(1);
     expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(1);
@@ -142,8 +138,6 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     runtime.destroy();
     runtime.destroy();
 
-    expect(projections).toHaveLength(2);
-    expect(projections[1]).toBeNull();
     expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(0);
     expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(0);
     expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(0);

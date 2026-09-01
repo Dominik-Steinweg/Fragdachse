@@ -30,7 +30,7 @@ vi.mock('../src/network/bridge', () => ({ bridge: bridgeMock }));
 import { ClientUpdateCoordinator } from '../src/scenes/arena/ClientUpdateCoordinator';
 
 type TestCoordinator = ClientUpdateCoordinator & {
-  ctx: { resourceSystem: { getAdrenaline(id: string): number } | null };
+  ctx: Record<string, unknown>;
   authoritativeAdrenaline: {
     worldRevision: number;
     value: number;
@@ -42,11 +42,10 @@ type TestCoordinator = ClientUpdateCoordinator & {
 
 function makeCoordinator(authoritativeAdrenaline?: () => number): TestCoordinator {
   const coordinator = Object.create(ClientUpdateCoordinator.prototype) as TestCoordinator;
-  coordinator.ctx = {
-    resourceSystem: authoritativeAdrenaline
-      ? { getAdrenaline: () => authoritativeAdrenaline() }
-      : null,
-  };
+  coordinator.ctx = {};
+  coordinator.setWorldPlayerGameplayRuntimeResolver(() => (authoritativeAdrenaline
+    ? { systems: { resource: { getAdrenaline: () => authoritativeAdrenaline() } } } as never
+    : null));
   (coordinator as unknown as { authoritativeAdrenaline: null }).authoritativeAdrenaline = null;
   (coordinator as unknown as { pendingAdrenalineSpends: Map<unknown, unknown> }).pendingAdrenalineSpends = new Map();
   (coordinator as unknown as { localFirePredictions: unknown }).localFirePredictions = {
@@ -121,7 +120,6 @@ describe('client weapon adrenaline prediction', () => {
     const coordinator = makeCoordinator();
     const firePrediction = coordinator as unknown as {
       ctx: {
-        resourceSystem: null;
         aimSystem: { notifyShot: ReturnType<typeof vi.fn> };
         effectSystem: { playLocalShotAudio: ReturnType<typeof vi.fn> };
         leftPanel: { flashSlot: ReturnType<typeof vi.fn> };
@@ -131,7 +129,6 @@ describe('client weapon adrenaline prediction', () => {
       playPredictedLocalHitscanTracer: () => undefined;
     };
     firePrediction.ctx = {
-      resourceSystem: null,
       aimSystem: { notifyShot: vi.fn() },
       effectSystem: { playLocalShotAudio: vi.fn() },
       leftPanel: { flashSlot: vi.fn() },

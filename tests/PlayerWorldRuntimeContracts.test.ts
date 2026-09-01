@@ -289,8 +289,8 @@ describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
     // Der Abbau steht nur noch an einer Stelle; Spawn und Respawn teilen sich dieselbe Liste.
     for (const call of [
       'this.ctx.combatSystem.removePlayer(',
-      'this.ctx.loadoutManager?.removePlayer(',
-      'this.ctx.burrowSystem?.removePlayer(',
+      'this.worldPlayerGameplayRuntime?.systems.loadout.removePlayer(',
+      'this.worldPlayerGameplayRuntime?.systems.burrow.removePlayer(',
     ]) {
       expect([...source.matchAll(new RegExp(call.replace(/[.?()]/g, '\\$&'), 'g'))], call)
         .toHaveLength(1);

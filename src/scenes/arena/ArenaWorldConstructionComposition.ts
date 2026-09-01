@@ -34,7 +34,7 @@ export function composeWorldPowerUp(
     worldMetrics: world.metrics,
     recordPowerUpCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
     addTemporaryUtility: (playerId, config) => (
-      ctx.loadoutManager?.addTemporaryUtility(playerId, config, 1) !== null
+      gameplay.player?.systems.loadout.addTemporaryUtility(playerId, config, 1) !== null
     ),
     claimObjectiveReward: (objectiveId, playerId) => (
       flow.getCoopMissionRuntime()?.coopDefenseObjectivePlacementRewardSystem?.claim(objectiveId, playerId) ?? false
@@ -46,35 +46,33 @@ export function composeWorldPowerUp(
     applyNukeEnvironmentDamage: (x, y, radius, triggeredBy) => (
       hostUpdate.applyNukeEnvironmentDamage(x, y, radius, triggeredBy)
     ),
-    notifyVoidHunterNuke: (strike) => ctx.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike),
+    notifyVoidHunterNuke: (strike) => flow.getCoopMissionRuntime()?.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike),
     coopDefenseMapXpReference: 1,
     isAdrenalineDropEnabled: (playerId) => (
-      (ctx.coopDefensePlayerModifierSystem?.getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
+      (gameplay.player?.systems.playerModifier.getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
     ),
     getAdrenalineDropChanceMultiplier: (playerId) => (
-      1 + (ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineDropChance') ?? 0)
+      1 + (gameplay.player?.systems.playerModifier.getPercentageStat(playerId, 'player.adrenalineDropChance') ?? 0)
     ),
     getAdrenalineSyringeDurationMultiplier: (playerId) => (
-      1 + (ctx.coopDefensePlayerModifierSystem?.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
+      1 + (gameplay.player?.systems.playerModifier.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
     ),
-    isLinkedBaseActive: (baseId) => ctx.baseManager?.getActiveBaseIds().has(baseId) ?? false,
+    isLinkedBaseActive: (baseId) => baseManager?.getActiveBaseIds().has(baseId) ?? false,
     getConstructionRespawnMultiplier: (constructionId) => {
-      const rock = ctx.placementSystem?.getRuntimeRock(constructionId);
+      const rock = placementSystem.getRuntimeRock(constructionId);
       if (!rock) return 1;
       const rockWorld = rockVisualHelper.gridToWorld(rock.gridX, rock.gridY);
-      return ctx.energyInjectorSystem?.getPowerUpRespawnMultiplierAt(rockWorld.x, rockWorld.y) ?? 1;
+      return gameplay.targeting?.systems.energyInjector.getPowerUpRespawnMultiplierAt(rockWorld.x, rockWorld.y) ?? 1;
     },
     onDestroy: () => {
       if (gameplay.powerUp === powerUpRuntime) gameplay.powerUp = null;
-      if (ctx.powerUpSystem === powerUpRuntime.system) ctx.powerUpSystem = null;
     },
   });
   gameplay.powerUp = powerUpRuntime;
   worldRuntime.bind(powerUpRuntime);
-  ctx.powerUpSystem = powerUpRuntime.system;
-  ctx.powerUpSystem.setArenaStartTime(bridge.getArenaStartTime());
+  powerUpRuntime.system.setArenaStartTime(bridge.getArenaStartTime());
   flow.syncActivityXpReference();
-  gameplay.player?.setPowerUpSystem(ctx.powerUpSystem);
+  gameplay.player?.setPowerUpSystem(powerUpRuntime.system);
 }
 
 /** Konstruktionsregeln der World und die world-lokale Materialisierung der persistenten Basis. */
@@ -86,9 +84,9 @@ export function composeWorldConstruction(
     scene, ctx, rockVisualHelper, flow, persistentBaseStores, worldRuntime,
     placementSystem, baseManager, persistentBaseBinding, coopMissionRuntime, activityDescriptor,
   } = input;
-  const loadoutManager = ctx.loadoutManager;
-  const burrowSystem = ctx.burrowSystem;
-  const resourceSystem = ctx.resourceSystem;
+  const loadoutManager = gameplay.player?.systems.loadout ?? null;
+  const burrowSystem = gameplay.player?.systems.burrow ?? null;
+  const resourceSystem = gameplay.player?.systems.resource ?? null;
   if (!loadoutManager || !burrowSystem || !resourceSystem) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
@@ -98,12 +96,12 @@ export function composeWorldConstruction(
     combatSystem: ctx.combatSystem,
     placementSystem,
     loadoutManager,
-    targetStatusSystem: ctx.targetStatusSystem,
-    energyInjectorSystem: ctx.energyInjectorSystem,
-    powerUpSystem: ctx.powerUpSystem,
-    modifierSystem: ctx.coopDefensePlayerModifierSystem,
+    targetStatusSystem: gameplay.targeting?.systems.targetStatus ?? null,
+    energyInjectorSystem: gameplay.targeting?.systems.energyInjector ?? null,
+    powerUpSystem: gameplay.powerUp?.system ?? null,
+    modifierSystem: gameplay.player?.systems.playerModifier ?? null,
     burrowSystem,
-    tunnelSystem: ctx.tunnelSystem,
+    tunnelSystem: gameplay.player?.systems.tunnel ?? null,
     gameAudioSystem: ctx.gameAudioSystem,
     getGameMode: () => flow.getConfiguredGameMode(),
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
@@ -156,12 +154,12 @@ export function composeWorldConstruction(
     contributions: persistentBaseStores.contributions,
     rewards: persistentBaseStores.rewards,
     placementSystem,
-    powerUpSystem: ctx.powerUpSystem,
+    powerUpSystem: gameplay.powerUp?.system ?? null,
     baseManager,
     // The WorldLifecycle sink clears its local runtime slot before destroying the runtime.
     // Read the descriptor context until that destruction has completed so PB finalization
     // still sees the live World site and can keep R-2's Construction-before-PB order.
-    getSite: () => ctx.world?.persistentBaseSite ?? null,
+    getSite: () => worldRuntime.context.persistentBaseSite,
     rockVisualHelper: rockVisualHelper,
     isHost: () => bridge.isHost(),
     getMapId: () => flow.getWorldMapId(),
@@ -202,5 +200,5 @@ export function composeWorldConstruction(
       flow.getActivityStartAnchor() ?? undefined,
     );
   }
-  gameplay.combat?.setPowerUpSystem(ctx.powerUpSystem);
+  gameplay.combat?.setPowerUpSystem(gameplay.powerUp?.system ?? null);
 }

@@ -27,6 +27,7 @@ import { allyFlowFieldId, type FlowFieldCoordinator } from '../systems/flowfield
 import type { NecromancySystem } from '../systems/NecromancySystem';
 import type { CoopMissionPlayerRuntime } from './CoopMissionPlayerRuntime';
 import type { CoopDefenseMissionProgressPresentationState, SyncedCoopDefenseCarryState } from '../types';
+import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/coopDefenseMaps';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { ActivityRuntime } from '../world/ActivityRuntimeHost';
 import {
@@ -169,6 +170,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
 
   /** Ally-Felder werden mit der Activity erzeugt und bei ihrem Ende vollstaendig verworfen. */
   readonly allyFlowFields = new Map<string, EnemyFlowFieldService>();
+  private secondaryObjectiveConfigsValue: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[] = [];
 
   constructor(
     readonly descriptor: ActivityDescriptor,
@@ -255,6 +257,16 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
    * und materialisiert ihn fuer die neue Mission neu, waehrend die `PlayerWorldRuntime` steht.
    */
   get playerActivity(): CoopMissionPlayerRuntime | null { return this.playerActivityOwner; }
+
+  get secondaryObjectiveConfigs(): readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[] {
+    return this.secondaryObjectiveConfigsValue;
+  }
+
+  setSecondaryObjectiveConfigs(
+    configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
+  ): void {
+    this.secondaryObjectiveConfigsValue = configs;
+  }
 
   setEnemyManager(manager: EnemyManager): void {
     this.claimEmptySlot('enemy manager', this.enemyOwner);
@@ -412,6 +424,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.secondaryObjectiveConfigsValue = [];
 
     const scopedBindings = this.scopedBindings;
     this.scopedBindings = [];

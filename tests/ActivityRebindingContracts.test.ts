@@ -208,7 +208,6 @@ function combatBindingHarness(
       },
     },
     respawnPlayer: () => true,
-    onSystemsChanged: () => undefined,
   };
   return {
     binding: new WorldCombatGameplayBinding(options),
@@ -343,7 +342,6 @@ describe('Phase 10B.7 – Activity rebinding', () => {
 
   it('haelt die Player-Upgrade-Systeme World-scoped und bindet Enemy A, null und B', () => {
     let enemyManager: EnemyManager | null = null;
-    const projections: unknown[] = [];
     const runtime = new WorldPlayerGameplayRuntime({
       playerManager: service({ getAllPlayers: () => [], getPlayer: () => undefined }) as PlayerManager,
       projectileManager: service(),
@@ -377,7 +375,6 @@ describe('Phase 10B.7 – Activity rebinding', () => {
           recordUltimateUsed: () => undefined,
         },
       },
-      onSystemsChanged: (systems) => projections.push(systems),
     });
     const dependentSystems = [
       runtime.systems.guardianSpirit,
@@ -399,7 +396,6 @@ describe('Phase 10B.7 – Activity rebinding', () => {
     runtime.updateEnemyManager(enemyB);
     for (const spy of managerSpies) expect(spy).toHaveBeenLastCalledWith(enemyB);
     expect(dependentSystems).toEqual(initialSystems);
-    expect(projections).toHaveLength(1);
     runtime.destroy();
   });
 

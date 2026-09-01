@@ -3,8 +3,8 @@ import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import {
   WorldCombatGameplayBinding,
-  type WorldCombatGameplaySystems,
 } from '../../world/WorldCombatGameplayBinding';
+import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
 import type { TrackedProjectile } from '../../types';
@@ -50,26 +50,45 @@ export function composeWorldCombatGameplay(
     isActivityActive: () => flow.isActivityActive(),
     getWorldParticipation: (playerId) => flow.getWorldParticipation(playerId),
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
-    getEnemyManager: () => ctx.enemyManager,
+    getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
     getPlayerSystems: () => gameplay.player?.systems ?? null,
-    getPowerUpSystem: () => ctx.powerUpSystem,
-    getTargetStatusSystem: () => ctx.targetStatusSystem,
-    getEnergyInjectorSystem: () => ctx.energyInjectorSystem,
+    getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
+    getTargetStatusSystem: () => gameplay.targeting?.systems.targetStatus ?? null,
+    getEnergyInjectorSystem: () => gameplay.targeting?.systems.energyInjector ?? null,
     getWorldGeometryBinding: () => gameplay.geometry,
-    getPersistentBaseId: () => ctx.world?.persistentBaseSite?.baseId,
+    getPersistentBaseId: () => world.persistentBaseSite?.baseId,
     getConstructionMuzzleOffset: (constructionId) => gameplay.construction?.getMuzzleOffset(constructionId),
-    getTargetFootprint: (target) => resolveTargetFootprint(ctx, rockVisualHelper, target),
-    resolveObstacleDamage: (rockId, damage, attackerId) => resolveObstacleDamage(ctx, rockId, damage, attackerId),
+    getTargetFootprint: (target) => resolveTargetFootprint(
+      ctx.playerManager,
+      flow.getCoopMissionRuntime(),
+      input.worldRuntime,
+      rockVisualHelper,
+      target,
+    ),
+    resolveObstacleDamage: (rockId, damage, attackerId) => resolveObstacleDamage(
+      ctx.combatSystem,
+      placementSystem,
+      rockId,
+      damage,
+      attackerId,
+    ),
     applyObstacleDamageById: (rockId, damage, attackerId) => rockVisualHelper.applyObstacleDamageById(rockId, damage, attackerId),
     handleDestroyedRock: (rockId, reason, attackerId) => rockVisualHelper.handleDestroyedRock(rockId, reason, attackerId),
     updateTurretAngle: (rockId, angle) => rockVisualHelper.updateTurretAngle(rockId, angle),
     spawnImpactCloud: (projectile, x, y) => spawnImpactCloudFromProjectile(ctx, projectile, x, y),
     resetPlayerPosition: (playerId, x, y) => flow.getCoopMissionRuntime()?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y),
-    dropBeer: (playerId, x, y) => ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y),
+    dropBeer: (playerId, x, y) => flow.getCaptureTheBeerSystem()?.dropBeerForPlayer(playerId, x, y),
     dropCarryForPlayer: (playerId, x, y) => flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.dropForPlayer(playerId, x, y),
     handlePlayerUnavailable: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId),
     handlePlayerDeath: (playerId) => flow.getPlayerActivityRuntime()?.handlePlayerDeath(playerId),
-    handleCoopItemKill: (killerId, victimId, x, y) => hostHandleCoopDefenseItemKill(ctx, killerId, victimId, x, y),
+    handleCoopItemKill: (killerId, victimId, x, y) => hostHandleCoopDefenseItemKill(
+      ctx,
+      gameplay.player,
+      killerId,
+      victimId,
+      x,
+      y,
+    ),
     getSecondaryObjectiveState: (objectiveId) => {
       const state = bridge.getCoopDefenseSecondaryObjectivePresentationState();
       return state?.find(entry => entry.objectiveId === objectiveId)?.state ?? null;
@@ -79,10 +98,10 @@ export function composeWorldCombatGameplay(
     reconcilePersistentBaseWorld: () => flow.reconcilePersistentBaseWorld(),
     syncActiveBaseIds,
     getMissionBarrierObstacles: () => flow.getCoopMissionRuntime()?.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
-    getRockTargets: () => (ctx.arenaResult?.rockPhysicsProxies ?? []).flatMap(rock => rock && rock.active ? [{ active: true, x: rock.x, y: rock.y }] : []),
+    getRockTargets: () => arenaResult.rockPhysicsProxies.flatMap(rock => rock && rock.active ? [{ active: true, x: rock.x, y: rock.y }] : []),
     getWorldTrain: () => gameplay.train,
-    getTimebombSystem: () => ctx.coopDefenseTimebombSystem,
-    getNecromancySystem: () => ctx.necromancySystem,
+    getTimebombSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTimebombSystem ?? null,
+    getNecromancySystem: () => flow.getCoopMissionRuntime()?.necromancySystem ?? null,
     hostUpdate: hostUpdate,
     createEnergyShieldSystem: (resource, shield) => new EnergyShieldSystem(ctx.playerManager, resource, bridge, shield),
     network: {
@@ -117,16 +136,9 @@ export function composeWorldCombatGameplay(
       },
     },
     respawnPlayer: (playerId) => flow.getPlayerActivityRuntime()?.consumeRespawn(playerId) ?? true,
-    getTeamHpRegenBonus: (playerId) => ctx.coopDefenseTeamBuffSystem?.getHpRegenBonus(Date.now(), bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
-    getMatrixDamageReduction: (footprint, applies) => ctx.reinforcementMatrixSystem?.getDamageReductionForFootprint(footprint, Date.now(), applies) ?? 0,
-    getMatrixDamageMultiplier: (footprint, applies) => ctx.reinforcementMatrixSystem?.getDamageMultiplierForFootprint(footprint, Date.now(), applies) ?? 1,
-    onSystemsChanged: (systems: WorldCombatGameplaySystems | null) => {
-      ctx.shieldBuffSystem = systems?.shieldBuff ?? null;
-      ctx.timeBubbleSystem = systems?.timeBubble ?? null;
-      ctx.teslaDomeSystem = systems?.teslaDome ?? null;
-      ctx.energyShieldSystem = systems?.energyShield ?? null;
-      ctx.turretSystem = systems?.turret ?? null;
-    },
+    getTeamHpRegenBonus: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(Date.now(), bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
+    getMatrixDamageReduction: (footprint, applies) => gameplay.targeting?.systems.reinforcementMatrix.getDamageReductionForFootprint(footprint, Date.now(), applies) ?? 0,
+    getMatrixDamageMultiplier: (footprint, applies) => gameplay.targeting?.systems.reinforcementMatrix.getDamageMultiplierForFootprint(footprint, Date.now(), applies) ?? 1,
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
@@ -162,12 +174,13 @@ function spawnImpactCloudFromProjectile(
  */
 function hostHandleCoopDefenseItemKill(
   ctx: ArenaContext,
+  playerRuntime: WorldPlayerGameplayRuntime | null,
   killerId: string,
   victimId: string,
   x: number,
   y: number,
 ): void {
-  const runtime = ctx.coopDefenseItemRuntimeSystem;
+  const runtime = playerRuntime?.systems.itemRuntime;
   // Nur der tatsaechliche Killer, nicht das ganze Team: Kills durch Verbuendete zaehlen nicht.
   if (!runtime || bridge.getPlayerProfile(killerId) === undefined) return;
 
@@ -179,7 +192,7 @@ function hostHandleCoopDefenseItemKill(
   if (origin?.kind !== 'direct' || origin.slot !== 'weapon1') return;
   if (!runtime.rollFireChunksOnKill(killerId)) return;
 
-  ctx.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(killerId, x, y, {
+  playerRuntime?.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(killerId, x, y, {
     count: COOP_DEFENSE_AFFIX_RULES.fireChunkCount,
     searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
     flightMs: 320,

@@ -50,6 +50,15 @@ function fakeFrameCoordinator() {
   return {
     activityStepResolver: null as (() => unknown) | null,
     setActivityStepResolver(resolver: () => unknown) { this.activityStepResolver = resolver; },
+    setWorldRuntimeResolver: vi.fn(),
+    setWorldTargetingRuntimeResolver: vi.fn(),
+    setWorldTrainRuntimeResolver: vi.fn(),
+    setWorldPlayerGameplayRuntimeResolver: vi.fn(),
+    setWorldCombatGameplayBindingResolver: vi.fn(),
+    setWorldPowerUpRuntimeResolver: vi.fn(),
+    setWorldSupportGameplayRuntimeResolver: vi.fn(),
+    setCoopMissionRuntimeResolver: vi.fn(),
+    setCaptureTheBeerRuntimeResolver: vi.fn(),
     runHostUpdate: vi.fn(),
     runClientUpdate: vi.fn(),
   };
@@ -275,7 +284,7 @@ describe('Checkpoint C – Flow besitzt nur Flow', () => {
       .toBeLessThan(matchStart.indexOf('this.worldLifecycle.endInstance();'));
     // Der Lobby-Fast-Reinstance verwendet die freigegebene Darstellung weiter.
     const worldChange = bodyOf(flow, '  detectWorldChange(', '\n  /**');
-    expect(worldChange).toContain('const reusablePresentation = this.ctx.worldPresentation');
+    expect(worldChange).toContain('const reusablePresentation = this.worldRuntime?.presentation');
     expect(worldChange).toContain('?? this.worldPresentationHandoff.pending;');
     expect(worldChange).toContain('canFastReinstance');
     const build = bodyOf(flow, '  buildWorld(', '\n  tearDownArena(');

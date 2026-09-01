@@ -2,6 +2,8 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_ROWS } from '../../conf
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
 import type { ArenaContext } from '../../scenes/arena/ArenaContext';
+import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
+import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import type { CombatDamageObservation } from '../../systems/CombatSystem';
 import type { GamePhase, LoadoutCommitSnapshot, WeaponSlot } from '../../types';
 import {
@@ -117,6 +119,8 @@ export class WeaponBalanceLabRuntime {
 
   constructor(
     private readonly getContext: () => ArenaContext,
+    private readonly getPlayerGameplayRuntime: () => WorldPlayerGameplayRuntime | null,
+    private readonly getCoopMissionRuntime: () => CoopMissionRuntime | null,
     private readonly onResult: (result: RuntimeBenchmarkResult) => void,
     private readonly onFinished: () => void,
   ) {}
@@ -179,9 +183,11 @@ export class WeaponBalanceLabRuntime {
     const active = this.armed;
     if (!active || !bridge.isHost()) return false;
     const ctx = this.getContext();
+    const playerSystems = this.getPlayerGameplayRuntime()?.systems;
+    const enemyManager = this.getCoopMissionRuntime()?.enemyManager;
     const playerId = bridge.getLocalPlayerId();
     const player = ctx.playerManager.getPlayer(playerId);
-    if (!player || !ctx.loadoutManager || !ctx.resourceSystem || !ctx.enemyManager) return false;
+    if (!player || !playerSystems || !enemyManager) return false;
 
     const playerX = ARENA_OFFSET_X + PLAYER_GRID_X * CELL_SIZE + CELL_SIZE * 0.5;
     const playerY = ARENA_OFFSET_Y + Math.floor(GRID_ROWS / 2) * CELL_SIZE + CELL_SIZE * 0.5;
@@ -192,7 +198,7 @@ export class WeaponBalanceLabRuntime {
     for (const yOffset of offsets) {
       const x = playerX + active.request.distance;
       const y = playerY + yOffset;
-      const enemy = ctx.enemyManager.hostSpawnAtWorld(x, y, 'zombie-badger', {
+      const enemy = enemyManager.hostSpawnAtWorld(x, y, 'zombie-badger', {
         originId: 'weapon-balance-lab',
       });
       enemy.setHp(TARGET_HP, TARGET_HP);
@@ -204,13 +210,13 @@ export class WeaponBalanceLabRuntime {
     this.removeDamageObserver = ctx.combatSystem.addDamageDealtObserver((event) => {
       this.recordDamage(event);
     });
-    this.removeAdrenalineObserver = ctx.resourceSystem.addAdrenalineDrainObserver(
+    this.removeAdrenalineObserver = playerSystems.resource.addAdrenalineDrainObserver(
       (observedPlayerId, _requested, drained) => {
         if (observedPlayerId !== playerId || !this.isInMeasurementWindow()) return;
         this.adrenalineConsumed += Math.max(0, drained);
       },
     );
-    this.removeAdrenalineGainObserver = ctx.resourceSystem.addAdrenalineGainObserver(
+    this.removeAdrenalineGainObserver = playerSystems.resource.addAdrenalineGainObserver(
       (observedPlayerId, _requested, gained) => {
         if (observedPlayerId !== playerId || !this.isInMeasurementWindow()) return;
         this.adrenalineGenerated += Math.max(0, gained);
@@ -222,6 +228,8 @@ export class WeaponBalanceLabRuntime {
 
   private pinParticipants(): void {
     const ctx = this.getContext();
+    const playerSystems = this.getPlayerGameplayRuntime()?.systems;
+    const enemyManager = this.getCoopMissionRuntime()?.enemyManager;
     const active = this.armed;
     if (!active) return;
     const player = ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
@@ -230,7 +238,7 @@ export class WeaponBalanceLabRuntime {
     player?.setPosition(playerX, playerY);
     player?.body.setVelocity(0, 0);
     for (const [enemyId, position] of this.targetPositions) {
-      const enemy = ctx.enemyManager?.getEnemy(enemyId);
+      const enemy = enemyManager?.getEnemy(enemyId);
       if (!enemy) continue;
       enemy.setPosition(position.x, position.y);
       enemy.body.setVelocity(0, 0);
@@ -238,7 +246,7 @@ export class WeaponBalanceLabRuntime {
     // W2 bleibt praktisch unbegrenzt; der echte Drain wird vor dem Auffuellen beobachtet.
     // W1 startet jeden Frame leer, damit echte Treffer-Gutschriften nicht am Maximum verpuffen.
     // setAdrenaline selbst ist kein Gain-Event und landet daher nicht in der Telemetrie.
-    const resources = ctx.resourceSystem;
+    const resources = playerSystems?.resource;
     if (resources) {
       const playerId = bridge.getLocalPlayerId();
       resources.setAdrenaline(
@@ -251,12 +259,13 @@ export class WeaponBalanceLabRuntime {
   private tryFire(): void {
     const active = this.armed;
     const ctx = this.getContext();
+    const loadoutManager = this.getPlayerGameplayRuntime()?.systems.loadout;
     const playerId = bridge.getLocalPlayerId();
     const player = ctx.playerManager.getPlayer(playerId);
     const target = [...this.targetPositions.values()][Math.floor(this.targetPositions.size / 2)];
-    if (!active || !player || !target || !ctx.loadoutManager) return;
+    if (!active || !player || !target || !loadoutManager) return;
     const angle = Math.atan2(target.y - player.y, target.x - player.x);
-    const result = ctx.loadoutManager.use(
+    const result = loadoutManager.use(
       active.request.slot,
       playerId,
       angle,

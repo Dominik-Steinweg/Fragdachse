@@ -41,7 +41,6 @@ export interface WorldSupportGameplayRuntimeOptions {
     config: AirstrikeUltimateConfig,
     triggeredBy: string,
   ) => void;
-  readonly onSystemsChanged: (systems: WorldSupportGameplaySystems | null) => void;
 }
 
 /** Owns world-scoped detonation and authored/player support-ultimate state. */
@@ -60,7 +59,6 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
       options.applyAirstrikeEnvironmentDamage(x, y, radius, config, triggeredBy);
     });
     this.systems = { detonation, armageddon, airstrike };
-    options.onSystemsChanged(this.systems);
     options.combatSystem.setDetonationSystem(detonation);
     options.loadoutManager.setArmageddonSystem(armageddon);
     options.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, config) => {
@@ -88,6 +86,5 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
     this.systems.airstrike.clear();
     this.systems.airstrike.setExplodedCallback(() => { /* noop */ });
     this.systems.airstrike.setResolvedCallback(null);
-    this.options.onSystemsChanged(null);
   }
 }

@@ -2,8 +2,11 @@ import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
 import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import { CELL_SIZE } from '../../config';
-import type { ArenaContext } from './ArenaContext';
 import type { RockVisualHelper } from './RockVisualHelper';
+import type { CombatSystem } from '../../systems/CombatSystem';
+import type { PlacementSystem } from '../../systems/PlacementSystem';
+import type { PlayerManager } from '../../entities/PlayerManager';
+import type { WorldRuntime } from '../../world/WorldRuntime';
 
 /**
  * Gemeinsame Weltabfragen der Arena-Composition.
@@ -16,54 +19,55 @@ import type { RockVisualHelper } from './RockVisualHelper';
 type EnemyNavigationFlowField = NonNullable<CoopMissionRuntime['enemyPlayerFlowFieldService']>;
 
 /** Das Navigationsfeld, das Gegner-Sonderbewegungen fuer Bodenpruefungen lesen. */
-function getEnemyNavigationFlowField(ctx: ArenaContext): EnemyNavigationFlowField | null {
-  return ctx.enemyPlayerFlowFieldService ?? ctx.enemyFlowFieldService;
+function getEnemyNavigationFlowField(runtime: CoopMissionRuntime | null): EnemyNavigationFlowField | null {
+  return runtime?.enemyPlayerFlowFieldService ?? runtime?.enemyFlowFieldService ?? null;
 }
 
 /** Physisch freie Bodenposition; Erreichbarkeit ist fuer reine Landepunktpruefungen optional. */
-export function isFreeEnemyGroundAt(ctx: ArenaContext, x: number, y: number, radius: number): boolean {
-  const flowFieldService = getEnemyNavigationFlowField(ctx);
+export function isFreeEnemyGroundAt(runtime: CoopMissionRuntime | null, x: number, y: number, radius: number): boolean {
+  const flowFieldService = getEnemyNavigationFlowField(runtime);
   if (!flowFieldService) return true;
   return flowFieldService.isCircleGroundFreeAt(x, y, radius);
 }
 
 /** Sichere Auftauchposition: Koerperfreiheit und Flowfield-Erreichbarkeit zugleich. */
-export function isSafeEnemyGroundAt(ctx: ArenaContext, x: number, y: number, radius: number): boolean {
-  const flowFieldService = getEnemyNavigationFlowField(ctx);
+export function isSafeEnemyGroundAt(runtime: CoopMissionRuntime | null, x: number, y: number, radius: number): boolean {
+  const flowFieldService = getEnemyNavigationFlowField(runtime);
   if (!flowFieldService) return true;
   return flowFieldService.isCirclePositionFreeAt(x, y, radius);
 }
 
 export function findSafeEnemyGroundPosition(
-  ctx: ArenaContext,
+  runtime: CoopMissionRuntime | null,
   x: number,
   y: number,
   radius: number,
   maxRadiusCells: number,
 ): { x: number; y: number } | null {
-  return getEnemyNavigationFlowField(ctx)?.findNearestSafeWorldPosition(x, y, radius, maxRadiusCells) ?? null;
+  return getEnemyNavigationFlowField(runtime)?.findNearestSafeWorldPosition(x, y, radius, maxRadiusCells) ?? null;
 }
 
 export function hasWalkableEnemyCircleLine(
-  ctx: ArenaContext,
+  runtime: CoopMissionRuntime | null,
   fromX: number,
   fromY: number,
   toX: number,
   toY: number,
   radius: number,
 ): boolean {
-  return getEnemyNavigationFlowField(ctx)?.hasWalkableCircleLine(fromX, fromY, toX, toY, radius) ?? true;
+  return getEnemyNavigationFlowField(runtime)?.hasWalkableCircleLine(fromX, fromY, toX, toY, radius) ?? true;
 }
 
 /** Gemeinsamer externer Hindernisschaden fuer Projektile und Gegner-Spezialeffekte. */
 export function resolveObstacleDamage(
-  ctx: ArenaContext,
+  combatSystem: CombatSystem,
+  placementSystem: PlacementSystem | null,
   index: number,
   damage: number,
   attackerId: string,
 ): number {
-  const runtimeRock = ctx.placementSystem?.getRuntimeRock(index);
-  return ctx.combatSystem.resolveExternalTargetDamage(
+  const runtimeRock = placementSystem?.getRuntimeRock(index);
+  return combatSystem.resolveExternalTargetDamage(
     {
       targetType: runtimeRock?.constructionId ? 'construction' : 'rock',
       targetId: String(index),
@@ -75,24 +79,26 @@ export function resolveObstacleDamage(
 
 /** Liefert die reale Kollisions-/Darstellungsflaeche fuer Schutz- und Statusabfragen. */
 export function resolveTargetFootprint(
-  ctx: ArenaContext,
+  playerManager: PlayerManager,
+  coopMissionRuntime: CoopMissionRuntime | null,
+  worldRuntime: WorldRuntime | null,
   rockVisualHelper: RockVisualHelper,
   target: TargetStatusTarget,
 ): TargetFootprint | null {
   if (target.targetType === 'player') {
-    const player = ctx.playerManager.getPlayer(target.targetId);
+    const player = playerManager.getPlayer(target.targetId);
     if (!player?.active) return null;
     const bounds = player.getBounds();
     return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
   }
   if (target.targetType === 'enemy') {
-    const enemy = ctx.enemyManager?.getEnemy(target.targetId);
+    const enemy = coopMissionRuntime?.enemyManager?.getEnemy(target.targetId);
     if (!enemy?.sprite.active) return null;
     const bounds = enemy.sprite.getBounds();
     return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };
   }
   if (target.targetType === 'base') {
-    const base = ctx.baseManager?.getBase(target.targetId);
+    const base = worldRuntime?.materialization?.bases?.getBase(target.targetId);
     if (!base || (base.isInert?.() ?? false)) return null;
     const parts = base.getCellBodies().map((body) => {
       const bounds = body.getBounds();
@@ -131,12 +137,12 @@ export function resolveTargetFootprint(
 
   const rockId = Number(target.targetId);
   if (!Number.isFinite(rockId)) return null;
-  const runtimeRock = ctx.placementSystem?.getRuntimeRock(rockId);
+  const runtimeRock = worldRuntime?.materialization?.placement?.getRuntimeRock(rockId);
   if (runtimeRock) {
     const world = rockVisualHelper.gridToWorld(runtimeRock.gridX, runtimeRock.gridY);
     return { x: world.x, y: world.y, width: CELL_SIZE, height: CELL_SIZE };
   }
-  const rock = ctx.arenaResult?.rockPhysicsProxies[rockId];
+  const rock = worldRuntime?.materialization?.arena?.rockPhysicsProxies[rockId];
   if (!rock?.active) return null;
   const bounds = rock.getBounds();
   return { x: bounds.centerX, y: bounds.centerY, width: bounds.width, height: bounds.height };

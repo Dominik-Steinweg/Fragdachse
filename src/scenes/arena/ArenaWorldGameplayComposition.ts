@@ -73,6 +73,7 @@ import type { WorldParticipation } from '../../world/WorldParticipation';
 /** Die Fragen der World-Composition an Flow und laufende Activity. */
 export interface ArenaWorldGameplayFlowPorts {
   readonly getCoopMissionRuntime: () => CoopMissionRuntime | null;
+  readonly getCaptureTheBeerSystem: () => import('../../systems/CaptureTheBeerSystem').CaptureTheBeerSystem | null;
   readonly getPlayerActivityRuntime: () => CoopMissionPlayerRuntime | null;
   readonly isCoopMissionActivity: () => boolean;
   readonly isActivityActive: () => boolean;

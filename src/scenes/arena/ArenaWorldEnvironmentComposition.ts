@@ -1,11 +1,10 @@
 import { bridge } from '../../network/bridge';
 import { CAPTURE_THE_BEER_MODE } from '../../gameModes';
 import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
-import { WorldTargetingRuntime, type WorldTargetingSystems } from '../../world/WorldTargetingRuntime';
+import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import {
   WorldSupportGameplayRuntime,
-  type WorldSupportGameplaySystems,
 } from '../../world/WorldSupportGameplayRuntime';
 import type {
   ArenaWorldGameplay,
@@ -67,13 +66,7 @@ export function composeWorldGeometry(
   gameplay.geometry = worldGeometryBinding;
   worldRuntime.bind(worldGeometryBinding);
   // Host und Client halten das System: der Host autoritativ, der Client fuer die Darstellung.
-  const targetingRuntime = new WorldTargetingRuntime({
-    onSystemsChanged: (systems: WorldTargetingSystems | null) => {
-      ctx.reinforcementMatrixSystem = systems?.reinforcementMatrix ?? null;
-      ctx.energyInjectorSystem = systems?.energyInjector ?? null;
-      ctx.targetStatusSystem = systems?.targetStatus ?? null;
-    },
-  });
+  const targetingRuntime = new WorldTargetingRuntime();
   gameplay.targeting = targetingRuntime;
   worldRuntime.bind(targetingRuntime);
   
@@ -85,7 +78,7 @@ export function composeWorldTrain(
   input: ArenaWorldGameplayCompositionInput,
   gameplay: ArenaWorldGameplay,
 ): void {
-  const { scene, ctx, renderers, hostUpdate, worldRuntime, world, presentation } = input;
+  const { scene, ctx, renderers, hostUpdate, flow, worldRuntime, world, presentation } = input;
   // The renderer is World-scoped on every peer; authoritative train setup is owned by the
   // World train runtime after the systems it references have been bound.
   const trainRuntime = new WorldTrainRuntime({
@@ -121,12 +114,11 @@ export function composeWorldTrain(
         ),
       },
     },
-    getEnemyManager: () => ctx.enemyManager,
-    getBurrowSystem: () => ctx.burrowSystem,
-    getTimeBubbleSystem: () => ctx.timeBubbleSystem,
-    getTranslocatorSystem: () => ctx.translocatorSystem,
-    getPowerUpSystem: () => ctx.powerUpSystem,
-    setCurrentTrain: (train) => { ctx.trainManager = train; },
+    getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    getBurrowSystem: () => gameplay.player?.systems.burrow ?? null,
+    getTimeBubbleSystem: () => gameplay.combat?.systems?.timeBubble ?? null,
+    getTranslocatorSystem: () => gameplay.player?.systems.translocator ?? null,
+    getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     setClassicTrainSpawned: (spawned) => { hostUpdate.setClassicTrainSpawned(spawned); },
     onRendererChanged: (renderer) => { renderers.train = renderer; },
   });
@@ -142,8 +134,8 @@ export function composeWorldSupportGameplay(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, hostUpdate, flow, worldRuntime, world, layout, arenaResult, isCoopMission } = input;
-  const loadoutManager = ctx.loadoutManager;
-  const burrowSystem = ctx.burrowSystem;
+  const loadoutManager = gameplay.player?.systems.loadout ?? null;
+  const burrowSystem = gameplay.player?.systems.burrow ?? null;
   if (!loadoutManager || !burrowSystem) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
@@ -163,11 +155,6 @@ export function composeWorldSupportGameplay(
     applyAirstrikeEnvironmentDamage: (x, y, radius, config, triggeredBy) => (
       hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, config, triggeredBy)
     ),
-    onSystemsChanged: (systems: WorldSupportGameplaySystems | null) => {
-      ctx.detonationSystem = systems?.detonation ?? null;
-      ctx.armageddonSystem = systems?.armageddon ?? null;
-      ctx.airstrikeSystem = systems?.airstrike ?? null;
-    },
   });
   gameplay.support = supportGameplayRuntime;
   worldRuntime.bind(supportGameplayRuntime);

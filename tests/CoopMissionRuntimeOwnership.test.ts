@@ -320,8 +320,8 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       expect(teardown).not.toContain(legacyTeardown);
     }
 
-    // Die alten Context-Felder sind nur noch gerichtete Lesefassaden. Ein zweiter Writer wuerde
-    // neben der CoopMissionRuntime wieder eine gleichwertige mutable Wahrheit eroeffnen.
+    // Phase 11A entfernt auch die gerichteten Context-Lesefassaden. Die CoopMissionRuntime ist
+    // der einzige Zugriffspfad fuer ihren Runtime-Graphen.
     for (const compatibilityField of [
       'enemyManager',
       'flowFieldCoordinator',
@@ -343,10 +343,7 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       'coopDefenseTimebombSystem',
       'necromancySystem',
     ]) {
-      expect(
-        [...source.matchAll(new RegExp(`this\\.ctx\\.${compatibilityField}\\s*=`, 'g'))],
-        `${compatibilityField} gained another writer`,
-      ).toHaveLength(1);
+      expect(source, compatibilityField).not.toContain(`this.ctx.${compatibilityField}`);
     }
   });
 
@@ -356,7 +353,7 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
       'utf8',
     );
     const start = source.indexOf('    runtime.bind({');
-    const end = source.indexOf('    this.syncCoopMissionCompatibilityBindings(runtime);', start);
+    const end = source.indexOf('    this.attachCoopMissionBaseBinding(activity, runtime);', start);
     const binding = source.slice(start, end);
     for (const consumer of [
       'combatSystem',

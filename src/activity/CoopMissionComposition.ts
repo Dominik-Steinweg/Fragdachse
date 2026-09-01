@@ -71,9 +71,6 @@ export interface CoopMissionCompositionOptions {
   readonly isHost: () => boolean;
   readonly getHumanPlayerCount: () => number;
   readonly getParticipantIds: () => readonly string[];
-  readonly setSecondaryObjectiveConfigs: (
-    configs: ReturnType<typeof resolveCoopDefenseMapSecondaryObjectives>,
-  ) => void;
   readonly nextGenerationId: () => number;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
   readonly getSecondsLeft: () => number;
@@ -197,7 +194,7 @@ export class CoopMissionComposition {
       attach: () => { /* train is materialized by the map-event composition */ },
       detach: () => { this.options.train.releaseActivityTrain(); },
     });
-    this.options.setSecondaryObjectiveConfigs(
+    runtime.setSecondaryObjectiveConfigs(
       resolveCoopDefenseMapSecondaryObjectives(activityMapConfig, humanPlayerCount),
     );
 

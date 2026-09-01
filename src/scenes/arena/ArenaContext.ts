@@ -15,67 +15,8 @@ import type { CenterHUD }           from '../../ui/CenterHUD';
 import type { AimSystem }           from '../../ui/AimSystem';
 import type { ArenaCountdownOverlay } from '../../ui/ArenaCountdownOverlay';
 import type { LocalArenaHudData }   from '../../ui/LocalArenaHudData';
-import type { ArenaBuilderResult }  from '../../arena/ArenaBuilder';
-import type { RockRegistry }        from '../../arena/RockRegistry';
-import type { LightOccluderIndex }  from '../../effects/LightOccluderIndex';
-import type { PlacementSystem }     from '../../systems/PlacementSystem';
-import type { ReinforcementMatrixSystem } from '../../systems/ReinforcementMatrixSystem';
-import type { EnergyInjectorSystem } from '../../systems/EnergyInjectorSystem';
-import type { TargetStatusSystem } from '../../systems/TargetStatusSystem';
-import type { ResourceSystem }      from '../../systems/ResourceSystem';
-import type { BurrowSystem }        from '../../systems/BurrowSystem';
-import type { LoadoutManager }      from '../../loadout/LoadoutManager';
-import type { PowerUpSystem }       from '../../powerups/PowerUpSystem';
-import type { DetonationSystem }    from '../../systems/DetonationSystem';
-import type { ArmageddonSystem }    from '../../systems/ArmageddonSystem';
-import type { AirstrikeSystem }     from '../../systems/AirstrikeSystem';
-import type { EnergyShieldSystem }  from '../../systems/EnergyShieldSystem';
-import type { ShieldBuffSystem }    from '../../systems/ShieldBuffSystem';
-import type { TeslaDomeSystem }     from '../../systems/TeslaDomeSystem';
-import type { TurretSystem }        from '../../systems/TurretSystem';
-import type { CoopDefenseEnemyAttackSystem } from '../../systems/CoopDefenseEnemyAttackSystem';
-import type { CoopDefenseEnemyAbilitySystem } from '../../systems/CoopDefenseEnemyAbilitySystem';
-import type { CoopDefenseEnemyTrainAwarenessSystem } from '../../systems/CoopDefenseEnemyTrainAwarenessSystem';
-import type { CoopDefenseEnemyBurrowSystem } from '../../systems/CoopDefenseEnemyBurrowSystem';
-import type { CoopDefenseEnemyDodgeSystem } from '../../systems/CoopDefenseEnemyDodgeSystem';
-import type { CoopDefenseEnemyCombatPositioningSystem } from '../../systems/CoopDefenseEnemyCombatPositioningSystem';
-import type { CoopDefenseVoidHunterSystem } from '../../systems/CoopDefenseVoidHunterSystem';
-import type { CoopDefenseTimebombSystem } from '../../systems/CoopDefenseTimebombSystem';
-import type { EnemyStrategicTargetService } from '../../systems/EnemyStrategicTargetService';
-import type { EnemyAiTargetCatalog } from '../../systems/EnemyAiTargetCatalog';
-import type { CoopDefensePlayerModifierSystem } from '../../systems/CoopDefensePlayerModifierSystem';
-import type { GuardianSpiritSystem } from '../../systems/GuardianSpiritSystem';
-import type { RepairDroneSystem } from '../../systems/RepairDroneSystem';
-import type { SlimeTrailSystem } from '../../systems/SlimeTrailSystem';
-import type { FlamethrowerUpgradeSystem } from '../../systems/FlamethrowerUpgradeSystem';
-import type { CoopDefenseItemRuntimeSystem } from '../../systems/CoopDefenseItemRuntimeSystem';
-import type { WeaponUpgradeSystem } from '../../systems/WeaponUpgradeSystem';
-import type { Ak47StrategicTargetSystem } from '../../systems/Ak47StrategicTargetSystem';
-import type { NecromancySystem } from '../../systems/NecromancySystem';
-import type { CoopDefenseSpawnExecutor } from '../../systems/CoopDefenseSpawnExecutor';
-import type { CoopDefensePersistentPressureSystem } from '../../systems/CoopDefensePersistentPressureSystem';
-import type { CoopDefenseBossSystem } from '../../systems/CoopDefenseBossSystem';
-import type { CoopDefenseMapDirector } from '../../systems/CoopDefenseMapDirector';
-import type { CoopDefenseMapEventDirector } from '../../systems/CoopDefenseMapEventDirector';
 import type { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
-import type { CoopDefenseTeamBuffSystem } from '../../systems/CoopDefenseTeamBuffSystem';
-import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../../config/coopDefenseMaps';
-import type { TranslocatorSystem }  from '../../systems/TranslocatorSystem';
-import type { CaptureTheBeerSystem } from '../../systems/CaptureTheBeerSystem';
-import type { BaseManager }          from '../../entities/BaseManager';
-import type { EnemyManager }         from '../../entities/EnemyManager';
-import type { TunnelSystem } from '../../systems/TunnelSystem';
-import type { TrainManager }        from '../../train/TrainManager';
 import type { DecoySystem }         from '../../systems/DecoySystem';
-import type { TimeBubbleSystem }    from '../../systems/TimeBubbleSystem';
-import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
-import type { FlowFieldCoordinator } from '../../systems/flowfield/FlowFieldCoordinator';
-import type { ArenaLayout, SyncedCoopDefenseCarryItem } from '../../types';
-import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
-import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
-import type { WorldMaterialization } from '../../world/WorldMaterialization';
-import type { WorldPresentationBinding } from '../../world/WorldPresentationBinding';
-import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 
 interface PlayerStatusRingLike {
   setActive(active: boolean): void;
@@ -83,15 +24,13 @@ interface PlayerStatusRingLike {
 }
 
 /**
- * Shared dependency container passed to all arena coordinators.
+ * Scene-lifetime infrastructure shared by arena coordinators.
  *
  * Scene-lifetime systems are readonly – they exist from create() until the scene
  * is destroyed and never change identity.
  *
- * World-, Activity- und Round-scoped systems are writable and may have different
- * lifetimes. World-Runtime can exist without an Activity or Round; Activity- and
- * Round-Runtime is created and cleared only for the corresponding activity lifecycle.
- * Coordinators must always null-check nullable fields before use.
+ * World- und Activity-Runtime gehoeren ihren konkreten Ownern und sind absichtlich nicht Teil
+ * dieses Contexts. Consumer erhalten direkte Owner-Referenzen oder kleine fachliche Ports.
  */
 export interface ArenaContext {
   // ── Scene-lifetime (always present after create()) ────────────────────────
@@ -115,111 +54,8 @@ export interface ArenaContext {
   readonly arenaCountdown:    ArenaCountdownOverlay | null;
   readonly playerStatusRing:  PlayerStatusRingLike | null;
 
-  // ── World-/Activity-scoped Compatibility-Fassaden ─────────────────────────
-  // World-State gehoert der WorldRuntime. Die in Phase 5 migrierten Enemy-/Encounter-/Flowfield-
-  // Felder werden ausschliesslich aus CoopMissionRuntime gespiegelt, bis ihre Consumer in den
-  // folgenden Phasen auf kleine Owner-Vertraege umgestellt sind.
-  /**
-   * Kanonischer Kontext der laufenden World-Instanz: Identitaet, Metrik, Basen und die
-   * persistente Basisstelle. World-scoped Zustand wird hierueber gelesen, nicht aus mutablen
-   * Modulvariablen oder erneut aus der Lobby-Auswahl.
-   */
-  world:             WorldRuntimeContext | null;
-  /**
-   * Der mutable World-Gameplay-State der laufenden Instanz. Er gehoert der `WorldRuntime` und
-   * faellt mit ihr; dieses Feld ist der Zugriffspfad der noch nicht migrierten Consumer.
-   */
-  worldMaterialization: WorldMaterialization | null;
-  /**
-   * Die lokale Darstellung der laufenden World-Instanz.
-   *
-   * Sie folgt der `WorldRuntime`, nicht dem Handoff: Sobald eine Darstellung an einen Uebergang
-   * uebergeben wurde, sieht kein world-scoped Consumer sie mehr.
-   */
-  worldPresentation: WorldPresentationBinding | null;
-  readonly arenaResult:   ArenaBuilderResult | null;
-  readonly currentLayout: ArenaLayout        | null;
-  readonly placementSystem: PlacementSystem  | null;
-  persistentBaseContributions: PersistentBaseContributionStore | null;
-  persistentBaseRewards: PersistentBaseRewardStore | null;
-  reinforcementMatrixSystem: ReinforcementMatrixSystem | null;
-  energyInjectorSystem: EnergyInjectorSystem | null;
-  targetStatusSystem: TargetStatusSystem | null;
-  readonly rockRegistry: RockRegistry     | null;
-  /**
-   * Cache der lichtblockierenden Hindernisse. Wird aus denselben Referenzen aufgebaut,
-   * die `CombatSystem` für Line-of-Sight nutzt, und über
-   * `RockVisualHelper.refreshObstacleVisuals()` invalidiert – demselben Trichter, der
-   * auch die statischen Sonnenschatten neu zeichnet.
-   */
-  readonly lightOccluderIndex: LightOccluderIndex | null;
-  captureTheBeerSystem: CaptureTheBeerSystem | null;
-  readonly baseManager: BaseManager | null;
-  enemyManager: EnemyManager | null;
-
-  // Host-only Activity-/Round-systems (null on clients and outside their lifetime)
-  resourceSystem:    ResourceSystem    | null;
-  burrowSystem:      BurrowSystem      | null;
-  loadoutManager:    LoadoutManager    | null;
-  powerUpSystem:     PowerUpSystem     | null;
-  detonationSystem:  DetonationSystem  | null;
-  armageddonSystem:  ArmageddonSystem  | null;
-  airstrikeSystem:   AirstrikeSystem   | null;
-  shieldBuffSystem:  ShieldBuffSystem  | null;
-  energyShieldSystem: EnergyShieldSystem | null;
-  timeBubbleSystem:  TimeBubbleSystem  | null;
-  teslaDomeSystem:   TeslaDomeSystem   | null;
-  turretSystem:      TurretSystem      | null;
-  coopDefensePlayerModifierSystem: CoopDefensePlayerModifierSystem | null;
-  coopDefenseItemRuntimeSystem: CoopDefenseItemRuntimeSystem | null;
-  guardianSpiritSystem: GuardianSpiritSystem | null;
-  repairDroneSystem: RepairDroneSystem | null;
-  slimeTrailSystem: SlimeTrailSystem | null;
-  flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
-  weaponUpgradeSystem: WeaponUpgradeSystem | null;
-  ak47StrategicTargetSystem: Ak47StrategicTargetSystem | null;
-  necromancySystem: NecromancySystem | null;
-  coopDefenseEnemyAttackSystem: CoopDefenseEnemyAttackSystem | null;
-  coopDefenseEnemyAbilitySystem: CoopDefenseEnemyAbilitySystem | null;
-  coopDefenseEnemyTrainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null;
-  coopDefenseEnemyBurrowSystem: CoopDefenseEnemyBurrowSystem | null;
-  coopDefenseEnemyDodgeSystem: CoopDefenseEnemyDodgeSystem | null;
-  coopDefenseEnemyCombatPositioningSystem: CoopDefenseEnemyCombatPositioningSystem | null;
-  coopDefenseVoidHunterSystem: CoopDefenseVoidHunterSystem | null;
-  coopDefenseTimebombSystem: CoopDefenseTimebombSystem | null;
-  coopDefenseSpawnExecutor: CoopDefenseSpawnExecutor | null;
-  coopDefensePersistentPressureSystem: CoopDefensePersistentPressureSystem | null;
-  coopDefenseBossSystem: CoopDefenseBossSystem | null;
-  coopDefenseMapDirector: CoopDefenseMapDirector | null;
-  coopDefenseMapEventDirector: CoopDefenseMapEventDirector | null;
+  // ── Transitional RPC state ────────────────────────────────────────────────
+  // Nicht Teil des 11A-Runtime-Cutovers: RpcCoordinator wird erst in 11B auf seinen kleinen
+  // fachlichen Port umgestellt. Dieses Feld spiegelt keinen bereits migrierten Runtime-Owner.
   hostHeldActionSystem: HostHeldActionSystem | null;
-  /** Host-only: one shared, round-local team buff end timestamp. */
-  coopDefenseTeamBuffSystem: CoopDefenseTeamBuffSystem | null;
-  /**
-   * Authored Nebenmissionen der laufenden Runde. Host und Client lösen sie gleichermaßen aus
-   * der Map-Konfiguration auf; HUD und Weltmarkierung lesen daraus Name, Reward-Hinweis und
-   * Zielreferenzen, statt sie über das Netzwerk zu beziehen.
-   */
-  coopDefenseSecondaryObjectiveConfigs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[];
-  /**
-   * Zuletzt bekannter Carry-Zustand der Runde: auf dem Host der eigene Snapshot, auf Clients der
-   * replizierte. Carry-Objekte sind die einzigen Missionsziele mit replizierter Position; die
-   * Weltmarkierung liest sie hier, statt sie erneut aus zwei Rollenpfaden zu beziehen.
-   */
-  coopDefenseCarryItems: readonly SyncedCoopDefenseCarryItem[];
-  translocatorSystem: TranslocatorSystem | null;
-  tunnelSystem:      TunnelSystem      | null;
-  trainManager:      TrainManager      | null;
-  /**
-   * Besitzt Topologiespiegel, Nav-Takt und Worker aller Runtime-Flowfields. Die `*FlowFieldService`
-   * darunter sind nur noch synchrone Lesefassaden auf je ein Feld dieses Coordinators.
-   */
-  flowFieldCoordinator: FlowFieldCoordinator | null;
-  enemyFlowFieldService: EnemyFlowFieldService | null;
-  enemyPlayerFlowFieldService: EnemyFlowFieldService | null;
-  enemyStrategicFlowFieldService: EnemyFlowFieldService | null;
-  enemyAiTargetCatalog: EnemyAiTargetCatalog | null;
-  enemyStrategicTargetService: EnemyStrategicTargetService | null;
-  enemyBossFlowFieldService: EnemyFlowFieldService | null;
-  allyFlowFieldServices: Map<string, EnemyFlowFieldService>;
 }

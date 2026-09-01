@@ -38,6 +38,11 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import type { WorldPresentationRequirement } from '../../world/WorldPresentation';
 import { consumesWorldReplication } from '../../world/WorldReplication';
 import { resolveEffectiveAdrenalineCost } from '../../systems/AdrenalineCost';
+import type { WorldRuntime } from '../../world/WorldRuntime';
+import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
+import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
+import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
+import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
 const EMPTY_EFFECT_TOTALS = EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
@@ -148,6 +153,11 @@ export class ClientUpdateCoordinator {
   private detachPlayerFromWorld: ((playerId: string) => void) | null = null;
   private getWorldPresentation: (() => WorldPresentationRequirement) | null = null;
   private activityStepResolver: (() => CoopMissionActivityStep | null) | null = null;
+  private worldRuntimeResolver: (() => WorldRuntime | null) | null = null;
+  private targetingRuntimeResolver: (() => WorldTargetingRuntime | null) | null = null;
+  private playerGameplayRuntimeResolver: (() => WorldPlayerGameplayRuntime | null) | null = null;
+  private powerUpRuntimeResolver: (() => WorldPowerUpRuntime | null) | null = null;
+  private coopMissionRuntimeResolver: (() => CoopMissionRuntime | null) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -190,6 +200,24 @@ export class ClientUpdateCoordinator {
     this.activityStepResolver = resolver;
   }
 
+  setWorldRuntimeResolver(resolver: () => WorldRuntime | null): void { this.worldRuntimeResolver = resolver; }
+  setWorldTargetingRuntimeResolver(resolver: () => WorldTargetingRuntime | null): void { this.targetingRuntimeResolver = resolver; }
+  setWorldPlayerGameplayRuntimeResolver(resolver: () => WorldPlayerGameplayRuntime | null): void { this.playerGameplayRuntimeResolver = resolver; }
+  setWorldPowerUpRuntimeResolver(resolver: () => WorldPowerUpRuntime | null): void { this.powerUpRuntimeResolver = resolver; }
+  setCoopMissionRuntimeResolver(resolver: () => CoopMissionRuntime | null): void { this.coopMissionRuntimeResolver = resolver; }
+
+  private get worldRuntime(): WorldRuntime | null { return this.worldRuntimeResolver?.() ?? null; }
+  private get world() { return this.worldRuntime?.context ?? null; }
+  private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
+  private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
+  private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
+  private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
+  private get targetingSystems() { return this.targetingRuntimeResolver?.()?.systems ?? null; }
+  private get playerSystems() { return this.playerGameplayRuntimeResolver?.()?.systems ?? null; }
+  private get powerUpSystem() { return this.powerUpRuntimeResolver?.()?.system ?? null; }
+  private get coopMissionRuntime() { return this.coopMissionRuntimeResolver?.() ?? null; }
+  private get enemyManager() { return this.coopMissionRuntime?.enemyManager ?? null; }
+
   setPerformanceMetricsEnabled(enabled: boolean): void {
     if (this.coarsePerformanceMetricsEnabled === enabled) return;
     this.coarsePerformanceMetricsEnabled = enabled;
@@ -231,7 +259,7 @@ export class ClientUpdateCoordinator {
 
   runClientUpdate(delta: number): void {
     const countdownActive = bridge.isArenaCountdownActive();
-    if (!this.ctx.world) {
+    if (!this.world) {
       this.lastPerformance = {
         totalMs: 0,
         snapshotMs: 0,
@@ -278,7 +306,7 @@ export class ClientUpdateCoordinator {
     this.activityStepResolver?.()?.clientPresentationStep();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
-    this.ctx.baseManager?.syncDormantStates();
+    this.baseManager?.syncDormantStates();
     if (!state) {
       if (this.coarsePerformanceMetricsEnabled) {
         this.lastPerformance = {
@@ -373,10 +401,10 @@ export class ClientUpdateCoordinator {
       // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
 
       const worldStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-      if (state.rocks && this.ctx.arenaResult && this.ctx.currentLayout) {
+      if (state.rocks && this.arenaResult && this.currentLayout) {
         const nextDamagedStaticRockIds = new Set<number>();
         for (const rockId of state.rockRemovals) {
-          if (!this.ctx.placementSystem?.getRuntimeRock(rockId)) {
+          if (!this.placementSystem?.getRuntimeRock(rockId)) {
             this.rockVisualHelper.handleDestroyedRock(rockId, 'damage');
             this.damagedStaticRockIds.delete(rockId);
           }
@@ -387,7 +415,7 @@ export class ClientUpdateCoordinator {
             this.damagedStaticRockIds.delete(rs.id);
             continue;
           }
-          if (!this.ctx.placementSystem?.getRuntimeRock(rs.id)) {
+          if (!this.placementSystem?.getRuntimeRock(rs.id)) {
             nextDamagedStaticRockIds.add(rs.id);
           }
           this.rockVisualHelper.updateRockVisualById(rs.id, rs.hp);
@@ -405,8 +433,8 @@ export class ClientUpdateCoordinator {
         }
       }
 
-      if (this.ctx.placementSystem) {
-        const placementChanges = this.ctx.placementSystem.syncFromSnapshot(state.placeableRocks ?? []);
+      if (this.placementSystem) {
+        const placementChanges = this.placementSystem.syncFromSnapshot(state.placeableRocks ?? []);
         this.rockVisualHelper.materializePlaceableRockBatch(placementChanges.added, true);
         for (const rock of placementChanges.added) {
           emitArenaMapGridChanged(this.scene.game.events, {
@@ -457,22 +485,22 @@ export class ClientUpdateCoordinator {
         }
       }
 
-      this.ctx.reinforcementMatrixSystem?.syncFromSnapshot(state.reinforcementMatrices ?? []);
-      this.ctx.energyInjectorSystem?.syncEffectsFromSnapshot(state.energyInjectorEffects ?? []);
-      this.ctx.energyInjectorSystem?.syncFocusFromSnapshot(state.energyInjectorFocus ?? []);
-      this.ctx.targetStatusSystem?.syncFromSnapshot(state.targetVulnerabilities ?? []);
+      this.targetingSystems?.reinforcementMatrix?.syncFromSnapshot(state.reinforcementMatrices ?? []);
+      this.targetingSystems?.energyInjector?.syncEffectsFromSnapshot(state.energyInjectorEffects ?? []);
+      this.targetingSystems?.energyInjector?.syncFocusFromSnapshot(state.energyInjectorFocus ?? []);
+      this.targetingSystems?.targetStatus?.syncFromSnapshot(state.targetVulnerabilities ?? []);
 
       const trainState = state.train;
       this.ctx.combatSystem.setClientTrainBounds(
         trainState?.alive ? { x: trainState.x, y: trainState.y, dir: trainState.dir } : null,
       );
 
-      this.ctx.baseManager?.applySnapshot(state.bases ?? []);
-      this.ctx.enemyManager?.applySnapshot(state.enemies);
+      this.baseManager?.applySnapshot(state.bases ?? []);
+      this.enemyManager?.applySnapshot(state.enemies);
       const vulnerabilityNow = bridge.getSynchronizedNow();
-      for (const base of this.ctx.baseManager?.getBases() ?? []) {
+      for (const base of this.baseManager?.getBases() ?? []) {
         base.setVulnerable(
-          this.ctx.targetStatusSystem?.isVulnerable(
+          this.targetingSystems?.targetStatus?.isVulnerable(
             { targetType: 'base', targetId: base.id },
             vulnerabilityNow,
           ) ?? false,
@@ -494,13 +522,13 @@ export class ClientUpdateCoordinator {
       }
     }
 
-    this.ctx.enemyManager?.updateClientInterpolation(lerpFactor);
+    this.enemyManager?.updateClientInterpolation(lerpFactor);
     // Der Host repliziert absolute Ablaufzeitpunkte, deshalb laeuft der Marker hier auch dann
     // sauber ab, wenn zwischendurch kein Snapshot ankommt.
     const vulnerableNow = bridge.getSynchronizedNow();
-    for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       this.enemyDashVisuals.sync(enemy);
-      enemy.setVulnerable(this.ctx.targetStatusSystem?.isVulnerable({ targetType: 'enemy', targetId: enemy.id }, vulnerableNow) ?? false);
+      enemy.setVulnerable(this.targetingSystems?.targetStatus?.isVulnerable({ targetType: 'enemy', targetId: enemy.id }, vulnerableNow) ?? false);
     }
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
@@ -593,7 +621,7 @@ export class ClientUpdateCoordinator {
         activePowerUps,
         shieldBuff:              bridge.getPlayerShieldBuffHud(localId2),
         weapon2AdrenalineCost:   this.getLocalWeaponAdrenalineCost('weapon2'),
-        constructionCapacityUsed: this.ctx.placementSystem?.getUsedCapacity(localId2) ?? 0,
+        constructionCapacityUsed: this.placementSystem?.getUsedCapacity(localId2) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
           getConstructionAccessContext(
             bridge.getActiveGameMode(),
@@ -770,7 +798,7 @@ export class ClientUpdateCoordinator {
 
   getLocalWeaponConfig(slot: WeaponSlot): WeaponConfig {
     const localId = bridge.getLocalPlayerId();
-    const equipped = this.ctx.loadoutManager?.getEquippedWeaponConfig(localId, slot);
+    const equipped = this.playerSystems?.loadout?.getEquippedWeaponConfig(localId, slot);
     if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
@@ -795,7 +823,7 @@ export class ClientUpdateCoordinator {
         return applyCoopDefenseModifiersToUtilityConfig(radialUtility, this.getLocalEffectTotals());
       }
     }
-    const equipped = this.ctx.loadoutManager?.getEquippedUtilityConfig(localId);
+    const equipped = this.playerSystems?.loadout?.getEquippedUtilityConfig(localId);
     if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
@@ -803,7 +831,7 @@ export class ClientUpdateCoordinator {
 
   getLocalUltimateConfig() {
     const localId = bridge.getLocalPlayerId();
-    const equipped = this.ctx.loadoutManager?.getEquippedUltimateConfig(localId);
+    const equipped = this.playerSystems?.loadout?.getEquippedUltimateConfig(localId);
     if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
@@ -811,7 +839,7 @@ export class ClientUpdateCoordinator {
 
   getLocalUltimateThresholds(): number[] {
     const localId = bridge.getLocalPlayerId();
-    const fromManager = this.ctx.loadoutManager?.getUltimateThresholds(localId);
+    const fromManager = this.playerSystems?.loadout?.getUltimateThresholds(localId);
     if (fromManager && fromManager.length > 0) return fromManager;
     const config = this.getLocalUltimateConfig();
     if (config.type === 'gauss') {
@@ -844,8 +872,8 @@ export class ClientUpdateCoordinator {
 
   getLocalAdrenaline(): number {
     const localId = bridge.getLocalPlayerId();
-    if (bridge.isHost() && this.ctx.resourceSystem) {
-      return this.ctx.resourceSystem.getAdrenaline(localId);
+    if (bridge.isHost() && this.playerSystems?.resource) {
+      return this.playerSystems?.resource.getAdrenaline(localId);
     }
     this.ensureCurrentPredictionWorld();
     this.reconcileAuthoritativeAdrenalineFromSnapshot();
@@ -1372,7 +1400,7 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const player  = this.ctx.playerManager.getPlayer(localId);
     if (!player || !player.active) return;
-    if (this.ctx.burrowSystem?.isBurrowed(localId)) return;
+    if (this.playerSystems?.burrow?.isBurrowed(localId)) return;
 
     const px = player.x;
     const py = player.y;
@@ -1382,7 +1410,7 @@ export class ClientUpdateCoordinator {
       const dist = Math.hypot(pu.x - px, pu.y - py);
       if (dist <= PICKUP_RADIUS * 2) {
         if (bridge.isHost()) {
-          this.ctx.powerUpSystem?.tryPickup(localId, pu.uid, px, py);
+          this.powerUpSystem?.tryPickup(localId, pu.uid, px, py);
         } else {
           if (this.pendingPickupUids.has(pu.uid)) continue;
           this.pendingPickupUids.add(pu.uid);
@@ -1493,7 +1521,7 @@ export class ClientUpdateCoordinator {
 
   private isLocalAk47FireSuperiorityAvailable(): boolean {
     const localId = bridge.getLocalPlayerId();
-    return this.ctx.loadoutManager?.isAk47FireSuperiorityAvailable(localId)
+    return this.playerSystems?.loadout?.isAk47FireSuperiorityAvailable(localId)
       ?? (this.getLocalWeaponConfig('weapon2').id === 'AK47'
         && bridge.getPlayerActiveBuffs(localId).some((buff) => (
           buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0

@@ -199,7 +199,6 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getTeamHpRegenBonus?: (playerId: string) => number;
   readonly getMatrixDamageReduction?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean) => number;
   readonly getMatrixDamageMultiplier?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean) => number;
-  readonly onSystemsChanged: (systems: WorldCombatGameplaySystems | null) => void;
 }
 
 /** Owns the World binding graph for combat, physics, projectile, turret and decoy systems. */
@@ -217,11 +216,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const energyShield = options.createEnergyShieldSystem(playerSystems.resource, shieldBuff);
       const turret = new ConcreteTurretSystem(options.playerManager, options.combatSystem);
       this.systems = { shieldBuff, timeBubble, teslaDome, energyShield, turret };
-      options.onSystemsChanged(this.systems);
       this.bindHostSystems(this.systems, playerSystems);
     } else {
       this.systems = null;
-      options.onSystemsChanged(null);
     }
     this.bindSharedSystems();
   }
@@ -348,7 +345,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.turret.setTurretDamageBuffProvider(null);
       this.systems.turret.setTurretDamageMultiplierProvider(null);
     }
-    this.options.onSystemsChanged(null);
   }
 
   private bindSharedSystems(): void {

@@ -207,13 +207,10 @@ describe('WorldLifecycle – genau ein Besitzer im Koordinator', () => {
     expect(source).toContain('publish: (world, activity) => bridge.publishWorldAndActivity(world, activity)');
     expect(source).toContain('clear: () => bridge.clearWorldAndActivity()');
 
-    // `ctx.world` wird nur vom Sink des Lifecycles geschrieben – genau die beiden Zuweisungen dort.
-    expect([...source.matchAll(/this\.ctx\.world\s*=/g)], 'ctx.world assigned past the lifecycle')
-      .toHaveLength(2);
-    // Der Sink besitzt die lokale Runtime; `ctx.world` ist daneben nur noch der
-    // Compatibility-Pfad fuer die noch nicht migrierten Consumer.
+    // Phase 11A entfernt den Context-Zugriffspfad vollstaendig. Der Sink besitzt die einzige
+    // lokale Runtime und Consumer fragen ihren Owner direkt.
+    expect(source).not.toContain('this.ctx.world');
     expect(source).toContain('this.worldRuntime = new WorldRuntime(context);');
-    expect(source).toContain('      this.ctx.world = context;');
-    expect(source).toContain('      this.ctx.world = null;');
+    expect(source).toContain('getWorldRuntime(): WorldRuntime | null');
   });
 });

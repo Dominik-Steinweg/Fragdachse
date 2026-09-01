@@ -367,12 +367,11 @@ describe('Uebergaenge – die Darstellung reist, der Gameplay-State nicht', () =
 describe('Arena-Anbindung der getrennten Lifetimes', () => {
   it('liest Gameplay-State und Darstellung ueber ihre jeweiligen Owner', () => {
     const scene = readFileSync(resolve(__dirname, '../src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('get arenaResult() { return this.worldMaterialization?.arena ?? null; }');
-    expect(scene).toContain('get currentLayout() { return this.worldPresentation?.layout ?? null; }');
-    expect(scene).toContain('get placementSystem() { return this.worldMaterialization?.placement ?? null; }');
-    expect(scene).toContain('get rockRegistry() { return this.worldMaterialization?.rocks ?? null; }');
-    expect(scene).toContain('get baseManager() { return this.worldMaterialization?.bases ?? null; }');
-    expect(scene).toContain('get lightOccluderIndex() { return this.worldMaterialization?.lightOccluders ?? null; }');
+    expect(scene).toContain('get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }');
+    expect(scene).toContain('get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }');
+    expect(scene).toContain('get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }');
+    expect(scene).toContain('get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }');
+    expect(scene).toContain('get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }');
 
     const lifecycle = readFileSync(
       resolve(__dirname, '../src/scenes/arena/ArenaLifecycleCoordinator.ts'),
@@ -425,7 +424,7 @@ describe('Arena-Anbindung der getrennten Lifetimes', () => {
       'baseManager',
       'lightOccluderIndex',
     ]) {
-      expect(context, `${field} bleibt eine Lesefassade`).toMatch(
+      expect(context, `${field} bleibt ausserhalb des ArenaContext`).not.toMatch(
         new RegExp(`readonly ${field}\\s*:`),
       );
     }

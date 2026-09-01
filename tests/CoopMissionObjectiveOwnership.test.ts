@@ -255,7 +255,8 @@ describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
     expect(coordinator).not.toContain('new CoopMissionObjectiveComposition(');
     expect(composition).toContain('runtime.setObjectives({');
     expect(composition).toContain('new CoopDefenseTeamBuffSystem()');
-    expect(coordinator).toContain('this.syncCoopMissionCompatibilityBindings(runtime);');
+    expect(coordinator).toContain('this.onCoopMissionRuntimeChanged(runtime);');
+    expect(coordinator).not.toContain('syncCoopMissionCompatibilityBindings');
   });
 
   it('haelt die migrierten Missionssysteme aus dem ArenaContext heraus', () => {
@@ -280,7 +281,7 @@ describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
 
   it('bindet die Missionsbarrieren an die Lifetime der Activity', () => {
     const start = coordinator.indexOf('    runtime.bind({');
-    const end = coordinator.indexOf('    this.syncCoopMissionCompatibilityBindings(runtime);', start);
+    const end = coordinator.indexOf('    this.attachCoopMissionBaseBinding(activity, runtime);', start);
     const binding = coordinator.slice(start, end);
     expect(binding).toContain('this.worldCombatGameplayBinding?.updateActivityBindings();');
     expect(binding).toContain('this.worldCombatGameplayBinding?.clearActivityBindings();');

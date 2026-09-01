@@ -374,8 +374,8 @@ describe('ArenaLifecycleCoordinator – TerrainSnapshotLifecycle', () => {
     const body = snapshotBuildBody();
     expect(body).toContain('const generation = ++this.terrainSnapshotGenerationId;');
     expect(body).toContain('generation === this.terrainSnapshotGenerationId');
-    expect(body).toContain('this.ctx.currentLayout === layout');
-    expect(body).toContain('this.ctx.arenaResult === arenaResult');
+    expect(body).toContain('this.worldRuntime?.presentation?.layout === layout');
+    expect(body).toContain('this.worldRuntime?.materialization?.arena === arenaResult');
     expect(body).toContain('bridge.getWorldDescriptor()?.worldRevision === worldRevision');
     // Ein World-Teardown invalidiert laufende Builds ueber dieselbe Generation.
     expect(source).toContain('this.terrainSnapshotGenerationId += 1;');

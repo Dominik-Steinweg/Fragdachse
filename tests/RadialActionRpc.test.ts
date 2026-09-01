@@ -80,6 +80,14 @@ function createFixture() {
     burrowSystem: { isBurrowed: vi.fn(() => false), isStunned: vi.fn(() => false) },
   };
   const lifecycle = {
+    getWorldPlayerGameplayRuntime: () => ({
+      systems: {
+        loadout: ctx.loadoutManager,
+        translocator: ctx.translocatorSystem,
+        burrow: ctx.burrowSystem,
+      },
+    }),
+    getWorldPowerUpRuntime: () => null,
     getActiveConstructionToolsForPlayer: vi.fn(() => [
       { kind: 'construction', id: 'rocket_turret' },
     ]),

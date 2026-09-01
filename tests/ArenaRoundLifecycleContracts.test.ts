@@ -22,6 +22,7 @@ const WORLD_GAMEPLAY_PATHS = [
   'src/scenes/arena/ArenaWorldConstructionComposition.ts',
 ];
 const SCENE_PATH = 'src/scenes/ArenaScene.ts';
+const RUNTIME_PATH = 'src/scenes/arena/ArenaRuntime.ts';
 
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
@@ -126,68 +127,32 @@ function resetsField(body: string, field: string, receiver: string): boolean {
 }
 
 describe('arena round lifecycle contract', () => {
-  const roundScopedFields = collectRoundScopedFields();
-
-  it('kennt die round-scoped Felder des ArenaContext', () => {
-    // Reine Absicherung des Parsers: eine leere Liste wuerde die Pruefungen unten wertlos machen.
-    expect(roundScopedFields.length).toBeGreaterThan(30);
-    // Der gebaute World-Zustand steht als genau ein Owner im Kontext; die frueheren Einzelfelder
-    // (arenaResult, currentLayout, placementSystem, rockRegistry, baseManager, lightOccluderIndex)
-    // sind reine Lesefassaden darauf und koennen deshalb nicht mehr einzeln leaken.
-    expect(roundScopedFields).toContain('worldMaterialization');
-    expect(roundScopedFields).toContain('persistentBaseContributions');
-    // Ziele, Fortschritt, Missionsabschluss und der activity-scoped Spielerzustand stehen nicht
-    // mehr im Kontext; sie gehoeren der CoopMissionRuntime. Der Parser bleibt an einem weiterhin
-    // round-scoped Feld verankert.
-    expect(roundScopedFields).toContain('coopDefenseTeamBuffSystem');
-    for (const migratedToActivity of [
-      'coopDefenseRoundStateSystem',
-      'coopDefenseSecondaryObjectiveSystem',
-      'coopDefenseMissionProgressSystem',
-      'coopDefenseMissionBarrierManager',
-      'coopDefenseCarrySystem',
-      'coopDefenseObjectiveRepairSystem',
-      'coopDefenseObjectivePlacementRewardSystem',
-      'coopDefenseRespawnBudgetSystem',
-    ]) {
-      expect(roundScopedFields).not.toContain(migratedToActivity);
+  it('enthaelt keinen migrierten World-/Activity-Runtime-State mehr im ArenaContext', () => {
+    const context = read(CONTEXT_PATH);
+    for (const field of Object.keys(OWNED_ROUND_FIELDS)) {
+      expect(context, field).not.toMatch(new RegExp(`^  ${field}\\??:`, 'm'));
     }
-    expect(roundScopedFields).not.toContain('playerManager');
-    expect(roundScopedFields).not.toContain('combatSystem');
+    expect(context).not.toContain('Round-scoped');
   });
 
-  it('setzt jedes round-scoped Feld in tearDownArena() zurueck', () => {
-    const body = readTearDownArenaBody();
-    const leaking = roundScopedFields.filter((field) => !resetsField(body, field, 'this.ctx'));
-    expect(leaking, 'round-scoped ArenaContext fields left behind by tearDownArena()').toEqual([]);
-  });
-
-  it('laesst die World-Gameplay-Projektionen ausschliesslich von ihrem Owner zuruecksetzen', () => {
+  it('greift direkt auf World-/Activity-Owner zu und entfernt den Compatibility-Sync', () => {
     const coordinator = read(COORDINATOR_PATH);
-    const worldGameplay = WORLD_GAMEPLAY_PATHS.map(read).join('\n');
-    const ownerCleared = Object.entries(OWNED_ROUND_FIELDS)
-      .filter(([field, owner]) => (
-        owner === 'this.releaseWorldRuntime('
-        && !['world', 'worldMaterialization', 'worldPresentation'].includes(field)
-      ))
-      .map(([field]) => field);
-    expect(ownerCleared.length).toBeGreaterThan(20);
-    for (const field of ownerCleared) {
-      // Genau ein Schreiber: die World-Composition setzt die Projektion und nullt sie mit dem
-      // Owner-Teardown. Ein zweiter Reset im Flow waere wieder Doppelbesitz.
-      expect(worldGameplay, field).toContain(`ctx.${field} = `);
-      expect(coordinator, field).not.toContain(`this.ctx.${field} = `);
+    expect(coordinator).toContain('getWorldRuntime(): WorldRuntime | null');
+    expect(coordinator).toContain('getCoopMissionRuntime(): CoopMissionRuntime | null');
+    expect(coordinator).toContain('this.worldRuntime?.materialization?.arena');
+    expect(coordinator).not.toContain('syncCoopMissionCompatibilityBindings');
+    for (const field of Object.keys(OWNED_ROUND_FIELDS)) {
+      expect(coordinator, field).not.toContain(`this.ctx.${field}`);
     }
   });
 
-  it('initialisiert jedes round-scoped Feld beim Scene-Aufbau leer', () => {
-    const source = read(SCENE_PATH).replace(/[ \t]+/g, ' ');
-    const missing = roundScopedFields.filter((field) => !(
-      source.includes(`${field}: null`)
-      || source.includes(`${field}: []`)
-      || source.includes(`${field}: new Map()`)
-    ));
-    expect(missing, 'round-scoped ArenaContext fields not initialized empty in ArenaScene').toEqual([]);
+  it('verdrahtet Frame-Consumer mit den tatsaechlichen Ownern', () => {
+    const runtime = read(RUNTIME_PATH);
+    expect(runtime).toContain('setWorldRuntimeResolver(() => this.flow.getWorldRuntime())');
+    expect(runtime).toContain('setWorldPlayerGameplayRuntimeResolver(');
+    expect(runtime).toContain('setCoopMissionRuntimeResolver(() => this.flow.getCoopMissionRuntime())');
+    expect(runtime).not.toContain('RuntimeContext');
+    expect(runtime).not.toContain('ArenaServices');
   });
 
   it('entkoppelt die persistente Basis beim Teardown vollstaendig', () => {
@@ -199,7 +164,7 @@ describe('arena round lifecycle contract', () => {
     expect(body).toContain('this.releaseWorldRuntime(preserveAuthoredPresentation);');
     expect(read(COORDINATOR_PATH)).toContain('this.persistentBaseWorldBinding?.finalizeWorldRuntimeObjects();');
 
-    expect(body).toContain('this.ctx.persistentBaseContributions = null');
+    expect(body).not.toContain('this.ctx.persistentBaseContributions');
   });
 
   it('beendet den Working State am Activity-Identity-Ende statt am Runtime-Teardown', () => {

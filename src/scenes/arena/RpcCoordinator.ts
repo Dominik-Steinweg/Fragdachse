@@ -126,6 +126,14 @@ export class RpcCoordinator {
     this.persistentBase = session;
   }
 
+  private get playerSystems() {
+    return this.lifecycle?.getWorldPlayerGameplayRuntime()?.systems ?? null;
+  }
+
+  private get powerUpSystem() {
+    return this.lifecycle?.getWorldPowerUpRuntime()?.system ?? null;
+  }
+
   registerAll(): void {
     this.registerDashHandler();
     this.registerBurrowRpcHandler();
@@ -196,7 +204,7 @@ export class RpcCoordinator {
       if (!bridge.isHost()) return;
       if (!this.lifecycle?.getPlayerCapabilities(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.ctx.burrowSystem?.handleBurrowRequest(playerId, wantsBurrowed);
+      this.playerSystems?.burrow?.handleBurrowRequest(playerId, wantsBurrowed);
     });
   }
 
@@ -229,8 +237,8 @@ export class RpcCoordinator {
       }
       if (!kind || !this.lifecycle?.getPlayerCapabilities(playerId).canInteract || bridge.isArenaCountdownActive()
         || !this.ctx.combatSystem.isAlive(playerId)
-        || this.ctx.burrowSystem?.isBurrowed(playerId)
-        || this.ctx.burrowSystem?.isStunned(playerId)) return false;
+        || this.playerSystems?.burrow?.isBurrowed(playerId)
+        || this.playerSystems?.burrow?.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
         if (toolRef || temporaryUtilityInstanceId) return false;
@@ -251,9 +259,9 @@ export class RpcCoordinator {
           bridge.getActiveGameMode(),
         );
       } else if (temporaryUtilityInstanceId) {
-        utility = this.ctx.loadoutManager?.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
+        utility = this.playerSystems?.loadout?.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
       } else {
-        utility = this.ctx.loadoutManager?.getEquippedUtilityConfig(playerId);
+        utility = this.playerSystems?.loadout?.getEquippedUtilityConfig(playerId);
       }
       if (!utility || utility.activation.type !== kind) return false;
       const identity = toolRef
@@ -367,13 +375,13 @@ export class RpcCoordinator {
       }
       if (slot === 'utility') {
         const utility = params?.temporaryUtilityInstanceId
-          ? this.ctx.loadoutManager?.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
-          : this.ctx.loadoutManager?.getEquippedUtilityConfig(senderId);
+          ? this.playerSystems?.loadout?.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
+          : this.playerSystems?.loadout?.getEquippedUtilityConfig(senderId);
         if (params?.temporaryUtilityInstanceId && !utility) {
           return { ok: false, reason: 'invalid' };
         }
         const isTranslocatorRecall = utility?.type === 'translocator'
-          && this.ctx.translocatorSystem?.getActivePuckId(senderId) !== undefined;
+          && this.playerSystems?.translocator?.getActivePuckId(senderId) !== undefined;
         if (isTranslocatorRecall) {
           this.ctx.hostHeldActionSystem?.clearPlayer(senderId);
         } else {
@@ -383,7 +391,7 @@ export class RpcCoordinator {
         }
       }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
-      const result = this.ctx.loadoutManager?.use(
+      const result = this.playerSystems?.loadout?.use(
         slot,
         senderId,
         angle,
@@ -399,8 +407,8 @@ export class RpcCoordinator {
       return {
         ...result,
         worldRevision: bridge.getCurrentWorldRevision() ?? undefined,
-        authoritativeAdrenaline: this.ctx.resourceSystem?.getAdrenaline(senderId),
-        adrenalineRevision: this.ctx.resourceSystem?.getAdrenalineRevision(senderId),
+        authoritativeAdrenaline: this.playerSystems?.resource?.getAdrenaline(senderId),
+        adrenalineRevision: this.playerSystems?.resource?.getAdrenalineRevision(senderId),
       };
     });
   }
@@ -620,7 +628,7 @@ export class RpcCoordinator {
       if (!this.lifecycle?.getPlayerCapabilities(playerId).canInteract) return false;
       const player = this.ctx.playerManager.getPlayer(playerId);
       if (!player) return false;
-      const pickedUp = this.ctx.powerUpSystem?.tryPickup(playerId, uid, player.x, player.y) ?? false;
+      const pickedUp = this.powerUpSystem?.tryPickup(playerId, uid, player.x, player.y) ?? false;
       if (pickedUp) this.ctx.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);
       return pickedUp;
     });

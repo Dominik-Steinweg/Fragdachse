@@ -186,6 +186,24 @@ describe('Dachs of Steel & Tutorial-Felsen Armor Drops', () => {
         ctx as never,
         { rebuildArenaStaticShadows: vi.fn(), rebuildArenaStaticShadowRegions: vi.fn() } as never,
         rockDestructionRenderer as never,
+        null,
+        {
+          getWorldRuntime: () => ({
+            context: null,
+            materialization: {
+              arena: result,
+              placement: ctx.placementSystem,
+              rocks: rockRegistry,
+              lightOccluders: ctx.lightOccluderIndex,
+            },
+            presentation: { layout },
+          } as never),
+          getTargetingRuntime: () => null,
+          getPlayerGameplayRuntime: () => ({
+            systems: { playerModifier: coopDefensePlayerModifierSystem },
+          } as never),
+          getPowerUpRuntime: () => ({ system: powerUpSystem } as never),
+        },
       );
 
       return { helper, powerUpSystem, layout, rockRegistry, rockPhysicsProxies };

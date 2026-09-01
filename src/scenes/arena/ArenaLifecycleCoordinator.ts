@@ -155,6 +155,8 @@ import type { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import type { ConstructionWorldRuntime } from '../../world/ConstructionWorldRuntime';
 import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
+import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
+import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import type { CoopTrainPort } from '../../activity/CoopTrainPort';
 import {
   PlayerWorldRuntime,
@@ -207,7 +209,8 @@ type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown
  *
  * Responsibilities: buildArena / tearDownArena, LOBBY ↔ ARENA phase transitions,
  * host quality checks, round result saving, train event setup.
- * Mutates World-/Activity-scoped ArenaContext fields (arenaResult, currentLayout, etc.).
+ * Runtime state stays at the concrete World-/Activity owners; the context contains only
+ * scene-lifetime infrastructure plus the RPC cutover field reserved for Phase 11B.
  */
 export class ArenaLifecycleCoordinator {
   private matchTerminated   = false;
@@ -353,7 +356,7 @@ export class ArenaLifecycleCoordinator {
         return player ? { x: player.x, y: player.y } : null;
       },
       isPlayerAlive: (playerId) => this.ctx.combatSystem.isAlive(playerId),
-      isPlayerBurrowed: (playerId) => this.ctx.burrowSystem?.isBurrowed(playerId) ?? false,
+      isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false,
       isPlayerStealthed: (playerId) => this.ctx.decoySystem.isStealthed(playerId),
       canUseMissionActions: (playerId) => this.getPlayerCapabilities(playerId).canUseMissionActions,
       getDecoyTargets: () => this.ctx.decoySystem.getHostTargets().map((decoy) => ({
@@ -370,7 +373,7 @@ export class ArenaLifecycleCoordinator {
       isDecoyTargetable: (decoyId) => this.ctx.decoySystem.getHostTarget(decoyId) !== null,
       getArmedConstructions: () => {
         const constructions: CoopMissionArmedConstructionView[] = [];
-        for (const construction of this.ctx.placementSystem?.getAllRuntimeRocks() ?? []) {
+        for (const construction of this.worldRuntime?.materialization?.placement?.getAllRuntimeRocks() ?? []) {
           if (construction.hp <= 0 || construction.kind !== 'turret') continue;
           constructions.push({
             id: String(construction.id),
@@ -383,7 +386,7 @@ export class ArenaLifecycleCoordinator {
       },
       getArmedOutposts: () => {
         const outposts: CoopMissionArmedOutpostView[] = [];
-        for (const base of this.ctx.baseManager?.getBasesByFaction('friendly') ?? []) {
+        for (const base of this.worldRuntime?.materialization?.bases?.getBasesByFaction('friendly') ?? []) {
           if (base.role !== 'outpost'
             || base.isInert?.() === true
             || base.getHp() <= 0
@@ -405,7 +408,7 @@ export class ArenaLifecycleCoordinator {
         }
         return outposts;
       },
-      syncDormantBaseStates: () => { this.ctx.baseManager?.syncDormantStates(); },
+      syncDormantBaseStates: () => { this.worldRuntime?.materialization?.bases?.syncDormantStates(); },
       getActiveBurnSources: (enemyId, atMs) => this.ctx.combatSystem.getActiveBurnSources(enemyId, atMs),
       getFireSystem: () => this.ctx.fireSystem,
       getSmokeSystem: () => this.ctx.smokeSystem,
@@ -436,9 +439,6 @@ export class ArenaLifecycleCoordinator {
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
-      // Compatibility-Pfad waehrend der Migration: Source of Truth ist die WorldRuntime, aber
-      // die bestehenden Consumer lesen den Kontext weiterhin ueber `ctx.world`.
-      this.ctx.world = context;
     },
     detach: () => {
       const runtime = this.worldRuntime;
@@ -446,15 +446,12 @@ export class ArenaLifecycleCoordinator {
       // Die Darstellung verlaesst die World zuerst: Ein Uebergang zeigt sie weiter oder
       // verwendet sie erneut, waehrend der Gameplay-State dieser Instanz vollstaendig faellt.
       // Nach der Uebergabe sieht kein world-scoped Consumer sie mehr.
-      this.ctx.worldPresentation = null;
       this.worldPresentationHandoff.release(runtime?.releasePresentation() ?? null);
       runtime?.destroy();
       // Mit der World enden ihre Runtime-Objekte. Der Raumzustand haelt danach keine mehr - er
       // haelt weiter die Blueprints, aber nichts, was sie in einer Welt darstellte.
       this.persistentBase.useWorldRuntimes(null);
       this.persistentBaseWorldBinding = null;
-      this.ctx.worldMaterialization = null;
-      this.ctx.world = null;
     },
     activityIdentity: {
       resolveStartAnchor: (_activity, previousActivity) => {
@@ -484,6 +481,7 @@ export class ArenaLifecycleCoordinator {
    */
   private readonly worldGameplayFlowPorts: ArenaWorldGameplayFlowPorts = {
     getCoopMissionRuntime: () => this.coopMissionRuntime,
+    getCaptureTheBeerSystem: () => this.captureTheBeerActivityRuntime?.system ?? null,
     getPlayerActivityRuntime: () => this.playerActivityRuntime,
     isCoopMissionActivity: () => this.worldLifecycle.activity.is('coop-mission'),
     isActivityActive: () => this.worldLifecycle.activity.isActive(),
@@ -559,27 +557,27 @@ export class ArenaLifecycleCoordinator {
         return true;
       },
       detachCombat: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); },
-      attachCombatResources: (playerId) => { this.ctx.resourceSystem?.initPlayer(playerId); },
+      attachCombatResources: (playerId) => { this.worldPlayerGameplayRuntime?.systems.resource.initPlayer(playerId); },
       detachCombatResources: (playerId) => {
-        this.ctx.resourceSystem?.removePlayer(playerId);
+        this.worldPlayerGameplayRuntime?.systems.resource.removePlayer(playerId);
         bridge.clearWeapon2PredictionState(playerId);
       },
-      attachPlayerBuild: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(playerId); },
-      detachPlayerBuild: (playerId) => { this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId); },
-      attachBurrow: (playerId) => { this.ctx.burrowSystem?.initPlayer(playerId); },
-      detachBurrow: (playerId) => { this.ctx.burrowSystem?.removePlayer(playerId); },
+      attachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.systems.itemRuntime.initPlayer(playerId); },
+      detachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.systems.itemRuntime.removePlayer(playerId); },
+      attachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.systems.burrow.initPlayer(playerId); },
+      detachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.systems.burrow.removePlayer(playerId); },
       attachLoadout: (playerId) => {
-        this.ctx.loadoutManager?.resetUltimateState(playerId);
-        this.ctx.loadoutManager?.assignDefaultLoadout(playerId, this.resolveCommittedLoadoutSelection(playerId));
+        this.worldPlayerGameplayRuntime?.systems.loadout.resetUltimateState(playerId);
+        this.worldPlayerGameplayRuntime?.systems.loadout.assignDefaultLoadout(playerId, this.resolveCommittedLoadoutSelection(playerId));
       },
       detachLoadout: (playerId) => {
-        this.ctx.loadoutManager?.removePlayer(playerId);
-        this.ctx.powerUpSystem?.removePlayer(playerId);
-        this.ctx.tunnelSystem?.removePlayer(playerId);
+        this.worldPlayerGameplayRuntime?.systems.loadout.removePlayer(playerId);
+        this.worldPowerUpRuntime?.system.removePlayer(playerId);
+        this.worldPlayerGameplayRuntime?.systems.tunnel.removePlayer(playerId);
       },
       detachWorldTargeting: (playerId) => {
-        this.ctx.targetStatusSystem?.removeTarget({ targetType: 'player', targetId: playerId });
-        this.ctx.energyInjectorSystem?.removeOwner(playerId);
+        this.worldGameplay?.targeting?.systems.targetStatus.removeTarget({ targetType: 'player', targetId: playerId });
+        this.worldGameplay?.targeting?.systems.energyInjector.removeOwner(playerId);
       },
     });
   }
@@ -666,24 +664,24 @@ export class ArenaLifecycleCoordinator {
     this.coopMissionComposition = new CoopMissionComposition({
       scene,
       getWorld: () => this.worldRuntime?.context ?? null,
-      getLayout: () => this.ctx.currentLayout,
-      getArenaResult: () => this.ctx.arenaResult,
-      getBaseManager: () => this.ctx.baseManager,
+      getLayout: () => this.worldRuntime?.presentation?.layout ?? null,
+      getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
+      getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getPlayerManager: () => this.ctx.playerManager,
       getCombatSystem: () => this.ctx.combatSystem,
       getProjectileManager: () => this.ctx.projectileManager,
       getHostPhysics: () => this.ctx.hostPhysics,
-      getPlacementSystem: () => this.ctx.placementSystem,
-      getLoadoutManager: () => this.ctx.loadoutManager,
-      getPowerUpSystem: () => this.ctx.powerUpSystem,
-      getPlayerModifierSystem: () => this.ctx.coopDefensePlayerModifierSystem,
-      getEnergyShieldSystem: () => this.ctx.energyShieldSystem,
+      getPlacementSystem: () => this.worldRuntime?.materialization?.placement ?? null,
+      getLoadoutManager: () => this.worldPlayerGameplayRuntime?.systems.loadout ?? null,
+      getPowerUpSystem: () => this.worldPowerUpRuntime?.system ?? null,
+      getPlayerModifierSystem: () => this.worldPlayerGameplayRuntime?.systems.playerModifier ?? null,
+      getEnergyShieldSystem: () => this.worldCombatGameplayBinding?.systems?.energyShield ?? null,
       getStinkCloudSystem: () => this.ctx.stinkCloudSystem,
-      getFlamethrowerUpgradeSystem: () => this.ctx.flamethrowerUpgradeSystem,
+      getFlamethrowerUpgradeSystem: () => this.worldPlayerGameplayRuntime?.systems.flamethrowerUpgrade ?? null,
       getFireSystem: () => this.ctx.fireSystem,
       getDecoySystem: () => this.ctx.decoySystem,
-      getArmageddonSystem: () => this.ctx.armageddonSystem,
-      getAirstrikeSystem: () => this.ctx.airstrikeSystem,
+      getArmageddonSystem: () => this.worldGameplay?.support?.systems.armageddon ?? null,
+      getAirstrikeSystem: () => this.worldGameplay?.support?.systems.airstrike ?? null,
       getGameAudioSystem: () => this.ctx.gameAudioSystem,
       getLightingSystem: () => this.renderers.lighting,
       getPlayerWorldRuntime: () => this.worldRuntime?.players ?? null,
@@ -694,23 +692,28 @@ export class ArenaLifecycleCoordinator {
         Math.floor(bridge.getRoundState()?.coopDefenseHumanPlayerCount ?? 1),
       ),
       getParticipantIds: () => bridge.getRoundParticipation()?.participantIds ?? bridge.getConnectedPlayerIds(),
-      setSecondaryObjectiveConfigs: (configs) => { this.ctx.coopDefenseSecondaryObjectiveConfigs = configs; },
       nextGenerationId: () => this.nextFlowFieldGenerationId(),
       getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
       getSecondsLeft: () => bridge.computeSecondsLeft(),
       getConnectedPlayerIds: () => bridge.getConnectedPlayerIds(),
       getSpectatorIds: () => bridge.getRoundParticipation()?.spectatorIds ?? [],
-      isPlayerBurrowed: (playerId) => this.ctx.burrowSystem?.isBurrowed(playerId) ?? false,
-      isSafeEnemyGroundAt: (x, y, radius) => isSafeEnemyGroundAt(this.ctx, x, y, radius),
+      isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false,
+      isSafeEnemyGroundAt: (x, y, radius) => isSafeEnemyGroundAt(this.coopMissionRuntime, x, y, radius),
       findSafeEnemyGroundPosition: (x, y, radius, maxRadiusCells) => (
-        findSafeEnemyGroundPosition(this.ctx, x, y, radius, maxRadiusCells)
+        findSafeEnemyGroundPosition(this.coopMissionRuntime, x, y, radius, maxRadiusCells)
       ),
-      isFreeEnemyGroundAt: (x, y, radius) => isFreeEnemyGroundAt(this.ctx, x, y, radius),
+      isFreeEnemyGroundAt: (x, y, radius) => isFreeEnemyGroundAt(this.coopMissionRuntime, x, y, radius),
       hasWalkableEnemyCircleLine: (fromX, fromY, toX, toY, radius) => (
-        hasWalkableEnemyCircleLine(this.ctx, fromX, fromY, toX, toY, radius)
+        hasWalkableEnemyCircleLine(this.coopMissionRuntime, fromX, fromY, toX, toY, radius)
       ),
       damageConstruction: (id, damage, attackerId) => {
-        const resolvedDamage = resolveObstacleDamage(this.ctx, id, damage, attackerId);
+        const resolvedDamage = resolveObstacleDamage(
+          this.ctx.combatSystem,
+          this.worldRuntime?.materialization?.placement ?? null,
+          id,
+          damage,
+          attackerId,
+        );
         if (resolvedDamage <= 0) return;
         const hp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, attackerId);
         if (hp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', attackerId);
@@ -722,10 +725,10 @@ export class ArenaLifecycleCoordinator {
       publishMissionProgress: (state) => bridge.publishCoopDefenseMissionProgressPresentationState(state),
       broadcastCarryDeliveredFx: (x, y) => bridge.broadcastCoopDefenseCarryDeliveredFx(x, y),
       publishRespawnBudget: (state) => bridge.publishCoopDefenseRespawnBudgetState(state),
-      patchBarrierCells: (changes) => this.ctx.flowFieldCoordinator?.patchBarrierCells(changes),
-      markLightDirty: () => this.ctx.lightOccluderIndex?.markDirty(),
+      patchBarrierCells: (changes) => this.coopMissionRuntime?.flowFieldCoordinator?.patchBarrierCells(changes),
+      markLightDirty: () => this.worldRuntime?.materialization?.lightOccluders?.markDirty(),
       grantPersistentBaseRewards: (rewardIds) => this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds),
-      removeEnemyFromItemRuntime: (enemyId) => this.ctx.coopDefenseItemRuntimeSystem?.removeEnemy(enemyId),
+      removeEnemyFromItemRuntime: (enemyId) => this.worldPlayerGameplayRuntime?.systems.itemRuntime.removeEnemy(enemyId),
       broadcastExplosion: (x, y, radius, style) => bridge.broadcastExplosionEffect(x, y, radius, 0xb82fff, style),
       broadcastCorpseMarker: (corpseId, x, y, enemySize, lifetimeMs) => (
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)
@@ -954,6 +957,20 @@ export class ArenaLifecycleCoordinator {
     this.worldRuntime?.update(deltaMs);
   }
 
+  /** Direkter Zugriff auf die tatsaechlichen Runtime-Owner fuer Scene-/Coordinator-Consumer. */
+  getWorldRuntime(): WorldRuntime | null { return this.worldRuntime; }
+  getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
+  getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
+  getWorldPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null { return this.worldPlayerGameplayRuntime; }
+  getWorldCombatGameplayBinding(): WorldCombatGameplayBinding | null { return this.worldCombatGameplayBinding; }
+  getWorldPowerUpRuntime(): WorldPowerUpRuntime | null { return this.worldPowerUpRuntime; }
+  getConstructionWorldRuntime(): ConstructionWorldRuntime | null { return this.constructionWorldRuntime; }
+  getWorldSupportGameplayRuntime(): WorldSupportGameplayRuntime | null { return this.worldGameplay?.support ?? null; }
+  getCoopMissionRuntime(): CoopMissionRuntime | null { return this.coopMissionRuntime; }
+  getCaptureTheBeerActivityRuntime(): CaptureTheBeerActivityRuntime | null {
+    return this.captureTheBeerActivityRuntime;
+  }
+
   /**
    * Der Missionsanteil des laufenden Frames.
    *
@@ -977,7 +994,7 @@ export class ArenaLifecycleCoordinator {
         playerManager: this.ctx.playerManager,
         isPlayerInteractionAllowed: (playerId) => (
           this.ctx.combatSystem.isAlive(playerId)
-          && !(this.ctx.burrowSystem?.isBurrowed(playerId) ?? false)
+          && !(this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false)
         ),
         onFx: (event) => {
           if (bridge.isHost()) bridge.broadcastCaptureTheBeerFx(event);
@@ -985,18 +1002,16 @@ export class ArenaLifecycleCoordinator {
         onDestroy: () => {
           if (this.captureTheBeerActivityRuntime !== runtime) return;
           this.captureTheBeerActivityRuntime = null;
-          if (this.ctx.captureTheBeerSystem === runtime.system) this.ctx.captureTheBeerSystem = null;
         },
       });
       this.captureTheBeerActivityRuntime = runtime;
-      this.ctx.captureTheBeerSystem = runtime.system;
       worldRuntime.activity.attach(activity, runtime);
       return;
     }
     if (activity.kind !== 'coop-mission') return;
     const runtime = new CoopMissionRuntime(activity, (current) => {
       if (current === null && this.coopMissionRuntime === runtime) this.coopMissionRuntime = null;
-      this.syncCoopMissionCompatibilityBindings(current);
+      this.onCoopMissionRuntimeChanged(current);
     }, this.coopMissionPorts);
     this.coopMissionRuntime = runtime;
     worldRuntime.activity.attach(activity, runtime);
@@ -1023,8 +1038,8 @@ export class ArenaLifecycleCoordinator {
       },
     });
     this.attachCoopMissionBaseBinding(activity, runtime);
-    this.syncCoopMissionCompatibilityBindings(runtime);
-    if (this.ctx.worldMaterialization?.arena) {
+    this.onCoopMissionRuntimeChanged(runtime);
+    if (this.worldRuntime?.materialization?.arena) {
       this.attachCoopMissionPowerUpBinding(
         activity,
         runtime,
@@ -1036,9 +1051,7 @@ export class ArenaLifecycleCoordinator {
       );
       this.coopMissionComposition.materializeCore(activityConfiguration, runtime);
       this.coopMissionComposition.materializeDependents(activityConfiguration, runtime);
-      // Objective composition creates the Activity-owned TeamBuff. Refresh the compatibility
-      // facade only after all Activity children exist; the Coordinator remains its single writer.
-      this.syncCoopMissionCompatibilityBindings(runtime);
+      this.onCoopMissionRuntimeChanged(runtime);
     }
   }
 
@@ -1048,7 +1061,7 @@ export class ArenaLifecycleCoordinator {
     runtime: CoopMissionRuntime,
   ): void {
     if (activity.kind !== 'coop-mission') return;
-    const baseManager = this.ctx.baseManager;
+    const baseManager = this.worldRuntime?.materialization?.bases ?? null;
     const world = this.worldRuntime?.context;
     if (!baseManager || !world) return;
 
@@ -1079,7 +1092,7 @@ export class ArenaLifecycleCoordinator {
     activityStartTime?: number,
   ): void {
     if (activity.kind !== 'coop-mission') return;
-    const powerUpSystem = this.ctx.powerUpSystem;
+    const powerUpSystem = this.worldPowerUpRuntime?.system ?? null;
     const world = this.worldRuntime?.context;
     if (!powerUpSystem || !world) return;
     const activityConfiguration = resolveCoopMissionActivityConfiguration(activity, world.definition);
@@ -1122,35 +1135,7 @@ export class ArenaLifecycleCoordinator {
     this.detachActivityRuntime();
   }
 
-  /**
-   * Transitional Compatibility fuer noch nicht migrierte Consumer in Scene/Host-/Client-Update.
-   * Die einzige mutable Wahrheit bleibt der konkrete CoopMissionRuntime-Owner.
-   */
-  private syncCoopMissionCompatibilityBindings(runtime: CoopMissionRuntime | null): void {
-    this.ctx.enemyManager = runtime?.enemyManager ?? null;
-    this.ctx.flowFieldCoordinator = runtime?.flowFieldCoordinator ?? null;
-    this.ctx.enemyFlowFieldService = runtime?.enemyFlowFieldService ?? null;
-    this.ctx.enemyPlayerFlowFieldService = runtime?.enemyPlayerFlowFieldService ?? null;
-    this.ctx.enemyStrategicFlowFieldService = runtime?.enemyStrategicFlowFieldService ?? null;
-    this.ctx.enemyBossFlowFieldService = runtime?.enemyBossFlowFieldService ?? null;
-    this.ctx.enemyAiTargetCatalog = runtime?.enemyAiTargetCatalog ?? null;
-    this.ctx.enemyStrategicTargetService = runtime?.enemyStrategicTargetService ?? null;
-    this.ctx.allyFlowFieldServices = runtime?.allyFlowFields ?? new Map();
-    this.ctx.coopDefenseSpawnExecutor = runtime?.coopDefenseSpawnExecutor ?? null;
-    this.ctx.coopDefensePersistentPressureSystem = runtime?.coopDefensePersistentPressureSystem ?? null;
-    this.ctx.coopDefenseBossSystem = runtime?.coopDefenseBossSystem ?? null;
-    this.ctx.coopDefenseMapDirector = runtime?.coopDefenseMapDirector ?? null;
-    this.ctx.coopDefenseMapEventDirector = runtime?.coopDefenseMapEventDirector ?? null;
-    this.ctx.coopDefenseEnemyTrainAwarenessSystem = runtime?.coopDefenseEnemyTrainAwarenessSystem ?? null;
-    this.ctx.coopDefenseEnemyBurrowSystem = runtime?.coopDefenseEnemyBurrowSystem ?? null;
-    this.ctx.coopDefenseEnemyDodgeSystem = runtime?.coopDefenseEnemyDodgeSystem ?? null;
-    this.ctx.coopDefenseEnemyCombatPositioningSystem = runtime?.coopDefenseEnemyCombatPositioningSystem ?? null;
-    this.ctx.coopDefenseEnemyAbilitySystem = runtime?.coopDefenseEnemyAbilitySystem ?? null;
-    this.ctx.coopDefenseEnemyAttackSystem = runtime?.coopDefenseEnemyAttackSystem ?? null;
-    this.ctx.coopDefenseTimebombSystem = runtime?.coopDefenseTimebombSystem ?? null;
-    this.ctx.coopDefenseVoidHunterSystem = runtime?.coopDefenseVoidHunterSystem ?? null;
-    this.ctx.necromancySystem = runtime?.necromancySystem ?? null;
-    this.ctx.coopDefenseTeamBuffSystem = runtime?.coopDefenseTeamBuffSystem ?? null;
+  private onCoopMissionRuntimeChanged(runtime: CoopMissionRuntime | null): void {
     this.worldCombatGameplayBinding?.updateActivityBindings();
     this.syncCoopDefenseMapXpReference(runtime);
   }
@@ -1208,7 +1193,7 @@ export class ArenaLifecycleCoordinator {
       || (localWorld !== null && !isSameWorldInstance(localWorld, world))
     );
     if (worldChanged) {
-      const previousWorld = localWorld ?? this.ctx.world?.descriptor ?? null;
+      const previousWorld = localWorld ?? this.worldRuntime?.descriptor ?? null;
       const previousDefinitionId = previousWorld?.definitionId;
       const lobbyToMatch = isLobbyWorldDefinitionId(previousDefinitionId ?? '')
         && !isLobbyWorldDefinitionId(world.definitionId);
@@ -1223,7 +1208,7 @@ export class ArenaLifecycleCoordinator {
       // Eine weiterverwendbare Darstellung steht entweder noch in der laufenden Runtime – so
       // erreicht ein Client den Wechsel – oder liegt bereits im Handoff, weil der Host seine
       // Instanz zuvor beendet hat.
-      const reusablePresentation = this.ctx.worldPresentation
+      const reusablePresentation = this.worldRuntime?.presentation
         ?? this.worldPresentationHandoff.pending;
       const canFastReinstance = bridge.getGamePhase() !== 'ARENA'
         && isLobbyWorldDefinitionId(world.definitionId)
@@ -1471,7 +1456,7 @@ export class ArenaLifecycleCoordinator {
       if (bridge.isHost()) this.tryScheduleArenaStart();
       return;
     }
-    if (!view || !this.ctx.arenaResult || !this.ctx.currentLayout) return;
+    if (!view || !this.worldRuntime?.materialization?.arena || !this.worldRuntime.presentation?.layout) return;
 
     const work = this.collectWorldRenderWork(view);
     // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
@@ -1494,15 +1479,16 @@ export class ArenaLifecycleCoordinator {
    * Schatten teilen sich denselben Bake-Scheduler, deshalb zaehlt hier auch nur eine Summe.
    */
   private collectWorldRenderWork(view: WorldViewRect): WorldRenderWork {
-    const groundWork = this.ctx.arenaResult?.groundSurface?.getWorkingSet(view, true) ?? null;
-    const rockOverlayWork = this.ctx.arenaResult?.rockOverlaySurface?.getWorkingSet(view, true) ?? null;
+    const arenaResult = this.worldRuntime?.materialization?.arena ?? null;
+    const groundWork = arenaResult?.groundSurface?.getWorkingSet(view, true) ?? null;
+    const rockOverlayWork = arenaResult?.rockOverlaySurface?.getWorkingSet(view, true) ?? null;
     const shadowWork = this.renderers.shadow.getStaticSurfaceWorkingSet(view, true);
     const work = resolveWorldRenderWork(groundWork, rockOverlayWork, shadowWork);
     // Die Surface-Readiness bleibt die Authority; Working-Set-Daten liefern nur den
     // view-bezogenen Fortschritt.
     return {
       ...work,
-      renderReady: ArenaBuilder.isSurfaceWorkingSetReady(this.ctx.arenaResult, view)
+      renderReady: ArenaBuilder.isSurfaceWorkingSetReady(arenaResult, view)
         && this.renderers.shadow.isStaticReadyForView(view, true),
     };
   }
@@ -1522,7 +1508,8 @@ export class ArenaLifecycleCoordinator {
     if (this.arenaBuilt && !this.getLocalWorldPresentation().required) {
       return { ready: true, progress: 100 };
     }
-    if (!this.arenaBuilt || !view || !this.ctx.arenaResult || !this.ctx.currentLayout) {
+    if (!this.arenaBuilt || !view || !this.worldRuntime?.materialization?.arena
+      || !this.worldRuntime.presentation?.layout) {
       return { ready: false, progress: 0 };
     }
     const work = this.collectWorldRenderWork(view);
@@ -1563,7 +1550,7 @@ export class ArenaLifecycleCoordinator {
     this.timeOfDayController?.setRoundStartTime(roundStartTime);
     this.worldLifecycle.bindActivityStartAnchor(roundStartTime);
     this.worldTrainRuntime?.bindRoundStart(roundStartTime);
-    this.ctx.powerUpSystem?.setArenaStartTime(roundStartTime);
+    this.worldPowerUpRuntime?.system.setArenaStartTime(roundStartTime);
   }
 
   private resolveRoundEndTime(arenaStartTime: number): number {
@@ -1655,12 +1642,13 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return;
     this.syncHostCoopDefensePlayerModifiersFromCurrentBuild();
     this.persistentBaseWorldBinding?.refreshForRelevantBuildChanges();
-    if (!this.ctx.loadoutManager) return;
+    const playerSystems = this.worldPlayerGameplayRuntime?.systems;
+    if (!playerSystems) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (!this.ctx.playerManager.hasPlayer(profile.id)) continue;
-      this.ctx.loadoutManager.syncSelectedLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+      playerSystems.loadout.syncSelectedLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       this.ctx.combatSystem.reconcilePlayerRuntimeState(profile.id);
-      this.ctx.resourceSystem?.reconcilePlayerLimits(profile.id);
+      playerSystems.resource.reconcilePlayerLimits(profile.id);
     }
   }
 
@@ -1689,7 +1677,7 @@ export class ArenaLifecycleCoordinator {
           gameMode,
           mapName,
           teamScore: gameMode === CAPTURE_THE_BEER_MODE && teamId
-            ? this.ctx.captureTheBeerSystem?.getTeamScore(teamId) ?? 0
+            ? this.captureTheBeerActivityRuntime?.system.getTeamScore(teamId) ?? 0
             : undefined,
           sharedXp: isCoopDefenseMode(gameMode) ? bridge.getCoopDefenseRoundXp() : undefined,
           epicGuaranteeCount: isCoopDefenseMode(gameMode) ? epicGuaranteeCount : undefined,
@@ -1965,7 +1953,7 @@ export class ArenaLifecycleCoordinator {
       && !this.matchTerminated
       && !this.roundStartPending
       && !this.worldLifecycle.activity.isActive()
-      && this.ctx.world?.definition?.participationPolicy?.selfAdmit === true;
+      && this.worldRuntime?.context.definition?.participationPolicy?.selfAdmit === true;
   }
 
   /**
@@ -2116,7 +2104,7 @@ export class ArenaLifecycleCoordinator {
       // Ob eine World auch ohne Teilnahme sichtbar sein darf, entscheidet ausschliesslich sie
       // selbst. Aus Raumzustand oder fehlender Activity wird das nie erschlossen.
       previewWithoutParticipation:
-        this.ctx.world?.definition?.presentationPolicy?.previewWithoutParticipation === true,
+        this.worldRuntime?.context.definition?.presentationPolicy?.previewWithoutParticipation === true,
     });
   }
 
@@ -2149,7 +2137,7 @@ export class ArenaLifecycleCoordinator {
     const playerSprites = this.ctx.playerManager.getAllPlayers()
       .map((player) => player.displayObject)
       .filter((sprite): sprite is Phaser.GameObjects.Sprite => sprite !== null);
-    const enemySprites = (this.ctx.enemyManager?.getAllEnemies() ?? []).map((enemy) => enemy.sprite);
+    const enemySprites = (this.coopMissionRuntime?.enemyManager?.getAllEnemies() ?? []).map((enemy) => enemy.sprite);
     this.arenaExitEntityPresentation = new ArenaExitEntityPresentation(
       this.scene,
       [...playerSprites, ...enemySprites],
@@ -2196,7 +2184,7 @@ export class ArenaLifecycleCoordinator {
       participation: this.getWorldParticipation(playerId),
       activityKind: this.worldLifecycle.activity.kind,
       worldCombatAllowed: this.worldLifecycle.activity.kind !== null
-        || this.ctx.world?.definition?.actionPolicy?.combat === true,
+        || this.worldRuntime?.context.definition?.actionPolicy?.combat === true,
     });
   }
 
@@ -2314,7 +2302,7 @@ export class ArenaLifecycleCoordinator {
     const reusablePresentation = preserveLobbyPresentation
       && isLobbyWorldDefinitionId(worldDescriptor.definitionId)
       && activityDescriptor === null
-      ? this.ctx.worldPresentation ?? this.worldPresentationHandoff.pending
+      ? this.worldRuntime?.presentation ?? this.worldPresentationHandoff.pending
       : null;
     const prepared = this.preparedRoundLayout;
     this.tearDownArena(reusablePresentation !== null);
@@ -2350,8 +2338,8 @@ export class ArenaLifecycleCoordinator {
     const activityConfiguration = isCoopMission && activityDescriptor?.kind === 'coop-mission'
       ? resolveCoopMissionActivityConfiguration(activityDescriptor, world.definition)
       : null;
-    // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle schreibt
-    // `ctx.world` und prueft, dass Runtime und Instanz dieselbe World meinen.
+    // Die lokale Runtime haengt sich an die laufende World-Instanz; der Lifecycle prueft, dass
+    // Runtime und Instanz dieselbe World meinen.
     this.worldLifecycle.attachRuntime(world, activityDescriptor);
     const coopMissionRuntime = isCoopMission ? this.coopMissionRuntime : null;
     if (isCoopMission && !coopMissionRuntime) {
@@ -2433,16 +2421,12 @@ export class ArenaLifecycleCoordinator {
       placement: placementSystem,
       bases: baseManager,
     } = builtWorld;
-    this.ctx.worldMaterialization = materialization;
-    this.ctx.worldPresentation = builtWorld.presentation;
     this.persistentBaseWorldBinding = persistentBaseBinding;
     this.persistentBase.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);
     if (coopMissionRuntime && baseManager && missionMapConfig && activityDescriptor) {
       this.attachCoopMissionBaseBinding(activityDescriptor, coopMissionRuntime);
     }
     bridge.setLocalWorldLoadProgress(worldDescriptor.worldRevision, 60, 'building');
-    this.ctx.persistentBaseContributions = null;
-    this.ctx.persistentBaseRewards = null;
     // Der Basiskern und sein committed Contribution-State gehoeren zur persistenten World. Nur
     // eine aktive Mission oeffnet zusaetzlich eine Working Copy; die LobbyWorld bearbeitet den
     // committed Stand dagegen unmittelbar.
@@ -2464,8 +2448,6 @@ export class ArenaLifecycleCoordinator {
           '[ArenaLifecycleCoordinator] Activity identity has no PersistentBase transaction',
         );
       }
-      this.ctx.persistentBaseContributions = this.persistentBaseContributions;
-      this.ctx.persistentBaseRewards = this.persistentBaseRewards;
       persistentBaseBinding.setSite(persistentBaseSite.anchor, persistentBaseSite.buildArea);
     } else {
       persistentBaseBinding.setSite(null, null);
@@ -2500,7 +2482,7 @@ export class ArenaLifecycleCoordinator {
 
     if (coopMissionRuntime && activityConfiguration) {
       this.coopMissionComposition.materializeDependents(activityConfiguration, coopMissionRuntime);
-      this.syncCoopMissionCompatibilityBindings(coopMissionRuntime);
+      this.onCoopMissionRuntimeChanged(coopMissionRuntime);
     }
 
     // World-/Activity-renderers are owned by WorldTrainRuntime.
@@ -2525,9 +2507,9 @@ export class ArenaLifecycleCoordinator {
     this.renderers.shadow.setTimeOfDay(runtimeTimeOfDayMinutes);
     if (presentation) {
       this.renderers.shadow.rebuildArenaStaticShadows(
-        this.ctx.currentLayout,
-        this.ctx.arenaResult,
-        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+        layout,
+        arenaResult,
+        placementSystem.getAllRuntimeRocks(),
         preserveLobbyPresentation,
       );
     }
@@ -2594,14 +2576,8 @@ export class ArenaLifecycleCoordinator {
     // naechste Aufbau sie uebernimmt.
     this.releaseWorldRuntime(preserveAuthoredPresentation);
     this.persistentBaseWorldBinding = null;
-    // Die Compatibility-Fassaden der World-Gameplay-Owner sind mit deren Teardown bereits
-    // neutralisiert; hier bleiben nur die Stores, die dieser Flow selbst gesetzt hat.
-    this.ctx.persistentBaseContributions = null;
-    this.ctx.persistentBaseRewards = null;
     this.ctx.hostHeldActionSystem?.reset();
     this.ctx.hostHeldActionSystem = null;
-    this.ctx.coopDefenseCarryItems = [];
-    this.ctx.coopDefenseSecondaryObjectiveConfigs = [];
     if (bridge.isHost()) {
       for (const player of bridge.getConnectedPlayers()) bridge.publishActiveBuffs(player.id, []);
     }
@@ -2614,9 +2590,6 @@ export class ArenaLifecycleCoordinator {
     // Die World-Darstellung raeumt ihr eigener Owner ab; der Flow sagt nur, ob eine uebernommene
     // authored Presentation stehen bleibt.
     resetRenderersForWorldPresentationTeardown(this.renderers, preserveAuthoredPresentation);
-    // Transitional ArenaContext facade: the WorldTrainRuntime already owns destruction; only
-    // clear the legacy reference here so no round-scoped object remains observable.
-    this.ctx.trainManager = null;
     this.ctx.centerHUD.hideTrainWidget();
   }
 
@@ -2841,9 +2814,9 @@ export class ArenaLifecycleCoordinator {
    * und niemals einen stillen Early-Return ohne Nachfolger.
    */
   private startTerrainSnapshotBuild(worldRevision: number): void {
-    const layout = this.ctx.currentLayout;
-    const arenaResult = this.ctx.arenaResult;
-    const world = this.ctx.world;
+    const layout = this.worldRuntime?.presentation?.layout ?? null;
+    const arenaResult = this.worldRuntime?.materialization?.arena ?? null;
+    const world = this.worldRuntime?.context ?? null;
     if (!layout || !arenaResult || !world) {
       // Nach einem erfolgreichen Arenaaufbau muessen Layout, Arena-Ergebnis und World stehen.
       // Fehlt eines davon, gibt es keinen Nachfolge-Build mehr: deterministisch abbrechen.
@@ -2856,8 +2829,8 @@ export class ArenaLifecycleCoordinator {
     const isCurrent = (): boolean => (
       generation === this.terrainSnapshotGenerationId
       && this.arenaBuilt
-      && this.ctx.currentLayout === layout
-      && this.ctx.arenaResult === arenaResult
+      && this.worldRuntime?.presentation?.layout === layout
+      && this.worldRuntime?.materialization?.arena === arenaResult
       && bridge.getWorldDescriptor()?.worldRevision === worldRevision
     );
 
@@ -3064,21 +3037,22 @@ export class ArenaLifecycleCoordinator {
   }
 
   private syncHostCoopDefensePlayerModifiersFromCurrentBuild(): void {
-    if (!bridge.isHost() || !this.ctx.coopDefensePlayerModifierSystem) return;
+    const playerSystems = this.worldPlayerGameplayRuntime?.systems;
+    if (!bridge.isHost() || !playerSystems) return;
 
     const currentBuilds = bridge.getConnectedPlayers().map((profile) => [
       profile.id,
       bridge.getPlayerCurrentLoadoutSnapshot(profile.id),
     ] as const);
-    const changedPlayerIds = this.ctx.coopDefensePlayerModifierSystem.syncPlayers(currentBuilds);
+    const changedPlayerIds = playerSystems.playerModifier.syncPlayers(currentBuilds);
     for (const playerId of changedPlayerIds) {
       const current = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
       if (current?.coopDefenseProfile || (current?.equippedItems?.length ?? 0) > 0) {
         if (this.ctx.playerManager.hasPlayer(playerId)) {
-          this.ctx.coopDefenseItemRuntimeSystem?.initPlayer(playerId);
+          playerSystems.itemRuntime.initPlayer(playerId);
         }
       } else {
-        this.ctx.coopDefenseItemRuntimeSystem?.removePlayer(playerId);
+        playerSystems.itemRuntime.removePlayer(playerId);
       }
     }
   }

@@ -355,6 +355,25 @@ export class ArenaScene extends Phaser.Scene {
   private arenaRuntime!: ArenaRuntime;
   /** Der Arena-Flow der laufenden Szene; sein Owner ist die `ArenaRuntime`. */
   private get lifecycle(): ArenaLifecycleCoordinator { return this.arenaRuntime.flow; }
+  private get worldRuntime() { return this.arenaRuntime?.flow.getWorldRuntime() ?? null; }
+  private get world() { return this.worldRuntime?.context ?? null; }
+  private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
+  private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
+  private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
+  private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
+  private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
+  private get targetingSystems() { return this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems ?? null; }
+  private get playerSystems() { return this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems ?? null; }
+  private get combatSystems() { return this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems ?? null; }
+  private get supportSystems() { return this.arenaRuntime?.flow.getWorldSupportGameplayRuntime()?.systems ?? null; }
+  private get powerUpSystem() { return this.arenaRuntime?.flow.getWorldPowerUpRuntime()?.system ?? null; }
+  private get trainManager() { return this.arenaRuntime?.flow.getWorldTrainRuntime()?.getCurrentTrain() ?? null; }
+  private get coopMissionRuntime() { return this.arenaRuntime?.flow.getCoopMissionRuntime() ?? null; }
+  private get enemyManager() { return this.coopMissionRuntime?.enemyManager ?? null; }
+  private get captureTheBeerSystem() {
+    return this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()?.system ?? null;
+  }
+  private coopDefenseCarryItems: readonly import('../types').SyncedCoopDefenseCarryItem[] = [];
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -687,30 +706,30 @@ export class ArenaScene extends Phaser.Scene {
       {
         getState: () => ({
           staticShadows: this.renderers?.shadow?.isStaticVisible() ?? true,
-          groundSurface: this.ctx?.arenaResult?.groundSurface?.isVisible() ?? true,
-          rockOverlay: this.ctx?.arenaResult?.rockOverlaySurface?.isVisible() ?? true,
+          groundSurface: this.arenaResult?.groundSurface?.isVisible() ?? true,
+          rockOverlay: this.arenaResult?.rockOverlaySurface?.isVisible() ?? true,
           chunkSampling: this.renderers?.shadow?.getSamplingMode()
-            ?? this.ctx?.arenaResult?.groundSurface?.getSamplingMode()
+            ?? this.arenaResult?.groundSurface?.getSamplingMode()
             ?? 'default',
-          rockRenderer: this.ctx?.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
-          rockGpuPageSize: this.ctx?.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
-          rockGpu: this.ctx?.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
+          rockRenderer: this.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
+          rockGpuPageSize: this.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
+          rockGpu: this.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
         }),
         setStaticShadowsVisible: (visible) => this.renderers?.shadow?.setStaticVisible(visible),
-        setGroundSurfaceVisible: (visible) => this.ctx?.arenaResult?.groundSurface?.setVisible(visible),
-        setRockOverlayVisible: (visible) => this.ctx?.arenaResult?.rockOverlaySurface?.setVisible(visible),
+        setGroundSurfaceVisible: (visible) => this.arenaResult?.groundSurface?.setVisible(visible),
+        setRockOverlayVisible: (visible) => this.arenaResult?.rockOverlaySurface?.setVisible(visible),
         setChunkSampling: (mode) => {
           this.renderers?.shadow?.setSamplingMode(mode);
-          this.ctx?.arenaResult?.groundSurface?.setSamplingMode(mode);
-          this.ctx?.arenaResult?.rockOverlaySurface?.setSamplingMode(mode);
+          this.arenaResult?.groundSurface?.setSamplingMode(mode);
+          this.arenaResult?.rockOverlaySurface?.setSamplingMode(mode);
         },
         setRockRenderer: (mode) => {
           setRockRendererMode(mode);
-          this.ctx?.arenaResult?.rockVisualSystem?.setMode(mode);
+          this.arenaResult?.rockVisualSystem?.setMode(mode);
         },
         setRockGpuPageSize: (size) => {
           setRockGpuPageSize(size);
-          this.ctx?.arenaResult?.rockVisualSystem?.setPageSize(size);
+          this.arenaResult?.rockVisualSystem?.setPageSize(size);
         },
       },
       () => this.renderers?.gpuVfx.getStats() ?? null,
@@ -811,7 +830,7 @@ export class ArenaScene extends Phaser.Scene {
           isLocalPlayer: targetId === bridge.getLocalPlayerId(),
         };
       }
-      const enemy = this.ctx?.enemyManager?.getEnemy(targetId);
+      const enemy = this.enemyManager?.getEnemy(targetId);
       if (enemy) {
         return {
           sprite: enemy.sprite,
@@ -1022,40 +1041,13 @@ export class ArenaScene extends Phaser.Scene {
       smokeSystem, fireSystem, stinkCloudSystem, hostPhysics, inputSystem,
       leftPanel, rightPanel, centerHUD, aimSystem, arenaCountdown,
       playerStatusRing: this.playerStatusRing,
-      // World-/Activity-scoped (start null)
-      world: null,
-      // Gameplay-State und Darstellung der World haben getrennte Lifetimes und deshalb getrennte
-      // Owner. Die Felder darunter lesen sie nur – ein Consumer, der `ctx.arenaResult` liest,
-      // sieht damit garantiert die Darstellung, die der World-Owner gerade fuehrt, und nach
-      // deren Uebergabe an einen Uebergang gar keine mehr.
-      worldMaterialization: null,
-      worldPresentation: null,
-      get arenaResult() { return this.worldMaterialization?.arena ?? null; },
-      get currentLayout() { return this.worldPresentation?.layout ?? null; },
-      get placementSystem() { return this.worldMaterialization?.placement ?? null; },
-      get rockRegistry() { return this.worldMaterialization?.rocks ?? null; },
-      get baseManager() { return this.worldMaterialization?.bases ?? null; },
-      get lightOccluderIndex() { return this.worldMaterialization?.lightOccluders ?? null; },
-      persistentBaseContributions: null, persistentBaseRewards: null, reinforcementMatrixSystem: null, energyInjectorSystem: null, targetStatusSystem: null, captureTheBeerSystem: null, enemyManager: null,
-      resourceSystem: null, burrowSystem: null, loadoutManager: null,
-      powerUpSystem: null, detonationSystem: null, armageddonSystem: null, airstrikeSystem: null,
-      shieldBuffSystem: null, energyShieldSystem: null,
-      timeBubbleSystem: null,
-      teslaDomeSystem: null, turretSystem: null, coopDefensePlayerModifierSystem: null, coopDefenseItemRuntimeSystem: null, guardianSpiritSystem: null, repairDroneSystem: null, slimeTrailSystem: null, flamethrowerUpgradeSystem: null, weaponUpgradeSystem: null, ak47StrategicTargetSystem: null, necromancySystem: null, coopDefenseEnemyAttackSystem: null, coopDefenseEnemyAbilitySystem: null, coopDefenseEnemyTrainAwarenessSystem: null, coopDefenseEnemyBurrowSystem: null, coopDefenseEnemyDodgeSystem: null, coopDefenseEnemyCombatPositioningSystem: null, coopDefenseVoidHunterSystem: null, coopDefenseTimebombSystem: null, coopDefenseSpawnExecutor: null, coopDefensePersistentPressureSystem: null, coopDefenseBossSystem: null, coopDefenseMapDirector: null, coopDefenseMapEventDirector: null, hostHeldActionSystem: null, coopDefenseTeamBuffSystem: null, coopDefenseSecondaryObjectiveConfigs: [], coopDefenseCarryItems: [], translocatorSystem: null, tunnelSystem: null, trainManager: null,
-      flowFieldCoordinator: null,
-      enemyFlowFieldService: null,
-      enemyPlayerFlowFieldService: null,
-      enemyStrategicFlowFieldService: null,
-      enemyAiTargetCatalog: null,
-      enemyStrategicTargetService: null,
-      enemyBossFlowFieldService: null,
-      allyFlowFieldServices: new Map(),
+      hostHeldActionSystem: null,
     };
 
     playerManager.setSpawnContextProvider((playerId) => {
       const latestState = bridge.getLatestGameState();
       const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
-      const worldMapId = this.ctx.world ? toMapId(this.ctx.world.descriptor.definitionId) : null;
+      const worldMapId = this.world ? toMapId(this.world.descriptor.definitionId) : null;
       const missionConfig = worldMapId === null
         ? null
         : resolveCoopDefenseMapMissionProgress(getCoopDefenseMapConfig(worldMapId));
@@ -1065,7 +1057,7 @@ export class ArenaScene extends Phaser.Scene {
       // Ohne aktivierten Respawn-Checkpoint bleibt der authored Startbereich der Fokus. Auf einer
       // langen Routenkarte waere der Initialspawn sonst ueber die gesamte Arena verteilt.
       const spawnFocusCell = respawnCheckpoint ?? missionConfig?.startArea;
-      const runtimePlaceables = this.ctx.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
+      const runtimePlaceables = this.placementSystem?.getAllRuntimeRocks() ?? latestState?.placeableRocks ?? [];
       const turretRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
 
       return {
@@ -1098,9 +1090,9 @@ export class ArenaScene extends Phaser.Scene {
         // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
         enemyThreats: (() => {
           // Nur eigene Basen: der Zombie-Druck wird gegen die Basen gemessen, die sie angreifen.
-          const livingBases = this.ctx.baseManager?.getBasesByFaction('friendly')
+          const livingBases = this.baseManager?.getBasesByFaction('friendly')
             .filter((base) => !(base.isInert?.() ?? false) && base.getHp() > 0) ?? [];
-          return (this.ctx.enemyManager?.getAllEnemies() ?? [])
+          return (this.enemyManager?.getAllEnemies() ?? [])
           .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && combatSystem.isAlive(enemy.id))
           .map((enemy) => {
             let targetBaseId: string | undefined;
@@ -1128,7 +1120,7 @@ export class ArenaScene extends Phaser.Scene {
             };
           });
         })(),
-        livingCoopBaseIds: this.ctx.baseManager?.getActiveMainBaseIds('friendly'),
+        livingCoopBaseIds: this.baseManager?.getActiveMainBaseIds('friendly'),
         preferredSpawnFocus: spawnFocusCell
           ? {
             x: ARENA_OFFSET_X + (spawnFocusCell.gridX + 0.5) * CELL_SIZE,
@@ -1209,7 +1201,7 @@ export class ArenaScene extends Phaser.Scene {
       // aufgezaehlt, wenn die Waffe sie ausdruecklich anfragt – der Bestand kostet sonst
       // in jedem Homing-Frame jeder Kampfwaffe.
       if (config.targetTypes?.includes('turrets')) {
-        for (const turret of this.ctx.turretSystem?.getTurrets() ?? []) {
+        for (const turret of this.combatSystems?.turret?.getTurrets() ?? []) {
           if (!inRange(turret.x, turret.y)) continue;
           emit(String(turret.id), 'turrets', turret.x, turret.y);
         }
@@ -1219,7 +1211,7 @@ export class ArenaScene extends Phaser.Scene {
         if (!player.active) continue;
         if (!inRange(player.x, player.y)) continue;
         if (!combatSystem.isAlive(player.id)) continue;
-        if (this.ctx.burrowSystem?.isBurrowed(player.id)) continue;
+        if (this.playerSystems?.burrow?.isBurrowed(player.id)) continue;
         if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
         emit(player.id, 'players', player.x, player.y);
       }
@@ -1230,15 +1222,15 @@ export class ArenaScene extends Phaser.Scene {
           emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
         }
       }
-      for (const enemy of this.ctx.enemyManager?.getAllEnemies() ?? []) {
+      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
         if (!enemy.sprite.active) continue;
         if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
         if (!combatSystem.isAlive(enemy.id)) continue;
         if (!combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
         emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
       }
-      if (config.targetTypes?.includes('bases') && !this.ctx.enemyManager?.hasEnemy(ownerId)) {
-        for (const base of this.ctx.baseManager?.getBasesByFaction('hostile') ?? []) {
+      if (config.targetTypes?.includes('bases') && !this.enemyManager?.hasEnemy(ownerId)) {
+        for (const base of this.baseManager?.getBasesByFaction('hostile') ?? []) {
           if (base.isInert?.() === true || base.getHp() <= 0) continue;
           const surface = base.getNearestSurfacePoint(originX, originY);
           if (!surface || !inRange(surface.x, surface.y)) continue;
@@ -1251,7 +1243,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     projectileManager.setHomingTargetValidityChecker((id, type) => {
       if (type !== 'players' && type !== 'decoys') return true;
-      const catalog = this.ctx.enemyAiTargetCatalog;
+      const catalog = this.coopMissionRuntime?.enemyAiTargetCatalog;
       if (!catalog) return true;
       return catalog.isTargetValid({ kind: type === 'players' ? 'player' : 'decoy', id });
     });
@@ -1260,7 +1252,19 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Shared state & helpers ─────────────────────────────────────────────
     this.localPlayerState = new LocalPlayerState();
-    this.rockVisualHelper  = new RockVisualHelper(this, this.ctx, this.renderers.shadow, this.renderers.rockDestruction, this.renderers.lighting);
+    this.rockVisualHelper  = new RockVisualHelper(
+      this,
+      this.ctx,
+      this.renderers.shadow,
+      this.renderers.rockDestruction,
+      this.renderers.lighting,
+      {
+        getWorldRuntime: () => this.arenaRuntime?.flow.getWorldRuntime() ?? null,
+        getTargetingRuntime: () => this.arenaRuntime?.flow.getWorldTargetingRuntime() ?? null,
+        getPlayerGameplayRuntime: () => this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime() ?? null,
+        getPowerUpRuntime: () => this.arenaRuntime?.flow.getWorldPowerUpRuntime() ?? null,
+      },
+    );
     this.hostileBaseIndicator = new HostileBaseIndicator(this);
     this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this, this.objectiveAnnouncements!);
     this.secondaryObjectiveHud.build();
@@ -1270,7 +1274,7 @@ export class ArenaScene extends Phaser.Scene {
     this.tunnelRenderer    = new TunnelRenderer(this);
     this.gaussWarning      = new GaussWarningRenderer(
       this,
-      () => this.ctx.enemyManager?.getAllEnemies() ?? [],
+      () => this.enemyManager?.getAllEnemies() ?? [],
     );
 
     // ── Coordinators ──────────────────────────────────────────────────────
@@ -1305,7 +1309,7 @@ export class ArenaScene extends Phaser.Scene {
       // Effekt-Summen wie das HUD, damit das Radialmenue nichts als baubar anzeigt, was das
       // Host-Gate anschliessend ablehnt.
       getCapacity: () => ({
-        used: this.ctx.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
+        used: this.placementSystem?.getUsedCapacity(bridge.getLocalPlayerId()) ?? 0,
         max: bridge.isHost()
           ? this.arenaRuntime?.flow.getConstructionCapacityForPlayer(bridge.getLocalPlayerId())
             ?? this.clientUpdate.getLocalConstructionCapacity()
@@ -1313,7 +1317,7 @@ export class ArenaScene extends Phaser.Scene {
       }),
       getDismantlePreview: () => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
-        const placementSystem = this.ctx.placementSystem;
+        const placementSystem = this.placementSystem;
         if (!player || !placementSystem) return undefined;
         const pointer = this.getPointerWorldPoint();
         return placementSystem.getDismantlePreview(
@@ -1416,8 +1420,8 @@ export class ArenaScene extends Phaser.Scene {
       if (!bridge.isHost()) return;
 
       const service = type === 'flowfield_players'
-        ? this.ctx.enemyPlayerFlowFieldService
-        : this.ctx.enemyFlowFieldService;
+        ? this.coopMissionRuntime?.enemyPlayerFlowFieldService
+        : this.coopMissionRuntime?.enemyFlowFieldService;
       if (!service) return;
 
       if (!this.flowFieldDebugOverlay) {
@@ -1501,7 +1505,7 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupConstructionPlacementPreviewProvider(
       (constructionId) => {
         const player = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
-        const placementSystem = this.ctx.placementSystem;
+        const placementSystem = this.placementSystem;
         if (!player || !placementSystem) return undefined;
         const pointer = this.getPointerWorldPoint();
         return placementSystem.getConstructionPlacementPreview(
@@ -1516,7 +1520,7 @@ export class ArenaScene extends Phaser.Scene {
     inputSystem.setupTranslocatorRecallCheck(() => {
       const cfg = this.clientUpdate.getLocalUtilityConfig();
       if (!cfg || cfg.type !== 'translocator') return false;
-      return this.ctx.translocatorSystem?.getActivePuckId(bridge.getLocalPlayerId()) !== undefined;
+      return this.playerSystems?.translocator?.getActivePuckId(bridge.getLocalPlayerId()) !== undefined;
     });
     inputSystem.onUtilityPressedDuringCooldown = () => {
       const config = this.clientUpdate.getLocalUtilityConfig();
@@ -1763,6 +1767,8 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(
       () => this.ctx,
+      () => this.lifecycle.getWorldPlayerGameplayRuntime(),
+      () => this.lifecycle.getCoopMissionRuntime(),
       (result) => {
         storeRuntimeBenchmarkResult(result);
         console.info(
@@ -1917,7 +1923,7 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.hostSyncWorldParticipation();
     this.lifecycle.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
-    const worldActive = this.ctx?.world !== null && this.ctx?.world !== undefined;
+    const worldActive = this.world !== null && this.world !== undefined;
     const activityActive = bridge.getActivityDescriptor() !== null;
     const exitPresentationActive = deferArenaExit && this.lifecycle.isArenaExitPresentationActive();
     const localWorldPresentation = this.lifecycle.getLocalWorldPresentation();
@@ -1967,7 +1973,7 @@ export class ArenaScene extends Phaser.Scene {
     // dazukommt.
     if (presentationPolicy.showWorld) {
       const worldView = getVisibleWorldView(this.cameras.main);
-      ArenaBuilder.updateSurfaceResidency(this.ctx?.arenaResult ?? null, worldView);
+      ArenaBuilder.updateSurfaceResidency(this.arenaResult ?? null, worldView);
       this.renderers?.shadow.updateStaticResidency(worldView);
     }
     this.arenaPanelsHeld = !!(gameplayActive && !terminated && this.arenaPanelTabKey?.isDown);
@@ -2199,11 +2205,11 @@ export class ArenaScene extends Phaser.Scene {
     // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
     // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
     // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
-    if (presentationPolicy.showWorld && this.ctx.arenaResult) {
+    if (presentationPolicy.showWorld && this.arenaResult) {
       const canopyStartedAt = diagnosticsActive ? performance.now() : 0;
       const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null;
       ArenaBuilder.updateCanopyTransparency(
-        this.ctx.arenaResult.canopyObjects,
+        this.arenaResult.canopyObjects,
         localSprite,
         (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
       );
@@ -2231,11 +2237,11 @@ export class ArenaScene extends Phaser.Scene {
     // zusaetzlich an der Activity: interaktiv zu spielen heisst nicht, dass eine Runde laeuft.
     const inRoundWorld = worldInteractive && activityActive;
     const strategicTargets = bridge.isHost()
-      ? (this.ctx.ak47StrategicTargetSystem?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
+      ? (this.playerSystems?.ak47StrategicTarget?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
       : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
     this.renderers.ak47StrategicTargets.sync(
       strategicTargets,
-      this.ctx.enemyManager,
+      this.enemyManager,
       bridge.getLocalPlayerId(),
       bridge.getSynchronizedNow(),
       inRoundWorld && isCoopDefenseMode(configuredGameMode),
@@ -2263,11 +2269,11 @@ export class ArenaScene extends Phaser.Scene {
       : null;
     const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
     const hostileMainBases = presentationMapConfig?.objective === 'destroy-hostile-bases'
-      ? (this.ctx.baseManager?.getMainBasesByFaction('hostile') ?? [])
+      ? (this.baseManager?.getMainBasesByFaction('hostile') ?? [])
       : [];
     const bossEnemyKind = presentationMapConfig?.boss?.enemyKind;
     const bossEnemy = bossEnemyKind
-      ? this.ctx.enemyManager?.getAllEnemies().find((enemy) => (
+      ? this.enemyManager?.getAllEnemies().find((enemy) => (
         enemy.faction === 'hostile'
         && enemy.kind === bossEnemyKind
         && enemy.sprite.active
@@ -2309,26 +2315,26 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
     // Die rechte Missionsspalte steht in Coop-Maps über dem Spielfeld und weicht deshalb vor
     // Figuren und Zielpunkt zurück.
-    this.ctx.centerHUD.updateMissionStackOcclusion(delta, this.ctx.playerManager, this.ctx.enemyManager);
+    this.ctx.centerHUD.updateMissionStackOcclusion(delta, this.ctx.playerManager, this.enemyManager);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
     // Pflichtziel und Nebenziel werden im selben Frameabschnitt aktualisiert; die Rundenzeit
     // ist dieselbe Bezugsgroesse, gegen die der Host seine Zustandswechsel datiert.
     this.secondaryObjectiveHud?.sync(
       secondaryObjectivePresentation,
-      this.ctx.coopDefenseSecondaryObjectiveConfigs,
+      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
       encounterElapsedMs,
       secondaryObjectivesActive,
     );
     this.secondaryObjectiveHud?.updateOcclusionFade(
       delta,
       this.ctx.playerManager,
-      this.ctx.enemyManager,
+      this.enemyManager,
     );
     this.renderers.secondaryObjectiveMarkers.sync(
       secondaryObjectivePresentation,
-      this.ctx.coopDefenseSecondaryObjectiveConfigs,
-      this.ctx.baseManager,
-      this.ctx.coopDefenseCarryItems,
+      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
+      this.baseManager,
+      this.coopDefenseCarryItems,
       secondaryObjectivesActive,
     );
     this.renderers.missionProgress.sync(
@@ -2338,21 +2344,21 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.renderers.carryZones.sync(
       secondaryObjectivePresentation,
-      this.ctx.coopDefenseSecondaryObjectiveConfigs,
+      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
       secondaryObjectivesActive,
     );
     this.renderers.objectiveRepairDrones.sync(
       secondaryObjectivePresentation,
-      this.ctx.coopDefenseSecondaryObjectiveConfigs,
-      this.ctx.baseManager,
+      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
+      this.baseManager,
       encounterElapsedMs,
       secondaryObjectivesActive,
     );
     this.syncSpectatorPlayerNames(inArena);
     if (coopDefensePresentationActive) {
       this.hostileBaseIndicator?.sync(
-        this.ctx.baseManager,
-        this.ctx.enemyManager,
+        this.baseManager,
+        this.enemyManager,
         presentationMapConfig,
         true,
       );
@@ -2384,27 +2390,27 @@ export class ArenaScene extends Phaser.Scene {
     this.visualFeedback?.update(delta);
     // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
     this.renderers.reinforcementMatrix.syncVisuals(
-      inArena ? (this.ctx.reinforcementMatrixSystem?.getActiveMatrices() ?? []) : [],
+      inArena ? (this.targetingSystems?.reinforcementMatrix?.getActiveMatrices() ?? []) : [],
       bridge.getSynchronizedNow(),
     );
     this.renderers.energyInjector.syncVisuals(
-      inArena ? (this.ctx.energyInjectorSystem?.getActiveEffects() ?? []) : [],
+      inArena ? (this.targetingSystems?.energyInjector?.getActiveEffects() ?? []) : [],
       bridge.getSynchronizedNow(),
     );
     const remoteControlTargets = !inArena
       ? []
       : bridge.isHost()
-        ? (this.ctx.coopDefenseItemRuntimeSystem?.getRemoteControlSnapshot(
+        ? (this.playerSystems?.itemRuntime?.getRemoteControlSnapshot(
           this.ctx.playerManager.getAllPlayers().map((player) => player.id),
-          this.ctx.turretSystem?.getTurrets() ?? [],
+          this.combatSystems?.turret?.getTurrets() ?? [],
         ) ?? [])
         : (bridge.getLatestGameState()?.remoteControlTurrets ?? []);
     this.renderers.remoteControl.syncVisuals(remoteControlTargets, bridge.getSynchronizedNow());
     this.renderers.teslaDome.update(delta);
     this.renderers.teslaNova.update();
     const visualEnemyStartMs = diagnosticsActive ? performance.now() : 0;
-    const auraEnemies = inArena ? (this.ctx.enemyManager?.getAllEnemies() ?? []) : [];
-    this.ctx.enemyManager?.syncHostVisuals();
+    const auraEnemies = inArena ? (this.enemyManager?.getAllEnemies() ?? []) : [];
+    this.enemyManager?.syncHostVisuals();
     const visualEnemyMs = diagnosticsActive ? performance.now() - visualEnemyStartMs : 0;
     this.renderers.healingAura.syncEnemies(auraEnemies);
     this.renderers.healingAura.update(delta);
@@ -2426,12 +2432,12 @@ export class ArenaScene extends Phaser.Scene {
       ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
       : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
-    const activeWorld = inArena ? this.ctx.world : null;
+    const activeWorld = inArena ? this.world : null;
     const persistentBaseSite = activeWorld?.persistentBaseSite ?? null;
     const persistentBaseVisualSite = inArena ? this.lifecycle.getPersistentBaseVisualSite() : null;
-    this.ctx.arenaResult?.groundSurface?.setPersistentBaseGravel(
-      persistentBaseVisualSite && this.ctx.currentLayout
-        ? toPersistentBaseGravelZone(persistentBaseVisualSite, this.ctx.currentLayout.seed)
+    this.arenaResult?.groundSurface?.setPersistentBaseGravel(
+      persistentBaseVisualSite && this.currentLayout
+        ? toPersistentBaseGravelZone(persistentBaseVisualSite, this.currentLayout.seed)
         : null,
     );
     this.persistentBaseVisuals.sync(
@@ -2512,7 +2518,7 @@ export class ArenaScene extends Phaser.Scene {
     this.placementPreview.renderPlacementPreview(inArena, activePlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
     this.placementPreview.renderRemotePlacementPreviews(inArena);
     const tunnelSnapshot = bridge.isHost()
-      ? (this.ctx.tunnelSystem?.getSnapshot() ?? [])
+      ? (this.playerSystems?.tunnel?.getSnapshot() ?? [])
       : (bridge.getLatestGameState()?.tunnels ?? []);
     this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
     this.tunnelRenderer.update(this.time.now);
@@ -2745,7 +2751,7 @@ export class ArenaScene extends Phaser.Scene {
       fireSimulationMs: firePerformance.simulationMs,
       fireCreationMs: firePerformance.creationMs,
       fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
-      enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
+      enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
       projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
       playerCount: this.ctx.playerManager.getAllPlayers().length,
       // Einschliesslich der Kinder der Fels-Ebene: Sonst meldete die Diagnose eine Szene ohne Welt.
@@ -2769,8 +2775,8 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private seedCompanionBaselines(recordingId: number): void {
-    const flowfieldSource = this.ctx.flowFieldCoordinator ?? null;
-    const rockSource = this.ctx.arenaResult?.rockVisualSystem ?? null;
+    const flowfieldSource = this.coopMissionRuntime?.flowFieldCoordinator ?? null;
+    const rockSource = this.arenaResult?.rockVisualSystem ?? null;
     const vfxSource = this.renderers.gpuVfx;
     const flowfield = flowfieldSource?.getDiagnostics(performance.now()) ?? null;
     const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
@@ -2863,9 +2869,9 @@ export class ArenaScene extends Phaser.Scene {
     let flowfieldComputeMs = 0;
     let flowfieldRoundTripMs = 0;
     if (sampleSubsystems) {
-      flowfield = this.ctx.flowFieldCoordinator?.getDiagnostics(performanceNow) ?? null;
-      const flowfieldSource = this.ctx.flowFieldCoordinator ?? null;
-      const rockSource = this.ctx.arenaResult?.rockVisualSystem ?? null;
+      flowfield = this.coopMissionRuntime?.flowFieldCoordinator?.getDiagnostics(performanceNow) ?? null;
+      const flowfieldSource = this.coopMissionRuntime?.flowFieldCoordinator ?? null;
+      const rockSource = this.arenaResult?.rockVisualSystem ?? null;
       const vfxSource = this.renderers.gpuVfx;
       const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
       const vfxCounters = vfxSource.getCompanionCounters();
@@ -3034,7 +3040,7 @@ export class ArenaScene extends Phaser.Scene {
       fireSimulationMs: 0,
       fireCreationMs: 0,
       fireVisualMs: 0,
-      enemyCount: this.ctx.enemyManager?.getAllEnemies().length ?? 0,
+      enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
       projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
       playerCount: this.ctx.playerManager.getAllPlayers().length,
       displayObjectCount: 0,
@@ -3101,8 +3107,8 @@ export class ArenaScene extends Phaser.Scene {
         ultimateId: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'ultimate') ?? null,
       },
       diagnosticContext: {
-        rockRenderer: this.ctx.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
-        rockGpuPageSize: this.ctx.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
+        rockRenderer: this.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
+        rockGpuPageSize: this.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
       },
     });
     // Delta-derived subsystem values belong to this sample only. Gauges above remain live on
@@ -3734,19 +3740,19 @@ export class ArenaScene extends Phaser.Scene {
   private getLocalPlacementPreview() {
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
     const cfg = this.clientUpdate.getLocalUtilityConfig();
-    if (!sprite || !this.ctx.placementSystem || !this.ctx.inputSystem.isUtilityPlacementActive()) return undefined;
+    if (!sprite || !this.placementSystem || !this.ctx.inputSystem.isUtilityPlacementActive()) return undefined;
     if (cfg.activation.type !== 'placement_mode') return undefined;
     const pointer = this.getPointerWorldPoint();
-    return this.ctx.placementSystem.getPlacementPreview(cfg as PlaceableUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
+    return this.placementSystem.getPlacementPreview(cfg as PlaceableUtilityConfig, sprite.x, sprite.y, pointer.x, pointer.y);
   }
 
   private getLocalUltimatePlacementPreview() {
     const sprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
     const cfg = this.clientUpdate.getLocalUltimateConfig();
-    if (!sprite || !this.ctx.placementSystem || !this.ctx.inputSystem.isUltimatePlacementActive()) return undefined;
+    if (!sprite || !this.placementSystem || !this.ctx.inputSystem.isUltimatePlacementActive()) return undefined;
     if (cfg.type !== 'tunnel') return undefined;
     const pointer = this.getPointerWorldPoint();
-    return this.ctx.placementSystem.getTunnelPlacementPreview(
+    return this.placementSystem.getTunnelPlacementPreview(
       cfg,
       sprite.x,
       sprite.y,
@@ -4134,7 +4140,7 @@ export class ArenaScene extends Phaser.Scene {
     bossSpawnedAtMs: number | null;
     bossPhase: number;
   } {
-    const observedPhase = this.ctx.enemyManager?.getMaxBossPhase() ?? 0;
+    const observedPhase = this.enemyManager?.getMaxBossPhase() ?? 0;
     return {
       bossSpawnedAtMs: bridge.getRoundState()?.coopDefenseBossSpawnedAtMs ?? null,
       bossPhase: observedPhase,
@@ -4188,7 +4194,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncArenaMetrics(phase = bridge.getGamePhase(), showWorld = phase === 'ARENA'): void {
     const mode = this.resolveConfiguredGameMode(phase);
-    const worldMetrics = this.ctx?.world?.metrics ?? null;
+    const worldMetrics = this.world?.metrics ?? null;
     if (worldMetrics) {
       // Der mutable Kompatibilitaetsspiegel folgt der laufenden World selbst. Ihn erneut aus dem
       // konfigurierten Modus abzuleiten waere eine zweite Quelle - und die LobbyWorld traegt
@@ -4284,17 +4290,17 @@ export class ArenaScene extends Phaser.Scene {
     const state = bridge.getLatestGameState();
     const countdownGround = countdownActive && activeMapConfig
       ? buildCountdownGroundFirePreview(
-        this.ctx.currentLayout,
+        this.currentLayout,
         activeMapConfig,
         bridge.getArenaStartTime(),
       )
       : { cells: [] };
-    const countdownPedestals = this.ctx.powerUpSystem?.getPedestalSnapshot() ?? [];
+    const countdownPedestals = this.powerUpSystem?.getPedestalSnapshot() ?? [];
     if (state) {
-      this.ctx.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
+      this.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
       this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
-      this.ctx.coopDefenseCarryItems = state.coopDefenseCarry ?? [];
-      this.renderers.beer.syncCoopDefenseCarry(this.ctx.coopDefenseCarryItems);
+      this.coopDefenseCarryItems = state.coopDefenseCarry ?? [];
+      this.renderers.beer.syncCoopDefenseCarry(this.coopDefenseCarryItems);
       this.renderers.timeBubble.syncVisuals(state.timeBubbles ?? []);
       this.renderers.teslaDome.syncVisuals(state.teslaDomes ?? []);
       this.renderers.energyShield.syncVisuals(state.energyShields ?? []);
@@ -4452,7 +4458,7 @@ export class ArenaScene extends Phaser.Scene {
       skyState: resolveSkyState(minutes),
       isVoidMap: mapId !== null && getCoopDefenseMapConfig(mapId).trackMode === 'void-fire',
       bossVisualProfile: inArena && mapId === '15' ? 'void-hunter' : undefined,
-      bossPhase: inArena ? (this.ctx?.enemyManager?.getMaxBossPhase() ?? 0) : 0,
+      bossPhase: inArena ? (this.enemyManager?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,
       gamePhase: inArena ? 'ARENA' : 'LOBBY',
     };
@@ -4466,13 +4472,13 @@ export class ArenaScene extends Phaser.Scene {
 
   private resolveCoopDefenseArenaWidthCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
-    if (this.ctx?.world) return this.ctx.world.metrics.gridCols;
+    if (this.world) return this.world.metrics.gridCols;
     return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaWidthCells;
   }
 
   private resolveCoopDefenseArenaHeightCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
-    if (this.ctx?.world) return this.ctx.world.metrics.gridRows;
+    if (this.world) return this.world.metrics.gridRows;
     return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaHeightCells;
   }
 
@@ -4484,8 +4490,8 @@ export class ArenaScene extends Phaser.Scene {
    * Stelle. Waehrend sie laeuft, beantworten Modus und Map weiterhin die Lobby.
    */
   private resolveRoundWorldDescriptor(phase = bridge.getGamePhase()): WorldDescriptor | null {
-    if (!this.ctx?.world && phase !== 'ARENA') return null;
-    const descriptor = this.ctx?.world?.descriptor ?? bridge.getWorldDescriptor();
+    if (!this.world && phase !== 'ARENA') return null;
+    const descriptor = this.world?.descriptor ?? bridge.getWorldDescriptor();
     if (!descriptor || isLobbyWorldDefinitionId(descriptor.definitionId)) return null;
     return descriptor;
   }
@@ -4553,12 +4559,12 @@ export class ArenaScene extends Phaser.Scene {
   private resolveTrainState(): SyncedTrainState | null {
     return this.renderers.train?.getShadowState()
       ?? (bridge.isHost()
-        ? (this.ctx.trainManager?.getNetSnapshot() ?? null)
+        ? (this.trainManager?.getNetSnapshot() ?? null)
         : (bridge.getLatestGameState()?.train ?? null));
   }
 
   private syncWorldShadows(inArena: boolean, trainState: SyncedTrainState | null): void {
-    if (!inArena || !this.ctx.currentLayout || !this.ctx.arenaResult) {
+    if (!inArena || !this.currentLayout || !this.arenaResult) {
       this.forceStaticTimeOfDayBake = false;
       this.renderers.shadow.clear();
       return;
@@ -4587,8 +4593,8 @@ export class ArenaScene extends Phaser.Scene {
     const lighting = this.renderers.lighting;
     const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
     const artificialLights = artificialFactor > 0;
-    const liveTrainSegments = trainState?.alive && bridge.isHost() && this.ctx.trainManager?.isActive()
-      ? this.ctx.trainManager.getSegObjects()
+    const liveTrainSegments = trainState?.alive && bridge.isHost() && this.trainManager?.isActive()
+      ? this.trainManager.getSegObjects()
       : null;
     this.trainLightOccluders.setTrain(liveTrainSegments, trainState);
 
@@ -4644,8 +4650,8 @@ export class ArenaScene extends Phaser.Scene {
     this.syncProjectileLights(inArena);
     this.rockVisualHelper.syncTurretLights(inArena);
 
-    if (inArena) this.ctx.baseManager?.syncLights();
-    else this.ctx.baseManager?.releaseLights();
+    if (inArena) this.baseManager?.syncLights();
+    else this.baseManager?.releaseLights();
     this.persistentBasePreviewRenderer.syncLights(inArena);
 
     lighting.update();
@@ -5066,9 +5072,9 @@ export class ArenaScene extends Phaser.Scene {
       hardwareConcurrency: nav?.hardwareConcurrency ?? null,
       deviceMemoryGb: nav?.deviceMemory ?? null,
       rockRendering: {
-        mode: this.ctx?.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
-        pageSize: this.ctx?.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
-        gpu: this.ctx?.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
+        mode: this.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
+        pageSize: this.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
+        gpu: this.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
       },
     };
   }
@@ -5295,8 +5301,8 @@ export class ArenaScene extends Phaser.Scene {
     if (!roundState || roundState.coopDefenseHumanPlayerCount !== 1) return;
     const localPlayerId = bridge.getLocalPlayerId();
     const localPlayerState = this.ctx.combatSystem;
-    const ownMainBases = this.ctx.baseManager?.getMainBasesByFaction('friendly') ?? [];
-    const hostileMainBases = this.ctx.baseManager?.getMainBasesByFaction('hostile') ?? [];
+    const ownMainBases = this.baseManager?.getMainBasesByFaction('friendly') ?? [];
+    const hostileMainBases = this.baseManager?.getMainBasesByFaction('hostile') ?? [];
     const sumBase = (bases: readonly { getHp(): number; getMaxHp(): number }[]): { hp: number; maxHp: number } | null => (
       bases.length === 0
         ? null

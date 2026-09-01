@@ -3,7 +3,6 @@ import { BurrowSystem } from '../../systems/BurrowSystem';
 import { LoadoutManager } from '../../loadout/LoadoutManager';
 import {
   WorldPlayerGameplayRuntime,
-  type WorldPlayerGameplaySystems,
 } from '../../world/WorldPlayerGameplayRuntime';
 import type {
   ArenaWorldGameplay,
@@ -34,11 +33,11 @@ export function composeWorldPlayerGameplay(
     placementSystem,
     gameAudioSystem: ctx.gameAudioSystem,
     worldMetrics: world.metrics,
-    getEnemyManager: () => ctx.enemyManager,
-    getTargetStatusSystem: () => ctx.targetStatusSystem,
-    getPowerUpSystem: () => ctx.powerUpSystem,
+    getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+    getTargetStatusSystem: () => gameplay.targeting?.systems.targetStatus ?? null,
+    getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
-    getTeamAdrenalineRegenMultiplier: (playerId) => ctx.coopDefenseTeamBuffSystem?.getAdrenalineRegenMultiplier(
+    getTeamAdrenalineRegenMultiplier: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getAdrenalineRegenMultiplier(
       Date.now(),
       bridge.canPlayerReceiveRoundRewards(playerId),
       ctx.combatSystem.isAlive(playerId),
@@ -46,7 +45,7 @@ export function composeWorldPlayerGameplay(
     resetPlayerPosition: (playerId, x, y) => {
       flow.getCoopMissionRuntime()?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
     },
-    dropBeer: (playerId, x, y) => ctx.captureTheBeerSystem?.dropBeerForPlayer(playerId, x, y),
+    dropBeer: (playerId, x, y) => flow.getCaptureTheBeerSystem()?.dropBeerForPlayer(playerId, x, y),
     createLoadoutManager: (resourceSystem) => new LoadoutManager(
       ctx.playerManager,
       ctx.projectileManager,
@@ -79,21 +78,6 @@ export function composeWorldPlayerGameplay(
         recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
         recordUltimateUsed: (playerId) => bridge.recordUltimateUsed(playerId),
       },
-    },
-    onSystemsChanged: (systems: WorldPlayerGameplaySystems | null) => {
-      ctx.coopDefensePlayerModifierSystem = systems?.playerModifier ?? null;
-      ctx.coopDefenseItemRuntimeSystem = systems?.itemRuntime ?? null;
-      ctx.resourceSystem = systems?.resource ?? null;
-      ctx.burrowSystem = systems?.burrow ?? null;
-      ctx.loadoutManager = systems?.loadout ?? null;
-      ctx.translocatorSystem = systems?.translocator ?? null;
-      ctx.tunnelSystem = systems?.tunnel ?? null;
-      ctx.guardianSpiritSystem = systems?.guardianSpirit ?? null;
-      ctx.repairDroneSystem = systems?.repairDrone ?? null;
-      ctx.slimeTrailSystem = systems?.slimeTrail ?? null;
-      ctx.flamethrowerUpgradeSystem = systems?.flamethrowerUpgrade ?? null;
-      ctx.weaponUpgradeSystem = systems?.weaponUpgrade ?? null;
-      ctx.ak47StrategicTargetSystem = systems?.ak47StrategicTarget ?? null;
     },
   });
   gameplay.player = playerGameplayRuntime;

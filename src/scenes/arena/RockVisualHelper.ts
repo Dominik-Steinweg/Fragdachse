@@ -17,6 +17,17 @@ import { isCoopDefenseMode } from '../../gameModes';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
+import type { WorldRuntime } from '../../world/WorldRuntime';
+import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
+import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
+import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
+
+export interface RockVisualWorldPort {
+  readonly getWorldRuntime: () => WorldRuntime | null;
+  readonly getTargetingRuntime: () => WorldTargetingRuntime | null;
+  readonly getPlayerGameplayRuntime: () => WorldPlayerGameplayRuntime | null;
+  readonly getPowerUpRuntime: () => WorldPowerUpRuntime | null;
+}
 
 interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
@@ -49,14 +60,15 @@ export class RockVisualHelper {
     private readonly ctx: ArenaContext,
     private readonly shadowSystem: ShadowSystem | null,
     private readonly rockDestructionRenderer: RockDestructionRenderer,
-    private readonly lighting: LightingSystem | null = null,
+    private readonly lighting: LightingSystem | null,
+    private readonly worldPort: RockVisualWorldPort,
   ) {
     this.ensureTurretTextures();
     this.rockPresentation = new RockPresentation(
       {
         scene,
-        getResult: () => this.ctx.arenaResult,
-        getLayout: () => this.ctx.currentLayout,
+        getResult: () => this.arenaResult,
+        getLayout: () => this.currentLayout,
         getWorldFrame: arenaWorldFrameSource,
       },
       rockDestructionRenderer,
@@ -85,12 +97,12 @@ export class RockVisualHelper {
     rocks: readonly SyncedPlaceableRock[],
     playSpawnFx: boolean,
   ): void {
-    if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
+    if (!this.arenaResult || !this.currentLayout) return;
 
     const materialization = rocks.filter((rock) => rock.kind !== 'pedestal' && rock.collisionMode !== 'none');
     for (const rock of rocks) this.ensureRuntimeRockSlot(rock);
     for (const rock of materialization) {
-      this.ctx.arenaResult.rockGrid.set(rock.gridX, rock.gridY, rock.id);
+      this.arenaResult.rockGrid.set(rock.gridX, rock.gridY, rock.id);
     }
 
     let refreshStaticShadows = false;
@@ -118,22 +130,22 @@ export class RockVisualHelper {
     requiresObstacleIndexRebuild: boolean;
     hasStalePedestalProxy: boolean;
   } {
-    if (!this.ctx.arenaResult || !this.ctx.currentLayout) {
+    if (!this.arenaResult || !this.currentLayout) {
       return {
         refreshStaticShadows: false,
         requiresObstacleIndexRebuild: false,
         hasStalePedestalProxy: false,
       };
     }
-    const presentation = this.ctx.arenaResult.rockVisualSystem !== null;
+    const presentation = this.arenaResult.rockVisualSystem !== null;
 
     // Power-up-Podeste werden vollständig vom PowerUpRenderer visualisiert und sind wie
     // feste Arena-Podeste begehbar. Der Runtime-Rock bleibt trotzdem im PlacementSystem,
     // damit Ownership, Grid-Belegung und Rückbau erhalten bleiben.
     if (rock.kind === 'pedestal') {
-      const staleProxy = this.ctx.arenaResult.rockPhysicsProxies[rock.id];
+      const staleProxy = this.arenaResult.rockPhysicsProxies[rock.id];
       if (staleProxy) {
-        ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
+        ArenaBuilder.destroyRock(this.arenaResult, rock.id);
       }
       this.destroyTurretVisual(rock.id);
       if (playSpawnFx && presentation) {
@@ -167,11 +179,11 @@ export class RockVisualHelper {
 
     let refreshStaticShadows = false;
 
-    if (!this.ctx.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'rock') {
+    if (!this.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'rock') {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
-        this.ctx.arenaResult,
-        this.ctx.currentLayout.rocks,
+        this.arenaResult,
+        this.currentLayout.rocks,
         rock.id,
         rock.ownerColor,
         this.getPlaceableRockConfig(rock).placeable.ownerTintStrength,
@@ -179,11 +191,11 @@ export class RockVisualHelper {
         rock.maxHp,
       );
       refreshStaticShadows = true;
-    } else if (!this.ctx.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'turret') {
+    } else if (!this.arenaResult.rockPhysicsProxies[rock.id]?.active && rock.kind === 'turret') {
       ArenaBuilder.spawnRockAndRetile(
         this.scene,
-        this.ctx.arenaResult,
-        this.ctx.currentLayout.rocks,
+        this.arenaResult,
+        this.currentLayout.rocks,
         rock.id,
         undefined,
         0,
@@ -236,8 +248,8 @@ export class RockVisualHelper {
   }
 
   removePlaceableRockVisual(rock: SyncedPlaceableRock, playDust: boolean): void {
-    if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
-    const currentProxy = this.ctx.arenaResult.rockPhysicsProxies[rock.id];
+    if (!this.arenaResult || !this.currentLayout) return;
+    const currentProxy = this.arenaResult.rockPhysicsProxies[rock.id];
     if (rock.collisionMode === 'none') {
       if (playDust) {
         const world = this.gridToWorld(rock.gridX, rock.gridY);
@@ -249,7 +261,7 @@ export class RockVisualHelper {
     }
     if (rock.kind === 'pedestal') {
       if (currentProxy) {
-        ArenaBuilder.destroyRock(this.ctx.arenaResult, rock.id);
+        ArenaBuilder.destroyRock(this.arenaResult, rock.id);
       }
       this.destroyTurretVisual(rock.id);
       this.markObstaclesDirty(rock.id, false);
@@ -260,7 +272,7 @@ export class RockVisualHelper {
       if (rock.kind !== 'rock') {
         this.playTurretSpawnBurst(world.x, world.y, rock.ownerColor);
       } else if (currentProxy?.active) {
-        const snapshot = this.ctx.arenaResult.rockVisualSystem?.getDestructionSnapshot(rock.id);
+        const snapshot = this.arenaResult.rockVisualSystem?.getDestructionSnapshot(rock.id);
         if (snapshot) this.rockDestructionRenderer.playDestruction(snapshot);
       } else {
         this.playRockDustBurst(world.x, world.y, rock.ownerColor);
@@ -268,8 +280,8 @@ export class RockVisualHelper {
     }
     if (rock.kind === 'turret') {
       ArenaBuilder.destroyRockAndRetile(
-        this.ctx.arenaResult,
-        this.ctx.currentLayout.rocks,
+        this.arenaResult,
+        this.currentLayout.rocks,
         rock.id,
       );
       this.destroyTurretVisual(rock.id);
@@ -277,16 +289,16 @@ export class RockVisualHelper {
       return;
     }
     ArenaBuilder.destroyRockAndRetile(
-      this.ctx.arenaResult,
-      this.ctx.currentLayout.rocks,
+      this.arenaResult,
+      this.currentLayout.rocks,
       rock.id,
     );
     this.markObstaclesDirty(rock.id, false);
   }
 
   updateRockVisualById(rockId: number, hp: number): void {
-    if (!this.ctx.arenaResult || !this.ctx.currentLayout) return;
-    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    if (!this.arenaResult || !this.currentLayout) return;
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock?.kind === 'pedestal') return;
     if (runtimeRock?.collisionMode === 'none') {
       if (runtimeRock.kind === 'turret') this.createOrUpdateTurretVisual({ ...runtimeRock, hp });
@@ -294,8 +306,8 @@ export class RockVisualHelper {
     }
     if (runtimeRock && runtimeRock.kind !== 'rock') {
       ArenaBuilder.updateRockVisual(
-        this.ctx.arenaResult,
-        this.ctx.currentLayout.rocks,
+        this.arenaResult,
+        this.currentLayout.rocks,
         rockId,
         hp,
         runtimeRock.maxHp,
@@ -304,36 +316,47 @@ export class RockVisualHelper {
       return;
     }
     ArenaBuilder.updateRockVisual(
-      this.ctx.arenaResult,
-      this.ctx.currentLayout.rocks,
+      this.arenaResult,
+      this.currentLayout.rocks,
       rockId,
       hp,
-      runtimeRock?.maxHp ?? this.ctx.rockRegistry?.getMaxHP(rockId) ?? ROCK_HP_MAX,
+      runtimeRock?.maxHp ?? this.rockRegistry?.getMaxHP(rockId) ?? ROCK_HP_MAX,
       runtimeRock?.ownerColor,
       runtimeRock ? this.getPlaceableRockConfig(runtimeRock).placeable.ownerTintStrength : 0,
     );
   }
 
+  private get worldRuntime(): WorldRuntime | null { return this.worldPort.getWorldRuntime(); }
+  private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
+  private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
+  private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
+  private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
+  private get lightOccluderIndex() { return this.worldRuntime?.materialization?.lightOccluders ?? null; }
+  private get world() { return this.worldRuntime?.context ?? null; }
+  private get targetingSystems() { return this.worldPort.getTargetingRuntime()?.systems ?? null; }
+  private get playerSystems() { return this.worldPort.getPlayerGameplayRuntime()?.systems ?? null; }
+  private get powerUpSystem() { return this.worldPort.getPowerUpRuntime()?.system ?? null; }
+
   private destroyRockProxyIfPresent(rockId: number): void {
-    if (this.ctx.arenaResult?.rockPhysicsProxies[rockId]) {
-      ArenaBuilder.destroyRock(this.ctx.arenaResult, rockId);
+    if (this.arenaResult?.rockPhysicsProxies[rockId]) {
+      ArenaBuilder.destroyRock(this.arenaResult, rockId);
     }
   }
 
   applyObstacleDamageById(rockId: number, damage: number, attackerId: string): number {
-    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {
       if (runtimeRock.kind === 'turret' && runtimeRock.ownerId === attackerId) {
         return runtimeRock.hp;
       }
-      const updated = this.ctx.placementSystem?.applyDamage(rockId, damage, attackerId);
+      const updated = this.placementSystem?.applyDamage(rockId, damage, attackerId);
       const hp = updated?.hp ?? 0;
       this.updateRockVisualById(rockId, hp);
       return hp;
     }
 
-    if (!this.ctx.rockRegistry) return 0;
-    const newHp = this.ctx.rockRegistry.applyDamage(rockId, damage);
+    if (!this.rockRegistry) return 0;
+    const newHp = this.rockRegistry.applyDamage(rockId, damage);
     this.updateRockVisualById(rockId, newHp);
     return newHp;
   }
@@ -346,16 +369,16 @@ export class RockVisualHelper {
    */
   applyObstacleRepairById(rockId: number, amount: number): number {
     if (amount <= 0) return 0;
-    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {
       const before = runtimeRock.hp;
-      const updated = this.ctx.placementSystem?.repairRock(rockId, amount);
+      const updated = this.placementSystem?.repairRock(rockId, amount);
       if (!updated) return 0;
       this.updateRockVisualById(rockId, updated.hp);
       return updated.hp - before;
     }
 
-    const registry = this.ctx.rockRegistry;
+    const registry = this.rockRegistry;
     if (!registry) return 0;
     const before = registry.getHP(rockId);
     const maxHp = registry.getMaxHP(rockId);
@@ -367,18 +390,18 @@ export class RockVisualHelper {
   }
 
   handleDestroyedRock(rockId: number, reason: 'damage' | 'decay', attackerId?: string): void {
-    const runtimeRock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
     if (runtimeRock) {
-      this.ctx.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(rockId) });
-      this.ctx.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(rockId) });
+      this.targetingSystems?.targetStatus?.removeTarget({ targetType: 'construction', targetId: String(rockId) });
+      this.targetingSystems?.energyInjector?.removeTarget({ targetType: 'construction', targetId: String(rockId) });
       if (runtimeRock.kind === 'turret') {
         this.spawnTurretDeathCloud(runtimeRock);
       }
       if (runtimeRock.kind === 'pedestal') {
         if (runtimeRock.persistentRewardId !== undefined) {
-          this.ctx.powerUpSystem?.unregisterPersistentBaseRewardPedestal(runtimeRock.persistentRewardId);
+          this.powerUpSystem?.unregisterPersistentBaseRewardPedestal(runtimeRock.persistentRewardId);
         } else {
-          this.ctx.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
+          this.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
         }
       }
       if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
@@ -387,7 +410,7 @@ export class RockVisualHelper {
         this.ctx.hostPhysics.applyRadialImpulse(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionKnockback ?? 0, runtimeRock.ownerId, 0);
         bridge.broadcastExplosionEffect(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0);
       }
-      this.ctx.placementSystem?.removeRock(rockId);
+      this.placementSystem?.removeRock(rockId);
       this.removePlaceableRockVisual(runtimeRock, true);
       emitArenaMapGridChanged(this.scene.game.events, {
         reason: 'placeable_removed',
@@ -409,7 +432,7 @@ export class RockVisualHelper {
     }
 
     if (!this.rockPresentation.destroyRock(rockId)) return;
-    const removed = this.ctx.rockRegistry?.remove(rockId) ?? false;
+    const removed = this.rockRegistry?.remove(rockId) ?? false;
     if (removed) {
       emitArenaRockDestroyed(this.scene.game.events, {
         rockId,
@@ -421,10 +444,10 @@ export class RockVisualHelper {
     const dropsArmor = !isCoopDefenseMode(bridge.getActiveGameMode())
       || (
         reason === 'damage'
-        && this.ctx.coopDefensePlayerModifierSystem?.getClassId(attackerId ?? '') === 'dachs_of_steel'
+        && this.playerSystems?.playerModifier?.getClassId(attackerId ?? '') === 'dachs_of_steel'
       );
-    if (dropsArmor) this.ctx.powerUpSystem?.onRockDestroyed(rockId);
-    const rockCell = this.ctx.currentLayout?.rocks[rockId];
+    if (dropsArmor) this.powerUpSystem?.onRockDestroyed(rockId);
+    const rockCell = this.currentLayout?.rocks[rockId];
     emitArenaMapGridChanged(this.scene.game.events, {
       reason: 'static_rock_destroyed',
       source: 'static_rock',
@@ -511,7 +534,7 @@ export class RockVisualHelper {
 
   updateTurretAngle(rockId: number, angle: number): void {
     if (!Number.isFinite(angle)) return;
-    const rock = this.ctx.placementSystem?.getRuntimeRock(rockId);
+    const rock = this.placementSystem?.getRuntimeRock(rockId);
     const visual = this.turretVisuals.get(rockId);
     if (!rock || rock.kind !== 'turret' || !visual) return;
 
@@ -605,7 +628,7 @@ export class RockVisualHelper {
   }
 
   gridToWorld(gridX: number, gridY: number): { x: number; y: number } {
-    const metrics = this.ctx.world?.metrics;
+    const metrics = this.world?.metrics;
     if (!metrics) throw new Error('[RockVisualHelper] Cannot resolve a grid cell without an active World');
     return {
       x: metrics.offsetX + gridX * CELL_SIZE + CELL_SIZE / 2,
@@ -614,10 +637,10 @@ export class RockVisualHelper {
   }
 
   private ensureRuntimeRockSlot(rock: SyncedPlaceableRock): void {
-    if (!this.ctx.currentLayout || !this.ctx.arenaResult) return;
-    this.ctx.currentLayout.rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
-    while (this.ctx.arenaResult.rockPhysicsProxies.length <= rock.id) {
-      this.ctx.arenaResult.rockPhysicsProxies.push(null);
+    if (!this.currentLayout || !this.arenaResult) return;
+    this.currentLayout.rocks[rock.id] = { gridX: rock.gridX, gridY: rock.gridY };
+    while (this.arenaResult.rockPhysicsProxies.length <= rock.id) {
+      this.arenaResult.rockPhysicsProxies.push(null);
     }
   }
 
@@ -717,24 +740,24 @@ export class RockVisualHelper {
   private refreshObstacleVisuals(requireFullRefresh: boolean, dirtyRockIds: ReadonlySet<number>): void {
     const canRefreshRegions = !requireFullRefresh
       && dirtyRockIds.size > 0
-      && this.ctx.arenaResult?.rockOverlaySurface != null;
+      && this.arenaResult?.rockOverlaySurface != null;
     if (canRefreshRegions) {
       this.rockPresentation.refreshOverlayRegions(dirtyRockIds);
       this.shadowSystem?.rebuildArenaStaticShadowRegions(
-        this.ctx.currentLayout,
-        this.ctx.arenaResult,
+        this.currentLayout,
+        this.arenaResult,
         dirtyRockIds,
-        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+        this.placementSystem?.getAllRuntimeRocks() ?? [],
       );
     } else {
       this.rockPresentation.refreshOverlays();
       this.shadowSystem?.rebuildArenaStaticShadows(
-        this.ctx.currentLayout,
-        this.ctx.arenaResult,
-        this.ctx.placementSystem?.getAllRuntimeRocks() ?? [],
+        this.currentLayout,
+        this.arenaResult,
+        this.placementSystem?.getAllRuntimeRocks() ?? [],
       );
     }
-    this.ctx.lightOccluderIndex?.markDirty();
+    this.lightOccluderIndex?.markDirty();
   }
 }
 

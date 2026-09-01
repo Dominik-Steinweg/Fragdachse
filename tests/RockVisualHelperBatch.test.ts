@@ -124,6 +124,22 @@ function createFixture(order: readonly number[], materialize = true) {
     ctx as never,
     shadowSystem as never,
     {} as never,
+    null,
+    {
+      getWorldRuntime: () => ({
+        context: null,
+        materialization: {
+          arena: result,
+          placement: ctx.placementSystem,
+          rocks: null,
+          lightOccluders: ctx.lightOccluderIndex,
+        },
+        presentation: { layout },
+      } as never),
+      getTargetingRuntime: () => null,
+      getPlayerGameplayRuntime: () => null,
+      getPowerUpRuntime: () => null,
+    },
   );
 
   if (materialize) helper.materializePlaceableRockBatch(changes.added, false);

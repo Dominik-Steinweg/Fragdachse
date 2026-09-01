@@ -58,6 +58,8 @@ export class ArenaRuntime {
       world: {
         getWorldBinding: () => this.flow.persistentBaseWorldPorts.getWorldBinding(),
         getConstructionRuntime: () => this.flow.persistentBaseWorldPorts.getConstructionRuntime(),
+        getWorldRuntime: () => this.flow.getWorldRuntime(),
+        getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
         getPlayerCapabilities: (playerId) => (
           this.flow.persistentBaseWorldPorts.getPlayerCapabilities(playerId)
         ),
@@ -82,6 +84,20 @@ export class ArenaRuntime {
     // und nicht ein Missionssystem.
     this.hostUpdate.setActivityStepResolver(() => this.flow.getActivityStep());
     this.clientUpdate.setActivityStepResolver(() => this.flow.getActivityStep());
+    this.hostUpdate.setWorldRuntimeResolver(() => this.flow.getWorldRuntime());
+    this.hostUpdate.setWorldTargetingRuntimeResolver(() => this.flow.getWorldTargetingRuntime());
+    this.hostUpdate.setWorldTrainRuntimeResolver(() => this.flow.getWorldTrainRuntime());
+    this.hostUpdate.setWorldPlayerGameplayRuntimeResolver(() => this.flow.getWorldPlayerGameplayRuntime());
+    this.hostUpdate.setWorldCombatGameplayBindingResolver(() => this.flow.getWorldCombatGameplayBinding());
+    this.hostUpdate.setWorldPowerUpRuntimeResolver(() => this.flow.getWorldPowerUpRuntime());
+    this.hostUpdate.setWorldSupportGameplayRuntimeResolver(() => this.flow.getWorldSupportGameplayRuntime());
+    this.hostUpdate.setCoopMissionRuntimeResolver(() => this.flow.getCoopMissionRuntime());
+    this.hostUpdate.setCaptureTheBeerRuntimeResolver(() => this.flow.getCaptureTheBeerActivityRuntime());
+    this.clientUpdate.setWorldRuntimeResolver(() => this.flow.getWorldRuntime());
+    this.clientUpdate.setWorldTargetingRuntimeResolver(() => this.flow.getWorldTargetingRuntime());
+    this.clientUpdate.setWorldPlayerGameplayRuntimeResolver(() => this.flow.getWorldPlayerGameplayRuntime());
+    this.clientUpdate.setWorldPowerUpRuntimeResolver(() => this.flow.getWorldPowerUpRuntime());
+    this.clientUpdate.setCoopMissionRuntimeResolver(() => this.flow.getCoopMissionRuntime());
   }
 
   /**

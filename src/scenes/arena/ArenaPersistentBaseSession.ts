@@ -52,6 +52,8 @@ import type { ConstructionWorldRuntime } from '../../world/ConstructionWorldRunt
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
+import type { WorldRuntime } from '../../world/WorldRuntime';
+import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 
 /**
  * Der raumlanglebige Owner der persistenten Basis dieses Raums.
@@ -62,7 +64,7 @@ import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
  * gehoert deshalb nicht dem World-/Activity-Flow.
  *
  * Er liegt waehrend der Migration im Scene-/Adapter-Layer, weil er die bestehenden RPC-, UI- und
- * `ArenaContext`-Pfade bedient; die eigentlichen PB-Owner (`PersistentBaseRoomSession`,
+ * RPC-/UI-Pfade bedient; die eigentlichen PB-Owner (`PersistentBaseRoomSession`,
  * `PersistentBaseWorldBinding`, Stores) bleiben unveraendert die fachliche Wahrheit.
  */
 
@@ -72,6 +74,8 @@ export interface ArenaPersistentBaseWorldPorts {
   readonly getWorldBinding: () => PersistentBaseWorldBinding | null;
   /** Der World-Owner der Konstruktionsregeln; `null` ohne World oder auf dem Client. */
   readonly getConstructionRuntime: () => ConstructionWorldRuntime | null;
+  readonly getWorldRuntime: () => WorldRuntime | null;
+  readonly getPlayerGameplayRuntime: () => WorldPlayerGameplayRuntime | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
   /** Auch vor der lokalen World-Materialisierung beantwortbar: fuehrt diese World eine Basis? */
   readonly hasPersistentBaseSite: () => boolean;
@@ -116,6 +120,12 @@ export class ArenaPersistentBaseSession {
     this.rockVisualHelper = input.rockVisualHelper;
     this.world = input.world;
   }
+
+  private get worldRuntime(): WorldRuntime | null { return this.world.getWorldRuntime(); }
+  private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
+  private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
+  private get worldContext() { return this.worldRuntime?.context ?? null; }
+  private get playerSystems() { return this.world.getPlayerGameplayRuntime()?.systems ?? null; }
 
   /** Uebernimmt die Runtime-Objekte der aktuellen World; ohne World fuehrt der Raum keine. */
   useWorldRuntimes(runtimes: Parameters<PersistentBaseRoomSession['useWorldRuntimes']>[0]): void {
@@ -167,7 +177,7 @@ export class ArenaPersistentBaseSession {
     if (!bridge.isHost() || !this.session.hasOpenTransaction) return;
     applyPersistentBaseRoundOutcome('rollback', {
       session: this.session,
-      isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+      isRuntimeObjectAlive: (runtimeId) => this.placementSystem?.hasRuntimeRock(runtimeId) === true,
       identity: {
         worldRevision: activity.worldRevision,
         activityRevision: activity.activityRevision,
@@ -224,8 +234,8 @@ export class ArenaPersistentBaseSession {
     if (confirmed) grantStoredPersistentBaseRewards(confirmed.rewardIds);
 
     if (!bridge.isHost()) return;
-    const site = this.ctx.world?.persistentBaseSite ?? null;
-    if (!site || !this.ctx.persistentBaseRewards) {
+    const site = this.worldContext?.persistentBaseSite ?? null;
+    if (!site || !this.session.rewards) {
       bridge.publishPersistentBaseRewardSessionState(null);
       return;
     }
@@ -244,9 +254,9 @@ export class ArenaPersistentBaseSession {
       sanitizedRequest.worldRevision,
       sanitizedRequest.activityRevision,
     )) return { ok: false, reason: 'blocked' };
-    const site = this.ctx.world?.persistentBaseSite ?? null;
-    const store = this.ctx.persistentBaseRewards;
-    const placementSystem = this.ctx.placementSystem;
+    const site = this.worldContext?.persistentBaseSite ?? null;
+    const store = this.session.rewards;
+    const placementSystem = this.placementSystem;
     const world = bridge.getWorldDescriptor();
     if (!site || !store || !placementSystem || !world || sanitizedRequest.worldRevision !== world.worldRevision) {
       return { ok: false, reason: 'blocked' };
@@ -287,7 +297,7 @@ export class ArenaPersistentBaseSession {
     const occupant = placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
     let displacedPersonalRuntimeId: number | null = null;
     if (occupant && occupant.ownership !== 'base-owned') {
-      const isPersistentContribution = this.ctx.persistentBaseContributions?.getRuntimeBindings()
+      const isPersistentContribution = this.session.contributions?.getRuntimeBindings()
         .some((binding) => binding.runtimeId === occupant.id) === true;
       // A reward may displace a persistent contribution, but must never silently delete an
       // unrelated live utility for which there is no blueprint to reconstruct on rollback.
@@ -337,7 +347,7 @@ export class ArenaPersistentBaseSession {
 
   /** Liefert die lokale Reward-Vorschau aus dem verlaesslichen Session-Snapshot. */
   getPersistentBaseRewardIdsForPlayer(playerId: string): PersistentBaseRewardId[] {
-    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const site = this.worldContext?.persistentBaseSite ?? null;
     const session = bridge.getPersistentBaseRewardSessionState();
     // Enumeration and temporary availability are deliberately separate: an unlocked, unplaced
     // reward remains visible in the radial while the player is dead, burrowed or otherwise
@@ -345,7 +355,7 @@ export class ArenaPersistentBaseSession {
     // below still enforce the capability contract.
     if (!site || !this.mayManagePersistentBase(playerId)) return [];
 
-    const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
+    const hostState = bridge.isHost() ? this.session.rewards?.getState() : undefined;
     const availableRewardIds = hostState
       ? getStoredPersistentBaseRewardUnlocks()
       : session?.availableRewardIds;
@@ -374,7 +384,7 @@ export class ArenaPersistentBaseSession {
   }
 
   isPersistentBaseRuntimeActive(site: WorldPersistentBaseSite): boolean {
-    const baseManager = this.ctx.baseManager;
+    const baseManager = this.baseManager;
     if (!baseManager) return true;
     const base = baseManager.getBase(site.baseId);
     return base !== undefined && !base.isInert();
@@ -404,8 +414,8 @@ export class ArenaPersistentBaseSession {
     pointerX: number,
     pointerY: number,
   ): UtilityPlacementPreviewState | undefined {
-    const site = this.ctx.world?.persistentBaseSite ?? null;
-    const placementSystem = this.ctx.placementSystem;
+    const site = this.worldContext?.persistentBaseSite ?? null;
+    const placementSystem = this.placementSystem;
     const player = this.ctx.playerManager.getPlayer(playerId);
     const session = bridge.getPersistentBaseRewardSessionState();
     if (!site || !placementSystem || !player || !player.active
@@ -414,7 +424,7 @@ export class ArenaPersistentBaseSession {
       || !this.isPlayerAvailableForPersistentBaseAction(playerId)
       || !isKnownPersistentBaseRewardId(rewardId)) return undefined;
 
-    const hostState = bridge.isHost() ? this.ctx.persistentBaseRewards?.getState() : undefined;
+    const hostState = bridge.isHost() ? this.session.rewards?.getState() : undefined;
     const placements = hostState?.placements ?? session?.placements ?? [];
     if (!this.getPersistentBaseRewardIdsForPlayer(playerId).includes(rewardId)) return undefined;
 
@@ -446,7 +456,7 @@ export class ArenaPersistentBaseSession {
     });
     const occupant = placementSystem.getRuntimeRockAt(targetCell.gridX, targetCell.gridY);
     const persistentContribution = occupant
-      ? this.ctx.persistentBaseContributions?.getRuntimeBindings()
+      ? this.session.contributions?.getRuntimeBindings()
         .some((binding) => binding.runtimeId === occupant.id) === true
       : false;
     const conflictAllowed = !occupant || occupant.ownership === 'base-owned' || persistentContribution;
@@ -480,7 +490,7 @@ export class ArenaPersistentBaseSession {
     rewardId: PersistentBaseRewardId,
     preview: Pick<UtilityPlacementPreviewState, 'gridX' | 'gridY' | 'angle'>,
   ): Promise<LoadoutUseResult> {
-    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const site = this.worldContext?.persistentBaseSite ?? null;
     const world = bridge.getWorldDescriptor();
     if (!site || !world || !isKnownPersistentBaseRewardId(rewardId)) return { ok: false, reason: 'blocked' };
     const relative = this.resolvePersistentBaseRewardRelativeCell(site, preview.gridX, preview.gridY);
@@ -508,7 +518,7 @@ export class ArenaPersistentBaseSession {
     pointerX: number,
     pointerY: number,
   ): UtilityPlacementPreviewState | undefined {
-    const placementSystem = this.ctx.placementSystem;
+    const placementSystem = this.placementSystem;
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (!placementSystem || !player || !player.active
       || !this.mayManagePersistentBase(playerId)
@@ -539,9 +549,9 @@ export class ArenaPersistentBaseSession {
     pointerX: number,
     pointerY: number,
   ): UtilityPlacementPreviewState | undefined {
-    const placementSystem = this.ctx.placementSystem;
+    const placementSystem = this.placementSystem;
     const player = this.ctx.playerManager.getPlayer(playerId);
-    const site = this.ctx.world?.persistentBaseSite ?? null;
+    const site = this.worldContext?.persistentBaseSite ?? null;
     if (!placementSystem || !player || !player.active
       || !this.mayManagePersistentBase(playerId)
       // Host und Client verwenden dieselbe Availability-Regel; die Quelle des Zustands bleibt
@@ -581,7 +591,7 @@ export class ArenaPersistentBaseSession {
     preview: Pick<UtilityPlacementPreviewState, 'gridX' | 'gridY'>,
   ): Promise<LoadoutUseResult> {
     const world = bridge.getWorldDescriptor();
-    const source = this.ctx.placementSystem?.getRuntimeRock(sourceRuntimeId);
+    const source = this.placementSystem?.getRuntimeRock(sourceRuntimeId);
     if (!world || !source) return { ok: false, reason: 'blocked' };
     return bridge.sendPersistentBaseMove({
       worldRevision: world.worldRevision,
@@ -608,7 +618,7 @@ export class ArenaPersistentBaseSession {
       return { ok: false, reason: 'blocked' };
     }
     const world = bridge.getWorldDescriptor();
-    const placementSystem = this.ctx.placementSystem;
+    const placementSystem = this.placementSystem;
     if (!world || !placementSystem || sanitized.worldRevision !== world.worldRevision) {
       return { ok: false, reason: 'blocked' };
     }
@@ -621,7 +631,7 @@ export class ArenaPersistentBaseSession {
       return { ok: false, reason: 'blocked' };
     }
     const now = Date.now();
-    if (this.ctx.loadoutManager?.isManagementActionOnCooldown(playerId, 'reposition', now)) {
+    if (this.playerSystems?.loadout?.isManagementActionOnCooldown(playerId, 'reposition', now)) {
       return { ok: false, reason: 'cooldown' };
     }
 
@@ -673,9 +683,9 @@ export class ArenaPersistentBaseSession {
     source: SyncedPlaceableRock,
     preview: UtilityPlacementPreviewState,
   ): LoadoutUseResult {
-    const placementSystem = this.ctx.placementSystem;
-    const site = this.ctx.world?.persistentBaseSite ?? null;
-    const store = this.ctx.persistentBaseRewards;
+    const placementSystem = this.placementSystem;
+    const site = this.worldContext?.persistentBaseSite ?? null;
+    const store = this.session.rewards;
     const rewardId = source.persistentRewardId;
     if (!placementSystem || !site || !store || rewardId === undefined) return { ok: false, reason: 'blocked' };
     const previousPlacement = store.getState().placements.find((entry) => entry.rewardId === rewardId);
@@ -687,7 +697,7 @@ export class ArenaPersistentBaseSession {
     const occupant = placementSystem.getRuntimeRockAt(preview.gridX, preview.gridY);
     let displacedPersonalRuntime = false;
     if (occupant && occupant.id !== source.id && occupant.ownership !== 'base-owned') {
-      const isPersistentContribution = this.ctx.persistentBaseContributions?.getRuntimeBindings()
+      const isPersistentContribution = this.session.contributions?.getRuntimeBindings()
         .some((binding) => binding.runtimeId === occupant.id) === true;
       if (!isPersistentContribution) return { ok: false, reason: 'placement' };
       this.world.getWorldBinding()?.releasePersonalRuntimeForRewardConflict(occupant.id);
@@ -756,7 +766,7 @@ export class ArenaPersistentBaseSession {
     pointerX: number,
     pointerY: number,
   ): UtilityPlacementPreviewState | undefined {
-    const placementSystem = this.ctx.placementSystem;
+    const placementSystem = this.placementSystem;
     if (!placementSystem) return undefined;
     const definition = getPersistentBaseRewardDefinition(rewardId);
     const targetCell = placementSystem.getClampedTargetCell(
@@ -778,7 +788,7 @@ export class ArenaPersistentBaseSession {
         }
       : null;
     const session = bridge.getPersistentBaseRewardSessionState();
-    const placements = (bridge.isHost() ? this.ctx.persistentBaseRewards?.getState().placements : undefined)
+    const placements = (bridge.isHost() ? this.session.rewards?.getState().placements : undefined)
       ?? session?.placements
       ?? [];
     const duplicateCell = placement !== null && placements.some((candidate) => {
@@ -788,7 +798,7 @@ export class ArenaPersistentBaseSession {
     });
     const occupant = placementSystem.getRuntimeRockAt(targetCell.gridX, targetCell.gridY);
     const persistentContribution = occupant
-      ? this.ctx.persistentBaseContributions?.getRuntimeBindings()
+      ? this.session.contributions?.getRuntimeBindings()
         .some((binding) => binding.runtimeId === occupant.id) === true
       : false;
     const conflictAllowed = !occupant
@@ -853,7 +863,7 @@ export class ArenaPersistentBaseSession {
 
   /** Startet den kurzen Doppelinput-Schutz einer Management-Aktion und repliziert ihn. */
   markManagementActionUsed(playerId: string, action: 'reposition' | 'dismantle', now: number): void {
-    this.ctx.loadoutManager?.markManagementActionUsed(
+    this.playerSystems?.loadout?.markManagementActionUsed(
       playerId,
       action,
       now,
@@ -874,18 +884,18 @@ export class ArenaPersistentBaseSession {
     const runtimeIds = this.session.removePlayerOwner(playerId);
     let removedCount = 0;
     for (const runtimeId of runtimeIds) {
-      const removed = this.ctx.placementSystem?.removeRock(runtimeId);
+      const removed = this.placementSystem?.removeRock(runtimeId);
       if (!removed) continue;
       this.world.getConstructionRuntime()?.finalizeDismantledConstruction(removed, false);
       removedCount += 1;
     }
     // Guest constructions outside a persistent base are still World-owned runtime objects and
     // must not survive the owner's final leave/spectator transition.
-    for (const construction of this.ctx.placementSystem?.getOwnedConstructions(playerId) ?? []) {
+    for (const construction of this.placementSystem?.getOwnedConstructions(playerId) ?? []) {
       // Older snapshots may not carry the explicit ownership field yet. The owner identity still
       // makes this a guest-owned runtime; only authored base-owned objects stay reserved.
       if (construction.ownership === 'base-owned') continue;
-      const removed = this.ctx.placementSystem?.removeRock(construction.id);
+      const removed = this.placementSystem?.removeRock(construction.id);
       if (!removed) continue;
       this.world.getConstructionRuntime()?.finalizeDismantledConstruction(removed, false);
       removedCount += 1;
@@ -917,7 +927,7 @@ export class ArenaPersistentBaseSession {
     this.publishConfirmedPersistentBaseContributions(
       applyPersistentBaseRoundOutcome(outcome, {
         session: this.session,
-        isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+        isRuntimeObjectAlive: (runtimeId) => this.placementSystem?.hasRuntimeRock(runtimeId) === true,
         identity,
       }),
     );
@@ -937,7 +947,7 @@ export class ArenaPersistentBaseSession {
     if (!bridge.isHost()) return;
     applyPersistentBaseRoundOutcome(resolvePersistentBaseRoundOutcome(null), {
       session: this.session,
-      isRuntimeObjectAlive: (runtimeId) => this.ctx.placementSystem?.hasRuntimeRock(runtimeId) === true,
+      isRuntimeObjectAlive: (runtimeId) => this.placementSystem?.hasRuntimeRock(runtimeId) === true,
     });
     this.publishPersistentBaseRewardSessionState();
   }
@@ -1019,8 +1029,8 @@ export class ArenaPersistentBaseSession {
   publishPersistentBaseRewardSessionState(): void {
     if (!bridge.isHost()) return;
     const world = bridge.getWorldDescriptor();
-    const store = this.ctx.persistentBaseRewards;
-    if (!world || !store || !this.ctx.world?.persistentBaseSite) {
+    const store = this.session.rewards;
+    if (!world || !store || !this.worldContext?.persistentBaseSite) {
       bridge.publishPersistentBaseRewardSessionState(null);
       return;
     }
@@ -1048,7 +1058,7 @@ export class ArenaPersistentBaseSession {
 
   persistCurrentCommittedPersistentBaseRewards(): void {
     if (!bridge.isHost()) return;
-    const store = this.ctx.persistentBaseRewards;
+    const store = this.session.rewards;
     if (!store || store.hasActiveMission) return;
     setStoredPersistentBaseRewardState(store.getState());
   }

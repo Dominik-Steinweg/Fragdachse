@@ -451,7 +451,7 @@ describe('Shared World ohne Activity – Host simuliert ohne Darstellung', () =>
     const host = read('src/scenes/arena/HostUpdateCoordinator.ts');
     const client = read('src/scenes/arena/ClientUpdateCoordinator.ts');
     expect(host).not.toContain('if (!bridge.isArenaStarted() && !countdownActive)');
-    expect(host).toContain('if (!this.ctx.world) {');
+    expect(host).toContain('if (!this.world) {');
     expect(client).not.toContain('if (!bridge.isArenaStarted() && !countdownActive)');
     expect(client).toContain('this.syncPlayerWorldRuntimes(state);');
     expect(client).toContain('consumesWorldReplication({');
