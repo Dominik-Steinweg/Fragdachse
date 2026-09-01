@@ -49,11 +49,8 @@ import {
   type CoopMissionActivityStep,
   type CoopMissionRuntimePorts,
 } from '../../activity/CoopMissionRuntime';
-import type {
-  CoopMissionArmedConstructionView,
-  CoopMissionArmedOutpostView,
-} from '../../activity/CoopMissionHostUpdate';
 import { CoopMissionPlayerRuntime } from '../../activity/CoopMissionPlayerRuntime';
+import { createArenaCoopMissionPorts } from './ArenaCoopMissionPorts';
 import { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
 import {
   createCoopMissionCompletion,
@@ -318,85 +315,9 @@ export class ArenaLifecycleCoordinator {
    *
    * Sie sind bewusst Closures und kein Container: Die Activity bekommt Antworten, nicht die
    * Systeme, die sie heute geben. Ein Activity-Wechsel in derselben World nutzt dieselben Ports.
+   * Die Antworten selbst sind Activity-Lesesicht und stehen deshalb neben dem Flow.
    */
-  private readonly coopMissionPorts: CoopMissionRuntimePorts = {
-    hostUpdate: {
-      getPlayers: () => this.ctx.playerManager.getAllPlayers(),
-      getPlayerPosition: (playerId) => {
-        const player = this.ctx.playerManager.getPlayer(playerId);
-        return player ? { x: player.x, y: player.y } : null;
-      },
-      isPlayerAlive: (playerId) => this.ctx.combatSystem.isAlive(playerId),
-      isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false,
-      isPlayerStealthed: (playerId) => this.ctx.decoySystem.isStealthed(playerId),
-      canUseMissionActions: (playerId) => this.getPlayerCapabilities(playerId).canUseMissionActions,
-      getDecoyTargets: () => this.ctx.decoySystem.getHostTargets().map((decoy) => ({
-        id: decoy.id,
-        ownerId: decoy.ownerId,
-        x: decoy.sprite.x,
-        y: decoy.sprite.y,
-        radius: Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5,
-      })),
-      getDecoyPosition: (decoyId) => {
-        const decoy = this.ctx.decoySystem.getHostTarget(decoyId);
-        return decoy ? { x: decoy.sprite.x, y: decoy.sprite.y } : null;
-      },
-      isDecoyTargetable: (decoyId) => this.ctx.decoySystem.getHostTarget(decoyId) !== null,
-      getArmedConstructions: () => {
-        const constructions: CoopMissionArmedConstructionView[] = [];
-        for (const construction of this.worldRuntime?.materialization?.placement?.getAllRuntimeRocks() ?? []) {
-          if (construction.hp <= 0 || construction.kind !== 'turret') continue;
-          constructions.push({
-            id: String(construction.id),
-            gridX: construction.gridX,
-            gridY: construction.gridY,
-            isTargetable: () => construction.hp > 0,
-          });
-        }
-        return constructions;
-      },
-      getArmedOutposts: () => {
-        const outposts: CoopMissionArmedOutpostView[] = [];
-        for (const base of this.worldRuntime?.materialization?.bases?.getBasesByFaction('friendly') ?? []) {
-          if (base.role !== 'outpost'
-            || base.isInert?.() === true
-            || base.getHp() <= 0
-            || base.getTurrets().length === 0) continue;
-          const turret = base.getTurrets()[0];
-          outposts.push({
-            id: base.id,
-            x: turret.x,
-            y: turret.y,
-            cells: base.getSpec().cells,
-            resolveSurfacePoint: (fromX, fromY) => {
-              const surface = base.getNearestSurfacePoint(fromX, fromY);
-              return surface ? { x: surface.x, y: surface.y } : null;
-            },
-            isTargetable: () => (
-              base.isInert?.() !== true && base.getHp() > 0 && base.getTurrets().length > 0
-            ),
-          });
-        }
-        return outposts;
-      },
-      syncDormantBaseStates: () => { this.worldRuntime?.materialization?.bases?.syncDormantStates(); },
-      getActiveBurnSources: (enemyId, atMs) => this.ctx.combatSystem.getActiveBurnSources(enemyId, atMs),
-      getFireSystem: () => this.ctx.fireSystem,
-      getSmokeSystem: () => this.ctx.smokeSystem,
-      publishEncounterPresentation: (state) => {
-        bridge.publishCoopDefenseEncounterPresentationState(state);
-      },
-      publishMapEventPresentation: (state) => {
-        bridge.publishCoopDefenseMapEventPresentationState(state);
-      },
-      publishSecondaryObjectivePresentation: (state) => {
-        bridge.publishCoopDefenseSecondaryObjectivePresentationState(state);
-      },
-    },
-    clientPresentation: {
-      getMissionProgressPresentationState: () => bridge.getCoopDefenseMissionProgressPresentationState(),
-    },
-  };
+  private readonly coopMissionPorts: CoopMissionRuntimePorts;
   /**
    * Besitzer der laufenden World-Instanz. Erzeugung, lokale Runtime und Ende laufen
    * ausschliesslich hierueber; `ArenaContext.world` wird nur von diesem Sink geschrieben.
@@ -631,6 +552,12 @@ export class ArenaLifecycleCoordinator {
      */
     private readonly persistentBase: ArenaPersistentBaseSession,
   ) {
+    this.coopMissionPorts = createArenaCoopMissionPorts({
+      ctx,
+      getWorldRuntime: () => this.worldRuntime,
+      getBurrowSystem: () => this.worldPlayerGameplayRuntime?.systems.burrow ?? null,
+      getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
+    });
     this.coopMissionComposition = new CoopMissionComposition({
       scene,
       getWorld: () => this.worldRuntime?.context ?? null,
@@ -694,6 +621,9 @@ export class ArenaLifecycleCoordinator {
       },
       publishMissionProgress: (state) => bridge.publishCoopDefenseMissionProgressPresentationState(state),
       broadcastCarryDeliveredFx: (x, y) => bridge.broadcastCoopDefenseCarryDeliveredFx(x, y),
+      enemyAbilityNetwork: {
+        broadcastTranslocatorFlash: (x, y, color, phase, ownerId) => bridge.broadcastTranslocatorFlash(x, y, color, phase, ownerId),
+      },
       publishRespawnBudget: (state) => bridge.publishCoopDefenseRespawnBudgetState(state),
       patchBarrierCells: (changes) => this.coopMissionRuntime?.flowFieldCoordinator?.patchBarrierCells(changes),
       markLightDirty: () => this.worldRuntime?.materialization?.lightOccluders?.markDirty(),
@@ -963,6 +893,11 @@ export class ArenaLifecycleCoordinator {
           this.ctx.combatSystem.isAlive(playerId)
           && !(this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false)
         ),
+        roster: {
+          getPlayerTeam: (playerId) => bridge.getPlayerTeam(playerId),
+          getPlayerIdentity: (playerId) => bridge.getConnectedPlayers()
+            .find((player) => player.id === playerId) ?? null,
+        },
         onFx: (event) => {
           if (bridge.isHost()) bridge.broadcastCaptureTheBeerFx(event);
         },

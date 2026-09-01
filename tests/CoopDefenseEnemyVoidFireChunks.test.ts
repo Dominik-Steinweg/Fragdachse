@@ -69,6 +69,7 @@ describe('Inferno Colossus void fire chunks', () => {
       {} as StinkCloudSystem,
       flamethrowerUpgradeSystem,
       fireSystem,
+      { broadcastTranslocatorFlash: () => undefined },
     );
 
     system.hostUpdate(1_000);

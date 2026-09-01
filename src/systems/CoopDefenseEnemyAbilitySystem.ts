@@ -24,7 +24,6 @@ import {
   type TranslocatorUtilityConfig,
   type WeaponConfig,
 } from '../loadout/LoadoutConfig';
-import { bridge } from '../network/bridge';
 import type { CombatSystem } from './CombatSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
@@ -93,6 +92,21 @@ function resolveEnemyThrowSpeed(distance: number, flightMs: number): number {
 }
 
 /** Host-seitige, dauerhaft aktive Spezialfaehigkeiten der Coop-Gegner. */
+/**
+ * Die Teleport-VFX-Replikation, die die Gegnerfaehigkeiten brauchen.
+ *
+ * Gegner-Faehigkeiten sind Activity-Regeln; ihre sichtbaren Blitze verteilt der Composition-Layer.
+ */
+export interface CoopDefenseEnemyAbilityNetworkPort {
+  readonly broadcastTranslocatorFlash: (
+    x: number,
+    y: number,
+    color: number,
+    phase: 'start' | 'end',
+    ownerId: string,
+  ) => void;
+}
+
 export class CoopDefenseEnemyAbilitySystem {
   private readonly lastHealingTickAt = new Map<string, number>();
   private readonly lastMiniDomeTickAt = new Map<string, number>();
@@ -112,6 +126,7 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly stinkCloudSystem: StinkCloudSystem,
     private readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null,
     private readonly fireSystem: FireSystem,
+    private readonly network: CoopDefenseEnemyAbilityNetworkPort,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
     private readonly decoySystem: DecoySystem | null = null,
   ) {}
@@ -728,10 +743,10 @@ export class CoopDefenseEnemyAbilitySystem {
     state: EnemyTeleportState,
   ): void {
     const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
-    bridge.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start', enemy.id);
+    this.network.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start', enemy.id);
     this.projectileManager.destroyProjectile(puckId);
     enemy.setPosition(targetX, targetY);
-    bridge.broadcastTranslocatorFlash(targetX, targetY, color, 'end', enemy.id);
+    this.network.broadcastTranslocatorFlash(targetX, targetY, color, 'end', enemy.id);
 
     const telefragRadius = enemy.getCollisionRadius() + PLAYER_SIZE * 0.5;
     if (enemy.faction === 'allied') {

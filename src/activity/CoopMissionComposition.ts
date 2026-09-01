@@ -14,6 +14,7 @@ import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
 import type { FireSystem } from '../effects/FireSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
+import type { CoopDefenseEnemyAbilityNetworkPort } from '../systems/CoopDefenseEnemyAbilitySystem';
 import type { ArmageddonSystem } from '../systems/ArmageddonSystem';
 import type { AirstrikeSystem } from '../systems/AirstrikeSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -96,6 +97,7 @@ export interface CoopMissionCompositionOptions {
   readonly releaseMissionObjectives: (runtime: CoopMissionRuntime, playerId: string) => void;
   readonly publishMissionProgress: (state: CoopDefenseMissionProgressPresentationState | null) => void;
   readonly broadcastCarryDeliveredFx: (x: number, y: number) => void;
+  readonly enemyAbilityNetwork: CoopDefenseEnemyAbilityNetworkPort;
   readonly publishRespawnBudget: (state: import('../types').CoopDefenseRespawnBudgetState | null) => void;
   readonly patchBarrierCells: (changes: readonly { gridX: number; gridY: number; occupied: boolean }[]) => void;
   readonly markLightDirty: () => void;
@@ -246,6 +248,7 @@ export class CoopMissionComposition {
       flamethrowerUpgradeSystem: this.options.getFlamethrowerUpgradeSystem(),
       fireSystem: this.options.getFireSystem(),
       decoySystem: this.options.getDecoySystem(),
+      enemyAbilityNetwork: this.options.enemyAbilityNetwork,
       getTrainManager: this.options.train.getCurrentTrain,
       getTrainEvent: this.options.train.getCurrentTrainEvent,
       isSafeEnemyGroundAt: this.options.isSafeEnemyGroundAt,

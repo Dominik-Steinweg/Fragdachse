@@ -1,21 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const trainNetwork = vi.hoisted(() => ({
+const trainNetwork = {
   current: null as unknown,
   publishCount: 0,
-}));
+};
 
-vi.mock('../src/network/bridge', () => ({
-  bridge: {
-    publishTrainEvent: (event: unknown) => {
-      trainNetwork.current = event;
-      trainNetwork.publishCount += 1;
-    },
-    clearTrainEvent: () => {
-      trainNetwork.current = null;
-    },
+/** Steht fuer den `trainEvents`-Port, den der World-Owner des Zuges weiterreicht. */
+const trainEventsPort = {
+  publish: (event: unknown) => {
+    trainNetwork.current = event;
+    trainNetwork.publishCount += 1;
   },
-}));
+  clear: () => {
+    trainNetwork.current = null;
+  },
+};
 
 vi.mock('phaser', () => ({
   Geom: {
@@ -166,6 +165,7 @@ describe('Coop Defense C4 active map-event integration', () => {
       trainManager as never,
       { setTrainSegments: vi.fn() } as never,
       1,
+      trainEventsPort as never,
     );
     const director = new CoopDefenseMapEventDirector([TRAIN_EVENT], [handler]);
 

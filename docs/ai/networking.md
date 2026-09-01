@@ -12,6 +12,14 @@ Bei PersistentBase-Daten entscheidet der Host über Materialisierung, Validierun
 
 PeerJS wird nur in [PeerJsTransport.ts](../../src/network/peer/PeerJsTransport.ts) importiert. [PeerRoom.ts](../../src/network/peer/PeerRoom.ts) kennt eine Transport-Schnittstelle; Gameplay kennt nur NetworkBridge.
 
+## Fachliche Systeme kennen Ports, nicht die Bridge
+
+Die fachlichen Runtime-/Domain-Schichten `src/activity/`, `src/effects/`, `src/entities/`, `src/loadout/`, `src/powerups/`, `src/systems/`, `src/train/` und `src/world/` importieren [bridge](../../src/network/bridge.ts) nicht. Ein Regelsystem bekommt stattdessen die kleine fachliche Sicht, die es wirklich braucht - einen benannten Port oder Callback wie `WorldTrainNetworkPort`, `TranslocatorNetworkPort` oder `CaptureTheBeerRosterPort`.
+
+Befüllt werden diese Ports ausschließlich an den expliziten Composition-/Adapter-Grenzen (`ArenaLifecycleCoordinator`, `src/scenes/arena/Arena*Composition.ts`, `CoopMission*Composition`). Ein Owner, der schon eine Portgruppe besitzt, setzt die Sicht seines Kindes daraus zusammen, statt eine zweite Adapterkette zu eröffnen.
+
+Das hält Regeln vom Transportsubstrat unabhängig und testbar: Ein Test übergibt den Port direkt und braucht kein Modulmock der Bridge. [tests/WorldGameplayCompositionContracts.test.ts](../../tests/WorldGameplayCompositionContracts.test.ts) hält die Grenze fest.
+
 ## World- und Activity-Store
 
 World und Activity sind getrennte replizierte Verträge:
@@ -82,3 +90,4 @@ World-scoped RPCs verwenden den zentralen Bridge-Pfad. Keine neue Funktion darf 
 - [tests/PeerProtocol.test.ts](../../tests/PeerProtocol.test.ts)
 - [tests/PeerLink.test.ts](../../tests/PeerLink.test.ts)
 - [tests/FullGameStateBootstrap.test.ts](../../tests/FullGameStateBootstrap.test.ts)
+- [tests/WorldGameplayCompositionContracts.test.ts](../../tests/WorldGameplayCompositionContracts.test.ts)

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WorldTargetingRuntime } from '../src/world/WorldTargetingRuntime';
@@ -12,8 +12,30 @@ const COMPOSITION_PATHS = [
   'src/scenes/arena/ArenaWorldConstructionComposition.ts',
 ];
 
+/** Fachliche Runtime-/Domain-Schichten; ihr Netzwerkzugriff laeuft ueber Ports der Composition. */
+const DOMAIN_ROOTS = [
+  'src/activity',
+  'src/effects',
+  'src/entities',
+  'src/loadout',
+  'src/powerups',
+  'src/systems',
+  'src/train',
+  'src/world',
+];
+
 function read(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8');
+}
+
+function listTypeScriptFiles(root: string): string[] {
+  const files: string[] = [];
+  for (const entry of readdirSync(resolve(process.cwd(), root), { withFileTypes: true })) {
+    const path = `${root}/${entry.name}`;
+    if (entry.isDirectory()) files.push(...listTypeScriptFiles(path));
+    else if (entry.name.endsWith('.ts')) files.push(path);
+  }
+  return files;
 }
 
 describe('Phase 10B.6 – World gameplay composition', () => {
@@ -23,6 +45,15 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(train).not.toContain("from '../network/bridge'");
     expect(train).not.toContain('NetworkBridge');
     expect(train).not.toMatch(/\bbridge\b/);
+  });
+
+  it('keeps every domain layer free of the network bridge module', () => {
+    // Fachliche Systeme kennen nur ihre eigene kleine Port-/Callback-Sicht. Das Transportsubstrat
+    // haengt ausschliesslich an den expliziten Composition-/Adapter-Grenzen.
+    const offenders = DOMAIN_ROOTS
+      .flatMap(listTypeScriptFiles)
+      .filter((path) => read(path).includes("network/bridge'"));
+    expect(offenders).toEqual([]);
   });
 
   it('keeps new World owners independent from ArenaContext and the network bridge', () => {

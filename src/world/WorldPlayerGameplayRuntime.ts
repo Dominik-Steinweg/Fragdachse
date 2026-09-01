@@ -40,6 +40,14 @@ export interface WorldPlayerGameplayNetworkPort {
     readonly getPlayerInput: (playerId: string) => PlayerInput | undefined;
   };
   readonly presentation: {
+    readonly getPlayerColor: (playerId: string) => number | undefined;
+    readonly broadcastTranslocatorFlash: (
+      x: number,
+      y: number,
+      color: number,
+      phase: 'start' | 'end',
+      ownerId: string,
+    ) => void;
     readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number) => void;
     readonly broadcastFireChunkEffect: (
       x: number,
@@ -50,6 +58,9 @@ export interface WorldPlayerGameplayNetworkPort {
     ) => void;
     readonly broadcastMiniRocketCollectionEffect: (x: number, y: number, color: number) => void;
     readonly broadcastMiniRocketDestructionEffect: (x: number, y: number, color: number) => void;
+  };
+  readonly loadout: {
+    readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
   };
   readonly roundStats: {
     readonly canPlayerReceiveRoundRewards: (playerId: string) => boolean;
@@ -132,6 +143,14 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
       options.playerManager,
       options.projectileManager,
       options.combatSystem,
+      // Der World-Owner setzt die fachliche Translocator-Sicht aus seinen eigenen Portgruppen
+      // zusammen; das System bekommt keinen breiteren Netzwerkzugriff als es braucht.
+      {
+        getPlayerColor: options.network.presentation.getPlayerColor,
+        broadcastTranslocatorFlash: options.network.presentation.broadcastTranslocatorFlash,
+        broadcastExplosionEffect: options.network.presentation.broadcastExplosionEffect,
+        publishUtilityCooldownUntil: options.network.loadout.publishUtilityCooldownUntil,
+      },
       null,
     );
     const tunnel = new TunnelSystem(

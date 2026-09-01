@@ -63,6 +63,7 @@ function createSystem(
       {} as StinkCloudSystem,
       null as FlamethrowerUpgradeSystem | null,
       {} as FireSystem,
+      { broadcastTranslocatorFlash: vi.fn() },
     ),
     hasClearLineOfFire,
     spawnProjectile,

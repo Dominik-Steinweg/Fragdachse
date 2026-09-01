@@ -1,11 +1,21 @@
 import * as Phaser from 'phaser';
-import { bridge } from '../network/bridge';
 import type { PlayerManager } from '../entities/PlayerManager';
 import {
   getCaptureTheBeerBaseWorldBounds,
   getCaptureTheBeerHomeWorldPosition,
 } from '../config';
 import type { CaptureTheBeerFxEvent, SyncedCaptureTheBeerBeer, SyncedCaptureTheBeerState, TeamId } from '../types';
+
+/**
+ * Die Spielerzugehoerigkeit, die die Capture-the-Beer-Regeln brauchen.
+ *
+ * Team und Anzeigeidentitaet gehoeren dem Roster ausserhalb der Activity; das Regelsystem liest
+ * sie ueber diesen Port statt ueber das Netzwerksubstrat.
+ */
+export interface CaptureTheBeerRosterPort {
+  readonly getPlayerTeam: (playerId: string) => TeamId | null | undefined;
+  readonly getPlayerIdentity: (playerId: string) => { readonly name: string; readonly colorHex: number } | null;
+}
 
 const BEER_SIZE = 16;
 const BEER_HALF_SIZE = BEER_SIZE * 0.5;
@@ -28,7 +38,10 @@ export class CaptureTheBeerSystem {
   private interactionPredicate: InteractionPredicate | null = null;
   private fxHandler: CaptureTheBeerFxHandler | null = null;
 
-  constructor(private readonly playerManager: PlayerManager) {
+  constructor(
+    private readonly playerManager: PlayerManager,
+    private readonly roster: CaptureTheBeerRosterPort,
+  ) {
     this.state = this.createInitialState();
   }
 
@@ -205,7 +218,7 @@ export class CaptureTheBeerSystem {
         if (beer.pickupBlockedByPlayerId === player.id) continue;
         if (!this.isPlayerTouchingBeer(player.getBounds(), beer)) continue;
 
-        const teamId = bridge.getPlayerTeam(player.id);
+        const teamId = this.roster.getPlayerTeam(player.id);
         if (!teamId) continue;
 
         if (teamId === beer.teamId) {
@@ -229,21 +242,21 @@ export class CaptureTheBeerSystem {
     for (const beer of this.state.beers) {
       if (beer.state !== 'carried' || !beer.holderId) continue;
 
-      const carrierTeam = bridge.getPlayerTeam(beer.holderId);
+      const carrierTeam = this.roster.getPlayerTeam(beer.holderId);
       if (!carrierTeam || carrierTeam === beer.teamId) continue;
       if (!this.isCarrierInsideBase(beer.holderId, carrierTeam)) continue;
 
       const ownBeer = this.getBeer(carrierTeam);
       if (ownBeer.state !== 'home') continue;
-      const scorerProfile = bridge.getConnectedPlayers().find((player) => player.id === beer.holderId);
+      const scorer = this.roster.getPlayerIdentity(beer.holderId);
 
       this.state.scores[carrierTeam] += 1;
       this.emitFx({
         kind: 'score',
         beerTeamId: beer.teamId,
         scoreTeamId: carrierTeam,
-        scorerName: scorerProfile?.name ?? 'Unknown',
-        scorerColor: scorerProfile?.colorHex ?? 0xe0e0e0,
+        scorerName: scorer?.name ?? 'Unknown',
+        scorerColor: scorer?.colorHex ?? 0xe0e0e0,
         x: beer.x,
         y: beer.y,
       });

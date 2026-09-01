@@ -2,7 +2,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { LoadoutManager } from '../loadout/LoadoutManager';
-import { CoopDefenseEnemyAbilitySystem } from '../systems/CoopDefenseEnemyAbilitySystem';
+import { CoopDefenseEnemyAbilitySystem, type CoopDefenseEnemyAbilityNetworkPort } from '../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyAttackSystem } from '../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseEnemyBurrowSystem } from '../systems/CoopDefenseEnemyBurrowSystem';
 import { CoopDefenseEnemyCombatPositioningSystem } from '../systems/CoopDefenseEnemyCombatPositioningSystem';
@@ -33,6 +33,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
   readonly fireSystem: FireSystem;
   readonly decoySystem: DecoySystem | null;
+  readonly enemyAbilityNetwork: CoopDefenseEnemyAbilityNetworkPort;
   readonly getTrainManager: () => TrainAwarenessSource | null;
   readonly getTrainEvent: () => TrainEventConfig | undefined;
   readonly isSafeEnemyGroundAt: (x: number, y: number, radius: number) => boolean;
@@ -100,6 +101,7 @@ export class CoopMissionEnemyBehaviourComposition {
       this.options.stinkCloudSystem,
       this.options.flamethrowerUpgradeSystem,
       this.options.fireSystem,
+      this.options.enemyAbilityNetwork,
       runtime.enemyAiTargetCatalog,
       this.options.decoySystem,
     );

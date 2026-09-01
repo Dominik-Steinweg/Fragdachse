@@ -357,6 +357,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
       {} as StinkCloudSystem,
       { hostCreateFireChunkBurst: vi.fn() } as unknown as FlamethrowerUpgradeSystem,
       { hostRefreshGroundCellsAlongSweptCircle: vi.fn() } as unknown as FireSystem,
+      { broadcastTranslocatorFlash: vi.fn() },
     );
     return { system, spawnProjectile };
   }
@@ -503,6 +504,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
       {} as StinkCloudSystem,
       { hostCreateFireChunkBurst: vi.fn() } as unknown as FlamethrowerUpgradeSystem,
       { hostRefreshGroundCellsAlongSweptCircle: vi.fn() } as unknown as FireSystem,
+      { broadcastTranslocatorFlash: vi.fn() },
     );
 
     system.hostUpdate(1_000);

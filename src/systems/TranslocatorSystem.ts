@@ -1,10 +1,28 @@
 import * as Phaser from 'phaser';
-import { bridge } from '../network/bridge';
 import { ProjectileManager } from '../entities/ProjectileManager';
 import { PlayerManager } from '../entities/PlayerManager';
 import { CombatSystem } from './CombatSystem';
 import { TrainManager } from '../train/TrainManager';
 import type { TranslocatorUtilityConfig } from '../loadout/LoadoutConfig';
+
+/**
+ * Die kleine fachliche Netzwerksicht des Translocators.
+ *
+ * Das System kennt nur Spielerfarbe, Teleport-VFX und den replizierten Utility-Cooldown; das
+ * Transportsubstrat liefert der Composition-Layer der World.
+ */
+export interface TranslocatorNetworkPort {
+  readonly getPlayerColor: (playerId: string) => number | undefined;
+  readonly broadcastTranslocatorFlash: (
+    x: number,
+    y: number,
+    color: number,
+    phase: 'start' | 'end',
+    ownerId: string,
+  ) => void;
+  readonly broadcastExplosionEffect: (x: number, y: number, radius: number) => void;
+  readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
+}
 
 export class TranslocatorSystem {
   // Map von playerId -> id des aktiven Pucks
@@ -17,6 +35,7 @@ export class TranslocatorSystem {
     private playerManager: PlayerManager,
     private projectileManager: ProjectileManager,
     private combatSystem: CombatSystem,
+    private readonly network: TranslocatorNetworkPort,
     private trainManager?: TrainManager | null
   ) {}
 
@@ -86,7 +105,7 @@ export class TranslocatorSystem {
       size: cfg.projectileSize ?? 16,
       damage: 0,
       color: cfg.projectileColor ?? 0xffffff,
-      ownerColor: bridge.getPlayerColor(playerId),
+      ownerColor: this.network.getPlayerColor(playerId),
       lifetime: 9999999, // Bleibt (nahezu) unendlich liegen bis zum Teleport
       maxBounces: cfg.maxBounces ?? 1,
       isGrenade: true,   // Bounced auf dem Boden/an Wänden wie eine Granate
@@ -116,29 +135,29 @@ export class TranslocatorSystem {
     this.projectileManager.destroyProjectile(puck.id);
     this.activePucks.delete(playerId);
 
-    const playerColor = bridge.getPlayerColor(playerId) ?? 0xffffff;
+    const playerColor = this.network.getPlayerColor(playerId) ?? 0xffffff;
 
     // 2. Start-VFX RPC senden 
-    bridge.broadcastTranslocatorFlash(player.x, player.y, playerColor, 'start', playerId);
+    this.network.broadcastTranslocatorFlash(player.x, player.y, playerColor, 'start', playerId);
 
     // 3. Teleport durchführen
     player.setPosition(targetX, targetY);
     this.positionResetCb?.(playerId, targetX, targetY);
 
     // 4. Ziel-VFX RPC senden
-    bridge.broadcastTranslocatorFlash(targetX, targetY, playerColor, 'end', playerId);
+    this.network.broadcastTranslocatorFlash(targetX, targetY, playerColor, 'end', playerId);
 
     // 5. Hazard & Telefrag Checks am Zielort anwenden
     this.checkTeleportHazards(playerId, targetX, targetY);
     if ((cfg.telefragRadius ?? 0) > 0 && (cfg.telefragDamage ?? 0) > 0) {
       this.combatSystem.applyAoeDamage(targetX, targetY, cfg.telefragRadius ?? 0, cfg.telefragDamage ?? 0, playerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.telefrag', sourceSlot: 'utility' });
       this.radialImpulseCb?.(targetX, targetY, cfg.telefragRadius ?? 0, cfg.telefragKnockback ?? 0, playerId);
-      bridge.broadcastExplosionEffect(targetX, targetY, cfg.telefragRadius ?? 0);
+      this.network.broadcastExplosionEffect(targetX, targetY, cfg.telefragRadius ?? 0);
     }
 
     // 6. Utility-Cooldown starten
     const cd = cfg.cooldown;
-    bridge.publishUtilityCooldownUntil(playerId, now + cd, cfg.id);
+    this.network.publishUtilityCooldownUntil(playerId, now + cd, cfg.id);
 
     return true;
   }

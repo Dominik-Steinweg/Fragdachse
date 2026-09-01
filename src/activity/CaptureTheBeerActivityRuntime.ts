@@ -1,11 +1,12 @@
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CaptureTheBeerFxEvent } from '../types';
-import { CaptureTheBeerSystem } from '../systems/CaptureTheBeerSystem';
+import { CaptureTheBeerSystem, type CaptureTheBeerRosterPort } from '../systems/CaptureTheBeerSystem';
 import type { ActivityRuntime } from '../world/ActivityRuntimeHost';
 
 export interface CaptureTheBeerActivityRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly isPlayerInteractionAllowed: (playerId: string) => boolean;
+  readonly roster: CaptureTheBeerRosterPort;
   readonly onFx: (event: CaptureTheBeerFxEvent) => void;
 }
 
@@ -15,7 +16,7 @@ export class CaptureTheBeerActivityRuntime implements ActivityRuntime {
   private destroyed = false;
 
   constructor(private readonly options: CaptureTheBeerActivityRuntimeOptions) {
-    this.system = new CaptureTheBeerSystem(options.playerManager);
+    this.system = new CaptureTheBeerSystem(options.playerManager, options.roster);
     this.system.setInteractionPredicate(options.isPlayerInteractionAllowed);
     this.system.setFxHandler(options.onFx);
   }

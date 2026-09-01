@@ -363,10 +363,15 @@ describe('Phase 10B.7 – Activity rebinding', () => {
         teams: { isEnemyPair: () => false },
         input: { getPlayerInput: () => undefined },
         presentation: {
+          getPlayerColor: () => undefined,
+          broadcastTranslocatorFlash: () => undefined,
           broadcastExplosionEffect: () => undefined,
           broadcastFireChunkEffect: () => undefined,
           broadcastMiniRocketCollectionEffect: () => undefined,
           broadcastMiniRocketDestructionEffect: () => undefined,
+        },
+        loadout: {
+          publishUtilityCooldownUntil: () => undefined,
         },
         roundStats: {
           canPlayerReceiveRoundRewards: () => true,

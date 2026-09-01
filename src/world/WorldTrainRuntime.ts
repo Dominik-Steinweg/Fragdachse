@@ -17,7 +17,7 @@ import type { WorldScopedBinding } from './WorldRuntime';
 import { TrainManager, type TrainDestroyResult } from '../train/TrainManager';
 import { TrainRenderer } from '../train/TrainRenderer';
 import { TRAIN } from '../train/TrainConfig';
-import { CoopDefenseTrainEventHandler } from '../train/CoopDefenseTrainEventHandler';
+import { CoopDefenseTrainEventHandler, type TrainEventReplicationPort } from '../train/CoopDefenseTrainEventHandler';
 import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEventPlan } from '../train/TrainEvent';
 import type { CoopTrainPort } from '../activity/CoopTrainPort';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -39,11 +39,10 @@ export interface WorldTrainNetworkPort {
     readonly getArenaStartTime: () => number;
     readonly now: () => number;
   };
-  readonly trainEvents: {
+  /** Derselbe Port versorgt den klassischen Zug und den authored Activity-Zug. */
+  readonly trainEvents: TrainEventReplicationPort & {
     readonly isHost: () => boolean;
     readonly get: () => TrainEventConfig | undefined;
-    readonly publish: (event: TrainEventConfig) => void;
-    readonly clear: () => void;
   };
   readonly matchEvents: {
     readonly addPlayerFrags: (playerId: string, amount: number) => void;
@@ -122,7 +121,12 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     const trackX = getClassicTrainTrackX(trackGridX, this.options.worldMetrics);
     const train = this.createTrain(trackX, direction, null);
     this.activityTrain = train;
-    this.activityHandler = new CoopDefenseTrainEventHandler(train, this.options.combatSystem, direction);
+    this.activityHandler = new CoopDefenseTrainEventHandler(
+      train,
+      this.options.combatSystem,
+      direction,
+      this.options.network.trainEvents,
+    );
     return this.activityHandler;
   }
 

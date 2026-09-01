@@ -1,4 +1,3 @@
-import { bridge } from '../network/bridge';
 import type { ResolvedCoopDefenseMapEventConfig } from '../config/coopDefenseMaps';
 import type {
   CoopDefenseMapEventCycleFinished,
@@ -6,6 +5,18 @@ import type {
 } from '../systems/CoopDefenseMapEventDirector';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { TrainManager } from './TrainManager';
+import type { TrainEventConfig } from '../types';
+
+/**
+ * Die Trainevent-Replikation, die der authored Zug braucht.
+ *
+ * Der Handler ist ein reines Regelobjekt und kennt das Netzwerksubstrat nicht; der World-Owner des
+ * Zuges reicht seinen eigenen `trainEvents`-Port weiter.
+ */
+export interface TrainEventReplicationPort {
+  readonly publish: (event: TrainEventConfig) => void;
+  readonly clear: () => void;
+}
 
 interface ScheduledTrainOccurrence {
   readonly eventId: string;
@@ -31,6 +42,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
     private readonly trainManager: TrainManager,
     private readonly combatSystem: CombatSystem,
     initialDirection: 1 | -1,
+    private readonly trainEvents: TrainEventReplicationPort,
   ) {
     this.initialDirection = initialDirection;
     this.nextDirection = initialDirection;
@@ -40,7 +52,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
 
       this.trainSpawned = false;
       this.scheduled = null;
-      bridge.clearTrainEvent();
+      this.trainEvents.clear();
       this.nextDirection = finished.direction === 1 ? -1 : 1;
       trainManager.prepareReentry(this.nextDirection);
       const completedAtMs = this.roundTimeMs;
@@ -80,7 +92,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
       ...(event.repeatAfterExitMs === undefined ? {} : { repeatAfterExitMs: event.repeatAfterExitMs }),
     };
     this.trainSpawned = false;
-    bridge.publishTrainEvent({
+    this.trainEvents.publish({
       trackX: this.trainManager.getTrackX(),
       direction: this.nextDirection,
       spawnAt,
@@ -105,7 +117,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
     this.trainSpawned = false;
     this.roundTimeMs = 0;
     this.nextDirection = this.initialDirection;
-    bridge.clearTrainEvent();
+    this.trainEvents.clear();
     this.trainManager.setExitedCallback(() => undefined);
   }
 
