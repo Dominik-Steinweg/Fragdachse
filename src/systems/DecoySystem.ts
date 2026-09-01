@@ -195,12 +195,6 @@ export class DecoySystem {
     }));
   }
 
-  /** Compatibility entry point for callers that still need both operations together. */
-  hostUpdate(now: number): SyncedDecoy[] {
-    if (this.bridge.isHost()) this.hostUpdateLifecycle(now);
-    return this.createHostSnapshots();
-  }
-
   syncSnapshots(snapshots: readonly SyncedDecoy[]): void {
     const activeIds = new Set<number>();
     const localPlayerId = this.bridge.getLocalPlayerId();

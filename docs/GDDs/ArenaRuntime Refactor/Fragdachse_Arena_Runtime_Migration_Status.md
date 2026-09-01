@@ -35,10 +35,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `12A – Transitional Debt / Compatibility Cleanup abgeschlossen`
-**Gesamtstatus:** `Phasen 1–11 und Phase 12A abgeschlossen; Checkpoint C wurde vom User manuell erfolgreich abgenommen.`
-**Letzter Integrations-Checkpoint:** `Phase 12A: npm run check grün (334 Testdateien, 2.824 Tests bestanden, 15 übersprungen, Build ok).`
-**Nächster Schritt:** `Phase 12B – finaler Legacy-/Contract-Cleanup und Abnahme-Gate.`
+**Aktive Phase:** `12B.1 – Runtime-/Legacy-Cleanup abgeschlossen`
+**Gesamtstatus:** `Phasen 1–11, 12A und 12B.1 abgeschlossen; Checkpoint C wurde vom User manuell erfolgreich abgenommen.`
+**Letzter Integrations-Checkpoint:** `Phase 12B.1: npm run check grün (334 Testdateien, 2.824 Tests bestanden, 15 übersprungen, Build ok).`
+**Nächster Schritt:** `Phase 12B.2 – Contract-/Source-Test-Cleanup und finaler Acceptance Gate.`
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -61,7 +61,8 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 11A ArenaContext Runtime Facade Cutover | ✅ abgeschlossen | Migrierter World-/Activity-State und Compatibility-Fassaden aus `ArenaContext` entfernt; Consumer lesen konkrete Owner oder kleine fachliche Ports. TD-1, TD-4 und TD-6 geschlossen. |
 | 11B Coordinator / RPC / Network Dependency Cutover | ✅ abgeschlossen | `RpcCoordinator` von Context/Flow/PB-Klasse und Runtime-Gettern entkoppelt; Held Actions beim World-Player-Owner; Frame-Reads auf kleine Ports reduziert; TD-9 geschlossen. |
 | 12A Transitional Debt / Compatibility Cleanup | ✅ abgeschlossen | Held-Action-State an Activity-Identity und Player-Leave gebunden; Activity-/PB-Runtime-Mirrors, obsolete Destroy-/Fallback-Adapter und zwei Domain→Network-Typabhängigkeiten entfernt. |
-| 12B Finaler Legacy-/Contract-Cleanup | ⬜ offen | Globale Teardown-Reste, Update-Branches, Feature Flags, Source-Structure-Tests und weitere Legacy-/Dead-Code-Kandidaten final prüfen; TD-10 bleibt eigener Folgeentscheid. |
+| 12B.1 Runtime-/Legacy-Cleanup | ✅ abgeschlossen | Obsolete Decoy-Kompatibilitätsmethode, dead projection fields, unbenutzte Imports/Types in Flow, Composition und Coordinatoren entfernt; Teardown und Frame-Ownership sauber verifiziert. |
+| 12B.2 Contract-/Source-Test-Cleanup | ⬜ offen | Source-Structure-Tests, Contract-Tests und finaler Acceptance Gate; TD-10 bleibt eigener Folgeentscheid. |
 
 Statuswerte: `⬜ offen` · `🟨 aktiv` · `🟧 blockiert` · `✅ abgeschlossen`
 
@@ -130,10 +131,9 @@ führt das Feld fachlich unverändert über den `ConstructionRpcPort` weiter.
 | R-4 | Host-Frame | Der Weltanteil `decoySystem.hostUpdateLifecycle()` steht seit Phase 6 **vor** dem Missionsschritt statt zwischen zwei Coop-Phasen; nur so ist die Activity-Reihenfolge zusammenhängend. Fachlich gleichwertig, weil ausschließlich die Navigation und die Kampfphase Köder und Tarnung lesen. Vertrag in `tests/HostUpdatePhaseContracts.test.ts`. | Mit 10C besitzt `ArenaRuntime` die Aufrufstelle; die Ausführungsreihenfolge im Host-Frame bleibt unverändert. |
 | R-5 | Exit-Fade | Player- und Enemy-Runtime fallen mit der World-Instanz. Das eingefrorene Entity-Bild muss deshalb **vor** `worldLifecycle.endInstance()` stehen; auf dem Host geschieht das im Completion-/Exit-Pfad, auf dem Client in `beginArenaExitPresentation`. Wer eine neue Stelle einführt, an der eine World-Instanz endet, muss diese Reihenfolge mitführen. | Nach 10C zusätzlich in `tests/ArenaFlowCheckpointC.test.ts` verankert. |
 
-Phase 12A hat keine neue fachliche Regression oder Transitional Debt erzeugt. Held Actions werden
-beim Ende/Wechsel der Activity-Identity vollständig invalidiert und beim Player-Leave selektiv
-entfernt; ein technischer Runtime-Detach/Reattach derselben Identity erhält den State. TD-10 bleibt
-unverändert; R-2, R-4 und R-5 gelten unverändert.
+Phase 12B.1 hat keine neue fachliche Regression oder Transitional Debt erzeugt. Unbenutzte Imports,
+Projektions-Cache-Felder und die obsolete DecoySystem.hostUpdate-Kompatibilitätsmethode wurden bereinigt.
+TD-10 bleibt unverändert; R-2, R-4 und R-5 gelten unverändert.
 
 `R-1` ist mit Phase 4 entfallen: Die Reihenfolge ist keine Zeilenfolge mehr, sondern folgt aus der Ownership (siehe R-2).
 
@@ -148,9 +148,9 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | Phase 12A: 334 Testdateien, 2.824 Tests bestanden, 15 übersprungen; Build mit 638 transformierten Modulen erfolgreich. |
-| `git diff --check` | grün | Phase-12A-Stand ohne Whitespace-Fehler. |
-| Browser-/Sichtprüfung | offen | Checkpoint C ist die manuell erfolgreiche Baseline; Held-Action Activity-Wechsel sowie Leave/Rejoin bleiben manuell zu prüfen. |
+| `npm run check` | grün | Phase 12B.1: 334 Testdateien, 2.824 Tests bestanden, 15 übersprungen; Build mit 638 transformierten Modulen erfolgreich. |
+| `git diff --check` | grün | Phase-12B.1-Stand ohne Whitespace-Fehler. |
+| Browser-/Sichtprüfung | offen | Checkpoint C ist die manuell erfolgreiche Baseline. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -448,18 +448,18 @@ Debt entsteht nicht.
 - Der User hat den Phase-10-Checkpoint C vor 11A manuell erfolgreich abgenommen.
 
 **Phase-10-GO/NO-GO – Ergebnis:**
-- LOC-Gate erfüllt: Flow (3.197) plus `ArenaRuntime` (131) liegen bei 3.328 LOC; Ziel war
+- LOC-Gate erfüllt: Flow (3.061) plus `ArenaRuntime` (159) liegen bei 3.220 LOC; Ziel war
   ≤ 3.000–3.500.
 - Keine Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/Train-Systemliste mehr im Flow,
   kein großer globaler manueller Teardown, kein neuer God-Composer (größte Composition-Datei
-  206 LOC, verteilt auf fünf fokussierte Grenzen).
+  186 LOC, verteilt auf fünf fokussierte Grenzen).
 - TD-1, TD-2, TD-4, TD-5, TD-6, TD-8 und TD-9 sind geschlossen; TD-10 bleibt für den eigenen
   Folgeentscheid offen.
-- `11B Review-Korrektur abgeschlossen: JA`; `Phase 12A abgeschlossen: JA`;
-  `Phase 12B kann begonnen werden: JA`.
+- `Phase 12A abgeschlossen: JA`; `Phase 12B.1 abgeschlossen: JA`;
+  `Phase 12B.2 kann begonnen werden: JA`.
 
 **Nächste konkrete Aktion:**
-`Phase 12B – finaler Legacy-/Contract-Cleanup und Abnahme-Gate.`
+`Phase 12B.2 – Contract-/Source-Test-Cleanup und finaler Acceptance Gate.`
 
 **Nicht automatisch tun:**  
 `Architektur- oder Implementierungsplan ändern.`

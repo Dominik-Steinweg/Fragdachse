@@ -15,7 +15,6 @@ import { TranslocatorTeleportRenderer } from '../../effects/TranslocatorTeleport
 import { DEFAULT_TIME_OF_DAY_MINUTES, parseTimeOfDay, resolveSkyState } from '../../effects/TimeOfDay';
 import { setEmissiveScale } from '../../effects/EmissiveScale';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
-import type { PlaceableTurretUtilityConfig, TeslaDomeWeaponFireConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import type { LoadoutSelection } from '../../loadout/LoadoutManager';
 import {
   resolveCoopDefenseActivityBaseOverlays,
@@ -35,7 +34,7 @@ import type { PersistentBasePreviewRenderer } from './PersistentBasePreviewRende
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, PlayerProfile, RoomQualitySnapshot } from '../../types';
+import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, PlayerProfile } from '../../types';
 import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -44,7 +43,6 @@ import {
   BASE_DESTRUCTION_GROUND_BURN_DAMAGE_PER_TICK,
   BASE_DESTRUCTION_GROUND_BURN_DURATION_MS,
   BASE_DESTRUCTION_GROUND_FIRE_DURATION_MS,
-  getBaseDestructionBlast,
 } from '../../effects/BaseDestructionPlan';
 import {
   CoopMissionRuntime,
@@ -78,12 +76,7 @@ import {
 } from './arenaWorldQueries';
 import { resolveCoopMissionActivityConfiguration } from '../../activity/CoopMissionActivityConfig';
 import { CoopMissionComposition } from '../../activity/CoopMissionComposition';
-import {
-  COOP_DEFENSE_DISMANTLE_RANGE,
-  COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
-  COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
-} from '../../config/coopDefenseConstructions';
-import type { LoadoutToolRef, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
+import type { LoadoutToolRef } from '../../types';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
 import {
   resolveWorldRenderWork,
@@ -92,41 +85,16 @@ import {
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
-  getStoredLocalOwnerId,
   getStoredPersistentBaseAreaStage,
   getStoredPersistentBaseUnlocked,
-  getStoredPersonalBaseContribution,
-  setStoredPersonalBaseContribution,
   getStoredPersistentBaseRewardState,
-  getStoredPersistentBaseRewardUnlocks,
-  grantStoredPersistentBaseRewards,
-  setStoredPersistentBaseRewardState,
 } from '../../utils/localPreferences';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
 import type { PersistentBaseRewardStore } from '../../persistentBase/PersistentBaseRewardStore';
 import type { PersistentBaseTransactionIdentity } from '../../persistentBase/PersistentBaseTransaction';
-import {
-  getPersistentBaseRewardDefinition,
-  isKnownPersistentBaseRewardId,
-  type PersistentBaseRewardDefinition,
-} from '../../persistentBase/PersistentBaseRewardCatalog';
 import type {
-  PersistentBaseRewardId,
-  PersistentBaseRewardPlacement,
-  PersistentBaseRewardPlacementRequest,
-  PersistentBaseRewardSessionState,
-} from '../../persistentBase/PersistentBaseRewardTypes';
-import { sanitizePersistentBaseRewardPlacementRequest } from '../../persistentBase/PersistentBaseRewardTypes';
-import {
-  sanitizePersistentBaseMoveRequest,
-  type PersistentBaseMoveRequest,
-} from '../../persistentBase/PersistentBaseMove';
-import {
-  getPersistentBaseBuildAreaExtentCells,
-  isCellInsidePersistentBaseBuildArea,
-  resolvePersistentBaseCell,
-  type PersistentBaseBuildArea,
-  type PersistentBaseAreaStage,
+  PersistentBaseAreaStage,
+  PersistentBaseBuildArea,
 } from '../../persistentBase/PersistentBaseCore';
 import { nextMonotonicRevision } from '../../world/WorldRevision';
 import {
@@ -138,7 +106,6 @@ import {
 } from '../../world/arenaDescriptorAdapter';
 import { getActivityDefinition, getWorldDefinition } from '../../config/authoring/authoredScenarios';
 import { isLobbyWorldDefinitionId, LOBBY_WORLD_DEFINITION_ID } from '../../config/authoring/lobbyWorld';
-import type { WorldDefinition } from '../../config/authoring/WorldDefinition';
 import { createAuthoredWorldDescriptor } from '../../world/WorldLayout';
 import { isArenaTransitionReady } from './ArenaTransitionReadiness';
 import { isValidPersistentBaseSite } from '../../world/WorldRuntimeContext';
@@ -193,7 +160,6 @@ import {
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type {
   PersistentBaseAnchor,
-  PersistentPlayerBaseContribution,
 } from '../../persistentBase/PersistentBaseTypes';
 import {
   resolvePersistentBaseVisualSite,
@@ -643,13 +609,6 @@ export class ArenaLifecycleCoordinator {
   private get persistentBaseBuildArea(): PersistentBaseBuildArea | null {
     return this.persistentBaseWorldBinding?.buildArea ?? null;
   }
-  /**
-   * Technischer Network-/Projection-Cache: monotone Revision des zuletzt publizierten Reward-
-   * Snapshots. Die fachliche Reward-Revision bleibt im `PersistentBaseRewardStore`.
-   */
-  private persistentBaseRewardProjectionRevision = 0;
-  /** Technischer Network-/Projection-Dedup-Cache, keine zweite fachliche Reward-Wahrheit. */
-  private persistentBaseRewardProjectionSignature: string | null = null;
   private persistentBaseVisualSite: PersistentBaseVisualSite | null = null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
   private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;
@@ -904,9 +863,6 @@ export class ArenaLifecycleCoordinator {
     const hadRuntime = this.worldRuntime !== null;
     this.worldLifecycle.detachRuntime();
     if (!preservePresentation) this.worldPresentationHandoff.discard();
-    // Der Abschluss des Bestands gehoert dem Persistent-Base-Binding und faellt mit der Runtime.
-    // Ein Teardown ohne laufende Runtime hat keinen solchen Owner, muss den Bestand aber genauso
-    // abschliessen.
     if (!hadRuntime) this.finalizePersistentBaseRuntimeObjects();
   }
 

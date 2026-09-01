@@ -11,20 +11,11 @@ import {
   composeWorldConstruction,
   composeWorldPowerUp,
 } from './ArenaWorldConstructionComposition';
-import { BurrowSystem } from '../../systems/BurrowSystem';
-import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
-import { LoadoutManager } from '../../loadout/LoadoutManager';
-import { CAPTURE_THE_BEER_MODE } from '../../gameModes';
-import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
-import { PLAYER_COLORS } from '../../config';
-import { getStoredLocalOwnerId } from '../../utils/localPreferences';
-import { emitArenaMapGridChanged } from './ArenaEvents';
-import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
 import type { RendererBundle } from './RendererBundle';
 import type { RockVisualHelper } from './RockVisualHelper';
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
-import type { ArenaLayout, GameMode, SyncedPlaceableRock, TrackedProjectile } from '../../types';
+import type { ArenaLayout, GameMode, SyncedPlaceableRock } from '../../types';
 import type { ArenaBuilderResult } from '../../arena/ArenaBuilder';
 import type { BaseSpec } from '../../arena/BaseRegistry';
 import type { BaseManager } from '../../entities/BaseManager';
@@ -35,22 +26,12 @@ import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 import type { PersistentBaseWorldBinding } from '../../world/PersistentBaseWorldBinding';
-import { PersistentBaseWorldMaterializer } from '../../world/PersistentBaseWorldMaterializer';
 import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
-import { WorldTargetingRuntime, type WorldTargetingSystems } from '../../world/WorldTargetingRuntime';
+import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
-import {
-  WorldPlayerGameplayRuntime,
-  type WorldPlayerGameplaySystems,
-} from '../../world/WorldPlayerGameplayRuntime';
-import {
-  WorldCombatGameplayBinding,
-  type WorldCombatGameplaySystems,
-} from '../../world/WorldCombatGameplayBinding';
-import {
-  WorldSupportGameplayRuntime,
-  type WorldSupportGameplaySystems,
-} from '../../world/WorldSupportGameplayRuntime';
+import { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
+import { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
+import { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import { ConstructionWorldRuntime, type ConstructionPersistentBaseContext } from '../../world/ConstructionWorldRuntime';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';

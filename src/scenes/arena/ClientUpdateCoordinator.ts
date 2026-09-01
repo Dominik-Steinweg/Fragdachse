@@ -11,7 +11,6 @@ import { resolveEffectiveLoadoutSelection } from '../../loadout/LoadoutRules';
 import { getHitscanRangeToCursor } from '../../loadout/WeaponFireExecutor';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '../../loadout/HeldItemVisuals';
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
-import { DEFAULT_LOADOUT }   from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
 import type { CoopMissionActivityStep } from '../../activity/CoopMissionRuntime';
