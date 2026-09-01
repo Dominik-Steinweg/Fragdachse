@@ -159,20 +159,21 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
   });
 
   it('behandelt ESC modale Oberflaechen vor dem World-Leave', () => {
-    const scene = read('src/scenes/ArenaScene.ts');
-    const start = scene.indexOf('    this.escapeHotkeyHandler = (event: KeyboardEvent) => {');
-    const end = scene.indexOf("    keyboard.on('keydown-ESC', this.escapeHotkeyHandler);", start);
+    const inputBindings = read('src/scenes/arena/ArenaInputBindings.ts');
+    const start = inputBindings.indexOf('    this.escapeHotkeyHandler = (event: KeyboardEvent) => {');
+    const end = inputBindings.indexOf("    keyboard.on('keydown-ESC', this.escapeHotkeyHandler);", start);
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    const escapePath = scene.slice(start, end);
+    const escapePath = inputBindings.slice(start, end);
 
-    expect(escapePath).toContain('this.ctx.leftPanel.hideOptionsOverlay();');
-    expect(escapePath).toContain('this.ctx.leftPanel.isHotkeyInputBlocked()');
-    expect(escapePath).toContain('this.canLeaveLocalLobbyWorld()');
-    expect(escapePath).toContain('this.requestLocalLobbyWorldLeave();');
+    expect(escapePath).toContain('ports.hideOptionsOverlay();');
+    expect(escapePath).toContain('ports.isHotkeyInputBlocked()');
+    expect(escapePath).toContain('ports.canLeaveLocalLobbyWorld()');
+    expect(escapePath).toContain('ports.requestLocalLobbyWorldLeave();');
     expect(escapePath.indexOf('isOptionsOverlayOpen')).toBeLessThan(
-      escapePath.indexOf('this.requestLocalLobbyWorldLeave();'),
+      escapePath.indexOf('ports.requestLocalLobbyWorldLeave();'),
     );
+    const scene = read('src/scenes/ArenaScene.ts');
     expect(scene).toContain('leave: () => this.requestLocalLobbyWorldLeave(),');
     expect(scene).toContain(': this.requestLocalLobbyWorldLeave(),');
     expect(scene).toContain('this.lifecycle.requestLocalWorldParticipation(false);');

@@ -32,11 +32,11 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Checkpoint A – Diagnostics (manueller Gate offen; danach Phase 3A)`
-**Gesamtstatus:** `🟨 Phase 2B abgeschlossen – Diagnostics-Owner besitzt Frame-Messung und Sampler; Checkpoint A wartet auf manuelle Sichtprüfung`
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 2B
-**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (336 Testdateien, 2843 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
-**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A-Verträge grün`
+**Aktive Phase:** `Phase 3A abgeschlossen – Checkpoint A manueller Gate offen; danach Phase 3B`
+**Gesamtstatus:** `🟨 Phase 3A abgeschlossen – ArenaInputBindings besitzt Input-Setup, Hotkeys, Keys und eigenes Teardown; Checkpoint A wartet weiterhin auf manuelle Sichtprüfung`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 3A
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (337 Testdateien, 2846 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
+**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A- und Phase-3A-Verträge grün`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
@@ -44,7 +44,7 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 | 2A Diagnostics Lifecycle/UI | ✅ abgeschlossen | `ArenaDiagnosticsController` besitzt Profiler, Ablation, beide Debug-Overlays und die Attribution; `ArenaScene` −115 Zeilen. |
 | 2B Diagnostics Frame/Sampler | ✅ abgeschlossen | `ArenaDiagnosticsController` besitzt Scene-/Transport-/Companion-Sampling, Counter und Frame-Messung; `ArenaScene` liefert nur benannte Messpunkte plus Read-only-Snapshot. |
 | – Checkpoint A | 🟨 aktiv | Automatisierte Prüfungen grün; manuelle Sichtprüfung von Diagnose an/aus, Overlay, Ablation und Sampling noch offen. |
-| 3A Input Setup/Hotkeys | ⬜ offen | Keys, Listener, Setup/Teardown an `ArenaInputBindings`. |
+| 3A Input Setup/Hotkeys | ✅ abgeschlossen | `ArenaInputBindings` besitzt statische Provider, Spectator-/Arena-Panel-/Debug-Keys, sieben lokale Hotkeys und idempotentes eigenes Teardown; Action-/Placement-Callbacks bleiben bewusst für 3B in der Scene. |
 | 3B Input Actions/Feedback | ⬜ offen | Provider, Placement, Requests und lokales Feedback aus Scene. |
 | 4A Meta Progress/Upgrades/Loadout | ⬜ offen | persönlicher Meta-Owner. |
 | 4B Meta Items/Rewards | ⬜ offen | Item-/Pending-Reward-Use-Cases. |
@@ -145,7 +145,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | R-8 | Meta Authority | `ArenaMetaController` darf weder `ResultApplication` noch `ArenaPersistentBaseSession` duplizieren/umschließen und Results nicht doppelt anwenden. | Deduplication heute behavioral abgesichert; Phase 4C muss die Dedup-Assertion beim Owner-Wechsel mitnehmen. |
 | R-9 | Activity Presentation | `CoopMissionScopedBinding` und `clientPresentationStep()` existieren bereits; ein paralleler Lifecycle oder Doppel-Tick wäre eine Regression. | Ab Phase 1 als Ratchet festgeschrieben: genau ein Aufruf von `clientPresentationStep(` in `src/scenes/arena/ClientUpdateCoordinator.ts`, keiner sonst unter `src/scenes/` und `src/world/`. Deklaration/Impl liegen in `src/activity/CoopMissionRuntime.ts` und sind bewusst ausgenommen. |
 | R-10 | Network Boundary | Neue Runtime-/Domain-Owner dürfen das `bridge`-Singleton nicht zurückführen; die eingefrorene Legacy-Menge konkreter `NetworkBridge`-Consumer darf nicht wachsen. | Bestehenden `WorldGameplayCompositionContracts`-Ratchet respektieren; kein Nebenrefactoring der acht Legacy-Consumer. |
-| R-11 | Listener-Leaks | Neue scene-langlebige Diagnostics-/Input-Owner sammeln viele Subscriptions/Keys; der heutige Hotkey-Shutdown enthält zugleich fremde Teardowns. | **Für Diagnostics geschlossen (2A):** `ArenaDiagnosticsController.destroy()` ist idempotent, löst alle eigenen Subscriptions und ist danach inert (`attachGpuVfx` nimmt keine Bindung mehr an); die vier `subscribeDiagnostics`-Listener, die zuvor **nie** abbestellt wurden, gehören jetzt dem Owner. Drei reine Diagnose-SHUTDOWN-Handler entfielen, der gemischte GPU-VFX-Handler wurde aufgespalten (15 → 13 Handler). **Weiter offen:** `ArenaRuntime`, `ArenaLifecycleCoordinator`, `ArenaPersistentBaseSession`, `HostUpdateCoordinator`, `ClientUpdateCoordinator`, `RpcCoordinator` haben weiterhin **kein eigenes `destroy()`**. Phase 3A/4A müssen ihren Owner ebenfalls mit idempotentem `destroy()` **und** Teardown-Test liefern. |
+| R-11 | Listener-Leaks | Neue scene-langlebige Diagnostics-/Input-Owner sammeln viele Subscriptions/Keys; der heutige Hotkey-Shutdown enthält zugleich fremde Teardowns. | **Für Diagnostics (2A) und Input (3A) geschlossen:** `ArenaDiagnosticsController.destroy()` ist idempotent, löst alle eigenen Subscriptions und ist danach inert (`attachGpuVfx` nimmt keine Bindung mehr an); die vier `subscribeDiagnostics`-Listener, die zuvor **nie** abbestellt wurden, gehören jetzt dem Owner. Drei reine Diagnose-SHUTDOWN-Handler entfielen, der gemischte GPU-VFX-Handler wurde aufgespalten (15 → 13 Handler). `ArenaInputBindings.destroy()` ist idempotent, löst sieben eigene Hotkey-Listener und sechs eigene Keyboard-Keys; ein Contract-Test bestätigt die Inertheit des Debug-Ports danach. **Weiter offen:** `ArenaRuntime`, `ArenaLifecycleCoordinator`, `ArenaPersistentBaseSession`, `HostUpdateCoordinator`, `ClientUpdateCoordinator`, `RpcCoordinator` haben weiterhin **kein eigenes `destroy()`**. Phase 4A muss den Meta-Owner ebenfalls mit idempotentem `destroy()` und Teardown-Test liefern. |
 
 ---
 
@@ -153,12 +153,13 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | Check / Quelle | Ergebnis |
 |---|---|
-| `npm run check` (nach Phase 2B) | grün – 336 Testdateien, 2843 Tests, 15 skipped; `tsc` und `vite build` erfolgreich |
-| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855). `ArenaDiagnosticsController.ts`: 331 → 1326 Zeilen; `ArenaDiagnosticsController.test.ts`: 155 → 169 Zeilen. |
+| `npm run check` (nach Phase 3A) | grün – 337 Testdateien, 2846 Tests, 15 skipped; `tsc` und `vite build` erfolgreich |
+| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185). `ArenaDiagnosticsController.ts`: 331 → 1326 Zeilen; `ArenaInputBindings.ts`: 337 Zeilen; `ArenaInputBindings.test.ts`: 191 Zeilen. |
 | Aus der Scene entfernt (2B) | Scene-Display-Counts, Transport-Sampling, Byte-/RTT-/Backpressure-Intervalle, Flowfield-/Rock-GPU-/VFX-Companion-Counter, Scratch-/Baseline-Zustände und die Frame-/Abschnittsmessung; `profiler`-/`ablation`-Accessoren sowie `captureSceneInspection`-/`onRecordingStart`-Ports entfallen. |
 | Aus der Scene entfernt (2A) | Felder `runtimeProfiler`, `visualAttribution`, `performanceAblation`, `performanceDiagnosticsOverlay`, `netDebugOverlay` → ein Feld `diagnostics`; Imports `ArenaRuntimeProfiler`, `PerformanceAblationController`, `PerformanceDiagnosticsOverlay`, `NetDebugOverlay`, `getArenaVisualAttribution`, `getWebGLRendererType`; Methode `describePerformanceEnvironment()` |
 | Toter Teardown-Pfad entfernt | Der gemischte SHUTDOWN-Handler rief `runtimeProfiler?.setGpuVfxSource(null)` erst, **nachdem** ein früher registrierter Handler `runtimeProfiler` bereits genullt hatte – schon vor der Extraktion ein No-op. Nur der wirksame Teil (`gpuVfx.setDiagnosticEventSink(null)`) blieb erhalten. |
 | Source-Test-Inventar `rg` über `tests/` | 13 Dateien / 21 Assertion-Stellen lesen `src/scenes/ArenaScene.ts` als Text; keine weiteren Pfadschreibweisen oder Verzeichnis-Scans. |
+| `ArenaInputBindings` | Scene-langlebiger Owner für Phase-3A-Keyboard-Setup, statische Provider, lokale Hotkeys sowie Spectator-/Panel-/Debug-Keys; `destroy()` löst sieben Listener und sechs eigene Keys idempotent. Action-/Placement-Provider und lokales Feedback bleiben für Phase 3B in der Scene. |
 | `WorldPresentationFrameBinding` | Existiert weder in `src/` noch in `tests/`. Phase 5 führt ihn erstmals ein; kein bestehender Test darf als Beleg für diesen Vertrag umgedeutet werden. |
 | `ArenaLifecycleCoordinator.detach()` | Ist-Reihenfolge: `handoff.release(runtime.releasePresentation())` → `runtime.destroy()` → `persistentBase.useWorldRuntimes(null)`. Deckt sich mit Architektur §4.5 und begründet den Phase-5-Auftrag. |
 | `clientPresentationStep` | Deklaration/Impl in `src/activity/CoopMissionRuntime.ts:137,416`; genau ein Aufrufer `src/scenes/arena/ClientUpdateCoordinator.ts:317`. |
@@ -169,11 +170,12 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Checkpoint A manuell abschließen, danach Phase 3A – `ArenaInputBindings`: Setup, Hotkeys und Teardown.**
+**Checkpoint A manuell abschließen, danach Phase 3B – `ArenaInputBindings`: Actions, Previews und lokales Feedback.**
 
 - Die automatisierten Checkpoint-A-Prüfungen sind mit `npm run check` grün.
 - Offen bleibt die manuelle Sichtprüfung von Diagnose an/aus, Performance-/Netzwerk-Overlay, Ablation, Semantic Events, Sampling und Shutdown-Verhalten.
-- Phase 3A erst nach diesem Gate beginnen; dabei die Ownership-/Teardown-Verträge aus Architektur und Plan erneut prüfen.
+- Phase 3A ist automatisiert abgeschlossen: Input-Setup, statische Provider, Hotkeys, sechs eigene Keys und die Ownership-getrennte Scene-Bereinigung sind verifiziert.
+- In Phase 3B werden ausschließlich die verbleibenden Action-/Placement-/Preview-/Feedback-Callbacks migriert; keine Phase-3A-Teardown- oder Hotkey-Logik erneut verschieben.
 
 ---
 

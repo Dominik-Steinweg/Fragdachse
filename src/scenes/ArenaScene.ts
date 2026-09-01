@@ -206,6 +206,10 @@ import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
 import { PersistentBasePreviewRenderer } from './arena/PersistentBasePreviewRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
 import {
+  ArenaInputBindings,
+  type ArenaInputDebugHotkey,
+} from './arena/ArenaInputBindings';
+import {
   ArenaDiagnosticsController,
   type ArenaDiagnosticsFrame,
   type ArenaDiagnosticsFrameInput,
@@ -373,24 +377,12 @@ export class ArenaScene extends Phaser.Scene {
   private lastCameraScrollY = 0;
   private spectatorCameraScrollX = 0;
   private spectatorCameraScrollY = 0;
-  private spectatorCameraLeftKey: Phaser.Input.Keyboard.Key | null = null;
-  private spectatorCameraRightKey: Phaser.Input.Keyboard.Key | null = null;
-  private spectatorCameraUpKey: Phaser.Input.Keyboard.Key | null = null;
-  private spectatorCameraDownKey: Phaser.Input.Keyboard.Key | null = null;
-  private arenaPanelTabKey: Phaser.Input.Keyboard.Key | null = null;
-  private coopDefenseDebugDamageKey: Phaser.Input.Keyboard.Key | null = null;
-  private arenaPanelsHeld = false;
-  private escapeHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
-  private optionsHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
-  private coopDefenseXpDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
-  private weaponBalanceLabHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
-  private netDebugHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
-  private performanceHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
-  private timeOfDayHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
   private forceStaticTimeOfDayBake = false;
   /** Scene-langlebiger Owner der Diagnose (Profiler, Ablation, Net-/Performance-Overlay). */
   private diagnostics: ArenaDiagnosticsController | null = null;
+  /** Scene-langlebiger Owner fuer Keyboard-Setup, Hotkeys und deren Teardown. */
+  private inputBindings: ArenaInputBindings | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
   private coopDefenseDebugOverlay: CoopDefenseDebugOverlay | null = null;
   private coopDefenseBalanceTracker!: CoopDefenseBalanceTracker;
@@ -652,7 +644,6 @@ export class ArenaScene extends Phaser.Scene {
     registerBadgerAnimations(this.anims);
 
     bridge.clearPlayerCallbacks();
-    this.input.mouse?.disableContextMenu();
 
     // ── Static arena (never destroyed) ────────────────────────────────────
     this.arenaBuilder = new ArenaBuilder(this);
@@ -689,10 +680,6 @@ export class ArenaScene extends Phaser.Scene {
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
     );
-    this.spectatorCameraLeftKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.A, false) ?? null;
-    this.spectatorCameraRightKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.D, false) ?? null;
-    this.spectatorCameraUpKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.W, false) ?? null;
-    this.spectatorCameraDownKey = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.S, false) ?? null;
     projectileManager.setAudioSystem(gameAudioSystem);
     effectSystem.setAudioSystem(gameAudioSystem);
 
@@ -1162,10 +1149,6 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     // ── Input setup ───────────────────────────────────────────────────────
-    inputSystem.setup();
-    inputSystem.setAudioSystem(gameAudioSystem);
-    inputSystem.setupUtilityConfigProvider(() => this.clientUpdate.getLocalUtilityConfig());
-    inputSystem.setupUtilityCooldownProvider(() => this.clientUpdate.getLocalUtilityCooldownUntil());
     inputSystem.setupRadialActionProviders({
       getTools: () => {
         const localId = bridge.getLocalPlayerId();
@@ -1285,26 +1268,6 @@ export class ArenaScene extends Phaser.Scene {
         });
       },
     );
-    inputSystem.setupUltimateConfigProvider(() => this.clientUpdate.getLocalUltimateConfig());
-    inputSystem.setupLocalRageProvider(() => this.clientUpdate.getLocalRage());
-
-    // ── Debug Hotkeys ─────────────────────────────────────────────────────
-    inputSystem.setupDebugHotkeys((type) => {
-      if (!bridge.isHost()) return;
-
-      const service = type === 'flowfield_players'
-        ? this.coopMissionRuntime?.enemyPlayerFlowFieldService
-        : this.coopMissionRuntime?.enemyFlowFieldService;
-      if (!service) return;
-
-      if (!this.flowFieldDebugOverlay) {
-        console.log('[ArenaScene] Creating EnemyFlowFieldDebugOverlay');
-        this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, service);
-      }
-
-      console.log(`[ArenaScene] Showing ${type} overlay`);
-      this.flowFieldDebugOverlay.showForService(service);
-    });
     const playLocalFailureSound = (slot: LoadoutSlot): void => {
       if (slot === 'weapon1' || slot === 'weapon2') {
         const shotAudio = this.clientUpdate.getLocalWeaponConfig(slot).shotAudio;
@@ -1355,7 +1318,6 @@ export class ArenaScene extends Phaser.Scene {
 
       playLocalFailureSound(slot);
     };
-    inputSystem.setupWeapon2ConfigProvider(() => this.clientUpdate.getLocalWeaponConfig('weapon2'));
     inputSystem.setupCanStartScopeCheck(() => {
       const wepConfig = this.clientUpdate.getLocalWeaponConfig('weapon2');
       const lastFired = this.clientUpdate.weaponLastFiredRecord()['weapon2'];
@@ -1778,7 +1740,92 @@ export class ArenaScene extends Phaser.Scene {
     });
 
     this.lifecycle.initialize();
-    this.registerArenaPanelHotkeys();
+    const inputBindings = new ArenaInputBindings({
+      scene: this,
+      inputSystem,
+      audioSystem: gameAudioSystem,
+      getLocalUtilityConfig: () => this.clientUpdate.getLocalUtilityConfig(),
+      getLocalUtilityCooldownUntil: () => this.clientUpdate.getLocalUtilityCooldownUntil(),
+      getLocalUltimateConfig: () => this.clientUpdate.getLocalUltimateConfig(),
+      getLocalRage: () => this.clientUpdate.getLocalRage(),
+      getLocalWeapon2Config: () => this.clientUpdate.getLocalWeaponConfig('weapon2'),
+      onFlowFieldDebugHotkey: (type: ArenaInputDebugHotkey) => this.handleFlowFieldDebugHotkey(type),
+      hotkeys: {
+        getGamePhase: () => bridge.getGamePhase(),
+        isMatchTerminated: () => this.lifecycle.isMatchTerminated(),
+        isCoopDefenseMode: () => isCoopDefenseMode(bridge.getGameMode()),
+        canLeaveLocalLobbyWorld: () => this.canLeaveLocalLobbyWorld(),
+        requestLocalLobbyWorldLeave: () => this.requestLocalLobbyWorldLeave(),
+        isHotkeyInputBlocked: () => this.ctx.leftPanel.isHotkeyInputBlocked(),
+        isHelpOverlayOpen: () => this.ctx.leftPanel.isHelpOverlayOpen(),
+        hideHelpOverlay: () => this.ctx.leftPanel.hideHelpOverlay(),
+        isOptionsOverlayOpen: () => this.ctx.leftPanel.isOptionsOverlayOpen(),
+        hideOptionsOverlay: () => this.ctx.leftPanel.hideOptionsOverlay(),
+        toggleOptionsOverlay: () => this.ctx.leftPanel.toggleOptionsOverlay(),
+        isCoopDefenseUpgradesOpen: () => this.coopDefenseUpgradesOverlay?.isOpen() ?? false,
+        hideCoopDefenseUpgrades: () => this.coopDefenseUpgradesOverlay?.hide(),
+        isCoopDefenseDebugOpen: () => this.coopDefenseDebugOverlay?.isOpen() ?? false,
+        hideCoopDefenseDebug: () => this.coopDefenseDebugOverlay?.hide(),
+        toggleCoopDefenseDebug: () => this.coopDefenseDebugOverlay?.toggle(),
+        isItemsOpen: () => this.itemsOverlay?.isOpen() ?? false,
+        hideItems: () => this.itemsOverlay?.hide(),
+        isItemRewardVisible: () => this.itemRewardOverlay?.isVisible() ?? false,
+        hideItemReward: () => this.itemRewardOverlay?.hide(),
+        isMatchResultsVisible: () => this.matchResultsOverlay?.isVisible() ?? false,
+        hideMatchResults: () => this.matchResultsOverlay?.hide(),
+        isRoomStatisticsVisible: () => this.roomStatisticsOverlay?.isVisible() ?? false,
+        hideRoomStatistics: () => this.roomStatisticsOverlay?.hide(),
+        isWeaponBalanceLabOpen: () => this.weaponBalanceLabOverlay?.isOpen() ?? false,
+        hideWeaponBalanceLab: () => this.weaponBalanceLabOverlay?.hide(),
+        toggleWeaponBalanceLab: () => this.weaponBalanceLabOverlay?.toggle(),
+        isNetDebugOpen: () => this.diagnostics?.isNetDebugOpen() ?? false,
+        hideNetDebug: () => this.diagnostics?.hideNetDebug(),
+        toggleNetDebug: () => this.diagnostics?.toggleNetDebug(),
+        isPerformanceOverlayOpen: () => this.diagnostics?.isPerformanceOverlayOpen() ?? false,
+        hidePerformanceOverlay: () => this.diagnostics?.hidePerformanceOverlay(),
+        togglePerformanceOverlay: () => this.diagnostics?.togglePerformanceOverlay(),
+        isTimeOfDayDebugOpen: () => this.timeOfDayDebugOverlay?.isOpen() ?? false,
+        hideTimeOfDayDebug: () => this.timeOfDayDebugOverlay?.hide(),
+        toggleTimeOfDayDebug: () => this.timeOfDayDebugOverlay?.toggle(),
+      },
+    });
+    this.inputBindings = inputBindings;
+    inputBindings.setup();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      inputBindings.destroy();
+      if (this.inputBindings === inputBindings) this.inputBindings = null;
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.lobbyOverlay?.destroy();
+      this.persistentBaseVisuals?.destroy();
+      this.persistentBasePreviewRenderer?.destroy();
+      this.timeOfDayDebugOverlay?.destroy();
+      this.timeOfDayDebugOverlay = null;
+      this.weaponBalanceLabRuntime?.cancel();
+      this.weaponBalanceLabOverlay?.destroy();
+      this.weaponBalanceLabOverlay = null;
+      this.coopDefenseDebugOverlay?.destroy();
+      this.coopDefenseDebugOverlay = null;
+      this.coopDefenseUpgradesOverlay?.destroy();
+      this.coopDefenseUpgradesOverlay = null;
+      this.hostileBaseIndicator?.destroy();
+      this.hostileBaseIndicator = null;
+      // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
+      // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
+      this.playerStatusRing?.destroy();
+      this.playerStatusRing = null;
+      this.secondaryObjectiveHud?.destroy();
+      this.secondaryObjectiveHud = null;
+      this.mapEventAnnouncementPresenter?.reset();
+      this.mapEventAnnouncementPresenter = null;
+      this.objectiveAnnouncements?.destroy();
+      this.objectiveAnnouncements = null;
+      this.removeReconnectStatusListener?.();
+      this.removeReconnectStatusListener = null;
+      this.renderers?.secondaryObjectiveMarkers.destroy();
+      this.renderers?.carryZones.clear();
+      this.renderers?.objectiveRepairDrones.destroy();
+    });
     bridge.sendPingToHost();
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
@@ -1907,12 +1954,6 @@ export class ArenaScene extends Phaser.Scene {
       ArenaBuilder.updateSurfaceResidency(this.arenaResult ?? null, worldView);
       this.renderers?.shadow.updateStaticResidency(worldView);
     }
-    this.arenaPanelsHeld = !!(gameplayActive && !terminated && this.arenaPanelTabKey?.isDown);
-
-    if (!inGame && this.arenaPanelsHeld) {
-      this.arenaPanelsHeld = false;
-    }
-
     if (worldActive && localWorldPresentation.required) {
       // Loading blocks input, while the countdown intentionally keeps aiming and the Inspector
       // radial menu available so the pre-round presentation remains interactive. Die Kombination
@@ -2086,8 +2127,7 @@ export class ArenaScene extends Phaser.Scene {
         diagnosticsFrame?.begin('primaryStep');
         this.weaponBalanceLabRuntime.update(phase, gameplayActive, delta);
         if (isCoopDefenseMode(configuredGameMode)
-          && this.coopDefenseDebugDamageKey
-          && Phaser.Input.Keyboard.JustDown(this.coopDefenseDebugDamageKey)
+          && this.inputBindings?.isCoopDefenseDebugDamageJustDown()
           && !this.ctx.leftPanel.isHotkeyInputBlocked()
           && !countdownActive) {
           this.arenaRuntime.applyDebugBaseDamage(50);
@@ -2120,7 +2160,7 @@ export class ArenaScene extends Phaser.Scene {
       this.forceStaticTimeOfDayBake ||= transitionCompleted;
 
       diagnosticsFrame?.begin('leaderboardCanopy');
-      if (this.arenaPanelsHeld) {
+      if (gameplayActive && this.inputBindings?.isArenaPanelHeld()) {
         this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
       }
       diagnosticsFrame?.end('leaderboardCanopy');
@@ -3234,248 +3274,6 @@ export class ArenaScene extends Phaser.Scene {
     return { name: nearest.name, x: nearest.x, y: nearest.y };
   }
 
-  private registerArenaPanelHotkeys(): void {
-    const keyboard = this.input.keyboard;
-    if (!keyboard) return;
-
-    this.arenaPanelTabKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
-    // K bleibt fuer den optionalen Debug-Schaden abfragbar, darf aber kein DOM-Textfeld
-    // blockieren, weil der Buchstabe auch in Spielernamen verwendet wird.
-    this.coopDefenseDebugDamageKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.K, false);
-    if (this.escapeHotkeyHandler) {
-      keyboard.off('keydown-ESC', this.escapeHotkeyHandler);
-      this.escapeHotkeyHandler = null;
-    }
-    this.escapeHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat || !this.ctx) return;
-
-      if (!this.canLeaveLocalLobbyWorld()) return;
-
-      // ESC schliesst immer zuerst die oberste UI-Schicht. Erst wenn keine modale oder
-      // eingabeblockierende Oberflaeche offen ist, darf es die World-Teilnahme verlassen.
-      if (this.ctx.leftPanel.isHelpOverlayOpen()) {
-        this.ctx.leftPanel.hideHelpOverlay();
-        event.preventDefault();
-        return;
-      }
-      if (this.ctx.leftPanel.isOptionsOverlayOpen()) {
-        this.ctx.leftPanel.hideOptionsOverlay();
-        event.preventDefault();
-        return;
-      }
-      if (this.coopDefenseUpgradesOverlay?.isOpen()) {
-        this.coopDefenseUpgradesOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.coopDefenseDebugOverlay?.isOpen()) {
-        this.coopDefenseDebugOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.itemsOverlay?.isOpen()) {
-        this.itemsOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.itemRewardOverlay?.isVisible()) {
-        this.itemRewardOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.matchResultsOverlay?.isVisible()) {
-        this.matchResultsOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.roomStatisticsOverlay?.isVisible()) {
-        this.roomStatisticsOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.weaponBalanceLabOverlay?.isOpen()) {
-        this.weaponBalanceLabOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.diagnostics?.isNetDebugOpen()) {
-        this.diagnostics.hideNetDebug();
-        event.preventDefault();
-        return;
-      }
-      if (this.diagnostics?.isPerformanceOverlayOpen()) {
-        this.diagnostics.hidePerformanceOverlay();
-        event.preventDefault();
-        return;
-      }
-      if (this.timeOfDayDebugOverlay?.isOpen()) {
-        this.timeOfDayDebugOverlay.hide();
-        event.preventDefault();
-        return;
-      }
-      if (this.ctx.leftPanel.isHotkeyInputBlocked()) {
-        event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      this.requestLocalLobbyWorldLeave();
-    };
-    keyboard.on('keydown-ESC', this.escapeHotkeyHandler);
-    if (this.optionsHotkeyHandler) {
-      keyboard.off('keydown-O', this.optionsHotkeyHandler);
-      this.optionsHotkeyHandler = null;
-    }
-
-    this.optionsHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat || !this.ctx) return;
-
-      const phase = bridge.getGamePhase();
-      if ((phase !== 'LOBBY' && phase !== 'ARENA') || this.lifecycle.isMatchTerminated()) return;
-      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
-      if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
-      if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
-      if (this.coopDefenseDebugOverlay?.isOpen()) return;
-      if (this.weaponBalanceLabOverlay?.isOpen()) return;
-
-      this.ctx.leftPanel.toggleOptionsOverlay();
-    };
-
-    keyboard.on('keydown-O', this.optionsHotkeyHandler);
-    if (this.coopDefenseXpDebugHotkeyHandler) {
-      keyboard.off('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
-      this.coopDefenseXpDebugHotkeyHandler = null;
-    }
-
-    this.coopDefenseXpDebugHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat || !this.ctx) return;
-
-      const phase = bridge.getGamePhase();
-      if (phase !== 'LOBBY' || this.lifecycle.isMatchTerminated()) return;
-      if (!isCoopDefenseMode(bridge.getGameMode())) return;
-      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
-      if (this.ctx.leftPanel.isHelpOverlayOpen()) return;
-      if (this.ctx.leftPanel.isOptionsOverlayOpen()) return;
-      if (this.coopDefenseUpgradesOverlay?.isOpen()) return;
-      if (this.weaponBalanceLabOverlay?.isOpen()) return;
-
-      this.coopDefenseDebugOverlay?.toggle();
-    };
-
-    keyboard.on('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
-
-    if (this.weaponBalanceLabHotkeyHandler) {
-      keyboard.off('keydown-F8', this.weaponBalanceLabHotkeyHandler);
-      this.weaponBalanceLabHotkeyHandler = null;
-    }
-    this.weaponBalanceLabHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat || !this.ctx) return;
-      if (bridge.getGamePhase() !== 'LOBBY' || this.lifecycle.isMatchTerminated()) return;
-      if (!isCoopDefenseMode(bridge.getGameMode())) return;
-      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
-      if (this.ctx.leftPanel.isHelpOverlayOpen() || this.ctx.leftPanel.isOptionsOverlayOpen()) return;
-      if (this.coopDefenseUpgradesOverlay?.isOpen() || this.coopDefenseDebugOverlay?.isOpen()) return;
-      event.preventDefault();
-      this.weaponBalanceLabOverlay?.toggle();
-    };
-    keyboard.on('keydown-F8', this.weaponBalanceLabHotkeyHandler);
-
-    if (this.netDebugHotkeyHandler) {
-      keyboard.off('keydown-P', this.netDebugHotkeyHandler);
-      this.netDebugHotkeyHandler = null;
-    }
-    // Transportdiagnose ist in jeder Phase erreichbar – gerade wenn etwas klemmt.
-    this.netDebugHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat || !this.ctx) return;
-      if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
-      this.diagnostics?.toggleNetDebug();
-    };
-    keyboard.on('keydown-P', this.netDebugHotkeyHandler);
-
-    if (this.performanceHotkeyHandler) {
-      keyboard.off('keydown-T', this.performanceHotkeyHandler);
-      this.performanceHotkeyHandler = null;
-    }
-    this.performanceHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat) return;
-      // T ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
-      if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
-      this.diagnostics?.togglePerformanceOverlay();
-    };
-    keyboard.on('keydown-T', this.performanceHotkeyHandler);
-
-    if (this.timeOfDayHotkeyHandler) {
-      keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
-      this.timeOfDayHotkeyHandler = null;
-    }
-    this.timeOfDayHotkeyHandler = (event: KeyboardEvent) => {
-      if (event.repeat) return;
-      // M ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
-      if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
-      this.timeOfDayDebugOverlay?.toggle();
-    };
-    keyboard.on('keydown-M', this.timeOfDayHotkeyHandler);
-
-    this.events.once('shutdown', () => {
-      this.lobbyOverlay?.destroy();
-      this.persistentBaseVisuals?.destroy();
-      this.persistentBasePreviewRenderer?.destroy();
-      if (this.escapeHotkeyHandler) {
-        keyboard.off('keydown-ESC', this.escapeHotkeyHandler);
-        this.escapeHotkeyHandler = null;
-      }
-      if (this.timeOfDayHotkeyHandler) {
-        keyboard.off('keydown-M', this.timeOfDayHotkeyHandler);
-        this.timeOfDayHotkeyHandler = null;
-      }
-      this.timeOfDayDebugOverlay?.destroy();
-      this.timeOfDayDebugOverlay = null;
-      if (this.netDebugHotkeyHandler) {
-        keyboard.off('keydown-P', this.netDebugHotkeyHandler);
-        this.netDebugHotkeyHandler = null;
-      }
-      if (this.performanceHotkeyHandler) {
-        keyboard.off('keydown-T', this.performanceHotkeyHandler);
-        this.performanceHotkeyHandler = null;
-      }
-      if (this.optionsHotkeyHandler) {
-        keyboard.off('keydown-O', this.optionsHotkeyHandler);
-        this.optionsHotkeyHandler = null;
-      }
-      if (this.coopDefenseXpDebugHotkeyHandler) {
-        keyboard.off('keydown-L', this.coopDefenseXpDebugHotkeyHandler);
-        this.coopDefenseXpDebugHotkeyHandler = null;
-      }
-      if (this.weaponBalanceLabHotkeyHandler) {
-        keyboard.off('keydown-F8', this.weaponBalanceLabHotkeyHandler);
-        this.weaponBalanceLabHotkeyHandler = null;
-      }
-      this.weaponBalanceLabRuntime?.cancel();
-      this.weaponBalanceLabOverlay?.destroy();
-      this.weaponBalanceLabOverlay = null;
-      this.coopDefenseDebugOverlay?.destroy();
-      this.coopDefenseDebugOverlay = null;
-      this.coopDefenseUpgradesOverlay?.destroy();
-      this.coopDefenseUpgradesOverlay = null;
-      this.hostileBaseIndicator?.destroy();
-      this.hostileBaseIndicator = null;
-      // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
-      // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
-      this.playerStatusRing?.destroy();
-      this.playerStatusRing = null;
-      this.secondaryObjectiveHud?.destroy();
-      this.secondaryObjectiveHud = null;
-      this.mapEventAnnouncementPresenter?.reset();
-      this.mapEventAnnouncementPresenter = null;
-      this.objectiveAnnouncements?.destroy();
-      this.objectiveAnnouncements = null;
-      this.removeReconnectStatusListener?.();
-      this.removeReconnectStatusListener = null;
-      this.renderers?.secondaryObjectiveMarkers.destroy();
-      this.renderers?.carryZones.clear();
-      this.renderers?.objectiveRepairDrones.destroy();
-    });
-  }
-
   private canLeaveLocalLobbyWorld(): boolean {
     return bridge.getGamePhase() === 'LOBBY'
       && bridge.getActivityDescriptor() === null
@@ -3534,9 +3332,26 @@ export class ArenaScene extends Phaser.Scene {
     this.flowFieldDebugOverlay = null;
   }
 
+  private handleFlowFieldDebugHotkey(type: ArenaInputDebugHotkey): void {
+    if (!bridge.isHost()) return;
+
+    const service = type === 'flowfield_players'
+      ? this.coopMissionRuntime?.enemyPlayerFlowFieldService
+      : this.coopMissionRuntime?.enemyFlowFieldService;
+    if (!service) return;
+
+    if (!this.flowFieldDebugOverlay) {
+      console.log('[ArenaScene] Creating EnemyFlowFieldDebugOverlay');
+      this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, service);
+    }
+
+    console.log(`[ArenaScene] Showing ${type} overlay`);
+    this.flowFieldDebugOverlay.showForService(service);
+  }
+
   private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.arenaRuntime?.flow.isMatchTerminated()): void {
     if (!this.ctx) return;
-    const shouldShow = inArena && this.arenaPanelsHeld;
+    const shouldShow = inArena && this.inputBindings?.isArenaPanelHeld() === true;
     this.syncArenaPanelOverlay(shouldShow);
   }
 
@@ -3748,16 +3563,16 @@ export class ArenaScene extends Phaser.Scene {
       this.spectatorCameraScrollX = advanceSpectatorCameraScroll({
         currentScrollX: this.spectatorCameraScrollX,
         deltaMs: delta,
-        moveLeft: this.spectatorCameraLeftKey?.isDown === true,
-        moveRight: this.spectatorCameraRightKey?.isDown === true,
+        moveLeft: this.inputBindings?.isSpectatorCameraLeftDown() === true,
+        moveRight: this.inputBindings?.isSpectatorCameraRightDown() === true,
         arenaWidth,
         viewportWidth: ARENA_VIEWPORT_WIDTH,
       });
       this.spectatorCameraScrollY = advanceSpectatorCameraScroll({
         currentScrollX: this.spectatorCameraScrollY,
         deltaMs: delta,
-        moveLeft: this.spectatorCameraUpKey?.isDown === true,
-        moveRight: this.spectatorCameraDownKey?.isDown === true,
+        moveLeft: this.inputBindings?.isSpectatorCameraUpDown() === true,
+        moveRight: this.inputBindings?.isSpectatorCameraDownDown() === true,
         arenaWidth: arenaHeight,
         viewportWidth: ARENA_VIEWPORT_HEIGHT,
       });
