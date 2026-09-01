@@ -40,6 +40,11 @@ export class ActivityRuntimeHost {
     return this.currentDescriptor;
   }
 
+  /** Die kanonische lokal materialisierte Runtime; `null`, solange der Slot leer ist. */
+  get runtime(): ActivityRuntime | null {
+    return this.currentRuntime;
+  }
+
   isAttached(): boolean {
     return this.currentRuntime !== null;
   }

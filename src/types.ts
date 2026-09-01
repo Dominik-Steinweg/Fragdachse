@@ -728,6 +728,11 @@ export type GamePhase = 'LOBBY' | 'ARENA';
 
 export type GameMode = 'deathmatch' | 'team_deathmatch' | 'capture_the_beer' | 'coop_defense';
 
+export type RoundOutcome = 'victory' | 'defeat';
+
+/** Fachlicher Abschluss einer Runde, unabhaengig vom Netzwerkadapter. */
+export type RoundConclusion = RoundOutcome | 'aborted';
+
 export type TeamId = 'blue' | 'red';
 
 export type CaptureTheBeerBeerState = 'home' | 'carried' | 'dropped';

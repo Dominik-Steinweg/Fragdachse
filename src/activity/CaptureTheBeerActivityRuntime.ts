@@ -7,7 +7,6 @@ export interface CaptureTheBeerActivityRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly isPlayerInteractionAllowed: (playerId: string) => boolean;
   readonly onFx: (event: CaptureTheBeerFxEvent) => void;
-  readonly onDestroy?: () => void;
 }
 
 /** Owns the Capture-the-Beer rules for exactly one Activity lifetime. */
@@ -28,6 +27,5 @@ export class CaptureTheBeerActivityRuntime implements ActivityRuntime {
     this.system.setFxHandler(null);
     this.system.reset();
     this.system.destroy();
-    this.options.onDestroy?.();
   }
 }

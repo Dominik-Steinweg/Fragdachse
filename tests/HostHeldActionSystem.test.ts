@@ -64,6 +64,39 @@ describe('HostHeldActionSystem', () => {
     )).toBeNull();
   });
 
+  it('invalidates an action from Activity A before Activity B can consume it', () => {
+    const system = new HostHeldActionSystem();
+    system.start('p1', 'activity-a', 'charged_throw', 1_000, 1_000);
+
+    system.reset();
+
+    expect(system.consume('p1', 'activity-a', 'charged_throw', 1_000, 2_000)).toBeNull();
+    expect(system.start('p1', 'activity-b', 'charged_throw', 1_000, 2_000)).toBe(true);
+    expect(system.consume('p1', 'activity-b', 'charged_throw', 1_000, 3_000))
+      .toEqual({ elapsedMs: 1_000, chargeFraction: 1 });
+  });
+
+  it('invalidates an action when Activity A ends without a successor', () => {
+    const system = new HostHeldActionSystem();
+    system.start('p1', 'activity-a', 'global_dismantle', 1_000, 5_000);
+
+    system.reset();
+
+    expect(system.consume('p1', 'activity-a', 'global_dismantle', 1_000, 6_000)).toBeNull();
+  });
+
+  it('invalidates only the leaving player action', () => {
+    const system = new HostHeldActionSystem();
+    system.start('leaving', 'leave-action', 'charged_gate', 1_000, 8_000);
+    system.start('staying', 'stay-action', 'charged_gate', 1_000, 8_000);
+
+    system.clearPlayer('leaving');
+
+    expect(system.consume('leaving', 'leave-action', 'charged_gate', 1_000, 9_000)).toBeNull();
+    expect(system.consume('staying', 'stay-action', 'charged_gate', 1_000, 9_000))
+      .toEqual({ elapsedMs: 1_000, chargeFraction: 1 });
+  });
+
   it('clears actions on cancel, player invalidation and timeout', () => {
     const system = new HostHeldActionSystem();
     system.start('p1', 'a', 'charged_throw', 1_000, 0);

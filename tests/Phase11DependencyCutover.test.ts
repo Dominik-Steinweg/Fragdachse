@@ -42,10 +42,22 @@ describe('Phase 11B dependency cutover', () => {
   it('ordnet Host-held Actions dem World-Player-Owner zu', () => {
     const context = read('src/scenes/arena/ArenaContext.ts');
     const runtime = read('src/world/WorldPlayerGameplayRuntime.ts');
+    const flow = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     expect(context).not.toContain('HostHeldActionSystem');
     expect(context).not.toContain('hostHeldActionSystem');
     expect(runtime).toContain('readonly heldAction: HostHeldActionSystem;');
     expect(runtime).toContain('systems.heldAction.reset();');
+    expect(flow).toContain('this.worldPlayerGameplayRuntime?.systems.heldAction.reset();');
+    expect(flow).toContain('this.worldPlayerGameplayRuntime?.systems.heldAction.clearPlayer(playerId);');
+  });
+
+  it('liest Activity- und PB-World-Runtimes nur noch aus ihren kanonischen Ownern', () => {
+    const flow = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
+    expect(flow).not.toMatch(/private coopMissionRuntime: CoopMissionRuntime \| null/);
+    expect(flow).not.toMatch(/private captureTheBeerActivityRuntime: CaptureTheBeerActivityRuntime \| null/);
+    expect(flow).not.toMatch(/private persistentBaseWorldBinding: PersistentBaseWorldBinding \| null/);
+    expect(flow).toContain('this.worldRuntime?.activity.runtime');
+    expect(flow).toContain('return this.worldRuntime?.persistentBase ?? null;');
   });
 
   it('verdichtet Frame-Reads auf wenige kleine World-, Player-, Combat- und Activity-Ports', () => {
@@ -65,6 +77,8 @@ describe('Phase 11B dependency cutover', () => {
     for (const path of [
       'src/world/WorldPlayerGameplayRuntime.ts',
       'src/world/ConstructionWorldRuntime.ts',
+      'src/persistentBase/PersistentBaseRoundOutcome.ts',
+      'src/systems/CoopDefenseRoundStateSystem.ts',
       'src/scenes/arena/ArenaRpcPorts.ts',
     ]) {
       expect(read(path), path).not.toMatch(/NetworkBridge|network\/bridge|\bbridge\b/);

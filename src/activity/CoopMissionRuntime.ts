@@ -349,8 +349,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.allyFlowFields.delete(playerId);
     this.navigationOwner?.coordinator.unregisterField(allyFlowFieldId(playerId));
     flowField.destroy();
-    // Beim Activity-Destroy ist der Compatibility-Pfad bereits geloest. Ein erneutes Publish
-    // wuerde den sterbenden Runtime-Owner sonst sichtbar machen.
+    // Beim Activity-Destroy ist der Runtime-Slot bereits geloest. Ein erneutes Publish wuerde
+    // den sterbenden Runtime-Owner sonst ueber langlebige Bindings wieder sichtbar machen.
     if (!this.destroyed) this.publishBindings();
   }
 
@@ -429,8 +429,8 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     const scopedBindings = this.scopedBindings;
     this.scopedBindings = [];
     for (const binding of [...scopedBindings].reverse()) binding.detach();
-    // Compatibility-Consumer sehen die Activity ab jetzt nicht mehr. Das geschieht vor dem
-    // Entity-Teardown, damit kein Destroy-Callback ueber einen langlebigeren Service zurueckgreift.
+    // Langlebige Consumer sehen die Activity ab jetzt nicht mehr. Das geschieht vor dem Entity-
+    // Teardown, damit kein Destroy-Callback ueber einen langlebigeren Service zurueckgreift.
     this.bindingsChanged(null);
 
     // Der Missionsanteil der Spieler faellt zuerst: Sein Abbau gibt gehaltene Ziele frei und

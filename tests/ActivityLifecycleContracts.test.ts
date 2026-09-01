@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ActivityLifecycle, type ActivityLifecycleSink } from '../src/world/ActivityLifecycle';
+import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import type { WorldDescriptor } from '../src/world/WorldDescriptor';
 import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
@@ -81,6 +82,39 @@ describe('ActivityLifecycle – setzt eine World voraus', () => {
 });
 
 describe('ActivityLifecycle – Reihenfolge gegenueber der World', () => {
+  it('invalidiert Identity-State bei A→B und A→none, aber nicht beim Runtime-Rebind', () => {
+    const heldAction = new HostHeldActionSystem();
+    const { world: baseWorld } = createSinks();
+    const world: WorldLifecycleSink = {
+      ...baseWorld,
+      activityIdentity: {
+        begin: () => { /* noop */ },
+        end: () => { heldAction.reset(); },
+      },
+    };
+    const lifecycle = new WorldLifecycle(world);
+    const currentWorld = descriptor();
+    const activityA = mission();
+    const activityB = { ...mission(), activityRevision: 32 };
+
+    lifecycle.beginCreate(currentWorld, activityA);
+    lifecycle.attachRuntime(runtime(currentWorld));
+    heldAction.start('p1', 'rebind', 'charged_throw', 1_000, 1_000);
+
+    lifecycle.detachRuntime();
+    lifecycle.attachRuntime(runtime(currentWorld));
+    expect(heldAction.consume('p1', 'rebind', 'charged_throw', 1_000, 2_000))
+      .toEqual({ elapsedMs: 1_000, chargeFraction: 1 });
+
+    heldAction.start('p1', 'activity-a', 'charged_throw', 1_000, 3_000);
+    lifecycle.syncObservedActivity(activityB);
+    expect(heldAction.consume('p1', 'activity-a', 'charged_throw', 1_000, 4_000)).toBeNull();
+
+    heldAction.start('p1', 'activity-b', 'charged_throw', 1_000, 5_000);
+    lifecycle.syncObservedActivity(null);
+    expect(heldAction.consume('p1', 'activity-b', 'charged_throw', 1_000, 6_000)).toBeNull();
+  });
+
   it('steht erst nach ihrer World und faellt vor ihr', () => {
     const { calls, world } = createSinks();
     const lifecycle = new WorldLifecycle(world);

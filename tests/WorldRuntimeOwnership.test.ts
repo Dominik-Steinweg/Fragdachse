@@ -136,6 +136,7 @@ describe('ActivityRuntimeHost – Slot der lokal materialisierten Activity', () 
     host.attach(activity(), mission);
     expect(host.isAttached()).toBe(true);
     expect(host.descriptor?.activityRevision).toBe(5);
+    expect(host.runtime).toBe(mission);
 
     host.update(16);
     expect(mission.updates).toBe(1);
@@ -145,6 +146,7 @@ describe('ActivityRuntimeHost – Slot der lokal materialisierten Activity', () 
     expect(mission.destroyCount).toBe(1);
     expect(host.isAttached()).toBe(false);
     expect(host.descriptor).toBeNull();
+    expect(host.runtime).toBeNull();
     expect(() => host.update(16)).not.toThrow();
   });
 

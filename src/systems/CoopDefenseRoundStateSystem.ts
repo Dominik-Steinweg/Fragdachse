@@ -1,6 +1,6 @@
 import type { CoopDefenseMapObjective } from '../config/coopDefenseMaps';
 import type { BaseManager } from '../entities/BaseManager';
-import type { RoundOutcome } from '../network/NetworkBridge';
+import type { RoundOutcome } from '../types';
 
 export interface CoopDefenseRoundStateSystemOptions {
   readonly baseManager: BaseManager;

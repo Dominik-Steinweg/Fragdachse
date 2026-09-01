@@ -101,6 +101,7 @@ import { sanitizeCoopDefenseEquippedItems } from '../utils/coopDefenseItems';
 import { DEFAULT_TIME_OF_DAY_MINUTES, normalizeTimeOfDay } from '../effects/TimeOfDay';
 import { isCoopDefenseClassId } from '../config/coopDefenseClasses';
 import type { TemporaryUtilityInstanceDescriptor } from '../types';
+import type { RoundConclusion } from '../types';
 import {
   canRoundPlayerReceiveRewards,
   canRoundPlayerSpawnOrRespawn,
@@ -118,6 +119,7 @@ import {
 } from './RoomStatistics';
 
 export type { RoomPlayerStatistics } from './RoomStatistics';
+export type { RoundConclusion, RoundOutcome } from '../types';
 
 /**
  * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`
@@ -273,15 +275,6 @@ export interface RoundResult {
   /** Gemeinsame, autoritative B8-Epic-Garantie; pro berechtigter Zeile wiederholt. */
   epicGuaranteeCount?: number;
 }
-
-export type RoundOutcome = 'victory' | 'defeat';
-
-/**
- * Wie eine Runde geendet hat. `aborted` ist der host-seitige Abbruch über das Optionsmenü und
- * damit kein Spielausgang: Er zählt weder als Sieg noch als Niederlage, beendet die Runde aber
- * in jedem Modus regulär (inklusive Endstand und – im Coop – der bis dahin erspielten XP).
- */
-export type RoundConclusion = RoundOutcome | 'aborted';
 
 export interface RoundState {
   status: 'active' | RoundConclusion;

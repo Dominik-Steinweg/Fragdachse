@@ -1,4 +1,4 @@
-import type { RoundConclusion } from '../network/NetworkBridge';
+import type { RoundConclusion } from '../types';
 import type { PersistentBaseRoomSession } from './PersistentBaseRoomSession';
 import type { PersistentBaseTransactionIdentity } from './PersistentBaseTransaction';
 import type { PersistentPlayerBaseContribution } from './PersistentBaseTypes';

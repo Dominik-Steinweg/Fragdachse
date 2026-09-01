@@ -10,10 +10,7 @@ import type { WorldRuntimeContext } from './WorldRuntimeContext';
 /**
  * Lebenszyklus genau einer World-Instanz.
  *
- * Bisher war "es gibt eine World" aus drei Quellen zu rekonstruieren: dem replizierten Kanal,
- * dem lokalen `ArenaContext.world` und dem Aufbaustand der Arena. Erzeugt und beendet wurde sie
- * an sechs verstreuten Stellen. Dieser Besitzer haelt den Zustand explizit und ist der einzige
- * Ort, der ihn wechselt.
+ * Dieser Besitzer haelt den Zustand explizit und ist der einzige Ort, der ihn wechselt.
  *
  * Die Instanz und ihre lokale Realisierung sind bewusst zwei Schritte: der Host eroeffnet die
  * Instanz beim Publizieren, jeder Peer haengt danach seine eigene Runtime daran. Ein Teardown

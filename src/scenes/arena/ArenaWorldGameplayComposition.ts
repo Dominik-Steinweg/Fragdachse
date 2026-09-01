@@ -66,8 +66,8 @@ import type { WorldParticipation } from '../../world/WorldParticipation';
  * bleibt. Die Grenze haelt selbst keinen langlebigen Zustand und wird nicht als Dependency
  * weitergereicht; der Flow fragt sie genau einmal pro World-Aufbau.
  *
- * Sie liegt bewusst im Scene-/Adapter-Layer: Hier duerfen `ArenaContext` und `bridge` waehrend
- * der Migration noch vorkommen, waehrend die erzeugten World-Owner selbst beides nicht kennen.
+ * Sie liegt bewusst im Scene-/Adapter-Layer: Hier duerfen `ArenaContext` und `bridge` als konkrete
+ * Infrastrukturgrenze vorkommen, waehrend die erzeugten World-Owner selbst beides nicht kennen.
  */
 
 /** Die Fragen der World-Composition an Flow und laufende Activity. */

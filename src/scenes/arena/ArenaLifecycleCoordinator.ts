@@ -304,7 +304,7 @@ export class ArenaLifecycleCoordinator {
    * Ausserhalb ihrer Lifetime ist sie `null` und wird nicht als Dependency weitergereicht.
    */
   private worldRuntime: WorldRuntime | null = null;
-  /** World-owned PowerUp runtime; the context field below is only a compatibility facade. */
+  /** World-owned PowerUp runtime exposed by the current gameplay composition. */
   private get worldPowerUpRuntime(): WorldPowerUpRuntime | null {
     return this.worldGameplay?.powerUp ?? null;
   }
@@ -323,7 +323,7 @@ export class ArenaLifecycleCoordinator {
   private get worldTrainRuntime(): WorldTrainRuntime | null {
     return this.worldGameplay?.train ?? null;
   }
-  /** World-owned player/loadout gameplay; context fields remain compatibility projections. */
+  /** World-owned player/loadout gameplay exposed by the current gameplay composition. */
   private get worldPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null {
     return this.worldGameplay?.player ?? null;
   }
@@ -335,10 +335,16 @@ export class ArenaLifecycleCoordinator {
   private get constructionWorldRuntime(): ConstructionWorldRuntime | null {
     return this.worldGameplay?.construction ?? null;
   }
-  /** Lokale Realisierung der optionalen Coop-Activity; ihr Besitzer ist der ActivityRuntimeHost. */
-  private coopMissionRuntime: CoopMissionRuntime | null = null;
-  /** Activity-owned Capture-the-Beer rules; the World keeps only this compatibility projection. */
-  private captureTheBeerActivityRuntime: CaptureTheBeerActivityRuntime | null = null;
+  /** Lokale Coop-Realisierung direkt aus dem kanonischen Activity-Slot der World. */
+  private get coopMissionRuntime(): CoopMissionRuntime | null {
+    const runtime = this.worldRuntime?.activity.runtime;
+    return runtime instanceof CoopMissionRuntime ? runtime : null;
+  }
+  /** Lokale Capture-the-Beer-Realisierung direkt aus dem kanonischen Activity-Slot der World. */
+  private get captureTheBeerActivityRuntime(): CaptureTheBeerActivityRuntime | null {
+    const runtime = this.worldRuntime?.activity.runtime;
+    return runtime instanceof CaptureTheBeerActivityRuntime ? runtime : null;
+  }
   /** Activity-specific orchestration; focused composers remain behind this boundary. */
   private readonly coopMissionComposition: CoopMissionComposition;
   /**
@@ -450,7 +456,6 @@ export class ArenaLifecycleCoordinator {
       // Mit der World enden ihre Runtime-Objekte. Der Raumzustand haelt danach keine mehr - er
       // haelt weiter die Blueprints, aber nichts, was sie in einer Welt darstellte.
       this.persistentBase.useWorldRuntimes(null);
-      this.persistentBaseWorldBinding = null;
     },
     activityIdentity: {
       resolveStartAnchor: (_activity, previousActivity) => {
@@ -459,7 +464,12 @@ export class ArenaLifecycleCoordinator {
         return arenaStartTime > 0 ? arenaStartTime : null;
       },
       begin: (activity) => { this.persistentBase.beginPersistentBaseTransaction(activity); },
-      end: (activity) => { this.persistentBase.endPersistentBaseTransaction(activity); },
+      end: (activity) => {
+        // Held Actions sind aktions-/rundenbezogen. Nur das Ende der fachlichen Identity leert
+        // sie; ein technischer Runtime-Detach derselben Activity laesst sie bewusst bestehen.
+        this.worldPlayerGameplayRuntime?.systems.heldAction.reset();
+        this.persistentBase.endPersistentBaseTransaction(activity);
+      },
     },
     activity: {
       attach: (activity) => { this.attachActivityRuntime(activity); },
@@ -623,7 +633,9 @@ export class ArenaLifecycleCoordinator {
    * Die world-lokale Materialisierung der persistenten Basis dieser Instanz. Sie gehoert der
    * `WorldRuntime`; ausserhalb einer World gibt es keine world-lokalen Runtime-IDs.
    */
-  private persistentBaseWorldBinding: PersistentBaseWorldBinding | null = null;
+  private get persistentBaseWorldBinding(): PersistentBaseWorldBinding | null {
+    return this.worldRuntime?.persistentBase ?? null;
+  }
   /** Leerstand ohne World: Ohne Instanz existiert nichts world-lokal Materialisiertes. */
   private get persistentBaseAnchor(): PersistentBaseAnchor | null {
     return this.persistentBaseWorldBinding?.anchor ?? null;
@@ -998,21 +1010,16 @@ export class ArenaLifecycleCoordinator {
         onFx: (event) => {
           if (bridge.isHost()) bridge.broadcastCaptureTheBeerFx(event);
         },
-        onDestroy: () => {
-          if (this.captureTheBeerActivityRuntime !== runtime) return;
-          this.captureTheBeerActivityRuntime = null;
-        },
       });
-      this.captureTheBeerActivityRuntime = runtime;
       worldRuntime.activity.attach(activity, runtime);
       return;
     }
     if (activity.kind !== 'coop-mission') return;
-    const runtime = new CoopMissionRuntime(activity, (current) => {
-      if (current === null && this.coopMissionRuntime === runtime) this.coopMissionRuntime = null;
-      this.onCoopMissionRuntimeChanged(current);
-    }, this.coopMissionPorts);
-    this.coopMissionRuntime = runtime;
+    const runtime = new CoopMissionRuntime(
+      activity,
+      (current) => { this.onCoopMissionRuntimeChanged(current); },
+      this.coopMissionPorts,
+    );
     worldRuntime.activity.attach(activity, runtime);
     runtime.bind({
       attach: (current) => {
@@ -1117,12 +1124,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
-    if (this.worldRuntime?.activity.isAttached()) {
-      this.worldRuntime.activity.detach();
-      return;
-    }
-    this.coopMissionRuntime?.destroy();
-    this.captureTheBeerActivityRuntime?.destroy();
+    this.worldRuntime?.activity.detach();
   }
 
   /** Teardown-Einstieg ausserhalb des Lifecycles; haelt dessen Runtime-Phase synchron. */
@@ -2226,6 +2228,7 @@ export class ArenaLifecycleCoordinator {
   detachPlayerFromWorld(playerId: string): void {
     // Umgekehrte Reihenfolge: Der Missionsanteil geht zuerst, solange seine Ziele noch stehen.
     this.playerActivityRuntime?.detach(playerId);
+    this.worldPlayerGameplayRuntime?.systems.heldAction.clearPlayer(playerId);
     this.playerRuntime?.detach(playerId);
   }
 
@@ -2418,7 +2421,6 @@ export class ArenaLifecycleCoordinator {
       placement: placementSystem,
       bases: baseManager,
     } = builtWorld;
-    this.persistentBaseWorldBinding = persistentBaseBinding;
     this.persistentBase.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);
     if (coopMissionRuntime && baseManager && missionMapConfig && activityDescriptor) {
       this.attachCoopMissionBaseBinding(activityDescriptor, coopMissionRuntime);
@@ -2572,7 +2574,6 @@ export class ArenaLifecycleCoordinator {
     // fallen mit ihr. Ihre Darstellung geht in den Handoff und bleibt nur stehen, wenn der
     // naechste Aufbau sie uebernimmt.
     this.releaseWorldRuntime(preserveAuthoredPresentation);
-    this.persistentBaseWorldBinding = null;
     if (bridge.isHost()) {
       for (const player of bridge.getConnectedPlayers()) bridge.publishActiveBuffs(player.id, []);
     }
