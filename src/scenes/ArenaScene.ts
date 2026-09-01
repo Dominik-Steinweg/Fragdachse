@@ -39,7 +39,6 @@ import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay, type ArenaLoadingScreenState } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
 import { HostileBaseIndicator, getVisibleWorldView } from '../ui/HostileBaseIndicator';
-import { countSceneDisplayObjects, forEachSceneDisplayObject } from './arena/sceneDisplayObjects';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseDebugOverlay } from '../ui/CoopDefenseDebugOverlay';
 import { CoopDefenseBalanceReportOverlay } from '../ui/CoopDefenseBalanceReportOverlay';
@@ -206,11 +205,14 @@ import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
 import { PersistentBasePreviewRenderer } from './arena/PersistentBasePreviewRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
-import { ArenaDiagnosticsController, type ArenaDiagnosticsRockVisualSystemPort } from './arena/ArenaDiagnosticsController';
+import {
+  ArenaDiagnosticsController,
+  type ArenaDiagnosticsFrame,
+  type ArenaDiagnosticsFrameInput,
+  type ArenaDiagnosticsRockVisualSystemPort,
+} from './arena/ArenaDiagnosticsController';
 import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
-import type { FlowFieldDiagnostics } from '../systems/flowfield/FlowFieldCoordinator';
-import type { PersistentGpuWorldDiagnostics } from '../arena/rocks/PersistentGpuWorldSystem';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { getPersistentBaseRewardIds } from '../persistentBase/PersistentBaseRewardCatalog';
 
@@ -274,21 +276,6 @@ interface TrainLamp {
 interface TrainLightPlan {
   readonly headlights: readonly TrainLamp[];
   readonly windows: readonly TrainLamp[];
-}
-
-interface TransportPerformanceCounts {
-  linkCount: number;
-  backpressureLinkCount: number;
-  reliableBufferedBytes: number;
-  fastBufferedBytes: number;
-  droppedFastMessages: number;
-  sentBytes: number;
-  receivedBytes: number;
-  sentBytesPerSec: number;
-  receivedBytesPerSec: number;
-  medianRttMs: number;
-  medianAppPingMs: number;
-  sampleMs: number;
 }
 
 /**
@@ -445,79 +432,6 @@ export class ArenaScene extends Phaser.Scene {
   private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
   private graphicsQuality!: GraphicsQualityController;
-  private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
-  private scenePerformanceCounts = {
-    visibleObjectCount: 0,
-    willRenderObjectCount: 0,
-    inCameraBoundsObjectCount: 0,
-    hiddenObjectCount: 0,
-    particleEmitterCount: 0,
-    aliveParticleCount: 0,
-    activeFilterCount: 0,
-    internalFilterCount: 0,
-    externalFilterCount: 0,
-    filteredObjectCount: 0,
-    cameraFilterCount: 0,
-    scanMs: 0,
-    filterBreakdown: null as string | null,
-  };
-  private lastTransportPerformanceSampleAtMs = Number.NEGATIVE_INFINITY;
-  private lastTransportByteSampleAtMs = Number.NEGATIVE_INFINITY;
-  private lastTransportBytesSent = 0;
-  private lastTransportBytesReceived = 0;
-  private lastTransportDroppedFastMessages = 0;
-  private transportPerformanceCounts: TransportPerformanceCounts = {
-    linkCount: 0,
-    backpressureLinkCount: 0,
-    reliableBufferedBytes: 0,
-    fastBufferedBytes: 0,
-    droppedFastMessages: 0,
-    sentBytes: 0,
-    receivedBytes: 0,
-    sentBytesPerSec: 0,
-    receivedBytesPerSec: 0,
-    medianRttMs: 0,
-    medianAppPingMs: 0,
-    sampleMs: 0,
-  };
-  private nextCompanionSubsystemSampleAtMs = 0;
-  private companionBaselineRecordingId = -1;
-  private companionFlowfieldSource: object | null = null;
-  private companionRockSource: object | null = null;
-  private companionVfxSource: object | null = null;
-  private companionBackpressureActive = false;
-  private companionFlowfieldCounters = {
-    generationId: 0,
-    requestedUpdates: 0,
-    startedJobs: 0,
-    completedJobs: 0,
-    droppedStale: 0,
-    coalescedJobs: 0,
-    skippedUnchangedFields: 0,
-    workerComputeTotalMs: 0,
-    roundTripTotalMs: 0,
-  };
-  private companionFlowfieldInterval = {
-    requestedUpdates: 0,
-    completedJobs: 0,
-    droppedStale: 0,
-    coalescedJobs: 0,
-    skippedUnchangedFields: 0,
-  };
-  private companionStaleFlowfields = new Set<string>();
-  private companionFlowfieldGauge = { ageMs: 0, queueDepth: 0 };
-  private companionRockCounters = {
-    dirtyRocks: 0,
-    affectedPages: 0,
-    sparseUploads: 0,
-    fullUploads: 0,
-    uploadBytes: 0,
-  };
-  private companionRockInterval = { ...this.companionRockCounters };
-  private companionVfxCounters = { epoch: 0, spawns: 0, capacityDrops: 0 };
-  private companionVfxInterval = { spawns: 0, capacityDrops: 0 };
-  private companionVisiblePages = 0;
-  private companionActiveVfx = 0;
 
   constructor() {
     super({ key: 'ArenaScene' });
@@ -667,8 +581,6 @@ export class ArenaScene extends Phaser.Scene {
       game: this.game,
       graphicsQuality: this.graphicsQuality,
       payloadDiagnostics: { setSink: (sink) => bridge.setPayloadDiagnosticsSink(sink) },
-      onRecordingStart: (recordingId) => this.seedCompanionBaselines(recordingId),
-      captureSceneInspection: () => this.captureSceneInspection(),
       getShadowSystem: () => this.renderers?.shadow ?? null,
       getLightingSystem: () => this.renderers?.lighting ?? null,
       getPostFxController: () => this.visualFeedback?.postFx ?? null,
@@ -706,7 +618,18 @@ export class ArenaScene extends Phaser.Scene {
         },
       },
       getGpuVfxStats: () => this.renderers?.gpuVfx.getStats() ?? null,
+      getFlowFieldCoordinator: () => this.coopMissionRuntime?.flowFieldCoordinator ?? null,
       getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaResult?.rockVisualSystem ?? null,
+      getHostPerformanceMetrics: () => this.hostUpdate.getPerformanceMetrics(),
+      getClientPerformanceMetrics: () => this.clientUpdate.getPerformanceMetrics(),
+      getFrameMetrics: () => ({
+        firePerformance: this.ctx.fireSystem.takePerformanceMetrics(),
+        fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
+        lightingPerformance: this.renderers.lighting.getPerformanceMetrics(),
+        lightingStepMs: this.renderers.lighting.getLastUpdateCostMs(),
+        scopePerformance: this.scopeOverlay?.getPerformanceMetrics() ?? null,
+        aimGraphicsCommandCount: this.ctx.aimSystem?.getGraphicsCommandCount() ?? 0,
+      }),
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.diagnostics?.destroy();
@@ -1873,22 +1796,15 @@ export class ArenaScene extends Phaser.Scene {
 
   update(_time: number, delta: number): void {
     const companionDiagnosticsActive = this.diagnostics?.isDiagnosticsActive() ?? false;
-    const diagnosticsActive = this.diagnostics?.wantsDetailedSampling() ?? false;
-    const frameStartMs = diagnosticsActive ? performance.now() : 0;
+    const diagnosticsFrame: ArenaDiagnosticsFrame | null = this.diagnostics?.beginFrame() ?? null;
     // Vor allem anderen, damit die Diagnose-Zaehlungen weiter unten den abgeschalteten
     // Zustand sehen und nicht den des Vorframes.
     if (companionDiagnosticsActive) this.diagnostics?.updateAblation();
-    let primaryStepMs = 0;
-    let clientRendererSyncMs = 0;
-    let inputCameraMs = 0;
-    let lobbyUiMs = 0;
-    let arenaHudMs = 0;
-    let leaderboardCanopyMs = 0;
-    let arenaPanelMs = 0;
-    const networkUpdateStartMs = diagnosticsActive ? performance.now() : 0;
-    const scenePreludeMs = diagnosticsActive ? networkUpdateStartMs - frameStartMs : 0;
+    diagnosticsFrame?.mark('networkStart');
+    diagnosticsFrame?.begin('networkUpdate');
     bridge.updateNetwork();
-    const networkUpdateMs = diagnosticsActive ? performance.now() - networkUpdateStartMs : 0;
+    diagnosticsFrame?.end('networkUpdate');
+    diagnosticsFrame?.mark('networkEnd');
 
     const phase           = bridge.getGamePhase();
     const deferArenaExit  = this.weaponBalanceLabPreviousMapId === null
@@ -2018,9 +1934,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.inputSystem.setAimEnabled(false);
       this.ctx.inputSystem.setInputEnabled(false);
     }
-    if (diagnosticsActive) {
-      inputCameraMs = performance.now() - (networkUpdateStartMs + networkUpdateMs);
-    }
+    diagnosticsFrame?.mark('inputEnd');
 
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer den
@@ -2043,7 +1957,7 @@ export class ArenaScene extends Phaser.Scene {
         : null,
     );
     if (!terminated && presentationPolicy.showLobby) {
-      const lobbyUiStartedAt = diagnosticsActive ? performance.now() : 0;
+      diagnosticsFrame?.begin('lobbyUi');
       if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.beginMatchResults();
       if (this.matchResultsPending) this.tryFinalizeMatchResults();
       const players = bridge.getConnectedPlayers();
@@ -2093,7 +2007,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.leftPanel.refreshColorPickerIfOpen();
       this.ctx.leftPanel.updateLobby();
       if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
-      if (diagnosticsActive) lobbyUiMs = performance.now() - lobbyUiStartedAt;
+      diagnosticsFrame?.end('lobbyUi');
     } else {
       this.coopDefenseDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
@@ -2102,10 +2016,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (!deferArenaExit) this.lastObservedGamePhase = phase;
-    const sceneStateEndMs = diagnosticsActive ? performance.now() : 0;
-    const sceneStateMs = diagnosticsActive
-      ? sceneStateEndMs - (networkUpdateStartMs + networkUpdateMs)
-      : 0;
+    diagnosticsFrame?.mark('sceneStateEnd');
 
     // Same-Mode-Live-Builds bleiben in derselben LobbyWorld reconciled. Ein vollstaendiger
     // GameMode-Wechsel wurde davor bereits als neue World-Instanz orchestriert.
@@ -2114,17 +2025,17 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     if (worldActive && !activityActive && !terminated) {
-      const worldStepStartMs = diagnosticsActive ? performance.now() : 0;
+      diagnosticsFrame?.begin('primaryStep');
       if (bridge.isHost()) this.arenaRuntime.runHostFrame(delta);
       else {
         this.arenaRuntime.runClientFrame(delta);
         this.syncClientWorldSnapshotPresentation(delta, false, null);
       }
-      if (diagnosticsActive) primaryStepMs += performance.now() - worldStepStartMs;
+      diagnosticsFrame?.end('primaryStep');
     }
 
     if ((gameplayActive || countdownActive) && !terminated) {
-      const arenaHudStartedAt = diagnosticsActive ? performance.now() : 0;
+      diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft();
       const activeMapConfig = configuredCoopDefenseMapId !== null
         ? getCoopDefenseMapConfig(configuredCoopDefenseMapId)
@@ -2169,10 +2080,10 @@ export class ArenaScene extends Phaser.Scene {
           if (arrivalSecs !== null) this.ctx.centerHUD.setTrainArrival(arrivalSecs);
         }
       }
-      if (diagnosticsActive) arenaHudMs = performance.now() - arenaHudStartedAt;
+      diagnosticsFrame?.end('arenaHud');
 
       if (bridge.isHost()) {
-        const hostStepStartMs = diagnosticsActive ? performance.now() : 0;
+        diagnosticsFrame?.begin('primaryStep');
         this.weaponBalanceLabRuntime.update(phase, gameplayActive, delta);
         if (isCoopDefenseMode(configuredGameMode)
           && this.coopDefenseDebugDamageKey
@@ -2190,18 +2101,16 @@ export class ArenaScene extends Phaser.Scene {
         } else if (!isCoopDefenseMode(configuredGameMode) && !countdownActive && secs <= 0) {
           this.lifecycle.hostCompleteRound();
         }
-        if (diagnosticsActive) primaryStepMs += performance.now() - hostStepStartMs;
+        diagnosticsFrame?.end('primaryStep');
       } else {
-        const clientStepStartMs = diagnosticsActive ? performance.now() : 0;
+        diagnosticsFrame?.begin('primaryStep');
         this.arenaRuntime.runClientFrame(delta);
 
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
-        const clientRendererSyncStartedAt = diagnosticsActive ? performance.now() : 0;
+        diagnosticsFrame?.begin('clientRendererSync');
         this.syncClientWorldSnapshotPresentation(delta, countdownActive, activeMapConfig);
-        if (diagnosticsActive) {
-          clientRendererSyncMs = performance.now() - clientRendererSyncStartedAt;
-          primaryStepMs += performance.now() - clientStepStartMs;
-        }
+        diagnosticsFrame?.end('clientRendererSync');
+        diagnosticsFrame?.end('primaryStep');
       }
 
       const transitionCompleted = this.lifecycle.syncRuntimeTimeOfDay(
@@ -2210,33 +2119,32 @@ export class ArenaScene extends Phaser.Scene {
       );
       this.forceStaticTimeOfDayBake ||= transitionCompleted;
 
-      const leaderboardCanopyStartedAt = diagnosticsActive ? performance.now() : 0;
+      diagnosticsFrame?.begin('leaderboardCanopy');
       if (this.arenaPanelsHeld) {
         this.ctx.rightPanel.updateLeaderboard(this.hostUpdate.getLeaderboardEntries());
       }
-      if (diagnosticsActive) leaderboardCanopyMs = performance.now() - leaderboardCanopyStartedAt;
+      diagnosticsFrame?.end('leaderboardCanopy');
     }
 
     // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
     // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
     // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
     if (presentationPolicy.showWorld && this.arenaResult) {
-      const canopyStartedAt = diagnosticsActive ? performance.now() : 0;
+      diagnosticsFrame?.begin('leaderboardCanopy');
       const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null;
       ArenaBuilder.updateCanopyTransparency(
         this.arenaResult.canopyObjects,
         localSprite,
         (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
       );
-      if (diagnosticsActive) leaderboardCanopyMs += performance.now() - canopyStartedAt;
+      diagnosticsFrame?.end('leaderboardCanopy');
     }
 
-    const arenaPanelStartedAt = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.begin('arenaPanel');
     this.syncArenaPanelOverlayState(gameplayActive && !terminated);
-    if (diagnosticsActive) arenaPanelMs = performance.now() - arenaPanelStartedAt;
+    diagnosticsFrame?.end('arenaPanel');
 
-    const visualsStartMs = diagnosticsActive ? performance.now() : 0;
-    const postRoleMs = diagnosticsActive ? visualsStartMs - sceneStateEndMs - primaryStepMs : 0;
+    diagnosticsFrame?.mark('visualStart');
 
     // ── Per-frame visuals (always) ─────────────────────────────────────────
     // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
@@ -2394,7 +2302,7 @@ export class ArenaScene extends Phaser.Scene {
     // Loading uses the full-screen veil even though the arena itself is still hidden; once the
     // authoritative countdown timestamp exists, the same overlay switches to 3 → 2 → 1.
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
-    const visualCameraEndMs = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.mark('visualCameraEnd');
 
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
@@ -2423,10 +2331,10 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.remoteControl.syncVisuals(remoteControlTargets, bridge.getSynchronizedNow());
     this.renderers.teslaDome.update(delta);
     this.renderers.teslaNova.update();
-    const visualEnemyStartMs = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.begin('visualEnemy');
     const auraEnemies = inArena ? (this.enemyManager?.getAllEnemies() ?? []) : [];
     this.enemyManager?.syncHostVisuals();
-    const visualEnemyMs = diagnosticsActive ? performance.now() - visualEnemyStartMs : 0;
+    diagnosticsFrame?.end('visualEnemy');
     this.renderers.healingAura.syncEnemies(auraEnemies);
     this.renderers.healingAura.update(delta);
     this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
@@ -2436,9 +2344,9 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.repairDrone.update(delta);
     this.renderers.slimeTrail.update(delta);
     this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
-    const visualEffectsEndMs = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.mark('visualEffectsEnd');
 
-    const aimPreviewStartedAt = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.begin('aimPreview');
     const utilityTargeting    = inArena && !spectator ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
     const airstrikeTargeting  = inArena && !spectator ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
     const utilityPlacement    = inArena && !spectator ? this.getLocalPlacementPreview() : undefined;
@@ -2482,8 +2390,8 @@ export class ArenaScene extends Phaser.Scene {
       && !this.ctx.inputSystem.isRepositionActive()
       && !this.ctx.inputSystem.isUltimatePlacementActive();
     const scopeProgress = this.ctx.inputSystem.getScopeProgress();
-    const aimPreviewMs = diagnosticsActive ? performance.now() - aimPreviewStartedAt : 0;
-    const aimGraphicsStartedAt = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.end('aimPreview');
+    diagnosticsFrame?.begin('aimGraphics');
     this.ctx.aimSystem?.setScopeProgress(scopeProgress);
     this.ctx.aimSystem?.setScoping(this.ctx.inputSystem.isScoping());
     this.ctx.aimSystem?.setWeaponChargeProgress(this.ctx.inputSystem.getScopeChargeProgress());
@@ -2497,10 +2405,10 @@ export class ArenaScene extends Phaser.Scene {
       optionsOpen ? undefined : targetingForReticle,
       optionsOpen ? undefined : ultimatePreview,
     );
-    const aimGraphicsMs = diagnosticsActive ? performance.now() - aimGraphicsStartedAt : 0;
+    diagnosticsFrame?.end('aimGraphics');
 
     // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
-    const scopeStartedAt = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.begin('scope');
     if (this.scopeOverlay) {
       const scopeCfg = inArena && !spectator ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
       if (scopeCfg) {
@@ -2518,13 +2426,13 @@ export class ArenaScene extends Phaser.Scene {
         this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
       }
     }
-    const scopeMs = diagnosticsActive ? performance.now() - scopeStartedAt : 0;
+    diagnosticsFrame?.end('scope');
 
-    const aimIndicatorsStartedAt = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.begin('aimIndicators');
     this.utilityChargeIndicator?.update(inArena && !spectator ? this.ctx.inputSystem.getUtilityChargePreviewState() : undefined);
     this.ultimateChargeIndicator?.update(ultimatePreview);
-    const aimIndicatorsMs = diagnosticsActive ? performance.now() - aimIndicatorsStartedAt : 0;
-    const visualAimEndMs = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.end('aimIndicators');
+    diagnosticsFrame?.mark('visualAimEnd');
 
     this.gaussWarning.update(inArena);
     this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
@@ -2538,13 +2446,7 @@ export class ArenaScene extends Phaser.Scene {
     this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
     this.tunnelRenderer.update(this.time.now);
 
-    const visualsEndMs = diagnosticsActive ? performance.now() : 0;
-    const visualStepMs   = diagnosticsActive ? visualsEndMs - visualsStartMs : 0;
-    const visualCameraMs = diagnosticsActive ? visualCameraEndMs - visualsStartMs : 0;
-    // Der Gegner-Sync liegt mitten im Effektblock und wird deshalb wieder herausgerechnet.
-    const visualEffectsMs = diagnosticsActive ? visualEffectsEndMs - visualCameraEndMs - visualEnemyMs : 0;
-    const visualAimMs = diagnosticsActive ? visualAimEndMs - visualEffectsEndMs : 0;
-    const visualHudMs = diagnosticsActive ? visualsEndMs - visualAimEndMs : 0;
+    diagnosticsFrame?.mark('visualEnd');
 
     // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
     // unversetzten Kameraposition (siehe `applyCameraFeedback`).
@@ -2562,15 +2464,14 @@ export class ArenaScene extends Phaser.Scene {
     // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
 
-    const shadowStepStartMs = diagnosticsActive ? visualsEndMs : 0;
+    diagnosticsFrame?.begin('shadow');
     const trainState = inRoundWorld ? this.resolveTrainState() : null;
     // Keep World-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
     const shadowArenaActive = inArena || (inGame && !terminated);
     this.syncWorldShadows(shadowArenaActive, trainState);
-    const shadowStepMs = diagnosticsActive ? performance.now() - shadowStepStartMs : 0;
+    diagnosticsFrame?.end('shadow');
     this.syncWorldLighting(inArena, trainState);
-    const lightingStepMs = diagnosticsActive ? this.renderers.lighting.getLastUpdateCostMs() : 0;
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
@@ -2589,579 +2490,39 @@ export class ArenaScene extends Phaser.Scene {
 
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
     // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
-    const networkFlushStartMs = diagnosticsActive ? performance.now() : 0;
+    diagnosticsFrame?.begin('networkFlush');
     bridge.flushNetwork();
-    const networkFlushMs = diagnosticsActive ? performance.now() - networkFlushStartMs : 0;
+    diagnosticsFrame?.end('networkFlush');
+    diagnosticsFrame?.mark('updateEnd');
 
-    if (!diagnosticsActive) {
-      if (companionDiagnosticsActive) this.recordCompanionFrame(delta);
-      return;
-    }
-
-    const diagnosticsStartedAt = performance.now();
-    const role = bridge.isHost() ? 'host' : 'client';
-    const runtimePhase = terminated ? 'terminated' : (inGame ? 'arena' : 'lobby');
-    const clientMetricsActive = role === 'client' && runtimePhase === 'arena';
-    const hostMetricsActive = role === 'host' && runtimePhase === 'arena';
-    const firePerformance = this.ctx.fireSystem.takePerformanceMetrics();
-    const lightingPerformance = this.renderers.lighting.getPerformanceMetrics();
-    const scopePerformance = this.scopeOverlay?.getPerformanceMetrics();
-    const clientPerformance = this.clientUpdate.getPerformanceMetrics();
-    const hostPerformance = this.hostUpdate.getPerformanceMetrics();
-    const detailedDiagnostics = this.diagnostics?.profiler?.wantsDetailedSampling() ?? false;
-    const sceneCounts = this.sampleScenePerformanceCounts(performance.now(), detailedDiagnostics);
-    const transportCounts = this.sampleTransportPerformanceCounts(performance.now());
-    let sceneBreakdown: string | null = null;
-    let sceneBreakdownScanMs = 0;
-    if (this.diagnostics?.profiler?.shouldCaptureSceneBreakdown(role, delta)) {
-      const breakdownStartedAt = performance.now();
-      sceneBreakdown = this.describeSceneObjectBreakdown();
-      sceneBreakdownScanMs = performance.now() - breakdownStartedAt;
-    }
-    const localId = bridge.getLocalPlayerId();
-    const rawDelta = this.game.loop.rawDelta;
-    const runtimeContext = {
-      localAlive: this.localPlayerState.alive,
-      aimVisible: showAim,
-      scopeActive: scopeProgress > 0.005,
-      utilityPlacementActive: utilityPlacement !== undefined,
-      ultimatePlacementActive: ultimatePlacement !== undefined,
-      optionsOpen,
-      pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
-      documentFocused: typeof document === 'undefined' || document.hasFocus(),
-      weapon1Id: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
-      weapon2Id: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
-      utilityId: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
-      ultimateId: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? null,
-    };
-    const detailTimings = {
-      scenePreludeMs,
-      sceneStateMs,
-      postRoleMs,
-      diagnosticsMs: 0,
-      inputCameraMs,
-      lobbyUiMs,
-      arenaHudMs,
-      leaderboardCanopyMs,
-      arenaPanelMs,
-      hostCoordinatorMs: hostMetricsActive ? hostPerformance.totalMs : 0,
-      hostEnemyAiMs: hostMetricsActive ? hostPerformance.enemyAiMs : 0,
-      hostNavFlowFieldMs: hostMetricsActive ? hostPerformance.navFlowFieldMs : 0,
-      hostNavWorkerMs: hostMetricsActive ? hostPerformance.navWorkerComputeMs : 0,
-      hostPlayerSystemsMs: hostMetricsActive ? hostPerformance.playerSystemsMs : 0,
-      hostPhysicsMs: hostMetricsActive ? hostPerformance.physicsMs : 0,
-      hostCombatProjectilesMs: hostMetricsActive ? hostPerformance.combatProjectilesMs : 0,
-      hostExplosionsMs: hostMetricsActive ? hostPerformance.explosionsMs : 0,
-      hostAreaEffectsMs: hostMetricsActive ? hostPerformance.areaEffectsMs : 0,
-      hostWorldVisualsMs: hostMetricsActive ? hostPerformance.worldVisualsMs : 0,
-      hostHudMs: hostMetricsActive ? hostPerformance.hudMs : 0,
-      hostEffectFlushMs: hostMetricsActive ? hostPerformance.effectFlushMs : 0,
-      hostSnapshotBuildMs: hostMetricsActive ? hostPerformance.snapshotBuildMs : 0,
-      clientCoordinatorMs: clientMetricsActive ? clientPerformance.totalMs : 0,
-      clientSnapshotMs: clientMetricsActive ? clientPerformance.snapshotMs : 0,
-      clientPlayersMs: clientMetricsActive ? clientPerformance.playersMs : 0,
-      clientProjectilesEffectsMs: clientMetricsActive ? clientPerformance.projectilesEffectsMs : 0,
-      clientWorldStateMs: clientMetricsActive ? clientPerformance.worldStateMs : 0,
-      clientInterpolationMs: clientMetricsActive ? clientPerformance.interpolationMs : 0,
-      clientHudMs: clientMetricsActive ? clientPerformance.hudMs : 0,
-      clientRendererSyncMs,
-      clientPostSyncMs: clientMetricsActive ? clientPerformance.postSyncMs : 0,
-      aimPreviewMs,
-      aimGraphicsMs,
-      scopeMs,
-      scopeRasterMs: scopePerformance?.rasterMs ?? 0,
-      scopeUploadMs: scopePerformance?.uploadMs ?? 0,
-      aimIndicatorsMs,
-      lightingExpireMs: lightingPerformance.expireMs,
-      lightingQueueMs: lightingPerformance.queueMs,
-      lightingCommandBuildMs: lightingPerformance.commandBuildMs,
-      lightingDirectMs: lightingPerformance.directMs,
-      lightingOcclusionMs: lightingPerformance.occlusionMs,
-      lightingShadowGeometryMs: lightingPerformance.shadowGeometryMs,
-      lightingOcclusionRefreshes: lightingPerformance.occlusionRefreshes,
-      lightingOcclusionCacheHits: lightingPerformance.occlusionCacheHits,
-      lightingMaxOcclusionCacheAgeMs: lightingPerformance.maxOcclusionCacheAgeMs,
-      sceneCountScanMs: sceneCounts.scanMs,
-      sceneBreakdownScanMs,
-      transportSampleMs: transportCounts.sampleMs,
-    };
-    const detailCounts = {
-      willRenderObjectCount: sceneCounts.willRenderObjectCount,
-      inCameraBoundsObjectCount: sceneCounts.inCameraBoundsObjectCount,
-      hiddenObjectCount: sceneCounts.hiddenObjectCount,
-      internalFilterCount: sceneCounts.internalFilterCount,
-      externalFilterCount: sceneCounts.externalFilterCount,
-      filteredObjectCount: sceneCounts.filteredObjectCount,
-      cameraFilterCount: sceneCounts.cameraFilterCount,
-      aimGraphicsCommandCount: this.ctx.aimSystem?.getGraphicsCommandCount() ?? 0,
-      scopeRefreshCount: scopePerformance?.refreshed ? 1 : 0,
-      scopeTexturePixels: scopePerformance?.texturePixels ?? 0,
-      directLightCount: lightingPerformance.directLights,
-      occludingLightCount: lightingPerformance.occludingLights,
-      fallbackOccludingLightCount: lightingPerformance.fallbackOccludingLights,
-      radialLightCount: lightingPerformance.radialLights,
-      coneLightCount: lightingPerformance.coneLights,
-      lightShadowQuadCount: lightingPerformance.shadowQuads,
-      lightFalloffQuadCount: lightingPerformance.falloffQuads,
-      lightingOcclusionRefreshCount: lightingPerformance.occlusionRefreshes,
-      lightingOcclusionCacheHitCount: lightingPerformance.occlusionCacheHits,
-      activeExplosionOcclusionCacheCount: lightingPerformance.activeExplosionCaches,
-      explosionOcclusionRefreshCount: lightingPerformance.explosionOcclusionRefreshes,
-      staticOcclusionRefreshCount: lightingPerformance.staticOcclusionRefreshes,
-      dynamicOcclusionRefreshCount: lightingPerformance.dynamicOcclusionRefreshes,
-      dynamicLightOccluderTestCount: lightingPerformance.dynamicOccluderTests,
-      dynamicLightOccluderHitCount: lightingPerformance.dynamicOccluderHits,
-      lightingCommandCount: lightingPerformance.commandCount,
-      lightMapPixelCount: lightingPerformance.lightMapPixels,
-      lightingScratchPixelCount: lightingPerformance.scratchPixels,
-      newNetworkSnapshotCount: clientMetricsActive && clientPerformance.newSnapshot ? 1 : 0,
-      hostNetworkTickCount: hostMetricsActive && hostPerformance.networkTick ? 1 : 0,
-      hostExplosionEventCount: hostMetricsActive ? hostPerformance.explosionEventCount : 0,
-      transportLinkCount: transportCounts.linkCount,
-      transportBackpressureLinkCount: transportCounts.backpressureLinkCount,
-      transportReliableBufferedBytes: transportCounts.reliableBufferedBytes,
-      transportFastBufferedBytes: transportCounts.fastBufferedBytes,
-      transportDroppedFastMessages: transportCounts.droppedFastMessages,
-      transportSentBytesPerSec: transportCounts.sentBytesPerSec,
-      transportReceivedBytesPerSec: transportCounts.receivedBytesPerSec,
-      transportMedianRttMs: transportCounts.medianRttMs,
-      transportMedianAppPingMs: transportCounts.medianAppPingMs,
-    };
-    detailTimings.diagnosticsMs = performance.now() - diagnosticsStartedAt;
-    const updateMs = performance.now() - frameStartMs;
-    const frameLifecycle = this.diagnostics?.profiler?.takeLastFrameLifecycleMetrics(updateMs) ?? {
-      gameStepMs: 0,
-      sceneManagerUpdateMs: 0,
-      sceneSystemsAndPluginsMs: 0,
-      rendererSetupMs: 0,
-      betweenFramesMs: 0,
-    };
-    this.diagnostics?.profiler?.record({
-      role,
-      phase: runtimePhase,
-      quality: this.graphicsQuality.getLevel(),
-      mode: configuredGameMode,
-      mapId: configuredCoopDefenseMapId,
-      ablation: this.diagnostics?.ablation?.getCurrentCategory() ?? 'baseline',
-      rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
-      deltaMs: delta,
-      updateMs,
-      gameStepMs: frameLifecycle.gameStepMs,
-      phaserSceneUpdateMs: frameLifecycle.sceneManagerUpdateMs,
-      phaserSceneSystemsMs: frameLifecycle.sceneSystemsAndPluginsMs,
-      rendererSetupMs: frameLifecycle.rendererSetupMs,
-      betweenFramesMs: frameLifecycle.betweenFramesMs,
-      renderSubmitMs: this.diagnostics?.profiler?.takeLastRenderSubmitMs() ?? 0,
-      roleStepMs: primaryStepMs,
-      networkUpdateMs,
-      networkFlushMs,
-      visualStepMs,
-      visualCameraMs,
-      visualEnemyMs,
-      visualEffectsMs,
-      visualAimMs,
-      visualHudMs,
-      shadowStepMs,
-      lightingStepMs,
-      fireSimulationMs: firePerformance.simulationMs,
-      fireCreationMs: firePerformance.creationMs,
-      fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
-      enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
-      projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
-      playerCount: this.ctx.playerManager.getAllPlayers().length,
-      // Einschliesslich der Kinder der Fels-Ebene: Sonst meldete die Diagnose eine Szene ohne Welt.
-      displayObjectCount: countSceneDisplayObjects(this),
-      visibleObjectCount: sceneCounts.visibleObjectCount,
-      particleEmitterCount: sceneCounts.particleEmitterCount,
-      aliveParticleCount: sceneCounts.aliveParticleCount,
-      activeFilterCount: sceneCounts.activeFilterCount,
-      activeLightCount: lightingPerformance.activeLights,
-      renderedLightCount: lightingPerformance.renderedLights,
-      drawCallCount: this.diagnostics?.profiler?.takeLastDrawCallCount() ?? 0,
-      details: {
-        timings: detailTimings,
-        counts: detailCounts,
-      },
-      context: runtimeContext,
-      lightPresetCounts: lightingPerformance.presetCounts,
-      filterBreakdown: sceneCounts.filterBreakdown,
-      sceneBreakdown,
-    });
-  }
-
-  private seedCompanionBaselines(recordingId: number): void {
-    const flowfieldSource = this.coopMissionRuntime?.flowFieldCoordinator ?? null;
-    const rockSource = this.arenaResult?.rockVisualSystem ?? null;
-    const vfxSource = this.renderers.gpuVfx;
-    const flowfield = flowfieldSource?.getDiagnostics(performance.now()) ?? null;
-    const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
-    const vfxCounters = vfxSource.getCompanionCounters();
-    this.companionBaselineRecordingId = recordingId;
-    const transportLinks = bridge.getTransportDiagnostics();
-    this.lastTransportBytesSent = transportLinks.reduce((sum, link) => sum + link.bytesSent, 0);
-    this.lastTransportBytesReceived = transportLinks.reduce((sum, link) => sum + link.bytesReceived, 0);
-    this.lastTransportDroppedFastMessages = transportLinks.reduce((sum, link) => sum + link.droppedFastMessages, 0);
-    this.lastTransportByteSampleAtMs = performance.now();
-    this.companionFlowfieldSource = flowfieldSource;
-    this.companionRockSource = rockSource;
-    this.companionVfxSource = vfxSource;
-    this.companionFlowfieldCounters = {
-      generationId: flowfield?.generationId ?? 0,
-      requestedUpdates: flowfield?.requestedUpdates ?? 0,
-      startedJobs: flowfield?.startedJobs ?? 0,
-      completedJobs: flowfield?.completedJobs ?? 0,
-      droppedStale: flowfield?.droppedStale ?? 0,
-      coalescedJobs: flowfield?.coalescedJobs ?? 0,
-      skippedUnchangedFields: flowfield?.skippedUnchangedFields ?? 0,
-      workerComputeTotalMs: flowfield?.workerComputeTotalMs ?? 0,
-      roundTripTotalMs: flowfield?.roundTripTotalMs ?? 0,
-    };
-    this.companionRockCounters = {
-      dirtyRocks: rockGpu?.dirtyRocks ?? 0,
-      affectedPages: rockGpu?.affectedPages ?? 0,
-      sparseUploads: rockGpu?.sparseUploads ?? 0,
-      fullUploads: rockGpu?.fullUploads ?? 0,
-      uploadBytes: rockGpu?.estimatedUploadBytes ?? 0,
-    };
-    this.companionVfxCounters = {
-      epoch: vfxCounters.epoch,
-      spawns: vfxCounters.spawns,
-      capacityDrops: vfxCounters.capacityDrops,
-    };
-    this.companionRockInterval = { dirtyRocks: 0, affectedPages: 0, sparseUploads: 0, fullUploads: 0, uploadBytes: 0 };
-    this.companionVfxInterval = { spawns: 0, capacityDrops: 0 };
-    this.companionFlowfieldInterval = {
-      requestedUpdates: 0,
-      completedJobs: 0,
-      droppedStale: 0,
-      coalescedJobs: 0,
-      skippedUnchangedFields: 0,
-    };
-    this.companionStaleFlowfields.clear();
-  }
-
-  private recordCompanionFrame(delta: number): void {
-    const runtimePhase = this.lifecycle.isMatchTerminated()
-      ? 'terminated'
-      : bridge.getGamePhase() === 'ARENA' ? 'arena' : 'lobby';
-    const role = bridge.isHost() ? 'host' : 'client';
-    const rawDelta = this.game.loop.rawDelta;
-    const hostPerformance = bridge.isHost() ? this.hostUpdate.getPerformanceMetrics() : null;
-    const clientPerformance = bridge.isHost() ? null : this.clientUpdate.getPerformanceMetrics();
-    const performanceNow = performance.now();
-    const sampleSubsystems = performanceNow >= this.nextCompanionSubsystemSampleAtMs;
-    if (sampleSubsystems) this.nextCompanionSubsystemSampleAtMs = performanceNow + 250;
-    const transport = sampleSubsystems
-      ? this.sampleTransportPerformanceCounts(performanceNow)
-      : {
-        ...this.transportPerformanceCounts,
-        droppedFastMessages: 0,
-        sentBytes: 0,
-        receivedBytes: 0,
-        sampleMs: 0,
-      };
-    const backpressureActive = transport.backpressureLinkCount > 0;
-    if (backpressureActive !== this.companionBackpressureActive) {
-      this.companionBackpressureActive = backpressureActive;
-      if (backpressureActive) {
-        this.diagnostics?.profiler?.recordSemanticEvent('network:backpressure', {
-          bufferedBytes: transport.reliableBufferedBytes + transport.fastBufferedBytes,
-          linkCount: transport.backpressureLinkCount,
-        });
-      }
-    }
-    const configuredGameMode = this.resolveConfiguredGameMode(
-      bridge.getGamePhase() === 'ARENA' ? 'ARENA' : 'LOBBY',
-    );
-    const mapId = isCoopDefenseMode(configuredGameMode)
-      ? this.resolveConfiguredCoopDefenseMapId(bridge.getGamePhase())
-      : null;
-    const hostCpuMs = hostPerformance?.totalMs ?? 0;
-    const clientCpuMs = clientPerformance?.totalMs ?? 0;
-    const roleCpuMs = role === 'host' ? hostCpuMs : clientCpuMs;
-    let flowfield: FlowFieldDiagnostics | null = null;
-    let flowfieldJobs = 0;
-    let flowfieldComputeMs = 0;
-    let flowfieldRoundTripMs = 0;
-    if (sampleSubsystems) {
-      flowfield = this.coopMissionRuntime?.flowFieldCoordinator?.getDiagnostics(performanceNow) ?? null;
-      const flowfieldSource = this.coopMissionRuntime?.flowFieldCoordinator ?? null;
-      const rockSource = this.arenaResult?.rockVisualSystem ?? null;
-      const vfxSource = this.renderers.gpuVfx;
-      const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
-      const vfxCounters = vfxSource.getCompanionCounters();
-      const recordingId = this.diagnostics?.profiler?.getRecordingId() ?? 0;
-      const previousFlowfieldCounters = this.companionFlowfieldCounters;
-      const previousVfxCounters = this.companionVfxCounters;
-      const sessionBaseline = this.companionBaselineRecordingId !== recordingId;
-      const flowfieldSourceChanged = this.companionFlowfieldSource !== flowfieldSource;
-      const rockSourceChanged = this.companionRockSource !== rockSource;
-      const vfxSourceChanged = this.companionVfxSource !== vfxSource;
-      const flowfieldEpochChanged = flowfield !== null
-        && flowfield.generationId !== previousFlowfieldCounters.generationId;
-      const vfxEpochChanged = previousVfxCounters.epoch !== vfxCounters.epoch;
-      const newBaseline = sessionBaseline || flowfieldSourceChanged || rockSourceChanged || vfxSourceChanged || vfxEpochChanged;
-      if (newBaseline) {
-        this.companionBaselineRecordingId = this.diagnostics?.profiler?.getRecordingId() ?? 0;
-        this.companionFlowfieldSource = flowfieldSource;
-        this.companionRockSource = rockSource;
-        this.companionVfxSource = vfxSource;
-        this.companionFlowfieldCounters = {
-          generationId: flowfield?.generationId ?? 0,
-          requestedUpdates: flowfield?.requestedUpdates ?? 0,
-          startedJobs: flowfield?.startedJobs ?? 0,
-          completedJobs: flowfield?.completedJobs ?? 0,
-          droppedStale: flowfield?.droppedStale ?? 0,
-          coalescedJobs: flowfield?.coalescedJobs ?? 0,
-          skippedUnchangedFields: flowfield?.skippedUnchangedFields ?? 0,
-          workerComputeTotalMs: flowfield?.workerComputeTotalMs ?? 0,
-          roundTripTotalMs: flowfield?.roundTripTotalMs ?? 0,
-        };
-        this.companionRockCounters = {
-          dirtyRocks: rockGpu?.dirtyRocks ?? 0,
-          affectedPages: rockGpu?.affectedPages ?? 0,
-          sparseUploads: rockGpu?.sparseUploads ?? 0,
-          fullUploads: rockGpu?.fullUploads ?? 0,
-          uploadBytes: rockGpu?.estimatedUploadBytes ?? 0,
-        };
-        this.companionVfxCounters = {
-          epoch: vfxCounters.epoch,
-          spawns: vfxCounters.spawns,
-          capacityDrops: vfxCounters.capacityDrops,
-        };
-        this.companionRockInterval = { dirtyRocks: 0, affectedPages: 0, sparseUploads: 0, fullUploads: 0, uploadBytes: 0 };
-        this.companionVfxInterval = sessionBaseline || (!vfxSourceChanged && !vfxEpochChanged)
-          ? { spawns: 0, capacityDrops: 0 }
-          : { spawns: vfxCounters.spawns, capacityDrops: vfxCounters.capacityDrops };
-        this.companionFlowfieldInterval = {
-          requestedUpdates: 0,
-          completedJobs: 0,
-          droppedStale: 0,
-          coalescedJobs: 0,
-          skippedUnchangedFields: 0,
-        };
-        this.companionStaleFlowfields.clear();
-      }
-      if (flowfield) {
-        const sameFlowfieldEpoch = !sessionBaseline && !flowfieldSourceChanged && !flowfieldEpochChanged;
-        const flowfieldBase = sameFlowfieldEpoch
-          ? previousFlowfieldCounters
-          : {
-            requestedUpdates: 0,
-            startedJobs: 0,
-            completedJobs: 0,
-            droppedStale: 0,
-            coalescedJobs: 0,
-            skippedUnchangedFields: 0,
-            workerComputeTotalMs: 0,
-            roundTripTotalMs: 0,
-          };
-        flowfieldJobs = Math.max(0, flowfield.startedJobs - flowfieldBase.startedJobs);
-        flowfieldComputeMs = Math.max(0, flowfield.workerComputeTotalMs - flowfieldBase.workerComputeTotalMs);
-        flowfieldRoundTripMs = Math.max(0, flowfield.roundTripTotalMs - flowfieldBase.roundTripTotalMs);
-        const flowfieldRequestedUpdates = Math.max(0, flowfield.requestedUpdates - flowfieldBase.requestedUpdates);
-        const flowfieldCompletedJobs = Math.max(0, flowfield.completedJobs - flowfieldBase.completedJobs);
-        const flowfieldDroppedStale = Math.max(0, flowfield.droppedStale - flowfieldBase.droppedStale);
-        const flowfieldCoalescedJobs = Math.max(0, flowfield.coalescedJobs - flowfieldBase.coalescedJobs);
-        const flowfieldSkippedUnchangedFields = Math.max(0, flowfield.skippedUnchangedFields - flowfieldBase.skippedUnchangedFields);
-        // Keep these deltas in locals for the record below without introducing a scan or
-        // another data structure on the per-frame path.
-        this.companionFlowfieldInterval = {
-          requestedUpdates: flowfieldRequestedUpdates,
-          completedJobs: flowfieldCompletedJobs,
-          droppedStale: flowfieldDroppedStale,
-          coalescedJobs: flowfieldCoalescedJobs,
-          skippedUnchangedFields: flowfieldSkippedUnchangedFields,
-        };
-        this.companionFlowfieldCounters.generationId = flowfield.generationId;
-        this.companionFlowfieldCounters.requestedUpdates = flowfield.requestedUpdates;
-        this.companionFlowfieldCounters.startedJobs = flowfield.startedJobs;
-        this.companionFlowfieldCounters.completedJobs = flowfield.completedJobs;
-        this.companionFlowfieldCounters.droppedStale = flowfield.droppedStale;
-        this.companionFlowfieldCounters.coalescedJobs = flowfield.coalescedJobs;
-        this.companionFlowfieldCounters.skippedUnchangedFields = flowfield.skippedUnchangedFields;
-        this.companionFlowfieldCounters.workerComputeTotalMs = flowfield.workerComputeTotalMs;
-        this.companionFlowfieldCounters.roundTripTotalMs = flowfield.roundTripTotalMs;
-        this.companionFlowfieldGauge.queueDepth = flowfield.backlogTicks;
-        this.companionFlowfieldGauge.ageMs = Math.max(0, ...Object.values(flowfield.fields)
-          .map((field) => field.recomputePendingAgeMs ?? 0));
-        for (const [fieldId, field] of Object.entries(flowfield.fields)) {
-          if (field.stale && !this.companionStaleFlowfields.has(fieldId)) {
-            this.diagnostics?.profiler?.recordSemanticEvent('flowfield:stale', {
-              fieldId,
-              goalMode: field.goalMode,
-              activeAgeMs: field.activeAgeMs,
-              staleAfterMs: field.staleAfterMs,
-            });
-          }
-          if (field.stale) this.companionStaleFlowfields.add(fieldId);
-          else this.companionStaleFlowfields.delete(fieldId);
-        }
-      }
-      if (!newBaseline) this.updateCompanionRockCounters(rockGpu);
-      else if (!sessionBaseline && rockSourceChanged) {
-        this.companionRockInterval = {
-          dirtyRocks: rockGpu?.dirtyRocks ?? 0,
-          affectedPages: rockGpu?.affectedPages ?? 0,
-          sparseUploads: rockGpu?.sparseUploads ?? 0,
-          fullUploads: rockGpu?.fullUploads ?? 0,
-          uploadBytes: rockGpu?.estimatedUploadBytes ?? 0,
-        };
-      }
-      if (!newBaseline) {
-        this.companionVfxInterval = {
-          spawns: Math.max(0, vfxCounters.spawns - previousVfxCounters.spawns),
-          capacityDrops: Math.max(0, vfxCounters.capacityDrops - previousVfxCounters.capacityDrops),
-        };
-      }
-      this.companionVfxCounters = {
-        epoch: vfxCounters.epoch,
-        spawns: vfxCounters.spawns,
-        capacityDrops: vfxCounters.capacityDrops,
-      };
-      const vfxStats = vfxSource.getStats();
-      this.companionActiveVfx = vfxStats
-        ? Object.values(vfxStats).reduce((sum, stats) => sum + stats.liveCount, 0)
-        : 0;
-      this.companionVisiblePages = rockGpu?.visiblePages ?? 0;
-    }
-    this.diagnostics?.profiler?.record({
-      role,
-      phase: runtimePhase,
-      quality: this.graphicsQuality.getLevel(),
-      mode: configuredGameMode,
-      mapId,
-      ablation: this.diagnostics?.ablation?.getCurrentCategory() ?? 'baseline',
-      rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
-      deltaMs: delta,
-      updateMs: roleCpuMs,
-      gameStepMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
-      phaserSceneUpdateMs: 0,
-      phaserSceneSystemsMs: 0,
-      rendererSetupMs: 0,
-      betweenFramesMs: 0,
-      renderSubmitMs: 0,
-      roleStepMs: roleCpuMs,
-      networkUpdateMs: 0,
-      networkFlushMs: 0,
-      visualStepMs: 0,
-      visualCameraMs: 0,
-      visualEnemyMs: 0,
-      visualEffectsMs: 0,
-      visualAimMs: 0,
-      visualHudMs: 0,
-      shadowStepMs: 0,
-      lightingStepMs: 0,
-      fireSimulationMs: 0,
-      fireCreationMs: 0,
-      fireVisualMs: 0,
-      enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
-      projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
-      playerCount: this.ctx.playerManager.getAllPlayers().length,
-      displayObjectCount: 0,
-      visibleObjectCount: 0,
-      particleEmitterCount: 0,
-      aliveParticleCount: 0,
-      activeFilterCount: 0,
-      activeLightCount: 0,
-      renderedLightCount: 0,
-      drawCallCount: 0,
-      details: {
-        timings: {
-          hostCpuMs,
-          clientCpuMs,
-          snapshotBuildMs: hostPerformance?.snapshotBuildMs ?? 0,
-          flowfieldComputeMs,
-          flowfieldRoundTripMs,
-          flowfieldAgeMs: this.companionFlowfieldGauge.ageMs,
-          flowfieldPendingAgeMs: this.companionFlowfieldGauge.ageMs,
-          flowfieldQueueDepth: this.companionFlowfieldGauge.queueDepth,
-          flowfieldBacklogTicks: this.companionFlowfieldGauge.queueDepth,
-        },
-        counts: {
-          newNetworkSnapshotCount: clientPerformance?.newSnapshot ? 1 : 0,
-          hostNetworkTickCount: hostPerformance?.networkTick ? 1 : 0,
-          transportReliableBufferedBytes: transport.reliableBufferedBytes,
-          transportFastBufferedBytes: transport.fastBufferedBytes,
-          transportDroppedFastMessages: transport.droppedFastMessages,
-          transportSentBytes: transport.sentBytes,
-          transportReceivedBytes: transport.receivedBytes,
-          transportSentBytesPerSec: transport.sentBytesPerSec,
-          transportReceivedBytesPerSec: transport.receivedBytesPerSec,
-          transportMedianRttMs: transport.medianRttMs,
-          transportMedianAppPingMs: transport.medianAppPingMs,
-          flowfieldJobs,
-          flowfieldRequestedUpdates: this.companionFlowfieldInterval.requestedUpdates,
-          flowfieldCompletedJobs: this.companionFlowfieldInterval.completedJobs,
-          flowfieldDroppedStale: this.companionFlowfieldInterval.droppedStale,
-          flowfieldCoalescedJobs: this.companionFlowfieldInterval.coalescedJobs,
-          flowfieldSkippedUnchangedFields: this.companionFlowfieldInterval.skippedUnchangedFields,
-          dirtyRocks: this.companionRockInterval.dirtyRocks,
-          affectedPages: this.companionRockInterval.affectedPages,
-          sparseUploads: this.companionRockInterval.sparseUploads,
-          fullUploads: this.companionRockInterval.fullUploads,
-          uploadBytes: this.companionRockInterval.uploadBytes,
-          vfxSpawns: this.companionVfxInterval.spawns,
-          capacityDrops: this.companionVfxInterval.capacityDrops,
-          visiblePages: this.companionVisiblePages,
-          activeVfx: this.companionActiveVfx,
-        },
-      },
-      context: {
+    if (companionDiagnosticsActive || diagnosticsFrame) {
+      const runtimePhase = terminated ? 'terminated' : (inGame ? 'arena' : 'lobby');
+      const diagnosticMode = diagnosticsFrame
+        ? configuredGameMode
+        : this.resolveConfiguredGameMode(phase === 'ARENA' ? 'ARENA' : 'LOBBY');
+      const diagnosticMapId = diagnosticsFrame
+        ? configuredCoopDefenseMapId
+        : isCoopDefenseMode(diagnosticMode)
+          ? this.resolveConfiguredCoopDefenseMapId(phase)
+          : null;
+      const diagnosticsInput: ArenaDiagnosticsFrameInput = {
+        phase: runtimePhase,
+        mode: diagnosticMode,
+        mapId: diagnosticMapId,
+        rawDeltaMs: this.game.loop.rawDelta,
+        deltaMs: delta,
         localAlive: this.localPlayerState.alive,
-        aimVisible: false,
-        scopeActive: false,
-        utilityPlacementActive: false,
-        ultimatePlacementActive: false,
-        optionsOpen: this.ctx.leftPanel.isOptionsOverlayOpen(),
-        pageVisible: typeof document === 'undefined' || document.visibilityState === 'visible',
-        documentFocused: typeof document === 'undefined' || document.hasFocus(),
-        weapon1Id: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'weapon1') ?? null,
-        weapon2Id: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'weapon2') ?? null,
-        utilityId: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'utility') ?? null,
-        ultimateId: bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), 'ultimate') ?? null,
-      },
-      diagnosticContext: {
-        rockRenderer: this.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
-        rockGpuPageSize: this.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
-      },
-    });
-    // Delta-derived subsystem values belong to this sample only. Gauges above remain live on
-    // every frame; repeating an interval delta over the three intervening frames would inflate
-    // the 250-ms aggregate.
-    this.companionRockInterval = { dirtyRocks: 0, affectedPages: 0, sparseUploads: 0, fullUploads: 0, uploadBytes: 0 };
-    this.companionVfxInterval = { spawns: 0, capacityDrops: 0 };
-    this.companionFlowfieldInterval = {
-      requestedUpdates: 0,
-      completedJobs: 0,
-      droppedStale: 0,
-      coalescedJobs: 0,
-      skippedUnchangedFields: 0,
-    };
-  }
-
-  private updateCompanionRockCounters(current: PersistentGpuWorldDiagnostics | null): void {
-    if (!current) {
-      this.companionVisiblePages = 0;
-      this.companionRockInterval = { dirtyRocks: 0, affectedPages: 0, sparseUploads: 0, fullUploads: 0, uploadBytes: 0 };
-      return;
+        aimVisible: showAim,
+        scopeActive: scopeProgress > 0.005,
+        utilityPlacementActive: utilityPlacement !== undefined,
+        ultimatePlacementActive: ultimatePlacement !== undefined,
+        optionsOpen,
+        enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
+        projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
+        playerCount: this.ctx.playerManager.getAllPlayers().length,
+      };
+      this.diagnostics?.endFrame(diagnosticsInput);
     }
-    const previous = this.companionRockCounters;
-    this.companionRockInterval = {
-      dirtyRocks: Math.max(0, current.dirtyRocks - previous.dirtyRocks),
-      affectedPages: Math.max(0, current.affectedPages - previous.affectedPages),
-      sparseUploads: Math.max(0, current.sparseUploads - previous.sparseUploads),
-      fullUploads: Math.max(0, current.fullUploads - previous.fullUploads),
-      uploadBytes: Math.max(0, current.estimatedUploadBytes - previous.uploadBytes),
-    };
-    this.companionRockCounters = {
-      dirtyRocks: current.dirtyRocks,
-      affectedPages: current.affectedPages,
-      sparseUploads: current.sparseUploads,
-      fullUploads: current.fullUploads,
-      uploadBytes: current.estimatedUploadBytes,
-    };
-    this.companionVisiblePages = current.visiblePages;
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -4820,222 +4181,6 @@ export class ArenaScene extends Phaser.Scene {
 
     this.trainLightPlan = { headlights, windows };
     return this.trainLightPlan;
-  }
-
-  private describeSceneObjectBreakdown(): string {
-    const counts = new Map<string, number>();
-    let visibleCount = 0;
-    let activeCount = 0;
-
-    forEachSceneDisplayObject(this, (child) => {
-      const gameObject = child as Phaser.GameObjects.GameObject & {
-        visible?: boolean;
-        active?: boolean;
-        type?: string;
-        texture?: { key?: string };
-      };
-
-      if (gameObject.visible !== false) visibleCount += 1;
-      if (gameObject.active !== false) activeCount += 1;
-
-      const baseType = gameObject.type || gameObject.constructor.name || 'Unknown';
-      const textureKey = typeof gameObject.texture?.key === 'string' && gameObject.texture.key.length > 0
-        ? gameObject.texture.key
-        : null;
-      const label = textureKey ? `${baseType}:${textureKey}` : baseType;
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    });
-
-    const topEntries = [...counts.entries()]
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 8)
-      .map(([label, count]) => `${label}:${count}`)
-      .join(', ');
-
-    return `visible=${visibleCount} active=${activeCount} top=${topEntries}`;
-  }
-
-  /** Explicit one-shot inspection; never called by the normal Companion sampling path. */
-  private captureSceneInspection(): void {
-    const typeCounts: Record<string, number> = {};
-    let directLayerChildren = 0;
-    let visible = 0;
-    let active = 0;
-    for (const child of this.children.list) {
-      const displayChild = child as Phaser.GameObjects.GameObject & { visible?: boolean; active?: boolean };
-      typeCounts[child.type] = (typeCounts[child.type] ?? 0) + 1;
-      if (displayChild.visible) visible += 1;
-      if (displayChild.active) active += 1;
-      const nested = child as Phaser.GameObjects.GameObject & {
-        type?: string;
-        list?: Phaser.GameObjects.GameObject[];
-      };
-      if (nested.type !== 'Layer' || !Array.isArray(nested.list)) continue;
-      directLayerChildren += nested.list.length;
-      for (const grandChild of nested.list) {
-        const displayGrandChild = grandChild as Phaser.GameObjects.GameObject & { visible?: boolean; active?: boolean };
-        typeCounts[grandChild.type] = (typeCounts[grandChild.type] ?? 0) + 1;
-        if (displayGrandChild.visible) visible += 1;
-        if (displayGrandChild.active) active += 1;
-      }
-    }
-    this.diagnostics?.profiler?.setSceneInspection({
-      capturedAtIso: new Date().toISOString(),
-      topLevelChildren: this.children.list.length,
-      directLayerChildren,
-      totalFlatChildren: this.children.list.length + directLayerChildren,
-      visible,
-      active,
-      typeCounts,
-      boundsIncluded: false,
-    });
-  }
-
-  private sampleScenePerformanceCounts(
-    nowMs: number,
-    enabled: boolean,
-  ): typeof this.scenePerformanceCounts {
-    if (!enabled) return { ...this.scenePerformanceCounts, scanMs: 0 };
-    if (nowMs - this.lastScenePerformanceCountAtMs < 250) {
-      return { ...this.scenePerformanceCounts, scanMs: 0 };
-    }
-
-    const scanStartedAt = performance.now();
-    let visibleObjectCount = 0;
-    let willRenderObjectCount = 0;
-    let inCameraBoundsObjectCount = 0;
-    let hiddenObjectCount = 0;
-    let particleEmitterCount = 0;
-    let aliveParticleCount = 0;
-    let activeFilterCount = 0;
-    let internalFilterCount = 0;
-    let externalFilterCount = 0;
-    let filteredObjectCount = 0;
-    const filterTypes = new Map<string, number>();
-    const camera = this.cameras.main;
-    forEachSceneDisplayObject(this, (child) => {
-      const gameObject = child as Phaser.GameObjects.GameObject & {
-        visible?: boolean;
-        type?: string;
-        willRender?: (camera: Phaser.Cameras.Scene2D.Camera) => boolean;
-        getBounds?: () => Phaser.Geom.Rectangle;
-        getAliveParticleCount?: () => number;
-        filters?: {
-          internal?: { getActive?: () => unknown[] };
-          external?: { getActive?: () => unknown[] };
-        };
-      };
-      if (gameObject.visible !== false) visibleObjectCount += 1;
-      else hiddenObjectCount += 1;
-      if (gameObject.willRender?.(camera) ?? gameObject.visible !== false) willRenderObjectCount += 1;
-      if (gameObject.getBounds) {
-        try {
-          if (Phaser.Geom.Intersects.RectangleToRectangle(gameObject.getBounds(), camera.worldView)) {
-            inCameraBoundsObjectCount += 1;
-          }
-        } catch {
-          // Einzelne Spezialobjekte koennen waehrend ihres Abbaus keine Bounds mehr liefern.
-        }
-      }
-      if (gameObject.type === 'ParticleEmitter' || gameObject.getAliveParticleCount) {
-        particleEmitterCount += 1;
-        aliveParticleCount += gameObject.getAliveParticleCount?.() ?? 0;
-      }
-      const internal = gameObject.filters?.internal?.getActive?.() ?? [];
-      const external = gameObject.filters?.external?.getActive?.() ?? [];
-      internalFilterCount += internal.length;
-      externalFilterCount += external.length;
-      if (internal.length + external.length > 0) filteredObjectCount += 1;
-      for (const filter of [...internal, ...external]) {
-        const typedFilter = filter as { type?: string; constructor?: { name?: string } };
-        const label = typedFilter.type ?? typedFilter.constructor?.name ?? 'UnknownFilter';
-        filterTypes.set(label, (filterTypes.get(label) ?? 0) + 1);
-      }
-    });
-    const cameraFilters = (camera as typeof camera & {
-      filters?: {
-        internal?: { getActive?: () => unknown[] };
-        external?: { getActive?: () => unknown[] };
-      };
-    }).filters;
-    const cameraFilterCount = (cameraFilters?.internal?.getActive?.().length ?? 0)
-      + (cameraFilters?.external?.getActive?.().length ?? 0);
-    activeFilterCount = internalFilterCount + externalFilterCount + cameraFilterCount;
-    const filterBreakdown = filterTypes.size > 0
-      ? [...filterTypes.entries()]
-        .sort((left, right) => right[1] - left[1])
-        .map(([name, count]) => `${name}:${count}`)
-        .join(', ')
-      : null;
-
-    this.scenePerformanceCounts = {
-      visibleObjectCount,
-      willRenderObjectCount,
-      inCameraBoundsObjectCount,
-      hiddenObjectCount,
-      particleEmitterCount,
-      aliveParticleCount,
-      activeFilterCount,
-      internalFilterCount,
-      externalFilterCount,
-      filteredObjectCount,
-      cameraFilterCount,
-      scanMs: performance.now() - scanStartedAt,
-      filterBreakdown,
-    };
-    this.lastScenePerformanceCountAtMs = nowMs;
-    return this.scenePerformanceCounts;
-  }
-
-  private sampleTransportPerformanceCounts(nowMs: number): TransportPerformanceCounts {
-    if (nowMs - this.lastTransportPerformanceSampleAtMs < 500) {
-      return {
-        ...this.transportPerformanceCounts,
-        droppedFastMessages: 0,
-        sentBytes: 0,
-        receivedBytes: 0,
-        sampleMs: 0,
-      };
-    }
-
-    const startedAt = performance.now();
-    const links = bridge.getTransportDiagnostics();
-    const bytesSent = links.reduce((sum, link) => sum + link.bytesSent, 0);
-    const bytesReceived = links.reduce((sum, link) => sum + link.bytesReceived, 0);
-    const droppedFastMessages = links.reduce((sum, link) => sum + link.droppedFastMessages, 0);
-    const elapsedMs = nowMs - this.lastTransportByteSampleAtMs;
-    const canComputeRate = Number.isFinite(elapsedMs) && elapsedMs > 0;
-    const measuredRtts = links
-      .map(link => link.medianRttMs)
-      .filter((value): value is number => value !== null);
-    const measuredAppPings = links
-      .map(link => link.medianAppPingMs)
-      .filter((value): value is number => value !== null);
-
-    this.lastTransportPerformanceSampleAtMs = nowMs;
-    this.lastTransportByteSampleAtMs = nowMs;
-    this.transportPerformanceCounts = {
-      linkCount: links.length,
-      backpressureLinkCount: links.filter(link => link.backpressure).length,
-      reliableBufferedBytes: links.reduce((sum, link) => sum + link.reliableBufferedBytes, 0),
-      fastBufferedBytes: links.reduce((sum, link) => sum + link.fastBufferedBytes, 0),
-      droppedFastMessages: Math.max(0, droppedFastMessages - this.lastTransportDroppedFastMessages),
-      sentBytes: canComputeRate ? Math.max(0, bytesSent - this.lastTransportBytesSent) : 0,
-      receivedBytes: canComputeRate ? Math.max(0, bytesReceived - this.lastTransportBytesReceived) : 0,
-      sentBytesPerSec: canComputeRate
-        ? Math.max(0, bytesSent - this.lastTransportBytesSent) * 1000 / elapsedMs
-        : 0,
-      receivedBytesPerSec: canComputeRate
-        ? Math.max(0, bytesReceived - this.lastTransportBytesReceived) * 1000 / elapsedMs
-        : 0,
-      medianRttMs: measuredRtts.length > 0 ? Math.max(...measuredRtts) : 0,
-      medianAppPingMs: measuredAppPings.length > 0 ? Math.max(...measuredAppPings) : 0,
-      sampleMs: performance.now() - startedAt,
-    };
-    this.lastTransportBytesSent = bytesSent;
-    this.lastTransportBytesReceived = bytesReceived;
-    this.lastTransportDroppedFastMessages = droppedFastMessages;
-    return this.transportPerformanceCounts;
   }
 
   private initializeRoomQuality(): void {

@@ -4,8 +4,10 @@ vi.mock('phaser', () => ({}));
 
 import {
   ArenaDiagnosticsController,
+  ArenaDiagnosticsFrame,
   type ArenaDiagnosticsInput,
 } from '../src/scenes/arena/ArenaDiagnosticsController';
+import { ArenaRuntimeProfiler } from '../src/scenes/arena/ArenaRuntimeProfiler';
 import type { ChunkRenderingDiagnosticsState } from '../src/ui/PerformanceDiagnosticsOverlay';
 
 function fakeChunkDiagnosticsState(): ChunkRenderingDiagnosticsState {
@@ -37,8 +39,6 @@ function makeInput(): { input: ArenaDiagnosticsInput; payloadSink: { setSink: Re
     game,
     graphicsQuality,
     payloadDiagnostics: payloadSink,
-    onRecordingStart: vi.fn(),
-    captureSceneInspection: vi.fn(),
     getShadowSystem: () => null,
     getLightingSystem: () => null,
     getPostFxController: () => null,
@@ -54,12 +54,30 @@ function makeInput(): { input: ArenaDiagnosticsInput; payloadSink: { setSink: Re
       setRockGpuPageSize: vi.fn(),
     },
     getGpuVfxStats: () => null,
+    getFlowFieldCoordinator: () => null,
     getRockVisualSystem: () => null,
+    getHostPerformanceMetrics: vi.fn() as unknown as ArenaDiagnosticsInput['getHostPerformanceMetrics'],
+    getClientPerformanceMetrics: vi.fn() as unknown as ArenaDiagnosticsInput['getClientPerformanceMetrics'],
+    getFrameMetrics: vi.fn() as unknown as ArenaDiagnosticsInput['getFrameMetrics'],
   };
   return { input, payloadSink };
 }
 
 describe('ArenaDiagnosticsController', () => {
+  it('sammelt benannte Frame-Abschnitte und behandelt fehlende Messpunkte neutral', () => {
+    const frame = new ArenaDiagnosticsFrame();
+
+    frame.mark('networkStart');
+    frame.begin('primaryStep');
+    frame.end('primaryStep');
+    frame.mark('networkEnd');
+
+    expect(frame.duration('primaryStep')).toBeGreaterThanOrEqual(0);
+    expect(frame.between('networkStart', 'networkEnd')).toBeGreaterThanOrEqual(0);
+    expect(frame.duration('networkUpdate')).toBe(0);
+    expect(frame.sinceStart('updateEnd')).toBe(0);
+  });
+
   it('ist nach destroy idempotent', () => {
     const { input } = makeInput();
     const controller = new ArenaDiagnosticsController(input);
@@ -73,13 +91,11 @@ describe('ArenaDiagnosticsController', () => {
   it('bestellt beim destroy alle subscribeDiagnostics-Listener ab', () => {
     const { input } = makeInput();
     const controller = new ArenaDiagnosticsController(input);
-    const profiler = controller.profiler;
-    expect(profiler).not.toBeNull();
 
     const unsubscribeSpies: Array<ReturnType<typeof vi.fn>> = [];
-    const originalSubscribe = profiler!.subscribeDiagnostics.bind(profiler);
-    vi.spyOn(profiler!, 'subscribeDiagnostics').mockImplementation((listener) => {
-      const realUnsubscribe = originalSubscribe(listener);
+    const originalSubscribe = ArenaRuntimeProfiler.prototype.subscribeDiagnostics;
+    vi.spyOn(ArenaRuntimeProfiler.prototype, 'subscribeDiagnostics').mockImplementation(function (this: ArenaRuntimeProfiler, listener) {
+      const realUnsubscribe = originalSubscribe.call(this, listener);
       const unsubscribeSpy = vi.fn(realUnsubscribe);
       unsubscribeSpies.push(unsubscribeSpy);
       return unsubscribeSpy;
@@ -137,10 +153,8 @@ describe('ArenaDiagnosticsController', () => {
 
   it('reicht getSemanticEventSink Events an den Profiler weiter, solange der Controller lebt', () => {
     const { input } = makeInput();
+    const recordSpy = vi.spyOn(ArenaRuntimeProfiler.prototype, 'recordSemanticEvent');
     const controller = new ArenaDiagnosticsController(input);
-    const profiler = controller.profiler;
-    expect(profiler).not.toBeNull();
-    const recordSpy = vi.spyOn(profiler!, 'recordSemanticEvent');
 
     const sink = controller.getSemanticEventSink();
     sink('test:event', { foo: 1 });

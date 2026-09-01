@@ -32,18 +32,18 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `2B – Diagnostics-Owner: Frame-Messung und Sampler`  
-**Gesamtstatus:** `🟨 Phase 2A abgeschlossen – Diagnose-Owner steht, Frame-Messung noch in der Scene`  
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 2A  
-**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (336 Testdateien, 2842 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)  
-**Manueller Gate:** `offen – Checkpoint A erst nach Phase 2B`
+**Aktive Phase:** `Checkpoint A – Diagnostics (manueller Gate offen; danach Phase 3A)`
+**Gesamtstatus:** `🟨 Phase 2B abgeschlossen – Diagnostics-Owner besitzt Frame-Messung und Sampler; Checkpoint A wartet auf manuelle Sichtprüfung`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 2B
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (336 Testdateien, 2843 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
+**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A-Verträge grün`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
 | 1 Baseline / Contracts | ✅ abgeschlossen | 21 Source-Assertions in 13 Dateien inventarisiert; 4 Vertragslücken geschlossen. |
 | 2A Diagnostics Lifecycle/UI | ✅ abgeschlossen | `ArenaDiagnosticsController` besitzt Profiler, Ablation, beide Debug-Overlays und die Attribution; `ArenaScene` −115 Zeilen. |
-| 2B Diagnostics Frame/Sampler | ⬜ offen | Counter, Transport-/Companion-Sampling und Frame-Timing aus Scene. |
-| – Checkpoint A | ⬜ offen | Diagnostics vollständig regressionsfrei. |
+| 2B Diagnostics Frame/Sampler | ✅ abgeschlossen | `ArenaDiagnosticsController` besitzt Scene-/Transport-/Companion-Sampling, Counter und Frame-Messung; `ArenaScene` liefert nur benannte Messpunkte plus Read-only-Snapshot. |
+| – Checkpoint A | 🟨 aktiv | Automatisierte Prüfungen grün; manuelle Sichtprüfung von Diagnose an/aus, Overlay, Ablation und Sampling noch offen. |
 | 3A Input Setup/Hotkeys | ⬜ offen | Keys, Listener, Setup/Teardown an `ArenaInputBindings`. |
 | 3B Input Actions/Feedback | ⬜ offen | Provider, Placement, Requests und lokales Feedback aus Scene. |
 | 4A Meta Progress/Upgrades/Loadout | ⬜ offen | persönlicher Meta-Owner. |
@@ -108,8 +108,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| TD-1 | 2A | `ArenaDiagnosticsController.profiler` und `.ablation` sind bewusst durchgereichte Lese-Accessoren. Die in der Scene verbliebene 2B-Frame-Messung (`record(...)`, `takeLast*`, `shouldCaptureSceneBreakdown`, `setSceneInspection`, `getRecordingId`, `recordSemanticEvent` in `recordCompanionFrame`, `getCurrentCategory`) greift darüber zu, statt eigene Felder zu halten. Bewusst **keine** Passthrough-Fassade je Profiler-Methode gebaut. | `ArenaDiagnosticsController` (alleiniger Owner; die Scene hält keine Diagnose-Instanz mehr) | 2B |
-| TD-2 | 2A | `captureSceneInspection` und `seedCompanionBaselines` bleiben Scene-Methoden und werden als Callback-Ports (`captureSceneInspection`, `onRecordingStart`) in den Controller injiziert. | Scene (2B-Sampler) | 2B |
+| – | – | Keine offenen Phase-2B-Transitional-Debts. | `ArenaDiagnosticsController` | – |
 
 ---
 
@@ -154,8 +153,9 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | Check / Quelle | Ergebnis |
 |---|---|
-| `npm run check` (nach Phase 2A) | grün – 336 Testdateien, 2842 Tests, 15 skipped; `tsc` und `vite build` erfolgreich |
-| `ArenaScene.ts` Umfang | 5685 → 5570 Zeilen (−115); neu `src/scenes/arena/ArenaDiagnosticsController.ts` (331) und `tests/ArenaDiagnosticsController.test.ts` (155) |
+| `npm run check` (nach Phase 2B) | grün – 336 Testdateien, 2843 Tests, 15 skipped; `tsc` und `vite build` erfolgreich |
+| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855). `ArenaDiagnosticsController.ts`: 331 → 1326 Zeilen; `ArenaDiagnosticsController.test.ts`: 155 → 169 Zeilen. |
+| Aus der Scene entfernt (2B) | Scene-Display-Counts, Transport-Sampling, Byte-/RTT-/Backpressure-Intervalle, Flowfield-/Rock-GPU-/VFX-Companion-Counter, Scratch-/Baseline-Zustände und die Frame-/Abschnittsmessung; `profiler`-/`ablation`-Accessoren sowie `captureSceneInspection`-/`onRecordingStart`-Ports entfallen. |
 | Aus der Scene entfernt (2A) | Felder `runtimeProfiler`, `visualAttribution`, `performanceAblation`, `performanceDiagnosticsOverlay`, `netDebugOverlay` → ein Feld `diagnostics`; Imports `ArenaRuntimeProfiler`, `PerformanceAblationController`, `PerformanceDiagnosticsOverlay`, `NetDebugOverlay`, `getArenaVisualAttribution`, `getWebGLRendererType`; Methode `describePerformanceEnvironment()` |
 | Toter Teardown-Pfad entfernt | Der gemischte SHUTDOWN-Handler rief `runtimeProfiler?.setGpuVfxSource(null)` erst, **nachdem** ein früher registrierter Handler `runtimeProfiler` bereits genullt hatte – schon vor der Extraktion ein No-op. Nur der wirksame Teil (`gpuVfx.setDiagnosticEventSink(null)`) blieb erhalten. |
 | Source-Test-Inventar `rg` über `tests/` | 13 Dateien / 21 Assertion-Stellen lesen `src/scenes/ArenaScene.ts` als Text; keine weiteren Pfadschreibweisen oder Verzeichnis-Scans. |
@@ -169,14 +169,11 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Phase 2B ausführen (Diagnostics-Owner: Frame-Messung und Sampler):**
+**Checkpoint A manuell abschließen, danach Phase 3A – `ArenaInputBindings`: Setup, Hotkeys und Teardown.**
 
-- die in `ArenaScene` verbliebenen Sampler und Counter in den Diagnose-Owner verschieben: Scene-Display-Object-Counts (`sampleScenePerformanceCounts`, `describeSceneObjectBreakdown`, `captureSceneInspection`), Transport-Sampling (`sampleTransportPerformanceCounts`), Byte-/RTT-/Backpressure-Intervalle, Flowfield-/Rock-GPU-/VFX-Companion-Counter (`seedCompanionBaselines`, `recordCompanionFrame`, `updateCompanionRockCounters`) samt der zugehörigen Scratch-/Baseline-Felder;
-- die Frame-/Abschnittsmessung aus `update()` auf kleine Diagnoseaufrufe (`beginFrame`, benannte Messpunkte, `endFrame`) reduzieren – **ohne** die Frame-Reihenfolge zu ändern (R-4 ist seit Phase 1 als Reihenfolge festgeschrieben);
-- damit TD-1 und TD-2 auflösen: die Accessoren `profiler`/`ablation` und die Callback-Ports `captureSceneInspection`/`onRecordingStart` entfallen;
-- keine unnötigen Allokationen im Pfad „Diagnose aus";
-- Test-Migrationskarte beachten: für Phase 2B steht dort kein Eintrag, es zieht also keine bestehende Assertion um;
-- danach Checkpoint A prüfen (Diagnose an/aus, Overlay, Ablation, Semantic Events, Sampling, kein Gameplay hängt am Diagnosezustand, Shutdown löst alle Subscriptions) und Status fortschreiben.
+- Die automatisierten Checkpoint-A-Prüfungen sind mit `npm run check` grün.
+- Offen bleibt die manuelle Sichtprüfung von Diagnose an/aus, Performance-/Netzwerk-Overlay, Ablation, Semantic Events, Sampling und Shutdown-Verhalten.
+- Phase 3A erst nach diesem Gate beginnen; dabei die Ownership-/Teardown-Verträge aus Architektur und Plan erneut prüfen.
 
 ---
 
