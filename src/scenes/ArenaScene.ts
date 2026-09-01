@@ -54,7 +54,6 @@ import { WeaponBalanceLabOverlay, type WeaponBalanceLabStartResult } from '../ui
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
 import { DEFAULT_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
 import type { WorldGradeInputs } from '../effects/postfx/worldGrade';
-import { NetDebugOverlay }          from '../ui/NetDebugOverlay';
 import { CoopDefenseUpgradesOverlay } from '../ui/CoopDefenseUpgradesOverlay';
 import { MatchResultsOverlay } from '../ui/MatchResultsOverlay';
 import { RoomStatisticsOverlay } from '../ui/RoomStatisticsOverlay';
@@ -158,7 +157,6 @@ import {
 } from '../utils/coopDefenseItems';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { destroySharedGlowSystem, installSharedGlowSystem } from '../effects/SharedGlowSystem';
-import { getArenaVisualAttribution } from './arena/ArenaVisualAttribution';
 import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
 import { installTextResolution } from '../graphics/TextResolution';
 import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
@@ -208,10 +206,7 @@ import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
 import { PersistentBasePreviewRenderer } from './arena/PersistentBasePreviewRenderer';
 import { EnemyFlowFieldDebugOverlay } from './arena/EnemyFlowFieldDebugOverlay';
-import { ArenaRuntimeProfiler } from './arena/ArenaRuntimeProfiler';
-import { PerformanceAblationController } from './arena/PerformanceAblation';
-import { PerformanceDiagnosticsOverlay } from '../ui/PerformanceDiagnosticsOverlay';
-import { getWebGLRendererType } from '../utils/webglContext';
+import { ArenaDiagnosticsController, type ArenaDiagnosticsRockVisualSystemPort } from './arena/ArenaDiagnosticsController';
 import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
 import type { FlowFieldDiagnostics } from '../systems/flowfield/FlowFieldCoordinator';
@@ -407,8 +402,8 @@ export class ArenaScene extends Phaser.Scene {
   private timeOfDayHotkeyHandler: ((event: KeyboardEvent) => void) | null = null;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
   private forceStaticTimeOfDayBake = false;
-  private netDebugOverlay: NetDebugOverlay | null = null;
-  private performanceDiagnosticsOverlay: PerformanceDiagnosticsOverlay | null = null;
+  /** Scene-langlebiger Owner der Diagnose (Profiler, Ablation, Net-/Performance-Overlay). */
+  private diagnostics: ArenaDiagnosticsController | null = null;
   private flowFieldDebugOverlay: EnemyFlowFieldDebugOverlay | null = null;
   private coopDefenseDebugOverlay: CoopDefenseDebugOverlay | null = null;
   private coopDefenseBalanceTracker!: CoopDefenseBalanceTracker;
@@ -449,9 +444,6 @@ export class ArenaScene extends Phaser.Scene {
   private itemRewardOverlay: CoopDefenseItemRewardOverlay | null = null;
   private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
-  private runtimeProfiler: ArenaRuntimeProfiler | null = null;
-  private visualAttribution: ReturnType<typeof getArenaVisualAttribution> | null = null;
-  private performanceAblation: PerformanceAblationController | null = null;
   private graphicsQuality!: GraphicsQualityController;
   private lastScenePerformanceCountAtMs = Number.NEGATIVE_INFINITY;
   private scenePerformanceCounts = {
@@ -670,48 +662,21 @@ export class ArenaScene extends Phaser.Scene {
     getRenderResolutionController()?.setMaxRenderScale(this.graphicsQuality.getProfile().maxRenderScale);
     installSharedGlowSystem(this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => destroySharedGlowSystem(this));
-    this.runtimeProfiler = new ArenaRuntimeProfiler();
-    this.visualAttribution = getArenaVisualAttribution(this);
-    this.runtimeProfiler.setAttributionSource(this.visualAttribution);
-    this.runtimeProfiler.attachGame(this.game);
-    const payloadDiagnosticsSink = (info: Parameters<ArenaRuntimeProfiler['recordNetworkPayload']>[0]) => {
-      this.runtimeProfiler?.recordNetworkPayload(info);
-    };
-    const unsubscribePayloadDiagnostics = this.runtimeProfiler.subscribeRecordingLifecycle((recording) => {
-      bridge.setPayloadDiagnosticsSink(recording ? payloadDiagnosticsSink : null);
-    });
-    const unsubscribeProfilerRecording = this.runtimeProfiler.subscribeRecording((recordingId) => {
-      this.seedCompanionBaselines(recordingId);
-    });
-    this.performanceAblation = new PerformanceAblationController(this, {
-      onTraceEvent: (type, fields) => this.runtimeProfiler?.recordSemanticEvent(type, fields),
-      getQualityController: () => this.graphicsQuality,
+    this.diagnostics = new ArenaDiagnosticsController({
+      scene: this,
+      game: this.game,
+      graphicsQuality: this.graphicsQuality,
+      payloadDiagnostics: { setSink: (sink) => bridge.setPayloadDiagnosticsSink(sink) },
+      onRecordingStart: (recordingId) => this.seedCompanionBaselines(recordingId),
+      captureSceneInspection: () => this.captureSceneInspection(),
       getShadowSystem: () => this.renderers?.shadow ?? null,
       getLightingSystem: () => this.renderers?.lighting ?? null,
       getPostFxController: () => this.visualFeedback?.postFx ?? null,
       getGpuParticleSuppressor: () => this.renderers?.gpuVfx ?? null,
-      getVectorEffectSystem: () => ({
-        setSuppressed: (suppressed: boolean) => this.visualAttribution?.setGraphicsFamilySuppressed('effectSystemGraphics', suppressed),
-      }),
       getVectorLighting: () => this.renderers?.lighting
         ? { setSuppressed: (suppressed: boolean) => this.renderers?.lighting.setVectorSuppressed(suppressed) }
         : null,
-      getVectorTreeTrunks: () => ({
-        setSuppressed: (suppressed: boolean) => this.visualAttribution?.setGraphicsFamilySuppressed('treeTrunks', suppressed),
-      }),
-      getVectorPowerUpEffects: () => ({
-        setSuppressed: (suppressed: boolean) => this.visualAttribution?.setGraphicsFamilySuppressed('powerUpEffects', suppressed),
-      }),
-    });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.performanceAblation?.destroy());
-    const unsubscribePerformanceQuality = this.graphicsQuality.subscribe((profile, previous) => {
-      this.runtimeProfiler?.recordQualityChange(previous, profile.level);
-    });
-    this.performanceDiagnosticsOverlay = new PerformanceDiagnosticsOverlay(
-      this.runtimeProfiler,
-      () => this.describePerformanceEnvironment(),
-      this.performanceAblation,
-      {
+      chunkDiagnostics: {
         getState: () => ({
           staticShadows: this.renderers?.shadow?.isStaticVisible() ?? true,
           groundSurface: this.arenaResult?.groundSurface?.isVisible() ?? true,
@@ -740,19 +705,12 @@ export class ArenaScene extends Phaser.Scene {
           this.arenaResult?.rockVisualSystem?.setPageSize(size);
         },
       },
-      () => this.renderers?.gpuVfx.getStats() ?? null,
-      () => this.captureSceneInspection(),
-    );
+      getGpuVfxStats: () => this.renderers?.gpuVfx.getStats() ?? null,
+      getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaResult?.rockVisualSystem ?? null,
+    });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      unsubscribePerformanceQuality();
-      this.performanceDiagnosticsOverlay?.destroy();
-      this.performanceDiagnosticsOverlay = null;
-      this.runtimeProfiler?.destroy();
-      this.visualAttribution = null;
-      bridge.setPayloadDiagnosticsSink(null);
-      unsubscribePayloadDiagnostics();
-      unsubscribeProfilerRecording();
-      this.runtimeProfiler = null;
+      this.diagnostics?.destroy();
+      this.diagnostics = null;
     });
 
     if (!this.anims.exists('player_death')) {
@@ -800,8 +758,8 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => gameAudioSystem.cleanup());
     const smokeSystem      = new SmokeSystem(this);
     const fireSystem       = new FireSystem(this);
-    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
-      fireSystem.setPerformanceMetricsEnabled(enabled && this.runtimeProfiler?.wantsDetailedSampling() === true);
+    this.diagnostics?.subscribeDiagnostics((enabled) => {
+      fireSystem.setPerformanceMetricsEnabled(enabled && this.diagnostics?.wantsDetailedSampling() === true);
     });
     const stinkCloudSystem = new StinkCloudSystem(this);
     const hostPhysics      = new HostPhysicsSystem(this, playerManager, bridge, combatSystem);
@@ -880,8 +838,8 @@ export class ArenaScene extends Phaser.Scene {
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
     this.scopeOverlay = new ScopeOverlay(this);
-    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
-      this.scopeOverlay?.setPerformanceMetricsEnabled(enabled && this.runtimeProfiler?.wantsDetailedSampling() === true);
+    this.diagnostics?.subscribeDiagnostics((enabled) => {
+      this.scopeOverlay?.setPerformanceMetricsEnabled(enabled && this.diagnostics?.wantsDetailedSampling() === true);
     });
     this.utilityChargeIndicator = new UtilityChargeIndicator(
       this,
@@ -900,13 +858,6 @@ export class ArenaScene extends Phaser.Scene {
       () => this.localPlayerState?.burrowed ?? false,
     );
     this.enemyHoverNameLabel = new EnemyHoverNameLabel(this);
-    this.netDebugOverlay = new NetDebugOverlay(
-      () => bridge.getTransportDiagnostics(),
-      () => bridge.getRoomCode(),
-      () => (bridge.isHost() ? `Host ${bridge.getLocalPlayerId()}` : `Client ${bridge.getLocalPlayerId()}`),
-      () => bridge.getProjectileSyncMetrics(),
-    );
-    this.events.once('shutdown', () => this.netDebugOverlay?.destroy());
     this.coopDefenseBalanceTracker = new CoopDefenseBalanceTracker();
     this.coopDefenseBalanceReportOverlay = new CoopDefenseBalanceReportOverlay(
       this.coopDefenseBalanceTracker,
@@ -1145,27 +1096,19 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers = createRendererBundle(this, playerManager);
     // Der Profiler entsteht vor dem Renderer-Bundle; die GPU-VFX-Statistik wird deshalb hier
     // nachgereicht. Ohne sie fehlen Lanes und Effekte im Performance-Export vollstaendig.
-    this.runtimeProfiler.setGpuVfxSource({
-      build: () => this.renderers!.gpuVfx.buildReport(),
-      reset: () => this.renderers?.gpuVfx.resetProfiling(),
-    });
-    this.renderers.gpuVfx.setDiagnosticEventSink((type, fields) => {
-      this.runtimeProfiler?.recordSemanticEvent(type, fields);
-    });
+    this.diagnostics?.attachGpuVfx(this.renderers.gpuVfx);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.runtimeProfiler?.setGpuVfxSource(null);
-      this.renderers?.gpuVfx.setDiagnosticEventSink(null);
       this.renderers?.explosionGpu.clearPending();
       this.renderers?.combatGoreGpu.destroy();
       this.renderers?.gpuVfx.destroy();
     });
-    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
-      const detailed = enabled && this.runtimeProfiler?.wantsDetailedSampling() === true;
+    this.diagnostics?.subscribeDiagnostics((enabled) => {
+      const detailed = enabled && this.diagnostics?.wantsDetailedSampling() === true;
       this.renderers?.lighting.setPerformanceMetricsEnabled(detailed);
       this.renderers?.flamethrowerUpgrades.setPerformanceMetricsEnabled(detailed);
     });
-    this.renderers.lighting.setAttributionCollector(this.visualAttribution);
-    this.renderers.shadow.setAttributionCollector(this.visualAttribution);
+    this.renderers.lighting.setAttributionCollector(this.diagnostics?.visualAttribution ?? null);
+    this.renderers.shadow.setAttributionCollector(this.diagnostics?.visualAttribution ?? null);
     this.renderers.lighting.setDynamicOccluderSource(this.trainLightOccluders);
     this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
       ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null
@@ -1288,7 +1231,7 @@ export class ArenaScene extends Phaser.Scene {
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
     this.clientUpdate = new ClientUpdateCoordinator(this, this.ctx, this.localPlayerState, this.rockVisualHelper);
     leftPanel.setAdrenalineCostProvider(() => this.clientUpdate.getLocalWeaponAdrenalineCost('weapon2'));
-    this.runtimeProfiler.subscribeDiagnostics((enabled) => {
+    this.diagnostics?.subscribeDiagnostics((enabled) => {
       // Coordinators interpret this as the cheap whole-step Companion metric; their internal
       // phase timers remain disabled until a future detailed mode is explicitly introduced.
       this.hostUpdate?.setPerformanceMetricsEnabled(enabled);
@@ -1717,7 +1660,7 @@ export class ArenaScene extends Phaser.Scene {
       () => { void this.onCopyRoomLink(); },
       () => rejoinCurrentRoom(),
       () => this.onRetryRoom(),
-      () => this.netDebugOverlay?.toggle(),
+      () => this.diagnostics?.toggleNetDebug(),
       () => leftPanel.showHelpOverlay(),
       () => leftPanel.showOptionsOverlay(),
       () => this.openCoopDefenseUpgradesOverlay(),
@@ -1768,9 +1711,7 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx.hostPhysics.setCanMoveResolver(
       (playerId) => this.lifecycle.getPlayerCapabilities(playerId).canMove,
     );
-    this.lifecycle.setRuntimeDiagnosticEventSink((type, fields) => {
-      this.runtimeProfiler?.recordSemanticEvent(type, fields);
-    });
+    this.lifecycle.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
     this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(
       () => this.ctx,
       () => this.lifecycle.getWorldPlayerGameplayRuntime(),
@@ -1931,12 +1872,12 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const companionDiagnosticsActive = this.runtimeProfiler?.isDiagnosticsActive() ?? false;
-    const diagnosticsActive = this.runtimeProfiler?.wantsDetailedSampling() ?? false;
+    const companionDiagnosticsActive = this.diagnostics?.isDiagnosticsActive() ?? false;
+    const diagnosticsActive = this.diagnostics?.wantsDetailedSampling() ?? false;
     const frameStartMs = diagnosticsActive ? performance.now() : 0;
     // Vor allem anderen, damit die Diagnose-Zaehlungen weiter unten den abgeschalteten
     // Zustand sehen und nicht den des Vorframes.
-    if (companionDiagnosticsActive) this.performanceAblation?.update();
+    if (companionDiagnosticsActive) this.diagnostics?.updateAblation();
     let primaryStepMs = 0;
     let clientRendererSyncMs = 0;
     let inputCameraMs = 0;
@@ -2667,12 +2608,12 @@ export class ArenaScene extends Phaser.Scene {
     const scopePerformance = this.scopeOverlay?.getPerformanceMetrics();
     const clientPerformance = this.clientUpdate.getPerformanceMetrics();
     const hostPerformance = this.hostUpdate.getPerformanceMetrics();
-    const detailedDiagnostics = this.runtimeProfiler?.wantsDetailedSampling() ?? false;
+    const detailedDiagnostics = this.diagnostics?.profiler?.wantsDetailedSampling() ?? false;
     const sceneCounts = this.sampleScenePerformanceCounts(performance.now(), detailedDiagnostics);
     const transportCounts = this.sampleTransportPerformanceCounts(performance.now());
     let sceneBreakdown: string | null = null;
     let sceneBreakdownScanMs = 0;
-    if (this.runtimeProfiler?.shouldCaptureSceneBreakdown(role, delta)) {
+    if (this.diagnostics?.profiler?.shouldCaptureSceneBreakdown(role, delta)) {
       const breakdownStartedAt = performance.now();
       sceneBreakdown = this.describeSceneObjectBreakdown();
       sceneBreakdownScanMs = performance.now() - breakdownStartedAt;
@@ -2788,20 +2729,20 @@ export class ArenaScene extends Phaser.Scene {
     };
     detailTimings.diagnosticsMs = performance.now() - diagnosticsStartedAt;
     const updateMs = performance.now() - frameStartMs;
-    const frameLifecycle = this.runtimeProfiler?.takeLastFrameLifecycleMetrics(updateMs) ?? {
+    const frameLifecycle = this.diagnostics?.profiler?.takeLastFrameLifecycleMetrics(updateMs) ?? {
       gameStepMs: 0,
       sceneManagerUpdateMs: 0,
       sceneSystemsAndPluginsMs: 0,
       rendererSetupMs: 0,
       betweenFramesMs: 0,
     };
-    this.runtimeProfiler?.record({
+    this.diagnostics?.profiler?.record({
       role,
       phase: runtimePhase,
       quality: this.graphicsQuality.getLevel(),
       mode: configuredGameMode,
       mapId: configuredCoopDefenseMapId,
-      ablation: this.performanceAblation?.getCurrentCategory() ?? 'baseline',
+      ablation: this.diagnostics?.ablation?.getCurrentCategory() ?? 'baseline',
       rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
       deltaMs: delta,
       updateMs,
@@ -2810,7 +2751,7 @@ export class ArenaScene extends Phaser.Scene {
       phaserSceneSystemsMs: frameLifecycle.sceneSystemsAndPluginsMs,
       rendererSetupMs: frameLifecycle.rendererSetupMs,
       betweenFramesMs: frameLifecycle.betweenFramesMs,
-      renderSubmitMs: this.runtimeProfiler.takeLastRenderSubmitMs(),
+      renderSubmitMs: this.diagnostics?.profiler?.takeLastRenderSubmitMs() ?? 0,
       roleStepMs: primaryStepMs,
       networkUpdateMs,
       networkFlushMs,
@@ -2836,7 +2777,7 @@ export class ArenaScene extends Phaser.Scene {
       activeFilterCount: sceneCounts.activeFilterCount,
       activeLightCount: lightingPerformance.activeLights,
       renderedLightCount: lightingPerformance.renderedLights,
-      drawCallCount: this.runtimeProfiler.takeLastDrawCallCount(),
+      drawCallCount: this.diagnostics?.profiler?.takeLastDrawCallCount() ?? 0,
       details: {
         timings: detailTimings,
         counts: detailCounts,
@@ -2923,7 +2864,7 @@ export class ArenaScene extends Phaser.Scene {
     if (backpressureActive !== this.companionBackpressureActive) {
       this.companionBackpressureActive = backpressureActive;
       if (backpressureActive) {
-        this.runtimeProfiler?.recordSemanticEvent('network:backpressure', {
+        this.diagnostics?.profiler?.recordSemanticEvent('network:backpressure', {
           bufferedBytes: transport.reliableBufferedBytes + transport.fastBufferedBytes,
           linkCount: transport.backpressureLinkCount,
         });
@@ -2949,7 +2890,7 @@ export class ArenaScene extends Phaser.Scene {
       const vfxSource = this.renderers.gpuVfx;
       const rockGpu = rockSource?.getGpuDiagnostics() ?? null;
       const vfxCounters = vfxSource.getCompanionCounters();
-      const recordingId = this.runtimeProfiler?.getRecordingId() ?? 0;
+      const recordingId = this.diagnostics?.profiler?.getRecordingId() ?? 0;
       const previousFlowfieldCounters = this.companionFlowfieldCounters;
       const previousVfxCounters = this.companionVfxCounters;
       const sessionBaseline = this.companionBaselineRecordingId !== recordingId;
@@ -2961,7 +2902,7 @@ export class ArenaScene extends Phaser.Scene {
       const vfxEpochChanged = previousVfxCounters.epoch !== vfxCounters.epoch;
       const newBaseline = sessionBaseline || flowfieldSourceChanged || rockSourceChanged || vfxSourceChanged || vfxEpochChanged;
       if (newBaseline) {
-        this.companionBaselineRecordingId = this.runtimeProfiler?.getRecordingId() ?? 0;
+        this.companionBaselineRecordingId = this.diagnostics?.profiler?.getRecordingId() ?? 0;
         this.companionFlowfieldSource = flowfieldSource;
         this.companionRockSource = rockSource;
         this.companionVfxSource = vfxSource;
@@ -3046,7 +2987,7 @@ export class ArenaScene extends Phaser.Scene {
           .map((field) => field.recomputePendingAgeMs ?? 0));
         for (const [fieldId, field] of Object.entries(flowfield.fields)) {
           if (field.stale && !this.companionStaleFlowfields.has(fieldId)) {
-            this.runtimeProfiler?.recordSemanticEvent('flowfield:stale', {
+            this.diagnostics?.profiler?.recordSemanticEvent('flowfield:stale', {
               fieldId,
               goalMode: field.goalMode,
               activeAgeMs: field.activeAgeMs,
@@ -3084,13 +3025,13 @@ export class ArenaScene extends Phaser.Scene {
         : 0;
       this.companionVisiblePages = rockGpu?.visiblePages ?? 0;
     }
-    this.runtimeProfiler?.record({
+    this.diagnostics?.profiler?.record({
       role,
       phase: runtimePhase,
       quality: this.graphicsQuality.getLevel(),
       mode: configuredGameMode,
       mapId,
-      ablation: this.performanceAblation?.getCurrentCategory() ?? 'baseline',
+      ablation: this.diagnostics?.ablation?.getCurrentCategory() ?? 'baseline',
       rawDeltaMs: Number.isFinite(rawDelta) && rawDelta > 0 ? rawDelta : delta,
       deltaMs: delta,
       updateMs: roleCpuMs,
@@ -3996,13 +3937,13 @@ export class ArenaScene extends Phaser.Scene {
         event.preventDefault();
         return;
       }
-      if (this.netDebugOverlay?.isOpen()) {
-        this.netDebugOverlay.hide();
+      if (this.diagnostics?.isNetDebugOpen()) {
+        this.diagnostics.hideNetDebug();
         event.preventDefault();
         return;
       }
-      if (this.performanceDiagnosticsOverlay?.isOpen()) {
-        this.performanceDiagnosticsOverlay.hide();
+      if (this.diagnostics?.isPerformanceOverlayOpen()) {
+        this.diagnostics.hidePerformanceOverlay();
         event.preventDefault();
         return;
       }
@@ -4085,7 +4026,7 @@ export class ArenaScene extends Phaser.Scene {
     this.netDebugHotkeyHandler = (event: KeyboardEvent) => {
       if (event.repeat || !this.ctx) return;
       if (this.ctx.leftPanel.isHotkeyInputBlocked()) return;
-      this.netDebugOverlay?.toggle();
+      this.diagnostics?.toggleNetDebug();
     };
     keyboard.on('keydown-P', this.netDebugHotkeyHandler);
 
@@ -4097,7 +4038,7 @@ export class ArenaScene extends Phaser.Scene {
       if (event.repeat) return;
       // T ist ein Schreibzeichen: nicht auslösen, während ein Textfeld den Fokus hat.
       if (this.ctx?.leftPanel.isHotkeyInputBlocked()) return;
-      this.performanceDiagnosticsOverlay?.toggle();
+      this.diagnostics?.togglePerformanceOverlay();
     };
     keyboard.on('keydown-T', this.performanceHotkeyHandler);
 
@@ -4938,7 +4879,7 @@ export class ArenaScene extends Phaser.Scene {
         if (displayGrandChild.active) active += 1;
       }
     }
-    this.runtimeProfiler?.setSceneInspection({
+    this.diagnostics?.profiler?.setSceneInspection({
       capturedAtIso: new Date().toISOString(),
       topLevelChildren: this.children.list.length,
       directLayerChildren,
@@ -5095,62 +5036,6 @@ export class ArenaScene extends Phaser.Scene {
     this.lastTransportBytesReceived = bytesReceived;
     this.lastTransportDroppedFastMessages = droppedFastMessages;
     return this.transportPerformanceCounts;
-  }
-
-  private describePerformanceEnvironment(): Record<string, unknown> {
-    const canvas = this.game.canvas;
-    const renderer = this.game.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
-    const gl = renderer.gl;
-    const debugRendererInfo = gl?.getExtension('WEBGL_debug_renderer_info');
-    const gpuRenderer = gl && debugRendererInfo
-      ? gl.getParameter(debugRendererInfo.UNMASKED_RENDERER_WEBGL)
-      : null;
-    const gpuVendor = gl && debugRendererInfo
-      ? gl.getParameter(debugRendererInfo.UNMASKED_VENDOR_WEBGL)
-      : null;
-    const nav = typeof navigator === 'undefined' ? null : navigator as Navigator & { deviceMemory?: number };
-    const glLimits = {
-      maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-      maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
-      maxTextureImageUnits: gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS),
-      maxVertexTextureImageUnits: gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS),
-      maxCombinedTextureImageUnits: gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS),
-      maxViewportDims: Array.from(gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array),
-    };
-
-    // Vorwiegend Geraete- und Renderer-Daten. Rock-Renderer und Page-Groesse gehoeren als
-    // ausdrueckliche Vergleichsparameter dazu; Rolle, Qualitaet, Modus und Map werden zusaetzlich
-    // als beobachteter, veraenderlicher Session-Kontext aufgezeichnet.
-    return {
-      renderer: getWebGLRendererType(gl),
-      gpuRenderer,
-      gpuVendor,
-      webglVersion: gl.getParameter(gl.VERSION),
-      shadingLanguageVersion: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-      supportedExtensions: gl.getSupportedExtensions() ?? [],
-      glLimits,
-      canvas: { width: canvas.width, height: canvas.height },
-      screen: typeof window === 'undefined'
-        ? null
-        : {
-          width: window.screen.width,
-          height: window.screen.height,
-          availWidth: window.screen.availWidth,
-          availHeight: window.screen.availHeight,
-        },
-      devicePixelRatio: typeof window === 'undefined' ? 1 : window.devicePixelRatio,
-      pageVisibility: typeof document === 'undefined' ? null : document.visibilityState,
-      documentFocused: typeof document === 'undefined' ? null : document.hasFocus(),
-      userAgent: nav?.userAgent ?? null,
-      platform: nav?.platform ?? null,
-      hardwareConcurrency: nav?.hardwareConcurrency ?? null,
-      deviceMemoryGb: nav?.deviceMemory ?? null,
-      rockRendering: {
-        mode: this.arenaResult?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
-        pageSize: this.arenaResult?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
-        gpu: this.arenaResult?.rockVisualSystem?.getGpuDiagnostics() ?? null,
-      },
-    };
   }
 
   private initializeRoomQuality(): void {

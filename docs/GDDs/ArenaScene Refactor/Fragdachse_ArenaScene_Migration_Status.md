@@ -32,16 +32,16 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `2A – Diagnostics-Owner: Lifecycle und UI`  
-**Gesamtstatus:** `🟨 Phase 1 abgeschlossen – Sicherheitsnetz und Test-Migrationskarte stehen, noch keine Extraktion begonnen`  
-**Letzter verifizierter Repository-Stand:** `39677c149ff44ebb8c3071b6bb18fede4bbb8013` + Phase-1-Testergänzungen  
-**Automatisierter Gate für dieses Refactoring:** `npm test` grün (335 Dateien, 2836 Tests, 15 skipped) · `npx tsc --noEmit` grün  
-**Manueller Gate:** `nicht erforderlich für Phase 1 – kein Produktionscode geändert, kein sichtbares Verhalten betroffen`
+**Aktive Phase:** `2B – Diagnostics-Owner: Frame-Messung und Sampler`  
+**Gesamtstatus:** `🟨 Phase 2A abgeschlossen – Diagnose-Owner steht, Frame-Messung noch in der Scene`  
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 2A  
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (336 Testdateien, 2842 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)  
+**Manueller Gate:** `offen – Checkpoint A erst nach Phase 2B`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
 | 1 Baseline / Contracts | ✅ abgeschlossen | 21 Source-Assertions in 13 Dateien inventarisiert; 4 Vertragslücken geschlossen. |
-| 2A Diagnostics Lifecycle/UI | ⬜ offen | Diagnose-Owner etablieren. |
+| 2A Diagnostics Lifecycle/UI | ✅ abgeschlossen | `ArenaDiagnosticsController` besitzt Profiler, Ablation, beide Debug-Overlays und die Attribution; `ArenaScene` −115 Zeilen. |
 | 2B Diagnostics Frame/Sampler | ⬜ offen | Counter, Transport-/Companion-Sampling und Frame-Timing aus Scene. |
 | – Checkpoint A | ⬜ offen | Diagnostics vollständig regressionsfrei. |
 | 3A Input Setup/Hotkeys | ⬜ offen | Keys, Listener, Setup/Teardown an `ArenaInputBindings`. |
@@ -108,7 +108,8 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| – | – | Phase 1 erzeugt keine Debt: nur Tests ergänzt, kein Produktionscode geändert. | – | – |
+| TD-1 | 2A | `ArenaDiagnosticsController.profiler` und `.ablation` sind bewusst durchgereichte Lese-Accessoren. Die in der Scene verbliebene 2B-Frame-Messung (`record(...)`, `takeLast*`, `shouldCaptureSceneBreakdown`, `setSceneInspection`, `getRecordingId`, `recordSemanticEvent` in `recordCompanionFrame`, `getCurrentCategory`) greift darüber zu, statt eigene Felder zu halten. Bewusst **keine** Passthrough-Fassade je Profiler-Methode gebaut. | `ArenaDiagnosticsController` (alleiniger Owner; die Scene hält keine Diagnose-Instanz mehr) | 2B |
+| TD-2 | 2A | `captureSceneInspection` und `seedCompanionBaselines` bleiben Scene-Methoden und werden als Callback-Ports (`captureSceneInspection`, `onRecordingStart`) in den Controller injiziert. | Scene (2B-Sampler) | 2B |
 
 ---
 
@@ -145,7 +146,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | R-8 | Meta Authority | `ArenaMetaController` darf weder `ResultApplication` noch `ArenaPersistentBaseSession` duplizieren/umschließen und Results nicht doppelt anwenden. | Deduplication heute behavioral abgesichert; Phase 4C muss die Dedup-Assertion beim Owner-Wechsel mitnehmen. |
 | R-9 | Activity Presentation | `CoopMissionScopedBinding` und `clientPresentationStep()` existieren bereits; ein paralleler Lifecycle oder Doppel-Tick wäre eine Regression. | Ab Phase 1 als Ratchet festgeschrieben: genau ein Aufruf von `clientPresentationStep(` in `src/scenes/arena/ClientUpdateCoordinator.ts`, keiner sonst unter `src/scenes/` und `src/world/`. Deklaration/Impl liegen in `src/activity/CoopMissionRuntime.ts` und sind bewusst ausgenommen. |
 | R-10 | Network Boundary | Neue Runtime-/Domain-Owner dürfen das `bridge`-Singleton nicht zurückführen; die eingefrorene Legacy-Menge konkreter `NetworkBridge`-Consumer darf nicht wachsen. | Bestehenden `WorldGameplayCompositionContracts`-Ratchet respektieren; kein Nebenrefactoring der acht Legacy-Consumer. |
-| R-11 | Listener-Leaks | Neue scene-langlebige Diagnostics-/Input-Owner sammeln viele Subscriptions/Keys; der heutige Hotkey-Shutdown enthält zugleich fremde Teardowns. | **Verifizierter Ausgangsbefund:** `ArenaRuntime`, `ArenaLifecycleCoordinator`, `ArenaPersistentBaseSession`, `HostUpdateCoordinator`, `ClientUpdateCoordinator` und `RpcCoordinator` besitzen **keine eigene `destroy()`/`shutdown()`**. Der gesamte scene-langlebige Teardown liegt in 15 verstreuten `this.events.once(SHUTDOWN, …)`-Handlern in `ArenaScene.ts` (552, 651, 659, 666, 672, 706, 746, 800, 853, 909, 1024, 1155, 1928, 4116, 4244; zwei davon nutzen das String-Literal `'shutdown'` statt der Phaser-Konstante). Die für `WorldRuntime`/`WorldMaterialization`/`ActivityRuntimeHost` geltende Idempotenz-Disziplin existiert auf Scene-Ebene nicht. Jede Phase 2A/3A/4A muss ihren neuen Owner mit idempotentem `destroy()` **und** Teardown-Test liefern. |
+| R-11 | Listener-Leaks | Neue scene-langlebige Diagnostics-/Input-Owner sammeln viele Subscriptions/Keys; der heutige Hotkey-Shutdown enthält zugleich fremde Teardowns. | **Für Diagnostics geschlossen (2A):** `ArenaDiagnosticsController.destroy()` ist idempotent, löst alle eigenen Subscriptions und ist danach inert (`attachGpuVfx` nimmt keine Bindung mehr an); die vier `subscribeDiagnostics`-Listener, die zuvor **nie** abbestellt wurden, gehören jetzt dem Owner. Drei reine Diagnose-SHUTDOWN-Handler entfielen, der gemischte GPU-VFX-Handler wurde aufgespalten (15 → 13 Handler). **Weiter offen:** `ArenaRuntime`, `ArenaLifecycleCoordinator`, `ArenaPersistentBaseSession`, `HostUpdateCoordinator`, `ClientUpdateCoordinator`, `RpcCoordinator` haben weiterhin **kein eigenes `destroy()`**. Phase 3A/4A müssen ihren Owner ebenfalls mit idempotentem `destroy()` **und** Teardown-Test liefern. |
 
 ---
 
@@ -153,9 +154,10 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | Check / Quelle | Ergebnis |
 |---|---|
-| `npm test` (nach Phase 1) | grün – 335 Testdateien, 2836 Tests, 15 skipped, 0 Fehler |
-| `npx tsc --noEmit` | grün |
-| `npm run build` | nicht ausgeführt – Phase 1 ändert keinen Produktionscode und keine sichtbare Phaser-/UI-Fläche (`AGENTS.md`, proportionale Prüfung) |
+| `npm run check` (nach Phase 2A) | grün – 336 Testdateien, 2842 Tests, 15 skipped; `tsc` und `vite build` erfolgreich |
+| `ArenaScene.ts` Umfang | 5685 → 5570 Zeilen (−115); neu `src/scenes/arena/ArenaDiagnosticsController.ts` (331) und `tests/ArenaDiagnosticsController.test.ts` (155) |
+| Aus der Scene entfernt (2A) | Felder `runtimeProfiler`, `visualAttribution`, `performanceAblation`, `performanceDiagnosticsOverlay`, `netDebugOverlay` → ein Feld `diagnostics`; Imports `ArenaRuntimeProfiler`, `PerformanceAblationController`, `PerformanceDiagnosticsOverlay`, `NetDebugOverlay`, `getArenaVisualAttribution`, `getWebGLRendererType`; Methode `describePerformanceEnvironment()` |
+| Toter Teardown-Pfad entfernt | Der gemischte SHUTDOWN-Handler rief `runtimeProfiler?.setGpuVfxSource(null)` erst, **nachdem** ein früher registrierter Handler `runtimeProfiler` bereits genullt hatte – schon vor der Extraktion ein No-op. Nur der wirksame Teil (`gpuVfx.setDiagnosticEventSink(null)`) blieb erhalten. |
 | Source-Test-Inventar `rg` über `tests/` | 13 Dateien / 21 Assertion-Stellen lesen `src/scenes/ArenaScene.ts` als Text; keine weiteren Pfadschreibweisen oder Verzeichnis-Scans. |
 | `WorldPresentationFrameBinding` | Existiert weder in `src/` noch in `tests/`. Phase 5 führt ihn erstmals ein; kein bestehender Test darf als Beleg für diesen Vertrag umgedeutet werden. |
 | `ArenaLifecycleCoordinator.detach()` | Ist-Reihenfolge: `handoff.release(runtime.releasePresentation())` → `runtime.destroy()` → `persistentBase.useWorldRuntimes(null)`. Deckt sich mit Architektur §4.5 und begründet den Phase-5-Auftrag. |
@@ -167,14 +169,14 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Phase 2A ausführen (Diagnostics-Owner: Lifecycle und UI):**
+**Phase 2B ausführen (Diagnostics-Owner: Frame-Messung und Sampler):**
 
-- scene-langlebigen Diagnose-Owner einführen und Ownership von `ArenaRuntimeProfiler`, `PerformanceAblationController`, `PerformanceDiagnosticsOverlay`, Diagnose-Subscriptions, Diagnose-Hotkey-Zielen und Environment-/Renderer-Beschreibung aus `ArenaScene` verschieben;
-- den Owner mit **idempotentem `destroy()` und Teardown-Test** ausliefern – dieser Vertrag existiert auf Scene-Ebene heute nicht (R-11);
-- den gemischten Shutdown-Block in `ArenaScene` nur so weit auftrennen, wie Diagnostics betroffen ist (Ausgangsbefund: 15 verstreute SHUTDOWN-Handler, R-11);
-- Test-Migrationskarte beachten: für Phase 2A steht dort kein Eintrag, es zieht also keine bestehende Assertion um;
-- kein Gameplay-Verhalten darf vom Diagnosezustand abhängen (Checkpoint A);
-- danach Status fortschreiben.
+- die in `ArenaScene` verbliebenen Sampler und Counter in den Diagnose-Owner verschieben: Scene-Display-Object-Counts (`sampleScenePerformanceCounts`, `describeSceneObjectBreakdown`, `captureSceneInspection`), Transport-Sampling (`sampleTransportPerformanceCounts`), Byte-/RTT-/Backpressure-Intervalle, Flowfield-/Rock-GPU-/VFX-Companion-Counter (`seedCompanionBaselines`, `recordCompanionFrame`, `updateCompanionRockCounters`) samt der zugehörigen Scratch-/Baseline-Felder;
+- die Frame-/Abschnittsmessung aus `update()` auf kleine Diagnoseaufrufe (`beginFrame`, benannte Messpunkte, `endFrame`) reduzieren – **ohne** die Frame-Reihenfolge zu ändern (R-4 ist seit Phase 1 als Reihenfolge festgeschrieben);
+- damit TD-1 und TD-2 auflösen: die Accessoren `profiler`/`ablation` und die Callback-Ports `captureSceneInspection`/`onRecordingStart` entfallen;
+- keine unnötigen Allokationen im Pfad „Diagnose aus";
+- Test-Migrationskarte beachten: für Phase 2B steht dort kein Eintrag, es zieht also keine bestehende Assertion um;
+- danach Checkpoint A prüfen (Diagnose an/aus, Overlay, Ablation, Semantic Events, Sampling, kein Gameplay hängt am Diagnosezustand, Shutdown löst alle Subscriptions) und Status fortschreiben.
 
 ---
 
@@ -182,4 +184,5 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | ID | Konflikt | Vorschlag |
 |---|---|---|
+| D-2 | Die 2A-Liste im Plan nennt nur `ArenaRuntimeProfiler`, `PerformanceAblationController` und `PerformanceDiagnosticsOverlay`, spricht aber zugleich von „Diagnose-Hotkey-Zielen“. `NetDebugOverlay` ist das zweite Diagnose-Overlay (Hotkey `P`, ESC-Kaskade, Lobby-Callback) und in Architektur §4.2 als „Performance-/**Netzwerk**-Diagnose-Overlay“ ausdrücklich Teil der Diagnose-Ownership. Umgesetzt wurde die Architektur-Lesart: `NetDebugOverlay` gehört dem Controller. | Die 2A-Liste im Plan um `NetDebugOverlay` ergänzen, damit Plan und Architektur denselben Ownership-Umfang nennen. Nebenwirkung der Umsetzung: Das Overlay wird jetzt an der Position des früheren Profiler-Blocks statt später in `create()` erzeugt – verhaltensneutral, da sein Konstruktor ausschließlich `bridge`-Closures entgegennimmt und keinen Scene-Zustand liest. |
 | D-1 | Phase 1 verlangt, „Listener-/Teardown-Idempotenz der späteren scene-langlebigen Owner“ abzusichern. Diese Owner (`ArenaDiagnosticsController`, `ArenaInputBindings`, `ArenaMetaController`) existieren in Phase 1 noch nicht, und die heutigen scene-langlebigen Owner besitzen gar kein `destroy()`. Der Punkt ist in Phase 1 nicht erfüllbar. | Den Punkt im Plan von Phase 1 zu einem Abnahmekriterium der Phasen 2A/3A/4A verschieben: „Jeder neue scene-langlebige Owner liefert ein idempotentes `destroy()` plus Teardown-Test.“ Phase 1 hält stattdessen nur den Ausgangsbefund fest (R-11). |
