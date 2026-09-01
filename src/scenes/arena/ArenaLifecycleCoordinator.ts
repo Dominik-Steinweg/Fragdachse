@@ -34,8 +34,8 @@ import type { PersistentBasePreviewRenderer } from './PersistentBasePreviewRende
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, PlayerProfile } from '../../types';
-import type { RoundConclusion, RoundResult, RoundState } from '../../network/NetworkBridge';
+import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, PlayerProfile, RoundConclusion } from '../../types';
+import type { RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
 import { CAPTURE_THE_BEER_MODE, isCoopDefenseMode, isTeamGameMode } from '../../gameModes';
@@ -175,7 +175,7 @@ type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown
  * Responsibilities: buildArena / tearDownArena, LOBBY ↔ ARENA phase transitions,
  * host quality checks, round result saving, train event setup.
  * Runtime state stays at the concrete World-/Activity owners; the context contains only
- * scene-lifetime infrastructure plus the RPC cutover field reserved for Phase 11B.
+ * scene-lifetime infrastructure.
  */
 export class ArenaLifecycleCoordinator {
   private matchTerminated   = false;

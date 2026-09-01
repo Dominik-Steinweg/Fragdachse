@@ -35,10 +35,11 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `12B.1 – Runtime-/Legacy-Cleanup abgeschlossen`
-**Gesamtstatus:** `Phasen 1–11, 12A und 12B.1 abgeschlossen; Checkpoint C wurde vom User manuell erfolgreich abgenommen.`
-**Letzter Integrations-Checkpoint:** `Phase 12B.1: npm run check grün (334 Testdateien, 2.824 Tests bestanden, 15 übersprungen, Build ok).`
-**Nächster Schritt:** `Phase 12B.2 – Contract-/Source-Test-Cleanup und finaler Acceptance Gate.`
+**Aktive Phase:** `12B.2 – Finaler Contract-/Legacy-Cleanup & automatisierter Final Gate abgeschlossen`
+**Gesamtstatus:** `Phase 12 Legacy-/Compatibility-Cleanup abgeschlossen. Keine unbeabsichtigte parallele Altarchitektur aus dem Arena-Runtime-Refactoring verbleibt.`
+**Automatisierter Final Gate:** `BESTANDEN – npm run check grün (334 Testdateien, 2.824 Tests bestanden, 15 übersprungen, 0 Fehler; Build ok).`
+**Manueller Final Gate:** `OFFEN – User-Abnahme erforderlich.`
+**TD-10:** `OFFEN – separater Architektur-/Authoring-Entscheid (außerhalb des Phase-12-Cleanups).`
 
 | Phase | Status | Kurznotiz |
 |---|---|---|
@@ -62,7 +63,7 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 | 11B Coordinator / RPC / Network Dependency Cutover | ✅ abgeschlossen | `RpcCoordinator` von Context/Flow/PB-Klasse und Runtime-Gettern entkoppelt; Held Actions beim World-Player-Owner; Frame-Reads auf kleine Ports reduziert; TD-9 geschlossen. |
 | 12A Transitional Debt / Compatibility Cleanup | ✅ abgeschlossen | Held-Action-State an Activity-Identity und Player-Leave gebunden; Activity-/PB-Runtime-Mirrors, obsolete Destroy-/Fallback-Adapter und zwei Domain→Network-Typabhängigkeiten entfernt. |
 | 12B.1 Runtime-/Legacy-Cleanup | ✅ abgeschlossen | Obsolete Decoy-Kompatibilitätsmethode, dead projection fields, unbenutzte Imports/Types in Flow, Composition und Coordinatoren entfernt; Teardown und Frame-Ownership sauber verifiziert. |
-| 12B.2 Contract-/Source-Test-Cleanup | ⬜ offen | Source-Structure-Tests, Contract-Tests und finaler Acceptance Gate; TD-10 bleibt eigener Folgeentscheid. |
+| 12B.2 Contract-/Legacy-Cleanup & Final Gate | ✅ abgeschlossen | Obsolete Network-Re-exports bereinigt; veraltete Migrationskommentare entfernt; 44 Source-/Contract-Testsuiten als dauerhafte Architektur-Ratchets bzw. Verhaltenstests verifiziert; automatisierter Final Gate vollständig grün. |
 
 Statuswerte: `⬜ offen` · `🟨 aktiv` · `🟧 blockiert` · `✅ abgeschlossen`
 
@@ -148,9 +149,9 @@ beim Fade-Start, auf dem Host schon beim Rundenabschluss (`hostCompleteRound`). 
 
 | Check | Ergebnis | Bezug |
 |---|---|---|
-| `npm run check` | grün | Phase 12B.1: 334 Testdateien, 2.824 Tests bestanden, 15 übersprungen; Build mit 638 transformierten Modulen erfolgreich. |
-| `git diff --check` | grün | Phase-12B.1-Stand ohne Whitespace-Fehler. |
-| Browser-/Sichtprüfung | offen | Checkpoint C ist die manuell erfolgreiche Baseline. |
+| `npm run check` (Automatisierter Final Gate) | **BESTANDEN** (grün) | Phase 12B.2: 334 Testdateien, 2.824 Tests bestanden, 15 übersprungen, 0 Fehler; Produktions-Build mit 638 transformierten Modulen erfolgreich. |
+| `git diff --check` | **BESTANDEN** (grün) | Phase-12B.2-Stand ohne Whitespace-Fehler. |
+| Manueller Final Gate (Browser-/Sichtprüfung) | **OFFEN – User-Abnahme erforderlich** | Checkpoint C ist die historische Baseline; die mit 11B/12A/12B hinzugekommenen/geänderten Pfade erfordern die bereitgestellte manuelle Endabnahme-Prüfliste. |
 
 Nur den letzten aussagekräftigen Stand behalten; keine Testhistorie führen.
 
@@ -446,20 +447,42 @@ Debt entsteht nicht.
 - Phase-9-Stand wurde am 31.08.2026 vom User erfolgreich im Browser getestet.
 - Diese erfolgreiche Baseline ist die Referenz für die große strukturelle Phase 10.
 - Der User hat den Phase-10-Checkpoint C vor 11A manuell erfolgreich abgenommen.
+- Die in Phase 11B, 12A und 12B hinzugekommenen Pfade (u. a. RPC-Ports, Held Action Invalidierung, Construction-Entkopplung, Participation/Leave/Rejoin) erfordern vor dem finalen Abschluss die manuelle Endabnahme durch den User.
 
-**Phase-10-GO/NO-GO – Ergebnis:**
-- LOC-Gate erfüllt: Flow (3.061) plus `ArenaRuntime` (159) liegen bei 3.220 LOC; Ziel war
-  ≤ 3.000–3.500.
-- Keine Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/Train-Systemliste mehr im Flow,
-  kein großer globaler manueller Teardown, kein neuer God-Composer (größte Composition-Datei
-  186 LOC, verteilt auf fünf fokussierte Grenzen).
-- TD-1, TD-2, TD-4, TD-5, TD-6, TD-8 und TD-9 sind geschlossen; TD-10 bleibt für den eigenen
-  Folgeentscheid offen.
-- `Phase 12A abgeschlossen: JA`; `Phase 12B.1 abgeschlossen: JA`;
-  `Phase 12B.2 kann begonnen werden: JA`.
+**Phase-12-GO/NO-GO – Ergebnis:**
+- LOC-Gate erfüllt: Flow (3.061) plus `ArenaRuntime` (160) liegen bei 3.221 LOC; Zielbereich war ≤ 3.000–3.500.
+- Keine Enemy-/Objective-/Flowfield-/PB-Composite-/Construction-/Train-Systemliste mehr im Flow, kein großer globaler manueller Teardown, kein neuer God-Composer (größte Composition-Datei 186 LOC, verteilt auf fünf fokussierte Grenzen).
+- TD-1, TD-2, TD-4, TD-5, TD-6, TD-8 und TD-9 sind geschlossen.
+- TD-10 bleibt bewusst als separat zu entscheidender Activity-PowerUp-/Authoring-Punkt offen (außerhalb des Phase-12-Legacy-Cleanups).
+- `Phase 12A abgeschlossen: JA`; `Phase 12B.1 abgeschlossen: JA`; `Phase 12B.2 abgeschlossen: JA`.
+- `Phase 12 Legacy-/Compatibility-Cleanup abgeschlossen: JA`.
+- `Automatisierter Final Gate: BESTANDEN`.
+- `Manueller Final Gate: OFFEN – User-Abnahme erforderlich`.
+
+**Manuelle Endabnahme-Prüfliste (für User):**
+1. Host + Client Lobby.
+2. Matchstart / Loading / Countdown.
+3. Normales Schießen / Utilities.
+4. Charged Utility: Start / Halten / Abbruch / Erneut laden / Auslösen.
+5. Construction: Bauen / einzeln abbauen / alles abbauen.
+6. Persistent Base in Lobby: Bauen / repositionieren / Reward.
+7. Coop Match mit Persistent Base.
+8. Victory → Commit.
+9. Defeat/Abort → Rollback.
+10. Carry Objective Host (Items, Delivery-Zone, Edge-Arrows).
+11. Carry Objective Client.
+12. World Leave / Rejoin / Participation.
+13. Train-Pfad.
+14. Verzögertes Activity-Pedestal.
+15. Match-Ende Host.
+16. Match-Ende Client.
+17. Exit-Fade (Entity-Presentation vor Instanzende).
+18. Lobby-Rückkehr.
+19. Lobby Fast Reinstance.
+20. Zweite Runde starten (keine stale Runtime, Callbacks oder Visuals).
 
 **Nächste konkrete Aktion:**
-`Phase 12B.2 – Contract-/Source-Test-Cleanup und finaler Acceptance Gate.`
+`Manuelle Endabnahme durch den User (keine automatische weitere Refactoring-Phase).`
 
 **Nicht automatisch tun:**  
-`Architektur- oder Implementierungsplan ändern.`
+`Architektur- oder Implementierungsplan ändern; weitere Refactoring-Phasen beginnen.`

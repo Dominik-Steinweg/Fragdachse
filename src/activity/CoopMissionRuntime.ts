@@ -420,7 +420,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     );
   }
 
-  /** Vollstaendiger, idempotenter Teardown aller in Phase 5 uebernommenen Child-Owner. */
+  /** Vollstaendiger, idempotenter Teardown aller Child-Owner dieser Mission. */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

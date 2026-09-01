@@ -119,7 +119,6 @@ import {
 } from './RoomStatistics';
 
 export type { RoomPlayerStatistics } from './RoomStatistics';
-export type { RoundConclusion, RoundOutcome } from '../types';
 
 /**
  * Zustandsobjekt eines Spielers. Absichtlich schmal: nur `id`, `getState` und `setState`

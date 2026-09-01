@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ARENA_COUNTDOWN_SEC } from '../src/config';
-import { NetworkBridge, type RoundConclusion } from '../src/network/NetworkBridge';
+import { NetworkBridge } from '../src/network/NetworkBridge';
+import type { RoundConclusion } from '../src/types';
 import { clearActiveSession, setActiveSession } from '../src/network/peer/session';
 import { resolveArenaStartTime } from '../src/scenes/arena/ArenaStartTiming';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
