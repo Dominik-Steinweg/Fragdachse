@@ -43,6 +43,16 @@ function createHarness(): {
       updateOcclusionFade: () => calls.push('secondary:occlusion'),
       reset: () => calls.push('secondary:reset'),
     },
+    worldSpace: {
+      syncEncounterTelegraph: () => calls.push('world:encounter'),
+      syncSecondaryObjectiveMarkers: () => calls.push('world:secondary'),
+      syncMissionProgress: () => calls.push('world:progress'),
+      syncCarryZones: () => calls.push('world:carry'),
+      syncObjectiveRepairDrones: () => calls.push('world:repair'),
+      syncHostileBaseIndicator: () => calls.push('world:hostile-base'),
+      destroy: () => calls.push('world:destroy'),
+      reset: () => calls.push('world:reset'),
+    },
   };
   const reads: CoopMissionPresentationReadPort = {
     getEncounterPresentationState: () => null,
@@ -54,6 +64,7 @@ function createHarness(): {
     getArenaStartTime: () => 0,
     getHostileBaseProgress: () => null,
     getBossProgress: () => null,
+    getCarryPresentationItems: () => [],
   };
   const binding = new CoopMissionPresentationBinding(
     getCoopDefenseMapConfig('1') as CoopDefenseMapConfig,
@@ -74,6 +85,12 @@ describe('CoopMissionPresentationBinding', () => {
     expect(calls).toContain('center:main');
     expect(calls).toContain('center:encounter');
     expect(calls).toContain('secondary:sync');
+    expect(calls).toContain('world:encounter');
+    expect(calls).toContain('world:secondary');
+    expect(calls).toContain('world:progress');
+    expect(calls).toContain('world:carry');
+    expect(calls).toContain('world:repair');
+    expect(calls).toContain('world:hostile-base');
 
     const mapSetCount = calls.filter((call) => call === 'map:set').length;
     runtime.setSecondaryObjectiveConfigs([]);
@@ -83,6 +100,7 @@ describe('CoopMissionPresentationBinding', () => {
     expect(calls).toContain('center:reset');
     expect(calls).toContain('map:reset');
     expect(calls).toContain('secondary:reset');
+    expect(calls).toContain('world:reset');
     const callsAfterDestroy = calls.length;
     binding.sync(16, true);
     expect(calls).toHaveLength(callsAfterDestroy);
@@ -113,8 +131,15 @@ describe('CoopMissionPresentationBinding', () => {
     expect(visualSource).not.toContain('updateEncounterPresentation');
     expect(visualSource).not.toContain('secondaryObjectiveHud?.sync');
     expect(visualSource).not.toContain('mapEventAnnouncementPresenter?.sync');
-    expect(visualSource).toContain('this.renderers.secondaryObjectiveMarkers.sync');
-    expect(visualSource).toContain('this.renderers.carryZones.sync');
-    expect(visualSource).toContain('this.renderers.objectiveRepairDrones.sync');
+    for (const sceneOwnedCoopPresentation of [
+      'this.renderers.encounterTelegraph.sync',
+      'this.renderers.secondaryObjectiveMarkers.sync',
+      'this.renderers.missionProgress.sync',
+      'this.renderers.carryZones.sync',
+      'this.renderers.objectiveRepairDrones.sync',
+      'this.hostileBaseIndicator?.sync',
+    ]) {
+      expect(visualSource).not.toContain(sceneOwnedCoopPresentation);
+    }
   });
 });

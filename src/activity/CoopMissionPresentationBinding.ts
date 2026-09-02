@@ -4,10 +4,12 @@ import type {
   CoopDefenseMissionProgressPresentationState,
   CoopDefenseRespawnBudgetPlayerState,
   CoopDefenseSecondaryObjectivePresentationState,
+  SyncedCoopDefenseCarryItem,
 } from '../types';
 import type {
   CoopDefenseMapConfig,
   ResolvedCoopDefenseMapEventConfig,
+  ResolvedCoopDefenseMapMissionProgressConfig,
   ResolvedCoopDefenseMapSecondaryObjectiveConfig,
   ResolvedCoopDefenseMapTutorialStepConfig,
 } from '../config/coopDefenseMaps';
@@ -40,6 +42,7 @@ export interface CoopMissionPresentationReadPort {
   readonly getArenaStartTime: () => number;
   readonly getHostileBaseProgress: () => MainObjectiveBaseProgress | null;
   readonly getBossProgress: (enemyKind: string) => MainObjectiveBossProgress | null;
+  readonly getCarryPresentationItems: () => readonly SyncedCoopDefenseCarryItem[];
 }
 
 export interface CoopMissionPresentationUiPort {
@@ -73,10 +76,38 @@ export interface CoopMissionPresentationUiPort {
     readonly updateOcclusionFade: (deltaMs: number) => void;
     readonly reset: () => void;
   };
+  readonly worldSpace: {
+    readonly syncEncounterTelegraph: (
+      state: CoopDefenseEncounterPresentationState | null,
+      elapsedMs: number,
+    ) => void;
+    readonly syncSecondaryObjectiveMarkers: (
+      snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
+      configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
+      carryItems: readonly SyncedCoopDefenseCarryItem[],
+    ) => void;
+    readonly syncMissionProgress: (
+      config: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
+      state: CoopDefenseMissionProgressPresentationState | null,
+    ) => void;
+    readonly syncCarryZones: (
+      snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
+      configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
+    ) => void;
+    readonly syncObjectiveRepairDrones: (
+      snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
+      configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
+      elapsedMs: number,
+    ) => void;
+    readonly syncHostileBaseIndicator: (mapConfig: CoopDefenseMapConfig) => void;
+    /** Scene-lifetime visual objects are destroyed only with the Scene, never on Activity detach. */
+    readonly destroy: () => void;
+    readonly reset: () => void;
+  };
 }
 
 /**
- * Activity-scoped owner for the screen-space Coop mission presentation.
+ * Activity-scoped owner for the screen- and world-space Coop mission presentation.
  *
  * The binding owns no simulation and has no network dependency. It reads the current replicated
  * state and World read models through the composition port, then forwards presentation models to
@@ -107,7 +138,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
   }
 
   /**
-   * Updates all screen-space Coop presentation in one named Activity-owned step.
+   * Updates all local Coop mission presentation in one named Activity-owned step.
    * `active` is supplied by the outer presentation policy so previews and exit fades cannot keep
    * an Activity HUD visible when the world is not interactively presented.
    */
@@ -164,6 +195,30 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       elapsedMs,
     );
     this.ui.secondaryObjectives.updateOcclusionFade(deltaMs);
+
+    // World-space Coop visuals share the same Activity owner as the HUD. The concrete Phaser
+    // objects remain scene-lifetime infrastructure behind the UI port; this binding supplies only
+    // Activity state and the current read models.
+    this.ui.worldSpace.syncEncounterTelegraph(encounter, elapsedMs);
+    this.ui.worldSpace.syncSecondaryObjectiveMarkers(
+      secondaryObjectivePresentation,
+      this.runtime.secondaryObjectiveConfigs,
+      this.reads.getCarryPresentationItems(),
+    );
+    this.ui.worldSpace.syncMissionProgress(
+      resolveCoopDefenseMapMissionProgress(this.mapConfig),
+      missionProgress,
+    );
+    this.ui.worldSpace.syncCarryZones(
+      secondaryObjectivePresentation,
+      this.runtime.secondaryObjectiveConfigs,
+    );
+    this.ui.worldSpace.syncObjectiveRepairDrones(
+      secondaryObjectivePresentation,
+      this.runtime.secondaryObjectiveConfigs,
+      elapsedMs,
+    );
+    this.ui.worldSpace.syncHostileBaseIndicator(this.mapConfig);
   }
 
   private syncTutorial(
@@ -207,5 +262,6 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.centerHud.resetCoopMissionPresentation();
     this.ui.mapEvents.reset();
     this.ui.secondaryObjectives.reset();
+    this.ui.worldSpace.reset();
   }
 }

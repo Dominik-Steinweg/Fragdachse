@@ -34,7 +34,14 @@ import type { PersistentBasePreviewRenderer } from './PersistentBasePreviewRende
 import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay }          from '../LobbyOverlay';
-import type { ArenaLayout, GameMode, LoadoutCommitSnapshot, PlayerProfile, RoundConclusion } from '../../types';
+import type {
+  ArenaLayout,
+  GameMode,
+  LoadoutCommitSnapshot,
+  PlayerProfile,
+  RoundConclusion,
+  SyncedCoopDefenseCarryItem,
+} from '../../types';
 import type { RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
 import type { RoomQualityMonitor }    from '../../network/RoomQualityMonitor';
@@ -327,9 +334,9 @@ export class ArenaLifecycleCoordinator {
    * Die Antworten selbst sind Activity-Lesesicht und stehen deshalb neben dem Flow.
    */
   private readonly coopMissionPorts: CoopMissionRuntimePorts;
-  /** Adapter boundary for Activity-owned screen-space Coop presentation. */
+  /** Adapter boundary for Activity-owned screen- and world-space Coop presentation. */
   private readonly coopMissionPresentationPorts: CoopMissionPresentationReadPort;
-  /** Active Activity-scoped HUD/announcement binding; inert after its Activity detaches. */
+  /** Active Activity-scoped presentation binding; inert after its Activity detaches. */
   private coopMissionPresentationBinding: CoopMissionPresentationBinding | null = null;
   /**
    * Besitzer der laufenden World-Instanz. Erzeugung, lokale Runtime und Ende laufen
@@ -635,6 +642,7 @@ export class ArenaLifecycleCoordinator {
     private readonly clientUpdate: ClientUpdateCoordinator,
     private readonly roomQualityMonitor: RoomQualityMonitor,
     private readonly coopMissionPresentationUi: CoopMissionPresentationUiPort,
+    private readonly getReplicatedCoopDefenseCarryItems: () => readonly SyncedCoopDefenseCarryItem[],
     /**
      * Der raumlanglebige Persistent-Base-Owner. Er ueberlebt jede World und jede Runde und
      * gehoert deshalb der `ArenaRuntime`; der Flow fragt ihn nur.
@@ -654,6 +662,8 @@ export class ArenaLifecycleCoordinator {
     this.coopMissionPresentationPorts = createArenaCoopMissionPresentationPort({
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
+      getCoopMissionRuntime: () => this.coopMissionRuntime,
+      getReplicatedCoopDefenseCarryItems: this.getReplicatedCoopDefenseCarryItems,
     });
     this.coopMissionComposition = new CoopMissionComposition({
       scene,

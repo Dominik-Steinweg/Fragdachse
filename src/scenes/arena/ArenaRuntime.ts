@@ -16,7 +16,11 @@ import {
   type WorldClientPresentationState,
   type WorldPresentationPersistentBaseVisuals,
 } from '../../world/WorldPresentationFrameBinding';
-import type { SyncedBurningGroundSnapshot, SyncedPowerUpPedestal } from '../../types';
+import type {
+  SyncedBurningGroundSnapshot,
+  SyncedCoopDefenseCarryItem,
+  SyncedPowerUpPedestal,
+} from '../../types';
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 
@@ -45,6 +49,7 @@ export interface ArenaRuntimeInput {
   readonly clientUpdate: ClientUpdateCoordinator;
   readonly roomQualityMonitor: RoomQualityMonitor;
   readonly coopMissionPresentationUi: CoopMissionPresentationUiPort;
+  readonly getReplicatedCoopDefenseCarryItems: () => readonly SyncedCoopDefenseCarryItem[];
   readonly getLocalPlayerId: () => string;
   readonly getSynchronizedNow: () => number;
   /**
@@ -107,6 +112,7 @@ export class ArenaRuntime {
       input.clientUpdate,
       input.roomQualityMonitor,
       input.coopMissionPresentationUi,
+      input.getReplicatedCoopDefenseCarryItems,
       this.persistentBase,
       input.getSpectatorCameraInput,
     );
@@ -193,7 +199,7 @@ export class ArenaRuntime {
     this.flow.getWorldRuntime()?.presentationFrame?.syncCanopyTransparency(showWorld);
   }
 
-  /** Taktet den Activity-scoped Coop-HUD-/Announcement-Binding genau einmal pro Frame. */
+  /** Taktet die vollständige lokale Coop-Missionsdarstellung genau einmal pro Frame. */
   syncCoopMissionPresentation(deltaMs: number, active: boolean): void {
     this.flow.syncCoopMissionPresentation(deltaMs, active);
   }

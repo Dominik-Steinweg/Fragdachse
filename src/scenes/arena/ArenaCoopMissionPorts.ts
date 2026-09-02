@@ -5,12 +5,15 @@ import type {
 } from '../../activity/CoopMissionHostUpdate';
 import type { CoopMissionRuntimePorts } from '../../activity/CoopMissionRuntime';
 import type { CoopMissionPresentationReadPort } from '../../activity/CoopMissionPresentationBinding';
+import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
+import { resolveCoopDefenseCarryPresentationSnapshot } from './CoopDefenseCarryPresentation';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { EnemyManager } from '../../entities/EnemyManager';
 import type { BurrowSystem } from '../../systems/BurrowSystem';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { ArenaContext } from './ArenaContext';
+import type { SyncedCoopDefenseCarryItem } from '../../types';
 
 export interface ArenaCoopMissionPortsInput {
   readonly ctx: ArenaContext;
@@ -22,7 +25,10 @@ export interface ArenaCoopMissionPortsInput {
 }
 
 export function createArenaCoopMissionPresentationPort(
-  input: Pick<ArenaCoopMissionPortsInput, 'getBaseManager' | 'getEnemyManager'>,
+  input: Pick<ArenaCoopMissionPortsInput, 'getBaseManager' | 'getEnemyManager'> & {
+    readonly getCoopMissionRuntime: () => CoopMissionRuntime | null;
+    readonly getReplicatedCoopDefenseCarryItems: () => readonly SyncedCoopDefenseCarryItem[];
+  },
 ): CoopMissionPresentationReadPort {
   return {
     getEncounterPresentationState: () => bridge.getCoopDefenseEncounterPresentationState(),
@@ -32,6 +38,11 @@ export function createArenaCoopMissionPresentationPort(
     getLocalRespawnBudgetState: () => bridge.getLocalCoopDefenseRespawnBudgetState(),
     getSynchronizedNow: () => bridge.getSynchronizedNow(),
     getArenaStartTime: () => bridge.getArenaStartTime(),
+    getCarryPresentationItems: () => resolveCoopDefenseCarryPresentationSnapshot(
+      bridge.isHost(),
+      input.getCoopMissionRuntime()?.coopDefenseCarrySystem ?? null,
+      input.getReplicatedCoopDefenseCarryItems(),
+    ),
     getHostileBaseProgress: () => {
       const bases = input.getBaseManager()?.getMainBasesByFaction('hostile') ?? [];
       if (bases.length === 0) return null;

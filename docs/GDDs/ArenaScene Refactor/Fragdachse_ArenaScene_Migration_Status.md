@@ -32,11 +32,11 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 7A.2 – Coop World-space Presentation`
-**Gesamtstatus:** `🟨 Phase 7A.1 abgeschlossen – Coop-HUD, ViewModels und Announcements hängen am activity-scoped Presentation-Binding; Checkpoint A/B/C warten weiterhin auf manuelle Sichtprüfung, Phase 7A.2 ist der nächste automatisierte Schritt`
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 7A.1
+**Aktive Phase:** `Phase 7B – Coop Client-Projektion und Activity-Lifecycle-Cutover`
+**Gesamtstatus:** `🟨 Phase 7A.2 abgeschlossen – die vollständige lokale Coop-Missionsdarstellung hängt am activity-scoped Presentation-Binding; Checkpoint A/B/C warten weiterhin auf manuelle Sichtprüfung, Phase 7B ist der nächste automatisierte Schritt`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 7A.2
 **Automatisierter Gate für dieses Refactoring:** `npm run check` grün (340 Testdateien, 2874 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
-**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B/C- und Phase-3A–7A.1-Verträge grün. World ohne Activity, Preview, Handoff und Activity-HUD-Rebinding bleiben sichtprüfungsrelevant.`
+**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B/C- und Phase-3A–7A.2-Verträge grün. World ohne Activity, Preview, Handoff und Activity-A→B-Rebinding bleiben sichtprüfungsrelevant.`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
@@ -55,9 +55,9 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 | 6A.2 World Lighting/Renderer | ✅ abgeschlossen | `WorldPresentationFrameBinding` besitzt Shadow-Residency/Readiness, Canopy, lokale Player-/Persistent-Base-Visuals sowie World-Shadows/-Lighting inklusive Zug-/Projektillichter; Handoff-Reihenfolge unverändert. |
 | 6B Client World Projection | ✅ abgeschlossen | Generische replizierte World-Projektion liegt im `WorldPresentationFrameBinding`; Activity-/Coop-spezifische Projektion bleibt für Phase 7; kein zweiter `clientPresentationStep()`. |
 | – Checkpoint C | 🟨 aktiv | Automatisierte Verträge grün; manuelle Prüfung von World ohne Activity, Preview und Handoff bleibt offen. |
-| 7A.1 Coop HUD/Announcements | ✅ abgeschlossen | `CoopMissionPresentationBinding` bindet Map-Event-Announcements, Encounter-/Main-Objective-/Secondary-HUD, Lebensstatus und Tutorial über Activity-/Read-/UI-Ports; Detach setzt alle Activity-HUD-Zustände zurück und macht den Binding inert. World-space Marker/Telegraphen bleiben für 7A.2 unverändert in Scene. |
-| 7A.2 Coop World-space Presentation | 🟨 aktiv | Objective-/Carry-/Repair-/Mission-Renderer an Activity-Lifetime. |
-| 7B Coop Client/Lifecycle Cutover | ⬜ offen | Client-Projektion über bestehenden Activity-Step vollständig cutovern. |
+| 7A.1 Coop HUD/Announcements | ✅ abgeschlossen | `CoopMissionPresentationBinding` bindet Map-Event-Announcements, Encounter-/Main-Objective-/Secondary-HUD, Lebensstatus und Tutorial über Activity-/Read-/UI-Ports; Detach setzt die bisherigen Activity-HUD-Zustände zurück und macht den Binding inert. |
+| 7A.2 Coop World-space Presentation | ✅ abgeschlossen | `CoopMissionPresentationBinding` besitzt zusätzlich Encounter-Telegraph, Secondary-Objective-, Mission-/Checkpoint-, Carry-, Repair-/Reward- und Hostile-Base-Projektion; scene-langlebige Renderer bleiben hinter dem UI-Port, Activity-Detach setzt sämtliche World-space-Zustände zurück. |
+| 7B Coop Client/Lifecycle Cutover | 🟨 aktiv | Verbleibende activity-spezifische Client-Projektion über den bestehenden Activity-Step vollständig cutovern. |
 | – Checkpoint D | ⬜ offen | Activity A→B, Host/Client, kein Presentation-Leak. |
 | 8 Scene Frame Cutover | ⬜ offen | `update()` auf Top-Level-Orchestrierung reduzieren. |
 | 9 Cleanup / Final Gate | ⬜ offen | Compatibility, Imports, Source-Ratchets, `npm run check`. |
@@ -105,7 +105,9 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 **Ergebnis 6B.** Die generische replizierte Client-Projektion (World-/Player-/PowerUp-/Construction-/Persistent-Base-nahe World-Visuals) wird jetzt über `ArenaRuntime` an das aktive `WorldPresentationFrameBinding` delegiert und läuft damit auch für eine World ohne Activity. Der Scene-Adapter behält ausschließlich Capture-the-Beer- und Coop-Defense-Carry-Projektion bis Phase 7; `ClientUpdateCoordinator.clientPresentationStep()` bleibt der einzige Activity-Client-Step.
 
-**Ergebnis 7A.1.** `CoopMissionPresentationBinding` ist als konkreter `CoopMissionScopedBinding` über `ArenaLifecycleCoordinator` etabliert. Map-Event-Announcements, Encounter-/Main-Objective-/Secondary-HUD, Lebensstatus und Tutorial werden über kleine Activity-Read-/UI-Ports synchronisiert; Base-/Boss-Fortschritt wird an der Arena-Adaptergrenze als Read-Model geliefert. Der Binding besitzt keine Simulation, importiert kein `bridge` und setzt beim Detach die scene-langlebigen UI-Infrastruktur-Objekte vollständig auf neutral zurück. World-space Objective-/Carry-/Repair-/Mission-Renderer sowie der Encounter-Telegraph bleiben für Phase 7A.2 in ihrem bisherigen Scene-Pfad.
+**Ergebnis 7A.1.** `CoopMissionPresentationBinding` ist als konkreter `CoopMissionScopedBinding` über `ArenaLifecycleCoordinator` etabliert. Map-Event-Announcements, Encounter-/Main-Objective-/Secondary-HUD, Lebensstatus und Tutorial werden über kleine Activity-Read-/UI-Ports synchronisiert; Base-/Boss-Fortschritt wird an der Arena-Adaptergrenze als Read-Model geliefert. Der Binding besitzt keine Simulation, importiert kein `bridge` und setzt beim Detach die scene-langlebigen UI-Infrastruktur-Objekte vollständig auf neutral zurück.
+
+**Ergebnis 7A.2.** Der bestehende `CoopMissionPresentationBinding` besitzt jetzt den vollständigen lokalen Coop-Missionspfad: Encounter-Telegraph, Secondary-Objective-Marker, Mission-/Checkpoint-Marker, Carry-Zonen, Repair-/Reward-Drohnen und Hostile-Base-Indikator werden aus Activity-Read-Models über benannte World-space-UI-Ports synchronisiert. Carry-Präsentationsdaten bleiben an der Composition-Grenze role-aware (Host-Runtime vs. replizierter Client-Snapshot); kein `bridge`-Import gelangt in den Activity-Binding. Die scene-langlebigen Phaser-Objekte bleiben Infrastruktur, werden aber bei Activity-Detach vor dem Child-Teardown neutralisiert; nach Destroy ist der Binding inert. `ArenaScene.update()` kennt diese Coop-Rendererliste nicht mehr, und Phase 7B/der kanonische `clientPresentationStep()` wurde nicht vorgezogen.
 
 **Kein Test der Klasse S.** Jede geprüfte Formel bzw. jeder geprüfte Aufruf trägt entweder echtes Verhalten (Aufrufreihenfolge = Ausführungsreihenfolge, verhaltenssteuernde Bedingungen) oder eine bewusste Ownership-Grenze. Beim Cutover darf daher **kein** Eintrag ersatzlos gelöscht werden.
 
@@ -176,7 +178,8 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | `npm run check` (nach Phase 6A.2) | grün – 339 Testdateien, 2870 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
 | `npm run check` (nach Phase 6B) | grün – 339 Testdateien, 2872 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
 | `npm run check` (nach Phase 7A.1) | grün – 340 Testdateien, 2874 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
-| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185); Phase 3B: 4530 → 4204 (−326); Phase 4A: 4204 → 3782 (−422); Phase 4B: 3782 → 3670 (−112); Phase 4C: 3670 → 3466 (−204); Phase 6A.1: 3466 → 3379 (−87); Phase 6A.2: 3379 → 3061 (−318); Phase 6B: 3061 → 3031 (−30); Phase 7A.1: 3031 → 2952 (−79). `WorldPresentationFrameBinding.ts`: 51 → 195 (6A.1) → 541 (6A.2) → 653 (6B); `CoopMissionPresentationBinding.ts`: 211 (7A.1). |
+| `npm run check` (nach Phase 7A.2) | grün – 340 Testdateien, 2874 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
+| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185); Phase 3B: 4530 → 4204 (−326); Phase 4A: 4204 → 3782 (−422); Phase 4B: 3782 → 3670 (−112); Phase 4C: 3670 → 3466 (−204); Phase 6A.1: 3466 → 3379 (−87); Phase 6A.2: 3379 → 3061 (−318); Phase 6B: 3061 → 3031 (−30); Phase 7A.1: 3031 → 2952 (−79); Phase 7A.2: 2952 → 2950 (−2). `WorldPresentationFrameBinding.ts`: 51 → 195 (6A.1) → 541 (6A.2) → 653 (6B); `CoopMissionPresentationBinding.ts`: 211 (7A.1) → 267 (7A.2). |
 | `WorldPresentationFrameBinding` | Trägt die World-Kamera-Positionierung (pro Frame zweimal), Surface- und Shadow-Residency/Readiness, Canopy-Transparenz, lokale Player-/Persistent-Base-Visuals, die generische replizierte Client-World-Projektion sowie allgemeine World-Shadows und -Lighting inklusive Zug-/Projektillichtern. Der Binding erzeugt und räumt seine World-spezifische Zug-Occluderquelle owner-sicher auf. |
 | Behobene Regression im 6A.1-Review | Ohne aktive `WorldRuntime` (zwischen zwei Instanzen, vor der ersten) lief der Kamera-Sync nach dem Umzug gar nicht mehr, während der alte Scene-Code dort jeden Frame den neutralen Stand setzte. Das Kamera-Feedback hätte am Frame-Ende auf der Basis der vergangenen World weitergerechnet. `ArenaRuntime.syncWorldCamera()` ruft in diesem Fall jetzt `resetWorldCameraBase(scene)` – dieselbe Funktion, die auch der Early-Return des Bindings nutzt, also eine Quelle. |
 | Zwei Kamera-Syncs pro Frame | Bleiben unverändert: Aufruf 1 positioniert die Kamera **vor** der Simulation (das Startbild definiert das Working Set der Ladebarriere), Aufruf 2 danach auf die finale Spielerposition, beim Spectator mit `delta = 0` gegen doppelte Pan-Geschwindigkeit. `getVisibleWorldView` wird für die Residency einmal im Frame-Binding berechnet; `syncArenaLoadReady` und Boot-Reveal erhalten ihre späteren, getrennten Readiness-Views. |
@@ -192,10 +195,10 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Phase 7A.2 – Coop World-space Presentation** (Checkpoint A/B/C bleiben parallel für die manuelle Sichtprüfung offen).
+**Phase 7B – Coop Client-Projektion und Activity-Lifecycle-Cutover** (Checkpoint A/B/C bleiben parallel für die manuelle Sichtprüfung offen).
 
-- Phase 7A.1 ist automatisiert abgeschlossen: Der `CoopMissionPresentationBinding` synchronisiert die Coop-HUD-/Announcement-Projektion aus Activity-Read-Models und UI-Ports; Detach/Rebind bleiben durch den bestehenden `CoopMissionScopedBinding`-Vertrag geschützt.
-- Der Scene-Adapter behält bis Phase 7A.2 ausschließlich die World-space Coop-Projektion (Encounter-Telegraph, Objective-/Mission-/Carry-/Repair-Renderer) sowie die Capture-the-Beer-Projektion; es gibt keinen zweiten `clientPresentationStep()`-Aufruf und keinen parallelen Activity-Client-Step.
+- Phase 7A.2 ist automatisiert abgeschlossen: Der `CoopMissionPresentationBinding` synchronisiert nun HUD, Announcements und die vollständige World-space-Coop-Missionsdarstellung aus Activity-Read-Models und UI-Ports; Detach/Rebind bleiben durch den bestehenden `CoopMissionScopedBinding`-Vertrag geschützt.
+- Die verbleibende activity-spezifische Client-/Enemy-/Objective-Projektion kann in Phase 7B über den bestehenden `CoopMissionActivityStep.clientPresentationStep()` weiter migriert werden; es gibt weiterhin keinen zweiten Client-Step oder parallelen Activity-Lifecycle.
 - Preview muss replizierte World-Darstellung ohne PlayerRuntime/Input behalten; die bestehende `ClientUpdateCoordinator`-Read-/Step-Grenze bleibt kanonisch.
 - Manuell prüfen: World ohne Activity, Preview-Projektion, Handoff/Detach sowie Activity A→B ohne stale HUD-/Announcement- oder World-Consumer-Effekte. Browserprüfung wurde gemäß Opt-in-Regel nicht gestartet.
 - `applyCameraFeedback`, `resolveWorldGradeInputs` und `resetRenderersForWorldPresentationTeardown` bleiben bis zu einer jeweils passenden späteren Ownership-Prüfung außerhalb der Phasen 6A.2/6B. Das ungenutzte `useWorldCamera` wird in Phase 9 oder einer dafür beschlossenen Vertragsänderung zusammengeführt.

@@ -166,7 +166,6 @@ import {
   wireRenderersToCameraFeedback,
   wireRenderersToDistortion,
 } from './arena';
-import { resolveCoopDefenseCarryPresentationSnapshot } from './arena/CoopDefenseCarryPresentation';
 import type { CoopMissionPresentationUiPort } from '../activity/CoopMissionPresentationBinding';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
@@ -260,13 +259,6 @@ export class ArenaScene extends Phaser.Scene {
     return this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()?.system ?? null;
   }
   private replicatedCoopDefenseCarryItems: readonly import('../types').SyncedCoopDefenseCarryItem[] = [];
-  private get coopDefenseCarryPresentationItems() {
-    return resolveCoopDefenseCarryPresentationSnapshot(
-      bridge.isHost(),
-      this.coopMissionRuntime?.coopDefenseCarrySystem ?? null,
-      this.replicatedCoopDefenseCarryItems,
-    );
-  }
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -1161,6 +1153,64 @@ export class ArenaScene extends Phaser.Scene {
         ),
         reset: () => this.secondaryObjectiveHud?.reset(),
       },
+      worldSpace: {
+        syncEncounterTelegraph: (state, elapsedMs) => this.renderers.encounterTelegraph.sync(
+          state,
+          elapsedMs,
+          true,
+        ),
+        syncSecondaryObjectiveMarkers: (snapshot, configs, carryItems) => (
+          this.renderers.secondaryObjectiveMarkers.sync(
+            snapshot,
+            configs,
+            this.baseManager,
+            carryItems,
+            true,
+          )
+        ),
+        syncMissionProgress: (config, state) => this.renderers.missionProgress.sync(
+          config,
+          state,
+          true,
+        ),
+        syncCarryZones: (snapshot, configs) => this.renderers.carryZones.sync(
+          snapshot,
+          configs,
+          true,
+        ),
+        syncObjectiveRepairDrones: (snapshot, configs, elapsedMs) => (
+          this.renderers.objectiveRepairDrones.sync(
+            snapshot,
+            configs,
+            this.baseManager,
+            elapsedMs,
+            true,
+          )
+        ),
+        syncHostileBaseIndicator: (mapConfig) => this.hostileBaseIndicator?.sync(
+          this.baseManager,
+          this.enemyManager,
+          mapConfig,
+          true,
+        ),
+        destroy: () => {
+          this.hostileBaseIndicator?.destroy();
+          this.hostileBaseIndicator = null;
+          this.renderers.encounterTelegraph.destroy();
+          this.renderers.secondaryObjectiveMarkers.destroy();
+          this.renderers.missionProgress.destroy();
+          this.renderers.carryZones.clear();
+          this.renderers.objectiveRepairDrones.destroy();
+        },
+        reset: () => {
+          this.renderers.encounterTelegraph.clear();
+          this.renderers.secondaryObjectiveMarkers.clear();
+          this.renderers.missionProgress.clear();
+          this.renderers.carryZones.clear();
+          this.renderers.objectiveRepairDrones.clear();
+          this.hostileBaseIndicator?.clear();
+        },
+      },
     };
     this.arenaRuntime   = new ArenaRuntime({
       scene: this,
@@ -1175,6 +1225,7 @@ export class ArenaScene extends Phaser.Scene {
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
       coopMissionPresentationUi,
+      getReplicatedCoopDefenseCarryItems: () => this.replicatedCoopDefenseCarryItems,
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
@@ -1515,8 +1566,6 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseUpgradesOverlay = null;
       this.meta?.destroy();
       this.meta = null;
-      this.hostileBaseIndicator?.destroy();
-      this.hostileBaseIndicator = null;
       // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
       // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
       this.playerStatusRing?.destroy();
@@ -1529,9 +1578,7 @@ export class ArenaScene extends Phaser.Scene {
       this.objectiveAnnouncements = null;
       this.removeReconnectStatusListener?.();
       this.removeReconnectStatusListener = null;
-      this.renderers?.secondaryObjectiveMarkers.destroy();
-      this.renderers?.carryZones.clear();
-      this.renderers?.objectiveRepairDrones.destroy();
+      coopMissionPresentationUi.worldSpace.destroy();
     });
     bridge.sendPingToHost();
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
@@ -1913,57 +1960,8 @@ export class ArenaScene extends Phaser.Scene {
     // readiness check at the end of the frame.
     this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
     const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
-    const presentationMapConfig = coopDefensePresentationActive
-      ? getCoopDefenseMapConfig(configuredCoopDefenseMapId!)
-      : null;
-    const encounterPresentation = coopDefensePresentationActive
-      ? bridge.getCoopDefenseEncounterPresentationState()
-      : null;
-    const secondaryObjectivesActive = coopDefensePresentationActive;
-    const secondaryObjectivePresentation = secondaryObjectivesActive
-      ? bridge.getCoopDefenseSecondaryObjectivePresentationState()
-      : null;
-    const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
-    const missionProgressPresentation = coopDefensePresentationActive
-      ? bridge.getCoopDefenseMissionProgressPresentationState()
-      : null;
     this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
-    this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
-    this.renderers.secondaryObjectiveMarkers.sync(
-      secondaryObjectivePresentation,
-      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
-      this.baseManager,
-      this.coopDefenseCarryPresentationItems,
-      secondaryObjectivesActive,
-    );
-    this.renderers.missionProgress.sync(
-      presentationMapConfig ? resolveCoopDefenseMapMissionProgress(presentationMapConfig) : undefined,
-      missionProgressPresentation,
-      coopDefensePresentationActive,
-    );
-    this.renderers.carryZones.sync(
-      secondaryObjectivePresentation,
-      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
-      secondaryObjectivesActive,
-    );
-    this.renderers.objectiveRepairDrones.sync(
-      secondaryObjectivePresentation,
-      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
-      this.baseManager,
-      encounterElapsedMs,
-      secondaryObjectivesActive,
-    );
     this.syncSpectatorPlayerNames(inArena);
-    if (coopDefensePresentationActive) {
-      this.hostileBaseIndicator?.sync(
-        this.baseManager,
-        this.enemyManager,
-        presentationMapConfig,
-        true,
-      );
-    } else {
-      this.hostileBaseIndicator?.clear();
-    }
     this.arenaRuntime.syncWorldLocalPlayerPresentation(inArena, spectator);
     if (inArena) {
       this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
