@@ -4,6 +4,7 @@ import type { PlayerWorldRuntime } from './PlayerWorldRuntime';
 import type { WorldDescriptor } from './WorldDescriptor';
 import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldPresentationBinding } from './WorldPresentationBinding';
+import type { WorldPresentationFrameBinding } from './WorldPresentationFrameBinding';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 
 /**
@@ -36,6 +37,7 @@ export class WorldRuntime {
 
   private materializedWorld: WorldMaterialization | null = null;
   private presentationBinding: WorldPresentationBinding | null = null;
+  private presentationFrameBinding: WorldPresentationFrameBinding | null = null;
   private persistentBaseBinding: PersistentBaseWorldBinding | null = null;
   private playerRuntime: PlayerWorldRuntime | null = null;
   private worldScopedBindings: WorldScopedBinding[] = [];
@@ -62,6 +64,11 @@ export class WorldRuntime {
   /** Die lokale Darstellung dieser World; `null` ohne eigene Presentation. */
   get presentation(): WorldPresentationBinding | null {
     return this.presentationBinding;
+  }
+
+  /** Die aktive Presentation-Verdrahtung dieser World; `null` ohne gebundenen Frame-Binding. */
+  get presentationFrame(): WorldPresentationFrameBinding | null {
+    return this.presentationFrameBinding;
   }
 
   /** Die world-lokale Materialisierung der persistenten Basis; `null`, wenn diese World keine fuehrt. */
@@ -126,6 +133,32 @@ export class WorldRuntime {
     return released;
   }
 
+  /**
+   * Bindet die aktive World-Presentation-Verdrahtung. Der Slot fuehrt genau einen Frame-Binding;
+   * ein bereits belegter Slot wird nicht still ueberschrieben, sonst leakt der vorherige.
+   */
+  bindPresentationFrame(binding: WorldPresentationFrameBinding): void {
+    this.assertAlive('presentation frame binding');
+    if (this.presentationFrameBinding) {
+      throw new Error(
+        `[WorldRuntime] Presentation frame binding of world ${this.descriptor.definitionId} `
+        + 'is already bound',
+      );
+    }
+    this.presentationFrameBinding = binding;
+  }
+
+  /**
+   * Loest die aktive World-Presentation-Verdrahtung. Idempotent und auch nach {@link destroy}
+   * gefahrlos aufrufbar – so kann sie vor der handoffbaren Darstellung fallen, ohne dass ein
+   * zweiter Aufruf (etwa das Sicherheitsnetz in `destroy()`) je etwas doppelt loest.
+   */
+  detachPresentationFrame(): void {
+    const binding = this.presentationFrameBinding;
+    this.presentationFrameBinding = null;
+    binding?.destroy();
+  }
+
   /** Setzt das Persistent-Base-Binding dieser World; ein vorhandenes wird zuvor zerstoert. */
   setPersistentBase(binding: PersistentBaseWorldBinding | null): void {
     this.assertAlive('persistent base binding');
@@ -171,6 +204,11 @@ export class WorldRuntime {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    // Sicherheitsnetz zuerst: eine ohne expliziten `detachPresentationFrame()` zerstoerte Runtime
+    // (z. B. ein technischer Abbruch) darf die aktive Presentation-Verdrahtung nicht leaken. Der
+    // regulaere Pfad hat den Slot an dieser Stelle bereits geleert; hier ist der Aufruf dann ein
+    // no-op. Die restliche Teardown-Reihenfolge bleibt unveraendert.
+    this.detachPresentationFrame();
     const presentation = this.presentationBinding;
     const persistentBase = this.persistentBaseBinding;
     const materialization = this.materializedWorld;

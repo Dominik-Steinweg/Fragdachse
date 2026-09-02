@@ -32,11 +32,11 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 4C abgeschlossen – Checkpoint B manueller Gate offen; danach Phase 5`
-**Gesamtstatus:** `🟨 Phase 4C abgeschlossen – ArenaMetaController besitzt persönliche Progression, Upgrades, Loadout, Items, Results und Lobby-Projektion; Checkpoint A/B warten weiterhin auf manuelle Sichtprüfung`
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 4C
-**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (338 Testdateien, 2851 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
-**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B- und Phase-3A/3B/4A/4B/4C-Verträge grün`
+**Aktive Phase:** `6A.1 – World Surface, Kamera und Residency`
+**Gesamtstatus:** `🟨 Phase 5 abgeschlossen – das Presentation-Lifetime-Gerüst steht; Renderblöcke ziehen erst ab Phase 6 ein. Checkpoint A/B warten weiterhin auf manuelle Sichtprüfung`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 5
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (339 Testdateien, 2867 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
+**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B- und Phase-3A–5-Verträge grün. Phase 5 ändert kein sichtbares Verhalten.`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
@@ -50,7 +50,7 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 | 4B Meta Items/Rewards | ✅ abgeschlossen | `ArenaMetaController` besitzt Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation, automatische Reward-Anzeige und Lobby-Button-Projektion; Persistenz bleibt Adapter. |
 | 4C Meta Results/Lobby | ✅ abgeschlossen | `ArenaMetaController` besitzt Result-Read-Verarbeitung, persönliche XP-/Unlock-/Reward-Verbuchung mit lokaler Deduplizierung, Result-Präsentation/Replay, Import-Follow-up, Default-Map, Ready-Reset und persönliche Lobby-Projektion; `ArenaScene` besitzt keinen persönlichen Result-/Progress-/Item-State und keine direkten persönlichen Persistence-Mutationen mehr. `ResultApplication` und `ArenaPersistentBaseSession` bleiben unverändert ihre jeweiligen Owner. |
 | – Checkpoint B | 🟨 aktiv | Automatisierte Prüfungen grün; manuelle Prüfung von Input, Persistent Base, Spectator, Options/Debug, Meta/Items/Upgrades/Results, Dateiimport/Lobby-Projektion und Ready-State noch offen. |
-| 5 Presentation-Lifetime-Fundament | ⬜ offen | Frame Binding vor Handoff lösen; bestehende Activity-Binding-/Step-Verträge wiederverwenden. |
+| 5 Presentation-Lifetime-Fundament | ✅ abgeschlossen | `WorldPresentationFrameBinding` + dedizierter `WorldRuntime`-Slot; der Detach läuft garantiert vor dem Handoff-Release. Activity-Seite bewusst unverändert (reuse-first: vorhandene Verträge reichen, nur festgeschrieben). |
 | 6A.1 World Surface/Camera | ⬜ offen | Surface, Kamera und Residency aus Scene. |
 | 6A.2 World Lighting/Renderer | ⬜ offen | Shadows, Lighting, Shared-Consumer und übrige World-Renderer. |
 | 6B Client World Projection | ⬜ offen | world-spezifische replizierte Client-Projektion. |
@@ -109,7 +109,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| – | – | Keine offenen Phase-3B-/4A-/4B-/4C-Transitional-Debts. | `ArenaDiagnosticsController` / `ArenaInputBindings` / `ArenaMetaController` | – |
+| TD-5 | 5 | `WorldPresentationFrameBinding` trägt noch **keine** Presentation-Consumer: Der benannte Port `WorldPresentationFrameConsumers` existiert, wird aber überall mit `null` gebunden. Der Owner hält damit heute nur den Lifetime-Vertrag. Bewusst **keine** `update()`-Methode, solange es keinen Aufrufer gibt (KISS, `docs/ai/architecture-principles.md` §6). | `WorldPresentationFrameBinding` | 6A.1 (erster Consumer + Frame-Step) |
 
 ---
 
@@ -130,14 +130,14 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | Stale World-Binding inert | ✅ voll für Geometry + Combat *(Phase 1 ergänzt)* | `WorldGeometryBindingLifecycle`; neu `ActivityRebindingContracts` für `WorldCombatGameplayBinding` |
 | Genau ein Activity-Client-Presentation-Step | ✅ voll *(Phase 1 ergänzt)* | Neuer Ratchet in `CoopMissionRuntimeOwnership`, spiegelbildlich zum Host-Pendant in `HostUpdatePhaseContracts` |
 | Teardown-Idempotenz scene-langlebiger Owner | ✅ für neue Refactoring-Owner | `ArenaDiagnosticsController`, `ArenaInputBindings` und `ArenaMetaController` liefern idempotentes `destroy()` mit Tests; die übrigen bestehenden Owner bleiben außerhalb dieser Phasen unverändert. |
-| Frame-Binding fällt vor Handoff | ⛔ nicht testbar | `WorldPresentationFrameBinding` existiert nicht (0 Treffer in `src/`); Vertrag entsteht erst in Phase 5 |
+| Frame-Binding fällt vor Handoff | ✅ voll *(Phase 5)* | `WorldPresentationFrameLifetime`: Reihenfolge `FrameBinding.destroy → handoff.release → runtime.destroy` als beobachtetes Aufrufprotokoll, plus Sicherheitsnetz-, Idempotenz-, Stale- und End-zu-Ende-Tests über `WorldLifecycle` |
 
 ### 5.2 Risikoregister
 
 | ID | Bereich | Risiko / Vertrag | Schutz |
 |---|---|---|---|
 | R-1 | Source-Tests | Zahlreiche Tests prüfen konkrete Strings in `ArenaScene.ts`; sie dürfen die alte Ownership nicht konservieren. | **Inventarisiert** (Abschnitt 3, 21 Einträge). Beim Cutover jeder Teilphase die dort gelisteten Einträge zum neuen Owner mitnehmen, nicht löschen. |
-| R-2 | World Handoff | `WorldPresentationBinding` darf beim Handoff keine Gameplay-/Physics-Referenzen tragen; der aktive Frame-Binding darf nicht erst nach dem Release fallen. | Ist-Reihenfolge verifiziert: `ArenaLifecycleCoordinator.detach()` ruft heute `worldPresentationHandoff.release(runtime.releasePresentation())` **vor** `runtime.destroy()`. Ein nur über `WorldRuntime.bind(...)` registrierter Frame-Binding fiele damit zu spät – genau der von Architektur §4.5 beschriebene Fall. Phase 5 muss den Detach explizit vorziehen. |
+| R-2 | World Handoff | `WorldPresentationBinding` darf beim Handoff keine Gameplay-/Physics-Referenzen tragen; der aktive Frame-Binding darf nicht erst nach dem Release fallen. | **Geschlossen (Phase 5).** `WorldRuntime` führt den Frame-Binding in einem **eigenen** Slot, nicht in `worldScopedBindings` (deren Teardown liefe erst in `destroy()` und damit zu spät – genau der von Architektur §4.5 beschriebene Fall). `ArenaLifecycleCoordinator.detach()` ruft jetzt `runtime.detachPresentationFrame()` **vor** `worldPresentationHandoff.release(runtime.releasePresentation())`; `WorldRuntime.destroy()` wiederholt den Detach als idempotentes Sicherheitsnetz zuerst. Alle Teardown-Pfade laufen über diesen einen Sink. |
 | R-3 | Stale World Binding | Ein bereits zerstörter Binding darf keine scene-langlebigen Renderer-/Lighting-/Occluder-/Listener-Consumer einer nachfolgenden World verändern. | `WorldGeometryBindingLifecycle` (Fire-Resolver, `movementBlockedResolver`, Map-Grid-Listener, `lighting.occluderIndex`) + neuer Combat-Binding-Test. **Offener Befund:** `WorldCombatGameplayBinding.setPowerUpSystem()` und `.updateEnemyManager()` haben **keinen** `destroyed`-Guard, schreiben aber auf scene-langlebige Systeme (`src/world/WorldCombatGameplayBinding.ts:227,242`). Heute unerreichbar, weil kein Aufrufer sie nach dem Detach ruft. In Phase 5 bewerten und ggf. schließen – Phase 1 ändert dafür bewusst keinen Produktionscode. |
 | R-4 | Frame-Reihenfolge | Network, Input/Pointers, Host-/Client-Step, Camera-Feedback, Residency, Lighting und Renderer besitzen relevante Reihenfolgen. | Top-Level-Reihenfolge `syncRoomOwners → arenaRuntime.update → runHost/ClientFrame` ist ab Phase 1 als Reihenfolge festgeschrieben; Host-interne Phasen über `HostUpdatePhaseContracts`. Phase 8 kein blindes Reordering. |
 | R-5 | World ohne Activity | LobbyWorld bzw. World ohne Activity darf keine Dummy-Coop-Presentation benötigen. | Voll abgedeckt (5.1); Checkpoint C/D bestätigt erneut. |
@@ -166,8 +166,11 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | Source-Test-Inventar `rg` über `tests/` | 14 Dateien / 26 Assertion-Stellen lesen `src/scenes/ArenaScene.ts` als Text; keine weiteren Pfadschreibweisen oder Verzeichnis-Scans. |
 | `ArenaInputBindings` | Scene-langlebiger Owner für Keyboard-Setup, alle `InputSystem`-Provider und Action-Callbacks, InputPolicy, Aim-/Cursor-/Spectator-Frame-Interface, lokale Placement-/Management-Weiterleitung und lokales Feedback; `destroy()` löst sieben Listener und sechs eigene Keys idempotent. |
 | `ArenaMetaController` | Scene-langlebiger Owner für validierten Coop-Progress-Read-Stand, Loadout-Reconciliation, Level Up/Down, Category/Class/Full Respec, Klassenwahl, Inspector-Tool-Slots, Loadout-Slot-Auswahl, Upgrade-Overlay-Apply/Cancel, Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation/-Anzeige, persönliche Debug-Progress-/Persistent-Base-Entitlements, Result-Read-Verarbeitung, persönliche Deduplizierung, Match-Result-Präsentation/-Replay, Import-Nachzug, Default-Map und Lobby-Projektion; `ArenaMetaPersistence` kapselt die bestehende Persistence-Grenze, ein `resultRead`-Port kapselt autoritative Resultdaten; `destroy()` ist idempotent und danach inert. Keine ResultApplication-, Activity-, World- oder Persistent-Base-Working-State-Verantwortung verschoben. |
-| `WorldPresentationFrameBinding` | Existiert weder in `src/` noch in `tests/`. Phase 5 führt ihn erstmals ein; kein bestehender Test darf als Beleg für diesen Vertrag umgedeutet werden. |
-| `ArenaLifecycleCoordinator.detach()` | Ist-Reihenfolge: `handoff.release(runtime.releasePresentation())` → `runtime.destroy()` → `persistentBase.useWorldRuntimes(null)`. Deckt sich mit Architektur §4.5 und begründet den Phase-5-Auftrag. |
+| `npm run check` (nach Phase 5) | grün – 339 Testdateien, 2867 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. |
+| `WorldPresentationFrameBinding` | Neu in `src/world/WorldPresentationFrameBinding.ts`. Trägt in Phase 5 ausschließlich den Lifetime-Vertrag (siehe TD-5); Renderlogik zieht ab 6A.1 ein. |
+| `ArenaLifecycleCoordinator.detach()` | Neue Reihenfolge: `detachPresentationFrame()` → `handoff.release(runtime.releasePresentation())` → `runtime.destroy()` → `persistentBase.useWorldRuntimes(null)`. Der Sink ist der **einzige** Ausführungsort des lokalen Teardowns; alle Pfade (Match-Exit, Lobby-Rückkehr, Fast-Reinstance, Rundenende, technischer Abbruch, Diagnose-Abbruch) laufen darüber. |
+| Bewusst **nicht** in Phase 5 verschoben | `resetRenderersForWorldPresentationTeardown` läuft heute **nach** `runtime.destroy()`. Ein Vorziehen in den Frame-Binding würde die Reihenfolge gegenüber den World-Gameplay-Ownern ändern (Renderer-Reset vor deren Teardown) – das ist Phase 6A.2, nicht Phase 5. |
+| Activity-Seite in Phase 5 | Keine Änderung. Verifiziert: `CoopMissionRuntime.bind({attach, detach})` wird bereits an sechs Stellen genutzt und löst scoped Bindings in umgekehrter Reihenfolge **vor** allen Activity-Child-Ownern; `clientPresentationStep()` hat weiterhin genau einen Aufrufer. Der vorhandene Vertrag reicht für Phase 7A – kein `CoopMissionPresentationBinding` und kein zweiter Client-Step vorgezogen. |
 | `clientPresentationStep` | Deklaration/Impl in `src/activity/CoopMissionRuntime.ts:137,416`; genau ein Aufrufer `src/scenes/arena/ClientUpdateCoordinator.ts:317`. |
 | Scene-langlebige Owner ohne `destroy()` | `ArenaRuntime`, `ArenaLifecycleCoordinator`, `ArenaPersistentBaseSession`, `HostUpdateCoordinator`, `ClientUpdateCoordinator`, `RpcCoordinator` (grep-verifiziert). |
 | Diagnostics-Vorprüfung für Phase 2A | Für Diagnostics existiert **kein** Eintrag in der Test-Migrationskarte – der Bereich ist heute nicht über Source-Assertions geschützt. Die Verträge entstehen in Phase 2A neu am Owner. |
@@ -176,8 +179,13 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Checkpoint A/B manuell abschließen, danach Phase 5 – Presentation-Lifetime-Fundament.**
+**Phase 6A.1 – World Surface, Kamera und Residency** (Checkpoint A/B bleiben parallel für die manuelle Sichtprüfung offen).
 
+- Erster echter Inhalt für `WorldPresentationFrameBinding`: Surface-/Canopy-Residency, World-Kamera-Bindung und die zugehörigen aktiven Reads aus `ArenaScene` in den world-scoped Owner ziehen. Damit entfällt TD-5.
+- Dabei den Frame-Step nachrüsten: Der Owner bekommt erst jetzt eine `update()`-Methode und einen Aufrufer über `WorldRuntime`/`ArenaRuntime`; die Scene bestimmt nur noch die grobe Frame-Position.
+- Frame-Reihenfolge nicht umsortieren – R-4 ist seit Phase 1 per `indexOf` festgeschrieben (`syncRoomOwners → arenaRuntime.update → runHostFrame/runClientFrame`), und der Presentation-Step gehört hinter den Host-/Client-Frame.
+- Keinen zweiten `clientPresentationStep(`-Aufruf einführen – der Regex-Ratchet in `CoopMissionRuntimeOwnership` scannt `src/scenes` und `src/world`.
+- `resetRenderersForWorldPresentationTeardown` erst in 6A.2 bewerten (siehe Abschnitt 6): Ein Vorziehen ändert die Teardown-Reihenfolge gegenüber den World-Gameplay-Ownern.
 - Die automatisierten Checkpoint-A-Prüfungen sind mit `npm run check` grün.
 - Offen bleibt die manuelle Sichtprüfung von Diagnose an/aus, Performance-/Netzwerk-Overlay, Ablation, Semantic Events, Sampling und Shutdown-Verhalten sowie der Checkpoint-B-Umfang (Input, Persistent Base, Spectator, Options/Debug, Meta/Items/Upgrades/Results, Dateiimport/Lobby-Projektion und Ready-State).
 - Phase 3A ist automatisiert abgeschlossen: Input-Setup, statische Provider, Hotkeys, sechs eigene Keys und die Ownership-getrennte Scene-Bereinigung sind verifiziert.

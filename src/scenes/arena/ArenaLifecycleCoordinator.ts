@@ -113,6 +113,7 @@ import {
   PersistentBaseWorldBinding,
 } from '../../world/PersistentBaseWorldBinding';
 import { WorldRuntime } from '../../world/WorldRuntime';
+import { WorldPresentationFrameBinding } from '../../world/WorldPresentationFrameBinding';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import type { ConstructionWorldRuntime } from '../../world/ConstructionWorldRuntime';
@@ -331,11 +332,18 @@ export class ArenaLifecycleCoordinator {
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
+      // Jede World bekommt ihren eigenen Presentation-Frame-Binding - auch eine World ohne
+      // Activity (LobbyWorld). Phase 5 baut nur das Lifetime-Gerüst; Consumer ziehen erst in
+      // Phase 6 hier ein.
+      this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding());
     },
     detach: () => {
       const runtime = this.worldRuntime;
       this.worldRuntime = null;
-      // Die Darstellung verlaesst die World zuerst: Ein Uebergang zeigt sie weiter oder
+      // Die aktive Presentation-Verdrahtung faellt zuerst: Sie adressiert world-scoped Zustand,
+      // den ein Uebergang gerade beendet, und darf nie in den Handoff gelangen.
+      runtime?.detachPresentationFrame();
+      // Die Darstellung verlaesst die World danach: Ein Uebergang zeigt sie weiter oder
       // verwendet sie erneut, waehrend der Gameplay-State dieser Instanz vollstaendig faellt.
       // Nach der Uebergabe sieht kein world-scoped Consumer sie mehr.
       this.worldPresentationHandoff.release(runtime?.releasePresentation() ?? null);
