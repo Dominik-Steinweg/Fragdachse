@@ -8,6 +8,15 @@ export { RpcCoordinator }               from './RpcCoordinator';
 export { ArenaLifecycleCoordinator }    from './ArenaLifecycleCoordinator';
 export { ArenaRuntime }                 from './ArenaRuntime';
 export { ArenaPersistentBaseSession }   from './ArenaPersistentBaseSession';
+export { ArenaMetaController }          from './ArenaMetaController';
+export type {
+  ArenaMetaControllerInput,
+  ArenaMetaProgressStore,
+  ArenaMetaSessionPort,
+  ArenaMetaPresentationPort,
+  ArenaMetaRefreshOptions,
+} from './ArenaMetaController';
+export { createArenaMetaProgressStore } from './ArenaMetaPersistence';
 export { GaussWarningRenderer }         from './GaussWarningRenderer';
 export { createRendererBundle, wireRenderersToProjManager, wireRenderersToEffectSystem, wireRenderersToAudioSystem, wireRenderersToCameraFeedback, wireRenderersToDistortion } from './RendererBundle';
 export type { RendererBundle }           from './RendererBundle';

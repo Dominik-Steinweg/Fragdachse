@@ -112,9 +112,10 @@ import type { PlaceableTurretUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
 import { WebGLRectMaskTexture } from '../utils/webglRectMask';
 import { coversDesignSpace } from './arena/ArenaClipPolicy';
+import { ArenaMetaController } from './arena/ArenaMetaController';
+import { createArenaMetaProgressStore } from './arena/ArenaMetaPersistence';
 import {
   addStoredCoopDefenseXp,
-  getStoredCoopDefenseProgress,
   getStoredEffectsVolume,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
@@ -122,15 +123,6 @@ import {
   markStoredCoopDefenseBossMapCompleted,
   markStoredCoopDefenseItemsSeen,
   markStoredCoopDefenseRoundProcessed,
-  resetStoredCoopDefenseCharacter,
-  restoreStoredCoopDefenseProgress,
-  setStoredCoopDefenseCheatProgress,
-  getStoredCoopDefenseLoadout,
-  setStoredCoopDefenseLoadoutSlot,
-  switchStoredCoopDefenseClassLoadout,
-  setStoredLoadoutSlot,
-  setStoredCoopDefenseUpgradeProfile,
-  resetStoredCoopDefenseUpgradeProfiles,
   claimStoredPendingCoopDefenseItemReward,
   equipStoredCoopDefenseItem,
   grantStoredPersistentBaseRewards,
@@ -147,7 +139,6 @@ import {
   unlockStoredCoopDefenseMapAfterVictory,
   unlockStoredPersistentBaseAfterVictory,
   unlockStoredPersistentBaseAreaStageAfterVictory,
-  type CoopDefenseProgressPreferences,
 } from '../utils/localPreferences';
 import {
   applyCoopDefenseEpicGuarantee,
@@ -158,28 +149,16 @@ import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { destroySharedGlowSystem, installSharedGlowSystem } from '../effects/SharedGlowSystem';
 import { getRenderResolutionController, toDesignSpace } from '../graphics/RenderResolution';
 import { installTextResolution } from '../graphics/TextResolution';
-import { getCoopDefenseProgressSnapshot, type CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
+import type { CoopDefenseProgressSnapshot } from '../utils/coopDefenseProgression';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
-  buildDefaultCoopDefenseUpgradeProfile,
-  levelDownCoopDefenseUpgrade,
-  levelUpCoopDefenseUpgrade,
-  respecCoopDefenseUpgradeCategory,
-  getCoopDefenseUpgradeLoadoutSelection,
   getCoopDefenseUpgradeTextureKey,
   hasCoopDefenseDedicatedUpgradeIcon,
-  getUnlockedLoadoutToolRefs,
-  getCoopDefenseToolCapacity,
-  setLoadoutToolSlots,
-  getSpentCoopDefenseUpgradePoints,
-  getSpentCoopDefenseBossPoints,
-  type CoopDefenseUpgradeCategoryId,
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../config/coopDefenseItems';
 import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
-import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
-import type { ConstructionId, CoopDefenseClassId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GameMode, GamePhase, LoadoutCommitSnapshot, LoadoutSlot, LoadoutToolRef, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { ConstructionId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
@@ -195,9 +174,7 @@ import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFireP
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName, getMapTutorial, getMapTutorialStep } from '../i18n/contentPresentation';
-import { INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID } from '../config/coopDefenseMapUnlocks';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { getSelectableLoadoutItems } from '../loadout/LoadoutCatalog';
 import { toPersistentBaseGravelZone } from '../persistentBase/PersistentBasePresentation';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
@@ -387,22 +364,14 @@ export class ArenaScene extends Phaser.Scene {
   private weaponBalanceLabOverlay: WeaponBalanceLabOverlay | null = null;
   private weaponBalanceLabRuntime!: WeaponBalanceLabRuntime;
   private weaponBalanceLabPreviousMapId: string | null = null;
+  /** Scene-langlebiger Owner fuer persoenliche Progression, Upgrades und Loadout-Use-Cases. */
+  private meta: ArenaMetaController | null = null;
   private coopDefenseUpgradesOverlay: CoopDefenseUpgradesOverlay | null = null;
   private matchResultsOverlay: MatchResultsOverlay | null = null;
   private roomStatisticsOverlay: RoomStatisticsOverlay | null = null;
   private arenaExitFadeOverlay: ArenaExitFadeOverlay | null = null;
   private arenaExitFadeComplete = false;
   private arenaExitOutcomeWaitStartedAt = 0;
-  private coopDefenseProgress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
-  /** Validierter Live-Stand fuer das geoeffnete Upgrade-Menue; LocalStorage bleibt Persistenz. */
-  private coopDefenseStoredProgress: CoopDefenseProgressPreferences | null = null;
-  // Profil-Stand beim Oeffnen des Upgrade-Overlays – fuer "Abbruch" (Wiederherstellen).
-  private coopDefenseUpgradeProfileSnapshot: CoopDefenseProgressPreferences | null = null;
-  private coopDefenseLastProcessedRoundEndedAt: number | null = null;
-  private coopDefenseHighestUnlockedMapId: string = INITIAL_HIGHEST_UNLOCKED_COOP_DEFENSE_MAP_ID;
-  private coopDefenseItemsUnlocked = false;
-  private coopDefensePendingItemRewardCount = 0;
-  private coopDefenseHasUnseenItems = false;
   /** Nur das Angebot der gerade abgeschlossenen Runde darf automatisch erscheinen. */
   private coopDefenseMatchItemReward: CoopDefensePendingItemReward | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
@@ -772,9 +741,34 @@ export class ArenaScene extends Phaser.Scene {
         this.matchResultsOverlay?.setBalanceFeedbackVisible(true);
       },
     );
+    this.meta = new ArenaMetaController({
+      progressStore: createArenaMetaProgressStore(),
+      session: {
+        getGamePhase: () => bridge.getGamePhase(),
+        getGameMode: () => bridge.getGameMode(),
+        getLocalPlayerId: () => bridge.getLocalPlayerId(),
+        isLocalReady: () => this.lifecycle.getIsLocalReady(),
+        isAuthoritativeLocalReady: () => bridge.getPlayerReady(bridge.getLocalPlayerId()),
+        getPlayerLoadoutSlot: (playerId, slot) => bridge.getPlayerLoadoutSlot(playerId, slot),
+        setLocalLoadoutSlot: (slot, itemId) => bridge.setLocalLoadoutSlot(slot, itemId),
+        setLocalReady: (ready) => {
+          bridge.setLocalReady(ready);
+          this.lifecycle.setIsLocalReady(ready);
+        },
+        setLocalCoopDefenseTotalXp: (totalXp) => bridge.setLocalCoopDefenseTotalXp(totalXp),
+      },
+      presentation: {
+        setCoopDefenseProgress: (progress) => this.lobbyOverlay.setCoopDefenseProgress(progress),
+        refreshUpgradeOverlay: () => this.coopDefenseUpgradesOverlay?.refresh(),
+        scheduleUpgradeOverlayRefresh: () => this.coopDefenseUpgradesOverlay?.scheduleRefresh(),
+        refreshColorIndicator: () => this.ctx.leftPanel.refreshColorIndicator(),
+        hideDebugOverlay: () => this.coopDefenseDebugOverlay?.hide(),
+        showUpgradeOverlay: () => this.coopDefenseUpgradesOverlay?.show(),
+      },
+    });
     this.coopDefenseDebugOverlay = new CoopDefenseDebugOverlay(
       () => {
-        const stored = getStoredCoopDefenseProgress();
+        const stored = this.meta!.getStoredProgress();
         return {
           totalXp: stored.totalXp,
           bossPoints: stored.completedBossMapIds.length,
@@ -787,12 +781,12 @@ export class ArenaScene extends Phaser.Scene {
         };
       },
       (totalXp, bossPoints, highestUnlockedMapId) => {
-        setStoredCoopDefenseCheatProgress(totalXp, bossPoints, highestUnlockedMapId);
-        this.refreshCoopDefenseDebugState({ applyMapSelection: true });
+        this.meta?.setDebugProgress(totalXp, bossPoints, highestUnlockedMapId);
+        this.refreshCoopDefenseDebugState({ applyMapSelection: true, metaAlreadyRefreshed: true });
       },
       () => {
-        resetStoredCoopDefenseCharacter();
-        this.refreshCoopDefenseDebugState({ applyMapSelection: true });
+        this.meta?.resetCharacter();
+        this.refreshCoopDefenseDebugState({ applyMapSelection: true, metaAlreadyRefreshed: true });
       },
       () => {
         setStoredPersistentBaseUnlocked(true);
@@ -826,20 +820,22 @@ export class ArenaScene extends Phaser.Scene {
     );
     this.coopDefenseUpgradesOverlay = new CoopDefenseUpgradesOverlay(
       this,
-      () => this.coopDefenseProgress,
-      (upgradeId) => this.levelUpCoopDefenseUpgrade(upgradeId),
-      (upgradeId) => this.levelDownCoopDefenseUpgrade(upgradeId),
-      (categoryId) => this.categoryRespecCoopDefenseUpgrades(categoryId),
-      () => this.classRespecCoopDefenseUpgrades(),
-      () => this.canFullRespecCoopDefenseUpgrades(),
-      () => this.fullRespecCoopDefenseUpgrades(),
-      (classId) => this.selectCoopDefenseClass(classId),
-      (tool) => this.toggleLoadoutTool(tool),
-      (tools) => this.setLoadoutTools(tools),
-      () => this.getLocalLoadoutSelection(),
-      (slot, itemId) => this.selectLoadoutItem(slot, itemId),
-      () => this.cancelCoopDefenseUpgradeChanges(),
-      () => this.applyCoopDefenseUpgradeChanges(),
+      () => this.meta!.getProgress(),
+      (upgradeId) => this.meta?.levelUpUpgrade(upgradeId) ?? false,
+      (upgradeId) => this.meta?.levelDownUpgrade(upgradeId) ?? false,
+      (categoryId) => this.meta?.categoryRespec(categoryId) ?? false,
+      () => this.meta?.classRespec() ?? false,
+      () => this.meta?.canFullRespec() ?? false,
+      () => this.meta?.fullRespec() ?? false,
+      (classId) => this.meta?.selectClass(classId),
+      (tool) => this.meta?.toggleLoadoutTool(tool) ?? false,
+      (tools) => this.meta?.setLoadoutTools(tools) ?? false,
+      () => this.meta?.getLocalLoadoutSelection() ?? {
+        weapon1: null, weapon2: null, utility: null, ultimate: null,
+      },
+      (slot, itemId) => this.meta?.selectLoadoutItem(slot, itemId) ?? false,
+      () => this.meta?.cancelUpgradeChanges(),
+      () => this.meta?.applyUpgradeChanges(),
     );
     this.coopDefenseUpgradesOverlay.build();
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
@@ -1155,7 +1151,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.diagnostics?.toggleNetDebug(),
       () => leftPanel.showHelpOverlay(),
       () => leftPanel.showOptionsOverlay(),
-      () => this.openCoopDefenseUpgradesOverlay(),
+      () => this.meta?.openUpgradeOverlay(),
       () => this.openCoopDefenseItemsOverlay(),
       (enter) => enter
         ? this.lifecycle.requestLocalWorldParticipation(true)
@@ -1524,6 +1520,8 @@ export class ArenaScene extends Phaser.Scene {
       this.coopDefenseDebugOverlay = null;
       this.coopDefenseUpgradesOverlay?.destroy();
       this.coopDefenseUpgradesOverlay = null;
+      this.meta?.destroy();
+      this.meta = null;
       this.hostileBaseIndicator?.destroy();
       this.hostileBaseIndicator = null;
       // Der Ring lebt so lange wie die Szene. Ohne diesen Aufruf bliebe seine
@@ -1545,7 +1543,7 @@ export class ArenaScene extends Phaser.Scene {
     bridge.sendPingToHost();
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
-    this.refreshStoredCoopDefenseProgress();
+    this.meta?.refresh();
     this.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
 
@@ -1730,7 +1728,9 @@ export class ArenaScene extends Phaser.Scene {
         bridge.getRoundState(),
       );
       this.ctx.rightPanel.setResultsReplayAvailable(this.lastMatchResultsPresentation !== null);
-      this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
+      this.lobbyOverlay.setCoopDefenseProgress(
+        isCoopDefenseMode(bridge.getGameMode()) ? this.meta!.getProgress() : null,
+      );
       // Signaturgeschuetzt wie die Fortschrittsanzeige: der Aufruf pro Frame ist billig.
       this.refreshCoopDefenseItemsButton();
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
@@ -2358,18 +2358,6 @@ export class ArenaScene extends Phaser.Scene {
     this.lifecycle.setIsLocalReady(nowReady);
   }
 
-  private openCoopDefenseUpgradesOverlay(): void {
-    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
-    if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) return;
-
-    this.coopDefenseDebugOverlay?.hide();
-    // Einmal validieren und danach waehrend des offenen Menues den kontrollierten Scene-State
-    // verwenden. Der unveraenderte Objektstand dient zugleich als Cancel-Snapshot.
-    this.refreshStoredCoopDefenseProgress({ refreshOverlay: false });
-    this.coopDefenseUpgradeProfileSnapshot = this.coopDefenseStoredProgress;
-    this.coopDefenseUpgradesOverlay?.show();
-  }
-
   /**
    * Items sind nur ausserhalb eines Matches wechselbar. Ein bereiter Spieler muss zuerst
    * „NICHT BEREIT“ waehlen, bevor er dieses Menue oeffnen kann.
@@ -2388,7 +2376,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private getCoopDefenseItemsOverlayState(): CoopDefenseItemsOverlayState {
-    const progress = getStoredCoopDefenseProgress();
+    const progress = this.meta!.getStoredProgress();
     return {
       items: progress.items,
       equippedItemIds: progress.equippedItemIds,
@@ -2398,342 +2386,28 @@ export class ArenaScene extends Phaser.Scene {
 
   /** Nach jeder Item-Aenderung: Lobby-Anzeige und Fortschritts-Cache nachziehen. */
   private afterCoopDefenseItemChange(): void {
-    this.refreshStoredCoopDefenseProgress();
-    this.lobbyOverlay.setCoopDefenseProgress(
-      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
-    );
+    this.meta?.refresh();
     this.refreshCoopDefenseItemsButton();
   }
 
   /** Hält die lokale Lobby-Projektion nach einer Aktion im Coop-Debug-Overlay synchron. */
-  private refreshCoopDefenseDebugState(options: { applyMapSelection?: boolean } = {}): void {
-    this.refreshStoredCoopDefenseProgress();
+  private refreshCoopDefenseDebugState(options: {
+    applyMapSelection?: boolean;
+    metaAlreadyRefreshed?: boolean;
+  } = {}): void {
+    if (!options.metaAlreadyRefreshed) this.meta?.refresh();
     if (options.applyMapSelection) this.applyDefaultCoopDefenseMapSelection();
-    this.lobbyOverlay.setCoopDefenseProgress(
-      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
-    );
     this.refreshCoopDefenseItemsButton();
     this.clientUpdate.refreshStoredProgressFallback();
   }
 
   private refreshCoopDefenseItemsButton(): void {
+    const progress = this.meta!.getStoredProgress();
     this.lobbyOverlay.setCoopDefenseItemsState(
-      isCoopDefenseMode(bridge.getGameMode()) && this.coopDefenseItemsUnlocked,
-      this.coopDefensePendingItemRewardCount,
-      this.coopDefenseHasUnseenItems,
+      isCoopDefenseMode(bridge.getGameMode()) && progress.itemsUnlocked,
+      progress.pendingItemRewards.length,
+      progress.unseenItems,
     );
-  }
-
-  private cancelCoopDefenseUpgradeChanges(): void {
-    const snapshot = this.coopDefenseUpgradeProfileSnapshot;
-    this.coopDefenseUpgradeProfileSnapshot = null;
-    if (!snapshot) return;
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    restoreStoredCoopDefenseProgress(snapshot);
-    this.refreshStoredCoopDefenseProgress({ stored: snapshot });
-    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-  }
-
-  private applyCoopDefenseUpgradeChanges(): void {
-    // Aenderungen wurden bereits live uebernommen; Snapshot verwerfen.
-    this.coopDefenseUpgradeProfileSnapshot = null;
-  }
-
-  private getCoopDefenseStoredProgressForMutation(): CoopDefenseProgressPreferences {
-    if (!this.coopDefenseStoredProgress) {
-      // This getter is also used by the overlay while ArenaScene.create() is still building
-      // its context. Loading the validated state must stay side-effect free here; the full
-      // derived refresh belongs to openCoopDefenseUpgradesOverlay(), after ctx exists.
-      this.coopDefenseStoredProgress = getStoredCoopDefenseProgress();
-    }
-    return this.coopDefenseStoredProgress;
-  }
-
-  private replaceCoopDefenseLiveProfile(
-    stored: CoopDefenseProgressPreferences,
-    classId: CoopDefenseClassId,
-    profile: CoopDefenseProgressPreferences['defaultProfile'],
-  ): CoopDefenseProgressPreferences {
-    if (stored.unlockedClassIds.length === 0) {
-      return { ...stored, defaultProfile: profile };
-    }
-    return {
-      ...stored,
-      profilesByClass: {
-        ...stored.profilesByClass,
-        [classId]: profile,
-      },
-    };
-  }
-
-  private refreshCoopDefenseAfterMutation(stored: CoopDefenseProgressPreferences): void {
-    // State first, one coalesced visible refresh afterwards. Several pointer actions in the
-    // same frame therefore share one POST_UPDATE rebuild.
-    this.refreshStoredCoopDefenseProgress({ stored, refreshOverlay: false });
-    this.coopDefenseUpgradesOverlay?.scheduleRefresh();
-  }
-
-  private selectCoopDefenseClass(classId: CoopDefenseClassId): void {
-    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return;
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    if (!stored.unlockedClassIds.includes(classId)) return;
-
-    // Der Bridge-Zustand ist nur das aktuell aktive Loadout. Vor dem Wechsel wird er
-    // deshalb noch einmal explizit im Profil der bisherigen Klasse gesichert. Alle
-    // persistenten Änderungen werden anschließend in einem Schreibvorgang gebündelt.
-    const previousLoadout: Partial<Record<LoadoutSlot, string>> = {};
-    const localId = bridge.getLocalPlayerId();
-    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
-      const itemId = bridge.getPlayerLoadoutSlot(localId, slot);
-      if (itemId) previousLoadout[slot] = itemId;
-    }
-
-    const savedNextLoadout = getStoredCoopDefenseLoadout(classId);
-    const profile = stored.profilesByClass[classId];
-    const nextLoadout: Partial<Record<LoadoutSlot, string>> = {};
-    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
-      const selectable = getSelectableLoadoutItems(slot, bridge.getGameMode(), profile, classId);
-      if (selectable.length === 0) continue;
-      const savedId = savedNextLoadout[slot];
-      nextLoadout[slot] = savedId && selectable.some((item) => item.id === savedId)
-        ? savedId
-        : selectable[0].id;
-    }
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    switchStoredCoopDefenseClassLoadout(
-      stored.selectedClassId,
-      classId,
-      previousLoadout,
-      nextLoadout,
-    );
-    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
-      const itemId = nextLoadout[slot];
-      if (itemId && bridge.getPlayerLoadoutSlot(localId, slot) !== itemId) {
-        bridge.setLocalLoadoutSlot(slot, itemId);
-      }
-    }
-    this.refreshCoopDefenseAfterMutation({ ...stored, selectedClassId: classId });
-    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
-  }
-
-  private levelUpCoopDefenseUpgrade(upgradeId: string): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    const classesUnlocked = stored.unlockedClassIds.length > 0;
-    const activeClassId = classesUnlocked
-      ? stored.selectedClassId
-      : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const activeProfile = classesUnlocked
-      ? stored.profilesByClass[stored.selectedClassId]
-      : stored.defaultProfile;
-    const nextProfile = levelUpCoopDefenseUpgrade(
-      activeProfile,
-      upgradeId,
-      this.coopDefenseProgress.level,
-      stored.completedBossMapIds.length,
-      activeClassId,
-    );
-    if (!nextProfile) return false;
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
-
-    const loadoutSelection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
-    if (loadoutSelection && activeClassId !== 'inspector_gadachs') {
-      bridge.setLocalLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
-      if (stored.classesUnlocked) {
-        setStoredCoopDefenseLoadoutSlot(activeClassId, loadoutSelection.slot, loadoutSelection.itemId);
-      } else {
-        setStoredLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
-      }
-    }
-
-    this.refreshCoopDefenseAfterMutation(
-      this.replaceCoopDefenseLiveProfile(stored, activeClassId, nextProfile),
-    );
-    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-    return true;
-  }
-
-  private toggleLoadoutTool(tool: LoadoutToolRef): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    if (stored.selectedClassId !== 'inspector_gadachs') return false;
-    const profile = stored.profilesByClass.inspector_gadachs;
-    const current = [...(profile.toolLoadout ?? [])];
-    const index = current.findIndex((entry) => entry.kind === tool.kind && entry.id === tool.id);
-    if (index >= 0) {
-      current.splice(index, 1);
-    } else {
-      const capacity = getCoopDefenseToolCapacity(profile);
-      if (current.length >= capacity) return false;
-      if (!getUnlockedLoadoutToolRefs(profile).some((entry) => entry.kind === tool.kind && entry.id === tool.id)) return false;
-      current.push({ ...tool });
-    }
-    const nextProfile = setLoadoutToolSlots(profile, current);
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, 'inspector_gadachs');
-    this.refreshCoopDefenseAfterMutation(
-      this.replaceCoopDefenseLiveProfile(stored, 'inspector_gadachs', nextProfile),
-    );
-    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
-    return true;
-  }
-
-  /** Setzt die Utility-Slots als Ganzes (Auswahl-Popup); nur freigeschaltete Utilities zaehlen. */
-  private setLoadoutTools(tools: readonly LoadoutToolRef[]): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    if (stored.selectedClassId !== 'inspector_gadachs') return false;
-    const profile = stored.profilesByClass.inspector_gadachs;
-    if (tools.length > getCoopDefenseToolCapacity(profile)) return false;
-
-    const unlocked = getUnlockedLoadoutToolRefs(profile);
-    if (!tools.every((tool) => unlocked.some((entry) => entry.kind === tool.kind && entry.id === tool.id))) {
-      return false;
-    }
-
-    const nextProfile = setLoadoutToolSlots(profile, tools.map((tool) => ({ ...tool })));
-    setStoredCoopDefenseUpgradeProfile(nextProfile, 'inspector_gadachs');
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    this.refreshCoopDefenseAfterMutation(
-      this.replaceCoopDefenseLiveProfile(stored, 'inspector_gadachs', nextProfile),
-    );
-    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
-    return true;
-  }
-
-  /** Liest die aktuell ausgeruestete Item-ID je Loadout-Slot des lokalen Spielers. */
-  private getLocalLoadoutSelection(): Record<LoadoutSlot, string | null> {
-    const localId = bridge.getLocalPlayerId();
-    return {
-      weapon1: bridge.getPlayerLoadoutSlot(localId, 'weapon1') ?? null,
-      weapon2: bridge.getPlayerLoadoutSlot(localId, 'weapon2') ?? null,
-      utility: bridge.getPlayerLoadoutSlot(localId, 'utility') ?? null,
-      ultimate: bridge.getPlayerLoadoutSlot(localId, 'ultimate') ?? null,
-    };
-  }
-
-  /** Setzt einen Loadout-Slot aus dem Upgrade-Overlay heraus (gleiche Wirkung wie das Lobby-Karussell). */
-  private selectLoadoutItem(slot: LoadoutSlot, itemId: string): boolean {
-    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return false;
-    if (bridge.getPlayerLoadoutSlot(bridge.getLocalPlayerId(), slot) === itemId) return false;
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    bridge.setLocalLoadoutSlot(slot, itemId);
-    if (stored.classesUnlocked) {
-      setStoredCoopDefenseLoadoutSlot(stored.selectedClassId, slot, itemId);
-    } else {
-      setStoredLoadoutSlot(slot, itemId);
-    }
-    this.refreshStoredCoopDefenseProgress({
-      stored,
-      refreshOverlay: false,
-      forceLoadoutRefresh: true,
-    });
-    this.coopDefenseUpgradesOverlay?.scheduleRefresh();
-    this.lobbyOverlay.setCoopDefenseProgress(this.coopDefenseProgress);
-    return true;
-  }
-
-  private levelDownCoopDefenseUpgrade(upgradeId: string): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    const activeClassId = stored.classesUnlocked
-      ? stored.selectedClassId
-      : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const activeProfile = stored.classesUnlocked
-      ? stored.profilesByClass[stored.selectedClassId]
-      : stored.defaultProfile;
-    const nextProfile = levelDownCoopDefenseUpgrade(
-      activeProfile,
-      upgradeId,
-      activeClassId,
-    );
-    if (!nextProfile) return false;
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
-    this.refreshCoopDefenseAfterMutation(
-      this.replaceCoopDefenseLiveProfile(stored, activeClassId, nextProfile),
-    );
-    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-    return true;
-  }
-
-  private categoryRespecCoopDefenseUpgrades(categoryId: CoopDefenseUpgradeCategoryId): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    const activeClassId = stored.classesUnlocked
-      ? stored.selectedClassId
-      : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const activeProfile = stored.classesUnlocked
-      ? stored.profilesByClass[stored.selectedClassId]
-      : stored.defaultProfile;
-    const nextProfile = respecCoopDefenseUpgradeCategory(activeProfile, categoryId, activeClassId);
-    if (!nextProfile) return false;
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
-    this.refreshCoopDefenseAfterMutation(
-      this.replaceCoopDefenseLiveProfile(stored, activeClassId, nextProfile),
-    );
-    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-    return true;
-  }
-
-  private classRespecCoopDefenseUpgrades(): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    if (!stored.classesUnlocked) return false;
-
-    const activeClassId = stored.selectedClassId;
-    const activeProfile = stored.profilesByClass[activeClassId];
-    if (
-      getSpentCoopDefenseUpgradePoints(activeProfile, activeClassId) <= 0
-      && getSpentCoopDefenseBossPoints(activeProfile, activeClassId) <= 0
-    ) return false;
-
-    const nextProfile = buildDefaultCoopDefenseUpgradeProfile(activeClassId);
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    setStoredCoopDefenseUpgradeProfile(nextProfile, activeClassId);
-    this.refreshCoopDefenseAfterMutation(
-      this.replaceCoopDefenseLiveProfile(stored, activeClassId, nextProfile),
-    );
-    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-    return true;
-  }
-
-  private canFullRespecCoopDefenseUpgrades(): boolean {
-    const stored = this.getCoopDefenseStoredProgressForMutation();
-    if (!stored.classesUnlocked) {
-      return getSpentCoopDefenseUpgradePoints(stored.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID) > 0
-        || getSpentCoopDefenseBossPoints(stored.defaultProfile, DEFAULT_COOP_DEFENSE_CLASS_ID) > 0;
-    }
-
-    return COOP_DEFENSE_CLASS_IDS.some((classId) => {
-      const profile = stored.profilesByClass[classId];
-      return getSpentCoopDefenseUpgradePoints(profile, classId) > 0
-        || getSpentCoopDefenseBossPoints(profile, classId) > 0;
-    });
-  }
-
-  private fullRespecCoopDefenseUpgrades(): boolean {
-    if (!this.canFullRespecCoopDefenseUpgrades()) return false;
-
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    resetStoredCoopDefenseUpgradeProfiles();
-    this.refreshStoredCoopDefenseProgress({ refreshOverlay: false });
-    this.coopDefenseUpgradesOverlay?.scheduleRefresh();
-    this.lobbyOverlay.setCoopDefenseProgress(isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null);
-    return true;
   }
 
   private async onCopyRoomLink(): Promise<void> {
@@ -2866,7 +2540,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private buildLocalCoopDefenseBuild(): LobbyLoadoutPreviewState {
-    const storedProgress = getStoredCoopDefenseProgress();
+    const storedProgress = this.meta!.getStoredProgress();
     const coopMode = isCoopDefenseMode(bridge.getGameMode());
     const classId = coopMode && storedProgress.classesUnlocked
       ? storedProgress.selectedClassId
@@ -3681,109 +3355,15 @@ export class ArenaScene extends Phaser.Scene {
     this.roomQualitySnapshot = this.roomQualityMonitor.update(now, players);
   }
 
-  private refreshStoredCoopDefenseProgress(options: {
-    stored?: CoopDefenseProgressPreferences;
-    refreshOverlay?: boolean;
-    forceLoadoutRefresh?: boolean;
-  } = {}): void {
-    const stored = options.stored ?? getStoredCoopDefenseProgress();
-    const previousProgress = this.coopDefenseProgress;
-    this.coopDefenseStoredProgress = stored;
-    const classesUnlocked = stored.unlockedClassIds.length > 0;
-    const activeClassId = classesUnlocked
-      ? stored.selectedClassId
-      : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const activeProfile = classesUnlocked
-      ? stored.profilesByClass[stored.selectedClassId]
-      : stored.defaultProfile;
-    this.coopDefenseProgress = getCoopDefenseProgressSnapshot(
-      stored.totalXp,
-      activeProfile,
-      stored.completedBossMapIds.length,
-      activeClassId,
-      classesUnlocked,
-      stored.unlockedClassIds,
-    );
-    this.coopDefenseLastProcessedRoundEndedAt = stored.lastProcessedRoundEndedAt;
-    this.coopDefenseHighestUnlockedMapId = stored.highestUnlockedMapId;
-    this.coopDefenseItemsUnlocked = stored.itemsUnlocked;
-    this.coopDefensePendingItemRewardCount = stored.pendingItemRewards.length;
-    this.coopDefenseHasUnseenItems = stored.unseenItems;
-    bridge.setLocalCoopDefenseTotalXp(this.coopDefenseProgress.totalXp);
-    const loadoutProjectionChanged = this.hasCoopDefenseLoadoutProjectionChanged(
-      previousProgress,
-      this.coopDefenseProgress,
-    );
-    // Pure stat changes never touch the four lobby slots. Reconcile selections only when
-    // unlocks, capacity, class or an explicit loadout action made that projection relevant.
-    const loadoutResynced = options.forceLoadoutRefresh || loadoutProjectionChanged
-      ? this.resyncLoadoutWithUnlocks(stored)
-      : false;
-    if (options.forceLoadoutRefresh
-      || loadoutResynced
-      || loadoutProjectionChanged) {
-      this.ctx.leftPanel.refreshColorIndicator();
-    }
-    if (options.refreshOverlay !== false) this.coopDefenseUpgradesOverlay?.refresh();
-  }
-
-  private hasCoopDefenseLoadoutProjectionChanged(
-    before: CoopDefenseProgressSnapshot,
-    after: CoopDefenseProgressSnapshot,
-  ): boolean {
-    if (before.classId !== after.classId || before.toolSlotCapacity !== after.toolSlotCapacity) return true;
-    if (before.unlockedClassIds.join('|') !== after.unlockedClassIds.join('|')) return true;
-    if (before.toolLoadout.map((tool) => `${tool.kind}:${tool.id}`).join('|')
-      !== after.toolLoadout.map((tool) => `${tool.kind}:${tool.id}`).join('|')) return true;
-    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
-      const beforeItems = before.unlockedItemsBySlot[slot].map((item) => item.id).join('|');
-      const afterItems = after.unlockedItemsBySlot[slot].map((item) => item.id).join('|');
-      if (beforeItems !== afterItems) return true;
-    }
-    return false;
-  }
-
   /** Zieht nach einem validierten Dateiimport alle lobby-lokalen Ableitungen atomar nach. */
   private handleImportedGameProgress(): void {
     if (bridge.getGamePhase() !== 'LOBBY') return;
     bridge.setLocalReady(false);
     this.lifecycle.setIsLocalReady(false);
-    this.refreshStoredCoopDefenseProgress();
+    this.meta?.refresh();
     this.applyDefaultCoopDefenseMapSelection();
-    this.lobbyOverlay.setCoopDefenseProgress(
-      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
-    );
     this.refreshCoopDefenseItemsButton();
     this.clientUpdate.refreshStoredProgressFallback();
-  }
-
-  /**
-   * Haelt die Loadout-Slots auf tatsaechlich waehlbaren Items. Noetig nach Klassenwechsel,
-   * Level-Down und Full Respec: ein Slot darf nie ein inzwischen gesperrtes Item behalten.
-   * Beim Inspector schnappt so auch der Waffe-2-Slot auf seine Adrenalinfaehigkeit.
-   */
-  private resyncLoadoutWithUnlocks(stored: CoopDefenseProgressPreferences): boolean {
-    if (bridge.getGamePhase() !== 'LOBBY' || !isCoopDefenseMode(bridge.getGameMode())) return false;
-    const classId = stored.classesUnlocked ? stored.selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID;
-    const profile = stored.classesUnlocked
-      ? stored.profilesByClass[stored.selectedClassId]
-      : stored.defaultProfile;
-    const localId = bridge.getLocalPlayerId();
-    let changed = false;
-    for (const slot of ['weapon1', 'weapon2', 'utility', 'ultimate'] as const) {
-      const selectable = getSelectableLoadoutItems(slot, bridge.getGameMode(), profile, classId);
-      if (selectable.length === 0) continue;
-      const current = bridge.getPlayerLoadoutSlot(localId, slot);
-      if (current && selectable.some((item) => item.id === current)) continue;
-      bridge.setLocalLoadoutSlot(slot, selectable[0].id);
-      changed = true;
-      if (stored.classesUnlocked) {
-        setStoredCoopDefenseLoadoutSlot(classId, slot, selectable[0].id);
-      } else {
-        setStoredLoadoutSlot(slot, selectable[0].id);
-      }
-    }
-    return changed;
   }
 
   /**
@@ -3792,7 +3372,7 @@ export class ArenaScene extends Phaser.Scene {
    */
   private applyDefaultCoopDefenseMapSelection(): void {
     if (!bridge.isHost()) return;
-    bridge.setCoopDefenseMapId(this.coopDefenseHighestUnlockedMapId);
+    bridge.setCoopDefenseMapId(this.meta!.getHighestUnlockedMapId());
   }
 
   /**
@@ -3906,7 +3486,7 @@ export class ArenaScene extends Phaser.Scene {
     );
     const ownBase = sumBase(ownMainBases);
     const hostileBase = sumBase(hostileMainBases);
-    const storedProgress = getStoredCoopDefenseProgress();
+    const storedProgress = this.meta!.getStoredProgress();
     const committed = bridge.getPlayerCommittedLoadout(localPlayerId);
     this.coopDefenseBalanceTracker.preparePendingRound({
       gameMode,
@@ -3925,7 +3505,7 @@ export class ArenaScene extends Phaser.Scene {
       survivalRemainingRespawns: bridge.getLocalCoopDefenseRespawnBudgetState()?.remainingRespawns ?? null,
       build: buildBalanceBuildSnapshot(
         storedProgress.totalXp,
-        this.coopDefenseProgress.level,
+        this.meta!.getProgress().level,
         committed,
       ),
     });
@@ -3950,7 +3530,7 @@ export class ArenaScene extends Phaser.Scene {
       : 'Zufallsarena';
 
     this.matchResultsPending = true;
-    this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.coopDefenseProgress : null;
+    this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.meta!.getProgress() : null;
     this.matchResultsOverlay?.showSyncing(getLocalizedGameModeLabel(mode), mapLabel);
   }
 
@@ -3987,7 +3567,7 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     const progress = isCoopDefenseMode(mode)
-      ? this.processCoopDefenseRoundProgress(this.matchResultsProgressBefore ?? this.coopDefenseProgress)
+      ? this.processCoopDefenseRoundProgress(this.matchResultsProgressBefore ?? this.meta!.getProgress())
       : null;
     if (isCoopDefenseMode(mode) && !progress) return;
 
@@ -4060,7 +3640,7 @@ export class ArenaScene extends Phaser.Scene {
 
   /** Liest die Queue frisch aus der Persistenz und baut die Auswahlansicht dazu. */
   private buildItemRewardPresentation(roundEndedAt?: number): MatchItemRewardPresentation | null {
-    const progress = getStoredCoopDefenseProgress();
+    const progress = this.meta!.getStoredProgress();
     const pendingRewards = progress.pendingItemRewards;
     const index = roundEndedAt === undefined
       ? 0
@@ -4085,7 +3665,7 @@ export class ArenaScene extends Phaser.Scene {
     action: CoopDefenseItemRewardAction = 'take',
   ): boolean {
     if (!claimStoredPendingCoopDefenseItemReward(roundEndedAt, offerUid, salvageUid, action)) return false;
-    this.refreshStoredCoopDefenseProgress();
+    this.meta?.refresh();
     if (this.lastMatchResultsPresentation) {
       this.lastMatchResultsPresentation = {
         ...this.lastMatchResultsPresentation,
@@ -4094,9 +3674,6 @@ export class ArenaScene extends Phaser.Scene {
           : this.lastMatchResultsPresentation.itemReward,
       };
     }
-    this.lobbyOverlay.setCoopDefenseProgress(
-      isCoopDefenseMode(bridge.getGameMode()) ? this.coopDefenseProgress : null,
-    );
     // Wurde die Belohnung aus dem offenen Item-Menue heraus abgeholt, sieht der Spieler das neue
     // Teil sofort - dann darf der Button gar nicht erst zu leuchten anfangen.
     if (this.itemsOverlay?.isOpen()) markStoredCoopDefenseItemsSeen();
@@ -4116,8 +3693,9 @@ export class ArenaScene extends Phaser.Scene {
 
     this.coopDefenseMatchItemReward = null;
 
-    if (this.coopDefenseLastProcessedRoundEndedAt !== null && this.coopDefenseLastProcessedRoundEndedAt >= endedAt) {
-      return createMatchProgressDelta(before, this.coopDefenseProgress, 0, null);
+    if (this.meta!.getLastProcessedRoundEndedAt() !== null
+      && this.meta!.getLastProcessedRoundEndedAt()! >= endedAt) {
+      return createMatchProgressDelta(before, this.meta!.getProgress(), 0, null);
     }
 
     const sharedRoundXp = Math.max(
@@ -4186,14 +3764,14 @@ export class ArenaScene extends Phaser.Scene {
     }
 
     markStoredCoopDefenseRoundProcessed(endedAt);
-    this.refreshStoredCoopDefenseProgress();
+    this.meta?.refresh();
     const unlockedMapName = unlockedNewMap
-      ? getMapName(this.coopDefenseHighestUnlockedMapId, getLocale())
+      ? getMapName(this.meta!.getHighestUnlockedMapId(), getLocale())
       : null;
     if (unlockedNewMap) this.applyDefaultCoopDefenseMapSelection();
     return createMatchProgressDelta(
       before,
-      this.coopDefenseProgress,
+      this.meta!.getProgress(),
       sharedRoundXp,
       unlockedMapName,
       unlockedItems,
