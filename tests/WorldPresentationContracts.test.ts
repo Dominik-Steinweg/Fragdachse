@@ -121,4 +121,16 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
       "allowsWorldPresentationSurface(this.input.getLocalWorldPresentation(), 'worldCamera')",
     );
   });
+
+  it('ordnet die generische Client-Projektion dem World-Presentation-Frame zu', () => {
+    const scene = read('src/scenes/ArenaScene.ts');
+    const runtime = read('src/scenes/arena/ArenaRuntime.ts');
+    const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
+
+    expect(scene).not.toContain('syncClientWorldSnapshotPresentation');
+    expect(frameBinding).toContain('syncClientWorldPresentation(');
+    expect(frameBinding).toContain('renderers.powerUp.sync(state.powerups);');
+    expect(frameBinding).toContain('renderers.train?.render(');
+    expect(runtime).toContain('presentationFrame?.syncClientWorldPresentation(');
+  });
 });

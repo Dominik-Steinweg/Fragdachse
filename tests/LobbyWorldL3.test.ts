@@ -330,13 +330,18 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
 
   it('verdrahtet denselben Client-Renderer-Consumer fuer Activity und Activity-lose World', () => {
     const scene = read('src/scenes/ArenaScene.ts');
+    const runtime = read('src/scenes/arena/ArenaRuntime.ts');
+    const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
     const noActivity = scene.slice(
       scene.indexOf('if (worldActive && !activityActive && !terminated)'),
       scene.indexOf('if ((gameplayActive || countdownActive) && !terminated)'),
     );
     expect(noActivity).toContain('this.arenaRuntime.runClientFrame(delta);');
-    expect(noActivity).toContain('this.syncClientWorldSnapshotPresentation(delta, false, null);');
-    expect(scene).toContain('if (!this.lifecycle.getLocalWorldPresentation().required) return;');
+    expect(noActivity).toContain('this.arenaRuntime.syncWorldClientPresentation(');
+    expect(scene).not.toContain('syncClientWorldSnapshotPresentation');
+    expect(runtime).toContain('presentationFrame?.syncClientWorldPresentation(');
+    expect(frameBinding).toContain('syncClientWorldPresentation(');
+    expect(frameBinding).toContain('if (this.destroyed || !this.input.getLocalWorldPresentation().required) return;');
   });
 });
 

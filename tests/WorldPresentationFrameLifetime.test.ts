@@ -18,6 +18,7 @@ import { getCameraBaseScroll } from '../src/graphics/cameraBaseScroll';
 import {
   resetWorldCameraBase,
   WorldPresentationFrameBinding,
+  type WorldClientPresentationState,
   type WorldPresentationFrameBindingInput,
 } from '../src/world/WorldPresentationFrameBinding';
 import {
@@ -30,7 +31,7 @@ import type { WorldDescriptor } from '../src/world/WorldDescriptor';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 
 /**
- * Phase 5 legte das Lifetime-Fundament der World-Presentation-Verdrahtung; Phase 6A gibt
+ * Phase 5 legte das Lifetime-Fundament der World-Presentation-Verdrahtung; Phase 6A/6B gibt
  * `WorldPresentationFrameBinding` die World-Display-Synchronisierung. `WorldPresentationBinding`
  * bleibt die handoffbare, gameplay-freie Darstellung selbst. Diese Tests halten fest, dass der
  * Frame-Binding immer vor der Darstellung faellt, nie im Handoff landet, und dass eine World
@@ -118,6 +119,20 @@ function fakeBindingInput(
     isArenaLoading: () => false,
     isArenaCountdownActive: () => false,
     getArenaResult: () => null,
+    clientWorldPresentation: {
+      timeBubble: { syncVisuals: vi.fn() },
+      teslaDome: { syncVisuals: vi.fn() },
+      energyShield: { syncVisuals: vi.fn() },
+      guardianSpirit: { syncVisuals: vi.fn() },
+      repairDrone: { syncVisuals: vi.fn() },
+      slimeTrail: { syncVisuals: vi.fn() },
+      flamethrowerUpgrades: { syncGround: vi.fn(), syncRings: vi.fn() },
+      train: { setTarget: vi.fn(), render: vi.fn() },
+      powerUp: { syncPedestals: vi.fn(), sync: vi.fn(), updatePedestals: vi.fn() },
+      nuke: { sync: vi.fn() },
+      airstrike: { sync: vi.fn() },
+      meteor: { sync: vi.fn() },
+    },
     shadow: {
       updateStaticResidency: vi.fn(),
       getStaticSurfaceWorkingSet: vi.fn(() => null),
@@ -154,7 +169,7 @@ function fakeBindingInput(
   };
 }
 
-describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.1)', () => {
+describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
   it('startet unzerstoert und wird durch destroy() idempotent inert', () => {
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene()));
 
@@ -163,6 +178,60 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
     expect(() => binding.destroy()).not.toThrow();
 
     expect(binding.isDestroyed()).toBe(true);
+  });
+
+  it('projiziert generischen Client-World-State und bleibt nach destroy() inert', () => {
+    const renderers = {
+      timeBubble: { syncVisuals: vi.fn() },
+      teslaDome: { syncVisuals: vi.fn() },
+      energyShield: { syncVisuals: vi.fn() },
+      guardianSpirit: { syncVisuals: vi.fn() },
+      repairDrone: { syncVisuals: vi.fn() },
+      slimeTrail: { syncVisuals: vi.fn() },
+      flamethrowerUpgrades: { syncGround: vi.fn(), syncRings: vi.fn() },
+      train: { setTarget: vi.fn(), render: vi.fn() },
+      powerUp: { syncPedestals: vi.fn(), sync: vi.fn(), updatePedestals: vi.fn() },
+      nuke: { sync: vi.fn() },
+      airstrike: { sync: vi.fn() },
+      meteor: { sync: vi.fn() },
+    };
+    const state = {
+      players: {},
+      placeableRocks: [],
+      timeBubbles: [],
+      teslaDomes: [],
+      energyShields: [],
+      guardianSpirits: [],
+      repairDrones: [],
+      slimeTrail: { cells: [], affectedEnemies: [] },
+      burningGround: { cells: [] },
+      train: null,
+      powerups: [],
+      pedestals: [],
+      nukes: [],
+      airstrikes: [],
+      meteors: [],
+    } satisfies WorldClientPresentationState;
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), {
+      clientWorldPresentation: renderers,
+      getSynchronizedNow: () => 123,
+    }));
+
+    binding.syncClientWorldPresentation(state, 16, false, { cells: [] }, []);
+    expect(renderers.timeBubble.syncVisuals).toHaveBeenCalledWith(state.timeBubbles);
+    expect(renderers.teslaDome.syncVisuals).toHaveBeenCalledWith(state.teslaDomes);
+    expect(renderers.repairDrone.syncVisuals).toHaveBeenCalledWith(
+      state.repairDrones,
+      state.placeableRocks,
+    );
+    expect(renderers.powerUp.sync).toHaveBeenCalledWith(state.powerups);
+    expect(renderers.train.render).toHaveBeenCalledTimes(1);
+
+    binding.destroy();
+    binding.syncClientWorldPresentation(state, 16, false, { cells: [] }, []);
+    expect(renderers.timeBubble.syncVisuals).toHaveBeenCalledTimes(1);
+    expect(renderers.powerUp.sync).toHaveBeenCalledTimes(1);
+    expect(renderers.train.render).toHaveBeenCalledTimes(1);
   });
 
   it('nimmt bei einer Preview ohne worldCamera-Flaeche den Early-Return-Pfad, obwohl die World sichtbar bleibt', () => {

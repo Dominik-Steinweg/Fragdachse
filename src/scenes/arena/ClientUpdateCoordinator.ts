@@ -408,8 +408,9 @@ export class ClientUpdateCoordinator {
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
       if (this.performanceMetricsEnabled) projectilesEffectsMs = performance.now() - effectsStartedAt;
 
-      // teslaDomeRenderer is accessed via the bundle (passed from ArenaScene)
-      // → handled by ArenaScene.update() which calls renderers.teslaDome.syncVisuals
+      // Generic World visual projection (including the Tesla dome) is handled by the
+      // WorldPresentationFrameBinding; this coordinator keeps the canonical player/projectile
+      // and replicated World-state step.
 
       const worldStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
       if (state.rocks && this.arenaResult && this.currentLayout) {

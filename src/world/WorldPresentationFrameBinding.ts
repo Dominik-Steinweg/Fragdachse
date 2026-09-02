@@ -4,13 +4,31 @@ import {
   ACTIVE_ARENA_METRICS_PROFILE,
   ARENA_MAX_X, ARENA_MAX_Y, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_VIEWPORT_HEIGHT, ARENA_VIEWPORT_WIDTH,
+  NET_SMOOTH_TIME_MS,
 } from '../config';
 import { setCameraBaseScroll } from '../graphics/cameraBaseScroll';
 import type { ArenaSpectatorCameraInput } from '../scenes/arena/ArenaInputBindings';
 import { advanceSpectatorCameraScroll } from '../scenes/arena/SpectatorCameraModel';
 import { getVisibleWorldView, type WorldViewRect } from '../ui/HostileBaseIndicator';
 import { allowsWorldPresentationSurface, type WorldPresentationRequirement } from './WorldPresentation';
-import type { ArenaLayout, SyncedTrainState } from '../types';
+import type {
+  ArenaLayout,
+  PlayerNetState,
+  SyncedAirstrikeStrike,
+  SyncedBurningGroundSnapshot,
+  SyncedEnergyShield,
+  SyncedGuardianSpirit,
+  SyncedMeteorStrike,
+  SyncedNukeStrike,
+  SyncedPlaceableRock,
+  SyncedPowerUp,
+  SyncedPowerUpPedestal,
+  SyncedRepairDrone,
+  SyncedSlimeTrailSnapshot,
+  SyncedTeslaDome,
+  SyncedTimeBubble,
+  SyncedTrainState,
+} from '../types';
 import type { LightingSystem } from '../effects/LightingSystem';
 import {
   getProjectileLightSpec,
@@ -45,6 +63,53 @@ export interface WorldPresentationRenderWork {
   readonly pending: number;
   readonly resident: number;
   readonly renderReady: boolean;
+}
+
+/** Der generische, replizierte World-Anteil des Client-Snapshots. */
+export interface WorldClientPresentationState {
+  readonly players: Record<string, PlayerNetState>;
+  readonly placeableRocks: SyncedPlaceableRock[];
+  readonly timeBubbles: SyncedTimeBubble[];
+  readonly teslaDomes: SyncedTeslaDome[];
+  readonly energyShields: SyncedEnergyShield[];
+  readonly guardianSpirits: SyncedGuardianSpirit[];
+  readonly repairDrones: SyncedRepairDrone[];
+  readonly slimeTrail: SyncedSlimeTrailSnapshot;
+  readonly burningGround: SyncedBurningGroundSnapshot;
+  readonly train: SyncedTrainState | null;
+  readonly powerups: SyncedPowerUp[];
+  readonly pedestals: SyncedPowerUpPedestal[];
+  readonly nukes: SyncedNukeStrike[];
+  readonly airstrikes: SyncedAirstrikeStrike[];
+  readonly meteors: SyncedMeteorStrike[];
+}
+
+/** Kleine Renderer-Ports fuer die World-Projektion; die Renderer selbst bleiben scene-langlebig. */
+export interface WorldClientPresentationRenderers {
+  readonly timeBubble: { syncVisuals(snapshots: readonly SyncedTimeBubble[]): void };
+  readonly teslaDome: { syncVisuals(domes: SyncedTeslaDome[]): void };
+  readonly energyShield: { syncVisuals(shields: SyncedEnergyShield[]): void };
+  readonly guardianSpirit: { syncVisuals(snapshots: readonly SyncedGuardianSpirit[]): void };
+  readonly repairDrone: {
+    syncVisuals(snapshots: readonly SyncedRepairDrone[], constructions: readonly SyncedPlaceableRock[]): void;
+  };
+  readonly slimeTrail: { syncVisuals(snapshot: SyncedSlimeTrailSnapshot): void };
+  readonly flamethrowerUpgrades: {
+    syncGround(snapshot: SyncedBurningGroundSnapshot, now: number): void;
+    syncRings(players: Readonly<Record<string, PlayerNetState>>): void;
+  };
+  readonly train: {
+    setTarget(state: SyncedTrainState | null): void;
+    render(lerpFactor: number): void;
+  } | null;
+  readonly powerUp: {
+    syncPedestals(pedestals: SyncedPowerUpPedestal[]): void;
+    sync(powerups: SyncedPowerUp[]): void;
+    updatePedestals(now: number): void;
+  };
+  readonly nuke: { sync(nukes: SyncedNukeStrike[]): void };
+  readonly airstrike: { sync(strikes: SyncedAirstrikeStrike[]): void };
+  readonly meteor: { sync(meteors: SyncedMeteorStrike[]): void };
 }
 
 /**
@@ -84,6 +149,7 @@ export interface WorldPresentationFrameBindingInput {
   readonly isArenaCountdownActive: () => boolean;
   /** Der gebaute World-Zustand, dessen residente Render-Chunks der Residency-Sync angleicht. */
   readonly getArenaResult: () => ArenaBuilderResult | null;
+  readonly clientWorldPresentation: WorldClientPresentationRenderers;
   /** Statische/dynamische Schatten gehoeren zur aktiven World-Presentation. */
   readonly shadow: ShadowSystem;
   /** Lightmap und ihre World-Occluder-Verdrahtung gehoeren zur aktiven World-Presentation. */
@@ -240,6 +306,52 @@ export class WorldPresentationFrameBinding {
     const worldView = getVisibleWorldView(this.input.scene.cameras.main);
     ArenaBuilder.updateSurfaceResidency(this.input.getArenaResult(), worldView);
     this.input.shadow.updateStaticResidency(worldView);
+  }
+
+  /** Projiziert den allgemeinen replizierten World-Zustand fuer Clients, auch ohne Activity. */
+  syncClientWorldPresentation(
+    state: WorldClientPresentationState | undefined,
+    delta: number,
+    countdownActive: boolean,
+    countdownGround: SyncedBurningGroundSnapshot,
+    countdownPedestals: SyncedPowerUpPedestal[],
+  ): void {
+    if (this.destroyed || !this.input.getLocalWorldPresentation().required) return;
+    const renderers = this.input.clientWorldPresentation;
+    const now = this.input.getSynchronizedNow();
+
+    if (state) {
+      renderers.timeBubble.syncVisuals(state.timeBubbles);
+      renderers.teslaDome.syncVisuals(state.teslaDomes);
+      renderers.energyShield.syncVisuals(state.energyShields);
+      renderers.guardianSpirit.syncVisuals(state.guardianSpirits);
+      renderers.repairDrone.syncVisuals(state.repairDrones, state.placeableRocks);
+      renderers.slimeTrail.syncVisuals(state.slimeTrail);
+      renderers.flamethrowerUpgrades.syncGround(
+        countdownActive && state.burningGround.cells.length === 0
+          ? countdownGround
+          : state.burningGround,
+        now,
+      );
+      renderers.flamethrowerUpgrades.syncRings(state.players);
+      renderers.train?.setTarget(state.train);
+      renderers.powerUp.syncPedestals(
+        countdownActive && state.pedestals.length === 0
+          ? countdownPedestals
+          : state.pedestals,
+      );
+      renderers.powerUp.sync(state.powerups);
+      renderers.nuke.sync(state.nukes);
+      renderers.airstrike.sync(state.airstrikes);
+      renderers.meteor.sync(state.meteors);
+    } else if (countdownActive) {
+      renderers.flamethrowerUpgrades.syncGround(countdownGround, now);
+      renderers.powerUp.syncPedestals(countdownPedestals);
+      renderers.powerUp.sync([]);
+    }
+
+    renderers.powerUp.updatePedestals(now);
+    renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
   }
 
   /** View-bezogene World-Readiness fuer Ladebarriere und Boot-Reveal. */

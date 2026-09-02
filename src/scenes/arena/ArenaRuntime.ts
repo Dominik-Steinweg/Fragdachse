@@ -12,8 +12,10 @@ import type { CoopMissionOutcome } from '../../activity/CoopMissionRuntime';
 import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import {
   resetWorldCameraBase,
+  type WorldClientPresentationState,
   type WorldPresentationPersistentBaseVisuals,
 } from '../../world/WorldPresentationFrameBinding';
+import type { SyncedBurningGroundSnapshot, SyncedPowerUpPedestal } from '../../types';
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 
@@ -166,6 +168,22 @@ export class ArenaRuntime {
   /** Gleicht die residenten Render-Chunks dieser World an den sichtbaren Ausschnitt an. */
   syncWorldSurfaceResidency(showWorld: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld);
+  }
+
+  syncWorldClientPresentation(
+    state: WorldClientPresentationState | undefined,
+    delta: number,
+    countdownActive: boolean,
+    countdownGround: SyncedBurningGroundSnapshot,
+    countdownPedestals: SyncedPowerUpPedestal[],
+  ): void {
+    this.flow.getWorldRuntime()?.presentationFrame?.syncClientWorldPresentation(
+      state,
+      delta,
+      countdownActive,
+      countdownGround,
+      countdownPedestals,
+    );
   }
 
   syncWorldCanopy(showWorld: boolean): void {
