@@ -438,18 +438,19 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
 
   it('bindet Rueckbau in Management-Overlay ein und unterdrueckt dabei das normale Aim', () => {
     const source = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
+    const inputBindings = readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaInputBindings.ts'), 'utf8');
     const overlayStart = source.indexOf('this.persistentBaseVisuals.sync(');
     const overlayEnd = source.indexOf('const ultimatePreview', overlayStart);
-    const showAimStart = source.indexOf('const showAim =');
-    const showAimEnd = source.indexOf('const scopeProgress', showAimStart);
+    const showAimStart = inputBindings.indexOf('const aimVisible = cursorVisible');
+    const showAimEnd = inputBindings.indexOf('return { aimVisible, cursorVisible };', showAimStart);
 
     expect(overlayStart).toBeGreaterThanOrEqual(0);
     expect(overlayEnd).toBeGreaterThan(overlayStart);
     expect(source.slice(overlayStart, overlayEnd)).toContain('isDismantlePlacementActive()');
     expect(showAimStart).toBeGreaterThanOrEqual(0);
     expect(showAimEnd).toBeGreaterThan(showAimStart);
-    expect(source.slice(showAimStart, showAimEnd)).toContain(
-      '&& !this.ctx.inputSystem.isDismantlePlacementActive()',
+    expect(inputBindings.slice(showAimStart, showAimEnd)).toContain(
+      '&& !this.input.inputSystem.isDismantlePlacementActive()',
     );
   });
 

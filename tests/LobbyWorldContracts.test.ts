@@ -488,8 +488,10 @@ describe('LobbyWorld – keine zweite Lobby-Simulation', () => {
   it('ersetzt den Systemcursor nur dort, wo es die Zielhilfe ueberhaupt gibt', () => {
     // In der Lobby steht der normale Cursor; das Fadenkreuz gehoert der Teilnahme.
     const scene = read('src/scenes/ArenaScene.ts');
-    expect(scene).toContain("const worldInteractive = presentationPolicy.worldMode === 'interactive';");
-    expect(scene).toContain('worldInteractive && !optionsOpen && !spectator,');
+    const inputBindings = read('src/scenes/arena/ArenaInputBindings.ts');
+    expect(scene).toContain('getAimPresentationState(worldInteractive, spectator, optionsOpen)');
+    expect(inputBindings).toContain('const cursorVisible = worldInteractive && !optionsOpen && !spectator;');
+    expect(inputBindings).toContain('return { aimVisible, cursorVisible };');
   });
 
   it('laesst die Scene die Lobby ueber den World-Lifecycle bauen statt ueber eine Vorschau', () => {

@@ -63,6 +63,24 @@ function makeInput(): {
     setupUltimateConfigProvider: vi.fn(),
     setupLocalRageProvider: vi.fn(),
     setupWeapon2ConfigProvider: vi.fn(),
+    setupRadialActionProviders: vi.fn(),
+    setupTemporaryUtilityProvider: vi.fn(),
+    setupPersistentRewardActionProvider: vi.fn(),
+    setupRepositionActionProvider: vi.fn(),
+    setupCanStartScopeCheck: vi.fn(),
+    setupUtilityPlacementPreviewProvider: vi.fn(),
+    setupUltimatePlacementPreviewProvider: vi.fn(),
+    setupConstructionPlacementPreviewProvider: vi.fn(),
+    setupTranslocatorRecallCheck: vi.fn(),
+    setupLoadoutListener: vi.fn(),
+    getSelectedRadialActionForHud: vi.fn(() => null),
+    getSelectedUtilityCooldownUntil: vi.fn(() => 0),
+    isUtilityPlacementActive: vi.fn(() => false),
+    isUltimatePlacementActive: vi.fn(() => false),
+    getUltimatePlacementAnchor: vi.fn(() => null),
+    cancelLocalUltimateChargePreview: vi.fn(),
+    onUtilityPressedDuringCooldown: null,
+    onUltimatePressedWithoutRage: null,
     setupDebugHotkeys: vi.fn((callback: (type: 'flowfield_bases' | 'flowfield_players') => void) => {
       debugCallback.current = callback;
     }),
@@ -105,16 +123,69 @@ function makeInput(): {
     hideTimeOfDayDebug: vi.fn(),
     toggleTimeOfDayDebug: vi.fn(),
   } as ArenaInputBindingsInput['hotkeys'];
+  const actions = {
+    getLocalUtilityConfig: vi.fn(() => undefined),
+    getLocalUtilityCooldownUntil: vi.fn(() => 0),
+    getLocalUltimateConfig: vi.fn(() => undefined),
+    getLocalRage: vi.fn(() => 0),
+    getLocalWeaponConfig: vi.fn(() => undefined),
+    getLocalWeaponAdrenalineCost: vi.fn(() => 0),
+    getLocalAdrenaline: vi.fn(() => 0),
+    getLocalInspectorTools: vi.fn(() => []),
+    getLocalConstructionCapacity: vi.fn(() => 0),
+    getWeaponLastFired: vi.fn(() => 0),
+    notifyLoadoutFired: vi.fn(() => ({ fired: false })),
+    rollbackRejectedLoadoutFire: vi.fn(),
+    notifyUtilityFired: vi.fn(),
+    beginPredictedWeapon2Use: vi.fn(),
+    getLocalPlayerId: vi.fn(() => 'local'),
+    getActiveGameMode: vi.fn(() => 'deathmatch'),
+    isHost: vi.fn(() => false),
+    getSynchronizedNow: vi.fn(() => 0),
+    getPlayerCurrentLoadoutSnapshot: vi.fn(() => null),
+    getPlayerUtilityCooldownUntil: vi.fn(() => 0),
+    getPlayerTemporaryUtilityInstances: vi.fn(() => []),
+    sendLoadoutUse: vi.fn(async () => null),
+    getPlayerCapabilities: vi.fn(() => ({
+      canInteract: false,
+      canUseCombat: false,
+      canPlace: false,
+      canDismantle: false,
+    })),
+    isLocalPlayerAlive: vi.fn(() => false),
+    isLocalPlayerBurrowed: vi.fn(() => false),
+    getLocalPlayerPosition: vi.fn(() => undefined),
+    getPointerWorldPoint: vi.fn(() => ({ x: 0, y: 0 })),
+    getConstructionCapacityForPlayer: vi.fn(() => undefined),
+    getTranslocatorActivePuckId: vi.fn(() => undefined),
+    placement: {
+      getUsedCapacity: vi.fn(() => 0),
+      getDismantlePreview: vi.fn(() => undefined),
+      getPlacementPreview: vi.fn(() => undefined),
+      getTunnelPlacementPreview: vi.fn(() => undefined),
+      getConstructionPlacementPreview: vi.fn(() => undefined),
+    },
+    persistentBase: {
+      getRewardIdsForPlayer: vi.fn(() => []),
+      getRewardPlacementPreview: vi.fn(() => undefined),
+      requestRewardPlacement: vi.fn(async () => ({ ok: false as const, reason: 'blocked' as const })),
+      getMoveSourcePreview: vi.fn(() => undefined),
+      getMoveTargetPreview: vi.fn(() => undefined),
+      requestMove: vi.fn(async () => ({ ok: false as const, reason: 'blocked' as const })),
+    },
+    feedback: {
+      notifyAdrenalineInsufficientShot: vi.fn(),
+      flashUltimateInsufficientRage: vi.fn(),
+      flashUtilityCooldown: vi.fn(),
+      showPlacementError: vi.fn(),
+    },
+  } as unknown as ArenaInputBindingsInput['actions'];
   const onFlowFieldDebugHotkey = vi.fn();
   const input: ArenaInputBindingsInput = {
     scene: { input: { keyboard } } as unknown as ArenaInputBindingsInput['scene'],
     inputSystem: inputSystem as unknown as ArenaInputBindingsInput['inputSystem'],
     audioSystem: {} as ArenaInputBindingsInput['audioSystem'],
-    getLocalUtilityConfig: () => undefined,
-    getLocalUtilityCooldownUntil: () => 0,
-    getLocalUltimateConfig: () => undefined,
-    getLocalRage: () => 0,
-    getLocalWeapon2Config: () => undefined,
+    actions,
     onFlowFieldDebugHotkey,
     hotkeys,
   };
@@ -175,7 +246,7 @@ describe('ArenaInputBindings', () => {
     expect(binding.isArenaPanelHeld()).toBe(false);
   });
 
-  it('trennt Phase-3A-Input von den bewusst verbleibenden Action-Callbacks', () => {
+  it('trennt die vollstaendige Input-Callbackflaeche von ArenaScene', () => {
     const scene = read('src/scenes/ArenaScene.ts');
     const inputBindings = read('src/scenes/arena/ArenaInputBindings.ts');
 
@@ -183,8 +254,21 @@ describe('ArenaInputBindings', () => {
     expect(scene).not.toContain('this.escapeHotkeyHandler');
     expect(scene).toContain('inputBindings.destroy();');
     expect(scene).toContain('this.lobbyOverlay?.destroy();');
-    expect(scene).toContain('inputSystem.setupRadialActionProviders');
-    expect(scene).toContain('inputSystem.setupLoadoutListener');
+    expect(scene).not.toContain('inputSystem.setupRadialActionProviders');
+    expect(scene).not.toContain('inputSystem.setupLoadoutListener');
+    expect(scene).not.toContain('inputSystem.setupPersistentRewardActionProvider');
+    expect(scene).not.toContain('inputSystem.setupRepositionActionProvider');
+    expect(scene).not.toContain('inputSystem.setupCanStartScopeCheck');
+    expect(scene).not.toContain('inputSystem.setupUtilityPlacementPreviewProvider');
+    expect(scene).not.toContain('inputSystem.setupUltimatePlacementPreviewProvider');
+    expect(scene).not.toContain('inputSystem.setupConstructionPlacementPreviewProvider');
+    expect(scene).not.toContain('inputSystem.setupTranslocatorRecallCheck');
+    expect(inputBindings).toContain('setupRadialActionProviders');
+    expect(inputBindings).toContain('setupLoadoutListener');
+    expect(inputBindings).toContain('getLocalPlacementPreview');
+    expect(inputBindings).toContain('showPlacementError');
+    expect(inputBindings).not.toContain("from '../../network/bridge'");
+    expect(inputBindings).not.toContain('ArenaRuntime');
     expect(inputBindings).toContain('setupDebugHotkeys');
     expect(inputBindings).toContain('keyboard.removeKey(key, true, true)');
   });

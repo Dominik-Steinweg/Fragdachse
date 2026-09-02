@@ -1,12 +1,38 @@
 import * as Phaser from 'phaser';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
-import type { GamePhase } from '../../types';
+import { getCoopDefenseConstructionDefinition, COOP_DEFENSE_DISMANTLE_RANGE } from '../../config/coopDefenseConstructions';
+import type { CoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
+import { isCoopDefenseMode } from '../../gameModes';
+import { getUtilityConfigForMode } from '../../loadout/LoadoutConfig';
 import type {
+  PlaceableUtilityConfig,
+  TunnelUltimateConfig,
   UltimateConfig,
   UtilityConfig,
   WeaponConfig,
 } from '../../loadout/LoadoutConfig';
+import type {
+  ConstructionId,
+  GameMode,
+  GamePhase,
+  LoadoutCommitSnapshot,
+  LoadoutSlot,
+  LoadoutToolRef,
+  LoadoutUseParams,
+  LoadoutUseResult,
+  TemporaryUtilityInstanceDescriptor,
+  UtilityPlacementPreviewState,
+} from '../../types';
+import { t } from '../../i18n';
+import type { PersistentBaseRewardId } from '../../persistentBase/PersistentBaseRewardTypes';
+import type { RadialActionRef } from '../../systems/RadialActionModel';
 import type { InputSystem } from '../../systems/InputSystem';
+import { resolveInputPolicy, type InputPolicyInput } from '../../world/InputPolicy';
+import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
+import type {
+  LocalWeaponPredictionResult,
+  PredictedWeapon2Request,
+} from './ClientUpdateCoordinator';
 
 export type ArenaInputDebugHotkey = 'flowfield_bases' | 'flowfield_players';
 
@@ -51,25 +77,169 @@ export interface ArenaInputHotkeyPorts {
   toggleTimeOfDayDebug(): void;
 }
 
+export interface ArenaInputPlacementPorts {
+  getUsedCapacity(ownerId: string): number;
+  getDismantlePreview(
+    ownerId: string,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+    range: number,
+  ): UtilityPlacementPreviewState | undefined;
+  getPlacementPreview(
+    config: PlaceableUtilityConfig,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined;
+  getTunnelPlacementPreview(
+    config: TunnelUltimateConfig,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+    anchor: { x: number; y: number; gridX: number; gridY: number } | null,
+  ): UtilityPlacementPreviewState | undefined;
+  getConstructionPlacementPreview(
+    definition: CoopDefenseConstructionDefinition,
+    originX: number,
+    originY: number,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined;
+}
+
+export interface ArenaInputPersistentBasePorts {
+  getRewardIdsForPlayer(playerId: string): readonly PersistentBaseRewardId[];
+  getRewardPlacementPreview(
+    playerId: string,
+    rewardId: PersistentBaseRewardId,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined;
+  requestRewardPlacement(
+    rewardId: PersistentBaseRewardId,
+    preview: UtilityPlacementPreviewState,
+  ): Promise<LoadoutUseResult>;
+  getMoveSourcePreview(
+    playerId: string,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined;
+  getMoveTargetPreview(
+    playerId: string,
+    sourceRuntimeId: number,
+    pointerX: number,
+    pointerY: number,
+  ): UtilityPlacementPreviewState | undefined;
+  requestMove(sourceRuntimeId: number, preview: UtilityPlacementPreviewState): Promise<LoadoutUseResult>;
+}
+
+export interface ArenaInputFeedbackPorts {
+  notifyAdrenalineInsufficientShot(): void;
+  flashUltimateInsufficientRage(): void;
+  flashUtilityCooldown(fraction: number, displayName: string): void;
+  showPlacementError(message: string): void;
+}
+
+export interface ArenaInputActionPorts {
+  getLocalUtilityConfig(): UtilityConfig | undefined;
+  getLocalUtilityCooldownUntil(temporaryUtilityInstanceId?: string): number;
+  getLocalUltimateConfig(): UltimateConfig | undefined;
+  getLocalRage(): number;
+  getLocalWeaponConfig(slot: 'weapon1' | 'weapon2'): WeaponConfig | undefined;
+  getLocalWeaponAdrenalineCost(slot?: 'weapon1' | 'weapon2'): number;
+  getLocalAdrenaline(): number;
+  getLocalInspectorTools(): readonly LoadoutToolRef[];
+  getLocalConstructionCapacity(): number;
+  getWeaponLastFired(slot: 'weapon1' | 'weapon2'): number;
+  notifyLoadoutFired(
+    slot: 'weapon1' | 'weapon2',
+    angle: number,
+    targetX: number,
+    targetY: number,
+  ): LocalWeaponPredictionResult;
+  rollbackRejectedLoadoutFire(slot: 'weapon1' | 'weapon2', predictionId?: number): void;
+  notifyUtilityFired(): void;
+  beginPredictedWeapon2Use(
+    predictionId: number,
+    request: PredictedWeapon2Request,
+    amount: number,
+    onReject: (result: LoadoutUseResult) => void,
+  ): void;
+
+  getLocalPlayerId(): string;
+  getActiveGameMode(): GameMode;
+  isHost(): boolean;
+  getSynchronizedNow(): number;
+  getPlayerCurrentLoadoutSnapshot(playerId: string): LoadoutCommitSnapshot | null;
+  getPlayerUtilityCooldownUntil(playerId: string, utilityId?: string): number;
+  getPlayerTemporaryUtilityInstances(playerId: string): readonly TemporaryUtilityInstanceDescriptor[];
+  sendLoadoutUse(
+    slot: LoadoutSlot,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    shotId?: number,
+    params?: LoadoutUseParams,
+    clientX?: number,
+    clientY?: number,
+    clientNow?: number,
+    awaitResult?: boolean,
+    predictionId?: number,
+  ): Promise<LoadoutUseResult | null>;
+
+  getPlayerCapabilities(): PlayerCapabilities;
+  isLocalPlayerAlive(): boolean;
+  isLocalPlayerBurrowed(): boolean;
+  getLocalPlayerPosition(): { x: number; y: number } | undefined;
+  getPointerWorldPoint(): { x: number; y: number };
+  getConstructionCapacityForPlayer(playerId: string): number | undefined;
+  getTranslocatorActivePuckId(playerId: string): number | undefined;
+
+  readonly placement: ArenaInputPlacementPorts;
+  readonly persistentBase: ArenaInputPersistentBasePorts;
+  readonly feedback: ArenaInputFeedbackPorts;
+}
+
 export interface ArenaInputBindingsInput {
   readonly scene: Phaser.Scene;
   readonly inputSystem: InputSystem;
   readonly audioSystem: GameAudioSystem;
-  readonly getLocalUtilityConfig: () => UtilityConfig | undefined;
-  readonly getLocalUtilityCooldownUntil: () => number;
-  readonly getLocalUltimateConfig: () => UltimateConfig | undefined;
-  readonly getLocalRage: () => number;
-  readonly getLocalWeapon2Config: () => WeaponConfig | undefined;
+  readonly actions: ArenaInputActionPorts;
   readonly onFlowFieldDebugHotkey: (type: ArenaInputDebugHotkey) => void;
   readonly hotkeys: ArenaInputHotkeyPorts;
 }
 
+export interface ArenaSpectatorCameraInput {
+  readonly left: boolean;
+  readonly right: boolean;
+  readonly up: boolean;
+  readonly down: boolean;
+}
+
+export interface ArenaInputFrameState {
+  readonly enabled: boolean;
+  readonly gameplayActive: boolean;
+  readonly countdownActive: boolean;
+  readonly uiBlocking: boolean;
+  readonly diagnosticsArena: boolean;
+}
+
+export interface ArenaAimPresentationState {
+  readonly aimVisible: boolean;
+  readonly cursorVisible: boolean;
+}
+
 /**
- * Scene-langlebiger Owner fuer Keyboard-Setup, lokale Hotkeys und statische Input-Provider.
+ * Scene-langlebiger Owner fuer Keyboard-Setup, InputSystem-Callbacks und lokale Hotkeys.
  *
- * Action-/Placement-Callbacks bleiben bewusst bei der Scene, bis Phase 3B ihre Ports definiert.
- * Dieser Owner entscheidet keine hostautoritativen Regeln; er liest nur lokale Eingabe und ruft
- * kleine UI-/Debug-Ports auf.
+ * Der Owner entscheidet keine hostautoritativen Regeln. Er verbindet die bestehende
+ * InputSystem-Callbackflaeche mit kleinen Read-/Request-/Feedback-Ports und besitzt deren
+ * lokale Lifetime. Vorschauen und lokale Rueckmeldungen bleiben damit ausserhalb von
+ * ArenaScene, waehrend Hostvalidierung und Gameplay weiterhin in ihren bestehenden Owners leben.
  */
 export class ArenaInputBindings {
   private spectatorCameraLeftKey: Phaser.Input.Keyboard.Key | null = null;
@@ -104,14 +274,19 @@ export class ArenaInputBindings {
     this.spectatorCameraDownKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S, false);
     this.input.inputSystem.setup();
     this.input.inputSystem.setAudioSystem(this.input.audioSystem);
-    this.input.inputSystem.setupUtilityConfigProvider(this.input.getLocalUtilityConfig);
-    this.input.inputSystem.setupUtilityCooldownProvider(this.input.getLocalUtilityCooldownUntil);
-    this.input.inputSystem.setupUltimateConfigProvider(this.input.getLocalUltimateConfig);
-    this.input.inputSystem.setupLocalRageProvider(this.input.getLocalRage);
+    this.input.inputSystem.setupUtilityConfigProvider(this.input.actions.getLocalUtilityConfig);
+    this.input.inputSystem.setupUtilityCooldownProvider(
+      this.input.actions.getLocalUtilityCooldownUntil.bind(this.input.actions),
+    );
+    this.input.inputSystem.setupUltimateConfigProvider(this.input.actions.getLocalUltimateConfig);
+    this.input.inputSystem.setupLocalRageProvider(this.input.actions.getLocalRage);
     this.input.inputSystem.setupDebugHotkeys((type) => {
       if (!this.destroyed) this.input.onFlowFieldDebugHotkey(type);
     });
-    this.input.inputSystem.setupWeapon2ConfigProvider(this.input.getLocalWeapon2Config);
+    this.input.inputSystem.setupWeapon2ConfigProvider(
+      this.input.actions.getLocalWeaponConfig.bind(this.input.actions, 'weapon2'),
+    );
+    this.setupActionBindings();
 
     this.arenaPanelTabKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB, true);
     // K bleibt fuer den optionalen Debug-Schaden abfragbar, darf aber kein DOM-Textfeld
@@ -265,6 +440,494 @@ export class ArenaInputBindings {
       this.input.hotkeys.toggleTimeOfDayDebug();
     };
     keyboard.on('keydown-M', this.timeOfDayHotkeyHandler);
+  }
+
+  private setupActionBindings(): void {
+    const actions = this.input.actions;
+    const inputSystem = this.input.inputSystem;
+
+    inputSystem.setupRadialActionProviders({
+      getTools: () => {
+        const localId = actions.getLocalPlayerId();
+        const currentLoadout = actions.getPlayerCurrentLoadoutSnapshot(localId);
+        return isCoopDefenseMode(actions.getActiveGameMode())
+          && currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          ? actions.getLocalInspectorTools()
+          : currentLoadout?.utility
+            ? [{ kind: 'utility' as const, id: currentLoadout.utility }]
+            : [];
+      },
+      // Host und Client halten denselben Bestand platzierter Objekte, deshalb kann die
+      // belegte Baukapazitaet lokal berechnet werden. Das Maximum kommt aus denselben
+      // Effekt-Summen wie das HUD, damit das Radialmenue nichts als baubar anzeigt, was das
+      // Host-Gate anschliessend ablehnt.
+      getCapacity: () => {
+        const localId = actions.getLocalPlayerId();
+        return {
+          used: actions.placement.getUsedCapacity(localId),
+          max: actions.isHost()
+            ? actions.getConstructionCapacityForPlayer(localId) ?? actions.getLocalConstructionCapacity()
+            : actions.getLocalConstructionCapacity(),
+        };
+      },
+      getDismantlePreview: () => {
+        const localId = actions.getLocalPlayerId();
+        const position = actions.getLocalPlayerPosition();
+        if (!position) return undefined;
+        const pointer = actions.getPointerWorldPoint();
+        return actions.placement.getDismantlePreview(
+          localId,
+          position.x,
+          position.y,
+          pointer.x,
+          pointer.y,
+          COOP_DEFENSE_DISMANTLE_RANGE,
+        );
+      },
+      getCooldownUntil: (ref: RadialActionRef) => {
+        const localId = actions.getLocalPlayerId();
+        if (ref.kind === 'construction') {
+          return actions.getPlayerUtilityCooldownUntil(localId, ref.constructionId);
+        }
+        if (ref.kind === 'utility') {
+          const resolved = getUtilityConfigForMode(ref.utilityId, actions.getActiveGameMode());
+          return actions.getPlayerUtilityCooldownUntil(localId, resolved?.id ?? ref.utilityId);
+        }
+        if (ref.kind === 'management') {
+          return actions.getPlayerUtilityCooldownUntil(localId, `management:${ref.action}`);
+        }
+        return 0;
+      },
+      getCapabilities: () => {
+        const capabilities = actions.getPlayerCapabilities();
+        return {
+          canUseUtility: capabilities.canInteract && capabilities.canUseCombat,
+          canPlace: capabilities.canInteract && capabilities.canPlace,
+          canManage: capabilities.canInteract && capabilities.canDismantle,
+        };
+      },
+      // Persistent-Base-Management ist nach 3F keine Klassenfrage mehr: Base-owned Rewards
+      // gehoeren der Basis, und persoenliche Konstruktionen bleiben ueber die Ownership-Pruefung
+      // des Hosts geschuetzt. Angeboten wird die Verwaltung deshalb im gesamten Coop-Defense-Modus.
+      getManagementActions: () => (isCoopDefenseMode(actions.getActiveGameMode())
+        ? ['reposition', 'dismantle', 'dismantle-own-all'] as const
+        : []),
+      utilityUsesToolRef: (utilityId: string) => {
+        const currentLoadout = actions.getPlayerCurrentLoadoutSnapshot(actions.getLocalPlayerId());
+        return currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+          && (currentLoadout.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === utilityId);
+      },
+    });
+    inputSystem.setupTemporaryUtilityProvider(
+      () => actions.getPlayerTemporaryUtilityInstances(actions.getLocalPlayerId()),
+    );
+    inputSystem.setupPersistentRewardActionProvider(
+      () => {
+        if (!isCoopDefenseMode(actions.getActiveGameMode())) return [];
+        return actions.persistentBase.getRewardIdsForPlayer(actions.getLocalPlayerId());
+      },
+      (rewardId: PersistentBaseRewardId) => {
+        const pointer = actions.getPointerWorldPoint();
+        return actions.persistentBase.getRewardPlacementPreview(
+          actions.getLocalPlayerId(),
+          rewardId,
+          pointer.x,
+          pointer.y,
+        );
+      },
+      (rewardId, preview) => actions.persistentBase.requestRewardPlacement(rewardId, preview),
+    );
+    inputSystem.setupRepositionActionProvider(
+      () => {
+        const pointer = actions.getPointerWorldPoint();
+        return actions.persistentBase.getMoveSourcePreview(
+          actions.getLocalPlayerId(),
+          pointer.x,
+          pointer.y,
+        );
+      },
+      (sourceRuntimeId: number) => {
+        const pointer = actions.getPointerWorldPoint();
+        return actions.persistentBase.getMoveTargetPreview(
+          actions.getLocalPlayerId(),
+          sourceRuntimeId,
+          pointer.x,
+          pointer.y,
+        );
+      },
+      (sourceRuntimeId, preview) => actions.persistentBase.requestMove(sourceRuntimeId, preview).then((result) => {
+        if (!result.ok) actions.feedback.showPlacementError(t('ui.errors.moveFailed'));
+        return result;
+      }),
+    );
+
+    const playLocalFailureSound = (slot: LoadoutSlot): void => {
+      if (slot === 'weapon1' || slot === 'weapon2') {
+        const shotAudio = actions.getLocalWeaponConfig(slot)?.shotAudio;
+        this.input.audioSystem.playLocalSound(shotAudio?.failureKey);
+        return;
+      }
+
+      if (slot === 'ultimate') {
+        const ultimate = actions.getLocalUltimateConfig();
+        if (ultimate?.type === 'gauss') {
+          this.input.audioSystem.playLocalSound(ultimate.shotAudio?.failureKey);
+        }
+      }
+    };
+    const getLocalWeapon2AdrenalineCost = (): number => {
+      return actions.getLocalWeaponAdrenalineCost('weapon2');
+    };
+    const isWeapon2AdrenalineInsufficient = (assumeRecentLocalShot = false): boolean => {
+      const adrenalineCost = getLocalWeapon2AdrenalineCost();
+      if (adrenalineCost <= 0) return false;
+
+      const localAdrenaline = actions.getLocalAdrenaline();
+      if (localAdrenaline < adrenalineCost) return true;
+      if (!assumeRecentLocalShot) return false;
+
+      return localAdrenaline < adrenalineCost * 2;
+    };
+    const handleLocalFailureFeedback = (
+      slot: LoadoutSlot,
+      reason: 'cooldown' | 'resource',
+      inputStarted: boolean,
+      resourceKind?: LoadoutUseResult['resourceKind'],
+      assumeRecentLocalWeapon2Shot = false,
+    ): void => {
+      if (!inputStarted) return;
+
+      if (
+        slot === 'weapon2'
+        && ((reason === 'resource' && resourceKind === 'adrenaline')
+          || (reason === 'cooldown' && isWeapon2AdrenalineInsufficient(assumeRecentLocalWeapon2Shot)))
+      ) {
+        actions.feedback.notifyAdrenalineInsufficientShot();
+      }
+
+      if (slot === 'ultimate' && reason === 'resource' && resourceKind === 'rage') {
+        actions.feedback.flashUltimateInsufficientRage();
+      }
+
+      playLocalFailureSound(slot);
+    };
+    inputSystem.setupCanStartScopeCheck(() => {
+      const wepConfig = actions.getLocalWeaponConfig('weapon2');
+      if (!wepConfig) return false;
+      const lastFired = actions.getWeaponLastFired('weapon2');
+      const cooldownOk = lastFired === 0 || Date.now() - lastFired >= wepConfig.cooldown;
+      const adrenalineCost = getLocalWeapon2AdrenalineCost();
+      const adrenalineOk = adrenalineCost === 0 || actions.getLocalAdrenaline() >= adrenalineCost;
+      if (!cooldownOk) {
+        handleLocalFailureFeedback('weapon2', 'cooldown', true, undefined, true);
+        return false;
+      }
+      if (!adrenalineOk) {
+        handleLocalFailureFeedback('weapon2', 'resource', true, 'adrenaline');
+        return false;
+      }
+      return true;
+    });
+    inputSystem.setupUtilityPlacementPreviewProvider(() => this.getLocalPlacementPreview());
+    inputSystem.setupUltimatePlacementPreviewProvider(() => this.getLocalUltimatePlacementPreview());
+    inputSystem.setupConstructionPlacementPreviewProvider(
+      (constructionId: ConstructionId) => {
+        const position = actions.getLocalPlayerPosition();
+        if (!position) return undefined;
+        const pointer = actions.getPointerWorldPoint();
+        return actions.placement.getConstructionPlacementPreview(
+          getCoopDefenseConstructionDefinition(constructionId),
+          position.x,
+          position.y,
+          pointer.x,
+          pointer.y,
+        );
+      },
+    );
+    inputSystem.setupTranslocatorRecallCheck(() => {
+      const cfg = actions.getLocalUtilityConfig();
+      if (!cfg || cfg.type !== 'translocator') return false;
+      return actions.getTranslocatorActivePuckId(actions.getLocalPlayerId()) !== undefined;
+    });
+    inputSystem.onUtilityPressedDuringCooldown = () => {
+      const config = actions.getLocalUtilityConfig();
+      const selected = inputSystem.getSelectedRadialActionForHud();
+      const cooldownUntil = inputSystem.getSelectedUtilityCooldownUntil();
+      const remaining = Math.max(0, cooldownUntil - actions.getSynchronizedNow());
+      const cooldown = selected?.kind === 'construction'
+        ? getCoopDefenseConstructionDefinition(selected.constructionId).buildCooldownMs
+        : config?.cooldown ?? 0;
+      const fraction = cooldown > 0 ? Math.min(1, remaining / cooldown) : 0.8;
+      const displayName = selected?.kind === 'construction' ? selected.constructionId : config?.id ?? 'UTILITY';
+      actions.feedback.flashUtilityCooldown(fraction, displayName);
+    };
+    inputSystem.onUltimatePressedWithoutRage = () => {
+      actions.feedback.flashUltimateInsufficientRage();
+    };
+
+    const handleLocalLoadoutFailure = (
+      slot: LoadoutSlot,
+      result: LoadoutUseResult | null,
+      inputStarted: boolean,
+      predictionId?: number,
+    ): void => {
+      if (!result || result.ok) return;
+
+      if (slot === 'ultimate') {
+        inputSystem.cancelLocalUltimateChargePreview();
+      }
+
+      if ((slot === 'weapon1' || slot === 'weapon2')
+        && (result.reason === 'cooldown' || result.reason === 'resource')) {
+        actions.rollbackRejectedLoadoutFire(slot, predictionId);
+      }
+
+      if (result.reason === 'cooldown' || result.reason === 'resource') {
+        handleLocalFailureFeedback(slot, result.reason, inputStarted, result.resourceKind);
+      }
+    };
+    const getConstructionFailureMessage = (reason: LoadoutUseResult['reason']): string => {
+      switch (reason) {
+        case 'capacity': return t('ui.errors.capacity');
+        case 'cooldown': return t('ui.errors.cooldown');
+        case 'placement': return t('ui.errors.placement');
+        default: return t('ui.errors.blocked');
+      }
+    };
+    inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      const capabilities = actions.getPlayerCapabilities();
+      if (!capabilities.canInteract) return;
+      const dismantleAction = params?.dismantle === true || params?.globalDismantle === true;
+      const constructionAction = params?.constructionId !== undefined
+        || params?.toolRef?.kind === 'construction';
+      if (dismantleAction ? !capabilities.canDismantle
+        : constructionAction ? !capabilities.canPlace
+        : !capabilities.canUseCombat) return;
+      if (!actions.isLocalPlayerAlive() || actions.isLocalPlayerBurrowed()) return;
+
+      let shotId: number | undefined;
+      let predictedWeapon2Id: number | undefined;
+      const inputStarted = params?.inputStarted === true;
+
+      if ((slot === 'weapon1' || slot === 'weapon2') && !params?.constructionId) {
+        // scopeHolding: kein Schuss, nur holdSpeedFactor auf Host-Seite aktiv halten.
+        // Weder Cooldown-Check noch notifyLoadoutFired – sonst würde der echte Schuss blockiert.
+        if (params?.scopeHolding) {
+          void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
+          return;
+        }
+        const now = Date.now();
+        const lastFired = actions.getWeaponLastFired(slot);
+        const wepConfig = actions.getLocalWeaponConfig(slot);
+        if (!wepConfig) return;
+        if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
+          handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
+          return;
+        }
+        // Der Host prueft Ressourcen autoritativ im LoadoutManager. Dasselbe Gate muss vor
+        // der lokalen Prediction liegen, die sowohl Host als auch Clients ausfuehren; sonst
+        // werden trotz abgelehntem Schuss weiterhin Strahl und Erfolgssound dargestellt.
+        if (slot === 'weapon2' && isWeapon2AdrenalineInsufficient()) {
+          handleLocalFailureFeedback(slot, 'resource', inputStarted, 'adrenaline');
+          return;
+        }
+        const localFire = actions.notifyLoadoutFired(slot, angle, targetX, targetY);
+        if (!localFire.fired) {
+          handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
+          return;
+        }
+        shotId = localFire.shotId;
+        if (slot === 'weapon2') predictedWeapon2Id = localFire.predictionId;
+      }
+      // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
+      if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
+        // The InputSystem has already checked keyed local prediction before dispatch. This
+        // synchronous callback must only gate against the authoritative state; otherwise the
+        // prediction created by this very request would reject the request itself.
+        const utilityCooldownUntil = params?.temporaryUtilityInstanceId
+          ? actions.getLocalUtilityCooldownUntil(params.temporaryUtilityInstanceId)
+          : actions.getLocalUtilityCooldownUntil();
+        if (utilityCooldownUntil > actions.getSynchronizedNow()) {
+          if (inputStarted) {
+            const utilityShotAudio = actions.getLocalUtilityConfig()?.shotAudio;
+            this.input.audioSystem.playLocalSound(utilityShotAudio?.failureKey);
+          }
+          return;
+        }
+        actions.notifyUtilityFired();
+      }
+
+      const localPosition = actions.getLocalPlayerPosition();
+      if (slot === 'weapon2' && predictedWeapon2Id !== undefined && !actions.isHost()) {
+        actions.beginPredictedWeapon2Use(
+          predictedWeapon2Id,
+          {
+            angle,
+            targetX,
+            targetY,
+            shotId,
+            params,
+            clientX: localPosition?.x,
+            clientY: localPosition?.y,
+            clientNow: Date.now(),
+          },
+          getLocalWeapon2AdrenalineCost(),
+          (result) => handleLocalLoadoutFailure('weapon2', result, inputStarted, predictedWeapon2Id),
+        );
+        return;
+      }
+      const utilityConfig = actions.getLocalUtilityConfig();
+      const isUtilityPlacementAction = slot === 'utility'
+        && inputSystem.isUtilityPlacementActive()
+        && utilityConfig?.activation.type === 'placement_mode';
+      const isUltimatePlacementAction = slot === 'ultimate'
+          && inputSystem.isUltimatePlacementActive()
+          && params?.tunnelAction === 'commit';
+      const isConstructionAction = params?.toolRef?.kind === 'construction';
+      const isToolUtilityAction = params?.toolRef?.kind === 'utility';
+      const isTemporaryUtilityAction = params?.temporaryUtilityInstanceId !== undefined;
+      const isDismantleAction = params?.dismantle === true;
+      const awaitResult = isUtilityPlacementAction
+        || isUltimatePlacementAction
+        || isConstructionAction
+        || isToolUtilityAction
+        || isTemporaryUtilityAction
+        || isDismantleAction;
+      const awaitFailureResult = inputStarted
+        && !params?.constructionId
+        && (slot === 'weapon1' || slot === 'ultimate' || (slot === 'weapon2' && actions.isHost()));
+      const loadoutPromise = actions.sendLoadoutUse(
+        slot,
+        angle,
+        targetX,
+        targetY,
+        shotId,
+        params,
+        localPosition?.x,
+        localPosition?.y,
+        Date.now(),
+        awaitResult || awaitFailureResult,
+      );
+      if (awaitFailureResult) {
+        void loadoutPromise.then((result) => {
+          handleLocalLoadoutFailure(slot, result, inputStarted);
+        });
+      }
+      if (awaitResult) {
+        void loadoutPromise.then((result) => {
+          if (result?.ok) return;
+          if (isDismantleAction) {
+            actions.feedback.showPlacementError(t('ui.errors.dismantleFailed'));
+            return;
+          }
+          if (isConstructionAction) {
+            actions.feedback.showPlacementError(getConstructionFailureMessage(result?.reason));
+            return;
+          }
+          if (isUtilityPlacementAction || isUltimatePlacementAction) {
+            actions.feedback.showPlacementError(
+              result?.reason === 'capacity' ? t('ui.errors.capacity') : t('ui.errors.buildFailed'),
+            );
+            return;
+          }
+          handleLocalLoadoutFailure(slot, result, inputStarted);
+        }).catch(() => {
+          if (isConstructionAction) {
+            actions.feedback.showPlacementError(t('ui.errors.blocked'));
+          } else if (isUtilityPlacementAction || isUltimatePlacementAction) {
+            actions.feedback.showPlacementError(t('ui.errors.buildFailed'));
+          }
+        });
+      }
+    });
+  }
+
+  /**
+   * Wendet die zentrale lokale InputPolicy an und taktet danach den vorhandenen InputSystem.
+   * Die Scene liefert nur den Frame-Kontext; Capabilities werden ueber den Read-Port bezogen.
+   */
+  updateFrame(frame: ArenaInputFrameState): void {
+    if (!frame.enabled) {
+      this.input.inputSystem.setAimEnabled(false);
+      this.input.inputSystem.setInputEnabled(false);
+      return;
+    }
+
+    const policyInput: InputPolicyInput = {
+      capabilities: this.input.actions.getPlayerCapabilities(),
+      gameplayActive: frame.gameplayActive,
+      countdownActive: frame.countdownActive,
+      uiBlocking: frame.uiBlocking,
+      diagnosticsArena: frame.diagnosticsArena,
+    };
+    const inputPolicy = resolveInputPolicy(policyInput);
+    this.input.inputSystem.setAimEnabled(inputPolicy.aim);
+    this.input.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);
+    this.input.inputSystem.update();
+  }
+
+  /** Liefert die lokale Aim-/Systemcursor-Freigabe fuer die Presentation-Schicht. */
+  getAimPresentationState(
+    worldInteractive: boolean,
+    spectator: boolean,
+    optionsOpen: boolean,
+  ): ArenaAimPresentationState {
+    if (this.destroyed) return { aimVisible: false, cursorVisible: false };
+    const cursorVisible = worldInteractive && !optionsOpen && !spectator;
+    const actions = this.input.actions;
+    const aimVisible = cursorVisible
+      && actions.isLocalPlayerAlive()
+      && !actions.isLocalPlayerBurrowed()
+      && !this.input.inputSystem.isUtilityChargePreviewActive()
+      && !this.input.inputSystem.isUtilityPlacementActive()
+      && !this.input.inputSystem.isConstructionPlacementActive()
+      && !this.input.inputSystem.isDismantlePlacementActive()
+      && !this.input.inputSystem.isPersistentRewardPlacementActive()
+      && !this.input.inputSystem.isRepositionActive()
+      && !this.input.inputSystem.isUltimatePlacementActive();
+    return { aimVisible, cursorVisible };
+  }
+
+  getLocalPlacementPreview(): UtilityPlacementPreviewState | undefined {
+    if (this.destroyed) return undefined;
+    const position = this.input.actions.getLocalPlayerPosition();
+    const config = this.input.actions.getLocalUtilityConfig();
+    if (!position || !config || !this.input.inputSystem.isUtilityPlacementActive()) return undefined;
+    if (config.activation.type !== 'placement_mode') return undefined;
+    const pointer = this.input.actions.getPointerWorldPoint();
+    return this.input.actions.placement.getPlacementPreview(
+      config as PlaceableUtilityConfig,
+      position.x,
+      position.y,
+      pointer.x,
+      pointer.y,
+    );
+  }
+
+  getLocalUltimatePlacementPreview(): UtilityPlacementPreviewState | undefined {
+    if (this.destroyed) return undefined;
+    const position = this.input.actions.getLocalPlayerPosition();
+    const config = this.input.actions.getLocalUltimateConfig();
+    if (!position || !config || !this.input.inputSystem.isUltimatePlacementActive()) return undefined;
+    if (config.type !== 'tunnel') return undefined;
+    const pointer = this.input.actions.getPointerWorldPoint();
+    return this.input.actions.placement.getTunnelPlacementPreview(
+      config as TunnelUltimateConfig,
+      position.x,
+      position.y,
+      pointer.x,
+      pointer.y,
+      this.input.inputSystem.getUltimatePlacementAnchor(),
+    );
+  }
+
+  getSpectatorCameraInput(): ArenaSpectatorCameraInput {
+    return {
+      left: this.isSpectatorCameraLeftDown(),
+      right: this.isSpectatorCameraRightDown(),
+      up: this.isSpectatorCameraUpDown(),
+      down: this.isSpectatorCameraDownDown(),
+    };
   }
 
   isSpectatorCameraLeftDown(): boolean {

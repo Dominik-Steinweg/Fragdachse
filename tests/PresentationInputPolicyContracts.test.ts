@@ -186,12 +186,15 @@ describe('Input Policy', () => {
   });
 });
 
-describe('Policies – in der Scene verdrahtet', () => {
-  it('leitet die Eingabe der Scene aus der Policy ab statt aus einer Bedingungskette', () => {
+describe('Policies – im Input-Owner verdrahtet', () => {
+  it('leitet den Input-Owner aus der Policy ab und laesst die Scene nur den Frame-Kontext liefern', () => {
     const scene = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('const inputPolicy = resolveInputPolicy({');
-    expect(scene).toContain('this.ctx.inputSystem.setAimEnabled(inputPolicy.aim);');
-    expect(scene).toContain('this.ctx.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);');
+    const inputBindings = readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaInputBindings.ts'), 'utf8');
+    expect(scene).toContain('this.inputBindings?.updateFrame({');
+    expect(scene).not.toContain('resolveInputPolicy');
+    expect(inputBindings).toContain('const inputPolicy = resolveInputPolicy(policyInput);');
+    expect(inputBindings).toContain('this.input.inputSystem.setAimEnabled(inputPolicy.aim);');
+    expect(inputBindings).toContain('this.input.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);');
 
     // Die frueher dreifach wiederholte Kombination steht nicht mehr in der Scene.
     expect(
