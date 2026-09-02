@@ -176,7 +176,7 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
     const scene = read('src/scenes/ArenaScene.ts');
     expect(scene).toContain('leave: () => this.requestLocalLobbyWorldLeave(),');
     expect(scene).toContain(': this.requestLocalLobbyWorldLeave(),');
-    expect(scene).toContain('this.lifecycle.requestLocalWorldParticipation(false);');
+    expect(scene).toContain('this.arenaRuntime.requestLocalWorldParticipation(false);');
   });
 
   it('bindet den Eintrittswunsch an die World-Revision statt an World-Input', () => {
@@ -301,7 +301,7 @@ describe('LobbyWorld – Preview und Interactive Presentation', () => {
 
   it('laesst die Scene ihre Lobby-Oberflaeche der Presentation folgen, nicht der Raumphase', () => {
     const scene = read('src/scenes/ArenaScene.ts');
-    expect(scene).toContain('this.lifecycle.syncLobbySurface(presentationPolicy.showLobby);');
+    expect(scene).toContain('this.arenaRuntime.syncLobbySurface(presentationPolicy.showLobby);');
     // Rundenpraesentation haengt zusaetzlich an der Activity: interaktiv zu spielen heisst nicht,
     // dass eine Runde laeuft.
     expect(scene).toContain('const inRoundWorld = worldInteractive && activityActive;');
@@ -464,7 +464,7 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     // Der erste Frame zeigt eine Lobby, deren World erst im ersten update()-Tick entsteht.
     expect(scene.includes('Phaser.Core.Events.POST_RENDER')).toBe(false);
     expect(scene).toContain('if (this.bootRevealPending) this.syncBootReveal(phase);');
-    expect(scene).toContain('this.lifecycle.getWorldRevealState(getVisibleWorldView(this.cameras.main))');
+    expect(scene).toContain('this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main))');
     // Hinter einem deckenden Ladescreen darf das Backen dasselbe Budget nutzen wie in der Arena.
     expect(scene).toContain(
       'arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,',

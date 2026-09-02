@@ -6,6 +6,14 @@ function readScene(): string {
   return readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
 }
 
+function readRuntime(): string {
+  return readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaRuntime.ts'), 'utf8');
+}
+
+function readLifecycle(): string {
+  return readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'), 'utf8');
+}
+
 function updateBody(): string {
   const source = readScene();
   const start = source.indexOf('  update(_time: number, delta: number): void {');
@@ -104,7 +112,8 @@ describe('Phase 9 – ArenaScene-Cleanup und Architektur-Gate', () => {
       expect(scene, concretePresentationCall).not.toContain(concretePresentationCall);
     }
     expect(scene).toContain('new CoopMissionPresentationInfrastructure(this)');
-    expect(scene).toContain('this.coopMissionPresentation.createUiPort({');
+    expect(scene).toContain('coopMissionPresentation: this.coopMissionPresentation,');
+    expect(readLifecycle()).toContain('coopMissionPresentation?.createUiPort({');
   });
 });
 

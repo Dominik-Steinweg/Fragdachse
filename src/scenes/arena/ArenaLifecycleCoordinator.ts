@@ -60,6 +60,7 @@ import {
   type CoopMissionPresentationReadPort,
   type CoopMissionPresentationUiPort,
 } from '../../activity/CoopMissionPresentationBinding';
+import type { CoopMissionPresentationInfrastructure } from './CoopMissionPresentationInfrastructure';
 import { CoopMissionPlayerRuntime } from '../../activity/CoopMissionPlayerRuntime';
 import {
   createArenaCoopMissionPorts,
@@ -624,6 +625,7 @@ export class ArenaLifecycleCoordinator {
     return this.persistentBaseWorldBinding?.buildArea ?? null;
   }
   private persistentBaseVisualSite: PersistentBaseVisualSite | null = null;
+  private readonly coopMissionPresentationUi: CoopMissionPresentationUiPort | null;
   private static readonly LAYOUT_RETRY_LIMIT = 312; // ~5s at 16ms per retry
   private static readonly TERRAIN_SNAPSHOT_TIMEOUT_MS = 8000;
   private static readonly TERRAIN_SNAPSHOT_MAX_RETRIES = 1;
@@ -640,7 +642,7 @@ export class ArenaLifecycleCoordinator {
     private readonly hostUpdate: HostUpdateCoordinator,
     private readonly clientUpdate: ClientUpdateCoordinator,
     private readonly roomQualityMonitor: RoomQualityMonitor,
-    private readonly coopMissionPresentationUi: CoopMissionPresentationUiPort,
+    coopMissionPresentation: CoopMissionPresentationInfrastructure | null,
     /**
      * Der raumlanglebige Persistent-Base-Owner. Er ueberlebt jede World und jede Runde und
      * gehoert deshalb der `ArenaRuntime`; der Flow fragt ihn nur.
@@ -649,6 +651,14 @@ export class ArenaLifecycleCoordinator {
     /** Lazy: Die Input-Bindings der Scene entstehen erst nach diesem Owner. */
     private readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined,
   ) {
+    this.coopMissionPresentationUi = coopMissionPresentation?.createUiPort({
+      centerHUD: ctx.centerHUD,
+      playerManager: ctx.playerManager,
+      clientUpdate,
+      renderers,
+      getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
+      getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
+    }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
       ctx,
       getWorldRuntime: () => this.worldRuntime,
@@ -1051,13 +1061,15 @@ export class ArenaLifecycleCoordinator {
       activity,
       worldRuntime.context.definition,
     );
-    const presentationBinding = new CoopMissionPresentationBinding(
-      activityConfiguration.mapConfig,
-      this.coopMissionPresentationPorts,
-      this.coopMissionPresentationUi,
-    );
-    this.coopMissionPresentationBinding = presentationBinding;
-    runtime.bind(presentationBinding);
+    if (this.coopMissionPresentationUi) {
+      const presentationBinding = new CoopMissionPresentationBinding(
+        activityConfiguration.mapConfig,
+        this.coopMissionPresentationPorts,
+        this.coopMissionPresentationUi,
+      );
+      this.coopMissionPresentationBinding = presentationBinding;
+      runtime.bind(presentationBinding);
+    }
     this.attachCoopMissionBaseBinding(activity, runtime);
     this.onCoopMissionRuntimeChanged(runtime);
     if (this.worldRuntime?.materialization?.arena) {

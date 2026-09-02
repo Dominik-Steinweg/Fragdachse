@@ -33,6 +33,7 @@ interface TurretVisualState {
   image:     Phaser.GameObjects.Image;
   aura:      Phaser.GameObjects.Image;
   rangeCircle: Phaser.GameObjects.Graphics;
+
   hpBarBg:   Phaser.GameObjects.Rectangle;
   hpBarFg:   Phaser.GameObjects.Rectangle;
   constructionId?: SyncedPlaceableRock['constructionId'];
@@ -53,6 +54,7 @@ export class RockVisualHelper {
   private obstacleVisualsRequireFullRefresh = false;
   private readonly dirtyRockIds = new Set<number>();
   /** Fels-Darstellung für die jeweils über den Context gebundene World-Geometrie. */
+  private worldPort: RockVisualWorldPort | null;
   private readonly rockPresentation: RockPresentation;
 
   constructor(
@@ -61,8 +63,9 @@ export class RockVisualHelper {
     private readonly shadowSystem: ShadowSystem | null,
     private readonly rockDestructionRenderer: RockDestructionRenderer,
     private readonly lighting: LightingSystem | null,
-    private readonly worldPort: RockVisualWorldPort,
+    worldPort?: RockVisualWorldPort | null,
   ) {
+    this.worldPort = worldPort ?? null;
     this.ensureTurretTextures();
     this.rockPresentation = new RockPresentation(
       {
@@ -73,6 +76,10 @@ export class RockVisualHelper {
       },
       rockDestructionRenderer,
     );
+  }
+
+  setWorldPort(worldPort: RockVisualWorldPort): void {
+    this.worldPort = worldPort;
   }
 
   private ensureTurretTextures(): void {
@@ -326,16 +333,16 @@ export class RockVisualHelper {
     );
   }
 
-  private get worldRuntime(): WorldRuntime | null { return this.worldPort.getWorldRuntime(); }
+  private get worldRuntime(): WorldRuntime | null { return this.worldPort?.getWorldRuntime() ?? null; }
   private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
   private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
   private get lightOccluderIndex() { return this.worldRuntime?.materialization?.lightOccluders ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
-  private get targetingSystems() { return this.worldPort.getTargetingRuntime()?.systems ?? null; }
-  private get playerSystems() { return this.worldPort.getPlayerGameplayRuntime()?.systems ?? null; }
-  private get powerUpSystem() { return this.worldPort.getPowerUpRuntime()?.system ?? null; }
+  private get targetingSystems() { return this.worldPort?.getTargetingRuntime()?.systems ?? null; }
+  private get playerSystems() { return this.worldPort?.getPlayerGameplayRuntime()?.systems ?? null; }
+  private get powerUpSystem() { return this.worldPort?.getPowerUpRuntime()?.system ?? null; }
 
   private destroyRockProxyIfPresent(rockId: number): void {
     if (this.arenaResult?.rockPhysicsProxies[rockId]) {

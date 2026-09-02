@@ -118,6 +118,7 @@ import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameMod
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
+import type { WorldPresentationRequirement } from '../world/WorldPresentation';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
 import { resolvePresentationPolicy } from '../world/PresentationPolicy';
@@ -151,7 +152,6 @@ import {
   ClientUpdateCoordinator,
   HostUpdateCoordinator,
   RpcCoordinator,
-  ArenaLifecycleCoordinator,
   ArenaRuntime,
   ArenaAimPresentationController,
   ArenaCombatPresentationController,
@@ -197,7 +197,7 @@ type ArenaFrameSignals = Readonly<{
   spectator: boolean;
   worldActive: boolean;
   activityActive: boolean;
-  localWorldPresentation: ReturnType<ArenaLifecycleCoordinator['getLocalWorldPresentation']>;
+  localWorldPresentation: WorldPresentationRequirement;
   presentationPolicy: ReturnType<typeof resolvePresentationPolicy>;
 }>;
 
@@ -231,8 +231,6 @@ export class ArenaScene extends Phaser.Scene {
   private clientUpdate!: ClientUpdateCoordinator;
   private rpcCoordinator!: RpcCoordinator;
   private arenaRuntime!: ArenaRuntime;
-  /** Der Arena-Flow der laufenden Szene; sein Owner ist die `ArenaRuntime`. */
-  private get lifecycle(): ArenaLifecycleCoordinator { return this.arenaRuntime.flow; }
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -424,37 +422,38 @@ export class ArenaScene extends Phaser.Scene {
         ? { setSuppressed: (suppressed: boolean) => this.renderers?.lighting.setVectorSuppressed(suppressed) }
         : null,
       chunkDiagnostics: {
-        getState: () => ({
-          staticShadows: this.renderers?.shadow?.isStaticVisible() ?? true,
-          groundSurface: this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.groundSurface?.isVisible() ?? true,
-          rockOverlay: this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockOverlaySurface?.isVisible() ?? true,
-          chunkSampling: this.renderers?.shadow?.getSamplingMode()
-            ?? this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.groundSurface?.getSamplingMode()
-            ?? 'default',
-          rockRenderer: this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.getMode() ?? getRockRendererMode(),
-          rockGpuPageSize: this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
-          rockGpu: this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.getGpuDiagnostics() ?? null,
-        }),
+        getState: () => {
+          const staticShadows = this.renderers?.shadow?.isStaticVisible() ?? true;
+          const shadowSampling = this.renderers?.shadow?.getSamplingMode() ?? null;
+          return this.arenaRuntime?.getChunkRenderingDiagnosticsState(staticShadows, shadowSampling) ?? {
+            staticShadows,
+            groundSurface: true,
+            rockOverlay: true,
+            chunkSampling: shadowSampling ?? 'default',
+            rockRenderer: getRockRendererMode(),
+            rockGpuPageSize: getRockGpuPageSize(),
+            rockGpu: null,
+          };
+        },
         setStaticShadowsVisible: (visible) => this.renderers?.shadow?.setStaticVisible(visible),
-        setGroundSurfaceVisible: (visible) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.groundSurface?.setVisible(visible),
-        setRockOverlayVisible: (visible) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockOverlaySurface?.setVisible(visible),
+        setGroundSurfaceVisible: (visible) => this.arenaRuntime?.setGroundSurfaceVisible(visible),
+        setRockOverlayVisible: (visible) => this.arenaRuntime?.setRockOverlayVisible(visible),
         setChunkSampling: (mode) => {
           this.renderers?.shadow?.setSamplingMode(mode);
-          this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.groundSurface?.setSamplingMode(mode);
-          this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockOverlaySurface?.setSamplingMode(mode);
+          this.arenaRuntime?.setChunkSampling(mode);
         },
         setRockRenderer: (mode) => {
           setRockRendererMode(mode);
-          this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.setMode(mode);
+          this.arenaRuntime?.setRockRenderer(mode);
         },
         setRockGpuPageSize: (size) => {
           setRockGpuPageSize(size);
-          this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.setPageSize(size);
+          this.arenaRuntime?.setRockGpuPageSize(size);
         },
       },
       getGpuVfxStats: () => this.renderers?.gpuVfx.getStats() ?? null,
-      getFlowFieldCoordinator: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.flowFieldCoordinator ?? null,
-      getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem ?? null,
+      getFlowFieldCoordinator: () => (this.arenaRuntime?.getFlowFieldDiagnosticsSource() as any) ?? null,
+      getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaRuntime?.getRockVisualDiagnostics() ?? null,
       getHostPerformanceMetrics: () => this.hostUpdate.getPerformanceMetrics(),
       getClientPerformanceMetrics: () => this.clientUpdate.getPerformanceMetrics(),
       getFrameMetrics: () => ({
@@ -549,16 +548,7 @@ export class ArenaScene extends Phaser.Scene {
           isLocalPlayer: targetId === bridge.getLocalPlayerId(),
         };
       }
-      const enemy = this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(targetId);
-      if (enemy) {
-        return {
-          sprite: enemy.sprite,
-          materialColor: enemy.getTintColor(),
-          knockbackFactor: enemy.getKnockbackFactor(),
-          isLocalPlayer: false,
-        };
-      }
-      return null;
+      return this.arenaRuntime?.getEnemySilhouette(targetId) ?? null;
     });
     effectSystem.setHitFeedbackRenderer(this.visualFeedback.hitFeedback);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -623,13 +613,13 @@ export class ArenaScene extends Phaser.Scene {
         isHost: () => bridge.isHost(),
         getCoopDefenseMapId: () => bridge.getCoopDefenseMapId(),
         setCoopDefenseMapId: (mapId) => bridge.setCoopDefenseMapId(mapId),
-        isLocalReady: () => this.lifecycle.getIsLocalReady(),
+        isLocalReady: () => this.arenaRuntime.getIsLocalReady(),
         isAuthoritativeLocalReady: () => bridge.getPlayerReady(bridge.getLocalPlayerId()),
         getPlayerLoadoutSlot: (playerId, slot) => bridge.getPlayerLoadoutSlot(playerId, slot),
         setLocalLoadoutSlot: (slot, itemId) => bridge.setLocalLoadoutSlot(slot, itemId),
         setLocalReady: (ready) => {
           bridge.setLocalReady(ready);
-          this.lifecycle.setIsLocalReady(ready);
+          this.arenaRuntime.setIsLocalReady(ready);
         },
         setLocalCoopDefenseTotalXp: (totalXp) => bridge.setLocalCoopDefenseTotalXp(totalXp),
       },
@@ -716,8 +706,8 @@ export class ArenaScene extends Phaser.Scene {
       () => this.coopDefenseBalanceReportOverlay?.show(),
     );
     this.timeOfDayDebugOverlay = new TimeOfDayDebugOverlay(
-      () => this.lifecycle.getCurrentTimeOfDayMinutes(),
-      () => this.lifecycle.getAutomaticTimeOfDayMinutes(),
+      () => this.arenaRuntime.getCurrentTimeOfDayMinutes(),
+      () => this.arenaRuntime.getAutomaticTimeOfDayMinutes(),
       (minutes, settled) => this.applyDebugTimeOfDay(minutes, settled),
       () => this.clearDebugTimeOfDay(),
     );
@@ -873,12 +863,6 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers.shadow,
       this.renderers.rockDestruction,
       this.renderers.lighting,
-      {
-        getWorldRuntime: () => this.arenaRuntime?.flow.getWorldRuntime() ?? null,
-        getTargetingRuntime: () => this.arenaRuntime?.flow.getWorldTargetingRuntime() ?? null,
-        getPlayerGameplayRuntime: () => this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime() ?? null,
-        getPowerUpRuntime: () => this.arenaRuntime?.flow.getWorldPowerUpRuntime() ?? null,
-      },
     );
     const placementPreview = new PlacementPreviewRenderer(this, this.ctx);
     this.persistentBaseVisuals = new PersistentBaseVisuals(this);
@@ -886,7 +870,7 @@ export class ArenaScene extends Phaser.Scene {
     const tunnelRenderer = new TunnelRenderer(this);
     const gaussWarning = new GaussWarningRenderer(
       this,
-      () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [],
+      () => this.arenaRuntime?.getAuraEnemies() ?? [],
     );
 
     this.aimPresentation = new ArenaAimPresentationController(
@@ -913,7 +897,7 @@ export class ArenaScene extends Phaser.Scene {
       {
         syncPersistentBasePresentation: (showWorld, spectator) => this.arenaRuntime?.syncWorldPersistentBasePresentation(showWorld, spectator),
         getTunnelSnapshot: () => bridge.isHost()
-          ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.tunnel?.getSnapshot() ?? [])
+          ? (this.arenaRuntime?.getHostTunnelSnapshot() ?? [])
           : (bridge.getLatestGameState()?.tunnels ?? []),
       },
       {
@@ -931,17 +915,14 @@ export class ArenaScene extends Phaser.Scene {
       {
         getSynchronizedNow: () => bridge.getSynchronizedNow(),
         updateVisualFeedback: (delta) => this.visualFeedback?.update(delta),
-        getReinforcementMatrices: () => this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems?.reinforcementMatrix?.getActiveMatrices() ?? [],
-        getEnergyInjectorEffects: () => this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems?.energyInjector?.getActiveEffects() ?? [],
+        getReinforcementMatrices: () => this.arenaRuntime?.getReinforcementMatrices() ?? [],
+        getEnergyInjectorEffects: () => this.arenaRuntime?.getEnergyInjectorEffects() ?? [],
         getRemoteControlTargets: () => bridge.isHost()
-          ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.itemRuntime?.getRemoteControlSnapshot(
-            playerManager.getAllPlayers().map((player) => player.id),
-            this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems?.turret?.getTurrets() ?? [],
-          ) ?? [])
+          ? (this.arenaRuntime?.getHostRemoteControlTargets(playerManager.getAllPlayers().map((player) => player.id)) ?? [])
           : (bridge.getLatestGameState()?.remoteControlTurrets ?? []),
-        getAuraEnemies: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [],
-        syncEnemyHostVisuals: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.syncHostVisuals(),
-        getEnemyCount: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies().length ?? 0,
+        getAuraEnemies: () => this.arenaRuntime?.getAuraEnemies() ?? [],
+        syncEnemyHostVisuals: () => this.arenaRuntime?.syncEnemyHostVisuals(),
+        getEnemyCount: () => this.arenaRuntime?.getEnemyCount() ?? 0,
       },
     );
     this.diagnostics?.subscribeDiagnostics((enabled) => {
@@ -972,7 +953,7 @@ export class ArenaScene extends Phaser.Scene {
       () => this.meta?.openUpgradeOverlay(),
       () => this.meta?.openItemsOverlay(),
       (enter) => enter
-        ? this.lifecycle.requestLocalWorldParticipation(true)
+        ? this.arenaRuntime.requestLocalWorldParticipation(true)
         : this.requestLocalLobbyWorldLeave(),
     );
     this.lobbyOverlay.build();
@@ -1004,37 +985,16 @@ export class ArenaScene extends Phaser.Scene {
       hostUpdate: this.hostUpdate,
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
-      coopMissionPresentationUi: this.coopMissionPresentation.createUiPort({
-        centerHUD,
-        playerManager,
-        clientUpdate: this.clientUpdate,
-        renderers: this.renderers,
-        getBaseManager: () => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases ?? null,
-        getEnemyManager: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-      }),
+      coopMissionPresentation: this.coopMissionPresentation,
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
       getSpectatorCameraInput: () => this.inputBindings?.getSpectatorCameraInput(),
     });
-    this.clientUpdate.setPlayerWorldRuntime(
-      (profile, spawn) => this.lifecycle.attachPlayerToWorld(profile, false, spawn),
-      (playerId) => this.lifecycle.detachPlayerFromWorld(playerId),
-    );
-    this.clientUpdate.setWorldPresentationResolver(
-      () => this.lifecycle.getLocalWorldPresentation(),
-    );
-    this.hostUpdate.setPlayerCapabilitiesResolver(
-      (playerId) => this.lifecycle.getPlayerCapabilities(playerId),
-    );
-    this.ctx.hostPhysics.setCanMoveResolver(
-      (playerId) => this.lifecycle.getPlayerCapabilities(playerId).canMove,
-    );
-    this.lifecycle.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
+    this.arenaRuntime.setRuntimeDiagnosticEventSink(this.diagnostics?.getSemanticEventSink() ?? null);
     this.weaponBalanceLabRuntime = new WeaponBalanceLabRuntime(
       () => this.ctx,
-      () => this.lifecycle.getWorldPlayerGameplayRuntime(),
-      () => this.lifecycle.getCoopMissionRuntime(),
+      this.arenaRuntime.weaponBalanceLabPort,
       (result) => {
         storeRuntimeBenchmarkResult(result);
         console.info(
@@ -1045,7 +1005,7 @@ export class ArenaScene extends Phaser.Scene {
       () => {
         // Nicht mitten im Host-Update abbauen: Der naechste Scene-Tick sieht bereits LOBBY
         // und laeuft durch den regulaeren ARENA→LOBBY-Teardown.
-        this.time.delayedCall(0, () => this.lifecycle.hostDiscardRound());
+        this.time.delayedCall(0, () => this.arenaRuntime.hostDiscardRound());
       },
     );
     this.weaponBalanceLabOverlay = new WeaponBalanceLabOverlay(
@@ -1071,71 +1031,23 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.effectSystem,
       this.ctx.visualFeedback,
       this.ctx.gameAudioSystem,
-      { handleRequest: (playerId, join) => this.lifecycle.hostHandleWorldParticipationRequest(playerId, join) },
-      { get: (playerId) => this.lifecycle.getPlayerCapabilities(playerId) },
-      {
-        placeInspectorConstruction: (playerId, constructionId, targetX, targetY, activityRevision) => (
-          this.lifecycle.getConstructionWorldRuntime()?.placeInspectorConstruction(
-            playerId,
-            constructionId,
-            targetX,
-            targetY,
-            activityRevision,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-        useInspectorUtility: (playerId, tool, angle, targetX, targetY, now, params) => (
-          this.lifecycle.getConstructionWorldRuntime()?.useInspectorUtility(
-            playerId,
-            tool,
-            angle,
-            targetX,
-            targetY,
-            now,
-            params,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-        dismantleConstruction: (playerId, targetX, targetY, activityRevision) => (
-          this.lifecycle.getConstructionWorldRuntime()?.dismantleConstruction(
-            playerId,
-            targetX,
-            targetY,
-            activityRevision,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-        dismantleAllOwnedConstructions: (playerId, activityRevision) => (
-          this.lifecycle.getConstructionWorldRuntime()?.dismantleAllOwnedConstructions(
-            playerId,
-            activityRevision,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-      },
-      {
-        placeReward: (playerId, request) => (
-          this.arenaRuntime.persistentBase.placePersistentBaseReward(playerId, request)
-        ),
-        moveObject: (playerId, request) => (
-          this.arenaRuntime.persistentBase.movePersistentBaseObject(playerId, request)
-        ),
-      },
-      {
-        getBurrowSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.burrow ?? null,
-        getLoadoutManager: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.loadout ?? null,
-        getTranslocatorSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.translocator ?? null,
-        getResourceSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.resource ?? null,
-        getPowerUpSystem: () => this.lifecycle.getWorldPowerUpRuntime()?.system ?? null,
-      },
-      { getSystem: () => this.lifecycle.getWorldPlayerGameplayRuntime()?.systems.heldAction ?? null },
-      { markDestroyed: () => this.lifecycle.onTrainDestroyed() },
+      this.arenaRuntime.rpcPorts.worldParticipation,
+      this.arenaRuntime.rpcPorts.playerCapabilities,
+      this.arenaRuntime.rpcPorts.construction,
+      this.arenaRuntime.rpcPorts.persistentBase,
+      this.arenaRuntime.rpcPorts.playerLoadout,
+      this.arenaRuntime.rpcPorts.heldAction,
+      this.arenaRuntime.rpcPorts.train,
     );
     this.rpcCoordinator.registerAll();
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).
     leftPanel.setAbortMatchBinding({
-      canAbort: () => this.lifecycle.canHostAbortRound(),
-      abort: () => this.lifecycle.hostAbortRound(),
+      canAbort: () => this.arenaRuntime.canHostAbortRound(),
+      abort: () => this.arenaRuntime.hostAbortRound(),
     });
     leftPanel.setSpectatorMatchBinding({
-      canSpectate: () => this.lifecycle.canEnterSpectatorMode(),
-      spectate: () => this.lifecycle.enterSpectatorMode(),
+      canSpectate: () => this.arenaRuntime.canEnterSpectatorMode(),
+      spectate: () => this.arenaRuntime.enterSpectatorMode(),
     });
     leftPanel.setWorldLeaveBinding({
       canLeave: () => this.canLeaveLocalLobbyWorld(),
@@ -1148,7 +1060,7 @@ export class ArenaScene extends Phaser.Scene {
 
     bridge.onPlayerJoin(profile => this.onPlayerJoined(profile));
     bridge.onPlayerQuit(id      => this.onPlayerLeft(id));
-    bridge.onSpectatorEntered(id => this.lifecycle.handleSpectatorEntered(id));
+    bridge.onSpectatorEntered(id => this.arenaRuntime.handleSpectatorEntered(id));
     bridge.onKicked(() => {
       this.lobbyOverlay.showHostDisconnectedMessage(t('ui.lobby.kickedFromRoom'));
     });
@@ -1160,7 +1072,7 @@ export class ArenaScene extends Phaser.Scene {
         this.clientUpdate.retryUnresolvedWeapon2Predictions();
       }
       if (status.state === 'player-expired') {
-        this.lifecycle.handleGuestSessionOwnerRemoved(status.playerId);
+        this.arenaRuntime.handleGuestSessionOwnerRemoved(status.playerId);
       }
     });
     // Verbindungsabbruch: es gibt keinen Hostwechsel und keinen Ersatztransport, die Partie
@@ -1169,10 +1081,10 @@ export class ArenaScene extends Phaser.Scene {
       if (bridge.getGamePhase() === 'ARENA') {
         this.meta?.abortMatchResults(message);
       }
-      this.lifecycle.terminateMatch(message);
+      this.arenaRuntime.terminateMatch(message);
     });
 
-    this.lifecycle.initialize();
+    this.arenaRuntime.initialize();
     const inputBindings = new ArenaInputBindings({
       scene: this,
       inputSystem,
@@ -1213,7 +1125,7 @@ export class ArenaScene extends Phaser.Scene {
           predictionId,
         ),
         getPlayerCapabilities: () => {
-          return this.lifecycle.getPlayerCapabilities(bridge.getLocalPlayerId());
+          return this.arenaRuntime.getPlayerCapabilities(bridge.getLocalPlayerId());
         },
         isLocalPlayerAlive: () => this.localPlayerState.alive,
         isLocalPlayerBurrowed: () => this.localPlayerState.burrowed,
@@ -1225,41 +1137,9 @@ export class ArenaScene extends Phaser.Scene {
           const pointer = this.getPointerWorldPoint();
           return { x: pointer.x, y: pointer.y };
         },
-        getConstructionCapacityForPlayer: (playerId) => this.arenaRuntime?.flow.getConstructionCapacityForPlayer(playerId),
-        getTranslocatorActivePuckId: (playerId) => this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.translocator?.getActivePuckId(playerId),
-        placement: {
-          getUsedCapacity: (ownerId) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement?.getUsedCapacity(ownerId) ?? 0,
-          getDismantlePreview: (ownerId, originX, originY, pointerX, pointerY, range) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement?.getDismantlePreview(
-            ownerId,
-            originX,
-            originY,
-            pointerX,
-            pointerY,
-            range,
-          ),
-          getPlacementPreview: (config, originX, originY, pointerX, pointerY) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement?.getPlacementPreview(
-            config,
-            originX,
-            originY,
-            pointerX,
-            pointerY,
-          ),
-          getTunnelPlacementPreview: (config, originX, originY, pointerX, pointerY, anchor) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement?.getTunnelPlacementPreview(
-            config,
-            originX,
-            originY,
-            pointerX,
-            pointerY,
-            anchor,
-          ),
-          getConstructionPlacementPreview: (definition, originX, originY, pointerX, pointerY) => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement?.getConstructionPlacementPreview(
-            definition,
-            originX,
-            originY,
-            pointerX,
-            pointerY,
-          ),
-        },
+        getConstructionCapacityForPlayer: (playerId) => this.arenaRuntime?.getConstructionCapacityForPlayer(playerId),
+        getTranslocatorActivePuckId: (playerId) => this.arenaRuntime?.getTranslocatorActivePuckId(playerId),
+        placement: this.arenaRuntime.placementPorts,
         persistentBase: {
           getRewardIdsForPlayer: (playerId) => this.arenaRuntime?.persistentBase.getPersistentBaseRewardIdsForPlayer(playerId) ?? [],
           getRewardPlacementPreview: (playerId, rewardId, pointerX, pointerY) => this.arenaRuntime?.persistentBase.getPersistentBaseRewardPlacementPreview(
@@ -1294,7 +1174,7 @@ export class ArenaScene extends Phaser.Scene {
       onFlowFieldDebugHotkey: (type: ArenaInputDebugHotkey) => this.handleFlowFieldDebugHotkey(type),
       hotkeys: {
         getGamePhase: () => bridge.getGamePhase(),
-        isMatchTerminated: () => this.lifecycle.isMatchTerminated(),
+        isMatchTerminated: () => this.arenaRuntime.isMatchTerminated(),
         isCoopDefenseMode: () => isCoopDefenseMode(bridge.getGameMode()),
         canLeaveLocalLobbyWorld: () => this.canLeaveLocalLobbyWorld(),
         requestLocalLobbyWorldLeave: () => this.requestLocalLobbyWorldLeave(),
@@ -1394,17 +1274,17 @@ export class ArenaScene extends Phaser.Scene {
     const phase = bridge.getGamePhase();
     const deferArenaExit = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
-    this.lifecycle.detectPhaseChange(deferArenaExit);
+    this.arenaRuntime.detectPhaseChange(deferArenaExit);
     // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
     // ihrem eigenen Kanal. Der Host haelt waehrend der Lobby genau eine LobbyWorld offen; jeder
     // Peer baut sie danach ueber denselben Kanal wie jede Match-World. Waehrend des lokalen
     // Arena-Exit-Fades bleibt nur die freigegebene Match-Presentation sichtbar; ihre Runtime ist
     // bereits vollstaendig beendet.
-    if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();
+    if (!deferArenaExit) this.arenaRuntime.hostSyncLobbyWorld();
     // Jeder Peer bietet seinen persoenlichen Basisbeitrag an und uebernimmt, was der Host ihm
     // bestaetigt hat. Beides haengt am Raum, nicht an Phase oder Runde.
     this.arenaRuntime.syncRoomOwners();
-    this.lifecycle.detectWorldChange(deferArenaExit);
+    this.arenaRuntime.detectWorldChange(deferArenaExit);
     // Erst steht fest, welche World lokal laeuft - dann taktet ihre Runtime. Sie taktet nur die
     // eigenen Child-Owner; Rundenphase und Rolle entscheiden darueber nichts.
     this.arenaRuntime.update(delta);
@@ -1470,7 +1350,7 @@ export class ArenaScene extends Phaser.Scene {
     // Same-Mode-Live-Builds bleiben in derselben LobbyWorld reconciled. Ein vollstaendiger
     // GameMode-Wechsel wurde davor bereits als neue World-Instanz orchestriert.
     if (worldActive && bridge.isHost() && !terminated) {
-      this.lifecycle.syncHostLoadoutsFromCommittedSelections();
+      this.arenaRuntime.syncHostLoadoutsFromCommittedSelections();
     }
 
     this.runArenaWorldWithoutActivityFrame(
@@ -1599,7 +1479,7 @@ export class ArenaScene extends Phaser.Scene {
       arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,
     );
     if (inGame && !terminated) {
-      this.lifecycle.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
+      this.arenaRuntime.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
     }
     // Ganz am Ende des Frames: die Barriere sieht damit eine vollstaendig aufgebaute Lobby
     // inklusive ihres UI-Durchlaufs, nicht einen halb aufgebauten Zwischenstand.
@@ -1662,7 +1542,7 @@ export class ArenaScene extends Phaser.Scene {
     const arenaLoading = bridge.isArenaLoading();
     const arenaVisible = bridge.isArenaCountdownVisible() || deferArenaExit;
     const countdownActive = bridge.isArenaCountdownActive();
-    const terminated = this.lifecycle.isMatchTerminated();
+    const terminated = this.arenaRuntime.isMatchTerminated();
     const gameplayActive = inGame && bridge.isArenaStarted() && !terminated;
     const weaponBalanceLabArena = inGame
       && configuredCoopDefenseMapId !== null
@@ -1672,15 +1552,14 @@ export class ArenaScene extends Phaser.Scene {
     // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
     // ausdruecklich vor und unabhaengig von der Rundenrolle. Ohne Activity taktet niemand den
     // Eintritt: dort folgt die Runtime unmittelbar der Aufnahme.
-    this.lifecycle.hostSyncWorldMembers();
-    this.lifecycle.hostSyncWorldParticipation();
-    this.lifecycle.syncRoundParticipation();
+    this.arenaRuntime.hostSyncWorldMembers();
+    this.arenaRuntime.hostSyncWorldParticipation();
+    this.arenaRuntime.syncRoundParticipation();
     const spectator = inGame && (this.localPlayerState.spectator || bridge.isLocalSpectator());
-    const worldActive = this.arenaRuntime?.flow.getWorldRuntime()?.context !== null
-      && this.arenaRuntime?.flow.getWorldRuntime()?.context !== undefined;
+    const worldActive = this.arenaRuntime.isWorldActive();
     const activityActive = bridge.getActivityDescriptor() !== null;
-    const exitPresentationActive = deferArenaExit && this.lifecycle.isArenaExitPresentationActive();
-    const localWorldPresentation = this.lifecycle.getLocalWorldPresentation();
+    const exitPresentationActive = deferArenaExit && this.arenaRuntime.isArenaExitPresentationActive();
+    const localWorldPresentation = this.arenaRuntime.getLocalWorldPresentation();
     const presentationPolicy = resolvePresentationPolicy({
       inLobby: phase === 'LOBBY' && !deferArenaExit,
       worldPresentation: localWorldPresentation,
@@ -1709,7 +1588,7 @@ export class ArenaScene extends Phaser.Scene {
       if (bridge.isHost()) {
         // Initial spawn is part of the hidden local build. It must happen before the first
         // residency check so the startup working set follows the actual local player focus.
-        this.lifecycle.spawnReadyPlayers();
+        this.arenaRuntime.spawnReadyPlayers();
         this.localPlayerState.alive = this.ctx.combatSystem.isAlive(bridge.getLocalPlayerId());
       } else if (arenaLoading || countdownActive) {
         // The client receives the first authoritative alive bit with the first post-start
@@ -1750,19 +1629,19 @@ export class ArenaScene extends Phaser.Scene {
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
     // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer das
     // Testgelaende betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
-    if (!terminated && phase === 'LOBBY' && !deferArenaExit) this.lifecycle.syncLobbyTimeOfDay();
+    if (!terminated && phase === 'LOBBY' && !deferArenaExit) this.arenaRuntime.syncLobbyTimeOfDay();
     // Die Oberflaeche folgt der Presentation. Ein technischer Abbruch fuehrt sie selbst zurueck
     // und darf hier nicht ueberschrieben werden.
-    if (!terminated) this.lifecycle.syncLobbySurface(presentationPolicy.showLobby);
+    if (!terminated) this.arenaRuntime.syncLobbySurface(presentationPolicy.showLobby);
     // Der Live-Build bleibt auch im interaktiven Testgelaende sichtbar. Er ist absichtlich kein
     // Ready-Commit und wird deshalb unabhaengig davon pro Lobby-Frame publiziert.
     if (!terminated && phase === 'LOBBY' && !deferArenaExit) {
       bridge.setLocalLobbyLoadoutPreview(this.buildLocalLobbyLoadoutPreview());
     }
     this.lobbyOverlay.setWorldEntryState(
-      this.lifecycle.canSelfAdmitToWorld()
+      this.arenaRuntime.canSelfAdmitToWorld()
         ? {
-          inside: this.lifecycle.isLocalWorldParticipant(),
+          inside: this.arenaRuntime.isLocalWorldParticipant(),
           canEnter: bridge.getPlayerReady(bridge.getLocalPlayerId()) === false,
         }
         : null,
@@ -1783,8 +1662,8 @@ export class ArenaScene extends Phaser.Scene {
       // Rundenwechsel (oder bei Modus-/Map-Wechsel) den Spieler auf "nicht bereit", folgt hier sowohl
       // das interne Flag als auch der Button – so ist der Client-Zustandsspeicher garantiert konsistent.
       const localReady = bridge.getPlayerReady(bridge.getLocalPlayerId());
-      if (localReady !== this.lifecycle.getIsLocalReady()) {
-        this.lifecycle.setIsLocalReady(localReady);
+      if (localReady !== this.arenaRuntime.getIsLocalReady()) {
+        this.arenaRuntime.setIsLocalReady(localReady);
         this.lobbyOverlay.setReadyButtonState(localReady);
       }
       this.updateRoomQuality(this.time.now, players);
@@ -1821,7 +1700,7 @@ export class ArenaScene extends Phaser.Scene {
       }
       this.ctx.leftPanel.refreshColorPickerIfOpen();
       this.ctx.leftPanel.updateLobby();
-      if (bridge.isHost()) this.lifecycle.hostCheckReadyToStart();
+      if (bridge.isHost()) this.arenaRuntime.hostCheckReadyToStart();
       diagnosticsFrame?.end('lobbyUi');
     } else {
       this.coopDefenseDebugOverlay?.hide();
@@ -1857,7 +1736,7 @@ export class ArenaScene extends Phaser.Scene {
       const trainEvent = bridge.getTrainEvent();
       if (!trainEvent) {
         this.ctx.centerHUD.hideTrainWidget();
-      } else if (!this.lifecycle.isTrainDestroyedShown()) {
+      } else if (!this.arenaRuntime.isTrainDestroyedShown()) {
         const trainState = bridge.getLatestGameState()?.train ?? null;
         if (trainState?.alive) {
           this.ctx.centerHUD.updateTrainHP(trainState.hp, trainState.maxHp);
@@ -1883,9 +1762,9 @@ export class ArenaScene extends Phaser.Scene {
           // Die Momentaufnahme der Runde entsteht vor ihrem Abschluss: `hostCompleteRound()`
           // beendet die World-Instanz, und danach gibt es weder Basen noch Spielerzustand.
           this.prepareCoopDefenseBalanceRound(coopRoundOutcome);
-          this.lifecycle.hostCompleteRound(coopRoundOutcome);
+          this.arenaRuntime.hostCompleteRound(coopRoundOutcome);
         } else if (!isCoopDefenseMode(configuredGameMode) && !countdownActive && secs <= 0) {
-          this.lifecycle.hostCompleteRound();
+          this.arenaRuntime.hostCompleteRound();
         }
         diagnosticsFrame?.end('primaryStep');
       } else {
@@ -1902,18 +1781,18 @@ export class ArenaScene extends Phaser.Scene {
           countdownActive,
           countdownActive && activeMapConfig
             ? buildCountdownGroundFirePreview(
-              this.arenaRuntime?.flow.getWorldRuntime()?.presentation?.layout ?? null,
+              this.arenaRuntime?.getWorldLayout() ?? null,
               activeMapConfig,
               bridge.getArenaStartTime(),
             )
             : { cells: [] },
-          this.arenaRuntime?.flow.getWorldPowerUpRuntime()?.system?.getPedestalSnapshot() ?? [],
+          this.arenaRuntime?.getPowerUpPedestalSnapshot() ?? [],
         );
         diagnosticsFrame?.end('clientRendererSync');
         diagnosticsFrame?.end('primaryStep');
       }
 
-      const transitionCompleted = this.lifecycle.syncRuntimeTimeOfDay(
+      const transitionCompleted = this.arenaRuntime.syncRuntimeTimeOfDay(
         bridge.getSynchronizedNow(),
         this.resolveArenaTimeOfDaySignals(),
       );
@@ -1947,7 +1826,7 @@ export class ArenaScene extends Phaser.Scene {
         delta,
         false,
         { cells: [] },
-        this.arenaRuntime?.flow.getWorldPowerUpRuntime()?.system?.getPedestalSnapshot() ?? [],
+        this.arenaRuntime?.getPowerUpPedestalSnapshot() ?? [],
       );
     }
     diagnosticsFrame?.end('primaryStep');
@@ -1957,16 +1836,7 @@ export class ArenaScene extends Phaser.Scene {
     inRoundWorld: boolean,
     configuredGameMode: GameMode,
   ): void {
-    const strategicTargets = bridge.isHost()
-      ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.ak47StrategicTarget?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
-      : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
-    this.renderers.ak47StrategicTargets.sync(
-      strategicTargets,
-      this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-      bridge.getLocalPlayerId(),
-      bridge.getSynchronizedNow(),
-      inRoundWorld && isCoopDefenseMode(configuredGameMode),
-    );
+    this.arenaRuntime?.syncStrategicTargetsPresentation(inRoundWorld, configuredGameMode);
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -1982,12 +1852,12 @@ export class ArenaScene extends Phaser.Scene {
 
   private onPlayerLeft(id: string): void {
     if (bridge.isHost()) bridge.hostReclaimColor(id);
-    this.lifecycle.handleGuestSessionOwnerRemoved(id);
+    this.arenaRuntime.handleGuestSessionOwnerRemoved(id);
     if (this.ctx.playerManager.hasPlayer(id)) {
-      this.lifecycle.removePlayerFromActiveRound(id);
+      this.arenaRuntime.removePlayerFromActiveRound(id);
     }
     if (bridge.getGamePhase() === 'ARENA' && id === bridge.getMatchHostId()) {
-      this.lifecycle.terminateMatch();
+      this.arenaRuntime.terminateMatch();
     }
   }
 
@@ -2001,7 +1871,7 @@ export class ArenaScene extends Phaser.Scene {
     if (bridge.getConnectedPlayers().length !== 1) {
       return { ok: false, message: 'Balance Lab 2.0 ist zunächst ausschließlich für Solo-Hosts verfügbar.' };
     }
-    if (this.lifecycle.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) {
+    if (this.arenaRuntime.getIsLocalReady() || bridge.getPlayerReady(bridge.getLocalPlayerId())) {
       return { ok: false, message: 'Vor dem Testgelände muss der Spieler nicht bereit sein.' };
     }
     if (this.roomQualityMonitor.shouldBlockStart()) {
@@ -2018,7 +1888,7 @@ export class ArenaScene extends Phaser.Scene {
       this.weaponBalanceLabRuntime.arm(request, build);
       bridge.setCoopDefenseMapId(WEAPON_BALANCE_LAB_MAP_ID);
       bridge.setLocalReadyWithCommittedLoadout(build.commit);
-      this.lifecycle.setIsLocalReady(true);
+      this.arenaRuntime.setIsLocalReady(true);
       return { ok: true };
     } catch (error) {
       this.weaponBalanceLabRuntime.cancel();
@@ -2034,12 +1904,12 @@ export class ArenaScene extends Phaser.Scene {
     this.weaponBalanceLabPreviousMapId = null;
     this.weaponBalanceLabRuntime.cancel();
     bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
+    this.arenaRuntime.setIsLocalReady(false);
     if (previousMapId && bridge.isHost()) bridge.setCoopDefenseMapId(previousMapId);
   }
 
   private onReadyToggled(): void {
-    const nowReady = !this.lifecycle.getIsLocalReady();
+    const nowReady = !this.arenaRuntime.getIsLocalReady();
     if (nowReady) {
       // Frühwarnung gegen Lobby-Desync (Bug A/B): Nur bereit machen, wenn dieser Client mit dem
       // host-autoritativen Lobby-Stand aufgeschlossen ist (Spieler-Roster, Modus, Coop-Map). Sonst
@@ -2061,7 +1931,7 @@ export class ArenaScene extends Phaser.Scene {
         this.restoreMapAfterWeaponBalanceLab();
       }
     }
-    this.lifecycle.setIsLocalReady(nowReady);
+    this.arenaRuntime.setIsLocalReady(nowReady);
   }
 
   /** Hält die lokale Lobby-Projektion nach einer Aktion im Coop-Debug-Overlay synchron. */
@@ -2292,7 +2162,7 @@ export class ArenaScene extends Phaser.Scene {
   }
 
   private requestLocalLobbyWorldLeave(): void {
-    this.lifecycle.requestLocalWorldParticipation(false);
+    this.arenaRuntime.requestLocalWorldParticipation(false);
   }
 
   /**
@@ -2306,18 +2176,18 @@ export class ArenaScene extends Phaser.Scene {
    * finalen Bake. AUTO loescht den Override und sampelt die inzwischen weitergelaufene Uhr.
    */
   private applyDebugTimeOfDay(minutes: number, settled: boolean): void {
-    this.lifecycle.setTimeOfDayDebugOverride(minutes);
+    this.arenaRuntime.setTimeOfDayDebugOverride(minutes);
     this.syncDebugTimeOfDay(settled);
   }
 
   private clearDebugTimeOfDay(): void {
-    this.lifecycle.clearTimeOfDayDebugOverride();
+    this.arenaRuntime.clearTimeOfDayDebugOverride();
     this.syncDebugTimeOfDay(true);
   }
 
   private syncDebugTimeOfDay(forceStaticBake: boolean): void {
     const now = bridge.getSynchronizedNow();
-    this.lifecycle.syncRuntimeTimeOfDay(now, this.resolveArenaTimeOfDaySignals());
+    this.arenaRuntime.syncRuntimeTimeOfDay(now, this.resolveArenaTimeOfDaySignals());
     this.arenaRuntime.syncWorldStaticShadowProfile(forceStaticBake);
   }
 
@@ -2325,7 +2195,7 @@ export class ArenaScene extends Phaser.Scene {
     bossSpawnedAtMs: number | null;
     bossPhase: number;
   } {
-    const observedPhase = this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getMaxBossPhase() ?? 0;
+    const observedPhase = this.arenaRuntime?.getMaxBossPhase() ?? 0;
     return {
       bossSpawnedAtMs: bridge.getRoundState()?.coopDefenseBossSpawnedAtMs ?? null,
       bossPhase: observedPhase,
@@ -2346,9 +2216,7 @@ export class ArenaScene extends Phaser.Scene {
   private handleFlowFieldDebugHotkey(type: ArenaInputDebugHotkey): void {
     if (!bridge.isHost()) return;
 
-    const service = type === 'flowfield_players'
-      ? this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyPlayerFlowFieldService
-      : this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyFlowFieldService;
+    const service = this.arenaRuntime?.getFlowFieldDebugService(type);
     if (!service) return;
 
     if (!this.flowFieldDebugOverlay) {
@@ -2360,7 +2228,7 @@ export class ArenaScene extends Phaser.Scene {
     this.flowFieldDebugOverlay.showForService(service);
   }
 
-  private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.arenaRuntime?.flow.isMatchTerminated()): void {
+  private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.arenaRuntime?.isMatchTerminated()): void {
     if (!this.ctx) return;
     const shouldShow = inArena && this.inputBindings?.isArenaPanelHeld() === true;
     this.syncArenaPanelOverlay(shouldShow);
@@ -2396,7 +2264,7 @@ export class ArenaScene extends Phaser.Scene {
 
   private syncArenaMetrics(phase = bridge.getGamePhase(), showWorld = phase === 'ARENA'): void {
     const mode = this.resolveConfiguredGameMode(phase);
-    const worldMetrics = this.arenaRuntime?.flow.getWorldRuntime()?.context?.metrics ?? null;
+    const worldMetrics = this.arenaRuntime?.getWorldMetrics() ?? null;
     if (worldMetrics) {
       // Der mutable Kompatibilitaetsspiegel folgt der laufenden World selbst. Ihn erneut aus dem
       // konfigurierten Modus abzuleiten waere eine zweite Quelle - und die LobbyWorld traegt
@@ -2478,9 +2346,8 @@ export class ArenaScene extends Phaser.Scene {
 
   /** Synchronisiert ausschließlich die separate Capture-the-Beer-Client-Presentation. */
   private syncClientCaptureTheBeerPresentation(state: GameState | undefined): void {
-    if (!this.lifecycle.getLocalWorldPresentation().required) return;
     if (!state) return;
-    this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()?.system?.syncSnapshot(state.captureTheBeer ?? null);
+    this.arenaRuntime?.syncClientCaptureTheBeerPresentation(state);
     this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
   }
 
@@ -2524,7 +2391,7 @@ export class ArenaScene extends Phaser.Scene {
       skyState: resolveSkyState(minutes),
       isVoidMap: mapId !== null && getCoopDefenseMapConfig(mapId).trackMode === 'void-fire',
       bossVisualProfile: inArena && mapId === '15' ? 'void-hunter' : undefined,
-      bossPhase: inArena ? (this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getMaxBossPhase() ?? 0) : 0,
+      bossPhase: inArena ? (this.arenaRuntime?.getMaxBossPhase() ?? 0) : 0,
       localHpFraction: localWounded ? (localPlayer?.getHpFraction() ?? 1) : 1,
       gamePhase: inArena ? 'ARENA' : 'LOBBY',
     };
@@ -2538,15 +2405,15 @@ export class ArenaScene extends Phaser.Scene {
 
   private resolveCoopDefenseArenaWidthCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
-    const world = this.arenaRuntime?.flow.getWorldRuntime()?.context;
-    if (world) return world.metrics.gridCols;
+    const metrics = this.arenaRuntime?.getWorldMetrics();
+    if (metrics) return metrics.gridCols;
     return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaWidthCells;
   }
 
   private resolveCoopDefenseArenaHeightCells(phase = bridge.getGamePhase()): number | undefined {
     if (!isCoopDefenseMode(this.resolveConfiguredGameMode(phase))) return undefined;
-    const world = this.arenaRuntime?.flow.getWorldRuntime()?.context;
-    if (world) return world.metrics.gridRows;
+    const metrics = this.arenaRuntime?.getWorldMetrics();
+    if (metrics) return metrics.gridRows;
     return getCoopDefenseMapConfig(this.resolveConfiguredCoopDefenseMapId(phase)).arenaHeightCells;
   }
 
@@ -2558,9 +2425,9 @@ export class ArenaScene extends Phaser.Scene {
    * Stelle. Waehrend sie laeuft, beantworten Modus und Map weiterhin die Lobby.
    */
   private resolveRoundWorldDescriptor(phase = bridge.getGamePhase()): WorldDescriptor | null {
-    const world = this.arenaRuntime?.flow.getWorldRuntime()?.context;
-    if (!world && phase !== 'ARENA') return null;
-    const descriptor = world?.descriptor ?? bridge.getWorldDescriptor();
+    const worldActive = this.arenaRuntime?.isWorldActive() ?? false;
+    if (!worldActive && phase !== 'ARENA') return null;
+    const descriptor = this.arenaRuntime?.getWorldDescriptor() ?? bridge.getWorldDescriptor();
     if (!descriptor || isLobbyWorldDefinitionId(descriptor.definitionId)) return null;
     return descriptor;
   }
@@ -2623,7 +2490,7 @@ export class ArenaScene extends Phaser.Scene {
     // Wer mitten in eine laufende Partie kommt, bekommt den eigenen Ladeschleier der Arena;
     // die Lobby-Barriere hat dort nichts zu halten.
     const reveal = phase === 'LOBBY'
-      ? this.lifecycle.getWorldRevealState(getVisibleWorldView(this.cameras.main))
+      ? this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main))
       : { ready: true, progress: 100 };
     if (!reveal.ready && this.time.now < this.bootRevealDeadlineMs) {
       const share = Phaser.Math.Clamp((reveal.progress - 70) / 30, 0, 1);
@@ -2651,7 +2518,7 @@ export class ArenaScene extends Phaser.Scene {
     if (
       phase !== 'LOBBY'
       || this.lastObservedGamePhase !== 'ARENA'
-      || this.lifecycle.isMatchTerminated()
+      || this.arenaRuntime.isMatchTerminated()
       || this.arenaExitFadeComplete
     ) {
       return false;
@@ -2678,7 +2545,7 @@ export class ArenaScene extends Phaser.Scene {
         this.arenaExitFadeComplete = true;
         return false;
       }
-      this.lifecycle.beginArenaExitPresentation();
+      this.arenaRuntime.beginArenaExitPresentation();
       overlay.play(outcome, () => {
         this.arenaExitFadeComplete = true;
       });
@@ -2709,19 +2576,12 @@ export class ArenaScene extends Phaser.Scene {
     if (!roundState || roundState.coopDefenseHumanPlayerCount !== 1) return;
     const localPlayerId = bridge.getLocalPlayerId();
     const localPlayerState = this.ctx.combatSystem;
-    const baseManager = this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases;
-    const ownMainBases = baseManager?.getMainBasesByFaction('friendly') ?? [];
-    const hostileMainBases = baseManager?.getMainBasesByFaction('hostile') ?? [];
-    const sumBase = (bases: readonly { getHp(): number; getMaxHp(): number }[]): { hp: number; maxHp: number } | null => (
-      bases.length === 0
-        ? null
-        : bases.reduce((sum, base) => ({
-          hp: sum.hp + Math.max(0, base.getHp()),
-          maxHp: sum.maxHp + Math.max(0, base.getMaxHp()),
-        }), { hp: 0, maxHp: 0 })
-    );
-    const ownBase = sumBase(ownMainBases);
-    const hostileBase = sumBase(hostileMainBases);
+    const baseSummary = this.arenaRuntime?.getCoopDefenseBaseHpSummary() ?? {
+      ownBase: null,
+      hostileBase: null,
+    };
+    const ownBase = baseSummary.ownBase;
+    const hostileBase = baseSummary.hostileBase;
     const storedProgress = this.meta!.getStoredProgress();
     const committed = bridge.getPlayerCommittedLoadout(localPlayerId);
     this.coopDefenseBalanceTracker.preparePendingRound({

@@ -499,7 +499,7 @@ describe('LobbyWorld – keine zweite Lobby-Simulation', () => {
     const scene = read('src/scenes/ArenaScene.ts');
     expect(scene).not.toContain('MenuArenaPreview');
     expect(scene).not.toContain('LobbyAmbient');
-    expect(scene).toContain('this.lifecycle.hostSyncLobbyWorld();');
+    expect(scene).toContain('this.arenaRuntime.hostSyncLobbyWorld();');
 
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     // Die LobbyWorld nimmt denselben Weg wie jede andere World-Instanz.

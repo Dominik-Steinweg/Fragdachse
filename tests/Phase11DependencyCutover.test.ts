@@ -34,9 +34,11 @@ describe('Phase 11B dependency cutover', () => {
     ]) {
       expect(flow, adapter).not.toContain(adapter);
     }
+    const runtime = read('src/scenes/arena/ArenaRuntime.ts');
+    expect(runtime).toContain('getConstructionWorldRuntime()?.placeInspectorConstruction(');
+    expect(runtime).toContain('getConstructionWorldRuntime()?.useInspectorUtility(');
     const scene = read('src/scenes/ArenaScene.ts');
-    expect(scene).toContain('getConstructionWorldRuntime()?.placeInspectorConstruction(');
-    expect(scene).toContain('getConstructionWorldRuntime()?.useInspectorUtility(');
+    expect(scene).not.toContain('getConstructionWorldRuntime');
   });
 
   it('ordnet Host-held Actions dem World-Player-Owner zu', () => {

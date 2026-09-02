@@ -2,10 +2,8 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_ROWS } from '../../conf
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
 import type { ArenaContext } from '../../scenes/arena/ArenaContext';
-import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
-import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import type { CombatDamageObservation } from '../../systems/CombatSystem';
-import type { GamePhase, LoadoutCommitSnapshot, WeaponSlot } from '../../types';
+import type { GamePhase, LoadoutCommitSnapshot, LoadoutUseResult, WeaponSlot } from '../../types';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
   getCoopDefenseUpgradeLoadoutSelection,
@@ -23,6 +21,25 @@ import type {
 const TARGET_HP = 1_000_000_000;
 const PLAYER_GRID_X = 30;
 const TARGET_Y_OFFSETS = [-120, -60, 0, 60, 120] as const;
+
+export interface WeaponBalanceLabWorldPort {
+  isReady(): boolean;
+  spawnTarget(x: number, y: number): { id: string } | null;
+  pinTarget(id: string, x: number, y: number): void;
+  observeAdrenalineDrain(listener: (playerId: string, drained: number) => void): (() => void) | null;
+  observeAdrenalineGain(listener: (playerId: string, gained: number) => void): (() => void) | null;
+  setAdrenaline(playerId: string, amount: number): void;
+  getMaxAdrenaline(playerId: string): number;
+  useLoadout(
+    slot: WeaponSlot,
+    playerId: string,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    shotSequence: number,
+  ): LoadoutUseResult | null;
+}
 
 export interface NeutralWeaponBenchmarkCommit {
   readonly commit: LoadoutCommitSnapshot;
@@ -119,8 +136,7 @@ export class WeaponBalanceLabRuntime {
 
   constructor(
     private readonly getContext: () => ArenaContext,
-    private readonly getPlayerGameplayRuntime: () => WorldPlayerGameplayRuntime | null,
-    private readonly getCoopMissionRuntime: () => CoopMissionRuntime | null,
+    private readonly worldPort: WeaponBalanceLabWorldPort,
     private readonly onResult: (result: RuntimeBenchmarkResult) => void,
     private readonly onFinished: () => void,
   ) {}
@@ -183,11 +199,9 @@ export class WeaponBalanceLabRuntime {
     const active = this.armed;
     if (!active || !bridge.isHost()) return false;
     const ctx = this.getContext();
-    const playerSystems = this.getPlayerGameplayRuntime()?.systems;
-    const enemyManager = this.getCoopMissionRuntime()?.enemyManager;
     const playerId = bridge.getLocalPlayerId();
     const player = ctx.playerManager.getPlayer(playerId);
-    if (!player || !playerSystems || !enemyManager) return false;
+    if (!player || !this.worldPort.isReady()) return false;
 
     const playerX = ARENA_OFFSET_X + PLAYER_GRID_X * CELL_SIZE + CELL_SIZE * 0.5;
     const playerY = ARENA_OFFSET_Y + Math.floor(GRID_ROWS / 2) * CELL_SIZE + CELL_SIZE * 0.5;
@@ -198,38 +212,33 @@ export class WeaponBalanceLabRuntime {
     for (const yOffset of offsets) {
       const x = playerX + active.request.distance;
       const y = playerY + yOffset;
-      const enemy = enemyManager.hostSpawnAtWorld(x, y, 'zombie-badger', {
-        originId: 'weapon-balance-lab',
-      });
-      enemy.setHp(TARGET_HP, TARGET_HP);
-      enemy.setPosition(x, y);
-      enemy.body.setVelocity(0, 0);
-      this.targetPositions.set(enemy.id, { x, y });
+      const target = this.worldPort.spawnTarget(x, y);
+      if (target) {
+        this.targetPositions.set(target.id, { x, y });
+      }
     }
 
     this.removeDamageObserver = ctx.combatSystem.addDamageDealtObserver((event) => {
       this.recordDamage(event);
     });
-    this.removeAdrenalineObserver = playerSystems.resource.addAdrenalineDrainObserver(
-      (observedPlayerId, _requested, drained) => {
+    this.removeAdrenalineObserver = this.worldPort.observeAdrenalineDrain(
+      (observedPlayerId, drained) => {
         if (observedPlayerId !== playerId || !this.isInMeasurementWindow()) return;
         this.adrenalineConsumed += Math.max(0, drained);
       },
-    );
-    this.removeAdrenalineGainObserver = playerSystems.resource.addAdrenalineGainObserver(
-      (observedPlayerId, _requested, gained) => {
+    ) ?? null;
+    this.removeAdrenalineGainObserver = this.worldPort.observeAdrenalineGain(
+      (observedPlayerId, gained) => {
         if (observedPlayerId !== playerId || !this.isInMeasurementWindow()) return;
         this.adrenalineGenerated += Math.max(0, gained);
       },
-    );
+    ) ?? null;
     this.running = true;
     return true;
   }
 
   private pinParticipants(): void {
     const ctx = this.getContext();
-    const playerSystems = this.getPlayerGameplayRuntime()?.systems;
-    const enemyManager = this.getCoopMissionRuntime()?.enemyManager;
     const active = this.armed;
     if (!active) return;
     const player = ctx.playerManager.getPlayer(bridge.getLocalPlayerId());
@@ -238,34 +247,24 @@ export class WeaponBalanceLabRuntime {
     player?.setPosition(playerX, playerY);
     player?.body.setVelocity(0, 0);
     for (const [enemyId, position] of this.targetPositions) {
-      const enemy = enemyManager?.getEnemy(enemyId);
-      if (!enemy) continue;
-      enemy.setPosition(position.x, position.y);
-      enemy.body.setVelocity(0, 0);
+      this.worldPort.pinTarget(enemyId, position.x, position.y);
     }
-    // W2 bleibt praktisch unbegrenzt; der echte Drain wird vor dem Auffuellen beobachtet.
-    // W1 startet jeden Frame leer, damit echte Treffer-Gutschriften nicht am Maximum verpuffen.
-    // setAdrenaline selbst ist kein Gain-Event und landet daher nicht in der Telemetrie.
-    const resources = playerSystems?.resource;
-    if (resources) {
-      const playerId = bridge.getLocalPlayerId();
-      resources.setAdrenaline(
-        playerId,
-        active.request.slot === 'weapon2' ? resources.getMaxAdrenaline(playerId) : 0,
-      );
-    }
+    const playerId = bridge.getLocalPlayerId();
+    this.worldPort.setAdrenaline(
+      playerId,
+      active.request.slot === 'weapon2' ? this.worldPort.getMaxAdrenaline(playerId) : 0,
+    );
   }
 
   private tryFire(): void {
     const active = this.armed;
     const ctx = this.getContext();
-    const loadoutManager = this.getPlayerGameplayRuntime()?.systems.loadout;
     const playerId = bridge.getLocalPlayerId();
     const player = ctx.playerManager.getPlayer(playerId);
     const target = [...this.targetPositions.values()][Math.floor(this.targetPositions.size / 2)];
-    if (!active || !player || !target || !loadoutManager) return;
+    if (!active || !player || !target) return;
     const angle = Math.atan2(target.y - player.y, target.x - player.x);
-    const result = loadoutManager.use(
+    const result = this.worldPort.useLoadout(
       active.request.slot,
       playerId,
       angle,
@@ -273,11 +272,8 @@ export class WeaponBalanceLabRuntime {
       target.y,
       Date.now(),
       this.shotSequence++,
-      { inputStarted: !this.hasFired },
-      player.x,
-      player.y,
     );
-    if (result.ok) {
+    if (result?.ok) {
       this.hasFired = true;
       if (this.isInMeasurementWindow()) this.shotsFired += 1;
     }

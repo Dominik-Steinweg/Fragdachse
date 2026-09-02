@@ -236,15 +236,15 @@ describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
     );
     const deferStart = source.indexOf('const deferArenaExit');
     const phaseChange = source.indexOf(
-      'this.lifecycle.detectPhaseChange(deferArenaExit);',
+      'this.arenaRuntime.detectPhaseChange(deferArenaExit);',
       deferStart,
     );
     const lobbySync = source.indexOf(
-      'this.lifecycle.hostSyncLobbyWorld();',
+      'this.arenaRuntime.hostSyncLobbyWorld();',
       phaseChange,
     );
     const worldChange = source.indexOf(
-      'this.lifecycle.detectWorldChange(deferArenaExit);',
+      'this.arenaRuntime.detectWorldChange(deferArenaExit);',
       lobbySync,
     );
 
@@ -252,8 +252,8 @@ describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
     expect(phaseChange).toBeGreaterThan(deferStart);
     expect(lobbySync).toBeGreaterThan(phaseChange);
     expect(worldChange).toBeGreaterThan(lobbySync);
-    expect(source).toContain('if (!deferArenaExit) this.lifecycle.hostSyncLobbyWorld();');
-    expect([...source.matchAll(/this\.lifecycle\.hostSyncLobbyWorld\(\);/g)]).toHaveLength(1);
+    expect(source).toContain('if (!deferArenaExit) this.arenaRuntime.hostSyncLobbyWorld();');
+    expect([...source.matchAll(/this\.arenaRuntime\.hostSyncLobbyWorld\(\);/g)]).toHaveLength(1);
   });
 
   it('reicht das Deferred-Exit-Fenster bis zur World-Erkennung weiter', () => {
@@ -266,7 +266,7 @@ describe('ArenaLifecycleCoordinator – Replacement-Orchestrierung', () => {
       'utf8',
     );
 
-    expect(scene).toContain('this.lifecycle.detectWorldChange(deferArenaExit);');
+    expect(scene).toContain('this.arenaRuntime.detectWorldChange(deferArenaExit);');
     expect(source).toContain('detectWorldChange(deferArenaToLobby = false): void {');
     expect(source).toContain('const deferredMatchToLobby = deferArenaToLobby');
     expect(source).toContain("&& bridge.getGamePhase() === 'LOBBY'");

@@ -365,27 +365,42 @@ describe('Uebergaenge – die Darstellung reist, der Gameplay-State nicht', () =
 });
 
 describe('Arena-Anbindung der getrennten Lifetimes', () => {
-  it('liest Gameplay-State und Darstellung direkt von ihren jeweiligen Ownern', () => {
+  it('kapselt ArenaLifecycleCoordinator und Runtime-Owner vollständig hinter ArenaRuntime', () => {
     const scene = readFileSync(resolve(__dirname, '../src/scenes/ArenaScene.ts'), 'utf8');
-    // Die Migration-Fassaden sind entfernt: Die Scene fragt die bereits vorhandenen Owner an
-    // der jeweiligen Verwendungsstelle und hält keinen zweiten Service-Locator vor.
-    expect(scene).not.toMatch(/private get (worldRuntime|world|arenaResult|currentLayout|placementSystem|rockRegistry|baseManager|targetingSystems|playerSystems|combatSystems|supportSystems|powerUpSystem|trainManager|coopMissionRuntime|enemyManager|captureTheBeerSystem)\b/);
+    const runtime = readFileSync(resolve(__dirname, '../src/scenes/arena/ArenaRuntime.ts'), 'utf8');
+    const barrel = readFileSync(resolve(__dirname, '../src/scenes/arena/index.ts'), 'utf8');
+
+    // ArenaScene darf ArenaLifecycleCoordinator weder typseitig noch als Wert kennen:
+    expect(scene).not.toContain('ArenaLifecycleCoordinator');
+    expect(scene).not.toMatch(/\.flow\b/);
+    expect(scene).not.toMatch(/private get (lifecycle|worldRuntime|world|arenaResult|currentLayout|placementSystem|rockRegistry|baseManager|targetingSystems|playerSystems|combatSystems|supportSystems|powerUpSystem|trainManager|coopMissionRuntime|enemyManager|captureTheBeerSystem)\b/);
     expect(scene).not.toContain('this.worldRuntime');
-    for (const ownerPath of [
-      'this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena',
-      'this.arenaRuntime?.flow.getWorldRuntime()?.presentation?.layout',
-      'this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement',
-      'this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases',
-      'this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems',
-      'this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems',
-      'this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems',
-      'this.arenaRuntime?.flow.getWorldPowerUpRuntime()?.system',
-      'this.arenaRuntime?.flow.getCoopMissionRuntime()',
-      'this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()',
+
+    // In ArenaScene dürfen keine World-/Activity-Owner oder Materialisierungen traversiert werden:
+    for (const forbiddenOwnerAccess of [
+      'getWorldRuntime',
+      'getCoopMissionRuntime',
+      'getWorldPlayerGameplayRuntime',
+      'getWorldTargetingRuntime',
+      'getWorldCombatGameplayBinding',
+      'getWorldPowerUpRuntime',
+      'getCaptureTheBeerActivityRuntime',
+      'getConstructionWorldRuntime',
+      'getWorldTrainRuntime',
+      'materialization',
     ]) {
-      expect(scene, ownerPath).toContain(ownerPath);
+      expect(scene, forbiddenOwnerAccess).not.toContain(forbiddenOwnerAccess);
     }
 
+    // ArenaRuntime hält den Coordinator als privates Detail:
+    expect(runtime).toMatch(/private\s+readonly\s+flow:\s*ArenaLifecycleCoordinator/);
+    expect(runtime).not.toMatch(/public\s+(get\s+)?flow\b/);
+
+    // Barrel-Export enthält den Coordinator nicht mehr:
+    expect(barrel).not.toContain('ArenaLifecycleCoordinator');
+  });
+
+  it('baut WorldComposition isoliert auf und hält World-Kinder aus ArenaLifecycleCoordinator heraus', () => {
     const lifecycle = readFileSync(
       resolve(__dirname, '../src/scenes/arena/ArenaLifecycleCoordinator.ts'),
       'utf8',

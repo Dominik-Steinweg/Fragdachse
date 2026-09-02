@@ -88,7 +88,7 @@ describe('ArenaExitEntityPresentation', () => {
       'utf8',
     );
 
-    const begin = scene.indexOf('this.lifecycle.beginArenaExitPresentation();');
+    const begin = scene.indexOf('this.arenaRuntime.beginArenaExitPresentation();');
     const play = scene.indexOf('overlay.play(outcome', begin);
     expect(begin).toBeGreaterThan(0);
     expect(play).toBeGreaterThan(begin);

@@ -69,6 +69,7 @@ function createArenaRuntime() {
     rockVisualHelper: {} as never,
     placementPreview: {} as never,
     persistentBasePreviewRenderer: {} as never,
+    persistentBaseVisuals: {} as never,
     lobbyOverlay: {} as never,
     hostUpdate: hostUpdate as never,
     clientUpdate: clientUpdate as never,
@@ -81,12 +82,13 @@ function createArenaRuntime() {
 describe('Checkpoint C – Top-Level-Owner und Frame', () => {
   it('bündelt Flow und raumlanglebigen Persistent-Base-Owner in der ArenaRuntime', () => {
     const { runtime } = createArenaRuntime();
-    expect(runtime.flow).toBeDefined();
+    const flow = (runtime as any).flow;
+    expect(flow).toBeDefined();
     expect(runtime.persistentBase).toBeDefined();
     // Der Persistent-Base-Owner haengt an keiner World: ohne Instanz gibt es keine world-lokale
     // Materialisierung, aber sehr wohl den Raumstand.
-    expect(runtime.flow.persistentBaseWorldPorts.getWorldBinding()).toBeNull();
-    expect(runtime.flow.persistentBaseWorldPorts.getConstructionRuntime()).toBeNull();
+    expect(flow.persistentBaseWorldPorts.getWorldBinding()).toBeNull();
+    expect(flow.persistentBaseWorldPorts.getConstructionRuntime()).toBeNull();
     expect(runtime.persistentBase.session).toBeDefined();
     expect(runtime.persistentBase.session.hasOpenTransaction).toBe(false);
   });
@@ -104,7 +106,7 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
       hostResolveCompletion: vi.fn(() => 'victory' as const),
       hostApplyDebugBaseDamage: vi.fn(),
     };
-    vi.spyOn(runtime.flow, 'getActivityStep').mockReturnValue(step as never);
+    vi.spyOn((runtime as any).flow, 'getActivityStep').mockReturnValue(step as never);
     expect(hostUpdate.activityFramePort?.getStep()).toBe(step);
     expect(clientUpdate.activityFramePort?.getStep()).toBe(step);
     runtime.applyDebugBaseDamage(50);
@@ -114,8 +116,8 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
   it('fragt den Abschluss nur im laufenden Gameplay und wendet ihn nicht selbst an', () => {
     const { runtime, hostUpdate } = createArenaRuntime();
     const step = { hostResolveCompletion: vi.fn(() => 'defeat' as const) };
-    vi.spyOn(runtime.flow, 'getActivityStep').mockReturnValue(step as never);
-    const completeRound = vi.spyOn(runtime.flow, 'hostCompleteRound').mockImplementation(() => {});
+    vi.spyOn((runtime as any).flow, 'getActivityStep').mockReturnValue(step as never);
+    const completeRound = vi.spyOn((runtime as any).flow, 'hostCompleteRound').mockImplementation(() => {});
 
     // Ohne laufendes Gameplay läuft nur die Host-Phase; der Abschluss wird nicht gefragt.
     expect(runtime.runHostFrame(16)).toBeNull();
@@ -238,7 +240,7 @@ describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Auf
     const secondCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);');
     const applyCameraFeedback = body.indexOf('this.applyCameraFeedback(delta);');
     const flushBakeBudget = body.indexOf('ChunkedRenderSurface.flushBakeBudget(');
-    const syncArenaLoadReady = body.indexOf('this.lifecycle.syncArenaLoadReady(');
+    const syncArenaLoadReady = body.indexOf('this.arenaRuntime.syncArenaLoadReady(');
     const syncBootReveal = body.indexOf('this.syncBootReveal(phase);');
 
     for (const [label, index] of [
