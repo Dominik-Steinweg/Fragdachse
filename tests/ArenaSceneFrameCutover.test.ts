@@ -81,4 +81,29 @@ describe('Phase 9 – ArenaScene-Cleanup und Architektur-Gate', () => {
     expect(scene).not.toContain('ArenaSceneController');
     expect(scene).not.toMatch(/private [A-Za-z][A-Za-z0-9]*(?:Counter|Sampler|Key|Handler)\s*[=:]/);
   });
+
+  it('kennt keine konkrete Coop-Presentation-Systemliste mehr', () => {
+    const scene = readScene();
+    for (const concretePresentationType of [
+      'CoopDefenseObjectiveAnnouncement',
+      'CoopDefenseMapEventAnnouncementPresenter',
+      'CoopDefenseSecondaryObjectiveHud',
+      'CoopMissionPresentationUiPort',
+    ]) {
+      expect(scene, concretePresentationType).not.toContain(concretePresentationType);
+    }
+    for (const concretePresentationCall of [
+      'encounterTelegraph.sync',
+      'secondaryObjectiveMarkers.sync',
+      'missionProgress.sync',
+      'carryZones.sync',
+      'objectiveRepairDrones.sync',
+      'hostileBaseIndicator?.sync',
+      'new HostileBaseIndicator',
+    ]) {
+      expect(scene, concretePresentationCall).not.toContain(concretePresentationCall);
+    }
+    expect(scene).toContain('new CoopMissionPresentationInfrastructure(this)');
+    expect(scene).toContain('this.coopMissionPresentation.createUiPort({');
+  });
 });

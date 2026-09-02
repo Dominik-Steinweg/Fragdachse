@@ -577,10 +577,13 @@ export class CenterHUD {
   private utilityAttentionActive = false;
   private ultimateReadyActive = false;
 
-  constructor(
-    private scene: Phaser.Scene,
-    private readonly objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null,
-  ) {}
+  private objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null;
+
+  constructor(private scene: Phaser.Scene) {}
+
+  setObjectiveAnnouncements(announcements: CoopDefenseObjectiveAnnouncement | null): void {
+    this.objectiveAnnouncements = announcements;
+  }
 
   build(): void {
     this.container = this.scene.add.container(0, 0);

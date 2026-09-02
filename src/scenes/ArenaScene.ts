@@ -36,7 +36,7 @@ import { AimSystem, UtilityChargeIndicator } from '../ui/AimSystem';
 import { ScopeOverlay } from '../ui/ScopeOverlay';
 import { ArenaCountdownOverlay, type ArenaLoadingScreenState } from '../ui/ArenaCountdownOverlay';
 import { EnemyHoverNameLabel }  from '../ui/EnemyHoverNameLabel';
-import { HostileBaseIndicator, getVisibleWorldView } from '../ui/HostileBaseIndicator';
+import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { PlayerStatusRing }      from '../ui/PlayerStatusRing';
 import { CoopDefenseDebugOverlay } from '../ui/CoopDefenseDebugOverlay';
 import { CoopDefenseBalanceReportOverlay } from '../ui/CoopDefenseBalanceReportOverlay';
@@ -71,9 +71,6 @@ import {
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
 import { CenterHUD }             from '../ui/CenterHUD';
-import { CoopDefenseObjectiveAnnouncement } from '../ui/CoopDefenseObjectiveAnnouncement';
-import { CoopDefenseMapEventAnnouncementPresenter } from '../ui/CoopDefenseMapEventAnnouncementPresenter';
-import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen }             from '../ui/BootScreen';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
@@ -157,6 +154,7 @@ import {
   RpcCoordinator,
   ArenaLifecycleCoordinator,
   ArenaRuntime,
+  CoopMissionPresentationInfrastructure,
   GaussWarningRenderer,
   createRendererBundle,
   wireRenderersToProjManager,
@@ -165,7 +163,6 @@ import {
   wireRenderersToCameraFeedback,
   wireRenderersToDistortion,
 } from './arena';
-import type { CoopMissionPresentationUiPort } from '../activity/CoopMissionPresentationBinding';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
   const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
@@ -232,11 +229,8 @@ export class ArenaScene extends Phaser.Scene {
   private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
-  private hostileBaseIndicator: HostileBaseIndicator | null = null;
-  private objectiveAnnouncements: CoopDefenseObjectiveAnnouncement | null = null;
-  private mapEventAnnouncementPresenter: CoopDefenseMapEventAnnouncementPresenter | null = null;
   private removeReconnectStatusListener: (() => void) | null = null;
-  private secondaryObjectiveHud: CoopDefenseSecondaryObjectiveHud | null = null;
+  private coopMissionPresentation!: CoopMissionPresentationInfrastructure;
   private scopeOverlay: ScopeOverlay | null = null;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
   private visualFeedback: VisualFeedbackDirector | null = null;
@@ -607,12 +601,11 @@ export class ArenaScene extends Phaser.Scene {
     leftPanel.build();
     const rightPanel = new RightSidePanel(this);
     rightPanel.build();
-    this.objectiveAnnouncements = new CoopDefenseObjectiveAnnouncement(this);
-    this.objectiveAnnouncements.build();
-    this.mapEventAnnouncementPresenter = new CoopDefenseMapEventAnnouncementPresenter(this.objectiveAnnouncements);
-    const centerHUD  = new CenterHUD(this, this.objectiveAnnouncements);
+    this.coopMissionPresentation = new CoopMissionPresentationInfrastructure(this);
+    const centerHUD  = new CenterHUD(this);
     centerHUD.build();
     centerHUD.setPuContainer(leftPanel.getPuContainer());
+    this.coopMissionPresentation.bindCenterHud(centerHUD);
 
     const aimSystem = new AimSystem(
       this,
@@ -1071,9 +1064,6 @@ export class ArenaScene extends Phaser.Scene {
         getPowerUpRuntime: () => this.arenaRuntime?.flow.getWorldPowerUpRuntime() ?? null,
       },
     );
-    this.hostileBaseIndicator = new HostileBaseIndicator(this);
-    this.secondaryObjectiveHud = new CoopDefenseSecondaryObjectiveHud(this, this.objectiveAnnouncements!);
-    this.secondaryObjectiveHud.build();
     this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
     this.persistentBaseVisuals = new PersistentBaseVisuals(this);
     this.persistentBasePreviewRenderer = new PersistentBasePreviewRenderer(this, this.renderers.lighting);
@@ -1127,105 +1117,6 @@ export class ArenaScene extends Phaser.Scene {
     this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
     // ── RPC + Lifecycle coordinators ──────────────────────────────────────
-    const coopMissionPresentationUi: CoopMissionPresentationUiPort = {
-      centerHud: {
-        resetCoopMissionPresentation: () => centerHUD.resetCoopMissionPresentation(),
-        updateLifeStatus: (model) => centerHUD.updateLifeStatus(model),
-        updateMainObjectivePresentation: (model) => centerHUD.updateMainObjectivePresentation(model),
-        updateEncounterPresentation: (state, elapsedMs) => centerHUD.updateEncounterPresentation(state, elapsedMs),
-        updateMissionStackOcclusion: (deltaMs) => centerHUD.updateMissionStackOcclusion(
-          deltaMs,
-          playerManager,
-          this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-        ),
-        updateTutorial: (text, showControls, anchor) => centerHUD.updateTutorial(text, showControls, anchor),
-        updateTutorialStep: (text, anchor) => centerHUD.updateTutorialStep(text, anchor),
-      },
-      mapEvents: {
-        setMapEvents: (events) => this.mapEventAnnouncementPresenter?.setMapEvents(events),
-        sync: (state) => this.mapEventAnnouncementPresenter?.sync(state),
-        reset: () => this.mapEventAnnouncementPresenter?.reset(),
-      },
-      secondaryObjectives: {
-        sync: (snapshot, configs, elapsedMs) => this.secondaryObjectiveHud?.sync(
-          snapshot,
-          configs,
-          elapsedMs,
-          true,
-        ),
-        updateOcclusionFade: (deltaMs) => this.secondaryObjectiveHud?.updateOcclusionFade(
-          deltaMs,
-          playerManager,
-          this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-        ),
-        reset: () => this.secondaryObjectiveHud?.reset(),
-      },
-      worldSpace: {
-        syncEncounterTelegraph: (state, elapsedMs) => this.renderers.encounterTelegraph.sync(
-          state,
-          elapsedMs,
-          true,
-        ),
-        syncSecondaryObjectiveMarkers: (snapshot, configs, carryItems) => (
-          this.renderers.secondaryObjectiveMarkers.sync(
-            snapshot,
-            configs,
-            this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases ?? null,
-            carryItems,
-            true,
-          )
-        ),
-        syncCoopDefenseCarry: (items) => this.renderers.beer.syncCoopDefenseCarry(items),
-        syncEnemyDashVisual: (enemy) => this.clientUpdate.syncEnemyDashVisual(enemy),
-        resetEnemyDashVisuals: () => this.clientUpdate.resetEnemyDashVisuals(),
-        syncMissionProgress: (config, state) => this.renderers.missionProgress.sync(
-          config,
-          state,
-          true,
-        ),
-        syncCarryZones: (snapshot, configs) => this.renderers.carryZones.sync(
-          snapshot,
-          configs,
-          true,
-        ),
-        syncObjectiveRepairDrones: (snapshot, configs, elapsedMs) => (
-          this.renderers.objectiveRepairDrones.sync(
-            snapshot,
-            configs,
-            this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases ?? null,
-            elapsedMs,
-            true,
-          )
-        ),
-        syncHostileBaseIndicator: (mapConfig) => this.hostileBaseIndicator?.sync(
-          this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases ?? null,
-          this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-          mapConfig,
-          true,
-        ),
-        destroy: () => {
-          this.renderers.beer.syncCoopDefenseCarry([]);
-          this.clientUpdate.resetEnemyDashVisuals();
-          this.hostileBaseIndicator?.destroy();
-          this.hostileBaseIndicator = null;
-          this.renderers.encounterTelegraph.destroy();
-          this.renderers.secondaryObjectiveMarkers.destroy();
-          this.renderers.missionProgress.destroy();
-          this.renderers.carryZones.clear();
-          this.renderers.objectiveRepairDrones.destroy();
-        },
-        reset: () => {
-          this.renderers.beer.syncCoopDefenseCarry([]);
-          this.clientUpdate.resetEnemyDashVisuals();
-          this.renderers.encounterTelegraph.clear();
-          this.renderers.secondaryObjectiveMarkers.clear();
-          this.renderers.missionProgress.clear();
-          this.renderers.carryZones.clear();
-          this.renderers.objectiveRepairDrones.clear();
-          this.hostileBaseIndicator?.clear();
-        },
-      },
-    };
     this.arenaRuntime   = new ArenaRuntime({
       scene: this,
       ctx: this.ctx,
@@ -1238,7 +1129,14 @@ export class ArenaScene extends Phaser.Scene {
       hostUpdate: this.hostUpdate,
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
-      coopMissionPresentationUi,
+      coopMissionPresentationUi: this.coopMissionPresentation.createUiPort({
+        centerHUD,
+        playerManager,
+        clientUpdate: this.clientUpdate,
+        renderers: this.renderers,
+        getBaseManager: () => this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases ?? null,
+        getEnemyManager: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager ?? null,
+      }),
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
@@ -1381,7 +1279,7 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.removeReconnectStatusListener = bridge.onReconnectStatus((status) => {
       if (status.state === 'reconnecting' || status.state === 'resumed') {
-        this.mapEventAnnouncementPresenter?.resetForHydration();
+        this.coopMissionPresentation.resetMapEventsForHydration();
       }
       if (status.state === 'resumed') {
         this.clientUpdate.retryUnresolvedWeapon2Predictions();
@@ -1583,15 +1481,9 @@ export class ArenaScene extends Phaser.Scene {
       // Qualitaets-Subscription im szenenuebergreifenden GraphicsQualityController haengen.
       this.playerStatusRing?.destroy();
       this.playerStatusRing = null;
-      this.secondaryObjectiveHud?.destroy();
-      this.secondaryObjectiveHud = null;
-      this.mapEventAnnouncementPresenter?.reset();
-      this.mapEventAnnouncementPresenter = null;
-      this.objectiveAnnouncements?.destroy();
-      this.objectiveAnnouncements = null;
+      this.coopMissionPresentation.destroy();
       this.removeReconnectStatusListener?.();
       this.removeReconnectStatusListener = null;
-      coopMissionPresentationUi.worldSpace.destroy();
     });
     bridge.sendPingToHost();
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
@@ -1795,7 +1687,7 @@ export class ArenaScene extends Phaser.Scene {
       delta,
       [
         ...this.ctx.centerHUD.getReservedHudRects(),
-        ...(this.secondaryObjectiveHud?.getReservedHudRects() ?? []),
+        ...this.coopMissionPresentation.getReservedHudRects(),
       ],
     );
     // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten

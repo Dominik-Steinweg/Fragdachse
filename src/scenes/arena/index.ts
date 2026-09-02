@@ -7,6 +7,7 @@ export { HostUpdateCoordinator }         from './HostUpdateCoordinator';
 export { RpcCoordinator }               from './RpcCoordinator';
 export { ArenaLifecycleCoordinator }    from './ArenaLifecycleCoordinator';
 export { ArenaRuntime }                 from './ArenaRuntime';
+export { CoopMissionPresentationInfrastructure } from './CoopMissionPresentationInfrastructure';
 export { ArenaPersistentBaseSession }   from './ArenaPersistentBaseSession';
 export { ArenaMetaController }          from './ArenaMetaController';
 export type {
