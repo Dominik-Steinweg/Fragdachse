@@ -166,6 +166,7 @@ function makeCombatController() {
     repairDrone: { update: vi.fn() },
     slimeTrail: { update: vi.fn() },
     flamethrowerUpgrades: { update: vi.fn() },
+    ak47StrategicTargets: { sync: vi.fn() },
   };
   const sources = {
     getSynchronizedNow: vi.fn(() => 1000),
@@ -176,6 +177,9 @@ function makeCombatController() {
     getAuraEnemies: vi.fn(() => []),
     syncEnemyHostVisuals: vi.fn(),
     getEnemyCount: vi.fn(() => 4),
+    getStrategicTargets: vi.fn(() => []),
+    getStrategicTargetEnemyManager: vi.fn(() => null),
+    getLocalPlayerId: vi.fn(() => 'local'),
   } as unknown as ArenaCombatPresentationSourcePort;
   const controller = new ArenaCombatPresentationController(renderers, sources);
   return { controller, renderers, sources };
@@ -201,5 +205,19 @@ describe('ArenaCombatPresentationController', () => {
     harness.controller.sync({ inArena: true, delta: 16 }, null);
     expect(harness.renderers.beer.update).not.toHaveBeenCalled();
     expect(harness.sources.updateVisualFeedback).not.toHaveBeenCalled();
+  });
+
+  it('ordnet Strategic Targets dem Combat-Presentation-Controller zu', () => {
+    const harness = makeCombatController();
+    harness.controller.syncStrategicTargets(true);
+
+    expect(harness.sources.getStrategicTargets).toHaveBeenCalledWith(1000);
+    expect(harness.renderers.ak47StrategicTargets.sync).toHaveBeenCalledWith(
+      [],
+      null,
+      'local',
+      1000,
+      true,
+    );
   });
 });

@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+const bridgeMock = vi.hoisted(() => ({
+  getWorldDescriptor: vi.fn(() => null),
+  getCoopDefenseMapId: vi.fn(() => 'weapon-balance-lab'),
+  isHost: vi.fn(() => true),
+  getLocalPlayerId: vi.fn(() => 'local'),
+}));
+
+vi.mock('../src/network/bridge', () => ({ bridge: bridgeMock }));
 import {
   COOP_DEFENSE_MAP_CONFIGS,
   getCoopDefenseCampaignAudit,
@@ -6,7 +15,10 @@ import {
   WEAPON_BALANCE_LAB_MAP_ID,
 } from '../src/config/coopDefenseMaps';
 import { getUnlockedCoopDefenseMapConfigs } from '../src/config/coopDefenseMapUnlocks';
-import { buildNeutralWeaponBenchmarkCommit } from '../src/debug/coopDefenseBalance/WeaponBalanceLabRuntime';
+import {
+  WeaponBalanceLabRuntime,
+  buildNeutralWeaponBenchmarkCommit,
+} from '../src/debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import {
   loadRuntimeBenchmarkResults,
   runtimeBenchmarkResultsToCsv,
@@ -14,6 +26,7 @@ import {
   storeRuntimeBenchmarkResult,
 } from '../src/debug/coopDefenseBalance/runtimeBenchmarkStorage';
 import type { RuntimeBenchmarkResult } from '../src/debug/coopDefenseBalance/runtimeBenchmarkTypes';
+import type { RuntimeBenchmarkRequest } from '../src/debug/coopDefenseBalance/runtimeBenchmarkTypes';
 import { sanitizeCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
 
 class MemoryStorage implements Storage {
@@ -60,6 +73,55 @@ function result(runId: string): RuntimeBenchmarkResult {
 }
 
 describe('Weapon Balance Lab 2.0 runtime contracts', () => {
+  it('markiert den ersten Lab-Schuss als Input-Start und Folgeschüsse nicht', () => {
+    const player = {
+      x: 0,
+      y: 0,
+      setPosition: vi.fn(),
+      body: { setVelocity: vi.fn() },
+    };
+    const useLoadout = vi.fn(() => ({ ok: true }));
+    const runtime = new WeaponBalanceLabRuntime(
+      () => ({
+        playerManager: { getPlayer: vi.fn(() => player) },
+        combatSystem: { addDamageDealtObserver: vi.fn(() => () => {}) },
+      } as never),
+      {
+        isReady: () => true,
+        spawnTarget: () => ({ id: 'target' }),
+        pinTarget: vi.fn(),
+        observeAdrenalineDrain: () => null,
+        observeAdrenalineGain: () => null,
+        setAdrenaline: vi.fn(),
+        getMaxAdrenaline: () => 0,
+        useLoadout,
+      },
+      vi.fn(),
+      vi.fn(),
+    );
+
+    const request: RuntimeBenchmarkRequest = {
+      slot: 'weapon1',
+      scenario: 'single_target',
+      distance: 180,
+      warmupMs: 0,
+      measurementMs: 100,
+      settleMs: 1000,
+    };
+    runtime.arm(request, {
+      commit: {} as never,
+      weaponId: 'GLOCK',
+      upgradeLevels: {},
+      buildSignature: 'base',
+    });
+
+    runtime.update('ARENA', true, 16);
+    runtime.update('ARENA', true, 16);
+
+    expect(useLoadout.mock.calls[0]?.at(-1)).toBe(true);
+    expect(useLoadout.mock.calls[1]?.at(-1)).toBe(false);
+  });
+
   it('resolves the internal range without exposing it as selectable campaign content', () => {
     const map = getCoopDefenseMapConfig(WEAPON_BALANCE_LAB_MAP_ID);
     expect(map.mapId).toBe(WEAPON_BALANCE_LAB_MAP_ID);

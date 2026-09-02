@@ -74,6 +74,8 @@ function createArenaRuntime() {
     hostUpdate: hostUpdate as never,
     clientUpdate: clientUpdate as never,
     roomQualityMonitor: {} as never,
+    getLocalPlayerId: () => 'local',
+    getSynchronizedNow: () => 1000,
     getSpectatorCameraInput: () => undefined,
   });
   return { runtime, hostUpdate, clientUpdate };
@@ -91,6 +93,26 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     expect(flow.persistentBaseWorldPorts.getConstructionRuntime()).toBeNull();
     expect(runtime.persistentBase.session).toBeDefined();
     expect(runtime.persistentBase.session.hasOpenTransaction).toBe(false);
+  });
+
+  it('meldet das Weapon Balance Lab nur mit Player-Systemen und EnemyManager als bereit', () => {
+    const { runtime } = createArenaRuntime();
+    const flow = (runtime as any).flow;
+    const playerRuntime = { systems: {} };
+
+    vi.spyOn(flow, 'getWorldPlayerGameplayRuntime').mockReturnValue(null);
+    vi.spyOn(flow, 'getCoopMissionRuntime').mockReturnValue({ enemyManager: {} } as never);
+    expect(runtime.weaponBalanceLabPort.isReady()).toBe(false);
+
+    flow.getWorldPlayerGameplayRuntime.mockReturnValue(playerRuntime);
+    flow.getCoopMissionRuntime.mockReturnValue(null);
+    expect(runtime.weaponBalanceLabPort.isReady()).toBe(false);
+
+    flow.getCoopMissionRuntime.mockReturnValue({ enemyManager: null });
+    expect(runtime.weaponBalanceLabPort.isReady()).toBe(false);
+
+    flow.getCoopMissionRuntime.mockReturnValue({ enemyManager: {} });
+    expect(runtime.weaponBalanceLabPort.isReady()).toBe(true);
   });
 
   it('gibt den benannten Activity-Schritt vom Frame-Owner an beide Frame-Phasen', () => {

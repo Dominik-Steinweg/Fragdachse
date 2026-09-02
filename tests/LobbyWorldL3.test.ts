@@ -333,7 +333,7 @@ describe('LobbyWorld L3 – Preview ist passiv, aber aktuell', () => {
     const runtime = read('src/scenes/arena/ArenaRuntime.ts');
     const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
     const noActivityStart = scene.indexOf('  private runArenaWorldWithoutActivityFrame(');
-    const noActivityEnd = scene.indexOf('  private syncArenaStrategicTargets(', noActivityStart);
+    const noActivityEnd = scene.indexOf('  // ── Network events ───', noActivityStart);
     expect(noActivityStart).toBeGreaterThanOrEqual(0);
     expect(noActivityEnd).toBeGreaterThan(noActivityStart);
     const noActivity = scene.slice(noActivityStart, noActivityEnd);

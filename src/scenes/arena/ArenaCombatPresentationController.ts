@@ -20,6 +20,7 @@ type CombatRenderers = Pick<RendererBundle,
   | 'repairDrone'
   | 'slimeTrail'
   | 'flamethrowerUpgrades'
+  | 'ak47StrategicTargets'
 >;
 
 export interface ArenaCombatPresentationSourcePort {
@@ -31,6 +32,9 @@ export interface ArenaCombatPresentationSourcePort {
   readonly getAuraEnemies: () => readonly EnemyEntity[];
   readonly syncEnemyHostVisuals: () => void;
   readonly getEnemyCount: () => number;
+  readonly getStrategicTargets: (now: number) => Parameters<CombatRenderers['ak47StrategicTargets']['sync']>[0];
+  readonly getStrategicTargetEnemyManager: () => Parameters<CombatRenderers['ak47StrategicTargets']['sync']>[1];
+  readonly getLocalPlayerId: () => string;
 }
 
 export interface ArenaCombatPresentationFrame {
@@ -79,6 +83,19 @@ export class ArenaCombatPresentationController {
     this.renderers.slimeTrail.update(frame.delta);
     this.renderers.flamethrowerUpgrades.update(now);
     diagnosticsFrame?.mark('visualEffectsEnd');
+  }
+
+  /** Synchronisiert das AK-Ziel an seiner etablierten Position vor Kamera-Feedback. */
+  syncStrategicTargets(active: boolean): void {
+    if (this.destroyed) return;
+    const now = this.sources.getSynchronizedNow();
+    this.renderers.ak47StrategicTargets.sync(
+      active ? this.sources.getStrategicTargets(now) : [],
+      this.sources.getStrategicTargetEnemyManager(),
+      this.sources.getLocalPlayerId(),
+      now,
+      active,
+    );
   }
 
   getEnemyCount(): number {

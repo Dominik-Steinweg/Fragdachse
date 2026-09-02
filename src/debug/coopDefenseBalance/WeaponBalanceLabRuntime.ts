@@ -38,6 +38,7 @@ export interface WeaponBalanceLabWorldPort {
     targetY: number,
     now: number,
     shotSequence: number,
+    inputStarted: boolean,
   ): LoadoutUseResult | null;
 }
 
@@ -272,6 +273,7 @@ export class WeaponBalanceLabRuntime {
       target.y,
       Date.now(),
       this.shotSequence++,
+      !this.hasFired,
     );
     if (result?.ok) {
       this.hasFired = true;

@@ -67,6 +67,7 @@ import {
   createArenaCoopMissionPresentationPort,
 } from './ArenaCoopMissionPorts';
 import { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
+import type { CaptureTheBeerPresentationBinding } from '../../activity/CaptureTheBeerPresentationBinding';
 import {
   createCoopMissionCompletion,
   getCoopMissionConclusion,
@@ -643,6 +644,7 @@ export class ArenaLifecycleCoordinator {
     private readonly clientUpdate: ClientUpdateCoordinator,
     private readonly roomQualityMonitor: RoomQualityMonitor,
     coopMissionPresentation: CoopMissionPresentationInfrastructure | null,
+    private readonly captureTheBeerPresentation: CaptureTheBeerPresentationBinding | null,
     /**
      * Der raumlanglebige Persistent-Base-Owner. Er ueberlebt jede World und jede Runde und
      * gehoert deshalb der `ArenaRuntime`; der Flow fragt ihn nur.
@@ -1026,6 +1028,7 @@ export class ArenaLifecycleCoordinator {
         },
       });
       worldRuntime.activity.attach(activity, runtime);
+      this.captureTheBeerPresentation?.bind(runtime);
       return;
     }
     if (activity.kind !== 'coop-mission') return;
@@ -1147,6 +1150,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
+    this.captureTheBeerPresentation?.detach();
     this.worldRuntime?.activity.detach();
   }
 

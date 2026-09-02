@@ -6,7 +6,11 @@ export { ClientUpdateCoordinator }       from './ClientUpdateCoordinator';
 export { HostUpdateCoordinator }         from './HostUpdateCoordinator';
 export { RpcCoordinator }               from './RpcCoordinator';
 export { ArenaRuntime }                 from './ArenaRuntime';
-export type { ArenaRuntimeRpcPorts, RuntimeDiagnosticEventSink } from './ArenaRuntime';
+export type {
+  ArenaRuntimeRpcPorts,
+  ArenaRuntimeStrategicTargetsPort,
+  RuntimeDiagnosticEventSink,
+} from './ArenaRuntime';
 export { CoopMissionPresentationInfrastructure } from './CoopMissionPresentationInfrastructure';
 export { ArenaPersistentBaseSession }   from './ArenaPersistentBaseSession';
 export { ArenaMetaController }          from './ArenaMetaController';

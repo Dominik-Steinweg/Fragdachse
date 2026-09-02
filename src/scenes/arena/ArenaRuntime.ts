@@ -8,7 +8,7 @@ import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay } from '../LobbyOverlay';
 import type { RoomQualityMonitor } from '../../network/RoomQualityMonitor';
-import type { CoopMissionOutcome } from '../../activity/CoopMissionRuntime';
+import type { CoopMissionOutcome, CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import type { CoopMissionPresentationInfrastructure } from './CoopMissionPresentationInfrastructure';
 import type { ArenaInputPlacementPorts, ArenaInputDebugHotkey, ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import type {
@@ -27,18 +27,19 @@ import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type {
   ArenaLayout,
-  GameMode,
   SyncedAk47StrategicTarget,
   SyncedReinforcementMatrix,
   SyncedEnergyInjectorEffect,
   SyncedRemoteControlTurret,
   SyncedTunnel,
 } from '../../types';
-import type { GameState } from '../../network/NetworkBridge';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
 import type { EnemyEntity } from '../../entities/EnemyEntity';
 import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
-import type { ArenaDiagnosticsRockVisualSystemPort } from './ArenaDiagnosticsController';
+import type {
+  ArenaDiagnosticsInput,
+  ArenaDiagnosticsRockVisualSystemPort,
+} from './ArenaDiagnosticsController';
 import type { ChunkRenderingDiagnosticsState } from '../../ui/PerformanceDiagnosticsOverlay';
 import type { ChunkSamplingMode } from '../../arena/chunks/ChunkedRenderSurface';
 import {
@@ -47,8 +48,6 @@ import {
   type RockGpuPageSize,
   type RockRendererMode,
 } from '../../arena/rocks/RockRendererSettings';
-import { bridge } from '../../network/bridge';
-import { isCoopDefenseMode } from '../../gameModes';
 import {
   resetWorldCameraBase,
   type WorldClientPresentationState,
@@ -60,6 +59,7 @@ import type {
 } from '../../types';
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
+import type { CaptureTheBeerPresentationBinding } from '../../activity/CaptureTheBeerPresentationBinding';
 
 export type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
@@ -71,6 +71,12 @@ export interface ArenaRuntimeRpcPorts {
   readonly playerLoadout: PlayerLoadoutRpcPort;
   readonly heldAction: HeldActionRpcPort;
   readonly train: TrainRpcPort;
+}
+
+/** Schmaler Read-Port fuer die allgemeine Combat-Presentation. */
+export interface ArenaRuntimeStrategicTargetsPort {
+  readonly getHostSnapshot: (now: number) => readonly SyncedAk47StrategicTarget[];
+  readonly getEnemySource: () => NonNullable<CoopMissionRuntime['enemyManager']> | null;
 }
 
 /**
@@ -98,8 +104,9 @@ export interface ArenaRuntimeInput {
   readonly clientUpdate: ClientUpdateCoordinator;
   readonly roomQualityMonitor: RoomQualityMonitor;
   readonly coopMissionPresentation?: CoopMissionPresentationInfrastructure;
-  readonly getLocalPlayerId?: () => string;
-  readonly getSynchronizedNow?: () => number;
+  readonly getLocalPlayerId: () => string;
+  readonly getSynchronizedNow: () => number;
+  readonly captureTheBeerPresentation?: CaptureTheBeerPresentationBinding;
   /**
    * A/D- bzw. Pfeiltasten-Eingabe der freien Zuschauerkamera. Lazy, weil die Input-Bindings der
    * Scene erst nach der `ArenaRuntime` entstehen – wie bei `rockVisualHelper`s World-Ports.
@@ -116,6 +123,8 @@ export class ArenaRuntime {
   readonly placementPorts: ArenaInputPlacementPorts;
   /** Schmaler Port fuer das Weapon-Balance-Lab. */
   readonly weaponBalanceLabPort: WeaponBalanceLabWorldPort;
+  /** Schmaler Source-Port fuer die Strategic-Target-Presentation. */
+  readonly strategicTargetsPort: ArenaRuntimeStrategicTargetsPort;
 
   /** Der Arena-Flow bleibt private Implementierungsdetail der ArenaRuntime. */
   private readonly flow: ArenaLifecycleCoordinator;
@@ -133,8 +142,8 @@ export class ArenaRuntime {
     this.renderers = input.renderers;
     this.hostUpdate = input.hostUpdate;
     this.clientUpdate = input.clientUpdate;
-    this.getLocalPlayerId = input.getLocalPlayerId ?? (() => bridge.getLocalPlayerId());
-    this.getSynchronizedNow = input.getSynchronizedNow ?? (() => bridge.getSynchronizedNow());
+    this.getLocalPlayerId = input.getLocalPlayerId;
+    this.getSynchronizedNow = input.getSynchronizedNow;
     // Der Persistent-Base-Owner entsteht vor dem Flow und fragt ihn erst zur Laufzeit nach der
     // aktuellen World; dadurch bleibt seine Lifetime unabhaengig von jeder World-Instanz.
     this.persistentBase = new ArenaPersistentBaseSession({
@@ -166,6 +175,7 @@ export class ArenaRuntime {
       input.clientUpdate,
       input.roomQualityMonitor,
       input.coopMissionPresentation ?? null,
+      input.captureTheBeerPresentation ?? null,
       this.persistentBase,
       input.getSpectatorCameraInput,
     );
@@ -294,7 +304,7 @@ export class ArenaRuntime {
       isReady: () => {
         const playerSystems = this.flow.getWorldPlayerGameplayRuntime()?.systems;
         const enemyManager = this.flow.getCoopMissionRuntime()?.enemyManager;
-        return playerSystems !== undefined && enemyManager !== undefined;
+        return playerSystems !== undefined && enemyManager != null;
       },
       spawnTarget: (x, y) => {
         const enemyManager = this.flow.getCoopMissionRuntime()?.enemyManager;
@@ -331,7 +341,7 @@ export class ArenaRuntime {
       getMaxAdrenaline: (playerId) => {
         return this.flow.getWorldPlayerGameplayRuntime()?.systems.resource.getMaxAdrenaline(playerId) ?? 0;
       },
-      useLoadout: (slot, playerId, angle, targetX, targetY, now, shotSequence) => {
+      useLoadout: (slot, playerId, angle, targetX, targetY, now, shotSequence, inputStarted) => {
         const loadout = this.flow.getWorldPlayerGameplayRuntime()?.systems.loadout;
         if (!loadout) return null;
         const player = this.ctx.playerManager.getPlayer(playerId);
@@ -343,11 +353,17 @@ export class ArenaRuntime {
           targetY,
           now,
           shotSequence,
-          undefined,
+          { inputStarted },
           player?.x,
           player?.y,
         );
       },
+    };
+    this.strategicTargetsPort = {
+      getHostSnapshot: (now) => (
+        this.flow.getWorldPlayerGameplayRuntime()?.systems?.ak47StrategicTarget?.getNetSnapshot(now) ?? []
+      ),
+      getEnemySource: () => this.flow.getCoopMissionRuntime()?.enemyManager ?? null,
     };
     this.hostUpdate.setWorldFramePort({
       getWorldRuntime: () => this.flow.getWorldRuntime(),
@@ -753,25 +769,6 @@ export class ArenaRuntime {
     return this.flow.getWorldPlayerGameplayRuntime()?.systems?.tunnel?.getSnapshot() ?? [];
   }
 
-  syncStrategicTargetsPresentation(inRoundWorld: boolean, configuredGameMode: GameMode): void {
-    const strategicTargets = bridge.isHost()
-      ? (this.flow.getWorldPlayerGameplayRuntime()?.systems?.ak47StrategicTarget?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
-      : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
-    this.renderers.ak47StrategicTargets.sync(
-      strategicTargets,
-      this.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-      this.getLocalPlayerId(),
-      bridge.getSynchronizedNow(),
-      inRoundWorld && isCoopDefenseMode(configuredGameMode),
-    );
-  }
-
-  syncClientCaptureTheBeerPresentation(state: GameState | undefined): void {
-    if (!this.flow.getLocalWorldPresentation().required || !state) return;
-    this.flow.getCaptureTheBeerActivityRuntime()?.system?.syncSnapshot(state.captureTheBeer ?? null);
-    this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
-  }
-
   getEnemySilhouette(targetId: string): {
     sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
     materialColor: number;
@@ -858,7 +855,9 @@ export class ArenaRuntime {
     this.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.setPageSize(size);
   }
 
-  getFlowFieldDiagnosticsSource(): { getDiagnostics(): any } | null {
+  getFlowFieldDiagnosticsSource(): ReturnType<
+    ArenaDiagnosticsInput[Extract<keyof ArenaDiagnosticsInput, `getFlowField${string}`>]
+  > {
     return this.flow.getCoopMissionRuntime()?.flowFieldCoordinator ?? null;
   }
 

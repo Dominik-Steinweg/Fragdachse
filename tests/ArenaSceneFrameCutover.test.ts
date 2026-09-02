@@ -23,6 +23,13 @@ function updateBody(): string {
   return source.slice(start, end);
 }
 
+function readCombatPresentationController(): string {
+  return readFileSync(
+    resolve(process.cwd(), 'src/scenes/arena/ArenaCombatPresentationController.ts'),
+    'utf8',
+  );
+}
+
 describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
   it('zeigt im Frame nur benannte Top-Level-Orchestrierungsschritte', () => {
     const update = updateBody();
@@ -79,6 +86,22 @@ describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
   it('führt den Activity-Client-Presentation-Step weiterhin nicht aus der Scene aus', () => {
     const scene = readScene();
     expect(scene).not.toContain('clientPresentationStep(');
+  });
+
+  it('hält Strategic-Target-Rendering im Combat-Controller und ArenaRuntime bridge-frei', () => {
+    const scene = readScene();
+    const runtime = readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaRuntime.ts'), 'utf8');
+    const controller = readCombatPresentationController();
+
+    expect(runtime).not.toContain("from '../../network/bridge'");
+    expect(runtime).not.toContain('syncStrategicTargetsPresentation');
+    expect(runtime).not.toContain('renderers.ak47StrategicTargets.sync(');
+    expect(controller).toContain('syncStrategicTargets(active: boolean)');
+    expect(controller).toContain('this.renderers.ak47StrategicTargets.sync(');
+
+    const update = updateBody();
+    expect(update.indexOf('this.combatPresentation?.syncStrategicTargets('))
+      .toBeLessThan(update.lastIndexOf('this.arenaRuntime.syncWorldCamera('));
   });
 });
 

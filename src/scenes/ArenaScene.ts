@@ -48,6 +48,7 @@ import {
 import type { RuntimeBenchmarkRequest } from '../debug/coopDefenseBalance/runtimeBenchmarkTypes';
 import { storeRuntimeBenchmarkResult } from '../debug/coopDefenseBalance/runtimeBenchmarkStorage';
 import { WeaponBalanceLabOverlay, type WeaponBalanceLabStartResult } from '../ui/WeaponBalanceLabOverlay';
+import { CaptureTheBeerPresentationBinding } from '../activity/CaptureTheBeerPresentationBinding';
 import { TimeOfDayDebugOverlay } from '../ui/TimeOfDayDebugOverlay';
 import { DEFAULT_TIME_OF_DAY_MINUTES, resolveSkyState } from '../effects/TimeOfDay';
 import type { WorldGradeInputs } from '../effects/postfx/worldGrade';
@@ -209,6 +210,7 @@ export class ArenaScene extends Phaser.Scene {
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private removeReconnectStatusListener: (() => void) | null = null;
   private coopMissionPresentation!: CoopMissionPresentationInfrastructure;
+  private captureTheBeerPresentation!: CaptureTheBeerPresentationBinding;
   private aimPresentation: ArenaAimPresentationController | null = null;
   private combatPresentation: ArenaCombatPresentationController | null = null;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
@@ -452,7 +454,7 @@ export class ArenaScene extends Phaser.Scene {
         },
       },
       getGpuVfxStats: () => this.renderers?.gpuVfx.getStats() ?? null,
-      getFlowFieldCoordinator: () => (this.arenaRuntime?.getFlowFieldDiagnosticsSource() as any) ?? null,
+      getFlowFieldCoordinator: () => this.arenaRuntime?.getFlowFieldDiagnosticsSource() ?? null,
       getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaRuntime?.getRockVisualDiagnostics() ?? null,
       getHostPerformanceMetrics: () => this.hostUpdate.getPerformanceMetrics(),
       getClientPerformanceMetrics: () => this.clientUpdate.getPerformanceMetrics(),
@@ -814,6 +816,7 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager);
+    this.captureTheBeerPresentation = new CaptureTheBeerPresentationBinding(this.renderers.beer);
     // Der Profiler entsteht vor dem Renderer-Bundle; die GPU-VFX-Statistik wird deshalb hier
     // nachgereicht. Ohne sie fehlen Lanes und Effekte im Performance-Export vollstaendig.
     this.diagnostics?.attachGpuVfx(this.renderers.gpuVfx);
@@ -915,6 +918,11 @@ export class ArenaScene extends Phaser.Scene {
       {
         getSynchronizedNow: () => bridge.getSynchronizedNow(),
         updateVisualFeedback: (delta) => this.visualFeedback?.update(delta),
+        getStrategicTargets: (now) => bridge.isHost()
+          ? (this.arenaRuntime?.strategicTargetsPort.getHostSnapshot(now) ?? [])
+          : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []),
+        getStrategicTargetEnemyManager: () => this.arenaRuntime?.strategicTargetsPort.getEnemySource() ?? null,
+        getLocalPlayerId: () => bridge.getLocalPlayerId(),
         getReinforcementMatrices: () => this.arenaRuntime?.getReinforcementMatrices() ?? [],
         getEnergyInjectorEffects: () => this.arenaRuntime?.getEnergyInjectorEffects() ?? [],
         getRemoteControlTargets: () => bridge.isHost()
@@ -986,6 +994,7 @@ export class ArenaScene extends Phaser.Scene {
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
       coopMissionPresentation: this.coopMissionPresentation,
+      captureTheBeerPresentation: this.captureTheBeerPresentation,
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
@@ -1241,6 +1250,7 @@ export class ArenaScene extends Phaser.Scene {
       this.playerStatusRing?.destroy();
       this.playerStatusRing = null;
       this.coopMissionPresentation.destroy();
+      this.captureTheBeerPresentation?.destroy();
       this.removeReconnectStatusListener?.();
       this.removeReconnectStatusListener = null;
     });
@@ -1400,7 +1410,9 @@ export class ArenaScene extends Phaser.Scene {
     // Und Rundenpraesentation - Missionsansagen, Encounter, Zug, strategische Ziele - haengt
     // zusaetzlich an der Activity: interaktiv zu spielen heisst nicht, dass eine Runde laeuft.
     const inRoundWorld = worldInteractive && activityActive;
-    this.syncArenaStrategicTargets(inRoundWorld, configuredGameMode);
+    this.combatPresentation?.syncStrategicTargets(
+      inRoundWorld && isCoopDefenseMode(configuredGameMode),
+    );
     // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
     // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is
@@ -1774,7 +1786,12 @@ export class ArenaScene extends Phaser.Scene {
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
         diagnosticsFrame?.begin('clientRendererSync');
         const clientState = bridge.getLatestGameState();
-        this.syncClientCaptureTheBeerPresentation(clientState);
+        if (clientState) {
+          this.captureTheBeerPresentation.syncClient(
+            clientState.captureTheBeer ?? null,
+            this.arenaRuntime.getLocalWorldPresentation().required,
+          );
+        }
         this.arenaRuntime.syncWorldClientPresentation(
           clientState,
           delta,
@@ -1820,7 +1837,12 @@ export class ArenaScene extends Phaser.Scene {
     else {
       this.arenaRuntime.runClientFrame(delta);
       const clientState = bridge.getLatestGameState();
-      this.syncClientCaptureTheBeerPresentation(clientState);
+      if (clientState) {
+        this.captureTheBeerPresentation.syncClient(
+          clientState.captureTheBeer ?? null,
+          this.arenaRuntime.getLocalWorldPresentation().required,
+        );
+      }
       this.arenaRuntime.syncWorldClientPresentation(
         clientState,
         delta,
@@ -1830,13 +1852,6 @@ export class ArenaScene extends Phaser.Scene {
       );
     }
     diagnosticsFrame?.end('primaryStep');
-  }
-
-  private syncArenaStrategicTargets(
-    inRoundWorld: boolean,
-    configuredGameMode: GameMode,
-  ): void {
-    this.arenaRuntime?.syncStrategicTargetsPresentation(inRoundWorld, configuredGameMode);
   }
 
   // ── Network events ────────────────────────────────────────────────────────
@@ -2342,13 +2357,6 @@ export class ArenaScene extends Phaser.Scene {
       Math.max(GAME_WIDTH, ARENA_MAX_X + ARENA_OFFSET_X) + pad * 2,
       Math.max(GAME_HEIGHT, ARENA_MAX_Y + ARENA_OFFSET_Y) + pad * 2,
     );
-  }
-
-  /** Synchronisiert ausschließlich die separate Capture-the-Beer-Client-Presentation. */
-  private syncClientCaptureTheBeerPresentation(state: GameState | undefined): void {
-    if (!state) return;
-    this.arenaRuntime?.syncClientCaptureTheBeerPresentation(state);
-    this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
   }
 
   /**
