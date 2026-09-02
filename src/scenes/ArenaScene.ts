@@ -25,7 +25,7 @@ import { DecoySystem }           from '../systems/DecoySystem';
 import { EffectSystem }          from '../effects/EffectSystem';
 import { VisualFeedbackDirector } from '../effects/VisualFeedbackDirector';
 import { CAMERA_FEEDBACK_LIMITS } from '../effects/camera/CameraFeedbackModel';
-import { getCameraBaseScroll, getUnshakenPointerWorldPoint, setCameraBaseScroll } from '../graphics/cameraBaseScroll';
+import { getCameraBaseScroll, getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
 import { getProjectileLightSpec, LIGHT_PRESETS } from '../effects/LightingConfig';
 import { mixColors }             from '../effects/EffectUtils';
@@ -86,7 +86,6 @@ import {
   PLAYER_COLORS, ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH, ARENA_HEIGHT, ARENA_MAX_X, ARENA_MAX_Y, ARENA_VIEWPORT_WIDTH, ARENA_VIEWPORT_HEIGHT, GAME_WIDTH, GAME_HEIGHT, CELL_SIZE, COLORS, DEPTH,
   NET_SMOOTH_TIME_MS,
-  ACTIVE_ARENA_METRICS_PROFILE,
   applyArenaActivityValuesForMode,
   applyArenaMetricsForMode,
   applyArenaModeFlags,
@@ -156,7 +155,6 @@ import {
   type ArenaDiagnosticsFrameInput,
   type ArenaDiagnosticsRockVisualSystemPort,
 } from './arena/ArenaDiagnosticsController';
-import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
 
 import {
@@ -312,10 +310,6 @@ export class ArenaScene extends Phaser.Scene {
   private lobbyOverlay!: LobbyOverlay;
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
-  private lastCameraScrollX = 0;
-  private lastCameraScrollY = 0;
-  private spectatorCameraScrollX = 0;
-  private spectatorCameraScrollY = 0;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
   private forceStaticTimeOfDayBake = false;
   /** Scene-langlebiger Owner der Diagnose (Profiler, Ablation, Net-/Performance-Overlay). */
@@ -1185,6 +1179,8 @@ export class ArenaScene extends Phaser.Scene {
       hostUpdate: this.hostUpdate,
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
+      // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
+      getSpectatorCameraInput: () => this.inputBindings?.getSpectatorCameraInput(),
     });
     this.clientUpdate.setPlayerWorldRuntime(
       (profile, spawn) => this.lifecycle.attachPlayerToWorld(profile, false, spawn),
@@ -1657,14 +1653,14 @@ export class ArenaScene extends Phaser.Scene {
 
     // The camera must already be positioned while the world is hidden, because its initial view
     // defines the startup working set that the load barrier waits for.
-    this.syncMainCamera(delta, presentationPolicy.showWorld);
+    this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
     if (presentationPolicy.showWorld) {
       const worldView = getVisibleWorldView(this.cameras.main);
-      ArenaBuilder.updateSurfaceResidency(this.arenaResult ?? null, worldView);
+      this.arenaRuntime.syncWorldSurfaceResidency(presentationPolicy.showWorld);
       this.renderers?.shadow.updateStaticResidency(worldView);
     }
     // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
@@ -1922,7 +1918,7 @@ export class ArenaScene extends Phaser.Scene {
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
-    this.syncMainCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
+    this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
     const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
     const presentationMapConfig = coopDefensePresentationActive
       ? getCoopDefenseMapConfig(configuredCoopDefenseMapId!)
@@ -2831,89 +2827,6 @@ export class ArenaScene extends Phaser.Scene {
     }
     this.renderers.powerUp.updatePedestals(bridge.getSynchronizedNow());
     this.renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
-  }
-
-  /**
-   * Setzt die Kamera auf ihre **unversetzte** Basisposition. Der visuelle Versatz des
-   * Kamera-Feedbacks kommt erst am Frame-Ende über `applyCameraFeedback()` dazu.
-   *
-   * Die Verfolgung lerpt bewusst aus `lastCameraScrollX` und nicht aus `camera.scrollX`: Zu
-   * Beginn eines Frames trägt die Kamera noch den Versatz des Vorframes, und ein Rücklesen
-   * würde das Rumpeln in die Verfolgung zurückkoppeln und die Kamera abdriften lassen.
-   */
-  private syncMainCamera(delta: number, inArena: boolean): void {
-    const camera = this.cameras.main;
-
-    const spectator = inArena && (this.localPlayerState.spectator || bridge.isLocalSpectator());
-    const arenaWidth = Math.max(0, ARENA_MAX_X - ARENA_OFFSET_X);
-    const arenaHeight = Math.max(0, ARENA_MAX_Y - ARENA_OFFSET_Y);
-    const canSpectatorPanX = arenaWidth > ARENA_VIEWPORT_WIDTH;
-    const canSpectatorPanY = arenaHeight > ARENA_VIEWPORT_HEIGHT;
-    const canSpectatorPan = canSpectatorPanX || canSpectatorPanY;
-    // Die Weltkamera ist World-Presentation: ohne lokale Darstellung dieser World gibt es sie
-    // nicht, auch wenn die Simulation weiterlaeuft.
-    const worldCamera = allowsWorldPresentationSurface(this.lifecycle.getLocalWorldPresentation(), 'worldCamera');
-    if (!inArena || !worldCamera
-      || (!ACTIVE_ARENA_METRICS_PROFILE.usesDynamicCamera && !(spectator && canSpectatorPan))) {
-      this.lastCameraScrollX = 0;
-      this.lastCameraScrollY = 0;
-      this.spectatorCameraScrollX = 0;
-      this.spectatorCameraScrollY = 0;
-      camera.scrollX = 0;
-      camera.scrollY = 0;
-      setCameraBaseScroll(this, 0, 0);
-      return;
-    }
-
-    if (spectator) {
-      const spectatorInput = this.inputBindings?.getSpectatorCameraInput();
-      this.spectatorCameraScrollX = advanceSpectatorCameraScroll({
-        currentScrollX: this.spectatorCameraScrollX,
-        deltaMs: delta,
-        moveLeft: spectatorInput?.left === true,
-        moveRight: spectatorInput?.right === true,
-        arenaWidth,
-        viewportWidth: ARENA_VIEWPORT_WIDTH,
-      });
-      this.spectatorCameraScrollY = advanceSpectatorCameraScroll({
-        currentScrollX: this.spectatorCameraScrollY,
-        deltaMs: delta,
-        moveLeft: spectatorInput?.up === true,
-        moveRight: spectatorInput?.down === true,
-        arenaWidth: arenaHeight,
-        viewportWidth: ARENA_VIEWPORT_HEIGHT,
-      });
-      this.lastCameraScrollX = this.spectatorCameraScrollX;
-      this.lastCameraScrollY = this.spectatorCameraScrollY;
-      camera.scrollX = this.spectatorCameraScrollX;
-      camera.scrollY = this.spectatorCameraScrollY;
-      setCameraBaseScroll(this, this.spectatorCameraScrollX, this.spectatorCameraScrollY);
-      return;
-    }
-
-    const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
-    const preparedStartFocus = bridge.isArenaLoading() || bridge.isArenaCountdownActive();
-    if (!localSprite?.active || (!this.localPlayerState.alive && !preparedStartFocus)) {
-      camera.scrollX = this.lastCameraScrollX;
-      camera.scrollY = this.lastCameraScrollY;
-      setCameraBaseScroll(this, this.lastCameraScrollX, this.lastCameraScrollY);
-      return;
-    }
-
-    const maxScrollX = Math.max(0, ARENA_MAX_X - (ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH));
-    const maxScrollY = Math.max(0, ARENA_MAX_Y - (ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT));
-    const focusScreenX = ARENA_OFFSET_X + ARENA_VIEWPORT_WIDTH * 0.5;
-    const focusScreenY = ARENA_OFFSET_Y + ARENA_VIEWPORT_HEIGHT * 0.5;
-    const targetScrollX = Phaser.Math.Clamp(localSprite.x - focusScreenX, 0, maxScrollX);
-    const targetScrollY = Phaser.Math.Clamp(localSprite.y - focusScreenY, 0, maxScrollY);
-    // The first local spawn is already known during loading; snap once so the startup working
-    // set is not invalidated by a camera glide while the barrier is being evaluated.
-    const followLerp = bridge.isArenaLoading() ? 1 : 1 - Math.exp(-delta / 120);
-    this.lastCameraScrollX = Phaser.Math.Linear(this.lastCameraScrollX, targetScrollX, followLerp);
-    this.lastCameraScrollY = Phaser.Math.Linear(this.lastCameraScrollY, targetScrollY, followLerp);
-    camera.scrollX = this.lastCameraScrollX;
-    camera.scrollY = this.lastCameraScrollY;
-    setCameraBaseScroll(this, this.lastCameraScrollX, this.lastCameraScrollY);
   }
 
   /**

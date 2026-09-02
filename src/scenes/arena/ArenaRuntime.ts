@@ -9,6 +9,8 @@ import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay } from '../LobbyOverlay';
 import type { RoomQualityMonitor } from '../../network/RoomQualityMonitor';
 import type { CoopMissionOutcome } from '../../activity/CoopMissionRuntime';
+import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
+import { resetWorldCameraBase } from '../../world/WorldPresentationFrameBinding';
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 
@@ -35,6 +37,11 @@ export interface ArenaRuntimeInput {
   readonly hostUpdate: HostUpdateCoordinator;
   readonly clientUpdate: ClientUpdateCoordinator;
   readonly roomQualityMonitor: RoomQualityMonitor;
+  /**
+   * A/D- bzw. Pfeiltasten-Eingabe der freien Zuschauerkamera. Lazy, weil die Input-Bindings der
+   * Scene erst nach der `ArenaRuntime` entstehen – wie bei `rockVisualHelper`s World-Ports.
+   */
+  readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined;
 }
 
 export class ArenaRuntime {
@@ -43,10 +50,12 @@ export class ArenaRuntime {
   /** Der Arena-Flow: World-/Activity-Uebergaenge, Readiness, Participation, Completion. */
   readonly flow: ArenaLifecycleCoordinator;
 
+  private readonly scene: Phaser.Scene;
   private readonly hostUpdate: HostUpdateCoordinator;
   private readonly clientUpdate: ClientUpdateCoordinator;
 
   constructor(input: ArenaRuntimeInput) {
+    this.scene = input.scene;
     this.hostUpdate = input.hostUpdate;
     this.clientUpdate = input.clientUpdate;
     // Der Persistent-Base-Owner entsteht vor dem Flow und fragt ihn erst zur Laufzeit nach der
@@ -79,6 +88,7 @@ export class ArenaRuntime {
       input.clientUpdate,
       input.roomQualityMonitor,
       this.persistentBase,
+      input.getSpectatorCameraInput,
     );
     this.hostUpdate.setWorldFramePort({
       getWorldRuntime: () => this.flow.getWorldRuntime(),
@@ -120,6 +130,27 @@ export class ArenaRuntime {
    */
   update(deltaMs: number): void {
     this.flow.updateWorldRuntime(deltaMs);
+  }
+
+  /**
+   * Positioniert die Weltkamera dieser World fuer diesen Frame; wird pro Frame zweimal gerufen -
+   * einmal vor der Simulation, einmal danach auf die finale Spielerposition.
+   */
+  syncWorldCamera(deltaMs: number, showWorld: boolean): void {
+    const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
+    // Ohne aktive World-Presentation - zwischen zwei Instanzen oder vor der ersten - gilt
+    // derselbe neutrale Stand wie fuer eine World ohne Weltkamera. Sonst bliebe die Basis der
+    // vorherigen World stehen, und das Kamera-Feedback rechnete am Frame-Ende darauf weiter.
+    if (!presentationFrame) {
+      resetWorldCameraBase(this.scene);
+      return;
+    }
+    presentationFrame.syncCamera(deltaMs, showWorld);
+  }
+
+  /** Gleicht die residenten Render-Chunks dieser World an den sichtbaren Ausschnitt an. */
+  syncWorldSurfaceResidency(showWorld: boolean): void {
+    this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld);
   }
 
   /**

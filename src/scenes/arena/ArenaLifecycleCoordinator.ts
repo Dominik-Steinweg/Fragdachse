@@ -114,6 +114,7 @@ import {
 } from '../../world/PersistentBaseWorldBinding';
 import { WorldRuntime } from '../../world/WorldRuntime';
 import { WorldPresentationFrameBinding } from '../../world/WorldPresentationFrameBinding';
+import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import type { ConstructionWorldRuntime } from '../../world/ConstructionWorldRuntime';
@@ -333,9 +334,20 @@ export class ArenaLifecycleCoordinator {
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
       // Jede World bekommt ihren eigenen Presentation-Frame-Binding - auch eine World ohne
-      // Activity (LobbyWorld). Phase 5 baut nur das Lifetime-Gerüst; Consumer ziehen erst in
-      // Phase 6 hier ein.
-      this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding());
+      // Activity (LobbyWorld). Ab Phase 6A.1 traegt er die Kamera- und Residency-Verdrahtung.
+      this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
+        scene: this.scene,
+        getLocalWorldPresentation: () => this.getLocalWorldPresentation(),
+        getSpectatorCameraInput: this.getSpectatorCameraInput,
+        getLocalPlayerSprite: () => (
+          this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null
+        ),
+        isLocalPlayerSpectator: () => this.localPlayerState.spectator || bridge.isLocalSpectator(),
+        isLocalPlayerAlive: () => this.localPlayerState.alive,
+        isArenaLoading: () => bridge.isArenaLoading(),
+        isArenaCountdownActive: () => bridge.isArenaCountdownActive(),
+        getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
+      }));
     },
     detach: () => {
       const runtime = this.worldRuntime;
@@ -559,6 +571,8 @@ export class ArenaLifecycleCoordinator {
      * gehoert deshalb der `ArenaRuntime`; der Flow fragt ihn nur.
      */
     private readonly persistentBase: ArenaPersistentBaseSession,
+    /** Lazy: Die Input-Bindings der Scene entstehen erst nach diesem Owner. */
+    private readonly getSpectatorCameraInput: () => ArenaSpectatorCameraInput | undefined,
   ) {
     this.coopMissionPorts = createArenaCoopMissionPorts({
       ctx,

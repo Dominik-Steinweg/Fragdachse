@@ -32,11 +32,11 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `6A.1 – World Surface, Kamera und Residency`
-**Gesamtstatus:** `🟨 Phase 5 abgeschlossen – das Presentation-Lifetime-Gerüst steht; Renderblöcke ziehen erst ab Phase 6 ein. Checkpoint A/B warten weiterhin auf manuelle Sichtprüfung`
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 5
-**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (339 Testdateien, 2867 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
-**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B- und Phase-3A–5-Verträge grün. Phase 5 ändert kein sichtbares Verhalten.`
+**Aktive Phase:** `6A.2 – World Lighting, Shadows und übrige World-Renderer`
+**Gesamtstatus:** `🟨 Phase 6A.1 abgeschlossen – World-Kamera und Surface-Residency hängen am world-scoped Presentation-Owner; Lighting/Shadows folgen in 6A.2. Checkpoint A/B warten weiterhin auf manuelle Sichtprüfung`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 6A.1
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (339 Testdateien, 2870 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
+**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B- und Phase-3A–6A.1-Verträge grün. Kamera und Residency sind sichtprüfungsrelevant (Checkpoint C).`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
@@ -51,7 +51,7 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 | 4C Meta Results/Lobby | ✅ abgeschlossen | `ArenaMetaController` besitzt Result-Read-Verarbeitung, persönliche XP-/Unlock-/Reward-Verbuchung mit lokaler Deduplizierung, Result-Präsentation/Replay, Import-Follow-up, Default-Map, Ready-Reset und persönliche Lobby-Projektion; `ArenaScene` besitzt keinen persönlichen Result-/Progress-/Item-State und keine direkten persönlichen Persistence-Mutationen mehr. `ResultApplication` und `ArenaPersistentBaseSession` bleiben unverändert ihre jeweiligen Owner. |
 | – Checkpoint B | 🟨 aktiv | Automatisierte Prüfungen grün; manuelle Prüfung von Input, Persistent Base, Spectator, Options/Debug, Meta/Items/Upgrades/Results, Dateiimport/Lobby-Projektion und Ready-State noch offen. |
 | 5 Presentation-Lifetime-Fundament | ✅ abgeschlossen | `WorldPresentationFrameBinding` + dedizierter `WorldRuntime`-Slot; der Detach läuft garantiert vor dem Handoff-Release. Activity-Seite bewusst unverändert (reuse-first: vorhandene Verträge reichen, nur festgeschrieben). |
-| 6A.1 World Surface/Camera | ⬜ offen | Surface, Kamera und Residency aus Scene. |
+| 6A.1 World Surface/Camera | ✅ abgeschlossen | `syncMainCamera` (beide Frame-Positionen) und World-Surface-Residency liegen im `WorldPresentationFrameBinding`; TD-5 aufgelöst. Shadow-Residency, Canopy, World Grade und Camera-Feedback bewusst zurückgestellt. |
 | 6A.2 World Lighting/Renderer | ⬜ offen | Shadows, Lighting, Shared-Consumer und übrige World-Renderer. |
 | 6B Client World Projection | ⬜ offen | world-spezifische replizierte Client-Projektion. |
 | – Checkpoint C | ⬜ offen | World ohne Activity, Preview und Handoff. |
@@ -76,7 +76,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | # | Test | Kl. | Schützt | Heutiger Source-Ort | Ziel-Owner | Migration in Phase |
 |---:|---|:--:|---|---|---|:--:|
-| 1 | `ArenaExitEntityPresentation` · beendet Gameplay vor dem Fade | B | Exit-Fade startet nach Gameplay-Ende; `worldVisible`-Formel | `ArenaScene` Exit-/Sichtbarkeitsblock | `WorldPresentationFrameBinding` | 6A.1 |
+| 1 | `ArenaExitEntityPresentation` · beendet Gameplay vor dem Fade | B | Exit-Fade startet nach Gameplay-Ende; `worldVisible`-Formel | `ArenaScene` Exit-/Sichtbarkeitsblock | `WorldPresentationFrameBinding` | 6A.2 |
 | 2 | `ArenaFlowCheckpointC` · Coop-Simulation an ihrer Frame-Position (R-4) | R | Scene taktet nur die `arenaRuntime`-Fassade, nie Host-/ClientUpdate direkt; **Phase 1 ergänzt:** Reihenfolge `syncRoomOwners → update → runHost/ClientFrame` | `ArenaScene.update()` | `ArenaScene` (bleibt) | 8 |
 | 3 | `ArenaFlowCheckpointC` · kein Top-Level-Owner selbst getaktet | R | Persistent-Base-Owner wird nur vom Frame-Owner getaktet | `ArenaScene.update()` | `ArenaScene` (bleibt) | 8 |
 | 4 | `ArenaTransitionReadiness` · Host-Lobby-Sync während Exit-Fade | B | `deferArenaExit → detectPhaseChange → hostSyncLobbyWorld → detectWorldChange`; genau ein `hostSyncLobbyWorld()` | `ArenaScene.update()` | `ArenaScene` (Frame-Orchestrierung) | 8 |
@@ -85,19 +85,21 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | 7 | `LobbyWorldContracts` · Lobby über World-Lifecycle statt Vorschau | R | Kein `MenuArenaPreview`/`LobbyAmbient`; `hostSyncLobbyWorld()` | `ArenaScene` (Abwesenheits-Ratchet) | `ArenaScene` (bleibt) | 9 |
 | 8 | `LobbyWorldInteractive` · Testgelände-Entry/Exit/Optionen | B | `canEnter` nur solange Spieler nicht ready | `ArenaScene` Lobby-Overlay-Verdrahtung | `ArenaMetaController` | 4C |
 | 9 | `LobbyWorldInteractive` · ESC behandelt Modals vor World-Leave | B | ESC-Reihenfolge Options → Hotkey-Block → Leave | `ArenaScene` Hotkey-Handler | `ArenaInputBindings` | 3A |
-| 10 | `LobbyWorldInteractive` · Lobby-Oberfläche folgt der Presentation | B | `syncLobbySurface(presentationPolicy.showLobby)`, `inRoundWorld`-Ableitung | `ArenaScene.update()` Presentation-Block | `WorldPresentationFrameBinding` | 6A.1 |
-| 11 | `LobbyWorldInteractive` · Ladescreen bis gebackener Weltausschnitt | B | Boot-Reveal an `getWorldRevealState`, nicht an `POST_RENDER` | `ArenaScene` Boot-Reveal | `ArenaScene` (Boot) + `WorldPresentationFrameBinding` | 6A.1 |
-| 12 | `LobbyWorldL3` · lokale Player-Presentation nur mit Surface + Runtime | B | `playerStatusRing` an `localPlayerVisuals`, nicht an `inArena` | `ArenaScene.update()` Presentation-Block | `WorldPresentationFrameBinding` | 6A.1 |
+| 10 | `LobbyWorldInteractive` · Lobby-Oberfläche folgt der Presentation | B | `syncLobbySurface(presentationPolicy.showLobby)`, `inRoundWorld`-Ableitung | `ArenaScene.update()` Presentation-Block | `WorldPresentationFrameBinding` | 6A.2 |
+| 11 | `LobbyWorldInteractive` · Ladescreen bis gebackener Weltausschnitt | B | Boot-Reveal an `getWorldRevealState`, nicht an `POST_RENDER` | `ArenaScene` Boot-Reveal | `ArenaScene` (Boot) + `WorldPresentationFrameBinding` | 6A.2 |
+| 12 | `LobbyWorldL3` · lokale Player-Presentation nur mit Surface + Runtime | B | `playerStatusRing` an `localPlayerVisuals`, nicht an `inArena` | `ArenaScene.update()` Presentation-Block | `WorldPresentationFrameBinding` | 6A.2 |
 | 13 | `LobbyWorldL3` · derselbe Client-Renderer-Consumer mit/ohne Activity | R | Activity-lose World nutzt denselben Client-Pfad (`runClientFrame` + `syncClientWorldSnapshotPresentation`) | `ArenaScene.update()` Client-Zweig | `WorldPresentationFrameBinding` (+ `ArenaRuntime`) | 6B |
-| 14 | `PersistentBaseManagementAllClasses` · Rückbau unterdrückt Aim | B | `showAim` respektiert `isDismantlePlacementActive()`; Basis-Visuals folgen dem Modus | `ArenaScene` Aim-/Visuals-Block | `ArenaInputBindings` (Aim) + `WorldPresentationFrameBinding` (Visuals) | 3B / 6A.1 |
+| 14 | `PersistentBaseManagementAllClasses` · Rückbau unterdrückt Aim | B | `showAim` respektiert `isDismantlePlacementActive()`; Basis-Visuals folgen dem Modus | `ArenaScene` Aim-/Visuals-Block | `ArenaInputBindings` (Aim) + `WorldPresentationFrameBinding` (Visuals) | 3B / 6A.2 |
 | 15 | `Phase11DependencyCutover` · Construction-RPCs am World-Owner | R | RPC ruft `getConstructionWorldRuntime()` direkt, nicht über den Flow | `ArenaScene` RPC-Verdrahtung | `ArenaScene` / `ArenaRuntime` | 9 |
 | 16 | `PresentationInputPolicyContracts` · Eingabe aus der Policy | R | `resolveInputPolicy()` statt handgebauter Bedingungskette | `ArenaScene.update()` Input-Block | `ArenaInputBindings` | 3B |
 | 17 | `WorldMaterializationOwnership` · Gameplay-State über seine Owner | R | Die 5 Scene-Getter delegieren an `worldRuntime.materialization/.presentation` | `ArenaScene` Getter | `ArenaScene` (dünne Delegation) | 9 |
-| 18 | `WorldMetricsScopeContracts` · Basen/Basisstelle am World-Kontext | R | `persistentBaseSite` kommt aus `activeWorld`, nicht global | `ArenaScene.update()` | `WorldPresentationFrameBinding` | 6A.1 |
+| 18 | `WorldMetricsScopeContracts` · Basen/Basisstelle am World-Kontext | R | `persistentBaseSite` kommt aus `activeWorld`, nicht global | `ArenaScene.update()` | `WorldPresentationFrameBinding` | 6A.2 |
 | 19 | `WorldMetricsScopeContracts` · Respawn-Kontext aus der aktiven World | B | Spawn-Map aus `world.descriptor.definitionId`, nicht aus Rundenstate | `ArenaScene:1054` Spawn-Provider | `ArenaRuntime`/`WorldRuntime` | 9 |
-| 20 | `WorldPresentationContracts` · Darstellungsentscheidung am richtigen Ort | R | Weltkamera über `allowsWorldPresentationSurface(..., 'worldCamera')` | `ArenaScene.update()` Kamera-Block | `WorldPresentationFrameBinding` | 6A.1 |
+| 20 | `WorldPresentationContracts` · Darstellungsentscheidung am richtigen Ort | R | Weltkamera über `allowsWorldPresentationSurface(..., 'worldCamera')` | **migriert (6A.1)**: prüft jetzt `WorldPresentationFrameBinding` | `WorldPresentationFrameBinding` | ✅ 
 | 21 | `WorldRuntimeOwnership` · World-Runtime hinter dem WorldLifecycle | R | Scene taktet nur `arenaRuntime.update(delta)`, nie `updateWorldRuntime` | `ArenaScene.update()` | `ArenaScene` (bleibt) | 8 |
 | 22 | `ArenaMetaController` · Meta-Ownership und Teardown | R | Progress-/Upgrade-/Loadout-Mutationen liegen im scene-langlebigen Owner; Persistence bleibt Adapter; `destroy()` ist idempotent und danach inert | `ArenaScene` + `ArenaMetaController` | `ArenaMetaController` | 4A |
+
+**Korrektur der Phasenprognose (6A.1).** Die Phase-1-Karte hatte die Einträge 1, 10, 11, 12, 14 und 18 ebenfalls für 6A.1 vorgesehen. Der reale 6A.1-Schnitt fiel bewusst enger aus (nur Kamera + Surface-Residency), weil alle übrigen Kandidaten `renderers.shadow`/`renderers.lighting` berühren oder activity-gegatet sind. Diese Einträge sind auf **6A.2** umdatiert; nur Eintrag 20 ist tatsächlich migriert.
 
 **Kein Test der Klasse S.** Jede geprüfte Formel bzw. jeder geprüfte Aufruf trägt entweder echtes Verhalten (Aufrufreihenfolge = Ausführungsreihenfolge, verhaltenssteuernde Bedingungen) oder eine bewusste Ownership-Grenze. Beim Cutover darf daher **kein** Eintrag ersatzlos gelöscht werden.
 
@@ -109,7 +111,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| TD-5 | 5 | `WorldPresentationFrameBinding` trägt noch **keine** Presentation-Consumer: Der benannte Port `WorldPresentationFrameConsumers` existiert, wird aber überall mit `null` gebunden. Der Owner hält damit heute nur den Lifetime-Vertrag. Bewusst **keine** `update()`-Methode, solange es keinen Aufrufer gibt (KISS, `docs/ai/architecture-principles.md` §6). | `WorldPresentationFrameBinding` | 6A.1 (erster Consumer + Frame-Step) |
+| TD-6 | 6A.1 | `getVisibleWorldView(this.cameras.main)` wird an der Residency-Stelle jetzt **zweimal** ausgewertet: einmal im Frame-Binding für die Surface-Residency, einmal in der Scene für `renderers.shadow.updateStaticResidency`. Die Funktion ist rein (nur Kamera-Arithmetik), beide Aufrufe im selben Moment liefern identische Werte – es ist verdoppelte Rechnung, kein zweiter Zustand. | `WorldPresentationFrameBinding` | 6A.2 (mit dem Umzug der Shadow-Residency) |
 
 ---
 
@@ -166,8 +168,12 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | Source-Test-Inventar `rg` über `tests/` | 14 Dateien / 26 Assertion-Stellen lesen `src/scenes/ArenaScene.ts` als Text; keine weiteren Pfadschreibweisen oder Verzeichnis-Scans. |
 | `ArenaInputBindings` | Scene-langlebiger Owner für Keyboard-Setup, alle `InputSystem`-Provider und Action-Callbacks, InputPolicy, Aim-/Cursor-/Spectator-Frame-Interface, lokale Placement-/Management-Weiterleitung und lokales Feedback; `destroy()` löst sieben Listener und sechs eigene Keys idempotent. |
 | `ArenaMetaController` | Scene-langlebiger Owner für validierten Coop-Progress-Read-Stand, Loadout-Reconciliation, Level Up/Down, Category/Class/Full Respec, Klassenwahl, Inspector-Tool-Slots, Loadout-Slot-Auswahl, Upgrade-Overlay-Apply/Cancel, Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation/-Anzeige, persönliche Debug-Progress-/Persistent-Base-Entitlements, Result-Read-Verarbeitung, persönliche Deduplizierung, Match-Result-Präsentation/-Replay, Import-Nachzug, Default-Map und Lobby-Projektion; `ArenaMetaPersistence` kapselt die bestehende Persistence-Grenze, ein `resultRead`-Port kapselt autoritative Resultdaten; `destroy()` ist idempotent und danach inert. Keine ResultApplication-, Activity-, World- oder Persistent-Base-Working-State-Verantwortung verschoben. |
-| `npm run check` (nach Phase 5) | grün – 339 Testdateien, 2867 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. |
-| `WorldPresentationFrameBinding` | Neu in `src/world/WorldPresentationFrameBinding.ts`. Trägt in Phase 5 ausschließlich den Lifetime-Vertrag (siehe TD-5); Renderlogik zieht ab 6A.1 ein. |
+| `npm run check` (nach Phase 6A.1) | grün – 339 Testdateien, 2870 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. |
+| `ArenaScene.ts` Umfang (6A.1) | 3466 → 3379 Zeilen (−87). Entfallen: Methode `syncMainCamera`, Felder `lastCameraScrollX/Y`, `spectatorCameraScrollX/Y`, Imports `ACTIVE_ARENA_METRICS_PROFILE`, `advanceSpectatorCameraScroll`, `setCameraBaseScroll`. `WorldPresentationFrameBinding.ts`: 51 → ~195 Zeilen. |
+| `WorldPresentationFrameBinding` | Trägt seit 6A.1 die World-Kamera-Positionierung (`syncCamera`, pro Frame zweimal) und die World-Surface-Residency (`syncSurfaceResidency`). Der Phase-5-Platzhalterport `WorldPresentationFrameConsumers` ist durch echten Inhalt ersetzt und entfernt. |
+| Behobene Regression im 6A.1-Review | Ohne aktive `WorldRuntime` (zwischen zwei Instanzen, vor der ersten) lief der Kamera-Sync nach dem Umzug gar nicht mehr, während der alte Scene-Code dort jeden Frame den neutralen Stand setzte. Das Kamera-Feedback hätte am Frame-Ende auf der Basis der vergangenen World weitergerechnet. `ArenaRuntime.syncWorldCamera()` ruft in diesem Fall jetzt `resetWorldCameraBase(scene)` – dieselbe Funktion, die auch der Early-Return des Bindings nutzt, also eine Quelle. |
+| Zwei Kamera-Syncs pro Frame | Bleiben unverändert: Aufruf 1 positioniert die Kamera **vor** der Simulation (das Startbild definiert das Working Set der Ladebarriere), Aufruf 2 danach auf die finale Spielerposition, beim Spectator mit `delta = 0` gegen doppelte Pan-Geschwindigkeit. Die drei `getVisibleWorldView`-Zeitpunkte (Residency vor dem Feedback, `syncArenaLoadReady` und Boot-Reveal danach) bleiben getrennt. |
+| Neuer Reihenfolge-Ratchet | `ArenaFlowCheckpointC` schreibt jetzt die volle Presentation-Frame-Kette per `indexOf` fest: Kamera 1 → Residency → `inputBindings.updateFrame` → Kamera 2 → `applyCameraFeedback` → `flushBakeBudget` → `syncArenaLoadReady` → `syncBootReveal`. Diese Reihenfolge stand vorher **nur in Kommentaren**. |
 | `ArenaLifecycleCoordinator.detach()` | Neue Reihenfolge: `detachPresentationFrame()` → `handoff.release(runtime.releasePresentation())` → `runtime.destroy()` → `persistentBase.useWorldRuntimes(null)`. Der Sink ist der **einzige** Ausführungsort des lokalen Teardowns; alle Pfade (Match-Exit, Lobby-Rückkehr, Fast-Reinstance, Rundenende, technischer Abbruch, Diagnose-Abbruch) laufen darüber. |
 | Bewusst **nicht** in Phase 5 verschoben | `resetRenderersForWorldPresentationTeardown` läuft heute **nach** `runtime.destroy()`. Ein Vorziehen in den Frame-Binding würde die Reihenfolge gegenüber den World-Gameplay-Ownern ändern (Renderer-Reset vor deren Teardown) – das ist Phase 6A.2, nicht Phase 5. |
 | Activity-Seite in Phase 5 | Keine Änderung. Verifiziert: `CoopMissionRuntime.bind({attach, detach})` wird bereits an sechs Stellen genutzt und löst scoped Bindings in umgekehrter Reihenfolge **vor** allen Activity-Child-Ownern; `clientPresentationStep()` hat weiterhin genau einen Aufrufer. Der vorhandene Vertrag reicht für Phase 7A – kein `CoopMissionPresentationBinding` und kein zweiter Client-Step vorgezogen. |
@@ -179,13 +185,15 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Phase 6A.1 – World Surface, Kamera und Residency** (Checkpoint A/B bleiben parallel für die manuelle Sichtprüfung offen).
+**Phase 6A.2 – World Lighting, Shadows und übrige World-Renderer** (Checkpoint A/B bleiben parallel für die manuelle Sichtprüfung offen).
 
-- Erster echter Inhalt für `WorldPresentationFrameBinding`: Surface-/Canopy-Residency, World-Kamera-Bindung und die zugehörigen aktiven Reads aus `ArenaScene` in den world-scoped Owner ziehen. Damit entfällt TD-5.
-- Dabei den Frame-Step nachrüsten: Der Owner bekommt erst jetzt eine `update()`-Methode und einen Aufrufer über `WorldRuntime`/`ArenaRuntime`; die Scene bestimmt nur noch die grobe Frame-Position.
-- Frame-Reihenfolge nicht umsortieren – R-4 ist seit Phase 1 per `indexOf` festgeschrieben (`syncRoomOwners → arenaRuntime.update → runHostFrame/runClientFrame`), und der Presentation-Step gehört hinter den Host-/Client-Frame.
+- Die in 6A.1 bewusst zurückgestellten Blöcke aus `ArenaScene` nachziehen: `renderers.shadow.updateStaticResidency` (löst TD-6 auf), Canopy-Transparenz (zieht `renderers.lighting.resolveCanopyTint` als Callback durch), `syncWorldShadows`, `syncWorldLighting` und die übrigen World-Renderer-Consumer.
+- `resetRenderersForWorldPresentationTeardown` jetzt bewerten: Es läuft heute **nach** `runtime.destroy()`. Ein Vorziehen in den Frame-Binding-Detach ändert die Reihenfolge gegenüber den World-Gameplay-Ownern (Renderer-Reset vor deren Teardown) – nur mit belegter Unbedenklichkeit verschieben.
+- `applyCameraFeedback` und `resolveWorldGradeInputs` prüfen, aber nicht vorschnell mitnehmen: Beide sind mit `VisualFeedbackDirector`/PostFX verzahnt, und `resolveWorldGradeInputs` liest activity-spezifischen Zustand (Boss-Phase, Void-Map).
+- Die Test-Migrationskarte weist die Einträge 1, 10, 11, 12, 14 und 18 jetzt dieser Phase zu.
+- Frame-Reihenfolge nicht umsortieren – seit 6A.1 ist die volle Presentation-Kette per `indexOf` festgeschrieben (siehe Abschnitt 6); `CameraFeedbackController` verlangt ausdrücklich, dass das Feedback **vor** der Lichtberechnung läuft.
 - Keinen zweiten `clientPresentationStep(`-Aufruf einführen – der Regex-Ratchet in `CoopMissionRuntimeOwnership` scannt `src/scenes` und `src/world`.
-- `resetRenderersForWorldPresentationTeardown` erst in 6A.2 bewerten (siehe Abschnitt 6): Ein Vorziehen ändert die Teardown-Reihenfolge gegenüber den World-Gameplay-Ownern.
+- Offener Befund ohne eigene Phase: `resolvePresentationPolicy` berechnet ein `useWorldCamera`, das nirgends konsumiert wird, während `syncCamera` dieselbe Entscheidung über `allowsWorldPresentationSurface(..., 'worldCamera')` erneut ableitet. Zwei Quellen derselben Wahrheit – in 6A.2 oder Phase 9 zusammenführen, nicht nebenbei.
 - Die automatisierten Checkpoint-A-Prüfungen sind mit `npm run check` grün.
 - Offen bleibt die manuelle Sichtprüfung von Diagnose an/aus, Performance-/Netzwerk-Overlay, Ablation, Semantic Events, Sampling und Shutdown-Verhalten sowie der Checkpoint-B-Umfang (Input, Persistent Base, Spectator, Options/Debug, Meta/Items/Upgrades/Results, Dateiimport/Lobby-Projektion und Ready-State).
 - Phase 3A ist automatisiert abgeschlossen: Input-Setup, statische Provider, Hotkeys, sechs eigene Keys und die Ownership-getrennte Scene-Bereinigung sind verifiziert.

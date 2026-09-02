@@ -73,6 +73,7 @@ function createArenaRuntime() {
     hostUpdate: hostUpdate as never,
     clientUpdate: clientUpdate as never,
     roomQualityMonitor: {} as never,
+    getSpectatorCameraInput: () => undefined,
   });
   return { runtime, hostUpdate, clientUpdate };
 }
@@ -211,6 +212,58 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     ]) {
       expect(scene, drivenWork).not.toContain(drivenWork);
     }
+  });
+});
+
+describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Aufrufe in ArenaScene.update()', () => {
+  /**
+   * Vor Phase 6A.1 stand diese Reihenfolge ausschliesslich in Kommentaren, nicht in einem Test.
+   * Seit Phase 6A.1 delegiert die Scene Kamera-Sync und World-Surface-Residency an
+   * `arenaRuntime.syncWorldCamera`/`syncWorldSurfaceResidency`, die intern den world-scoped
+   * `WorldPresentationFrameBinding` takten. Dieser Test friert die relative Position dieser
+   * Aufrufe zu Input-Frame und den Frame-Ende-Schritten ein - unabhaengig vom jeweiligen
+   * Aufrufnamen.
+   */
+  it('haelt die Reihenfolge von Kamera-Sync, Residency, Input-Frame und Frame-Ende-Schritten fest', () => {
+    const scene = read(SCENE_PATH);
+    const updateStart = scene.indexOf('  update(_time: number, delta: number): void {');
+    expect(updateStart, 'ArenaScene.update() nicht gefunden').toBeGreaterThan(-1);
+    const updateEnd = scene.indexOf('\n  // ── Network events', updateStart);
+    expect(updateEnd, 'Ende von ArenaScene.update() nicht gefunden').toBeGreaterThan(updateStart);
+    const body = scene.slice(updateStart, updateEnd);
+
+    const firstCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);');
+    const visibleWorldViewForResidency = body.indexOf('const worldView = getVisibleWorldView(this.cameras.main);');
+    const updateSurfaceResidency = body.indexOf('this.arenaRuntime.syncWorldSurfaceResidency(');
+    const inputBindingsUpdateFrame = body.indexOf('this.inputBindings?.updateFrame({');
+    const secondCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);');
+    const applyCameraFeedback = body.indexOf('this.applyCameraFeedback(delta);');
+    const flushBakeBudget = body.indexOf('ChunkedRenderSurface.flushBakeBudget(');
+    const syncArenaLoadReady = body.indexOf('this.lifecycle.syncArenaLoadReady(');
+    const syncBootReveal = body.indexOf('this.syncBootReveal(phase);');
+
+    for (const [label, index] of [
+      ['erster syncMainCamera-Aufruf', firstCameraSync],
+      ['getVisibleWorldView fuer Residency', visibleWorldViewForResidency],
+      ['ArenaBuilder.updateSurfaceResidency', updateSurfaceResidency],
+      ['inputBindings.updateFrame', inputBindingsUpdateFrame],
+      ['zweiter syncMainCamera-Aufruf', secondCameraSync],
+      ['applyCameraFeedback', applyCameraFeedback],
+      ['flushBakeBudget', flushBakeBudget],
+      ['syncArenaLoadReady', syncArenaLoadReady],
+      ['syncBootReveal', syncBootReveal],
+    ] as const) {
+      expect(index, `${label} nicht in update() gefunden`).toBeGreaterThan(-1);
+    }
+
+    expect(firstCameraSync, '1 vor 2').toBeLessThan(visibleWorldViewForResidency);
+    expect(visibleWorldViewForResidency, '2a vor 2b').toBeLessThan(updateSurfaceResidency);
+    expect(updateSurfaceResidency, '2 vor 3').toBeLessThan(inputBindingsUpdateFrame);
+    expect(inputBindingsUpdateFrame, '3 vor 4').toBeLessThan(secondCameraSync);
+    expect(secondCameraSync, '4 vor 5').toBeLessThan(applyCameraFeedback);
+    expect(applyCameraFeedback, '5 vor 6').toBeLessThan(flushBakeBudget);
+    expect(flushBakeBudget, '6 vor 7').toBeLessThan(syncArenaLoadReady);
+    expect(syncArenaLoadReady, '7 vor 8').toBeLessThan(syncBootReveal);
   });
 });
 
