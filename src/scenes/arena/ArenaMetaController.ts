@@ -1,8 +1,13 @@
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
+import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../../config/coopDefenseItems';
 import { isCoopDefenseMode } from '../../gameModes';
 import { getSelectableLoadoutItems } from '../../loadout/LoadoutCatalog';
 import type {
   CoopDefenseClassId,
+  CoopDefenseItem,
+  CoopDefenseItemRewardAction,
+  CoopDefenseItemSlot,
+  CoopDefensePendingItemReward,
   CoopDefenseUpgradeProfile,
   GameMode,
   GamePhase,
@@ -23,10 +28,20 @@ import {
   type CoopDefenseUpgradeCategoryId,
 } from '../../utils/coopDefenseUpgrades';
 import {
+  applyCoopDefenseEpicGuarantee,
+  getEquippedCoopDefenseItems,
+  rollCoopDefenseItemOffer,
+  type CoopDefenseEquippedItemIds,
+} from '../../utils/coopDefenseItems';
+import {
   getCoopDefenseProgressSnapshot,
   type CoopDefenseProgressSnapshot,
 } from '../../utils/coopDefenseProgression';
 import type { CoopDefenseProgressPreferences } from '../../utils/localPreferences';
+import {
+  createMatchItemRewardPresentation,
+  type MatchItemRewardPresentation,
+} from '../../ui/MatchResultsModel';
 
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
 
@@ -47,6 +62,19 @@ export interface ArenaMetaProgressStore {
   resetUpgradeProfiles(): void;
   setDebugProgress(totalXp: number, bossPoints: number, highestUnlockedMapId: string): void;
   resetCharacter(): void;
+  setItemsUnlocked(unlocked: boolean): boolean;
+  unlockItemsAfterVictory(completedMapId: string, firstReward?: CoopDefensePendingItemReward): boolean;
+  markItemsSeen(): boolean;
+  equipItem(uid: string): boolean;
+  unequipItem(slot: CoopDefenseItemSlot): boolean;
+  salvageItem(uid: string): number;
+  setPendingItemReward(reward: CoopDefensePendingItemReward): boolean;
+  claimPendingItemReward(
+    roundEndedAt: number,
+    offerUid: string,
+    salvageUid?: string,
+    action?: CoopDefenseItemRewardAction,
+  ): ArenaMetaItemRewardClaim | null;
 }
 
 /** Kleine Bruecke auf den lokalen Spieler-/Ready-Stand, ohne Netzwerk-Substrat im Owner. */
@@ -65,11 +93,41 @@ export interface ArenaMetaSessionPort {
 /** Presentation bleibt bei den bestehenden Overlays/Panels; der Owner liefert nur Read-Daten. */
 export interface ArenaMetaPresentationPort {
   setCoopDefenseProgress(progress: CoopDefenseProgressSnapshot | null): void;
+  setCoopDefenseItemsState(unlocked: boolean, pendingRewardCount: number, hasUnseenItems: boolean): void;
   refreshUpgradeOverlay(): void;
   scheduleUpgradeOverlayRefresh(): void;
   refreshColorIndicator(): void;
   hideDebugOverlay(): void;
   showUpgradeOverlay(): void;
+  showItemsOverlay(): void;
+  refreshItemsOverlay(): void;
+  isItemsOverlayOpen(): boolean;
+  showItemRewardOverlay(presentation: MatchItemRewardPresentation, closeAfterClaim: boolean): void;
+  isItemRewardOverlayVisible(): boolean;
+}
+
+export interface ArenaMetaItemsOverlayState {
+  readonly items: readonly CoopDefenseItem[];
+  readonly equippedItemIds: CoopDefenseEquippedItemIds;
+  readonly pendingRewardCount: number;
+}
+
+export interface ArenaMetaItemRewardClaim {
+  readonly acquired: CoopDefenseItem | null;
+  readonly salvagedXp: number;
+}
+
+export interface ArenaMetaVictoryItemRewardInput {
+  readonly completedMapId: string;
+  readonly roundEndedAt: number;
+  readonly itemLevel: number | null;
+  readonly playedClassId: CoopDefenseClassId | null;
+  readonly epicGuaranteeCount: number;
+}
+
+export interface ArenaMetaVictoryItemRewardResult {
+  readonly itemsUnlocked: boolean;
+  readonly reward: CoopDefensePendingItemReward | null;
 }
 
 export interface ArenaMetaControllerInput {
@@ -119,6 +177,34 @@ export class ArenaMetaController {
     return this.getStoredProgress().highestUnlockedMapId;
   }
 
+  getEquippedItems(): CoopDefenseItem[] {
+    if (this.destroyed) return [];
+    const stored = this.getStoredProgress();
+    return getEquippedCoopDefenseItems(stored.items, stored.equippedItemIds);
+  }
+
+  getItemsOverlayState(): ArenaMetaItemsOverlayState {
+    if (this.destroyed) {
+      return { items: [], equippedItemIds: {}, pendingRewardCount: 0 };
+    }
+    const stored = this.getStoredProgress();
+    return {
+      items: stored.items,
+      equippedItemIds: stored.equippedItemIds,
+      pendingRewardCount: stored.pendingItemRewards.length,
+    };
+  }
+
+  refreshItemsPresentation(): void {
+    if (this.destroyed) return;
+    const stored = this.getStoredProgress();
+    this.input.presentation.setCoopDefenseItemsState(
+      isCoopDefenseMode(this.input.session.getGameMode()) && stored.itemsUnlocked,
+      stored.pendingItemRewards.length,
+      stored.unseenItems,
+    );
+  }
+
   refresh(options: ArenaMetaRefreshOptions = {}): void {
     if (this.destroyed) return;
 
@@ -157,6 +243,7 @@ export class ArenaMetaController {
     this.input.presentation.setCoopDefenseProgress(
       isCoopDefenseMode(this.input.session.getGameMode()) ? this.progress : null,
     );
+    this.refreshItemsPresentation();
     if (options.refreshOverlay !== false) this.input.presentation.refreshUpgradeOverlay();
   }
 
@@ -451,6 +538,142 @@ export class ArenaMetaController {
     this.refresh();
   }
 
+  setDebugItemsUnlocked(unlocked: boolean): void {
+    if (this.destroyed) return;
+    this.input.progressStore.setItemsUnlocked(unlocked);
+    this.refresh();
+  }
+
+  openItemsOverlay(): void {
+    if (this.destroyed) return;
+    if (this.input.session.getGamePhase() !== 'LOBBY'
+      || !isCoopDefenseMode(this.input.session.getGameMode())) return;
+    if (this.input.session.isLocalReady() || this.input.session.isAuthoritativeLocalReady()) return;
+
+    const stored = this.readFreshStoredProgress();
+    if (!stored.itemsUnlocked) return;
+
+    this.input.presentation.hideDebugOverlay();
+    this.input.progressStore.markItemsSeen();
+    this.refresh({ refreshOverlay: false });
+    this.input.presentation.showItemsOverlay();
+  }
+
+  equipItem(uid: string): boolean {
+    if (this.destroyed || !this.input.progressStore.equipItem(uid)) return false;
+    this.refresh();
+    return true;
+  }
+
+  unequipItem(slot: CoopDefenseItemSlot): boolean {
+    if (this.destroyed || !this.input.progressStore.unequipItem(slot)) return false;
+    this.refresh();
+    return true;
+  }
+
+  salvageItem(uid: string): number {
+    if (this.destroyed) return 0;
+    const xp = this.input.progressStore.salvageItem(uid);
+    if (xp <= 0) return 0;
+    this.refresh();
+    return xp;
+  }
+
+  getItemRewardPresentation(roundEndedAt?: number): MatchItemRewardPresentation | null {
+    if (this.destroyed) return null;
+    const stored = this.readFreshStoredProgress();
+    const pendingRewards = stored.pendingItemRewards;
+    const index = roundEndedAt === undefined
+      ? 0
+      : pendingRewards.findIndex((reward) => reward.roundEndedAt === roundEndedAt);
+    const pending = index >= 0 ? pendingRewards[index] : null;
+    return createMatchItemRewardPresentation(
+      pending,
+      stored.items,
+      stored.equippedItemIds,
+      { index: index >= 0 ? index : 0, size: Math.max(1, pendingRewards.length) },
+    );
+  }
+
+  openItemRewardOverlay(automaticRoundEndedAt?: number, automatic = false): void {
+    if (this.destroyed || this.input.presentation.isItemRewardOverlayVisible()) return;
+    if (automatic && automaticRoundEndedAt === undefined) return;
+
+    const presentation = this.getItemRewardPresentation(automaticRoundEndedAt);
+    if (!presentation) return;
+    this.input.presentation.showItemRewardOverlay(presentation, automatic);
+  }
+
+  claimItemReward(
+    roundEndedAt: number,
+    offerUid: string,
+    salvageUid?: string,
+    action: CoopDefenseItemRewardAction = 'take',
+  ): ArenaMetaItemRewardClaim | null {
+    if (this.destroyed) return null;
+    const claim = this.input.progressStore.claimPendingItemReward(
+      roundEndedAt,
+      offerUid,
+      salvageUid,
+      action,
+    );
+    if (!claim) return null;
+
+    this.refresh();
+    if (this.input.presentation.isItemsOverlayOpen()) {
+      this.input.progressStore.markItemsSeen();
+      this.refresh({ refreshOverlay: false });
+    }
+    this.input.presentation.refreshItemsOverlay();
+    return claim;
+  }
+
+  recordVictoryItemReward(
+    input: ArenaMetaVictoryItemRewardInput,
+  ): ArenaMetaVictoryItemRewardResult {
+    if (this.destroyed) return { itemsUnlocked: false, reward: null };
+
+    const stored = this.getStoredProgress();
+    const shouldAtomicallyUnlockItems = input.completedMapId === COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID
+      && !stored.itemsUnlocked
+      && input.itemLevel !== null;
+    let itemsUnlocked = false;
+    if (!shouldAtomicallyUnlockItems) {
+      itemsUnlocked = this.input.progressStore.unlockItemsAfterVictory(input.completedMapId);
+    }
+
+    let reward: CoopDefensePendingItemReward | undefined;
+    if (input.itemLevel !== null && (stored.itemsUnlocked || shouldAtomicallyUnlockItems)) {
+      const offers = rollCoopDefenseItemOffer(input.itemLevel, input.playedClassId);
+      reward = {
+        roundEndedAt: input.roundEndedAt,
+        mapId: input.completedMapId,
+        epicGuaranteeCount: input.epicGuaranteeCount,
+        offers: applyCoopDefenseEpicGuarantee(
+          offers,
+          input.epicGuaranteeCount,
+          input.playedClassId,
+        ),
+      };
+      if (shouldAtomicallyUnlockItems) {
+        itemsUnlocked = this.input.progressStore.unlockItemsAfterVictory(
+          input.completedMapId,
+          reward,
+        );
+      } else {
+        this.input.progressStore.setPendingItemReward(reward);
+      }
+    }
+
+    const current = this.readFreshStoredProgress();
+    return {
+      itemsUnlocked,
+      reward: current.pendingItemRewards.find(
+        (entry) => entry.roundEndedAt === input.roundEndedAt,
+      ) ?? null,
+    };
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
@@ -459,6 +682,12 @@ export class ArenaMetaController {
 
   private setLocalReady(ready: boolean): void {
     this.input.session.setLocalReady(ready);
+  }
+
+  private readFreshStoredProgress(): CoopDefenseProgressPreferences {
+    const stored = this.input.progressStore.getProgress();
+    this.storedProgress = stored;
+    return stored;
   }
 
   private refreshAfterMutation(stored: CoopDefenseProgressPreferences): void {

@@ -1,14 +1,22 @@
 import {
   getStoredCoopDefenseLoadout,
   getStoredCoopDefenseProgress,
+  claimStoredPendingCoopDefenseItemReward,
+  equipStoredCoopDefenseItem,
+  markStoredCoopDefenseItemsSeen,
   resetStoredCoopDefenseCharacter,
   resetStoredCoopDefenseUpgradeProfiles,
   restoreStoredCoopDefenseProgress,
+  salvageStoredCoopDefenseItem,
   setStoredCoopDefenseCheatProgress,
+  setStoredCoopDefenseItemsUnlocked,
   setStoredCoopDefenseLoadoutSlot,
+  setStoredPendingCoopDefenseItemReward,
   setStoredCoopDefenseUpgradeProfile,
   setStoredLoadoutSlot,
   switchStoredCoopDefenseClassLoadout,
+  unequipStoredCoopDefenseItem,
+  unlockStoredCoopDefenseItemsAfterVictory,
 } from '../../utils/localPreferences';
 import type { ArenaMetaProgressStore } from './ArenaMetaController';
 
@@ -28,5 +36,13 @@ export function createArenaMetaProgressStore(): ArenaMetaProgressStore {
     resetUpgradeProfiles: resetStoredCoopDefenseUpgradeProfiles,
     setDebugProgress: setStoredCoopDefenseCheatProgress,
     resetCharacter: resetStoredCoopDefenseCharacter,
+    setItemsUnlocked: setStoredCoopDefenseItemsUnlocked,
+    unlockItemsAfterVictory: unlockStoredCoopDefenseItemsAfterVictory,
+    markItemsSeen: markStoredCoopDefenseItemsSeen,
+    equipItem: equipStoredCoopDefenseItem,
+    unequipItem: unequipStoredCoopDefenseItem,
+    salvageItem: salvageStoredCoopDefenseItem,
+    setPendingItemReward: setStoredPendingCoopDefenseItemReward,
+    claimPendingItemReward: claimStoredPendingCoopDefenseItemReward,
   };
 }

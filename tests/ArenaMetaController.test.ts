@@ -29,6 +29,14 @@ function makeInput(): {
     resetUpgradeProfiles: vi.fn(),
     setDebugProgress: vi.fn(),
     resetCharacter: vi.fn(),
+    setItemsUnlocked: vi.fn(),
+    unlockItemsAfterVictory: vi.fn(),
+    markItemsSeen: vi.fn(),
+    equipItem: vi.fn(),
+    unequipItem: vi.fn(),
+    salvageItem: vi.fn(),
+    setPendingItemReward: vi.fn(),
+    claimPendingItemReward: vi.fn(),
   };
   const loadout: Record<string, string> = {};
   const session: ArenaMetaControllerInput['session'] = {
@@ -49,6 +57,12 @@ function makeInput(): {
     refreshColorIndicator: vi.fn(),
     hideDebugOverlay: vi.fn(),
     showUpgradeOverlay: vi.fn(),
+    setCoopDefenseItemsState: vi.fn(),
+    showItemsOverlay: vi.fn(),
+    refreshItemsOverlay: vi.fn(),
+    isItemsOverlayOpen: vi.fn(() => false),
+    showItemRewardOverlay: vi.fn(),
+    isItemRewardOverlayVisible: vi.fn(() => false),
   };
   return {
     controller: new ArenaMetaController({ progressStore: store, session, presentation }),
@@ -84,6 +98,25 @@ describe('ArenaMetaController', () => {
     expect(presentation.refreshUpgradeOverlay).not.toHaveBeenCalled();
   });
 
+  it('besitzt Item-Use-Cases und aktualisiert die Lobby-Projektion ueber Ports', () => {
+    const { controller, store, presentation } = makeInput();
+
+    vi.mocked(store.equipItem).mockReturnValue(true);
+    vi.mocked(store.unequipItem).mockReturnValue(true);
+    vi.mocked(store.salvageItem).mockReturnValue(7);
+
+    expect(controller.getItemsOverlayState().pendingRewardCount).toBe(0);
+    expect(controller.equipItem('item-1')).toBe(true);
+    expect(controller.unequipItem('armor')).toBe(true);
+    expect(controller.salvageItem('item-1')).toBe(7);
+
+    expect(store.equipItem).toHaveBeenCalledWith('item-1');
+    expect(store.unequipItem).toHaveBeenCalledWith('armor');
+    expect(store.salvageItem).toHaveBeenCalledWith('item-1');
+    expect(presentation.setCoopDefenseItemsState).toHaveBeenCalled();
+    expect(presentation.refreshUpgradeOverlay).toHaveBeenCalledTimes(3);
+  });
+
   it('entkoppelt Phase-4A-Ownership von ArenaScene und Netzwerk-Substrat', () => {
     const scene = read('src/scenes/ArenaScene.ts');
     const controller = read('src/scenes/arena/ArenaMetaController.ts');
@@ -91,6 +124,14 @@ describe('ArenaMetaController', () => {
     expect(scene).not.toContain('getStoredCoopDefenseProgress');
     expect(scene).not.toContain('setStoredCoopDefenseUpgradeProfile');
     expect(scene).not.toContain('setStoredCoopDefenseLoadoutSlot');
+    expect(scene).not.toContain('setStoredCoopDefenseItemsUnlocked');
+    expect(scene).not.toContain('setStoredPendingCoopDefenseItemReward');
+    expect(scene).not.toContain('claimStoredPendingCoopDefenseItemReward');
+    expect(scene).not.toContain('equipStoredCoopDefenseItem');
+    expect(scene).not.toContain('unequipStoredCoopDefenseItem');
+    expect(scene).not.toContain('salvageStoredCoopDefenseItem');
+    expect(scene).not.toContain('unlockStoredCoopDefenseItemsAfterVictory');
+    expect(scene).not.toContain('createMatchItemRewardPresentation');
     expect(scene).not.toContain('levelUpCoopDefenseUpgrade(');
     expect(scene).not.toContain('resyncLoadoutWithUnlocks');
     expect(controller).not.toContain("from '../../network/bridge'");

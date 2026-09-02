@@ -15,6 +15,10 @@ export type {
   ArenaMetaSessionPort,
   ArenaMetaPresentationPort,
   ArenaMetaRefreshOptions,
+  ArenaMetaItemsOverlayState,
+  ArenaMetaItemRewardClaim,
+  ArenaMetaVictoryItemRewardInput,
+  ArenaMetaVictoryItemRewardResult,
 } from './ArenaMetaController';
 export { createArenaMetaProgressStore } from './ArenaMetaPersistence';
 export { GaussWarningRenderer }         from './GaussWarningRenderer';
