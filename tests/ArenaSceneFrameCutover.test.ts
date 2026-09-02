@@ -25,8 +25,8 @@ describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
       'this.inputBindings?.updateFrame({',
       'this.syncArenaLobbyFrame(',
       'this.runArenaRoleFrame(',
-      'this.syncArenaVisualEffects(inArena, delta, diagnosticsFrame);',
-      'this.syncArenaAimAndPlacementPresentation(',
+      'this.combatPresentation?.sync({ inArena, delta }, diagnosticsFrame);',
+      'this.aimPresentation?.sync({',
       'this.applyCameraFeedback(delta);',
       'ChunkedRenderSurface.flushBakeBudget(',
       'bridge.flushNetwork();',
@@ -53,8 +53,8 @@ describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
       update.indexOf('this.inputBindings?.updateFrame({'),
       update.indexOf('this.runArenaRoleFrame('),
       update.indexOf('this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);'),
-      update.indexOf('this.syncArenaVisualEffects(inArena, delta, diagnosticsFrame);'),
-      update.indexOf('this.syncArenaAimAndPlacementPresentation('),
+      update.indexOf('this.combatPresentation?.sync({ inArena, delta }, diagnosticsFrame);'),
+      update.indexOf('this.aimPresentation?.sync({'),
       update.indexOf('this.applyCameraFeedback(delta);'),
       update.indexOf('ChunkedRenderSurface.flushBakeBudget('),
       update.indexOf('this.syncBootReveal(phase);'),
@@ -105,5 +105,36 @@ describe('Phase 9 – ArenaScene-Cleanup und Architektur-Gate', () => {
     }
     expect(scene).toContain('new CoopMissionPresentationInfrastructure(this)');
     expect(scene).toContain('this.coopMissionPresentation.createUiPort({');
+  });
+});
+
+describe('Nachkonsolidierung – ArenaScene-Ownership-Ratchets', () => {
+  it('hält Homing-Targeting und konkrete Frame-Präsentationslisten aus der Scene heraus', () => {
+    const scene = readScene();
+    for (const homingBinding of [
+      'setHomingTargetProvider',
+      'setHomingLineOfFireChecker',
+      'setHomingTargetValidityChecker',
+    ]) {
+      expect(scene, homingBinding).not.toContain(homingBinding);
+    }
+    for (const presentationCall of [
+      'this.renderers.beer.update(',
+      'this.renderers.reinforcementMatrix.syncVisuals(',
+      'this.renderers.energyInjector.syncVisuals(',
+      'this.renderers.remoteControl.syncVisuals(',
+    ]) {
+      expect(updateBody(), presentationCall).not.toContain(presentationCall);
+    }
+    for (const aimRead of [
+      'this.ctx.inputSystem.getUtilityTargetingPreviewState(',
+      'this.ctx.inputSystem.getConstructionPlacementPreviewState(',
+      'this.placementPreview.renderPlacementPreview(',
+      'this.tunnelRenderer.sync(',
+    ]) {
+      expect(updateBody(), aimRead).not.toContain(aimRead);
+    }
+    expect(scene).toContain('new ArenaAimPresentationController(');
+    expect(scene).toContain('new ArenaCombatPresentationController(');
   });
 });

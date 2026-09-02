@@ -231,15 +231,10 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
   });
 
   it('loest den Respawn-Kontext der Arena aus der aktiven World auf', () => {
-    const source = read('src/scenes/ArenaScene.ts');
-    const start = source.indexOf('playerManager.setSpawnContextProvider');
-    const end = source.indexOf('\n    });', start);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    const provider = source.slice(start, end);
+    const provider = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
 
-    expect(provider).toContain('const world = this.arenaRuntime?.flow.getWorldRuntime()?.context;');
-    expect(provider).toContain('toMapId(world.descriptor.definitionId)');
+    expect(provider).toContain('const worldContext = worldRuntime.context;');
+    expect(provider).toContain('toMapId(worldContext.descriptor.definitionId)');
     expect(provider).not.toContain('getCoopDefenseMapId');
     expect(provider).not.toContain('getRoundState');
   });

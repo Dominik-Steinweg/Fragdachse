@@ -1,13 +1,17 @@
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
+import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../../config';
 import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
+import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '../../config/coopDefenseMaps';
 import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
 import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
-import type { TrackedProjectile } from '../../types';
+import type { SyncedProjectile, TrackedProjectile } from '../../types';
+import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
+import { toMapId } from '../../world/arenaDescriptorAdapter';
 import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
@@ -48,6 +52,91 @@ export function composeWorldCombatGameplay(
     worldMetrics: world.metrics,
     isCoopMission: () => flow.isCoopMissionActivity(),
     isActivityActive: () => flow.isActivityActive(),
+    getSpawnContext: (playerId) => {
+      const latestState = bridge.getLatestGameState();
+      const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
+      const worldContext = worldRuntime.context;
+      const worldMapId = toMapId(worldContext.descriptor.definitionId);
+      const missionConfig = worldMapId === null
+        ? null
+        : resolveCoopDefenseMapMissionProgress(getCoopDefenseMapConfig(worldMapId));
+      const respawnCheckpoint = missionConfig?.checkpoints.find(
+        ({ id }) => id === missionState?.respawnCheckpointId,
+      );
+      const spawnFocusCell = respawnCheckpoint ?? missionConfig?.startArea;
+      const runtimePlaceables = placementSystem.getAllRuntimeRocks();
+      const turretRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
+
+      return {
+        fires: latestState?.fires ?? [],
+        stinkClouds: latestState?.stinkClouds ?? [],
+        teslaDomes: latestState?.teslaDomes ?? [],
+        nukes: latestState?.nukes ?? [],
+        meteors: latestState?.meteors ?? [],
+        turrets: runtimePlaceables
+          .filter((placeable) => (
+            placeable.kind === 'turret'
+            && playerId !== null
+            && ctx.combatSystem.canDamageTarget(placeable.ownerId, playerId)
+          ))
+          .map((placeable) => ({
+            x: ARENA_OFFSET_X + placeable.gridX * CELL_SIZE + CELL_SIZE * 0.5,
+            y: ARENA_OFFSET_Y + placeable.gridY * CELL_SIZE + CELL_SIZE * 0.5,
+            ownerId: placeable.ownerId,
+            range: placeable.targetRange ?? turretRange,
+          })),
+        projectiles: (latestState?.projectiles ?? [])
+          .filter((projectile) => playerId !== null && ctx.combatSystem.canDamageTarget(projectile.ownerId, playerId, projectile.allowTeamDamage))
+          .map((projectile) => ({
+            x: projectile.x,
+            y: projectile.y,
+            ownerId: projectile.ownerId,
+            radius: resolveSpawnProjectileDangerRadius(projectile),
+          })),
+        enemyThreats: (() => {
+          const livingBases = baseManager?.getBasesByFaction('friendly')
+            ?.filter((base) => !(base.isInert?.() ?? false) && base.getHp() > 0) ?? [];
+          return (flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [])
+            .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && ctx.combatSystem.isAlive(enemy.id))
+            .map((enemy) => {
+              let targetBaseId: string | undefined;
+              let targetBaseDistance = Number.POSITIVE_INFINITY;
+              for (const base of livingBases) {
+                const surface = base.getNearestSurfacePoint(enemy.sprite.x, enemy.sprite.y);
+                if (surface && surface.distance < targetBaseDistance) {
+                  targetBaseId = base.id;
+                  targetBaseDistance = surface.distance;
+                }
+              }
+              return {
+                x: enemy.sprite.x,
+                y: enemy.sprite.y,
+                attackRange: Math.max(
+                  0,
+                  ...enemy.getAttackWeapons().map((attackWeapon) => (
+                    attackWeapon.weapon.config.fire.type === 'tesla_dome'
+                      ? attackWeapon.weapon.config.fire.radius
+                      : attackWeapon.weapon.config.range
+                  )),
+                ),
+                targetBaseId,
+                targetBaseDistance,
+              };
+            });
+        })(),
+        livingCoopBaseIds: baseManager?.getActiveMainBaseIds('friendly'),
+        preferredSpawnFocus: spawnFocusCell
+          ? {
+            x: ARENA_OFFSET_X + (spawnFocusCell.gridX + 0.5) * CELL_SIZE,
+            y: ARENA_OFFSET_Y + (spawnFocusCell.gridY + 0.5) * CELL_SIZE,
+          }
+          : undefined,
+        isRelevantOpponent: (otherPlayerId) => playerId === null
+          ? ctx.combatSystem.isAlive(otherPlayerId)
+          : ctx.combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
+        hasLineOfSight: (sx, sy, ex, ey) => ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey),
+      };
+    },
     getWorldParticipation: (playerId) => flow.getWorldParticipation(playerId),
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
     getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
@@ -139,9 +228,37 @@ export function composeWorldCombatGameplay(
     getTeamHpRegenBonus: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(Date.now(), bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
     getMatrixDamageReduction: (footprint, applies) => gameplay.targeting?.systems.reinforcementMatrix.getDamageReductionForFootprint(footprint, Date.now(), applies) ?? 0,
     getMatrixDamageMultiplier: (footprint, applies) => gameplay.targeting?.systems.reinforcementMatrix.getDamageMultiplierForFootprint(footprint, Date.now(), applies) ?? 1,
+    isHomingTargetValid: (id, type, ownerId) => {
+      void ownerId;
+      if (type !== 'players' && type !== 'decoys') return true;
+      const catalog = flow.getCoopMissionRuntime()?.enemyAiTargetCatalog;
+      if (!catalog) return true;
+      return catalog.isTargetValid({ kind: type === 'players' ? 'player' : 'decoy', id });
+    },
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
+}
+
+function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
+  const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
+
+  switch (projectile.style) {
+    case 'rocket':
+    case 'bfg':
+      return Math.max(baseRadius, CELL_SIZE * 4);
+    case 'grenade':
+    case 'holy_grenade':
+      return Math.max(baseRadius, CELL_SIZE * 3.5);
+    case 'energy_ball':
+    case 'hydra':
+    case 'spore':
+      return Math.max(baseRadius, CELL_SIZE * 3);
+    case 'flame':
+      return Math.max(baseRadius, CELL_SIZE * 1.5);
+    default:
+      return baseRadius;
+  }
 }
 
 /** Item-Affix-Wolke eines eingeschlagenen Projektils; reine Host-Folge des Treffers. */

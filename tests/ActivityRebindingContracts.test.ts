@@ -145,6 +145,7 @@ function combatBindingHarness(
     worldMetrics: resolveActiveArenaWorldMetrics(),
     isCoopMission,
     isActivityActive: () => true,
+    getSpawnContext: () => null,
     getWorldParticipation: () => null as never,
     getPlayerCapabilities: () => ({ canUseCombat: true }),
     getEnemyManager: () => null,
@@ -502,5 +503,24 @@ describe('WorldCombatGameplayBinding – Lifetime-Symmetrie', () => {
     harnessA.binding.clearActivityBindings();
 
     expect(harnessB.barriers.length).toBe(barrierCallsAfterB);
+  });
+
+  it('laesst stale Bindings weder PowerUp- noch Enemy-Consumer nach dem Destroy veraendern', () => {
+    const harness = combatBindingHarness(() => false);
+    const setPowerUpSystem = harness.combat.setPowerUpSystem as ReturnType<typeof vi.fn>;
+    const setEnemyManager = vi.fn();
+
+    harness.binding.destroy();
+    Object.defineProperty(harness.binding, 'systems', {
+      value: { energyShield: { setEnemyManager } },
+      configurable: true,
+    });
+    const callsAfterDestroy = setPowerUpSystem.mock.calls.length;
+
+    harness.binding.setPowerUpSystem(service());
+    harness.binding.updateEnemyManager(service() as EnemyManager);
+
+    expect(setPowerUpSystem.mock.calls.length).toBe(callsAfterDestroy);
+    expect(setEnemyManager).not.toHaveBeenCalled();
   });
 });

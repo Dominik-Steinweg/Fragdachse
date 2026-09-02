@@ -92,7 +92,6 @@ import {
   registerBadgerAnimations,
 } from '../animations/BadgerAnimations';
 import { resolveLoadoutSelectionIds } from '../loadout/LoadoutRules';
-import type { PlaceableTurretUtilityConfig } from '../loadout/LoadoutConfig';
 import { copyRoomShareUrl, rejoinCurrentRoom, restartWithNewRoom } from '../utils/roomQuality';
 import { WebGLRectMaskTexture } from '../utils/webglRectMask';
 import { coversDesignSpace } from './arena/ArenaClipPolicy';
@@ -113,10 +112,10 @@ import {
   getCoopDefenseUpgradeTextureKey,
   hasCoopDefenseDedicatedUpgradeIcon,
 } from '../utils/coopDefenseUpgrades';
-import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
+import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot } from '../types';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, WEAPON_BALANCE_LAB_MAP_ID } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, WEAPON_BALANCE_LAB_MAP_ID } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
@@ -154,6 +153,8 @@ import {
   RpcCoordinator,
   ArenaLifecycleCoordinator,
   ArenaRuntime,
+  ArenaAimPresentationController,
+  ArenaCombatPresentationController,
   CoopMissionPresentationInfrastructure,
   GaussWarningRenderer,
   createRendererBundle,
@@ -163,27 +164,6 @@ import {
   wireRenderersToCameraFeedback,
   wireRenderersToDistortion,
 } from './arena';
-
-function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
-  const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
-
-  switch (projectile.style) {
-    case 'rocket':
-    case 'bfg':
-      return Math.max(baseRadius, CELL_SIZE * 4);
-    case 'grenade':
-    case 'holy_grenade':
-      return Math.max(baseRadius, CELL_SIZE * 3.5);
-    case 'energy_ball':
-    case 'hydra':
-    case 'spore':
-      return Math.max(baseRadius, CELL_SIZE * 3);
-    case 'flame':
-      return Math.max(baseRadius, CELL_SIZE * 1.5);
-    default:
-      return baseRadius;
-  }
-}
 
 /**
  * Anteil des Bootscreen-Balkens, den der Asset-Preload einnimmt. Das restliche Fuenftel gehoert
@@ -225,13 +205,12 @@ export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
   private arenaClipMask: WebGLRectMaskTexture | null = null;
-  private utilityChargeIndicator: UtilityChargeIndicator | null = null;
-  private ultimateChargeIndicator: UtilityChargeIndicator | null = null;
   private playerStatusRing: PlayerStatusRing | null = null;
   private enemyHoverNameLabel: EnemyHoverNameLabel | null = null;
   private removeReconnectStatusListener: (() => void) | null = null;
   private coopMissionPresentation!: CoopMissionPresentationInfrastructure;
-  private scopeOverlay: ScopeOverlay | null = null;
+  private aimPresentation: ArenaAimPresentationController | null = null;
+  private combatPresentation: ArenaCombatPresentationController | null = null;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Szenenlebensdauer. */
   private visualFeedback: VisualFeedbackDirector | null = null;
   /**
@@ -246,11 +225,8 @@ export class ArenaScene extends Phaser.Scene {
   private renderers!: RendererBundle;
   private localPlayerState!: LocalPlayerState;
   private rockVisualHelper!: RockVisualHelper;
-  private placementPreview!: PlacementPreviewRenderer;
   private persistentBaseVisuals!: PersistentBaseVisuals;
   private persistentBasePreviewRenderer!: PersistentBasePreviewRenderer;
-  private tunnelRenderer!: TunnelRenderer;
-  private gaussWarning!: GaussWarningRenderer;
   private hostUpdate!: HostUpdateCoordinator;
   private clientUpdate!: ClientUpdateCoordinator;
   private rpcCoordinator!: RpcCoordinator;
@@ -486,8 +462,8 @@ export class ArenaScene extends Phaser.Scene {
         fireVisualMs: this.renderers.flamethrowerUpgrades.getLastUpdateCostMs(),
         lightingPerformance: this.renderers.lighting.getPerformanceMetrics(),
         lightingStepMs: this.renderers.lighting.getLastUpdateCostMs(),
-        scopePerformance: this.scopeOverlay?.getPerformanceMetrics() ?? null,
-        aimGraphicsCommandCount: this.ctx.aimSystem?.getGraphicsCommandCount() ?? 0,
+        scopePerformance: this.aimPresentation?.getScopePerformanceMetrics() ?? null,
+        aimGraphicsCommandCount: this.aimPresentation?.getAimGraphicsCommandCount() ?? 0,
       }),
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -613,16 +589,13 @@ export class ArenaScene extends Phaser.Scene {
       (slot) => this.clientUpdate.getLocalWeaponConfig(slot),
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
-    this.scopeOverlay = new ScopeOverlay(this);
-    this.diagnostics?.subscribeDiagnostics((enabled) => {
-      this.scopeOverlay?.setPerformanceMetricsEnabled(enabled && this.diagnostics?.wantsDetailedSampling() === true);
-    });
-    this.utilityChargeIndicator = new UtilityChargeIndicator(
+    const scopeOverlay = new ScopeOverlay(this);
+    const utilityChargeIndicator = new UtilityChargeIndicator(
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
     );
-    this.ultimateChargeIndicator = new UtilityChargeIndicator(
+    const ultimateChargeIndicator = new UtilityChargeIndicator(
       this,
       () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
       () => bridge.getPlayerColor(bridge.getLocalPlayerId()) ?? PLAYER_COLORS[0],
@@ -849,99 +822,6 @@ export class ArenaScene extends Phaser.Scene {
       playerStatusRing: this.playerStatusRing,
     };
 
-    playerManager.setSpawnContextProvider((playerId) => {
-      const latestState = bridge.getLatestGameState();
-      const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
-      const world = this.arenaRuntime?.flow.getWorldRuntime()?.context;
-      const worldMapId = world ? toMapId(world.descriptor.definitionId) : null;
-      const missionConfig = worldMapId === null
-        ? null
-        : resolveCoopDefenseMapMissionProgress(getCoopDefenseMapConfig(worldMapId));
-      const respawnCheckpoint = missionConfig?.checkpoints.find(
-        ({ id }) => id === missionState?.respawnCheckpointId,
-      );
-      // Ohne aktivierten Respawn-Checkpoint bleibt der authored Startbereich der Fokus. Auf einer
-      // langen Routenkarte waere der Initialspawn sonst ueber die gesamte Arena verteilt.
-      const spawnFocusCell = respawnCheckpoint ?? missionConfig?.startArea;
-      const runtimePlaceables = this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement?.getAllRuntimeRocks()
-        ?? latestState?.placeableRocks
-        ?? [];
-      const turretRange = (UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig).placeable.targetRange;
-
-      return {
-        fires: latestState?.fires ?? [],
-        stinkClouds: latestState?.stinkClouds ?? [],
-        teslaDomes: latestState?.teslaDomes ?? [],
-        nukes: latestState?.nukes ?? [],
-        meteors: latestState?.meteors ?? [],
-        turrets: runtimePlaceables
-          .filter((placeable) => (
-            placeable.kind === 'turret'
-            && playerId !== null
-            && combatSystem.canDamageTarget(placeable.ownerId, playerId)
-          ))
-          .map((placeable) => ({
-            x: ARENA_OFFSET_X + placeable.gridX * CELL_SIZE + CELL_SIZE * 0.5,
-            y: ARENA_OFFSET_Y + placeable.gridY * CELL_SIZE + CELL_SIZE * 0.5,
-            ownerId: placeable.ownerId,
-            range: placeable.targetRange ?? turretRange,
-          })),
-        projectiles: (latestState?.projectiles ?? [])
-          .filter((projectile) => playerId !== null && combatSystem.canDamageTarget(projectile.ownerId, playerId, projectile.allowTeamDamage))
-          .map((projectile) => ({
-            x: projectile.x,
-            y: projectile.y,
-            ownerId: projectile.ownerId,
-            radius: resolveSpawnProjectileDangerRadius(projectile),
-          })),
-        // Coop-Defense: Lebende Gegner mit ihrer effektiven Angriffsreichweite
-        // veröffentlichen, damit der Spawn nicht in deren Wirkungskreis fällt.
-        enemyThreats: (() => {
-          // Nur eigene Basen: der Zombie-Druck wird gegen die Basen gemessen, die sie angreifen.
-          const livingBases = this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases?.getBasesByFaction('friendly')
-            .filter((base) => !(base.isInert?.() ?? false) && base.getHp() > 0) ?? [];
-          return (this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [])
-          .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && combatSystem.isAlive(enemy.id))
-          .map((enemy) => {
-            let targetBaseId: string | undefined;
-            let targetBaseDistance = Number.POSITIVE_INFINITY;
-            for (const base of livingBases) {
-              const surface = base.getNearestSurfacePoint(enemy.sprite.x, enemy.sprite.y);
-              if (surface && surface.distance < targetBaseDistance) {
-                targetBaseId = base.id;
-                targetBaseDistance = surface.distance;
-              }
-            }
-            return {
-              x: enemy.sprite.x,
-              y: enemy.sprite.y,
-              attackRange: Math.max(
-                0,
-                ...enemy.getAttackWeapons().map((attackWeapon) => (
-                  attackWeapon.weapon.config.fire.type === 'tesla_dome'
-                    ? attackWeapon.weapon.config.fire.radius
-                    : attackWeapon.weapon.config.range
-                )),
-              ),
-              targetBaseId,
-              targetBaseDistance,
-            };
-          });
-        })(),
-        livingCoopBaseIds: this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases?.getActiveMainBaseIds('friendly'),
-        preferredSpawnFocus: spawnFocusCell
-          ? {
-            x: ARENA_OFFSET_X + (spawnFocusCell.gridX + 0.5) * CELL_SIZE,
-            y: ARENA_OFFSET_Y + (spawnFocusCell.gridY + 0.5) * CELL_SIZE,
-          }
-          : undefined,
-        isRelevantOpponent: (otherPlayerId) => playerId === null
-          ? combatSystem.isAlive(otherPlayerId)
-          : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
-        hasLineOfSight: (sx, sy, ex, ey) => combatSystem.hasLineOfSight(sx, sy, ex, ey),
-      };
-    });
-
     // ── Renderers ─────────────────────────────────────────────────────────
     this.renderers = createRendererBundle(this, playerManager);
     // Der Profiler entsteht vor dem Renderer-Bundle; die GPU-VFX-Statistik wird deshalb hier
@@ -983,70 +863,6 @@ export class ArenaScene extends Phaser.Scene {
     );
     inputSystem.setCameraFeedback(this.visualFeedback.camera);
 
-    // Homing providers (closed over ctx, read at call-time → safe after teardown)
-    // Der Suchradius wird hier bereits ausgewertet: bei vielen Splitter-Projektilen läuft
-    // dieser Provider mehrfach pro Frame, und die Gegner außerhalb des Radius sind der
-    // Großteil der Liste. Die Kandidaten gehen per `emit` in den Pool des Controllers,
-    // es entsteht also kein Array und kein Objekt pro Aufruf.
-    projectileManager.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
-      if (!bridge.isHost()) return;
-      const radiusSq = searchRadius * searchRadius;
-      const inRange = (x: number, y: number): boolean => {
-        const dx = x - originX;
-        const dy = y - originY;
-        return dx * dx + dy * dy <= radiusSq;
-      };
-      // Tuerme sind ein reiner Unterstuetzungs-Zieltyp (Energieinjektor) und werden nur
-      // aufgezaehlt, wenn die Waffe sie ausdruecklich anfragt – der Bestand kostet sonst
-      // in jedem Homing-Frame jeder Kampfwaffe.
-      if (config.targetTypes?.includes('turrets')) {
-        for (const turret of this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems?.turret?.getTurrets() ?? []) {
-          if (!inRange(turret.x, turret.y)) continue;
-          emit(String(turret.id), 'turrets', turret.x, turret.y);
-        }
-      }
-      for (const player of playerManager.getAllPlayers()) {
-        if (player.id === ownerId) continue;
-        if (!player.active) continue;
-        if (!inRange(player.x, player.y)) continue;
-        if (!combatSystem.isAlive(player.id)) continue;
-        if (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.burrow?.isBurrowed(player.id)) continue;
-        if (!combatSystem.canDamageTarget(ownerId, player.id)) continue;
-        emit(player.id, 'players', player.x, player.y);
-      }
-      if (config.targetTypes?.includes('decoys')) {
-        for (const decoy of this.ctx.decoySystem.getHostTargets()) {
-          if (decoy.ownerId === ownerId) continue;
-          if (!inRange(decoy.sprite.x, decoy.sprite.y)) continue;
-          emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
-        }
-      }
-      for (const enemy of this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? []) {
-        if (!enemy.sprite.active) continue;
-        if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
-        if (!combatSystem.isAlive(enemy.id)) continue;
-        if (!combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
-        emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
-      }
-      if (config.targetTypes?.includes('bases') && !this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.hasEnemy(ownerId)) {
-        for (const base of this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases?.getBasesByFaction('hostile') ?? []) {
-          if (base.isInert?.() === true || base.getHp() <= 0) continue;
-          const surface = base.getNearestSurfacePoint(originX, originY);
-          if (!surface || !inRange(surface.x, surface.y)) continue;
-          emit(base.id, 'bases', surface.x, surface.y);
-        }
-      }
-    });
-    projectileManager.setHomingLineOfFireChecker((sx, sy, ex, ey) => {
-      return combatSystem.hasClearLineOfFire(sx, sy, ex, ey);
-    });
-    projectileManager.setHomingTargetValidityChecker((id, type) => {
-      if (type !== 'players' && type !== 'decoys') return true;
-      const catalog = this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyAiTargetCatalog;
-      if (!catalog) return true;
-      return catalog.isTargetValid({ kind: type === 'players' ? 'player' : 'decoy', id });
-    });
-
     effectSystem.setup(() => { aimSystem.notifyConfirmedHit(); });
 
     // ── Shared state & helpers ─────────────────────────────────────────────
@@ -1064,14 +880,73 @@ export class ArenaScene extends Phaser.Scene {
         getPowerUpRuntime: () => this.arenaRuntime?.flow.getWorldPowerUpRuntime() ?? null,
       },
     );
-    this.placementPreview  = new PlacementPreviewRenderer(this, this.ctx);
+    const placementPreview = new PlacementPreviewRenderer(this, this.ctx);
     this.persistentBaseVisuals = new PersistentBaseVisuals(this);
     this.persistentBasePreviewRenderer = new PersistentBasePreviewRenderer(this, this.renderers.lighting);
-    this.tunnelRenderer    = new TunnelRenderer(this);
-    this.gaussWarning      = new GaussWarningRenderer(
+    const tunnelRenderer = new TunnelRenderer(this);
+    const gaussWarning = new GaussWarningRenderer(
       this,
       () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [],
     );
+
+    this.aimPresentation = new ArenaAimPresentationController(
+      {
+        getUtilityTargetingPreviewState: () => this.ctx.inputSystem.getUtilityTargetingPreviewState(),
+        getAirstrikeTargetingPreviewState: () => this.ctx.inputSystem.getAirstrikeTargetingPreviewState(),
+        getConstructionPlacementPreviewState: () => this.ctx.inputSystem.getConstructionPlacementPreviewState(),
+        getUltimateChargePreviewState: () => this.ctx.inputSystem.getUltimateChargePreviewState(),
+        getUtilityChargePreviewState: () => this.ctx.inputSystem.getUtilityChargePreviewState(),
+        getScopeProgress: () => this.ctx.inputSystem.getScopeProgress(),
+        isScoping: () => this.ctx.inputSystem.isScoping(),
+        getScopeChargeProgress: () => this.ctx.inputSystem.getScopeChargeProgress(),
+        getWeapon2ScopeConfig: () => this.ctx.inputSystem.getWeapon2ScopeConfig(),
+      },
+      {
+        getLocalPlacementPreview: () => this.inputBindings?.getLocalPlacementPreview(),
+        getLocalUltimatePlacementPreview: () => this.inputBindings?.getLocalUltimatePlacementPreview(),
+        getAimPresentationState: (worldInteractive, spectator, optionsOpen) => this.inputBindings?.getAimPresentationState(
+          worldInteractive,
+          spectator,
+          optionsOpen,
+        ) ?? { aimVisible: false, cursorVisible: false },
+      },
+      {
+        syncPersistentBasePresentation: (showWorld, spectator) => this.arenaRuntime?.syncWorldPersistentBasePresentation(showWorld, spectator),
+        getTunnelSnapshot: () => bridge.isHost()
+          ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.tunnel?.getSnapshot() ?? [])
+          : (bridge.getLatestGameState()?.tunnels ?? []),
+      },
+      {
+        aimSystem,
+        scopeOverlay,
+        utilityChargeIndicator,
+        ultimateChargeIndicator,
+        placementPreview,
+        tunnelRenderer,
+        gaussWarning,
+      },
+    );
+    this.combatPresentation = new ArenaCombatPresentationController(
+      this.renderers,
+      {
+        getSynchronizedNow: () => bridge.getSynchronizedNow(),
+        updateVisualFeedback: (delta) => this.visualFeedback?.update(delta),
+        getReinforcementMatrices: () => this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems?.reinforcementMatrix?.getActiveMatrices() ?? [],
+        getEnergyInjectorEffects: () => this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems?.energyInjector?.getActiveEffects() ?? [],
+        getRemoteControlTargets: () => bridge.isHost()
+          ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.itemRuntime?.getRemoteControlSnapshot(
+            playerManager.getAllPlayers().map((player) => player.id),
+            this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems?.turret?.getTurrets() ?? [],
+          ) ?? [])
+          : (bridge.getLatestGameState()?.remoteControlTurrets ?? []),
+        getAuraEnemies: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [],
+        syncEnemyHostVisuals: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.syncHostVisuals(),
+        getEnemyCount: () => this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies().length ?? 0,
+      },
+    );
+    this.diagnostics?.subscribeDiagnostics((enabled) => {
+      this.aimPresentation?.setScopePerformanceMetricsEnabled(enabled && this.diagnostics?.wantsDetailedSampling() === true);
+    });
 
     // ── Coordinators ──────────────────────────────────────────────────────
     this.hostUpdate   = new HostUpdateCoordinator(this, this.ctx, this.renderers, this.localPlayerState, this.rockVisualHelper);
@@ -1122,7 +997,7 @@ export class ArenaScene extends Phaser.Scene {
       ctx: this.ctx,
       renderers: this.renderers,
       rockVisualHelper: this.rockVisualHelper,
-      placementPreview: this.placementPreview,
+      placementPreview: this.aimPresentation.getPlacementPreviewRenderer(),
       persistentBasePreviewRenderer: this.persistentBasePreviewRenderer,
       persistentBaseVisuals: this.persistentBaseVisuals,
       lobbyOverlay: this.lobbyOverlay,
@@ -1413,7 +1288,7 @@ export class ArenaScene extends Phaser.Scene {
           notifyAdrenalineInsufficientShot: () => this.playerStatusRing?.notifyAdrenalineInsufficientShot(),
           flashUltimateInsufficientRage: () => this.ctx.centerHUD.flashUltimateInsufficientRage(),
           flashUtilityCooldown: (fraction, displayName) => this.ctx.centerHUD.flashUtilityCooldown(fraction, displayName),
-          showPlacementError: (message) => this.placementPreview.showPlacementError(message),
+          showPlacementError: (message) => this.aimPresentation?.showPlacementError(message),
         },
       },
       onFlowFieldDebugHotkey: (type: ArenaInputDebugHotkey) => this.handleFlowFieldDebugHotkey(type),
@@ -1464,6 +1339,10 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.lobbyOverlay?.destroy();
+      this.aimPresentation?.destroy();
+      this.aimPresentation = null;
+      this.combatPresentation?.destroy();
+      this.combatPresentation = null;
       this.persistentBaseVisuals?.destroy();
       this.persistentBasePreviewRenderer?.destroy();
       this.timeOfDayDebugOverlay?.destroy();
@@ -1662,21 +1541,30 @@ export class ArenaScene extends Phaser.Scene {
     this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
     diagnosticsFrame?.mark('visualCameraEnd');
 
-    this.syncArenaVisualEffects(inArena, delta, diagnosticsFrame);
+    this.combatPresentation?.sync({ inArena, delta }, diagnosticsFrame);
 
     const {
       showAim,
       scopeProgress,
       utilityPlacementActive,
       ultimatePlacementActive,
-    } = this.syncArenaAimAndPlacementPresentation(
+    } = this.aimPresentation?.sync({
       inArena,
       worldInteractive,
       spectator,
       optionsOpen,
       delta,
-      diagnosticsFrame,
-    );
+      now: this.time.now,
+      localPlayerAlive: this.localPlayerState.alive,
+      localPlayerBurrowed: this.localPlayerState.burrowed,
+      scopeCursorX: toDesignSpace(this.scale, this.input.activePointer.x),
+      scopeCursorY: toDesignSpace(this.scale, this.input.activePointer.y),
+    }, diagnosticsFrame) ?? {
+      showAim: false,
+      scopeProgress: 0,
+      utilityPlacementActive: false,
+      ultimatePlacementActive: false,
+    };
 
     // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
     // unversetzten Kameraposition (siehe `applyCameraFeedback`).
@@ -1746,7 +1634,7 @@ export class ArenaScene extends Phaser.Scene {
         utilityPlacementActive,
         ultimatePlacementActive,
         optionsOpen,
-        enemyCount: this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies().length ?? 0,
+        enemyCount: this.combatPresentation?.getEnemyCount() ?? 0,
         projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
         playerCount: this.ctx.playerManager.getAllPlayers().length,
       };
@@ -2079,147 +1967,6 @@ export class ArenaScene extends Phaser.Scene {
       bridge.getSynchronizedNow(),
       inRoundWorld && isCoopDefenseMode(configuredGameMode),
     );
-  }
-
-  private syncArenaVisualEffects(
-    inArena: boolean,
-    delta: number,
-    diagnosticsFrame: ArenaDiagnosticsFrame | null,
-  ): void {
-    this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
-    this.renderers.timeBubble.update(delta);
-    this.renderers.blackHole.update(delta);
-    this.renderers.bfg.update();
-    this.renderers.plasmaBurner.update(delta);
-    // Nach dem Positionsabgleich der Entities: die Trefferkopien führen ihre Ziele nach.
-    this.visualFeedback?.update(delta);
-    // Host und Client halten denselben Feldbestand, deshalb genuegt ein Sync-Punkt.
-    this.renderers.reinforcementMatrix.syncVisuals(
-      inArena ? (this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems?.reinforcementMatrix?.getActiveMatrices() ?? []) : [],
-      bridge.getSynchronizedNow(),
-    );
-    this.renderers.energyInjector.syncVisuals(
-      inArena ? (this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems?.energyInjector?.getActiveEffects() ?? []) : [],
-      bridge.getSynchronizedNow(),
-    );
-    const remoteControlTargets = !inArena
-      ? []
-      : bridge.isHost()
-        ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.itemRuntime?.getRemoteControlSnapshot(
-          this.ctx.playerManager.getAllPlayers().map((player) => player.id),
-          this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems?.turret?.getTurrets() ?? [],
-        ) ?? [])
-        : (bridge.getLatestGameState()?.remoteControlTurrets ?? []);
-    this.renderers.remoteControl.syncVisuals(remoteControlTargets, bridge.getSynchronizedNow());
-    this.renderers.teslaDome.update(delta);
-    this.renderers.teslaNova.update();
-    diagnosticsFrame?.begin('visualEnemy');
-    const auraEnemies = inArena ? (this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? []) : [];
-    this.arenaRuntime?.flow.getCoopMissionRuntime()?.enemyManager?.syncHostVisuals();
-    diagnosticsFrame?.end('visualEnemy');
-    this.renderers.healingAura.syncEnemies(auraEnemies);
-    this.renderers.healingAura.update(delta);
-    this.renderers.miniTeslaDome.syncEnemies(auraEnemies);
-    this.renderers.miniTeslaDome.update(delta);
-    this.renderers.energyShield.update(delta);
-    this.renderers.guardianSpirit.update(delta);
-    this.renderers.repairDrone.update(delta);
-    this.renderers.slimeTrail.update(delta);
-    this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
-    diagnosticsFrame?.mark('visualEffectsEnd');
-  }
-
-  private syncArenaAimAndPlacementPresentation(
-    inArena: boolean,
-    worldInteractive: boolean,
-    spectator: boolean,
-    optionsOpen: boolean,
-    delta: number,
-    diagnosticsFrame: ArenaDiagnosticsFrame | null,
-  ): {
-    showAim: boolean;
-    scopeProgress: number;
-    utilityPlacementActive: boolean;
-    ultimatePlacementActive: boolean;
-  } {
-    diagnosticsFrame?.begin('aimPreview');
-    const utilityTargeting    = inArena && !spectator ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
-    const airstrikeTargeting  = inArena && !spectator ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
-    const utilityPlacement    = inArena && !spectator ? this.inputBindings?.getLocalPlacementPreview() : undefined;
-    const ultimatePlacement   = inArena && !spectator ? this.inputBindings?.getLocalUltimatePlacementPreview() : undefined;
-    const constructionPlacement = inArena && !spectator
-      ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
-      : undefined;
-    const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
-    this.arenaRuntime.syncWorldPersistentBasePresentation(inArena, spectator);
-    const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
-    const aimPresentation = this.inputBindings?.getAimPresentationState(worldInteractive, spectator, optionsOpen)
-      ?? { aimVisible: false, cursorVisible: false };
-    const showAim = aimPresentation.aimVisible;
-    const scopeProgress = this.ctx.inputSystem.getScopeProgress();
-    diagnosticsFrame?.end('aimPreview');
-    diagnosticsFrame?.begin('aimGraphics');
-    this.ctx.aimSystem?.setScopeProgress(scopeProgress);
-    this.ctx.aimSystem?.setScoping(this.ctx.inputSystem.isScoping());
-    this.ctx.aimSystem?.setWeaponChargeProgress(this.ctx.inputSystem.getScopeChargeProgress());
-    const targetingForReticle = utilityTargeting ?? airstrikeTargeting;
-    this.ctx.aimSystem?.update(
-      (showAim || targetingForReticle !== undefined) && aimPresentation.cursorVisible,
-      // Das Fadenkreuz ersetzt den Systemcursor genau dort, wo es die Zielhilfe gibt. Eine
-      // Preview hat keine: ueber der LobbyWorld bleibt der normale Cursor sichtbar.
-      aimPresentation.cursorVisible,
-      delta,
-      optionsOpen ? undefined : targetingForReticle,
-      optionsOpen ? undefined : ultimatePreview,
-    );
-    diagnosticsFrame?.end('aimGraphics');
-
-    // Scope-Overlay (Sichtverdunkelung bei AWP und anderen Scope-Waffen)
-    diagnosticsFrame?.begin('scope');
-    if (this.scopeOverlay) {
-      const scopeCfg = inArena && !spectator ? this.ctx.inputSystem.getWeapon2ScopeConfig() : undefined;
-      if (scopeCfg) {
-        // `pointer.x/y` zählen Renderpixel; das Overlay rechnet im Designraum.
-        const pointer = this.input.activePointer;
-        this.scopeOverlay.update(
-          scopeProgress,
-          toDesignSpace(this.scale, pointer.x),
-          toDesignSpace(this.scale, pointer.y),
-          delta,
-          scopeCfg,
-        );
-      } else {
-        // Keine Scope-Waffe ausgerüstet – Overlay ausblenden
-        this.scopeOverlay.update(0, 0, 0, delta, { scopeInMs: 1, fullScopeViewRadius: 0, edgeSoftnessPx: 0, unscopedSpreadDeg: 0, unscopeSpeedMs: 200 });
-      }
-    }
-    diagnosticsFrame?.end('scope');
-
-    diagnosticsFrame?.begin('aimIndicators');
-    this.utilityChargeIndicator?.update(inArena && !spectator ? this.ctx.inputSystem.getUtilityChargePreviewState() : undefined);
-    this.ultimateChargeIndicator?.update(ultimatePreview);
-    diagnosticsFrame?.end('aimIndicators');
-    diagnosticsFrame?.mark('visualAimEnd');
-
-    this.gaussWarning.update(inArena);
-    this.placementPreview.syncUtilityTargetingHint(inArena, utilityTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
-    this.placementPreview.syncAirstrikeTargetingHint(inArena, airstrikeTargeting !== undefined, this.localPlayerState.alive, this.localPlayerState.burrowed);
-    this.placementPreview.syncPlaceableUtilityHint(inArena, activePlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
-    this.placementPreview.renderPlacementPreview(inArena, activePlacement, this.localPlayerState.alive, this.localPlayerState.burrowed);
-    this.placementPreview.renderRemotePlacementPreviews(inArena);
-    const tunnelSnapshot = bridge.isHost()
-      ? (this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems?.tunnel?.getSnapshot() ?? [])
-      : (bridge.getLatestGameState()?.tunnels ?? []);
-    this.tunnelRenderer.sync(inArena ? tunnelSnapshot : []);
-    this.tunnelRenderer.update(this.time.now);
-
-    diagnosticsFrame?.mark('visualEnd');
-    return {
-      showAim,
-      scopeProgress,
-      utilityPlacementActive: utilityPlacement !== undefined,
-      ultimatePlacementActive: ultimatePlacement !== undefined,
-    };
   }
 
   // ── Network events ────────────────────────────────────────────────────────

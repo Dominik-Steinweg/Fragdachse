@@ -93,6 +93,10 @@ export class GaussWarningRenderer {
     }
   }
 
+  destroy(): void {
+    this.gfx.destroy();
+  }
+
   private drawVoidBeam(
     sx: number,
     sy: number,

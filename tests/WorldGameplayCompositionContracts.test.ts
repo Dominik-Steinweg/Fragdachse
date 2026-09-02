@@ -179,6 +179,32 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(coordinator).toContain('this.worldCombatGameplayBinding?.clearActivityBindings()');
   });
 
+  it('besitzt die Homing-Target-Aufloesung an der World-Combat-Grenze', () => {
+    const combat = read('src/world/WorldCombatGameplayBinding.ts');
+    const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
+    const scene = read('src/scenes/ArenaScene.ts');
+    for (const provider of [
+      'setHomingTargetProvider',
+      'setHomingLineOfFireChecker',
+      'setHomingTargetValidityChecker',
+    ]) {
+      expect(combat, provider).toContain(provider);
+      expect(scene, provider).not.toContain(provider);
+    }
+    expect(combat).toContain('o.playerManager.getAllPlayers()');
+    expect(combat).toContain('o.decoySystem.getHostTargets()');
+    expect(combat).toContain('o.getEnemyManager()?.getAllEnemies()');
+    expect(combat).toContain("o.baseManager?.getBasesByFaction('hostile')");
+    expect(combat).toContain('o.getPlayerSystems()?.burrow.isBurrowed');
+    expect(combat).toContain('o.combatSystem.canDamageTarget');
+    expect(combat).toContain('o.combatSystem.hasClearLineOfFire');
+    expect(composition).toContain('isHomingTargetValid:');
+    expect(composition).toContain('enemyAiTargetCatalog');
+    expect(composition).toContain('getSpawnContext:');
+    expect(combat).toContain('playerManager.setSpawnContextProvider(options.getSpawnContext)');
+    expect(scene).not.toContain('setSpawnContextProvider(');
+  });
+
   it('clears target systems exactly at World-owner teardown', () => {
     const runtime = new WorldTargetingRuntime();
 

@@ -29,6 +29,7 @@ import type {
   SlimeBloomTarget,
   SupportProjectileImpact,
   TrackedProjectile,
+  HomingTargetType,
 } from '../types';
 import type { TargetStatusTarget } from '../systems/TargetStatusSystem';
 import type { EnergyInjectorSystem } from '../systems/EnergyInjectorSystem';
@@ -160,6 +161,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly worldMetrics: WorldMetrics;
   readonly isCoopMission: () => boolean;
   readonly isActivityActive: () => boolean;
+  readonly getSpawnContext: Parameters<PlayerManager['setSpawnContextProvider']>[0];
   readonly getWorldParticipation: (playerId: string) => WorldParticipation;
   readonly getPlayerCapabilities: (playerId: string) => { canUseCombat: boolean };
   readonly getEnemyManager: () => EnemyManager | null;
@@ -199,6 +201,8 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getTeamHpRegenBonus?: (playerId: string) => number;
   readonly getMatrixDamageReduction?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean) => number;
   readonly getMatrixDamageMultiplier?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean) => number;
+  /** World-composed validity for replicated Activity targets (players/decoys). */
+  readonly isHomingTargetValid?: (id: string, type: HomingTargetType, ownerId: string) => boolean;
 }
 
 /** Owns the World binding graph for combat, physics, projectile, turret and decoy systems. */
@@ -221,9 +225,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems = null;
     }
     this.bindSharedSystems();
+    options.playerManager.setSpawnContextProvider(options.getSpawnContext);
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {
+    if (this.destroyed) return;
     this.systems?.energyShield.setEnemyManager(enemyManager);
   }
 
@@ -240,6 +246,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   }
 
   setPowerUpSystem(powerUpSystem: PowerUpSystem | null): void {
+    if (this.destroyed) return;
     this.options.combatSystem.setPowerUpSystem(powerUpSystem);
   }
 
@@ -248,6 +255,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.clearActivityBindings();
     this.destroyed = true;
     const { combatSystem, hostPhysics, projectileManager, decoySystem, baseManager } = this.options;
+    this.options.playerManager.setSpawnContextProvider(null);
     baseManager?.setOnBaseActivated(null);
     baseManager?.setOnBaseDestroyed(null);
     baseManager?.setSecondaryObjectiveStateProvider(null);
@@ -316,6 +324,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     projectileManager.setObstacleKindResolver(null);
     projectileManager.setBaseHitCallback(null);
     projectileManager.setSupportImpactCallback(null);
+    projectileManager.setHomingTargetProvider(null);
+    projectileManager.setHomingLineOfFireChecker(null);
+    projectileManager.setHomingTargetValidityChecker(null);
     decoySystem.setCombatStateReader(null);
     decoySystem.setRunSpeedResolver(null);
     decoySystem.setCooldownStarter(null);
@@ -691,6 +702,57 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.network.effects.broadcastBfgLaserBatch([...playerLines, ...pulse.lines], projectile.isBfg ? COLORS.GREEN_2 : projectile.color, projectile.isBfg ? undefined : 'asmd_primary', projectile.isBfg ? projectile.id : undefined);
     });
     o.projectileManager.setTimeBubbleFactorProvider((x, y, now, ownerId) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1);
+    o.projectileManager.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
+      if (!o.network.authority.isHost()) return;
+      const radiusSq = searchRadius * searchRadius;
+      const inRange = (x: number, y: number): boolean => {
+        const dx = x - originX;
+        const dy = y - originY;
+        return dx * dx + dy * dy <= radiusSq;
+      };
+      if (config.targetTypes?.includes('turrets')) {
+        for (const turret of this.systems?.turret.getTurrets() ?? []) {
+          if (!inRange(turret.x, turret.y)) continue;
+          emit(String(turret.id), 'turrets', turret.x, turret.y);
+        }
+      }
+      for (const player of o.playerManager.getAllPlayers()) {
+        if (player.id === ownerId || !player.active) continue;
+        if (!inRange(player.x, player.y)) continue;
+        if (!o.combatSystem.isAlive(player.id)) continue;
+        if (o.getPlayerSystems()?.burrow.isBurrowed(player.id)) continue;
+        if (!o.combatSystem.canDamageTarget(ownerId, player.id)) continue;
+        emit(player.id, 'players', player.x, player.y);
+      }
+      if (config.targetTypes?.includes('decoys')) {
+        for (const decoy of o.decoySystem.getHostTargets()) {
+          if (decoy.ownerId === ownerId) continue;
+          if (!inRange(decoy.sprite.x, decoy.sprite.y)) continue;
+          emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
+        }
+      }
+      for (const enemy of o.getEnemyManager()?.getAllEnemies() ?? []) {
+        if (!enemy.sprite.active) continue;
+        if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
+        if (!o.combatSystem.isAlive(enemy.id)) continue;
+        if (!o.combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
+        emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
+      }
+      if (config.targetTypes?.includes('bases') && !o.getEnemyManager()?.hasEnemy(ownerId)) {
+        for (const base of o.baseManager?.getBasesByFaction('hostile') ?? []) {
+          if (base.isInert?.() === true || base.getHp() <= 0) continue;
+          const surface = base.getNearestSurfacePoint(originX, originY);
+          if (!surface || !inRange(surface.x, surface.y)) continue;
+          emit(base.id, 'bases', surface.x, surface.y);
+        }
+      }
+    });
+    o.projectileManager.setHomingLineOfFireChecker((sx, sy, ex, ey) => (
+      o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey)
+    ));
+    o.projectileManager.setHomingTargetValidityChecker((id, type, ownerId) => (
+      o.isHomingTargetValid?.(id, type, ownerId) ?? true
+    ));
     o.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;

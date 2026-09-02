@@ -25,5 +25,19 @@ export type {
 } from './ArenaMetaController';
 export { createArenaMetaProgressStore } from './ArenaMetaPersistence';
 export { GaussWarningRenderer }         from './GaussWarningRenderer';
+export { ArenaAimPresentationController } from './ArenaAimPresentationController';
+export type {
+  ArenaAimPresentationBindingPort,
+  ArenaAimPresentationFrame,
+  ArenaAimPresentationInputPort,
+  ArenaAimPresentationRendererPort,
+  ArenaAimPresentationResult,
+  ArenaAimPresentationWorldPort,
+} from './ArenaAimPresentationController';
+export { ArenaCombatPresentationController } from './ArenaCombatPresentationController';
+export type {
+  ArenaCombatPresentationFrame,
+  ArenaCombatPresentationSourcePort,
+} from './ArenaCombatPresentationController';
 export { createRendererBundle, wireRenderersToProjManager, wireRenderersToEffectSystem, wireRenderersToAudioSystem, wireRenderersToCameraFeedback, wireRenderersToDistortion } from './RendererBundle';
 export type { RendererBundle }           from './RendererBundle';
