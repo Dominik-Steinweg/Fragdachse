@@ -30,12 +30,11 @@ import type { WorldDescriptor } from '../src/world/WorldDescriptor';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 
 /**
- * Phase 5 legte das Lifetime-Fundament der World-Presentation-Verdrahtung; Phase 6A.1 gibt
- * `WorldPresentationFrameBinding` ihren ersten echten Inhalt (Kamera-Sync und World-Surface-
- * Residency). `WorldPresentationBinding` bleibt die handoffbare, gameplay-freie Darstellung
- * selbst. Diese Tests halten fest, dass der Frame-Binding immer vor der Darstellung faellt, nie
- * im Handoff landet, und dass eine World ohne Activity denselben Weg nimmt wie eine mit - und
- * pruefen jetzt zusaetzlich das reale Verhalten von `syncCamera`/`syncSurfaceResidency`.
+ * Phase 5 legte das Lifetime-Fundament der World-Presentation-Verdrahtung; Phase 6A gibt
+ * `WorldPresentationFrameBinding` die World-Display-Synchronisierung. `WorldPresentationBinding`
+ * bleibt die handoffbare, gameplay-freie Darstellung selbst. Diese Tests halten fest, dass der
+ * Frame-Binding immer vor der Darstellung faellt, nie im Handoff landet, und dass eine World
+ * ohne Activity denselben Weg nimmt wie eine mit - und pruefen das reale Frame-Verhalten.
  */
 
 function descriptor(): WorldDescriptor {
@@ -119,6 +118,38 @@ function fakeBindingInput(
     isArenaLoading: () => false,
     isArenaCountdownActive: () => false,
     getArenaResult: () => null,
+    shadow: {
+      updateStaticResidency: vi.fn(),
+      getStaticSurfaceWorkingSet: vi.fn(() => null),
+      isStaticReadyForView: vi.fn(() => false),
+      syncStaticProfile: vi.fn(),
+      syncDynamicShadows: vi.fn(),
+      clear: vi.fn(),
+    } as never,
+    lighting: {
+      setDynamicOccluderSource: vi.fn(),
+      clearDynamicOccluderSource: vi.fn(),
+      resolveCanopyTint: vi.fn(() => 0),
+    } as never,
+    getWorldLayout: () => null,
+    getWorldMetrics: () => null,
+    getPersistentBaseSite: () => null,
+    getPersistentBaseVisualSite: () => null,
+    isPersistentBasePlacementOverlayActive: () => false,
+    persistentBaseVisuals: { sync: vi.fn() },
+    persistentBasePreview: { syncLights: vi.fn() },
+    setLocalPlayerStatusRingActive: vi.fn(),
+    setLocalPlayerWorldBarsVisible: vi.fn(),
+    isLocalPlayerAttachedToWorld: () => false,
+    getPlayers: () => [],
+    getProjectileShadowSamples: () => [],
+    getProjectileLightSamples: () => [],
+    getTrainState: () => null,
+    getLiveTrainSegments: () => null,
+    getTrainVisual: () => null,
+    syncTurretLights: vi.fn(),
+    syncBaseLights: vi.fn(),
+    getSynchronizedNow: () => 0,
     ...overrides,
   };
 }

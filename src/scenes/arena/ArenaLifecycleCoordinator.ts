@@ -75,10 +75,6 @@ import { resolveCoopMissionActivityConfiguration } from '../../activity/CoopMiss
 import { CoopMissionComposition } from '../../activity/CoopMissionComposition';
 import type { LoadoutToolRef } from '../../types';
 import { resolveWorldLoadProgress } from '../../world/WorldLoadReady';
-import {
-  resolveWorldRenderWork,
-  type WorldRenderWork,
-} from './WorldRenderWork';
 import { getActiveRoundParticipantIds } from './RoundParticipationPolicy';
 import { resolveArenaStartTime } from './ArenaStartTiming';
 import {
@@ -113,7 +109,10 @@ import {
   PersistentBaseWorldBinding,
 } from '../../world/PersistentBaseWorldBinding';
 import { WorldRuntime } from '../../world/WorldRuntime';
-import { WorldPresentationFrameBinding } from '../../world/WorldPresentationFrameBinding';
+import {
+  WorldPresentationFrameBinding,
+  type WorldPresentationPersistentBaseVisuals,
+} from '../../world/WorldPresentationFrameBinding';
 import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
@@ -334,7 +333,8 @@ export class ArenaLifecycleCoordinator {
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
       // Jede World bekommt ihren eigenen Presentation-Frame-Binding - auch eine World ohne
-      // Activity (LobbyWorld). Ab Phase 6A.1 traegt er die Kamera- und Residency-Verdrahtung.
+      // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
+      // Handoff dieser World.
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
         scene: this.scene,
         getLocalWorldPresentation: () => this.getLocalWorldPresentation(),
@@ -347,6 +347,47 @@ export class ArenaLifecycleCoordinator {
         isArenaLoading: () => bridge.isArenaLoading(),
         isArenaCountdownActive: () => bridge.isArenaCountdownActive(),
         getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
+        shadow: this.renderers.shadow,
+        lighting: this.renderers.lighting,
+        getWorldLayout: () => this.worldRuntime?.presentation?.layout ?? null,
+        getWorldMetrics: () => this.worldRuntime?.context.metrics ?? null,
+        getPersistentBaseSite: () => this.worldRuntime?.context.persistentBaseSite ?? null,
+        getPersistentBaseVisualSite: () => this.getPersistentBaseVisualSite(),
+        isPersistentBasePlacementOverlayActive: () => (
+          this.ctx.inputSystem.isUtilityPlacementActive()
+          || this.ctx.inputSystem.isConstructionPlacementActive()
+          || this.ctx.inputSystem.isDismantlePlacementActive()
+          || this.ctx.inputSystem.isPersistentRewardPlacementActive()
+          || this.ctx.inputSystem.isRepositionActive()
+        ),
+        persistentBaseVisuals: this.persistentBaseVisuals,
+        persistentBasePreview: this.persistentBasePreviewRenderer,
+        setLocalPlayerStatusRingActive: (active) => this.ctx.playerStatusRing?.setActive(active),
+        setLocalPlayerWorldBarsVisible: (visible) => {
+          this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(visible);
+        },
+        isLocalPlayerAttachedToWorld: () => this.isPlayerAttachedToWorld(bridge.getLocalPlayerId()),
+        getPlayers: () => this.ctx.playerManager.getAllPlayers(),
+        getProjectileShadowSamples: () => this.ctx.projectileManager.getShadowSamples(),
+        getProjectileLightSamples: () => this.ctx.projectileManager.getLightSamples(),
+        getTrainState: (inRoundWorld) => inRoundWorld
+          ? (this.renderers.train?.getShadowState()
+            ?? (bridge.isHost()
+              ? (this.worldTrainRuntime?.getCurrentTrain()?.getNetSnapshot() ?? null)
+              : (bridge.getLatestGameState()?.train ?? null)))
+          : null,
+        getLiveTrainSegments: (inRoundWorld) => (
+          inRoundWorld && bridge.isHost() && this.worldTrainRuntime?.getCurrentTrain()?.isActive()
+            ? this.worldTrainRuntime.getCurrentTrain()?.getSegObjects() ?? null
+            : null
+        ),
+        getTrainVisual: () => this.renderers.train,
+        syncTurretLights: (inArena) => this.rockVisualHelper.syncTurretLights(inArena),
+        syncBaseLights: (inArena) => {
+          if (inArena) this.worldRuntime?.materialization?.bases?.syncLights();
+          else this.worldRuntime?.materialization?.bases?.releaseLights();
+        },
+        getSynchronizedNow: () => bridge.getSynchronizedNow(),
       }));
     },
     detach: () => {
@@ -562,6 +603,7 @@ export class ArenaLifecycleCoordinator {
     private readonly rockVisualHelper: RockVisualHelper,
     private readonly placementPreview: PlacementPreviewRenderer,
     private readonly persistentBasePreviewRenderer: PersistentBasePreviewRenderer,
+    private readonly persistentBaseVisuals: WorldPresentationPersistentBaseVisuals,
     private readonly lobbyOverlay: LobbyOverlay,
     private readonly hostUpdate: HostUpdateCoordinator,
     private readonly clientUpdate: ClientUpdateCoordinator,
@@ -1388,23 +1430,10 @@ export class ArenaLifecycleCoordinator {
     if (bridge.isHost()) this.tryScheduleArenaStart();
   }
 
-  /**
-   * Aufbauarbeit der lokal dargestellten World-Flaechen. Boden, Fels-Overlay und statische
-   * Schatten teilen sich denselben Bake-Scheduler, deshalb zaehlt hier auch nur eine Summe.
-   */
-  private collectWorldRenderWork(view: WorldViewRect): WorldRenderWork {
-    const arenaResult = this.worldRuntime?.materialization?.arena ?? null;
-    const groundWork = arenaResult?.groundSurface?.getWorkingSet(view, true) ?? null;
-    const rockOverlayWork = arenaResult?.rockOverlaySurface?.getWorkingSet(view, true) ?? null;
-    const shadowWork = this.renderers.shadow.getStaticSurfaceWorkingSet(view, true);
-    const work = resolveWorldRenderWork(groundWork, rockOverlayWork, shadowWork);
-    // Die Surface-Readiness bleibt die Authority; Working-Set-Daten liefern nur den
-    // view-bezogenen Fortschritt.
-    return {
-      ...work,
-      renderReady: ArenaBuilder.isSurfaceWorkingSetReady(arenaResult, view)
-        && this.renderers.shadow.isStaticReadyForView(view, true),
-    };
+  /** View-bezogene Ladearbeit gehoert der aktiven World-Presentation-Verdrahtung. */
+  private collectWorldRenderWork(view: WorldViewRect) {
+    return this.worldRuntime?.presentationFrame?.getWorldRenderWork(view)
+      ?? { pending: 0, resident: 0, renderReady: false };
   }
 
   /**

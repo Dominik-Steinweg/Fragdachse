@@ -4,7 +4,7 @@ import type { RectOccluderVisitor } from '../effects/LightOccluderIndex';
 import { ALL_EDGES_EXPOSED } from '../effects/lightShadowGeometry';
 import { TRAIN } from './TrainConfig';
 
-interface TrainSegmentRect {
+export interface TrainSegmentRect {
   readonly active: boolean;
   readonly x: number;
   readonly y: number;

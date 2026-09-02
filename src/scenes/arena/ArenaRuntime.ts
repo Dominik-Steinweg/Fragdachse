@@ -10,7 +10,10 @@ import type { LobbyOverlay } from '../LobbyOverlay';
 import type { RoomQualityMonitor } from '../../network/RoomQualityMonitor';
 import type { CoopMissionOutcome } from '../../activity/CoopMissionRuntime';
 import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
-import { resetWorldCameraBase } from '../../world/WorldPresentationFrameBinding';
+import {
+  resetWorldCameraBase,
+  type WorldPresentationPersistentBaseVisuals,
+} from '../../world/WorldPresentationFrameBinding';
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 
@@ -33,10 +36,13 @@ export interface ArenaRuntimeInput {
   readonly rockVisualHelper: RockVisualHelper;
   readonly placementPreview: PlacementPreviewRenderer;
   readonly persistentBasePreviewRenderer: PersistentBasePreviewRenderer;
+  readonly persistentBaseVisuals: WorldPresentationPersistentBaseVisuals;
   readonly lobbyOverlay: LobbyOverlay;
   readonly hostUpdate: HostUpdateCoordinator;
   readonly clientUpdate: ClientUpdateCoordinator;
   readonly roomQualityMonitor: RoomQualityMonitor;
+  readonly getLocalPlayerId: () => string;
+  readonly getSynchronizedNow: () => number;
   /**
    * A/D- bzw. Pfeiltasten-Eingabe der freien Zuschauerkamera. Lazy, weil die Input-Bindings der
    * Scene erst nach der `ArenaRuntime` entstehen – wie bei `rockVisualHelper`s World-Ports.
@@ -51,13 +57,21 @@ export class ArenaRuntime {
   readonly flow: ArenaLifecycleCoordinator;
 
   private readonly scene: Phaser.Scene;
+  private readonly ctx: ArenaContext;
+  private readonly renderers: RendererBundle;
   private readonly hostUpdate: HostUpdateCoordinator;
   private readonly clientUpdate: ClientUpdateCoordinator;
+  private readonly getLocalPlayerId: () => string;
+  private readonly getSynchronizedNow: () => number;
 
   constructor(input: ArenaRuntimeInput) {
     this.scene = input.scene;
+    this.ctx = input.ctx;
+    this.renderers = input.renderers;
     this.hostUpdate = input.hostUpdate;
     this.clientUpdate = input.clientUpdate;
+    this.getLocalPlayerId = input.getLocalPlayerId;
+    this.getSynchronizedNow = input.getSynchronizedNow;
     // Der Persistent-Base-Owner entsteht vor dem Flow und fragt ihn erst zur Laufzeit nach der
     // aktuellen World; dadurch bleibt seine Lifetime unabhaengig von jeder World-Instanz.
     this.persistentBase = new ArenaPersistentBaseSession({
@@ -83,6 +97,7 @@ export class ArenaRuntime {
       input.rockVisualHelper,
       input.placementPreview,
       input.persistentBasePreviewRenderer,
+      input.persistentBaseVisuals,
       input.lobbyOverlay,
       input.hostUpdate,
       input.clientUpdate,
@@ -151,6 +166,58 @@ export class ArenaRuntime {
   /** Gleicht die residenten Render-Chunks dieser World an den sichtbaren Ausschnitt an. */
   syncWorldSurfaceResidency(showWorld: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld);
+  }
+
+  syncWorldCanopy(showWorld: boolean): void {
+    this.flow.getWorldRuntime()?.presentationFrame?.syncCanopyTransparency(showWorld);
+  }
+
+  syncWorldLocalPlayerPresentation(showWorld: boolean, spectator: boolean): void {
+    const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
+    if (presentationFrame) {
+      presentationFrame.syncLocalPlayerPresentation(showWorld, spectator);
+      return;
+    }
+    // Beim Handoff ist kein aktives World-Binding mehr vorhanden; die lokalen HUD-Elemente
+    // werden trotzdem neutralisiert, damit kein World-Ring in die Lobby leakt.
+    this.ctx.playerStatusRing?.setActive(false);
+    this.ctx.playerManager.getPlayer(this.getLocalPlayerId())?.setWorldBarsVisible(!showWorld);
+  }
+
+  syncWorldPersistentBasePresentation(showWorld: boolean, spectator: boolean): void {
+    this.flow.getWorldRuntime()?.presentationFrame?.syncPersistentBasePresentation(showWorld, spectator);
+  }
+
+  requestWorldStaticShadowBake(force: boolean): void {
+    this.flow.getWorldRuntime()?.presentationFrame?.requestStaticShadowBake(force);
+  }
+
+  syncWorldStaticShadowProfile(force: boolean): void {
+    const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
+    if (presentationFrame) {
+      presentationFrame.syncStaticShadowProfile(force);
+      return;
+    }
+    this.renderers.shadow.syncStaticProfile(this.getSynchronizedNow(), force);
+  }
+
+  syncWorldShadows(shadowArenaActive: boolean, inRoundWorld: boolean): void {
+    const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
+    if (presentationFrame) {
+      presentationFrame.syncWorldShadows(shadowArenaActive, inRoundWorld);
+      return;
+    }
+    // Preserve the old no-runtime cleanup during a World handoff.
+    this.renderers.shadow.clear();
+  }
+
+  syncWorldLighting(inArena: boolean, inRoundWorld: boolean): void {
+    const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
+    if (presentationFrame) {
+      presentationFrame.syncWorldLighting(inArena, inRoundWorld);
+      return;
+    }
+    this.renderers.lighting.update();
   }
 
   /**

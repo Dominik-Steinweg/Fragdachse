@@ -27,8 +27,6 @@ import { VisualFeedbackDirector } from '../effects/VisualFeedbackDirector';
 import { CAMERA_FEEDBACK_LIMITS } from '../effects/camera/CameraFeedbackModel';
 import { getCameraBaseScroll, getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 import { ClarityCameraRegistry } from './arena/ClarityCameraRegistry';
-import { getProjectileLightSpec, LIGHT_PRESETS } from '../effects/LightingConfig';
-import { mixColors }             from '../effects/EffectUtils';
 import { SmokeSystem }           from '../effects/SmokeSystem';
 import { FireSystem }            from '../effects/FireSystem';
 import { StinkCloudSystem }      from '../effects/StinkCloudSystem';
@@ -123,24 +121,20 @@ import {
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
-import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
-import { TRAIN } from '../train/TrainConfig';
+import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
-import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
 import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
 import { toArenaMetricsProfile } from '../world/WorldMetrics';
-import { allowsWorldPresentationSurface } from '../world/WorldPresentation';
 import { resolvePresentationPolicy } from '../world/PresentationPolicy';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
 import { getMapName, getMapTutorial, getMapTutorialStep } from '../i18n/contentPresentation';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
-import { toPersistentBaseGravelZone } from '../persistentBase/PersistentBasePresentation';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
 import { PersistentBasePreviewRenderer } from './arena/PersistentBasePreviewRenderer';
@@ -199,26 +193,6 @@ function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): numbe
   }
 }
 
-/** Eine feste Lampe am Zug, relativ zur Mitte ihres Segments. */
-interface TrainLamp {
-  readonly key: string;
-  readonly offsetX: number;
-  readonly offsetY: number;
-  /** Index in `TrainRenderer.computeSegYs()`: 0 = Lok, danach die Waggons. */
-  readonly segment: number;
-  /**
-   * `offsetY` relativ zur Fahrtrichtung statt absolut. Für Lampen, die immer vorne am
-   * Segment sitzen (Lok-Kabinenfenster): + zeigt zur Nase, egal ob der Zug nach Norden
-   * oder Süden fährt.
-   */
-  readonly frontRelative?: boolean;
-}
-
-interface TrainLightPlan {
-  readonly headlights: readonly TrainLamp[];
-  readonly windows: readonly TrainLamp[];
-}
-
 /**
  * Anteil des Bootscreen-Balkens, den der Asset-Preload einnimmt. Das restliche Fuenftel gehoert
  * der Reveal-Barriere, damit der Balken ueber beide Phasen monoton bleibt.
@@ -259,15 +233,6 @@ export class ArenaScene extends Phaser.Scene {
   private renderers!: RendererBundle;
   private localPlayerState!: LocalPlayerState;
   private rockVisualHelper!: RockVisualHelper;
-  /** Links/rechts am Zug – als Konstante, damit die Licht-Keys stabil bleiben. */
-  private static readonly TRAIN_LIGHT_SIDES = [-1, 1] as const;
-  private trainLightPlan: TrainLightPlan | null = null;
-  private trainLightsActive = false;
-  private readonly trainLightOccluders = new TrainLightOccluderSource();
-  private flashlightsActive = false;
-  /** Zwei getauschte Sets statt Neuallokation pro Frame: Projektile wechseln schnell. */
-  private activeProjectileLightIds = new Set<number>();
-  private projectileLightScratch = new Set<number>();
   private placementPreview!: PlacementPreviewRenderer;
   private persistentBaseVisuals!: PersistentBaseVisuals;
   private persistentBasePreviewRenderer!: PersistentBasePreviewRenderer;
@@ -311,7 +276,6 @@ export class ArenaScene extends Phaser.Scene {
   private roomQualityMonitor!: RoomQualityMonitor;
   private roomQualitySnapshot: RoomQualitySnapshot | null = null;
   private timeOfDayDebugOverlay: TimeOfDayDebugOverlay | null = null;
-  private forceStaticTimeOfDayBake = false;
   /** Scene-langlebiger Owner der Diagnose (Profiler, Ablation, Net-/Performance-Overlay). */
   private diagnostics: ArenaDiagnosticsController | null = null;
   /** Scene-langlebiger Owner fuer Keyboard-Setup, Hotkeys und deren Teardown. */
@@ -1006,7 +970,6 @@ export class ArenaScene extends Phaser.Scene {
     });
     this.renderers.lighting.setAttributionCollector(this.diagnostics?.visualAttribution ?? null);
     this.renderers.shadow.setAttributionCollector(this.diagnostics?.visualAttribution ?? null);
-    this.renderers.lighting.setDynamicOccluderSource(this.trainLightOccluders);
     this.renderers.plasmaBurner.setLocalAimAngleProvider((ownerId) => (
       ownerId === bridge.getLocalPlayerId() ? inputSystem.getAimAngle() : null
     ));
@@ -1175,10 +1138,13 @@ export class ArenaScene extends Phaser.Scene {
       rockVisualHelper: this.rockVisualHelper,
       placementPreview: this.placementPreview,
       persistentBasePreviewRenderer: this.persistentBasePreviewRenderer,
+      persistentBaseVisuals: this.persistentBaseVisuals,
       lobbyOverlay: this.lobbyOverlay,
       hostUpdate: this.hostUpdate,
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
+      getLocalPlayerId: () => bridge.getLocalPlayerId(),
+      getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
       getSpectatorCameraInput: () => this.inputBindings?.getSpectatorCameraInput(),
     });
@@ -1659,9 +1625,7 @@ export class ArenaScene extends Phaser.Scene {
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
     if (presentationPolicy.showWorld) {
-      const worldView = getVisibleWorldView(this.cameras.main);
       this.arenaRuntime.syncWorldSurfaceResidency(presentationPolicy.showWorld);
-      this.renderers?.shadow.updateStaticResidency(worldView);
     }
     // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
     // liefert nur den bereits orchestrierten World-/Round-/UI-Framekontext.
@@ -1861,7 +1825,7 @@ export class ArenaScene extends Phaser.Scene {
         bridge.getSynchronizedNow(),
         this.resolveArenaTimeOfDaySignals(),
       );
-      this.forceStaticTimeOfDayBake ||= transitionCompleted;
+      this.arenaRuntime.requestWorldStaticShadowBake(transitionCompleted);
 
       diagnosticsFrame?.begin('leaderboardCanopy');
       if (gameplayActive && this.inputBindings?.isArenaPanelHeld()) {
@@ -1873,14 +1837,9 @@ export class ArenaScene extends Phaser.Scene {
     // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
     // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
     // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
-    if (presentationPolicy.showWorld && this.arenaResult) {
+    if (presentationPolicy.showWorld) {
       diagnosticsFrame?.begin('leaderboardCanopy');
-      const localSprite = this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? null;
-      ArenaBuilder.updateCanopyTransparency(
-        this.arenaResult.canopyObjects,
-        localSprite,
-        (worldX, worldY) => this.renderers.lighting.resolveCanopyTint(worldX, worldY),
-      );
+      this.arenaRuntime.syncWorldCanopy(presentationPolicy.showWorld);
       diagnosticsFrame?.end('leaderboardCanopy');
     }
 
@@ -2032,12 +1991,7 @@ export class ArenaScene extends Phaser.Scene {
     } else {
       this.hostileBaseIndicator?.clear();
     }
-    const localPlayerVisuals = allowsWorldPresentationSurface(
-      this.lifecycle.getLocalWorldPresentation(),
-      'localPlayerVisuals',
-    ) && this.lifecycle.isPlayerAttachedToWorld(bridge.getLocalPlayerId());
-    this.playerStatusRing?.setActive(localPlayerVisuals && !spectator);
-    this.ctx.playerManager.getPlayer(bridge.getLocalPlayerId())?.setWorldBarsVisible(!inArena);
+    this.arenaRuntime.syncWorldLocalPlayerPresentation(inArena, spectator);
     if (inArena) {
       this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
     } else {
@@ -2099,27 +2053,7 @@ export class ArenaScene extends Phaser.Scene {
       ? this.ctx.inputSystem.getConstructionPlacementPreviewState()
       : undefined;
     const activePlacement     = ultimatePlacement ?? utilityPlacement ?? constructionPlacement;
-    const activeWorld = inArena ? this.world : null;
-    const persistentBaseSite = activeWorld?.persistentBaseSite ?? null;
-    const persistentBaseVisualSite = inArena ? this.lifecycle.getPersistentBaseVisualSite() : null;
-    this.arenaResult?.groundSurface?.setPersistentBaseGravel(
-      persistentBaseVisualSite && this.currentLayout
-        ? toPersistentBaseGravelZone(persistentBaseVisualSite, this.currentLayout.seed)
-        : null,
-    );
-    this.persistentBaseVisuals.sync(
-      persistentBaseSite,
-      activeWorld?.metrics ?? null,
-      inArena
-        && !spectator
-        && (
-          this.ctx.inputSystem.isUtilityPlacementActive()
-          || this.ctx.inputSystem.isConstructionPlacementActive()
-          || this.ctx.inputSystem.isDismantlePlacementActive()
-          || this.ctx.inputSystem.isPersistentRewardPlacementActive()
-          || this.ctx.inputSystem.isRepositionActive()
-        ),
-    );
+    this.arenaRuntime.syncWorldPersistentBasePresentation(inArena, spectator);
     const ultimatePreview     = inArena && !spectator ? this.ctx.inputSystem.getUltimateChargePreviewState() : undefined;
     const aimPresentation = this.inputBindings?.getAimPresentationState(worldInteractive, spectator, optionsOpen)
       ?? { aimVisible: false, cursorVisible: false };
@@ -2200,13 +2134,12 @@ export class ArenaScene extends Phaser.Scene {
     this.ctx.arenaCountdown?.syncAfterCameraFeedback();
 
     diagnosticsFrame?.begin('shadow');
-    const trainState = inRoundWorld ? this.resolveTrainState() : null;
     // Keep World-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
     const shadowArenaActive = inArena || (inGame && !terminated);
-    this.syncWorldShadows(shadowArenaActive, trainState);
+    this.arenaRuntime.syncWorldShadows(shadowArenaActive, inRoundWorld);
     diagnosticsFrame?.end('shadow');
-    this.syncWorldLighting(inArena, trainState);
+    this.arenaRuntime.syncWorldLighting(inArena, inRoundWorld);
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
@@ -2609,7 +2542,7 @@ export class ArenaScene extends Phaser.Scene {
   private syncDebugTimeOfDay(forceStaticBake: boolean): void {
     const now = bridge.getSynchronizedNow();
     this.lifecycle.syncRuntimeTimeOfDay(now, this.resolveArenaTimeOfDaySignals());
-    this.renderers.shadow.syncStaticProfile(now, forceStaticBake);
+    this.arenaRuntime.syncWorldStaticShadowProfile(forceStaticBake);
   }
 
   private resolveArenaTimeOfDaySignals(): {
@@ -2965,257 +2898,6 @@ export class ArenaScene extends Phaser.Scene {
       visibleStep === null ? null : getMapTutorialStep(visibleStep.id, getLocale()) ?? null,
       visibleStep?.anchor,
     );
-  }
-
-  private resolveTrainState(): SyncedTrainState | null {
-    return this.renderers.train?.getShadowState()
-      ?? (bridge.isHost()
-        ? (this.trainManager?.getNetSnapshot() ?? null)
-        : (bridge.getLatestGameState()?.train ?? null));
-  }
-
-  private syncWorldShadows(inArena: boolean, trainState: SyncedTrainState | null): void {
-    if (!inArena || !this.currentLayout || !this.arenaResult) {
-      this.forceStaticTimeOfDayBake = false;
-      this.renderers.shadow.clear();
-      return;
-    }
-
-    this.renderers.shadow.syncStaticProfile(
-      bridge.getSynchronizedNow(),
-      this.forceStaticTimeOfDayBake,
-    );
-    this.forceStaticTimeOfDayBake = false;
-
-    this.renderers.shadow.syncDynamicShadows(
-      this.ctx.playerManager.getAllPlayers(),
-      this.ctx.projectileManager.getShadowSamples(),
-      trainState,
-    );
-  }
-
-  /**
-   * Dynamische Beleuchtung. Die Lichtquellen selbst melden sich in ihren eigenen
-   * Renderern an (Mündungsfeuer, Explosionen, Feuer); hier hängen nur die Lichter, die
-   * an einem bewegten Träger sitzen – Taschenlampen und Zugscheinwerfer – sowie die
-   * Komposition der Lightmap.
-   */
-  private syncWorldLighting(inArena: boolean, trainState: SyncedTrainState | null): void {
-    const lighting = this.renderers.lighting;
-    const artificialFactor = inArena ? lighting.getArtificialLightFactor() : 0;
-    const artificialLights = artificialFactor > 0;
-    const liveTrainSegments = trainState?.alive && bridge.isHost() && this.trainManager?.isActive()
-      ? this.trainManager.getSegObjects()
-      : null;
-    this.trainLightOccluders.setTrain(liveTrainSegments, trainState);
-
-    this.syncTrainLights(artificialLights, artificialFactor, trainState);
-
-    if (artificialLights) {
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        const key = `flashlight:${player.id}`;
-        const sprite = player.displayObject;
-        const burrowPhase = player.getBurrowPhase();
-        // Exakt dieselben Sichtbarkeitsbedingungen wie beim dynamischen Schatten: wer
-        // nicht sichtbar auf dem Feld steht, leuchtet auch nicht.
-        //
-        // Bewusst kein `combatSystem.isAlive()`: dessen Zustand entsteht in
-        // `initPlayer()` und das läuft nur auf dem Host, auf Clients wäre also jeder
-        // Spieler tot und keine Taschenlampe sichtbar. Der Lebendzustand steckt ohnehin
-        // schon in `sprite.visible` – beide Seiten setzen ihn beim Tod (siehe
-        // HostUpdateCoordinator und ClientUpdateCoordinator).
-        const visible = sprite !== null
-          && sprite.active
-          && sprite.visible
-          && !player.isDecoyStealthedVisual()
-          && burrowPhase !== 'underground'
-          && burrowPhase !== 'trapped';
-
-        const spillKey = `flashlightspill:${player.id}`;
-        if (!visible) {
-          lighting.releaseLight(key);
-          lighting.releaseLight(spillKey);
-          continue;
-        }
-        lighting.setLight(key, 'flashlight', sprite.x, sprite.y, {
-          angle: player.getAimAngle(),
-          intensity: LIGHT_PRESETS.flashlight.intensity * artificialFactor,
-        });
-        // Nimmt dem Kegelansatz die harte Kante an der Spielerlinie.
-        lighting.setLight(spillKey, 'flashlightSpill', sprite.x, sprite.y, {
-          intensity: LIGHT_PRESETS.flashlightSpill.intensity * artificialFactor,
-        });
-      }
-      this.flashlightsActive = true;
-    } else if (this.flashlightsActive) {
-      // Ausdrückliche Freigabe statt Verlass auf das Stale-Notnetz: das blendet über
-      // `RELEASE_FADE_MS` aus, während der Stale-Pfad die Lampen 400 ms stehen lässt und
-      // dann hart abschaltet. Wird sichtbar, sobald der Debug-Regler in den Tag zieht.
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        lighting.releaseLight(`flashlight:${player.id}`);
-        lighting.releaseLight(`flashlightspill:${player.id}`);
-      }
-      this.flashlightsActive = false;
-    }
-
-    this.syncProjectileLights(inArena);
-    this.rockVisualHelper.syncTurretLights(inArena);
-
-    if (inArena) this.baseManager?.syncLights();
-    else this.baseManager?.releaseLights();
-    this.persistentBasePreviewRenderer.syncLights(inArena);
-
-    lighting.update();
-  }
-
-  /**
-   * Eigenleuchten der Projektile.
-   *
-   * Bewusst ein zentraler Pass statt einer Anmeldung in jedem der zwölf
-   * Projektil-Renderer: `ProjectileManager.getLightSamples()` deckt Host und Client aus
-   * einer Methode ab – genau wie `getShadowSamples()` beim dynamischen Schatten – und die
-   * Zuordnung Stil → Licht bleibt an einer Stelle steuerbar.
-   *
-   * Der Brand eines Projektils ist davon unabhängig: `ProjectileBurnRenderer` meldet ihn
-   * unter einem eigenen Key an, ein brennendes Geschoss trägt also beide Lichter.
-   */
-  private syncProjectileLights(inArena: boolean): void {
-    const lighting = this.renderers.lighting;
-    const active = this.activeProjectileLightIds;
-
-    if (!inArena) {
-      for (const id of active) lighting.releaseLight(`proj:${id}`);
-      active.clear();
-      return;
-    }
-
-    const seen = this.projectileLightScratch;
-    seen.clear();
-
-    for (const sample of this.ctx.projectileManager.getLightSamples()) {
-      const spec = getProjectileLightSpec(
-        sample.style,
-        sample.energyBallVariant,
-        sample.grenadeVisualPreset,
-        sample.color,
-      );
-      if (!spec) continue;
-
-      lighting.setLight(`proj:${sample.id}`, spec.preset, sample.x, sample.y, {
-        radiusPx: spec.baseRadiusPx + sample.size * spec.radiusPerSizePx,
-        color: spec.whitenFromColor === undefined
-          ? undefined
-          : mixColors(sample.color, 0xffffff, spec.whitenFromColor),
-      });
-      seen.add(sample.id);
-    }
-
-    // Freigabe statt Verlass auf das Stale-Notnetz: das blendet sauber aus, statt das
-    // Licht eines längst zerstörten Projektils noch 400 ms stehen zu lassen.
-    for (const id of active) {
-      if (!seen.has(id)) lighting.releaseLight(`proj:${id}`);
-    }
-
-    this.activeProjectileLightIds = seen;
-    this.projectileLightScratch = active;
-  }
-
-  /**
-   * Zugbeleuchtung: zwei Frontscheinwerfer an der Lok, dazu Fensterlichter an beiden
-   * Seiten jedes Waggons.
-   *
-   * Der Zug fährt entlang Y: `dir = 1` bedeutet nach Süden, `dir = -1` nach Norden
-   * (`TrainManager` addiert `direction * SPEED` auf `locoY`). Die Lok ist dabei immer
-   * das führende Segment, die Nase liegt also eine halbe Loklänge in Fahrtrichtung vor
-   * ihrem Mittelpunkt. Die Segmentmitten kommen aus `TrainRenderer.computeSegYs()` –
-   * dieselbe Rechnung, aus der auch die Zuggrafik entsteht.
-   */
-  private syncTrainLights(
-    artificialLights: boolean,
-    artificialFactor: number,
-    trainState: SyncedTrainState | null,
-  ): void {
-    const lighting = this.renderers.lighting;
-    const trainRenderer = this.renderers.train;
-    const train = artificialLights ? trainState : null;
-
-    if (!train?.alive || !trainRenderer) {
-      if (this.trainLightsActive) {
-        const plan = this.getTrainLightPlan();
-        for (const lamp of plan.headlights) lighting.releaseLight(lamp.key);
-        for (const lamp of plan.windows) lighting.releaseLight(lamp.key);
-        this.trainLightsActive = false;
-      }
-      return;
-    }
-
-    const segmentYs = trainRenderer.computeSegYs(train.y, train.dir);
-    const beamAngle = train.dir === 1 ? Math.PI / 2 : -Math.PI / 2;
-    const noseY = segmentYs[0] + train.dir * TRAIN.HEADLIGHT_OFFSET_Y;
-    const plan = this.getTrainLightPlan();
-
-    for (const lamp of plan.headlights) {
-      lighting.setLight(lamp.key, 'trainHeadlight', train.x + lamp.offsetX, noseY, {
-        angle: beamAngle,
-        intensity: LIGHT_PRESETS.trainHeadlight.intensity * artificialFactor,
-      });
-    }
-    for (const lamp of plan.windows) {
-      // Waggons hinter dem sichtbaren Bereich fallen in `LightingSystem` durch das
-      // Screen-Culling; hier bleibt es bei einem Upsert ohne Allokation.
-      const offsetY = lamp.frontRelative ? train.dir * lamp.offsetY : lamp.offsetY;
-      lighting.setLight(
-        lamp.key,
-        'trainWindow',
-        train.x + lamp.offsetX,
-        segmentYs[lamp.segment] + offsetY,
-        { intensity: LIGHT_PRESETS.trainWindow.intensity * artificialFactor },
-      );
-    }
-
-    this.trainLightsActive = true;
-  }
-
-  /**
-   * Feste Lampenanordnung des Zugs, einmalig aufgebaut. Die Menge ist konstant, die
-   * Keys dürfen deshalb nicht pro Frame neu zusammengesetzt werden.
-   */
-  private getTrainLightPlan(): TrainLightPlan {
-    if (this.trainLightPlan) return this.trainLightPlan;
-
-    const headlights: TrainLamp[] = [];
-    const windows: TrainLamp[] = [];
-
-    for (const side of ArenaScene.TRAIN_LIGHT_SIDES) {
-      headlights.push({
-        key: `trainheadlight:${side}`,
-        offsetX: side * TRAIN.HEADLIGHT_OFFSET_X,
-        offsetY: 0,
-        segment: 0,
-      });
-      // Zwei Kabinenfenster an den Seiten der Lok, vorne wie beim Vorbild – leuchten wie
-      // die Waggonfenster (dasselbe `trainWindow`-Preset), sitzen aber am führenden Ende.
-      windows.push({
-        key: `trainlocowindow:${side}`,
-        offsetX: side * TRAIN.LOCO_WINDOW_LIGHT_OFFSET_X,
-        offsetY: TRAIN.LOCO_WINDOW_LIGHT_OFFSET_Y,
-        segment: 0,
-        frontRelative: true,
-      });
-      for (let wagon = 1; wagon <= TRAIN.WAGON_COUNT; wagon += 1) {
-        for (let slot = 0; slot < TRAIN.WINDOW_LIGHT_OFFSETS_Y.length; slot += 1) {
-          windows.push({
-            key: `trainwindow:${wagon}:${side}:${slot}`,
-            offsetX: side * TRAIN.WINDOW_LIGHT_OFFSET_X,
-            offsetY: TRAIN.WINDOW_LIGHT_OFFSETS_Y[slot],
-            segment: wagon,
-          });
-        }
-      }
-    }
-
-    this.trainLightPlan = { headlights, windows };
-    return this.trainLightPlan;
   }
 
   private initializeRoomQuality(): void {

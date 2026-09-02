@@ -205,11 +205,11 @@ describe('LobbyWorld L3 – Leave und lokale Presentation', () => {
   });
 
   it('aktiviert lokale Player-Presentation nur mit Surface und echter Runtime', () => {
-    const scene = read('src/scenes/ArenaScene.ts');
-    expect(scene).toContain("'localPlayerVisuals',");
-    expect(scene).toContain('this.lifecycle.isPlayerAttachedToWorld(bridge.getLocalPlayerId())');
-    expect(scene).toContain('this.playerStatusRing?.setActive(localPlayerVisuals && !spectator);');
-    expect(scene).not.toContain('this.playerStatusRing?.setActive(inArena && !spectator);');
+    const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
+    expect(frameBinding).toContain("'localPlayerVisuals',");
+    expect(frameBinding).toContain('this.input.isLocalPlayerAttachedToWorld()');
+    expect(frameBinding).toContain('this.input.setLocalPlayerStatusRingActive(localPlayerVisuals && !spectator);');
+    expect(frameBinding).not.toContain('setLocalPlayerStatusRingActive(showWorld && !spectator)');
   });
 
   it('erzeugt bei join -> leave -> join eine neue Entity und keinen stale Runtime-Eintrag', () => {

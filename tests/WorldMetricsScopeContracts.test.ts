@@ -158,7 +158,8 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
     expect(geometryBinding).toContain('playerManager.setWorldGeometry({');
     expect(lifecycle).toContain('this.persistentBase.reconcilePersistentBaseWorld();');
     expect(lifecycle).not.toContain('getPersistentBaseAnchor');
-    expect(arenaScene).toContain('const persistentBaseSite = activeWorld?.persistentBaseSite ?? null');
+    const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
+    expect(frameBinding).toContain('showWorld ? this.input.getPersistentBaseSite() : null');
     expect(combatSystem).toContain('this.playerManager.getWorldSpawnPoint(');
     expect(combatSystem).not.toMatch(/ARENA_OFFSET_[XY] \+ spawn\.[xy]/);
   });

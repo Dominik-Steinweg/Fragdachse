@@ -218,7 +218,7 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
 describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Aufrufe in ArenaScene.update()', () => {
   /**
    * Vor Phase 6A.1 stand diese Reihenfolge ausschliesslich in Kommentaren, nicht in einem Test.
-   * Seit Phase 6A.1 delegiert die Scene Kamera-Sync und World-Surface-Residency an
+   * Seit Phase 6A.2 delegiert die Scene Kamera-Sync und World-Surface-Residency an
    * `arenaRuntime.syncWorldCamera`/`syncWorldSurfaceResidency`, die intern den world-scoped
    * `WorldPresentationFrameBinding` takten. Dieser Test friert die relative Position dieser
    * Aufrufe zu Input-Frame und den Frame-Ende-Schritten ein - unabhaengig vom jeweiligen
@@ -233,7 +233,6 @@ describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Auf
     const body = scene.slice(updateStart, updateEnd);
 
     const firstCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);');
-    const visibleWorldViewForResidency = body.indexOf('const worldView = getVisibleWorldView(this.cameras.main);');
     const updateSurfaceResidency = body.indexOf('this.arenaRuntime.syncWorldSurfaceResidency(');
     const inputBindingsUpdateFrame = body.indexOf('this.inputBindings?.updateFrame({');
     const secondCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);');
@@ -244,7 +243,6 @@ describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Auf
 
     for (const [label, index] of [
       ['erster syncMainCamera-Aufruf', firstCameraSync],
-      ['getVisibleWorldView fuer Residency', visibleWorldViewForResidency],
       ['ArenaBuilder.updateSurfaceResidency', updateSurfaceResidency],
       ['inputBindings.updateFrame', inputBindingsUpdateFrame],
       ['zweiter syncMainCamera-Aufruf', secondCameraSync],
@@ -256,14 +254,18 @@ describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Auf
       expect(index, `${label} nicht in update() gefunden`).toBeGreaterThan(-1);
     }
 
-    expect(firstCameraSync, '1 vor 2').toBeLessThan(visibleWorldViewForResidency);
-    expect(visibleWorldViewForResidency, '2a vor 2b').toBeLessThan(updateSurfaceResidency);
+    expect(firstCameraSync, '1 vor 2').toBeLessThan(updateSurfaceResidency);
     expect(updateSurfaceResidency, '2 vor 3').toBeLessThan(inputBindingsUpdateFrame);
     expect(inputBindingsUpdateFrame, '3 vor 4').toBeLessThan(secondCameraSync);
     expect(secondCameraSync, '4 vor 5').toBeLessThan(applyCameraFeedback);
     expect(applyCameraFeedback, '5 vor 6').toBeLessThan(flushBakeBudget);
     expect(flushBakeBudget, '6 vor 7').toBeLessThan(syncArenaLoadReady);
     expect(syncArenaLoadReady, '7 vor 8').toBeLessThan(syncBootReveal);
+
+    const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
+    expect(frameBinding.indexOf('ArenaBuilder.updateSurfaceResidency')).toBeLessThan(
+      frameBinding.indexOf('this.input.shadow.updateStaticResidency'),
+    );
   });
 });
 

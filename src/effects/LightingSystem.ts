@@ -275,6 +275,15 @@ export class LightingSystem {
   }
 
   /**
+   * Loest eine bewegliche World-Occluderquelle nur dann, wenn sie noch die aktive Quelle ist.
+   * Das verhindert, dass ein verspaeteter Teardown einer alten World die Quelle einer neuen
+   * World entfernt.
+   */
+  clearDynamicOccluderSource(source: DynamicLightOccluderSource): void {
+    if (this.dynamicOccluders === source) this.dynamicOccluders = null;
+  }
+
+  /**
    * Uhrzeit der aktuellen World-Darstellung. Ändert ausschließlich Werte, nie den Rechenweg – siehe
    * {@link resolveSkyState}. Vor `setActive(true)` setzen, damit der erste Frame schon
    * mit dem richtigen Ambient läuft.

@@ -437,16 +437,16 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
   });
 
   it('bindet Rueckbau in Management-Overlay ein und unterdrueckt dabei das normale Aim', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
+    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldPresentationFrameBinding.ts'), 'utf8');
     const inputBindings = readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaInputBindings.ts'), 'utf8');
-    const overlayStart = source.indexOf('this.persistentBaseVisuals.sync(');
-    const overlayEnd = source.indexOf('const ultimatePreview', overlayStart);
+    const overlayStart = source.indexOf('this.input.persistentBaseVisuals.sync(');
+    const overlayEnd = source.indexOf('  }', overlayStart);
     const showAimStart = inputBindings.indexOf('const aimVisible = cursorVisible');
     const showAimEnd = inputBindings.indexOf('return { aimVisible, cursorVisible };', showAimStart);
 
     expect(overlayStart).toBeGreaterThanOrEqual(0);
     expect(overlayEnd).toBeGreaterThan(overlayStart);
-    expect(source.slice(overlayStart, overlayEnd)).toContain('isDismantlePlacementActive()');
+    expect(source.slice(overlayStart, overlayEnd)).toContain('isPersistentBasePlacementOverlayActive()');
     expect(showAimStart).toBeGreaterThanOrEqual(0);
     expect(showAimEnd).toBeGreaterThan(showAimStart);
     expect(inputBindings.slice(showAimStart, showAimEnd)).toContain(
