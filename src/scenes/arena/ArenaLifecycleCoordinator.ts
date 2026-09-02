@@ -40,7 +40,6 @@ import type {
   LoadoutCommitSnapshot,
   PlayerProfile,
   RoundConclusion,
-  SyncedCoopDefenseCarryItem,
 } from '../../types';
 import type { RoundResult, RoundState } from '../../network/NetworkBridge';
 import { resolvePvpWinnerIds } from '../../network/RoomStatistics';
@@ -642,7 +641,6 @@ export class ArenaLifecycleCoordinator {
     private readonly clientUpdate: ClientUpdateCoordinator,
     private readonly roomQualityMonitor: RoomQualityMonitor,
     private readonly coopMissionPresentationUi: CoopMissionPresentationUiPort,
-    private readonly getReplicatedCoopDefenseCarryItems: () => readonly SyncedCoopDefenseCarryItem[],
     /**
      * Der raumlanglebige Persistent-Base-Owner. Er ueberlebt jede World und jede Runde und
      * gehoert deshalb der `ArenaRuntime`; der Flow fragt ihn nur.
@@ -663,7 +661,10 @@ export class ArenaLifecycleCoordinator {
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
       getCoopMissionRuntime: () => this.coopMissionRuntime,
-      getReplicatedCoopDefenseCarryItems: this.getReplicatedCoopDefenseCarryItems,
+      getEnemyVulnerability: (enemyId, now) => this.worldGameplay?.targeting?.systems.targetStatus.isVulnerable(
+        { targetType: 'enemy', targetId: enemyId },
+        now,
+      ) ?? false,
     });
     this.coopMissionComposition = new CoopMissionComposition({
       scene,

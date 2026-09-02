@@ -13,12 +13,16 @@ import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from '..
 import type { UtilityConfig, WeaponConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
-import type { CoopMissionActivityStep } from '../../activity/CoopMissionRuntime';
+import type {
+  CoopMissionActivityStep,
+  CoopMissionClientPresentationFrame,
+} from '../../activity/CoopMissionRuntime';
 import type { ArenaContext }     from './ArenaContext';
 import type { LocalPlayerState } from './LocalPlayerState';
 import type { RockVisualHelper } from './RockVisualHelper';
 import type { BurrowPhase, CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerProfile, SyncedPowerUp, TemporaryUtilityInstanceDescriptor, WeaponSlot } from '../../types';
 import { PICKUP_RADIUS }     from '../../powerups/PowerUpConfig';
+import type { EnemyEntity } from '../../entities/EnemyEntity';
 import type { PlayerEntity } from '../../entities/PlayerEntity';
 import { ROCK_HP_MAX } from '../../config';
 import {
@@ -41,7 +45,6 @@ import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
-import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
 const EMPTY_EFFECT_TOTALS = EMPTY_COOP_DEFENSE_EFFECT_TOTALS;
@@ -107,7 +110,6 @@ export interface ClientPlayerFramePort {
 /** Activity-owned reads needed by the client frame, absent outside an Activity. */
 export interface ClientActivityFramePort {
   getStep(): CoopMissionActivityStep | null;
-  getCoopMissionRuntime(): CoopMissionRuntime | null;
 }
 
 /**
@@ -226,9 +228,6 @@ export class ClientUpdateCoordinator {
   private get targetingSystems() { return this.worldFramePort?.getTargetingRuntime()?.systems ?? null; }
   private get playerSystems() { return this.playerFramePort?.getPlayerGameplayRuntime()?.systems ?? null; }
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
-  private get coopMissionRuntime() { return this.activityFramePort?.getCoopMissionRuntime() ?? null; }
-  private get enemyManager() { return this.coopMissionRuntime?.enemyManager ?? null; }
-
   setPerformanceMetricsEnabled(enabled: boolean): void {
     if (this.coarsePerformanceMetricsEnabled === enabled) return;
     this.coarsePerformanceMetricsEnabled = enabled;
@@ -313,12 +312,17 @@ export class ClientUpdateCoordinator {
       return;
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
-    // Activity: Was diese Mission lokal darstellt, folgt ihrer eigenen Reihenfolge.
-    this.activityFramePort?.getStep()?.clientPresentationStep();
     // B1's reliable presentation snapshot is independent of the ticked GameState. Sync it first
     // so a dormant structure can materialize even when no base HP delta arrived this frame.
     this.baseManager?.syncDormantStates();
     if (!state) {
+      this.runActivityClientPresentationStep({
+        stateAvailable: false,
+        newSnapshot: false,
+        enemySnapshot: null,
+        carryItems: [],
+        interpolationFactor: 0,
+      });
       if (this.coarsePerformanceMetricsEnabled) {
         this.lastPerformance = {
           totalMs: performance.now() - startedAt,
@@ -508,7 +512,6 @@ export class ClientUpdateCoordinator {
       );
 
       this.baseManager?.applySnapshot(state.bases ?? []);
-      this.enemyManager?.applySnapshot(state.enemies);
       const vulnerabilityNow = bridge.getSynchronizedNow();
       for (const base of this.baseManager?.getBases() ?? []) {
         base.setVulnerable(
@@ -534,14 +537,13 @@ export class ClientUpdateCoordinator {
       }
     }
 
-    this.enemyManager?.updateClientInterpolation(lerpFactor);
-    // Der Host repliziert absolute Ablaufzeitpunkte, deshalb laeuft der Marker hier auch dann
-    // sauber ab, wenn zwischendurch kein Snapshot ankommt.
-    const vulnerableNow = bridge.getSynchronizedNow();
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      this.enemyDashVisuals.sync(enemy);
-      enemy.setVulnerable(this.targetingSystems?.targetStatus?.isVulnerable({ targetType: 'enemy', targetId: enemy.id }, vulnerableNow) ?? false);
-    }
+    this.runActivityClientPresentationStep({
+      stateAvailable: true,
+      newSnapshot: isNewData,
+      enemySnapshot: state.enemies,
+      carryItems: state.coopDefenseCarry ?? [],
+      interpolationFactor: lerpFactor,
+    });
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
 
@@ -684,6 +686,24 @@ export class ClientUpdateCoordinator {
         newSnapshot: isNewData,
       };
     }
+  }
+
+  /**
+   * Keeps the Activity presentation on the existing single client-step call site while allowing
+   * the frame owner to provide the already resolved snapshot/interpolation inputs.
+   */
+  private runActivityClientPresentationStep(frame: CoopMissionClientPresentationFrame): void {
+    this.activityFramePort?.getStep()?.clientPresentationStep(frame);
+  }
+
+  /** Activity presentation adapter for the client-only enemy dash visual. */
+  syncEnemyDashVisual(enemy: EnemyEntity): void {
+    this.enemyDashVisuals.sync(enemy);
+  }
+
+  /** Clears client enemy presentation state when the Activity binding detaches. */
+  resetEnemyDashVisuals(): void {
+    this.enemyDashVisuals.reset();
   }
 
   getPerformanceMetrics(): ClientUpdatePerformanceMetrics {

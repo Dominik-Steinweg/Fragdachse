@@ -26,7 +26,12 @@ import type { EnemyStrategicTargetService } from '../systems/EnemyStrategicTarge
 import { allyFlowFieldId, type FlowFieldCoordinator } from '../systems/flowfield/FlowFieldCoordinator';
 import type { NecromancySystem } from '../systems/NecromancySystem';
 import type { CoopMissionPlayerRuntime } from './CoopMissionPlayerRuntime';
-import type { CoopDefenseMissionProgressPresentationState, SyncedCoopDefenseCarryState } from '../types';
+import type {
+  CoopDefenseMissionProgressPresentationState,
+  SyncedCoopDefenseCarryItem,
+  SyncedCoopDefenseCarryState,
+  SyncedEnemySnapshot,
+} from '../types';
 import type { ResolvedCoopDefenseMapSecondaryObjectiveConfig } from '../config/coopDefenseMaps';
 import type { ActivityDescriptor } from '../world/ActivityDescriptor';
 import type { ActivityRuntime } from '../world/ActivityRuntimeHost';
@@ -102,6 +107,15 @@ export interface CoopMissionClientPresentationPort {
   readonly getMissionProgressPresentationState: () => CoopDefenseMissionProgressPresentationState | null;
 }
 
+/** Die unveraenderlichen Client-Eingaben fuer genau einen Activity-Presentation-Step. */
+export interface CoopMissionClientPresentationFrame {
+  readonly stateAvailable: boolean;
+  readonly newSnapshot: boolean;
+  readonly enemySnapshot: SyncedEnemySnapshot | null;
+  readonly carryItems: readonly SyncedCoopDefenseCarryItem[];
+  readonly interpolationFactor: number;
+}
+
 /**
  * Die Aussenanschluesse der Mission.
  *
@@ -134,7 +148,7 @@ export interface CoopMissionActivityStep {
   readonly hostCarrySnapshot: (interactionsEnabled: boolean) => SyncedCoopDefenseCarryState;
   readonly hostResolveCompletion: () => CoopMissionOutcome | null;
   readonly hostApplyDebugBaseDamage: (amount: number) => void;
-  readonly clientPresentationStep: () => void;
+  readonly clientPresentationStep: (frame?: CoopMissionClientPresentationFrame) => void;
 }
 
 export type CoopMissionRuntimeBindingsChanged = (runtime: CoopMissionRuntime | null) => void;
@@ -143,6 +157,8 @@ export type CoopMissionRuntimeBindingsChanged = (runtime: CoopMissionRuntime | n
 export interface CoopMissionScopedBinding {
   readonly attach: (runtime: CoopMissionRuntime) => void;
   readonly detach: () => void;
+  /** Optionaler Anteil des bereits kanonischen clientseitigen Activity-Steps. */
+  readonly clientPresentationStep?: (frame: CoopMissionClientPresentationFrame) => void;
 }
 
 /**
@@ -413,11 +429,23 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
   }
 
   /** Lokale Darstellung des replizierten Missionsstands auf einem Client. */
-  clientPresentationStep(): void {
-    if (this.destroyed || !this.ports) return;
-    this.objectiveOwner?.barriers?.syncPresentationState(
-      this.ports.clientPresentation.getMissionProgressPresentationState(),
-    );
+  clientPresentationStep(frame?: CoopMissionClientPresentationFrame): void {
+    if (this.destroyed) return;
+    if (this.ports) {
+      this.objectiveOwner?.barriers?.syncPresentationState(
+        this.ports.clientPresentation.getMissionProgressPresentationState(),
+      );
+    }
+    const clientFrame = frame ?? {
+      stateAvailable: false,
+      newSnapshot: false,
+      enemySnapshot: null,
+      carryItems: [],
+      interpolationFactor: 0,
+    } satisfies CoopMissionClientPresentationFrame;
+    for (const binding of this.scopedBindings) {
+      binding.clientPresentationStep?.(clientFrame);
+    }
   }
 
   /** Vollstaendiger, idempotenter Teardown aller Child-Owner dieser Mission. */

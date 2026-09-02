@@ -8,6 +8,8 @@ import {
   type CoopMissionPresentationUiPort,
 } from '../src/activity/CoopMissionPresentationBinding';
 import { CoopMissionRuntime } from '../src/activity/CoopMissionRuntime';
+import type { EnemyEntity } from '../src/entities/EnemyEntity';
+import type { SyncedCoopDefenseCarryItem } from '../src/types';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 
 const activity = (revision: number): ActivityDescriptor => ({
@@ -21,8 +23,10 @@ function createHarness(): {
   readonly binding: CoopMissionPresentationBinding;
   readonly runtime: CoopMissionRuntime;
   readonly calls: string[];
+  readonly carrySnapshots: readonly SyncedCoopDefenseCarryItem[][];
 } {
   const calls: string[] = [];
+  const carrySnapshots: SyncedCoopDefenseCarryItem[][] = [];
   const ui: CoopMissionPresentationUiPort = {
     centerHud: {
       resetCoopMissionPresentation: () => calls.push('center:reset'),
@@ -46,6 +50,12 @@ function createHarness(): {
     worldSpace: {
       syncEncounterTelegraph: () => calls.push('world:encounter'),
       syncSecondaryObjectiveMarkers: () => calls.push('world:secondary'),
+      syncCoopDefenseCarry: (items) => {
+        carrySnapshots.push([...items]);
+        calls.push('world:carry-items');
+      },
+      syncEnemyDashVisual: (_enemy: EnemyEntity) => calls.push('world:enemy-dash'),
+      resetEnemyDashVisuals: () => calls.push('world:enemy-reset'),
       syncMissionProgress: () => calls.push('world:progress'),
       syncCarryZones: () => calls.push('world:carry'),
       syncObjectiveRepairDrones: () => calls.push('world:repair'),
@@ -64,6 +74,7 @@ function createHarness(): {
     getArenaStartTime: () => 0,
     getHostileBaseProgress: () => null,
     getBossProgress: () => null,
+    getEnemyVulnerability: () => false,
     getCarryPresentationItems: () => [],
   };
   const binding = new CoopMissionPresentationBinding(
@@ -72,7 +83,7 @@ function createHarness(): {
     ui,
   );
   const runtime = new CoopMissionRuntime(activity(1));
-  return { binding, runtime, calls };
+  return { binding, runtime, calls, carrySnapshots };
 }
 
 describe('CoopMissionPresentationBinding', () => {
@@ -87,6 +98,7 @@ describe('CoopMissionPresentationBinding', () => {
     expect(calls).toContain('secondary:sync');
     expect(calls).toContain('world:encounter');
     expect(calls).toContain('world:secondary');
+    expect(calls).toContain('world:carry-items');
     expect(calls).toContain('world:progress');
     expect(calls).toContain('world:carry');
     expect(calls).toContain('world:repair');
@@ -104,6 +116,66 @@ describe('CoopMissionPresentationBinding', () => {
     const callsAfterDestroy = calls.length;
     binding.sync(16, true);
     expect(calls).toHaveLength(callsAfterDestroy);
+  });
+
+  it('zieht Enemy-Projection und replizierte Carry-Daten ueber den kanonischen Activity-Step', () => {
+    const { binding, runtime, calls, carrySnapshots } = createHarness();
+    runtime.bind(binding);
+    const enemy = {
+      id: 'enemy-a',
+      setVulnerable: (active: boolean) => calls.push(`enemy:vulnerable:${active}`),
+    } as unknown as EnemyEntity;
+    const enemyManager = {
+      applySnapshot: () => calls.push('enemy:snapshot'),
+      updateClientInterpolation: (factor: number) => calls.push(`enemy:lerp:${factor}`),
+      getAllEnemies: () => [enemy],
+      setLethalDamageGuard: () => undefined,
+      setEnemySpawnedCallback: () => undefined,
+      destroy: () => undefined,
+      setVisualSink: () => undefined,
+    } as never;
+    runtime.setEnemyManager(enemyManager);
+
+    runtime.clientPresentationStep({
+      stateAvailable: true,
+      newSnapshot: true,
+      enemySnapshot: null,
+      carryItems: [{
+        id: 'carry-a', objectiveId: 'objective-a', x: 10, y: 20, holderId: null, state: 'spawned',
+      }],
+      interpolationFactor: 0.25,
+    });
+    binding.sync(16, true);
+
+    expect(calls).toContain('enemy:snapshot');
+    expect(calls).toContain('enemy:lerp:0.25');
+    expect(calls).toContain('world:enemy-dash');
+    expect(calls).toContain('enemy:vulnerable:false');
+    expect(carrySnapshots.at(-1)).toEqual([
+      { id: 'carry-a', objectiveId: 'objective-a', x: 10, y: 20, holderId: null, state: 'spawned' },
+    ]);
+
+    const callsAfterDestroy = calls.length;
+    runtime.destroy();
+    binding.clientPresentationStep({
+      stateAvailable: true,
+      newSnapshot: true,
+      enemySnapshot: null,
+      carryItems: [],
+      interpolationFactor: 0.25,
+    });
+    expect(calls).toHaveLength(callsAfterDestroy + 4);
+    expect(calls.slice(-4)).toEqual([
+      'center:reset',
+      'map:reset',
+      'secondary:reset',
+      'world:reset',
+    ]);
+
+    const next = createHarness();
+    next.runtime.bind(next.binding);
+    next.binding.sync(16, true);
+    expect(next.carrySnapshots.at(-1)).toEqual([]);
   });
 
   it('keeps network access at the composition boundary', () => {
@@ -124,6 +196,8 @@ describe('CoopMissionPresentationBinding', () => {
 
     const scene = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
     expect(scene).toContain('this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);');
+    expect(scene).toContain('syncClientCaptureTheBeerPresentation');
+    expect(scene).not.toContain('syncClientActivitySnapshotPresentation');
     const visualStart = scene.indexOf('// ── Per-frame visuals');
     const updateEnd = scene.indexOf('\n  private ', visualStart);
     const visualSource = scene.slice(visualStart, updateEnd);

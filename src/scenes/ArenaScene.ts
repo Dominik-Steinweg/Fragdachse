@@ -258,7 +258,6 @@ export class ArenaScene extends Phaser.Scene {
   private get captureTheBeerSystem() {
     return this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()?.system ?? null;
   }
-  private replicatedCoopDefenseCarryItems: readonly import('../types').SyncedCoopDefenseCarryItem[] = [];
 
   // ── Lobby / Room-quality (not round-scoped) ───────────────────────────────
   private lobbyOverlay!: LobbyOverlay;
@@ -1168,6 +1167,9 @@ export class ArenaScene extends Phaser.Scene {
             true,
           )
         ),
+        syncCoopDefenseCarry: (items) => this.renderers.beer.syncCoopDefenseCarry(items),
+        syncEnemyDashVisual: (enemy) => this.clientUpdate.syncEnemyDashVisual(enemy),
+        resetEnemyDashVisuals: () => this.clientUpdate.resetEnemyDashVisuals(),
         syncMissionProgress: (config, state) => this.renderers.missionProgress.sync(
           config,
           state,
@@ -1194,6 +1196,8 @@ export class ArenaScene extends Phaser.Scene {
           true,
         ),
         destroy: () => {
+          this.renderers.beer.syncCoopDefenseCarry([]);
+          this.clientUpdate.resetEnemyDashVisuals();
           this.hostileBaseIndicator?.destroy();
           this.hostileBaseIndicator = null;
           this.renderers.encounterTelegraph.destroy();
@@ -1203,6 +1207,8 @@ export class ArenaScene extends Phaser.Scene {
           this.renderers.objectiveRepairDrones.destroy();
         },
         reset: () => {
+          this.renderers.beer.syncCoopDefenseCarry([]);
+          this.clientUpdate.resetEnemyDashVisuals();
           this.renderers.encounterTelegraph.clear();
           this.renderers.secondaryObjectiveMarkers.clear();
           this.renderers.missionProgress.clear();
@@ -1225,7 +1231,6 @@ export class ArenaScene extends Phaser.Scene {
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
       coopMissionPresentationUi,
-      getReplicatedCoopDefenseCarryItems: () => this.replicatedCoopDefenseCarryItems,
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
@@ -1818,7 +1823,7 @@ export class ArenaScene extends Phaser.Scene {
       else {
         this.arenaRuntime.runClientFrame(delta);
         const clientState = bridge.getLatestGameState();
-        this.syncClientActivitySnapshotPresentation(clientState);
+        this.syncClientCaptureTheBeerPresentation(clientState);
         this.arenaRuntime.syncWorldClientPresentation(
           clientState,
           delta,
@@ -1884,7 +1889,7 @@ export class ArenaScene extends Phaser.Scene {
         // Sync renderers that HostUpdateCoordinator handles for host but client needs too
         diagnosticsFrame?.begin('clientRendererSync');
         const clientState = bridge.getLatestGameState();
-        this.syncClientActivitySnapshotPresentation(clientState);
+        this.syncClientCaptureTheBeerPresentation(clientState);
         this.arenaRuntime.syncWorldClientPresentation(
           clientState,
           delta,
@@ -2671,14 +2676,12 @@ export class ArenaScene extends Phaser.Scene {
     );
   }
 
-  /** Synchronisiert nur die activity-spezifische Client-Presentation dieser World. */
-  private syncClientActivitySnapshotPresentation(state: GameState | undefined): void {
+  /** Synchronisiert ausschließlich die separate Capture-the-Beer-Client-Presentation. */
+  private syncClientCaptureTheBeerPresentation(state: GameState | undefined): void {
     if (!this.lifecycle.getLocalWorldPresentation().required) return;
     if (!state) return;
     this.captureTheBeerSystem?.syncSnapshot(state.captureTheBeer ?? null);
     this.renderers.beer.sync(state.captureTheBeer?.beers ?? []);
-    this.replicatedCoopDefenseCarryItems = state.coopDefenseCarry ?? [];
-    this.renderers.beer.syncCoopDefenseCarry(this.replicatedCoopDefenseCarryItems);
   }
 
   /**

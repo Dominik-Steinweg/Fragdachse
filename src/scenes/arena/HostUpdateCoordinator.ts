@@ -918,7 +918,6 @@ export class HostUpdateCoordinator {
 
     this.visuals?.train?.update(train);
     this.visuals?.beer.sync(captureTheBeer?.beers ?? []);
-    this.visuals?.beer.syncCoopDefenseCarry(coopDefenseCarry);
     this.visuals?.powerUp.syncPedestals(pedestals);
     this.visuals?.powerUp.sync(powerups);
     this.visuals?.powerUp.updatePedestals(syncedNow);

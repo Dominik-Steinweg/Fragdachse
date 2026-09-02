@@ -472,6 +472,10 @@ describe('CoopMissionRuntime – Migrationsgrenzen', () => {
     // Spiegelbild zum Host-Pendant (tests/HostUpdatePhaseContracts.test.ts): der Frame-Owner
     // kennt den Praesentations-Schritt der Activity nur an genau einer Stelle.
     expect([...clientUpdate.matchAll(/clientPresentationStep\(/g)]).toHaveLength(1);
+    expect(clientUpdate).not.toContain('getCoopMissionRuntime');
+    expect(clientUpdate).not.toContain('enemyManager?.applySnapshot');
+    expect(clientUpdate).not.toContain('enemyManager?.updateClientInterpolation');
+    expect(clientUpdate).not.toContain('syncCoopDefenseCarry');
 
     // Ausserhalb des Frame-Owners darf kein weiterer Aufruf des kanonischen Schritts entstehen.
     for (const dir of ['src/scenes', 'src/world']) {

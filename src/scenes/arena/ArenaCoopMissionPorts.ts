@@ -13,7 +13,6 @@ import type { BurrowSystem } from '../../systems/BurrowSystem';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { ArenaContext } from './ArenaContext';
-import type { SyncedCoopDefenseCarryItem } from '../../types';
 
 export interface ArenaCoopMissionPortsInput {
   readonly ctx: ArenaContext;
@@ -27,7 +26,7 @@ export interface ArenaCoopMissionPortsInput {
 export function createArenaCoopMissionPresentationPort(
   input: Pick<ArenaCoopMissionPortsInput, 'getBaseManager' | 'getEnemyManager'> & {
     readonly getCoopMissionRuntime: () => CoopMissionRuntime | null;
-    readonly getReplicatedCoopDefenseCarryItems: () => readonly SyncedCoopDefenseCarryItem[];
+    readonly getEnemyVulnerability: (enemyId: string, now: number) => boolean;
   },
 ): CoopMissionPresentationReadPort {
   return {
@@ -38,10 +37,11 @@ export function createArenaCoopMissionPresentationPort(
     getLocalRespawnBudgetState: () => bridge.getLocalCoopDefenseRespawnBudgetState(),
     getSynchronizedNow: () => bridge.getSynchronizedNow(),
     getArenaStartTime: () => bridge.getArenaStartTime(),
+    getEnemyVulnerability: (enemyId, now) => input.getEnemyVulnerability(enemyId, now),
     getCarryPresentationItems: () => resolveCoopDefenseCarryPresentationSnapshot(
       bridge.isHost(),
       input.getCoopMissionRuntime()?.coopDefenseCarrySystem ?? null,
-      input.getReplicatedCoopDefenseCarryItems(),
+      [],
     ),
     getHostileBaseProgress: () => {
       const bases = input.getBaseManager()?.getMainBasesByFaction('hostile') ?? [];

@@ -6,6 +6,7 @@ import type {
   CoopDefenseSecondaryObjectivePresentationState,
   SyncedCoopDefenseCarryItem,
 } from '../types';
+import type { EnemyEntity } from '../entities/EnemyEntity';
 import type {
   CoopDefenseMapConfig,
   ResolvedCoopDefenseMapEventConfig,
@@ -30,7 +31,11 @@ import {
   type MainObjectiveBossProgress,
 } from '../ui/coopDefenseMainObjectiveModel';
 import { resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps } from '../config/coopDefenseMaps';
-import type { CoopMissionRuntime, CoopMissionScopedBinding } from './CoopMissionRuntime';
+import type {
+  CoopMissionClientPresentationFrame,
+  CoopMissionRuntime,
+  CoopMissionScopedBinding,
+} from './CoopMissionRuntime';
 
 export interface CoopMissionPresentationReadPort {
   readonly getEncounterPresentationState: () => CoopDefenseEncounterPresentationState | null;
@@ -42,6 +47,7 @@ export interface CoopMissionPresentationReadPort {
   readonly getArenaStartTime: () => number;
   readonly getHostileBaseProgress: () => MainObjectiveBaseProgress | null;
   readonly getBossProgress: (enemyKind: string) => MainObjectiveBossProgress | null;
+  readonly getEnemyVulnerability: (enemyId: string, now: number) => boolean;
   readonly getCarryPresentationItems: () => readonly SyncedCoopDefenseCarryItem[];
 }
 
@@ -86,6 +92,9 @@ export interface CoopMissionPresentationUiPort {
       configs: readonly ResolvedCoopDefenseMapSecondaryObjectiveConfig[],
       carryItems: readonly SyncedCoopDefenseCarryItem[],
     ) => void;
+    readonly syncCoopDefenseCarry: (items: readonly SyncedCoopDefenseCarryItem[]) => void;
+    readonly syncEnemyDashVisual: (enemy: EnemyEntity) => void;
+    readonly resetEnemyDashVisuals: () => void;
     readonly syncMissionProgress: (
       config: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
       state: CoopDefenseMissionProgressPresentationState | null,
@@ -116,6 +125,7 @@ export interface CoopMissionPresentationUiPort {
 export class CoopMissionPresentationBinding implements CoopMissionScopedBinding {
   private runtime: CoopMissionRuntime | null = null;
   private presentationActive = false;
+  private clientCarryPresentationItems: readonly SyncedCoopDefenseCarryItem[] | null = null;
 
   constructor(
     private readonly mapConfig: CoopDefenseMapConfig,
@@ -128,6 +138,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     if (this.runtime) this.clearPresentation();
     this.runtime = runtime;
     this.presentationActive = false;
+    this.clientCarryPresentationItems = null;
     this.ui.mapEvents.setMapEvents(this.mapConfig.mapEvents ?? []);
   }
 
@@ -189,6 +200,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.centerHud.updateMissionStackOcclusion(deltaMs);
 
     const secondaryObjectivePresentation = this.reads.getSecondaryObjectivePresentationState();
+    const carryItems = this.resolveCarryPresentationItems();
     this.ui.secondaryObjectives.sync(
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,
@@ -203,8 +215,9 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.worldSpace.syncSecondaryObjectiveMarkers(
       secondaryObjectivePresentation,
       this.runtime.secondaryObjectiveConfigs,
-      this.reads.getCarryPresentationItems(),
+      carryItems,
     );
+    this.ui.worldSpace.syncCoopDefenseCarry(carryItems);
     this.ui.worldSpace.syncMissionProgress(
       resolveCoopDefenseMapMissionProgress(this.mapConfig),
       missionProgress,
@@ -219,6 +232,32 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
       elapsedMs,
     );
     this.ui.worldSpace.syncHostileBaseIndicator(this.mapConfig);
+  }
+
+  /**
+   * Activity-owned client projection reached through the existing canonical Activity step.
+   * Snapshot application remains conditional on a new network snapshot; interpolation and
+   * transient enemy visuals continue for every frame with an available client state.
+   */
+  clientPresentationStep(frame: CoopMissionClientPresentationFrame): void {
+    const runtime = this.runtime;
+    if (!runtime) return;
+
+    if (!frame.stateAvailable) return;
+    if (frame.newSnapshot) {
+      runtime.enemyManager?.applySnapshot(frame.enemySnapshot);
+    }
+    // Carry state is read by the regular Activity presentation step after this call. It is
+    // intentionally refreshed on every available state, just like the former Scene adapter,
+    // while EnemyManager reconciliation remains gated by the network-version flag above.
+    this.clientCarryPresentationItems = frame.carryItems;
+    runtime.enemyManager?.updateClientInterpolation(frame.interpolationFactor);
+
+    const vulnerabilityNow = this.reads.getSynchronizedNow();
+    for (const enemy of runtime.enemyManager?.getAllEnemies() ?? []) {
+      this.ui.worldSpace.syncEnemyDashVisual(enemy);
+      enemy.setVulnerable(this.reads.getEnemyVulnerability(enemy.id, vulnerabilityNow));
+    }
   }
 
   private syncTutorial(
@@ -259,9 +298,14 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
 
   private clearPresentation(): void {
     this.presentationActive = false;
+    this.clientCarryPresentationItems = null;
     this.ui.centerHud.resetCoopMissionPresentation();
     this.ui.mapEvents.reset();
     this.ui.secondaryObjectives.reset();
     this.ui.worldSpace.reset();
+  }
+
+  private resolveCarryPresentationItems(): readonly SyncedCoopDefenseCarryItem[] {
+    return this.clientCarryPresentationItems ?? this.reads.getCarryPresentationItems();
   }
 }

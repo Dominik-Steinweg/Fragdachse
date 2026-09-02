@@ -18,7 +18,6 @@ import {
 } from '../../world/WorldPresentationFrameBinding';
 import type {
   SyncedBurningGroundSnapshot,
-  SyncedCoopDefenseCarryItem,
   SyncedPowerUpPedestal,
 } from '../../types';
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
@@ -49,7 +48,6 @@ export interface ArenaRuntimeInput {
   readonly clientUpdate: ClientUpdateCoordinator;
   readonly roomQualityMonitor: RoomQualityMonitor;
   readonly coopMissionPresentationUi: CoopMissionPresentationUiPort;
-  readonly getReplicatedCoopDefenseCarryItems: () => readonly SyncedCoopDefenseCarryItem[];
   readonly getLocalPlayerId: () => string;
   readonly getSynchronizedNow: () => number;
   /**
@@ -112,7 +110,6 @@ export class ArenaRuntime {
       input.clientUpdate,
       input.roomQualityMonitor,
       input.coopMissionPresentationUi,
-      input.getReplicatedCoopDefenseCarryItems,
       this.persistentBase,
       input.getSpectatorCameraInput,
     );
@@ -144,7 +141,6 @@ export class ArenaRuntime {
     });
     this.clientUpdate.setActivityFramePort({
       getStep: () => this.flow.getActivityStep(),
-      getCoopMissionRuntime: () => this.flow.getCoopMissionRuntime(),
     });
   }
 
