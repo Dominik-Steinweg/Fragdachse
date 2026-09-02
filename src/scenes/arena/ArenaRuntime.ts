@@ -9,6 +9,7 @@ import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay } from '../LobbyOverlay';
 import type { RoomQualityMonitor } from '../../network/RoomQualityMonitor';
 import type { CoopMissionOutcome } from '../../activity/CoopMissionRuntime';
+import type { CoopMissionPresentationUiPort } from '../../activity/CoopMissionPresentationBinding';
 import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import {
   resetWorldCameraBase,
@@ -43,6 +44,7 @@ export interface ArenaRuntimeInput {
   readonly hostUpdate: HostUpdateCoordinator;
   readonly clientUpdate: ClientUpdateCoordinator;
   readonly roomQualityMonitor: RoomQualityMonitor;
+  readonly coopMissionPresentationUi: CoopMissionPresentationUiPort;
   readonly getLocalPlayerId: () => string;
   readonly getSynchronizedNow: () => number;
   /**
@@ -104,6 +106,7 @@ export class ArenaRuntime {
       input.hostUpdate,
       input.clientUpdate,
       input.roomQualityMonitor,
+      input.coopMissionPresentationUi,
       this.persistentBase,
       input.getSpectatorCameraInput,
     );
@@ -188,6 +191,11 @@ export class ArenaRuntime {
 
   syncWorldCanopy(showWorld: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.syncCanopyTransparency(showWorld);
+  }
+
+  /** Taktet den Activity-scoped Coop-HUD-/Announcement-Binding genau einmal pro Frame. */
+  syncCoopMissionPresentation(deltaMs: number, active: boolean): void {
+    this.flow.syncCoopMissionPresentation(deltaMs, active);
   }
 
   syncWorldLocalPlayerPresentation(showWorld: boolean, spectator: boolean): void {

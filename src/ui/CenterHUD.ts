@@ -1008,15 +1008,7 @@ export class CenterHUD {
 
   transitionToLobby(): void {
     this.container.setVisible(false);
-    this.objectiveAnnouncements?.reset();
-    this.announcedEncounterStarts.clear();
-    this.announcedEncounterResults.clear();
-    this.encounterAnnouncementHandsOver = false;
-    this.hideAnnouncement();
-    this.hideMainObjectivePresentation(true);
-    this.hideEncounterPresentation();
-    this.hideTutorial(true);
-    this.hideTutorialStep(true);
+    this.resetCoopMissionPresentation();
     this.hideTrainWidget();
     this.hideLowerSection(this.armorSection);
     this.hideLowerSection(this.utilitySection);
@@ -1031,6 +1023,26 @@ export class CenterHUD {
     this.ultimateReadyActive = false;
     this.lastTimerText = null;
     this.lastTimerColor = null;
+  }
+
+  /**
+   * Clears only Activity-scoped Coop presentation. The CenterHUD itself remains scene-lifetime
+   * infrastructure and can immediately serve the next World or Activity.
+   */
+  resetCoopMissionPresentation(): void {
+    this.objectiveAnnouncements?.reset();
+    this.announcedEncounterStarts.clear();
+    this.announcedEncounterResults.clear();
+    this.encounterAnnouncementHandsOver = false;
+    this.hideAnnouncement();
+    this.hideMainObjectivePresentation(true);
+    this.hideEncounterPresentation();
+    this.hideTutorial(true);
+    this.hideTutorialStep(true);
+    if (this.missionStack) {
+      resetHudOcclusionFade(this.missionStackFade);
+      this.missionStack.setAlpha(1);
+    }
     this.lastLifeStatusText = null;
     this.lifeStatusText.setVisible(false);
   }

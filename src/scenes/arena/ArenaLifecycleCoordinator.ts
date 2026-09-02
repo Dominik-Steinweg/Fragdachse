@@ -49,8 +49,16 @@ import {
   type CoopMissionActivityStep,
   type CoopMissionRuntimePorts,
 } from '../../activity/CoopMissionRuntime';
+import {
+  CoopMissionPresentationBinding,
+  type CoopMissionPresentationReadPort,
+  type CoopMissionPresentationUiPort,
+} from '../../activity/CoopMissionPresentationBinding';
 import { CoopMissionPlayerRuntime } from '../../activity/CoopMissionPlayerRuntime';
-import { createArenaCoopMissionPorts } from './ArenaCoopMissionPorts';
+import {
+  createArenaCoopMissionPorts,
+  createArenaCoopMissionPresentationPort,
+} from './ArenaCoopMissionPorts';
 import { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
 import {
   createCoopMissionCompletion,
@@ -319,6 +327,10 @@ export class ArenaLifecycleCoordinator {
    * Die Antworten selbst sind Activity-Lesesicht und stehen deshalb neben dem Flow.
    */
   private readonly coopMissionPorts: CoopMissionRuntimePorts;
+  /** Adapter boundary for Activity-owned screen-space Coop presentation. */
+  private readonly coopMissionPresentationPorts: CoopMissionPresentationReadPort;
+  /** Active Activity-scoped HUD/announcement binding; inert after its Activity detaches. */
+  private coopMissionPresentationBinding: CoopMissionPresentationBinding | null = null;
   /**
    * Besitzer der laufenden World-Instanz. Erzeugung, lokale Runtime und Ende laufen
    * ausschliesslich hierueber; `ArenaContext.world` wird nur von diesem Sink geschrieben.
@@ -622,6 +634,7 @@ export class ArenaLifecycleCoordinator {
     private readonly hostUpdate: HostUpdateCoordinator,
     private readonly clientUpdate: ClientUpdateCoordinator,
     private readonly roomQualityMonitor: RoomQualityMonitor,
+    private readonly coopMissionPresentationUi: CoopMissionPresentationUiPort,
     /**
      * Der raumlanglebige Persistent-Base-Owner. Er ueberlebt jede World und jede Runde und
      * gehoert deshalb der `ArenaRuntime`; der Flow fragt ihn nur.
@@ -633,8 +646,14 @@ export class ArenaLifecycleCoordinator {
     this.coopMissionPorts = createArenaCoopMissionPorts({
       ctx,
       getWorldRuntime: () => this.worldRuntime,
+      getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
+      getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
       getBurrowSystem: () => this.worldPlayerGameplayRuntime?.systems.burrow ?? null,
       getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
+    });
+    this.coopMissionPresentationPorts = createArenaCoopMissionPresentationPort({
+      getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
+      getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
     });
     this.coopMissionComposition = new CoopMissionComposition({
       scene,
@@ -956,6 +975,11 @@ export class ArenaLifecycleCoordinator {
     return this.coopMissionRuntime;
   }
 
+  /** Taktet die screen-space Coop-Presentation fuer die laufende Activity. */
+  syncCoopMissionPresentation(deltaMs: number, active: boolean): void {
+    this.coopMissionPresentationBinding?.sync(deltaMs, active);
+  }
+
   /** Bindet die konkrete Coop-Runtime an den Activity-Slot der laufenden World. */
   private attachActivityRuntime(activity: ActivityDescriptor): void {
     const worldRuntime = this.worldRuntime;
@@ -1012,6 +1036,17 @@ export class ArenaLifecycleCoordinator {
         this.ctx.combatSystem.setEnemyManager(null);
       },
     });
+    const activityConfiguration = resolveCoopMissionActivityConfiguration(
+      activity,
+      worldRuntime.context.definition,
+    );
+    const presentationBinding = new CoopMissionPresentationBinding(
+      activityConfiguration.mapConfig,
+      this.coopMissionPresentationPorts,
+      this.coopMissionPresentationUi,
+    );
+    this.coopMissionPresentationBinding = presentationBinding;
+    runtime.bind(presentationBinding);
     this.attachCoopMissionBaseBinding(activity, runtime);
     this.onCoopMissionRuntimeChanged(runtime);
     if (this.worldRuntime?.materialization?.arena) {
@@ -1019,10 +1054,6 @@ export class ArenaLifecycleCoordinator {
         activity,
         runtime,
         this.worldLifecycle.activityStartAnchor ?? undefined,
-      );
-      const activityConfiguration = resolveCoopMissionActivityConfiguration(
-        activity,
-        this.worldRuntime?.context.definition ?? null,
       );
       this.coopMissionComposition.materializeCore(activityConfiguration, runtime);
       this.coopMissionComposition.materializeDependents(activityConfiguration, runtime);

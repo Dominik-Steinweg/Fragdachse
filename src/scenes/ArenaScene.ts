@@ -74,8 +74,6 @@ import { CenterHUD }             from '../ui/CenterHUD';
 import { CoopDefenseObjectiveAnnouncement } from '../ui/CoopDefenseObjectiveAnnouncement';
 import { CoopDefenseMapEventAnnouncementPresenter } from '../ui/CoopDefenseMapEventAnnouncementPresenter';
 import { CoopDefenseSecondaryObjectiveHud } from '../ui/CoopDefenseSecondaryObjectiveHud';
-import { buildCoopDefenseLifeStatusViewModel } from '../ui/coopDefenseLifeStatusModel';
-import { buildMainObjectiveViewModel } from '../ui/coopDefenseMainObjectiveModel';
 import { LobbyOverlay }          from './LobbyOverlay';
 import { BootScreen }             from '../ui/BootScreen';
 import { RoomQualityMonitor }    from '../network/RoomQualityMonitor';
@@ -119,12 +117,10 @@ import {
   getCoopDefenseUpgradeTextureKey,
   hasCoopDefenseDedicatedUpgradeIcon,
 } from '../utils/coopDefenseUpgrades';
-import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
-import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
 import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile } from '../types';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { COOP_DEFENSE_MODE, isCoopDefenseMode, isTeamGameMode } from '../gameModes';
-import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, resolveCoopDefenseMapTutorialSteps, WEAPON_BALANCE_LAB_MAP_ID, type CoopDefenseMapConfig } from '../config/coopDefenseMaps';
+import { getCoopDefenseMapConfig, isWeaponBalanceLabMapId, resolveCoopDefenseMapMissionProgress, WEAPON_BALANCE_LAB_MAP_ID } from '../config/coopDefenseMaps';
 import { resolveActiveGameMode, toMapId } from '../world/arenaDescriptorAdapter';
 import type { WorldDescriptor } from '../world/WorldDescriptor';
 import { isLobbyWorldDefinitionId } from '../config/authoring/lobbyWorld';
@@ -133,7 +129,7 @@ import { resolvePresentationPolicy } from '../world/PresentationPolicy';
 import { buildCountdownGroundFirePreview } from '../effects/CountdownGroundFirePreview';
 import { getLocale, t } from '../i18n';
 import { getLocalizedGameModeLabel } from '../i18n/gameModePresentation';
-import { getMapName, getMapTutorial, getMapTutorialStep } from '../i18n/contentPresentation';
+import { getMapName } from '../i18n/contentPresentation';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../config/coopDefenseEnemies';
 import { TunnelRenderer } from './arena/TunnelRenderer';
 import { PersistentBaseVisuals } from './arena/PersistentBaseVisuals';
@@ -171,6 +167,7 @@ import {
   wireRenderersToDistortion,
 } from './arena';
 import { resolveCoopDefenseCarryPresentationSnapshot } from './arena/CoopDefenseCarryPresentation';
+import type { CoopMissionPresentationUiPort } from '../activity/CoopMissionPresentationBinding';
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {
   const baseRadius = Math.max(CELL_SIZE * 2, projectile.size * 4);
@@ -1131,6 +1128,40 @@ export class ArenaScene extends Phaser.Scene {
     this.roomQualityMonitor = new RoomQualityMonitor(bridge);
 
     // ── RPC + Lifecycle coordinators ──────────────────────────────────────
+    const coopMissionPresentationUi: CoopMissionPresentationUiPort = {
+      centerHud: {
+        resetCoopMissionPresentation: () => centerHUD.resetCoopMissionPresentation(),
+        updateLifeStatus: (model) => centerHUD.updateLifeStatus(model),
+        updateMainObjectivePresentation: (model) => centerHUD.updateMainObjectivePresentation(model),
+        updateEncounterPresentation: (state, elapsedMs) => centerHUD.updateEncounterPresentation(state, elapsedMs),
+        updateMissionStackOcclusion: (deltaMs) => centerHUD.updateMissionStackOcclusion(
+          deltaMs,
+          playerManager,
+          this.enemyManager,
+        ),
+        updateTutorial: (text, showControls, anchor) => centerHUD.updateTutorial(text, showControls, anchor),
+        updateTutorialStep: (text, anchor) => centerHUD.updateTutorialStep(text, anchor),
+      },
+      mapEvents: {
+        setMapEvents: (events) => this.mapEventAnnouncementPresenter?.setMapEvents(events),
+        sync: (state) => this.mapEventAnnouncementPresenter?.sync(state),
+        reset: () => this.mapEventAnnouncementPresenter?.reset(),
+      },
+      secondaryObjectives: {
+        sync: (snapshot, configs, elapsedMs) => this.secondaryObjectiveHud?.sync(
+          snapshot,
+          configs,
+          elapsedMs,
+          true,
+        ),
+        updateOcclusionFade: (deltaMs) => this.secondaryObjectiveHud?.updateOcclusionFade(
+          deltaMs,
+          playerManager,
+          this.enemyManager,
+        ),
+        reset: () => this.secondaryObjectiveHud?.reset(),
+      },
+    };
     this.arenaRuntime   = new ArenaRuntime({
       scene: this,
       ctx: this.ctx,
@@ -1143,6 +1174,7 @@ export class ArenaScene extends Phaser.Scene {
       hostUpdate: this.hostUpdate,
       clientUpdate: this.clientUpdate,
       roomQualityMonitor: this.roomQualityMonitor,
+      coopMissionPresentationUi,
       getLocalPlayerId: () => bridge.getLocalPlayerId(),
       getSynchronizedNow: () => bridge.getSynchronizedNow(),
       // Lazy: `this.inputBindings` entsteht erst nach der ArenaRuntime.
@@ -1761,26 +1793,6 @@ export class ArenaScene extends Phaser.Scene {
         secs,
         activeMapConfig === null || activeMapConfig.objective === 'survive',
       );
-      this.ctx.centerHUD.updateLifeStatus(buildCoopDefenseLifeStatusViewModel({
-        budget: bridge.getLocalCoopDefenseRespawnBudgetState(),
-        missionRespawnActive: bridge.getCoopDefenseMissionProgressPresentationState()
-          ?.respawnCheckpointId != null,
-      }));
-      const roundElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
-      const tutorialDurationMs = activeMapConfig?.tutorialDurationMs ?? COOP_DEFENSE_TUTORIAL_DURATION_MS;
-      // `tutorialPersistent` blendet das Fenster über die gesamte Rundendauer ein.
-      const tutorialText = activeMapConfig
-        ? getMapTutorial(activeMapConfig.mapId, getLocale())
-        : undefined;
-      const tutorialVisible = tutorialText !== undefined
-        && roundElapsedMs >= 0
-        && (activeMapConfig?.tutorialPersistent === true || roundElapsedMs < tutorialDurationMs);
-      this.ctx.centerHUD.updateTutorial(
-        tutorialVisible ? tutorialText! : null,
-        activeMapConfig?.tutorialShowControls === true,
-        activeMapConfig?.tutorialAnchor,
-      );
-      this.updateCoopDefenseTutorialSteps(activeMapConfig);
 
       // Train widget: Das Zug-Event selbst entscheidet, ob etwas anzuzeigen ist – Maps mit
       // Gleisen ohne Zug und Runden ohne weitere Einfahrt haben schlicht kein Event.
@@ -1907,77 +1919,16 @@ export class ArenaScene extends Phaser.Scene {
     const encounterPresentation = coopDefensePresentationActive
       ? bridge.getCoopDefenseEncounterPresentationState()
       : null;
-    this.mapEventAnnouncementPresenter?.setMapEvents(presentationMapConfig?.mapEvents ?? []);
-    this.mapEventAnnouncementPresenter?.sync(
-      coopDefensePresentationActive ? bridge.getCoopDefenseMapEventPresentationState() : null,
-    );
     const secondaryObjectivesActive = coopDefensePresentationActive;
     const secondaryObjectivePresentation = secondaryObjectivesActive
       ? bridge.getCoopDefenseSecondaryObjectivePresentationState()
       : null;
     const encounterElapsedMs = bridge.getSynchronizedNow() - bridge.getArenaStartTime();
-    const hostileMainBases = presentationMapConfig?.objective === 'destroy-hostile-bases'
-      ? (this.baseManager?.getMainBasesByFaction('hostile') ?? [])
-      : [];
-    const bossEnemyKind = presentationMapConfig?.boss?.enemyKind;
-    const bossEnemy = bossEnemyKind
-      ? this.enemyManager?.getAllEnemies().find((enemy) => (
-        enemy.faction === 'hostile'
-        && enemy.kind === bossEnemyKind
-        && enemy.sprite.active
-        && enemy.getHp() > 0
-      ))
-      : undefined;
     const missionProgressPresentation = coopDefensePresentationActive
       ? bridge.getCoopDefenseMissionProgressPresentationState()
       : null;
-    const mainObjective = presentationMapConfig
-      ? buildMainObjectiveViewModel({
-        mapId: presentationMapConfig.mapId,
-        objective: presentationMapConfig.objective,
-        elapsedMs: encounterElapsedMs,
-        surviveDurationSec: presentationMapConfig.surviveDurationSec,
-        encounterCount: presentationMapConfig.encounters?.length ?? 0,
-        encounter: encounterPresentation,
-        boss: bossEnemy ? { currentHp: bossEnemy.getHp(), maxHp: bossEnemy.getMaxHp() } : null,
-        hostileBases: hostileMainBases.length > 0
-          ? {
-            currentHp: hostileMainBases.reduce((sum, base) => sum + base.getHp(), 0),
-            maxHp: hostileMainBases.reduce((sum, base) => sum + base.getMaxHp(), 0),
-            remaining: hostileMainBases.filter((base) => !base.isDestroyed()).length,
-            total: hostileMainBases.length,
-          }
-          : null,
-        // Vorstoss liest denselben replizierten MissionProgress-Snapshot wie die Weltmarker.
-        advance: presentationMapConfig.objective === 'advance'
-          ? {
-            activatedCheckpoints: missionProgressPresentation?.activatedCheckpoints.length ?? 0,
-            totalCheckpoints: resolveCoopDefenseMapMissionProgress(presentationMapConfig)
-              ?.checkpoints.length ?? 0,
-            routeComplete: missionProgressPresentation?.routeComplete === true,
-          }
-          : null,
-      })
-      : null;
-    this.ctx.centerHUD.updateMainObjectivePresentation(mainObjective);
-    this.ctx.centerHUD.updateEncounterPresentation(encounterPresentation, encounterElapsedMs);
-    // Die rechte Missionsspalte steht in Coop-Maps über dem Spielfeld und weicht deshalb vor
-    // Figuren und Zielpunkt zurück.
-    this.ctx.centerHUD.updateMissionStackOcclusion(delta, this.ctx.playerManager, this.enemyManager);
+    this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
     this.renderers.encounterTelegraph.sync(encounterPresentation, encounterElapsedMs, inArena);
-    // Pflichtziel und Nebenziel werden im selben Frameabschnitt aktualisiert; die Rundenzeit
-    // ist dieselbe Bezugsgroesse, gegen die der Host seine Zustandswechsel datiert.
-    this.secondaryObjectiveHud?.sync(
-      secondaryObjectivePresentation,
-      (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
-      encounterElapsedMs,
-      secondaryObjectivesActive,
-    );
-    this.secondaryObjectiveHud?.updateOcclusionFade(
-      delta,
-      this.ctx.playerManager,
-      this.enemyManager,
-    );
     this.renderers.secondaryObjectiveMarkers.sync(
       secondaryObjectivePresentation,
       (this.coopMissionRuntime?.secondaryObjectiveConfigs ?? []),
@@ -2840,36 +2791,6 @@ export class ArenaScene extends Phaser.Scene {
    * Aktueller Zugzustand für Schatten und Licht. Bevorzugt den interpolierten Stand des
    * Renderers, damit beide nicht am Netz-Tick kleben.
    */
-  /**
-   * Gemeinsame Tutorial-Hinweise entlang der Route. Die Aktivierung kommt aus dem bereits
-   * replizierten, hostautoritativen Missions-Presentation-State; alle Clients projizieren daraus
-   * denselben World-Space-Hinweis. Der Step selbst bleibt reine Darstellung.
-   */
-  private updateCoopDefenseTutorialSteps(activeMapConfig: CoopDefenseMapConfig | null): void {
-    const steps = activeMapConfig ? resolveCoopDefenseMapTutorialSteps(activeMapConfig) : [];
-    if (activeMapConfig === null || steps.length === 0) {
-      this.ctx.centerHUD.updateTutorialStep(null);
-      return;
-    }
-
-    const missionState = bridge.getCoopDefenseMissionProgressPresentationState();
-    const roundElapsedMs = Math.max(0, bridge.getSynchronizedNow() - bridge.getArenaStartTime());
-    const visibleStepId = missionState === null
-      ? null
-      : getVisibleCoopDefenseTutorialStepId(
-        steps,
-        missionState.activatedCheckpoints,
-        roundElapsedMs,
-      );
-    const visibleStep = visibleStepId === null
-      ? null
-      : steps.find((step) => step.id === visibleStepId) ?? null;
-    this.ctx.centerHUD.updateTutorialStep(
-      visibleStep === null ? null : getMapTutorialStep(visibleStep.id, getLocale()) ?? null,
-      visibleStep?.anchor,
-    );
-  }
-
   private initializeRoomQuality(): void {
     this.roomQualityMonitor.initialize(this.time.now);
     this.roomQualitySnapshot = this.roomQualityMonitor.getSnapshot();

@@ -4,6 +4,9 @@ import type {
   CoopMissionArmedOutpostView,
 } from '../../activity/CoopMissionHostUpdate';
 import type { CoopMissionRuntimePorts } from '../../activity/CoopMissionRuntime';
+import type { CoopMissionPresentationReadPort } from '../../activity/CoopMissionPresentationBinding';
+import type { BaseManager } from '../../entities/BaseManager';
+import type { EnemyManager } from '../../entities/EnemyManager';
 import type { BurrowSystem } from '../../systems/BurrowSystem';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldRuntime } from '../../world/WorldRuntime';
@@ -12,8 +15,43 @@ import type { ArenaContext } from './ArenaContext';
 export interface ArenaCoopMissionPortsInput {
   readonly ctx: ArenaContext;
   readonly getWorldRuntime: () => WorldRuntime | null;
+  readonly getBaseManager: () => BaseManager | null;
+  readonly getEnemyManager: () => EnemyManager | null;
   readonly getBurrowSystem: () => BurrowSystem | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
+}
+
+export function createArenaCoopMissionPresentationPort(
+  input: Pick<ArenaCoopMissionPortsInput, 'getBaseManager' | 'getEnemyManager'>,
+): CoopMissionPresentationReadPort {
+  return {
+    getEncounterPresentationState: () => bridge.getCoopDefenseEncounterPresentationState(),
+    getMapEventPresentationState: () => bridge.getCoopDefenseMapEventPresentationState(),
+    getSecondaryObjectivePresentationState: () => bridge.getCoopDefenseSecondaryObjectivePresentationState(),
+    getMissionProgressPresentationState: () => bridge.getCoopDefenseMissionProgressPresentationState(),
+    getLocalRespawnBudgetState: () => bridge.getLocalCoopDefenseRespawnBudgetState(),
+    getSynchronizedNow: () => bridge.getSynchronizedNow(),
+    getArenaStartTime: () => bridge.getArenaStartTime(),
+    getHostileBaseProgress: () => {
+      const bases = input.getBaseManager()?.getMainBasesByFaction('hostile') ?? [];
+      if (bases.length === 0) return null;
+      return {
+        currentHp: bases.reduce((sum, base) => sum + base.getHp(), 0),
+        maxHp: bases.reduce((sum, base) => sum + base.getMaxHp(), 0),
+        remaining: bases.filter((base) => !base.isDestroyed()).length,
+        total: bases.length,
+      };
+    },
+    getBossProgress: (enemyKind) => {
+      const enemy = input.getEnemyManager()?.getAllEnemies().find((candidate) => (
+        candidate.faction === 'hostile'
+        && candidate.kind === enemyKind
+        && candidate.sprite.active
+        && candidate.getHp() > 0
+      ));
+      return enemy ? { currentHp: enemy.getHp(), maxHp: enemy.getMaxHp() } : null;
+    },
+  };
 }
 
 /**
