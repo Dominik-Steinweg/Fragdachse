@@ -201,6 +201,30 @@ const BOOT_PRELOAD_PROGRESS_SHARE = 0.8;
  */
 const BOOT_REVEAL_TIMEOUT_MS = 2500;
 
+/**
+ * Reine, immutable Frame-Signale fuer die Scene-Orchestrierung. Das Objekt traegt keine
+ * Services oder Owner-Referenzen; fachliche Arbeit bleibt an den benannten Runtime-/Binding-
+ * Schritten unten.
+ */
+type ArenaFrameSignals = Readonly<{
+  configuredGameMode: GameMode;
+  configuredCoopDefenseMapId: string | null;
+  enteredLobbyFromArena: boolean;
+  returningFromWeaponBalanceLab: boolean;
+  inGame: boolean;
+  arenaLoading: boolean;
+  countdownActive: boolean;
+  terminated: boolean;
+  gameplayActive: boolean;
+  weaponBalanceLabArena: boolean;
+  optionsOpen: boolean;
+  spectator: boolean;
+  worldActive: boolean;
+  activityActive: boolean;
+  localWorldPresentation: ReturnType<ArenaLifecycleCoordinator['getLocalWorldPresentation']>;
+  presentationPolicy: ReturnType<typeof resolvePresentationPolicy>;
+}>;
+
 export class ArenaScene extends Phaser.Scene {
   // ── Phaser-scoped objects (must stay in scene) ────────────────────────────
   private arenaBuilder!: ArenaBuilder;
@@ -1612,8 +1636,8 @@ export class ArenaScene extends Phaser.Scene {
     diagnosticsFrame?.end('networkUpdate');
     diagnosticsFrame?.mark('networkEnd');
 
-    const phase           = bridge.getGamePhase();
-    const deferArenaExit  = this.weaponBalanceLabPreviousMapId === null
+    const phase = bridge.getGamePhase();
+    const deferArenaExit = this.weaponBalanceLabPreviousMapId === null
       && this.syncArenaExitFade(phase);
     this.lifecycle.detectPhaseChange(deferArenaExit);
     // Eine World ohne Activity haengt an keinem Phasenwechsel; sie entsteht und vergeht mit
@@ -1630,6 +1654,234 @@ export class ArenaScene extends Phaser.Scene {
     // eigenen Child-Owner; Rundenphase und Rolle entscheiden darueber nichts.
     this.arenaRuntime.update(delta);
     if (!deferArenaExit && phase === 'LOBBY') this.arenaExitFadeOverlay?.hide();
+
+    const frame = this.resolveArenaFrameSignals(phase, deferArenaExit);
+    const {
+      configuredGameMode,
+      configuredCoopDefenseMapId,
+      enteredLobbyFromArena,
+      returningFromWeaponBalanceLab,
+      inGame,
+      arenaLoading,
+      countdownActive,
+      terminated,
+      gameplayActive,
+      weaponBalanceLabArena,
+      optionsOpen,
+      spectator,
+      worldActive,
+      activityActive,
+      localWorldPresentation,
+      presentationPolicy,
+    } = frame;
+
+    // The camera must already be positioned while the world is hidden, because its initial view
+    // defines the startup working set that the load barrier waits for.
+    this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);
+    // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
+    // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
+    // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
+    // dazukommt.
+    if (presentationPolicy.showWorld) {
+      this.arenaRuntime.syncWorldSurfaceResidency(presentationPolicy.showWorld);
+    }
+    // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
+    // liefert nur den bereits orchestrierten World-/Round-/UI-Framekontext.
+    this.inputBindings?.updateFrame({
+      enabled: worldActive && localWorldPresentation.required,
+      gameplayActive: worldActive && (!activityActive || gameplayActive),
+      countdownActive,
+      uiBlocking: optionsOpen,
+      diagnosticsArena: weaponBalanceLabArena,
+    });
+    if (worldActive && localWorldPresentation.required && countdownActive) {
+      this.syncCountdownPlayerPresentation();
+    }
+    diagnosticsFrame?.mark('inputEnd');
+
+    this.syncArenaLobbyFrame(
+      phase,
+      deferArenaExit,
+      terminated,
+      presentationPolicy,
+      enteredLobbyFromArena,
+      returningFromWeaponBalanceLab,
+      diagnosticsFrame,
+    );
+
+    if (!deferArenaExit) this.lastObservedGamePhase = phase;
+    diagnosticsFrame?.mark('sceneStateEnd');
+
+    // Same-Mode-Live-Builds bleiben in derselben LobbyWorld reconciled. Ein vollstaendiger
+    // GameMode-Wechsel wurde davor bereits als neue World-Instanz orchestriert.
+    if (worldActive && bridge.isHost() && !terminated) {
+      this.lifecycle.syncHostLoadoutsFromCommittedSelections();
+    }
+
+    this.runArenaWorldWithoutActivityFrame(
+      worldActive,
+      activityActive,
+      terminated,
+      delta,
+      diagnosticsFrame,
+    );
+
+    this.runArenaRoleFrame(
+      delta,
+      phase,
+      configuredGameMode,
+      configuredCoopDefenseMapId,
+      gameplayActive,
+      countdownActive,
+      terminated,
+      diagnosticsFrame,
+    );
+
+    // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
+    // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
+    // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
+    if (presentationPolicy.showWorld) {
+      diagnosticsFrame?.begin('leaderboardCanopy');
+      this.arenaRuntime.syncWorldCanopy(presentationPolicy.showWorld);
+      diagnosticsFrame?.end('leaderboardCanopy');
+    }
+
+    diagnosticsFrame?.begin('arenaPanel');
+    this.syncArenaPanelOverlayState(gameplayActive && !terminated);
+    diagnosticsFrame?.end('arenaPanel');
+
+    diagnosticsFrame?.mark('visualStart');
+
+    // ── Per-frame visuals (always) ─────────────────────────────────────────
+    // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
+    // Renderer-Syncs nur mit frischem Netzzustand, die bisherigen Emitter liefen dagegen
+    // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
+    this.renderers.gpuVfx.update(delta);
+    const inArena = presentationPolicy.showWorld;
+    // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor
+    // und Platzierungsvorschau gehoeren deshalb der interaktiven Darstellung, nicht der blossen
+    // Sichtbarkeit.
+    const worldInteractive = presentationPolicy.worldMode === 'interactive';
+    // Und Rundenpraesentation - Missionsansagen, Encounter, Zug, strategische Ziele - haengt
+    // zusaetzlich an der Activity: interaktiv zu spielen heisst nicht, dass eine Runde laeuft.
+    const inRoundWorld = worldInteractive && activityActive;
+    this.syncArenaStrategicTargets(inRoundWorld, configuredGameMode);
+    // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
+    // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
+    // Keep the camera active while the arena is hidden behind the loading veil. Its position is
+    // part of the local startup working set and must not be reset to the lobby origin before the
+    // readiness check at the end of the frame.
+    this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
+    const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
+    this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
+    this.syncSpectatorPlayerNames(inArena);
+    this.arenaRuntime.syncWorldLocalPlayerPresentation(inArena, spectator);
+    if (inArena) {
+      this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
+    } else {
+      this.enemyHoverNameLabel?.clear(true);
+    }
+    // Loading uses the full-screen veil even though the arena itself is still hidden; once the
+    // authoritative countdown timestamp exists, the same overlay switches to 3 → 2 → 1.
+    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
+    diagnosticsFrame?.mark('visualCameraEnd');
+
+    this.syncArenaVisualEffects(inArena, delta, diagnosticsFrame);
+
+    const {
+      showAim,
+      scopeProgress,
+      utilityPlacementActive,
+      ultimatePlacementActive,
+    } = this.syncArenaAimAndPlacementPresentation(
+      inArena,
+      worldInteractive,
+      spectator,
+      optionsOpen,
+      delta,
+      diagnosticsFrame,
+    );
+
+    // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
+    // unversetzten Kameraposition (siehe `applyCameraFeedback`).
+    this.applyCameraFeedback(delta);
+    // Das Tutorial ist ein Weltobjekt: Seine Occlusion-Probe braucht deshalb den finalen
+    // Scroll-/Shake-Versatz, den auch der anschließende Render-Schritt verwendet.
+    this.ctx.centerHUD.updateTutorialOcclusion(
+      delta,
+      [
+        ...this.ctx.centerHUD.getReservedHudRects(),
+        ...(this.secondaryObjectiveHud?.getReservedHudRects() ?? []),
+      ],
+    );
+    // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten
+    // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
+    this.ctx.arenaCountdown?.syncAfterCameraFeedback();
+
+    diagnosticsFrame?.begin('shadow');
+    // Keep World-scoped static shadows alive while the arena is hidden behind the loading veil;
+    // clearing them here would destroy the startup surface before the load barrier can observe it.
+    const shadowArenaActive = inArena || (inGame && !terminated);
+    this.arenaRuntime.syncWorldShadows(shadowArenaActive, inRoundWorld);
+    diagnosticsFrame?.end('shadow');
+    this.arenaRuntime.syncWorldLighting(inArena, inRoundWorld);
+
+    // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
+    // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
+    // Das grosszuegige Budget gilt, solange ein deckender Ladescreen davor steht - in der Arena
+    // ihr eigener Schleier, beim Start der Bootscreen.
+    ChunkedRenderSurface.flushBakeBudget(
+      this,
+      arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,
+    );
+    if (inGame && !terminated) {
+      this.lifecycle.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
+    }
+    // Ganz am Ende des Frames: die Barriere sieht damit eine vollstaendig aufgebaute Lobby
+    // inklusive ihres UI-Durchlaufs, nicht einen halb aufgebauten Zwischenstand.
+    if (this.bootRevealPending) this.syncBootReveal(phase);
+
+    // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
+    // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
+    diagnosticsFrame?.begin('networkFlush');
+    bridge.flushNetwork();
+    diagnosticsFrame?.end('networkFlush');
+    diagnosticsFrame?.mark('updateEnd');
+
+    if (companionDiagnosticsActive || diagnosticsFrame) {
+      const runtimePhase = terminated ? 'terminated' : (inGame ? 'arena' : 'lobby');
+      const diagnosticMode = diagnosticsFrame
+        ? configuredGameMode
+        : this.resolveConfiguredGameMode(phase === 'ARENA' ? 'ARENA' : 'LOBBY');
+      const diagnosticMapId = diagnosticsFrame
+        ? configuredCoopDefenseMapId
+        : isCoopDefenseMode(diagnosticMode)
+          ? this.resolveConfiguredCoopDefenseMapId(phase)
+          : null;
+      const diagnosticsInput: ArenaDiagnosticsFrameInput = {
+        phase: runtimePhase,
+        mode: diagnosticMode,
+        mapId: diagnosticMapId,
+        rawDeltaMs: this.game.loop.rawDelta,
+        deltaMs: delta,
+        localAlive: this.localPlayerState.alive,
+        aimVisible: showAim,
+        scopeActive: scopeProgress > 0.005,
+        utilityPlacementActive,
+        ultimatePlacementActive,
+        optionsOpen,
+        enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
+        projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
+        playerCount: this.ctx.playerManager.getAllPlayers().length,
+      };
+      this.diagnostics?.endFrame(diagnosticsInput);
+    }
+  }
+
+  private resolveArenaFrameSignals(
+    phase: GamePhase,
+    deferArenaExit: boolean,
+  ): ArenaFrameSignals {
     const configuredPhase = deferArenaExit ? 'ARENA' : phase;
     const configuredGameMode = this.resolveConfiguredGameMode(configuredPhase);
     const configuredCoopDefenseMapId = isCoopDefenseMode(configuredGameMode)
@@ -1641,18 +1893,18 @@ export class ArenaScene extends Phaser.Scene {
     const returningFromWeaponBalanceLab = enteredLobbyFromArena
       && this.weaponBalanceLabPreviousMapId !== null;
     if (returningFromWeaponBalanceLab) this.restoreMapAfterWeaponBalanceLab();
-    const inGame          = phase === 'ARENA';
-    const countdownVisible = bridge.isArenaCountdownVisible();
-    const arenaLoading    = bridge.isArenaLoading();
-    const arenaStarted    = bridge.isArenaStarted();
-    const arenaVisible    = countdownVisible || deferArenaExit;
+
+    const inGame = phase === 'ARENA';
+    const arenaLoading = bridge.isArenaLoading();
+    const arenaVisible = bridge.isArenaCountdownVisible() || deferArenaExit;
     const countdownActive = bridge.isArenaCountdownActive();
-    const terminated      = this.lifecycle.isMatchTerminated();
-    const gameplayActive  = inGame && arenaStarted && !terminated;
+    const terminated = this.lifecycle.isMatchTerminated();
+    const gameplayActive = inGame && bridge.isArenaStarted() && !terminated;
     const weaponBalanceLabArena = inGame
       && configuredCoopDefenseMapId !== null
       && isWeaponBalanceLabMapId(configuredCoopDefenseMapId);
-    const optionsOpen     = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
+    const optionsOpen = this.ctx?.leftPanel.isOptionsOverlayOpen() ?? false;
+
     // Teilnahme haengt an der World, nicht an der Rundenphase - deshalb steht der Abgleich
     // ausdruecklich vor und unabhaengig von der Rundenrolle. Ohne Activity taktet niemand den
     // Eintritt: dort folgt die Runtime unmittelbar der Aufnahme.
@@ -1701,33 +1953,38 @@ export class ArenaScene extends Phaser.Scene {
       }
     }
 
-    // The camera must already be positioned while the world is hidden, because its initial view
-    // defines the startup working set that the load barrier waits for.
-    this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);
-    // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
-    // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
-    // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
-    // dazukommt.
-    if (presentationPolicy.showWorld) {
-      this.arenaRuntime.syncWorldSurfaceResidency(presentationPolicy.showWorld);
-    }
-    // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
-    // liefert nur den bereits orchestrierten World-/Round-/UI-Framekontext.
-    this.inputBindings?.updateFrame({
-      enabled: worldActive && localWorldPresentation.required,
-      gameplayActive: worldActive && (!activityActive || gameplayActive),
+    return {
+      configuredGameMode,
+      configuredCoopDefenseMapId,
+      enteredLobbyFromArena,
+      returningFromWeaponBalanceLab,
+      inGame,
+      arenaLoading,
       countdownActive,
-      uiBlocking: optionsOpen,
-      diagnosticsArena: weaponBalanceLabArena,
-    });
-    if (worldActive && localWorldPresentation.required && countdownActive) {
-      this.syncCountdownPlayerPresentation();
-    }
-    diagnosticsFrame?.mark('inputEnd');
+      terminated,
+      gameplayActive,
+      weaponBalanceLabArena,
+      optionsOpen,
+      spectator,
+      worldActive,
+      activityActive,
+      localWorldPresentation,
+      presentationPolicy,
+    };
+  }
 
+  private syncArenaLobbyFrame(
+    phase: GamePhase,
+    deferArenaExit: boolean,
+    terminated: boolean,
+    presentationPolicy: ReturnType<typeof resolvePresentationPolicy>,
+    enteredLobbyFromArena: boolean,
+    returningFromWeaponBalanceLab: boolean,
+    diagnosticsFrame: ArenaDiagnosticsFrame | null,
+  ): void {
     if (phase !== 'LOBBY' || deferArenaExit) this.roomStatisticsOverlay?.hide();
-    // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer den
-    // das Testgelaende betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
+    // Weltlicht der Lobby haengt an der Raumphase, nicht an der Oberflaeche: wer das
+    // Testgelaende betritt, sieht dieselbe host-autoritative Uhrzeit wie alle anderen.
     if (!terminated && phase === 'LOBBY' && !deferArenaExit) this.lifecycle.syncLobbyTimeOfDay();
     // Die Oberflaeche folgt der Presentation. Ein technischer Abbruch fuehrt sie selbst zurueck
     // und darf hier nicht ueberschrieben werden.
@@ -1807,34 +2064,18 @@ export class ArenaScene extends Phaser.Scene {
       this.meta?.refreshLobbyProjection(false);
       this.lastLobbySidebarSignature = null;
     }
+  }
 
-    if (!deferArenaExit) this.lastObservedGamePhase = phase;
-    diagnosticsFrame?.mark('sceneStateEnd');
-
-    // Same-Mode-Live-Builds bleiben in derselben LobbyWorld reconciled. Ein vollstaendiger
-    // GameMode-Wechsel wurde davor bereits als neue World-Instanz orchestriert.
-    if (worldActive && bridge.isHost() && !terminated) {
-      this.lifecycle.syncHostLoadoutsFromCommittedSelections();
-    }
-
-    if (worldActive && !activityActive && !terminated) {
-      diagnosticsFrame?.begin('primaryStep');
-      if (bridge.isHost()) this.arenaRuntime.runHostFrame(delta);
-      else {
-        this.arenaRuntime.runClientFrame(delta);
-        const clientState = bridge.getLatestGameState();
-        this.syncClientCaptureTheBeerPresentation(clientState);
-        this.arenaRuntime.syncWorldClientPresentation(
-          clientState,
-          delta,
-          false,
-          { cells: [] },
-          this.powerUpSystem?.getPedestalSnapshot() ?? [],
-        );
-      }
-      diagnosticsFrame?.end('primaryStep');
-    }
-
+  private runArenaRoleFrame(
+    delta: number,
+    phase: GamePhase,
+    configuredGameMode: GameMode,
+    configuredCoopDefenseMapId: string | null,
+    gameplayActive: boolean,
+    countdownActive: boolean,
+    terminated: boolean,
+    diagnosticsFrame: ArenaDiagnosticsFrame | null,
+  ): void {
     if ((gameplayActive || countdownActive) && !terminated) {
       diagnosticsFrame?.begin('arenaHud');
       const secs = bridge.computeSecondsLeft();
@@ -1919,35 +2160,38 @@ export class ArenaScene extends Phaser.Scene {
       }
       diagnosticsFrame?.end('leaderboardCanopy');
     }
+  }
 
-    // Baumkronen haengen an der Darstellung, nicht an der Runde: der Abgleich ist rein lokal und
-    // kennt weder Activity noch Rundenphase. Deshalb blenden sie ueber der eigenen Figur auch in
-    // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
-    if (presentationPolicy.showWorld) {
-      diagnosticsFrame?.begin('leaderboardCanopy');
-      this.arenaRuntime.syncWorldCanopy(presentationPolicy.showWorld);
-      diagnosticsFrame?.end('leaderboardCanopy');
+  private runArenaWorldWithoutActivityFrame(
+    worldActive: boolean,
+    activityActive: boolean,
+    terminated: boolean,
+    delta: number,
+    diagnosticsFrame: ArenaDiagnosticsFrame | null,
+  ): void {
+    if (!worldActive || activityActive || terminated) return;
+
+    diagnosticsFrame?.begin('primaryStep');
+    if (bridge.isHost()) this.arenaRuntime.runHostFrame(delta);
+    else {
+      this.arenaRuntime.runClientFrame(delta);
+      const clientState = bridge.getLatestGameState();
+      this.syncClientCaptureTheBeerPresentation(clientState);
+      this.arenaRuntime.syncWorldClientPresentation(
+        clientState,
+        delta,
+        false,
+        { cells: [] },
+        this.powerUpSystem?.getPedestalSnapshot() ?? [],
+      );
     }
+    diagnosticsFrame?.end('primaryStep');
+  }
 
-    diagnosticsFrame?.begin('arenaPanel');
-    this.syncArenaPanelOverlayState(gameplayActive && !terminated);
-    diagnosticsFrame?.end('arenaPanel');
-
-    diagnosticsFrame?.mark('visualStart');
-
-    // ── Per-frame visuals (always) ─────────────────────────────────────────
-    // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
-    // Renderer-Syncs nur mit frischem Netzzustand, die bisherigen Emitter liefen dagegen
-    // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
-    this.renderers.gpuVfx.update(delta);
-    const inArena = presentationPolicy.showWorld;
-    // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor
-    // und Platzierungsvorschau gehoeren deshalb der interaktiven Darstellung, nicht der blossen
-    // Sichtbarkeit.
-    const worldInteractive = presentationPolicy.worldMode === 'interactive';
-    // Und Rundenpraesentation - Missionsansagen, Encounter, Zug, strategische Ziele - haengt
-    // zusaetzlich an der Activity: interaktiv zu spielen heisst nicht, dass eine Runde laeuft.
-    const inRoundWorld = worldInteractive && activityActive;
+  private syncArenaStrategicTargets(
+    inRoundWorld: boolean,
+    configuredGameMode: GameMode,
+  ): void {
     const strategicTargets = bridge.isHost()
       ? (this.playerSystems?.ak47StrategicTarget?.getNetSnapshot(bridge.getSynchronizedNow()) ?? [])
       : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []);
@@ -1958,26 +2202,13 @@ export class ArenaScene extends Phaser.Scene {
       bridge.getSynchronizedNow(),
       inRoundWorld && isCoopDefenseMode(configuredGameMode),
     );
-    // Beim Spectator ist die Kamera bereits vor dem Netzwerk-/Render-Schritt fortgeschrieben;
-    // der zweite normale Sync-Punkt darf die A/D-Geschwindigkeit nicht verdoppeln.
-    // Keep the camera active while the arena is hidden behind the loading veil. Its position is
-    // part of the local startup working set and must not be reset to the lobby origin before the
-    // readiness check at the end of the frame.
-    this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
-    const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
-    this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
-    this.syncSpectatorPlayerNames(inArena);
-    this.arenaRuntime.syncWorldLocalPlayerPresentation(inArena, spectator);
-    if (inArena) {
-      this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
-    } else {
-      this.enemyHoverNameLabel?.clear(true);
-    }
-    // Loading uses the full-screen veil even though the arena itself is still hidden; once the
-    // authoritative countdown timestamp exists, the same overlay switches to 3 → 2 → 1.
-    this.syncArenaFogOverlay(bridge.getSynchronizedNow(), inGame && !terminated, countdownActive);
-    diagnosticsFrame?.mark('visualCameraEnd');
+  }
 
+  private syncArenaVisualEffects(
+    inArena: boolean,
+    delta: number,
+    diagnosticsFrame: ArenaDiagnosticsFrame | null,
+  ): void {
     this.renderers.beer.update(bridge.getSynchronizedNow(), delta);
     this.renderers.timeBubble.update(delta);
     this.renderers.blackHole.update(delta);
@@ -2019,7 +2250,21 @@ export class ArenaScene extends Phaser.Scene {
     this.renderers.slimeTrail.update(delta);
     this.renderers.flamethrowerUpgrades.update(bridge.getSynchronizedNow());
     diagnosticsFrame?.mark('visualEffectsEnd');
+  }
 
+  private syncArenaAimAndPlacementPresentation(
+    inArena: boolean,
+    worldInteractive: boolean,
+    spectator: boolean,
+    optionsOpen: boolean,
+    delta: number,
+    diagnosticsFrame: ArenaDiagnosticsFrame | null,
+  ): {
+    showAim: boolean;
+    scopeProgress: number;
+    utilityPlacementActive: boolean;
+    ultimatePlacementActive: boolean;
+  } {
     diagnosticsFrame?.begin('aimPreview');
     const utilityTargeting    = inArena && !spectator ? this.ctx.inputSystem.getUtilityTargetingPreviewState() : undefined;
     const airstrikeTargeting  = inArena && !spectator ? this.ctx.inputSystem.getAirstrikeTargetingPreviewState() : undefined;
@@ -2092,81 +2337,12 @@ export class ArenaScene extends Phaser.Scene {
     this.tunnelRenderer.update(this.time.now);
 
     diagnosticsFrame?.mark('visualEnd');
-
-    // Letzter Schritt vor Schatten, Licht und Rendering – alles davor rechnet mit der
-    // unversetzten Kameraposition (siehe `applyCameraFeedback`).
-    this.applyCameraFeedback(delta);
-    // Das Tutorial ist ein Weltobjekt: Seine Occlusion-Probe braucht deshalb den finalen
-    // Scroll-/Shake-Versatz, den auch der anschließende Render-Schritt verwendet.
-    this.ctx.centerHUD.updateTutorialOcclusion(
-      delta,
-      [
-        ...this.ctx.centerHUD.getReservedHudRects(),
-        ...(this.secondaryObjectiveHud?.getReservedHudRects() ?? []),
-      ],
-    );
-    // Der Fokus wird erst nach dem finalen Scroll-/Shake-Versatz in Bildschirmkoordinaten
-    // übersetzt, damit Radialfilter und Low-Fallback denselben Frame wie die Welt sehen.
-    this.ctx.arenaCountdown?.syncAfterCameraFeedback();
-
-    diagnosticsFrame?.begin('shadow');
-    // Keep World-scoped static shadows alive while the arena is hidden behind the loading veil;
-    // clearing them here would destroy the startup surface before the load barrier can observe it.
-    const shadowArenaActive = inArena || (inGame && !terminated);
-    this.arenaRuntime.syncWorldShadows(shadowArenaActive, inRoundWorld);
-    diagnosticsFrame?.end('shadow');
-    this.arenaRuntime.syncWorldLighting(inArena, inRoundWorld);
-
-    // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
-    // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
-    // Das grosszuegige Budget gilt, solange ein deckender Ladescreen davor steht - in der Arena
-    // ihr eigener Schleier, beim Start der Bootscreen.
-    ChunkedRenderSurface.flushBakeBudget(
-      this,
-      arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,
-    );
-    if (inGame && !terminated) {
-      this.lifecycle.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
-    }
-    // Ganz am Ende des Frames: die Barriere sieht damit eine vollstaendig aufgebaute Lobby
-    // inklusive ihres UI-Durchlaufs, nicht einen halb aufgebauten Zwischenstand.
-    if (this.bootRevealPending) this.syncBootReveal(phase);
-
-    // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
-    // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
-    diagnosticsFrame?.begin('networkFlush');
-    bridge.flushNetwork();
-    diagnosticsFrame?.end('networkFlush');
-    diagnosticsFrame?.mark('updateEnd');
-
-    if (companionDiagnosticsActive || diagnosticsFrame) {
-      const runtimePhase = terminated ? 'terminated' : (inGame ? 'arena' : 'lobby');
-      const diagnosticMode = diagnosticsFrame
-        ? configuredGameMode
-        : this.resolveConfiguredGameMode(phase === 'ARENA' ? 'ARENA' : 'LOBBY');
-      const diagnosticMapId = diagnosticsFrame
-        ? configuredCoopDefenseMapId
-        : isCoopDefenseMode(diagnosticMode)
-          ? this.resolveConfiguredCoopDefenseMapId(phase)
-          : null;
-      const diagnosticsInput: ArenaDiagnosticsFrameInput = {
-        phase: runtimePhase,
-        mode: diagnosticMode,
-        mapId: diagnosticMapId,
-        rawDeltaMs: this.game.loop.rawDelta,
-        deltaMs: delta,
-        localAlive: this.localPlayerState.alive,
-        aimVisible: showAim,
-        scopeActive: scopeProgress > 0.005,
-        utilityPlacementActive: utilityPlacement !== undefined,
-        ultimatePlacementActive: ultimatePlacement !== undefined,
-        optionsOpen,
-        enemyCount: this.enemyManager?.getAllEnemies().length ?? 0,
-        projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
-        playerCount: this.ctx.playerManager.getAllPlayers().length,
-      };
-      this.diagnostics?.endFrame(diagnosticsInput);
-    }
+    return {
+      showAim,
+      scopeProgress,
+      utilityPlacementActive: utilityPlacement !== undefined,
+      ultimatePlacementActive: ultimatePlacement !== undefined,
+    };
   }
 
   // ── Network events ────────────────────────────────────────────────────────
