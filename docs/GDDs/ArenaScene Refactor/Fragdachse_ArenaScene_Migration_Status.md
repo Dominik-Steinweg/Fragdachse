@@ -32,11 +32,11 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 4B abgeschlossen – Checkpoint A manueller Gate offen; danach Phase 4C`
-**Gesamtstatus:** `🟨 Phase 4B abgeschlossen – ArenaMetaController besitzt Progression, Upgrades, Loadout, Items und Pending Rewards; Checkpoint A wartet weiterhin auf manuelle Sichtprüfung`
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 4B
-**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (338 Testdateien, 2850 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
-**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A- und Phase-3A/3B/4A/4B-Verträge grün`
+**Aktive Phase:** `Phase 4C abgeschlossen – Checkpoint B manueller Gate offen; danach Phase 5`
+**Gesamtstatus:** `🟨 Phase 4C abgeschlossen – ArenaMetaController besitzt persönliche Progression, Upgrades, Loadout, Items, Results und Lobby-Projektion; Checkpoint A/B warten weiterhin auf manuelle Sichtprüfung`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 4C
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (338 Testdateien, 2851 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
+**Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B- und Phase-3A/3B/4A/4B/4C-Verträge grün`
 
 | Teilphase | Status | Kurznotiz |
 |---|---|---|
@@ -48,8 +48,8 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 | 3B Input Actions/Feedback | ✅ abgeschlossen | Radial-/Placement-/Management-Provider, Scope-Start, InputPolicy, Aim-/Cursor-Freigabe, lokale Requests und Cooldown-/Ressourcen-/Failure-Feedback liegen hinter kleinen Read-/Request-/Feedback-Ports im Owner; keine Hostvalidierung verschoben. |
 | 4A Meta Progress/Upgrades/Loadout | ✅ abgeschlossen | `ArenaMetaController` besitzt validierten Read-/Arbeitsstand, Reconciliation, Klassen-/Upgrade-/Respec-/Tool-/Loadout-Use-Cases und persönliche Debug-Mutationen; Persistenz bleibt Adapter. |
 | 4B Meta Items/Rewards | ✅ abgeschlossen | `ArenaMetaController` besitzt Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation, automatische Reward-Anzeige und Lobby-Button-Projektion; Persistenz bleibt Adapter. |
-| 4C Meta Results/Lobby | ⬜ offen | Match Results und persönliche Lobby-Projektion. |
-| – Checkpoint B | ⬜ offen | Input + Meta vollständig regressionsfrei. |
+| 4C Meta Results/Lobby | ✅ abgeschlossen | `ArenaMetaController` besitzt Result-Read-Verarbeitung, persönliche XP-/Unlock-/Reward-Verbuchung mit lokaler Deduplizierung, Result-Präsentation/Replay, Import-Follow-up, Default-Map, Ready-Reset und persönliche Lobby-Projektion; `ArenaScene` besitzt keinen persönlichen Result-/Progress-/Item-State und keine direkten persönlichen Persistence-Mutationen mehr. `ResultApplication` und `ArenaPersistentBaseSession` bleiben unverändert ihre jeweiligen Owner. |
+| – Checkpoint B | 🟨 aktiv | Automatisierte Prüfungen grün; manuelle Prüfung von Input, Persistent Base, Spectator, Options/Debug, Meta/Items/Upgrades/Results, Dateiimport/Lobby-Projektion und Ready-State noch offen. |
 | 5 Presentation-Lifetime-Fundament | ⬜ offen | Frame Binding vor Handoff lösen; bestehende Activity-Binding-/Step-Verträge wiederverwenden. |
 | 6A.1 World Surface/Camera | ⬜ offen | Surface, Kamera und Residency aus Scene. |
 | 6A.2 World Lighting/Renderer | ⬜ offen | Shadows, Lighting, Shared-Consumer und übrige World-Renderer. |
@@ -109,7 +109,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | ID | Seit Phase | Temporärer Pfad / Debt | Source of Truth | Entfernen bis |
 |---|---:|---|---|---:|
-| – | – | Keine offenen Phase-3B-/4A-/4B-Transitional-Debts. | `ArenaDiagnosticsController` / `ArenaInputBindings` / `ArenaMetaController` | – |
+| – | – | Keine offenen Phase-3B-/4A-/4B-/4C-Transitional-Debts. | `ArenaDiagnosticsController` / `ArenaInputBindings` / `ArenaMetaController` | – |
 
 ---
 
@@ -143,7 +143,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | R-5 | World ohne Activity | LobbyWorld bzw. World ohne Activity darf keine Dummy-Coop-Presentation benötigen. | Voll abgedeckt (5.1); Checkpoint C/D bestätigt erneut. |
 | R-6 | Preview | Replizierte World-Presentation darf ohne lokale Participation existieren; Input/PlayerRuntime daraus nicht ableiten. | Strukturell belegt: `resolveInputPolicy`/`resolvePlayerRuntimeFeatures` nehmen `participation`, nie ein `WorldPresentationRequirement`. |
 | R-7 | Exit-Fade | Gameplay endet vor dem Fade; nur reine/frozen Presentation darf weiterleben. | `ArenaFlowCheckpointC` R-5 + `ArenaExitEntityPresentation`; aktiven Frame Binding in Phase 5 vor Handoff lösen. |
-| R-8 | Meta Authority | `ArenaMetaController` darf weder `ResultApplication` noch `ArenaPersistentBaseSession` duplizieren/umschließen und Results nicht doppelt anwenden. | Deduplication heute behavioral abgesichert; Phase 4C muss die Dedup-Assertion beim Owner-Wechsel mitnehmen. |
+| R-8 | Meta Authority | `ArenaMetaController` darf weder `ResultApplication` noch `ArenaPersistentBaseSession` duplizieren/umschließen und Results nicht doppelt anwenden. | `ArenaMetaController.test.ts` prüft die einmalige persönliche XP-/Round-Marker-Verbuchung bei wiederholter Auswertung; `ActivityResultApplication` prüft weiterhin die unabhängige Activity-Deduplizierung. |
 | R-9 | Activity Presentation | `CoopMissionScopedBinding` und `clientPresentationStep()` existieren bereits; ein paralleler Lifecycle oder Doppel-Tick wäre eine Regression. | Ab Phase 1 als Ratchet festgeschrieben: genau ein Aufruf von `clientPresentationStep(` in `src/scenes/arena/ClientUpdateCoordinator.ts`, keiner sonst unter `src/scenes/` und `src/world/`. Deklaration/Impl liegen in `src/activity/CoopMissionRuntime.ts` und sind bewusst ausgenommen. |
 | R-10 | Network Boundary | Neue Runtime-/Domain-Owner dürfen das `bridge`-Singleton nicht zurückführen; die eingefrorene Legacy-Menge konkreter `NetworkBridge`-Consumer darf nicht wachsen. | Bestehenden `WorldGameplayCompositionContracts`-Ratchet respektieren; kein Nebenrefactoring der acht Legacy-Consumer. |
 | R-11 | Listener-Leaks | Neue scene-langlebige Diagnostics-/Input-Owner sammeln viele Subscriptions/Keys; der heutige Hotkey-Shutdown enthält zugleich fremde Teardowns. | **Für Diagnostics (2A), Input (3A/3B) und Meta (4A) geschlossen:** `ArenaDiagnosticsController.destroy()` ist idempotent, löst alle eigenen Subscriptions und ist danach inert (`attachGpuVfx` nimmt keine Bindung mehr an); die vier `subscribeDiagnostics`-Listener, die zuvor **nie** abbestellt wurden, gehören jetzt dem Owner. Drei reine Diagnose-SHUTDOWN-Handler entfielen, der gemischte GPU-VFX-Handler wurde aufgespalten (15 → 13 Handler). `ArenaInputBindings.destroy()` ist idempotent, löst sieben eigene Hotkey-Listener und sechs eigene Keyboard-Keys; Provider und Action-Callbacks werden vom bestehenden `InputSystem` an die scene-langlebige Owner-Lifetime gebunden, ein Contract-Test bestätigt die Inertheit des Debug-Ports danach. `ArenaMetaController.destroy()` ist idempotent und macht danach Progress-/Debug-Mutationen sowie Presentation-Refreshes wirkungslos; ein Contract-Test deckt den Teardown ab. **Weiter offen:** `ArenaRuntime`, `ArenaLifecycleCoordinator`, `ArenaPersistentBaseSession`, `HostUpdateCoordinator`, `ClientUpdateCoordinator`, `RpcCoordinator` haben weiterhin **kein eigenes `destroy()`**. |
@@ -154,17 +154,18 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 | Check / Quelle | Ergebnis |
 |---|---|
-| `npm run check` (nach Phase 4B) | grün – 338 Testdateien, 2850 Tests, 15 skipped; `tsc` und `vite build` erfolgreich |
-| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185); Phase 3B: 4530 → 4204 (−326); Phase 4A: 4204 → 3782 (−422); Phase 4B: 3782 → 3670 (−112). `ArenaDiagnosticsController.ts`: 331 → 1326 Zeilen; `ArenaInputBindings.ts`: 1000 Zeilen; `ArenaMetaController.ts`: 761 Zeilen; `ArenaMetaPersistence.ts`: 48 Zeilen; `ArenaMetaController.test.ts`: 141 Zeilen. |
+| `npm run check` (nach Phase 4C) | grün – 338 Testdateien, 2851 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Bekannte unveränderte Vite-Font-Auflösungswarnungen für drei Chakra-/JetBrains-Dateien. |
+| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185); Phase 3B: 4530 → 4204 (−326); Phase 4A: 4204 → 3782 (−422); Phase 4B: 3782 → 3670 (−112); Phase 4C: 3670 → 3466 (−204). `ArenaDiagnosticsController.ts`: 1326 Zeilen; `ArenaInputBindings.ts`: 1000 Zeilen; `ArenaMetaController.ts`: 1046 Zeilen; `ArenaMetaPersistence.ts`: 68 Zeilen; `ArenaMetaController.test.ts`: 219 Zeilen. |
 | Aus der Scene entfernt (2B) | Scene-Display-Counts, Transport-Sampling, Byte-/RTT-/Backpressure-Intervalle, Flowfield-/Rock-GPU-/VFX-Companion-Counter, Scratch-/Baseline-Zustände und die Frame-/Abschnittsmessung; `profiler`-/`ablation`-Accessoren sowie `captureSceneInspection`-/`onRecordingStart`-Ports entfallen. |
 | Aus der Scene entfernt (2A) | Felder `runtimeProfiler`, `visualAttribution`, `performanceAblation`, `performanceDiagnosticsOverlay`, `netDebugOverlay` → ein Feld `diagnostics`; Imports `ArenaRuntimeProfiler`, `PerformanceAblationController`, `PerformanceDiagnosticsOverlay`, `NetDebugOverlay`, `getArenaVisualAttribution`, `getWebGLRendererType`; Methode `describePerformanceEnvironment()` |
 | Toter Teardown-Pfad entfernt | Der gemischte SHUTDOWN-Handler rief `runtimeProfiler?.setGpuVfxSource(null)` erst, **nachdem** ein früher registrierter Handler `runtimeProfiler` bereits genullt hatte – schon vor der Extraktion ein No-op. Nur der wirksame Teil (`gpuVfx.setDiagnosticEventSink(null)`) blieb erhalten. |
 | Aus der Scene entfernt (3B) | Alle verbliebenen `InputSystem.setup...`-Provider und der Loadout-Callback-Baum inklusive lokaler Prediction-/Failure-Auswertung; Placement-/Persistent-Base-Requests laufen über explizite Ports. Die Frame-Scene liefert nur den InputPolicy-Kontext sowie Presentation-Daten für den weiterhin orchestrierten Aim-/Renderer-Durchlauf. |
 | Aus der Scene entfernt (4A) | Validierter Coop-Progress-Read-Stand, Upgrade-/Klassen-/Respec-/Tool-/Loadout-Use-Cases, Loadout-Reconciliation und persönliche Debug-Progress-Mutationen; die Persistence-Anbindung liegt im separaten `ArenaMetaPersistence`-Adapter. |
-| Aus der Scene entfernt (4B) | Item-Unlock-/Unseen-/Pending-Mutationen, Equip/Unequip/Salvage, Claim-Logik, Item-Overlay-State, Reward-Präsentationsaufbau, automatische Reward-Anzeige und Lobby-Item-Button-Refresh; der Round-Result-Flow bleibt als Orchestrierung in der Scene. |
+| Aus der Scene entfernt (4B) | Item-Unlock-/Unseen-/Pending-Mutationen, Equip/Unequip/Salvage, Claim-Logik, Item-Overlay-State, Reward-Präsentationsaufbau, automatische Reward-Anzeige und Lobby-Item-Button-Refresh. |
+| Aus der Scene entfernt (4C) | Match-Result-Gate/-Präsentation/-Replay, persönliche Progress-/XP-/Unlock-/Reward-Verarbeitung, Import-Nachzug, Default-Coop-Map-Auswahl, persönliche Lobby-Projektion und Result-/Item-State; autoritative Result-Reads kommen über einen kleinen `resultRead`-Port. Balance-Diagnose bleibt als optionaler Presentation-Hook in der Scene. `ResultApplication` und `ArenaPersistentBaseSession` wurden nicht verschoben. |
 | Source-Test-Inventar `rg` über `tests/` | 14 Dateien / 26 Assertion-Stellen lesen `src/scenes/ArenaScene.ts` als Text; keine weiteren Pfadschreibweisen oder Verzeichnis-Scans. |
 | `ArenaInputBindings` | Scene-langlebiger Owner für Keyboard-Setup, alle `InputSystem`-Provider und Action-Callbacks, InputPolicy, Aim-/Cursor-/Spectator-Frame-Interface, lokale Placement-/Management-Weiterleitung und lokales Feedback; `destroy()` löst sieben Listener und sechs eigene Keys idempotent. |
-| `ArenaMetaController` | Scene-langlebiger Owner für validierten Coop-Progress-Read-Stand, Loadout-Reconciliation, Level Up/Down, Category/Class/Full Respec, Klassenwahl, Inspector-Tool-Slots, Loadout-Slot-Auswahl, Upgrade-Overlay-Apply/Cancel, Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation/-Anzeige und persönliche Debug-Progress-Mutationen; `ArenaMetaPersistence` kapselt die bestehende Persistence-Grenze; `destroy()` ist idempotent und danach inert. Keine ResultApplication-, Activity-, World- oder Persistent-Base-Working-State-Verantwortung verschoben. |
+| `ArenaMetaController` | Scene-langlebiger Owner für validierten Coop-Progress-Read-Stand, Loadout-Reconciliation, Level Up/Down, Category/Class/Full Respec, Klassenwahl, Inspector-Tool-Slots, Loadout-Slot-Auswahl, Upgrade-Overlay-Apply/Cancel, Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation/-Anzeige, persönliche Debug-Progress-/Persistent-Base-Entitlements, Result-Read-Verarbeitung, persönliche Deduplizierung, Match-Result-Präsentation/-Replay, Import-Nachzug, Default-Map und Lobby-Projektion; `ArenaMetaPersistence` kapselt die bestehende Persistence-Grenze, ein `resultRead`-Port kapselt autoritative Resultdaten; `destroy()` ist idempotent und danach inert. Keine ResultApplication-, Activity-, World- oder Persistent-Base-Working-State-Verantwortung verschoben. |
 | `WorldPresentationFrameBinding` | Existiert weder in `src/` noch in `tests/`. Phase 5 führt ihn erstmals ein; kein bestehender Test darf als Beleg für diesen Vertrag umgedeutet werden. |
 | `ArenaLifecycleCoordinator.detach()` | Ist-Reihenfolge: `handoff.release(runtime.releasePresentation())` → `runtime.destroy()` → `persistentBase.useWorldRuntimes(null)`. Deckt sich mit Architektur §4.5 und begründet den Phase-5-Auftrag. |
 | `clientPresentationStep` | Deklaration/Impl in `src/activity/CoopMissionRuntime.ts:137,416`; genau ein Aufrufer `src/scenes/arena/ClientUpdateCoordinator.ts:317`. |
@@ -175,14 +176,15 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Checkpoint A manuell abschließen, danach Phase 4C – `ArenaMetaController`: Match Results und Lobby-Projektion.**
+**Checkpoint A/B manuell abschließen, danach Phase 5 – Presentation-Lifetime-Fundament.**
 
 - Die automatisierten Checkpoint-A-Prüfungen sind mit `npm run check` grün.
-- Offen bleibt die manuelle Sichtprüfung von Diagnose an/aus, Performance-/Netzwerk-Overlay, Ablation, Semantic Events, Sampling und Shutdown-Verhalten.
+- Offen bleibt die manuelle Sichtprüfung von Diagnose an/aus, Performance-/Netzwerk-Overlay, Ablation, Semantic Events, Sampling und Shutdown-Verhalten sowie der Checkpoint-B-Umfang (Input, Persistent Base, Spectator, Options/Debug, Meta/Items/Upgrades/Results, Dateiimport/Lobby-Projektion und Ready-State).
 - Phase 3A ist automatisiert abgeschlossen: Input-Setup, statische Provider, Hotkeys, sechs eigene Keys und die Ownership-getrennte Scene-Bereinigung sind verifiziert.
 - Phase 3B ist automatisiert abgeschlossen: Action-/Placement-/Preview-/Feedback-Callbacks, InputPolicy sowie das kleine Spectator-/Aim-Interface liegen im Input-Owner; keine Phase-3A-Teardown- oder Hotkey-Logik wurde erneut verschoben.
 - Phase 4A ist automatisiert abgeschlossen: Progress-/Upgrade-/Klassen-/Loadout-Use-Cases, Reconciliation und persönliche Debug-Mutationen liegen im Meta-Owner; Persistence bleibt Adapter und Results/PersistentBase bleiben außerhalb dieses Owners.
-- Phase 4B ist automatisiert abgeschlossen: Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation/-Anzeige und Lobby-Item-Projektion liegen im Meta-Owner; der Round-Result-Flow und die ResultApplication bleiben außerhalb dieses Owners.
+- Phase 4B ist automatisiert abgeschlossen: Item-Unlock-/Unseen-/Pending-State, Equip/Unequip/Salvage, Claim, Reward-Präsentation/-Anzeige und Lobby-Item-Projektion liegen im Meta-Owner.
+- Phase 4C ist automatisiert abgeschlossen: persönliche Result-Verarbeitung, lokale Deduplizierung, Match-Result-Präsentation/Replay, Import-Nachzug, Default-Map und Lobby-Projektion liegen im Meta-Owner; `ResultApplication`, `ArenaPersistentBaseSession` und Exit-Fade/Lifecycle bleiben außerhalb dieses Owners.
 
 ---
 

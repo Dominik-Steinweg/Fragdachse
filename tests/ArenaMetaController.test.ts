@@ -15,6 +15,7 @@ function makeInput(): {
   controller: ArenaMetaController;
   store: ArenaMetaControllerInput['progressStore'];
   session: ArenaMetaControllerInput['session'];
+  resultRead: ArenaMetaControllerInput['resultRead'];
   presentation: ArenaMetaControllerInput['presentation'];
 } {
   const stored = getStoredCoopDefenseProgress();
@@ -29,6 +30,16 @@ function makeInput(): {
     resetUpgradeProfiles: vi.fn(),
     setDebugProgress: vi.fn(),
     resetCharacter: vi.fn(),
+    addCoopDefenseXp: vi.fn(),
+    markCoopDefenseRoundProcessed: vi.fn(),
+    markCoopDefenseBossMapCompleted: vi.fn(),
+    unlockCoopDefenseClassesAfterVictory: vi.fn(),
+    unlockCoopDefenseMapAfterVictory: vi.fn(),
+    unlockPersistentBaseAfterVictory: vi.fn(),
+    unlockPersistentBaseAreaStageAfterVictory: vi.fn(),
+    setPersistentBaseUnlocked: vi.fn(),
+    setPersistentBaseAreaStage: vi.fn(),
+    grantPersistentBaseRewards: vi.fn(),
     setItemsUnlocked: vi.fn(),
     unlockItemsAfterVictory: vi.fn(),
     markItemsSeen: vi.fn(),
@@ -43,12 +54,22 @@ function makeInput(): {
     getGamePhase: vi.fn(() => 'LOBBY'),
     getGameMode: vi.fn(() => 'coop_defense'),
     getLocalPlayerId: vi.fn(() => 'local'),
+    isHost: vi.fn(() => true),
+    getCoopDefenseMapId: vi.fn(() => '1'),
+    setCoopDefenseMapId: vi.fn(),
     isLocalReady: vi.fn(() => false),
     isAuthoritativeLocalReady: vi.fn(() => false),
     getPlayerLoadoutSlot: vi.fn((_playerId, slot) => loadout[slot]),
     setLocalLoadoutSlot: vi.fn((slot, itemId) => { loadout[slot] = itemId; }),
     setLocalReady: vi.fn(),
     setLocalCoopDefenseTotalXp: vi.fn(),
+  };
+  const resultRead: ArenaMetaControllerInput['resultRead'] = {
+    getRoundResults: vi.fn(() => null),
+    getRoundState: vi.fn(() => null),
+    isLocalRoundResultEligible: vi.fn(() => true),
+    getCoopDefenseRoundXp: vi.fn(() => 0),
+    getLocalCommittedLoadout: vi.fn(() => null),
   };
   const presentation: ArenaMetaControllerInput['presentation'] = {
     setCoopDefenseProgress: vi.fn(),
@@ -63,11 +84,20 @@ function makeInput(): {
     isItemsOverlayOpen: vi.fn(() => false),
     showItemRewardOverlay: vi.fn(),
     isItemRewardOverlayVisible: vi.fn(() => false),
+    showMatchResultsSyncing: vi.fn(),
+    hideMatchResults: vi.fn(),
+    showMatchResults: vi.fn(),
+    showMatchResultsReplay: vi.fn(),
+    isMatchResultsVisible: vi.fn(() => false),
+    setMatchResultsBalanceFeedbackVisible: vi.fn(),
+    showMatchResultsTechnicalAbort: vi.fn(),
+    setResultsReplayAvailable: vi.fn(),
   };
   return {
-    controller: new ArenaMetaController({ progressStore: store, session, presentation }),
+    controller: new ArenaMetaController({ progressStore: store, session, resultRead, presentation }),
     store,
     session,
+    resultRead,
     presentation,
   };
 }
@@ -117,6 +147,51 @@ describe('ArenaMetaController', () => {
     expect(presentation.refreshUpgradeOverlay).toHaveBeenCalledTimes(3);
   });
 
+  it('verarbeitet autoritative Match Results und dedupliziert persoenliche Verbuchung', () => {
+    const { controller, store, resultRead, presentation } = makeInput();
+    let current = getStoredCoopDefenseProgress();
+    vi.mocked(store.getProgress).mockImplementation(() => current);
+    vi.mocked(store.addCoopDefenseXp).mockImplementation((amount) => {
+      current = { ...current, totalXp: current.totalXp + amount };
+      return current.totalXp;
+    });
+    vi.mocked(store.markCoopDefenseRoundProcessed).mockImplementation((endedAt) => {
+      current = { ...current, lastProcessedRoundEndedAt: endedAt };
+    });
+    vi.mocked(resultRead.getRoundResults).mockReturnValue([{
+      id: 'local',
+      name: 'Local',
+      colorHex: 0xffffff,
+      frags: 0,
+      teamId: null,
+      roundEndedAt: 42,
+      gameMode: 'coop_defense',
+      mapName: 'Map 1',
+      sharedXp: 25,
+    }]);
+    vi.mocked(resultRead.getRoundState).mockReturnValue({
+      status: 'defeat',
+      roundStartTime: 1,
+      coopDefenseMapId: '1',
+      endedAt: 42,
+    });
+
+    controller.refresh();
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+    controller.beginMatchResults();
+    controller.tryFinalizeMatchResults();
+
+    expect(store.addCoopDefenseXp).toHaveBeenCalledTimes(1);
+    expect(store.markCoopDefenseRoundProcessed).toHaveBeenCalledTimes(1);
+    expect(presentation.showMatchResults).toHaveBeenCalledTimes(2);
+    expect(controller.getLastMatchResultsPresentation()?.progress?.xpGained).toBe(0);
+
+    controller.replayMatchResults();
+    expect(presentation.showMatchResultsReplay).toHaveBeenCalledTimes(1);
+    expect(store.addCoopDefenseXp).toHaveBeenCalledTimes(1);
+  });
+
   it('entkoppelt Phase-4A-Ownership von ArenaScene und Netzwerk-Substrat', () => {
     const scene = read('src/scenes/ArenaScene.ts');
     const controller = read('src/scenes/arena/ArenaMetaController.ts');
@@ -131,11 +206,18 @@ describe('ArenaMetaController', () => {
     expect(scene).not.toContain('unequipStoredCoopDefenseItem');
     expect(scene).not.toContain('salvageStoredCoopDefenseItem');
     expect(scene).not.toContain('unlockStoredCoopDefenseItemsAfterVictory');
+    expect(scene).not.toContain('addStoredCoopDefenseXp');
+    expect(scene).not.toContain('markStoredCoopDefenseRoundProcessed');
+    expect(scene).not.toContain('unlockStoredPersistentBaseAfterVictory');
+    expect(scene).not.toContain('matchResultsPending');
+    expect(scene).not.toContain('lastMatchResultsPresentation');
+    expect(scene).not.toContain('processCoopDefenseRoundProgress');
     expect(scene).not.toContain('createMatchItemRewardPresentation');
     expect(scene).not.toContain('levelUpCoopDefenseUpgrade(');
     expect(scene).not.toContain('resyncLoadoutWithUnlocks');
     expect(controller).not.toContain("from '../../network/bridge'");
     expect(controller).not.toContain('ArenaScene');
+    expect(controller).toContain('resultRead');
     expect(controller).toContain('destroy(): void');
   });
 });

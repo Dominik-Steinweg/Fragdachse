@@ -68,12 +68,7 @@ import {
   CoopDefenseItemsOverlay,
 } from '../ui/CoopDefenseItemsOverlay';
 import {
-  createMatchProgressDelta,
-  resolveCoopDefenseEpicGuaranteeCount,
   resolvePersonalMatchOutcome,
-  sortMatchLeaderboard,
-  type MatchProgressDelta,
-  type MatchResultsPresentation,
 } from '../ui/MatchResultsModel';
 import { LeftSidePanel }         from '../ui/LeftSidePanel';
 import { RightSidePanel }        from '../ui/RightSidePanel';
@@ -112,20 +107,10 @@ import { coversDesignSpace } from './arena/ArenaClipPolicy';
 import { ArenaMetaController } from './arena/ArenaMetaController';
 import { createArenaMetaProgressStore } from './arena/ArenaMetaPersistence';
 import {
-  addStoredCoopDefenseXp,
   getStoredEffectsVolume,
   getStoredGraphicsQuality,
   getStoredMasterVolume,
   getStoredMusicVolume,
-  markStoredCoopDefenseBossMapCompleted,
-  markStoredCoopDefenseRoundProcessed,
-  grantStoredPersistentBaseRewards,
-  setStoredPersistentBaseAreaStage,
-  setStoredPersistentBaseUnlocked,
-  unlockStoredCoopDefenseClassesAfterVictory,
-  unlockStoredCoopDefenseMapAfterVictory,
-  unlockStoredPersistentBaseAfterVictory,
-  unlockStoredPersistentBaseAreaStageAfterVictory,
 } from '../utils/localPreferences';
 import { GraphicsQualityController } from '../graphics/GraphicsQuality';
 import { destroySharedGlowSystem, installSharedGlowSystem } from '../effects/SharedGlowSystem';
@@ -139,7 +124,7 @@ import {
 } from '../utils/coopDefenseUpgrades';
 import { COOP_DEFENSE_TUTORIAL_DURATION_MS } from '../config/coopDefenseTutorial';
 import { getVisibleCoopDefenseTutorialStepId } from '../ui/coopDefenseTutorialStepModel';
-import type { ConstructionId, CoopDefenseItemRewardAction, CoopDefensePendingItemReward, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
+import type { ConstructionId, GameMode, GamePhase, LoadoutCommitSnapshot, LobbyLoadoutPreviewState, PlayerProfile, RoomQualitySnapshot, SyncedProjectile, SyncedTrainState } from '../types';
 import { TRAIN } from '../train/TrainConfig';
 import { getTrainArrivalCountdownSecs } from '../train/TrainEvent';
 import { TrainLightOccluderSource } from '../train/TrainLightOccluderSource';
@@ -173,7 +158,6 @@ import {
 } from './arena/ArenaDiagnosticsController';
 import { advanceSpectatorCameraScroll } from './arena/SpectatorCameraModel';
 import { dequantizeAngle } from '../utils/angle';
-import { getPersistentBaseRewardIds } from '../persistentBase/PersistentBaseRewardCatalog';
 
 import {
   type ArenaContext,
@@ -354,19 +338,10 @@ export class ArenaScene extends Phaser.Scene {
   private arenaExitFadeComplete = false;
   private arenaExitOutcomeWaitStartedAt = 0;
   /** Nur das Angebot der gerade abgeschlossenen Runde darf automatisch erscheinen. */
-  private coopDefenseMatchItemReward: CoopDefensePendingItemReward | null = null;
   private lastObservedGamePhase: GamePhase | null = null;
   /** Solange gesetzt, deckt der Bootscreen die Lobby noch ab (siehe `syncBootReveal`). */
   private bootRevealPending = true;
   private bootRevealDeadlineMs = 0;
-  private matchResultsPending = false;
-  private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
-  /**
-   * Die zuletzt ausgewertete Runde, exakt so wie sie am Rundenende gezeigt wurde. Der Knopf
-   * "Letzte Runde" im Lobby-Panel spielt genau diese Praesentation erneut ab; der Fortschritt
-   * darin ist bereits verbucht und wird beim Wiederholen weder neu berechnet noch gespeichert.
-   */
-  private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
   private itemRewardOverlay: CoopDefenseItemRewardOverlay | null = null;
   private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
@@ -719,7 +694,7 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseBalanceReportOverlay = new CoopDefenseBalanceReportOverlay(
       this.coopDefenseBalanceTracker,
       () => {
-        this.matchResultsOverlay?.setBalanceFeedbackVisible(true);
+        this.meta?.setMatchResultsBalanceFeedbackVisible(true);
       },
     );
     this.meta = new ArenaMetaController({
@@ -728,6 +703,9 @@ export class ArenaScene extends Phaser.Scene {
         getGamePhase: () => bridge.getGamePhase(),
         getGameMode: () => bridge.getGameMode(),
         getLocalPlayerId: () => bridge.getLocalPlayerId(),
+        isHost: () => bridge.isHost(),
+        getCoopDefenseMapId: () => bridge.getCoopDefenseMapId(),
+        setCoopDefenseMapId: (mapId) => bridge.setCoopDefenseMapId(mapId),
         isLocalReady: () => this.lifecycle.getIsLocalReady(),
         isAuthoritativeLocalReady: () => bridge.getPlayerReady(bridge.getLocalPlayerId()),
         getPlayerLoadoutSlot: (playerId, slot) => bridge.getPlayerLoadoutSlot(playerId, slot),
@@ -737,6 +715,15 @@ export class ArenaScene extends Phaser.Scene {
           this.lifecycle.setIsLocalReady(ready);
         },
         setLocalCoopDefenseTotalXp: (totalXp) => bridge.setLocalCoopDefenseTotalXp(totalXp),
+      },
+      resultRead: {
+        getRoundResults: () => bridge.getRoundResults(),
+        getRoundState: () => bridge.getRoundState(),
+        isLocalRoundResultEligible: (results) => bridge.isLocalRoundResultEligible(
+          results ? [...results] : null,
+        ),
+        getCoopDefenseRoundXp: () => bridge.getCoopDefenseRoundXp(),
+        getLocalCommittedLoadout: () => bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId()),
       },
       presentation: {
         setCoopDefenseProgress: (progress) => this.lobbyOverlay.setCoopDefenseProgress(progress),
@@ -755,6 +742,14 @@ export class ArenaScene extends Phaser.Scene {
         isItemsOverlayOpen: () => this.itemsOverlay?.isOpen() ?? false,
         showItemRewardOverlay: (presentation, closeAfterClaim) => this.itemRewardOverlay?.show(presentation, closeAfterClaim),
         isItemRewardOverlayVisible: () => this.itemRewardOverlay?.isVisible() ?? false,
+        showMatchResultsSyncing: (modeLabel, mapLabel) => this.matchResultsOverlay?.showSyncing(modeLabel, mapLabel),
+        hideMatchResults: () => this.matchResultsOverlay?.hide(),
+        showMatchResults: (presentation) => this.matchResultsOverlay?.show(presentation),
+        showMatchResultsReplay: (presentation) => this.matchResultsOverlay?.showReplay(presentation),
+        isMatchResultsVisible: () => this.matchResultsOverlay?.isVisible() ?? false,
+        setMatchResultsBalanceFeedbackVisible: (visible) => this.matchResultsOverlay?.setBalanceFeedbackVisible(visible),
+        showMatchResultsTechnicalAbort: (message) => this.matchResultsOverlay?.showTechnicalAbort(message),
+        setResultsReplayAvailable: (available) => rightPanel.setResultsReplayAvailable(available),
       },
     });
     this.coopDefenseDebugOverlay = new CoopDefenseDebugOverlay(
@@ -780,19 +775,19 @@ export class ArenaScene extends Phaser.Scene {
         this.refreshCoopDefenseDebugState({ applyMapSelection: true, metaAlreadyRefreshed: true });
       },
       () => {
-        setStoredPersistentBaseUnlocked(true);
+        this.meta?.setDebugPersistentBaseUnlocked(true);
         this.refreshCoopDefenseDebugState();
       },
       () => {
-        setStoredPersistentBaseAreaStage(1);
+        this.meta?.setDebugPersistentBaseAreaStage(1);
         this.refreshCoopDefenseDebugState();
       },
       (rewardId) => {
-        grantStoredPersistentBaseRewards([rewardId]);
+        this.meta?.grantDebugPersistentBaseRewards([rewardId]);
         this.refreshCoopDefenseDebugState();
       },
       () => {
-        grantStoredPersistentBaseRewards(getPersistentBaseRewardIds());
+        this.meta?.grantAllDebugPersistentBaseRewards();
         this.refreshCoopDefenseDebugState();
       },
       () => {
@@ -831,7 +826,9 @@ export class ArenaScene extends Phaser.Scene {
     this.coopDefenseUpgradesOverlay.build();
     this.itemRewardOverlay = new CoopDefenseItemRewardOverlay(
       this,
-      (roundEndedAt, offerUid, salvageUid, action) => this.claimItemReward(roundEndedAt, offerUid, salvageUid, action),
+      (roundEndedAt, offerUid, salvageUid, action) => Boolean(
+        this.meta?.claimItemReward(roundEndedAt, offerUid, salvageUid, action),
+      ),
       () => this.meta?.getItemRewardPresentation() ?? null,
       () => {
         this.lobbyOverlay.setReadyButtonState(false);
@@ -855,14 +852,26 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay.setReadyButtonState(false);
       // Nur der Reward dieser Runde folgt direkt auf die Auswertung. Altbestand bleibt bewusst
       // im Item-Menue und wird nicht nach einem Match ohne neuen Drop aufgezwungen.
-      this.meta?.openItemRewardOverlay(this.lastMatchResultsPresentation?.itemReward?.roundEndedAt, true);
+      this.meta?.openItemRewardOverlay(
+        this.meta?.getLastMatchResultsPresentation()?.itemReward?.roundEndedAt,
+        true,
+      );
     }, () => this.openBalanceFeedback());
     this.matchResultsOverlay.build();
     this.roomStatisticsOverlay = new RoomStatisticsOverlay(this);
     this.roomStatisticsOverlay.build();
     this.arenaExitFadeOverlay = new ArenaExitFadeOverlay(this);
     this.arenaExitFadeOverlay.build();
-    rightPanel.setResultsReplayHandler(() => this.replayMatchResults());
+    rightPanel.setResultsReplayHandler(() => {
+      const presentation = this.meta?.getLastMatchResultsPresentation();
+      const roundEndedAt = presentation?.leaderboard[0]?.roundEndedAt ?? null;
+      this.meta?.replayMatchResults(
+        !!presentation
+        && isCoopDefenseMode(presentation.mode)
+        && roundEndedAt !== null
+        && this.coopDefenseBalanceTracker.hasRound(roundEndedAt),
+      );
+    });
     rightPanel.setRoomStatisticsDetailHandler(() => {
       this.roomStatisticsOverlay?.show(bridge.getRoomPlayerStatistics());
     });
@@ -1327,8 +1336,7 @@ export class ArenaScene extends Phaser.Scene {
     // endet mit der konkreten Ursache statt still weiterzulaufen.
     bridge.onNetworkFailure(message => {
       if (bridge.getGamePhase() === 'ARENA') {
-        this.matchResultsPending = false;
-        this.matchResultsOverlay?.showTechnicalAbort(message);
+        this.meta?.abortMatchResults(message);
       }
       this.lifecycle.terminateMatch(message);
     });
@@ -1535,7 +1543,7 @@ export class ArenaScene extends Phaser.Scene {
     this.time.addEvent({ delay: 1000, callback: () => bridge.sendPingToHost(), loop: true });
     this.initializeRoomQuality();
     this.meta?.refresh();
-    this.applyDefaultCoopDefenseMapSelection();
+    this.meta?.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
 
     // Der Bootscreen weicht nicht dem ersten Frame, sondern der fertigen Lobby; `syncBootReveal`
@@ -1695,8 +1703,15 @@ export class ArenaScene extends Phaser.Scene {
     );
     if (!terminated && presentationPolicy.showLobby) {
       diagnosticsFrame?.begin('lobbyUi');
-      if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.beginMatchResults();
-      if (this.matchResultsPending) this.tryFinalizeMatchResults();
+      if (enteredLobbyFromArena && !returningFromWeaponBalanceLab) this.meta?.beginMatchResults();
+      if (this.meta?.isMatchResultsPending()) {
+        this.meta.tryFinalizeMatchResults({
+          finalizeBalanceRound: (roundEndedAt) => {
+            this.coopDefenseBalanceTracker.finalizePendingRound(roundEndedAt);
+            return this.coopDefenseBalanceTracker.hasRound(roundEndedAt);
+          },
+        });
+      }
       const players = bridge.getConnectedPlayers();
       // Lokalen Ready-Stand an den autoritativen Netzwerkwert angleichen. Setzt der Host beim
       // Rundenwechsel (oder bei Modus-/Map-Wechsel) den Spieler auf "nicht bereit", folgt hier sowohl
@@ -1718,12 +1733,7 @@ export class ArenaScene extends Phaser.Scene {
         bridge.isLocalRoundResultEligible(roundResults) ? roundResults : null,
         bridge.getRoundState(),
       );
-      this.ctx.rightPanel.setResultsReplayAvailable(this.lastMatchResultsPresentation !== null);
-      this.lobbyOverlay.setCoopDefenseProgress(
-        isCoopDefenseMode(bridge.getGameMode()) ? this.meta!.getProgress() : null,
-      );
-      // Signaturgeschuetzt wie die Fortschrittsanzeige: der Aufruf pro Frame ist billig.
-      this.meta?.refreshItemsPresentation();
+      this.meta?.refreshLobbyProjection();
       const localProfile = players.find(p => p.id === bridge.getLocalPlayerId());
       const localId = bridge.getLocalPlayerId();
       const sidebarSignature = [
@@ -1750,7 +1760,7 @@ export class ArenaScene extends Phaser.Scene {
     } else {
       this.coopDefenseDebugOverlay?.hide();
       this.coopDefenseUpgradesOverlay?.hide();
-      this.lobbyOverlay.setCoopDefenseProgress(null);
+      this.meta?.refreshLobbyProjection(false);
       this.lastLobbySidebarSignature = null;
     }
 
@@ -2355,7 +2365,7 @@ export class ArenaScene extends Phaser.Scene {
     metaAlreadyRefreshed?: boolean;
   } = {}): void {
     if (!options.metaAlreadyRefreshed) this.meta?.refresh();
-    if (options.applyMapSelection) this.applyDefaultCoopDefenseMapSelection();
+    if (options.applyMapSelection) this.meta?.applyDefaultCoopDefenseMapSelection();
     this.clientUpdate.refreshStoredProgressFallback();
   }
 
@@ -3306,21 +3316,8 @@ export class ArenaScene extends Phaser.Scene {
 
   /** Zieht nach einem validierten Dateiimport alle lobby-lokalen Ableitungen atomar nach. */
   private handleImportedGameProgress(): void {
-    if (bridge.getGamePhase() !== 'LOBBY') return;
-    bridge.setLocalReady(false);
-    this.lifecycle.setIsLocalReady(false);
-    this.meta?.refresh();
-    this.applyDefaultCoopDefenseMapSelection();
+    if (!this.meta?.handleImportedGameProgress()) return;
     this.clientUpdate.refreshStoredProgressFallback();
-  }
-
-  /**
-   * Stellt die Lobby-Auswahl auf die hoechste freigeschaltete Map. Nur der Host besitzt die
-   * Map-Auswahl; Clients folgen dem replizierten Wert und ihr eigener Freischaltstand zaehlt nicht.
-   */
-  private applyDefaultCoopDefenseMapSelection(): void {
-    if (!bridge.isHost()) return;
-    bridge.setCoopDefenseMapId(this.meta!.getHighestUnlockedMapId());
   }
 
   /**
@@ -3459,212 +3456,11 @@ export class ArenaScene extends Phaser.Scene {
     });
   }
 
-  private beginMatchResults(): void {
-    // Die Auswertung darf nicht aus der vorherigen Runde als Replay in den neuen Lobby-Frame
-    // hineinragen, insbesondere nicht bei einem Latejoiner/Spectator.
-    this.lastMatchResultsPresentation = null;
-    this.coopDefenseMatchItemReward = null;
-    const existingResults = bridge.getRoundResults();
-    if (existingResults && !bridge.isLocalRoundResultEligible(existingResults)) {
-      this.matchResultsPending = false;
-      this.matchResultsProgressBefore = null;
-      this.matchResultsOverlay?.hide();
-      return;
-    }
-    const mode = bridge.getGameMode();
-    const roundState = bridge.getRoundState();
-    const mapLabel = isCoopDefenseMode(mode)
-      ? getMapName(roundState?.coopDefenseMapId ?? bridge.getCoopDefenseMapId(), getLocale())
-      : 'Zufallsarena';
-
-    this.matchResultsPending = true;
-    this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.meta!.getProgress() : null;
-    this.matchResultsOverlay?.showSyncing(getLocalizedGameModeLabel(mode), mapLabel);
-  }
-
-  /**
-   * Wartet auf den atomaren Endstand und zeigt erst danach den Endzustand. Der Ergebnis-Layer
-   * selbst schreibt keine Belohnungen; im Coop-Modus ist die lokale Persistenz vorher abgeschlossen.
-   */
-  private tryFinalizeMatchResults(): void {
-    const results = bridge.getRoundResults();
-    if (!results || results.length === 0) return;
-    if (!bridge.isLocalRoundResultEligible(results)) {
-      this.matchResultsPending = false;
-      this.matchResultsProgressBefore = null;
-      this.matchResultsOverlay?.hide();
-      return;
-    }
-
-    const firstResult = results[0];
-    const mode = firstResult.gameMode ?? bridge.getGameMode();
-    const roundState = bridge.getRoundState();
-    if (
-      isCoopDefenseMode(mode)
-      && (
-        !roundState?.endedAt
-        || roundState.endedAt !== firstResult.roundEndedAt
-        || roundState.status === 'active'
-      )
-    ) {
-      return;
-    }
-
-    if (isCoopDefenseMode(mode)) {
-      this.coopDefenseBalanceTracker.finalizePendingRound(firstResult.roundEndedAt);
-    }
-
-    const progress = isCoopDefenseMode(mode)
-      ? this.processCoopDefenseRoundProgress(this.matchResultsProgressBefore ?? this.meta!.getProgress())
-      : null;
-    if (isCoopDefenseMode(mode) && !progress) return;
-
-    const outcome = resolvePersonalMatchOutcome(
-      mode,
-      bridge.getLocalPlayerId(),
-      results,
-      roundState,
-    );
-    const presentation: MatchResultsPresentation = {
-      outcome,
-      mode,
-      modeLabel: getLocalizedGameModeLabel(mode),
-      mapLabel: firstResult.mapName || 'Zufallsarena',
-      localPlayerId: bridge.getLocalPlayerId(),
-      leaderboard: sortMatchLeaderboard(results),
-      progress,
-      technicalMessage: null,
-      itemReward: isCoopDefenseMode(mode) && this.coopDefenseMatchItemReward
-        ? this.meta!.getItemRewardPresentation(this.coopDefenseMatchItemReward.roundEndedAt)
-        : null,
-    };
-    this.lastMatchResultsPresentation = presentation;
-    this.matchResultsOverlay?.setBalanceFeedbackVisible(
-      isCoopDefenseMode(mode) && this.coopDefenseBalanceTracker.hasRound(firstResult.roundEndedAt),
-    );
-    this.matchResultsOverlay?.show(presentation);
-    this.matchResultsPending = false;
-    this.matchResultsProgressBefore = null;
-  }
-
-  /**
-   * Oeffnet die Auswertung der letzten Runde noch einmal. Es wird ausschliesslich die bereits
-   * berechnete Praesentation wiederverwendet: kein erneutes Verbuchen von XP, Skillpunkten
-   * oder Map-Freischaltungen, und beim Schliessen kein Lobby-Uebergang.
-   */
-  private replayMatchResults(): void {
-    const presentation = this.lastMatchResultsPresentation;
-    if (!presentation || this.matchResultsPending) return;
-    if (this.matchResultsOverlay?.isVisible()) return;
-    const roundEndedAt = presentation.leaderboard[0]?.roundEndedAt ?? null;
-    this.matchResultsOverlay?.setBalanceFeedbackVisible(
-      isCoopDefenseMode(presentation.mode)
-      && roundEndedAt !== null
-      && this.coopDefenseBalanceTracker.hasRound(roundEndedAt),
-    );
-    this.matchResultsOverlay?.showReplay(presentation);
-  }
-
   private openBalanceFeedback(): void {
-    const presentation = this.lastMatchResultsPresentation;
+    const presentation = this.meta?.getLastMatchResultsPresentation();
     if (!presentation || !isCoopDefenseMode(presentation.mode)) return;
     const roundEndedAt = presentation.leaderboard[0]?.roundEndedAt;
     if (!roundEndedAt || !this.coopDefenseBalanceTracker.hasRound(roundEndedAt)) return;
     this.coopDefenseBalanceReportOverlay?.showFeedback(roundEndedAt);
-  }
-
-  /**
-   * Loest eine Auswahl im Ergebnis-Screen auf und aktualisiert die Anzeige. Bleibt die Belohnung
-   * offen (volle Kategorie ohne Zerlege-Ziel), passiert nichts und der Screen fragt weiter.
-   */
-  private claimItemReward(
-    roundEndedAt: number,
-    offerUid: string,
-    salvageUid?: string,
-    action: CoopDefenseItemRewardAction = 'take',
-  ): boolean {
-    if (!this.meta?.claimItemReward(roundEndedAt, offerUid, salvageUid, action)) return false;
-    if (this.lastMatchResultsPresentation) {
-      this.lastMatchResultsPresentation = {
-        ...this.lastMatchResultsPresentation,
-        itemReward: this.lastMatchResultsPresentation.itemReward?.roundEndedAt === roundEndedAt
-          ? null
-          : this.lastMatchResultsPresentation.itemReward,
-      };
-    }
-    return true;
-  }
-
-  private processCoopDefenseRoundProgress(
-    before: CoopDefenseProgressSnapshot,
-  ): MatchProgressDelta | null {
-    const roundState = bridge.getRoundState();
-    const results = bridge.getRoundResults();
-    const endedAt = roundState?.endedAt ?? null;
-    if (!roundState || !endedAt || !results?.length) return null;
-    if (!bridge.isLocalRoundResultEligible(results)) return null;
-
-    this.coopDefenseMatchItemReward = null;
-
-    if (this.meta!.getLastProcessedRoundEndedAt() !== null
-      && this.meta!.getLastProcessedRoundEndedAt()! >= endedAt) {
-      return createMatchProgressDelta(before, this.meta!.getProgress(), 0, null);
-    }
-
-    const sharedRoundXp = Math.max(
-      0,
-      Math.floor(
-        results.find((result) => typeof result.sharedXp === 'number')?.sharedXp
-          ?? bridge.getCoopDefenseRoundXp(),
-      ),
-    );
-    if (sharedRoundXp > 0) addStoredCoopDefenseXp(sharedRoundXp);
-
-    const completedMapId = roundState.coopDefenseMapId;
-    let unlockedNewMap = false;
-    let unlockedItems = false;
-    let unlockedPersistentBase = false;
-    let unlockedPersistentBaseAreaStage = false;
-    if (roundState.status === 'victory' && completedMapId) {
-      const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
-      if (completedMapConfig.boss) {
-        markStoredCoopDefenseBossMapCompleted(completedMapId);
-      }
-      unlockStoredCoopDefenseClassesAfterVictory(completedMapId);
-      const itemReward = this.meta!.recordVictoryItemReward({
-        completedMapId,
-        roundEndedAt: endedAt,
-        itemLevel: completedMapConfig.itemDrop?.itemLevel ?? null,
-        playedClassId: bridge.getPlayerCommittedLoadout(bridge.getLocalPlayerId())
-          ?.coopDefenseClassId ?? null,
-        epicGuaranteeCount: resolveCoopDefenseEpicGuaranteeCount(results, roundState),
-      });
-      unlockedItems = itemReward.itemsUnlocked;
-      this.coopDefenseMatchItemReward = itemReward.reward;
-      // Ein eigenstaendiges Entitlement neben dem Mapfortschritt: Ab jetzt traegt die LobbyWorld
-      // ihren Basiskern, unabhaengig davon, welche Map als naechstes offen ist.
-      unlockedPersistentBase = unlockStoredPersistentBaseAfterVictory(completedMapId);
-      // Die Area-Stufe ist ein eigenes, monotones Campaign-Entitlement. Sie wird wie alle lokalen
-      // Progressionsdaten pro berechtigtem Spieler verbucht, aber erst in der naechsten World
-      // aus dem Host-Stand aufgeloest.
-      unlockedPersistentBaseAreaStage = unlockStoredPersistentBaseAreaStageAfterVictory(completedMapId);
-      unlockedNewMap = unlockStoredCoopDefenseMapAfterVictory(completedMapId);
-    }
-
-    markStoredCoopDefenseRoundProcessed(endedAt);
-    this.meta?.refresh();
-    const unlockedMapName = unlockedNewMap
-      ? getMapName(this.meta!.getHighestUnlockedMapId(), getLocale())
-      : null;
-    if (unlockedNewMap) this.applyDefaultCoopDefenseMapSelection();
-    return createMatchProgressDelta(
-      before,
-      this.meta!.getProgress(),
-      sharedRoundXp,
-      unlockedMapName,
-      unlockedItems,
-      unlockedPersistentBase,
-      unlockedPersistentBaseAreaStage,
-    );
   }
 }

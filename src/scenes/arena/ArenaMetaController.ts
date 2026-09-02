@@ -1,7 +1,12 @@
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../../config/coopDefenseItems';
+import { getCoopDefenseMapConfig } from '../../config/coopDefenseMaps';
 import { isCoopDefenseMode } from '../../gameModes';
 import { getSelectableLoadoutItems } from '../../loadout/LoadoutCatalog';
+import type { RoundResult, RoundState } from '../../network/NetworkBridge';
+import { getPersistentBaseRewardIds } from '../../persistentBase/PersistentBaseRewardCatalog';
+import type { PersistentBaseAreaStage } from '../../persistentBase/PersistentBaseCore';
+import type { PersistentBaseRewardId } from '../../persistentBase/PersistentBaseRewardTypes';
 import type {
   CoopDefenseClassId,
   CoopDefenseItem,
@@ -13,6 +18,7 @@ import type {
   GamePhase,
   LoadoutSlot,
   LoadoutToolRef,
+  LoadoutCommitSnapshot,
 } from '../../types';
 import {
   buildDefaultCoopDefenseUpgradeProfile,
@@ -40,8 +46,17 @@ import {
 import type { CoopDefenseProgressPreferences } from '../../utils/localPreferences';
 import {
   createMatchItemRewardPresentation,
+  createMatchProgressDelta,
+  resolveCoopDefenseEpicGuaranteeCount,
+  resolvePersonalMatchOutcome,
+  sortMatchLeaderboard,
+  type MatchProgressDelta,
   type MatchItemRewardPresentation,
+  type MatchResultsPresentation,
 } from '../../ui/MatchResultsModel';
+import { getLocale } from '../../i18n';
+import { getLocalizedGameModeLabel } from '../../i18n/gameModePresentation';
+import { getMapName } from '../../i18n/contentPresentation';
 
 const LOADOUT_SLOTS: readonly LoadoutSlot[] = ['weapon1', 'weapon2', 'utility', 'ultimate'];
 
@@ -62,6 +77,16 @@ export interface ArenaMetaProgressStore {
   resetUpgradeProfiles(): void;
   setDebugProgress(totalXp: number, bossPoints: number, highestUnlockedMapId: string): void;
   resetCharacter(): void;
+  addCoopDefenseXp(amount: number): number;
+  markCoopDefenseRoundProcessed(endedAt: number | null): void;
+  markCoopDefenseBossMapCompleted(mapId: string): boolean;
+  unlockCoopDefenseClassesAfterVictory(completedMapId: string): boolean;
+  unlockCoopDefenseMapAfterVictory(completedMapId: string): boolean;
+  unlockPersistentBaseAfterVictory(completedMapId: string): boolean;
+  unlockPersistentBaseAreaStageAfterVictory(completedMapId: string): boolean;
+  setPersistentBaseUnlocked(unlocked: boolean): boolean;
+  setPersistentBaseAreaStage(areaStage: PersistentBaseAreaStage): boolean;
+  grantPersistentBaseRewards(rewardIds: readonly PersistentBaseRewardId[]): readonly PersistentBaseRewardId[];
   setItemsUnlocked(unlocked: boolean): boolean;
   unlockItemsAfterVictory(completedMapId: string, firstReward?: CoopDefensePendingItemReward): boolean;
   markItemsSeen(): boolean;
@@ -82,12 +107,24 @@ export interface ArenaMetaSessionPort {
   getGamePhase(): GamePhase;
   getGameMode(): GameMode;
   getLocalPlayerId(): string;
+  isHost(): boolean;
+  getCoopDefenseMapId(): string;
+  setCoopDefenseMapId(mapId: string): void;
   isLocalReady(): boolean;
   isAuthoritativeLocalReady(): boolean;
   getPlayerLoadoutSlot(playerId: string, slot: LoadoutSlot): string | null | undefined;
   setLocalLoadoutSlot(slot: LoadoutSlot, itemId: string): void;
   setLocalReady(ready: boolean): void;
   setLocalCoopDefenseTotalXp(totalXp: number): void;
+}
+
+/** Liest ausschliesslich den autoritativen Result-/Round-Snapshot; keine ResultApplication-Authority. */
+export interface ArenaMetaResultReadPort {
+  getRoundResults(): readonly RoundResult[] | null;
+  getRoundState(): RoundState | null;
+  isLocalRoundResultEligible(results: readonly RoundResult[] | null): boolean;
+  getCoopDefenseRoundXp(): number;
+  getLocalCommittedLoadout(): LoadoutCommitSnapshot | null;
 }
 
 /** Presentation bleibt bei den bestehenden Overlays/Panels; der Owner liefert nur Read-Daten. */
@@ -104,6 +141,14 @@ export interface ArenaMetaPresentationPort {
   isItemsOverlayOpen(): boolean;
   showItemRewardOverlay(presentation: MatchItemRewardPresentation, closeAfterClaim: boolean): void;
   isItemRewardOverlayVisible(): boolean;
+  showMatchResultsSyncing(modeLabel: string, mapLabel: string): void;
+  hideMatchResults(): void;
+  showMatchResults(presentation: MatchResultsPresentation): void;
+  showMatchResultsReplay(presentation: MatchResultsPresentation): void;
+  isMatchResultsVisible(): boolean;
+  setMatchResultsBalanceFeedbackVisible(visible: boolean): void;
+  showMatchResultsTechnicalAbort(message: string): void;
+  setResultsReplayAvailable(available: boolean): void;
 }
 
 export interface ArenaMetaItemsOverlayState {
@@ -133,6 +178,7 @@ export interface ArenaMetaVictoryItemRewardResult {
 export interface ArenaMetaControllerInput {
   readonly progressStore: ArenaMetaProgressStore;
   readonly session: ArenaMetaSessionPort;
+  readonly resultRead: ArenaMetaResultReadPort;
   readonly presentation: ArenaMetaPresentationPort;
 }
 
@@ -142,17 +188,26 @@ export interface ArenaMetaRefreshOptions {
   readonly forceLoadoutRefresh?: boolean;
 }
 
+export interface ArenaMetaMatchResultsFinalizeOptions {
+  /** Balance-Diagnose bleibt ein Scene-langlebiger, rein optionaler Presentation-Hook. */
+  readonly finalizeBalanceRound?: (roundEndedAt: number) => boolean;
+}
+
 /**
  * Scene-langlebiger Owner fuer persoenliche Coop-Progression, Upgrades und Loadout-Use-Cases.
  *
  * Der Controller haelt nur den validierten scene-lokalen Read-/Arbeitsstand. Dauerhafte Daten
- * bleiben im injizierten Persistence-Adapter; World-, Activity-, Result- und Persistent-Base-
- * Verantwortungen werden nicht hier gespiegelt oder ausgefuehrt.
+ * bleiben im injizierten Persistence-Adapter; Activity-ResultApplication und Persistent-Base-
+ * Working-State bleiben ausserhalb dieses Owners.
  */
 export class ArenaMetaController {
   private progress: CoopDefenseProgressSnapshot = getCoopDefenseProgressSnapshot(0);
   private storedProgress: CoopDefenseProgressPreferences | null = null;
   private upgradeProfileSnapshot: CoopDefenseProgressPreferences | null = null;
+  private coopDefenseMatchItemReward: CoopDefensePendingItemReward | null = null;
+  private matchResultsPending = false;
+  private matchResultsProgressBefore: CoopDefenseProgressSnapshot | null = null;
+  private lastMatchResultsPresentation: MatchResultsPresentation | null = null;
   private destroyed = false;
 
   constructor(private readonly input: ArenaMetaControllerInput) {}
@@ -175,6 +230,14 @@ export class ArenaMetaController {
 
   getHighestUnlockedMapId(): string {
     return this.getStoredProgress().highestUnlockedMapId;
+  }
+
+  getLastMatchResultsPresentation(): MatchResultsPresentation | null {
+    return this.lastMatchResultsPresentation;
+  }
+
+  isMatchResultsPending(): boolean {
+    return !this.destroyed && this.matchResultsPending;
   }
 
   getEquippedItems(): CoopDefenseItem[] {
@@ -203,6 +266,27 @@ export class ArenaMetaController {
       stored.pendingItemRewards.length,
       stored.unseenItems,
     );
+  }
+
+  refreshLobbyProjection(showLobby = true): void {
+    if (this.destroyed) return;
+    this.input.presentation.setCoopDefenseProgress(
+      showLobby && isCoopDefenseMode(this.input.session.getGameMode()) ? this.progress : null,
+    );
+    if (showLobby) this.refreshItemsPresentation();
+  }
+
+  handleImportedGameProgress(): boolean {
+    if (this.destroyed || this.input.session.getGamePhase() !== 'LOBBY') return false;
+    this.setLocalReady(false);
+    this.refresh();
+    this.applyDefaultCoopDefenseMapSelection();
+    return true;
+  }
+
+  applyDefaultCoopDefenseMapSelection(): void {
+    if (this.destroyed || !this.input.session.isHost()) return;
+    this.input.session.setCoopDefenseMapId(this.getHighestUnlockedMapId());
   }
 
   refresh(options: ArenaMetaRefreshOptions = {}): void {
@@ -532,6 +616,134 @@ export class ArenaMetaController {
     this.refresh();
   }
 
+  setDebugPersistentBaseUnlocked(unlocked: boolean): void {
+    if (this.destroyed) return;
+    this.input.progressStore.setPersistentBaseUnlocked(unlocked);
+    this.refresh();
+  }
+
+  setDebugPersistentBaseAreaStage(areaStage: PersistentBaseAreaStage): void {
+    if (this.destroyed) return;
+    this.input.progressStore.setPersistentBaseAreaStage(areaStage);
+    this.refresh();
+  }
+
+  grantDebugPersistentBaseRewards(rewardIds: readonly PersistentBaseRewardId[]): void {
+    if (this.destroyed) return;
+    this.input.progressStore.grantPersistentBaseRewards(rewardIds);
+    this.refresh();
+  }
+
+  grantAllDebugPersistentBaseRewards(): void {
+    this.grantDebugPersistentBaseRewards(getPersistentBaseRewardIds());
+  }
+
+  beginMatchResults(): void {
+    if (this.destroyed) return;
+    // Eine neue Lobby-Rueckkehr darf niemals die alte Auswertung als frische Runde anzeigen.
+    this.lastMatchResultsPresentation = null;
+    this.coopDefenseMatchItemReward = null;
+    this.input.presentation.setResultsReplayAvailable(false);
+
+    const existingResults = this.input.resultRead.getRoundResults();
+    if (existingResults && !this.input.resultRead.isLocalRoundResultEligible(existingResults)) {
+      this.matchResultsPending = false;
+      this.matchResultsProgressBefore = null;
+      this.input.presentation.hideMatchResults();
+      return;
+    }
+
+    const mode = this.input.session.getGameMode();
+    const roundState = this.input.resultRead.getRoundState();
+    const mapLabel = isCoopDefenseMode(mode)
+      ? getMapName(
+        roundState?.coopDefenseMapId ?? this.input.session.getCoopDefenseMapId(),
+        getLocale(),
+      )
+      : 'Zufallsarena';
+
+    this.matchResultsPending = true;
+    this.matchResultsProgressBefore = isCoopDefenseMode(mode) ? this.getProgress() : null;
+    this.input.presentation.showMatchResultsSyncing(getLocalizedGameModeLabel(mode), mapLabel);
+  }
+
+  /** Wartet auf den atomaren Result-/Round-Snapshot und verbucht persoenliche Daten genau einmal. */
+  tryFinalizeMatchResults(options: ArenaMetaMatchResultsFinalizeOptions = {}): void {
+    if (this.destroyed || !this.matchResultsPending) return;
+    const results = this.input.resultRead.getRoundResults();
+    if (!results || results.length === 0) return;
+    if (!this.input.resultRead.isLocalRoundResultEligible(results)) {
+      this.matchResultsPending = false;
+      this.matchResultsProgressBefore = null;
+      this.input.presentation.hideMatchResults();
+      return;
+    }
+
+    const firstResult = results[0];
+    const mode = firstResult.gameMode ?? this.input.session.getGameMode();
+    const roundState = this.input.resultRead.getRoundState();
+    if (
+      isCoopDefenseMode(mode)
+      && (
+        !roundState?.endedAt
+        || roundState.endedAt !== firstResult.roundEndedAt
+        || roundState.status === 'active'
+      )
+    ) return;
+
+    const balanceFeedbackAvailable = isCoopDefenseMode(mode)
+      ? options.finalizeBalanceRound?.(firstResult.roundEndedAt) ?? false
+      : false;
+    const progress = isCoopDefenseMode(mode)
+      ? this.processCoopDefenseRoundProgress(this.matchResultsProgressBefore ?? this.getProgress())
+      : null;
+    if (isCoopDefenseMode(mode) && !progress) return;
+
+    const presentation: MatchResultsPresentation = {
+      outcome: resolvePersonalMatchOutcome(
+        mode,
+        this.input.session.getLocalPlayerId(),
+        results,
+        roundState,
+      ),
+      mode,
+      modeLabel: getLocalizedGameModeLabel(mode),
+      mapLabel: firstResult.mapName || 'Zufallsarena',
+      localPlayerId: this.input.session.getLocalPlayerId(),
+      leaderboard: sortMatchLeaderboard(results),
+      progress,
+      technicalMessage: null,
+      itemReward: isCoopDefenseMode(mode) && this.coopDefenseMatchItemReward
+        ? this.getItemRewardPresentation(this.coopDefenseMatchItemReward.roundEndedAt)
+        : null,
+    };
+    this.lastMatchResultsPresentation = presentation;
+    this.input.presentation.setMatchResultsBalanceFeedbackVisible(balanceFeedbackAvailable);
+    this.input.presentation.showMatchResults(presentation);
+    this.input.presentation.setResultsReplayAvailable(true);
+    this.matchResultsPending = false;
+    this.matchResultsProgressBefore = null;
+  }
+
+  replayMatchResults(balanceFeedbackAvailable = false): void {
+    if (this.destroyed || !this.lastMatchResultsPresentation || this.matchResultsPending) return;
+    if (this.input.presentation.isMatchResultsVisible()) return;
+    this.input.presentation.setMatchResultsBalanceFeedbackVisible(balanceFeedbackAvailable);
+    this.input.presentation.showMatchResultsReplay(this.lastMatchResultsPresentation);
+  }
+
+  setMatchResultsBalanceFeedbackVisible(visible: boolean): void {
+    if (this.destroyed) return;
+    this.input.presentation.setMatchResultsBalanceFeedbackVisible(visible);
+  }
+
+  abortMatchResults(message: string): void {
+    if (this.destroyed) return;
+    this.matchResultsPending = false;
+    this.matchResultsProgressBefore = null;
+    this.input.presentation.showMatchResultsTechnicalAbort(message);
+  }
+
   resetCharacter(): void {
     if (this.destroyed) return;
     this.input.progressStore.resetCharacter();
@@ -625,6 +837,12 @@ export class ArenaMetaController {
       this.refresh({ refreshOverlay: false });
     }
     this.input.presentation.refreshItemsOverlay();
+    if (this.lastMatchResultsPresentation?.itemReward?.roundEndedAt === roundEndedAt) {
+      this.lastMatchResultsPresentation = {
+        ...this.lastMatchResultsPresentation,
+        itemReward: this.getItemRewardPresentation(roundEndedAt),
+      };
+    }
     return claim;
   }
 
@@ -672,6 +890,73 @@ export class ArenaMetaController {
         (entry) => entry.roundEndedAt === input.roundEndedAt,
       ) ?? null,
     };
+  }
+
+  private processCoopDefenseRoundProgress(
+    before: CoopDefenseProgressSnapshot,
+  ): MatchProgressDelta | null {
+    const roundState = this.input.resultRead.getRoundState();
+    const results = this.input.resultRead.getRoundResults();
+    const endedAt = roundState?.endedAt ?? null;
+    if (!roundState || !endedAt || !results?.length) return null;
+    if (!this.input.resultRead.isLocalRoundResultEligible(results)) return null;
+
+    this.coopDefenseMatchItemReward = null;
+    const lastProcessedRoundEndedAt = this.getLastProcessedRoundEndedAt();
+    if (lastProcessedRoundEndedAt !== null && lastProcessedRoundEndedAt >= endedAt) {
+      return createMatchProgressDelta(before, this.getProgress(), 0, null);
+    }
+
+    const sharedRoundXp = Math.max(
+      0,
+      Math.floor(
+        results.find((result) => typeof result.sharedXp === 'number')?.sharedXp
+          ?? this.input.resultRead.getCoopDefenseRoundXp(),
+      ),
+    );
+    if (sharedRoundXp > 0) this.input.progressStore.addCoopDefenseXp(sharedRoundXp);
+
+    const completedMapId = roundState.coopDefenseMapId;
+    let unlockedNewMap = false;
+    let unlockedItems = false;
+    let unlockedPersistentBase = false;
+    let unlockedPersistentBaseAreaStage = false;
+    if (roundState.status === 'victory' && completedMapId) {
+      const completedMapConfig = getCoopDefenseMapConfig(completedMapId);
+      if (completedMapConfig.boss) {
+        this.input.progressStore.markCoopDefenseBossMapCompleted(completedMapId);
+      }
+      this.input.progressStore.unlockCoopDefenseClassesAfterVictory(completedMapId);
+      const itemReward = this.recordVictoryItemReward({
+        completedMapId,
+        roundEndedAt: endedAt,
+        itemLevel: completedMapConfig.itemDrop?.itemLevel ?? null,
+        playedClassId: this.input.resultRead.getLocalCommittedLoadout()?.coopDefenseClassId ?? null,
+        epicGuaranteeCount: resolveCoopDefenseEpicGuaranteeCount(results, roundState),
+      });
+      unlockedItems = itemReward.itemsUnlocked;
+      this.coopDefenseMatchItemReward = itemReward.reward;
+      // Persoenliches Entitlement, getrennt vom room-langlebigen Working-State der Basis.
+      unlockedPersistentBase = this.input.progressStore.unlockPersistentBaseAfterVictory(completedMapId);
+      unlockedPersistentBaseAreaStage = this.input.progressStore.unlockPersistentBaseAreaStageAfterVictory(completedMapId);
+      unlockedNewMap = this.input.progressStore.unlockCoopDefenseMapAfterVictory(completedMapId);
+    }
+
+    this.input.progressStore.markCoopDefenseRoundProcessed(endedAt);
+    this.refresh();
+    const unlockedMapName = unlockedNewMap
+      ? getMapName(this.getHighestUnlockedMapId(), getLocale())
+      : null;
+    if (unlockedNewMap) this.applyDefaultCoopDefenseMapSelection();
+    return createMatchProgressDelta(
+      before,
+      this.getProgress(),
+      sharedRoundXp,
+      unlockedMapName,
+      unlockedItems,
+      unlockedPersistentBase,
+      unlockedPersistentBaseAreaStage,
+    );
   }
 
   destroy(): void {
