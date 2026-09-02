@@ -602,6 +602,49 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const surface = base.getNearestSurfacePoint(turretX, turretY);
       return surface ? { id: base.id, x: surface.x, y: surface.y } : null;
     });
+    turret.setFireHandler((ownerId, color, weaponId, x, y, angle, targetX, targetY, damageFactor = 1, rangeFactor = 1, sourceTurretId, skipRockIndex) => {
+      const turretCfg = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
+      const weapon = WEAPON_CONFIGS[weaponId] ?? WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
+      const isFriendlyBaseTurret = ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID;
+      const isHostileBaseTurret = ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID;
+      const isBaseTurret = isFriendlyBaseTurret || isHostileBaseTurret;
+      const ownerRuntimeDamageMultiplier = isBaseTurret
+        ? 1
+        : player.loadout.getDamageMultiplier(ownerId) * (o.getPowerUpSystem()?.getDamageMultiplier(ownerId) ?? 1);
+      const fire = isBaseTurret && weapon.fire.type === 'projectile'
+        ? {
+          ...weapon.fire,
+          homing: weapon.fire.homing
+            ? {
+              ...weapon.fire.homing,
+              targetTypes: isHostileBaseTurret ? ['players'] as const : ['enemies'] as const,
+            }
+            : undefined,
+        }
+        : weapon.fire;
+      player.loadout.fireAutomatedWeapon(
+        { ...weapon, fire, range: weapon.range * rangeFactor },
+        x,
+        y,
+        angle,
+        targetX,
+        targetY,
+        ownerId,
+        color,
+        {
+          ignoreBaseCollisions: isBaseTurret,
+          ignoreRockIndex: skipRockIndex,
+          // Spielerbauten bleiben ihrem Besitzer zugerechnet und laufen als Utility-Schaden
+          // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
+          sourceSlot: isBaseTurret ? undefined : 'utility',
+          sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
+          directDamageMultiplier: damageFactor,
+          // Explosionen, Brand und Schadenswolken laufen nicht durch computeProjectileDamage;
+          // ihr Besitzer-/Power-up-Faktor wird deshalb beim Turmschuss eingefroren.
+          payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
+        },
+      );
+    });
     teslaDome.setConstructionSourceProvider(() => this.getTeslaConstructionSources());
     turret.setTurretDamageBuffProvider((x, y) => {
       const damageMultiplier = o.getEnergyInjectorSystem()?.getTurretDamageMultiplierAt(x, y) ?? 1;

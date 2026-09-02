@@ -104,6 +104,10 @@ export class TurretSystem {
 
   setFireHandler(handler: TurretFireHandler | null): void {
     this.fireHandler = handler;
+    if (!handler) {
+      this.nextFireAt.clear();
+      this.pendingBursts.clear();
+    }
   }
 
   /**
@@ -161,6 +165,7 @@ export class TurretSystem {
       const pendingBurst = this.pendingBursts.get(turret.id);
       if (pendingBurst) {
         if (now < pendingBurst.nextShotAt) continue;
+        if (!this.fireHandler) continue;
         const burstAngle = Phaser.Math.Angle.Between(
           turretX,
           turretY,
@@ -214,6 +219,7 @@ export class TurretSystem {
       const muzzleDistance = muzzleOffset;
       const muzzleX = turretX + Math.cos(angle) * muzzleDistance;
       const muzzleY = turretY + Math.sin(angle) * muzzleDistance;
+      if (!this.fireHandler) continue;
       this.fireHandler?.(
         turret.ownerId,
         turret.ownerColor,
