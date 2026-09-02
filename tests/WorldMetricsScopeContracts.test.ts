@@ -238,7 +238,8 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
     expect(end).toBeGreaterThan(start);
     const provider = source.slice(start, end);
 
-    expect(provider).toContain('toMapId(this.world.descriptor.definitionId)');
+    expect(provider).toContain('const world = this.arenaRuntime?.flow.getWorldRuntime()?.context;');
+    expect(provider).toContain('toMapId(world.descriptor.definitionId)');
     expect(provider).not.toContain('getCoopDefenseMapId');
     expect(provider).not.toContain('getRoundState');
   });

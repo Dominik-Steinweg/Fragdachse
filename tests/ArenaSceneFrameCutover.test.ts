@@ -73,3 +73,12 @@ describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
     expect(scene).not.toContain('clientPresentationStep(');
   });
 });
+
+describe('Phase 9 – ArenaScene-Cleanup und Architektur-Gate', () => {
+  it('entfernt die verbliebenen World-/Activity-Kompatibilitaetsfassaden', () => {
+    const scene = readScene();
+    expect(scene).not.toMatch(/private get (worldRuntime|world|arenaResult|currentLayout|placementSystem|rockRegistry|baseManager|targetingSystems|playerSystems|combatSystems|supportSystems|powerUpSystem|trainManager|coopMissionRuntime|enemyManager|captureTheBeerSystem)\b/);
+    expect(scene).not.toContain('ArenaSceneController');
+    expect(scene).not.toMatch(/private [A-Za-z][A-Za-z0-9]*(?:Counter|Sampler|Key|Handler)\s*[=:]/);
+  });
+});

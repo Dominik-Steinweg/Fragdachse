@@ -32,10 +32,10 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 
 ## 2. Aktueller Stand
 
-**Aktive Phase:** `Phase 9 – Legacy-/Compatibility-Cleanup und finaler Architektur-Gate`
-**Gesamtstatus:** `🟨 Phase 8 abgeschlossen – ArenaScene.update() ist auf benannte Top-Level-Orchestrierungsschritte reduziert; Checkpoint A/B/C/D warten weiterhin auf manuelle Sichtprüfung, Phase 9 ist der nächste automatisierte Schritt`
-**Letzter verifizierter Repository-Stand:** `main` nach Phase 8
-**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (341 Testdateien, 2878 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
+**Aktive Phase:** `Finaler manueller Gate – Checkpoint A/B/C/D`
+**Gesamtstatus:** `✅ Phase 9 abgeschlossen – Legacy-/Compatibility-Cleanup und finaler Architektur-Gate grün; Checkpoint A/B/C/D warten weiterhin auf manuelle Sichtprüfung`
+**Letzter verifizierter Repository-Stand:** `main` nach Phase 9
+**Automatisierter Gate für dieses Refactoring:** `npm run check` grün (341 Testdateien, 2879 Tests, 15 skipped; `tsc` + `vite build` erfolgreich)
 **Manueller Gate:** `offen – visuelle Prüfung nicht ausgeführt (Browser ist opt-in); automatisierte Checkpoint-A/B/C/D- und Phase-3A–8-Verträge grün. World ohne Activity, Preview, Handoff und Activity-A→B-Rebinding bleiben sichtprüfungsrelevant.`
 
 | Teilphase | Status | Kurznotiz |
@@ -60,7 +60,7 @@ Wenn Code und Dokumentvorgabe nicht sinnvoll zusammenpassen:
 | 7B Coop Client/Lifecycle Cutover | ✅ abgeschlossen | Clientseitige Enemy-Snapshot-/Interpolation-/Vulnerability-Projektion sowie replizierte Coop-Carry-Visuals laufen über `CoopMissionPresentationBinding` am bestehenden kanonischen Activity-Step; Capture-the-Beer bleibt separat, ohne zweiten Activity-Step. |
 | – Checkpoint D | 🟨 aktiv | Activity A→B, Host/Client, kein Presentation-Leak; automatisierte Verträge grün, manuelle Sichtprüfung offen. |
 | 8 Scene Frame Cutover | ✅ abgeschlossen | `ArenaScene.update()` zeigt nur noch benannte Frame-/Runtime-/Presentation-Schritte; fachliche Blöcke liegen in kleinen Scene-Orchestrierungsmethoden. |
-| 9 Cleanup / Final Gate | 🟨 aktiv | Compatibility, Imports, Source-Ratchets, `npm run check`. |
+| 9 Cleanup / Final Gate | ✅ abgeschlossen | Compatibility-Fassaden und ungenutzte Scene-Annahmen entfernt; finale Source-Ratchets und `npm run check` grün. |
 
 Statuswerte: `⬜ offen` · `🟨 aktiv` · `🟧 blockiert` · `✅ abgeschlossen`
 
@@ -92,7 +92,7 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | 14 | `PersistentBaseManagementAllClasses` · Rückbau unterdrückt Aim | B | `showAim` respektiert `isDismantlePlacementActive()`; Basis-Visuals folgen dem Modus | `ArenaScene` Aim-/Visuals-Block | `ArenaInputBindings` (Aim) + `WorldPresentationFrameBinding` (Visuals) | 3B / 6A.2 |
 | 15 | `Phase11DependencyCutover` · Construction-RPCs am World-Owner | R | RPC ruft `getConstructionWorldRuntime()` direkt, nicht über den Flow | `ArenaScene` RPC-Verdrahtung | `ArenaScene` / `ArenaRuntime` | 9 |
 | 16 | `PresentationInputPolicyContracts` · Eingabe aus der Policy | R | `resolveInputPolicy()` statt handgebauter Bedingungskette | `ArenaScene.update()` Input-Block | `ArenaInputBindings` | 3B |
-| 17 | `WorldMaterializationOwnership` · Gameplay-State über seine Owner | R | Die 5 Scene-Getter delegieren an `worldRuntime.materialization/.presentation` | `ArenaScene` Getter | `ArenaScene` (dünne Delegation) | 9 |
+| 17 | `WorldMaterializationOwnership` · Gameplay-State über seine Owner | R | World-/Materialization-State wird an den Verwendungsstellen direkt vom kanonischen Owner gelesen; keine Scene-Kompatibilitätsgetter | `ArenaScene` World-/Materialization-Zugriffe | `ArenaRuntime` / `WorldRuntime` | 9 |
 | 18 | `WorldMetricsScopeContracts` · Basen/Basisstelle am World-Kontext | R | `persistentBaseSite` kommt aus `activeWorld`, nicht global | `ArenaScene.update()` | `WorldPresentationFrameBinding` | 6A.2 |
 | 19 | `WorldMetricsScopeContracts` · Respawn-Kontext aus der aktiven World | B | Spawn-Map aus `world.descriptor.definitionId`, nicht aus Rundenstate | `ArenaScene:1054` Spawn-Provider | `ArenaRuntime`/`WorldRuntime` | 9 |
 | 20 | `WorldPresentationContracts` · Darstellungsentscheidung am richtigen Ort | R | Weltkamera über `allowsWorldPresentationSurface(..., 'worldCamera')` | **migriert (6A.1)**: prüft jetzt `WorldPresentationFrameBinding` | `WorldPresentationFrameBinding` | ✅ 
@@ -114,6 +114,8 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 **Ergebnis 8.** `ArenaScene.update()` enthält jetzt den groben Ablauf aus Network, Phase-/World-/Participation-Orchestrierung, ArenaRuntime, Input, World-ohne-Activity-/Rollen-Frame, World-Presentation, scene-globalen Effekten und Frame-Abschluss. Die fachlich längeren Lobby-, Rollen-/HUD-, World-ohne-Activity-, Effekt-, strategischen Ziel- und Aim-/Placement-Blöcke liegen in kleinen benannten Scene-Orchestrierungsmethoden; `ArenaFrameSignals` transportiert ausschließlich immutable Zustandswerte und keine Owner-/Service-Referenzen. Die bestehende Camera-/Residency-/Input-/Runtime-/Readiness-Reihenfolge bleibt ratchetiert, der Activity-Client-Step wird weiterhin nicht aus der Scene dupliziert, und kein Phase-9-Compatibility-Cleanup wurde vorgezogen.
 
+**Ergebnis 9.** Die verbliebenen World-/Activity-Kompatibilitätsgetter und der nicht mehr verwendete `CoopDefenseProgressSnapshot`-Import wurden aus `ArenaScene` entfernt. Die Scene liest World-, Materialization-, Gameplay- und Activity-State jetzt an den jeweiligen kanonischen Runtime-Ownern; Spawn-/Metrik-Source-Tests und Ownership-Ratchets wurden auf diese tatsächlichen Pfade aktualisiert. Die finalen Architektur-Ratchets schützen weiterhin die Network-Consumer-Grenze, die World-/Activity-Binding-Lifetime, den einmaligen Activity-Client-Step, die Gameplay-/Physics-Freiheit des World-Presentation-Bindings und das Ausbleiben eines God-Composers. Verhalten, Authority und Lifetime-Grenzen wurden nicht verändert.
+
 **Kein Test der Klasse S.** Jede geprüfte Formel bzw. jeder geprüfte Aufruf trägt entweder echtes Verhalten (Aufrufreihenfolge = Ausführungsreihenfolge, verhaltenssteuernde Bedingungen) oder eine bewusste Ownership-Grenze. Beim Cutover darf daher **kein** Eintrag ersatzlos gelöscht werden.
 
 **Inventar-Nebenbefund:** `tests/ArenaRoundLifecycleContracts.test.ts` deklarierte eine ungenutzte Konstante `SCENE_PATH = 'src/scenes/ArenaScene.ts'` ohne jede Assertion. Sie wurde in Phase 1 entfernt, damit spätere Inventare kein falsches Signal erhalten; die Datei enthält keine ArenaScene-Assertion.
@@ -123,6 +125,8 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 ## 4. Transitional Debt
 
 **TD-6 aufgelöst in Phase 6A.2.** `getVisibleWorldView(this.cameras.main)` wird an der Residency-Stelle einmal im `WorldPresentationFrameBinding` berechnet und für Surface-Residency sowie Shadow-Residency verwendet. Es gibt dort keinen zweiten Scene-Aufruf mehr.
+
+**Phase 9 abgeschlossen.** Keine ausschließlich für die Migration verbliebenen World-/Activity-Kompatibilitätsfassaden oder ungenutzten Scene-Imports/Felder wurden im verifizierten Phase-9-Scope zurückgelassen. Die weiterhin dokumentierten offenen Punkte sind bewusste Ownership-/Teardown-Entscheidungen außerhalb dieser Phase.
 
 ---
 
@@ -186,7 +190,8 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 | `npm run check` (nach Phase 7A.2) | grün – 340 Testdateien, 2874 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
 | `npm run check` (nach Phase 7B) | grün – 340 Testdateien, 2875 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
 | `npm run check` (nach Phase 8) | grün – 341 Testdateien, 2878 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
-| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185); Phase 3B: 4530 → 4204 (−326); Phase 4A: 4204 → 3782 (−422); Phase 4B: 3782 → 3670 (−112); Phase 4C: 3670 → 3466 (−204); Phase 6A.1: 3466 → 3379 (−87); Phase 6A.2: 3379 → 3061 (−318); Phase 6B: 3061 → 3031 (−30); Phase 7A.1: 3031 → 2952 (−79); Phase 7A.2: 2952 → 2950 (−2); Phase 7B: 2950 → 2953 (+3); Phase 8: 2953 → 3129 (+176). `ArenaScene.update()` umfasst 254 Zeilen und enthält keine langen fachlichen Update-Blöcke mehr; `WorldPresentationFrameBinding.ts`: 51 → 195 (6A.1) → 541 (6A.2) → 653 (6B); `CoopMissionPresentationBinding.ts`: 211 (7A.1) → 267 (7A.2) → 311 (7B). |
+| `npm run check` (nach Phase 9) | grün – 341 Testdateien, 2879 Tests, 15 skipped; `tsc` und `vite build` erfolgreich. Die drei bekannten Vite-Font-Auflösungswarnungen bleiben unverändert. |
+| `ArenaScene.ts` Umfang | Phase 2A: 5685 → 5570 (−115); Phase 2B: 5570 → 4715 (−855); Phase 3A: 4715 → 4530 (−185); Phase 3B: 4530 → 4204 (−326); Phase 4A: 4204 → 3782 (−422); Phase 4B: 3782 → 3670 (−112); Phase 4C: 3670 → 3466 (−204); Phase 6A.1: 3466 → 3379 (−87); Phase 6A.2: 3379 → 3061 (−318); Phase 6B: 3061 → 3031 (−30); Phase 7A.1: 3031 → 2952 (−79); Phase 7A.2: 2952 → 2950 (−2); Phase 7B: 2950 → 2953 (+3); Phase 8: 2953 → 3129 (+176); Phase 9: 3129 → 3118 (−11). `ArenaScene.update()` umfasst 254 Zeilen und enthält keine langen fachlichen Update-Blöcke mehr; `WorldPresentationFrameBinding.ts`: 51 → 195 (6A.1) → 541 (6A.2) → 653 (6B); `CoopMissionPresentationBinding.ts`: 211 (7A.1) → 267 (7A.2) → 311 (7B). |
 | `WorldPresentationFrameBinding` | Trägt die World-Kamera-Positionierung (pro Frame zweimal), Surface- und Shadow-Residency/Readiness, Canopy-Transparenz, lokale Player-/Persistent-Base-Visuals, die generische replizierte Client-World-Projektion sowie allgemeine World-Shadows und -Lighting inklusive Zug-/Projektillichtern. Der Binding erzeugt und räumt seine World-spezifische Zug-Occluderquelle owner-sicher auf. |
 | Behobene Regression im 6A.1-Review | Ohne aktive `WorldRuntime` (zwischen zwei Instanzen, vor der ersten) lief der Kamera-Sync nach dem Umzug gar nicht mehr, während der alte Scene-Code dort jeden Frame den neutralen Stand setzte. Das Kamera-Feedback hätte am Frame-Ende auf der Basis der vergangenen World weitergerechnet. `ArenaRuntime.syncWorldCamera()` ruft in diesem Fall jetzt `resetWorldCameraBase(scene)` – dieselbe Funktion, die auch der Early-Return des Bindings nutzt, also eine Quelle. |
 | Zwei Kamera-Syncs pro Frame | Bleiben unverändert: Aufruf 1 positioniert die Kamera **vor** der Simulation (das Startbild definiert das Working Set der Ladebarriere), Aufruf 2 danach auf die finale Spielerposition, beim Spectator mit `delta = 0` gegen doppelte Pan-Geschwindigkeit. `getVisibleWorldView` wird für die Residency einmal im Frame-Binding berechnet; `syncArenaLoadReady` und Boot-Reveal erhalten ihre späteren, getrennten Readiness-Views. |
@@ -202,14 +207,11 @@ Beim Cutover gilt: **B** wird zum Verhaltens-Test des neuen Owners, **R** zieht 
 
 ## 7. Konkret nächster Schritt
 
-**Phase 9 – Legacy-/Compatibility-Cleanup und finaler Architektur-Gate** (Checkpoint A/B/C/D bleiben parallel für die manuelle Sichtprüfung offen).
+**Finaler manueller Gate – Checkpoint A/B/C/D.** Die automatisierte Migration einschließlich Phase 9 ist abgeschlossen.
 
-- Phase 8 ist automatisiert abgeschlossen: `ArenaScene.update()` ist auf benannte Top-Level-Schritte reduziert; die immutable `ArenaFrameSignals` enthalten keine Services oder Owner-Referenzen.
-- Die verifizierte Reihenfolge bleibt geschützt: Network → Phase-/World-/Participation-Orchestrierung → `ArenaRuntime.update` → Input → World-ohne-Activity-/Host-/Client-Frame → World-Presentation → scene-globale FX/UI → Readiness/Boot-Reveal → Network-Flush/Diagnostics.
-- `CoopMissionActivityStep.clientPresentationStep()` bleibt der einzige Activity-Client-Step. `ClientUpdateCoordinator` liefert Snapshot-Neuheit, Enemy-Snapshot, Carry-Daten und Interpolationsfaktor an diesen einen Aufruf; die Scene besitzt keinen Coop-Client-Projektionspfad und keinen zweiten Activity-Step.
-- Als nächste automatisierte Phase stehen ausschließlich die im Plan genannten Compatibility-Getter/-Callbacks, unbenutzten Felder/Imports und Source-Ratchets an; kein weiterer Ownership- oder Presentation-Cutover ist vorgezogen.
-- Manuell prüfen: Coop create/update/destroy, Host/Client, Activity A→B, Carry-/Enemy-Projektion, World ohne Activity, Preview, Handoff und keine stale HUD-/Announcement-/World-Consumer-Effekte nach Detach. Browserprüfung wurde gemäß Opt-in-Regel nicht gestartet.
-- `applyCameraFeedback`, `resolveWorldGradeInputs` und `resetRenderersForWorldPresentationTeardown` bleiben bis zu einer jeweils passenden späteren Ownership-Prüfung außerhalb der Phasen 6A.2/6B. Das ungenutzte `useWorldCamera` wird in Phase 9 oder einer dafür beschlossenen Vertragsänderung zusammengeführt.
+- Manuell prüfen: Coop create/update/destroy, Host/Client, Activity A→B, Carry-/Enemy-Projektion, World ohne Activity, Preview, Handoff und keine stale HUD-/Announcement-/World-Consumer-Effekte nach Detach.
+- Browserprüfung wurde gemäß Opt-in-Regel nicht gestartet.
+- `applyCameraFeedback`, `resolveWorldGradeInputs`, `resetRenderersForWorldPresentationTeardown` und das ungenutzte `useWorldCamera` bleiben als bewusste Ownership-/Teardown-Prüfpunkte außerhalb des abgeschlossenen Phase-9-Cleanup-Scope dokumentiert.
 
 ---
 

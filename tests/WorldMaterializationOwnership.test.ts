@@ -365,13 +365,26 @@ describe('Uebergaenge – die Darstellung reist, der Gameplay-State nicht', () =
 });
 
 describe('Arena-Anbindung der getrennten Lifetimes', () => {
-  it('liest Gameplay-State und Darstellung ueber ihre jeweiligen Owner', () => {
+  it('liest Gameplay-State und Darstellung direkt von ihren jeweiligen Ownern', () => {
     const scene = readFileSync(resolve(__dirname, '../src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }');
-    expect(scene).toContain('get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }');
-    expect(scene).toContain('get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }');
-    expect(scene).toContain('get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }');
-    expect(scene).toContain('get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }');
+    // Die Migration-Fassaden sind entfernt: Die Scene fragt die bereits vorhandenen Owner an
+    // der jeweiligen Verwendungsstelle und hält keinen zweiten Service-Locator vor.
+    expect(scene).not.toMatch(/private get (worldRuntime|world|arenaResult|currentLayout|placementSystem|rockRegistry|baseManager|targetingSystems|playerSystems|combatSystems|supportSystems|powerUpSystem|trainManager|coopMissionRuntime|enemyManager|captureTheBeerSystem)\b/);
+    expect(scene).not.toContain('this.worldRuntime');
+    for (const ownerPath of [
+      'this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.arena',
+      'this.arenaRuntime?.flow.getWorldRuntime()?.presentation?.layout',
+      'this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.placement',
+      'this.arenaRuntime?.flow.getWorldRuntime()?.materialization?.bases',
+      'this.arenaRuntime?.flow.getWorldTargetingRuntime()?.systems',
+      'this.arenaRuntime?.flow.getWorldPlayerGameplayRuntime()?.systems',
+      'this.arenaRuntime?.flow.getWorldCombatGameplayBinding()?.systems',
+      'this.arenaRuntime?.flow.getWorldPowerUpRuntime()?.system',
+      'this.arenaRuntime?.flow.getCoopMissionRuntime()',
+      'this.arenaRuntime?.flow.getCaptureTheBeerActivityRuntime()',
+    ]) {
+      expect(scene, ownerPath).toContain(ownerPath);
+    }
 
     const lifecycle = readFileSync(
       resolve(__dirname, '../src/scenes/arena/ArenaLifecycleCoordinator.ts'),
