@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { COLORS, DEPTH } from '../config';
-import type { EnemyManager } from '../entities/EnemyManager';
-import type { EnemyEntity } from '../entities/EnemyEntity';
+import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import type { SyncedAk47StrategicTarget } from '../types';
 import { registerGraphicsObject } from './EffectUtils';
 
@@ -57,14 +56,14 @@ export class Ak47StrategicTargetRenderer {
 
   sync(
     snapshot: readonly SyncedAk47StrategicTarget[],
-    enemyManager: EnemyManager | null,
+    enemy: EnemyVisualSource | null,
     localPlayerId: string,
     now = Date.now(),
     active = true,
   ): void {
     if (!this.built || !this.marker) return;
 
-    if (!active || !enemyManager || !localPlayerId) {
+    if (!active || !enemy || !localPlayerId) {
       this.hide();
       return;
     }
@@ -75,8 +74,7 @@ export class Ak47StrategicTargetRenderer {
       return;
     }
 
-    const enemy = enemyManager.getEnemy(myEntry.enemyId);
-    if (!enemy || !enemy.sprite.active || enemy.getHp() <= 0) {
+    if (enemy.id !== myEntry.enemyId || !enemy.sprite.active || enemy.getHp() <= 0) {
       this.hide();
       return;
     }
@@ -165,7 +163,7 @@ export class Ak47StrategicTargetRenderer {
     });
   }
 
-  private getEnemyRadius(enemy: EnemyEntity): number {
+  private getEnemyRadius(enemy: EnemyVisualSource): number {
     const sprite = enemy.sprite;
     const width = sprite.displayWidth || (sprite.width * Math.abs(sprite.scaleX)) || 32;
     const height = sprite.displayHeight || (sprite.height * Math.abs(sprite.scaleY)) || 32;

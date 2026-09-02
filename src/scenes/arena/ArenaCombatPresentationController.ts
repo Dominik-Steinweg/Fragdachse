@@ -1,4 +1,10 @@
-import type { EnemyEntity } from '../../entities/EnemyEntity';
+import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
+import type {
+  SyncedAk47StrategicTarget,
+  SyncedEnergyInjectorEffect,
+  SyncedReinforcementMatrix,
+  SyncedRemoteControlTurret,
+} from '../../types';
 import type { RendererBundle } from './RendererBundle';
 import type { ArenaDiagnosticsFrame } from './ArenaDiagnosticsController';
 
@@ -26,14 +32,14 @@ type CombatRenderers = Pick<RendererBundle,
 export interface ArenaCombatPresentationSourcePort {
   readonly getSynchronizedNow: () => number;
   readonly updateVisualFeedback: (delta: number) => void;
-  readonly getReinforcementMatrices: () => Parameters<CombatRenderers['reinforcementMatrix']['syncVisuals']>[0];
-  readonly getEnergyInjectorEffects: () => Parameters<CombatRenderers['energyInjector']['syncVisuals']>[0];
-  readonly getRemoteControlTargets: () => Parameters<CombatRenderers['remoteControl']['syncVisuals']>[0];
-  readonly getAuraEnemies: () => readonly EnemyEntity[];
+  readonly getReinforcementMatrices: () => readonly SyncedReinforcementMatrix[];
+  readonly getEnergyInjectorEffects: () => readonly SyncedEnergyInjectorEffect[];
+  readonly getRemoteControlTargets: () => readonly SyncedRemoteControlTurret[];
+  readonly getEnemyVisuals: () => readonly EnemyVisualSource[];
   readonly syncEnemyHostVisuals: () => void;
   readonly getEnemyCount: () => number;
-  readonly getStrategicTargets: (now: number) => Parameters<CombatRenderers['ak47StrategicTargets']['sync']>[0];
-  readonly getStrategicTargetEnemyManager: () => Parameters<CombatRenderers['ak47StrategicTargets']['sync']>[1];
+  readonly getStrategicTargets: (now: number) => readonly SyncedAk47StrategicTarget[];
+  readonly getStrategicTargetEnemy: (enemyId: string) => EnemyVisualSource | null;
   readonly getLocalPlayerId: () => string;
 }
 
@@ -70,7 +76,7 @@ export class ArenaCombatPresentationController {
     this.renderers.teslaDome.update(frame.delta);
     this.renderers.teslaNova.update();
     diagnosticsFrame?.begin('visualEnemy');
-    const auraEnemies = frame.inArena ? this.sources.getAuraEnemies() : [];
+    const auraEnemies = frame.inArena ? this.sources.getEnemyVisuals() : [];
     this.sources.syncEnemyHostVisuals();
     diagnosticsFrame?.end('visualEnemy');
     this.renderers.healingAura.syncEnemies(auraEnemies);
@@ -89,10 +95,13 @@ export class ArenaCombatPresentationController {
   syncStrategicTargets(active: boolean): void {
     if (this.destroyed) return;
     const now = this.sources.getSynchronizedNow();
+    const localPlayerId = this.sources.getLocalPlayerId();
+    const targets = active ? this.sources.getStrategicTargets(now) : [];
+    const target = targets.find(entry => entry.ownerId === localPlayerId);
     this.renderers.ak47StrategicTargets.sync(
-      active ? this.sources.getStrategicTargets(now) : [],
-      this.sources.getStrategicTargetEnemyManager(),
-      this.sources.getLocalPlayerId(),
+      targets,
+      target ? this.sources.getStrategicTargetEnemy(target.enemyId) : null,
+      localPlayerId,
       now,
       active,
     );

@@ -91,8 +91,47 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
     // Materialisierung, aber sehr wohl den Raumstand.
     expect(flow.persistentBaseWorldPorts.getWorldBinding()).toBeNull();
     expect(flow.persistentBaseWorldPorts.getConstructionRuntime()).toBeNull();
-    expect(runtime.persistentBase.session).toBeDefined();
-    expect(runtime.persistentBase.session.hasOpenTransaction).toBe(false);
+  });
+
+  it('hält die Scene-facing Runtime-Oberfläche frei von konkreten Owner-Typen', () => {
+    const runtime = read(RUNTIME_PATH);
+    const classStart = runtime.indexOf('export class ArenaRuntime');
+    expect(classStart, 'ArenaRuntime-Klasse nicht gefunden').toBeGreaterThan(-1);
+    const publicSurface = runtime
+      .slice(classStart)
+      .split('\n')
+      .filter((line) => /^ {2}(?! )(?!private\b|protected\b|constructor\b|\/|\*)/.test(line))
+      .join('\n');
+
+    for (const concreteOwner of [
+      'EnemyEntity',
+      'EnemyManager',
+      'EnemyFlowFieldService',
+      'WorldRuntime',
+      'CoopMissionRuntime',
+    ]) {
+      expect(publicSurface, concreteOwner).not.toContain(concreteOwner);
+    }
+    for (const removedApi of ['getAuraEnemies', 'getFlowFieldDebugService', 'getEnemySource']) {
+      expect(runtime, removedApi).not.toContain(removedApi);
+    }
+    const rpcPorts = read('src/scenes/arena/ArenaRpcPorts.ts');
+    for (const concreteRpcOwner of [
+      'BurrowSystem',
+      'LoadoutManager',
+      'TranslocatorSystem',
+      'ResourceSystem',
+      'PowerUpSystem',
+      'HostHeldActionSystem',
+    ]) {
+      expect(rpcPorts, concreteRpcOwner).not.toContain(concreteRpcOwner);
+    }
+    expect(runtime).toContain('createArenaRuntimeRpcPorts(');
+    expect(runtime).toContain('createArenaPlacementPorts(');
+    expect(runtime).toContain('createArenaRuntimeDiagnosticsPort(');
+    expect(runtime).toContain('createArenaRuntimePresentationPort(');
+    expect(runtime).toContain('createWeaponBalanceLabWorldPort(');
+    expect(runtime).toContain('createArenaStrategicTargetsPort(');
   });
 
   it('meldet das Weapon Balance Lab nur mit Player-Systemen und EnemyManager als bereit', () => {
@@ -155,9 +194,9 @@ describe('Checkpoint C – Top-Level-Owner und Frame', () => {
 
   it('taktet die raumlanglebigen Owner selbst', () => {
     const { runtime } = createArenaRuntime();
-    const contributions = vi.spyOn(runtime.persistentBase, 'syncPersistentBaseContributions')
+    const contributions = vi.spyOn((runtime as any).persistentBaseOwner, 'syncPersistentBaseContributions')
       .mockImplementation(() => {});
-    const rewards = vi.spyOn(runtime.persistentBase, 'syncPersistentBaseRewards')
+    const rewards = vi.spyOn((runtime as any).persistentBaseOwner, 'syncPersistentBaseRewards')
       .mockImplementation(() => {});
 
     runtime.syncRoomOwners();
@@ -243,7 +282,7 @@ describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Auf
   /**
    * Vor Phase 6A.1 stand diese Reihenfolge ausschliesslich in Kommentaren, nicht in einem Test.
    * Seit Phase 6A.2 delegiert die Scene Kamera-Sync und World-Surface-Residency an
-   * `arenaRuntime.syncWorldCamera`/`syncWorldSurfaceResidency`, die intern den world-scoped
+   * `arenaRuntime.presentation.syncWorldCamera`/`syncWorldSurfaceResidency`, die intern den world-scoped
    * `WorldPresentationFrameBinding` takten. Dieser Test friert die relative Position dieser
    * Aufrufe zu Input-Frame und den Frame-Ende-Schritten ein - unabhaengig vom jeweiligen
    * Aufrufnamen.
@@ -256,10 +295,10 @@ describe('Checkpoint C – Frame-Reihenfolge der World-Kamera- und Residency-Auf
     expect(updateEnd, 'Ende von ArenaScene.update() nicht gefunden').toBeGreaterThan(updateStart);
     const body = scene.slice(updateStart, updateEnd);
 
-    const firstCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);');
-    const updateSurfaceResidency = body.indexOf('this.arenaRuntime.syncWorldSurfaceResidency(');
+    const firstCameraSync = body.indexOf('this.arenaRuntime.presentation.syncWorldCamera(delta, presentationPolicy.showWorld);');
+    const updateSurfaceResidency = body.indexOf('this.arenaRuntime.presentation.syncWorldSurfaceResidency(');
     const inputBindingsUpdateFrame = body.indexOf('this.inputBindings?.updateFrame({');
-    const secondCameraSync = body.indexOf('this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);');
+    const secondCameraSync = body.indexOf('this.arenaRuntime.presentation.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);');
     const applyCameraFeedback = body.indexOf('this.applyCameraFeedback(delta);');
     const flushBakeBudget = body.indexOf('ChunkedRenderSurface.flushBakeBudget(');
     const syncArenaLoadReady = body.indexOf('this.arenaRuntime.syncArenaLoadReady(');

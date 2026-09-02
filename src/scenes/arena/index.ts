@@ -7,8 +7,11 @@ export { HostUpdateCoordinator }         from './HostUpdateCoordinator';
 export { RpcCoordinator }               from './RpcCoordinator';
 export { ArenaRuntime }                 from './ArenaRuntime';
 export type {
+  ArenaRuntimeDiagnosticsPort,
+  ArenaRuntimePresentationPort,
   ArenaRuntimeRpcPorts,
   ArenaRuntimeStrategicTargetsPort,
+  EnemyFlowFieldDebugPort,
   RuntimeDiagnosticEventSink,
 } from './ArenaRuntime';
 export { CoopMissionPresentationInfrastructure } from './CoopMissionPresentationInfrastructure';

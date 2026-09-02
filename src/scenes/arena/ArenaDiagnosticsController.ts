@@ -20,7 +20,7 @@ import type { GpuVfxPoolStats } from '../../effects/gpu/GpuVfxPool';
 import type { GpuVfxSystem } from '../../effects/gpu/GpuVfxSystem';
 import { getWebGLRendererType } from '../../utils/webglContext';
 import type { LinkDiagnostics } from '../../network/peer/TransportDiagnostics';
-import type { FlowFieldCoordinator, FlowFieldDiagnostics } from '../../systems/flowfield/FlowFieldCoordinator';
+import type { FlowFieldDiagnostics } from '../../systems/flowfield/FlowFieldCoordinator';
 import type { HostUpdatePerformanceMetrics } from './HostUpdateCoordinator';
 import type { ClientUpdatePerformanceMetrics } from './ClientUpdateCoordinator';
 import type { LightingPerformanceMetrics } from '../../effects/LightingSystem';
@@ -45,6 +45,11 @@ export interface ArenaDiagnosticsRockVisualSystemPort {
   getMode(): RockRendererMode;
   getPageSize(): RockGpuPageSize;
   getGpuDiagnostics(): PersistentGpuWorldDiagnostics | null;
+}
+
+/** Read-only Flow-Field-Diagnose ohne Re-Export des konkreten Koordinators. */
+export interface ArenaDiagnosticsFlowFieldPort {
+  getDiagnostics(atMs?: number): FlowFieldDiagnostics;
 }
 
 interface TransportPerformanceCounts {
@@ -262,7 +267,7 @@ export interface ArenaDiagnosticsInput {
   readonly getVectorLighting: NonNullable<PerformanceAblationDeps['getVectorLighting']>;
   readonly chunkDiagnostics: ChunkRenderingDiagnostics;
   readonly getGpuVfxStats: () => Record<string, GpuVfxPoolStats> | null;
-  readonly getFlowFieldCoordinator: () => Pick<FlowFieldCoordinator, 'getDiagnostics'> | null;
+  readonly getFlowFieldDiagnostics: () => ArenaDiagnosticsFlowFieldPort | null;
   readonly getRockVisualSystem: () => ArenaDiagnosticsRockVisualSystemPort | null;
   readonly getHostPerformanceMetrics: () => HostUpdatePerformanceMetrics;
   readonly getClientPerformanceMetrics: () => ClientUpdatePerformanceMetrics;
@@ -673,7 +678,7 @@ export class ArenaDiagnosticsController {
   }
 
   private seedCompanionBaselines(recordingId: number): void {
-    const flowfieldSource = this.input.getFlowFieldCoordinator();
+    const flowfieldSource = this.input.getFlowFieldDiagnostics();
     const rockSource = this.input.getRockVisualSystem();
     const vfxSource = this.gpuVfx;
     const flowfield = flowfieldSource?.getDiagnostics(performance.now()) ?? null;
@@ -750,8 +755,8 @@ export class ArenaDiagnosticsController {
     let flowfieldComputeMs = 0;
     let flowfieldRoundTripMs = 0;
     if (sampleSubsystems) {
-      flowfield = this.input.getFlowFieldCoordinator()?.getDiagnostics(performanceNow) ?? null;
-      const flowfieldSource = this.input.getFlowFieldCoordinator();
+      flowfield = this.input.getFlowFieldDiagnostics()?.getDiagnostics(performanceNow) ?? null;
+      const flowfieldSource = this.input.getFlowFieldDiagnostics();
       const rockSource = this.input.getRockVisualSystem();
       const vfxSource = this.gpuVfx;
       const rockGpu = rockSource?.getGpuDiagnostics() ?? null;

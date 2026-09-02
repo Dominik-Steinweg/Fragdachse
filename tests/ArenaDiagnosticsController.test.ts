@@ -54,7 +54,7 @@ function makeInput(): { input: ArenaDiagnosticsInput; payloadSink: { setSink: Re
       setRockGpuPageSize: vi.fn(),
     },
     getGpuVfxStats: () => null,
-    getFlowFieldCoordinator: () => null,
+    getFlowFieldDiagnostics: () => null,
     getRockVisualSystem: () => null,
     getHostPerformanceMetrics: vi.fn() as unknown as ArenaDiagnosticsInput['getHostPerformanceMetrics'],
     getClientPerformanceMetrics: vi.fn() as unknown as ArenaDiagnosticsInput['getClientPerformanceMetrics'],

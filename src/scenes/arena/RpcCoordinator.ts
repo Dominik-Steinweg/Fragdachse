@@ -12,13 +12,13 @@ import type { DecoySystem } from '../../systems/DecoySystem';
 import type { EffectSystem } from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
-import type { ExplosionVisualStyle, LoadoutUseParams, LoadoutUseResult } from '../../types';
+import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
 import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
-import type { HeldActionIdentity, HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
 import type {
   ConstructionRpcPort,
+  HeldActionRpcIdentity,
   HeldActionRpcPort,
   PersistentBaseRpcPort,
   PlayerCapabilitiesRpcPort,
@@ -69,7 +69,7 @@ function isChargeableUtilityConfig(config: UtilityConfig | undefined): config is
 
 /** Consumes the host-held action only for a utility that actually requires one. */
 function validateHostUtilityCharge(
-  heldActionSystem: HostHeldActionSystem | null,
+  heldActionPort: HeldActionRpcPort,
   senderId: string,
   utility: UtilityConfig | undefined,
   params?: LoadoutUseParams,
@@ -78,7 +78,7 @@ function validateHostUtilityCharge(
 
   const identity = getHeldActionIdentity(params);
   const held = identity
-    ? heldActionSystem?.consume(
+    ? heldActionPort.consume(
       senderId,
       params?.heldActionId,
       utility.activation.type,
@@ -86,7 +86,7 @@ function validateHostUtilityCharge(
       Date.now(),
       identity,
     )
-    : heldActionSystem?.consume(
+    : heldActionPort.consume(
       senderId,
       params?.heldActionId,
       utility.activation.type,
@@ -105,7 +105,7 @@ function validateHostUtilityCharge(
   };
 }
 
-function getHeldActionIdentity(params?: LoadoutUseParams): HeldActionIdentity | undefined {
+function getHeldActionIdentity(params?: LoadoutUseParams): HeldActionRpcIdentity | undefined {
   if (params?.temporaryUtilityInstanceId !== undefined) {
     return { temporaryUtilityInstanceId: params.temporaryUtilityInstanceId };
   }
@@ -142,10 +142,6 @@ export class RpcCoordinator {
     private readonly heldActions: HeldActionRpcPort,
     private readonly train: TrainRpcPort,
   ) {}
-
-  private get powerUpSystem() {
-    return this.playerLoadout.getPowerUpSystem();
-  }
 
   registerAll(): void {
     this.registerDashHandler();
@@ -215,7 +211,7 @@ export class RpcCoordinator {
       if (!bridge.isHost()) return;
       if (!this.capabilities.get(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
-      this.playerLoadout.getBurrowSystem()?.handleBurrowRequest(playerId, wantsBurrowed);
+      this.playerLoadout.handleBurrowRequest(playerId, wantsBurrowed);
     });
   }
 
@@ -240,20 +236,18 @@ export class RpcCoordinator {
       temporaryUtilityInstanceId,
     ) => {
       if (!bridge.isHost()) return false;
-      const system = this.heldActions.getSystem();
-      if (!system) return false;
       if (operation === 'cancel') {
-        system.cancel(playerId, actionId);
+        this.heldActions.cancel(playerId, actionId);
         return true;
       }
       if (!kind || !this.capabilities.get(playerId).canInteract || bridge.isArenaCountdownActive()
         || !this.combatSystem.isAlive(playerId)
-        || this.playerLoadout.getBurrowSystem()?.isBurrowed(playerId)
-        || this.playerLoadout.getBurrowSystem()?.isStunned(playerId)) return false;
+        || this.playerLoadout.isBurrowed(playerId)
+        || this.playerLoadout.isStunned(playerId)) return false;
 
       if (kind === 'global_dismantle') {
         if (toolRef || temporaryUtilityInstanceId) return false;
-        return system.start(playerId, actionId, kind, 1_000, Date.now());
+        return this.heldActions.start(playerId, actionId, kind, 1_000, Date.now());
       }
       let utility: UtilityConfig | undefined;
       if (toolRef && temporaryUtilityInstanceId) return false;
@@ -270,9 +264,9 @@ export class RpcCoordinator {
           bridge.getActiveGameMode(),
         );
       } else if (temporaryUtilityInstanceId) {
-        utility = this.playerLoadout.getLoadoutManager()?.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
+        utility = this.playerLoadout.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
       } else {
-        utility = this.playerLoadout.getLoadoutManager()?.getEquippedUtilityConfig(playerId);
+        utility = this.playerLoadout.getEquippedUtilityConfig(playerId);
       }
       if (!utility || utility.activation.type !== kind) return false;
       const identity = toolRef
@@ -281,8 +275,8 @@ export class RpcCoordinator {
           ? { temporaryUtilityInstanceId }
           : undefined;
       return identity
-        ? system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now(), identity)
-        : system.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
+        ? this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now(), identity)
+        : this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
     });
   }
 
@@ -309,7 +303,7 @@ export class RpcCoordinator {
           || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
-        const held = this.heldActions.getSystem()?.consume(
+        const held = this.heldActions.consume(
           senderId,
           params.heldActionId,
           'global_dismantle',
@@ -370,7 +364,7 @@ export class RpcCoordinator {
           bridge.getActiveGameMode(),
         );
         if (!inspectorUtility) return { ok: false, reason: 'invalid' };
-        const charge = validateHostUtilityCharge(this.heldActions.getSystem(), senderId, inspectorUtility, params);
+        const charge = validateHostUtilityCharge(this.heldActions, senderId, inspectorUtility, params);
         if (!charge.ok) return charge;
         return this.construction.useInspectorUtility(
           senderId,
@@ -384,23 +378,23 @@ export class RpcCoordinator {
       }
       if (slot === 'utility') {
         const utility = params?.temporaryUtilityInstanceId
-          ? this.playerLoadout.getLoadoutManager()?.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
-          : this.playerLoadout.getLoadoutManager()?.getEquippedUtilityConfig(senderId);
+          ? this.playerLoadout.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
+          : this.playerLoadout.getEquippedUtilityConfig(senderId);
         if (params?.temporaryUtilityInstanceId && !utility) {
           return { ok: false, reason: 'invalid' };
         }
         const isTranslocatorRecall = utility?.type === 'translocator'
-          && this.playerLoadout.getTranslocatorSystem()?.getActivePuckId(senderId) !== undefined;
+          && this.playerLoadout.hasActiveTranslocatorPuck(senderId);
         if (isTranslocatorRecall) {
-          this.heldActions.getSystem()?.clearPlayer(senderId);
+          this.heldActions.clearPlayer(senderId);
         } else {
-          const charge = validateHostUtilityCharge(this.heldActions.getSystem(), senderId, utility, params);
+          const charge = validateHostUtilityCharge(this.heldActions, senderId, utility, params);
           if (!charge.ok) return charge;
           authoritativeParams = charge.authoritativeParams;
         }
       }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
-      const result = this.playerLoadout.getLoadoutManager()?.use(
+      const result = this.playerLoadout.useLoadout(
         slot,
         senderId,
         angle,
@@ -411,13 +405,13 @@ export class RpcCoordinator {
         authoritativeParams,
         clientX,
         clientY,
-      ) ?? { ok: false, reason: 'blocked' } satisfies LoadoutUseResult;
+      );
       if (slot !== 'weapon2') return result;
       return {
         ...result,
         worldRevision: bridge.getCurrentWorldRevision() ?? undefined,
-        authoritativeAdrenaline: this.playerLoadout.getResourceSystem()?.getAdrenaline(senderId),
-        adrenalineRevision: this.playerLoadout.getResourceSystem()?.getAdrenalineRevision(senderId),
+        authoritativeAdrenaline: this.playerLoadout.getAdrenaline(senderId),
+        adrenalineRevision: this.playerLoadout.getAdrenalineRevision(senderId),
       };
     });
   }
@@ -637,7 +631,7 @@ export class RpcCoordinator {
       if (!this.capabilities.get(playerId).canInteract) return false;
       const player = this.playerManager.getPlayer(playerId);
       if (!player) return false;
-      const pickedUp = this.powerUpSystem?.tryPickup(playerId, uid, player.x, player.y) ?? false;
+      const pickedUp = this.playerLoadout.tryPickupPowerUp(playerId, uid, player.x, player.y);
       if (pickedUp) this.gameAudioSystem.playSound('sfx_pickup_powerup', player.x, player.y, playerId);
       return pickedUp;
     });

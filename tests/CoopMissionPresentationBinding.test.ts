@@ -195,7 +195,7 @@ describe('CoopMissionPresentationBinding', () => {
     }
 
     const scene = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);');
+    expect(scene).toContain('this.arenaRuntime.presentation.syncCoopMissionPresentation(delta, coopDefensePresentationActive);');
     expect(scene).toContain('this.captureTheBeerPresentation.syncClient(');
     expect(scene).not.toContain('syncClientCaptureTheBeerPresentation');
     expect(scene).not.toContain('syncClientActivitySnapshotPresentation');

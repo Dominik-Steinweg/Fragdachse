@@ -174,11 +174,11 @@ function makeCombatController() {
     getReinforcementMatrices: vi.fn(() => []),
     getEnergyInjectorEffects: vi.fn(() => []),
     getRemoteControlTargets: vi.fn(() => []),
-    getAuraEnemies: vi.fn(() => []),
+    getEnemyVisuals: vi.fn(() => []),
     syncEnemyHostVisuals: vi.fn(),
     getEnemyCount: vi.fn(() => 4),
     getStrategicTargets: vi.fn(() => []),
-    getStrategicTargetEnemyManager: vi.fn(() => null),
+    getStrategicTargetEnemy: vi.fn(() => null),
     getLocalPlayerId: vi.fn(() => 'local'),
   } as unknown as ArenaCombatPresentationSourcePort;
   const controller = new ArenaCombatPresentationController(renderers, sources);

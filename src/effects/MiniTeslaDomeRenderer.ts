@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
-import type { EnemyEntity } from '../entities/EnemyEntity';
+import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import { configureAdditiveImage, fillRadialGradientTexture, registerGraphicsObject } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
@@ -48,7 +48,7 @@ export class MiniTeslaDomeRenderer {
     ]);
   }
 
-  syncEnemies(enemies: readonly EnemyEntity[]): void {
+  syncEnemies(enemies: readonly EnemyVisualSource[]): void {
     const activeIds = new Set<string>();
     const weapon = WEAPON_CONFIGS.MINI_TESLA_DOME;
     if (weapon.fire.type !== 'tesla_dome') return;
@@ -106,7 +106,7 @@ export class MiniTeslaDomeRenderer {
     this.particles.clear();
   }
 
-  private syncDome(enemy: EnemyEntity, radius: number): void {
+  private syncDome(enemy: EnemyVisualSource, radius: number): void {
     let visual = this.visuals.get(enemy.id);
     if (!visual) {
       const field = configureAdditiveImage(

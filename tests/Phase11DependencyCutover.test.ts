@@ -34,9 +34,9 @@ describe('Phase 11B dependency cutover', () => {
     ]) {
       expect(flow, adapter).not.toContain(adapter);
     }
-    const runtime = read('src/scenes/arena/ArenaRuntime.ts');
-    expect(runtime).toContain('getConstructionWorldRuntime()?.placeInspectorConstruction(');
-    expect(runtime).toContain('getConstructionWorldRuntime()?.useInspectorUtility(');
+    const adapters = read('src/scenes/arena/ArenaRuntimeAdapters.ts');
+    expect(adapters).toContain('getConstructionWorldRuntime()?.placeInspectorConstruction(');
+    expect(adapters).toContain('getConstructionWorldRuntime()?.useInspectorUtility(');
     const scene = read('src/scenes/ArenaScene.ts');
     expect(scene).not.toContain('getConstructionWorldRuntime');
   });

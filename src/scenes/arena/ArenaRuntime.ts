@@ -8,36 +8,28 @@ import type { HostUpdateCoordinator } from './HostUpdateCoordinator';
 import type { ClientUpdateCoordinator } from './ClientUpdateCoordinator';
 import type { LobbyOverlay } from '../LobbyOverlay';
 import type { RoomQualityMonitor } from '../../network/RoomQualityMonitor';
-import type { CoopMissionOutcome, CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
+import type { CoopMissionOutcome } from '../../activity/CoopMissionRuntime';
 import type { CoopMissionPresentationInfrastructure } from './CoopMissionPresentationInfrastructure';
-import type { ArenaInputPlacementPorts, ArenaInputDebugHotkey, ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import type {
-  ConstructionRpcPort,
-  HeldActionRpcPort,
-  PersistentBaseRpcPort,
-  PlayerCapabilitiesRpcPort,
-  PlayerLoadoutRpcPort,
-  TrainRpcPort,
-  WorldParticipationRpcPort,
-} from './ArenaRpcPorts';
+  ArenaInputDebugHotkey,
+  ArenaSpectatorCameraInput,
+} from './ArenaInputBindings';
 import type { WeaponBalanceLabWorldPort } from '../../debug/coopDefenseBalance/WeaponBalanceLabRuntime';
 import type { WorldPresentationRequirement } from '../../world/WorldPresentation';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
+import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
 import type {
   ArenaLayout,
-  SyncedAk47StrategicTarget,
   SyncedReinforcementMatrix,
   SyncedEnergyInjectorEffect,
   SyncedRemoteControlTurret,
   SyncedTunnel,
 } from '../../types';
 import type { WorldViewRect } from '../../ui/HostileBaseIndicator';
-import type { EnemyEntity } from '../../entities/EnemyEntity';
-import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import type {
-  ArenaDiagnosticsInput,
+  ArenaDiagnosticsFlowFieldPort,
   ArenaDiagnosticsRockVisualSystemPort,
 } from './ArenaDiagnosticsController';
 import type { ChunkRenderingDiagnosticsState } from '../../ui/PerformanceDiagnosticsOverlay';
@@ -60,24 +52,35 @@ import type {
 import { ArenaLifecycleCoordinator } from './ArenaLifecycleCoordinator';
 import { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import type { CaptureTheBeerPresentationBinding } from '../../activity/CaptureTheBeerPresentationBinding';
+import {
+  createArenaPersistentBasePort,
+  createArenaFlowFieldDebugPort,
+  createArenaPlacementPorts,
+  createArenaRuntimeDiagnosticsPort,
+  createArenaRuntimePresentationPort,
+  createArenaRuntimeRpcPorts,
+  createArenaStrategicTargetsPort,
+  createWeaponBalanceLabWorldPort,
+} from './ArenaRuntimeAdapters';
+import type {
+  ArenaRuntimePersistentBasePort,
+  ArenaRuntimePlacementPort,
+  ArenaRuntimeDiagnosticsPort,
+  ArenaRuntimePresentationPort,
+  ArenaRuntimeRpcPorts,
+  ArenaRuntimeStrategicTargetsPort,
+  EnemyFlowFieldDebugPort,
+} from './ArenaRuntimePorts';
 
 export type RuntimeDiagnosticEventSink = (type: string, fields?: Record<string, unknown>) => void;
 
-export interface ArenaRuntimeRpcPorts {
-  readonly worldParticipation: WorldParticipationRpcPort;
-  readonly playerCapabilities: PlayerCapabilitiesRpcPort;
-  readonly construction: ConstructionRpcPort;
-  readonly persistentBase: PersistentBaseRpcPort;
-  readonly playerLoadout: PlayerLoadoutRpcPort;
-  readonly heldAction: HeldActionRpcPort;
-  readonly train: TrainRpcPort;
-}
-
-/** Schmaler Read-Port fuer die allgemeine Combat-Presentation. */
-export interface ArenaRuntimeStrategicTargetsPort {
-  readonly getHostSnapshot: (now: number) => readonly SyncedAk47StrategicTarget[];
-  readonly getEnemySource: () => NonNullable<CoopMissionRuntime['enemyManager']> | null;
-}
+export type {
+  ArenaRuntimeDiagnosticsPort,
+  ArenaRuntimePresentationPort,
+  ArenaRuntimeRpcPorts,
+  ArenaRuntimeStrategicTargetsPort,
+  EnemyFlowFieldDebugPort,
+} from './ArenaRuntimePorts';
 
 /**
  * Scene-langlebiger Top-Level-Owner des Arena-Layers.
@@ -116,15 +119,19 @@ export interface ArenaRuntimeInput {
 
 export class ArenaRuntime {
   /** Raumlanglebiger Persistent-Base-Owner; er ueberlebt jede World und jede Runde. */
-  readonly persistentBase: ArenaPersistentBaseSession;
+  readonly persistentBase: ArenaRuntimePersistentBasePort;
   /** Gebuendelte RPC-Ports fuer den RpcCoordinator; entkoppelt von konkreten Runtime-Interna. */
   readonly rpcPorts: ArenaRuntimeRpcPorts;
   /** Schmale Platzierungsports fuer die Scene-Eingabe. */
-  readonly placementPorts: ArenaInputPlacementPorts;
+  readonly placementPorts: ArenaRuntimePlacementPort;
   /** Schmaler Port fuer das Weapon-Balance-Lab. */
   readonly weaponBalanceLabPort: WeaponBalanceLabWorldPort;
   /** Schmaler Source-Port fuer die Strategic-Target-Presentation. */
   readonly strategicTargetsPort: ArenaRuntimeStrategicTargetsPort;
+  /** Gebuendelte World-/Activity-Praesentationsschritte fuer die Scene. */
+  readonly presentation: ArenaRuntimePresentationPort;
+  /** Explizite Diagnose- und Debug-Queries ohne Gameplay-Owner an der Boundary. */
+  readonly diagnostics: ArenaRuntimeDiagnosticsPort;
 
   /** Der Arena-Flow bleibt private Implementierungsdetail der ArenaRuntime. */
   private readonly flow: ArenaLifecycleCoordinator;
@@ -133,6 +140,7 @@ export class ArenaRuntime {
   private readonly renderers: RendererBundle;
   private readonly hostUpdate: HostUpdateCoordinator;
   private readonly clientUpdate: ClientUpdateCoordinator;
+  private readonly persistentBaseOwner: ArenaPersistentBaseSession;
   private readonly getLocalPlayerId: () => string;
   private readonly getSynchronizedNow: () => number;
 
@@ -146,7 +154,7 @@ export class ArenaRuntime {
     this.getSynchronizedNow = input.getSynchronizedNow;
     // Der Persistent-Base-Owner entsteht vor dem Flow und fragt ihn erst zur Laufzeit nach der
     // aktuellen World; dadurch bleibt seine Lifetime unabhaengig von jeder World-Instanz.
-    this.persistentBase = new ArenaPersistentBaseSession({
+    this.persistentBaseOwner = new ArenaPersistentBaseSession({
       scene: input.scene,
       ctx: input.ctx,
       rockVisualHelper: input.rockVisualHelper,
@@ -176,7 +184,7 @@ export class ArenaRuntime {
       input.roomQualityMonitor,
       input.coopMissionPresentation ?? null,
       input.captureTheBeerPresentation ?? null,
-      this.persistentBase,
+      this.persistentBaseOwner,
       input.getSpectatorCameraInput,
     );
     input.rockVisualHelper?.setWorldPort?.({
@@ -198,173 +206,35 @@ export class ArenaRuntime {
     input.ctx?.hostPhysics?.setCanMoveResolver?.(
       (playerId) => this.flow.getPlayerCapabilities(playerId).canMove,
     );
-    this.rpcPorts = {
-      worldParticipation: {
-        handleRequest: (playerId, join) => this.flow.hostHandleWorldParticipationRequest(playerId, join),
-      },
-      playerCapabilities: {
-        get: (playerId) => this.flow.getPlayerCapabilities(playerId),
-      },
-      construction: {
-        placeInspectorConstruction: (playerId, constructionId, targetX, targetY, activityRevision) => (
-          this.flow.getConstructionWorldRuntime()?.placeInspectorConstruction(
-            playerId,
-            constructionId,
-            targetX,
-            targetY,
-            activityRevision,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-        useInspectorUtility: (playerId, tool, angle, targetX, targetY, now, params) => (
-          this.flow.getConstructionWorldRuntime()?.useInspectorUtility(
-            playerId,
-            tool,
-            angle,
-            targetX,
-            targetY,
-            now,
-            params,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-        dismantleConstruction: (playerId, targetX, targetY, activityRevision) => (
-          this.flow.getConstructionWorldRuntime()?.dismantleConstruction(
-            playerId,
-            targetX,
-            targetY,
-            activityRevision,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-        dismantleAllOwnedConstructions: (playerId, activityRevision) => (
-          this.flow.getConstructionWorldRuntime()?.dismantleAllOwnedConstructions(
-            playerId,
-            activityRevision,
-          ) ?? { ok: false, reason: 'blocked' }
-        ),
-      },
-      persistentBase: {
-        placeReward: (playerId, request) => this.persistentBase.placePersistentBaseReward(playerId, request),
-        moveObject: (playerId, request) => this.persistentBase.movePersistentBaseObject(playerId, request),
-      },
-      playerLoadout: {
-        getBurrowSystem: () => this.flow.getWorldPlayerGameplayRuntime()?.systems.burrow ?? null,
-        getLoadoutManager: () => this.flow.getWorldPlayerGameplayRuntime()?.systems.loadout ?? null,
-        getTranslocatorSystem: () => this.flow.getWorldPlayerGameplayRuntime()?.systems.translocator ?? null,
-        getResourceSystem: () => this.flow.getWorldPlayerGameplayRuntime()?.systems.resource ?? null,
-        getPowerUpSystem: () => this.flow.getWorldPowerUpRuntime()?.system ?? null,
-      },
-      heldAction: {
-        getSystem: () => this.flow.getWorldPlayerGameplayRuntime()?.systems.heldAction ?? null,
-      },
-      train: {
-        markDestroyed: () => this.flow.onTrainDestroyed(),
-      },
-    };
-    this.placementPorts = {
-      getUsedCapacity: (ownerId) => this.flow.getWorldRuntime()?.materialization?.placement?.getUsedCapacity(ownerId) ?? 0,
-      getDismantlePreview: (ownerId, originX, originY, pointerX, pointerY, range) => (
-        this.flow.getWorldRuntime()?.materialization?.placement?.getDismantlePreview(
-          ownerId,
-          originX,
-          originY,
-          pointerX,
-          pointerY,
-          range,
-        )
-      ),
-      getPlacementPreview: (config, originX, originY, pointerX, pointerY) => (
-        this.flow.getWorldRuntime()?.materialization?.placement?.getPlacementPreview(
-          config,
-          originX,
-          originY,
-          pointerX,
-          pointerY,
-        )
-      ),
-      getTunnelPlacementPreview: (config, originX, originY, pointerX, pointerY, anchor) => (
-        this.flow.getWorldRuntime()?.materialization?.placement?.getTunnelPlacementPreview(
-          config,
-          originX,
-          originY,
-          pointerX,
-          pointerY,
-          anchor,
-        )
-      ),
-      getConstructionPlacementPreview: (definition, originX, originY, pointerX, pointerY) => (
-        this.flow.getWorldRuntime()?.materialization?.placement?.getConstructionPlacementPreview(
-          definition,
-          originX,
-          originY,
-          pointerX,
-          pointerY,
-        )
-      ),
-    };
-    this.weaponBalanceLabPort = {
-      isReady: () => {
-        const playerSystems = this.flow.getWorldPlayerGameplayRuntime()?.systems;
-        const enemyManager = this.flow.getCoopMissionRuntime()?.enemyManager;
-        return playerSystems !== undefined && enemyManager != null;
-      },
-      spawnTarget: (x, y) => {
-        const enemyManager = this.flow.getCoopMissionRuntime()?.enemyManager;
-        if (!enemyManager) return null;
-        const enemy = enemyManager.hostSpawnAtWorld(x, y, 'zombie-badger', {
-          originId: 'weapon-balance-lab',
-        });
-        enemy.setHp(1_000_000_000, 1_000_000_000);
-        enemy.setPosition(x, y);
-        enemy.body.setVelocity(0, 0);
-        return { id: enemy.id };
-      },
-      pinTarget: (id, x, y) => {
-        const enemy = this.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(id);
-        if (!enemy) return;
-        enemy.setPosition(x, y);
-        enemy.body.setVelocity(0, 0);
-      },
-      observeAdrenalineDrain: (listener) => {
-        const resources = this.flow.getWorldPlayerGameplayRuntime()?.systems.resource;
-        return resources?.addAdrenalineDrainObserver((observedPlayerId, _requested, drained) => {
-          listener(observedPlayerId, drained);
-        }) ?? null;
-      },
-      observeAdrenalineGain: (listener) => {
-        const resources = this.flow.getWorldPlayerGameplayRuntime()?.systems.resource;
-        return resources?.addAdrenalineGainObserver((observedPlayerId, _requested, gained) => {
-          listener(observedPlayerId, gained);
-        }) ?? null;
-      },
-      setAdrenaline: (playerId, amount) => {
-        this.flow.getWorldPlayerGameplayRuntime()?.systems.resource.setAdrenaline(playerId, amount);
-      },
-      getMaxAdrenaline: (playerId) => {
-        return this.flow.getWorldPlayerGameplayRuntime()?.systems.resource.getMaxAdrenaline(playerId) ?? 0;
-      },
-      useLoadout: (slot, playerId, angle, targetX, targetY, now, shotSequence, inputStarted) => {
-        const loadout = this.flow.getWorldPlayerGameplayRuntime()?.systems.loadout;
-        if (!loadout) return null;
-        const player = this.ctx.playerManager.getPlayer(playerId);
-        return loadout.use(
-          slot,
-          playerId,
-          angle,
-          targetX,
-          targetY,
-          now,
-          shotSequence,
-          { inputStarted },
-          player?.x,
-          player?.y,
-        );
-      },
-    };
-    this.strategicTargetsPort = {
-      getHostSnapshot: (now) => (
-        this.flow.getWorldPlayerGameplayRuntime()?.systems?.ak47StrategicTarget?.getNetSnapshot(now) ?? []
-      ),
-      getEnemySource: () => this.flow.getCoopMissionRuntime()?.enemyManager ?? null,
-    };
+    this.rpcPorts = createArenaRuntimeRpcPorts(this.flow, this.persistentBaseOwner);
+    this.placementPorts = createArenaPlacementPorts(this.flow);
+    this.persistentBase = createArenaPersistentBasePort(this.persistentBaseOwner);
+    this.weaponBalanceLabPort = createWeaponBalanceLabWorldPort(this.flow, this.ctx.playerManager);
+    this.strategicTargetsPort = createArenaStrategicTargetsPort(this.flow);
+    this.presentation = createArenaRuntimePresentationPort(
+      this.syncWorldCamera.bind(this),
+      this.syncWorldSurfaceResidency.bind(this),
+      this.syncWorldClientPresentation.bind(this),
+      this.syncWorldCanopy.bind(this),
+      this.syncCoopMissionPresentation.bind(this),
+      this.syncWorldLocalPlayerPresentation.bind(this),
+      this.syncWorldPersistentBasePresentation.bind(this),
+      this.requestWorldStaticShadowBake.bind(this),
+      this.syncWorldStaticShadowProfile.bind(this),
+      this.syncWorldShadows.bind(this),
+      this.syncWorldLighting.bind(this),
+    );
+    this.diagnostics = createArenaRuntimeDiagnosticsPort(
+      this.getChunkRenderingDiagnosticsState.bind(this),
+      this.setGroundSurfaceVisible.bind(this),
+      this.setRockOverlayVisible.bind(this),
+      this.setChunkSampling.bind(this),
+      this.setRockRenderer.bind(this),
+      this.setRockGpuPageSize.bind(this),
+      this.getFlowFieldDebugPort.bind(this),
+      this.getFlowFieldDiagnosticsPort.bind(this),
+      this.getRockVisualDiagnostics.bind(this),
+    );
     this.hostUpdate.setWorldFramePort({
       getWorldRuntime: () => this.flow.getWorldRuntime(),
       getTrainRuntime: () => this.flow.getWorldTrainRuntime(),
@@ -410,7 +280,7 @@ export class ArenaRuntime {
    * Positioniert die Weltkamera dieser World fuer diesen Frame; wird pro Frame zweimal gerufen -
    * einmal vor der Simulation, einmal danach auf die finale Spielerposition.
    */
-  syncWorldCamera(deltaMs: number, showWorld: boolean): void {
+  private syncWorldCamera(deltaMs: number, showWorld: boolean): void {
     const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
     // Ohne aktive World-Presentation - zwischen zwei Instanzen oder vor der ersten - gilt
     // derselbe neutrale Stand wie fuer eine World ohne Weltkamera. Sonst bliebe die Basis der
@@ -423,11 +293,11 @@ export class ArenaRuntime {
   }
 
   /** Gleicht die residenten Render-Chunks dieser World an den sichtbaren Ausschnitt an. */
-  syncWorldSurfaceResidency(showWorld: boolean): void {
+  private syncWorldSurfaceResidency(showWorld: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.syncSurfaceResidency(showWorld);
   }
 
-  syncWorldClientPresentation(
+  private syncWorldClientPresentation(
     state: WorldClientPresentationState | undefined,
     delta: number,
     countdownActive: boolean,
@@ -443,16 +313,16 @@ export class ArenaRuntime {
     );
   }
 
-  syncWorldCanopy(showWorld: boolean): void {
+  private syncWorldCanopy(showWorld: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.syncCanopyTransparency(showWorld);
   }
 
   /** Taktet die vollständige lokale Coop-Missionsdarstellung genau einmal pro Frame. */
-  syncCoopMissionPresentation(deltaMs: number, active: boolean): void {
+  private syncCoopMissionPresentation(deltaMs: number, active: boolean): void {
     this.flow.syncCoopMissionPresentation(deltaMs, active);
   }
 
-  syncWorldLocalPlayerPresentation(showWorld: boolean, spectator: boolean): void {
+  private syncWorldLocalPlayerPresentation(showWorld: boolean, spectator: boolean): void {
     const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
     if (presentationFrame) {
       presentationFrame.syncLocalPlayerPresentation(showWorld, spectator);
@@ -464,15 +334,15 @@ export class ArenaRuntime {
     this.ctx.playerManager.getPlayer(this.getLocalPlayerId())?.setWorldBarsVisible(!showWorld);
   }
 
-  syncWorldPersistentBasePresentation(showWorld: boolean, spectator: boolean): void {
+  private syncWorldPersistentBasePresentation(showWorld: boolean, spectator: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.syncPersistentBasePresentation(showWorld, spectator);
   }
 
-  requestWorldStaticShadowBake(force: boolean): void {
+  private requestWorldStaticShadowBake(force: boolean): void {
     this.flow.getWorldRuntime()?.presentationFrame?.requestStaticShadowBake(force);
   }
 
-  syncWorldStaticShadowProfile(force: boolean): void {
+  private syncWorldStaticShadowProfile(force: boolean): void {
     const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
     if (presentationFrame) {
       presentationFrame.syncStaticShadowProfile(force);
@@ -481,7 +351,7 @@ export class ArenaRuntime {
     this.renderers.shadow.syncStaticProfile(this.getSynchronizedNow(), force);
   }
 
-  syncWorldShadows(shadowArenaActive: boolean, inRoundWorld: boolean): void {
+  private syncWorldShadows(shadowArenaActive: boolean, inRoundWorld: boolean): void {
     const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
     if (presentationFrame) {
       presentationFrame.syncWorldShadows(shadowArenaActive, inRoundWorld);
@@ -491,7 +361,7 @@ export class ArenaRuntime {
     this.renderers.shadow.clear();
   }
 
-  syncWorldLighting(inArena: boolean, inRoundWorld: boolean): void {
+  private syncWorldLighting(inArena: boolean, inRoundWorld: boolean): void {
     const presentationFrame = this.flow.getWorldRuntime()?.presentationFrame;
     if (presentationFrame) {
       presentationFrame.syncWorldLighting(inArena, inRoundWorld);
@@ -508,8 +378,8 @@ export class ArenaRuntime {
    * raumlanglebigen Owner das betrifft, entscheidet dieser Top-Level-Owner - nicht die Scene.
    */
   syncRoomOwners(): void {
-    this.persistentBase.syncPersistentBaseContributions();
-    this.persistentBase.syncPersistentBaseRewards();
+    this.persistentBaseOwner.syncPersistentBaseContributions();
+    this.persistentBaseOwner.syncPersistentBaseRewards();
   }
 
   /**
@@ -753,7 +623,7 @@ export class ArenaRuntime {
     ) ?? [];
   }
 
-  getAuraEnemies(): readonly EnemyEntity[] {
+  getCombatEnemyVisuals(): readonly EnemyVisualSource[] {
     return this.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [];
   }
 
@@ -785,11 +655,12 @@ export class ArenaRuntime {
     };
   }
 
-  getFlowFieldDebugService(type: ArenaInputDebugHotkey): EnemyFlowFieldService | null {
+  private getFlowFieldDebugPort(type: ArenaInputDebugHotkey): EnemyFlowFieldDebugPort | null {
     const coop = this.flow.getCoopMissionRuntime();
-    return type === 'flowfield_players'
+    const service = type === 'flowfield_players'
       ? coop?.enemyPlayerFlowFieldService ?? null
       : coop?.enemyFlowFieldService ?? null;
+    return service ? createArenaFlowFieldDebugPort(service) : null;
   }
 
   getCoopDefenseBaseHpSummary(): {
@@ -815,7 +686,7 @@ export class ArenaRuntime {
 
   // --- Diagnostics Methods ---
 
-  getChunkRenderingDiagnosticsState(
+  private getChunkRenderingDiagnosticsState(
     staticShadows: boolean,
     shadowSamplingMode: ChunkSamplingMode | null,
   ): ChunkRenderingDiagnosticsState {
@@ -833,35 +704,33 @@ export class ArenaRuntime {
     };
   }
 
-  setGroundSurfaceVisible(visible: boolean): void {
+  private setGroundSurfaceVisible(visible: boolean): void {
     this.flow.getWorldRuntime()?.materialization?.arena?.groundSurface?.setVisible(visible);
   }
 
-  setRockOverlayVisible(visible: boolean): void {
+  private setRockOverlayVisible(visible: boolean): void {
     this.flow.getWorldRuntime()?.materialization?.arena?.rockOverlaySurface?.setVisible(visible);
   }
 
-  setChunkSampling(mode: ChunkSamplingMode): void {
+  private setChunkSampling(mode: ChunkSamplingMode): void {
     const arena = this.flow.getWorldRuntime()?.materialization?.arena;
     arena?.groundSurface?.setSamplingMode(mode);
     arena?.rockOverlaySurface?.setSamplingMode(mode);
   }
 
-  setRockRenderer(mode: RockRendererMode): void {
+  private setRockRenderer(mode: RockRendererMode): void {
     this.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.setMode(mode);
   }
 
-  setRockGpuPageSize(size: RockGpuPageSize): void {
+  private setRockGpuPageSize(size: RockGpuPageSize): void {
     this.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem?.setPageSize(size);
   }
 
-  getFlowFieldDiagnosticsSource(): ReturnType<
-    ArenaDiagnosticsInput[Extract<keyof ArenaDiagnosticsInput, `getFlowField${string}`>]
-  > {
+  private getFlowFieldDiagnosticsPort(): ArenaDiagnosticsFlowFieldPort | null {
     return this.flow.getCoopMissionRuntime()?.flowFieldCoordinator ?? null;
   }
 
-  getRockVisualDiagnostics(): ArenaDiagnosticsRockVisualSystemPort | null {
+  private getRockVisualDiagnostics(): ArenaDiagnosticsRockVisualSystemPort | null {
     return this.flow.getWorldRuntime()?.materialization?.arena?.rockVisualSystem ?? null;
   }
 }

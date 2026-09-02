@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
-import type { EnemyFlowFieldService } from '../../systems/EnemyFlowFieldService';
 import { DEPTH } from '../../config';
+import type { EnemyFlowFieldDebugPort } from './ArenaRuntimePorts';
 
 /**
  * Optional debug visualization for flow field vectors.
@@ -11,30 +11,30 @@ import { DEPTH } from '../../config';
  */
 export class EnemyFlowFieldDebugOverlay {
   private graphics: Phaser.GameObjects.Graphics | null = null;
-  private flowFieldService: EnemyFlowFieldService | null = null;
+  private flowFieldPort: EnemyFlowFieldDebugPort | null = null;
   private isVisible = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    flowFieldService: EnemyFlowFieldService,
+    flowFieldPort: EnemyFlowFieldDebugPort,
   ) {
-    this.setFlowFieldService(flowFieldService);
+    this.setFlowFieldPort(flowFieldPort);
   }
 
-  showForService(flowFieldService: EnemyFlowFieldService): void {
-    this.setFlowFieldService(flowFieldService);
+  showForPort(flowFieldPort: EnemyFlowFieldDebugPort): void {
+    this.setFlowFieldPort(flowFieldPort);
     this.show();
   }
 
-  private setFlowFieldService(flowFieldService: EnemyFlowFieldService): void {
-    if (this.flowFieldService === flowFieldService) {
+  private setFlowFieldPort(flowFieldPort: EnemyFlowFieldDebugPort): void {
+    if (this.flowFieldPort === flowFieldPort) {
       this.refresh();
       return;
     }
 
-    this.flowFieldService?.registerDebugOverlayCallback(null);
-    this.flowFieldService = flowFieldService;
-    this.flowFieldService.registerDebugOverlayCallback(() => {
+    this.flowFieldPort?.setRefreshListener(null);
+    this.flowFieldPort = flowFieldPort;
+    this.flowFieldPort.setRefreshListener(() => {
       this.refresh();
     });
   }
@@ -57,27 +57,27 @@ export class EnemyFlowFieldDebugOverlay {
   }
 
   private redraw(): void {
-    if (!this.graphics || !this.flowFieldService) return;
+    if (!this.graphics || !this.flowFieldPort) return;
     this.graphics.clear();
 
-    const flowFieldService = this.flowFieldService;
-    const cellSize = flowFieldService.getCellSize();
-    const cols = flowFieldService.getCols();
-    const rows = flowFieldService.getRows();
+    const flowFieldPort = this.flowFieldPort;
+    const cellSize = flowFieldPort.getCellSize();
+    const cols = flowFieldPort.getCols();
+    const rows = flowFieldPort.getRows();
     const arrowScale = cellSize * 0.3;
     const arrowHeadLength = 4;
 
     for (let gridY = 0; gridY < rows; gridY++) {
       for (let gridX = 0; gridX < cols; gridX++) {
-        const vector = flowFieldService.getVectorAt(gridX, gridY);
-        const integrationValue = flowFieldService.getIntegrationValueAt(gridX, gridY);
+        const vector = flowFieldPort.getVectorAt(gridX, gridY);
+        const integrationValue = flowFieldPort.getIntegrationValueAt(gridX, gridY);
 
         // Skip non-traversable cells
-        if (!flowFieldService.isTraversableAt(gridX, gridY)) {
+        if (!flowFieldPort.isTraversableAt(gridX, gridY)) {
           continue;
         }
 
-        const worldPos = flowFieldService.gridToWorld(gridX, gridY);
+        const worldPos = flowFieldPort.gridToWorld(gridX, gridY);
         if (!worldPos) continue;
 
         // Color by distance: blue (close) → cyan → green → yellow → red (far)
@@ -110,8 +110,8 @@ export class EnemyFlowFieldDebugOverlay {
     }
 
     // Draw goal cells with a special marker
-    for (const goalCell of flowFieldService.getGoalCells()) {
-      const worldPos = flowFieldService.gridToWorld(goalCell.gridX, goalCell.gridY);
+    for (const goalCell of flowFieldPort.getGoalCells()) {
+      const worldPos = flowFieldPort.gridToWorld(goalCell.gridX, goalCell.gridY);
       if (!worldPos) continue;
 
       this.graphics.lineStyle(2, 0x00ff00, 1); // Bright green for goals
@@ -157,12 +157,12 @@ export class EnemyFlowFieldDebugOverlay {
   }
 
   destroy(): void {
-    this.flowFieldService?.registerDebugOverlayCallback(null);
+    this.flowFieldPort?.setRefreshListener(null);
     if (this.graphics) {
       this.graphics.destroy();
       this.graphics = null;
     }
-    this.flowFieldService = null;
+    this.flowFieldPort = null;
     this.isVisible = false;
   }
 }

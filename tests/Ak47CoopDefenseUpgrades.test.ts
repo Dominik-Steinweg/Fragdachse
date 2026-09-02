@@ -368,14 +368,11 @@ describe('AK-47 Strategische Ziele', () => {
   it('only renders the local player strategic target and filters out foreign targets', () => {
     const { renderer, containers } = makeRendererFixture();
     const enemy = fakeEntity({ id: 'e1', x: 350, y: 420, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
-    const enemyManager = {
-      getEnemy: (id: string) => (id === 'e1' ? enemy : null),
-    } as any;
 
     // Snapshot contains only target for foreign player 'p2'
     renderer.sync(
       [{ ownerId: 'p2', enemyId: 'e1', confirmationUntil: 0 }],
-      enemyManager,
+      enemy,
       'p1', // local player
       1000,
       true,
@@ -388,7 +385,7 @@ describe('AK-47 Strategische Ziele', () => {
         { ownerId: 'p2', enemyId: 'e1', confirmationUntil: 0 },
         { ownerId: 'p1', enemyId: 'e1', confirmationUntil: 0 },
       ],
-      enemyManager,
+      enemy,
       'p1', // local player
       1000,
       true,
@@ -401,7 +398,7 @@ describe('AK-47 Strategische Ziele', () => {
     enemy.sprite.active = false;
     renderer.sync(
       [{ ownerId: 'p1', enemyId: 'e1', confirmationUntil: 0 }],
-      enemyManager,
+      enemy,
       'p1',
       1001,
       true,
@@ -412,15 +409,12 @@ describe('AK-47 Strategische Ziele', () => {
   it('shows hit confirmation graphics when confirmationUntil is active', () => {
     const { renderer, graphicsObjects } = makeRendererFixture();
     const enemy = fakeEntity({ id: 'e1', x: 100, y: 100, active: true, width: 32, height: 32, scaleX: 1, scaleY: 1, displayWidth: 32, displayHeight: 32, getHp: () => 100 });
-    const enemyManager = {
-      getEnemy: (id: string) => (id === 'e1' ? enemy : null),
-    } as any;
     const confirmationGraphics = graphicsObjects[1]; // second graphics object is confirmation
 
     // With confirmationUntil in future (hit confirmation active)
     renderer.sync(
       [{ ownerId: 'p1', enemyId: 'e1', confirmationUntil: 1150 }],
-      enemyManager,
+      enemy,
       'p1',
       1000,
       true,
@@ -430,7 +424,7 @@ describe('AK-47 Strategische Ziele', () => {
     // After confirmation expires
     renderer.sync(
       [{ ownerId: 'p1', enemyId: 'e1', confirmationUntil: 1150 }],
-      enemyManager,
+      enemy,
       'p1',
       1200,
       true,

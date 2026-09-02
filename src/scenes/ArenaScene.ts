@@ -427,7 +427,7 @@ export class ArenaScene extends Phaser.Scene {
         getState: () => {
           const staticShadows = this.renderers?.shadow?.isStaticVisible() ?? true;
           const shadowSampling = this.renderers?.shadow?.getSamplingMode() ?? null;
-          return this.arenaRuntime?.getChunkRenderingDiagnosticsState(staticShadows, shadowSampling) ?? {
+          return this.arenaRuntime?.diagnostics.getChunkRenderingDiagnosticsState(staticShadows, shadowSampling) ?? {
             staticShadows,
             groundSurface: true,
             rockOverlay: true,
@@ -438,24 +438,24 @@ export class ArenaScene extends Phaser.Scene {
           };
         },
         setStaticShadowsVisible: (visible) => this.renderers?.shadow?.setStaticVisible(visible),
-        setGroundSurfaceVisible: (visible) => this.arenaRuntime?.setGroundSurfaceVisible(visible),
-        setRockOverlayVisible: (visible) => this.arenaRuntime?.setRockOverlayVisible(visible),
+        setGroundSurfaceVisible: (visible) => this.arenaRuntime?.diagnostics.setGroundSurfaceVisible(visible),
+        setRockOverlayVisible: (visible) => this.arenaRuntime?.diagnostics.setRockOverlayVisible(visible),
         setChunkSampling: (mode) => {
           this.renderers?.shadow?.setSamplingMode(mode);
-          this.arenaRuntime?.setChunkSampling(mode);
+          this.arenaRuntime?.diagnostics.setChunkSampling(mode);
         },
         setRockRenderer: (mode) => {
           setRockRendererMode(mode);
-          this.arenaRuntime?.setRockRenderer(mode);
+          this.arenaRuntime?.diagnostics.setRockRenderer(mode);
         },
         setRockGpuPageSize: (size) => {
           setRockGpuPageSize(size);
-          this.arenaRuntime?.setRockGpuPageSize(size);
+          this.arenaRuntime?.diagnostics.setRockGpuPageSize(size);
         },
       },
       getGpuVfxStats: () => this.renderers?.gpuVfx.getStats() ?? null,
-      getFlowFieldCoordinator: () => this.arenaRuntime?.getFlowFieldDiagnosticsSource() ?? null,
-      getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaRuntime?.getRockVisualDiagnostics() ?? null,
+      getFlowFieldDiagnostics: () => this.arenaRuntime?.diagnostics.getFlowFieldDiagnosticsPort() ?? null,
+      getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaRuntime?.diagnostics.getRockVisualDiagnostics() ?? null,
       getHostPerformanceMetrics: () => this.hostUpdate.getPerformanceMetrics(),
       getClientPerformanceMetrics: () => this.clientUpdate.getPerformanceMetrics(),
       getFrameMetrics: () => ({
@@ -873,7 +873,7 @@ export class ArenaScene extends Phaser.Scene {
     const tunnelRenderer = new TunnelRenderer(this);
     const gaussWarning = new GaussWarningRenderer(
       this,
-      () => this.arenaRuntime?.getAuraEnemies() ?? [],
+      () => this.arenaRuntime?.getCombatEnemyVisuals() ?? [],
     );
 
     this.aimPresentation = new ArenaAimPresentationController(
@@ -898,7 +898,7 @@ export class ArenaScene extends Phaser.Scene {
         ) ?? { aimVisible: false, cursorVisible: false },
       },
       {
-        syncPersistentBasePresentation: (showWorld, spectator) => this.arenaRuntime?.syncWorldPersistentBasePresentation(showWorld, spectator),
+        syncPersistentBasePresentation: (showWorld, spectator) => this.arenaRuntime?.presentation.syncWorldPersistentBasePresentation(showWorld, spectator),
         getTunnelSnapshot: () => bridge.isHost()
           ? (this.arenaRuntime?.getHostTunnelSnapshot() ?? [])
           : (bridge.getLatestGameState()?.tunnels ?? []),
@@ -921,14 +921,14 @@ export class ArenaScene extends Phaser.Scene {
         getStrategicTargets: (now) => bridge.isHost()
           ? (this.arenaRuntime?.strategicTargetsPort.getHostSnapshot(now) ?? [])
           : (bridge.getLatestGameState()?.ak47StrategicTargets ?? []),
-        getStrategicTargetEnemyManager: () => this.arenaRuntime?.strategicTargetsPort.getEnemySource() ?? null,
+        getStrategicTargetEnemy: (enemyId) => this.arenaRuntime?.strategicTargetsPort.getEnemyVisual(enemyId) ?? null,
         getLocalPlayerId: () => bridge.getLocalPlayerId(),
         getReinforcementMatrices: () => this.arenaRuntime?.getReinforcementMatrices() ?? [],
         getEnergyInjectorEffects: () => this.arenaRuntime?.getEnergyInjectorEffects() ?? [],
         getRemoteControlTargets: () => bridge.isHost()
           ? (this.arenaRuntime?.getHostRemoteControlTargets(playerManager.getAllPlayers().map((player) => player.id)) ?? [])
           : (bridge.getLatestGameState()?.remoteControlTurrets ?? []),
-        getAuraEnemies: () => this.arenaRuntime?.getAuraEnemies() ?? [],
+        getEnemyVisuals: () => this.arenaRuntime?.getCombatEnemyVisuals() ?? [],
         syncEnemyHostVisuals: () => this.arenaRuntime?.syncEnemyHostVisuals(),
         getEnemyCount: () => this.arenaRuntime?.getEnemyCount() ?? 0,
       },
@@ -1149,30 +1149,7 @@ export class ArenaScene extends Phaser.Scene {
         getConstructionCapacityForPlayer: (playerId) => this.arenaRuntime?.getConstructionCapacityForPlayer(playerId),
         getTranslocatorActivePuckId: (playerId) => this.arenaRuntime?.getTranslocatorActivePuckId(playerId),
         placement: this.arenaRuntime.placementPorts,
-        persistentBase: {
-          getRewardIdsForPlayer: (playerId) => this.arenaRuntime?.persistentBase.getPersistentBaseRewardIdsForPlayer(playerId) ?? [],
-          getRewardPlacementPreview: (playerId, rewardId, pointerX, pointerY) => this.arenaRuntime?.persistentBase.getPersistentBaseRewardPlacementPreview(
-            playerId,
-            rewardId,
-            pointerX,
-            pointerY,
-          ),
-          requestRewardPlacement: (rewardId, preview) => this.arenaRuntime?.persistentBase.requestPersistentBaseRewardPlacement(rewardId, preview)
-            ?? Promise.resolve({ ok: false, reason: 'blocked' as const }),
-          getMoveSourcePreview: (playerId, pointerX, pointerY) => this.arenaRuntime?.persistentBase.getPersistentBaseMoveSourcePreview(
-            playerId,
-            pointerX,
-            pointerY,
-          ),
-          getMoveTargetPreview: (playerId, sourceRuntimeId, pointerX, pointerY) => this.arenaRuntime?.persistentBase.getPersistentBaseMoveTargetPreview(
-            playerId,
-            sourceRuntimeId,
-            pointerX,
-            pointerY,
-          ),
-          requestMove: (sourceRuntimeId, preview) => this.arenaRuntime?.persistentBase.requestPersistentBaseMove(sourceRuntimeId, preview)
-            ?? Promise.resolve({ ok: false, reason: 'blocked' as const }),
-        },
+        persistentBase: this.arenaRuntime.persistentBase,
         feedback: {
           notifyAdrenalineInsufficientShot: () => this.playerStatusRing?.notifyAdrenalineInsufficientShot(),
           flashUltimateInsufficientRage: () => this.ctx.centerHUD.flashUltimateInsufficientRage(),
@@ -1322,13 +1299,13 @@ export class ArenaScene extends Phaser.Scene {
 
     // The camera must already be positioned while the world is hidden, because its initial view
     // defines the startup working set that the load barrier waits for.
-    this.arenaRuntime.syncWorldCamera(delta, presentationPolicy.showWorld);
+    this.arenaRuntime.presentation.syncWorldCamera(delta, presentationPolicy.showWorld);
     // Direkt nach der Kamera und vor allem Weiteren: Die gestreamten Bodenbaender und
     // Fels-Overlays halten nur Renderziele um den sichtbaren Ausschnitt herum. Der
     // Sicherheitsrand deckt den Kamera-Feedback-Versatz mit ab, der erst am Frame-Ende
     // dazukommt.
     if (presentationPolicy.showWorld) {
-      this.arenaRuntime.syncWorldSurfaceResidency(presentationPolicy.showWorld);
+      this.arenaRuntime.presentation.syncWorldSurfaceResidency(presentationPolicy.showWorld);
     }
     // Der Owner loest die zentrale Policy auf und taktet den vorhandenen InputSystem; die Scene
     // liefert nur den bereits orchestrierten World-/Round-/UI-Framekontext.
@@ -1387,7 +1364,7 @@ export class ArenaScene extends Phaser.Scene {
     // der LobbyWorld aus. Ohne eigene Figur - reine Preview - bleiben sie deckend.
     if (presentationPolicy.showWorld) {
       diagnosticsFrame?.begin('leaderboardCanopy');
-      this.arenaRuntime.syncWorldCanopy(presentationPolicy.showWorld);
+      this.arenaRuntime.presentation.syncWorldCanopy(presentationPolicy.showWorld);
       diagnosticsFrame?.end('leaderboardCanopy');
     }
 
@@ -1418,11 +1395,11 @@ export class ArenaScene extends Phaser.Scene {
     // Keep the camera active while the arena is hidden behind the loading veil. Its position is
     // part of the local startup working set and must not be reset to the lobby origin before the
     // readiness check at the end of the frame.
-    this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
+    this.arenaRuntime.presentation.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);
     const coopDefensePresentationActive = inRoundWorld && isCoopDefenseMode(configuredGameMode);
-    this.arenaRuntime.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
+    this.arenaRuntime.presentation.syncCoopMissionPresentation(delta, coopDefensePresentationActive);
     this.syncSpectatorPlayerNames(inArena);
-    this.arenaRuntime.syncWorldLocalPlayerPresentation(inArena, spectator);
+    this.arenaRuntime.presentation.syncWorldLocalPlayerPresentation(inArena, spectator);
     if (inArena) {
       this.enemyHoverNameLabel?.sync(this.getEnemyHoverNameTarget());
     } else {
@@ -1478,9 +1455,9 @@ export class ArenaScene extends Phaser.Scene {
     // Keep World-scoped static shadows alive while the arena is hidden behind the loading veil;
     // clearing them here would destroy the startup surface before the load barrier can observe it.
     const shadowArenaActive = inArena || (inGame && !terminated);
-    this.arenaRuntime.syncWorldShadows(shadowArenaActive, inRoundWorld);
+    this.arenaRuntime.presentation.syncWorldShadows(shadowArenaActive, inRoundWorld);
     diagnosticsFrame?.end('shadow');
-    this.arenaRuntime.syncWorldLighting(inArena, inRoundWorld);
+    this.arenaRuntime.presentation.syncWorldLighting(inArena, inRoundWorld);
 
     // Erst jetzt, nachdem alle drei Schichten und moegliche Dirty-Wellen des Frames ihre Arbeit
     // eingereiht haben: ein gemeinsames kleines Budget statt eines separaten Vollbakes je Layer.
@@ -1792,7 +1769,7 @@ export class ArenaScene extends Phaser.Scene {
             this.arenaRuntime.getLocalWorldPresentation().required,
           );
         }
-        this.arenaRuntime.syncWorldClientPresentation(
+        this.arenaRuntime.presentation.syncWorldClientPresentation(
           clientState,
           delta,
           countdownActive,
@@ -1813,7 +1790,7 @@ export class ArenaScene extends Phaser.Scene {
         bridge.getSynchronizedNow(),
         this.resolveArenaTimeOfDaySignals(),
       );
-      this.arenaRuntime.requestWorldStaticShadowBake(transitionCompleted);
+      this.arenaRuntime.presentation.requestWorldStaticShadowBake(transitionCompleted);
 
       diagnosticsFrame?.begin('leaderboardCanopy');
       if (gameplayActive && this.inputBindings?.isArenaPanelHeld()) {
@@ -1843,7 +1820,7 @@ export class ArenaScene extends Phaser.Scene {
           this.arenaRuntime.getLocalWorldPresentation().required,
         );
       }
-      this.arenaRuntime.syncWorldClientPresentation(
+      this.arenaRuntime.presentation.syncWorldClientPresentation(
         clientState,
         delta,
         false,
@@ -2203,7 +2180,7 @@ export class ArenaScene extends Phaser.Scene {
   private syncDebugTimeOfDay(forceStaticBake: boolean): void {
     const now = bridge.getSynchronizedNow();
     this.arenaRuntime.syncRuntimeTimeOfDay(now, this.resolveArenaTimeOfDaySignals());
-    this.arenaRuntime.syncWorldStaticShadowProfile(forceStaticBake);
+    this.arenaRuntime.presentation.syncWorldStaticShadowProfile(forceStaticBake);
   }
 
   private resolveArenaTimeOfDaySignals(): {
@@ -2231,16 +2208,16 @@ export class ArenaScene extends Phaser.Scene {
   private handleFlowFieldDebugHotkey(type: ArenaInputDebugHotkey): void {
     if (!bridge.isHost()) return;
 
-    const service = this.arenaRuntime?.getFlowFieldDebugService(type);
-    if (!service) return;
+    const port = this.arenaRuntime?.diagnostics.getFlowFieldDebugPort(type);
+    if (!port) return;
 
     if (!this.flowFieldDebugOverlay) {
       console.log('[ArenaScene] Creating EnemyFlowFieldDebugOverlay');
-      this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, service);
+      this.flowFieldDebugOverlay = new EnemyFlowFieldDebugOverlay(this, port);
     }
 
     console.log(`[ArenaScene] Showing ${type} overlay`);
-    this.flowFieldDebugOverlay.showForService(service);
+    this.flowFieldDebugOverlay.showForPort(port);
   }
 
   private syncArenaPanelOverlayState(inArena = bridge.getGamePhase() === 'ARENA' && !this.arenaRuntime?.isMatchTerminated()): void {

@@ -67,7 +67,7 @@ describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
       update.indexOf('this.arenaRuntime.update(delta);'),
       update.indexOf('this.inputBindings?.updateFrame({'),
       update.indexOf('this.runArenaRoleFrame('),
-      update.indexOf('this.arenaRuntime.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);'),
+      update.indexOf('this.arenaRuntime.presentation.syncWorldCamera(spectator ? 0 : delta, presentationPolicy.showWorld);'),
       update.indexOf('this.combatPresentation?.sync({ inArena, delta }, diagnosticsFrame);'),
       update.indexOf('this.aimPresentation?.sync({'),
       update.indexOf('this.applyCameraFeedback(delta);'),
@@ -101,7 +101,7 @@ describe('Phase 8 – ArenaScene-Frame-Cutover', () => {
 
     const update = updateBody();
     expect(update.indexOf('this.combatPresentation?.syncStrategicTargets('))
-      .toBeLessThan(update.lastIndexOf('this.arenaRuntime.syncWorldCamera('));
+      .toBeLessThan(update.lastIndexOf('this.arenaRuntime.presentation.syncWorldCamera('));
   });
 });
 

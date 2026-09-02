@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
-import type { EnemyEntity } from '../entities/EnemyEntity';
+import type { EnemyVisualSource } from '../entities/EnemyVisualSource';
 import { WEAPON_CONFIGS, type HealingAuraWeaponFireConfig } from '../loadout/LoadoutConfig';
 import { configureAdditiveImage, fillRadialGradientTexture, registerGraphicsObject } from './EffectUtils';
 import type { LightingSystem } from './LightingSystem';
@@ -47,7 +47,7 @@ export class HealingAuraRenderer {
     ]);
   }
 
-  syncEnemies(enemies: readonly EnemyEntity[]): void {
+  syncEnemies(enemies: readonly EnemyVisualSource[]): void {
     const activeAuraIds = new Set<string>();
     const activeEnemyIds = new Set<string>();
 
@@ -113,7 +113,7 @@ export class HealingAuraRenderer {
     this.particles.clear();
   }
 
-  private syncAura(enemy: EnemyEntity, fire: HealingAuraWeaponFireConfig): void {
+  private syncAura(enemy: EnemyVisualSource, fire: HealingAuraWeaponFireConfig): void {
     let visual = this.visuals.get(enemy.id);
     if (!visual) {
       const field = configureAdditiveImage(

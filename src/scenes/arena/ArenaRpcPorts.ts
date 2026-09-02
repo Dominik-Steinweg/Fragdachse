@@ -1,17 +1,14 @@
 import type { PersistentBaseMoveRequest } from '../../persistentBase/PersistentBaseMove';
 import type { PersistentBaseRewardPlacementRequest } from '../../persistentBase/PersistentBaseRewardTypes';
-import type { PowerUpSystem } from '../../powerups/PowerUpSystem';
-import type { LoadoutManager } from '../../loadout/LoadoutManager';
-import type { BurrowSystem } from '../../systems/BurrowSystem';
-import type { HostHeldActionSystem } from '../../systems/HostHeldActionSystem';
-import type { ResourceSystem } from '../../systems/ResourceSystem';
-import type { TranslocatorSystem } from '../../systems/TranslocatorSystem';
 import type {
   ConstructionId,
+  HostHeldActionKind,
+  LoadoutSlot,
   LoadoutToolRef,
   LoadoutUseParams,
   LoadoutUseResult,
 } from '../../types';
+import type { UtilityConfig } from '../../loadout/LoadoutConfig';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 
 export interface WorldParticipationRpcPort {
@@ -53,18 +50,61 @@ export interface PersistentBaseRpcPort {
   moveObject(playerId: string, request: PersistentBaseMoveRequest): LoadoutUseResult;
 }
 
-/** RPC access to the current World-owned player/loadout systems, never to their Runtime owner. */
+export interface HeldActionRpcIdentity {
+  readonly toolRef?: LoadoutToolRef;
+  readonly temporaryUtilityInstanceId?: string;
+}
+
+export interface HeldActionRpcResult {
+  readonly elapsedMs: number;
+  readonly chargeFraction: number;
+}
+
+/** RPC access to current World-owned player capabilities, never to their Runtime owner. */
 export interface PlayerLoadoutRpcPort {
-  getBurrowSystem(): BurrowSystem | null;
-  getLoadoutManager(): LoadoutManager | null;
-  getTranslocatorSystem(): TranslocatorSystem | null;
-  getResourceSystem(): ResourceSystem | null;
-  getPowerUpSystem(): PowerUpSystem | null;
+  handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void;
+  isBurrowed(playerId: string): boolean;
+  isStunned(playerId: string): boolean;
+  getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null;
+  getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined;
+  hasActiveTranslocatorPuck(playerId: string): boolean;
+  useLoadout(
+    slot: LoadoutSlot,
+    playerId: string,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    shotId?: number,
+    params?: LoadoutUseParams,
+    clientX?: number,
+    clientY?: number,
+  ): LoadoutUseResult;
+  getAdrenaline(playerId: string): number;
+  getAdrenalineRevision(playerId: string): number;
+  tryPickupPowerUp(playerId: string, uid: number, playerX: number, playerY: number): boolean;
 }
 
 /** Host-held input lives and dies with the World player/loadout owner. */
 export interface HeldActionRpcPort {
-  getSystem(): HostHeldActionSystem | null;
+  start(
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    expectedDurationMs: number,
+    hostNowMs: number,
+    identity?: HeldActionRpcIdentity,
+  ): boolean;
+  cancel(playerId: string, actionId?: string): void;
+  consume(
+    playerId: string,
+    actionId: string | undefined,
+    kind: HostHeldActionKind,
+    fullChargeDurationMs: number,
+    hostNowMs: number,
+    expectedIdentity?: HeldActionRpcIdentity,
+  ): HeldActionRpcResult | null;
+  clearPlayer(playerId: string): void;
 }
 
 export interface TrainRpcPort {

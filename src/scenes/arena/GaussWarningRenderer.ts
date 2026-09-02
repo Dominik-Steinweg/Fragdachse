@@ -3,7 +3,7 @@ import { bridge }            from '../../network/bridge';
 import { dequantizeAngle }   from '../../utils/angle';
 import { DEPTH, ARENA_OFFSET_X, ARENA_OFFSET_Y, ARENA_WIDTH, ARENA_HEIGHT, getTopDownMuzzleOrigin } from '../../config';
 import { VOID_PALETTE } from '../../config';
-import type { EnemyEntity } from '../../entities/EnemyEntity';
+import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
 import { registerGraphicsObject } from '../../effects/EffectUtils';
 
 /**
@@ -17,7 +17,7 @@ export class GaussWarningRenderer {
 
   constructor(
     scene: Phaser.Scene,
-    private readonly getEnemies: () => readonly EnemyEntity[] = () => [],
+    private readonly getEnemies: () => readonly EnemyVisualSource[] = () => [],
   ) {
     this.gfx = scene.add.graphics().setDepth(DEPTH.OVERLAY - 2);
     registerGraphicsObject(scene, 'gaussWarning', this.gfx);
