@@ -25,6 +25,7 @@ import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
@@ -104,6 +105,7 @@ function createFixture(options: {
   readonly powerUpDamageMultiplier?: number;
   readonly turretDamageMultiplier?: number;
   readonly combatSystem?: CombatSystem;
+  readonly ak47Behavior?: WorldPlayerGameplaySystems['ak47Behavior'];
   readonly ak47StrategicTarget?: Ak47StrategicTargetSystem | null;
   readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
   readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
@@ -172,6 +174,7 @@ function createFixture(options: {
     slimeTrail: null,
     flamethrowerUpgrade: null,
     weaponUpgrade: null,
+    ak47Behavior: options.ak47Behavior ?? null,
     ak47StrategicTarget: options.ak47StrategicTarget ?? null,
   } as unknown as WorldPlayerGameplaySystems;
   const metrics = resolveActiveArenaWorldMetrics();
@@ -422,7 +425,7 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
       setSpawnContextProvider: vi.fn(),
     } as unknown as PlayerManager;
 
-    let registeredHitHandler: ((proj: TrackedProjectile, enemyId: string) => any) | null = null;
+    let registeredHitHandler: ((proj: TrackedProjectile, enemyId: string, nowMs: number) => any) | null = null;
     const combatSystem = methodBag({
       isAlive: () => true,
       isBurrowed: () => false,
@@ -458,14 +461,18 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
       }
       return null;
     });
-    const registerHitSpy = vi.spyOn(playerLoadout, 'registerAk47StrategicTargetHit');
+    const ak47Behavior = new Ak47BehaviorRuntime(playerLoadout);
+    ak47Behavior.resetPlayer(player.id);
+    const registerHitSpy = vi.spyOn(ak47Behavior, 'registerStrategicTargetHit');
 
     const ak47StrategicTarget = new Ak47StrategicTargetSystem(
       playerManager,
       enemyManager,
       combatSystem,
       playerLoadout,
+      ak47Behavior,
     );
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     ak47StrategicTarget.hostUpdate(0);
     expect(ak47StrategicTarget.isCurrentTarget(player.id, enemy.id)).toBe(true);
     expect(ak47StrategicTarget.isCurrentTarget(player.id, unmarkedEnemy.id)).toBe(false);
@@ -475,6 +482,7 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
       players: [player],
       enemies: enemyList.map(e => ({ id: e.id, x: e.sprite.x, y: e.sprite.y, active: true })),
       combatSystem,
+      ak47Behavior,
       ak47StrategicTarget,
     });
 
@@ -491,7 +499,7 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
     } as TrackedProjectile;
 
     // Hit on marked strategic target
-    const impact = hitHandler(ak47Projectile, enemy.id);
+    const impact = hitHandler(ak47Projectile, enemy.id, 1_000);
     expect(impact).not.toBeNull();
     expect(impact?.damageMultiplier).toBeCloseTo(1.5);
     expect(impact?.explosionRadius).toBeGreaterThan(0);

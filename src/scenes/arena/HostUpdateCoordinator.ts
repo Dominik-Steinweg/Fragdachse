@@ -425,7 +425,7 @@ export class HostUpdateCoordinator {
       this.supportSystems?.detonation?.checkProjectileDetonations();
       this.playerSystems?.flamethrowerUpgrade?.prepareProjectileBurns(now);
       this.playerSystems?.weaponUpgrade?.hostUpdate(now);
-      this.ctx.combatSystem.update();
+      this.ctx.combatSystem.update(now);
       this.ctx.combatSystem.updateBurnEffects(now);
     }
 
@@ -1001,7 +1001,7 @@ export class HostUpdateCoordinator {
       const weapon2Cfg = this.playerSystems?.loadout?.getEquippedWeaponConfig(localId, 'weapon2');
       const activePowerUps = [
         ...(this.powerUpSystem?.getActiveBuffsForHUD(localId) ?? []),
-        ...(this.playerSystems?.loadout?.getAk47HudBuffs(localId, now) ?? []),
+        ...(this.playerSystems?.ak47Behavior?.getHudBuffs(localId, now) ?? []),
         ...(this.playerSystems?.loadout?.getNegevHudBuffs(localId) ?? []),
         ...this.getMovementChargeHudBuffs(localId),
         ...this.getGlutwandererHudBuffs(localId),
@@ -1039,7 +1039,7 @@ export class HostUpdateCoordinator {
           ...(stealthBuff ? [stealthBuff] : []),
         ],
         shieldBuff,
-        weapon2AdrenalineCost:   this.playerSystems?.loadout?.isAk47FireSuperiorityAvailable(localId)
+        weapon2AdrenalineCost:   this.playerSystems?.ak47Behavior?.isFireSuperiorityAvailable(localId)
           ? 0
           : this.playerSystems?.resource?.resolveAdrenalineCost(localId, weapon2Cfg?.adrenalinCost ?? 0) ?? 0,
         constructionCapacityUsed: this.placementSystem?.getUsedCapacity(localId) ?? 0,
@@ -1161,7 +1161,7 @@ export class HostUpdateCoordinator {
       bridge.publishAdrSyringeActive(player.id, (this.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
       const activeBuffs = [
         ...(this.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []),
-        ...(this.playerSystems?.loadout?.getAk47HudBuffs(player.id, now) ?? []),
+        ...(this.playerSystems?.ak47Behavior?.getHudBuffs(player.id, now) ?? []),
         ...(this.playerSystems?.loadout?.getNegevHudBuffs(player.id) ?? []),
         ...this.getMovementChargeHudBuffs(player.id),
         ...this.getGlutwandererHudBuffs(player.id),

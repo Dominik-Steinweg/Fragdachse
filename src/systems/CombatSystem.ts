@@ -65,6 +65,7 @@ import {
   shouldIgnorePlasmaSwarmOriginHit,
 } from './PlasmaCharge';
 import type { TargetStatusTarget } from './TargetStatusSystem';
+import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -77,8 +78,6 @@ type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = {
   getDamageMultiplier(id: string): number;
   getWeaponDamageMultiplier(id: string, slot: WeaponSlot, now?: number): number;
-  registerAk47ProjectileHit(projectile: TrackedProjectile, now?: number): void;
-  resetAk47State(playerId: string): void;
 };
 type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlayer(id: string): void };
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
@@ -334,12 +333,13 @@ export class CombatSystem {
   private onKillCb: ((killerId: string, victimId: string, sourceId: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null = null;
-  private onAk47DirectEnemyHit: ((projectile: TrackedProjectile, enemyId: string) => Ak47DirectEnemyHitImpact | null) | null = null;
+  private onAk47DirectEnemyHit: ((projectile: TrackedProjectile, enemyId: string, nowMs: number) => Ak47DirectEnemyHitImpact | null) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
   private resourceSystem:   ResourceSystem      | null  = null;
   private loadoutManager:   LoadoutManagerType  | null  = null;
+  private ak47Behavior:     Pick<Ak47BehaviorPort, 'registerProjectileHit' | 'resetPlayer'> | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private powerUpSystem:    PowerUpSystemType   | null  = null;
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (RockPhysicsProxy | null)[] | null = null;
@@ -459,6 +459,9 @@ export class CombatSystem {
   setBurrowSystem(bs: BurrowSystemType | null): void     { this.burrowSystem   = bs; }
   setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
+  setAk47Behavior(behavior: Pick<Ak47BehaviorPort, 'registerProjectileHit' | 'resetPlayer'> | null): void {
+    this.ak47Behavior = behavior;
+  }
   setEnergyShieldSystem(es: EnergyShieldSystem | null): void { this.energyShieldSystem = es; }
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
@@ -675,7 +678,7 @@ export class CombatSystem {
     this.onEnemyDeathCb = cb;
   }
 
-  setAk47DirectEnemyHitHandler(handler: ((projectile: TrackedProjectile, enemyId: string) => Ak47DirectEnemyHitImpact | null) | null): void {
+  setAk47DirectEnemyHitHandler(handler: ((projectile: TrackedProjectile, enemyId: string, nowMs: number) => Ak47DirectEnemyHitImpact | null) | null): void {
     this.onAk47DirectEnemyHit = handler;
   }
 
@@ -1242,7 +1245,7 @@ export class CombatSystem {
    * Prüft Überschneidungen zwischen Projektilen und Spielern.
    * Selbst-Treffer, Granaten und burrowed Spieler werden ignoriert.
    */
-  update(): void {
+  update(nowMs: number = Date.now()): void {
     if (!this.bridge.isHost()) return;
 
     this.applyDomeProjectileBarrier();
@@ -1256,15 +1259,15 @@ export class CombatSystem {
       if (this.shouldUseContinuousProjectileCollision(proj)) {
         const travelDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
         if (travelDistance > 0.5) {
-          this.tryResolveContinuousProjectileHit(proj);
+          this.tryResolveContinuousProjectileHit(proj, nowMs);
           continue;
         }
       }
 
       const projBounds = proj.sprite.getBounds();
-      if (this.resolveProjectilePlayerHits(proj, projBounds)) continue;
-      if (this.resolveProjectileEnemyHits(proj, projBounds)) continue;
-      this.resolveProjectileDecoyHits(proj, projBounds);
+      if (this.resolveProjectilePlayerHits(proj, projBounds, nowMs)) continue;
+      if (this.resolveProjectileEnemyHits(proj, projBounds, nowMs)) continue;
+      this.resolveProjectileDecoyHits(proj, projBounds, nowMs);
     }
   }
 
@@ -1524,16 +1527,16 @@ export class CombatSystem {
     );
   }
 
-  private registerAk47Hit(proj: TrackedProjectile): void {
+  private registerAk47Hit(proj: TrackedProjectile, nowMs: number): void {
     if (proj.ak47ShotId === undefined || proj.ak47HitConfirmed) return;
-    this.loadoutManager?.registerAk47ProjectileHit(proj, Date.now());
+    this.ak47Behavior?.registerProjectileHit(proj, nowMs);
   }
 
-  private resolveAk47DirectEnemyHit(proj: TrackedProjectile, enemyId: string): Ak47DirectEnemyHitImpact {
+  private resolveAk47DirectEnemyHit(proj: TrackedProjectile, enemyId: string, nowMs: number): Ak47DirectEnemyHitImpact {
     if (proj.ak47ShotId === undefined || proj.sourceSlot !== 'weapon2') {
       return { damageMultiplier: 1 };
     }
-    return this.onAk47DirectEnemyHit?.(proj, enemyId) ?? { damageMultiplier: 1 };
+    return this.onAk47DirectEnemyHit?.(proj, enemyId, nowMs) ?? { damageMultiplier: 1 };
   }
 
   private applyAk47TargetExplosion(
@@ -1564,7 +1567,7 @@ export class CombatSystem {
   }
 
   /** AABB-Treffer gegen Spieler (Shield/Piercing/Flammen-Burn/Standard). Liefert true, wenn das Projektil verbraucht ist. */
-  private resolveProjectilePlayerHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+  private resolveProjectilePlayerHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle, nowMs: number): boolean {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!this.isAlive(player.id))                     continue;
       if (proj.ownerId === player.id)                   continue;
@@ -1610,7 +1613,7 @@ export class CombatSystem {
           return true;
         }
 
-        if (canDealDamage) this.registerAk47Hit(proj);
+        if (canDealDamage) this.registerAk47Hit(proj, nowMs);
 
         if (proj.penetrationHitIds) {
           if (proj.penetrationHitIds.has(player.id)) continue;
@@ -1702,7 +1705,7 @@ export class CombatSystem {
   }
 
   /** AABB-Treffer gegen Gegner (Coop-Defense). Liefert true, wenn das Projektil verbraucht ist. */
-  private resolveProjectileEnemyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+  private resolveProjectileEnemyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle, nowMs: number): boolean {
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (proj.ownerId === enemy.id) continue;
       if (proj.multiExplosionExcludedTargetKeys?.has(`enemies:${enemy.id}`)) continue;
@@ -1735,9 +1738,9 @@ export class CombatSystem {
         if (proj.penetrationHitIds) {
           if (proj.penetrationHitIds.has(enemyKey)) continue;
           proj.penetrationHitIds.add(enemyKey);
-          const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id);
+          const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id, nowMs);
           const impactDamage = actualDamage * impact.damageMultiplier;
-          this.registerAk47Hit(proj);
+          this.registerAk47Hit(proj, nowMs);
           this.applyProjectileBurn(enemy.id, proj);
           this.applyDamage(enemy.id, impactDamage, false, proj.ownerId, proj.sourceId, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
           this.applyAk47TargetExplosion(proj, enemy.id, impactDamage, impact);
@@ -1773,7 +1776,7 @@ export class CombatSystem {
         }
 
         if (proj.isBfg || proj.projectileStyle === 'gauss') {
-          this.registerAk47Hit(proj);
+          this.registerAk47Hit(proj, nowMs);
           if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
           if (proj.projectileStyle === 'gauss') {
             if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
@@ -1798,7 +1801,7 @@ export class CombatSystem {
         }
 
         if (proj.isFlame && proj.flamePierceHitIds !== undefined) {
-          this.registerAk47Hit(proj);
+          this.registerAk47Hit(proj, nowMs);
           const enemyKey = `enemy_${enemy.id}`;
           if (proj.flamePierceHitIds.has(enemyKey)) continue;
           proj.flamePierceHitIds.add(enemyKey);
@@ -1816,8 +1819,8 @@ export class CombatSystem {
         }
 
         // Brennende Treffer werden zentral in handleEnemyHit angewendet.
-        const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id);
-        this.registerAk47Hit(proj);
+        const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id, nowMs);
+        this.registerAk47Hit(proj, nowMs);
         this.handleEnemyHit(proj.id, enemy.id, actualDamage * impact.damageMultiplier, proj.ownerId, proj.adrenalinGain, proj.sourceId, impact);
         return true;
       }
@@ -1826,14 +1829,14 @@ export class CombatSystem {
   }
 
   /** AABB-Treffer gegen Decoys. Liefert true, wenn das Projektil verbraucht ist. */
-  private resolveProjectileDecoyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle): boolean {
+  private resolveProjectileDecoyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle, nowMs: number): boolean {
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
       if (proj.ownerId === decoy.ownerId) continue;
 
       if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, decoy.sprite.getBounds())) {
         const actualDamage = this.computeProjectileDamage(proj);
         const decoyKey = `decoy_${decoy.id}`;
-        this.registerAk47Hit(proj);
+        this.registerAk47Hit(proj, nowMs);
 
         if (proj.penetrationHitIds) {
           if (proj.penetrationHitIds.has(decoyKey)) continue;
@@ -1903,7 +1906,7 @@ export class CombatSystem {
     });
   }
 
-  private tryResolveContinuousProjectileHit(proj: TrackedProjectile): boolean {
+  private tryResolveContinuousProjectileHit(proj: TrackedProjectile, nowMs: number): boolean {
     const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
     const travelDistance = Phaser.Geom.Line.Length(line);
     if (travelDistance <= 0.5) return false;
@@ -2021,7 +2024,7 @@ export class CombatSystem {
         return true;
       }
 
-      if (canDealDamage) this.registerAk47Hit(proj);
+      if (canDealDamage) this.registerAk47Hit(proj, nowMs);
 
       if (proj.penetrationHitIds) {
         proj.penetrationHitIds.add(bestHit.playerId);
@@ -2047,9 +2050,9 @@ export class CombatSystem {
         const enemyKey = `enemy_${bestHit.enemyId}`;
         if (proj.penetrationHitIds.has(enemyKey)) return true;
         proj.penetrationHitIds.add(enemyKey);
-        const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId);
+        const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId, nowMs);
         const impactDamage = actualDamage * impact.damageMultiplier;
-        this.registerAk47Hit(proj);
+        this.registerAk47Hit(proj, nowMs);
         this.applyDamage(bestHit.enemyId, impactDamage, false, proj.ownerId, proj.sourceId, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
         this.applyProjectileBurn(bestHit.enemyId, proj);
         this.applyAk47TargetExplosion(proj, bestHit.enemyId, impactDamage, impact);
@@ -2061,13 +2064,13 @@ export class CombatSystem {
         this.projectileManager.destroyProjectile(proj.id);
         return true;
       }
-      const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId);
-      this.registerAk47Hit(proj);
+      const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId, nowMs);
+      this.registerAk47Hit(proj, nowMs);
       this.handleEnemyHit(proj.id, bestHit.enemyId, actualDamage * impact.damageMultiplier, proj.ownerId, proj.adrenalinGain, proj.sourceId, impact);
       return true;
     }
 
-    this.registerAk47Hit(proj);
+    this.registerAk47Hit(proj, nowMs);
     if (proj.penetrationHitIds) {
       proj.penetrationHitIds.add(`decoy_${bestHit.decoyId}`);
       this.decoySystem?.applyDamage(bestHit.decoyId, actualDamage, proj.ownerId, proj.sourceId, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy });
@@ -4009,7 +4012,7 @@ export class CombatSystem {
     // Stinkwolke beim Tod sofort deaktivieren
     this.stinkCloudSystem?.hostDeactivateForPlayer(playerId);
     this.decoySystem?.clearPlayer(playerId);
-    this.loadoutManager?.resetAk47State(playerId);
+    this.ak47Behavior?.resetPlayer(playerId);
 
     const player = this.playerManager.getPlayer(playerId);
     if (player) player.body.enable = false;

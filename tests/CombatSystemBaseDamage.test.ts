@@ -108,8 +108,6 @@ function makeCombatHarness() {
   combat.setLoadoutManager({
     getDamageMultiplier: () => 2,
     getWeaponDamageMultiplier: () => 2,
-    registerAk47ProjectileHit: () => {},
-    resetAk47State: () => {},
   });
   combat.setPowerUpSystem({
     getDamageMultiplier: () => 3,
@@ -143,8 +141,6 @@ function makeSupportCombatHarness() {
   combat.setLoadoutManager({
     getDamageMultiplier: () => 1,
     getWeaponDamageMultiplier: () => 1,
-    registerAk47ProjectileHit: () => {},
-    resetAk47State: () => {},
   });
   combat.setPowerUpSystem({ getDamageMultiplier: () => 1, removePlayer: () => {} });
   return { combat, players };

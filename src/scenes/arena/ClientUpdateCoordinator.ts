@@ -1551,7 +1551,7 @@ export class ClientUpdateCoordinator {
 
   private isLocalAk47FireSuperiorityAvailable(): boolean {
     const localId = bridge.getLocalPlayerId();
-    return this.playerSystems?.loadout?.isAk47FireSuperiorityAvailable(localId)
+    return this.playerSystems?.ak47Behavior?.isFireSuperiorityAvailable(localId)
       ?? (this.getLocalWeaponConfig('weapon2').id === 'AK47'
         && bridge.getPlayerActiveBuffs(localId).some((buff) => (
           buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0

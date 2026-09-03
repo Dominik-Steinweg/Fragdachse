@@ -65,6 +65,11 @@ function makeRuntime() {
       isUltimateActive: vi.fn(() => false),
       getActiveUltimateId: vi.fn(() => null),
     },
+    ak47Behavior: {
+      resetPlayer: tag('ak47Behavior.resetPlayer'),
+      removePlayer: tag('ak47Behavior.removePlayer'),
+      destroy: tag('ak47Behavior.destroy'),
+    },
     utilityAction: {
       syncEquippedUtility: vi.fn(),
       removePlayer: vi.fn(),
@@ -163,6 +168,7 @@ function makeConcreteRemoveRuntime() {
     playerModifier,
     translocator,
     utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
+    ak47Behavior: { removePlayer: vi.fn(), destroy: vi.fn() },
   };
   runtime.options = { decoySystem: { clearPlayer: vi.fn() } };
   return {
@@ -178,7 +184,7 @@ function makeConcreteRemoveRuntime() {
 
 function makeDestroyRuntime() {
   const setterNames = [
-    'setAk47StrategicTargetHitResolver',
+    'setAk47Behavior',
     'setCombatSystem',
     'setWeaponExecutionCapability',
     'setSpecializedWeaponExecutionCapability',
@@ -230,6 +236,7 @@ function makeDestroyRuntime() {
   const systems = {
     loadout,
     ultimateBehavior: { destroy: vi.fn() },
+    ak47Behavior: { destroy: vi.fn() },
     utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
     heldAction: { reset: vi.fn() },
     guardianSpirit: { clear: vi.fn() },
@@ -275,7 +282,11 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     runtime.attachPlayerLoadout('p1', selection);
 
-    expect(order).toEqual(['ultimateBehavior.resetPlayer', 'loadout.assignDefaultLoadout']);
+    expect(order).toEqual([
+      'ultimateBehavior.resetPlayer',
+      'ak47Behavior.resetPlayer',
+      'loadout.assignDefaultLoadout',
+    ]);
     expect(systems.loadout.assignDefaultLoadout).toHaveBeenCalledWith('p1', selection);
   });
 
@@ -284,7 +295,12 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     runtime.detachPlayerLoadout('p1');
 
-    expect(order).toEqual(['ultimateBehavior.removePlayer', 'loadout.removePlayer', 'tunnel.removePlayer']);
+    expect(order).toEqual([
+      'ultimateBehavior.removePlayer',
+      'ak47Behavior.removePlayer',
+      'loadout.removePlayer',
+      'tunnel.removePlayer',
+    ]);
   });
 
   it('reconciled Loadout-Auswahl und Ressourcenmaxima zusammen', () => {
@@ -413,6 +429,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     runtime.destroy();
 
     expect(systems.ultimateBehavior.destroy).toHaveBeenCalledTimes(1);
+    expect(systems.ak47Behavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.heldAction.reset).toHaveBeenCalledTimes(1);
     expect(systems.tunnel.clear).toHaveBeenCalledTimes(1);
     expect(systems.resource.removePlayer).toHaveBeenCalledTimes(1);

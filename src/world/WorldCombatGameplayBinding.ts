@@ -277,6 +277,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setDeathCallback(null);
     combatSystem.setEnemyDeathCallback(null);
     combatSystem.setAk47DirectEnemyHitHandler(null);
+    combatSystem.setAk47Behavior(null);
     combatSystem.setPlayerMaxHpResolver(null);
     combatSystem.setInitialSpawnAllowedResolver(null);
     combatSystem.setRespawnAllowedResolver(null);
@@ -696,8 +697,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.combatSystem.setBurrowSystem(player.burrow);
     o.combatSystem.setResourceSystem(player.resource);
     o.combatSystem.setLoadoutManager(player.loadout);
-    o.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId) => (
-      (o.getPlayerSystems()?.ak47StrategicTarget ?? player.ak47StrategicTarget)?.handleDirectAk47EnemyHit(projectile, enemyId) ?? null
+    o.combatSystem.setAk47Behavior(player.ak47Behavior);
+    o.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId, nowMs) => (
+      (o.getPlayerSystems()?.ak47StrategicTarget ?? player.ak47StrategicTarget)?.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) ?? null
     ));
     o.hostPhysics.setBurrowSystem(player.burrow);
     o.hostPhysics.setLoadoutManager(player.loadout);
@@ -737,7 +739,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindProjectiles(): void {
     const o = this.options;
-    o.projectileManager.setProjectileResolvedCallback((projectile) => o.getPlayerSystems()?.loadout.resolveAk47Projectile(projectile));
+    o.projectileManager.setProjectileResolvedCallback((projectile) => o.getPlayerSystems()?.ak47Behavior?.resolveProjectile(projectile));
     o.projectileManager.setMiniRocketCollectedCallback((projectile, x, y) => {
       const refund = Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0) * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0);
       const armor = Math.max(0, projectile.miniRocketPickupArmor ?? 0);

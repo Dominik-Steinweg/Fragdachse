@@ -21,7 +21,7 @@ import {
   getCoopDefenseUpgradeDefinition,
 } from '../src/utils/coopDefenseUpgrades';
 import type { CoopDefenseUpgradeProfile, TrackedProjectile } from '../src/types';
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
 import { Ak47StrategicTargetRenderer } from '../src/effects/Ak47StrategicTargetRenderer';
 
@@ -42,12 +42,12 @@ function akConfig(levels: Readonly<Record<string, number>>) {
   );
 }
 
-function makeManager(config: ReturnType<typeof akConfig>): any {
-  const manager = Object.create(LoadoutManager.prototype) as any;
-  manager.ak47States = new Map();
-  manager.loadouts = new Map([['p1', { weapon2: { config } }]]);
-  manager.resetAk47State('p1');
-  return manager;
+function makeBehavior(config: ReturnType<typeof akConfig>): any {
+  const behavior = new Ak47BehaviorRuntime({
+    getEquippedWeaponConfig: (_playerId, slot) => slot === 'weapon2' ? config : undefined,
+  });
+  behavior.resetPlayer('p1');
+  return behavior;
 }
 
 function projectile(shotId: number, overrides: Partial<TrackedProjectile> = {}): TrackedProjectile {
@@ -94,11 +94,11 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
     expect(combined.ak47Focus?.fireControlRangePerStack).toBeCloseTo(0.03);
     expect(combined.ak47Focus?.fireControlProjectileSpeedPerStack).toBeCloseTo(0.05);
 
-    const controlManager = makeManager(control);
+    const controlBehavior = makeBehavior(control);
     for (let shotId = 1; shotId <= 5; shotId += 1) {
-      controlManager.registerAk47ProjectileHit(projectile(shotId));
+      controlBehavior.registerProjectileHit(projectile(shotId), shotId);
     }
-    expect(controlManager.ak47States.get('p1').stacks).toBe(5);
+    expect(controlBehavior.getHudBuffs('p1', 0)[0]).toMatchObject({ stacks: 5, maxStacks: 5 });
   });
 
   it('resolves rhythm, rock levels, and 3/6/9/12 breakthrough ammunition', () => {
@@ -123,57 +123,57 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
       ak47_fire_control: 1,
       ak47_fire_superiority: 1,
     });
-    const manager = makeManager(config);
+    const behavior = makeBehavior(config);
     for (let shotId = 1; shotId <= 5; shotId += 1) {
-      manager.registerAk47ProjectileHit(projectile(shotId));
+      behavior.registerProjectileHit(projectile(shotId), shotId);
     }
-    expect(manager.ak47States.get('p1').stacks).toBe(5);
-    expect(manager.ak47States.get('p1').fireSuperiorityShotsAvailable).toBe(3);
+    expect(behavior.getHudBuffs('p1', 0)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ defId: 'AK47_FOCUS', stacks: 5 }),
+      expect.objectContaining({ defId: 'AK47_FIRE_SUPERIORITY', availableCount: 3 }),
+    ]));
 
     const miss = projectile(6);
-    manager.resolveAk47Projectile(miss);
-    expect(manager.ak47States.get('p1').stacks).toBe(5);
+    behavior.resolveProjectile(miss);
+    expect(behavior.getHudBuffs('p1', 0)[0]).toMatchObject({ stacks: 5 });
 
-    const state = manager.ak47States.get('p1');
+    const state = (behavior as any).states.get('p1');
     state.stacks = 5;
     state.fireSuperiorityShotsAvailable = 0;
     state.pendingFireSuperiorityShotIds.add(99);
-    manager.registerAk47ProjectileHit(projectile(7));
+    behavior.registerProjectileHit(projectile(7), 7);
     expect(state.fireSuperiorityShotsAvailable).toBe(0);
     expect(state.pendingFireSuperiorityShotIds.has(99)).toBe(true);
 
-    manager.resolveAk47Projectile(projectile(99, { ak47FireSuperiorityShot: true }));
+    behavior.resolveProjectile(projectile(99, { ak47FireSuperiorityShot: true }));
     expect(state.stacks).toBe(0);
   });
 
   it('refunds the concrete strategic penetrator once and ends only after pending resolves', () => {
-    const manager = makeManager(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_fire_control: 1, ak47_fire_superiority: 1 }));
-    manager.setAk47StrategicTargetHitResolver(() => true);
-    const state = manager.ak47States.get('p1');
+    const behavior = makeBehavior(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_fire_control: 1, ak47_fire_superiority: 1 }));
+    const state = (behavior as any).states.get('p1');
     state.fireSuperiorityShotsAvailable = 0;
     state.fireSuperiorityTotalShots = 1;
     state.pendingFireSuperiorityShotIds.add(10);
     const shot = projectile(10, { ak47FireSuperiorityShot: true });
 
-    expect(manager.registerAk47StrategicTargetHit(shot, 'enemy-1')).toBe(true);
-    expect(manager.registerAk47StrategicTargetHit(shot, 'enemy-2')).toBe(false);
+    expect(behavior.registerStrategicTargetHit(shot, 'enemy-1')).toBe(true);
+    expect(behavior.registerStrategicTargetHit(shot, 'enemy-2')).toBe(false);
     expect(state.fireSuperiorityShotsAvailable).toBe(1);
-    expect(manager.isAk47FireSuperiorityActive('p1')).toBe(true);
-    expect(manager.isAk47FireSuperiorityAvailable('p1')).toBe(true);
+    expect(behavior.isFireSuperiorityActive('p1')).toBe(true);
+    expect(behavior.isFireSuperiorityAvailable('p1')).toBe(true);
 
-    manager.resolveAk47Projectile(shot);
+    behavior.resolveProjectile(shot);
     expect(state.pendingFireSuperiorityShotIds.size).toBe(0);
     expect(state.fireSuperiorityShotsAvailable).toBe(1);
 
     state.fireSuperiorityShotsAvailable = 0;
     state.pendingFireSuperiorityShotIds.add(11);
-    expect(manager.isAk47FireSuperiorityActive('p1')).toBe(true);
-    expect(manager.isAk47FireSuperiorityAvailable('p1')).toBe(false);
+    expect(behavior.isFireSuperiorityActive('p1')).toBe(true);
+    expect(behavior.isFireSuperiorityAvailable('p1')).toBe(false);
   });
 });
 
 function makeTargetFixture(focus: any) {
-  let fullStacks = true;
   const enemies = [
     fakeEntity({ id: 'near', kind: 'zombie-badger', faction: 'hostile', x: 1000, y: 0, rotation: 0, active: true, getHp: () => 100, isBurrowed: () => false }),
     fakeEntity({ id: 'far', kind: 'inferno-colossus', faction: 'hostile', x: 300, y: 300, rotation: 0, active: true, getHp: () => 100, isBurrowed: () => false }),
@@ -193,14 +193,13 @@ function makeTargetFixture(focus: any) {
   } as any;
   const loadout = {
     getEquippedWeaponConfig: () => ({ id: 'AK47', ak47Focus: focus }),
-    isAk47FocusAtMaxStacks: () => fullStacks,
-    registerAk47StrategicTargetHit: vi.fn(),
   } as any;
+  const behavior = { registerStrategicTargetHit: vi.fn() };
   return {
     enemies,
     player,
-    setFullStacks: (value: boolean) => { fullStacks = value; },
-    system: new Ak47StrategicTargetSystem(playerManager, enemyManager, combat, loadout),
+    behavior,
+    system: new Ak47StrategicTargetSystem(playerManager, enemyManager, combat, loadout, behavior),
   };
 }
 
@@ -271,7 +270,7 @@ function makeRendererFixture() {
 
 describe('AK-47 Strategische Ziele', () => {
   it('stays active permanently once unlocked and debounces a replacement target for exactly 200ms after death', () => {
-    const { enemies, system, setFullStacks } = makeTargetFixture({
+    const { enemies, system } = makeTargetFixture({
       strategicTargetEnabled: 1,
       strategicTargetDamageBonus: 0.25,
       targetPrioritizationEnabled: 0,
@@ -282,8 +281,7 @@ describe('AK-47 Strategische Ziele', () => {
     expect(system.getNetSnapshot(0)).toHaveLength(1);
     const marked = system.getNetSnapshot(0)[0];
 
-    // Remains active even when focus stacks are 0 / lost
-    setFullStacks(false);
+    // Target selection remains active independently from focus stacks.
     system.hostUpdate(100);
     expect(system.getNetSnapshot(100)).toHaveLength(1);
     expect(system.isCurrentTarget('p1', marked.enemyId)).toBe(true);
@@ -312,7 +310,6 @@ describe('AK-47 Strategische Ziele', () => {
     const marked = fixture.system.getNetSnapshot(0)[0]?.enemyId;
     expect(marked).toBeTruthy();
 
-    fixture.setFullStacks(false);
     fixture.system.hostUpdate(1);
     expect(fixture.system.getNetSnapshot(1)).toHaveLength(1);
     expect(fixture.system.isCurrentTarget('p1', marked!)).toBe(true);

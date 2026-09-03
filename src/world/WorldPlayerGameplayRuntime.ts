@@ -24,6 +24,7 @@ import { SlimeTrailSystem } from '../systems/SlimeTrailSystem';
 import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
+import { Ak47BehaviorRuntime } from './Ak47BehaviorRuntime';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -120,6 +121,7 @@ export interface WorldPlayerGameplaySystems {
   readonly slimeTrail: SlimeTrailSystem | null;
   readonly flamethrowerUpgrade: FlamethrowerUpgradeSystem | null;
   readonly weaponUpgrade: WeaponUpgradeSystem | null;
+  readonly ak47Behavior: Ak47BehaviorRuntime | null;
   readonly ak47StrategicTarget: Ak47StrategicTargetSystem | null;
 }
 
@@ -318,6 +320,7 @@ export class WorldPlayerGameplayRuntime implements
     this.configureBurrow(burrow, playerModifier);
 
     const loadout = options.createLoadoutManager(resource);
+    const ak47Behavior = new Ak47BehaviorRuntime(loadout);
     const ultimateBehavior = new PlayerUltimateBehaviorRuntime({
       playerManager: options.playerManager,
       combatSystem: options.combatSystem,
@@ -460,6 +463,7 @@ export class WorldPlayerGameplayRuntime implements
       enemyManager,
       options.combatSystem,
       loadout,
+      ak47Behavior,
     );
 
     this.systems = {
@@ -479,6 +483,7 @@ export class WorldPlayerGameplayRuntime implements
       slimeTrail,
       flamethrowerUpgrade,
       weaponUpgrade,
+      ak47Behavior,
       ak47StrategicTarget,
     };
     this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
@@ -549,12 +554,14 @@ export class WorldPlayerGameplayRuntime implements
     // Frischer Ultimate-State (deaktiviert u. a. ein laufendes Armageddon nach Reconnect),
     // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
     this.systems.ultimateBehavior.resetPlayer(playerId);
+    this.systems.ak47Behavior?.resetPlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
     this.systems.utilityAction.syncEquippedUtility(playerId);
   }
 
   detachPlayerLoadout(playerId: string): void {
     this.systems.ultimateBehavior.removePlayer(playerId);
+    this.systems.ak47Behavior?.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
     this.systems.translocator.removePlayer(playerId);
@@ -565,7 +572,10 @@ export class WorldPlayerGameplayRuntime implements
   /** Zieht eine geänderte committed/live Auswahl nach und klemmt laufende Ressourcen an neue Maxima. */
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
-    if (changed) this.systems.ultimateBehavior.resetPlayer(playerId);
+    if (changed) {
+      this.systems.ultimateBehavior.resetPlayer(playerId);
+      this.systems.ak47Behavior?.resetPlayer(playerId);
+    }
     this.systems.utilityAction.syncEquippedUtility(playerId);
     this.systems.resource.reconcilePlayerLimits(playerId);
     return changed;
@@ -789,7 +799,7 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed) return;
     this.destroyed = true;
     const { systems } = this;
-    systems.loadout.setAk47StrategicTargetHitResolver(null);
+    systems.loadout.setAk47Behavior(null);
     systems.loadout.setCombatSystem(null);
     systems.loadout.setWeaponExecutionCapability(null);
     systems.loadout.setSpecializedWeaponExecutionCapability(null);
@@ -799,6 +809,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setItemRuntimeWeaponFiredHandler(null);
     systems.loadout.setUltimateModifierReadPort(null);
     systems.ultimateBehavior.destroy();
+    systems.ak47Behavior?.destroy();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
     systems.guardianSpirit?.clear();
@@ -880,7 +891,7 @@ export class WorldPlayerGameplayRuntime implements
     loadout.setWeaponExecutionCapability(this.options.weaponExecution);
     loadout.setSpecializedWeaponExecutionCapability(this.options.specializedWeaponExecution);
     loadout.setPhysicsSystem(this.options.hostPhysics);
-    loadout.setAk47StrategicTargetHitResolver((playerId, enemyId) => this.systems.ak47StrategicTarget?.isCurrentTarget(playerId, enemyId) ?? false);
+    loadout.setAk47Behavior(this.systems.ak47Behavior);
     loadout.setNegevKillstreakExplosionHandler((event: NegevKillstreakExplosionEvent) => {
       this.options.network.presentation.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
       this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(event.ownerId, event.x, event.y, {

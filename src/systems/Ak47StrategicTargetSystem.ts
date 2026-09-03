@@ -3,7 +3,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { TrackedProjectile, SyncedAk47StrategicTarget } from '../types';
 import type { CombatSystem, Ak47DirectEnemyHitImpact } from './CombatSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
+import type { Ak47BehaviorPort, Ak47LoadoutReadPort } from '../loadout/Ak47BehaviorPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 
 const TARGET_RESELECT_DEBOUNCE_MS = 200;
@@ -40,7 +40,8 @@ export class Ak47StrategicTargetSystem {
     private readonly playerManager: PlayerManager,
     enemyManager: EnemyManager | null,
     private readonly combatSystem: CombatSystem,
-    private readonly loadoutManager: LoadoutManager,
+    private readonly loadout: Ak47LoadoutReadPort,
+    private readonly behavior: Pick<Ak47BehaviorPort, 'registerStrategicTargetHit'>,
   ) {
     this.enemyManager = enemyManager;
   }
@@ -51,7 +52,7 @@ export class Ak47StrategicTargetSystem {
 
   hostUpdate(now: number): void {
     for (const player of this.playerManager.getAllPlayers()) {
-      const focus = this.loadoutManager.getEquippedWeaponConfig(player.id, 'weapon2')?.ak47Focus;
+      const focus = this.loadout.getEquippedWeaponConfig(player.id, 'weapon2')?.ak47Focus;
       if (!focus || focus.strategicTargetEnabled <= 0) {
         this.states.delete(player.id);
         continue;
@@ -71,9 +72,9 @@ export class Ak47StrategicTargetSystem {
     }
   }
 
-  handleDirectAk47EnemyHit(projectile: TrackedProjectile, enemyId: string, now = Date.now()): Ak47DirectEnemyHitImpact | null {
+  handleDirectAk47EnemyHit(projectile: TrackedProjectile, enemyId: string, nowMs: number): Ak47DirectEnemyHitImpact | null {
     const state = this.states.get(projectile.ownerId);
-    const focus = this.loadoutManager.getEquippedWeaponConfig(projectile.ownerId, 'weapon2')?.ak47Focus;
+    const focus = this.loadout.getEquippedWeaponConfig(projectile.ownerId, 'weapon2')?.ak47Focus;
     if (
       !state
       || !focus
@@ -81,8 +82,8 @@ export class Ak47StrategicTargetSystem {
       || state.targetId !== enemyId
     ) return null;
 
-    state.confirmationUntil = now + TARGET_HIT_CONFIRMATION_MS;
-    this.loadoutManager.registerAk47StrategicTargetHit(projectile, enemyId);
+    state.confirmationUntil = nowMs + TARGET_HIT_CONFIRMATION_MS;
+    this.behavior.registerStrategicTargetHit(projectile, enemyId);
     const explosion = EXPLOSION_BY_LEVEL[Math.max(0, Math.min(
       EXPLOSION_BY_LEVEL.length - 1,
       Math.round(focus.explosiveTargetAcquisitionLevel),
@@ -94,13 +95,12 @@ export class Ak47StrategicTargetSystem {
     };
   }
 
-  isCurrentTarget(playerId: string, enemyId: string, now = Date.now()): boolean {
+  isCurrentTarget(playerId: string, enemyId: string): boolean {
     const state = this.states.get(playerId);
-    void now;
     return !!state && state.targetId === enemyId;
   }
 
-  getNetSnapshot(now = Date.now()): SyncedAk47StrategicTarget[] {
+  getNetSnapshot(nowMs: number): SyncedAk47StrategicTarget[] {
     const result: SyncedAk47StrategicTarget[] = [];
     for (const [ownerId, state] of this.states) {
       if (state.targetId === null) continue;
@@ -110,7 +110,7 @@ export class Ak47StrategicTargetSystem {
         confirmationUntil: state.confirmationUntil,
       });
     }
-    void now;
+    void nowMs;
     return result;
   }
 

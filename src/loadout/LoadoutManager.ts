@@ -7,7 +7,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
+import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, WeaponSlot } from '../types';
 import type {
   EnergyShieldWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -27,6 +27,7 @@ import type {
   WeaponExecutionCapability,
   WeaponFireOptions,
 } from './WeaponFireExecutor';
+import type { Ak47BehaviorPort } from './Ak47BehaviorPort';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
@@ -55,15 +56,6 @@ interface PlayerLoadout {
 export interface UltimateModifierReadPort {
   getSpeedMultiplier(playerId: string, nowMs: number): number;
   getDamageMultiplier(playerId: string, nowMs: number): number;
-}
-
-interface Ak47CombatState {
-  stacks: number;
-  fireSuperiorityShotsAvailable: number;
-  fireSuperiorityTotalShots: number;
-  pendingFireSuperiorityShotIds: Set<number>;
-  nextShotId: number;
-  confirmedShotIds: Set<number>;
 }
 
 interface ShotgunLightningEvent {
@@ -121,8 +113,7 @@ export class LoadoutManager {
   private itemRuntimeChargeConsumer: ((playerId: string) => number) | null = null;
   private itemRuntimeWeaponFiredHandler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null = null;
   private shotCounters = new Map<string, number>();
-  private ak47States = new Map<string, Ak47CombatState>();
-  private ak47StrategicTargetHitResolver: ((playerId: string, enemyId: string) => boolean) | null = null;
+  private ak47Behavior: Ak47BehaviorPort | null = null;
   private negevStates = new Map<string, NegevCombatState>();
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
   private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
@@ -188,7 +179,6 @@ export class LoadoutManager {
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.getActiveWeaponSlots().set(playerId, 'weapon1');
     this.shieldBuffSystem?.resetPlayer(playerId);
-    this.resetAk47State(playerId);
     this.negevStates.set(playerId, { kills: 0, lastShotAt: 0 });
     // Ein frisches Loadout beginnt mit Waffe 1 in den Pfoten, sonst zeigte die Figur nach einem
     // Waffenwechsel in der Lobby weiter den Slot der letzten Runde.
@@ -238,120 +228,9 @@ export class LoadoutManager {
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
-    this.ak47States.delete(playerId);
     this.negevStates.delete(playerId);
     this.heldItemSlots.removePlayer(playerId);
     this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
-  }
-
-  resetAk47State(playerId: string): void {
-    this.ak47States.set(playerId, {
-      stacks: 0,
-      fireSuperiorityShotsAvailable: 0,
-      fireSuperiorityTotalShots: 0,
-      pendingFireSuperiorityShotIds: new Set<number>(),
-      nextShotId: 1,
-      confirmedShotIds: new Set<number>(),
-    });
-  }
-
-  setAk47StrategicTargetHitResolver(resolver: ((playerId: string, enemyId: string) => boolean) | null): void {
-    this.ak47StrategicTargetHitResolver = resolver;
-  }
-
-  /** Refunds a specific penetrative shot at most once. */
-  registerAk47StrategicTargetHit(projectile: TrackedProjectile, enemyId: string): boolean {
-    const shotId = projectile.ak47ShotId;
-    if (!projectile.ak47FireSuperiorityShot || shotId === undefined || projectile.ak47StrategicRefunded) return false;
-    if (!this.ak47StrategicTargetHitResolver?.(projectile.ownerId, enemyId)) return false;
-    const state = this.ak47States.get(projectile.ownerId);
-    if (!state || !state.pendingFireSuperiorityShotIds.has(shotId)) return false;
-
-    state.pendingFireSuperiorityShotIds.delete(shotId);
-    state.fireSuperiorityShotsAvailable += 1;
-    projectile.ak47StrategicRefunded = true;
-    return true;
-  }
-
-  registerAk47ProjectileHit(projectile: TrackedProjectile, now = Date.now()): void {
-    const shotId = projectile.ak47ShotId;
-    if (shotId === undefined || projectile.ak47HitConfirmed) return;
-    projectile.ak47HitConfirmed = true;
-
-    const config = this.getAk47Config(projectile.ownerId);
-    const focus = config?.ak47Focus;
-    if (!focus || this.getAk47MaxStacks(focus) <= 0) return;
-
-    const state = this.getOrCreateAk47State(projectile.ownerId);
-    state.confirmedShotIds.add(shotId);
-    void now;
-
-    // Durchbruchmunition baut waehrend der laufenden Belohnungsphase keine neue
-    // Belohnungsschleife auf. Nach dem Magazin beginnt die Praezisionsserie neu.
-    if (projectile.ak47FireSuperiorityShot) return;
-
-    const maxStacks = this.getAk47MaxStacks(focus);
-    state.stacks = Math.min(maxStacks, state.stacks + 1);
-
-    if (
-      state.stacks >= maxStacks
-      && focus.fireSuperiorityShots > 0
-      && !this.isAk47FireSuperiorityPhaseActive(state)
-    ) {
-      const shotCount = Math.max(1, Math.round(focus.fireSuperiorityShots));
-      state.fireSuperiorityShotsAvailable = shotCount;
-      state.fireSuperiorityTotalShots = shotCount;
-      state.stacks = maxStacks;
-    }
-  }
-
-  resolveAk47Projectile(projectile: TrackedProjectile, now = Date.now()): void {
-    const shotId = projectile.ak47ShotId;
-    if (shotId === undefined) return;
-    const state = this.ak47States.get(projectile.ownerId);
-    if (!state) return;
-
-    const didHit = projectile.ak47HitConfirmed || state.confirmedShotIds.has(shotId);
-    state.confirmedShotIds.delete(shotId);
-    state.pendingFireSuperiorityShotIds.delete(shotId);
-    void now;
-    if (projectile.ak47FireSuperiorityShot && !this.isAk47FireSuperiorityPhaseActive(state)) {
-      state.fireSuperiorityTotalShots = 0;
-      state.stacks = 0;
-    } else if (!didHit && !this.isAk47FireSuperiorityPhaseActive(state)) {
-      state.stacks = 0;
-    }
-  }
-
-  getAk47HudBuffs(playerId: string, now = Date.now()): SyncedActiveHudBuff[] {
-    const config = this.getAk47Config(playerId);
-    const focus = config?.ak47Focus;
-    const state = this.ak47States.get(playerId);
-    if (!focus || !state) return [];
-
-    void now;
-    const result: SyncedActiveHudBuff[] = [];
-    const maxStacks = this.getAk47MaxStacks(focus);
-    if (state.stacks > 0 && maxStacks > 0) {
-      const damagePct = Math.round(state.stacks * focus.damagePerStack * 100);
-      result.push({
-        defId: 'AK47_FOCUS',
-        remainingFrac: state.stacks / maxStacks,
-        stacks: state.stacks,
-        maxStacks,
-        value: damagePct / 100,
-      });
-    }
-    const pending = state.pendingFireSuperiorityShotIds.size;
-    if (state.fireSuperiorityShotsAvailable > 0 || pending > 0) {
-      result.push({
-        defId: 'AK47_FIRE_SUPERIORITY',
-        remainingFrac: (state.fireSuperiorityShotsAvailable + pending) / Math.max(1, state.fireSuperiorityTotalShots),
-        availableCount: state.fireSuperiorityShotsAvailable,
-        pendingCount: pending,
-      });
-    }
-    return result;
   }
 
   getNegevHudBuffs(playerId: string): SyncedActiveHudBuff[] {
@@ -371,23 +250,8 @@ export class LoadoutManager {
     }];
   }
 
-  isAk47FireSuperiorityActive(playerId: string): boolean {
-    return this.getAk47Config(playerId) !== null
-      && this.isAk47FireSuperiorityPhaseActive(this.ak47States.get(playerId));
-  }
-
-  /** True only while at least one breakthrough shot can be fired immediately. */
-  isAk47FireSuperiorityAvailable(playerId: string): boolean {
-    return this.getAk47Config(playerId) !== null
-      && (this.ak47States.get(playerId)?.fireSuperiorityShotsAvailable ?? 0) > 0;
-  }
-
-  /** True when the shared Einschießen series has reached its hard five-stack cap. */
-  isAk47FocusAtMaxStacks(playerId: string): boolean {
-    const focus = this.getAk47Config(playerId)?.ak47Focus;
-    if (!focus) return false;
-    const maxStacks = this.getAk47MaxStacks(focus);
-    return maxStacks > 0 && (this.ak47States.get(playerId)?.stacks ?? 0) >= maxStacks;
+  setAk47Behavior(behavior: Ak47BehaviorPort | null): void {
+    this.ak47Behavior = behavior;
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -813,30 +677,6 @@ export class LoadoutManager {
     return loadout[slot].getCooldownFrac(now);
   }
 
-  private getAk47Config(playerId: string): WeaponConfig | null {
-    const config = this.loadouts.get(playerId)?.weapon2.config;
-    return config?.id === 'AK47' ? config : null;
-  }
-
-  private getOrCreateAk47State(playerId: string): Ak47CombatState {
-    const current = this.ak47States.get(playerId);
-    if (current) return current;
-    this.resetAk47State(playerId);
-    return this.ak47States.get(playerId)!;
-  }
-
-  private getAk47MaxStacks(focus: NonNullable<WeaponConfig['ak47Focus']>): number {
-    // Firepower and fire control share one hard cap. Fire control does not add another +5.
-    return focus.maxStacks > 0 || focus.fireControlEnabled > 0 ? 5 : 0;
-  }
-
-  private isAk47FireSuperiorityPhaseActive(state: Ak47CombatState | undefined): boolean {
-    return !!state && (
-      state.fireSuperiorityShotsAvailable > 0
-      || state.pendingFireSuperiorityShotIds.size > 0
-    );
-  }
-
   // ── Interne Helfer ────────────────────────────────────────────────────────
 
   /**
@@ -871,9 +711,8 @@ export class LoadoutManager {
     if (weapon.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
 
     const cfg = weapon.config;
-    const ak47State = cfg.id === 'AK47' ? this.getOrCreateAk47State(playerId) : null;
-    const ak47Focus = cfg.id === 'AK47' ? cfg.ak47Focus : null;
-    const fireSuperiorityCanFire = (ak47State?.fireSuperiorityShotsAvailable ?? 0) > 0;
+    const fireSuperiorityCanFire = cfg.id === 'AK47'
+      && (this.ak47Behavior?.isFireSuperiorityAvailable(playerId) ?? false);
 
     // 2. Adrenalin-Check (nur wenn Kosten > 0, sonst Regen-Pause nicht unterbrechen)
     const effectiveAdrenalineCost = fireSuperiorityCanFire
@@ -897,10 +736,6 @@ export class LoadoutManager {
     const shooterBody = this.playerManager.getPlayer(playerId)?.body;
     const isMoving    = isVelocityMoving(shooterBody?.velocity.x ?? 0, shooterBody?.velocity.y ?? 0);
     const scopeProgress = params?.scopeProgress;
-    const fireControlSpreadMultiplier = cfg.id === 'AK47' && ak47Focus && ak47Focus.fireControlEnabled > 0
-      ? Math.max(0, 1 - ak47State!.stacks * ak47Focus.fireControlSpreadPerStack)
-      : 1;
-
     // 4. Typ-spezifische Waffenlogik ausführen.
     //    Multi-Pellet-Waffen (z.B. Shotgun) feuern alle Projektile gleichzeitig ab.
     //    Jedes Pellet erhält seinen eigenen zufälligen Spread-Offset zusätzlich zum Pellet-Winkel.
@@ -949,28 +784,11 @@ export class LoadoutManager {
         };
       }
     }
-    if (ak47State && cfg.ak47Focus) {
-      const focusDamageMultiplier = 1 + ak47State.stacks * cfg.ak47Focus.damagePerStack;
-      const fireControlRangeMultiplier = cfg.ak47Focus.fireControlEnabled > 0
-        ? Math.max(0, 1 + ak47State.stacks * cfg.ak47Focus.fireControlRangePerStack)
-        : 1;
-      const fireControlProjectileSpeedMultiplier = cfg.ak47Focus.fireControlEnabled > 0
-        ? Math.max(0, 1 + ak47State.stacks * cfg.ak47Focus.fireControlProjectileSpeedPerStack)
-        : 1;
-      shotCfg = {
-        ...shotCfg,
-        range: shotCfg.range * fireControlRangeMultiplier,
-        fire: shotCfg.fire.type === 'projectile'
-          ? { ...shotCfg.fire, projectileSpeed: shotCfg.fire.projectileSpeed * fireControlProjectileSpeedMultiplier }
-          : shotCfg.fire,
-        penetrationCount: fireSuperiorityCanFire ? 1_000_000 : shotCfg.penetrationCount,
-        penetrationDamageRetention: fireSuperiorityCanFire ? 1 : shotCfg.penetrationDamageRetention,
-        penetratesRocks: fireSuperiorityCanFire && (shotCfg.rockDamageMult ?? 0) > 0 ? 1 : 0,
-        ak47ShotId: ak47State.nextShotId++,
-        ak47DamageMultiplier: focusDamageMultiplier,
-        ak47FireSuperiorityShot: fireSuperiorityCanFire,
-      };
-    }
+    const ak47Shot = cfg.id === 'AK47'
+      ? this.ak47Behavior?.prepareShot(playerId, shotCfg) ?? null
+      : null;
+    if (ak47Shot) shotCfg = ak47Shot.shotConfig;
+    const fireControlSpreadMultiplier = ak47Shot?.fireControlSpreadMultiplier ?? 1;
     // Kinetische Ladung: der Bonus wird in `shotCfg.damage` gebacken, **bevor** sich der Schuss in
     // Pellets aufteilt. Dadurch gilt er fuer die vollstaendige Salve statt je Projektil erneut,
     // greift ohne Sonderfall auch bei Hitscan-Waffen, und Sekundaerschaden erbt ihn nicht.
@@ -1010,9 +828,8 @@ export class LoadoutManager {
     }
     if (!didFire) return { ok: false, reason: 'blocked' };
 
-    if (fireSuperiorityCanFire && ak47State && shotCfg.ak47ShotId !== undefined) {
-      ak47State.fireSuperiorityShotsAvailable = Math.max(0, ak47State.fireSuperiorityShotsAvailable - 1);
-      ak47State.pendingFireSuperiorityShotIds.add(shotCfg.ak47ShotId);
+    if (ak47Shot) {
+      this.ak47Behavior?.commitShot(playerId, ak47Shot.shotId, ak47Shot.fireSuperiorityShot);
     }
 
     if ((shotCfg.sideBurstEveryShots ?? 0) > 0 && (shotCfg.sideBurstCount ?? 0) >= 2) {
