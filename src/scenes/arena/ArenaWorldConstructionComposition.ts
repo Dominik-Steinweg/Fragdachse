@@ -34,7 +34,7 @@ export function composeWorldPowerUp(
     worldMetrics: world.metrics,
     recordPowerUpCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
     addTemporaryUtility: (playerId, config) => (
-      gameplay.player?.systems.loadout.addTemporaryUtility(playerId, config, 1) !== null
+      gameplay.player?.addTemporaryUtility(playerId, config, 1) !== null
     ),
     claimObjectiveReward: (objectiveId, playerId) => (
       flow.getCoopMissionRuntime()?.coopDefenseObjectivePlacementRewardSystem?.claim(objectiveId, playerId) ?? false
@@ -84,10 +84,11 @@ export function composeWorldConstruction(
     scene, ctx, rockVisualHelper, flow, persistentBaseStores, worldRuntime,
     placementSystem, baseManager, persistentBaseBinding, coopMissionRuntime, activityDescriptor,
   } = input;
-  const loadoutManager = gameplay.player?.systems.loadout ?? null;
-  const burrowSystem = gameplay.player?.systems.burrow ?? null;
-  const resourceSystem = gameplay.player?.systems.resource ?? null;
-  if (!loadoutManager || !burrowSystem || !resourceSystem) {
+  const playerGameplay = gameplay.player;
+  const loadoutManager = playerGameplay?.systems.loadout ?? null;
+  const burrowSystem = playerGameplay?.systems.burrow ?? null;
+  const resourceSystem = playerGameplay?.systems.resource ?? null;
+  if (!playerGameplay || !loadoutManager || !burrowSystem || !resourceSystem) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
   const constructionRuntime = new ConstructionWorldRuntime({
@@ -96,6 +97,7 @@ export function composeWorldConstruction(
     combatSystem: ctx.combatSystem,
     placementSystem,
     loadoutManager,
+    utilityAction: playerGameplay,
     targetStatusSystem: gameplay.targeting?.systems.targetStatus ?? null,
     energyInjectorSystem: gameplay.targeting?.systems.energyInjector ?? null,
     powerUpSystem: gameplay.powerUp?.system ?? null,
@@ -147,6 +149,9 @@ export function composeWorldConstruction(
       removePlaceableRockVisual: (runtime, playDust) => rockVisualHelper.removePlaceableRockVisual(runtime, playDust),
     },
   });
+  playerGameplay.setUtilityPlacementCapability((cfg, playerId, x, y, targetX, targetY, now, playerColor, params) => (
+    constructionRuntime.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor, params)
+  ));
   gameplay.construction = constructionRuntime;
   worldRuntime.bind(constructionRuntime);
   persistentBaseBinding.setMaterializer(new PersistentBaseWorldMaterializer({

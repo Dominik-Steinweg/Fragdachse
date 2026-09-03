@@ -59,12 +59,19 @@ function makeRuntime() {
       getEquippedUtilityConfig: vi.fn(() => ({ id: 'DECOY' })),
       getTemporaryUtilityConfig: vi.fn(() => ({ id: 'BFG' })),
     },
+    utilityAction: {
+      syncEquippedUtility: vi.fn(),
+      removePlayer: vi.fn(),
+      getTemporaryUtilityConfig: vi.fn(() => ({ id: 'BFG' })),
+      destroy: vi.fn(),
+    },
     tunnel: {
       removePlayer: tag('tunnel.removePlayer'),
       getSnapshot: vi.fn(() => ['tunnel-snap']),
     },
     translocator: {
       getActivePuckId: vi.fn((playerId: string) => (playerId === 'withPuck' ? 42 : undefined)),
+      removePlayer: vi.fn(),
     },
     heldAction: {
       clearPlayer: tag('heldAction.clearPlayer'),
@@ -85,6 +92,7 @@ function makeRuntime() {
     playerManager: {
       hasPlayer: (playerId: string) => playerId !== 'absent',
     },
+    decoySystem: { clearPlayer: vi.fn() },
   };
   return { runtime, systems, order, drainUnsub, gainUnsub };
 }
@@ -147,7 +155,9 @@ function makeConcreteRemoveRuntime() {
     heldAction,
     playerModifier,
     translocator,
+    utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
   };
+  runtime.options = { decoySystem: { clearPlayer: vi.fn() } };
   return {
     runtime,
     playerId,
@@ -166,18 +176,12 @@ function makeDestroyRuntime() {
     'setWeaponExecutionCapability',
     'setSpecializedWeaponExecutionCapability',
     'setPhysicsSystem',
-    'setTranslocatorSystem',
-    'setDecoySystem',
     'setNegevKillstreakExplosionHandler',
     'setUtilityConfigModifierSource',
     'setItemRuntimeChargeConsumer',
     'setItemRuntimeWeaponFiredHandler',
-    'setUtilityUsedCallback',
-    'setUtilityUsedObserver',
     'setUltimateUsedObserver',
     'setActionBlockedChecker',
-    'setNukeStrikeHandler',
-    'setStinkCloudSystem',
   ];
   const resourceSetterNames = [
     'setPowerUpSystem',
@@ -220,6 +224,7 @@ function makeDestroyRuntime() {
   };
   const systems = {
     loadout,
+    utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
     heldAction: { reset: vi.fn() },
     guardianSpirit: { clear: vi.fn() },
     repairDrone: { clear: vi.fn() },
@@ -240,6 +245,7 @@ function makeDestroyRuntime() {
     playerManager: {
       getAllPlayers: () => [{ id: 'p1' }],
     },
+    decoySystem: { clearPlayer: vi.fn() },
   };
   return { runtime, systems };
 }

@@ -145,6 +145,16 @@ export function createArenaRuntimeRpcPorts(
       usePlayerAction: (request) => (
         flow.getWorldPlayerGameplayRuntime()?.usePlayerAction(request) ?? { ok: false, reason: 'blocked' }
       ),
+      startUtilityHeldAction: (playerId, actionId, kind, hostNowMs, toolRef, temporaryUtilityInstanceId) => (
+        flow.getWorldPlayerGameplayRuntime()?.startUtilityHeldAction(
+          playerId,
+          actionId,
+          kind,
+          hostNowMs,
+          toolRef,
+          temporaryUtilityInstanceId,
+        ) ?? false
+      ),
       useLoadout: (slot, playerId, angle, targetX, targetY, now, shotId, params, clientX, clientY) => (
         slot === 'weapon1' || slot === 'weapon2'
           ? flow.getWorldPlayerGameplayRuntime()?.usePlayerAction({
@@ -159,7 +169,19 @@ export function createArenaRuntimeRpcPorts(
             params,
             clientPosition: { x: clientX, y: clientY },
           }) ?? { ok: false, reason: 'blocked' }
-          : flow.getWorldPlayerGameplayRuntime()?.useLegacyLoadoutAction(
+          : slot === 'utility'
+            ? flow.getWorldPlayerGameplayRuntime()?.usePlayerAction({
+              category: 'utility',
+              playerId,
+              angle,
+              targetX,
+              targetY,
+              hostNowMs: now,
+              attemptId: params?.attemptId,
+              params,
+              clientPosition: { x: clientX, y: clientY },
+            }) ?? { ok: false, reason: 'blocked' }
+            : flow.getWorldPlayerGameplayRuntime()?.useLegacyLoadoutAction(
             slot,
             playerId,
             angle,

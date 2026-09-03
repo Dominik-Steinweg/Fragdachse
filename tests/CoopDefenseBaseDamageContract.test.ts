@@ -7,7 +7,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { applyCoopDefenseModifiersToWeaponConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { PlayerUtilityActionRuntime } from '../src/world/PlayerUtilityActionRuntime';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { DamageGrenadeEffect } from '../src/types';
 
@@ -34,11 +34,11 @@ describe('Coop-Defense base damage payload contracts', () => {
     expect(grenade.baseDamageMult).toBe(2);
 
     const buildGrenadeEffect = (
-      LoadoutManager.prototype as unknown as {
+      PlayerUtilityActionRuntime.prototype as unknown as {
         buildGrenadeEffect(config: typeof grenade): DamageGrenadeEffect;
       }
     ).buildGrenadeEffect;
-    const effect = buildGrenadeEffect.call(Object.create(LoadoutManager.prototype), grenade);
+    const effect = buildGrenadeEffect.call(Object.create(PlayerUtilityActionRuntime.prototype), grenade);
 
     expect(effect.type).toBe('damage');
     expect(effect.baseDamageMult).toBe(2);

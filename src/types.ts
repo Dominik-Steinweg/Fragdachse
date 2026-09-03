@@ -915,6 +915,8 @@ export interface LoadoutCommitSnapshot {
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
+  /** Separate request/attempt identity for duplicate-safe action commits. */
+  attemptId?: string;
   /** Activity-Identity fuer PB-Mutationen; fehlt bewusst in einer Activity-losen World. */
   activityRevision?: number;
   utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf

@@ -72,7 +72,7 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
       '.systems.burrow?.isStunned(',
       '.systems.translocator?.getActivePuckId(',
       '.systems.loadout?.getEquippedUtilityConfig(',
-      '.systems.loadout?.getTemporaryUtilityConfig(',
+      '.systems.utilityAction?.getTemporaryUtilityConfig(',
       '.systems.resource?.getAdrenaline(',
       '.systems.resource.getMaxAdrenaline(',
       '.systems?.ak47StrategicTarget',

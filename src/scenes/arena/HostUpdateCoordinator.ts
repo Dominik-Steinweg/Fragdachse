@@ -979,7 +979,7 @@ export class HostUpdateCoordinator {
         ? getUtilityConfigForMode(selectedTool.id, gameMode)
         : undefined;
       const selectedUtility = radialAction?.kind === 'temporary-utility'
-        ? this.playerSystems?.loadout?.getTemporaryUtilityConfig(localId, radialAction.instanceId)
+        ? this.playerSystems?.utilityAction?.getTemporaryUtilityConfig(localId, radialAction.instanceId)
         : selectedUtilityBase
           ? this.playerSystems?.loadout?.resolveUtilityConfig(localId, selectedUtilityBase) ?? selectedUtilityBase
           : undefined;

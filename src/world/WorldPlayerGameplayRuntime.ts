@@ -40,9 +40,13 @@ import type {
   PlayerInput,
   SyncedAk47StrategicTarget,
   SyncedTunnel,
+  TemporaryUtilityInstanceDescriptor,
 } from '../types';
 import type { UtilityConfig } from '../loadout/LoadoutConfig';
 import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
+import { PlayerUtilityActionRuntime } from './PlayerUtilityActionRuntime';
+import type { DecoySystem } from '../systems/DecoySystem';
+import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type {
   SpecializedWeaponExecutionCapability,
   WeaponExecutionCapability,
@@ -82,6 +86,8 @@ export interface WorldPlayerGameplayNetworkPort {
   };
   readonly loadout: {
     readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
+    readonly publishTemporaryUtilityInstances: (playerId: string, descriptors: readonly TemporaryUtilityInstanceDescriptor[]) => void;
+    readonly publishHeldUtilityId: (playerId: string, utilityId: string) => void;
   };
   readonly roundStats: {
     readonly canPlayerReceiveRoundRewards: (playerId: string) => boolean;
@@ -93,6 +99,7 @@ export interface WorldPlayerGameplayNetworkPort {
 
 export interface WorldPlayerGameplaySystems {
   readonly playerAction: PlayerActionRuntime;
+  readonly utilityAction: PlayerUtilityActionRuntime;
   readonly heldAction: HostHeldActionSystem;
   readonly playerModifier: CoopDefensePlayerModifierSystem;
   readonly itemRuntime: CoopDefenseItemRuntimeSystem;
@@ -160,6 +167,31 @@ export interface PlayerGameplayActionPort {
     expectedIdentity?: PlayerGameplayHeldActionIdentity,
   ): PlayerGameplayHeldActionResult | null;
   clearHeldActionsForPlayer(playerId: string): void;
+  addTemporaryUtility(playerId: string, config: UtilityConfig, charges: number): string | null;
+  releaseTemporaryUtilityForObjective(playerId: string, objectiveId: string): void;
+  clearTemporaryUtilities(playerId: string): void;
+  startUtilityHeldAction(
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    hostNowMs: number,
+    toolRef?: import('../types').LoadoutToolRef,
+    temporaryUtilityInstanceId?: string,
+  ): boolean;
+  useInspectorUtility(
+    playerId: string,
+    tool: import('../types').LoadoutToolRef,
+    config: UtilityConfig,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    hostNowMs: number,
+    params?: LoadoutUseParams,
+  ): LoadoutUseResult;
+  setUtilityPlacementCapability(
+    capability: NonNullable<import('./PlayerUtilityActionRuntime').PlayerUtilityActionRuntimeOptions['placeable']>['use'] | null,
+  ): void;
+  beginUtilityCooldown(playerId: string, utilityId: string, now: number): void;
 }
 
 /** Resource commands exposed to tooling without exposing the ResourceSystem owner. */
@@ -231,6 +263,10 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly dropBeer: (playerId: string, x?: number, y?: number) => void;
   readonly createLoadoutManager: (resourceSystem: ResourceSystem) => LoadoutManager;
   readonly createBurrowSystem: (resourceSystem: ResourceSystem) => BurrowSystem;
+  readonly decoySystem: DecoySystem;
+  readonly stinkCloudSystem: StinkCloudSystem;
+  readonly resolveToolUtilityConfig?: (toolRef: import('../types').LoadoutToolRef) => UtilityConfig | undefined;
+  readonly isUtilityToolAuthorized?: (playerId: string, toolRef: import('../types').LoadoutToolRef) => boolean;
   /** World-composed gemeinsame Immediate-Weapon-Execution-Capability (Teilphase 4A). */
   readonly weaponExecution: WeaponExecutionCapability;
   /** World-composed benannte Capability für unmittelbare Spezialschüsse (Teilphase 4C). */
@@ -276,11 +312,17 @@ export class WorldPlayerGameplayRuntime implements
     const loadout = options.createLoadoutManager(resource);
     const playerAction = new PlayerActionRuntime(
       {
-        getPlayer: (playerId) => options.playerManager.getPlayer(playerId),
+        getPlayer: (playerId) => {
+          const player = options.playerManager.getPlayer(playerId);
+          return player
+            ? { x: player.x, y: player.y, color: player.color, displaySize: player.displayObject?.displayWidth ?? undefined }
+            : undefined;
+        },
         canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
         isAlive: (playerId) => options.combatSystem.isAlive(playerId),
         isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId),
         isDashBurst: (playerId) => options.hostPhysics.isDashBurst(playerId),
+        breakStealth: (playerId, now) => options.decoySystem.breakStealth(playerId, now),
       },
       loadout,
     );
@@ -294,10 +336,39 @@ export class WorldPlayerGameplayRuntime implements
         getPlayerColor: options.network.presentation.getPlayerColor,
         broadcastTranslocatorFlash: options.network.presentation.broadcastTranslocatorFlash,
         broadcastExplosionEffect: options.network.presentation.broadcastExplosionEffect,
-        publishUtilityCooldownUntil: options.network.loadout.publishUtilityCooldownUntil,
       },
       null,
     );
+    const utilityAction = new PlayerUtilityActionRuntime({
+      projectileManager: options.projectileManager,
+      combatSystem: options.combatSystem,
+      actor: {
+        getPlayer: (playerId) => {
+          const player = options.playerManager.getPlayer(playerId);
+          return player
+            ? { x: player.x, y: player.y, color: player.color, displaySize: player.displayObject?.displayWidth ?? undefined }
+            : undefined;
+        },
+        canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
+        isAlive: (playerId) => options.combatSystem.isAlive(playerId),
+        isUtilityBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
+      },
+      loadout,
+      heldAction,
+      translocator,
+      decoy: options.decoySystem,
+      stinkCloud: options.stinkCloudSystem,
+      gameAudioSystem: options.gameAudioSystem,
+      network: {
+        loadout: options.network.loadout,
+        roundStats: options.network.roundStats,
+      },
+      dropBeer: options.dropBeer,
+      nukeStrike: (playerId, targetX, targetY) => options.getPowerUpSystem()?.scheduleNukeStrike(playerId, targetX, targetY) ?? false,
+      resolveToolUtilityConfig: (toolRef) => options.resolveToolUtilityConfig?.(toolRef),
+      isToolAuthorized: (playerId, toolRef) => options.isUtilityToolAuthorized?.(playerId, toolRef) ?? false,
+      placeable: null,
+    });
     const tunnel = new TunnelSystem(
       options.playerManager,
       options.combatSystem,
@@ -369,6 +440,7 @@ export class WorldPlayerGameplayRuntime implements
 
     this.systems = {
       playerAction,
+      utilityAction,
       heldAction,
       playerModifier,
       itemRuntime,
@@ -441,16 +513,21 @@ export class WorldPlayerGameplayRuntime implements
     // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
     this.systems.loadout.resetUltimateState(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
+    this.systems.utilityAction.syncEquippedUtility(playerId);
   }
 
   detachPlayerLoadout(playerId: string): void {
+    this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
+    this.systems.translocator.removePlayer(playerId);
+    this.options.decoySystem.clearPlayer(playerId);
     this.systems.tunnel.removePlayer(playerId);
   }
 
   /** Zieht eine geänderte committed/live Auswahl nach und klemmt laufende Ressourcen an neue Maxima. */
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
+    this.systems.utilityAction.syncEquippedUtility(playerId);
     this.systems.resource.reconcilePlayerLimits(playerId);
     return changed;
   }
@@ -491,7 +568,61 @@ export class WorldPlayerGameplayRuntime implements
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
-    return this.systems.playerAction.execute(request);
+    return request.category === 'utility'
+      ? this.systems.utilityAction.execute(request)
+      : this.systems.playerAction.execute(request);
+  }
+
+  addTemporaryUtility(playerId: string, config: UtilityConfig, charges: number): string | null {
+    if (this.destroyed) return null;
+    return this.systems.utilityAction.addTemporaryUtility(playerId, config, charges);
+  }
+
+  releaseTemporaryUtilityForObjective(playerId: string, objectiveId: string): void {
+    if (this.destroyed) return;
+    this.systems.utilityAction.releaseTemporaryUtilityForObjective(playerId, objectiveId);
+  }
+
+  clearTemporaryUtilities(playerId: string): void {
+    if (this.destroyed) return;
+    this.systems.utilityAction.clearTemporaryUtilities(playerId);
+  }
+
+  startUtilityHeldAction(
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    hostNowMs: number,
+    toolRef?: import('../types').LoadoutToolRef,
+    temporaryUtilityInstanceId?: string,
+  ): boolean {
+    if (this.destroyed) return false;
+    return this.systems.utilityAction.startHeldAction(playerId, actionId, kind, hostNowMs, toolRef, temporaryUtilityInstanceId);
+  }
+
+  useInspectorUtility(
+    playerId: string,
+    tool: import('../types').LoadoutToolRef,
+    config: UtilityConfig,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    hostNowMs: number,
+    params?: LoadoutUseParams,
+  ): LoadoutUseResult {
+    if (this.destroyed) return { ok: false, reason: 'invalid' };
+    return this.systems.utilityAction.useInspectorUtility(playerId, tool, config, angle, targetX, targetY, hostNowMs, params);
+  }
+
+  setUtilityPlacementCapability(
+    capability: NonNullable<import('./PlayerUtilityActionRuntime').PlayerUtilityActionRuntimeOptions['placeable']>['use'] | null,
+  ): void {
+    this.systems.utilityAction.setPlacementCapability(capability);
+  }
+
+  beginUtilityCooldown(playerId: string, utilityId: string, now: number): void {
+    if (this.destroyed) return;
+    this.systems.utilityAction.beginUtilityCooldown(playerId, utilityId, now);
   }
 
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
@@ -552,7 +683,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.resource.setAdrenaline(playerId, amount);
   }
 
-  /** Temporary one-way legacy path for Utility/Ultimate until their dedicated activation phases. */
+  /** Narrow compatibility path for the still-unmigrated Ultimate activation. */
   useLegacyLoadoutAction(
     slot: LoadoutSlot,
     playerId: string,
@@ -566,6 +697,19 @@ export class WorldPlayerGameplayRuntime implements
     clientY?: number,
   ): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
+    if (slot === 'utility') {
+      return this.usePlayerAction({
+        category: 'utility',
+        playerId,
+        angle,
+        targetX,
+        targetY,
+        hostNowMs,
+        params,
+        clientPosition: { x: clientX, y: clientY },
+      });
+    }
+    this.systems.utilityAction.breakStealth(playerId, hostNowMs);
     return this.systems.loadout.use(
       slot,
       playerId,
@@ -600,7 +744,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null {
-    return this.systems.loadout.getTemporaryUtilityConfig(playerId, instanceId);
+    return this.systems.utilityAction.getTemporaryUtilityConfig(playerId, instanceId);
   }
 
   hasActiveTranslocatorPuck(playerId: string): boolean {
@@ -652,18 +796,11 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setWeaponExecutionCapability(null);
     systems.loadout.setSpecializedWeaponExecutionCapability(null);
     systems.loadout.setPhysicsSystem(null);
-    systems.loadout.setTranslocatorSystem(null);
-    systems.loadout.setDecoySystem(null);
     systems.loadout.setNegevKillstreakExplosionHandler(null);
-    systems.loadout.setUtilityConfigModifierSource(null);
     systems.loadout.setItemRuntimeChargeConsumer(null);
     systems.loadout.setItemRuntimeWeaponFiredHandler(null);
-    systems.loadout.setUtilityUsedCallback(null);
-    systems.loadout.setUtilityUsedObserver(null);
     systems.loadout.setUltimateUsedObserver(null);
     systems.loadout.setActionBlockedChecker(null);
-    systems.loadout.setNukeStrikeHandler(null);
-    systems.loadout.setStinkCloudSystem(null);
     systems.loadout.resetAllUltimateStates();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
@@ -678,10 +815,13 @@ export class WorldPlayerGameplayRuntime implements
     systems.translocator.setRadialImpulseCallback(null);
     systems.translocator.setPositionResetCallback(null);
     for (const player of this.options.playerManager.getAllPlayers()) {
+      systems.utilityAction.removePlayer(player.id);
       systems.resource.removePlayer(player.id);
       systems.burrow.removePlayer(player.id);
       systems.translocator.removePlayer(player.id);
+      this.options.decoySystem.clearPlayer(player.id);
     }
+    systems.utilityAction.destroy();
     systems.resource.setPowerUpSystem(null);
     systems.resource.setAdrenalineMaxResolver(null);
     systems.resource.setAdrenalineRegenRateResolver(null);
@@ -764,18 +904,6 @@ export class WorldPlayerGameplayRuntime implements
     });
     loadout.setItemRuntimeChargeConsumer((playerId) => itemRuntime.consumeMovementCharge(playerId));
     loadout.setItemRuntimeWeaponFiredHandler((playerId, sourceSlot) => itemRuntime.registerWeaponFired(playerId, sourceSlot));
-    loadout.setUtilityUsedCallback((playerId, utilityType) => {
-      if (utilityType !== 'decoy') return;
-      this.options.dropBeer(playerId);
-      const player = this.options.playerManager.getPlayer(playerId);
-      if (player) this.options.gameAudioSystem.playSound('sfx_place_decoy', player.x, player.y, playerId);
-    });
-    loadout.setUtilityUsedObserver((playerId, utilityType) => {
-      this.options.network.roundStats.recordUtilityUsed(playerId);
-      if (utilityType === 'placeable_rock' || utilityType === 'placeable_turret' || utilityType === 'placeable_pedestal') {
-        this.options.network.roundStats.recordConstructionBuilt(playerId);
-      }
-    });
     loadout.setUltimateUsedObserver((playerId) => this.options.network.roundStats.recordUltimateUsed(playerId));
     translocator.setUseCallback((playerId) => this.options.dropBeer(playerId));
     translocator.setRadialImpulseCallback((x, y, radius, knockback, ownerId) => {
@@ -795,8 +923,5 @@ export class WorldPlayerGameplayRuntime implements
       if ((slot === 'utility' || slot === 'ultimate') && burrow.isUtilityBlocked(playerId)) return true;
       return false;
     });
-    loadout.setNukeStrikeHandler((playerId, targetX, targetY) => (
-      this.options.getPowerUpSystem()?.scheduleNukeStrike(playerId, targetX, targetY) ?? false
-    ));
   }
 }

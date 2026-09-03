@@ -15,6 +15,7 @@ import { ULTIMATE_CONFIGS, UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig'
 import { POWERUP_DEFS } from '../src/powerups/PowerUpConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { PlayerManager } from '../src/entities/PlayerManager';
+import { PlayerUtilityActionRuntime } from '../src/world/PlayerUtilityActionRuntime';
 
 function makeLoadoutHookHarness() {
   const manager = Object.create(LoadoutManager.prototype) as any;
@@ -38,41 +39,76 @@ function makeLoadoutHookHarness() {
   return manager;
 }
 
-function fakeUtility(config: any) {
-  return {
-    config,
-    isOnCooldown: vi.fn(() => false),
-    recordUse: vi.fn(),
-  };
+function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
+  const player = { x: 10, y: 10, color: 0xffffff, displaySize: 32 };
+  const noteUtilityUsed = vi.fn();
+  const recordUtilityUsed = vi.fn();
+  const recordConstructionBuilt = vi.fn();
+  const utility = new PlayerUtilityActionRuntime({
+    projectileManager: { spawnProjectile: vi.fn() } as any,
+    combatSystem: { resolveMeleeSwing: vi.fn(() => true) } as any,
+    actor: {
+      getPlayer: vi.fn(() => player),
+      canInteract: vi.fn(() => true),
+      isAlive: vi.fn(() => true),
+      isUtilityBlocked: vi.fn(() => false),
+    },
+    loadout: {
+      getEquippedUtilityConfig: vi.fn(() => config),
+      resolveUtilityConfig: vi.fn((_playerId: string, value: any) => value),
+      noteUtilityUsed,
+    },
+    heldAction: {
+      start: vi.fn(() => true),
+      consume: vi.fn(() => ({ elapsedMs: 0, chargeFraction: 1 })),
+      clearPlayer: vi.fn(),
+    },
+    translocator: null,
+    decoy: { activate: vi.fn(() => true), breakStealth: vi.fn() } as any,
+    stinkCloud: null,
+    gameAudioSystem: { playSound: vi.fn() } as any,
+    network: {
+      loadout: {
+        publishUtilityCooldownUntil: vi.fn(),
+        publishTemporaryUtilityInstances: vi.fn(),
+        publishHeldUtilityId: vi.fn(),
+      },
+      roundStats: { recordUtilityUsed, recordConstructionBuilt },
+    },
+    dropBeer: vi.fn(),
+    nukeStrike: vi.fn(() => true),
+    placeable: { use: placeableUse },
+  });
+  return { utility, noteUtilityUsed, recordUtilityUsed, recordConstructionBuilt, placeableUse };
 }
 
 describe('room-statistics gameplay hooks', () => {
-  it('observes successful utilities, preserves the existing callback and ignores blocked use', () => {
-    const manager = makeLoadoutHookHarness();
-    const existingCallback = manager.utilityUsedCallback;
-    const utility = fakeUtility(UTILITY_CONFIGS.DECOY);
+  it('records successful utilities once at the semantic utility boundary and ignores cooldown use', () => {
+    const { utility, noteUtilityUsed, recordUtilityUsed } = makeUtilityRuntime(UTILITY_CONFIGS.ZEUS_TASER);
 
-    expect((manager as any).useUtility(utility, 0, 0, 0, 10, 10, 'p1', 100, 0xffffff)).toBe(true);
-    expect(existingCallback).toHaveBeenCalledWith('p1', 'decoy');
-    expect(manager.utilityUsedObserver).toHaveBeenCalledWith('p1', 'decoy');
+    expect(utility.execute({ category: 'utility', playerId: 'p1', angle: 0, targetX: 10, targetY: 10, hostNowMs: 100 }))
+      .toEqual({ ok: true });
+    expect(noteUtilityUsed).toHaveBeenCalledWith('p1', 100);
+    expect(recordUtilityUsed).toHaveBeenCalledWith('p1');
 
-    utility.isOnCooldown.mockReturnValue(true);
-    expect((manager as any).useUtility(utility, 0, 0, 0, 10, 10, 'p1', 200, 0xffffff)).toBe(false);
-    expect(manager.utilityUsedObserver).toHaveBeenCalledOnce();
-    expect(existingCallback).toBe(manager.utilityUsedCallback);
+    expect(utility.execute({ category: 'utility', playerId: 'p1', angle: 0, targetX: 10, targetY: 10, hostNowMs: 200 }))
+      .toEqual({ ok: false, reason: 'cooldown' });
+    expect(recordUtilityUsed).toHaveBeenCalledOnce();
   });
 
   it('observes construction-mode utility only after its placement handler succeeds', () => {
-    const manager = makeLoadoutHookHarness();
-    const utility = fakeUtility(UTILITY_CONFIGS.SPORE_TURRET);
+    const config = { ...UTILITY_CONFIGS.SPORE_TURRET, cooldown: 0 };
+    const { utility, recordUtilityUsed, recordConstructionBuilt, placeableUse } = makeUtilityRuntime(config);
 
-    expect((manager as any).useUtility(utility, 0, 0, 0, 10, 10, 'p1', 100, 0xffffff)).toBe(true);
-    expect(manager.utilityUsedObserver).toHaveBeenCalledWith('p1', 'placeable_turret');
+    expect(utility.execute({ category: 'utility', playerId: 'p1', angle: 0, targetX: 10, targetY: 10, hostNowMs: 100 }))
+      .toEqual({ ok: true });
+    expect(recordUtilityUsed).toHaveBeenCalledWith('p1');
+    expect(recordConstructionBuilt).toHaveBeenCalledWith('p1');
 
-    manager.utilityUsedObserver.mockClear();
-    manager.placeableRockHandler.mockReturnValue(false);
-    expect((manager as any).useUtility(utility, 0, 0, 0, 10, 10, 'p1', 200, 0xffffff)).toBe(false);
-    expect(manager.utilityUsedObserver).not.toHaveBeenCalled();
+    placeableUse.mockReturnValue(false);
+    expect(utility.execute({ category: 'utility', playerId: 'p1', angle: 0, targetX: 10, targetY: 10, hostNowMs: 200 }))
+      .toEqual({ ok: false, reason: 'blocked' });
+    expect(recordUtilityUsed).toHaveBeenCalledOnce();
   });
 
   it('counts Gauss only on a fully charged release, never on press or aborted charge', () => {

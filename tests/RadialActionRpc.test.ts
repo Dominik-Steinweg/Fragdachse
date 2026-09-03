@@ -76,6 +76,35 @@ function createFixture() {
       : null
   ));
   const use = vi.fn((): LoadoutUseResult => ({ ok: true }));
+  const usePlayerAction = vi.fn((): LoadoutUseResult => ({ ok: true }));
+  const startUtilityHeldAction = vi.fn((
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    hostNowMs: number,
+    toolRef?: LoadoutToolRef,
+    temporaryUtilityInstanceId?: string,
+  ) => {
+    const config = toolRef
+      ? getUtilityConfigForMode(toolRef.id, 'coop_defense')
+      : temporaryUtilityInstanceId
+        ? getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined
+        : getEquippedUtilityConfig(playerId);
+    if (!config || config.activation.type !== kind) return false;
+    const identity = toolRef
+      ? { toolRef }
+      : temporaryUtilityInstanceId !== undefined
+        ? { temporaryUtilityInstanceId }
+        : undefined;
+    return ctx.hostHeldActionSystem.start(
+      playerId,
+      actionId,
+      kind,
+      config.activation.fullChargeDuration,
+      hostNowMs,
+      identity,
+    );
+  });
   const ctx: any = {
     loadoutManager: { getEquippedUtilityConfig, getTemporaryUtilityConfig, use },
     hostHeldActionSystem: { consume, start, clearPlayer },
@@ -145,6 +174,8 @@ function createFixture() {
       getTemporaryUtilityConfig: (playerId: string, instanceId: string) => ctx.loadoutManager.getTemporaryUtilityConfig(playerId, instanceId),
       getEquippedUtilityConfig: (playerId: string) => ctx.loadoutManager.getEquippedUtilityConfig(playerId),
       hasActiveTranslocatorPuck: (playerId: string) => ctx.translocatorSystem.getActivePuckId(playerId) !== undefined,
+      usePlayerAction,
+      startUtilityHeldAction,
       useLoadout: (...args: Parameters<typeof use>) => ctx.loadoutManager.use(...args),
       getAdrenaline: () => 0,
       getAdrenalineRevision: () => 0,
@@ -168,6 +199,8 @@ function createFixture() {
     getEquippedUtilityConfig,
     getTemporaryUtilityConfig,
     use,
+    usePlayerAction,
+    startUtilityHeldAction,
     participation,
     persistentBase,
     powerUpSystem,
@@ -262,20 +295,19 @@ describe('radial action RPC classification', () => {
       tools: undefined,
     });
     const fixture = createFixture();
-    fixture.consume.mockReturnValue(null);
+    fixture.usePlayerAction.mockReturnValue({ ok: false, reason: 'blocked' });
     const handler = registerLoadoutHandler(fixture.coordinator);
 
     const result = handler('utility', 0, 220, 180, 'p1', undefined, {});
 
     expect(result).toEqual({ ok: false, reason: 'blocked' });
-    expect(fixture.getEquippedUtilityConfig).toHaveBeenCalledWith('p1');
-    expect(fixture.consume).toHaveBeenCalledWith(
-      'p1',
-      undefined,
-      'charged_throw',
-      UTILITY_CONFIGS.HE_GRENADE.activation.fullChargeDuration,
-      expect.any(Number),
-    );
+    expect(fixture.getEquippedUtilityConfig).not.toHaveBeenCalled();
+    expect(fixture.consume).not.toHaveBeenCalled();
+    expect(fixture.usePlayerAction).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'utility',
+      playerId: 'p1',
+      hostNowMs: expect.any(Number),
+    }));
     expect(fixture.use).not.toHaveBeenCalled();
   });
 
@@ -283,7 +315,6 @@ describe('radial action RPC classification', () => {
     // Die mutable Lobby-Auswahl darf die laufende Coop-Activity nicht umkonfigurieren.
     bridgeMock.getGameMode.mockReturnValue('deathmatch');
     const fixture = createFixture();
-    fixture.consume.mockReturnValue({ elapsedMs: 900, chargeFraction: 1 });
     const handler = registerLoadoutHandler(fixture.coordinator);
 
     const result = handler('utility', 0, 220, 180, 'p1', undefined, {
@@ -293,14 +324,7 @@ describe('radial action RPC classification', () => {
 
     expect(result).toEqual({ ok: true });
     expect(fixture.getEquippedUtilityConfig).not.toHaveBeenCalled();
-    expect(fixture.consume).toHaveBeenCalledWith(
-      'p1',
-      'bfg-action',
-      'charged_gate',
-      getUtilityConfigForMode('BFG', 'coop_defense')?.activation.fullChargeDuration,
-      expect.any(Number),
-      { toolRef: { kind: 'utility', id: 'BFG' } },
-    );
+    expect(fixture.consume).not.toHaveBeenCalled();
     expect(fixture.lifecycle.useInspectorUtility).toHaveBeenCalledWith(
       'p1',
       { kind: 'utility', id: 'BFG' },
@@ -308,7 +332,7 @@ describe('radial action RPC classification', () => {
       220,
       180,
       expect.any(Number),
-      expect.objectContaining({ heldActionId: 'bfg-action', utilityChargeFraction: 1 }),
+      { toolRef: { kind: 'utility', id: 'BFG' }, heldActionId: 'bfg-action' },
     );
   });
 
@@ -350,13 +374,13 @@ describe('radial action RPC classification', () => {
     expect(handler('p1', 'start', 'bfg-action', 'charged_gate', 900, { kind: 'utility', id: 'BFG' }))
       .toBe(true);
     expect(fixture.getEquippedUtilityConfig).not.toHaveBeenCalled();
-    expect(fixture.start).toHaveBeenCalledWith(
+    expect(fixture.startUtilityHeldAction).toHaveBeenCalledWith(
       'p1',
       'bfg-action',
       'charged_gate',
-      getUtilityConfigForMode('BFG', 'coop_defense')?.activation.fullChargeDuration,
       expect.any(Number),
-      { toolRef: { kind: 'utility', id: 'BFG' } },
+      { kind: 'utility', id: 'BFG' },
+      undefined,
     );
   });
 
@@ -371,27 +395,12 @@ describe('radial action RPC classification', () => {
     });
 
     expect(result).toEqual({ ok: true });
-    expect(fixture.getTemporaryUtilityConfig).toHaveBeenCalledWith('p1', 'temporary-utility-7');
-    expect(fixture.consume).toHaveBeenCalledWith(
-      'p1',
-      'temporary-bfg-action',
-      'charged_gate',
-      UTILITY_CONFIGS.BFG.activation.fullChargeDuration,
-      expect.any(Number),
-      { temporaryUtilityInstanceId: 'temporary-utility-7' },
-    );
-    expect(fixture.use).toHaveBeenCalledWith(
-      'utility',
-      'p1',
-      0,
-      220,
-      180,
-      expect.any(Number),
-      undefined,
-      expect.objectContaining({ temporaryUtilityInstanceId: 'temporary-utility-7' }),
-      undefined,
-      undefined,
-    );
+    expect(fixture.getTemporaryUtilityConfig).not.toHaveBeenCalled();
+    expect(fixture.consume).not.toHaveBeenCalled();
+    expect(fixture.usePlayerAction).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'utility',
+      params: expect.objectContaining({ temporaryUtilityInstanceId: 'temporary-utility-7' }),
+    }));
   });
 
   it('committet mit einem einzigen Host-Zeitpunkt statt einer Client-Angabe (Clock-Skew)', () => {
@@ -407,11 +416,11 @@ describe('radial action RPC classification', () => {
     const after = Date.now();
 
     expect(result).toEqual({ ok: true });
-    const commitNow = fixture.use.mock.calls.at(-1)?.[5] as number;
+    const commitNow = fixture.usePlayerAction.mock.calls.at(-1)?.[0].hostNowMs as number;
     expect(commitNow).toBeGreaterThanOrEqual(before);
     expect(commitNow).toBeLessThanOrEqual(after);
     // Held-Action-Consume und Gameplay-Commit teilen sich denselben hostseitigen nowMs.
-    expect(fixture.consume.mock.calls.at(-1)?.[4]).toBe(commitNow);
+    expect(fixture.consume).not.toHaveBeenCalled();
   });
 
   it('rejects a held charge when the release names another equal temporary instance', () => {
@@ -429,11 +438,15 @@ describe('radial action RPC classification', () => {
       undefined,
       'temporary-utility-7',
     )).toBe(true);
+    fixture.usePlayerAction.mockReturnValue({ ok: false, reason: 'blocked' });
 
     expect(use('utility', 0, 220, 180, 'p1', undefined, {
       temporaryUtilityInstanceId: 'temporary-utility-8',
       heldActionId: 'temporary-bfg-a',
     })).toEqual({ ok: false, reason: 'blocked' });
-    expect(fixture.use).not.toHaveBeenCalled();
+    expect(fixture.usePlayerAction).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'utility',
+      params: expect.objectContaining({ temporaryUtilityInstanceId: 'temporary-utility-8' }),
+    }));
   });
 });

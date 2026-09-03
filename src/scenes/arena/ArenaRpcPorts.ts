@@ -71,8 +71,16 @@ export interface PlayerLoadoutRpcPort {
   getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null;
   getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined;
   hasActiveTranslocatorPuck(playerId: string): boolean;
-  /** Phase 6A Player Action boundary; currently materialized for Weapon1/Weapon2. */
+  /** World-owned semantic Player Action boundary for weapon and utility mutations. */
   usePlayerAction: (request: PlayerActionRequest) => LoadoutUseResult;
+  startUtilityHeldAction(
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    hostNowMs: number,
+    toolRef?: LoadoutToolRef,
+    temporaryUtilityInstanceId?: string,
+  ): boolean;
   useLoadout(
     slot: LoadoutSlot,
     playerId: string,

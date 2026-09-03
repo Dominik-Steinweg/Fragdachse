@@ -13,12 +13,10 @@ import type { EffectSystem } from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
-import { getUtilityConfigForMode, type UtilityConfig } from '../../loadout/LoadoutConfig';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import type {
   ConstructionRpcPort,
-  HeldActionRpcIdentity,
   HeldActionRpcPort,
   PersistentBaseRpcPort,
   PlayerCapabilitiesRpcPort,
@@ -53,65 +51,6 @@ function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: strin
     case 'brood_hatch': return { key: 'shot_throw', scale: 1 };
     default:            return { key: 'sfx_explosion_he',             scale: EXPLOSION_CLOSE_BOOST };
   }
-}
-
-type ChargeableUtilityConfig = UtilityConfig & {
-  activation: Extract<UtilityConfig['activation'], { type: 'charged_throw' | 'charged_gate' }>;
-};
-
-type HostChargeValidation =
-  | { ok: true; authoritativeParams?: LoadoutUseParams }
-  | { ok: false; reason: 'blocked' };
-
-function isChargeableUtilityConfig(config: UtilityConfig | undefined): config is ChargeableUtilityConfig {
-  return config?.activation.type === 'charged_throw' || config?.activation.type === 'charged_gate';
-}
-
-/** Consumes the host-held action only for a utility that actually requires one. */
-function validateHostUtilityCharge(
-  heldActionPort: HeldActionRpcPort,
-  senderId: string,
-  utility: UtilityConfig | undefined,
-  hostNowMs: number,
-  params?: LoadoutUseParams,
-): HostChargeValidation {
-  if (!isChargeableUtilityConfig(utility)) return { ok: true, authoritativeParams: params };
-
-  const identity = getHeldActionIdentity(params);
-  const held = identity
-    ? heldActionPort.consume(
-      senderId,
-      params?.heldActionId,
-      utility.activation.type,
-      utility.activation.fullChargeDuration,
-      hostNowMs,
-      identity,
-    )
-    : heldActionPort.consume(
-      senderId,
-      params?.heldActionId,
-      utility.activation.type,
-      utility.activation.fullChargeDuration,
-      hostNowMs,
-    );
-  if (!held || (utility.activation.type === 'charged_gate' && held.chargeFraction < 1)) {
-    return { ok: false, reason: 'blocked' };
-  }
-  return {
-    ok: true,
-    authoritativeParams: {
-      ...(params ?? {}),
-      utilityChargeFraction: held.chargeFraction,
-    },
-  };
-}
-
-function getHeldActionIdentity(params?: LoadoutUseParams): HeldActionRpcIdentity | undefined {
-  if (params?.temporaryUtilityInstanceId !== undefined) {
-    return { temporaryUtilityInstanceId: params.temporaryUtilityInstanceId };
-  }
-  if (params?.toolRef !== undefined) return { toolRef: params.toolRef };
-  return undefined;
 }
 
 /**
@@ -254,34 +193,19 @@ export class RpcCoordinator {
         if (toolRef || temporaryUtilityInstanceId) return false;
         return this.heldActions.start(playerId, actionId, kind, 1_000, hostNowMs);
       }
-      let utility: UtilityConfig | undefined;
       if (toolRef && temporaryUtilityInstanceId) return false;
       if (toolRef) {
-        const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
         if (toolRef.kind === 'construction') return false;
-        if (
-          toolRef.kind !== 'utility'
-          || currentLoadout?.coopDefenseClassId !== 'inspector_gadachs'
-          || !(currentLoadout.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id)
-        ) return false;
-        utility = getUtilityConfigForMode(
-          toolRef.id,
-          bridge.getActiveGameMode(),
-        );
-      } else if (temporaryUtilityInstanceId) {
-        utility = this.playerLoadout.getTemporaryUtilityConfig(playerId, temporaryUtilityInstanceId) ?? undefined;
-      } else {
-        utility = this.playerLoadout.getEquippedUtilityConfig(playerId);
+        if (toolRef.kind !== 'utility') return false;
       }
-      if (!utility || utility.activation.type !== kind) return false;
-      const identity = toolRef
-        ? { toolRef }
-        : temporaryUtilityInstanceId !== undefined
-          ? { temporaryUtilityInstanceId }
-          : undefined;
-      return identity
-        ? this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, hostNowMs, identity)
-        : this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, hostNowMs);
+      return this.playerLoadout.startUtilityHeldAction(
+        playerId,
+        actionId,
+        kind,
+        hostNowMs,
+        toolRef,
+        temporaryUtilityInstanceId,
+      );
     });
   }
 
@@ -297,8 +221,9 @@ export class RpcCoordinator {
       // `clientX`/`clientY` bleiben Positions-/Latenzkompensation und sind davon unberührt;
       // eine Client-Uhr fließt bewusst nicht mehr in Cooldown-/Commit-Entscheidungen ein.
       const hostNowMs = Date.now();
+      const activeGameMode = bridge.getActiveGameMode();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
-      let authoritativeParams = params;
+      const authoritativeParams = params;
       const temporaryUtilityInstanceId = params?.temporaryUtilityInstanceId;
       if (temporaryUtilityInstanceId !== undefined
         && (slot !== 'utility'
@@ -340,7 +265,7 @@ export class RpcCoordinator {
           params?.activityRevision,
         );
       }
-      if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+      if (activeGameMode === 'coop_defense' && currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
         && slot === 'utility' && !params?.toolRef && !params?.temporaryUtilityInstanceId) {
         return { ok: false, reason: 'blocked' };
       }
@@ -363,15 +288,7 @@ export class RpcCoordinator {
           );
         }
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
-        if (currentLoadout?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };
         if (params.constructionId !== undefined) return { ok: false, reason: 'invalid' };
-        const inspectorUtility = getUtilityConfigForMode(
-          params.toolRef.id,
-          bridge.getActiveGameMode(),
-        );
-        if (!inspectorUtility) return { ok: false, reason: 'invalid' };
-        const charge = validateHostUtilityCharge(this.heldActions, senderId, inspectorUtility, hostNowMs, params);
-        if (!charge.ok) return charge;
         return this.construction.useInspectorUtility(
           senderId,
           params.toolRef,
@@ -379,25 +296,8 @@ export class RpcCoordinator {
           targetX,
           targetY,
           hostNowMs,
-          charge.authoritativeParams,
+          params,
         );
-      }
-      if (slot === 'utility') {
-        const utility = params?.temporaryUtilityInstanceId
-          ? this.playerLoadout.getTemporaryUtilityConfig(senderId, params.temporaryUtilityInstanceId) ?? undefined
-          : this.playerLoadout.getEquippedUtilityConfig(senderId);
-        if (params?.temporaryUtilityInstanceId && !utility) {
-          return { ok: false, reason: 'invalid' };
-        }
-        const isTranslocatorRecall = utility?.type === 'translocator'
-          && this.playerLoadout.hasActiveTranslocatorPuck(senderId);
-        if (isTranslocatorRecall) {
-          this.heldActions.clearPlayer(senderId);
-        } else {
-          const charge = validateHostUtilityCharge(this.heldActions, senderId, utility, hostNowMs, params);
-          if (!charge.ok) return charge;
-          authoritativeParams = charge.authoritativeParams;
-        }
       }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
       const result = slot === 'weapon1' || slot === 'weapon2'
@@ -409,11 +309,24 @@ export class RpcCoordinator {
           targetX,
           targetY,
           hostNowMs,
+          attemptId: params?.attemptId,
           shotId,
           params: authoritativeParams,
           clientPosition: { x: clientX, y: clientY },
         })
-        : this.playerLoadout.useLoadout(
+        : slot === 'utility'
+          ? this.playerLoadout.usePlayerAction({
+            category: 'utility',
+            playerId: senderId,
+            angle,
+            targetX,
+            targetY,
+            hostNowMs,
+            attemptId: params?.attemptId,
+            params: authoritativeParams,
+            clientPosition: { x: clientX, y: clientY },
+          })
+          : this.playerLoadout.useLoadout(
           slot,
           senderId,
           angle,

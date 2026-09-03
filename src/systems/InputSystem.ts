@@ -1717,6 +1717,10 @@ export class InputSystem {
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
       ...chargeParams,
+      // Held-Action-Identitaet und Commit-Attempt bleiben getrennt: Retries desselben Releases
+      // koennen am Host denselben erfolgreichen Utility-Commit wiedererkennen, ohne die laufende
+      // Charge als Commit-ID zu missbrauchen.
+      attemptId: `utility-attempt:${actionId}`,
       utilityChargeFraction: chargeFraction,
       heldActionId: actionId,
     });

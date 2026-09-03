@@ -14,6 +14,7 @@ import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { TunnelSystem } from '../systems/TunnelSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { PlayerCapabilities } from './PlayerCapabilities';
+import type { PlayerGameplayActionPort } from './WorldPlayerGameplayRuntime';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { PersistentBaseWorldBinding } from './PersistentBaseWorldBinding';
 import type { PersistentBaseAnchor, PersistentToolRef } from '../persistentBase/PersistentBaseTypes';
@@ -59,6 +60,7 @@ export interface ConstructionWorldRuntimeOptions {
   readonly combatSystem: CombatSystem;
   readonly placementSystem: PlacementSystem;
   readonly loadoutManager: LoadoutManager;
+  readonly utilityAction: Pick<PlayerGameplayActionPort, 'useInspectorUtility' | 'setUtilityPlacementCapability'>;
   readonly targetStatusSystem: TargetStatusSystem | null;
   readonly energyInjectorSystem: EnergyInjectorSystem | null;
   readonly powerUpSystem: import('../powerups/PowerUpSystem').PowerUpSystem | null;
@@ -103,9 +105,6 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   private readonly readiness = new ConstructionReadinessRuntime();
 
   constructor(private readonly options: ConstructionWorldRuntimeOptions) {
-    options.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor, params) => (
-      this.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor, params)
-    ));
     options.loadoutManager.setTunnelPlacementHandler((cfg, playerId, x, y, targetX, targetY, playerColor, params) => (
       this.placeTunnel(cfg, playerId, x, y, targetX, targetY, playerColor, params)
     ));
@@ -320,7 +319,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const constructionId = getConstructionIdForUtility(tool.id);
     if (constructionId && !resolveConstructionAccess(constructionId, getConstructionAccessContext(this.options.getGameMode(), loadout)).allowed) return { ok: false, reason: 'blocked' };
     if (getToolCapacityCost(tool) > 0 && !this.hasFreeCapacity(playerId, getToolCapacityCost(tool))) return { ok: false, reason: 'capacity' };
-    return this.options.loadoutManager.useInspectorUtility(playerId, config, angle, targetX, targetY, now, params);
+    return this.options.utilityAction.useInspectorUtility(playerId, tool, config, angle, targetX, targetY, now, params);
   }
 
   dismantleConstruction(
@@ -518,8 +517,8 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (this.destroyed) return;
     this.destroyed = true;
     this.readiness.destroy();
-    this.options.loadoutManager.setPlaceableRockHandler(null);
     this.options.loadoutManager.setTunnelPlacementHandler(null);
+    this.options.utilityAction.setUtilityPlacementCapability(null);
     this.options.onDestroy?.(this);
   }
 

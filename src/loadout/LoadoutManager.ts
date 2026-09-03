@@ -3,26 +3,16 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { ArmageddonSystem }  from '../systems/ArmageddonSystem';
-import type { StinkCloudSystem }  from '../effects/StinkCloudSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
+import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
 import type {
   AirstrikeUltimateConfig,
-  BfgUtilityConfig,
-  ChargedThrowUtilityActivationConfig,
-  DecoyUtilityConfig,
   EnergyShieldWeaponFireConfig,
   GaussUltimateConfig,
-  NukeUtilityConfig,
-  PlaceableUtilityConfig,
-  StinkCloudUtilityConfig,
-  TaserUtilityConfig,
-  TimeBubbleUtilityConfig,
-  TranslocatorUtilityConfig,
   TunnelUltimateConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
@@ -52,22 +42,16 @@ export interface LoadoutSelection {
 
 import { HeldItemSlotTracker, type HeldItemSlot } from './HeldItemSlotTracker';
 import { GenericWeapon }   from './GenericWeapon';
-import { GenericUtility }  from './GenericUtility';
 import { GenericUltimate } from './GenericUltimate';
-import {
-  TemporaryUtilityCollection,
-  type TemporaryUtilityRuntimeInstance,
-} from './TemporaryUtilityCollection';
 import { EnergyShieldWeapon } from './EnergyShieldWeapon';
 import { TeslaDomeWeapon } from './TeslaDomeWeapon';
 import type { BaseWeapon }   from './BaseWeapon';
-import type { BaseUtility }  from './BaseUtility';
 import type { BaseUltimate } from './BaseUltimate';
 
 interface PlayerLoadout {
   weapon1:  BaseWeapon;
   weapon2:  BaseWeapon;
-  utility:  BaseUtility;
+  utility:  UtilityConfig;
   ultimate: BaseUltimate;
 }
 
@@ -133,27 +117,18 @@ type PhysicsSystemType  = {
  */
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
-  /** Inspector utilities keep an independent cooldown state per player and utility id. */
-  private inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
   private ultimateStates    = new Map<string, UltimateState>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
   private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
   private armageddonSystem:   ArmageddonSystem | null = null;
-  private nukeStrikeHandler:      ((playerId: string, targetX: number, targetY: number) => boolean) | null = null;
   private airstrikeHandler:        ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null = null;
-  private stinkCloudSystem:   StinkCloudSystem | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private shieldBuffSystem:   ShieldBuffSystem | null = null;
-  private translocatorSystem: import('../systems/TranslocatorSystem').TranslocatorSystem | null = null;
-  private decoySystem: import('../systems/DecoySystem').DecoySystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
-  private placeableRockHandler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
-  private utilityUsedCallback: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
-  private utilityUsedObserver: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null = null;
   private ultimateUsedObserver: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   /**
@@ -204,9 +179,6 @@ export class LoadoutManager {
 
   private readonly okResult: LoadoutUseResult = { ok: true };
 
-  // ── Temporaere Utilities (host-autoritative Multi-Instance-Collection) ───
-  private readonly temporaryUtilities = new TemporaryUtilityCollection();
-
   constructor(
     private playerManager:     PlayerManager,
     private projectileManager: ProjectileManager,
@@ -226,10 +198,9 @@ export class LoadoutManager {
     this.loadouts.set(playerId, {
       weapon1:  this.createWeapon(w1Cfg),
       weapon2:  this.createWeapon(w2Cfg),
-      utility:  new GenericUtility(utCfg),
+      utility:  utCfg,
       ultimate: new GenericUltimate(ultCfg),
     });
-    this.inspectorUtilities.set(playerId, new Map());
     this.ultimateStates.set(playerId, {
       active:    false,
       startTime: 0,
@@ -242,10 +213,6 @@ export class LoadoutManager {
       auraLingerUntil: 0,
       gaussChargeStartedAt: null,
     });
-    this.temporaryUtilities.clearPlayer(playerId);
-    this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
-    this.bridge.publishTemporaryUtilityInstances(playerId, []);
-    this.bridge.publishHeldUtilityId(playerId, '');
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.getActiveWeaponSlots().set(playerId, 'weapon1');
@@ -282,7 +249,7 @@ export class LoadoutManager {
       current
       && areLoadoutConfigsEquivalent(current.weapon1.config, nextWeapon1)
       && areLoadoutConfigsEquivalent(current.weapon2.config, nextWeapon2)
-      && areLoadoutConfigsEquivalent(current.utility.config, nextUtility)
+      && areLoadoutConfigsEquivalent(current.utility, nextUtility)
       && areLoadoutConfigsEquivalent(currentUltimate, nextUltimate)
     ) {
       return false;
@@ -294,22 +261,13 @@ export class LoadoutManager {
 
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
-    this.inspectorUtilities.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
-    this.temporaryUtilities.clearPlayer(playerId);
-    // Per-player network state survives a round reset while the player remains connected.
-    // Clear the temporary utility collection before the next loadout is created.
-    this.bridge.publishUtilityCooldownUntil(playerId, 0, '__clear__');
-    this.bridge.publishTemporaryUtilityInstances(playerId, []);
-    this.bridge.publishHeldUtilityId(playerId, '');
     this.heldFireSlots.delete(playerId);
     this.activeWeaponSlots?.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
-    this.translocatorSystem?.removePlayer(playerId);
-    this.decoySystem?.clearPlayer(playerId);
     this.ak47States.delete(playerId);
     this.negevStates.delete(playerId);
     this.heldItemSlots.removePlayer(playerId);
@@ -462,14 +420,6 @@ export class LoadoutManager {
     return maxStacks > 0 && (this.ak47States.get(playerId)?.stacks ?? 0) >= maxStacks;
   }
 
-  beginUtilityCooldown(playerId: string, utilityId: string, now: number): void {
-    const loadout = this.loadouts.get(playerId);
-    if (!loadout) return;
-    if (loadout.utility.config.id !== utilityId) return;
-    loadout.utility.recordUse(now);
-    this.bridge.publishUtilityCooldownUntil(playerId, now + loadout.utility.config.cooldown, utilityId);
-  }
-
   resetUltimateState(playerId: string): void {
     const state = this.ultimateStates.get(playerId);
     if (!state) return;
@@ -507,22 +457,6 @@ export class LoadoutManager {
     this.physicsSystem = ps;
   }
 
-  setTranslocatorSystem(sys: import('../systems/TranslocatorSystem').TranslocatorSystem | null): void {
-    this.translocatorSystem = sys;
-  }
-
-  setDecoySystem(sys: import('../systems/DecoySystem').DecoySystem | null): void {
-    this.decoySystem = sys;
-  }
-
-  setUtilityUsedCallback(cb: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null): void {
-    this.utilityUsedCallback = cb;
-  }
-
-  setUtilityUsedObserver(observer: ((playerId: string, utilityType: UtilityConfig['type']) => void) | null): void {
-    this.utilityUsedObserver = observer;
-  }
-
   setUltimateUsedObserver(observer: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null): void {
     this.ultimateUsedObserver = observer;
   }
@@ -551,19 +485,9 @@ export class LoadoutManager {
     this.armageddonSystem = sys;
   }
 
-  /** Injiziert die Host-Logik für zielbasierte Nuke-Strikes. */
-  setNukeStrikeHandler(handler: ((playerId: string, targetX: number, targetY: number) => boolean) | null): void {
-    this.nukeStrikeHandler = handler;
-  }
-
   /** Injiziert die Host-Logik für Luftangriff-Strikes. */
   setAirstrikeHandler(handler: ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null): void {
     this.airstrikeHandler = handler;
-  }
-
-  /** Injiziert das StinkCloudSystem für Stinkdrüsen-Utilities. */
-  setStinkCloudSystem(sys: StinkCloudSystem | null): void {
-    this.stinkCloudSystem = sys;
   }
 
   /** Injiziert das TeslaDomeSystem für kontinuierliche Tesla-Kuppeln. */
@@ -590,96 +514,8 @@ export class LoadoutManager {
     this.actionBlockedChecker = checker;
   }
 
-  setPlaceableRockHandler(handler: ((cfg: PlaceableUtilityConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, now: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null): void {
-    this.placeableRockHandler = handler;
-  }
-
   setTunnelPlacementHandler(handler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null): void {
     this.tunnelPlacementHandler = handler;
-  }
-
-  /**
-   * Host-authoritative dispatch for an Inspector utility. Unlike the regular
-   * utility slot, every Inspector utility owns its own cooldown, taken from the
-   * utility's own config. Inspector utilities never cost adrenaline; constructs
-   * are limited by the fixed construction capacity instead.
-   */
-  useInspectorUtility(
-    playerId: string,
-    config: UtilityConfig,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    now: number,
-    params?: LoadoutUseParams,
-  ): LoadoutUseResult {
-    const loadout = this.loadouts.get(playerId);
-    const player = this.playerManager.getPlayer(playerId);
-    if (!loadout || !player) return { ok: false, reason: 'invalid' };
-    if (this.actionBlockedChecker?.(playerId, 'utility')) return { ok: false, reason: 'blocked' };
-
-    const effectiveConfig: UtilityConfig = this.resolveUtilityConfig(playerId, config);
-    const utilities = this.inspectorUtilities.get(playerId) ?? new Map<string, GenericUtility>();
-    this.inspectorUtilities.set(playerId, utilities);
-    let utility = utilities.get(effectiveConfig.id);
-    if (!utility || utility.config !== effectiveConfig) {
-      const previousLastUsedAt = utility?.getLastUsedAt() ?? 0;
-      utility = new GenericUtility(effectiveConfig);
-      utility.setLastUsedAt(previousLastUsedAt);
-      utilities.set(effectiveConfig.id, utility);
-    }
-
-    if (utility.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
-
-    // Inspector actions are host-authoritative: the client may submit an aim
-    // target, but never its own origin for range or spawn validation.
-    const x = player.x;
-    const y = player.y;
-    const didUse = this.useUtility(utility, x, y, angle, targetX, targetY, playerId, now, player.color, params);
-    if (!didUse) return { ok: false, reason: 'blocked' };
-    this.heldItemSlots.noteUtilityUsed(playerId, now);
-    this.bridge.publishHeldUtilityId(playerId, effectiveConfig.id);
-    return this.okResult;
-  }
-
-  // ── Temporaere Utility-Instanzen ─────────────────────────────────────────
-
-  addTemporaryUtility(playerId: string, config: UtilityConfig, charges: number): string | null {
-    if (!this.loadouts.has(playerId)) return null;
-    const modifierSource = this.utilityConfigModifierSource?.(playerId);
-    const effectiveConfig = modifierSource ? applyCoopDefenseModifiersToUtilityConfig(config, modifierSource) : config;
-    const instance = this.temporaryUtilities.add(
-      playerId,
-      effectiveConfig,
-      charges,
-      config.type === 'placeable_pedestal'
-        ? { kind: 'objective-placement', objectiveId: config.rewardObjectiveId, powerUpDefId: config.powerUpDefId }
-        : { kind: 'utility' },
-    );
-    if (!instance) return null;
-    this.publishTemporaryUtilities(playerId);
-    return instance.instanceId;
-  }
-
-  getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null {
-    return this.temporaryUtilities.get(playerId, instanceId)?.utility.config ?? null;
-  }
-
-  releaseTemporaryUtilityForObjective(playerId: string, objectiveId: string): void {
-    if (!this.temporaryUtilities.removeForObjective(playerId, objectiveId)) return;
-    this.publishTemporaryUtilities(playerId);
-  }
-
-  clearTemporaryUtilities(playerId: string): void {
-    this.temporaryUtilities.clearPlayer(playerId);
-    this.publishTemporaryUtilities(playerId);
-  }
-
-  private publishTemporaryUtilities(playerId: string): void {
-    this.bridge.publishTemporaryUtilityInstances(
-      playerId,
-      this.temporaryUtilities.getDescriptors(playerId),
-    );
   }
 
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
@@ -738,38 +574,12 @@ export class LoadoutManager {
       }
 
       case 'utility': {
-        const temporaryInstance = params?.temporaryUtilityInstanceId
-          ? this.temporaryUtilities.get(playerId, params.temporaryUtilityInstanceId)
-          : null;
-        if (params?.temporaryUtilityInstanceId && !temporaryInstance) {
-          return { ok: false, reason: 'invalid' };
-        }
-        const utility = temporaryInstance?.utility ?? loadout.utility;
-        if (utility.config.type !== 'decoy') {
-          this.decoySystem?.breakStealth(playerId, now);
-        }
-        const didUse = this.useUtility(
-          utility,
-          x,
-          y,
-          angle,
-          targetX,
-          targetY,
-          playerId,
-          now,
-          player.color,
-          params,
-          temporaryInstance,
-        );
-        if (didUse) {
-          this.heldItemSlots.noteUtilityUsed(playerId, now);
-          this.bridge.publishHeldUtilityId(playerId, utility.config.id);
-        }
-        return didUse ? this.okResult : { ok: false, reason: 'blocked' };
+        // Utility activation belongs to PlayerUtilityActionRuntime. Keeping this branch invalid
+        // prevents a second utility writer from surviving behind the legacy loadout facade.
+        return { ok: false, reason: 'invalid' };
       }
 
       case 'ultimate': {
-        this.decoySystem?.breakStealth(playerId, now);
         const ultState = this.ultimateStates.get(playerId);
         const cfg  = loadout.ultimate.config;
         if (cfg.type === 'buff') {
@@ -1226,7 +1036,6 @@ export class LoadoutManager {
   claimWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void {
     this.claimWeaponSlot(playerId, slot);
     this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
-    this.decoySystem?.breakStealth(playerId, now);
   }
 
   /**
@@ -1271,6 +1080,11 @@ export class LoadoutManager {
     this.heldItemSlots.noteWeaponUsed(playerId, slot, now);
   }
 
+  /** Visual held-item state is kept with the equipped loadout, not utility execution. */
+  noteUtilityUsed(playerId: string, now: number): void {
+    this.heldItemSlots.noteUtilityUsed(playerId, now);
+  }
+
   /**
    * Gibt die WeaponConfig der tatsächlich ausgerüsteten Waffe zurück.
    * Ermöglicht dem AimSystem die echten Waffenwerte (Range, Spread-Parameter)
@@ -1282,7 +1096,7 @@ export class LoadoutManager {
 
   /** Gibt ausschließlich die Config der tatsächlich ausgerüsteten Utility zurück. */
   getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined {
-    return this.loadouts.get(playerId)?.utility.config;
+    return this.loadouts.get(playerId)?.utility;
   }
 
   /** Wendet die Coop-Upgrades eines Spielers auf eine beliebige Utility-Basiskonfiguration an. */
@@ -1460,7 +1274,7 @@ export class LoadoutManager {
   /** Cooldown-Fraktion eines Slots: 0 = bereit, 1 = gerade benutzt. */
   getCooldownFrac(playerId: string, slot: LoadoutSlot, now: number): number {
     const loadout = this.loadouts.get(playerId);
-    if (!loadout || slot === 'ultimate') return 0;
+    if (!loadout || slot === 'ultimate' || slot === 'utility') return 0;
     return loadout[slot].getCooldownFrac(now);
   }
 
@@ -1731,275 +1545,6 @@ export class LoadoutManager {
     }
 
     return this.okResult;
-  }
-
-  private useUtility(
-    utility: BaseUtility,
-    x: number,
-    y: number,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    playerId: string,
-    now: number,
-    playerColor: number,
-    params?: LoadoutUseParams,
-    temporaryInstance?: TemporaryUtilityRuntimeInstance | null,
-  ): boolean {
-    if (utility.isOnCooldown(now)) return false;
-    if (temporaryInstance && (temporaryInstance.charges <= 0 || temporaryInstance.cooldownUntil > now)) return false;
-
-    const cfg = utility.config;
-    const gameplayMuzzleOrigin = this.getGameplayMuzzleOrigin(playerId, cfg.id, x, y, angle);
-    let didUse = false;
-
-    switch (cfg.activation.type) {
-      case 'charged_throw':
-        if (cfg.type === 'translocator') {
-          didUse = this.translocatorSystem?.handleUse(playerId, angle, targetX, targetY, now, params, cfg as TranslocatorUtilityConfig) ?? false;
-        } else {
-          didUse = this.throwGrenadeUtility(
-            cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
-            x,
-            y,
-            angle,
-            playerId,
-            playerColor,
-            params?.utilityChargeFraction ?? 0,
-            gameplayMuzzleOrigin,
-          );
-        }
-        break;
-
-      case 'charged_gate':
-        if ((params?.utilityChargeFraction ?? 0) < 1.0) return false; // nicht voll geladen → abbrechen
-        if (cfg.type === 'bfg') {
-          didUse = this.fireBfgUtility(cfg as BfgUtilityConfig, x, y, angle, playerId, gameplayMuzzleOrigin);
-        }
-        break;
-
-      case 'targeted_click':
-        if (cfg.type === 'nuke') {
-          didUse = this.triggerNukeUtility(cfg as NukeUtilityConfig, playerId, targetX, targetY);
-        }
-        break;
-
-      case 'placement_mode':
-        if (cfg.type === 'placeable_rock' || cfg.type === 'placeable_turret' || cfg.type === 'placeable_pedestal') {
-          didUse = this.placeableRockHandler?.(cfg as PlaceableUtilityConfig, playerId, x, y, targetX, targetY, now, playerColor, params) ?? false;
-        }
-        break;
-
-      case 'instant':
-        if (cfg.type === 'stinkcloud') {
-          didUse = this.activateStinkCloud(cfg as StinkCloudUtilityConfig, playerId);
-        } else if (cfg.type === 'taser') {
-          const taserCfg = cfg as TaserUtilityConfig;
-          didUse = this.combatSystem?.resolveMeleeSwing(
-            playerId, x, y, angle,
-            taserCfg.range, taserCfg.hitArcDegrees, taserCfg.damage,
-            0,           // kein Adrenalin-Gain
-            taserCfg.id, playerColor,
-            undefined,   // kein sourceSlot (Utility)
-            taserCfg.rockDamageMult ?? 1,
-            taserCfg.trainDamageMult ?? 1,
-            taserCfg.visualPreset,
-            taserCfg.shotAudio?.successKey,
-            undefined,
-            (taserCfg.chainCount ?? 0) > 0 ? { count: taserCfg.chainCount ?? 0, radius: taserCfg.chainRadius ?? 0, damageFactor: taserCfg.chainDamageFactor ?? 0 } : undefined,
-            undefined,
-            undefined,
-            1,
-            undefined,
-            taserCfg.baseDamageMult ?? 1,
-          ) ?? false;
-        } else if (cfg.type === 'decoy') {
-          didUse = this.decoySystem?.activate(cfg as DecoyUtilityConfig, playerId, angle, playerColor, now) ?? false;
-        }
-        break;
-    }
-
-    if (didUse) {
-      this.utilityUsedCallback?.(playerId, cfg.type);
-      this.utilityUsedObserver?.(playerId, cfg.type);
-
-      if (temporaryInstance) {
-        this.temporaryUtilities.recordSuccessfulUse(playerId, temporaryInstance.instanceId, now);
-        this.publishTemporaryUtilities(playerId);
-      } else if (!cfg.skipCooldownPublish) {
-        utility.recordUse(now);
-        this.bridge.publishUtilityCooldownUntil(playerId, now + cfg.cooldown, cfg.id);
-      }
-    }
-
-    return didUse;
-  }
-
-  private throwGrenadeUtility(
-    cfg: UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },
-    x: number,
-    y: number,
-    angle: number,
-    playerId: string,
-    playerColor: number,
-    chargeFraction: number,
-    gameplayMuzzleOrigin?: MuzzleOrigin,
-  ): boolean {
-    const clampedCharge = Math.max(0, Math.min(1, chargeFraction));
-    const speed = cfg.activation.minThrowSpeed
-      + (cfg.projectileSpeed - cfg.activation.minThrowSpeed) * clampedCharge;
-
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed,
-      size:          cfg.projectileSize,
-      damage:        0,
-      color:         cfg.projectileColor ?? playerColor,
-      allowTeamDamage: cfg.allowTeamDamage,
-      lifetime:      cfg.fuseTime,
-      maxBounces:    cfg.maxBounces,
-      isGrenade:     true,
-      adrenalinGain: 0,
-      sourceId:    cfg.id,
-      gameplayMuzzleOrigin,
-      fuseTime:      cfg.fuseTime,
-      grenadeEffect: this.buildGrenadeEffect(cfg, playerColor),
-      projectileStyle: cfg.projectileStyle,
-      grenadeVisualPreset: cfg.grenadeVisualPreset,
-      frictionDelayMs: cfg.frictionDelayMs,
-      airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
-      bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
-      stopSpeedThreshold: cfg.stopSpeedThreshold,
-      shotAudioKey:    cfg.shotAudio?.successKey,
-    });
-
-    return true;
-  }
-
-  private fireBfgUtility(
-    cfg:       BfgUtilityConfig,
-    x:         number,
-    y:         number,
-    angle:     number,
-    playerId:  string,
-    gameplayMuzzleOrigin?: MuzzleOrigin,
-  ): boolean {
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:            cfg.projectileSpeed,
-      size:             cfg.projectileSize,
-      damage:           cfg.directDamage,
-      color:            COLORS.GREEN_2,
-      allowTeamDamage:  cfg.allowTeamDamage,
-      lifetime:         (cfg.range / cfg.projectileSpeed) * 1000,
-      remainingRangePx: cfg.range,
-      maxBounces:       0,
-      isGrenade:        false,
-      adrenalinGain:    0,
-      sourceId:       cfg.id,
-      gameplayMuzzleOrigin,
-      projectileStyle:  'bfg',
-      isBfg:            true,
-      proximityPulse:   cfg.proximityPulse,
-      shotAudioKey:     cfg.shotAudio?.successKey,
-    });
-
-    return true;
-  }
-
-  private triggerNukeUtility(
-    _cfg: NukeUtilityConfig,
-    playerId: string,
-    targetX: number,
-    targetY: number,
-  ): boolean {
-    return this.nukeStrikeHandler?.(playerId, targetX, targetY) ?? false;
-  }
-
-  private activateStinkCloud(cfg: StinkCloudUtilityConfig, playerId: string): boolean {
-    if (!this.stinkCloudSystem) return false;
-    this.stinkCloudSystem.hostActivate(
-      playerId,
-      cfg.cloudRadius,
-      cfg.cloudDuration,
-      cfg.cloudDamagePerTick,
-      cfg.cloudTickInterval,
-      cfg.rockDamageMult ?? 1,
-      cfg.trainDamageMult ?? 1,
-      cfg.baseDamageMult ?? 1,
-      cfg.afterCloudDurationMs ?? 0,
-      cfg.afterCloudRadiusFactor ?? 0,
-      cfg.afterCloudDamageFactor ?? 0,
-      cfg.visualVariant ?? 'stink',
-    );
-    return true;
-  }
-
-  private buildGrenadeEffect(cfg: UtilityConfig, playerColor?: number): GrenadeEffectConfig {
-    if (cfg.type === 'explosive') {
-      return {
-        type:   'damage',
-        radius: cfg.aoeRadius,
-        damage: cfg.aoeDamage,
-        damageFalloff:   cfg.damageFalloff,
-        allowTeamDamage: cfg.allowTeamDamage,
-        rockDamageMult:  cfg.rockDamageMult,
-        trainDamageMult: cfg.trainDamageMult,
-        baseDamageMult:  cfg.baseDamageMult,
-        visualStyle:     cfg.explosionVisualStyle,
-        clusterCount:    cfg.clusterCount,
-        clusterRadiusFactor: cfg.clusterRadiusFactor,
-        clusterDamageFactor: cfg.clusterDamageFactor,
-      };
-    }
-
-    if (cfg.type === 'molotov') {
-      return {
-        type:           'fire',
-        radius:         cfg.fireRadius,
-        damagePerTick:  cfg.fireDamagePerTick,
-        lingerDuration: cfg.fireLingerDuration,
-        allowTeamDamage: cfg.allowTeamDamage,
-        rockDamageMult:  cfg.rockDamageMult,
-        trainDamageMult: cfg.trainDamageMult,
-        baseDamageMult:  cfg.baseDamageMult,
-        burnDurationMs:     cfg.fireBurnDurationMs,
-        burnDamagePerTick:  cfg.fireBurnDamagePerTick,
-        wildfire: (cfg.wildfireEnabled ?? 0) > 0 ? {
-          speedMultiplier: cfg.wildfirePanicSpeedMultiplier ?? 1.5,
-          trailDurationMs: cfg.wildfireTrailDurationMs ?? 2000,
-          trailDamagePerTick: cfg.wildfireTrailDamagePerTick ?? 2,
-        } : undefined,
-      };
-    }
-
-    if (cfg.type === 'smoke') {
-      return {
-        type:              'smoke',
-        radius:            cfg.smokeRadius,
-        spreadDuration:    cfg.smokeExpandDuration,
-        lingerDuration:    cfg.smokeLingerDuration,
-        dissipateDuration: cfg.smokeDissipateDuration,
-        maxAlpha:          cfg.smokeMaxAlpha,
-        dotDamagePerTick:  cfg.smokeDotDamagePerTick,
-        dotTickIntervalMs: cfg.smokeDotTickIntervalMs,
-      };
-    }
-
-    if (cfg.type === 'time_bubble') {
-      return {
-        type:               'time_bubble',
-        radius:             cfg.bubbleRadius,
-        duration:           cfg.bubbleDuration,
-        projectileSlowFactor: cfg.projectileSlowFactor,
-        playerSlowFactor:   cfg.playerSlowFactor,
-        trainSlowFactor:    cfg.trainSlowFactor,
-        color:              cfg.bubbleColor ?? cfg.projectileColor ?? playerColor,
-        distortion:         cfg.bubbleDistortion,
-        friendlyImmunity:   cfg.friendlyImmunity,
-      };
-    }
-
-    // BFG und andere Typen haben keinen Granaten-Effekt
-    return { type: 'damage', radius: 0, damage: 0 };
   }
 
   private dispatchWeaponFire(

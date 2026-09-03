@@ -297,8 +297,8 @@ export class StinkCloudSystem {
     afterCloudRadiusFactor = 0,
     afterCloudDamageFactor = 0,
     visualVariant: DamageZoneVisualStyle = 'stink',
+    now = Date.now(),
   ): void {
-    const now = Date.now();
     this.activeZones.push({
       id: this.nextId++,
       ownerId,

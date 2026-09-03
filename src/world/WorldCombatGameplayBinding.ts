@@ -705,8 +705,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     player.loadout.setTeslaDomeSystem(teslaDome);
     player.loadout.setEnergyShieldSystem(energyShield);
     player.loadout.setShieldBuffSystem(systems.shieldBuff);
-    player.loadout.setTranslocatorSystem(player.translocator);
-    player.loadout.setDecoySystem(o.decoySystem);
     timeBubble.setFriendlyResolver((ownerId, subjectId) => !o.network.authority.isEnemyPair(ownerId, subjectId));
   }
 
@@ -729,7 +727,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const o = this.options;
     o.decoySystem.setCombatStateReader(o.combatSystem);
     o.decoySystem.setRunSpeedResolver((playerId) => (o.getPlayerSystems()?.playerModifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (o.getPlayerSystems()?.loadout.getSpeedMultiplier(playerId) ?? 1));
-    o.decoySystem.setCooldownStarter((playerId, utilityId, when) => o.getPlayerSystems()?.loadout.beginUtilityCooldown(playerId, utilityId, when));
+    o.decoySystem.setCooldownStarter((playerId, utilityId, when) => o.getPlayerSystems()?.utilityAction.beginUtilityCooldown(playerId, utilityId, when));
     o.decoySystem.setExplosionCallback((ownerId, x, y, radius, damage, knockback) => {
       o.combatSystem.applyAoeDamage(x, y, radius, damage, ownerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.decoy_explosion', sourceSlot: 'utility' });
       o.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);

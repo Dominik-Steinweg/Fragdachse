@@ -1,5 +1,5 @@
-import type { WeaponConfig } from '../loadout/LoadoutConfig';
-import type { LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../types';
+import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
+import type { LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../types';
 
 /** Optional client-position compensation supplied by a player-action request. */
 export interface PlayerActionPositionInput {
@@ -13,12 +13,12 @@ export interface PlayerActionPosition {
   readonly y: number;
 }
 
-/** The only action category materialized by Phase 6A. */
-export type PlayerActionCategory = 'weapon';
+/** Semantic player-action capabilities materialized by the runtime cutover. */
+export type PlayerActionCategory = 'weapon' | 'utility';
 
 /** Semantic host request for one player weapon action. */
-export interface PlayerActionRequest {
-  readonly category: PlayerActionCategory;
+export interface PlayerWeaponActionRequest {
+  readonly category: 'weapon';
   readonly playerId: string;
   readonly slot: WeaponSlot;
   readonly angle: number;
@@ -35,10 +35,35 @@ export interface PlayerActionRequest {
   readonly clientPosition?: PlayerActionPositionInput;
 }
 
+export type PlayerUtilityActionSource =
+  | { readonly kind: 'equipped' }
+  | { readonly kind: 'temporary'; readonly instanceId: string }
+  | { readonly kind: 'tool'; readonly toolRef: LoadoutToolRef; readonly config: UtilityConfig };
+
+/** Semantic host request for one equipped or temporary utility action. */
+export interface PlayerUtilityActionRequest {
+  readonly category: 'utility';
+  readonly playerId: string;
+  readonly angle: number;
+  readonly targetX: number;
+  readonly targetY: number;
+  /** One host timestamp for readiness, resource and commit decisions. */
+  readonly hostNowMs: number;
+  /** Request/attempt identity. It is distinct from held-action and execution identities. */
+  readonly attemptId?: string;
+  readonly params?: LoadoutUseParams;
+  readonly clientPosition?: PlayerActionPositionInput;
+  /** Optional semantic source. The temporary id in params remains a wire compatibility fallback. */
+  readonly source?: PlayerUtilityActionSource;
+}
+
+export type PlayerActionRequest = PlayerWeaponActionRequest | PlayerUtilityActionRequest;
+
 export interface PlayerActionActor {
   readonly x: number;
   readonly y: number;
   readonly color: number;
+  readonly displaySize?: number;
 }
 
 export interface PlayerActionActorPort {
@@ -47,6 +72,7 @@ export interface PlayerActionActorPort {
   isAlive(playerId: string): boolean;
   isWeaponBlocked(playerId: string): boolean;
   isDashBurst(playerId: string): boolean;
+  breakStealth?(playerId: string, now: number): void;
 }
 
 /**
@@ -86,8 +112,8 @@ export function resolvePlayerActionPosition(
 /**
  * World-scoped owner for host-authoritative Player Actions.
  *
- * Phase 6A intentionally contains only Weapon1/Weapon2. Utility and Ultimate actions continue
- * through their existing one-way legacy path until their own activation phases.
+ * Weapon activation remains the narrow weapon capability of this runtime. Utility activation is
+ * owned by the sibling PlayerUtilityActionRuntime and is dispatched by the World owner.
  */
 export class PlayerActionRuntime {
   private destroyed = false;
@@ -97,7 +123,7 @@ export class PlayerActionRuntime {
     private readonly loadout: PlayerActionLoadoutPort,
   ) {}
 
-  execute(request: PlayerActionRequest): LoadoutUseResult {
+  execute(request: PlayerWeaponActionRequest): LoadoutUseResult {
     if (this.destroyed || request.category !== 'weapon') {
       return { ok: false, reason: 'invalid' };
     }
@@ -111,6 +137,8 @@ export class PlayerActionRuntime {
       return { ok: false, reason: 'blocked' };
     }
     if (this.actor.isDashBurst(request.playerId)) return { ok: false, reason: 'blocked' };
+
+    this.actor.breakStealth?.(request.playerId, request.hostNowMs);
 
     // Claim before readiness/resource resolution: switching away from a channel is immediate even
     // when the newly requested weapon is on cooldown or lacks adrenaline.

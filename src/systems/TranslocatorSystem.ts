@@ -8,7 +8,8 @@ import type { TranslocatorUtilityConfig } from '../loadout/LoadoutConfig';
 /**
  * Die kleine fachliche Netzwerksicht des Translocators.
  *
- * Das System kennt nur Spielerfarbe, Teleport-VFX und den replizierten Utility-Cooldown; das
+ * Das System kennt nur Spielerfarbe und Teleport-VFX; der Player-Utility-Owner repliziert den
+ * Utility-Cooldown nach dem erfolgreichen Commit.
  * Transportsubstrat liefert der Composition-Layer der World.
  */
 export interface TranslocatorNetworkPort {
@@ -21,7 +22,6 @@ export interface TranslocatorNetworkPort {
     ownerId: string,
   ) => void;
   readonly broadcastExplosionEffect: (x: number, y: number, radius: number) => void;
-  readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
 }
 
 export class TranslocatorSystem {
@@ -154,10 +154,6 @@ export class TranslocatorSystem {
       this.radialImpulseCb?.(targetX, targetY, cfg.telefragRadius ?? 0, cfg.telefragKnockback ?? 0, playerId);
       this.network.broadcastExplosionEffect(targetX, targetY, cfg.telefragRadius ?? 0);
     }
-
-    // 6. Utility-Cooldown starten
-    const cd = cfg.cooldown;
-    this.network.publishUtilityCooldownUntil(playerId, now + cd, cfg.id);
 
     return true;
   }

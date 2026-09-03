@@ -7,7 +7,6 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
@@ -56,7 +55,7 @@ export interface CoopMissionCompositionOptions {
   readonly getProjectileManager: () => ProjectileManager;
   readonly getHostPhysics: () => HostPhysicsSystem;
   readonly getPlacementSystem: () => PlacementSystem | null;
-  readonly getLoadoutManager: () => LoadoutManager | null;
+  readonly getTemporaryUtilityPort: () => import('../world/PlayerUtilityActionRuntime').TemporaryUtilityPort | null;
   readonly getAutomatedWeaponExecution: () => AutomatedWeaponExecution | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getEnergyShieldSystem: () => EnergyShieldSystem | null;
@@ -189,7 +188,7 @@ export class CoopMissionComposition {
     const playerManager = this.options.getPlayerManager();
     const combatSystem = this.options.getCombatSystem();
     const powerUpSystem = this.options.getPowerUpSystem();
-    const loadoutManager = this.options.getLoadoutManager();
+    const temporaryUtilityPort = this.options.getTemporaryUtilityPort();
     const weaponExecution = this.options.getAutomatedWeaponExecution();
     const placementSystem = this.options.getPlacementSystem();
     // The concrete train child lives behind the World owner's Activity slot. Register the
@@ -215,7 +214,7 @@ export class CoopMissionComposition {
       playerManager,
       combatSystem,
       powerUpSystem,
-      loadoutManager,
+      temporaryUtilityPort,
       getPlayerCapabilities: this.options.getPlayerCapabilities,
       getSecondsLeft: this.options.getSecondsLeft,
       getConnectedPlayerIds: this.options.getConnectedPlayerIds,

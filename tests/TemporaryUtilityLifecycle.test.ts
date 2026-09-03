@@ -10,9 +10,9 @@ vi.mock('phaser', () => ({
 }));
 
 import { createCoopDefensePlaceablePedestalUtility } from '../src/loadout/CoopDefenseMissionUtility';
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { TemporaryUtilityCollection } from '../src/loadout/TemporaryUtilityCollection';
+import { PlayerUtilityActionRuntime } from '../src/world/PlayerUtilityActionRuntime';
 
 describe('temporary utility collection lifecycle', () => {
   it('keeps duplicate utility types as independent, pickup-ordered instances', () => {
@@ -67,11 +67,36 @@ describe('temporary utility collection lifecycle', () => {
 
   it('publishes the complete authoritative collection after add and clear', () => {
     const publishTemporaryUtilityInstances = vi.fn();
-    const manager = Object.create(LoadoutManager.prototype) as any;
-    manager.bridge = { publishTemporaryUtilityInstances };
-    manager.loadouts = new Map([['player-a', {}]]);
-    manager.temporaryUtilities = new TemporaryUtilityCollection();
-    manager.utilityConfigModifierSource = null;
+    const manager = new PlayerUtilityActionRuntime({
+      playerManager: {} as never,
+      projectileManager: {} as never,
+      combatSystem: {} as never,
+      actor: {} as never,
+      loadout: {
+        getEquippedUtilityConfig: vi.fn(() => UTILITY_CONFIGS.HE_GRENADE),
+        resolveUtilityConfig: (_playerId, config) => config,
+        noteUtilityUsed: vi.fn(),
+      },
+      heldAction: {} as never,
+      translocator: null,
+      decoy: null,
+      stinkCloud: null,
+      gameAudioSystem: {} as never,
+      network: {
+        loadout: {
+          publishUtilityCooldownUntil: vi.fn(),
+          publishTemporaryUtilityInstances,
+          publishHeldUtilityId: vi.fn(),
+        },
+        roundStats: {
+          recordUtilityUsed: vi.fn(),
+          recordConstructionBuilt: vi.fn(),
+        },
+      },
+      dropBeer: vi.fn(),
+      nukeStrike: vi.fn(() => false),
+      placeable: null,
+    });
 
     const firstId = manager.addTemporaryUtility('player-a', UTILITY_CONFIGS.BFG, 1);
     const secondId = manager.addTemporaryUtility('player-a', UTILITY_CONFIGS.BFG, 1);

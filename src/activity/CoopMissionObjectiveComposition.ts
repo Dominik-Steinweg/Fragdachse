@@ -11,7 +11,7 @@ import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRew
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
+import type { TemporaryUtilityPort } from '../world/PlayerUtilityActionRuntime';
 import { CoopDefenseCarrySystem } from '../systems/CoopDefenseCarrySystem';
 import { CoopDefenseMissionBarrierManager } from '../systems/CoopDefenseMissionBarrierManager';
 import { CoopDefenseMissionProgressSystem } from '../systems/CoopDefenseMissionProgressSystem';
@@ -38,7 +38,7 @@ export interface CoopMissionObjectiveCompositionOptions {
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
   readonly powerUpSystem: PowerUpSystem | null;
-  readonly loadoutManager: LoadoutManager | null;
+  readonly temporaryUtilityPort: TemporaryUtilityPort | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
   readonly getSecondsLeft: () => number;
   readonly getConnectedPlayerIds: () => readonly string[];
@@ -96,10 +96,10 @@ export class CoopMissionObjectiveComposition {
           this.options.powerUpSystem?.spawnObjectiveRewardPickup(objectiveId, powerUpDefId, x, y) !== null
         ),
         addTemporaryUtility: (playerId, config) => (
-          this.options.loadoutManager?.addTemporaryUtility(playerId, config, 1) !== null
+          this.options.temporaryUtilityPort?.addTemporaryUtility(playerId, config, 1) !== null
         ),
         releaseTemporaryUtility: (playerId, objectiveId) => (
-          this.options.loadoutManager?.releaseTemporaryUtilityForObjective(playerId, objectiveId)
+          this.options.temporaryUtilityPort?.releaseTemporaryUtilityForObjective(playerId, objectiveId)
         ),
       })
       : null;

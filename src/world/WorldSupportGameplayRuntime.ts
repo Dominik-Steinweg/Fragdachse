@@ -67,7 +67,6 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
       this.options.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
       return airstrike.scheduleStrike(playerId, targetX, targetY, config);
     });
-    options.loadoutManager.setStinkCloudSystem(options.stinkCloudSystem);
     options.combatSystem.setStinkCloudSystem(options.stinkCloudSystem);
     options.burrowSystem.setStinkCloudSystem(options.stinkCloudSystem);
   }
@@ -79,7 +78,6 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
     this.options.combatSystem.setStinkCloudSystem(null);
     this.options.loadoutManager.setArmageddonSystem(null);
     this.options.loadoutManager.setAirstrikeHandler(null);
-    this.options.loadoutManager.setStinkCloudSystem(null);
     this.options.burrowSystem.setStinkCloudSystem(null);
     this.systems.detonation.reset();
     this.systems.armageddon.destroyAll();

@@ -7,6 +7,7 @@ import {
 import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../../world/AutomatedWeaponExecutionAdapter';
 import { SpecializedWeaponExecutionAdapter } from '../../world/SpecializedWeaponExecutionAdapter';
+import { getUtilityConfigForMode } from '../../loadout/LoadoutConfig';
 import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
@@ -65,6 +66,17 @@ export function composeWorldPlayerGameplay(
       flow.getCoopMissionRuntime()?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
     },
     dropBeer: (playerId, x, y) => flow.getCaptureTheBeerSystem()?.dropBeerForPlayer(playerId, x, y),
+    decoySystem: ctx.decoySystem,
+    stinkCloudSystem: ctx.stinkCloudSystem,
+    resolveToolUtilityConfig: (toolRef) => toolRef.kind === 'utility'
+      ? getUtilityConfigForMode(toolRef.id, bridge.getActiveGameMode())
+      : undefined,
+    isUtilityToolAuthorized: (playerId, toolRef) => {
+      const current = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
+      return toolRef.kind === 'utility'
+        && current?.coopDefenseClassId === 'inspector_gadachs'
+        && (current.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id);
+    },
     createLoadoutManager: (resourceSystem) => new LoadoutManager(
       ctx.playerManager,
       ctx.projectileManager,
@@ -97,6 +109,8 @@ export function composeWorldPlayerGameplay(
       },
       loadout: {
         publishUtilityCooldownUntil: (playerId, until, utilityId) => bridge.publishUtilityCooldownUntil(playerId, until, utilityId),
+        publishTemporaryUtilityInstances: (playerId, descriptors) => bridge.publishTemporaryUtilityInstances(playerId, descriptors),
+        publishHeldUtilityId: (playerId, utilityId) => bridge.publishHeldUtilityId(playerId, utilityId),
       },
       roundStats: {
         canPlayerReceiveRoundRewards: (playerId) => bridge.canPlayerReceiveRoundRewards(playerId),
