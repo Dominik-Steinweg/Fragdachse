@@ -85,10 +85,8 @@ export function composeWorldConstruction(
     placementSystem, baseManager, persistentBaseBinding, coopMissionRuntime, activityDescriptor,
   } = input;
   const playerGameplay = gameplay.player;
-  const loadoutManager = playerGameplay?.systems.loadout ?? null;
   const burrowSystem = playerGameplay?.systems.burrow ?? null;
-  const resourceSystem = playerGameplay?.systems.resource ?? null;
-  if (!playerGameplay || !loadoutManager || !burrowSystem || !resourceSystem) {
+  if (!playerGameplay || !burrowSystem) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
   const constructionRuntime = new ConstructionWorldRuntime({
@@ -96,7 +94,6 @@ export function composeWorldConstruction(
     playerManager: ctx.playerManager,
     combatSystem: ctx.combatSystem,
     placementSystem,
-    loadoutManager,
     utilityAction: playerGameplay,
     targetStatusSystem: gameplay.targeting?.systems.targetStatus ?? null,
     energyInjectorSystem: gameplay.targeting?.systems.energyInjector ?? null,
@@ -141,6 +138,7 @@ export function composeWorldConstruction(
     publishUtilityCooldown: (playerId, until, key) => bridge.publishUtilityCooldownUntil(playerId, until, key),
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
     onDestroy: () => {
+      playerGameplay.setTunnelPlacementCapability(null);
       if (gameplay.construction === constructionRuntime) gameplay.construction = null;
     },
     rockVisualHelper: {
@@ -152,6 +150,11 @@ export function composeWorldConstruction(
   playerGameplay.setUtilityPlacementCapability((cfg, playerId, x, y, targetX, targetY, now, playerColor, params) => (
     constructionRuntime.placePlaceableRock(cfg, playerId, x, y, targetX, targetY, now, playerColor, params)
   ));
+  playerGameplay.setTunnelPlacementCapability({
+    placeTunnel: (cfg, playerId, originX, originY, targetX, targetY, playerColor, params) => (
+      constructionRuntime.placeTunnel(cfg, playerId, originX, originY, targetX, targetY, playerColor, params)
+    ),
+  });
   gameplay.construction = constructionRuntime;
   worldRuntime.bind(constructionRuntime);
   persistentBaseBinding.setMaterializer(new PersistentBaseWorldMaterializer({

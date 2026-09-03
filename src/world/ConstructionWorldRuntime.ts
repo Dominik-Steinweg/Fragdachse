@@ -4,7 +4,6 @@ import type { CombatSystem } from '../systems/CombatSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { EnergyInjectorSystem } from '../systems/EnergyInjectorSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { LoadoutUseParams, LoadoutUseResult, LoadoutToolRef, SyncedPlaceableRock, UtilityPlacementPreviewState, ConstructionId, ConstructionOwnership } from '../types';
 import type { PlaceableUtilityConfig, TunnelUltimateConfig, UtilityConfig } from '../loadout/LoadoutConfig';
 import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
@@ -59,7 +58,6 @@ export interface ConstructionWorldRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
   readonly placementSystem: PlacementSystem;
-  readonly loadoutManager: LoadoutManager;
   readonly utilityAction: Pick<PlayerGameplayActionPort, 'useInspectorUtility' | 'setUtilityPlacementCapability'>;
   readonly targetStatusSystem: TargetStatusSystem | null;
   readonly energyInjectorSystem: EnergyInjectorSystem | null;
@@ -104,11 +102,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   private destroyed = false;
   private readonly readiness = new ConstructionReadinessRuntime();
 
-  constructor(private readonly options: ConstructionWorldRuntimeOptions) {
-    options.loadoutManager.setTunnelPlacementHandler((cfg, playerId, x, y, targetX, targetY, playerColor, params) => (
-      this.placeTunnel(cfg, playerId, x, y, targetX, targetY, playerColor, params)
-    ));
-  }
+  constructor(private readonly options: ConstructionWorldRuntimeOptions) {}
 
   getActiveTools(playerId: string): readonly LoadoutToolRef[] {
     return getActiveConstructionToolRefs(getConstructionAccessContext(this.options.getGameMode(), this.options.getCurrentLoadout(playerId)));
@@ -517,7 +511,6 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (this.destroyed) return;
     this.destroyed = true;
     this.readiness.destroy();
-    this.options.loadoutManager.setTunnelPlacementHandler(null);
     this.options.utilityAction.setUtilityPlacementCapability(null);
     this.options.onDestroy?.(this);
   }

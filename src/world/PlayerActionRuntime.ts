@@ -126,9 +126,8 @@ export function resolvePlayerActionPosition(
 /**
  * World-scoped owner for host-authoritative Player Actions.
  *
- * Weapon activation remains the narrow weapon capability of this runtime. Utility activation and
- * sustained buff-ultimate activation are owned by sibling behavior runtimes and dispatched by
- * the World owner.
+ * Weapon activation remains the narrow weapon capability of this runtime. Utility and Ultimate
+ * activation are owned by sibling behavior runtimes and dispatched by the World owner.
  */
 export class PlayerActionRuntime {
   private destroyed = false;

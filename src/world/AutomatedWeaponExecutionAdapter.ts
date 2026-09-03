@@ -10,6 +10,7 @@ import type {
   WeaponFireOptions,
 } from '../loadout/WeaponFireExecutor';
 import type { ProjectileExplosionConfig } from '../types';
+import type { MuzzleOrigin } from '../config';
 import { SpecializedWeaponExecutionAdapter } from './SpecializedWeaponExecutionAdapter';
 
 type AutomatedWeaponProjectileSink = Pick<ProjectileManager, 'spawnProjectile'>;
@@ -32,6 +33,7 @@ export interface AutomatedGaussFireParams {
   readonly angle: number;
   readonly ownerId: string;
   readonly ownerColor: number;
+  readonly gameplayMuzzleOrigin?: MuzzleOrigin;
 }
 
 /**
@@ -95,6 +97,7 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
       isGrenade: false,
       adrenalinGain: 0,
       sourceId: config.id,
+      gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
       projectileStyle: config.projectileStyle ?? 'gauss',
       bulletVisualPreset: config.bulletVisualPreset,
       tracerConfig: config.tracerConfig,

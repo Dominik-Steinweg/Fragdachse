@@ -124,7 +124,7 @@ export class TunnelSystem {
     this.reentryBlockedUntil.clear();
   }
 
-  notifyTransitEnded(playerId: string): void {
+  notifyTransitEnded(playerId: string, nowMs: number): void {
     const player = this.playerManager.getPlayer(playerId);
     this.clearTransit(playerId);
     if (!player) {
@@ -132,7 +132,7 @@ export class TunnelSystem {
       return;
     }
     this.reentryBlockedUntil.set(playerId, {
-      blockedUntil: Date.now() + REENTRY_BLOCK_MS,
+      blockedUntil: nowMs + REENTRY_BLOCK_MS,
       exitX: player.x,
       exitY: player.y,
     });
@@ -156,7 +156,7 @@ export class TunnelSystem {
         player.setPosition(transit.destination.x, transit.destination.y);
         this.onPositionReset?.(playerId, transit.destination.x, transit.destination.y);
         this.hostPhysics.clearForcedMovement(playerId);
-        this.burrowSystem.completeTunnelTransit(playerId);
+        this.burrowSystem.completeTunnelTransit(playerId, now);
         continue;
       }
 

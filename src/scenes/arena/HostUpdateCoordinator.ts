@@ -778,7 +778,7 @@ export class HostUpdateCoordinator {
 
     // Airstrike-Strikes detonieren
     if (!countdownActive) {
-      this.supportSystems?.airstrike?.update(Date.now());
+      this.supportSystems?.airstrike?.update(now);
     }
 
     const meteorImpacts = countdownActive ? [] : (this.supportSystems?.armageddon?.update(Date.now(), delta) ?? []);
@@ -1149,9 +1149,9 @@ export class HostUpdateCoordinator {
       const isRaging   = this.playerSystems?.ultimateBehavior?.isUltimateActive(player.id) ?? false;
       const activeUltimateId = this.playerSystems?.ultimateBehavior?.getActiveUltimateId(player.id) ?? undefined;
       const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
-      const isChargingUltimate = this.playerSystems?.loadout?.isUltimateCharging(player.id) ?? false;
-      const ultimateChargeFraction = this.playerSystems?.loadout?.getUltimateChargeFraction(player.id, now) ?? 0;
-      const ultimateChargeRange    = this.playerSystems?.loadout?.getUltimateChargeRange(player.id) ?? 0;
+      const isChargingUltimate = this.playerSystems?.ultimateBehavior?.isUltimateCharging(player.id) ?? false;
+      const ultimateChargeFraction = this.playerSystems?.ultimateBehavior?.getUltimateChargeFraction(player.id, now) ?? 0;
+      const ultimateChargeRange    = this.playerSystems?.ultimateBehavior?.getUltimateChargeRange(player.id) ?? 0;
       const isDecoyStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const decoyStealthRemainingFrac = this.ctx.decoySystem.getStealthRemainingFrac(player.id, now);
       const isMoving = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);

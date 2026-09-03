@@ -35,11 +35,12 @@ export function composeWorldPlayerGameplay(
   const specializedWeaponExecution = new SpecializedWeaponExecutionAdapter(ctx.projectileManager);
   gameplay.weaponExecution = weaponExecution;
   gameplay.specializedWeaponExecution = specializedWeaponExecution;
-  gameplay.automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(
+  const automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(
     weaponExecution,
     ctx.projectileManager,
     specializedWeaponExecution,
   );
+  gameplay.automatedWeaponExecution = automatedWeaponExecution;
   worldRuntime.bind(weaponExecution);
   // Der Coop-Build gehoert zur laufenden World und kann deshalb auch in einer Activity-losen
   // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
@@ -85,6 +86,9 @@ export function composeWorldPlayerGameplay(
     ),
     weaponExecution,
     specializedWeaponExecution,
+    gaussExecution: {
+      fireGauss: (config, params) => automatedWeaponExecution.fireGauss(config, params),
+    },
     createBurrowSystem: (resourceSystem) => new BurrowSystem(
       resourceSystem,
       ctx.playerManager,

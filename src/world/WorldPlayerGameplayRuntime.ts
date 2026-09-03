@@ -45,7 +45,13 @@ import type {
 import type { UtilityConfig } from '../loadout/LoadoutConfig';
 import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
 import { PlayerUtilityActionRuntime } from './PlayerUtilityActionRuntime';
-import { PlayerUltimateBehaviorRuntime, type PlayerUltimateArmageddonCapability } from './PlayerUltimateBehaviorRuntime';
+import {
+  PlayerUltimateBehaviorRuntime,
+  type PlayerUltimateAirstrikeCapability,
+  type PlayerUltimateArmageddonCapability,
+  type PlayerUltimateGaussExecutionCapability,
+  type PlayerUltimateTunnelPlacementCapability,
+} from './PlayerUltimateBehaviorRuntime';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type {
@@ -207,8 +213,8 @@ export interface PlayerGameplayResourceCommandPort {
  *
  * Obere Scene-/Runtime-/Adapter-Consumer lesen darüber, statt in `WorldPlayerGameplayRuntime.systems`
  * zu traversieren. Bewusst nach Verbrauchergruppe geschnitten und **kein** Mega-Facade – dieselbe
- * Runtime implementiert alle Teilsichten. Legacy-Utility-/Nicht-Buff-Ultimate-`use` bleibt bis zu den
- * dedizierten Activation-Phasen außen vor;
+ * Runtime implementiert alle Teilsichten. Der verbleibende slotförmige Legacy-`use`-Pfad ist auf
+ * interne Waffenkompatibilität begrenzt;
  * mutierende Action-/Burrow-/Resource-Commands laufen über benannte Runtime-Grenzen.
  */
 export interface PlayerGameplayStateReadView {
@@ -273,6 +279,8 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly weaponExecution: WeaponExecutionCapability;
   /** World-composed benannte Capability für unmittelbare Spezialschüsse (Teilphase 4C). */
   readonly specializedWeaponExecution: SpecializedWeaponExecutionCapability;
+  /** World-composed Gauss execution; charge/readiness/commit remain in the Ultimate owner. */
+  readonly gaussExecution: PlayerUltimateGaussExecutionCapability;
   readonly network: WorldPlayerGameplayNetworkPort;
 }
 
@@ -317,9 +325,12 @@ export class WorldPlayerGameplayRuntime implements
       combatSystem: options.combatSystem,
       resourceSystem: resource,
       loadout,
+      physics: options.hostPhysics,
+      gaussExecution: options.gaussExecution,
       canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
       isAlive: (playerId) => options.combatSystem.isAlive(playerId),
       isUltimateBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
+      breakStealth: (playerId, nowMs) => options.decoySystem.breakStealth(playerId, nowMs),
       network: {
         teams: options.network.teams,
         roundStats: options.network.roundStats,
@@ -477,6 +488,14 @@ export class WorldPlayerGameplayRuntime implements
 
   setArmageddonCapability(capability: PlayerUltimateArmageddonCapability | null): void {
     this.systems.ultimateBehavior.setArmageddonCapability(capability);
+  }
+
+  setAirstrikeCapability(capability: PlayerUltimateAirstrikeCapability | null): void {
+    this.systems.ultimateBehavior.setAirstrikeCapability(capability);
+  }
+
+  setTunnelPlacementCapability(capability: PlayerUltimateTunnelPlacementCapability | null): void {
+    this.systems.ultimateBehavior.setTunnelPlacementCapability(capability);
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {
@@ -705,7 +724,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.resource.setAdrenaline(playerId, amount);
   }
 
-  /** Narrow compatibility path for the still-unmigrated non-buff Ultimate activation. */
+  /** Narrow compatibility path for weapon callers that still use the old slot-shaped API. */
   useLegacyLoadoutAction(
     slot: LoadoutSlot,
     playerId: string,
@@ -731,8 +750,7 @@ export class WorldPlayerGameplayRuntime implements
         clientPosition: { x: clientX, y: clientY },
       });
     }
-    this.systems.utilityAction.breakStealth(playerId, hostNowMs);
-    if (slot === 'ultimate' && this.systems.loadout.getEquippedUltimateConfig(playerId)?.type === 'buff') {
+    if (slot === 'ultimate') {
       return this.usePlayerAction({
         category: 'ultimate',
         playerId,
@@ -745,6 +763,7 @@ export class WorldPlayerGameplayRuntime implements
         clientPosition: { x: clientX, y: clientY },
       });
     }
+    this.systems.utilityAction.breakStealth(playerId, hostNowMs);
     return this.systems.loadout.use(
       slot,
       playerId,
@@ -834,7 +853,6 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setNegevKillstreakExplosionHandler(null);
     systems.loadout.setItemRuntimeChargeConsumer(null);
     systems.loadout.setItemRuntimeWeaponFiredHandler(null);
-    systems.loadout.setUltimateUsedObserver(null);
     systems.loadout.setUltimateModifierReadPort(null);
     systems.loadout.setActionBlockedChecker(null);
     systems.ultimateBehavior.destroy();
@@ -941,7 +959,6 @@ export class WorldPlayerGameplayRuntime implements
     loadout.setUltimateModifierReadPort(this.systems.ultimateBehavior);
     loadout.setItemRuntimeChargeConsumer((playerId) => itemRuntime.consumeMovementCharge(playerId));
     loadout.setItemRuntimeWeaponFiredHandler((playerId, sourceSlot) => itemRuntime.registerWeaponFired(playerId, sourceSlot));
-    loadout.setUltimateUsedObserver((playerId) => this.options.network.roundStats.recordUltimateUsed(playerId));
     translocator.setUseCallback((playerId) => this.options.dropBeer(playerId));
     translocator.setRadialImpulseCallback((x, y, radius, knockback, ownerId) => {
       this.options.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);
@@ -952,7 +969,7 @@ export class WorldPlayerGameplayRuntime implements
       this.options.gameAudioSystem.playSound('sfx_use_dachstunnel', x, y, playerId);
     });
     tunnel.setPositionResetCallback((playerId, x, y) => this.options.resetPlayerPosition(playerId, x, y));
-    burrow.setTunnelTransitEndedCallback((playerId) => tunnel.notifyTransitEnded(playerId));
+    burrow.setTunnelTransitEndedCallback((playerId, nowMs) => tunnel.notifyTransitEnded(playerId, nowMs));
     loadout.setActionBlockedChecker((playerId, slot) => {
       if (!this.options.getPlayerCapabilities(playerId).canInteract) return true;
       if (!this.options.combatSystem.isAlive(playerId)) return true;

@@ -187,7 +187,6 @@ function makeDestroyRuntime() {
     'setUtilityConfigModifierSource',
     'setItemRuntimeChargeConsumer',
     'setItemRuntimeWeaponFiredHandler',
-    'setUltimateUsedObserver',
     'setUltimateModifierReadPort',
     'setActionBlockedChecker',
   ];

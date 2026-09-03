@@ -68,6 +68,7 @@ export interface CoopDefenseAirstrikeEventHandlerDeps {
     y: number,
     config: AirstrikeUltimateConfig,
     metadata: AirstrikeStrikeMetadata,
+    armedAt: number,
   ): boolean | void;
   getAlivePlayerPositions(): readonly { x: number; y: number }[];
   isProtectedBasePoint(x: number, y: number): boolean;
@@ -78,6 +79,7 @@ export interface CoopDefenseAirstrikeEventHandlerDeps {
   readonly worldMetrics?: WorldMetrics;
   readonly tutorialShowControls?: boolean;
   readonly random?: AirstrikeRandom;
+  readonly getNowMs: () => number;
 }
 
 interface ScheduledAirstrikeOccurrence {
@@ -169,6 +171,7 @@ export class CoopDefenseAirstrikeEventHandler implements CoopDefenseMapEventHand
         point.y,
         this.getStrikeConfig(occurrence.event.pattern),
         { eventId: occurrence.event.id, occurrence: occurrence.occurrence },
+        this.deps.getNowMs(),
       );
       if (accepted === false) continue;
       occurrence.acceptedStrikeCount += 1;

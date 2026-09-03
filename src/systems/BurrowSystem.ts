@@ -40,7 +40,7 @@ export class BurrowSystem {
   private onBurrowStartCb: ((playerId: string) => void) | null = null;
   private worldMetrics: WorldMetrics | null = null;
   private onPositionResetCb: ((playerId: string, x: number, y: number) => void) | null = null;
-  private onTunnelTransitEndedCb: ((playerId: string) => void) | null = null;
+  private onTunnelTransitEndedCb: ((playerId: string, nowMs: number) => void) | null = null;
 
   constructor(
     private resources:    ResourceSystem,
@@ -66,7 +66,7 @@ export class BurrowSystem {
     this.onPositionResetCb = cb;
   }
 
-  setTunnelTransitEndedCallback(cb: ((playerId: string) => void) | null): void {
+  setTunnelTransitEndedCallback(cb: ((playerId: string, nowMs: number) => void) | null): void {
     this.onTunnelTransitEndedCb = cb;
   }
 
@@ -328,23 +328,23 @@ export class BurrowSystem {
     this.bridge.broadcastBurrowVisual(id, 'underground');
   }
 
-  completeTunnelTransit(id: string): void {
+  completeTunnelTransit(id: string, nowMs = Date.now()): void {
     const state = this.states.get(id);
     if (!state?.isTunnelTransit) return;
-    this.finalizeTunnelTransit(id);
+    this.finalizeTunnelTransit(id, nowMs);
   }
 
-  private finalizeTunnelTransit(id: string): void {
+  private finalizeTunnelTransit(id: string, nowMs = Date.now()): void {
     this.hostPhysics.setPlayerBurrowed(id, false);
     this.states.set(id, {
       phase: 'recovery',
-      phaseEndsAt: Date.now() + BURROW_POPOUT_WEAPON_LOCK_MS,
+      phaseEndsAt: nowMs + BURROW_POPOUT_WEAPON_LOCK_MS,
       drainElapsedMs: 0,
       stuckDamageAccum: 0,
       isTunnelTransit: false,
     });
     this.bridge.broadcastBurrowVisual(id, 'recovery');
-    this.onTunnelTransitEndedCb?.(id);
+    this.onTunnelTransitEndedCb?.(id, nowMs);
   }
 
   private resetState(id: string, broadcastIdle: boolean): void {

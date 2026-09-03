@@ -134,9 +134,8 @@ export function composeWorldSupportGameplay(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, hostUpdate, flow, worldRuntime, world, layout, arenaResult, isCoopMission } = input;
-  const loadoutManager = gameplay.player?.systems.loadout ?? null;
   const burrowSystem = gameplay.player?.systems.burrow ?? null;
-  if (!loadoutManager || !burrowSystem) {
+  if (!gameplay.player || !burrowSystem) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
   
@@ -144,7 +143,6 @@ export function composeWorldSupportGameplay(
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
     combatSystem: ctx.combatSystem,
-    loadoutManager,
     burrowSystem,
     gameAudioSystem: ctx.gameAudioSystem,
     worldMetrics: world.metrics,
@@ -155,11 +153,16 @@ export function composeWorldSupportGameplay(
     applyAirstrikeEnvironmentDamage: (x, y, radius, config, triggeredBy) => (
       hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, config, triggeredBy)
     ),
+    onDestroy: () => {
+      gameplay.player?.setArmageddonCapability(null);
+      gameplay.player?.setAirstrikeCapability(null);
+    },
   });
   gameplay.support = supportGameplayRuntime;
   // Der Buff-/Armageddon-Behavior-Owner bekommt nur die world-scoped Capability. Die
   // Armageddon-Sessions selbst bleiben beim Support-Owner und werden nicht im Loadout verdrahtet.
   gameplay.player?.setArmageddonCapability(supportGameplayRuntime.systems.armageddon);
+  gameplay.player?.setAirstrikeCapability(supportGameplayRuntime);
   worldRuntime.bind(supportGameplayRuntime);
   
   

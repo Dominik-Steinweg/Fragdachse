@@ -414,8 +414,8 @@ describe('Phase 10B.7 – Activity rebinding', () => {
   it('entfernt authored Airstrikes gezielt, lässt Player-Strikes stehen und akzeptiert B', () => {
     const system = new AirstrikeSystem();
     const config = ULTIMATE_CONFIGS.AIRSTRIKE;
-    system.scheduleStrike('player', 100, 100, config);
-    system.scheduleStrike('coop-zombie-bomber', 200, 200, config, { eventId: 'activity-a', occurrence: 0 });
+    system.scheduleStrike('player', 100, 100, config, 0);
+    system.scheduleStrike('coop-zombie-bomber', 200, 200, config, 0, { eventId: 'activity-a', occurrence: 0 });
     expect(system.getSnapshot()).toHaveLength(2);
 
     system.clearAuthoredActivityStrikes(new Set(['activity-a']));
@@ -423,7 +423,7 @@ describe('Phase 10B.7 – Activity rebinding', () => {
       expect.objectContaining({ triggeredBy: 'player' }),
     ]);
 
-    system.scheduleStrike('coop-zombie-bomber', 300, 300, config, { eventId: 'activity-b', occurrence: 0 });
+    system.scheduleStrike('coop-zombie-bomber', 300, 300, config, 0, { eventId: 'activity-b', occurrence: 0 });
     expect(system.getSnapshot()).toHaveLength(2);
   });
 

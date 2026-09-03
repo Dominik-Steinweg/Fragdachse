@@ -300,11 +300,12 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     const system = new AirstrikeSystem();
     const handler = new CoopDefenseAirstrikeEventHandler({
-      scheduleStrike: (x, y, config, metadata) => system.scheduleStrike(
+      scheduleStrike: (x, y, config, metadata, armedAt) => system.scheduleStrike(
         'coop-zombie-bomber',
         x,
         y,
         { ...config, delayMs: 2_000 },
+        armedAt,
         metadata,
       ),
       getAlivePlayerPositions: () => Array.from({ length: playerCount }, (_, index) => ({
@@ -317,6 +318,7 @@ describe('Coop Defense C2 airstrike lifecycle', () => {
       arenaHeightCells: 34,
       worldMetrics: resolveActiveArenaWorldMetrics(),
       random: () => 0.5,
+      getNowMs: () => now,
     });
     system.setResolvedCallback((resolution) => handler.handleStrikeResolved(resolution));
     const event = {

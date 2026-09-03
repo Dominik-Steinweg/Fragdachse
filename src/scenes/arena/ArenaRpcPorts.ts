@@ -3,7 +3,6 @@ import type { PersistentBaseRewardPlacementRequest } from '../../persistentBase/
 import type {
   ConstructionId,
   HostHeldActionKind,
-  LoadoutSlot,
   LoadoutToolRef,
   LoadoutUseParams,
   LoadoutUseResult,
@@ -81,18 +80,6 @@ export interface PlayerLoadoutRpcPort {
     toolRef?: LoadoutToolRef,
     temporaryUtilityInstanceId?: string,
   ): boolean;
-  useLoadout(
-    slot: LoadoutSlot,
-    playerId: string,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    now: number,
-    shotId?: number,
-    params?: LoadoutUseParams,
-    clientX?: number,
-    clientY?: number,
-  ): LoadoutUseResult;
   getAdrenaline(playerId: string): number;
   getAdrenalineRevision(playerId: string): number;
   tryPickupPowerUp(playerId: string, uid: number, playerX: number, playerY: number): boolean;

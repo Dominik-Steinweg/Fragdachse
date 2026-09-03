@@ -194,11 +194,12 @@ describe('Coop Defense C4 active map-event integration', () => {
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     const system = new AirstrikeSystem();
     const handler = new CoopDefenseAirstrikeEventHandler({
-      scheduleStrike: (x, y, config, metadata) => system.scheduleStrike(
+      scheduleStrike: (x, y, config, metadata, armedAt) => system.scheduleStrike(
         'coop-zombie-bomber',
         x,
         y,
         { ...config, delayMs: 1_000 },
+        armedAt,
         metadata,
       ),
       getAlivePlayerPositions: () => [{ x: 600, y: 500 }],
@@ -208,6 +209,7 @@ describe('Coop Defense C4 active map-event integration', () => {
       arenaHeightCells: 34,
       worldMetrics: resolveActiveArenaWorldMetrics(),
       random: () => 0.5,
+      getNowMs: () => now,
     });
     system.setResolvedCallback((resolution) => handler.handleStrikeResolved(resolution));
     const director = new CoopDefenseMapEventDirector([AIRSTRIKE_EVENT], [handler]);

@@ -326,18 +326,17 @@ export class RpcCoordinator {
             params: authoritativeParams,
             clientPosition: { x: clientX, y: clientY },
           })
-          : this.playerLoadout.useLoadout(
-          slot,
-          senderId,
-          angle,
-          targetX,
-          targetY,
-          hostNowMs,
-          shotId,
-          authoritativeParams,
-          clientX,
-          clientY,
-        );
+          : this.playerLoadout.usePlayerAction({
+            category: 'ultimate',
+            playerId: senderId,
+            angle,
+            targetX,
+            targetY,
+            hostNowMs,
+            attemptId: params?.attemptId,
+            params: authoritativeParams,
+            clientPosition: { x: clientX, y: clientY },
+          });
       if (slot !== 'weapon2') return result;
       return {
         ...result,

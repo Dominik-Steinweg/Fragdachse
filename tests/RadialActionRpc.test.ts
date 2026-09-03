@@ -176,7 +176,6 @@ function createFixture() {
       hasActiveTranslocatorPuck: (playerId: string) => ctx.translocatorSystem.getActivePuckId(playerId) !== undefined,
       usePlayerAction,
       startUtilityHeldAction,
-      useLoadout: (...args: Parameters<typeof use>) => ctx.loadoutManager.use(...args),
       getAdrenaline: () => 0,
       getAdrenalineRevision: () => 0,
       tryPickupPowerUp: (playerId: string, uid: number, x: number, y: number) => powerUpSystem.tryPickup(playerId, uid, x, y),

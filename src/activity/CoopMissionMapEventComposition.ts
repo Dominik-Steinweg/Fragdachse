@@ -60,11 +60,12 @@ export class CoopMissionMapEventComposition {
     let airstrikeHandler: CoopDefenseAirstrikeEventHandler | null = null;
     if (events.some((event) => event.type === 'airstrike')) {
       airstrikeHandler = new CoopDefenseAirstrikeEventHandler({
-        scheduleStrike: (x, y, cfg, metadata) => this.options.airstrikeSystem.scheduleStrike(
+        scheduleStrike: (x, y, cfg, metadata, armedAt) => this.options.airstrikeSystem.scheduleStrike(
           COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID,
           x,
           y,
           cfg,
+          armedAt,
           metadata,
         ),
         getAlivePlayerPositions: () => this.options.playerManager.getAllPlayers()
@@ -82,6 +83,7 @@ export class CoopMissionMapEventComposition {
         arenaHeightCells: this.options.worldMetrics.gridRows,
         worldMetrics: this.options.worldMetrics,
         tutorialShowControls: this.options.activity.mapConfig.tutorialShowControls,
+        getNowMs: this.options.getNowMs,
       });
       handlers.push(airstrikeHandler);
     }

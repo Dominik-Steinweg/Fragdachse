@@ -1,7 +1,6 @@
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from '../systems/CombatSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { WorldMetrics } from './WorldMetrics';
@@ -12,6 +11,7 @@ import type { DetonationSystem } from '../systems/DetonationSystem';
 import type { AirstrikeUltimateConfig } from '../loadout/LoadoutConfig';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { WorldScopedBinding } from './WorldRuntime';
+import type { PlayerUltimateAirstrikeCapability } from './PlayerUltimateBehaviorRuntime';
 import { AirstrikeSystem as ConcreteAirstrikeSystem } from '../systems/AirstrikeSystem';
 import { ArmageddonSystem as ConcreteArmageddonSystem } from '../systems/ArmageddonSystem';
 import { DetonationSystem as ConcreteDetonationSystem } from '../systems/DetonationSystem';
@@ -26,7 +26,6 @@ export interface WorldSupportGameplayRuntimeOptions {
   readonly projectileManager: ProjectileManager;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
-  readonly loadoutManager: LoadoutManager;
   readonly burrowSystem: BurrowSystem;
   readonly gameAudioSystem: GameAudioSystem;
   readonly worldMetrics: WorldMetrics;
@@ -41,10 +40,11 @@ export interface WorldSupportGameplayRuntimeOptions {
     config: AirstrikeUltimateConfig,
     triggeredBy: string,
   ) => void;
+  readonly onDestroy?: () => void;
 }
 
 /** Owns world-scoped detonation and support-ultimate capabilities. */
-export class WorldSupportGameplayRuntime implements WorldScopedBinding {
+export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUltimateAirstrikeCapability {
   readonly systems: WorldSupportGameplaySystems;
   private destroyed = false;
 
@@ -60,14 +60,25 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
     });
     this.systems = { detonation, armageddon, airstrike };
     options.combatSystem.setDetonationSystem(detonation);
-    options.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, config) => {
-      const player = this.options.playerManager.getPlayer(playerId);
-      if (!player || !this.options.combatSystem.isAlive(playerId)) return false;
-      this.options.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
-      return airstrike.scheduleStrike(playerId, targetX, targetY, config);
-    });
     options.combatSystem.setStinkCloudSystem(options.stinkCloudSystem);
     options.burrowSystem.setStinkCloudSystem(options.stinkCloudSystem);
+  }
+
+  scheduleStrike(
+    playerId: string,
+    targetX: number,
+    targetY: number,
+    config: AirstrikeUltimateConfig,
+    armedAt: number,
+  ): boolean {
+    if (this.destroyed
+      || !Number.isFinite(targetX)
+      || !Number.isFinite(targetY)
+      || !Number.isFinite(armedAt)) return false;
+    const player = this.options.playerManager.getPlayer(playerId);
+    if (!player || !this.options.combatSystem.isAlive(playerId)) return false;
+    this.options.gameAudioSystem.playSound('sfx_airstrike_countdown', targetX, targetY);
+    return this.systems.airstrike.scheduleStrike(playerId, targetX, targetY, config, armedAt);
   }
 
   destroy(): void {
@@ -75,12 +86,12 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
     this.destroyed = true;
     this.options.combatSystem.setDetonationSystem(null);
     this.options.combatSystem.setStinkCloudSystem(null);
-    this.options.loadoutManager.setAirstrikeHandler(null);
     this.options.burrowSystem.setStinkCloudSystem(null);
     this.systems.detonation.reset();
     this.systems.armageddon.destroyAll();
     this.systems.airstrike.clear();
     this.systems.airstrike.setExplodedCallback(() => { /* noop */ });
     this.systems.airstrike.setResolvedCallback(null);
+    this.options.onDestroy?.();
   }
 }

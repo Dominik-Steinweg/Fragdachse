@@ -155,45 +155,6 @@ export function createArenaRuntimeRpcPorts(
           temporaryUtilityInstanceId,
         ) ?? false
       ),
-      useLoadout: (slot, playerId, angle, targetX, targetY, now, shotId, params, clientX, clientY) => (
-        slot === 'weapon1' || slot === 'weapon2'
-          ? flow.getWorldPlayerGameplayRuntime()?.usePlayerAction({
-            category: 'weapon',
-            playerId,
-            slot,
-            angle,
-            targetX,
-            targetY,
-            hostNowMs: now,
-            shotId,
-            params,
-            clientPosition: { x: clientX, y: clientY },
-          }) ?? { ok: false, reason: 'blocked' }
-          : slot === 'utility'
-            ? flow.getWorldPlayerGameplayRuntime()?.usePlayerAction({
-              category: 'utility',
-              playerId,
-              angle,
-              targetX,
-              targetY,
-              hostNowMs: now,
-              attemptId: params?.attemptId,
-              params,
-              clientPosition: { x: clientX, y: clientY },
-            }) ?? { ok: false, reason: 'blocked' }
-            : flow.getWorldPlayerGameplayRuntime()?.useLegacyLoadoutAction(
-            slot,
-            playerId,
-            angle,
-            targetX,
-            targetY,
-            now,
-            shotId,
-            params,
-            clientX,
-            clientY,
-          ) ?? { ok: false, reason: 'blocked' }
-      ),
       getAdrenaline: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getAdrenaline(playerId) ?? 0,
       getAdrenalineRevision: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getAdrenalineRevision(playerId) ?? 0,
       tryPickupPowerUp: (playerId, uid, playerX, playerY) => flow.getWorldPowerUpRuntime()?.system?.tryPickup(playerId, uid, playerX, playerY) ?? false,

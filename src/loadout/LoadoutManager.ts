@@ -9,10 +9,7 @@ import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
 import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
 import type {
-  AirstrikeUltimateConfig,
   EnergyShieldWeaponFireConfig,
-  GaussUltimateConfig,
-  TunnelUltimateConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
@@ -109,18 +106,14 @@ type PhysicsSystemType  = {
  */
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
-  private gaussChargeStartedAt = new Map<string, number>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
   private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
-  private airstrikeHandler:        ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private shieldBuffSystem:   ShieldBuffSystem | null = null;
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
-  private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
-  private ultimateUsedObserver: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null = null;
   private ultimateModifierReadPort: UltimateModifierReadPort | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   /**
@@ -193,7 +186,6 @@ export class LoadoutManager {
       utility:  utCfg,
       ultimate: new GenericUltimate(ultCfg),
     });
-    this.gaussChargeStartedAt.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.getActiveWeaponSlots().set(playerId, 'weapon1');
@@ -242,7 +234,6 @@ export class LoadoutManager {
 
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
-    this.gaussChargeStartedAt.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.heldFireSlots.delete(playerId);
     this.activeWeaponSlots?.delete(playerId);
@@ -415,10 +406,6 @@ export class LoadoutManager {
     this.physicsSystem = ps;
   }
 
-  setUltimateUsedObserver(observer: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null): void {
-    this.ultimateUsedObserver = observer;
-  }
-
   setUltimateModifierReadPort(port: UltimateModifierReadPort | null): void {
     this.ultimateModifierReadPort = port;
   }
@@ -440,11 +427,6 @@ export class LoadoutManager {
    */
   setItemRuntimeWeaponFiredHandler(handler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null): void {
     this.itemRuntimeWeaponFiredHandler = handler;
-  }
-
-  /** Injiziert die Host-Logik für Luftangriff-Strikes. */
-  setAirstrikeHandler(handler: ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null): void {
-    this.airstrikeHandler = handler;
   }
 
   /** Injiziert das TeslaDomeSystem für kontinuierliche Tesla-Kuppeln. */
@@ -469,10 +451,6 @@ export class LoadoutManager {
   /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
   setActionBlockedChecker(checker: ((playerId: string, slot: LoadoutSlot) => boolean) | null): void {
     this.actionBlockedChecker = checker;
-  }
-
-  setTunnelPlacementHandler(handler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null): void {
-    this.tunnelPlacementHandler = handler;
   }
 
   // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
@@ -537,40 +515,10 @@ export class LoadoutManager {
       }
 
       case 'ultimate': {
-        const cfg  = loadout.ultimate.config;
-        if (cfg.type === 'buff') return { ok: false, reason: 'invalid' };
-
-        if (cfg.type === 'airstrike') {
-          const rage = this.resourceSystem.getRage(playerId);
-          if (rage < cfg.rageCost) return { ok: false, reason: 'resource', resourceKind: 'rage' };
-          const ok = this.airstrikeHandler?.(playerId, targetX, targetY, cfg) ?? false;
-          if (!ok) return { ok: false, reason: 'blocked' };
-          this.resourceSystem.addRage(playerId, -cfg.rageCost);
-          this.ultimateUsedObserver?.(playerId, cfg.type);
-          return this.okResult;
-        }
-
-        if (cfg.type === 'tunnel') {
-          const rage = this.resourceSystem.getRage(playerId);
-          if (rage < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
-          if (params?.tunnelAction !== 'commit') return { ok: false, reason: 'blocked' };
-          const ok = this.tunnelPlacementHandler?.(cfg, playerId, x, y, targetX, targetY, player.color, params) ?? false;
-          if (!ok) return { ok: false, reason: 'blocked' };
-          this.resourceSystem.addRage(playerId, -cfg.rageCost);
-          this.ultimateUsedObserver?.(playerId, cfg.type);
-          return this.okResult;
-        }
-
-        return this.handleGaussUltimateUse(
-          cfg,
-          playerId,
-          x,
-          y,
-          angle,
-          now,
-          player.color,
-          params,
-        );
+        // Ultimate activation is owned by PlayerUltimateBehaviorRuntime. Keeping this
+        // compatibility branch invalid prevents a second resource/commit writer in the
+        // equipment owner while direct weapon tests can continue to use this facade.
+        return { ok: false, reason: 'invalid' };
       }
     }
 
@@ -602,16 +550,12 @@ export class LoadoutManager {
 
   getSpeedMultiplier(playerId: string, now: number = Date.now()): number {
     const ultimateMult = this.ultimateModifierReadPort?.getSpeedMultiplier(playerId, now) ?? 1;
-    const ultimateConfig = this.loadouts.get(playerId)?.ultimate.config;
-    const gaussSlowMult = ultimateConfig?.type === 'gauss' && this.gaussChargeStartedAt.has(playerId)
-      ? ultimateConfig.movementSlowFactor
-      : 1;
 
     // Energie-Schild/Kuppel verlangsamt, solange er aktiv ist – auch im Toggle-Modus ohne Halten.
     if (this.energyShieldSystem?.isActive(playerId)) {
       const shieldCfg = this.loadouts.get(playerId)?.weapon2.config;
       if (shieldCfg?.fire.type === 'energy_shield') {
-        return ultimateMult * gaussSlowMult * (shieldCfg.fire as EnergyShieldWeaponFireConfig).movementSlowFactor;
+        return ultimateMult * (shieldCfg.fire as EnergyShieldWeaponFireConfig).movementSlowFactor;
       }
     }
 
@@ -623,18 +567,18 @@ export class LoadoutManager {
         // Feldstabilisierung hebt den Bewegungsfaktor mit der Ladestufe an. Der maßgebliche
         // Wert steht deshalb im Laufzeitzustand des TeslaDomeSystem, nicht in der statischen Config.
         const holdFactor = this.teslaDomeSystem?.getMovementSlowFactor(playerId) ?? 1;
-        return ultimateMult * gaussSlowMult * holdFactor;
+        return ultimateMult * holdFactor;
       }
       if (cfg?.fire.type === 'energy_shield') {
         const fireCfg = cfg.fire as EnergyShieldWeaponFireConfig;
         const holdFactor = this.energyShieldSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
-        return ultimateMult * gaussSlowMult * holdFactor;
+        return ultimateMult * holdFactor;
       }
       const holdFactor = cfg?.holdSpeedFactor ?? 1;
-      return ultimateMult * gaussSlowMult * holdFactor;
+      return ultimateMult * holdFactor;
     }
 
-    return ultimateMult * gaussSlowMult;
+    return ultimateMult;
   }
 
   getHeldSelfPushVelocity(playerId: string, now: number = Date.now()): { vx: number; vy: number } | null {
@@ -688,23 +632,6 @@ export class LoadoutManager {
     return this.loadouts.get(playerId)?.ultimate.config.rageRequired ?? this.resourceSystem.getMaxRage(playerId);
   }
 
-  isUltimateCharging(playerId: string): boolean {
-    return this.gaussChargeStartedAt.has(playerId);
-  }
-
-  getUltimateChargeFraction(playerId: string, now: number): number {
-    const config = this.loadouts.get(playerId)?.ultimate.config;
-    const startedAt = this.gaussChargeStartedAt.get(playerId);
-    if (config?.type !== 'gauss' || startedAt === undefined) return 0;
-    if (config.chargeDuration <= 0) return 1;
-    return Math.max(0, Math.min(1, (now - startedAt) / config.chargeDuration));
-  }
-
-  getUltimateChargeRange(playerId: string): number {
-    const config = this.loadouts.get(playerId)?.ultimate.config;
-    return config?.type === 'gauss' ? config.range : 0;
-  }
-
   getUltimateThresholds(playerId: string): number[] {
     const config = this.loadouts.get(playerId)?.ultimate.config;
     if (!config) return [];
@@ -717,110 +644,6 @@ export class LoadoutManager {
       return thresholds;
     }
     return [config.rageRequired];
-  }
-
-  private handleGaussUltimateUse(
-    cfg: GaussUltimateConfig,
-    playerId: string,
-    x: number,
-    y: number,
-    angle: number,
-    now: number,
-    playerColor: number,
-    params?: LoadoutUseParams,
-  ): LoadoutUseResult {
-    const action = params?.ultimateAction;
-
-    if (action === 'press') {
-      if (this.gaussChargeStartedAt.has(playerId)) {
-        this.gaussChargeStartedAt.delete(playerId);
-        return { ok: false, reason: 'blocked' };
-      }
-      if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) {
-        return { ok: false, reason: 'resource', resourceKind: 'rage' };
-      }
-      this.gaussChargeStartedAt.set(playerId, now);
-      return this.okResult;
-    }
-
-    if (action === 'release') {
-      const startedAt = this.gaussChargeStartedAt.has(playerId);
-      this.gaussChargeStartedAt.delete(playerId);
-      if (!startedAt) return { ok: false, reason: 'blocked' };
-      if (this.resourceSystem.getRage(playerId) < cfg.rageCost) return { ok: false, reason: 'resource', resourceKind: 'rage' };
-      if ((params?.ultimateChargeFraction ?? 0) < 1) return { ok: false, reason: 'blocked' };
-      this.fireGaussUltimate(cfg, x, y, angle, playerId, playerColor);
-      this.resourceSystem.addRage(playerId, -cfg.rageCost);
-      this.ultimateUsedObserver?.(playerId, cfg.type);
-      return this.okResult;
-    }
-
-    this.gaussChargeStartedAt.delete(playerId);
-    return { ok: false, reason: 'blocked' };
-  }
-
-  private fireGaussUltimate(
-    cfg: GaussUltimateConfig,
-    x: number,
-    y: number,
-    angle: number,
-    playerId: string,
-    playerColor: number,
-  ): void {
-    this.spawnGaussProjectile(
-      cfg,
-      x,
-      y,
-      angle,
-      playerId,
-      playerColor,
-      undefined,
-      this.getGameplayMuzzleOrigin(playerId, cfg.id, x, y, angle),
-    );
-
-    this.physicsSystem?.addRecoil(
-      playerId,
-      -Math.cos(angle) * cfg.shotRecoilForce,
-      -Math.sin(angle) * cfg.shotRecoilForce,
-      cfg.shotRecoilDuration,
-    );
-  }
-
-  private spawnGaussProjectile(
-    cfg: GaussUltimateConfig,
-    x: number,
-    y: number,
-    angle: number,
-    playerId: string,
-    playerColor: number,
-    remainingRangePx?: number,
-    gameplayMuzzleOrigin?: MuzzleOrigin,
-  ): void {
-    const lifetime = (cfg.range / cfg.projectileSpeed) * 1000;
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:             cfg.projectileSpeed,
-      size:              cfg.projectileSize,
-      damage:            cfg.damage,
-      color:             cfg.projectileColor,
-      ownerColor:        playerColor,
-      projectileVisualScale: cfg.projectileVisualScale,
-      lifetime,
-      maxBounces:        0,
-      isGrenade:         false,
-      adrenalinGain:     0,
-      sourceId:        cfg.id,
-      gameplayMuzzleOrigin,
-      projectileStyle:   cfg.projectileStyle ?? 'gauss',
-      bulletVisualPreset: cfg.bulletVisualPreset,
-      tracerConfig:      cfg.tracerConfig,
-      rockDamageMult:    cfg.rockDamageMult,
-      trainDamageMult:   cfg.trainDamageMult,
-      baseDamageMult:    cfg.baseDamageMult,
-      shotAudioKey:      cfg.shotAudio?.successKey,
-      gaussChainRadius:  cfg.chainRadius,
-      gaussChainDamageFactor: cfg.chainDamageFactor,
-      remainingRangePx,
-    });
   }
 
   // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────

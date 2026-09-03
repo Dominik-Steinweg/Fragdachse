@@ -9,35 +9,12 @@ vi.mock('phaser', () => ({
   },
 }));
 
-import { HeldItemSlotTracker } from '../src/loadout/HeldItemSlotTracker';
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { ULTIMATE_CONFIGS, UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { POWERUP_DEFS } from '../src/powerups/PowerUpConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { PlayerUtilityActionRuntime } from '../src/world/PlayerUtilityActionRuntime';
-
-function makeLoadoutHookHarness() {
-  const manager = Object.create(LoadoutManager.prototype) as any;
-  manager.okResult = { ok: true };
-  manager.bridge = {
-    publishUtilityCooldownUntil: vi.fn(),
-  };
-  manager.heldItemSlots = new HeldItemSlotTracker();
-  manager.decoySystem = { activate: vi.fn(() => true) };
-  manager.placeableRockHandler = vi.fn(() => true);
-  manager.utilityUsedCallback = vi.fn();
-  manager.utilityUsedObserver = vi.fn();
-  manager.ultimateUsedObserver = vi.fn();
-  manager.gaussChargeStartedAt = new Map();
-  manager.projectileManager = { spawnProjectile: vi.fn() };
-  manager.physicsSystem = { addRecoil: vi.fn() };
-  manager.resourceSystem = {
-    getRage: vi.fn(() => 200),
-    addRage: vi.fn(),
-  };
-  return manager;
-}
+import { PlayerUltimateBehaviorRuntime } from '../src/world/PlayerUltimateBehaviorRuntime';
 
 function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
   const player = { x: 10, y: 10, color: 0xffffff, displaySize: 32 };
@@ -112,28 +89,50 @@ describe('room-statistics gameplay hooks', () => {
   });
 
   it('counts Gauss only on a fully charged release, never on press or aborted charge', () => {
-    const manager = makeLoadoutHookHarness();
     const cfg = ULTIMATE_CONFIGS.GAUSS_RIFLE;
+    const rage = new Map([['p1', 200]]);
+    const ultimateUsed = vi.fn();
+    const fireGauss = vi.fn(() => true);
+    const behavior = new PlayerUltimateBehaviorRuntime({
+      playerManager: {
+        getPlayer: () => ({ id: 'p1', x: 0, y: 0, color: 0xffffff }),
+        getAllPlayers: () => [],
+      } as any,
+      combatSystem: { addArmor: vi.fn(), applyAoeDamage: vi.fn() },
+      resourceSystem: {
+        getRage: (playerId: string) => rage.get(playerId) ?? 0,
+        getMaxRage: () => 600,
+        addRage: (playerId: string, amount: number) => rage.set(playerId, (rage.get(playerId) ?? 0) + amount),
+      },
+      loadout: { getEquippedUltimateConfig: () => cfg },
+      physics: { addRecoil: vi.fn() },
+      gaussExecution: { fireGauss },
+      canInteract: () => true,
+      isAlive: () => true,
+      isUltimateBlocked: () => false,
+      network: {
+        teams: { isEnemyPair: () => false },
+        roundStats: { recordUltimateUsed: ultimateUsed },
+      },
+    });
 
-    expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 1000, 0xffffff, { ultimateAction: 'press' },
+    expect(behavior.execute(
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1000, params: { ultimateAction: 'press' } },
     )).toEqual({ ok: true });
-    expect(manager.ultimateUsedObserver).not.toHaveBeenCalled();
-    expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 1100, 0xffffff,
-      { ultimateAction: 'release', ultimateChargeFraction: 0.5 },
+    expect(ultimateUsed).not.toHaveBeenCalled();
+    expect(behavior.execute(
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1100, params: { ultimateAction: 'release', ultimateChargeFraction: 1 } },
     ).ok).toBe(false);
-    expect(manager.ultimateUsedObserver).not.toHaveBeenCalled();
+    expect(ultimateUsed).not.toHaveBeenCalled();
 
-    expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 2000, 0xffffff, { ultimateAction: 'press' },
+    expect(behavior.execute(
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 2000, params: { ultimateAction: 'press' } },
     ).ok).toBe(true);
-    expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 3600, 0xffffff,
-      { ultimateAction: 'release', ultimateChargeFraction: 1 },
+    expect(behavior.execute(
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 3600, params: { ultimateAction: 'release', ultimateChargeFraction: 0 } },
     ).ok).toBe(true);
-    expect(manager.ultimateUsedObserver).toHaveBeenCalledOnce();
-    expect(manager.projectileManager.spawnProjectile).toHaveBeenCalledOnce();
+    expect(ultimateUsed).toHaveBeenCalledOnce();
+    expect(fireGauss).toHaveBeenCalledOnce();
   });
 
   it('notifies pickup collection only after a real item is consumed', () => {

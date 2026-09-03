@@ -63,17 +63,17 @@ export class AirstrikeSystem {
 
   /**
    * Plant einen neuen Luftangriff-Strike ein.
-   * Gibt false zurück wenn der auslösende Spieler nicht existiert / tot ist
-   * (Prüfung erfolgt im rufenden Code in ArenaLifecycleCoordinator).
+   * Die Spieler-/Readiness-Prüfung erfolgt im jeweiligen Aktivierungs-Owner; dieses System
+   * besitzt ausschließlich die deferred Strike-Lifetime.
    */
   scheduleStrike(
     playerId: string,
     targetX:  number,
     targetY:  number,
     config:   AirstrikeUltimateConfig,
+    armedAt: number,
     metadata?: AirstrikeStrikeMetadata,
   ): boolean {
-    const armedAt = Date.now();
     const count = Math.max(1, Math.floor(config.carpetStrikeCount ?? 1));
     const radiusFactor = count > 1 ? (config.carpetRadiusFactor ?? 1) : 1;
     const damageFactor = count > 1 ? (config.carpetDamageFactor ?? 1) : 1;
