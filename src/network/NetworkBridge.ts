@@ -442,7 +442,6 @@ type LoadoutUseHandler = (
   params?: LoadoutUseParams,
   clientX?: number,
   clientY?: number,
-  clientNow?: number,
 ) => LoadoutUseResult;
 
 type PersistentBaseRewardPlacementHandler = (
@@ -3140,7 +3139,6 @@ export class NetworkBridge {
     params?: LoadoutUseParams,
     clientX?: number,
     clientY?: number,
-    clientNow?: number,
     awaitResult = false,
     predictionId?: number,
   ): Promise<LoadoutUseResult | null> {
@@ -3153,7 +3151,7 @@ export class NetworkBridge {
       ? params
       : { ...params, activityRevision };
     if (isHost()) {
-      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY, clientNow) ?? { ok: false, reason: 'invalid' };
+      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY) ?? { ok: false, reason: 'invalid' };
     }
     const payload = {
       slot,
@@ -3164,7 +3162,6 @@ export class NetworkBridge {
       prm: requestParams,
       px: clientX,
       py: clientY,
-      ts: clientNow,
       pid: predictionId,
       // Every client action is bound to the World it was created in. The host rejects it if the
       // World was restarted while the RPC was in flight.
@@ -3189,7 +3186,6 @@ export class NetworkBridge {
       params?: LoadoutUseParams,
       clientX?: number,
       clientY?: number,
-      clientNow?: number,
     ) => LoadoutUseResult,
   ): void {
     this.loadoutUseHandler = handler;
@@ -3197,7 +3193,7 @@ export class NetworkBridge {
       if (!isHost()) return undefined;
       const loadoutUseHandler = this.loadoutUseHandler;
       if (!loadoutUseHandler) return undefined;
-      const { slot, angle, tx, ty, sid, prm, px, py, ts, wr } = data as {
+      const { slot, angle, tx, ty, sid, prm, px, py, wr } = data as {
         slot: LoadoutSlot;
         angle: number;
         tx: number;
@@ -3206,7 +3202,6 @@ export class NetworkBridge {
         prm?: LoadoutUseParams;
         px?: number;
         py?: number;
-        ts?: number;
         wr?: number;
         pid?: number;
       };
@@ -3250,7 +3245,6 @@ export class NetworkBridge {
         || (sid !== undefined && !isFiniteNumber(sid))
         || (px !== undefined && !isFiniteNumber(px))
         || (py !== undefined && !isFiniteNumber(py))
-        || (ts !== undefined && !isFiniteNumber(ts))
         || (prm !== undefined && !isRecord(prm))) {
         return finish({ ok: false, reason: 'invalid' });
       }
@@ -3266,11 +3260,10 @@ export class NetworkBridge {
           };
         }
       }
-      // Verwende Client-Timestamp für Cooldown-Tracking (verhindert Schussverlust bei variierender RPC-Latenz).
-      // Plausibilitätsprüfung: Max. 200ms Abweichung vom Host-Time (Anti-Cheat).
-      const hostNow = Date.now();
-      const clientNow = (typeof ts === 'number' && Math.abs(hostNow - ts) <= 200) ? ts : hostNow;
-      return finish(loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, clientNow));
+      // Die autoritative fachliche Zeit einer Player-Aktion bestimmt der Host an der
+      // Action-/RPC-Orchestrierungsgrenze (RpcCoordinator), nicht der Client. Der Transport
+      // reicht keinen Client-Timestamp mehr für Cooldown-/Commit-Entscheidungen durch.
+      return finish(loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py));
     });
   }
 

@@ -72,6 +72,7 @@ function validateHostUtilityCharge(
   heldActionPort: HeldActionRpcPort,
   senderId: string,
   utility: UtilityConfig | undefined,
+  hostNowMs: number,
   params?: LoadoutUseParams,
 ): HostChargeValidation {
   if (!isChargeableUtilityConfig(utility)) return { ok: true, authoritativeParams: params };
@@ -83,7 +84,7 @@ function validateHostUtilityCharge(
       params?.heldActionId,
       utility.activation.type,
       utility.activation.fullChargeDuration,
-      Date.now(),
+      hostNowMs,
       identity,
     )
     : heldActionPort.consume(
@@ -91,7 +92,7 @@ function validateHostUtilityCharge(
       params?.heldActionId,
       utility.activation.type,
       utility.activation.fullChargeDuration,
-      Date.now(),
+      hostNowMs,
     );
   if (!held || (utility.activation.type === 'charged_gate' && held.chargeFraction < 1)) {
     return { ok: false, reason: 'blocked' };
@@ -281,12 +282,17 @@ export class RpcCoordinator {
   }
 
   private registerLoadoutUseHandler(): void {
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, clientNow) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
       if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
       if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
+      // Ein einziger hostseitiger Zeitpunkt für die gesamte Aktion: Held-Action-Consume,
+      // Charge-Validierung, Construction-Use und der Gameplay-Commit teilen sich `hostNowMs`.
+      // `clientX`/`clientY` bleiben Positions-/Latenzkompensation und sind davon unberührt;
+      // eine Client-Uhr fließt bewusst nicht mehr in Cooldown-/Commit-Entscheidungen ein.
+      const hostNowMs = Date.now();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       let authoritativeParams = params;
       const temporaryUtilityInstanceId = params?.temporaryUtilityInstanceId;
@@ -308,7 +314,7 @@ export class RpcCoordinator {
           params.heldActionId,
           'global_dismantle',
           1_000,
-          Date.now(),
+          hostNowMs,
         );
         if (!held || held.elapsedMs < 1_000) return { ok: false, reason: 'blocked' };
         const activityRevision = params?.activityRevision;
@@ -364,7 +370,7 @@ export class RpcCoordinator {
           bridge.getActiveGameMode(),
         );
         if (!inspectorUtility) return { ok: false, reason: 'invalid' };
-        const charge = validateHostUtilityCharge(this.heldActions, senderId, inspectorUtility, params);
+        const charge = validateHostUtilityCharge(this.heldActions, senderId, inspectorUtility, hostNowMs, params);
         if (!charge.ok) return charge;
         return this.construction.useInspectorUtility(
           senderId,
@@ -372,7 +378,7 @@ export class RpcCoordinator {
           angle,
           targetX,
           targetY,
-          Date.now(),
+          hostNowMs,
           charge.authoritativeParams,
         );
       }
@@ -388,7 +394,7 @@ export class RpcCoordinator {
         if (isTranslocatorRecall) {
           this.heldActions.clearPlayer(senderId);
         } else {
-          const charge = validateHostUtilityCharge(this.heldActions, senderId, utility, params);
+          const charge = validateHostUtilityCharge(this.heldActions, senderId, utility, hostNowMs, params);
           if (!charge.ok) return charge;
           authoritativeParams = charge.authoritativeParams;
         }
@@ -400,7 +406,7 @@ export class RpcCoordinator {
         angle,
         targetX,
         targetY,
-        clientNow ?? Date.now(),
+        hostNowMs,
         shotId,
         authoritativeParams,
         clientX,

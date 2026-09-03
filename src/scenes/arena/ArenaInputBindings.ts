@@ -186,7 +186,6 @@ export interface ArenaInputActionPorts {
     params?: LoadoutUseParams,
     clientX?: number,
     clientY?: number,
-    clientNow?: number,
     awaitResult?: boolean,
     predictionId?: number,
   ): Promise<LoadoutUseResult | null>;
@@ -769,7 +768,6 @@ export class ArenaInputBindings {
             params,
             clientX: localPosition?.x,
             clientY: localPosition?.y,
-            clientNow: Date.now(),
           },
           getLocalWeapon2AdrenalineCost(),
           (result) => handleLocalLoadoutFailure('weapon2', result, inputStarted, predictedWeapon2Id),
@@ -805,7 +803,6 @@ export class ArenaInputBindings {
         params,
         localPosition?.x,
         localPosition?.y,
-        Date.now(),
         awaitResult || awaitFailureResult,
       );
       if (awaitFailureResult) {

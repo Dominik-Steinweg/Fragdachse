@@ -39,7 +39,6 @@ type LoadoutHandler = (
   params?: LoadoutUseParams,
   clientX?: number,
   clientY?: number,
-  clientNow?: number,
 ) => LoadoutUseResult;
 
 type HeldActionHandler = (
@@ -380,6 +379,26 @@ describe('radial action RPC classification', () => {
       undefined,
       undefined,
     );
+  });
+
+  it('committet mit einem einzigen Host-Zeitpunkt statt einer Client-Angabe (Clock-Skew)', () => {
+    const fixture = createFixture();
+    fixture.consume.mockReturnValue({ elapsedMs: 900, chargeFraction: 1 });
+    const handler = registerLoadoutHandler(fixture.coordinator);
+
+    const before = Date.now();
+    const result = handler('utility', 0, 220, 180, 'p1', undefined, {
+      temporaryUtilityInstanceId: 'temporary-utility-7',
+      heldActionId: 'temporary-bfg-action',
+    });
+    const after = Date.now();
+
+    expect(result).toEqual({ ok: true });
+    const commitNow = fixture.use.mock.calls.at(-1)?.[5] as number;
+    expect(commitNow).toBeGreaterThanOrEqual(before);
+    expect(commitNow).toBeLessThanOrEqual(after);
+    // Held-Action-Consume und Gameplay-Commit teilen sich denselben hostseitigen nowMs.
+    expect(fixture.consume.mock.calls.at(-1)?.[4]).toBe(commitNow);
   });
 
   it('rejects a held charge when the release names another equal temporary instance', () => {

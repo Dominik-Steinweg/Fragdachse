@@ -1120,7 +1120,7 @@ export class ArenaScene extends Phaser.Scene {
         getPlayerCurrentLoadoutSnapshot: (playerId) => bridge.getPlayerCurrentLoadoutSnapshot(playerId),
         getPlayerUtilityCooldownUntil: (playerId, utilityId) => bridge.getPlayerUtilityCooldownUntil(playerId, utilityId),
         getPlayerTemporaryUtilityInstances: (playerId) => bridge.getPlayerTemporaryUtilityInstances(playerId),
-        sendLoadoutUse: (slot, angle, targetX, targetY, shotId, params, clientX, clientY, clientNow, awaitResult, predictionId) => bridge.sendLoadoutUse(
+        sendLoadoutUse: (slot, angle, targetX, targetY, shotId, params, clientX, clientY, awaitResult, predictionId) => bridge.sendLoadoutUse(
           slot,
           angle,
           targetX,
@@ -1129,7 +1129,6 @@ export class ArenaScene extends Phaser.Scene {
           params,
           clientX,
           clientY,
-          clientNow,
           awaitResult,
           predictionId,
         ),

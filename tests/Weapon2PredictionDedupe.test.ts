@@ -75,6 +75,34 @@ describe('Weapon2 prediction deduplication', () => {
     }
   });
 
+  it('leitet keinen Client-Timestamp aus dem lu-Payload an den Host-Handler weiter', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    try {
+      useRoom(hostRoom);
+      const host = new NetworkBridge();
+      host.activate();
+      host.publishWorldAndActivity(world(1), null);
+      const handler = vi.fn(() => ({ ok: true }));
+      host.registerLoadoutUseHandler(handler);
+
+      useRoom(hostRoom);
+      // Absurd alte / weit in der Zukunft liegende Client-Zeit darf den Host nicht erreichen.
+      await clientRoom.room.callHost('lu', { slot: 'weapon1', angle: 0, tx: 1, ty: 2, wr: 1, ts: 1 }, 500);
+      await clientRoom.room.callHost('lu', { slot: 'weapon1', angle: 0, tx: 1, ty: 2, wr: 1, ts: 9_999_999_999_999 }, 500);
+
+      expect(handler).toHaveBeenCalledTimes(2);
+      for (const call of handler.mock.calls) {
+        // (slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) – kein Zeit-Argument.
+        expect(call.length).toBeLessThanOrEqual(9);
+        expect(call.slice(0, 4)).toEqual(['weapon1', 0, 1, 2]);
+      }
+    } finally {
+      clearActiveSession();
+    }
+  });
+
   it('deduplicates final rejects as well as accepted shots', async () => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network);

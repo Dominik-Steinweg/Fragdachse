@@ -266,7 +266,7 @@ describe('Transition-/Race-Case-Tests', () => {
     const sendBody = source.slice(sendStart, registerStart);
     const registerBody = source.slice(registerStart);
     expect(sendBody).toContain('wr: worldRevision');
-    expect(registerBody).toContain('const { slot, angle, tx, ty, sid, prm, px, py, ts, wr } = data');
+    expect(registerBody).toContain('const { slot, angle, tx, ty, sid, prm, px, py, wr } = data');
     expect(registerBody).toContain('this.acceptsWorldRpc(data)');
 
     // Der eigentliche Race-Schutz ist dieselbe zentrale Revisionserkennung wie bei Snapshots:

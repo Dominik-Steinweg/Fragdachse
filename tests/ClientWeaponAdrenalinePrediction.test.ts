@@ -180,7 +180,7 @@ describe('client weapon adrenaline prediction', () => {
     try {
       coordinator.beginPredictedWeapon2Use(
         1,
-        { angle: 0.5, targetX: 4, targetY: 8, clientNow: 123 },
+        { angle: 0.5, targetX: 4, targetY: 8 },
         30,
         vi.fn(),
       );
@@ -205,7 +205,7 @@ describe('client weapon adrenaline prediction', () => {
     try {
       coordinator.beginPredictedWeapon2Use(
         17,
-        { angle: 0.5, targetX: 4, targetY: 8, clientNow: 123 },
+        { angle: 0.5, targetX: 4, targetY: 8 },
         30,
         vi.fn(),
       );

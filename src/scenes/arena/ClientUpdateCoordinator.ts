@@ -61,7 +61,6 @@ export interface PredictedWeapon2Request {
   params?: LoadoutUseParams;
   clientX?: number;
   clientY?: number;
-  clientNow?: number;
 }
 
 type PendingWeapon2Prediction = {
@@ -1008,7 +1007,6 @@ export class ClientUpdateCoordinator {
       request.params,
       request.clientX,
       request.clientY,
-      request.clientNow,
       true,
       pending.predictionId,
     ).then((result) => {
