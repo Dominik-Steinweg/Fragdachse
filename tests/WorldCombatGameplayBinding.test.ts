@@ -13,7 +13,11 @@ vi.mock('phaser', () => ({
 }));
 
 import { RockGridIndex } from '../src/arena/RockGridIndex';
-import { CELL_SIZE, COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID } from '../src/config';
+import {
+  CELL_SIZE,
+  COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+  COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
+} from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyManager } from '../src/entities/EnemyManager';
@@ -30,7 +34,9 @@ import type { GameAudioSystem } from '../src/audio/GameAudioSystem';
 import type { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
 import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { TurretSystem } from '../src/systems/TurretSystem';
-import type { ArenaLayout, PlayerProfile } from '../src/types';
+import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
+import type { TargetStatusSystem, TargetStatusTarget } from '../src/systems/TargetStatusSystem';
+import type { ArenaLayout, PlayerProfile, TrackedProjectile } from '../src/types';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import {
   WorldCombatGameplayBinding,
@@ -62,17 +68,28 @@ function methodBag(overrides: Record<string, unknown> = {}): Record<string, unkn
   });
 }
 
+function createPlacement(playerManager: PlayerManager): PlacementSystem {
+  const metrics = resolveActiveArenaWorldMetrics();
+  return new PlacementSystem(
+    layout,
+    new RockGridIndex(layout.rocks, { cols: metrics.gridCols, rows: metrics.gridRows }),
+    playerManager,
+    metrics,
+  );
+}
+
 interface TurretFixture {
   readonly binding: WorldCombatGameplayBinding;
   readonly projectileManager: ProjectileManager;
   readonly playerLoadout: LoadoutManager;
   readonly playerManager: PlayerManager;
+  readonly combatSystem: CombatSystem;
   readonly metrics: ReturnType<typeof resolveActiveArenaWorldMetrics>;
 }
 
 function createFixture(options: {
-  readonly placementSystem: PlacementSystem;
-  readonly players: readonly { id: string; x: number; y: number; active: boolean }[];
+  readonly placementSystem?: PlacementSystem;
+  readonly players: readonly { id: string; x: number; y: number; active: boolean; rotation?: number }[];
   readonly enemies: readonly { id: string; x: number; y: number; active: boolean }[];
   readonly baseTurrets?: readonly {
     id: string;
@@ -84,6 +101,11 @@ function createFixture(options: {
   readonly loadoutDamageMultiplier?: number;
   readonly powerUpDamageMultiplier?: number;
   readonly turretDamageMultiplier?: number;
+  readonly combatSystem?: CombatSystem;
+  readonly ak47StrategicTarget?: Ak47StrategicTargetSystem | null;
+  readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
+  readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
+  readonly targetStatusSystem?: TargetStatusSystem | null;
 }): TurretFixture {
   const playerManager = {
     getAllPlayers: () => options.players as readonly PlayerEntity[] as PlayerEntity[],
@@ -93,12 +115,13 @@ function createFixture(options: {
   const projectileManager = methodBag({
     spawnProjectile: vi.fn(),
   }) as unknown as ProjectileManager;
-  const combatSystem = methodBag({
+  const combatSystem = options.combatSystem ?? (methodBag({
     isAlive: vi.fn(() => true),
     isBurrowed: vi.fn(() => false),
     canDamageTarget: vi.fn(() => true),
     hasClearLineOfFire: vi.fn(() => true),
-  }) as unknown as CombatSystem;
+    hasLineOfSight: vi.fn(() => true),
+  }) as unknown as CombatSystem);
   const enemyManager = {
     getAllEnemies: () => options.enemies.map((enemy) => ({
       id: enemy.id,
@@ -139,7 +162,7 @@ function createFixture(options: {
     slimeTrail: null,
     flamethrowerUpgrade: null,
     weaponUpgrade: null,
-    ak47StrategicTarget: null,
+    ak47StrategicTarget: options.ak47StrategicTarget ?? null,
   } as unknown as WorldPlayerGameplaySystems;
   const metrics = resolveActiveArenaWorldMetrics();
   const network = {
@@ -158,6 +181,7 @@ function createFixture(options: {
     stats: methodBag() as never,
     effects: methodBag() as never,
   };
+  const placement = options.placementSystem ?? createPlacement(playerManager);
   const binding = new WorldCombatGameplayBinding({
     playerManager,
     projectileManager,
@@ -166,7 +190,7 @@ function createFixture(options: {
     decoySystem: methodBag() as unknown as DecoySystem,
     fireSystem: methodBag() as unknown as FireSystem,
     gameAudioSystem: methodBag() as unknown as GameAudioSystem,
-    placementSystem: options.placementSystem,
+    placementSystem: placement,
     baseManager,
     worldMetrics: metrics,
     isCoopMission: () => false,
@@ -179,7 +203,7 @@ function createFixture(options: {
     getPowerUpSystem: () => options.powerUpDamageMultiplier === undefined
       ? null
       : { getDamageMultiplier: () => options.powerUpDamageMultiplier } as never,
-    getTargetStatusSystem: () => null,
+    getTargetStatusSystem: () => options.targetStatusSystem ?? null,
     getEnergyInjectorSystem: () => options.turretDamageMultiplier === undefined
       ? null
       : {
@@ -209,26 +233,18 @@ function createFixture(options: {
     reconcilePersistentBaseWorld: vi.fn(),
     syncActiveBaseIds: vi.fn(),
     getMissionBarrierObstacles: () => null,
-    getRockTargets: () => [],
+    getRockTargets: () => options.rockTargets ?? [],
     getWorldTrain: () => null,
     getTimebombSystem: () => null,
     getNecromancySystem: () => null,
-    hostUpdate: methodBag() as never,
+    hostUpdate: methodBag({
+      applyTeslaRockDamage: options.applyTeslaRockDamage ?? vi.fn(),
+    }) as never,
     createEnergyShieldSystem: () => methodBag() as never,
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, projectileManager, playerLoadout, playerManager, metrics };
-}
-
-function createPlacement(playerManager: PlayerManager): PlacementSystem {
-  const metrics = resolveActiveArenaWorldMetrics();
-  return new PlacementSystem(
-    layout,
-    new RockGridIndex(layout.rocks, { cols: metrics.gridCols, rows: metrics.gridRows }),
-    playerManager,
-    metrics,
-  );
+  return { binding, projectileManager, playerLoadout, playerManager, combatSystem, metrics };
 }
 
 afterEach(() => {
@@ -325,6 +341,263 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     expect(projectile.sourceSlot).toBeUndefined();
     expect(projectile.ignoreRockIndex).toBeUndefined();
     fixture.binding.destroy();
+  });
+
+  it('fires a persistent base-owned turret through the world loadout with base collision bypass', () => {
+    const player = { id: 'builder', x: 0, y: 0, active: true };
+    const playerManager = {
+      getAllPlayers: () => [player] as unknown as PlayerEntity[],
+      getPlayer: (id: string) => id === player.id ? player as unknown as PlayerEntity : undefined,
+    } as unknown as PlayerManager;
+    const placement = createPlacement(playerManager);
+    const placed = placement.materializePersistentPlaceable(
+      COOP_DEFENSE_CONSTRUCTIONS.spore_turret,
+      5,
+      5,
+      0,
+      player.id,
+      0x4a90e2,
+      'base-owned',
+    );
+    expect(placed).not.toBeNull();
+    if (!placed) return;
+    const metrics = resolveActiveArenaWorldMetrics();
+    const turretX = metrics.offsetX + placed.gridX * CELL_SIZE + CELL_SIZE / 2;
+    const turretY = metrics.offsetY + placed.gridY * CELL_SIZE + CELL_SIZE / 2;
+    const fixture = createFixture({
+      placementSystem: placement,
+      players: [player],
+      enemies: [{ id: 'enemy-base-target', x: turretX + 80, y: turretY, active: true }],
+    });
+
+    fixture.binding.systems?.turret.hostUpdate(
+      0,
+      UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig,
+      WEAPON_CONFIGS.SPORES,
+    );
+
+    const spawn = (fixture.projectileManager.spawnProjectile as unknown as ReturnType<typeof vi.fn>);
+    expect(spawn).toHaveBeenCalledOnce();
+    const [, , , ownerId, projectile] = spawn.mock.calls[0];
+    expect(ownerId).toBe(COOP_DEFENSE_BASE_TURRET_OWNER_ID);
+    expect(projectile).toMatchObject({
+      ignoreBaseCollisions: true,
+      ignoreRockIndex: placed.id,
+      sourceTurretId: String(placed.id),
+      damage: WEAPON_CONFIGS.SPORES.damage,
+    });
+    expect(projectile.sourceSlot).toBeUndefined();
+    fixture.binding.destroy();
+  });
+});
+
+describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
+  it('wires AK47 direct enemy hit handler to strategic target system and applies damage bonus plus explosion', () => {
+    const player = { id: 'shooter', x: 0, y: 0, active: true, rotation: 0 };
+    const enemy = { id: 'strategic-zombie', x: 100, y: 0, active: true, getHp: () => 100, isBurrowed: () => false };
+    const unmarkedEnemy = { id: 'other-zombie', x: 200, y: 0, active: true, getHp: () => 100, isBurrowed: () => false };
+    const enemyList = [
+      { id: enemy.id, sprite: { active: true, x: enemy.x, y: enemy.y }, getHp: enemy.getHp, isBurrowed: enemy.isBurrowed, kind: 'zombie-badger' },
+      { id: unmarkedEnemy.id, sprite: { active: true, x: unmarkedEnemy.x, y: unmarkedEnemy.y }, getHp: unmarkedEnemy.getHp, isBurrowed: unmarkedEnemy.isBurrowed, kind: 'zombie-badger' },
+    ];
+    const enemyManager = {
+      getAllEnemies: () => enemyList,
+      getEnemy: (id: string) => enemyList.find(e => e.id === id),
+      hasEnemy: (id: string) => enemyList.some(e => e.id === id),
+    } as unknown as EnemyManager;
+    const playerManager = {
+      getAllPlayers: () => [player] as unknown as PlayerEntity[],
+      getPlayer: (id: string) => id === player.id ? player as unknown as PlayerEntity : undefined,
+      setSpawnContextProvider: vi.fn(),
+    } as unknown as PlayerManager;
+
+    let registeredHitHandler: ((proj: TrackedProjectile, enemyId: string) => any) | null = null;
+    const combatSystem = methodBag({
+      isAlive: () => true,
+      isBurrowed: () => false,
+      canDamageTarget: () => true,
+      hasLineOfSight: () => true,
+      setAk47DirectEnemyHitHandler: vi.fn((handler) => {
+        registeredHitHandler = handler;
+      }),
+    }) as unknown as CombatSystem;
+
+    const projectileManager = methodBag({
+      spawnProjectile: vi.fn(),
+    }) as unknown as ProjectileManager;
+    const resource = methodBag() as unknown as ResourceSystem;
+    const playerLoadout = new LoadoutManager(
+      playerManager,
+      projectileManager,
+      resource,
+      {} as never,
+    );
+    playerLoadout.getEquippedWeaponConfig = vi.fn((_playerId, slot) => {
+      if (slot === 'weapon2') {
+        return {
+          id: 'AK47',
+          range: 600,
+          ak47Focus: {
+            strategicTargetEnabled: 1,
+            strategicTargetDamageBonus: 0.5,
+            targetPrioritizationEnabled: 0,
+            explosiveTargetAcquisitionLevel: 1,
+          },
+        } as any;
+      }
+      return null;
+    });
+    const registerHitSpy = vi.spyOn(playerLoadout, 'registerAk47StrategicTargetHit');
+
+    const ak47StrategicTarget = new Ak47StrategicTargetSystem(
+      playerManager,
+      enemyManager,
+      combatSystem,
+      playerLoadout,
+    );
+    ak47StrategicTarget.hostUpdate(0);
+    expect(ak47StrategicTarget.isCurrentTarget(player.id, enemy.id)).toBe(true);
+    expect(ak47StrategicTarget.isCurrentTarget(player.id, unmarkedEnemy.id)).toBe(false);
+
+    const fixture = createFixture({
+      placementSystem: createPlacement(playerManager),
+      players: [player],
+      enemies: enemyList.map(e => ({ id: e.id, x: e.sprite.x, y: e.sprite.y, active: true })),
+      combatSystem,
+      ak47StrategicTarget,
+    });
+
+    expect(registeredHitHandler).not.toBeNull();
+    const hitHandler = registeredHitHandler!;
+
+    const ak47Projectile: TrackedProjectile = {
+      id: 42,
+      ownerId: player.id,
+      ak47ShotId: 1,
+      sourceSlot: 'weapon2',
+      damage: 20,
+      sprite: { x: enemy.x, y: enemy.y } as any,
+    } as TrackedProjectile;
+
+    // Hit on marked strategic target
+    const impact = hitHandler(ak47Projectile, enemy.id);
+    expect(impact).not.toBeNull();
+    expect(impact?.damageMultiplier).toBeCloseTo(1.5);
+    expect(impact?.explosionRadius).toBeGreaterThan(0);
+    expect(impact?.explosionDamageFraction).toBeGreaterThan(0);
+    expect(registerHitSpy).toHaveBeenCalledWith(ak47Projectile, enemy.id);
+
+    // Hit on unmarked target returns null (no strategic bonus)
+    const missImpact = hitHandler(ak47Projectile, unmarkedEnemy.id);
+    expect(missImpact).toBeNull();
+
+    fixture.binding.destroy();
+  });
+});
+
+describe('WorldCombatGameplayBinding Tesla rock target indexing', () => {
+  it('preserves original rock index in sparse rock arrays and does not damage shifted indices', () => {
+    const applyTeslaRockDamage = vi.fn();
+    // Sparse rock array: index 0 is rock 0, index 1 is missing, index 2 is rock 2
+    const rockTargets = [
+      { id: 0, index: 0, active: true, x: 50, y: 50 },
+      { id: 2, index: 2, active: true, x: 150, y: 150 },
+    ];
+    const player = { id: 'p1', x: 0, y: 0, active: true };
+    const fixture = createFixture({
+      players: [player],
+      enemies: [],
+      rockTargets,
+      applyTeslaRockDamage,
+    });
+
+    const teslaDome = fixture.binding.systems?.teslaDome;
+    expect(teslaDome).toBeDefined();
+
+    // Verify the rock provider installed by binding provides the exact original indices
+    const rockProvider = (teslaDome as any).rockTargetProvider;
+    expect(rockProvider).toBeDefined();
+    const providedRocks = rockProvider();
+    expect(providedRocks).toEqual([
+      { index: 0, x: 50, y: 50 },
+      { index: 2, x: 150, y: 150 },
+    ]);
+    expect(providedRocks[1].index).toBe(2);
+
+    // Verify the damage handler forwards index 2 to hostUpdate.applyTeslaRockDamage
+    const damageHandler = (teslaDome as any).rockDamageHandler;
+    expect(damageHandler).toBeDefined();
+    damageHandler(2, 40, 'p1');
+    expect(applyTeslaRockDamage).toHaveBeenCalledWith(2, 40, 'p1');
+    expect(applyTeslaRockDamage).not.toHaveBeenCalledWith(1, expect.anything(), expect.anything());
+
+    fixture.binding.destroy();
+  });
+
+  it('ArenaWorldCombatComposition getRockTargets preserves original proxy array index', () => {
+    const rockPhysicsProxies = [
+      { active: true, x: 10, y: 20 },
+      null,
+      { active: true, x: 30, y: 40 },
+    ];
+    const getRockTargets = () => rockPhysicsProxies.flatMap((rock, index) => (
+      rock && rock.active ? [{ id: index, index, active: true, x: rock.x, y: rock.y }] : []
+    ));
+
+    const targets = getRockTargets();
+    expect(targets).toHaveLength(2);
+    expect(targets[0]).toEqual({ id: 0, index: 0, active: true, x: 10, y: 20 });
+    expect(targets[1]).toEqual({ id: 2, index: 2, active: true, x: 30, y: 40 });
+    expect(targets[1].index).toBe(2);
+  });
+});
+
+describe('WorldCombatGameplayBinding lifecycle hardening', () => {
+  it('registers and cleans up vulnerability handler and line-of-fire/sight checkers symmetrically on destroy', () => {
+    let vulnerabilityHandler: ((target: TargetStatusTarget, durationMs: number) => void) | null = null;
+
+    const combatSystem = methodBag({
+      isAlive: () => true,
+      isBurrowed: () => false,
+      canDamageTarget: () => true,
+      hasClearLineOfFire: () => true,
+      hasLineOfSight: () => true,
+      setApplyVulnerabilityHandler: vi.fn((handler) => {
+        vulnerabilityHandler = handler;
+      }),
+    }) as unknown as CombatSystem;
+
+    const appliedVulnerabilities: Array<{ target: TargetStatusTarget; durationMs: number }> = [];
+    const targetStatusSystem = {
+      applyVulnerability: (target: TargetStatusTarget, durationMs: number) => {
+        appliedVulnerabilities.push({ target, durationMs });
+      },
+    } as unknown as TargetStatusSystem;
+
+    const player = { id: 'p1', x: 0, y: 0, active: true };
+    const fixture = createFixture({
+      players: [player],
+      enemies: [],
+      combatSystem,
+      targetStatusSystem,
+    });
+
+    expect(vulnerabilityHandler).not.toBeNull();
+
+    const sampleTarget: TargetStatusTarget = { targetType: 'enemy', targetId: 'enemy-1' } as any;
+    vulnerabilityHandler!(sampleTarget, 5000);
+    expect(appliedVulnerabilities).toEqual([{ target: sampleTarget, durationMs: 5000 }]);
+
+    const turret = fixture.binding.systems?.turret;
+    const teslaDome = fixture.binding.systems?.teslaDome;
+    const turretLofSpy = vi.spyOn(turret!, 'setLineOfFireChecker');
+    const teslaLosSpy = vi.spyOn(teslaDome!, 'setLineOfSightChecker');
+
+    fixture.binding.destroy();
+
+    expect(combatSystem.setApplyVulnerabilityHandler).toHaveBeenLastCalledWith(null);
+    expect(turretLofSpy).toHaveBeenCalledWith(null);
+    expect(teslaLosSpy).toHaveBeenCalledWith(null);
   });
 });
 

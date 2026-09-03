@@ -187,7 +187,9 @@ export function composeWorldCombatGameplay(
     reconcilePersistentBaseWorld: () => flow.reconcilePersistentBaseWorld(),
     syncActiveBaseIds,
     getMissionBarrierObstacles: () => flow.getCoopMissionRuntime()?.coopDefenseMissionBarrierManager?.getObstacleRectangles() ?? null,
-    getRockTargets: () => arenaResult.rockPhysicsProxies.flatMap(rock => rock && rock.active ? [{ active: true, x: rock.x, y: rock.y }] : []),
+    getRockTargets: () => arenaResult.rockPhysicsProxies.flatMap((rock, index) => (
+      rock && rock.active ? [{ id: index, index, active: true, x: rock.x, y: rock.y }] : []
+    )),
     getWorldTrain: () => gameplay.train,
     getTimebombSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTimebombSystem ?? null,
     getNecromancySystem: () => flow.getCoopMissionRuntime()?.necromancySystem ?? null,

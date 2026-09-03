@@ -190,7 +190,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly reconcilePersistentBaseWorld: () => void;
   readonly syncActiveBaseIds: () => void;
   readonly getMissionBarrierObstacles: () => Parameters<CombatSystem['setBarrierObstacles']>[0];
-  readonly getRockTargets: () => readonly { active: boolean; x: number; y: number }[];
+  readonly getRockTargets: () => readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
@@ -293,6 +293,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setPlayerOutgoingDamageResolver(null);
     combatSystem.setEnemyIncomingDamageMultiplierResolver(null);
     combatSystem.setTargetIncomingDamageMultiplierResolver(null);
+    combatSystem.setApplyVulnerabilityHandler(null);
     combatSystem.setEnergyInjectorTargetHitCallback(null);
     combatSystem.setHitscanSupportImpactCallback(null);
     combatSystem.setDirectPrimaryHitHandler(null);
@@ -348,6 +349,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       this.systems.teslaDome.setEnergyShieldSystem(null);
       this.systems.teslaDome.setStormProjectileSpawner(null);
       this.systems.teslaDome.setNovaHitHandler(null);
+      this.systems.teslaDome.setLineOfSightChecker(null);
+      this.systems.turret.setLineOfFireChecker(null);
       this.systems.turret.setTurretProvider(null, null);
       this.systems.turret.setEnemyTargetProvider(null);
       this.systems.turret.setFocusTargetProvider(null);
@@ -652,7 +655,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     turret.setTurretDamageMultiplierProvider((turretData, turrets) => player.itemRuntime.getRemoteControlDamageMultiplier(turretData.ownerId, turretData, turrets));
     teslaDome.setRockCallbacks(
-      () => o.getRockTargets().flatMap((rock, index) => rock.active ? [{ index, x: rock.x, y: rock.y }] : []),
+      () => o.getRockTargets().flatMap(rock => rock.active ? [{ index: rock.index, x: rock.x, y: rock.y }] : []),
       (index, damage, ownerId) => o.hostUpdate.applyTeslaRockDamage(index, damage, ownerId),
     );
     teslaDome.setTurretCallbacks(
@@ -690,6 +693,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.combatSystem.setBurrowSystem(player.burrow);
     o.combatSystem.setResourceSystem(player.resource);
     o.combatSystem.setLoadoutManager(player.loadout);
+    o.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId) => (
+      (o.getPlayerSystems()?.ak47StrategicTarget ?? player.ak47StrategicTarget)?.handleDirectAk47EnemyHit(projectile, enemyId) ?? null
+    ));
     o.hostPhysics.setBurrowSystem(player.burrow);
     o.hostPhysics.setLoadoutManager(player.loadout);
     o.hostPhysics.setTimeBubbleSystem(timeBubble);
