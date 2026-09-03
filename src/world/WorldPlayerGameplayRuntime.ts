@@ -25,6 +25,7 @@ import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem'
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
 import { Ak47BehaviorRuntime } from './Ak47BehaviorRuntime';
+import { NegevBehaviorRuntime } from './NegevBehaviorRuntime';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -58,7 +59,6 @@ import type {
   SpecializedWeaponExecutionCapability,
   WeaponExecutionCapability,
 } from '../loadout/WeaponFireExecutor';
-import type { NegevKillstreakExplosionEvent } from '../loadout/LoadoutManager';
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
 } from '../config/coopDefenseConstructions';
@@ -122,6 +122,7 @@ export interface WorldPlayerGameplaySystems {
   readonly flamethrowerUpgrade: FlamethrowerUpgradeSystem | null;
   readonly weaponUpgrade: WeaponUpgradeSystem | null;
   readonly ak47Behavior: Ak47BehaviorRuntime | null;
+  readonly negevBehavior: NegevBehaviorRuntime;
   readonly ak47StrategicTarget: Ak47StrategicTargetSystem | null;
 }
 
@@ -465,6 +466,25 @@ export class WorldPlayerGameplayRuntime implements
       loadout,
       ak47Behavior,
     );
+    const negevBehavior = new NegevBehaviorRuntime({
+      loadout,
+      playerManager: options.playerManager,
+      combatSystem: options.combatSystem,
+      physicsSystem: options.hostPhysics,
+      onKillstreakExplosion: (event) => {
+        options.network.presentation.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
+        flamethrowerUpgrade?.hostCreateFireChunkBurst(event.ownerId, event.x, event.y, {
+          count: event.kills,
+          searchRadius: event.radius,
+          flightMs: 320,
+          igniteCenter: false,
+          durationMs: event.fireChunkDurationMs,
+          burnDurationMs: event.fireChunkBurnDurationMs,
+          burnDamagePerTick: event.fireChunkBurnDamagePerTick,
+          sourceId: 'weapon.NEGEV.killstreak',
+        }, `negev-killstreak:${event.ownerId}:${event.nowMs}`);
+      },
+    });
 
     this.systems = {
       playerAction,
@@ -484,6 +504,7 @@ export class WorldPlayerGameplayRuntime implements
       flamethrowerUpgrade,
       weaponUpgrade,
       ak47Behavior,
+      negevBehavior,
       ak47StrategicTarget,
     };
     this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
@@ -555,6 +576,7 @@ export class WorldPlayerGameplayRuntime implements
     // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
     this.systems.ultimateBehavior.resetPlayer(playerId);
     this.systems.ak47Behavior?.resetPlayer(playerId);
+    this.systems.negevBehavior.resetPlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
     this.systems.utilityAction.syncEquippedUtility(playerId);
   }
@@ -562,6 +584,7 @@ export class WorldPlayerGameplayRuntime implements
   detachPlayerLoadout(playerId: string): void {
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
+    this.systems.negevBehavior.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
     this.systems.translocator.removePlayer(playerId);
@@ -575,6 +598,7 @@ export class WorldPlayerGameplayRuntime implements
     if (changed) {
       this.systems.ultimateBehavior.resetPlayer(playerId);
       this.systems.ak47Behavior?.resetPlayer(playerId);
+      this.systems.negevBehavior.resetPlayer(playerId);
     }
     this.systems.utilityAction.syncEquippedUtility(playerId);
     this.systems.resource.reconcilePlayerLimits(playerId);
@@ -800,16 +824,17 @@ export class WorldPlayerGameplayRuntime implements
     this.destroyed = true;
     const { systems } = this;
     systems.loadout.setAk47Behavior(null);
+    systems.loadout.setNegevBehavior(null);
     systems.loadout.setCombatSystem(null);
     systems.loadout.setWeaponExecutionCapability(null);
     systems.loadout.setSpecializedWeaponExecutionCapability(null);
     systems.loadout.setPhysicsSystem(null);
-    systems.loadout.setNegevKillstreakExplosionHandler(null);
     systems.loadout.setItemRuntimeChargeConsumer(null);
     systems.loadout.setItemRuntimeWeaponFiredHandler(null);
     systems.loadout.setUltimateModifierReadPort(null);
     systems.ultimateBehavior.destroy();
     systems.ak47Behavior?.destroy();
+    systems.negevBehavior.destroy();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
     systems.guardianSpirit?.clear();
@@ -892,19 +917,7 @@ export class WorldPlayerGameplayRuntime implements
     loadout.setSpecializedWeaponExecutionCapability(this.options.specializedWeaponExecution);
     loadout.setPhysicsSystem(this.options.hostPhysics);
     loadout.setAk47Behavior(this.systems.ak47Behavior);
-    loadout.setNegevKillstreakExplosionHandler((event: NegevKillstreakExplosionEvent) => {
-      this.options.network.presentation.broadcastExplosionEffect(event.x, event.y, event.radius, 0xff8a2d);
-      this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(event.ownerId, event.x, event.y, {
-        count: event.kills,
-        searchRadius: event.radius,
-        flightMs: 320,
-        igniteCenter: false,
-        durationMs: event.fireChunkDurationMs,
-        burnDurationMs: event.fireChunkBurnDurationMs,
-        burnDamagePerTick: event.fireChunkBurnDamagePerTick,
-        sourceId: 'weapon.NEGEV.killstreak',
-      }, `negev-killstreak:${event.ownerId}:${event.nowMs}`);
-    });
+    loadout.setNegevBehavior(this.systems.negevBehavior);
     loadout.setUtilityConfigModifierSource((playerId) => {
       const modifiers = playerModifier.getModifiers(playerId);
       return { additive: modifiers.additiveStats, percentage: modifiers.percentageStats };

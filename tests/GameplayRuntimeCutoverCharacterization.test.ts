@@ -170,77 +170,6 @@ describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und
   });
 });
 
-describe('LoadoutManager – Negev-Killstreak lebt heute im Loadout (Migrationsziel 8B)', () => {
-  function makeNegevManager() {
-    const combatSystem = { heal: vi.fn(), addArmor: vi.fn(), applyAoeDamage: vi.fn() };
-    const explosionHandler = vi.fn();
-    const manager = Object.create(LoadoutManager.prototype) as AnyManager;
-    const negevConfig = {
-      id: 'NEGEV',
-      killHeal: 0,
-      killAdrenaline: 0,
-      negevKillstreak: {
-        damageBonusPerKill: 0.1,
-        healPerKill: 5,
-        armorPerKill: 0,
-        explosionEnabled: 1,
-        explosionDamagePerKill: 20,
-        explosionBaseRadius: 100,
-        explosionRadiusPerKill: 10,
-        explosionBaseKnockback: 0,
-        explosionKnockbackPerKill: 0,
-        fireChunkDurationMs: 0,
-        fireChunkBurnDurationMs: 0,
-        fireChunkBurnDamagePerTick: 0,
-      },
-    };
-    manager.loadouts = new Map([['p1', {
-      weapon1: { config: { id: 'W1' }, decaySpread() { /* noop */ } },
-      weapon2: { config: negevConfig, decaySpread() { /* noop */ } },
-    }]]);
-    manager.negevStates = new Map();
-    manager.shotgunLightningQueue = [];
-    manager.combatSystem = combatSystem;
-    manager.physicsSystem = { applyRadialImpulse: vi.fn() };
-    manager.resourceSystem = { addAdrenaline: vi.fn() };
-    manager.playerManager = { getPlayer: vi.fn(() => ({ x: 0, y: 0 })) };
-    manager.negevKillstreakExplosionHandler = explosionHandler;
-    return { manager, combatSystem, explosionHandler };
-  }
-
-  it('zaehlt Kills der ausgeruesteten Negev hoch und heilt pro Kill', () => {
-    const { manager, combatSystem } = makeNegevManager();
-
-    manager.handleKill('p1', 'NEGEV', 0, 0);
-
-    expect(manager.negevStates.get('p1').kills).toBe(1);
-    expect(combatSystem.heal).toHaveBeenCalledWith('p1', 5);
-  });
-
-  it('beendet den Streak im update() nach der Feuerpause und loest die Abschlussexplosion aus', () => {
-    const { manager, combatSystem, explosionHandler } = makeNegevManager();
-    manager.handleKill('p1', 'NEGEV', 0, 0);
-    manager.handleKill('p1', 'NEGEV', 0, 0);
-
-    manager.update(16);
-
-    expect(manager.negevStates.get('p1').kills).toBe(0);
-    expect(combatSystem.applyAoeDamage).toHaveBeenCalledTimes(1);
-    expect(explosionHandler).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'p1', kills: 2 }));
-  });
-
-  it('haelt den Streak, solange innerhalb der Feuerpause weiter geschossen wird', () => {
-    const { manager, explosionHandler } = makeNegevManager();
-    manager.handleKill('p1', 'NEGEV', 0, 0);
-    manager.negevStates.get('p1').lastShotAt = Date.now();
-
-    manager.update(16);
-
-    expect(manager.negevStates.get('p1').kills).toBe(1);
-    expect(explosionHandler).not.toHaveBeenCalled();
-  });
-});
-
 describe('LoadoutManager – Shotgun-Lightning-Queue lebt heute im Loadout (Migrationsziel 8C)', () => {
   function makeShotgunManager() {
     const combatSystem = { applyAoeDamage: vi.fn() };
@@ -258,7 +187,6 @@ describe('LoadoutManager – Shotgun-Lightning-Queue lebt heute im Loadout (Migr
       weapon1: { config: { id: 'W1' } },
       weapon2: { config: shotgunConfig },
     }]]);
-    manager.negevStates = new Map();
     manager.shotgunLightningQueue = [];
     manager.combatSystem = combatSystem;
     manager.resourceSystem = { addAdrenaline: vi.fn() };

@@ -30,4 +30,25 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(inputBindings).toContain('inputSystem.handleGaussActionResult');
     expect(rpcCoordinator).toContain("params?.ultimateAction === 'cancel'");
   });
+
+  it('keeps Negev killstreak state and reactions out of LoadoutManager', () => {
+    const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const behaviorPort = source('src/loadout/NegevBehaviorPort.ts');
+    const behaviorRuntime = source('src/world/NegevBehaviorRuntime.ts');
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+    const combatBinding = source('src/world/WorldCombatGameplayBinding.ts');
+    const hostFrame = source('src/scenes/arena/HostUpdateCoordinator.ts');
+
+    expect(loadoutManager).not.toContain('negevStates');
+    expect(loadoutManager).not.toContain('finishNegevKillstreak');
+    expect(loadoutManager).toContain('negevBehavior?.prepareShot');
+    expect(loadoutManager).toContain('negevBehavior?.commitShot');
+    expect(behaviorPort).toContain('NegevBehaviorPort');
+    expect(behaviorRuntime).toContain('update(nowMs: number)');
+    expect(behaviorRuntime).not.toContain('Date.now()');
+    expect(worldRuntime).toContain('new NegevBehaviorRuntime');
+    expect(combatBinding).toContain('negevBehavior?.registerKill');
+    expect(hostFrame).not.toContain('loadout?.getNegevHudBuffs');
+    expect(hostFrame).toContain('negevBehavior?.getHudBuffs');
+  });
 });

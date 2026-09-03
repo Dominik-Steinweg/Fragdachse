@@ -7,7 +7,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, WeaponSlot } from '../types';
+import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
   EnergyShieldWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -28,6 +28,7 @@ import type {
   WeaponFireOptions,
 } from './WeaponFireExecutor';
 import type { Ak47BehaviorPort } from './Ak47BehaviorPort';
+import type { NegevBehaviorPort } from './NegevBehaviorPort';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
@@ -65,25 +66,6 @@ interface ShotgunLightningEvent {
   generation: number;
 }
 
-interface NegevCombatState {
-  kills: number;
-  /** Zeitpunkt des letzten tatsaechlich abgefeuerten Negev-Schusses. */
-  lastShotAt: number;
-}
-
-export interface NegevKillstreakExplosionEvent {
-  ownerId: string;
-  x: number;
-  y: number;
-  kills: number;
-  radius: number;
-  damage: number;
-  nowMs: number;
-  fireChunkDurationMs: number;
-  fireChunkBurnDurationMs: number;
-  fireChunkBurnDamagePerTick: number;
-}
-
 type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>
   & Partial<Pick<CombatSystem, 'resolveSafeHitscanStart'>>;
 type PhysicsSystemType  = {
@@ -114,9 +96,8 @@ export class LoadoutManager {
   private itemRuntimeWeaponFiredHandler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null = null;
   private shotCounters = new Map<string, number>();
   private ak47Behavior: Ak47BehaviorPort | null = null;
-  private negevStates = new Map<string, NegevCombatState>();
+  private negevBehavior: NegevBehaviorPort | null = null;
   private shotgunLightningQueue: ShotgunLightningEvent[] = [];
-  private negevKillstreakExplosionHandler: ((event: NegevKillstreakExplosionEvent) => void) | null = null;
   /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
 
@@ -142,15 +123,6 @@ export class LoadoutManager {
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
   private heldFireSlots = new Map<string, { slot: WeaponSlot; lastAt: number; angle: number }>();
   private static readonly HOLD_EXPIRE_MS = 100;
-  /**
-   * Dauerfeuer gilt als unterbrochen, wenn so lange kein Negev-Schuss mehr fiel.
-   * Bewusst an den echten Schuessen statt am gehaltenen Feuerknopf gemessen: So
-   * endet der Killstreak auch bei leerem Adrenalin, Tod, Eingraben oder Dodge.
-   */
-  private static readonly NEGEV_STREAK_GAP_MS = 300;
-  /** Kill-Zahl, ab der die HUD-Partikel des Killstreaks ihre volle Staerke erreichen. */
-  private static readonly NEGEV_STREAK_FULL_INTENSITY_KILLS = 15;
-
   private readonly okResult: LoadoutUseResult = { ok: true };
 
   constructor(
@@ -179,7 +151,6 @@ export class LoadoutManager {
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.getActiveWeaponSlots().set(playerId, 'weapon1');
     this.shieldBuffSystem?.resetPlayer(playerId);
-    this.negevStates.set(playerId, { kills: 0, lastShotAt: 0 });
     // Ein frisches Loadout beginnt mit Waffe 1 in den Pfoten, sonst zeigte die Figur nach einem
     // Waffenwechsel in der Lobby weiter den Slot der letzten Runde.
     this.heldItemSlots.removePlayer(playerId);
@@ -228,30 +199,16 @@ export class LoadoutManager {
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
-    this.negevStates.delete(playerId);
     this.heldItemSlots.removePlayer(playerId);
     this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
   }
 
-  getNegevHudBuffs(playerId: string): SyncedActiveHudBuff[] {
-    const config = this.loadouts.get(playerId)?.weapon2.config;
-    const state = this.negevStates.get(playerId);
-    const damagePerKill = config?.id === 'NEGEV'
-      ? (config.negevKillstreak?.damageBonusPerKill ?? 0)
-      : 0;
-    if (!state || state.kills <= 0 || damagePerKill <= 0) return [];
-    return [{
-      defId: 'NEGEV_KILLSTREAK',
-      remainingFrac: 1,
-      count: state.kills,
-      value: state.kills * damagePerKill,
-      // Der Streak ist unbegrenzt – ab dieser Kill-Zahl laeuft die Anzeige auf Vollgas.
-      intensity: Math.min(1, state.kills / LoadoutManager.NEGEV_STREAK_FULL_INTENSITY_KILLS),
-    }];
-  }
-
   setAk47Behavior(behavior: Ak47BehaviorPort | null): void {
     this.ak47Behavior = behavior;
+  }
+
+  setNegevBehavior(behavior: NegevBehaviorPort | null): void {
+    this.negevBehavior = behavior;
   }
 
   setCombatSystem(combatSystem: CombatResolverType | null): void {
@@ -298,12 +255,6 @@ export class LoadoutManager {
     this.shieldBuffSystem = sys;
   }
 
-  setNegevKillstreakExplosionHandler(
-    handler: ((event: NegevKillstreakExplosionEvent) => void) | null,
-  ): void {
-    this.negevKillstreakExplosionHandler = handler;
-  }
-
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
 
   update(delta: number, nowMs?: number): void {
@@ -315,13 +266,7 @@ export class LoadoutManager {
       loadout.weapon2.decaySpread(delta, now);
     }
 
-    for (const [playerId, state] of this.negevStates) {
-      if (state.kills <= 0) continue;
-      const stillFiringNegev = now - state.lastShotAt < LoadoutManager.NEGEV_STREAK_GAP_MS
-        && this.loadouts.get(playerId)?.weapon2.config.id === 'NEGEV';
-      if (!stillFiringNegev) this.finishNegevKillstreak(playerId, state.kills, now);
-    }
-
+    this.negevBehavior?.update(now);
     this.processShotgunLightningQueue();
   }
 
@@ -522,19 +467,6 @@ export class LoadoutManager {
   ): void {
     const loadout = this.loadouts.get(killerId);
     if (!loadout) return;
-    const negev = loadout.weapon2.config.id === 'NEGEV' ? loadout.weapon2.config : null;
-    if (
-      negev
-      && sourceId === negev.id
-      && (negev.negevKillstreak?.damageBonusPerKill ?? 0) > 0
-    ) {
-      const state = this.getOrCreateNegevState(killerId);
-      state.kills += 1;
-      const heal = negev.negevKillstreak?.healPerKill ?? 0;
-      const armor = negev.negevKillstreak?.armorPerKill ?? 0;
-      if (heal > 0) this.combatSystem?.heal(killerId, heal);
-      if (armor > 0) this.combatSystem?.addArmor(killerId, armor);
-    }
     const shotgun = loadout.weapon2.config.id === 'SHOTGUN' ? loadout.weapon2.config : null;
     if (shotgun) {
       if (sourceId === shotgun.id && (shotgun.shotgunLightningRadius ?? 0) > 0 && (shotgun.shotgunLightningDamage ?? 0) > 0) {
@@ -559,53 +491,6 @@ export class LoadoutManager {
       if ((cfg.killAdrenaline ?? 0) > 0) this.resourceSystem.addAdrenaline(killerId, cfg.killAdrenaline ?? 0);
       return;
     }
-  }
-
-  private getOrCreateNegevState(playerId: string): NegevCombatState {
-    let state = this.negevStates.get(playerId);
-    if (!state) {
-      state = { kills: 0, lastShotAt: 0 };
-      this.negevStates.set(playerId, state);
-    }
-    return state;
-  }
-
-  private finishNegevKillstreak(playerId: string, kills: number, now: number = Date.now()): void {
-    const state = this.negevStates.get(playerId);
-    if (state) state.kills = 0;
-    if (kills <= 0) return;
-
-    const config = this.loadouts.get(playerId)?.weapon2.config;
-    const streak = config?.id === 'NEGEV' ? config.negevKillstreak : undefined;
-    if (!streak || streak.explosionEnabled <= 0) return;
-    const player = this.playerManager.getPlayer(playerId);
-    if (!player) return;
-
-    const radius = streak.explosionBaseRadius + kills * streak.explosionRadiusPerKill;
-    const damage = kills * streak.explosionDamagePerKill;
-    const knockback = streak.explosionBaseKnockback + kills * streak.explosionKnockbackPerKill;
-    if (damage > 0 && radius > 0) {
-      this.combatSystem?.applyAoeDamage(player.x, player.y, radius, damage, playerId, false, {
-        category: 'explosion',
-        sourceId: 'weapon.NEGEV.killstreak',
-        sourceSlot: 'weapon2',
-      });
-    }
-    if (knockback > 0 && radius > 0) {
-      this.physicsSystem?.applyRadialImpulse(player.x, player.y, radius, knockback, playerId, 0);
-    }
-    this.negevKillstreakExplosionHandler?.({
-      ownerId: playerId,
-      x: player.x,
-      y: player.y,
-      kills,
-      radius,
-      damage,
-      nowMs: now,
-      fireChunkDurationMs: streak.fireChunkDurationMs,
-      fireChunkBurnDurationMs: streak.fireChunkBurnDurationMs,
-      fireChunkBurnDamagePerTick: streak.fireChunkBurnDamagePerTick,
-    });
   }
 
   private processShotgunLightningQueue(): void {
@@ -723,8 +608,7 @@ export class LoadoutManager {
         // Zu wenig Adrenalin fuer den naechsten Schuss = Dauerfeuer vorbei.
         // Sofort beenden, damit nachtropfendes Adrenalin den Streak nicht am Leben haelt.
         if (cfg.id === 'NEGEV') {
-          const streakKills = this.negevStates.get(playerId)?.kills ?? 0;
-          if (streakKills > 0) this.finishNegevKillstreak(playerId, streakKills, now);
+          this.negevBehavior?.terminateStreak(playerId, now);
         }
         return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
       }
@@ -768,22 +652,10 @@ export class LoadoutManager {
         },
       };
     }
-    if (cfg.id === 'NEGEV') {
-      const negevState = this.getOrCreateNegevState(playerId);
-      negevState.lastShotAt = now;
-      const kills = negevState.kills;
-      const damageMultiplier = 1 + kills * (cfg.negevKillstreak?.damageBonusPerKill ?? 0);
-      if (damageMultiplier > 1) {
-        shotCfg = {
-          ...shotCfg,
-          damage: shotCfg.damage * damageMultiplier,
-          burnOnHit: shotCfg.burnOnHit ? {
-            ...shotCfg.burnOnHit,
-            damagePerTick: shotCfg.burnOnHit.damagePerTick * damageMultiplier,
-          } : undefined,
-        };
-      }
-    }
+    const negevShot = cfg.id === 'NEGEV'
+      ? this.negevBehavior?.prepareShot(playerId, shotCfg) ?? null
+      : null;
+    if (negevShot) shotCfg = negevShot.shotConfig;
     const ak47Shot = cfg.id === 'AK47'
       ? this.ak47Behavior?.prepareShot(playerId, shotCfg) ?? null
       : null;
@@ -827,6 +699,8 @@ export class LoadoutManager {
       if (fired) didFire = true;
     }
     if (!didFire) return { ok: false, reason: 'blocked' };
+
+    if (negevShot) this.negevBehavior?.commitShot(playerId, now);
 
     if (ak47Shot) {
       this.ak47Behavior?.commitShot(playerId, ak47Shot.shotId, ak47Shot.fireSuperiorityShot);

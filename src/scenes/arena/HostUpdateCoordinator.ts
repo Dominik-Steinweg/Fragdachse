@@ -1002,7 +1002,7 @@ export class HostUpdateCoordinator {
       const activePowerUps = [
         ...(this.powerUpSystem?.getActiveBuffsForHUD(localId) ?? []),
         ...(this.playerSystems?.ak47Behavior?.getHudBuffs(localId, now) ?? []),
-        ...(this.playerSystems?.loadout?.getNegevHudBuffs(localId) ?? []),
+        ...(this.playerSystems?.negevBehavior?.getHudBuffs(localId) ?? []),
         ...this.getMovementChargeHudBuffs(localId),
         ...this.getGlutwandererHudBuffs(localId),
         ...this.getSurroundedHudBuffs(localId, now),
@@ -1162,7 +1162,7 @@ export class HostUpdateCoordinator {
       const activeBuffs = [
         ...(this.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []),
         ...(this.playerSystems?.ak47Behavior?.getHudBuffs(player.id, now) ?? []),
-        ...(this.playerSystems?.loadout?.getNegevHudBuffs(player.id) ?? []),
+        ...(this.playerSystems?.negevBehavior?.getHudBuffs(player.id) ?? []),
         ...this.getMovementChargeHudBuffs(player.id),
         ...this.getGlutwandererHudBuffs(player.id),
         ...this.getSurroundedHudBuffs(player.id, now),

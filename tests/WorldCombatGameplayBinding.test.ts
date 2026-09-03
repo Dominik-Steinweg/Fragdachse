@@ -106,6 +106,7 @@ function createFixture(options: {
   readonly turretDamageMultiplier?: number;
   readonly combatSystem?: CombatSystem;
   readonly ak47Behavior?: WorldPlayerGameplaySystems['ak47Behavior'];
+  readonly negevBehavior?: WorldPlayerGameplaySystems['negevBehavior'];
   readonly ak47StrategicTarget?: Ak47StrategicTargetSystem | null;
   readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
   readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
@@ -175,6 +176,7 @@ function createFixture(options: {
     flamethrowerUpgrade: null,
     weaponUpgrade: null,
     ak47Behavior: options.ak47Behavior ?? null,
+    negevBehavior: options.negevBehavior ?? null,
     ak47StrategicTarget: options.ak47StrategicTarget ?? null,
   } as unknown as WorldPlayerGameplaySystems;
   const metrics = resolveActiveArenaWorldMetrics();
@@ -510,6 +512,30 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
     const missImpact = hitHandler(ak47Projectile, unmarkedEnemy.id);
     expect(missImpact).toBeNull();
 
+    fixture.binding.destroy();
+  });
+});
+
+describe('WorldCombatGameplayBinding Negev kill outcome', () => {
+  it('routes the semantic kill outcome to the Negev behavior owner', () => {
+    const registerKill = vi.fn();
+    const fixture = createFixture({
+      players: [{ id: 'p1', x: 0, y: 0, active: true }],
+      enemies: [],
+      negevBehavior: { registerKill } as never,
+    });
+
+    const setKillCallback = fixture.combatSystem.setKillCallback as unknown as ReturnType<typeof vi.fn>;
+    const killHandler = setKillCallback.mock.calls.at(-1)?.[0] as (
+      killerId: string,
+      victimId: string,
+      sourceId: string,
+      x: number,
+      y: number,
+    ) => void;
+    killHandler('p1', 'enemy', 'NEGEV', 10, 20);
+
+    expect(registerKill).toHaveBeenCalledWith({ killerId: 'p1', sourceId: 'NEGEV' });
     fixture.binding.destroy();
   });
 });
