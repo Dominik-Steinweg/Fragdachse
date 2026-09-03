@@ -24,12 +24,12 @@
 
 ## Aktueller Stand
 
-- **Aktive Teilphase:** `4A – Shared Immediate Weapon Execution` (offen; nächster Schritt)
-- **Zuletzt abgeschlossen:** `3B – Resource-System und Player-Readiness auf explizite Zeit umstellen` ✅
-- **Gesamtstatus:** Lifecycle-, Read-View-, Action-Zeit- und Resource-/Readiness-Zeit-Grenzen der Player-Gameplay-Runtime stehen; Shared Immediate Execution und Execution-Cutover als nächstes
-- **Letzter verifizierter Repository-Stand:** Phase-3A-Commit (`936e5b87`) + Phase-3B-Commit
-- **Letzter vollständig grüner automatisierter Gate:** Phase 3B – `npx tsc --noEmit` grün; `npm run build` (tsc + vite) grün; `vitest run tests/` ohne die zwei bekannt flakigen Dateien: **357 Dateien / 2990 Tests grün** (inkl. neuer Tests in `ResourceSystemExplicitTime.test.ts`).
-- **Bekannte Umgebungsflakiness (nicht durch dieses Refactoring verursacht):** Der volle `npm test`-Lauf ist in diesem Checkout nicht deterministisch grün. `tests/ArenaTransitionReadiness.test.ts` (4 Source-Scan-Tests mit `\n{…}`-Literalen) schlägt in einem CRLF-Checkout unabhängig vom Diff fehl; `tests/WorldCombatGameplayBinding.test.ts` (AK47 „random visible target") ist `Math.random`-flaky (0–1 Fehler pro Lauf). Beide scheitern auf unverändertem Stand vor 2A/2B identisch. Der Phase-Gate wird deshalb über `vitest run tests/` mit `--exclude` dieser beiden Dateien plus `npm run build` geführt.
+- **Aktive Teilphase:** `4B – Automatisierte und nicht-playergebundene Waffenquellen migrieren` (offen; nächster Schritt)
+- **Zuletzt abgeschlossen:** `4A – Shared Immediate Weapon Execution Capability` ✅
+- **Gesamtstatus:** Lifecycle-, Read-View-, Action-Zeit-, Resource-/Readiness-Zeit-Grenzen stehen; die gemeinsame Immediate-Weapon-Execution-Capability existiert world-composed. Nächstes: automatische Feuerquellen davon weg vom `LoadoutManager`.
+- **Letzter verifizierter Repository-Stand:** Phase-3B-Commit (`14a0f04b`) + Phase-4A-Commit
+- **Letzter vollständig grüner automatisierter Gate:** Phase 4A – `npx tsc --noEmit` grün; `npm run build` (tsc + vite) grün; `npm test` = **347 Dateien / 2942 Tests grün**, nur die 4 bekannten CRLF-Source-Scan-Fehler in `ArenaTransitionReadiness.test.ts` verbleiben. Isolierte Läufe der berührten Dateien (`WeaponFireExecutor`, `WorldWeaponExecutionRuntime`, `AutomatedPelletWeapon`, `InspectorSupportWeapons`, `ReinforcementMatrixProjectile`, `WeaponSlotExclusivity`, `WorldCombatGameplayBinding` Turmschuss, `WorldGameplayCompositionContracts`, `ArenaFlowCheckpointC`) grün.
+- **Bekannte Umgebungsflakiness (nicht durch dieses Refactoring verursacht):** `tests/ArenaTransitionReadiness.test.ts` (4 Source-Scan-Tests mit `\n{…}`-Literalen) schlägt in einem CRLF-Checkout unabhängig vom Diff fehl; `tests/WorldCombatGameplayBinding.test.ts` AK47-„random visible target" ist `Math.random`-flaky (~1/5 Läufe). Beide scheitern auf unverändertem Stand vor 2A identisch. Der Phase-Gate wird über `npm test` + `npm run build` geführt; die genannten Flaker separat isoliert geprüft.
 - **Manueller Gate:** offen; bewusst erst nach vollständigem Refactoring
 - **Projectile-/Combat-Full-Refactor:** ausdrücklich außerhalb dieses Plans
 
@@ -43,8 +43,8 @@
 | 2A | ✅ | `82322e93` | Player-Gameplay Lifecycle-Grenze |
 | 2B | ✅ | `17d14634` | Player-Gameplay Read Views |
 | 3A | ✅ | `936e5b87` | Host-Zeit im Action-/Request-Pfad |
-| 3B | ✅ | Phase-3B-Commit (HEAD dieser Änderung) | Resource/Readiness mit expliziter Zeit |
-| 4A | ⬜ | — | Shared Immediate Weapon Execution |
+| 3B | ✅ | `14a0f04b` | Resource/Readiness mit expliziter Zeit |
+| 4A | ✅ | Phase-4A-Commit (HEAD dieser Änderung) | Shared Immediate Weapon Execution |
 | 4B | ⬜ | — | Automated-/Non-Player-Fire Cutover |
 | 4C | ⬜ | — | Spezialisierte Immediate-Execution-Adapter |
 | 5 | ⬜ | — | Construction-/Management-Readiness |
@@ -112,6 +112,8 @@ Diese Liste wird während der Umsetzung **ersetzt/gekürzt**, nicht chronologisc
 
 `fireAutomatedWeapon`: `WorldCombatGameplayBinding` (Turret), `CoopDefenseEnemyAttackSystem`, `NecromancySystem`. `fireAutomatedGaussWeapon`: `CoopDefenseVoidHunterSystem`.
 
+**Zielphase 4B.** Die gemeinsame Immediate-Weapon-Execution-Capability existiert seit 4A world-composed (`WorldWeaponExecutionRuntime`, `gameplay.weaponExecution`); der `LoadoutManager` delegiert seinen Player-Fire bereits dorthin. In 4B werden diese automatischen Quellen direkt an die Capability (bzw. benannte Spezialadapter) angeschlossen, `fireAutomatedWeapon`/`fireAutomatedGaussWeapon` danach aus dem `LoadoutManager` entfernt und Enemy-/Turret-Cooldowns bei ihren jeweiligen Ownern belassen.
+
 ### Construction-/Management-Cooldown-Methoden
 
 Produktiv nur `ConstructionWorldRuntime`. Lifetime heute: `Map` im `LoadoutManager`, an `assignDefaultLoadout`/`removePlayer` gebunden (Player-in-World-Lifetime). Zielphase 5.
@@ -151,19 +153,20 @@ Diese Tests schützen heute alte Positionen und müssen von den jeweiligen Cutov
 | Test | Pinnt | Migriert in |
 |---|---|---|
 | `Phase11DependencyCutover.test.ts` | **2A: Held-Action-Assertions auf `invalidateHeldActionsForPlayer` / `invalidateHeldActionsOnActivityEnd` umgestellt** (+ `flow` enthält kein `worldPlayerGameplayRuntime?.systems.heldAction` mehr). Verbleibend: `RpcCoordinator`-Portnamen, Frame-Read-Ports → 6B | 2A ✅ / 6B |
-| `WorldGameplayCompositionContracts.test.ts` | eingefrorene `NetworkBridge`-Consumer-Liste inkl. `src/loadout/LoadoutManager.ts`; neue World-Owner frei von `NetworkBridge`/`ArenaContext`; `new WorldPlayerGameplayRuntime` nur in Composition | 2A / 10B |
-| `ArenaFlowCheckpointC.test.ts` | Scene-facing Runtime-Oberfläche frei von `LoadoutManager` u. a.; `getWorldPlayerGameplayRuntime`-Gate des Balance-Lab (2B: `isReady` prüft nur noch Nicht-`null`); kein `new WorldPlayerGameplayRuntime` im Flow | 2A / 2B ✅ |
+| `WorldGameplayCompositionContracts.test.ts` | eingefrorene `NetworkBridge`-Consumer-Liste inkl. `src/loadout/LoadoutManager.ts`; neue World-Owner frei von `NetworkBridge`/`ArenaContext`; `new WorldPlayerGameplayRuntime` nur in Composition. **4A: `new WorldWeaponExecutionRuntime` + `worldRuntime.bind(weaponExecution)` in die Owner-/Bind-Liste aufgenommen** | 2A / 4A ✅ / 10B |
+| `ArenaFlowCheckpointC.test.ts` | Scene-facing Runtime-Oberfläche frei von `LoadoutManager` u. a.; `getWorldPlayerGameplayRuntime`-Gate des Balance-Lab (2B: `isReady` prüft nur noch Nicht-`null`); kein `new WorldPlayerGameplayRuntime` im Flow. **4A: `new WorldWeaponExecutionRuntime` in die „nicht im Flow"-Liste aufgenommen** | 2A / 2B / 4A ✅ |
 | `PlayerWorldRuntimeContracts.test.ts` | **2A: „genau ein Detach-Pfad"-Scan auf `detachPlayerLoadout(` / `detachPlayerBurrow(` umgestellt** (vorher `systems.loadout.removePlayer` / `systems.burrow.removePlayer`) | 2A ✅ |
 | **`PlayerGameplayReadViewBoundary.test.ts`** | **neu (2B): friert die 9 verbleibenden externen `WorldPlayerGameplayRuntime.systems`-Consumer ein; prüft die migrierten Read-Call-Sites** – Ratchet gegen neue `.systems`-Leaks | schrumpft in 3B · 5 · 6A · 6B · 11 · 12A · 12B · 12C |
 | `DachsOfSteelRockArmorDrop.test.ts` | **2B: Mock `getPlayerGameplayRuntime()` gibt jetzt `getPlayerClassId` statt `{ systems: { playerModifier } }`** | 2B ✅ |
 | `TransitionRaceCases.test.ts` | **3A: `lu`-Payload-Destructure-Scan auf `{ …, px, py, wr }` umgestellt** (vorher `…, px, py, ts, wr` – `ts`-Feld entfernt) | 3A ✅ |
-| `WorldCombatGameplayBinding.test.ts`, `WorldMaterializationOwnership.test.ts`, `CoopMissionRuntimeOwnership.test.ts`, `ActivityRebindingContracts.test.ts` | World-/Combat-/Activity-Ownership-Scans mit `WorldPlayerGameplayRuntime`-Bezug | 11 / 12C |
+| **`WorldWeaponExecutionRuntime.test.ts`** | **neu (4A): Capability-Verdrahtung (Projectile/Hitscan/Melee), Metadaten-Durchreichung, `destroy`-Idempotenz; Ratchet `LoadoutManager` baut `new WeaponFireExecutor` nicht mehr selbst** | 4B (automatische Quellen anschließen) |
+| `WorldCombatGameplayBinding.test.ts`, `WorldMaterializationOwnership.test.ts`, `CoopMissionRuntimeOwnership.test.ts`, `ActivityRebindingContracts.test.ts` | World-/Combat-/Activity-Ownership-Scans mit `WorldPlayerGameplayRuntime`-Bezug (4A: Turmschuss-Fixture + `ActivityRebindingContracts`-Options um `weaponExecution` ergänzt) | 4A ✅ / 11 / 12C |
 
 ---
 
 ## Test-Migrationskarte
 
-Stand nach Phase 3A. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zielstatus` = was die genannte Phase mit dem Test tun muss.
+Stand nach Phase 4A. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zielstatus` = was die genannte Phase mit dem Test tun muss.
 
 | Semantik | Test(s) | Ist | Zielstatus |
 |---|---|---|---|
@@ -171,8 +174,8 @@ Stand nach Phase 3A. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zi
 | Weapon2 Prediction Retry/Dedupe + authoritative Adrenalin/Revision | `Weapon2PredictionDedupe.test.ts`, `ClientWeaponAdrenalinePrediction.test.ts` | abgedeckt | prüfen bei 6B |
 | Temporary Utility Identity / Charges / Cooldown / Acquisition Order | `TemporaryUtilityLifecycle.test.ts` | abgedeckt | prüfen bei 7A |
 | Radial/Held RPC | `RadialActionRpc.test.ts`, `RadialActionInput.test.ts` | abgedeckt | migrieren bei 6B / 7A |
-| Shared automated fire + Source-/Owner-Metadaten | `AutomatedPelletWeapon.test.ts`, `InspectorSupportWeapons.test.ts`, `ReinforcementMatrixProjectile.test.ts` + Consumer-Tests (`CoopDefenseVoidHunterSystem`, `CoopDefenseInfernoColossusCombat`, `GraveTitanVoidPlasma`, `CoopDefenseStuckEnemyBite`) | abgedeckt | migrieren bei 4A / 4B |
-| Shared Immediate Execution (Projectile/Hitscan/Melee) | `WeaponFireExecutor.test.ts` | abgedeckt | erweitern bei 4A |
+| Shared automated fire + Source-/Owner-Metadaten | `AutomatedPelletWeapon.test.ts`, `InspectorSupportWeapons.test.ts`, `ReinforcementMatrixProjectile.test.ts` + Consumer-Tests (`CoopDefenseVoidHunterSystem`, `CoopDefenseInfernoColossusCombat`, `GraveTitanVoidPlasma`, `CoopDefenseStuckEnemyBite`) | abgedeckt (4A: `AutomatedPelletWeapon`/`InspectorSupportWeapons` injizieren jetzt eine `WorldWeaponExecutionRuntime` statt sich auf den loadout-eigenen Executor zu verlassen) | migrieren bei 4B |
+| Shared Immediate Execution (Projectile/Hitscan/Melee) | `WeaponFireExecutor.test.ts`, `WorldWeaponExecutionRuntime.test.ts` | abgedeckt (4A: Capability world-composed, `WeaponFireExecutor implements WeaponExecutionCapability`) | prüfen bei 4C |
 | Weapon-Slot-Exklusivität / Channel-Switch-Deaktivierung | `WeaponSlotExclusivity.test.ts` | abgedeckt | prüfen bei 6A / 9 |
 | Dynamischer Spread / aktiver Slot / Shot Identity | `AimSpreadModelActiveSlot.test.ts`, `ShotPlanResolverRuntimeRegression.test.ts`, `ProjectileSpawnResolver.test.ts` | abgedeckt | prüfen bei 6A |
 | Resource Revision / Adrenalin-Observer / Cost-Modifier | `ResourceSystemObservers.test.ts`, `ResourceSystemExplicitTime.test.ts` | abgedeckt (3B: explizite Zeit, Pause, Regen-Tick, Powerup-Interaktion) | prüfen bei 6A |
@@ -195,12 +198,13 @@ Stand nach Phase 3A. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zi
 
 ## Bewusste Übergänge / bekannte Regressionen
 
-Aktuell keine Implementierungsübergänge. 2A/2B/3A/3B sind reine Boundary-/Zeit-Moves ohne fachliche Semantikänderung:
+Aktuell keine Implementierungsübergänge. 2A/2B/3A/3B/4A sind reine Boundary-/Zeit-Moves ohne fachliche Semantikänderung:
 
 - **2A** kapselt die Player-Child-Lifecycle-Schritte (`resource`/`burrow`/`itemRuntime`/`loadout`/`tunnel`/`heldAction`/`playerModifier`) hinter `WorldPlayerGameplayRuntime`-Methoden. Zwei verhaltensneutrale Reorderings: im `detachLoadout`-Pfad läuft `worldPowerUpRuntime.system.removePlayer` jetzt nach `detachPlayerLoadout` (loadout+tunnel); in `syncHostLoadoutsFromCommittedSelections` läuft `resource.reconcilePlayerLimits` jetzt vor `combatSystem.reconcilePlayerRuntimeState`. Beide betreffen unabhängige Map-Löschungen bzw. getrennte Domains.
 - **2B** routet die reinen Read-Zugriffe von `ArenaRuntimeAdapters`, `ArenaRuntime`, `RockVisualHelper` und `ArenaLifecycleCoordinator` über die `PlayerGameplayReadViews` derselben Runtime. Genuine Mutationen (`loadout.use`, `heldAction.*`, `burrow.handleBurrowRequest`, `resource.setAdrenaline`) sowie die Activity-System-Handoffs und Frame-Reads bleiben bewusst als `.systems.*` und sind im Ratchet `PlayerGameplayReadViewBoundary.test.ts` eingefroren.
 - **3A** entfernt den Client-Timestamp (`ts` / `clientNow`) vollständig aus dem `lu`-RPC-Pfad (NetworkBridge-Wire + `LoadoutUseHandler`-Typ, `RpcCoordinator`, `ClientUpdateCoordinator.PredictedWeapon2Request`, `ArenaInputBindings`, `ArenaScene`). `RpcCoordinator.registerLoadoutUseHandler` bestimmt einen einzigen `hostNowMs = Date.now()` je Aktion und teilt ihn zwischen `useLoadout`, `heldActions.consume`, `validateHostUtilityCharge` und `construction.useInspectorUtility`. Verhaltensänderung nur im Missbrauchsfall: der bisherige ±200 ms-Client-Timestamp-Spielraum für Waffe-2-Cooldowns entfällt. Client-Prediction reconciled weiterhin über `weapon2PredictionAck` / `authoritativeAdrenaline`. `clientX`/`clientY` bleiben unverändert.
 - **3B** stellt `ResourceSystem.drainAdrenaline(id, amount, nowMs)` und `ResourceSystem.regenTick(id, delta, nowMs)` auf explizite Host-Zeit um und entfernt die internen `Date.now()`-Aufrufe vollständig. `HostUpdateCoordinator` taktet `regenTick`, `burrow.update` und `loadout.update` mit dem Host-Frame-Timestamp `now`. `LoadoutManager.fireWeapon` reicht `now` an `drainAdrenaline` und den Negev-Zustand (`negevState.lastShotAt = now`) durch. Die Loadout-Multiplier-Reads (`getSpeedMultiplier`, `getHeldSelfPushVelocity`, `getDamageMultiplier`, `getAllyAuraMultiplier`, `getWeaponDamageMultiplier`) akzeptieren optional `now` und verwenden keine versteckte Wanduhr mehr bei Durchreichung. `WorldPlayerGameplayRuntime` bindet die Negev-Abschlussexplosion an `event.nowMs`. Item-lokale Readiness verbleibt unverändert bei `BaseWeapon`, `BaseUtility` und `TemporaryUtilityCollection`.
+- **4A** zieht die gemeinsame Immediate-Weapon-Execution aus dem `LoadoutManager` heraus: neuer world-composed `WorldWeaponExecutionRuntime` (implementiert `WeaponExecutionCapability`) besitzt den `WeaponFireExecutor` und verdrahtet dessen `WeaponFireSink` einmalig mit `ProjectileManager` + `CombatSystem`. Der `LoadoutManager` baut den Executor nicht mehr selbst, sondern erhält die Capability per `setWeaponExecutionCapability(...)` (gebunden in `WorldPlayerGameplayRuntime.bindLoadout`, geleert im `destroy`) und delegiert seinen Player-Fire unverändert dorthin. Die per-Schuss-Metadaten (`ownerId`, `sourceSlot`, `shotId`, Muzzle-Origins, `sourceTurretId`, Damage-Multiplier, Payload-Metadaten) laufen 1:1 durch. Kein Projectile-/Combat-internes Verhalten geändert; automatische Feuerquellen delegieren weiterhin über `LoadoutManager` (4B).
 
 Regel für Updates:
 
@@ -231,7 +235,7 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 | `PlayerGameplayLifecyclePort` | `interface PlayerGameplayLifecyclePort` in `src/world/WorldPlayerGameplayRuntime.ts`, implementiert von `WorldPlayerGameplayRuntime`. Methoden: `attachPlayerResources` / `detachPlayerResources` / `attachPlayerBurrow` / `detachPlayerBurrow` / `attachPlayerBuild` / `detachPlayerBuild` / `attachPlayerLoadout(playerId, selection?)` / `detachPlayerLoadout` / `reconcilePlayerLoadout(playerId, selection?)` / `reconcilePlayerBuildModifiers(builds, hasPlayer)` / `invalidateHeldActionsForPlayer` / `invalidateHeldActionsOnActivityEnd`. World-Teardown bleibt `WorldScopedBinding.destroy()`. | 2A |
 | `PlayerGameplayReadViews` | Vier kleine Interfaces in `src/world/WorldPlayerGameplayRuntime.ts`, alle von `WorldPlayerGameplayRuntime` implementiert, plus `type PlayerGameplayReadViews` als deren Schnittmenge. `PlayerGameplayStateReadView` (`isBurrowed`/`isStunned`/`getPlayerClassId`); `PlayerGameplayLoadoutReadView` (`getEquippedUtilityConfig`/`getTemporaryUtilityConfig`/`hasActiveTranslocatorPuck`); `PlayerGameplayResourceReadView` (`getAdrenaline`/`getAdrenalineRevision`/`getMaxAdrenaline`/`addAdrenalineDrainObserver`/`addAdrenalineGainObserver`); `PlayerGameplaySnapshotReadView` (`getTranslocatorActivePuckId`/`getTunnelNetSnapshot`/`getAk47StrategicTargetNetSnapshot`). | 2B |
 | `PlayerActionRequest` | — | — |
-| `WeaponExecutionCapability` | — | — |
+| `WeaponExecutionCapability` | `interface WeaponExecutionCapability { fire(config: WeaponConfig, params: WeaponFireParams): boolean }` in `src/loadout/WeaponFireExecutor.ts`; einziger Vertrag ist der bestehende `WeaponFireExecutor.fire` (`class WeaponFireExecutor implements WeaponExecutionCapability`). World-composed Owner: `class WorldWeaponExecutionRuntime` (`src/world/WorldWeaponExecutionRuntime.ts`, `WorldScopedBinding`), erzeugt in `ArenaWorldPlayerComposition`, Slot `ArenaWorldGameplay.weaponExecution`. Kein zweiter Fire-Request-Typ; spezialisierte Adapter folgen in 4C. | 4A |
 | `PlayerRelationshipPort` | — | — |
 | `PlayerCombatIntegrationPort` | — | — |
 | `PlayerGameplayFrameStages` | — | — |
@@ -240,22 +244,17 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 ## Nächster konkreter Schritt
 
-**Teilphase 4A umsetzen – Shared Immediate Weapon Execution Capability.**
+**Teilphase 4B umsetzen – automatisierte und nicht-playergebundene Waffenquellen migrieren.**
 
 Dabei:
 
-1. Den bestehenden `WeaponFireExecutor` zur kleinen gemeinsamen Ausführungsgrenze für sofortige Shared-Fire-Semantik machen (oberhalb der unveränderten Projectile-/Combat-Legacy).
-2. World-owned oder world-composed Execution-Owner/Port einführen:
-   - besitzt oder stellt `WeaponFireExecutor` bereit,
-   - verdrahtet dessen `WeaponFireSink` einmalig mit vorhandenen Projectile-/Combat-Senken,
-   - besitzt keine Player-Resource-/Loadout-Autorität.
-3. Gemeinsame Immediate-Fire-Fälle über diese Capability abbilden: Projectile, Hitscan, Melee.
-4. Bestehende Metadaten unverändert transportieren: owner/source, `sourceSlot`, `shotId`, muzzle origins, turret/source IDs, direct/payload damage multipliers, attribution-relevante Payload-Metadaten.
-5. `LoadoutManager` darf für Player-Fire zunächst noch delegieren, aber der Executor selbst gehört nicht mehr logisch dem Loadout.
-6. Keine Projectile-internen Regeln in den neuen Owner ziehen.
-7. Referenz-§§: `02` §§ 13, 15, 27–29.
+1. Alle Call-Sites aus der Consumer-Matrix (`fireAutomatedWeapon` / `fireAutomatedGaussWeapon`) prüfen und auf die Capability `gameplay.weaponExecution` (`WorldWeaponExecutionRuntime.fire`) bzw. benannte kleine Spezialadapter umstellen: `WorldCombatGameplayBinding` Turret-Fire-Handler, `CoopDefenseEnemyAttackSystem`, `NecromancySystem`, `CoopDefenseVoidHunterSystem` (Gauss), weitere Konstrukte/Allies.
+2. Enemy-/Turret-eigene Cooldowns/Salven bleiben bei ihren jeweiligen Ownern; die Capability entscheidet nicht **wann** eine automatische Quelle feuert. Source-/Owner-/Allegiance-/Attribution-Info bleibt erhalten. Der heutige Payload-/Damage-Multiplier-Vorberechnungspfad (`scaleAutomatedWeaponDamage`, Pellet-Fanout aus `fireAutomatedWeapon`) muss dabei entweder mitwandern oder als benannter Adapter zwischen Quelle und Capability liegen.
+3. Cleanup: `fireAutomatedWeapon` und `fireAutomatedGaussWeapon` aus `LoadoutManager` entfernen; Activity-Kompositionen erhalten keinen `LoadoutManager` mehr nur zum Feuern automatischer Waffen (`CoopMissionComposition` / `-EnemyBehaviourComposition` / `-EnemySupportComposition`).
+4. Referenz-§§: `02` §§ 4, 13–15, 19, 21, 26–29.
+5. Gate zusätzlich: Enemy-attack-, Turret-fire-, Necromancy-, Void-Hunter-, Automated-weapon-Tests; `npm run check`.
 
-Hinweis für den Gate: `vitest run tests/` mit `--exclude tests/ArenaTransitionReadiness.test.ts --exclude tests/WorldCombatGameplayBinding.test.ts` (bekannte Umgebungsflakiness) plus `npm run build`.
+Hinweis für den Gate: `npm test` (bekannte CRLF-Flaker in `ArenaTransitionReadiness` verbleiben) plus `npm run build`; berührte Flaker isoliert prüfen.
 
 ---
 

@@ -41,7 +41,7 @@ import { COLORS, PLAYER_SIZE, type MuzzleOrigin } from '../config';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
 import { resolveShotPlan } from './ShotPlanResolver';
-import { getHitscanRequestRange, WeaponFireExecutor, type WeaponFireOptions } from './WeaponFireExecutor';
+import type { WeaponExecutionCapability, WeaponFireOptions } from './WeaponFireExecutor';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
@@ -184,82 +184,15 @@ export class LoadoutManager {
   /** Host-authoritative weapon intent. A weapon request claims its slot immediately. */
   private activeWeaponSlots = new Map<string, WeaponSlot>();
 
-  private weaponFireExecutor: WeaponFireExecutor | null = null;
-
   /**
-   * Gemeinsamer Fire-Dispatch für Projektil-, Hitscan- und Melee-Waffen. Der Manager liefert
-   * hier nur die Gameplay-Senken; die Übersetzung von {@link WeaponConfig} in einen Schuss
-   * liegt im Executor, getrennt vom World-/Activity-Lifecycle.
-   *
-   * Beim ersten Zugriff erzeugt statt im Feldinitialisierer: die Senken lesen `this` erst beim
-   * Schuss, und der Manager wird in Tests auch ohne Konstruktorlauf aufgebaut.
+   * Gemeinsame Immediate-Weapon-Execution-Capability für Projektil-, Hitscan- und Melee-Waffen.
+   * Seit Teilphase 4A world-composed injiziert statt vom Loadout selbst gebaut: der Executor
+   * gehört nicht mehr logisch dem Loadout. Für Player-Fire delegiert der Manager weiterhin hierher.
    */
-  private get weaponFire(): WeaponFireExecutor {
-    return this.weaponFireExecutor ??= new WeaponFireExecutor({
-    spawnProjectile: (x, y, angle, ownerId, cfg) => {
-      this.projectileManager.spawnProjectile(x, y, angle, ownerId, cfg);
-    },
-    resolveHitscan: (request) => {
-      const combat = this.combatSystem;
-      if (!combat) return false;
+  private weaponExecution: WeaponExecutionCapability | null = null;
 
-      const shooterX = request.shooterX ?? request.startX;
-      const shooterY = request.shooterY ?? request.startY;
-      const resolvedStart = combat.resolveSafeHitscanStart
-        ? combat.resolveSafeHitscanStart(shooterX, shooterY, request.startX, request.startY)
-        : { x: request.startX, y: request.startY };
-      const resolvedRange = getHitscanRequestRange(request, resolvedStart.x, resolvedStart.y, request.angle);
-
-      return combat.resolveHitscanShot(
-        request.shooterId,
-        resolvedStart.x,
-        resolvedStart.y,
-        request.angle,
-        resolvedRange,
-        request.damage,
-        request.traceThickness,
-        request.color,
-        request.adrenalinGain,
-        request.sourceId,
-        request.visualPreset,
-        request.shotAudioKey,
-        request.sourceSlot,
-        request.shotId,
-        request.detonator,
-        request.rockDamageMult,
-        request.trainDamageMult,
-        request.chainLightning,
-        request.burnOnHit,
-        request.supportEffect,
-        request.visualMuzzleOrigin,
-        request.baseDamageMult,
-      );
-    },
-    resolveMelee: (request) => this.combatSystem?.resolveMeleeSwing(
-      request.shooterId,
-      request.x,
-      request.y,
-      request.angle,
-      request.range,
-      request.arcDegrees,
-      request.damage,
-      request.adrenalinGain,
-      request.sourceId,
-      request.color,
-      request.sourceSlot,
-      request.rockDamageMult,
-      request.trainDamageMult,
-      request.visualPreset,
-      request.shotAudioKey,
-      request.burnOnHit,
-      undefined,
-      request.hitHeal,
-      request.hitAdrenaline,
-      request.bloodEffectMultiplier,
-      request.damageTargets,
-      request.baseDamageMult,
-    ) ?? false,
-    });
+  setWeaponExecutionCapability(capability: WeaponExecutionCapability | null): void {
+    this.weaponExecution = capability;
   }
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
@@ -2438,7 +2371,7 @@ export class LoadoutManager {
     gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     void fireConfig;
-    return this.weaponFire.fire(config, {
+    return (this.weaponExecution?.fire(config, {
       x, y, angle, targetX, targetY,
       ownerId: playerId,
       ownerColor: playerColor,
@@ -2452,7 +2385,7 @@ export class LoadoutManager {
         this.resourceSystem.getAdrenaline(playerId),
         this.resourceSystem.resolveAdrenalineCost(playerId, config.adrenalinCost),
       ),
-    });
+    }) ?? false);
   }
 
   private fireHitscanWeapon(
@@ -2471,7 +2404,7 @@ export class LoadoutManager {
     gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     void fireConfig;
-    return this.weaponFire.fire(config, {
+    return (this.weaponExecution?.fire(config, {
       x, y, angle, targetX, targetY,
       ownerId: playerId,
       ownerColor: playerColor,
@@ -2479,7 +2412,7 @@ export class LoadoutManager {
       shotId,
       gameplayMuzzleOrigin,
       visualMuzzleOrigin,
-    });
+    }) ?? false);
   }
 
   private fireMeleeWeapon(
@@ -2493,14 +2426,14 @@ export class LoadoutManager {
     sourceSlot?: WeaponSlot,
   ): boolean {
     void fireConfig;
-    return this.weaponFire.fire(config, {
+    return (this.weaponExecution?.fire(config, {
       x, y, angle,
       targetX: x,
       targetY: y,
       ownerId: playerId,
       ownerColor: playerColor,
       sourceSlot,
-    });
+    }) ?? false);
   }
 
   private fireFlamethrowerWeapon(

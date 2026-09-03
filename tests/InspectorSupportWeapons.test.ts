@@ -11,13 +11,20 @@ import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { ENERGY_INJECTOR_COLOR, getTopDownMuzzleOrigin, PLASMA_BURNER_COLOR } from '../src/config';
 import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
 import { getLoadoutItemName } from '../src/i18n/contentPresentation';
+import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 
 function createManagerWithSpawnSpy() {
   const spawnProjectile = vi.fn(() => 42);
   const resolveHitscanShot = vi.fn(() => true);
+  const resolveMeleeSwing = vi.fn(() => true);
   const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
   Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile } });
   Object.defineProperty(manager, 'combatSystem', { value: { resolveHitscanShot } });
+  // Seit Teilphase 4A ist die gemeinsame Immediate-Fire-Capability world-composed und wird injiziert.
+  manager.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
+    projectileManager: { spawnProjectile },
+    combatSystem: { resolveHitscanShot, resolveMeleeSwing },
+  }));
   return { manager, spawnProjectile, resolveHitscanShot };
 }
 
@@ -92,6 +99,10 @@ describe('inspector support weapons', () => {
     const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
     Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile: vi.fn() } });
     Object.defineProperty(manager, 'combatSystem', { value: { resolveHitscanShot } });
+    manager.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
+      projectileManager: { spawnProjectile: vi.fn() },
+      combatSystem: { resolveHitscanShot, resolveMeleeSwing: vi.fn(() => true) },
+    }));
 
     manager.fireAutomatedWeapon(config, startX, startY, angle, cursorX, startY, 'inspector', 0x22cc88);
     expect(resolveHitscanShot.mock.calls[0]?.[4]).toBeCloseTo(cursorX - muzzle.x, 10);

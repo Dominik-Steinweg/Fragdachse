@@ -8,6 +8,7 @@ vi.mock('phaser', () => ({
 
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 
 describe('automated projectile weapons', () => {
   it('forwards construction damage as owner-attributed utility damage', () => {
@@ -39,6 +40,10 @@ describe('automated projectile weapons', () => {
     const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
     const spawnProjectile = vi.fn(() => 42);
     Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile } });
+    manager.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
+      projectileManager: { spawnProjectile },
+      combatSystem: { resolveHitscanShot: vi.fn(() => true), resolveMeleeSwing: vi.fn(() => true) },
+    }));
 
     manager.fireAutomatedWeapon(
       WEAPON_CONFIGS.TURRET_ROCKET_BURST,

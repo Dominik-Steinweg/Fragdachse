@@ -25,6 +25,7 @@ import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import type { ResourceSystem } from '../src/systems/ResourceSystem';
 import type { CombatSystem } from '../src/systems/CombatSystem';
@@ -143,6 +144,12 @@ function createFixture(options: {
     resource,
     {} as never,
   );
+  // Seit Teilphase 4A ist die gemeinsame Immediate-Fire-Capability world-composed; ohne sie
+  // liefe kein Turmschuss durch `fireAutomatedWeapon`.
+  playerLoadout.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
+    projectileManager,
+    combatSystem: combatSystem as unknown as ConstructorParameters<typeof WorldWeaponExecutionRuntime>[0]['combatSystem'],
+  }));
   if (options.loadoutDamageMultiplier !== undefined) {
     vi.spyOn(playerLoadout, 'getDamageMultiplier').mockReturnValue(options.loadoutDamageMultiplier);
   }

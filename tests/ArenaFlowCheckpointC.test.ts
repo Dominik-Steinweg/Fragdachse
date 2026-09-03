@@ -350,6 +350,7 @@ describe('Checkpoint C – Flow besitzt nur Flow', () => {
       'new WorldGeometryBinding',
       'new WorldTargetingRuntime',
       'new WorldTrainRuntime',
+      'new WorldWeaponExecutionRuntime',
       'new WorldPlayerGameplayRuntime',
       'new WorldCombatGameplayBinding',
       'new WorldPowerUpRuntime',

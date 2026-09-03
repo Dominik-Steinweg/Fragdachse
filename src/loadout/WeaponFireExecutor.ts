@@ -194,6 +194,18 @@ export function getHitscanRequestRange(
 }
 
 /**
+ * Gemeinsame Immediate-Weapon-Execution-Capability (Cross-Phase-Contract-Familie
+ * `WeaponExecutionCapability`, materialisiert in Teilphase 4A).
+ *
+ * Der einzige Vertrag ist der bereits bestehende {@link WeaponFireExecutor.fire}. Ein world-composed
+ * Owner besitzt den Executor und verdrahtet dessen {@link WeaponFireSink} einmalig mit den
+ * Legacy-Projectile-/Combat-Pfaden; Player, Gegner, Türme und Allies rufen dieselbe `fire()`.
+ */
+export interface WeaponExecutionCapability {
+  fire(config: WeaponConfig, params: WeaponFireParams): boolean;
+}
+
+/**
  * Zustandsarmer Fire-Dispatch für die gemeinsamen Projektil-, Hitscan- und Melee-Pfade.
  *
  * Er übersetzt eine {@link WeaponConfig} in Projektil-, Hitscan- oder Melee-Aufträge und hält
@@ -201,7 +213,7 @@ export function getHitscanRequestRange(
  * Genau diese Trennung erlaubt es verschiedenen Aufrufern, dieselbe Waffenbeschreibung ohne
  * eine zweite Waffenmechanik zu verwenden.
  */
-export class WeaponFireExecutor {
+export class WeaponFireExecutor implements WeaponExecutionCapability {
   constructor(private readonly sink: WeaponFireSink) {}
 
   /**

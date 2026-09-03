@@ -27,6 +27,7 @@ import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem'
 import { HostHeldActionSystem } from '../systems/HostHeldActionSystem';
 import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, PlayerInput, SyncedAk47StrategicTarget, SyncedTunnel } from '../types';
 import type { UtilityConfig } from '../loadout/LoadoutConfig';
+import type { WeaponExecutionCapability } from '../loadout/WeaponFireExecutor';
 import type { NegevKillstreakExplosionEvent } from '../loadout/LoadoutManager';
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
@@ -178,6 +179,8 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly dropBeer: (playerId: string, x?: number, y?: number) => void;
   readonly createLoadoutManager: (resourceSystem: ResourceSystem) => LoadoutManager;
   readonly createBurrowSystem: (resourceSystem: ResourceSystem) => BurrowSystem;
+  /** World-composed gemeinsame Immediate-Weapon-Execution-Capability (Teilphase 4A). */
+  readonly weaponExecution: WeaponExecutionCapability;
   readonly network: WorldPlayerGameplayNetworkPort;
 }
 
@@ -487,6 +490,7 @@ export class WorldPlayerGameplayRuntime implements
     const { systems } = this;
     systems.loadout.setAk47StrategicTargetHitResolver(null);
     systems.loadout.setCombatSystem(null);
+    systems.loadout.setWeaponExecutionCapability(null);
     systems.loadout.setPhysicsSystem(null);
     systems.loadout.setTranslocatorSystem(null);
     systems.loadout.setDecoySystem(null);
@@ -575,6 +579,7 @@ export class WorldPlayerGameplayRuntime implements
     tunnel: TunnelSystem,
   ): void {
     loadout.setCombatSystem(this.options.combatSystem);
+    loadout.setWeaponExecutionCapability(this.options.weaponExecution);
     loadout.setDashBurstChecker((playerId) => this.options.hostPhysics.isDashBurst(playerId));
     loadout.setPhysicsSystem(this.options.hostPhysics);
     loadout.setAk47StrategicTargetHitResolver((playerId, enemyId) => this.systems.ak47StrategicTarget?.isCurrentTarget(playerId, enemyId) ?? false);

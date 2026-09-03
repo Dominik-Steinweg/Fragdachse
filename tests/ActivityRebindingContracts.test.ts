@@ -364,6 +364,7 @@ describe('Phase 10B.7 – Activity rebinding', () => {
       dropBeer: () => undefined,
       createLoadoutManager: () => service(),
       createBurrowSystem: () => service(),
+      weaponExecution: service(),
       network: {
         teams: { isEnemyPair: () => false },
         input: { getPlayerInput: () => undefined },

@@ -107,6 +107,7 @@ describe('Phase 10B.6 – World gameplay composition', () => {
       'new WorldGeometryBinding',
       'new WorldTargetingRuntime',
       'new WorldTrainRuntime',
+      'new WorldWeaponExecutionRuntime',
       'new WorldPlayerGameplayRuntime',
       'new WorldCombatGameplayBinding',
       'new WorldPowerUpRuntime',
@@ -136,6 +137,7 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     ]) {
       expect(build, legacyConstructor).not.toContain(legacyConstructor);
     }
+    expect(build).toContain('worldRuntime.bind(weaponExecution);');
     expect(build).toContain('worldRuntime.bind(playerGameplayRuntime);');
     expect(build).toContain('worldRuntime.bind(combatGameplayBinding);');
     expect(build).toContain('worldRuntime.bind(supportGameplayRuntime);');

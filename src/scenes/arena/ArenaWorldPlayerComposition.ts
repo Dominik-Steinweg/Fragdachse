@@ -4,6 +4,7 @@ import { LoadoutManager } from '../../loadout/LoadoutManager';
 import {
   WorldPlayerGameplayRuntime,
 } from '../../world/WorldPlayerGameplayRuntime';
+import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
@@ -21,6 +22,15 @@ export function composeWorldPlayerGameplay(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, flow, worldRuntime, world, placementSystem } = input;
+  // Gemeinsame Immediate-Weapon-Execution-Capability: world-composed, ohne Player-Resource-/
+  // Loadout-Autoritaet. Der Loadout delegiert seinen Player-Fire hierher; automatische Quellen
+  // folgen in Teilphase 4B.
+  const weaponExecution = new WorldWeaponExecutionRuntime({
+    projectileManager: ctx.projectileManager,
+    combatSystem: ctx.combatSystem,
+  });
+  gameplay.weaponExecution = weaponExecution;
+  worldRuntime.bind(weaponExecution);
   // Der Coop-Build gehoert zur laufenden World und kann deshalb auch in einer Activity-losen
   // LobbyWorld wirken. Die darunterliegenden Missionssysteme bleiben weiterhin an
   // `isCoopMission`/`missionMapConfig` gebunden.
@@ -52,6 +62,7 @@ export function composeWorldPlayerGameplay(
       resourceSystem,
       bridge,
     ),
+    weaponExecution,
     createBurrowSystem: (resourceSystem) => new BurrowSystem(
       resourceSystem,
       ctx.playerManager,
