@@ -15,6 +15,7 @@ import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
+import { isValidPlayerActionAttemptId } from '../../world/PlayerActionRuntime';
 import type {
   ConstructionRpcPort,
   HeldActionRpcPort,
@@ -214,13 +215,33 @@ export class RpcCoordinator {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
-      if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
-      if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
+      if (!isValidPlayerActionAttemptId(params?.attemptId)) return { ok: false, reason: 'invalid' };
       // Ein einziger hostseitiger Zeitpunkt für die gesamte Aktion: Held-Action-Consume,
       // Charge-Validierung, Construction-Use und der Gameplay-Commit teilen sich `hostNowMs`.
       // `clientX`/`clientY` bleiben Positions-/Latenzkompensation und sind davon unberührt;
       // eine Client-Uhr fließt bewusst nicht mehr in Cooldown-/Commit-Entscheidungen ein.
       const hostNowMs = Date.now();
+      const isGaussCancellation = slot === 'ultimate'
+        && params?.ultimateAction === 'cancel'
+        && params?.gaussChargeId !== undefined;
+
+      // A Gauss cancel is an authoritative lifecycle cleanup command. Route it directly to the
+      // Ultimate owner so a stun, burrow, countdown or input teardown cannot strand the charge.
+      if (isGaussCancellation && params) {
+        return this.playerLoadout.usePlayerAction({
+          category: 'ultimate',
+          playerId: senderId,
+          angle,
+          targetX,
+          targetY,
+          hostNowMs,
+          attemptId: params.attemptId,
+          params,
+          clientPosition: { x: clientX, y: clientY },
+        });
+      }
+      if (!capabilities.canInteract) return { ok: false, reason: 'blocked' };
+      if (bridge.isArenaCountdownActive()) return { ok: false, reason: 'blocked' };
       const activeGameMode = bridge.getActiveGameMode();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       const authoritativeParams = params;

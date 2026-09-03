@@ -117,19 +117,19 @@ describe('room-statistics gameplay hooks', () => {
     });
 
     expect(behavior.execute(
-      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1000, params: { ultimateAction: 'press' } },
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1000, params: { ultimateAction: 'press', gaussChargeId: 'charge-a' } },
     )).toEqual({ ok: true });
     expect(ultimateUsed).not.toHaveBeenCalled();
     expect(behavior.execute(
-      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1100, params: { ultimateAction: 'release', ultimateChargeFraction: 1 } },
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1100, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } },
     ).ok).toBe(false);
     expect(ultimateUsed).not.toHaveBeenCalled();
 
     expect(behavior.execute(
-      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 2000, params: { ultimateAction: 'press' } },
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 2000, params: { ultimateAction: 'press', gaussChargeId: 'charge-b' } },
     ).ok).toBe(true);
     expect(behavior.execute(
-      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 3600, params: { ultimateAction: 'release', ultimateChargeFraction: 0 } },
+      { category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 3600, params: { ultimateAction: 'release', gaussChargeId: 'charge-b', attemptId: 'gauss-commit-b' } },
     ).ok).toBe(true);
     expect(ultimateUsed).toHaveBeenCalledOnce();
     expect(fireGauss).toHaveBeenCalledOnce();

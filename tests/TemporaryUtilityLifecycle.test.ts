@@ -111,4 +111,83 @@ describe('temporary utility collection lifecycle', () => {
     manager.clearTemporaryUtilities('player-a');
     expect(publishTemporaryUtilityInstances).toHaveBeenLastCalledWith('player-a', []);
   });
+
+  it('starts a newly equipped utility ready instead of transferring the previous cooldown', () => {
+    let config = UTILITY_CONFIGS.HE_GRENADE;
+    const publishCooldown = vi.fn();
+    const manager = new PlayerUtilityActionRuntime({
+      playerManager: {} as never,
+      projectileManager: {} as never,
+      combatSystem: {} as never,
+      actor: {} as never,
+      loadout: {
+        getEquippedUtilityConfig: vi.fn(() => config),
+        resolveUtilityConfig: (_playerId, value) => value,
+        noteUtilityUsed: vi.fn(),
+      },
+      heldAction: {} as never,
+      translocator: null,
+      decoy: null,
+      stinkCloud: null,
+      gameAudioSystem: {} as never,
+      network: {
+        loadout: {
+          publishUtilityCooldownUntil: publishCooldown,
+          publishTemporaryUtilityInstances: vi.fn(),
+          publishHeldUtilityId: vi.fn(),
+        },
+        roundStats: { recordUtilityUsed: vi.fn(), recordConstructionBuilt: vi.fn() },
+      },
+      dropBeer: vi.fn(),
+      nukeStrike: vi.fn(() => false),
+      placeable: null,
+    });
+
+    manager.syncEquippedUtility('player-a');
+    manager.beginUtilityCooldown('player-a', UTILITY_CONFIGS.HE_GRENADE.id, 1_000);
+    config = UTILITY_CONFIGS.BFG;
+    manager.syncEquippedUtility('player-a');
+
+    const equipped = (manager as unknown as { equippedUtilities: Map<string, { getLastUsedAt(): number }> })
+      .equippedUtilities.get('player-a');
+    expect(equipped?.getLastUsedAt()).toBe(-Infinity);
+    expect(publishCooldown).toHaveBeenLastCalledWith('player-a', 0, '__clear__');
+  });
+
+  it('does not republish temporary utility state for a no-op equipment sync', () => {
+    const publishTemporaryUtilityInstances = vi.fn();
+    const config = UTILITY_CONFIGS.HE_GRENADE;
+    const manager = new PlayerUtilityActionRuntime({
+      playerManager: {} as never,
+      projectileManager: {} as never,
+      combatSystem: {} as never,
+      actor: {} as never,
+      loadout: {
+        getEquippedUtilityConfig: vi.fn(() => config),
+        resolveUtilityConfig: (_playerId, value) => value,
+        noteUtilityUsed: vi.fn(),
+      },
+      heldAction: {} as never,
+      translocator: null,
+      decoy: null,
+      stinkCloud: null,
+      gameAudioSystem: {} as never,
+      network: {
+        loadout: {
+          publishUtilityCooldownUntil: vi.fn(),
+          publishTemporaryUtilityInstances,
+          publishHeldUtilityId: vi.fn(),
+        },
+        roundStats: { recordUtilityUsed: vi.fn(), recordConstructionBuilt: vi.fn() },
+      },
+      dropBeer: vi.fn(),
+      nukeStrike: vi.fn(() => false),
+      placeable: null,
+    });
+
+    manager.syncEquippedUtility('player-a');
+    publishTemporaryUtilityInstances.mockClear();
+    manager.syncEquippedUtility('player-a');
+    expect(publishTemporaryUtilityInstances).not.toHaveBeenCalled();
+  });
 });

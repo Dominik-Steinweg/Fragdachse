@@ -11,7 +11,10 @@ import type { CombatSystem } from '../systems/CombatSystem';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { LoadoutManager, UltimateModifierReadPort } from '../loadout/LoadoutManager';
-import type { PlayerUltimateActionRequest } from './PlayerActionRuntime';
+import {
+  isValidPlayerActionAttemptId,
+  type PlayerUltimateActionRequest,
+} from './PlayerActionRuntime';
 import { PLAYER_SIZE, type MuzzleOrigin } from '../config';
 import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
 
@@ -99,12 +102,22 @@ interface BuffUltimateState {
   auraLingerUntil: number;
 }
 
+interface GaussChargeState {
+  readonly chargeId: string;
+  readonly startedAt: number;
+}
+
+type GaussChargeEndReason = 'cancelled' | 'released' | 'reset';
+
+const MAX_RECENT_ATTEMPTS_PER_PLAYER = 64;
+const MAX_RECENT_GAUSS_CHARGES_PER_PLAYER = 64;
+
 /** World-owned player-Ultimate activation plus sustained buff behavior. */
 export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   private readonly states = new Map<string, BuffUltimateState>();
-  private readonly committedAttempts = new Map<string, LoadoutUseResult>();
-  private readonly gaussChargeStartedAt = new Map<string, number>();
-  private readonly gaussPressAttempts = new Map<string, LoadoutUseResult>();
+  private readonly committedAttempts = new Map<string, Map<string, LoadoutUseResult>>();
+  private readonly gaussCharges = new Map<string, GaussChargeState>();
+  private readonly gaussChargeHistory = new Map<string, Map<string, GaussChargeEndReason>>();
   private armageddon: PlayerUltimateArmageddonCapability | null = null;
   private airstrike: PlayerUltimateAirstrikeCapability | null = null;
   private tunnelPlacement: PlayerUltimateTunnelPlacementCapability | null = null;
@@ -133,16 +146,29 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
 
   execute(request: PlayerUltimateActionRequest): LoadoutUseResult {
     if (this.destroyed || request.category !== 'ultimate') return { ok: false, reason: 'invalid' };
+    if (!isValidPlayerActionAttemptId(request.attemptId)) return { ok: false, reason: 'invalid' };
 
-    const attemptKey = request.attemptId ? `${request.playerId}:${request.attemptId}` : null;
+    const attemptKey = request.attemptId === undefined ? null : request.attemptId;
+    const activeGaussCharge = this.gaussCharges.get(request.playerId);
+    if (activeGaussCharge
+      && request.params?.gaussChargeId !== undefined
+      && activeGaussCharge.chargeId !== request.params.gaussChargeId) {
+      return { ok: false, reason: 'blocked' };
+    }
     if (attemptKey) {
-      const committed = this.committedAttempts.get(attemptKey);
+      const committed = this.committedAttempts.get(request.playerId)?.get(attemptKey);
       if (committed) return committed;
     }
 
     const playerId = request.playerId;
     const config = this.options.loadout.getEquippedUltimateConfig(playerId);
     if (!config) return { ok: false, reason: 'invalid' };
+
+    // Gauss cancellation is a lifecycle cleanup command. It must still reach this owner when
+    // stun, burrow or another input gate has already made ordinary combat actions unavailable.
+    if (config.type === 'gauss' && request.params?.ultimateAction === 'cancel') {
+      return this.cancelGaussCharge(playerId, request.params.gaussChargeId);
+    }
     if (!this.options.canInteract(playerId)
       || !this.options.isAlive(playerId)
       || this.options.isUltimateBlocked(playerId)) {
@@ -203,7 +229,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     this.options.network.roundStats.recordUltimateUsed(playerId);
 
     const result: LoadoutUseResult = { ok: true };
-    if (attemptKey) this.committedAttempts.set(attemptKey, result);
+    if (attemptKey) this.rememberCommittedAttempt(playerId, attemptKey, result);
     return result;
   }
 
@@ -269,36 +295,40 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   ): LoadoutUseResult {
     const action = request.params?.ultimateAction;
     if (action === 'press') {
-      if (attemptKey) {
-        const previous = this.gaussPressAttempts.get(attemptKey);
-        if (previous) return previous;
+      const chargeId = request.params?.gaussChargeId;
+      if (!this.isValidGaussChargeId(chargeId)) return { ok: false, reason: 'invalid' };
+      const current = this.gaussCharges.get(request.playerId);
+      if (current) {
+        // A retransmitted press for the current charge is idempotent. A press for another
+        // charge can never replace an active charge and therefore cannot affect its lifetime.
+        return current.chargeId === chargeId
+          ? { ok: true }
+          : { ok: false, reason: 'blocked' };
       }
-      if (this.gaussChargeStartedAt.has(request.playerId)) return { ok: false, reason: 'blocked' };
+      if (this.hasGaussChargeEnded(request.playerId, chargeId)) return { ok: false, reason: 'blocked' };
       if (this.options.resourceSystem.getRage(request.playerId) < config.rageRequired) {
         return { ok: false, reason: 'resource', resourceKind: 'rage' };
       }
-      this.gaussChargeStartedAt.set(request.playerId, request.hostNowMs);
-      const result: LoadoutUseResult = { ok: true };
-      if (attemptKey) this.gaussPressAttempts.set(attemptKey, result);
-      return result;
+      this.gaussCharges.set(request.playerId, { chargeId, startedAt: request.hostNowMs });
+      return { ok: true };
     }
 
-    if (action !== 'release') {
-      this.clearGaussCharge(request.playerId);
-      return { ok: false, reason: 'blocked' };
-    }
+    if (action !== 'release') return { ok: false, reason: 'invalid' };
 
-    const startedAt = this.gaussChargeStartedAt.get(request.playerId);
-    if (startedAt === undefined) return { ok: false, reason: 'blocked' };
+    const chargeId = request.params?.gaussChargeId;
+    if (!this.isValidGaussChargeId(chargeId)) return { ok: false, reason: 'invalid' };
+    const charge = this.gaussCharges.get(request.playerId);
+    if (!charge || charge.chargeId !== chargeId) return { ok: false, reason: 'blocked' };
+
     const chargeFraction = config.chargeDuration <= 0
       ? 1
-      : Math.max(0, Math.min(1, (request.hostNowMs - startedAt) / config.chargeDuration));
+      : Math.max(0, Math.min(1, (request.hostNowMs - charge.startedAt) / config.chargeDuration));
     if (chargeFraction < 1) {
-      this.clearGaussCharge(request.playerId);
+      this.endGaussCharge(request.playerId, chargeId, 'cancelled');
       return { ok: false, reason: 'blocked' };
     }
     if (this.options.resourceSystem.getRage(request.playerId) < config.rageCost) {
-      this.clearGaussCharge(request.playerId);
+      this.endGaussCharge(request.playerId, chargeId, 'released');
       return { ok: false, reason: 'resource', resourceKind: 'rage' };
     }
     const player = this.options.playerManager.getPlayer(request.playerId);
@@ -327,7 +357,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       -Math.sin(request.angle) * config.shotRecoilForce,
       config.shotRecoilDuration,
     );
-    this.clearGaussCharge(request.playerId);
+    this.endGaussCharge(request.playerId, chargeId, 'released');
     return this.commitRageUltimate(request.playerId, config.rageCost, attemptKey);
   }
 
@@ -339,7 +369,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     const result: LoadoutUseResult = { ok: true };
     this.options.resourceSystem.addRage(playerId, -rageCost);
     this.options.network.roundStats.recordUltimateUsed(playerId);
-    if (attemptKey) this.committedAttempts.set(attemptKey, result);
+    if (attemptKey) this.rememberCommittedAttempt(playerId, attemptKey, result);
     return result;
   }
 
@@ -412,7 +442,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     const state = this.states.get(playerId);
     const ownMultiplier = state?.active ? state.config.speedMultiplier : 1;
     const config = this.options.loadout.getEquippedUltimateConfig(playerId);
-    const gaussMultiplier = config?.type === 'gauss' && this.gaussChargeStartedAt.has(playerId)
+    const gaussMultiplier = config?.type === 'gauss' && this.gaussCharges.has(playerId)
       ? config.movementSlowFactor
       : 1;
     return ownMultiplier * gaussMultiplier * this.getAllyAuraMultiplier(playerId, 'speed', nowMs);
@@ -434,15 +464,15 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   }
 
   isUltimateCharging(playerId: string): boolean {
-    return this.gaussChargeStartedAt.has(playerId);
+    return this.gaussCharges.has(playerId);
   }
 
   getUltimateChargeFraction(playerId: string, nowMs: number): number {
     const config = this.options.loadout.getEquippedUltimateConfig(playerId);
-    const startedAt = this.gaussChargeStartedAt.get(playerId);
-    if (config?.type !== 'gauss' || startedAt === undefined) return 0;
+    const charge = this.gaussCharges.get(playerId);
+    if (config?.type !== 'gauss' || !charge) return 0;
     if (config.chargeDuration <= 0) return 1;
-    return Math.max(0, Math.min(1, (nowMs - startedAt) / config.chargeDuration));
+    return Math.max(0, Math.min(1, (nowMs - charge.startedAt) / config.chargeDuration));
   }
 
   getUltimateChargeRange(playerId: string): number {
@@ -454,12 +484,16 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     const state = this.states.get(playerId);
     if (state?.config.armageddon) this.armageddon?.deactivate(playerId);
     this.states.delete(playerId);
-    this.clearGaussCharge(playerId);
+    const charge = this.gaussCharges.get(playerId);
+    if (charge) this.endGaussCharge(playerId, charge.chargeId, 'reset');
     this.clearAttempts(playerId);
   }
 
   removePlayer(playerId: string): void {
     this.resetPlayer(playerId);
+    // Detach is a player-lifetime boundary: no retry or charge tombstone may survive it.
+    this.gaussChargeHistory.delete(playerId);
+    this.committedAttempts.delete(playerId);
   }
 
   destroy(): void {
@@ -470,8 +504,8 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     }
     this.states.clear();
     this.committedAttempts.clear();
-    this.gaussChargeStartedAt.clear();
-    this.gaussPressAttempts.clear();
+    this.gaussCharges.clear();
+    this.gaussChargeHistory.clear();
     this.armageddon = null;
     this.airstrike = null;
     this.tunnelPlacement = null;
@@ -513,18 +547,55 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   }
 
   private clearAttempts(playerId: string): void {
-    for (const key of this.committedAttempts.keys()) {
-      if (key.startsWith(`${playerId}:`)) this.committedAttempts.delete(key);
-    }
-    for (const key of this.gaussPressAttempts.keys()) {
-      if (key.startsWith(`${playerId}:`)) this.gaussPressAttempts.delete(key);
-    }
+    this.committedAttempts.delete(playerId);
   }
 
-  private clearGaussCharge(playerId: string): void {
-    this.gaussChargeStartedAt.delete(playerId);
-    for (const key of this.gaussPressAttempts.keys()) {
-      if (key.startsWith(`${playerId}:`)) this.gaussPressAttempts.delete(key);
+  private rememberCommittedAttempt(playerId: string, attemptId: string, result: LoadoutUseResult): void {
+    const history = this.committedAttempts.get(playerId) ?? new Map<string, LoadoutUseResult>();
+    history.delete(attemptId);
+    history.set(attemptId, result);
+    while (history.size > MAX_RECENT_ATTEMPTS_PER_PLAYER) {
+      const oldest = history.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      history.delete(oldest);
     }
+    this.committedAttempts.set(playerId, history);
+  }
+
+  private cancelGaussCharge(playerId: string, chargeId: string | undefined): LoadoutUseResult {
+    if (!this.isValidGaussChargeId(chargeId)) return { ok: false, reason: 'invalid' };
+    const current = this.gaussCharges.get(playerId);
+    if (!current) return this.hasGaussChargeEnded(playerId, chargeId)
+      ? { ok: true }
+      : { ok: false, reason: 'blocked' };
+    if (current.chargeId !== chargeId) return { ok: false, reason: 'blocked' };
+    this.endGaussCharge(playerId, chargeId, 'cancelled');
+    return { ok: true };
+  }
+
+  private endGaussCharge(playerId: string, chargeId: string, reason: GaussChargeEndReason): void {
+    const current = this.gaussCharges.get(playerId);
+    if (!current || current.chargeId !== chargeId) return;
+    this.gaussCharges.delete(playerId);
+    const history = this.gaussChargeHistory.get(playerId) ?? new Map<string, GaussChargeEndReason>();
+    history.delete(chargeId);
+    history.set(chargeId, reason);
+    while (history.size > MAX_RECENT_GAUSS_CHARGES_PER_PLAYER) {
+      const oldest = history.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      history.delete(oldest);
+    }
+    this.gaussChargeHistory.set(playerId, history);
+  }
+
+  private hasGaussChargeEnded(playerId: string, chargeId: string): boolean {
+    return this.gaussChargeHistory.get(playerId)?.has(chargeId) ?? false;
+  }
+
+  private isValidGaussChargeId(value: unknown): value is string {
+    return typeof value === 'string'
+      && value.length > 0
+      && value.length <= 120
+      && value.trim() === value;
   }
 }

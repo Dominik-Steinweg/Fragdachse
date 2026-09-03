@@ -29,7 +29,12 @@ import type { CombatSystem } from '../systems/CombatSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { TranslocatorSystem } from '../systems/TranslocatorSystem';
 import type { HeldActionIdentity } from '../systems/HostHeldActionSystem';
-import type { PlayerActionActor, PlayerUtilityActionRequest, PlayerUtilityActionSource } from './PlayerActionRuntime';
+import {
+  isValidPlayerActionAttemptId,
+  type PlayerActionActor,
+  type PlayerUtilityActionRequest,
+  type PlayerUtilityActionSource,
+} from './PlayerActionRuntime';
 
 export interface TemporaryUtilityPort {
   addTemporaryUtility(playerId: string, config: UtilityConfig, charges: number): string | null;
@@ -115,6 +120,8 @@ type ChargedUtilityConfig = UtilityConfig & {
   activation: Extract<UtilityConfig['activation'], { type: 'charged_throw' | 'charged_gate' }>;
 };
 
+const MAX_RECENT_ATTEMPTS_PER_PLAYER = 64;
+
 /**
  * World-owned semantic utility action boundary.
  *
@@ -126,7 +133,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   private readonly temporaryUtilities = new TemporaryUtilityCollection();
   private readonly equippedUtilities = new Map<string, GenericUtility>();
   private readonly inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
-  private readonly committedAttempts = new Map<string, LoadoutUseResult>();
+  private readonly committedAttempts = new Map<string, Map<string, LoadoutUseResult>>();
   private placeableCapability: PlayerUtilityActionRuntimeOptions['placeable'];
   private destroyed = false;
 
@@ -149,12 +156,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     }
     const current = this.equippedUtilities.get(playerId);
     if (current?.config.id === config.id && current.config === config) {
-      this.publishTemporaryUtilities(playerId);
       return;
     }
-    const previousLastUsedAt = current?.getLastUsedAt() ?? -Infinity;
     const next = new GenericUtility(config);
-    if (previousLastUsedAt !== -Infinity) next.setLastUsedAt(previousLastUsedAt);
     this.equippedUtilities.set(playerId, next);
     this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, '__clear__');
     this.options.network.loadout.publishHeldUtilityId(playerId, '');
@@ -165,9 +169,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     this.equippedUtilities.delete(playerId);
     this.inspectorUtilities.delete(playerId);
     this.temporaryUtilities.clearPlayer(playerId);
-    for (const key of this.committedAttempts.keys()) {
-      if (key.startsWith(`${playerId}:`)) this.committedAttempts.delete(key);
-    }
+    this.committedAttempts.delete(playerId);
     this.publishTemporaryUtilities(playerId);
     this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, '__clear__');
     this.options.network.loadout.publishHeldUtilityId(playerId, '');
@@ -268,16 +270,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
   execute(request: PlayerUtilityActionRequest, inspector = false): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
-    const attemptKey = request.attemptId ? `${request.playerId}:${request.attemptId}` : null;
-    if (request.attemptId !== undefined
-      && (typeof request.attemptId !== 'string'
-        || request.attemptId.length === 0
-        || request.attemptId.length > 120
-        || request.attemptId.trim() !== request.attemptId)) {
+    if (!isValidPlayerActionAttemptId(request.attemptId)) {
       return { ok: false, reason: 'invalid' };
     }
+    const attemptKey = request.attemptId === undefined ? null : request.attemptId;
     if (attemptKey) {
-      const previous = this.committedAttempts.get(attemptKey);
+      const previous = this.committedAttempts.get(request.playerId)?.get(attemptKey);
       if (previous) return previous;
     }
 
@@ -380,8 +378,20 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       this.options.gameAudioSystem.playSound('sfx_place_decoy', player.x, player.y, request.playerId);
     }
     const result: LoadoutUseResult = { ok: true };
-    if (attemptKey) this.committedAttempts.set(attemptKey, result);
+    if (attemptKey) this.rememberCommittedAttempt(request.playerId, attemptKey, result);
     return result;
+  }
+
+  private rememberCommittedAttempt(playerId: string, attemptId: string, result: LoadoutUseResult): void {
+    const history = this.committedAttempts.get(playerId) ?? new Map<string, LoadoutUseResult>();
+    history.delete(attemptId);
+    history.set(attemptId, result);
+    while (history.size > MAX_RECENT_ATTEMPTS_PER_PLAYER) {
+      const oldest = history.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      history.delete(oldest);
+    }
+    this.committedAttempts.set(playerId, history);
   }
 
   private resolveSource(

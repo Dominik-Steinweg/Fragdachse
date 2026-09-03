@@ -34,7 +34,6 @@ import type {
   GroundFireVisualStyle,
   HostHeldActionKind,
   LoadoutCommitSnapshot,
-  LoadoutSlot,
   LoadoutUseParams,
   LoadoutUseResult,
   PlayerInput,
@@ -213,9 +212,8 @@ export interface PlayerGameplayResourceCommandPort {
  *
  * Obere Scene-/Runtime-/Adapter-Consumer lesen darüber, statt in `WorldPlayerGameplayRuntime.systems`
  * zu traversieren. Bewusst nach Verbrauchergruppe geschnitten und **kein** Mega-Facade – dieselbe
- * Runtime implementiert alle Teilsichten. Der verbleibende slotförmige Legacy-`use`-Pfad ist auf
- * interne Waffenkompatibilität begrenzt;
- * mutierende Action-/Burrow-/Resource-Commands laufen über benannte Runtime-Grenzen.
+ * Runtime implementiert alle Teilsichten; mutierende Action-/Burrow-/Resource-Commands laufen
+ * über benannte Runtime-Grenzen.
  */
 export interface PlayerGameplayStateReadView {
   isBurrowed(playerId: string): boolean;
@@ -724,60 +722,6 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.resource.setAdrenaline(playerId, amount);
   }
 
-  /** Narrow compatibility path for weapon callers that still use the old slot-shaped API. */
-  useLegacyLoadoutAction(
-    slot: LoadoutSlot,
-    playerId: string,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    hostNowMs: number,
-    shotId?: number,
-    params?: LoadoutUseParams,
-    clientX?: number,
-    clientY?: number,
-  ): LoadoutUseResult {
-    if (this.destroyed) return { ok: false, reason: 'invalid' };
-    if (slot === 'utility') {
-      return this.usePlayerAction({
-        category: 'utility',
-        playerId,
-        angle,
-        targetX,
-        targetY,
-        hostNowMs,
-        params,
-        clientPosition: { x: clientX, y: clientY },
-      });
-    }
-    if (slot === 'ultimate') {
-      return this.usePlayerAction({
-        category: 'ultimate',
-        playerId,
-        angle,
-        targetX,
-        targetY,
-        hostNowMs,
-        attemptId: params?.attemptId,
-        params,
-        clientPosition: { x: clientX, y: clientY },
-      });
-    }
-    this.systems.utilityAction.breakStealth(playerId, hostNowMs);
-    return this.systems.loadout.use(
-      slot,
-      playerId,
-      angle,
-      targetX,
-      targetY,
-      hostNowMs,
-      shotId,
-      params,
-      clientX,
-      clientY,
-    );
-  }
-
   // ── Read-Views (PlayerGameplayReadViews) ─────────────────────────────────────
   // Reine Lesezugriffe für obere Consumer; keine State-Mutation.
 
@@ -854,7 +798,6 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setItemRuntimeChargeConsumer(null);
     systems.loadout.setItemRuntimeWeaponFiredHandler(null);
     systems.loadout.setUltimateModifierReadPort(null);
-    systems.loadout.setActionBlockedChecker(null);
     systems.ultimateBehavior.destroy();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
@@ -936,7 +879,6 @@ export class WorldPlayerGameplayRuntime implements
     loadout.setCombatSystem(this.options.combatSystem);
     loadout.setWeaponExecutionCapability(this.options.weaponExecution);
     loadout.setSpecializedWeaponExecutionCapability(this.options.specializedWeaponExecution);
-    loadout.setDashBurstChecker((playerId) => this.options.hostPhysics.isDashBurst(playerId));
     loadout.setPhysicsSystem(this.options.hostPhysics);
     loadout.setAk47StrategicTargetHitResolver((playerId, enemyId) => this.systems.ak47StrategicTarget?.isCurrentTarget(playerId, enemyId) ?? false);
     loadout.setNegevKillstreakExplosionHandler((event: NegevKillstreakExplosionEvent) => {
@@ -970,12 +912,5 @@ export class WorldPlayerGameplayRuntime implements
     });
     tunnel.setPositionResetCallback((playerId, x, y) => this.options.resetPlayerPosition(playerId, x, y));
     burrow.setTunnelTransitEndedCallback((playerId, nowMs) => tunnel.notifyTransitEnded(playerId, nowMs));
-    loadout.setActionBlockedChecker((playerId, slot) => {
-      if (!this.options.getPlayerCapabilities(playerId).canInteract) return true;
-      if (!this.options.combatSystem.isAlive(playerId)) return true;
-      if ((slot === 'weapon1' || slot === 'weapon2') && burrow.isWeaponBlocked(playerId)) return true;
-      if ((slot === 'utility' || slot === 'ultimate') && burrow.isUtilityBlocked(playerId)) return true;
-      return false;
-    });
   }
 }

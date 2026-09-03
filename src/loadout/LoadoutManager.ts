@@ -108,12 +108,10 @@ export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
-  private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
   private shieldBuffSystem:   ShieldBuffSystem | null = null;
-  private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
   private ultimateModifierReadPort: UltimateModifierReadPort | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   /**
@@ -396,11 +394,6 @@ export class LoadoutManager {
     this.combatSystem = combatSystem;
   }
 
-  /** Injiziert einen Checker, der während Dash-Phase 1 das Schießen blockiert. */
-  setDashBurstChecker(fn: (id: string) => boolean): void {
-    this.dashBurstChecker = fn;
-  }
-
   /** Injiziert das HostPhysicsSystem für Rückstoß-Impulse. */
   setPhysicsSystem(ps: PhysicsSystemType | null): void {
     this.physicsSystem = ps;
@@ -421,9 +414,8 @@ export class LoadoutManager {
   /**
    * Meldung ueber einen tatsaechlich erfolgten Waffeneinsatz (Kreuzfeuer).
    *
-   * Bewusst ohne Zeitstempel: `use()` bekommt die Client-Uhr durchgereicht, das Zeitfenster des
-   * Laufzeitsystems laeuft aber gegen `Date.now()` des Hosts. Ein durchgereichtes `now` wuerde
-   * die Dauer um den Clock-Skew verschieben.
+   * Bewusst ohne Zeitstempel: der semantische Action-Owner leitet die Meldung nach erfolgreichem
+   * Dispatch weiter; das Zeitfenster des Laufzeitsystems läuft gegen die Host-Uhr.
    */
   setItemRuntimeWeaponFiredHandler(handler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null): void {
     this.itemRuntimeWeaponFiredHandler = handler;
@@ -446,83 +438,6 @@ export class LoadoutManager {
     handler: ((event: NegevKillstreakExplosionEvent) => void) | null,
   ): void {
     this.negevKillstreakExplosionHandler = handler;
-  }
-
-  /** Injiziert einen Host-seitigen Blocker für Aktionen (z.B. tot, verbuddelt, stunned). */
-  setActionBlockedChecker(checker: ((playerId: string, slot: LoadoutSlot) => boolean) | null): void {
-    this.actionBlockedChecker = checker;
-  }
-
-  // ── Haupt-Dispatch (vom Host-RPC-Handler) ────────────────────────────────
-
-  use(
-    slot:      LoadoutSlot,
-    playerId:  string,
-    angle:     number,
-    targetX:   number,
-    targetY:   number,
-    now:       number,
-    shotId?:   number,
-    params?:   LoadoutUseParams,
-    clientX?:  number,
-    clientY?:  number,
-  ): LoadoutUseResult {
-    const loadout = this.loadouts.get(playerId);
-    if (!loadout) return { ok: false, reason: 'invalid' };
-    if (this.actionBlockedChecker?.(playerId, slot)) return { ok: false, reason: 'blocked' };
-
-    const player = this.playerManager.getPlayer(playerId);
-    if (!player) return { ok: false, reason: 'invalid' };
-    // Client-Position verwenden falls vorhanden (kompensiert Netzwerk-Tick-Latenz),
-    // sonst Fallback auf autoritative Host-Position.
-    const x = clientX ?? player.x;
-    const y = clientY ?? player.y;
-
-    // Schießen während Dash-Phase 1 (Burst) blockiert
-    if ((slot === 'weapon1' || slot === 'weapon2') && this.dashBurstChecker?.(playerId)) return { ok: false, reason: 'blocked' };
-
-    // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
-    if (slot === 'weapon1' || slot === 'weapon2') {
-      this.claimWeaponAction(playerId, slot, now, angle);
-    }
-
-    // scopeHolding: Scope-Waffe wird gehalten, aber noch kein Schuss – nur holdSpeedFactor aktiv
-    if (params?.scopeHolding && (slot === 'weapon1' || slot === 'weapon2')) {
-      return this.okResult;
-    }
-
-    switch (slot) {
-      case 'weapon1': {
-        const result = this.activateWeapon(playerId, 'weapon1', x, y, angle, targetX, targetY, now, shotId, params);
-        if (result.ok) this.completeWeaponAction(playerId, 'weapon1', now);
-        return result;
-      }
-
-      case 'weapon2': {
-        // Der Kreuzfeuer-Melder haengt bewusst hier und nicht in `fireWeapon`: nur ein Aufruf,
-        // der tatsaechlich gefeuert hat, oeffnet das Fenster – Cooldown, fehlendes Adrenalin und
-        // blockierte Schuesse liefern `ok: false` und zaehlen nicht. Dasselbe gilt fuer das
-        // getragene Item: ein abgelehnter Schuss nimmt die Waffe nicht in die Pfoten.
-        const result = this.activateWeapon(playerId, 'weapon2', x, y, angle, targetX, targetY, now, shotId, params);
-        if (result.ok) this.completeWeaponAction(playerId, 'weapon2', now);
-        return result;
-      }
-
-      case 'utility': {
-        // Utility activation belongs to PlayerUtilityActionRuntime. Keeping this branch invalid
-        // prevents a second utility writer from surviving behind the legacy loadout facade.
-        return { ok: false, reason: 'invalid' };
-      }
-
-      case 'ultimate': {
-        // Ultimate activation is owned by PlayerUltimateBehaviorRuntime. Keeping this
-        // compatibility branch invalid prevents a second resource/commit writer in the
-        // equipment owner while direct weapon tests can continue to use this facade.
-        return { ok: false, reason: 'invalid' };
-      }
-    }
-
-    return { ok: false, reason: 'invalid' };
   }
 
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────

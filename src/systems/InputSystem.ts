@@ -127,6 +127,13 @@ export class InputSystem {
   private ultimatePlacementActive = false;
   private ultimateHoldActive = false;
   private ultimateChargeStartedAt: number | null = null;
+  /** Client-side correlation only; the host remains authoritative for this charge lifecycle. */
+  private gaussChargeId: string | null = null;
+  private gaussCommitAttemptId: string | null = null;
+  private gaussChargeSequence = 0;
+  private gaussCommitAttemptSequence = 0;
+  private gaussReleasePending = false;
+  private gaussChargeReady = false;
   private ultimateTargetingActive = false;   // Zielmodus für Airstrike-Ultimate
   private getUtilityPlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
   private getUltimatePlacementPreviewProvider: (() => UtilityPlacementPreviewState | undefined) | null = null;
@@ -805,6 +812,55 @@ export class InputSystem {
     this.cancelUltimateCharge();
     this.cancelUltimatePlacement();
     this.ultimateTargetingActive = false;
+  }
+
+  /** Reconcile the local Gauss preview with the authoritative lifecycle result. */
+  handleGaussActionResult(params: LoadoutUseParams, result: LoadoutUseResult | null): void {
+    const chargeId = params.gaussChargeId;
+    if (!chargeId || chargeId !== this.gaussChargeId) return;
+
+    if (params.ultimateAction === 'cancel') {
+      this.finishLocalGaussCharge();
+      return;
+    }
+    if (params.ultimateAction !== 'release') return;
+
+    this.gaussReleasePending = false;
+    if (result?.ok) {
+      const shouldRecharge = this.keyQ.isDown;
+      const cfg = this.getGaussUltimateConfig();
+      this.finishLocalGaussCharge();
+      if (shouldRecharge && cfg && (this.getLocalRage?.() ?? 0) >= cfg.rageRequired) {
+        const pointer = this.scene.input.activePointer;
+        const sprite = this.getLocalSprite();
+        if (sprite) {
+          const pointerWorld = this.getPointerWorldPoint(pointer);
+          const target = clampPointToArena(pointerWorld.x, pointerWorld.y);
+          this.beginUltimateCharge(
+            Date.now(),
+            cfg,
+            Phaser.Math.Angle.Between(sprite.x, sprite.y, target.x, target.y),
+            target.x,
+            target.y,
+          );
+        }
+      }
+      return;
+    }
+
+    // A failed execution keeps the host charge alive so a later matching release can retry. The
+    // local preview stays in the same ready state; a new press retries this same commit attempt.
+    if (!result || result.reason === 'blocked') {
+      if (!this.keyQ.isDown) {
+        this.cancelUltimateCharge();
+        return;
+      }
+      this.gaussChargeReady = true;
+      this.ultimateHoldActive = true;
+      this.stopUltimateChargeAudio();
+      return;
+    }
+    this.finishLocalGaussCharge();
   }
 
   getUtilityPlacementPreviewState(): UtilityPlacementPreviewState | undefined {
@@ -1506,7 +1562,11 @@ export class InputSystem {
     const airstrikeCfg = ultimateCfg?.type === 'airstrike' ? ultimateCfg as AirstrikeUltimateConfig : undefined;
     const tunnelCfg    = ultimateCfg?.type === 'tunnel'    ? ultimateCfg as TunnelUltimateConfig    : undefined;
     if (!utilityBlocked && gaussCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
-      this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
+      if (this.gaussChargeReady && this.gaussChargeId !== null) {
+        this.releaseUltimateCharge(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
+      } else {
+        this.beginUltimateCharge(now, gaussCfg, angle, clampedTarget.x, clampedTarget.y);
+      }
     } else if (!utilityBlocked && airstrikeCfg && Phaser.Input.Keyboard.JustDown(this.keyQ)) {
       const rage = this.getLocalRage?.() ?? 0;
       if (rage >= airstrikeCfg.rageCost) {
@@ -1542,7 +1602,11 @@ export class InputSystem {
       this.onLoadoutUse('ultimate', angle, clampedTarget.x, clampedTarget.y, { inputStarted: true });
     }
 
-    if (this.ultimateHoldActive && this.ultimateChargeStartedAt !== null && gaussCfg) {
+    if (this.ultimateHoldActive
+      && !this.gaussReleasePending
+      && !this.gaussChargeReady
+      && this.ultimateChargeStartedAt !== null
+      && gaussCfg) {
       const chargeFraction = this.computeGaussChargeFraction(this.ultimateChargeStartedAt, gaussCfg, now);
       if (chargeFraction >= 1.0) {
         this.autoFireAndMaybeRechargeGauss(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
@@ -1551,9 +1615,22 @@ export class InputSystem {
       }
     }
 
-    if (Phaser.Input.Keyboard.JustUp(this.keyQ) && gaussCfg) {
+    if (Phaser.Input.Keyboard.JustUp(this.keyQ)
+      && gaussCfg
+      && !this.gaussReleasePending
+      && this.gaussChargeReady) {
       this.cancelUltimateCharge();
-    } else if (this.ultimateHoldActive && !this.keyQ.isDown) {
+    } else if (Phaser.Input.Keyboard.JustUp(this.keyQ) && gaussCfg && !this.gaussReleasePending && !this.gaussChargeReady) {
+      const startedAt = this.ultimateChargeStartedAt;
+      if (startedAt !== null && this.computeGaussChargeFraction(startedAt, gaussCfg, now) >= 1) {
+        this.releaseUltimateCharge(angle, clampedTarget.x, clampedTarget.y, now, gaussCfg);
+      } else {
+        this.cancelUltimateCharge();
+      }
+    } else if (this.ultimateHoldActive
+      && !this.keyQ.isDown
+      && !this.gaussReleasePending
+      && !this.gaussChargeReady) {
       this.cancelUltimateCharge();
     }
     } finally {
@@ -1909,9 +1986,17 @@ export class InputSystem {
     this.cancelUtilityInteraction();
     this.ultimateHoldActive = true;
     this.ultimateChargeStartedAt = now;
+    this.gaussChargeId = `gauss-charge:${++this.gaussChargeSequence}`;
+    this.gaussCommitAttemptId = `gauss-commit:${++this.gaussCommitAttemptSequence}`;
+    this.gaussReleasePending = false;
+    this.gaussChargeReady = false;
     this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_gauss_charge') ?? null;
     this.bridge.sendDecoyStealthBreakRequest();
-    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press', inputStarted: true });
+    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, {
+      ultimateAction: 'press',
+      gaussChargeId: this.gaussChargeId,
+      inputStarted: true,
+    });
   }
 
   private releaseUltimateCharge(
@@ -1922,13 +2007,21 @@ export class InputSystem {
     cfg: GaussUltimateConfig,
   ): void {
     const startedAt = this.ultimateChargeStartedAt;
-    this.cancelUltimateCharge();
-    if (startedAt === null) return;
+    const chargeId = this.gaussChargeId;
+    if (startedAt === null || chargeId === null || this.gaussReleasePending) return;
 
     const chargeFraction = this.computeGaussChargeFraction(startedAt, cfg, now);
+    if (chargeFraction < 1) {
+      this.cancelUltimateCharge();
+      return;
+    }
+    this.gaussReleasePending = true;
+    this.stopUltimateChargeAudio();
     this.onLoadoutUse?.('ultimate', angle, targetX, targetY, {
       ultimateAction: 'release',
       ultimateChargeFraction: chargeFraction,
+      gaussChargeId: chargeId,
+      attemptId: this.gaussCommitAttemptId ?? undefined,
     });
   }
 
@@ -1945,28 +2038,32 @@ export class InputSystem {
     now: number,
     cfg: GaussUltimateConfig,
   ): void {
-    if (this.ultimateChargeStartedAt === null) return;
-
-    this.onLoadoutUse?.('ultimate', angle, targetX, targetY, {
-      ultimateAction: 'release',
-      ultimateChargeFraction: 1.0,
-    });
-
-    if (this.keyQ.isDown) {
-      const rage = this.getLocalRage?.() ?? 0;
-      if (rage >= cfg.rageRequired) {
-        this.ultimateChargeStartedAt = now;
-        this.bridge.sendDecoyStealthBreakRequest();
-        this.onLoadoutUse?.('ultimate', angle, targetX, targetY, { ultimateAction: 'press' });
-        return;
-      }
-    }
-    this.cancelUltimateCharge();
+    if (this.ultimateChargeStartedAt === null || this.gaussReleasePending || this.gaussChargeReady) return;
+    this.releaseUltimateCharge(angle, targetX, targetY, now, cfg);
   }
 
   private cancelUltimateCharge(): void {
+    const chargeId = this.gaussChargeId;
+    if (chargeId !== null) {
+      this.onLoadoutUse?.('ultimate', this.currentAimAngle, 0, 0, {
+        ultimateAction: 'cancel',
+        gaussChargeId: chargeId,
+      });
+    }
+    this.finishLocalGaussCharge();
+  }
+
+  private finishLocalGaussCharge(): void {
     this.ultimateHoldActive = false;
     this.ultimateChargeStartedAt = null;
+    this.gaussChargeId = null;
+    this.gaussCommitAttemptId = null;
+    this.gaussReleasePending = false;
+    this.gaussChargeReady = false;
+    this.stopUltimateChargeAudio();
+  }
+
+  private stopUltimateChargeAudio(): void {
     if (this.chargeLoopHandle) {
       this.audioSystem?.stopLoop(this.chargeLoopHandle);
       this.chargeLoopHandle = null;

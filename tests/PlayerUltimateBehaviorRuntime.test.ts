@@ -123,6 +123,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
   const scheduleStrike = vi.fn(() => true);
   const placeTunnel = vi.fn(() => true);
   const fireGauss = vi.fn(() => true);
+  const canInteract = vi.fn(() => true);
   const recordUltimateUsed = vi.fn();
   const behavior = new PlayerUltimateBehaviorRuntime({
     playerManager: {
@@ -138,7 +139,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
     loadout: { getEquippedUltimateConfig: () => config },
     physics: { addRecoil: vi.fn() },
     gaussExecution: { fireGauss },
-    canInteract: () => true,
+    canInteract,
     isAlive: () => true,
     isUltimateBlocked: () => false,
     network: {
@@ -148,7 +149,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
   });
   behavior.setAirstrikeCapability({ scheduleStrike });
   behavior.setTunnelPlacementCapability({ placeTunnel });
-  return { behavior, rage, scheduleStrike, placeTunnel, fireGauss, recordUltimateUsed };
+  return { behavior, rage, scheduleStrike, placeTunnel, fireGauss, canInteract, recordUltimateUsed };
 }
 
 describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () => {
@@ -232,15 +233,94 @@ describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () =
       targetX: 0,
       targetY: 0,
       hostNowMs: 100,
-      params: { ultimateAction: 'press' as const },
+      params: { ultimateAction: 'press' as const, gaussChargeId: 'charge-a' },
     };
     expect(behavior.execute(press)).toEqual({ ok: true });
     expect(behavior.getUltimateChargeFraction('p1', 1_000)).toBeCloseTo(0.6);
-    expect(behavior.execute({ ...press, hostNowMs: 1_700, params: { ultimateAction: 'release', ultimateChargeFraction: 0 } })).toEqual({ ok: false, reason: 'blocked' });
+    expect(behavior.execute({ ...press, hostNowMs: 1_700, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } })).toEqual({ ok: false, reason: 'blocked' });
     expect(behavior.isUltimateCharging('p1')).toBe(true);
-    expect(behavior.execute({ ...press, hostNowMs: 1_700, params: { ultimateAction: 'release', ultimateChargeFraction: 0 } })).toEqual({ ok: true });
+    expect(behavior.execute({ ...press, hostNowMs: 1_700, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } })).toEqual({ ok: true });
     expect(fireGauss).toHaveBeenCalledTimes(2);
     expect(rage.get('p1')).toBe(200);
     expect(recordUltimateUsed).toHaveBeenCalledOnce();
+  });
+
+  it('beendet eine frühe Release-Anfrage als Cancel und feuert später nur eine neue Charge', () => {
+    const { behavior, rage, fireGauss, recordUltimateUsed } = makeActivationHarness(ULTIMATE_CONFIGS.GAUSS_RIFLE);
+    const pressA = {
+      category: 'ultimate' as const, playerId: 'p1', angle: 0, targetX: 0, targetY: 0,
+      hostNowMs: 100, params: { ultimateAction: 'press' as const, gaussChargeId: 'charge-a' },
+    };
+
+    expect(behavior.execute(pressA)).toEqual({ ok: true });
+    expect(behavior.execute({ ...pressA, hostNowMs: 200, params: { ultimateAction: 'cancel', gaussChargeId: 'charge-a' } })).toEqual({ ok: true });
+    expect(behavior.isUltimateCharging('p1')).toBe(false);
+    expect(fireGauss).not.toHaveBeenCalled();
+
+    expect(behavior.execute({ ...pressA, hostNowMs: 300, params: { ultimateAction: 'press', gaussChargeId: 'charge-b' } })).toEqual({ ok: true });
+    expect(behavior.execute({ ...pressA, hostNowMs: 1_900, params: { ultimateAction: 'release', gaussChargeId: 'charge-b', attemptId: 'gauss-commit-b' } })).toEqual({ ok: true });
+    expect(fireGauss).toHaveBeenCalledOnce();
+    expect(rage.get('p1')).toBe(200);
+    expect(recordUltimateUsed).toHaveBeenCalledOnce();
+  });
+
+  it('lässt eine verspätete Charge-A-Anfrage niemals Charge-B verändern', () => {
+    const { behavior, canInteract, fireGauss } = makeActivationHarness(ULTIMATE_CONFIGS.GAUSS_RIFLE);
+    const base = { category: 'ultimate' as const, playerId: 'p1', angle: 0, targetX: 0, targetY: 0 };
+
+    expect(behavior.execute({ ...base, hostNowMs: 100, params: { ultimateAction: 'press', gaussChargeId: 'charge-a' } })).toEqual({ ok: true });
+    expect(behavior.execute({ ...base, hostNowMs: 150, params: { ultimateAction: 'cancel', gaussChargeId: 'charge-a' } })).toEqual({ ok: true });
+    expect(behavior.execute({ ...base, hostNowMs: 300, params: { ultimateAction: 'press', gaussChargeId: 'charge-b' } })).toEqual({ ok: true });
+
+    expect(behavior.execute({ ...base, hostNowMs: 1_700, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } })).toEqual({ ok: false, reason: 'blocked' });
+    expect(behavior.isUltimateCharging('p1')).toBe(true);
+    expect(fireGauss).not.toHaveBeenCalled();
+
+    canInteract.mockReturnValue(false);
+    expect(behavior.execute({ ...base, hostNowMs: 350, params: { ultimateAction: 'cancel', gaussChargeId: 'charge-b' } })).toEqual({ ok: true });
+    expect(behavior.isUltimateCharging('p1')).toBe(false);
+    expect(fireGauss).not.toHaveBeenCalled();
+  });
+
+  it('verhindert eine Wiederbelebung derselben Charge-ID nach Reset und lässt einen neuen Versuch zu', () => {
+    const { behavior, fireGauss } = makeActivationHarness(ULTIMATE_CONFIGS.GAUSS_RIFLE);
+    const base = { category: 'ultimate' as const, playerId: 'p1', angle: 0, targetX: 0, targetY: 0 };
+    expect(behavior.execute({ ...base, hostNowMs: 100, params: { ultimateAction: 'press', gaussChargeId: 'charge-a' } })).toEqual({ ok: true });
+
+    behavior.resetPlayer('p1');
+    expect(behavior.execute({ ...base, hostNowMs: 1_700, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } })).toEqual({ ok: false, reason: 'blocked' });
+    expect(behavior.execute({ ...base, hostNowMs: 200, params: { ultimateAction: 'press', gaussChargeId: 'charge-a' } })).toEqual({ ok: false, reason: 'blocked' });
+    expect(behavior.execute({ ...base, hostNowMs: 300, params: { ultimateAction: 'press', gaussChargeId: 'charge-b' } })).toEqual({ ok: true });
+    expect(behavior.execute({ ...base, hostNowMs: 1_900, params: { ultimateAction: 'release', gaussChargeId: 'charge-b', attemptId: 'gauss-commit-b' } })).toEqual({ ok: true });
+    expect(fireGauss).toHaveBeenCalledOnce();
+  });
+
+  it('weist eine ungültige Attempt-ID vor dem Ultimate-Commit zurück', () => {
+    const { behavior, rage, scheduleStrike, recordUltimateUsed } = makeActivationHarness(ULTIMATE_CONFIGS.AIRSTRIKE, 600);
+    const result = behavior.execute({
+      category: 'ultimate', playerId: 'p1', angle: 0, targetX: 1, targetY: 2, hostNowMs: 100,
+      attemptId: ' invalid',
+    } as never);
+
+    expect(result).toEqual({ ok: false, reason: 'invalid' });
+    expect(scheduleStrike).not.toHaveBeenCalled();
+    expect(rage.get('p1')).toBe(600);
+    expect(recordUltimateUsed).not.toHaveBeenCalled();
+  });
+
+  it('begrenzt die Commit-Historie pro Spieler', () => {
+    const { behavior, rage } = makeActivationHarness(ULTIMATE_CONFIGS.AIRSTRIKE, 20_000);
+    for (let index = 0; index < 80; index += 1) {
+      expect(behavior.execute({
+        category: 'ultimate', playerId: 'p1', angle: 0, targetX: index, targetY: 2,
+        hostNowMs: 100 + index, attemptId: `airstrike-${index}`,
+      })).toEqual({ ok: true });
+    }
+
+    const histories = (behavior as unknown as {
+      committedAttempts: Map<string, Map<string, unknown>>;
+    }).committedAttempts;
+    expect(histories.get('p1')?.size).toBeLessThanOrEqual(64);
+    expect(rage.get('p1')).toBeGreaterThan(0);
   });
 });

@@ -920,7 +920,9 @@ export interface LoadoutUseParams {
   /** Activity-Identity fuer PB-Mutationen; fehlt bewusst in einer Activity-losen World. */
   activityRevision?: number;
   utilityChargeFraction?: number; // 0 = Minimalwurf, 1 = voller Wurf
-  ultimateAction?: 'press' | 'release';
+  ultimateAction?: 'press' | 'release' | 'cancel';
+  /** Stable host-side identity for the lifetime of one Gauss charge. */
+  gaussChargeId?: string;
   ultimateChargeFraction?: number;
   inputStarted?: boolean;
   scopeProgress?: number;  // 0–1, für fire-on-release Scope-Waffen (beim Loslassen gesetzt)

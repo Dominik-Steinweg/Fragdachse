@@ -694,6 +694,32 @@ export class ArenaInputBindings {
       }
     };
     inputSystem.setupLoadoutListener((slot, angle, targetX, targetY, params) => {
+      const isGaussLifecycleAction = slot === 'ultimate'
+        && (params?.ultimateAction === 'release' || params?.ultimateAction === 'cancel')
+        && params?.gaussChargeId !== undefined;
+      const isGaussCancellation = isGaussLifecycleAction && params?.ultimateAction === 'cancel';
+
+      // Cancellation is cleanup, not combat input. It must cross the local capability gates so
+      // stun, burrow and input teardown cannot strand an authoritative host charge.
+      if (isGaussCancellation && params) {
+        const localPosition = actions.getLocalPlayerPosition();
+        const cancellation = actions.sendLoadoutUse(
+          slot,
+          angle,
+          targetX,
+          targetY,
+          undefined,
+          params,
+          localPosition?.x,
+          localPosition?.y,
+          true,
+        );
+        void cancellation
+          .then((result) => inputSystem.handleGaussActionResult(params, result))
+          .catch(() => inputSystem.handleGaussActionResult(params, null));
+        return;
+      }
+
       const capabilities = actions.getPlayerCapabilities();
       if (!capabilities.canInteract) return;
       const dismantleAction = params?.dismantle === true || params?.globalDismantle === true;
@@ -790,7 +816,8 @@ export class ArenaInputBindings {
         || isConstructionAction
         || isToolUtilityAction
         || isTemporaryUtilityAction
-        || isDismantleAction;
+        || isDismantleAction
+        || isGaussLifecycleAction;
       const awaitFailureResult = inputStarted
         && !params?.constructionId
         && (slot === 'weapon1' || slot === 'ultimate' || (slot === 'weapon2' && actions.isHost()));
@@ -812,6 +839,10 @@ export class ArenaInputBindings {
       }
       if (awaitResult) {
         void loadoutPromise.then((result) => {
+          if (isGaussLifecycleAction) {
+            inputSystem.handleGaussActionResult(params!, result);
+            return;
+          }
           if (result?.ok) return;
           if (isDismantleAction) {
             actions.feedback.showPlacementError(t('ui.errors.dismantleFailed'));

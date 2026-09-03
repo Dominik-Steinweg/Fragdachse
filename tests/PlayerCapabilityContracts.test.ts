@@ -112,7 +112,7 @@ describe('Capability Policy – host-autoritativ verdrahtet', () => {
     expect(readFileSync(resolve(process.cwd(), 'src/world/WorldCombatGameplayBinding.ts'), 'utf8'))
       .toContain('o.getPlayerCapabilities(playerId).canUseCombat');
     expect(readFileSync(resolve(process.cwd(), 'src/world/WorldPlayerGameplayRuntime.ts'), 'utf8'))
-      .toContain('this.options.getPlayerCapabilities(playerId).canInteract');
+      .toContain('options.getPlayerCapabilities(playerId).canInteract');
     expect(source).toContain('maySendWorldInput(this.getWorldParticipation(localId))');
   });
 });

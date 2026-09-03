@@ -53,17 +53,29 @@ function makeTeslaSystem() {
   };
 }
 
+function activateWeapon(
+  manager: LoadoutManager,
+  slot: 'weapon1' | 'weapon2',
+  now: number,
+  params?: Parameters<LoadoutManager['activateWeapon']>[9],
+) {
+  manager.claimWeaponAction(PLAYER_ID, slot, now, 0);
+  const result = manager.activateWeapon(PLAYER_ID, slot, 0, 0, 0, 100, 0, now, undefined, params);
+  if (result.ok) manager.completeWeaponAction(PLAYER_ID, slot, now);
+  return result;
+}
+
 describe('host-authoritative weapon slot exclusivity', () => {
   it('ends a weapon-2 Tesla channel immediately on a fast LMB switch, even when Waffe 1 is rejected', () => {
     const tesla = makeTeslaSystem();
     const { manager } = createManager(WEAPON_CONFIGS.GLOCK, WEAPON_CONFIGS.TESLA_DOME);
     manager.setTeslaDomeSystem(tesla as never);
 
-    manager.use('weapon2', PLAYER_ID, 0, 100, 0, 100);
+    activateWeapon(manager, 'weapon2', 100);
     expect(tesla.hostRefresh).toHaveBeenCalledOnce();
 
     vi.spyOn(manager as never, 'fireWeapon').mockReturnValue({ ok: false, reason: 'cooldown' });
-    const result = manager.use('weapon1', PLAYER_ID, 0, 100, 0, 116);
+    const result = activateWeapon(manager, 'weapon1', 116);
 
     expect(result).toEqual({ ok: false, reason: 'cooldown' });
     expect(tesla.hostDeactivateForPlayer).toHaveBeenCalledWith(PLAYER_ID);
@@ -74,11 +86,11 @@ describe('host-authoritative weapon slot exclusivity', () => {
     const { manager } = createManager(WEAPON_CONFIGS.TESLA_DOME, WEAPON_CONFIGS.GLOCK);
     manager.setTeslaDomeSystem(tesla as never);
 
-    manager.use('weapon1', PLAYER_ID, 0, 100, 0, 200);
+    activateWeapon(manager, 'weapon1', 200);
     expect(tesla.hostRefresh).toHaveBeenCalledOnce();
 
     vi.spyOn(manager as never, 'fireWeapon').mockReturnValue({ ok: true });
-    manager.use('weapon2', PLAYER_ID, 0, 100, 0, 216);
+    activateWeapon(manager, 'weapon2', 216);
 
     expect(tesla.hostDeactivateForPlayer).toHaveBeenCalledWith(PLAYER_ID);
   });
@@ -105,11 +117,11 @@ describe('host-authoritative weapon slot exclusivity', () => {
     const { manager } = createManager(WEAPON_CONFIGS.GLOCK, toggleConfig);
     manager.setEnergyShieldSystem(energyShield);
 
-    manager.use('weapon2', PLAYER_ID, 0, 100, 0, 300, undefined, { inputStarted: true });
+    activateWeapon(manager, 'weapon2', 300, { inputStarted: true });
     expect(energyShield.isActive(PLAYER_ID)).toBe(true);
 
     vi.spyOn(manager as never, 'fireWeapon').mockReturnValue({ ok: true });
-    manager.use('weapon1', PLAYER_ID, 0, 100, 0, 316);
+    activateWeapon(manager, 'weapon1', 316);
 
     expect(energyShield.isActive(PLAYER_ID)).toBe(true);
   });

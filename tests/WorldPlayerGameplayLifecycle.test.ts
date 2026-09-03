@@ -188,7 +188,6 @@ function makeDestroyRuntime() {
     'setItemRuntimeChargeConsumer',
     'setItemRuntimeWeaponFiredHandler',
     'setUltimateModifierReadPort',
-    'setActionBlockedChecker',
   ];
   const resourceSetterNames = [
     'setPowerUpSystem',

@@ -42,7 +42,7 @@ function projectileWeaponConfig(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-/** Baut einen LoadoutManager ohne Konstruktorlauf und injiziert nur die vom Use-Pfad gelesenen Felder. */
+/** Baut einen LoadoutManager ohne Konstruktorlauf und injiziert nur die vom Weapon-Owner gelesenen Felder. */
 function makeWeaponUseManager(options: {
   weapon: unknown;
   adrenaline?: number;
@@ -59,8 +59,6 @@ function makeWeaponUseManager(options: {
     weapon1: options.weapon,
     weapon2: { config: projectileWeaponConfig({ id: 'CHAR_TEST_WEAPON_2' }), decaySpread() { /* noop */ } },
   }]]);
-  manager.actionBlockedChecker = null;
-  manager.dashBurstChecker = null;
   manager.decoySystem = null;
   manager.itemRuntimeChargeConsumer = null;
   manager.heldFireSlots = new Map();
@@ -76,13 +74,13 @@ function makeWeaponUseManager(options: {
   return { manager, dispatch, drain };
 }
 
-describe('LoadoutManager.use – Client-Position im Waffen-Pfad', () => {
+describe('LoadoutManager.activateWeapon – Client-Position im Waffen-Pfad', () => {
   it('nimmt clientX/clientY als Schussursprung, wenn der Client sie liefert', () => {
     const { manager, dispatch } = makeWeaponUseManager({
       weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
     });
 
-    const result = manager.use('weapon1', 'p1', 0, 900, 900, 1_000, undefined, undefined, 640, 480);
+    const result = manager.activateWeapon('p1', 'weapon1', 640, 480, 0, 900, 900, 1_000);
 
     expect(result).toEqual({ ok: true });
     expect(dispatch).toHaveBeenCalledTimes(1);
@@ -95,14 +93,14 @@ describe('LoadoutManager.use – Client-Position im Waffen-Pfad', () => {
       weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
     });
 
-    manager.use('weapon1', 'p1', 0, 900, 900, 1_000);
+    manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 900, 900, 1_000);
 
     expect(dispatch.mock.calls[0][1]).toBe(111);
     expect(dispatch.mock.calls[0][2]).toBe(222);
   });
 });
 
-describe('LoadoutManager.use – Commit-Reihenfolge von Readiness und Ressource', () => {
+describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und Ressource', () => {
   it('zahlt weder Adrenalin noch startet den Cooldown, wenn die Waffe auf Cooldown ist', () => {
     const recordUse = vi.fn();
     const addSpread = vi.fn();
@@ -110,7 +108,7 @@ describe('LoadoutManager.use – Commit-Reihenfolge von Readiness und Ressource'
       weapon: { config: projectileWeaponConfig(), isOnCooldown: () => true, getDynamicSpread: () => 0, addSpread, recordUse },
     });
 
-    const result = manager.use('weapon1', 'p1', 0, 0, 0, 1_000);
+    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
 
     expect(result).toEqual({ ok: false, reason: 'cooldown' });
     expect(dispatch).not.toHaveBeenCalled();
@@ -128,7 +126,7 @@ describe('LoadoutManager.use – Commit-Reihenfolge von Readiness und Ressource'
       adrenalineCost: 5,
     });
 
-    const result = manager.use('weapon1', 'p1', 0, 0, 0, 1_000);
+    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
 
     expect(result).toEqual({ ok: false, reason: 'resource', resourceKind: 'adrenaline' });
     expect(dispatch).not.toHaveBeenCalled();
@@ -146,7 +144,7 @@ describe('LoadoutManager.use – Commit-Reihenfolge von Readiness und Ressource'
       adrenalineCost: 5,
     });
 
-    const result = manager.use('weapon1', 'p1', 0, 0, 0, 1_000);
+    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
 
     expect(result).toEqual({ ok: true });
     expect(dispatch).toHaveBeenCalledTimes(1);
@@ -164,7 +162,7 @@ describe('LoadoutManager.use – Commit-Reihenfolge von Readiness und Ressource'
     });
     dispatch.mockReturnValue(false);
 
-    const result = manager.use('weapon1', 'p1', 0, 0, 0, 1_000);
+    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
 
     expect(result).toEqual({ ok: false, reason: 'blocked' });
     expect(drain).not.toHaveBeenCalled();

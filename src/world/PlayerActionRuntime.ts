@@ -123,6 +123,15 @@ export function resolvePlayerActionPosition(
   };
 }
 
+/** Shared optional Attempt-ID contract for state-changing player actions. */
+export function isValidPlayerActionAttemptId(value: unknown): value is string | undefined {
+  return value === undefined
+    || (typeof value === 'string'
+      && value.length > 0
+      && value.length <= 120
+      && value.trim() === value);
+}
+
 /**
  * World-scoped owner for host-authoritative Player Actions.
  *
@@ -139,6 +148,9 @@ export class PlayerActionRuntime {
 
   execute(request: PlayerWeaponActionRequest): LoadoutUseResult {
     if (this.destroyed || request.category !== 'weapon') {
+      return { ok: false, reason: 'invalid' };
+    }
+    if (!isValidPlayerActionAttemptId(request.attemptId)) {
       return { ok: false, reason: 'invalid' };
     }
 
