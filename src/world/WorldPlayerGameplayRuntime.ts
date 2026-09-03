@@ -28,6 +28,7 @@ import { Ak47BehaviorRuntime } from './Ak47BehaviorRuntime';
 import { NegevBehaviorRuntime } from './NegevBehaviorRuntime';
 import { WeaponReactionRuntime } from './WeaponReactionRuntime';
 import { SustainedWeaponBehaviorRuntime } from './SustainedWeaponBehaviorRuntime';
+import { PlayerWeaponActivationRuntime } from './PlayerWeaponActivationRuntime';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -84,6 +85,7 @@ export interface WorldPlayerGameplayNetworkPort {
       ownerId: string,
     ) => void;
     readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
+    readonly broadcastShotFx: (shooterId: string, durationMs: number, intensity: number) => void;
     readonly broadcastFireChunkEffect: (
       x: number,
       y: number,
@@ -109,6 +111,7 @@ export interface WorldPlayerGameplayNetworkPort {
 
 export interface WorldPlayerGameplaySystems {
   readonly playerAction: PlayerActionRuntime;
+  readonly weaponActivation: PlayerWeaponActivationRuntime;
   readonly utilityAction: PlayerUtilityActionRuntime;
   readonly ultimateBehavior: PlayerUltimateBehaviorRuntime;
   readonly heldAction: HostHeldActionSystem;
@@ -350,23 +353,6 @@ export class WorldPlayerGameplayRuntime implements
         roundStats: options.network.roundStats,
       },
     });
-    const playerAction = new PlayerActionRuntime(
-      {
-        getPlayer: (playerId) => {
-          const player = options.playerManager.getPlayer(playerId);
-          return player
-            ? { x: player.x, y: player.y, color: player.color, displaySize: player.displayObject?.displayWidth ?? undefined }
-            : undefined;
-        },
-        canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
-        isAlive: (playerId) => options.combatSystem.isAlive(playerId),
-        isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId),
-        isDashBurst: (playerId) => options.hostPhysics.isDashBurst(playerId),
-        breakStealth: (playerId, now) => options.decoySystem.breakStealth(playerId, now),
-      },
-      loadout,
-      sustainedWeaponBehavior,
-    );
     const translocator = new TranslocatorSystem(
       options.playerManager,
       options.projectileManager,
@@ -498,9 +484,55 @@ export class WorldPlayerGameplayRuntime implements
         }, `negev-killstreak:${event.ownerId}:${event.nowMs}`);
       },
     });
+    const weaponActivation = new PlayerWeaponActivationRuntime({
+      playerManager: {
+        getPlayer: (playerId) => {
+          const player = options.playerManager.getPlayer(playerId);
+          return player
+            ? {
+              x: player.x,
+              y: player.y,
+              color: player.color,
+              rotation: player.rotation,
+              body: { velocity: player.body?.velocity },
+              displayObject: { displayWidth: player.displayObject?.displayWidth },
+            }
+            : undefined;
+        },
+      },
+      loadout,
+      resourceSystem: resource,
+      physicsSystem: options.hostPhysics,
+      weaponExecution: options.weaponExecution,
+      specializedWeaponExecution: options.specializedWeaponExecution,
+      ak47Behavior,
+      negevBehavior,
+      consumeMovementCharge: (playerId) => itemRuntime.consumeMovementCharge(playerId),
+      registerWeaponFired: (playerId, sourceSlot) => itemRuntime.registerWeaponFired(playerId, sourceSlot),
+      broadcastShotFx: options.network.presentation.broadcastShotFx,
+    });
+    const playerAction = new PlayerActionRuntime(
+      {
+        getPlayer: (playerId) => {
+          const player = options.playerManager.getPlayer(playerId);
+          return player
+            ? { x: player.x, y: player.y, color: player.color, displaySize: player.displayObject?.displayWidth ?? undefined }
+            : undefined;
+        },
+        canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
+        isAlive: (playerId) => options.combatSystem.isAlive(playerId),
+        isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId),
+        isDashBurst: (playerId) => options.hostPhysics.isDashBurst(playerId),
+        breakStealth: (playerId, now) => options.decoySystem.breakStealth(playerId, now),
+      },
+      loadout,
+      sustainedWeaponBehavior,
+      weaponActivation,
+    );
 
     this.systems = {
       playerAction,
+      weaponActivation,
       utilityAction,
       ultimateBehavior,
       heldAction,
@@ -522,7 +554,7 @@ export class WorldPlayerGameplayRuntime implements
       sustainedWeaponBehavior,
       ak47StrategicTarget,
     };
-    this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
+    this.bindLoadout(loadout, playerModifier, burrow, translocator, tunnel);
   }
 
   setArmageddonCapability(capability: PlayerUltimateArmageddonCapability | null): void {
@@ -844,15 +876,9 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed) return;
     this.destroyed = true;
     const { systems } = this;
-    systems.loadout.setAk47Behavior(null);
-    systems.loadout.setNegevBehavior(null);
     systems.loadout.setSustainedWeaponBehavior(null);
-    systems.loadout.setWeaponExecutionCapability(null);
-    systems.loadout.setSpecializedWeaponExecutionCapability(null);
-    systems.loadout.setPhysicsSystem(null);
-    systems.loadout.setItemRuntimeChargeConsumer(null);
-    systems.loadout.setItemRuntimeWeaponFiredHandler(null);
     systems.loadout.setUltimateModifierReadPort(null);
+    systems.weaponActivation.destroy();
     systems.ultimateBehavior.destroy();
     systems.ak47Behavior?.destroy();
     systems.negevBehavior.destroy();
@@ -930,24 +956,16 @@ export class WorldPlayerGameplayRuntime implements
   private bindLoadout(
     loadout: LoadoutManager,
     playerModifier: CoopDefensePlayerModifierSystem,
-    itemRuntime: CoopDefenseItemRuntimeSystem,
     burrow: BurrowSystem,
     translocator: TranslocatorSystem,
     tunnel: TunnelSystem,
   ): void {
-    loadout.setWeaponExecutionCapability(this.options.weaponExecution);
-    loadout.setSpecializedWeaponExecutionCapability(this.options.specializedWeaponExecution);
-    loadout.setPhysicsSystem(this.options.hostPhysics);
-    loadout.setAk47Behavior(this.systems.ak47Behavior);
-    loadout.setNegevBehavior(this.systems.negevBehavior);
     loadout.setSustainedWeaponBehavior(this.systems.sustainedWeaponBehavior);
     loadout.setUtilityConfigModifierSource((playerId) => {
       const modifiers = playerModifier.getModifiers(playerId);
       return { additive: modifiers.additiveStats, percentage: modifiers.percentageStats };
     });
     loadout.setUltimateModifierReadPort(this.systems.ultimateBehavior);
-    loadout.setItemRuntimeChargeConsumer((playerId) => itemRuntime.consumeMovementCharge(playerId));
-    loadout.setItemRuntimeWeaponFiredHandler((playerId, sourceSlot) => itemRuntime.registerWeaponFired(playerId, sourceSlot));
     translocator.setUseCallback((playerId) => this.options.dropBeer(playerId));
     translocator.setRadialImpulseCallback((x, y, radius, knockback, ownerId) => {
       this.options.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);

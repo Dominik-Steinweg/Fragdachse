@@ -85,8 +85,10 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
     expect(loadout).not.toContain('fireLeafBlowerWeapon');
     expect(loadout).not.toContain('fireReinforcementMatrixWeapon');
     expect(loadout).not.toContain('fireEnergyInjectorWeapon');
-    expect(loadout).toContain('setWeaponExecutionCapability(');
-    expect(loadout).toContain('setSpecializedWeaponExecutionCapability(');
+    expect(loadout).not.toContain('setWeaponExecutionCapability(');
+    expect(loadout).not.toContain('setSpecializedWeaponExecutionCapability(');
+    expect(loadout).not.toContain('private fireWeapon(');
+    expect(read('src/world/PlayerWeaponActivationRuntime.ts')).toContain('class PlayerWeaponActivationRuntime');
     const composition = read('src/scenes/arena/ArenaWorldPlayerComposition.ts');
     expect(composition).toContain('new WorldWeaponExecutionRuntime(');
     expect(composition).toContain('new SpecializedWeaponExecutionAdapter(');

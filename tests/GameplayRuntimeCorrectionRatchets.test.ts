@@ -33,6 +33,7 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
 
   it('keeps Negev killstreak state and reactions out of LoadoutManager', () => {
     const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const weaponActivation = source('src/world/PlayerWeaponActivationRuntime.ts');
     const behaviorPort = source('src/loadout/NegevBehaviorPort.ts');
     const behaviorRuntime = source('src/world/NegevBehaviorRuntime.ts');
     const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
@@ -41,8 +42,10 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
 
     expect(loadoutManager).not.toContain('negevStates');
     expect(loadoutManager).not.toContain('finishNegevKillstreak');
-    expect(loadoutManager).toContain('negevBehavior?.prepareShot');
-    expect(loadoutManager).toContain('negevBehavior?.commitShot');
+    expect(loadoutManager).not.toContain('prepareShot');
+    expect(loadoutManager).not.toContain('commitShot');
+    expect(weaponActivation).toContain('negevBehavior?.prepareShot');
+    expect(weaponActivation).toContain('negevBehavior?.commitShot');
     expect(behaviorPort).toContain('NegevBehaviorPort');
     expect(behaviorRuntime).toContain('update(nowMs: number)');
     expect(behaviorRuntime).not.toContain('Date.now()');
@@ -93,5 +96,23 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(worldRuntime).toContain('new SustainedWeaponBehaviorRuntime');
     expect(combatBinding).toContain('player.sustainedWeaponBehavior.setTeslaDomeSystem');
     expect(combatBinding).toContain('player.sustainedWeaponBehavior.setEnergyShieldSystem');
+  });
+
+  it('keeps immediate weapon dispatch and resource commit out of LoadoutManager (10A)', () => {
+    const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const actionRuntime = source('src/world/PlayerActionRuntime.ts');
+    const weaponActivation = source('src/world/PlayerWeaponActivationRuntime.ts');
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+
+    expect(loadoutManager).not.toContain('activateWeapon(');
+    expect(loadoutManager).not.toContain('completeWeaponAction(');
+    expect(loadoutManager).not.toContain('private fireWeapon(');
+    expect(loadoutManager).not.toContain('dispatchWeaponFire(');
+    expect(loadoutManager).not.toContain('setPhysicsSystem(');
+    expect(loadoutManager).not.toContain('setItemRuntimeChargeConsumer(');
+    expect(loadoutManager).not.toContain('setItemRuntimeWeaponFiredHandler(');
+    expect(actionRuntime).toContain('weaponActivation.activateWeapon');
+    expect(weaponActivation).toContain('drainAdrenaline');
+    expect(worldRuntime).toContain('new PlayerWeaponActivationRuntime');
   });
 });

@@ -16,11 +16,9 @@ vi.mock('phaser', () => ({
   Scenes: { Events: { SHUTDOWN: 'shutdown' } },
 }));
 
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { PlayerWeaponActivationRuntime } from '../src/world/PlayerWeaponActivationRuntime';
 import { ConstructionReadinessRuntime } from '../src/world/ConstructionReadinessRuntime';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
-
-type AnyManager = LoadoutManager & Record<string, any>;
 
 function projectileWeaponConfig(overrides: Record<string, unknown> = {}): any {
   return {
@@ -42,73 +40,97 @@ function projectileWeaponConfig(overrides: Record<string, unknown> = {}): any {
   };
 }
 
-/** Baut einen LoadoutManager ohne Konstruktorlauf und injiziert nur die vom Weapon-Owner gelesenen Felder. */
+/** Baut den World-owned Weapon-Activation-Pfad mit einem schmalen Equipment-Port. */
 function makeWeaponUseManager(options: {
   weapon: unknown;
   adrenaline?: number;
   adrenalineCost?: number;
-}): { manager: AnyManager; dispatch: ReturnType<typeof vi.fn>; drain: ReturnType<typeof vi.fn> } {
-  const manager = Object.create(LoadoutManager.prototype) as AnyManager;
+}): { activation: PlayerWeaponActivationRuntime; dispatch: ReturnType<typeof vi.fn>; drain: ReturnType<typeof vi.fn> } {
   const dispatch = vi.fn(() => true);
   const drain = vi.fn();
-  Object.defineProperty(manager, 'dispatchWeaponFire', { value: dispatch });
-
   const player = { x: 111, y: 222, color: 0xffffff, body: undefined, displayObject: { displayWidth: 32 } };
-  manager.okResult = { ok: true };
-  manager.loadouts = new Map([['p1', {
-    weapon1: options.weapon,
-    weapon2: { config: projectileWeaponConfig({ id: 'CHAR_TEST_WEAPON_2' }), decaySpread() { /* noop */ } },
-  }]]);
-  manager.decoySystem = null;
-  manager.itemRuntimeChargeConsumer = null;
-  manager.heldFireSlots = new Map();
-  manager.heldItemSlots = { noteWeaponUsed: vi.fn(), noteUtilityUsed: vi.fn() };
-  manager.physicsSystem = null;
-  manager.bridge = { broadcastShotFx: vi.fn() };
-  manager.playerManager = { getPlayer: vi.fn(() => player) };
-  manager.resourceSystem = {
-    resolveAdrenalineCost: vi.fn((_id: string, amount: number) => options.adrenalineCost ?? amount),
-    getAdrenaline: vi.fn(() => options.adrenaline ?? 100),
-    drainAdrenaline: drain,
+  const weapon = options.weapon as {
+    config: any;
+    isOnCooldown: () => boolean;
+    getDynamicSpread: () => number;
+    addSpread: ReturnType<typeof vi.fn>;
+    recordUse: ReturnType<typeof vi.fn>;
   };
-  return { manager, dispatch, drain };
+  const activation = new PlayerWeaponActivationRuntime({
+    playerManager: { getPlayer: vi.fn(() => player) },
+    loadout: {
+      isWeaponOnCooldown: () => weapon.isOnCooldown(),
+      getDynamicSpread: () => weapon.getDynamicSpread(),
+      addWeaponSpread: () => weapon.addSpread(),
+      recordWeaponUse: (_playerId, _slot, nowMs) => weapon.recordUse(nowMs),
+      noteWeaponUsed: vi.fn(),
+    },
+    resourceSystem: {
+      resolveAdrenalineCost: vi.fn((_id: string, amount: number) => options.adrenalineCost ?? amount),
+      getAdrenaline: vi.fn(() => options.adrenaline ?? 100),
+      drainAdrenaline: drain,
+    },
+    weaponExecution: { fire: dispatch },
+    specializedWeaponExecution: { fire: vi.fn(() => false) },
+  });
+  return { activation, dispatch, drain };
 }
 
-describe('LoadoutManager.activateWeapon – Client-Position im Waffen-Pfad', () => {
+function activateWeapon(
+  activation: PlayerWeaponActivationRuntime,
+  config: any,
+  x: number,
+  y: number,
+): ReturnType<PlayerWeaponActivationRuntime['activateWeapon']> {
+  return activation.activateWeapon({
+    playerId: 'p1',
+    slot: 'weapon1',
+    config,
+    x,
+    y,
+    angle: 0,
+    targetX: 900,
+    targetY: 900,
+    nowMs: 1_000,
+  });
+}
+
+describe('PlayerWeaponActivationRuntime – Client-Position im Waffen-Pfad', () => {
   it('nimmt clientX/clientY als Schussursprung, wenn der Client sie liefert', () => {
-    const { manager, dispatch } = makeWeaponUseManager({
-      weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
+    const config = projectileWeaponConfig();
+    const { activation, dispatch } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
     });
 
-    const result = manager.activateWeapon('p1', 'weapon1', 640, 480, 0, 900, 900, 1_000);
+    const result = activateWeapon(activation, config, 640, 480);
 
     expect(result).toEqual({ ok: true });
     expect(dispatch).toHaveBeenCalledTimes(1);
-    expect(dispatch.mock.calls[0][1]).toBe(640);
-    expect(dispatch.mock.calls[0][2]).toBe(480);
+    expect(dispatch.mock.calls[0][1]).toMatchObject({ x: 640, y: 480 });
   });
 
   it('faellt ohne Client-Position auf die autoritative Host-Position zurueck', () => {
-    const { manager, dispatch } = makeWeaponUseManager({
-      weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
+    const config = projectileWeaponConfig();
+    const { activation, dispatch } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
     });
 
-    manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 900, 900, 1_000);
+    activateWeapon(activation, config, 111, 222);
 
-    expect(dispatch.mock.calls[0][1]).toBe(111);
-    expect(dispatch.mock.calls[0][2]).toBe(222);
+    expect(dispatch.mock.calls[0][1]).toMatchObject({ x: 111, y: 222 });
   });
 });
 
-describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und Ressource', () => {
+describe('PlayerWeaponActivationRuntime – Commit-Reihenfolge von Readiness und Ressource', () => {
   it('zahlt weder Adrenalin noch startet den Cooldown, wenn die Waffe auf Cooldown ist', () => {
     const recordUse = vi.fn();
     const addSpread = vi.fn();
-    const { manager, dispatch, drain } = makeWeaponUseManager({
-      weapon: { config: projectileWeaponConfig(), isOnCooldown: () => true, getDynamicSpread: () => 0, addSpread, recordUse },
+    const config = projectileWeaponConfig();
+    const { activation, dispatch, drain } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => true, getDynamicSpread: () => 0, addSpread, recordUse },
     });
 
-    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
+    const result = activateWeapon(activation, config, 111, 222);
 
     expect(result).toEqual({ ok: false, reason: 'cooldown' });
     expect(dispatch).not.toHaveBeenCalled();
@@ -120,13 +142,14 @@ describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und
   it('laesst bei zu wenig Adrenalin Cooldown und Bloom unveraendert', () => {
     const recordUse = vi.fn();
     const addSpread = vi.fn();
-    const { manager, dispatch, drain } = makeWeaponUseManager({
-      weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread, recordUse },
+    const config = projectileWeaponConfig();
+    const { activation, dispatch, drain } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread, recordUse },
       adrenaline: 1,
       adrenalineCost: 5,
     });
 
-    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
+    const result = activateWeapon(activation, config, 111, 222);
 
     expect(result).toEqual({ ok: false, reason: 'resource', resourceKind: 'adrenaline' });
     expect(dispatch).not.toHaveBeenCalled();
@@ -138,13 +161,14 @@ describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und
   it('bucht Adrenalin und Cooldown erst nach einem erfolgreichen Fire-Dispatch ab', () => {
     const recordUse = vi.fn();
     const addSpread = vi.fn();
-    const { manager, dispatch, drain } = makeWeaponUseManager({
-      weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread, recordUse },
+    const config = projectileWeaponConfig();
+    const { activation, dispatch, drain } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread, recordUse },
       adrenaline: 100,
       adrenalineCost: 5,
     });
 
-    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
+    const result = activateWeapon(activation, config, 111, 222);
 
     expect(result).toEqual({ ok: true });
     expect(dispatch).toHaveBeenCalledTimes(1);
@@ -157,12 +181,13 @@ describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und
 
   it('startet keinen Cooldown, wenn der Fire-Dispatch nichts abfeuert', () => {
     const recordUse = vi.fn();
-    const { manager, dispatch, drain } = makeWeaponUseManager({
-      weapon: { config: projectileWeaponConfig(), isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse },
+    const config = projectileWeaponConfig();
+    const { activation, dispatch, drain } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse },
     });
     dispatch.mockReturnValue(false);
 
-    const result = manager.activateWeapon('p1', 'weapon1', 111, 222, 0, 0, 0, 1_000);
+    const result = activateWeapon(activation, config, 111, 222);
 
     expect(result).toEqual({ ok: false, reason: 'blocked' });
     expect(drain).not.toHaveBeenCalled();

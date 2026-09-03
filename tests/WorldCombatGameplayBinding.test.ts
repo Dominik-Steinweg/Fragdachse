@@ -145,8 +145,6 @@ function createFixture(options: {
   }) as unknown as BaseManager;
   const resource = methodBag() as unknown as ResourceSystem;
   const playerLoadout = new LoadoutManager(
-    playerManager,
-    projectileManager,
     resource,
     {} as never,
   );
@@ -156,7 +154,6 @@ function createFixture(options: {
     projectileManager,
     combatSystem: combatSystem as unknown as ConstructorParameters<typeof WorldWeaponExecutionRuntime>[0]['combatSystem'],
   });
-  playerLoadout.setWeaponExecutionCapability(weaponExecution);
   const automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(weaponExecution, projectileManager);
   if (options.loadoutDamageMultiplier !== undefined) {
     vi.spyOn(playerLoadout, 'getDamageMultiplier').mockReturnValue(options.loadoutDamageMultiplier);
@@ -447,8 +444,6 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
     }) as unknown as ProjectileManager;
     const resource = methodBag() as unknown as ResourceSystem;
     const playerLoadout = new LoadoutManager(
-      playerManager,
-      projectileManager,
       resource,
       {} as never,
     );

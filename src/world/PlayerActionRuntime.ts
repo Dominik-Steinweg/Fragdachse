@@ -1,6 +1,7 @@
 import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../types';
 import type { SustainedWeaponActionRequest, SustainedWeaponBehaviorPort } from '../loadout/SustainedWeaponBehaviorPort';
+import type { PlayerWeaponActivationRequest } from './PlayerWeaponActivationRuntime';
 
 /** Optional client-position compensation supplied by a player-action request. */
 export interface PlayerActionPositionInput {
@@ -98,19 +99,13 @@ export interface PlayerActionActorPort {
 export interface PlayerActionLoadoutPort {
   getEquippedWeaponConfig(playerId: string, slot: WeaponSlot): WeaponConfig | undefined;
   noteWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void;
-  activateWeapon(
-    playerId: string,
-    slot: WeaponSlot,
-    x: number,
-    y: number,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    now: number,
-    shotId?: number,
-    params?: LoadoutUseParams,
-  ): LoadoutUseResult;
-  completeWeaponAction(playerId: string, slot: WeaponSlot, now: number): void;
+  noteWeaponUsed(playerId: string, slot: WeaponSlot, now: number): void;
+}
+
+/** Narrow immediate-weapon activation boundary owned by the World runtime. */
+export interface PlayerWeaponActivationPort {
+  activateWeapon(request: PlayerWeaponActivationRequest): LoadoutUseResult;
+  noteWeaponFired(playerId: string, slot: WeaponSlot, now: number): void;
 }
 
 /** Explicit position policy preserving the pre-6A clientX/clientY semantics. */
@@ -146,6 +141,7 @@ export class PlayerActionRuntime {
     private readonly actor: PlayerActionActorPort,
     private readonly loadout: PlayerActionLoadoutPort,
     private readonly sustainedWeaponBehavior: SustainedWeaponBehaviorPort | null = null,
+    private readonly weaponActivation: PlayerWeaponActivationPort,
   ) {}
 
   execute(request: PlayerWeaponActionRequest): LoadoutUseResult {
@@ -192,25 +188,26 @@ export class PlayerActionRuntime {
     const sustainedResult = this.sustainedWeaponBehavior?.activateWeapon(sustainedRequest) ?? null;
     if (sustainedResult !== null) {
       if (sustainedResult.ok) {
-        this.loadout.completeWeaponAction(request.playerId, request.slot, request.hostNowMs);
+        this.weaponActivation.noteWeaponFired(request.playerId, request.slot, request.hostNowMs);
       }
       return sustainedResult;
     }
 
-    const result = this.loadout.activateWeapon(
-      request.playerId,
-      request.slot,
-      position.x,
-      position.y,
-      request.angle,
-      request.targetX,
-      request.targetY,
-      request.hostNowMs,
-      request.shotId,
-      request.params,
-    );
+    const result = this.weaponActivation.activateWeapon({
+      playerId: request.playerId,
+      slot: request.slot,
+      config,
+      x: position.x,
+      y: position.y,
+      angle: request.angle,
+      targetX: request.targetX,
+      targetY: request.targetY,
+      nowMs: request.hostNowMs,
+      shotId: request.shotId,
+      params: request.params,
+    });
     if (result.ok) {
-      this.loadout.completeWeaponAction(request.playerId, request.slot, request.hostNowMs);
+      this.weaponActivation.noteWeaponFired(request.playerId, request.slot, request.hostNowMs);
     }
     return result;
   }

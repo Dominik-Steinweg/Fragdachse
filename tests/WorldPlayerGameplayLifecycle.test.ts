@@ -58,6 +58,9 @@ function makeRuntime() {
       getEquippedUtilityConfig: vi.fn(() => ({ id: 'DECOY' })),
       getTemporaryUtilityConfig: vi.fn(() => ({ id: 'BFG' })),
     },
+    weaponActivation: {
+      destroy: tag('weaponActivation.destroy'),
+    },
     ultimateBehavior: {
       resetPlayer: tag('ultimateBehavior.resetPlayer'),
       removePlayer: tag('ultimateBehavior.removePlayer'),
@@ -150,8 +153,6 @@ function makeConcreteRemoveRuntime() {
     publishHeldUtilityId: vi.fn(),
   };
   const loadout = new LoadoutManager(
-    playerManager as never,
-    {} as never,
     resource,
     loadoutBridge as never,
   );
@@ -202,15 +203,8 @@ function makeConcreteRemoveRuntime() {
 
 function makeDestroyRuntime() {
   const setterNames = [
-    'setAk47Behavior',
-    'setNegevBehavior',
     'setSustainedWeaponBehavior',
-    'setWeaponExecutionCapability',
-    'setSpecializedWeaponExecutionCapability',
-    'setPhysicsSystem',
     'setUtilityConfigModifierSource',
-    'setItemRuntimeChargeConsumer',
-    'setItemRuntimeWeaponFiredHandler',
     'setUltimateModifierReadPort',
   ];
   const resourceSetterNames = [
@@ -253,6 +247,7 @@ function makeDestroyRuntime() {
   };
   const systems = {
     loadout,
+    weaponActivation: { destroy: vi.fn() },
     ultimateBehavior: { destroy: vi.fn() },
     ak47Behavior: { destroy: vi.fn() },
     negevBehavior: { destroy: vi.fn() },
@@ -456,6 +451,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     runtime.destroy();
 
     expect(systems.ultimateBehavior.destroy).toHaveBeenCalledTimes(1);
+    expect(systems.weaponActivation.destroy).toHaveBeenCalledTimes(1);
     expect(systems.ak47Behavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.negevBehavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.sustainedWeaponBehavior.destroy).toHaveBeenCalledTimes(1);

@@ -15,6 +15,7 @@ import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import { PlayerActionRuntime } from '../src/world/PlayerActionRuntime';
 import { SustainedWeaponBehaviorRuntime } from '../src/world/SustainedWeaponBehaviorRuntime';
+import type { LoadoutUseParams } from '../src/types';
 
 const PLAYER_ID = 'player-1';
 
@@ -24,8 +25,6 @@ function createManager(weapon1: WeaponConfig, weapon2: WeaponConfig) {
   const playerManager = { getPlayer: vi.fn(() => player) };
   const resourceSystem = { getAdrenaline: vi.fn(() => 100) };
   const manager = new LoadoutManager(
-    playerManager as never,
-    {} as never,
     resourceSystem as never,
     {} as never,
   );
@@ -60,20 +59,27 @@ function createActionRuntime(
   behavior: SustainedWeaponBehaviorRuntime,
   playerManager: { getPlayer: ReturnType<typeof vi.fn> },
 ) {
-  return new PlayerActionRuntime({
+  const weaponActivation = {
+    activateWeapon: vi.fn(() => ({ ok: true })),
+    noteWeaponFired: vi.fn(),
+  };
+  return {
+    action: new PlayerActionRuntime({
     getPlayer: (playerId) => playerManager.getPlayer(playerId),
     canInteract: () => true,
     isAlive: () => true,
     isWeaponBlocked: () => false,
     isDashBurst: () => false,
-  }, manager, behavior);
+    }, manager, behavior, weaponActivation),
+    weaponActivation,
+  };
 }
 
 function activateWeapon(
   action: PlayerActionRuntime,
   slot: 'weapon1' | 'weapon2',
   now: number,
-  params?: Parameters<LoadoutManager['activateWeapon']>[9],
+  params?: LoadoutUseParams,
 ) {
   return action.execute({
     category: 'weapon',
@@ -93,12 +99,12 @@ describe('host-authoritative weapon slot exclusivity', () => {
     const { manager, playerManager, resourceSystem } = createManager(WEAPON_CONFIGS.GLOCK, WEAPON_CONFIGS.TESLA_DOME);
     const behavior = new SustainedWeaponBehaviorRuntime(manager, resourceSystem as never);
     behavior.setTeslaDomeSystem(tesla as never);
-    const action = createActionRuntime(manager, behavior, playerManager);
+    const { action, weaponActivation } = createActionRuntime(manager, behavior, playerManager);
 
     activateWeapon(action, 'weapon2', 100);
     expect(tesla.hostRefresh).toHaveBeenCalledOnce();
 
-    vi.spyOn(manager, 'activateWeapon').mockReturnValue({ ok: false, reason: 'cooldown' });
+    weaponActivation.activateWeapon.mockReturnValue({ ok: false, reason: 'cooldown' });
     const result = activateWeapon(action, 'weapon1', 116);
 
     expect(result).toEqual({ ok: false, reason: 'cooldown' });
@@ -110,12 +116,12 @@ describe('host-authoritative weapon slot exclusivity', () => {
     const { manager, playerManager, resourceSystem } = createManager(WEAPON_CONFIGS.TESLA_DOME, WEAPON_CONFIGS.GLOCK);
     const behavior = new SustainedWeaponBehaviorRuntime(manager, resourceSystem as never);
     behavior.setTeslaDomeSystem(tesla as never);
-    const action = createActionRuntime(manager, behavior, playerManager);
+    const { action, weaponActivation } = createActionRuntime(manager, behavior, playerManager);
 
     activateWeapon(action, 'weapon1', 200);
     expect(tesla.hostRefresh).toHaveBeenCalledOnce();
 
-    vi.spyOn(manager, 'activateWeapon').mockReturnValue({ ok: true });
+    weaponActivation.activateWeapon.mockReturnValue({ ok: true });
     activateWeapon(action, 'weapon2', 216);
 
     expect(tesla.hostDeactivateForPlayer).toHaveBeenCalledWith(PLAYER_ID);
@@ -143,12 +149,12 @@ describe('host-authoritative weapon slot exclusivity', () => {
     const { manager, playerManager, resourceSystem } = createManager(WEAPON_CONFIGS.GLOCK, toggleConfig);
     const behavior = new SustainedWeaponBehaviorRuntime(manager, resourceSystem as never);
     behavior.setEnergyShieldSystem(energyShield);
-    const action = createActionRuntime(manager, behavior, playerManager);
+    const { action, weaponActivation } = createActionRuntime(manager, behavior, playerManager);
 
     activateWeapon(action, 'weapon2', 300, { inputStarted: true });
     expect(energyShield.isActive(PLAYER_ID)).toBe(true);
 
-    vi.spyOn(manager, 'activateWeapon').mockReturnValue({ ok: true });
+    weaponActivation.activateWeapon.mockReturnValue({ ok: true });
     activateWeapon(action, 'weapon1', 316);
 
     expect(energyShield.isActive(PLAYER_ID)).toBe(true);

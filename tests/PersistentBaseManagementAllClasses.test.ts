@@ -133,7 +133,10 @@ function createHarness(classId: string) {
   const persistentBaseSession = new PersistentBaseRoomSession();
   const contributionStore = persistentBaseSession.contributions;
   const rewardStore = persistentBaseSession.rewards;
-  const loadoutManager = new LoadoutManager();
+  const loadoutManager = new LoadoutManager(
+    { getMaxRage: () => 600 } as never,
+    { getGameMode: () => COOP_DEFENSE_MODE } as never,
+  );
   const powerUpSystem = {
     repositionPersistentBaseRewardPedestal: vi.fn(() => true),
     repositionConstructionPedestal: vi.fn(() => true),
