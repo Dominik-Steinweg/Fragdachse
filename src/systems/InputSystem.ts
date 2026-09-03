@@ -350,13 +350,13 @@ export class InputSystem {
   }
 
   /**
-   * Resolves the held-item projection from the canonical radial selection. `undefined` means
-   * that no radial action is selected and the host's use/animation state may be used as a
-   * fallback; `null` deliberately hides the item for actions without a hand-held visual.
+   * Resolves a local held-item override only while a utility/construction interaction is active.
+   * `undefined` keeps the host's use/animation state as the source; `null` deliberately hides
+   * the item for active actions without a hand-held visual.
    */
   getSelectedHeldItemIdForPresentation(): string | null | undefined {
     const selected = this.getSelectedRadialActionForHud();
-    if (!selected) return undefined;
+    if (!selected || !this.hasActiveUtilityInteraction()) return undefined;
     switch (selected.kind) {
       case 'utility':
         return selected.utilityId;
@@ -445,6 +445,17 @@ export class InputSystem {
     return this.bridge.getSynchronizedNow();
   }
 
+  private hasActiveUtilityInteraction(): boolean {
+    return this.utilityPlacementActive
+      || this.utilityTargetingActive
+      || this.utilityHoldActive
+      || this.globalDismantleHoldStartedAt !== null
+      || this.constructionPlacementActive
+      || this.dismantlePlacementActive
+      || this.persistentRewardPlacementActive
+      || this.repositionActive;
+  }
+
   private ensureSelectedRadialAction(actions: readonly RadialActionState[]): void {
     if (this.selectedRadialAction && actions.some((entry) => (
       isSameRadialActionRef(entry.ref, this.selectedRadialAction)
@@ -511,14 +522,7 @@ export class InputSystem {
       return false;
     }
 
-    const interactionActive = this.utilityPlacementActive
-      || this.utilityTargetingActive
-      || this.utilityHoldActive
-      || this.globalDismantleHoldStartedAt !== null
-      || this.constructionPlacementActive
-      || this.dismantlePlacementActive
-      || this.persistentRewardPlacementActive
-      || this.repositionActive;
+    const interactionActive = this.hasActiveUtilityInteraction();
     if (Phaser.Input.Keyboard.JustDown(this.keyR) && !this.radialActionMenu?.isOpen) {
       if (interactionActive) {
         this.cancelUtilityInteraction();

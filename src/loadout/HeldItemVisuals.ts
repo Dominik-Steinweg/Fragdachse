@@ -1,8 +1,8 @@
 /**
  * Bildzuordnung fuer getragene Loadout-Items.
  *
- * Die Spielerfigur haelt genau ein Item in den Pfoten. Welches das ist, entscheidet
- * Die lokale Radial-Auswahl beziehungsweise der hostseitige `HeldItemSlotTracker` bestimmen,
+ * Die Spielerfigur haelt genau ein Item in den Pfoten. Welches das ist, bestimmen
+ * eine aktive lokale Utility-/Construction-Interaktion beziehungsweise der hostseitige `HeldItemSlotTracker`,
  * welches Bild dazu gehoert; die Zuordnung entscheidet diese Datei. Beides ist bewusst getrennt:
  * Die Action-/Slot-Identity ist Zustand, die Textur reine Darstellung.
  *

@@ -13,8 +13,8 @@ export const HELD_UTILITY_DISPLAY_MS = 450;
 
 /**
  * Verfolgt je Spieler, welches Loadout-Item die Figur als Use-/Animationsfallback gerade traegt.
- * Die lokale Radial-Auswahl wird fuer den eigenen Spieler darueber projiziert; fuer entfernte
- * Spieler bleibt dieser host-autoritativ replizierte Tracker die sichtbare Quelle.
+ * Eine lokale Radial-Auswahl allein ist keine sichtbare Quelle; fuer entfernte Spieler bleibt
+ * dieser host-autoritativ replizierte Tracker die sichtbare Quelle.
  *
  * Reine Zustandslogik ohne Phaser- oder Netzwerkbezug: der Host fuettert sie aus tatsaechlich
  * erfolgreichen Einsaetzen, das Ergebnis wird als Slot repliziert und fuer Spieler ohne lokale

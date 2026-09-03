@@ -422,7 +422,7 @@ describe('Radial Menu V2 input', () => {
     system.setupTemporaryUtilityProvider(() => temporaryUtilities);
 
     expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
-    expect(system.getSelectedHeldItemIdForPresentation()).toBe('STINK_CLOUD');
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
     temporaryUtilities = [{
       kind: 'utility', instanceId: 'temp-1', utilityId: 'BFG', charges: 1,
       cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 0,
@@ -430,7 +430,7 @@ describe('Radial Menu V2 input', () => {
     expect(system.getSelectedRadialActionForHud()).toEqual({
       kind: 'temporary-utility', instanceId: 'temp-1', utilityId: 'BFG',
     });
-    expect(system.getSelectedHeldItemIdForPresentation()).toBe('BFG');
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
     temporaryUtilities = [...temporaryUtilities, {
       kind: 'utility', instanceId: 'temp-2', utilityId: 'BFG', charges: 1,
       cooldownUntil: 0, cooldownDurationMs: 1_000, acquisitionOrder: 1,
@@ -438,16 +438,66 @@ describe('Radial Menu V2 input', () => {
     expect(system.getSelectedRadialActionForHud()).toEqual({
       kind: 'temporary-utility', instanceId: 'temp-2', utilityId: 'BFG',
     });
-    expect(system.getSelectedHeldItemIdForPresentation()).toBe('BFG');
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
 
     temporaryUtilities = temporaryUtilities.filter((instance) => instance.instanceId !== 'temp-2');
     expect(system.getSelectedRadialActionForHud()).toEqual({
       kind: 'temporary-utility', instanceId: 'temp-1', utilityId: 'BFG',
     });
-    expect(system.getSelectedHeldItemIdForPresentation()).toBe('BFG');
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
     temporaryUtilities = [];
     expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
+  });
+
+  it('projects a selected utility only while its local interaction is active', () => {
+    const { system } = createSystem();
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
+
+    expect(system.getSelectedRadialActionForHud()).toEqual({ kind: 'utility', utilityId: 'STINK_CLOUD' });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
+
+    Object.assign(system as never as Record<string, unknown>, { utilityTargetingActive: true });
     expect(system.getSelectedHeldItemIdForPresentation()).toBe('STINK_CLOUD');
+
+    Object.assign(system as never as Record<string, unknown>, { utilityTargetingActive: false });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
+  });
+
+  it.each([
+    ['utilityPlacementActive', 'Placement'],
+    ['utilityTargetingActive', 'Targeting'],
+    ['utilityHoldActive', 'Charge/Hold'],
+  ])('keeps the selected utility visible during %s', (state, label) => {
+    const { system } = createSystem();
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
+    Object.assign(system as never as Record<string, unknown>, { [state]: true });
+
+    expect(system.getSelectedHeldItemIdForPresentation(), label).toBe('STINK_CLOUD');
+  });
+
+  it('projects a construction during active construction placement only', () => {
+    const { system } = createSystem();
+    system.setupRadialActionProviders({
+      getTools: () => [{ kind: 'construction', id: 'rock_barrier' }],
+      getCooldownUntil: () => 0,
+      getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
+    });
+    expect(system.getSelectedRadialActionForHud()).toEqual({
+      kind: 'construction', constructionId: 'rock_barrier',
+    });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBeUndefined();
+
+    Object.assign(system as never as Record<string, unknown>, { constructionPlacementActive: true });
+    expect(system.getSelectedHeldItemIdForPresentation()).toBe('ROCK_BARRIER');
   });
 
   it('keeps two Nukes and a BFG as three independent radial actions without a cap', () => {

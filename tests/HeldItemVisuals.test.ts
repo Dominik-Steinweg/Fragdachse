@@ -241,3 +241,34 @@ describe('Getragener Slot', () => {
     expect(tracker.resolve('p1', 1_000)).toBe('weapon1');
   });
 });
+
+describe('Getragene Held-Item-Presentation', () => {
+  it('verwendet die lokale Radialprojektion nur fuer den lokalen Spieler', () => {
+    const callSites = [
+      {
+        file: 'src/scenes/ArenaScene.ts',
+        localCheck: 'player.id === localId',
+        playerId: 'player.id',
+      },
+      {
+        file: 'src/scenes/arena/HostUpdateCoordinator.ts',
+        localCheck: 'player.id === bridge.getLocalPlayerId()',
+        playerId: 'player.id',
+      },
+      {
+        file: 'src/scenes/arena/ClientUpdateCoordinator.ts',
+        localCheck: 'id === localId',
+        playerId: 'id',
+      },
+    ];
+
+    for (const callSite of callSites) {
+      const source = readFileSync(path.resolve(REPOSITORY_ROOT, callSite.file), 'utf8');
+      expect(source, callSite.file).toMatch(
+        new RegExp(
+          `const selectedHeldItemId = ${callSite.localCheck}[\\s\\S]*?selectedHeldItemId === undefined \\? bridge\\.getPlayerHeldItemId\\(${callSite.playerId}\\)`,
+        ),
+      );
+    }
+  });
+});
