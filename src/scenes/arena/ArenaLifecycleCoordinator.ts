@@ -2992,10 +2992,7 @@ export class ArenaLifecycleCoordinator {
         bridge.getPlayerCurrentLoadoutSnapshot(profile.id),
       ] as const),
     );
-    playerGameplay.reconcilePlayerBuildModifiers(
-      builds,
-      (playerId) => this.ctx.playerManager.hasPlayer(playerId),
-    );
+    playerGameplay.reconcilePlayerBuildModifiers(builds);
   }
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {

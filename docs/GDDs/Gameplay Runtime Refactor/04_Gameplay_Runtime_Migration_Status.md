@@ -27,7 +27,7 @@
 - **Aktive Teilphase:** `4C – Spezialisierte Immediate-Execution-Adapter` (offen; nächster Schritt)
 - **Zuletzt abgeschlossen:** `4B – Automatisierte und nicht-playergebundene Waffenquellen migrieren` ✅
 - **Gesamtstatus:** Lifecycle-, Read-View-, Action-Zeit-, Resource-/Readiness-Zeit-Grenzen und die world-composed Immediate-Weapon-Execution-Capability stehen. Gegner, Türme, Necromancy und Void-Hunter-Gauss feuern über die benannte automatische Ausführungsgrenze; Timing, Readiness und Autorität bleiben bei ihren jeweiligen Ownern.
-- **Letzter verifizierter Repository-Stand:** Phase-4B-Commit (siehe Phasentabelle)
+- **Letzter verifizierter Repository-Stand:** Correction-Pass auf Phase-4B-Stand `d104a9f9`
 - **Letzter vollständig grüner automatisierter Gate:** Phase 4B – `npx tsc --noEmit` grün; `npm run build` (tsc + vite) grün; der Lauf von `npm run check` meldete **347 Dateien / 2942 Tests grün**, nur die 4 bekannten CRLF-Source-Scan-Fehler in `ArenaTransitionReadiness.test.ts` verbleiben. Isolierte 4B-Läufe für automatische Waffen, Gegnerangriffe, Void Hunter, Spezialgeschosse, Inspector-Waffen, Activity-Rebinding und World-Turm-Binding grün.
 - **Bekannte Umgebungsflakiness (nicht durch dieses Refactoring verursacht):** `tests/ArenaTransitionReadiness.test.ts` (4 Source-Scan-Tests mit `\n{…}`-Literalen) schlägt in einem CRLF-Checkout unabhängig vom Diff fehl; `tests/WorldCombatGameplayBinding.test.ts` AK47-„random visible target" ist `Math.random`-flaky (~1/5 Läufe). Beide scheitern auf unverändertem Stand vor 2A identisch. Der Phase-Gate wird über `npm test` + `npm run build` geführt; die genannten Flaker separat isoliert geprüft.
 - **Manueller Gate:** offen; bewusst erst nach vollständigem Refactoring
@@ -45,7 +45,7 @@
 | 3A | ✅ | `936e5b87` | Host-Zeit im Action-/Request-Pfad |
 | 3B | ✅ | `14a0f04b` | Resource/Readiness mit expliziter Zeit |
 | 4A | ✅ | `0ee7093f` | Shared Immediate Weapon Execution |
-| 4B | ✅ | Phase-4B-Commit (HEAD dieser Änderung) | Automated-/Non-Player-Fire Cutover |
+| 4B | ✅ | `d104a9f9` | Automated-/Non-Player-Fire Cutover |
 | 4C | ⬜ | — | Spezialisierte Immediate-Execution-Adapter |
 | 5 | ⬜ | — | Construction-/Management-Readiness |
 | 6A | ⬜ | — | Player Action Runtime + Weapon Activation |
@@ -123,22 +123,37 @@ Produktiv nur `ConstructionWorldRuntime`. Lifetime heute: `Map` im `LoadoutManag
 ### AK47 / Negev / Shotgun
 
 - AK47: `CombatSystem.registerAk47ProjectileHit`; `WorldCombatGameplayBinding` → `resolveAk47Projectile`; `WorldPlayerGameplayRuntime.setAk47StrategicTargetHitResolver`; HUD-Reads (`getAk47HudBuffs`, `isAk47FireSuperiority*`, `isAk47FocusAtMaxStacks`) im Host-/ClientUpdateCoordinator; `resetAk47State` in `assignDefaultLoadout`. State: `ak47States`-Map. Zielphase 8A.
-- Negev: `WorldCombatGameplayBinding.handleKill` → `negevStates`; `update()` → `finishNegevKillstreak` (Streak-Gap `NEGEV_STREAK_GAP_MS`, `Date.now()`); `setNegevKillstreakExplosionHandler` (`WorldPlayerGameplayRuntime`); HUD `getNegevHudBuffs`. Zielphase 8B.
+- Negev: `WorldCombatGameplayBinding.handleKill` → `negevStates`; `update()` → `finishNegevKillstreak` (Streak-Gap `NEGEV_STREAK_GAP_MS`, expliziter Zeitwert aus dem Host-Update; verbleibender Default-Fallback → 8B); `setNegevKillstreakExplosionHandler` (`WorldPlayerGameplayRuntime`); HUD `getNegevHudBuffs`. Zielphase 8B.
 - Shotgun: `WorldCombatGameplayBinding.handleKill` → `shotgunLightningQueue`; `processShotgunLightningQueue` in `update()` → `combatSystem.applyAoeDamage` + `bridge.broadcastExplosionEffect`; Chain-Generation. Zielphase 8C.
 
 ### Tesla-Dome / Energy-Shield / ShieldBuff Hooks
 
 `WorldCombatGameplayBinding`: `setTeslaDomeSystem`, `setEnergyShieldSystem`, `setShieldBuffSystem`. Nutzung im Core: `activateTeslaDomeWeapon`/`activateEnergyShieldWeapon` aus `fireWeapon`; `deactivateNonAutonomousWeaponEffect` beim Slot-Claim (`claimWeaponSlot`); `hostDeactivateForPlayer` in `assignDefaultLoadout`/`removePlayer`/`destroy`; Speed-Multiplier-Zweige für `energy_shield`/`tesla_dome`. Zielphase 9.
 
-### Versteckte `Date.now()` im Player-Gameplay-Pfad (Ziel 3A/3B)
+### Zeitmigration nach 3A/3B: abgeschlossen, verbleibende Legacy-Stellen später zugeordnet
 
-- `ResourceSystem.drainAdrenaline` (Regen-Pause setzen), `ResourceSystem.regenTick` (Pause prüfen) – **3B**.
-- `LoadoutManager.update()` – `const now = Date.now()` für Spread-Decay, Negev-Streak-Gap, Ultimate-Drain/Ticks, Shotgun-Queue.
-- `LoadoutManager` Default-Parameter `now = Date.now()`: `getHeldItemSlot`, `registerAk47ProjectileHit`, `resolveAk47Projectile`, `getAk47HudBuffs`, `getWeaponDamageMultiplier`, `getShieldBuffHudState`.
-- `LoadoutManager.getSpeedMultiplier` / `getHeldSelfPushVelocity` / `getAllyAuraMultiplier` – `Date.now()` für Hold-Expire / Aura-Linger.
-- `fireWeapon` NEGEV-Zweig: `negevState.lastShotAt = Date.now()` (bewusst Host-Wanduhr, muss zu `update()` passen).
-- `bindLoadout` Negev-Killstreak-Handler: `Date.now()` im `sourceId`-String.
-- `RpcCoordinator.registerLoadoutUseHandler` – **3A ✅**: kein `clientNow` mehr; ein einziger `const hostNowMs = Date.now()` je Aktion, geteilt zwischen `useLoadout`, `heldActions.consume`, `validateHostUtilityCharge`, `construction.useInspectorUtility`. `registerHeldActionHandler` nutzt weiterhin `Date.now()` (Host-Zeit, unverändert).
+Die Zeitmigrationen von 3A und 3B sind im aktuellen Repository-Stand abgeschlossen:
+
+- **3A ✅ (`936e5b87`):** `RpcCoordinator.registerLoadoutUseHandler` nimmt keinen Client-Timestamp (`ts`/`clientNow`) mehr an. Pro Loadout-Use wird ein einziger hostseitiger `hostNowMs` bestimmt und für `useLoadout`, `heldActions.consume`, `validateHostUtilityCharge` und `construction.useInspectorUtility` geteilt. Der `lu`-Wire-Pfad und der Host-Handler tragen damit keine Client-Uhr mehr.
+- **3B ✅ (`14a0f04b`):** `ResourceSystem.drainAdrenaline(id, amount, nowMs)` und `ResourceSystem.regenTick(id, delta, nowMs)` erhalten die fachliche Zeit explizit; `HostUpdateCoordinator` reicht den Host-Frame-Zeitstempel an `regenTick`, `burrow.update` und `loadout.update` weiter. `LoadoutManager.fireWeapon` verwendet diesen Zeitwert für Adrenalin-Drain und Negev-Schusszeit, und die Negev-Abschlussexplosion übernimmt `event.nowMs`. Die internen `Date.now()`-Aufrufe des `ResourceSystem` sowie die alte `fireWeapon`-Zeitsetzung und die `bindLoadout`-`sourceId`-Zeitstelle aus der früheren Statusliste sind nicht mehr vorhanden.
+
+Die folgenden Vorkommen sind deshalb **keine offenen 3A/3B-Aufgaben**. Sie bleiben als bewusst verschobene Legacy-Fallbacks bzw. direkt verdrahtete Zeitquellen bestehen und werden ihrer bereits geplanten späteren Fachphase zugeordnet. Die Liste umfasst den Player-Gameplay-/Action-/Behavior-/Integration-Pfad; UI-/Diagnose-Zeit, Netzwerk-Infrastruktur sowie die separat geplanten Projectile-/Combat-Refactorings werden nicht nachträglich 3A/3B zugerechnet.
+
+| Spätere Fachphase | Verbleibende Legacy-Zeitstelle im Stand `d104a9f9` |
+|---|---|
+| **4C – spezialisierte Immediate-Execution-Adapter** | Die zeitbehafteten Defaults in `FlamethrowerUpgradeSystem` (`handleEnemyDeath`, `handleNaturalFlameExpiry`) und `EnergyInjectorSystem` gehören zu den spezialisierten unmittelbaren Payload-/Effect-Pfaden. Ihre Prüfung wird mit der ausdrücklich noch offenen 4C-Adapterprüfung vorgenommen; `AutomatedWeaponExecutionAdapter` wird hier nicht vorgezogen umgebaut. |
+| **5 – Construction-/Management-Readiness** | `ConstructionWorldRuntime.placeInspectorConstruction` und `dismantleConstruction` bestimmen den Cooldown-Zeitpunkt noch direkt mit `Date.now()`. `ArenaPersistentBaseSession.movePersistentBaseObject` verwendet dies ebenfalls für die Management-Bereitschaft. Diese Zeitquelle wird erst mit der geplanten Readiness-Verlagerung in Phase 5 explizit eingespeist. |
+| **6A – Player Action Runtime + Weapon Activation** | `LoadoutManager.update(delta, nowMs?)` fällt beim Spread-Decay noch auf `Date.now()` zurück, wenn der Aufrufer keinen Zeitwert liefert. `LoadoutManager.getSpeedMultiplier` und `getHeldSelfPushVelocity` verwenden für das Ablaufdatum von `heldFireSlots` weiterhin einen Default-Zeitwert. `BurrowSystem.update(delta, nowMs?)` sowie `startWindUp`, `finalizeExit` und `finalizeTunnelTransit` erzeugen bzw. prüfen Teile ihres Action-/Recovery-Zustands noch gegen `Date.now()`. Diese Stellen gehören zur expliziten Action-/Behavior-Zeitgrenze. |
+| **6B – RPC-/Held-Action-Cutover** | `RpcCoordinator.registerHeldActionHandler` ruft beim Start einer Held Action weiterhin direkt `Date.now()` auf. Das ist bereits Host-Zeit, aber noch keine über die Player-Gameplay-Grenze eingespeiste Zeit; die Bereinigung gehört zum geplanten Held-Action-Cutover. Der lokale `ArenaInputBindings`-Cooldown-/Prediction-Clock bleibt nichtautoritativ und darf erst im jeweiligen Action-/Prediction-Cutover neu bewertet werden. |
+| **7B – Buff-/Armageddon-Ultimate Behavior** | `LoadoutManager.update()` verwendet den Zeitwert noch für Ultimate-Drain und Buff-/Aura-Ticks. Die Default-Zeit in `getDamageMultiplier`/`getAllyAuraMultiplier` betrifft ebenfalls den heute noch im Loadout liegenden Buff-/Aura-State und wird mit dessen Behavior-Extraktion bereinigt. |
+| **7A – Utility Activation und Temporary Utilities** | Die Default-/Direktzeit in `TimeBubbleSystem` und `DecoySystem` gehört zu den Utility-Lifecycles und wird beim Utility-Cutover explizit an die jeweilige Activation-/Effect-Zeit binden. |
+| **7C – Airstrike/Tunnel/Gauss Ultimate** | `AirstrikeSystem` verwendet `Date.now()` beim Arming, `CoopDefenseVoidHunterSystem.notifyNukeExploded` besitzt noch einen Zeit-Default und `InputSystem` berechnet die lokale Gauss-Charge mit der lokalen Uhr. Diese Stellen gehören zur jeweiligen Ultimate-Activation; die lokale Anzeige bleibt bis dahin nichtautoritative Projektion. |
+| **8A – AK47 Behavior** | `LoadoutManager.registerAk47ProjectileHit`, `resolveAk47Projectile` und `getAk47HudBuffs` sowie `Ak47StrategicTargetSystem.handleDirectAk47EnemyHit`, `isCurrentTarget` und `getNetSnapshot` besitzen noch `Date.now()`-Fallbacks. Die Fallbacks werden mit der AK47-State-/Outcome-Grenze entfernt; sie sind keine offene 3B-Resource-Zeitmigration. |
+| **8B – Negev Behavior** | Der Negev-Zweig in `LoadoutManager.update()` nutzt den bereits übergebenen Zeitwert für das Streak-Gap, aber `finishNegevKillstreak` hat noch einen `Date.now()`-Default. Der tatsächliche Fire-Zeitpunkt (`negevState.lastShotAt`) ist dagegen seit 3B explizit und bleibt abgeschlossen. |
+| **9 – Tesla Dome / Energy Shield Behavior** | `LoadoutManager.getShieldBuffHudState` besitzt noch einen `Date.now()`-Default. Der Shield-/Dome-Anteil von `getSpeedMultiplier` und die dazugehörigen zeitabhängigen Reads werden mit der geplanten Sustained-Behavior-Grenze bereinigt. |
+| **11A/11B – PlayerCombatIntegration** | `LoadoutManager.getDamageMultiplier`/`getWeaponDamageMultiplier` haben noch `Date.now()`-Defaults; `CombatSystem` übergibt an mehreren Legacy-Damage-Pfaden direkt `Date.now()`. Die Zuordnung gehört zur späteren Player-Combat-Integration für Modifier-Reads bzw. Hit-/Outcome-Reaktionen. Die verbleibenden zeitbehafteten Defaults in `CoopDefenseItemRuntimeSystem` sowie die direkten Zeitübergaben aus `ArenaWorldPlayerComposition`, `ArenaWorldCombatComposition` und `WorldCombatGameplayBinding` werden dort fachlich mitgeführt. |
+| **12A/12B – Host-/Client-Frame und stabile Reads** | `LoadoutManager.getHeldItemSlot` hat noch einen `Date.now()`-Default, obwohl der Host-Frame ihn bereits mit `now` aufruft; die Bereinigung gehört zur stabilen Held-Item-/HUD-Read-Grenze in 12B. Die verbleibenden Frame-Caller, die Legacy-Systeme direkt mit `Date.now()` takten, werden im Stage-/Read-Cutover bewertet. |
+| **separates Projectile-/Combat-Refactoring nach dem ersten Cutover** | Verbleibende fachliche Zeitstellen innerhalb von `ProjectileManager`/`CombatSystem` und deren unteren Interaktionspfaden sind nicht Teil von 3A/3B und werden nicht vorgezogen. Sie bleiben dem später geplanten Projectile- bzw. Combat-Runtime-Refactoring zugeordnet. |
 
 ### `clientX` / `clientY` im Loadout-Use-Pfad
 
@@ -178,7 +193,7 @@ Stand nach Phase 4B. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zi
 | Dynamischer Spread / aktiver Slot / Shot Identity | `AimSpreadModelActiveSlot.test.ts`, `ShotPlanResolverRuntimeRegression.test.ts`, `ProjectileSpawnResolver.test.ts` | abgedeckt | prüfen bei 6A |
 | Resource Revision / Adrenalin-Observer / Cost-Modifier | `ResourceSystemObservers.test.ts`, `ResourceSystemExplicitTime.test.ts` | abgedeckt (3B: explizite Zeit, Pause, Regen-Tick, Powerup-Interaktion) | prüfen bei 6A |
 | **`clientX`/`clientY` als Use-Ursprung** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)**; in 3A bewusst unverändert (Positions-/Latenzsemantik ≠ Zeit-Authority) | Zielprüfung 6A |
-| **Host-Zeit-Authority der Player-Aktion (Clock-Skew)** | `RadialActionRpc.test.ts` (ein `hostNowMs` je Aktion, geteilt mit Held-Action-Consume), `Weapon2PredictionDedupe.test.ts` (`lu`-Payload-`ts` erreicht den Host-Handler nicht) | **neu (Phase 3A)** | prüfen bei 6A / 6B |
+| **Host-Zeit-Authority der Player-Aktion (Clock-Skew)** | `RadialActionRpc.test.ts` (ein `hostNowMs` je Aktion, geteilt mit Held-Action-Consume), `Weapon2PredictionDedupe.test.ts` (`lu`-Payload-`ts` erreicht den Host-Handler nicht) | **abgedeckt (Phase 3A ✅)** | prüfen bei 6A / 6B |
 | **Waffen-Commit-Reihenfolge: Reject → keine Resource-/Cooldown-Mutation; Drain erst nach Dispatch** | `GameplayRuntimeCutoverCharacterization.test.ts` | abgedeckt (3B: mit expliziter Zeit `nowMs` gesichert) | Zielprüfung 6A |
 | **Negev-Killstreak-Runtime: Kill-Zahl, Streak-Gap-Ende in `update()`, Abschlussexplosion** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | migrieren bei 8B |
 | **Shotgun-Lightning: Kill → Queue → `applyAoeDamage` + Broadcast** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | migrieren bei 8C |
@@ -190,7 +205,7 @@ Stand nach Phase 4B. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zi
 | World Player ownership boundary | `WorldGameplayCompositionContracts.test.ts` | Ratchet | migrieren bei 10B |
 | Combat integration boundary | `WorldCombatGameplayBinding.test.ts` | Ratchet (AK47-Ziel `Math.random`-flaky) | migrieren bei 11A / 11B |
 | Arena source boundaries | `Phase11DependencyCutover.test.ts` (2A: Held-Action ✅), `ArenaFlowCheckpointC.test.ts` | Ratchet | migrieren bei 6B |
-| **Player-in-World-Lifecycle- und Read-View-Grenze der Runtime** | `WorldPlayerGameplayLifecycle.test.ts` (attach/detach/reconcile/held-invalidation + Read-Views), `PlayerGameplayReadViewBoundary.test.ts` (`.systems`-Ratchet) | abgedeckt | prüfen bei 12A / 12B |
+| **Player-in-World-Lifecycle- und Read-View-Grenze der Runtime** | `WorldPlayerGameplayLifecycle.test.ts` (attach/detach/reconcile/held-invalidation + wiederholte Detach-/Reset-/Destroy-Pfade + Read-Views), `PlayerGameplayReadViewBoundary.test.ts` (`.systems`-Ratchet) | abgedeckt (Correction-Pass ergänzt Idempotenz-Gate) | prüfen bei 12A / 12B |
 
 ---
 
@@ -231,7 +246,7 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 | Contract-Familie aus 03 | Realisierter Type/API | Eingeführt in |
 |---|---|---|
-| `PlayerGameplayLifecyclePort` | `interface PlayerGameplayLifecyclePort` in `src/world/WorldPlayerGameplayRuntime.ts`, implementiert von `WorldPlayerGameplayRuntime`. Methoden: `attachPlayerResources` / `detachPlayerResources` / `attachPlayerBurrow` / `detachPlayerBurrow` / `attachPlayerBuild` / `detachPlayerBuild` / `attachPlayerLoadout(playerId, selection?)` / `detachPlayerLoadout` / `reconcilePlayerLoadout(playerId, selection?)` / `reconcilePlayerBuildModifiers(builds, hasPlayer)` / `invalidateHeldActionsForPlayer` / `invalidateHeldActionsOnActivityEnd`. World-Teardown bleibt `WorldScopedBinding.destroy()`. | 2A |
+| `PlayerGameplayLifecyclePort` | `interface PlayerGameplayLifecyclePort` in `src/world/WorldPlayerGameplayRuntime.ts`, implementiert von `WorldPlayerGameplayRuntime`. Methoden: `attachPlayerResources` / `detachPlayerResources` / `attachPlayerBurrow` / `detachPlayerBurrow` / `attachPlayerBuild` / `detachPlayerBuild` / `attachPlayerLoadout(playerId, selection?)` / `detachPlayerLoadout` / `reconcilePlayerLoadout(playerId, selection?)` / `reconcilePlayerBuildModifiers(builds)` mit `Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null` je Map-Wert / `invalidateHeldActionsForPlayer` / `invalidateHeldActionsOnActivityEnd`. Die Player-Existenzprüfung liegt intern beim `PlayerManager`; ein externer `hasPlayer`-Callback gehört nicht mehr zur Boundary. World-Teardown bleibt `WorldScopedBinding.destroy()`. | 2A / Correction-Pass |
 | `PlayerGameplayReadViews` | Vier kleine Interfaces in `src/world/WorldPlayerGameplayRuntime.ts`, alle von `WorldPlayerGameplayRuntime` implementiert, plus `type PlayerGameplayReadViews` als deren Schnittmenge. `PlayerGameplayStateReadView` (`isBurrowed`/`isStunned`/`getPlayerClassId`); `PlayerGameplayLoadoutReadView` (`getEquippedUtilityConfig`/`getTemporaryUtilityConfig`/`hasActiveTranslocatorPuck`); `PlayerGameplayResourceReadView` (`getAdrenaline`/`getAdrenalineRevision`/`getMaxAdrenaline`/`addAdrenalineDrainObserver`/`addAdrenalineGainObserver`); `PlayerGameplaySnapshotReadView` (`getTranslocatorActivePuckId`/`getTunnelNetSnapshot`/`getAk47StrategicTargetNetSnapshot`). | 2B |
 | `PlayerActionRequest` | — | — |
 | `WeaponExecutionCapability` | `interface WeaponExecutionCapability { fire(config: WeaponConfig, params: WeaponFireParams): boolean }` in `src/loadout/WeaponFireExecutor.ts`; einziger gemeinsamer Vertrag ist `WeaponFireExecutor.fire` (`class WeaponFireExecutor implements WeaponExecutionCapability`). World-composed Owner: `class WorldWeaponExecutionRuntime` (`src/world/WorldWeaponExecutionRuntime.ts`, `WorldScopedBinding`), erzeugt in `ArenaWorldPlayerComposition`, Slot `ArenaWorldGameplay.weaponExecution`. Die getrennte 4B-Boundary `interface AutomatedWeaponExecution` / `class AutomatedWeaponExecutionAdapter` in `src/world/AutomatedWeaponExecutionAdapter.ts` hält automatische Payload-Sonderfälle explizit. | 4A / 4B |

@@ -109,8 +109,7 @@ export interface PlayerGameplayLifecyclePort {
   detachPlayerLoadout(playerId: string): void;
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): void;
   reconcilePlayerBuildModifiers(
-    builds: ReadonlyMap<string, LoadoutCommitSnapshot | null>,
-    hasPlayer: (playerId: string) => boolean,
+    builds: ReadonlyMap<string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null>,
   ): void;
   invalidateHeldActionsForPlayer(playerId: string): void;
   invalidateHeldActionsOnActivityEnd(): void;
@@ -392,8 +391,7 @@ export class WorldPlayerGameplayRuntime implements
    * genau für die Spieler mit tatsächlich geänderter Build.
    */
   reconcilePlayerBuildModifiers(
-    builds: ReadonlyMap<string, LoadoutCommitSnapshot | null>,
-    hasPlayer: (playerId: string) => boolean,
+    builds: ReadonlyMap<string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null>,
   ): void {
     const changedPlayerIds = this.systems.playerModifier.syncPlayers(builds);
     for (const playerId of changedPlayerIds) {
@@ -401,7 +399,7 @@ export class WorldPlayerGameplayRuntime implements
       const wantsItemRuntime = Boolean(snapshot?.coopDefenseProfile)
         || (snapshot?.equippedItems?.length ?? 0) > 0;
       if (wantsItemRuntime) {
-        if (hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId);
+        if (this.options.playerManager.hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId);
       } else {
         this.systems.itemRuntime.removePlayer(playerId);
       }
