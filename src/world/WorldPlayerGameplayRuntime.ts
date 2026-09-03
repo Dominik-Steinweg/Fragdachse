@@ -25,7 +25,8 @@ import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem'
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
 import { HostHeldActionSystem } from '../systems/HostHeldActionSystem';
-import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, PlayerInput } from '../types';
+import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, PlayerInput, SyncedAk47StrategicTarget, SyncedTunnel } from '../types';
+import type { UtilityConfig } from '../loadout/LoadoutConfig';
 import type { NegevKillstreakExplosionEvent } from '../loadout/LoadoutManager';
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
@@ -114,6 +115,51 @@ export interface PlayerGameplayLifecyclePort {
   invalidateHeldActionsOnActivityEnd(): void;
 }
 
+/**
+ * Kleine consumer-orientierte Read-Sichten auf world-scoped Player-Gameplay
+ * (Cross-Phase-Contract-Familie `PlayerGameplayReadViews`, eingeführt in Teilphase 2B).
+ *
+ * Obere Scene-/Runtime-/Adapter-Consumer lesen darüber, statt in `WorldPlayerGameplayRuntime.systems`
+ * zu traversieren. Bewusst nach Verbrauchergruppe geschnitten und **kein** Mega-Facade – dieselbe
+ * Runtime implementiert alle Teilsichten. Mutationen (`use`, Held-Action-Start/-Consume,
+ * Burrow-Request, direktes `setAdrenaline`) bleiben bis zu ihren Phasen (3B/6A/6B) außen vor.
+ */
+export interface PlayerGameplayStateReadView {
+  isBurrowed(playerId: string): boolean;
+  isStunned(playerId: string): boolean;
+  getPlayerClassId(playerId: string): string | null;
+}
+
+export interface PlayerGameplayLoadoutReadView {
+  getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined;
+  getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null;
+  hasActiveTranslocatorPuck(playerId: string): boolean;
+}
+
+export interface PlayerGameplayResourceReadView {
+  getAdrenaline(playerId: string): number;
+  getAdrenalineRevision(playerId: string): number;
+  getMaxAdrenaline(playerId: string): number;
+  addAdrenalineDrainObserver(
+    observer: (playerId: string, requestedAmount: number, drainedAmount: number) => void,
+  ): () => void;
+  addAdrenalineGainObserver(
+    observer: (playerId: string, requestedAmount: number, gainedAmount: number) => void,
+  ): () => void;
+}
+
+export interface PlayerGameplaySnapshotReadView {
+  getTranslocatorActivePuckId(playerId: string): number | undefined;
+  getTunnelNetSnapshot(): readonly SyncedTunnel[];
+  getAk47StrategicTargetNetSnapshot(nowMs: number): readonly SyncedAk47StrategicTarget[];
+}
+
+export type PlayerGameplayReadViews =
+  PlayerGameplayStateReadView
+  & PlayerGameplayLoadoutReadView
+  & PlayerGameplayResourceReadView
+  & PlayerGameplaySnapshotReadView;
+
 export interface WorldPlayerGameplayRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
@@ -136,7 +182,10 @@ export interface WorldPlayerGameplayRuntimeOptions {
 }
 
 /** World-owned player/loadout state and its ability-side bindings. */
-export class WorldPlayerGameplayRuntime implements WorldScopedBinding, PlayerGameplayLifecyclePort {
+export class WorldPlayerGameplayRuntime implements
+  WorldScopedBinding,
+  PlayerGameplayLifecyclePort,
+  PlayerGameplayReadViews {
   readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
 
@@ -367,6 +416,69 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding, PlayerGam
    */
   invalidateHeldActionsOnActivityEnd(): void {
     this.systems.heldAction.reset();
+  }
+
+  // ── Read-Views (PlayerGameplayReadViews) ─────────────────────────────────────
+  // Reine Lesezugriffe für obere Consumer; keine State-Mutation.
+
+  isBurrowed(playerId: string): boolean {
+    return this.systems.burrow.isBurrowed(playerId);
+  }
+
+  isStunned(playerId: string): boolean {
+    return this.systems.burrow.isStunned(playerId);
+  }
+
+  getPlayerClassId(playerId: string): string | null {
+    return this.systems.playerModifier.getClassId(playerId) ?? null;
+  }
+
+  getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined {
+    return this.systems.loadout.getEquippedUtilityConfig(playerId);
+  }
+
+  getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null {
+    return this.systems.loadout.getTemporaryUtilityConfig(playerId, instanceId);
+  }
+
+  hasActiveTranslocatorPuck(playerId: string): boolean {
+    return this.systems.translocator.getActivePuckId(playerId) !== undefined;
+  }
+
+  getAdrenaline(playerId: string): number {
+    return this.systems.resource.getAdrenaline(playerId);
+  }
+
+  getAdrenalineRevision(playerId: string): number {
+    return this.systems.resource.getAdrenalineRevision(playerId);
+  }
+
+  getMaxAdrenaline(playerId: string): number {
+    return this.systems.resource.getMaxAdrenaline(playerId);
+  }
+
+  addAdrenalineDrainObserver(
+    observer: (playerId: string, requestedAmount: number, drainedAmount: number) => void,
+  ): () => void {
+    return this.systems.resource.addAdrenalineDrainObserver(observer);
+  }
+
+  addAdrenalineGainObserver(
+    observer: (playerId: string, requestedAmount: number, gainedAmount: number) => void,
+  ): () => void {
+    return this.systems.resource.addAdrenalineGainObserver(observer);
+  }
+
+  getTranslocatorActivePuckId(playerId: string): number | undefined {
+    return this.systems.translocator.getActivePuckId(playerId);
+  }
+
+  getTunnelNetSnapshot(): readonly SyncedTunnel[] {
+    return this.systems.tunnel.getSnapshot();
+  }
+
+  getAk47StrategicTargetNetSnapshot(nowMs: number): readonly SyncedAk47StrategicTarget[] {
+    return this.systems.ak47StrategicTarget?.getNetSnapshot(nowMs) ?? [];
   }
 
   destroy(): void {

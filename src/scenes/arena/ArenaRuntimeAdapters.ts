@@ -135,11 +135,11 @@ export function createArenaRuntimeRpcPorts(
       handleBurrowRequest: (playerId, wantsBurrowed) => {
         flow.getWorldPlayerGameplayRuntime()?.systems.burrow?.handleBurrowRequest(playerId, wantsBurrowed);
       },
-      isBurrowed: (playerId) => flow.getWorldPlayerGameplayRuntime()?.systems.burrow?.isBurrowed(playerId) ?? false,
-      isStunned: (playerId) => flow.getWorldPlayerGameplayRuntime()?.systems.burrow?.isStunned(playerId) ?? false,
-      getTemporaryUtilityConfig: (playerId, instanceId) => flow.getWorldPlayerGameplayRuntime()?.systems.loadout?.getTemporaryUtilityConfig(playerId, instanceId) ?? null,
-      getEquippedUtilityConfig: (playerId) => flow.getWorldPlayerGameplayRuntime()?.systems.loadout?.getEquippedUtilityConfig(playerId),
-      hasActiveTranslocatorPuck: (playerId) => flow.getWorldPlayerGameplayRuntime()?.systems.translocator?.getActivePuckId(playerId) !== undefined,
+      isBurrowed: (playerId) => flow.getWorldPlayerGameplayRuntime()?.isBurrowed(playerId) ?? false,
+      isStunned: (playerId) => flow.getWorldPlayerGameplayRuntime()?.isStunned(playerId) ?? false,
+      getTemporaryUtilityConfig: (playerId, instanceId) => flow.getWorldPlayerGameplayRuntime()?.getTemporaryUtilityConfig(playerId, instanceId) ?? null,
+      getEquippedUtilityConfig: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getEquippedUtilityConfig(playerId),
+      hasActiveTranslocatorPuck: (playerId) => flow.getWorldPlayerGameplayRuntime()?.hasActiveTranslocatorPuck(playerId) ?? false,
       useLoadout: (slot, playerId, angle, targetX, targetY, now, shotId, params, clientX, clientY) => (
         flow.getWorldPlayerGameplayRuntime()?.systems.loadout?.use(
           slot,
@@ -154,8 +154,8 @@ export function createArenaRuntimeRpcPorts(
           clientY,
         ) ?? { ok: false, reason: 'blocked' }
       ),
-      getAdrenaline: (playerId) => flow.getWorldPlayerGameplayRuntime()?.systems.resource?.getAdrenaline(playerId) ?? 0,
-      getAdrenalineRevision: (playerId) => flow.getWorldPlayerGameplayRuntime()?.systems.resource?.getAdrenalineRevision(playerId) ?? 0,
+      getAdrenaline: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getAdrenaline(playerId) ?? 0,
+      getAdrenalineRevision: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getAdrenalineRevision(playerId) ?? 0,
       tryPickupPowerUp: (playerId, uid, playerX, playerY) => flow.getWorldPowerUpRuntime()?.system?.tryPickup(playerId, uid, playerX, playerY) ?? false,
     },
     heldAction: {
@@ -269,9 +269,9 @@ export function createWeaponBalanceLabWorldPort(
 ): WeaponBalanceLabWorldPort {
   return {
     isReady: () => {
-      const playerSystems = flow.getWorldPlayerGameplayRuntime()?.systems;
+      const playerGameplay = flow.getWorldPlayerGameplayRuntime();
       const enemyManager = flow.getCoopMissionRuntime()?.enemyManager;
-      return playerSystems !== undefined && enemyManager != null;
+      return playerGameplay != null && enemyManager != null;
     },
     spawnTarget: (x, y) => {
       const enemyManager = flow.getCoopMissionRuntime()?.enemyManager;
@@ -290,23 +290,22 @@ export function createWeaponBalanceLabWorldPort(
       enemy.setPosition(x, y);
       enemy.body.setVelocity(0, 0);
     },
-    observeAdrenalineDrain: (listener) => {
-      const resources = flow.getWorldPlayerGameplayRuntime()?.systems.resource;
-      return resources?.addAdrenalineDrainObserver((observedPlayerId, _requested, drained) => {
+    observeAdrenalineDrain: (listener) => (
+      flow.getWorldPlayerGameplayRuntime()?.addAdrenalineDrainObserver((observedPlayerId, _requested, drained) => {
         listener(observedPlayerId, drained);
-      }) ?? null;
-    },
-    observeAdrenalineGain: (listener) => {
-      const resources = flow.getWorldPlayerGameplayRuntime()?.systems.resource;
-      return resources?.addAdrenalineGainObserver((observedPlayerId, _requested, gained) => {
+      }) ?? null
+    ),
+    observeAdrenalineGain: (listener) => (
+      flow.getWorldPlayerGameplayRuntime()?.addAdrenalineGainObserver((observedPlayerId, _requested, gained) => {
         listener(observedPlayerId, gained);
-      }) ?? null;
-    },
+      }) ?? null
+    ),
     setAdrenaline: (playerId, amount) => {
+      // Mutation – bleibt bis Teilphase 3B am konkreten ResourceSystem.
       flow.getWorldPlayerGameplayRuntime()?.systems.resource.setAdrenaline(playerId, amount);
     },
     getMaxAdrenaline: (playerId) => (
-      flow.getWorldPlayerGameplayRuntime()?.systems.resource.getMaxAdrenaline(playerId) ?? 0
+      flow.getWorldPlayerGameplayRuntime()?.getMaxAdrenaline(playerId) ?? 0
     ),
     useLoadout: (slot, playerId, angle, targetX, targetY, now, shotSequence, inputStarted) => {
       const loadout = flow.getWorldPlayerGameplayRuntime()?.systems.loadout;
@@ -333,7 +332,7 @@ export function createArenaStrategicTargetsPort(
 ): ArenaRuntimeStrategicTargetsPort {
   return {
     getHostSnapshot: (now) => (
-      flow.getWorldPlayerGameplayRuntime()?.systems?.ak47StrategicTarget?.getNetSnapshot(now) ?? []
+      flow.getWorldPlayerGameplayRuntime()?.getAk47StrategicTargetNetSnapshot(now) ?? []
     ),
     getEnemyVisual: (enemyId) => flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(enemyId) ?? null,
   };

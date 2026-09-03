@@ -200,7 +200,7 @@ describe('Dachs of Steel & Tutorial-Felsen Armor Drops', () => {
           } as never),
           getTargetingRuntime: () => null,
           getPlayerGameplayRuntime: () => ({
-            systems: { playerModifier: coopDefensePlayerModifierSystem },
+            getPlayerClassId: (playerId: string) => coopDefensePlayerModifierSystem.getClassId(playerId),
           } as never),
           getPowerUpRuntime: () => ({ system: powerUpSystem } as never),
         },

@@ -712,7 +712,7 @@ export class ArenaLifecycleCoordinator {
       getSecondsLeft: () => bridge.computeSecondsLeft(),
       getConnectedPlayerIds: () => bridge.getConnectedPlayerIds(),
       getSpectatorIds: () => bridge.getRoundParticipation()?.spectatorIds ?? [],
-      isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false,
+      isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.isBurrowed(playerId) ?? false,
       isSafeEnemyGroundAt: (x, y, radius) => isSafeEnemyGroundAt(this.coopMissionRuntime, x, y, radius),
       findSafeEnemyGroundPosition: (x, y, radius, maxRadiusCells) => (
         findSafeEnemyGroundPosition(this.coopMissionRuntime, x, y, radius, maxRadiusCells)
@@ -1014,7 +1014,7 @@ export class ArenaLifecycleCoordinator {
         playerManager: this.ctx.playerManager,
         isPlayerInteractionAllowed: (playerId) => (
           this.ctx.combatSystem.isAlive(playerId)
-          && !(this.worldPlayerGameplayRuntime?.systems.burrow.isBurrowed(playerId) ?? false)
+          && !(this.worldPlayerGameplayRuntime?.isBurrowed(playerId) ?? false)
         ),
         roster: {
           getPlayerTeam: (playerId) => bridge.getPlayerTeam(playerId),

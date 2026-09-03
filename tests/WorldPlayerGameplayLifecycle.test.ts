@@ -21,15 +21,24 @@ function makeRuntime() {
   const tag = (name: string, fn: (...args: any[]) => any = () => undefined) =>
     vi.fn((...args: any[]) => { order.push(name); return fn(...args); });
 
-  const systems = {
+  const drainUnsub = vi.fn();
+  const gainUnsub = vi.fn();
+  const systems: Record<string, any> = {
     resource: {
       initPlayer: tag('resource.initPlayer'),
       removePlayer: tag('resource.removePlayer'),
       reconcilePlayerLimits: tag('resource.reconcilePlayerLimits'),
+      getAdrenaline: vi.fn(() => 55),
+      getAdrenalineRevision: vi.fn(() => 7),
+      getMaxAdrenaline: vi.fn(() => 100),
+      addAdrenalineDrainObserver: vi.fn(() => drainUnsub),
+      addAdrenalineGainObserver: vi.fn(() => gainUnsub),
     },
     burrow: {
       initPlayer: tag('burrow.initPlayer'),
       removePlayer: tag('burrow.removePlayer'),
+      isBurrowed: vi.fn((playerId: string) => playerId === 'buried'),
+      isStunned: vi.fn((playerId: string) => playerId === 'zapped'),
     },
     itemRuntime: {
       initPlayer: tag('itemRuntime.initPlayer'),
@@ -40,9 +49,15 @@ function makeRuntime() {
       assignDefaultLoadout: tag('loadout.assignDefaultLoadout'),
       removePlayer: tag('loadout.removePlayer'),
       syncSelectedLoadout: tag('loadout.syncSelectedLoadout'),
+      getEquippedUtilityConfig: vi.fn(() => ({ id: 'DECOY' })),
+      getTemporaryUtilityConfig: vi.fn(() => ({ id: 'BFG' })),
     },
     tunnel: {
       removePlayer: tag('tunnel.removePlayer'),
+      getSnapshot: vi.fn(() => ['tunnel-snap']),
+    },
+    translocator: {
+      getActivePuckId: vi.fn((playerId: string) => (playerId === 'withPuck' ? 42 : undefined)),
     },
     heldAction: {
       clearPlayer: tag('heldAction.clearPlayer'),
@@ -50,12 +65,16 @@ function makeRuntime() {
     },
     playerModifier: {
       syncPlayers: vi.fn(() => [] as readonly string[]),
+      getClassId: vi.fn((playerId: string) => (playerId === 'p1' ? 'dachs_of_steel' : null)),
+    },
+    ak47StrategicTarget: {
+      getNetSnapshot: vi.fn((now: number) => [{ now }]),
     },
   };
 
   const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
   runtime.systems = systems;
-  return { runtime, systems, order };
+  return { runtime, systems, order, drainUnsub, gainUnsub };
 }
 
 describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', () => {
@@ -136,5 +155,50 @@ describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => 
 
     expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalled();
     expect(systems.itemRuntime.removePlayer).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorldPlayerGameplayRuntime – Read-Views (2B)', () => {
+  it('reicht State-Reads unverändert an die Child-Systeme durch', () => {
+    const { runtime } = makeRuntime();
+
+    expect(runtime.isBurrowed('buried')).toBe(true);
+    expect(runtime.isBurrowed('p1')).toBe(false);
+    expect(runtime.isStunned('zapped')).toBe(true);
+    expect(runtime.getPlayerClassId('p1')).toBe('dachs_of_steel');
+    expect(runtime.getPlayerClassId('other')).toBeNull();
+  });
+
+  it('reicht Loadout-/Translocator-Reads durch', () => {
+    const { runtime } = makeRuntime();
+
+    expect(runtime.getEquippedUtilityConfig('p1')).toEqual({ id: 'DECOY' });
+    expect(runtime.getTemporaryUtilityConfig('p1', 'inst-1')).toEqual({ id: 'BFG' });
+    expect(runtime.hasActiveTranslocatorPuck('withPuck')).toBe(true);
+    expect(runtime.hasActiveTranslocatorPuck('p1')).toBe(false);
+    expect(runtime.getTranslocatorActivePuckId('withPuck')).toBe(42);
+  });
+
+  it('reicht Resource-Reads und Observer-Abos durch', () => {
+    const { runtime, systems, drainUnsub } = makeRuntime();
+
+    expect(runtime.getAdrenaline('p1')).toBe(55);
+    expect(runtime.getAdrenalineRevision('p1')).toBe(7);
+    expect(runtime.getMaxAdrenaline('p1')).toBe(100);
+
+    const listener = vi.fn();
+    const unsub = runtime.addAdrenalineDrainObserver(listener);
+    expect(systems.resource.addAdrenalineDrainObserver).toHaveBeenCalledWith(listener);
+    expect(unsub).toBe(drainUnsub);
+  });
+
+  it('reicht Snapshot-Reads durch (Tunnel, AK47-Strategic-Target)', () => {
+    const { runtime, systems } = makeRuntime();
+
+    expect(runtime.getTunnelNetSnapshot()).toEqual(['tunnel-snap']);
+    expect(runtime.getAk47StrategicTargetNetSnapshot(1_234)).toEqual([{ now: 1_234 }]);
+
+    systems.ak47StrategicTarget = null;
+    expect(runtime.getAk47StrategicTargetNetSnapshot(0)).toEqual([]);
   });
 });

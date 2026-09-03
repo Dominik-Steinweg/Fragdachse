@@ -341,7 +341,6 @@ export class RockVisualHelper {
   private get lightOccluderIndex() { return this.worldRuntime?.materialization?.lightOccluders ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
   private get targetingSystems() { return this.worldPort?.getTargetingRuntime()?.systems ?? null; }
-  private get playerSystems() { return this.worldPort?.getPlayerGameplayRuntime()?.systems ?? null; }
   private get powerUpSystem() { return this.worldPort?.getPowerUpRuntime()?.system ?? null; }
 
   private destroyRockProxyIfPresent(rockId: number): void {
@@ -451,7 +450,7 @@ export class RockVisualHelper {
     const dropsArmor = !isCoopDefenseMode(bridge.getActiveGameMode())
       || (
         reason === 'damage'
-        && this.playerSystems?.playerModifier?.getClassId(attackerId ?? '') === 'dachs_of_steel'
+        && this.worldPort?.getPlayerGameplayRuntime()?.getPlayerClassId(attackerId ?? '') === 'dachs_of_steel'
       );
     if (dropsArmor) this.powerUpSystem?.onRockDestroyed(rockId);
     const rockCell = this.currentLayout?.rocks[rockId];

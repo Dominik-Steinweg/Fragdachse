@@ -603,7 +603,7 @@ export class ArenaRuntime {
   }
 
   getTranslocatorActivePuckId(playerId: string): number | undefined {
-    return this.flow.getWorldPlayerGameplayRuntime()?.systems?.translocator?.getActivePuckId(playerId);
+    return this.flow.getWorldPlayerGameplayRuntime()?.getTranslocatorActivePuckId(playerId);
   }
 
   // --- Presentation & Combat Sources ---
@@ -636,7 +636,7 @@ export class ArenaRuntime {
   }
 
   getHostTunnelSnapshot(): readonly SyncedTunnel[] {
-    return this.flow.getWorldPlayerGameplayRuntime()?.systems?.tunnel?.getSnapshot() ?? [];
+    return this.flow.getWorldPlayerGameplayRuntime()?.getTunnelNetSnapshot() ?? [];
   }
 
   getEnemySilhouette(targetId: string): {
