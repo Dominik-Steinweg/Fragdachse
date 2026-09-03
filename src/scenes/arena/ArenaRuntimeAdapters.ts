@@ -142,19 +142,35 @@ export function createArenaRuntimeRpcPorts(
       getTemporaryUtilityConfig: (playerId, instanceId) => flow.getWorldPlayerGameplayRuntime()?.getTemporaryUtilityConfig(playerId, instanceId) ?? null,
       getEquippedUtilityConfig: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getEquippedUtilityConfig(playerId),
       hasActiveTranslocatorPuck: (playerId) => flow.getWorldPlayerGameplayRuntime()?.hasActiveTranslocatorPuck(playerId) ?? false,
+      usePlayerAction: (request) => (
+        flow.getWorldPlayerGameplayRuntime()?.usePlayerAction(request) ?? { ok: false, reason: 'blocked' }
+      ),
       useLoadout: (slot, playerId, angle, targetX, targetY, now, shotId, params, clientX, clientY) => (
-        flow.getWorldPlayerGameplayRuntime()?.systems.loadout?.use(
-          slot,
-          playerId,
-          angle,
-          targetX,
-          targetY,
-          now,
-          shotId,
-          params,
-          clientX,
-          clientY,
-        ) ?? { ok: false, reason: 'blocked' }
+        slot === 'weapon1' || slot === 'weapon2'
+          ? flow.getWorldPlayerGameplayRuntime()?.usePlayerAction({
+            category: 'weapon',
+            playerId,
+            slot,
+            angle,
+            targetX,
+            targetY,
+            hostNowMs: now,
+            shotId,
+            params,
+            clientPosition: { x: clientX, y: clientY },
+          }) ?? { ok: false, reason: 'blocked' }
+          : flow.getWorldPlayerGameplayRuntime()?.useLegacyLoadoutAction(
+            slot,
+            playerId,
+            angle,
+            targetX,
+            targetY,
+            now,
+            shotId,
+            params,
+            clientX,
+            clientY,
+          ) ?? { ok: false, reason: 'blocked' }
       ),
       getAdrenaline: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getAdrenaline(playerId) ?? 0,
       getAdrenalineRevision: (playerId) => flow.getWorldPlayerGameplayRuntime()?.getAdrenalineRevision(playerId) ?? 0,
@@ -310,21 +326,21 @@ export function createWeaponBalanceLabWorldPort(
       flow.getWorldPlayerGameplayRuntime()?.getMaxAdrenaline(playerId) ?? 0
     ),
     useLoadout: (slot, playerId, angle, targetX, targetY, now, shotSequence, inputStarted) => {
-      const loadout = flow.getWorldPlayerGameplayRuntime()?.systems.loadout;
-      if (!loadout) return null;
+      const playerRuntime = flow.getWorldPlayerGameplayRuntime();
+      if (!playerRuntime) return null;
       const player = playerManager.getPlayer(playerId);
-      return loadout.use(
-        slot,
+      return playerRuntime.usePlayerAction({
+        category: 'weapon',
         playerId,
+        slot,
         angle,
         targetX,
         targetY,
-        now,
-        shotSequence,
-        { inputStarted },
-        player?.x,
-        player?.y,
-      );
+        hostNowMs: now,
+        shotId: shotSequence,
+        params: { inputStarted },
+        clientPosition: { x: player?.x, y: player?.y },
+      });
     },
   };
 }

@@ -25,8 +25,9 @@ import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem'
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
 import { HostHeldActionSystem } from '../systems/HostHeldActionSystem';
-import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, PlayerInput, SyncedAk47StrategicTarget, SyncedTunnel } from '../types';
+import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, SyncedAk47StrategicTarget, SyncedTunnel } from '../types';
 import type { UtilityConfig } from '../loadout/LoadoutConfig';
+import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
 import type {
   SpecializedWeaponExecutionCapability,
   WeaponExecutionCapability,
@@ -76,6 +77,7 @@ export interface WorldPlayerGameplayNetworkPort {
 }
 
 export interface WorldPlayerGameplaySystems {
+  readonly playerAction: PlayerActionRuntime;
   readonly heldAction: HostHeldActionSystem;
   readonly playerModifier: CoopDefensePlayerModifierSystem;
   readonly itemRuntime: CoopDefenseItemRuntimeSystem;
@@ -118,14 +120,20 @@ export interface PlayerGameplayLifecyclePort {
   invalidateHeldActionsOnActivityEnd(): void;
 }
 
+/** World-facing action boundary; Phase 6A materializes host-authoritative weapon actions. */
+export interface PlayerGameplayActionPort {
+  usePlayerAction(request: PlayerActionRequest): LoadoutUseResult;
+}
+
 /**
  * Kleine consumer-orientierte Read-Sichten auf world-scoped Player-Gameplay
  * (Cross-Phase-Contract-Familie `PlayerGameplayReadViews`, eingeführt in Teilphase 2B).
  *
  * Obere Scene-/Runtime-/Adapter-Consumer lesen darüber, statt in `WorldPlayerGameplayRuntime.systems`
  * zu traversieren. Bewusst nach Verbrauchergruppe geschnitten und **kein** Mega-Facade – dieselbe
- * Runtime implementiert alle Teilsichten. Mutationen (`use`, Held-Action-Start/-Consume,
- * Burrow-Request, direktes `setAdrenaline`) bleiben bis zu ihren Phasen (3B/6A/6B) außen vor.
+ * Runtime implementiert alle Teilsichten. Mutationen (Legacy-Utility-/Ultimate-`use`,
+ * Held-Action-Start/-Consume, Burrow-Request, direktes `setAdrenaline`) bleiben bis zu ihren
+ * Phasen (6B/7A/7B/7C) außen vor; Weapon1/Weapon2 nutzen seit 6A die Action-Grenze.
  */
 export interface PlayerGameplayStateReadView {
   isBurrowed(playerId: string): boolean;
@@ -192,7 +200,8 @@ export interface WorldPlayerGameplayRuntimeOptions {
 export class WorldPlayerGameplayRuntime implements
   WorldScopedBinding,
   PlayerGameplayLifecyclePort,
-  PlayerGameplayReadViews {
+  PlayerGameplayReadViews,
+  PlayerGameplayActionPort {
   readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
 
@@ -222,6 +231,16 @@ export class WorldPlayerGameplayRuntime implements
     this.configureBurrow(burrow, playerModifier);
 
     const loadout = options.createLoadoutManager(resource);
+    const playerAction = new PlayerActionRuntime(
+      {
+        getPlayer: (playerId) => options.playerManager.getPlayer(playerId),
+        canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
+        isAlive: (playerId) => options.combatSystem.isAlive(playerId),
+        isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId),
+        isDashBurst: (playerId) => options.hostPhysics.isDashBurst(playerId),
+      },
+      loadout,
+    );
     const translocator = new TranslocatorSystem(
       options.playerManager,
       options.projectileManager,
@@ -306,6 +325,7 @@ export class WorldPlayerGameplayRuntime implements
     );
 
     this.systems = {
+      playerAction,
       heldAction,
       playerModifier,
       itemRuntime,
@@ -425,6 +445,40 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.heldAction.reset();
   }
 
+  /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
+  usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
+    if (this.destroyed) return { ok: false, reason: 'invalid' };
+    return this.systems.playerAction.execute(request);
+  }
+
+  /** Temporary one-way legacy path for Utility/Ultimate until their dedicated activation phases. */
+  useLegacyLoadoutAction(
+    slot: LoadoutSlot,
+    playerId: string,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    hostNowMs: number,
+    shotId?: number,
+    params?: LoadoutUseParams,
+    clientX?: number,
+    clientY?: number,
+  ): LoadoutUseResult {
+    if (this.destroyed) return { ok: false, reason: 'invalid' };
+    return this.systems.loadout.use(
+      slot,
+      playerId,
+      angle,
+      targetX,
+      targetY,
+      hostNowMs,
+      shotId,
+      params,
+      clientX,
+      clientY,
+    );
+  }
+
   // ── Read-Views (PlayerGameplayReadViews) ─────────────────────────────────────
   // Reine Lesezugriffe für obere Consumer; keine State-Mutation.
 
@@ -510,6 +564,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setNukeStrikeHandler(null);
     systems.loadout.setStinkCloudSystem(null);
     systems.loadout.resetAllUltimateStates();
+    systems.playerAction?.destroy();
     systems.heldAction.reset();
     systems.guardianSpirit?.clear();
     systems.repairDrone?.clear();

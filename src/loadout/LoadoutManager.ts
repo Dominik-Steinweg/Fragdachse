@@ -712,9 +712,7 @@ export class LoadoutManager {
 
     // Held-Fire-Tracking: Feuerknopf-Halte-Zustand aktualisieren
     if (slot === 'weapon1' || slot === 'weapon2') {
-      this.claimWeaponSlot(playerId, slot);
-      this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
-      this.decoySystem?.breakStealth(playerId, now);
+      this.claimWeaponAction(playerId, slot, now, angle);
     }
 
     // scopeHolding: Scope-Waffe wird gehalten, aber noch kein Schuss – nur holdSpeedFactor aktiv
@@ -724,8 +722,8 @@ export class LoadoutManager {
 
     switch (slot) {
       case 'weapon1': {
-        const result = this.fireWeapon(loadout.weapon1, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon1', shotId);
-        if (result.ok) this.heldItemSlots.noteWeaponUsed(playerId, 'weapon1', now);
+        const result = this.activateWeapon(playerId, 'weapon1', x, y, angle, targetX, targetY, now, shotId, params);
+        if (result.ok) this.completeWeaponAction(playerId, 'weapon1', now);
         return result;
       }
 
@@ -734,11 +732,8 @@ export class LoadoutManager {
         // der tatsaechlich gefeuert hat, oeffnet das Fenster – Cooldown, fehlendes Adrenalin und
         // blockierte Schuesse liefern `ok: false` und zaehlen nicht. Dasselbe gilt fuer das
         // getragene Item: ein abgelehnter Schuss nimmt die Waffe nicht in die Pfoten.
-        const result = this.fireWeapon(loadout.weapon2, x, y, angle, targetX, targetY, playerId, now, player.color, 'weapon2', shotId, params);
-        if (result.ok) {
-          this.itemRuntimeWeaponFiredHandler?.(playerId, 'weapon2');
-          this.heldItemSlots.noteWeaponUsed(playerId, 'weapon2', now);
-        }
+        const result = this.activateWeapon(playerId, 'weapon2', x, y, angle, targetX, targetY, now, shotId, params);
+        if (result.ok) this.completeWeaponAction(playerId, 'weapon2', now);
         return result;
       }
 
@@ -1222,6 +1217,59 @@ export class LoadoutManager {
   }
 
   // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────
+
+  /**
+   * Claims a host weapon action before readiness/resource resolution. The PlayerActionRuntime owns
+   * the semantic action boundary; this method keeps the existing slot/channel mutation in the
+   * loadout owner so there is still exactly one writer for it.
+   */
+  claimWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void {
+    this.claimWeaponSlot(playerId, slot);
+    this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
+    this.decoySystem?.breakStealth(playerId, now);
+  }
+
+  /**
+   * Activates the equipped weapon after the PlayerActionRuntime has resolved actor, slot and
+   * position. Weapon readiness, resource checks, capability dispatch and weapon commit ordering
+   * remain in the existing ability-specific activation implementation.
+   */
+  activateWeapon(
+    playerId: string,
+    slot: WeaponSlot,
+    x: number,
+    y: number,
+    angle: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    shotId?: number,
+    params?: LoadoutUseParams,
+  ): LoadoutUseResult {
+    const loadout = this.loadouts.get(playerId);
+    const player = this.playerManager.getPlayer(playerId);
+    if (!loadout || !player) return { ok: false, reason: 'invalid' };
+    return this.fireWeapon(
+      loadout[slot],
+      x,
+      y,
+      angle,
+      targetX,
+      targetY,
+      playerId,
+      now,
+      player.color,
+      slot,
+      shotId,
+      params,
+    );
+  }
+
+  /** Applies post-dispatch weapon observations owned by the equipped loadout. */
+  completeWeaponAction(playerId: string, slot: WeaponSlot, now: number): void {
+    if (slot === 'weapon2') this.itemRuntimeWeaponFiredHandler?.(playerId, slot);
+    this.heldItemSlots.noteWeaponUsed(playerId, slot, now);
+  }
 
   /**
    * Gibt die WeaponConfig der tatsächlich ausgerüsteten Waffe zurück.

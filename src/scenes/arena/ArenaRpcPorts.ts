@@ -8,6 +8,7 @@ import type {
   LoadoutUseParams,
   LoadoutUseResult,
 } from '../../types';
+import type { PlayerActionRequest } from '../../world/PlayerActionRuntime';
 import type { UtilityConfig } from '../../loadout/LoadoutConfig';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 
@@ -70,6 +71,8 @@ export interface PlayerLoadoutRpcPort {
   getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null;
   getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined;
   hasActiveTranslocatorPuck(playerId: string): boolean;
+  /** Phase 6A Player Action boundary; currently materialized for Weapon1/Weapon2. */
+  usePlayerAction: (request: PlayerActionRequest) => LoadoutUseResult;
   useLoadout(
     slot: LoadoutSlot,
     playerId: string,

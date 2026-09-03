@@ -396,18 +396,31 @@ export class RpcCoordinator {
         }
       }
       if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
-      const result = this.playerLoadout.useLoadout(
-        slot,
-        senderId,
-        angle,
-        targetX,
-        targetY,
-        hostNowMs,
-        shotId,
-        authoritativeParams,
-        clientX,
-        clientY,
-      );
+      const result = slot === 'weapon1' || slot === 'weapon2'
+        ? this.playerLoadout.usePlayerAction({
+          category: 'weapon',
+          playerId: senderId,
+          slot,
+          angle,
+          targetX,
+          targetY,
+          hostNowMs,
+          shotId,
+          params: authoritativeParams,
+          clientPosition: { x: clientX, y: clientY },
+        })
+        : this.playerLoadout.useLoadout(
+          slot,
+          senderId,
+          angle,
+          targetX,
+          targetY,
+          hostNowMs,
+          shotId,
+          authoritativeParams,
+          clientX,
+          clientY,
+        );
       if (slot !== 'weapon2') return result;
       return {
         ...result,
