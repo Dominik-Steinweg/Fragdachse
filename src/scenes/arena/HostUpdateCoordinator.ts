@@ -399,6 +399,7 @@ export class HostUpdateCoordinator {
 
     if (!countdownActive) {
       this.playerSystems?.loadout?.update(delta, now);
+      this.playerSystems?.ultimateBehavior?.update(delta, now);
       this.powerUpSystem?.update(delta);
       this.playerSystems?.tunnel?.update(now);
     }
@@ -859,7 +860,7 @@ export class HostUpdateCoordinator {
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
       player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
-      player.setRageTint(this.playerSystems?.loadout?.isUltimateActive(player.id) ?? false);
+      player.setRageTint(this.playerSystems?.ultimateBehavior?.isUltimateActive(player.id) ?? false);
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const wasStealthed = this.prevStealthStates.get(player.id) ?? false;
       if (isStealthed !== wasStealthed) {
@@ -1019,7 +1020,7 @@ export class HostUpdateCoordinator {
         maxAdrenaline:           this.playerSystems?.resource?.getMaxAdrenaline(localId) ?? 100,
         rage:                    this.playerSystems?.resource?.getRage(localId) ?? 0,
         maxRage:                 this.playerSystems?.resource?.getMaxRage(localId) ?? 600,
-        isUltimateActive:        this.playerSystems?.loadout?.isUltimateActive(localId) ?? false,
+        isUltimateActive:        this.playerSystems?.ultimateBehavior?.isUltimateActive(localId) ?? false,
         ultimateRequiredRage:    ultCfg?.rageRequired ?? 300,
         ultimateThresholds,
         ultimateId:              ultCfg?.id,
@@ -1145,8 +1146,8 @@ export class HostUpdateCoordinator {
       const isBurrowed = this.playerSystems?.burrow?.isBurrowed(player.id) ?? false;
       const isStunned  = this.playerSystems?.burrow?.isStunned(player.id)  ?? false;
       const burrowPhase = this.playerSystems?.burrow?.getPhase(player.id) ?? 'idle';
-      const isRaging   = this.playerSystems?.loadout?.isUltimateActive(player.id) ?? false;
-      const activeUltimateId = this.playerSystems?.loadout?.getActiveUltimateId(player.id) ?? undefined;
+      const isRaging   = this.playerSystems?.ultimateBehavior?.isUltimateActive(player.id) ?? false;
+      const activeUltimateId = this.playerSystems?.ultimateBehavior?.getActiveUltimateId(player.id) ?? undefined;
       const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
       const isChargingUltimate = this.playerSystems?.loadout?.isUltimateCharging(player.id) ?? false;
       const ultimateChargeFraction = this.playerSystems?.loadout?.getUltimateChargeFraction(player.id, now) ?? 0;

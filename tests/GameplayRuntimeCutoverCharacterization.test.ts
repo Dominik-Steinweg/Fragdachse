@@ -201,7 +201,7 @@ describe('LoadoutManager – Negev-Killstreak lebt heute im Loadout (Migrationsz
       weapon2: { config: negevConfig, decaySpread() { /* noop */ } },
     }]]);
     manager.negevStates = new Map();
-    manager.ultimateStates = new Map();
+    manager.gaussChargeStartedAt = new Map();
     manager.shotgunLightningQueue = [];
     manager.combatSystem = combatSystem;
     manager.physicsSystem = { applyRadialImpulse: vi.fn() };

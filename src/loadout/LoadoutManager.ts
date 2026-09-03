@@ -2,7 +2,6 @@ import * as Phaser from 'phaser';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
-import type { ArmageddonSystem }  from '../systems/ArmageddonSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
@@ -55,17 +54,10 @@ interface PlayerLoadout {
   ultimate: BaseUltimate;
 }
 
-interface UltimateState {
-  active:    boolean;
-  startTime: number;
-  config:    UltimateConfig;
-  consumedRage: number;
-  durationMs: number;
-  drainDurationMs: number;
-  nextArmorTickAt: number;
-  nextAuraTickAt: number;
-  auraLingerUntil: number;
-  gaussChargeStartedAt: number | null;
+/** Read-only dynamic modifiers supplied by the World-owned sustained Ultimate behavior. */
+export interface UltimateModifierReadPort {
+  getSpeedMultiplier(playerId: string, nowMs: number): number;
+  getDamageMultiplier(playerId: string, nowMs: number): number;
 }
 
 interface Ak47CombatState {
@@ -113,16 +105,15 @@ type PhysicsSystemType  = {
 /**
  * LoadoutManager – Host-autoritär.
  * Verwaltet pro Spieler 4 Slots (weapon1, weapon2, utility, ultimate),
- * prüft Cooldowns/Adrenalin, dispatcht Aktionen, tracked Spread-Bloom und Ultimate-Zustand.
+ * prüft Cooldowns/Adrenalin, dispatcht Aktionen und tracked Spread-Bloom.
  */
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
-  private ultimateStates    = new Map<string, UltimateState>();
+  private gaussChargeStartedAt = new Map<string, number>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
   private dashBurstChecker: ((id: string) => boolean) | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
-  private armageddonSystem:   ArmageddonSystem | null = null;
   private airstrikeHandler:        ((playerId: string, targetX: number, targetY: number, cfg: AirstrikeUltimateConfig) => boolean) | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
@@ -130,6 +121,7 @@ export class LoadoutManager {
   private actionBlockedChecker: ((playerId: string, slot: LoadoutSlot) => boolean) | null = null;
   private tunnelPlacementHandler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null = null;
   private ultimateUsedObserver: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null = null;
+  private ultimateModifierReadPort: UltimateModifierReadPort | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   /**
    * Verbraucht eine gespeicherte kinetische Ladung und liefert den Schadensbonus als Anteil.
@@ -201,18 +193,7 @@ export class LoadoutManager {
       utility:  utCfg,
       ultimate: new GenericUltimate(ultCfg),
     });
-    this.ultimateStates.set(playerId, {
-      active:    false,
-      startTime: 0,
-      config:    ultCfg,
-      consumedRage: 0,
-      durationMs: 0,
-      drainDurationMs: 0,
-      nextArmorTickAt: 0,
-      nextAuraTickAt: 0,
-      auraLingerUntil: 0,
-      gaussChargeStartedAt: null,
-    });
+    this.gaussChargeStartedAt.delete(playerId);
     this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.getActiveWeaponSlots().set(playerId, 'weapon1');
@@ -243,7 +224,7 @@ export class LoadoutManager {
     const nextUtility = sanitized.utility;
     const nextUltimate = sanitized.ultimate;
     const current = this.loadouts.get(playerId);
-    const currentUltimate = this.ultimateStates.get(playerId)?.config;
+    const currentUltimate = current?.ultimate.config;
 
     if (
       current
@@ -261,7 +242,7 @@ export class LoadoutManager {
 
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
-    this.ultimateStates.delete(playerId);
+    this.gaussChargeStartedAt.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.heldFireSlots.delete(playerId);
     this.activeWeaponSlots?.delete(playerId);
@@ -420,29 +401,6 @@ export class LoadoutManager {
     return maxStacks > 0 && (this.ak47States.get(playerId)?.stacks ?? 0) >= maxStacks;
   }
 
-  resetUltimateState(playerId: string): void {
-    const state = this.ultimateStates.get(playerId);
-    if (!state) return;
-    if (state.active && state.config.type === 'buff' && state.config.armageddon && this.armageddonSystem) {
-      this.armageddonSystem.deactivate(playerId);
-    }
-    state.active = false;
-    state.startTime = 0;
-    state.consumedRage = 0;
-    state.durationMs = 0;
-    state.drainDurationMs = 0;
-    state.nextArmorTickAt = 0;
-    state.nextAuraTickAt = 0;
-    state.auraLingerUntil = 0;
-    state.gaussChargeStartedAt = null;
-  }
-
-  resetAllUltimateStates(): void {
-    for (const playerId of this.ultimateStates.keys()) {
-      this.resetUltimateState(playerId);
-    }
-  }
-
   setCombatSystem(combatSystem: CombatResolverType | null): void {
     this.combatSystem = combatSystem;
   }
@@ -459,6 +417,10 @@ export class LoadoutManager {
 
   setUltimateUsedObserver(observer: ((playerId: string, ultimateType: UltimateConfig['type']) => void) | null): void {
     this.ultimateUsedObserver = observer;
+  }
+
+  setUltimateModifierReadPort(port: UltimateModifierReadPort | null): void {
+    this.ultimateModifierReadPort = port;
   }
 
   setUtilityConfigModifierSource(source: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null): void {
@@ -478,11 +440,6 @@ export class LoadoutManager {
    */
   setItemRuntimeWeaponFiredHandler(handler: ((playerId: string, sourceSlot: WeaponSlot) => void) | null): void {
     this.itemRuntimeWeaponFiredHandler = handler;
-  }
-
-  /** Injiziert das ArmageddonSystem für Meteor-Ultimates. */
-  setArmageddonSystem(sys: ArmageddonSystem | null): void {
-    this.armageddonSystem = sys;
   }
 
   /** Injiziert die Host-Logik für Luftangriff-Strikes. */
@@ -580,39 +537,8 @@ export class LoadoutManager {
       }
 
       case 'ultimate': {
-        const ultState = this.ultimateStates.get(playerId);
         const cfg  = loadout.ultimate.config;
-        if (cfg.type === 'buff') {
-          if (ultState?.active) return { ok: false, reason: 'blocked' };
-          const rage = this.resourceSystem.getRage(playerId);
-          if (rage < cfg.rageRequired) return { ok: false, reason: 'resource', resourceKind: 'rage' };
-          const consumedRage = Math.min(rage, this.resourceSystem.getMaxRage(playerId));
-          const scale = consumedRage / cfg.rageRequired;
-          const durationMs = Math.max(1, Math.round(cfg.duration * scale));
-          const drainDurationMs = Math.max(1, Math.round(cfg.rageDrainDuration * scale));
-          this.ultimateStates.set(playerId, {
-            active: true,
-            startTime: now,
-            config: cfg,
-            consumedRage,
-            durationMs,
-            drainDurationMs,
-            nextArmorTickAt: now + cfg.armorTickIntervalMs,
-            nextAuraTickAt: cfg.aura && cfg.aura.tickIntervalMs > 0 ? now + cfg.aura.tickIntervalMs : 0,
-            auraLingerUntil: 0,
-            gaussChargeStartedAt: null,
-          });
-
-          if (cfg.armageddon && this.armageddonSystem) {
-            const pm = this.playerManager;
-            this.armageddonSystem.activate(playerId, cfg.armageddon, () => {
-              const p = pm.getPlayer(playerId);
-              return p ? { x: p.x, y: p.y } : null;
-            });
-          }
-          this.ultimateUsedObserver?.(playerId, cfg.type);
-          return this.okResult;
-        }
+        if (cfg.type === 'buff') return { ok: false, reason: 'invalid' };
 
         if (cfg.type === 'airstrike') {
           const rage = this.resourceSystem.getRage(playerId);
@@ -643,7 +569,6 @@ export class LoadoutManager {
           angle,
           now,
           player.color,
-          ultState,
           params,
         );
       }
@@ -670,90 +595,16 @@ export class LoadoutManager {
       if (!stillFiringNegev) this.finishNegevKillstreak(playerId, state.kills, now);
     }
 
-    // Ultimate: Rage proportional drainieren + Effekt nach duration deaktivieren
-    for (const [playerId, state] of this.ultimateStates) {
-      if (!state.active) continue;
-      if (state.config.type !== 'buff') continue;
-
-      const elapsed  = now - state.startTime;
-      const endTime = state.startTime + state.durationMs;
-      const fraction = Math.min(1, elapsed / state.drainDurationMs);
-      const targetRage  = state.consumedRage * (1 - fraction);
-      const currentRage = this.resourceSystem.getRage(playerId);
-      const drain = currentRage - targetRage;
-      if (drain > 0) {
-        this.resourceSystem.addRage(playerId, -drain);
-      }
-
-      if (state.config.armorPerTick > 0 && state.config.armorTickIntervalMs > 0 && this.combatSystem) {
-        while (state.nextArmorTickAt > 0 && state.nextArmorTickAt <= now && state.nextArmorTickAt <= endTime) {
-          this.combatSystem.addArmor(playerId, state.config.armorPerTick);
-          const aura = state.config.aura;
-          if (aura && (aura.allyArmorPerTick ?? 0) > 0) {
-            const owner = this.playerManager.getPlayer(playerId);
-            if (owner) {
-              for (const ally of this.playerManager.getAllPlayers()) {
-                if (ally.id === playerId || this.bridge.isEnemyPair(playerId, ally.id)) continue;
-                if (Phaser.Math.Distance.Between(owner.x, owner.y, ally.x, ally.y) <= aura.radius) {
-                  this.combatSystem.addArmor(ally.id, aura.allyArmorPerTick ?? 0);
-                }
-              }
-            }
-          }
-          state.nextArmorTickAt += state.config.armorTickIntervalMs;
-        }
-      }
-
-      const aura = state.config.aura;
-      const auraOwner = aura ? this.playerManager.getPlayer(playerId) : null;
-      if (aura && aura.damagePerTick > 0 && aura.tickIntervalMs > 0 && aura.radius > 0 && this.combatSystem) {
-        while (state.nextAuraTickAt > 0 && state.nextAuraTickAt <= now && state.nextAuraTickAt <= endTime) {
-          if (auraOwner) {
-            this.combatSystem.applyAoeDamage(
-              auraOwner.x,
-              auraOwner.y,
-              aura.radius,
-              aura.damagePerTick,
-              playerId,
-              false,
-              {
-                category: 'damage_over_time',
-                sourceId: state.config.id,
-                sourceSlot: 'ultimate',
-                baseDamageMult: aura.baseDamageMult,
-              },
-            );
-          }
-          state.nextAuraTickAt += aura.tickIntervalMs;
-        }
-      }
-
-      if (elapsed >= state.durationMs) {
-        state.auraLingerUntil = now + (state.config.aura?.lingerMs ?? 0);
-        state.active = false;
-        state.consumedRage = 0;
-        state.durationMs = 0;
-        state.drainDurationMs = 0;
-        state.nextArmorTickAt = 0;
-        state.nextAuraTickAt = 0;
-        // Armageddon: Meteor-Spawning stoppen (In-Flight-Meteore schlagen noch ein)
-        if (state.config.armageddon && this.armageddonSystem) {
-          this.armageddonSystem.deactivate(playerId);
-        }
-      }
-    }
-
     this.processShotgunLightningQueue();
   }
 
   // ── Multiplier-Getter ─────────────────────────────────────────────────────
 
   getSpeedMultiplier(playerId: string, now: number = Date.now()): number {
-    const state        = this.ultimateStates.get(playerId);
-    const ultimateMult = (state?.active && state.config.type === 'buff' ? state.config.speedMultiplier : 1)
-      * this.getAllyAuraMultiplier(playerId, 'speed', now);
-    const gaussSlowMult = state?.config.type === 'gauss' && state.gaussChargeStartedAt !== null
-      ? state.config.movementSlowFactor
+    const ultimateMult = this.ultimateModifierReadPort?.getSpeedMultiplier(playerId, now) ?? 1;
+    const ultimateConfig = this.loadouts.get(playerId)?.ultimate.config;
+    const gaussSlowMult = ultimateConfig?.type === 'gauss' && this.gaussChargeStartedAt.has(playerId)
+      ? ultimateConfig.movementSlowFactor
       : 1;
 
     // Energie-Schild/Kuppel verlangsamt, solange er aktiv ist – auch im Toggle-Modus ohne Halten.
@@ -803,25 +654,7 @@ export class LoadoutManager {
   }
 
   getDamageMultiplier(playerId: string, now: number = Date.now()): number {
-    const state = this.ultimateStates.get(playerId);
-    return (state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1)
-      * this.getAllyAuraMultiplier(playerId, 'damage', now);
-  }
-  private getAllyAuraMultiplier(playerId: string, kind: 'speed' | 'damage', now: number = Date.now()): number {
-    const target = this.playerManager.getPlayer(playerId);
-    if (!target) return 1;
-    let multiplier = 1;
-    for (const [ownerId, state] of this.ultimateStates) {
-      if (ownerId === playerId || state.config.type !== 'buff' || !state.config.aura) continue;
-      if (!state.active && state.auraLingerUntil < now) continue;
-      if (this.bridge.isEnemyPair(ownerId, playerId)) continue;
-      const owner = this.playerManager.getPlayer(ownerId);
-      if (!owner || Phaser.Math.Distance.Between(owner.x, owner.y, target.x, target.y) > state.config.aura.radius) continue;
-      multiplier *= kind === 'speed'
-        ? (state.config.aura.allySpeedMultiplier ?? 1)
-        : (state.config.aura.allyDamageMultiplier ?? 1);
-    }
-    return multiplier;
+    return this.ultimateModifierReadPort?.getDamageMultiplier(playerId, now) ?? 1;
   }
 
   getWeaponDamageMultiplier(playerId: string, slot: WeaponSlot, now = Date.now()): number {
@@ -847,15 +680,6 @@ export class LoadoutManager {
     return this.shieldBuffSystem.getHudState(playerId, fireCfg, true, now);
   }
 
-  isUltimateActive(playerId: string): boolean {
-    return this.ultimateStates.get(playerId)?.active ?? false;
-  }
-
-  getActiveUltimateId(playerId: string): string | null {
-    const state = this.ultimateStates.get(playerId);
-    return state?.active ? state.config.id : null;
-  }
-
   getEquippedUltimateConfig(playerId: string): UltimateConfig | undefined {
     return this.loadouts.get(playerId)?.ultimate.config;
   }
@@ -865,19 +689,18 @@ export class LoadoutManager {
   }
 
   isUltimateCharging(playerId: string): boolean {
-    return this.ultimateStates.get(playerId)?.gaussChargeStartedAt !== null;
+    return this.gaussChargeStartedAt.has(playerId);
   }
 
   getUltimateChargeFraction(playerId: string, now: number): number {
-    const state = this.ultimateStates.get(playerId);
-    if (!state || state.config.type !== 'gauss' || state.gaussChargeStartedAt === null) return 0;
-    if (state.config.chargeDuration <= 0) return 1;
-    return Math.max(0, Math.min(1, (now - state.gaussChargeStartedAt) / state.config.chargeDuration));
+    const config = this.loadouts.get(playerId)?.ultimate.config;
+    const startedAt = this.gaussChargeStartedAt.get(playerId);
+    if (config?.type !== 'gauss' || startedAt === undefined) return 0;
+    if (config.chargeDuration <= 0) return 1;
+    return Math.max(0, Math.min(1, (now - startedAt) / config.chargeDuration));
   }
 
   getUltimateChargeRange(playerId: string): number {
-    const state = this.ultimateStates.get(playerId);
-    if (state?.config.type === 'gauss') return state.config.range;
     const config = this.loadouts.get(playerId)?.ultimate.config;
     return config?.type === 'gauss' ? config.range : 0;
   }
@@ -904,52 +727,26 @@ export class LoadoutManager {
     angle: number,
     now: number,
     playerColor: number,
-    state: UltimateState | undefined,
     params?: LoadoutUseParams,
   ): LoadoutUseResult {
     const action = params?.ultimateAction;
-    const currentState = state ?? {
-      active: false,
-      startTime: 0,
-      config: cfg,
-      consumedRage: 0,
-      durationMs: 0,
-      drainDurationMs: 0,
-      nextArmorTickAt: 0,
-      nextAuraTickAt: 0,
-      auraLingerUntil: 0,
-      gaussChargeStartedAt: null,
-    };
-    currentState.config = cfg;
-    const clearGaussCharge = (): void => {
-      if (currentState.gaussChargeStartedAt === null && state) {
-        this.ultimateStates.set(playerId, currentState);
-        return;
-      }
-      if (currentState.gaussChargeStartedAt === null) return;
-      currentState.gaussChargeStartedAt = null;
-      this.ultimateStates.set(playerId, currentState);
-    };
 
     if (action === 'press') {
-      if (currentState.gaussChargeStartedAt !== null) {
-        clearGaussCharge();
+      if (this.gaussChargeStartedAt.has(playerId)) {
+        this.gaussChargeStartedAt.delete(playerId);
         return { ok: false, reason: 'blocked' };
       }
       if (this.resourceSystem.getRage(playerId) < cfg.rageRequired) {
-        clearGaussCharge();
         return { ok: false, reason: 'resource', resourceKind: 'rage' };
       }
-      currentState.gaussChargeStartedAt = now;
-      this.ultimateStates.set(playerId, currentState);
+      this.gaussChargeStartedAt.set(playerId, now);
       return this.okResult;
     }
 
     if (action === 'release') {
-      const startedAt = currentState.gaussChargeStartedAt;
-      currentState.gaussChargeStartedAt = null;
-      this.ultimateStates.set(playerId, currentState);
-      if (startedAt === null) return { ok: false, reason: 'blocked' };
+      const startedAt = this.gaussChargeStartedAt.has(playerId);
+      this.gaussChargeStartedAt.delete(playerId);
+      if (!startedAt) return { ok: false, reason: 'blocked' };
       if (this.resourceSystem.getRage(playerId) < cfg.rageCost) return { ok: false, reason: 'resource', resourceKind: 'rage' };
       if ((params?.ultimateChargeFraction ?? 0) < 1) return { ok: false, reason: 'blocked' };
       this.fireGaussUltimate(cfg, x, y, angle, playerId, playerColor);
@@ -958,7 +755,7 @@ export class LoadoutManager {
       return this.okResult;
     }
 
-    clearGaussCharge();
+    this.gaussChargeStartedAt.delete(playerId);
     return { ok: false, reason: 'blocked' };
   }
 

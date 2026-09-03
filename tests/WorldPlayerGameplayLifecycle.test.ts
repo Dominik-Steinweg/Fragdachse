@@ -52,12 +52,18 @@ function makeRuntime() {
       removePlayer: tag('itemRuntime.removePlayer'),
     },
     loadout: {
-      resetUltimateState: tag('loadout.resetUltimateState'),
       assignDefaultLoadout: tag('loadout.assignDefaultLoadout'),
       removePlayer: tag('loadout.removePlayer'),
       syncSelectedLoadout: tag('loadout.syncSelectedLoadout'),
       getEquippedUtilityConfig: vi.fn(() => ({ id: 'DECOY' })),
       getTemporaryUtilityConfig: vi.fn(() => ({ id: 'BFG' })),
+    },
+    ultimateBehavior: {
+      resetPlayer: tag('ultimateBehavior.resetPlayer'),
+      removePlayer: tag('ultimateBehavior.removePlayer'),
+      destroy: tag('ultimateBehavior.destroy'),
+      isUltimateActive: vi.fn(() => false),
+      getActiveUltimateId: vi.fn(() => null),
     },
     utilityAction: {
       syncEquippedUtility: vi.fn(),
@@ -151,6 +157,7 @@ function makeConcreteRemoveRuntime() {
     burrow,
     itemRuntime,
     loadout,
+    ultimateBehavior: { removePlayer: vi.fn() },
     tunnel,
     heldAction,
     playerModifier,
@@ -181,6 +188,7 @@ function makeDestroyRuntime() {
     'setItemRuntimeChargeConsumer',
     'setItemRuntimeWeaponFiredHandler',
     'setUltimateUsedObserver',
+    'setUltimateModifierReadPort',
     'setActionBlockedChecker',
   ];
   const resourceSetterNames = [
@@ -206,7 +214,6 @@ function makeDestroyRuntime() {
   ];
   const loadout = Object.fromEntries([
     ...setterNames,
-    'resetAllUltimateStates',
   ].map((name) => [name, vi.fn()]));
   const resource = Object.fromEntries([
     ...resourceSetterNames,
@@ -224,6 +231,7 @@ function makeDestroyRuntime() {
   };
   const systems = {
     loadout,
+    ultimateBehavior: { destroy: vi.fn() },
     utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
     heldAction: { reset: vi.fn() },
     guardianSpirit: { clear: vi.fn() },
@@ -269,7 +277,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     runtime.attachPlayerLoadout('p1', selection);
 
-    expect(order).toEqual(['loadout.resetUltimateState', 'loadout.assignDefaultLoadout']);
+    expect(order).toEqual(['ultimateBehavior.resetPlayer', 'loadout.assignDefaultLoadout']);
     expect(systems.loadout.assignDefaultLoadout).toHaveBeenCalledWith('p1', selection);
   });
 
@@ -278,7 +286,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     runtime.detachPlayerLoadout('p1');
 
-    expect(order).toEqual(['loadout.removePlayer', 'tunnel.removePlayer']);
+    expect(order).toEqual(['ultimateBehavior.removePlayer', 'loadout.removePlayer', 'tunnel.removePlayer']);
   });
 
   it('reconciled Loadout-Auswahl und Ressourcenmaxima zusammen', () => {
@@ -406,7 +414,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     runtime.destroy();
     runtime.destroy();
 
-    expect(systems.loadout.resetAllUltimateStates).toHaveBeenCalledTimes(1);
+    expect(systems.ultimateBehavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.heldAction.reset).toHaveBeenCalledTimes(1);
     expect(systems.tunnel.clear).toHaveBeenCalledTimes(1);
     expect(systems.resource.removePlayer).toHaveBeenCalledTimes(1);

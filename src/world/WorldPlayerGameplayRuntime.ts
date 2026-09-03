@@ -45,6 +45,7 @@ import type {
 import type { UtilityConfig } from '../loadout/LoadoutConfig';
 import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
 import { PlayerUtilityActionRuntime } from './PlayerUtilityActionRuntime';
+import { PlayerUltimateBehaviorRuntime, type PlayerUltimateArmageddonCapability } from './PlayerUltimateBehaviorRuntime';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type {
@@ -100,6 +101,7 @@ export interface WorldPlayerGameplayNetworkPort {
 export interface WorldPlayerGameplaySystems {
   readonly playerAction: PlayerActionRuntime;
   readonly utilityAction: PlayerUtilityActionRuntime;
+  readonly ultimateBehavior: PlayerUltimateBehaviorRuntime;
   readonly heldAction: HostHeldActionSystem;
   readonly playerModifier: CoopDefensePlayerModifierSystem;
   readonly itemRuntime: CoopDefenseItemRuntimeSystem;
@@ -205,7 +207,7 @@ export interface PlayerGameplayResourceCommandPort {
  *
  * Obere Scene-/Runtime-/Adapter-Consumer lesen darüber, statt in `WorldPlayerGameplayRuntime.systems`
  * zu traversieren. Bewusst nach Verbrauchergruppe geschnitten und **kein** Mega-Facade – dieselbe
- * Runtime implementiert alle Teilsichten. Legacy-Utility-/Ultimate-`use` bleibt bis zu den
+ * Runtime implementiert alle Teilsichten. Legacy-Utility-/Nicht-Buff-Ultimate-`use` bleibt bis zu den
  * dedizierten Activation-Phasen außen vor;
  * mutierende Action-/Burrow-/Resource-Commands laufen über benannte Runtime-Grenzen.
  */
@@ -310,6 +312,19 @@ export class WorldPlayerGameplayRuntime implements
     this.configureBurrow(burrow, playerModifier);
 
     const loadout = options.createLoadoutManager(resource);
+    const ultimateBehavior = new PlayerUltimateBehaviorRuntime({
+      playerManager: options.playerManager,
+      combatSystem: options.combatSystem,
+      resourceSystem: resource,
+      loadout,
+      canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
+      isAlive: (playerId) => options.combatSystem.isAlive(playerId),
+      isUltimateBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
+      network: {
+        teams: options.network.teams,
+        roundStats: options.network.roundStats,
+      },
+    });
     const playerAction = new PlayerActionRuntime(
       {
         getPlayer: (playerId) => {
@@ -441,6 +456,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems = {
       playerAction,
       utilityAction,
+      ultimateBehavior,
       heldAction,
       playerModifier,
       itemRuntime,
@@ -457,6 +473,10 @@ export class WorldPlayerGameplayRuntime implements
       ak47StrategicTarget,
     };
     this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
+  }
+
+  setArmageddonCapability(capability: PlayerUltimateArmageddonCapability | null): void {
+    this.systems.ultimateBehavior.setArmageddonCapability(capability);
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {
@@ -511,12 +531,13 @@ export class WorldPlayerGameplayRuntime implements
   attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void {
     // Frischer Ultimate-State (deaktiviert u. a. ein laufendes Armageddon nach Reconnect),
     // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
-    this.systems.loadout.resetUltimateState(playerId);
+    this.systems.ultimateBehavior.resetPlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
     this.systems.utilityAction.syncEquippedUtility(playerId);
   }
 
   detachPlayerLoadout(playerId: string): void {
+    this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
     this.systems.translocator.removePlayer(playerId);
@@ -527,6 +548,7 @@ export class WorldPlayerGameplayRuntime implements
   /** Zieht eine geänderte committed/live Auswahl nach und klemmt laufende Ressourcen an neue Maxima. */
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
+    if (changed) this.systems.ultimateBehavior.resetPlayer(playerId);
     this.systems.utilityAction.syncEquippedUtility(playerId);
     this.systems.resource.reconcilePlayerLimits(playerId);
     return changed;
@@ -568,9 +590,9 @@ export class WorldPlayerGameplayRuntime implements
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
-    return request.category === 'utility'
-      ? this.systems.utilityAction.execute(request)
-      : this.systems.playerAction.execute(request);
+    if (request.category === 'utility') return this.systems.utilityAction.execute(request);
+    if (request.category === 'ultimate') return this.systems.ultimateBehavior.execute(request);
+    return this.systems.playerAction.execute(request);
   }
 
   addTemporaryUtility(playerId: string, config: UtilityConfig, charges: number): string | null {
@@ -683,7 +705,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.resource.setAdrenaline(playerId, amount);
   }
 
-  /** Narrow compatibility path for the still-unmigrated Ultimate activation. */
+  /** Narrow compatibility path for the still-unmigrated non-buff Ultimate activation. */
   useLegacyLoadoutAction(
     slot: LoadoutSlot,
     playerId: string,
@@ -710,6 +732,19 @@ export class WorldPlayerGameplayRuntime implements
       });
     }
     this.systems.utilityAction.breakStealth(playerId, hostNowMs);
+    if (slot === 'ultimate' && this.systems.loadout.getEquippedUltimateConfig(playerId)?.type === 'buff') {
+      return this.usePlayerAction({
+        category: 'ultimate',
+        playerId,
+        angle,
+        targetX,
+        targetY,
+        hostNowMs,
+        attemptId: params?.attemptId,
+        params,
+        clientPosition: { x: clientX, y: clientY },
+      });
+    }
     return this.systems.loadout.use(
       slot,
       playerId,
@@ -800,8 +835,9 @@ export class WorldPlayerGameplayRuntime implements
     systems.loadout.setItemRuntimeChargeConsumer(null);
     systems.loadout.setItemRuntimeWeaponFiredHandler(null);
     systems.loadout.setUltimateUsedObserver(null);
+    systems.loadout.setUltimateModifierReadPort(null);
     systems.loadout.setActionBlockedChecker(null);
-    systems.loadout.resetAllUltimateStates();
+    systems.ultimateBehavior.destroy();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
     systems.guardianSpirit?.clear();
@@ -902,6 +938,7 @@ export class WorldPlayerGameplayRuntime implements
       const modifiers = playerModifier.getModifiers(playerId);
       return { additive: modifiers.additiveStats, percentage: modifiers.percentageStats };
     });
+    loadout.setUltimateModifierReadPort(this.systems.ultimateBehavior);
     loadout.setItemRuntimeChargeConsumer((playerId) => itemRuntime.consumeMovementCharge(playerId));
     loadout.setItemRuntimeWeaponFiredHandler((playerId, sourceSlot) => itemRuntime.registerWeaponFired(playerId, sourceSlot));
     loadout.setUltimateUsedObserver((playerId) => this.options.network.roundStats.recordUltimateUsed(playerId));

@@ -43,7 +43,7 @@ export interface WorldSupportGameplayRuntimeOptions {
   ) => void;
 }
 
-/** Owns world-scoped detonation and authored/player support-ultimate state. */
+/** Owns world-scoped detonation and support-ultimate capabilities. */
 export class WorldSupportGameplayRuntime implements WorldScopedBinding {
   readonly systems: WorldSupportGameplaySystems;
   private destroyed = false;
@@ -60,7 +60,6 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
     });
     this.systems = { detonation, armageddon, airstrike };
     options.combatSystem.setDetonationSystem(detonation);
-    options.loadoutManager.setArmageddonSystem(armageddon);
     options.loadoutManager.setAirstrikeHandler((playerId, targetX, targetY, config) => {
       const player = this.options.playerManager.getPlayer(playerId);
       if (!player || !this.options.combatSystem.isAlive(playerId)) return false;
@@ -76,7 +75,6 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding {
     this.destroyed = true;
     this.options.combatSystem.setDetonationSystem(null);
     this.options.combatSystem.setStinkCloudSystem(null);
-    this.options.loadoutManager.setArmageddonSystem(null);
     this.options.loadoutManager.setAirstrikeHandler(null);
     this.options.burrowSystem.setStinkCloudSystem(null);
     this.systems.detonation.reset();

@@ -14,7 +14,7 @@ export interface PlayerActionPosition {
 }
 
 /** Semantic player-action capabilities materialized by the runtime cutover. */
-export type PlayerActionCategory = 'weapon' | 'utility';
+export type PlayerActionCategory = 'weapon' | 'utility' | 'ultimate';
 
 /** Semantic host request for one player weapon action. */
 export interface PlayerWeaponActionRequest {
@@ -57,7 +57,21 @@ export interface PlayerUtilityActionRequest {
   readonly source?: PlayerUtilityActionSource;
 }
 
-export type PlayerActionRequest = PlayerWeaponActionRequest | PlayerUtilityActionRequest;
+export interface PlayerUltimateActionRequest {
+  readonly category: 'ultimate';
+  readonly playerId: string;
+  readonly angle: number;
+  readonly targetX: number;
+  readonly targetY: number;
+  /** One host timestamp for readiness, resource and commit decisions. */
+  readonly hostNowMs: number;
+  /** Request/attempt identity for duplicate-safe activation commits. */
+  readonly attemptId?: string;
+  readonly params?: LoadoutUseParams;
+  readonly clientPosition?: PlayerActionPositionInput;
+}
+
+export type PlayerActionRequest = PlayerWeaponActionRequest | PlayerUtilityActionRequest | PlayerUltimateActionRequest;
 
 export interface PlayerActionActor {
   readonly x: number;
@@ -112,8 +126,9 @@ export function resolvePlayerActionPosition(
 /**
  * World-scoped owner for host-authoritative Player Actions.
  *
- * Weapon activation remains the narrow weapon capability of this runtime. Utility activation is
- * owned by the sibling PlayerUtilityActionRuntime and is dispatched by the World owner.
+ * Weapon activation remains the narrow weapon capability of this runtime. Utility activation and
+ * sustained buff-ultimate activation are owned by sibling behavior runtimes and dispatched by
+ * the World owner.
  */
 export class PlayerActionRuntime {
   private destroyed = false;

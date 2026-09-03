@@ -29,7 +29,7 @@ function makeLoadoutHookHarness() {
   manager.utilityUsedCallback = vi.fn();
   manager.utilityUsedObserver = vi.fn();
   manager.ultimateUsedObserver = vi.fn();
-  manager.ultimateStates = new Map();
+  manager.gaussChargeStartedAt = new Map();
   manager.projectileManager = { spawnProjectile: vi.fn() };
   manager.physicsSystem = { addRecoil: vi.fn() };
   manager.resourceSystem = {
@@ -116,20 +116,20 @@ describe('room-statistics gameplay hooks', () => {
     const cfg = ULTIMATE_CONFIGS.GAUSS_RIFLE;
 
     expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 1000, 0xffffff, undefined, { ultimateAction: 'press' },
+      cfg, 'p1', 0, 0, 0, 1000, 0xffffff, { ultimateAction: 'press' },
     )).toEqual({ ok: true });
     expect(manager.ultimateUsedObserver).not.toHaveBeenCalled();
     expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 1100, 0xffffff, manager.ultimateStates.get('p1'),
+      cfg, 'p1', 0, 0, 0, 1100, 0xffffff,
       { ultimateAction: 'release', ultimateChargeFraction: 0.5 },
     ).ok).toBe(false);
     expect(manager.ultimateUsedObserver).not.toHaveBeenCalled();
 
     expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 2000, 0xffffff, manager.ultimateStates.get('p1'), { ultimateAction: 'press' },
+      cfg, 'p1', 0, 0, 0, 2000, 0xffffff, { ultimateAction: 'press' },
     ).ok).toBe(true);
     expect((manager as any).handleGaussUltimateUse(
-      cfg, 'p1', 0, 0, 0, 3600, 0xffffff, manager.ultimateStates.get('p1'),
+      cfg, 'p1', 0, 0, 0, 3600, 0xffffff,
       { ultimateAction: 'release', ultimateChargeFraction: 1 },
     ).ok).toBe(true);
     expect(manager.ultimateUsedObserver).toHaveBeenCalledOnce();

@@ -157,6 +157,9 @@ export function composeWorldSupportGameplay(
     ),
   });
   gameplay.support = supportGameplayRuntime;
+  // Der Buff-/Armageddon-Behavior-Owner bekommt nur die world-scoped Capability. Die
+  // Armageddon-Sessions selbst bleiben beim Support-Owner und werden nicht im Loadout verdrahtet.
+  gameplay.player?.setArmageddonCapability(supportGameplayRuntime.systems.armageddon);
   worldRuntime.bind(supportGameplayRuntime);
   
   
