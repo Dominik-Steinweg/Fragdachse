@@ -18,20 +18,16 @@ import type {
   DecoyUtilityConfig,
   EnergyShieldWeaponFireConfig,
   GaussUltimateConfig,
-  LeafBlowerWeaponFireConfig,
   NukeUtilityConfig,
-  ReinforcementMatrixWeaponFireConfig,
   PlaceableUtilityConfig,
   StinkCloudUtilityConfig,
   TaserUtilityConfig,
   TimeBubbleUtilityConfig,
   TranslocatorUtilityConfig,
   TunnelUltimateConfig,
-  FlamethrowerWeaponFireConfig,
   MeleeWeaponFireConfig,
   ProjectileWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
-  EnergyInjectorWeaponFireConfig,
   UltimateConfig,
   UtilityConfig,
   WeaponConfig,
@@ -41,7 +37,11 @@ import { COLORS, PLAYER_SIZE, type MuzzleOrigin } from '../config';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import { isVelocityMoving } from './SpreadMath';
 import { resolveShotPlan } from './ShotPlanResolver';
-import type { WeaponExecutionCapability, WeaponFireOptions } from './WeaponFireExecutor';
+import type {
+  SpecializedWeaponExecutionCapability,
+  WeaponExecutionCapability,
+  WeaponFireOptions,
+} from './WeaponFireExecutor';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
@@ -185,9 +185,14 @@ export class LoadoutManager {
    * gehört nicht mehr logisch dem Loadout. Für Player-Fire delegiert der Manager weiterhin hierher.
    */
   private weaponExecution: WeaponExecutionCapability | null = null;
+  private specializedWeaponExecution: SpecializedWeaponExecutionCapability | null = null;
 
   setWeaponExecutionCapability(capability: WeaponExecutionCapability | null): void {
     this.weaponExecution = capability;
+  }
+
+  setSpecializedWeaponExecutionCapability(capability: SpecializedWeaponExecutionCapability | null): void {
+    this.specializedWeaponExecution = capability;
   }
 
   // Held-Fire-Tracking: Feuerknopf gilt als gehalten wenn innerhalb HOLD_EXPIRE_MS gefeuert wurde
@@ -2018,28 +2023,30 @@ export class LoadoutManager {
         return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
 
       case 'flamethrower':
-        return this.fireFlamethrowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin, gameplayMuzzleOrigin);
-
       case 'leaf_blower':
-        return this.fireLeafBlowerWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin, gameplayMuzzleOrigin);
-
       case 'reinforcement_matrix':
-        return this.fireReinforcementMatrixWeapon(
-          config,
-          config.fire,
+      case 'energy_injector':
+        return (this.specializedWeaponExecution?.fire(config, {
           x,
           y,
           angle,
           targetX,
           targetY,
-          playerId,
-          playerColor,
+          ownerId: playerId,
+          ownerColor: playerColor,
           sourceSlot,
+          options,
           visualMuzzleOrigin,
-        );
-
-      case 'energy_injector':
-        return this.fireEnergyInjectorWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot, visualMuzzleOrigin, gameplayMuzzleOrigin);
+          gameplayMuzzleOrigin: config.fire.type === 'reinforcement_matrix'
+            ? this.getGameplayMuzzleOrigin(
+              playerId,
+              config.id,
+              x,
+              y,
+              resolveReinforcementAimAngle(x, y, angle, targetX, targetY),
+            )
+            : gameplayMuzzleOrigin,
+        }) ?? false);
 
       case 'tesla_dome':
       case 'healing_aura':
@@ -2079,123 +2086,6 @@ export class LoadoutManager {
       angle,
       player.displayObject?.displayWidth ?? PLAYER_SIZE,
     ) ?? undefined;
-  }
-
-  /**
-   * Feuert die Verstärkungsmatrix wie eine langsame Rakete bis zum Cursor oder zur
-   * maximalen Reichweite. Die spezielle Explosionsnutzlast wird erst am Einschlag
-   * vom HostUpdateCoordinator in ein Feld umgewandelt.
-   */
-  private fireReinforcementMatrixWeapon(
-    config: WeaponConfig,
-    fireConfig: ReinforcementMatrixWeaponFireConfig,
-    x: number,
-    y: number,
-    fallbackAngle: number,
-    targetX: number,
-    targetY: number,
-    playerId: string,
-    playerColor: number,
-    sourceSlot?: LoadoutSlot,
-    visualMuzzleOrigin?: MuzzleOrigin,
-  ): boolean {
-    const dx = targetX - x;
-    const dy = targetY - y;
-    const cursorDistance = Math.hypot(dx, dy);
-    const travelDistance = Math.min(config.range, cursorDistance);
-    const angle = cursorDistance > 0.001 ? Math.atan2(dy, dx) : fallbackAngle;
-    const lifetime = (travelDistance / fireConfig.projectileSpeed) * 1000;
-    const resolvedGameplayMuzzleOrigin = this.getGameplayMuzzleOrigin(
-      playerId,
-      config.id,
-      x,
-      y,
-      angle,
-    );
-
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed: fireConfig.projectileSpeed,
-      size: fireConfig.projectileSize,
-      damage: 0,
-      color: config.projectileColor ?? fireConfig.fieldColor,
-      ownerColor: playerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      smokeTrailColor: config.rocketSmokeTrailColor ?? fireConfig.fieldColor,
-      lifetime,
-      remainingRangePx: travelDistance,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: config.id,
-      gameplayMuzzleOrigin: resolvedGameplayMuzzleOrigin,
-      explosion: {
-        radius: fireConfig.radius,
-        maxDamage: 0,
-        knockback: 0,
-        selfDamageMult: 0,
-        rockDamageMult: 0,
-        trainDamageMult: 0,
-        color: fireConfig.fieldColor,
-        reinforcementMatrix: {
-          durationMs: fireConfig.durationMs,
-          damageReduction: fireConfig.damageReduction,
-          vulnerabilityBonus: fireConfig.vulnerabilityBonus,
-          color: fireConfig.fieldColor,
-        },
-      },
-      projectileStyle: config.projectileStyle,
-      sourceSlot: sourceSlot ?? 'weapon2',
-      visualMuzzleOrigin,
-      shotAudioKey: config.shotAudio?.successKey,
-    });
-    return true;
-  }
-
-  /**
-   * Feuert einen Energiebolzen ohne Lenkwirkung. Der Host ordnet einen Treffer dem Ziel zu und
-   * ermittelt die typisierte Konstruktionswirkung aus dessen Definition.
-   */
-  private fireEnergyInjectorWeapon(
-    config: WeaponConfig,
-    fireConfig: EnergyInjectorWeaponFireConfig,
-    x: number,
-    y: number,
-    angle: number,
-    playerId: string,
-    playerColor: number,
-    sourceSlot?: LoadoutSlot,
-    visualMuzzleOrigin?: MuzzleOrigin,
-    gameplayMuzzleOrigin?: MuzzleOrigin,
-  ): boolean {
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed: fireConfig.projectileSpeed,
-      size: fireConfig.projectileSize,
-      damage: 0,
-      color: config.projectileColor ?? fireConfig.injectorColor,
-      ownerColor: playerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      lifetime: (config.range / fireConfig.projectileSpeed) * 1000,
-      remainingRangePx: config.range,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: config.id,
-      rockDamageMult: 0,
-      trainDamageMult: 0,
-      energyInjectorPayload: {
-        durationMs: fireConfig.durationMs,
-        focusDurationMs: fireConfig.focusDurationMs,
-        vulnerabilityBonus: fireConfig.vulnerabilityBonus,
-        color: fireConfig.injectorColor,
-      },
-      projectileStyle: config.projectileStyle,
-      energyBallVariant: config.energyBallVariant,
-      sourceSlot: sourceSlot ?? 'weapon2',
-      gameplayMuzzleOrigin,
-      visualMuzzleOrigin,
-      shotAudioKey: config.shotAudio?.successKey,
-    });
-    return true;
   }
 
   private createWeapon(config: WeaponConfig): BaseWeapon {
@@ -2358,181 +2248,6 @@ export class LoadoutManager {
     }) ?? false);
   }
 
-  private fireFlamethrowerWeapon(
-    config:      WeaponConfig,
-    fireConfig:  FlamethrowerWeaponFireConfig,
-    x:           number,
-    y:           number,
-    angle:       number,
-    playerId:    string,
-    playerColor: number,
-    sourceSlot?: LoadoutSlot,
-    options?: WeaponFireOptions,
-    visualMuzzleOrigin?: MuzzleOrigin,
-    gameplayMuzzleOrigin?: MuzzleOrigin,
-  ): boolean {
-    const fireball = fireConfig.fireball;
-    if ((fireball?.enabled ?? 0) > 0) {
-      const groundEffect = {
-        durationMs: fireball?.groundDurationMs ?? 2000,
-        burnDurationMs: fireConfig.burnDurationMs,
-        burnDamagePerTick: fireball?.groundBurnDamagePerTick ?? 0.5,
-                sourceId: 'weapon.fireball_fire',
-        baseDamageMult: config.baseDamageMult ?? 1,
-      };
-      const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
-      this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-        speed: fireball?.projectileSpeed ?? 450,
-        ignoreBaseCollisions: options?.ignoreBaseCollisions,
-        ignoreRockIndex: options?.ignoreRockIndex,
-        size: fireball?.projectileSize ?? 28,
-        damage: config.damage,
-        color: 0xff7417,
-        ownerColor: playerColor,
-        lifetime: config.range / Math.max(1, fireball?.projectileSpeed ?? 450) * 1000,
-        maxBounces: 0,
-        isGrenade: false,
-        adrenalinGain: config.adrenalinGain,
-                sourceId: 'weapon.fireball_launcher',
-        projectileStyle: 'fireball',
-        rockDamageMult: 1,
-        trainDamageMult: 1.15,
-        explosion: {
-          radius: fireball?.explosionRadius ?? 120,
-          maxDamage: fireball?.explosionMaxDamage ?? 90,
-          minDamage: fireball?.explosionMinDamage ?? 20,
-          knockback: fireball?.explosionKnockback ?? 1250,
-          selfDamageMult: fireball?.selfDamageMult ?? 0.25,
-          rockDamageMult: 1,
-          trainDamageMult: 1.15,
-          baseDamageMult: config.baseDamageMult ?? 1,
-          color: 0xff6a14,
-          visualStyle: 'rocket',
-          burnOnHit: { durationMs: fireConfig.burnDurationMs, damagePerTick: fireConfig.burnDamagePerTick },
-          burnOrigin: 'flamethrower_direct',
-          fireChunkBurst: {
-            ...groundEffect,
-            count: chunkCount,
-            searchRadius: fireball?.chunkSearchRadius ?? 96,
-            flightMs: fireball?.chunkFlightMs ?? 320,
-            igniteCenter: true,
-          },
-        },
-        fireTrail: (fireball?.trailEnabled ?? 0) > 0 ? groundEffect : undefined,
-        sourceSlot,
-        sourceTurretId: options?.sourceTurretId,
-        gameplayMuzzleOrigin,
-        visualMuzzleOrigin,
-        shotAudioKey: config.shotAudio?.successKey,
-      });
-      return true;
-    }
-
-    const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
-
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:           fireConfig.projectileSpeed,
-      ignoreBaseCollisions: options?.ignoreBaseCollisions,
-      ignoreRockIndex: options?.ignoreRockIndex,
-      size:            fireConfig.hitboxStartSize,
-      damage:          config.damage,
-      color:           config.projectileColor ?? playerColor,
-      lifetime,
-      maxBounces:      999999,  // Flammen sterben nicht durch Bounces, sondern durch Lifetime/Kollision
-      isGrenade:       false,
-      adrenalinGain:   config.adrenalinGain,
-      sourceId:      config.id,
-      projectileStyle: 'flame',
-      rockDamageMult:  config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      // Flammenwerfer-spezifische Felder
-      isFlame:         true,
-      hitboxGrowRate:  fireConfig.hitboxGrowRate,
-      hitboxMaxSize:   fireConfig.hitboxEndSize,
-      velocityDecay:   fireConfig.velocityDecay,
-      burnDurationMs:    fireConfig.burnDurationMs,
-      burnDamagePerTick: fireConfig.burnDamagePerTick,
-      projectileBurnVisualStyle: config.projectileBurnVisualStyle,
-      flamePiercing:     (fireConfig.piercingCount ?? 0) > 0,
-      sourceSlot,
-      sourceTurretId:    options?.sourceTurretId,
-      gameplayMuzzleOrigin,
-      visualMuzzleOrigin,
-      shotAudioKey:    config.shotAudio?.successKey,
-    });
-
-    return true;
-  }
-
-  private fireLeafBlowerWeapon(
-    config:      WeaponConfig,
-    fireConfig:  LeafBlowerWeaponFireConfig,
-    x:           number,
-    y:           number,
-    angle:       number,
-    playerId:    string,
-    playerColor: number,
-    sourceSlot?: LoadoutSlot,
-    options?: WeaponFireOptions,
-    visualMuzzleOrigin?: MuzzleOrigin,
-    gameplayMuzzleOrigin?: MuzzleOrigin,
-  ): boolean {
-    const lifetime = this.calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
-    // Der Debuff-Wurf faellt pro Luftstoss: ein Stoss verbraucht sich am ersten Ziel, damit
-    // entspricht der Schuss-Wurf genau der beworbenen Trefferchance.
-    const debuffHit = (config.hitDebuffChance ?? 0) > 0 && Math.random() < (config.hitDebuffChance ?? 0);
-
-    this.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed:           fireConfig.projectileSpeed,
-      ignoreBaseCollisions: options?.ignoreBaseCollisions,
-      ignoreRockIndex: options?.ignoreRockIndex,
-      size:            fireConfig.hitboxStartSize,
-      damage:          config.directDamageOverride ?? config.damage,
-      color:           config.projectileColor ?? playerColor,
-      ownerColor:      playerColor,
-      lifetime,
-      maxBounces:      999999,
-      isGrenade:       false,
-      adrenalinGain:   config.adrenalinGain,
-      sourceId:      config.id,
-      projectileStyle: 'leaf_blower',
-      rockDamageMult:  config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      hitboxGrowRate:  fireConfig.hitboxGrowRate,
-      hitboxMaxSize:   fireConfig.hitboxEndSize,
-      velocityDecay:   fireConfig.velocityDecay,
-      leafBlowerMinKnockback: fireConfig.minKnockback,
-      leafBlowerMaxKnockback: fireConfig.maxKnockback,
-      leafBlowerSelfPush: fireConfig.selfPush,
-      leafBlowerDeflectsProjectiles: fireConfig.deflectProjectiles > 0,
-      hitSlowFraction:   debuffHit ? config.hitSlowFraction : undefined,
-      hitSlowDurationMs: debuffHit ? config.hitSlowDurationMs : undefined,
-      hitVulnerabilityDurationMs: debuffHit ? config.hitVulnerabilityDurationMs : undefined,
-      sourceSlot,
-      sourceTurretId:    options?.sourceTurretId,
-      gameplayMuzzleOrigin,
-      visualMuzzleOrigin,
-      shotAudioKey:    config.shotAudio?.successKey,
-    });
-
-    return true;
-  }
-
-  private calculateDecayLifetime(range: number, projectileSpeed: number, decay: number): number {
-    if (decay >= 1 || decay <= 0) {
-      return (range / projectileSpeed) * 1000;
-    }
-
-    const lnDecay   = Math.log(decay);
-    const maxDist   = projectileSpeed / -lnDecay;
-    const distRatio = range / maxDist;
-    if (distRatio >= 1) {
-      return 3000;
-    }
-
-    return Math.log(1 - distRatio) / lnDecay * 1000;
-  }
-
   private getEquippedEnergyShieldFireConfig(playerId: string): EnergyShieldWeaponFireConfig | null {
     const weapon = this.loadouts.get(playerId)?.weapon2.config;
     if (!weapon || weapon.fire.type !== 'energy_shield') return null;
@@ -2544,4 +2259,16 @@ function isAutonomousWeaponToggle(config: WeaponConfig): boolean {
   return config.fire.type === 'energy_shield'
     && config.fire.domeEnabled > 0
     && config.fire.domeToggleEnabled > 0;
+}
+
+function resolveReinforcementAimAngle(
+  x: number,
+  y: number,
+  fallbackAngle: number,
+  targetX: number,
+  targetY: number,
+): number {
+  const dx = targetX - x;
+  const dy = targetY - y;
+  return Math.hypot(dx, dy) > 0.001 ? Math.atan2(dy, dx) : fallbackAngle;
 }

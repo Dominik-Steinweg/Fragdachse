@@ -32,6 +32,7 @@ import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import type { AutomatedWeaponExecution } from '../../world/AutomatedWeaponExecutionAdapter';
+import type { SpecializedWeaponExecutionCapability } from '../../loadout/WeaponFireExecutor';
 import { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
 import { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
@@ -136,6 +137,7 @@ export class ArenaWorldGameplay {
   targeting: WorldTargetingRuntime | null = null;
   train: WorldTrainRuntime | null = null;
   weaponExecution: WorldWeaponExecutionRuntime | null = null;
+  specializedWeaponExecution: SpecializedWeaponExecutionCapability | null = null;
   automatedWeaponExecution: AutomatedWeaponExecution | null = null;
   player: WorldPlayerGameplayRuntime | null = null;
   combat: WorldCombatGameplayBinding | null = null;

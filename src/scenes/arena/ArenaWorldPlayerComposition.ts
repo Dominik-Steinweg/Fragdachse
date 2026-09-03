@@ -6,6 +6,7 @@ import {
 } from '../../world/WorldPlayerGameplayRuntime';
 import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../../world/AutomatedWeaponExecutionAdapter';
+import { SpecializedWeaponExecutionAdapter } from '../../world/SpecializedWeaponExecutionAdapter';
 import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
@@ -30,10 +31,13 @@ export function composeWorldPlayerGameplay(
     projectileManager: ctx.projectileManager,
     combatSystem: ctx.combatSystem,
   });
+  const specializedWeaponExecution = new SpecializedWeaponExecutionAdapter(ctx.projectileManager);
   gameplay.weaponExecution = weaponExecution;
+  gameplay.specializedWeaponExecution = specializedWeaponExecution;
   gameplay.automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(
     weaponExecution,
     ctx.projectileManager,
+    specializedWeaponExecution,
   );
   worldRuntime.bind(weaponExecution);
   // Der Coop-Build gehoert zur laufenden World und kann deshalb auch in einer Activity-losen
@@ -68,6 +72,7 @@ export function composeWorldPlayerGameplay(
       bridge,
     ),
     weaponExecution,
+    specializedWeaponExecution,
     createBurrowSystem: (resourceSystem) => new BurrowSystem(
       resourceSystem,
       ctx.playerManager,

@@ -81,9 +81,15 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
   it('der LoadoutManager baut den Executor nicht mehr selbst (4A-Ratchet)', () => {
     const loadout = read('src/loadout/LoadoutManager.ts');
     expect(loadout).not.toContain('new WeaponFireExecutor');
+    expect(loadout).not.toContain('fireFlamethrowerWeapon');
+    expect(loadout).not.toContain('fireLeafBlowerWeapon');
+    expect(loadout).not.toContain('fireReinforcementMatrixWeapon');
+    expect(loadout).not.toContain('fireEnergyInjectorWeapon');
     expect(loadout).toContain('setWeaponExecutionCapability(');
+    expect(loadout).toContain('setSpecializedWeaponExecutionCapability(');
     const composition = read('src/scenes/arena/ArenaWorldPlayerComposition.ts');
     expect(composition).toContain('new WorldWeaponExecutionRuntime(');
+    expect(composition).toContain('new SpecializedWeaponExecutionAdapter(');
     expect(composition).toContain('worldRuntime.bind(weaponExecution)');
   });
 });

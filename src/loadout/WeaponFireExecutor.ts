@@ -206,6 +206,14 @@ export interface WeaponExecutionCapability {
 }
 
 /**
+ * Benannte Capability für unmittelbare Fire-Typen außerhalb des gemeinsamen Projectile-/
+ * Hitscan-/Melee-Executors. Sie kennt keine Ressourcen-, Cooldown- oder Player-Lifetime-Regeln.
+ */
+export interface SpecializedWeaponExecutionCapability {
+  fire(config: WeaponConfig, params: WeaponFireParams): boolean;
+}
+
+/**
  * Zustandsarmer Fire-Dispatch für die gemeinsamen Projektil-, Hitscan- und Melee-Pfade.
  *
  * Er übersetzt eine {@link WeaponConfig} in Projektil-, Hitscan- oder Melee-Aufträge und hält

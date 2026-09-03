@@ -164,6 +164,7 @@ function makeDestroyRuntime() {
     'setAk47StrategicTargetHitResolver',
     'setCombatSystem',
     'setWeaponExecutionCapability',
+    'setSpecializedWeaponExecutionCapability',
     'setPhysicsSystem',
     'setTranslocatorSystem',
     'setDecoySystem',
