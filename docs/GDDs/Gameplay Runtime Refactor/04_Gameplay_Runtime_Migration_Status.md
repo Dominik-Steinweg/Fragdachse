@@ -24,11 +24,11 @@
 
 ## Aktueller Stand
 
-- **Aktive Teilphase:** `3B – Resource-System und Player-Readiness auf explizite Zeit umstellen` (offen; nächster Schritt)
-- **Zuletzt abgeschlossen:** `3A – Host-Zeit für Action- und Request-Pfad` ✅
-- **Gesamtstatus:** Lifecycle-, Read-View- und Action-Zeit-Grenze der Player-Gameplay-Runtime stehen; Resource-/Readiness-Zeit und Execution-Cutover noch offen
-- **Letzter verifizierter Repository-Stand:** Phase-2B-Commit + Phase-3A-Commit
-- **Letzter vollständig grüner automatisierter Gate:** Phase 3A – `npx tsc --noEmit` grün; `npm run build` (tsc + vite) grün; `vitest run tests/` ohne die zwei bekannt flakigen Dateien: **344 Dateien / 2898 Tests grün** (inkl. neuer Clock-Skew-Tests in `RadialActionRpc.test.ts` und `Weapon2PredictionDedupe.test.ts`).
+- **Aktive Teilphase:** `4A – Shared Immediate Weapon Execution` (offen; nächster Schritt)
+- **Zuletzt abgeschlossen:** `3B – Resource-System und Player-Readiness auf explizite Zeit umstellen` ✅
+- **Gesamtstatus:** Lifecycle-, Read-View-, Action-Zeit- und Resource-/Readiness-Zeit-Grenzen der Player-Gameplay-Runtime stehen; Shared Immediate Execution und Execution-Cutover als nächstes
+- **Letzter verifizierter Repository-Stand:** Phase-3A-Commit (`936e5b87`) + Phase-3B-Commit
+- **Letzter vollständig grüner automatisierter Gate:** Phase 3B – `npx tsc --noEmit` grün; `npm run build` (tsc + vite) grün; `vitest run tests/` ohne die zwei bekannt flakigen Dateien: **357 Dateien / 2990 Tests grün** (inkl. neuer Tests in `ResourceSystemExplicitTime.test.ts`).
 - **Bekannte Umgebungsflakiness (nicht durch dieses Refactoring verursacht):** Der volle `npm test`-Lauf ist in diesem Checkout nicht deterministisch grün. `tests/ArenaTransitionReadiness.test.ts` (4 Source-Scan-Tests mit `\n{…}`-Literalen) schlägt in einem CRLF-Checkout unabhängig vom Diff fehl; `tests/WorldCombatGameplayBinding.test.ts` (AK47 „random visible target") ist `Math.random`-flaky (0–1 Fehler pro Lauf). Beide scheitern auf unverändertem Stand vor 2A/2B identisch. Der Phase-Gate wird deshalb über `vitest run tests/` mit `--exclude` dieser beiden Dateien plus `npm run build` geführt.
 - **Manueller Gate:** offen; bewusst erst nach vollständigem Refactoring
 - **Projectile-/Combat-Full-Refactor:** ausdrücklich außerhalb dieses Plans
@@ -42,8 +42,8 @@
 | 1 | ✅ | `2b0db38d` | Baseline, Contracts, Migrationskarte |
 | 2A | ✅ | `82322e93` | Player-Gameplay Lifecycle-Grenze |
 | 2B | ✅ | `17d14634` | Player-Gameplay Read Views |
-| 3A | ✅ | Phase-3A-Commit (HEAD dieser Änderung) | Host-Zeit im Action-/Request-Pfad |
-| 3B | ⬜ | — | Resource/Readiness mit expliziter Zeit |
+| 3A | ✅ | `936e5b87` | Host-Zeit im Action-/Request-Pfad |
+| 3B | ✅ | Phase-3B-Commit (HEAD dieser Änderung) | Resource/Readiness mit expliziter Zeit |
 | 4A | ⬜ | — | Shared Immediate Weapon Execution |
 | 4B | ⬜ | — | Automated-/Non-Player-Fire Cutover |
 | 4C | ⬜ | — | Spezialisierte Immediate-Execution-Adapter |
@@ -175,10 +175,10 @@ Stand nach Phase 3A. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zi
 | Shared Immediate Execution (Projectile/Hitscan/Melee) | `WeaponFireExecutor.test.ts` | abgedeckt | erweitern bei 4A |
 | Weapon-Slot-Exklusivität / Channel-Switch-Deaktivierung | `WeaponSlotExclusivity.test.ts` | abgedeckt | prüfen bei 6A / 9 |
 | Dynamischer Spread / aktiver Slot / Shot Identity | `AimSpreadModelActiveSlot.test.ts`, `ShotPlanResolverRuntimeRegression.test.ts`, `ProjectileSpawnResolver.test.ts` | abgedeckt | prüfen bei 6A |
-| Resource Revision / Adrenalin-Observer / Cost-Modifier | `ResourceSystemObservers.test.ts` | abgedeckt | prüfen bei 3B |
+| Resource Revision / Adrenalin-Observer / Cost-Modifier | `ResourceSystemObservers.test.ts`, `ResourceSystemExplicitTime.test.ts` | abgedeckt (3B: explizite Zeit, Pause, Regen-Tick, Powerup-Interaktion) | prüfen bei 6A |
 | **`clientX`/`clientY` als Use-Ursprung** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)**; in 3A bewusst unverändert (Positions-/Latenzsemantik ≠ Zeit-Authority) | Zielprüfung 6A |
 | **Host-Zeit-Authority der Player-Aktion (Clock-Skew)** | `RadialActionRpc.test.ts` (ein `hostNowMs` je Aktion, geteilt mit Held-Action-Consume), `Weapon2PredictionDedupe.test.ts` (`lu`-Payload-`ts` erreicht den Host-Handler nicht) | **neu (Phase 3A)** | prüfen bei 6A / 6B |
-| **Waffen-Commit-Reihenfolge: Reject → keine Resource-/Cooldown-Mutation; Drain erst nach Dispatch** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | Zielprüfung 3B / 6A |
+| **Waffen-Commit-Reihenfolge: Reject → keine Resource-/Cooldown-Mutation; Drain erst nach Dispatch** | `GameplayRuntimeCutoverCharacterization.test.ts` | abgedeckt (3B: mit expliziter Zeit `nowMs` gesichert) | Zielprüfung 6A |
 | **Negev-Killstreak-Runtime: Kill-Zahl, Streak-Gap-Ende in `update()`, Abschlussexplosion** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | migrieren bei 8B |
 | **Shotgun-Lightning: Kill → Queue → `applyAoeDamage` + Broadcast** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | migrieren bei 8C |
 | **Construction-/Management-Cooldown-Keying (pro Spieler/ID bzw. pro Aktion)** | `GameplayRuntimeCutoverCharacterization.test.ts`, `PersistentBaseRepositioning.test.ts` | **neu + abgedeckt** | migrieren bei 5 |
@@ -189,17 +189,18 @@ Stand nach Phase 3A. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zi
 | World Player ownership boundary | `WorldGameplayCompositionContracts.test.ts` | Ratchet | migrieren bei 10B |
 | Combat integration boundary | `WorldCombatGameplayBinding.test.ts` | Ratchet (AK47-Ziel `Math.random`-flaky) | migrieren bei 11A / 11B |
 | Arena source boundaries | `Phase11DependencyCutover.test.ts` (2A: Held-Action ✅), `ArenaFlowCheckpointC.test.ts` | Ratchet | migrieren bei 6B |
-| **Player-in-World-Lifecycle- und Read-View-Grenze der Runtime** | `WorldPlayerGameplayLifecycle.test.ts` (attach/detach/reconcile/held-invalidation + Read-Views), `PlayerGameplayReadViewBoundary.test.ts` (`.systems`-Ratchet) | **neu (Phase 2A/2B)** | prüfen bei 3B / 12A / 12B |
+| **Player-in-World-Lifecycle- und Read-View-Grenze der Runtime** | `WorldPlayerGameplayLifecycle.test.ts` (attach/detach/reconcile/held-invalidation + Read-Views), `PlayerGameplayReadViewBoundary.test.ts` (`.systems`-Ratchet) | abgedeckt | prüfen bei 12A / 12B |
 
 ---
 
 ## Bewusste Übergänge / bekannte Regressionen
 
-Aktuell keine Implementierungsübergänge. 2A/2B/3A sind reine Boundary-/Zeit-Moves ohne fachliche Semantikänderung:
+Aktuell keine Implementierungsübergänge. 2A/2B/3A/3B sind reine Boundary-/Zeit-Moves ohne fachliche Semantikänderung:
 
 - **2A** kapselt die Player-Child-Lifecycle-Schritte (`resource`/`burrow`/`itemRuntime`/`loadout`/`tunnel`/`heldAction`/`playerModifier`) hinter `WorldPlayerGameplayRuntime`-Methoden. Zwei verhaltensneutrale Reorderings: im `detachLoadout`-Pfad läuft `worldPowerUpRuntime.system.removePlayer` jetzt nach `detachPlayerLoadout` (loadout+tunnel); in `syncHostLoadoutsFromCommittedSelections` läuft `resource.reconcilePlayerLimits` jetzt vor `combatSystem.reconcilePlayerRuntimeState`. Beide betreffen unabhängige Map-Löschungen bzw. getrennte Domains.
 - **2B** routet die reinen Read-Zugriffe von `ArenaRuntimeAdapters`, `ArenaRuntime`, `RockVisualHelper` und `ArenaLifecycleCoordinator` über die `PlayerGameplayReadViews` derselben Runtime. Genuine Mutationen (`loadout.use`, `heldAction.*`, `burrow.handleBurrowRequest`, `resource.setAdrenaline`) sowie die Activity-System-Handoffs und Frame-Reads bleiben bewusst als `.systems.*` und sind im Ratchet `PlayerGameplayReadViewBoundary.test.ts` eingefroren.
 - **3A** entfernt den Client-Timestamp (`ts` / `clientNow`) vollständig aus dem `lu`-RPC-Pfad (NetworkBridge-Wire + `LoadoutUseHandler`-Typ, `RpcCoordinator`, `ClientUpdateCoordinator.PredictedWeapon2Request`, `ArenaInputBindings`, `ArenaScene`). `RpcCoordinator.registerLoadoutUseHandler` bestimmt einen einzigen `hostNowMs = Date.now()` je Aktion und teilt ihn zwischen `useLoadout`, `heldActions.consume`, `validateHostUtilityCharge` und `construction.useInspectorUtility`. Verhaltensänderung nur im Missbrauchsfall: der bisherige ±200 ms-Client-Timestamp-Spielraum für Waffe-2-Cooldowns entfällt. Client-Prediction reconciled weiterhin über `weapon2PredictionAck` / `authoritativeAdrenaline`. `clientX`/`clientY` bleiben unverändert.
+- **3B** stellt `ResourceSystem.drainAdrenaline(id, amount, nowMs)` und `ResourceSystem.regenTick(id, delta, nowMs)` auf explizite Host-Zeit um und entfernt die internen `Date.now()`-Aufrufe vollständig. `HostUpdateCoordinator` taktet `regenTick`, `burrow.update` und `loadout.update` mit dem Host-Frame-Timestamp `now`. `LoadoutManager.fireWeapon` reicht `now` an `drainAdrenaline` und den Negev-Zustand (`negevState.lastShotAt = now`) durch. Die Loadout-Multiplier-Reads (`getSpeedMultiplier`, `getHeldSelfPushVelocity`, `getDamageMultiplier`, `getAllyAuraMultiplier`, `getWeaponDamageMultiplier`) akzeptieren optional `now` und verwenden keine versteckte Wanduhr mehr bei Durchreichung. `WorldPlayerGameplayRuntime` bindet die Negev-Abschlussexplosion an `event.nowMs`. Item-lokale Readiness verbleibt unverändert bei `BaseWeapon`, `BaseUtility` und `TemporaryUtilityCollection`.
 
 Regel für Updates:
 
@@ -239,16 +240,20 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 ## Nächster konkreter Schritt
 
-**Teilphase 3B umsetzen – Resource-System und Player-Readiness auf explizite Zeit umstellen.**
+**Teilphase 4A umsetzen – Shared Immediate Weapon Execution Capability.**
 
 Dabei:
 
-1. `ResourceSystem` für fachliche Zeit explizit machen: `drainAdrenaline` (Regen-Pause setzen), `regenTick` (Regen-Pause prüfen) und ggf. weitere lesen heute `Date.now()` direkt ([ResourceSystem.ts:167](../../src/systems/ResourceSystem.ts), [ResourceSystem.ts:188](../../src/systems/ResourceSystem.ts)). Vertrag: `nowMs`/`deltaMs` über den Aufrufvertrag, kleinstmöglich.
-2. Relevante Player-Gameplay-Aufrufer migrieren – v. a. `HostUpdateCoordinator` (`playerSystems.resource.regenTick(player.id, delta)`), `LoadoutManager.fireWeapon`/`drainAdrenaline`-Pfad.
-3. Versteckte `Date.now()`-Defaults in Loadout-/Held-Item-/Behavior-Reads identifizieren (Matrix-Abschnitt „Versteckte `Date.now()`") und im ersten Scope durch explizite Zeit ersetzen; item-lokale Readiness bleibt bei `BaseWeapon`/`BaseUtility`/Temporary-Utility-Instance.
-4. Commit-Reihenfolge testseitig festhalten (Check → Execution/Acceptance → Resource-/Cooldown-/Charge-Commit) – teils schon in `GameplayRuntimeCutoverCharacterization.test.ts`.
-5. Referenz-§§: `02` §§ 9.1, 10.1, 11, 27–29. Keine zentrale Readiness-Wahrheit.
-6. Source-Check auf verbotene neue `Date.now()` in den migrierten Player-Gameplay-Dateien.
+1. Den bestehenden `WeaponFireExecutor` zur kleinen gemeinsamen Ausführungsgrenze für sofortige Shared-Fire-Semantik machen (oberhalb der unveränderten Projectile-/Combat-Legacy).
+2. World-owned oder world-composed Execution-Owner/Port einführen:
+   - besitzt oder stellt `WeaponFireExecutor` bereit,
+   - verdrahtet dessen `WeaponFireSink` einmalig mit vorhandenen Projectile-/Combat-Senken,
+   - besitzt keine Player-Resource-/Loadout-Autorität.
+3. Gemeinsame Immediate-Fire-Fälle über diese Capability abbilden: Projectile, Hitscan, Melee.
+4. Bestehende Metadaten unverändert transportieren: owner/source, `sourceSlot`, `shotId`, muzzle origins, turret/source IDs, direct/payload damage multipliers, attribution-relevante Payload-Metadaten.
+5. `LoadoutManager` darf für Player-Fire zunächst noch delegieren, aber der Executor selbst gehört nicht mehr logisch dem Loadout.
+6. Keine Projectile-internen Regeln in den neuen Owner ziehen.
+7. Referenz-§§: `02` §§ 13, 15, 27–29.
 
 Hinweis für den Gate: `vitest run tests/` mit `--exclude tests/ArenaTransitionReadiness.test.ts --exclude tests/WorldCombatGameplayBinding.test.ts` (bekannte Umgebungsflakiness) plus `npm run build`.
 

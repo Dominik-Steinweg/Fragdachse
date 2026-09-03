@@ -119,6 +119,7 @@ export interface NegevKillstreakExplosionEvent {
   kills: number;
   radius: number;
   damage: number;
+  nowMs: number;
   fireChunkDurationMs: number;
   fireChunkBurnDurationMs: number;
   fireChunkBurnDamagePerTick: number;
@@ -1031,8 +1032,8 @@ export class LoadoutManager {
 
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
 
-  update(delta: number): void {
-    const now = Date.now();
+  update(delta: number, nowMs?: number): void {
+    const now = nowMs ?? Date.now();
 
     // Spread-Decay für alle ausgerüsteten Waffen
     for (const loadout of this.loadouts.values()) {
@@ -1044,7 +1045,7 @@ export class LoadoutManager {
       if (state.kills <= 0) continue;
       const stillFiringNegev = now - state.lastShotAt < LoadoutManager.NEGEV_STREAK_GAP_MS
         && this.loadouts.get(playerId)?.weapon2.config.id === 'NEGEV';
-      if (!stillFiringNegev) this.finishNegevKillstreak(playerId, state.kills);
+      if (!stillFiringNegev) this.finishNegevKillstreak(playerId, state.kills, now);
     }
 
     // Ultimate: Rage proportional drainieren + Effekt nach duration deaktivieren
@@ -1125,10 +1126,10 @@ export class LoadoutManager {
 
   // ── Multiplier-Getter ─────────────────────────────────────────────────────
 
-  getSpeedMultiplier(playerId: string): number {
+  getSpeedMultiplier(playerId: string, now: number = Date.now()): number {
     const state        = this.ultimateStates.get(playerId);
     const ultimateMult = (state?.active && state.config.type === 'buff' ? state.config.speedMultiplier : 1)
-      * this.getAllyAuraMultiplier(playerId, 'speed');
+      * this.getAllyAuraMultiplier(playerId, 'speed', now);
     const gaussSlowMult = state?.config.type === 'gauss' && state.gaussChargeStartedAt !== null
       ? state.config.movementSlowFactor
       : 1;
@@ -1143,7 +1144,7 @@ export class LoadoutManager {
 
     // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
     const held = this.heldFireSlots.get(playerId);
-    if (held && Date.now() - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
+    if (held && now - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
       const cfg = this.loadouts.get(playerId)?.[held.slot].config;
       if (cfg?.fire.type === 'tesla_dome') {
         // Feldstabilisierung hebt den Bewegungsfaktor mit der Ladestufe an. Der maßgebliche
@@ -1163,9 +1164,9 @@ export class LoadoutManager {
     return ultimateMult * gaussSlowMult;
   }
 
-  getHeldSelfPushVelocity(playerId: string): { vx: number; vy: number } | null {
+  getHeldSelfPushVelocity(playerId: string, now: number = Date.now()): { vx: number; vy: number } | null {
     const held = this.heldFireSlots.get(playerId);
-    if (!held || Date.now() - held.lastAt >= LoadoutManager.HOLD_EXPIRE_MS) return null;
+    if (!held || now - held.lastAt >= LoadoutManager.HOLD_EXPIRE_MS) return null;
 
     const cfg = this.loadouts.get(playerId)?.[held.slot].config;
     if (!cfg || cfg.fire.type !== 'leaf_blower') return null;
@@ -1179,13 +1180,12 @@ export class LoadoutManager {
     };
   }
 
-  getDamageMultiplier(playerId: string): number {
+  getDamageMultiplier(playerId: string, now: number = Date.now()): number {
     const state = this.ultimateStates.get(playerId);
     return (state?.active && state.config.type === 'buff' ? state.config.damageMultiplier : 1)
-      * this.getAllyAuraMultiplier(playerId, 'damage');
+      * this.getAllyAuraMultiplier(playerId, 'damage', now);
   }
-  private getAllyAuraMultiplier(playerId: string, kind: 'speed' | 'damage'): number {
-    const now = Date.now();
+  private getAllyAuraMultiplier(playerId: string, kind: 'speed' | 'damage', now: number = Date.now()): number {
     const target = this.playerManager.getPlayer(playerId);
     if (!target) return 1;
     let multiplier = 1;
@@ -1203,7 +1203,7 @@ export class LoadoutManager {
   }
 
   getWeaponDamageMultiplier(playerId: string, slot: WeaponSlot, now = Date.now()): number {
-    const baseMultiplier = this.getDamageMultiplier(playerId);
+    const baseMultiplier = this.getDamageMultiplier(playerId, now);
     if (slot !== 'weapon1') return baseMultiplier;
 
     const fireCfg = this.getEquippedEnergyShieldFireConfig(playerId);
@@ -1492,7 +1492,7 @@ export class LoadoutManager {
     return state;
   }
 
-  private finishNegevKillstreak(playerId: string, kills: number): void {
+  private finishNegevKillstreak(playerId: string, kills: number, now: number = Date.now()): void {
     const state = this.negevStates.get(playerId);
     if (state) state.kills = 0;
     if (kills <= 0) return;
@@ -1523,6 +1523,7 @@ export class LoadoutManager {
       kills,
       radius,
       damage,
+      nowMs: now,
       fireChunkDurationMs: streak.fireChunkDurationMs,
       fireChunkBurnDurationMs: streak.fireChunkBurnDurationMs,
       fireChunkBurnDamagePerTick: streak.fireChunkBurnDamagePerTick,
@@ -1670,7 +1671,7 @@ export class LoadoutManager {
         // Sofort beenden, damit nachtropfendes Adrenalin den Streak nicht am Leben haelt.
         if (cfg.id === 'NEGEV') {
           const streakKills = this.negevStates.get(playerId)?.kills ?? 0;
-          if (streakKills > 0) this.finishNegevKillstreak(playerId, streakKills);
+          if (streakKills > 0) this.finishNegevKillstreak(playerId, streakKills, now);
         }
         return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
       }
@@ -1720,9 +1721,7 @@ export class LoadoutManager {
     }
     if (cfg.id === 'NEGEV') {
       const negevState = this.getOrCreateNegevState(playerId);
-      // Bewusst Host-Wanduhr statt des (client-gelieferten) now: update() vergleicht
-      // ebenfalls gegen Date.now(), sonst wuerde Clock-Skew den Streak abreissen.
-      negevState.lastShotAt = Date.now();
+      negevState.lastShotAt = now;
       const kills = negevState.kills;
       const damageMultiplier = 1 + kills * (cfg.negevKillstreak?.damageBonusPerKill ?? 0);
       if (damageMultiplier > 1) {
@@ -1847,7 +1846,7 @@ export class LoadoutManager {
 
     // 5. Ressourcen erst nach erfolgreichem Fire-Dispatch abbuchen.
     if (effectiveAdrenalineCost > 0) {
-      this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost);
+      this.resourceSystem.drainAdrenaline(playerId, cfg.adrenalinCost, now);
     }
 
     // 6. Bloom erhöhen, dann Cooldown-Timestamp setzen

@@ -155,8 +155,8 @@ export class BurrowSystem {
 
   // ── Frame-Update (Host) ───────────────────────────────────────────────────
 
-  update(delta: number): void {
-    const now = Date.now();
+  update(delta: number, nowMs?: number): void {
+    const now = nowMs ?? Date.now();
 
     for (const [id, state] of [...this.states]) {
       if (!this.combat.isAlive(id)) {
@@ -171,7 +171,7 @@ export class BurrowSystem {
           }
           break;
         case 'underground':
-          this.updateUndergroundState(id, state, delta);
+          this.updateUndergroundState(id, state, delta, now);
           break;
         case 'trapped':
           this.updateTrappedState(id, state, delta);
@@ -187,12 +187,16 @@ export class BurrowSystem {
     }
   }
 
-  private updateUndergroundState(id: string, state: BurrowStateData, delta: number): void {
+  private updateUndergroundState(id: string, state: BurrowStateData, delta: number, now: number): void {
     if (state.isTunnelTransit) return;
     state.drainElapsedMs += delta;
     while (state.drainElapsedMs >= BURROW_DRAIN_INTERVAL_MS) {
       state.drainElapsedMs -= BURROW_DRAIN_INTERVAL_MS;
-      this.resources.drainAdrenaline(id, BURROW_DRAIN_AMOUNT_PER_TICK * Math.max(0, this.drainMultiplierResolver?.(id) ?? 1));
+      this.resources.drainAdrenaline(
+        id,
+        BURROW_DRAIN_AMOUNT_PER_TICK * Math.max(0, this.drainMultiplierResolver?.(id) ?? 1),
+        now,
+      );
       if (this.resources.getAdrenaline(id) <= 0) {
         this.requestExit(id, 'depleted');
         return;

@@ -153,7 +153,7 @@ export class ResourceSystem {
    * Zieht Adrenalin ab und pausiert die passive Regeneration für
    * ADRENALINE_REGEN_PAUSE_MS Millisekunden.
    */
-  drainAdrenaline(id: string, amount: number): void {
+  drainAdrenaline(id: string, amount: number, nowMs: number): void {
     const adjustedAmount = this.resolveAdrenalineCost(id, amount);
     const previous = this.adrenaline.get(id) ?? 0;
     const cur = Math.max(0, previous - adjustedAmount);
@@ -164,8 +164,15 @@ export class ResourceSystem {
     }
     // Regen-Pause nicht setzen, wenn Adrenalinspritze aktiv ist
     if ((this.powerUpSystem?.getRegenMultiplier(id) ?? 1) === 1) {
-      this.regenPausedUntil.set(id, Date.now() + ADRENALINE_REGEN_PAUSE_MS);
+      this.regenPausedUntil.set(id, nowMs + ADRENALINE_REGEN_PAUSE_MS);
     }
+  }
+
+  /**
+   * Liefert den Zeitstempel bis zu dem die passive Regeneration pausiert ist.
+   */
+  getRegenPausedUntil(id: string): number {
+    return this.regenPausedUntil.get(id) ?? 0;
   }
 
   /**
@@ -183,9 +190,10 @@ export class ResourceSystem {
   /**
    * Passiver Adrenalin-Regen – nur für nicht-grabende Spieler aufrufen.
    * @param delta Frame-Delta in Millisekunden
+   * @param nowMs Aktueller Host-Zeitstempel in Millisekunden
    */
-  regenTick(id: string, delta: number): void {
-    if (Date.now() < (this.regenPausedUntil.get(id) ?? 0)) return;
+  regenTick(id: string, delta: number, nowMs: number): void {
+    if (nowMs < (this.regenPausedUntil.get(id) ?? 0)) return;
     const regenMult = this.powerUpSystem?.getRegenMultiplier(id) ?? 1;
     const regenRate = this.adrenalineRegenRateResolver?.(id) ?? ADRENALINE_REGEN_PER_SEC;
     const cur = Math.min(

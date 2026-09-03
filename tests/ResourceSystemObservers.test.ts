@@ -24,13 +24,13 @@ describe('ResourceSystem diagnostic observers', () => {
     const observer = vi.fn();
     const unsubscribe = resources.addAdrenalineDrainObserver(observer);
 
-    resources.drainAdrenaline('player-1', 60);
+    resources.drainAdrenaline('player-1', 60, 1_000);
 
     expect(resources.getAdrenaline('player-1')).toBe(10);
     expect(observer).toHaveBeenCalledWith('player-1', 60, 30);
 
     unsubscribe();
-    resources.drainAdrenaline('player-1', 10);
+    resources.drainAdrenaline('player-1', 10, 1_000);
     expect(observer).toHaveBeenCalledTimes(1);
   });
 
@@ -42,7 +42,7 @@ describe('ResourceSystem diagnostic observers', () => {
     resources.addAdrenaline('player-1', 0);
     expect(resources.getAdrenalineRevision('player-1')).toBe(0);
 
-    resources.drainAdrenaline('player-1', 10);
+    resources.drainAdrenaline('player-1', 10, 1_000);
     expect(resources.getAdrenalineRevision('player-1')).toBe(1);
     resources.setAdrenaline('player-1', resources.getAdrenaline('player-1'));
     expect(resources.getAdrenalineRevision('player-1')).toBe(1);

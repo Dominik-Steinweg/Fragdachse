@@ -589,7 +589,7 @@ export class WorldPlayerGameplayRuntime implements
         burnDurationMs: event.fireChunkBurnDurationMs,
         burnDamagePerTick: event.fireChunkBurnDamagePerTick,
         sourceId: 'weapon.NEGEV.killstreak',
-      }, `negev-killstreak:${event.ownerId}:${Date.now()}`);
+      }, `negev-killstreak:${event.ownerId}:${event.nowMs}`);
     });
     loadout.setUtilityConfigModifierSource((playerId) => {
       const modifiers = playerModifier.getModifiers(playerId);

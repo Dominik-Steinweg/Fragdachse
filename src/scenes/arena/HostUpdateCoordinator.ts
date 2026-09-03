@@ -389,16 +389,16 @@ export class HostUpdateCoordinator {
     if (!countdownActive && this.playerSystems?.resource && this.playerSystems?.burrow) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
         if (!this.playerSystems?.burrow.isBurrowed(player.id)) {
-          this.playerSystems?.resource.regenTick(player.id, delta);
+          this.playerSystems?.resource.regenTick(player.id, delta, now);
           this.ctx.combatSystem.hpRegenTick(player.id, delta);
           this.ctx.combatSystem.armorRegenTick(player.id, delta);
         }
       }
-      this.playerSystems?.burrow.update(delta);
+      this.playerSystems?.burrow.update(delta, now);
     }
 
     if (!countdownActive) {
-      this.playerSystems?.loadout?.update(delta);
+      this.playerSystems?.loadout?.update(delta, now);
       this.powerUpSystem?.update(delta);
       this.playerSystems?.tunnel?.update(now);
     }

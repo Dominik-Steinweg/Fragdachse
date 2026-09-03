@@ -149,7 +149,7 @@ describe('LoadoutManager.use – Commit-Reihenfolge von Readiness und Ressource'
 
     expect(result).toEqual({ ok: true });
     expect(dispatch).toHaveBeenCalledTimes(1);
-    expect(drain).toHaveBeenCalledWith('p1', 5);
+    expect(drain).toHaveBeenCalledWith('p1', 5, 1_000);
     expect(recordUse).toHaveBeenCalledWith(1_000);
     expect(addSpread).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.invocationCallOrder[0]).toBeLessThan(drain.mock.invocationCallOrder[0]);

@@ -325,7 +325,7 @@ export class TeslaDomeSystem {
       if (elapsedDrainMs > 0) {
         const drainAmount = dome.config.fire.adrenalineDrainPerSecond * (elapsedDrainMs / 1000);
         if (drainAmount > 0) {
-          this.resourceSystem.drainAdrenaline(ownerId, drainAmount);
+          this.resourceSystem.drainAdrenaline(ownerId, drainAmount, now);
         }
         dome.lastDrainAt = now;
       }

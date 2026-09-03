@@ -267,7 +267,7 @@ export class EnergyShieldSystem {
       const elapsedDrainMs = Math.max(0, now - shield.lastDrainAt);
       if (elapsedDrainMs > 0) {
         const drain = fire.adrenalineDrainPerSecond * (elapsedDrainMs / 1000);
-        if (drain > 0) this.resourceSystem.drainAdrenaline(ownerId, drain);
+        if (drain > 0) this.resourceSystem.drainAdrenaline(ownerId, drain, now);
         shield.lastDrainAt = now;
       }
 
