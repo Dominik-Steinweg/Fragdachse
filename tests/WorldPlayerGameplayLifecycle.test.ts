@@ -75,6 +75,11 @@ function makeRuntime() {
       removePlayer: tag('negevBehavior.removePlayer'),
       destroy: tag('negevBehavior.destroy'),
     },
+    sustainedWeaponBehavior: {
+      resetPlayer: tag('sustainedWeaponBehavior.resetPlayer'),
+      removePlayer: tag('sustainedWeaponBehavior.removePlayer'),
+      destroy: tag('sustainedWeaponBehavior.destroy'),
+    },
     weaponReaction: {
       resetPlayer: tag('weaponReaction.resetPlayer'),
       removePlayer: tag('weaponReaction.removePlayer'),
@@ -174,6 +179,7 @@ function makeConcreteRemoveRuntime() {
     loadout,
     ultimateBehavior: { removePlayer: vi.fn() },
     negevBehavior: { removePlayer: vi.fn(), destroy: vi.fn() },
+    sustainedWeaponBehavior: { removePlayer: vi.fn(), destroy: vi.fn() },
     weaponReaction: { removePlayer: vi.fn(), destroy: vi.fn() },
     tunnel,
     heldAction,
@@ -198,6 +204,7 @@ function makeDestroyRuntime() {
   const setterNames = [
     'setAk47Behavior',
     'setNegevBehavior',
+    'setSustainedWeaponBehavior',
     'setWeaponExecutionCapability',
     'setSpecializedWeaponExecutionCapability',
     'setPhysicsSystem',
@@ -249,6 +256,7 @@ function makeDestroyRuntime() {
     ultimateBehavior: { destroy: vi.fn() },
     ak47Behavior: { destroy: vi.fn() },
     negevBehavior: { destroy: vi.fn() },
+    sustainedWeaponBehavior: { destroy: vi.fn() },
     weaponReaction: { destroy: vi.fn() },
     utilityAction: { removePlayer: vi.fn(), destroy: vi.fn() },
     heldAction: { reset: vi.fn() },
@@ -299,6 +307,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
       'ultimateBehavior.resetPlayer',
       'ak47Behavior.resetPlayer',
       'negevBehavior.resetPlayer',
+      'sustainedWeaponBehavior.resetPlayer',
       'weaponReaction.resetPlayer',
       'loadout.assignDefaultLoadout',
     ]);
@@ -314,6 +323,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
       'ultimateBehavior.removePlayer',
       'ak47Behavior.removePlayer',
       'negevBehavior.removePlayer',
+      'sustainedWeaponBehavior.removePlayer',
       'weaponReaction.removePlayer',
       'loadout.removePlayer',
       'tunnel.removePlayer',
@@ -448,6 +458,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
     expect(systems.ultimateBehavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.ak47Behavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.negevBehavior.destroy).toHaveBeenCalledTimes(1);
+    expect(systems.sustainedWeaponBehavior.destroy).toHaveBeenCalledTimes(1);
     expect(systems.weaponReaction.destroy).toHaveBeenCalledTimes(1);
     expect(systems.heldAction.reset).toHaveBeenCalledTimes(1);
     expect(systems.tunnel.clear).toHaveBeenCalledTimes(1);

@@ -1,5 +1,6 @@
 import type { UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../types';
+import type { SustainedWeaponActionRequest, SustainedWeaponBehaviorPort } from '../loadout/SustainedWeaponBehaviorPort';
 
 /** Optional client-position compensation supplied by a player-action request. */
 export interface PlayerActionPositionInput {
@@ -96,7 +97,7 @@ export interface PlayerActionActorPort {
  */
 export interface PlayerActionLoadoutPort {
   getEquippedWeaponConfig(playerId: string, slot: WeaponSlot): WeaponConfig | undefined;
-  claimWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void;
+  noteWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void;
   activateWeapon(
     playerId: string,
     slot: WeaponSlot,
@@ -144,6 +145,7 @@ export class PlayerActionRuntime {
   constructor(
     private readonly actor: PlayerActionActorPort,
     private readonly loadout: PlayerActionLoadoutPort,
+    private readonly sustainedWeaponBehavior: SustainedWeaponBehaviorPort | null = null,
   ) {}
 
   execute(request: PlayerWeaponActionRequest): LoadoutUseResult {
@@ -167,13 +169,34 @@ export class PlayerActionRuntime {
     this.actor.breakStealth?.(request.playerId, request.hostNowMs);
 
     // Claim before readiness/resource resolution: switching away from a channel is immediate even
-    // when the newly requested weapon is on cooldown or lacks adrenaline.
-    this.loadout.claimWeaponAction(request.playerId, request.slot, request.hostNowMs, request.angle);
+    // when the newly requested weapon is on cooldown or lacks adrenaline. Sustained behavior owns
+    // the switch semantics; Loadout only records its generic held-item input observation.
+    this.sustainedWeaponBehavior?.claimWeaponAction(request.playerId, request.slot, request.hostNowMs, request.angle);
+    this.loadout.noteWeaponAction(request.playerId, request.slot, request.hostNowMs, request.angle);
 
     // A held scope input claims the slot and updates the hold state but does not execute a shot.
     if (request.params?.scopeHolding) return { ok: true };
 
     const position = resolvePlayerActionPosition(player, request.clientPosition);
+    const sustainedRequest: SustainedWeaponActionRequest = {
+      playerId: request.playerId,
+      slot: request.slot,
+      config,
+      x: position.x,
+      y: position.y,
+      angle: request.angle,
+      nowMs: request.hostNowMs,
+      playerColor: player.color,
+      params: request.params,
+    };
+    const sustainedResult = this.sustainedWeaponBehavior?.activateWeapon(sustainedRequest) ?? null;
+    if (sustainedResult !== null) {
+      if (sustainedResult.ok) {
+        this.loadout.completeWeaponAction(request.playerId, request.slot, request.hostNowMs);
+      }
+      return sustainedResult;
+    }
+
     const result = this.loadout.activateWeapon(
       request.playerId,
       request.slot,

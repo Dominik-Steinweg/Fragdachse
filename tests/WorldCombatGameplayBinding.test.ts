@@ -107,6 +107,7 @@ function createFixture(options: {
   readonly combatSystem?: CombatSystem;
   readonly ak47Behavior?: WorldPlayerGameplaySystems['ak47Behavior'];
   readonly negevBehavior?: WorldPlayerGameplaySystems['negevBehavior'];
+  readonly sustainedWeaponBehavior?: WorldPlayerGameplaySystems['sustainedWeaponBehavior'];
   readonly weaponReaction?: WorldPlayerGameplaySystems['weaponReaction'];
   readonly ak47StrategicTarget?: Ak47StrategicTargetSystem | null;
   readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
@@ -178,6 +179,7 @@ function createFixture(options: {
     weaponUpgrade: null,
     ak47Behavior: options.ak47Behavior ?? null,
     negevBehavior: options.negevBehavior ?? null,
+    sustainedWeaponBehavior: options.sustainedWeaponBehavior ?? methodBag(),
     weaponReaction: options.weaponReaction ?? methodBag(),
     ak47StrategicTarget: options.ak47StrategicTarget ?? null,
   } as unknown as WorldPlayerGameplaySystems;

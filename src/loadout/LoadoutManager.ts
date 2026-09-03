@@ -3,9 +3,7 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
-import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
-import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
 import type { LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
   EnergyShieldWeaponFireConfig,
@@ -28,6 +26,7 @@ import type {
 } from './WeaponFireExecutor';
 import type { Ak47BehaviorPort } from './Ak47BehaviorPort';
 import type { NegevBehaviorPort } from './NegevBehaviorPort';
+import type { SustainedWeaponBehaviorPort } from './SustainedWeaponBehaviorPort';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
 
 export interface LoadoutSelection {
@@ -72,9 +71,8 @@ export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private physicsSystem:      PhysicsSystemType | null = null;
-  private teslaDomeSystem:    TeslaDomeSystem | null = null;
-  private energyShieldSystem: EnergyShieldSystem | null = null;
   private shieldBuffSystem:   ShieldBuffSystem | null = null;
+  private sustainedWeaponBehavior: SustainedWeaponBehaviorPort | null = null;
   private ultimateModifierReadPort: UltimateModifierReadPort | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
   /**
@@ -88,9 +86,6 @@ export class LoadoutManager {
   private negevBehavior: NegevBehaviorPort | null = null;
   /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
-
-  /** Host-authoritative weapon intent. A weapon request claims its slot immediately. */
-  private activeWeaponSlots = new Map<string, WeaponSlot>();
 
   /**
    * Gemeinsame Immediate-Weapon-Execution-Capability für Projektil-, Hitscan- und Melee-Waffen.
@@ -134,9 +129,6 @@ export class LoadoutManager {
       utility:  utCfg,
       ultimate: new GenericUltimate(ultCfg),
     });
-    this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
-    this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
-    this.getActiveWeaponSlots().set(playerId, 'weapon1');
     this.shieldBuffSystem?.resetPlayer(playerId);
     // Ein frisches Loadout beginnt mit Waffe 1 in den Pfoten, sonst zeigte die Figur nach einem
     // Waffenwechsel in der Lobby weiter den Slot der letzten Runde.
@@ -182,9 +174,6 @@ export class LoadoutManager {
     this.loadouts.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.heldFireSlots.delete(playerId);
-    this.activeWeaponSlots?.delete(playerId);
-    this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
-    this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
     this.heldItemSlots.removePlayer(playerId);
   }
@@ -224,13 +213,9 @@ export class LoadoutManager {
     this.itemRuntimeWeaponFiredHandler = handler;
   }
 
-  /** Injiziert das TeslaDomeSystem für kontinuierliche Tesla-Kuppeln. */
-  setTeslaDomeSystem(sys: TeslaDomeSystem | null): void {
-    this.teslaDomeSystem = sys;
-  }
-
-  setEnergyShieldSystem(sys: EnergyShieldSystem | null): void {
-    this.energyShieldSystem = sys;
+  /** Injects the concrete two-weapon behavior without making Loadout the lifecycle owner. */
+  setSustainedWeaponBehavior(behavior: SustainedWeaponBehaviorPort | null): void {
+    this.sustainedWeaponBehavior = behavior;
   }
 
   setShieldBuffSystem(sys: ShieldBuffSystem | null): void {
@@ -256,29 +241,13 @@ export class LoadoutManager {
   getSpeedMultiplier(playerId: string, now: number = Date.now()): number {
     const ultimateMult = this.ultimateModifierReadPort?.getSpeedMultiplier(playerId, now) ?? 1;
 
-    // Energie-Schild/Kuppel verlangsamt, solange er aktiv ist – auch im Toggle-Modus ohne Halten.
-    if (this.energyShieldSystem?.isActive(playerId)) {
-      const shieldCfg = this.loadouts.get(playerId)?.weapon2.config;
-      if (shieldCfg?.fire.type === 'energy_shield') {
-        return ultimateMult * (shieldCfg.fire as EnergyShieldWeaponFireConfig).movementSlowFactor;
-      }
-    }
+    const sustainedFactor = this.sustainedWeaponBehavior?.getMovementSlowFactor(playerId, now) ?? null;
+    if (sustainedFactor !== null) return ultimateMult * sustainedFactor;
 
     // holdSpeedFactor: Verlangsamung wenn Feuerknopf gehalten wird
     const held = this.heldFireSlots.get(playerId);
     if (held && now - held.lastAt < LoadoutManager.HOLD_EXPIRE_MS) {
       const cfg = this.loadouts.get(playerId)?.[held.slot].config;
-      if (cfg?.fire.type === 'tesla_dome') {
-        // Feldstabilisierung hebt den Bewegungsfaktor mit der Ladestufe an. Der maßgebliche
-        // Wert steht deshalb im Laufzeitzustand des TeslaDomeSystem, nicht in der statischen Config.
-        const holdFactor = this.teslaDomeSystem?.getMovementSlowFactor(playerId) ?? 1;
-        return ultimateMult * holdFactor;
-      }
-      if (cfg?.fire.type === 'energy_shield') {
-        const fireCfg = cfg.fire as EnergyShieldWeaponFireConfig;
-        const holdFactor = this.energyShieldSystem?.isActive(playerId) ? fireCfg.movementSlowFactor : 1;
-        return ultimateMult * holdFactor;
-      }
       const holdFactor = cfg?.holdSpeedFactor ?? 1;
       return ultimateMult * holdFactor;
     }
@@ -353,13 +322,8 @@ export class LoadoutManager {
 
   // ── Waffen-Getter (für AimSystem) ────────────────────────────────────────
 
-  /**
-   * Claims a host weapon action before readiness/resource resolution. The PlayerActionRuntime owns
-   * the semantic action boundary; this method keeps the existing slot/channel mutation in the
-   * loadout owner so there is still exactly one writer for it.
-   */
-  claimWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void {
-    this.claimWeaponSlot(playerId, slot);
+  /** Records generic held-fire input; sustained slot/channel state belongs to its behavior owner. */
+  noteWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void {
     this.heldFireSlots.set(playerId, { slot, lastAt: now, angle });
   }
 
@@ -490,15 +454,6 @@ export class LoadoutManager {
     shotId?:  number,
     params?:  LoadoutUseParams,
   ): LoadoutUseResult {
-    if (weapon.config.fire.type === 'tesla_dome') {
-      this.activateTeslaDomeWeapon(weapon, x, y, angle, playerId, now, playerColor);
-      return this.okResult;
-    }
-    if (weapon.config.fire.type === 'energy_shield') {
-      this.activateEnergyShieldWeapon(weapon, playerId, now, playerColor, params?.inputStarted === true);
-      return this.okResult;
-    }
-
     // 1. Cooldown-Check
     if (weapon.isOnCooldown(now)) return { ok: false, reason: 'cooldown' };
 
@@ -781,75 +736,6 @@ export class LoadoutManager {
     return new GenericWeapon(config);
   }
 
-  private activateTeslaDomeWeapon(
-    weapon: BaseWeapon,
-    x: number,
-    y: number,
-    aimAngle: number,
-    playerId: string,
-    now: number,
-    playerColor: number,
-  ): void {
-    if (!this.teslaDomeSystem) return;
-    if (this.resourceSystem.getAdrenaline(playerId) <= 0) {
-      this.teslaDomeSystem.hostDeactivateForPlayer(playerId);
-      return;
-    }
-
-    const cfg = weapon.config as WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
-    this.teslaDomeSystem.hostRefresh(playerId, x, y, now, cfg, cfg.projectileColor ?? playerColor, aimAngle);
-  }
-
-  private activateEnergyShieldWeapon(
-    weapon: BaseWeapon,
-    playerId: string,
-    now: number,
-    playerColor: number,
-    pressed: boolean,
-  ): void {
-    if (!this.energyShieldSystem) return;
-    if (this.resourceSystem.getAdrenaline(playerId) <= 0) {
-      this.energyShieldSystem.hostDeactivateForPlayer(playerId);
-      return;
-    }
-
-    const cfg = weapon.config as WeaponConfig & { fire: EnergyShieldWeaponFireConfig };
-    this.energyShieldSystem.hostRefresh(playerId, now, cfg, cfg.projectileColor ?? playerColor, pressed);
-  }
-
-  /**
-   * Claims a weapon slot on the host before cooldown/resource resolution. A deliberate switch
-   * must stop the previous non-autonomous channel immediately, even when the newly requested
-   * weapon is currently on cooldown or lacks a resource.
-   */
-  private claimWeaponSlot(playerId: string, slot: WeaponSlot): void {
-    const activeWeaponSlots = this.getActiveWeaponSlots();
-    const previous = activeWeaponSlots.get(playerId);
-    if (previous === slot) return;
-
-    activeWeaponSlots.set(playerId, slot);
-    this.deactivateNonAutonomousWeaponEffect(playerId, slot === 'weapon1' ? 'weapon2' : 'weapon1');
-  }
-
-  private getActiveWeaponSlots(): Map<string, WeaponSlot> {
-    return this.activeWeaponSlots ??= new Map<string, WeaponSlot>();
-  }
-
-  /**
-   * Ends the persistent effect owned by the other weapon slot. Explicit autonomous toggles are
-   * not channels and therefore survive a weapon switch by design.
-   */
-  private deactivateNonAutonomousWeaponEffect(playerId: string, slot: WeaponSlot): void {
-    const config = this.loadouts.get(playerId)?.[slot].config;
-    if (!config || isAutonomousWeaponToggle(config)) return;
-
-    if (config.fire.type === 'tesla_dome') {
-      this.teslaDomeSystem?.hostDeactivateForPlayer(playerId);
-    } else if (config.fire.type === 'energy_shield') {
-      this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
-    }
-  }
-
   private fireProjectileWeapon(
     config:      WeaponConfig,
     fireConfig:  ProjectileWeaponFireConfig,
@@ -936,12 +822,6 @@ export class LoadoutManager {
     if (!weapon || weapon.fire.type !== 'energy_shield') return null;
     return weapon.fire as EnergyShieldWeaponFireConfig;
   }
-}
-
-function isAutonomousWeaponToggle(config: WeaponConfig): boolean {
-  return config.fire.type === 'energy_shield'
-    && config.fire.domeEnabled > 0
-    && config.fire.domeToggleEnabled > 0;
 }
 
 function resolveReinforcementAimAngle(

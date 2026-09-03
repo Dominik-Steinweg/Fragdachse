@@ -27,6 +27,7 @@ import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem'
 import { Ak47BehaviorRuntime } from './Ak47BehaviorRuntime';
 import { NegevBehaviorRuntime } from './NegevBehaviorRuntime';
 import { WeaponReactionRuntime } from './WeaponReactionRuntime';
+import { SustainedWeaponBehaviorRuntime } from './SustainedWeaponBehaviorRuntime';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -126,6 +127,7 @@ export interface WorldPlayerGameplaySystems {
   readonly ak47Behavior: Ak47BehaviorRuntime | null;
   readonly negevBehavior: NegevBehaviorRuntime;
   readonly weaponReaction: WeaponReactionRuntime;
+  readonly sustainedWeaponBehavior: SustainedWeaponBehaviorRuntime;
   readonly ak47StrategicTarget: Ak47StrategicTargetSystem | null;
 }
 
@@ -324,6 +326,7 @@ export class WorldPlayerGameplayRuntime implements
     this.configureBurrow(burrow, playerModifier);
 
     const loadout = options.createLoadoutManager(resource);
+    const sustainedWeaponBehavior = new SustainedWeaponBehaviorRuntime(loadout, resource);
     const ak47Behavior = new Ak47BehaviorRuntime(loadout);
     const weaponReaction = new WeaponReactionRuntime({
       loadout,
@@ -362,6 +365,7 @@ export class WorldPlayerGameplayRuntime implements
         breakStealth: (playerId, now) => options.decoySystem.breakStealth(playerId, now),
       },
       loadout,
+      sustainedWeaponBehavior,
     );
     const translocator = new TranslocatorSystem(
       options.playerManager,
@@ -515,6 +519,7 @@ export class WorldPlayerGameplayRuntime implements
       ak47Behavior,
       negevBehavior,
       weaponReaction,
+      sustainedWeaponBehavior,
       ak47StrategicTarget,
     };
     this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
@@ -587,6 +592,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.ultimateBehavior.resetPlayer(playerId);
     this.systems.ak47Behavior?.resetPlayer(playerId);
     this.systems.negevBehavior.resetPlayer(playerId);
+    this.systems.sustainedWeaponBehavior.resetPlayer(playerId);
     this.systems.weaponReaction.resetPlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
     this.systems.utilityAction.syncEquippedUtility(playerId);
@@ -596,6 +602,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
     this.systems.negevBehavior.removePlayer(playerId);
+    this.systems.sustainedWeaponBehavior.removePlayer(playerId);
     this.systems.weaponReaction.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
@@ -611,6 +618,7 @@ export class WorldPlayerGameplayRuntime implements
       this.systems.ultimateBehavior.resetPlayer(playerId);
       this.systems.ak47Behavior?.resetPlayer(playerId);
       this.systems.negevBehavior.resetPlayer(playerId);
+      this.systems.sustainedWeaponBehavior.resetPlayer(playerId);
       this.systems.weaponReaction.resetPlayer(playerId);
     }
     this.systems.utilityAction.syncEquippedUtility(playerId);
@@ -838,6 +846,7 @@ export class WorldPlayerGameplayRuntime implements
     const { systems } = this;
     systems.loadout.setAk47Behavior(null);
     systems.loadout.setNegevBehavior(null);
+    systems.loadout.setSustainedWeaponBehavior(null);
     systems.loadout.setWeaponExecutionCapability(null);
     systems.loadout.setSpecializedWeaponExecutionCapability(null);
     systems.loadout.setPhysicsSystem(null);
@@ -847,6 +856,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.ultimateBehavior.destroy();
     systems.ak47Behavior?.destroy();
     systems.negevBehavior.destroy();
+    systems.sustainedWeaponBehavior.destroy();
     systems.weaponReaction.destroy();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
@@ -930,6 +940,7 @@ export class WorldPlayerGameplayRuntime implements
     loadout.setPhysicsSystem(this.options.hostPhysics);
     loadout.setAk47Behavior(this.systems.ak47Behavior);
     loadout.setNegevBehavior(this.systems.negevBehavior);
+    loadout.setSustainedWeaponBehavior(this.systems.sustainedWeaponBehavior);
     loadout.setUtilityConfigModifierSource((playerId) => {
       const modifiers = playerModifier.getModifiers(playerId);
       return { additive: modifiers.additiveStats, percentage: modifiers.percentageStats };

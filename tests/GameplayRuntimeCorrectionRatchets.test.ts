@@ -69,4 +69,29 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(combatBinding).toContain('weaponReaction.registerKill');
     expect(hostFrame).toContain('weaponReaction?.update');
   });
+
+  it('keeps Tesla Dome and Energy Shield lifecycles in the sustained behavior owner', () => {
+    const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const actionRuntime = source('src/world/PlayerActionRuntime.ts');
+    const sustainedPort = source('src/loadout/SustainedWeaponBehaviorPort.ts');
+    const sustainedRuntime = source('src/world/SustainedWeaponBehaviorRuntime.ts');
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+    const combatBinding = source('src/world/WorldCombatGameplayBinding.ts');
+
+    expect(loadoutManager).not.toContain('setTeslaDomeSystem');
+    expect(loadoutManager).not.toContain('setEnergyShieldSystem');
+    expect(loadoutManager).not.toContain('activateTeslaDomeWeapon');
+    expect(loadoutManager).not.toContain('activateEnergyShieldWeapon');
+    expect(loadoutManager).not.toContain('activeWeaponSlots');
+    expect(loadoutManager).toContain('setSustainedWeaponBehavior');
+    expect(actionRuntime).toContain('sustainedWeaponBehavior?.claimWeaponAction');
+    expect(actionRuntime).toContain('sustainedWeaponBehavior?.activateWeapon');
+    expect(sustainedPort).toContain('SustainedWeaponBehaviorPort');
+    expect(sustainedRuntime).toContain('class SustainedWeaponBehaviorRuntime');
+    expect(sustainedRuntime).toContain('hostRefresh');
+    expect(sustainedRuntime).toContain('hostDeactivateForPlayer');
+    expect(worldRuntime).toContain('new SustainedWeaponBehaviorRuntime');
+    expect(combatBinding).toContain('player.sustainedWeaponBehavior.setTeslaDomeSystem');
+    expect(combatBinding).toContain('player.sustainedWeaponBehavior.setEnergyShieldSystem');
+  });
 });

@@ -706,8 +706,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.hostPhysics.setBurrowSystem(player.burrow);
     o.hostPhysics.setLoadoutManager(player.loadout);
     o.hostPhysics.setTimeBubbleSystem(timeBubble);
-    player.loadout.setTeslaDomeSystem(teslaDome);
-    player.loadout.setEnergyShieldSystem(energyShield);
+    player.sustainedWeaponBehavior.setTeslaDomeSystem(teslaDome);
+    player.sustainedWeaponBehavior.setEnergyShieldSystem(energyShield);
     player.loadout.setShieldBuffSystem(systems.shieldBuff);
     timeBubble.setFriendlyResolver((ownerId, subjectId) => !o.network.authority.isEnemyPair(ownerId, subjectId));
   }
