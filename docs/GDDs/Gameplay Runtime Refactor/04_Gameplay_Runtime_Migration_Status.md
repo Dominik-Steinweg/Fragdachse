@@ -24,11 +24,12 @@
 
 ## Aktueller Stand
 
-- **Aktive Teilphase:** `2A – Öffentliche Player-Gameplay-Lifecycle-Grenze` (offen; nächster Schritt)
-- **Zuletzt abgeschlossen:** `1 – Baseline, Contract-Matrix und Migrationskarte` ✅
-- **Gesamtstatus:** Cutover-Vorbereitung abgeschlossen, struktureller Umbau noch nicht begonnen
-- **Letzter verifizierter Repository-Stand:** `ef10d29a49810115cf408c74e6cea40ada1a8bbf` + Phase-1-Commit
-- **Letzter vollständig grüner automatisierter Gate:** Phase 1 – `vitest run` der neuen `GameplayRuntimeCutoverCharacterization.test.ts` plus der kartierten Bestandstests (`HostHeldActionSystem`, `Weapon2PredictionDedupe`, `TemporaryUtilityLifecycle`, `ResourceSystemObservers`, `AutomatedPelletWeapon`, `WeaponFireExecutor`, `WeaponSlotExclusivity`, `Ak47CoopDefenseUpgrades`, `RoomStatisticsGameplayHooks`, `RadialActionRpc`, `Phase11DependencyCutover`, `WorldGameplayCompositionContracts`, `WorldCombatGameplayBinding`) – 14 Dateien / 86 Tests grün. Kein Produktivmodul geändert, daher kein `npm run check` erforderlich.
+- **Aktive Teilphase:** `2B – Player-Gameplay Read Views und obere Consumer` (offen; nächster Schritt)
+- **Zuletzt abgeschlossen:** `2A – Öffentliche Player-Gameplay-Lifecycle-Grenze` ✅
+- **Gesamtstatus:** Lifecycle-Grenze der Player-Gameplay-Runtime steht; Read-Sichten und Frame-Grenzen noch offen
+- **Letzter verifizierter Repository-Stand:** `2b0db38d` (Phase 1) + Phase-2A-Commit
+- **Letzter vollständig grüner automatisierter Gate:** Phase 2A – `npm run build` (tsc + vite) grün; `vitest run` der Lifecycle-/Held-Action-/Ownership-Tests plus der neuen `WorldPlayerGameplayLifecycle.test.ts` (17 Dateien / 172 Tests grün: `WorldPlayerGameplayLifecycle`, `Phase11DependencyCutover`, `PlayerWorldRuntimeContracts`, `ActivityLifecycleContracts`, `ActivityRebindingContracts`, `WorldLifecycleContracts`, `WorldRuntimeOwnership`, `WorldGameplayCompositionContracts`, `WorldMaterializationOwnership`, `PlayerCapabilityContracts`, `HostHeldActionSystem`, `PlayerLifetimeSeparation`, `CoopMissionRuntimeOwnership`, `MissionLifecycleContracts`, `GameplayRuntimeCutoverCharacterization`, `SharedWorldWithoutActivity`, `ArenaRoundLifecycleContracts`).
+- **Bekannte Umgebungsflakiness (nicht durch dieses Refactoring verursacht):** Der volle `npm test`-Lauf ist in diesem Checkout nicht deterministisch grün. `tests/ArenaTransitionReadiness.test.ts` (4 Source-Scan-Tests mit `\n{…}`-Literalen) schlägt in einem CRLF-Checkout unabhängig vom Diff fehl; `tests/WorldCombatGameplayBinding.test.ts` (AK47 „random visible target") ist `Math.random`-flaky. Beide scheitern auf unverändertem `2b0db38d` identisch. Der Phase-Gate wurde deshalb deterministisch über die oben genannten Dateien plus `npm run build` geführt.
 - **Manueller Gate:** offen; bewusst erst nach vollständigem Refactoring
 - **Projectile-/Combat-Full-Refactor:** ausdrücklich außerhalb dieses Plans
 
@@ -38,8 +39,8 @@
 
 | Teilphase | Status | Commit | Kurzgegenstand |
 |---|---:|---|---|
-| 1 | ✅ | Phase-1-Commit (HEAD dieser Änderung) | Baseline, Contracts, Migrationskarte |
-| 2A | ⬜ | — | Player-Gameplay Lifecycle-Grenze |
+| 1 | ✅ | `2b0db38d` | Baseline, Contracts, Migrationskarte |
+| 2A | ✅ | Phase-2A-Commit (HEAD dieser Änderung) | Player-Gameplay Lifecycle-Grenze |
 | 2B | ⬜ | — | Player-Gameplay Read Views |
 | 3A | ⬜ | — | Host-Zeit im Action-/Request-Pfad |
 | 3B | ⬜ | — | Resource/Readiness mit expliziter Zeit |
@@ -67,7 +68,7 @@
 
 ---
 
-## Consumer-/Contract-Matrix (Phase 1, Ist-Stand `ef10d29a`)
+## Consumer-/Contract-Matrix (in Phase 1 erstellt, laufend fortgeschrieben)
 
 Diese Liste wird während der Umsetzung **ersetzt/gekürzt**, nicht chronologisch erweitert. `L` = Loadout-/`WeaponFireExecutor`-intern (kein externer Cutover-Consumer).
 
@@ -75,9 +76,9 @@ Diese Liste wird während der Umsetzung **ersetzt/gekürzt**, nicht chronologisc
 
 | Consumer | Zugriff | Consumer-Art | Zielphase |
 |---|---|---|---|
-| `world/WorldPlayerGameplayRuntime.ts` | Owner: baut `systems`, `bindLoadout`, `destroy`-Teardown, `configureResource/Burrow` | Owner/Lifecycle | 2A |
+| `world/WorldPlayerGameplayRuntime.ts` | Owner: baut `systems`, `bindLoadout`, `destroy`-Teardown, `configureResource/Burrow`; **seit 2A einziger Lifecycle-Writer** der Player-Children über `PlayerGameplayLifecyclePort` | Owner/Lifecycle | 2A ✅ |
 | `scenes/arena/ArenaWorldPlayerComposition.ts` | `new WorldPlayerGameplayRuntime`, `gameplay.player = …`, `worldRuntime.bind(…)` | Owner-Composition | 2A |
-| `scenes/arena/ArenaLifecycleCoordinator.ts` | `systems.{heldAction,resource,itemRuntime,burrow,loadout,tunnel,playerModifier,flamethrowerUpgrade}` – `initPlayer/removePlayer`, `heldAction.reset/clearPlayer`, `loadout.assignDefaultLoadout/resetUltimateState/removePlayer/syncSelectedLoadout` | Lifecycle + Read | 2A / 2B |
+| `scenes/arena/ArenaLifecycleCoordinator.ts` | **Lifecycle in 2A migriert** → ruft `attachPlayer{Resources,Burrow,Build,Loadout}` / `detachPlayer{Resources,Burrow,Build,Loadout}` / `reconcilePlayer{Loadout,BuildModifiers}` / `invalidateHeldActions{ForPlayer,OnActivityEnd}`. Verbleibend (2B): Read-Zugriffe `systems.burrow.isBurrowed`, `systems.itemRuntime.removeEnemy`, `systems.flamethrowerUpgrade.hostCreateFireChunkBurst` und die Port-Getter `getBurrowSystem/getLoadoutManager/getPlayerModifierSystem/getFlamethrowerUpgradeSystem` | Lifecycle ✅ / Read offen | 2A ✅ / 2B |
 | `scenes/arena/ArenaRuntimeAdapters.ts` | `systems.{burrow,loadout,translocator,resource,heldAction}` – `loadout.use`, `heldAction.start/cancel/consume/clearPlayer`, `resource.get/setAdrenaline*`, `loadout.getEquipped/getTemporaryUtilityConfig` | Action + Read (RPC-Adapter) | 2B / 6A / 6B |
 | `scenes/arena/HostUpdateCoordinator.ts` | `playerSystems` = `getPlayerGameplayRuntime()?.systems`; taktet `resource.regenTick`, `burrow.update`, `loadout.update`, `tunnel.update`, `weaponUpgrade`, `ak47StrategicTarget`, `guardianSpirit`, `repairDrone`, `slimeTrail`, `flamethrowerUpgrade`, `itemRuntime`; liest ~30 Loadout-/Resource-Getter für HUD/Net-Snapshot | Host-Frame + Read | 2B / 12A |
 | `scenes/arena/ClientUpdateCoordinator.ts` | `playerSystems`; `loadout.getEquipped*`, `getUltimateThresholds`, `isAk47FireSuperiorityAvailable`, `resource.getAdrenaline`, `burrow.isBurrowed` | Client-Frame Read | 2B / 12B |
@@ -147,9 +148,10 @@ Diese Tests schützen heute alte Positionen und müssen von den jeweiligen Cutov
 
 | Test | Pinnt | Migriert in |
 |---|---|---|
-| `Phase11DependencyCutover.test.ts` | `RpcCoordinator`-Portnamen; `flow` enthält `this.worldPlayerGameplayRuntime?.systems.heldAction.reset()` / `.clearPlayer(playerId)`; `runtime` enthält `readonly heldAction: HostHeldActionSystem;`; Frame-Read-Ports | 2A / 6B |
+| `Phase11DependencyCutover.test.ts` | **2A: Held-Action-Assertions auf `invalidateHeldActionsForPlayer` / `invalidateHeldActionsOnActivityEnd` umgestellt** (+ `flow` enthält kein `worldPlayerGameplayRuntime?.systems.heldAction` mehr). Verbleibend: `RpcCoordinator`-Portnamen, Frame-Read-Ports → 6B | 2A ✅ / 6B |
 | `WorldGameplayCompositionContracts.test.ts` | eingefrorene `NetworkBridge`-Consumer-Liste inkl. `src/loadout/LoadoutManager.ts`; neue World-Owner frei von `NetworkBridge`/`ArenaContext`; `new WorldPlayerGameplayRuntime` nur in Composition | 2A / 10B |
 | `ArenaFlowCheckpointC.test.ts` | Scene-facing Runtime-Oberfläche frei von `LoadoutManager` u. a.; `getWorldPlayerGameplayRuntime`-Gate des Balance-Lab; kein `new WorldPlayerGameplayRuntime` im Flow | 2A / 2B |
+| `PlayerWorldRuntimeContracts.test.ts` | **2A: „genau ein Detach-Pfad"-Scan auf `detachPlayerLoadout(` / `detachPlayerBurrow(` umgestellt** (vorher `systems.loadout.removePlayer` / `systems.burrow.removePlayer`) | 2A ✅ |
 | `WorldCombatGameplayBinding.test.ts`, `WorldMaterializationOwnership.test.ts`, `CoopMissionRuntimeOwnership.test.ts`, `ActivityRebindingContracts.test.ts` | World-/Combat-/Activity-Ownership-Scans mit `WorldPlayerGameplayRuntime`-Bezug | 2A / 11 / 12C |
 
 ---
@@ -178,15 +180,16 @@ Stand nach Phase 1. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zie
 | Gauss-Ultimate press/release Commit (nur bei Vollladung, at-most-once) | `RoomStatisticsGameplayHooks.test.ts` | abgedeckt | migrieren bei 7C |
 | Ultimate buff/airstrike/tunnel Accept-Reject + Rage-Kosten-Zeitpunkt | – | **Lücke** (nur Gauss) | in 7B/7C konkretisieren, dort Test ergänzen |
 | Tesla Dome / Energy Shield start/refresh/stop-Orchestrierung | `TeslaDomeSystem.test.ts`, `TeslaDomeCoopDefenseUpgrades.test.ts`, `WeaponSlotExclusivity.test.ts` | teilabgedeckt (System-Ebene) | Orchestrierung in 9 konkretisieren |
-| World Player ownership boundary | `WorldGameplayCompositionContracts.test.ts` | Ratchet | migrieren bei 2A / 2B / 10B |
-| Combat integration boundary | `WorldCombatGameplayBinding.test.ts` | Ratchet | migrieren bei 11A / 11B |
-| Arena source boundaries | `Phase11DependencyCutover.test.ts`, `ArenaFlowCheckpointC.test.ts` | Ratchet | migrieren bei 2A / 2B / 6B |
+| World Player ownership boundary | `WorldGameplayCompositionContracts.test.ts` | Ratchet | migrieren bei 2B / 10B |
+| Combat integration boundary | `WorldCombatGameplayBinding.test.ts` | Ratchet (AK47-Ziel `Math.random`-flaky) | migrieren bei 11A / 11B |
+| Arena source boundaries | `Phase11DependencyCutover.test.ts` (2A: Held-Action ✅), `ArenaFlowCheckpointC.test.ts` | Ratchet | migrieren bei 2B / 6B |
+| **Player-in-World-Lifecycle-Grenze der Runtime (attach/detach/reconcile/held-invalidation)** | `WorldPlayerGameplayLifecycle.test.ts` | **neu (Phase 2A)** | prüfen bei 2B / 12A |
 
 ---
 
 ## Bewusste Übergänge / bekannte Regressionen
 
-Aktuell keine Implementierungsübergänge. Phase 1 hat keine Produktivsemantik geändert und nur Charakterisierungstests plus diese Migrationskarte ergänzt.
+Aktuell keine Implementierungsübergänge. Phase 2A ist ein reiner Boundary-Move: die Player-Child-Lifecycle-Schritte (`resource`/`burrow`/`itemRuntime`/`loadout`/`tunnel`/`heldAction`/`playerModifier`) laufen unverändert, aber ausschließlich über `WorldPlayerGameplayRuntime`-Methoden statt direkter `.systems.*`-Zugriffe im `ArenaLifecycleCoordinator`. Einziger Writer bleibt die Runtime. Zwei bewusste, verhaltensneutrale Reordering-Details: im `detachLoadout`-Pfad läuft `worldPowerUpRuntime.system.removePlayer` jetzt nach `detachPlayerLoadout` (loadout+tunnel); in `syncHostLoadoutsFromCommittedSelections` läuft `resource.reconcilePlayerLimits` jetzt vor `combatSystem.reconcilePlayerRuntimeState`. Beide betreffen unabhängige Map-Löschungen bzw. getrennte Domains (Resource vs. Combat-HP).
 
 Regel für Updates:
 
@@ -214,7 +217,7 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 | Contract-Familie aus 03 | Realisierter Type/API | Eingeführt in |
 |---|---|---|
-| `PlayerGameplayLifecyclePort` | — | — |
+| `PlayerGameplayLifecyclePort` | `interface PlayerGameplayLifecyclePort` in `src/world/WorldPlayerGameplayRuntime.ts`, implementiert von `WorldPlayerGameplayRuntime`. Methoden: `attachPlayerResources` / `detachPlayerResources` / `attachPlayerBurrow` / `detachPlayerBurrow` / `attachPlayerBuild` / `detachPlayerBuild` / `attachPlayerLoadout(playerId, selection?)` / `detachPlayerLoadout` / `reconcilePlayerLoadout(playerId, selection?)` / `reconcilePlayerBuildModifiers(builds, hasPlayer)` / `invalidateHeldActionsForPlayer` / `invalidateHeldActionsOnActivityEnd`. World-Teardown bleibt `WorldScopedBinding.destroy()`. | 2A |
 | `PlayerGameplayReadViews` | — | — |
 | `PlayerActionRequest` | — | — |
 | `WeaponExecutionCapability` | — | — |
@@ -226,16 +229,18 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 ## Nächster konkreter Schritt
 
-**Teilphase 2A umsetzen – öffentliche Player-Gameplay-Lifecycle-Grenze.**
+**Teilphase 2B umsetzen – Player-Gameplay Read Views und obere Consumer.**
 
 Dabei:
 
-1. `WorldPlayerGameplayRuntime` erhält explizite öffentliche Operationen für Player attach/init, detach/remove, Loadout-/Build-Reconcile, Activity-Identity-bezogene Held-Action-Invalidierung, World teardown/reset (Contract-Familie `PlayerGameplayLifecyclePort`; finalen Namen unten eintragen).
-2. Die heute in `ArenaLifecycleCoordinator` verstreute Init von `resource`/`burrow`/`loadout`/`heldAction`/`itemRuntime`/`tunnel` hinter diese Runtime-Methoden ziehen (siehe Matrix, Zeilen `ArenaLifecycleCoordinator` / `2A`).
-3. Teardown-Reihenfolge im Runtime-Owner explizit machen; Idempotenz von remove/reset/destroy testen.
-4. Source-Ratchets aus `Phase11DependencyCutover.test.ts` (`systems.heldAction.reset()` / `.clearPlayer` im `flow`) semantisch auf die neue API umstellen.
-5. Referenz-§§: `02` §§ 3, 6, 22, 26–29.
-6. Keine Read-Fassade erzwingen (2B), `LoadoutManager.use` nicht verschieben (6A), Projectile/Combat nicht anfassen.
+1. Kleine, nach Verbrauchergruppe geschnittene Read-Contracts definieren (Loadout-/Equipped-, Resource-, Player-State/Burrow-, Prediction-/HUD-, Construction/Persistent-Base-Read), von derselben `WorldPlayerGameplayRuntime` implementiert – **kein** `PlayerGameplayFacade` mit dutzenden Methoden. Contract-Familie `PlayerGameplayReadViews`; realisierten Namen unten eintragen.
+2. Migrieren (siehe Consumer-Matrix, Zeilen mit Zielphase 2B): `ArenaRuntimeAdapters`, `ArenaRuntime`, read-only Teile von `ArenaPersistentBaseSession`, `RockVisualHelper`, Weapon-Balance-Lab-Adapter, die Port-Getter `getBurrowSystem/getLoadoutManager/getPlayerModifierSystem/getFlamethrowerUpgradeSystem` im `ArenaLifecycleCoordinator`, `HostUpdateCoordinator`/`ClientUpdateCoordinator`-Reads, `ArenaWorld{Construction,Environment,Combat}Composition`-Reads.
+3. Keine Consumer sollen neue konkrete Child-Systeme zwischenspeichern.
+4. Source-Ratchet ergänzen: neue direkte `.systems`-Zugriffe außerhalb des Runtime-/Composition-Inneren verboten.
+5. Referenz-§§: `02` §§ 3, 6–7, 22–24, 26–29.
+6. `LoadoutManager.use` nicht verschieben (6A), keine Lifecycle-Änderung (2A abgeschlossen), Projectile/Combat nicht anfassen.
+
+Hinweis für den Gate: voller `npm test`-Lauf ist in diesem Checkout nicht deterministisch (CRLF-Source-Scan in `ArenaTransitionReadiness`, `Math.random`-Flakiness in `WorldCombatGameplayBinding`) – Phase-Gate deterministisch über die betroffenen Dateien plus `npm run build` führen.
 
 ---
 

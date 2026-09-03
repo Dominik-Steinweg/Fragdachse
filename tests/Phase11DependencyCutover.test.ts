@@ -49,8 +49,13 @@ describe('Phase 11B dependency cutover', () => {
     expect(context).not.toContain('hostHeldActionSystem');
     expect(runtime).toContain('readonly heldAction: HostHeldActionSystem;');
     expect(runtime).toContain('systems.heldAction.reset();');
-    expect(flow).toContain('this.worldPlayerGameplayRuntime?.systems.heldAction.reset();');
-    expect(flow).toContain('this.worldPlayerGameplayRuntime?.systems.heldAction.clearPlayer(playerId);');
+    // Seit Teilphase 2A adressiert der Flow die Held-Action-Invalidierung über die
+    // öffentliche Lifecycle-Grenze der Player-Gameplay-Runtime, nicht mehr über systems.heldAction.
+    expect(runtime).toContain('invalidateHeldActionsForPlayer(playerId: string): void');
+    expect(runtime).toContain('invalidateHeldActionsOnActivityEnd(): void');
+    expect(flow).toContain('this.worldPlayerGameplayRuntime?.invalidateHeldActionsOnActivityEnd();');
+    expect(flow).toContain('this.worldPlayerGameplayRuntime?.invalidateHeldActionsForPlayer(playerId);');
+    expect(flow).not.toMatch(/worldPlayerGameplayRuntime\?\.systems\.heldAction/);
   });
 
   it('liest Activity- und PB-World-Runtimes nur noch aus ihren kanonischen Ownern', () => {

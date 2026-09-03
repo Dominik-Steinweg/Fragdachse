@@ -449,7 +449,7 @@ export class ArenaLifecycleCoordinator {
       end: (activity) => {
         // Held Actions sind aktions-/rundenbezogen. Nur das Ende der fachlichen Identity leert
         // sie; ein technischer Runtime-Detach derselben Activity laesst sie bewusst bestehen.
-        this.worldPlayerGameplayRuntime?.systems.heldAction.reset();
+        this.worldPlayerGameplayRuntime?.invalidateHeldActionsOnActivityEnd();
         this.persistentBase.endPersistentBaseTransaction(activity);
       },
     },
@@ -548,23 +548,21 @@ export class ArenaLifecycleCoordinator {
         return true;
       },
       detachCombat: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); },
-      attachCombatResources: (playerId) => { this.worldPlayerGameplayRuntime?.systems.resource.initPlayer(playerId); },
+      attachCombatResources: (playerId) => { this.worldPlayerGameplayRuntime?.attachPlayerResources(playerId); },
       detachCombatResources: (playerId) => {
-        this.worldPlayerGameplayRuntime?.systems.resource.removePlayer(playerId);
+        this.worldPlayerGameplayRuntime?.detachPlayerResources(playerId);
         bridge.clearWeapon2PredictionState(playerId);
       },
-      attachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.systems.itemRuntime.initPlayer(playerId); },
-      detachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.systems.itemRuntime.removePlayer(playerId); },
-      attachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.systems.burrow.initPlayer(playerId); },
-      detachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.systems.burrow.removePlayer(playerId); },
+      attachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.attachPlayerBuild(playerId); },
+      detachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.detachPlayerBuild(playerId); },
+      attachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.attachPlayerBurrow(playerId); },
+      detachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.detachPlayerBurrow(playerId); },
       attachLoadout: (playerId) => {
-        this.worldPlayerGameplayRuntime?.systems.loadout.resetUltimateState(playerId);
-        this.worldPlayerGameplayRuntime?.systems.loadout.assignDefaultLoadout(playerId, this.resolveCommittedLoadoutSelection(playerId));
+        this.worldPlayerGameplayRuntime?.attachPlayerLoadout(playerId, this.resolveCommittedLoadoutSelection(playerId));
       },
       detachLoadout: (playerId) => {
-        this.worldPlayerGameplayRuntime?.systems.loadout.removePlayer(playerId);
+        this.worldPlayerGameplayRuntime?.detachPlayerLoadout(playerId);
         this.worldPowerUpRuntime?.system.removePlayer(playerId);
-        this.worldPlayerGameplayRuntime?.systems.tunnel.removePlayer(playerId);
       },
       detachWorldTargeting: (playerId) => {
         this.worldGameplay?.targeting?.systems.targetStatus.removeTarget({ targetType: 'player', targetId: playerId });
@@ -1657,13 +1655,12 @@ export class ArenaLifecycleCoordinator {
     if (!bridge.isHost()) return;
     this.syncHostCoopDefensePlayerModifiersFromCurrentBuild();
     this.persistentBaseWorldBinding?.refreshForRelevantBuildChanges();
-    const playerSystems = this.worldPlayerGameplayRuntime?.systems;
-    if (!playerSystems) return;
+    const playerGameplay = this.worldPlayerGameplayRuntime;
+    if (!playerGameplay) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (!this.ctx.playerManager.hasPlayer(profile.id)) continue;
-      playerSystems.loadout.syncSelectedLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+      playerGameplay.reconcilePlayerLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       this.ctx.combatSystem.reconcilePlayerRuntimeState(profile.id);
-      playerSystems.resource.reconcilePlayerLimits(profile.id);
     }
   }
 
@@ -2242,7 +2239,7 @@ export class ArenaLifecycleCoordinator {
   detachPlayerFromWorld(playerId: string): void {
     // Umgekehrte Reihenfolge: Der Missionsanteil geht zuerst, solange seine Ziele noch stehen.
     this.playerActivityRuntime?.detach(playerId);
-    this.worldPlayerGameplayRuntime?.systems.heldAction.clearPlayer(playerId);
+    this.worldPlayerGameplayRuntime?.invalidateHeldActionsForPlayer(playerId);
     this.playerRuntime?.detach(playerId);
   }
 
@@ -2985,24 +2982,19 @@ export class ArenaLifecycleCoordinator {
   }
 
   private syncHostCoopDefensePlayerModifiersFromCurrentBuild(): void {
-    const playerSystems = this.worldPlayerGameplayRuntime?.systems;
-    if (!bridge.isHost() || !playerSystems) return;
+    const playerGameplay = this.worldPlayerGameplayRuntime;
+    if (!bridge.isHost() || !playerGameplay) return;
 
-    const currentBuilds = bridge.getConnectedPlayers().map((profile) => [
-      profile.id,
-      bridge.getPlayerCurrentLoadoutSnapshot(profile.id),
-    ] as const);
-    const changedPlayerIds = playerSystems.playerModifier.syncPlayers(currentBuilds);
-    for (const playerId of changedPlayerIds) {
-      const current = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
-      if (current?.coopDefenseProfile || (current?.equippedItems?.length ?? 0) > 0) {
-        if (this.ctx.playerManager.hasPlayer(playerId)) {
-          playerSystems.itemRuntime.initPlayer(playerId);
-        }
-      } else {
-        playerSystems.itemRuntime.removePlayer(playerId);
-      }
-    }
+    const builds = new Map(
+      bridge.getConnectedPlayers().map((profile) => [
+        profile.id,
+        bridge.getPlayerCurrentLoadoutSnapshot(profile.id),
+      ] as const),
+    );
+    playerGameplay.reconcilePlayerBuildModifiers(
+      builds,
+      (playerId) => this.ctx.playerManager.hasPlayer(playerId),
+    );
   }
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {

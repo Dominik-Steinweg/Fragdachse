@@ -9,7 +9,7 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
+import type { LoadoutManager, LoadoutSelection } from '../loadout/LoadoutManager';
 import type { PlayerCapabilities } from './PlayerCapabilities';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
@@ -25,7 +25,7 @@ import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem'
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
 import { HostHeldActionSystem } from '../systems/HostHeldActionSystem';
-import type { FireChunkTarget, GroundFireVisualStyle, PlayerInput } from '../types';
+import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, PlayerInput } from '../types';
 import type { NegevKillstreakExplosionEvent } from '../loadout/LoadoutManager';
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
@@ -87,6 +87,33 @@ export interface WorldPlayerGameplaySystems {
   readonly ak47StrategicTarget: Ak47StrategicTargetSystem | null;
 }
 
+/**
+ * Öffentliche Player-in-World-/World-Lifecycle-Grenze der Player-Gameplay-Runtime
+ * (Cross-Phase-Contract-Familie `PlayerGameplayLifecyclePort`, eingeführt in Teilphase 2A).
+ *
+ * Consumer oberhalb der Runtime rufen diese Operationen statt konkrete Child-Systeme
+ * (`resource`, `burrow`, `loadout`, `heldAction`, `itemRuntime`, `playerModifier`, `tunnel`)
+ * direkt zu initialisieren oder abzubauen. Player-in-World-Attach/-Detach bleibt von Respawn
+ * getrennt; ein Activity-Wechsel invalidiert Held Actions nur an der fachlichen Identity-Grenze.
+ */
+export interface PlayerGameplayLifecyclePort {
+  attachPlayerResources(playerId: string): void;
+  detachPlayerResources(playerId: string): void;
+  attachPlayerBurrow(playerId: string): void;
+  detachPlayerBurrow(playerId: string): void;
+  attachPlayerBuild(playerId: string): void;
+  detachPlayerBuild(playerId: string): void;
+  attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void;
+  detachPlayerLoadout(playerId: string): void;
+  reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): void;
+  reconcilePlayerBuildModifiers(
+    builds: ReadonlyMap<string, LoadoutCommitSnapshot | null>,
+    hasPlayer: (playerId: string) => boolean,
+  ): void;
+  invalidateHeldActionsForPlayer(playerId: string): void;
+  invalidateHeldActionsOnActivityEnd(): void;
+}
+
 export interface WorldPlayerGameplayRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
@@ -109,7 +136,7 @@ export interface WorldPlayerGameplayRuntimeOptions {
 }
 
 /** World-owned player/loadout state and its ability-side bindings. */
-export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
+export class WorldPlayerGameplayRuntime implements WorldScopedBinding, PlayerGameplayLifecyclePort {
   readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
 
@@ -258,6 +285,88 @@ export class WorldPlayerGameplayRuntime implements WorldScopedBinding {
 
   setPowerUpSystem(system: PowerUpSystem | null): void {
     this.systems.resource.setPowerUpSystem(system);
+  }
+
+  // ── Öffentliche Player-in-World-/Reconcile-Lifecycle-Grenze (PlayerGameplayLifecyclePort) ──
+  //
+  // Jede Operation kapselt genau die Child-System-Schritte, die ihr Feature-Attach/-Detach
+  // heute im ArenaLifecycleCoordinator verstreut ausgeführt hat. Reihenfolge und Semantik
+  // bleiben unverändert; die Runtime ist ab hier der einzige Lifecycle-Writer dieser Children.
+
+  attachPlayerResources(playerId: string): void {
+    this.systems.resource.initPlayer(playerId);
+  }
+
+  detachPlayerResources(playerId: string): void {
+    this.systems.resource.removePlayer(playerId);
+  }
+
+  attachPlayerBurrow(playerId: string): void {
+    this.systems.burrow.initPlayer(playerId);
+  }
+
+  detachPlayerBurrow(playerId: string): void {
+    this.systems.burrow.removePlayer(playerId);
+  }
+
+  attachPlayerBuild(playerId: string): void {
+    this.systems.itemRuntime.initPlayer(playerId);
+  }
+
+  detachPlayerBuild(playerId: string): void {
+    this.systems.itemRuntime.removePlayer(playerId);
+  }
+
+  attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void {
+    // Frischer Ultimate-State (deaktiviert u. a. ein laufendes Armageddon nach Reconnect),
+    // dann das Default-Loadout aus der eingefrorenen bzw. Live-Auswahl.
+    this.systems.loadout.resetUltimateState(playerId);
+    this.systems.loadout.assignDefaultLoadout(playerId, selection);
+  }
+
+  detachPlayerLoadout(playerId: string): void {
+    this.systems.loadout.removePlayer(playerId);
+    this.systems.tunnel.removePlayer(playerId);
+  }
+
+  /** Zieht eine geänderte committed/live Auswahl nach und klemmt laufende Ressourcen an neue Maxima. */
+  reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): void {
+    this.systems.loadout.syncSelectedLoadout(playerId, selection);
+    this.systems.resource.reconcilePlayerLimits(playerId);
+  }
+
+  /**
+   * Synct die Coop-Build-Modifikatoren aller Spieler und materialisiert/entfernt die Item-Runtime
+   * genau für die Spieler mit tatsächlich geänderter Build.
+   */
+  reconcilePlayerBuildModifiers(
+    builds: ReadonlyMap<string, LoadoutCommitSnapshot | null>,
+    hasPlayer: (playerId: string) => boolean,
+  ): void {
+    const changedPlayerIds = this.systems.playerModifier.syncPlayers(builds);
+    for (const playerId of changedPlayerIds) {
+      const snapshot = builds.get(playerId) ?? null;
+      const wantsItemRuntime = Boolean(snapshot?.coopDefenseProfile)
+        || (snapshot?.equippedItems?.length ?? 0) > 0;
+      if (wantsItemRuntime) {
+        if (hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId);
+      } else {
+        this.systems.itemRuntime.removePlayer(playerId);
+      }
+    }
+  }
+
+  /** Held Actions eines austretenden Spielers verwerfen (Player-in-World-Detach-Grenze). */
+  invalidateHeldActionsForPlayer(playerId: string): void {
+    this.systems.heldAction.clearPlayer(playerId);
+  }
+
+  /**
+   * Held Actions an der fachlichen Activity-Identity-Grenze verwerfen. Ein technischer
+   * Runtime-Detach derselben Activity lässt sie bewusst bestehen.
+   */
+  invalidateHeldActionsOnActivityEnd(): void {
+    this.systems.heldAction.reset();
   }
 
   destroy(): void {
