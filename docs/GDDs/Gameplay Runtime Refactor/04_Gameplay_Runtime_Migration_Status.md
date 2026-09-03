@@ -24,10 +24,11 @@
 
 ## Aktueller Stand
 
-- **Aktive Teilphase:** `1 – Baseline, Contract-Matrix und Migrationskarte`
-- **Gesamtstatus:** noch nicht begonnen
-- **Letzter verifizierter Repository-Stand:** `fcc6e3f5ac194fa29b08d23a1c2b3331f8dc3453`
-- **Letzter vollständig grüner automatisierter Gate:** Planungsstand – noch nicht ausgeführt
+- **Aktive Teilphase:** `2A – Öffentliche Player-Gameplay-Lifecycle-Grenze` (offen; nächster Schritt)
+- **Zuletzt abgeschlossen:** `1 – Baseline, Contract-Matrix und Migrationskarte` ✅
+- **Gesamtstatus:** Cutover-Vorbereitung abgeschlossen, struktureller Umbau noch nicht begonnen
+- **Letzter verifizierter Repository-Stand:** `ef10d29a49810115cf408c74e6cea40ada1a8bbf` + Phase-1-Commit
+- **Letzter vollständig grüner automatisierter Gate:** Phase 1 – `vitest run` der neuen `GameplayRuntimeCutoverCharacterization.test.ts` plus der kartierten Bestandstests (`HostHeldActionSystem`, `Weapon2PredictionDedupe`, `TemporaryUtilityLifecycle`, `ResourceSystemObservers`, `AutomatedPelletWeapon`, `WeaponFireExecutor`, `WeaponSlotExclusivity`, `Ak47CoopDefenseUpgrades`, `RoomStatisticsGameplayHooks`, `RadialActionRpc`, `Phase11DependencyCutover`, `WorldGameplayCompositionContracts`, `WorldCombatGameplayBinding`) – 14 Dateien / 86 Tests grün. Kein Produktivmodul geändert, daher kein `npm run check` erforderlich.
 - **Manueller Gate:** offen; bewusst erst nach vollständigem Refactoring
 - **Projectile-/Combat-Full-Refactor:** ausdrücklich außerhalb dieses Plans
 
@@ -37,7 +38,7 @@
 
 | Teilphase | Status | Commit | Kurzgegenstand |
 |---|---:|---|---|
-| 1 | ⬜ | — | Baseline, Contracts, Migrationskarte |
+| 1 | ✅ | Phase-1-Commit (HEAD dieser Änderung) | Baseline, Contracts, Migrationskarte |
 | 2A | ⬜ | — | Player-Gameplay Lifecycle-Grenze |
 | 2B | ⬜ | — | Player-Gameplay Read Views |
 | 3A | ⬜ | — | Host-Zeit im Action-/Request-Pfad |
@@ -66,50 +67,126 @@
 
 ---
 
-## Initiale Migrationsschuld
+## Consumer-/Contract-Matrix (Phase 1, Ist-Stand `ef10d29a`)
 
-Diese Liste wird während der Umsetzung **ersetzt/gekürzt**, nicht chronologisch erweitert.
+Diese Liste wird während der Umsetzung **ersetzt/gekürzt**, nicht chronologisch erweitert. `L` = Loadout-/`WeaponFireExecutor`-intern (kein externer Cutover-Consumer).
 
-- `WorldPlayerGameplayRuntime` veröffentlicht aktuell einen kompletten `systems`-Graph.
-- `LoadoutManager` vereint Loadout, Action Dispatch, Resource/Readiness, Ultimates, mehrere Weapon-Behaviors, Construction-/Management-Cooldowns und Execution.
-- `LoadoutManager` ist aktuell konkreter `NetworkBridge`-Consumer.
-- `RpcCoordinator` enthält neben Wire-Adapter-Aufgaben noch hostautoritative Ability-/Held-Action-Orchestrierung.
-- `ResourceSystem` und mehrere Player-Gameplay-Pfade nutzen versteckte Wanduhr-Zugriffe.
-- `HostUpdateCoordinator` taktet zahlreiche Player-Gameplay-Child-Systeme einzeln.
-- `ClientUpdateCoordinator` liest konkrete Player-Gameplay-Children.
-- `WorldCombatGameplayBinding` konsumiert den vollständigen `WorldPlayerGameplaySystems`-Typ.
-- `WorldSupportGameplayRuntime` und `ConstructionWorldRuntime` konfigurieren heute Handler direkt im `LoadoutManager`.
-- Activity-/Enemy-Systeme verwenden `LoadoutManager` als Shared Fire Service.
-- Source-Contract-Tests schützen teilweise noch alte Quellcodepositionen statt der neuen Zielgrenzen.
+### `WorldPlayerGameplayRuntime` / `.systems` / `WorldPlayerGameplaySystems`
+
+| Consumer | Zugriff | Consumer-Art | Zielphase |
+|---|---|---|---|
+| `world/WorldPlayerGameplayRuntime.ts` | Owner: baut `systems`, `bindLoadout`, `destroy`-Teardown, `configureResource/Burrow` | Owner/Lifecycle | 2A |
+| `scenes/arena/ArenaWorldPlayerComposition.ts` | `new WorldPlayerGameplayRuntime`, `gameplay.player = …`, `worldRuntime.bind(…)` | Owner-Composition | 2A |
+| `scenes/arena/ArenaLifecycleCoordinator.ts` | `systems.{heldAction,resource,itemRuntime,burrow,loadout,tunnel,playerModifier,flamethrowerUpgrade}` – `initPlayer/removePlayer`, `heldAction.reset/clearPlayer`, `loadout.assignDefaultLoadout/resetUltimateState/removePlayer/syncSelectedLoadout` | Lifecycle + Read | 2A / 2B |
+| `scenes/arena/ArenaRuntimeAdapters.ts` | `systems.{burrow,loadout,translocator,resource,heldAction}` – `loadout.use`, `heldAction.start/cancel/consume/clearPlayer`, `resource.get/setAdrenaline*`, `loadout.getEquipped/getTemporaryUtilityConfig` | Action + Read (RPC-Adapter) | 2B / 6A / 6B |
+| `scenes/arena/HostUpdateCoordinator.ts` | `playerSystems` = `getPlayerGameplayRuntime()?.systems`; taktet `resource.regenTick`, `burrow.update`, `loadout.update`, `tunnel.update`, `weaponUpgrade`, `ak47StrategicTarget`, `guardianSpirit`, `repairDrone`, `slimeTrail`, `flamethrowerUpgrade`, `itemRuntime`; liest ~30 Loadout-/Resource-Getter für HUD/Net-Snapshot | Host-Frame + Read | 2B / 12A |
+| `scenes/arena/ClientUpdateCoordinator.ts` | `playerSystems`; `loadout.getEquipped*`, `getUltimateThresholds`, `isAk47FireSuperiorityAvailable`, `resource.getAdrenaline`, `burrow.isBurrowed` | Client-Frame Read | 2B / 12B |
+| `scenes/arena/ArenaWorldCombatComposition.ts` | `playerRuntime?.systems.{itemRuntime,flamethrowerUpgrade}` | Combat-Composition | 2B / 11 |
+| `scenes/arena/ArenaWorldConstructionComposition.ts` | `gameplay.player?.systems.{loadout,playerModifier,tunnel,burrow,resource}`, `loadout.addTemporaryUtility` | Construction-Composition | 2B / 5 / 7A |
+| `scenes/arena/ArenaWorldEnvironmentComposition.ts` | `gameplay.player?.systems.{burrow,translocator,loadout}` | Support-Composition | 2B |
+| `scenes/arena/ArenaPersistentBaseSession.ts`, `ArenaRuntime.ts`, `ArenaWorldGameplayComposition.ts`, `RockVisualHelper.ts` | Typ-Import + Read-Sichten | Read | 2B |
+| `world/WorldCombatGameplayBinding.ts` | konsumiert `WorldPlayerGameplaySystems`-Typ + `getPlayerSystems()?.{loadout,playerModifier,burrow}` | Combat integration | 11A / 11B |
+
+### `LoadoutManager` (direkte Typ-Consumer, nach Consumer-Art)
+
+| Consumer-Art | Consumer (Datei → API) |
+|---|---|
+| Owner/Lifecycle | `WorldPlayerGameplayRuntime` (`createLoadoutManager`, `bindLoadout`, `destroy` löst alle Setter), `ArenaWorldPlayerComposition` (reicht `createLoadoutManager`), `ArenaLifecycleCoordinator` (`assignDefaultLoadout`, `syncSelectedLoadout`, `resetUltimateState`, `removePlayer`, `resetAllUltimateStates`) |
+| Action | `ArenaRuntimeAdapters` (`loadout.use`) → `RpcCoordinator.registerLoadoutUseHandler` via `PlayerLoadoutRpcPort.useLoadout`; RPC reicht `clientNow ?? Date.now()`, `clientX`, `clientY` durch, augmentiert Weapon2-Antwort um `worldRevision`/`authoritativeAdrenaline`/`adrenalineRevision` |
+| Read/Presentation | `HostUpdateCoordinator`, `ClientUpdateCoordinator` (`getEquipped{Weapon,Utility,Ultimate}Config`, `getAk47HudBuffs`, `getNegevHudBuffs`, `getShieldBuffHudState`, `getCooldownFrac`, `getAimNetState`, `getHeldItemSlot`, `getUltimate*`, `isUltimate*`), `ArenaRuntimeAdapters` (`getEquippedUtilityConfig`, `getTemporaryUtilityConfig`) |
+| Combat integration | `CombatSystem` (`setLoadoutManager` → `getWeaponDamageMultiplier`, `getDamageMultiplier`, `registerAk47ProjectileHit`), `WorldCombatGameplayBinding` (`handleKill`, `getEquippedWeaponConfig`, `getDamageMultiplier`, `getSpeedMultiplier`, `beginUtilityCooldown`, `resolveAk47Projectile` via `projectileManager.setProjectileResolvedCallback`, `fireAutomatedWeapon` Turret-Pfad), `HostPhysicsSystem` (`setLoadoutManager`), `Ak47StrategicTargetSystem` (`getEquippedWeaponConfig`), `FlamethrowerUpgradeSystem` (`resolveUtilityConfig`, `getEquippedWeaponConfig`), `TranslocatorSystem` (Typ) |
+| Construction / Persistent Base | `ConstructionWorldRuntime` (`isConstructionOnCooldown`, `markConstructionUsed`, `useInspectorUtility`, `isManagementActionOnCooldown`, `markManagementActionUsed`, `getManagementActionCooldownUntil` via `RadialActionModel`, `setPlaceableRockHandler`, `setTunnelPlacementHandler`), `ArenaWorldConstructionComposition` (`addTemporaryUtility`) |
+| automated actor / Activity (Shared Fire Service) | `CoopDefenseEnemyAttackSystem` (`fireAutomatedWeapon`), `NecromancySystem` (`fireAutomatedWeapon`), `CoopDefenseVoidHunterSystem` (`fireAutomatedGaussWeapon`), `CoopMissionComposition` / `CoopMissionEnemyBehaviourComposition` / `CoopMissionEnemySupportComposition` (reichen `LoadoutManager` in Enemy-/Support-Systeme), `CoopMissionObjectiveComposition` (`addTemporaryUtility`, `releaseTemporaryUtilityForObjective`) |
+| Support-/Ultimate-Handler-Wiring | `WorldSupportGameplayRuntime` (`setArmageddonSystem`, `setAirstrikeHandler`, `setStinkCloudSystem`) |
+| network adapter (Legacy) | `LoadoutManager.ts` selbst: `this.bridge` → `getGameMode`, `publishUtilityCooldownUntil`, `publishTemporaryUtilityInstances`, `publishHeldUtilityId`, `isEnemyPair`, `broadcastExplosionEffect`, `broadcastShotFx`. Eingefrorener Consumer in `WorldGameplayCompositionContracts.test.ts` |
+| Typ-/Sibling-only | `types.ts`, `loadout/BaseUltimate.ts`, `loadout/LoadoutRules.ts`, `loadout/ShotPlanResolver.ts`, `loadout/WeaponFireExecutor.ts` |
+
+### `LoadoutManager.use` – einziger Produktiv-Call-Site
+
+`ArenaRuntimeAdapters` → `PlayerLoadoutRpcPort.useLoadout` → `RpcCoordinator.registerLoadoutUseHandler`. Vorgelagerte hostautoritative Entscheidungen im RPC: Capabilities, Countdown, Dismantle/GlobalDismantle-Sonderpfade, Inspector-Class-Gate, `validateHostUtilityCharge` (`heldActions.consume`), Translocator-Recall (`heldActions.clearPlayer`). Zeit: `clientNow ?? Date.now()` fließt als `now` in den Core.
+
+### `fireAutomatedWeapon` / `fireAutomatedGaussWeapon`
+
+`fireAutomatedWeapon`: `WorldCombatGameplayBinding` (Turret), `CoopDefenseEnemyAttackSystem`, `NecromancySystem`. `fireAutomatedGaussWeapon`: `CoopDefenseVoidHunterSystem`.
+
+### Construction-/Management-Cooldown-Methoden
+
+Produktiv nur `ConstructionWorldRuntime`. Lifetime heute: `Map` im `LoadoutManager`, an `assignDefaultLoadout`/`removePlayer` gebunden (Player-in-World-Lifetime). Zielphase 5.
+
+### Temporary-Utility-Methoden
+
+`addTemporaryUtility`: `ArenaWorldConstructionComposition`, `CoopMissionObjectiveComposition`. `getTemporaryUtilityConfig`: `ArenaRuntimeAdapters`, `HostUpdateCoordinator`. `releaseTemporaryUtilityForObjective`: `CoopMissionObjectiveComposition`. State-Owner: `TemporaryUtilityCollection`. Zielphase 7A.
+
+### AK47 / Negev / Shotgun
+
+- AK47: `CombatSystem.registerAk47ProjectileHit`; `WorldCombatGameplayBinding` → `resolveAk47Projectile`; `WorldPlayerGameplayRuntime.setAk47StrategicTargetHitResolver`; HUD-Reads (`getAk47HudBuffs`, `isAk47FireSuperiority*`, `isAk47FocusAtMaxStacks`) im Host-/ClientUpdateCoordinator; `resetAk47State` in `assignDefaultLoadout`. State: `ak47States`-Map. Zielphase 8A.
+- Negev: `WorldCombatGameplayBinding.handleKill` → `negevStates`; `update()` → `finishNegevKillstreak` (Streak-Gap `NEGEV_STREAK_GAP_MS`, `Date.now()`); `setNegevKillstreakExplosionHandler` (`WorldPlayerGameplayRuntime`); HUD `getNegevHudBuffs`. Zielphase 8B.
+- Shotgun: `WorldCombatGameplayBinding.handleKill` → `shotgunLightningQueue`; `processShotgunLightningQueue` in `update()` → `combatSystem.applyAoeDamage` + `bridge.broadcastExplosionEffect`; Chain-Generation. Zielphase 8C.
+
+### Tesla-Dome / Energy-Shield / ShieldBuff Hooks
+
+`WorldCombatGameplayBinding`: `setTeslaDomeSystem`, `setEnergyShieldSystem`, `setShieldBuffSystem`. Nutzung im Core: `activateTeslaDomeWeapon`/`activateEnergyShieldWeapon` aus `fireWeapon`; `deactivateNonAutonomousWeaponEffect` beim Slot-Claim (`claimWeaponSlot`); `hostDeactivateForPlayer` in `assignDefaultLoadout`/`removePlayer`/`destroy`; Speed-Multiplier-Zweige für `energy_shield`/`tesla_dome`. Zielphase 9.
+
+### Versteckte `Date.now()` im Player-Gameplay-Pfad (Ziel 3A/3B)
+
+- `ResourceSystem.drainAdrenaline` (Regen-Pause setzen), `ResourceSystem.regenTick` (Pause prüfen) – **3B**.
+- `LoadoutManager.update()` – `const now = Date.now()` für Spread-Decay, Negev-Streak-Gap, Ultimate-Drain/Ticks, Shotgun-Queue.
+- `LoadoutManager` Default-Parameter `now = Date.now()`: `getHeldItemSlot`, `registerAk47ProjectileHit`, `resolveAk47Projectile`, `getAk47HudBuffs`, `getWeaponDamageMultiplier`, `getShieldBuffHudState`.
+- `LoadoutManager.getSpeedMultiplier` / `getHeldSelfPushVelocity` / `getAllyAuraMultiplier` – `Date.now()` für Hold-Expire / Aura-Linger.
+- `fireWeapon` NEGEV-Zweig: `negevState.lastShotAt = Date.now()` (bewusst Host-Wanduhr, muss zu `update()` passen).
+- `bindLoadout` Negev-Killstreak-Handler: `Date.now()` im `sourceId`-String.
+- `RpcCoordinator`: `Date.now()`-Fallback für `clientNow`; `Date.now()` in `heldActions.start/consume` und `validateHostUtilityCharge` – **3A**.
+
+### `clientX` / `clientY` im Loadout-Use-Pfad
+
+`RpcCoordinator.registerLoadoutUseHandler` liest `clientX`/`clientY`/`clientNow` aus dem Wire und reicht sie an `loadout.use(…, clientX, clientY)` durch. In `use()`: `x = clientX ?? player.x; y = clientY ?? player.y` – Ursprung für Weapon-Fire, Utility, Ultimate. Positions- und Zeit-Authority sind zwei getrennte Entscheidungen (3A ≠ 6A). **Testseitig fixiert** durch `GameplayRuntimeCutoverCharacterization.test.ts` (`use – Client-Position im Waffen-Pfad`).
+
+### Source-Ratchets (String-Scan-Tests, die aktuelle Quellcodepositionen pinnen)
+
+Diese Tests schützen heute alte Positionen und müssen von den jeweiligen Cutover-Phasen semantisch mitmigriert werden:
+
+| Test | Pinnt | Migriert in |
+|---|---|---|
+| `Phase11DependencyCutover.test.ts` | `RpcCoordinator`-Portnamen; `flow` enthält `this.worldPlayerGameplayRuntime?.systems.heldAction.reset()` / `.clearPlayer(playerId)`; `runtime` enthält `readonly heldAction: HostHeldActionSystem;`; Frame-Read-Ports | 2A / 6B |
+| `WorldGameplayCompositionContracts.test.ts` | eingefrorene `NetworkBridge`-Consumer-Liste inkl. `src/loadout/LoadoutManager.ts`; neue World-Owner frei von `NetworkBridge`/`ArenaContext`; `new WorldPlayerGameplayRuntime` nur in Composition | 2A / 10B |
+| `ArenaFlowCheckpointC.test.ts` | Scene-facing Runtime-Oberfläche frei von `LoadoutManager` u. a.; `getWorldPlayerGameplayRuntime`-Gate des Balance-Lab; kein `new WorldPlayerGameplayRuntime` im Flow | 2A / 2B |
+| `WorldCombatGameplayBinding.test.ts`, `WorldMaterializationOwnership.test.ts`, `CoopMissionRuntimeOwnership.test.ts`, `ActivityRebindingContracts.test.ts` | World-/Combat-/Activity-Ownership-Scans mit `WorldPlayerGameplayRuntime`-Bezug | 2A / 11 / 12C |
 
 ---
 
 ## Test-Migrationskarte
 
-Wird in Phase 1 vervollständigt.
+Stand nach Phase 1. `abgedeckt` = Ist-Semantik ausreichend charakterisiert; `Zielstatus` = was die genannte Phase mit dem Test tun muss.
 
-| Semantik | Bestehender/zu ergänzender Test | Zielstatus |
-|---|---|---|
-| Held Action duplicate-safe / stale | `HostHeldActionSystem.test.ts` | prüfen |
-| Weapon2 Retry/Dedupe | `Weapon2PredictionDedupe.test.ts` | prüfen |
-| Temporary Utility Identity | `TemporaryUtilityLifecycle.test.ts` | prüfen |
-| Radial/Held RPC | `RadialActionRpc.test.ts` | prüfen |
-| Shared automated fire | `AutomatedPelletWeapon.test.ts` + Consumer-Tests | prüfen |
-| World Player ownership | `WorldGameplayCompositionContracts.test.ts` | migrieren |
-| Combat integration | `WorldCombatGameplayBinding.test.ts` | migrieren |
-| Arena source boundaries | `Phase11DependencyCutover.test.ts`, `ArenaFlowCheckpointC.test.ts` | migrieren |
-| AK47 | Phase 1 konkretisieren | offen |
-| Negev | Phase 1 konkretisieren | offen |
-| Shotgun reaction | Phase 1 konkretisieren | offen |
-| Ultimates | Phase 1 konkretisieren | offen |
-| Tesla/Shield | Phase 1 konkretisieren | offen |
-| Construction/PB cooldown | Phase 1 konkretisieren | offen |
+| Semantik | Test(s) | Ist | Zielstatus |
+|---|---|---|---|
+| Held Action duplicate-safe / stale / Identity | `HostHeldActionSystem.test.ts` | abgedeckt | prüfen bei 3A / 6B |
+| Weapon2 Prediction Retry/Dedupe + authoritative Adrenalin/Revision | `Weapon2PredictionDedupe.test.ts`, `ClientWeaponAdrenalinePrediction.test.ts` | abgedeckt | prüfen bei 6B |
+| Temporary Utility Identity / Charges / Cooldown / Acquisition Order | `TemporaryUtilityLifecycle.test.ts` | abgedeckt | prüfen bei 7A |
+| Radial/Held RPC | `RadialActionRpc.test.ts`, `RadialActionInput.test.ts` | abgedeckt | migrieren bei 6B / 7A |
+| Shared automated fire + Source-/Owner-Metadaten | `AutomatedPelletWeapon.test.ts`, `InspectorSupportWeapons.test.ts`, `ReinforcementMatrixProjectile.test.ts` + Consumer-Tests (`CoopDefenseVoidHunterSystem`, `CoopDefenseInfernoColossusCombat`, `GraveTitanVoidPlasma`, `CoopDefenseStuckEnemyBite`) | abgedeckt | migrieren bei 4A / 4B |
+| Shared Immediate Execution (Projectile/Hitscan/Melee) | `WeaponFireExecutor.test.ts` | abgedeckt | erweitern bei 4A |
+| Weapon-Slot-Exklusivität / Channel-Switch-Deaktivierung | `WeaponSlotExclusivity.test.ts` | abgedeckt | prüfen bei 6A / 9 |
+| Dynamischer Spread / aktiver Slot / Shot Identity | `AimSpreadModelActiveSlot.test.ts`, `ShotPlanResolverRuntimeRegression.test.ts`, `ProjectileSpawnResolver.test.ts` | abgedeckt | prüfen bei 6A |
+| Resource Revision / Adrenalin-Observer / Cost-Modifier | `ResourceSystemObservers.test.ts` | abgedeckt | prüfen bei 3B |
+| **`clientX`/`clientY` als Use-Ursprung** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | Zielprüfung 6A |
+| **Waffen-Commit-Reihenfolge: Reject → keine Resource-/Cooldown-Mutation; Drain erst nach Dispatch** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | Zielprüfung 3B / 6A |
+| **Negev-Killstreak-Runtime: Kill-Zahl, Streak-Gap-Ende in `update()`, Abschlussexplosion** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | migrieren bei 8B |
+| **Shotgun-Lightning: Kill → Queue → `applyAoeDamage` + Broadcast** | `GameplayRuntimeCutoverCharacterization.test.ts` | **neu (Phase 1)** | migrieren bei 8C |
+| **Construction-/Management-Cooldown-Keying (pro Spieler/ID bzw. pro Aktion)** | `GameplayRuntimeCutoverCharacterization.test.ts`, `PersistentBaseRepositioning.test.ts` | **neu + abgedeckt** | migrieren bei 5 |
+| AK47 hit/refund identity (at-most-once, pending-resolve) + Stacks | `Ak47CoopDefenseUpgrades.test.ts` | abgedeckt | migrieren bei 8A |
+| Gauss-Ultimate press/release Commit (nur bei Vollladung, at-most-once) | `RoomStatisticsGameplayHooks.test.ts` | abgedeckt | migrieren bei 7C |
+| Ultimate buff/airstrike/tunnel Accept-Reject + Rage-Kosten-Zeitpunkt | – | **Lücke** (nur Gauss) | in 7B/7C konkretisieren, dort Test ergänzen |
+| Tesla Dome / Energy Shield start/refresh/stop-Orchestrierung | `TeslaDomeSystem.test.ts`, `TeslaDomeCoopDefenseUpgrades.test.ts`, `WeaponSlotExclusivity.test.ts` | teilabgedeckt (System-Ebene) | Orchestrierung in 9 konkretisieren |
+| World Player ownership boundary | `WorldGameplayCompositionContracts.test.ts` | Ratchet | migrieren bei 2A / 2B / 10B |
+| Combat integration boundary | `WorldCombatGameplayBinding.test.ts` | Ratchet | migrieren bei 11A / 11B |
+| Arena source boundaries | `Phase11DependencyCutover.test.ts`, `ArenaFlowCheckpointC.test.ts` | Ratchet | migrieren bei 2A / 2B / 6B |
 
 ---
 
 ## Bewusste Übergänge / bekannte Regressionen
 
-Aktuell keine Implementierungsübergänge – Refactoring noch nicht begonnen.
+Aktuell keine Implementierungsübergänge. Phase 1 hat keine Produktivsemantik geändert und nur Charakterisierungstests plus diese Migrationskarte ergänzt.
 
 Regel für Updates:
 
@@ -126,6 +203,7 @@ Aktuell:
 
 - `docs/ai/networking.md` wird nach Phase 10B voraussichtlich die konkrete Legacy-Consumer-Liste anpassen müssen.
 - `docs/ai/gameplay.md` nach finalem Player-Action-/Loadout-Cutover gegen die neue öffentliche Boundary prüfen.
+- Phase 1 hat keinen `docs/ai/*`-Writeback ausgelöst: die kartierten Kopplungen sind Implementierungs-Ist, keine langlebige systemübergreifende Invariante.
 - Normative `01`/`02` nur nach menschlicher Entscheidung ändern.
 
 ---
@@ -148,14 +226,16 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 ## Nächster konkreter Schritt
 
-**Teilphase 1 umsetzen.**
+**Teilphase 2A umsetzen – öffentliche Player-Gameplay-Lifecycle-Grenze.**
 
 Dabei:
 
-1. komplette Consumer-/Contract-Matrix erstellen,
-2. Test-Migrationskarte vervollständigen,
-3. riskante Semantik per Characterization-Test absichern,
-4. noch keine neue Gameplay-Runtime-Architektur bauen.
+1. `WorldPlayerGameplayRuntime` erhält explizite öffentliche Operationen für Player attach/init, detach/remove, Loadout-/Build-Reconcile, Activity-Identity-bezogene Held-Action-Invalidierung, World teardown/reset (Contract-Familie `PlayerGameplayLifecyclePort`; finalen Namen unten eintragen).
+2. Die heute in `ArenaLifecycleCoordinator` verstreute Init von `resource`/`burrow`/`loadout`/`heldAction`/`itemRuntime`/`tunnel` hinter diese Runtime-Methoden ziehen (siehe Matrix, Zeilen `ArenaLifecycleCoordinator` / `2A`).
+3. Teardown-Reihenfolge im Runtime-Owner explizit machen; Idempotenz von remove/reset/destroy testen.
+4. Source-Ratchets aus `Phase11DependencyCutover.test.ts` (`systems.heldAction.reset()` / `.clearPlayer` im `flow`) semantisch auf die neue API umstellen.
+5. Referenz-§§: `02` §§ 3, 6, 22, 26–29.
+6. Keine Read-Fassade erzwingen (2B), `LoadoutManager.use` nicht verschieben (6A), Projectile/Combat nicht anfassen.
 
 ---
 
