@@ -34,13 +34,13 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
     // Compositions dürfen ihr Rezept dauerhaft verdrahten; die übrigen Einträge sind an
     // spätere Teilphasen gebunden und dürfen nur schrumpfen:
     //  - ArenaLifecycleCoordinator: System-Handoff an die Activity-Composition → 4B/7A/12C
-    //  - ArenaPersistentBaseSession: Management-Cooldown → 5
+    //  - ArenaPersistentBaseSession: Management-Cooldown ist in Phase 5 auf den Construction-Port
+    //    migriert und darf deshalb nicht mehr als Player-Gameplay-Systems-Consumer erscheinen.
     //  - ArenaRuntime: itemRuntime×turret Remote-Control-Snapshot-Join → 12B
     //  - ArenaRuntimeAdapters: use / Held-Action / setAdrenaline (Mutationen) → 3B/6A/6B
     //  - Host-/ClientUpdateCoordinator: Frame-Reads → 12A/12B
     expect(offenders).toEqual([
       'src/scenes/arena/ArenaLifecycleCoordinator.ts',
-      'src/scenes/arena/ArenaPersistentBaseSession.ts',
       'src/scenes/arena/ArenaRuntime.ts',
       'src/scenes/arena/ArenaRuntimeAdapters.ts',
       'src/scenes/arena/ArenaWorldCombatComposition.ts',

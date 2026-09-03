@@ -12,7 +12,7 @@ import {
   getCoopDefenseConstructionDefinition,
 } from '../src/config/coopDefenseConstructions';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../src/config/persistentBase';
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { ConstructionReadinessRuntime } from '../src/world/ConstructionReadinessRuntime';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../src/persistentBase/PersistentBaseCore';
 import { PersistentBaseContributionStore } from '../src/persistentBase/PersistentBaseContributionStore';
 import { PersistentBaseRoomSession } from '../src/persistentBase/PersistentBaseRoomSession';
@@ -275,15 +275,15 @@ describe('PersistentBaseContributionStore – Move-Mutation', () => {
 
 describe('Management-Cooldown', () => {
   it('schuetzt Verschieben und Einzel-Rueckbau je fuer 100 ms und getrennt voneinander', () => {
-    const manager = new LoadoutManager();
-    manager.markManagementActionUsed('p1', 'reposition', 1_000, COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS);
+    const readiness = new ConstructionReadinessRuntime();
+    readiness.markManagementActionUsed('p1', 'reposition', 1_000);
 
     expect(COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS).toBe(100);
-    expect(manager.isManagementActionOnCooldown('p1', 'reposition', 1_050)).toBe(true);
-    expect(manager.isManagementActionOnCooldown('p1', 'reposition', 1_100)).toBe(false);
-    expect(manager.isManagementActionOnCooldown('p1', 'dismantle', 1_050)).toBe(false);
-    expect(manager.isManagementActionOnCooldown('p2', 'reposition', 1_050)).toBe(false);
-    expect(manager.getManagementActionCooldownUntil('p1', 'reposition')).toBe(1_100);
+    expect(readiness.isManagementActionOnCooldown('p1', 'reposition', 1_050)).toBe(true);
+    expect(readiness.isManagementActionOnCooldown('p1', 'reposition', 1_100)).toBe(false);
+    expect(readiness.isManagementActionOnCooldown('p1', 'dismantle', 1_050)).toBe(false);
+    expect(readiness.isManagementActionOnCooldown('p2', 'reposition', 1_050)).toBe(false);
+    expect(readiness.getManagementActionCooldownUntil('p1', 'reposition')).toBe(1_100);
   });
 
   it('gibt allen permanenten Coop-Defense-Constructions denselben 100-ms-Build-Cooldown', () => {

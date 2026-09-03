@@ -5,7 +5,6 @@ import type { ArenaContext } from './ArenaContext';
 import type { RockVisualHelper } from './RockVisualHelper';
 import {
   COOP_DEFENSE_DISMANTLE_RANGE,
-  COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
 } from '../../config/coopDefenseConstructions';
 import { isCoopDefenseMode } from '../../gameModes';
 import type { GameMode, LoadoutUseResult, SyncedPlaceableRock, UtilityPlacementPreviewState } from '../../types';
@@ -49,11 +48,11 @@ import type { PersistentPlayerBaseContribution } from '../../persistentBase/Pers
 import type { PersistentBaseTransactionIdentity } from '../../persistentBase/PersistentBaseTransaction';
 import type { PersistentBaseWorldBinding } from '../../world/PersistentBaseWorldBinding';
 import type { ConstructionWorldRuntime } from '../../world/ConstructionWorldRuntime';
+import type { ConstructionReadinessPort } from '../../world/ConstructionReadinessRuntime';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { ActivityDescriptor } from '../../world/ActivityDescriptor';
 import type { WorldPersistentBaseSite } from '../../world/WorldRuntimeContext';
 import type { WorldRuntime } from '../../world/WorldRuntime';
-import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 
 /**
  * Der raumlanglebige Owner der persistenten Basis dieses Raums.
@@ -74,8 +73,9 @@ export interface ArenaPersistentBaseWorldPorts {
   readonly getWorldBinding: () => PersistentBaseWorldBinding | null;
   /** Der World-Owner der Konstruktionsregeln; `null` ohne World oder auf dem Client. */
   readonly getConstructionRuntime: () => ConstructionWorldRuntime | null;
+  /** Schmaler World-Port fuer die Management-Readiness; kein Loadout-/Persistent-Base-State. */
+  readonly getConstructionReadiness: () => ConstructionReadinessPort | null;
   readonly getWorldRuntime: () => WorldRuntime | null;
-  readonly getPlayerGameplayRuntime: () => WorldPlayerGameplayRuntime | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
   /** Auch vor der lokalen World-Materialisierung beantwortbar: fuehrt diese World eine Basis? */
   readonly hasPersistentBaseSite: () => boolean;
@@ -125,7 +125,6 @@ export class ArenaPersistentBaseSession {
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get worldContext() { return this.worldRuntime?.context ?? null; }
-  private get playerSystems() { return this.world.getPlayerGameplayRuntime()?.systems ?? null; }
 
   /** Uebernimmt die Runtime-Objekte der aktuellen World; ohne World fuehrt der Raum keine. */
   useWorldRuntimes(runtimes: Parameters<PersistentBaseRoomSession['useWorldRuntimes']>[0]): void {
@@ -610,7 +609,11 @@ export class ArenaPersistentBaseSession {
    * damit die erste vom Host akzeptierte Mutation. Ein Fehlschlag laesst die Quelle in jedem
    * Fall unveraendert - es entsteht kein teilweise verschobener Zustand.
    */
-  movePersistentBaseObject(playerId: string, request: PersistentBaseMoveRequest): LoadoutUseResult {
+  movePersistentBaseObject(
+    playerId: string,
+    request: PersistentBaseMoveRequest,
+    hostNowMs: number,
+  ): LoadoutUseResult {
     if (!bridge.isHost()) return { ok: false, reason: 'invalid' };
     const sanitized = sanitizePersistentBaseMoveRequest(request);
     if (!sanitized) return { ok: false, reason: 'invalid' };
@@ -630,8 +633,8 @@ export class ArenaPersistentBaseSession {
       || this.ctx.combatSystem.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
     }
-    const now = Date.now();
-    if (this.playerSystems?.loadout?.isManagementActionOnCooldown(playerId, 'reposition', now)) {
+    const readiness = this.world.getConstructionReadiness();
+    if (readiness?.isManagementActionOnCooldown(playerId, 'reposition', hostNowMs)) {
       return { ok: false, reason: 'cooldown' };
     }
 
@@ -664,7 +667,7 @@ export class ArenaPersistentBaseSession {
     const result = source.persistentRewardId === undefined
       ? this.hostMovePersonalConstruction(playerId, source, preview)
       : this.hostMovePersistentBaseReward(source, preview);
-    if (result.ok) this.markManagementActionUsed(playerId, 'reposition', now);
+    if (result.ok) this.markManagementActionUsed(playerId, 'reposition', hostNowMs);
     return result;
   }
 
@@ -863,17 +866,13 @@ export class ArenaPersistentBaseSession {
 
   /** Startet den kurzen Doppelinput-Schutz einer Management-Aktion und repliziert ihn. */
   markManagementActionUsed(playerId: string, action: 'reposition' | 'dismantle', now: number): void {
-    this.playerSystems?.loadout?.markManagementActionUsed(
-      playerId,
-      action,
-      now,
-      COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
-    );
+    const cooldownUntil = this.world.getConstructionReadiness()?.markManagementActionUsed(playerId, action, now);
+    if (cooldownUntil === undefined) return;
     // Ueber denselben keyed Kanal wie Utility- und Bau-Cooldowns, damit das Radial denselben
     // echten Zustand darstellt.
     bridge.publishUtilityCooldownUntil(
       playerId,
-      now + COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
+      cooldownUntil,
       `management:${action}`,
     );
   }

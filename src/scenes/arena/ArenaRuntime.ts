@@ -161,8 +161,8 @@ export class ArenaRuntime {
       world: {
         getWorldBinding: () => this.flow.persistentBaseWorldPorts.getWorldBinding(),
         getConstructionRuntime: () => this.flow.persistentBaseWorldPorts.getConstructionRuntime(),
+        getConstructionReadiness: () => this.flow.persistentBaseWorldPorts.getConstructionReadiness(),
         getWorldRuntime: () => this.flow.getWorldRuntime(),
-        getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
         getPlayerCapabilities: (playerId) => (
           this.flow.persistentBaseWorldPorts.getPlayerCapabilities(playerId)
         ),

@@ -9,8 +9,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
-import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import type { GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
 import type {
   AirstrikeUltimateConfig,
   BfgUtilityConfig,
@@ -136,10 +135,6 @@ export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
   /** Inspector utilities keep an independent cooldown state per player and utility id. */
   private inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
-  /** Constructions bypass GenericUtility, so their build cooldown is tracked separately. */
-  private constructionCooldowns = new Map<string, Map<ConstructionId, number>>();
-  /** Kurzer Doppelinput-Schutz je Management-Aktion; derselbe keyed Cooldown-Vertrag wie Bauen. */
-  private readonly managementActionCooldowns = new Map<string, Map<string, number>>();
   private ultimateStates    = new Map<string, UltimateState>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
   private combatSystem:       CombatResolverType | null = null;
@@ -235,8 +230,6 @@ export class LoadoutManager {
       ultimate: new GenericUltimate(ultCfg),
     });
     this.inspectorUtilities.set(playerId, new Map());
-    this.constructionCooldowns.set(playerId, new Map());
-    this.managementActionCooldowns.set(playerId, new Map());
     this.ultimateStates.set(playerId, {
       active:    false,
       startTime: 0,
@@ -276,7 +269,7 @@ export class LoadoutManager {
    * Zieht eine geaenderte Lobby-Auswahl in das autoritative Host-Loadout nach,
    * ohne unveraenderte Spieler jedes Frame neu zu initialisieren.
    */
-  syncSelectedLoadout(playerId: string, selection?: LoadoutSelection): void {
+  syncSelectedLoadout(playerId: string, selection?: LoadoutSelection): boolean {
     const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
     const nextWeapon1 = sanitized.weapon1;
     const nextWeapon2 = sanitized.weapon2;
@@ -292,17 +285,16 @@ export class LoadoutManager {
       && areLoadoutConfigsEquivalent(current.utility.config, nextUtility)
       && areLoadoutConfigsEquivalent(currentUltimate, nextUltimate)
     ) {
-      return;
+      return false;
     }
 
     this.assignDefaultLoadout(playerId, selection);
+    return true;
   }
 
   removePlayer(playerId: string): void {
     this.loadouts.delete(playerId);
     this.inspectorUtilities.delete(playerId);
-    this.constructionCooldowns.delete(playerId);
-    this.managementActionCooldowns.delete(playerId);
     this.ultimateStates.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.temporaryUtilities.clearPlayer(playerId);
@@ -648,41 +640,6 @@ export class LoadoutManager {
     this.heldItemSlots.noteUtilityUsed(playerId, now);
     this.bridge.publishHeldUtilityId(playerId, effectiveConfig.id);
     return this.okResult;
-  }
-
-  // ── Bau-Cooldowns der Konstruktionen ──────────────────────────────────────
-  // Konstruktionen laufen nicht ueber `GenericUtility`; ihr Bau-Cooldown kommt aus
-  // der jeweiligen Konstruktsdefinition.
-
-  isConstructionOnCooldown(playerId: string, constructionId: ConstructionId, now: number): boolean {
-    const readyAt = this.constructionCooldowns.get(playerId)?.get(constructionId) ?? 0;
-    return now < readyAt;
-  }
-
-  markConstructionUsed(playerId: string, constructionId: ConstructionId, now: number): void {
-    const perPlayer = this.constructionCooldowns.get(playerId) ?? new Map<ConstructionId, number>();
-    this.constructionCooldowns.set(playerId, perPlayer);
-    perPlayer.set(constructionId, now + getCoopDefenseConstructionDefinition(constructionId).buildCooldownMs);
-  }
-
-  /**
-   * Endzeitpunkt des Doppelinput-Schutzes einer Management-Aktion.
-   *
-   * Der Wert haengt bewusst an der Aktion und nicht am bewegten Objekt: Verschieben und
-   * Einzel-Rueckbau verwenden denselben festen Schutz, unabhaengig vom Konstruktionstyp.
-   */
-  getManagementActionCooldownUntil(playerId: string, action: string): number {
-    return this.managementActionCooldowns.get(playerId)?.get(action) ?? 0;
-  }
-
-  isManagementActionOnCooldown(playerId: string, action: string, now: number): boolean {
-    return now < this.getManagementActionCooldownUntil(playerId, action);
-  }
-
-  markManagementActionUsed(playerId: string, action: string, now: number, cooldownMs: number): void {
-    const perPlayer = this.managementActionCooldowns.get(playerId) ?? new Map<string, number>();
-    this.managementActionCooldowns.set(playerId, perPlayer);
-    perPlayer.set(action, now + Math.max(0, cooldownMs));
   }
 
   // ── Temporaere Utility-Instanzen ─────────────────────────────────────────

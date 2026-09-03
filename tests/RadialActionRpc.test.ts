@@ -220,7 +220,7 @@ describe('radial action RPC classification', () => {
     const moveObject = bridgeMock.registerPersistentBaseMoveHandler.mock.calls.at(-1)?.[0];
     const moveRequest = { sourceRuntimeId: 'runtime-1' };
     expect(moveObject?.('p1', moveRequest)).toEqual({ ok: true });
-    expect(fixture.persistentBase.moveObject).toHaveBeenCalledWith('p1', moveRequest);
+    expect(fixture.persistentBase.moveObject).toHaveBeenCalledWith('p1', moveRequest, expect.any(Number));
 
     const pickup = bridgeMock.registerPickupPowerUpHandler.mock.calls.at(-1)?.[0];
     expect(pickup?.(7, 'p1')).toBe(true);
@@ -242,7 +242,14 @@ describe('radial action RPC classification', () => {
     });
 
     expect(result).toEqual({ ok: true });
-    expect(fixture.lifecycle.placeInspectorConstruction).toHaveBeenCalledWith('p1', 'rocket_turret', 220, 180);
+    expect(fixture.lifecycle.placeInspectorConstruction).toHaveBeenCalledWith(
+      'p1',
+      'rocket_turret',
+      220,
+      180,
+      expect.any(Number),
+      undefined,
+    );
     expect(fixture.getEquippedUtilityConfig).not.toHaveBeenCalled();
     expect(fixture.consume).not.toHaveBeenCalled();
     expect(fixture.use).not.toHaveBeenCalled();
@@ -311,7 +318,13 @@ describe('radial action RPC classification', () => {
 
     expect(handler('utility', 0, 220, 180, 'p1', undefined, { dismantle: true }))
       .toEqual({ ok: true });
-    expect(fixture.lifecycle.dismantleConstruction).toHaveBeenCalledWith('p1', 220, 180);
+    expect(fixture.lifecycle.dismantleConstruction).toHaveBeenCalledWith(
+      'p1',
+      220,
+      180,
+      expect.any(Number),
+      undefined,
+    );
     expect(fixture.getEquippedUtilityConfig).not.toHaveBeenCalled();
     expect(fixture.consume).not.toHaveBeenCalled();
 

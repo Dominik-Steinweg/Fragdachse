@@ -17,6 +17,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { ConstructionReadinessRuntime } from '../src/world/ConstructionReadinessRuntime';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 
 type AnyManager = LoadoutManager & Record<string, any>;
@@ -291,34 +292,48 @@ describe('LoadoutManager – Shotgun-Lightning-Queue lebt heute im Loadout (Migr
   });
 });
 
-describe('LoadoutManager – Construction-/Management-Readiness lebt heute im Loadout (Migrationsziel 5)', () => {
-  function makeCooldownManager(): AnyManager {
-    const manager = Object.create(LoadoutManager.prototype) as AnyManager;
-    manager.constructionCooldowns = new Map();
-    manager.managementActionCooldowns = new Map();
-    return manager;
+describe('ConstructionReadinessRuntime – Construction-/Management-Readiness (Phase 5)', () => {
+  function makeReadiness(): ConstructionReadinessRuntime {
+    const readiness = new ConstructionReadinessRuntime();
+    readiness.attachPlayer('p1');
+    readiness.attachPlayer('p2');
+    return readiness;
   }
 
   it('haelt den Bau-Cooldown pro Spieler und Konstruktions-ID getrennt', () => {
-    const manager = makeCooldownManager();
+    const readiness = makeReadiness();
     const cooldownMs = getCoopDefenseConstructionDefinition('rock_barrier').buildCooldownMs;
 
-    manager.markConstructionUsed('p1', 'rock_barrier', 1_000);
+    readiness.markConstructionUsed('p1', 'rock_barrier', 1_000);
 
-    expect(manager.isConstructionOnCooldown('p1', 'rock_barrier', 1_000 + cooldownMs - 1)).toBe(true);
-    expect(manager.isConstructionOnCooldown('p1', 'rock_barrier', 1_000 + cooldownMs)).toBe(false);
-    expect(manager.isConstructionOnCooldown('p1', 'spore_turret', 1_000)).toBe(false);
-    expect(manager.isConstructionOnCooldown('p2', 'rock_barrier', 1_000)).toBe(false);
+    expect(readiness.isConstructionOnCooldown('p1', 'rock_barrier', 1_000 + cooldownMs - 1)).toBe(true);
+    expect(readiness.isConstructionOnCooldown('p1', 'rock_barrier', 1_000 + cooldownMs)).toBe(false);
+    expect(readiness.isConstructionOnCooldown('p1', 'spore_turret', 1_000)).toBe(false);
+    expect(readiness.isConstructionOnCooldown('p2', 'rock_barrier', 1_000)).toBe(false);
   });
 
   it('schluesselt den Management-Cooldown an der Aktion, nicht am bewegten Objekt', () => {
-    const manager = makeCooldownManager();
+    const readiness = makeReadiness();
 
-    manager.markManagementActionUsed('p1', 'dismantle', 1_000, 500);
+    readiness.markManagementActionUsed('p1', 'dismantle', 1_000);
 
-    expect(manager.getManagementActionCooldownUntil('p1', 'dismantle')).toBe(1_500);
-    expect(manager.isManagementActionOnCooldown('p1', 'dismantle', 1_400)).toBe(true);
-    expect(manager.isManagementActionOnCooldown('p1', 'dismantle', 1_500)).toBe(false);
-    expect(manager.isManagementActionOnCooldown('p1', 'reposition', 1_400)).toBe(false);
+    expect(readiness.getManagementActionCooldownUntil('p1', 'dismantle')).toBe(1_100);
+    expect(readiness.isManagementActionOnCooldown('p1', 'dismantle', 1_099)).toBe(true);
+    expect(readiness.isManagementActionOnCooldown('p1', 'dismantle', 1_100)).toBe(false);
+    expect(readiness.isManagementActionOnCooldown('p1', 'reposition', 1_099)).toBe(false);
+  });
+
+  it('raeumt Player-in-World-Readiness beim Detach und World-Teardown auf', () => {
+    const readiness = makeReadiness();
+    readiness.markConstructionUsed('p1', 'rock_barrier', 1_000);
+    readiness.markManagementActionUsed('p1', 'reposition', 1_000);
+
+    readiness.detachPlayer('p1');
+    expect(readiness.isConstructionOnCooldown('p1', 'rock_barrier', 1_000)).toBe(false);
+    expect(readiness.getManagementActionCooldownUntil('p1', 'reposition')).toBe(0);
+
+    readiness.markConstructionUsed('p2', 'rock_barrier', 1_000);
+    readiness.destroy();
+    expect(readiness.isConstructionOnCooldown('p2', 'rock_barrier', 1_000)).toBe(false);
   });
 });

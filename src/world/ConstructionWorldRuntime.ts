@@ -23,10 +23,14 @@ import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRew
 import type { PersistentBaseBuildArea } from '../persistentBase/PersistentBaseCore';
 import type { PersistentRestoreCandidate, PersistentRestoreToolDefinition } from '../persistentBase/PersistentBaseTools';
 import {
+  ConstructionReadinessRuntime,
+  type ConstructionManagementAction,
+  type ConstructionReadinessPort,
+} from './ConstructionReadinessRuntime';
+import {
   COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
   COOP_DEFENSE_DISMANTLE_RANGE,
   COOP_DEFENSE_CONSTRUCTION_IDS,
-  COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
   getCoopDefenseConstructionDefinition,
   getConstructionIdForUtility,
   getUtilityIdForConstruction,
@@ -94,8 +98,9 @@ export interface ConstructionWorldRuntimeOptions {
 }
 
 /** World-scoped construction rules, persistent restore port and placement handlers. */
-export class ConstructionWorldRuntime implements WorldScopedBinding {
+export class ConstructionWorldRuntime implements WorldScopedBinding, ConstructionReadinessPort {
   private destroyed = false;
+  private readonly readiness = new ConstructionReadinessRuntime();
 
   constructor(private readonly options: ConstructionWorldRuntimeOptions) {
     options.loadoutManager.setPlaceableRockHandler((cfg, playerId, x, y, targetX, targetY, now, playerColor, params) => (
@@ -120,6 +125,47 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
 
   getOwnership(playerId: string): ConstructionOwnership {
     return playerId === this.options.getLocalPlayerId() ? 'host-persistent' : 'guest-session';
+  }
+
+  /** Player-in-World-Lifetime der world-owned Construction-Readiness. */
+  attachPlayerReadiness(playerId: string): void {
+    this.readiness.attachPlayer(playerId);
+  }
+
+  detachPlayerReadiness(playerId: string): void {
+    this.readiness.detachPlayer(playerId);
+  }
+
+  resetPlayerReadiness(playerId: string): void {
+    this.readiness.resetPlayer(playerId);
+  }
+
+  isConstructionOnCooldown(playerId: string, constructionId: ConstructionId, nowMs: number): boolean {
+    return this.readiness.isConstructionOnCooldown(playerId, constructionId, nowMs);
+  }
+
+  markConstructionUsed(playerId: string, constructionId: ConstructionId, nowMs: number): number {
+    return this.readiness.markConstructionUsed(playerId, constructionId, nowMs);
+  }
+
+  getManagementActionCooldownUntil(playerId: string, action: ConstructionManagementAction): number {
+    return this.readiness.getManagementActionCooldownUntil(playerId, action);
+  }
+
+  isManagementActionOnCooldown(
+    playerId: string,
+    action: ConstructionManagementAction,
+    nowMs: number,
+  ): boolean {
+    return this.readiness.isManagementActionOnCooldown(playerId, action, nowMs);
+  }
+
+  markManagementActionUsed(
+    playerId: string,
+    action: ConstructionManagementAction,
+    nowMs: number,
+  ): number {
+    return this.readiness.markManagementActionUsed(playerId, action, nowMs);
   }
 
   resolveConstructionId(value: string | number | undefined): ConstructionId | null {
@@ -214,6 +260,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
     constructionId: ConstructionId,
     targetX: number,
     targetY: number,
+    hostNowMs: number,
     activityRevision?: number,
   ): LoadoutUseResult {
     const canonical = normalizeConstructionId(constructionId);
@@ -225,14 +272,13 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
     const player = this.options.playerManager.getPlayer(playerId);
     if (!player || !player.active || !this.options.combatSystem.isAlive(playerId) || this.options.combatSystem.isBurrowed(playerId)) return { ok: false, reason: 'blocked' };
     const definition = getCoopDefenseConstructionDefinition(canonical);
-    const now = Date.now();
-    if (this.options.loadoutManager.isConstructionOnCooldown(playerId, canonical, now)) return { ok: false, reason: 'cooldown' };
+    if (this.isConstructionOnCooldown(playerId, canonical, hostNowMs)) return { ok: false, reason: 'cooldown' };
     if (!this.hasFreeCapacity(playerId, definition.capacityCost)) return { ok: false, reason: 'capacity' };
     const hpMultiplier = definition.indestructible ? 1 : 1 + (this.options.modifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0);
     const utilityId = getUtilityIdForConstruction(canonical);
     const utilityConfig = utilityId ? this.getEffectiveUtilityConfig(playerId, canonical) : null;
     const construction = utilityConfig
-      ? this.options.placementSystem.tryPlaceRock(utilityConfig, playerId, player.color, player.x, player.y, targetX, targetY, now, this.getOwnership(playerId))
+      ? this.options.placementSystem.tryPlaceRock(utilityConfig, playerId, player.color, player.x, player.y, targetX, targetY, hostNowMs, this.getOwnership(playerId))
       : this.options.placementSystem.tryPlaceConstruction(definition, definition.maxHp * hpMultiplier, playerId, player.color, player.x, player.y, targetX, targetY, this.getOwnership(playerId));
     if (!construction) return { ok: false, reason: 'placement' };
     if (definition.kind === 'pedestal') {
@@ -243,8 +289,8 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
         return { ok: false, reason: 'placement' };
       }
     }
-    this.options.loadoutManager.markConstructionUsed(playerId, canonical, now);
-    this.options.publishUtilityCooldown(playerId, now + definition.buildCooldownMs, canonical);
+    const cooldownUntil = this.markConstructionUsed(playerId, canonical, hostNowMs);
+    this.options.publishUtilityCooldown(playerId, cooldownUntil, canonical);
     this.options.rockVisualHelper.materializePlaceableRock(construction, true);
     this.registerNewPersistentPlaceable(construction, { kind: 'construction', id: canonical }, definition.footprint);
     this.options.emitGridChanged({
@@ -277,12 +323,17 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
     return this.options.loadoutManager.useInspectorUtility(playerId, config, angle, targetX, targetY, now, params);
   }
 
-  dismantleConstruction(playerId: string, targetX: number, targetY: number, activityRevision?: number): LoadoutUseResult {
+  dismantleConstruction(
+    playerId: string,
+    targetX: number,
+    targetY: number,
+    hostNowMs: number,
+    activityRevision?: number,
+  ): LoadoutUseResult {
     if (!this.options.isHost() || !this.options.getPlayerCapabilities(playerId).canDismantle || !this.options.mayManagePersistentBase(playerId)) return { ok: false, reason: this.options.isHost() ? 'blocked' : 'invalid' };
     const player = this.options.playerManager.getPlayer(playerId);
     if (!player || !player.active || !this.options.combatSystem.isAlive(playerId) || this.options.combatSystem.isBurrowed(playerId)) return { ok: false, reason: 'blocked' };
-    const now = Date.now();
-    if (this.options.loadoutManager.isManagementActionOnCooldown(playerId, 'dismantle', now)) return { ok: false, reason: 'cooldown' };
+    if (this.isManagementActionOnCooldown(playerId, 'dismantle', hostNowMs)) return { ok: false, reason: 'cooldown' };
     const cell = this.options.placementSystem.getClampedTargetCell(player.x, player.y, targetX, targetY, COOP_DEFENSE_DISMANTLE_RANGE);
     if (!cell) return { ok: false, reason: 'blocked' };
     const target = this.options.placementSystem.getRuntimeRockAt(cell.gridX, cell.gridY);
@@ -292,7 +343,8 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
     if (rewardId !== undefined && !this.options.getPersistentBaseContext()?.rewards.getState().placements.some((placement) => placement.rewardId === rewardId)) return { ok: false, reason: 'blocked' };
     const removed = this.options.placementSystem.removeRockAt(cell.gridX, cell.gridY, playerId, rewardId !== undefined ? 'base-owned' : this.getOwnership(playerId), rewardId !== undefined);
     if (!removed) return { ok: false, reason: 'blocked' };
-    this.markManagementActionUsed(playerId, 'dismantle', now);
+    const cooldownUntil = this.markManagementActionUsed(playerId, 'dismantle', hostNowMs);
+    this.options.publishUtilityCooldown(playerId, cooldownUntil, 'management:dismantle');
     this.finalizeDismantledConstruction(removed, true);
     this.options.gameAudioSystem.playSound('sfx_place_rock', cell.x, cell.y, playerId);
     this.options.emitGridChanged({ reason: 'placeable_removed', source: this.sourceFor(removed), runtime: removed });
@@ -465,6 +517,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.readiness.destroy();
     this.options.loadoutManager.setPlaceableRockHandler(null);
     this.options.loadoutManager.setTunnelPlacementHandler(null);
     this.options.onDestroy?.(this);
@@ -482,11 +535,6 @@ export class ConstructionWorldRuntime implements WorldScopedBinding {
     const modifiers = this.options.modifierSystem?.getModifiers(playerId);
     const effective = modifiers ? applyCoopDefenseModifiersToUtilityConfig(base as PlaceableUtilityConfig, { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }) as PlaceableUtilityConfig : base as PlaceableUtilityConfig;
     return { ...effective, id: utilityId, placeable: { ...effective.placeable, lifetimeMs: 0 } } as PlaceableUtilityConfig;
-  }
-
-  private markManagementActionUsed(playerId: string, action: 'reposition' | 'dismantle', now: number): void {
-    this.options.loadoutManager.markManagementActionUsed(playerId, action, now, COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS);
-    this.options.publishUtilityCooldown(playerId, now + COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS, `management:${action}`);
   }
 
   private sourceFor(runtime: SyncedPlaceableRock): 'placeable_rock' | 'placeable_turret' | 'placeable_pedestal' {

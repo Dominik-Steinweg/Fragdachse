@@ -92,12 +92,13 @@ export function createArenaRuntimeRpcPorts(
       get: (playerId) => flow.getPlayerCapabilities(playerId),
     },
     construction: {
-      placeInspectorConstruction: (playerId, constructionId, targetX, targetY, activityRevision) => (
+      placeInspectorConstruction: (playerId, constructionId, targetX, targetY, hostNowMs, activityRevision) => (
         flow.getConstructionWorldRuntime()?.placeInspectorConstruction(
           playerId,
           constructionId,
           targetX,
           targetY,
+          hostNowMs,
           activityRevision,
         ) ?? { ok: false, reason: 'blocked' }
       ),
@@ -112,11 +113,12 @@ export function createArenaRuntimeRpcPorts(
           params,
         ) ?? { ok: false, reason: 'blocked' }
       ),
-      dismantleConstruction: (playerId, targetX, targetY, activityRevision) => (
+      dismantleConstruction: (playerId, targetX, targetY, hostNowMs, activityRevision) => (
         flow.getConstructionWorldRuntime()?.dismantleConstruction(
           playerId,
           targetX,
           targetY,
+          hostNowMs,
           activityRevision,
         ) ?? { ok: false, reason: 'blocked' }
       ),
@@ -129,7 +131,7 @@ export function createArenaRuntimeRpcPorts(
     },
     persistentBase: {
       placeReward: (playerId, request) => persistentBase.placePersistentBaseReward(playerId, request),
-      moveObject: (playerId, request) => persistentBase.movePersistentBaseObject(playerId, request),
+      moveObject: (playerId, request, hostNowMs) => persistentBase.movePersistentBaseObject(playerId, request, hostNowMs),
     },
     playerLoadout: {
       handleBurrowRequest: (playerId, wantsBurrowed) => {

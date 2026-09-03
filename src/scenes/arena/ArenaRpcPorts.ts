@@ -25,6 +25,7 @@ export interface ConstructionRpcPort {
     constructionId: ConstructionId,
     targetX: number,
     targetY: number,
+    hostNowMs: number,
     activityRevision?: number,
   ): LoadoutUseResult;
   useInspectorUtility(
@@ -40,6 +41,7 @@ export interface ConstructionRpcPort {
     playerId: string,
     targetX: number,
     targetY: number,
+    hostNowMs: number,
     activityRevision?: number,
   ): LoadoutUseResult;
   dismantleAllOwnedConstructions(playerId: string, activityRevision?: number): LoadoutUseResult;
@@ -47,7 +49,7 @@ export interface ConstructionRpcPort {
 
 export interface PersistentBaseRpcPort {
   placeReward(playerId: string, request: PersistentBaseRewardPlacementRequest): LoadoutUseResult;
-  moveObject(playerId: string, request: PersistentBaseMoveRequest): LoadoutUseResult;
+  moveObject(playerId: string, request: PersistentBaseMoveRequest, hostNowMs: number): LoadoutUseResult;
 }
 
 export interface HeldActionRpcIdentity {

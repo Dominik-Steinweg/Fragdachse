@@ -110,7 +110,7 @@ export interface PlayerGameplayLifecyclePort {
   detachPlayerBuild(playerId: string): void;
   attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void;
   detachPlayerLoadout(playerId: string): void;
-  reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): void;
+  reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean;
   reconcilePlayerBuildModifiers(
     builds: ReadonlyMap<string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null>,
   ): void;
@@ -386,9 +386,10 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   /** Zieht eine geänderte committed/live Auswahl nach und klemmt laufende Ressourcen an neue Maxima. */
-  reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): void {
-    this.systems.loadout.syncSelectedLoadout(playerId, selection);
+  reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean {
+    const changed = this.systems.loadout.syncSelectedLoadout(playerId, selection);
     this.systems.resource.reconcilePlayerLimits(playerId);
+    return changed;
   }
 
   /**

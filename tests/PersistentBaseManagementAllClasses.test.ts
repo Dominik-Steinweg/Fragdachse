@@ -175,10 +175,8 @@ function createHarness(classId: string) {
         context: { persistentBaseSite: site, definition: { sourceMapId: 'management-test' } },
         materialization: { placement: placementSystem, bases: null },
       }),
-      getPlayerGameplayRuntime: () => ({
-        systems: { loadout: loadoutManager, targetStatus: null, energyInjector: null },
-      }),
       getWorldBinding: () => persistentBaseWorldBinding,
+      getConstructionReadiness: () => coordinator.constructionWorldRuntime,
       getConstructionRuntime: () => coordinator.constructionWorldRuntime,
       getPlayerCapabilities: () => ({ canPlace: true, canDismantle: true, canInteract: true } as never),
       hasPersistentBaseSite: () => true,
@@ -425,7 +423,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       sourceGridY: 1,
       targetGridX: 2,
       targetGridY: 2,
-    })).toEqual({ ok: false, reason: 'invalid' });
+    }, 1_000)).toEqual({ ok: false, reason: 'invalid' });
   });
 
   it('behandelt null als fehlendes Loadout im Management-Gate', () => {
@@ -490,7 +488,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       1_000,
     )).toMatchObject({ isValid: true, sourceRuntimeId: reward.id, mode: 'dismantle' });
 
-    expect(coordinator.constructionWorldRuntime.dismantleConstruction(playerId, target.x, target.y)).toEqual({ ok: true });
+    expect(coordinator.constructionWorldRuntime.dismantleConstruction(playerId, target.x, target.y, 1_000)).toEqual({ ok: true });
     expect(placementSystem.getRuntimeRock(reward.id)).toBeUndefined();
     expect(rewardStore.getState().placements).toEqual([]);
   });
@@ -501,7 +499,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     const source = placeRewardPedestal(harness, 0, 0);
     const target = rewardCell(1, 1);
 
-    const result = coordinator.movePersistentBaseObject(playerId, moveRequest(source, target));
+    const result = coordinator.movePersistentBaseObject(playerId, moveRequest(source, target), 1_000);
 
     expect(result).toEqual({ ok: true });
     expect(rewardStore.getState().placements).toEqual([
@@ -534,26 +532,23 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
 
   it('schuetzt aufeinanderfolgende Moves mit 100 ms und laesst die Quelle dabei unveraendert', () => {
     const harness = createHarness('assault_dachs');
-    const { coordinator, placementSystem, loadoutManager, playerId } = harness;
+    const { coordinator, placementSystem, playerId } = harness;
     const source = placeRewardPedestal(harness, 0, 0);
     const firstTarget = rewardCell(1, 1);
-    vi.spyOn(Date, 'now').mockReturnValue(5_000);
-
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, firstTarget)))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, firstTarget), 5_000))
       .toEqual({ ok: true });
-    expect(loadoutManager.getManagementActionCooldownUntil(playerId, 'reposition')).toBe(5_100);
+    expect(coordinator.constructionWorldRuntime.getManagementActionCooldownUntil(playerId, 'reposition')).toBe(5_100);
 
     const moved = placementSystem.getRuntimeRock(source.id)!;
     const secondTarget = rewardCell(-1, 1);
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(moved, secondTarget)))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(moved, secondTarget), 5_050))
       .toEqual({ ok: false, reason: 'cooldown' });
     expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({
       gridX: firstTarget.gridX,
       gridY: firstTarget.gridY,
     });
 
-    vi.spyOn(Date, 'now').mockReturnValue(5_100);
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(moved, secondTarget)))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(moved, secondTarget), 5_100))
       .toEqual({ ok: true });
   });
 
@@ -562,12 +557,10 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     const { coordinator, rewardStore, placementSystem, playerId } = harness;
     const source = placeRewardPedestal(harness, 0, 0);
     const first = rewardCell(1, 1);
-    vi.spyOn(Date, 'now').mockReturnValue(9_000);
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, first))).toEqual({ ok: true });
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, first), 9_000)).toEqual({ ok: true });
 
     // Zweite Anfrage haelt noch die alte Quellzelle: first valid host-accepted mutation wins.
-    vi.spyOn(Date, 'now').mockReturnValue(9_500);
-    const stale = coordinator.movePersistentBaseObject(playerId, moveRequest(source, rewardCell(-1, 1)));
+    const stale = coordinator.movePersistentBaseObject(playerId, moveRequest(source, rewardCell(-1, 1)), 9_500);
     expect(stale).toEqual({ ok: false, reason: 'blocked' });
     expect(rewardStore.getState().placements).toEqual([
       expect.objectContaining({
@@ -612,7 +605,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     });
     contributionStore.registerRestored('owner-a', blueprint, personal.id);
 
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target)))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target), 1_000))
       .toEqual({ ok: true });
 
     // Der Reward steht allein auf der Zielzelle; die verdraengte Runtime ist fort.
@@ -633,6 +626,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(coordinator.movePersistentBaseObject(
       playerId,
       moveRequest(source, rewardCell(1, 1), { worldRevision: WORLD_REVISION - 1 }),
+      1_000,
     )).toEqual({ ok: false, reason: 'blocked' });
     expect(rewardStore.getState().placements).toEqual([
       { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 },
@@ -656,6 +650,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     const stale = coordinator.movePersistentBaseObject(
       playerId,
       moveRequest(source, rewardCell(1, 1), { activityRevision: ACTIVITY_A_REVISION }),
+      1_000,
     );
     expect(stale).toEqual({ ok: false, reason: 'blocked' });
     expect(rewardStore.getState().placements).toEqual([
@@ -670,6 +665,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     const current = coordinator.movePersistentBaseObject(
       playerId,
       moveRequest(source, rewardCell(1, 1), { activityRevision: ACTIVITY_B_REVISION }),
+      1_100,
     );
     expect(current).toEqual({ ok: true });
     expect(rewardStore.getState().placements).toEqual([
@@ -725,6 +721,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       playerId,
       target.x,
       target.y,
+      1_000,
       ACTIVITY_A_REVISION,
     )).toEqual({ ok: false, reason: 'blocked' });
     expect(placementSystem.getRuntimeRock(source.id)).toBeDefined();
@@ -734,6 +731,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       playerId,
       target.x,
       target.y,
+      1_100,
       ACTIVITY_B_REVISION,
     )).toEqual({ ok: true });
     expect(placementSystem.getRuntimeRock(source.id)).toBeUndefined();
@@ -756,6 +754,7 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     expect(coordinator.movePersistentBaseObject(
       playerId,
       moveRequest(source, rewardCell(1, 1), { activityRevision: ACTIVITY_A_REVISION }),
+      1_000,
     )).toEqual({ ok: false, reason: 'blocked' });
     expect(rewardStore.getState().placements).toEqual([
       { rewardId: 'base_health_pedestal', relativeGridX: 0, relativeGridY: 0, angle: 0 },
@@ -795,7 +794,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     placementSystem.applyDamage(source.id, 60);
     const target = rewardCell(1, 1);
 
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target)))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, target), 1_000))
       .toEqual({ ok: true });
     expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({
       id: source.id,
@@ -812,7 +811,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
     const { coordinator, placementSystem, playerId } = harness;
     const foreign = placeOwnConstruction(harness, 'someone-else', 0, 0);
 
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(foreign, rewardCell(1, 1))))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(foreign, rewardCell(1, 1)), 1_000))
       .toEqual({ ok: false, reason: 'blocked' });
     expect(placementSystem.getRuntimeRock(foreign.id)).toMatchObject({
       gridX: foreign.gridX,
@@ -853,7 +852,7 @@ describe('Persoenliche Konstruktionen bleiben owner-basiert', () => {
 
     // Ausserhalb des 3x3-Baubereichs koennte der Store den Blueprint nicht mehr halten.
     const outside = { gridX: ANCHOR.gridX + 4, gridY: ANCHOR.gridY };
-    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, outside)))
+    expect(coordinator.movePersistentBaseObject(playerId, moveRequest(source, outside), 1_000))
       .toEqual({ ok: false, reason: 'placement' });
     expect(placementSystem.getRuntimeRock(source.id)).toMatchObject({
       gridX: source.gridX,

@@ -184,7 +184,7 @@ export class RpcCoordinator {
 
   private registerPersistentBaseMoveHandler(): void {
     bridge.registerPersistentBaseMoveHandler((playerId, request) => (
-      this.persistentBase.moveObject(playerId, request)
+      this.persistentBase.moveObject(playerId, request, Date.now())
     ));
   }
 
@@ -328,10 +328,13 @@ export class RpcCoordinator {
           || params.temporaryUtilityInstanceId) {
           return { ok: false, reason: 'invalid' };
         }
-        const activityRevision = params?.activityRevision;
-        return (activityRevision === undefined
-          ? this.construction.dismantleConstruction(senderId, targetX, targetY)
-          : this.construction.dismantleConstruction(senderId, targetX, targetY, activityRevision));
+        return this.construction.dismantleConstruction(
+          senderId,
+          targetX,
+          targetY,
+          hostNowMs,
+          params?.activityRevision,
+        );
       }
       if (currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
         && slot === 'utility' && !params?.toolRef && !params?.temporaryUtilityInstanceId) {
@@ -346,21 +349,14 @@ export class RpcCoordinator {
             || normalizeConstructionId(params.toolRef.id) !== normalizeConstructionId(params.constructionId)) {
             return { ok: false, reason: 'invalid' };
           }
-          const activityRevision = params.activityRevision;
-          return activityRevision === undefined
-            ? this.construction.placeInspectorConstruction(
-              senderId,
-              params.constructionId,
-              targetX,
-              targetY,
-            )
-            : this.construction.placeInspectorConstruction(
-              senderId,
-              params.constructionId,
-              targetX,
-              targetY,
-              activityRevision,
-            );
+          return this.construction.placeInspectorConstruction(
+            senderId,
+            params.constructionId,
+            targetX,
+            targetY,
+            hostNowMs,
+            params.activityRevision,
+          );
         }
         if (params.toolRef.kind !== 'utility') return { ok: false, reason: 'invalid' };
         if (currentLoadout?.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'invalid' };

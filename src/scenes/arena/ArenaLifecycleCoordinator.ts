@@ -559,9 +559,11 @@ export class ArenaLifecycleCoordinator {
       detachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.detachPlayerBurrow(playerId); },
       attachLoadout: (playerId) => {
         this.worldPlayerGameplayRuntime?.attachPlayerLoadout(playerId, this.resolveCommittedLoadoutSelection(playerId));
+        this.constructionWorldRuntime?.attachPlayerReadiness(playerId);
       },
       detachLoadout: (playerId) => {
         this.worldPlayerGameplayRuntime?.detachPlayerLoadout(playerId);
+        this.constructionWorldRuntime?.detachPlayerReadiness(playerId);
         this.worldPowerUpRuntime?.system.removePlayer(playerId);
       },
       detachWorldTargeting: (playerId) => {
@@ -948,6 +950,7 @@ export class ArenaLifecycleCoordinator {
   readonly persistentBaseWorldPorts = {
     getWorldBinding: () => this.persistentBaseWorldBinding,
     getConstructionRuntime: () => this.constructionWorldRuntime,
+    getConstructionReadiness: () => this.constructionWorldRuntime,
     getPlayerCapabilities: (playerId: string) => this.getPlayerCapabilities(playerId),
     hasPersistentBaseSite: () => this.hasPersistentBaseForCurrentWorld(),
     getConfiguredGameMode: () => this.resolveConfiguredGameMode(),
@@ -1660,7 +1663,8 @@ export class ArenaLifecycleCoordinator {
     if (!playerGameplay) return;
     for (const profile of bridge.getConnectedPlayers()) {
       if (!this.ctx.playerManager.hasPlayer(profile.id)) continue;
-      playerGameplay.reconcilePlayerLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+      const loadoutChanged = playerGameplay.reconcilePlayerLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
+      if (loadoutChanged) this.constructionWorldRuntime?.resetPlayerReadiness(profile.id);
       this.ctx.combatSystem.reconcilePlayerRuntimeState(profile.id);
     }
   }
