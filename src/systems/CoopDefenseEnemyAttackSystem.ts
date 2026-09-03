@@ -3,7 +3,6 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { CombatSystem } from './CombatSystem';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from './CoopDefenseEnemyTrainAwarenessSystem';
 import type { PlacementSystem } from './PlacementSystem';
@@ -11,6 +10,7 @@ import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCata
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import { COLORS, PLAYER_SIZE } from '../config';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
+import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 type EnemyAttackTargetKind = 'base' | 'player' | 'decoy' | 'ally' | 'train' | 'obstacle';
 
@@ -106,7 +106,7 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly playerManager: PlayerManager,
     private readonly baseManager: BaseManager,
     private readonly combatSystem: CombatSystem,
-    private readonly loadoutManager: LoadoutManager,
+    private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly getRockObjects: () => readonly (RockPhysicsProxy | null)[] | null,
     private readonly trainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null = null,
     private readonly placementSystem: PlacementSystem | null = null,
@@ -328,16 +328,15 @@ export class CoopDefenseEnemyAttackSystem {
     );
     enemy.faceAngle(angle);
 
-    const didFire = this.loadoutManager.fireAutomatedWeapon(
-      weapon.config,
-      enemy.sprite.x,
-      enemy.sprite.y,
-      angle + enemy.rollWeaponSpreadOffset(weapon),
-      target.targetX,
-      target.targetY,
-      enemy.id,
-      COLORS.RED_2,
-    );
+    const didFire = this.weaponExecution.fire(weapon.config, {
+      x: enemy.sprite.x,
+      y: enemy.sprite.y,
+      angle: angle + enemy.rollWeaponSpreadOffset(weapon),
+      targetX: target.targetX,
+      targetY: target.targetY,
+      ownerId: enemy.id,
+      ownerColor: COLORS.RED_2,
+    });
     if (!didFire) return;
 
     enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);

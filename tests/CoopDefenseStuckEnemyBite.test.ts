@@ -21,8 +21,8 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { LoadoutManager } from '../src/loadout/LoadoutManager';
 import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 // Kennwerte des Pyro-Dachses aus der Gegner-Registry.
 const PYRO_BADGER_CONFIG = getCoopDefenseEnemyConfig('pyro-badger');
@@ -127,19 +127,12 @@ function createSystem(
       hasClearLineOfFire: () => true,
     } as unknown as CombatSystem,
     {
-      fireAutomatedWeapon: (
-        config: { id: string },
-        _originX: number,
-        _originY: number,
-        _angle: number,
-        targetX: number,
-        targetY: number,
-      ) => {
+      fire: (config: { id: string }, params: { targetX: number; targetY: number }) => {
         firedWeaponIds.push(config.id);
-        firedTargetPositions.push({ x: targetX, y: targetY });
+        firedTargetPositions.push({ x: params.targetX, y: params.targetY });
         return true;
       },
-    } as unknown as LoadoutManager,
+    } as unknown as AutomatedWeaponExecution,
     () => [rock as unknown as Phaser.GameObjects.Image],
   );
 

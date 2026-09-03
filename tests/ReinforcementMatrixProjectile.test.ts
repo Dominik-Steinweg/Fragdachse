@@ -6,27 +6,24 @@ vi.mock('phaser', () => ({
   },
 }));
 
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 // Fachlicher Name; OVERCHARGE_CORE bleibt nur der persistente Loadout-Identifier.
 describe('reinforcement matrix projectile', () => {
   it('launches a slow wall-colliding rocket payload and deploys only on impact', () => {
     const spawnProjectile = vi.fn(() => 17);
-    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
-    Object.defineProperty(manager, 'projectileManager', {
-      value: { spawnProjectile },
-    });
+    const adapter = new AutomatedWeaponExecutionAdapter(
+      { fire: vi.fn(() => true) },
+      { spawnProjectile },
+    );
 
-    expect(manager.fireAutomatedWeapon(
+    expect(adapter.fire(
       WEAPON_CONFIGS.OVERCHARGE_CORE,
-      100,
-      200,
-      Math.PI,
-      1_000,
-      200,
-      'inspector',
-      0x22cc88,
+      {
+        x: 100, y: 200, angle: Math.PI, targetX: 1_000, targetY: 200,
+        ownerId: 'inspector', ownerColor: 0x22cc88,
+      },
     )).toBe(true);
 
     expect(spawnProjectile).toHaveBeenCalledTimes(1);
@@ -63,20 +60,17 @@ describe('reinforcement matrix projectile', () => {
 
   it('limits flight time to the aimed position when it is inside weapon range', () => {
     const spawnProjectile = vi.fn(() => 18);
-    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
-    Object.defineProperty(manager, 'projectileManager', {
-      value: { spawnProjectile },
-    });
+    const adapter = new AutomatedWeaponExecutionAdapter(
+      { fire: vi.fn(() => true) },
+      { spawnProjectile },
+    );
 
-    manager.fireAutomatedWeapon(
+    adapter.fire(
       WEAPON_CONFIGS.OVERCHARGE_CORE,
-      40,
-      60,
-      0,
-      40,
-      220,
-      'inspector',
-      0xffffff,
+      {
+        x: 40, y: 60, angle: 0, targetX: 40, targetY: 220,
+        ownerId: 'inspector', ownerColor: 0xffffff,
+      },
     );
 
     const [, , angle, , projectile] = spawnProjectile.mock.calls[0];

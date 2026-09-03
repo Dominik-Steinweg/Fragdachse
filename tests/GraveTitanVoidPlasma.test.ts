@@ -21,8 +21,8 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { LoadoutManager } from '../src/loadout/LoadoutManager';
 import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 const TITAN = getCoopDefenseEnemyConfig('grave-titan');
 const VOID_PLASMA = WEAPON_CONFIGS.GRAVE_TITAN_VOID_PLASMA;
@@ -121,18 +121,11 @@ function createAttackSystem(
       hasClearLineOfFire: () => true,
     } as unknown as CombatSystem,
     {
-      fireAutomatedWeapon: (
-        config: { id: string },
-        _originX: number,
-        _originY: number,
-        _angle: number,
-        targetX: number,
-        targetY: number,
-      ) => {
-        shots.push({ weaponId: config.id, targetX, targetY });
+      fire: (config: { id: string }, params: { targetX: number; targetY: number }) => {
+        shots.push({ weaponId: config.id, targetX: params.targetX, targetY: params.targetY });
         return true;
       },
-    } as unknown as LoadoutManager,
+    } as unknown as AutomatedWeaponExecution,
     () => [],
   );
 

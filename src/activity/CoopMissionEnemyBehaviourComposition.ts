@@ -1,7 +1,6 @@
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import { CoopDefenseEnemyAbilitySystem, type CoopDefenseEnemyAbilityNetworkPort } from '../systems/CoopDefenseEnemyAbilitySystem';
 import { CoopDefenseEnemyAttackSystem } from '../systems/CoopDefenseEnemyAttackSystem';
 import { CoopDefenseEnemyBurrowSystem } from '../systems/CoopDefenseEnemyBurrowSystem';
@@ -19,6 +18,7 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { TrainAwarenessSource } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
 import type { TrainEventConfig } from '../types';
+import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly playerManager: PlayerManager;
@@ -26,7 +26,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly baseManager: BaseManager;
-  readonly loadoutManager: LoadoutManager;
+  readonly weaponExecution: AutomatedWeaponExecution;
   readonly placementSystem: PlacementSystem;
   readonly energyShieldSystem: EnergyShieldSystem | null;
   readonly stinkCloudSystem: StinkCloudSystem;
@@ -110,7 +110,7 @@ export class CoopMissionEnemyBehaviourComposition {
       this.options.playerManager,
       this.options.baseManager,
       this.options.combatSystem,
-      this.options.loadoutManager,
+      this.options.weaponExecution,
       this.options.getRockObjects,
       trainAwareness,
       this.options.placementSystem,

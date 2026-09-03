@@ -26,6 +26,7 @@ import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
+import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import type { ResourceSystem } from '../src/systems/ResourceSystem';
 import type { CombatSystem } from '../src/systems/CombatSystem';
@@ -144,12 +145,14 @@ function createFixture(options: {
     resource,
     {} as never,
   );
-  // Seit Teilphase 4A ist die gemeinsame Immediate-Fire-Capability world-composed; ohne sie
-  // liefe kein Turmschuss durch `fireAutomatedWeapon`.
-  playerLoadout.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
+  // Die gemeinsame Immediate-Fire-Capability und der explizite Automatik-Adapter werden beide
+  // an der World-Grenze erzeugt; Player- und Turmquellen teilen nur die Ausführung.
+  const weaponExecution = new WorldWeaponExecutionRuntime({
     projectileManager,
     combatSystem: combatSystem as unknown as ConstructorParameters<typeof WorldWeaponExecutionRuntime>[0]['combatSystem'],
-  }));
+  });
+  playerLoadout.setWeaponExecutionCapability(weaponExecution);
+  const automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(weaponExecution, projectileManager);
   if (options.loadoutDamageMultiplier !== undefined) {
     vi.spyOn(playerLoadout, 'getDamageMultiplier').mockReturnValue(options.loadoutDamageMultiplier);
   }
@@ -207,6 +210,7 @@ function createFixture(options: {
     getPlayerCapabilities: () => ({ canUseCombat: true }),
     getEnemyManager: () => enemyManager,
     getPlayerSystems: () => playerSystems,
+    automatedWeaponExecution,
     getPowerUpSystem: () => options.powerUpDamageMultiplier === undefined
       ? null
       : { getDamageMultiplier: () => options.powerUpDamageMultiplier } as never,

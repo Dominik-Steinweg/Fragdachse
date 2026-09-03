@@ -20,7 +20,6 @@ import { getCoopDefenseEnemyConfig, resolveCoopDefenseEnemyConfigs } from '../sr
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { ArmageddonSystem } from '../src/systems/ArmageddonSystem';
@@ -31,6 +30,7 @@ import {
   computeVoidHunterNukeTarget,
   CoopDefenseVoidHunterSystem,
 } from '../src/systems/CoopDefenseVoidHunterSystem';
+import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
   const actions: string[] = [];
@@ -64,12 +64,11 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     canDamageTarget: () => true,
     hasLineOfSight: () => true,
   };
-  const loadout = {
-    fireAutomatedGaussWeapon: vi.fn(() => {
+  const fireGauss = vi.fn(() => {
       actions.push('gauss-shot');
       return true;
-    }),
-  };
+    });
+  const weaponExecution = { fireGauss };
   const power = {
     scheduleConfiguredNukeStrike: vi.fn(() => true),
   };
@@ -88,13 +87,13 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     enemyManager as unknown as EnemyManager,
     playerManager as unknown as PlayerManager,
     combat as unknown as CombatSystem,
-    loadout as unknown as LoadoutManager,
+    weaponExecution as unknown as AutomatedWeaponExecution,
     power as unknown as PowerUpSystem,
     armageddon as unknown as ArmageddonSystem,
     burrow as unknown as CoopDefenseEnemyBurrowSystem,
     fireChunks as unknown as FlamethrowerUpgradeSystem,
   );
-  return { system, enemy, players, playerManager, loadout, power, armageddon, burrow, fireChunks, actions };
+  return { system, enemy, players, playerManager, weaponExecution, fireGauss, power, armageddon, burrow, fireChunks, actions };
 }
 
 describe('Leerenjäger', () => {
@@ -196,7 +195,7 @@ describe('Leerenjäger', () => {
     const fixture = createFixture([{ x: 100, y: 100 + targetDistance }]);
     fixture.system.hostUpdate(0);
     fixture.system.hostUpdate(Math.max(0, initialDelay - 1));
-    expect(fixture.loadout.fireAutomatedGaussWeapon).not.toHaveBeenCalled();
+    expect(fixture.fireGauss).not.toHaveBeenCalled();
 
     fixture.system.hostUpdate(initialDelay);
     expect(fixture.enemy.aim).toBe(0);
@@ -207,12 +206,13 @@ describe('Leerenjäger', () => {
     }
     fixture.system.hostUpdate(initialDelay + chargeDuration);
 
-    expect(fixture.loadout.fireAutomatedGaussWeapon).toHaveBeenCalledTimes(1);
+    expect(fixture.fireGauss).toHaveBeenCalledTimes(1);
     const expectedAngle = Math.min(
       Math.PI / 2,
       (bossConfig.gauss.maxAimTurnDegreesPerSecond * Math.PI / 180) * chargeDuration / 1000,
     );
-    expect(fixture.loadout.fireAutomatedGaussWeapon.mock.calls[0][3]).toBeCloseTo(expectedAngle, 5);
+    expect(fixture.fireGauss.mock.calls[0][0]).toEqual(ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS);
+    expect(fixture.fireGauss.mock.calls[0][1].angle).toBeCloseTo(expectedAngle, 5);
     expect(fixture.playerManager.getPlayer).toHaveBeenCalledTimes(
       aimUpdateInterval > 0 ? Math.floor(chargeDuration / aimUpdateInterval) : 0,
     );
@@ -224,7 +224,7 @@ describe('Leerenjäger', () => {
     fixture.system.hostUpdate(0);
     fixture.system.hostUpdate(bossConfig.gauss.initialDelayMs);
     fixture.system.hostUpdate(bossConfig.gauss.initialDelayMs + bossConfig.gauss.chargeDurationMs);
-    expect(fixture.loadout.fireAutomatedGaussWeapon).not.toHaveBeenCalled();
+    expect(fixture.fireGauss).not.toHaveBeenCalled();
   });
 
   it('finishes a due Gauss shot before starting pending Armageddon', () => {

@@ -9,7 +9,7 @@ import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
-import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ProjectileExplosionConfig, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
+import type { ConstructionId, GrenadeEffectConfig, LoadoutSlot, LoadoutToolRef, LoadoutUseParams, LoadoutUseResult, PlayerAimNetState, ShieldBuffHudState, SyncedActiveHudBuff, TrackedProjectile, WeaponSlot } from '../types';
 import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
 import type {
   AirstrikeUltimateConfig,
@@ -39,7 +39,7 @@ import type {
 import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
 import { COLORS, PLAYER_SIZE, type MuzzleOrigin } from '../config';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
-import { isVelocityMoving, calcPelletAngles } from './SpreadMath';
+import { isVelocityMoving } from './SpreadMath';
 import { resolveShotPlan } from './ShotPlanResolver';
 import type { WeaponExecutionCapability, WeaponFireOptions } from './WeaponFireExecutor';
 import { getHeldWeaponGameplayMuzzleOrigin, getHeldWeaponMuzzleOrigin } from './HeldItemVisuals';
@@ -51,11 +51,6 @@ export interface LoadoutSelection {
   ultimate?: UltimateConfig;
 }
 
-/**
- * Zusatzangaben automatischer Feuerquellen. Der Vertrag liegt beim gemeinsamen
- * {@link WeaponFireExecutor}, damit alle World-Aufrufer denselben Vertrag benutzen.
- */
-type AutomatedWeaponFireOptions = WeaponFireOptions;
 import { HeldItemSlotTracker, type HeldItemSlot } from './HeldItemSlotTracker';
 import { GenericWeapon }   from './GenericWeapon';
 import { GenericUtility }  from './GenericUtility';
@@ -604,79 +599,6 @@ export class LoadoutManager {
 
   setTunnelPlacementHandler(handler: ((cfg: TunnelUltimateConfig, playerId: string, x: number, y: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams) => boolean) | null): void {
     this.tunnelPlacementHandler = handler;
-  }
-
-  fireAutomatedWeapon(
-    config: WeaponConfig,
-    x: number,
-    y: number,
-    angle: number,
-    targetX: number,
-    targetY: number,
-    playerId: string,
-    playerColor: number,
-    options?: AutomatedWeaponFireOptions,
-  ): boolean {
-    const resolvedConfig = scaleAutomatedWeaponDamage(
-      config,
-      options?.directDamageMultiplier ?? 1,
-      options?.payloadDamageMultiplier ?? options?.directDamageMultiplier ?? 1,
-    );
-    const pelletCount = Math.max(
-      1,
-      Math.round((resolvedConfig.pelletCount ?? 1) * (resolvedConfig.pelletCountMultiplier ?? 1)),
-    );
-    if (pelletCount <= 1) {
-      return this.dispatchWeaponFire(
-        resolvedConfig,
-        x,
-        y,
-        angle,
-        targetX,
-        targetY,
-        playerId,
-        playerColor,
-        options?.sourceSlot,
-        undefined,
-        options,
-      );
-    }
-
-    const pelletOffsets = calcPelletAngles(pelletCount, resolvedConfig.pelletSpreadAngle ?? 0);
-    let didFire = false;
-    for (let pelletIndex = 0; pelletIndex < pelletOffsets.length; pelletIndex += 1) {
-      const pelletConfig = pelletIndex === 0
-        ? resolvedConfig
-        : { ...resolvedConfig, shotAudio: undefined };
-      const pelletFired = this.dispatchWeaponFire(
-        pelletConfig,
-        x,
-        y,
-        angle + pelletOffsets[pelletIndex],
-        targetX,
-        targetY,
-        playerId,
-        playerColor,
-        options?.sourceSlot,
-        undefined,
-        options,
-      );
-      didFire = pelletFired || didFire;
-    }
-    return didFire;
-  }
-
-  /** Host-authoritativer NPC-Fire-Pfad für Gauss-Ultimate-Varianten. */
-  fireAutomatedGaussWeapon(
-    config: GaussUltimateConfig,
-    x: number,
-    y: number,
-    angle: number,
-    playerId: string,
-    playerColor: number,
-  ): boolean {
-    this.spawnGaussProjectile(config, x, y, angle, playerId, playerColor, config.range);
-    return true;
   }
 
   /**
@@ -2081,7 +2003,7 @@ export class LoadoutManager {
     playerColor: number,
     sourceSlot?: LoadoutSlot,
     shotId?:     number,
-    options?: AutomatedWeaponFireOptions,
+    options?: WeaponFireOptions,
     gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
     const visualMuzzleOrigin = this.getVisualMuzzleOrigin(playerId, config.id);
@@ -2366,7 +2288,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
-    options?: AutomatedWeaponFireOptions,
+    options?: WeaponFireOptions,
     visualMuzzleOrigin?: MuzzleOrigin,
     gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
@@ -2445,7 +2367,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
-    options?: AutomatedWeaponFireOptions,
+    options?: WeaponFireOptions,
     visualMuzzleOrigin?: MuzzleOrigin,
     gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
@@ -2551,7 +2473,7 @@ export class LoadoutManager {
     playerId:    string,
     playerColor: number,
     sourceSlot?: LoadoutSlot,
-    options?: AutomatedWeaponFireOptions,
+    options?: WeaponFireOptions,
     visualMuzzleOrigin?: MuzzleOrigin,
     gameplayMuzzleOrigin?: MuzzleOrigin,
   ): boolean {
@@ -2622,105 +2544,4 @@ function isAutonomousWeaponToggle(config: WeaponConfig): boolean {
   return config.fire.type === 'energy_shield'
     && config.fire.domeEnabled > 0
     && config.fire.domeToggleEnabled > 0;
-}
-
-/**
- * Skaliert alle derzeit von automatischen Turmwaffen verwendeten Schadensfelder gemeinsam.
- *
- * Direktschaden bekommt nur den lokalen Turmfaktor: aktive Besitzer-/Power-up-Faktoren werden
- * beim eigentlichen Projektiltreffer vom CombatSystem aufgeloest. Explosionen, Wolken und Brand
- * umgehen diesen Projektiltrichter; deshalb wird deren Gesamtfaktor bereits beim Schuss
- * eingefroren. Der zentrale Coop-Resolver (globaler Schaden, Krit) folgt weiterhin pro Treffer.
- */
-function scaleAutomatedWeaponDamage(
-  config: WeaponConfig,
-  directDamageMultiplier: number,
-  payloadDamageMultiplier: number,
-): WeaponConfig {
-  const directFactor = Math.max(0, directDamageMultiplier);
-  const payloadFactor = Math.max(0, payloadDamageMultiplier);
-  const baseConfig: WeaponConfig = {
-    ...config,
-    damage: config.damage * directFactor,
-    directDamageOverride: config.directDamageOverride === undefined
-      ? undefined
-      : config.directDamageOverride * directFactor,
-    burnOnHit: config.burnOnHit
-      ? { ...config.burnOnHit, damagePerTick: config.burnOnHit.damagePerTick * payloadFactor }
-      : undefined,
-  };
-
-  if (config.fire.type === 'projectile') {
-    return {
-      ...baseConfig,
-      fire: {
-        ...config.fire,
-        impactExplosion: scaleAutomatedExplosion(config.fire.impactExplosion, payloadFactor),
-        enemyHitExplosion: scaleAutomatedExplosion(config.fire.enemyHitExplosion, payloadFactor),
-        impactCloud: config.fire.impactCloud
-          ? { ...config.fire.impactCloud, damagePerTick: config.fire.impactCloud.damagePerTick * payloadFactor }
-          : undefined,
-      },
-    };
-  }
-
-  if (config.fire.type === 'flamethrower') {
-    return {
-      ...baseConfig,
-      fire: {
-        ...config.fire,
-        burnDamagePerTick: config.fire.burnDamagePerTick * payloadFactor,
-        fireball: config.fire.fireball
-          ? {
-            ...config.fire.fireball,
-            explosionMaxDamage: config.fire.fireball.explosionMaxDamage * payloadFactor,
-            explosionMinDamage: config.fire.fireball.explosionMinDamage * payloadFactor,
-            groundBurnDamagePerTick: config.fire.fireball.groundBurnDamagePerTick * payloadFactor,
-          }
-          : undefined,
-      },
-    };
-  }
-
-  if (config.fire.type === 'tesla_dome') {
-    return {
-      ...baseConfig,
-      fire: {
-        ...config.fire,
-        damagePerTick: config.fire.damagePerTick * payloadFactor,
-      },
-    };
-  }
-
-  return baseConfig;
-}
-
-function scaleAutomatedExplosion(
-  effect: ProjectileExplosionConfig | undefined,
-  multiplier: number,
-): ProjectileExplosionConfig | undefined {
-  if (!effect) return undefined;
-  return {
-    ...effect,
-    maxDamage: effect.maxDamage * multiplier,
-    minDamage: effect.minDamage === undefined ? undefined : effect.minDamage * multiplier,
-    burnOnHit: effect.burnOnHit
-      ? { ...effect.burnOnHit, damagePerTick: effect.burnOnHit.damagePerTick * multiplier }
-      : undefined,
-    groundFire: effect.groundFire
-      ? {
-        ...effect.groundFire,
-        damagePerTick: effect.groundFire.damagePerTick * multiplier,
-        burnDamagePerTick: effect.groundFire.burnDamagePerTick === undefined
-          ? undefined
-          : effect.groundFire.burnDamagePerTick * multiplier,
-      }
-      : undefined,
-    fireChunkBurst: effect.fireChunkBurst
-      ? {
-        ...effect.fireChunkBurst,
-        burnDamagePerTick: effect.fireChunkBurst.burnDamagePerTick * multiplier,
-      }
-      : undefined,
-  };
 }

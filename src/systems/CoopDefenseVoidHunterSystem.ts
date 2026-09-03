@@ -9,7 +9,6 @@ import {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import { ULTIMATE_CONFIGS, type GaussUltimateConfig } from '../loadout/LoadoutConfig';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { SyncedNukeStrike } from '../types';
@@ -19,6 +18,7 @@ import type { CoopDefenseEnemyBurrowSystem } from './CoopDefenseEnemyBurrowSyste
 import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
+import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 interface GaussChargeState {
   readonly targetRef: EnemyAiTargetRef;
@@ -83,7 +83,7 @@ export class CoopDefenseVoidHunterSystem {
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
     private readonly combatSystem: CombatSystem,
-    private readonly loadoutManager: LoadoutManager,
+    private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly powerUpSystem: PowerUpSystem,
     private readonly armageddonSystem: ArmageddonSystem,
     private readonly burrowSystem: CoopDefenseEnemyBurrowSystem,
@@ -360,15 +360,13 @@ export class CoopDefenseVoidHunterSystem {
     enemy.setSpecialAction('gauss-charge', gauss.endsAt, progress, gauss.actualAngle);
     if (now < gauss.endsAt) return;
 
-    const range = VOID_HUNTER_GAUSS.range;
-    this.loadoutManager.fireAutomatedGaussWeapon(
-      VOID_HUNTER_GAUSS,
-      enemy.sprite.x,
-      enemy.sprite.y,
-      gauss.actualAngle,
-      enemy.id,
-      VOID_FIRE_COLOR,
-    );
+    this.weaponExecution.fireGauss(VOID_HUNTER_GAUSS, {
+      x: enemy.sprite.x,
+      y: enemy.sprite.y,
+      angle: gauss.actualAngle,
+      ownerId: enemy.id,
+      ownerColor: VOID_FIRE_COLOR,
+    });
     state.gauss = null;
     state.nextGaussAt = now + config.gauss.cooldownMs;
     enemy.setSpecialAction('none');

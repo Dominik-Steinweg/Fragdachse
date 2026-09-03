@@ -3,7 +3,6 @@ import type { CombatSystem } from '../systems/CombatSystem';
 import type { CoopMissionEnemySpecialRuntime, CoopMissionRuntime } from './CoopMissionRuntime';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlacementSystem } from '../systems/PlacementSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import { CoopDefenseTimebombSystem as TimebombSystem } from '../systems/CoopDefenseTimebombSystem';
 import { CoopDefenseVoidHunterSystem } from '../systems/CoopDefenseVoidHunterSystem';
 import { NecromancySystem } from '../systems/NecromancySystem';
@@ -15,6 +14,7 @@ import type { CoopDefensePlayerModifierSystem } from '../systems/CoopDefensePlay
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 export interface CoopMissionEnemySupportCompositionOptions {
   readonly playerManager: PlayerManager;
@@ -22,7 +22,7 @@ export interface CoopMissionEnemySupportCompositionOptions {
   readonly baseManager: BaseManager;
   readonly placementSystem: PlacementSystem;
   readonly hostPhysics: HostPhysicsSystem;
-  readonly loadoutManager: LoadoutManager;
+  readonly weaponExecution: AutomatedWeaponExecution;
   readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
   readonly powerUpSystem: PowerUpSystem | null;
   readonly armageddonSystem: ArmageddonSystem | null;
@@ -87,14 +87,14 @@ export class CoopMissionEnemySupportComposition {
     const voidHunter = enemyManager
       && burrow
       && this.options.flamethrowerUpgradeSystem
-      && this.options.loadoutManager
+      && this.options.weaponExecution
       && this.options.powerUpSystem
       && this.options.armageddonSystem
       ? new CoopDefenseVoidHunterSystem(
         enemyManager,
         this.options.playerManager,
         this.options.combatSystem,
-        this.options.loadoutManager,
+        this.options.weaponExecution,
         this.options.powerUpSystem,
         this.options.armageddonSystem,
         burrow,
@@ -110,12 +110,12 @@ export class CoopMissionEnemySupportComposition {
       runtime.setEnemySpecials(specials);
     }
 
-    const necromancy = this.options.playerModifierSystem && this.options.loadoutManager
+    const necromancy = this.options.playerModifierSystem && this.options.weaponExecution
       ? new NecromancySystem(
         this.options.playerManager,
         enemyManager,
         this.options.combatSystem,
-        this.options.loadoutManager,
+        this.options.weaponExecution,
         runtime.allyFlowFields,
         (playerId, stat, baseValue) => this.options.playerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
       )

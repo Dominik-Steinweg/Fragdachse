@@ -29,11 +29,11 @@ import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
-import type { LoadoutManager } from '../src/loadout/LoadoutManager';
 import type { CombatSystem } from '../src/systems/CombatSystem';
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 import { EnemyAiTargetCatalog } from '../src/systems/EnemyAiTargetCatalog';
+import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 const COLOSSUS = getCoopDefenseEnemyConfig('inferno-colossus');
 const SCAN_INTERVAL_MS = COLOSSUS.attackScanIntervalMs;
@@ -160,18 +160,11 @@ function createAttackSystem(
       hasClearLineOfFire: () => true,
     } as unknown as CombatSystem,
     {
-      fireAutomatedWeapon: (
-        config: { id: string },
-        _originX: number,
-        _originY: number,
-        _angle: number,
-        targetX: number,
-        targetY: number,
-      ) => {
-        shots.push({ weaponId: config.id, targetX, targetY });
+      fire: (config: { id: string }, params: { targetX: number; targetY: number }) => {
+        shots.push({ weaponId: config.id, targetX: params.targetX, targetY: params.targetY });
         return true;
       },
-    } as unknown as LoadoutManager,
+    } as unknown as AutomatedWeaponExecution,
     () => [],
     null,
     null,
@@ -312,18 +305,11 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
         hasClearLineOfFire: () => true,
       } as unknown as CombatSystem,
       {
-        fireAutomatedWeapon: (
-          config: { id: string },
-          _originX: number,
-          _originY: number,
-          _angle: number,
-          targetX: number,
-          targetY: number,
-        ) => {
-          shots.push({ weaponId: config.id, targetX, targetY });
+        fire: (config: { id: string }, params: { targetX: number; targetY: number }) => {
+          shots.push({ weaponId: config.id, targetX: params.targetX, targetY: params.targetY });
           return true;
         },
-      } as unknown as LoadoutManager,
+      } as unknown as AutomatedWeaponExecution,
       () => [rock],
     );
 

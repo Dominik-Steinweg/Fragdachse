@@ -43,6 +43,7 @@ import {
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { CoopTrainPort } from './CoopTrainPort';
+import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 export interface CoopMissionCompositionOptions {
   readonly scene: Phaser.Scene;
@@ -56,6 +57,7 @@ export interface CoopMissionCompositionOptions {
   readonly getHostPhysics: () => HostPhysicsSystem;
   readonly getPlacementSystem: () => PlacementSystem | null;
   readonly getLoadoutManager: () => LoadoutManager | null;
+  readonly getAutomatedWeaponExecution: () => AutomatedWeaponExecution | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getEnergyShieldSystem: () => EnergyShieldSystem | null;
   readonly getStinkCloudSystem: () => StinkCloudSystem;
@@ -188,6 +190,7 @@ export class CoopMissionComposition {
     const combatSystem = this.options.getCombatSystem();
     const powerUpSystem = this.options.getPowerUpSystem();
     const loadoutManager = this.options.getLoadoutManager();
+    const weaponExecution = this.options.getAutomatedWeaponExecution();
     const placementSystem = this.options.getPlacementSystem();
     // The concrete train child lives behind the World owner's Activity slot. Register the
     // release before any dependent event composition so it is always removed on Activity end,
@@ -234,14 +237,14 @@ export class CoopMissionComposition {
       publishRespawnBudget: this.options.publishRespawnBudget,
     }).materialize(runtime);
 
-    if (!this.options.isHost() || !runtime.enemyManager || !baseManager || !placementSystem || !loadoutManager) return;
+    if (!this.options.isHost() || !runtime.enemyManager || !baseManager || !placementSystem || !weaponExecution) return;
     new CoopMissionEnemyBehaviourComposition({
       playerManager,
       projectileManager: this.options.getProjectileManager(),
       combatSystem,
       hostPhysics: this.options.getHostPhysics(),
       baseManager,
-      loadoutManager,
+      weaponExecution,
       placementSystem,
       energyShieldSystem: this.options.getEnergyShieldSystem(),
       stinkCloudSystem: this.options.getStinkCloudSystem(),
@@ -264,7 +267,7 @@ export class CoopMissionComposition {
       baseManager,
       placementSystem,
       hostPhysics: this.options.getHostPhysics(),
-      loadoutManager,
+      weaponExecution,
       flamethrowerUpgradeSystem: this.options.getFlamethrowerUpgradeSystem(),
       powerUpSystem,
       armageddonSystem: this.options.getArmageddonSystem(),

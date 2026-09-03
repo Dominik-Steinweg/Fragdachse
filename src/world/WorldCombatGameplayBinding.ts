@@ -10,7 +10,6 @@ import type { CombatSystem, HitscanSupportImpact } from '../systems/CombatSystem
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 import type { BurrowSystem } from '../systems/BurrowSystem';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
@@ -37,6 +36,7 @@ import type { TargetFootprint } from '../systems/ReinforcementMatrixSystem';
 import type { CoopDefenseSecondaryObjectiveState } from '../types';
 import type { CoopDefenseTimebombSystem } from '../systems/CoopDefenseTimebombSystem';
 import type { NecromancySystem } from '../systems/NecromancySystem';
+import type { AutomatedWeaponExecution } from './AutomatedWeaponExecutionAdapter';
 import type { TeslaDomeSystem } from '../systems/TeslaDomeSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem } from '../systems/ShieldBuffSystem';
@@ -166,6 +166,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getPlayerCapabilities: (playerId: string) => { canUseCombat: boolean };
   readonly getEnemyManager: () => EnemyManager | null;
   readonly getPlayerSystems: () => WorldPlayerGameplaySystems | null;
+  readonly automatedWeaponExecution: AutomatedWeaponExecution | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getTargetStatusSystem: () => TargetStatusSystem | null;
   readonly getEnergyInjectorSystem: () => EnergyInjectorSystem | null;
@@ -625,26 +626,28 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             : undefined,
         }
         : weapon.fire;
-      player.loadout.fireAutomatedWeapon(
+      o.automatedWeaponExecution?.fire(
         { ...weapon, fire, range: weapon.range * rangeFactor },
-        x,
-        y,
-        angle,
-        targetX,
-        targetY,
-        ownerId,
-        color,
         {
-          ignoreBaseCollisions: isBaseTurret,
-          ignoreRockIndex: skipRockIndex,
-          // Spielerbauten bleiben ihrem Besitzer zugerechnet und laufen als Utility-Schaden
-          // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
-          sourceSlot: isBaseTurret ? undefined : 'utility',
-          sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
-          directDamageMultiplier: damageFactor,
-          // Explosionen, Brand und Schadenswolken laufen nicht durch computeProjectileDamage;
-          // ihr Besitzer-/Power-up-Faktor wird deshalb beim Turmschuss eingefroren.
-          payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
+          x,
+          y,
+          angle,
+          targetX,
+          targetY,
+          ownerId,
+          ownerColor: color,
+          options: {
+            ignoreBaseCollisions: isBaseTurret,
+            ignoreRockIndex: skipRockIndex,
+            // Spielerbauten bleiben ihrem Besitzer zugerechnet und laufen als Utility-Schaden
+            // durch denselben ausgehenden Modifier-/Krit-Pfad wie dessen eigene Treffer.
+            sourceSlot: isBaseTurret ? undefined : 'utility',
+            sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
+            directDamageMultiplier: damageFactor,
+            // Explosionen, Brand und Schadenswolken laufen nicht durch computeProjectileDamage;
+            // ihr Besitzer-/Power-up-Faktor wird deshalb beim Turmschuss eingefroren.
+            payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
+          },
         },
       );
     });

@@ -150,6 +150,7 @@ function combatBindingHarness(
     getPlayerCapabilities: () => ({ canUseCombat: true }),
     getEnemyManager: () => null,
     getPlayerSystems: () => null,
+    automatedWeaponExecution: null,
     getPowerUpSystem: () => null,
     getTargetStatusSystem: () => null,
     getEnergyInjectorSystem: () => null,

@@ -6,31 +6,28 @@ vi.mock('phaser', () => ({
   },
 }));
 
-import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { ENERGY_INJECTOR_COLOR, getTopDownMuzzleOrigin, PLASMA_BURNER_COLOR } from '../src/config';
 import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
 import { getLoadoutItemName } from '../src/i18n/contentPresentation';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
+import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 function createManagerWithSpawnSpy() {
   const spawnProjectile = vi.fn(() => 42);
   const resolveHitscanShot = vi.fn(() => true);
   const resolveMeleeSwing = vi.fn(() => true);
-  const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
-  Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile } });
-  Object.defineProperty(manager, 'combatSystem', { value: { resolveHitscanShot } });
-  // Seit Teilphase 4A ist die gemeinsame Immediate-Fire-Capability world-composed und wird injiziert.
-  manager.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
+  const sharedExecution = new WorldWeaponExecutionRuntime({
     projectileManager: { spawnProjectile },
     combatSystem: { resolveHitscanShot, resolveMeleeSwing },
-  }));
-  return { manager, spawnProjectile, resolveHitscanShot };
+  });
+  const adapter = new AutomatedWeaponExecutionAdapter(sharedExecution, { spawnProjectile });
+  return { adapter, spawnProjectile, resolveHitscanShot };
 }
 
 describe('inspector support weapons', () => {
   it('fires the Plasmabrenner as a continuous, context-sensitive hitscan', () => {
-    const { manager, spawnProjectile, resolveHitscanShot } = createManagerWithSpawnSpy();
+    const { adapter, spawnProjectile, resolveHitscanShot } = createManagerWithSpawnSpy();
     const productionConfig = WEAPON_CONFIGS.PLASMA_BURNER;
 
     expect(getLoadoutItemName(productionConfig.id, 'de')).toBe('Plasmabrenner');
@@ -65,15 +62,12 @@ describe('inspector support weapons', () => {
       },
     };
 
-    expect(manager.fireAutomatedWeapon(
+    expect(adapter.fire(
       testConfig,
-      100,
-      200,
-      0,
-      500,
-      200,
-      'inspector',
-      0x22cc88,
+      {
+        x: 100, y: 200, angle: 0, targetX: 500, targetY: 200,
+        ownerId: 'inspector', ownerColor: 0x22cc88,
+      },
     )).toBe(true);
 
     expect(spawnProjectile).not.toHaveBeenCalled();
@@ -88,7 +82,7 @@ describe('inspector support weapons', () => {
   });
 
   it('limits the Plasmabrenner trace to the cursor while retaining its maximum range', () => {
-    const { resolveHitscanShot } = createManagerWithSpawnSpy();
+    const { adapter, resolveHitscanShot } = createManagerWithSpawnSpy();
     const config = WEAPON_CONFIGS.PLASMA_BURNER;
     const startX = 100;
     const startY = 200;
@@ -96,42 +90,36 @@ describe('inspector support weapons', () => {
     const muzzle = getTopDownMuzzleOrigin(startX, startY, angle);
     const cursorX = muzzle.x + 80;
 
-    const manager = Object.create(LoadoutManager.prototype) as LoadoutManager;
-    Object.defineProperty(manager, 'projectileManager', { value: { spawnProjectile: vi.fn() } });
-    Object.defineProperty(manager, 'combatSystem', { value: { resolveHitscanShot } });
-    manager.setWeaponExecutionCapability(new WorldWeaponExecutionRuntime({
-      projectileManager: { spawnProjectile: vi.fn() },
-      combatSystem: { resolveHitscanShot, resolveMeleeSwing: vi.fn(() => true) },
-    }));
+    const secondAdapter = new AutomatedWeaponExecutionAdapter(
+      new WorldWeaponExecutionRuntime({
+        projectileManager: { spawnProjectile: vi.fn() },
+        combatSystem: { resolveHitscanShot, resolveMeleeSwing: vi.fn(() => true) },
+      }),
+      { spawnProjectile: vi.fn() },
+    );
 
-    manager.fireAutomatedWeapon(config, startX, startY, angle, cursorX, startY, 'inspector', 0x22cc88);
+    adapter.fire(config, {
+      x: startX, y: startY, angle, targetX: cursorX, targetY: startY,
+      ownerId: 'inspector', ownerColor: 0x22cc88,
+    });
     expect(resolveHitscanShot.mock.calls[0]?.[4]).toBeCloseTo(cursorX - muzzle.x, 10);
 
-    manager.fireAutomatedWeapon(
+    secondAdapter.fire(
       config,
-      startX,
-      startY,
-      angle,
-      muzzle.x + config.range + 200,
-      startY,
-      'inspector',
-      0x22cc88,
+      {
+        x: startX, y: startY, angle, targetX: muzzle.x + config.range + 200, targetY: startY,
+        ownerId: 'inspector', ownerColor: 0x22cc88,
+      },
     );
     expect(resolveHitscanShot.mock.calls[1]?.[4]).toBe(config.range);
   });
 
   it('fires the energy injector as a precise non-homing projectile', () => {
-    const { manager, spawnProjectile } = createManagerWithSpawnSpy();
+    const { adapter, spawnProjectile } = createManagerWithSpawnSpy();
 
-    manager.fireAutomatedWeapon(
+    adapter.fire(
       WEAPON_CONFIGS.ENERGY_INJECTOR,
-      0,
-      0,
-      0,
-      400,
-      0,
-      'inspector',
-      0xffffff,
+      { x: 0, y: 0, angle: 0, targetX: 400, targetY: 0, ownerId: 'inspector', ownerColor: 0xffffff },
     );
 
     const [, , , , projectile] = spawnProjectile.mock.calls[0];

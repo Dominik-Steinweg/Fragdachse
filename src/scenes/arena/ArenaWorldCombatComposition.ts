@@ -141,6 +141,7 @@ export function composeWorldCombatGameplay(
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
     getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
     getPlayerSystems: () => gameplay.player?.systems ?? null,
+    automatedWeaponExecution: gameplay.automatedWeaponExecution,
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     getTargetStatusSystem: () => gameplay.targeting?.systems.targetStatus ?? null,
     getEnergyInjectorSystem: () => gameplay.targeting?.systems.energyInjector ?? null,

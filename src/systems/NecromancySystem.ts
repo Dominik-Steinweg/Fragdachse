@@ -4,9 +4,9 @@ import { getCoopDefenseEnemyXp, type CoopDefenseEnemyKind } from '../config/coop
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { LoadoutManager } from '../loadout/LoadoutManager';
 import type { CombatSystem } from './CombatSystem';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
+import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
 const STAT_PREFIX = 'player.necromancy';
 const DEFAULT_INTERVAL_MS = 4000;
@@ -89,7 +89,7 @@ export class NecromancySystem {
     private readonly playerManager: PlayerManager,
     private readonly enemyManager: EnemyManager,
     private readonly combatSystem: CombatSystem,
-    private readonly loadoutManager: LoadoutManager,
+    private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly allyFlowFields: ReadonlyMap<string, EnemyFlowFieldService>,
     private readonly resolveStat: NecromancyStatResolver,
   ) {}
@@ -368,16 +368,15 @@ export class NecromancySystem {
       if (distance > weapon.config.range || !this.combatSystem.hasClearLineOfFire(ally.sprite.x, ally.sprite.y, destination.target.sprite.x, destination.target.sprite.y)) continue;
       if (!ally.isWeaponReady(weapon, now)) return;
       const angle = Phaser.Math.Angle.Between(ally.sprite.x, ally.sprite.y, destination.target.sprite.x, destination.target.sprite.y);
-      if (!this.loadoutManager.fireAutomatedWeapon(
-        weapon.config,
-        ally.sprite.x,
-        ally.sprite.y,
+      if (!this.weaponExecution.fire(weapon.config, {
+        x: ally.sprite.x,
+        y: ally.sprite.y,
         angle,
-        destination.target.sprite.x,
-        destination.target.sprite.y,
-        ally.id,
-        ownerColor || COLORS.GREEN_2,
-      )) return;
+        targetX: destination.target.sprite.x,
+        targetY: destination.target.sprite.y,
+        ownerId: ally.id,
+        ownerColor: ownerColor || COLORS.GREEN_2,
+      })) return;
       ally.faceAngle(angle);
       ally.pauseAttackMovement(now);
       ally.recordWeaponUse(weapon, now);
