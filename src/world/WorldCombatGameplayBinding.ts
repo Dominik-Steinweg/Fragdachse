@@ -541,7 +541,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }
       const playerSystems = o.getPlayerSystems();
       playerSystems?.negevBehavior?.registerKill({ killerId, sourceId });
-      playerSystems?.loadout.handleKill(killerId, sourceId, x, y, source);
+      playerSystems?.weaponReaction.registerKill({ killerId, sourceId, x, y, source });
       if (o.isCoopMission() && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
         o.handleCoopItemKill(killerId, victimId, x, y);
         o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);

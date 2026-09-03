@@ -26,6 +26,7 @@ import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
 import { Ak47BehaviorRuntime } from './Ak47BehaviorRuntime';
 import { NegevBehaviorRuntime } from './NegevBehaviorRuntime';
+import { WeaponReactionRuntime } from './WeaponReactionRuntime';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -33,6 +34,7 @@ import {
 } from '../systems/HostHeldActionSystem';
 import type {
   FireChunkTarget,
+  ExplosionVisualStyle,
   GroundFireVisualStyle,
   HostHeldActionKind,
   LoadoutCommitSnapshot,
@@ -80,7 +82,7 @@ export interface WorldPlayerGameplayNetworkPort {
       phase: 'start' | 'end',
       ownerId: string,
     ) => void;
-    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number) => void;
+    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
     readonly broadcastFireChunkEffect: (
       x: number,
       y: number,
@@ -123,6 +125,7 @@ export interface WorldPlayerGameplaySystems {
   readonly weaponUpgrade: WeaponUpgradeSystem | null;
   readonly ak47Behavior: Ak47BehaviorRuntime | null;
   readonly negevBehavior: NegevBehaviorRuntime;
+  readonly weaponReaction: WeaponReactionRuntime;
   readonly ak47StrategicTarget: Ak47StrategicTargetSystem | null;
 }
 
@@ -322,6 +325,12 @@ export class WorldPlayerGameplayRuntime implements
 
     const loadout = options.createLoadoutManager(resource);
     const ak47Behavior = new Ak47BehaviorRuntime(loadout);
+    const weaponReaction = new WeaponReactionRuntime({
+      loadout,
+      combatSystem: options.combatSystem,
+      resourceSystem: resource,
+      network: options.network.presentation,
+    });
     const ultimateBehavior = new PlayerUltimateBehaviorRuntime({
       playerManager: options.playerManager,
       combatSystem: options.combatSystem,
@@ -505,6 +514,7 @@ export class WorldPlayerGameplayRuntime implements
       weaponUpgrade,
       ak47Behavior,
       negevBehavior,
+      weaponReaction,
       ak47StrategicTarget,
     };
     this.bindLoadout(loadout, playerModifier, itemRuntime, burrow, translocator, tunnel);
@@ -577,6 +587,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.ultimateBehavior.resetPlayer(playerId);
     this.systems.ak47Behavior?.resetPlayer(playerId);
     this.systems.negevBehavior.resetPlayer(playerId);
+    this.systems.weaponReaction.resetPlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
     this.systems.utilityAction.syncEquippedUtility(playerId);
   }
@@ -585,6 +596,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.ultimateBehavior.removePlayer(playerId);
     this.systems.ak47Behavior?.removePlayer(playerId);
     this.systems.negevBehavior.removePlayer(playerId);
+    this.systems.weaponReaction.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
     this.systems.translocator.removePlayer(playerId);
@@ -599,6 +611,7 @@ export class WorldPlayerGameplayRuntime implements
       this.systems.ultimateBehavior.resetPlayer(playerId);
       this.systems.ak47Behavior?.resetPlayer(playerId);
       this.systems.negevBehavior.resetPlayer(playerId);
+      this.systems.weaponReaction.resetPlayer(playerId);
     }
     this.systems.utilityAction.syncEquippedUtility(playerId);
     this.systems.resource.reconcilePlayerLimits(playerId);
@@ -825,7 +838,6 @@ export class WorldPlayerGameplayRuntime implements
     const { systems } = this;
     systems.loadout.setAk47Behavior(null);
     systems.loadout.setNegevBehavior(null);
-    systems.loadout.setCombatSystem(null);
     systems.loadout.setWeaponExecutionCapability(null);
     systems.loadout.setSpecializedWeaponExecutionCapability(null);
     systems.loadout.setPhysicsSystem(null);
@@ -835,6 +847,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.ultimateBehavior.destroy();
     systems.ak47Behavior?.destroy();
     systems.negevBehavior.destroy();
+    systems.weaponReaction.destroy();
     systems.playerAction?.destroy();
     systems.heldAction.reset();
     systems.guardianSpirit?.clear();
@@ -912,7 +925,6 @@ export class WorldPlayerGameplayRuntime implements
     translocator: TranslocatorSystem,
     tunnel: TunnelSystem,
   ): void {
-    loadout.setCombatSystem(this.options.combatSystem);
     loadout.setWeaponExecutionCapability(this.options.weaponExecution);
     loadout.setSpecializedWeaponExecutionCapability(this.options.specializedWeaponExecution);
     loadout.setPhysicsSystem(this.options.hostPhysics);

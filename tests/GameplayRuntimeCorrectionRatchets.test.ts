@@ -51,4 +51,22 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(hostFrame).not.toContain('loadout?.getNegevHudBuffs');
     expect(hostFrame).toContain('negevBehavior?.getHudBuffs');
   });
+
+  it('keeps Shotgun Lightning and simple kill reactions out of LoadoutManager', () => {
+    const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const reactionPort = source('src/loadout/WeaponReactionPort.ts');
+    const reactionRuntime = source('src/world/WeaponReactionRuntime.ts');
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+    const combatBinding = source('src/world/WorldCombatGameplayBinding.ts');
+    const hostFrame = source('src/scenes/arena/HostUpdateCoordinator.ts');
+
+    expect(loadoutManager).not.toContain('shotgunLightningQueue');
+    expect(loadoutManager).not.toContain('processShotgunLightningQueue');
+    expect(loadoutManager).not.toContain('handleKill');
+    expect(reactionPort).toContain('WeaponReactionPort');
+    expect(reactionRuntime).toContain('class WeaponReactionRuntime');
+    expect(worldRuntime).toContain('new WeaponReactionRuntime');
+    expect(combatBinding).toContain('weaponReaction.registerKill');
+    expect(hostFrame).toContain('weaponReaction?.update');
+  });
 });

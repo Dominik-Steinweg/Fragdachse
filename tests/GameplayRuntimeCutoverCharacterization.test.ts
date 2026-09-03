@@ -170,53 +170,6 @@ describe('LoadoutManager.activateWeapon – Commit-Reihenfolge von Readiness und
   });
 });
 
-describe('LoadoutManager – Shotgun-Lightning-Queue lebt heute im Loadout (Migrationsziel 8C)', () => {
-  function makeShotgunManager() {
-    const combatSystem = { applyAoeDamage: vi.fn() };
-    const bridge = { broadcastExplosionEffect: vi.fn() };
-    const manager = Object.create(LoadoutManager.prototype) as AnyManager;
-    const shotgunConfig = {
-      id: 'SHOTGUN',
-      killHeal: 0,
-      killAdrenaline: 0,
-      shotgunLightningRadius: 80,
-      shotgunLightningDamage: 30,
-      shotgunChainEnabled: 0,
-    };
-    manager.loadouts = new Map([['p1', {
-      weapon1: { config: { id: 'W1' } },
-      weapon2: { config: shotgunConfig },
-    }]]);
-    manager.shotgunLightningQueue = [];
-    manager.combatSystem = combatSystem;
-    manager.resourceSystem = { addAdrenaline: vi.fn() };
-    manager.bridge = bridge;
-    return { manager, combatSystem, bridge };
-  }
-
-  it('reiht einen Lightning-Einschlag auf einen Shotgun-Kill ein', () => {
-    const { manager } = makeShotgunManager();
-
-    manager.handleKill('p1', 'SHOTGUN', 10, 20);
-
-    expect(manager.shotgunLightningQueue).toHaveLength(1);
-    expect(manager.shotgunLightningQueue[0]).toMatchObject({ ownerId: 'p1', x: 10, y: 20, generation: 0 });
-  });
-
-  it('loest die eingereihten Einschlaege als AoE-Schaden plus Broadcast auf', () => {
-    const { manager, combatSystem, bridge } = makeShotgunManager();
-    manager.handleKill('p1', 'SHOTGUN', 10, 20);
-
-    manager.processShotgunLightningQueue();
-
-    expect(manager.shotgunLightningQueue).toHaveLength(0);
-    expect(combatSystem.applyAoeDamage).toHaveBeenCalledWith(
-      10, 20, 80, 30, 'p1', false, expect.objectContaining({ category: 'explosion', sourceId: 'weapon.SHOTGUN.lightning' }),
-    );
-    expect(bridge.broadcastExplosionEffect).toHaveBeenCalledWith(10, 20, 80, 0x78dfff, 'lightning');
-  });
-});
-
 describe('ConstructionReadinessRuntime – Construction-/Management-Readiness (Phase 5)', () => {
   function makeReadiness(): ConstructionReadinessRuntime {
     const readiness = new ConstructionReadinessRuntime();

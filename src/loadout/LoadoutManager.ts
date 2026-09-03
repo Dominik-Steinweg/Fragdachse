@@ -3,7 +3,6 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ResourceSystem }    from '../systems/ResourceSystem';
 import type { NetworkBridge }     from '../network/NetworkBridge';
-import type { CombatSystem }      from '../systems/CombatSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { TeslaDomeSystem }   from '../systems/TeslaDomeSystem';
@@ -59,15 +58,6 @@ export interface UltimateModifierReadPort {
   getDamageMultiplier(playerId: string, nowMs: number): number;
 }
 
-interface ShotgunLightningEvent {
-  ownerId: string;
-  x: number;
-  y: number;
-  generation: number;
-}
-
-type CombatResolverType = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage' | 'resolveHitscanShot' | 'traceHitscan' | 'resolveMeleeSwing'>
-  & Partial<Pick<CombatSystem, 'resolveSafeHitscanStart'>>;
 type PhysicsSystemType  = {
   addRecoil(id: string, vx: number, vy: number, durationMs?: number): void;
   applyRadialImpulse(x: number, y: number, radius: number, force: number, ownerId?: string, selfMultiplier?: number, durationMs?: number): void;
@@ -81,7 +71,6 @@ type PhysicsSystemType  = {
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
-  private combatSystem:       CombatResolverType | null = null;
   private physicsSystem:      PhysicsSystemType | null = null;
   private teslaDomeSystem:    TeslaDomeSystem | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
@@ -97,7 +86,6 @@ export class LoadoutManager {
   private shotCounters = new Map<string, number>();
   private ak47Behavior: Ak47BehaviorPort | null = null;
   private negevBehavior: NegevBehaviorPort | null = null;
-  private shotgunLightningQueue: ShotgunLightningEvent[] = [];
   /** Welches Item die Figur gerade in den Pfoten haelt – rein visuell, aber host-autoritativ. */
   private readonly heldItemSlots = new HeldItemSlotTracker();
 
@@ -135,7 +123,6 @@ export class LoadoutManager {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   assignDefaultLoadout(playerId: string, selection?: LoadoutSelection): void {
-    this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
     const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
     const w1Cfg = sanitized.weapon1;
     const w2Cfg = sanitized.weapon2;
@@ -200,7 +187,6 @@ export class LoadoutManager {
     this.energyShieldSystem?.hostDeactivateForPlayer(playerId);
     this.shieldBuffSystem?.removePlayer(playerId);
     this.heldItemSlots.removePlayer(playerId);
-    this.shotgunLightningQueue = this.shotgunLightningQueue.filter((event) => event.ownerId !== playerId);
   }
 
   setAk47Behavior(behavior: Ak47BehaviorPort | null): void {
@@ -209,10 +195,6 @@ export class LoadoutManager {
 
   setNegevBehavior(behavior: NegevBehaviorPort | null): void {
     this.negevBehavior = behavior;
-  }
-
-  setCombatSystem(combatSystem: CombatResolverType | null): void {
-    this.combatSystem = combatSystem;
   }
 
   /** Injiziert das HostPhysicsSystem für Rückstoß-Impulse. */
@@ -267,7 +249,6 @@ export class LoadoutManager {
     }
 
     this.negevBehavior?.update(now);
-    this.processShotgunLightningQueue();
   }
 
   // ── Multiplier-Getter ─────────────────────────────────────────────────────
@@ -456,80 +437,6 @@ export class LoadoutManager {
    */
   getDynamicSpread(playerId: string, slot: 'weapon1' | 'weapon2'): number {
     return this.loadouts.get(playerId)?.[slot].getDynamicSpread() ?? 0;
-  }
-
-  handleKill(
-    killerId: string,
-    sourceId: string,
-    x: number,
-    y: number,
-    source?: { dirX?: number; dirY?: number; projectileColor?: number; shotgunLightningGeneration?: number },
-  ): void {
-    const loadout = this.loadouts.get(killerId);
-    if (!loadout) return;
-    const shotgun = loadout.weapon2.config.id === 'SHOTGUN' ? loadout.weapon2.config : null;
-    if (shotgun) {
-      if (sourceId === shotgun.id && (shotgun.shotgunLightningRadius ?? 0) > 0 && (shotgun.shotgunLightningDamage ?? 0) > 0) {
-        this.shotgunLightningQueue.push({ ownerId: killerId, x, y, generation: 0 });
-      } else if (
-        sourceId === 'weapon.SHOTGUN.lightning'
-        && (shotgun.shotgunChainEnabled ?? 0) > 0
-        && source?.shotgunLightningGeneration !== undefined
-      ) {
-        this.shotgunLightningQueue.push({
-          ownerId: killerId,
-          x,
-          y,
-          generation: source.shotgunLightningGeneration + 1,
-        });
-      }
-    }
-    for (const weapon of [loadout.weapon1, loadout.weapon2]) {
-      const cfg = weapon.config;
-      if (cfg.id !== sourceId) continue;
-      if ((cfg.killHeal ?? 0) > 0) this.combatSystem?.heal(killerId, cfg.killHeal ?? 0);
-      if ((cfg.killAdrenaline ?? 0) > 0) this.resourceSystem.addAdrenaline(killerId, cfg.killAdrenaline ?? 0);
-      return;
-    }
-  }
-
-  private processShotgunLightningQueue(): void {
-    if (!this.combatSystem || this.shotgunLightningQueue.length === 0) return;
-
-    // Grosse Ketten werden ueber mehrere Frames verteilt, aber logisch nicht begrenzt.
-    const events = this.shotgunLightningQueue.splice(0, 256);
-    for (const event of events) {
-      const loadout = this.loadouts.get(event.ownerId);
-      const shotgun = loadout?.weapon2.config.id === 'SHOTGUN' ? loadout.weapon2.config : null;
-      if (!shotgun) continue;
-
-      const baseRadius = shotgun.shotgunLightningRadius ?? 0;
-      const baseDamage = shotgun.shotgunLightningDamage ?? 0;
-      if (baseRadius <= 0 || baseDamage <= 0) continue;
-
-      const damageRetention = event.generation > 0
-        ? Phaser.Math.Clamp(shotgun.shotgunChainDamageRetention ?? 0, 0, 1)
-        : 1;
-      const radiusRetention = event.generation > 0
-        ? Phaser.Math.Clamp(shotgun.shotgunChainRadiusRetention ?? 0, 0, 1)
-        : 1;
-      if (event.generation > 0 && ((shotgun.shotgunChainEnabled ?? 0) <= 0 || damageRetention <= 0 || radiusRetention <= 0)) continue;
-
-      const damage = baseDamage * Math.pow(damageRetention, event.generation);
-      const radius = baseRadius * Math.pow(radiusRetention, event.generation);
-      if (damage < 0.5 || radius < 4) continue;
-
-      this.combatSystem.applyAoeDamage(event.x, event.y, radius, damage, event.ownerId, false, {
-        category: 'explosion',
-        allowTeamDamage: false,
-        sourceId: 'weapon.SHOTGUN.lightning',
-        sourceSlot: 'weapon2',
-        enemySlowFraction: (shotgun.shotgunLightningAppliesSlow ?? 0) > 0 ? shotgun.shotgunSlowFraction ?? 0 : 0,
-        enemySlowDurationMs: shotgun.shotgunSlowDurationMs ?? 0,
-        killSource: { shotgunLightningGeneration: event.generation },
-      });
-      this.bridge.broadcastExplosionEffect(event.x, event.y, radius, 0x78dfff, 'lightning');
-    }
   }
 
   getAimNetState(playerId: string, isMoving: boolean): PlayerAimNetState | undefined {

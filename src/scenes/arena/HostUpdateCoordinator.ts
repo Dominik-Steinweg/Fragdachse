@@ -399,6 +399,7 @@ export class HostUpdateCoordinator {
 
     if (!countdownActive) {
       this.playerSystems?.loadout?.update(delta, now);
+      this.playerSystems?.weaponReaction?.update();
       this.playerSystems?.ultimateBehavior?.update(delta, now);
       this.powerUpSystem?.update(delta);
       this.playerSystems?.tunnel?.update(now);

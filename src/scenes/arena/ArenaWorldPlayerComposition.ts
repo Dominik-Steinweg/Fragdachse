@@ -106,7 +106,7 @@ export function composeWorldPlayerGameplay(
       presentation: {
         getPlayerColor: (playerId) => bridge.getPlayerColor(playerId),
         broadcastTranslocatorFlash: (x, y, color, phase, ownerId) => bridge.broadcastTranslocatorFlash(x, y, color, phase, ownerId),
-        broadcastExplosionEffect: (x, y, radius, color) => bridge.broadcastExplosionEffect(x, y, radius, color),
+        broadcastExplosionEffect: (x, y, radius, color, visualStyle) => bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle),
         broadcastFireChunkEffect: (x, y, targets, landsAt, visualStyle) => bridge.broadcastFireChunkEffect(x, y, targets, landsAt, visualStyle),
         broadcastMiniRocketCollectionEffect: (x, y, color) => bridge.broadcastMiniRocketCollectionEffect(x, y, color),
         broadcastMiniRocketDestructionEffect: (x, y, color) => bridge.broadcastMiniRocketDestructionEffect(x, y, color),
