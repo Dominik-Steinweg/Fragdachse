@@ -245,10 +245,14 @@ export class RpcCoordinator {
         || !this.combatSystem.isAlive(playerId)
         || this.playerLoadout.isBurrowed(playerId)
         || this.playerLoadout.isStunned(playerId)) return false;
+      // Die Host-Zeit wird einmal an der RPC-Orchestrierungsgrenze aufgelöst und unverändert
+      // durch die Held-Action-Grenze gereicht. Retries mit derselben actionId werden dort
+      // duplicate-safe behandelt und dürfen den ursprünglichen Startzeitpunkt nicht verschieben.
+      const hostNowMs = Date.now();
 
       if (kind === 'global_dismantle') {
         if (toolRef || temporaryUtilityInstanceId) return false;
-        return this.heldActions.start(playerId, actionId, kind, 1_000, Date.now());
+        return this.heldActions.start(playerId, actionId, kind, 1_000, hostNowMs);
       }
       let utility: UtilityConfig | undefined;
       if (toolRef && temporaryUtilityInstanceId) return false;
@@ -276,8 +280,8 @@ export class RpcCoordinator {
           ? { temporaryUtilityInstanceId }
           : undefined;
       return identity
-        ? this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now(), identity)
-        : this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, Date.now());
+        ? this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, hostNowMs, identity)
+        : this.heldActions.start(playerId, actionId, kind, utility.activation.fullChargeDuration, hostNowMs);
     });
   }
 

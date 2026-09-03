@@ -24,8 +24,23 @@ import { SlimeTrailSystem } from '../systems/SlimeTrailSystem';
 import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
-import { HostHeldActionSystem } from '../systems/HostHeldActionSystem';
-import type { FireChunkTarget, GroundFireVisualStyle, LoadoutCommitSnapshot, LoadoutSlot, LoadoutUseParams, LoadoutUseResult, PlayerInput, SyncedAk47StrategicTarget, SyncedTunnel } from '../types';
+import {
+  HostHeldActionSystem,
+  type ConsumedHeldAction,
+  type HeldActionIdentity,
+} from '../systems/HostHeldActionSystem';
+import type {
+  FireChunkTarget,
+  GroundFireVisualStyle,
+  HostHeldActionKind,
+  LoadoutCommitSnapshot,
+  LoadoutSlot,
+  LoadoutUseParams,
+  LoadoutUseResult,
+  PlayerInput,
+  SyncedAk47StrategicTarget,
+  SyncedTunnel,
+} from '../types';
 import type { UtilityConfig } from '../loadout/LoadoutConfig';
 import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
 import type {
@@ -120,9 +135,36 @@ export interface PlayerGameplayLifecyclePort {
   invalidateHeldActionsOnActivityEnd(): void;
 }
 
-/** World-facing action boundary; Phase 6A materializes host-authoritative weapon actions. */
+export type PlayerGameplayHeldActionIdentity = HeldActionIdentity;
+export type PlayerGameplayHeldActionResult = ConsumedHeldAction;
+
+/** World-facing player action boundary for host-authoritative action mutations. */
 export interface PlayerGameplayActionPort {
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult;
+  handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void;
+  startHeldAction(
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    expectedDurationMs: number,
+    hostNowMs: number,
+    identity?: PlayerGameplayHeldActionIdentity,
+  ): boolean;
+  cancelHeldAction(playerId: string, actionId?: string): void;
+  consumeHeldAction(
+    playerId: string,
+    actionId: string | undefined,
+    kind: HostHeldActionKind,
+    fullChargeDurationMs: number,
+    hostNowMs: number,
+    expectedIdentity?: PlayerGameplayHeldActionIdentity,
+  ): PlayerGameplayHeldActionResult | null;
+  clearHeldActionsForPlayer(playerId: string): void;
+}
+
+/** Resource commands exposed to tooling without exposing the ResourceSystem owner. */
+export interface PlayerGameplayResourceCommandPort {
+  setAdrenaline(playerId: string, amount: number): void;
 }
 
 /**
@@ -131,9 +173,9 @@ export interface PlayerGameplayActionPort {
  *
  * Obere Scene-/Runtime-/Adapter-Consumer lesen darüber, statt in `WorldPlayerGameplayRuntime.systems`
  * zu traversieren. Bewusst nach Verbrauchergruppe geschnitten und **kein** Mega-Facade – dieselbe
- * Runtime implementiert alle Teilsichten. Mutationen (Legacy-Utility-/Ultimate-`use`,
- * Held-Action-Start/-Consume, Burrow-Request, direktes `setAdrenaline`) bleiben bis zu ihren
- * Phasen (6B/7A/7B/7C) außen vor; Weapon1/Weapon2 nutzen seit 6A die Action-Grenze.
+ * Runtime implementiert alle Teilsichten. Legacy-Utility-/Ultimate-`use` bleibt bis zu den
+ * dedizierten Activation-Phasen außen vor;
+ * mutierende Action-/Burrow-/Resource-Commands laufen über benannte Runtime-Grenzen.
  */
 export interface PlayerGameplayStateReadView {
   isBurrowed(playerId: string): boolean;
@@ -201,7 +243,8 @@ export class WorldPlayerGameplayRuntime implements
   WorldScopedBinding,
   PlayerGameplayLifecyclePort,
   PlayerGameplayReadViews,
-  PlayerGameplayActionPort {
+  PlayerGameplayActionPort,
+  PlayerGameplayResourceCommandPort {
   readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
 
@@ -434,7 +477,7 @@ export class WorldPlayerGameplayRuntime implements
 
   /** Held Actions eines austretenden Spielers verwerfen (Player-in-World-Detach-Grenze). */
   invalidateHeldActionsForPlayer(playerId: string): void {
-    this.systems.heldAction.clearPlayer(playerId);
+    this.clearHeldActionsForPlayer(playerId);
   }
 
   /**
@@ -449,6 +492,64 @@ export class WorldPlayerGameplayRuntime implements
   usePlayerAction(request: PlayerActionRequest): LoadoutUseResult {
     if (this.destroyed) return { ok: false, reason: 'invalid' };
     return this.systems.playerAction.execute(request);
+  }
+
+  handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
+    if (this.destroyed) return;
+    this.systems.burrow.handleBurrowRequest(playerId, wantsBurrowed);
+  }
+
+  startHeldAction(
+    playerId: string,
+    actionId: string,
+    kind: HostHeldActionKind,
+    expectedDurationMs: number,
+    hostNowMs: number,
+    identity?: PlayerGameplayHeldActionIdentity,
+  ): boolean {
+    if (this.destroyed) return false;
+    return this.systems.heldAction.start(
+      playerId,
+      actionId,
+      kind,
+      expectedDurationMs,
+      hostNowMs,
+      identity,
+    );
+  }
+
+  cancelHeldAction(playerId: string, actionId?: string): void {
+    if (this.destroyed) return;
+    this.systems.heldAction.cancel(playerId, actionId);
+  }
+
+  consumeHeldAction(
+    playerId: string,
+    actionId: string | undefined,
+    kind: HostHeldActionKind,
+    fullChargeDurationMs: number,
+    hostNowMs: number,
+    expectedIdentity?: PlayerGameplayHeldActionIdentity,
+  ): PlayerGameplayHeldActionResult | null {
+    if (this.destroyed) return null;
+    return this.systems.heldAction.consume(
+      playerId,
+      actionId,
+      kind,
+      fullChargeDurationMs,
+      hostNowMs,
+      expectedIdentity,
+    );
+  }
+
+  clearHeldActionsForPlayer(playerId: string): void {
+    if (this.destroyed) return;
+    this.systems.heldAction.clearPlayer(playerId);
+  }
+
+  setAdrenaline(playerId: string, amount: number): void {
+    if (this.destroyed) return;
+    this.systems.resource.setAdrenaline(playerId, amount);
   }
 
   /** Temporary one-way legacy path for Utility/Ultimate until their dedicated activation phases. */

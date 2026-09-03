@@ -135,7 +135,7 @@ export function createArenaRuntimeRpcPorts(
     },
     playerLoadout: {
       handleBurrowRequest: (playerId, wantsBurrowed) => {
-        flow.getWorldPlayerGameplayRuntime()?.systems.burrow?.handleBurrowRequest(playerId, wantsBurrowed);
+        flow.getWorldPlayerGameplayRuntime()?.handleBurrowRequest(playerId, wantsBurrowed);
       },
       isBurrowed: (playerId) => flow.getWorldPlayerGameplayRuntime()?.isBurrowed(playerId) ?? false,
       isStunned: (playerId) => flow.getWorldPlayerGameplayRuntime()?.isStunned(playerId) ?? false,
@@ -178,7 +178,7 @@ export function createArenaRuntimeRpcPorts(
     },
     heldAction: {
       start: (playerId, actionId, kind, expectedDurationMs, hostNowMs, identity) => (
-        flow.getWorldPlayerGameplayRuntime()?.systems.heldAction?.start(
+        flow.getWorldPlayerGameplayRuntime()?.startHeldAction(
           playerId,
           actionId,
           kind,
@@ -188,10 +188,10 @@ export function createArenaRuntimeRpcPorts(
         ) ?? false
       ),
       cancel: (playerId, actionId) => {
-        flow.getWorldPlayerGameplayRuntime()?.systems.heldAction?.cancel(playerId, actionId);
+        flow.getWorldPlayerGameplayRuntime()?.cancelHeldAction(playerId, actionId);
       },
       consume: (playerId, actionId, kind, fullChargeDurationMs, hostNowMs, expectedIdentity) => (
-        flow.getWorldPlayerGameplayRuntime()?.systems.heldAction?.consume(
+        flow.getWorldPlayerGameplayRuntime()?.consumeHeldAction(
           playerId,
           actionId,
           kind,
@@ -201,7 +201,7 @@ export function createArenaRuntimeRpcPorts(
         ) ?? null
       ),
       clearPlayer: (playerId) => {
-        flow.getWorldPlayerGameplayRuntime()?.systems.heldAction?.clearPlayer(playerId);
+        flow.getWorldPlayerGameplayRuntime()?.clearHeldActionsForPlayer(playerId);
       },
     },
     train: {
@@ -319,8 +319,7 @@ export function createWeaponBalanceLabWorldPort(
       }) ?? null
     ),
     setAdrenaline: (playerId, amount) => {
-      // Mutation – bleibt bis Teilphase 3B am konkreten ResourceSystem.
-      flow.getWorldPlayerGameplayRuntime()?.systems.resource.setAdrenaline(playerId, amount);
+      flow.getWorldPlayerGameplayRuntime()?.setAdrenaline(playerId, amount);
     },
     getMaxAdrenaline: (playerId) => (
       flow.getWorldPlayerGameplayRuntime()?.getMaxAdrenaline(playerId) ?? 0

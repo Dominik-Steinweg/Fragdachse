@@ -30,6 +30,25 @@ describe('HostHeldActionSystem', () => {
     expect(system.consume('p1', 'throw-new', 'charged_throw', 1_000, 3_000)?.chargeFraction).toBe(1);
   });
 
+  it('keeps a duplicate start idempotent and preserves its original host start time', () => {
+    const system = new HostHeldActionSystem();
+    expect(system.start('p1', 'retry', 'charged_throw', 1_000, 5_000)).toBe(true);
+    expect(system.start('p1', 'retry', 'charged_throw', 1_000, 5_500)).toBe(true);
+
+    expect(system.consume('p1', 'retry', 'charged_throw', 1_000, 5_750))
+      .toEqual({ elapsedMs: 750, chargeFraction: 0.75 });
+  });
+
+  it('does not consume a held action for a rejected identity or duration', () => {
+    const system = new HostHeldActionSystem();
+    system.start('p1', 'retry', 'charged_gate', 1_000, 5_000, { temporaryUtilityInstanceId: 'bfg-a' });
+
+    expect(system.consume('p1', 'retry', 'charged_gate', 900, 5_900, { temporaryUtilityInstanceId: 'bfg-a' }))
+      .toBeNull();
+    expect(system.consume('p1', 'retry', 'charged_gate', 1_000, 6_000, { temporaryUtilityInstanceId: 'bfg-a' }))
+      .toEqual({ elapsedMs: 1_000, chargeFraction: 1 });
+  });
+
   it('binds a charged action to the temporary utility instance that started it', () => {
     const system = new HostHeldActionSystem();
     const bfgA = { temporaryUtilityInstanceId: 'temporary-utility-a' } as const;

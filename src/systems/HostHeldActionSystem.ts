@@ -10,6 +10,7 @@ interface ActiveHeldAction {
   readonly actionId: string;
   readonly kind: HostHeldActionKind;
   readonly identity?: HeldActionIdentity;
+  readonly expectedDurationMs: number;
   readonly startedAtHostMs: number;
   readonly timeoutAtHostMs: number;
 }
@@ -37,10 +38,19 @@ export class HostHeldActionSystem {
       || !Number.isFinite(expectedDurationMs) || expectedDurationMs <= 0
       || !Number.isFinite(hostNowMs)
       || !isValidHeldActionIdentity(identity)) return false;
+    const current = this.actions.get(playerId);
+    if (current?.actionId === actionId) {
+      // A transport retry of the same start is idempotent. In particular, do not refresh its
+      // start time: doing so would extend the charge window and violate host-time authority.
+      return current.kind === kind
+        && current.expectedDurationMs === expectedDurationMs
+        && getHeldActionIdentityKey(current.identity) === getHeldActionIdentityKey(identity);
+    }
     this.actions.set(playerId, {
       actionId,
       kind,
       ...(identity ? { identity: cloneHeldActionIdentity(identity) } : {}),
+      expectedDurationMs,
       startedAtHostMs: hostNowMs,
       timeoutAtHostMs: hostNowMs + Math.max(1, expectedDurationMs) + ACTION_TIMEOUT_GRACE_MS,
     });
@@ -64,13 +74,14 @@ export class HostHeldActionSystem {
     const action = this.actions.get(playerId);
     // Ein verspaeteter Commit einer ersetzten Action darf die neuere Action nicht loeschen.
     if (!action || !actionId || action.actionId !== actionId) return null;
-    this.actions.delete(playerId);
     if (action.kind !== kind
       || !isValidHeldActionIdentity(expectedIdentity)
       || getHeldActionIdentityKey(action.identity) !== getHeldActionIdentityKey(expectedIdentity)
       || !Number.isFinite(fullChargeDurationMs) || fullChargeDurationMs <= 0
+      || fullChargeDurationMs !== action.expectedDurationMs
       || !Number.isFinite(hostNowMs) || hostNowMs < action.startedAtHostMs
       || hostNowMs > action.timeoutAtHostMs) return null;
+    this.actions.delete(playerId);
     const elapsedMs = Math.max(0, hostNowMs - action.startedAtHostMs);
     return {
       elapsedMs,

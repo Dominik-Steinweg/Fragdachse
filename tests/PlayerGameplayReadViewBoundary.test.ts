@@ -37,12 +37,11 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
     //  - ArenaPersistentBaseSession: Management-Cooldown ist in Phase 5 auf den Construction-Port
     //    migriert und darf deshalb nicht mehr als Player-Gameplay-Systems-Consumer erscheinen.
     //  - ArenaRuntime: itemRuntime×turret Remote-Control-Snapshot-Join → 12B
-    //  - ArenaRuntimeAdapters: use / Held-Action / setAdrenaline (Mutationen) → 3B/6A/6B
+    //  - ArenaRuntimeAdapters: Player-Gameplay-Mutationen → 6B abgeschlossen
     //  - Host-/ClientUpdateCoordinator: Frame-Reads → 12A/12B
     expect(offenders).toEqual([
       'src/scenes/arena/ArenaLifecycleCoordinator.ts',
       'src/scenes/arena/ArenaRuntime.ts',
-      'src/scenes/arena/ArenaRuntimeAdapters.ts',
       'src/scenes/arena/ArenaWorldCombatComposition.ts',
       'src/scenes/arena/ArenaWorldConstructionComposition.ts',
       'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
