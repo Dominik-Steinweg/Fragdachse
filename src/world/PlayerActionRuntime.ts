@@ -99,7 +99,6 @@ export interface PlayerActionActorPort {
 export interface PlayerActionLoadoutPort {
   getEquippedWeaponConfig(playerId: string, slot: WeaponSlot): WeaponConfig | undefined;
   noteWeaponAction(playerId: string, slot: WeaponSlot, now: number, angle: number): void;
-  noteWeaponUsed(playerId: string, slot: WeaponSlot, now: number): void;
 }
 
 /** Narrow immediate-weapon activation boundary owned by the World runtime. */

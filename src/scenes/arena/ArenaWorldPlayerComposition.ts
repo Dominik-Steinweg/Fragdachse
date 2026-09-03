@@ -94,7 +94,7 @@ export function composeWorldPlayerGameplay(
       bridge,
     ),
     network: {
-      teams: {
+      relationship: {
         isEnemyPair: (firstPlayerId, secondPlayerId) => bridge.isEnemyPair(firstPlayerId, secondPlayerId),
       },
       input: {

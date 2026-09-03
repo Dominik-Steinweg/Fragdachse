@@ -367,12 +367,13 @@ describe('Phase 10B.7 – Activity rebinding', () => {
       createBurrowSystem: () => service(),
       weaponExecution: service(),
       network: {
-        teams: { isEnemyPair: () => false },
+        relationship: { isEnemyPair: () => false },
         input: { getPlayerInput: () => undefined },
         presentation: {
           getPlayerColor: () => undefined,
           broadcastTranslocatorFlash: () => undefined,
           broadcastExplosionEffect: () => undefined,
+          broadcastShotFx: () => undefined,
           broadcastFireChunkEffect: () => undefined,
           broadcastMiniRocketCollectionEffect: () => undefined,
           broadcastMiniRocketDestructionEffect: () => undefined,

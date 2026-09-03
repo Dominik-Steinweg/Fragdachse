@@ -49,7 +49,7 @@ function makeHarness() {
     isAlive: () => true,
     isUltimateBlocked: () => false,
     network: {
-      teams: { isEnemyPair: (first: string, second: string) => first === 'p1' && second === 'enemy' },
+      relationship: { isEnemyPair: (first: string, second: string) => first === 'p1' && second === 'enemy' },
       roundStats: { recordUltimateUsed },
     },
   });
@@ -143,7 +143,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
     isAlive: () => true,
     isUltimateBlocked: () => false,
     network: {
-      teams: { isEnemyPair: () => false },
+      relationship: { isEnemyPair: () => false },
       roundStats: { recordUltimateUsed },
     },
   });

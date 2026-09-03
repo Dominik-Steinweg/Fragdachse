@@ -111,7 +111,7 @@ describe('room-statistics gameplay hooks', () => {
       isAlive: () => true,
       isUltimateBlocked: () => false,
       network: {
-        teams: { isEnemyPair: () => false },
+        relationship: { isEnemyPair: () => false },
         roundStats: { recordUltimateUsed: ultimateUsed },
       },
     });

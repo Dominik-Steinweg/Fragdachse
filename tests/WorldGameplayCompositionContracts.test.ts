@@ -70,7 +70,6 @@ describe('Phase 10B.6 – World gameplay composition', () => {
       .sort();
     expect(concreteConsumers).toEqual([
       'src/effects/EffectSystem.ts',
-      'src/loadout/LoadoutManager.ts',
       'src/systems/BurrowSystem.ts',
       'src/systems/CombatSystem.ts',
       'src/systems/DecoySystem.ts',
@@ -94,6 +93,24 @@ describe('Phase 10B.6 – World gameplay composition', () => {
       expect(source, path).not.toMatch(/from ['"].*network\/bridge['"]/);
       expect(source, path).not.toMatch(/\bbridge\b/);
     }
+  });
+
+  it('keeps the Loadout/Ability core transport-agnostic and uses a domain relationship port', () => {
+    const loadout = read('src/loadout/LoadoutManager.ts');
+    const activation = read('src/world/PlayerWeaponActivationRuntime.ts');
+    const ultimate = read('src/world/PlayerUltimateBehaviorRuntime.ts');
+    const worldPlayer = read('src/world/WorldPlayerGameplayRuntime.ts');
+    const relationship = read('src/world/PlayerRelationshipPort.ts');
+
+    expect(loadout).not.toContain('NetworkBridge');
+    expect(activation).not.toContain('NetworkBridge');
+    expect(ultimate).not.toContain('NetworkBridge');
+    expect(worldPlayer).not.toContain('NetworkBridge');
+    expect(worldPlayer).not.toContain('network.teams');
+    expect(ultimate).not.toContain('network.teams');
+    expect(worldPlayer).toContain('PlayerRelationshipPort');
+    expect(ultimate).toContain('PlayerRelationshipPort');
+    expect(relationship).toContain('interface PlayerRelationshipPort');
   });
 
   it('leaves the remaining World gameplay graph to focused owners', () => {

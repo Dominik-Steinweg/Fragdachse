@@ -17,6 +17,7 @@ import {
 } from './PlayerActionRuntime';
 import { PLAYER_SIZE, type MuzzleOrigin } from '../config';
 import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
+import type { PlayerRelationshipPort } from './PlayerRelationshipPort';
 
 export interface PlayerUltimateArmageddonCapability {
   activate(
@@ -68,9 +69,7 @@ export interface PlayerUltimateGaussExecutionCapability {
 }
 
 export interface PlayerUltimateBehaviorNetworkPort {
-  readonly teams: {
-    readonly isEnemyPair: (firstPlayerId: string, secondPlayerId: string) => boolean;
-  };
+  readonly relationship: PlayerRelationshipPort;
   readonly roundStats: {
     readonly recordUltimateUsed: (playerId: string) => void;
   };
@@ -397,7 +396,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
             const owner = this.options.playerManager.getPlayer(playerId);
             if (owner) {
               for (const ally of this.options.playerManager.getAllPlayers()) {
-                if (ally.id === playerId || this.options.network.teams.isEnemyPair(playerId, ally.id)) continue;
+                if (ally.id === playerId || this.options.network.relationship.isEnemyPair(playerId, ally.id)) continue;
                 if (Math.hypot(owner.x - ally.x, owner.y - ally.y) <= aura.radius) {
                   this.options.combatSystem.addArmor(ally.id, aura.allyArmorPerTick ?? 0);
                 }
@@ -536,7 +535,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       const aura = state.config.aura;
       if (ownerId === playerId || !aura) continue;
       if (!state.active && state.auraLingerUntil < nowMs) continue;
-      if (this.options.network.teams.isEnemyPair(ownerId, playerId)) continue;
+      if (this.options.network.relationship.isEnemyPair(ownerId, playerId)) continue;
       const owner = this.options.playerManager.getPlayer(ownerId);
       if (!owner || Math.hypot(owner.x - target.x, owner.y - target.y) > aura.radius) continue;
       multiplier *= kind === 'speed'

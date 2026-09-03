@@ -29,6 +29,7 @@ import { NegevBehaviorRuntime } from './NegevBehaviorRuntime';
 import { WeaponReactionRuntime } from './WeaponReactionRuntime';
 import { SustainedWeaponBehaviorRuntime } from './SustainedWeaponBehaviorRuntime';
 import { PlayerWeaponActivationRuntime } from './PlayerWeaponActivationRuntime';
+import type { PlayerRelationshipPort } from './PlayerRelationshipPort';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -69,9 +70,7 @@ import {
 import { SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../config';
 
 export interface WorldPlayerGameplayNetworkPort {
-  readonly teams: {
-    readonly isEnemyPair: (firstPlayerId: string, secondPlayerId: string) => boolean;
-  };
+  readonly relationship: PlayerRelationshipPort;
   readonly input: {
     readonly getPlayerInput: (playerId: string) => PlayerInput | undefined;
   };
@@ -349,7 +348,7 @@ export class WorldPlayerGameplayRuntime implements
       isUltimateBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
       breakStealth: (playerId, nowMs) => options.decoySystem.breakStealth(playerId, nowMs),
       network: {
-        teams: options.network.teams,
+        relationship: options.network.relationship,
         roundStats: options.network.roundStats,
       },
     });
@@ -440,7 +439,7 @@ export class WorldPlayerGameplayRuntime implements
       loadout,
       options.fireSystem,
       (playerId) => burrow.isBurrowed(playerId),
-      (firstPlayerId, secondPlayerId) => !options.network.teams.isEnemyPair(firstPlayerId, secondPlayerId),
+      (firstPlayerId, secondPlayerId) => !options.network.relationship.isEnemyPair(firstPlayerId, secondPlayerId),
       (x, y, radius) => options.network.presentation.broadcastExplosionEffect(x, y, radius, 0xff6600),
       (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
       (x, y, targets, landsAt, visualStyle) => options.network.presentation.broadcastFireChunkEffect(

@@ -1,7 +1,6 @@
 import type { ResourceSystem }    from '../systems/ResourceSystem';
-import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
-import type { LoadoutSlot, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
+import type { GameMode, LoadoutSlot, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
   EnergyShieldWeaponFireConfig,
   TeslaDomeWeaponFireConfig,
@@ -41,6 +40,11 @@ export interface UltimateModifierReadPort {
   getDamageMultiplier(playerId: string, nowMs: number): number;
 }
 
+/** Minimal mode context needed to sanitize a selected equipment set. */
+export interface LoadoutSelectionModePort {
+  getGameMode(): GameMode;
+}
+
 /**
  * LoadoutManager – Host-autoritär.
  * Verwaltet pro Spieler 4 Slots (weapon1, weapon2, utility, ultimate),
@@ -62,13 +66,13 @@ export class LoadoutManager {
 
   constructor(
     private resourceSystem:    ResourceSystem,
-    private bridge:            NetworkBridge,
+    private selectionMode:    LoadoutSelectionModePort,
   ) {}
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   assignDefaultLoadout(playerId: string, selection?: LoadoutSelection): void {
-    const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
+    const sanitized = sanitizeLoadoutSelectionForMode(selection, this.selectionMode.getGameMode());
     const w1Cfg = sanitized.weapon1;
     const w2Cfg = sanitized.weapon2;
     const utCfg = sanitized.utility;
@@ -98,7 +102,7 @@ export class LoadoutManager {
    * ohne unveraenderte Spieler jedes Frame neu zu initialisieren.
    */
   syncSelectedLoadout(playerId: string, selection?: LoadoutSelection): boolean {
-    const sanitized = sanitizeLoadoutSelectionForMode(selection, this.bridge.getGameMode());
+    const sanitized = sanitizeLoadoutSelectionForMode(selection, this.selectionMode.getGameMode());
     const nextWeapon1 = sanitized.weapon1;
     const nextWeapon2 = sanitized.weapon2;
     const nextUtility = sanitized.utility;

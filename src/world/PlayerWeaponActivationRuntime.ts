@@ -1,5 +1,4 @@
 import * as Phaser from 'phaser';
-import type { ResourceSystem } from '../systems/ResourceSystem';
 import type {
   LoadoutSlot,
   LoadoutUseParams,
@@ -63,7 +62,7 @@ export interface PlayerWeaponActivationPhysicsPort {
 export interface PlayerWeaponActivationRuntimeOptions {
   readonly playerManager: PlayerWeaponActivationPlayerPort;
   readonly loadout: PlayerWeaponActivationLoadoutPort;
-  readonly resourceSystem: PlayerWeaponActivationResourcePort | ResourceSystem;
+  readonly resourceSystem: PlayerWeaponActivationResourcePort;
   readonly physicsSystem?: PlayerWeaponActivationPhysicsPort | null;
   readonly weaponExecution: WeaponExecutionCapability;
   readonly specializedWeaponExecution: SpecializedWeaponExecutionCapability;
