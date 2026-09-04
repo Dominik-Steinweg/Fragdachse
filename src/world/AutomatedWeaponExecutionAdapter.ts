@@ -1,4 +1,3 @@
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type {
   GaussUltimateConfig,
   WeaponConfig,
@@ -11,9 +10,9 @@ import type {
 } from '../loadout/WeaponFireExecutor';
 import type { ProjectileExplosionConfig } from '../types';
 import type { MuzzleOrigin } from '../config';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import { SpecializedWeaponExecutionAdapter } from './SpecializedWeaponExecutionAdapter';
-
-type AutomatedWeaponProjectileSink = Pick<ProjectileManager, 'spawnProjectile'>;
 
 /** Request data owned by an automatic source; timing/readiness stays with that source. */
 export interface AutomatedWeaponFireParams {
@@ -52,8 +51,8 @@ export interface AutomatedWeaponExecution {
 export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution {
   constructor(
     private readonly sharedExecution: WeaponExecutionCapability,
-    private readonly projectileManager: AutomatedWeaponProjectileSink,
-    private readonly specializedExecution: SpecializedWeaponExecutionCapability = new SpecializedWeaponExecutionAdapter(projectileManager),
+    private readonly projectileSpawn: ProjectileSpawnPort,
+    private readonly specializedExecution: SpecializedWeaponExecutionCapability = new SpecializedWeaponExecutionAdapter(projectileSpawn),
   ) {}
 
   fire(config: WeaponConfig, params: AutomatedWeaponFireParams): boolean {
@@ -85,29 +84,40 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
 
   fireGauss(config: GaussUltimateConfig, params: AutomatedGaussFireParams): boolean {
     const lifetime = (config.range / config.projectileSpeed) * 1000;
-    this.projectileManager.spawnProjectile(params.x, params.y, params.angle, params.ownerId, {
-      speed: config.projectileSpeed,
-      size: config.projectileSize,
-      damage: config.damage,
-      color: config.projectileColor,
-      ownerColor: params.ownerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      lifetime,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: config.id,
-      gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
-      projectileStyle: config.projectileStyle ?? 'gauss',
-      bulletVisualPreset: config.bulletVisualPreset,
-      tracerConfig: config.tracerConfig,
-      rockDamageMult: config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      baseDamageMult: config.baseDamageMult,
-      shotAudioKey: config.shotAudio?.successKey,
-      gaussChainRadius: config.chainRadius,
-      gaussChainDamageFactor: config.chainDamageFactor,
-      remainingRangePx: config.range,
+    this.projectileSpawn.spawnProjectile({
+      origin: {
+        x: params.x,
+        y: params.y,
+        angle: params.angle,
+        gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
+      },
+      flight: {
+        speed: config.projectileSpeed,
+        size: config.projectileSize,
+        lifetimeMs: lifetime,
+        maxBounces: 0,
+        isGrenade: false,
+        remainingRangePx: config.range,
+      },
+      provenance: createSingleOwnerProvenance(params.ownerId, { weaponSourceId: config.id }),
+      interaction: {
+        directHit: {
+          damage: config.damage,
+          rockDamageMult: config.rockDamageMult,
+          trainDamageMult: config.trainDamageMult,
+          baseDamageMult: config.baseDamageMult,
+          gaussChain: { radius: config.chainRadius, damageFactor: config.chainDamageFactor },
+        },
+      },
+      presentation: {
+        color: config.projectileColor,
+        style: config.projectileStyle ?? 'gauss',
+        ownerColor: params.ownerColor,
+        visualScale: config.projectileVisualScale,
+        bulletPreset: config.bulletVisualPreset,
+        tracer: config.tracerConfig,
+        shotAudioKey: config.shotAudio?.successKey,
+      },
     });
     return true;
   }

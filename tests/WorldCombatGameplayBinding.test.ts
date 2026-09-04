@@ -27,6 +27,7 @@ import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
+import { LegacyProjectileSpawnAdapter } from '../src/projectile/LegacyProjectileSpawnAdapter';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import type { ResourceSystem } from '../src/systems/ResourceSystem';
@@ -150,11 +151,12 @@ function createFixture(options: {
   );
   // Die gemeinsame Immediate-Fire-Capability und der explizite Automatik-Adapter werden beide
   // an der World-Grenze erzeugt; Player- und Turmquellen teilen nur die Ausführung.
+  const projectileSpawn = new LegacyProjectileSpawnAdapter(projectileManager);
   const weaponExecution = new WorldWeaponExecutionRuntime({
-    projectileManager,
+    projectileSpawn,
     combatSystem: combatSystem as unknown as ConstructorParameters<typeof WorldWeaponExecutionRuntime>[0]['combatSystem'],
   });
-  const automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(weaponExecution, projectileManager);
+  const automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(weaponExecution, projectileSpawn);
   if (options.loadoutDamageMultiplier !== undefined) {
     vi.spyOn(playerLoadout, 'getDamageMultiplier').mockReturnValue(options.loadoutDamageMultiplier);
   }

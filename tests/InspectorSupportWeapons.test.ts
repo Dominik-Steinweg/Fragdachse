@@ -12,13 +12,14 @@ import { EnergyInjectorSystem } from '../src/systems/EnergyInjectorSystem';
 import { getLoadoutItemName } from '../src/i18n/contentPresentation';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
+import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
 function createManagerWithSpawnSpy() {
-  const spawnProjectile = vi.fn(() => 42);
+  const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 42);
   const resolveHitscanShot = vi.fn(() => true);
   const resolveMeleeSwing = vi.fn(() => true);
   const sharedExecution = new WorldWeaponExecutionRuntime({
-    projectileManager: { spawnProjectile },
+    projectileSpawn: { spawnProjectile },
     combatSystem: { resolveHitscanShot, resolveMeleeSwing },
   });
   const adapter = new AutomatedWeaponExecutionAdapter(sharedExecution, { spawnProjectile });
@@ -92,7 +93,7 @@ describe('inspector support weapons', () => {
 
     const secondAdapter = new AutomatedWeaponExecutionAdapter(
       new WorldWeaponExecutionRuntime({
-        projectileManager: { spawnProjectile: vi.fn() },
+        projectileSpawn: { spawnProjectile: vi.fn() },
         combatSystem: { resolveHitscanShot, resolveMeleeSwing: vi.fn(() => true) },
       }),
       { spawnProjectile: vi.fn() },
@@ -122,15 +123,14 @@ describe('inspector support weapons', () => {
       { x: 0, y: 0, angle: 0, targetX: 400, targetY: 0, ownerId: 'inspector', ownerColor: 0xffffff },
     );
 
-    const [, , , , projectile] = spawnProjectile.mock.calls[0];
-    expect(projectile.damage).toBe(0);
-    expect(projectile.homing).toBeUndefined();
-    expect(projectile.energyInjectorPayload).toMatchObject({
-      color: ENERGY_INJECTOR_COLOR,
-    });
-    expect(projectile.energyInjectorPayload.durationMs).toBeGreaterThan(0);
-    expect(projectile.energyInjectorPayload.focusDurationMs).toBe(projectile.energyInjectorPayload.durationMs);
-    expect(projectile.energyInjectorPayload.vulnerabilityBonus).toBeGreaterThan(0);
+    const [request] = spawnProjectile.mock.calls[0];
+    expect(request.interaction.directHit?.damage ?? 0).toBe(0);
+    expect(request.flight.homing).toBeUndefined();
+    const payload = request.interaction.support?.energyInjector;
+    expect(payload).toMatchObject({ color: ENERGY_INJECTOR_COLOR });
+    expect(payload!.durationMs).toBeGreaterThan(0);
+    expect(payload!.focusDurationMs).toBe(payload!.durationMs);
+    expect(payload!.vulnerabilityBonus).toBeGreaterThan(0);
   });
 });
 

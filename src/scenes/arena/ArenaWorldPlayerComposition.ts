@@ -7,6 +7,7 @@ import {
 import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../../world/AutomatedWeaponExecutionAdapter';
 import { SpecializedWeaponExecutionAdapter } from '../../world/SpecializedWeaponExecutionAdapter';
+import { LegacyProjectileSpawnAdapter } from '../../projectile/LegacyProjectileSpawnAdapter';
 import { getUtilityConfigForMode } from '../../loadout/LoadoutConfig';
 import type {
   ArenaWorldGameplay,
@@ -28,16 +29,18 @@ export function composeWorldPlayerGameplay(
   // Gemeinsame Immediate-Weapon-Execution-Capability: world-composed, ohne Player-Resource-/
   // Loadout-Autoritaet. Der Loadout delegiert seinen Player-Fire hierher; automatische Quellen
   // verwenden den daneben liegenden world-lokalen Adapter.
+  // Einziger one-way Übergang vom semantischen Spawn-Auftrag auf die bestehende Spawn-Senke.
+  const projectileSpawn = new LegacyProjectileSpawnAdapter(ctx.projectileManager);
   const weaponExecution = new WorldWeaponExecutionRuntime({
-    projectileManager: ctx.projectileManager,
+    projectileSpawn,
     combatSystem: ctx.combatSystem,
   });
-  const specializedWeaponExecution = new SpecializedWeaponExecutionAdapter(ctx.projectileManager);
+  const specializedWeaponExecution = new SpecializedWeaponExecutionAdapter(projectileSpawn);
   gameplay.weaponExecution = weaponExecution;
   gameplay.specializedWeaponExecution = specializedWeaponExecution;
   const automatedWeaponExecution = new AutomatedWeaponExecutionAdapter(
     weaponExecution,
-    ctx.projectileManager,
+    projectileSpawn,
     specializedWeaponExecution,
   );
   gameplay.automatedWeaponExecution = automatedWeaponExecution;
@@ -48,6 +51,7 @@ export function composeWorldPlayerGameplay(
   const playerGameplayRuntime = new WorldPlayerGameplayRuntime({
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
+    projectileSpawn,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     fireSystem: ctx.fireSystem,

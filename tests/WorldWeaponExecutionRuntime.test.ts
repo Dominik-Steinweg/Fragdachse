@@ -3,21 +3,22 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { getHeldWeaponGameplayMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
+import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
 function makeRuntime() {
-  const spawnProjectile = vi.fn(() => 7);
+  const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 7);
   const resolveHitscanShot = vi.fn(() => true);
   const resolveMeleeSwing = vi.fn(() => true);
   const resolveSafeHitscanStart = vi.fn((_sx: number, _sy: number, startX: number, startY: number) => ({ x: startX, y: startY }));
   const runtime = new WorldWeaponExecutionRuntime({
-    projectileManager: { spawnProjectile },
+    projectileSpawn: { spawnProjectile },
     combatSystem: { resolveHitscanShot, resolveMeleeSwing, resolveSafeHitscanStart },
   });
   return { runtime, spawnProjectile, resolveHitscanShot, resolveMeleeSwing, resolveSafeHitscanStart };
 }
 
 describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-Capability', () => {
-  it('verdrahtet Projektil-, Hitscan- und Melee-Fire einmalig mit den Legacy-Senken', () => {
+  it('verdrahtet Projektil-, Hitscan- und Melee-Fire einmalig mit Spawn-Port und Combat-Senken', () => {
     const { runtime, spawnProjectile, resolveHitscanShot, resolveMeleeSwing } = makeRuntime();
 
     const params = {
@@ -27,7 +28,15 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
 
     expect(runtime.fire(WEAPON_CONFIGS.GLOCK, params)).toBe(true);
     expect(spawnProjectile).toHaveBeenCalledTimes(1);
-    expect(spawnProjectile.mock.calls[0]?.slice(0, 4)).toEqual([100, 200, 0, 'p1']);
+    const request = spawnProjectile.mock.calls[0]?.[0];
+    expect(request?.origin).toMatchObject({ x: 100, y: 200, angle: 0 });
+    expect(request?.provenance).toMatchObject({
+      gameplaySourceId: 'p1',
+      attributionId: 'p1',
+      allegiance: { ownerId: 'p1' },
+      weaponSourceId: WEAPON_CONFIGS.GLOCK.id,
+      sourceSlot: 'weapon1',
+    });
 
     expect(runtime.fire(WEAPON_CONFIGS.PLASMA_BURNER, params)).toBe(true);
     expect(resolveHitscanShot).toHaveBeenCalledTimes(1);

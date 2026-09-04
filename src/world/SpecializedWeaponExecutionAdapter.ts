@@ -1,4 +1,3 @@
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type {
   EnergyInjectorWeaponFireConfig,
   FlamethrowerWeaponFireConfig,
@@ -10,19 +9,19 @@ import type {
   SpecializedWeaponExecutionCapability,
   WeaponFireParams,
 } from '../loadout/WeaponFireExecutor';
-
-type SpecializedWeaponProjectileSink = Pick<ProjectileManager, 'spawnProjectile'>;
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 
 /**
  * Führt die unmittelbaren Spezial-Projektiltypen aus, die bewusst nicht zum gemeinsamen
  * Projectile-/Hitscan-/Melee-Executor gehören.
  *
  * Der Adapter besitzt weder Player-Lifecycle noch Ressourcen-, Cooldown- oder Commit-State.
- * Alle Owner-, Slot-, Muzzle- und automatischen Quellenangaben kommen aus dem Auftrag; die
- * bestehende ProjectileManager-Senke bleibt die einzige Payload-/Treffer-Pipeline.
+ * Alle Owner-, Slot-, Muzzle- und automatischen Quellenangaben kommen aus dem Auftrag; jede
+ * Spezialwirkung verlässt die Execution als aufgelöster Spawn-Auftrag.
  */
 export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecutionCapability {
-  constructor(private readonly projectileManager: SpecializedWeaponProjectileSink) {}
+  constructor(private readonly projectileSpawn: ProjectileSpawnPort) {}
 
   fire(config: WeaponConfig, params: WeaponFireParams): boolean {
     switch (config.fire.type) {
@@ -55,83 +54,108 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         baseDamageMult: config.baseDamageMult ?? 1,
       };
       const chunkCount = Math.max(0, Math.floor(fireball?.chunkCount ?? 0));
-      this.projectileManager.spawnProjectile(params.x, params.y, params.angle, params.ownerId, {
-        speed: fireball?.projectileSpeed ?? 450,
-        ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
-        ignoreRockIndex: params.options?.ignoreRockIndex,
-        size: fireball?.projectileSize ?? 28,
-        damage: config.damage,
-        color: 0xff7417,
-        ownerColor: params.ownerColor,
-        lifetime: config.range / Math.max(1, fireball?.projectileSpeed ?? 450) * 1000,
-        maxBounces: 0,
-        isGrenade: false,
-        adrenalinGain: config.adrenalinGain,
-        sourceId: 'weapon.fireball_launcher',
-        projectileStyle: 'fireball',
-        rockDamageMult: 1,
-        trainDamageMult: 1.15,
-        explosion: {
-          radius: fireball?.explosionRadius ?? 120,
-          maxDamage: fireball?.explosionMaxDamage ?? 90,
-          minDamage: fireball?.explosionMinDamage ?? 20,
-          knockback: fireball?.explosionKnockback ?? 1250,
-          selfDamageMult: fireball?.selfDamageMult ?? 0.25,
-          rockDamageMult: 1,
-          trainDamageMult: 1.15,
-          baseDamageMult: config.baseDamageMult ?? 1,
-          color: 0xff6a14,
-          visualStyle: 'rocket',
-          burnOnHit: { durationMs: fireConfig.burnDurationMs, damagePerTick: fireConfig.burnDamagePerTick },
-          burnOrigin: 'flamethrower_direct',
-          fireChunkBurst: {
-            ...groundEffect,
-            count: chunkCount,
-            searchRadius: fireball?.chunkSearchRadius ?? 96,
-            flightMs: fireball?.chunkFlightMs ?? 320,
-            igniteCenter: true,
+      this.projectileSpawn.spawnProjectile({
+        origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
+        flight: {
+          speed: fireball?.projectileSpeed ?? 450,
+          size: fireball?.projectileSize ?? 28,
+          lifetimeMs: config.range / Math.max(1, fireball?.projectileSpeed ?? 450) * 1000,
+          maxBounces: 0,
+          isGrenade: false,
+          collisionFilter: {
+            ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
+            ignoreRockIndex: params.options?.ignoreRockIndex,
           },
         },
-        fireTrail: (fireball?.trailEnabled ?? 0) > 0 ? groundEffect : undefined,
-        sourceSlot,
-        sourceTurretId: params.options?.sourceTurretId,
-        gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
-        visualMuzzleOrigin: params.visualMuzzleOrigin,
-        shotAudioKey: config.shotAudio?.successKey,
+        provenance: createSingleOwnerProvenance(params.ownerId, {
+          weaponSourceId: 'weapon.fireball_launcher',
+          sourceSlot,
+          sourceTurretId: params.options?.sourceTurretId,
+        }),
+        interaction: {
+          directHit: {
+            damage: config.damage,
+            adrenalinGain: config.adrenalinGain,
+            rockDamageMult: 1,
+            trainDamageMult: 1.15,
+          },
+          explosion: {
+            radius: fireball?.explosionRadius ?? 120,
+            maxDamage: fireball?.explosionMaxDamage ?? 90,
+            minDamage: fireball?.explosionMinDamage ?? 20,
+            knockback: fireball?.explosionKnockback ?? 1250,
+            selfDamageMult: fireball?.selfDamageMult ?? 0.25,
+            rockDamageMult: 1,
+            trainDamageMult: 1.15,
+            baseDamageMult: config.baseDamageMult ?? 1,
+            color: 0xff6a14,
+            visualStyle: 'rocket',
+            burnOnHit: { durationMs: fireConfig.burnDurationMs, damagePerTick: fireConfig.burnDamagePerTick },
+            burnOrigin: 'flamethrower_direct',
+            fireChunkBurst: {
+              ...groundEffect,
+              count: chunkCount,
+              searchRadius: fireball?.chunkSearchRadius ?? 96,
+              flightMs: fireball?.chunkFlightMs ?? 320,
+              igniteCenter: true,
+            },
+          },
+          pathEffect: (fireball?.trailEnabled ?? 0) > 0 ? { fireTrail: groundEffect } : undefined,
+        },
+        presentation: {
+          color: 0xff7417,
+          style: 'fireball',
+          ownerColor: params.ownerColor,
+          shotAudioKey: config.shotAudio?.successKey,
+          visualMuzzleOrigin: params.visualMuzzleOrigin,
+        },
       });
       return true;
     }
 
     const lifetime = calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
-    this.projectileManager.spawnProjectile(params.x, params.y, params.angle, params.ownerId, {
-      speed: fireConfig.projectileSpeed,
-      ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
-      ignoreRockIndex: params.options?.ignoreRockIndex,
-      size: fireConfig.hitboxStartSize,
-      damage: config.damage,
-      color: config.projectileColor ?? params.ownerColor,
-      ownerColor: params.ownerColor,
-      lifetime,
-      maxBounces: 999999,
-      isGrenade: false,
-      adrenalinGain: config.adrenalinGain,
-      sourceId: config.id,
-      projectileStyle: 'flame',
-      rockDamageMult: config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      isFlame: true,
-      hitboxGrowRate: fireConfig.hitboxGrowRate,
-      hitboxMaxSize: fireConfig.hitboxEndSize,
-      velocityDecay: fireConfig.velocityDecay,
-      burnDurationMs: fireConfig.burnDurationMs,
-      burnDamagePerTick: fireConfig.burnDamagePerTick,
-      projectileBurnVisualStyle: config.projectileBurnVisualStyle,
-      flamePiercing: (fireConfig.piercingCount ?? 0) > 0,
-      sourceSlot,
-      sourceTurretId: params.options?.sourceTurretId,
-      gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
-      visualMuzzleOrigin: params.visualMuzzleOrigin,
-      shotAudioKey: config.shotAudio?.successKey,
+    this.projectileSpawn.spawnProjectile({
+      origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
+      flight: {
+        speed: fireConfig.projectileSpeed,
+        size: fireConfig.hitboxStartSize,
+        lifetimeMs: lifetime,
+        maxBounces: 999999,
+        isGrenade: false,
+        isFlame: true,
+        flamePiercing: (fireConfig.piercingCount ?? 0) > 0,
+        collisionFilter: {
+          ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
+          ignoreRockIndex: params.options?.ignoreRockIndex,
+        },
+        hitboxGrowth: { growRatePerSec: fireConfig.hitboxGrowRate, maxSize: fireConfig.hitboxEndSize },
+        drag: { velocityDecayPerSec: fireConfig.velocityDecay },
+      },
+      provenance: createSingleOwnerProvenance(params.ownerId, {
+        weaponSourceId: config.id,
+        sourceSlot,
+        sourceTurretId: params.options?.sourceTurretId,
+      }),
+      interaction: {
+        directHit: {
+          damage: config.damage,
+          adrenalinGain: config.adrenalinGain,
+          rockDamageMult: config.rockDamageMult,
+          trainDamageMult: config.trainDamageMult,
+        },
+        burn: {
+          durationMs: fireConfig.burnDurationMs,
+          damagePerTick: fireConfig.burnDamagePerTick,
+          visualStyle: config.projectileBurnVisualStyle,
+        },
+      },
+      presentation: {
+        color: config.projectileColor ?? params.ownerColor,
+        style: 'flame',
+        ownerColor: params.ownerColor,
+        shotAudioKey: config.shotAudio?.successKey,
+        visualMuzzleOrigin: params.visualMuzzleOrigin,
+      },
     });
     return true;
   }
@@ -144,37 +168,50 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
     const lifetime = calculateDecayLifetime(config.range, fireConfig.projectileSpeed, fireConfig.velocityDecay);
     // Der Debuff-Wurf fällt pro Luftstoß: ein Stoß verbraucht sich am ersten Ziel.
     const debuffHit = (config.hitDebuffChance ?? 0) > 0 && Math.random() < (config.hitDebuffChance ?? 0);
-    this.projectileManager.spawnProjectile(params.x, params.y, params.angle, params.ownerId, {
-      speed: fireConfig.projectileSpeed,
-      ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
-      ignoreRockIndex: params.options?.ignoreRockIndex,
-      size: fireConfig.hitboxStartSize,
-      damage: config.directDamageOverride ?? config.damage,
-      color: config.projectileColor ?? params.ownerColor,
-      ownerColor: params.ownerColor,
-      lifetime,
-      maxBounces: 999999,
-      isGrenade: false,
-      adrenalinGain: config.adrenalinGain,
-      sourceId: config.id,
-      projectileStyle: 'leaf_blower',
-      rockDamageMult: config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      hitboxGrowRate: fireConfig.hitboxGrowRate,
-      hitboxMaxSize: fireConfig.hitboxEndSize,
-      velocityDecay: fireConfig.velocityDecay,
-      leafBlowerMinKnockback: fireConfig.minKnockback,
-      leafBlowerMaxKnockback: fireConfig.maxKnockback,
-      leafBlowerSelfPush: fireConfig.selfPush,
-      leafBlowerDeflectsProjectiles: fireConfig.deflectProjectiles > 0,
-      hitSlowFraction: debuffHit ? config.hitSlowFraction : undefined,
-      hitSlowDurationMs: debuffHit ? config.hitSlowDurationMs : undefined,
-      hitVulnerabilityDurationMs: debuffHit ? config.hitVulnerabilityDurationMs : undefined,
-      sourceSlot: resolveSourceSlot(params),
-      sourceTurretId: params.options?.sourceTurretId,
-      gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
-      visualMuzzleOrigin: params.visualMuzzleOrigin,
-      shotAudioKey: config.shotAudio?.successKey,
+    this.projectileSpawn.spawnProjectile({
+      origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
+      flight: {
+        speed: fireConfig.projectileSpeed,
+        size: fireConfig.hitboxStartSize,
+        lifetimeMs: lifetime,
+        maxBounces: 999999,
+        isGrenade: false,
+        collisionFilter: {
+          ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
+          ignoreRockIndex: params.options?.ignoreRockIndex,
+        },
+        hitboxGrowth: { growRatePerSec: fireConfig.hitboxGrowRate, maxSize: fireConfig.hitboxEndSize },
+        drag: { velocityDecayPerSec: fireConfig.velocityDecay },
+      },
+      provenance: createSingleOwnerProvenance(params.ownerId, {
+        weaponSourceId: config.id,
+        sourceSlot: resolveSourceSlot(params),
+        sourceTurretId: params.options?.sourceTurretId,
+      }),
+      interaction: {
+        directHit: {
+          damage: config.directDamageOverride ?? config.damage,
+          adrenalinGain: config.adrenalinGain,
+          rockDamageMult: config.rockDamageMult,
+          trainDamageMult: config.trainDamageMult,
+          slowFraction: debuffHit ? config.hitSlowFraction : undefined,
+          slowDurationMs: debuffHit ? config.hitSlowDurationMs : undefined,
+          vulnerabilityDurationMs: debuffHit ? config.hitVulnerabilityDurationMs : undefined,
+        },
+        impulse: {
+          minKnockback: fireConfig.minKnockback,
+          maxKnockback: fireConfig.maxKnockback,
+          selfPush: fireConfig.selfPush,
+          deflectsProjectiles: fireConfig.deflectProjectiles > 0,
+        },
+      },
+      presentation: {
+        color: config.projectileColor ?? params.ownerColor,
+        style: 'leaf_blower',
+        ownerColor: params.ownerColor,
+        shotAudioKey: config.shotAudio?.successKey,
+        visualMuzzleOrigin: params.visualMuzzleOrigin,
+      },
     });
     return true;
   }
@@ -190,40 +227,46 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
     const travelDistance = Math.min(config.range, cursorDistance);
     const angle = cursorDistance > 0.001 ? Math.atan2(dy, dx) : params.angle;
     const lifetime = (travelDistance / fireConfig.projectileSpeed) * 1000;
-    this.projectileManager.spawnProjectile(params.x, params.y, angle, params.ownerId, {
-      speed: fireConfig.projectileSpeed,
-      size: fireConfig.projectileSize,
-      damage: 0,
-      color: config.projectileColor ?? fireConfig.fieldColor,
-      ownerColor: params.ownerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      smokeTrailColor: config.rocketSmokeTrailColor ?? fireConfig.fieldColor,
-      lifetime,
-      remainingRangePx: travelDistance,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: config.id,
-      gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
-      explosion: {
-        radius: fireConfig.radius,
-        maxDamage: 0,
-        knockback: 0,
-        selfDamageMult: 0,
-        rockDamageMult: 0,
-        trainDamageMult: 0,
-        color: fireConfig.fieldColor,
-        reinforcementMatrix: {
-          durationMs: fireConfig.durationMs,
-          damageReduction: fireConfig.damageReduction,
-          vulnerabilityBonus: fireConfig.vulnerabilityBonus,
+    this.projectileSpawn.spawnProjectile({
+      origin: { x: params.x, y: params.y, angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
+      flight: {
+        speed: fireConfig.projectileSpeed,
+        size: fireConfig.projectileSize,
+        lifetimeMs: lifetime,
+        maxBounces: 0,
+        isGrenade: false,
+        remainingRangePx: travelDistance,
+      },
+      provenance: createSingleOwnerProvenance(params.ownerId, {
+        weaponSourceId: config.id,
+        sourceSlot: resolveSourceSlot(params) ?? 'weapon2',
+      }),
+      interaction: {
+        explosion: {
+          radius: fireConfig.radius,
+          maxDamage: 0,
+          knockback: 0,
+          selfDamageMult: 0,
+          rockDamageMult: 0,
+          trainDamageMult: 0,
           color: fireConfig.fieldColor,
+          reinforcementMatrix: {
+            durationMs: fireConfig.durationMs,
+            damageReduction: fireConfig.damageReduction,
+            vulnerabilityBonus: fireConfig.vulnerabilityBonus,
+            color: fireConfig.fieldColor,
+          },
         },
       },
-      projectileStyle: config.projectileStyle,
-      sourceSlot: resolveSourceSlot(params) ?? 'weapon2',
-      visualMuzzleOrigin: params.visualMuzzleOrigin,
-      shotAudioKey: config.shotAudio?.successKey,
+      presentation: {
+        color: config.projectileColor ?? fireConfig.fieldColor,
+        style: config.projectileStyle,
+        ownerColor: params.ownerColor,
+        visualScale: config.projectileVisualScale,
+        smokeTrailColor: config.rocketSmokeTrailColor ?? fireConfig.fieldColor,
+        shotAudioKey: config.shotAudio?.successKey,
+        visualMuzzleOrigin: params.visualMuzzleOrigin,
+      },
     });
     return true;
   }
@@ -233,33 +276,40 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
     fireConfig: EnergyInjectorWeaponFireConfig,
     params: WeaponFireParams,
   ): boolean {
-    this.projectileManager.spawnProjectile(params.x, params.y, params.angle, params.ownerId, {
-      speed: fireConfig.projectileSpeed,
-      size: fireConfig.projectileSize,
-      damage: 0,
-      color: config.projectileColor ?? fireConfig.injectorColor,
-      ownerColor: params.ownerColor,
-      projectileVisualScale: config.projectileVisualScale,
-      lifetime: (config.range / fireConfig.projectileSpeed) * 1000,
-      remainingRangePx: config.range,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: config.id,
-      rockDamageMult: 0,
-      trainDamageMult: 0,
-      energyInjectorPayload: {
-        durationMs: fireConfig.durationMs,
-        focusDurationMs: fireConfig.focusDurationMs,
-        vulnerabilityBonus: fireConfig.vulnerabilityBonus,
-        color: fireConfig.injectorColor,
+    this.projectileSpawn.spawnProjectile({
+      origin: { x: params.x, y: params.y, angle: params.angle, gameplayMuzzleOrigin: params.gameplayMuzzleOrigin },
+      flight: {
+        speed: fireConfig.projectileSpeed,
+        size: fireConfig.projectileSize,
+        lifetimeMs: (config.range / fireConfig.projectileSpeed) * 1000,
+        maxBounces: 0,
+        isGrenade: false,
+        remainingRangePx: config.range,
       },
-      projectileStyle: config.projectileStyle,
-      energyBallVariant: config.energyBallVariant,
-      sourceSlot: resolveSourceSlot(params) ?? 'weapon2',
-      gameplayMuzzleOrigin: params.gameplayMuzzleOrigin,
-      visualMuzzleOrigin: params.visualMuzzleOrigin,
-      shotAudioKey: config.shotAudio?.successKey,
+      provenance: createSingleOwnerProvenance(params.ownerId, {
+        weaponSourceId: config.id,
+        sourceSlot: resolveSourceSlot(params) ?? 'weapon2',
+      }),
+      interaction: {
+        directHit: { damage: 0, rockDamageMult: 0, trainDamageMult: 0 },
+        support: {
+          energyInjector: {
+            durationMs: fireConfig.durationMs,
+            focusDurationMs: fireConfig.focusDurationMs,
+            vulnerabilityBonus: fireConfig.vulnerabilityBonus,
+            color: fireConfig.injectorColor,
+          },
+        },
+      },
+      presentation: {
+        color: config.projectileColor ?? fireConfig.injectorColor,
+        style: config.projectileStyle,
+        ownerColor: params.ownerColor,
+        visualScale: config.projectileVisualScale,
+        energyBallVariant: config.energyBallVariant,
+        shotAudioKey: config.shotAudio?.successKey,
+        visualMuzzleOrigin: params.visualMuzzleOrigin,
+      },
     });
     return true;
   }

@@ -2,6 +2,9 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
+import { LegacyProjectileSpawnAdapter } from '../projectile/LegacyProjectileSpawnAdapter';
 import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
@@ -210,8 +213,11 @@ export interface WorldCombatGameplayBindingOptions {
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly systems: WorldCombatGameplaySystems | null;
   private destroyed = false;
+  /** Storm-Bolts sind eine World-Quelle und verlassen die Bindung über den Spawn-Port. */
+  private readonly projectileSpawn: ProjectileSpawnPort;
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
+    this.projectileSpawn = new LegacyProjectileSpawnAdapter(options.projectileManager);
     const playerCombat = options.getPlayerCombatIntegration();
     if (playerCombat) {
       const shieldBuff = new ConcreteShieldBuffSystem();
@@ -683,7 +689,30 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     );
     teslaDome.setStormProjectileSpawner((request) => {
       const lifetime = request.speed > 0 ? request.rangePx / request.speed * 1000 : 0;
-      o.projectileManager.spawnProjectile(request.x, request.y, request.angle, request.ownerId, { speed: request.speed, size: request.size, damage: request.damage, color: request.color, ownerColor: request.color, lifetime, remainingRangePx: request.rangePx, maxBounces: 0, isGrenade: false, adrenalinGain: 0, sourceId: request.weaponId, projectileStyle: 'tesla_bolt', piercesTargets: true, homing: request.homing, rockDamageMult: 0, sourceSlot: request.sourceSlot, suppressSpawnFx: true });
+      this.projectileSpawn.spawnProjectile({
+        origin: { x: request.x, y: request.y, angle: request.angle },
+        flight: {
+          speed: request.speed,
+          size: request.size,
+          lifetimeMs: lifetime,
+          maxBounces: 0,
+          isGrenade: false,
+          remainingRangePx: request.rangePx,
+          piercesTargets: true,
+          homing: request.homing,
+        },
+        provenance: createSingleOwnerProvenance(request.ownerId, {
+          weaponSourceId: request.weaponId,
+          sourceSlot: request.sourceSlot,
+        }),
+        interaction: { directHit: { damage: request.damage, rockDamageMult: 0 } },
+        presentation: {
+          color: request.color,
+          style: 'tesla_bolt',
+          ownerColor: request.color,
+          suppressSpawnFx: true,
+        },
+      });
     });
     teslaDome.setNovaHitHandler((hit) => {
       if (hit.type === 'enemies' && hit.slowFraction > 0 && hit.slowDurationMs > 0) o.combatSystem.applyEnemySlow(hit.targetId, hit.slowFraction, hit.slowDurationMs);

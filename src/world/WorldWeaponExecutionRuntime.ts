@@ -1,6 +1,6 @@
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { CombatSystem } from '../systems/CombatSystem';
-import type { ProjectileManager } from '../entities/ProjectileManager';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import {
   WeaponFireExecutor,
@@ -9,16 +9,13 @@ import {
   type WeaponFireParams,
 } from '../loadout/WeaponFireExecutor';
 
-/** Projektil-Senke des gemeinsamen Immediate-Fire-Pfads. */
-type WeaponFireProjectileSink = Pick<ProjectileManager, 'spawnProjectile'>;
-
 /** Combat-Senke des gemeinsamen Immediate-Fire-Pfads (Hitscan/Melee). */
 type WeaponFireCombatResolver =
   Pick<CombatSystem, 'resolveHitscanShot' | 'resolveMeleeSwing'>
   & Partial<Pick<CombatSystem, 'resolveSafeHitscanStart'>>;
 
 export interface WorldWeaponExecutionRuntimeOptions {
-  readonly projectileManager: WeaponFireProjectileSink;
+  readonly projectileSpawn: ProjectileSpawnPort;
   readonly combatSystem: WeaponFireCombatResolver;
 }
 
@@ -27,19 +24,18 @@ export interface WorldWeaponExecutionRuntimeOptions {
  * (Cross-Phase-Contract-Familie `WeaponExecutionCapability`, eingeführt in Teilphase 4A).
  *
  * Er besitzt den zustandsarmen {@link WeaponFireExecutor} und verdrahtet dessen `WeaponFireSink`
- * **einmalig** mit den unveränderten Legacy-Projectile-/Combat-Pfaden. Kein Player-Resource-/
- * Loadout-Wissen, keine Projectile-internen Regeln: Player, Gegner, Türme und Allies rufen `fire()`
- * mit derselben `WeaponConfig`. Der `LoadoutManager` delegiert seinen Player-Fire hierher.
+ * **einmalig** mit dem semantischen Projectile-Spawn-Port und den unveränderten Legacy-Combat-
+ * Pfaden. Kein Player-Resource-/Loadout-Wissen, keine Projectile-internen Regeln: Player, Gegner,
+ * Türme und Allies rufen `fire()` mit derselben `WeaponConfig`. Der `LoadoutManager` delegiert
+ * seinen Player-Fire hierher.
  */
 export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponExecutionCapability {
   private readonly executor: WeaponFireExecutor;
 
   constructor(options: WorldWeaponExecutionRuntimeOptions) {
-    const { projectileManager, combatSystem } = options;
+    const { projectileSpawn, combatSystem } = options;
     this.executor = new WeaponFireExecutor({
-      spawnProjectile: (x, y, angle, ownerId, cfg) => {
-        projectileManager.spawnProjectile(x, y, angle, ownerId, cfg);
-      },
+      spawnProjectile: (request) => projectileSpawn.spawnProjectile(request),
       resolveHitscan: (request) => {
         const shooterX = request.shooterX ?? request.startX;
         const shooterY = request.shooterY ?? request.startY;
@@ -104,7 +100,7 @@ export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponEx
   }
 
   destroy(): void {
-    // Zustandsarm: der Executor hält keinen world-scoped State. Die Legacy-Senken
-    // (ProjectileManager / CombatSystem) sind scene-langlebig und werden hier nicht besessen.
+    // Zustandsarm: der Executor hält keinen world-scoped State. Spawn-Port und Combat-Senke
+    // sind scene-langlebig und werden hier nicht besessen.
   }
 }

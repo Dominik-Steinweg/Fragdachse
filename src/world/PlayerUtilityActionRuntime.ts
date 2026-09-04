@@ -1,4 +1,5 @@
-import type { ProjectileManager } from '../entities/ProjectileManager';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type {
@@ -87,7 +88,7 @@ export interface PlayerUtilityActionNetworkPort {
 }
 
 export interface PlayerUtilityActionRuntimeOptions {
-  readonly projectileManager: ProjectileManager;
+  readonly projectileSpawn: ProjectileSpawnPort;
   readonly combatSystem: Pick<CombatSystem, 'resolveMeleeSwing'>;
   readonly actor: UtilityActorPort;
   readonly loadout: UtilityLoadoutPort;
@@ -499,49 +500,64 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   ): boolean {
     const clampedCharge = Math.max(0, Math.min(1, chargeFraction));
     const speed = cfg.activation.minThrowSpeed + (cfg.projectileSpeed - cfg.activation.minThrowSpeed) * clampedCharge;
-    this.options.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed,
-      size: cfg.projectileSize,
-      damage: 0,
-      color: cfg.projectileColor ?? playerColor,
-      allowTeamDamage: cfg.allowTeamDamage,
-      lifetime: cfg.fuseTime,
-      maxBounces: cfg.maxBounces,
-      isGrenade: true,
-      adrenalinGain: 0,
-      sourceId: cfg.id,
-      gameplayMuzzleOrigin: muzzle,
-      fuseTime: cfg.fuseTime,
-      grenadeEffect: this.buildGrenadeEffect(cfg, playerColor),
-      projectileStyle: cfg.projectileStyle,
-      grenadeVisualPreset: cfg.grenadeVisualPreset,
-      frictionDelayMs: cfg.frictionDelayMs,
-      airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
-      bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
-      stopSpeedThreshold: cfg.stopSpeedThreshold,
-      shotAudioKey: cfg.shotAudio?.successKey,
+    this.options.projectileSpawn.spawnProjectile({
+      origin: { x, y, angle, gameplayMuzzleOrigin: muzzle },
+      flight: {
+        speed,
+        size: cfg.projectileSize,
+        lifetimeMs: cfg.fuseTime,
+        maxBounces: cfg.maxBounces,
+        isGrenade: true,
+        fuseTimeMs: cfg.fuseTime,
+        drag: {
+          frictionDelayMs: cfg.frictionDelayMs,
+          airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
+          bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
+          stopSpeedThreshold: cfg.stopSpeedThreshold,
+        },
+      },
+      provenance: createSingleOwnerProvenance(playerId, {
+        weaponSourceId: cfg.id,
+        allowTeamDamage: cfg.allowTeamDamage,
+      }),
+      interaction: {
+        grenadeEffect: this.buildGrenadeEffect(cfg, playerColor),
+      },
+      presentation: {
+        color: cfg.projectileColor ?? playerColor,
+        style: cfg.projectileStyle,
+        grenadePreset: cfg.grenadeVisualPreset,
+        shotAudioKey: cfg.shotAudio?.successKey,
+      },
     });
     return true;
   }
 
   private fireBfg(cfg: BfgUtilityConfig, x: number, y: number, angle: number, playerId: string, muzzle?: MuzzleOrigin): boolean {
-    this.options.projectileManager.spawnProjectile(x, y, angle, playerId, {
-      speed: cfg.projectileSpeed,
-      size: cfg.projectileSize,
-      damage: cfg.directDamage,
-      color: COLORS.GREEN_2,
-      allowTeamDamage: cfg.allowTeamDamage,
-      lifetime: (cfg.range / cfg.projectileSpeed) * 1000,
-      remainingRangePx: cfg.range,
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: cfg.id,
-      gameplayMuzzleOrigin: muzzle,
-      projectileStyle: 'bfg',
-      isBfg: true,
-      proximityPulse: cfg.proximityPulse,
-      shotAudioKey: cfg.shotAudio?.successKey,
+    this.options.projectileSpawn.spawnProjectile({
+      origin: { x, y, angle, gameplayMuzzleOrigin: muzzle },
+      flight: {
+        speed: cfg.projectileSpeed,
+        size: cfg.projectileSize,
+        lifetimeMs: (cfg.range / cfg.projectileSpeed) * 1000,
+        maxBounces: 0,
+        isGrenade: false,
+        remainingRangePx: cfg.range,
+        isBfg: true,
+      },
+      provenance: createSingleOwnerProvenance(playerId, {
+        weaponSourceId: cfg.id,
+        allowTeamDamage: cfg.allowTeamDamage,
+      }),
+      interaction: {
+        directHit: { damage: cfg.directDamage },
+        proximityPulse: cfg.proximityPulse,
+      },
+      presentation: {
+        color: COLORS.GREEN_2,
+        style: 'bfg',
+        shotAudioKey: cfg.shotAudio?.successKey,
+      },
     });
     return true;
   }

@@ -50,26 +50,16 @@ import { analyzeWeaponFiveTargetProgression } from '../../src/debug/coopDefenseB
 import { validateWeaponBalanceCapabilities } from '../../src/debug/coopDefenseBalance/weaponCapabilityValidator';
 import { resolveProjectileTargetImpact } from '../../src/combat/rules/ProjectileImpactResolver';
 import { resolveFiveTargetAim } from '../../src/debug/coopDefenseBalance/fiveTargetAim';
+import { headlessProjectileSpawnRequest } from '../HeadlessProjectileSpawnHelper';
 
-function projectileConfig(overrides: Partial<WeaponConfig['fire']> = {}): any {
-  return {
-    speed: 1000,
-    size: 2,
-    damage: 10,
-    lifetime: 1000,
-    maxBounces: 0,
-    adrenalinGain: 0,
-    sourceId: 'test_projectile',
-    ...overrides,
-  };
-}
+
 
 function runLifetime(stepMs: number, lifetimeMs: number, hitTimeMs: number): HeadlessSingleTargetWorld {
   const world = new HeadlessSingleTargetWorld(150, 1, true);
   const collisionDistance = 150 - (world.target.radius + 1);
-  world.spawnProjectile(0, 0, 0, 'player', projectileConfig({
+  world.spawnProjectile(headlessProjectileSpawnRequest(0, 0, 0, 'player', {
     speed: collisionDistance / (hitTimeMs / 1000),
-    lifetime: lifetimeMs,
+    lifetimeMs,
   }));
   for (let now = 0; now < 250; now += stepMs) world.step(Math.min(stepMs, 250 - now));
   return world;
@@ -269,7 +259,7 @@ describe('Weapon Balance Lab V0.9 – Measurement Semantics & Static Five-Target
 
   it('waehlt bei Projectile, Hitscan und identischer Distanz deterministisch das naechste Ziel', () => {
     const world = new HeadlessStaticTargetWorld(fiveTargets(), 1, true, 16, 'five_target');
-    world.spawnProjectile(0, 0, 0, 'player', projectileConfig({ speed: 1000, lifetime: 1000 }));
+    world.spawnProjectile(headlessProjectileSpawnRequest(0, 0, 0, 'player', { speed: 1000, lifetimeMs: 1000 }));
     world.step(100);
     expect(world.getDamageEvents()[0]?.targetId).toBe('target_1');
 

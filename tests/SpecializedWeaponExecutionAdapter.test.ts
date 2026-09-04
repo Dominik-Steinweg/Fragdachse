@@ -2,10 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { SpecializedWeaponExecutionAdapter } from '../src/world/SpecializedWeaponExecutionAdapter';
+import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
 describe('SpecializedWeaponExecutionAdapter – unmittelbare Spezialschüsse (4C)', () => {
   it('führt Flamethrower, Leaf Blower, Reinforcement Matrix und Energy Injector über eine Capability aus', () => {
-    const spawnProjectile = vi.fn(() => 1);
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 1);
     const adapter = new SpecializedWeaponExecutionAdapter({ spawnProjectile });
     const params = {
       x: 100,
@@ -31,22 +32,26 @@ describe('SpecializedWeaponExecutionAdapter – unmittelbare Spezialschüsse (4C
     }
 
     expect(spawnProjectile).toHaveBeenCalledTimes(4);
-    for (const [, , , ownerId, projectile] of spawnProjectile.mock.calls) {
-      expect(ownerId).toBe('player-owner');
-      expect(projectile).toMatchObject({
+    for (const [request] of spawnProjectile.mock.calls) {
+      expect(request.provenance).toMatchObject({
+        gameplaySourceId: 'player-owner',
+        attributionId: 'player-owner',
+        allegiance: { ownerId: 'player-owner' },
         sourceSlot: 'weapon1',
-        gameplayMuzzleOrigin: { x: 108, y: 200 },
-        visualMuzzleOrigin: { x: 109, y: 201 },
       });
+      expect(request.origin.gameplayMuzzleOrigin).toEqual({ x: 108, y: 200 });
+      expect(request.presentation.visualMuzzleOrigin).toEqual({ x: 109, y: 201 });
     }
-    expect(spawnProjectile.mock.calls[0]?.[4]).toMatchObject({ ignoreBaseCollisions: true });
-    expect(spawnProjectile.mock.calls[1]?.[4]).toMatchObject({ ignoreBaseCollisions: true });
-    expect(spawnProjectile.mock.calls[0]?.[4]).toMatchObject({ sourceTurretId: 'turret-1' });
-    expect(spawnProjectile.mock.calls[1]?.[4]).toMatchObject({ sourceTurretId: 'turret-1' });
+    // Nur die beiden Dauerstrahl-Waffen tragen die Quellen-Kollisionsausnahmen des Turms.
+    for (const index of [0, 1]) {
+      const request = spawnProjectile.mock.calls[index]?.[0];
+      expect(request?.flight.collisionFilter).toMatchObject({ ignoreBaseCollisions: true });
+      expect(request?.provenance.sourceTurretId).toBe('turret-1');
+    }
   });
 
   it('lässt die gemeinsamen Fire-Typen und nicht unterstützte Zustandswaffen beim Aufrufer', () => {
-    const spawnProjectile = vi.fn(() => 1);
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 1);
     const adapter = new SpecializedWeaponExecutionAdapter({ spawnProjectile });
 
     expect(adapter.fire(WEAPON_CONFIGS.GLOCK, {

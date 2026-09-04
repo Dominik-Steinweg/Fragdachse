@@ -6,6 +6,7 @@ import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
@@ -356,6 +357,7 @@ export interface PlayerGameplayTunnelPlacementPort {
 export interface WorldPlayerGameplayRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
+  readonly projectileSpawn: ProjectileSpawnPort;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
@@ -460,7 +462,7 @@ export class WorldPlayerGameplayRuntime implements
       null,
     );
     const utilityAction = new PlayerUtilityActionRuntime({
-      projectileManager: options.projectileManager,
+      projectileSpawn: options.projectileSpawn,
       combatSystem: options.combatSystem,
       actor: {
         getPlayer: (playerId) => {

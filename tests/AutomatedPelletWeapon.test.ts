@@ -9,6 +9,7 @@ vi.mock('phaser', () => ({
 import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
+import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
 describe('automated projectile weapons', () => {
   it('forwards construction damage as owner-attributed utility damage', () => {
@@ -36,9 +37,9 @@ describe('automated projectile weapons', () => {
   });
 
   it('passes turret support collision filters into the spawned projectile', () => {
-    const spawnProjectile = vi.fn(() => 42);
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 42);
     const sharedExecution = new WorldWeaponExecutionRuntime({
-      projectileManager: { spawnProjectile },
+      projectileSpawn: { spawnProjectile },
       combatSystem: { resolveHitscanShot: vi.fn(() => true), resolveMeleeSwing: vi.fn(() => true) },
     });
     const adapter = new AutomatedWeaponExecutionAdapter(sharedExecution, { spawnProjectile });
@@ -52,11 +53,9 @@ describe('automated projectile weapons', () => {
       },
     );
 
-    expect(spawnProjectile.mock.calls[0]?.[4]).toMatchObject({
-      ignoreBaseCollisions: true,
-      ignoreRockIndex: 7,
-      sourceTurretId: '7',
-    });
+    const request = spawnProjectile.mock.calls[0]?.[0];
+    expect(request?.flight.collisionFilter).toMatchObject({ ignoreBaseCollisions: true, ignoreRockIndex: 7 });
+    expect(request?.provenance.sourceTurretId).toBe('7');
   });
 
   it('applies one shared tower multiplier to direct, explosive, cloud and burn damage', () => {
@@ -110,8 +109,8 @@ describe('automated projectile weapons', () => {
         options: { directDamageMultiplier: 1.25, payloadDamageMultiplier: 2.5, sourceSlot: 'utility' },
       },
     );
-    const flame = spawnProjectile.mock.calls[0][4];
-    expect(flame.burnDamagePerTick).toBeCloseTo(
+    const flame = spawnProjectile.mock.calls[0][0];
+    expect(flame.interaction.burn.damagePerTick).toBeCloseTo(
       WEAPON_CONFIGS.TURRET_FLAME.fire.type === 'flamethrower'
         ? WEAPON_CONFIGS.TURRET_FLAME.fire.burnDamagePerTick * 2.5
         : 0,
@@ -142,8 +141,8 @@ describe('automated projectile weapons', () => {
     }
   });
 
-  it('fires the Void Hunter Gauss variant with its legacy projectile values and Gauss style', () => {
-    const spawnProjectile = vi.fn(() => 42);
+  it('fires the Void Hunter Gauss variant with its resolved projectile values and Gauss style', () => {
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 42);
     const adapter = new AutomatedWeaponExecutionAdapter(
       { fire: vi.fn(() => true) },
       { spawnProjectile },
@@ -156,18 +155,22 @@ describe('automated projectile weapons', () => {
       { x: 100, y: 200, angle: 0, ownerId: 'void-hunter', ownerColor: 0xaa55ff },
     )).toBe(true);
 
-    const [, , , , projectile] = spawnProjectile.mock.calls[0];
-    expect(projectile).toMatchObject({
+    const [request] = spawnProjectile.mock.calls[0];
+    expect(request.flight).toMatchObject({
       speed: 1350,
       size: 16,
-      damage: 200,
-      color: 0xb347ff,
-      projectileStyle: 'gauss',
-      projectileVisualScale: 1.25,
       maxBounces: 0,
       remainingRangePx: 1500,
+    });
+    expect(request.interaction.directHit).toMatchObject({
+      damage: 200,
       rockDamageMult: 1,
       trainDamageMult: 1,
+    });
+    expect(request.presentation).toMatchObject({
+      color: 0xb347ff,
+      style: 'gauss',
+      visualScale: 1.25,
     });
   });
 });

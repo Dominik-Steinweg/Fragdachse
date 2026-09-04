@@ -1,10 +1,13 @@
 import { PLAYER_SIZE } from '../../config';
-import type { CombatDamageKind, GroundFireVisualStyle, ProjectileSpawnConfig } from '../../types';
+import type { CombatDamageKind, GroundFireVisualStyle } from '../../types';
 import type {
   HitscanShotRequest,
   MeleeSwingRequest,
   WeaponFireSink,
 } from '../../loadout/WeaponFireExecutor';
+import type { ProjectileSpawnResult } from '../../projectile/ProjectileSpawnPort';
+import type { ProjectileSpawnRequest } from '../../projectile/ProjectileSpawnRequest';
+import { toLegacyProjectileSpawnConfig } from '../../projectile/LegacyProjectileSpawnAdapter';
 import { getHitscanRequestRange } from '../../loadout/WeaponFireExecutor';
 import {
   checkHitscanRayCircleHit,
@@ -373,16 +376,22 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
   // ── WeaponFireSink-Implementierung ─────────────────────────────────────────
 
   /** Spawnt ein fliegendes Projektil in der virtuellen Welt. */
-  spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): boolean {
-    if (this.failingSink) return false;
+  spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
+    if (this.failingSink) return null;
+
+    const { x, y, angle } = request.origin;
+    const ownerId = request.provenance.attributionId;
+    // Der Benchmark prüft die aufgelöste Payload weiterhin in ihrer Wirkungsform.
+    const cfg = toLegacyProjectileSpawnConfig(request);
 
     // Zweite Sicherheitsgrenze auf empfangene Projektil-Payloads
     validateProjectileSpawnPayload(cfg, this.scenario);
 
     const vx = Math.cos(angle) * cfg.speed;
     const vy = Math.sin(angle) * cfg.speed;
+    const id = this.nextProjectileId++;
     this.activeProjectiles.push({
-      id: this.nextProjectileId++,
+      id,
       x,
       y,
       lastX: x,
@@ -400,7 +409,7 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
       burnDamagePerTick: cfg.burnDamagePerTick,
       projectileBurnVisualStyle: cfg.projectileBurnVisualStyle,
     });
-    return true;
+    return id;
   }
 
   /** Löst einen Hitscan-Strahl über den gemeinsamen Schnitt-Resolver auf. */

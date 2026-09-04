@@ -7,10 +7,11 @@ import type {
   LoadoutSlot,
   MeleeDamageTarget,
   MeleeVisualPreset,
-  ProjectileSpawnConfig,
   ShotAudioKey,
   WeaponSlot,
 } from '../types';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import type {
   HitscanWeaponFireConfig,
   MeleeWeaponFireConfig,
@@ -100,11 +101,12 @@ export interface MeleeSwingRequest {
 /**
  * Ziel der drei gemeinsamen Fire-Pfade.
  *
- * Der `LoadoutManager` füllt diese Grenze mit `ProjectileManager` und `CombatSystem`. Der
- * Executor kennt weder deren Lifecycle noch die konkrete World-/Activity-Semantik.
+ * Projektile verlassen die Execution ausschließlich über den semantischen
+ * {@link ProjectileSpawnPort}; Hitscan und Melee bleiben bei den bestehenden Combat-Senken. Der
+ * world-composed Owner verdrahtet die Grenze; der Executor kennt weder Lifecycle noch die
+ * konkrete World-/Activity-Semantik dahinter.
  */
-export interface WeaponFireSink {
-  spawnProjectile(x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig): boolean | void;
+export interface WeaponFireSink extends ProjectileSpawnPort {
   resolveHitscan(request: HitscanShotRequest): boolean;
   resolveMelee(request: MeleeSwingRequest): boolean;
 }
@@ -273,119 +275,150 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
       && sourceSlot === 'weapon1'
       && (config.plasmaSwarmEnabled ?? 0) > 0;
 
-    const spawnResult = this.sink.spawnProjectile(x, y, angle, ownerId, {
-      speed:           fireConfig.projectileSpeed,
-      ignoreBaseCollisions: options?.ignoreBaseCollisions,
-      ignoreRockIndex: options?.ignoreRockIndex,
-      sourceTurretId:     options?.sourceTurretId,
-      size:            fireConfig.projectileSize,
-      damage:          config.directDamageOverride ?? config.damage,
-      color:           config.projectileColor ?? ownerColor,  // Waffen-eigene Farbe hat Vorrang
-      ownerColor,
-      gameplayMuzzleOrigin,
-      visualMuzzleOrigin,
-      projectileVisualScale: config.projectileVisualScale,
-      smokeTrailColor: config.rocketSmokeTrailColor ?? ownerColor,
-      lifetime: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : lifetime,
-      maxBounces:      fireConfig.projectileMaxBounces,
-      isGrenade:       false,
-      adrenalinGain:   config.adrenalinGain,
-      sourceId:      config.id,
-      plasmaSwarmEnabled,
-      plasmaSwarmProjectileCount: plasmaSwarmEnabled ? config.plasmaSwarmProjectileCount : undefined,
-      plasmaSwarmExplosionRadius: plasmaSwarmEnabled ? config.plasmaSwarmExplosionRadius : undefined,
-      plasmaSwarmExplosionDamage: plasmaSwarmEnabled ? config.plasmaSwarmExplosionDamage : undefined,
-      plasmaSwarmExplosionSlowFraction: plasmaSwarmEnabled ? config.plasmaSwarmExplosionSlowFraction : undefined,
-      splitCount:      config.splitCount,
-      splitSpread:     config.splitSpread,
-      splitFactor:     config.splitFactor,
-      splitHoming:     (config.splitHomingEnabled ?? 0) > 0 ? {
-        acquireDelayMs: 0,
-        searchRadius: 500,
-        // Wie die Basis-Waffen: Splitter treten in großer Zahl auf, und jede Zielsuche
-        // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
-        retargetIntervalMs: 100,
-        maxTurnDegreesPerStep: 20,
-        targetTypes: ['players', 'enemies', 'bases'],
-        requireLineOfSight: true,
-        excludeOwner: true,
-        distanceWeight: 1,
-        forwardWeight: 0.5,
-      } : undefined,
-      remainingRangePx: effectiveRange,
-      explosion:       fireConfig.impactExplosion,
-      enemyHitExplosion: fireConfig.enemyHitExplosion,
-      impactCloud:     fireConfig.impactCloud,
-      sporeVisualVariant: config.projectileStyle === 'spore'
-        ? fireConfig.impactCloud?.visualVariant === 'spore_void' ? 'spore_void' : 'spore'
-        : undefined,
-      homing:          config.homingEnabled === undefined || config.homingEnabled > 0
-        ? fireConfig.homing
-        : undefined,
-      projectileStyle: config.projectileStyle,
-      bulletVisualPreset: config.bulletVisualPreset,
-      grenadeVisualPreset: config.grenadeVisualPreset,
-      energyBallVariant: config.energyBallVariant,
-      tracerConfig:    config.tracerConfig,
-      detonable:       config.detonable,
-      detonator:       config.detonator,
-      rockDamageMult:  config.rockDamageMult,
-      trainDamageMult: config.trainDamageMult,
-      baseDamageMult:  config.baseDamageMult ?? 1,
-      // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
-      burnDurationMs:     config.burnOnHit?.durationMs,
-      burnDamagePerTick:  config.burnOnHit?.damagePerTick,
-      projectileBurnVisualStyle: config.projectileBurnVisualStyle,
-      canReceiveFireImbue: sourceSlot === 'weapon1' || sourceSlot === 'weapon2',
-      sourceSlot,
-      shotAudioKey:    config.shotAudio?.successKey,
-      penetrationCount: config.penetrationCount,
-      penetrationDamageRetention: config.penetrationDamageRetention,
-      penetratesRocks: (config.penetratesRocks ?? 0) > 0,
-      multiExplosionCount: config.multiExplosionCount,
-      multiExplosionCoastMs: isMiniRocket ? config.multiExplosionCoastMs : undefined,
-      miniRocketStageRangePx: hasExtendedMiniRocketFlight ? effectiveRange : undefined,
-      miniRocketReturnEnabled: isMiniRocket && (config.miniRocketReturnEnabled ?? 0) > 0,
-      miniRocketReturnRangeBuffer: isMiniRocket ? config.miniRocketReturnRangeBuffer : undefined,
-      miniRocketPickupRadius: isMiniRocket ? config.miniRocketPickupRadius : undefined,
-      miniRocketPickupAdrenalineRefundFraction: isMiniRocket ? config.miniRocketPickupAdrenalineRefundFraction : undefined,
-      miniRocketPickupArmor: isMiniRocket ? config.miniRocketPickupArmor : undefined,
-      miniRocketAdrenalineCostPaid: isMiniRocket
-        ? (params.resolvePaidAdrenalineCost?.() ?? 0)
-        : undefined,
-      miniRocketSafetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
-      miniRocketCascadeDamageBonusPerExplosion: isMiniRocket ? config.miniRocketCascadeDamageBonusPerExplosion : undefined,
-      shotgunOriginX: isShotgun ? x : undefined,
-      shotgunOriginY: isShotgun ? y : undefined,
-      shotgunResolvedRange: isShotgun ? effectiveRange : undefined,
-      shotgunProximityMaxDamageBonus: isShotgun ? config.shotgunProximityMaxDamageBonus : undefined,
-      shotgunSlowFraction: isShotgun ? config.shotgunSlowFraction : undefined,
-      shotgunSlowDurationMs: isShotgun ? config.shotgunSlowDurationMs : undefined,
-      hitSlowFraction: config.hitSlowFraction,
-      hitSlowDurationMs: config.hitSlowDurationMs,
-      hitKnockback: config.hitKnockback,
-      hitKnockbackDurationMs: config.hitKnockbackDurationMs,
-      fireTrail: config.id === 'AWP' && (config.awpCharge?.fireTrailDurationMs ?? 0) > 0 ? {
-        durationMs: config.awpCharge?.fireTrailDurationMs ?? 0,
-        burnDurationMs: config.awpCharge?.fireTrailBurnDurationMs ?? 0,
-        burnDamagePerTick: config.awpCharge?.fireTrailBurnDamagePerTick ?? 0,
-        sourceId: 'weapon.AWP.fire_trail',
-        baseDamageMult: config.baseDamageMult ?? 1,
-      } : undefined,
-      fireTrailHalfWidthCells: config.id === 'AWP' ? config.awpCharge?.fireTrailHalfWidthCells : undefined,
-      awpCorridorHalfWidth: hasAwpCorridor ? config.awpCharge?.corridorHalfWidth : undefined,
-      awpCorridorDamage: hasAwpCorridor ? config.awpCharge?.corridorDamage : undefined,
-      awpCorridorDotDurationMs: hasAwpCorridor ? config.awpCharge?.corridorDotDurationMs : undefined,
-      awpCorridorDotTickIntervalMs: hasAwpCorridor ? config.awpCharge?.corridorDotTickIntervalMs : undefined,
-      awpCorridorKnockback: hasAwpCorridor ? config.awpCharge?.corridorKnockback : undefined,
-      awpCorridorKnockbackDurationMs: hasAwpCorridor ? config.awpCharge?.corridorKnockbackDurationMs : undefined,
-      proximityPulse: config.proximityPulse,
-      ak47ShotId: config.ak47ShotId,
-      ak47DamageMultiplier: config.ak47DamageMultiplier,
-      ak47FireSuperiorityShot: config.ak47FireSuperiorityShot,
+    const isAwp = config.id === 'AWP';
+
+    const spawnResult = this.sink.spawnProjectile({
+      origin: { x, y, angle, gameplayMuzzleOrigin },
+      flight: {
+        speed:      fireConfig.projectileSpeed,
+        size:       fireConfig.projectileSize,
+        lifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : lifetime,
+        maxBounces: fireConfig.projectileMaxBounces,
+        isGrenade:  false,
+        remainingRangePx: effectiveRange,
+        homing: config.homingEnabled === undefined || config.homingEnabled > 0
+          ? fireConfig.homing
+          : undefined,
+        penetration: {
+          count:           config.penetrationCount,
+          damageRetention: config.penetrationDamageRetention,
+          penetratesRocks: (config.penetratesRocks ?? 0) > 0,
+        },
+        collisionFilter: {
+          ignoreBaseCollisions: options?.ignoreBaseCollisions,
+          ignoreRockIndex:      options?.ignoreRockIndex,
+        },
+        split: {
+          count:       config.splitCount,
+          spread:      config.splitSpread,
+          speedFactor: config.splitFactor,
+          homing: (config.splitHomingEnabled ?? 0) > 0 ? {
+            acquireDelayMs: 0,
+            searchRadius: 500,
+            // Wie die Basis-Waffen: Splitter treten in großer Zahl auf, und jede Zielsuche
+            // kostet eine Sichtlinienprüfung je geprüftem Kandidaten.
+            retargetIntervalMs: 100,
+            maxTurnDegreesPerStep: 20,
+            targetTypes: ['players', 'enemies', 'bases'],
+            requireLineOfSight: true,
+            excludeOwner: true,
+            distanceWeight: 1,
+            forwardWeight: 0.5,
+          } : undefined,
+        },
+        miniRocket: isMiniRocket ? {
+          stageRangePx:  hasExtendedMiniRocketFlight ? effectiveRange : undefined,
+          returnEnabled: (config.miniRocketReturnEnabled ?? 0) > 0,
+          returnRangeBuffer: config.miniRocketReturnRangeBuffer,
+          pickupRadius:  config.miniRocketPickupRadius,
+          pickupAdrenalineRefundFraction: config.miniRocketPickupAdrenalineRefundFraction,
+          pickupArmor:   config.miniRocketPickupArmor,
+          adrenalineCostPaid: params.resolvePaidAdrenalineCost?.() ?? 0,
+          safetyLifetimeMs: hasExtendedMiniRocketFlight ? (config.miniRocketSafetyLifetimeMs ?? 12_000) : undefined,
+          cascadeDamageBonusPerExplosion: config.miniRocketCascadeDamageBonusPerExplosion,
+        } : undefined,
+      },
+      provenance: createSingleOwnerProvenance(ownerId, {
+        weaponSourceId: config.id,
+        sourceSlot,
+        sourceTurretId: options?.sourceTurretId,
+        correlation: { ak47ShotId: config.ak47ShotId },
+      }),
+      interaction: {
+        directHit: {
+          damage:        config.directDamageOverride ?? config.damage,
+          adrenalinGain: config.adrenalinGain,
+          rockDamageMult:  config.rockDamageMult,
+          trainDamageMult: config.trainDamageMult,
+          baseDamageMult:  config.baseDamageMult ?? 1,
+          slowFraction:       config.hitSlowFraction,
+          slowDurationMs:     config.hitSlowDurationMs,
+          knockback:          config.hitKnockback,
+          knockbackDurationMs: config.hitKnockbackDurationMs,
+          shotgun: isShotgun ? {
+            originX: x,
+            originY: y,
+            resolvedRange: effectiveRange,
+            proximityMaxDamageBonus: config.shotgunProximityMaxDamageBonus,
+            slowFraction:   config.shotgunSlowFraction,
+            slowDurationMs: config.shotgunSlowDurationMs,
+          } : undefined,
+          plasmaSwarm: plasmaSwarmEnabled ? {
+            projectileCount:      config.plasmaSwarmProjectileCount,
+            explosionRadius:      config.plasmaSwarmExplosionRadius,
+            explosionDamage:      config.plasmaSwarmExplosionDamage,
+            explosionSlowFraction: config.plasmaSwarmExplosionSlowFraction,
+          } : undefined,
+          ak47: {
+            damageMultiplier:    config.ak47DamageMultiplier,
+            fireSuperiorityShot: config.ak47FireSuperiorityShot,
+          },
+        },
+        explosion:         fireConfig.impactExplosion,
+        enemyHitExplosion: fireConfig.enemyHitExplosion,
+        multiExplosion: {
+          count:   config.multiExplosionCount,
+          coastMs: isMiniRocket ? config.multiExplosionCoastMs : undefined,
+        },
+        impactCloud: fireConfig.impactCloud,
+        // Brennende Kugeln (z.B. Glock/Negev-Upgrade): Burn-Felder aufs Projektil übertragen.
+        burn: {
+          durationMs:    config.burnOnHit?.durationMs,
+          damagePerTick: config.burnOnHit?.damagePerTick,
+          visualStyle:   config.projectileBurnVisualStyle,
+          canReceiveFireImbue: sourceSlot === 'weapon1' || sourceSlot === 'weapon2',
+        },
+        pathEffect: isAwp ? {
+          fireTrail: (config.awpCharge?.fireTrailDurationMs ?? 0) > 0 ? {
+            durationMs: config.awpCharge?.fireTrailDurationMs ?? 0,
+            burnDurationMs: config.awpCharge?.fireTrailBurnDurationMs ?? 0,
+            burnDamagePerTick: config.awpCharge?.fireTrailBurnDamagePerTick ?? 0,
+            sourceId: 'weapon.AWP.fire_trail',
+            baseDamageMult: config.baseDamageMult ?? 1,
+          } : undefined,
+          fireTrailHalfWidthCells: config.awpCharge?.fireTrailHalfWidthCells,
+          awpCorridor: hasAwpCorridor ? {
+            halfWidth:          config.awpCharge?.corridorHalfWidth,
+            damage:             config.awpCharge?.corridorDamage,
+            dotDurationMs:      config.awpCharge?.corridorDotDurationMs,
+            dotTickIntervalMs:  config.awpCharge?.corridorDotTickIntervalMs,
+            knockback:          config.awpCharge?.corridorKnockback,
+            knockbackDurationMs: config.awpCharge?.corridorKnockbackDurationMs,
+          } : undefined,
+        } : undefined,
+        detonable:      config.detonable,
+        detonator:      config.detonator,
+        proximityPulse: config.proximityPulse,
+      },
+      presentation: {
+        color:      config.projectileColor ?? ownerColor,  // Waffen-eigene Farbe hat Vorrang
+        style:      config.projectileStyle,
+        ownerColor,
+        visualScale: config.projectileVisualScale,
+        bulletPreset:  config.bulletVisualPreset,
+        grenadePreset: config.grenadeVisualPreset,
+        energyBallVariant: config.energyBallVariant,
+        sporeVariant: config.projectileStyle === 'spore'
+          ? fireConfig.impactCloud?.visualVariant === 'spore_void' ? 'spore_void' : 'spore'
+          : undefined,
+        smokeTrailColor: config.rocketSmokeTrailColor ?? ownerColor,
+        tracer: config.tracerConfig,
+        shotAudioKey: config.shotAudio?.successKey,
+        visualMuzzleOrigin,
+      },
     });
 
-    return spawnResult !== false;
+    return spawnResult !== null;
   }
 
   private fireHitscan(

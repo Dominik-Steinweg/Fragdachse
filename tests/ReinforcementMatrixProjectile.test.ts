@@ -8,11 +8,12 @@ vi.mock('phaser', () => ({
 
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
+import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 
 // Fachlicher Name; OVERCHARGE_CORE bleibt nur der persistente Loadout-Identifier.
 describe('reinforcement matrix projectile', () => {
   it('launches a slow wall-colliding rocket payload and deploys only on impact', () => {
-    const spawnProjectile = vi.fn(() => 17);
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 17);
     const adapter = new AutomatedWeaponExecutionAdapter(
       { fire: vi.fn(() => true) },
       { spawnProjectile },
@@ -27,39 +28,38 @@ describe('reinforcement matrix projectile', () => {
     )).toBe(true);
 
     expect(spawnProjectile).toHaveBeenCalledTimes(1);
-    const [x, y, angle, ownerId, projectile] = spawnProjectile.mock.calls[0];
-    expect({ x, y, ownerId }).toEqual({ x: 100, y: 200, ownerId: 'inspector' });
-    expect(angle).toBe(0);
-    expect(projectile).toMatchObject({
+    const [request] = spawnProjectile.mock.calls[0];
+    expect(request.origin).toMatchObject({ x: 100, y: 200, angle: 0 });
+    expect(request.provenance).toMatchObject({ attributionId: 'inspector', sourceSlot: 'weapon2' });
+    expect(request.flight).toMatchObject({
       speed: 320,
       size: 12,
-      damage: 0,
-      lifetime: 1_312.5,
+      lifetimeMs: 1_312.5,
       remainingRangePx: 420,
       maxBounces: 0,
       isGrenade: false,
-      projectileStyle: 'rocket',
-      sourceSlot: 'weapon2',
-      explosion: {
-        radius: 220,
-        maxDamage: 0,
-        knockback: 0,
-        selfDamageMult: 0,
-        rockDamageMult: 0,
-        trainDamageMult: 0,
-        reinforcementMatrix: {
-          durationMs: 6_000,
-          damageReduction: 0.5,
-          vulnerabilityBonus: 0.2,
-          color: 0x4fd6ff,
-        },
+    });
+    expect(request.presentation.style).toBe('rocket');
+    expect(request.interaction.directHit?.damage ?? 0).toBe(0);
+    expect(request.interaction.explosion).toMatchObject({
+      radius: 220,
+      maxDamage: 0,
+      knockback: 0,
+      selfDamageMult: 0,
+      rockDamageMult: 0,
+      trainDamageMult: 0,
+      reinforcementMatrix: {
+        durationMs: 6_000,
+        damageReduction: 0.5,
+        vulnerabilityBonus: 0.2,
+        color: 0x4fd6ff,
       },
     });
-    expect(projectile.explosion.visualStyle).toBeUndefined();
+    expect(request.interaction.explosion?.visualStyle).toBeUndefined();
   });
 
   it('limits flight time to the aimed position when it is inside weapon range', () => {
-    const spawnProjectile = vi.fn(() => 18);
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 18);
     const adapter = new AutomatedWeaponExecutionAdapter(
       { fire: vi.fn(() => true) },
       { spawnProjectile },
@@ -73,9 +73,9 @@ describe('reinforcement matrix projectile', () => {
       },
     );
 
-    const [, , angle, , projectile] = spawnProjectile.mock.calls[0];
-    expect(angle).toBeCloseTo(Math.PI / 2);
-    expect(projectile.remainingRangePx).toBe(160);
-    expect(projectile.lifetime).toBe(500);
+    const [request] = spawnProjectile.mock.calls[0];
+    expect(request.origin.angle).toBeCloseTo(Math.PI / 2);
+    expect(request.flight.remainingRangePx).toBe(160);
+    expect(request.flight.lifetimeMs).toBe(500);
   });
 });

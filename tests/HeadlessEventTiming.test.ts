@@ -36,6 +36,7 @@ import { validateProjectileSpawnPayload } from '../src/debug/coopDefenseBalance/
 import { resolveProjectileTargetImpact } from '../src/combat/rules/ProjectileImpactResolver';
 import { checkSweptCircleHit } from '../src/combat/rules/DirectCombatHitResolver';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../src/loadout/LoadoutConfig';
+import { headlessProjectileSpawnRequest } from './HeadlessProjectileSpawnHelper';
 
 describe('Headless Event Timing & Causal Correctness', () => {
   describe('1. Causal Non-Retroactivity Boundary Tests', () => {
@@ -52,15 +53,15 @@ describe('Headless Event Timing & Causal Correctness', () => {
       const speed = colDist / 0.260; // Hits at exactly 260ms!
 
       world.setTime(0);
-      world.spawnProjectile(0, 0, 0, 'shooter_1', {
+      world.spawnProjectile(headlessProjectileSpawnRequest(0, 0, 0, 'shooter_1', {
         speed,
         size: 2,
         damage: 10,
-        lifetime: 1000,
+        lifetimeMs: 1000,
         burnDurationMs: 2000,
         burnDamagePerTick: 5,
-        sourceId: 'test_gun',
-      });
+        weaponSourceId: 'test_gun',
+      }));
 
       // Advance from 0 to 240ms in single step
       world.step(240);
@@ -90,15 +91,15 @@ describe('Headless Event Timing & Causal Correctness', () => {
       const speed = colDist / 0.240; // Hits at exactly 240ms!
 
       world.setTime(0);
-      world.spawnProjectile(0, 0, 0, 'shooter_1', {
+      world.spawnProjectile(headlessProjectileSpawnRequest(0, 0, 0, 'shooter_1', {
         speed,
         size: 2,
         damage: 10,
-        lifetime: 1000,
+        lifetimeMs: 1000,
         burnDurationMs: 2000,
         burnDamagePerTick: 5,
-        sourceId: 'test_gun',
-      });
+        weaponSourceId: 'test_gun',
+      }));
 
       // Step from 0 to 265ms in one step (covers impact at 240ms, then tick at 250ms)
       world.step(265);
@@ -172,15 +173,15 @@ describe('Headless Event Timing & Causal Correctness', () => {
       const speed = colDist / 0.100;
 
       world.setTime(0);
-      world.spawnProjectile(0, 0, 0, 'player_alpha', {
+      world.spawnProjectile(headlessProjectileSpawnRequest(0, 0, 0, 'player_alpha', {
         speed,
         size: 2,
         damage: 10,
-        lifetime: 1000,
+        lifetimeMs: 1000,
         burnDurationMs: 2000,
         burnDamagePerTick: 5,
-        sourceId: 'plasma_rifle',
-      });
+        weaponSourceId: 'plasma_rifle',
+      }));
 
       world.step(150); // Impact at 100ms
 
