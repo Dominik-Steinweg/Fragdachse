@@ -14,7 +14,6 @@ import {
 } from '../src/utils/coopDefenseUpgrades';
 import { getCoopDefenseProgressSnapshot } from '../src/utils/coopDefenseProgression';
 import { COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS } from '../src/config/coopDefenseConstructions';
-import { getUpgradeCategoryName } from '../src/i18n/upgradePresentation';
 
 describe('shared tool slots', () => {
   it('migrates the standard rocket and HE tools and auto-equips unlocks until full', () => {
@@ -124,15 +123,13 @@ describe('shared tool slots', () => {
 });
 
 describe('category naming per class', () => {
-  it('keeps weapon 2 named consistently and shows construction only for the Inspector', () => {
+  it('shows construction only for the Inspector while the shared categories remain available', () => {
     const inspector = getCoopDefenseUpgradeCategories('inspector_gadachs');
-    expect(getUpgradeCategoryName('weapon2', 'de')).toBe('Waffe 2');
-    expect(getUpgradeCategoryName('construction', 'de')).toBe('Konstruktionen');
-    expect(getUpgradeCategoryName('utility', 'de')).toBe('Utility');
+    expect(inspector.some((category) => category.id === 'weapon2')).toBe(true);
+    expect(inspector.some((category) => category.id === 'utility')).toBe(true);
+    expect(inspector.some((category) => category.id === 'construction')).toBe(true);
 
     const nukem = getCoopDefenseUpgradeCategories('dachs_nukem');
-    expect(getUpgradeCategoryName('weapon2', 'de')).toBe('Waffe 2');
-    expect(getUpgradeCategoryName('utility', 'de')).toBe('Utility');
     expect(nukem.find((category) => category.id === 'construction')).toBeUndefined();
   });
 });

@@ -22,10 +22,10 @@
 
 ## 1. Aktueller Stand
 
-- **Aktive Phase:** `Phase 5 – Redundanz, Mock-Shape und verbleibender Ballast`
-- **Zuletzt abgeschlossen:** `Phase 4 – Config-/Content-/Visual-Tuning-Kopplung`
-- **Gesamtstatus:** Phasen 1–4 abgeschlossen; Redundanz-/Mock-Shape-Cleanup als nächster Schritt offen.
-- **Letzter automatisierter Gate:** betroffene Config-/Content-/Visualtests, Content-Validation und Core — grün
+- **Aktive Phase:** `Phase 6 – Dauerhafte AI-Testpolicy und finaler Gate`
+- **Zuletzt abgeschlossen:** `Phase 5 – Redundanz, Mock-Shape und verbleibender Ballast`
+- **Gesamtstatus:** Phasen 1–5 abgeschlossen; dauerhafte Testpolicy und Final-Gate offen.
+- **Letzter automatisierter Gate:** fokussierte Redundanz-/Copy-/Profiler-/Maptests und Core — grün
 - **Bekannte Regressionen:** keine
 - **Sichtprüfung:** nicht vorgesehen
 
@@ -39,8 +39,8 @@
 | 2 | ✅ | Runner-/Suite-Trennung |
 | 3 | ✅ | Source-Ratchets + Architecture-Tests |
 | 4 | ✅ | Config-/Content-/Visual-Tuning-Kopplung |
-| 5 | 🟨 | Redundanz + Mock-Shape + Restballast |
-| 6 | ⬜ | AI-Testpolicy + Final Gate |
+| 5 | ✅ | Redundanz + Mock-Shape + Restballast |
+| 6 | 🟨 | AI-Testpolicy + Final Gate |
 
 ---
 
@@ -52,14 +52,12 @@
 
 | Cluster / Testbereich | Problem | Zielaktion | Zielphase | Status |
 |---|---|---|---:|:---:|
-| Redundanz / Mock-Call-Shape | 89 Dateien nutzen Spies/Mocks; große Testdateien und doppelte Ownership-/Content-Aussagen sind erkennbar | nur berührte Cluster auf unterschiedlichen Schutzwert prüfen, dann CONSOLIDATE/REWRITE/DELETE | 5 | offen |
 
 ---
 
 ## 4. Offene Risiken / Entscheidungen
 
-- Einige große Testdateien enthalten weiterhin gemischte technische, Mock- und historische Aussagen; die verbleibenden Assertions müssen einzeln auf Duplikation geprüft werden.
-- Übersprungene Legacy-Profiler-Erwartungen und kleine doppelte Raster-/Snapshot-Tests sind als möglicher Restballast zu bewerten.
+- Verbleibende positional Mocks schützen eigenständige Orchestrierungs-, Netzwerk- oder Renderer-Grenzen und wurden nicht ohne zusätzlichen Wartungsnutzen umgebaut.
 
 Während der Umsetzung hier nur Punkte führen, die die **nächste Phase** beeinflussen, z. B.:
 
@@ -91,9 +89,9 @@ Keine dieser Änderungen vor Phase 6 nur vorsorglich durchführen, sofern ein fr
 
 ## 6. Nächster konkreter Schritt
 
-**Phase 5 vollständig umsetzen.**
+**Phase 6 vollständig umsetzen.**
 
-Verbleibende redundante Assertions, Mock-Call-Shape und übersprungene Legacy-Blöcke auf Schutzwert prüfen; echte Runtime- und Integrationsregressionen behalten, Ballast konsolidieren oder löschen und anschließend fokussierte Suites sowie Core ausführen.
+Dauerhafte Testpolicy in den vorgesehenen AI-Dokumentationspfaden ergänzen, `npm run ai:sync` ausführen und anschließend alle definierten Test-Suites, Build und `git diff --check` ausführen.
 
 ---
 

@@ -250,8 +250,9 @@ describe('Coop defense map progression', () => {
     }
   });
 
-  it('uses the central enemy-spawn resolver for Map 1 encounter XP', () => {
-    const map = getCoopDefenseMapConfig('1');
+  it('uses the central enemy-spawn resolver for encounter XP', () => {
+    const map = COOP_DEFENSE_MAP_CONFIGS.find((candidate) => (candidate.encounters?.length ?? 0) > 0)!;
+    expect(map).toBeDefined();
     const singlePlayerXp = getCoopDefenseMapScheduledXp(map, 1);
     const multiplayerXp = getCoopDefenseMapScheduledXp(map, 2);
     const resolvedMultiplayerGroups = resolveCoopDefenseMapEncounterConfigs(map, 2)
@@ -358,7 +359,8 @@ describe('Coop defense map progression', () => {
   });
 
   it('uses the explicit balance reference only for pressure/drop normalization', () => {
-    const map = getCoopDefenseMapConfig('13');
+    const map = COOP_DEFENSE_MAP_CONFIGS.find((candidate) => (candidate.persistentSpawns?.length ?? 0) > 0)!;
+    expect(map).toBeDefined();
     const persistentSpawns = resolveCoopDefenseMapPersistentSpawnConfigs(map, 1);
     const shortReference = { ...map, balanceReferenceDurationSec: 1 };
     const longReference = { ...map, balanceReferenceDurationSec: 120 };
@@ -367,8 +369,10 @@ describe('Coop defense map progression', () => {
       .toBeGreaterThan(getCoopDefenseMapXpReference(shortReference, persistentSpawns, 1));
   });
 
-  it('keeps five-cell obstacle clearance around every role and preserves spawn-center gaps', () => {
-    for (const map of COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId }) => ['8', '13', '14', '15', '16'].includes(mapId))) {
+  it('keeps obstacle clearance around every role and preserves spawn-center gaps', () => {
+    const mapsWithBases = COOP_DEFENSE_MAP_CONFIGS.filter(({ mapId, bases }) => mapId !== '0' && bases.length > 0);
+    expect(mapsWithBases.length).toBeGreaterThan(0);
+    for (const map of mapsWithBases) {
       const specs = resolveCoopDefenseBases(map);
       for (const spec of specs) {
         const edgeCell = {
