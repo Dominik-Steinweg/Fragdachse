@@ -10,6 +10,7 @@ import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { LoadoutManager, LoadoutSelection } from '../loadout/LoadoutManager';
+import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
 import type { ShieldBuffPort } from '../loadout/ShieldBuffPort';
 import type { PlayerCapabilities } from './PlayerCapabilities';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
@@ -37,7 +38,9 @@ import {
   type HeldActionIdentity,
 } from '../systems/HostHeldActionSystem';
 import type {
+  BurrowPhase,
   FireChunkTarget,
+  FireChunkBurstConfig,
   ExplosionVisualStyle,
   GroundFireVisualStyle,
   HostHeldActionKind,
@@ -46,10 +49,17 @@ import type {
   LoadoutUseResult,
   PlayerInput,
   SyncedAk47StrategicTarget,
+  SyncedActiveHudBuff,
+  SyncedGuardianSpirit,
+  SyncedRepairDrone,
+  SyncedRemoteControlTurret,
+  SyncedSlimeTrailSnapshot,
   SyncedTunnel,
+  ShieldBuffHudState,
+  PlayerAimNetState,
   TemporaryUtilityInstanceDescriptor,
 } from '../types';
-import type { UtilityConfig } from '../loadout/LoadoutConfig';
+import type { UltimateConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
 import { PlayerUtilityActionRuntime } from './PlayerUtilityActionRuntime';
 import {
@@ -61,6 +71,7 @@ import {
 } from './PlayerUltimateBehaviorRuntime';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
+import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type {
   SpecializedWeaponExecutionCapability,
   WeaponExecutionCapability,
@@ -72,6 +83,7 @@ import type {
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
 } from '../config/coopDefenseConstructions';
+import { COOP_DEFENSE_AFFIX_RULES } from '../config/coopDefenseItems';
 import { SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../config';
 
 export interface WorldPlayerGameplayNetworkPort {
@@ -265,6 +277,59 @@ export type PlayerGameplayReadViews =
   & PlayerGameplayResourceReadView
   & PlayerGameplaySnapshotReadView;
 
+export interface PlayerGameplayHostFrameReadModel {
+  readonly adrenaline: number;
+  readonly adrenalineRevision: number;
+  readonly maxAdrenaline: number;
+  readonly rage: number;
+  readonly maxRage: number;
+  readonly isBurrowed: boolean;
+  readonly isStunned: boolean;
+  readonly burrowPhase: BurrowPhase;
+  readonly isUltimateActive: boolean;
+  readonly activeUltimateId: string | null;
+  readonly isUltimateCharging: boolean;
+  readonly ultimateChargeFraction: number;
+  readonly ultimateChargeRange: number;
+  readonly aim: PlayerAimNetState | undefined;
+  readonly heldItemSlot: HeldItemSlot;
+  readonly equippedUtilityConfig: UtilityConfig | undefined;
+  readonly equippedUltimateConfig: UltimateConfig | undefined;
+  readonly equippedWeapon2Config: WeaponConfig | undefined;
+  readonly behaviorHudBuffs: readonly SyncedActiveHudBuff[];
+  readonly itemHudBuffs: readonly SyncedActiveHudBuff[];
+  readonly shieldBuff: ShieldBuffHudState;
+  readonly ultimateThresholds: readonly number[];
+  readonly maxArmor: number;
+  readonly weapon1CooldownFrac: number;
+  readonly weapon2CooldownFrac: number;
+  readonly weapon2AdrenalineCost: number;
+  readonly flameRingRadius: number | undefined;
+}
+
+export interface PlayerGameplayPostProjectileStageResult {
+  readonly guardianSpirits: readonly SyncedGuardianSpirit[];
+  readonly repairDrones: readonly SyncedRepairDrone[];
+  readonly slimeTrail: SyncedSlimeTrailSnapshot;
+}
+
+export interface PlayerGameplayHostSnapshot {
+  readonly ak47StrategicTargets: readonly SyncedAk47StrategicTarget[];
+  readonly tunnels: readonly SyncedTunnel[];
+}
+
+/** Semantically named host-frame stages owned by the World-scoped player runtime. */
+export interface PlayerGameplayFrameStages {
+  runHostPrePhysicsStage(deltaMs: number, nowMs: number, countdownActive: boolean): void;
+  runHostPreCombatStage(nowMs: number, countdownActive: boolean): void;
+  runHostPostProjectileStage(
+    deltaMs: number,
+    nowMs: number,
+    countdownActive: boolean,
+  ): PlayerGameplayPostProjectileStageResult;
+  prepareHostSnapshot(nowMs: number): PlayerGameplayHostSnapshot;
+}
+
 export interface WorldPlayerGameplayRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
@@ -303,10 +368,12 @@ export class WorldPlayerGameplayRuntime implements
   PlayerGameplayLifecyclePort,
   PlayerGameplayReadViews,
   PlayerGameplayActionPort,
-  PlayerGameplayResourceCommandPort {
+  PlayerGameplayResourceCommandPort,
+  PlayerGameplayFrameStages {
   readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
   private shieldBuffPort: ShieldBuffPort | null = null;
+  private readonly heldActionUtilityIds = new Map<string, string | null>();
 
   constructor(private readonly options: WorldPlayerGameplayRuntimeOptions) {
     const heldAction = new HostHeldActionSystem();
@@ -658,6 +725,208 @@ export class WorldPlayerGameplayRuntime implements
     };
   }
 
+  runHostPrePhysicsStage(deltaMs: number, nowMs: number, countdownActive: boolean): void {
+    if (this.destroyed) return;
+    const { systems } = this;
+    systems.heldAction.clearExpired(nowMs);
+    if (countdownActive) {
+      systems.heldAction.reset();
+    this.heldActionUtilityIds?.clear();
+      return;
+    }
+
+    const players = this.options.playerManager.getAllPlayers();
+    for (const player of players) {
+      const utilityId = systems.loadout.getEquippedUtilityConfig(player.id)?.id ?? null;
+      if (
+        this.heldActionUtilityIds.has(player.id)
+        && this.heldActionUtilityIds.get(player.id) !== utilityId
+      ) {
+        systems.heldAction.clearPlayer(player.id);
+      }
+      this.heldActionUtilityIds.set(player.id, utilityId);
+      if (
+        !this.options.getPlayerCapabilities(player.id).canInteract
+        || !this.options.combatSystem.isAlive(player.id)
+        || systems.burrow.isBurrowed(player.id)
+        || systems.burrow.isStunned(player.id)
+      ) {
+        systems.heldAction.clearPlayer(player.id);
+      }
+    }
+
+    systems.itemRuntime.hostUpdate(nowMs);
+    systems.itemRuntime.updateSurroundedPlayers(
+      players,
+      this.options.getEnemyManager(),
+      (playerId) => this.options.combatSystem.isAlive(playerId),
+      (enemyId) => this.options.combatSystem.isAlive(enemyId),
+      nowMs,
+    );
+    for (const player of players) {
+      if (!this.options.combatSystem.isAlive(player.id) || !player.active) continue;
+      const glutwandererBursts = systems.itemRuntime.trackMovement(player.id, player.x, player.y);
+      if (glutwandererBursts <= 0) continue;
+      for (let burstIndex = 0; burstIndex < glutwandererBursts; burstIndex += 1) {
+        this.hostCreateFireChunkBurst(player.id, player.x, player.y, {
+          count: systems.itemRuntime.getGlutwandererChunkCount(player.id),
+          searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
+          flightMs: 320,
+          igniteCenter: false,
+          durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
+          burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
+          burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
+          sourceId: 'powerup.GLUTWANDERER',
+        }, `glutwanderer:${player.id}:${nowMs}:${burstIndex}`, nowMs);
+      }
+    }
+
+    for (const player of players) {
+      if (!systems.burrow.isBurrowed(player.id)) {
+        systems.resource.regenTick(player.id, deltaMs, nowMs);
+        this.options.combatSystem.hpRegenTick(player.id, deltaMs);
+        this.options.combatSystem.armorRegenTick(player.id, deltaMs);
+      }
+    }
+    systems.burrow.update(deltaMs, nowMs);
+    systems.loadout.update(deltaMs, nowMs);
+    systems.weaponReaction.update();
+    systems.ultimateBehavior.update(deltaMs, nowMs);
+    systems.tunnel.update(nowMs);
+  }
+
+  runHostPreCombatStage(nowMs: number, countdownActive: boolean): void {
+    if (this.destroyed || countdownActive) return;
+    this.systems.flamethrowerUpgrade?.prepareProjectileBurns(nowMs);
+    this.systems.weaponUpgrade?.hostUpdate(nowMs);
+  }
+
+  runHostPostProjectileStage(
+    deltaMs: number,
+    nowMs: number,
+    countdownActive: boolean,
+  ): PlayerGameplayPostProjectileStageResult {
+    if (this.destroyed || countdownActive) {
+      return { guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] } };
+    }
+    const { systems } = this;
+    systems.ak47StrategicTarget?.hostUpdate(nowMs);
+    const guardianSpirits = systems.guardianSpirit?.hostUpdate(nowMs, deltaMs) ?? [];
+    systems.repairDrone?.update(deltaMs);
+    const repairDrones = systems.repairDrone?.getSnapshot() ?? [];
+    const slimeTrail = systems.slimeTrail?.hostUpdate(nowMs) ?? { cells: [], affectedEnemies: [] };
+    systems.flamethrowerUpgrade?.hostUpdate(nowMs);
+    return { guardianSpirits, repairDrones, slimeTrail };
+  }
+
+  prepareHostSnapshot(nowMs: number): PlayerGameplayHostSnapshot {
+    if (this.destroyed) return { ak47StrategicTargets: [], tunnels: [] };
+    return {
+      ak47StrategicTargets: this.getAk47StrategicTargetNetSnapshot(nowMs),
+      tunnels: this.getTunnelNetSnapshot(),
+    };
+  }
+
+  getHostPlayerFrameReadModel(
+    playerId: string,
+    nowMs: number,
+    isMoving: boolean,
+  ): PlayerGameplayHostFrameReadModel {
+    const { systems } = this;
+    const ultimateConfig = systems.loadout.getEquippedUltimateConfig(playerId);
+    const weapon2Config = systems.loadout.getEquippedWeaponConfig(playerId, 'weapon2');
+    const activeBehaviorBuffs = [
+      ...(systems.ak47Behavior?.getHudBuffs(playerId, nowMs) ?? []),
+      ...(systems.negevBehavior?.getHudBuffs(playerId) ?? []),
+    ];
+    return {
+      adrenaline: systems.resource.getAdrenaline(playerId),
+      adrenalineRevision: systems.resource.getAdrenalineRevision(playerId),
+      maxAdrenaline: systems.resource.getMaxAdrenaline(playerId),
+      rage: systems.resource.getRage(playerId),
+      maxRage: systems.resource.getMaxRage(playerId),
+      isBurrowed: systems.burrow.isBurrowed(playerId),
+      isStunned: systems.burrow.isStunned(playerId),
+      burrowPhase: systems.burrow.getPhase(playerId),
+      isUltimateActive: systems.ultimateBehavior.isUltimateActive(playerId),
+      activeUltimateId: systems.ultimateBehavior.getActiveUltimateId(playerId),
+      isUltimateCharging: systems.ultimateBehavior.isUltimateCharging(playerId),
+      ultimateChargeFraction: systems.ultimateBehavior.getUltimateChargeFraction(playerId, nowMs),
+      ultimateChargeRange: systems.ultimateBehavior.getUltimateChargeRange(playerId),
+      aim: systems.loadout.getAimNetState(playerId, isMoving),
+      heldItemSlot: systems.loadout.getHeldItemSlot(playerId, nowMs),
+      equippedUtilityConfig: systems.loadout.getEquippedUtilityConfig(playerId),
+      equippedUltimateConfig: ultimateConfig,
+      equippedWeapon2Config: weapon2Config,
+      behaviorHudBuffs: activeBehaviorBuffs,
+      itemHudBuffs: this.getItemHudBuffs(playerId, nowMs),
+      shieldBuff: systems.loadout.getShieldBuffHudState(playerId, nowMs),
+      ultimateThresholds: systems.loadout.getUltimateThresholds(playerId),
+      maxArmor: systems.playerModifier.getResolvedStat(playerId, 'player.maxArmor', 100),
+      weapon1CooldownFrac: systems.loadout.getCooldownFrac(playerId, 'weapon1', nowMs),
+      weapon2CooldownFrac: systems.loadout.getCooldownFrac(playerId, 'weapon2', nowMs),
+      weapon2AdrenalineCost: systems.ak47Behavior?.isFireSuperiorityAvailable(playerId)
+        ? 0
+        : systems.resource.resolveAdrenalineCost(playerId, weapon2Config?.adrenalinCost ?? 0),
+      flameRingRadius: systems.flamethrowerUpgrade?.getActiveRingRadius(playerId),
+    };
+  }
+
+  hostCreateFireChunkBurst(
+    ownerId: string,
+    x: number,
+    y: number,
+    burst: FireChunkBurstConfig,
+    sourceKey: string,
+    nowMs: number,
+  ): void {
+    if (this.destroyed) return;
+    this.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, nowMs);
+  }
+
+  registerDashCompleted(playerId: string, nowMs: number): void {
+    if (this.destroyed) return;
+    this.systems.itemRuntime.registerDashCompleted(playerId, nowMs);
+  }
+
+  getRemoteControlSnapshot(
+    playerIds: readonly string[],
+    sources: readonly RemoteControlSource[],
+  ): SyncedRemoteControlTurret[] {
+    if (this.destroyed) return [];
+    return this.systems.itemRuntime.getRemoteControlSnapshot(playerIds, sources);
+  }
+
+  private getItemHudBuffs(playerId: string, nowMs: number): SyncedActiveHudBuff[] {
+    const runtime = this.systems.itemRuntime;
+    const movementCharge = this.systems.playerModifier.getItemAffixValue(playerId, 'movement_charge_damage');
+    const glutwanderer = this.systems.playerModifier.getItemAffixValue(playerId, 'glutwanderer');
+    const surrounded = this.systems.playerModifier.getItemAffixValue(playerId, 'surrounded');
+    const buffs: SyncedActiveHudBuff[] = [];
+    if (movementCharge > 0) {
+      const charged = runtime.hasMovementCharge(playerId);
+      buffs.push({
+        defId: 'MOVEMENT_CHARGE',
+        remainingFrac: runtime.getMovementChargeProgress(playerId),
+        value: movementCharge,
+        charged,
+        intensity: charged ? 1 : 0.35,
+      });
+    }
+    if (glutwanderer > 0) {
+      buffs.push({
+        defId: 'GLUTWANDERER',
+        remainingFrac: runtime.getGlutwandererProgress(playerId),
+        count: runtime.getGlutwandererChunkCount(playerId),
+        intensity: 0.35 + runtime.getGlutwandererProgress(playerId) * 0.65,
+      });
+    }
+    if (surrounded > 0 && runtime.isSurrounded(playerId, nowMs)) {
+      buffs.push({ defId: 'SURROUNDED', remainingFrac: 1, value: surrounded, intensity: 1 });
+    }
+    return buffs;
+  }
+
   // ── Öffentliche Player-in-World-/Reconcile-Lifecycle-Grenze (PlayerGameplayLifecyclePort) ──
   //
   // Jede Operation kapselt genau die Child-System-Schritte, die ihr Feature-Attach/-Detach
@@ -893,12 +1162,28 @@ export class WorldPlayerGameplayRuntime implements
     return this.systems.burrow.isStunned(playerId);
   }
 
+  getBurrowPhase(playerId: string): BurrowPhase {
+    return this.systems.burrow.getPhase(playerId);
+  }
+
+  isUltimateActive(playerId: string): boolean {
+    return this.systems.ultimateBehavior.isUltimateActive(playerId);
+  }
+
+  getHeldItemSlot(playerId: string, nowMs: number): HeldItemSlot {
+    return this.systems.loadout.getHeldItemSlot(playerId, nowMs);
+  }
+
   getPlayerClassId(playerId: string): string | null {
     return this.systems.playerModifier.getClassId(playerId) ?? null;
   }
 
   getEquippedUtilityConfig(playerId: string): UtilityConfig | undefined {
     return this.systems.loadout.getEquippedUtilityConfig(playerId);
+  }
+
+  resolveUtilityConfig(playerId: string, config: UtilityConfig): UtilityConfig {
+    return this.systems.loadout.resolveUtilityConfig(playerId, config);
   }
 
   getTemporaryUtilityConfig(playerId: string, instanceId: string): UtilityConfig | null {
@@ -949,6 +1234,7 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed) return;
     this.destroyed = true;
     const { systems } = this;
+    this.heldActionUtilityIds?.clear();
     this.shieldBuffPort = null;
     systems.loadout.setShieldBuffReadPort(null);
     systems.loadout.setSustainedWeaponBehavior(null);

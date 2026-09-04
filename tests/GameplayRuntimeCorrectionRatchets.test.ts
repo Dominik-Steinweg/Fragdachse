@@ -52,7 +52,8 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(worldRuntime).toContain('new NegevBehaviorRuntime');
     expect(combatBinding).toContain('getPlayerCombatIntegration()?.reactions.registerKill');
     expect(hostFrame).not.toContain('loadout?.getNegevHudBuffs');
-    expect(hostFrame).toContain('negevBehavior?.getHudBuffs');
+    expect(hostFrame).toContain('getHostPlayerFrameReadModel');
+    expect(worldRuntime).toContain('negevBehavior?.getHudBuffs');
   });
 
   it('keeps Shotgun Lightning and simple kill reactions out of LoadoutManager', () => {
@@ -70,7 +71,8 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(reactionRuntime).toContain('class WeaponReactionRuntime');
     expect(worldRuntime).toContain('new WeaponReactionRuntime');
     expect(combatBinding).toContain('reactions.registerKill');
-    expect(hostFrame).toContain('weaponReaction?.update');
+    expect(hostFrame).toContain('runHostPrePhysicsStage');
+    expect(worldRuntime).toContain('weaponReaction.update');
   });
 
   it('keeps Tesla Dome and Energy Shield lifecycles in the sustained behavior owner', () => {

@@ -38,7 +38,7 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
     //    migriert und darf deshalb nicht mehr als Player-Gameplay-Systems-Consumer erscheinen.
     //  - ArenaRuntime: itemRuntime×turret Remote-Control-Snapshot-Join → 12B
     //  - ArenaRuntimeAdapters: Player-Gameplay-Mutationen → 6B abgeschlossen
-    //  - Host-/ClientUpdateCoordinator: Frame-Reads → 12A/12B
+    //  - ClientUpdateCoordinator: Frame-Reads → 12B
     expect(offenders).toEqual([
       'src/scenes/arena/ArenaLifecycleCoordinator.ts',
       'src/scenes/arena/ArenaRuntime.ts',
@@ -46,7 +46,6 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
       'src/scenes/arena/ArenaWorldConstructionComposition.ts',
       'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
       'src/scenes/arena/ClientUpdateCoordinator.ts',
-      'src/scenes/arena/HostUpdateCoordinator.ts',
     ]);
   });
 

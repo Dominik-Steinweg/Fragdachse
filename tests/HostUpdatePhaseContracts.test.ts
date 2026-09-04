@@ -101,6 +101,27 @@ describe('Host-Tick – Reihenfolge und Weltanteil unveraendert', () => {
     expect(body).toContain('if (metrics) metrics.enemyAiMs = performance.now() - phaseStartedAt;');
   });
 
+  it('delegiert Player-Gameplay über benannte Host-Frame-Stages', () => {
+    const host = read(HOST_PATH);
+    const runtime = read('src/world/WorldPlayerGameplayRuntime.ts');
+    const body = hostTickBody(host);
+
+    expect(host).not.toMatch(/private get playerSystems\b/);
+    expect(runtime).toContain('interface PlayerGameplayFrameStages');
+    expect(runtime).toContain('runHostPrePhysicsStage(');
+    expect(runtime).toContain('runHostPreCombatStage(');
+    expect(runtime).toContain('runHostPostProjectileStage(');
+    expect(runtime).toContain('prepareHostSnapshot(');
+    expect(body).toContain('this.playerGameplayRuntime?.runHostPrePhysicsStage(');
+    expect(body).toContain('this.playerGameplayRuntime?.runHostPreCombatStage(');
+    expect(body).toContain('this.playerGameplayRuntime?.runHostPostProjectileStage(');
+    expect(body).toContain('this.playerGameplayRuntime?.prepareHostSnapshot(');
+    expect(body.indexOf('runHostPrePhysicsStage(')).toBeLessThan(body.indexOf('this.ctx.hostPhysics.update('));
+    expect(body.indexOf('runHostPreCombatStage(')).toBeLessThan(body.indexOf('this.ctx.combatSystem.update('));
+    expect(body.indexOf('this.ctx.projectileManager.hostUpdate(')).toBeLessThan(body.indexOf('runHostPostProjectileStage('));
+    expect(body.indexOf('prepareHostSnapshot(')).toBeLessThan(body.indexOf('bridge.publishGameState('));
+  });
+
   it('haelt die Activity-Reihenfolge frei von eigener Aktivierungslogik', () => {
     const source = read(ACTIVITY_UPDATE_PATH);
     for (const phase of ['runProgressPhase', 'runCombatPhase']) {

@@ -5,7 +5,6 @@ import { NET_TICK_INTERVAL_MS, COLORS, DASH_T2_S, CELL_SIZE } from '../../config
 import { getUtilityConfigForMode, UTILITY_CONFIGS, WEAPON_CONFIGS }          from '../../loadout/LoadoutConfig';
 import { COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT, getCoopDefenseConstructionDefinition, getToolCapacityCost, resolveConstructionCapacity } from '../../config/coopDefenseConstructions';
 import { getActiveConstructionToolRefs, getConstructionAccessContext } from '../../systems/ConstructionAccessResolver';
-import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import type { AirstrikeUltimateConfig, PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { buildLocalArenaHudData } from '../../ui/LocalArenaHudData';
 import { bfgFlightRumble } from '../../effects/camera/cameraFeedbackPresets';
@@ -146,7 +145,6 @@ export class HostUpdateCoordinator {
   private readonly burrowLoopHandles    = new Map<string, string>();
   private readonly prevStealthStates    = new Map<string, boolean>();
   private readonly prevAliveStates      = new Map<string, boolean>();
-  private readonly heldActionUtilityIds = new Map<string, string | null>();
   private moveLoopHandle: string | null = null;
   private classicTrainSpawned = false;
   private readonly blackHoleSystem: BlackHoleSystem;
@@ -207,7 +205,9 @@ export class HostUpdateCoordinator {
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
   private get targetingSystems() { return this.combatFramePort?.getTargetingRuntime()?.systems ?? null; }
-  private get playerSystems() { return this.playerFramePort?.getPlayerGameplayRuntime()?.systems ?? null; }
+  private get playerGameplayRuntime(): WorldPlayerGameplayRuntime | null {
+    return this.playerFramePort?.getPlayerGameplayRuntime() ?? null;
+  }
   private get combatSystems() { return this.combatFramePort?.getCombatGameplayBinding()?.systems ?? null; }
   private get supportSystems() { return this.combatFramePort?.getSupportGameplayRuntime()?.systems ?? null; }
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
@@ -271,7 +271,6 @@ export class HostUpdateCoordinator {
     this.burrowLoopHandles.clear();
     this.prevStealthStates.clear();
     this.prevAliveStates.clear();
-    this.heldActionUtilityIds.clear();
     if (this.moveLoopHandle) { this.audio?.stopLoop(this.moveLoopHandle); this.moveLoopHandle = null; }
     this.classicTrainSpawned = false;
     this.blackHoleSystem.clear();
@@ -315,27 +314,6 @@ export class HostUpdateCoordinator {
     const now = Date.now();
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
-    const heldActions = this.playerSystems?.heldAction;
-    heldActions?.clearExpired(now);
-    if (countdownActive) {
-      heldActions?.reset();
-    } else if (heldActions) {
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        const utilityId = this.playerSystems?.loadout?.getEquippedUtilityConfig(player.id)?.id ?? null;
-        if (this.heldActionUtilityIds.has(player.id)
-          && this.heldActionUtilityIds.get(player.id) !== utilityId) {
-          heldActions.clearPlayer(player.id);
-        }
-        this.heldActionUtilityIds.set(player.id, utilityId);
-        if (!(this.playerCapabilitiesResolver?.(player.id).canInteract ?? false)
-          || !this.ctx.combatSystem.isAlive(player.id)
-          || this.playerSystems?.burrow?.isBurrowed(player.id)
-          || this.playerSystems?.burrow?.isStunned(player.id)) {
-          heldActions.clearPlayer(player.id);
-        }
-      }
-    }
-
     // World: Koeder und Tarnung leben unabhaengig von jeder Activity und stehen deshalb vor dem
     // Missionsschritt, der sie als Ziele liest.
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
@@ -347,63 +325,8 @@ export class HostUpdateCoordinator {
     if (metrics) metrics.enemyAiMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-    if (!countdownActive && this.playerSystems?.itemRuntime) {
-      const runtime = this.playerSystems?.itemRuntime;
-      runtime.hostUpdate(now);
-      // Beide Positions-Affixe werden aus echter Distanz gespeist. Teleports werden im
-      // Runtime-System ueber die gemeinsame Schrittgrenze verworfen.
-      const players = this.ctx.playerManager.getAllPlayers();
-      runtime.updateSurroundedPlayers(
-        players,
-        this.enemyManager,
-        (playerId) => this.ctx.combatSystem.isAlive(playerId),
-        (enemyId) => this.ctx.combatSystem.isAlive(enemyId),
-        now,
-      );
-      for (const player of players) {
-        const alive = this.ctx.combatSystem.isAlive(player.id);
-        const glutwandererBursts = runtime.trackMovement(player.id, player.x, player.y);
-        if (glutwandererBursts <= 0 || !alive || !player.active) continue;
-        for (let burstIndex = 0; burstIndex < glutwandererBursts; burstIndex += 1) {
-          this.playerSystems?.flamethrowerUpgrade?.hostCreateFireChunkBurst(
-            player.id,
-            player.x,
-            player.y,
-            {
-              count: runtime.getGlutwandererChunkCount(player.id),
-              searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
-              flightMs: 320,
-              igniteCenter: false,
-              durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
-              burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
-              burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
-              sourceId: 'powerup.GLUTWANDERER',
-            },
-            `glutwanderer:${player.id}:${now}:${burstIndex}`,
-            now,
-          );
-        }
-      }
-    }
-
-    if (!countdownActive && this.playerSystems?.resource && this.playerSystems?.burrow) {
-      for (const player of this.ctx.playerManager.getAllPlayers()) {
-        if (!this.playerSystems?.burrow.isBurrowed(player.id)) {
-          this.playerSystems?.resource.regenTick(player.id, delta, now);
-          this.ctx.combatSystem.hpRegenTick(player.id, delta);
-          this.ctx.combatSystem.armorRegenTick(player.id, delta);
-        }
-      }
-      this.playerSystems?.burrow.update(delta, now);
-    }
-
-    if (!countdownActive) {
-      this.playerSystems?.loadout?.update(delta, now);
-      this.playerSystems?.weaponReaction?.update();
-      this.playerSystems?.ultimateBehavior?.update(delta, now);
-      this.powerUpSystem?.update(delta);
-      this.playerSystems?.tunnel?.update(now);
-    }
+    this.playerGameplayRuntime?.runHostPrePhysicsStage(delta, now, countdownActive);
+    if (!countdownActive) this.powerUpSystem?.update(delta);
 
     this.blackHoleSystem.update(now);
     if (metrics) metrics.playerSystemsMs = performance.now() - phaseStartedAt;
@@ -424,8 +347,7 @@ export class HostUpdateCoordinator {
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (!countdownActive) {
       this.supportSystems?.detonation?.checkProjectileDetonations();
-      this.playerSystems?.flamethrowerUpgrade?.prepareProjectileBurns(now);
-      this.playerSystems?.weaponUpgrade?.hostUpdate(now);
+      this.playerGameplayRuntime?.runHostPreCombatStage(now, countdownActive);
       this.ctx.combatSystem.update(now);
       this.ctx.combatSystem.updateBurnEffects(now);
     }
@@ -433,24 +355,17 @@ export class HostUpdateCoordinator {
     const { explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
       ? { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
       : this.ctx.projectileManager.hostUpdate(delta);
-    if (!countdownActive) this.playerSystems?.ak47StrategicTarget?.hostUpdate(now);
-    const guardianSpirits = countdownActive
-      ? []
-      : (this.playerSystems?.guardianSpirit?.hostUpdate(now, delta) ?? []);
+    const playerPostProjectile = this.playerGameplayRuntime?.runHostPostProjectileStage(delta, now, countdownActive)
+      ?? { guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] } };
+    const guardianSpirits = [...playerPostProjectile.guardianSpirits];
+    const repairDrones = [...playerPostProjectile.repairDrones];
+    const { slimeTrail } = playerPostProjectile;
     this.visuals?.guardianSpirit.syncVisuals(guardianSpirits);
-    if (!countdownActive) this.playerSystems?.repairDrone?.update(delta);
-    const repairDrones = countdownActive
-      ? []
-      : (this.playerSystems?.repairDrone?.getSnapshot() ?? []);
     this.visuals?.repairDrone.syncVisuals(
       repairDrones,
       this.placementSystem?.getAllRuntimeRocks() ?? [],
     );
-    const slimeTrail = countdownActive
-      ? { cells: [], affectedEnemies: [] }
-      : (this.playerSystems?.slimeTrail?.hostUpdate(now) ?? { cells: [], affectedEnemies: [] });
     this.visuals?.slimeTrail.syncVisuals(slimeTrail);
-    if (!countdownActive) this.playerSystems?.flamethrowerUpgrade?.hostUpdate(now);
     if (metrics) metrics.combatProjectilesMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
@@ -537,7 +452,7 @@ export class HostUpdateCoordinator {
         this.ctx.fireSystem.hostCreateZone(explosion.x, explosion.y, groundFire, explosion.ownerId);
       }
       if (explosion.effect.fireChunkBurst) {
-        this.playerSystems?.flamethrowerUpgrade?.hostCreateFireChunkBurst(
+        this.playerGameplayRuntime?.hostCreateFireChunkBurst(
           explosion.ownerId,
           explosion.x,
           explosion.y,
@@ -643,7 +558,7 @@ export class HostUpdateCoordinator {
               x:        player.x,
               y:        player.y,
               alive:    this.ctx.combatSystem.isAlive(id),
-              burrowed: this.playerSystems?.burrow?.isBurrowed(id) ?? false,
+              burrowed: this.playerGameplayRuntime?.isBurrowed(id) ?? false,
               color:    profile?.colorHex ?? 0xffffff,
             };
           }
@@ -815,7 +730,7 @@ export class HostUpdateCoordinator {
         );
         bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xff6622);
       }
-      this.playerSystems?.flamethrowerUpgrade?.hostCreateFireChunkBurst(
+      this.playerGameplayRuntime?.hostCreateFireChunkBurst(
         mi.ownerId,
         mi.x,
         mi.y,
@@ -861,7 +776,7 @@ export class HostUpdateCoordinator {
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
       player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
-      player.setRageTint(this.playerSystems?.ultimateBehavior?.isUltimateActive(player.id) ?? false);
+      player.setRageTint(this.playerGameplayRuntime?.isUltimateActive(player.id) ?? false);
       const isStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const wasStealthed = this.prevStealthStates.get(player.id) ?? false;
       if (isStealthed !== wasStealthed) {
@@ -871,7 +786,7 @@ export class HostUpdateCoordinator {
       this.prevStealthStates.set(player.id, isStealthed);
       // Erst publizieren, dann lesen: Host und Clients leiten das getragene Item damit aus
       // derselben Quelle ab, statt der Host aus dem LoadoutManager und die Clients aus dem Netz.
-      const heldSlot = this.playerSystems?.loadout?.getHeldItemSlot(player.id, now);
+      const heldSlot = this.playerGameplayRuntime?.getHeldItemSlot(player.id, now);
       if (heldSlot) bridge.publishHeldItemSlot(player.id, heldSlot);
       const selectedHeldItemId = player.id === bridge.getLocalPlayerId()
         ? this.ctx.inputSystem.getSelectedHeldItemIdForPresentation?.()
@@ -889,7 +804,7 @@ export class HostUpdateCoordinator {
       // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
       // waere fuer diese eine Flanke unnoetig.
       if (dashPhase === 0 && prevDashPhase === 2) {
-        this.playerSystems?.itemRuntime?.registerDashCompleted(player.id, now);
+        this.playerGameplayRuntime?.registerDashCompleted(player.id, now);
       }
       this.prevDashPhases.set(player.id, dashPhase);
       if (dashPhase === 0) this.dashTrailTimers.delete(player.id);
@@ -899,9 +814,10 @@ export class HostUpdateCoordinator {
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       const burn = this.ctx.combatSystem.getBurnVisualState(enemy.id);
       enemy.updateBurnStacks(burn.stackCount, burn.visualStyle);
-      if (this.playerSystems?.itemRuntime) {
+      const combatIntegration = this.playerGameplayRuntime?.getPlayerCombatIntegrationPort();
+      if (combatIntegration) {
         enemy.setVulnerable(
-          this.playerSystems?.itemRuntime.getEnemyIncomingDamageMultiplier(enemy.id, now) > 1,
+          combatIntegration.item.getEnemyIncomingDamageMultiplier(enemy.id, now) > 1,
         );
       }
       // Die Hitbox-Skalierung besorgt die Physik; hier fehlen nur Trail-Geister und Dash-Sound.
@@ -936,7 +852,7 @@ export class HostUpdateCoordinator {
     }
 
     for (const player of this.ctx.playerManager.getAllPlayers()) {
-      const burrowPhase = this.playerSystems?.burrow?.getPhase(player.id) ?? 'idle';
+      const burrowPhase = this.playerGameplayRuntime?.getBurrowPhase(player.id) ?? 'idle';
       this.applyBurrowVisual(player, burrowPhase);
     }
 
@@ -949,7 +865,7 @@ export class HostUpdateCoordinator {
 
       // Movement loop for local player
       const localAlive = this.ctx.combatSystem.isAlive(localId);
-      const localBurrowed = this.playerSystems?.burrow?.isBurrowed(localId) ?? false;
+      const localBurrowed = this.playerGameplayRuntime?.isBurrowed(localId) ?? false;
       if (isMovingLocal && localAlive && !localBurrowed && !this.moveLoopHandle) {
         this.moveLoopHandle = this.audio?.startLoop('sfx_player_move') ?? null;
       } else if ((!isMovingLocal || !localAlive || localBurrowed) && this.moveLoopHandle) {
@@ -957,16 +873,16 @@ export class HostUpdateCoordinator {
         this.moveLoopHandle = null;
       }
 
-      const aimLocal      = this.playerSystems?.loadout?.getAimNetState(localId, isMovingLocal)
-                          ?? this.getDefaultAimState(isMovingLocal);
+      const now = Date.now();
+      const playerFrame = this.playerGameplayRuntime?.getHostPlayerFrameReadModel(localId, now, isMovingLocal);
+      const aimLocal      = playerFrame?.aim ?? this.getDefaultAimState(isMovingLocal);
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);
       this.ctx.inputSystem.setLocalState(
-        this.playerSystems?.burrow?.isStunned(localId) ?? false,
-        this.playerSystems?.burrow?.isBurrowed(localId) ?? false,
-        this.playerSystems?.burrow?.getPhase(localId) ?? 'idle',
+        playerFrame?.isStunned ?? false,
+        playerFrame?.isBurrowed ?? false,
+        playerFrame?.burrowPhase ?? 'idle',
       );
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
-      const now = Date.now();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
       const gameMode = bridge.getActiveGameMode();
       const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
@@ -981,15 +897,15 @@ export class HostUpdateCoordinator {
         ? getUtilityConfigForMode(selectedTool.id, gameMode)
         : undefined;
       const selectedUtility = radialAction?.kind === 'temporary-utility'
-        ? this.playerSystems?.utilityAction?.getTemporaryUtilityConfig(localId, radialAction.instanceId)
+        ? this.playerGameplayRuntime?.getTemporaryUtilityConfig(localId, radialAction.instanceId)
         : selectedUtilityBase
-          ? this.playerSystems?.loadout?.resolveUtilityConfig(localId, selectedUtilityBase) ?? selectedUtilityBase
+          ? this.playerGameplayRuntime?.resolveUtilityConfig(localId, selectedUtilityBase) ?? selectedUtilityBase
           : undefined;
       const selectedConstruction = selectedTool?.kind === 'construction'
         ? getCoopDefenseConstructionDefinition(selectedTool.id)
         : undefined;
       const activeConstructionTool = selectedTool?.kind === 'construction' ? selectedTool : null;
-      const utilCfg   = selectedUtility ?? this.playerSystems?.loadout?.getEquippedUtilityConfig(localId);
+      const utilCfg   = selectedUtility ?? playerFrame?.equippedUtilityConfig;
       // Konstrukte belegen Baukapazitaet (BK) und zeigen ihre Kosten am Namen; reine
       // Utilities kosten nichts ausser ihrem Cooldown.
       const constructionCapacityCost = activeConstructionTool ? getToolCapacityCost(activeConstructionTool) : 0;
@@ -998,35 +914,32 @@ export class HostUpdateCoordinator {
         : selectedConstruction
           ? `construction.${selectedConstruction.id}`
           : utilCfg?.id;
-      const ultCfg    = this.playerSystems?.loadout?.getEquippedUltimateConfig(localId) ?? this.getFallbackUltimateConfig();
-      const weapon2Cfg = this.playerSystems?.loadout?.getEquippedWeaponConfig(localId, 'weapon2');
+      const ultCfg    = playerFrame?.equippedUltimateConfig ?? this.getFallbackUltimateConfig();
+      const weapon2Cfg = playerFrame?.equippedWeapon2Config;
       const activePowerUps = [
         ...(this.powerUpSystem?.getActiveBuffsForHUD(localId) ?? []),
-        ...(this.playerSystems?.ak47Behavior?.getHudBuffs(localId, now) ?? []),
-        ...(this.playerSystems?.negevBehavior?.getHudBuffs(localId) ?? []),
-        ...this.getMovementChargeHudBuffs(localId),
-        ...this.getGlutwandererHudBuffs(localId),
-        ...this.getSurroundedHudBuffs(localId, now),
+        ...(playerFrame?.behaviorHudBuffs ?? []),
+        ...(playerFrame?.itemHudBuffs ?? []),
       ];
       const teamBuff = this.getTeamBuffHudBuff(localId, now);
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(localId, now);
-      const shieldBuff = this.playerSystems?.loadout?.getShieldBuffHudState(localId, now);
-      const ultimateThresholds = this.playerSystems?.loadout?.getUltimateThresholds(localId) ?? [ultCfg?.rageRequired ?? 300];
+      const shieldBuff = playerFrame?.shieldBuff;
+      const ultimateThresholds = playerFrame?.ultimateThresholds ?? [ultCfg?.rageRequired ?? 300];
       const hudData = buildLocalArenaHudData({
         hp:                      this.ctx.combatSystem.getHP(localId),
         maxHp:                   this.ctx.combatSystem.getMaxHp(localId),
         armor:                   this.ctx.combatSystem.getArmor(localId),
-        maxArmor:                this.playerSystems?.playerModifier?.getResolvedStat(localId, 'player.maxArmor', 100) ?? 100,
-        adrenaline:              this.playerSystems?.resource?.getAdrenaline(localId) ?? 0,
-        maxAdrenaline:           this.playerSystems?.resource?.getMaxAdrenaline(localId) ?? 100,
-        rage:                    this.playerSystems?.resource?.getRage(localId) ?? 0,
-        maxRage:                 this.playerSystems?.resource?.getMaxRage(localId) ?? 600,
-        isUltimateActive:        this.playerSystems?.ultimateBehavior?.isUltimateActive(localId) ?? false,
+        maxArmor:                playerFrame?.maxArmor ?? 100,
+        adrenaline:              playerFrame?.adrenaline ?? 0,
+        maxAdrenaline:           playerFrame?.maxAdrenaline ?? 100,
+        rage:                    playerFrame?.rage ?? 0,
+        maxRage:                 playerFrame?.maxRage ?? 600,
+        isUltimateActive:        playerFrame?.isUltimateActive ?? false,
         ultimateRequiredRage:    ultCfg?.rageRequired ?? 300,
-        ultimateThresholds,
+      ultimateThresholds: [...ultimateThresholds],
         ultimateId:              ultCfg?.id,
-        weapon1CooldownFrac:     this.playerSystems?.loadout?.getCooldownFrac(localId, 'weapon1', now) ?? 0,
-        weapon2CooldownFrac:     this.playerSystems?.loadout?.getCooldownFrac(localId, 'weapon2', now) ?? 0,
+        weapon1CooldownFrac:     playerFrame?.weapon1CooldownFrac ?? 0,
+        weapon2CooldownFrac:     playerFrame?.weapon2CooldownFrac ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
         utilityId,
         utilityAction:            managementAction ?? undefined,
@@ -1040,9 +953,7 @@ export class HostUpdateCoordinator {
           ...(stealthBuff ? [stealthBuff] : []),
         ],
         shieldBuff,
-        weapon2AdrenalineCost:   this.playerSystems?.ak47Behavior?.isFireSuperiorityAvailable(localId)
-          ? 0
-          : this.playerSystems?.resource?.resolveAdrenalineCost(localId, weapon2Cfg?.adrenalinCost ?? 0) ?? 0,
+        weapon2AdrenalineCost:   playerFrame?.weapon2AdrenalineCost ?? 0,
         constructionCapacityUsed: this.placementSystem?.getUsedCapacity(localId) ?? 0,
         constructionCapacityMax:  getActiveConstructionToolRefs(
           getConstructionAccessContext(gameMode, currentLoadout),
@@ -1050,7 +961,7 @@ export class HostUpdateCoordinator {
           ? resolveConstructionCapacity({
             gameMode,
             classId: currentLoadout?.coopDefenseClassId,
-            modifiers: this.playerSystems?.playerModifier?.getNumericStat(
+            modifiers: this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.modifier.getNumericStat(
               localId,
               COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT,
             ) ?? 0,
@@ -1058,7 +969,7 @@ export class HostUpdateCoordinator {
           : 0,
       });
       this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
-      this.localPlayerState.burrowed = this.playerSystems?.burrow?.isBurrowed(localId) ?? false;
+      this.localPlayerState.burrowed = playerFrame?.isBurrowed ?? false;
       // Das World-HUD ist eine Darstellungsflaeche. Ohne lokale World-Presentation entsteht
       // der Snapshot weiterhin - er wird nur nicht angezeigt.
       if (this.presentationActive) {
@@ -1142,31 +1053,28 @@ export class HostUpdateCoordinator {
       const maxHp      = this.ctx.combatSystem.getMaxHp(player.id);
       const armor      = this.ctx.combatSystem.getArmor(player.id);
       const alive      = this.ctx.combatSystem.isAlive(player.id);
-      const adrenaline = this.playerSystems?.resource?.getAdrenaline(player.id) ?? 0;
-      const rage       = this.playerSystems?.resource?.getRage(player.id) ?? 0;
-      const isBurrowed = this.playerSystems?.burrow?.isBurrowed(player.id) ?? false;
-      const isStunned  = this.playerSystems?.burrow?.isStunned(player.id)  ?? false;
-      const burrowPhase = this.playerSystems?.burrow?.getPhase(player.id) ?? 'idle';
-      const isRaging   = this.playerSystems?.ultimateBehavior?.isUltimateActive(player.id) ?? false;
-      const activeUltimateId = this.playerSystems?.ultimateBehavior?.getActiveUltimateId(player.id) ?? undefined;
       const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
-      const isChargingUltimate = this.playerSystems?.ultimateBehavior?.isUltimateCharging(player.id) ?? false;
-      const ultimateChargeFraction = this.playerSystems?.ultimateBehavior?.getUltimateChargeFraction(player.id, now) ?? 0;
-      const ultimateChargeRange    = this.playerSystems?.ultimateBehavior?.getUltimateChargeRange(player.id) ?? 0;
       const isDecoyStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const decoyStealthRemainingFrac = this.ctx.decoySystem.getStealthRemainingFrac(player.id, now);
       const isMoving = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
-      const aim      = this.playerSystems?.loadout?.getAimNetState(player.id, isMoving)
-                     ?? this.getDefaultAimState(isMoving);
+      const playerFrame = this.playerGameplayRuntime?.getHostPlayerFrameReadModel(player.id, now, isMoving);
+      const adrenaline = playerFrame?.adrenaline ?? 0;
+      const rage = playerFrame?.rage ?? 0;
+      const isBurrowed = playerFrame?.isBurrowed ?? false;
+      const isStunned = playerFrame?.isStunned ?? false;
+      const burrowPhase = playerFrame?.burrowPhase ?? 'idle';
+      const isRaging = playerFrame?.isUltimateActive ?? false;
+      const activeUltimateId = playerFrame?.activeUltimateId ?? undefined;
+      const isChargingUltimate = playerFrame?.isUltimateCharging ?? false;
+      const ultimateChargeFraction = playerFrame?.ultimateChargeFraction ?? 0;
+      const ultimateChargeRange = playerFrame?.ultimateChargeRange ?? 0;
+      const aim = playerFrame?.aim ?? this.getDefaultAimState(isMoving);
 
       bridge.publishAdrSyringeActive(player.id, (this.powerUpSystem?.getRegenMultiplier(player.id) ?? 1) > 1);
       const activeBuffs = [
         ...(this.powerUpSystem?.getActiveBuffsForHUD(player.id) ?? []),
-        ...(this.playerSystems?.ak47Behavior?.getHudBuffs(player.id, now) ?? []),
-        ...(this.playerSystems?.negevBehavior?.getHudBuffs(player.id) ?? []),
-        ...this.getMovementChargeHudBuffs(player.id),
-        ...this.getGlutwandererHudBuffs(player.id),
-        ...this.getSurroundedHudBuffs(player.id, now),
+        ...(playerFrame?.behaviorHudBuffs ?? []),
+        ...(playerFrame?.itemHudBuffs ?? []),
       ];
       const teamBuff = this.getTeamBuffHudBuff(player.id, now);
       const stealthBuff = this.ctx.decoySystem.getStealthBuff(player.id, now);
@@ -1175,7 +1083,7 @@ export class HostUpdateCoordinator {
         ...(teamBuff ? [teamBuff] : []),
         ...(stealthBuff ? [stealthBuff] : []),
       ]);
-      bridge.publishShieldBuffHud(player.id, this.playerSystems?.loadout?.getShieldBuffHudState(player.id, now) ?? {
+      bridge.publishShieldBuffHud(player.id, playerFrame?.shieldBuff ?? {
         visible: false,
         defId: 'SHIELD_OVERCHARGE',
         value: 0,
@@ -1193,7 +1101,7 @@ export class HostUpdateCoordinator {
         armor,
         alive,
         adrenaline: Math.round(adrenaline),
-        adrenalineRevision: this.playerSystems?.resource?.getAdrenalineRevision(player.id) ?? 0,
+        adrenalineRevision: playerFrame?.adrenalineRevision ?? 0,
         weapon2PredictionAck: bridge.getWeapon2PredictionAck(player.id),
         rage: Math.round(rage),
         isBurrowed,
@@ -1209,7 +1117,7 @@ export class HostUpdateCoordinator {
         isDecoyStealthed,
         decoyStealthRemainingFrac,
         dashPhase: this.ctx.hostPhysics.getDashPhase(player.id),
-        flameRingRadius: this.playerSystems?.flamethrowerUpgrade?.getActiveRingRadius(player.id),
+        flameRingRadius: playerFrame?.flameRingRadius,
         aim: {
           revision:             aim.revision,
           isMoving:             aim.isMoving,
@@ -1225,7 +1133,9 @@ export class HostUpdateCoordinator {
     const projectiles = countdownActive
       ? EMPTY_FULL_PROJECTILE_SNAPSHOT
       : this.ctx.projectileManager.getNetSnapshot();
-    const remoteControlTurrets = this.playerSystems?.itemRuntime?.getRemoteControlSnapshot(
+    const playerSnapshot = this.playerGameplayRuntime?.prepareHostSnapshot(now)
+      ?? { ak47StrategicTargets: [], tunnels: [] };
+    const remoteControlTurrets = this.playerGameplayRuntime?.getRemoteControlSnapshot(
       this.ctx.playerManager.getAllPlayers().map((player) => player.id),
       this.combatSystems?.turret?.getTurrets() ?? [],
     ) ?? [];
@@ -1256,7 +1166,7 @@ export class HostUpdateCoordinator {
       slimeTrail,
       burningGround,
       targetVulnerabilities: this.targetingSystems?.targetStatus?.getSnapshot(now) ?? [],
-      ak47StrategicTargets: this.playerSystems?.ak47StrategicTarget?.getNetSnapshot(now) ?? [],
+      ak47StrategicTargets: [...playerSnapshot.ak47StrategicTargets],
       // Ebenfalls verbrauchend – siehe `rocks`. Das volle Array oben (`powerups`, `pedestals`)
       // dient nur der host-lokalen Darstellung und dem eigenen Aufsammel-Check.
       powerups: this.powerUpSystem?.getNetSnapshot() ?? null,
@@ -1264,7 +1174,7 @@ export class HostUpdateCoordinator {
       nukes,
       airstrikes,
       meteors,
-      tunnels: this.playerSystems?.tunnel?.getSnapshot() ?? [],
+      tunnels: [...playerSnapshot.tunnels],
       train,
       bases: this.baseManager?.getNetSnapshot() ?? [],
       captureTheBeer,
@@ -1724,7 +1634,7 @@ export class HostUpdateCoordinator {
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       if (player.id === proj.ownerId) continue;
       if (!this.ctx.combatSystem.isAlive(player.id)) continue;
-      if (this.playerSystems?.burrow?.isBurrowed(player.id)) continue;
+      if (this.playerGameplayRuntime?.isBurrowed(player.id)) continue;
       if (Phaser.Math.Distance.Squared(originX, originY, player.x, player.y) > radiusSquared) continue;
       if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, player.x, player.y)) continue;
       if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
@@ -1770,7 +1680,7 @@ export class HostUpdateCoordinator {
    */
   private readonly detonationEffectSink: DetonationEffectSink = {
     addComboAdrenaline: (ownerId, amount) => {
-      this.playerSystems?.resource?.addAdrenaline(ownerId, amount);
+      this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.resource.addAdrenaline(ownerId, amount);
     },
     applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot) => {
       this.ctx.combatSystem.applyAoeDamage(x, y, radius, damage, attackerId, false, {
@@ -2129,52 +2039,6 @@ export class HostUpdateCoordinator {
     return best;
   }
 
-  /**
-   * HUD-Balken der Kinetischen Ladung.
-   *
-   * Als regulaerer `SyncedActiveHudBuff` ausgegeben und in dieselbe Liste gehaengt wie die
-   * AK-47- und Negev-Buffs: dadurch erscheint der Balken ueber `publishActiveBuffs` auch bei
-   * Clients, ohne dass dort etwas angepasst werden muss.
-   */
-  private getMovementChargeHudBuffs(playerId: string): SyncedActiveHudBuff[] {
-    const runtime = this.playerSystems?.itemRuntime;
-    if (!runtime) return [];
-    const bonus = this.playerSystems?.playerModifier?.getItemAffixValue(playerId, 'movement_charge_damage') ?? 0;
-    if (bonus <= 0) return [];
-    const charged = runtime.hasMovementCharge(playerId);
-    return [{
-      defId: 'MOVEMENT_CHARGE',
-      remainingFrac: runtime.getMovementChargeProgress(playerId),
-      value: bonus,
-      charged,
-      intensity: charged ? 1 : 0.35,
-    }];
-  }
-
-  private getGlutwandererHudBuffs(playerId: string): SyncedActiveHudBuff[] {
-    const runtime = this.playerSystems?.itemRuntime;
-    const value = this.playerSystems?.playerModifier?.getItemAffixValue(playerId, 'glutwanderer') ?? 0;
-    if (!runtime || value <= 0) return [];
-    return [{
-      defId: 'GLUTWANDERER',
-      remainingFrac: runtime.getGlutwandererProgress(playerId),
-      count: runtime.getGlutwandererChunkCount(playerId),
-      intensity: 0.35 + runtime.getGlutwandererProgress(playerId) * 0.65,
-    }];
-  }
-
-  private getSurroundedHudBuffs(playerId: string, now: number): SyncedActiveHudBuff[] {
-    const runtime = this.playerSystems?.itemRuntime;
-    const value = this.playerSystems?.playerModifier?.getItemAffixValue(playerId, 'surrounded') ?? 0;
-    if (!runtime || value <= 0 || !runtime.isSurrounded(playerId, now)) return [];
-    return [{
-      defId: 'SURROUNDED',
-      remainingFrac: 1,
-      value,
-      intensity: 1,
-    }];
-  }
-
   private getTeamBuffHudBuff(playerId: string, now: number): SyncedActiveHudBuff | null {
     return this.coopMissionRuntime?.coopDefenseTeamBuffSystem?.getHudBuff(
       now,
@@ -2241,7 +2105,7 @@ export class HostUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const player  = this.ctx.playerManager.getPlayer(localId);
     if (!player || !player.active) return;
-    if (this.playerSystems?.burrow?.isBurrowed(localId)) return;
+    if (this.playerGameplayRuntime?.isBurrowed(localId)) return;
 
     const px = player.x;
     const py = player.y;
@@ -2273,12 +2137,12 @@ export class HostUpdateCoordinator {
     }
     // Konstruktionen und Utilities laufen ueber denselben Cooldown-Kanal; nur die
     // Bezugsdauer unterscheidet sich.
-    const fallbackConfig = this.playerSystems?.loadout?.getEquippedUtilityConfig(localId);
+    const fallbackConfig = this.playerGameplayRuntime?.getEquippedUtilityConfig(localId);
     const selectedConfigBase = radialAction?.kind === 'utility'
       ? getUtilityConfigForMode(radialAction.utilityId, bridge.getActiveGameMode())
       : undefined;
     const selectedConfig = selectedConfigBase
-      ? this.playerSystems?.loadout?.resolveUtilityConfig(localId, selectedConfigBase) ?? selectedConfigBase
+      ? this.playerGameplayRuntime?.resolveUtilityConfig(localId, selectedConfigBase) ?? selectedConfigBase
       : undefined;
     const itemId = radialAction?.kind === 'construction'
       ? radialAction.constructionId
