@@ -33,13 +33,47 @@ vi.mock('phaser', () => ({
       }
     },
     Intersects: {
-      GetLineToRectangle: (_line: unknown, _rect: unknown, scratch: Array<{ x: number; y: number }>) => {
-        scratch.push({ x: 4, y: 16 });
+      GetLineToRectangle: (
+        line: { x1: number; y1: number; x2: number; y2: number },
+        rect: { left: number; right: number; top: number; bottom: number },
+        scratch: Array<{ x: number; y: number }>,
+      ) => {
+        const dx = line.x2 - line.x1;
+        const dy = line.y2 - line.y1;
+        let enter = 0;
+        let exit = 1;
+        for (const [origin, delta, min, max] of [
+          [line.x1, dx, rect.left, rect.right],
+          [line.y1, dy, rect.top, rect.bottom],
+        ] as const) {
+          if (delta === 0) {
+            if (origin < min || origin > max) return scratch;
+            continue;
+          }
+          let near = (min - origin) / delta;
+          let far = (max - origin) / delta;
+          if (near > far) [near, far] = [far, near];
+          enter = Math.max(enter, near);
+          exit = Math.min(exit, far);
+          if (enter > exit) return scratch;
+        }
+        scratch.push({ x: line.x1 + dx * enter, y: line.y1 + dy * enter });
+        if (exit > enter) scratch.push({ x: line.x1 + dx * exit, y: line.y1 + dy * exit });
         return scratch;
       },
     },
   },
   Math: {
+    Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+    DegToRad: (degrees: number) => degrees * Math.PI / 180,
+    Angle: {
+      Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1),
+      Wrap: (angle: number) => {
+        while (angle > Math.PI) angle -= Math.PI * 2;
+        while (angle < -Math.PI) angle += Math.PI * 2;
+        return angle;
+      },
+    },
     Easing: {
       Quadratic: {
         Out: (value: number) => value,
@@ -353,5 +387,432 @@ describe('projectile performance paths', () => {
     expect(manager.getProjectileById(7)).toBeUndefined();
     expect(sprites[0].sprite.destroy).toHaveBeenCalledOnce();
     expect(sprites[1].sprite.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('resolves the nearer obstacle first during a continuous projectile sweep', () => {
+    const farRock = {
+      active: true,
+      getBounds: () => ({ left: 60, top: 8, right: 68, bottom: 24 }),
+    };
+    const nearRock = {
+      active: true,
+      getBounds: () => ({ left: 20, top: 8, right: 28, bottom: 24 }),
+    };
+    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    manager.setRockGroup(
+      {} as Phaser.Physics.Arcade.StaticGroup,
+      [farRock, nearRock],
+      null,
+    );
+
+    const body = {
+      velocity: { x: 100, y: 0 },
+      reset: vi.fn(),
+      setVelocity: vi.fn(),
+      enable: true,
+    } as unknown as Phaser.Physics.Arcade.Body;
+    const projectile = fakeEntity({
+      id: 1,
+      ownerId: 'shooter',
+      lastX: 0,
+      lastY: 16,
+      x: 100,
+      y: 16,
+      displayWidth: 4,
+      body,
+      bounceCount: 0,
+      maxBounces: 0,
+      damage: 7,
+      color: 0xffffff,
+      pendingDestroy: false,
+      bounceProcessedThisStep: false,
+      penetratesRocks: false,
+      projectileStyle: 'bullet',
+      isGrenade: false,
+      isFlame: false,
+      isBfg: false,
+      colliders: [],
+    }) as unknown as TrackedProjectile;
+    const rockHits: number[] = [];
+    manager.setRockHitCallback((rockId) => rockHits.push(rockId));
+
+    (manager as unknown as { resolveContinuousRockCollision: (projectile: TrackedProjectile) => void })
+      .resolveContinuousRockCollision(projectile);
+
+    expect(rockHits).toEqual([1]);
+    expect(body.reset).toHaveBeenCalledOnce();
+    expect(body.enable).toBe(false);
+  });
+
+  it.each(['bfg', 'gauss'] as const)('deduplicates repeated rock and train overlaps for %s', (style) => {
+    type OverlapCallback = (object1: unknown, object2: unknown) => void;
+    const overlapCallbacks: OverlapCallback[] = [];
+    const scene = {
+      physics: {
+        world: { on: vi.fn(), off: vi.fn() },
+        add: {
+          overlap: vi.fn((_left: unknown, _right: unknown, callback?: OverlapCallback) => {
+            if (callback) overlapCallbacks.push(callback);
+            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
+          }),
+        },
+      },
+    } as unknown as Phaser.Scene;
+    const manager = new ProjectileManager(scene);
+    const rock = {} as Phaser.GameObjects.Image;
+    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
+    manager.setTrainGroup({} as Phaser.Physics.Arcade.StaticGroup);
+
+    const body = {
+      velocity: { x: 100, y: 0 },
+      setCollideWorldBounds: vi.fn(),
+    } as unknown as Phaser.Physics.Arcade.Body;
+    const projectile = {
+      id: 1,
+      ownerId: 'shooter',
+      damage: 12,
+      body,
+      projectileStyle: style,
+      colliders: [],
+    } as unknown as TrackedProjectile;
+    const rockHits: Array<{ id: number; damage: number }> = [];
+    const trainHits: number[] = [];
+    manager.setRockHitCallback((rockId, damage) => rockHits.push({ id: rockId, damage }));
+    manager.setTrainHitCallback((damage) => trainHits.push(damage));
+
+    (manager as unknown as {
+      setupProjectileColliders: (
+        id: number,
+        x: number,
+        y: number,
+        sprite: unknown,
+        body: Phaser.Physics.Arcade.Body,
+        tracked: TrackedProjectile,
+        cfg: unknown,
+      ) => void;
+    }).setupProjectileColliders(1, 0, 0, {}, body, projectile, { projectileStyle: style });
+
+    expect(overlapCallbacks).toHaveLength(2);
+    overlapCallbacks[0]?.({}, rock);
+    overlapCallbacks[0]?.({}, rock);
+    overlapCallbacks[1]?.({}, {});
+    overlapCallbacks[1]?.({}, {});
+
+    expect(rockHits).toEqual([{ id: 0, damage: 12 }]);
+    expect(trainHits).toEqual([12]);
+  });
+
+  it('splits Hydra at the impact point and forwards each child through the normal spawn path', () => {
+    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const spawnedIds = [2, 3];
+    const spawn = vi.spyOn(manager, 'spawnProjectile').mockImplementation(() => spawnedIds.shift() ?? 4);
+    const body = {
+      velocity: {
+        x: 100,
+        y: 0,
+        length: () => 100,
+      },
+      setVelocity: vi.fn(),
+      enable: true,
+    } as unknown as Phaser.Physics.Arcade.Body;
+    const projectile = fakeEntity({
+      id: 1,
+      ownerId: 'shooter',
+      lastX: 0,
+      lastY: 0,
+      displayWidth: 10,
+      body,
+      color: 0x22ccff,
+      damage: 20,
+      adrenalinGain: 4,
+      lifetime: 1_000,
+      maxBounces: 2,
+      bounceCount: 0,
+      splitCount: 2,
+      splitSpread: 30,
+      splitFactor: 1,
+      remainingRangePx: 100,
+      initialSpeed: 100,
+      timeBubbleFactor: 1,
+      pendingDestroy: false,
+      colliders: [],
+      projectileStyle: 'hydra',
+      isGrenade: false,
+    }) as unknown as TrackedProjectile;
+
+    const didSplit = (manager as unknown as {
+      trySplitHydraProjectile: (
+        projectile: TrackedProjectile,
+        impactX: number,
+        impactY: number,
+        outgoingVx: number,
+        outgoingVy: number,
+      ) => boolean;
+    }).trySplitHydraProjectile(projectile, 20, 0, 100, 0);
+
+    expect(didSplit).toBe(true);
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn.mock.calls.map((call) => call.slice(0, 4))).toEqual([
+      [20, 0, -Math.PI / 6, 'shooter'],
+      [20, 0, Math.PI / 6, 'shooter'],
+    ]);
+    expect(spawn.mock.calls.every((call) => (call[4] as { suppressSpawnFx?: boolean }).suppressSpawnFx === true)).toBe(true);
+    expect(projectile.pendingDestroy).toBe(true);
+    expect(body.setVelocity).toHaveBeenCalledWith(0, 0);
+  });
+
+  it('keeps grenade fuse timing on real time even when projectile time is slowed', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(5_000);
+      const sprite = fakeEntity({ id: 1, x: 10, y: 20, displayWidth: 8, destroy: vi.fn() });
+      const projectile = {
+        id: 1,
+        ownerId: 'shooter',
+        sprite,
+        body: {
+          velocity: { x: 0, y: 0 },
+          setVelocity: vi.fn(),
+        },
+        createdAt: 4_600,
+        simulatedAgeMs: 0,
+        timeBubbleFactor: 0.1,
+        isGrenade: true,
+        fuseTime: 300,
+        grenadeEffect: { type: 'fire' },
+        colliders: [],
+        boundsListener: vi.fn(),
+      } as unknown as TrackedProjectile;
+      const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+      manager.setTimeBubbleFactorProvider(() => 0.1);
+      const internals = manager as unknown as {
+        projectiles: TrackedProjectile[];
+        activeProjectiles: Set<TrackedProjectile>;
+        projectilesById: Map<number, TrackedProjectile>;
+      };
+      internals.projectiles.push(projectile);
+      internals.activeProjectiles.add(projectile);
+      internals.projectilesById.set(projectile.id, projectile);
+
+      const result = manager.hostUpdate(1_000);
+
+      expect(result.explodedGrenades).toHaveLength(1);
+      expect(result.explodedGrenades[0]?.effect).toBe(projectile.grenadeEffect);
+      expect(projectile.simulatedAgeMs).toBe(100);
+      expect(sprite.destroy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('advances flight lifetime by the explicit time-bubble factor', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(1_000);
+      const body = {
+        velocity: { x: 100, y: 0 },
+        setVelocity: vi.fn((x: number, y: number) => {
+          body.velocity.x = x;
+          body.velocity.y = y;
+        }),
+      };
+      const sprite = fakeEntity({ id: 1, x: 10, y: 20, displayWidth: 4, destroy: vi.fn() });
+      const projectile = {
+        id: 1,
+        ownerId: 'shooter',
+        sprite,
+        body,
+        createdAt: 1_000,
+        lastX: 10,
+        lastY: 20,
+        simulatedAgeMs: 0,
+        timeBubbleFactor: 1,
+        lifetime: 100,
+        maxBounces: 0,
+        bounceCount: 0,
+        isGrenade: false,
+        pendingDestroy: false,
+        colliders: [],
+        boundsListener: vi.fn(),
+      } as unknown as TrackedProjectile;
+      const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+      manager.setTimeBubbleFactorProvider(() => 0.5);
+      const internals = manager as unknown as {
+        projectiles: TrackedProjectile[];
+        activeProjectiles: Set<TrackedProjectile>;
+        projectilesById: Map<number, TrackedProjectile>;
+      };
+      internals.projectiles.push(projectile);
+      internals.activeProjectiles.add(projectile);
+      internals.projectilesById.set(projectile.id, projectile);
+
+      manager.hostUpdate(100);
+      manager.hostUpdate(100);
+      expect(projectile.simulatedAgeMs).toBe(100);
+      expect(manager.getProjectileById(projectile.id)).toBe(projectile);
+      expect(body.velocity.x).toBe(50);
+
+      manager.hostUpdate(1);
+      expect(manager.getProjectileById(projectile.id)).toBeUndefined();
+      expect(sprite.destroy).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps mini-rocket explosions separated by a coast stage before the next detonation', () => {
+    const explosion = {
+      radius: 40,
+      maxDamage: 20,
+      minDamage: 10,
+      knockback: 0,
+      selfDamageMult: 0,
+      damageTarget: 'enemies',
+    } as unknown as TrackedProjectile['explosion'];
+    const body = {
+      velocity: {
+        x: 100,
+        y: 0,
+        length: () => Math.hypot(body.velocity.x, body.velocity.y),
+      },
+      setVelocity: vi.fn((x: number, y: number) => {
+        body.velocity.x = x;
+        body.velocity.y = y;
+      }),
+      enable: true,
+    };
+    const sprite = fakeEntity({ id: 1, x: 100, y: 20, displayWidth: 8, destroy: vi.fn() });
+    const projectile = {
+      id: 1,
+      ownerId: 'shooter',
+      sprite,
+      body,
+      lastX: 100,
+      lastY: 20,
+      color: 0xffaa00,
+      ownerColor: 0xffffff,
+      sourceId: 'weapon.mini_rocket',
+      sourceSlot: 'weapon2',
+      createdAt: Date.now(),
+      lifetime: 2_000,
+      maxBounces: 0,
+      bounceCount: 0,
+      isGrenade: false,
+      pendingDestroy: false,
+      pendingExplosion: false,
+      explosion,
+      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
+      miniRocketStageRangePx: 100,
+      miniRocketPhase: 'attack',
+      miniRocketNextExplosionAtAgeMs: 0,
+      miniRocketDeferredExplosion: false,
+      miniRocketSpent: false,
+      miniRocketHasExploded: false,
+      miniRocketReturnEnabled: false,
+      multiExplosionsRemaining: 2,
+      multiExplosionCoastMs: 50,
+      miniRocketExplosionIndex: 0,
+      simulatedAgeMs: 100,
+      remainingRangePx: 100,
+      colliders: [],
+      boundsListener: vi.fn(),
+    } as unknown as TrackedProjectile;
+    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const internals = manager as unknown as {
+      projectiles: TrackedProjectile[];
+      activeProjectiles: Set<TrackedProjectile>;
+      projectilesById: Map<number, TrackedProjectile>;
+    };
+    internals.projectiles.push(projectile);
+    internals.activeProjectiles.add(projectile);
+    internals.projectilesById.set(projectile.id, projectile);
+
+    expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:target')).toBe(true);
+    const first = manager.hostUpdate(0);
+    expect(first.explodedProjectiles).toHaveLength(1);
+    expect(projectile.pendingExplosion).toBe(true);
+
+    manager.resumeMultiExplosionProjectile(projectile.id, []);
+    expect(projectile.miniRocketPhase).toBe('coast');
+    expect((manager as unknown as { updateMiniRocketFlight: (p: TrackedProjectile, age: number) => boolean })
+      .updateMiniRocketFlight(projectile, 120)).toBe(false);
+    expect(projectile.miniRocketPhase).toBe('coast');
+    expect((manager as unknown as { updateMiniRocketFlight: (p: TrackedProjectile, age: number) => boolean })
+      .updateMiniRocketFlight(projectile, 150)).toBe(false);
+    expect(projectile.miniRocketPhase).toBe('attack');
+
+    projectile.simulatedAgeMs = 150;
+    expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:next')).toBe(true);
+    const second = manager.hostUpdate(0);
+    expect(second.explodedProjectiles).toHaveLength(1);
+    expect(manager.getProjectileById(projectile.id)).toBeUndefined();
+  });
+
+  it('collects a spent mini-rocket when its explicit return phase reaches the owner', () => {
+    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const body = {
+      velocity: { x: 100, y: 0, length: () => 100 },
+      setVelocity: vi.fn(),
+    } as unknown as Phaser.Physics.Arcade.Body;
+    const projectile = fakeEntity({
+      id: 1,
+      ownerId: 'shooter',
+      x: 100,
+      y: 100,
+      body,
+      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
+      miniRocketStageRangePx: 100,
+      miniRocketPhase: 'return',
+      miniRocketSpent: true,
+      miniRocketPickupRadius: 32,
+      simulatedAgeMs: 200,
+    }) as unknown as TrackedProjectile;
+    const collected = vi.fn();
+    manager.setOwnerPositionProvider(() => ({ x: 100, y: 100 }));
+    manager.setMiniRocketCollectedCallback(collected);
+
+    const returned = (manager as unknown as {
+      updateMiniRocketFlight: (p: TrackedProjectile, age: number) => boolean;
+    }).updateMiniRocketFlight(projectile, 200);
+
+    expect(returned).toBe(true);
+    expect(collected).toHaveBeenCalledWith(projectile, 100, 100);
+  });
+
+  it('resends new projectile statics, supports a full late-join snapshot, and cleans absent IDs', () => {
+    const manager = new ProjectileManager({} as Phaser.Scene);
+    const projectile = fakeEntity({
+      id: 7,
+      ownerId: 'shooter',
+      x: 10,
+      y: 20,
+      displayWidth: 6,
+      projectileStyle: 'bullet',
+      color: 0xffcc00,
+      body: { velocity: { x: 800, y: 0 } },
+      isFlame: false,
+      isGrenade: false,
+      createdAt: Date.now(),
+    }) as unknown as TrackedProjectile;
+    const internals = manager as unknown as { activeProjectiles: Set<TrackedProjectile> };
+    internals.activeProjectiles.add(projectile);
+
+    const first = manager.getNetSnapshot();
+    const second = manager.getNetSnapshot();
+    const third = manager.getNetSnapshot();
+    const fourth = manager.getNetSnapshot();
+    expect(first?.s.length).toBeGreaterThan(0);
+    expect(second?.s.length).toBeGreaterThan(0);
+    expect(third?.s.length).toBeGreaterThan(0);
+    expect(fourth?.s).toEqual([]);
+    expect(fourth?.u.length).toBeGreaterThan(0);
+
+    manager.requestFullNetSnapshot();
+    expect(manager.getNetSnapshot()).toMatchObject({ f: 1 });
+
+    internals.activeProjectiles.clear();
+    expect(manager.getNetSnapshot()).toBeNull();
+    internals.activeProjectiles.add(projectile);
+    expect(manager.getNetSnapshot()?.s.length).toBeGreaterThan(0);
   });
 });

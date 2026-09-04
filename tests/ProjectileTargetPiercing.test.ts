@@ -76,12 +76,26 @@ function makeProjectile(piercesTargets: boolean): TrackedProjectile {
       getBounds: () => new Phaser.Geom.Rectangle(-20, -6, 40, 12), body: { velocity: { x: 100, y: 0 } } }) as unknown as TrackedProjectile;
 }
 
-function makeSystem(proj: TrackedProjectile, enemies: ReturnType<typeof makeEnemy>[]) {
+function makeSystem(
+  proj: TrackedProjectile,
+  enemies: ReturnType<typeof makeEnemy>[],
+  active: Set<TrackedProjectile> | readonly TrackedProjectile[] = [proj],
+  disableSpecialCases = true,
+) {
   const destroyProjectile = vi.fn();
+  const spawnProjectile = vi.fn();
   const projectileManager = {
-    getActiveProjectiles: () => [proj],
-    getProjectileById: (id: number) => (id === proj.id ? proj : undefined),
-    destroyProjectile,
+    getActiveProjectiles: () => active,
+    getProjectileById: (id: number) => [...active].find((projectile) => projectile.id === id),
+    destroyProjectile: (id: number) => {
+      destroyProjectile(id);
+      if (active instanceof Set) {
+        const target = [...active].find((projectile) => projectile.id === id);
+        if (target) active.delete(target);
+      }
+    },
+    spawnProjectile,
+    queueStandaloneExplosion: vi.fn(),
   } as unknown as ProjectileManager;
   const playerManager = { getAllPlayers: () => [] } as unknown as PlayerManager;
   const bridge = { isHost: () => true } as unknown as NetworkBridge;
@@ -99,10 +113,12 @@ function makeSystem(proj: TrackedProjectile, enemies: ReturnType<typeof makeEnem
   (system as unknown as { canDamageTarget: unknown }).canDamageTarget = () => true;
   (system as unknown as { computeProjectileDamage: unknown }).computeProjectileDamage = () => proj.damage;
   (system as unknown as { registerAk47Hit: unknown }).registerAk47Hit = () => {};
-  (system as unknown as { applyDomeProjectileBarrier: unknown }).applyDomeProjectileBarrier = () => {};
-  (system as unknown as { applyLeafBlowerProjectileDeflection: unknown }).applyLeafBlowerProjectileDeflection = () => {};
+  if (disableSpecialCases) {
+    (system as unknown as { applyDomeProjectileBarrier: unknown }).applyDomeProjectileBarrier = () => {};
+    (system as unknown as { applyLeafBlowerProjectileDeflection: unknown }).applyLeafBlowerProjectileDeflection = () => {};
+  }
 
-  return { system, applyDamage, destroyProjectile };
+  return { system, applyDamage, destroyProjectile, spawnProjectile };
 }
 
 describe('generic projectile target piercing', () => {
@@ -141,5 +157,146 @@ describe('generic projectile target piercing', () => {
     system.update();
 
     expect(destroyProjectile).toHaveBeenCalledWith(proj.id);
+  });
+
+  it('reflects a projectile through the normal spawn path and preserves its payload', () => {
+    const proj = makeProjectile(false);
+    Object.assign(proj, {
+      x: 10,
+      y: 0,
+      createdAt: 0,
+      lifetime: 1_000,
+      explosion: { radius: 20, maxDamage: 10, minDamage: 5, knockback: 0, selfDamageMult: 0, damageTarget: 'enemies' },
+    });
+    const { system, destroyProjectile, spawnProjectile } = makeSystem(proj, [], [proj], false);
+    system.setEnergyShieldSystem({
+      getReflectDomes: () => [{ ownerId: 'shield-owner', x: 0, y: 0, radius: 20, color: 0x123456, reflect: true }],
+      onDomeAbsorb: vi.fn(),
+    } as never);
+
+    system.update();
+
+    expect(spawnProjectile).toHaveBeenCalledWith(
+      10,
+      0,
+      0,
+      'shield-owner',
+      expect.objectContaining({
+        ownerColor: 0x123456,
+        sourceId: 'environment.reflector_dome',
+        reflected: true,
+        explosion: proj.explosion,
+      }),
+    );
+    expect(destroyProjectile).toHaveBeenCalledWith(proj.id);
+  });
+
+  it('captures a spawn-enemy grenade with its remaining fuse and new owner', () => {
+    const proj = makeProjectile(false);
+    Object.assign(proj, {
+      x: 10,
+      y: 0,
+      createdAt: 0,
+      lifetime: 1_000,
+      fuseTime: 1_000,
+      isGrenade: true,
+      grenadeEffect: { type: 'spawn_enemy' },
+    });
+    const { system, destroyProjectile, spawnProjectile } = makeSystem(proj, [], [proj], false);
+    system.setEnergyShieldSystem({
+      getReflectDomes: () => [{ ownerId: 'shield-owner', x: 0, y: 0, radius: 20, color: 0x123456, reflect: true }],
+      onDomeAbsorb: vi.fn(),
+    } as never);
+
+    system.update();
+
+    expect(spawnProjectile).toHaveBeenCalledWith(
+      10,
+      0,
+      0,
+      'shield-owner',
+      expect.objectContaining({
+        isGrenade: true,
+        fuseTime: expect.any(Number),
+        sourceId: 'environment.reflector_dome',
+        reflected: true,
+      }),
+    );
+    expect(destroyProjectile).toHaveBeenCalledWith(proj.id);
+  });
+
+  it('deflects a projectile through the leaf-blower spawn path with inherited effects', () => {
+    const target = makeProjectile(false);
+    target.explosion = {
+      radius: 20,
+      maxDamage: 10,
+      minDamage: 5,
+      knockback: 0,
+      selfDamageMult: 0,
+      damageTarget: 'enemies',
+    } as never;
+    const blower = fakeEntity({
+      id: 2,
+      ownerId: 'blower-owner',
+      ownerColor: 0xabcdef,
+      projectileStyle: 'leaf_blower',
+      leafBlowerDeflectsProjectiles: true,
+      displayWidth: 20,
+      getBounds: () => new Phaser.Geom.Rectangle(-20, -10, 40, 20),
+      body: { velocity: { x: 0, y: 100 } },
+    }) as unknown as TrackedProjectile;
+    const { system, destroyProjectile, spawnProjectile } = makeSystem(target, [], [target, blower], false);
+
+    system.update();
+
+    expect(spawnProjectile).toHaveBeenCalledWith(
+      target.sprite.x,
+      target.sprite.y,
+      Math.PI / 2,
+      'blower-owner',
+      expect.objectContaining({
+        sourceId: 'weapon.leaf_blower_deflect',
+        reflected: true,
+        explosion: target.explosion,
+      }),
+    );
+    expect(destroyProjectile).toHaveBeenCalledWith(target.id);
+  });
+
+  it('characterizes current same-stage traversal when a hit spawns plasma children', () => {
+    const parent = makeProjectile(false);
+    parent.plasmaSwarmEnabled = true;
+    parent.plasmaSwarmProjectileCount = 1;
+    parent.initialSpeed = 100;
+    const active = new Set<TrackedProjectile>([parent]);
+    const enemy = makeEnemy('enemy-a', 0);
+    enemy.updatePlasmaChargeStacks = vi.fn();
+    const secondEnemy = makeEnemy('enemy-b', 25);
+    const { system, applyDamage, spawnProjectile } = makeSystem(parent, [enemy, secondEnemy], active);
+    const originalRandom = Math.random;
+    Math.random = () => 0;
+
+    try {
+      spawnProjectile.mockImplementation((x: number, y: number, _angle: number, ownerId: string, config: Record<string, unknown>) => {
+        const child = makeProjectile(false);
+        Object.assign(child, {
+          id: active.size + 1,
+          ownerId,
+          x,
+          y,
+          ...config,
+        });
+        active.add(child);
+        return child.id;
+      });
+
+      system.update();
+
+      expect(spawnProjectile).toHaveBeenCalled();
+      expect(applyDamage).toHaveBeenCalledTimes(spawnProjectile.mock.calls.length + 1);
+      expect(active.size).toBe(0);
+    } finally {
+      Math.random = originalRandom;
+    }
   });
 });

@@ -25,9 +25,9 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `1 – Baseline und riskante Characterization`
-- **Gesamtstatus:** Refactoring noch nicht begonnen
-- **Baseline:** Projectile-Refactoring noch nicht verifiziert; Testarchitektur selbst ist bereits abgeschlossen und getrennt in Core/Architecture/Integration/Assets/Stress/Balance-Lab
+- **Nächste Phase:** `2A – Spawn Contract, Provenance und Execution-Grenze`
+- **Gesamtstatus:** Phase 1 abgeschlossen; struktureller Cutover noch nicht begonnen
+- **Baseline:** verifiziert mit `npm run check`, `npm run typecheck`, `npm run test:architecture`, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab`; die risikoreiche aktuelle Projectile-Semantik ist charakterisiert
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
@@ -38,7 +38,7 @@
 
 | Phase | Status | Kurzgegenstand |
 |---|:---:|---|
-| 1 | ⬜ | Baseline + Characterization |
+| 1 | ✅ | Baseline + Characterization |
 | 2A | ⬜ | Spawn Contract + Provenance |
 | 2B | ⬜ | World Runtime + Store + Spawn Authority |
 | 3 | ⬜ | Flight + Lifetime + Homing |
@@ -104,7 +104,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 1 starten; bei tatsächlichem Beginn Phase 1 auf 🟨 setzen.**
+**Phase 2A starten; bei tatsächlichem Beginn Phase 2A auf 🟨 setzen.**
 
 ---
 
