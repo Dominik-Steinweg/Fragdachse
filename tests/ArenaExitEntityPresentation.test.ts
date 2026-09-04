@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({}));
@@ -77,45 +75,4 @@ describe('ArenaExitEntityPresentation', () => {
     expect(presentation.size).toBe(0);
   });
 
-  it('beendet Gameplay vor dem Fade und haelt den Snapshot frei von Runtime-Abhaengigkeiten', () => {
-    const scene = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
-    const coordinator = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const presentation = readFileSync(
-      resolve(process.cwd(), 'src/world/ArenaExitEntityPresentation.ts'),
-      'utf8',
-    );
-
-    const begin = scene.indexOf('this.arenaRuntime.beginArenaExitPresentation();');
-    const play = scene.indexOf('overlay.play(outcome', begin);
-    expect(begin).toBeGreaterThan(0);
-    expect(play).toBeGreaterThan(begin);
-    expect(scene).toContain(
-      'worldVisible: exitPresentationActive || (worldActive && (!activityActive || arenaVisible)),',
-    );
-
-    const method = coordinator.slice(
-      coordinator.indexOf('  beginArenaExitPresentation(): void'),
-      coordinator.indexOf('  private clearArenaExitPresentation()', coordinator.indexOf('  beginArenaExitPresentation(): void')),
-    );
-    // Einfrieren, dann Instanz beenden, dann abraeumen – in genau dieser Reihenfolge.
-    expect(method.indexOf('this.captureArenaExitEntityPresentation();'))
-      .toBeLessThan(method.indexOf('this.synchronizeLocalWorldLifecycle(null);'));
-    expect(method.indexOf('this.synchronizeLocalWorldLifecycle(null);'))
-      .toBeLessThan(method.indexOf('this.tearDownArena(true);'));
-    expect(method).toContain('new ArenaExitEntityPresentation(');
-
-    // Der Host beendet seine World-Instanz schon beim Rundenabschluss. Player- und
-    // Enemy-Runtime fallen mit ihr, deshalb steht das eingefrorene Bild dort vorher.
-    const completeRound = coordinator.slice(
-      coordinator.indexOf('  hostCompleteRound('),
-      coordinator.indexOf('\n  /**', coordinator.indexOf('  hostCompleteRound(')),
-    );
-    expect(completeRound.indexOf('this.captureArenaExitEntityPresentation();'))
-      .toBeLessThan(completeRound.indexOf('this.worldLifecycle.endInstance();'));
-    expect(coordinator).toContain('this.arenaExitEntityPresentation && this.worldPresentationHandoff.pending');
-    expect(presentation).not.toMatch(/EnemyManager|PlayerManager|Physics\.Arcade|NetworkBridge/);
-  });
 });

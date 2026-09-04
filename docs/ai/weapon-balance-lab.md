@@ -34,5 +34,5 @@ Bei einer neuen Waffe oder einem Upgrade zuerst die produktive Content-/Capabili
 - [src/debug/coopDefenseBalance/scenarioTypes.ts](../../src/debug/coopDefenseBalance/scenarioTypes.ts)
 - [src/debug/coopDefenseBalance/scenarioCacheKey.ts](../../src/debug/coopDefenseBalance/scenarioCacheKey.ts)
 - [src/debug/coopDefenseBalance/runtimeBenchmarkStorage.ts](../../src/debug/coopDefenseBalance/runtimeBenchmarkStorage.ts)
-- [tests/WeaponBalanceLabRuntime.test.ts](../../tests/WeaponBalanceLabRuntime.test.ts)
-- [tests/CoopDefenseBalanceLab.test.ts](../../tests/CoopDefenseBalanceLab.test.ts)
+- [tests/balance-lab/WeaponBalanceLabRuntime.test.ts](../../tests/balance-lab/WeaponBalanceLabRuntime.test.ts)
+- [tests/balance-lab/CoopDefenseBalanceLab.test.ts](../../tests/balance-lab/CoopDefenseBalanceLab.test.ts)

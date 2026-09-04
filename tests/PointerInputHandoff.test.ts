@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -14,7 +12,40 @@ vi.mock('../src/ui/RadialActionMenu', () => ({
   RadialActionMenu: class {},
 }));
 
-import { resolvePointerButtonHandoff } from '../src/systems/InputSystem';
+import { InputSystem, resolvePointerButtonHandoff } from '../src/systems/InputSystem';
+
+interface TestPointerState {
+  buttons: number;
+  left: boolean;
+  right: boolean;
+}
+
+function createInputForHandoff() {
+  const pointerState: TestPointerState = { buttons: 0, left: false, right: false };
+  const pointer = {
+    buttons: 0,
+    leftButtonDown: () => pointerState.left,
+    rightButtonDown: () => pointerState.right,
+  };
+  const bridge = {
+    getWorldDescriptor: () => null,
+    getSynchronizedNow: () => Date.now(),
+    getLocalPlayerId: () => 'player-1',
+    sendLocalInput: vi.fn(),
+  };
+  const scene = { input: { activePointer: pointer } };
+  const system = new InputSystem(scene as never, bridge as never, () => ({ x: 0, y: 0 } as never));
+  const key = () => ({ isDown: false, justDown: false, justUp: false });
+  Object.assign(system as never as Record<string, unknown>, {
+    keyW: key(), keyA: key(), keyS: key(), keyD: key(), keySpace: key(), keyShift: key(),
+    keyE: key(), keyQ: key(), keyR: key(), keyB: key(), keyN: key(),
+    localBurrowPhase: 'idle',
+  });
+  const uses: string[] = [];
+  system.setupLoadoutListener((slot) => uses.push(slot));
+
+  return { pointer, pointerState, system, uses };
+}
 
 describe('UI -> World Pointer-Handoff', () => {
   it('verbraucht den gehaltenen Join-Gesture bis zum Release', () => {
@@ -46,13 +77,27 @@ describe('UI -> World Pointer-Handoff', () => {
     });
   });
 
-  it('armt beim semantischen Input-Uebergang statt ueber einen Timer', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/systems/InputSystem.ts'), 'utf8');
-    const start = source.indexOf('  setInputEnabled(enabled: boolean');
-    const end = source.indexOf('\n  /**', start + 5);
-    const body = source.slice(start, end);
-    expect(body).toContain('if (enabled && !wasEnabled)');
-    expect(body).toContain('this.scene.input.activePointer?.buttons ?? 0');
-    expect(body).not.toContain('setTimeout');
+  it('verbraucht den UI-Press auch im echten InputSystem bis zum Release', () => {
+    const { pointer, pointerState, system, uses } = createInputForHandoff();
+
+    system.setInputEnabled(false);
+    pointerState.left = true;
+    pointerState.buttons = 1;
+    pointer.buttons = pointerState.buttons;
+    system.setInputEnabled(true);
+    system.update();
+    system.update();
+    expect(uses).toEqual([]);
+
+    pointerState.left = false;
+    pointerState.buttons = 0;
+    pointer.buttons = pointerState.buttons;
+    system.update();
+
+    pointerState.left = true;
+    pointerState.buttons = 1;
+    pointer.buttons = pointerState.buttons;
+    system.update();
+    expect(uses).toEqual(['weapon1']);
   });
 });

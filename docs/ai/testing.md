@@ -65,9 +65,9 @@ Beispiele:
 | Balance Lab | `npm run test:balance-lab` | Weapon-Balance-, Progression- und Benchmark-Parität zur aktuellen Config |
 
 Die Spezial-Suites liegen unter `tests/architecture/`, `tests/integration/`, `tests/assets/`,
-`tests/stress/` und `tests/balance-lab/`. `npm run check` bleibt das tägliche Gate aus Core und
-Build; die Spezial-Suites werden gezielt für ihre Änderung ausgeführt. Browser, Dev-Server und
-Sichtprüfung gehören nicht zum normalen Test-Gate.
+`tests/stress/` und `tests/balance-lab/`. `npm run check` bleibt das tägliche Gate aus Core,
+schneller Architecture-Suite und Build; die übrigen Spezial-Suites werden gezielt für ihre
+Änderung ausgeführt. Browser, Dev-Server und Sichtprüfung gehören nicht zum normalen Test-Gate.
 
 ## Mocks und Reduktion
 
@@ -83,7 +83,7 @@ Vor dem Löschen, Zusammenführen oder Verschieben eines Tests:
 2. Compiler, Types, Validatoren und bestehende Tests auf Ersatzschutz prüfen;
 3. bei echtem Vertrag die kleinste notwendige Assertion behalten oder migrieren;
 4. fokussierten Test und den passenden Runner ausführen;
-5. bei einem Refactoring-Cluster `04_Test_Refactoring_Migration_Status.md` aktuell halten.
+5. bei einem Refactoring-Cluster das vorhandene Statusdokument dieses Refactorings aktuell halten.
 
 Ein Test darf entfallen, wenn er nur eine historische Sourceform, doppeltes Verhalten, aktuelles
 Visual-/Balance-Tuning oder eine bereits vollständig garantierte Type-/Validator-Aussage schützt.

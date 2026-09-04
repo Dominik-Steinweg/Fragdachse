@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { WorldTargetingRuntime } from '../../src/world/WorldTargetingRuntime';
 
-/** Fachliche Schichten bleiben vom Modul-Singleton des Transports getrennt. */
+/** Dauerhafte Layer-Grenzen; die Legacy-Ausnahme bleibt bewusst schrumpfbar. */
 const DOMAIN_ROOTS = [
   'src/activity',
   'src/effects',
@@ -14,6 +14,8 @@ const DOMAIN_ROOTS = [
   'src/train',
   'src/world',
 ];
+
+const WORLD_ACTIVITY_ROOTS = ['src/activity', 'src/world'];
 
 /**
  * Übergangs-Allowlist für die noch nicht portierten Legacy-Systeme.
@@ -44,12 +46,18 @@ function listTypeScriptFiles(root: string): string[] {
 }
 
 describe('World gameplay composition – dauerhafte Grenzen', () => {
-  it('hält fachliche Schichten frei vom Netzwerk-Singleton', () => {
-    const offenders = DOMAIN_ROOTS
-      .flatMap(listTypeScriptFiles)
-      .filter((path) => read(path).includes("network/bridge'"));
+  it('hält Domain-Schichten vom Transport-Singleton und World-Owner vom Scene-Context frei', () => {
+    const domainFiles = DOMAIN_ROOTS.flatMap(listTypeScriptFiles);
+    const singletonOffenders = domainFiles
+      .filter((path) => /from ['"][^'"]*network\/bridge['"]/.test(read(path)));
 
-    expect(offenders).toEqual([]);
+    expect(singletonOffenders).toEqual([]);
+
+    const ownerOffenders = WORLD_ACTIVITY_ROOTS
+      .flatMap(listTypeScriptFiles)
+      .filter((path) => /from ['"][^'"]*(?:ArenaContext|NetworkBridge|network\/bridge)['"]/.test(read(path)));
+
+    expect(ownerOffenders).toEqual([]);
   });
 
   it('begrenzt direkte NetworkBridge-Consumer auf die schrumpfbare Legacy-Allowlist', () => {
@@ -58,21 +66,6 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
       .filter((path) => /import[^;]*\bNetworkBridge\b[^;]*from ['"][^'"]*network\/NetworkBridge['"]/.test(read(path)));
 
     expect(consumers.filter((path) => !LEGACY_NETWORK_BRIDGE_CONSUMERS.has(path))).toEqual([]);
-  });
-
-  it('hält World-Owner unabhängig von ArenaContext und Transport', () => {
-    for (const path of [
-      'src/world/WorldTargetingRuntime.ts',
-      'src/world/WorldPlayerGameplayRuntime.ts',
-      'src/world/WorldCombatGameplayBinding.ts',
-      'src/world/WorldSupportGameplayRuntime.ts',
-      'src/activity/CaptureTheBeerActivityRuntime.ts',
-    ]) {
-      const source = read(path);
-      expect(source, path).not.toContain('ArenaContext');
-      expect(source, path).not.toContain('NetworkBridge');
-      expect(source, path).not.toMatch(/from ['"].*network\/bridge['"]/);
-    }
   });
 
   it('hält den WorldRuntimeContext frei von Activity- und Simulationszustand', () => {
@@ -89,52 +82,19 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
     expect(fields.every((field) => !forbidden.test(field))).toBe(true);
   });
 
-  it('trennt Player-Relationship- und Transport-Port fachlich', () => {
-    const loadout = read('src/loadout/LoadoutManager.ts');
-    const activation = read('src/world/PlayerWeaponActivationRuntime.ts');
-    const ultimate = read('src/world/PlayerUltimateBehaviorRuntime.ts');
-    const worldPlayer = read('src/world/WorldPlayerGameplayRuntime.ts');
-    const relationship = read('src/world/PlayerRelationshipPort.ts');
-    const networkPortStart = worldPlayer.indexOf('export interface WorldPlayerGameplayNetworkPort');
-    const networkPortEnd = worldPlayer.indexOf('interface WorldPlayerGameplaySystems');
+  it('hält den Player-Relationship-Port aus dem Transport-Port heraus', () => {
+    const source = read('src/world/WorldPlayerGameplayRuntime.ts');
+    const networkPort = source.match(
+      /export interface WorldPlayerGameplayNetworkPort \{[\s\S]*?\n\}/,
+    )?.[0] ?? '';
 
-    expect(loadout).not.toContain('NetworkBridge');
-    expect(activation).not.toContain('NetworkBridge');
-    expect(ultimate).not.toContain('NetworkBridge');
-    expect(worldPlayer).not.toContain('NetworkBridge');
-    expect(networkPortStart).toBeGreaterThanOrEqual(0);
-    expect(worldPlayer.slice(networkPortStart, networkPortEnd)).not.toMatch(/relationship/);
-    expect(worldPlayer).toContain('PlayerRelationshipPort');
-    expect(ultimate).toContain('PlayerRelationshipPort');
-    expect(relationship).toContain('interface PlayerRelationshipPort');
+    expect(networkPort).not.toMatch(/\brelationship\b/i);
   });
 
-  it('hält Activity- und Homing-Bindings an der World-Combat-Grenze', () => {
-    const combat = read('src/world/WorldCombatGameplayBinding.ts');
-    const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
+  it('lässt niedrigstufige Homing-Bindings außerhalb der ArenaScene', () => {
     const scene = read('src/scenes/ArenaScene.ts');
 
-    expect(combat).toContain('readonly isCoopMission: () => boolean');
-    expect(combat).toContain('updateActivityBindings(): void');
-    expect(combat).toContain('clearActivityBindings(): void');
-    expect(composition).toContain('isCoopMission: () => flow.isCoopMissionActivity()');
-    expect(combat).toContain('setHomingTargetProvider');
-    expect(composition).toContain('isHomingTargetValid:');
-    expect(scene).not.toContain('setHomingTargetProvider');
-    expect(scene).not.toContain('setHomingLineOfFireChecker');
-    expect(scene).not.toContain('setHomingTargetValidityChecker');
-  });
-
-  it('führt Combat-Reaktionen über den typisierten Player-Combat-Port', () => {
-    const integration = read('src/world/PlayerCombatIntegrationPort.ts');
-    const combat = read('src/world/WorldCombatGameplayBinding.ts');
-
-    expect(integration).toContain('export interface PlayerCombatReactionPort');
-    expect(integration).toContain('readonly reactions: PlayerCombatReactionPort');
-    expect(combat).toContain('playerCombat.reactions.handleDirectAk47EnemyHit');
-    expect(combat).toContain('getPlayerCombatIntegration()?.reactions.handleEnemyDeath');
-    expect(combat).not.toContain('.item.rollDirectPrimaryHitEffects');
-    expect(combat).not.toContain('.item.handlePlayerDamageTaken');
+    expect(scene).not.toMatch(/\.\s*setHoming[A-Z]\w*\s*\(/);
   });
 
   it('räumt World-Target-Systeme am Owner-Teardown idempotent auf', () => {

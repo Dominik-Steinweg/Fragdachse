@@ -22,7 +22,7 @@
     "test:stress": "vitest run --pool=threads tests/stress",
     "test:balance-lab": "vitest run --pool=threads tests/balance-lab",
     "build": "tsc && vite build",
-    "check": "npm test && npm run build",
+    "check": "npm test && npm run test:architecture && npm run build",
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",

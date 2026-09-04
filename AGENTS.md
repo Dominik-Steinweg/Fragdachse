@@ -35,6 +35,7 @@ oder zufällige Implementierungsdetails. Bestehende passende Tests bevorzugt erw
 | Kleine isolierte TypeScript-Änderung | `npm run typecheck` |
 | Getestetes Modul | passender existierender Test, z. B. `npm test -- tests/PeerRoom.test.ts` |
 | Mehrere Module, Netzwerk, Lifecycle oder Build-Konfiguration | `npm run check` |
+| Architecture-, World-, Activity-, Asset-, Stress- oder Balance-Lab-relevante Änderung | passende Spezialsuite gemäß [`docs/ai/testing.md`](docs/ai/testing.md) |
 | Sichtbare Phaser-/UI-Änderung | `npm run build` |
 
 Es gibt kein Lint-Script. Keine neue Test-, Browser- oder CI-Infrastruktur ohne Auftrag. Vor `npm run build` nicht zusätzlich typechecken; der Build enthält TypeScript.
