@@ -43,6 +43,8 @@ import type { CoopDefenseMissionProgressPresentationState } from '../types';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { CoopTrainPort } from './CoopTrainPort';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
+import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts';
+import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 
 export interface CoopMissionCompositionOptions {
   readonly scene: Phaser.Scene;
@@ -53,6 +55,8 @@ export interface CoopMissionCompositionOptions {
   readonly getPlayerManager: () => PlayerManager;
   readonly getCombatSystem: () => CombatSystem;
   readonly getProjectileManager: () => ProjectileManager;
+  readonly getProjectileThreatReadPort: () => ProjectileThreatReadPort | null;
+  readonly getTranslocatorProjectilePort: () => TranslocatorProjectilePort | null;
   readonly getHostPhysics: () => HostPhysicsSystem;
   readonly getPlacementSystem: () => PlacementSystem | null;
   readonly getTemporaryUtilityPort: () => import('../world/PlayerUtilityActionRuntime').TemporaryUtilityPort | null;
@@ -191,6 +195,8 @@ export class CoopMissionComposition {
     const temporaryUtilityPort = this.options.getTemporaryUtilityPort();
     const weaponExecution = this.options.getAutomatedWeaponExecution();
     const placementSystem = this.options.getPlacementSystem();
+    const projectileThreatReadPort = this.options.getProjectileThreatReadPort();
+    const translocatorProjectilePort = this.options.getTranslocatorProjectilePort();
     // The concrete train child lives behind the World owner's Activity slot. Register the
     // release before any dependent event composition so it is always removed on Activity end,
     // including maps without an AirstrikeSystem.
@@ -236,10 +242,13 @@ export class CoopMissionComposition {
       publishRespawnBudget: this.options.publishRespawnBudget,
     }).materialize(runtime);
 
-    if (!this.options.isHost() || !runtime.enemyManager || !baseManager || !placementSystem || !weaponExecution) return;
+    if (!this.options.isHost() || !runtime.enemyManager || !baseManager || !placementSystem || !weaponExecution
+      || !projectileThreatReadPort || !translocatorProjectilePort) return;
     new CoopMissionEnemyBehaviourComposition({
       playerManager,
       projectileManager: this.options.getProjectileManager(),
+      projectileThreatReadPort,
+      translocatorProjectilePort,
       combatSystem,
       hostPhysics: this.options.getHostPhysics(),
       baseManager,

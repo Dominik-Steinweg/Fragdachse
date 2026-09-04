@@ -269,6 +269,7 @@ export function createWeaponBalanceLabWorldPort(
   playerManager: PlayerManager,
 ): WeaponBalanceLabWorldPort {
   return {
+    getProjectileDiagnostics: () => flow.getWorldProjectileRuntime(),
     isReady: () => {
       const playerGameplay = flow.getWorldPlayerGameplayRuntime();
       const enemyManager = flow.getCoopMissionRuntime()?.enemyManager;

@@ -11,6 +11,7 @@ import type { AirstrikeUltimateConfig } from '../loadout/LoadoutConfig';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { PlayerUltimateAirstrikeCapability } from './PlayerUltimateBehaviorRuntime';
+import type { ProjectileExternalInteractionPort } from '../projectile/ProjectileExternalInteractionPort';
 import { AirstrikeSystem as ConcreteAirstrikeSystem } from '../systems/AirstrikeSystem';
 import { ArmageddonSystem as ConcreteArmageddonSystem } from '../systems/ArmageddonSystem';
 import { DetonationSystem as ConcreteDetonationSystem } from '../systems/DetonationSystem';
@@ -23,6 +24,7 @@ export interface WorldSupportGameplaySystems {
 
 export interface WorldSupportGameplayRuntimeOptions {
   readonly projectileManager: ProjectileManager;
+  readonly projectileExternalInteraction: ProjectileExternalInteractionPort;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
   readonly setBurrowStinkCloudSystem: (system: StinkCloudSystem | null) => void;
@@ -48,7 +50,7 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUl
   private destroyed = false;
 
   constructor(private readonly options: WorldSupportGameplayRuntimeOptions) {
-    const detonation = new ConcreteDetonationSystem(options.projectileManager);
+    const detonation = new ConcreteDetonationSystem(options.projectileExternalInteraction);
     const armageddon = new ConcreteArmageddonSystem(options.worldMetrics);
     armageddon.setRockGrid(options.rockGrid);
     const airstrike = new ConcreteAirstrikeSystem();

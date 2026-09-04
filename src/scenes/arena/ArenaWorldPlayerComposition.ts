@@ -53,6 +53,7 @@ export function composeWorldPlayerGameplay(
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
     projectileSpawn,
+    translocatorProjectilePort: projectileSpawn,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     fireSystem: ctx.fireSystem,

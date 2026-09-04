@@ -1,5 +1,7 @@
-import * as Phaser from 'phaser';
-import type { ProjectileManager } from '../entities/ProjectileManager';
+import type {
+  ProjectileDetonationOutcome,
+  ProjectileExternalInteractionPort,
+} from '../projectile/ProjectileExternalInteractionPort';
 import type { DetonableConfig, DetonatorConfig, LoadoutSlot } from '../types';
 
 /**
@@ -38,10 +40,7 @@ export interface DetonationEvent {
 export class DetonationSystem {
   private pendingDetonations: DetonationEvent[] = [];
 
-  // Scratch-Objekte für Intersection-Checks (Garbage-Vermeidung)
-  private readonly scratchLine = new Phaser.Geom.Line();
-
-  constructor(private projectileManager: ProjectileManager) {}
+  constructor(private readonly projectileInteraction: ProjectileExternalInteractionPort) {}
 
   /**
    * Prüft ob eine Hitscan-Linie detonierbare Projektile schneidet.
@@ -62,26 +61,17 @@ export class DetonationSystem {
     detonatorCfg: DetonatorConfig,
     sourceSlot?:  LoadoutSlot,
   ): void {
-    this.scratchLine.setTo(startX, startY, endX, endY);
-
-    for (const proj of this.projectileManager.getActiveProjectiles()) {
-      if (!proj.detonable) continue;
-      if (!detonatorCfg.triggerTags.includes(proj.detonable.tag)) continue;
-      if (!proj.detonable.allowCrossTeam && proj.ownerId !== shooterId) continue;
-
-      const bounds = proj.sprite.getBounds();
-      if (Phaser.Geom.Intersects.LineToRectangle(this.scratchLine, bounds)) {
-        this.pendingDetonations.push({
-          x:                 proj.sprite.x,
-          y:                 proj.sprite.y,
-          projectileOwnerId: proj.ownerId,
-          detonatorOwnerId:  shooterId,
-          effect:            proj.detonable,
-          sourceId:        proj.sourceId,
-          sourceSlot:        sourceSlot ?? proj.sourceSlot,
-        });
-        this.projectileManager.destroyProjectile(proj.id);
-      }
+    const targets = this.projectileInteraction.searchDetonableProjectiles({
+      startX,
+      startY,
+      endX,
+      endY,
+      shooterId,
+      detonator: detonatorCfg,
+    });
+    for (const target of targets) {
+      const outcome = this.projectileInteraction.detonateProjectile(target.id, shooterId);
+      if (outcome) this.pendingDetonations.push(toDetonationEvent(outcome, sourceSlot));
     }
   }
 
@@ -94,19 +84,9 @@ export class DetonationSystem {
    * @param detonatorOwnerId  Spieler, dem die Detonation zugerechnet wird
    */
   detonateProjectile(projectileId: number, detonatorOwnerId: string): boolean {
-    const proj = this.projectileManager.getProjectileById(projectileId);
-    if (!proj?.detonable) return false;
-
-    this.pendingDetonations.push({
-      x:                 proj.sprite.x,
-      y:                 proj.sprite.y,
-      projectileOwnerId: proj.ownerId,
-      detonatorOwnerId,
-      effect:            proj.detonable,
-      sourceId:        proj.sourceId,
-      sourceSlot:        proj.sourceSlot,
-    });
-    this.projectileManager.destroyProjectile(proj.id);
+    const outcome = this.projectileInteraction.detonateProjectile(projectileId, detonatorOwnerId);
+    if (!outcome) return false;
+    this.pendingDetonations.push(toDetonationEvent(outcome));
     return true;
   }
 
@@ -116,35 +96,8 @@ export class DetonationSystem {
    * Aufrufen BEVOR combatSystem.update(), damit zerstörte Objekte nicht doppelt verarbeitet werden.
    */
   checkProjectileDetonations(): void {
-    const active       = this.projectileManager.getActiveProjectiles();
-    const destroyedIds = new Set<number>();
-
-    for (const det of active) {
-      if (!det.detonator || destroyedIds.has(det.id)) continue;
-
-      for (const target of active) {
-        if (!target.detonable || destroyedIds.has(target.id)) continue;
-        if (det.id === target.id) continue;
-        if (!det.detonator.triggerTags.includes(target.detonable.tag)) continue;
-        if (!target.detonable.allowCrossTeam && target.ownerId !== det.ownerId) continue;
-
-        if (Phaser.Geom.Intersects.RectangleToRectangle(
-          det.sprite.getBounds(),
-          target.sprite.getBounds(),
-        )) {
-          destroyedIds.add(target.id);
-          this.pendingDetonations.push({
-            x:                 target.sprite.x,
-            y:                 target.sprite.y,
-            projectileOwnerId: target.ownerId,
-            detonatorOwnerId:  det.ownerId,
-            effect:            target.detonable,
-            sourceId:        target.sourceId,
-            sourceSlot:        target.sourceSlot,
-          });
-          this.projectileManager.destroyProjectile(target.id);
-        }
-      }
+    for (const outcome of this.projectileInteraction.detonateOverlappingProjectiles()) {
+      this.pendingDetonations.push(toDetonationEvent(outcome));
     }
   }
 
@@ -163,4 +116,19 @@ export class DetonationSystem {
   reset(): void {
     this.pendingDetonations = [];
   }
+}
+
+function toDetonationEvent(
+  outcome: ProjectileDetonationOutcome,
+  sourceSlot?: LoadoutSlot,
+): DetonationEvent {
+  return {
+    x: outcome.x,
+    y: outcome.y,
+    projectileOwnerId: outcome.projectileOwnerId,
+    detonatorOwnerId: outcome.detonatorOwnerId,
+    effect: outcome.effect,
+    sourceId: outcome.sourceId,
+    sourceSlot: sourceSlot ?? outcome.sourceSlot,
+  };
 }

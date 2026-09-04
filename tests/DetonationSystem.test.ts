@@ -1,15 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('phaser', () => ({
-  Geom: {
-    Line: class {},
-  },
-}));
-
-import { fakeEntity } from './fakeEntity';
 import { DetonationSystem } from '../src/systems/DetonationSystem';
-import type { DetonableConfig, TrackedProjectile } from '../src/types';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { DetonableConfig } from '../src/types';
+import type { ProjectileExternalInteractionPort } from '../src/projectile/ProjectileExternalInteractionPort';
 
 describe('projectile detonation characterization', () => {
   it('emits one attributed event for an externally detonated projectile', () => {
@@ -19,27 +12,27 @@ describe('projectile detonation characterization', () => {
       aoeRadius: 96,
       allowCrossTeam: true,
     } satisfies DetonableConfig;
-    const projectile = fakeEntity({
-      id: 7,
-      ownerId: 'ball-owner',
-      sourceId: 'weapon.asmd.secondary',
-      sourceSlot: 'weapon2',
-      x: 12,
-      y: 34,
-      detonable: effect,
-    }) as unknown as TrackedProjectile;
-    let active: TrackedProjectile | undefined = projectile;
-    const destroyProjectile = vi.fn((id: number) => {
-      if (id === projectile.id) active = undefined;
-    });
-    const projectileManager = {
-      getProjectileById: (id: number) => id === active?.id ? active : undefined,
-      destroyProjectile,
-    } as unknown as ProjectileManager;
-    const system = new DetonationSystem(projectileManager);
+    const detonateProjectile = vi.fn((id: number, detonatorOwnerId: string) => id === 7
+      ? {
+        id,
+        x: 12,
+        y: 34,
+        projectileOwnerId: 'ball-owner',
+        detonatorOwnerId,
+        effect,
+        sourceId: 'weapon.asmd.secondary',
+        sourceSlot: 'weapon2' as const,
+      }
+      : null);
+    const projectileInteraction: ProjectileExternalInteractionPort = {
+      searchDetonableProjectiles: () => [],
+      detonateProjectile,
+      detonateOverlappingProjectiles: () => [],
+    };
+    const system = new DetonationSystem(projectileInteraction);
 
-    expect(system.detonateProjectile(projectile.id, 'detonator')).toBe(true);
-    expect(destroyProjectile).toHaveBeenCalledWith(projectile.id);
+    expect(system.detonateProjectile(7, 'detonator')).toBe(true);
+    expect(detonateProjectile).toHaveBeenCalledWith(7, 'detonator');
     expect(system.flushDetonations()).toEqual([{
       x: 12,
       y: 34,
@@ -50,6 +43,6 @@ describe('projectile detonation characterization', () => {
       sourceSlot: 'weapon2',
     }]);
     expect(system.flushDetonations()).toEqual([]);
-    expect(system.detonateProjectile(projectile.id, 'detonator')).toBe(false);
+    expect(system.detonateProjectile(8, 'detonator')).toBe(false);
   });
 });

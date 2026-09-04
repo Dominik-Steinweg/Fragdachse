@@ -17,6 +17,7 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { TranslocatorProjectilePort } from '../src/projectile/ProjectileExternalInteractionPort';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
 import type { CombatSystem } from '../src/systems/CombatSystem';
@@ -35,7 +36,8 @@ function createSystem(
     getCollisionRadius: () => 16,
     isBurrowed: () => false }) as unknown as EnemyEntity;
   const player = fakeEntity({ id: 'player-1', active: true, x: 800, y: 300 });
-  const spawnProjectile = vi.fn().mockReturnValue(7);
+  const spawnPuck = vi.fn().mockReturnValue(7);
+  const spawnProjectile = vi.fn().mockReturnValue(8);
   const enemyManager = {
     getAllEnemies: () => [enemy],
   } as unknown as EnemyManager;
@@ -52,6 +54,11 @@ function createSystem(
   const projectileManager = {
     spawnProjectile,
   } as unknown as ProjectileManager;
+  const translocatorProjectilePort: TranslocatorProjectilePort = {
+    spawnPuck,
+    getPuckPosition: () => null,
+    consumePuck: () => false,
+  };
 
   return {
     system: new CoopDefenseEnemyAbilitySystem(
@@ -64,8 +71,12 @@ function createSystem(
       null as FlamethrowerUpgradeSystem | null,
       {} as FireSystem,
       { broadcastTranslocatorFlash: vi.fn() },
+      undefined,
+      undefined,
+      translocatorProjectilePort,
     ),
     hasClearLineOfFire,
+    spawnPuck,
     spawnProjectile,
   };
 }
@@ -73,21 +84,21 @@ function createSystem(
 describe('Void-Stalker Translocator', () => {
   it('passes puck radius and safety margin to the path check', () => {
     const hasClearLineOfFire = vi.fn((...args: unknown[]) => (args[4] as { clearanceRadius?: number }).clearanceRadius === 12);
-    const { system, spawnProjectile } = createSystem(hasClearLineOfFire);
+    const { system, spawnPuck } = createSystem(hasClearLineOfFire);
 
     system.hostUpdate(0);
 
     expect(hasClearLineOfFire).toHaveBeenCalledWith(400, 300, 800, 300, { clearanceRadius: 12 });
-    expect(spawnProjectile).toHaveBeenCalledTimes(1);
+    expect(spawnPuck).toHaveBeenCalledTimes(1);
   });
 
   it('does not throw when the padded path is blocked by an obstacle', () => {
     const hasClearLineOfFire = vi.fn(() => false);
-    const { system, spawnProjectile } = createSystem(hasClearLineOfFire);
+    const { system, spawnPuck } = createSystem(hasClearLineOfFire);
 
     system.hostUpdate(0);
 
-    expect(spawnProjectile).not.toHaveBeenCalled();
+    expect(spawnPuck).not.toHaveBeenCalled();
   });
 });
 

@@ -137,10 +137,14 @@ export function composeWorldSupportGameplay(
   if (!gameplay.player) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
+  if (!gameplay.projectiles) {
+    throw new Error('[ArenaWorldComposition] Projectile runtime is missing on host');
+  }
   
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
+    projectileExternalInteraction: gameplay.projectiles,
     combatSystem: ctx.combatSystem,
     setBurrowStinkCloudSystem: (system) => gameplay.player?.setBurrowStinkCloudSystem(system),
     gameAudioSystem: ctx.gameAudioSystem,

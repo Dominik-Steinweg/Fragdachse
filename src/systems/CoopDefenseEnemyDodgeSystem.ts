@@ -7,8 +7,7 @@ import {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { ProjectileManager } from '../entities/ProjectileManager';
-import type { TrackedProjectile } from '../types';
+import type { ProjectileThreatReadPort, ProjectileThreatSample } from '../projectile/ProjectileReadPorts';
 import type { CombatSystem } from './CombatSystem';
 import type { HostPhysicsSystem } from './HostPhysicsSystem';
 import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
@@ -54,7 +53,7 @@ function projectileBucketKey(gridX: number, gridY: number): number {
 export class CoopDefenseEnemyDodgeSystem {
   private readonly readyAt = new Map<string, number>();
   private readonly activeEnemyIds = new Set<string>();
-  private readonly projectileBuckets = new Map<number, TrackedProjectile[]>();
+  private readonly projectileBuckets = new Map<number, ProjectileThreatSample[]>();
   private readonly usedProjectileBucketKeys: number[] = [];
   private projectilesPrepared = false;
   private currentNow = 0;
@@ -75,7 +74,7 @@ export class CoopDefenseEnemyDodgeSystem {
     if (this.currentNow < (this.readyAt.get(enemy.id) ?? 0)) return;
 
     if (!this.projectilesPrepared) {
-      this.rebuildProjectileBroadphase(this.projectileManager.getActiveProjectiles());
+      this.rebuildProjectileBroadphase(this.projectileThreats.getThreatSamples());
       this.projectilesPrepared = true;
     }
     const direction = this.findEvadeDirection(enemy, dodge)
@@ -90,7 +89,7 @@ export class CoopDefenseEnemyDodgeSystem {
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
-    private readonly projectileManager: ProjectileManager,
+    private readonly projectileThreats: ProjectileThreatReadPort,
     private readonly combatSystem: CombatSystem,
     private readonly hostPhysics: HostPhysicsSystem,
     private readonly isFreeGroundAt: FreeGroundResolver,
@@ -129,7 +128,7 @@ export class CoopDefenseEnemyDodgeSystem {
       if (now < (this.readyAt.get(enemy.id) ?? 0)) continue;
 
       if (!this.projectilesPrepared) {
-        this.rebuildProjectileBroadphase(this.projectileManager.getActiveProjectiles());
+        this.rebuildProjectileBroadphase(this.projectileThreats.getThreatSamples());
         this.projectilesPrepared = true;
       }
       const direction = this.findEvadeDirection(enemy, dodge)
@@ -178,13 +177,13 @@ export class CoopDefenseEnemyDodgeSystem {
         for (const projectile of bucket) {
           if (!this.isDodgeableProjectile(enemy, projectile, dodge)) continue;
 
-          const velocityX = projectile.body.velocity.x;
-          const velocityY = projectile.body.velocity.y;
+          const velocityX = projectile.vx;
+          const velocityY = projectile.vy;
           const speedSq = velocityX * velocityX + velocityY * velocityY;
           if (speedSq <= 1) continue;
 
-          const toEnemyX = enemy.sprite.x - projectile.sprite.x;
-          const toEnemyY = enemy.sprite.y - projectile.sprite.y;
+          const toEnemyX = enemy.sprite.x - projectile.x;
+          const toEnemyY = enemy.sprite.y - projectile.y;
           const timeToClosest = (toEnemyX * velocityX + toEnemyY * velocityY) / speedSq;
           if (timeToClosest <= 0 || timeToClosest > leadTimeSeconds || timeToClosest >= bestTime) continue;
 
@@ -265,28 +264,28 @@ export class CoopDefenseEnemyDodgeSystem {
   /** Nur scharfe Spieler-Projektile sind eine Bedrohung – nicht die eigenen Geschosse der Horde. */
   private isDodgeableProjectile(
     enemy: EnemyEntity,
-    projectile: TrackedProjectile,
+    projectile: ProjectileThreatSample,
     dodge: CoopDefenseEnemyDodgeConfig,
   ): boolean {
-    if (!projectile.sprite.active) return false;
-    if (projectile.isGrenade || projectile.isFlame) return false;
-    if (this.enemyManager.hasEnemy(projectile.ownerId)) return false;
-    if (!this.combatSystem.canDamageTarget(projectile.ownerId, enemy.id, projectile.allowTeamDamage)) return false;
+    if (!projectile.dodgeRelevant) return false;
+    const ownerId = projectile.provenance.allegiance.ownerId;
+    if (this.enemyManager.hasEnemy(ownerId)) return false;
+    if (!this.combatSystem.canDamageTarget(ownerId, enemy.id, projectile.provenance.allegiance.allowTeamDamage)) return false;
 
-    const dx = enemy.sprite.x - projectile.sprite.x;
-    const dy = enemy.sprite.y - projectile.sprite.y;
+    const dx = enemy.sprite.x - projectile.x;
+    const dy = enemy.sprite.y - projectile.y;
     return dx * dx + dy * dy <= dodge.evadeScanRadiusPx * dodge.evadeScanRadiusPx;
   }
 
-  private rebuildProjectileBroadphase(projectiles: ReadonlySet<TrackedProjectile>): void {
+  private rebuildProjectileBroadphase(projectiles: readonly ProjectileThreatSample[]): void {
     for (const key of this.usedProjectileBucketKeys) this.projectileBuckets.get(key)!.length = 0;
     this.usedProjectileBucketKeys.length = 0;
 
     for (const projectile of projectiles) {
-      if (!projectile.sprite.active || projectile.isGrenade || projectile.isFlame) continue;
-      if (this.enemyManager.hasEnemy(projectile.ownerId)) continue;
-      const bucketX = Math.floor(projectile.sprite.x / PROJECTILE_BUCKET_SIZE_PX);
-      const bucketY = Math.floor(projectile.sprite.y / PROJECTILE_BUCKET_SIZE_PX);
+      if (!projectile.dodgeRelevant) continue;
+      if (this.enemyManager.hasEnemy(projectile.provenance.allegiance.ownerId)) continue;
+      const bucketX = Math.floor(projectile.x / PROJECTILE_BUCKET_SIZE_PX);
+      const bucketY = Math.floor(projectile.y / PROJECTILE_BUCKET_SIZE_PX);
       const key = projectileBucketKey(bucketX, bucketY);
       let bucket = this.projectileBuckets.get(key);
       if (!bucket) {

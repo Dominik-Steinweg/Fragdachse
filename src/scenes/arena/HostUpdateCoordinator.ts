@@ -1192,10 +1192,8 @@ export class HostUpdateCoordinator {
 
     // Direkt an den Physik-Projektilen statt am Wire-Snapshot: der Rumble ist reine Host-Praesentation
     // und haengt nicht davon ab, was in diesem Tick tatsaechlich uebertragen wurde.
-    let bfgInFlight = false;
-    for (const projectile of this.ctx.projectileManager.getActiveProjectiles()) {
-      if (projectile.projectileStyle === 'bfg') { bfgInFlight = true; break; }
-    }
+    const bfgInFlight = this.worldFramePort?.getProjectileRuntime?.()
+      ?.hasActiveProjectileStyle('bfg') ?? false;
     if (bfgInFlight) {
       if (this.presentationActive) this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }

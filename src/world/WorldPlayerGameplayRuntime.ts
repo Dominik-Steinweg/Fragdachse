@@ -7,6 +7,7 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
@@ -358,6 +359,7 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
   readonly projectileSpawn: ProjectileSpawnPort;
+  readonly translocatorProjectilePort: TranslocatorProjectilePort;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
@@ -450,7 +452,7 @@ export class WorldPlayerGameplayRuntime implements
     });
     const translocator = new TranslocatorSystem(
       options.playerManager,
-      options.projectileManager,
+      options.translocatorProjectilePort,
       options.combatSystem,
       // Der World-Owner setzt die fachliche Translocator-Sicht aus seinen eigenen Portgruppen
       // zusammen; das System bekommt keinen breiteren Netzwerkzugriff als es braucht.

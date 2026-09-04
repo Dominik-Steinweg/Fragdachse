@@ -15,6 +15,22 @@ import type {
 import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
+import type {
+  LegacyProjectileExternalInteractionAccess,
+  ProjectileExternalInteractionPort,
+  ProjectileDetonationOutcome,
+  ProjectileDetonationSearchRequest,
+  ProjectileDetonationTarget,
+  TranslocatorProjectilePort,
+  TranslocatorPuckSpawnRequest,
+} from './ProjectileExternalInteractionPort';
+import type {
+  ProjectileDiagnosticsReadPort,
+  ProjectileDiagnosticsSummary,
+  ProjectilePresentationReadPort,
+  ProjectileThreatReadPort,
+  ProjectileThreatSample,
+} from './ProjectileReadPorts';
 import { ProjectileStore, type LegacyProjectileStoreAccess } from './ProjectileStore';
 
 export interface ProjectileHostStageResult {
@@ -54,6 +70,8 @@ export interface LegacyProjectileHostSimulation {
   /** Übergangshilfe für die bestehende Spawn-Initialisierung. */
   setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
   setHostFrameTime?(nowMs: number): void;
+  /** Semantische External-Interaction-Brücke; Runtime-Records bleiben intern. */
+  externalInteraction?: LegacyProjectileExternalInteractionAccess;
   /** Räumt den registry-fremden Rest ab: Renderer, Snapshot-Zustand und Client-Visuals. */
   releaseWorldProjectileState(): void;
 }
@@ -106,10 +124,23 @@ export interface WorldProjectileRuntimeOptions {
  * Flight, Kollision, Wirkung und Darstellung liegen bis zu ihren Cutover-Phasen weiterhin in der
  * Legacy-Simulation; sie arbeitet dabei auf **demselben** Store, nie auf einer Kopie.
  */
-export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOwnerSeam, WorldScopedBinding {
+export class WorldProjectileRuntime implements
+  ProjectileSpawnPort,
+  ProjectileOwnerSeam,
+  ProjectileExternalInteractionPort,
+  TranslocatorProjectilePort,
+  ProjectileThreatReadPort,
+  ProjectileDiagnosticsReadPort,
+  ProjectilePresentationReadPort,
+  WorldScopedBinding {
   private readonly projectiles = new ProjectileStore();
   private readonly flightProcessor = new ProjectileFlightProcessor();
   private readonly homingController = new ProjectileHomingController();
+  private readonly detonableIds = new Set<ProjectileId>();
+  private readonly detonatorIds = new Set<ProjectileId>();
+  private readonly translocatorPuckIds = new Set<ProjectileId>();
+  private readonly threatSamples: ProjectileThreatSample[] = [];
+  private readonly activeProjectilesByOwner = new Map<string, number>();
   private readonly simulation: LegacyProjectileHostSimulation;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
@@ -162,8 +193,107 @@ export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOw
   }
 
   releaseProjectile(record: TrackedProjectile): void {
+    this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
     this.simulation.releaseProjectileResources(record);
+  }
+
+  searchDetonableProjectiles(request: ProjectileDetonationSearchRequest): readonly ProjectileDetonationTarget[] {
+    if (this.destroyed) return [];
+    return this.simulation.externalInteraction?.searchDetonableProjectiles(this.detonableIds, request) ?? [];
+  }
+
+  detonateProjectile(
+    projectileId: ProjectileId,
+    detonatorOwnerId: string,
+  ): ProjectileDetonationOutcome | null {
+    if (this.destroyed || !this.detonableIds.has(projectileId)) return null;
+    return this.simulation.externalInteraction?.detonateProjectile(projectileId, detonatorOwnerId) ?? null;
+  }
+
+  detonateOverlappingProjectiles(): readonly ProjectileDetonationOutcome[] {
+    if (this.destroyed) return [];
+    return this.simulation.externalInteraction?.detonateOverlappingProjectiles(
+      this.detonatorIds,
+      this.detonableIds,
+    ) ?? [];
+  }
+
+  spawnPuck(request: TranslocatorPuckSpawnRequest): ProjectileId {
+    if (this.destroyed) return -1;
+    return this.spawnResolved(request.x, request.y, request.angle, request.ownerId, {
+      speed: request.speed,
+      size: request.size,
+      damage: 0,
+      color: request.color,
+      ownerColor: request.ownerColor,
+      lifetime: request.lifetimeMs,
+      maxBounces: request.maxBounces,
+      isGrenade: true,
+      adrenalinGain: 0,
+      sourceId: request.sourceId,
+      projectileStyle: 'translocator_puck',
+      frictionDelayMs: request.frictionDelayMs,
+      airFrictionDecayPerSec: request.airFrictionDecayPerSec,
+      bounceFrictionMultiplier: request.bounceFrictionMultiplier,
+      stopSpeedThreshold: request.stopSpeedThreshold,
+    });
+  }
+
+  getPuckPosition(id: ProjectileId): { x: number; y: number } | null {
+    if (!this.translocatorPuckIds.has(id)) return null;
+    const record = this.projectiles.getById(id);
+    if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return null;
+    return { x: record.sprite.x, y: record.sprite.y };
+  }
+
+  consumePuck(id: ProjectileId): boolean {
+    if (!this.translocatorPuckIds.has(id)) return false;
+    const record = this.projectiles.getById(id);
+    if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return false;
+    this.destroyProjectile(id);
+    return true;
+  }
+
+  getThreatSamples(): readonly ProjectileThreatSample[] {
+    this.threatSamples.length = 0;
+    if (this.destroyed) return this.threatSamples;
+    for (const record of this.projectiles.activeRecords) {
+      if (!record.sprite.active) continue;
+      const radius = Math.max(record.sprite.displayWidth, record.sprite.displayHeight) * 0.5;
+      this.threatSamples.push({
+        id: record.id,
+        x: record.sprite.x,
+        y: record.sprite.y,
+        vx: record.body.velocity.x,
+        vy: record.body.velocity.y,
+        radius,
+        provenance: createProjectileProvenance(record),
+        dodgeRelevant: !record.isGrenade && !record.isFlame,
+      });
+    }
+    return this.threatSamples;
+  }
+
+  getSummary(): ProjectileDiagnosticsSummary {
+    this.activeProjectilesByOwner.clear();
+    for (const record of this.projectiles.activeRecords) {
+      this.activeProjectilesByOwner.set(
+        record.ownerId,
+        (this.activeProjectilesByOwner.get(record.ownerId) ?? 0) + 1,
+      );
+    }
+    return {
+      activeCount: this.projectiles.activeCount,
+      activeProjectilesByOwner: this.activeProjectilesByOwner,
+    };
+  }
+
+  hasActiveProjectileStyle(style: import('../types').ProjectileStyle): boolean {
+    for (const record of this.projectiles.activeRecords) {
+      if (record.projectileStyle === style && record.sprite.active) return true;
+    }
+    return false;
   }
 
   /**
@@ -216,6 +346,11 @@ export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOw
       this.simulation.releaseProjectileResources(record);
     }
     this.projectiles.clear();
+    this.detonableIds.clear();
+    this.detonatorIds.clear();
+    this.translocatorPuckIds.clear();
+    this.threatSamples.length = 0;
+    this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
     this.simulation.releaseWorldProjectileState();
     this.simulation.bindProjectileOwner(null);
@@ -232,8 +367,29 @@ export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOw
     const id = this.projectiles.allocateId();
     const record = this.simulation.createProjectile(id, x, y, angle, ownerId, cfg, this.hostNowMs());
     this.projectiles.insert(record);
+    if (record.detonable) this.detonableIds.add(id);
+    if (record.detonator) this.detonatorIds.add(id);
+    if (record.projectileStyle === 'translocator_puck') this.translocatorPuckIds.add(id);
     return id;
   }
+
+  private removeCapabilityIds(id: ProjectileId): void {
+    this.detonableIds.delete(id);
+    this.detonatorIds.delete(id);
+    this.translocatorPuckIds.delete(id);
+  }
+}
+
+function createProjectileProvenance(record: TrackedProjectile) {
+  return {
+    gameplaySourceId: record.ownerId,
+    attributionId: record.ownerId,
+    allegiance: { ownerId: record.ownerId, allowTeamDamage: record.allowTeamDamage },
+    weaponSourceId: record.sourceId,
+    sourceSlot: record.sourceSlot,
+    sourceTurretId: record.sourceTurretId,
+    lineage: record.reflected === undefined ? undefined : { reflected: record.reflected },
+  } satisfies import('./ProjectileSpawnRequest').ProjectileProvenance;
 }
 
 function emptyHostStageResult(): ProjectileHostStageResult {

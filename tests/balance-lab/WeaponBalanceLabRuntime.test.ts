@@ -87,6 +87,7 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
         combatSystem: { addDamageDealtObserver: vi.fn(() => () => {}) },
       } as never),
       {
+        getProjectileDiagnostics: () => null,
         isReady: () => true,
         spawnTarget: () => ({ id: 'target' }),
         pinTarget: vi.fn(),

@@ -29,6 +29,7 @@ import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
+import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 
 interface EnemyTeleportState {
   nextReadyAt: number;
@@ -129,6 +130,7 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly network: CoopDefenseEnemyAbilityNetworkPort,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
     private readonly decoySystem: DecoySystem | null = null,
+    private readonly translocatorProjectilePort: TranslocatorProjectilePort | null = null,
   ) {}
 
   hostUpdate(now: number): void {
@@ -185,7 +187,7 @@ export class CoopDefenseEnemyAbilitySystem {
 
   clear(): void {
     for (const state of this.teleportStates.values()) {
-      if (state.puckId !== undefined) this.projectileManager.destroyProjectile(state.puckId);
+      if (state.puckId !== undefined) this.translocatorProjectilePort?.consumePuck(state.puckId);
     }
     for (const enemyId of this.voidMolotovStates.keys()) {
       this.enemyManager.getEnemy(enemyId)?.setSpecialAction('none');
@@ -292,11 +294,13 @@ export class CoopDefenseEnemyAbilitySystem {
 
     if (state.puckId !== undefined) {
       if (now < (state.teleportAt ?? Number.POSITIVE_INFINITY)) return;
-      const puck = this.projectileManager.getProjectileById(state.puckId);
-      if (puck) this.teleportEnemyToPuck(enemy, puck.id, puck.sprite.x, puck.sprite.y, now, ability, state);
+      const position = this.translocatorProjectilePort?.getPuckPosition(state.puckId);
+      if (position) this.teleportEnemyToPuck(enemy, state.puckId, position.x, position.y, now, ability, state);
       else this.resetTeleportState(state, now + ability.cooldownMs);
       return;
     }
+
+    if (!this.translocatorProjectilePort) return;
 
     if (now < state.nextReadyAt) return;
 
@@ -323,18 +327,18 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.projectileSpeed * ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER,
     );
 
-    state.puckId = this.projectileManager.spawnProjectile(spawnX, spawnY, angle, enemy.id, {
+    state.puckId = this.translocatorProjectilePort.spawnPuck({
+      x: spawnX,
+      y: spawnY,
+      angle,
+      ownerId: enemy.id,
       speed: throwSpeed,
       size: utility.projectileSize,
-      damage: 0,
       color,
       ownerColor: color,
-      lifetime: ability.flightTimeMs + 5000,
+      lifetimeMs: ability.flightTimeMs + 5000,
       maxBounces: utility.maxBounces,
-      isGrenade: true,
-      adrenalinGain: 0,
       sourceId: utility.id,
-      projectileStyle: utility.projectileStyle,
       frictionDelayMs: utility.frictionDelayMs,
       airFrictionDecayPerSec: utility.airFrictionDecayPerSec,
       bounceFrictionMultiplier: utility.bounceFrictionMultiplier,
@@ -743,8 +747,8 @@ export class CoopDefenseEnemyAbilitySystem {
     state: EnemyTeleportState,
   ): void {
     const color = getCoopDefenseEnemyConfig(enemy.kind).color ?? 0x9b32ff;
+    if (!this.translocatorProjectilePort?.consumePuck(puckId)) return;
     this.network.broadcastTranslocatorFlash(enemy.sprite.x, enemy.sprite.y, color, 'start', enemy.id);
-    this.projectileManager.destroyProjectile(puckId);
     enemy.setPosition(targetX, targetY);
     this.network.broadcastTranslocatorFlash(targetX, targetY, color, 'end', enemy.id);
 
@@ -820,7 +824,7 @@ export class CoopDefenseEnemyAbilitySystem {
     }
     for (const [enemyId, state] of this.teleportStates) {
       if (activeEnemyIds.has(enemyId)) continue;
-      if (state.puckId !== undefined) this.projectileManager.destroyProjectile(state.puckId);
+      if (state.puckId !== undefined) this.translocatorProjectilePort?.consumePuck(state.puckId);
       this.teleportStates.delete(enemyId);
     }
     for (const enemyId of this.activeStinkAuraEnemyIds) {

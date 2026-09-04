@@ -350,6 +350,11 @@ describe('Activity rebinding', () => {
     const runtime = new WorldPlayerGameplayRuntime({
       playerManager: service({ getAllPlayers: () => [], getPlayer: () => undefined }) as PlayerManager,
       projectileManager: service(),
+      translocatorProjectilePort: {
+        spawnPuck: () => 1,
+        getPuckPosition: () => null,
+        consumePuck: () => false,
+      },
       combatSystem: service(),
       hostPhysics: service(),
       fireSystem: service(),

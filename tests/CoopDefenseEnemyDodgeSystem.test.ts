@@ -9,10 +9,9 @@ import { CoopDefenseEnemyDodgeSystem } from '../src/systems/CoopDefenseEnemyDodg
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { CombatSystem } from '../src/systems/CombatSystem';
 import type { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
-import type { TrackedProjectile } from '../src/types';
+import type { ProjectileThreatReadPort } from '../src/projectile/ProjectileReadPorts';
 
 function buildSystem(projectileX: number) {
   const enemy = fakeEntity({ id: 'enemy-1',
@@ -23,10 +22,20 @@ function buildSystem(projectileX: number) {
     getMoveSpeed: () => 100,
     getSpecialAction: () => 'none',
     isBurrowed: () => false }) as unknown as EnemyEntity;
-  const projectile = fakeEntity({ ownerId: 'player-1', active: true, x: projectileX, y: 100, body: { velocity: { x: -200, y: 0 } },
-    isGrenade: false,
-    isFlame: false,
-    allowTeamDamage: false }) as unknown as TrackedProjectile;
+  const projectile = {
+    id: 1,
+    x: projectileX,
+    y: 100,
+    vx: -200,
+    vy: 0,
+    radius: 4,
+    dodgeRelevant: true,
+    provenance: {
+      gameplaySourceId: 'player-1',
+      attributionId: 'player-1',
+      allegiance: { ownerId: 'player-1', allowTeamDamage: false },
+    },
+  };
   const startEnemyDash = vi.fn(() => true);
   const system = new CoopDefenseEnemyDodgeSystem(
     {
@@ -35,7 +44,7 @@ function buildSystem(projectileX: number) {
       isEnemyPanicking: () => false,
     } as unknown as EnemyManager,
     { getAllPlayers: () => [] } as unknown as PlayerManager,
-    { getActiveProjectiles: () => new Set([projectile]) } as unknown as ProjectileManager,
+    { getThreatSamples: () => [projectile] } satisfies ProjectileThreatReadPort,
     {
       canDamageTarget: () => true,
       hasLineOfSight: () => true,

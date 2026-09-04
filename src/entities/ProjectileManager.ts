@@ -59,6 +59,12 @@ import {
   type ProjectileCoreStageResult,
 } from '../projectile/ProjectileFlightProcessor';
 import type { ProjectileTimeFieldPort } from '../projectile/ProjectileTimeFieldPort';
+import type {
+  LegacyProjectileExternalInteractionAccess,
+  ProjectileDetonationOutcome,
+  ProjectileDetonationSearchRequest,
+  ProjectileDetonationTarget,
+} from '../projectile/ProjectileExternalInteractionPort';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -173,6 +179,19 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private timeFieldPort: ProjectileTimeFieldPort | null = null;
   private hostFrameNowMs: number | null = null;
 
+  /** Semantische Brücke für den world-owned External-Interaction-Port. */
+  readonly externalInteraction: LegacyProjectileExternalInteractionAccess = {
+    searchDetonableProjectiles: (detonableIds, request) => (
+      this.searchDetonableProjectiles(detonableIds, request)
+    ),
+    detonateProjectile: (projectileId, detonatorOwnerId) => (
+      this.detonateProjectile(projectileId, detonatorOwnerId)
+    ),
+    detonateOverlappingProjectiles: (detonatorIds, detonableIds) => (
+      this.detonateOverlappingProjectiles(detonatorIds, detonableIds)
+    ),
+  };
+
   // ── Radialer Projektil-Puls (Host-only, injiziert von ArenaScene) ────────
   private proximityPulseCallback: ((proj: TrackedProjectile) => void) | null = null;
   private naturalFlameExpiryCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
@@ -199,6 +218,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private obstacleGeometry: CombatGeometry | null = null;
   /** Ziel der Kandidaten-Bounds bzw. des bislang besten Treffers (keine Allokation pro Fels). */
   private readonly scratchObstacleRect = new Phaser.Geom.Rectangle();
+  private readonly scratchLine = new Phaser.Geom.Line();
   private readonly bestRockRect        = new Phaser.Geom.Rectangle();
   private readonly scratchTrainBounds  = new Phaser.Geom.Rectangle();
   /**
@@ -2140,6 +2160,67 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     return projectile?.pendingDestroy ? undefined : projectile;
   }
 
+  private searchDetonableProjectiles(
+    detonableIds: ReadonlySet<number>,
+    request: ProjectileDetonationSearchRequest,
+  ): readonly ProjectileDetonationTarget[] {
+    this.scratchLine.setTo(request.startX, request.startY, request.endX, request.endY);
+    const targets: ProjectileDetonationTarget[] = [];
+    for (const projectileId of detonableIds) {
+      const projectile = this.getActiveProjectileById(projectileId);
+      if (!projectile?.detonable) continue;
+      if (!request.detonator.triggerTags.includes(projectile.detonable.tag)) continue;
+      if (!projectile.detonable.allowCrossTeam && projectile.ownerId !== request.shooterId) continue;
+      if (!Phaser.Geom.Intersects.LineToRectangle(this.scratchLine, projectile.sprite.getBounds())) continue;
+      targets.push(createDetonationTarget(projectile));
+    }
+    return targets;
+  }
+
+  private detonateProjectile(
+    projectileId: number,
+    detonatorOwnerId: string,
+  ): ProjectileDetonationOutcome | null {
+    const projectile = this.getActiveProjectileById(projectileId);
+    if (!projectile?.detonable) return null;
+    const target = createDetonationTarget(projectile);
+    this.destroyProjectile(projectileId);
+    return { ...target, detonatorOwnerId };
+  }
+
+  private detonateOverlappingProjectiles(
+    detonatorIds: ReadonlySet<number>,
+    detonableIds: ReadonlySet<number>,
+  ): readonly ProjectileDetonationOutcome[] {
+    const outcomes: ProjectileDetonationOutcome[] = [];
+    const destroyedIds = new Set<number>();
+    const active = this.activeProjectiles;
+    for (const detonator of active) {
+      if (!detonatorIds.has(detonator.id) || destroyedIds.has(detonator.id)) continue;
+      for (const target of active) {
+        if (!detonableIds.has(target.id) || destroyedIds.has(target.id)) continue;
+        if (detonator.id === target.id || !target.detonable) continue;
+        if (!detonator.detonator?.triggerTags.includes(target.detonable.tag)) continue;
+        if (!target.detonable.allowCrossTeam && target.ownerId !== detonator.ownerId) continue;
+        if (!Phaser.Geom.Intersects.RectangleToRectangle(
+          detonator.sprite.getBounds(),
+          target.sprite.getBounds(),
+        )) continue;
+
+        destroyedIds.add(target.id);
+        const detonation = this.detonateProjectile(target.id, detonator.ownerId);
+        if (detonation) outcomes.push(detonation);
+      }
+    }
+    return outcomes;
+  }
+
+  private getActiveProjectileById(id: number): TrackedProjectile | undefined {
+    const projectile = this.owner?.store.getById(id);
+    if (!projectile || projectile.pendingDestroy || !this.owner?.store.activeRecords.has(projectile)) return undefined;
+    return projectile;
+  }
+
   getShadowSamples(): readonly ShadowProjectileSample[] {
     const samples = this.shadowSamples;
     samples.length = 0;
@@ -3530,6 +3611,18 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       velocityY: state.vy,
     };
   }
+}
+
+function createDetonationTarget(projectile: TrackedProjectile): ProjectileDetonationTarget {
+  return {
+    id: projectile.id,
+    x: projectile.sprite.x,
+    y: projectile.sprite.y,
+    projectileOwnerId: projectile.ownerId,
+    effect: projectile.detonable!,
+    sourceId: projectile.sourceId,
+    sourceSlot: projectile.sourceSlot,
+  };
 }
 
 function projFallbackSign(value: number): number {

@@ -19,10 +19,14 @@ import type { TrainAwarenessSource } from '../systems/CoopDefenseEnemyTrainAware
 import type { CoopMissionRuntime } from './CoopMissionRuntime';
 import type { TrainEventConfig } from '../types';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
+import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
+import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts';
 
 export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: import('../entities/ProjectileManager').ProjectileManager;
+  readonly projectileThreatReadPort: ProjectileThreatReadPort;
+  readonly translocatorProjectilePort: TranslocatorProjectilePort;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly baseManager: BaseManager;
@@ -78,7 +82,7 @@ export class CoopMissionEnemyBehaviourComposition {
     const dodge = new CoopDefenseEnemyDodgeSystem(
       enemyManager,
       this.options.playerManager,
-      this.options.projectileManager,
+      this.options.projectileThreatReadPort,
       this.options.combatSystem,
       this.options.hostPhysics,
       this.options.isFreeEnemyGroundAt,
@@ -104,6 +108,7 @@ export class CoopMissionEnemyBehaviourComposition {
       this.options.enemyAbilityNetwork,
       runtime.enemyAiTargetCatalog,
       this.options.decoySystem,
+      this.options.translocatorProjectilePort,
     );
     const attack = new CoopDefenseEnemyAttackSystem(
       enemyManager,

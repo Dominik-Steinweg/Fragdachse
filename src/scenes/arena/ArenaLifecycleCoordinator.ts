@@ -688,6 +688,8 @@ export class ArenaLifecycleCoordinator {
       getPlayerManager: () => this.ctx.playerManager,
       getCombatSystem: () => this.ctx.combatSystem,
       getProjectileManager: () => this.ctx.projectileManager,
+      getProjectileThreatReadPort: () => this.worldGameplay?.projectiles ?? null,
+      getTranslocatorProjectilePort: () => this.worldGameplay?.projectiles ?? null,
       getHostPhysics: () => this.ctx.hostPhysics,
       getPlacementSystem: () => this.worldRuntime?.materialization?.placement ?? null,
       getTemporaryUtilityPort: () => this.worldPlayerGameplayRuntime,

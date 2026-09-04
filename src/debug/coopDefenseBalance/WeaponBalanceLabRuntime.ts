@@ -17,12 +17,14 @@ import type {
   RuntimeBenchmarkRequest,
   RuntimeBenchmarkResult,
 } from './runtimeBenchmarkTypes';
+import type { ProjectileDiagnosticsReadPort } from '../../projectile/ProjectileReadPorts';
 
 const TARGET_HP = 1_000_000_000;
 const PLAYER_GRID_X = 30;
 const TARGET_Y_OFFSETS = [-120, -60, 0, 60, 120] as const;
 
 export interface WeaponBalanceLabWorldPort {
+  getProjectileDiagnostics(): ProjectileDiagnosticsReadPort | null;
   isReady(): boolean;
   spawnTarget(x: number, y: number): { id: string } | null;
   pinTarget(id: string, x: number, y: number): void;
@@ -311,9 +313,8 @@ export class WeaponBalanceLabRuntime {
     if (!active) return;
     const ctx = this.getContext();
     const playerId = bridge.getLocalPlayerId();
-    const activeOwnedProjectilesAtEnd = [...ctx.projectileManager.getActiveProjectiles()]
-      .filter((projectile) => projectile.ownerId === playerId)
-      .length;
+    const activeOwnedProjectilesAtEnd = this.worldPort.getProjectileDiagnostics()
+      ?.getSummary().activeProjectilesByOwner.get(playerId) ?? 0;
     let activeBurnSourcesAtEnd = 0;
     for (const targetId of this.targetPositions.keys()) {
       activeBurnSourcesAtEnd += ctx.combatSystem.getActiveBurnSources(targetId)

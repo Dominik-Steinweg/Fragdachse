@@ -1,9 +1,9 @@
 import * as Phaser from 'phaser';
-import { ProjectileManager } from '../entities/ProjectileManager';
 import { PlayerManager } from '../entities/PlayerManager';
 import { CombatSystem } from './CombatSystem';
 import { TrainManager } from '../train/TrainManager';
 import type { TranslocatorUtilityConfig } from '../loadout/LoadoutConfig';
+import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 
 /**
  * Die kleine fachliche Netzwerksicht des Translocators.
@@ -33,7 +33,7 @@ export class TranslocatorSystem {
 
   constructor(
     private playerManager: PlayerManager,
-    private projectileManager: ProjectileManager,
+    private projectilePort: TranslocatorProjectilePort,
     private combatSystem: CombatSystem,
     private readonly network: TranslocatorNetworkPort,
     private trainManager?: TrainManager | null
@@ -68,9 +68,9 @@ export class TranslocatorSystem {
     const existingPuckId = this.activePucks.get(playerId);
 
     if (existingPuckId !== undefined) {
-      const puck = this.projectileManager.getProjectileById(existingPuckId);
-      if (puck) {
-        return this.teleportToPuck(playerId, puck, now, cfg);
+      const position = this.projectilePort.getPuckPosition(existingPuckId);
+      if (position) {
+        return this.teleportToPuck(playerId, existingPuckId, position.x, position.y, now, cfg);
       } else {
         // Puck wurde mittlerweile zerstört (Arena-Grenze, etc.), Referenz entfernen und Werfen erlauben
         this.activePucks.delete(playerId);
@@ -100,17 +100,18 @@ export class TranslocatorSystem {
     const spawnX = player.x + Math.cos(angle) * playerExtents;
     const spawnY = player.y + Math.sin(angle) * playerExtents;
 
-    const projId = this.projectileManager.spawnProjectile(spawnX, spawnY, angle, playerId, {
+    const projId = this.projectilePort.spawnPuck({
+      x: spawnX,
+      y: spawnY,
+      angle,
+      ownerId: playerId,
       speed: throwSpeed,
       size: cfg.projectileSize ?? 16,
-      damage: 0,
       color: cfg.projectileColor ?? 0xffffff,
       ownerColor: this.network.getPlayerColor(playerId),
-      lifetime: 9999999, // Bleibt (nahezu) unendlich liegen bis zum Teleport
+      lifetimeMs: 9999999, // Bleibt (nahezu) unendlich liegen bis zum Teleport
       maxBounces: cfg.maxBounces ?? 1,
-      isGrenade: true,   // Bounced auf dem Boden/an Wänden wie eine Granate
-      adrenalinGain: 0,
-      projectileStyle: cfg.projectileStyle,
+      sourceId: cfg.id,
       frictionDelayMs: cfg.frictionDelayMs,
       airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
       bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
@@ -123,16 +124,21 @@ export class TranslocatorSystem {
     return true; 
   }
 
-  private teleportToPuck(playerId: string, puck: any, now: number, cfg: TranslocatorUtilityConfig): boolean {
+  private teleportToPuck(
+    playerId: string,
+    puckId: number,
+    targetX: number,
+    targetY: number,
+    now: number,
+    cfg: TranslocatorUtilityConfig,
+  ): boolean {
     const player = this.playerManager.getPlayer(playerId);
     if (!player) return false;
 
     this.onUseCb?.(playerId);
 
     // 1. Puck Koordinaten lesen und Puck zerstören
-    const targetX = puck.sprite.x;
-    const targetY = puck.sprite.y;
-    this.projectileManager.destroyProjectile(puck.id);
+    if (!this.projectilePort.consumePuck(puckId)) return false;
     this.activePucks.delete(playerId);
 
     const playerColor = this.network.getPlayerColor(playerId) ?? 0xffffff;
@@ -199,7 +205,7 @@ export class TranslocatorSystem {
   public removePlayer(playerId: string): void {
     const puckId = this.activePucks.get(playerId);
     if (puckId !== undefined) {
-      this.projectileManager.destroyProjectile(puckId);
+      this.projectilePort.consumePuck(puckId);
       this.activePucks.delete(playerId);
     }
   }
