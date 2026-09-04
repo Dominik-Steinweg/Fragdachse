@@ -68,11 +68,8 @@ export interface PlayerUltimateGaussExecutionCapability {
   ): boolean;
 }
 
-export interface PlayerUltimateBehaviorNetworkPort {
-  readonly relationship: PlayerRelationshipPort;
-  readonly roundStats: {
-    readonly recordUltimateUsed: (playerId: string) => void;
-  };
+export interface PlayerUltimateBehaviorRoundStatsPort {
+  readonly recordUltimateUsed: (playerId: string) => void;
 }
 
 export interface PlayerUltimateBehaviorRuntimeOptions {
@@ -86,7 +83,8 @@ export interface PlayerUltimateBehaviorRuntimeOptions {
   readonly isAlive: (playerId: string) => boolean;
   readonly isUltimateBlocked: (playerId: string) => boolean;
   readonly breakStealth?: (playerId: string, nowMs: number) => void;
-  readonly network: PlayerUltimateBehaviorNetworkPort;
+  readonly relationship: PlayerRelationshipPort;
+  readonly roundStats: PlayerUltimateBehaviorRoundStatsPort;
 }
 
 interface BuffUltimateState {
@@ -225,7 +223,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
         return player ? { x: player.x, y: player.y } : null;
       });
     }
-    this.options.network.roundStats.recordUltimateUsed(playerId);
+    this.options.roundStats.recordUltimateUsed(playerId);
 
     const result: LoadoutUseResult = { ok: true };
     if (attemptKey) this.rememberCommittedAttempt(playerId, attemptKey, result);
@@ -367,7 +365,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
   ): LoadoutUseResult {
     const result: LoadoutUseResult = { ok: true };
     this.options.resourceSystem.addRage(playerId, -rageCost);
-    this.options.network.roundStats.recordUltimateUsed(playerId);
+    this.options.roundStats.recordUltimateUsed(playerId);
     if (attemptKey) this.rememberCommittedAttempt(playerId, attemptKey, result);
     return result;
   }
@@ -396,7 +394,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
             const owner = this.options.playerManager.getPlayer(playerId);
             if (owner) {
               for (const ally of this.options.playerManager.getAllPlayers()) {
-                if (ally.id === playerId || this.options.network.relationship.isEnemyPair(playerId, ally.id)) continue;
+                if (ally.id === playerId || this.options.relationship.isEnemyPair(playerId, ally.id)) continue;
                 if (Math.hypot(owner.x - ally.x, owner.y - ally.y) <= aura.radius) {
                   this.options.combatSystem.addArmor(ally.id, aura.allyArmorPerTick ?? 0);
                 }
@@ -535,7 +533,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       const aura = state.config.aura;
       if (ownerId === playerId || !aura) continue;
       if (!state.active && state.auraLingerUntil < nowMs) continue;
-      if (this.options.network.relationship.isEnemyPair(ownerId, playerId)) continue;
+      if (this.options.relationship.isEnemyPair(ownerId, playerId)) continue;
       const owner = this.options.playerManager.getPlayer(ownerId);
       if (!owner || Math.hypot(owner.x - target.x, owner.y - target.y) > aura.radius) continue;
       multiplier *= kind === 'speed'

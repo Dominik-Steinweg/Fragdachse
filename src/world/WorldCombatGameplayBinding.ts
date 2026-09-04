@@ -40,6 +40,7 @@ import type { AutomatedWeaponExecution } from './AutomatedWeaponExecutionAdapter
 import type { TeslaDomeSystem } from '../systems/TeslaDomeSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { ShieldBuffSystem } from '../systems/ShieldBuffSystem';
+import type { ShieldBuffPort } from '../loadout/ShieldBuffPort';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import type { TurretSystem, AutomatedTurretId } from '../systems/TurretSystem';
 import {
@@ -197,6 +198,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getNecromancySystem: () => NecromancySystem | null;
   readonly hostUpdate: WorldCombatImpactPort;
   readonly createEnergyShieldSystem: (resourceSystem: ResourceSystem, shieldBuffSystem: ShieldBuffSystem) => EnergyShieldSystem;
+  readonly bindPlayerShieldBuffPort?: (port: ShieldBuffPort | null) => void;
   readonly network: WorldCombatNetworkPort;
   readonly respawnPlayer: (playerId: string) => boolean;
   readonly getTeamHpRegenBonus?: (playerId: string) => number;
@@ -221,6 +223,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const energyShield = options.createEnergyShieldSystem(playerSystems.resource, shieldBuff);
       const turret = new ConcreteTurretSystem(options.playerManager, options.combatSystem);
       this.systems = { shieldBuff, timeBubble, teslaDome, energyShield, turret };
+      options.bindPlayerShieldBuffPort?.(shieldBuff);
       this.bindHostSystems(this.systems, playerSystems);
     } else {
       this.systems = null;
@@ -255,6 +258,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     if (this.destroyed) return;
     this.clearActivityBindings();
     this.destroyed = true;
+    this.options.bindPlayerShieldBuffPort?.(null);
     const { combatSystem, hostPhysics, projectileManager, decoySystem, baseManager } = this.options;
     this.options.playerManager.setSpawnContextProvider(null);
     baseManager?.setOnBaseActivated(null);
@@ -708,7 +712,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.hostPhysics.setTimeBubbleSystem(timeBubble);
     player.sustainedWeaponBehavior.setTeslaDomeSystem(teslaDome);
     player.sustainedWeaponBehavior.setEnergyShieldSystem(energyShield);
-    player.loadout.setShieldBuffSystem(systems.shieldBuff);
     timeBubble.setFriendlyResolver((ownerId, subjectId) => !o.network.authority.isEnemyPair(ownerId, subjectId));
   }
 

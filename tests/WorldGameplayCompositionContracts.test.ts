@@ -101,16 +101,34 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     const ultimate = read('src/world/PlayerUltimateBehaviorRuntime.ts');
     const worldPlayer = read('src/world/WorldPlayerGameplayRuntime.ts');
     const relationship = read('src/world/PlayerRelationshipPort.ts');
+    const worldPlayerNetworkPortStart = worldPlayer.indexOf('export interface WorldPlayerGameplayNetworkPort');
+    const worldPlayerNetworkPortEnd = worldPlayer.indexOf('export interface WorldPlayerGameplaySystems');
+    const worldPlayerNetworkPort = worldPlayer.slice(worldPlayerNetworkPortStart, worldPlayerNetworkPortEnd);
 
     expect(loadout).not.toContain('NetworkBridge');
+    expect(loadout).not.toContain('ShieldBuffSystem');
     expect(activation).not.toContain('NetworkBridge');
     expect(ultimate).not.toContain('NetworkBridge');
+    expect(ultimate).not.toContain('PlayerUltimateBehaviorNetworkPort');
     expect(worldPlayer).not.toContain('NetworkBridge');
+    expect(worldPlayerNetworkPort).not.toContain('relationship');
     expect(worldPlayer).not.toContain('network.teams');
     expect(ultimate).not.toContain('network.teams');
     expect(worldPlayer).toContain('PlayerRelationshipPort');
     expect(ultimate).toContain('PlayerRelationshipPort');
     expect(relationship).toContain('interface PlayerRelationshipPort');
+  });
+
+  it('binds relationship and ShieldBuff through separate semantic boundaries', () => {
+    const playerComposition = read('src/scenes/arena/ArenaWorldPlayerComposition.ts');
+    const combatComposition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
+    const playerNetworkStart = playerComposition.indexOf('network: {');
+    const relationshipStart = playerComposition.indexOf('relationship: {');
+
+    expect(relationshipStart).toBeGreaterThanOrEqual(0);
+    expect(playerNetworkStart).toBeGreaterThan(relationshipStart);
+    expect(combatComposition).toContain('bindPlayerShieldBuffPort');
+    expect(combatComposition).toContain('bindShieldBuffPort');
   });
 
   it('leaves the remaining World gameplay graph to focused owners', () => {

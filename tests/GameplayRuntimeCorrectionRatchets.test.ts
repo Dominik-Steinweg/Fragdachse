@@ -115,4 +115,36 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(weaponActivation).toContain('drainAdrenaline');
     expect(worldRuntime).toContain('new PlayerWeaponActivationRuntime');
   });
+
+  it('keeps ShieldBuff lifecycle ownership and reads outside concrete Loadout coupling', () => {
+    const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const shieldBuffPort = source('src/loadout/ShieldBuffPort.ts');
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+    const combatBinding = source('src/world/WorldCombatGameplayBinding.ts');
+
+    expect(loadoutManager).not.toContain('ShieldBuffSystem');
+    expect(loadoutManager).not.toContain('setShieldBuffSystem');
+    expect(loadoutManager).not.toContain('shieldBuffSystem');
+    expect(loadoutManager).toContain('ShieldBuffReadPort');
+    expect(shieldBuffPort).toContain('interface ShieldBuffLifecyclePort');
+    expect(worldRuntime).toContain('shieldBuffPort?.resetPlayer');
+    expect(worldRuntime).toContain('shieldBuffPort?.removePlayer');
+    expect(combatBinding).toContain('bindPlayerShieldBuffPort');
+    expect(combatBinding).not.toContain('player.loadout.setShieldBuffSystem');
+  });
+
+  it('keeps PlayerRelationshipPort outside Player gameplay Network ports', () => {
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+    const ultimateRuntime = source('src/world/PlayerUltimateBehaviorRuntime.ts');
+    const networkPortStart = worldRuntime.indexOf('export interface WorldPlayerGameplayNetworkPort');
+    const networkPortEnd = worldRuntime.indexOf('export interface WorldPlayerGameplaySystems');
+    const networkPort = worldRuntime.slice(networkPortStart, networkPortEnd);
+
+    expect(networkPort).not.toContain('relationship');
+    expect(worldRuntime).toContain('options.relationship.isEnemyPair');
+    expect(worldRuntime).not.toContain('options.network.relationship');
+    expect(ultimateRuntime).toContain('this.options.relationship.isEnemyPair');
+    expect(ultimateRuntime).not.toContain('this.options.network.relationship');
+    expect(ultimateRuntime).not.toContain('PlayerUltimateBehaviorNetworkPort');
+  });
 });

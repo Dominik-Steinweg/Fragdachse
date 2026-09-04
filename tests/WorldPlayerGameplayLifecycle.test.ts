@@ -123,6 +123,10 @@ function makeRuntime() {
     },
     decoySystem: { clearPlayer: vi.fn() },
   };
+  runtime.shieldBuffPort = {
+    resetPlayer: tag('shieldBuff.resetPlayer'),
+    removePlayer: tag('shieldBuff.removePlayer'),
+  };
   return { runtime, systems, order, drainUnsub, gainUnsub };
 }
 
@@ -203,6 +207,7 @@ function makeConcreteRemoveRuntime() {
 
 function makeDestroyRuntime() {
   const setterNames = [
+    'setShieldBuffReadPort',
     'setSustainedWeaponBehavior',
     'setUtilityConfigModifierSource',
     'setUltimateModifierReadPort',
@@ -305,6 +310,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
       'sustainedWeaponBehavior.resetPlayer',
       'weaponReaction.resetPlayer',
       'loadout.assignDefaultLoadout',
+      'shieldBuff.resetPlayer',
     ]);
     expect(systems.loadout.assignDefaultLoadout).toHaveBeenCalledWith('p1', selection);
   });
@@ -321,6 +327,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
       'sustainedWeaponBehavior.removePlayer',
       'weaponReaction.removePlayer',
       'loadout.removePlayer',
+      'shieldBuff.removePlayer',
       'tunnel.removePlayer',
     ]);
   });
@@ -328,10 +335,23 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
   it('reconciled Loadout-Auswahl und Ressourcenmaxima zusammen', () => {
     const { runtime, systems, order } = makeRuntime();
     const selection = { weapon2: undefined } as never;
+    systems.loadout.syncSelectedLoadout = vi.fn(() => {
+      order.push('loadout.syncSelectedLoadout');
+      return true;
+    });
 
     runtime.reconcilePlayerLoadout('p1', selection);
 
-    expect(order).toEqual(['loadout.syncSelectedLoadout', 'resource.reconcilePlayerLimits']);
+    expect(order).toEqual([
+      'loadout.syncSelectedLoadout',
+      'ultimateBehavior.resetPlayer',
+      'ak47Behavior.resetPlayer',
+      'negevBehavior.resetPlayer',
+      'sustainedWeaponBehavior.resetPlayer',
+      'weaponReaction.resetPlayer',
+      'shieldBuff.resetPlayer',
+      'resource.reconcilePlayerLimits',
+    ]);
     expect(systems.loadout.syncSelectedLoadout).toHaveBeenCalledWith('p1', selection);
   });
 

@@ -10,6 +10,7 @@ import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { LoadoutManager, LoadoutSelection } from '../loadout/LoadoutManager';
+import type { ShieldBuffPort } from '../loadout/ShieldBuffPort';
 import type { PlayerCapabilities } from './PlayerCapabilities';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
@@ -70,7 +71,6 @@ import {
 import { SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../config';
 
 export interface WorldPlayerGameplayNetworkPort {
-  readonly relationship: PlayerRelationshipPort;
   readonly input: {
     readonly getPlayerInput: (playerId: string) => PlayerInput | undefined;
   };
@@ -274,6 +274,7 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly getTargetStatusSystem: () => TargetStatusSystem | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
+  readonly relationship: PlayerRelationshipPort;
   readonly getTeamAdrenalineRegenMultiplier?: (playerId: string) => number;
   readonly resetPlayerPosition: (playerId: string, x: number, y: number) => void;
   readonly dropBeer: (playerId: string, x?: number, y?: number) => void;
@@ -301,6 +302,7 @@ export class WorldPlayerGameplayRuntime implements
   PlayerGameplayResourceCommandPort {
   readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
+  private shieldBuffPort: ShieldBuffPort | null = null;
 
   constructor(private readonly options: WorldPlayerGameplayRuntimeOptions) {
     const heldAction = new HostHeldActionSystem();
@@ -347,10 +349,8 @@ export class WorldPlayerGameplayRuntime implements
       isAlive: (playerId) => options.combatSystem.isAlive(playerId),
       isUltimateBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
       breakStealth: (playerId, nowMs) => options.decoySystem.breakStealth(playerId, nowMs),
-      network: {
-        relationship: options.network.relationship,
-        roundStats: options.network.roundStats,
-      },
+      relationship: options.relationship,
+      roundStats: options.network.roundStats,
     });
     const translocator = new TranslocatorSystem(
       options.playerManager,
@@ -439,7 +439,7 @@ export class WorldPlayerGameplayRuntime implements
       loadout,
       options.fireSystem,
       (playerId) => burrow.isBurrowed(playerId),
-      (firstPlayerId, secondPlayerId) => !options.network.relationship.isEnemyPair(firstPlayerId, secondPlayerId),
+      (firstPlayerId, secondPlayerId) => !options.relationship.isEnemyPair(firstPlayerId, secondPlayerId),
       (x, y, radius) => options.network.presentation.broadcastExplosionEffect(x, y, radius, 0xff6600),
       (playerId, stat, baseValue) => playerModifier.getResolvedStat(playerId, stat, baseValue),
       (x, y, targets, landsAt, visualStyle) => options.network.presentation.broadcastFireChunkEffect(
@@ -587,6 +587,13 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.resource.setPowerUpSystem(system);
   }
 
+  /** Binds the concrete World-owned Shield-Buff state through its semantic port. */
+  bindShieldBuffPort(port: ShieldBuffPort | null): void {
+    if (this.destroyed) return;
+    this.shieldBuffPort = port;
+    this.systems.loadout.setShieldBuffReadPort(port);
+  }
+
   // ── Öffentliche Player-in-World-/Reconcile-Lifecycle-Grenze (PlayerGameplayLifecyclePort) ──
   //
   // Jede Operation kapselt genau die Child-System-Schritte, die ihr Feature-Attach/-Detach
@@ -626,6 +633,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.sustainedWeaponBehavior.resetPlayer(playerId);
     this.systems.weaponReaction.resetPlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
+    this.shieldBuffPort?.resetPlayer(playerId);
     this.systems.utilityAction.syncEquippedUtility(playerId);
   }
 
@@ -637,6 +645,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.weaponReaction.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
+    this.shieldBuffPort?.removePlayer(playerId);
     this.systems.translocator.removePlayer(playerId);
     this.options.decoySystem.clearPlayer(playerId);
     this.systems.tunnel.removePlayer(playerId);
@@ -651,6 +660,7 @@ export class WorldPlayerGameplayRuntime implements
       this.systems.negevBehavior.resetPlayer(playerId);
       this.systems.sustainedWeaponBehavior.resetPlayer(playerId);
       this.systems.weaponReaction.resetPlayer(playerId);
+      this.shieldBuffPort?.resetPlayer(playerId);
     }
     this.systems.utilityAction.syncEquippedUtility(playerId);
     this.systems.resource.reconcilePlayerLimits(playerId);
@@ -875,6 +885,8 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed) return;
     this.destroyed = true;
     const { systems } = this;
+    this.shieldBuffPort = null;
+    systems.loadout.setShieldBuffReadPort(null);
     systems.loadout.setSustainedWeaponBehavior(null);
     systems.loadout.setUltimateModifierReadPort(null);
     systems.weaponActivation.destroy();

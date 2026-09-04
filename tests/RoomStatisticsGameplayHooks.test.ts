@@ -110,10 +110,8 @@ describe('room-statistics gameplay hooks', () => {
       canInteract: () => true,
       isAlive: () => true,
       isUltimateBlocked: () => false,
-      network: {
-        relationship: { isEnemyPair: () => false },
-        roundStats: { recordUltimateUsed: ultimateUsed },
-      },
+      relationship: { isEnemyPair: () => false },
+      roundStats: { recordUltimateUsed: ultimateUsed },
     });
 
     expect(behavior.execute(

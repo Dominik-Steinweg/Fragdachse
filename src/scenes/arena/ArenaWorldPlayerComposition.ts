@@ -58,6 +58,9 @@ export function composeWorldPlayerGameplay(
     getTargetStatusSystem: () => gameplay.targeting?.systems.targetStatus ?? null,
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
+    relationship: {
+      isEnemyPair: (firstPlayerId, secondPlayerId) => bridge.isEnemyPair(firstPlayerId, secondPlayerId),
+    },
     getTeamAdrenalineRegenMultiplier: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getAdrenalineRegenMultiplier(
       Date.now(),
       bridge.canPlayerReceiveRoundRewards(playerId),
@@ -94,9 +97,6 @@ export function composeWorldPlayerGameplay(
       bridge,
     ),
     network: {
-      relationship: {
-        isEnemyPair: (firstPlayerId, secondPlayerId) => bridge.isEnemyPair(firstPlayerId, secondPlayerId),
-      },
       input: {
         getPlayerInput: (playerId) => bridge.getPlayerInput(playerId),
       },

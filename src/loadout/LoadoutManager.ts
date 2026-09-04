@@ -1,5 +1,4 @@
 import type { ResourceSystem }    from '../systems/ResourceSystem';
-import type { ShieldBuffSystem }   from '../systems/ShieldBuffSystem';
 import type { GameMode, LoadoutSlot, PlayerAimNetState, ShieldBuffHudState, WeaponSlot } from '../types';
 import type {
   EnergyShieldWeaponFireConfig,
@@ -11,6 +10,7 @@ import type {
 import { applyCoopDefenseModifiersToUtilityConfig } from './CoopDefenseLoadoutModifiers';
 import { areLoadoutConfigsEquivalent, sanitizeLoadoutSelectionForMode } from './LoadoutRules';
 import type { SustainedWeaponBehaviorPort } from './SustainedWeaponBehaviorPort';
+import type { ShieldBuffReadPort } from './ShieldBuffPort';
 
 export interface LoadoutSelection {
   weapon1?:  WeaponConfig;
@@ -53,7 +53,7 @@ export interface LoadoutSelectionModePort {
 export class LoadoutManager {
   private loadouts          = new Map<string, PlayerLoadout>();
   private aimNetStates      = new Map<string, PlayerAimNetState>();
-  private shieldBuffSystem:   ShieldBuffSystem | null = null;
+  private shieldBuffReadPort: ShieldBuffReadPort | null = null;
   private sustainedWeaponBehavior: SustainedWeaponBehaviorPort | null = null;
   private ultimateModifierReadPort: UltimateModifierReadPort | null = null;
   private utilityConfigModifierSource: ((playerId: string) => { additive: Readonly<Record<string, number>>; percentage: Readonly<Record<string, number>> } | null) | null = null;
@@ -83,7 +83,6 @@ export class LoadoutManager {
       utility:  utCfg,
       ultimate: new GenericUltimate(ultCfg),
     });
-    this.shieldBuffSystem?.resetPlayer(playerId);
     // Ein frisches Loadout beginnt mit Waffe 1 in den Pfoten, sonst zeigte die Figur nach einem
     // Waffenwechsel in der Lobby weiter den Slot der letzten Runde.
     this.heldItemSlots.removePlayer(playerId);
@@ -128,7 +127,6 @@ export class LoadoutManager {
     this.loadouts.delete(playerId);
     this.aimNetStates.delete(playerId);
     this.heldFireSlots.delete(playerId);
-    this.shieldBuffSystem?.removePlayer(playerId);
     this.heldItemSlots.removePlayer(playerId);
   }
 
@@ -145,8 +143,8 @@ export class LoadoutManager {
     this.sustainedWeaponBehavior = behavior;
   }
 
-  setShieldBuffSystem(sys: ShieldBuffSystem | null): void {
-    this.shieldBuffSystem = sys;
+  setShieldBuffReadPort(port: ShieldBuffReadPort | null): void {
+    this.shieldBuffReadPort = port;
   }
 
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
@@ -206,13 +204,13 @@ export class LoadoutManager {
     if (slot !== 'weapon1') return baseMultiplier;
 
     const fireCfg = this.getEquippedEnergyShieldFireConfig(playerId);
-    if (!fireCfg || !this.shieldBuffSystem) return baseMultiplier;
-    return baseMultiplier * this.shieldBuffSystem.getPrimaryDamageMultiplier(playerId, fireCfg, now);
+    if (!fireCfg || !this.shieldBuffReadPort) return baseMultiplier;
+    return baseMultiplier * this.shieldBuffReadPort.getPrimaryDamageMultiplier(playerId, fireCfg, now);
   }
 
   getShieldBuffHudState(playerId: string, now = Date.now()): ShieldBuffHudState {
     const fireCfg = this.getEquippedEnergyShieldFireConfig(playerId);
-    if (!fireCfg || !this.shieldBuffSystem) {
+    if (!fireCfg || !this.shieldBuffReadPort) {
       return {
         visible: false,
         defId: 'SHIELD_OVERCHARGE',
@@ -221,7 +219,7 @@ export class LoadoutManager {
         damageBonusPct: 0,
       };
     }
-    return this.shieldBuffSystem.getHudState(playerId, fireCfg, true, now);
+    return this.shieldBuffReadPort.getHudState(playerId, fireCfg, true, now);
   }
 
   getEquippedUltimateConfig(playerId: string): UltimateConfig | undefined {

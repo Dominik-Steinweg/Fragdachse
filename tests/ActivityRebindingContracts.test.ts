@@ -366,8 +366,8 @@ describe('Phase 10B.7 – Activity rebinding', () => {
       createLoadoutManager: () => service(),
       createBurrowSystem: () => service(),
       weaponExecution: service(),
+      relationship: { isEnemyPair: () => false },
       network: {
-        relationship: { isEnemyPair: () => false },
         input: { getPlayerInput: () => undefined },
         presentation: {
           getPlayerColor: () => undefined,

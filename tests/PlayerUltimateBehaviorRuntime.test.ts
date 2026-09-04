@@ -48,10 +48,8 @@ function makeHarness() {
     canInteract: () => true,
     isAlive: () => true,
     isUltimateBlocked: () => false,
-    network: {
-      relationship: { isEnemyPair: (first: string, second: string) => first === 'p1' && second === 'enemy' },
-      roundStats: { recordUltimateUsed },
-    },
+    relationship: { isEnemyPair: (first: string, second: string) => first === 'p1' && second === 'enemy' },
+    roundStats: { recordUltimateUsed },
   });
   behavior.setArmageddonCapability(armageddon);
   return { behavior, config, rage, combatSystem, armageddon, recordUltimateUsed };
@@ -142,10 +140,8 @@ function makeActivationHarness(config: any, initialRage = 400) {
     canInteract,
     isAlive: () => true,
     isUltimateBlocked: () => false,
-    network: {
-      relationship: { isEnemyPair: () => false },
-      roundStats: { recordUltimateUsed },
-    },
+    relationship: { isEnemyPair: () => false },
+    roundStats: { recordUltimateUsed },
   });
   behavior.setAirstrikeCapability({ scheduleStrike });
   behavior.setTunnelPlacementCapability({ placeTunnel });
