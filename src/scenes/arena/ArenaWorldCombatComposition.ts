@@ -5,6 +5,7 @@ import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '.
 import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
+import { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedProjectile, TrackedProjectile } from '../../types';
@@ -14,6 +15,29 @@ import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
 } from './ArenaWorldGameplayComposition';
+
+/**
+ * Der world-owned Owner der autoritativen Projectile-Registry.
+ *
+ * Er entsteht mit der World und nimmt die scene-langlebige Host-Simulation fuer genau diese
+ * Lebensdauer in Dienst: Identity, Records und ihr Teardown gehoeren ihm. Er steht vor Player-,
+ * Kampf- und Bau-Anteil, weil deren Quellen ueber seine Spawn-Grenze schiessen.
+ */
+export function composeWorldProjectileRuntime(
+  input: ArenaWorldGameplayCompositionInput,
+  gameplay: ArenaWorldGameplay,
+): void {
+  const { ctx, worldRuntime } = input;
+  const projectileRuntime = new WorldProjectileRuntime({
+    simulation: ctx.projectileManager,
+    hostNowMs: () => Date.now(),
+    onDestroy: () => {
+      if (gameplay.projectiles === projectileRuntime) gameplay.projectiles = null;
+    },
+  });
+  gameplay.projectiles = projectileRuntime;
+  worldRuntime.bind(projectileRuntime);
+}
 
 /**
  * Die World-Projektion der scene-langlebigen Kampf-, Physik- und Projektilsysteme.
@@ -30,6 +54,10 @@ export function composeWorldCombatGameplay(
     ctx, rockVisualHelper, hostUpdate, flow, worldRuntime, world,
     arenaResult, placementSystem, baseManager,
   } = input;
+  const projectileRuntime = gameplay.projectiles;
+  if (!projectileRuntime) {
+    throw new Error('[ArenaWorldComposition] Projectile runtime is missing');
+  }
   // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
   // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
   const syncActiveBaseIds = (): void => {
@@ -40,6 +68,7 @@ export function composeWorldCombatGameplay(
   const combatGameplayBinding = new WorldCombatGameplayBinding({
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
+    projectileSpawn: projectileRuntime,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     decoySystem: ctx.decoySystem,

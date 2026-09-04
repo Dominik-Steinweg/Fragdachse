@@ -42,6 +42,10 @@ import type { SporeRenderer }  from '../effects/SporeRenderer';
 import type { TracerRenderer }  from '../effects/TracerRenderer';
 import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
 import { registerGraphicsObject } from '../effects/EffectUtils';
+import type {
+  LegacyProjectileHostSimulation,
+  ProjectileOwnerSeam,
+} from '../projectile/WorldProjectileRuntime';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -73,16 +77,22 @@ function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset):
   return style === 'awp' ? 'awp' : 'default';
 }
 
-export class ProjectileManager {
+const NO_PROJECTILE_RECORDS: readonly TrackedProjectile[] = [];
+const NO_ACTIVE_PROJECTILES: ReadonlySet<TrackedProjectile> = new Set<TrackedProjectile>();
+
+export class ProjectileManager implements LegacyProjectileHostSimulation {
   private scene:       Phaser.Scene;
-  private projectiles: TrackedProjectile[] = [];        // Host: Physik-Projektile inkl. ausstehendem Cleanup
-  private readonly activeProjectiles = new Set<TrackedProjectile>();
-  private readonly projectilesById = new Map<number, TrackedProjectile>();
+  /**
+   * §5.1-Seam auf die kanonische Registry der laufenden World.
+   *
+   * Der Owner bindet ihn beim World-Aufbau und löst ihn beim Teardown wieder; ohne World gibt es
+   * keine Host-Projectiles zu verarbeiten. Es ist derselbe Store, keine Kopie.
+   */
+  private owner: ProjectileOwnerSeam | null = null;
   private readonly activeBurningProjectileIds = new Set<number>();
   private readonly shadowSamples: ShadowProjectileSample[] = [];
   private readonly lightSamples: ProjectileLightSample[] = [];
   private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
-  private nextId        = 0;
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
 
   // ── Host-Netzwerk-Snapshot ────────────────────────────────────────────────
@@ -191,6 +201,21 @@ export class ProjectileManager {
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
+  }
+
+  /** Der world-owned Owner bindet und löst diese Verarbeitung mit seiner eigenen Lifetime. */
+  bindProjectileOwner(owner: ProjectileOwnerSeam | null): void {
+    this.owner = owner;
+  }
+
+  /** Host: Verarbeitungsreihenfolge der laufenden World; außerhalb einer World leer. */
+  private get projectiles(): readonly TrackedProjectile[] {
+    return this.owner?.store.stepOrder ?? NO_PROJECTILE_RECORDS;
+  }
+
+  /** Host: wirksame Projectiles der laufenden World; außerhalb einer World leer. */
+  private get activeProjectiles(): ReadonlySet<TrackedProjectile> {
+    return this.owner?.store.activeRecords ?? NO_ACTIVE_PROJECTILES;
   }
 
   // ── Gruppen injizieren (nach buildDynamic) ─────────────────────────────────
@@ -594,6 +619,12 @@ export class ProjectileManager {
     }
   }
 
+  /**
+   * §5.1-Seam: Spawn im Legacy-Payload-Shape der noch nicht migrierten Host-Quellen.
+   *
+   * Identity, Registry und Lifetime gehören dem world-owned Owner; dieser Aufruf reicht den
+   * Auftrag nur an ihn weiter. Ohne gebundene World entsteht kein Projectile.
+   */
   spawnProjectile(
     x:       number,
     y:       number,
@@ -601,8 +632,22 @@ export class ProjectileManager {
     ownerId: string,
     cfg:     ProjectileSpawnConfig,
   ): number {
-    const id = this.nextId++;
+    return this.owner?.spawnLegacyProjectile(x, y, angle, ownerId, cfg) ?? -1;
+  }
 
+  /**
+   * Baut Physics-Handle, Collider, Spawn-Darstellung und Runtime-Record zu einer bereits vom
+   * Owner vergebenen Identity. Die Aufnahme in die Registry macht der Owner.
+   */
+  createProjectile(
+    id:      number,
+    x:       number,
+    y:       number,
+    angle:   number,
+    ownerId: string,
+    cfg:     ProjectileSpawnConfig,
+    hostNowMs: number,
+  ): TrackedProjectile {
     // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-Größe) gebraucht werden.
     // Die renderer- und collider-spezifische Style-Auswertung passiert in den jeweiligen Helfern.
     const isBall   = cfg.projectileStyle === 'ball';
@@ -651,7 +696,7 @@ export class ProjectileManager {
     const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(
       resolvedSpawn.x,
       resolvedSpawn.y,
-      Date.now(),
+      hostNowMs,
       ownerId,
     ) ?? 1;
     if (initialTimeBubbleFactor < 0.999) {
@@ -669,7 +714,7 @@ export class ProjectileManager {
       lastX:          resolvedSpawn.x,
       lastY:          resolvedSpawn.y,
       bounceCount:    cfg.initialBounceCount ?? 0,
-      createdAt:      Date.now(),
+      createdAt:      hostNowMs,
       ownerId,
       ignoreBaseCollisions: cfg.ignoreBaseCollisions,
       ignoreRockIndex: cfg.ignoreRockIndex,
@@ -872,10 +917,7 @@ export class ProjectileManager {
       this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
     }
 
-    this.projectiles.push(tracked);
-    this.activeProjectiles.add(tracked);
-    this.projectilesById.set(id, tracked);
-    return id;
+    return tracked;
   }
 
   /** Placeable turret shots ignore only their own supporting runtime rock. */
@@ -1866,9 +1908,20 @@ export class ProjectileManager {
     this.removeActiveProjectile(proj);
   }
 
+  /** Beendet Identity und Aktivmenge über den Owner und gibt danach die Ressourcen frei. */
   private destroyTrackedProjectile(proj: TrackedProjectile): void {
-    this.removeActiveProjectile(proj);
-    this.projectilesById.delete(proj.id);
+    if (this.owner) {
+      this.owner.releaseProjectile(proj);
+      return;
+    }
+    this.releaseProjectileResources(proj);
+  }
+
+  /**
+   * Gibt Physics-, Collider- und Darstellungsressourcen eines vom Owner entfernten Records frei.
+   * Registry und Identity sind zu diesem Zeitpunkt bereits beendet.
+   */
+  releaseProjectileResources(proj: TrackedProjectile): void {
     proj.hitObstacleIds?.clear();
     proj.hitBaseIds?.clear();
     this.projectileResolvedCallback?.(proj);
@@ -1919,7 +1972,7 @@ export class ProjectileManager {
   }
 
   private removeActiveProjectile(proj: TrackedProjectile): void {
-    this.activeProjectiles.delete(proj);
+    this.owner?.store.deactivate(proj);
   }
 
   private queueProjectileExplosion(
@@ -2077,7 +2130,7 @@ export class ProjectileManager {
    * Host: Gibt ein aktives Projektil anhand seiner ID zurück.
    */
   getProjectileById(id: number): TrackedProjectile | undefined {
-    const projectile = this.projectilesById.get(id);
+    const projectile = this.owner?.store.getById(id);
     return projectile?.pendingDestroy ? undefined : projectile;
   }
 
@@ -2160,15 +2213,12 @@ export class ProjectileManager {
   }
 
   /**
-   * Host: Einzelnes Projektil sofort zerstören (z.B. nach Spielertreffer).
+   * §5.1-Seam: einzelnes Projektil sofort zerstören (z.B. nach Spielertreffer).
+   *
+   * Die Entfernung selbst verantwortet der world-owned Owner; unbekannte Ids sind wirkungslos.
    */
   destroyProjectile(id: number): void {
-    const projectile = this.projectilesById.get(id);
-    if (!projectile) return;
-    const idx = this.projectiles.indexOf(projectile);
-    if (idx === -1) return;
-    this.destroyTrackedProjectile(projectile);
-    this.projectiles.splice(idx, 1);
+    this.owner?.destroyProjectile(id);
   }
 
   triggerProjectileExplosion(id: number, impactTargetKey?: string): boolean {
@@ -2257,16 +2307,10 @@ export class ProjectileManager {
   }
 
   /**
-   * Zerstört alle aktiven Projektile und ihre Collider.
-   * Muss vor ArenaBuilder.destroyDynamic() aufgerufen werden.
+   * Räumt beim World-Teardown den registry-fremden Rest ab: Renderer, Snapshot-Zustand und
+   * Client-Visuals. Records und Identity hat der Owner zu diesem Zeitpunkt bereits entfernt.
    */
-  destroyAll(): void {
-    for (const proj of this.projectiles) {
-      this.destroyTrackedProjectile(proj);
-    }
-    this.projectiles = [];
-    this.activeProjectiles.clear();
-    this.projectilesById.clear();
+  releaseWorldProjectileState(): void {
     this.activeBurningProjectileIds.clear();
     // Ohne diesen Reset traegt der Statik-Zustand der Vorrunde in die neue hinein und der Client
     // bekaeme fuer wiederverwendete Snapshot-Slots nie wieder einen Statik-Block.
@@ -2320,7 +2364,7 @@ export class ProjectileManager {
         explodedGrenades,
         countdownEvents,
       )) {
-        this.projectiles.splice(index, 1);
+        this.owner?.store.dropStepEntryAt(index);
       }
     }
 

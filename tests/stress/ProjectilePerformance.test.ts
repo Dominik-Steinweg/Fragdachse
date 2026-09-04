@@ -91,7 +91,34 @@ import { RocketRenderer } from '../../src/effects/RocketRenderer';
 import { GpuVfxSystem } from '../../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
 import { ProjectileManager } from '../../src/entities/ProjectileManager';
-import type { TrackedProjectile } from '../../src/types';
+import type { ProjectileSpawnConfig, TrackedProjectile } from '../../src/types';
+import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
+
+/**
+ * Bindet den Manager an eine echte world-owned Registry und nimmt vorbereitete Records auf.
+ *
+ * Identity, Aufnahme und Entfernung bleiben beim Owner; der Test liefert nur die Records, die er
+ * ohne vollstaendige Phaser-Szene nicht spawnen kann.
+ */
+function bindProjectileRegistry(
+  manager: ProjectileManager,
+  records: readonly TrackedProjectile[],
+): WorldProjectileRuntime {
+  const pending = [...records];
+  const runtime = new WorldProjectileRuntime({
+    simulation: {
+      bindProjectileOwner: (owner) => manager.bindProjectileOwner(owner),
+      createProjectile: () => pending.shift() as TrackedProjectile,
+      releaseProjectileResources: (record) => manager.releaseProjectileResources(record),
+      releaseWorldProjectileState: () => manager.releaseWorldProjectileState(),
+    },
+    hostNowMs: () => 0,
+  });
+  for (const record of records) {
+    runtime.spawnLegacyProjectile(0, 0, 0, record.ownerId, {} as ProjectileSpawnConfig);
+  }
+  return runtime;
+}
 
 describe('projectile performance paths', () => {
   it('damages each obstacle once per flame and uses kind-specific rock scaling', () => {
@@ -355,22 +382,13 @@ describe('projectile performance paths', () => {
       },
     } as unknown as Phaser.Scene;
     const manager = new ProjectileManager(scene);
-    const internals = manager as unknown as {
-      projectiles: TrackedProjectile[];
-      activeProjectiles: Set<TrackedProjectile>;
-      projectilesById: Map<number, TrackedProjectile>;
-    };
     const sprites = [7, 8].map((id) => (fakeEntity({ id, x: 10,
         y: 20,
         displayWidth: 8,
         destroy: vi.fn(), body: {},
       boundsListener: vi.fn(),
       colliders: [] }) as unknown as TrackedProjectile));
-    for (const tracked of sprites) {
-      internals.projectiles.push(tracked);
-      internals.activeProjectiles.add(tracked);
-      internals.projectilesById.set(tracked.id, tracked);
-    }
+    const registry = bindProjectileRegistry(manager, sprites);
 
     const firstView = manager.getActiveProjectiles();
     expect(manager.getActiveProjectiles()).toBe(firstView);
@@ -387,6 +405,11 @@ describe('projectile performance paths', () => {
     expect(manager.getProjectileById(7)).toBeUndefined();
     expect(sprites[0].sprite.destroy).toHaveBeenCalledOnce();
     expect(sprites[1].sprite.destroy).toHaveBeenCalledOnce();
+
+    // Nach dem World-Teardown bleibt kein Host-Projektil sichtbar und kein Spawn wirksam.
+    registry.destroy();
+    expect(manager.getActiveProjectiles().size).toBe(0);
+    expect(manager.spawnProjectile(0, 0, 0, 'owner', {} as ProjectileSpawnConfig)).toBe(-1);
   });
 
   it('resolves the nearer obstacle first during a continuous projectile sweep', () => {
@@ -585,14 +608,7 @@ describe('projectile performance paths', () => {
       } as unknown as TrackedProjectile;
       const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
       manager.setTimeBubbleFactorProvider(() => 0.1);
-      const internals = manager as unknown as {
-        projectiles: TrackedProjectile[];
-        activeProjectiles: Set<TrackedProjectile>;
-        projectilesById: Map<number, TrackedProjectile>;
-      };
-      internals.projectiles.push(projectile);
-      internals.activeProjectiles.add(projectile);
-      internals.projectilesById.set(projectile.id, projectile);
+      bindProjectileRegistry(manager, [projectile]);
 
       const result = manager.hostUpdate(1_000);
 
@@ -637,14 +653,7 @@ describe('projectile performance paths', () => {
       } as unknown as TrackedProjectile;
       const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
       manager.setTimeBubbleFactorProvider(() => 0.5);
-      const internals = manager as unknown as {
-        projectiles: TrackedProjectile[];
-        activeProjectiles: Set<TrackedProjectile>;
-        projectilesById: Map<number, TrackedProjectile>;
-      };
-      internals.projectiles.push(projectile);
-      internals.activeProjectiles.add(projectile);
-      internals.projectilesById.set(projectile.id, projectile);
+      bindProjectileRegistry(manager, [projectile]);
 
       manager.hostUpdate(100);
       manager.hostUpdate(100);
@@ -718,14 +727,7 @@ describe('projectile performance paths', () => {
       boundsListener: vi.fn(),
     } as unknown as TrackedProjectile;
     const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    const internals = manager as unknown as {
-      projectiles: TrackedProjectile[];
-      activeProjectiles: Set<TrackedProjectile>;
-      projectilesById: Map<number, TrackedProjectile>;
-    };
-    internals.projectiles.push(projectile);
-    internals.activeProjectiles.add(projectile);
-    internals.projectilesById.set(projectile.id, projectile);
+    bindProjectileRegistry(manager, [projectile]);
 
     expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:target')).toBe(true);
     const first = manager.hostUpdate(0);
@@ -794,8 +796,7 @@ describe('projectile performance paths', () => {
       isGrenade: false,
       createdAt: Date.now(),
     }) as unknown as TrackedProjectile;
-    const internals = manager as unknown as { activeProjectiles: Set<TrackedProjectile> };
-    internals.activeProjectiles.add(projectile);
+    const registry = bindProjectileRegistry(manager, [projectile]);
 
     const first = manager.getNetSnapshot();
     const second = manager.getNetSnapshot();
@@ -810,9 +811,9 @@ describe('projectile performance paths', () => {
     manager.requestFullNetSnapshot();
     expect(manager.getNetSnapshot()).toMatchObject({ f: 1 });
 
-    internals.activeProjectiles.clear();
+    registry.store.deactivate(projectile);
     expect(manager.getNetSnapshot()).toBeNull();
-    internals.activeProjectiles.add(projectile);
+    bindProjectileRegistry(manager, [projectile]);
     expect(manager.getNetSnapshot()?.s.length).toBeGreaterThan(0);
   });
 });

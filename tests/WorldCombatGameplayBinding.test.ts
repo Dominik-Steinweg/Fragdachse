@@ -27,7 +27,7 @@ import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
-import { LegacyProjectileSpawnAdapter } from '../src/projectile/LegacyProjectileSpawnAdapter';
+import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import type { ResourceSystem } from '../src/systems/ResourceSystem';
@@ -85,6 +85,7 @@ function createPlacement(playerManager: PlayerManager): PlacementSystem {
 interface TurretFixture {
   readonly binding: WorldCombatGameplayBinding;
   readonly projectileManager: ProjectileManager;
+  readonly projectileSpawn: { spawnProjectile: ReturnType<typeof vi.fn> };
   readonly playerLoadout: LoadoutManager;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
@@ -151,7 +152,8 @@ function createFixture(options: {
   );
   // Die gemeinsame Immediate-Fire-Capability und der explizite Automatik-Adapter werden beide
   // an der World-Grenze erzeugt; Player- und Turmquellen teilen nur die Ausführung.
-  const projectileSpawn = new LegacyProjectileSpawnAdapter(projectileManager);
+  // Der world-owned Owner ist hier ein reiner Spawn-Port: das Wiring, nicht die Registry, steht auf dem Pruefstand.
+  const projectileSpawn = { spawnProjectile: vi.fn((_request: ProjectileSpawnRequest) => 1) };
   const weaponExecution = new WorldWeaponExecutionRuntime({
     projectileSpawn,
     combatSystem: combatSystem as unknown as ConstructorParameters<typeof WorldWeaponExecutionRuntime>[0]['combatSystem'],
@@ -225,6 +227,7 @@ function createFixture(options: {
   const binding = new WorldCombatGameplayBinding({
     playerManager,
     projectileManager,
+    projectileSpawn,
     combatSystem,
     hostPhysics: methodBag() as unknown as HostPhysicsSystem,
     decoySystem: methodBag() as unknown as DecoySystem,
@@ -284,7 +287,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, projectileManager, playerLoadout, playerManager, combatSystem, metrics };
+  return { binding, projectileManager, projectileSpawn, playerLoadout, playerManager, combatSystem, metrics };
 }
 
 afterEach(() => {
@@ -328,20 +331,21 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       WEAPON_CONFIGS.SPORES,
     );
 
-    const spawn = (fixture.projectileManager.spawnProjectile as unknown as ReturnType<typeof vi.fn>);
+    const spawn = fixture.projectileSpawn.spawnProjectile;
     expect(spawn).toHaveBeenCalledOnce();
-    const [, , , ownerId, projectile] = spawn.mock.calls[0];
-    expect(ownerId).toBe(player.id);
-    expect(projectile).toMatchObject({
-      ignoreRockIndex: placed.id,
+    const request = spawn.mock.calls[0][0] as ProjectileSpawnRequest;
+    expect(request.provenance).toMatchObject({
+      attributionId: player.id,
       sourceTurretId: String(placed.id),
       sourceSlot: 'utility',
-      damage: WEAPON_CONFIGS.TURRET_ROCKET_BURST.damage * 1.25,
-      explosion: {
-        maxDamage: 14 * 1.25 * 1.5 * 2,
-      },
     });
-    expect(projectile.ignoreBaseCollisions).toBe(false);
+    expect(request.flight.collisionFilter).toMatchObject({
+      ignoreRockIndex: placed.id,
+      ignoreBaseCollisions: false,
+    });
+    expect(request.interaction.directHit?.damage)
+      .toBe(WEAPON_CONFIGS.TURRET_ROCKET_BURST.damage * 1.25);
+    expect(request.interaction.explosion?.maxDamage).toBe(14 * 1.25 * 1.5 * 2);
     fixture.binding.destroy();
   });
 
@@ -369,17 +373,17 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       WEAPON_CONFIGS.SPORES,
     );
 
-    const spawn = (fixture.projectileManager.spawnProjectile as unknown as ReturnType<typeof vi.fn>);
+    const spawn = fixture.projectileSpawn.spawnProjectile;
     expect(spawn).toHaveBeenCalledOnce();
-    const [, , , ownerId, projectile] = spawn.mock.calls[0];
-    expect(ownerId).toBe(COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID);
-    expect(projectile).toMatchObject({
-      ignoreBaseCollisions: true,
+    const request = spawn.mock.calls[0][0] as ProjectileSpawnRequest;
+    expect(request.provenance).toMatchObject({
+      attributionId: COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
       sourceTurretId: 'hostile-base:front',
-      homing: { targetTypes: ['players'] },
     });
-    expect(projectile.sourceSlot).toBeUndefined();
-    expect(projectile.ignoreRockIndex).toBeUndefined();
+    expect(request.flight.collisionFilter?.ignoreBaseCollisions).toBe(true);
+    expect(request.flight.homing).toMatchObject({ targetTypes: ['players'] });
+    expect(request.provenance.sourceSlot).toBeUndefined();
+    expect(request.flight.collisionFilter?.ignoreRockIndex).toBeUndefined();
     fixture.binding.destroy();
   });
 
@@ -416,17 +420,19 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
       WEAPON_CONFIGS.SPORES,
     );
 
-    const spawn = (fixture.projectileManager.spawnProjectile as unknown as ReturnType<typeof vi.fn>);
+    const spawn = fixture.projectileSpawn.spawnProjectile;
     expect(spawn).toHaveBeenCalledOnce();
-    const [, , , ownerId, projectile] = spawn.mock.calls[0];
-    expect(ownerId).toBe(COOP_DEFENSE_BASE_TURRET_OWNER_ID);
-    expect(projectile).toMatchObject({
+    const request = spawn.mock.calls[0][0] as ProjectileSpawnRequest;
+    expect(request.provenance).toMatchObject({
+      attributionId: COOP_DEFENSE_BASE_TURRET_OWNER_ID,
+      sourceTurretId: String(placed.id),
+    });
+    expect(request.provenance.sourceSlot).toBeUndefined();
+    expect(request.flight.collisionFilter).toMatchObject({
       ignoreBaseCollisions: true,
       ignoreRockIndex: placed.id,
-      sourceTurretId: String(placed.id),
-      damage: WEAPON_CONFIGS.SPORES.damage,
     });
-    expect(projectile.sourceSlot).toBeUndefined();
+    expect(request.interaction.directHit?.damage).toBe(WEAPON_CONFIGS.SPORES.damage);
     fixture.binding.destroy();
   });
 });

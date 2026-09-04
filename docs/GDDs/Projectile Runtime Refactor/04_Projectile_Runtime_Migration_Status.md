@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `2B – WorldProjectileRuntime, Store, Identity und autoritativer Spawn-Cutover`
-- **Gesamtstatus:** Phase 2A abgeschlossen; die Execution-Seite spricht den semantischen Spawn-Contract, der autoritative Store folgt in 2B
+- **Nächste Phase:** `3 – Flight, Lifetime, Homing und Core Runtime Processing`
+- **Gesamtstatus:** Phase 2B abgeschlossen; es existiert genau eine world-owned Projectile-Registry, die Legacy-Verarbeitung arbeitet auf demselben Store
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm test`, `npm run build`, `npm run test:architecture`, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab` (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -40,7 +40,7 @@
 |---|:---:|---|
 | 1 | ✅ | Baseline + Characterization |
 | 2A | ✅ | Spawn Contract + Provenance |
-| 2B | ⬜ | World Runtime + Store + Spawn Authority |
+| 2B | ✅ | World Runtime + Store + Spawn Authority |
 | 3 | ⬜ | Flight + Lifetime + Homing |
 | 4 | ⬜ | External Interaction + Read Ports |
 | 5 | ⬜ | Travel / Environment / Augments |
@@ -61,10 +61,11 @@
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- [Transition] `LegacyProjectileSpawnAdapter`: `ProjectileSpawnRequest` → bestehende `ProjectileManager.spawnProjectile`-Senke; nur one-way, ohne State/Identity; Schließphase 2B.
-- [Transition] noch nicht migrierte Spawn-Aufrufer der Legacy-Senke: `TranslocatorSystem` und der Puck von `CoopDefenseEnemyAbilitySystem` (Schließphase 4), `CombatSystem`-Deflection/Reflection/Schwarmkinder (Schließphase 6–7), übrige Gegner-Wurfquellen als Host-Sonderfall (Schließphase 9–10), interner Hydra-Split im `ProjectileManager` (Schließphase 2B/3).
+Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-Ab Phase 2B darf zusätzlich ausschließlich der in `03 §5.1` definierte Single-State Legacy Access Seam mit konkret benannten Schließphasen hier stehen.
+- [Transition] `ProjectileManager` verarbeitet Flight, Kollision, Wirkung, Snapshot und Presentation weiter auf dem kanonischen Store und hält keine eigene Registry mehr; Schließung fachbereichsweise in den Phasen 3–14.
+- [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: `TranslocatorSystem` und Enemy-Puck (Schließphase 4), `CombatSystem`-Deflection/Reflection/Schwarmkinder (6–7), übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
+- [Transition] `toLegacyProjectileSpawnConfig` bildet den Spawn-Auftrag auf den Legacy-Record ab; entfällt mit dessen Ablösung (14).
 
 Format bei Bedarf:
 
@@ -82,8 +83,8 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Contract-Familie | Realisierter Type/API |
 |---|---|
 | Projectile Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` (`src/projectile/`) |
-| World Projectile Runtime / Host Frame | — |
-| Projectile Store / Runtime Record | — |
+| World Projectile Runtime / Host Frame | `WorldProjectileRuntime` (`src/projectile/`); Host-Frame-Port noch offen |
+| Projectile Store / Runtime Record | `ProjectileStore`; Record bis zur Ablösung weiterhin `TrackedProjectile` |
 | External Interaction | — |
 | Read Ports | — |
 | Target / Geometry / Targetability | — |
@@ -107,7 +108,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 2B starten; bei tatsächlichem Beginn Phase 2B auf 🟨 setzen.**
+**Phase 3 starten; bei tatsächlichem Beginn Phase 3 auf 🟨 setzen.**
 
 ---
 

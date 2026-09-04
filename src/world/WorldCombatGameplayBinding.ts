@@ -4,7 +4,6 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
-import { LegacyProjectileSpawnAdapter } from '../projectile/LegacyProjectileSpawnAdapter';
 import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
@@ -154,6 +153,8 @@ export interface WorldCombatImpactPort {
 export interface WorldCombatGameplayBindingOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
+  /** Storm-Bolts sind eine World-Quelle und verlassen die Bindung ueber diesen Spawn-Port. */
+  readonly projectileSpawn: ProjectileSpawnPort;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly decoySystem: DecoySystem;
@@ -213,11 +214,8 @@ export interface WorldCombatGameplayBindingOptions {
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly systems: WorldCombatGameplaySystems | null;
   private destroyed = false;
-  /** Storm-Bolts sind eine World-Quelle und verlassen die Bindung über den Spawn-Port. */
-  private readonly projectileSpawn: ProjectileSpawnPort;
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
-    this.projectileSpawn = new LegacyProjectileSpawnAdapter(options.projectileManager);
     const playerCombat = options.getPlayerCombatIntegration();
     if (playerCombat) {
       const shieldBuff = new ConcreteShieldBuffSystem();
@@ -342,7 +340,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     decoySystem.setRunSpeedResolver(null);
     decoySystem.setCooldownStarter(null);
     decoySystem.setExplosionCallback(null);
-    projectileManager.destroyAll();
     decoySystem.clearAll();
     if (this.systems) {
       this.systems.timeBubble.destroyAll();
@@ -689,7 +686,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     );
     teslaDome.setStormProjectileSpawner((request) => {
       const lifetime = request.speed > 0 ? request.rangePx / request.speed * 1000 : 0;
-      this.projectileSpawn.spawnProjectile({
+      o.projectileSpawn.spawnProjectile({
         origin: { x: request.x, y: request.y, angle: request.angle },
         flight: {
           speed: request.speed,

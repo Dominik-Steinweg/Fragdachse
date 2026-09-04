@@ -7,7 +7,6 @@ import {
 import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../../world/AutomatedWeaponExecutionAdapter';
 import { SpecializedWeaponExecutionAdapter } from '../../world/SpecializedWeaponExecutionAdapter';
-import { LegacyProjectileSpawnAdapter } from '../../projectile/LegacyProjectileSpawnAdapter';
 import { getUtilityConfigForMode } from '../../loadout/LoadoutConfig';
 import type {
   ArenaWorldGameplay,
@@ -29,8 +28,10 @@ export function composeWorldPlayerGameplay(
   // Gemeinsame Immediate-Weapon-Execution-Capability: world-composed, ohne Player-Resource-/
   // Loadout-Autoritaet. Der Loadout delegiert seinen Player-Fire hierher; automatische Quellen
   // verwenden den daneben liegenden world-lokalen Adapter.
-  // Einziger one-way Übergang vom semantischen Spawn-Auftrag auf die bestehende Spawn-Senke.
-  const projectileSpawn = new LegacyProjectileSpawnAdapter(ctx.projectileManager);
+  const projectileSpawn = gameplay.projectiles;
+  if (!projectileSpawn) {
+    throw new Error('[ArenaWorldComposition] Projectile runtime is missing');
+  }
   const weaponExecution = new WorldWeaponExecutionRuntime({
     projectileSpawn,
     combatSystem: ctx.combatSystem,

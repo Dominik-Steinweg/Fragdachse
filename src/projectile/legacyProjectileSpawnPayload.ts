@@ -1,45 +1,17 @@
 import type { ProjectileSpawnConfig } from '../types';
-import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 
-/** Bestehende Spawn-Senke des Legacy-`ProjectileManager`. */
-export interface LegacyProjectileSpawnSink {
-  spawnProjectile(
-    x: number,
-    y: number,
-    angle: number,
-    ownerId: string,
-    cfg: ProjectileSpawnConfig,
-  ): ProjectileId;
-}
-
 /**
- * Einziger one-way Adapter vom neuen Spawn-Contract auf die bestehende Spawn-Senke.
+ * Übersetzt einen aufgelösten Spawn-Auftrag in die noch bestehende Payload-Form der
+ * Host-Simulation.
  *
- * Er übersetzt ausschließlich `ProjectileSpawnRequest` → `ProjectileSpawnConfig`; er besitzt weder
- * State noch Identity noch Lifecycle und ist keine dauerhafte Fassade. Sobald die world-owned
- * Projectile-Runtime den autoritativen Spawn übernimmt, entfällt er ersatzlos.
+ * Die Abbildung ist eine reine Funktion ohne State, Identity oder Lifecycle. Sie lebt so lange,
+ * wie Flight, Kollision und Wirkung den Legacy-Record verwenden, und verschwindet mit dessen
+ * Ablösung.
  *
- * Solange die Senke nur ein `ownerId` kennt, müssen Gameplay-Source, Attribution und Allegiance
- * derselben Entität gehören; die Trennung dieser Dimensionen wird erst hinter der neuen Grenze
- * wirksam.
+ * Solange die Payload nur ein `ownerId` kennt, müssen Gameplay-Source, Attribution und Allegiance
+ * derselben Entität gehören; die Trennung dieser Dimensionen wird erst dahinter wirksam.
  */
-export class LegacyProjectileSpawnAdapter implements ProjectileSpawnPort {
-  constructor(private readonly sink: LegacyProjectileSpawnSink) {}
-
-  spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
-    const { origin } = request;
-    return this.sink.spawnProjectile(
-      origin.x,
-      origin.y,
-      origin.angle,
-      request.provenance.attributionId,
-      toLegacyProjectileSpawnConfig(request),
-    );
-  }
-}
-
-/** Flacht einen aufgelösten Spawn-Auftrag auf die bestehende Payload-Form ab. */
 export function toLegacyProjectileSpawnConfig(request: ProjectileSpawnRequest): ProjectileSpawnConfig {
   const { flight, provenance, interaction, presentation } = request;
   const directHit = interaction.directHit;

@@ -6,7 +6,7 @@ import {
   composeWorldTrain,
 } from './ArenaWorldEnvironmentComposition';
 import { composeWorldPlayerGameplay } from './ArenaWorldPlayerComposition';
-import { composeWorldCombatGameplay } from './ArenaWorldCombatComposition';
+import { composeWorldCombatGameplay, composeWorldProjectileRuntime } from './ArenaWorldCombatComposition';
 import {
   composeWorldConstruction,
   composeWorldPowerUp,
@@ -27,6 +27,7 @@ import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { WorldRuntimeContext } from '../../world/WorldRuntimeContext';
 import type { PersistentBaseWorldBinding } from '../../world/PersistentBaseWorldBinding';
 import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
+import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
@@ -134,6 +135,7 @@ export interface ArenaWorldGameplayCompositionInput {
  */
 export class ArenaWorldGameplay {
   geometry: WorldGeometryBinding | null = null;
+  projectiles: WorldProjectileRuntime | null = null;
   targeting: WorldTargetingRuntime | null = null;
   train: WorldTrainRuntime | null = null;
   weaponExecution: WorldWeaponExecutionRuntime | null = null;
@@ -160,6 +162,7 @@ export function composeArenaWorldGameplay(
   const gameplay = new ArenaWorldGameplay();
 
   composeWorldGeometry(input, gameplay);
+  composeWorldProjectileRuntime(input, gameplay);
   if (coopMissionRuntime && isCoopMission) {
     // Benannter Activity-Schritt: welche Systeme darin entstehen, gehoert der Activity.
     flow.materializeActivityCore(activityDescriptor, coopMissionRuntime, layout);

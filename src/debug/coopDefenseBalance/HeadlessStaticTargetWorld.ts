@@ -7,7 +7,7 @@ import type {
 } from '../../loadout/WeaponFireExecutor';
 import type { ProjectileSpawnResult } from '../../projectile/ProjectileSpawnPort';
 import type { ProjectileSpawnRequest } from '../../projectile/ProjectileSpawnRequest';
-import { toLegacyProjectileSpawnConfig } from '../../projectile/LegacyProjectileSpawnAdapter';
+import { toLegacyProjectileSpawnConfig } from '../../projectile/legacyProjectileSpawnPayload';
 import { getHitscanRequestRange } from '../../loadout/WeaponFireExecutor';
 import {
   checkHitscanRayCircleHit,
