@@ -14,7 +14,7 @@ export interface PlayerWorldRuntimeCompositionPorts {
   readonly detachCombat: (playerId: string) => void;
   readonly attachCombatResources: (playerId: string) => void;
   readonly detachCombatResources: (playerId: string) => void;
-  readonly attachPlayerBuild: (playerId: string) => void;
+  readonly attachPlayerBuild: (playerId: string, nowMs: number) => void;
   readonly detachPlayerBuild: (playerId: string) => void;
   readonly attachBurrow: (playerId: string) => void;
   readonly detachBurrow: (playerId: string) => void;
@@ -48,7 +48,7 @@ export function composePlayerWorldRuntime(
       {
         id: 'player-build',
         feature: 'playerBuild',
-        run: ({ profile }) => { ports.attachPlayerBuild(profile.id); },
+        run: ({ profile, nowMs }) => { ports.attachPlayerBuild(profile.id, nowMs); },
       },
       {
         id: 'burrow-state',

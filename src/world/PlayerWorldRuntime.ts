@@ -72,6 +72,8 @@ export interface PlayerAttachContext {
   readonly profile: PlayerProfile;
   /** True, wenn der Spieler nach einem Tod erneut in dieselbe Runde kommt. */
   readonly reconnectAfterDeath: boolean;
+  /** Zeitpunkt des Attach-Aufrufs; wird für zeitabhängige World-Player-Initialisierung weitergereicht. */
+  readonly nowMs: number;
   /**
    * Autoritative Startposition dieses Eintritts in Weltkoordinaten.
    *

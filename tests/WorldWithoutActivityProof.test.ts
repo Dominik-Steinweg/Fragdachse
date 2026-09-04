@@ -362,9 +362,9 @@ describe('Schritt 22 – haertester World-ohne-Activity-Proof', () => {
         canDismantle: true,
         canUseCombat: false,
       });
-      expect(hostPlayerRuntime.attach({ profile, reconnectAfterDeath: false }, hostFeatures)).toBe(true);
+      expect(hostPlayerRuntime.attach({ profile, reconnectAfterDeath: false, nowMs: 0 }, hostFeatures)).toBe(true);
       useRoom(clientRoom);
-      expect(clientPlayerRuntime.attach({ profile, reconnectAfterDeath: false }, clientFeatures)).toBe(true);
+      expect(clientPlayerRuntime.attach({ profile, reconnectAfterDeath: false, nowMs: 0 }, clientFeatures)).toBe(true);
       expect(hostFeatureSteps).toEqual([
         'entity',
         'navigation',

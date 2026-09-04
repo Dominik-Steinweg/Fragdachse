@@ -290,11 +290,11 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     runtime.attachPlayerResources('p1');
     runtime.attachPlayerBurrow('p1');
-    runtime.attachPlayerBuild('p1');
+    runtime.attachPlayerBuild('p1', 1_000);
 
     expect(systems.resource.initPlayer).toHaveBeenCalledWith('p1');
     expect(systems.burrow.initPlayer).toHaveBeenCalledWith('p1');
-    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('p1', expect.any(Number));
+    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('p1', 1_000);
   });
 
   it('setzt beim Loadout-Attach erst den Ultimate-State zurück, dann das Default-Loadout', () => {
@@ -376,11 +376,11 @@ describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => 
       ['absent', { coopDefenseProfile: {} }],
     ]);
 
-    runtime.reconcilePlayerBuildModifiers(builds);
+    runtime.reconcilePlayerBuildModifiers(builds, 2_000);
 
     expect(systems.playerModifier.syncPlayers).toHaveBeenCalledWith(builds);
-    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('withBuild', expect.any(Number));
-    expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalledWith('absent', expect.any(Number));
+    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('withBuild', 2_000);
+    expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalledWith('absent', 2_000);
     expect(systems.itemRuntime.removePlayer).toHaveBeenCalledWith('noBuild');
   });
 
@@ -388,7 +388,7 @@ describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => 
     const { runtime, systems } = makeRuntime();
     systems.playerModifier.syncPlayers.mockReturnValue([]);
 
-    runtime.reconcilePlayerBuildModifiers(new Map());
+    runtime.reconcilePlayerBuildModifiers(new Map(), 2_000);
 
     expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalled();
     expect(systems.itemRuntime.removePlayer).not.toHaveBeenCalled();

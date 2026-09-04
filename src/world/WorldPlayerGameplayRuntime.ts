@@ -170,13 +170,14 @@ export interface PlayerGameplayLifecyclePort {
   detachPlayerResources(playerId: string): void;
   attachPlayerBurrow(playerId: string): void;
   detachPlayerBurrow(playerId: string): void;
-  attachPlayerBuild(playerId: string): void;
+  attachPlayerBuild(playerId: string, nowMs: number): void;
   detachPlayerBuild(playerId: string): void;
   attachPlayerLoadout(playerId: string, selection?: LoadoutSelection): void;
   detachPlayerLoadout(playerId: string): void;
   reconcilePlayerLoadout(playerId: string, selection?: LoadoutSelection): boolean;
   reconcilePlayerBuildModifiers(
     builds: ReadonlyMap<string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null>,
+    nowMs: number,
   ): void;
   invalidateHeldActionsForPlayer(playerId: string): void;
   invalidateHeldActionsOnActivityEnd(): void;
@@ -1031,8 +1032,8 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.burrow.removePlayer(playerId);
   }
 
-  attachPlayerBuild(playerId: string): void {
-    this.systems.itemRuntime.initPlayer(playerId, Date.now());
+  attachPlayerBuild(playerId: string, nowMs: number): void {
+    this.systems.itemRuntime.initPlayer(playerId, nowMs);
   }
 
   detachPlayerBuild(playerId: string): void {
@@ -1088,6 +1089,7 @@ export class WorldPlayerGameplayRuntime implements
    */
   reconcilePlayerBuildModifiers(
     builds: ReadonlyMap<string, Pick<LoadoutCommitSnapshot, 'coopDefenseClassId' | 'coopDefenseProfile' | 'equippedItems'> | null>,
+    nowMs: number,
   ): void {
     const changedPlayerIds = this.systems.playerModifier.syncPlayers(builds);
     for (const playerId of changedPlayerIds) {
@@ -1095,7 +1097,7 @@ export class WorldPlayerGameplayRuntime implements
       const wantsItemRuntime = Boolean(snapshot?.coopDefenseProfile)
         || (snapshot?.equippedItems?.length ?? 0) > 0;
       if (wantsItemRuntime) {
-        if (this.options.playerManager.hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId, Date.now());
+        if (this.options.playerManager.hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId, nowMs);
       } else {
         this.systems.itemRuntime.removePlayer(playerId);
       }

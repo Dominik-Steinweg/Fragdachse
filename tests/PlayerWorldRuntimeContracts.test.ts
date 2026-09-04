@@ -105,7 +105,7 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
 
     // Ein Beobachter bekommt keinen Kampfzustand ...
     const observer = resolvePlayerRuntimeFeatures({ isHost: true, participation: 'observer' });
-    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, observer)).toBe(true);
+    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 }, observer)).toBe(true);
     expect(calls).toEqual(['attach:entity']);
 
     // ... und baut auch dann keinen ab, wenn die Policy ihn inzwischen als Teilnehmer sehen
@@ -123,8 +123,8 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       detach: [detachStep('entity', 'entity', calls)],
     });
     const features = resolvePlayerRuntimeFeatures({ isHost: true, participation: 'interactive' });
-    runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features);
-    runtime.attach({ profile: { ...PROFILE, id: 'p2' }, reconnectAfterDeath: false }, features);
+    runtime.attach({ profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 }, features);
+    runtime.attach({ profile: { ...PROFILE, id: 'p2' }, reconnectAfterDeath: false, nowMs: 0 }, features);
     expect(runtime.attachedPlayerIds()).toEqual(['p1', 'p2']);
 
     calls.length = 0;
@@ -149,7 +149,7 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
       ],
     });
 
-    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features({ loadoutTools: false })))
+    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 }, features({ loadoutTools: false })))
       .toBe(true);
     expect(calls).toEqual(['attach:entity', 'attach:combat']);
 
@@ -181,7 +181,7 @@ describe('Player-Lifecycle – atomarer Attach', () => {
       detach: [],
     });
 
-    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: true }, features())).toBe(false);
+    expect(runtime.attach({ profile: PROFILE, reconnectAfterDeath: true, nowMs: 0 }, features())).toBe(false);
     // Rueckwaerts und ohne das ablehnende Modul selbst; der spaetere Schritt lief nie.
     expect(calls).toEqual(['attach:entity', 'attach:combat', 'rollback:entity']);
     expect(runtime.isAttached('p1')).toBe(false);
@@ -198,7 +198,7 @@ describe('Player-Lifecycle – atomarer Attach', () => {
       detach: [],
     });
 
-    expect(() => runtime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features()))
+    expect(() => runtime.attach({ profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 }, features()))
       .toThrow(/boom:loadout/);
     expect(calls).toEqual([
       'attach:entity', 'attach:resources', 'attach:loadout',
@@ -213,7 +213,7 @@ describe('Player-Lifecycle – atomarer Attach', () => {
       attach: [step('entity', 'entity', calls)],
       detach: [detachStep('entity', 'entity', calls)],
     });
-    const context = { profile: PROFILE, reconnectAfterDeath: false };
+    const context = { profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 };
     expect(runtime.attach(context, features())).toBe(true);
     expect(runtime.attach(context, features())).toBe(true);
     expect(calls).toEqual(['attach:entity']);
@@ -229,6 +229,7 @@ describe('Player-Lifecycle – atomarer Attach', () => {
 describe('Player-Lifecycle – konkrete World-Komposition', () => {
   it('haelt die feste Attach- und Detach-Reihenfolge ausserhalb des Coordinators', () => {
     const calls: string[] = [];
+    const buildAttachTimes: number[] = [];
     const runtime = composePlayerWorldRuntime({
       attachEntity: () => { calls.push('attach:entity'); },
       detachEntity: () => { calls.push('detach:entity'); },
@@ -236,7 +237,7 @@ describe('Player-Lifecycle – konkrete World-Komposition', () => {
       detachCombat: () => { calls.push('detach:combat'); },
       attachCombatResources: () => { calls.push('attach:resources'); },
       detachCombatResources: () => { calls.push('detach:resources'); },
-      attachPlayerBuild: () => { calls.push('attach:build'); },
+      attachPlayerBuild: (_playerId, nowMs) => { calls.push('attach:build'); buildAttachTimes.push(nowMs); },
       detachPlayerBuild: () => { calls.push('detach:build'); },
       attachBurrow: () => { calls.push('attach:burrow'); },
       detachBurrow: () => { calls.push('detach:burrow'); },
@@ -246,9 +247,10 @@ describe('Player-Lifecycle – konkrete World-Komposition', () => {
     });
 
     expect(runtime.attach(
-      { profile: PROFILE, reconnectAfterDeath: false },
+      { profile: PROFILE, reconnectAfterDeath: false, nowMs: 1_234 },
       features(),
     )).toBe(true);
+    expect(buildAttachTimes).toEqual([1_234]);
     expect(calls).toEqual([
       'attach:entity',
       'attach:combat',

@@ -103,7 +103,7 @@ export class SlimeTrailSystem {
     return this.getSnapshot(now);
   }
 
-  getEnemyMovementFactor(enemyId: string, now = Date.now()): number {
+  getEnemyMovementFactor(enemyId: string, now: number): number {
     const state = this.affectedEnemies.get(enemyId);
     if (!state || now > state.expiresAt) return 1;
     return 1 - Phaser.Math.Clamp(state.slowFraction, 0, 0.95);

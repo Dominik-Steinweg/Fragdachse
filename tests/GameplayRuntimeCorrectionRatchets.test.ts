@@ -155,6 +155,7 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
     const flamethrower = source('src/systems/FlamethrowerUpgradeSystem.ts');
     const slimeTrail = source('src/systems/SlimeTrailSystem.ts');
+    const combatIntegrationPort = source('src/world/PlayerCombatIntegrationPort.ts');
 
     expect(loadoutManager).toContain('update(delta: number, nowMs: number): void');
     expect(loadoutManager).not.toMatch(/(?:update|getSpeedMultiplier|getHeldSelfPushVelocity|getDamageMultiplier|getWeaponDamageMultiplier|getShieldBuffHudState)\([^)]*now(?:Ms)?\s*=\s*Date\.now\(\)/);
@@ -163,6 +164,13 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(flamethrower).not.toMatch(/(?:handleEnemyDeath|hostCreateFireChunkBurst|handleNaturalFlameExpiry)[\s\S]{0,220}now\s*=\s*Date\.now\(\)/);
     expect(slimeTrail).toContain('handleEnemyDeath(enemyId: string, x: number, y: number, now: number)');
     expect(slimeTrail).not.toMatch(/handleEnemyDeath\([^)]*now\s*=\s*Date\.now\(\)/);
+    expect(slimeTrail).toContain('getEnemyMovementFactor(enemyId: string, now: number)');
+    expect(slimeTrail).not.toContain('Date.now()');
+    expect(combatIntegrationPort).toContain('getEnemyMovementFactor(enemyId: string, nowMs: number)');
+    expect(combatIntegrationPort).not.toContain('nowMs?: number');
+    expect(worldRuntime).toContain('attachPlayerBuild(playerId: string, nowMs: number)');
+    expect(worldRuntime).toContain('reconcilePlayerBuildModifiers(');
+    expect(worldRuntime).not.toContain('Date.now()');
     expect(worldRuntime).toContain('systems.loadout.update(deltaMs, nowMs)');
     expect(worldRuntime).toContain('handleCoopDefenseItemKill: (killerId, victimId, x, y, nowMs)');
   });

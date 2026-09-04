@@ -161,9 +161,9 @@ describe('Transition-/Race-Case-Tests', () => {
     });
     const features = fullFeatures();
 
-    expect(playerRuntime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features)).toBe(true);
+    expect(playerRuntime.attach({ profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 }, features)).toBe(true);
     playerRuntime.detach(PROFILE.id, features);
-    expect(playerRuntime.attach({ profile: PROFILE, reconnectAfterDeath: false }, features)).toBe(true);
+    expect(playerRuntime.attach({ profile: PROFILE, reconnectAfterDeath: false, nowMs: 0 }, features)).toBe(true);
 
     expect(playerRuntime.isAttached(PROFILE.id)).toBe(true);
     expect(calls).toEqual(['attach', 'detach', 'attach']);

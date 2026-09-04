@@ -553,7 +553,7 @@ export class ArenaLifecycleCoordinator {
         this.worldPlayerGameplayRuntime?.detachPlayerResources(playerId);
         bridge.clearWeapon2PredictionState(playerId);
       },
-      attachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.attachPlayerBuild(playerId); },
+      attachPlayerBuild: (playerId, nowMs) => { this.worldPlayerGameplayRuntime?.attachPlayerBuild(playerId, nowMs); },
       detachPlayerBuild: (playerId) => { this.worldPlayerGameplayRuntime?.detachPlayerBuild(playerId); },
       attachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.attachPlayerBurrow(playerId); },
       detachBurrow: (playerId) => { this.worldPlayerGameplayRuntime?.detachPlayerBurrow(playerId); },
@@ -2232,7 +2232,7 @@ export class ArenaLifecycleCoordinator {
     const playerRuntime = this.playerRuntime;
     if (!playerRuntime) return false;
     const attached = playerRuntime.attach(
-      { profile, reconnectAfterDeath, spawn },
+      { profile, reconnectAfterDeath, spawn, nowMs: Date.now() },
       this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
     );
     // Erst die World, dann ihre Activity: Der Missionsanteil setzt eine stehende Figur voraus.
@@ -2996,7 +2996,7 @@ export class ArenaLifecycleCoordinator {
         bridge.getPlayerCurrentLoadoutSnapshot(profile.id),
       ] as const),
     );
-    playerGameplay.reconcilePlayerBuildModifiers(builds);
+    playerGameplay.reconcilePlayerBuildModifiers(builds, Date.now());
   }
 
   private resolveCommittedLoadoutSelection(playerId: string): LoadoutSelection {

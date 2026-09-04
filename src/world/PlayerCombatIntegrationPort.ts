@@ -88,7 +88,7 @@ export interface PlayerCombatUtilityPort {
 
 /** Enemy movement read owned by the player item/runtime behavior. */
 export interface PlayerCombatSlimeTrailPort {
-  getEnemyMovementFactor(enemyId: string, nowMs?: number): number;
+  getEnemyMovementFactor(enemyId: string, nowMs: number): number;
 }
 
 export interface PlayerCombatKillOutcome {

@@ -231,13 +231,13 @@ describe('LobbyWorld L3 – Leave und lokale Presentation', () => {
     });
     const profile = { id: 'p1', name: 'Client', colorHex: 0x52d273 };
 
-    expect(runtime.attach({ profile, reconnectAfterDeath: false }, features)).toBe(true);
+    expect(runtime.attach({ profile, reconnectAfterDeath: false, nowMs: 0 }, features)).toBe(true);
     expect(entities.get('p1')).toBe(1);
     runtime.detach('p1', features);
     expect(runtime.isAttached('p1')).toBe(false);
     expect(entities.has('p1')).toBe(false);
     runtime.detach('p1', features);
-    expect(runtime.attach({ profile, reconnectAfterDeath: false }, features)).toBe(true);
+    expect(runtime.attach({ profile, reconnectAfterDeath: false, nowMs: 0 }, features)).toBe(true);
     expect(entities.get('p1')).toBe(2);
     expect(detach).toHaveBeenCalledTimes(1);
   });
