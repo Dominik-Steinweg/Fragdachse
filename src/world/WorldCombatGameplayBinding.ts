@@ -448,11 +448,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     combat.setHitscanSupportImpactCallback((impact, effect, attackerId, sourceSlot) => o.hostUpdate.applyHitscanSupportImpact(impact, effect, attackerId, sourceSlot));
     combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
-      const runtime = o.getPlayerCombatIntegration()?.item;
-      if (!runtime) return;
-      const slow = runtime.rollDirectPrimaryHitEffects(attackerId, enemyId);
+      const reaction = o.getPlayerCombatIntegration()?.reactions;
+      if (!reaction) return;
+      const result = reaction.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss);
+      const slow = result;
       if (slow.slowFraction > 0) combat.applyEnemySlow(enemyId, slow.slowFraction, slow.slowDurationMs);
-      if (runtime.rollCulling(attackerId, remainingHp, maxHp, isBoss)) {
+      if (result.shouldCull) {
         combat.applyDamage(enemyId, remainingHp, false, attackerId, 'Hinrichtung', undefined, {
           damageKind: 'direct', sourceSlot: 'weapon1', allowCritical: false, skipLifeLeech: true,
         });
@@ -461,9 +462,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind) => {
       o.network.stats.recordPlayerDamageTaken(playerId, hpLost, armorLost);
       const playerCombat = o.getPlayerCombatIntegration();
-      const runtime = playerCombat?.item;
-      if (!runtime) return;
-      const result = runtime.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind);
+      const reaction = playerCombat?.reactions;
+      if (!reaction) return;
+      const result = reaction.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind);
       if (result.adrenalineGain > 0) playerCombat?.resource.addAdrenaline(playerId, result.adrenalineGain);
       if (result.reflectedDamage > 0 && result.reflectTargetId) {
         combat.applyDamage(result.reflectTargetId, result.reflectedDamage, false, playerId, 'Dornenplatten', undefined, { damageKind: 'reflect', allowCritical: false });
@@ -479,7 +480,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     combat.setHealingReceivedHandler((playerId, amount) => o.network.stats.recordHealingReceived(playerId, amount));
     combat.setArmorReceivedHandler((playerId, amount) => o.network.stats.recordArmorReceived(playerId, amount));
-    projectiles.setNaturalFlameExpiryCallback((projectile, x, y) => o.getPlayerCombatIntegration()?.flamethrower?.handleNaturalFlameExpiry(projectile, x, y));
+    projectiles.setNaturalFlameExpiryCallback((projectile, x, y) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, x, y));
     hostPhysics.setEnemyMovementFactorResolver((enemyId, now) => Math.min(
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
@@ -489,16 +490,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (wasTimebomb) {
         o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
         o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
-        o.getPlayerCombatIntegration()?.item.removeEnemy(enemyId);
+        o.getPlayerCombatIntegration()?.reactions.removeEnemy(enemyId);
         return true;
       }
-      o.getPlayerCombatIntegration()?.flamethrower?.handleEnemyDeath(x, y, burnSources);
-      const burst = o.getPlayerCombatIntegration()?.slimeTrail?.handleEnemyDeath(enemyId, x, y, Date.now());
+      const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources) ?? null;
       if (burst) o.network.effects.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
       if (death) o.getNecromancySystem()?.recordEnemyDeath(death);
       o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
       o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
-      o.getPlayerCombatIntegration()?.item.removeEnemy(enemyId);
       return false;
     });
     combat.setRockDamageCallback((rockIndex, damage, attackerId) => {
@@ -528,7 +527,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.network.stats.recordPlayerDeath(playerId);
       o.handlePlayerUnavailable(playerId);
       o.handlePlayerDeath(playerId);
-      o.getPlayerCombatIntegration()?.flamethrower?.handlePlayerDeath(playerId, x, y);
+      o.getPlayerCombatIntegration()?.reactions.handlePlayerDeath(playerId, x, y);
       o.dropCarryForPlayer(playerId, x, y);
       o.dropBeer(playerId, x, y);
       o.gameAudioSystem.playSound('sfx_player_death', x, y);
@@ -543,9 +542,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
           o.network.stats.recordPlayerKill(killerId, 'pve');
         }
       }
-      const playerCombat = o.getPlayerCombatIntegration();
-      playerCombat?.negev?.registerKill({ killerId, sourceId });
-      playerCombat?.weaponReaction.registerKill({ killerId, sourceId, x, y, source });
+      o.getPlayerCombatIntegration()?.reactions.registerKill({ killerId, victimId, sourceId, x, y, source });
       if (o.isCoopMission() && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
         o.handleCoopItemKill(killerId, victimId, x, y);
         o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
@@ -706,7 +703,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.combatSystem.setLoadoutManager(playerCombat.loadout);
     o.combatSystem.setAk47Behavior(playerCombat.ak47);
     o.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId, nowMs) => (
-      playerCombat.ak47StrategicTarget?.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) ?? null
+      playerCombat.reactions.handleDirectAk47EnemyHit(projectile, enemyId, nowMs)
     ));
     o.hostPhysics.setBurrowSystem(playerCombat.state);
     o.hostPhysics.setLoadoutManager(playerCombat.loadout);
@@ -745,7 +742,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindProjectiles(): void {
     const o = this.options;
-    o.projectileManager.setProjectileResolvedCallback((projectile) => o.getPlayerCombatIntegration()?.ak47?.resolveProjectile(projectile));
+    o.projectileManager.setProjectileResolvedCallback((projectile) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(projectile));
     o.projectileManager.setMiniRocketCollectedCallback((projectile, x, y) => {
       const refund = Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0) * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0);
       const armor = Math.max(0, projectile.miniRocketPickupArmor ?? 0);

@@ -65,7 +65,10 @@ import type {
   SpecializedWeaponExecutionCapability,
   WeaponExecutionCapability,
 } from '../loadout/WeaponFireExecutor';
-import type { PlayerCombatIntegrationPort } from './PlayerCombatIntegrationPort';
+import type {
+  PlayerCombatIntegrationPort,
+  PlayerCombatKillOutcome,
+} from './PlayerCombatIntegrationPort';
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
 } from '../config/coopDefenseConstructions';
@@ -615,14 +618,43 @@ export class WorldPlayerGameplayRuntime implements
       item: systems.itemRuntime,
       utility: systems.utilityAction,
       ak47: systems.ak47Behavior,
-      ak47StrategicTarget: systems.ak47StrategicTarget
-        ? { handleDirectAk47EnemyHit: (projectile, enemyId, nowMs) => systems.ak47StrategicTarget!.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) }
-        : null,
-      negev: systems.negevBehavior,
-      weaponReaction: systems.weaponReaction,
       sustainedWeapon: systems.sustainedWeaponBehavior,
       slimeTrail: systems.slimeTrail,
-      flamethrower: systems.flamethrowerUpgrade,
+      reactions: {
+        handleDirectPrimaryHit: (attackerId, enemyId, remainingHp, maxHp, isBoss) => {
+          const slow = systems.itemRuntime.rollDirectPrimaryHitEffects(attackerId, enemyId);
+          return {
+            ...slow,
+            shouldCull: systems.itemRuntime.rollCulling(attackerId, remainingHp, maxHp, isBoss),
+          };
+        },
+        handlePlayerDamageTaken: (playerId, attackerId, hpLost, armorLost, damageKind) => (
+          systems.itemRuntime.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind)
+        ),
+        handleDirectAk47EnemyHit: (projectile, enemyId, nowMs) => (
+          systems.ak47StrategicTarget?.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) ?? null
+        ),
+        handleNaturalFlameExpiry: (projectile, x, y) => {
+          systems.flamethrowerUpgrade?.handleNaturalFlameExpiry(projectile, x, y);
+        },
+        handleEnemyDeath: (enemyId, x, y, burnSources) => {
+          systems.flamethrowerUpgrade?.handleEnemyDeath(x, y, burnSources);
+          const burst = systems.slimeTrail?.handleEnemyDeath(enemyId, x, y, Date.now()) ?? null;
+          systems.itemRuntime.removeEnemy(enemyId);
+          return burst;
+        },
+        removeEnemy: (enemyId) => systems.itemRuntime.removeEnemy(enemyId),
+        handlePlayerDeath: (playerId, x, y) => {
+          systems.flamethrowerUpgrade?.handlePlayerDeath(playerId, x, y);
+        },
+        resolveProjectile: (projectile) => {
+          systems.ak47Behavior?.resolveProjectile(projectile);
+        },
+        registerKill: (outcome: PlayerCombatKillOutcome) => {
+          systems.negevBehavior.registerKill({ killerId: outcome.killerId, sourceId: outcome.sourceId });
+          systems.weaponReaction.registerKill(outcome);
+        },
+      },
     };
   }
 

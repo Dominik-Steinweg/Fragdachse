@@ -50,7 +50,7 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(behaviorRuntime).toContain('update(nowMs: number)');
     expect(behaviorRuntime).not.toContain('Date.now()');
     expect(worldRuntime).toContain('new NegevBehaviorRuntime');
-    expect(combatBinding).toContain('playerCombat?.negev?.registerKill');
+    expect(combatBinding).toContain('getPlayerCombatIntegration()?.reactions.registerKill');
     expect(hostFrame).not.toContain('loadout?.getNegevHudBuffs');
     expect(hostFrame).toContain('negevBehavior?.getHudBuffs');
   });
@@ -69,7 +69,7 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(reactionPort).toContain('WeaponReactionPort');
     expect(reactionRuntime).toContain('class WeaponReactionRuntime');
     expect(worldRuntime).toContain('new WeaponReactionRuntime');
-    expect(combatBinding).toContain('weaponReaction.registerKill');
+    expect(combatBinding).toContain('reactions.registerKill');
     expect(hostFrame).toContain('weaponReaction?.update');
   });
 

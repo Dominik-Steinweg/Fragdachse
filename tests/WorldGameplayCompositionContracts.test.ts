@@ -244,6 +244,25 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(scene).not.toContain('setSpawnContextProvider(');
   });
 
+  it('führt Combat-Reaktionen über den typisierten Player-Combat-Port aus', () => {
+    const integration = read('src/world/PlayerCombatIntegrationPort.ts');
+    const combat = read('src/world/WorldCombatGameplayBinding.ts');
+    const runtime = read('src/world/WorldPlayerGameplayRuntime.ts');
+
+    expect(integration).toContain('export interface PlayerCombatReactionPort');
+    expect(integration).toContain('readonly reactions: PlayerCombatReactionPort');
+    expect(combat).toContain('playerCombat.reactions.handleDirectAk47EnemyHit');
+    expect(combat).toContain('o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath');
+    expect(combat).toContain('o.getPlayerCombatIntegration()?.reactions.handlePlayerDeath');
+    expect(combat).toContain('o.getPlayerCombatIntegration()?.reactions.resolveProjectile');
+    expect(combat).not.toContain('.item.rollDirectPrimaryHitEffects');
+    expect(combat).not.toContain('.item.handlePlayerDamageTaken');
+    expect(combat).not.toContain('.flamethrower');
+    expect(combat).not.toContain('.weaponReaction');
+    expect(combat).not.toContain('.negev');
+    expect(runtime).toContain('reactions: {');
+  });
+
   it('clears target systems exactly at World-owner teardown', () => {
     const runtime = new WorldTargetingRuntime();
 

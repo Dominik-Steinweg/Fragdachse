@@ -3,11 +3,7 @@ import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSyste
 import type { SlimeDeathBurst } from '../systems/SlimeTrailSystem';
 import type { ActiveBurnSource } from '../systems/CombatSystem';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
-import type { NegevBehaviorPort as NegevBehaviorPortContract } from '../loadout/NegevBehaviorPort';
-import type {
-  WeaponKillReactionOutcome,
-  WeaponReactionPort,
-} from '../loadout/WeaponReactionPort';
+import type { WeaponKillReactionOutcome } from '../loadout/WeaponReactionPort';
 import type { SustainedWeaponBehaviorPort } from '../loadout/SustainedWeaponBehaviorPort';
 import type { LoadoutSlot, TrackedProjectile } from '../types';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
@@ -61,7 +57,7 @@ export interface PlayerCombatStatePort {
   isWeaponBlocked(playerId: string): boolean;
 }
 
-/** Conditional item-derived combat/movement values and item-local combat reactions. */
+/** Conditional item-derived combat/movement values consumed by the World combat binding. */
 export interface PlayerCombatItemPort {
   getConditionalDamageReduction(playerId: string): number;
   getConditionalLifeLeechBonus(playerId: string): number;
@@ -74,21 +70,6 @@ export interface PlayerCombatItemPort {
     source: RemoteControlSource,
     sources: readonly RemoteControlSource[],
   ): number;
-  rollDirectPrimaryHitEffects(
-    attackerId: string,
-    enemyId: string,
-    nowMs?: number,
-  ): { slowFraction: number; slowDurationMs: number };
-  rollCulling(attackerId: string, remainingHp: number, maxHp: number, isBoss: boolean): boolean;
-  handlePlayerDamageTaken(
-    playerId: string,
-    attackerId: string | undefined,
-    hpLost: number,
-    armorLost: number,
-    damageKind: CombatDamageKind,
-    nowMs?: number,
-  ): { adrenalineGain: number; reflectedDamage: number; reflectTargetId?: string };
-  removeEnemy(enemyId: string): void;
 }
 
 export type PlayerCombatAk47Port = Pick<
@@ -96,18 +77,6 @@ export type PlayerCombatAk47Port = Pick<
   'registerProjectileHit' | 'resolveProjectile' | 'resetPlayer'
 >;
 
-export interface PlayerCombatAk47StrategicTargetPort {
-  handleDirectAk47EnemyHit(
-    projectile: TrackedProjectile,
-    enemyId: string,
-    nowMs: number,
-  ): Ak47DirectEnemyHitImpact | null;
-}
-
-export type PlayerCombatNegevPort = Pick<NegevBehaviorPortContract, 'registerKill'>;
-export type PlayerCombatWeaponReactionPort = Pick<WeaponReactionPort, 'registerKill'> & {
-  registerKill(outcome: WeaponKillReactionOutcome): void;
-};
 export type PlayerCombatSustainedWeaponPort = Pick<
   SustainedWeaponBehaviorPort,
   'setTeslaDomeSystem' | 'setEnergyShieldSystem'
@@ -117,15 +86,47 @@ export interface PlayerCombatUtilityPort {
   beginUtilityCooldown(playerId: string, utilityId: string, nowMs: number): void;
 }
 
+/** Enemy movement read owned by the player item/runtime behavior. */
 export interface PlayerCombatSlimeTrailPort {
   getEnemyMovementFactor(enemyId: string, nowMs?: number): number;
-  handleEnemyDeath(enemyId: string, x: number, y: number, nowMs?: number): SlimeDeathBurst | null;
 }
 
-export interface PlayerCombatFlamethrowerPort {
-  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, nowMs?: number): void;
-  handleEnemyDeath(x: number, y: number, burnSources: readonly ActiveBurnSource[], nowMs?: number): void;
+export interface PlayerCombatKillOutcome {
+  readonly killerId: string;
+  readonly victimId: string;
+  readonly sourceId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly source?: WeaponKillReactionOutcome['source'];
+}
+
+/** Typed authoritative reactions emitted by the WorldCombatGameplayBinding. */
+export interface PlayerCombatReactionPort {
+  handleDirectPrimaryHit(
+    attackerId: string,
+    enemyId: string,
+    remainingHp: number,
+    maxHp: number,
+    isBoss: boolean,
+  ): { slowFraction: number; slowDurationMs: number; shouldCull: boolean };
+  handlePlayerDamageTaken(
+    playerId: string,
+    attackerId: string | undefined,
+    hpLost: number,
+    armorLost: number,
+    damageKind: CombatDamageKind,
+  ): { adrenalineGain: number; reflectedDamage: number; reflectTargetId?: string };
+  handleDirectAk47EnemyHit(
+    projectile: TrackedProjectile,
+    enemyId: string,
+    nowMs: number,
+  ): Ak47DirectEnemyHitImpact | null;
+  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number): void;
+  handleEnemyDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[]): SlimeDeathBurst | null;
+  removeEnemy(enemyId: string): void;
   handlePlayerDeath(playerId: string, x: number, y: number): void;
+  resolveProjectile(projectile: TrackedProjectile): void;
+  registerKill(outcome: PlayerCombatKillOutcome): void;
 }
 
 /**
@@ -143,10 +144,7 @@ export interface PlayerCombatIntegrationPort {
   readonly item: PlayerCombatItemPort;
   readonly utility: PlayerCombatUtilityPort;
   readonly ak47: PlayerCombatAk47Port | null;
-  readonly ak47StrategicTarget: PlayerCombatAk47StrategicTargetPort | null;
-  readonly negev: PlayerCombatNegevPort | null;
-  readonly weaponReaction: PlayerCombatWeaponReactionPort;
   readonly sustainedWeapon: PlayerCombatSustainedWeaponPort;
   readonly slimeTrail: PlayerCombatSlimeTrailPort | null;
-  readonly flamethrower: PlayerCombatFlamethrowerPort | null;
+  readonly reactions: PlayerCombatReactionPort;
 }

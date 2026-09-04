@@ -24,11 +24,11 @@
 
 ## Aktueller Stand
 
-- **Aktive Teilphase:** `11B – PlayerCombatIntegration: Hit/Kill/Outcome-Reaktionen` (nächster Schritt)
-- **Zuletzt abgeschlossen:** `11A – PlayerCombatIntegration: Reads, Modifier und Resource-Semantik` ✅
+- **Aktive Teilphase:** `12A – Host Frame Player-Gameplay-Stages` (nächster Schritt)
+- **Zuletzt abgeschlossen:** `11B – PlayerCombatIntegration: Hit/Kill/Outcome-Reaktionen` ✅
 - **Gesamtstatus:** Lifecycle-, Read-View-, Action-Zeit-, Resource-/Readiness-Zeit-Grenzen und die world-composed Immediate-Weapon-Execution-Capabilities stehen. Construction-/Management-Readiness liegt im World-Construction-Owner und wird über einen schmalen Port von der Persistent-Base-Session genutzt; Konstruktion, Einzel-Rückbau und Persistent-Base-Repositionierung verwenden explizite Host-Zeit. Gemeinsame Projectile/Hitscan/Melee-Fälle laufen über `WeaponExecutionCapability`; Flamethrower, Leaf Blower, Reinforcement Matrix und Energy Injector über die benannte `SpecializedWeaponExecutionCapability`. Der World-Player-Owner besitzt mit `PlayerActionRuntime` die hostautoritative Weapon1/Weapon2-Action-Grenze und mit `PlayerWeaponActivationRuntime` die unmittelbare Waffenaktivierung; seit 6B die Held-Action-, Burrow- und Resource-Command-Grenze, seit 7A die semantische Utility-Action-Grenze, seit 7C die vollständige Player-Ultimate-Activation-Grenze und seit 8A die zustandsbehafteten AK47-, Negev-, Weapon-Reaction- und seit 9 Tesla-/Energy-Behavior-Grenzen. `PlayerUtilityActionRuntime` ist der Single-Writer für Equipped-Utility-Cooldown/Commit, Temporary-Utility-Identity/Charges und die Utility-Routen; `TemporaryUtilityCollection` bleibt State-Owner für temporäre Instanzen. `PlayerUltimateBehaviorRuntime` besitzt alle Player-Ultimate-Activation-/Charge-/Commit-Pfade sowie Buff-/Aura-/Armageddon-Lifecycle, Rage-Drain, Ticks, Linger und die zugehörigen Active-/Modifier-Reads; Airstrike-Deferred-State bleibt im `WorldSupportGameplayRuntime`, Tunnel-Placement im `ConstructionWorldRuntime` und Gauss-Execution in der world-composed Gauss-Capability. `Ak47BehaviorRuntime`, `NegevBehaviorRuntime`, `WeaponReactionRuntime` und `SustainedWeaponBehaviorRuntime` besitzen ihre jeweiligen fachlichen Zustände und Orchestrierungen; `LoadoutManager` besitzt nur Equipment-, item-lokale Readiness-/Spread- und Presentation-Read-State, liest ShieldBuff-Damage/HUD über `ShieldBuffReadPort` und ist frei von direktem `NetworkBridge`-Zugriff sowie konkreter ShieldBuff-Lifecycle-Mutation. `WorldPlayerGameplayRuntime` führt den ShieldBuff-Reset/Remove an der Player-in-World-Lifecycle-Grenze aus und exponiert für Combat ausschließlich semantische Sichten über `PlayerCombatIntegrationPort`; `WorldCombatGameplayBinding` kennt keinen `WorldPlayerGameplaySystems`-Graphen mehr. Relationship-Reads der Player-Gameplay-Owner laufen über den eigenständigen `PlayerRelationshipPort`; der Composition-Adapter delegiert diese Sicht vorläufig an `NetworkBridge.isEnemyPair`. Objective-Rewards nutzen einen schmalen `TemporaryUtilityPort`, Construction erhält nur seine Placement-Capabilities. Gegner, Türme, Necromancy und Void-Hunter-Gauss behalten ihre automatische Boundary; Timing, Readiness und Autorität bleiben bei ihren jeweiligen Ownern.
-- **Letzter verifizierter Repository-Stand:** Phase 11A – PlayerCombatIntegration-Port (dieser Commit)
-- **Letzter grüner automatisierter 11A-Gate:** Fokussierter Lauf mit **7 Dateien / 50 Tests grün**; danach `npm run check` mit **355 Testdateien / 2.988 Tests grün / 15 übersprungen** sowie TypeScript-Check und Vite-Build vollständig grün.
+- **Letzter verifizierter Repository-Stand:** Phase 11B – PlayerCombatIntegration-Reaktions-Port (dieser Commit)
+- **Letzter grüner automatisierter 11B-Gate:** Fokussierter Lauf mit **13 Dateien / 129 Tests grün**; danach `npm run check` mit **355 Testdateien / 2.989 Tests grün / 15 übersprungen** sowie TypeScript-Check und Vite-Build vollständig grün.
 - **Bekannte Umgebungsflakiness:** Der erste vollständige 8B-Check hatte einen isoliert nicht reproduzierbaren `HostPhysicsSystemAllocation.test.ts`-Fehler; der isolierte Testlauf und der unmittelbar wiederholte vollständige Check waren grün. Für 8C keine Regression offen.
 - **Manueller Gate:** offen; bewusst erst nach vollständigem Refactoring
 - **Projectile-/Combat-Full-Refactor:** ausdrücklich außerhalb dieses Plans
@@ -59,8 +59,8 @@
 | 9 | ✅ | `99fdb870589624089ab371a6199b1112abda8030` | Tesla Dome / Energy Shield Behavior |
 | 10A | ✅ | `503c4f84ec66ee919e0238227c3c51fbf40fa672` | LoadoutManager final reduzieren |
 | 10B | ✅ | `810bf5141b3371dee60faf7857eac53f2ad9bfdb` | NetworkBridge aus Loadout/Ability-Core |
-| 11A | ✅ | `84da7c7d` | PlayerCombatIntegration Reads/Modifier |
-| 11B | ⬜ | — | PlayerCombatIntegration Outcomes/Reactions |
+| 11A | ✅ | `579910d1` | PlayerCombatIntegration Reads/Modifier |
+| 11B | ✅ | — | PlayerCombatIntegration Outcomes/Reactions |
 | 12A | ⬜ | — | Host Frame Player-Gameplay-Stages |
 | 12B | ⬜ | — | Client Frame/HUD/Prediction Reads |
 | 12C | ⬜ | — | Activity/Support/Construction Cleanup |
@@ -88,7 +88,7 @@ Diese Liste wird während der Umsetzung **ersetzt/gekürzt**, nicht chronologisc
 | `scenes/arena/ArenaRuntime.ts` | 2B: `getTranslocatorActivePuckId`/`getTunnelNetSnapshot` → Read-Views. **Verbleibend:** `itemRuntime.getRemoteControlSnapshot` (Cross-Runtime-Join mit `turret`) | Read ✅ / Snapshot-Join offen | 2B ✅ / 12B |
 | `scenes/arena/RockVisualHelper.ts` | 2B: `getClassId` → `getPlayerClassId`-Read-View; `playerSystems`-Getter entfernt | Read ✅ | 2B ✅ |
 | `scenes/arena/ArenaPersistentBaseSession.ts` | nutzt `getConstructionReadiness()` für Reposition-Readiness; persistente Basisdaten und Move-Transaktionen bleiben im raumlanglebigen Room-Owner | Readiness-Port ✅ | 5 ✅ |
-| `world/WorldCombatGameplayBinding.ts` | konsumiert `PlayerCombatIntegrationPort` mit getrennten Loadout-, Modifier-, Resource-, State-, Item- und typed Behavior-/Reaction-Sichten; kein Zugriff auf `WorldPlayerGameplaySystems` oder `getPlayerSystems` | Combat integration | 8A ✅ / 8B ✅ / 8C ✅ / 11A ✅ / 11B |
+| `world/WorldCombatGameplayBinding.ts` | konsumiert `PlayerCombatIntegrationPort` mit getrennten Loadout-, Modifier-, Resource-, State-, Item- und typed Behavior-/Reaction-Sichten; alle Player-Combat-Reaktionen laufen über den typisierten `reactions`-Port; kein Zugriff auf `WorldPlayerGameplaySystems` oder `getPlayerSystems` | Combat integration | 8A ✅ / 8B ✅ / 8C ✅ / 11A ✅ / 11B ✅ |
 
 ### `LoadoutManager` (direkte Typ-Consumer, nach Consumer-Art)
 
@@ -212,7 +212,7 @@ Stand nach 10B und dem abgeschlossenen Correction-Pass für 10A/10B.
 | ShieldBuff-Damage-/HUD-Reads und Player-Lifecycle | `ShieldBuffLoadoutBoundary.test.ts`, `WorldPlayerGameplayLifecycle.test.ts`, `GameplayRuntimeCorrectionRatchets.test.ts` | abgedeckt (semantic Read-Port erhält Primary-Damage-Bonus und HUD; Reset/Remove bleibt an WorldPlayerGameplayRuntime; Loadout kennt keine konkrete ShieldBuff-Implementierung) | geprüft im Correction-Pass ✅ |
 | PlayerRelationship-Domain-Port außerhalb der Network-Semantik | `WorldGameplayCompositionContracts.test.ts`, `GameplayRuntimeCorrectionRatchets.test.ts`, `PlayerUltimateBehaviorRuntime.test.ts` | abgedeckt (eigenständige Relationship-Abhängigkeit; Composition delegiert unverändert an `NetworkBridge.isEnemyPair`) | geprüft im Correction-Pass ✅ |
 | World Player ownership boundary | `WorldGameplayCompositionContracts.test.ts` | Ratchet | geprüft bei 10B ✅ |
-| Combat integration boundary | `WorldCombatGameplayBinding.test.ts`, `WorldGameplayCompositionContracts.test.ts`, `GameplayRuntimeCorrectionRatchets.test.ts` | Ratchet (semantic `PlayerCombatIntegrationPort`; kein `WorldPlayerGameplaySystems`-Zugriff) | geprüft bei 11A ✅ / Outcomes bei 11B |
+| Combat integration boundary | `WorldCombatGameplayBinding.test.ts`, `WorldGameplayCompositionContracts.test.ts`, `GameplayRuntimeCorrectionRatchets.test.ts` | Ratchet (semantic `PlayerCombatIntegrationPort`; kein `WorldPlayerGameplaySystems`-Zugriff; Hit-/Kill-/Death-Reaktionen über `PlayerCombatReactionPort`) | geprüft bei 11A ✅ / 11B ✅ |
 | Arena source boundaries | `Phase11DependencyCutover.test.ts`, `ArenaFlowCheckpointC.test.ts`, `PlayerGameplayReadViewBoundary.test.ts` | Ratchet: Utility-/Temporary-Utility-Dispatch liegt nicht mehr in `LoadoutManager`; Composition- und Frame-Consumer bleiben bewusst als nächste spätere Boundary-Phasen markiert | geprüft bei 7A ✅
 | **Player-in-World-Lifecycle- und Read-View-Grenze der Runtime** | `WorldPlayerGameplayLifecycle.test.ts` (attach/detach/reconcile/held-invalidation + wiederholte Detach-/Reset-/Destroy-Pfade + Read-Views), `PlayerGameplayReadViewBoundary.test.ts` (`.systems`-Ratchet) | abgedeckt (Correction-Pass ergänzt Idempotenz-Gate) | prüfen bei 12A / 12B |
 
@@ -220,9 +220,10 @@ Stand nach 10B und dem abgeschlossenen Correction-Pass für 10A/10B.
 
 ## Bewusste Übergänge / bekannte Regressionen
 
-Aktuell keine offenen Implementierungsübergänge innerhalb der abgeschlossenen Phasen. 2A/2B/3A/3B/4A/4B/4C/5/6A/6B/7A/7B/7C/8A/8B/8C/9/10A/10B/11A bleiben abgeschlossen, und die nächste offene fachliche Transition ist 11B.
+Aktuell keine offenen Implementierungsübergänge innerhalb der abgeschlossenen Phasen. 2A/2B/3A/3B/4A/4B/4C/5/6A/6B/7A/7B/7C/8A/8B/8C/9/10A/10B/11A/11B bleiben abgeschlossen, und die nächste offene fachliche Transition ist 12A.
 
 - **11A – PlayerCombatIntegration Reads/Modifier ✅:** `WorldCombatGameplayBinding` konsumiert die semantische `PlayerCombatIntegrationPort`-Sicht statt `WorldPlayerGameplaySystems`; Combat-/Physics-Legacy-Setter erhalten dafür strukturelle Read-/Resource-Ports. Keine Combat-Auflösungslogik, Projectile-Interna oder Outcome-Reihenfolge wurden verändert.
+- **11B – PlayerCombatIntegration Outcomes/Reactions ✅:** Die Bindung nutzt für Direct-Primary-Hit, Player-Damage, AK47-Hit/Resolve, Flame-/Enemy-/Player-Death und Kill-Outcome ausschließlich den typisierten `PlayerCombatReactionPort`. Combat bleibt Owner von Treffer-/Damage-Auflösung und führt weiterhin nur die daraus resultierenden Combat-/World-Mutationen aus; Reihenfolge, Source-/Victim-Identität und At-most-once-Verhalten der bestehenden Reaktionen bleiben erhalten.
 
 - **Correction-Pass für 10A/10B ✅:** `LoadoutManager` konsumiert ShieldBuff-Damage-/HUD-Reads nur noch über `ShieldBuffReadPort`; der konkrete `ShieldBuffSystem`-State wird im World-Combat-Binding erzeugt, während Reset/Remove an der `WorldPlayerGameplayRuntime`-Player-Lifecycle-Grenze ausgeführt werden. `PlayerRelationshipPort` ist eine eigenständige Domain-Abhängigkeit von `WorldPlayerGameplayRuntime` und `PlayerUltimateBehaviorRuntime`, nicht Bestandteil ihrer Network-Ports. Die Composition delegiert weiterhin unverändert an `NetworkBridge.isEnemyPair`. Keine 11A-Combat-Integration wurde vorgezogen.
 - **Gameplay-Runtime-Correction-Pass 1–7C:** Gauss besitzt einen hostautoritativen Press-/Release-/Cancel-Lifecycle mit stabiler Charge-Identity, getrenntem Commit-Attempt, stale-sicheren Tombstones, Cleanup bei Reset/Detach und Ergebnis-Reconciliation im Client. Invalid Attempt-IDs werden vor Mutation verworfen; retriable Commit-Historien bleiben pro Spieler bounded.
@@ -293,15 +294,15 @@ Diese Tabelle dokumentiert **nur die im Code tatsächlich eingeführten Namen** 
 
 ## Nächster konkreter Schritt
 
-**Teilphase 11B umsetzen – PlayerCombatIntegration: Hit/Kill/Outcome-Reaktionen.**
+**Teilphase 12A umsetzen – Host Frame Player-Gameplay-Stages.**
 
 Dabei:
 
-1. Die bestehenden typed Hit-/Kill-/Outcome-Reaktionen über die semantische Combat-Integration weiterführen und ihre At-most-once-/Reihenfolge-Verträge prüfen.
-2. Player-Gameplay bleibt Owner seiner Build-/Behavior-/Resource-Zustände; Combat bleibt Owner seiner Treffer-/Damage-Auflösung.
+1. Die Host-Frame-Taktung der Player-Gameplay-Children in benannte Runtime-Stage-Methoden verschieben, ohne Reihenfolge oder Host-Zeit zu verändern.
+2. `HostUpdateCoordinator` bleibt Frame-Orchestrator; Player-Gameplay bleibt Owner der internen Update-Reihenfolge und Child-Lifetimes.
 3. Keine vorsorgliche Mega-Fassade und keinen Projectile-/Combat-Full-Refactor vorziehen.
-4. Referenz: Phase-11B-Abschnitt in `03`.
-5. Gate: Combat binding, AK47/Negev/Shotgun-/Item-Reaktionen, Death/Kill-Tests und `npm run check`.
+4. Referenz: Phase-12A-Abschnitt in `03`.
+5. Gate: Host-Frame-/Player-Lifecycle-Contracts, betroffene Runtime-/Behavior-Tests und `npm run check`.
 
 Hinweis für den Gate: Keine Sichtprüfung und kein Browser/Dev-Server; nur die vorgesehenen automatisierten Checks ausführen.
 

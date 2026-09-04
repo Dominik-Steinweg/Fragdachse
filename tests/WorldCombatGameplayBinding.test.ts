@@ -106,9 +106,9 @@ function createFixture(options: {
   readonly turretDamageMultiplier?: number;
   readonly combatSystem?: CombatSystem;
   readonly ak47Behavior?: PlayerCombatIntegrationPort['ak47'];
-  readonly negevBehavior?: PlayerCombatIntegrationPort['negev'];
+  readonly negevBehavior?: { registerKill(outcome: { killerId: string; sourceId: string }): void };
   readonly sustainedWeaponBehavior?: PlayerCombatIntegrationPort['sustainedWeapon'];
-  readonly weaponReaction?: PlayerCombatIntegrationPort['weaponReaction'];
+  readonly weaponReaction?: { registerKill(outcome: Parameters<PlayerCombatIntegrationPort['reactions']['registerKill']>[0]): void };
   readonly ak47StrategicTarget?: Ak47StrategicTargetSystem | null;
   readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
   readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
@@ -180,15 +180,27 @@ function createFixture(options: {
     },
     utility: methodBag() as never,
     ak47: options.ak47Behavior ?? null,
-    ak47StrategicTarget: options.ak47StrategicTarget,
-    negev: options.negevBehavior ?? null,
     sustainedWeapon: options.sustainedWeaponBehavior ?? methodBag({
       setTeslaDomeSystem: vi.fn(),
       setEnergyShieldSystem: vi.fn(),
     }) as never,
-    weaponReaction: options.weaponReaction ?? methodBag(),
     slimeTrail: null,
-    flamethrower: null,
+    reactions: {
+      handleDirectPrimaryHit: vi.fn(() => ({ slowFraction: 0, slowDurationMs: 0, shouldCull: false })),
+      handlePlayerDamageTaken: vi.fn(() => ({ adrenalineGain: 0, reflectedDamage: 0 })),
+      handleDirectAk47EnemyHit: (projectile, enemyId, nowMs) => (
+        options.ak47StrategicTarget?.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) ?? null
+      ),
+      handleNaturalFlameExpiry: vi.fn(),
+      handleEnemyDeath: vi.fn(() => null),
+      removeEnemy: vi.fn(),
+      handlePlayerDeath: vi.fn(),
+      resolveProjectile: (projectile) => options.ak47Behavior?.resolveProjectile(projectile),
+      registerKill: (outcome) => {
+        options.negevBehavior?.registerKill({ killerId: outcome.killerId, sourceId: outcome.sourceId });
+        options.weaponReaction?.registerKill(outcome);
+      },
+    },
   };
   const metrics = resolveActiveArenaWorldMetrics();
   const network = {
@@ -572,6 +584,7 @@ describe('WorldCombatGameplayBinding weapon reactions', () => {
 
     expect(registerKill).toHaveBeenCalledWith({
       killerId: 'p1',
+      victimId: 'enemy',
       sourceId: 'weapon.SHOTGUN.lightning',
       x: 10,
       y: 20,
