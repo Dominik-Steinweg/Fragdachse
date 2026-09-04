@@ -26,7 +26,7 @@ import {
 } from '../loadout/LoadoutConfig';
 import type { CombatSystem } from './CombatSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
-import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
+import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 
@@ -124,7 +124,7 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly combatSystem: CombatSystem,
     private readonly energyShieldSystem: EnergyShieldSystem | null,
     private readonly stinkCloudSystem: StinkCloudSystem,
-    private readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null,
+    private readonly fireChunkPort: FireChunkBurstPort | null,
     private readonly fireSystem: FireSystem,
     private readonly network: CoopDefenseEnemyAbilityNetworkPort,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
@@ -424,7 +424,7 @@ export class CoopDefenseEnemyAbilitySystem {
     }
     if (now < nextReadyAt) return;
 
-    this.flamethrowerUpgradeSystem?.hostCreateFireChunkBurst(
+    this.fireChunkPort?.hostCreateFireChunkBurst(
       enemy.id,
       enemy.sprite.x,
       enemy.sprite.y,

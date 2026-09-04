@@ -18,12 +18,18 @@ import { ResourceSystem } from '../systems/ResourceSystem';
 import { BurrowSystem } from '../systems/BurrowSystem';
 import { TranslocatorSystem } from '../systems/TranslocatorSystem';
 import { TunnelSystem } from '../systems/TunnelSystem';
-import { CoopDefensePlayerModifierSystem } from '../systems/CoopDefensePlayerModifierSystem';
+import {
+  CoopDefensePlayerModifierSystem,
+  type CoopDefensePlayerModifierReadPort,
+} from '../systems/CoopDefensePlayerModifierSystem';
 import { CoopDefenseItemRuntimeSystem } from '../systems/CoopDefenseItemRuntimeSystem';
 import { GuardianSpiritSystem } from '../systems/GuardianSpiritSystem';
 import { RepairDroneSystem } from '../systems/RepairDroneSystem';
 import { SlimeTrailSystem } from '../systems/SlimeTrailSystem';
-import { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
+import {
+  FlamethrowerUpgradeSystem,
+  type FireChunkBurstPort,
+} from '../systems/FlamethrowerUpgradeSystem';
 import { WeaponUpgradeSystem } from '../systems/WeaponUpgradeSystem';
 import { Ak47StrategicTargetSystem } from '../systems/Ak47StrategicTargetSystem';
 import { Ak47BehaviorRuntime } from './Ak47BehaviorRuntime';
@@ -32,6 +38,7 @@ import { WeaponReactionRuntime } from './WeaponReactionRuntime';
 import { SustainedWeaponBehaviorRuntime } from './SustainedWeaponBehaviorRuntime';
 import { PlayerWeaponActivationRuntime } from './PlayerWeaponActivationRuntime';
 import type { PlayerRelationshipPort } from './PlayerRelationshipPort';
+import type { TrainManager } from '../train/TrainManager';
 import {
   HostHeldActionSystem,
   type ConsumedHeldAction,
@@ -59,7 +66,7 @@ import type {
   PlayerAimNetState,
   TemporaryUtilityInstanceDescriptor,
 } from '../types';
-import type { UltimateConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
+import type { UltimateConfig, UtilityConfig, WeaponConfig, TunnelUltimateConfig } from '../loadout/LoadoutConfig';
 import { PlayerActionRuntime, type PlayerActionRequest } from './PlayerActionRuntime';
 import { PlayerUtilityActionRuntime } from './PlayerUtilityActionRuntime';
 import {
@@ -124,7 +131,7 @@ export interface WorldPlayerGameplayNetworkPort {
   };
 }
 
-export interface WorldPlayerGameplaySystems {
+interface WorldPlayerGameplaySystems {
   readonly playerAction: PlayerActionRuntime;
   readonly weaponActivation: PlayerWeaponActivationRuntime;
   readonly utilityAction: PlayerUtilityActionRuntime;
@@ -328,6 +335,21 @@ export interface PlayerGameplayFrameStages {
     countdownActive: boolean,
   ): PlayerGameplayPostProjectileStageResult;
   prepareHostSnapshot(nowMs: number): PlayerGameplayHostSnapshot;
+}
+
+/** World-facing capability for the construction owner to place an authored tunnel. */
+export interface PlayerGameplayTunnelPlacementPort {
+  tryPlaceTunnel(
+    cfg: TunnelUltimateConfig,
+    playerId: string,
+    ownerColor: number,
+    originX: number,
+    originY: number,
+    startGridX: number,
+    startGridY: number,
+    targetX: number,
+    targetY: number,
+  ): boolean;
 }
 
 export interface WorldPlayerGameplayRuntimeOptions {
@@ -721,8 +743,68 @@ export class WorldPlayerGameplayRuntime implements
           systems.negevBehavior.registerKill({ killerId: outcome.killerId, sourceId: outcome.sourceId });
           systems.weaponReaction.registerKill(outcome);
         },
+        handleCoopDefenseItemKill: (killerId, victimId, x, y) => {
+          // Nur der tatsaechliche Killer, nicht das ganze Team, bekommt die Kill-Affixe.
+          systems.itemRuntime.registerOwnKill(killerId);
+
+          // Brandzerfall verlangt einen Kill durch direkten Primaerwaffenschaden; Explosionen,
+          // Brand, Kettenblitze und Bodenflaechen loesen ihn nicht aus.
+          const origin = this.options.combatSystem.getLastDamageOrigin(victimId);
+          if (origin?.kind !== 'direct' || origin.slot !== 'weapon1') return;
+          if (!systems.itemRuntime.rollFireChunksOnKill(killerId)) return;
+          systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(killerId, x, y, {
+            count: COOP_DEFENSE_AFFIX_RULES.fireChunkCount,
+            searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
+            flightMs: 320,
+            igniteCenter: false,
+            durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
+            burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
+            burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
+            sourceId: 'ground_fire.fire_decay',
+          }, `item-fire-chunks:${killerId}`);
+        },
       },
     };
+  }
+
+  /** Narrow capability for Activity-owned fire-chunk reactions. */
+  getPlayerFireChunkPort(): FireChunkBurstPort | null {
+    if (this.destroyed || !this.systems.flamethrowerUpgrade) return null;
+    return {
+      hostCreateFireChunkBurst: (ownerId, x, y, burst, sourceKey, now) => (
+        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now ?? Date.now())
+      ),
+    };
+  }
+
+  /** Narrow read capability for construction and Activity stat resolution. */
+  getPlayerModifierReadPort(): CoopDefensePlayerModifierReadPort {
+    const modifier = this.systems.playerModifier;
+    return {
+      getModifiers: (playerId) => modifier.getModifiers(playerId),
+      getNumericStat: (playerId, stat) => modifier.getNumericStat(playerId, stat),
+      getPercentageStat: (playerId, stat) => modifier.getPercentageStat(playerId, stat),
+      getResolvedStat: (playerId, stat, baseValue) => modifier.getResolvedStat(playerId, stat, baseValue),
+    };
+  }
+
+  getTunnelPlacementPort(): PlayerGameplayTunnelPlacementPort {
+    const tunnel = this.systems.tunnel;
+    return {
+      tryPlaceTunnel: (cfg, playerId, ownerColor, originX, originY, startGridX, startGridY, targetX, targetY) => (
+        tunnel.tryPlaceTunnel(cfg, playerId, ownerColor, originX, originY, startGridX, startGridY, targetX, targetY)
+      ),
+    };
+  }
+
+  setTranslocatorTrainManager(train: TrainManager | null): void {
+    if (this.destroyed) return;
+    this.systems.translocator.setTrainManager(train);
+  }
+
+  setBurrowStinkCloudSystem(system: StinkCloudSystem | null): void {
+    if (this.destroyed) return;
+    this.systems.burrow.setStinkCloudSystem(system);
   }
 
   runHostPrePhysicsStage(deltaMs: number, nowMs: number, countdownActive: boolean): void {

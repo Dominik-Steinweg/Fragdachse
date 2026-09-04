@@ -1,12 +1,10 @@
 import { bridge } from '../../network/bridge';
 import { EnergyShieldSystem } from '../../systems/EnergyShieldSystem';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE } from '../../config';
-import { COOP_DEFENSE_AFFIX_RULES } from '../../config/coopDefenseItems';
 import { getCoopDefenseMapConfig, resolveCoopDefenseMapMissionProgress } from '../../config/coopDefenseMaps';
 import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
-import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedProjectile, TrackedProjectile } from '../../types';
@@ -172,14 +170,6 @@ export function composeWorldCombatGameplay(
     dropCarryForPlayer: (playerId, x, y) => flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.dropForPlayer(playerId, x, y),
     handlePlayerUnavailable: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId),
     handlePlayerDeath: (playerId) => flow.getPlayerActivityRuntime()?.handlePlayerDeath(playerId),
-    handleCoopItemKill: (killerId, victimId, x, y) => hostHandleCoopDefenseItemKill(
-      ctx,
-      gameplay.player,
-      killerId,
-      victimId,
-      x,
-      y,
-    ),
     getSecondaryObjectiveState: (objectiveId) => {
       const state = bridge.getCoopDefenseSecondaryObjectivePresentationState();
       return state?.find(entry => entry.objectiveId === objectiveId)?.state ?? null;
@@ -285,42 +275,4 @@ function spawnImpactCloudFromProjectile(
     proj.impactCloud.baseDamageMult ?? 1,
     proj.impactCloud.visualVariant,
   );
-}
-
-/**
- * Item-Affixe, die an einem eigenen Gegner-Kill haengen: Kampfaufladung und Brandzerfall.
- *
- * Laeuft aus dem Kill-Callback, weil dort sowohl der Killer feststeht als auch
- * `getLastDamageOrigin` noch gefuellt ist - aufgeraeumt wird erst danach.
- */
-function hostHandleCoopDefenseItemKill(
-  ctx: ArenaContext,
-  playerRuntime: WorldPlayerGameplayRuntime | null,
-  killerId: string,
-  victimId: string,
-  x: number,
-  y: number,
-): void {
-  const runtime = playerRuntime?.systems.itemRuntime;
-  // Nur der tatsaechliche Killer, nicht das ganze Team: Kills durch Verbuendete zaehlen nicht.
-  if (!runtime || bridge.getPlayerProfile(killerId) === undefined) return;
-
-  runtime.registerOwnKill(killerId);
-
-  // Brandzerfall verlangt einen Kill durch *direkten* Primaerwaffenschaden; Explosionen,
-  // Brand, Kettenblitze und Bodenflaechen loesen ihn nicht aus.
-  const origin = ctx.combatSystem.getLastDamageOrigin(victimId);
-  if (origin?.kind !== 'direct' || origin.slot !== 'weapon1') return;
-  if (!runtime.rollFireChunksOnKill(killerId)) return;
-
-  playerRuntime?.systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(killerId, x, y, {
-    count: COOP_DEFENSE_AFFIX_RULES.fireChunkCount,
-    searchRadius: COOP_DEFENSE_AFFIX_RULES.fireChunkRadius,
-    flightMs: 320,
-    igniteCenter: false,
-    durationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkGroundDurationMs,
-    burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
-    burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
-    sourceId: 'ground_fire.fire_decay',
-  }, `item-fire-chunks:${killerId}`);
 }

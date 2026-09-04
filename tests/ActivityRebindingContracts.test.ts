@@ -168,7 +168,6 @@ function combatBindingHarness(
     dropCarryForPlayer: () => undefined,
     handlePlayerUnavailable: () => undefined,
     handlePlayerDeath: () => undefined,
-    handleCoopItemKill: () => undefined,
     getSecondaryObjectiveState: () => null,
     reportTargetContribution: () => undefined,
     reportTargetDestroyed: () => 0,

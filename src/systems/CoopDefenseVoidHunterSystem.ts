@@ -15,7 +15,7 @@ import type { SyncedNukeStrike } from '../types';
 import type { ArmageddonSystem } from './ArmageddonSystem';
 import type { CombatSystem } from './CombatSystem';
 import type { CoopDefenseEnemyBurrowSystem } from './CoopDefenseEnemyBurrowSystem';
-import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
+import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
@@ -87,7 +87,7 @@ export class CoopDefenseVoidHunterSystem {
     private readonly powerUpSystem: PowerUpSystem,
     private readonly armageddonSystem: ArmageddonSystem,
     private readonly burrowSystem: CoopDefenseEnemyBurrowSystem,
-    private readonly fireChunks: FlamethrowerUpgradeSystem,
+    private readonly fireChunks: FireChunkBurstPort,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
     private readonly onPhaseReached?: (phase: number) => void,
     private readonly worldMetrics: WorldMetrics = resolveCoopDefenseWorldMetrics(undefined, undefined),

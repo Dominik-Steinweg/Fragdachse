@@ -8,9 +8,10 @@ import type { LoadoutUseParams, LoadoutUseResult, LoadoutToolRef, SyncedPlaceabl
 import type { PlaceableUtilityConfig, TunnelUltimateConfig, UtilityConfig } from '../loadout/LoadoutConfig';
 import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../loadout/CoopDefenseLoadoutModifiers';
-import type { CoopDefensePlayerModifierSystem } from '../systems/CoopDefensePlayerModifierSystem';
-import type { BurrowSystem } from '../systems/BurrowSystem';
-import type { TunnelSystem } from '../systems/TunnelSystem';
+import type {
+  CoopDefensePlayerModifierReadPort,
+} from '../systems/CoopDefensePlayerModifierSystem';
+import type { PlayerGameplayTunnelPlacementPort } from './WorldPlayerGameplayRuntime';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { PlayerCapabilities } from './PlayerCapabilities';
 import type { PlayerGameplayActionPort } from './WorldPlayerGameplayRuntime';
@@ -62,9 +63,8 @@ export interface ConstructionWorldRuntimeOptions {
   readonly targetStatusSystem: TargetStatusSystem | null;
   readonly energyInjectorSystem: EnergyInjectorSystem | null;
   readonly powerUpSystem: import('../powerups/PowerUpSystem').PowerUpSystem | null;
-  readonly modifierSystem: CoopDefensePlayerModifierSystem | null;
-  readonly burrowSystem: BurrowSystem | null;
-  readonly tunnelSystem: TunnelSystem | null;
+  readonly modifierReadPort: CoopDefensePlayerModifierReadPort | null;
+  readonly tunnelPlacementPort: PlayerGameplayTunnelPlacementPort | null;
   readonly gameAudioSystem: GameAudioSystem;
   readonly getGameMode: () => import('../types').GameMode;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
@@ -112,7 +112,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     return resolveConstructionCapacity({
       gameMode: this.options.getGameMode(),
       classId: this.options.getCurrentLoadout(playerId)?.coopDefenseClassId,
-      modifiers: this.options.modifierSystem?.getNumericStat(playerId, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT) ?? 0,
+      modifiers: this.options.modifierReadPort?.getNumericStat(playerId, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT) ?? 0,
     });
   }
 
@@ -267,7 +267,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     const definition = getCoopDefenseConstructionDefinition(canonical);
     if (this.isConstructionOnCooldown(playerId, canonical, hostNowMs)) return { ok: false, reason: 'cooldown' };
     if (!this.hasFreeCapacity(playerId, definition.capacityCost)) return { ok: false, reason: 'capacity' };
-    const hpMultiplier = definition.indestructible ? 1 : 1 + (this.options.modifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0);
+    const hpMultiplier = definition.indestructible ? 1 : 1 + (this.options.modifierReadPort?.getPercentageStat(playerId, 'construction.maxHp') ?? 0);
     const utilityId = getUtilityIdForConstruction(canonical);
     const utilityConfig = utilityId ? this.getEffectiveUtilityConfig(playerId, canonical) : null;
     const construction = utilityConfig
@@ -388,8 +388,8 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   buildRestoreTools(playerId: string): readonly PersistentRestoreToolDefinition[] {
     const loadout = this.options.getCurrentLoadout(playerId);
     const accessContext = getConstructionAccessContext(this.options.getGameMode(), loadout);
-    const modifiers = this.options.modifierSystem?.getModifiers(playerId);
-    const hpMultiplier = 1 + (this.options.modifierSystem?.getPercentageStat(playerId, 'construction.maxHp') ?? 0);
+    const modifiers = this.options.modifierReadPort?.getModifiers(playerId);
+    const hpMultiplier = 1 + (this.options.modifierReadPort?.getPercentageStat(playerId, 'construction.maxHp') ?? 0);
     return COOP_DEFENSE_CONSTRUCTION_IDS.map((constructionId) => {
       const definition = getCoopDefenseConstructionDefinition(constructionId);
       const access = resolveConstructionAccess(constructionId, accessContext);
@@ -424,7 +424,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (utilityId) {
       const config = getUtilityConfigForMode(utilityId, this.options.getGameMode());
       if (!config || !('placeable' in config)) return null;
-      const modifiers = this.options.modifierSystem?.getModifiers(ownerId);
+      const modifiers = this.options.modifierReadPort?.getModifiers(ownerId);
       const modified = modifiers ? applyCoopDefenseModifiersToUtilityConfig(config as PlaceableUtilityConfig, { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }) as PlaceableUtilityConfig : config as PlaceableUtilityConfig;
       const effective = { ...modified, id: utilityId, placeable: { ...modified.placeable, lifetimeMs: 0, maxHp: candidate.tool.maxHp } } as PlaceableUtilityConfig;
       const runtime = this.options.placementSystem.materializePersistentPlaceable(effective, candidate.gridX, candidate.gridY, candidate.blueprint.angle, ownerId, ownerColor, ownership);
@@ -502,7 +502,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
 
   placeTunnel(cfg: TunnelUltimateConfig, playerId: string, originX: number, originY: number, targetX: number, targetY: number, playerColor: number, params?: LoadoutUseParams): boolean {
     if (params?.tunnelStartGridX === undefined || params.tunnelStartGridY === undefined) return false;
-    const placed = this.options.tunnelSystem?.tryPlaceTunnel(cfg, playerId, playerColor, originX, originY, params.tunnelStartGridX, params.tunnelStartGridY, targetX, targetY) ?? false;
+    const placed = this.options.tunnelPlacementPort?.tryPlaceTunnel(cfg, playerId, playerColor, originX, originY, params.tunnelStartGridX, params.tunnelStartGridY, targetX, targetY) ?? false;
     if (placed) this.options.gameAudioSystem.playSound('sfx_place_dachstunnel', originX, originY, playerId);
     return placed;
   }
@@ -524,7 +524,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     if (!utilityId) return null;
     const base = getUtilityConfigForMode(utilityId, this.options.getGameMode());
     if (!base || !('placeable' in base)) return null;
-    const modifiers = this.options.modifierSystem?.getModifiers(playerId);
+    const modifiers = this.options.modifierReadPort?.getModifiers(playerId);
     const effective = modifiers ? applyCoopDefenseModifiersToUtilityConfig(base as PlaceableUtilityConfig, { additive: modifiers.additiveStats, percentage: modifiers.percentageStats }) as PlaceableUtilityConfig : base as PlaceableUtilityConfig;
     return { ...effective, id: utilityId, placeable: { ...effective.placeable, lifetimeMs: 0 } } as PlaceableUtilityConfig;
   }

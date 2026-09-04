@@ -9,7 +9,7 @@ import { CoopDefenseEnemyDodgeSystem } from '../systems/CoopDefenseEnemyDodgeSys
 import { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
-import type { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
+import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { FireSystem } from '../effects/FireSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { CombatSystem } from '../systems/CombatSystem';
@@ -30,7 +30,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly placementSystem: PlacementSystem;
   readonly energyShieldSystem: EnergyShieldSystem | null;
   readonly stinkCloudSystem: StinkCloudSystem;
-  readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
+  readonly playerFireChunkPort: FireChunkBurstPort | null;
   readonly fireSystem: FireSystem;
   readonly decoySystem: DecoySystem | null;
   readonly enemyAbilityNetwork: CoopDefenseEnemyAbilityNetworkPort;
@@ -99,7 +99,7 @@ export class CoopMissionEnemyBehaviourComposition {
       this.options.combatSystem,
       this.options.energyShieldSystem,
       this.options.stinkCloudSystem,
-      this.options.flamethrowerUpgradeSystem,
+      this.options.playerFireChunkPort,
       this.options.fireSystem,
       this.options.enemyAbilityNetwork,
       runtime.enemyAiTargetCatalog,

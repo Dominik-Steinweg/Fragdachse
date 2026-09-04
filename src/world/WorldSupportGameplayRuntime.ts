@@ -2,7 +2,6 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
-import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { RockGridIndex } from '../arena/RockGridIndex';
 import type { AirstrikeSystem } from '../systems/AirstrikeSystem';
@@ -26,7 +25,7 @@ export interface WorldSupportGameplayRuntimeOptions {
   readonly projectileManager: ProjectileManager;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
-  readonly burrowSystem: BurrowSystem;
+  readonly setBurrowStinkCloudSystem: (system: StinkCloudSystem | null) => void;
   readonly gameAudioSystem: GameAudioSystem;
   readonly worldMetrics: WorldMetrics;
   readonly rockGrid: RockGridIndex;
@@ -61,7 +60,7 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUl
     this.systems = { detonation, armageddon, airstrike };
     options.combatSystem.setDetonationSystem(detonation);
     options.combatSystem.setStinkCloudSystem(options.stinkCloudSystem);
-    options.burrowSystem.setStinkCloudSystem(options.stinkCloudSystem);
+    options.setBurrowStinkCloudSystem(options.stinkCloudSystem);
   }
 
   scheduleStrike(
@@ -86,7 +85,7 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUl
     this.destroyed = true;
     this.options.combatSystem.setDetonationSystem(null);
     this.options.combatSystem.setStinkCloudSystem(null);
-    this.options.burrowSystem.setStinkCloudSystem(null);
+    this.options.setBurrowStinkCloudSystem(null);
     this.systems.detonation.reset();
     this.systems.armageddon.destroyAll();
     this.systems.airstrike.clear();

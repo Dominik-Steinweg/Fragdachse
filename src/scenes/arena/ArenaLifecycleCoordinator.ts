@@ -666,7 +666,7 @@ export class ArenaLifecycleCoordinator {
       getWorldRuntime: () => this.worldRuntime,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
-      getBurrowSystem: () => this.worldPlayerGameplayRuntime?.systems.burrow ?? null,
+      isPlayerBurrowed: (playerId) => this.worldPlayerGameplayRuntime?.isBurrowed(playerId) ?? false,
       getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId),
     });
     this.coopMissionPresentationPorts = createArenaCoopMissionPresentationPort({
@@ -692,10 +692,10 @@ export class ArenaLifecycleCoordinator {
       getTemporaryUtilityPort: () => this.worldPlayerGameplayRuntime,
       getAutomatedWeaponExecution: () => this.worldGameplay?.automatedWeaponExecution ?? null,
       getPowerUpSystem: () => this.worldPowerUpRuntime?.system ?? null,
-      getPlayerModifierSystem: () => this.worldPlayerGameplayRuntime?.systems.playerModifier ?? null,
+      getPlayerModifierReadPort: () => this.worldPlayerGameplayRuntime?.getPlayerModifierReadPort() ?? null,
       getEnergyShieldSystem: () => this.worldCombatGameplayBinding?.systems?.energyShield ?? null,
       getStinkCloudSystem: () => this.ctx.stinkCloudSystem,
-      getFlamethrowerUpgradeSystem: () => this.worldPlayerGameplayRuntime?.systems.flamethrowerUpgrade ?? null,
+      getPlayerFireChunkPort: () => this.worldPlayerGameplayRuntime?.getPlayerFireChunkPort() ?? null,
       getFireSystem: () => this.ctx.fireSystem,
       getDecoySystem: () => this.ctx.decoySystem,
       getArmageddonSystem: () => this.worldGameplay?.support?.systems.armageddon ?? null,
@@ -749,7 +749,7 @@ export class ArenaLifecycleCoordinator {
       patchBarrierCells: (changes) => this.coopMissionRuntime?.flowFieldCoordinator?.patchBarrierCells(changes),
       markLightDirty: () => this.worldRuntime?.materialization?.lightOccluders?.markDirty(),
       grantPersistentBaseRewards: (rewardIds) => this.persistentBase.grantAuthoredPersistentBaseRewards(rewardIds),
-      removeEnemyFromItemRuntime: (enemyId) => this.worldPlayerGameplayRuntime?.systems.itemRuntime.removeEnemy(enemyId),
+      removeEnemyFromPlayerItems: (enemyId) => this.worldPlayerGameplayRuntime?.getPlayerCombatIntegrationPort().reactions.removeEnemy(enemyId),
       broadcastExplosion: (x, y, radius, style) => bridge.broadcastExplosionEffect(x, y, radius, 0xb82fff, style),
       broadcastCorpseMarker: (corpseId, x, y, enemySize, lifetimeMs) => (
         bridge.broadcastCorpseMarker(corpseId, x, y, enemySize, lifetimeMs)

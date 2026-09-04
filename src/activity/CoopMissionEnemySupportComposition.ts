@@ -6,11 +6,11 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import { CoopDefenseTimebombSystem as TimebombSystem } from '../systems/CoopDefenseTimebombSystem';
 import { CoopDefenseVoidHunterSystem } from '../systems/CoopDefenseVoidHunterSystem';
 import { NecromancySystem } from '../systems/NecromancySystem';
-import type { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
+import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { ArmageddonSystem } from '../systems/ArmageddonSystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
-import type { CoopDefensePlayerModifierSystem } from '../systems/CoopDefensePlayerModifierSystem';
+import type { CoopDefensePlayerModifierReadPort } from '../systems/CoopDefensePlayerModifierSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { WorldMetrics } from '../world/WorldMetrics';
@@ -23,12 +23,12 @@ export interface CoopMissionEnemySupportCompositionOptions {
   readonly placementSystem: PlacementSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly weaponExecution: AutomatedWeaponExecution;
-  readonly flamethrowerUpgradeSystem: FlamethrowerUpgradeSystem | null;
+  readonly playerFireChunkPort: FireChunkBurstPort | null;
   readonly powerUpSystem: PowerUpSystem | null;
   readonly armageddonSystem: ArmageddonSystem | null;
   readonly decoySystem: DecoySystem | null;
-  readonly playerModifierSystem: CoopDefensePlayerModifierSystem | null;
-  readonly removeEnemyFromItemRuntime: (enemyId: string) => void;
+  readonly playerModifierReadPort: CoopDefensePlayerModifierReadPort | null;
+  readonly removeEnemyFromPlayerItems: (enemyId: string) => void;
   readonly damageConstruction: (id: number, damage: number, attackerId: string) => void;
   readonly broadcastExplosion: (
     x: number,
@@ -70,14 +70,14 @@ export class CoopMissionEnemySupportComposition {
         this.options.combatSystem,
         strategicTargets,
         strategicFlowField,
-        this.options.flamethrowerUpgradeSystem,
+        this.options.playerFireChunkPort,
         {
           playExplosion: (x, y, radius, style) => this.options.broadcastExplosion(x, y, radius, style),
           applyRadialImpulse: (x, y, radius, force, ownerId) => {
             this.options.hostPhysics.applyRadialImpulse(x, y, radius, force, ownerId, 0);
           },
           damageConstruction: this.options.damageConstruction,
-          onSelfDetonated: (enemyId) => this.options.removeEnemyFromItemRuntime(enemyId),
+          onSelfDetonated: (enemyId) => this.options.removeEnemyFromPlayerItems(enemyId),
           sound: (_event) => { /* intentionally unmapped */ },
         },
         this.options.decoySystem,
@@ -86,7 +86,7 @@ export class CoopMissionEnemySupportComposition {
 
     const voidHunter = enemyManager
       && burrow
-      && this.options.flamethrowerUpgradeSystem
+      && this.options.playerFireChunkPort
       && this.options.weaponExecution
       && this.options.powerUpSystem
       && this.options.armageddonSystem
@@ -98,7 +98,7 @@ export class CoopMissionEnemySupportComposition {
         this.options.powerUpSystem,
         this.options.armageddonSystem,
         burrow,
-        this.options.flamethrowerUpgradeSystem,
+        this.options.playerFireChunkPort,
         runtime.enemyAiTargetCatalog,
         (phase) => this.options.onDiagnosticEvent?.('boss:phase', { phase }),
         this.options.worldMetrics,
@@ -110,14 +110,14 @@ export class CoopMissionEnemySupportComposition {
       runtime.setEnemySpecials(specials);
     }
 
-    const necromancy = this.options.playerModifierSystem && this.options.weaponExecution
+    const necromancy = this.options.playerModifierReadPort && this.options.weaponExecution
       ? new NecromancySystem(
         this.options.playerManager,
         enemyManager,
         this.options.combatSystem,
         this.options.weaponExecution,
         runtime.allyFlowFields,
-        (playerId, stat, baseValue) => this.options.playerModifierSystem?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
+        (playerId, stat, baseValue) => this.options.playerModifierReadPort?.getResolvedStat(playerId, stat, baseValue) ?? baseValue,
       )
       : null;
     if (necromancy) runtime.setNecromancy(necromancy);

@@ -265,7 +265,6 @@ function createFixture(options: {
     dropCarryForPlayer: vi.fn(),
     handlePlayerUnavailable: vi.fn(),
     handlePlayerDeath: vi.fn(),
-    handleCoopItemKill: vi.fn(),
     getSecondaryObjectiveState: () => null,
     reportTargetContribution: vi.fn(),
     reportTargetDestroyed: () => 0,

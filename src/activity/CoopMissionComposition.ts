@@ -10,7 +10,7 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
-import type { FlamethrowerUpgradeSystem } from '../systems/FlamethrowerUpgradeSystem';
+import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { FireSystem } from '../effects/FireSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { CoopDefenseEnemyAbilityNetworkPort } from '../systems/CoopDefenseEnemyAbilitySystem';
@@ -18,7 +18,7 @@ import type { ArmageddonSystem } from '../systems/ArmageddonSystem';
 import type { AirstrikeSystem } from '../systems/AirstrikeSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { LightingSystem } from '../effects/LightingSystem';
-import type { CoopDefensePlayerModifierSystem } from '../systems/CoopDefensePlayerModifierSystem';
+import type { CoopDefensePlayerModifierReadPort } from '../systems/CoopDefensePlayerModifierSystem';
 import type { PlayerWorldRuntime } from '../world/PlayerWorldRuntime';
 import type { WorldRuntimeContext } from '../world/WorldRuntimeContext';
 import type { PlayerCapabilities } from '../world/PlayerCapabilities';
@@ -60,14 +60,14 @@ export interface CoopMissionCompositionOptions {
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getEnergyShieldSystem: () => EnergyShieldSystem | null;
   readonly getStinkCloudSystem: () => StinkCloudSystem;
-  readonly getFlamethrowerUpgradeSystem: () => FlamethrowerUpgradeSystem | null;
+  readonly getPlayerFireChunkPort: () => FireChunkBurstPort | null;
   readonly getFireSystem: () => FireSystem;
   readonly getDecoySystem: () => DecoySystem;
   readonly getArmageddonSystem: () => ArmageddonSystem | null;
   readonly getAirstrikeSystem: () => AirstrikeSystem | null;
   readonly getGameAudioSystem: () => GameAudioSystem;
   readonly getLightingSystem: () => LightingSystem;
-  readonly getPlayerModifierSystem: () => CoopDefensePlayerModifierSystem | null;
+  readonly getPlayerModifierReadPort: () => CoopDefensePlayerModifierReadPort | null;
   readonly getPlayerWorldRuntime: () => PlayerWorldRuntime | null;
   readonly train: CoopTrainPort;
   readonly isHost: () => boolean;
@@ -103,7 +103,7 @@ export interface CoopMissionCompositionOptions {
   readonly patchBarrierCells: (changes: readonly { gridX: number; gridY: number; occupied: boolean }[]) => void;
   readonly markLightDirty: () => void;
   readonly grantPersistentBaseRewards: (rewardIds: readonly PersistentBaseRewardId[] | undefined) => void;
-  readonly removeEnemyFromItemRuntime: (enemyId: string) => void;
+  readonly removeEnemyFromPlayerItems: (enemyId: string) => void;
   readonly broadcastExplosion: (x: number, y: number, radius: number, style: 'timebomb' | 'timebomb_pop') => void;
   readonly broadcastCorpseMarker: (corpseId: number, x: number, y: number, enemySize: number, lifetimeMs: number) => void;
   readonly removeCorpseMarker: (corpseId: number) => void;
@@ -247,7 +247,7 @@ export class CoopMissionComposition {
       placementSystem,
       energyShieldSystem: this.options.getEnergyShieldSystem(),
       stinkCloudSystem: this.options.getStinkCloudSystem(),
-      flamethrowerUpgradeSystem: this.options.getFlamethrowerUpgradeSystem(),
+      playerFireChunkPort: this.options.getPlayerFireChunkPort(),
       fireSystem: this.options.getFireSystem(),
       decoySystem: this.options.getDecoySystem(),
       enemyAbilityNetwork: this.options.enemyAbilityNetwork,
@@ -267,12 +267,12 @@ export class CoopMissionComposition {
       placementSystem,
       hostPhysics: this.options.getHostPhysics(),
       weaponExecution,
-      flamethrowerUpgradeSystem: this.options.getFlamethrowerUpgradeSystem(),
+      playerFireChunkPort: this.options.getPlayerFireChunkPort(),
       powerUpSystem,
       armageddonSystem: this.options.getArmageddonSystem(),
       decoySystem: this.options.getDecoySystem(),
-      playerModifierSystem: this.options.getPlayerModifierSystem(),
-      removeEnemyFromItemRuntime: this.options.removeEnemyFromItemRuntime,
+      playerModifierReadPort: this.options.getPlayerModifierReadPort(),
+      removeEnemyFromPlayerItems: this.options.removeEnemyFromPlayerItems,
       damageConstruction: this.options.damageConstruction,
       broadcastExplosion: this.options.broadcastExplosion,
       broadcastCorpseMarker: this.options.broadcastCorpseMarker,

@@ -7,9 +7,7 @@ import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
-import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
-import type { TranslocatorSystem } from '../systems/TranslocatorSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { CoopDefenseMapEventHandler } from '../systems/CoopDefenseMapEventDirector';
 import type { WorldMetrics } from './WorldMetrics';
@@ -73,9 +71,9 @@ export interface WorldTrainRuntimeOptions {
   readonly gameAudioSystem: GameAudioSystem;
   readonly network: WorldTrainNetworkPort;
   readonly getEnemyManager: () => EnemyManager | null;
-  readonly getBurrowSystem: () => BurrowSystem | null;
+  readonly isPlayerBurrowed: (playerId: string) => boolean;
   readonly getTimeBubbleSystem: () => TimeBubbleSystem | null;
-  readonly getTranslocatorSystem: () => TranslocatorSystem | null;
+  readonly setTranslocatorTrainManager: (train: TrainManager | null) => void;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly setClassicTrainSpawned: (spawned: boolean) => void;
   readonly onRendererChanged: (renderer: TrainRenderer | null) => void;
@@ -158,12 +156,12 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       this.options.projectileManager.setTrainHitCallback((damage, attackerId) => {
         this.classicTrain?.applyDamage(damage, attackerId);
       });
-      this.options.getTranslocatorSystem()?.setTrainManager(this.classicTrain);
+      this.options.setTranslocatorTrainManager(this.classicTrain);
     } else {
       this.options.combatSystem.setTrainSegments(null);
       this.options.projectileManager.setTrainHitCallback(null);
       this.options.projectileManager.setTrainGroup(null);
-      this.options.getTranslocatorSystem()?.setTrainManager(null);
+      this.options.setTranslocatorTrainManager(null);
     }
   }
 
@@ -186,7 +184,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.options.combatSystem.setTrainSegments(null);
     this.options.projectileManager.setTrainHitCallback(null);
     this.options.projectileManager.setTrainGroup(null);
-    this.options.getTranslocatorSystem()?.setTrainManager(null);
+    this.options.setTranslocatorTrainManager(null);
     this.cancelExplosionTimers();
     this.renderer?.destroy();
     this.renderer = null;
@@ -203,12 +201,12 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     );
     train.setTimeBubbleSystem(this.options.getTimeBubbleSystem());
     train.setEnemyManager(this.options.getEnemyManager());
-    this.options.getTranslocatorSystem()?.setTrainManager(train);
+    this.options.setTranslocatorTrainManager(train);
     this.options.projectileManager.setTrainGroup(train.getGroup());
     this.options.projectileManager.setTrainHitCallback((damage, attackerId) => {
       this.getCurrentTrain()?.applyDamage(damage, attackerId);
     });
-    train.setCanHitPlayerCallback((playerId) => !this.options.getBurrowSystem()?.isBurrowed(playerId));
+    train.setCanHitPlayerCallback((playerId) => !this.options.isPlayerBurrowed(playerId));
     train.setPlayerHitCallback((playerId, sourceX, sourceY) => {
       const recentPusherId = this.options.hostPhysics.getRecentImpulseSource(playerId);
       this.options.combatSystem.applyDamage(
@@ -236,7 +234,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       );
       return collision ? { destroysTrain: !isRevivedAlly && collision.destroysTrain } : undefined;
     });
-    train.setIsPlayerBurrowedCallback((playerId) => this.options.getBurrowSystem()?.isBurrowed(playerId) ?? false);
+    train.setIsPlayerBurrowedCallback((playerId) => this.options.isPlayerBurrowed(playerId));
     train.setOnBurrowDamageDealtCallback((_playerId, x, y) => {
       this.options.network.effects.broadcastTrainBurrowSparks(x, y);
     });

@@ -102,7 +102,7 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     const worldPlayer = read('src/world/WorldPlayerGameplayRuntime.ts');
     const relationship = read('src/world/PlayerRelationshipPort.ts');
     const worldPlayerNetworkPortStart = worldPlayer.indexOf('export interface WorldPlayerGameplayNetworkPort');
-    const worldPlayerNetworkPortEnd = worldPlayer.indexOf('export interface WorldPlayerGameplaySystems');
+    const worldPlayerNetworkPortEnd = worldPlayer.indexOf('interface WorldPlayerGameplaySystems');
     const worldPlayerNetworkPort = worldPlayer.slice(worldPlayerNetworkPortStart, worldPlayerNetworkPortEnd);
 
     expect(loadout).not.toContain('NetworkBridge');

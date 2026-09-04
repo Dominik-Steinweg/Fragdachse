@@ -31,18 +31,10 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
       .filter((path) => PLAYER_SYSTEMS_ACCESS.test(read(path)))
       .sort();
 
-    // Compositions dürfen ihr Rezept dauerhaft verdrahten; die übrigen Einträge sind an
-    // spätere Teilphasen gebunden und dürfen nur schrumpfen:
-    //  - ArenaLifecycleCoordinator: System-Handoff an die Activity-Composition → 4B/7A/12C
-    //  - ArenaPersistentBaseSession: Management-Cooldown ist in Phase 5 auf den Construction-Port
-    //    migriert und darf deshalb nicht mehr als Player-Gameplay-Systems-Consumer erscheinen.
-    //  - ArenaRuntimeAdapters: Player-Gameplay-Mutationen → 6B abgeschlossen
-    expect(offenders).toEqual([
-      'src/scenes/arena/ArenaLifecycleCoordinator.ts',
-      'src/scenes/arena/ArenaWorldCombatComposition.ts',
-      'src/scenes/arena/ArenaWorldConstructionComposition.ts',
-      'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
-    ]);
+    // Teilphase 12C schliesst die letzten Activity-/World-/Scene-Leaks. Die Combat- und
+    // Targeting-Compositions duerfen weiterhin ihre eigenen `systems`-Owner kennen; dieses
+    // Muster trifft ausschliesslich den Player-Gameplay-Graph.
+    expect(offenders).toEqual([]);
   });
 
   it('führt die in 2B migrierten Consumer über die öffentlichen Read-Views', () => {

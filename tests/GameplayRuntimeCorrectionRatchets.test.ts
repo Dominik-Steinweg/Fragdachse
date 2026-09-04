@@ -139,7 +139,7 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
     const ultimateRuntime = source('src/world/PlayerUltimateBehaviorRuntime.ts');
     const networkPortStart = worldRuntime.indexOf('export interface WorldPlayerGameplayNetworkPort');
-    const networkPortEnd = worldRuntime.indexOf('export interface WorldPlayerGameplaySystems');
+    const networkPortEnd = worldRuntime.indexOf('interface WorldPlayerGameplaySystems');
     const networkPort = worldRuntime.slice(networkPortStart, networkPortEnd);
 
     expect(networkPort).not.toContain('relationship');

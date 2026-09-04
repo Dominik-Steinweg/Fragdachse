@@ -115,9 +115,9 @@ export function composeWorldTrain(
       },
     },
     getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
-    getBurrowSystem: () => gameplay.player?.systems.burrow ?? null,
+    isPlayerBurrowed: (playerId) => gameplay.player?.isBurrowed(playerId) ?? false,
     getTimeBubbleSystem: () => gameplay.combat?.systems?.timeBubble ?? null,
-    getTranslocatorSystem: () => gameplay.player?.systems.translocator ?? null,
+    setTranslocatorTrainManager: (train) => gameplay.player?.setTranslocatorTrainManager(train),
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     setClassicTrainSpawned: (spawned) => { hostUpdate.setClassicTrainSpawned(spawned); },
     onRendererChanged: (renderer) => { renderers.train = renderer; },
@@ -134,8 +134,7 @@ export function composeWorldSupportGameplay(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, hostUpdate, flow, worldRuntime, world, layout, arenaResult, isCoopMission } = input;
-  const burrowSystem = gameplay.player?.systems.burrow ?? null;
-  if (!gameplay.player || !burrowSystem) {
+  if (!gameplay.player) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
   
@@ -143,7 +142,7 @@ export function composeWorldSupportGameplay(
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
     combatSystem: ctx.combatSystem,
-    burrowSystem,
+    setBurrowStinkCloudSystem: (system) => gameplay.player?.setBurrowStinkCloudSystem(system),
     gameAudioSystem: ctx.gameAudioSystem,
     worldMetrics: world.metrics,
     rockGrid: arenaResult.rockGrid,

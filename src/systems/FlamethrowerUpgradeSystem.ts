@@ -43,8 +43,20 @@ export type FlamethrowerBurrowResolver = (playerId: string) => boolean;
 export type FlamethrowerFriendlyResolver = (firstPlayerId: string, secondPlayerId: string) => boolean;
 export type FireUpgradeStatResolver = (playerId: string, stat: string, baseValue: number) => number;
 
+/** Narrow world/activity capability for creating authored ground-fire bursts. */
+export interface FireChunkBurstPort {
+  hostCreateFireChunkBurst(
+    ownerId: string,
+    x: number,
+    y: number,
+    burst: FireChunkBurstConfig,
+    sourceKey: string,
+    now?: number,
+  ): void;
+}
+
 /** Host-authoritative simulation for the Flamethrower's passive upgrade branches. */
-export class FlamethrowerUpgradeSystem {
+export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   private lastRingContactTick = -1;
   private readonly pendingChunkLandings: PendingFireChunkLanding[] = [];
   private enemyManager: EnemyManager | null;

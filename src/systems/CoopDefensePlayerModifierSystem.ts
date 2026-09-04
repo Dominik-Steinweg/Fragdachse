@@ -40,6 +40,14 @@ export interface CoopDefensePlayerRuntimeModifiers {
   affixValues: ReadonlyMap<string, number>;
 }
 
+/** Narrow read capability for world/activity consumers of resolved player modifiers. */
+export interface CoopDefensePlayerModifierReadPort {
+  getModifiers(playerId: string): CoopDefensePlayerRuntimeModifiers;
+  getNumericStat(playerId: string, stat: string): number;
+  getPercentageStat(playerId: string, stat: string): number;
+  getResolvedStat(playerId: string, stat: string, baseValue: number): number;
+}
+
 const EMPTY_AFFIX_VALUES: ReadonlyMap<string, number> = new Map();
 
 const DEFAULT_RUNTIME_MODIFIERS: CoopDefensePlayerRuntimeModifiers = {

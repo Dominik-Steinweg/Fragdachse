@@ -49,13 +49,13 @@ export function composeWorldPowerUp(
     notifyVoidHunterNuke: (strike) => flow.getCoopMissionRuntime()?.coopDefenseVoidHunterSystem?.notifyNukeExploded(strike),
     coopDefenseMapXpReference: 1,
     isAdrenalineDropEnabled: (playerId) => (
-      (gameplay.player?.systems.playerModifier.getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
+      (gameplay.player?.getPlayerModifierReadPort().getResolvedStat(playerId, 'player.adrenalineDropEnabled', 0) ?? 0) > 0
     ),
     getAdrenalineDropChanceMultiplier: (playerId) => (
-      1 + (gameplay.player?.systems.playerModifier.getPercentageStat(playerId, 'player.adrenalineDropChance') ?? 0)
+      1 + (gameplay.player?.getPlayerModifierReadPort().getPercentageStat(playerId, 'player.adrenalineDropChance') ?? 0)
     ),
     getAdrenalineSyringeDurationMultiplier: (playerId) => (
-      1 + (gameplay.player?.systems.playerModifier.getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
+      1 + (gameplay.player?.getPlayerModifierReadPort().getPercentageStat(playerId, 'player.adrenalineSyringeDuration') ?? 0)
     ),
     isLinkedBaseActive: (baseId) => baseManager?.getActiveBaseIds().has(baseId) ?? false,
     getConstructionRespawnMultiplier: (constructionId) => {
@@ -85,8 +85,7 @@ export function composeWorldConstruction(
     placementSystem, baseManager, persistentBaseBinding, coopMissionRuntime, activityDescriptor,
   } = input;
   const playerGameplay = gameplay.player;
-  const burrowSystem = playerGameplay?.systems.burrow ?? null;
-  if (!playerGameplay || !burrowSystem) {
+  if (!playerGameplay) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
   const constructionRuntime = new ConstructionWorldRuntime({
@@ -98,9 +97,8 @@ export function composeWorldConstruction(
     targetStatusSystem: gameplay.targeting?.systems.targetStatus ?? null,
     energyInjectorSystem: gameplay.targeting?.systems.energyInjector ?? null,
     powerUpSystem: gameplay.powerUp?.system ?? null,
-    modifierSystem: gameplay.player?.systems.playerModifier ?? null,
-    burrowSystem,
-    tunnelSystem: gameplay.player?.systems.tunnel ?? null,
+    modifierReadPort: playerGameplay.getPlayerModifierReadPort(),
+    tunnelPlacementPort: playerGameplay.getTunnelPlacementPort(),
     gameAudioSystem: ctx.gameAudioSystem,
     getGameMode: () => flow.getConfiguredGameMode(),
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),

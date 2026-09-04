@@ -9,7 +9,6 @@ import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import { resolveCoopDefenseCarryPresentationSnapshot } from './CoopDefenseCarryPresentation';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { EnemyManager } from '../../entities/EnemyManager';
-import type { BurrowSystem } from '../../systems/BurrowSystem';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { ArenaContext } from './ArenaContext';
@@ -19,7 +18,7 @@ export interface ArenaCoopMissionPortsInput {
   readonly getWorldRuntime: () => WorldRuntime | null;
   readonly getBaseManager: () => BaseManager | null;
   readonly getEnemyManager: () => EnemyManager | null;
-  readonly getBurrowSystem: () => BurrowSystem | null;
+  readonly isPlayerBurrowed: (playerId: string) => boolean;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
 }
 
@@ -74,7 +73,7 @@ export function createArenaCoopMissionPresentationPort(
  * an die Activity-Runtime durch.
  */
 export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): CoopMissionRuntimePorts {
-  const { ctx, getWorldRuntime, getBurrowSystem, getPlayerCapabilities } = input;
+  const { ctx, getWorldRuntime, isPlayerBurrowed, getPlayerCapabilities } = input;
 
   return {
     hostUpdate: {
@@ -84,7 +83,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         return player ? { x: player.x, y: player.y } : null;
       },
       isPlayerAlive: (playerId) => ctx.combatSystem.isAlive(playerId),
-      isPlayerBurrowed: (playerId) => getBurrowSystem()?.isBurrowed(playerId) ?? false,
+      isPlayerBurrowed,
       isPlayerStealthed: (playerId) => ctx.decoySystem.isStealthed(playerId),
       canUseMissionActions: (playerId) => getPlayerCapabilities(playerId).canUseMissionActions,
       getDecoyTargets: () => ctx.decoySystem.getHostTargets().map((decoy) => ({

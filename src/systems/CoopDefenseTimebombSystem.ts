@@ -6,7 +6,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyDeathInfo, EnemyManager, EnemySpecialMovementSource } from '../entities/EnemyManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { FlamethrowerUpgradeSystem } from './FlamethrowerUpgradeSystem';
+import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { CombatSystem } from './CombatSystem';
 import type { PlacementSystem } from './PlacementSystem';
 import type { DecoySystem } from './DecoySystem';
@@ -72,7 +72,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     private readonly combatSystem: CombatSystem,
     private readonly strategicTargets: EnemyStrategicTargetService,
     private readonly strategicFlowField: EnemyFlowFieldService,
-    private readonly fireChunks: FlamethrowerUpgradeSystem | null,
+    private readonly fireChunks: FireChunkBurstPort | null,
     private readonly hooks: CoopDefenseTimebombHooks,
     private readonly decoySystem: DecoySystem | null = null,
   ) {}

@@ -184,7 +184,6 @@ export interface WorldCombatGameplayBindingOptions {
   readonly dropCarryForPlayer: (playerId: string, x: number, y: number) => void;
   readonly handlePlayerUnavailable: (playerId: string) => void;
   readonly handlePlayerDeath: (playerId: string) => void;
-  readonly handleCoopItemKill: (killerId: string, victimId: string, x: number, y: number) => void;
   readonly getSecondaryObjectiveState: (objectiveId: string) => CoopDefenseSecondaryObjectiveState | null;
   readonly reportTargetContribution: (objectiveId: string, baseId: string) => void;
   readonly reportTargetDestroyed: (objectiveId: string, baseId: string) => number;
@@ -544,7 +543,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }
       o.getPlayerCombatIntegration()?.reactions.registerKill({ killerId, victimId, sourceId, x, y, source });
       if (o.isCoopMission() && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
-        o.handleCoopItemKill(killerId, victimId, x, y);
+        if (killerProfile) {
+          o.getPlayerCombatIntegration()?.reactions.handleCoopDefenseItemKill(killerId, victimId, x, y);
+        }
         o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
         for (const profile of o.network.authority.getConnectedPlayers()) {
           const playerCombat = o.getPlayerCombatIntegration();

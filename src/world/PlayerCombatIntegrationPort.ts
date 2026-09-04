@@ -125,6 +125,7 @@ export interface PlayerCombatReactionPort {
   handleEnemyDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[]): SlimeDeathBurst | null;
   removeEnemy(enemyId: string): void;
   handlePlayerDeath(playerId: string, x: number, y: number): void;
+  handleCoopDefenseItemKill(killerId: string, victimId: string, x: number, y: number): void;
   resolveProjectile(projectile: TrackedProjectile): void;
   registerKill(outcome: PlayerCombatKillOutcome): void;
 }
