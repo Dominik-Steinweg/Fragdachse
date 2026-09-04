@@ -2,9 +2,10 @@ import * as Phaser from 'phaser';
 import type { MuzzleOrigin } from '../config';
 import type { ProjectileSpawnConfig } from '../types';
 import { CombatGeometry } from './CombatGeometry';
+import { MIN_PROJECTILE_BODY_LENGTH } from '../projectile/ProjectileFlightConstants';
 
 /** Minimale Body-Länge entlang der Flugrichtung für das bestehende Anti-Tunneling. */
-export const MIN_BODY_LEN = 10;
+export const MIN_BODY_LEN = MIN_PROJECTILE_BODY_LENGTH;
 
 /** Der Leaf-Blower nutzt bewusst einen kleineren Hinderniskörper als seine Visual-/Trefferfläche. */
 export const LEAF_BLOWER_OBSTACLE_BODY_SCALE = 0.6;

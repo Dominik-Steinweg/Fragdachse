@@ -508,6 +508,13 @@ export interface DamageOverTimeAreaConfig {
 }
 
 export type HomingTargetType = 'players' | 'decoys' | 'enemies' | 'bases' | 'train' | 'projectiles' | 'turrets';
+
+/** Sparse, host-authoritative state retained by the projectile homing capability. */
+export interface HomingRuntimeState {
+  lockedTargetId?: string | null;
+  lockedTargetType?: HomingTargetType;
+  lastSearchAtSimulatedMs?: number;
+}
 export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 
 /**
@@ -1415,6 +1422,10 @@ export interface TrackedProjectile {
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number;
   smokeTrailColor?: number;
+  /** Transition-state for the runtime-owned homing capability. */
+  homingState?: HomingRuntimeState;
+  /** Reused narrow Homing request; its kinematics remain bound to this record. */
+  homingRequest?: import('./entities/ProjectileHomingController').ProjectileHomingRequest;
   lockedTargetId?: string | null;
   lockedTargetType?: HomingTargetType;
   lastHomingSearchAt?: number;
@@ -1440,6 +1451,8 @@ export interface TrackedProjectile {
   isFlame?:         boolean;
   hitboxGrowRate?:  number;     // px/s Wachstum
   hitboxMaxSize?:   number;     // px Maximum
+  /** Runtime-owned hitbox size; the legacy visual applies the staged update. */
+  hitboxSize?:      number;
   velocityDecay?:   number;     // Speed-Multiplikator pro Sekunde
   initialSpeed?:    number;     // Geschwindigkeit bei Spawn (für Decay-Berechnung)
   burnDurationMs?:    number;

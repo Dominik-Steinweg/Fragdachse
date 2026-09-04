@@ -13,8 +13,15 @@ import { encodeProjectileDynamic, encodeProjectileStatic } from '../network/proj
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, SyncedProjectileSnapshot, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact } from '../types';
-import { ProjectileHomingController } from './ProjectileHomingController';
-import type { HomingTargetProvider, HomingTargetValidityChecker } from './ProjectileHomingController';
+import type {
+  HomingLineOfFireChecker,
+  HomingTargetProvider,
+  HomingTargetValidityChecker,
+  LineOfFireReadPort,
+  ProjectileHomingRequest,
+  ProjectileTargetQueryPort,
+  ProjectileTargetabilityPort,
+} from './ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import { CombatGeometry } from '../systems/CombatGeometry';
 import {
@@ -44,8 +51,14 @@ import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import type {
   LegacyProjectileHostSimulation,
+  ProjectileHostStageResult,
   ProjectileOwnerSeam,
 } from '../projectile/WorldProjectileRuntime';
+import {
+  effectiveAirFrictionDecay,
+  type ProjectileCoreStageResult,
+} from '../projectile/ProjectileFlightProcessor';
+import type { ProjectileTimeFieldPort } from '../projectile/ProjectileTimeFieldPort';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -157,13 +170,17 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private audioSystem: GameAudioSystem | null = null;
   private ownerPositionProvider: ((ownerId: string) => { x: number; y: number } | null) | null = null;
   private timeBubbleFactorProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
+  private timeFieldPort: ProjectileTimeFieldPort | null = null;
+  private hostFrameNowMs: number | null = null;
 
   // ── Radialer Projektil-Puls (Host-only, injiziert von ArenaScene) ────────
   private proximityPulseCallback: ((proj: TrackedProjectile) => void) | null = null;
   private naturalFlameExpiryCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
 
-  // ── Homing-Zielsuche (Host-only, injiziert von ArenaScene) ──────────────
-  private readonly homingController = new ProjectileHomingController();
+  // ── Homing-Port-Kompatibilität (die Verarbeitung liegt im World-Owner) ───
+  private homingTargetProvider: HomingTargetProvider | null = null;
+  private homingLineOfFireChecker: HomingLineOfFireChecker | null = null;
+  private homingTargetValidityChecker: HomingTargetValidityChecker | null = null;
 
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
   private pendingProjectileExplosions: ExplodedProjectile[] = [];
@@ -206,6 +223,21 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   /** Der world-owned Owner bindet und löst diese Verarbeitung mit seiner eigenen Lifetime. */
   bindProjectileOwner(owner: ProjectileOwnerSeam | null): void {
     this.owner = owner;
+    owner?.setProjectileTimeFieldPort?.(this.timeFieldPort);
+    owner?.setProjectileTargetQueryPort?.(
+      this.homingTargetProvider ? { queryTargets: this.homingTargetProvider } : null,
+    );
+    owner?.setProjectileTargetabilityPort?.(
+      this.homingTargetValidityChecker
+        ? { isTargetCurrentlyValid: this.homingTargetValidityChecker }
+        : null,
+    );
+    owner?.setLineOfFireReadPort?.(
+      this.homingLineOfFireChecker
+        ? { hasClearLineOfFire: this.homingLineOfFireChecker }
+        : null,
+    );
+    if (this.hostFrameNowMs !== null) owner?.setHostFrameTime?.(this.hostFrameNowMs);
   }
 
   /** Host: Verarbeitungsreihenfolge der laufenden World; außerhalb einer World leer. */
@@ -452,6 +484,25 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number, ownerId?: string) => number) | null): void {
     this.timeBubbleFactorProvider = provider;
+    this.timeFieldPort = provider
+      ? {
+        getMovementFactor: (x, y, nowMs, provenance) => provider(
+          x,
+          y,
+          nowMs,
+          provenance.allegiance.ownerId,
+        ),
+      }
+      : null;
+    this.owner?.setProjectileTimeFieldPort?.(this.timeFieldPort);
+  }
+
+  setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
+    this.timeFieldPort = port;
+  }
+
+  setHostFrameTime(nowMs: number): void {
+    this.hostFrameNowMs = nowMs;
   }
 
   /** Registriert den gemeinsamen radialen Projektil-Puls (Host-only). */
@@ -477,16 +528,19 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
   setHomingTargetProvider(cb: HomingTargetProvider | null): void {
-    this.homingController.setTargetProvider(cb);
+    this.homingTargetProvider = cb;
+    this.owner?.setProjectileTargetQueryPort?.(cb ? { queryTargets: cb } : null);
   }
 
   /** Registriert die Host-seitige Line-of-Fire-Prüfung für Homing-Projektile. */
   setHomingLineOfFireChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
-    this.homingController.setLineOfFireChecker(cb);
+    this.homingLineOfFireChecker = cb;
+    this.owner?.setLineOfFireReadPort?.(cb ? { hasClearLineOfFire: cb } : null);
   }
 
   setHomingTargetValidityChecker(cb: HomingTargetValidityChecker | null): void {
-    this.homingController.setTargetValidityChecker(cb);
+    this.homingTargetValidityChecker = cb;
+    this.owner?.setProjectileTargetabilityPort?.(cb ? { isTargetCurrentlyValid: cb } : null);
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────
@@ -693,11 +747,24 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       Math.sin(angle) * cfg.speed,
     );
 
+    const spawnProvenance = {
+      gameplaySourceId: ownerId,
+      attributionId: ownerId,
+      allegiance: { ownerId, allowTeamDamage: cfg.allowTeamDamage },
+      weaponSourceId: cfg.sourceId,
+      sourceSlot: cfg.sourceSlot,
+      sourceTurretId: cfg.sourceTurretId,
+    };
     const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(
       resolvedSpawn.x,
       resolvedSpawn.y,
       hostNowMs,
       ownerId,
+    ) ?? this.timeFieldPort?.getMovementFactor(
+      resolvedSpawn.x,
+      resolvedSpawn.y,
+      hostNowMs,
+      spawnProvenance,
     ) ?? 1;
     if (initialTimeBubbleFactor < 0.999) {
       body.setVelocity(body.velocity.x * initialTimeBubbleFactor, body.velocity.y * initialTimeBubbleFactor);
@@ -747,6 +814,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       projectileVisualScale: cfg.projectileVisualScale,
       smokeTrailColor: cfg.smokeTrailColor,
       lockedTargetId: null,
+      homingState: cfg.homing ? { lockedTargetId: null } : undefined,
       fuseTime:        cfg.fuseTime,
       grenadeEffect:   cfg.grenadeEffect,
       projectileStyle: cfg.projectileStyle,
@@ -822,6 +890,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       isFlame:         cfg.isFlame,
       hitboxGrowRate:  cfg.hitboxGrowRate,
       hitboxMaxSize:   cfg.hitboxMaxSize,
+      hitboxSize:      cfg.size,
       velocityDecay:   cfg.velocityDecay,
       burnDurationMs:    cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,
@@ -880,7 +949,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       body.useDamping = true;
       // Drag erst nach frictionDelayMs aktivieren; bis dahin kein Luftwiderstand (Faktor 1)
       if (!cfg.frictionDelayMs || cfg.frictionDelayMs <= 0) {
-        const effectiveDecay = this.getEffectiveAirFrictionDecay(cfg.airFrictionDecayPerSec, initialTimeBubbleFactor);
+        const effectiveDecay = effectiveAirFrictionDecay(cfg.airFrictionDecayPerSec, initialTimeBubbleFactor);
         body.setDrag(effectiveDecay, effectiveDecay);
         tracked.frictionActivated = true;
         tracked.appliedAirFrictionDecay = effectiveDecay;
@@ -1527,38 +1596,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     }
   }
 
-  /**
-   * Host: Flammen-Hitbox pro Frame wachsen lassen und verlangsamen.
-   * Wird nur für Projektile mit `isFlame === true` aufgerufen.
-   */
-  private updateFlameHitbox(proj: TrackedProjectile, deltaS: number): void {
-    const growRate = proj.hitboxGrowRate ?? 0;
-    const maxSize  = proj.hitboxMaxSize ?? proj.sprite.width;
-    const decay    = proj.velocityDecay ?? 1;
-
-    // 1. Wachstum: Nur die visuelle Sprite-Größe vergrößern – der Physik-Body bleibt
-    // bei seiner Startgröße (hitboxStartSize). Würde der Body mitgewachsen, würde sein
-    // seitlich wachsender Rand benachbarte Felsen/Trunks und Arena-Wände treffen,
-    // obwohl der Flugpfad der Flamme frei ist → vorzeitiger Tod und positionsabhängige
-    // Reichweite. CombatSystem nutzt sprite.getBounds() für Spielertreffer, das mit
-    // displayWidth wächst → die wachsende Trefferzone funktioniert korrekt.
-    const curSize = proj.sprite.displayWidth;
-    if (curSize < maxSize) {
-      const newSize = Math.min(maxSize, curSize + growRate * deltaS);
-      // Shape-Dimension aktualisieren (für SyncedProjectile.size und CombatSystem-Bounds)
-      proj.sprite.setDisplaySize(newSize, newSize);
-    }
-
-    // 2. Verlangsamung: Geschwindigkeit exponentiell abbauen
-    if (decay < 1) {
-      const factor = Math.pow(decay, deltaS);
-      proj.body.setVelocity(
-        proj.body.velocity.x * factor,
-        proj.body.velocity.y * factor,
-      );
-    }
-  }
-
   private shouldUseContinuousRockCollision(proj: TrackedProjectile): boolean {
     return (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp')
       && !proj.isGrenade
@@ -1781,7 +1818,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     if (outgoingSpeed <= 0.001) return false;
 
     const spawnTimeBubbleFactor = Phaser.Math.Clamp(
-      this.timeBubbleFactorProvider?.(impactX, impactY, Date.now(), proj.ownerId) ?? (proj.timeBubbleFactor ?? 1),
+      this.timeBubbleFactorProvider?.(impactX, impactY, this.hostFrameNowMs ?? proj.createdAt, proj.ownerId)
+        ?? (proj.timeBubbleFactor ?? 1),
       0.0001,
       1,
     );
@@ -2069,9 +2107,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       continuesAfterExplosion: resumesAfterExplosion,
     });
     if (resumesAfterExplosion) {
-      proj.lockedTargetId = null;
-      proj.lockedTargetType = undefined;
-      proj.lastHomingSearchAt = undefined;
+      this.resetHomingState(proj);
       proj.body.setVelocity(0, 0);
       proj.body.enable = false;
     } else {
@@ -2081,36 +2117,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   private emitProjectileImpact(proj: TrackedProjectile, x: number, y: number): void {
     this.projectileImpactCallback?.(proj, x, y);
-  }
-
-  private getEffectiveAirFrictionDecay(baseDecay: number, timeFactor: number): number {
-    const clampedDecay = Phaser.Math.Clamp(baseDecay, 0.0001, 1);
-    const clampedFactor = Phaser.Math.Clamp(timeFactor, 0.0001, 1);
-    return Math.pow(clampedDecay, clampedFactor);
-  }
-
-  private syncTimeBubbleDrag(proj: TrackedProjectile): void {
-    if (!proj.frictionActivated || proj.airFrictionDecayPerSec === undefined) return;
-    const timeFactor = proj.timeBubbleFactor ?? 1;
-    const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
-    if (proj.appliedAirFrictionDecay !== undefined && Math.abs(proj.appliedAirFrictionDecay - effectiveDecay) <= 0.0001) return;
-    proj.body.setDrag(effectiveDecay, effectiveDecay);
-    proj.appliedAirFrictionDecay = effectiveDecay;
-  }
-
-  private syncTimeBubbleFactor(proj: TrackedProjectile, now: number): void {
-    const nextFactor = this.timeBubbleFactorProvider?.(proj.sprite.x, proj.sprite.y, now, proj.ownerId) ?? 1;
-    const prevFactor = proj.timeBubbleFactor ?? 1;
-    if (Math.abs(nextFactor - prevFactor) <= 0.0001) return;
-    if (prevFactor <= 0.0001) {
-      proj.timeBubbleFactor = nextFactor;
-      return;
-    }
-
-    const ratio = nextFactor / prevFactor;
-    proj.body.setVelocity(proj.body.velocity.x * ratio, proj.body.velocity.y * ratio);
-    proj.timeBubbleFactor = nextFactor;
-    this.syncTimeBubbleDrag(proj);
   }
 
   /** Host: stabile, allokationsfreie Sicht für Kollisionen und Host-Systeme. */
@@ -2251,9 +2257,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     if (!proj || ((proj.multiExplosionsRemaining ?? 0) <= 0 && !proj.miniRocketSpent)) return;
     void excludedTargetKeys;
     proj.pendingExplosion = false;
-    proj.lockedTargetId = null;
-    proj.lockedTargetType = undefined;
-    proj.lastHomingSearchAt = undefined;
+    this.resetHomingState(proj);
     if (proj.miniRocketStageRangePx !== undefined) {
       proj.miniRocketHasExploded = true;
       if (proj.miniRocketSpent) {
@@ -2346,259 +2350,233 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurückgeben.
    * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
    */
-  hostUpdate(deltaMs = 16.67): {
-    explodedProjectiles: ExplodedProjectile[];
-    explodedGrenades: ExplodedGrenade[];
-    countdownEvents: Array<{ x: number; y: number; value: number }>;
-  } {
-    const now              = Date.now();
+  hostUpdate(deltaMs = 16.67, nowMs?: number): ProjectileHostStageResult {
+    const now = nowMs ?? this.resolveLegacyHostNow(deltaMs);
+    this.setHostFrameTime(now);
+    return this.owner?.runHostProjectileStage?.(deltaMs, now) ?? {
+      explodedProjectiles: [],
+      explodedGrenades: [],
+      countdownEvents: [],
+    };
+  }
+
+  /** Executes the Manager remainder after the World-owned Flight/Lifetime core. */
+  runLegacyProjectileStage(
+    _deltaMs: number,
+    nowMs: number,
+    coreStage: ProjectileCoreStageResult,
+  ): ProjectileHostStageResult {
+    this.setHostFrameTime(nowMs);
     const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
     const explodedGrenades: ExplodedGrenade[] = [];
-    const countdownEvents: Array<{ x: number; y: number; value: number }> = [];
-    for (let index = this.projectiles.length - 1; index >= 0; index--) {
-      if (!this.stepProjectile(
-        this.projectiles[index],
-        deltaMs,
-        now,
-        explodedProjectiles,
-        explodedGrenades,
-        countdownEvents,
-      )) {
+    const countdownEvents = coreStage.countdownEvents;
+    for (const projectile of this.projectiles) {
+      if ((projectile.isFlame || projectile.projectileStyle === 'leaf_blower')
+        && projectile.hitboxSize !== undefined
+        && Math.abs(projectile.sprite.displayWidth - projectile.hitboxSize) > 0.0001) {
+        projectile.sprite.setDisplaySize(projectile.hitboxSize, projectile.hitboxSize);
+      }
+    }
+    for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
+      if (!this.stepLegacyProjectile(this.projectiles[index], coreStage, explodedProjectiles, explodedGrenades)) {
         this.owner?.store.dropStepEntryAt(index);
       }
     }
-
     this.syncHostRenderers();
-
     return { explodedProjectiles, explodedGrenades, countdownEvents };
   }
 
   /**
-   * Pro-Projektil-Schritt im Host-Update: Time-Bubble, Physik/Air-Friction, Lifetime,
-   * Grenade- und Spezial-Logik (Flame/BFG/Homing). Liefert `false`, wenn das Projektil
-   * aus der aktiven Liste entfernt werden soll.
+   * Pro-Projektil-Schritt der verbleibenden Legacy-Stufe: Kollision, Wirkung und
+   * Spezialausgänge. Flight, Lifetime und Homing werden zuvor vom World-Owner verarbeitet.
    */
-  private stepProjectile(
+  private stepLegacyProjectile(
     proj: TrackedProjectile,
-    deltaMs: number,
-    now: number,
+    coreStage: ProjectileCoreStageResult,
     explodedProjectiles: ExplodedProjectile[],
     explodedGrenades: ExplodedGrenade[],
-    countdownEvents: Array<{ x: number; y: number; value: number }>,
   ): boolean {
+    if (proj.pendingDestroy) {
+      this.destroyTrackedProjectile(proj);
+      return false;
+    }
+
+    if (proj.isGrenade) {
+      if (coreStage.grenadeExpiredIds.has(proj.id) && proj.grenadeEffect) {
+        explodedGrenades.push({
+          x: proj.sprite.x,
+          y: proj.sprite.y,
+          ownerId: proj.ownerId,
+          effect: proj.grenadeEffect,
+        });
+        this.destroyTrackedProjectile(proj);
+        return false;
+      }
+      proj.bounceProcessedThisStep = false;
+      proj.velocityAfterFirstBounce = undefined;
+      return true;
+    }
+
+    const awaitingContinuation = proj.pendingExplosion
+      && (proj.multiExplosionsRemaining ?? 0) > 0;
+    if (awaitingContinuation) {
+      proj.lastX = proj.sprite.x;
+      proj.lastY = proj.sprite.y;
+      return true;
+    }
+
+    if (proj.miniRocketDeferredExplosion) {
+      if ((proj.simulatedAgeMs ?? 0) >= (proj.miniRocketNextExplosionAtAgeMs ?? 0)) {
+        this.queueProjectileExplosion(
+          proj,
+          true,
+          proj.miniRocketDeferredExplosionStopsAtObstacle ?? false,
+        );
+      }
+      proj.lastX = proj.sprite.x;
+      proj.lastY = proj.sprite.y;
+      return true;
+    }
+
+    if (coreStage.miniRocketSafetyExpiredIds.has(proj.id)) {
+      this.destroyTrackedProjectile(proj);
+      return false;
+    }
+
+    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.explosion) {
+      explodedProjectiles.push({
+        x: proj.sprite.x,
+        y: proj.sprite.y,
+        ownerId: proj.ownerId,
+        effect: proj.explosion,
+        sourceSlot: proj.sourceSlot,
+        sourceTurretId: proj.sourceTurretId,
+        sourceId: proj.sourceId,
+      });
+      this.destroyTrackedProjectile(proj);
+      return false;
+    }
+
+    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.impactCloud) {
+      this.emitProjectileImpact(proj, proj.sprite.x, proj.sprite.y);
+      this.destroyTrackedProjectile(proj);
+      return false;
+    }
+
+    if (this.shouldUseContinuousRockCollision(proj)) {
+      this.resolveContinuousRockCollision(proj);
       if (proj.pendingDestroy) {
         this.destroyTrackedProjectile(proj);
         return false;
       }
+    }
 
-      this.syncTimeBubbleFactor(proj, now);
-      const timeFactor = proj.timeBubbleFactor ?? 1;
-      const simulatedDeltaMs = Math.max(0, deltaMs * timeFactor);
-      proj.simulatedAgeMs = (proj.simulatedAgeMs ?? 0) + simulatedDeltaMs;
-      const realAge = now - proj.createdAt;
-      const simulatedAge = proj.simulatedAgeMs;
+    if (coreStage.rangeDepletedIds.has(proj.id)
+      && proj.miniRocketStageRangePx !== undefined
+      && proj.explosion) {
+      this.queueProjectileExplosion(proj, true);
+      return true;
+    }
 
-      if (proj.isGrenade) {
-        // Granate explodiert nach fuseTime ODER wenn Abprall-Limit erreicht
-        const fuseExpired = realAge >= proj.fuseTime!;
-        const bouncedOut  = proj.maxBounces > 0 && proj.bounceCount >= proj.maxBounces;
-        if ((fuseExpired || bouncedOut) && proj.grenadeEffect) {
-          explodedGrenades.push({
-            x:      proj.sprite.x,
-            y:      proj.sprite.y,
-            ownerId: proj.ownerId,
-            effect: proj.grenadeEffect,
-          });
-          this.destroyTrackedProjectile(proj);
-          return false;
-        }
-
-        // Countdown-Emission für Granaten mit langer Zündzeit (≥ 1500ms)
-        const fuseTime = proj.fuseTime ?? 0;
-        if (fuseTime >= 1500) {
-          const remainingSeconds = Math.max(0, Math.ceil((fuseTime - realAge) / 1000));
-          if (remainingSeconds > 0 && proj.lastCountdownEmitted !== remainingSeconds) {
-            proj.lastCountdownEmitted = remainingSeconds;
-            countdownEvents.push({ x: proj.sprite.x, y: proj.sprite.y, value: remainingSeconds });
-          }
-        }
-
-        // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
-        if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
-          if (proj.frictionDelayMs === undefined || simulatedAge >= proj.frictionDelayMs) {
-            const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
-            proj.body.setDrag(effectiveDecay, effectiveDecay);
-            proj.frictionActivated = true;
-            proj.appliedAirFrictionDecay = effectiveDecay;
-          }
-        }
-        this.syncTimeBubbleDrag(proj);
-        // Stop-Threshold: unter Mindestgeschwindigkeit komplett anhalten
-        if (proj.frictionActivated && proj.stopSpeedThreshold !== undefined) {
-          const speedSq = proj.body.velocity.lengthSq();
-          const effectiveThreshold = proj.stopSpeedThreshold * timeFactor;
-          if (speedSq > 0 && speedSq < effectiveThreshold * effectiveThreshold) {
-            proj.body.setVelocity(0, 0);
-          }
-        }
-
-        proj.bounceProcessedThisStep = false;
-        proj.velocityAfterFirstBounce = undefined;
-
-        return true;
-      } else {
-        const awaitingMultiExplosionContinuation = proj.pendingExplosion
-          && (proj.multiExplosionsRemaining ?? 0) > 0;
-        if (proj.remainingRangePx !== undefined) {
-          const traveledDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
-          if (traveledDistance > 0.01) {
-            proj.remainingRangePx = Math.max(0, proj.remainingRangePx - traveledDistance);
-          }
-        }
-
-        // Bis HostUpdateCoordinator die Explosion verarbeitet und die naechste
-        // Etappe freigibt, bleibt das Projektil vollstaendig eingefroren.
-        if (awaitingMultiExplosionContinuation) {
-          proj.lastX = proj.sprite.x;
-          proj.lastY = proj.sprite.y;
-          return true;
-        }
-
-        if (proj.miniRocketDeferredExplosion) {
-          if (simulatedAge >= (proj.miniRocketNextExplosionAtAgeMs ?? 0)) {
-            this.queueProjectileExplosion(
-              proj,
-              true,
-              proj.miniRocketDeferredExplosionStopsAtObstacle ?? false,
-            );
-          }
-          proj.lastX = proj.sprite.x;
-          proj.lastY = proj.sprite.y;
-          return true;
-        }
-
-        if (
-          proj.miniRocketStageRangePx !== undefined
-          && simulatedAge >= (proj.miniRocketSafetyLifetimeMs ?? proj.lifetime)
-        ) {
-          this.destroyTrackedProjectile(proj);
-          return false;
-        }
-
-        // Normales Projektil: Lifetime oder Max-Bounces
-        if (
-          proj.miniRocketStageRangePx === undefined
-          && simulatedAge > proj.lifetime
-          && proj.explosion
-        ) {
-          explodedProjectiles.push({
-            x: proj.sprite.x,
-            y: proj.sprite.y,
-            ownerId: proj.ownerId,
-            effect: proj.explosion,
-            sourceSlot: proj.sourceSlot,
-            sourceTurretId: proj.sourceTurretId,
-            sourceId: proj.sourceId,
-          });
-          this.destroyTrackedProjectile(proj);
-          return false;
-        }
-
-        if (simulatedAge > proj.lifetime && proj.impactCloud) {
-          this.emitProjectileImpact(proj, proj.sprite.x, proj.sprite.y);
-          this.destroyTrackedProjectile(proj);
-          return false;
-        }
-
-        if (this.shouldUseContinuousRockCollision(proj)) {
-          this.resolveContinuousRockCollision(proj);
-          if (proj.pendingDestroy) {
-            this.destroyTrackedProjectile(proj);
-            return false;
-          }
-        }
-
-        const rangeDepleted = proj.remainingRangePx !== undefined && proj.remainingRangePx <= 0.5;
-        if (
-          rangeDepleted
-          && proj.miniRocketStageRangePx !== undefined
-          && proj.explosion
-        ) {
-          this.queueProjectileExplosion(proj, true);
-          return true;
-        }
-        const dead = !awaitingMultiExplosionContinuation
-          && (simulatedAge > proj.lifetime || rangeDepleted || proj.bounceCount > proj.maxBounces);
-        if (dead) {
-          if (proj.isFlame && simulatedAge > proj.lifetime) {
-            this.naturalFlameExpiryCallback?.(proj, proj.sprite.x, proj.sprite.y);
-          }
-          if (proj.miniRocketSpent && rangeDepleted) {
-            this.emitSpentMiniRocketDestruction(proj);
-          }
-          this.destroyTrackedProjectile(proj);
-        } else if (proj.isFlame || proj.projectileStyle === 'leaf_blower') {
-          this.updateFlameHitbox(proj, simulatedDeltaMs / 1000);
-        } else if (proj.homing) {
-          if (proj.miniRocketStageRangePx !== undefined) {
-            if (this.updateMiniRocketFlight(proj, simulatedAge)) {
-              this.destroyTrackedProjectile(proj);
-              return false;
-            }
-          } else {
-            this.homingController.update(proj, simulatedAge);
-          }
-        }
-
-        const proximityPulse = proj.proximityPulse;
-        if (proximityPulse && proximityPulse.radius > 0 && proximityPulse.damage > 0) {
-          const interval = Math.max(50, proximityPulse.scanIntervalMs);
-          if (proj.lastProximityPulseAt === undefined || simulatedAge - proj.lastProximityPulseAt >= interval) {
-            proj.lastProximityPulseAt = simulatedAge;
-            this.proximityPulseCallback?.(proj);
-          }
-        }
-
-        // Erweiterte Flugphysik (Air Friction) – Phaser-Damping nach Delay aktivieren
-        if (proj.airFrictionDecayPerSec !== undefined && !proj.frictionActivated) {
-          if (proj.frictionDelayMs === undefined || simulatedAge >= proj.frictionDelayMs) {
-            const effectiveDecay = this.getEffectiveAirFrictionDecay(proj.airFrictionDecayPerSec, timeFactor);
-            proj.body.setDrag(effectiveDecay, effectiveDecay);
-            proj.frictionActivated = true;
-            proj.appliedAirFrictionDecay = effectiveDecay;
-          }
-        }
-        this.syncTimeBubbleDrag(proj);
-        // Stop-Threshold: unter Mindestgeschwindigkeit komplett anhalten
-        if (proj.frictionActivated && proj.stopSpeedThreshold !== undefined) {
-          const speedSq = proj.body.velocity.lengthSq();
-          const effectiveThreshold = proj.stopSpeedThreshold * timeFactor;
-          if (speedSq > 0 && speedSq < effectiveThreshold * effectiveThreshold) {
-            proj.body.setVelocity(0, 0);
-          }
-        }
-
-        // Anti-Tunneling: Body-Ausrichtung nach Bounce aktualisieren
-        if (proj.originalBodySize !== undefined) {
-          const pvx = Math.abs(proj.body.velocity.x);
-          const pvy = Math.abs(proj.body.velocity.y);
-          const spd = Math.sqrt(pvx * pvx + pvy * pvy);
-          if (spd > 1) {
-            const orig = proj.originalBodySize;
-            const bw = Math.max(orig, (pvx / spd) * MIN_BODY_LEN);
-            const bh = Math.max(orig, (pvy / spd) * MIN_BODY_LEN);
-            proj.body.setSize(bw, bh);
-            proj.body.setOffset((orig - bw) / 2, (orig - bh) / 2);
-          }
-        }
-
-        proj.lastX = proj.sprite.x;
-        proj.lastY = proj.sprite.y;
-        proj.bounceProcessedThisStep = false;
-        proj.velocityAfterFirstBounce = undefined;
-
-        return !dead;
+    const dead = !awaitingContinuation
+      && (coreStage.lifetimeExpiredIds.has(proj.id)
+        || coreStage.rangeDepletedIds.has(proj.id)
+        || coreStage.bounceLimitReachedIds.has(proj.id));
+    if (dead) {
+      if (proj.isFlame && coreStage.lifetimeExpiredIds.has(proj.id)) {
+        this.naturalFlameExpiryCallback?.(proj, proj.sprite.x, proj.sprite.y);
       }
+      if (proj.miniRocketSpent && coreStage.rangeDepletedIds.has(proj.id)) {
+        this.emitSpentMiniRocketDestruction(proj);
+      }
+      this.destroyTrackedProjectile(proj);
+    } else if (proj.homing) {
+      const simulatedAge = proj.simulatedAgeMs ?? 0;
+      if (proj.miniRocketStageRangePx !== undefined) {
+        if (this.updateMiniRocketFlight(proj, simulatedAge)) {
+          this.destroyTrackedProjectile(proj);
+          return false;
+        }
+      } else {
+        this.owner?.resolveProjectileHoming?.(this.createHomingRequest(proj), simulatedAge);
+      }
+    }
+
+    const proximityPulse = proj.proximityPulse;
+    if (proximityPulse && proximityPulse.radius > 0 && proximityPulse.damage > 0) {
+      const interval = Math.max(50, proximityPulse.scanIntervalMs);
+      const simulatedAge = proj.simulatedAgeMs ?? 0;
+      if (proj.lastProximityPulseAt === undefined || simulatedAge - proj.lastProximityPulseAt >= interval) {
+        proj.lastProximityPulseAt = simulatedAge;
+        this.proximityPulseCallback?.(proj);
+      }
+    }
+
+    proj.lastX = proj.sprite.x;
+    proj.lastY = proj.sprite.y;
+    proj.bounceProcessedThisStep = false;
+    proj.velocityAfterFirstBounce = undefined;
+    return !dead;
+  }
+
+  private createHomingRequest(proj: TrackedProjectile): ProjectileHomingRequest {
+    if (proj.homingRequest) return proj.homingRequest;
+    const state = proj.homingState ??= {
+      lockedTargetId: proj.lockedTargetId ?? null,
+      lockedTargetType: proj.lockedTargetType,
+      lastSearchAtSimulatedMs: proj.lastHomingSearchAt,
+    };
+    const request: ProjectileHomingRequest = {
+      ownerId: proj.ownerId,
+      homing: proj.homing!,
+      kinematics: {
+        get x() { return proj.sprite.x; },
+        get y() { return proj.sprite.y; },
+        get velocityX() { return proj.body.velocity.x; },
+        get velocityY() { return proj.body.velocity.y; },
+        setVelocity: (x, y) => proj.body.setVelocity(x, y),
+      },
+      state,
+      excludedTargetKeys: proj.multiExplosionExcludedTargetKeys,
+    };
+    proj.homingRequest = request;
+    return request;
+  }
+
+  private resetHomingState(proj: TrackedProjectile): void {
+    const state = proj.homingState ??= { lockedTargetId: null };
+    state.lockedTargetId = null;
+    state.lockedTargetType = undefined;
+    state.lastSearchAtSimulatedMs = undefined;
+    proj.lockedTargetId = null;
+    proj.lockedTargetType = undefined;
+    proj.lastHomingSearchAt = undefined;
+  }
+
+  private updateProjectileHoming(
+    proj: TrackedProjectile,
+    simulatedAgeMs: number,
+    forceSearch = false,
+  ): boolean {
+    const foundTarget = this.owner?.resolveProjectileHoming?.(
+      this.createHomingRequest(proj),
+      simulatedAgeMs,
+      forceSearch,
+    ) ?? false;
+    const state = proj.homingState;
+    if (state) {
+      proj.lockedTargetId = state.lockedTargetId;
+      proj.lockedTargetType = state.lockedTargetType;
+      proj.lastHomingSearchAt = state.lastSearchAtSimulatedMs;
+    }
+    return foundTarget;
+  }
+
+  private resolveLegacyHostNow(deltaMs: number): number {
+    if (this.hostFrameNowMs !== null) return this.hostFrameNowMs + Math.max(0, deltaMs);
+    let latestCreatedAt = 0;
+    for (const projectile of this.projectiles) latestCreatedAt = Math.max(latestCreatedAt, projectile.createdAt);
+    return latestCreatedAt + Math.max(0, deltaMs);
   }
 
   /**
@@ -2616,10 +2594,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       if (simulatedAge < (proj.miniRocketCoastUntilAgeMs ?? 0)) return false;
       proj.miniRocketPhase = 'attack';
       proj.multiExplosionExcludedTargetKeys?.clear();
-      proj.lockedTargetId = null;
-      proj.lockedTargetType = undefined;
-      proj.lastHomingSearchAt = undefined;
-      const foundTarget = this.homingController.update(proj, simulatedAge, true);
+      this.resetHomingState(proj);
+      const foundTarget = this.updateProjectileHoming(proj, simulatedAge, true);
       if (!foundTarget && proj.miniRocketReturnEnabled && proj.miniRocketHasExploded) {
         this.enterMiniRocketReturn(proj);
       }
@@ -2646,7 +2622,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         return false;
       }
       const previousSearchAt = proj.lastHomingSearchAt;
-      const foundTarget = this.homingController.update(proj, simulatedAge);
+      const foundTarget = this.updateProjectileHoming(proj, simulatedAge);
       if (foundTarget) {
         // Das vorhandene Restbudget laeuft unveraendert weiter: kein Reset, keine Pause.
         proj.miniRocketPhase = 'attack';
@@ -2669,7 +2645,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       return false;
     }
 
-    const foundTarget = this.homingController.update(proj, simulatedAge);
+    const foundTarget = this.updateProjectileHoming(proj, simulatedAge);
     if (foundTarget || !proj.miniRocketReturnEnabled) return false;
 
     const mayReturn = proj.miniRocketHasExploded
@@ -2683,9 +2659,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     if (!owner) return;
 
     proj.miniRocketPhase = 'return';
-    proj.lockedTargetId = null;
-    proj.lockedTargetType = undefined;
-    proj.lastHomingSearchAt = undefined;
+    this.resetHomingState(proj);
 
     if (!proj.miniRocketReturnReserveGranted) {
       const ownerDistance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);

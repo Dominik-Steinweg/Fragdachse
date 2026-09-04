@@ -77,4 +77,44 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     expect(runtime.store.stepOrder).toHaveLength(0);
     expect(runtime.activeCount).toBe(0);
   });
+
+  it('taktet den Flight-Core mit der vom Host gelieferten Zeit vor der Legacy-Stufe', () => {
+    const projectile = {
+      id: 0,
+      ownerId: 'owner',
+      sprite: { x: 0, y: 0, displayWidth: 4 },
+      body: { velocity: { x: 10, y: 0 } },
+      lastX: 0,
+      lastY: 0,
+      createdAt: 0,
+      simulatedAgeMs: 0,
+      timeBubbleFactor: 1,
+      lifetime: 1_000,
+      maxBounces: 0,
+      bounceCount: 0,
+      isGrenade: false,
+      colliders: [],
+    } as unknown as TrackedProjectile;
+    let stageNowMs = 0;
+    let receivedAge = 0;
+    const simulation: LegacyProjectileHostSimulation = {
+      bindProjectileOwner: () => {},
+      createProjectile: () => projectile,
+      releaseProjectileResources: () => {},
+      runLegacyProjectileStage: (_deltaMs, nowMs, coreStage) => {
+        stageNowMs = nowMs;
+        receivedAge = projectile.simulatedAgeMs ?? 0;
+        expect(coreStage.lifetimeExpiredIds.has(projectile.id)).toBe(false);
+        return { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] };
+      },
+      releaseWorldProjectileState: () => {},
+    };
+    const runtime = new WorldProjectileRuntime({ simulation, hostNowMs: () => 0 });
+    runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+
+    runtime.runHostProjectileStage(100, 1_234);
+
+    expect(stageNowMs).toBe(1_234);
+    expect(receivedAge).toBe(100);
+  });
 });

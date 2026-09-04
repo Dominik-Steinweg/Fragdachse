@@ -1,43 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('phaser', () => ({
-  Math: {
-    Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
-    DegToRad: (degrees: number) => degrees * Math.PI / 180,
-    Angle: {
-      Between: (x1: number, y1: number, x2: number, y2: number) => Math.atan2(y2 - y1, x2 - x1),
-      Wrap: (angle: number) => {
-        while (angle > Math.PI) angle -= Math.PI * 2;
-        while (angle < -Math.PI) angle += Math.PI * 2;
-        return angle;
-      },
-    },
-  },
-}));
-
 import { ProjectileHomingController } from '../src/entities/ProjectileHomingController';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
-import type { ProjectileHomingConfig, TrackedProjectile } from '../src/types';
+import type { ProjectileHomingConfig, HomingRuntimeState } from '../src/types';
+import type { ProjectileHomingRequest } from '../src/entities/ProjectileHomingController';
 
-function makeProjectile(config: ProjectileHomingConfig): TrackedProjectile {
+function makeProjectile(config: ProjectileHomingConfig): ProjectileHomingRequest {
   const velocity = {
     x: 100,
     y: 0,
-    length: () => Math.hypot(velocity.x, velocity.y),
   };
+  const state: HomingRuntimeState = { lockedTargetId: null };
   return {
     ownerId: 'player-1',
-    sprite: { x: 0, y: 0 },
-    body: {
-      velocity,
+    homing: config,
+    state,
+    kinematics: {
+      get x() { return 0; },
+      get y() { return 0; },
+      get velocityX() { return velocity.x; },
+      get velocityY() { return velocity.y; },
       setVelocity: (x: number, y: number) => {
         velocity.x = x;
         velocity.y = y;
       },
     },
-    homing: config,
-    lockedTargetId: null,
-  } as unknown as TrackedProjectile;
+  };
 }
 
 const BASE_HOMING: ProjectileHomingConfig = {
@@ -68,8 +56,8 @@ describe('projectile homing against hostile bases', () => {
 
     const projectile = makeProjectile(BASE_HOMING);
     expect(controller.update(projectile, 0, true)).toBe(true);
-    expect(projectile.lockedTargetId).toBe('hostile-base');
-    expect(projectile.lockedTargetType).toBe('bases');
+    expect(projectile.state.lockedTargetId).toBe('hostile-base');
+    expect(projectile.state.lockedTargetType).toBe('bases');
   });
 
   it('does not lock a base behind an obstacle', () => {
@@ -82,7 +70,7 @@ describe('projectile homing against hostile bases', () => {
 
     const projectile = makeProjectile(BASE_HOMING);
     expect(controller.update(projectile, 0, true)).toBe(false);
-    expect(projectile.lockedTargetId).toBeNull();
+    expect(projectile.state.lockedTargetId).toBeNull();
     expect(lineOfFire).toHaveBeenCalledWith(0, 0, 100, 0);
   });
 
@@ -103,12 +91,12 @@ describe('projectile homing against hostile bases', () => {
       targetTypes: ['players', 'decoys'],
     });
     expect(controller.update(projectile, 0, true)).toBe(true);
-    expect(projectile.lockedTargetId).toBe('player-2');
-    expect(projectile.lockedTargetType).toBe('players');
+    expect(projectile.state.lockedTargetId).toBe('player-2');
+    expect(projectile.state.lockedTargetType).toBe('players');
 
     stealthed = true;
     expect(controller.update(projectile, 1)).toBe(true);
-    expect(projectile.lockedTargetId).toBe('decoy-7');
-    expect(projectile.lockedTargetType).toBe('decoys');
+    expect(projectile.state.lockedTargetId).toBe('decoy-7');
+    expect(projectile.state.lockedTargetType).toBe('decoys');
   });
 });

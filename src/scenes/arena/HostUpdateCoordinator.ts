@@ -37,6 +37,7 @@ import type { RockPhysicsProxy } from '../../arena/rocks/RockPhysicsProxy';
 import { toMapId } from '../../world/arenaDescriptorAdapter';
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldRuntime } from '../../world/WorldRuntime';
+import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
 import type { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
 import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
@@ -84,6 +85,7 @@ export interface HostUpdatePerformanceMetrics {
 export interface HostWorldFramePort {
   getWorldRuntime(): WorldRuntime | null;
   getTrainRuntime(): WorldTrainRuntime | null;
+  getProjectileRuntime?(): WorldProjectileRuntime | null;
 }
 
 /** World-owned player/loadout reads used by the host frame. */
@@ -312,6 +314,7 @@ export class HostUpdateCoordinator {
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     const metrics = this.performanceMetricsEnabled ? emptyHostUpdatePerformanceMetrics() : null;
     const now = Date.now();
+    this.worldFramePort?.getProjectileRuntime?.()?.setHostFrameTime(now);
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
     // World: Koeder und Tarnung leben unabhaengig von jeder Activity und stehen deshalb vor dem
@@ -352,9 +355,12 @@ export class HostUpdateCoordinator {
       this.ctx.combatSystem.updateBurnEffects(now);
     }
 
+    const projectileRuntime = this.worldFramePort?.getProjectileRuntime?.() ?? null;
+    if (!countdownActive) projectileRuntime?.setHostFrameTime(now);
     const { explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
       ? { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
-      : this.ctx.projectileManager.hostUpdate(delta);
+      : projectileRuntime?.runHostProjectileStage(delta, now)
+        ?? this.ctx.projectileManager.hostUpdate(delta, now);
     const playerPostProjectile = this.playerGameplayRuntime?.runHostPostProjectileStage(delta, now, countdownActive)
       ?? { guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] } };
     const guardianSpirits = [...playerPostProjectile.guardianSpirits];

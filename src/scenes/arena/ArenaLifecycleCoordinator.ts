@@ -132,6 +132,7 @@ import {
 import type { ArenaSpectatorCameraInput } from './ArenaInputBindings';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldTrainRuntime } from '../../world/WorldTrainRuntime';
+import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { ConstructionWorldRuntime } from '../../world/ConstructionWorldRuntime';
 import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
 import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
@@ -980,6 +981,7 @@ export class ArenaLifecycleCoordinator {
   getWorldRuntime(): WorldRuntime | null { return this.worldRuntime; }
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
+  getWorldProjectileRuntime(): WorldProjectileRuntime | null { return this.worldGameplay?.projectiles ?? null; }
   getWorldPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null { return this.worldPlayerGameplayRuntime; }
   getWorldCombatGameplayBinding(): WorldCombatGameplayBinding | null { return this.worldCombatGameplayBinding; }
   getWorldPowerUpRuntime(): WorldPowerUpRuntime | null { return this.worldPowerUpRuntime; }

@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `3 – Flight, Lifetime, Homing und Core Runtime Processing`
-- **Gesamtstatus:** Phase 2B abgeschlossen; es existiert genau eine world-owned Projectile-Registry, die Legacy-Verarbeitung arbeitet auf demselben Store
+- **Nächste Phase:** `4 – External Interaction + Read Ports`
+- **Gesamtstatus:** Phase 3 abgeschlossen; die world-owned Runtime taktet Flight, Lifetime und Homing deterministisch auf derselben Registry, die Legacy-Stufe verarbeitet nur noch spätere Fachbereiche
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm test`, `npm run build`, `npm run test:architecture`, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab` (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -41,7 +41,7 @@
 | 1 | ✅ | Baseline + Characterization |
 | 2A | ✅ | Spawn Contract + Provenance |
 | 2B | ✅ | World Runtime + Store + Spawn Authority |
-| 3 | ⬜ | Flight + Lifetime + Homing |
+| 3 | ✅ | Flight + Lifetime + Homing |
 | 4 | ⬜ | External Interaction + Read Ports |
 | 5 | ⬜ | Travel / Environment / Augments |
 | 6 | ⬜ | Collision + Targets + Defense |
@@ -61,9 +61,9 @@
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
+Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet Flight, Kollision, Wirkung, Snapshot und Presentation weiter auf dem kanonischen Store und hält keine eigene Registry mehr; Schließung fachbereichsweise in den Phasen 3–14.
+- [Transition] `ProjectileManager` verarbeitet Kollision, Wirkung, Snapshot und Presentation weiter auf dem kanonischen Store; Flight/Lifetime/Homing sind im `WorldProjectileRuntime` geschlossen, spätere Fachbereiche folgen in den Phasen 4–14.
 - [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: `TranslocatorSystem` und Enemy-Puck (Schließphase 4), `CombatSystem`-Deflection/Reflection/Schwarmkinder (6–7), übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
 - [Transition] `toLegacyProjectileSpawnConfig` bildet den Spawn-Auftrag auf den Legacy-Record ab; entfällt mit dessen Ablösung (14).
 
@@ -83,11 +83,11 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Contract-Familie | Realisierter Type/API |
 |---|---|
 | Projectile Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` (`src/projectile/`) |
-| World Projectile Runtime / Host Frame | `WorldProjectileRuntime` (`src/projectile/`); Host-Frame-Port noch offen |
+| World Projectile Runtime / Host Frame | `WorldProjectileRuntime`, `ProjectileHostStageResult` (`src/projectile/`) |
 | Projectile Store / Runtime Record | `ProjectileStore`; Record bis zur Ablösung weiterhin `TrackedProjectile` |
-| External Interaction | — |
+| External Interaction | `ProjectileTimeFieldPort` (`src/projectile/`) |
 | Read Ports | — |
-| Target / Geometry / Targetability | — |
+| Target / Geometry / Targetability | `ProjectileHomingRequest`, `ProjectileKinematics`, `ProjectileTargetQueryPort`, `ProjectileTargetabilityPort`, `LineOfFireReadPort`, `HomingRuntimeState` (`src/entities/`, `src/types.ts`) |
 | Barrier / Defense | — |
 | Projectile Combat | — |
 | Domain Effect / Explosion Resolution | — |
@@ -108,7 +108,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 3 starten; bei tatsächlichem Beginn Phase 3 auf 🟨 setzen.**
+**Phase 4 starten; bei tatsächlichem Beginn Phase 4 auf 🟨 setzen.**
 
 ---
 

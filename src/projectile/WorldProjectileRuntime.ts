@@ -1,9 +1,27 @@
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../types';
 import type { WorldScopedBinding } from '../world/WorldRuntime';
 import { toLegacyProjectileSpawnConfig } from './legacyProjectileSpawnPayload';
+import {
+  ProjectileFlightProcessor,
+  type ProjectileCoreStageResult,
+} from './ProjectileFlightProcessor';
+import { ProjectileHomingController } from '../entities/ProjectileHomingController';
+import type {
+  LineOfFireReadPort,
+  ProjectileHomingRequest,
+  ProjectileTargetQueryPort,
+  ProjectileTargetabilityPort,
+} from '../entities/ProjectileHomingController';
 import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
+import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 import { ProjectileStore, type LegacyProjectileStoreAccess } from './ProjectileStore';
+
+export interface ProjectileHostStageResult {
+  explodedProjectiles: import('../types').ExplodedProjectile[];
+  explodedGrenades: import('../types').ExplodedGrenade[];
+  countdownEvents: Array<{ x: number; y: number; value: number }>;
+}
 
 /**
  * Noch nicht migrierte Host-Simulation eines Projectiles (`03 §5.1`).
@@ -27,6 +45,15 @@ export interface LegacyProjectileHostSimulation {
   ): TrackedProjectile;
   /** Gibt Physics-, Collider- und Darstellungsressourcen eines entfernten Records frei. */
   releaseProjectileResources(record: TrackedProjectile): void;
+  /** Führt nur die noch nicht migrierten Collision-/Effect-/Presentation-Reste aus. */
+  runLegacyProjectileStage?(
+    deltaMs: number,
+    nowMs: number,
+    coreStage: ProjectileCoreStageResult,
+  ): ProjectileHostStageResult;
+  /** Übergangshilfe für die bestehende Spawn-Initialisierung. */
+  setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
+  setHostFrameTime?(nowMs: number): void;
   /** Räumt den registry-fremden Rest ab: Renderer, Snapshot-Zustand und Client-Visuals. */
   releaseWorldProjectileState(): void;
 }
@@ -51,6 +78,14 @@ export interface ProjectileOwnerSeam {
   destroyProjectile(id: ProjectileId): void;
   /** Beendet Identity und Aktivmenge und gibt die Ressourcen frei; der Step-Eintrag bleibt. */
   releaseProjectile(record: TrackedProjectile): void;
+  /** Host Frame: deterministische Flight-/Lifetime-/Homing-Verarbeitung. */
+  runHostProjectileStage?(deltaMs: number, nowMs: number): ProjectileHostStageResult;
+  setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
+  setProjectileTargetQueryPort?(port: ProjectileTargetQueryPort | null): void;
+  setProjectileTargetabilityPort?(port: ProjectileTargetabilityPort | null): void;
+  setLineOfFireReadPort?(port: LineOfFireReadPort | null): void;
+  resolveProjectileHoming?(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch?: boolean): boolean;
+  setHostFrameTime?(nowMs: number): void;
 }
 
 export interface WorldProjectileRuntimeOptions {
@@ -73,6 +108,8 @@ export interface WorldProjectileRuntimeOptions {
  */
 export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOwnerSeam, WorldScopedBinding {
   private readonly projectiles = new ProjectileStore();
+  private readonly flightProcessor = new ProjectileFlightProcessor();
+  private readonly homingController = new ProjectileHomingController();
   private readonly simulation: LegacyProjectileHostSimulation;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
@@ -129,6 +166,47 @@ export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOw
     this.simulation.releaseProjectileResources(record);
   }
 
+  /**
+   * Host Frame Port: der Owner taktet zuerst den Runtime-Core und reicht danach ausschließlich
+   * dessen schmale Ergebnisse an die noch offene Legacy-Phase weiter.
+   */
+  runHostProjectileStage(deltaMs: number, nowMs: number): ProjectileHostStageResult {
+    if (this.destroyed) return emptyHostStageResult();
+    this.setHostFrameTime(nowMs);
+    const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
+    return this.simulation.runLegacyProjectileStage?.(deltaMs, nowMs, coreStage)
+      ?? {
+        explodedProjectiles: [],
+        explodedGrenades: [],
+        countdownEvents: coreStage.countdownEvents,
+      };
+  }
+
+  setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
+    this.flightProcessor.setTimeFieldPort(port);
+    this.simulation.setProjectileTimeFieldPort?.(port);
+  }
+
+  setProjectileTargetQueryPort(port: ProjectileTargetQueryPort | null): void {
+    this.homingController.setTargetQueryPort(port);
+  }
+
+  setProjectileTargetabilityPort(port: ProjectileTargetabilityPort | null): void {
+    this.homingController.setTargetabilityPort(port);
+  }
+
+  setLineOfFireReadPort(port: LineOfFireReadPort | null): void {
+    this.homingController.setLineOfFireReadPort(port);
+  }
+
+  resolveProjectileHoming(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false): boolean {
+    return this.homingController.update(request, simulatedAgeMs, forceSearch);
+  }
+
+  setHostFrameTime(nowMs: number): void {
+    this.simulation.setHostFrameTime?.(nowMs);
+  }
+
   /** World-Teardown: kein Record, kein Identity-Eintrag und kein Restzustand überlebt ihn. */
   destroy(): void {
     if (this.destroyed) return;
@@ -138,6 +216,7 @@ export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOw
       this.simulation.releaseProjectileResources(record);
     }
     this.projectiles.clear();
+    this.flightProcessor.reset();
     this.simulation.releaseWorldProjectileState();
     this.simulation.bindProjectileOwner(null);
     this.onDestroy?.();
@@ -155,4 +234,8 @@ export class WorldProjectileRuntime implements ProjectileSpawnPort, ProjectileOw
     this.projectiles.insert(record);
     return id;
   }
+}
+
+function emptyHostStageResult(): ProjectileHostStageResult {
+  return { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] };
 }
