@@ -14,7 +14,7 @@ Use the project rules from the repository-root AGENTS.md and keep investigation 
 3. For an uncertain Phaser API, search the exact symbol under node_modules/phaser/types/ or node_modules/phaser/src/. Read only the matching definition and nearby documentation.
 4. Implement with Phaser 4 APIs. Reject Phaser-3-only examples unless the task explicitly concerns migration.
 5. Keep authoritative gameplay state outside renderers and UI. Scenes orchestrate; renderers and effects visualize.
-6. Apply the proportional verification matrix from the repository-root AGENTS.md. A visible Phaser or UI change requires npm run build. Browser, dev-server and screenshot checks are opt-in and require an explicit request.
+6. Apply the proportional verification matrix from the repository-root AGENTS.md. A visible Phaser or UI change requires npm run build. Browser, dev-server and screenshot checks are opt-in and require an explicit request. Tests should protect render ownership, asset contracts and durable visual semantics without freezing aesthetic tuning; see docs/ai/testing.md.
 
 ## Local conventions
 

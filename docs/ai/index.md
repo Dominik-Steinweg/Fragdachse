@@ -18,6 +18,7 @@ Diese Seiten dokumentieren langlebige Architektur- und Fachverträge von Fragdac
 | [visual-guidelines.md](visual-guidelines.md) | sichtbare Gameplay-Grafik oder Lesbarkeit gestaltet wird. |
 | [held-item-sprites.md](held-item-sprites.md) | Held-Item-Sprites, Generatoren oder deren Laufzeitbindung geändert werden. |
 | [weapon-balance-lab.md](weapon-balance-lab.md) | Balance-Lab, Headless-Szenarien, Benchmarks oder Debug-Ausgaben betroffen sind. |
+| [testing.md](testing.md) | neue, geänderte, verschobene oder entfernte Tests sowie Runner-/Suite-Grenzen betroffen sind. |
 | [reference-implementations.md](reference-implementations.md) | ein konkreter Einstiegspunkt als Muster für eine neue Änderung gesucht wird. |
 | [local-dev-environment.md](local-dev-environment.md) | Verifikation, AI-Skill-Sync oder lokaler Start gebraucht wird. |
 

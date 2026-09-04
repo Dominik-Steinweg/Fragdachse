@@ -16,6 +16,14 @@ Vergleiche sind nur sinnvoll, wenn Szenarioidentität, Seed, Simulationszeit, Tr
 
 Cache-Schlüssel, Benchmark-Storage und Reports müssen die Szenarioidentität mitführen. Ergebnisse werden als Diagnoseartefakt behandelt; sie ändern weder authored Balance noch laufenden Multiplayer-Zustand automatisch.
 
+## Test- und Config-Parität
+
+`npm run test:balance-lab` ist die bewusste Ausnahme zur normalen Tuning-Regel: Werkzeug-,
+Progressions- und Benchmarktests dürfen ihre Ergebnisse gegen die aktuell aufgelöste Config
+prüfen. Core-Tests sollen dieselben HP-, Damage-, Cooldown- oder Progressionswerte nicht als
+zweite Wahrheit wiederholen. Änderungen am Lab bleiben Diagnose- und Teständerungen; sie ändern
+nicht automatisch die produktive Balance.
+
 ## Erweiterungen
 
 Bei einer neuen Waffe oder einem Upgrade zuerst die produktive Content-/Capability-Auflösung prüfen und dann die kleinste Lab-Szenarioerweiterung ergänzen. Keine Karte, kein Gegnerwert und kein historischer Benchmarkstand gehört in diese Seite. Eine neue Messgröße braucht einen reproduzierbaren Owner und einen Test, nicht nur eine Dokumentationszahl.

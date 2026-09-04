@@ -22,10 +22,10 @@
 
 ## 1. Aktueller Stand
 
-- **Aktive Phase:** `Phase 6 – Dauerhafte AI-Testpolicy und finaler Gate`
-- **Zuletzt abgeschlossen:** `Phase 5 – Redundanz, Mock-Shape und verbleibender Ballast`
-- **Gesamtstatus:** Phasen 1–5 abgeschlossen; dauerhafte Testpolicy und Final-Gate offen.
-- **Letzter automatisierter Gate:** fokussierte Redundanz-/Copy-/Profiler-/Maptests und Core — grün
+- **Aktive Phase:** keine — Plan vollständig umgesetzt
+- **Zuletzt abgeschlossen:** `Phase 6 – Dauerhafte AI-Testpolicy und finaler Gate`
+- **Gesamtstatus:** Phasen 1–6 abgeschlossen.
+- **Letzter automatisierter Gate:** alle definierten Test-Suites, Build, `npm run ai:sync` und `git diff --check` — grün
 - **Bekannte Regressionen:** keine
 - **Sichtprüfung:** nicht vorgesehen
 
@@ -40,7 +40,7 @@
 | 3 | ✅ | Source-Ratchets + Architecture-Tests |
 | 4 | ✅ | Config-/Content-/Visual-Tuning-Kopplung |
 | 5 | ✅ | Redundanz + Mock-Shape + Restballast |
-| 6 | 🟨 | AI-Testpolicy + Final Gate |
+| 6 | ✅ | AI-Testpolicy + Final Gate |
 
 ---
 
@@ -57,7 +57,7 @@
 
 ## 4. Offene Risiken / Entscheidungen
 
-- Verbleibende positional Mocks schützen eigenständige Orchestrierungs-, Netzwerk- oder Renderer-Grenzen und wurden nicht ohne zusätzlichen Wartungsnutzen umgebaut.
+- Keine offenen handlungsrelevanten Risiken. Verbleibende positional Mocks schützen eigenständige Orchestrierungs-, Netzwerk- oder Renderer-Grenzen.
 
 Während der Umsetzung hier nur Punkte führen, die die **nächste Phase** beeinflussen, z. B.:
 
@@ -73,15 +73,8 @@ Erledigte Punkte entfernen.
 
 ## 5. Dokumentations-Follow-ups
 
-Für Phase 6 vorgesehen:
-
-- `docs/ai/testing.md` neu
-- `AGENTS.md` sehr kurzer Testhinweis
-- `docs/ai/index.md`
-- `docs/ai/local-dev-environment.md`
-- `docs/ai/weapon-balance-lab.md`
-- `.ai/skills/fragdachse-phaser/SKILL.md`
-- danach `npm run ai:sync`
+Für Phase 6 vorgesehen und abgeschlossen: zentrale Testpolicy, kurze Router-/Entwicklungs-
+Verweise, Phaser-Skill-Verweis und `npm run ai:sync`.
 
 Keine dieser Änderungen vor Phase 6 nur vorsorglich durchführen, sofern ein früherer Runner-Umbau nicht zwingend einen kleinen aktuellen Kommando-Hinweis erfordert.
 
@@ -89,9 +82,8 @@ Keine dieser Änderungen vor Phase 6 nur vorsorglich durchführen, sofern ein fr
 
 ## 6. Nächster konkreter Schritt
 
-**Phase 6 vollständig umsetzen.**
-
-Dauerhafte Testpolicy in den vorgesehenen AI-Dokumentationspfaden ergänzen, `npm run ai:sync` ausführen und anschließend alle definierten Test-Suites, Build und `git diff --check` ausführen.
+Keine offene Phase. Die dauerhafte Testpolicy ist verlinkt, synchronisiert und durch den Final-Gate
+verifiziert.
 
 ---
 

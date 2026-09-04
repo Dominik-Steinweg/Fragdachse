@@ -25,6 +25,10 @@ Fragdachse ist ein browserbasierter 2D-Arena-Shooter mit Phaser 4 und direkten W
 
 ## Proportionale Prüfung
 
+Neue oder geänderte Tests schützen langlebiges Verhalten oder Invarianten, nicht aktuelles Tuning
+oder zufällige Implementierungsdetails. Bestehende passende Tests bevorzugt erweitern. Details:
+[`docs/ai/testing.md`](docs/ai/testing.md).
+
 | Änderung | Prüfung |
 |---|---|
 | Markdown, Instruktionen oder Kommentare | Pfade, Links, Symbolnamen und `git diff --check` prüfen |

@@ -14,6 +14,14 @@ Verifikation bleibt proportional zur Änderung. Der Repository-Root [AGENTS.md](
 
 Es gibt kein allgemeines Lint-Script. Neue Test-, Browser- oder CI-Infrastruktur gehört nicht in eine normale Featureänderung.
 
+## Test-Runner
+
+`npm test` ist der schnelle Core-Gate. Die getrennten Spezial-Suites laufen über
+`npm run test:architecture`, `npm run test:integration`, `npm run test:assets`,
+`npm run test:stress` und `npm run test:balance-lab`. `npm run check` kombiniert Core und Build;
+die vollständige Testentscheidung und Schutzwertprüfung steht in
+[testing.md](testing.md).
+
 ## Browser ist opt-in
 
 Ohne ausdrückliche Aufforderung keinen Dev-Server, Browser oder Screenshot starten. Wenn eine Browserprüfung beauftragt ist, den projektspezifischen Start npm run dev:browser verwenden, auf HTTP 200 unter http://127.0.0.1:8090/ warten und keinen fremden Prozess beenden. Scheitert die Sichtprüfung wegen eines verborgenen Browser-Panes, als nicht verifiziert melden.
