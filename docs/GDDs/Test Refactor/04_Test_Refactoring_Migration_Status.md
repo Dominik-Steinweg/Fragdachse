@@ -22,10 +22,10 @@
 
 ## 1. Aktueller Stand
 
-- **Aktive Phase:** `Phase 1 – Baseline und handlungsrelevante Migrationskarte`
-- **Zuletzt abgeschlossen:** `–`
-- **Gesamtstatus:** Test-Refactoring noch nicht begonnen.
-- **Letzter automatisierter Gate:** noch nicht für dieses Refactoring ausgeführt
+- **Aktive Phase:** `Phase 2 – Runner-/Suite-Trennung`
+- **Zuletzt abgeschlossen:** `Phase 1 – Baseline und handlungsrelevante Migrationskarte`
+- **Gesamtstatus:** Phase 1 abgeschlossen; Suite-Trennung als nächster Schritt offen.
+- **Letzter automatisierter Gate:** `npm test` — grün (356 Testdateien, 2994 passed, 15 skipped)
 - **Bekannte Regressionen:** keine
 - **Sichtprüfung:** nicht vorgesehen
 
@@ -35,8 +35,8 @@
 
 | Phase | Status | Kurzgegenstand |
 |---|:---:|---|
-| 1 | 🟨 | Baseline + handlungsrelevante Migrationskarte |
-| 2 | ⬜ | Runner-/Suite-Trennung |
+| 1 | ✅ | Baseline + handlungsrelevante Migrationskarte |
+| 2 | 🟨 | Runner-/Suite-Trennung |
 | 3 | ⬜ | Source-Ratchets + Architecture-Tests |
 | 4 | ⬜ | Config-/Content-/Visual-Tuning-Kopplung |
 | 5 | ⬜ | Redundanz + Mock-Shape + Restballast |
@@ -52,20 +52,21 @@
 
 | Cluster / Testbereich | Problem | Zielaktion | Zielphase | Status |
 |---|---|---|---:|:---:|
-| Source-/Phase-/Cutover-Ratchets | Implementation Shape / Historie teilweise mit echten Verträgen vermischt | B/R/S klassifizieren, REWRITE/CONSOLIDATE/DELETE | 3 | offen |
-| normale Config-/Balance-Tests | mutable authored Werte als zweite Wahrheit | relativ zur Config / Invariante / DELETE | 4 | offen |
-| Visual-/VFX-Snapshots | ästhetische Tuningwerte teilweise eingefroren | semantisch prüfen / DELETE / MOVE | 4 | offen |
-| Balance-Lab-/Benchmarktests | spezialisiertes Werkzeug, aktuell über Einzelfile-Excludes getrennt | `balance-lab` Suite | 2 | offen |
-| Large-Arena-/Multi-Seed-Tests | wertvoll, aber zu schwer für Daily Gate | `stress` Suite | 2 | offen |
-| teure Asset-/Pixeltests | Jimp/Dateisystem/Pixelloops | `assets` Suite | 2 | offen |
-| große World-/Campaign-Integration | Integration selbst sinnvoll, aber nicht Core | `integration` Suite | 2 | offen |
-| Redundanz / Mock-Call-Shape | Wartungsballast in bereits berührten Clustern | CONSOLIDATE/REWRITE/DELETE | 5 | offen |
+| Source-/Phase-/Cutover-Ratchets (`ArenaSceneFrameCutover`, `Phase11DependencyCutover`, `PlayerGameplayReadViewBoundary`, `WorldGameplayCompositionContracts`, weitere Ownership-/Lifetime-Contracts) | 56 Testdateien lesen Produktionscode; historische Marker und dauerhafte Grenzen sind vermischt | B/R/S klassifizieren, Behavior-Tests stärken, Architecture-Scan konsolidieren, Historie löschen | 3 | offen |
+| Balance-Lab-/Progression-/Benchmarktests (`Asmd`, `Bite`, `Glock`, `P90`, Coverage, Weapon-*`, `CoopDefenseBalanceLab`, `WeaponBalanceLab*`) | 16 spezialisierte Dateien; `npm test` schließt sie über 12 Einzelpfade aus | unter `tests/balance-lab/` bündeln und `test:balance-lab` als eigenen Runner etablieren | 2 | offen |
+| Large-Arena-/Multi-Seed-/Performance-Tests (`LargeArenaGeneration`, `ArenaLoadingContracts`, `CoopDefenseArenaGeneration`, `PerformanceAblation`, `ProjectilePerformance`) | große Generator-/Benchmarkläufe werden aktuell nicht sauber vom Daily Gate getrennt | `stress`-Suite; technische Assertions behalten, Tuning-/Timingwerte prüfen | 2 | offen |
+| Asset-/Pixel-/Maskenprüfungen (`GroundCoverField`, `RockMossField`, `RockVegetationField`, `PersistentBaseGravel`, `TerrainColorSnapshot`, weitere Texture-/Pixeltests) | Dateisystem-, Dekodierungs- und Pixelarbeit ist über normale Tests verteilt | technisch notwendige Integrität behalten, teure Prüfungen in `assets` verschieben | 2 | offen |
+| große World-/Campaign-/Materialization-Integration (`ArenaLoadingContracts`, `LobbyWorld*`, `PersistentBase*`, `WorldMaterializationOwnership`, `SharedWorldWithoutActivity`) | reale Composition-/Materialization-Tests sind wertvoll, aber nicht durchweg Core-kostengünstig | echte Multi-Owner-Verträge nach `integration`, Pure-/Runtime-Teile im Core belassen | 2 | offen |
+| normale Config-/Balance-Tests (`GraveTitanVoidPlasma`, `CoopDefenseInfernoColossusCombat`, `Ak47CoopDefenseUpgrades`, `PlasmaSwarm`, `CoopDefenseMaps`, `CoopDefenseItemStats`, `CoopDefenseRuntimeAffixWiring`, `InspectorSupportWeapons`, `CoopDefenseHostileBase`) | mutable authored Werte und Mapdaten können als zweite Wahrheit eingefroren sein | Assertion je Schutzwert prüfen; relativ zur Config, Strukturvalidator oder DELETE | 4 | offen |
+| Visual-/VFX-/UI-Snapshots (`ArenaVisualAttribution`, `GraphicsQualityAndPerformance`, Renderer-/PostFX-/Terrain-Tests) | exakte ästhetische Farben, Alpha-, Glow-, Partikel- und Timingwerte sind mögliche Tuning-Ratchets | Lifecycle/Bounds/Verdrahtung schützen; ästhetische Snapshots DELETE oder MOVE | 4 | offen |
+| Redundanz / Mock-Call-Shape | 89 Dateien nutzen Spies/Mocks; große Testdateien und doppelte Ownership-/Content-Aussagen sind erkennbar | nur berührte Cluster auf unterschiedlichen Schutzwert prüfen, dann CONSOLIDATE/REWRITE/DELETE | 5 | offen |
 
 ---
 
 ## 4. Offene Risiken / Entscheidungen
 
-Aktuell keine zusätzlichen Entscheidungen offen.
+- Runner-Zuordnung der gemischten Dateien (`ArenaLoadingContracts`, `GraphicsQualityAndPerformance`, `PersistentBaseGravel`) muss anhand der einzelnen Tests erfolgen; keine pauschale Verschiebung.
+- Die vorhandenen Source-Reads sind nicht automatisch löschbar: vor Phase 3 muss je Assertion geprüft werden, ob sie B, R oder S ist und ob ein Runtime-/Validator-Test bereits denselben Schutz liefert.
 
 Während der Umsetzung hier nur Punkte führen, die die **nächste Phase** beeinflussen, z. B.:
 
@@ -97,17 +98,9 @@ Keine dieser Änderungen vor Phase 6 nur vorsorglich durchführen, sofern ein fr
 
 ## 6. Nächster konkreter Schritt
 
-**Phase 1 vollständig umsetzen.**
+**Phase 2 vollständig umsetzen.**
 
-Dabei:
-
-1. problematische Testmuster repositoryweit suchen;
-2. nur handlungsrelevante Cluster hier konkretisieren;
-3. keine Vollinventur guter Tests erstellen;
-4. keine Tests allein zur Charakterisierung hinzufügen, wenn kein wichtiger ungeschützter Vertrag existiert;
-5. Phase-1-Gate ausführen;
-6. diesen Status aktualisieren;
-7. bei grünem Gate genau einen Phase-1-Commit erstellen.
+Dabei die Spezial-Suites über stabile Verzeichnis-/Patternregeln herstellen, die dateispezifische Balance-Exclude-Liste ablösen und danach alle in Phase 2 definierten Runner einschließlich `npm run check` und Build ausführen.
 
 ---
 
