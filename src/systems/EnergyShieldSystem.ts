@@ -4,7 +4,7 @@ import type { NetworkBridge } from '../network/NetworkBridge';
 import type { EnergyShieldWeaponFireConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { ShieldBlockCategory, SyncedEnergyShield } from '../types';
 import { dequantizeAngle } from '../utils/angle';
-import type { ResourceSystem } from './ResourceSystem';
+import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { ShieldBuffSystem } from './ShieldBuffSystem';
 import type { CombatSystem } from './CombatSystem';
 import type { EnemyManager } from '../entities/EnemyManager';
@@ -54,7 +54,7 @@ export class EnergyShieldSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly resourceSystem: ResourceSystem,
+    private readonly resourceSystem: PlayerCombatResourcePort,
     private readonly bridge: NetworkBridge,
     private readonly shieldBuffSystem: ShieldBuffSystem,
   ) {}

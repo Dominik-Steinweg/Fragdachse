@@ -50,7 +50,7 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(behaviorRuntime).toContain('update(nowMs: number)');
     expect(behaviorRuntime).not.toContain('Date.now()');
     expect(worldRuntime).toContain('new NegevBehaviorRuntime');
-    expect(combatBinding).toContain('negevBehavior?.registerKill');
+    expect(combatBinding).toContain('playerCombat?.negev?.registerKill');
     expect(hostFrame).not.toContain('loadout?.getNegevHudBuffs');
     expect(hostFrame).toContain('negevBehavior?.getHudBuffs');
   });
@@ -94,8 +94,8 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(sustainedRuntime).toContain('hostRefresh');
     expect(sustainedRuntime).toContain('hostDeactivateForPlayer');
     expect(worldRuntime).toContain('new SustainedWeaponBehaviorRuntime');
-    expect(combatBinding).toContain('player.sustainedWeaponBehavior.setTeslaDomeSystem');
-    expect(combatBinding).toContain('player.sustainedWeaponBehavior.setEnergyShieldSystem');
+    expect(combatBinding).toContain('playerCombat.sustainedWeapon.setTeslaDomeSystem');
+    expect(combatBinding).toContain('playerCombat.sustainedWeapon.setEnergyShieldSystem');
   });
 
   it('keeps immediate weapon dispatch and resource commit out of LoadoutManager (10A)', () => {

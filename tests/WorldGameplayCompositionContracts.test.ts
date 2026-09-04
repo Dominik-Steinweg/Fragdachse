@@ -232,7 +232,9 @@ describe('Phase 10B.6 – World gameplay composition', () => {
     expect(combat).toContain('o.decoySystem.getHostTargets()');
     expect(combat).toContain('o.getEnemyManager()?.getAllEnemies()');
     expect(combat).toContain("o.baseManager?.getBasesByFaction('hostile')");
-    expect(combat).toContain('o.getPlayerSystems()?.burrow.isBurrowed');
+    expect(combat).toContain('o.getPlayerCombatIntegration()?.state.isBurrowed');
+    expect(combat).not.toContain('WorldPlayerGameplaySystems');
+    expect(combat).not.toContain('getPlayerSystems');
     expect(combat).toContain('o.combatSystem.canDamageTarget');
     expect(combat).toContain('o.combatSystem.hasClearLineOfFire');
     expect(composition).toContain('isHomingTargetValid:');

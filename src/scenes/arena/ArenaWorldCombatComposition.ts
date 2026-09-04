@@ -140,7 +140,7 @@ export function composeWorldCombatGameplay(
     getWorldParticipation: (playerId) => flow.getWorldParticipation(playerId),
     getPlayerCapabilities: (playerId) => flow.getPlayerCapabilities(playerId),
     getEnemyManager: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
-    getPlayerSystems: () => gameplay.player?.systems ?? null,
+    getPlayerCombatIntegration: () => gameplay.player?.getPlayerCombatIntegrationPort() ?? null,
     bindPlayerShieldBuffPort: (port) => gameplay.player?.bindShieldBuffPort(port),
     automatedWeaponExecution: gameplay.automatedWeaponExecution,
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,

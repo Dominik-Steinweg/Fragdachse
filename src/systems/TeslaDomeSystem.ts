@@ -11,7 +11,7 @@ import type {
 } from '../types';
 import type { CombatSystem } from './CombatSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
-import type { ResourceSystem } from './ResourceSystem';
+import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 
 /**
  * Ein gehaltener Primärstrahl.
@@ -177,7 +177,7 @@ export class TeslaDomeSystem {
   constructor(
     private readonly playerManager: PlayerManager,
     private readonly combatSystem: CombatSystem,
-    private readonly resourceSystem: ResourceSystem,
+    private readonly resourceSystem: PlayerCombatResourcePort,
   ) {}
 
   setLineOfSightChecker(checker: LineOfSightChecker | null): void {

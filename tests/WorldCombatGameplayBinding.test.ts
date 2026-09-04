@@ -45,7 +45,7 @@ import {
   WorldCombatGameplayBinding,
   type WorldCombatGameplayBindingOptions,
 } from '../src/world/WorldCombatGameplayBinding';
-import type { WorldPlayerGameplaySystems } from '../src/world/WorldPlayerGameplayRuntime';
+import type { PlayerCombatIntegrationPort } from '../src/world/PlayerCombatIntegrationPort';
 
 const layout: ArenaLayout = {
   seed: 1,
@@ -105,10 +105,10 @@ function createFixture(options: {
   readonly powerUpDamageMultiplier?: number;
   readonly turretDamageMultiplier?: number;
   readonly combatSystem?: CombatSystem;
-  readonly ak47Behavior?: WorldPlayerGameplaySystems['ak47Behavior'];
-  readonly negevBehavior?: WorldPlayerGameplaySystems['negevBehavior'];
-  readonly sustainedWeaponBehavior?: WorldPlayerGameplaySystems['sustainedWeaponBehavior'];
-  readonly weaponReaction?: WorldPlayerGameplaySystems['weaponReaction'];
+  readonly ak47Behavior?: PlayerCombatIntegrationPort['ak47'];
+  readonly negevBehavior?: PlayerCombatIntegrationPort['negev'];
+  readonly sustainedWeaponBehavior?: PlayerCombatIntegrationPort['sustainedWeapon'];
+  readonly weaponReaction?: PlayerCombatIntegrationPort['weaponReaction'];
   readonly ak47StrategicTarget?: Ak47StrategicTargetSystem | null;
   readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
   readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
@@ -158,28 +158,38 @@ function createFixture(options: {
   if (options.loadoutDamageMultiplier !== undefined) {
     vi.spyOn(playerLoadout, 'getDamageMultiplier').mockReturnValue(options.loadoutDamageMultiplier);
   }
-  const playerSystems = {
-    heldAction: methodBag(),
-    playerModifier: methodBag(),
-    itemRuntime: methodBag({
-      getRemoteControlDamageMultiplier: vi.fn(() => 1),
-    }),
+  const playerCombat: PlayerCombatIntegrationPort = {
     resource,
-    burrow: methodBag({ isWeaponBlocked: vi.fn(() => false) }),
-    loadout: playerLoadout,
-    translocator: methodBag(),
-    tunnel: methodBag(),
-    guardianSpirit: null,
-    repairDrone: null,
-    slimeTrail: null,
-    flamethrowerUpgrade: null,
-    weaponUpgrade: null,
-    ak47Behavior: options.ak47Behavior ?? null,
-    negevBehavior: options.negevBehavior ?? null,
-    sustainedWeaponBehavior: options.sustainedWeaponBehavior ?? methodBag(),
+    modifier: methodBag() as never,
+    item: methodBag({
+      getRemoteControlDamageMultiplier: vi.fn(() => 1),
+    }) as never,
+    state: {
+      isBurrowed: vi.fn(() => false),
+      isStunned: vi.fn(() => false),
+      isDashBlocked: vi.fn(() => false),
+      getMovementSpeedFactor: vi.fn(() => 1),
+      isWeaponBlocked: vi.fn(() => false),
+    },
+    loadout: {
+      getEquippedWeaponConfig: (playerId, slot) => playerLoadout.getEquippedWeaponConfig(playerId, slot),
+      getDamageMultiplier: (playerId, nowMs) => playerLoadout.getDamageMultiplier(playerId, nowMs),
+      getWeaponDamageMultiplier: (playerId, slot, nowMs) => playerLoadout.getWeaponDamageMultiplier(playerId, slot, nowMs),
+      getSpeedMultiplier: (playerId, nowMs) => playerLoadout.getSpeedMultiplier(playerId, nowMs),
+      getHeldSelfPushVelocity: (playerId, nowMs) => playerLoadout.getHeldSelfPushVelocity(playerId, nowMs),
+    },
+    utility: methodBag() as never,
+    ak47: options.ak47Behavior ?? null,
+    ak47StrategicTarget: options.ak47StrategicTarget,
+    negev: options.negevBehavior ?? null,
+    sustainedWeapon: options.sustainedWeaponBehavior ?? methodBag({
+      setTeslaDomeSystem: vi.fn(),
+      setEnergyShieldSystem: vi.fn(),
+    }) as never,
     weaponReaction: options.weaponReaction ?? methodBag(),
-    ak47StrategicTarget: options.ak47StrategicTarget ?? null,
-  } as unknown as WorldPlayerGameplaySystems;
+    slimeTrail: null,
+    flamethrower: null,
+  };
   const metrics = resolveActiveArenaWorldMetrics();
   const network = {
     authority: {
@@ -215,7 +225,7 @@ function createFixture(options: {
     getWorldParticipation: () => ({}) as never,
     getPlayerCapabilities: () => ({ canUseCombat: true }),
     getEnemyManager: () => enemyManager,
-    getPlayerSystems: () => playerSystems,
+    getPlayerCombatIntegration: () => playerCombat,
     automatedWeaponExecution,
     getPowerUpSystem: () => options.powerUpDamageMultiplier === undefined
       ? null

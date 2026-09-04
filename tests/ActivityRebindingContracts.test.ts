@@ -149,7 +149,7 @@ function combatBindingHarness(
     getWorldParticipation: () => null as never,
     getPlayerCapabilities: () => ({ canUseCombat: true }),
     getEnemyManager: () => null,
-    getPlayerSystems: () => null,
+    getPlayerCombatIntegration: () => null,
     automatedWeaponExecution: null,
     getPowerUpSystem: () => null,
     getTargetStatusSystem: () => null,

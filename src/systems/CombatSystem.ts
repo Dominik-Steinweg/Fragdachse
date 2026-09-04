@@ -5,7 +5,7 @@ import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager }     from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
-import type { ResourceSystem }    from './ResourceSystem';
+import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
@@ -337,7 +337,7 @@ export class CombatSystem {
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
-  private resourceSystem:   ResourceSystem      | null  = null;
+  private resourceSystem:   PlayerCombatResourcePort | null  = null;
   private loadoutManager:   LoadoutManagerType  | null  = null;
   private ak47Behavior:     Pick<Ak47BehaviorPort, 'registerProjectileHit' | 'resetPlayer'> | null = null;
   private energyShieldSystem: EnergyShieldSystem | null = null;
@@ -457,7 +457,7 @@ export class CombatSystem {
   // ── Referenz-Injection ────────────────────────────────────────────────────
 
   setBurrowSystem(bs: BurrowSystemType | null): void     { this.burrowSystem   = bs; }
-  setResourceSystem(rs: ResourceSystem | null): void     { this.resourceSystem = rs; }
+  setResourceSystem(rs: PlayerCombatResourcePort | null): void     { this.resourceSystem = rs; }
   setLoadoutManager(lm: LoadoutManagerType | null): void { this.loadoutManager = lm; }
   setAk47Behavior(behavior: Pick<Ak47BehaviorPort, 'registerProjectileHit' | 'resetPlayer'> | null): void {
     this.ak47Behavior = behavior;

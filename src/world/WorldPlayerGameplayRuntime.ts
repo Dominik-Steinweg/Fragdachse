@@ -65,6 +65,7 @@ import type {
   SpecializedWeaponExecutionCapability,
   WeaponExecutionCapability,
 } from '../loadout/WeaponFireExecutor';
+import type { PlayerCombatIntegrationPort } from './PlayerCombatIntegrationPort';
 import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
 } from '../config/coopDefenseConstructions';
@@ -592,6 +593,37 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed) return;
     this.shieldBuffPort = port;
     this.systems.loadout.setShieldBuffReadPort(port);
+  }
+
+  /**
+   * Returns the semantic combat view of this runtime without exposing its internal system
+   * directory. Combat integration owns neither the player-Gameplay state nor its lifecycle.
+   */
+  getPlayerCombatIntegrationPort(): PlayerCombatIntegrationPort {
+    const systems = this.systems;
+    return {
+      resource: systems.resource,
+      loadout: systems.loadout,
+      modifier: systems.playerModifier,
+      state: {
+        isBurrowed: (playerId) => systems.burrow.isBurrowed(playerId),
+        isStunned: (playerId) => systems.burrow.isStunned(playerId),
+        isDashBlocked: (playerId) => systems.burrow.isDashBlocked(playerId),
+        getMovementSpeedFactor: (playerId) => systems.burrow.getMovementSpeedFactor(playerId),
+        isWeaponBlocked: (playerId) => systems.burrow.isWeaponBlocked(playerId),
+      },
+      item: systems.itemRuntime,
+      utility: systems.utilityAction,
+      ak47: systems.ak47Behavior,
+      ak47StrategicTarget: systems.ak47StrategicTarget
+        ? { handleDirectAk47EnemyHit: (projectile, enemyId, nowMs) => systems.ak47StrategicTarget!.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) }
+        : null,
+      negev: systems.negevBehavior,
+      weaponReaction: systems.weaponReaction,
+      sustainedWeapon: systems.sustainedWeaponBehavior,
+      slimeTrail: systems.slimeTrail,
+      flamethrower: systems.flamethrowerUpgrade,
+    };
   }
 
   // ── Öffentliche Player-in-World-/Reconcile-Lifecycle-Grenze (PlayerGameplayLifecyclePort) ──
