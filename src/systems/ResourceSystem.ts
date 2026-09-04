@@ -21,7 +21,7 @@ export class ResourceSystem {
   private regenPausedUntil:  Map<string, number> = new Map(); // ms-Timestamp
   private powerUpSystem:     PowerUpSystemType | null = null;
   private adrenalineMaxResolver: ((id: string) => number) | null = null;
-  private adrenalineRegenRateResolver: ((id: string) => number) | null = null;
+  private adrenalineRegenRateResolver: ((id: string, nowMs: number) => number) | null = null;
   private rageMaxResolver: ((id: string) => number) | null = null;
   private rageGainMultiplierResolver: ((id: string) => number) | null = null;
   private adrenalineGainMultiplierResolver: ((id: string) => number) | null = null;
@@ -40,7 +40,7 @@ export class ResourceSystem {
 
   setPowerUpSystem(ps: PowerUpSystemType | null): void { this.powerUpSystem = ps; }
   setAdrenalineMaxResolver(resolver: ((id: string) => number) | null): void { this.adrenalineMaxResolver = resolver; }
-  setAdrenalineRegenRateResolver(resolver: ((id: string) => number) | null): void { this.adrenalineRegenRateResolver = resolver; }
+  setAdrenalineRegenRateResolver(resolver: ((id: string, nowMs: number) => number) | null): void { this.adrenalineRegenRateResolver = resolver; }
   setRageMaxResolver(resolver: ((id: string) => number) | null): void { this.rageMaxResolver = resolver; }
   setRageGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.rageGainMultiplierResolver = resolver; }
   setAdrenalineGainMultiplierResolver(resolver: ((id: string) => number) | null): void { this.adrenalineGainMultiplierResolver = resolver; }
@@ -195,7 +195,7 @@ export class ResourceSystem {
   regenTick(id: string, delta: number, nowMs: number): void {
     if (nowMs < (this.regenPausedUntil.get(id) ?? 0)) return;
     const regenMult = this.powerUpSystem?.getRegenMultiplier(id) ?? 1;
-    const regenRate = this.adrenalineRegenRateResolver?.(id) ?? ADRENALINE_REGEN_PER_SEC;
+    const regenRate = this.adrenalineRegenRateResolver?.(id, nowMs) ?? ADRENALINE_REGEN_PER_SEC;
     const cur = Math.min(
       this.getMaxAdrenaline(id),
       (this.adrenaline.get(id) ?? 0) + regenRate * regenMult * delta / 1000,

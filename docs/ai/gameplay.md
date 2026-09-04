@@ -39,6 +39,8 @@ World Loading ist an worldRevision gebunden. Round Loading wartet auf die World-
 
 Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody ist der kanonische physische Körper; PlayerEntity kapselt ihn und die optionale Sprite-Präsentation. Attach- und Detach-Operationen sind atomar und müssen bei einem Fehler zurückrollen.
 
+`WorldPlayerGameplayRuntime` besitzt den World-Lifetime der Player-Gameplay-Systeme und stellt nach außen nur benannte Lifecycle-, Action-, Read-, Resource- und Combat-Integration-Ports bereit. Activity-, Construction-, Support-, Host- und Client-Adapter konsumieren diese semantischen Sichten; sie traversieren weder den internen Child-Graphen noch greifen sie auf `.systems` zu. Die Runtime bleibt dabei ohne Renderer, ArenaContext und direkte NetworkBridge-Abhängigkeit.
+
 ## Eingaben und Aktionen
 
 World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem Handler zentral geprüft. Activity- oder Round-Aktionen erhalten zusätzlich die fachlich nötige Activity-/Round-Identität. Ein alter Client kann so weder nach einem World-Wechsel noch nach einem Activity-Wechsel veraltete Aktionen ausführen.

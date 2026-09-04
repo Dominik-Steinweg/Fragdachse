@@ -51,7 +51,7 @@ export interface FireChunkBurstPort {
     y: number,
     burst: FireChunkBurstConfig,
     sourceKey: string,
-    now?: number,
+    now: number,
   ): void;
 }
 
@@ -149,7 +149,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     }
   }
 
-  handleEnemyDeath(x: number, y: number, burnSources: readonly ActiveBurnSource[], now = Date.now()): void {
+  handleEnemyDeath(x: number, y: number, burnSources: readonly ActiveBurnSource[], now: number): void {
     const handledOwners = new Set<string>();
     for (const source of burnSources) {
       if (handledOwners.has(source.attackerId)) continue;
@@ -185,12 +185,12 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     y: number,
     burst: FireChunkBurstConfig,
     sourceKey: string,
-    now = Date.now(),
+    now: number,
   ): void {
     this.launchFireChunks(ownerId, x, y, burst, now, sourceKey);
   }
 
-  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, now = Date.now()): void {
+  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, now: number): void {
     const owner = this.getEquippedFlameOwner(projectile.ownerId);
     if (!owner || (owner.fire.burningGround?.createOnFlameExpiry ?? 0) <= 0) return;
     if ((owner.fire.burningGround?.durationMs ?? 0) <= 0) return;

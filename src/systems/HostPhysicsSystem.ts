@@ -29,8 +29,8 @@ type BurrowSystemType   = {
   getMovementSpeedFactor(id: string): number;
 };
 type LoadoutManagerType = {
-  getSpeedMultiplier(id: string): number;
-  getHeldSelfPushVelocity(id: string): { vx: number; vy: number } | null;
+  getSpeedMultiplier(id: string, now: number): number;
+  getHeldSelfPushVelocity(id: string, now: number): { vx: number; vy: number } | null;
 };
 
 interface DashState {
@@ -341,6 +341,7 @@ export class HostPhysicsSystem {
    * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
+    const now = Date.now();
     if (!(this.canMoveResolver?.(playerId)
       ?? maySendWorldInput(this.bridge.getWorldParticipation(playerId)))) return;
     if (!this.combatSystem.isAlive(playerId)) return;
@@ -351,7 +352,7 @@ export class HostPhysicsSystem {
     if (len === 0) return; // kein Dash im Stand
 
     const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(playerId) ?? 1;
-    const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId) ?? 1;
+    const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId, now) ?? 1;
     const dashRangeMultiplier = Math.max(0, this.dashRangeMultiplierResolver?.(playerId) ?? 1);
     const vNorm     = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * dashRangeMultiplier;
     const player = this.playerManager.getPlayer(playerId);
@@ -359,7 +360,7 @@ export class HostPhysicsSystem {
 
     this.dashStates.set(playerId, {
       phase:   1,
-      startMs: Date.now(),
+      startMs: now,
       dirX:    dx / len,
       dirY:    dy / len,
       vNorm,
@@ -737,7 +738,7 @@ export class HostPhysicsSystem {
       const len   = Math.sqrt(dx * dx + dy * dy);
 
       const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
-      const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id) ?? 1;
+      const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
       const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult;
 
       if (len > 0) {
@@ -748,7 +749,7 @@ export class HostPhysicsSystem {
         baseVy = 0;
       }
 
-      const selfPush = this.loadoutManager?.getHeldSelfPushVelocity(player.id);
+      const selfPush = this.loadoutManager?.getHeldSelfPushVelocity(player.id, now);
       if (selfPush) {
         baseVx += selfPush.vx;
         baseVy += selfPush.vy;

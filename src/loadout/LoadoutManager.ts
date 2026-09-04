@@ -149,20 +149,19 @@ export class LoadoutManager {
 
   // ── Frame-Update (Spread-Decay, Rage-Drain, Ultimate-Ablauf) ─────────────
 
-  update(delta: number, nowMs?: number): void {
-    const now = nowMs ?? Date.now();
+  update(delta: number, nowMs: number): void {
 
     // Spread-Decay für alle ausgerüsteten Waffen
     for (const loadout of this.loadouts.values()) {
-      loadout.weapon1.decaySpread(delta, now);
-      loadout.weapon2.decaySpread(delta, now);
+      loadout.weapon1.decaySpread(delta, nowMs);
+      loadout.weapon2.decaySpread(delta, nowMs);
     }
 
   }
 
   // ── Multiplier-Getter ─────────────────────────────────────────────────────
 
-  getSpeedMultiplier(playerId: string, now: number = Date.now()): number {
+  getSpeedMultiplier(playerId: string, now: number): number {
     const ultimateMult = this.ultimateModifierReadPort?.getSpeedMultiplier(playerId, now) ?? 1;
 
     const sustainedFactor = this.sustainedWeaponBehavior?.getMovementSlowFactor(playerId, now) ?? null;
@@ -179,7 +178,7 @@ export class LoadoutManager {
     return ultimateMult;
   }
 
-  getHeldSelfPushVelocity(playerId: string, now: number = Date.now()): { vx: number; vy: number } | null {
+  getHeldSelfPushVelocity(playerId: string, now: number): { vx: number; vy: number } | null {
     const held = this.heldFireSlots.get(playerId);
     if (!held || now - held.lastAt >= LoadoutManager.HOLD_EXPIRE_MS) return null;
 
@@ -195,11 +194,11 @@ export class LoadoutManager {
     };
   }
 
-  getDamageMultiplier(playerId: string, now: number = Date.now()): number {
+  getDamageMultiplier(playerId: string, now: number): number {
     return this.ultimateModifierReadPort?.getDamageMultiplier(playerId, now) ?? 1;
   }
 
-  getWeaponDamageMultiplier(playerId: string, slot: WeaponSlot, now = Date.now()): number {
+  getWeaponDamageMultiplier(playerId: string, slot: WeaponSlot, now: number): number {
     const baseMultiplier = this.getDamageMultiplier(playerId, now);
     if (slot !== 'weapon1') return baseMultiplier;
 
@@ -208,7 +207,7 @@ export class LoadoutManager {
     return baseMultiplier * this.shieldBuffReadPort.getPrimaryDamageMultiplier(playerId, fireCfg, now);
   }
 
-  getShieldBuffHudState(playerId: string, now = Date.now()): ShieldBuffHudState {
+  getShieldBuffHudState(playerId: string, now: number): ShieldBuffHudState {
     const fireCfg = this.getEquippedEnergyShieldFireConfig(playerId);
     if (!fireCfg || !this.shieldBuffReadPort) {
       return {

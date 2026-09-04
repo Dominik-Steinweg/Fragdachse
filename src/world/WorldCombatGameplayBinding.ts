@@ -405,7 +405,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       + (o.getPlayerCombatIntegration()?.item.getConditionalLifeLeechBonus(playerId) ?? 0)
     ));
     combat.setPlayerArmorRegenPerSecondResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getNumericStat(playerId, 'player.armorRegenPerSecond') ?? 0);
-    combat.setPlayerBonusArmorRegenPerSecondResolver((playerId) => o.getPlayerCombatIntegration()?.item.getBonusArmorRegenPerSecond(playerId) ?? 0);
+    combat.setPlayerBonusArmorRegenPerSecondResolver((playerId) => o.getPlayerCombatIntegration()?.item.getBonusArmorRegenPerSecond(playerId, Date.now()) ?? 0);
     combat.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical, sourceSlot) => {
       const p = o.getPlayerCombatIntegration();
       return p?.modifier.resolveOutgoingDamage(
@@ -414,10 +414,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         amount,
         allowCritical,
         Math.random,
-        p.item.getConditionalOutgoingDamageBonus(attackerId, sourceSlot),
+        p.item.getConditionalOutgoingDamageBonus(attackerId, sourceSlot, Date.now()),
       ) ?? { amount, isCritical: false };
     });
-    combat.setEnemyIncomingDamageMultiplierResolver((enemyId) => o.getPlayerCombatIntegration()?.item.getEnemyIncomingDamageMultiplier(enemyId) ?? 1);
+    combat.setEnemyIncomingDamageMultiplierResolver((enemyId) => o.getPlayerCombatIntegration()?.item.getEnemyIncomingDamageMultiplier(enemyId, Date.now()) ?? 1);
     combat.setTargetIncomingDamageMultiplierResolver((target) => {
       const targeting = o.getTargetStatusSystem();
       const vulnerability = targeting?.getIncomingDamageMultiplier(target) ?? 1;
@@ -449,7 +449,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
       const reaction = o.getPlayerCombatIntegration()?.reactions;
       if (!reaction) return;
-      const result = reaction.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss);
+      const result = reaction.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss, Date.now());
       const slow = result;
       if (slow.slowFraction > 0) combat.applyEnemySlow(enemyId, slow.slowFraction, slow.slowDurationMs);
       if (result.shouldCull) {
@@ -463,7 +463,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const playerCombat = o.getPlayerCombatIntegration();
       const reaction = playerCombat?.reactions;
       if (!reaction) return;
-      const result = reaction.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind);
+      const result = reaction.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, Date.now());
       if (result.adrenalineGain > 0) playerCombat?.resource.addAdrenaline(playerId, result.adrenalineGain);
       if (result.reflectedDamage > 0 && result.reflectTargetId) {
         combat.applyDamage(result.reflectTargetId, result.reflectedDamage, false, playerId, 'Dornenplatten', undefined, { damageKind: 'reflect', allowCritical: false });
@@ -479,7 +479,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     combat.setHealingReceivedHandler((playerId, amount) => o.network.stats.recordHealingReceived(playerId, amount));
     combat.setArmorReceivedHandler((playerId, amount) => o.network.stats.recordArmorReceived(playerId, amount));
-    projectiles.setNaturalFlameExpiryCallback((projectile, x, y) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, x, y));
+    projectiles.setNaturalFlameExpiryCallback((projectile, x, y) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, x, y, Date.now()));
     hostPhysics.setEnemyMovementFactorResolver((enemyId, now) => Math.min(
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
@@ -492,7 +492,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         o.getPlayerCombatIntegration()?.reactions.removeEnemy(enemyId);
         return true;
       }
-      const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources) ?? null;
+      const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources, Date.now()) ?? null;
       if (burst) o.network.effects.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
       if (death) o.getNecromancySystem()?.recordEnemyDeath(death);
       o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
@@ -544,7 +544,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.getPlayerCombatIntegration()?.reactions.registerKill({ killerId, victimId, sourceId, x, y, source });
       if (o.isCoopMission() && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
         if (killerProfile) {
-          o.getPlayerCombatIntegration()?.reactions.handleCoopDefenseItemKill(killerId, victimId, x, y);
+          o.getPlayerCombatIntegration()?.reactions.handleCoopDefenseItemKill(killerId, victimId, x, y, Date.now());
         }
         o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
         for (const profile of o.network.authority.getConnectedPlayers()) {
@@ -620,7 +620,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const isBaseTurret = isFriendlyBaseTurret || isHostileBaseTurret;
       const ownerRuntimeDamageMultiplier = isBaseTurret
         ? 1
-        : playerCombat.loadout.getDamageMultiplier(ownerId) * (o.getPowerUpSystem()?.getDamageMultiplier(ownerId) ?? 1);
+        : playerCombat.loadout.getDamageMultiplier(ownerId, Date.now()) * (o.getPowerUpSystem()?.getDamageMultiplier(ownerId) ?? 1);
       const fire = isBaseTurret && weapon.fire.type === 'projectile'
         ? {
           ...weapon.fire,
@@ -718,7 +718,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const o = this.options;
     hostPhysics.setRunSpeedResolver((playerId) => {
       const p = o.getPlayerCombatIntegration();
-      return (p?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (p?.item.getRunSpeedMultiplier(playerId) ?? 1);
+      return (p?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (p?.item.getRunSpeedMultiplier(playerId, Date.now()) ?? 1);
     });
     hostPhysics.setDashRangeMultiplierResolver((playerId) => 1 + (o.getPlayerCombatIntegration()?.modifier.getPercentageStat(playerId, 'player.dashRange') ?? 0));
     hostPhysics.setDashRecoveryDurationResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S);
@@ -732,7 +732,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   private bindDecoy(): void {
     const o = this.options;
     o.decoySystem.setCombatStateReader(o.combatSystem);
-    o.decoySystem.setRunSpeedResolver((playerId) => (o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (o.getPlayerCombatIntegration()?.loadout.getSpeedMultiplier(playerId) ?? 1));
+    o.decoySystem.setRunSpeedResolver((playerId) => (o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (o.getPlayerCombatIntegration()?.loadout.getSpeedMultiplier(playerId, Date.now()) ?? 1));
     o.decoySystem.setCooldownStarter((playerId, utilityId, when) => o.getPlayerCombatIntegration()?.utility.beginUtilityCooldown(playerId, utilityId, when));
     o.decoySystem.setExplosionCallback((ownerId, x, y, radius, damage, knockback) => {
       o.combatSystem.applyAoeDamage(x, y, radius, damage, ownerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.decoy_explosion', sourceSlot: 'utility' });
@@ -919,7 +919,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
           y,
           color: rock.ownerColor,
           config: WEAPON_CONFIGS.TURRET_TESLA as WeaponConfig & { fire: TeslaDomeWeaponFireConfig },
-          damageMultiplier: injectorMultiplier * remote * (playerCombat?.loadout.getDamageMultiplier(rock.ownerId) ?? 1) * (o.getPowerUpSystem()?.getDamageMultiplier(rock.ownerId) ?? 1),
+          damageMultiplier: injectorMultiplier * remote * (playerCombat?.loadout.getDamageMultiplier(rock.ownerId, Date.now()) ?? 1) * (o.getPowerUpSystem()?.getDamageMultiplier(rock.ownerId) ?? 1),
         };
       });
   }

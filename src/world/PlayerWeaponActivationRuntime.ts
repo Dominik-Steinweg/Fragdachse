@@ -69,7 +69,7 @@ export interface PlayerWeaponActivationRuntimeOptions {
   readonly ak47Behavior?: Pick<Ak47BehaviorPort, 'isFireSuperiorityAvailable' | 'prepareShot' | 'commitShot'> | null;
   readonly negevBehavior?: Pick<NegevBehaviorPort, 'prepareShot' | 'commitShot' | 'terminateStreak'> | null;
   readonly consumeMovementCharge?: ((playerId: string) => number) | null;
-  readonly registerWeaponFired?: ((playerId: string, sourceSlot: WeaponSlot) => void) | null;
+  readonly registerWeaponFired?: ((playerId: string, sourceSlot: WeaponSlot, nowMs: number) => void) | null;
   readonly broadcastShotFx?: ((shooterId: string, durationMs: number, intensity: number) => void) | null;
 }
 
@@ -296,7 +296,7 @@ export class PlayerWeaponActivationRuntime {
   /** Applies post-dispatch observations that remain owned by the equipped Loadout. */
   noteWeaponFired(playerId: string, slot: WeaponSlot, nowMs: number): void {
     if (this.destroyed) return;
-    if (slot === 'weapon2') this.options.registerWeaponFired?.(playerId, slot);
+    if (slot === 'weapon2') this.options.registerWeaponFired?.(playerId, slot, nowMs);
     this.options.loadout.noteWeaponUsed(playerId, slot, nowMs);
   }
 

@@ -149,4 +149,21 @@ describe('Gameplay Runtime correction-pass ratchets', () => {
     expect(ultimateRuntime).not.toContain('this.options.network.relationship');
     expect(ultimateRuntime).not.toContain('PlayerUltimateBehaviorNetworkPort');
   });
+
+  it('keeps migrated player gameplay time explicit at the owner boundary', () => {
+    const loadoutManager = source('src/loadout/LoadoutManager.ts');
+    const worldRuntime = source('src/world/WorldPlayerGameplayRuntime.ts');
+    const flamethrower = source('src/systems/FlamethrowerUpgradeSystem.ts');
+    const slimeTrail = source('src/systems/SlimeTrailSystem.ts');
+
+    expect(loadoutManager).toContain('update(delta: number, nowMs: number): void');
+    expect(loadoutManager).not.toMatch(/(?:update|getSpeedMultiplier|getHeldSelfPushVelocity|getDamageMultiplier|getWeaponDamageMultiplier|getShieldBuffHudState)\([^)]*now(?:Ms)?\s*=\s*Date\.now\(\)/);
+    expect(flamethrower).toContain('handleEnemyDeath(x: number, y: number, burnSources: readonly ActiveBurnSource[], now: number)');
+    expect(flamethrower).toContain('handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, now: number)');
+    expect(flamethrower).not.toMatch(/(?:handleEnemyDeath|hostCreateFireChunkBurst|handleNaturalFlameExpiry)[\s\S]{0,220}now\s*=\s*Date\.now\(\)/);
+    expect(slimeTrail).toContain('handleEnemyDeath(enemyId: string, x: number, y: number, now: number)');
+    expect(slimeTrail).not.toMatch(/handleEnemyDeath\([^)]*now\s*=\s*Date\.now\(\)/);
+    expect(worldRuntime).toContain('systems.loadout.update(deltaMs, nowMs)');
+    expect(worldRuntime).toContain('handleCoopDefenseItemKill: (killerId, victimId, x, y, nowMs)');
+  });
 });

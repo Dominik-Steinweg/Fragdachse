@@ -294,7 +294,7 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
 
     expect(systems.resource.initPlayer).toHaveBeenCalledWith('p1');
     expect(systems.burrow.initPlayer).toHaveBeenCalledWith('p1');
-    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('p1');
+    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('p1', expect.any(Number));
   });
 
   it('setzt beim Loadout-Attach erst den Ultimate-State zurück, dann das Default-Loadout', () => {
@@ -379,8 +379,8 @@ describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => 
     runtime.reconcilePlayerBuildModifiers(builds);
 
     expect(systems.playerModifier.syncPlayers).toHaveBeenCalledWith(builds);
-    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('withBuild');
-    expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalledWith('absent');
+    expect(systems.itemRuntime.initPlayer).toHaveBeenCalledWith('withBuild', expect.any(Number));
+    expect(systems.itemRuntime.initPlayer).not.toHaveBeenCalledWith('absent', expect.any(Number));
     expect(systems.itemRuntime.removePlayer).toHaveBeenCalledWith('noBuild');
   });
 

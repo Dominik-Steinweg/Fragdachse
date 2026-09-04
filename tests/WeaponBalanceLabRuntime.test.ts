@@ -80,7 +80,7 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
       setPosition: vi.fn(),
       body: { setVelocity: vi.fn() },
     };
-    const useLoadout = vi.fn(() => ({ ok: true }));
+    const useWeaponAction = vi.fn(() => ({ ok: true }));
     const runtime = new WeaponBalanceLabRuntime(
       () => ({
         playerManager: { getPlayer: vi.fn(() => player) },
@@ -94,7 +94,7 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
         observeAdrenalineGain: () => null,
         setAdrenaline: vi.fn(),
         getMaxAdrenaline: () => 0,
-        useLoadout,
+        useWeaponAction,
       },
       vi.fn(),
       vi.fn(),
@@ -118,8 +118,8 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
     runtime.update('ARENA', true, 16);
     runtime.update('ARENA', true, 16);
 
-    expect(useLoadout.mock.calls[0]?.at(-1)).toBe(true);
-    expect(useLoadout.mock.calls[1]?.at(-1)).toBe(false);
+    expect(useWeaponAction.mock.calls[0]?.at(-1)).toBe(true);
+    expect(useWeaponAction.mock.calls[1]?.at(-1)).toBe(false);
   });
 
   it('resolves the internal range without exposing it as selectable campaign content', () => {

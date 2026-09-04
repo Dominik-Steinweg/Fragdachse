@@ -109,7 +109,7 @@ export class SlimeTrailSystem {
     return 1 - Phaser.Math.Clamp(state.slowFraction, 0, 0.95);
   }
 
-  handleEnemyDeath(enemyId: string, x: number, y: number, now = Date.now()): SlimeDeathBurst | null {
+  handleEnemyDeath(enemyId: string, x: number, y: number, now: number): SlimeDeathBurst | null {
     const state = this.affectedEnemies.get(enemyId);
     if (!state || state.deathBurstSearchRadius <= 0 || state.deathBurstPatchCount <= 0) return null;
     this.affectedEnemies.delete(enemyId);

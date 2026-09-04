@@ -76,8 +76,8 @@ const HITSCAN_MUZZLE_EPSILON = 0.25;
 // Zirkuläre Abhängigkeiten vermeiden: nur Typ-Imports
 type BurrowSystemType    = { isBurrowed(id: string): boolean };
 type LoadoutManagerType  = {
-  getDamageMultiplier(id: string): number;
-  getWeaponDamageMultiplier(id: string, slot: WeaponSlot, now?: number): number;
+  getDamageMultiplier(id: string, now: number): number;
+  getWeaponDamageMultiplier(id: string, slot: WeaponSlot, now: number): number;
 };
 type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlayer(id: string): void };
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
@@ -1502,7 +1502,7 @@ export class CombatSystem {
   getPlayerRuntimeDamageMultiplier(playerId: string, sourceSlot?: LoadoutSlot): number {
     const loadoutMult = sourceSlot === 'weapon1' || sourceSlot === 'weapon2'
       ? (this.loadoutManager?.getWeaponDamageMultiplier(playerId, sourceSlot, Date.now()) ?? 1)
-      : (this.loadoutManager?.getDamageMultiplier(playerId) ?? 1);
+      : (this.loadoutManager?.getDamageMultiplier(playerId, Date.now()) ?? 1);
     const powerUpMult = this.powerUpSystem?.getDamageMultiplier(playerId) ?? 1;
     return loadoutMult * powerUpMult;
   }
@@ -2227,7 +2227,7 @@ export class CombatSystem {
     if (trace.hitPlayerId) {
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const canDealDamage = this.canDamageTarget(shooterId, trace.hitPlayerId);
@@ -2247,7 +2247,7 @@ export class CombatSystem {
     } else if (trace.hitEnemyId) {
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       this.applyDamage(trace.hitEnemyId, actualDamage, false, shooterId, sourceId, {
@@ -2265,7 +2265,7 @@ export class CombatSystem {
     } else if (trace.hitDecoyId !== null) {
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const hit = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
@@ -2290,7 +2290,7 @@ export class CombatSystem {
     if (chainCfg && chainCfg.maxJumps > 0) {
       const loadoutMult = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const baseChainDamage = damage * loadoutMult * powerUpMult;
 
@@ -2343,7 +2343,7 @@ export class CombatSystem {
     const damageTarget = (targetId: string): void => {
       const loadoutMult = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
       if (actualDamage <= 0) return;
@@ -2388,7 +2388,7 @@ export class CombatSystem {
     if (trace.hitDecoyId !== null) {
       const loadoutMult = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
       if (actualDamage <= 0) return;
@@ -2709,7 +2709,7 @@ export class CombatSystem {
 
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const canDealDamage = this.canDamageTarget(shooterId, player.id);
@@ -2752,7 +2752,7 @@ export class CombatSystem {
 
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       this.applyDamage(enemy.id, actualDamage, false, shooterId, sourceId, {
@@ -2792,7 +2792,7 @@ export class CombatSystem {
 
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId) ?? 1);
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, shooterId, sourceId, {

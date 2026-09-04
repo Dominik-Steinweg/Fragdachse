@@ -30,7 +30,7 @@ export interface WeaponBalanceLabWorldPort {
   observeAdrenalineGain(listener: (playerId: string, gained: number) => void): (() => void) | null;
   setAdrenaline(playerId: string, amount: number): void;
   getMaxAdrenaline(playerId: string): number;
-  useLoadout(
+  useWeaponAction(
     slot: WeaponSlot,
     playerId: string,
     angle: number,
@@ -265,7 +265,7 @@ export class WeaponBalanceLabRuntime {
     const target = [...this.targetPositions.values()][Math.floor(this.targetPositions.size / 2)];
     if (!active || !player || !target) return;
     const angle = Math.atan2(target.y - player.y, target.x - player.x);
-    const result = this.worldPort.useLoadout(
+    const result = this.worldPort.useWeaponAction(
       active.request.slot,
       playerId,
       angle,

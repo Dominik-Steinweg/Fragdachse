@@ -392,7 +392,7 @@ export class WorldPlayerGameplayRuntime implements
   PlayerGameplayActionPort,
   PlayerGameplayResourceCommandPort,
   PlayerGameplayFrameStages {
-  readonly systems: WorldPlayerGameplaySystems;
+  private readonly systems: WorldPlayerGameplaySystems;
   private destroyed = false;
   private shieldBuffPort: ShieldBuffPort | null = null;
   private readonly heldActionUtilityIds = new Map<string, string | null>();
@@ -573,7 +573,7 @@ export class WorldPlayerGameplayRuntime implements
           burnDurationMs: event.fireChunkBurnDurationMs,
           burnDamagePerTick: event.fireChunkBurnDamagePerTick,
           sourceId: 'weapon.NEGEV.killstreak',
-        }, `negev-killstreak:${event.ownerId}:${event.nowMs}`);
+        }, `negev-killstreak:${event.ownerId}:${event.nowMs}`, event.nowMs);
       },
     });
     const weaponActivation = new PlayerWeaponActivationRuntime({
@@ -600,7 +600,7 @@ export class WorldPlayerGameplayRuntime implements
       ak47Behavior,
       negevBehavior,
       consumeMovementCharge: (playerId) => itemRuntime.consumeMovementCharge(playerId),
-      registerWeaponFired: (playerId, sourceSlot) => itemRuntime.registerWeaponFired(playerId, sourceSlot),
+      registerWeaponFired: (playerId, sourceSlot, nowMs) => itemRuntime.registerWeaponFired(playerId, sourceSlot, nowMs),
       broadcastShotFx: options.network.presentation.broadcastShotFx,
     });
     const playerAction = new PlayerActionRuntime(
@@ -710,25 +710,25 @@ export class WorldPlayerGameplayRuntime implements
       sustainedWeapon: systems.sustainedWeaponBehavior,
       slimeTrail: systems.slimeTrail,
       reactions: {
-        handleDirectPrimaryHit: (attackerId, enemyId, remainingHp, maxHp, isBoss) => {
-          const slow = systems.itemRuntime.rollDirectPrimaryHitEffects(attackerId, enemyId);
+        handleDirectPrimaryHit: (attackerId, enemyId, remainingHp, maxHp, isBoss, nowMs) => {
+          const slow = systems.itemRuntime.rollDirectPrimaryHitEffects(attackerId, enemyId, nowMs);
           return {
             ...slow,
             shouldCull: systems.itemRuntime.rollCulling(attackerId, remainingHp, maxHp, isBoss),
           };
         },
-        handlePlayerDamageTaken: (playerId, attackerId, hpLost, armorLost, damageKind) => (
-          systems.itemRuntime.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind)
+        handlePlayerDamageTaken: (playerId, attackerId, hpLost, armorLost, damageKind, nowMs) => (
+          systems.itemRuntime.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, nowMs)
         ),
         handleDirectAk47EnemyHit: (projectile, enemyId, nowMs) => (
           systems.ak47StrategicTarget?.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) ?? null
         ),
-        handleNaturalFlameExpiry: (projectile, x, y) => {
-          systems.flamethrowerUpgrade?.handleNaturalFlameExpiry(projectile, x, y);
+        handleNaturalFlameExpiry: (projectile, x, y, nowMs) => {
+          systems.flamethrowerUpgrade?.handleNaturalFlameExpiry(projectile, x, y, nowMs);
         },
-        handleEnemyDeath: (enemyId, x, y, burnSources) => {
-          systems.flamethrowerUpgrade?.handleEnemyDeath(x, y, burnSources);
-          const burst = systems.slimeTrail?.handleEnemyDeath(enemyId, x, y, Date.now()) ?? null;
+        handleEnemyDeath: (enemyId, x, y, burnSources, nowMs) => {
+          systems.flamethrowerUpgrade?.handleEnemyDeath(x, y, burnSources, nowMs);
+          const burst = systems.slimeTrail?.handleEnemyDeath(enemyId, x, y, nowMs) ?? null;
           systems.itemRuntime.removeEnemy(enemyId);
           return burst;
         },
@@ -743,9 +743,9 @@ export class WorldPlayerGameplayRuntime implements
           systems.negevBehavior.registerKill({ killerId: outcome.killerId, sourceId: outcome.sourceId });
           systems.weaponReaction.registerKill(outcome);
         },
-        handleCoopDefenseItemKill: (killerId, victimId, x, y) => {
+        handleCoopDefenseItemKill: (killerId, victimId, x, y, nowMs) => {
           // Nur der tatsaechliche Killer, nicht das ganze Team, bekommt die Kill-Affixe.
-          systems.itemRuntime.registerOwnKill(killerId);
+          systems.itemRuntime.registerOwnKill(killerId, nowMs);
 
           // Brandzerfall verlangt einen Kill durch direkten Primaerwaffenschaden; Explosionen,
           // Brand, Kettenblitze und Bodenflaechen loesen ihn nicht aus.
@@ -761,7 +761,7 @@ export class WorldPlayerGameplayRuntime implements
             burnDurationMs: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDurationMs,
             burnDamagePerTick: COOP_DEFENSE_AFFIX_RULES.fireChunkBurnDamagePerTick,
             sourceId: 'ground_fire.fire_decay',
-          }, `item-fire-chunks:${killerId}`);
+          }, `item-fire-chunks:${killerId}`, nowMs);
         },
       },
     };
@@ -772,7 +772,7 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed || !this.systems.flamethrowerUpgrade) return null;
     return {
       hostCreateFireChunkBurst: (ownerId, x, y, burst, sourceKey, now) => (
-        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now ?? Date.now())
+        this.hostCreateFireChunkBurst(ownerId, x, y, burst, sourceKey, now)
       ),
     };
   }
@@ -1032,7 +1032,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   attachPlayerBuild(playerId: string): void {
-    this.systems.itemRuntime.initPlayer(playerId);
+    this.systems.itemRuntime.initPlayer(playerId, Date.now());
   }
 
   detachPlayerBuild(playerId: string): void {
@@ -1095,7 +1095,7 @@ export class WorldPlayerGameplayRuntime implements
       const wantsItemRuntime = Boolean(snapshot?.coopDefenseProfile)
         || (snapshot?.equippedItems?.length ?? 0) > 0;
       if (wantsItemRuntime) {
-        if (this.options.playerManager.hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId);
+        if (this.options.playerManager.hasPlayer(playerId)) this.systems.itemRuntime.initPlayer(playerId, Date.now());
       } else {
         this.systems.itemRuntime.removePlayer(playerId);
       }
@@ -1374,10 +1374,10 @@ export class WorldPlayerGameplayRuntime implements
     itemRuntime: CoopDefenseItemRuntimeSystem,
   ): void {
     resource.setAdrenalineMaxResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.maxAdrenaline', 100));
-    resource.setAdrenalineRegenRateResolver((playerId) => {
+    resource.setAdrenalineRegenRateResolver((playerId, nowMs) => {
       const base = playerModifier.getResolvedStat(playerId, 'player.adrenalineRegenRate', 10);
       return base
-        * itemRuntime.getAdrenalineRegenMultiplier(playerId)
+        * itemRuntime.getAdrenalineRegenMultiplier(playerId, nowMs)
         * (this.options.getTeamAdrenalineRegenMultiplier?.(playerId) ?? 1);
     });
     resource.setRageMaxResolver((playerId) => playerModifier.getResolvedStat(playerId, 'ultimate.maxRage', 600));

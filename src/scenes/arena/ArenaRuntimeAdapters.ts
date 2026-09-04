@@ -307,7 +307,7 @@ export function createWeaponBalanceLabWorldPort(
     getMaxAdrenaline: (playerId) => (
       flow.getWorldPlayerGameplayRuntime()?.getMaxAdrenaline(playerId) ?? 0
     ),
-    useLoadout: (slot, playerId, angle, targetX, targetY, now, shotSequence, inputStarted) => {
+    useWeaponAction: (slot, playerId, angle, targetX, targetY, now, shotSequence, inputStarted) => {
       const playerRuntime = flow.getWorldPlayerGameplayRuntime();
       if (!playerRuntime) return null;
       const player = playerManager.getPlayer(playerId);

@@ -39,6 +39,8 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
 
   it('führt die in 2B migrierten Consumer über die öffentlichen Read-Views', () => {
     const runtime = read('src/world/WorldPlayerGameplayRuntime.ts');
+    expect(runtime).not.toContain('export interface WorldPlayerGameplaySystems');
+    expect(runtime).toContain('private readonly systems: WorldPlayerGameplaySystems');
     for (const view of [
       'interface PlayerGameplayStateReadView',
       'interface PlayerGameplayLoadoutReadView',

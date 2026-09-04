@@ -24,10 +24,10 @@ export type PlayerCombatResourcePort = Pick<
 /** Equipment-derived values consumed by combat, physics and automated weapon wiring. */
 export interface PlayerCombatLoadoutPort {
   getEquippedWeaponConfig(playerId: string, slot: 'weapon1' | 'weapon2'): WeaponConfig | undefined;
-  getDamageMultiplier(playerId: string, nowMs?: number): number;
-  getWeaponDamageMultiplier(playerId: string, slot: LoadoutSlot, nowMs?: number): number;
-  getSpeedMultiplier(playerId: string, nowMs?: number): number;
-  getHeldSelfPushVelocity(playerId: string, nowMs?: number): { vx: number; vy: number } | null;
+  getDamageMultiplier(playerId: string, nowMs: number): number;
+  getWeaponDamageMultiplier(playerId: string, slot: LoadoutSlot, nowMs: number): number;
+  getSpeedMultiplier(playerId: string, nowMs: number): number;
+  getHeldSelfPushVelocity(playerId: string, nowMs: number): { vx: number; vy: number } | null;
 }
 
 /** Resolved player/build values consumed by combat and movement resolution. */
@@ -61,10 +61,10 @@ export interface PlayerCombatStatePort {
 export interface PlayerCombatItemPort {
   getConditionalDamageReduction(playerId: string): number;
   getConditionalLifeLeechBonus(playerId: string): number;
-  getBonusArmorRegenPerSecond(playerId: string, nowMs?: number): number;
-  getConditionalOutgoingDamageBonus(playerId: string | undefined, sourceSlot?: LoadoutSlot, nowMs?: number): number;
-  getEnemyIncomingDamageMultiplier(enemyId: string, nowMs?: number): number;
-  getRunSpeedMultiplier(playerId: string, nowMs?: number): number;
+  getBonusArmorRegenPerSecond(playerId: string, nowMs: number): number;
+  getConditionalOutgoingDamageBonus(playerId: string | undefined, sourceSlot: LoadoutSlot | undefined, nowMs: number): number;
+  getEnemyIncomingDamageMultiplier(enemyId: string, nowMs: number): number;
+  getRunSpeedMultiplier(playerId: string, nowMs: number): number;
   getRemoteControlDamageMultiplier(
     playerId: string,
     source: RemoteControlSource,
@@ -108,6 +108,7 @@ export interface PlayerCombatReactionPort {
     remainingHp: number,
     maxHp: number,
     isBoss: boolean,
+    nowMs: number,
   ): { slowFraction: number; slowDurationMs: number; shouldCull: boolean };
   handlePlayerDamageTaken(
     playerId: string,
@@ -115,17 +116,18 @@ export interface PlayerCombatReactionPort {
     hpLost: number,
     armorLost: number,
     damageKind: CombatDamageKind,
+    nowMs: number,
   ): { adrenalineGain: number; reflectedDamage: number; reflectTargetId?: string };
   handleDirectAk47EnemyHit(
     projectile: TrackedProjectile,
     enemyId: string,
     nowMs: number,
   ): Ak47DirectEnemyHitImpact | null;
-  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number): void;
-  handleEnemyDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[]): SlimeDeathBurst | null;
+  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, nowMs: number): void;
+  handleEnemyDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], nowMs: number): SlimeDeathBurst | null;
   removeEnemy(enemyId: string): void;
   handlePlayerDeath(playerId: string, x: number, y: number): void;
-  handleCoopDefenseItemKill(killerId: string, victimId: string, x: number, y: number): void;
+  handleCoopDefenseItemKill(killerId: string, victimId: string, x: number, y: number, nowMs: number): void;
   resolveProjectile(projectile: TrackedProjectile): void;
   registerKill(outcome: PlayerCombatKillOutcome): void;
 }
