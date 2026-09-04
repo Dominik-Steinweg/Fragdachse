@@ -65,6 +65,7 @@ import type {
   ProjectileDetonationSearchRequest,
   ProjectileDetonationTarget,
 } from '../projectile/ProjectileExternalInteractionPort';
+import type { ProjectileBurnAugment } from '../projectile/ProjectileTravelPort';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -919,7 +920,9 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       hitObstacleIds: cfg.isFlame ? new Set<number>() : undefined,
       canReceiveFireImbue: cfg.canReceiveFireImbue,
       supplementalBurnOnHit: cfg.supplementalBurnOnHit,
+      supplementalBurnProvenance: cfg.supplementalBurnProvenance,
       fireTrail: cfg.fireTrail,
+      pathEffectKind: cfg.pathEffectKind,
       lastFireTrailCellKey: undefined,
       fireTrailHalfWidthCells: cfg.fireTrailHalfWidthCells,
       awpCorridorHalfWidth: cfg.awpCorridorHalfWidth,
@@ -2158,6 +2161,17 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   getProjectileById(id: number): TrackedProjectile | undefined {
     const projectile = this.owner?.store.getById(id);
     return projectile?.pendingDestroy ? undefined : projectile;
+  }
+
+  /** Applies a travel-acquired burn to the canonical record; callers never receive that record. */
+  applyProjectileBurnAugment(id: number, augment: ProjectileBurnAugment): boolean {
+    const projectile = this.getActiveProjectileById(id);
+    if (!projectile?.canReceiveFireImbue || projectile.isGrenade || projectile.isFlame) return false;
+    if (projectile.supplementalBurnOnHit
+      && augment.burn.damagePerTick <= projectile.supplementalBurnOnHit.damagePerTick) return false;
+    projectile.supplementalBurnOnHit = { ...augment.burn };
+    projectile.supplementalBurnProvenance = augment.provenance;
+    return true;
   }
 
   private searchDetonableProjectiles(

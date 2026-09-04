@@ -15,6 +15,7 @@ import type {
   ProjectileExplosionConfig,
   ProjectileHomingConfig,
   ProjectileProximityPulseConfig,
+  ProjectilePathEffectKind,
   ProjectileStyle,
   ShotAudioKey,
   TracerConfig,
@@ -304,6 +305,7 @@ export interface ProjectileBurnSpec {
 
 /** Wirkung entlang der geflogenen Bahn statt am Treffpunkt. */
 export interface ProjectilePathEffectSpec {
+  readonly kind?: ProjectilePathEffectKind;
   readonly fireTrail?: GroundFireCellEffect;
   readonly fireTrailHalfWidthCells?: number;
   readonly awpCorridor?: ProjectileAwpCorridorSpec;

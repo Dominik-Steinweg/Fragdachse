@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `5 – Travel / Environment / Augments`
-- **Gesamtstatus:** Phase 4 abgeschlossen; External Interaction und schmale Threat-, Diagnostics- und Presentation-Reads laufen über world-owned Ports, ohne aktive Collection oder Runtime-Record-Leaks bei den migrierten Fremdconsumern
+- **Nächste Phase:** `6 – Collision + Targets + Defense`
+- **Gesamtstatus:** Phase 5 abgeschlossen; Travel-/Environment-Augments und Path-Effects laufen über world-owned Capability- und Interaction-Ports, ohne direkte Projectile-Manager- oder Runtime-Record-Zugriffe in den migrierten Upgrade-Systemen
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab` (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -43,7 +43,7 @@
 | 2B | ✅ | World Runtime + Store + Spawn Authority |
 | 3 | ✅ | Flight + Lifetime + Homing |
 | 4 | ✅ | External Interaction + Read Ports |
-| 5 | ⬜ | Travel / Environment / Augments |
+| 5 | ✅ | Travel / Environment / Augments |
 | 6 | ⬜ | Collision + Targets + Defense |
 | 7 | ⬜ | Combat Port + Direct Outcomes |
 | 8 | ⬜ | Explosion / Domain Effects / Grenades |
@@ -63,7 +63,7 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet Kollision, Wirkung, Snapshot und Presentation weiter auf dem kanonischen Store; Flight/Lifetime/Homing und Phase-4-External-/Read-Ports sind im `WorldProjectileRuntime` geschlossen, spätere Fachbereiche folgen in den Phasen 5–14.
+- [Transition] `ProjectileManager` verarbeitet Kollision, Wirkung, Snapshot und Presentation weiter auf dem kanonischen Store; Flight/Lifetime/Homing, Phase-4-External-/Read-Ports und Phase-5-Travel-/Environment-Ports sind im `WorldProjectileRuntime` geschlossen, spätere Fachbereiche folgen in den Phasen 6–14.
 - [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: `CombatSystem`-Deflection/Reflection/Schwarmkinder (6–7), übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
 - [Transition] `toLegacyProjectileSpawnConfig` bildet den Spawn-Auftrag auf den Legacy-Record ab; entfällt mit dessen Ablösung (14).
 
@@ -87,6 +87,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Projectile Store / Runtime Record | `ProjectileStore`; Record bis zur Ablösung weiterhin `TrackedProjectile` |
 | External Interaction | `ProjectileExternalInteractionPort`, `ProjectileDetonationSearchRequest`, `ProjectileDetonationTarget`, `ProjectileDetonationOutcome`, `TranslocatorProjectilePort`, `TranslocatorPuckSpawnRequest` (`src/projectile/ProjectileExternalInteractionPort.ts`) |
 | Read Ports | `ProjectileThreatReadPort`, `ProjectileThreatSample`, `ProjectileDiagnosticsReadPort`, `ProjectileDiagnosticsSummary`, `ProjectilePresentationReadPort` (`src/projectile/ProjectileReadPorts.ts`) |
+| Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileFireTrailCapability`, `ProjectileAwpCorridorCapability`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment` (`src/projectile/ProjectileTravelPort.ts`); `ProjectilePathEffectKind` (`src/types.ts`) |
 | Target / Geometry / Targetability | `ProjectileHomingRequest`, `ProjectileKinematics`, `ProjectileTargetQueryPort`, `ProjectileTargetabilityPort`, `LineOfFireReadPort`, `HomingRuntimeState` (`src/entities/`, `src/types.ts`) |
 | Barrier / Defense | — |
 | Projectile Combat | — |
@@ -108,7 +109,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 5 starten; bei tatsächlichem Beginn Phase 5 auf 🟨 setzen.**
+**Phase 6 starten; bei tatsächlichem Beginn Phase 6 auf 🟨 setzen.**
 
 ---
 

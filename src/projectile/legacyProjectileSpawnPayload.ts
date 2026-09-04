@@ -111,6 +111,7 @@ export function toLegacyProjectileSpawnConfig(request: ProjectileSpawnRequest): 
     supplementalBurnOnHit:     interaction.burn?.supplemental,
     canReceiveFireImbue:       interaction.burn?.canReceiveFireImbue,
     fireTrail:               interaction.pathEffect?.fireTrail,
+    pathEffectKind:          interaction.pathEffect?.kind,
     fireTrailHalfWidthCells: interaction.pathEffect?.fireTrailHalfWidthCells,
     awpCorridorHalfWidth:          corridor?.halfWidth,
     awpCorridorDamage:             corridor?.damage,

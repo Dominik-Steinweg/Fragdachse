@@ -349,12 +349,14 @@ describe('Activity rebinding', () => {
     let enemyManager: EnemyManager | null = null;
     const runtime = new WorldPlayerGameplayRuntime({
       playerManager: service({ getAllPlayers: () => [], getPlayer: () => undefined }) as PlayerManager,
-      projectileManager: service(),
+      projectileSpawn: service(),
       translocatorProjectilePort: {
         spawnPuck: () => 1,
         getPuckPosition: () => null,
         consumePuck: () => false,
       },
+      projectileTravelReadPort: service(),
+      projectileEnvironmentInteractionPort: service(),
       combatSystem: service(),
       hostPhysics: service(),
       fireSystem: service(),

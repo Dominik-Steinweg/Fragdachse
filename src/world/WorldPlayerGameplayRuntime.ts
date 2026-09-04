@@ -5,9 +5,12 @@ import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
+import type {
+  ProjectileEnvironmentInteractionPort,
+  ProjectileTravelReadPort,
+} from '../projectile/ProjectileTravelPort';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
@@ -357,9 +360,10 @@ export interface PlayerGameplayTunnelPlacementPort {
 
 export interface WorldPlayerGameplayRuntimeOptions {
   readonly playerManager: PlayerManager;
-  readonly projectileManager: ProjectileManager;
   readonly projectileSpawn: ProjectileSpawnPort;
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
+  readonly projectileTravelReadPort: ProjectileTravelReadPort;
+  readonly projectileEnvironmentInteractionPort: ProjectileEnvironmentInteractionPort;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
@@ -532,7 +536,8 @@ export class WorldPlayerGameplayRuntime implements
     const flamethrowerUpgrade = new FlamethrowerUpgradeSystem(
       options.playerManager,
       enemyManager,
-      options.projectileManager,
+      options.projectileTravelReadPort,
+      options.projectileEnvironmentInteractionPort,
       options.combatSystem,
       loadout,
       options.fireSystem,
@@ -549,7 +554,7 @@ export class WorldPlayerGameplayRuntime implements
       ),
     );
     const weaponUpgrade = new WeaponUpgradeSystem(
-      options.projectileManager,
+      options.projectileTravelReadPort,
       enemyManager,
       options.combatSystem,
       options.hostPhysics,

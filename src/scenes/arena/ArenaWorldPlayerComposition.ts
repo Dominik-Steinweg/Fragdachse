@@ -51,9 +51,10 @@ export function composeWorldPlayerGameplay(
   // `isCoopMission`/`missionMapConfig` gebunden.
   const playerGameplayRuntime = new WorldPlayerGameplayRuntime({
     playerManager: ctx.playerManager,
-    projectileManager: ctx.projectileManager,
     projectileSpawn,
     translocatorProjectilePort: projectileSpawn,
+    projectileTravelReadPort: projectileSpawn,
+    projectileEnvironmentInteractionPort: projectileSpawn,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     fireSystem: ctx.fireSystem,

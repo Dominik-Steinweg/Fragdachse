@@ -2,7 +2,6 @@ import * as Phaser from 'phaser';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { LoadoutManager } from '../loadout/LoadoutManager';
 import {
   UTILITY_CONFIGS,
@@ -12,6 +11,13 @@ import {
 import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, GroundFireVisualStyle, TrackedProjectile } from '../types';
 import type { FireSystem } from '../effects/FireSystem';
 import { BURN_TICK_INTERVAL_MS } from '../config';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
+import type {
+  ProjectileEnvironmentInteractionPort,
+  ProjectileTravelReadPort,
+  ProjectileTravelSample,
+} from '../projectile/ProjectileTravelPort';
+import type { ProjectileId } from '../projectile/ProjectileSpawnPort';
 import type { ActiveBurnSource, CombatSystem } from './CombatSystem';
 
 interface ResolvedFlameOwner {
@@ -59,12 +65,15 @@ export interface FireChunkBurstPort {
 export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   private lastRingContactTick = -1;
   private readonly pendingChunkLandings: PendingFireChunkLanding[] = [];
+  private readonly fireTrailCellByProjectile = new Map<ProjectileId, string>();
+  private readonly activeFireTrailIds = new Set<ProjectileId>();
   private enemyManager: EnemyManager | null;
 
   constructor(
     private readonly playerManager: PlayerManager,
     enemyManager: EnemyManager | null,
-    private readonly projectileManager: ProjectileManager,
+    private readonly projectileTravel: ProjectileTravelReadPort,
+    private readonly projectileEnvironment: ProjectileEnvironmentInteractionPort,
     private readonly combatSystem: CombatSystem,
     private readonly loadoutManager: LoadoutManager,
     private readonly fireSystem: FireSystem,
@@ -90,36 +99,36 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   /** Must run before CombatSystem.update so a swept projectile is imbued before a same-frame hit. */
   prepareProjectileBurns(now: number): void {
     const rings = this.getActiveRings();
-    for (const projectile of this.projectileManager.getActiveProjectiles()) {
-      if (!projectile.canReceiveFireImbue || projectile.pendingDestroy) continue;
-      if (projectile.isGrenade || projectile.isFlame) continue;
-      const fromX = projectile.lastX;
-      const fromY = projectile.lastY;
-      const toX = projectile.sprite.x;
-      const toY = projectile.sprite.y;
+    for (const sample of this.projectileTravel.getTravelSamples()) {
+      if (!sample.capabilities.canReceiveFireImbue) continue;
+      const ownerId = sample.provenance.allegiance.ownerId;
+      const fromX = sample.fromX;
+      const fromY = sample.fromY;
+      const toX = sample.toX;
+      const toY = sample.toY;
       if (Math.abs(toX - fromX) + Math.abs(toY - fromY) <= 0.01) continue;
 
       const generalBurnEnabled = this.resolvePlayerStat(
-        projectile.ownerId,
+        ownerId,
         'player.fire.burningProjectiles.enabled',
         0,
       ) > 0;
       if (generalBurnEnabled) {
         const burn: BurnOnHitConfig = {
-          durationMs: this.resolvePlayerStat(projectile.ownerId, 'player.fire.burningProjectiles.durationMs', 0),
-          damagePerTick: this.resolvePlayerStat(projectile.ownerId, 'player.fire.burningProjectiles.damagePerTick', 0),
+          durationMs: this.resolvePlayerStat(ownerId, 'player.fire.burningProjectiles.durationMs', 0),
+          damagePerTick: this.resolvePlayerStat(ownerId, 'player.fire.burningProjectiles.damagePerTick', 0),
         };
         for (const fireOwner of this.fireSystem.collectGroundFireOwnersAlongSegment(fromX, fromY, toX, toY, now)) {
-          if (!this.areFriendly(fireOwner.ownerId, projectile.ownerId)) continue;
-          this.applyStrongestSupplementalBurn(projectile, burn);
+          if (!this.areFriendly(fireOwner.ownerId, ownerId)) continue;
+          this.addBurnAugment(sample, burn, fireOwner.ownerId, fireOwner.sourceId);
           break;
         }
       }
 
       for (const ring of rings) {
-        if (!ring.igniteProjectiles || !this.areFriendly(ring.playerId, projectile.ownerId)) continue;
+        if (!ring.igniteProjectiles || !this.areFriendly(ring.playerId, ownerId)) continue;
         if (!this.segmentTouchesRing(fromX, fromY, toX, toY, ring)) continue;
-        this.applyStrongestSupplementalBurn(projectile, ring.burn);
+        this.addBurnAugment(sample, ring.burn, ring.playerId, `flame-ring:${ring.playerId}`);
       }
     }
   }
@@ -233,6 +242,8 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   clear(): void {
     this.lastRingContactTick = -1;
     this.pendingChunkLandings.length = 0;
+    this.fireTrailCellByProjectile.clear();
+    this.activeFireTrailIds.clear();
   }
 
   private getEquippedFlameOwner(playerId: string): ResolvedFlameOwner | null {
@@ -287,14 +298,24 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   }
 
   private updateFireballTrails(now: number): void {
-    for (const projectile of this.projectileManager.getActiveProjectiles()) {
-      if (!projectile.fireTrail || projectile.pendingDestroy || projectile.projectileStyle !== 'fireball') continue;
-      const gridX = Math.floor(projectile.sprite.x / 16);
-      const gridY = Math.floor(projectile.sprite.y / 16);
-      const cellKey = `${gridX}:${gridY}`;
-      if (projectile.lastFireTrailCellKey === cellKey) continue;
-      projectile.lastFireTrailCellKey = cellKey;
-      this.refreshGenericGround(projectile.ownerId, projectile.sprite.x, projectile.sprite.y, projectile.fireTrail, now, `fireball-trail:${projectile.id}`);
+    this.activeFireTrailIds.clear();
+    for (const sample of this.projectileTravel.getTravelSamples()) {
+      const trail = sample.capabilities.pathEffect?.fireTrail;
+      if (!trail || sample.capabilities.pathEffect?.kind !== 'fireball') continue;
+      this.activeFireTrailIds.add(sample.projectileId);
+      if (this.fireTrailCellByProjectile.get(sample.projectileId) === trail.cellKey) continue;
+      this.fireTrailCellByProjectile.set(sample.projectileId, trail.cellKey);
+      this.refreshGenericGround(
+        sample.provenance.allegiance.ownerId,
+        sample.toX,
+        sample.toY,
+        trail.effect,
+        now,
+        `fireball-trail:${sample.projectileId}`,
+      );
+    }
+    for (const projectileId of this.fireTrailCellByProjectile.keys()) {
+      if (!this.activeFireTrailIds.has(projectileId)) this.fireTrailCellByProjectile.delete(projectileId);
     }
   }
 
@@ -422,13 +443,15 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
       && maxEndpointDistance >= Math.max(0, ring.radius - halfThickness);
   }
 
-  private applyStrongestSupplementalBurn(projectile: TrackedProjectile, burn: BurnOnHitConfig): void {
-    if (!projectile.supplementalBurnOnHit || this.burnDps(burn) > this.burnDps(projectile.supplementalBurnOnHit)) {
-      projectile.supplementalBurnOnHit = { ...burn };
-    }
-  }
-
-  private burnDps(burn: BurnOnHitConfig): number {
-    return burn.damagePerTick * 1000 / BURN_TICK_INTERVAL_MS;
+  private addBurnAugment(
+    sample: ProjectileTravelSample,
+    burn: BurnOnHitConfig,
+    sourceOwnerId: string,
+    sourceId: string,
+  ): void {
+    this.projectileEnvironment.addBurnAugment(sample.projectileId, {
+      burn: { ...burn },
+      provenance: createSingleOwnerProvenance(sourceOwnerId, { weaponSourceId: sourceId }),
+    });
   }
 }

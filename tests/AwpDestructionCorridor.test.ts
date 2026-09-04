@@ -2,10 +2,13 @@ import { fakeEntity } from './fakeEntity';
 import { describe, expect, it } from 'vitest';
 import { WeaponUpgradeSystem } from '../src/systems/WeaponUpgradeSystem';
 import type { EnemyManager } from '../src/entities/EnemyManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { FireSystem } from '../src/effects/FireSystem';
 import type { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
-import type { TrackedProjectile } from '../src/types';
+import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
+import type {
+  ProjectileAwpCorridorCapability,
+  ProjectileTravelSample,
+} from '../src/projectile/ProjectileTravelPort';
 
 interface DamageCall { targetId: string; amount: number; atMs: number }
 interface RecoilCall { targetId: string; vx: number; vy: number; atMs: number }
@@ -14,22 +17,33 @@ interface RecoilCall { targetId: string; vx: number; vy: number; atMs: number }
  * Projektil, das entlang der X-Achse fliegt; der Gegner steht seitlich versetzt
  * innerhalb der Schneisenbreite.
  */
-function corridorProjectile(overrides: Partial<TrackedProjectile> = {}): TrackedProjectile {
-  return fakeEntity({ id: 1,
-    ownerId: 'shooter',
-    projectileStyle: 'awp',
-    lastX: 0,
-    lastY: 0, x: 200, y: 0, awpCorridorHalfWidth: 56,
-    awpCorridorDamage: 40,
-    awpCorridorDotDurationMs: 500,
-    awpCorridorDotTickIntervalMs: 100,
-    awpCorridorKnockback: 900,
-    awpCorridorKnockbackDurationMs: 260,
-    awpCorridorHitIds: new Set<string>(),
-    ...overrides }) as unknown as TrackedProjectile;
+function corridorSample(overrides: Partial<ProjectileAwpCorridorCapability> = {}): ProjectileTravelSample {
+  return {
+    projectileId: 1,
+    fromX: 0,
+    fromY: 0,
+    toX: 200,
+    toY: 0,
+    provenance: createSingleOwnerProvenance('shooter', { weaponSourceId: 'AWP' }),
+    capabilities: {
+      canReceiveFireImbue: false,
+      pathEffect: {
+        kind: 'awp',
+        awpCorridor: {
+          halfWidth: 56,
+          damage: 40,
+          dotDurationMs: 500,
+          dotTickIntervalMs: 100,
+          knockback: 900,
+          knockbackDurationMs: 260,
+          ...overrides,
+        },
+      },
+    },
+  };
 }
 
-function buildSystem(projectiles: TrackedProjectile[]) {
+function buildSystem(samples: ProjectileTravelSample[]) {
   const damageCalls: DamageCall[] = [];
   const recoilCalls: RecoilCall[] = [];
   const enemies = new Map<string, { id: string; sprite: { x: number; y: number }; getCollisionRadius(): number }>([
@@ -37,7 +51,7 @@ function buildSystem(projectiles: TrackedProjectile[]) {
   ]);
   let now = 0;
 
-  const projectileManager = { getActiveProjectiles: () => projectiles } as unknown as ProjectileManager;
+  const projectileTravel = { getTravelSamples: () => samples };
   const enemyManager = {
     getAllEnemies: () => [...enemies.values()],
     getEnemy: (id: string) => enemies.get(id),
@@ -52,7 +66,7 @@ function buildSystem(projectiles: TrackedProjectile[]) {
   } as unknown as HostPhysicsSystem;
   const fireSystem = { hostRefreshGroundCellsAlongSegment: () => {} } as unknown as FireSystem;
 
-  const system = new WeaponUpgradeSystem(projectileManager, enemyManager, combatSystem, hostPhysics, fireSystem);
+  const system = new WeaponUpgradeSystem(projectileTravel, enemyManager, combatSystem, hostPhysics, fireSystem);
 
   return {
     damageCalls,
@@ -67,7 +81,7 @@ function buildSystem(projectiles: TrackedProjectile[]) {
 
 describe('AWP-Schneise: Wegstoss vor kurzem Nachbrenner', () => {
   it('stoesst sofort weg und richtet erst danach ueber mehrere Ticks Schaden an', () => {
-    const harness = buildSystem([corridorProjectile()]);
+    const harness = buildSystem([corridorSample()]);
 
     harness.advanceTo(0);
     expect(harness.recoilCalls).toHaveLength(1);
@@ -80,7 +94,7 @@ describe('AWP-Schneise: Wegstoss vor kurzem Nachbrenner', () => {
   });
 
   it('verteilt den Gesamtschaden innerhalb einer halben Sekunde auf fuenf Ticks', () => {
-    const harness = buildSystem([corridorProjectile()]);
+    const harness = buildSystem([corridorSample()]);
 
     harness.advanceTo(0);
     for (let ms = 100; ms <= 600; ms += 100) harness.advanceTo(ms);
@@ -92,7 +106,7 @@ describe('AWP-Schneise: Wegstoss vor kurzem Nachbrenner', () => {
   });
 
   it('bricht den Nachbrenner ab, sobald der Gegner nicht mehr existiert', () => {
-    const harness = buildSystem([corridorProjectile()]);
+    const harness = buildSystem([corridorSample()]);
 
     harness.advanceTo(0);
     harness.advanceTo(100);
@@ -103,10 +117,10 @@ describe('AWP-Schneise: Wegstoss vor kurzem Nachbrenner', () => {
   });
 
   it('bleibt untaetig, wenn die Schneise nicht aktiv ist (nicht voll aufgeladen)', () => {
-    const harness = buildSystem([corridorProjectile({
-      awpCorridorHalfWidth: undefined,
-      awpCorridorDamage: undefined,
-      awpCorridorKnockback: undefined,
+    const harness = buildSystem([corridorSample({
+      halfWidth: 0,
+      damage: 0,
+      knockback: undefined,
     })]);
 
     harness.advanceTo(0);

@@ -379,6 +379,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
           canReceiveFireImbue: sourceSlot === 'weapon1' || sourceSlot === 'weapon2',
         },
         pathEffect: isAwp ? {
+          kind: 'awp',
           fireTrail: (config.awpCharge?.fireTrailDurationMs ?? 0) > 0 ? {
             durationMs: config.awpCharge?.fireTrailDurationMs ?? 0,
             burnDurationMs: config.awpCharge?.fireTrailBurnDurationMs ?? 0,

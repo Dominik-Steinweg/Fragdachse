@@ -6,6 +6,8 @@ import {
   type ProjectileOwnerSeam,
 } from '../src/projectile/WorldProjectileRuntime';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../src/types';
+import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
+import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
 
 function createSimulation() {
   const created: TrackedProjectile[] = [];
@@ -116,5 +118,73 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
 
     expect(stageNowMs).toBe(1_234);
     expect(receivedAge).toBe(100);
+  });
+
+  it('materialisiert Travel-Capabilities und wendet Burn-Augments im Owner an', () => {
+    const projectile = {
+      id: 0,
+      ownerId: 'owner',
+      sourceId: 'weapon.GLOCK',
+      sourceSlot: 'weapon1',
+      allowTeamDamage: false,
+      sprite: { active: true, x: 100, y: 8 },
+      body: { velocity: { x: 10, y: 0 } },
+      lastX: 0,
+      lastY: 8,
+      pendingDestroy: false,
+      isGrenade: false,
+      isFlame: false,
+      canReceiveFireImbue: true,
+      fireTrail: {
+        durationMs: 1_000,
+        burnDurationMs: 500,
+        burnDamagePerTick: 2,
+        sourceId: 'weapon.AWP.fire_trail',
+      },
+      pathEffectKind: 'awp',
+      fireTrailHalfWidthCells: 1,
+      awpCorridorHalfWidth: 24,
+      awpCorridorDamage: 40,
+    } as unknown as TrackedProjectile;
+    let appliedAugment: ProjectileBurnAugment | null = null;
+    const simulation: LegacyProjectileHostSimulation = {
+      bindProjectileOwner: () => {},
+      createProjectile: () => projectile,
+      releaseProjectileResources: () => {},
+      applyProjectileBurnAugment: (_id, augment) => {
+        appliedAugment = augment;
+        projectile.supplementalBurnOnHit = augment.burn;
+        projectile.supplementalBurnProvenance = augment.provenance;
+        return true;
+      },
+      releaseWorldProjectileState: () => {},
+    };
+    const runtime = new WorldProjectileRuntime({ simulation, hostNowMs: () => 0 });
+    runtime.spawnLegacyProjectile(0, 8, 0, 'owner', payload);
+
+    expect(runtime.getTravelSamples()).toMatchObject([{
+      projectileId: 0,
+      fromX: 0,
+      fromY: 8,
+      toX: 100,
+      toY: 8,
+      capabilities: {
+        canReceiveFireImbue: true,
+        pathEffect: {
+          kind: 'awp',
+          fireTrail: { halfWidthCells: 1, cellKey: '6:0' },
+          awpCorridor: { halfWidth: 24, damage: 40 },
+        },
+      },
+    }]);
+
+    const augment: ProjectileBurnAugment = {
+      burn: { durationMs: 750, damagePerTick: 4 },
+      provenance: createSingleOwnerProvenance('fire-owner', { weaponSourceId: 'ground-fire' }),
+    };
+    expect(runtime.addBurnAugment(0, augment)).toBe(true);
+    expect(appliedAugment).toEqual(augment);
+    expect(projectile.supplementalBurnOnHit).toEqual(augment.burn);
+    expect(projectile.supplementalBurnProvenance).toEqual(augment.provenance);
   });
 });

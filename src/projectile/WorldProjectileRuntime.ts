@@ -15,6 +15,16 @@ import type {
 import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
+import {
+  BURN_TICK_INTERVAL_MS,
+} from '../config';
+import type {
+  ProjectileBurnAugment,
+  ProjectileEnvironmentInteractionPort,
+  ProjectileTravelCapabilities,
+  ProjectileTravelReadPort,
+  ProjectileTravelSample,
+} from './ProjectileTravelPort';
 import type {
   LegacyProjectileExternalInteractionAccess,
   ProjectileExternalInteractionPort,
@@ -72,6 +82,8 @@ export interface LegacyProjectileHostSimulation {
   setHostFrameTime?(nowMs: number): void;
   /** Semantische External-Interaction-Brücke; Runtime-Records bleiben intern. */
   externalInteraction?: LegacyProjectileExternalInteractionAccess;
+  /** Übergangshilfe: der Legacy-Simulationsowner schreibt den kanonischen Burn-Zustand. */
+  applyProjectileBurnAugment?(projectileId: ProjectileId, augment: ProjectileBurnAugment): boolean;
   /** Räumt den registry-fremden Rest ab: Renderer, Snapshot-Zustand und Client-Visuals. */
   releaseWorldProjectileState(): void;
 }
@@ -132,6 +144,8 @@ export class WorldProjectileRuntime implements
   ProjectileThreatReadPort,
   ProjectileDiagnosticsReadPort,
   ProjectilePresentationReadPort,
+  ProjectileTravelReadPort,
+  ProjectileEnvironmentInteractionPort,
   WorldScopedBinding {
   private readonly projectiles = new ProjectileStore();
   private readonly flightProcessor = new ProjectileFlightProcessor();
@@ -139,7 +153,10 @@ export class WorldProjectileRuntime implements
   private readonly detonableIds = new Set<ProjectileId>();
   private readonly detonatorIds = new Set<ProjectileId>();
   private readonly translocatorPuckIds = new Set<ProjectileId>();
+  private readonly travelEffectIds = new Set<ProjectileId>();
+  private readonly burnAugments = new Map<ProjectileId, ProjectileBurnAugment>();
   private readonly threatSamples: ProjectileThreatSample[] = [];
+  private readonly travelSamples: ProjectileTravelSample[] = [];
   private readonly activeProjectilesByOwner = new Map<string, number>();
   private readonly simulation: LegacyProjectileHostSimulation;
   private readonly hostNowMs: () => number;
@@ -255,6 +272,51 @@ export class WorldProjectileRuntime implements
     return true;
   }
 
+  getTravelSamples(): readonly ProjectileTravelSample[] {
+    this.travelSamples.length = 0;
+    if (this.destroyed) return this.travelSamples;
+    for (const projectileId of this.travelEffectIds) {
+      const record = this.projectiles.getById(projectileId);
+      if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.sprite.active) continue;
+
+      const pathEffect = createTravelPathEffect(record);
+      this.travelSamples.push({
+        projectileId: record.id,
+        fromX: record.lastX,
+        fromY: record.lastY,
+        toX: record.sprite.x,
+        toY: record.sprite.y,
+        provenance: createProjectileProvenance(record),
+        capabilities: {
+          canReceiveFireImbue: record.canReceiveFireImbue === true && !record.isGrenade && !record.isFlame,
+          pathEffect,
+        },
+      });
+    }
+    return this.travelSamples;
+  }
+
+  addBurnAugment(projectileId: ProjectileId, augment: ProjectileBurnAugment): boolean {
+    if (this.destroyed) return false;
+    const record = this.projectiles.getById(projectileId);
+    if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return false;
+    if (!record.canReceiveFireImbue || record.isGrenade || record.isFlame) return false;
+
+    const current = this.burnAugments.get(projectileId)
+      ?? (record.supplementalBurnOnHit
+        ? {
+          burn: record.supplementalBurnOnHit,
+          provenance: record.supplementalBurnProvenance ?? createProjectileProvenance(record),
+        }
+        : undefined);
+    if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
+
+    const applied = this.simulation.applyProjectileBurnAugment?.(projectileId, augment) ?? false;
+    if (!applied) return false;
+    this.burnAugments.set(projectileId, augment);
+    return true;
+  }
+
   getThreatSamples(): readonly ProjectileThreatSample[] {
     this.threatSamples.length = 0;
     if (this.destroyed) return this.threatSamples;
@@ -349,7 +411,10 @@ export class WorldProjectileRuntime implements
     this.detonableIds.clear();
     this.detonatorIds.clear();
     this.translocatorPuckIds.clear();
+    this.travelEffectIds.clear();
+    this.burnAugments.clear();
     this.threatSamples.length = 0;
+    this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
     this.simulation.releaseWorldProjectileState();
@@ -370,6 +435,13 @@ export class WorldProjectileRuntime implements
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
     if (record.projectileStyle === 'translocator_puck') this.translocatorPuckIds.add(id);
+    if (hasTravelEffect(record)) this.travelEffectIds.add(id);
+    if (record.supplementalBurnOnHit) {
+      this.burnAugments.set(id, {
+        burn: record.supplementalBurnOnHit,
+        provenance: record.supplementalBurnProvenance ?? createProjectileProvenance(record),
+      });
+    }
     return id;
   }
 
@@ -377,7 +449,52 @@ export class WorldProjectileRuntime implements
     this.detonableIds.delete(id);
     this.detonatorIds.delete(id);
     this.translocatorPuckIds.delete(id);
+    this.travelEffectIds.delete(id);
+    this.burnAugments.delete(id);
   }
+}
+
+function hasTravelEffect(record: TrackedProjectile): boolean {
+  return record.canReceiveFireImbue === true
+    || record.fireTrail !== undefined
+    || record.awpCorridorHalfWidth !== undefined
+    || record.awpCorridorDamage !== undefined
+    || record.awpCorridorDotDurationMs !== undefined
+    || record.awpCorridorDotTickIntervalMs !== undefined
+    || record.awpCorridorKnockback !== undefined
+    || record.awpCorridorKnockbackDurationMs !== undefined;
+}
+
+function createTravelPathEffect(record: TrackedProjectile): ProjectileTravelCapabilities['pathEffect'] {
+  const fireTrail = record.fireTrail
+    ? {
+      effect: record.fireTrail,
+      halfWidthCells: Math.max(0, Math.floor(record.fireTrailHalfWidthCells ?? 0)),
+      cellKey: `${Math.floor(record.sprite.x / 16)}:${Math.floor(record.sprite.y / 16)}`,
+    }
+    : undefined;
+  const hasCorridor = record.awpCorridorHalfWidth !== undefined
+    || record.awpCorridorDamage !== undefined
+    || record.awpCorridorDotDurationMs !== undefined
+    || record.awpCorridorDotTickIntervalMs !== undefined
+    || record.awpCorridorKnockback !== undefined
+    || record.awpCorridorKnockbackDurationMs !== undefined;
+  const awpCorridor = hasCorridor
+    ? {
+      halfWidth: record.awpCorridorHalfWidth ?? 0,
+      damage: record.awpCorridorDamage ?? 0,
+      dotDurationMs: record.awpCorridorDotDurationMs,
+      dotTickIntervalMs: record.awpCorridorDotTickIntervalMs,
+      knockback: record.awpCorridorKnockback,
+      knockbackDurationMs: record.awpCorridorKnockbackDurationMs,
+    }
+    : undefined;
+  if (!fireTrail && !awpCorridor) return undefined;
+  return { kind: record.pathEffectKind, fireTrail, awpCorridor };
+}
+
+function burnDps(burn: { damagePerTick: number }): number {
+  return burn.damagePerTick * 1000 / BURN_TICK_INTERVAL_MS;
 }
 
 function createProjectileProvenance(record: TrackedProjectile) {

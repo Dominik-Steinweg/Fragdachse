@@ -329,6 +329,9 @@ export interface SyncedDecoy {
 /** Visueller Stil eines Projektils */
 export type ProjectileStyle = 'bullet' | 'ball' | 'energy_ball' | 'hydra' | 'spore' | 'flame' | 'fireball' | 'leaf_blower' | 'bfg' | 'awp' | 'gauss' | 'rocket' | 'grenade' | 'holy_grenade' | 'translocator_puck' | 'tesla_bolt';
 
+/** Semantic owner of a path effect; unlike ProjectileStyle this is gameplay capability data. */
+export type ProjectilePathEffectKind = 'awp' | 'fireball';
+
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 // 'awp_charged'  = voll aufgeladener Schuss (Geduldiger Tod) ohne Schneisen-Upgrade
 // 'awp_corridor' = voll aufgeladener Schuss mit "Schneise der Zerstoerung" (inkl. Sturm-VFX)
@@ -1102,7 +1105,10 @@ export interface ProjectileSpawnConfig {
   flamePiercing?:     boolean;   // true = Projektil zerstört sich nicht bei Treffern (piercing)
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
+  /** Provenance of the strongest travel-acquired supplemental burn. */
+  supplementalBurnProvenance?: import('./projectile/ProjectileSpawnRequest').ProjectileProvenance;
   fireTrail?: GroundFireCellEffect;
+  pathEffectKind?: ProjectilePathEffectKind;
 
   // Laubblaeser (optional)
   leafBlowerMinKnockback?: number;
@@ -1462,7 +1468,10 @@ export interface TrackedProjectile {
   hitObstacleIds?: Set<number>; // Flammen treffen jedes Hindernis hoechstens einmal
   canReceiveFireImbue?: boolean;
   supplementalBurnOnHit?: BurnOnHitConfig;
+  /** Provenance of the strongest travel-acquired supplemental burn. */
+  supplementalBurnProvenance?: import('./projectile/ProjectileSpawnRequest').ProjectileProvenance;
   fireTrail?: GroundFireCellEffect;
+  pathEffectKind?: ProjectilePathEffectKind;
   lastFireTrailCellKey?: string;
 
   // Laubblaeser (optional)

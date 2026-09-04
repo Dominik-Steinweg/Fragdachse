@@ -100,7 +100,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
               igniteCenter: true,
             },
           },
-          pathEffect: (fireball?.trailEnabled ?? 0) > 0 ? { fireTrail: groundEffect } : undefined,
+          pathEffect: (fireball?.trailEnabled ?? 0) > 0 ? { kind: 'fireball', fireTrail: groundEffect } : undefined,
         },
         presentation: {
           color: 0xff7417,
