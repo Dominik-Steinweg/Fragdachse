@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ActivityDescriptor } from '../../src/world/ActivityDescriptor';
 import { ActivityRuntimeHost, type ActivityRuntime } from '../../src/world/ActivityRuntimeHost';
@@ -251,24 +249,5 @@ describe('WorldLifecycle + WorldRuntime – Identitaet ueberlebt die lokale Runt
     expect(owner.current()).toBeNull();
     expect(owner.lifecycle.descriptor).toBeNull();
     expect(owner.lifecycle.phase).toBe('none');
-  });
-});
-
-describe('Arena-Anbindung', () => {
-  it('haengt die lokale World-Runtime hinter den bestehenden WorldLifecycle', () => {
-    const source = readFileSync(
-      resolve(__dirname, '../../src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    expect(source).toContain('this.worldRuntime = new WorldRuntime(context);');
-    expect(source).toContain('runtime?.destroy();');
-    expect(source).toContain('this.worldRuntime?.update(deltaMs);');
-
-    // Phase 10C: Der Frame-Owner taktet die World-Runtime; die Scene ruft nur ihn.
-    const runtime = readFileSync(resolve(__dirname, '../../src/scenes/arena/ArenaRuntime.ts'), 'utf8');
-    expect(runtime).toContain('this.flow.updateWorldRuntime(deltaMs);');
-    const scene = readFileSync(resolve(__dirname, '../../src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('this.arenaRuntime.update(delta);');
-    expect(scene).not.toContain('updateWorldRuntime');
   });
 });

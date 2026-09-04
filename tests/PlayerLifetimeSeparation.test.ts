@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CoopMissionPlayerRuntime } from '../src/activity/CoopMissionPlayerRuntime';
 import { CoopMissionRuntime } from '../src/activity/CoopMissionRuntime';
@@ -226,63 +224,5 @@ describe('CoopMissionPlayerRuntime – activity-scoped Spielerzustand', () => {
     expect(runtime.consumeRespawn('p1')).toBe(true);
     expect(runtime.isTeamWiped(['p1'], [])).toBe(false);
     expect(calls).toEqual([]);
-  });
-});
-
-describe('Phase 7 – Ownership im Koordinator', () => {
-  const coordinator = readFileSync(
-    resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-    'utf8',
-  );
-  const composition = readFileSync(
-    resolve(process.cwd(), 'src/world/PlayerWorldRuntimeComposition.ts'),
-    'utf8',
-  );
-
-  it('erzeugt die Player-Runtime mit der World-Instanz', () => {
-    expect(coordinator).toContain('this.worldRuntime.setPlayers(this.composePlayerRuntime());');
-    expect(coordinator).toContain('return composePlayerWorldRuntime({');
-    // Genau ein Erzeuger: die World. Ein scene-langlebiges Feld waere wieder eine zweite Lifetime.
-    expect([...composition.matchAll(/new PlayerWorldRuntime\(/g)]).toHaveLength(1);
-    expect(coordinator).toContain('return this.worldRuntime?.players ?? null;');
-  });
-
-  it('materialisiert den Missionsanteil der Spieler mit der Activity', () => {
-    const activityComposition = readFileSync(
-      resolve(process.cwd(), 'src/activity/CoopMissionPlayerComposition.ts'),
-      'utf8',
-    );
-    expect(coordinator).toContain('this.coopMissionComposition.materializeDependents(');
-    expect(coordinator).not.toContain('new CoopMissionPlayerComposition(');
-    expect(activityComposition).toContain('runtime.setPlayerActivity(playerActivity);');
-    // Beim Wechsel in derselben World nimmt die neue Mission die stehende Besetzung auf.
-    expect(activityComposition).toContain("for (const playerId of this.options.playerWorldRuntime?.attachedPlayerIds() ?? []) {");
-  });
-
-  it('haelt Attach und Detach in der richtigen Reihenfolge', () => {
-    const attachStart = coordinator.indexOf('  attachPlayerToWorld(');
-    const attachBody = coordinator.slice(attachStart, coordinator.indexOf('\n  }', attachStart));
-    expect(attachBody.indexOf('playerRuntime.attach('))
-      .toBeLessThan(attachBody.indexOf('this.playerActivityRuntime?.attach('));
-
-    const detachStart = coordinator.indexOf('  detachPlayerFromWorld(playerId: string): void {');
-    const detachBody = coordinator.slice(detachStart, coordinator.indexOf('\n  }', detachStart));
-    expect(detachBody.indexOf('this.playerActivityRuntime?.detach(playerId);'))
-      .toBeLessThan(detachBody.indexOf('this.playerRuntime?.detach(playerId);'));
-  });
-
-  it('kennt keinen missionsgebundenen Player-State mehr im World-Lifecycle', () => {
-    expect(coordinator).not.toContain("feature: 'missionStatus'");
-    expect(coordinator).not.toContain("id: 'ally-flow-field'");
-    expect(coordinator).not.toContain('this.ensureAllyFlowField(');
-    expect(coordinator).not.toContain('this.ctx.coopDefenseRespawnBudgetSystem');
-    const worldRuntimeSource = readFileSync(
-      resolve(process.cwd(), 'src/world/PlayerWorldRuntime.ts'),
-      'utf8',
-    );
-    expect(worldRuntimeSource).not.toContain('missionStatus');
-    // Der Detach folgt dem Ledger, nicht einer erneut aufgeloesten Policy.
-    expect(worldRuntimeSource).toContain('private readonly materializedFeatures = new Map<string, PlayerRuntimeFeatures>();');
-    expect(worldRuntimeSource).toContain('detach(playerId: string): void {');
   });
 });

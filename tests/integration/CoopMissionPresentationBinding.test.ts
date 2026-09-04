@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { getCoopDefenseMapConfig, type CoopDefenseMapConfig } from '../../src/config/coopDefenseMaps';
 import {
@@ -178,43 +176,4 @@ describe('CoopMissionPresentationBinding', () => {
     expect(next.carrySnapshots.at(-1)).toEqual([]);
   });
 
-  it('keeps network access at the composition boundary', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/activity/CoopMissionPresentationBinding.ts'),
-      'utf8',
-    );
-    expect(source).not.toContain("from '../../network/bridge'");
-    expect(source).not.toContain('NetworkBridge');
-    for (const laterPhaseOwner of [
-      'secondaryObjectiveMarkers',
-      'missionProgress.sync',
-      'carryZones',
-      'objectiveRepairDrones',
-    ]) {
-      expect(source).not.toContain(laterPhaseOwner);
-    }
-
-    const scene = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
-    expect(scene).toContain('this.arenaRuntime.presentation.syncCoopMissionPresentation(delta, coopDefensePresentationActive);');
-    expect(scene).toContain('this.captureTheBeerPresentation.syncClient(');
-    expect(scene).not.toContain('syncClientCaptureTheBeerPresentation');
-    expect(scene).not.toContain('syncClientActivitySnapshotPresentation');
-    const visualStart = scene.indexOf('// ── Per-frame visuals');
-    const updateEnd = scene.indexOf('\n  private ', visualStart);
-    const visualSource = scene.slice(visualStart, updateEnd);
-    expect(visualSource).not.toContain('updateMainObjectivePresentation');
-    expect(visualSource).not.toContain('updateEncounterPresentation');
-    expect(visualSource).not.toContain('secondaryObjectiveHud?.sync');
-    expect(visualSource).not.toContain('mapEventAnnouncementPresenter?.sync');
-    for (const sceneOwnedCoopPresentation of [
-      'this.renderers.encounterTelegraph.sync',
-      'this.renderers.secondaryObjectiveMarkers.sync',
-      'this.renderers.missionProgress.sync',
-      'this.renderers.carryZones.sync',
-      'this.renderers.objectiveRepairDrones.sync',
-      'this.hostileBaseIndicator?.sync',
-    ]) {
-      expect(visualSource).not.toContain(sceneOwnedCoopPresentation);
-    }
-  });
 });

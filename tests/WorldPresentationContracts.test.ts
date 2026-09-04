@@ -113,9 +113,8 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
     expect(body).toContain('participation: this.getWorldParticipation(bridge.getLocalPlayerId())');
     expect(body).toContain('worldActive: this.worldLifecycle.isActive()');
 
-    // Die Weltkamera ist eine dieser Flaechen und fragt sie ab. Seit Phase 6A.1 sitzt dieser
-    // Abgleich nicht mehr in der Scene, sondern im world-scoped Presentation-Frame-Owner, ueber
-    // den von der Scene durchgereichten `getLocalWorldPresentation`-Port.
+    // Die Weltkamera ist eine dieser Flaechen. Der Abgleich sitzt im world-scoped
+    // Presentation-Frame-Owner, ueber den von der Scene durchgereichten Port.
     const frameBinding = read('src/world/WorldPresentationFrameBinding.ts');
     expect(frameBinding).toContain(
       "allowsWorldPresentationSurface(this.input.getLocalWorldPresentation(), 'worldCamera')",

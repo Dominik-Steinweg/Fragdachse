@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -22,10 +20,6 @@ interface FakeKey {
 }
 
 type HotkeyHandler = (event: KeyboardEvent) => void;
-
-function read(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), 'utf8');
-}
 
 function makeInput(): {
   binding: ArenaInputBindings;
@@ -203,7 +197,7 @@ function makeInput(): {
 }
 
 describe('ArenaInputBindings', () => {
-  it('besitzt Phase-3A-Keys und verdrahtet statische InputSystem-Provider', () => {
+  it('verdrahtet statische InputSystem-Provider und Arena-Tasten', () => {
     const { binding, inputSystem, keyboard, keys, debugCallback, onFlowFieldDebugHotkey } = makeInput();
 
     binding.setup();
@@ -246,30 +240,4 @@ describe('ArenaInputBindings', () => {
     expect(binding.isArenaPanelHeld()).toBe(false);
   });
 
-  it('trennt die vollstaendige Input-Callbackflaeche von ArenaScene', () => {
-    const scene = read('src/scenes/ArenaScene.ts');
-    const inputBindings = read('src/scenes/arena/ArenaInputBindings.ts');
-
-    expect(scene).not.toContain('registerArenaPanelHotkeys');
-    expect(scene).not.toContain('this.escapeHotkeyHandler');
-    expect(scene).toContain('inputBindings.destroy();');
-    expect(scene).toContain('this.lobbyOverlay?.destroy();');
-    expect(scene).not.toContain('inputSystem.setupRadialActionProviders');
-    expect(scene).not.toContain('inputSystem.setupLoadoutListener');
-    expect(scene).not.toContain('inputSystem.setupPersistentRewardActionProvider');
-    expect(scene).not.toContain('inputSystem.setupRepositionActionProvider');
-    expect(scene).not.toContain('inputSystem.setupCanStartScopeCheck');
-    expect(scene).not.toContain('inputSystem.setupUtilityPlacementPreviewProvider');
-    expect(scene).not.toContain('inputSystem.setupUltimatePlacementPreviewProvider');
-    expect(scene).not.toContain('inputSystem.setupConstructionPlacementPreviewProvider');
-    expect(scene).not.toContain('inputSystem.setupTranslocatorRecallCheck');
-    expect(inputBindings).toContain('setupRadialActionProviders');
-    expect(inputBindings).toContain('setupLoadoutListener');
-    expect(inputBindings).toContain('getLocalPlacementPreview');
-    expect(inputBindings).toContain('showPlacementError');
-    expect(inputBindings).not.toContain("from '../../network/bridge'");
-    expect(inputBindings).not.toContain('ArenaRuntime');
-    expect(inputBindings).toContain('setupDebugHotkeys');
-    expect(inputBindings).toContain('keyboard.removeKey(key, true, true)');
-  });
 });

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import type { WorldDescriptor } from '../src/world/WorldDescriptor';
@@ -107,7 +105,6 @@ describe('WorldLifecycle – expliziter Zustand', () => {
     expect(sink.attached).toBeNull();
   });
 });
-
 describe('WorldLifecycle – Teardown und Instanzende sind verschieden', () => {
   it('behaelt die replizierte Instanz, wenn nur die lokale Runtime faellt', () => {
     const sink = createSink();
@@ -184,33 +181,5 @@ describe('WorldLifecycle – Teardown und Instanzende sind verschieden', () => {
     expect(lifecycle.context).toBeNull();
     expect(lifecycle.descriptor?.worldRevision).toBe(13);
     expect(sink.calls).toEqual(['publish:12', 'attach:12', 'detach', 'publish:13']);
-  });
-});
-
-describe('WorldLifecycle – genau ein Besitzer im Koordinator', () => {
-  it('wechselt den World-Zustand nirgends am Lifecycle vorbei', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    // Erzeugung, Ende und die lokale Bindung laufen ausschliesslich ueber den Besitzer.
-    expect(source).toContain('this.worldLifecycle.beginCreate(');
-    expect(source).toContain('this.worldLifecycle.attachRuntime(');
-    expect(source).toContain('this.worldLifecycle.detachRuntime()');
-    expect(source).toContain('this.worldLifecycle.endInstance()');
-
-    // Der Kanal wird ausschliesslich aus dem Sink des Lifecycles bedient – genau einmal je Richtung.
-    expect([...source.matchAll(/bridge\.publishWorldAndActivity\(/g)], 'publish past the lifecycle')
-      .toHaveLength(1);
-    expect([...source.matchAll(/bridge\.clearWorldAndActivity\(/g)], 'clear past the lifecycle')
-      .toHaveLength(1);
-    expect(source).toContain('publish: (world, activity) => bridge.publishWorldAndActivity(world, activity)');
-    expect(source).toContain('clear: () => bridge.clearWorldAndActivity()');
-
-    // Phase 11A entfernt den Context-Zugriffspfad vollstaendig. Der Sink besitzt die einzige
-    // lokale Runtime und Consumer fragen ihren Owner direkt.
-    expect(source).not.toContain('this.ctx.world');
-    expect(source).toContain('this.worldRuntime = new WorldRuntime(context);');
-    expect(source).toContain('getWorldRuntime(): WorldRuntime | null');
   });
 });

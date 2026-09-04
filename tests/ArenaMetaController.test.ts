@@ -1,15 +1,9 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import {
   ArenaMetaController,
   type ArenaMetaControllerInput,
 } from '../src/scenes/arena/ArenaMetaController';
 import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
-
-function read(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), 'utf8');
-}
 
 function makeInput(): {
   controller: ArenaMetaController;
@@ -192,32 +186,4 @@ describe('ArenaMetaController', () => {
     expect(store.addCoopDefenseXp).toHaveBeenCalledTimes(1);
   });
 
-  it('entkoppelt Phase-4A-Ownership von ArenaScene und Netzwerk-Substrat', () => {
-    const scene = read('src/scenes/ArenaScene.ts');
-    const controller = read('src/scenes/arena/ArenaMetaController.ts');
-
-    expect(scene).not.toContain('getStoredCoopDefenseProgress');
-    expect(scene).not.toContain('setStoredCoopDefenseUpgradeProfile');
-    expect(scene).not.toContain('setStoredCoopDefenseLoadoutSlot');
-    expect(scene).not.toContain('setStoredCoopDefenseItemsUnlocked');
-    expect(scene).not.toContain('setStoredPendingCoopDefenseItemReward');
-    expect(scene).not.toContain('claimStoredPendingCoopDefenseItemReward');
-    expect(scene).not.toContain('equipStoredCoopDefenseItem');
-    expect(scene).not.toContain('unequipStoredCoopDefenseItem');
-    expect(scene).not.toContain('salvageStoredCoopDefenseItem');
-    expect(scene).not.toContain('unlockStoredCoopDefenseItemsAfterVictory');
-    expect(scene).not.toContain('addStoredCoopDefenseXp');
-    expect(scene).not.toContain('markStoredCoopDefenseRoundProcessed');
-    expect(scene).not.toContain('unlockStoredPersistentBaseAfterVictory');
-    expect(scene).not.toContain('matchResultsPending');
-    expect(scene).not.toContain('lastMatchResultsPresentation');
-    expect(scene).not.toContain('processCoopDefenseRoundProgress');
-    expect(scene).not.toContain('createMatchItemRewardPresentation');
-    expect(scene).not.toContain('levelUpCoopDefenseUpgrade(');
-    expect(scene).not.toContain('resyncLoadoutWithUnlocks');
-    expect(controller).not.toContain("from '../../network/bridge'");
-    expect(controller).not.toContain('ArenaScene');
-    expect(controller).toContain('resultRead');
-    expect(controller).toContain('destroy(): void');
-  });
 });

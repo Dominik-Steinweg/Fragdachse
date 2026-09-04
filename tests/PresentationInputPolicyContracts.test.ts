@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { resolveInputPolicy, type InputPolicyInput } from '../src/world/InputPolicy';
 import { resolvePlayerCapabilities } from '../src/world/PlayerCapabilities';
@@ -116,7 +114,6 @@ describe('Presentation Policy', () => {
     expect(preview.useSpectatorCamera).toBe(false);
   });
 });
-
 describe('Input Policy', () => {
   it('gibt einem handelnden Spieler die vollen Eingaben', () => {
     const policy = resolveInputPolicy(inputPolicy());
@@ -183,23 +180,5 @@ describe('Input Policy', () => {
     }));
     expect(countdown.worldInteraction).toBe(true);
     expect(countdown.aim).toBe(false);
-  });
-});
-
-describe('Policies – im Input-Owner verdrahtet', () => {
-  it('leitet den Input-Owner aus der Policy ab und laesst die Scene nur den Frame-Kontext liefern', () => {
-    const scene = readFileSync(resolve(process.cwd(), 'src/scenes/ArenaScene.ts'), 'utf8');
-    const inputBindings = readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaInputBindings.ts'), 'utf8');
-    expect(scene).toContain('this.inputBindings?.updateFrame({');
-    expect(scene).not.toContain('resolveInputPolicy');
-    expect(inputBindings).toContain('const inputPolicy = resolveInputPolicy(policyInput);');
-    expect(inputBindings).toContain('this.input.inputSystem.setAimEnabled(inputPolicy.aim);');
-    expect(inputBindings).toContain('this.input.inputSystem.setInputEnabled(inputPolicy.movement, inputPolicy.worldInteraction);');
-
-    // Die frueher dreifach wiederholte Kombination steht nicht mehr in der Scene.
-    expect(
-      scene.includes('!optionsOpen && !spectator && !weaponBalanceLabArena'),
-      'scene still recombines the input state by hand',
-    ).toBe(false);
   });
 });

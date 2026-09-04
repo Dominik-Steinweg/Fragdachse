@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   mergePersistentBaseComposite,
@@ -27,11 +25,6 @@ import type {
 
 const anchor = { gridX: 20, gridY: 20 };
 const buildArea = DEFAULT_PERSISTENT_BASE_BUILD_AREA;
-const constructionRuntime = readFileSync(
-  resolve(process.cwd(), 'src/world/ConstructionWorldRuntime.ts'),
-  'utf8',
-);
-
 function blueprint(
   persistentId: string,
   relativeGridX: number,
@@ -123,7 +116,6 @@ describe('PersistentBaseComposite – Prioritaet und Determinismus', () => {
     expect(result.active.map((entry) => entry.blueprint.persistentId)).toEqual(['host-1']);
   });
 });
-
 describe('PersistentBaseComposite – Baubereich ist die einzige Geometriequelle', () => {
   it('weist alles ausserhalb des Innenhofs ab', () => {
     const result = merge({
@@ -191,7 +183,6 @@ describe('PersistentBaseComposite – Baubereich ist die einzige Geometriequelle
     expect(result.conflicts[0]?.reason).toBe('authored-collision');
   });
 });
-
 describe('PersistentBaseComposite – Freischaltung und Kapazitaet gehoeren dem Besitzer', () => {
   it('laesst ein Gast-Werkzeug erscheinen, das der Host nicht besitzt', () => {
     const result = merge({
@@ -284,76 +275,5 @@ describe('PersistentBaseComposite – erneuter Merge auf einer laufenden Welt', 
     expect(after.conflicts).toEqual([
       { ownerId: 'owner-b', persistentId: 'b-1', toolId: 'rock_barrier', reason: 'collision' },
     ]);
-  });
-});
-
-describe('PersistentBaseComposite – Verankerung im Lifecycle', () => {
-    const lifecycle = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const materializer = readFileSync(
-      resolve(process.cwd(), 'src/world/PersistentBaseWorldMaterializer.ts'),
-      'utf8',
-    );
-    // Phase 10C: Raum-Session-Regeln liegen beim Persistent-Base-Owner, nicht im Flow.
-    const persistentBase = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaPersistentBaseSession.ts'),
-      'utf8',
-    );
-
-  it('nimmt bereits materialisierte Zellen aus der statischen Kollision heraus', () => {
-    expect(materializer).toContain('isCellBlocked: (gridX, gridY) => !materializedCells.has(cellKey(gridX, gridY))');
-  });
-
-  it('entmaterialisiert, was das Composite nicht mehr traegt, ohne den Besitz zu loeschen', () => {
-    // Die Reihenfolge ist der ganze Unterschied: Erst die Bindung loesen, dann abbauen. Sonst
-    // wertet der gemeinsame Abbaupfad die Verdraengung als Abriss und loescht den Blueprint.
-    expect(materializer).toContain('store.releaseRuntimeBinding(binding.runtimeId);');
-    const releaseAt = materializer.indexOf('store.releaseRuntimeBinding(binding.runtimeId);');
-    const removeAt = materializer.indexOf('const removed = this.options.placementSystem.removeRock(binding.runtimeId);');
-    expect(releaseAt).toBeGreaterThanOrEqual(0);
-    expect(removeAt).toBeGreaterThan(releaseAt);
-    // Der Konfliktpfad benutzt den besitzneutralen Abbau, nicht den Abriss.
-    expect(materializer).toContain('this.options.construction.releaseRuntime(removed, false);');
-  });
-
-  it('rechnet nach einem Austritt neu, damit Unterdruecktes zurueckkommt', () => {
-    const start = persistentBase.indexOf('  removeGuestSessionOwner(playerId: string): void {');
-    const end = persistentBase.indexOf('\n  /** Verwirft einen offenen Missions-Working-State', start);
-    expect(start).toBeGreaterThanOrEqual(0);
-    expect(end).toBeGreaterThan(start);
-    expect(persistentBase.slice(start, end)).toContain('this.reconcilePersistentBaseWorld();');
-  });
-
-  it('reconciled nach einer relevanten Live-Build-Aenderung ohne die Loadout-Dormancy aufzuweichen', () => {
-    const syncStart = lifecycle.indexOf('  syncHostLoadoutsFromCommittedSelections(): void {');
-    const syncEnd = lifecycle.indexOf('\n  hostSaveRoundResults(', syncStart);
-    expect(syncStart).toBeGreaterThanOrEqual(0);
-    expect(syncEnd).toBeGreaterThan(syncStart);
-    expect(lifecycle.slice(syncStart, syncEnd)).toContain(
-      'this.persistentBaseWorldBinding?.refreshForRelevantBuildChanges();',
-    );
-
-    const refresh = materializer.slice(
-      materializer.indexOf('  refreshForRelevantBuildChanges(): void {'),
-      materializer.indexOf('\n  materializeRewardPlacement(', materializer.indexOf('  refreshForRelevantBuildChanges(): void {')),
-    );
-    expect(refresh).toContain('capacityMax: this.resolveCapacity(playerId)');
-    expect(refresh).toContain('tools: this.options.construction.resolveRestoreTools(playerId)');
-    expect(refresh).toContain('if (changed) this.reconcile();');
-
-    // Die bestehende Zugriffsauflosung bleibt die Quelle fuer `active`; ein nicht ausgeruestetes
-    // Werkzeug wird daher weiter als dormant behandelt und nicht pauschal materialisiert.
-    expect(constructionRuntime).toContain('active: access.active');
-  });
-
-  it('laesst eine Besitzeridentitaet nur einem Spieler des Raums', () => {
-    expect(persistentBase).toContain(
-      'this.session.acceptContributionOffer(playerId, offered)',
-    );
-    expect(persistentBase).not.toContain('persistentBaseOwnerByPlayerId');
-    expect(persistentBase).not.toContain('ingestedContributionRevisions');
-    expect(lifecycle).not.toContain('acceptContributionOffer');
   });
 });

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as config from '../src/config';
 import { applyArenaMetricsForMode, getArenaMetricsProfile } from '../src/config';
@@ -201,10 +199,7 @@ describe('WorldRuntimeContext – world-scoped Ableitungen', () => {
     expect(world.persistentBaseSite?.buildArea).toEqual({ kind: 'radius', radiusCells: 5 });
   });
 
-  it('enthaelt keine alternative authored Area-Aufloesung mehr', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/persistentBase/PersistentBaseCore.ts'), 'utf8');
-    expect(source).not.toContain('resolvePersistentBaseBuildArea(');
-    expect(source).not.toContain('authoredBuildArea');
+  it('verwendet keine authored Area-Ueberschreibung fuer den Persistent-Base-Kern', () => {
     for (const mapConfig of COOP_DEFENSE_MAP_CONFIGS) {
       if (mapConfig.persistentBase) {
         expect(mapConfig.persistentBase).not.toHaveProperty('buildArea');
@@ -260,23 +255,11 @@ describe('WorldRuntimeContext – eine Metrikquelle', () => {
     expect(world.metrics.gridCols).toBe(mapConfig.arenaWidthCells);
     expect(world.metrics.gridRows).toBe(mapConfig.arenaHeightCells);
 
-    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldRuntimeContext.ts'), 'utf8');
-    const factoryStart = source.indexOf('export function createWorldRuntimeContext(');
-    const factory = source.slice(factoryStart, source.indexOf('\n}', factoryStart));
-    // Die Basen loesen gegen genau die Metrik auf, die dieser Kontext fuehrt; weitere Argumente
-    // duerfen dazukommen, eine zweite Metrikquelle nicht.
-    expect(factory).toContain('resolveWorldBases(definition, metrics,');
-    expect(source).not.toContain('humanPlayerCount');
-    expect((factory.match(/resolveWorldMetrics\(/g) ?? []).length).toBe(1);
   });
 });
 
 describe('WorldRuntimeContext – World-Basen und Activity-Overlays', () => {
   it('haelt Activity-Zustaende aus der World-Aufloesung heraus', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/arena/BaseRegistry.ts'), 'utf8');
-    expect(source).toContain('export function resolveWorldBases(');
-    expect(source).toContain('export function resolveCoopDefenseActivityBases(');
-
     const world = contextForMap('17');
     expect(world.bases[0]).not.toHaveProperty('startHp');
     expect(world.bases[0]).not.toHaveProperty('dormant');
@@ -341,34 +324,4 @@ describe('WorldRuntimeContext – Unabhaengigkeit von der Lobby', () => {
     }
   });
 
-  it('verbietet der BaseRegistry einen Lobby- oder Netzwerk-Fallback', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/arena/BaseRegistry.ts'), 'utf8');
-    expect(source).not.toContain("../network/bridge");
-    expect(source).not.toContain('getCoopDefenseMapId');
-    expect(source).not.toContain('getCoopDefenseBases');
-  });
-});
-
-describe('WorldRuntimeContext – kein neuer God-Context', () => {
-  it('nimmt keine Activity-Systeme als Felder auf', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldRuntimeContext.ts'), 'utf8');
-    const start = source.indexOf('export interface WorldRuntimeContext {');
-    expect(start, 'WorldRuntimeContext interface must exist').toBeGreaterThan(0);
-    const body = source.slice(start, source.indexOf('\n}', start));
-    const fields = [...body.matchAll(/^ {2}readonly ([a-zA-Z][a-zA-Z0-9]*)[?]?:/gm)].map((match) => match[1]);
-    expect(fields.sort()).toEqual(['bases', 'definition', 'descriptor', 'metrics', 'persistentBaseSite']);
-
-    // Missionssysteme existieren nicht, weil keine Activity laeuft – nicht, weil hier ein Feld
-    // auf null steht.
-    const forbidden = [
-      'enemy', 'boss', 'objective', 'mission', 'encounter', 'respawn',
-      'round', 'activity', 'spawnExecutor', 'director', 'powerUp',
-    ];
-    for (const field of fields) {
-      for (const term of forbidden) {
-        expect(field.toLowerCase().includes(term.toLowerCase()), `WorldRuntimeContext.${field} is activity state`)
-          .toBe(false);
-      }
-    }
-  });
 });

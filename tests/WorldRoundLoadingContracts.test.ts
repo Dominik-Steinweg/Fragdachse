@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   getActiveRoundParticipantIds,
@@ -16,10 +14,6 @@ import { resolveWorldLoadProgress } from '../src/world/WorldLoadReady';
  * koennte eine World ohne Activity nie "fertig geladen" melden – und ein Client koennte nicht
  * unterscheiden, ob der Host noch laedt oder auf die Runde wartet.
  */
-
-function read(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), 'utf8');
-}
 
 function participation(overrides: Partial<RoundParticipationState> = {}): RoundParticipationState {
   return {
@@ -48,36 +42,9 @@ describe('World Loading – nur der Zustand der lokalen World', () => {
     expect(resolveWorldLoadProgress(-5, -5, false)).toMatchObject({ stage: 'rendering', ready: false });
   });
 
-  it('kennt keine Rundenbedingung mehr', () => {
-    // Die Signatur ist der Vertrag: Round-Zustand hat hier keinen Platz.
-    expect(resolveWorldLoadProgress.length).toBe(3);
-    const source = read('src/world/WorldLoadReady.ts');
-    for (const roundTerm of ['participation', 'roundRevision', 'spawn', 'startupCaches']) {
-      expect(source.includes(roundTerm), `WorldLoadReady leaks round state: ${roundTerm}`).toBe(false);
-    }
-  });
 });
 
 describe('Round Loading – eigene Startbedingung hinter der World-Barriere', () => {
-  it('gattert den Rundenstart getrennt von der World-Ladebarriere', () => {
-    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const start = source.indexOf('private tryScheduleArenaStart(): void {');
-    expect(start, 'tryScheduleArenaStart must exist').toBeGreaterThan(0);
-    const body = source.slice(start, source.indexOf('\n  }', start));
-    // Erst die World bei allen Teilnehmern, dann der host-lokale Rundenaufbau.
-    expect(body).toContain('bridge.areWorldParticipantsLoadReady()');
-    expect(body).toContain('this.prepareRoundStart(');
-    expect(body.indexOf('areWorldParticipantsLoadReady'))
-      .toBeLessThan(body.indexOf('prepareRoundStart'));
-
-    // Die publizierte World-Barriere darf den Rundenaufbau nicht mehr enthalten.
-    const syncStart = source.indexOf('syncArenaLoadReady(view: WorldViewRect | null): void {');
-    expect(syncStart).toBeGreaterThan(0);
-    const syncBody = source.slice(syncStart, source.indexOf('\n  }', syncStart));
-    expect(syncBody).toContain('resolveWorldLoadProgress(');
-    expect(syncBody.includes('prepareRoundStart'), 'world barrier still waits for the round').toBe(false);
-  });
-
   it('leitet aktive Rundenteilnehmer aus genau einer Regel ab', () => {
     const state = participation({ spectatorIds: ['p1'] });
     const connected = ['p0', 'p1'];
@@ -87,11 +54,5 @@ describe('Round Loading – eigene Startbedingung hinter der World-Barriere', ()
     expect(getActiveRoundParticipantIds(null, connected)).toEqual([]);
     expect(getActiveRoundParticipantIds(state, [])).toEqual([]);
 
-    const source = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
-    const gateStart = source.indexOf('private prepareRoundStart(now: number): boolean {');
-    expect(gateStart).toBeGreaterThan(0);
-    const gate = source.slice(gateStart, source.indexOf('\n  }', gateStart));
-    expect(gate).toContain('getActiveRoundParticipantIds(');
-    expect(gate.includes('spectatorIds.includes'), 'round gate re-implements the participation rule').toBe(false);
   });
 });

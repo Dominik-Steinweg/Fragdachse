@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PERSISTENT_PLAYER_BASE_CONTRIBUTION_SCHEMA_VERSION } from '../../src/config/persistentBase';
 import { DEFAULT_PERSISTENT_BASE_BUILD_AREA } from '../../src/persistentBase/PersistentBaseCore';
@@ -21,7 +19,7 @@ import { WorldLifecycle, type WorldLifecycleSink } from '../../src/world/WorldLi
 import type { WorldRuntimeContext } from '../../src/world/WorldRuntimeContext';
 
 /**
- * Phase 8: Drei Lifetimes, drei Owner.
+ * Drei Lifetimes, drei Owner.
  *
  * - committed Raumstand: `PersistentBaseRoomSession` – ueberlebt jede World und jede Activity;
  * - Arbeitsstand: `PersistentBaseTransaction` – endet mit ihrer Activity, genau einmal;
@@ -451,96 +449,5 @@ describe('PersistentBaseRuntimeBindings – die Objekte gehoeren der World', () 
     // Das Objekt hat die Runde nicht ueberlebt; sein Blueprint faellt aus dem Arbeitsstand.
     session.finalizeWorldRuntimeObjects(() => false);
     expect(store.getContribution('owner-a')?.constructions).toEqual([]);
-  });
-});
-
-describe('Phase 8 – Ownership im Koordinator', () => {
-  const coordinator = readFileSync(
-    resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-    'utf8',
-  );
-  // Phase 10C: Der raumlanglebige Persistent-Base-Owner liegt nicht mehr im Flow.
-  const persistentBase = readFileSync(
-    resolve(process.cwd(), 'src/scenes/arena/ArenaPersistentBaseSession.ts'),
-    'utf8',
-  );
-
-  it('fuehrt genau einen Raum-Owner statt zweier loser Speicher', () => {
-    expect(persistentBase).toContain('readonly session = new PersistentBaseRoomSession();');
-    expect(coordinator).not.toContain('new PersistentBaseRoomSession()');
-    expect(persistentBase).not.toContain('new PersistentBaseContributionStore()');
-    expect(persistentBase).not.toContain('new PersistentBaseRewardStore()');
-  });
-
-  it('haelt fachliche Player-Owner-Bindungen und Contribution-Ingest im Room-Owner', () => {
-    const session = readFileSync(
-      resolve(process.cwd(), 'src/persistentBase/PersistentBaseRoomSession.ts'),
-      'utf8',
-    );
-    expect(session).toContain('private readonly persistentBaseOwnerByPlayerId');
-    expect(session).toContain('private readonly ingestedContributionRevisions');
-    expect(session).toContain('bindPlayerOwner(');
-    expect(session).toContain('acceptContributionOffer(');
-    expect(session).toContain('removePlayerOwner(');
-    expect(persistentBase).not.toContain('private readonly persistentBaseOwnerByPlayerId');
-    expect(persistentBase).not.toContain('private readonly ingestedContributionRevisions');
-    expect(persistentBase).not.toContain('private canClaimPersistentBaseOwnerId(');
-  });
-
-  it('kennzeichnet Reward-Revision und Signatur als reine Projection-Caches', () => {
-    expect(persistentBase).toContain('private projectionRevision = 0;');
-    expect(persistentBase).toContain('private projectionSignature: string | null = null;');
-    expect(persistentBase).not.toContain('persistentBaseRewardSessionRevision');
-    expect(persistentBase).not.toContain('persistentBaseRewardSessionSignature');
-    expect(coordinator).not.toContain('persistentBaseRewardSessionRevision');
-    expect(coordinator).not.toContain('persistentBaseRewardSessionSignature');
-  });
-
-  it('oeffnet den Arbeitsstand mit der Identitaet der Activity und schliesst ihn damit ab', () => {
-    expect(persistentBase).toContain('this.session.beginTransaction({');
-    expect(coordinator).toContain('this.resolvePersistentBaseTransactionIdentity(),');
-    expect(coordinator).toContain('private resolvePersistentBaseTransactionIdentity(): PersistentBaseTransactionIdentity | undefined {');
-    expect(coordinator).toContain('activityIdentity: {');
-    expect(persistentBase).toContain('beginPersistentBaseTransaction(activity: ActivityDescriptor): void {');
-    expect(persistentBase).toContain('endPersistentBaseTransaction(activity: ActivityDescriptor): void {');
-    const buildStart = coordinator.indexOf('  buildWorld(');
-    const buildEnd = coordinator.indexOf('  tearDownArena(', buildStart);
-    expect(coordinator.slice(buildStart, buildEnd)).not.toContain('beginTransaction(');
-  });
-
-  it('bindet die Runtime-Objekte an die World-Instanz', () => {
-    expect(coordinator).toContain('this.persistentBase.useWorldRuntimes(persistentBaseBinding.constructionRuntimes);');
-    expect(coordinator).toContain('this.persistentBase.useWorldRuntimes(null);');
-    const worldBinding = readFileSync(
-      resolve(process.cwd(), 'src/world/PersistentBaseWorldBinding.ts'),
-      'utf8',
-    );
-    expect(worldBinding).toContain('private readonly constructionRuntimeBindings = new PersistentBaseRuntimeBindings();');
-    expect(worldBinding).toContain('this.constructionRuntimeBindings.clear();');
-  });
-
-  it('erzeugt ohne World keine mutable Ersatz-Bindings im Coordinator', () => {
-    expect(persistentBase).not.toContain('noWorldRewardRuntimes');
-    expect(persistentBase).not.toContain('noWorldCompositeSignatures');
-    expect(persistentBase).not.toContain('persistentBaseRewardRuntimeBindings.set(');
-    expect(persistentBase).not.toContain('persistentBaseCompositeBuildSignatures.set(');
-    expect(persistentBase).toContain('this.world.getWorldBinding()?.reconcile();');
-  });
-
-  it('haelt die drei Lifetimes in getrennten Modulen', () => {
-    const contributionStore = readFileSync(
-      resolve(process.cwd(), 'src/persistentBase/PersistentBaseContributionStore.ts'),
-      'utf8',
-    );
-    // Kein eigener Arbeitsstand und keine eigenen Runtime-Objekte mehr: beides gehoert anderen.
-    expect(contributionStore).not.toContain('private baseline:');
-    expect(contributionStore).not.toContain('private working:');
-    expect(contributionStore).not.toContain('runtimeBlueprints');
-    const rewardStore = readFileSync(
-      resolve(process.cwd(), 'src/persistentBase/PersistentBaseRewardStore.ts'),
-      'utf8',
-    );
-    expect(rewardStore).not.toContain('private baseline:');
-    expect(rewardStore).not.toContain('private working:');
   });
 });

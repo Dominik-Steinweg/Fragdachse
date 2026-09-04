@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   CoopMissionRuntime,
@@ -12,7 +10,7 @@ import type { ActivityDescriptor } from '../../src/world/ActivityDescriptor';
 import { CoopDefenseTeamBuffSystem } from '../../src/systems/CoopDefenseTeamBuffSystem';
 
 /**
- * Phase 6: Ziele, Fortschritt, Abschluss und die lokale Missionsdarstellung gehoeren der
+ * Ziele, Fortschritt, Abschluss und die lokale Missionsdarstellung gehoeren der
  * `CoopMissionRuntime`. Der Frame-Owner kennt nur benannte Schritte, und ein Activity-Wechsel in
  * derselben World materialisiert alles davon frisch.
  */
@@ -237,53 +235,5 @@ describe('CoopMissionRuntime – Missionsschritte des Frames', () => {
     runtime.clientPresentationStep();
 
     expect(synced).toEqual([state]);
-  });
-});
-
-describe('Phase 6 – Aufbau und Consumer der Missionsziele', () => {
-  const coordinator = readFileSync(
-    resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-    'utf8',
-  );
-
-  it('erzeugt die Ziele als Child-Owner der Activity ueber die Activity-Composition', () => {
-    const composition = readFileSync(
-      resolve(process.cwd(), 'src/activity/CoopMissionObjectiveComposition.ts'),
-      'utf8',
-    );
-    expect(coordinator).toContain('this.coopMissionComposition.materializeDependents(');
-    expect(coordinator).not.toContain('new CoopMissionObjectiveComposition(');
-    expect(composition).toContain('runtime.setObjectives({');
-    expect(composition).toContain('new CoopDefenseTeamBuffSystem()');
-    expect(coordinator).toContain('this.onCoopMissionRuntimeChanged(runtime);');
-    expect(coordinator).not.toContain('syncCoopMissionCompatibilityBindings');
-  });
-
-  it('haelt die migrierten Missionssysteme aus dem ArenaContext heraus', () => {
-    const context = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaContext.ts'),
-      'utf8',
-    );
-    for (const migrated of [
-      'coopDefenseSecondaryObjectiveSystem',
-      'coopDefenseMissionProgressSystem',
-      'coopDefenseMissionBarrierManager',
-      'coopDefenseCarrySystem',
-      'coopDefenseObjectiveRepairSystem',
-      'coopDefenseObjectivePlacementRewardSystem',
-      'coopDefenseRoundStateSystem',
-    ]) {
-      expect(context.includes(migrated), `${migrated} is still a context field`).toBe(false);
-      expect(coordinator.includes(`this.ctx.${migrated}`), `${migrated} keeps a context consumer`)
-        .toBe(false);
-    }
-  });
-
-  it('bindet die Missionsbarrieren an die Lifetime der Activity', () => {
-    const start = coordinator.indexOf('    runtime.bind({');
-    const end = coordinator.indexOf('    this.attachCoopMissionBaseBinding(activity, runtime);', start);
-    const binding = coordinator.slice(start, end);
-    expect(binding).toContain('this.worldCombatGameplayBinding?.updateActivityBindings();');
-    expect(binding).toContain('this.worldCombatGameplayBinding?.clearActivityBindings();');
   });
 });

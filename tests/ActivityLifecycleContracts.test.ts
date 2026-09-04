@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ActivityLifecycle, type ActivityLifecycleSink } from '../src/world/ActivityLifecycle';
 import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
@@ -80,7 +78,6 @@ describe('ActivityLifecycle – setzt eine World voraus', () => {
     expect(calls.some((call) => call.startsWith('activity:'))).toBe(false);
   });
 });
-
 describe('ActivityLifecycle – Reihenfolge gegenueber der World', () => {
   it('invalidiert Identity-State bei A→B und A→none, aber nicht beim Runtime-Rebind', () => {
     const heldAction = new HostHeldActionSystem();
@@ -325,46 +322,5 @@ describe('ActivityLifecycle – Reihenfolge gegenueber der World', () => {
     expect(lifecycle.activityStartAnchor).toBe(6_000);
     lifecycle.activity.bindStartAnchor(7_000);
     expect(lifecycle.activityStartAnchor).toBe(6_000);
-  });
-});
-
-describe('Activity-Systeme entstehen aus der Activity, nicht aus einem Modus-Flag', () => {
-  it('gattert den Arena-Aufbau ueber genau eine Activity-Entscheidung', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const start = source.indexOf('  buildWorld(');
-    const end = source.indexOf('  tearDownArena(', start);
-    expect(start).toBeGreaterThan(0);
-    expect(end).toBeGreaterThan(start);
-    const body = source.slice(start, end);
-    const composition = readFileSync(
-      resolve(process.cwd(), 'src/world/WorldComposition.ts'),
-      'utf8',
-    );
-
-    // Eine Entscheidung, viele Verbraucher. Die Activity kommt als Parameter herein: der Aufbau
-    // gehoert der World, die Activity ist ausdruecklich optional.
-    expect(composition).toContain("const isCoopMission = activity?.kind === 'coop-mission';");
-    expect([...composition.matchAll(/const isCoopMission =/g)]).toHaveLength(1);
-    expect(body).toContain('isCoopMission,');
-    // Phase 10C: Die Verbraucher dieser einen Entscheidung stehen an der World-Gameplay-
-    // Composition-Grenze; der Flow reicht sie nur weiter.
-    const worldGameplay = [
-      'src/scenes/arena/ArenaWorldGameplayComposition.ts',
-      'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
-      'src/scenes/arena/ArenaWorldPlayerComposition.ts',
-      'src/scenes/arena/ArenaWorldCombatComposition.ts',
-      'src/scenes/arena/ArenaWorldConstructionComposition.ts',
-    ].map((path) => readFileSync(resolve(process.cwd(), path), 'utf8')).join('\n');
-    expect([...`${body}${worldGameplay}`.matchAll(/\bisCoopMission\b/g)].length)
-      .toBeGreaterThanOrEqual(10);
-
-    // Und keine verstreute Modus-Abfrage mehr im Aufbau der Runtime.
-    expect(
-      body.includes('isCoopDefenseMode(descriptor.gameMode)'),
-      'buildWorld still gates activity systems on the game mode',
-    ).toBe(false);
   });
 });

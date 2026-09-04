@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { PlayerProfile } from '../src/types';
 import {
@@ -168,7 +166,6 @@ describe('Player-Lifecycle – kontextgesteuerte Module', () => {
     expect(calls).toEqual([]);
   });
 });
-
 describe('Player-Lifecycle – atomarer Attach', () => {
   it('nimmt bereits angehaengte Module zurueck, wenn eines ablehnt', () => {
     const calls: string[] = [];
@@ -225,7 +222,6 @@ describe('Player-Lifecycle – atomarer Attach', () => {
     expect(calls).toEqual(['attach:entity', 'detach:entity', 'attach:entity']);
   });
 });
-
 describe('Player-Lifecycle – konkrete World-Komposition', () => {
   it('haelt die feste Attach- und Detach-Reihenfolge ausserhalb des Coordinators', () => {
     const calls: string[] = [];
@@ -271,61 +267,5 @@ describe('Player-Lifecycle – konkrete World-Komposition', () => {
       'detach:loadout',
       'detach:entity',
     ]);
-  });
-});
-
-describe('Player-Lifecycle – genau ein Weg hinein und hinaus', () => {
-  it('fuehrt Spawn und Entfernen ausschliesslich ueber die gemeinsame Runtime', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const spawnStart = source.indexOf('  spawnReadyPlayers(): void {');
-    const spawnBody = source.slice(spawnStart, source.indexOf('\n  }', spawnStart));
-    expect(spawnBody).toContain('this.attachPlayerToWorld(profile, reconnectAfterDeath)');
-
-    const removeStart = source.indexOf('  removePlayerFromActiveRound(playerId: string): void {');
-    const removeBody = source.slice(removeStart, source.indexOf('\n  }', removeStart));
-    expect(removeBody).toContain('this.detachPlayerFromWorld(playerId)');
-
-    // Der Abbau steht nur noch an einer Stelle; Spawn und Respawn teilen sich dieselbe Liste.
-    for (const call of [
-      'this.ctx.combatSystem.removePlayer(',
-      'this.worldPlayerGameplayRuntime?.detachPlayerLoadout(',
-      'this.worldPlayerGameplayRuntime?.detachPlayerBurrow(',
-    ]) {
-      expect([...source.matchAll(new RegExp(call.replace(/[.?()]/g, '\\$&'), 'g'))], call)
-        .toHaveLength(1);
-    }
-
-    // Der world-scoped Kontext kennt die Activity nicht mehr: Ihr Spieleranteil gehoert der
-    // Activity-Runtime und faellt mit ihr.
-    const featureStart = source.indexOf('  private resolvePlayerFeatures(');
-    const featureBody = source.slice(featureStart, source.indexOf('\n  }', featureStart));
-    expect(featureStart).toBeGreaterThan(0);
-    expect(featureBody).not.toContain('activityKind');
-    expect(source).toContain('this.playerActivityRuntime?.attach(profile.id, reconnectAfterDeath)');
-  });
-
-  it('fuehrt auch Startbesetzung und Client-Roster ueber denselben Lifecycle', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const start = source.indexOf('  private onTransitionToArena(): void {');
-    expect(start).toBeGreaterThan(0);
-    const body = source.slice(start, source.indexOf('\n  private ', start + 10));
-    expect(body).toContain('this.attachPlayerToWorld(profile);');
-    expect(body).not.toContain('this.ctx.playerManager.addPlayer(profile);');
-
-    const client = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ClientUpdateCoordinator.ts'),
-      'utf8',
-    );
-    expect(client).not.toContain('this.ctx.playerManager.addPlayer(');
-    expect(client).not.toContain('this.ctx.playerManager.removePlayer(');
-    // Der Client reicht die replizierte Position mit: er darf keinen eigenen Spawn wuerfeln.
-    expect(client).toContain('this.attachPlayerToWorld?.(profile, { x: ps.x, y: ps.y })');
-    expect(client).toContain('this.detachPlayerFromWorld?.(player.id)');
   });
 });

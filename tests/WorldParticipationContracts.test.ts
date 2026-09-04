@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   canRoundPlayerReceiveRewards,
@@ -142,64 +140,9 @@ describe('WorldParticipation – Rundenrolle bleibt getrennt', () => {
     expect(resolveWorldParticipation(input())).toBe('interactive');
   });
 
-  it('kennt selbst keine Rundenbegriffe', () => {
-    // Die Signatur ist der Vertrag: eine World ohne Runde muss teilnehmen koennen.
-    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldParticipation.ts'), 'utf8');
-    const typeStart = source.indexOf('export interface WorldParticipationInput {');
-    const typeBody = source.slice(typeStart, source.indexOf('\n}', typeStart));
-    for (const roundTerm of ['round', 'Round', 'spectator', 'participantIds', 'revision']) {
-      expect(typeBody.includes(roundTerm), `WorldParticipationInput leaks round state: ${roundTerm}`)
-        .toBe(false);
-    }
-  });
 });
 
 describe('WorldParticipation – kanonisch repliziert', () => {
-  it('liest die Teilnahme aus dem World-Kanal statt sie zu rekonstruieren', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const start = source.indexOf('  getWorldParticipation(playerId: string): WorldParticipation {');
-    expect(start, 'coordinator must expose the world participation').toBeGreaterThan(0);
-    const body = source.slice(start, source.indexOf('\n  }', start));
-    // Genau eine Quelle: der replizierte World-Kanal.
-    expect(body).toContain('return bridge.getWorldParticipation(playerId);');
-    // Und ausdruecklich keine Rekonstruktion aus Runden-/Phasenzustaenden mehr.
-    for (const reconstructed of ['canPlayerAct', 'canPlayerSpawnOrRespawn', 'getGamePhase']) {
-      expect(body.includes(reconstructed), `participation reconstructed from ${reconstructed}`)
-        .toBe(false);
-    }
-  });
-
-  it('leitet sie host-autoritativ genau einmal ab und repliziert sie', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const start = source.indexOf('  hostSyncWorldParticipation(): void {');
-    expect(start, 'host must author the participation').toBeGreaterThan(0);
-    const body = source.slice(start, source.indexOf('\n  }', start));
-    expect(body).toContain(
-      "(this.worldLifecycle.phase !== 'active' && this.worldLifecycle.phase !== 'creating')",
-    );
-    expect(body).toContain('bridge.hostPublishWorldParticipation(participants);');
-    // Ohne laufende Activity traegt allein die World-Mitgliedschaft.
-    expect(body).toContain('const activityPresent = this.worldLifecycle.activity.descriptor !== null;');
-
-    // Der erste Activity-Sync darf die gerade entstehende Teilnahme nicht ueber ihre noch leere
-    // Replikation aufloesen - sonst wird ein aktiver Teilnehmer dauerhaft zum Observer.
-    expect(body).toContain("bridge.getRoundRole(profile.id) === 'participant'");
-    expect(body).not.toContain('this.getPlayerCapabilities(profile.id).canMove');
-
-    // Der Attach fragt die Teilnahme; der Abbau liest sie nicht erneut, sondern folgt dem
-    // Materialisierungs-Ledger des Spielers.
-    expect(source).toContain('this.resolvePlayerFeatures(this.getWorldParticipation(profile.id))');
-    expect(source).not.toContain("this.resolvePlayerFeatures('interactive')");
-    expect(source).toContain('this.playerRuntime?.detach(playerId);');
-    expect(source).toContain('this.playerRuntime?.detachAll();');
-  });
-
   it('bindet den Stand an die World-Instanz, aus der er stammt', () => {
     const state = { r: 7, p: { a: 'interactive', b: 'observer' } };
     expect(parseWorldParticipationState(state, 7)?.participants).toEqual({

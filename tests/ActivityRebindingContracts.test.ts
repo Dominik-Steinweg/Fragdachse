@@ -247,7 +247,7 @@ function beer(teamId: 'blue' | 'red', state: SyncedCaptureTheBeerBeer['state'], 
   };
 }
 
-describe('Phase 10B.7 – Activity rebinding', () => {
+describe('Activity rebinding', () => {
   it('liest Coop dynamisch durch none → A → none → B → none ohne neue Combat-Bindung', () => {
     const world = new WorldRuntime(worldContext());
     let lifecycle: WorldLifecycle | null = null;

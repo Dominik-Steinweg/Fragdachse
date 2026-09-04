@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => {
@@ -61,12 +59,6 @@ import type { SyncedPlaceableRock } from '../../src/types';
 import type { WorldPersistentBaseSite } from '../../src/world/WorldRuntimeContext';
 import { createAuthoredWorldDescriptor } from '../../src/world/WorldLayout';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from '../fakePeerNetwork';
-
-const LIFECYCLE_PATH = resolve(process.cwd(), 'src/scenes/arena/ArenaPersistentBaseSession.ts');
-
-function readLifecycle(): string {
-  return readFileSync(LIFECYCLE_PATH, 'utf8');
-}
 
 class MemoryStorage implements Storage {
   private readonly values = new Map<string, string>();
@@ -380,68 +372,6 @@ function personalContribution(ownerId: string): {
 }
 
 describe('Persistent Base Reward – 3D-2 Korrekturvertraege', () => {
-  it('verwendet die zentrale kanonische World-Zellen-Aufloesung', () => {
-    const source = readLifecycle();
-    const resolverStart = source.indexOf('  resolvePersistentBaseRewardCell(');
-    const resolverEnd = source.indexOf('\n  resolvePersistentBaseRewardRelativeCell(', resolverStart);
-    expect(resolverStart).toBeGreaterThanOrEqual(0);
-    expect(resolverEnd).toBeGreaterThan(resolverStart);
-    const resolver = source.slice(resolverStart, resolverEnd);
-    expect(resolver).toContain('return resolvePersistentBaseCell(');
-    expect(resolver).not.toContain('resolvePersistentBaseCoreCellsRelative');
-  });
-
-  it('entfernt bei Basiszerstoerung nur die Reward-Turret-Runtime', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/world/WorldCombatGameplayBinding.ts'),
-      'utf8',
-    );
-    const materializer = readFileSync(
-      resolve(process.cwd(), 'src/world/PersistentBaseWorldMaterializer.ts'),
-      'utf8',
-    );
-    const destroyedStart = source.indexOf('o.baseManager?.setOnBaseDestroyed((destroyedBase) => {');
-    const destroyedEnd = source.indexOf('\n    });', destroyedStart);
-    expect(destroyedStart).toBeGreaterThanOrEqual(0);
-    expect(destroyedEnd).toBeGreaterThan(destroyedStart);
-    const destroyed = source.slice(destroyedStart, destroyedEnd);
-    expect(destroyed).toContain('o.getTargetStatusSystem()?.removeTarget');
-    expect(destroyed).toContain('o.getEnergyInjectorSystem()?.removeTarget');
-    expect(destroyed).toContain('o.getPowerUpSystem()?.destroyPedestalsLinkedToBase');
-    expect(destroyed).toContain('o.reconcilePersistentBaseWorld();');
-    expect(destroyed).toContain('o.reportTargetDestroyed');
-    expect(destroyed).toContain('o.hostPhysics.applyRadialImpulse');
-    expect(destroyed).toContain('o.syncActiveBaseIds();');
-
-    const removalStart = materializer.indexOf('  private removeRewardTurretsForBase(');
-    const removalEnd = materializer.indexOf('\n  private isPersistentBaseRuntimeActive(', removalStart);
-    expect(removalStart).toBeGreaterThanOrEqual(0);
-    expect(removalEnd).toBeGreaterThan(removalStart);
-    const removal = materializer.slice(removalStart, removalEnd);
-    expect(removal).toContain("rock.kind !== 'turret'");
-    expect(removal).toContain("rock.ownership !== 'base-owned'");
-    expect(removal).toContain('rock.persistentRewardId === undefined');
-    expect(removal).toContain('this.options.placementSystem.removeRock(rock.id)');
-    expect(removal).toContain('this.options.construction.releaseRuntime(removed, false);');
-    expect(removal).not.toContain('dismantleReward');
-    expect(materializer).toContain('if (!persistentBaseActive) this.removeRewardTurretsForBase(site.baseId);');
-  });
-
-  it('baut nach einem Materialisierungsfehler das unveraenderte Composite wieder auf', () => {
-    const source = readLifecycle();
-    const placementStart = source.indexOf('  placePersistentBaseReward(');
-    const placementEnd = source.indexOf('\n  /** Liefert die lokale Reward-Vorschau', placementStart);
-    expect(placementStart).toBeGreaterThanOrEqual(0);
-    expect(placementEnd).toBeGreaterThan(placementStart);
-    const placement = source.slice(placementStart, placementEnd);
-    const rollbackAt = placement.indexOf('store.rollbackPlacement(sanitizedRequest.rewardId);');
-    const refreshAt = placement.indexOf('this.reconcilePersistentBaseWorld();', rollbackAt);
-    expect(placement).toContain('isPersistentContribution');
-    expect(rollbackAt).toBeGreaterThanOrEqual(0);
-    expect(refreshAt).toBeGreaterThan(rollbackAt);
-    expect(placement).toContain('emitArenaMapGridChanged(this.scene.game.events');
-  });
-
   it('rollt eine fehlgeschlagene Reward-Platzierung atomar zur persoenlichen Composite-Runtime zurueck', () => {
     useBehaviorHost();
     publishBehaviorWorld(407);

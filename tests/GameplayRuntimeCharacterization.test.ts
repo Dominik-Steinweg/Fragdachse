@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// Charakterisierungstests fuer den ersten Player-Gameplay-Runtime-Cutover (Plan Phase 1).
-// Sie fixieren die heutige Semantik der riskantesten Loadout-Pfade, bevor spaetere Teilphasen
-// (3B Resource/Readiness-Zeit, 5 Construction-Readiness, 6A Player-Action-Owner,
-// 8B Negev-Behavior, 8C Shotgun-Reactions) sie verschieben. Kein Zielvertrag – nur Ist-Zustand.
+// Charakterisierungstests fuer die riskantesten Player-Gameplay-Loadout-Pfade.
+// Sie dokumentieren beobachtbare Runtime-Semantik und bleiben bewusst frei von Source-Shape-
+// Assertions; dauerhafte Ownership-Grenzen gehoeren in die Architecture-Suite.
 
 vi.mock('phaser', () => ({
   Math: {
@@ -195,7 +194,7 @@ describe('PlayerWeaponActivationRuntime – Commit-Reihenfolge von Readiness und
   });
 });
 
-describe('ConstructionReadinessRuntime – Construction-/Management-Readiness (Phase 5)', () => {
+describe('ConstructionReadinessRuntime – Construction-/Management-Readiness', () => {
   function makeReadiness(): ConstructionReadinessRuntime {
     const readiness = new ConstructionReadinessRuntime();
     readiness.attachPlayer('p1');

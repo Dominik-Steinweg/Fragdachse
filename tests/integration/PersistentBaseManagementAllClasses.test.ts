@@ -1,6 +1,4 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('../fakeArenaRenderScene');
@@ -434,24 +432,6 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue(null);
 
     expect(coordinator.getPersistentBaseRewardIdsForPlayer(playerId)).toEqual([]);
-  });
-
-  it('bindet Rueckbau in Management-Overlay ein und unterdrueckt dabei das normale Aim', () => {
-    const source = readFileSync(resolve(process.cwd(), 'src/world/WorldPresentationFrameBinding.ts'), 'utf8');
-    const inputBindings = readFileSync(resolve(process.cwd(), 'src/scenes/arena/ArenaInputBindings.ts'), 'utf8');
-    const overlayStart = source.indexOf('this.input.persistentBaseVisuals.sync(');
-    const overlayEnd = source.indexOf('  }', overlayStart);
-    const showAimStart = inputBindings.indexOf('const aimVisible = cursorVisible');
-    const showAimEnd = inputBindings.indexOf('return { aimVisible, cursorVisible };', showAimStart);
-
-    expect(overlayStart).toBeGreaterThanOrEqual(0);
-    expect(overlayEnd).toBeGreaterThan(overlayStart);
-    expect(source.slice(overlayStart, overlayEnd)).toContain('isPersistentBasePlacementOverlayActive()');
-    expect(showAimStart).toBeGreaterThanOrEqual(0);
-    expect(showAimEnd).toBeGreaterThan(showAimStart);
-    expect(inputBindings.slice(showAimStart, showAimEnd)).toContain(
-      '&& !this.input.inputSystem.isDismantlePlacementActive()',
-    );
   });
 
   it('bietet unplatzierte Rewards auch ohne Inspector-Klasse an', () => {

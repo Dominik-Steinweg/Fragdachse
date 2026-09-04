@@ -1,14 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { getHeldWeaponGameplayMuzzleOrigin } from '../src/loadout/HeldItemVisuals';
-
-function read(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), 'utf8');
-}
 
 function makeRuntime() {
   const spawnProjectile = vi.fn(() => 7);
@@ -22,7 +16,7 @@ function makeRuntime() {
   return { runtime, spawnProjectile, resolveHitscanShot, resolveMeleeSwing, resolveSafeHitscanStart };
 }
 
-describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-Capability (4A)', () => {
+describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-Capability', () => {
   it('verdrahtet Projektil-, Hitscan- und Melee-Fire einmalig mit den Legacy-Senken', () => {
     const { runtime, spawnProjectile, resolveHitscanShot, resolveMeleeSwing } = makeRuntime();
 
@@ -78,20 +72,4 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
     expect(() => { runtime.destroy(); runtime.destroy(); }).not.toThrow();
   });
 
-  it('der LoadoutManager baut den Executor nicht mehr selbst (4A-Ratchet)', () => {
-    const loadout = read('src/loadout/LoadoutManager.ts');
-    expect(loadout).not.toContain('new WeaponFireExecutor');
-    expect(loadout).not.toContain('fireFlamethrowerWeapon');
-    expect(loadout).not.toContain('fireLeafBlowerWeapon');
-    expect(loadout).not.toContain('fireReinforcementMatrixWeapon');
-    expect(loadout).not.toContain('fireEnergyInjectorWeapon');
-    expect(loadout).not.toContain('setWeaponExecutionCapability(');
-    expect(loadout).not.toContain('setSpecializedWeaponExecutionCapability(');
-    expect(loadout).not.toContain('private fireWeapon(');
-    expect(read('src/world/PlayerWeaponActivationRuntime.ts')).toContain('class PlayerWeaponActivationRuntime');
-    const composition = read('src/scenes/arena/ArenaWorldPlayerComposition.ts');
-    expect(composition).toContain('new WorldWeaponExecutionRuntime(');
-    expect(composition).toContain('new SpecializedWeaponExecutionAdapter(');
-    expect(composition).toContain('worldRuntime.bind(weaponExecution)');
-  });
 });

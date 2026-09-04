@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { ActivityKind } from '../src/config/authoring/ActivityDefinition';
 import {
@@ -91,28 +89,5 @@ describe('Capability Policy – aus dem Runtime-State aufgeloest', () => {
       if (participation === 'interactive') continue;
       expect(capabilities(participation, 'coop-mission').canMove, participation).toBe(false);
     }
-  });
-});
-
-describe('Capability Policy – host-autoritativ verdrahtet', () => {
-  it('ersetzt die universelle Freigabe an den Stellen, die der Koordinator besitzt', () => {
-    const source = readFileSync(
-      resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
-      'utf8',
-    );
-    const start = source.indexOf('  getPlayerCapabilities(playerId: string): PlayerCapabilities {');
-    expect(start, 'coordinator must resolve capabilities from its own state').toBeGreaterThan(0);
-    const body = source.slice(start, source.indexOf('\n  }', start));
-    expect(body).toContain('participation: this.getWorldParticipation(playerId)');
-    expect(body).toContain('activityKind: this.worldLifecycle.activity.kind');
-
-    // World-Owner fragen die fachlich passende Capability selbst ab; der Coordinator reicht nur
-    // die schmale Policy-Funktion in ihre Composition-Portfolios.
-    expect(source).toContain('getPlayerCapabilities: (playerId) => this.getPlayerCapabilities(playerId)');
-    expect(readFileSync(resolve(process.cwd(), 'src/world/WorldCombatGameplayBinding.ts'), 'utf8'))
-      .toContain('o.getPlayerCapabilities(playerId).canUseCombat');
-    expect(readFileSync(resolve(process.cwd(), 'src/world/WorldPlayerGameplayRuntime.ts'), 'utf8'))
-      .toContain('options.getPlayerCapabilities(playerId).canInteract');
-    expect(source).toContain('maySendWorldInput(this.getWorldParticipation(localId))');
   });
 });
