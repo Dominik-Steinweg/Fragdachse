@@ -1,7 +1,6 @@
 import type { TrackedProjectile } from '../types';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
-import type { ProjectileProvenance } from './ProjectileSpawnRequest';
 
 /** Core results consumed by the still-legacy collision/effect stage. */
 export interface ProjectileCoreStageResult {
@@ -27,14 +26,6 @@ export class ProjectileFlightProcessor {
   private readonly miniRocketSafetyExpiredIds = new Set<number>();
   private readonly countdownEvents: Array<{ x: number; y: number; value: number }> = [];
   private timeFieldPort: ProjectileTimeFieldPort | null = null;
-  private readonly fallbackProvenance = {
-    gameplaySourceId: '',
-    attributionId: '',
-    allegiance: { ownerId: '', allowTeamDamage: undefined as boolean | undefined },
-    weaponSourceId: undefined as string | undefined,
-    sourceSlot: undefined as ProjectileProvenance['sourceSlot'],
-    sourceTurretId: undefined as string | undefined,
-  } satisfies ProjectileProvenance;
 
   private readonly result: ProjectileCoreStageResult = {
     lifetimeExpiredIds: this.lifetimeExpiredIds,
@@ -132,19 +123,11 @@ export class ProjectileFlightProcessor {
   }
 
   private resolveMovementFactor(projectile: TrackedProjectile, nowMs: number): number {
-    const fallbackProvenance = this.fallbackProvenance;
-    fallbackProvenance.gameplaySourceId = projectile.ownerId;
-    fallbackProvenance.attributionId = projectile.ownerId;
-    fallbackProvenance.allegiance.ownerId = projectile.ownerId;
-    fallbackProvenance.allegiance.allowTeamDamage = projectile.allowTeamDamage;
-    fallbackProvenance.weaponSourceId = projectile.sourceId;
-    fallbackProvenance.sourceSlot = projectile.sourceSlot;
-    fallbackProvenance.sourceTurretId = projectile.sourceTurretId;
     const queried = this.timeFieldPort?.getMovementFactor(
       projectile.sprite.x,
       projectile.sprite.y,
       nowMs,
-      fallbackProvenance,
+      projectile.provenance,
     );
     const nextFactor = clamp(queried ?? projectile.timeBubbleFactor ?? 1, 0, 1);
     const previousFactor = clamp(projectile.timeBubbleFactor ?? 1, 0, 1);

@@ -6,7 +6,14 @@ import {
   type ProjectileOwnerSeam,
 } from '../src/projectile/WorldProjectileRuntime';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../src/types';
-import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
+import {
+  createSingleOwnerProvenance,
+  type ProjectileProvenance,
+  type ProjectileSpawnRequest,
+} from '../src/projectile/ProjectileSpawnRequest';
+import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
+import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
+import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
 
 function createSimulation() {
@@ -15,8 +22,8 @@ function createSimulation() {
   let boundOwner: ProjectileOwnerSeam | null = null;
   const simulation: LegacyProjectileHostSimulation = {
     bindProjectileOwner: (owner) => { boundOwner = owner; },
-    createProjectile: (id) => {
-      const record = { id, pendingDestroy: false } as unknown as TrackedProjectile;
+    createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
+      const record = { id: _id, pendingDestroy: false, provenance } as unknown as TrackedProjectile;
       created.push(record);
       return record;
     },
@@ -26,10 +33,11 @@ function createSimulation() {
   return { simulation, created, released, getBoundOwner: () => boundOwner };
 }
 
-function createRuntime() {
+function createRuntime(identityScope = new ProjectileIdentityScope(1)) {
   const simulation = createSimulation();
   const runtime = new WorldProjectileRuntime({
     simulation: simulation.simulation,
+    identityScope,
     hostNowMs: () => 1_000,
   });
   return { runtime, ...simulation };
@@ -48,6 +56,46 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     expect(runtime.store.getById(first)?.id).toBe(first);
     expect(runtime.store.getById(second)?.id).toBe(second);
     expect(runtime.activeCount).toBe(2);
+  });
+
+  it('verwendet nach Runtime-Rebuild derselben World-Revision keine Projectile-Id erneut', () => {
+    const context = {
+      descriptor: {
+        worldRevision: 21,
+        definitionId: 'world:test',
+        seed: 1,
+        generatorVersion: 1,
+        layoutFingerprint: 'test',
+      },
+    } as WorldRuntimeContext;
+    let current: WorldProjectileRuntime | null = null;
+    const runtimes: WorldProjectileRuntime[] = [];
+    const sink: WorldLifecycleSink = {
+      publish: () => {},
+      clear: () => {},
+      attach: (_worldContext, identityScope) => {
+        current = createRuntime(identityScope).runtime;
+        runtimes.push(current);
+      },
+      detach: () => {
+        current?.destroy();
+        current = null;
+      },
+    };
+    const lifecycle = new WorldLifecycle(sink);
+    lifecycle.beginCreate(context.descriptor, null);
+    lifecycle.attachRuntime(context);
+    const firstId = current!.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+
+    lifecycle.detachRuntime();
+    lifecycle.attachRuntime(context);
+    const secondId = current!.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+
+    expect(runtimes).toHaveLength(2);
+    expect(secondId).toBeGreaterThan(firstId);
+    expect(secondId).toBe(1);
+
+    lifecycle.endInstance();
   });
 
   it('entfernt ein Projectile vollständig und bleibt bei Wiederholung wirkungslos', () => {
@@ -84,6 +132,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     const projectile = {
       id: 0,
       ownerId: 'owner',
+      provenance: createSingleOwnerProvenance('owner'),
       sprite: { x: 0, y: 0, displayWidth: 4 },
       body: { velocity: { x: 10, y: 0 } },
       lastX: 0,
@@ -111,7 +160,11 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       },
       releaseWorldProjectileState: () => {},
     };
-    const runtime = new WorldProjectileRuntime({ simulation, hostNowMs: () => 0 });
+    const runtime = new WorldProjectileRuntime({
+      simulation,
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 0,
+    });
     runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
 
     runtime.runHostProjectileStage(100, 1_234);
@@ -124,6 +177,11 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     const projectile = {
       id: 0,
       ownerId: 'owner',
+      provenance: createSingleOwnerProvenance('owner', {
+        weaponSourceId: 'weapon.GLOCK',
+        sourceSlot: 'weapon2',
+        allowTeamDamage: false,
+      }),
       sourceId: 'weapon.GLOCK',
       sourceSlot: 'weapon1',
       allowTeamDamage: false,
@@ -159,7 +217,11 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       },
       releaseWorldProjectileState: () => {},
     };
-    const runtime = new WorldProjectileRuntime({ simulation, hostNowMs: () => 0 });
+    const runtime = new WorldProjectileRuntime({
+      simulation,
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 0,
+    });
     runtime.spawnLegacyProjectile(0, 8, 0, 'owner', payload);
 
     expect(runtime.getTravelSamples()).toMatchObject([{
@@ -186,5 +248,78 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     expect(appliedAugment).toEqual(augment);
     expect(projectile.supplementalBurnOnHit).toEqual(augment.burn);
     expect(projectile.supplementalBurnProvenance).toEqual(augment.provenance);
+  });
+
+  it('erhält getrennte Provenance-Dimensionen von Semantic Spawn bis Runtime und Reads', () => {
+    const provenance: ProjectileProvenance = {
+      gameplaySourceId: 'weapon-source',
+      attributionId: 'credit-owner',
+      allegiance: { ownerId: 'team-owner', allowTeamDamage: true },
+      weaponSourceId: 'weapon.test',
+      sourceSlot: 'weapon2',
+      sourceTurretId: 'turret-17',
+      lineage: {
+        parentProjectileId: 77,
+        reflected: true,
+        plasmaSwarmChild: true,
+        plasmaSwarmOriginEnemyId: 'enemy-9',
+      },
+      correlation: { ak47ShotId: 1234 },
+    };
+    const baseRecord = {
+      id: 0,
+      pendingDestroy: false,
+      isGrenade: false,
+      isFlame: false,
+      canReceiveFireImbue: true,
+      pathEffectKind: 'awp' as const,
+      awpCorridorHalfWidth: 24,
+      awpCorridorDamage: 40,
+      lastX: 0,
+      lastY: 8,
+      sprite: { active: true, x: 100, y: 8, displayWidth: 4, displayHeight: 4 },
+      body: { velocity: { x: 10, y: 0 } },
+    } as unknown as TrackedProjectile;
+    const simulation: LegacyProjectileHostSimulation = {
+      bindProjectileOwner: () => {},
+      createProjectile: (id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, receivedProvenance) => ({
+        ...baseRecord,
+        id,
+        provenance: receivedProvenance,
+      }),
+      releaseProjectileResources: () => {},
+      releaseWorldProjectileState: () => {},
+    };
+    const runtime = new WorldProjectileRuntime({
+      simulation,
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 0,
+    });
+    const request: ProjectileSpawnRequest = {
+      origin: { x: 0, y: 8, angle: 0 },
+      flight: {
+        speed: 100,
+        size: 4,
+        lifetimeMs: 1_000,
+        maxBounces: 0,
+        isGrenade: false,
+      },
+      provenance,
+      interaction: {
+        burn: { canReceiveFireImbue: true },
+        pathEffect: { kind: 'awp', awpCorridor: { halfWidth: 24, damage: 40 } },
+      },
+      presentation: { color: 0xffffff },
+    };
+
+    const id = runtime.spawnProjectile(request);
+    if (id === null) throw new Error('Expected semantic projectile spawn to succeed');
+    const stored = runtime.store.getById(id);
+
+    expect(stored?.provenance).toBe(provenance);
+    expect(runtime.getTravelSamples()[0]?.provenance).toBe(provenance);
+    expect(runtime.getThreatSamples()[0]?.provenance).toBe(provenance);
+    expect(runtime.getSummary().activeProjectilesByOwner.get(provenance.allegiance.ownerId)).toBe(1);
+    expect(runtime.getSummary().activeProjectilesByOwner.get(provenance.attributionId)).toBeUndefined();
   });
 });

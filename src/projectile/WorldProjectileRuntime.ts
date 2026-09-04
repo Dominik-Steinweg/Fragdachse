@@ -1,5 +1,6 @@
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../types';
 import type { WorldScopedBinding } from '../world/WorldRuntime';
+import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import { toLegacyProjectileSpawnConfig } from './legacyProjectileSpawnPayload';
 import {
   ProjectileFlightProcessor,
@@ -13,7 +14,11 @@ import type {
   ProjectileTargetabilityPort,
 } from '../entities/ProjectileHomingController';
 import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
-import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
+import {
+  createSingleOwnerProvenance,
+  type ProjectileProvenance,
+  type ProjectileSpawnRequest,
+} from './ProjectileSpawnRequest';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 import {
   BURN_TICK_INTERVAL_MS,
@@ -68,6 +73,7 @@ export interface LegacyProjectileHostSimulation {
     ownerId: string,
     cfg: ProjectileSpawnConfig,
     hostNowMs: number,
+    provenance: ProjectileProvenance,
   ): TrackedProjectile;
   /** Gibt Physics-, Collider- und Darstellungsressourcen eines entfernten Records frei. */
   releaseProjectileResources(record: TrackedProjectile): void;
@@ -120,6 +126,8 @@ export interface ProjectileOwnerSeam {
 
 export interface WorldProjectileRuntimeOptions {
   readonly simulation: LegacyProjectileHostSimulation;
+  /** World-Revision-Scope für monotone Projectile-Identity über lokale Runtime-Rebuilds. */
+  readonly identityScope: ProjectileIdentityScope;
   /** Hostautoritative Frame-/Weltzeit; die Runtime liest keine eigene Wall Clock. */
   readonly hostNowMs: () => number;
   /** Meldet der Composition, dass dieser Owner abgeräumt ist. */
@@ -129,9 +137,10 @@ export interface WorldProjectileRuntimeOptions {
 /**
  * World-owned Owner der autoritativen Projectile-Registry.
  *
- * Er lebt und stirbt mit seiner `WorldRuntime`: Identity, Runtime-Records und ihr Teardown gehören
- * ihm allein. Spawn läuft ausschließlich über diese Grenze – aus der aufgelösten Execution über
- * {@link spawnProjectile}, aus noch nicht migrierten Host-Quellen über den befristeten Seam.
+ * Er lebt und stirbt mit seiner `WorldRuntime`: Registry, Runtime-Records und ihr Teardown gehören
+ * ihm allein; die monotone Identity-Vergabe kommt aus dem worldRevision-langlebigen Scope. Spawn
+ * läuft ausschließlich über diese Grenze – aus der aufgelösten Execution über {@link spawnProjectile},
+ * aus noch nicht migrierten Host-Quellen über den befristeten Seam.
  *
  * Flight, Kollision, Wirkung und Darstellung liegen bis zu ihren Cutover-Phasen weiterhin in der
  * Legacy-Simulation; sie arbeitet dabei auf **demselben** Store, nie auf einer Kopie.
@@ -147,7 +156,7 @@ export class WorldProjectileRuntime implements
   ProjectileTravelReadPort,
   ProjectileEnvironmentInteractionPort,
   WorldScopedBinding {
-  private readonly projectiles = new ProjectileStore();
+  private readonly projectiles: ProjectileStore;
   private readonly flightProcessor = new ProjectileFlightProcessor();
   private readonly homingController = new ProjectileHomingController();
   private readonly detonableIds = new Set<ProjectileId>();
@@ -167,6 +176,7 @@ export class WorldProjectileRuntime implements
     this.simulation = options.simulation;
     this.hostNowMs = options.hostNowMs;
     this.onDestroy = options.onDestroy;
+    this.projectiles = new ProjectileStore(options.identityScope);
     this.simulation.bindProjectileOwner(this);
   }
 
@@ -185,8 +195,9 @@ export class WorldProjectileRuntime implements
       origin.x,
       origin.y,
       origin.angle,
-      request.provenance.attributionId,
+      request.provenance.allegiance.ownerId,
       toLegacyProjectileSpawnConfig(request),
+      request.provenance,
     );
   }
 
@@ -197,7 +208,7 @@ export class WorldProjectileRuntime implements
     ownerId: string,
     cfg: ProjectileSpawnConfig,
   ): ProjectileId {
-    return this.spawnResolved(x, y, angle, ownerId, cfg);
+    return this.spawnResolved(x, y, angle, ownerId, cfg, createLegacyProjectileProvenance(ownerId, cfg));
   }
 
   destroyProjectile(id: ProjectileId): void {
@@ -254,7 +265,7 @@ export class WorldProjectileRuntime implements
       airFrictionDecayPerSec: request.airFrictionDecayPerSec,
       bounceFrictionMultiplier: request.bounceFrictionMultiplier,
       stopSpeedThreshold: request.stopSpeedThreshold,
-    });
+    }, createSingleOwnerProvenance(request.ownerId, { weaponSourceId: request.sourceId }));
   }
 
   getPuckPosition(id: ProjectileId): { x: number; y: number } | null {
@@ -286,7 +297,7 @@ export class WorldProjectileRuntime implements
         fromY: record.lastY,
         toX: record.sprite.x,
         toY: record.sprite.y,
-        provenance: createProjectileProvenance(record),
+        provenance: record.provenance,
         capabilities: {
           canReceiveFireImbue: record.canReceiveFireImbue === true && !record.isGrenade && !record.isFlame,
           pathEffect,
@@ -306,7 +317,7 @@ export class WorldProjectileRuntime implements
       ?? (record.supplementalBurnOnHit
         ? {
           burn: record.supplementalBurnOnHit,
-          provenance: record.supplementalBurnProvenance ?? createProjectileProvenance(record),
+          provenance: record.supplementalBurnProvenance ?? record.provenance,
         }
         : undefined);
     if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
@@ -330,7 +341,7 @@ export class WorldProjectileRuntime implements
         vx: record.body.velocity.x,
         vy: record.body.velocity.y,
         radius,
-        provenance: createProjectileProvenance(record),
+        provenance: record.provenance,
         dodgeRelevant: !record.isGrenade && !record.isFlame,
       });
     }
@@ -341,8 +352,8 @@ export class WorldProjectileRuntime implements
     this.activeProjectilesByOwner.clear();
     for (const record of this.projectiles.activeRecords) {
       this.activeProjectilesByOwner.set(
-        record.ownerId,
-        (this.activeProjectilesByOwner.get(record.ownerId) ?? 0) + 1,
+        record.provenance.allegiance.ownerId,
+        (this.activeProjectilesByOwner.get(record.provenance.allegiance.ownerId) ?? 0) + 1,
       );
     }
     return {
@@ -428,9 +439,10 @@ export class WorldProjectileRuntime implements
     angle: number,
     ownerId: string,
     cfg: ProjectileSpawnConfig,
+    provenance: ProjectileProvenance,
   ): ProjectileId {
     const id = this.projectiles.allocateId();
-    const record = this.simulation.createProjectile(id, x, y, angle, ownerId, cfg, this.hostNowMs());
+    const record = this.simulation.createProjectile(id, x, y, angle, ownerId, cfg, this.hostNowMs(), provenance);
     this.projectiles.insert(record);
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
@@ -439,7 +451,7 @@ export class WorldProjectileRuntime implements
     if (record.supplementalBurnOnHit) {
       this.burnAugments.set(id, {
         burn: record.supplementalBurnOnHit,
-        provenance: record.supplementalBurnProvenance ?? createProjectileProvenance(record),
+        provenance: record.supplementalBurnProvenance ?? record.provenance,
       });
     }
     return id;
@@ -497,16 +509,31 @@ function burnDps(burn: { damagePerTick: number }): number {
   return burn.damagePerTick * 1000 / BURN_TICK_INTERVAL_MS;
 }
 
-function createProjectileProvenance(record: TrackedProjectile) {
-  return {
-    gameplaySourceId: record.ownerId,
-    attributionId: record.ownerId,
-    allegiance: { ownerId: record.ownerId, allowTeamDamage: record.allowTeamDamage },
-    weaponSourceId: record.sourceId,
-    sourceSlot: record.sourceSlot,
-    sourceTurretId: record.sourceTurretId,
-    lineage: record.reflected === undefined ? undefined : { reflected: record.reflected },
-  } satisfies import('./ProjectileSpawnRequest').ProjectileProvenance;
+function createLegacyProjectileProvenance(
+  ownerId: string,
+  cfg: ProjectileSpawnConfig,
+): ProjectileProvenance {
+  const hasLineage = cfg.reflected !== undefined
+    || cfg.plasmaSwarmProjectile !== undefined
+    || cfg.plasmaSwarmOriginEnemyId !== undefined;
+  const lineage = hasLineage
+    ? {
+      reflected: cfg.reflected,
+      plasmaSwarmChild: cfg.plasmaSwarmProjectile,
+      plasmaSwarmOriginEnemyId: cfg.plasmaSwarmOriginEnemyId,
+    }
+    : undefined;
+  const correlation = cfg.ak47ShotId === undefined
+    ? undefined
+    : { ak47ShotId: cfg.ak47ShotId };
+  return createSingleOwnerProvenance(ownerId, {
+    weaponSourceId: cfg.sourceId,
+    sourceSlot: cfg.sourceSlot,
+    sourceTurretId: cfg.sourceTurretId,
+    allowTeamDamage: cfg.allowTeamDamage,
+    lineage,
+    correlation,
+  });
 }
 
 function emptyHostStageResult(): ProjectileHostStageResult {

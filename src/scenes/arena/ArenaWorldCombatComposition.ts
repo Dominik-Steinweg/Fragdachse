@@ -30,6 +30,7 @@ export function composeWorldProjectileRuntime(
   const { ctx, worldRuntime } = input;
   const projectileRuntime = new WorldProjectileRuntime({
     simulation: ctx.projectileManager,
+    identityScope: worldRuntime.projectileIdentityScope,
     hostNowMs: () => Date.now(),
     onDestroy: () => {
       if (gameplay.projectiles === projectileRuntime) gameplay.projectiles = null;

@@ -1,4 +1,5 @@
 import type { TrackedProjectile } from '../types';
+import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import type { ProjectileId } from './ProjectileSpawnPort';
 
 /**
@@ -9,19 +10,20 @@ import type { ProjectileId } from './ProjectileSpawnPort';
  * Repository: er gehört dem `WorldProjectileRuntime`-Owner, der ihn erzeugt, füllt und mit der
  * World wieder abräumt.
  *
- * Eine `ProjectileId` wird innerhalb dieses Stores nie wiederverwendet; erst der World-Teardown
- * beendet den Identity-Scope.
+ * Die ID-Vergabe delegiert an den worldRevision-langlebigen Identity-Scope. Ein lokaler Store-
+ * Teardown leert nur die Registry; der Scope bleibt bis zum Ende der World-Instanz erhalten.
  */
 export class ProjectileStore {
-  private nextId = 0;
   /** Verarbeitungsreihenfolge inklusive bereits zum Abbau vorgemerkter Records. */
   private readonly records: TrackedProjectile[] = [];
   private readonly active = new Set<TrackedProjectile>();
   private readonly byId = new Map<ProjectileId, TrackedProjectile>();
 
-  /** Vergibt die nächste Identity. Einzige ID-Quelle dieser World. */
+  constructor(private readonly identityScope: ProjectileIdentityScope) {}
+
+  /** Vergibt die nächste Identity über die einzige ID-Quelle dieser World-Revision. */
   allocateId(): ProjectileId {
-    return this.nextId++;
+    return this.identityScope.allocate();
   }
 
   /** Nimmt einen fertig erzeugten Record in Identity, Aktivmenge und Verarbeitung auf. */

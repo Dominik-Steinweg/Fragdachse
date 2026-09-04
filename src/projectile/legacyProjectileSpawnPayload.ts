@@ -9,8 +9,9 @@ import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
  * wie Flight, Kollision und Wirkung den Legacy-Record verwenden, und verschwindet mit dessen
  * Ablösung.
  *
- * Solange die Payload nur ein `ownerId` kennt, müssen Gameplay-Source, Attribution und Allegiance
- * derselben Entität gehören; die Trennung dieser Dimensionen wird erst dahinter wirksam.
+ * Die Payload führt weiterhin nur den für den Legacy-Code nötigen operativen `ownerId`-Anteil.
+ * Die vollständige Provenance wird von der World-Runtime separat und unverändert in den
+ * kanonischen Runtime-Record übergeben.
  */
 export function toLegacyProjectileSpawnConfig(request: ProjectileSpawnRequest): ProjectileSpawnConfig {
   const { flight, provenance, interaction, presentation } = request;

@@ -1393,6 +1393,8 @@ export interface TrackedProjectile {
   bounceCount:     number;
   createdAt:       number;
   ownerId:         string;
+  /** Kanonische mehrdimensionale Herkunft; wird nicht aus `ownerId` rekonstruiert. */
+  provenance:      import('./projectile/ProjectileSpawnRequest').ProjectileProvenance;
   ignoreBaseCollisions?: boolean;
   ignoreRockIndex?: number;
   color:           number;  // hex – gespeichert bei Spawn, entkoppelt von Shape

@@ -6,6 +6,7 @@ import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldPresentationBinding } from './WorldPresentationBinding';
 import type { WorldPresentationFrameBinding } from './WorldPresentationFrameBinding';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
+import { ProjectileIdentityScope } from '../projectile/ProjectileIdentityScope';
 
 /**
  * Lokale Realisierung genau einer World-Instanz.
@@ -43,7 +44,19 @@ export class WorldRuntime {
   private worldScopedBindings: WorldScopedBinding[] = [];
   private destroyed = false;
 
-  constructor(readonly context: WorldRuntimeContext) {
+  readonly projectileIdentityScope: ProjectileIdentityScope;
+
+  constructor(
+    readonly context: WorldRuntimeContext,
+    projectileIdentityScope = new ProjectileIdentityScope(context.descriptor.worldRevision),
+  ) {
+    if (projectileIdentityScope.worldRevision !== context.descriptor.worldRevision) {
+      throw new Error(
+        `[WorldRuntime] Projectile identity scope belongs to world revision `
+        + `${projectileIdentityScope.worldRevision}, not ${context.descriptor.worldRevision}`,
+      );
+    }
+    this.projectileIdentityScope = projectileIdentityScope;
     this.activity = new ActivityRuntimeHost(context.descriptor.worldRevision);
   }
 

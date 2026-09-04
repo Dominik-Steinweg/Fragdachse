@@ -191,8 +191,8 @@ describe('WorldLifecycle + WorldRuntime – Identitaet ueberlebt die lokale Runt
     const sink: WorldLifecycleSink = {
       publish: () => { /* Wire-Verhalten ist hier nicht Gegenstand */ },
       clear: () => { /* dito */ },
-      attach: (worldContext) => {
-        current = new WorldRuntime(worldContext);
+      attach: (worldContext, identityScope) => {
+        current = new WorldRuntime(worldContext, identityScope);
         runtimes.push(current);
       },
       detach: () => {

@@ -6,6 +6,7 @@ import {
 import type { ActivityDescriptor } from './ActivityDescriptor';
 import { isSameWorldInstance, type WorldDescriptor } from './WorldDescriptor';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
+import { ProjectileIdentityScope } from '../projectile/ProjectileIdentityScope';
 
 /**
  * Lebenszyklus genau einer World-Instanz.
@@ -25,8 +26,8 @@ export interface WorldLifecycleSink {
   readonly publishActivity?: (activity: ActivityDescriptor | null) => void;
   /** Host-only: beendet die replizierte World-Instanz. */
   readonly clear: () => void;
-  /** Bindet die lokale World-Runtime an die laufende Instanz. */
-  readonly attach: (context: WorldRuntimeContext) => void;
+  /** Bindet die lokale World-Runtime samt worldRevision-langlebigem Identity-Scope. */
+  readonly attach: (context: WorldRuntimeContext, identityScope: ProjectileIdentityScope) => void;
   /** Loest die lokale World-Runtime. */
   readonly detach: () => void;
   /** Activity-Identity: getrennt von Attach/Detach der lokalen Activity-Runtime. */
@@ -49,6 +50,8 @@ export class WorldLifecycle {
    * World endet erst mit {@link endInstance}, nicht mit dem Fall ihrer Runtime.
    */
   private instanceDescriptor: WorldDescriptor | null = null;
+  /** Projectile-Identity bleibt bis zum Ende der replizierten World-Instanz erhalten. */
+  private projectileIdentityScope: ProjectileIdentityScope | null = null;
   /** Highest revision that was completely ended on this local lifecycle. */
   private lastEndedWorldRevision = 0;
 
@@ -78,6 +81,12 @@ export class WorldLifecycle {
   /** Identitaet der World, die gerade entsteht oder laeuft. */
   get descriptor(): WorldDescriptor | null {
     return this.instanceDescriptor;
+  }
+
+  /** Liefert den Identity-Scope der laufenden World-Instanz für ihre lokale Materialisierung. */
+  getProjectileIdentityScope(): ProjectileIdentityScope {
+    if (this.projectileIdentityScope) return this.projectileIdentityScope;
+    throw new Error('[WorldLifecycle] Projectile identity scope is unavailable without a World instance');
   }
 
   /** Stable wall-clock anchor of the current Activity identity, if one exists. */
@@ -121,6 +130,7 @@ export class WorldLifecycle {
     this.activity.end();
     if (this.currentContext) this.detachRuntime();
     this.instanceDescriptor = world;
+    this.projectileIdentityScope = new ProjectileIdentityScope(world.worldRevision);
     this.currentPhase = 'creating';
     // World und Activity gehen atomar auf den Draht, damit nie eine Activity ohne ihre World
     // sichtbar wird. Ihre Lebenszyklen bleiben trotzdem getrennt.
@@ -156,8 +166,9 @@ export class WorldLifecycle {
     // Ein Client beobachtet die Instanz nur; fuer ihn beginnt sie mit seiner Runtime.
     this.instanceDescriptor = context.descriptor;
     this.currentContext = context;
+    const identityScope = this.ensureProjectileIdentityScope(context.descriptor.worldRevision);
     this.currentPhase = 'active';
-    this.sink.attach(context);
+    this.sink.attach(context, identityScope);
     // Erst steht die World, dann ihre Activity – nie umgekehrt. Ein Client eroeffnet die
     // beobachtete Activity hier, weil er sie nicht selbst erzeugt hat.
     this.syncActivity(observedActivity, false, false);
@@ -203,7 +214,17 @@ export class WorldLifecycle {
     this.lastEndedWorldRevision = Math.max(this.lastEndedWorldRevision, endedRevision);
     if (hadContext) this.sink.detach();
     this.sink.clear();
+    this.projectileIdentityScope = null;
     this.currentPhase = 'none';
+  }
+
+  private ensureProjectileIdentityScope(worldRevision: number): ProjectileIdentityScope {
+    if (this.projectileIdentityScope?.worldRevision === worldRevision) {
+      return this.projectileIdentityScope;
+    }
+    const scope = new ProjectileIdentityScope(worldRevision);
+    this.projectileIdentityScope = scope;
+    return scope;
   }
 
   private syncActivity(

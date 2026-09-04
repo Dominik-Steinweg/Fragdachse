@@ -26,7 +26,7 @@
 ## 1. Aktueller Stand
 
 - **Nächste Phase:** `6 – Collision + Targets + Defense`
-- **Gesamtstatus:** Phase 5 abgeschlossen; Travel-/Environment-Augments und Path-Effects laufen über world-owned Capability- und Interaction-Ports, ohne direkte Projectile-Manager- oder Runtime-Record-Zugriffe in den migrierten Upgrade-Systemen
+- **Gesamtstatus:** Phase 5 abgeschlossen; Travel-/Environment-Augments und Path-Effects laufen über world-owned Capability- und Interaction-Ports, die Projectile-Identity bleibt über lokale Runtime-Rebuilds innerhalb einer `worldRevision` stabil und die kanonische Provenance bleibt im Runtime-Record vollständig erhalten
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab` (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -64,6 +64,8 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
 - [Transition] `ProjectileManager` verarbeitet Kollision, Wirkung, Snapshot und Presentation weiter auf dem kanonischen Store; Flight/Lifetime/Homing, Phase-4-External-/Read-Ports und Phase-5-Travel-/Environment-Ports sind im `WorldProjectileRuntime` geschlossen, spätere Fachbereiche folgen in den Phasen 6–14.
+- [Transition] `ProjectileIdentityScope` gehört zur `WorldLifecycle`-Lifetime und wird an jede lokale `WorldRuntime`-Materialisierung derselben `worldRevision` weitergereicht; er endet erst mit `endInstance`.
+- [Transition] `TrackedProjectile.provenance` ist die kanonische vollständige Provenance; Legacy-Spawn-Shape und flache Legacy-Felder bleiben nur bis zu ihren späteren Cutovers als Adapter-/Migrationsdaten bestehen.
 - [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: `CombatSystem`-Deflection/Reflection/Schwarmkinder (6–7), übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
 - [Transition] `toLegacyProjectileSpawnConfig` bildet den Spawn-Auftrag auf den Legacy-Record ab; entfällt mit dessen Ablösung (14).
 
@@ -84,7 +86,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 |---|---|
 | Projectile Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` (`src/projectile/`) |
 | World Projectile Runtime / Host Frame | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort` (`src/projectile/`) |
-| Projectile Store / Runtime Record | `ProjectileStore`; Record bis zur Ablösung weiterhin `TrackedProjectile` |
+| Projectile Store / Runtime Record | `ProjectileStore`, `ProjectileIdentityScope`; Record bis zur Ablösung weiterhin `TrackedProjectile` mit kanonischer `provenance` |
 | External Interaction | `ProjectileExternalInteractionPort`, `ProjectileDetonationSearchRequest`, `ProjectileDetonationTarget`, `ProjectileDetonationOutcome`, `TranslocatorProjectilePort`, `TranslocatorPuckSpawnRequest` (`src/projectile/ProjectileExternalInteractionPort.ts`) |
 | Read Ports | `ProjectileThreatReadPort`, `ProjectileThreatSample`, `ProjectileDiagnosticsReadPort`, `ProjectileDiagnosticsSummary`, `ProjectilePresentationReadPort` (`src/projectile/ProjectileReadPorts.ts`) |
 | Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileFireTrailCapability`, `ProjectileAwpCorridorCapability`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment` (`src/projectile/ProjectileTravelPort.ts`); `ProjectilePathEffectKind` (`src/types.ts`) |

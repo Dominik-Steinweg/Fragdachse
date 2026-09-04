@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectileFlightProcessor } from '../src/projectile/ProjectileFlightProcessor';
+import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
 import type { TrackedProjectile } from '../src/types';
 
 function makeProjectile(overrides: Partial<TrackedProjectile> = {}): TrackedProjectile {
@@ -26,6 +27,7 @@ function makeProjectile(overrides: Partial<TrackedProjectile> = {}): TrackedProj
   return {
     id: 1,
     ownerId: 'owner',
+    provenance: createSingleOwnerProvenance('owner'),
     sprite,
     body,
     lastX: 0,

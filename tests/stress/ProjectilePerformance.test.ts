@@ -93,6 +93,7 @@ import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from '../fak
 import { ProjectileManager } from '../../src/entities/ProjectileManager';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../../src/types';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
+import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
 
 /**
  * Bindet den Manager an eine echte world-owned Registry und nimmt vorbereitete Records auf.
@@ -108,13 +109,18 @@ function bindProjectileRegistry(
   const runtime = new WorldProjectileRuntime({
     simulation: {
       bindProjectileOwner: (owner) => manager.bindProjectileOwner(owner),
-      createProjectile: () => pending.shift() as TrackedProjectile,
+      createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
+        const record = pending.shift() as TrackedProjectile;
+        record.provenance = provenance;
+        return record;
+      },
       releaseProjectileResources: (record) => manager.releaseProjectileResources(record),
       runLegacyProjectileStage: (deltaMs, nowMs, coreStage) => manager.runLegacyProjectileStage(deltaMs, nowMs, coreStage),
       setProjectileTimeFieldPort: (port) => manager.setProjectileTimeFieldPort(port),
       setHostFrameTime: (nowMs) => manager.setHostFrameTime(nowMs),
       releaseWorldProjectileState: () => manager.releaseWorldProjectileState(),
     },
+    identityScope: new ProjectileIdentityScope(1),
     hostNowMs: () => 0,
   });
   for (const record of records) {

@@ -66,6 +66,7 @@ import type {
   ProjectileDetonationTarget,
 } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileBurnAugment } from '../projectile/ProjectileTravelPort';
+import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -722,6 +723,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     ownerId: string,
     cfg:     ProjectileSpawnConfig,
     hostNowMs: number,
+    provenance: ProjectileProvenance,
   ): TrackedProjectile {
     // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-Größe) gebraucht werden.
     // Die renderer- und collider-spezifische Style-Auswertung passiert in den jeweiligen Helfern.
@@ -768,14 +770,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       Math.sin(angle) * cfg.speed,
     );
 
-    const spawnProvenance = {
-      gameplaySourceId: ownerId,
-      attributionId: ownerId,
-      allegiance: { ownerId, allowTeamDamage: cfg.allowTeamDamage },
-      weaponSourceId: cfg.sourceId,
-      sourceSlot: cfg.sourceSlot,
-      sourceTurretId: cfg.sourceTurretId,
-    };
+    const spawnProvenance = provenance;
     const initialTimeBubbleFactor = this.timeBubbleFactorProvider?.(
       resolvedSpawn.x,
       resolvedSpawn.y,
@@ -804,6 +799,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       bounceCount:    cfg.initialBounceCount ?? 0,
       createdAt:      hostNowMs,
       ownerId,
+      provenance,
       ignoreBaseCollisions: cfg.ignoreBaseCollisions,
       ignoreRockIndex: cfg.ignoreRockIndex,
       color:          cfg.color,

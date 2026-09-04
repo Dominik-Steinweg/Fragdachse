@@ -349,7 +349,7 @@ export class ArenaLifecycleCoordinator {
     publishActivity: (activity) => bridge.publishActivity(activity),
     clear: () => bridge.clearWorldAndActivity(),
     attach: (context) => {
-      this.worldRuntime = new WorldRuntime(context);
+      this.worldRuntime = new WorldRuntime(context, this.worldLifecycle.getProjectileIdentityScope());
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
