@@ -1,4 +1,4 @@
-import type { ProjectileSpawnConfig } from '../types';
+import type { ProjectileSpawnConfig, TrackedProjectile } from '../types';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 
 /**
@@ -140,5 +140,48 @@ export function toLegacyProjectileSpawnConfig(request: ProjectileSpawnRequest): 
     tracerConfig:          presentation.tracer,
     shotAudioKey:          presentation.shotAudioKey,
     suppressSpawnFx:       presentation.suppressSpawnFx,
+  };
+}
+
+/**
+ * Trägt die Restwirkung eines übernommenen Projectiles in seinen Nachfolger.
+ *
+ * Reflexion und Deflexion erzeugen ein neues Projectile; ohne diese Übertragung gingen Wolken,
+ * Explosionen, Brand und Debuffs des Ursprungs still verloren.
+ */
+export function createInheritedProjectilePayload(
+  record: TrackedProjectile,
+): Partial<ProjectileSpawnConfig> {
+  return {
+    explosion:            record.explosion,
+    enemyHitExplosion:    record.enemyHitExplosion,
+    impactCloud:          record.impactCloud,
+    grenadeEffect:        record.grenadeEffect,
+    burnDurationMs:       record.burnDurationMs,
+    burnDamagePerTick:    record.burnDamagePerTick,
+    projectileBurnVisualStyle: record.projectileBurnVisualStyle,
+    supplementalBurnOnHit: record.supplementalBurnOnHit,
+    supplementalBurnProvenance: record.supplementalBurnProvenance,
+    canReceiveFireImbue:  record.canReceiveFireImbue,
+    fireTrail:            record.fireTrail,
+    pathEffectKind:       record.pathEffectKind,
+    fireTrailHalfWidthCells: record.fireTrailHalfWidthCells,
+    awpCorridorHalfWidth: record.awpCorridorHalfWidth,
+    awpCorridorDamage:    record.awpCorridorDamage,
+    awpCorridorDotDurationMs: record.awpCorridorDotDurationMs,
+    awpCorridorDotTickIntervalMs: record.awpCorridorDotTickIntervalMs,
+    awpCorridorKnockback: record.awpCorridorKnockback,
+    awpCorridorKnockbackDurationMs: record.awpCorridorKnockbackDurationMs,
+    detonable:            record.detonable,
+    detonator:            record.detonator,
+    proximityPulse:       record.proximityPulse,
+    rockDamageMult:       record.rockDamageMult,
+    trainDamageMult:      record.trainDamageMult,
+    baseDamageMult:       record.baseDamageMult,
+    hitSlowFraction:      record.hitSlowFraction,
+    hitSlowDurationMs:    record.hitSlowDurationMs,
+    hitVulnerabilityDurationMs: record.hitVulnerabilityDurationMs,
+    hitKnockback:         record.hitKnockback,
+    hitKnockbackDurationMs: record.hitKnockbackDurationMs,
   };
 }

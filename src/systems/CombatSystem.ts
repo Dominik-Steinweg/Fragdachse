@@ -8,7 +8,7 @@ import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { DetonationSystem }  from './DetonationSystem';
-import type { EnergyShieldSystem, ReflectDomeInfo } from './EnergyShieldSystem';
+import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
 import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, CombatDamageKind, CombatDamageTargetType, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
 import {
@@ -46,6 +46,13 @@ import {
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
 import { isCoopDefenseMode } from '../gameModes';
+import type {
+  ProjectileBarrierRequest,
+  ProjectileBarrierResolution,
+  ProjectileImpactRequest,
+  ProjectileImpactResolution,
+} from '../projectile/ProjectileInteractionPorts';
+import type { ProjectileCollisionTargetSink } from '../projectile/ProjectileTargetPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 import { getRageGeneratingDamage } from '../utils/rageDamage';
@@ -281,6 +288,8 @@ export class CombatSystem {
   private enemySlowStates: Map<string, EnemySlowState> = new Map();
   private readonly plasmaChargeTracker = new PlasmaChargeTracker();
   private readonly hitscanLine       = new Phaser.Geom.Line();
+  /** Scratch-Segment der Projectile-Blockerabfrage. */
+  private readonly projectileBlockerLine = new Phaser.Geom.Line();
   private readonly chainScanLine     = new Phaser.Geom.Line();  // Scratch-Linie für Kettenblitz-Sichtlinienprüfung
   private readonly meleeLine         = new Phaser.Geom.Line();  // Scratch-Linie für Melee-Hindernisprüfung
   private readonly lineOfFireLine    = new Phaser.Geom.Line();  // Scratch-Linie für die Blockerprüfung der Schusslinie
@@ -1238,255 +1247,103 @@ export class CombatSystem {
     });
   }
 
-  // ── Host-Update: Projektil-Spieler-Kollisionserkennung ────────────────────
+  // ── Projectile-Collision-Grenzen ──────────────────────────────────────────
 
   /**
-   * Jeden Frame auf dem Host aufrufen.
-   * Prüft Überschneidungen zwischen Projektilen und Spielern.
-   * Selbst-Treffer, Granaten und burrowed Spieler werden ignoriert.
+   * Frame-Sicht der kollidierbaren Kampfziele für die Projectile-Runtime.
+   *
+   * Die Reihenfolge ist fachlich: lebende, nicht vergrabene Spieler vor Gegnern vor Ködern. Dieser
+   * Owner iteriert dabei keine Projectiles.
    */
-  update(nowMs: number = Date.now()): void {
-    if (!this.bridge.isHost()) return;
-
-    this.applyDomeProjectileBarrier();
-    this.applyLeafBlowerProjectileDeflection();
-
-    for (const proj of this.projectileManager.getActiveProjectiles()) {
-      if (proj.isGrenade) continue;  // Granaten treffen nicht direkt, nur AoE
-      if (proj.miniRocketDeferredExplosion) continue;
-      if (proj.miniRocketSpent) continue;
-
-      if (this.shouldUseContinuousProjectileCollision(proj)) {
-        const travelDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
-        if (travelDistance > 0.5) {
-          this.tryResolveContinuousProjectileHit(proj, nowMs);
-          continue;
-        }
-      }
-
-      const projBounds = proj.sprite.getBounds();
-      if (this.resolveProjectilePlayerHits(proj, projBounds, nowMs)) continue;
-      if (this.resolveProjectileEnemyHits(proj, projBounds, nowMs)) continue;
-      this.resolveProjectileDecoyHits(proj, projBounds, nowMs);
+  readCollisionTargets(sink: ProjectileCollisionTargetSink): void {
+    for (const player of this.playerManager.getAllPlayers()) {
+      if (!this.isAlive(player.id)) continue;
+      if (this.burrowSystem?.isBurrowed(player.id)) continue;
+      const bounds = player.getBounds();
+      sink(
+        'player', player.id, player.id,
+        player.x, player.y, PLAYER_SIZE * 0.5,
+        bounds.left, bounds.top, bounds.right, bounds.bottom,
+      );
+    }
+    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      const bounds = enemy.sprite.getBounds();
+      sink(
+        'enemy', enemy.id, enemy.id,
+        enemy.sprite.x, enemy.sprite.y,
+        Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5,
+        bounds.left, bounds.top, bounds.right, bounds.bottom,
+      );
+    }
+    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+      const bounds = decoy.sprite.getBounds();
+      sink(
+        'decoy', decoy.id, decoy.ownerId,
+        decoy.sprite.x, decoy.sprite.y,
+        Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5,
+        bounds.left, bounds.top, bounds.right, bounds.bottom,
+      );
     }
   }
 
+  /** Nächster Weltblocker entlang eines Travel-Segments; derselbe Index wie beim Hitscan. */
+  getNearestProjectileBlockerDistance(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    ignoreRocks: boolean,
+  ): number | null {
+    this.projectileBlockerLine.setTo(startX, startY, endX, endY);
+    return this.findNearestProjectilePathBlockerDistance(this.projectileBlockerLine, ignoreRocks);
+  }
+
   /**
-   * Energie-Kuppel-Projektilbarriere: Gegnerische Projektile innerhalb einer Kuppel werden
-   * absorbiert (a1) oder nach außen abgeprallt (d2). Abgeprallte Projektile gelten danach als
-   * Projektile des Kuppel-Besitzers und treffen Gegner. In beiden Fällen lädt der Schadensbonus.
+   * World-space Barriere der Energiekuppel vor jeder normalen Target-Interaction.
+   *
+   * Sie entscheidet ausschließlich über Absorption, Reflexion und Übernahme; die Projectile-
+   * Mutation bleibt beim Projectile-Owner.
    */
-  private applyDomeProjectileBarrier(): void {
+  resolveProjectileBarrier(request: ProjectileBarrierRequest): ProjectileBarrierResolution {
     const domes = this.energyShieldSystem?.getReflectDomes();
-    if (!domes || domes.length === 0) return;
-    const now = Date.now();
+    if (!domes || domes.length === 0) return { kind: 'passed' };
+    const attackerId = request.provenance.allegiance.ownerId;
 
-    for (const proj of this.projectileManager.getActiveProjectiles()) {
-      // Geworfene Utilities fliegen weiterhin durch die Kuppel. Einzige Ausnahme sind
-      // Brut-Wurfgeschosse: die faengt die Kuppel ab, damit ihr Besitzer die Brut uebernimmt.
-      const isCapturableGrenade = proj.grenadeEffect?.type === 'spawn_enemy';
-      if (proj.isGrenade && !isCapturableGrenade) continue;
-      if (proj.miniRocketDeferredExplosion || proj.miniRocketSpent) continue;
+    for (const dome of domes) {
+      if (attackerId === dome.ownerId) continue;
+      // Nur feindliche Projektile abwehren – eigene/verbündete Geschosse passieren die Kuppel.
+      if (!this.canDamageTarget(attackerId, dome.ownerId, request.allowTeamDamage)) continue;
 
-      for (const dome of domes) {
-        if (proj.ownerId === dome.ownerId) continue;
-        // Nur feindliche Projektile abwehren – eigene/verbündete Geschosse passieren die Kuppel.
-        if (!this.canDamageTarget(proj.ownerId, dome.ownerId, proj.allowTeamDamage)) continue;
+      const dx = request.x - dome.x;
+      const dy = request.y - dome.y;
+      if (dx * dx + dy * dy > dome.radius * dome.radius) continue;
 
-        const dx = proj.sprite.x - dome.x;
-        const dy = proj.sprite.y - dome.y;
-        if (dx * dx + dy * dy > dome.radius * dome.radius) continue;
+      // Legacy-Read der Trefferwirkung; er entfällt mit dem `ProjectileCombatPort` in Phase 7.
+      const projectile = this.projectileManager.getProjectileById(request.projectileId);
+      const blockedDamage = projectile ? this.computeProjectileDamage(projectile) : 0;
+      this.energyShieldSystem?.onDomeAbsorb(dome.ownerId, blockedDamage, request.nowMs);
 
-        const blockedDamage = this.computeProjectileDamage(proj);
-        this.energyShieldSystem?.onDomeAbsorb(dome.ownerId, blockedDamage, now);
+      // Reine Absorptionskuppel: das Geschoss verschwindet folgenlos, bei Brutbomben
+      // schluepft also gar nichts.
+      if (!dome.reflect) return { kind: 'absorbed' };
 
-        if (!dome.reflect) {
-          // Reine Absorptionskuppel: das Geschoss verschwindet folgenlos, bei Brutbomben
-          // schluepft also gar nichts.
-          this.projectileManager.destroyProjectile(proj.id);
-        } else if (isCapturableGrenade) {
-          this.captureSpawnGrenadeFromDome(proj, dome, now);
-        } else {
-          this.reflectProjectileFromDome(proj, dome, now);
-        }
-        break; // Projektil ist behandelt
-      }
+      const angle = (dx === 0 && dy === 0)
+        ? Math.atan2(-request.velocityY, -request.velocityX)
+        : Math.atan2(dy, dx);
+      return {
+        kind: 'reflected',
+        attributionId: dome.ownerId,
+        allegiance: { ownerId: dome.ownerId },
+        angle,
+        sourceId: 'environment.reflector_dome',
+        sourceSlot: 'weapon2',
+        ownerColor: dome.color,
+        // Übernommene Brut-Granate: Granatensemantik und Restzündzeit bleiben erhalten.
+        keepGrenade: request.capturable,
+      };
     }
+    return { kind: 'passed' };
   }
-
-  /**
-   * Laubbläser-Gegenwind: Ein Luftstoß mit `leafBlowerDeflectsProjectiles` fängt gegnerische
-   * Projektile ab und schleudert sie in Stoßrichtung zurück. Das zurückgeschleuderte Geschoss
-   * gehört danach dem Schützen und trifft dessen Gegner – analog zur Reflexkuppel (d2).
-   */
-  private applyLeafBlowerProjectileDeflection(): void {
-    const blowers: TrackedProjectile[] = [];
-    for (const proj of this.projectileManager.getActiveProjectiles()) {
-      if (proj.leafBlowerDeflectsProjectiles && proj.projectileStyle === 'leaf_blower') blowers.push(proj);
-    }
-    if (blowers.length === 0) return;
-    const now = Date.now();
-
-    for (const target of this.projectileManager.getActiveProjectiles()) {
-      if (target.projectileStyle === 'leaf_blower') continue;
-      // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
-      if (target.isGrenade) continue;
-      if (target.miniRocketDeferredExplosion || target.miniRocketSpent) continue;
-
-      const targetBounds = target.sprite.getBounds();
-      for (const blower of blowers) {
-        if (blower.ownerId === target.ownerId) continue;
-        if (!this.canDamageTarget(target.ownerId, blower.ownerId, target.allowTeamDamage)) continue;
-        if (!Phaser.Geom.Intersects.RectangleToRectangle(targetBounds, blower.sprite.getBounds())) continue;
-
-        this.deflectProjectileFromLeafBlower(target, blower, now);
-        break; // Projektil ist behandelt
-      }
-    }
-  }
-
-  /** Übergibt ein abgefangenes Geschoss an den Laubbläser-Schützen und dreht es in Stoßrichtung. */
-  private deflectProjectileFromLeafBlower(
-    proj: TrackedProjectile,
-    blower: TrackedProjectile,
-    now: number,
-  ): void {
-    const blowLen = Math.hypot(blower.body.velocity.x, blower.body.velocity.y);
-    const angle = blowLen > 0.001
-      ? Math.atan2(blower.body.velocity.y, blower.body.velocity.x)
-      : Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
-    const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
-
-    this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, blower.ownerId, {
-      ...this.inheritedProjectileEffects(proj),
-      speed,
-      size: Math.max(1, proj.sprite.displayWidth),
-      damage: proj.damage,
-      color: proj.color,
-      ownerColor: blower.ownerColor ?? proj.color,
-      lifetime: Math.max(1, proj.lifetime - (now - proj.createdAt)),
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: 'weapon.leaf_blower_deflect',
-      projectileStyle: proj.projectileStyle,
-      bulletVisualPreset: proj.bulletVisualPreset,
-      tracerConfig: proj.tracerConfig,
-      reflected: true,
-      sourceSlot: 'weapon1',
-    });
-    this.projectileManager.destroyProjectile(proj.id);
-  }
-
-  /**
-   * Trägt die Trefferwirkungen eines Projektils (Boden-DoT-Wolken, Explosionen, Brand, Debuffs)
-   * in ein neu gespawntes Projektil weiter, damit sie nach einem Abprall/einer Reflexion
-   * weiterhin ausgelöst werden, statt beim Reflect stillschweigend verloren zu gehen.
-   */
-  private inheritedProjectileEffects(proj: TrackedProjectile): Partial<ProjectileSpawnConfig> {
-    return {
-      explosion:            proj.explosion,
-      enemyHitExplosion:    proj.enemyHitExplosion,
-      impactCloud:          proj.impactCloud,
-      grenadeEffect:        proj.grenadeEffect,
-      burnDurationMs:       proj.burnDurationMs,
-      burnDamagePerTick:    proj.burnDamagePerTick,
-      projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
-      supplementalBurnOnHit: proj.supplementalBurnOnHit,
-      supplementalBurnProvenance: proj.supplementalBurnProvenance,
-      canReceiveFireImbue:  proj.canReceiveFireImbue,
-      fireTrail:            proj.fireTrail,
-      pathEffectKind:       proj.pathEffectKind,
-      fireTrailHalfWidthCells: proj.fireTrailHalfWidthCells,
-      awpCorridorHalfWidth: proj.awpCorridorHalfWidth,
-      awpCorridorDamage: proj.awpCorridorDamage,
-      awpCorridorDotDurationMs: proj.awpCorridorDotDurationMs,
-      awpCorridorDotTickIntervalMs: proj.awpCorridorDotTickIntervalMs,
-      awpCorridorKnockback: proj.awpCorridorKnockback,
-      awpCorridorKnockbackDurationMs: proj.awpCorridorKnockbackDurationMs,
-      detonable:            proj.detonable,
-      detonator:            proj.detonator,
-      proximityPulse:       proj.proximityPulse,
-      rockDamageMult:       proj.rockDamageMult,
-      trainDamageMult:      proj.trainDamageMult,
-      baseDamageMult:       proj.baseDamageMult,
-      hitSlowFraction:      proj.hitSlowFraction,
-      hitSlowDurationMs:    proj.hitSlowDurationMs,
-      hitVulnerabilityDurationMs: proj.hitVulnerabilityDurationMs,
-      hitKnockback:         proj.hitKnockback,
-      hitKnockbackDurationMs: proj.hitKnockbackDurationMs,
-    };
-  }
-
-  /** Schleudert ein gegnerisches Projektil radial aus der Kuppel und übergibt es an den Besitzer. */
-  private reflectProjectileFromDome(proj: TrackedProjectile, dome: ReflectDomeInfo, now: number): void {
-    const dirX = proj.sprite.x - dome.x;
-    const dirY = proj.sprite.y - dome.y;
-    const angle = (dirX === 0 && dirY === 0)
-      ? Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x)
-      : Math.atan2(dirY, dirX);
-    const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
-
-    this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, dome.ownerId, {
-      ...this.inheritedProjectileEffects(proj),
-      speed,
-      size: Math.max(1, proj.sprite.displayWidth),
-      damage: proj.damage,
-      color: proj.color,
-      ownerColor: dome.color,
-      lifetime: Math.max(1, proj.lifetime - (now - proj.createdAt)),
-      maxBounces: 0,
-      isGrenade: false,
-      adrenalinGain: 0,
-      sourceId: 'environment.reflector_dome',
-      projectileStyle: proj.projectileStyle,
-      bulletVisualPreset: proj.bulletVisualPreset,
-      tracerConfig: proj.tracerConfig,
-      reflected: true,
-      sourceSlot: 'weapon2',
-    });
-    this.projectileManager.destroyProjectile(proj.id);
-  }
-
-  /**
-   * Übernimmt ein Brut-Wurfgeschoss an der Kuppelgrenze: Es bleibt eine Granate mit Restzündzeit,
-   * prallt nach außen ab und gehört danach dem Kuppel-Besitzer. Die schlüpfende Brut spawnt
-   * dadurch als sein Verbündeter (siehe HostUpdateCoordinator.spawnEnemiesFromGrenade).
-   */
-  private captureSpawnGrenadeFromDome(proj: TrackedProjectile, dome: ReflectDomeInfo, now: number): void {
-    const dirX = proj.sprite.x - dome.x;
-    const dirY = proj.sprite.y - dome.y;
-    const angle = (dirX === 0 && dirY === 0)
-      ? Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x)
-      : Math.atan2(dirY, dirX);
-    const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y) || 400;
-    const remainingFuse = Math.max(1, (proj.fuseTime ?? proj.lifetime) - (now - proj.createdAt));
-
-    this.projectileManager.spawnProjectile(proj.sprite.x, proj.sprite.y, angle, dome.ownerId, {
-      ...this.inheritedProjectileEffects(proj),
-      speed,
-      size: Math.max(1, proj.sprite.displayWidth),
-      damage: 0,
-      color: dome.color,
-      ownerColor: dome.color,
-      lifetime: remainingFuse,
-      fuseTime: remainingFuse,
-      maxBounces: proj.maxBounces,
-      isGrenade: true,
-      adrenalinGain: 0,
-      sourceId: 'environment.reflector_dome',
-      projectileStyle: proj.projectileStyle,
-      grenadeVisualPreset: proj.grenadeVisualPreset,
-      frictionDelayMs: proj.frictionDelayMs,
-      airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
-      bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
-      stopSpeedThreshold: proj.stopSpeedThreshold,
-      reflected: true,
-      sourceSlot: 'weapon2',
-    });
-    this.projectileManager.destroyProjectile(proj.id);
-  }
-
   /** Schützen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
   private computeProjectileWeaponDamage(proj: TrackedProjectile): number {
     let projectileMultiplier = proj.ak47DamageMultiplier ?? 1;
@@ -1575,325 +1432,238 @@ export class CombatSystem {
     );
   }
 
-  /** AABB-Treffer gegen Spieler (Shield/Piercing/Flammen-Burn/Standard). Liefert true, wenn das Projektil verbraucht ist. */
-  private resolveProjectilePlayerHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle, nowMs: number): boolean {
-    for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.isAlive(player.id))                     continue;
-      if (proj.ownerId === player.id)                   continue;
-      if (this.burrowSystem?.isBurrowed(player.id))     continue;
-      if (proj.multiExplosionExcludedTargetKeys?.has(`players:${player.id}`)) continue;
+  /**
+   * Direct-Impact-Grenze der Projectile-Collision (Zielcontract: `ProjectileCombatPort`, Phase 7).
+   *
+   * Der Kandidat kommt fertig aufgelöst aus der Projectile-Runtime: Geometrie, Reihenfolge,
+   * Kontaktgedächtnis und Verbrauch liegen dort. Hier entstehen nur Schaden, Brand, Kettenwirkung
+   * und die target-lokale Defense-Entscheidung.
+   */
+  resolveProjectileImpact(request: ProjectileImpactRequest): ProjectileImpactResolution {
+    // Legacy-Read des Runtime-Records; er entfällt mit dem `ProjectileCombatPort` in Phase 7.
+    const proj = this.projectileManager.getProjectileById(request.candidate.projectileId);
+    if (!proj) return { kind: 'ignored' };
+    const target = request.candidate.target;
+    if (target.kind === 'player') return this.applyProjectilePlayerImpact(proj, target.id, request);
+    if (target.kind === 'enemy') return this.applyProjectileEnemyImpact(proj, target.id, request);
+    if (target.kind === 'decoy') return this.applyProjectileDecoyImpact(proj, target.id, request);
+    return { kind: 'ignored' };
+  }
 
-      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, player.getBounds())) {
-        const actualDamage = this.computeProjectileDamage(proj);
-        const canDealDamage = this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage);
-        if (!canDealDamage) continue;
+  /** Trefferwirkung gegen einen Spieler inklusive Schild-Auflösung. */
+  private applyProjectilePlayerImpact(
+    proj: TrackedProjectile,
+    playerId: string,
+    request: ProjectileImpactRequest,
+  ): ProjectileImpactResolution {
+    const player = this.playerManager.getPlayer(playerId);
+    if (!player) return { kind: 'ignored' };
+    const { candidate, contact, nowMs } = request;
+    const actualDamage = this.computeProjectileDamage(proj);
+    const impactSource = {
+      sourceX: candidate.x,
+      sourceY: candidate.y,
+      dirX: proj.body.velocity.x,
+      dirY: proj.body.velocity.y,
+    };
+    const damageOptions = {
+      allowTeamDamage: proj.allowTeamDamage,
+      sourceSlot: proj.sourceSlot,
+      damageKind: 'direct' as const,
+    };
 
-        if (proj.energyInjectorPayload) {
-          this.onEnergyInjectorTargetHit?.('player', player.id, player.x, player.y, proj);
-          this.projectileManager.destroyProjectile(proj.id);
-          return true;
-        }
-
-        if (canDealDamage && this.shouldBlockWithShield(player.id, 'projectile', actualDamage, proj.sprite.x, proj.sprite.y)) {
-          const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(player.id) ?? 0);
-          if (reflectionFactor > 0) {
-            const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
-            const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
-            this.projectileManager.spawnProjectile(player.x, player.y, angle, player.id, {
-              ...this.inheritedProjectileEffects(proj),
-              speed,
-              size: Math.max(1, proj.sprite.displayWidth),
-              damage: proj.damage * reflectionFactor,
-              color: proj.color,
-              ownerColor: proj.ownerColor,
-              lifetime: Math.max(1, proj.lifetime - (Date.now() - proj.createdAt)),
-              maxBounces: 0,
-              isGrenade: false,
-              adrenalinGain: 0,
-              sourceId: 'environment.reflector',
-              projectileStyle: proj.projectileStyle,
-              bulletVisualPreset: proj.bulletVisualPreset,
-              tracerConfig: proj.tracerConfig,
-              reflected: true,
-              sourceSlot: 'weapon2',
-            });
-          }
-          this.projectileManager.destroyProjectile(proj.id);
-          return true;
-        }
-
-        if (canDealDamage) this.registerAk47Hit(proj, nowMs);
-
-        if (proj.penetrationHitIds) {
-          if (proj.penetrationHitIds.has(player.id)) continue;
-          proj.penetrationHitIds.add(player.id);
-          if (canDealDamage) {
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.sourceId, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
-            this.applyProjectileBurn(player.id, proj);
-          }
-          if ((proj.penetrationRemaining ?? 0) > 0) {
-            proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
-            proj.damage *= proj.penetrationDamageRetention ?? 1;
-            continue;
-          }
-          this.projectileManager.destroyProjectile(proj.id);
-          return true;
-        }
-
-        if (proj.piercesTargets) {
-          // Wie gegen Gegner: jeder Spieler zählt genau einmal, das Projektil fliegt weiter.
-          if (!proj.piercingHitIds) proj.piercingHitIds = new Set();
-          if (proj.piercingHitIds.has(player.id)) continue;
-          proj.piercingHitIds.add(player.id);
-          if (canDealDamage) {
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.sourceId, {
-              sourceX: proj.sprite.x,
-              sourceY: proj.sprite.y,
-              dirX: proj.body.velocity.x,
-              dirY: proj.body.velocity.y,
-            }, {
-              allowTeamDamage: proj.allowTeamDamage,
-              sourceSlot: proj.sourceSlot,
-              damageKind: 'direct',
-            });
-            this.applyProjectileBurn(player.id, proj);
-          }
-          continue;
-        }
-
-        if (proj.isBfg || proj.projectileStyle === 'gauss') {
-          // Piercing-Projektile: Spieler nur 1x treffen, Projektil fliegt weiter.
-          if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-          if (proj.projectileStyle === 'gauss') {
-            if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
-            if (proj.gaussHitPlayers.has(player.id)) continue;
-            proj.gaussHitPlayers.add(player.id);
-          } else {
-            if (proj.bfgHitPlayers.has(player.id)) continue;
-            proj.bfgHitPlayers.add(player.id);
-          }
-          this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.sourceId, {
-            sourceX: proj.sprite.x,
-            sourceY: proj.sprite.y,
-            dirX: proj.body.velocity.x,
-            dirY: proj.body.velocity.y,
-          }, {
-            allowTeamDamage: proj.allowTeamDamage,
-            sourceSlot: proj.sourceSlot,
-            damageKind: 'direct',
-          });
-          if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, player.id, undefined, actualDamage);
-          continue; // kein break, kein destroyProjectile
-        }
-
-        if (proj.isFlame && proj.flamePierceHitIds !== undefined) {
-          if (proj.flamePierceHitIds.has(player.id)) continue;
-          proj.flamePierceHitIds.add(player.id);
-          if (canDealDamage) {
-            this.applyBurnHit(
-              player.id,
-              proj.ownerId,
-              proj.burnDurationMs ?? 0,
-              proj.burnDamagePerTick ?? 0,
-              `weapon:${proj.sourceId}`,
-              proj.sourceId,
-              'flamethrower_direct',
-            );
-            this.applyDamage(player.id, actualDamage, false, proj.ownerId, proj.sourceId, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
-          }
-          continue;
-        }
-
-        // Brennende Treffer (Flammenwerfer-Hitbox, brennende Kugeln, …) werden
-        // zentral in handleHit aus den Burn-Feldern des Projektils angewendet.
-        this.handleHit(proj.id, player.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId, canDealDamage);
-        return true;  // Projektil trifft maximal einen Spieler pro Frame
-      }
+    if (proj.energyInjectorPayload) {
+      this.onEnergyInjectorTargetHit?.('player', playerId, player.x, player.y, proj);
+      return { kind: 'applied' };
     }
-    return false;
-  }
 
-  /** AABB-Treffer gegen Gegner (Coop-Defense). Liefert true, wenn das Projektil verbraucht ist. */
-  private resolveProjectileEnemyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle, nowMs: number): boolean {
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      if (proj.ownerId === enemy.id) continue;
-      if (proj.multiExplosionExcludedTargetKeys?.has(`enemies:${enemy.id}`)) continue;
-
-      const enemyBounds = enemy.sprite.getBounds();
-      if (proj.plasmaSwarmOriginEnemyId === enemy.id) {
-        const stillInsideOrigin = Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemyBounds);
-        if (shouldIgnorePlasmaSwarmOriginHit(
-          proj,
-          proj.plasmaSwarmOriginEnemyId,
-          enemy.id,
-          !stillInsideOrigin,
-        )) {
-          continue;
-        }
-        if (!stillInsideOrigin) proj.plasmaSwarmOriginEnemyId = undefined;
-      }
-
-      if (!this.canDamageTarget(proj.ownerId, enemy.id, proj.allowTeamDamage)) continue;
-
-      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, enemyBounds)) {
-        if (proj.energyInjectorPayload) {
-          this.onEnergyInjectorTargetHit?.('enemy', enemy.id, enemy.sprite.x, enemy.sprite.y, proj);
-          this.projectileManager.destroyProjectile(proj.id);
-          return true;
-        }
-        const actualDamage = this.computeProjectileDamage(proj);
-        const enemyKey = `enemy_${enemy.id}`;
-
-        if (proj.penetrationHitIds) {
-          if (proj.penetrationHitIds.has(enemyKey)) continue;
-          proj.penetrationHitIds.add(enemyKey);
-          const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id, nowMs);
-          const impactDamage = actualDamage * impact.damageMultiplier;
-          this.registerAk47Hit(proj, nowMs);
-          this.applyProjectileBurn(enemy.id, proj);
-          this.applyDamage(enemy.id, impactDamage, false, proj.ownerId, proj.sourceId, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
-          this.applyAk47TargetExplosion(proj, enemy.id, impactDamage, impact);
-          if ((proj.penetrationRemaining ?? 0) > 0) {
-            proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
-            proj.damage *= proj.penetrationDamageRetention ?? 1;
-            continue;
-          }
-          this.projectileManager.destroyProjectile(proj.id);
-          return true;
-        }
-
-        const asmdProximityPiercing = proj.projectileStyle === 'energy_ball'
-          && (proj.proximityPulse?.radius ?? 0) > 0
-          && (proj.proximityPulse?.damage ?? 0) > 0;
-        if (proj.piercesTargets || asmdProximityPiercing) {
-          // Durchschlag gilt nur gegen logische Kampfziele. Felsen und Zug bleiben in
-          // ProjectileManager normale Weltblocker und verbrauchen das Projektil dort
-          // weiterhin – das gilt für ASMD_SEC ebenso wie für die Gewitterentladung.
-          if (!proj.piercingHitIds) proj.piercingHitIds = new Set();
-          if (proj.piercingHitIds.has(enemy.id)) continue;
-          proj.piercingHitIds.add(enemy.id);
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.sourceId, {
-            sourceX: proj.sprite.x,
-            sourceY: proj.sprite.y,
-            dirX: proj.body.velocity.x,
-            dirY: proj.body.velocity.y,
-          }, {
-            sourceSlot: proj.sourceSlot,
-            damageKind: 'direct',
-          });
-          continue;
-        }
-
-        if (proj.isBfg || proj.projectileStyle === 'gauss') {
-          this.registerAk47Hit(proj, nowMs);
-          if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-          if (proj.projectileStyle === 'gauss') {
-            if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
-            if (proj.gaussHitPlayers.has(enemyKey)) continue;
-            proj.gaussHitPlayers.add(enemyKey);
-          } else {
-            if (proj.bfgHitPlayers.has(enemyKey)) continue;
-            proj.bfgHitPlayers.add(enemyKey);
-          }
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.sourceId, {
-            sourceX: proj.sprite.x,
-            sourceY: proj.sprite.y,
-            dirX: proj.body.velocity.x,
-            dirY: proj.body.velocity.y,
-          }, {
-            allowTeamDamage: proj.allowTeamDamage,
-            sourceSlot: proj.sourceSlot,
-            damageKind: 'direct',
-          });
-          if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, undefined, enemy.id, actualDamage);
-          continue;
-        }
-
-        if (proj.isFlame && proj.flamePierceHitIds !== undefined) {
-          this.registerAk47Hit(proj, nowMs);
-          const enemyKey = `enemy_${enemy.id}`;
-          if (proj.flamePierceHitIds.has(enemyKey)) continue;
-          proj.flamePierceHitIds.add(enemyKey);
-          this.applyBurnHit(
-            enemy.id,
-            proj.ownerId,
-            proj.burnDurationMs ?? 0,
-            proj.burnDamagePerTick ?? 0,
-            `weapon:${proj.sourceId}`,
-            proj.sourceId,
-            'flamethrower_direct',
-          );
-          this.applyDamage(enemy.id, actualDamage, false, proj.ownerId, proj.sourceId, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
-          continue;
-        }
-
-        // Brennende Treffer werden zentral in handleEnemyHit angewendet.
-        const impact = this.resolveAk47DirectEnemyHit(proj, enemy.id, nowMs);
-        this.registerAk47Hit(proj, nowMs);
-        this.handleEnemyHit(proj.id, enemy.id, actualDamage * impact.damageMultiplier, proj.ownerId, proj.adrenalinGain, proj.sourceId, impact);
-        return true;
-      }
+    if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, candidate.x, candidate.y)) {
+      const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(playerId) ?? 0);
+      if (reflectionFactor <= 0) return { kind: 'defended', defense: { kind: 'absorbed' } };
+      // Der Overlap-Treffer reflektiert am Spieler, der Sweep am aufgelösten Trefferpunkt.
+      return {
+        kind: 'defended',
+        defense: {
+          kind: 'reflected',
+          damageFactor: reflectionFactor,
+          attributionId: playerId,
+          allegiance: { ownerId: playerId },
+          originX: candidate.source === 'sweep' ? candidate.x : player.x,
+          originY: candidate.source === 'sweep' ? candidate.y : player.y,
+          sourceId: 'environment.reflector',
+          sourceSlot: 'weapon2',
+        },
+      };
     }
-    return false;
-  }
 
-  /** AABB-Treffer gegen Decoys. Liefert true, wenn das Projektil verbraucht ist. */
-  private resolveProjectileDecoyHits(proj: TrackedProjectile, projBounds: Phaser.Geom.Rectangle, nowMs: number): boolean {
-    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
-      if (proj.ownerId === decoy.ownerId) continue;
+    this.registerAk47Hit(proj, nowMs);
 
-      if (Phaser.Geom.Intersects.RectangleToRectangle(projBounds, decoy.sprite.getBounds())) {
-        const actualDamage = this.computeProjectileDamage(proj);
-        const decoyKey = `decoy_${decoy.id}`;
-        this.registerAk47Hit(proj, nowMs);
-
-        if (proj.penetrationHitIds) {
-          if (proj.penetrationHitIds.has(decoyKey)) continue;
-          proj.penetrationHitIds.add(decoyKey);
-          this.decoySystem?.applyDamage(decoy.id, actualDamage, proj.ownerId, proj.sourceId, { sourceX: proj.sprite.x, sourceY: proj.sprite.y, dirX: proj.body.velocity.x, dirY: proj.body.velocity.y });
-          if ((proj.penetrationRemaining ?? 0) > 0) {
-            proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
-            proj.damage *= proj.penetrationDamageRetention ?? 1;
-            continue;
-          }
-          this.projectileManager.destroyProjectile(proj.id);
-          return true;
-        }
-
-        if (proj.isBfg || proj.projectileStyle === 'gauss') {
-          if (!proj.bfgHitPlayers) proj.bfgHitPlayers = new Set();
-          if (proj.projectileStyle === 'gauss') {
-            if (!proj.gaussHitPlayers) proj.gaussHitPlayers = new Set();
-            if (proj.gaussHitPlayers.has(decoyKey)) continue;
-            proj.gaussHitPlayers.add(decoyKey);
-          } else {
-            if (proj.bfgHitPlayers.has(decoyKey)) continue;
-            proj.bfgHitPlayers.add(decoyKey);
-          }
-
-          const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, proj.ownerId, proj.sourceId, {
-            sourceX: proj.sprite.x,
-            sourceY: proj.sprite.y,
-            dirX: proj.body.velocity.x,
-            dirY: proj.body.velocity.y,
-          }) ?? false;
-          if (hit && proj.adrenalinGain > 0) {
-            this.resourceSystem?.addAdrenaline(proj.ownerId, proj.adrenalinGain);
-          }
-          continue;
-        }
-
-        this.handleDecoyHit(proj.id, decoy.id, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId);
-        return true;
-      }
+    if (contact === 'penetration') {
+      this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
+      this.applyProjectileBurn(playerId, proj);
+      return { kind: 'applied' };
     }
-    return false;
+
+    if (contact === 'pierce') {
+      this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
+      if (proj.piercesTargets === true) {
+        this.applyProjectileBurn(playerId, proj);
+        return { kind: 'applied' };
+      }
+      if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, playerId, undefined, actualDamage);
+      return { kind: 'applied' };
+    }
+
+    if (contact === 'flame') {
+      this.applyBurnHit(
+        playerId,
+        proj.ownerId,
+        proj.burnDurationMs ?? 0,
+        proj.burnDamagePerTick ?? 0,
+        `weapon:${proj.sourceId}`,
+        proj.sourceId,
+        'flamethrower_direct',
+      );
+      this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
+      return { kind: 'applied' };
+    }
+
+    // Brennende Treffer werden zentral in handleHit aus den Burn-Feldern angewendet.
+    this.handleHit(proj.id, playerId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId, true);
+    return { kind: 'consumed' };
   }
 
-  private shouldUseContinuousProjectileCollision(proj: TrackedProjectile): boolean {
-    return proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp';
+  /** Trefferwirkung gegen einen Gegner inklusive AK47-Fokus und Gauss-Entladung. */
+  private applyProjectileEnemyImpact(
+    proj: TrackedProjectile,
+    enemyId: string,
+    request: ProjectileImpactRequest,
+  ): ProjectileImpactResolution {
+    const enemy = this.enemyManager?.getEnemy(enemyId);
+    if (!enemy) return { kind: 'ignored' };
+    const { candidate, contact, nowMs } = request;
+    const actualDamage = this.computeProjectileDamage(proj);
+    const impactSource = {
+      sourceX: candidate.x,
+      sourceY: candidate.y,
+      dirX: proj.body.velocity.x,
+      dirY: proj.body.velocity.y,
+    };
+
+    if (proj.energyInjectorPayload) {
+      this.onEnergyInjectorTargetHit?.('enemy', enemyId, enemy.sprite.x, enemy.sprite.y, proj);
+      return { kind: 'applied' };
+    }
+
+    if (contact === 'penetration') {
+      const impact = this.resolveAk47DirectEnemyHit(proj, enemyId, nowMs);
+      const impactDamage = actualDamage * impact.damageMultiplier;
+      this.registerAk47Hit(proj, nowMs);
+      // Der Sweep verrechnet den Treffer vor dem Brand, der Overlap-Treffer danach.
+      if (candidate.source === 'sweep') {
+        this.applyDamage(enemyId, impactDamage, false, proj.ownerId, proj.sourceId, impactSource, {
+          allowTeamDamage: proj.allowTeamDamage,
+          sourceSlot: proj.sourceSlot,
+          damageKind: 'direct',
+        });
+        this.applyProjectileBurn(enemyId, proj);
+      } else {
+        this.applyProjectileBurn(enemyId, proj);
+        this.applyDamage(enemyId, impactDamage, false, proj.ownerId, proj.sourceId, impactSource, {
+          allowTeamDamage: proj.allowTeamDamage,
+          sourceSlot: proj.sourceSlot,
+          damageKind: 'direct',
+        });
+      }
+      this.applyAk47TargetExplosion(proj, enemyId, impactDamage, impact);
+      return { kind: 'applied' };
+    }
+
+    if (contact === 'pierce') {
+      // Durchschlag gilt nur gegen logische Kampfziele; Felsen und Zug bleiben Weltblocker.
+      if (proj.piercesTargets === true || !(proj.isBfg === true || proj.projectileStyle === 'gauss')) {
+        this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
+          sourceSlot: proj.sourceSlot,
+          damageKind: 'direct',
+        });
+        return { kind: 'applied' };
+      }
+      this.registerAk47Hit(proj, nowMs);
+      this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
+        allowTeamDamage: proj.allowTeamDamage,
+        sourceSlot: proj.sourceSlot,
+        damageKind: 'direct',
+      });
+      if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, undefined, enemyId, actualDamage);
+      return { kind: 'applied' };
+    }
+
+    if (contact === 'flame') {
+      this.registerAk47Hit(proj, nowMs);
+      this.applyBurnHit(
+        enemyId,
+        proj.ownerId,
+        proj.burnDurationMs ?? 0,
+        proj.burnDamagePerTick ?? 0,
+        `weapon:${proj.sourceId}`,
+        proj.sourceId,
+        'flamethrower_direct',
+      );
+      this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
+        allowTeamDamage: proj.allowTeamDamage,
+        sourceSlot: proj.sourceSlot,
+        damageKind: 'direct',
+      });
+      return { kind: 'applied' };
+    }
+
+    // Brennende Treffer werden zentral in handleEnemyHit angewendet.
+    const impact = this.resolveAk47DirectEnemyHit(proj, enemyId, nowMs);
+    this.registerAk47Hit(proj, nowMs);
+    this.handleEnemyHit(
+      proj.id,
+      enemyId,
+      actualDamage * impact.damageMultiplier,
+      proj.ownerId,
+      proj.adrenalinGain,
+      proj.sourceId,
+      impact,
+    );
+    return { kind: 'consumed' };
   }
 
+  /** Trefferwirkung gegen einen Köder. */
+  private applyProjectileDecoyImpact(
+    proj: TrackedProjectile,
+    decoyId: number,
+    request: ProjectileImpactRequest,
+  ): ProjectileImpactResolution {
+    const { candidate, contact, nowMs } = request;
+    const actualDamage = this.computeProjectileDamage(proj);
+    const impactSource = {
+      sourceX: candidate.x,
+      sourceY: candidate.y,
+      dirX: proj.body.velocity.x,
+      dirY: proj.body.velocity.y,
+    };
+    this.registerAk47Hit(proj, nowMs);
+
+    if (contact === 'penetration') {
+      this.decoySystem?.applyDamage(decoyId, actualDamage, proj.ownerId, proj.sourceId, impactSource);
+      return { kind: 'applied' };
+    }
+
+    if (contact === 'pierce') {
+      const hit = this.decoySystem?.applyDamage(decoyId, actualDamage, proj.ownerId, proj.sourceId, impactSource) ?? false;
+      if (hit && proj.adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(proj.ownerId, proj.adrenalinGain);
+      }
+      return { kind: 'applied' };
+    }
+
+    this.handleDecoyHit(proj.id, decoyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId);
+    return { kind: 'consumed' };
+  }
   private resolveGaussDischarge(proj: TrackedProjectile, hitPlayerId: string | undefined, hitEnemyId: string | undefined, damage: number): void {
     const radius = proj.gaussChainRadius ?? 0;
     const factor = proj.gaussChainDamageFactor ?? 0;
@@ -1913,186 +1683,6 @@ export class CombatSystem {
       visitedEnemies: new Set(hitEnemyId ? [hitEnemyId] : []),
       visitedDecoys: new Set(),
     });
-  }
-
-  private tryResolveContinuousProjectileHit(proj: TrackedProjectile, nowMs: number): boolean {
-    const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
-    const travelDistance = Phaser.Geom.Line.Length(line);
-    if (travelDistance <= 0.5) return false;
-
-    const blockerDistance = this.findNearestProjectilePathBlockerDistance(line, proj.penetratesRocks === true);
-    const projectileRadius = Math.max(proj.sprite.displayWidth, proj.sprite.displayHeight) * 0.5;
-    let bestHit: SweptProjectileHit | null = null;
-
-    for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.isAlive(player.id)) continue;
-      if (proj.ownerId === player.id) continue;
-      if (this.burrowSystem?.isBurrowed(player.id)) continue;
-      if (proj.penetrationHitIds?.has(player.id)) continue;
-      if (!this.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
-
-       const hit = resolveProjectileTargetImpact({
-         startX: line.x1,
-         startY: line.y1,
-         endX: line.x2,
-         endY: line.y2,
-         targetX: player.x,
-         targetY: player.y,
-         radius: PLAYER_SIZE * 0.5 + projectileRadius,
-         ignoreStartingOverlap: true,
-       });
-      if (!hit) continue;
-      if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
-      if (!bestHit || hit.distance < bestHit.distance) {
-        bestHit = { kind: 'player', playerId: player.id, distance: hit.distance, x: hit.x, y: hit.y };
-      }
-    }
-
-    for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      if (proj.ownerId === enemy.id) continue;
-      if (proj.penetrationHitIds?.has(`enemy_${enemy.id}`)) continue;
-      if (!this.canDamageTarget(proj.ownerId, enemy.id, proj.allowTeamDamage)) continue;
-
-      const enemyRadius = Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5 + projectileRadius;
-       const hit = resolveProjectileTargetImpact({
-         startX: line.x1,
-         startY: line.y1,
-         endX: line.x2,
-         endY: line.y2,
-         targetX: enemy.sprite.x,
-         targetY: enemy.sprite.y,
-         radius: enemyRadius,
-         ignoreStartingOverlap: true,
-       });
-      if (!hit) continue;
-      if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
-      if (!bestHit || hit.distance < bestHit.distance) {
-        bestHit = { kind: 'enemy', enemyId: enemy.id, distance: hit.distance, x: hit.x, y: hit.y };
-      }
-    }
-
-    for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
-      if (proj.ownerId === decoy.ownerId) continue;
-      if (proj.penetrationHitIds?.has(`decoy_${decoy.id}`)) continue;
-
-      const decoyRadius = Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5 + projectileRadius;
-       const hit = resolveProjectileTargetImpact({
-         startX: line.x1,
-         startY: line.y1,
-         endX: line.x2,
-         endY: line.y2,
-         targetX: decoy.sprite.x,
-         targetY: decoy.sprite.y,
-         radius: decoyRadius,
-         ignoreStartingOverlap: true,
-       });
-      if (!hit) continue;
-      if (blockerDistance !== null && blockerDistance < hit.distance - 0.75) continue;
-      if (!bestHit || hit.distance < bestHit.distance) {
-        bestHit = { kind: 'decoy', decoyId: decoy.id, distance: hit.distance, x: hit.x, y: hit.y };
-      }
-    }
-
-    if (!bestHit) return false;
-
-    const vx = proj.body.velocity.x;
-    const vy = proj.body.velocity.y;
-    proj.body.reset(bestHit.x, bestHit.y);
-    proj.body.setVelocity(vx, vy);
-
-    const actualDamage = this.computeProjectileDamage(proj);
-
-    if (bestHit.kind === 'player') {
-      const canDealDamage = this.canDamageTarget(proj.ownerId, bestHit.playerId, proj.allowTeamDamage);
-
-      if (canDealDamage && this.shouldBlockWithShield(bestHit.playerId, 'projectile', actualDamage, bestHit.x, bestHit.y)) {
-        const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(bestHit.playerId) ?? 0);
-        if (reflectionFactor > 0) {
-          const speed = Math.hypot(proj.body.velocity.x, proj.body.velocity.y);
-          const angle = Math.atan2(-proj.body.velocity.y, -proj.body.velocity.x);
-          this.projectileManager.spawnProjectile(bestHit.x, bestHit.y, angle, bestHit.playerId, {
-            ...this.inheritedProjectileEffects(proj),
-            speed,
-            size: Math.max(1, proj.sprite.displayWidth),
-            damage: proj.damage * reflectionFactor,
-            color: proj.color,
-            ownerColor: proj.ownerColor,
-            lifetime: Math.max(1, proj.lifetime - (Date.now() - proj.createdAt)),
-            maxBounces: 0,
-            isGrenade: false,
-            adrenalinGain: 0,
-            sourceId: 'environment.reflector',
-            projectileStyle: proj.projectileStyle,
-            bulletVisualPreset: proj.bulletVisualPreset,
-            tracerConfig: proj.tracerConfig,
-            reflected: true,
-            sourceSlot: 'weapon2',
-          });
-        }
-        this.projectileManager.destroyProjectile(proj.id);
-        return true;
-      }
-
-      if (canDealDamage) this.registerAk47Hit(proj, nowMs);
-
-      if (proj.penetrationHitIds) {
-        proj.penetrationHitIds.add(bestHit.playerId);
-        if (canDealDamage) {
-          this.applyDamage(bestHit.playerId, actualDamage, false, proj.ownerId, proj.sourceId, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
-          this.applyProjectileBurn(bestHit.playerId, proj);
-        }
-        if ((proj.penetrationRemaining ?? 0) > 0) {
-          proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
-          proj.damage *= proj.penetrationDamageRetention ?? 1;
-          return true;
-        }
-        this.projectileManager.destroyProjectile(proj.id);
-        return true;
-      }
-
-      this.handleHit(proj.id, bestHit.playerId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId, canDealDamage);
-      return true;
-    }
-
-    if (bestHit.kind === 'enemy') {
-      if (proj.penetrationHitIds) {
-        const enemyKey = `enemy_${bestHit.enemyId}`;
-        if (proj.penetrationHitIds.has(enemyKey)) return true;
-        proj.penetrationHitIds.add(enemyKey);
-        const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId, nowMs);
-        const impactDamage = actualDamage * impact.damageMultiplier;
-        this.registerAk47Hit(proj, nowMs);
-        this.applyDamage(bestHit.enemyId, impactDamage, false, proj.ownerId, proj.sourceId, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy }, { allowTeamDamage: proj.allowTeamDamage, sourceSlot: proj.sourceSlot, damageKind: 'direct' });
-        this.applyProjectileBurn(bestHit.enemyId, proj);
-        this.applyAk47TargetExplosion(proj, bestHit.enemyId, impactDamage, impact);
-        if ((proj.penetrationRemaining ?? 0) > 0) {
-          proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
-          proj.damage *= proj.penetrationDamageRetention ?? 1;
-          return true;
-        }
-        this.projectileManager.destroyProjectile(proj.id);
-        return true;
-      }
-      const impact = this.resolveAk47DirectEnemyHit(proj, bestHit.enemyId, nowMs);
-      this.registerAk47Hit(proj, nowMs);
-      this.handleEnemyHit(proj.id, bestHit.enemyId, actualDamage * impact.damageMultiplier, proj.ownerId, proj.adrenalinGain, proj.sourceId, impact);
-      return true;
-    }
-
-    this.registerAk47Hit(proj, nowMs);
-    if (proj.penetrationHitIds) {
-      proj.penetrationHitIds.add(`decoy_${bestHit.decoyId}`);
-      this.decoySystem?.applyDamage(bestHit.decoyId, actualDamage, proj.ownerId, proj.sourceId, { sourceX: bestHit.x, sourceY: bestHit.y, dirX: vx, dirY: vy });
-      if ((proj.penetrationRemaining ?? 0) > 0) {
-        proj.penetrationRemaining = (proj.penetrationRemaining ?? 0) - 1;
-        proj.damage *= proj.penetrationDamageRetention ?? 1;
-        return true;
-      }
-      this.projectileManager.destroyProjectile(proj.id);
-      return true;
-    }
-    this.handleDecoyHit(proj.id, bestHit.decoyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId);
-    return true;
   }
 
   private findNearestProjectilePathBlockerDistance(

@@ -3,6 +3,15 @@ import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import type {
+  ProjectileBarrierPort,
+  ProjectileDirectImpactPort,
+} from '../projectile/ProjectileInteractionPorts';
+import type {
+  ProjectileCollisionTargetQueryPort,
+  ProjectileTargetabilityPort,
+  ProjectileWorldBlockerPort,
+} from '../projectile/ProjectileTargetPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -150,11 +159,22 @@ export interface WorldCombatImpactPort {
   ) => { sx: number; sy: number; ex: number; ey: number }[];
 }
 
+/** Die Setter des world-owned Projectile-Owners, die diese Bindung bedient. */
+export interface ProjectileInteractionBinding {
+  setProjectileTargetabilityPort(port: ProjectileTargetabilityPort | null): void;
+  setProjectileCollisionTargetQueryPort(port: ProjectileCollisionTargetQueryPort | null): void;
+  setProjectileWorldBlockerPort(port: ProjectileWorldBlockerPort | null): void;
+  setProjectileBarrierPort(port: ProjectileBarrierPort | null): void;
+  setProjectileDirectImpactPort(port: ProjectileDirectImpactPort | null): void;
+}
+
 export interface WorldCombatGameplayBindingOptions {
   readonly playerManager: PlayerManager;
   readonly projectileManager: ProjectileManager;
   /** Storm-Bolts sind eine World-Quelle und verlassen die Bindung ueber diesen Spawn-Port. */
   readonly projectileSpawn: ProjectileSpawnPort;
+  /** Bindet Ziel-, Blocker-, Barrier- und Direct-Impact-Grenzen an den Projectile-Owner. */
+  readonly projectileInteraction: ProjectileInteractionBinding;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly decoySystem: DecoySystem;
@@ -335,7 +355,11 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     projectileManager.setSupportImpactCallback(null);
     projectileManager.setHomingTargetProvider(null);
     projectileManager.setHomingLineOfFireChecker(null);
-    projectileManager.setHomingTargetValidityChecker(null);
+    this.options.projectileInteraction.setProjectileTargetabilityPort(null);
+    this.options.projectileInteraction.setProjectileCollisionTargetQueryPort(null);
+    this.options.projectileInteraction.setProjectileWorldBlockerPort(null);
+    this.options.projectileInteraction.setProjectileBarrierPort(null);
+    this.options.projectileInteraction.setProjectileDirectImpactPort(null);
     decoySystem.setCombatStateReader(null);
     decoySystem.setRunSpeedResolver(null);
     decoySystem.setCooldownStarter(null);
@@ -832,9 +856,33 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.projectileManager.setHomingLineOfFireChecker((sx, sy, ex, ey) => (
       o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey)
     ));
-    o.projectileManager.setHomingTargetValidityChecker((id, type, ownerId) => (
-      o.isHomingTargetValid?.(id, type, ownerId) ?? true
-    ));
+    // Targetability-Familie: Beziehung und Homing-Gültigkeit kommen aus ihren kanonischen Ownern.
+    o.projectileInteraction.setProjectileTargetabilityPort({
+      canDamage: (provenance, target, allowTeamDamage) => (
+        // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
+        target.kind === 'decoy'
+          ? true
+          : o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, String(target.id), allowTeamDamage)
+      ),
+      canDamageOwner: (provenance, otherOwnerId, allowTeamDamage) => (
+        o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, otherOwnerId, allowTeamDamage)
+      ),
+      isTargetCurrentlyValid: (id, type, ownerId) => o.isHomingTargetValid?.(id, type, ownerId) ?? true,
+    });
+    o.projectileInteraction.setProjectileCollisionTargetQueryPort({
+      readCollisionTargets: (sink) => o.combatSystem.readCollisionTargets(sink),
+    });
+    o.projectileInteraction.setProjectileWorldBlockerPort({
+      getNearestBlockerDistance: (startX, startY, endX, endY, ignoreRocks) => (
+        o.combatSystem.getNearestProjectileBlockerDistance(startX, startY, endX, endY, ignoreRocks)
+      ),
+    });
+    o.projectileInteraction.setProjectileBarrierPort({
+      resolveBarrier: (request) => o.combatSystem.resolveProjectileBarrier(request),
+    });
+    o.projectileInteraction.setProjectileDirectImpactPort({
+      resolveDirectImpact: (request) => o.combatSystem.resolveProjectileImpact(request),
+    });
     o.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;

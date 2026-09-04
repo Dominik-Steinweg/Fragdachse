@@ -351,7 +351,7 @@ export class HostUpdateCoordinator {
     if (!countdownActive) {
       this.supportSystems?.detonation?.checkProjectileDetonations();
       this.playerGameplayRuntime?.runHostPreCombatStage(now, countdownActive);
-      this.ctx.combatSystem.update(now);
+      this.worldFramePort?.getProjectileRuntime?.()?.runHostInteractionStage(now);
       this.ctx.combatSystem.updateBurnEffects(now);
     }
 

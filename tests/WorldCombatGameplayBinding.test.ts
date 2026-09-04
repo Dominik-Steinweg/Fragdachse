@@ -86,6 +86,7 @@ interface TurretFixture {
   readonly binding: WorldCombatGameplayBinding;
   readonly projectileManager: ProjectileManager;
   readonly projectileSpawn: { spawnProjectile: ReturnType<typeof vi.fn> };
+  readonly projectileInteraction: Record<string, ReturnType<typeof vi.fn>>;
   readonly playerLoadout: LoadoutManager;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
@@ -154,6 +155,14 @@ function createFixture(options: {
   // an der World-Grenze erzeugt; Player- und Turmquellen teilen nur die Ausführung.
   // Der world-owned Owner ist hier ein reiner Spawn-Port: das Wiring, nicht die Registry, steht auf dem Pruefstand.
   const projectileSpawn = { spawnProjectile: vi.fn((_request: ProjectileSpawnRequest) => 1) };
+  // Der world-owned Owner nimmt hier nur die gebundenen Collision-/Defense-Ports entgegen.
+  const projectileInteraction = {
+    setProjectileTargetabilityPort: vi.fn(),
+    setProjectileCollisionTargetQueryPort: vi.fn(),
+    setProjectileWorldBlockerPort: vi.fn(),
+    setProjectileBarrierPort: vi.fn(),
+    setProjectileDirectImpactPort: vi.fn(),
+  };
   const weaponExecution = new WorldWeaponExecutionRuntime({
     projectileSpawn,
     combatSystem: combatSystem as unknown as ConstructorParameters<typeof WorldWeaponExecutionRuntime>[0]['combatSystem'],
@@ -228,6 +237,7 @@ function createFixture(options: {
     playerManager,
     projectileManager,
     projectileSpawn,
+    projectileInteraction,
     combatSystem,
     hostPhysics: methodBag() as unknown as HostPhysicsSystem,
     decoySystem: methodBag() as unknown as DecoySystem,
@@ -287,7 +297,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, projectileManager, projectileSpawn, playerLoadout, playerManager, combatSystem, metrics };
+  return { binding, projectileManager, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics };
 }
 
 afterEach(() => {

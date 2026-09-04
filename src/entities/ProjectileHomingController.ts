@@ -37,9 +37,15 @@ export interface ProjectileTargetQueryPort {
 /** Prüft die fachliche Gültigkeit eines bereits bekannten Zieles. */
 export type HomingTargetValidityChecker = (id: string, type: HomingTargetType, ownerId: string) => boolean;
 
-export interface ProjectileTargetabilityPort {
-  readonly isTargetCurrentlyValid: HomingTargetValidityChecker;
-}
+/**
+ * Targetability-Familie der Projectile-Runtime; die Homing-Suche nutzt nur ihre Gültigkeitssicht.
+ */
+export type { ProjectileTargetabilityPort } from '../projectile/ProjectileTargetPort';
+
+type HomingTargetabilityView = Pick<
+  import('../projectile/ProjectileTargetPort').ProjectileTargetabilityPort,
+  'isTargetCurrentlyValid'
+>;
 
 /** Prüft die tatsächliche Projectile-Schusslinie, nicht bloß Sichtbarkeit. */
 export type HomingLineOfFireChecker = (sx: number, sy: number, ex: number, ey: number) => boolean;
@@ -77,7 +83,7 @@ const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
 export class ProjectileHomingController {
   private targetQueryPort: ProjectileTargetQueryPort | null = null;
   private lineOfFirePort: LineOfFireReadPort | null = null;
-  private targetabilityPort: ProjectileTargetabilityPort | null = null;
+  private targetabilityPort: HomingTargetabilityView | null = null;
 
   // Kandidaten-Pool: wiederverwendet die Kandidatenobjekte über alle Homing-Suchen hinweg.
   private readonly candidatePool: HomingTargetCandidate[] = [];
@@ -119,7 +125,7 @@ export class ProjectileHomingController {
     this.targetabilityPort = checker ? { isTargetCurrentlyValid: checker } : null;
   }
 
-  setTargetabilityPort(port: ProjectileTargetabilityPort | null): void {
+  setTargetabilityPort(port: HomingTargetabilityView | null): void {
     this.targetabilityPort = port;
   }
 

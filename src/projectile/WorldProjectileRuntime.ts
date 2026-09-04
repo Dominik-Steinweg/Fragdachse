@@ -1,4 +1,4 @@
-import type { ProjectileSpawnConfig, TrackedProjectile } from '../types';
+import type { LoadoutSlot, ProjectileSpawnConfig, TrackedProjectile } from '../types';
 import type { WorldScopedBinding } from '../world/WorldRuntime';
 import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import { toLegacyProjectileSpawnConfig } from './legacyProjectileSpawnPayload';
@@ -11,11 +11,11 @@ import type {
   LineOfFireReadPort,
   ProjectileHomingRequest,
   ProjectileTargetQueryPort,
-  ProjectileTargetabilityPort,
 } from '../entities/ProjectileHomingController';
 import type { ProjectileId, ProjectileSpawnPort, ProjectileSpawnResult } from './ProjectileSpawnPort';
 import {
   createSingleOwnerProvenance,
+  type ProjectileAllegianceRef,
   type ProjectileProvenance,
   type ProjectileSpawnRequest,
 } from './ProjectileSpawnRequest';
@@ -46,7 +46,42 @@ import type {
   ProjectileThreatReadPort,
   ProjectileThreatSample,
 } from './ProjectileReadPorts';
+import {
+  ProjectileCollisionProcessor,
+  type ProjectileCollisionDependencies,
+} from './ProjectileCollisionProcessor';
+import type {
+  ProjectileBarrierPort,
+  ProjectileBarrierResolution,
+  ProjectileDefenseResolution,
+  ProjectileDirectImpactPort,
+} from './ProjectileInteractionPorts';
+import type {
+  ProjectileCollisionTargetQueryPort,
+  ProjectileImpactCandidate,
+  ProjectileTargetabilityPort,
+  ProjectileWorldBlockerPort,
+} from './ProjectileTargetPort';
+import { createInheritedProjectilePayload } from './legacyProjectileSpawnPayload';
 import { ProjectileStore, type LegacyProjectileStoreAccess } from './ProjectileStore';
+
+/** Parameter eines vom Owner erzeugten Reflect-/Deflect-Nachfolgers. */
+interface ReflectedProjectileOptions {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  readonly speed: number;
+  readonly ownerId: string;
+  readonly allegiance: ProjectileAllegianceRef;
+  readonly damage: number;
+  readonly color: number;
+  readonly ownerColor: number;
+  readonly sourceId: string;
+  readonly sourceSlot?: LoadoutSlot;
+  /** Übernommene Granate: Granatensemantik und Restzündzeit bleiben erhalten. */
+  readonly keepGrenade: boolean;
+  readonly nowMs: number;
+}
 
 export interface ProjectileHostStageResult {
   explodedProjectiles: import('../types').ExplodedProjectile[];
@@ -167,9 +202,19 @@ export class WorldProjectileRuntime implements
   private readonly threatSamples: ProjectileThreatSample[] = [];
   private readonly travelSamples: ProjectileTravelSample[] = [];
   private readonly activeProjectilesByOwner = new Map<string, number>();
+  private readonly collisionProcessor = new ProjectileCollisionProcessor();
+  /** Capability-Index der aktiven Luftstöße, die gegnerische Projectiles umlenken. */
+  private readonly deflectorIds = new Set<ProjectileId>();
+  private readonly collisionDependencies: ProjectileCollisionDependencies;
+  private collisionTargetQueryPort: ProjectileCollisionTargetQueryPort | null = null;
+  private worldBlockerPort: ProjectileWorldBlockerPort | null = null;
+  private targetabilityPort: ProjectileTargetabilityPort | null = null;
+  private barrierPort: ProjectileBarrierPort | null = null;
+  private directImpactPort: ProjectileDirectImpactPort | null = null;
   private readonly simulation: LegacyProjectileHostSimulation;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
+  private interactionNowMs = 0;
   private destroyed = false;
 
   constructor(options: WorldProjectileRuntimeOptions) {
@@ -177,6 +222,15 @@ export class WorldProjectileRuntime implements
     this.hostNowMs = options.hostNowMs;
     this.onDestroy = options.onDestroy;
     this.projectiles = new ProjectileStore(options.identityScope);
+    const runtime = this;
+    this.collisionDependencies = {
+      get targetQuery() { return runtime.collisionTargetQueryPort; },
+      get targetability() { return runtime.targetabilityPort; },
+      get worldBlocker() { return runtime.worldBlockerPort; },
+      get directImpact() { return runtime.directImpactPort; },
+      destroyProjectile: (id) => this.destroyProjectile(id),
+      applyDefense: (record, defense, candidate) => this.applyDefense(record, defense, candidate),
+    };
     this.simulation.bindProjectileOwner(this);
   }
 
@@ -395,7 +449,245 @@ export class WorldProjectileRuntime implements
   }
 
   setProjectileTargetabilityPort(port: ProjectileTargetabilityPort | null): void {
+    this.targetabilityPort = port;
     this.homingController.setTargetabilityPort(port);
+  }
+
+  setProjectileCollisionTargetQueryPort(port: ProjectileCollisionTargetQueryPort | null): void {
+    this.collisionTargetQueryPort = port;
+  }
+
+  setProjectileWorldBlockerPort(port: ProjectileWorldBlockerPort | null): void {
+    this.worldBlockerPort = port;
+  }
+
+  setProjectileBarrierPort(port: ProjectileBarrierPort | null): void {
+    this.barrierPort = port;
+  }
+
+  setProjectileDirectImpactPort(port: ProjectileDirectImpactPort | null): void {
+    this.directImpactPort = port;
+  }
+
+  /**
+   * Host Frame: externe Barrieren, Projectile↔Projectile-Deflexion und Target-Kandidaten.
+   *
+   * Die Stage steht dort, wo die Interaktion fachlich hingehört – vor Flight/Expiry und nach den
+   * Travel-/Environment-Schritten des Frames.
+   */
+  runHostInteractionStage(nowMs: number): void {
+    if (this.destroyed) return;
+    this.interactionNowMs = nowMs;
+    this.setHostFrameTime(nowMs);
+    this.runBarrierStage(nowMs);
+    this.runDeflectionStage(nowMs);
+    this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+  }
+
+  /**
+   * World-space Barriere vor jeder normalen Target-Interaction.
+   *
+   * Die Entscheidung trifft der Barrier-Owner hinter dem Port; Absorption und Reflexion mutieren
+   * das Projectile ausschließlich hier.
+   */
+  private runBarrierStage(nowMs: number): void {
+    const port = this.barrierPort;
+    if (!port) return;
+    for (const record of this.projectiles.activeRecords) {
+      if (record.pendingDestroy) continue;
+      // Geworfene Utilities passieren; nur übernehmbare Wurfgeschosse hält die Barriere auf.
+      const capturable = record.grenadeEffect?.type === 'spawn_enemy';
+      if (record.isGrenade && !capturable) continue;
+      if (record.miniRocketDeferredExplosion || record.miniRocketSpent) continue;
+
+      const resolution = port.resolveBarrier({
+        projectileId: record.id,
+        provenance: record.provenance,
+        x: record.sprite.x,
+        y: record.sprite.y,
+        velocityX: record.body.velocity.x,
+        velocityY: record.body.velocity.y,
+        isGrenade: record.isGrenade,
+        capturable,
+        allowTeamDamage: record.allowTeamDamage === true,
+        nowMs,
+      });
+      if (resolution.kind === 'passed') continue;
+      this.applyBarrierResolution(record, resolution, nowMs);
+    }
+  }
+
+  private applyBarrierResolution(
+    record: TrackedProjectile,
+    resolution: ProjectileBarrierResolution,
+    nowMs: number,
+  ): void {
+    if (resolution.kind === 'absorbed') {
+      this.destroyProjectile(record.id);
+      return;
+    }
+    if (resolution.kind !== 'reflected') return;
+    const speed = Math.hypot(record.body.velocity.x, record.body.velocity.y) || 400;
+    this.spawnReflectedProjectile(record, {
+      x: record.sprite.x,
+      y: record.sprite.y,
+      angle: resolution.angle,
+      speed,
+      ownerId: resolution.attributionId,
+      allegiance: resolution.allegiance,
+      damage: resolution.keepGrenade ? 0 : record.damage,
+      color: resolution.keepGrenade ? resolution.ownerColor : record.color,
+      ownerColor: resolution.ownerColor,
+      sourceId: resolution.sourceId,
+      sourceSlot: resolution.sourceSlot,
+      keepGrenade: resolution.keepGrenade,
+      nowMs,
+    });
+    this.destroyProjectile(record.id);
+  }
+
+  /**
+   * Projectile↔Projectile-Interaktion: ein Luftstoß übernimmt gegnerische Geschosse.
+   *
+   * Beide Seiten sind Runtime-Records, deshalb bleibt die gesamte Auflösung beim Owner; der
+   * auslösende Gameplay-Code sieht nie einen Record.
+   */
+  private runDeflectionStage(nowMs: number): void {
+    if (this.deflectorIds.size === 0) return;
+    for (const target of this.projectiles.activeRecords) {
+      if (target.pendingDestroy) continue;
+      if (target.projectileStyle === 'leaf_blower') continue;
+      // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
+      if (target.isGrenade) continue;
+      if (target.miniRocketDeferredExplosion || target.miniRocketSpent) continue;
+
+      const targetBounds = target.sprite.getBounds();
+      for (const deflectorId of this.deflectorIds) {
+        const blower = this.projectiles.getById(deflectorId);
+        if (!blower || blower.pendingDestroy || !this.projectiles.activeRecords.has(blower)) continue;
+        const blowerOwnerId = blower.provenance.allegiance.ownerId;
+        if (blowerOwnerId === target.provenance.allegiance.ownerId) continue;
+        if (this.targetabilityPort && !this.targetabilityPort.canDamageOwner(
+          target.provenance,
+          blowerOwnerId,
+          target.allowTeamDamage === true,
+        )) continue;
+        if (!boundsOverlap(targetBounds, blower.sprite.getBounds())) continue;
+
+        this.deflectProjectile(target, blower, nowMs);
+        break;
+      }
+    }
+  }
+
+  private deflectProjectile(target: TrackedProjectile, blower: TrackedProjectile, nowMs: number): void {
+    const blowLength = Math.hypot(blower.body.velocity.x, blower.body.velocity.y);
+    const angle = blowLength > 0.001
+      ? Math.atan2(blower.body.velocity.y, blower.body.velocity.x)
+      : Math.atan2(-target.body.velocity.y, -target.body.velocity.x);
+    const speed = Math.hypot(target.body.velocity.x, target.body.velocity.y) || 400;
+
+    this.spawnReflectedProjectile(target, {
+      x: target.sprite.x,
+      y: target.sprite.y,
+      angle,
+      speed,
+      ownerId: blower.provenance.allegiance.ownerId,
+      allegiance: blower.provenance.allegiance,
+      damage: target.damage,
+      color: target.color,
+      ownerColor: blower.ownerColor ?? target.color,
+      sourceId: 'weapon.leaf_blower_deflect',
+      sourceSlot: 'weapon1',
+      keepGrenade: false,
+      nowMs,
+    });
+    this.destroyProjectile(target.id);
+  }
+
+  /** Target-lokale Defense: Absorption entfernt, Reflexion erzeugt den Nachfolger beim Owner. */
+  private applyDefense(
+    record: TrackedProjectile,
+    defense: ProjectileDefenseResolution,
+    candidate: ProjectileImpactCandidate,
+  ): void {
+    if (defense.kind === 'reflected' && defense.damageFactor > 0) {
+      this.spawnReflectedProjectile(record, {
+        x: defense.originX,
+        y: defense.originY,
+        angle: Math.atan2(-record.body.velocity.y, -record.body.velocity.x),
+        speed: Math.hypot(record.body.velocity.x, record.body.velocity.y),
+        ownerId: defense.attributionId,
+        allegiance: defense.allegiance,
+        damage: record.damage * defense.damageFactor,
+        color: record.color,
+        ownerColor: record.ownerColor ?? record.color,
+        sourceId: defense.sourceId,
+        sourceSlot: defense.sourceSlot,
+        keepGrenade: false,
+        nowMs: this.interactionNowMs,
+      });
+    }
+    this.destroyProjectile(record.id);
+  }
+
+  /**
+   * Erzeugt den Nachfolger eines übernommenen Projectiles.
+   *
+   * Attribution und Allegiance wechseln, Gameplay-Source und Abstammung bleiben unterscheidbar;
+   * die Restwirkung des Ursprungs bleibt erhalten.
+   */
+  private spawnReflectedProjectile(
+    record: TrackedProjectile,
+    options: ReflectedProjectileOptions,
+  ): void {
+    const elapsed = Math.max(0, options.nowMs - record.createdAt);
+    const remainingFuse = Math.max(1, (record.fuseTime ?? record.lifetime) - elapsed);
+    const remainingLifetime = Math.max(1, record.lifetime - elapsed);
+    const cfg: ProjectileSpawnConfig = {
+      ...createInheritedProjectilePayload(record),
+      speed: options.speed,
+      size: Math.max(1, record.sprite.displayWidth),
+      damage: options.damage,
+      color: options.color,
+      ownerColor: options.ownerColor,
+      lifetime: options.keepGrenade ? remainingFuse : remainingLifetime,
+      maxBounces: options.keepGrenade ? record.maxBounces : 0,
+      isGrenade: options.keepGrenade,
+      adrenalinGain: 0,
+      sourceId: options.sourceId,
+      projectileStyle: record.projectileStyle,
+      reflected: true,
+      sourceSlot: options.sourceSlot,
+      ...(options.keepGrenade
+        ? {
+          fuseTime: remainingFuse,
+          grenadeVisualPreset: record.grenadeVisualPreset,
+          frictionDelayMs: record.frictionDelayMs,
+          airFrictionDecayPerSec: record.airFrictionDecayPerSec,
+          bounceFrictionMultiplier: record.bounceFrictionMultiplier,
+          stopSpeedThreshold: record.stopSpeedThreshold,
+        }
+        : {
+          bulletVisualPreset: record.bulletVisualPreset,
+          tracerConfig: record.tracerConfig,
+        }),
+    };
+    const provenance: ProjectileProvenance = {
+      gameplaySourceId: record.provenance.gameplaySourceId,
+      attributionId: options.ownerId,
+      allegiance: options.allegiance,
+      weaponSourceId: options.sourceId,
+      sourceSlot: options.sourceSlot,
+      sourceTurretId: record.provenance.sourceTurretId,
+      lineage: {
+        ...record.provenance.lineage,
+        reflected: true,
+        parentProjectileId: record.id,
+      },
+      correlation: record.provenance.correlation,
+    };
+    this.spawnResolved(options.x, options.y, options.angle, options.ownerId, cfg, provenance);
   }
 
   setLineOfFireReadPort(port: LineOfFireReadPort | null): void {
@@ -423,6 +715,8 @@ export class WorldProjectileRuntime implements
     this.detonatorIds.clear();
     this.translocatorPuckIds.clear();
     this.travelEffectIds.clear();
+    this.deflectorIds.clear();
+    this.collisionProcessor.reset();
     this.burnAugments.clear();
     this.threatSamples.length = 0;
     this.travelSamples.length = 0;
@@ -447,6 +741,7 @@ export class WorldProjectileRuntime implements
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
     if (record.projectileStyle === 'translocator_puck') this.translocatorPuckIds.add(id);
+    if (record.leafBlowerDeflectsProjectiles && record.projectileStyle === 'leaf_blower') this.deflectorIds.add(id);
     if (hasTravelEffect(record)) this.travelEffectIds.add(id);
     if (record.supplementalBurnOnHit) {
       this.burnAugments.set(id, {
@@ -458,6 +753,7 @@ export class WorldProjectileRuntime implements
   }
 
   private removeCapabilityIds(id: ProjectileId): void {
+    this.deflectorIds.delete(id);
     this.detonableIds.delete(id);
     this.detonatorIds.delete(id);
     this.translocatorPuckIds.delete(id);
@@ -534,6 +830,16 @@ function createLegacyProjectileProvenance(
     lineage,
     correlation,
   });
+}
+
+function boundsOverlap(
+  first: { left: number; right: number; top: number; bottom: number },
+  second: { left: number; right: number; top: number; bottom: number },
+): boolean {
+  return first.left < second.right
+    && first.right > second.left
+    && first.top < second.bottom
+    && first.bottom > second.top;
 }
 
 function emptyHostStageResult(): ProjectileHostStageResult {

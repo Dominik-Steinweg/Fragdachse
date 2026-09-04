@@ -135,6 +135,7 @@ function combatBindingHarness(
   const options: WorldCombatGameplayBindingOptions = {
     playerManager: service({ getAllPlayers: () => [], getPlayer: () => undefined }) as PlayerManager,
     projectileManager: service(),
+    projectileInteraction: service(),
     combatSystem: combat as CombatSystem,
     hostPhysics: service(),
     decoySystem: service(),

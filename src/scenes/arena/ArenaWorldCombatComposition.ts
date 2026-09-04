@@ -70,6 +70,7 @@ export function composeWorldCombatGameplay(
     playerManager: ctx.playerManager,
     projectileManager: ctx.projectileManager,
     projectileSpawn: projectileRuntime,
+    projectileInteraction: projectileRuntime,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     decoySystem: ctx.decoySystem,

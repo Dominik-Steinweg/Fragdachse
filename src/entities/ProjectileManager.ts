@@ -249,11 +249,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     owner?.setProjectileTargetQueryPort?.(
       this.homingTargetProvider ? { queryTargets: this.homingTargetProvider } : null,
     );
-    owner?.setProjectileTargetabilityPort?.(
-      this.homingTargetValidityChecker
-        ? { isTargetCurrentlyValid: this.homingTargetValidityChecker }
-        : null,
-    );
     owner?.setLineOfFireReadPort?.(
       this.homingLineOfFireChecker
         ? { hasClearLineOfFire: this.homingLineOfFireChecker }
@@ -558,11 +553,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   setHomingLineOfFireChecker(cb: ((sx: number, sy: number, ex: number, ey: number) => boolean) | null): void {
     this.homingLineOfFireChecker = cb;
     this.owner?.setLineOfFireReadPort?.(cb ? { hasClearLineOfFire: cb } : null);
-  }
-
-  setHomingTargetValidityChecker(cb: HomingTargetValidityChecker | null): void {
-    this.homingTargetValidityChecker = cb;
-    this.owner?.setProjectileTargetabilityPort?.(cb ? { isTargetCurrentlyValid: cb } : null);
   }
 
   // ── Host ──────────────────────────────────────────────────────────────────
