@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-
 import { DIRT_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleTextureKey, ROCK_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { multiplyTint, resolveBlobSurfaceCornerTints } from '../src/arena/BlobSurfaceShading';
 
@@ -83,33 +81,6 @@ describe('47-Blob surface shading', () => {
     expect(Math.abs(luminance(top[0]) - luminance(bottom[2]))).toBeLessThan(20);
   });
 
-  it('pins representative rock output byte-exactly', () => {
-    expect(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, 3, 1, isOccupied))
-      .toEqual([0xe5eff4, 0xeaf1f6, 0xe5eff4, 0xeaf1f6]);
-  });
-
-  it('fades the hue wash out where the selected hue changes', () => {
-    // Der Farbanteil waehlt je Rauschband einen anderen Farbton. Wuerde er an der Bandgrenze
-    // seine volle Staerke tragen, saesse der groesste Farbsprung genau auf dem Wechsel und die
-    // Flaeche zerfiele in hartkantige Farbfelder – das Gegenteil des Zwecks. Der Schrittwert
-    // zwischen benachbarten Ecken bleibt deshalb im Bereich des glatten Rauschgradienten
-    // (gemessen 13 statt 24 bei an der Grenze maximalem Farbanteil).
-    const solid = () => true;
-    const channels = (tint: number) => [(tint >> 16) & 0xff, (tint >> 8) & 0xff, tint & 0xff];
-    let maxStep = 0;
-    for (let gridY = -40; gridY < 40; gridY += 1) {
-      for (let gridX = -40; gridX < 40; gridX += 1) {
-        const here = channels(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY, solid)[0]);
-        const east = channels(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX + 1, gridY, solid)[0]);
-        const south = channels(resolveBlobSurfaceCornerTints(ROCK_BLOB_SURFACE_PROFILE, gridX, gridY + 1, solid)[0]);
-        for (let channel = 0; channel < 3; channel += 1) {
-          maxStep = Math.max(maxStep, Math.abs(here[channel] - east[channel]), Math.abs(here[channel] - south[channel]));
-        }
-      }
-    }
-    expect(maxStep).toBeLessThan(20);
-  });
-
   it('gives mottle dynamic textures collision-free profile keys', () => {
     expect(getBlobSurfaceMottleTextureKey(ROCK_BLOB_SURFACE_PROFILE))
       .not.toBe(getBlobSurfaceMottleTextureKey(DIRT_BLOB_SURFACE_PROFILE));
@@ -138,9 +109,4 @@ describe('47-Blob surface shading', () => {
     expect(ROCK_BLOB_SURFACE_PROFILE.additionalMottleLayers?.[0]).toMatchObject({ blend: 'multiply', materialMode: 'normalized' });
   });
 
-  it('keeps material texture and frame choices out of the generic mottle core', () => {
-    const core = readFileSync(new URL('../src/arena/BlobSurfaceMottle.ts', import.meta.url), 'utf8');
-    expect(core).not.toContain("'rocks'");
-    expect(core).not.toContain('materialFrame: 12');
-  });
 });

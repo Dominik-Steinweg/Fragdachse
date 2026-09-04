@@ -22,10 +22,10 @@
 
 ## 1. Aktueller Stand
 
-- **Aktive Phase:** `Phase 4 – Config-/Content-/Visual-Tuning-Kopplung`
-- **Zuletzt abgeschlossen:** `Phase 3 – Source-Ratchets und Architecture-Tests`
-- **Gesamtstatus:** Phasen 1–3 abgeschlossen; Config-/Content-/Visual-Cleanup als nächster Schritt offen.
-- **Letzter automatisierter Gate:** Core, Architecture sowie betroffene Behavior-/Runtime-/Integration-Tests — grün
+- **Aktive Phase:** `Phase 5 – Redundanz, Mock-Shape und verbleibender Ballast`
+- **Zuletzt abgeschlossen:** `Phase 4 – Config-/Content-/Visual-Tuning-Kopplung`
+- **Gesamtstatus:** Phasen 1–4 abgeschlossen; Redundanz-/Mock-Shape-Cleanup als nächster Schritt offen.
+- **Letzter automatisierter Gate:** betroffene Config-/Content-/Visualtests, Content-Validation und Core — grün
 - **Bekannte Regressionen:** keine
 - **Sichtprüfung:** nicht vorgesehen
 
@@ -38,8 +38,8 @@
 | 1 | ✅ | Baseline + handlungsrelevante Migrationskarte |
 | 2 | ✅ | Runner-/Suite-Trennung |
 | 3 | ✅ | Source-Ratchets + Architecture-Tests |
-| 4 | 🟨 | Config-/Content-/Visual-Tuning-Kopplung |
-| 5 | ⬜ | Redundanz + Mock-Shape + Restballast |
+| 4 | ✅ | Config-/Content-/Visual-Tuning-Kopplung |
+| 5 | 🟨 | Redundanz + Mock-Shape + Restballast |
 | 6 | ⬜ | AI-Testpolicy + Final Gate |
 
 ---
@@ -52,16 +52,14 @@
 
 | Cluster / Testbereich | Problem | Zielaktion | Zielphase | Status |
 |---|---|---|---:|:---:|
-| normale Config-/Balance-Tests (`GraveTitanVoidPlasma`, `CoopDefenseInfernoColossusCombat`, `Ak47CoopDefenseUpgrades`, `PlasmaSwarm`, `CoopDefenseMaps`, `CoopDefenseItemStats`, `CoopDefenseRuntimeAffixWiring`, `InspectorSupportWeapons`, `CoopDefenseHostileBase`) | mutable authored Werte und Mapdaten können als zweite Wahrheit eingefroren sein | Assertion je Schutzwert prüfen; relativ zur Config, Strukturvalidator oder DELETE | 4 | offen |
-| Visual-/VFX-/UI-Snapshots (`ArenaVisualAttribution`, `GraphicsQualityAndPerformance`, Renderer-/PostFX-/Terrain-Tests) | exakte ästhetische Farben, Alpha-, Glow-, Partikel- und Timingwerte sind mögliche Tuning-Ratchets | Lifecycle/Bounds/Verdrahtung schützen; ästhetische Snapshots DELETE oder MOVE | 4 | offen |
 | Redundanz / Mock-Call-Shape | 89 Dateien nutzen Spies/Mocks; große Testdateien und doppelte Ownership-/Content-Aussagen sind erkennbar | nur berührte Cluster auf unterschiedlichen Schutzwert prüfen, dann CONSOLIDATE/REWRITE/DELETE | 5 | offen |
 
 ---
 
 ## 4. Offene Risiken / Entscheidungen
 
-- Runner-Zuordnung der gemischten Dateien (`GraphicsQualityAndPerformance`, verbleibende Asset-/Visualtests) muss anhand der einzelnen Tests erfolgen; keine pauschale Verschiebung.
-- Bei authored Config-/Mapwerten ist vor jeder Änderung zu unterscheiden, ob Struktur/Loader-Vertrag oder nur konkrete Tuningwahl geschützt wird.
+- Einige große Testdateien enthalten weiterhin gemischte technische, Mock- und historische Aussagen; die verbleibenden Assertions müssen einzeln auf Duplikation geprüft werden.
+- Übersprungene Legacy-Profiler-Erwartungen und kleine doppelte Raster-/Snapshot-Tests sind als möglicher Restballast zu bewerten.
 
 Während der Umsetzung hier nur Punkte führen, die die **nächste Phase** beeinflussen, z. B.:
 
@@ -93,9 +91,9 @@ Keine dieser Änderungen vor Phase 6 nur vorsorglich durchführen, sofern ein fr
 
 ## 6. Nächster konkreter Schritt
 
-**Phase 4 vollständig umsetzen.**
+**Phase 5 vollständig umsetzen.**
 
-Normale Config-/Content- und Visualtests nach Schutzwert prüfen: dauerhafte Loader-, Struktur-, Lifecycle- und Verdrahtungsverträge behalten, konkrete authored Tuningwerte relativ zur Quelle prüfen oder aus dem Core entfernen. Danach betroffene Content-/Visual-Suites und Core ausführen.
+Verbleibende redundante Assertions, Mock-Call-Shape und übersprungene Legacy-Blöcke auf Schutzwert prüfen; echte Runtime- und Integrationsregressionen behalten, Ballast konsolidieren oder löschen und anschließend fokussierte Suites sowie Core ausführen.
 
 ---
 

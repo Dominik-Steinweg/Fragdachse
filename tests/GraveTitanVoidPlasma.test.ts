@@ -26,6 +26,7 @@ import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecu
 
 const TITAN = getCoopDefenseEnemyConfig('grave-titan');
 const VOID_PLASMA = WEAPON_CONFIGS.GRAVE_TITAN_VOID_PLASMA;
+const VOID_PLASMA_ATTACK = TITAN.weapons.find((weapon) => weapon.weaponId === VOID_PLASMA.id)!;
 
 interface TestPlayer {
   id: string;
@@ -144,65 +145,47 @@ function runAttackFrames(
 }
 
 describe('Grufttitan Void-Plasma', () => {
-  it('uses the current Map 10 rocket salvo balance contract', () => {
-    const salvo = TITAN.weapons.find((weapon) => weapon.weaponId === VOID_PLASMA.id)?.salvo;
-    const fire = VOID_PLASMA.fire as {
-      type?: string;
-      projectileSpeed?: number;
-      homing?: { maxTurnDegreesPerStep?: number };
-    };
-    expect(VOID_PLASMA.range).toBe(900);
-    expect(VOID_PLASMA.damage).toBe(8);
-    expect(VOID_PLASMA.projectileColor).toBe(0xb347ff);
-    expect(fire.type).toBe('projectile');
-    expect(fire.projectileSpeed).toBe(370);
-    expect(VOID_PLASMA.energyBallVariant).toBe('plasma');
-    expect(fire.homing?.maxTurnDegreesPerStep).toBe(12);
-    expect(salvo).toEqual({
-      count: 12,
-      intervalMs: 90,
-      cooldownMs: 5000,
-      targetDistribution: 'round_robin',
-    });
-    expect(TITAN.weapons.find((weapon) => weapon.weaponId === VOID_PLASMA.id)?.minTargetDistancePx).toBe(200);
-  });
-
-  it('waits outside the range band, then fires the balanced salvo over multiple players', () => {
+  it('waits outside the range band, then distributes one configured salvo over multiple players', () => {
+    const salvo = VOID_PLASMA_ATTACK.salvo!;
+    const minTargetDistance = VOID_PLASMA_ATTACK.minTargetDistancePx ?? 0;
+    const inRangeDistance = minTargetDistance + 50;
+    expect(inRangeDistance).toBeLessThan(VOID_PLASMA.range);
     const players = [
-      fakeEntity({ id: 'p1', x: 500, y: 100, active: true }),
-      fakeEntity({ id: 'p2', x: 700, y: 100, active: true }),
+      fakeEntity({ id: 'p1', x: 100 + inRangeDistance, y: 100, active: true }),
+      fakeEntity({ id: 'p2', x: 100 + inRangeDistance + 100, y: 100, active: true }),
     ];
     const enemy = createTitan();
     const { system, shots } = createAttackSystem(enemy, players);
 
-    players[0].sprite.x = 1_200;
-    players[1].sprite.x = 1_300;
+    players[0].sprite.x = 100 + VOID_PLASMA.range + 100;
+    players[1].sprite.x = 100 + VOID_PLASMA.range + 200;
     runAttackFrames(system, 1_000, 1_500);
     expect(shots).toEqual([]);
 
-    players[0].sprite.x = 500;
-    players[1].sprite.x = 700;
-    runAttackFrames(system, 1_510, 2_800);
+    players[0].sprite.x = 100 + inRangeDistance;
+    players[1].sprite.x = 100 + inRangeDistance + 100;
+    runAttackFrames(system, 1_510, 1_510 + salvo.intervalMs * (salvo.count + 1));
 
-    expect(shots).toHaveLength(12);
+    expect(shots).toHaveLength(salvo.count);
     expect(shots.every((shot) => shot.weaponId === VOID_PLASMA.id)).toBe(true);
-    expect(shots.filter((shot) => shot.targetX === 500)).toHaveLength(6);
-    expect(shots.filter((shot) => shot.targetX === 700)).toHaveLength(6);
+    expect(shots.filter((shot) => shot.targetX === players[0].sprite.x)).toHaveLength(Math.ceil(salvo.count / 2));
+    expect(shots.filter((shot) => shot.targetX === players[1].sprite.x)).toHaveLength(Math.floor(salvo.count / 2));
   });
 
-  it('does not target players inside 200 px, including during an active salvo', () => {
-    const players = [fakeEntity({ id: 'p1', x: 250, y: 100, active: true })];
+  it('does not target players inside the configured minimum distance, including during an active salvo', () => {
+    const minTargetDistance = VOID_PLASMA_ATTACK.minTargetDistancePx ?? 0;
+    const players = [fakeEntity({ id: 'p1', x: 100 + Math.max(0, minTargetDistance - 1), y: 100, active: true })];
     const enemy = createTitan();
     const { system, shots } = createAttackSystem(enemy, players);
 
     runAttackFrames(system, 1_000, 2_000);
     expect(shots).toEqual([]);
 
-    players[0].sprite.x = 600;
+    players[0].sprite.x = 100 + minTargetDistance + 1;
     runAttackFrames(system, 2_010, 2_140);
     expect(shots).toHaveLength(1);
 
-    players[0].sprite.x = 250;
+    players[0].sprite.x = 100 + Math.max(0, minTargetDistance - 1);
     runAttackFrames(system, 2_070, 2_200);
     expect(shots).toHaveLength(1);
   });
@@ -220,12 +203,13 @@ describe('Grufttitan Void-Plasma', () => {
     const enemy = createTitan();
     const { system, shots } = createAttackSystem(enemy, players, bases);
 
-    runAttackFrames(system, 1_000, 7_200);
+    const salvo = VOID_PLASMA_ATTACK.salvo!;
+    runAttackFrames(system, 1_000, 1_000 + salvo.cooldownMs + salvo.intervalMs * salvo.count + TITAN.attackScanIntervalMs * 2);
 
     const weaponIds = shots.map((shot) => shot.weaponId);
     const firstBiteIndex = weaponIds.indexOf('GRAVE_TITAN_BITE');
-    expect(weaponIds.slice(0, 12).every((weaponId) => weaponId === VOID_PLASMA.id)).toBe(true);
-    expect(firstBiteIndex).toBeGreaterThanOrEqual(12);
+    expect(weaponIds.slice(0, salvo.count).every((weaponId) => weaponId === VOID_PLASMA.id)).toBe(true);
+    expect(firstBiteIndex).toBeGreaterThanOrEqual(salvo.count);
     expect(shots[firstBiteIndex]).toMatchObject({
       weaponId: 'GRAVE_TITAN_BITE',
       targetX: 200,

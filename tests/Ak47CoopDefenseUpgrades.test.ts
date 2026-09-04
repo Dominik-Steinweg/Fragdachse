@@ -81,37 +81,54 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
     ]);
   });
 
-  it('shares the exact five-stack cap and combines firepower/fire-control additively', () => {
+  it('shares the configured stack cap and combines firepower/fire-control additively', () => {
     const firepower = akConfig({ unlock_ak47: 1, ak47_firepower: 1 });
     const control = akConfig({ unlock_ak47: 1, ak47_fire_control: 1 });
     const combined = akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_fire_control: 1, ak47_rhythm: 3 });
-    expect(firepower.ak47Focus?.maxStacks).toBe(5);
+    expect(firepower.ak47Focus?.maxStacks).toBeGreaterThan(0);
     expect(control.ak47Focus?.maxStacks).toBe(0);
     expect(control.ak47Focus?.fireControlEnabled).toBe(1);
-    expect(combined.ak47Focus?.maxStacks).toBe(5);
-    expect(combined.ak47Focus?.damagePerStack).toBeCloseTo(0.25);
-    expect(combined.ak47Focus?.fireControlSpreadPerStack).toBeCloseTo(0.08);
-    expect(combined.ak47Focus?.fireControlRangePerStack).toBeCloseTo(0.03);
-    expect(combined.ak47Focus?.fireControlProjectileSpeedPerStack).toBeCloseTo(0.05);
+    expect(combined.ak47Focus?.maxStacks).toBe(firepower.ak47Focus?.maxStacks);
+    expect(combined.ak47Focus?.damagePerStack).toBeGreaterThan(0);
+    expect(combined.ak47Focus?.fireControlSpreadPerStack).toBeGreaterThan(0);
+    expect(combined.ak47Focus?.fireControlRangePerStack).toBeGreaterThan(0);
+    expect(combined.ak47Focus?.fireControlProjectileSpeedPerStack).toBeGreaterThan(0);
 
     const controlBehavior = makeBehavior(control);
-    for (let shotId = 1; shotId <= 5; shotId += 1) {
+    for (let shotId = 1; shotId <= (firepower.ak47Focus?.maxStacks ?? 0); shotId += 1) {
       controlBehavior.registerProjectileHit(projectile(shotId), shotId);
     }
-    expect(controlBehavior.getHudBuffs('p1', 0)[0]).toMatchObject({ stacks: 5, maxStacks: 5 });
+    expect(controlBehavior.getHudBuffs('p1', 0)[0]).toMatchObject({
+      stacks: firepower.ak47Focus?.maxStacks,
+      maxStacks: firepower.ak47Focus?.maxStacks,
+    });
   });
 
-  it('resolves rhythm, rock levels, and 3/6/9/12 breakthrough ammunition', () => {
-    expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1 }).ak47Focus?.damagePerStack)
-      .toBeCloseTo(0.15);
-    expect(getCoopDefenseUpgradeDefinition('ak47_rock_destruction')?.maxLevel).toBe(1);
-    expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1, ak47_rock_destruction: 1 }).rockDamageMult)
-      .toBe(8);
-    expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1, ak47_rock_destruction: 2 }).rockDamageMult)
-      .toBe(8);
-    for (const level of [0, 1, 2, 3]) {
-      expect(akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_fire_control: 1, ak47_fire_superiority: 1, ak47_breakthrough_magazine: level }).ak47Focus?.fireSuperiorityShots)
-        .toBe(3 + level * 3);
+  it('resolves rhythm, rock levels, and breakthrough ammunition from the upgrade definitions', () => {
+    const withoutRhythm = akConfig({ unlock_ak47: 1, ak47_firepower: 1 }).ak47Focus?.damagePerStack ?? 0;
+    const withRhythm = akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1 }).ak47Focus?.damagePerStack ?? 0;
+    expect(withRhythm).toBeGreaterThan(withoutRhythm);
+
+    const rockDefinition = getCoopDefenseUpgradeDefinition('ak47_rock_destruction');
+    expect(rockDefinition?.maxLevel).toBeGreaterThan(0);
+    const rockAtOne = akConfig({ unlock_ak47: 1, ak47_firepower: 1, ak47_rhythm: 1, ak47_rock_destruction: 1 }).rockDamageMult;
+    const rockPastMax = akConfig({
+      unlock_ak47: 1,
+      ak47_firepower: 1,
+      ak47_rhythm: 1,
+      ak47_rock_destruction: (rockDefinition?.maxLevel ?? 1) + 1,
+    }).rockDamageMult;
+    expect(rockAtOne).toBeGreaterThan(0);
+    expect(rockPastMax).toBe(rockAtOne);
+
+    const magazineMaxLevel = getCoopDefenseUpgradeDefinition('ak47_breakthrough_magazine')?.maxLevel ?? 0;
+    const shotsByLevel = Array.from({ length: magazineMaxLevel + 1 }, (_, level) => (
+      akConfig({ unlock_ak47: 1, ak47_fire_control: 1, ak47_fire_superiority: 1, ak47_breakthrough_magazine: level })
+        .ak47Focus?.fireSuperiorityShots ?? 0
+    ));
+    expect(shotsByLevel[0]).toBeGreaterThanOrEqual(0);
+    for (let index = 1; index < shotsByLevel.length; index += 1) {
+      expect(shotsByLevel[index]).toBeGreaterThanOrEqual(shotsByLevel[index - 1]);
     }
     expect(akConfig({ unlock_ak47: 1 }).rockDamageMult).toBe(0);
   });

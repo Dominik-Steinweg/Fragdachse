@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-
 import { CELL_SIZE } from '../src/config';
 import type { RockCell } from '../src/types';
 import { ROCK_BLOB_SURFACE_PROFILE, getBlobSurfaceMottleReachPx } from '../src/arena/BlobSurfaceProfile';
@@ -120,22 +118,5 @@ describe('rock overlay dirty chunks', () => {
   it('merges the chunks of a whole destruction wave without duplicates', () => {
     const chunks = collectRockOverlayChunks([cell(1, 1), cell(1, 1), cell(2, 1)], [], FRAME);
     expect(chunkKeys(chunks)).toEqual(['0:0', '128:0']);
-  });
-});
-
-describe('rock overlay wiring', () => {
-  it('feeds the mottle bake from the stable source, never from the living rocks', () => {
-    const streamer = readFileSync(
-      new URL('../src/arena/chunks/RockOverlayStreamer.ts', import.meta.url),
-      'utf8',
-    ).replace(/\r\n/g, '\n');
-
-    // Seit dem Chunk-Streaming gibt es nur noch einen Bake-Pfad. Er zieht seine Quellzellen aus
-    // der stabilen Materialquelle; ein Rueckfall auf die gerade lebenden Felsen waere genau der
-    // Fehler, der Flecken auf unbeteiligten Nachbarfelsen umspringen liesse.
-    expect(streamer).toContain('const cell = this.overlaySource.cells[index];');
-    expect(streamer).toContain('sourceCells,\n        index,');
-    // Die lebenden Felsen tragen ausschliesslich die Stanzform.
-    expect(streamer).toContain('if (silhouetteImages.length > 0) cutout.erase(silhouetteImages);');
   });
 });

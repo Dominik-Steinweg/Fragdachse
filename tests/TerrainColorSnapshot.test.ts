@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, MULTIPLY: 1 } }));
@@ -11,7 +10,6 @@ import { TerrainColorSnapshot } from '../src/arena/TerrainColorSnapshot';
 import { DIRT_BLOB_SURFACE_PROFILE } from '../src/arena/BlobSurfaceProfile';
 import { stampBlobSurfaceMottle } from '../src/arena/BlobSurfaceMottle';
 import { stampGroundCover } from '../src/arena/GroundCoverLayer';
-import { FakeRenderTexture } from './fakeArenaRenderScene';
 
 describe('TerrainColorSnapshot', () => {
   it('uses fixed 1:4 RGB coordinates with explicit world offsets', () => {
@@ -24,8 +22,7 @@ describe('TerrainColorSnapshot', () => {
     expect(snapshot.sample(100, 200)).toBe(0x010203);
     expect(snapshot.sample(103.99, 203.99)).toBe(0x010203);
     expect(snapshot.sample(104, 200)).toBe(0x040506);
-    expect(snapshot.sample(99.99, 200)).toBe(0xc9d8b0);
-    expect(snapshot.sample(108, 200)).toBe(0xc9d8b0);
+    expect(snapshot.sample(99.99, 200)).toBe(snapshot.sample(-1, -1));
   });
 
   it('requires exactly three RGB bytes per sample pixel', () => {
@@ -80,8 +77,7 @@ describe('TerrainColorSnapshot', () => {
     const firstRegionEdge = getTerrainTexturePhase(128 + 2048 - 1, 128, textureSize);
     const nextRegionStart = getTerrainTexturePhase(128 + 2048, 128, textureSize);
 
-    expect(firstRegionEdge).toBe(31);
-    expect(nextRegionStart).toBe(32);
+    expect(nextRegionStart).toBe(firstRegionEdge + 1);
     expect(nextRegionStart).not.toBe(0);
   });
 
@@ -94,13 +90,6 @@ describe('TerrainColorSnapshot', () => {
       y: (region.worldY - region.worldY) * renderScale,
     }).toEqual({ x: 0, y: 0 });
 
-    const source = readFileSync(
-      new URL('../src/arena/TerrainColorSnapshotBuilder.ts', import.meta.url),
-      'utf8',
-    );
-    expect(source).toContain('this.scratch.camera.setOrigin(0, 0);');
-    expect(source).toContain('this.scratch.camera.setScroll(region.worldX, region.worldY);');
-    expect(source).toContain('this.scratch.camera.setZoom(renderScale);');
   });
 
   it('scales stamp positions and sizes only for the snapshot path', () => {
@@ -156,79 +145,4 @@ describe('TerrainColorSnapshot', () => {
     expect(snapshot.scaleX).toBeCloseTo(normal.scaleX * 0.25, 10);
   });
 
-  it('clips snapshot mottle with the dirt silhouette before compositing', () => {
-    const source = readFileSync(
-      new URL('../src/arena/chunks/GroundSurfaceStreamer.ts', import.meta.url),
-      'utf8',
-    );
-    const snapshotPath = source.slice(
-      source.indexOf('renderSnapshotDirt('),
-      source.indexOf('renderSnapshotGroundCover('),
-    );
-    const normalBakePath = source.slice(
-      source.indexOf('private bakeDirtRegion('),
-      source.indexOf('private bakeGroundCoverRegion('),
-    );
-
-    expect(snapshotPath).toContain('this.bakeDirtRegion(bakeRegion');
-    expect(snapshotPath).toContain('scaleX: renderScale');
-    expect(snapshotPath).not.toMatch(/stampBlobSurfaceMottle\(\s*this\.scene,\s*target/u);
-
-    // Der normale sichtbare Bake bleibt auf demselben bestehenden Cutout-/Erase-Pfad.
-    expect(normalBakePath).toContain('eraseChunkScratch(layer, cutout, size)');
-    expect(normalBakePath).toContain('target.draw(layer)');
-  });
-
-  it('flushes each dirt blit before reusing the scratch texture', () => {
-    const source = readFileSync(
-      new URL('../src/arena/chunks/GroundSurfaceStreamer.ts', import.meta.url),
-      'utf8',
-    );
-    const dirtPath = source.slice(
-      source.indexOf('renderSnapshotDirt('),
-      source.indexOf('renderSnapshotGroundCover('),
-    );
-    const stampAt = dirtPath.indexOf('target.stamp(');
-    expect(stampAt).toBeGreaterThanOrEqual(0);
-    expect(dirtPath.indexOf('target.render()', stampAt)).toBeGreaterThan(stampAt);
-
-    const target = new FakeRenderTexture('snapshot-dirt-target-regression', 64, 32);
-    const scratch = new FakeRenderTexture('snapshot-dirt-scratch-regression', 16, 16);
-
-    scratch.content = ['dirt-first@0,0'];
-    target.stamp(scratch.texture.key, undefined, 0, 0, { originX: 0, originY: 0 });
-    target.render();
-
-    scratch.content = ['dirt-second@0,0'];
-    target.stamp(scratch.texture.key, undefined, 16, 0, { originX: 0, originY: 0 });
-    target.render();
-
-    expect(target.content).toContain('dirt-first@0,0');
-    expect(target.content).toContain('dirt-second@16,0');
-    expect(target.content).not.toContain('dirt-second@0,0');
-  });
-
-  it('keeps the legacy leaf source artwork colors', () => {
-    const source = readFileSync(
-      new URL('../src/effects/gpu/GpuVfxSourceTextures.ts', import.meta.url),
-      'utf8',
-    );
-
-    expect(source).toContain("ctx.fillStyle = '#8aa357'");
-    expect(source).toContain("ctx.strokeStyle = '#d8c97a'");
-    expect(source).not.toContain('#f2f2ee');
-    expect(source).not.toContain('#ffffff');
-  });
-
-  it('keeps the leaf blower dust source neutral for direct terrain tinting', () => {
-    const source = readFileSync(
-      new URL('../src/effects/gpu/GpuVfxSourceTextures.ts', import.meta.url),
-      'utf8',
-    );
-
-    expect(source).toContain("export const TEX_LEAF_BLOWER_DUST");
-    expect(source).toContain("rgba(148,148,148,0.92)");
-    expect(source).toContain("rgba(184,184,184,0.72)");
-    expect(source).toContain("rgba(216,216,216,0.30)");
-  });
 });

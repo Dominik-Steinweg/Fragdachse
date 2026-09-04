@@ -41,6 +41,12 @@ const STOP_DURATION_MS = COLOSSUS.attackStopDurationMs;
 const VOID_ROCKETS = WEAPON_CONFIGS.INFERNO_COLOSSUS_VOID_ROCKETS;
 const VOID_MOLOTOV = COLOSSUS.voidMolotov!;
 const SALVO = COLOSSUS.weapons.find(weapon => weapon.salvo)!.salvo!;
+const FLAMETHROWER_ATTACK = COLOSSUS.weapons.find(
+  weapon => weapon.weaponId === 'INFERNO_COLOSSUS_FLAMETHROWER',
+)!;
+const ROCKET_ATTACK = COLOSSUS.weapons.find(
+  weapon => weapon.weaponId === 'INFERNO_COLOSSUS_VOID_ROCKETS',
+)!;
 
 interface TestPlayer {
   id: string;
@@ -206,36 +212,46 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     expect(shots[0].targetY).toBe(100);
   });
 
-  it('nutzt im Nahbereich den Hoellenwerfer und laeuft dabei mit 75 % weiter', () => {
+  it('nutzt im Nahbereich den Hoellenwerfer und behaelt dabei seine konfigurierte Bewegung', () => {
+    const flameConfig = WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER;
+    const rocketMinDistance = ROCKET_ATTACK.minTargetDistancePx ?? 0;
+    expect(flameConfig.range).toBeLessThan(rocketMinDistance);
+    const nearDistance = Math.max(1, flameConfig.range - 1);
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 300, y: 100, active: true })]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 100 + nearDistance, y: 100, active: true })]);
 
     system.hostUpdate(16, 1_000);
 
     expect(shots.map(shot => shot.weaponId)).toEqual(['INFERNO_COLOSSUS_FLAMETHROWER']);
     // Der Boss darf waehrend des Feuerns laufen – die Pause haelt ihn nicht mehr an.
-    expect(enemy.pauseCalls).toEqual([{ factor: 0.75, durationMs: STOP_DURATION_MS }]);
-    expect(enemy.getAttackMovementSpeedFactor(1_000)).toBeCloseTo(0.75);
+    expect(enemy.pauseCalls).toEqual([{ factor: FLAMETHROWER_ATTACK.attackMovementSpeedFactor, durationMs: STOP_DURATION_MS }]);
+    expect(enemy.getAttackMovementSpeedFactor(1_000)).toBeCloseTo(FLAMETHROWER_ATTACK.attackMovementSpeedFactor);
     expect(enemy.stopCalls).toBe(0);
   });
 
-  it('feuert ab 450 px Void-Raketen und bewegt sich dabei ungebremst', () => {
+  it('feuert oberhalb der konfigurierten Mindestdistanz Void-Raketen und bewegt sich dabei konfiguriert', () => {
+    const rocketMinDistance = ROCKET_ATTACK.minTargetDistancePx ?? 0;
+    const rocketDistance = Math.min(rocketMinDistance + 1, VOID_ROCKETS.range - 1);
+    expect(rocketDistance).toBeGreaterThan(rocketMinDistance);
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 100 + rocketDistance, y: 100, active: true })]);
 
     system.hostUpdate(16, 1_000);
 
     expect(shots.map(shot => shot.weaponId)).toEqual(['INFERNO_COLOSSUS_VOID_ROCKETS']);
     // Jeder Einzelschuss der Salve darf den Boss nicht festsetzen.
-    expect(enemy.pauseCalls).toEqual([{ factor: 1, durationMs: STOP_DURATION_MS }]);
-    expect(enemy.getAttackMovementSpeedFactor(1_000)).toBe(1);
+    expect(enemy.pauseCalls).toEqual([{ factor: ROCKET_ATTACK.attackMovementSpeedFactor, durationMs: STOP_DURATION_MS }]);
+    expect(enemy.getAttackMovementSpeedFactor(1_000)).toBeCloseTo(ROCKET_ATTACK.attackMovementSpeedFactor);
     expect(enemy.stopCalls).toBe(0);
   });
 
   it('haelt die Raketen unter ihrer Mindestdistanz zurueck und laeuft stattdessen weiter', () => {
-    // 400 px: zu weit fuer den Hoellenwerfer (350), zu nah fuer die Raketen (450).
+    const flameRange = WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER.range;
+    const rocketMinDistance = ROCKET_ATTACK.minTargetDistancePx ?? 0;
+    expect(flameRange).toBeLessThan(rocketMinDistance);
+    const gapDistance = (flameRange + rocketMinDistance) / 2;
     const enemy = createColossus();
-    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 500, y: 100, active: true })]);
+    const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 100 + gapDistance, y: 100, active: true })]);
 
     runAttackFrames(system, 1_000, 2_000);
 
@@ -243,23 +259,25 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     expect(enemy.getAttackMovementSpeedFactor(2_000)).toBe(1);
   });
 
-  it('feuert genau zehn Raketen und pausiert danach acht Sekunden', () => {
+  it('feuert genau die konfigurierte Raketensalve und pausiert danach konfiguriert', () => {
     const enemy = createColossus();
     const { system, shots } = createAttackSystem(enemy, [fakeEntity({ id: 'p1', x: 800, y: 100, active: true })]);
 
-    // Eine volle Salve braucht 10 × Salventakt; grosszuegig darueber hinaus takten.
-    const salvoWindowMs = SALVO.intervalMs * 14;
+    // Eine volle Salve braucht count × Salventakt; grosszuegig darueber hinaus takten.
+    const salvoWindowMs = SALVO.intervalMs * (SALVO.count + 4);
     runAttackFrames(system, 1_000, 1_000 + salvoWindowMs);
-    expect(shots).toHaveLength(10);
+    expect(shots).toHaveLength(SALVO.count);
     expect(shots.every(shot => shot.weaponId === 'INFERNO_COLOSSUS_VOID_ROCKETS')).toBe(true);
 
-    // Innerhalb der Salvenpause bleibt es bei zehn Schuessen.
-    runAttackFrames(system, 1_000 + salvoWindowMs, 1_000 + salvoWindowMs + 7_000);
-    expect(shots).toHaveLength(10);
+    // Innerhalb der konfigurierten Salvenpause bleibt es bei dieser Schusszahl.
+    const pauseStart = 1_000;
+    const pauseEnd = pauseStart + SALVO.cooldownMs;
+    runAttackFrames(system, 1_000 + salvoWindowMs, pauseEnd - SALVO.intervalMs);
+    expect(shots).toHaveLength(SALVO.count);
 
     // Nach der Pause startet die naechste Salve.
-    runAttackFrames(system, 1_000 + salvoWindowMs + 7_000, 1_000 + salvoWindowMs + 9_000);
-    expect(shots.length).toBeGreaterThan(10);
+    runAttackFrames(system, pauseEnd, pauseEnd + SALVO.intervalMs * (SALVO.count + 1));
+    expect(shots.length).toBeGreaterThan(SALVO.count);
   });
 
   it('wechselt mitten in der Salve auf den Hoellenwerfer, wenn ein Spieler heranrueckt', () => {
@@ -270,7 +288,10 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     // Zwei Raketen der Salve, dann schliesst der Spieler auf Nahkampfdistanz auf.
     runAttackFrames(system, 1_000, 1_000 + SALVO.intervalMs * 2);
     expect(shots.length).toBeGreaterThan(1);
-    player.sprite.x = 300;
+    const rocketMinDistance = ROCKET_ATTACK.minTargetDistancePx ?? 0;
+    const nearDistance = Math.max(1, WEAPON_CONFIGS.INFERNO_COLOSSUS_FLAMETHROWER.range - 1);
+    expect(nearDistance).toBeLessThan(rocketMinDistance);
+    player.sprite.x = 100 + nearDistance;
 
     const shotsBeforeClosing = shots.length;
     runAttackFrames(system, 1_000 + SALVO.intervalMs * 2, 1_000 + SALVO.intervalMs * 2 + 300);
@@ -314,9 +335,11 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     );
 
     // Salve abfeuern, danach steckt der Boss in der Salvenpause fest.
-    runAttackFrames(system, 1_000, 1_000 + VOID_ROCKETS.cooldown * 14);
+    const salvoWindowMs = SALVO.intervalMs * (SALVO.count + 4);
+    const pauseStart = 1_000 + salvoWindowMs;
+    runAttackFrames(system, 1_000, pauseStart);
     const shotsAfterSalvo = shots.length;
-    runAttackFrames(system, 3_000, 5_000);
+    runAttackFrames(system, pauseStart, pauseStart + SALVO.cooldownMs);
 
     expect(shots.slice(shotsAfterSalvo).map(shot => shot.weaponId)).toContain('INFERNO_COLOSSUS_BITE');
   });
@@ -508,22 +531,10 @@ describe('Flammenkoloss – Void-Darstellung', () => {
     expect(VOID_ROCKETS.projectileBurnVisualStyle).toBe('void');
   });
 
-  it('faerbt Rakete, Rauch und Explosion violett', () => {
-    expect(VOID_ROCKETS.projectileColor).toBe(0xd98cff);
-    expect(VOID_ROCKETS.rocketSmokeTrailColor).toBe(0xa755ff);
-    expect(VOID_ROCKETS.fire.type).toBe('projectile');
-    expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.impactExplosion?.color).toBe(VOID_FIRE_COLOR);
-  });
-
-  it('verwendet Spieler-Homing bei 1000 px Reichweite', () => {
-    expect(VOID_ROCKETS.range).toBe(1_000);
+  it('verwendet Spieler-Homing innerhalb der konfigurierten Reichweite', () => {
+    expect(VOID_ROCKETS.range).toBeGreaterThan(0);
     expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.homing?.targetTypes).toEqual(['players']);
     expect(VOID_ROCKETS.fire.type === 'projectile' && VOID_ROCKETS.fire.homing?.maxTurnDegreesPerStep).toBeGreaterThan(0);
-  });
-
-  it('taktet die Salve im geforderten Fenster von 75–100 ms', () => {
-    expect(VOID_ROCKETS.cooldown).toBeGreaterThanOrEqual(75);
-    expect(VOID_ROCKETS.cooldown).toBeLessThanOrEqual(100);
   });
 
   it('behaelt die vorhandenen Void-Feuer-Effekte des Bosses unveraendert', () => {

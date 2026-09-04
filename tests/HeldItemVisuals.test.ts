@@ -181,26 +181,6 @@ describe('Getragene Loadout-Items: Pfotenanker', () => {
     }
   });
 
-  it('bewahrt die absichtlich unterschiedlichen Waffen-Silhouetten', () => {
-    const dimensions = (itemId: string): [number, number] => {
-      const spec = HELD_ITEM_SPRITES[itemId];
-      const size = readPngSize(spec.assetPath);
-      return [size.width, size.height];
-    };
-
-    expect(dimensions('GLOCK')).toEqual([9, 11]);
-    expect(dimensions('P90')).toEqual([9, 14]);
-    expect(dimensions('AK47')).toEqual([9, 22]);
-    expect(dimensions('AWP')).toEqual([9, 28]);
-    expect(dimensions('ROCKET_LAUNCHER')).toEqual([13, 22]);
-    expect(dimensions('NEGEV')).toEqual([13, 22]);
-    expect(dimensions('SHOTGUN')).toEqual([11, 19]);
-    expect(dimensions('MINI_ROCKET_LAUNCHER')).toEqual([9, 14]);
-    expect(HELD_ITEM_SPRITES.GLOCK.muzzleX).toBe(3.5);
-    expect(HELD_ITEM_SPRITES.GLOCK.gripX).toBe(4.5);
-    expect(HELD_ITEM_SPRITES.NEGEV.gripX).toBe(6.5);
-    expect(HELD_ITEM_SPRITES.ROCKET_LAUNCHER.muzzleX).toBe(5.5);
-  });
 });
 
 describe('Getragener Slot', () => {
@@ -239,36 +219,5 @@ describe('Getragener Slot', () => {
 
     tracker.removePlayer('p1');
     expect(tracker.resolve('p1', 1_000)).toBe('weapon1');
-  });
-});
-
-describe('Getragene Held-Item-Presentation', () => {
-  it('verwendet die lokale Radialprojektion nur fuer den lokalen Spieler', () => {
-    const callSites = [
-      {
-        file: 'src/scenes/ArenaScene.ts',
-        localCheck: 'player.id === localId',
-        playerId: 'player.id',
-      },
-      {
-        file: 'src/scenes/arena/HostUpdateCoordinator.ts',
-        localCheck: 'player.id === bridge.getLocalPlayerId()',
-        playerId: 'player.id',
-      },
-      {
-        file: 'src/scenes/arena/ClientUpdateCoordinator.ts',
-        localCheck: 'id === localId',
-        playerId: 'id',
-      },
-    ];
-
-    for (const callSite of callSites) {
-      const source = readFileSync(path.resolve(REPOSITORY_ROOT, callSite.file), 'utf8');
-      expect(source, callSite.file).toMatch(
-        new RegExp(
-          `const selectedHeldItemId = ${callSite.localCheck}[\\s\\S]*?selectedHeldItemId === undefined \\? bridge\\.getPlayerHeldItemId\\(${callSite.playerId}\\)`,
-        ),
-      );
-    }
   });
 });

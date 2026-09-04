@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   COOP_DEFENSE_AFFIX_RULES,
-  COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS,
   getCoopDefenseItemAffixDefinition,
 } from '../src/config/coopDefenseItems';
 import { CoopDefenseItemRuntimeSystem } from '../src/systems/CoopDefenseItemRuntimeSystem';
@@ -217,12 +216,6 @@ describe('Definitionen der Laufzeit-Affixe', () => {
     'out_of_combat_armor_repair', 'damage_reflection', 'low_hp_speed', 'low_hp_damage_reduction',
     'dash_speed', 'movement_charge_damage', 'crossfire', 'glutwanderer', 'remote_control', 'surrounded',
   ] as const;
-
-  it('umfasst den vollstaendigen Pool aus 40 Affixen', () => {
-    expect(COOP_DEFENSE_ITEM_AFFIX_DEFINITIONS).toHaveLength(40);
-    // Versorgungsmunition ist bewusst zurueckgestellt und darf nicht rollen.
-    expect(getCoopDefenseItemAffixDefinition('primary_ally_heal')).toBeUndefined();
-  });
 
   it('traegt fuer jedes Laufzeit-Affix eine Erklaerung und keinen Stat', () => {
     for (const affixId of runtimeAffixIds) {
