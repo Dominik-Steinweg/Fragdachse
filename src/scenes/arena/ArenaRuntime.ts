@@ -258,7 +258,7 @@ export class ArenaRuntime {
       getTargetingRuntime: () => this.flow.getWorldTargetingRuntime(),
     });
     this.clientUpdate.setPlayerFramePort({
-      getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
+      getPlayerGameplayReadViews: () => this.flow.getWorldPlayerGameplayRuntime(),
       getPowerUpRuntime: () => this.flow.getWorldPowerUpRuntime(),
     });
     this.clientUpdate.setActivityFramePort({
@@ -617,7 +617,7 @@ export class ArenaRuntime {
   }
 
   getHostRemoteControlTargets(playerIds: readonly string[]): readonly SyncedRemoteControlTurret[] {
-    return this.flow.getWorldPlayerGameplayRuntime()?.systems?.itemRuntime?.getRemoteControlSnapshot(
+    return this.flow.getWorldPlayerGameplayRuntime()?.getRemoteControlSnapshot(
       [...playerIds],
       this.flow.getWorldCombatGameplayBinding()?.systems?.turret?.getTurrets() ?? [],
     ) ?? [];

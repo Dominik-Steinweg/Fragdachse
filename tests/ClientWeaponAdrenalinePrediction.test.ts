@@ -48,8 +48,8 @@ function makeCoordinator(authoritativeAdrenaline?: () => number): TestCoordinato
     getTargetingRuntime: () => null,
   });
   coordinator.setPlayerFramePort({
-    getPlayerGameplayRuntime: () => (authoritativeAdrenaline
-      ? { systems: { resource: { getAdrenaline: () => authoritativeAdrenaline() } } } as never
+    getPlayerGameplayReadViews: () => (authoritativeAdrenaline
+      ? { getAdrenaline: () => authoritativeAdrenaline() } as never
       : null),
     getPowerUpRuntime: () => null,
   });

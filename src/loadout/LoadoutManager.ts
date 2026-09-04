@@ -92,7 +92,7 @@ export class LoadoutManager {
    * Slot, dessen Item die Figur gerade sichtbar traegt. Host-autoritativ und rein visuell; der
    * Wert wird als Slot repliziert, die Zuordnung zum Bild passiert lokal auf jeder Seite.
    */
-  getHeldItemSlot(playerId: string, now = Date.now()): HeldItemSlot {
+  getHeldItemSlot(playerId: string, now: number): HeldItemSlot {
     return this.heldItemSlots.resolve(playerId, now);
   }
 

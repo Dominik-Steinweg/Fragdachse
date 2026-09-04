@@ -43,7 +43,7 @@ import { consumesWorldReplication } from '../../world/WorldReplication';
 import { resolveEffectiveAdrenalineCost } from '../../systems/AdrenalineCost';
 import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { WorldTargetingRuntime } from '../../world/WorldTargetingRuntime';
-import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplayRuntime';
+import type { PlayerGameplayReadViews } from '../../world/WorldPlayerGameplayRuntime';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 
 /** Geteilte Leer-Instanz: vermeidet eine Allokation pro Aufruf ohne Coop-Profil. */
@@ -102,7 +102,8 @@ export interface ClientWorldFramePort {
 
 /** World-owned player/loadout reads used by the client frame. */
 export interface ClientPlayerFramePort {
-  getPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null;
+  /** Host-only Player runtime is projected here as a stable read view; clients return null. */
+  getPlayerGameplayReadViews(): PlayerGameplayReadViews | null;
   getPowerUpRuntime(): WorldPowerUpRuntime | null;
 }
 
@@ -225,7 +226,9 @@ export class ClientUpdateCoordinator {
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get targetingSystems() { return this.worldFramePort?.getTargetingRuntime()?.systems ?? null; }
-  private get playerSystems() { return this.playerFramePort?.getPlayerGameplayRuntime()?.systems ?? null; }
+  private get playerGameplayReadViews(): PlayerGameplayReadViews | null {
+    return this.playerFramePort?.getPlayerGameplayReadViews() ?? null;
+  }
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
   setPerformanceMetricsEnabled(enabled: boolean): void {
     if (this.coarsePerformanceMetricsEnabled === enabled) return;
@@ -829,8 +832,6 @@ export class ClientUpdateCoordinator {
 
   getLocalWeaponConfig(slot: WeaponSlot): WeaponConfig {
     const localId = bridge.getLocalPlayerId();
-    const equipped = this.playerSystems?.loadout?.getEquippedWeaponConfig(localId, slot);
-    if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection[slot] ?? (slot === 'weapon1' ? WEAPON_CONFIGS.GLOCK : WEAPON_CONFIGS.P90);
   }
@@ -854,7 +855,7 @@ export class ClientUpdateCoordinator {
         return applyCoopDefenseModifiersToUtilityConfig(radialUtility, this.getLocalEffectTotals());
       }
     }
-    const equipped = this.playerSystems?.loadout?.getEquippedUtilityConfig(localId);
+    const equipped = this.playerGameplayReadViews?.getEquippedUtilityConfig(localId);
     if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.utility ?? UTILITY_CONFIGS.HE_GRENADE;
@@ -862,16 +863,11 @@ export class ClientUpdateCoordinator {
 
   getLocalUltimateConfig() {
     const localId = bridge.getLocalPlayerId();
-    const equipped = this.playerSystems?.loadout?.getEquippedUltimateConfig(localId);
-    if (equipped) return equipped;
     const selection = this.resolveCommittedLoadoutSelection(localId);
     return selection.ultimate ?? ULTIMATE_CONFIGS.HONEY_BADGER_RAGE;
   }
 
   getLocalUltimateThresholds(): number[] {
-    const localId = bridge.getLocalPlayerId();
-    const fromManager = this.playerSystems?.loadout?.getUltimateThresholds(localId);
-    if (fromManager && fromManager.length > 0) return fromManager;
     const config = this.getLocalUltimateConfig();
     if (config.type === 'gauss') {
       const thresholds: number[] = [];
@@ -903,8 +899,8 @@ export class ClientUpdateCoordinator {
 
   getLocalAdrenaline(): number {
     const localId = bridge.getLocalPlayerId();
-    if (bridge.isHost() && this.playerSystems?.resource) {
-      return this.playerSystems?.resource.getAdrenaline(localId);
+    if (bridge.isHost() && this.playerGameplayReadViews) {
+      return this.playerGameplayReadViews.getAdrenaline(localId);
     }
     this.ensureCurrentPredictionWorld();
     this.reconcileAuthoritativeAdrenalineFromSnapshot();
@@ -1430,7 +1426,10 @@ export class ClientUpdateCoordinator {
     const localId = bridge.getLocalPlayerId();
     const player  = this.ctx.playerManager.getPlayer(localId);
     if (!player || !player.active) return;
-    if (this.playerSystems?.burrow?.isBurrowed(localId)) return;
+    const isBurrowed = this.playerGameplayReadViews
+      ? this.playerGameplayReadViews.isBurrowed(localId)
+      : ['underground', 'trapped'].includes(player.getBurrowPhase?.() ?? 'idle');
+    if (isBurrowed) return;
 
     const px = player.x;
     const py = player.y;
@@ -1551,11 +1550,10 @@ export class ClientUpdateCoordinator {
 
   private isLocalAk47FireSuperiorityAvailable(): boolean {
     const localId = bridge.getLocalPlayerId();
-    return this.playerSystems?.ak47Behavior?.isFireSuperiorityAvailable(localId)
-      ?? (this.getLocalWeaponConfig('weapon2').id === 'AK47'
-        && bridge.getPlayerActiveBuffs(localId).some((buff) => (
-          buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0
-        )));
+    return this.getLocalWeaponConfig('weapon2').id === 'AK47'
+      && bridge.getPlayerActiveBuffs(localId).some((buff) => (
+        buff.defId === 'AK47_FIRE_SUPERIORITY' && (buff.availableCount ?? 0) > 0
+      ));
   }
 
   private getClientWeaponCooldownFrac(slot: 'weapon1' | 'weapon2'): number {

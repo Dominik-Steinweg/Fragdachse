@@ -36,16 +36,12 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
     //  - ArenaLifecycleCoordinator: System-Handoff an die Activity-Composition → 4B/7A/12C
     //  - ArenaPersistentBaseSession: Management-Cooldown ist in Phase 5 auf den Construction-Port
     //    migriert und darf deshalb nicht mehr als Player-Gameplay-Systems-Consumer erscheinen.
-    //  - ArenaRuntime: itemRuntime×turret Remote-Control-Snapshot-Join → 12B
     //  - ArenaRuntimeAdapters: Player-Gameplay-Mutationen → 6B abgeschlossen
-    //  - ClientUpdateCoordinator: Frame-Reads → 12B
     expect(offenders).toEqual([
       'src/scenes/arena/ArenaLifecycleCoordinator.ts',
-      'src/scenes/arena/ArenaRuntime.ts',
       'src/scenes/arena/ArenaWorldCombatComposition.ts',
       'src/scenes/arena/ArenaWorldConstructionComposition.ts',
       'src/scenes/arena/ArenaWorldEnvironmentComposition.ts',
-      'src/scenes/arena/ClientUpdateCoordinator.ts',
     ]);
   });
 
@@ -82,6 +78,8 @@ describe('PlayerGameplayReadViews – 2B Read-View-Grenze', () => {
     const arenaRuntime = read('src/scenes/arena/ArenaRuntime.ts');
     expect(arenaRuntime).toContain('.getTranslocatorActivePuckId(playerId)');
     expect(arenaRuntime).toContain('.getTunnelNetSnapshot()');
+    expect(arenaRuntime).toContain('.getRemoteControlSnapshot(');
+    expect(arenaRuntime).not.toContain('.systems?.itemRuntime?.getRemoteControlSnapshot(');
 
     const rockHelper = read('src/scenes/arena/RockVisualHelper.ts');
     expect(rockHelper).toContain('.getPlayerGameplayRuntime()?.getPlayerClassId(');
