@@ -156,7 +156,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
         stageNowMs = nowMs;
         receivedAge = projectile.simulatedAgeMs ?? 0;
         expect(coreStage.lifetimeExpiredIds.has(projectile.id)).toBe(false);
-        return { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] };
+        return { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] };
       },
       releaseWorldProjectileState: () => {},
     };

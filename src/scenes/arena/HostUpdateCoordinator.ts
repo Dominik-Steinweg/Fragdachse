@@ -45,6 +45,12 @@ import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplay
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import type { ProjectileEnergyInjectorImpact } from '../../projectile/ProjectileCombatPort';
+import type {
+  ProjectileExplosionRequest,
+  ProjectileExplosionOutcome,
+  ProjectileGrenadePayloadRequest,
+  ProjectileExplosionResolutionPort,
+} from '../../projectile/ProjectileExplosionPort';
 import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import type { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
 
@@ -136,7 +142,7 @@ function emptyHostUpdatePerformanceMetrics(): HostUpdatePerformanceMetrics {
  * and all host-side simulation: physics, combat, projectiles, AoE,
  * area-effects, turrets, train, armageddon meteors, and state publishing.
  */
-export class HostUpdateCoordinator {
+export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort {
   private active = true;
   private netTickAccumulator = 0;
   private leaderboardSignature = '';
@@ -160,6 +166,9 @@ export class HostUpdateCoordinator {
   private playerFramePort: HostPlayerFramePort | null = null;
   private combatFramePort: HostCombatFramePort | null = null;
   private activityFramePort: HostActivityFramePort | null = null;
+  /** Standalone domain effects are queued here and resolved after post-projectile gameplay. */
+  private readonly pendingStandaloneExplosions: ProjectileExplosionRequest[] = [];
+  private hostFrameNowMs = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -199,6 +208,10 @@ export class HostUpdateCoordinator {
   setWorldFramePort(port: HostWorldFramePort): void { this.worldFramePort = port; }
   setPlayerFramePort(port: HostPlayerFramePort): void { this.playerFramePort = port; }
   setCombatFramePort(port: HostCombatFramePort): void { this.combatFramePort = port; }
+
+  queueStandaloneProjectileExplosion(request: ProjectileExplosionRequest): void {
+    this.pendingStandaloneExplosions.push(request);
+  }
 
   private get worldRuntime(): WorldRuntime | null { return this.worldFramePort?.getWorldRuntime() ?? null; }
   private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
@@ -315,6 +328,7 @@ export class HostUpdateCoordinator {
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     const metrics = this.performanceMetricsEnabled ? emptyHostUpdatePerformanceMetrics() : null;
     const now = Date.now();
+    this.hostFrameNowMs = now;
     this.worldFramePort?.getProjectileRuntime?.()?.setHostFrameTime(now);
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
 
@@ -358,8 +372,8 @@ export class HostUpdateCoordinator {
 
     const projectileRuntime = this.worldFramePort?.getProjectileRuntime?.() ?? null;
     if (!countdownActive) projectileRuntime?.setHostFrameTime(now);
-    const { explodedProjectiles, explodedGrenades, countdownEvents } = countdownActive
-      ? { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] }
+    const { projectileExplosions, grenadePayloads, countdownEvents } = countdownActive
+      ? { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] }
       : projectileRuntime?.runHostProjectileStage(delta, now)
         ?? this.ctx.projectileManager.hostUpdate(delta, now);
     const playerPostProjectile = this.playerGameplayRuntime?.runHostPostProjectileStage(delta, now, countdownActive)
@@ -385,154 +399,16 @@ export class HostUpdateCoordinator {
     // Host-Senken. Die Lobby verarbeitet ihre ASMD-Combo über denselben Weg.
     resolveDetonations(this.detonationEffectSink, detonations);
 
-    for (const explosion of explodedProjectiles) {
-      const matrix = explosion.effect.reinforcementMatrix ?? explosion.effect.overchargeField;
-      if (matrix) {
-        const field = this.targetingSystems?.reinforcementMatrix?.spawnMatrix(
-          explosion.ownerId,
-          explosion.x,
-          explosion.y,
-          explosion.effect.radius,
-          matrix.durationMs,
-          matrix.damageReduction,
-          matrix.vulnerabilityBonus,
-          matrix.color,
-          now,
-        );
-        if (field) {
-          this.audio?.playSound(
-            'sfx_place_spore_turret',
-            field.x,
-            field.y,
-            explosion.ownerId,
-          );
-        }
-        continue;
-      }
-
-      const timeBubble = explosion.effect.timeBubble;
-      if (timeBubble) {
-        const injectorEffect = explosion.sourceTurretId
-          ? this.targetingSystems?.energyInjector?.getEffect(explosion.sourceTurretId, now)
-          : null;
-        const slowMultiplier = injectorEffect?.effect.type === 'slow_bubble'
-          ? Math.max(1, injectorEffect.effect.slowStrengthMultiplier)
-          : 1;
-        const adjustedTimeBubble = slowMultiplier > 1
-          ? {
-            ...timeBubble,
-            projectileSlowFactor: Math.max(0.05, 1 - (1 - timeBubble.projectileSlowFactor) * slowMultiplier),
-            playerSlowFactor: Math.max(0.05, 1 - (1 - timeBubble.playerSlowFactor) * slowMultiplier),
-            trainSlowFactor: Math.max(0.05, 1 - (1 - timeBubble.trainSlowFactor) * slowMultiplier),
-          }
-          : timeBubble;
-        this.combatSystems?.timeBubble?.hostCreateBubble(
-          explosion.ownerId,
-          explosion.x,
-          explosion.y,
-          adjustedTimeBubble,
-          now,
-        );
-        continue;
-      }
-
-      const damagedTargetKeys = this.ctx.combatSystem.applyExplosionDamage(
-        explosion.x,
-        explosion.y,
-        explosion.effect,
-        explosion.ownerId,
-        explosion.sourceSlot,
-        explosion.sourceId ?? 'environment.explosion',
-      );
-      this.ctx.hostPhysics.applyRadialImpulse(
-        explosion.x, explosion.y, explosion.effect.radius,
-        explosion.effect.knockback, explosion.ownerId,
-        explosion.effect.selfKnockbackMult ?? 1,
-      );
-      this.applyExplosionEnvironmentDamage(explosion.x, explosion.y, explosion.effect, explosion.ownerId);
-      bridge.broadcastExplosionEffect(
-        explosion.x, explosion.y, explosion.effect.radius,
-        explosion.effect.color, explosion.effect.visualStyle,
-      );
-      const groundFire = explosion.effect.groundFire;
-      if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
-        this.ctx.fireSystem.hostCreateZone(explosion.x, explosion.y, groundFire, explosion.ownerId);
-      }
-      if (explosion.effect.fireChunkBurst) {
-        this.playerGameplayRuntime?.hostCreateFireChunkBurst(
-          explosion.ownerId,
-          explosion.x,
-          explosion.y,
-          explosion.effect.fireChunkBurst,
-          `fireball-impact:${explosion.ownerId}`,
-          now,
-        );
-      }
-      if ((explosion.effect.blackHoleDurationMs ?? 0) > 0) {
-        const durationMs = explosion.effect.blackHoleDurationMs ?? 0;
-        const injectorEffect = explosion.sourceTurretId
-          ? this.targetingSystems?.energyInjector?.getEffect(explosion.sourceTurretId, now)
-          : null;
-        const pullMultiplier = injectorEffect?.effect.type === 'gravity_pull'
-          ? Math.max(1, injectorEffect.effect.pullStrengthMultiplier)
-          : 1;
-        this.blackHoleSystem.create(explosion.x, explosion.y, {
-          radius: explosion.effect.radius,
-          durationMs,
-          pullStrength: (explosion.effect.blackHolePullStrength ?? 0) * pullMultiplier,
-          ownerId: explosion.ownerId,
-        }, now);
-        bridge.broadcastBlackHoleEffect(explosion.x, explosion.y, explosion.effect.radius, durationMs);
-      }
-      if (explosion.continuesAfterExplosion && explosion.projectileId !== undefined) {
-        this.ctx.projectileManager.resumeMultiExplosionProjectile(explosion.projectileId, damagedTargetKeys);
-      }
+    const deferredExplosions = this.pendingStandaloneExplosions.splice(0);
+    for (const explosion of [...projectileExplosions, ...deferredExplosions]) {
+      this.resolveProjectileExplosion(explosion);
     }
 
-    for (const g of explodedGrenades) {
-      if (g.effect.type === 'damage') {
-        this.ctx.combatSystem.applyAoeDamage(g.x, g.y, g.effect.radius, g.effect.damage, g.ownerId, false, {
-          category: 'explosion',
-          allowTeamDamage: g.effect.allowTeamDamage,
-          sourceId: 'weapon.grenade',
-          sourceSlot: 'utility',
-          damageFalloff: g.effect.damageFalloff,
-          baseDamageMult: g.effect.baseDamageMult,
-        });
-        this.applyAoeEnvironmentDamage(
-          g.x, g.y, g.effect.radius, g.effect.damage,
-          g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId,
-          g.effect.damageFalloff,
-        );
-        bridge.broadcastExplosionEffect(g.x, g.y, g.effect.radius, undefined, g.effect.visualStyle);
-        const clusterCount = Math.max(0, Math.floor(g.effect.clusterCount ?? 0));
-        for (let index = 0; index < clusterCount; index += 1) {
-          const angle = (Math.PI * 2 * index) / Math.max(1, clusterCount);
-          const radius = g.effect.radius * (g.effect.clusterRadiusFactor ?? 0);
-          const damage = g.effect.damage * (g.effect.clusterDamageFactor ?? 0);
-          const cx = g.x + Math.cos(angle) * g.effect.radius * 0.45;
-          const cy = g.y + Math.sin(angle) * g.effect.radius * 0.45;
-          this.ctx.combatSystem.applyAoeDamage(cx, cy, radius, damage, g.ownerId, false, {
-            category: 'explosion', allowTeamDamage: g.effect.allowTeamDamage, sourceId: 'weapon.cluster_charge', sourceSlot: 'utility',
-            baseDamageMult: g.effect.baseDamageMult,
-          });
-          this.applyAoeEnvironmentDamage(cx, cy, radius, damage, g.effect.rockDamageMult ?? 1, g.effect.trainDamageMult ?? 1, g.ownerId);
-          bridge.broadcastExplosionEffect(cx, cy, radius, undefined, g.effect.visualStyle);
-        }
-      } else if (g.effect.type === 'spawn_enemy') {
-        this.spawnEnemiesFromGrenade(g.x, g.y, g.effect, g.ownerId);
-      } else if (g.effect.type === 'fire') {
-        this.ctx.fireSystem.hostCreateZone(g.x, g.y, g.effect, g.ownerId);
-      } else if (g.effect.type === 'time_bubble') {
-        this.combatSystems?.timeBubble?.hostCreateBubble(g.ownerId, g.x, g.y, g.effect);
-      } else {
-        this.ctx.smokeSystem.hostCreateCloud(g.x, g.y, g.effect, g.ownerId);
-      }
-    }
+    for (const grenade of grenadePayloads) this.resolveGrenadePayload(grenade);
 
     if (metrics) {
       metrics.explosionsMs = performance.now() - phaseStartedAt;
-      metrics.explosionEventCount = detonations.length + explodedProjectiles.length + explodedGrenades.length;
+      metrics.explosionEventCount = detonations.length + projectileExplosions.length + deferredExplosions.length + grenadePayloads.length;
     }
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const { synced: smokes, damageEvents: smokeDmg } = countdownActive
@@ -1404,6 +1280,143 @@ export class HostUpdateCoordinator {
       }
     }
     bridge.broadcastExplosionEffect(x, y, effect.offsetPx * 2, effect.color, 'brood_hatch');
+  }
+
+  resolveProjectileExplosion(request: ProjectileExplosionRequest): ProjectileExplosionOutcome {
+    const ownerId = request.provenance.allegiance.ownerId;
+    const effect = request.effect;
+    const matrix = effect.reinforcementMatrix ?? effect.overchargeField;
+    let damagedTargetKeys: readonly string[] = [];
+
+    if (matrix) {
+      const field = this.targetingSystems?.reinforcementMatrix?.spawnMatrix(
+        ownerId,
+        request.x,
+        request.y,
+        effect.radius,
+        matrix.durationMs,
+        matrix.damageReduction,
+        matrix.vulnerabilityBonus,
+        matrix.color,
+        this.hostFrameNowMs,
+      );
+      if (field) this.audio?.playSound('sfx_place_spore_turret', field.x, field.y, ownerId);
+    } else if (effect.timeBubble) {
+      const now = this.hostFrameNowMs;
+      const injectorEffect = request.provenance.sourceTurretId
+        ? this.targetingSystems?.energyInjector?.getEffect(request.provenance.sourceTurretId, now)
+        : null;
+      const slowMultiplier = injectorEffect?.effect.type === 'slow_bubble'
+        ? Math.max(1, injectorEffect.effect.slowStrengthMultiplier)
+        : 1;
+      const bubble = slowMultiplier > 1
+        ? {
+          ...effect.timeBubble,
+          projectileSlowFactor: Math.max(0.05, 1 - (1 - effect.timeBubble.projectileSlowFactor) * slowMultiplier),
+          playerSlowFactor: Math.max(0.05, 1 - (1 - effect.timeBubble.playerSlowFactor) * slowMultiplier),
+          trainSlowFactor: Math.max(0.05, 1 - (1 - effect.timeBubble.trainSlowFactor) * slowMultiplier),
+        }
+        : effect.timeBubble;
+      this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, bubble, now);
+    } else {
+      damagedTargetKeys = this.ctx.combatSystem.resolveExplosionCombat({
+        projectileId: request.projectileId,
+        x: request.x,
+        y: request.y,
+        provenance: request.provenance,
+        effect,
+      }).damagedTargetKeys;
+      this.ctx.hostPhysics.applyRadialImpulse(
+        request.x, request.y, effect.radius, effect.knockback, ownerId, effect.selfKnockbackMult ?? 1,
+      );
+      this.applyExplosionEnvironmentDamage(request.x, request.y, effect, ownerId);
+      bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, effect.color, effect.visualStyle);
+      const groundFire = effect.groundFire;
+      if (groundFire && groundFire.radius > 0 && groundFire.lingerDuration > 0) {
+        this.ctx.fireSystem.hostCreateZone(request.x, request.y, groundFire, ownerId);
+      }
+      if (effect.fireChunkBurst) {
+        this.playerGameplayRuntime?.hostCreateFireChunkBurst(
+          ownerId, request.x, request.y, effect.fireChunkBurst, `fireball-impact:${ownerId}`, this.hostFrameNowMs,
+        );
+      }
+      if ((effect.blackHoleDurationMs ?? 0) > 0) {
+        const durationMs = effect.blackHoleDurationMs ?? 0;
+        const now = this.hostFrameNowMs;
+        const injectorEffect = request.provenance.sourceTurretId
+          ? this.targetingSystems?.energyInjector?.getEffect(request.provenance.sourceTurretId, now)
+          : null;
+        const pullMultiplier = injectorEffect?.effect.type === 'gravity_pull'
+          ? Math.max(1, injectorEffect.effect.pullStrengthMultiplier)
+          : 1;
+        this.blackHoleSystem.create(request.x, request.y, {
+          radius: effect.radius,
+          durationMs,
+          pullStrength: (effect.blackHolePullStrength ?? 0) * pullMultiplier,
+          ownerId,
+        }, now);
+        bridge.broadcastBlackHoleEffect(request.x, request.y, effect.radius, durationMs);
+      }
+    }
+
+    if (request.continuation) {
+      const continuation = {
+        projectileId: request.continuation.projectileId,
+        damagedTargetKeys,
+      };
+      const runtime = this.worldFramePort?.getProjectileRuntime?.();
+      const completeProjectileExplosion = runtime?.completeProjectileExplosion;
+      if (completeProjectileExplosion) completeProjectileExplosion.call(runtime, continuation.projectileId, continuation);
+      else this.ctx.projectileManager.resumeMultiExplosionProjectile(continuation.projectileId, continuation.damagedTargetKeys);
+    }
+    return { damagedTargetKeys };
+  }
+
+  private resolveGrenadePayload(request: ProjectileGrenadePayloadRequest): void {
+    const ownerId = request.provenance.allegiance.ownerId;
+    const effect = request.effect;
+    if (effect.type === 'damage') {
+      this.ctx.combatSystem.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
+        category: 'explosion',
+        allowTeamDamage: effect.allowTeamDamage,
+        sourceId: request.provenance.weaponSourceId ?? 'weapon.grenade',
+        sourceSlot: request.provenance.sourceSlot ?? 'utility',
+        damageFalloff: effect.damageFalloff,
+        baseDamageMult: effect.baseDamageMult,
+      });
+      this.applyAoeEnvironmentDamage(
+        request.x, request.y, effect.radius, effect.damage,
+        effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId, effect.damageFalloff,
+      );
+      bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, undefined, effect.visualStyle);
+      const clusterCount = Math.max(0, Math.floor(effect.clusterCount ?? 0));
+      for (let index = 0; index < clusterCount; index += 1) {
+        const angle = (Math.PI * 2 * index) / Math.max(1, clusterCount);
+        const radius = effect.radius * (effect.clusterRadiusFactor ?? 0);
+        const damage = effect.damage * (effect.clusterDamageFactor ?? 0);
+        const cx = request.x + Math.cos(angle) * effect.radius * 0.45;
+        const cy = request.y + Math.sin(angle) * effect.radius * 0.45;
+        this.ctx.combatSystem.applyAoeDamage(cx, cy, radius, damage, ownerId, false, {
+          category: 'explosion',
+          allowTeamDamage: effect.allowTeamDamage,
+          sourceId: 'weapon.cluster_charge',
+          sourceSlot: request.provenance.sourceSlot ?? 'utility',
+          baseDamageMult: effect.baseDamageMult,
+        });
+        this.applyAoeEnvironmentDamage(cx, cy, radius, damage, effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId);
+        bridge.broadcastExplosionEffect(cx, cy, radius, undefined, effect.visualStyle);
+      }
+      return;
+    }
+    if (effect.type === 'spawn_enemy') {
+      this.spawnEnemiesFromGrenade(request.x, request.y, effect, ownerId);
+    } else if (effect.type === 'fire') {
+      this.ctx.fireSystem.hostCreateZone(request.x, request.y, effect, ownerId);
+    } else if (effect.type === 'time_bubble') {
+      this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, effect);
+    } else {
+      this.ctx.smokeSystem.hostCreateCloud(request.x, request.y, effect, ownerId);
+    }
   }
 
   applyExplosionEnvironmentDamage(

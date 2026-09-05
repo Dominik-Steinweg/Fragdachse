@@ -1325,26 +1325,6 @@ export interface ChainLightningConfig {
   readonly thicknessFalloffPerJump?: number;  // visuelle Verschmälerung des Strahls je Sprung (Default 0.2)
 }
 
-/** Explodierte Granate – von ProjectileManager.hostUpdate() zurückgegeben */
-export interface ExplodedGrenade {
-  x:      number;
-  y:      number;
-  ownerId: string;
-  effect: GrenadeEffectConfig;
-}
-
-export interface ExplodedProjectile {
-  x: number;
-  y: number;
-  ownerId: string;
-  effect: ProjectileExplosionConfig;
-  sourceSlot?: LoadoutSlot;
-  sourceId?: string;
-  projectileId?: number;
-  sourceTurretId?: string;
-  continuesAfterExplosion?: boolean;
-}
-
 export interface SyncedSmokeCloud {
   id:      number;
   x:       number;

@@ -7,6 +7,7 @@ import type {
   ProjectileBarrierPort,
 } from '../projectile/ProjectileInteractionPorts';
 import type { ProjectileCombatPort, ProjectileEnergyInjectorImpact } from '../projectile/ProjectileCombatPort';
+import type { ProjectileExplosionRequest } from '../projectile/ProjectileExplosionPort';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileTargetabilityPort,
@@ -133,6 +134,7 @@ export interface WorldCombatGameplaySystems {
 }
 
 export interface WorldCombatImpactPort {
+  readonly queueStandaloneProjectileExplosion?: (request: ProjectileExplosionRequest) => void;
   readonly applyEnergyInjectorTargetHit: (
     targetType: 'player' | 'enemy' | 'construction' | 'base',
     targetId: string,
@@ -358,6 +360,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     projectileManager.setProjectileResolvedCallback(null);
     projectileManager.setMiniRocketCollectedCallback(null);
     projectileManager.setMiniRocketDestroyedCallback(null);
+    projectileManager.setStandaloneExplosionRequestCallback(null);
     projectileManager.setProximityPulseCallback(null);
     projectileManager.setTimeBubbleFactorProvider(null);
     projectileManager.setRockHitCallback(() => { /* noop */ });
@@ -810,6 +813,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.network.effects.broadcastMiniRocketCollectionEffect(x, y, projectile.ownerColor ?? projectile.color);
     });
     o.projectileManager.setMiniRocketDestroyedCallback((projectile, x, y) => o.network.effects.broadcastMiniRocketDestructionEffect(x, y, projectile.ownerColor ?? projectile.color));
+    o.projectileManager.setStandaloneExplosionRequestCallback((request) => {
+      o.hostUpdate.queueStandaloneProjectileExplosion?.(request);
+    });
     o.projectileManager.setProximityPulseCallback((projectile) => {
       const pulse = o.hostUpdate.resolveProjectileProximityPulse(projectile);
       const playerLines = projectile.isBfg ? o.hostUpdate.resolveBfgPlayerProximityPulse(projectile) : [];

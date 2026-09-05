@@ -60,6 +60,10 @@ import type {
   ProjectileEnergyInjectorImpact,
   ProjectilePlasmaSwarmImpact,
 } from '../projectile/ProjectileCombatPort';
+import type {
+  ProjectileCombatExplosionOutcome,
+  ProjectileCombatExplosionRequest,
+} from '../projectile/ProjectileExplosionPort';
 import type { ProjectileCollisionTargetSink } from '../projectile/ProjectileTargetPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
@@ -1450,6 +1454,20 @@ export class CombatSystem implements ProjectileCombatPort {
     if (request.target.kind === 'player') return this.applyDirectPlayerImpact(request, request.target.id);
     if (request.target.kind === 'enemy') return this.applyDirectEnemyImpact(request, request.target.id);
     return this.applyDirectDecoyImpact(request, request.target.id);
+  }
+
+  /** Combat-only explosion resolution; Environment and World Effects are host-domain concerns. */
+  resolveExplosionCombat(request: ProjectileCombatExplosionRequest): ProjectileCombatExplosionOutcome {
+    return {
+      damagedTargetKeys: this.applyExplosionDamage(
+        request.x,
+        request.y,
+        request.effect,
+        request.provenance.allegiance.ownerId,
+        request.provenance.sourceSlot,
+        request.provenance.weaponSourceId ?? 'environment.explosion',
+      ),
+    };
   }
 
   /** Trefferwirkung gegen einen Spieler inklusive Schild-Auflösung. */

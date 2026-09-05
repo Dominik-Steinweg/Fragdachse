@@ -12,7 +12,7 @@ import {
 import { encodeProjectileDynamic, encodeProjectileStatic } from '../network/projectileSnapshotCodec';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, SyncedProjectileSnapshot, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, SyncedProjectileSnapshot, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
 import type {
   HomingLineOfFireChecker,
   HomingTargetProvider,
@@ -66,12 +66,17 @@ import type {
   ProjectileDetonationTarget,
 } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileBurnAugment } from '../projectile/ProjectileTravelPort';
-import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
+import { createSingleOwnerProvenance, type ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
 import type {
   ProjectileCombatTargetRef,
   ProjectileDirectImpactOutcome,
   ProjectilePlasmaSwarmImpact,
 } from '../projectile/ProjectileCombatPort';
+import type {
+  ProjectileExplosionRequest,
+  ProjectileExplosionOutcome,
+  ProjectileGrenadePayloadRequest,
+} from '../projectile/ProjectileExplosionPort';
 import {
   PLASMA_SWARM_EXPLOSION_DURATION_MS,
   resolvePlasmaSwarmProjectileProfile,
@@ -215,11 +220,12 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private homingTargetValidityChecker: HomingTargetValidityChecker | null = null;
 
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
-  private pendingProjectileExplosions: ExplodedProjectile[] = [];
+  private pendingProjectileExplosions: ProjectileExplosionRequest[] = [];
   private projectileImpactCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private projectileResolvedCallback: ((proj: TrackedProjectile) => void) | null = null;
   private miniRocketCollectedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private miniRocketDestroyedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
+  private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -546,12 +552,14 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * Completes the owner-side lifecycle after Combat has accepted a semantic direct outcome.
    * Combat never receives this record or calls these legacy lifecycle operations itself.
    */
-  finalizeDirectImpact(
-    projectile: TrackedProjectile,
+  completeDirectImpact(
+    projectileId: number,
     target: ProjectileCombatTargetRef,
     impact: { readonly x: number; readonly y: number },
     outcome: ProjectileDirectImpactOutcome,
   ): boolean {
+    const projectile = this.getProjectileById(projectileId);
+    if (!projectile) return false;
     if (!outcome.accepted || projectile.pendingDestroy) return false;
     if (projectile.impactCloud) this.emitProjectileImpact(projectile, impact.x, impact.y);
 
@@ -569,13 +577,21 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     return !projectile.pendingDestroy;
   }
 
+  completeProjectileExplosion(projectileId: number, damagedTargetKeys: ProjectileExplosionOutcome['damagedTargetKeys']): void {
+    this.resumeMultiExplosionProjectile(projectileId, damagedTargetKeys);
+  }
+
   /** Applies the semantic Plasma reaction through the normal world-owned spawn path. */
   applyPlasmaSwarmImpact(impact: ProjectilePlasmaSwarmImpact): void {
-    this.queueStandaloneExplosion(
-      impact.x,
-      impact.y,
-      impact.ownerId,
-      {
+    this.standaloneExplosionRequestCallback?.({
+      x: impact.x,
+      y: impact.y,
+      provenance: createSingleOwnerProvenance(impact.ownerId, {
+        weaponSourceId: `${impact.sourceId}:swarm-explosion`,
+        sourceSlot: impact.sourceSlot ?? 'weapon1',
+        allowTeamDamage: impact.allowTeamDamage,
+      }),
+      effect: {
         radius: impact.explosionRadius,
         maxDamage: impact.explosionDamage,
         minDamage: impact.explosionDamage,
@@ -590,9 +606,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         color: impact.color,
         visualStyle: 'energy',
       },
-      impact.sourceSlot ?? 'weapon1',
-      `${impact.sourceId}:swarm-explosion`,
-    );
+    });
 
     const profile = resolvePlasmaSwarmProjectileProfile({
       damage: impact.normalDamage,
@@ -639,6 +653,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   setMiniRocketDestroyedCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
     this.miniRocketDestroyedCallback = cb;
+  }
+
+  /** Sends standalone domain effects to the host resolver; they do not enter the projectile store. */
+  setStandaloneExplosionRequestCallback(cb: ((request: ProjectileExplosionRequest) => void) | null): void {
+    this.standaloneExplosionRequestCallback = cb;
   }
 
   /** Registriert die Host-seitige Zielquelle für Homing-Projektile. */
@@ -2214,17 +2233,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     proj.multiExplosionsRemaining = returnsSpentAfterExplosion ? 0 : remaining - 1;
     proj.miniRocketSpent = returnsSpentAfterExplosion;
     proj.pendingExplosion = true;
-    this.pendingProjectileExplosions.push({
-      x: proj.sprite.x,
-      y: proj.sprite.y,
-      ownerId: proj.ownerId,
-      effect: resolvedEffect,
-      sourceSlot: proj.sourceSlot,
-      sourceTurretId: proj.sourceTurretId,
-      sourceId: proj.sourceId,
-      projectileId: proj.id,
-      continuesAfterExplosion: resumesAfterExplosion,
-    });
+    this.pendingProjectileExplosions.push(this.createExplosionRequest(proj, resolvedEffect, resumesAfterExplosion));
     if (resumesAfterExplosion) {
       this.resetHomingState(proj);
       proj.body.setVelocity(0, 0);
@@ -2236,6 +2245,25 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   private emitProjectileImpact(proj: TrackedProjectile, x: number, y: number): void {
     this.projectileImpactCallback?.(proj, x, y);
+  }
+
+  private createExplosionRequest(
+    proj: TrackedProjectile,
+    effect: TrackedProjectile['explosion'] = proj.explosion,
+    continuesAfterExplosion = false,
+  ): ProjectileExplosionRequest {
+    if (!effect) throw new Error(`[ProjectileManager] explosion request without effect for ${proj.id}`);
+    const excludedTargetKey = proj.multiExplosionExcludedTargetKeys?.values().next().value as string | undefined;
+    return {
+      x: proj.sprite.x,
+      y: proj.sprite.y,
+      projectileId: proj.id,
+      provenance: proj.provenance,
+      effect,
+      continuation: continuesAfterExplosion
+        ? { projectileId: proj.id, excludedTargetKey }
+        : undefined,
+    };
   }
 
   /** Host: stabile, allokationsfreie Sicht für Kollisionen und Host-Systeme. */
@@ -2431,18 +2459,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     return true;
   }
 
-  /** Host: queue an explosion that is not attached to a projectile (e.g. Plasma Swarm). */
-  queueStandaloneExplosion(
-    x: number,
-    y: number,
-    ownerId: string,
-    effect: import('../types').ProjectileExplosionConfig,
-    sourceSlot?: import('../types').LoadoutSlot,
-    sourceId?: string,
-  ): void {
-    this.pendingProjectileExplosions.push({ x, y, ownerId, effect, sourceSlot, sourceId });
-  }
-
   resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {
     const proj = this.getProjectileById(id);
     if (!proj || ((proj.multiExplosionsRemaining ?? 0) <= 0 && !proj.miniRocketSpent)) return;
@@ -2491,11 +2507,9 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     this.pendingProjectileExplosions.push({
       x: proj.sprite.x,
       y: proj.sprite.y,
-      ownerId: proj.ownerId,
+      projectileId: proj.id,
+      provenance: proj.provenance,
       effect: proj.enemyHitExplosion,
-      sourceSlot: proj.sourceSlot,
-      sourceTurretId: proj.sourceTurretId,
-      sourceId: proj.sourceId,
     });
     this.queueDestroyProjectile(proj);
     return true;
@@ -2539,14 +2553,14 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   /**
    * Host: Abgelaufene/explodierte Projektile entfernen, aktuelle Positionen zurückgeben.
-   * Granaten die ihre fuseTime erreicht haben werden als ExplodedGrenade zurückgegeben.
+   * Granaten die ihre fuseTime erreicht haben werden als typisierte Payload-Requests zurückgegeben.
    */
   hostUpdate(deltaMs = 16.67, nowMs?: number): ProjectileHostStageResult {
     const now = nowMs ?? this.resolveLegacyHostNow(deltaMs);
     this.setHostFrameTime(now);
     return this.owner?.runHostProjectileStage?.(deltaMs, now) ?? {
-      explodedProjectiles: [],
-      explodedGrenades: [],
+      projectileExplosions: [],
+      grenadePayloads: [],
       countdownEvents: [],
     };
   }
@@ -2558,8 +2572,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     coreStage: ProjectileCoreStageResult,
   ): ProjectileHostStageResult {
     this.setHostFrameTime(nowMs);
-    const explodedProjectiles = this.pendingProjectileExplosions.splice(0);
-    const explodedGrenades: ExplodedGrenade[] = [];
+    const projectileExplosions = this.pendingProjectileExplosions.splice(0);
+    const grenadePayloads: ProjectileGrenadePayloadRequest[] = [];
     const countdownEvents = coreStage.countdownEvents;
     for (const projectile of this.projectiles) {
       if ((projectile.isFlame || hasLeafBlowerCapability(projectile))
@@ -2569,12 +2583,12 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       }
     }
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
-      if (!this.stepLegacyProjectile(this.projectiles[index], coreStage, explodedProjectiles, explodedGrenades)) {
+      if (!this.stepLegacyProjectile(this.projectiles[index], coreStage, projectileExplosions, grenadePayloads)) {
         this.owner?.store.dropStepEntryAt(index);
       }
     }
     this.syncHostRenderers();
-    return { explodedProjectiles, explodedGrenades, countdownEvents };
+    return { projectileExplosions, grenadePayloads, countdownEvents };
   }
 
   /**
@@ -2584,8 +2598,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private stepLegacyProjectile(
     proj: TrackedProjectile,
     coreStage: ProjectileCoreStageResult,
-    explodedProjectiles: ExplodedProjectile[],
-    explodedGrenades: ExplodedGrenade[],
+    projectileExplosions: ProjectileExplosionRequest[],
+    grenadePayloads: ProjectileGrenadePayloadRequest[],
   ): boolean {
     if (proj.pendingDestroy) {
       this.destroyTrackedProjectile(proj);
@@ -2594,10 +2608,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
     if (proj.isGrenade) {
       if (coreStage.grenadeExpiredIds.has(proj.id) && proj.grenadeEffect) {
-        explodedGrenades.push({
+        grenadePayloads.push({
           x: proj.sprite.x,
           y: proj.sprite.y,
-          ownerId: proj.ownerId,
+          projectileId: proj.id,
+          provenance: proj.provenance,
           effect: proj.grenadeEffect,
         });
         this.destroyTrackedProjectile(proj);
@@ -2635,15 +2650,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     }
 
     if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.explosion) {
-      explodedProjectiles.push({
-        x: proj.sprite.x,
-        y: proj.sprite.y,
-        ownerId: proj.ownerId,
-        effect: proj.explosion,
-        sourceSlot: proj.sourceSlot,
-        sourceTurretId: proj.sourceTurretId,
-        sourceId: proj.sourceId,
-      });
+      projectileExplosions.push(this.createExplosionRequest(proj));
       this.destroyTrackedProjectile(proj);
       return false;
     }

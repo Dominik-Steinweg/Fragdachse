@@ -61,6 +61,12 @@ import type {
   ProjectileDirectImpactOutcome,
 } from './ProjectileCombatPort';
 import type {
+  ProjectileExplosionRequest,
+  ProjectileExplosionContinuationPort,
+  ProjectileExplosionOutcome,
+  ProjectileGrenadePayloadRequest,
+} from './ProjectileExplosionPort';
+import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileImpactCandidate,
   ProjectileTargetabilityPort,
@@ -88,8 +94,9 @@ interface ReflectedProjectileOptions {
 }
 
 export interface ProjectileHostStageResult {
-  explodedProjectiles: import('../types').ExplodedProjectile[];
-  explodedGrenades: import('../types').ExplodedGrenade[];
+  /** Typed requests; domain fan-out is resolved after the post-projectile stage. */
+  projectileExplosions: ProjectileExplosionRequest[];
+  grenadePayloads: ProjectileGrenadePayloadRequest[];
   countdownEvents: Array<{ x: number; y: number; value: number }>;
 }
 
@@ -129,13 +136,15 @@ export interface LegacyProjectileHostSimulation {
   externalInteraction?: LegacyProjectileExternalInteractionAccess;
   /** Übergangshilfe: der Legacy-Simulationsowner schreibt den kanonischen Burn-Zustand. */
   applyProjectileBurnAugment?(projectileId: ProjectileId, augment: ProjectileBurnAugment): boolean;
-  /** Führt die terminale Legacy-Reaktion nach einem autoritativen Direct Outcome aus. */
-  finalizeDirectImpact?(
-    record: TrackedProjectile,
+  /** Queues a typed explosion or terminal lifecycle after an authoritative Direct Outcome. */
+  completeDirectImpact?(
+    projectileId: ProjectileId,
     target: ProjectileCombatTargetRef,
     impact: { readonly x: number; readonly y: number },
     outcome: ProjectileDirectImpactOutcome,
   ): boolean;
+  /** Applies the small same-frame domain outcome to projectile continuation state. */
+  completeProjectileExplosion?(projectileId: ProjectileId, damagedTargetKeys: readonly string[]): void;
   /** Räumt den registry-fremden Rest ab: Renderer, Snapshot-Zustand und Client-Visuals. */
   releaseWorldProjectileState(): void;
 }
@@ -201,6 +210,7 @@ export class WorldProjectileRuntime implements
   ProjectilePresentationReadPort,
   ProjectileTravelReadPort,
   ProjectileEnvironmentInteractionPort,
+  ProjectileExplosionContinuationPort,
   WorldScopedBinding {
   private readonly projectiles: ProjectileStore;
   private readonly flightProcessor = new ProjectileFlightProcessor();
@@ -241,8 +251,8 @@ export class WorldProjectileRuntime implements
       get directImpact() { return runtime.directImpactPort; },
       destroyProjectile: (id) => this.destroyProjectile(id),
       applyDefense: (record, defense, candidate) => this.applyDefense(record, defense, candidate),
-      finalizeDirectImpact: (record, target, impact, outcome) => (
-        this.simulation.finalizeDirectImpact?.(record, target, impact, outcome) ?? false
+      completeDirectImpact: (record, target, impact, outcome) => (
+        this.simulation.completeDirectImpact?.(record.id, target, impact, outcome) ?? false
       ),
     };
     this.simulation.bindProjectileOwner(this);
@@ -448,8 +458,8 @@ export class WorldProjectileRuntime implements
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
     return this.simulation.runLegacyProjectileStage?.(deltaMs, nowMs, coreStage)
       ?? {
-        explodedProjectiles: [],
-        explodedGrenades: [],
+        projectileExplosions: [],
+        grenadePayloads: [],
         countdownEvents: coreStage.countdownEvents,
       };
   }
@@ -482,6 +492,10 @@ export class WorldProjectileRuntime implements
 
   setProjectileCombatPort(port: ProjectileCombatPort | null): void {
     this.directImpactPort = port;
+  }
+
+  completeProjectileExplosion(projectileId: ProjectileId, outcome: ProjectileExplosionOutcome): void {
+    this.simulation.completeProjectileExplosion?.(projectileId, outcome.damagedTargetKeys);
   }
 
   /**
@@ -864,5 +878,5 @@ function boundsOverlap(
 }
 
 function emptyHostStageResult(): ProjectileHostStageResult {
-  return { explodedProjectiles: [], explodedGrenades: [], countdownEvents: [] };
+  return { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] };
 }

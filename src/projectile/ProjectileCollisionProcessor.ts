@@ -68,7 +68,7 @@ export interface ProjectileCollisionDependencies {
     candidate: ProjectileImpactCandidate,
   ): void;
   /** Resolves the terminal projectile lifecycle after Combat accepted the direct effect. */
-  finalizeDirectImpact?(
+  completeDirectImpact?(
     record: TrackedProjectile,
     target: ProjectileCombatTargetRef,
     impact: { readonly x: number; readonly y: number },
@@ -477,7 +477,7 @@ export class ProjectileCollisionProcessor {
     }
     if (contact.mode === 'pierce' || contact.mode === 'flame') return 'passed';
 
-    const keptAlive = deps.finalizeDirectImpact?.(record, target, {
+    const keptAlive = deps.completeDirectImpact?.(record, target, {
       x: candidate.x,
       y: candidate.y,
     }, outcome) ?? false;

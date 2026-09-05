@@ -25,9 +25,9 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `8 – Explosion / Domain Effects / Grenades`
-- **Gesamtstatus:** Phase 7 abgeschlossen; semantischer ProjectileCombatPort, autoritative Direct Outcomes, target-lokale Defense und owner-seitige terminale Projectile-Reaktionen sind verdrahtet
-- **Baseline:** verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:architecture` sowie den fokussierten Direct-Impact-, Burn-, AK47- und Binding-Suiten (alle grün)
+- **Nächste Phase:** `9 – Complex Projectile State Machines`
+- **Gesamtstatus:** Phase 8 abgeschlossen; typisierte Explosion-/Grenade-Requests, separate Domain-Effect-Orchestrierung, Combat-AoE-Grenze und deferred Continuation sind verdrahtet
+- **Baseline:** verifiziert mit `npm run typecheck`, `npm run check` sowie den fokussierten Explosion-, Grenade-, Reflection-, Environment-, World-Effect-, Plasma- und Continuation-Suiten (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
@@ -46,7 +46,7 @@
 | 5 | ✅ | Travel / Environment / Augments |
 | 6 | ✅ | Collision + Targets + Defense |
 | 7 | ✅ | Combat Port + Direct Outcomes |
-| 8 | ⬜ | Explosion / Domain Effects / Grenades |
+| 8 | ✅ | Explosion / Domain Effects / Grenades |
 | 9 | ⬜ | Complex Projectile State Machines |
 | 10 | ⬜ | Sonderfall-Parität Host Gameplay |
 | 11 | ⬜ | Host Replication Adapter |
@@ -63,7 +63,8 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet World-Obstacle-/Effect-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; die Target-Collision-Kandidatenerzeugung, semantische Combat-Aufträge und der Interaction-Stage liegen in `WorldProjectileRuntime`.
+- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle-/Special-State-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge und der Interaction-Stage in `WorldProjectileRuntime` liegen.
+- [Transition] `HostUpdateCoordinator` ist der schmale `ProjectileExplosionResolutionPort`-Adapter: Combat-AoE läuft über `ProjectileCombatPort`, Environment-/Fire-/Knockback-/World-Effect-Owner bleiben außerhalb der Projectile-Simulation; Standalone-Explosionen werden dort gepuffert und nicht in die Runtime-Registry aufgenommen.
 - [Transition] `ProjectileIdentityScope` gehört zur `WorldLifecycle`-Lifetime und wird an jede lokale `WorldRuntime`-Materialisierung derselben `worldRevision` weitergereicht; er endet erst mit `endInstance`.
 - [Transition] `TrackedProjectile.provenance` ist die kanonische vollständige Provenance; Legacy-Spawn-Shape und flache Legacy-Felder bleiben nur bis zu ihren späteren Cutovers als Adapter-/Migrationsdaten bestehen.
 - [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
@@ -85,11 +86,9 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileFireTrailCapability`, `ProjectileAwpCorridorCapability`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment` (`src/projectile/ProjectileTravelPort.ts`); `ProjectilePathEffectKind` (`src/types.ts`) |
 | Target / Geometry / Targetability | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileCollisionTarget`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectileCollisionMode` (`src/projectile/ProjectileTargetPort.ts`, `src/types.ts`); Homing-Reads bleiben daneben bestehen |
 | Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution` (`src/projectile/ProjectileInteractionPorts.ts`); `ProjectileExternalInteractionPort.deflectProjectile` für Projectile↔Projectile-Transform |
-| Projectile Combat | `ProjectileCombatPort`, `ProjectileCombatTargetRef`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileAk47HitContext`, `ProjectileEnergyInjectorImpact`, `ProjectilePlasmaSwarmImpact` (`src/projectile/ProjectileCombatPort.ts`) |
-| Domain Effect / Explosion Resolution | `ProjectileManager.finalizeDirectImpact`, `ProjectileManager.applyPlasmaSwarmImpact` als aktueller owner-seitiger Übergang |
-| Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata` |
-| Domain Effect / Explosion Resolution | — |
-| Lifecycle / Outcomes | — |
+| Projectile Combat | `ProjectileCombatPort`, `ProjectileCombatTargetRef`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileCombatExplosionRequest`, `ProjectileCombatExplosionOutcome`, `ProjectileAk47HitContext`, `ProjectileEnergyInjectorImpact`, `ProjectilePlasmaSwarmImpact` (`src/projectile/ProjectileCombatPort.ts`, `src/projectile/ProjectileExplosionPort.ts`) |
+| Domain Effect / Explosion Resolution | `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome`, `ProjectileExplosionContinuationPort` (`src/projectile/ProjectileExplosionPort.ts`); `HostUpdateCoordinator.resolveProjectileExplosion` als Domain-Adapter |
+| Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort` |
 | Replication | — |
 | Client Replica | — |
 | Presentation | — |
@@ -108,7 +107,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 8 starten; bei tatsächlichem Beginn Phase 8 auf 🟨 setzen.**
+**Phase 9 starten; bei tatsächlichem Beginn Phase 9 auf 🟨 setzen.**
 
 ---
 

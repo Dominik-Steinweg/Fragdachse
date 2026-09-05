@@ -11,6 +11,10 @@ import type { ProjectileId } from './ProjectileSpawnPort';
 import type { ProjectileAllegianceRef, ProjectileProvenance } from './ProjectileSpawnRequest';
 import type { ProjectileDefenseResolution } from './ProjectileInteractionPorts';
 import type { ProjectileTargetRef } from './ProjectileTargetPort';
+import type {
+  ProjectileCombatExplosionOutcome,
+  ProjectileCombatExplosionRequest,
+} from './ProjectileExplosionPort';
 
 /** Combat targets are a strict subset of the world collision target space. */
 export type ProjectileCombatTargetRef = Extract<
@@ -96,6 +100,8 @@ export interface ProjectileDirectImpactOutcome {
 /** Stable projectile-to-combat boundary for direct target effects. */
 export interface ProjectileCombatPort {
   resolveDirectImpact(request: ProjectileDirectImpactRequest): ProjectileDirectImpactOutcome;
+  /** Resolves only the Combat/AoE part; Environment and World Effects stay outside Combat. */
+  resolveExplosionCombat(request: ProjectileCombatExplosionRequest): ProjectileCombatExplosionOutcome;
   /** Host frame time is supplied by the Runtime; the port must not read a wall clock. */
   setHostFrameTime?(nowMs: number): void;
 }

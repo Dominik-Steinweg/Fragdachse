@@ -630,8 +630,8 @@ describe('projectile performance paths', () => {
 
       const result = manager.hostUpdate(1_000);
 
-      expect(result.explodedGrenades).toHaveLength(1);
-      expect(result.explodedGrenades[0]?.effect).toBe(projectile.grenadeEffect);
+      expect(result.grenadePayloads).toHaveLength(1);
+      expect(result.grenadePayloads[0]?.effect).toBe(projectile.grenadeEffect);
       expect(projectile.simulatedAgeMs).toBe(100);
       expect(sprite.destroy).toHaveBeenCalledOnce();
     } finally {
@@ -749,7 +749,7 @@ describe('projectile performance paths', () => {
 
     expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:target')).toBe(true);
     const first = manager.hostUpdate(0);
-    expect(first.explodedProjectiles).toHaveLength(1);
+    expect(first.projectileExplosions).toHaveLength(1);
     expect(projectile.pendingExplosion).toBe(true);
 
     manager.resumeMultiExplosionProjectile(projectile.id, []);
@@ -764,7 +764,7 @@ describe('projectile performance paths', () => {
     projectile.simulatedAgeMs = 150;
     expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:next')).toBe(true);
     const second = manager.hostUpdate(0);
-    expect(second.explodedProjectiles).toHaveLength(1);
+    expect(second.projectileExplosions).toHaveLength(1);
     expect(manager.getProjectileById(projectile.id)).toBeUndefined();
   });
 
