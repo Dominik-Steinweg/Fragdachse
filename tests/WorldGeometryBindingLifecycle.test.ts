@@ -176,7 +176,7 @@ function createBinding(
     playerManager: shared.playerManager,
     combatSystem: shared.combatSystem,
     decoySystem: shared.decoySystem,
-    projectileRuntime: shared.projectileRuntime,
+    projectileGeometry: shared.projectileRuntime,
     hostPhysics: shared.hostPhysics,
     fireSystem: shared.fire,
     leafBlower: shared.leafBlower,

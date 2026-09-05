@@ -25,9 +25,9 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** Korrekturphase C4 – schmale World-/Activity-Ports und Universal-Forwarder
+- **Nächste Phase:** Korrekturphase C5 – Runtime-Record-/Provenance-/Identity-Audit und dauerhafte Ratchets
 - **Gesamtstatus:** Korrekturschleife aktiv; Phasen 1–15 bleiben abgeschlossen, der technische Endzustand ist wegen Host-/Physics-Authority-Abweichungen wieder offen
-- **Baseline:** Phase-15-Gates waren grün, beweisen aber keine Ownership-Korrektheit; C2- und C3-Gates sind grün, Korrektur-Gates laufen pro Korrekturphase
+- **Baseline:** Phase-15-Gates waren grün, beweisen aber keine Ownership-Korrektheit; C2-, C3- und C4-Gates sind grün, Korrektur-Gates laufen pro Korrekturphase
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** technisch grün, Gesamt-Abnahme bis C5 ausgesetzt
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
@@ -66,7 +66,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 | C1 | ✅ | Hydra-/Split-Entscheidung aus dem Physics-Binding gelöst; Child-Spawns explizit in die `next-stage`-Queue gegeben |
 | C2 | ✅ | Phaser-Kontakte als technische Kandidaten melden; Rock/Base/Train/Support/Explosion nicht mehr im Binding fachlich entscheiden |
 | C3 | ✅ | Collision-/Interaction-Authority konsolidiert und autoritative `projectileStyle`-Verzweigung entfernt |
-| C4 | ⬜ | World-/Activity-Consumer auf tatsächlich benötigte schmale Ports umstellen; Universal-Forwarder abbauen |
+| C4 | ✅ | World-/Activity-Consumer auf tatsächlich benötigte schmale Ports umgestellt; Universal-Forwarder abgebaut |
 | C5 | ⬜ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
 
 ---
@@ -75,7 +75,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- [Transition C4+] World-/Activity-Consumer verwenden neben schmalen Ports noch konkrete Runtime-Setter und Callback-Forwarder; der nächste Schnitt reduziert diese Boundary auf die tatsächlich benötigten Capabilities.
+- [Transition C5+] Runtime-Record-/Provenance-/Identity-Verträge und die dauerhaften Architektur-Ratchets werden gegen den abgeschlossenen Korrekturstand erneut auditiert.
 
 ---
 
@@ -88,6 +88,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` |
 | World / Host / Store | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort`, `ProjectileStore`, `ProjectileIdentityScope`, internes `ProjectileRuntimeRecord` mit `provenance` |
 | Physics Binding | `ProjectilePhysicsBindingPort`, `ProjectileRuntimeOwnerPort`, `ProjectilePhysicsBinding`, `ProjectilePresentationPort` |
+| World Boundary | `ProjectileGeometryBindingPort`, `ProjectileTrainBindingPort`, `ProjectileWorldImpactBindingPort`, `ProjectileLifecycleEventsBindingPort`, `ProjectileTimeFieldBindingPort`, `ProjectileHomingBindingPort`, `ProjectileSwarmReactionPort` |
 | External / Reads | `ProjectileExternalInteractionPort`, `TranslocatorProjectilePort`, `ProjectileThreatReadPort`, `ProjectileDiagnosticsReadPort`, `ProjectilePresentationReadPort` |
 | Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment`, `ProjectilePathEffectKind` |
 | Target / Geometry | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectilePhysicsContact`, `ProjectilePhysicsContactTarget`, `ProjectileCollisionMode` |
@@ -112,7 +113,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**C4 beginnen. Die ursprüngliche Phase-15-Abnahme bleibt bis C5 ausgesetzt.**
+**C5 beginnen. Die ursprüngliche Phase-15-Abnahme bleibt bis C5 ausgesetzt.**
 
 ---
 

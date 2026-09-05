@@ -111,4 +111,32 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(utility).toContain('readonly projectileSpawn: ProjectileSpawnPort;');
     expect(enemyAbility).toContain('private readonly projectileSpawn: ProjectileSpawnPort');
   });
+
+  it('keeps World consumers on narrow boundary capabilities instead of the concrete runtime', () => {
+    const boundary = read('src/projectile/ProjectileBoundaryPorts.ts');
+    const geometry = read('src/world/WorldGeometryBinding.ts');
+    const train = read('src/world/WorldTrainRuntime.ts');
+    const combat = read('src/world/WorldCombatGameplayBinding.ts');
+
+    expect(boundary).toContain('export interface ProjectileGeometryBindingPort');
+    expect(boundary).toContain('export interface ProjectileTrainBindingPort');
+    expect(boundary).toContain('export interface ProjectileWorldImpactBindingPort');
+    expect(boundary).toContain('export interface ProjectileLifecycleEventsBindingPort');
+    expect(boundary).toContain('export interface ProjectileTimeFieldBindingPort');
+    expect(boundary).toContain('export interface ProjectileHomingBindingPort');
+    expect(boundary).toContain('export interface ProjectileSwarmReactionPort');
+
+    for (const consumer of [geometry, train, combat]) {
+      expect(consumer).not.toContain("from '../projectile/WorldProjectileRuntime'");
+      expect(consumer).not.toContain("from '../../projectile/WorldProjectileRuntime'");
+    }
+    expect(geometry).toContain('ProjectileGeometryBindingPort');
+    expect(geometry).toContain('projectileGeometry');
+    expect(train).toContain('ProjectileTrainBindingPort');
+    expect(train).toContain('projectileTrain');
+    expect(combat).toContain('ProjectileLifecycleEventsBindingPort');
+    expect(combat).toContain('ProjectileWorldImpactBindingPort');
+    expect(combat).not.toContain('readonly projectileRuntime:');
+    expect(combat).not.toContain('o.projectileRuntime.');
+  });
 });

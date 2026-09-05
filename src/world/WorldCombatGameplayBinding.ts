@@ -1,8 +1,14 @@
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { WorldProjectileRuntime } from '../projectile/WorldProjectileRuntime';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import type {
+  ProjectileHomingBindingPort,
+  ProjectileLifecycleEventsBindingPort,
+  ProjectileSwarmReactionPort,
+  ProjectileTimeFieldBindingPort,
+  ProjectileWorldImpactBindingPort,
+} from '../projectile/ProjectileBoundaryPorts';
 import type {
   ProjectileBarrierPort,
 } from '../projectile/ProjectileInteractionPorts';
@@ -176,9 +182,13 @@ export interface ProjectileInteractionBinding {
 
 export interface WorldCombatGameplayBindingOptions {
   readonly playerManager: PlayerManager;
-  readonly projectileRuntime: WorldProjectileRuntime;
   /** Storm-Bolts sind eine World-Quelle und verlassen die Bindung ueber diesen Spawn-Port. */
   readonly projectileSpawn: ProjectileSpawnPort;
+  readonly projectileEvents: ProjectileLifecycleEventsBindingPort;
+  readonly projectileTimeField: ProjectileTimeFieldBindingPort;
+  readonly projectileHoming: ProjectileHomingBindingPort;
+  readonly projectileWorldImpact: ProjectileWorldImpactBindingPort;
+  readonly projectileSwarm: ProjectileSwarmReactionPort;
   /** Bindet Ziel-, Blocker-, Barrier- und Direct-Impact-Grenzen an den Projectile-Owner. */
   readonly projectileInteraction: ProjectileInteractionBinding;
   readonly combatSystem: CombatSystem;
@@ -297,7 +307,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.clearActivityBindings();
     this.destroyed = true;
     this.options.bindPlayerShieldBuffPort?.(null);
-    const { combatSystem, hostPhysics, projectileRuntime, decoySystem, baseManager } = this.options;
+    const { combatSystem, hostPhysics, decoySystem, baseManager } = this.options;
     this.options.playerManager.setSpawnContextProvider(null);
     baseManager?.setOnBaseActivated(null);
     baseManager?.setOnBaseDestroyed(null);
@@ -359,19 +369,19 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     hostPhysics.setLoadoutManager(null);
     hostPhysics.setTimeBubbleSystem(null);
     hostPhysics.setEnemyManager(null);
-    projectileRuntime.setNaturalFlameExpiryCallback(null);
-    projectileRuntime.setProjectileImpactCallback(null);
-    projectileRuntime.setProjectileResolvedCallback(null);
-    projectileRuntime.setMiniRocketDestroyedCallback(null);
-    projectileRuntime.setStandaloneExplosionRequestCallback(null);
-    projectileRuntime.setProximityPulseCallback(null);
-    projectileRuntime.setTimeBubbleFactorProvider(null);
-    projectileRuntime.setRockHitCallback(() => { /* noop */ });
-    projectileRuntime.setObstacleKindResolver(null);
-    projectileRuntime.setBaseHitCallback(null);
-    projectileRuntime.setSupportImpactCallback(null);
-    projectileRuntime.setHomingTargetProvider(null);
-    projectileRuntime.setHomingLineOfFireChecker(null);
+    this.options.projectileEvents.setNaturalFlameExpiryCallback(null);
+    this.options.projectileEvents.setProjectileImpactCallback(null);
+    this.options.projectileEvents.setProjectileResolvedCallback(null);
+    this.options.projectileEvents.setMiniRocketDestroyedCallback(null);
+    this.options.projectileEvents.setStandaloneExplosionRequestCallback(null);
+    this.options.projectileEvents.setProximityPulseCallback(null);
+    this.options.projectileTimeField.setTimeBubbleFactorProvider(null);
+    this.options.projectileWorldImpact.setRockHitCallback(() => { /* noop */ });
+    this.options.projectileWorldImpact.setObstacleKindResolver(null);
+    this.options.projectileWorldImpact.setBaseHitCallback(null);
+    this.options.projectileWorldImpact.setSupportImpactCallback(null);
+    this.options.projectileHoming.setHomingTargetProvider(null);
+    this.options.projectileHoming.setHomingLineOfFireChecker(null);
     this.options.projectileInteraction.setProjectileTargetabilityPort(null);
     this.options.projectileInteraction.setProjectileCollisionTargetQueryPort(null);
     this.options.projectileInteraction.setProjectileWorldBlockerPort(null);
@@ -412,7 +422,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindSharedSystems(): void {
     const o = this.options;
-    const { combatSystem: combat, hostPhysics, projectileRuntime: projectiles, baseManager } = o;
+    const { combatSystem: combat, hostPhysics, baseManager } = o;
     combat.setEnemyManager(o.getEnemyManager());
     combat.setPlayerMaxHpResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getMaxHp(playerId) ?? HP_MAX);
     combat.setInitialSpawnAllowedResolver((playerId) => (
@@ -524,7 +534,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     combat.setHealingReceivedHandler((playerId, amount) => o.network.stats.recordHealingReceived(playerId, amount));
     combat.setArmorReceivedHandler((playerId, amount) => o.network.stats.recordArmorReceived(playerId, amount));
-    projectiles.setNaturalFlameExpiryCallback((projectile: ProjectileFlameExpiryEvent) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, Date.now()));
+    o.projectileEvents.setNaturalFlameExpiryCallback((projectile: ProjectileFlameExpiryEvent) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, Date.now()));
     hostPhysics.setEnemyMovementFactorResolver((enemyId, now) => Math.min(
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
@@ -625,7 +635,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         if (allowKillDrop) o.getPowerUpSystem()?.onPlayerKilled(x, y);
       }
     });
-    projectiles.setProjectileImpactCallback((projectile: ProjectileImpactSource) => o.spawnImpactCloud(projectile));
+    o.projectileEvents.setProjectileImpactCallback((projectile: ProjectileImpactSource) => o.spawnImpactCloud(projectile));
     hostPhysics.setEnemyManager(o.getEnemyManager());
     this.bindHostPhysics(hostPhysics);
     combat.setDecoySystem(o.decoySystem);
@@ -767,7 +777,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.combatSystem.setResourceSystem(playerCombat.resource);
     o.combatSystem.setLoadoutManager(playerCombat.loadout);
     o.combatSystem.setAk47Behavior(playerCombat.ak47);
-    o.combatSystem.setPlasmaSwarmReactionHandler((impact) => o.projectileRuntime.applyPlasmaSwarmImpact(impact));
+    o.combatSystem.setPlasmaSwarmReactionHandler((impact) => o.projectileSwarm.applyPlasmaSwarmImpact(impact));
     o.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId, nowMs) => (
       playerCombat.reactions.handleDirectAk47EnemyHit(projectile, enemyId, nowMs)
     ));
@@ -808,7 +818,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindProjectiles(): void {
     const o = this.options;
-    o.projectileRuntime.setProjectileResolvedCallback((outcome: ProjectileLifecycleOutcome) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(outcome));
+    o.projectileEvents.setProjectileResolvedCallback((outcome: ProjectileLifecycleOutcome) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(outcome));
     o.projectileInteraction.setProjectileMiniRocketStatePort({
       getOwnerPosition: (ownerId) => {
         const owner = o.playerManager.getOwnerVisualState(ownerId);
@@ -826,19 +836,19 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         );
       },
     });
-    o.projectileRuntime.setMiniRocketDestroyedCallback((source: ProjectileImpactSource) => (
+    o.projectileEvents.setMiniRocketDestroyedCallback((source: ProjectileImpactSource) => (
       o.network.effects.broadcastMiniRocketDestructionEffect(source.x, source.y, source.ownerColor ?? source.color)
     ));
-    o.projectileRuntime.setStandaloneExplosionRequestCallback((request) => {
+    o.projectileEvents.setStandaloneExplosionRequestCallback((request) => {
       o.hostUpdate.queueStandaloneProjectileExplosion?.(request);
     });
-    o.projectileRuntime.setProximityPulseCallback((projectile) => {
+    o.projectileEvents.setProximityPulseCallback((projectile) => {
       const pulse = o.hostUpdate.resolveProjectileProximityPulse(projectile);
       const playerLines = projectile.isBfg ? o.hostUpdate.resolveBfgPlayerProximityPulse(projectile) : [];
       o.network.effects.broadcastBfgLaserBatch([...playerLines, ...pulse.lines], projectile.isBfg ? COLORS.GREEN_2 : projectile.color, projectile.isBfg ? undefined : 'asmd_primary', projectile.isBfg ? projectile.projectileId : undefined);
     });
-    o.projectileRuntime.setTimeBubbleFactorProvider((x, y, now, ownerId) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1);
-    o.projectileRuntime.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
+    o.projectileTimeField.setTimeBubbleFactorProvider((x, y, now, ownerId) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1);
+    o.projectileHoming.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
       if (!o.network.authority.isHost()) return;
       const radiusSq = searchRadius * searchRadius;
       const inRange = (x: number, y: number): boolean => {
@@ -883,7 +893,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         }
       }
     });
-    o.projectileRuntime.setHomingLineOfFireChecker((sx, sy, ex, ey) => (
+    o.projectileHoming.setHomingLineOfFireChecker((sx, sy, ex, ey) => (
       o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey)
     ));
     // Targetability-Familie: Beziehung und Homing-Gültigkeit kommen aus ihren kanonischen Ownern.
@@ -989,20 +999,20 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     o.projectileInteraction.setProjectileCombatPort(o.combatSystem);
     o.combatSystem.setProjectileDetonableReadPort(o.projectileInteraction);
-    o.projectileRuntime.setRockHitCallback((rockId, damage, attackerId) => {
+    o.projectileWorldImpact.setRockHitCallback((rockId, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;
       const newHp = o.applyObstacleDamageById(rockId, resolvedDamage, attackerId);
       if (newHp <= 0) o.handleDestroyedRock(rockId, 'damage', attackerId);
     });
-    o.projectileRuntime.setObstacleKindResolver((rockId) => o.placementSystem.getRuntimeRock(rockId)?.kind);
-    o.projectileRuntime.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
+    o.projectileWorldImpact.setObstacleKindResolver((rockId) => o.placementSystem.getRuntimeRock(rockId)?.kind);
+    o.projectileWorldImpact.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
       const base = o.baseManager?.getBase(baseId);
       if (!base || base.faction !== 'hostile' || base.isInert?.() || base.getHp() <= 0) return;
       if (projectile) o.combatSystem.applyProjectileBaseDamage(baseId, projectile);
       else o.combatSystem.applyBaseDamage(baseId, damage, attackerId);
     });
-    o.projectileRuntime.setSupportImpactCallback((projectile, impact) => o.hostUpdate.applySupportProjectileImpact(projectile, impact));
+    o.projectileWorldImpact.setSupportImpactCallback((projectile, impact) => o.hostUpdate.applySupportProjectileImpact(projectile, impact));
   }
 
   private bindBaseManager(): void {

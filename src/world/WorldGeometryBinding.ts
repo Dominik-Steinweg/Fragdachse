@@ -9,7 +9,7 @@ import type { LeafBlowerRenderer } from '../effects/LeafBlowerRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
 import type { BaseManager } from '../entities/BaseManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { WorldProjectileRuntime } from '../projectile/WorldProjectileRuntime';
+import type { ProjectileGeometryBindingPort } from '../projectile/ProjectileBoundaryPorts';
 import {
   ARENA_MAP_GRID_CHANGED_EVENT,
   type ArenaMapGridChangedEvent,
@@ -35,7 +35,7 @@ export interface WorldGeometryBindingInput {
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;
   readonly decoySystem: DecoySystem;
-  readonly projectileRuntime: WorldProjectileRuntime;
+  readonly projectileGeometry: ProjectileGeometryBindingPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
   readonly leafBlower: LeafBlowerRenderer;
@@ -69,7 +69,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       playerManager,
       combatSystem,
       decoySystem,
-      projectileRuntime,
+      projectileGeometry,
       hostPhysics,
       fireSystem,
       leafBlower,
@@ -94,12 +94,12 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     );
     leafBlower.setTerrainMaterialLayout(layout, bases.flatMap((base) => base.cells));
 
-    projectileRuntime.setRockGroup(arena.rockGroup, arena.rockPhysicsProxies, arena.trunkGroup);
-    projectileRuntime.setBaseGroup(baseManager?.getBaseGroup() ?? null);
+    projectileGeometry.setRockGroup(arena.rockGroup, arena.rockPhysicsProxies, arena.trunkGroup);
+    projectileGeometry.setBaseGroup(baseManager?.getBaseGroup() ?? null);
     decoySystem.setObstacleGroups(arena.rockGroup, arena.trunkGroup);
     combatSystem.setArenaObstacles(arena.rockPhysicsProxies, arena.trunkBodies);
     combatSystem.setBaseObstacles(baseManager?.getObstacleRectangles() ?? null);
-    projectileRuntime.setObstacleIndex(combatSystem.getObstacleIndex());
+    projectileGeometry.setObstacleIndex(combatSystem.getObstacleIndex());
     combatSystem.setBaseManager(baseManager);
 
     hostPhysics.setRockGroup(arena.rockGroup, arena.trunkGroup);
@@ -190,7 +190,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       playerManager,
       combatSystem,
       decoySystem,
-      projectileRuntime,
+      projectileGeometry,
       hostPhysics,
       fireSystem,
       leafBlower,
@@ -205,9 +205,9 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     hostPhysics.setWorldMetrics(null);
     hostPhysics.setBaseGroup(null);
     hostPhysics.setRockGroup(null, null);
-    projectileRuntime.setObstacleIndex(null);
-    projectileRuntime.setBaseGroup(null);
-    projectileRuntime.setRockGroup(null, null, null);
+    projectileGeometry.setObstacleIndex(null);
+    projectileGeometry.setBaseGroup(null);
+    projectileGeometry.setRockGroup(null, null, null);
     decoySystem.setObstacleGroups(null, null);
     decoySystem.setWorldMetrics(null);
     combatSystem.setBaseManager(null);

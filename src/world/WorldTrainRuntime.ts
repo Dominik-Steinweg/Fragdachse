@@ -5,7 +5,7 @@ import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { WorldProjectileRuntime } from '../projectile/WorldProjectileRuntime';
+import type { ProjectileTrainBindingPort } from '../projectile/ProjectileBoundaryPorts';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
@@ -63,7 +63,7 @@ export interface WorldTrainNetworkPort {
 export interface WorldTrainRuntimeOptions {
   readonly scene: Phaser.Scene;
   readonly playerManager: PlayerManager;
-  readonly projectileRuntime: WorldProjectileRuntime;
+  readonly projectileTrain: ProjectileTrainBindingPort;
   readonly combatSystem: CombatSystem;
   readonly hostPhysics: HostPhysicsSystem;
   readonly worldMetrics: WorldMetrics;
@@ -152,15 +152,15 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.activityTrain?.destroy();
     this.activityTrain = null;
     if (this.classicTrain) {
-      this.options.projectileRuntime.setTrainGroup(this.classicTrain.getGroup());
-      this.options.projectileRuntime.setTrainHitCallback((damage, attackerId) => {
+      this.options.projectileTrain.setTrainGroup(this.classicTrain.getGroup());
+      this.options.projectileTrain.setTrainHitCallback((damage, attackerId) => {
         this.classicTrain?.applyDamage(damage, attackerId);
       });
       this.options.setTranslocatorTrainManager(this.classicTrain);
     } else {
       this.options.combatSystem.setTrainSegments(null);
-      this.options.projectileRuntime.setTrainHitCallback(null);
-      this.options.projectileRuntime.setTrainGroup(null);
+      this.options.projectileTrain.setTrainHitCallback(null);
+      this.options.projectileTrain.setTrainGroup(null);
       this.options.setTranslocatorTrainManager(null);
     }
   }
@@ -182,8 +182,8 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.classicTrain = null;
     this.pendingClassic = null;
     this.options.combatSystem.setTrainSegments(null);
-    this.options.projectileRuntime.setTrainHitCallback(null);
-    this.options.projectileRuntime.setTrainGroup(null);
+    this.options.projectileTrain.setTrainHitCallback(null);
+    this.options.projectileTrain.setTrainGroup(null);
     this.options.setTranslocatorTrainManager(null);
     this.cancelExplosionTimers();
     this.renderer?.destroy();
@@ -202,8 +202,8 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     train.setTimeBubbleSystem(this.options.getTimeBubbleSystem());
     train.setEnemyManager(this.options.getEnemyManager());
     this.options.setTranslocatorTrainManager(train);
-    this.options.projectileRuntime.setTrainGroup(train.getGroup());
-    this.options.projectileRuntime.setTrainHitCallback((damage, attackerId) => {
+    this.options.projectileTrain.setTrainGroup(train.getGroup());
+    this.options.projectileTrain.setTrainHitCallback((damage, attackerId) => {
       this.getCurrentTrain()?.applyDamage(damage, attackerId);
     });
     train.setCanHitPlayerCallback((playerId) => !this.options.isPlayerBurrowed(playerId));

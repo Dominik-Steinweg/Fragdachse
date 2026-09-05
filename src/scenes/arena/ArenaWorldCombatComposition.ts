@@ -78,8 +78,12 @@ export function composeWorldCombatGameplay(
   };
   const combatGameplayBinding = new WorldCombatGameplayBinding({
     playerManager: ctx.playerManager,
-    projectileRuntime,
     projectileSpawn: projectileRuntime,
+    projectileEvents: projectileRuntime,
+    projectileTimeField: projectileRuntime,
+    projectileHoming: projectileRuntime,
+    projectileWorldImpact: projectileRuntime,
+    projectileSwarm: projectileRuntime,
     projectileInteraction: projectileRuntime,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,

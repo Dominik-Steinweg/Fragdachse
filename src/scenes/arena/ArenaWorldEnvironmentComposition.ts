@@ -50,7 +50,7 @@ export function composeWorldGeometry(
     playerManager: ctx.playerManager,
     combatSystem: ctx.combatSystem,
     decoySystem: ctx.decoySystem,
-    projectileRuntime: gameplay.projectiles!,
+    projectileGeometry: gameplay.projectiles!,
     hostPhysics: ctx.hostPhysics,
     fireSystem: ctx.fireSystem,
     leafBlower: renderers.leafBlower,
@@ -84,7 +84,7 @@ export function composeWorldTrain(
   const trainRuntime = new WorldTrainRuntime({
     scene: scene,
     playerManager: ctx.playerManager,
-    projectileRuntime: gameplay.projectiles!,
+    projectileTrain: gameplay.projectiles!,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     worldMetrics: world.metrics,

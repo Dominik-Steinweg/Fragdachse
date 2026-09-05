@@ -134,7 +134,11 @@ function combatBindingHarness(
   const profile = { id: 'attacker', name: 'Attacker', colorHex: 0xffffff } as PlayerProfile;
   const options: WorldCombatGameplayBindingOptions = {
     playerManager: service({ getAllPlayers: () => [], getPlayer: () => undefined }) as PlayerManager,
-    projectileRuntime: service(),
+    projectileEvents: service(),
+    projectileTimeField: service(),
+    projectileHoming: service(),
+    projectileWorldImpact: service(),
+    projectileSwarm: service(),
     projectileInteraction: service(),
     combatSystem: combat as CombatSystem,
     hostPhysics: service(),
