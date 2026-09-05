@@ -56,6 +56,7 @@ import type {
 } from './ProjectileReadPorts';
 import {
   ProjectileCollisionProcessor,
+  type ProjectileCollisionOutcome,
   type ProjectileCollisionDependencies,
 } from './ProjectileCollisionProcessor';
 import {
@@ -85,12 +86,13 @@ import type {
   ProjectileReplicationRecord,
 } from './ProjectileReplicationAdapter';
 import { ProjectileReplicationAdapter } from './ProjectileReplicationAdapter';
-import type {
-  ProjectileCollisionTargetQueryPort,
-  ProjectilePhysicsContact,
-  ProjectileImpactCandidate,
-  ProjectileTargetabilityPort,
-  ProjectileWorldBlockerPort,
+import {
+  type ProjectileCollisionTargetQueryPort,
+  type ProjectilePhysicsContact,
+  type ProjectileImpactCandidate,
+  projectileTargetPhysicalKey,
+  type ProjectileTargetabilityPort,
+  type ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
 import type { ProjectileImpactSource } from './ProjectileGameplayPort';
 import { createInheritedProjectilePayload } from './projectileSpawnPayloadAdapter';
@@ -129,6 +131,11 @@ interface PendingNextStageProjectileSpawn {
   readonly hostNowMs: number;
   /** Number of completed interaction stages after which this spawn is eligible. */
   readonly readyAfterCompletedStages: number;
+}
+
+interface ResolvedWorldContact {
+  readonly outcome: ProjectileCollisionOutcome;
+  readonly technicalContactConsumed: boolean;
 }
 
 export interface ProjectileHostStageResult {
@@ -334,6 +341,9 @@ export class WorldProjectileRuntime implements
   private hasStartedInteractionStage = false;
   private hostFrameNowMs = 0;
   private interactionNowMs = 0;
+  /** Same-frame bridge between technical Phaser contacts and canonical target candidates. */
+  private readonly resolvedWorldContacts = new Map<string, boolean>();
+  private contactFrameNowMs: number | null = null;
   private destroyed = false;
 
   constructor(options: WorldProjectileRuntimeOptions) {
@@ -377,6 +387,7 @@ export class WorldProjectileRuntime implements
       completeDirectImpact: (record, target, impact, outcome) => (
         this.physicsBinding.completeDirectImpact?.(record.id, target, impact, outcome) ?? false
       ),
+      resolveWorldImpact: (record, candidate) => this.resolveWorldImpact(record, candidate),
     };
     this.physicsBinding.bindOwner(this.bindingOwner);
   }
@@ -606,18 +617,135 @@ export class WorldProjectileRuntime implements
     const projectile = this.projectiles.getById(contact.projectileId);
     if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return true;
 
-    const impact = this.createImpactSource(projectile, contact.x, contact.y);
     switch (contact.target.kind) {
-      case 'rock':
-        return this.resolveRockPhysicsContact(projectile, contact.target.id, contact.x, contact.y, impact);
+      case 'rock': {
+        const resolution = this.resolveWorldImpactCandidate(projectile, {
+          projectileId: projectile.id,
+          target: { kind: 'rock', id: contact.target.id },
+          x: contact.x,
+          y: contact.y,
+          source: contact.source,
+        });
+        return resolution.technicalContactConsumed;
+      }
       case 'trunk':
         return this.resolveTrunkPhysicsContact(projectile);
-      case 'base':
-        return this.resolveBasePhysicsContact(projectile, contact.target.id, contact.x, contact.y, impact);
-      case 'train':
-        return this.resolveTrainPhysicsContact(projectile, impact);
+      case 'base': {
+        const resolution = this.resolveWorldImpactCandidate(projectile, {
+          projectileId: projectile.id,
+          target: { kind: 'base', id: contact.target.id },
+          x: contact.x,
+          y: contact.y,
+          source: contact.source,
+        });
+        return resolution.technicalContactConsumed;
+      }
+      case 'train': {
+        const resolution = this.resolveWorldImpactCandidate(projectile, {
+          projectileId: projectile.id,
+          target: { kind: 'train', id: contact.target.id },
+          x: contact.x,
+          y: contact.y,
+          source: contact.source,
+        });
+        return resolution.technicalContactConsumed;
+      }
       case 'world-boundary':
-        return this.resolveWorldBoundaryPhysicsContact(projectile, impact);
+        return this.resolveWorldBoundaryPhysicsContact(
+          projectile,
+          this.createImpactSource(projectile, contact.x, contact.y),
+        );
+    }
+  }
+
+  /**
+   * Single authority for canonical World candidates from both collision modes and Phaser.
+   * `technicalContactConsumed` preserves the adapter's bounce/stop contract without letting the
+   * adapter execute a second domain effect when the same contact was already resolved here.
+   */
+  private resolveWorldImpact(
+    projectile: ProjectileRuntimeRecord,
+    candidate: ProjectileImpactCandidate,
+  ): ProjectileCollisionOutcome {
+    return this.resolveWorldImpactCandidate(projectile, candidate).outcome;
+  }
+
+  private resolveWorldImpactCandidate(
+    projectile: ProjectileRuntimeRecord,
+    candidate: ProjectileImpactCandidate,
+  ): ResolvedWorldContact {
+    const contactKey = `${candidate.projectileId}:${projectileTargetPhysicalKey(candidate.target)}`;
+    const previousTechnicalConsumption = this.resolvedWorldContacts.get(contactKey);
+    if (previousTechnicalConsumption !== undefined) {
+      return {
+        outcome: 'consumed',
+        technicalContactConsumed: previousTechnicalConsumption,
+      };
+    }
+
+    const impact = this.createImpactSource(projectile, candidate.x, candidate.y);
+    let technicalContactConsumed = false;
+    switch (candidate.target.kind) {
+      case 'rock':
+        this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id);
+        technicalContactConsumed = this.resolveRockPhysicsContact(
+          projectile,
+          candidate.target.id,
+          candidate.x,
+          candidate.y,
+          impact,
+        );
+        break;
+      case 'base':
+        technicalContactConsumed = this.resolveBasePhysicsContact(
+          projectile,
+          candidate.target.id,
+          candidate.x,
+          candidate.y,
+          impact,
+        );
+        break;
+      case 'train':
+        this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id);
+        technicalContactConsumed = this.resolveTrainPhysicsContact(projectile, impact);
+        break;
+      case 'construction':
+        // Runtime constructions are normalized to `rock` by the target query. Keep a legacy
+        // candidate terminal if an adapter violates that contract, without a second identity.
+        technicalContactConsumed = false;
+        break;
+      default:
+        this.resolvedWorldContacts.set(contactKey, false);
+        return { outcome: 'ignored', technicalContactConsumed: false };
+    }
+
+    this.resolvedWorldContacts.set(contactKey, technicalContactConsumed);
+    return {
+      outcome: shouldPassThroughWorldTarget(projectile) ? 'passed' : 'consumed',
+      technicalContactConsumed,
+    };
+  }
+
+  private rememberPiercingWorldContact(
+    projectile: ProjectileRuntimeRecord,
+    targetKind: 'rock' | 'train',
+    targetId: number | string,
+  ): void {
+    if (projectile.isBfg === true) {
+      if (targetKind === 'rock') {
+        projectile.bfgHitRocks ??= new Set<number>();
+        projectile.bfgHitRocks.add(Number(targetId));
+      } else {
+        projectile.bfgHitTrain = true;
+      }
+    }
+    if (hasGaussDischarge(projectile)) {
+      if (targetKind === 'rock') {
+        projectile.gaussHitRocks ??= new Set<number>();
+        projectile.gaussHitRocks.add(Number(targetId));
+      } else {
+        projectile.gaussHitTrain = true;
+      }
     }
   }
 
@@ -1644,6 +1772,10 @@ export class WorldProjectileRuntime implements
   }
 
   setHostFrameTime(nowMs: number): void {
+    if (this.contactFrameNowMs !== nowMs) {
+      this.resolvedWorldContacts.clear();
+      this.contactFrameNowMs = nowMs;
+    }
     this.hostFrameNowMs = nowMs;
     this.physicsBinding.setHostFrameTime?.(nowMs);
     this.directImpactPort?.setHostFrameTime?.(nowMs);
@@ -1666,6 +1798,8 @@ export class WorldProjectileRuntime implements
     this.translocatorPuckIds.clear();
     this.travelEffectIds.clear();
     this.deflectorIds.clear();
+    this.resolvedWorldContacts.clear();
+    this.contactFrameNowMs = null;
     this.collisionProcessor.reset();
     this.burnAugments.clear();
     this.threatSamples.length = 0;
@@ -1736,6 +1870,17 @@ function hasLeafBlowerCapability(
   return projectile.leafBlowerMinKnockback !== undefined
     || projectile.leafBlowerMaxKnockback !== undefined
     || projectile.leafBlowerDeflectsProjectiles === true;
+}
+
+function hasGaussDischarge(
+  projectile: Pick<ProjectileRuntimeRecord, 'gaussChainRadius' | 'gaussChainDamageFactor'>,
+): boolean {
+  return (projectile.gaussChainRadius ?? 0) > 0
+    && (projectile.gaussChainDamageFactor ?? 0) > 0;
+}
+
+function shouldPassThroughWorldTarget(projectile: ProjectileRuntimeRecord): boolean {
+  return projectile.isBfg === true || hasGaussDischarge(projectile);
 }
 
 function createTravelPathEffect(record: ProjectileRuntimeRecord): ProjectileTravelCapabilities['pathEffect'] {

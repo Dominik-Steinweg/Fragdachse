@@ -75,9 +75,14 @@ export interface ProjectileCollisionDependencies {
     impact: { readonly x: number; readonly y: number },
     outcome: ProjectileDirectImpactOutcome,
   ): boolean;
+  /** Resolves a canonical world target without exposing its domain owner to this processor. */
+  resolveWorldImpact?(
+    record: ProjectileRuntimeRecord,
+    candidate: ProjectileImpactCandidate,
+  ): ProjectileCollisionOutcome;
 }
 
-type CandidateOutcome = 'ignored' | 'passed' | 'consumed';
+export type ProjectileCollisionOutcome = 'ignored' | 'passed' | 'consumed';
 
 /** Unterhalb dieser Streckenlänge bleibt es beim Overlap-Test. */
 const MIN_SWEEP_TRAVEL_PX = 0.5;
@@ -413,6 +418,8 @@ export class ProjectileCollisionProcessor {
       && (slot.obstacleKind === undefined || slot.obstacleKind === 'rock')) return false;
     if (slot.kind === 'rock' && record.ignoreRockIndex !== undefined
       && record.ignoreRockIndex === slot.numericId) return false;
+    if (slot.kind === 'base' && record.ignoreBaseCollisions === true) return false;
+    if (hasPersistentWorldContact(record, slot)) return false;
 
     const exclusionKey = projectileExclusionKey(slot.ref);
     if (exclusionKey !== null && record.multiExplosionExcludedTargetKeys?.has(exclusionKey)) return false;
@@ -451,12 +458,12 @@ export class ProjectileCollisionProcessor {
     candidate: ProjectileImpactCandidate,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
-  ): CandidateOutcome {
-    // World and Projectile refs are candidate-owned here, but their domain mutation remains in
-    // the existing world/external owners until their later cutover. They still claim the nearest
-    // overlap so combat targets behind a world blocker cannot be hit in the same frame.
+  ): ProjectileCollisionOutcome {
+    if (candidate.target.kind === 'projectile') return 'ignored';
     if (!isCombatTarget(candidate.target.kind)) {
-      return candidate.target.kind === 'projectile' ? 'ignored' : 'consumed';
+      // World interaction is resolved by the WorldProjectileRuntime through the narrow callback.
+      // The processor remains responsible only for candidate order and the terminal outcome.
+      return deps.resolveWorldImpact?.(record, candidate) ?? 'consumed';
     }
     const impactPort = deps.directImpact;
     if (!impactPort) return 'ignored';
@@ -656,4 +663,19 @@ function overlapDistanceAlongTravel(record: ProjectileRuntimeRecord, slot: Colli
 
 function hasGaussDischarge(record: ProjectileRuntimeRecord): boolean {
   return (record.gaussChainRadius ?? 0) > 0 && (record.gaussChainDamageFactor ?? 0) > 0;
+}
+
+function hasPersistentWorldContact(
+  record: ProjectileRuntimeRecord,
+  slot: CollisionTargetSlot,
+): boolean {
+  if (slot.kind === 'rock') {
+    if (record.isBfg === true && record.bfgHitRocks?.has(slot.numericId)) return true;
+    if (hasGaussDischarge(record) && record.gaussHitRocks?.has(slot.numericId)) return true;
+  }
+  if (slot.kind === 'train') {
+    if (record.isBfg === true && record.bfgHitTrain) return true;
+    if (hasGaussDischarge(record) && record.gaussHitTrain) return true;
+  }
+  return false;
 }

@@ -56,6 +56,7 @@ import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../src/types';
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
+import type { ProjectileRuntimeOwnerPort } from '../src/projectile/WorldProjectileRuntime';
 
 function makeEnemy(id: string, x: number) {
   return fakeEntity({ id, active: true,
@@ -195,6 +196,58 @@ function makeSystem(
 }
 
 describe('generic projectile target piercing', () => {
+  it('resolves a world candidate in the runtime and deduplicates a later Phaser contact', () => {
+    const projectile = makeProjectile(false);
+    projectile.collisionMode = 'overlap';
+    let boundOwner: ProjectileRuntimeOwnerPort | null = null;
+    const rockHits: Array<{ id: number; damage: number }> = [];
+    const runtime = new WorldProjectileRuntime({
+      physicsBinding: {
+        bindOwner: (owner) => { boundOwner = owner; },
+        createProjectile: (id, _x, _y, _angle, _ownerId, _cfg, _nowMs, provenance) => {
+          Object.assign(projectile, { id, provenance, pendingDestroy: false });
+          return projectile;
+        },
+        releaseProjectileResources: () => {},
+        releaseWorldState: () => {},
+      },
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 0,
+    });
+    runtime.setProjectileCollisionTargetQueryPort({
+      readCollisionTargets: (sink) => sink(
+        'rock', 7, '__world__', 0, 0, 12, -12, -12, 12, 12, 'rock',
+      ),
+    });
+    runtime.setProjectileWorldBlockerPort({ getNearestBlockerDistance: () => null });
+    runtime.setRockHitCallback((id, damage) => rockHits.push({ id, damage }));
+    runtime.spawnProjectileConfig(0, 0, 0, 'player-1', {
+      speed: 100,
+      size: 12,
+      damage: 6,
+      color: 0xffffff,
+      lifetime: 1_000,
+      maxBounces: 2,
+      isGrenade: false,
+      adrenalinGain: 0,
+      collisionMode: 'overlap',
+    });
+
+    runtime.runHostInteractionStage(0);
+
+    expect(rockHits).toEqual([{ id: 7, damage: 6 }]);
+    expect(boundOwner?.reportPhysicsContact({
+      projectileId: projectile.id,
+      target: { kind: 'rock', id: 7 },
+      x: 0,
+      y: 0,
+      velocityX: 100,
+      velocityY: 0,
+      source: 'physics-collider',
+    })).toBe(false);
+    expect(rockHits).toHaveLength(1);
+  });
+
   it('damages every overlapping enemy once and keeps the projectile alive', () => {
     const proj = makeProjectile(true);
     const { runtime, applyDamage, destroyProjectile } = makeSystem(proj, [

@@ -479,12 +479,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     hostNowMs: number,
     provenance: ProjectileProvenance,
   ): ProjectileRuntimeRecord {
-    // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-Größe) gebraucht werden.
-    // Die renderer- und collider-spezifische Style-Auswertung passiert in den jeweiligen Helfern.
-    const isBall   = cfg.projectileStyle === 'ball';
-    const isEnergyBall = cfg.projectileStyle === 'energy_ball';
-    const isHydra = cfg.projectileStyle === 'hydra';
-    const isSpore = cfg.projectileStyle === 'spore';
     const bodyProfile = resolveProjectileBodyProfile(cfg, angle);
     const resolvedSpawn = cfg.gameplayMuzzleOrigin
       ? resolveSafeMuzzleSpawn(
@@ -502,10 +496,15 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       )
       : { x, y };
 
-    // Physik-Shape: für 'bullet'/'flame'/'awp' unsichtbar (nur Kollisions-Body)
-    const sprite: Phaser.GameObjects.Shape = (isBall || isEnergyBall || isHydra || isSpore)
-      ? this.scene.add.circle(resolvedSpawn.x, resolvedSpawn.y, cfg.size / 2, cfg.color)
-      : this.scene.add.rectangle(resolvedSpawn.x, resolvedSpawn.y, cfg.size, cfg.size, cfg.color);
+    // Der Fallback-Shape ist ausschließlich ein technischer Arcade-Body. Visualformen werden
+    // über den Presentation-Port erzeugt; kein Presentation-Style beeinflusst Physics-Setup.
+    const sprite: Phaser.GameObjects.Shape = this.scene.add.rectangle(
+      resolvedSpawn.x,
+      resolvedSpawn.y,
+      cfg.size,
+      cfg.size,
+      cfg.color,
+    );
     sprite.setDepth(DEPTH.PROJECTILES);
 
     this.presentation.createSpawnRendererVisuals(id, sprite, resolvedSpawn.x, resolvedSpawn.y, cfg);

@@ -70,6 +70,18 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(runtime).toContain('resolveTrainPhysicsContact');
   });
 
+  it('uses one World candidate authority and keeps Physics independent of presentation style', () => {
+    const processor = read('src/projectile/ProjectileCollisionProcessor.ts');
+    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
+    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
+
+    expect(processor).toContain('resolveWorldImpact');
+    expect(processor).not.toContain("candidate.target.kind === 'projectile' ? 'ignored' : 'consumed'");
+    expect(binding).not.toContain('cfg.projectileStyle ===');
+    expect(runtime).toContain('resolvedWorldContacts');
+    expect(runtime).toContain('projectileTargetPhysicalKey(candidate.target)');
+  });
+
   it('keeps presentation, replica and replication state world-scoped', () => {
     const runtime = read('src/projectile/WorldProjectileRuntime.ts');
     const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
