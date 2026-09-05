@@ -132,4 +132,24 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
     expect(frameBinding).toContain('renderers.train?.render(');
     expect(runtime).toContain('presentationFrame?.syncClientWorldPresentation(');
   });
+
+  it('trennt Projectile-Presentation von Host-Owner und Client-Replica', () => {
+    const manager = read('src/entities/ProjectileManager.ts');
+    const presentation = read('src/projectile/ProjectilePresentationRuntime.ts');
+    const bundle = read('src/scenes/arena/RendererBundle.ts');
+    const clientCoordinator = read('src/scenes/arena/ClientUpdateCoordinator.ts');
+
+    const managerValueImports = [...manager.matchAll(/^import\s+(?!type\s)[\s\S]*?from\s+'([^']+)'/gm)]
+      .map(([, specifier]) => specifier);
+    expect(managerValueImports.some((specifier) => specifier.includes('/effects/'))).toBe(false);
+    expect(manager).not.toMatch(/private (?:bullet|flame|bfg|tracer|muzzleFlash)Renderer/);
+    expect(manager).not.toContain('private audioSystem');
+    expect(presentation).not.toContain('TrackedProjectile');
+    expect(presentation).not.toContain('ProjectileManager');
+    expect(presentation).not.toContain('NetworkBridge');
+    expect(bundle).toContain('pm.getPresentationRuntime().bindRenderers(');
+    expect(bundle).not.toContain('pm.setBulletRenderer(');
+    expect(clientCoordinator).toContain('getClientReplica().sync(state.projectiles)');
+    expect(clientCoordinator).toContain('presentClientProjectileFrame(');
+  });
 });

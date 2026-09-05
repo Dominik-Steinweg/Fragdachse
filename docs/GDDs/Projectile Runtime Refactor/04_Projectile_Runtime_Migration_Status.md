@@ -25,9 +25,9 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `13 – Presentation` (offen)
-- **Gesamtstatus:** Phase 12 abgeschlossen; Client-State und Extrapolation laufen in einer rendererfreien, nichtautoritativen Projectile-Replica
-- **Baseline:** verifiziert mit `npm run typecheck`, `npm run check` sowie den fokussierten Explosion-, Grenade-, Reflection-, Environment-, World-Effect-, Plasma- und Continuation-Suiten (alle grün)
+- **Nächste Phase:** `14 – Composition + Legacy Removal` (offen)
+- **Gesamtstatus:** Phase 13 abgeschlossen; Projectile-Presentation läuft in einem separaten, nichtautoritativen Presentation-Owner
+- **Baseline:** verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:integration` sowie fokussierten Client-Replica-, World-Presentation-, Presentation-Contract- und No-Duplicate-Audio-Tests (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
@@ -51,7 +51,7 @@
 | 10 | ✅ | Sonderfall-Parität Host Gameplay |
 | 11 | ✅ | Host Replication Adapter |
 | 12 | ✅ | Client Replica |
-| 13 | ⬜ | Presentation |
+| 13 | ✅ | Presentation |
 | 14 | ⬜ | Composition + Legacy Removal |
 | 15 | ⬜ | Final Cleanup + Gesamtverifikation |
 
@@ -63,7 +63,8 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle- und Presentation-Reste weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge, Interaction-Stage und Mini-Rocket-State in `WorldProjectileRuntime` liegen.
+- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle-Reste weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge, Interaction-Stage und Mini-Rocket-State in `WorldProjectileRuntime` liegen.
+- [Transition] `ProjectileManager` bleibt bis Phase 14 als schmale Composition-Fassade für `ProjectilePresentationRuntime` und `ProjectileClientReplica` bestehen; der Presentation-Owner selbst enthält keine autoritative Gameplay-Entscheidung.
 - [Transition] `ProjectileStageContract` benennt die Spawn-Reentrancy: bestehende Plasma-Swarm-Interaction-Spawns dürfen im selben Collision-Stage verarbeitet werden; Hydra-/sonstige Child-Splits folgen der Next-Stage-Policy.
 - [Transition] `HostUpdateCoordinator` ist der schmale `ProjectileExplosionResolutionPort`-Adapter: Combat-AoE läuft über `ProjectileCombatPort`, Environment-/Fire-/Knockback-/World-Effect-Owner bleiben außerhalb der Projectile-Simulation; Standalone-Explosionen werden dort gepuffert und nicht in die Runtime-Registry aufgenommen.
 - [Transition] `ProjectileIdentityScope` gehört zur `WorldLifecycle`-Lifetime und wird an jede lokale `WorldRuntime`-Materialisierung derselben `worldRevision` weitergereicht; er endet erst mit `endInstance`.
@@ -94,7 +95,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Detonable Combat Read | `ProjectileDetonableReadPort`, `ProjectileDetonableSample` (`src/projectile/ProjectileGameplayPort.ts`) |
 | Replication | `ProjectileReplicationAdapter`, `ProjectileReplicationRecord`, `ProjectileReplicationReadPort` (`src/projectile/ProjectileReplicationAdapter.ts`); Manager bis Phase 14 nur Weiterleitung |
 | Client Replica | `ProjectileClientReplica`, `ProjectileClientReplicaState`, `ProjectileClientReplicaFrame`, `ProjectileClientExtrapolatedState` (`src/projectile/ProjectileClientReplica.ts`) |
-| Presentation | — |
+| Presentation | `ProjectilePresentationRuntime`, `ProjectilePresentationRenderers` (`src/projectile/ProjectilePresentationRuntime.ts`) |
 
 Phase-6-Normalisierung: Combat liefert `player`/`enemy`/`decoy`; statische und runtime-gebundene Placeables werden als `rock` mit `obstacleKind`, Basen und Zug als eigene World-Targets geführt. Der Projectile-Owner ergänzt aktive `projectile`-Targets; `projectileTargetPhysicalKey` dedupliziert Rock/Construction.
 
@@ -110,7 +111,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 13 bearbeiten; Projectile-Presentation aus dem Manager in einen separaten Presentation-Owner schneiden.**
+**Phase 14 bearbeiten; World-Lifetime und finale Composition/Legacy-Entfernung über neue Runtime, Adapter und Projection-Owner herstellen.**
 
 ---
 

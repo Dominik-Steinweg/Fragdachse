@@ -524,7 +524,7 @@ export class ArenaScene extends Phaser.Scene {
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
     );
-    projectileManager.setAudioSystem(gameAudioSystem);
+    projectileManager.getPresentationRuntime().setAudioSystem(gameAudioSystem);
     effectSystem.setAudioSystem(gameAudioSystem);
 
     this.visualFeedback = new VisualFeedbackDirector(this, {

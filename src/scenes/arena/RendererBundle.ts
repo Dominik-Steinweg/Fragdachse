@@ -332,24 +332,25 @@ export function wireProjectileRenderers(
   pm: ProjectileManager,
   owners: OwnerVisualSource,
 ): void {
-  pm.setBulletRenderer(bundle.bullet);
-  pm.setProjectileBurnRenderer(bundle.projectileBurn);
-  pm.setFlameRenderer(bundle.flame);
-  pm.setLeafBlowerRenderer(bundle.leafBlower);
-  pm.setBfgRenderer(bundle.bfg);
-  pm.setEnergyBallRenderer(bundle.energyBall);
-  pm.setHydraRenderer(bundle.hydra);
-  pm.setGaussRenderer(bundle.gauss);
-  pm.setHolyGrenadeRenderer(bundle.holyGrenade);
-  pm.setRocketRenderer(bundle.rocket);
-  pm.setFireballRenderer(bundle.fireball);
-  pm.setSporeRenderer(bundle.spore);
-  pm.setGrenadeRenderer(bundle.grenade);
-  pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);
-  pm.setTeslaBoltRenderer(bundle.teslaBolt);
-  pm.setTracerRenderer(bundle.tracer);
-  pm.setMuzzleFlashRenderer(bundle.muzzleFlash);
-  pm.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
+  pm.getPresentationRuntime().bindRenderers({
+    bullet: bundle.bullet,
+    projectileBurn: bundle.projectileBurn,
+    flame: bundle.flame,
+    leafBlower: bundle.leafBlower,
+    bfg: bundle.bfg,
+    energyBall: bundle.energyBall,
+    hydra: bundle.hydra,
+    gauss: bundle.gauss,
+    holyGrenade: bundle.holyGrenade,
+    rocket: bundle.rocket,
+    fireball: bundle.fireball,
+    spore: bundle.spore,
+    grenade: bundle.grenade,
+    translocatorPuck: bundle.translocatorPuck,
+    teslaBolt: bundle.teslaBolt,
+    tracer: bundle.tracer,
+    muzzleFlash: bundle.muzzleFlash,
+  }, (ownerId) => owners.getOwnerVisualState(ownerId));
 }
 
 /** Wire all renderers to the ProjectileManager and register the owner-position provider. */
@@ -358,24 +359,25 @@ export function wireRenderersToProjManager(
   pm: ProjectileManager,
   owners: OwnerVisualSource,
 ): void {
-  pm.setBulletRenderer(bundle.bullet);
-  pm.setProjectileBurnRenderer(bundle.projectileBurn);
-  pm.setFlameRenderer(bundle.flame);
-  pm.setLeafBlowerRenderer(bundle.leafBlower);
-  pm.setBfgRenderer(bundle.bfg);
-  pm.setEnergyBallRenderer(bundle.energyBall);
-  pm.setHydraRenderer(bundle.hydra);
-  pm.setGaussRenderer(bundle.gauss);
-  pm.setHolyGrenadeRenderer(bundle.holyGrenade);
-  pm.setRocketRenderer(bundle.rocket);
-  pm.setFireballRenderer(bundle.fireball);
-  pm.setSporeRenderer(bundle.spore);
-  pm.setGrenadeRenderer(bundle.grenade);
-  pm.setTranslocatorPuckRenderer(bundle.translocatorPuck);
-  pm.setTeslaBoltRenderer(bundle.teslaBolt);
-  pm.setTracerRenderer(bundle.tracer);
-  pm.setMuzzleFlashRenderer(bundle.muzzleFlash);
-  pm.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
+  pm.getPresentationRuntime().bindRenderers({
+    bullet: bundle.bullet,
+    projectileBurn: bundle.projectileBurn,
+    flame: bundle.flame,
+    leafBlower: bundle.leafBlower,
+    bfg: bundle.bfg,
+    energyBall: bundle.energyBall,
+    hydra: bundle.hydra,
+    gauss: bundle.gauss,
+    holyGrenade: bundle.holyGrenade,
+    rocket: bundle.rocket,
+    fireball: bundle.fireball,
+    spore: bundle.spore,
+    grenade: bundle.grenade,
+    translocatorPuck: bundle.translocatorPuck,
+    teslaBolt: bundle.teslaBolt,
+    tracer: bundle.tracer,
+    muzzleFlash: bundle.muzzleFlash,
+  }, (ownerId) => owners.getOwnerVisualState(ownerId));
   bundle.energyShield.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
 }
 
