@@ -66,6 +66,13 @@ import type {
   ProjectileDetonationTarget,
 } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileBurnAugment } from '../projectile/ProjectileTravelPort';
+import type {
+  ProjectileFlameExpiryEvent,
+  ProjectileImpactSource,
+  ProjectileLifecycleOutcome,
+  ProjectileMiniRocketDestroyedOutcome,
+  ProjectileResolvedOutcome,
+} from '../projectile/ProjectileGameplayPort';
 import { createSingleOwnerProvenance, type ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
 import type {
   ProjectileCombatTargetRef,
@@ -211,8 +218,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   };
 
   // ── Radialer Projektil-Puls (Host-only, injiziert von ArenaScene) ────────
-  private proximityPulseCallback: ((proj: TrackedProjectile) => void) | null = null;
-  private naturalFlameExpiryCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
+  private proximityPulseCallback: ((proj: ProjectileImpactSource) => void) | null = null;
+  private naturalFlameExpiryCallback: ((projectile: ProjectileFlameExpiryEvent) => void) | null = null;
 
   // ── Homing-Port-Kompatibilität (die Verarbeitung liegt im World-Owner) ───
   private homingTargetProvider: HomingTargetProvider | null = null;
@@ -221,9 +228,9 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   // ── Host: gepufferte Explosionen explosiver Projektile ──────────────────
   private pendingProjectileExplosions: ProjectileExplosionRequest[] = [];
-  private projectileImpactCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
-  private projectileResolvedCallback: ((proj: TrackedProjectile) => void) | null = null;
-  private miniRocketDestroyedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
+  private projectileImpactCallback: ((proj: ProjectileImpactSource) => void) | null = null;
+  private projectileResolvedCallback: ((outcome: ProjectileLifecycleOutcome) => void) | null = null;
+  private miniRocketDestroyedCallback: ((source: ProjectileImpactSource) => void) | null = null;
   private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
 
   // ── Obstacle-Gruppen (werden nach Arena-Aufbau injiziert) ─────────────────
@@ -247,8 +254,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
   private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
   private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
-  private onBaseHit:   ((baseId: string, damage: number, attackerId: string, projectile?: TrackedProjectile) => void) | null = null;
-  private onSupportImpact: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null = null;
+  private onBaseHit:   ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
+  private onSupportImpact: ((proj: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null = null;
 
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
   private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -317,13 +324,51 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     this.baseGroup = group;
   }
 
+  /** Creates the narrow host-gameplay view used by callbacks leaving the simulation seam. */
+  private createImpactSource(proj: TrackedProjectile, x = proj.sprite?.x ?? 0, y = proj.sprite?.y ?? 0): ProjectileImpactSource {
+    return {
+      projectileId: proj.id,
+      ownerId: proj.ownerId,
+      provenance: proj.provenance,
+      x,
+      y,
+      velocityX: proj.body?.velocity?.x ?? 0,
+      velocityY: proj.body?.velocity?.y ?? 0,
+      color: proj.color,
+      ownerColor: proj.ownerColor,
+      sourceId: proj.sourceId,
+      sourceSlot: proj.sourceSlot,
+      allowTeamDamage: proj.allowTeamDamage,
+      damage: proj.damage,
+      ak47DamageMultiplier: proj.ak47DamageMultiplier,
+      baseDamageMult: proj.baseDamageMult,
+      rockDamageMult: proj.rockDamageMult,
+      trainDamageMult: proj.trainDamageMult,
+      impactCloud: proj.impactCloud,
+      energyInjectorPayload: proj.energyInjectorPayload,
+      proximityPulse: proj.proximityPulse,
+      isBfg: proj.isBfg,
+      isFlame: proj.isFlame,
+      hitboxSize: proj.hitboxSize,
+      hitboxMaxSize: proj.hitboxMaxSize,
+      bodyWidth: proj.body?.width ?? 0,
+      projectileStyle: proj.projectileStyle,
+      projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
+      shotAudioKey: proj.shotAudioKey,
+      shotgunProximityMaxDamageBonus: proj.shotgunProximityMaxDamageBonus,
+      shotgunOriginX: proj.shotgunOriginX,
+      shotgunOriginY: proj.shotgunOriginY,
+      shotgunResolvedRange: proj.shotgunResolvedRange,
+    };
+  }
+
   /**
    * Registriert den Empfaenger fuer Projektil-Basis-Treffer (Host). Analog zu
    * {@link setRockHitCallback}: nur der Collider weiss, welche Basiszelle getroffen wurde.
    * Das optionale Projektil wird mitgereicht, damit der Empfaenger denselben effektiven
    * Projektilschaden wie beim Gegner-Treffer berechnen kann.
    */
-  setBaseHitCallback(cb: ((baseId: string, damage: number, attackerId: string, projectile?: TrackedProjectile) => void) | null): void {
+  setBaseHitCallback(cb: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void {
     this.onBaseHit = cb;
   }
 
@@ -341,7 +386,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     tracked.hitBaseIds ??= new Set<string>();
     if (tracked.hitBaseIds.has(baseId)) return;
     tracked.hitBaseIds.add(baseId);
-    this.onBaseHit(baseId, tracked.damage, tracked.ownerId, tracked);
+    this.onBaseHit(baseId, tracked.damage, tracked.ownerId, this.createImpactSource(tracked));
   }
 
   /**
@@ -365,7 +410,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * welche Basiszelle getroffen wurde.
    */
   setSupportImpactCallback(
-    cb: ((proj: TrackedProjectile, impact: SupportProjectileImpact) => void) | null,
+    cb: ((proj: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null,
   ): void {
     this.onSupportImpact = cb;
   }
@@ -433,7 +478,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   setNaturalFlameExpiryCallback(
-    callback: ((proj: TrackedProjectile, x: number, y: number) => void) | null,
+    callback: ((projectile: ProjectileFlameExpiryEvent) => void) | null,
   ): void {
     this.naturalFlameExpiryCallback = callback;
   }
@@ -539,11 +584,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   /** Registriert den gemeinsamen radialen Projektil-Puls (Host-only). */
-  setProximityPulseCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
+  setProximityPulseCallback(cb: ((proj: ProjectileImpactSource) => void) | null): void {
     this.proximityPulseCallback = cb;
   }
 
-  setProjectileImpactCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
+  setProjectileImpactCallback(cb: ((proj: ProjectileImpactSource) => void) | null): void {
     this.projectileImpactCallback = cb;
   }
 
@@ -642,11 +687,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     }
   }
 
-  setProjectileResolvedCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
+  setProjectileResolvedCallback(cb: ((outcome: ProjectileLifecycleOutcome) => void) | null): void {
     this.projectileResolvedCallback = cb;
   }
 
-  setMiniRocketDestroyedCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
+  setMiniRocketDestroyedCallback(cb: ((source: ProjectileImpactSource) => void) | null): void {
     this.miniRocketDestroyedCallback = cb;
   }
 
@@ -2058,7 +2103,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     proj.supportConsumed = true;
     const impact = this.resolveObstacleImpactPoint(proj, obstacle);
     this.onSupportImpact?.(
-      proj,
+      this.createImpactSource(proj, impact.x, impact.y),
       rockId >= 0
         ? { kind: 'rock', rockId, x: impact.x, y: impact.y }
         : { kind: 'base', x: impact.x, y: impact.y },
@@ -2095,7 +2140,23 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   releaseProjectileResources(proj: TrackedProjectile): void {
     proj.hitObstacleIds?.clear();
     proj.hitBaseIds?.clear();
-    this.projectileResolvedCallback?.(proj);
+    const lifecycle: ProjectileLifecycleOutcome = proj.miniRocketSpent
+      ? ({ kind: 'mini-rocket-destroyed', projectileId: proj.id } satisfies ProjectileMiniRocketDestroyedOutcome)
+      : ({
+        kind: 'resolved',
+        projectileId: proj.id,
+        provenance: proj.provenance,
+        ...(proj.ak47ShotId === undefined ? {} : {
+          reaction: {
+            ak47: {
+              shotId: proj.ak47ShotId,
+              fireSuperiorityShot: proj.ak47FireSuperiorityShot === true,
+              hitConfirmed: proj.ak47HitConfirmed === true,
+            },
+          },
+        }),
+      } satisfies ProjectileResolvedOutcome);
+    this.projectileResolvedCallback?.(lifecycle);
     const destroyX = proj.pendingHydraSplit?.x ?? proj.sprite.x;
     const destroyY = proj.pendingHydraSplit?.y ?? proj.sprite.y;
     const destroyScale = proj.sprite.displayWidth / 16;
@@ -2238,7 +2299,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   private emitProjectileImpact(proj: TrackedProjectile, x: number, y: number): void {
-    this.projectileImpactCallback?.(proj, x, y);
+    this.projectileImpactCallback?.(this.createImpactSource(proj, x, y));
   }
 
   private createExplosionRequest(
@@ -2644,7 +2705,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         || coreStage.bounceLimitReachedIds.has(proj.id));
     if (dead) {
       if (proj.isFlame && coreStage.lifetimeExpiredIds.has(proj.id)) {
-        this.naturalFlameExpiryCallback?.(proj, proj.sprite.x, proj.sprite.y);
+        this.naturalFlameExpiryCallback?.(this.createImpactSource(proj) as ProjectileFlameExpiryEvent);
       }
       if (proj.miniRocketSpent && coreStage.rangeDepletedIds.has(proj.id)) {
         this.emitSpentMiniRocketDestruction(proj);
@@ -2661,7 +2722,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       const simulatedAge = proj.simulatedAgeMs ?? 0;
       if (proj.lastProximityPulseAt === undefined || simulatedAge - proj.lastProximityPulseAt >= interval) {
         proj.lastProximityPulseAt = simulatedAge;
-        this.proximityPulseCallback?.(proj);
+        this.proximityPulseCallback?.(this.createImpactSource(proj));
       }
     }
 
@@ -2729,7 +2790,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private emitSpentMiniRocketDestruction(proj: TrackedProjectile): void {
     if (proj.miniRocketDestructionFxEmitted) return;
     proj.miniRocketDestructionFxEmitted = true;
-    this.miniRocketDestroyedCallback?.(proj, proj.sprite.x, proj.sprite.y);
+    this.miniRocketDestroyedCallback?.(this.createImpactSource(proj));
   }
 
   private queueSpentMiniRocketDestruction(proj: TrackedProjectile): void {

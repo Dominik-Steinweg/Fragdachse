@@ -1,20 +1,10 @@
 import type { TrackedProjectile } from '../types';
-
-export interface ProjectileMiniRocketCollectedEvent {
-  readonly projectileId: number;
-  readonly ownerId: string;
-  readonly x: number;
-  readonly y: number;
-  readonly color: number;
-  readonly ownerColor?: number;
-  readonly adrenalineRefund: number;
-  readonly armorRefund: number;
-}
+import type { ProjectileMiniRocketCollectedOutcome } from './ProjectileGameplayPort';
 
 /** Domain-facing hooks for the local Mini-Rocket state machine. */
 export interface ProjectileMiniRocketStatePort {
   getOwnerPosition(ownerId: string): { x: number; y: number } | null;
-  onCollected(event: ProjectileMiniRocketCollectedEvent): void;
+  onOutcome(outcome: ProjectileMiniRocketCollectedOutcome): void;
 }
 
 export interface ProjectileMiniRocketProcessorDependencies {

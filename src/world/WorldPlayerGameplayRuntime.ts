@@ -733,8 +733,8 @@ export class WorldPlayerGameplayRuntime implements
         handleDirectAk47EnemyHit: (projectile, enemyId, nowMs) => (
           systems.ak47StrategicTarget?.handleDirectAk47EnemyHit(projectile, enemyId, nowMs) ?? null
         ),
-        handleNaturalFlameExpiry: (projectile, x, y, nowMs) => {
-          systems.flamethrowerUpgrade?.handleNaturalFlameExpiry(projectile, x, y, nowMs);
+        handleNaturalFlameExpiry: (projectile, nowMs) => {
+          systems.flamethrowerUpgrade?.handleNaturalFlameExpiry(projectile, nowMs);
         },
         handleEnemyDeath: (enemyId, x, y, burnSources, nowMs) => {
           systems.flamethrowerUpgrade?.handleEnemyDeath(x, y, burnSources, nowMs);
@@ -746,8 +746,8 @@ export class WorldPlayerGameplayRuntime implements
         handlePlayerDeath: (playerId, x, y) => {
           systems.flamethrowerUpgrade?.handlePlayerDeath(playerId, x, y);
         },
-        resolveProjectile: (projectile) => {
-          systems.ak47Behavior?.resolveProjectile(projectile);
+        resolveProjectile: (outcome) => {
+          systems.ak47Behavior?.resolveProjectile(outcome);
         },
         registerKill: (outcome: PlayerCombatKillOutcome) => {
           systems.negevBehavior.registerKill({ killerId: outcome.killerId, sourceId: outcome.sourceId });

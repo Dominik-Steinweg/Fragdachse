@@ -215,7 +215,7 @@ describe('projectile performance paths', () => {
     const baseCell = (baseId: string) => ({
       getData: vi.fn((key: string) => key === 'baseId' ? baseId : undefined),
     }) as unknown as Phaser.GameObjects.GameObject;
-    const baseHits: Array<{ baseId: string; damage: number; attackerId: string; projectile?: TrackedProjectile }> = [];
+    const baseHits: Array<{ baseId: string; damage: number; attackerId: string; projectile?: unknown }> = [];
     manager.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
       baseHits.push({ baseId, damage, attackerId, projectile });
     });
@@ -232,7 +232,7 @@ describe('projectile performance paths', () => {
       baseId: 'enemy-base',
       damage: 20,
       attackerId: 'flame-owner',
-      projectile: tracked,
+      projectile: expect.objectContaining({ ownerId: tracked.ownerId }),
     });
     expect(body.setVelocity).toHaveBeenCalledWith(0, 0);
   });
@@ -791,15 +791,15 @@ describe('projectile performance paths', () => {
     const runtime = bindProjectileRegistry(manager, [projectile]);
     runtime.setProjectileMiniRocketStatePort({
       getOwnerPosition: () => ({ x: 100, y: 100 }),
-      onCollected: collected,
+      onOutcome: collected,
     });
     manager.hostUpdate(0, 200);
 
     expect(collected).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'mini-rocket-collected',
       projectileId: projectile.id,
-      ownerId: projectile.ownerId,
-      x: 100,
-      y: 100,
+      collectorId: projectile.ownerId,
+      pickup: expect.objectContaining({ x: 100, y: 100 }),
     }));
   });
 

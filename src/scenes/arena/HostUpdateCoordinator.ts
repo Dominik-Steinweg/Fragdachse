@@ -21,7 +21,7 @@ import type { LocalPlayerState }  from './LocalPlayerState';
 import type { RockVisualHelper }  from './RockVisualHelper';
 import type { RendererBundle }    from './RendererBundle';
 import type { PlayerEntity }      from '../../entities/PlayerEntity';
-import type { HitscanSupportEffect, LoadoutSlot, PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, SyncedReinforcementMatrix, TeamId, TrackedProjectile } from '../../types';
+import type { HitscanSupportEffect, LoadoutSlot, PlayerAimNetState, PlayerNetState, RadialDamageFalloffConfig, SupportProjectileImpact, SyncedActiveHudBuff, SyncedReinforcementMatrix, TeamId } from '../../types';
 import type { BaseManager } from '../../entities/BaseManager';
 import type { AutomatedTurret, AutomatedTurretId } from '../../systems/TurretSystem';
 import { emitArenaMapGridChanged } from './ArenaEvents';
@@ -45,6 +45,7 @@ import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplay
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import type { ProjectileEnergyInjectorImpact } from '../../projectile/ProjectileCombatPort';
+import type { ProjectileImpactSource } from '../../projectile/ProjectileGameplayPort';
 import type {
   ProjectileExplosionRequest,
   ProjectileExplosionOutcome,
@@ -1578,13 +1579,13 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    * Gemeinsamer Gameplay-Resolver für alle radialen Projektil-Pulse.
    * BFG-Spielerziele bleiben bewusst außerhalb dieses Coop-Pfades.
    */
-  resolveProjectileProximityPulse(proj: TrackedProjectile): { lines: { sx: number; sy: number; ex: number; ey: number }[] } {
+  resolveProjectileProximityPulse(proj: ProjectileImpactSource): { lines: { sx: number; sy: number; ex: number; ey: number }[] } {
     const config = proj.proximityPulse;
     const lines: { sx: number; sy: number; ex: number; ey: number }[] = [];
     if (!config || config.radius <= 0 || config.damage <= 0) return { lines };
 
-    const originX = proj.sprite.x;
-    const originY = proj.sprite.y;
+    const originX = proj.x;
+    const originY = proj.y;
     const radiusSquared = config.radius * config.radius;
     const lineTo = (x: number, y: number) => ({ sx: originX, sy: originY, ex: x, ey: y });
 
@@ -1641,11 +1642,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   /** BFG-only extension: preserve its existing player/friendly-fire pulse. */
-  resolveBfgPlayerProximityPulse(proj: TrackedProjectile): { sx: number; sy: number; ex: number; ey: number }[] {
+  resolveBfgPlayerProximityPulse(proj: ProjectileImpactSource): { sx: number; sy: number; ex: number; ey: number }[] {
     const config = proj.proximityPulse;
     if (!config || config.radius <= 0 || config.damage <= 0) return [];
-    const originX = proj.sprite.x;
-    const originY = proj.sprite.y;
+    const originX = proj.x;
+    const originY = proj.y;
     const radiusSquared = config.radius * config.radius;
     const lines: { sx: number; sy: number; ex: number; ey: number }[] = [];
 
@@ -1662,7 +1663,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         damage: config.damage,
         sourceX: originX,
         sourceY: originY,
-        now: Date.now(),
+        now: this.hostFrameNowMs,
       })) continue;
 
       this.ctx.combatSystem.applyDamage(player.id, config.damage, false, proj.ownerId, 'BFG', {
@@ -1847,7 +1848,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    * Der Energieinjektor sucht am Einschlagsort einen Turm: bei Felstreffern ist das die
    * getroffene Konstruktion selbst, bei Basistreffern der naechstgelegene Basisturm.
    */
-  applySupportProjectileImpact(projectile: TrackedProjectile, impact: SupportProjectileImpact): void {
+  applySupportProjectileImpact(projectile: ProjectileImpactSource, impact: SupportProjectileImpact): void {
     const injector = projectile.energyInjectorPayload;
     if (injector) {
       if (impact.kind === 'rock') {
@@ -2021,7 +2022,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     targetId: string,
     x: number,
     y: number,
-    projectile: TrackedProjectile | ProjectileEnergyInjectorImpact,
+    projectile: ProjectileImpactSource | ProjectileEnergyInjectorImpact,
   ): void {
     const payload = 'payload' in projectile ? projectile.payload : projectile.energyInjectorPayload;
     if (!payload || !this.targetingSystems?.targetStatus) return;

@@ -70,6 +70,7 @@ import type {
   ProjectileExplosionOutcome,
   ProjectileGrenadePayloadRequest,
 } from './ProjectileExplosionPort';
+import type { ProjectileDetonableReadPort, ProjectileDetonableSample } from './ProjectileGameplayPort';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileImpactCandidate,
@@ -217,6 +218,7 @@ export class WorldProjectileRuntime implements
   ProjectileTravelReadPort,
   ProjectileEnvironmentInteractionPort,
   ProjectileExplosionContinuationPort,
+  ProjectileDetonableReadPort,
   WorldScopedBinding {
   private readonly projectiles: ProjectileStore;
   private readonly flightProcessor = new ProjectileFlightProcessor();
@@ -237,16 +239,19 @@ export class WorldProjectileRuntime implements
     ),
     resetHoming: (projectile) => this.resetHomingState(projectile),
     onCollected: (projectile, x, y) => {
-      this.miniRocketStatePort?.onCollected({
+      this.miniRocketStatePort?.onOutcome({
+        kind: 'mini-rocket-collected',
         projectileId: projectile.id,
-        ownerId: projectile.ownerId,
-        x,
-        y,
-        color: projectile.color,
-        ownerColor: projectile.ownerColor,
-        adrenalineRefund: Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0)
-          * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0),
-        armorRefund: Math.max(0, projectile.miniRocketPickupArmor ?? 0),
+        collectorId: projectile.ownerId,
+        pickup: {
+          x,
+          y,
+          color: projectile.color,
+          ownerColor: projectile.ownerColor,
+          adrenalineRefund: Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0)
+            * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0),
+          armorRefund: Math.max(0, projectile.miniRocketPickupArmor ?? 0),
+        },
       });
     },
   });
@@ -526,6 +531,21 @@ export class WorldProjectileRuntime implements
 
   setProjectileCombatPort(port: ProjectileCombatPort | null): void {
     this.directImpactPort = port;
+  }
+
+  readDetonableProjectiles(sink: (sample: ProjectileDetonableSample) => void): void {
+    for (const projectileId of this.detonableIds) {
+      const record = this.projectiles.getById(projectileId);
+      if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.detonable) continue;
+      sink({
+        projectileId: record.id,
+        ownerId: record.ownerId,
+        x: record.sprite.x,
+        y: record.sprite.y,
+        tag: record.detonable.tag,
+        allowCrossTeam: record.detonable.allowCrossTeam,
+      });
+    }
   }
 
   completeProjectileExplosion(projectileId: ProjectileId, outcome: ProjectileExplosionOutcome): void {

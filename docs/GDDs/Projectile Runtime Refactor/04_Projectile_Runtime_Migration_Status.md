@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `10 – Sonderfall-Parität und Host-Gameplay-Vollständigkeit` (offen)
-- **Gesamtstatus:** Phase 9 abgeschlossen; Mini-Rocket-State und Homing-Integration liegen im World-Owner, und Spawn-during-stage ist über einen benannten Stage-Contract charakterisiert
+- **Nächste Phase:** `11 – Host Replication Adapter und Wire-Semantik` (offen)
+- **Gesamtstatus:** Phase 10 abgeschlossen; autoritatives Host-Gameplay nutzt semantische Projectile-Quellen, Lifecycle-Outcomes und einen schmalen Detonable-Read-Port
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm run check` sowie den fokussierten Explosion-, Grenade-, Reflection-, Environment-, World-Effect-, Plasma- und Continuation-Suiten (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -48,7 +48,7 @@
 | 7 | ✅ | Combat Port + Direct Outcomes |
 | 8 | ✅ | Explosion / Domain Effects / Grenades |
 | 9 | ✅ | Complex Projectile State Machines |
-| 10 | ⬜ | Sonderfall-Parität Host Gameplay |
+| 10 | ✅ | Sonderfall-Parität Host Gameplay |
 | 11 | ⬜ | Host Replication Adapter |
 | 12 | ⬜ | Client Replica |
 | 13 | ⬜ | Presentation |
@@ -90,7 +90,8 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Projectile Combat | `ProjectileCombatPort`, `ProjectileCombatTargetRef`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileCombatExplosionRequest`, `ProjectileCombatExplosionOutcome`, `ProjectileAk47HitContext`, `ProjectileEnergyInjectorImpact`, `ProjectilePlasmaSwarmImpact` (`src/projectile/ProjectileCombatPort.ts`, `src/projectile/ProjectileExplosionPort.ts`) |
 | Domain Effect / Explosion Resolution | `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome`, `ProjectileExplosionContinuationPort` (`src/projectile/ProjectileExplosionPort.ts`); `HostUpdateCoordinator.resolveProjectileExplosion` als Domain-Adapter |
 | Complex Projectile State | `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `ProjectileStageSpawnPolicy`, `PROJECTILE_STAGE_SPAWN_CONTRACT` (`src/projectile/`) |
-| Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort` |
+| Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort`, `ProjectileImpactSource`, `ProjectileLifecycleOutcome`, `MiniRocketPickupSpec`, `ProjectileMiniRocketCollectedOutcome`, `ProjectileMiniRocketDestroyedOutcome` (`src/projectile/ProjectileGameplayPort.ts`) |
+| Detonable Combat Read | `ProjectileDetonableReadPort`, `ProjectileDetonableSample` (`src/projectile/ProjectileGameplayPort.ts`) |
 | Replication | — |
 | Client Replica | — |
 | Presentation | — |
@@ -109,7 +110,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 10 bearbeiten; Sonderfall-Parität und Host-Gameplay-Vollständigkeit gegen die Referenzmatrix schließen.**
+**Phase 11 bearbeiten; Host-Replication-Adapter und unveränderte Wire-Semantik materialisieren.**
 
 ---
 

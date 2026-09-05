@@ -3,14 +3,13 @@ import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager }     from '../entities/PlayerManager';
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { DetonationSystem }  from './DetonationSystem';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
-import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, CombatDamageKind, CombatDamageTargetType, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, TrackedProjectile, WeaponSlot } from '../types';
+import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, CombatDamageKind, CombatDamageTargetType, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   type GeometryHit,
 } from '../utils/geometry';
@@ -80,6 +79,7 @@ import {
 } from './PlasmaCharge';
 import type { TargetStatusTarget } from './TargetStatusSystem';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
+import type { ProjectileDetonableReadPort, ProjectileImpactSource } from '../projectile/ProjectileGameplayPort';
 
 type Ak47DirectEnemyHitImpact = ProjectileAk47DirectImpact;
 
@@ -359,6 +359,7 @@ export class CombatSystem implements ProjectileCombatPort {
   private detonationSystem: DetonationSystem    | null  = null;  private stinkCloudSystem: StinkCloudSystemType | null = null;  private rockObjects: readonly (RockPhysicsProxy | null)[] | null = null;
   private decoySystem:      DecoySystem | null = null;
   private enemyManager:     EnemyManager | null = null;
+  private projectileDetonableReadPort: ProjectileDetonableReadPort | null = null;
   private baseManager:      BaseManager | null = null;
   private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null = null;
   private trunkObjects: readonly ObstacleCircleBody[] | null = null;
@@ -443,7 +444,7 @@ export class CombatSystem implements ProjectileCombatPort {
 
   constructor(
     private playerManager:     PlayerManager,
-    private projectileManager: ProjectileManager,
+    _projectileManager: unknown,
     private bridge:            NetworkBridge,
   ) {}
 
@@ -474,6 +475,9 @@ export class CombatSystem implements ProjectileCombatPort {
   setEnergyShieldSystem(es: EnergyShieldSystem | null): void { this.energyShieldSystem = es; }
   setPowerUpSystem(ps: PowerUpSystemType | null): void   { this.powerUpSystem  = ps; }
   setDetonationSystem(ds: DetonationSystem | null): void { this.detonationSystem = ds; }
+  setProjectileDetonableReadPort(port: ProjectileDetonableReadPort | null): void {
+    this.projectileDetonableReadPort = port;
+  }
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void { this.stinkCloudSystem = sc; }
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
   setEnemyManager(manager: EnemyManager | null): void {
@@ -963,41 +967,6 @@ export class CombatSystem implements ProjectileCombatPort {
     );
   }
 
-  /**
-   * Brennende Treffer aus den Burn-Feldern eines Projektils (z.B. brennende
-   * Kugeln der Glock/Negev oder Flammenwerfer-Hitbox). No-op ohne Burn-Felder.
-   */
-  /** true, wenn das Projektil eine aktive "nur bei Gegner-Treffern"-Explosion besitzt. */
-  private hasEnemyHitExplosion(proj: TrackedProjectile | undefined): boolean {
-    const e = proj?.enemyHitExplosion;
-    return !!e && e.radius > 0 && e.maxDamage > 0;
-  }
-
-  private applyProjectileBurn(targetId: string, proj: TrackedProjectile | undefined): void {
-    if (!proj) return;
-    this.applyBurnHit(
-      targetId,
-      proj.ownerId,
-      proj.burnDurationMs ?? 0,
-      proj.burnDamagePerTick ?? 0,
-      `weapon:${proj.sourceId}`,
-      proj.sourceId,
-      proj.isFlame ? 'flamethrower_direct' : 'generic',
-      proj.projectileBurnVisualStyle,
-    );
-    const supplemental = proj.supplementalBurnOnHit;
-    if (supplemental) {
-      this.applyBurnHit(
-        targetId,
-        proj.ownerId,
-        supplemental.durationMs,
-        supplemental.damagePerTick,
-        `imbued-projectile:${proj.sourceId}`,
-        `${proj.sourceId}:imbued`,
-      );
-    }
-  }
-
   updateBurnEffects(now: number): void {
     const isTargetValid = (targetId: string) => this.isAlive(targetId) && !this.isBurrowed(targetId);
     const contributions = this.burnStateMachine.advanceTo(now, isTargetValid);
@@ -1343,7 +1312,7 @@ export class CombatSystem implements ProjectileCombatPort {
     return { kind: 'passed' };
   }
   /** Schützen-Damage-Multiplikator (Loadout/Ultimate + PowerUp) auf den Projektil-Basisschaden anwenden. */
-  private computeProjectileWeaponDamage(proj: TrackedProjectile): number {
+  private computeProjectileWeaponDamage(proj: ProjectileImpactSource): number {
     let projectileMultiplier = proj.ak47DamageMultiplier ?? 1;
     if (
       (proj.shotgunProximityMaxDamageBonus ?? 0) > 0
@@ -1354,8 +1323,8 @@ export class CombatSystem implements ProjectileCombatPort {
       const distance = Phaser.Math.Distance.Between(
         proj.shotgunOriginX,
         proj.shotgunOriginY,
-        proj.sprite.x,
-        proj.sprite.y,
+        proj.x,
+        proj.y,
       );
       const closeness = Phaser.Math.Clamp(1 - distance / (proj.shotgunResolvedRange ?? 1), 0, 1);
       projectileMultiplier *= 1 + closeness * (proj.shotgunProximityMaxDamageBonus ?? 0);
@@ -1371,17 +1340,12 @@ export class CombatSystem implements ProjectileCombatPort {
     return loadoutMult * powerUpMult;
   }
 
-  private computeProjectileDamage(proj: TrackedProjectile): number {
-    return this.computeProjectileWeaponDamage(proj)
-      * this.getPlayerRuntimeDamageMultiplier(proj.ownerId, proj.sourceSlot);
-  }
-
   /**
    * Wendet einen Projektiltreffer auf eine Basis an. Die Berechnung bleibt identisch zum
    * Projektiltreffer gegen Spieler/Gegner; der anschließende Basistrichter ergänzt die
    * strukturspezifischen Coop-Modifikatoren.
    */
-  applyProjectileBaseDamage(baseId: string, projectile: TrackedProjectile): void {
+  applyProjectileBaseDamage(baseId: string, projectile: ProjectileImpactSource): void {
     this.applyBaseDamage(
       baseId,
       this.computeProjectileWeaponDamage(projectile),
@@ -2163,16 +2127,16 @@ export class CombatSystem implements ProjectileCombatPort {
           }
         }
         if (detonableTags.length > 0) {
-          for (const proj of this.projectileManager.getActiveProjectiles()) {
-            if (!proj.detonable || !detonableTags.includes(proj.detonable.tag)) continue;
-            if (!proj.detonable.allowCrossTeam && proj.ownerId !== opts.shooterId) continue;
+          this.projectileDetonableReadPort?.readDetonableProjectiles((proj) => {
+            if (!detonableTags.includes(proj.tag)) return;
+            if (!proj.allowCrossTeam && proj.ownerId !== opts.shooterId) return;
             candidates.push({
-              id: `detonable:${proj.id}`,
+              id: `detonable:${proj.projectileId}`,
               kind: 'detonable',
-              x: proj.sprite.x,
-              y: proj.sprite.y,
+              x: proj.x,
+              y: proj.y,
             });
-          }
+          });
         }
         return candidates;
       },
@@ -3165,193 +3129,13 @@ export class CombatSystem implements ProjectileCombatPort {
     return { dirX: Math.cos(angle), dirY: Math.sin(angle) };
   }
 
-  private handleHit(
-    projectileId:  number,
-    playerId:      string,
-    damage:        number,
-    shooterId:     string,
-    adrenalinGain: number,
-    sourceId:    string,
-    allowDamage = true,
-  ): void {
-    const projectile = this.projectileManager.getProjectileById(projectileId);
-    const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, playerId) : null;
-    const visualContext: DamageVisualContext | undefined = projectile
-      ? {
-          sourceX: projectile.sprite.x,
-          sourceY: projectile.sprite.y,
-          dirX: projectile.body.velocity.x,
-          dirY: projectile.body.velocity.y,
-          projectileColor: projectile.color,
-        }
-      : undefined;
-    void projectileId;
-    void playerId;
-    if (allowDamage) {
-      this.applyProjectileBurn(playerId, projectile);
-      this.applyProjectileVulnerability({ targetType: 'player', targetId: playerId }, projectile);
-      this.applyDamage(playerId, damage, false, shooterId, sourceId, visualContext, {
-        sourceSlot: projectile?.sourceSlot,
-        damageKind: 'direct',
-      });
-      if (leafBlowerImpulse && this.isAlive(playerId)) {
-        this.onPlayerImpulse?.(playerId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
-      }
-    }
-
-    // Adrenalin-Belohnung für den Schützen
-    if (allowDamage && adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-    }
-  }
-
-  private handleEnemyHit(
-    projectileId: number,
-    enemyId: string,
-    damage: number,
-    shooterId: string,
-    adrenalinGain: number,
-    sourceId: string,
-    ak47Impact?: Ak47DirectEnemyHitImpact,
-  ): void {
-    const projectile = this.projectileManager.getProjectileById(projectileId);
-    const leafBlowerImpulse = projectile ? this.createLeafBlowerImpulse(projectile, enemyId) : null;
-    const projectileHitImpulse = projectile ? this.createProjectileHitImpulse(projectile, enemyId) : null;
-    const visualContext = projectile
-      ? {
-          sourceX: projectile.sprite.x,
-          sourceY: projectile.sprite.y,
-          dirX: projectile.body.velocity.x,
-          dirY: projectile.body.velocity.y,
-          projectileColor: projectile.color,
-        }
-      : undefined;
-    void projectileId;
-    void enemyId;
-
-    const slowFraction = projectile?.hitSlowFraction ?? projectile?.shotgunSlowFraction ?? 0;
-    const slowDurationMs = projectile?.hitSlowDurationMs ?? projectile?.shotgunSlowDurationMs ?? 0;
-    if (slowFraction > 0 && slowDurationMs > 0) {
-      this.applyEnemySlow(enemyId, slowFraction, slowDurationMs);
-    }
-    this.applyProjectileVulnerability({ targetType: 'enemy', targetId: enemyId }, projectile);
-    this.applyProjectileBurn(enemyId, projectile);
-    this.applyDamage(enemyId, damage, false, shooterId, sourceId, visualContext, {
-      sourceSlot: projectile?.sourceSlot,
-      damageKind: 'direct',
-    });
-    if (projectile && ak47Impact) {
-      this.applyAk47TargetExplosion(projectile.sprite.x, projectile.sprite.y, projectile.ownerId, enemyId, damage, ak47Impact);
-    }
-    if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
-      this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
-    }
-    if (projectileHitImpulse && this.enemyManager?.hasEnemy(enemyId)) {
-      this.onEnemyImpulse?.(enemyId, projectileHitImpulse.vx, projectileHitImpulse.vy, projectileHitImpulse.durationMs, shooterId);
-    }
-
-    if (adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-    }
-  }
-
-  private handleDecoyHit(
-    projectileId: number,
-    decoyId: number,
-    damage: number,
-    shooterId: string,
-    adrenalinGain: number,
-    sourceId: string,
-  ): void {
-    const projectile = this.projectileManager.getProjectileById(projectileId);
-    const visualContext = projectile
-      ? {
-          sourceX: projectile.sprite.x,
-          sourceY: projectile.sprite.y,
-          dirX: projectile.body.velocity.x,
-          dirY: projectile.body.velocity.y,
-        }
-      : undefined;
-    void projectileId;
-    this.decoySystem?.applyDamage(decoyId, damage, shooterId, sourceId, visualContext);
-
-    if (adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-    }
-  }
-
   /** Setzt die zentrale Verwundbarkeit, wenn das treffende Projektil sie mitfuehrt. */
   private applyProjectileVulnerability(
     target: TargetStatusTarget,
-    durationOrProjectile: number | TrackedProjectile | undefined,
+    durationOrProjectile: number | undefined,
   ): void {
-    const durationMs = typeof durationOrProjectile === 'number'
-      ? durationOrProjectile
-      : durationOrProjectile?.hitVulnerabilityDurationMs ?? 0;
+    const durationMs = durationOrProjectile ?? 0;
     if (durationMs > 0) this.onApplyVulnerability?.(target, durationMs);
-  }
-
-  private createLeafBlowerImpulse(
-    projectile: TrackedProjectile,
-    targetId: string,
-  ): { vx: number; vy: number; durationMs: number } | null {
-    const minKnockback = projectile.leafBlowerMinKnockback;
-    const maxKnockback = projectile.leafBlowerMaxKnockback;
-    if (minKnockback === undefined || maxKnockback === undefined || maxKnockback <= 0) return null;
-
-    const startSize = projectile.body.width;
-    const maxSize = projectile.hitboxMaxSize ?? startSize;
-    const spread = Math.max(maxSize - startSize, 0.0001);
-    const progress = Phaser.Math.Clamp((projectile.sprite.displayWidth - startSize) / spread, 0, 1);
-    const magnitude = Phaser.Math.Linear(maxKnockback, minKnockback, progress);
-    if (magnitude <= 0) return null;
-
-    const player = this.playerManager.getPlayer(targetId);
-    const enemy = this.enemyManager?.getEnemy(targetId);
-    const targetX = player?.x ?? enemy?.sprite.x ?? projectile.sprite.x;
-    const targetY = player?.y ?? enemy?.sprite.y ?? projectile.sprite.y;
-    const fallbackDx = targetX - projectile.sprite.x;
-    const fallbackDy = targetY - projectile.sprite.y;
-    const velocityLen = Math.hypot(projectile.body.velocity.x, projectile.body.velocity.y);
-    const fallbackLen = Math.hypot(fallbackDx, fallbackDy);
-    const dirX = velocityLen > 0.001
-      ? projectile.body.velocity.x / velocityLen
-      : (fallbackLen > 0.001 ? fallbackDx / fallbackLen : 0);
-    const dirY = velocityLen > 0.001
-      ? projectile.body.velocity.y / velocityLen
-      : (fallbackLen > 0.001 ? fallbackDy / fallbackLen : -1);
-
-    return {
-      vx: dirX * magnitude,
-      vy: dirY * magnitude,
-      durationMs: 220,
-    };
-  }
-
-  private createProjectileHitImpulse(
-    projectile: TrackedProjectile,
-    targetId: string,
-  ): { vx: number; vy: number; durationMs: number } | null {
-    const magnitude = projectile.hitKnockback ?? 0;
-    if (magnitude <= 0) return null;
-
-    const enemy = this.enemyManager?.getEnemy(targetId);
-    const fallbackDx = (enemy?.sprite.x ?? projectile.sprite.x) - projectile.sprite.x;
-    const fallbackDy = (enemy?.sprite.y ?? projectile.sprite.y) - projectile.sprite.y;
-    const velocityLength = Math.hypot(projectile.body.velocity.x, projectile.body.velocity.y);
-    const fallbackLength = Math.hypot(fallbackDx, fallbackDy);
-    const dirX = velocityLength > 0.001
-      ? projectile.body.velocity.x / velocityLength
-      : (fallbackLength > 0.001 ? fallbackDx / fallbackLength : 0);
-    const dirY = velocityLength > 0.001
-      ? projectile.body.velocity.y / velocityLength
-      : (fallbackLength > 0.001 ? fallbackDy / fallbackLength : -1);
-
-    return {
-      vx: dirX * magnitude,
-      vy: dirY * magnitude,
-      durationMs: Math.max(1, projectile.hitKnockbackDurationMs ?? 180),
-    };
   }
 
   private applyEnemyDamage(
@@ -3686,13 +3470,6 @@ export class CombatSystem implements ProjectileCombatPort {
   private clearBurnByAttacker(attackerId: string): void {
     this.burnStateMachine.clearByAttacker(attackerId);
   }
-}
-
-function hasGaussDischarge(
-  projectile: Pick<TrackedProjectile, 'gaussChainRadius' | 'gaussChainDamageFactor'>,
-): boolean {
-  return (projectile.gaussChainRadius ?? 0) > 0
-    && (projectile.gaussChainDamageFactor ?? 0) > 0;
 }
 
 function createAk47Context(request: ProjectileDirectImpactRequest): ProjectileAk47HitContext | undefined {

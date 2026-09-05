@@ -9,6 +9,7 @@ import type {
 import type { ProjectileCombatPort, ProjectileEnergyInjectorImpact } from '../projectile/ProjectileCombatPort';
 import type { ProjectileExplosionRequest } from '../projectile/ProjectileExplosionPort';
 import type { ProjectileMiniRocketStatePort } from '../projectile/ProjectileMiniRocketProcessor';
+import type { ProjectileDetonableReadPort, ProjectileFlameExpiryEvent, ProjectileImpactSource, ProjectileLifecycleOutcome } from '../projectile/ProjectileGameplayPort';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileTargetabilityPort,
@@ -39,7 +40,6 @@ import type {
   PlayerProfile,
   SlimeBloomTarget,
   SupportProjectileImpact,
-  TrackedProjectile,
   HomingTargetType,
 } from '../types';
 import type { TargetStatusTarget } from '../systems/TargetStatusSystem';
@@ -141,7 +141,7 @@ export interface WorldCombatImpactPort {
     targetId: string,
     x: number,
     y: number,
-    projectile: TrackedProjectile | ProjectileEnergyInjectorImpact,
+    projectile: ProjectileImpactSource | ProjectileEnergyInjectorImpact,
   ) => void;
   readonly applyHitscanSupportImpact: (
     impact: HitscanSupportImpact,
@@ -150,16 +150,16 @@ export interface WorldCombatImpactPort {
     sourceSlot?: LoadoutSlot,
   ) => void;
   readonly applySupportProjectileImpact: (
-    projectile: TrackedProjectile,
+    projectile: ProjectileImpactSource,
     impact: SupportProjectileImpact,
   ) => void;
   readonly applyTeslaRockDamage: (index: number, damage: number, ownerId: string) => void;
   readonly applyTeslaTurretDamage: (id: number, damage: number, ownerId: string) => void;
   readonly resolveProjectileProximityPulse: (
-    projectile: TrackedProjectile,
+    projectile: ProjectileImpactSource,
   ) => { lines: { sx: number; sy: number; ex: number; ey: number }[] };
   readonly resolveBfgPlayerProximityPulse: (
-    projectile: TrackedProjectile,
+    projectile: ProjectileImpactSource,
   ) => { sx: number; sy: number; ex: number; ey: number }[];
 }
 
@@ -171,6 +171,7 @@ export interface ProjectileInteractionBinding {
   setProjectileBarrierPort(port: ProjectileBarrierPort | null): void;
   setProjectileCombatPort(port: ProjectileCombatPort | null): void;
   setProjectileMiniRocketStatePort(port: ProjectileMiniRocketStatePort | null): void;
+  readDetonableProjectiles(sink: Parameters<ProjectileDetonableReadPort['readDetonableProjectiles']>[0]): void;
 }
 
 export interface WorldCombatGameplayBindingOptions {
@@ -207,7 +208,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly applyObstacleDamageById: (rockId: number, damage: number, attackerId: string) => number;
   readonly handleDestroyedRock: (rockId: number, reason: 'damage', attackerId: string) => void;
   readonly updateTurretAngle: (rockId: number, angle: number) => void;
-  readonly spawnImpactCloud: (projectile: TrackedProjectile, x: number, y: number) => void;
+  readonly spawnImpactCloud: (projectile: ProjectileImpactSource) => void;
   readonly resetPlayerPosition: (playerId: string, x: number, y: number) => void;
   readonly dropBeer: (playerId: string, x: number, y: number) => void;
   readonly dropCarryForPlayer: (playerId: string, x: number, y: number) => void;
@@ -308,6 +309,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setPowerUpSystem(null);
     combatSystem.setDecoySystem(null);
     combatSystem.setEnemyManager(null);
+    combatSystem.setProjectileDetonableReadPort(null);
     combatSystem.setRockDamageCallback(null);
     combatSystem.setBaseDamageCallback(null);
     combatSystem.setTrainDamageCallback(null);
@@ -522,7 +524,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     combat.setHealingReceivedHandler((playerId, amount) => o.network.stats.recordHealingReceived(playerId, amount));
     combat.setArmorReceivedHandler((playerId, amount) => o.network.stats.recordArmorReceived(playerId, amount));
-    projectiles.setNaturalFlameExpiryCallback((projectile, x, y) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, x, y, Date.now()));
+    projectiles.setNaturalFlameExpiryCallback((projectile: ProjectileFlameExpiryEvent) => o.getPlayerCombatIntegration()?.reactions.handleNaturalFlameExpiry(projectile, Date.now()));
     hostPhysics.setEnemyMovementFactorResolver((enemyId, now) => Math.min(
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
@@ -623,7 +625,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         if (allowKillDrop) o.getPowerUpSystem()?.onPlayerKilled(x, y);
       }
     });
-    projectiles.setProjectileImpactCallback((projectile, x, y) => o.spawnImpactCloud(projectile, x, y));
+    projectiles.setProjectileImpactCallback((projectile: ProjectileImpactSource) => o.spawnImpactCloud(projectile));
     hostPhysics.setEnemyManager(o.getEnemyManager());
     this.bindHostPhysics(hostPhysics);
     combat.setDecoySystem(o.decoySystem);
@@ -806,28 +808,34 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindProjectiles(): void {
     const o = this.options;
-    o.projectileManager.setProjectileResolvedCallback((projectile) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(projectile));
+    o.projectileManager.setProjectileResolvedCallback((outcome: ProjectileLifecycleOutcome) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(outcome));
     o.projectileInteraction.setProjectileMiniRocketStatePort({
       getOwnerPosition: (ownerId) => {
         const owner = o.playerManager.getOwnerVisualState(ownerId);
         return owner ? { x: owner.x, y: owner.y } : null;
       },
-      onCollected: (event) => {
-        if (event.adrenalineRefund > 0) {
-          o.getPlayerCombatIntegration()?.resource.refundAdrenaline(event.ownerId, event.adrenalineRefund);
+      onOutcome: (outcome) => {
+        if (outcome.pickup.adrenalineRefund > 0) {
+          o.getPlayerCombatIntegration()?.resource.refundAdrenaline(outcome.collectorId, outcome.pickup.adrenalineRefund);
         }
-        if (event.armorRefund > 0) o.combatSystem.addArmor(event.ownerId, event.armorRefund);
-        o.network.effects.broadcastMiniRocketCollectionEffect(event.x, event.y, event.ownerColor ?? event.color);
+        if (outcome.pickup.armorRefund > 0) o.combatSystem.addArmor(outcome.collectorId, outcome.pickup.armorRefund);
+        o.network.effects.broadcastMiniRocketCollectionEffect(
+          outcome.pickup.x,
+          outcome.pickup.y,
+          outcome.pickup.ownerColor ?? outcome.pickup.color,
+        );
       },
     });
-    o.projectileManager.setMiniRocketDestroyedCallback((projectile, x, y) => o.network.effects.broadcastMiniRocketDestructionEffect(x, y, projectile.ownerColor ?? projectile.color));
+    o.projectileManager.setMiniRocketDestroyedCallback((source: ProjectileImpactSource) => (
+      o.network.effects.broadcastMiniRocketDestructionEffect(source.x, source.y, source.ownerColor ?? source.color)
+    ));
     o.projectileManager.setStandaloneExplosionRequestCallback((request) => {
       o.hostUpdate.queueStandaloneProjectileExplosion?.(request);
     });
     o.projectileManager.setProximityPulseCallback((projectile) => {
       const pulse = o.hostUpdate.resolveProjectileProximityPulse(projectile);
       const playerLines = projectile.isBfg ? o.hostUpdate.resolveBfgPlayerProximityPulse(projectile) : [];
-      o.network.effects.broadcastBfgLaserBatch([...playerLines, ...pulse.lines], projectile.isBfg ? COLORS.GREEN_2 : projectile.color, projectile.isBfg ? undefined : 'asmd_primary', projectile.isBfg ? projectile.id : undefined);
+      o.network.effects.broadcastBfgLaserBatch([...playerLines, ...pulse.lines], projectile.isBfg ? COLORS.GREEN_2 : projectile.color, projectile.isBfg ? undefined : 'asmd_primary', projectile.isBfg ? projectile.projectileId : undefined);
     });
     o.projectileManager.setTimeBubbleFactorProvider((x, y, now, ownerId) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1);
     o.projectileManager.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
@@ -980,6 +988,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       resolveBarrier: (request) => o.combatSystem.resolveProjectileBarrier(request),
     });
     o.projectileInteraction.setProjectileCombatPort(o.combatSystem);
+    o.combatSystem.setProjectileDetonableReadPort(o.projectileInteraction);
     o.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;

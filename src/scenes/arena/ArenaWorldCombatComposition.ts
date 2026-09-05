@@ -8,7 +8,8 @@ import {
 import { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
-import type { SyncedProjectile, TrackedProjectile } from '../../types';
+import type { SyncedProjectile } from '../../types';
+import type { ProjectileImpactSource } from '../../projectile/ProjectileGameplayPort';
 import { UTILITY_CONFIGS, type PlaceableTurretUtilityConfig } from '../../loadout/LoadoutConfig';
 import { toMapId } from '../../world/arenaDescriptorAdapter';
 import type {
@@ -195,7 +196,7 @@ export function composeWorldCombatGameplay(
     applyObstacleDamageById: (rockId, damage, attackerId) => rockVisualHelper.applyObstacleDamageById(rockId, damage, attackerId),
     handleDestroyedRock: (rockId, reason, attackerId) => rockVisualHelper.handleDestroyedRock(rockId, reason, attackerId),
     updateTurretAngle: (rockId, angle) => rockVisualHelper.updateTurretAngle(rockId, angle),
-    spawnImpactCloud: (projectile, x, y) => spawnImpactCloudFromProjectile(ctx, projectile, x, y),
+    spawnImpactCloud: (projectile) => spawnImpactCloudFromProjectile(ctx, projectile),
     resetPlayerPosition: (playerId, x, y) => flow.getCoopMissionRuntime()?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y),
     dropBeer: (playerId, x, y) => flow.getCaptureTheBeerSystem()?.dropBeerForPlayer(playerId, x, y),
     dropCarryForPlayer: (playerId, x, y) => flow.getCoopMissionRuntime()?.coopDefenseCarrySystem?.dropForPlayer(playerId, x, y),
@@ -302,14 +303,12 @@ function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): numbe
 /** Item-Affix-Wolke eines eingeschlagenen Projektils; reine Host-Folge des Treffers. */
 function spawnImpactCloudFromProjectile(
   ctx: ArenaContext,
-  proj: TrackedProjectile,
-  x: number,
-  y: number,
+  proj: ProjectileImpactSource,
 ): void {
   if (!proj.impactCloud) return;
   const ownerColor = proj.ownerColor ?? bridge.getPlayerColor(proj.ownerId) ?? proj.color;
   ctx.stinkCloudSystem.hostCreateStationaryCloud(
-    proj.ownerId, ownerColor, x, y,
+    proj.ownerId, ownerColor, proj.x, proj.y,
     proj.impactCloud.radius,
     proj.impactCloud.duration,
     proj.impactCloud.damagePerTick,

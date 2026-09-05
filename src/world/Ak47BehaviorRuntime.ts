@@ -1,4 +1,4 @@
-import type { TrackedProjectile, SyncedActiveHudBuff } from '../types';
+import type { SyncedActiveHudBuff } from '../types';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import type {
   Ak47BehaviorPort,
@@ -6,6 +6,7 @@ import type {
   Ak47ShotPreparation,
 } from '../loadout/Ak47BehaviorPort';
 import type { ProjectileAk47HitContext } from '../projectile/ProjectileCombatPort';
+import type { ProjectileLifecycleOutcome } from '../projectile/ProjectileGameplayPort';
 
 interface Ak47CombatState {
   stacks: number;
@@ -103,17 +104,20 @@ export class Ak47BehaviorRuntime implements Ak47BehaviorPort {
     }
   }
 
-  resolveProjectile(projectile: TrackedProjectile): void {
+  resolveProjectile(outcome: ProjectileLifecycleOutcome): void {
     if (this.destroyed) return;
-    const shotId = projectile.ak47ShotId;
+    if (outcome.kind !== 'resolved') return;
+    const ak47 = outcome.reaction?.ak47;
+    if (!ak47) return;
+    const shotId = ak47.shotId;
     if (shotId === undefined) return;
-    const state = this.states.get(projectile.ownerId);
+    const state = this.states.get(outcome.provenance.allegiance.ownerId);
     if (!state) return;
 
-    const didHit = projectile.ak47HitConfirmed || state.confirmedShotIds.has(shotId);
+    const didHit = ak47.hitConfirmed || state.confirmedShotIds.has(shotId);
     state.confirmedShotIds.delete(shotId);
     state.pendingFireSuperiorityShotIds.delete(shotId);
-    if (projectile.ak47FireSuperiorityShot && !this.isFireSuperiorityPhaseActive(state)) {
+    if (ak47.fireSuperiorityShot && !this.isFireSuperiorityPhaseActive(state)) {
       state.fireSuperiorityTotalShots = 0;
       state.stacks = 0;
     } else if (!didHit && !this.isFireSuperiorityPhaseActive(state)) {

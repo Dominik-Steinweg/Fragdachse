@@ -8,7 +8,7 @@ import {
   type FlamethrowerWeaponFireConfig,
   type MolotovUtilityConfig,
 } from '../loadout/LoadoutConfig';
-import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, GroundFireVisualStyle, TrackedProjectile } from '../types';
+import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenadeEffect, GroundFireCellEffect, GroundFireVisualStyle } from '../types';
 import type { FireSystem } from '../effects/FireSystem';
 import { BURN_TICK_INTERVAL_MS } from '../config';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -18,6 +18,7 @@ import type {
   ProjectileTravelSample,
 } from '../projectile/ProjectileTravelPort';
 import type { ProjectileId } from '../projectile/ProjectileSpawnPort';
+import type { ProjectileFlameExpiryEvent } from '../projectile/ProjectileGameplayPort';
 import type { ActiveBurnSource, CombatSystem } from './CombatSystem';
 
 interface ResolvedFlameOwner {
@@ -199,11 +200,11 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     this.launchFireChunks(ownerId, x, y, burst, now, sourceKey);
   }
 
-  handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, now: number): void {
+  handleNaturalFlameExpiry(projectile: ProjectileFlameExpiryEvent, now: number): void {
     const owner = this.getEquippedFlameOwner(projectile.ownerId);
     if (!owner || (owner.fire.burningGround?.createOnFlameExpiry ?? 0) <= 0) return;
     if ((owner.fire.burningGround?.durationMs ?? 0) <= 0) return;
-    this.refreshGroundAt(x, y, owner, now);
+    this.refreshGroundAt(projectile.x, projectile.y, owner, now);
   }
 
   handlePlayerDeath(playerId: string, x: number, y: number): void {

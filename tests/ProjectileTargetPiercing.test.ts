@@ -162,7 +162,6 @@ function makeSystem(
   // Der Schadenspfad selbst ist hier nicht der Prüfgegenstand, nur wer wie oft getroffen wird.
   (system as unknown as { applyDamage: unknown }).applyDamage = applyDamage;
   (system as unknown as { canDamageTarget: unknown }).canDamageTarget = () => true;
-  (system as unknown as { computeProjectileDamage: unknown }).computeProjectileDamage = () => proj.damage;
   (system as unknown as { registerAk47Hit: unknown }).registerAk47Hit = () => {};
   system.setPlasmaSwarmReactionHandler((impact) => {
     for (let index = 0; index < impact.projectileCount; index += 1) {

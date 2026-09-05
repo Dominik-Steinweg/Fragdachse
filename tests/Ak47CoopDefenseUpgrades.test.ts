@@ -25,6 +25,8 @@ import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
 import { Ak47StrategicTargetRenderer } from '../src/effects/Ak47StrategicTargetRenderer';
 import type { ProjectileAk47HitContext } from '../src/projectile/ProjectileCombatPort';
+import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
+import type { ProjectileLifecycleOutcome } from '../src/projectile/ProjectileGameplayPort';
 
 function profile(levels: Readonly<Record<string, number>>): CoopDefenseUpgradeProfile {
   return {
@@ -60,6 +62,21 @@ function projectile(shotId: number, overrides: Partial<TrackedProjectile> = {}):
     ak47FireSuperiorityShot: false,
     ...overrides,
   } as TrackedProjectile;
+}
+
+function resolvedProjectile(shotId: number, fireSuperiorityShot = false): ProjectileLifecycleOutcome {
+  return {
+    kind: 'resolved',
+    projectileId: shotId,
+    provenance: createSingleOwnerProvenance('p1', { weaponSourceId: 'weapon.ak47', sourceSlot: 'weapon2' }),
+    reaction: {
+      ak47: {
+        shotId,
+        fireSuperiorityShot,
+        hitConfirmed: false,
+      },
+    },
+  };
 }
 
 function hitContext(shotId: number, fireSuperiorityShot = false): ProjectileAk47HitContext {
@@ -154,7 +171,7 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
       expect.objectContaining({ defId: 'AK47_FIRE_SUPERIORITY', availableCount: 3 }),
     ]));
 
-    const miss = projectile(6);
+    const miss = resolvedProjectile(6);
     behavior.resolveProjectile(miss);
     expect(behavior.getHudBuffs('p1', 0)[0]).toMatchObject({ stacks: 5 });
 
@@ -166,7 +183,7 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
     expect(state.fireSuperiorityShotsAvailable).toBe(0);
     expect(state.pendingFireSuperiorityShotIds.has(99)).toBe(true);
 
-    behavior.resolveProjectile(projectile(99, { ak47FireSuperiorityShot: true }));
+    behavior.resolveProjectile(resolvedProjectile(99, true));
     expect(state.stacks).toBe(0);
   });
 
@@ -176,7 +193,7 @@ describe('AK-47 Coop-Defense-Upgradebaum', () => {
     state.fireSuperiorityShotsAvailable = 0;
     state.fireSuperiorityTotalShots = 1;
     state.pendingFireSuperiorityShotIds.add(10);
-    const shot = projectile(10, { ak47FireSuperiorityShot: true });
+    const shot = resolvedProjectile(10, true);
 
     const context = hitContext(10, true);
     expect(behavior.registerStrategicTargetHit(context, 'enemy-1')).toBe(true);
