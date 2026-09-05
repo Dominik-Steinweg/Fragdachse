@@ -73,13 +73,12 @@ vi.mock('phaser', () => {
 import { CombatSystem } from '../src/systems/CombatSystem';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type {
   HitscanSupportEffect,
   ProjectileExplosionConfig,
   SyncedDeathEffect,
-  TrackedProjectile,
+  ProjectileRuntimeRecord,
 } from '../src/types';
 
 function makeCombatHarness() {
@@ -101,7 +100,6 @@ function makeCombatHarness() {
   } as unknown as NetworkBridge;
   const combat = new CombatSystem(
     { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
-    {} as ProjectilePhysicsBinding,
     bridge,
   );
   combat.setBaseManager(baseManager);
@@ -136,7 +134,7 @@ function makeSupportCombatHarness() {
     getAllPlayers: () => players,
     getPlayer: (id: string) => players.find((player) => player.id === id),
   } as unknown as PlayerManager;
-  const combat = new CombatSystem(playerManager, {} as ProjectilePhysicsBinding, bridge);
+  const combat = new CombatSystem(playerManager, bridge);
   for (const player of players) combat.initPlayer(player.id);
   combat.setLoadoutManager({
     getDamageMultiplier: () => 1,
@@ -171,7 +169,6 @@ describe('CombatSystem base damage routing', () => {
         getAllPlayers: () => [player],
         getPlayer: (id: string) => id === player.id ? player : undefined,
       } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       bridge,
     );
     combat.initPlayer(player.id);
@@ -189,7 +186,7 @@ describe('CombatSystem base damage routing', () => {
       damage: 10,
       ownerId: 'player-1',
       sourceSlot: 'weapon1',
-    } as TrackedProjectile);
+    } as ProjectileRuntimeRecord);
 
     const internals = combat as unknown as {
       traceHitscan: () => {
@@ -251,7 +248,7 @@ describe('CombatSystem base damage routing', () => {
       damage: 10,
       ownerId: 'player-1',
       sourceSlot: 'weapon1',
-    } as TrackedProjectile);
+    } as ProjectileRuntimeRecord);
     const explosion: ProjectileExplosionConfig = {
       radius: 200,
       maxDamage: 10,
@@ -300,7 +297,6 @@ describe('CombatSystem base damage routing', () => {
     } as unknown as NetworkBridge;
     const combat = new CombatSystem(
       { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       bridge,
     );
     combat.setEnemyManager({
@@ -344,7 +340,6 @@ describe('CombatSystem death visual snapshots', () => {
         getAllPlayers: () => [player],
         getPlayer: (id: string) => id === player.id ? player : undefined,
       } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       {} as NetworkBridge,
     );
     const internals = combat as unknown as {
@@ -403,7 +398,6 @@ describe('CombatSystem actual damage callbacks', () => {
     } as unknown as NetworkBridge;
     const combat = new CombatSystem(
       { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       bridge,
     );
     combat.setEnemyManager({
@@ -434,7 +428,6 @@ describe('CombatSystem actual damage callbacks', () => {
         getAllPlayers: () => [victim],
         getPlayer: (id: string) => id === victim.id ? victim : undefined,
       } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       bridge,
     );
     combat.initPlayer(victim.id);
@@ -466,7 +459,6 @@ describe('CombatSystem actual damage callbacks', () => {
         getAllPlayers: () => [player],
         getPlayer: (id: string) => id === player.id ? player : undefined,
       } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       bridge,
     );
     combat.initPlayer(player.id);
@@ -525,7 +517,6 @@ describe('Plasmabrenner hitscan support impact', () => {
         getAllPlayers: () => [shooter],
         getPlayer: () => shooter,
       } as unknown as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       bridge,
     );
     combat.initPlayer(shooter.id);

@@ -1,4 +1,4 @@
-import type { ProjectileSpawnConfig, TrackedProjectile } from '../types';
+import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../types';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 
 /**
@@ -146,7 +146,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
  * Explosionen, Brand und Debuffs des Ursprungs still verloren.
  */
 export function createInheritedProjectilePayload(
-  record: TrackedProjectile,
+  record: ProjectileRuntimeRecord,
 ): Partial<ProjectileSpawnConfig> {
   return {
     explosion:            record.explosion,

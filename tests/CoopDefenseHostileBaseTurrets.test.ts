@@ -25,7 +25,6 @@ import {
 } from '../src/config';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import {
   UTILITY_CONFIGS,
   WEAPON_CONFIGS,
@@ -148,7 +147,6 @@ describe('hostile base turrets', () => {
   it('treats hostile base spores as zombie-faction damage', () => {
     const combat = new CombatSystem(
       {} as PlayerManager,
-      {} as ProjectilePhysicsBinding,
       { areTeammates: () => true } as unknown as NetworkBridge,
     );
     const enemies = new Map([

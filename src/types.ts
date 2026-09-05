@@ -1367,7 +1367,7 @@ export interface SyncedTimeBubble {
 }
 
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
-export interface TrackedProjectile {
+export interface ProjectileRuntimeRecord {
   proximityPulse?: ProjectileProximityPulseConfig;
   /** Collision candidate mode resolved from the semantic spawn capabilities. */
   collisionMode: ProjectileCollisionMode;

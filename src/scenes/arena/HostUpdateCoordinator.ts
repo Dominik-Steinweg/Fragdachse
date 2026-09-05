@@ -1071,7 +1071,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Direkt an den Physik-Projektilen statt am Wire-Snapshot: der Rumble ist reine Host-Praesentation
     // und haengt nicht davon ab, was in diesem Tick tatsaechlich uebertragen wurde.
     const bfgInFlight = this.worldFramePort?.getProjectileRuntime?.()
-      ?.hasActiveProjectileStyle('bfg') ?? false;
+      ?.hasActiveBfgProjectile() ?? false;
     if (bfgInFlight) {
       if (this.presentationActive) this.ctx.visualFeedback.camera.request(bfgFlightRumble());
     }

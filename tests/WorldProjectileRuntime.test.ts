@@ -5,25 +5,26 @@ import {
   type ProjectilePhysicsBindingPort,
   type ProjectileRuntimeOwnerPort,
 } from '../src/projectile/WorldProjectileRuntime';
-import type { ProjectileSpawnConfig, TrackedProjectile } from '../src/types';
+import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../src/types';
 import {
   createSingleOwnerProvenance,
   type ProjectileProvenance,
   type ProjectileSpawnRequest,
 } from '../src/projectile/ProjectileSpawnRequest';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
+import type { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
 import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
 
 function createSimulation() {
-  const created: TrackedProjectile[] = [];
-  const released: TrackedProjectile[] = [];
+  const created: ProjectileRuntimeRecord[] = [];
+  const released: ProjectileRuntimeRecord[] = [];
   let boundOwner: ProjectileRuntimeOwnerPort | null = null;
   const simulation: ProjectilePhysicsBindingPort = {
     bindOwner: (owner) => { boundOwner = owner; },
     createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
-      const record = { id: _id, pendingDestroy: false, provenance } as unknown as TrackedProjectile;
+      const record = { id: _id, pendingDestroy: false, provenance } as unknown as ProjectileRuntimeRecord;
       created.push(record);
       return record;
     },
@@ -33,10 +34,23 @@ function createSimulation() {
   return { simulation, created, released, getBoundOwner: () => boundOwner };
 }
 
+function createPresentation(): ProjectilePresentationRuntime {
+  return {
+    clientVisualCount: 0,
+    syncHostRenderers: () => {},
+    getShadowSamples: () => [],
+    getLightSamples: () => [],
+    presentClientFrame: () => {},
+    extrapolateClient: () => {},
+    releaseWorldPresentation: () => {},
+  } as unknown as ProjectilePresentationRuntime;
+}
+
 function createRuntime(identityScope = new ProjectileIdentityScope(1)) {
   const simulation = createSimulation();
   const runtime = new WorldProjectileRuntime({
     physicsBinding: simulation.simulation,
+    presentation: createPresentation(),
     identityScope,
     hostNowMs: () => 1_000,
   });
@@ -53,8 +67,8 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     const second = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
 
     expect(second).not.toBe(first);
-    expect(runtime.store.getById(first)?.id).toBe(first);
-    expect(runtime.store.getById(second)?.id).toBe(second);
+    expect(runtime.getSummary().activeCount).toBe(2);
+    expect(runtime.getSummary().activeProjectilesByOwner.get('owner')).toBe(2);
     expect(runtime.activeCount).toBe(2);
   });
 
@@ -107,8 +121,6 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     runtime.destroyProjectile(4711);
 
     expect(released).toHaveLength(1);
-    expect(runtime.store.getById(id)).toBeUndefined();
-    expect(runtime.store.stepOrder).toHaveLength(0);
     expect(runtime.activeCount).toBe(0);
   });
 
@@ -116,7 +128,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     const { runtime, simulation, released, getBoundOwner } = createRuntime();
     runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
     runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-    expect(getBoundOwner()).toBe(runtime);
+    expect(getBoundOwner()).not.toBeNull();
 
     runtime.destroy();
     runtime.destroy();
@@ -124,11 +136,10 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     expect(released).toHaveLength(2);
     expect(simulation.releaseWorldState).toHaveBeenCalledOnce();
     expect(getBoundOwner()).toBeNull();
-    expect(runtime.store.stepOrder).toHaveLength(0);
     expect(runtime.activeCount).toBe(0);
   });
 
-  it('taktet den Flight-Core mit der vom Host gelieferten Zeit vor der Legacy-Stufe', () => {
+  it('taktet den Flight-Core mit der vom Host gelieferten Zeit vor der Binding-Stufe', () => {
     const projectile = {
       id: 0,
       ownerId: 'owner',
@@ -145,7 +156,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       bounceCount: 0,
       isGrenade: false,
       colliders: [],
-    } as unknown as TrackedProjectile;
+    } as unknown as ProjectileRuntimeRecord;
     let stageNowMs = 0;
     let receivedAge = 0;
     const simulation: ProjectilePhysicsBindingPort = {
@@ -162,6 +173,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     };
     const runtime = new WorldProjectileRuntime({
       physicsBinding: simulation,
+      presentation: createPresentation(),
       identityScope: new ProjectileIdentityScope(1),
       hostNowMs: () => 0,
     });
@@ -203,7 +215,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       fireTrailHalfWidthCells: 1,
       awpCorridorHalfWidth: 24,
       awpCorridorDamage: 40,
-    } as unknown as TrackedProjectile;
+    } as unknown as ProjectileRuntimeRecord;
     let appliedAugment: ProjectileBurnAugment | null = null;
     const simulation: ProjectilePhysicsBindingPort = {
       bindOwner: () => {},
@@ -219,6 +231,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     };
     const runtime = new WorldProjectileRuntime({
       physicsBinding: simulation,
+      presentation: createPresentation(),
       identityScope: new ProjectileIdentityScope(1),
       hostNowMs: () => 0,
     });
@@ -279,7 +292,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       lastY: 8,
       sprite: { active: true, x: 100, y: 8, displayWidth: 4, displayHeight: 4 },
       body: { velocity: { x: 10, y: 0 } },
-    } as unknown as TrackedProjectile;
+    } as unknown as ProjectileRuntimeRecord;
     const simulation: ProjectilePhysicsBindingPort = {
       bindOwner: () => {},
       createProjectile: (id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, receivedProvenance) => ({
@@ -292,6 +305,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     };
     const runtime = new WorldProjectileRuntime({
       physicsBinding: simulation,
+      presentation: createPresentation(),
       identityScope: new ProjectileIdentityScope(1),
       hostNowMs: () => 0,
     });
@@ -314,9 +328,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
 
     const id = runtime.spawnProjectile(request);
     if (id === null) throw new Error('Expected semantic projectile spawn to succeed');
-    const stored = runtime.store.getById(id);
-
-    expect(stored?.provenance).toBe(provenance);
+    expect(id).toBe(0);
     expect(runtime.getTravelSamples()[0]?.provenance).toBe(provenance);
     expect(runtime.getThreatSamples()[0]?.provenance).toBe(provenance);
     expect(runtime.getSummary().activeProjectilesByOwner.get(provenance.allegiance.ownerId)).toBe(1);

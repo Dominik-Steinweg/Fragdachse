@@ -144,7 +144,7 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
     expect(managerValueImports.some((specifier) => specifier.includes('/effects/'))).toBe(false);
     expect(manager).not.toMatch(/private (?:bullet|flame|bfg|tracer|muzzleFlash)Renderer/);
     expect(manager).not.toContain('private audioSystem');
-    expect(presentation).not.toContain('TrackedProjectile');
+    expect(presentation).not.toContain('ProjectileRuntimeRecord');
     expect(presentation).not.toContain('ProjectilePhysicsBinding');
     expect(presentation).not.toContain('NetworkBridge');
     expect(bundle).toContain('runtime.getPresentationRuntime().bindRenderers(');

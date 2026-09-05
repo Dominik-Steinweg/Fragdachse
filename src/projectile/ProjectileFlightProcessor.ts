@@ -1,8 +1,8 @@
-import type { TrackedProjectile } from '../types';
+import type { ProjectileRuntimeRecord } from '../types';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 
-/** Core results consumed by the still-legacy collision/effect stage. */
+/** Core results consumed by the downstream collision/effect binding stage. */
 export interface ProjectileCoreStageResult {
   readonly lifetimeExpiredIds: ReadonlySet<number>;
   readonly grenadeExpiredIds: ReadonlySet<number>;
@@ -16,7 +16,7 @@ export interface ProjectileCoreStageResult {
  * World-owned Flight/Lifetime core.
  *
  * The processor owns only deterministic runtime bookkeeping and physics-body state. Collision,
- * effects and presentation stay in the legacy stage until their planned cutover phases.
+ * effects and presentation are consumed by their dedicated downstream owners.
  */
 export class ProjectileFlightProcessor {
   private readonly lifetimeExpiredIds = new Set<number>();
@@ -40,7 +40,7 @@ export class ProjectileFlightProcessor {
     this.timeFieldPort = port;
   }
 
-  run(projectiles: readonly TrackedProjectile[], deltaMs: number, nowMs: number): ProjectileCoreStageResult {
+  run(projectiles: readonly ProjectileRuntimeRecord[], deltaMs: number, nowMs: number): ProjectileCoreStageResult {
     this.lifetimeExpiredIds.clear();
     this.grenadeExpiredIds.clear();
     this.rangeDepletedIds.clear();
@@ -65,7 +65,7 @@ export class ProjectileFlightProcessor {
     this.timeFieldPort = null;
   }
 
-  private step(projectile: TrackedProjectile, deltaMs: number, nowMs: number): void {
+  private step(projectile: ProjectileRuntimeRecord, deltaMs: number, nowMs: number): void {
     if (projectile.pendingDestroy) return;
 
     const nextFactor = this.resolveMovementFactor(projectile, nowMs);
@@ -122,7 +122,7 @@ export class ProjectileFlightProcessor {
     this.updateAntiTunnelingBody(projectile);
   }
 
-  private resolveMovementFactor(projectile: TrackedProjectile, nowMs: number): number {
+  private resolveMovementFactor(projectile: ProjectileRuntimeRecord, nowMs: number): number {
     const queried = this.timeFieldPort?.getMovementFactor(
       projectile.sprite.x,
       projectile.sprite.y,
@@ -144,7 +144,7 @@ export class ProjectileFlightProcessor {
     return nextFactor;
   }
 
-  private decrementRange(projectile: TrackedProjectile): void {
+  private decrementRange(projectile: ProjectileRuntimeRecord): void {
     if (projectile.remainingRangePx === undefined) return;
     const dx = projectile.sprite.x - projectile.lastX;
     const dy = projectile.sprite.y - projectile.lastY;
@@ -152,7 +152,7 @@ export class ProjectileFlightProcessor {
     if (distance > 0.01) projectile.remainingRangePx = Math.max(0, projectile.remainingRangePx - distance);
   }
 
-  private emitCountdown(projectile: TrackedProjectile, realAgeMs: number): void {
+  private emitCountdown(projectile: ProjectileRuntimeRecord, realAgeMs: number): void {
     const fuseTimeMs = projectile.fuseTime ?? 0;
     if (fuseTimeMs < 1500) return;
     const remainingSeconds = Math.max(0, Math.ceil((fuseTimeMs - realAgeMs) / 1000));
@@ -161,7 +161,7 @@ export class ProjectileFlightProcessor {
     this.countdownEvents.push({ x: projectile.sprite.x, y: projectile.sprite.y, value: remainingSeconds });
   }
 
-  private updateGrowingHitbox(projectile: TrackedProjectile, deltaSeconds: number): void {
+  private updateGrowingHitbox(projectile: ProjectileRuntimeRecord, deltaSeconds: number): void {
     if (!projectile.isFlame
       && projectile.leafBlowerMinKnockback === undefined
       && projectile.leafBlowerMaxKnockback === undefined
@@ -180,7 +180,7 @@ export class ProjectileFlightProcessor {
     }
   }
 
-  private updateDragAndStop(projectile: TrackedProjectile, timeFactor: number, simulatedAgeMs: number): void {
+  private updateDragAndStop(projectile: ProjectileRuntimeRecord, timeFactor: number, simulatedAgeMs: number): void {
     if (projectile.airFrictionDecayPerSec !== undefined && !projectile.frictionActivated
       && (projectile.frictionDelayMs === undefined || simulatedAgeMs >= projectile.frictionDelayMs)) {
       const effectiveDecay = effectiveAirFrictionDecay(projectile.airFrictionDecayPerSec, timeFactor);
@@ -196,7 +196,7 @@ export class ProjectileFlightProcessor {
     }
   }
 
-  private syncTimeBubbleDrag(projectile: TrackedProjectile): void {
+  private syncTimeBubbleDrag(projectile: ProjectileRuntimeRecord): void {
     if (!projectile.frictionActivated || projectile.airFrictionDecayPerSec === undefined) return;
     const effectiveDecay = effectiveAirFrictionDecay(
       projectile.airFrictionDecayPerSec,
@@ -208,7 +208,7 @@ export class ProjectileFlightProcessor {
     projectile.appliedAirFrictionDecay = effectiveDecay;
   }
 
-  private updateAntiTunnelingBody(projectile: TrackedProjectile): void {
+  private updateAntiTunnelingBody(projectile: ProjectileRuntimeRecord): void {
     if (projectile.originalBodySize === undefined) return;
     const velocityX = Math.abs(projectile.body.velocity.x);
     const velocityY = Math.abs(projectile.body.velocity.y);

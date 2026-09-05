@@ -16,7 +16,7 @@ vi.mock('phaser', () => ({
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
+import type { ProjectileSpawnPort } from '../src/projectile/ProjectileSpawnPort';
 import type { TranslocatorProjectilePort } from '../src/projectile/ProjectileExternalInteractionPort';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
@@ -51,9 +51,9 @@ function createSystem(
     hasClearLineOfFire,
     applyDamage: vi.fn(),
   } as unknown as CombatSystem;
-  const projectileManager = {
+  const projectileSpawn = {
     spawnProjectile,
-  } as unknown as ProjectilePhysicsBinding;
+  } as unknown as ProjectileSpawnPort;
   const translocatorProjectilePort: TranslocatorProjectilePort = {
     spawnPuck,
     getPuckPosition: () => null,
@@ -64,7 +64,7 @@ function createSystem(
     system: new CoopDefenseEnemyAbilitySystem(
       enemyManager,
       playerManager,
-      projectileManager,
+      projectileSpawn,
       combatSystem,
       null as EnergyShieldSystem | null,
       {} as StinkCloudSystem,

@@ -1,4 +1,4 @@
-import type { TrackedProjectile } from '../types';
+import type { ProjectileRuntimeRecord } from '../types';
 import type { ProjectileMiniRocketCollectedOutcome } from './ProjectileGameplayPort';
 
 /** Domain-facing hooks for the local Mini-Rocket state machine. */
@@ -9,9 +9,9 @@ export interface ProjectileMiniRocketStatePort {
 
 export interface ProjectileMiniRocketProcessorDependencies {
   getOwnerPosition(ownerId: string): { x: number; y: number } | null;
-  updateHoming(projectile: TrackedProjectile, simulatedAgeMs: number, forceSearch?: boolean): boolean;
-  resetHoming(projectile: TrackedProjectile): void;
-  onCollected(projectile: TrackedProjectile, x: number, y: number): void;
+  updateHoming(projectile: ProjectileRuntimeRecord, simulatedAgeMs: number, forceSearch?: boolean): boolean;
+  resetHoming(projectile: ProjectileRuntimeRecord): void;
+  onCollected(projectile: ProjectileRuntimeRecord, x: number, y: number): void;
 }
 
 /**
@@ -23,7 +23,7 @@ export interface ProjectileMiniRocketProcessorDependencies {
 export class ProjectileMiniRocketProcessor {
   constructor(private readonly deps: ProjectileMiniRocketProcessorDependencies) {}
 
-  update(projectile: TrackedProjectile, simulatedAgeMs: number): boolean {
+  update(projectile: ProjectileRuntimeRecord, simulatedAgeMs: number): boolean {
     if (!projectile.homing || projectile.miniRocketStageRangePx === undefined) return false;
 
     if (projectile.miniRocketSpent && projectile.miniRocketPhase !== 'return') {
@@ -87,7 +87,7 @@ export class ProjectileMiniRocketProcessor {
     return false;
   }
 
-  completeExplosion(projectile: TrackedProjectile): void {
+  completeExplosion(projectile: ProjectileRuntimeRecord): void {
     projectile.miniRocketHasExploded = true;
     if (projectile.miniRocketSpent) {
       projectile.explosion = undefined;
@@ -115,7 +115,7 @@ export class ProjectileMiniRocketProcessor {
     }
   }
 
-  private enterReturn(projectile: TrackedProjectile): void {
+  private enterReturn(projectile: ProjectileRuntimeRecord): void {
     const owner = this.deps.getOwnerPosition(projectile.ownerId);
     if (!owner) return;
     projectile.miniRocketPhase = 'return';
@@ -129,7 +129,7 @@ export class ProjectileMiniRocketProcessor {
     this.steerTowards(projectile, owner.x, owner.y);
   }
 
-  private steerTowards(projectile: TrackedProjectile, targetX: number, targetY: number): void {
+  private steerTowards(projectile: ProjectileRuntimeRecord, targetX: number, targetY: number): void {
     const velocitySpeed = projectile.body.velocity.length();
     const normalFlightSpeed = this.getFlightSpeed(projectile);
     const currentSpeed = normalFlightSpeed > 0.001 ? normalFlightSpeed : velocitySpeed;
@@ -144,13 +144,13 @@ export class ProjectileMiniRocketProcessor {
     projectile.body.setVelocity(Math.cos(nextAngle) * currentSpeed, Math.sin(nextAngle) * currentSpeed);
   }
 
-  private getFlightSpeed(projectile: TrackedProjectile): number {
+  private getFlightSpeed(projectile: ProjectileRuntimeRecord): number {
     const completedExplosions = Math.max(0, projectile.miniRocketExplosionIndex ?? 0);
     const explosionSpeedFactor = Math.max(0.1, 1 - completedExplosions * 0.2);
     return (projectile.initialSpeed ?? 0) * (projectile.timeBubbleFactor ?? 1) * explosionSpeedFactor;
   }
 
-  private setVelocityFromDirection(projectile: TrackedProjectile, vx: number, vy: number): void {
+  private setVelocityFromDirection(projectile: ProjectileRuntimeRecord, vx: number, vy: number): void {
     const directionLength = Math.hypot(vx, vy);
     const speed = this.getFlightSpeed(projectile);
     if (directionLength <= 0.001 || speed <= 0.001) return;

@@ -22,7 +22,7 @@ function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
   const recordUtilityUsed = vi.fn();
   const recordConstructionBuilt = vi.fn();
   const utility = new PlayerUtilityActionRuntime({
-    projectileManager: { spawnProjectile: vi.fn() } as any,
+    projectileSpawn: { spawnProjectile: vi.fn() } as any,
     combatSystem: { resolveMeleeSwing: vi.fn(() => true) } as any,
     actor: {
       getPlayer: vi.fn(() => player),

@@ -34,9 +34,6 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
       getPlayer: vi.fn().mockReturnValue(fakeEntity({ x: 0, y: 0, body: { enable: true } })),
       getAllPlayers: vi.fn().mockReturnValue([]),
     };
-    const projectileManagerMock: any = {
-      getTrackedProjectiles: vi.fn().mockReturnValue([]),
-    };
     const networkBridgeMock: any = {
       isHost: vi.fn().mockReturnValue(true),
       send: vi.fn(),
@@ -47,7 +44,6 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
 
     const cs = new CombatSystem(
       playerManagerMock,
-      projectileManagerMock,
       networkBridgeMock,
     );
 

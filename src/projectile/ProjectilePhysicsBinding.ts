@@ -3,9 +3,7 @@ import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import {
   DEPTH,
 } from '../config';
-import type { ShadowProjectileSample } from '../effects/ShadowConfig';
-import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { PlaceableKind, TrackedProjectile, SyncedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
+import type { PlaceableKind, ProjectileRuntimeRecord, ProjectileSpawnConfig, ProjectileHomingConfig, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
 import type {
   HomingLineOfFireChecker,
   HomingTargetProvider,
@@ -35,15 +33,10 @@ import {
   type ProjectileCoreStageResult,
 } from './ProjectileFlightProcessor';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
-import type { ProjectileReplicationAdapter } from './ProjectileReplicationAdapter';
 import {
-  ProjectileClientReplica,
-  type ProjectileClientReplicaFrame,
-} from './ProjectileClientReplica';
-import {
-  ProjectilePresentationRuntime,
-  type ProjectilePresentationState,
-} from './ProjectilePresentationRuntime';
+  EMPTY_PROJECTILE_PRESENTATION,
+  type ProjectilePresentationPort,
+} from './ProjectilePresentationPort';
 import type {
   ProjectileExternalInteractionAccess,
   ProjectileDetonationOutcome,
@@ -76,8 +69,8 @@ import {
   resolvePlasmaSwarmHoming,
 } from '../systems/PlasmaCharge';
 
-const NO_PROJECTILE_RECORDS: readonly TrackedProjectile[] = [];
-const NO_ACTIVE_PROJECTILES: ReadonlySet<TrackedProjectile> = new Set<TrackedProjectile>();
+const NO_PROJECTILE_RECORDS: readonly ProjectileRuntimeRecord[] = [];
+const NO_ACTIVE_PROJECTILES: ReadonlySet<ProjectileRuntimeRecord> = new Set<ProjectileRuntimeRecord>();
 
 /**
  * World-local Phaser binding for ProjectileRuntime.
@@ -96,15 +89,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    */
   private owner: ProjectileRuntimeOwnerPort | null = null;
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
-
-  /** World-lokaler Host-Replication-Adapter; der Manager besitzt weder Codec- noch Resend-State. */
-  private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;
-
-  /** Rendererfreier Client-Owner für Snapshot-State und Extrapolation. */
-  private readonly clientReplica = new ProjectileClientReplica();
-  /** Presentation bleibt außerhalb von Host-Simulation und Client-Replica. */
-  private readonly presentation: ProjectilePresentationRuntime;
-  private readonly presentationStates: ProjectilePresentationState[] = [];
 
   private timeBubbleFactorProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
   private timeFieldPort: ProjectileTimeFieldPort | null = null;
@@ -167,9 +151,11 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
   private onTrainHit:  ((damage: number, attackerId: string) => void) | null = null;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(
+    scene: Phaser.Scene,
+    private readonly presentation: ProjectilePresentationPort = EMPTY_PROJECTILE_PRESENTATION,
+  ) {
     this.scene = scene;
-    this.presentation = new ProjectilePresentationRuntime(scene);
   }
 
   /** Der world-owned Owner bindet und löst diese Verarbeitung mit seiner eigenen Lifetime. */
@@ -187,67 +173,14 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     if (this.hostFrameNowMs !== null) owner?.setHostFrameTime?.(this.hostFrameNowMs);
   }
 
-  setProjectileReplicationAdapter(adapter: ProjectileReplicationAdapter | null): void {
-    this.projectileReplicationAdapter = adapter;
-  }
-
-  getClientReplica(): ProjectileClientReplica {
-    return this.clientReplica;
-  }
-
-  getPresentationRuntime(): ProjectilePresentationRuntime {
-    return this.presentation;
-  }
-
   /** Host: Verarbeitungsreihenfolge der laufenden World; außerhalb einer World leer. */
-  private get projectiles(): readonly TrackedProjectile[] {
-    return this.owner?.store.stepOrder ?? NO_PROJECTILE_RECORDS;
+  private get projectiles(): readonly ProjectileRuntimeRecord[] {
+    return this.owner?.readProjectileStepOrder() ?? NO_PROJECTILE_RECORDS;
   }
 
   /** Host: wirksame Projectiles der laufenden World; außerhalb einer World leer. */
-  private get activeProjectiles(): ReadonlySet<TrackedProjectile> {
-    return this.owner?.store.activeRecords ?? NO_ACTIVE_PROJECTILES;
-  }
-
-  private get presentationProjectiles(): readonly ProjectilePresentationState[] {
-    const states = this.presentationStates;
-    states.length = 0;
-    for (const projectile of this.projectiles) {
-      const sprite = projectile.sprite;
-      states.push({
-        id: projectile.id,
-        ownerId: projectile.ownerId,
-        x: sprite.x,
-        y: sprite.y,
-        vx: projectile.body.velocity.x,
-        vy: projectile.body.velocity.y,
-        size: sprite.displayWidth,
-        color: projectile.color,
-        ownerColor: projectile.ownerColor,
-        projectileVisualScale: projectile.projectileVisualScale,
-        smokeTrailColor: projectile.smokeTrailColor,
-        style: projectile.projectileStyle,
-        sporeVisualVariant: projectile.sporeVisualVariant,
-        bulletVisualPreset: projectile.bulletVisualPreset,
-        grenadeVisualPreset: projectile.grenadeVisualPreset,
-        energyBallVariant: projectile.energyBallVariant,
-        tracer: projectile.tracerConfig,
-        shotAudioKey: projectile.shotAudioKey,
-        suppressSpawnFx: projectile.suppressSpawnFx,
-        miniRocketPhase: projectile.miniRocketPhase,
-        miniRocketCascadeStage: (projectile.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
-          ? projectile.miniRocketExplosionIndex
-          : undefined,
-        projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
-        burning: !projectile.isFlame && !projectile.isGrenade && (
-          ((projectile.burnDurationMs ?? 0) > 0 && (projectile.burnDamagePerTick ?? 0) > 0)
-          || ((projectile.supplementalBurnOnHit?.durationMs ?? 0) > 0
-            && (projectile.supplementalBurnOnHit?.damagePerTick ?? 0) > 0)
-        ),
-        sourceTurretId: projectile.sourceTurretId,
-      });
-    }
-    return states;
+  private get activeProjectiles(): ReadonlySet<ProjectileRuntimeRecord> {
+    return this.owner?.readActiveProjectileRecords() ?? NO_ACTIVE_PROJECTILES;
   }
 
   // ── Gruppen injizieren (nach buildDynamic) ─────────────────────────────────
@@ -285,7 +218,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   /** Creates the narrow host-gameplay view used by callbacks leaving the simulation seam. */
-  private createImpactSource(proj: TrackedProjectile, x = proj.sprite?.x ?? 0, y = proj.sprite?.y ?? 0): ProjectileImpactSource {
+  private createImpactSource(proj: ProjectileRuntimeRecord, x = proj.sprite?.x ?? 0, y = proj.sprite?.y ?? 0): ProjectileImpactSource {
     return {
       projectileId: proj.id,
       ownerId: proj.ownerId,
@@ -339,7 +272,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * Basis einzeln und wuerden eine 17-Zellen-Basis sonst pro Schuss 17-mal treffen – dasselbe
    * Problem, das fuer Felsen bereits ueber `bfgHitRocks` geloest ist.
    */
-  private applyBaseHit(tracked: TrackedProjectile, baseObject: Phaser.GameObjects.GameObject): void {
+  private applyBaseHit(tracked: ProjectileRuntimeRecord, baseObject: Phaser.GameObjects.GameObject): void {
     if (!this.onBaseHit || tracked.damage <= 0) return;
     const baseId = baseObject.getData('baseId') as string | undefined;
     if (!baseId) return;
@@ -457,7 +390,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
   /**
    * Completes the owner-side lifecycle after Combat has accepted a semantic direct outcome.
-   * Combat never receives this record or calls these legacy lifecycle operations itself.
+   * Combat never receives this record or calls these owner lifecycle operations itself.
    */
   completeDirectImpact(
     projectileId: number,
@@ -465,7 +398,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     impact: { readonly x: number; readonly y: number },
     outcome: ProjectileDirectImpactOutcome,
   ): boolean {
-    const projectile = this.getActiveProjectileById(projectileId);
+    const projectile = this.getLiveRecordById(projectileId);
     if (!projectile) return false;
     if (!outcome.accepted || projectile.pendingDestroy) return false;
     if (projectile.impactCloud) this.emitProjectileImpact(projectile, impact.x, impact.y);
@@ -611,7 +544,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     cfg:     ProjectileSpawnConfig,
     hostNowMs: number,
     provenance: ProjectileProvenance,
-  ): TrackedProjectile {
+  ): ProjectileRuntimeRecord {
     // Style-Flags, die im weiteren Spawn-Ablauf (Shape, Anti-Tunneling, Body-Größe) gebraucht werden.
     // Die renderer- und collider-spezifische Style-Auswertung passiert in den jeweiligen Helfern.
     const isBall   = cfg.projectileStyle === 'ball';
@@ -673,7 +606,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     body.setSize(bodyProfile.width, bodyProfile.height);
     body.setOffset(bodyProfile.offsetX, bodyProfile.offsetY);
 
-    const tracked: TrackedProjectile = {
+    const tracked: ProjectileRuntimeRecord = {
       id,
       sprite,
       body,
@@ -870,11 +803,11 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   /** Placeable turret shots ignore only their own supporting runtime rock. */
-  private canCollideWithRockIndex(tracked: TrackedProjectile, rockIndex: number): boolean {
+  private canCollideWithRockIndex(tracked: ProjectileRuntimeRecord, rockIndex: number): boolean {
     return tracked.ignoreRockIndex === undefined || rockIndex !== tracked.ignoreRockIndex;
   }
 
-  private canCollideWithRock(tracked: TrackedProjectile, rockGO: Phaser.GameObjects.GameObject): boolean {
+  private canCollideWithRock(tracked: ProjectileRuntimeRecord, rockGO: Phaser.GameObjects.GameObject): boolean {
     const rockIndex = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
     return this.canCollideWithRockIndex(tracked, rockIndex);
   }
@@ -890,7 +823,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     y: number,
     sprite: Phaser.GameObjects.Shape,
     body: Phaser.Physics.Arcade.Body,
-    tracked: TrackedProjectile,
+    tracked: ProjectileRuntimeRecord,
     cfg: ProjectileSpawnConfig,
   ): void {
     const isBfg = cfg.isBfg === true;
@@ -1117,7 +1050,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   private setupFlameColliders(
     sprite:  Phaser.GameObjects.Shape,
     body:    Phaser.Physics.Arcade.Body,
-    tracked: TrackedProjectile,
+    tracked: ProjectileRuntimeRecord,
   ): void {
     // Kein Abprallen: Flamme bleibt an der Aufprallstelle stehen
     body.setBounce(0, 0);
@@ -1172,7 +1105,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   private setupLeafBlowerColliders(
     sprite:  Phaser.GameObjects.Shape,
     body:    Phaser.Physics.Arcade.Body,
-    tracked: TrackedProjectile,
+    tracked: ProjectileRuntimeRecord,
   ): void {
     body.setBounce(0, 0);
 
@@ -1219,7 +1152,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   private setupBouncePhysics(
     sprite:          Phaser.GameObjects.Shape,
     body:            Phaser.Physics.Arcade.Body,
-    tracked:         TrackedProjectile,
+    tracked:         ProjectileRuntimeRecord,
     applyRockDamage: boolean,
   ): void {
     body.setCollideWorldBounds(true);
@@ -1461,7 +1394,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }
   }
 
-  private shouldUseContinuousRockCollision(proj: TrackedProjectile): boolean {
+  private shouldUseContinuousRockCollision(proj: ProjectileRuntimeRecord): boolean {
     return proj.collisionMode === 'sweep'
       && !proj.isGrenade
       && !proj.isFlame
@@ -1472,7 +1405,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       && !!this.rockObjects;
   }
 
-  private resolveContinuousRockCollision(proj: TrackedProjectile): void {
+  private resolveContinuousRockCollision(proj: ProjectileRuntimeRecord): void {
     if (!this.rockObjects) return;
 
     const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
@@ -1616,7 +1549,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     return geomNearestRectangleHit(line, rect, this.scratchPoints);
   }
 
-  private getProjectileBodyCenter(proj: TrackedProjectile): { x: number; y: number } {
+  private getProjectileBodyCenter(proj: ProjectileRuntimeRecord): { x: number; y: number } {
     return {
       x: proj.body.x + proj.body.halfWidth,
       y: proj.body.y + proj.body.halfHeight,
@@ -1624,7 +1557,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   private resolveObstacleImpactPoint(
-    proj: TrackedProjectile,
+    proj: ProjectileRuntimeRecord,
     obstacle?: Phaser.GameObjects.GameObject | null,
   ): { x: number; y: number } {
     const fallback = this.getProjectileBodyCenter(proj);
@@ -1658,14 +1591,14 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     return offsets.map((offsetDeg) => baseAngle + Phaser.Math.DegToRad(offsetDeg));
   }
 
-  private getRemainingRangeAfterImpact(proj: TrackedProjectile, impactX: number, impactY: number): number {
+  private getRemainingRangeAfterImpact(proj: ProjectileRuntimeRecord, impactX: number, impactY: number): number {
     const baseRange = proj.remainingRangePx ?? (Math.max(proj.initialSpeed ?? proj.body.velocity.length(), 0) * proj.lifetime) / 1000;
     const impactDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, impactX, impactY);
     return Math.max(0, baseRange - impactDistance);
   }
 
   private trySplitHydraProjectile(
-    proj: TrackedProjectile,
+    proj: ProjectileRuntimeRecord,
     impactX: number,
     impactY: number,
     outgoingVx: number,
@@ -1789,7 +1722,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * aufgeloest, weil der Collider nur die einzelne Zelle kennt.
    */
   private tryResolveSupportImpact(
-    proj: TrackedProjectile,
+    proj: ProjectileRuntimeRecord,
     obstacle: Phaser.GameObjects.GameObject,
     rockId: number,
   ): boolean {
@@ -1811,7 +1744,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * Markiert ein Projektil zur sofortigen Entfernung aus Host-Logik und Phaser-Kollision.
    * Das eigentliche Cleanup erfolgt gesammelt im nächsten hostUpdate().
    */
-  private queueDestroyProjectile(proj: TrackedProjectile): void {
+  private queueDestroyProjectile(proj: ProjectileRuntimeRecord): void {
     if (proj.pendingDestroy) return;
     proj.pendingDestroy = true;
     proj.body.setVelocity(0, 0);
@@ -1820,7 +1753,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   /** Beendet Identity und Aktivmenge über den Owner und gibt danach die Ressourcen frei. */
-  private destroyTrackedProjectile(proj: TrackedProjectile): void {
+  private destroyProjectileRuntimeRecord(proj: ProjectileRuntimeRecord): void {
     if (this.owner) {
       this.owner.releaseProjectile(proj);
       return;
@@ -1832,7 +1765,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * Gibt Physics-, Collider- und Darstellungsressourcen eines vom Owner entfernten Records frei.
    * Registry und Identity sind zu diesem Zeitpunkt bereits beendet.
    */
-  releaseProjectileResources(proj: TrackedProjectile): void {
+  releaseProjectileResources(proj: ProjectileRuntimeRecord): void {
     proj.hitObstacleIds?.clear();
     proj.hitBaseIds?.clear();
     const lifecycle: ProjectileLifecycleOutcome = proj.miniRocketSpent
@@ -1874,12 +1807,12 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     proj.sprite.destroy();
   }
 
-  private removeActiveProjectile(proj: TrackedProjectile): void {
-    this.owner?.store.deactivate(proj);
+  private removeActiveProjectile(proj: ProjectileRuntimeRecord): void {
+    this.owner?.deactivateProjectileRecord(proj);
   }
 
   private queueProjectileExplosion(
-    proj: TrackedProjectile,
+    proj: ProjectileRuntimeRecord,
     allowMultiContinue = false,
     stopMultiContinuationAtObstacle = false,
   ): void {
@@ -1969,13 +1902,13 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }
   }
 
-  private emitProjectileImpact(proj: TrackedProjectile, x: number, y: number): void {
+  private emitProjectileImpact(proj: ProjectileRuntimeRecord, x: number, y: number): void {
     this.projectileImpactCallback?.(this.createImpactSource(proj, x, y));
   }
 
   private createExplosionRequest(
-    proj: TrackedProjectile,
-    effect: TrackedProjectile['explosion'] = proj.explosion,
+    proj: ProjectileRuntimeRecord,
+    effect: ProjectileRuntimeRecord['explosion'] = proj.explosion,
     continuesAfterExplosion = false,
   ): ProjectileExplosionRequest {
     if (!effect) throw new Error(`[ProjectilePhysicsBinding] explosion request without effect for ${proj.id}`);
@@ -1992,17 +1925,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     };
   }
 
-  getDebugActiveProjectileCount(): number {
-    return Math.max(
-      this.activeProjectiles.size,
-      this.clientReplica.size,
-      this.presentation.clientVisualCount,
-    );
-  }
-
   /** Applies a travel-acquired burn to the canonical record; callers never receive that record. */
   applyProjectileBurnAugment(id: number, augment: ProjectileBurnAugment): boolean {
-    const projectile = this.getActiveProjectileById(id);
+      const projectile = this.getLiveRecordById(id);
     if (!projectile?.canReceiveFireImbue || projectile.isGrenade || projectile.isFlame) return false;
     if (projectile.supplementalBurnOnHit
       && augment.burn.damagePerTick <= projectile.supplementalBurnOnHit.damagePerTick) return false;
@@ -2018,7 +1943,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     this.scratchLine.setTo(request.startX, request.startY, request.endX, request.endY);
     const targets: ProjectileDetonationTarget[] = [];
     for (const projectileId of detonableIds) {
-      const projectile = this.getActiveProjectileById(projectileId);
+      const projectile = this.getLiveRecordById(projectileId);
       if (!projectile?.detonable) continue;
       if (!request.detonator.triggerTags.includes(projectile.detonable.tag)) continue;
       if (!projectile.detonable.allowCrossTeam && projectile.ownerId !== request.shooterId) continue;
@@ -2032,7 +1957,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     projectileId: number,
     detonatorOwnerId: string,
   ): ProjectileDetonationOutcome | null {
-    const projectile = this.getActiveProjectileById(projectileId);
+    const projectile = this.getLiveRecordById(projectileId);
     if (!projectile?.detonable) return null;
     const target = createDetonationTarget(projectile);
     this.destroyProjectile(projectileId);
@@ -2066,32 +1991,10 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     return outcomes;
   }
 
-  private getActiveProjectileById(id: number): TrackedProjectile | undefined {
-    const projectile = this.owner?.store.getById(id);
-    if (!projectile || projectile.pendingDestroy || !this.owner?.store.activeRecords.has(projectile)) return undefined;
+  private getLiveRecordById(id: number): ProjectileRuntimeRecord | undefined {
+    const projectile = this.owner?.readProjectileRecord(id);
+    if (!projectile || projectile.pendingDestroy || !this.owner?.readActiveProjectileRecords().has(projectile)) return undefined;
     return projectile;
-  }
-
-  getShadowSamples(): readonly ShadowProjectileSample[] {
-    return this.presentation.getShadowSamples(
-      this.activeProjectiles.size > 0 ? this.presentationProjectiles : [],
-      this.clientReplica,
-    );
-  }
-
-  /**
-   * Projektile, die selbst leuchten könnten – die Auswahl trifft der Aufrufer über
-   * `getProjectileLightSpec()`.
-   *
-   * Aufbau bewusst identisch zu `getShadowSamples()`: auf dem Host stammen die Werte aus
-   * den Physik-Bodies, auf Clients aus den extrapolierten Snapshots. Damit ist der
-   * Lichtpfad ohne eine zweite Fallunterscheidung auf beiden Seiten gleich.
-   */
-  getLightSamples(): readonly ProjectileLightSample[] {
-    return this.presentation.getLightSamples(
-      this.activeProjectiles.size > 0 ? this.presentationProjectiles : [],
-      this.clientReplica,
-    );
   }
 
   /**
@@ -2104,7 +2007,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   triggerProjectileExplosion(id: number, impactTargetKey?: string): boolean {
-    const proj = this.getActiveProjectileById(id);
+    const proj = this.getLiveRecordById(id);
     if (!proj?.explosion) return false;
     // Nur das Ziel, das die aktuelle Explosion ausgeloest hat, wird waehrend der
     // anschliessenden Geradeausphase ignoriert. Andere Ziele und alle Phaser-
@@ -2126,7 +2029,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * Explosivbolzen). Nutzt denselben Explosions-Pfad wie reguläre Projektil-Explosionen.
    */
   triggerEnemyImpactExplosion(id: number): boolean {
-    const proj = this.getActiveProjectileById(id);
+    const proj = this.getLiveRecordById(id);
     if (!proj?.enemyHitExplosion || proj.pendingExplosion) return false;
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push({
@@ -2141,16 +2044,11 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   /**
-   * Räumt beim World-Teardown den registry-fremden Rest ab: Renderer, Snapshot-Zustand und
-   * Client-Visuals. Records und Identity hat der Owner zu diesem Zeitpunkt bereits entfernt.
+   * Räumt beim World-Teardown den binding-eigenen Rest ab. Records, Identity, Snapshot und
+   * Presentation werden von der World-Runtime in derselben Phase freigegeben.
    */
   releaseWorldState(): void {
-    this.projectileReplicationAdapter?.reset();
-    this.projectileReplicationAdapter = null;
     this.pendingProjectileExplosions = [];
-    this.presentation.releaseWorldPresentation();
-    this.presentationStates.length = 0;
-    this.clientReplica.reset();
   }
 
   /**
@@ -2167,7 +2065,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     };
   }
 
-  /** Executes the Manager remainder after the World-owned Flight/Lifetime core. */
+  /** Executes the binding remainder after the World-owned Flight/Lifetime core. */
   runProjectileEffectsStage(
     _deltaMs: number,
     nowMs: number,
@@ -2186,10 +2084,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
       if (!this.stepProjectileEffects(this.projectiles[index], coreStage, projectileExplosions, grenadePayloads)) {
-        this.owner?.store.dropStepEntryAt(index);
+        this.owner?.dropProjectileStepEntryAt(index);
       }
     }
-    this.presentation.syncHostRenderers(this.presentationProjectiles);
     return { projectileExplosions, grenadePayloads, countdownEvents };
   }
 
@@ -2198,13 +2095,13 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * Spezialausgänge. Flight, Lifetime und Homing werden zuvor vom World-Owner verarbeitet.
    */
   private stepProjectileEffects(
-    proj: TrackedProjectile,
+    proj: ProjectileRuntimeRecord,
     coreStage: ProjectileCoreStageResult,
     projectileExplosions: ProjectileExplosionRequest[],
     grenadePayloads: ProjectileGrenadePayloadRequest[],
   ): boolean {
     if (proj.pendingDestroy) {
-      this.destroyTrackedProjectile(proj);
+      this.destroyProjectileRuntimeRecord(proj);
       return false;
     }
 
@@ -2217,7 +2114,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
           provenance: proj.provenance,
           effect: proj.grenadeEffect,
         });
-        this.destroyTrackedProjectile(proj);
+        this.destroyProjectileRuntimeRecord(proj);
         return false;
       }
       proj.bounceProcessedThisStep = false;
@@ -2247,26 +2144,26 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }
 
     if (coreStage.miniRocketSafetyExpiredIds.has(proj.id)) {
-      this.destroyTrackedProjectile(proj);
+      this.destroyProjectileRuntimeRecord(proj);
       return false;
     }
 
     if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.explosion) {
       projectileExplosions.push(this.createExplosionRequest(proj));
-      this.destroyTrackedProjectile(proj);
+      this.destroyProjectileRuntimeRecord(proj);
       return false;
     }
 
     if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.impactCloud) {
       this.emitProjectileImpact(proj, proj.sprite.x, proj.sprite.y);
-      this.destroyTrackedProjectile(proj);
+      this.destroyProjectileRuntimeRecord(proj);
       return false;
     }
 
     if (this.shouldUseContinuousRockCollision(proj)) {
       this.resolveContinuousRockCollision(proj);
       if (proj.pendingDestroy) {
-        this.destroyTrackedProjectile(proj);
+        this.destroyProjectileRuntimeRecord(proj);
         return false;
       }
     }
@@ -2289,7 +2186,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       if (proj.miniRocketSpent && coreStage.rangeDepletedIds.has(proj.id)) {
         this.emitSpentMiniRocketDestruction(proj);
       }
-      this.destroyTrackedProjectile(proj);
+      this.destroyProjectileRuntimeRecord(proj);
     } else if (proj.homing && proj.miniRocketStageRangePx === undefined) {
       const simulatedAge = proj.simulatedAgeMs ?? 0;
       this.owner?.resolveProjectileHoming?.(this.createHomingRequest(proj), simulatedAge);
@@ -2312,7 +2209,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     return !dead;
   }
 
-  private createHomingRequest(proj: TrackedProjectile): ProjectileHomingRequest {
+  private createHomingRequest(proj: ProjectileRuntimeRecord): ProjectileHomingRequest {
     if (proj.homingRequest) return proj.homingRequest;
     const state = proj.homingState ??= {
       lockedTargetId: proj.lockedTargetId ?? null,
@@ -2366,48 +2263,17 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     );
   }
 
-  private emitSpentMiniRocketDestruction(proj: TrackedProjectile): void {
+  private emitSpentMiniRocketDestruction(proj: ProjectileRuntimeRecord): void {
     if (proj.miniRocketDestructionFxEmitted) return;
     proj.miniRocketDestructionFxEmitted = true;
     this.miniRocketDestroyedCallback?.(this.createImpactSource(proj));
   }
 
-  private queueSpentMiniRocketDestruction(proj: TrackedProjectile): void {
+  private queueSpentMiniRocketDestruction(proj: ProjectileRuntimeRecord): void {
     if (proj.pendingDestroy) return;
     this.emitSpentMiniRocketDestruction(proj);
     this.queueDestroyProjectile(proj);
   }
-
-  /** Host-only: der naechste Netzwerk-Snapshot traegt die Statik aller aktiven Projektile. */
-  requestFullNetSnapshot(): void {
-    this.projectileReplicationAdapter?.requestFullSnapshot();
-  }
-
-  getNetSnapshot() {
-    return this.projectileReplicationAdapter?.getSnapshot(this.hostFrameNowMs ?? Date.now()) ?? null;
-  }
-
-  // ── Client ────────────────────────────────────────────────────────────────
-
-  /**
-   * Übergangsfassade: nimmt den Snapshot in der Replica an und aktualisiert anschließend die
-   * Presentation. Neue Client-Aufrufer sollen die Replica direkt verwenden.
-   */
-  clientSyncVisuals(data: SyncedProjectile[], localPlayerId?: string): void {
-    this.presentClientProjectileFrame(this.clientReplica.sync(data), localPlayerId);
-  }
-
-  /** Delegates the renderer-free client frame to the Presentation owner. */
-  presentClientProjectileFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
-    this.presentation.presentClientFrame(frame, localPlayerId);
-  }
-
-  /** Delegates client extrapolation to the Presentation owner. */
-  clientExtrapolate(): void {
-    this.presentation.extrapolateClient(this.clientReplica);
-  }
-
-
 
 }
 
@@ -2435,11 +2301,11 @@ function hasGaussDischarge(
     && (projectile.gaussChainDamageFactor ?? 0) > 0;
 }
 
-function hasHydraSplitCapability(projectile: Pick<TrackedProjectile, 'splitCount'>): boolean {
+function hasHydraSplitCapability(projectile: Pick<ProjectileRuntimeRecord, 'splitCount'>): boolean {
   return (projectile.splitCount ?? 0) > 0;
 }
 
-function createDetonationTarget(projectile: TrackedProjectile): ProjectileDetonationTarget {
+function createDetonationTarget(projectile: ProjectileRuntimeRecord): ProjectileDetonationTarget {
   return {
     id: projectile.id,
     x: projectile.sprite.x,

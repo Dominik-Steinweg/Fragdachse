@@ -495,7 +495,7 @@ export class ArenaScene extends Phaser.Scene {
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
     playerManager.setRelationshipResolver((localPlayerId, otherPlayerId) => bridge.isEnemyPair(localPlayerId, otherPlayerId));
     playerManager.setTeamResolver((playerId) => bridge.getPlayerTeam(playerId));
-    const combatSystem     = new CombatSystem(playerManager, null, bridge);
+    const combatSystem     = new CombatSystem(playerManager, bridge);
     const decoySystem      = new DecoySystem(this, playerManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
     effectSystem.setPlayerDeathResolver((targetId) => playerManager.getPlayer(targetId) !== undefined);

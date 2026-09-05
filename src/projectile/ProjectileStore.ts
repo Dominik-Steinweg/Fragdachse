@@ -1,4 +1,4 @@
-import type { TrackedProjectile } from '../types';
+import type { ProjectileRuntimeRecord } from '../types';
 import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import type { ProjectileId } from './ProjectileSpawnPort';
 
@@ -15,9 +15,9 @@ import type { ProjectileId } from './ProjectileSpawnPort';
  */
 export class ProjectileStore {
   /** Verarbeitungsreihenfolge inklusive bereits zum Abbau vorgemerkter Records. */
-  private readonly records: TrackedProjectile[] = [];
-  private readonly active = new Set<TrackedProjectile>();
-  private readonly byId = new Map<ProjectileId, TrackedProjectile>();
+  private readonly records: ProjectileRuntimeRecord[] = [];
+  private readonly active = new Set<ProjectileRuntimeRecord>();
+  private readonly byId = new Map<ProjectileId, ProjectileRuntimeRecord>();
 
   constructor(private readonly identityScope: ProjectileIdentityScope) {}
 
@@ -27,19 +27,19 @@ export class ProjectileStore {
   }
 
   /** Nimmt einen fertig erzeugten Record in Identity, Aktivmenge und Verarbeitung auf. */
-  insert(record: TrackedProjectile): void {
+  insert(record: ProjectileRuntimeRecord): void {
     this.records.push(record);
     this.active.add(record);
     this.byId.set(record.id, record);
   }
 
   /** Stabile, allokationsfreie Sicht in Verarbeitungsreihenfolge. */
-  get stepOrder(): readonly TrackedProjectile[] {
+  get stepOrder(): readonly ProjectileRuntimeRecord[] {
     return this.records;
   }
 
   /** Stabile, allokationsfreie Sicht auf die noch wirksamen Projectiles. */
-  get activeRecords(): ReadonlySet<TrackedProjectile> {
+  get activeRecords(): ReadonlySet<ProjectileRuntimeRecord> {
     return this.active;
   }
 
@@ -47,7 +47,7 @@ export class ProjectileStore {
     return this.active.size;
   }
 
-  getById(id: ProjectileId): TrackedProjectile | undefined {
+  getById(id: ProjectileId): ProjectileRuntimeRecord | undefined {
     return this.byId.get(id);
   }
 
@@ -57,12 +57,12 @@ export class ProjectileStore {
    * Ein zum Abbau vorgemerktes Projectile verlässt die Aktivmenge sofort, bleibt für den
    * verzögerten Cleanup aber auffindbar.
    */
-  deactivate(record: TrackedProjectile): void {
+  deactivate(record: ProjectileRuntimeRecord): void {
     this.active.delete(record);
   }
 
   /** Beendet Identity und Aktivmenge; der Record bleibt bis zum Drop in der Verarbeitung. */
-  detach(record: TrackedProjectile): void {
+  detach(record: ProjectileRuntimeRecord): void {
     this.active.delete(record);
     this.byId.delete(record.id);
   }
@@ -73,7 +73,7 @@ export class ProjectileStore {
   }
 
   /** Position des Records in der Verarbeitungsreihenfolge; `-1`, wenn er dort fehlt. */
-  indexOfStepEntry(record: TrackedProjectile): number {
+  indexOfStepEntry(record: ProjectileRuntimeRecord): number {
     return this.records.indexOf(record);
   }
 
@@ -84,16 +84,3 @@ export class ProjectileStore {
     this.byId.clear();
   }
 }
-
-/**
- * Befristete Sicht des noch nicht migrierten Host-Simulationscodes auf **denselben** kanonischen
- * Store (`03 §5.1`).
- *
- * Sie kopiert nichts, vergibt keine Identity und erzeugt keinen zweiten Lifecycle; Spawn und
- * endgültige Entfernung bleiben beim Owner. Mit dem Cutover der jeweiligen Verarbeitung
- * (Phasen 3–14) entfällt sie.
- */
-export type ProjectileStoreAccess = Pick<
-  ProjectileStore,
-  'stepOrder' | 'activeRecords' | 'activeCount' | 'getById' | 'deactivate' | 'dropStepEntryAt'
->;

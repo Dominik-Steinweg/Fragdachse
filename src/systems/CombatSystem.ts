@@ -444,7 +444,6 @@ export class CombatSystem implements ProjectileCombatPort {
 
   constructor(
     private playerManager:     PlayerManager,
-    _projectileManager: unknown,
     private bridge:            NetworkBridge,
   ) {}
 

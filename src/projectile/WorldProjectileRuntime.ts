@@ -1,7 +1,10 @@
-import type { LoadoutSlot, ProjectileSpawnConfig, TrackedProjectile } from '../types';
+import type { LoadoutSlot, ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../types';
 import type { ProjectilePhysicsBinding } from './ProjectilePhysicsBinding';
 import { ProjectileClientReplica, type ProjectileClientReplicaFrame } from './ProjectileClientReplica';
-import type { ProjectilePresentationRuntime } from './ProjectilePresentationRuntime';
+import type {
+  ProjectilePresentationRuntime,
+  ProjectilePresentationState,
+} from './ProjectilePresentationRuntime';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { WorldScopedBinding } from '../world/WorldRuntime';
@@ -81,6 +84,7 @@ import type {
   ProjectileReplicationReadPort,
   ProjectileReplicationRecord,
 } from './ProjectileReplicationAdapter';
+import { ProjectileReplicationAdapter } from './ProjectileReplicationAdapter';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileImpactCandidate,
@@ -88,7 +92,7 @@ import type {
   ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
 import { createInheritedProjectilePayload } from './projectileSpawnPayloadAdapter';
-import { ProjectileStore, type ProjectileStoreAccess } from './ProjectileStore';
+import { ProjectileStore } from './ProjectileStore';
 
 /** Parameter eines vom Owner erzeugten Reflect-/Deflect-Nachfolgers. */
 interface ReflectedProjectileOptions {
@@ -135,9 +139,9 @@ export interface ProjectilePhysicsBindingPort {
     cfg: ProjectileSpawnConfig,
     hostNowMs: number,
     provenance: ProjectileProvenance,
-  ): TrackedProjectile;
+  ): ProjectileRuntimeRecord;
   /** Gibt Physics-, Collider- und Darstellungsressourcen eines entfernten Records frei. */
-  releaseProjectileResources(record: TrackedProjectile): void;
+  releaseProjectileResources(record: ProjectileRuntimeRecord): void;
   /** Führt den Physics-/Effect-Rest nach dem deterministischen Flight-Stage aus. */
   runProjectileEffectsStage?(
     deltaMs: number,
@@ -171,7 +175,12 @@ export interface ProjectilePhysicsBindingPort {
  * zweite Identity und wird nicht an neue Consumer verteilt.
  */
 export interface ProjectileRuntimeOwnerPort {
-  readonly store: ProjectileStoreAccess;
+  /** Internal binding seam; the Store itself never crosses the World boundary. */
+  readonly readProjectileStepOrder: () => readonly ProjectileRuntimeRecord[];
+  readonly readActiveProjectileRecords: () => ReadonlySet<ProjectileRuntimeRecord>;
+  readonly readProjectileRecord: (id: ProjectileId) => ProjectileRuntimeRecord | undefined;
+  readonly deactivateProjectileRecord: (record: ProjectileRuntimeRecord) => void;
+  readonly dropProjectileStepEntryAt: (index: number) => void;
   /** Erstellt ein Projectile aus der aufgelösten, bestehenden Spawn-Payload. */
   spawnProjectileConfig(
     x: number,
@@ -183,7 +192,7 @@ export interface ProjectileRuntimeOwnerPort {
   /** Entfernt ein Projectile vollständig; unbekannte Ids sind wirkungslos. */
   destroyProjectile(id: ProjectileId): void;
   /** Beendet Identity und Aktivmenge und gibt die Ressourcen frei; der Step-Eintrag bleibt. */
-  releaseProjectile(record: TrackedProjectile): void;
+  releaseProjectile(record: ProjectileRuntimeRecord): void;
   /** Host Frame: deterministische Flight-/Lifetime-/Homing-Verarbeitung. */
   runHostProjectileStage?(deltaMs: number, nowMs: number): ProjectileHostStageResult;
   /** Completes the local Mini-Rocket state machine after deferred explosion resolution. */
@@ -198,6 +207,8 @@ export interface ProjectileRuntimeOwnerPort {
 
 export interface WorldProjectileRuntimeOptions {
   readonly physicsBinding: ProjectilePhysicsBindingPort;
+  /** World-scoped visual owner; it is never constructed by the physics binding. */
+  readonly presentation: ProjectilePresentationRuntime;
   /** World-Revision-Scope für monotone Projectile-Identity über lokale Runtime-Rebuilds. */
   readonly identityScope: ProjectileIdentityScope;
   /** Hostautoritative Frame-/Weltzeit; die Runtime liest keine eigene Wall Clock. */
@@ -219,7 +230,6 @@ export interface WorldProjectileRuntimeOptions {
  */
 export class WorldProjectileRuntime implements
   ProjectileSpawnPort,
-  ProjectileRuntimeOwnerPort,
   ProjectileExternalInteractionPort,
   TranslocatorProjectilePort,
   ProjectileThreatReadPort,
@@ -243,6 +253,11 @@ export class WorldProjectileRuntime implements
   private readonly travelSamples: ProjectileTravelSample[] = [];
   private readonly activeProjectilesByOwner = new Map<string, number>();
   private readonly collisionProcessor = new ProjectileCollisionProcessor();
+  private readonly bindingOwner: ProjectileRuntimeOwnerPort;
+  private readonly clientReplica = new ProjectileClientReplica();
+  private readonly presentation: ProjectilePresentationRuntime;
+  private readonly presentationStates: ProjectilePresentationState[] = [];
+  private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;
   private readonly miniRocketProcessor = new ProjectileMiniRocketProcessor({
     getOwnerPosition: (ownerId) => this.miniRocketStatePort?.getOwnerPosition(ownerId) ?? null,
     updateHoming: (projectile, simulatedAgeMs, forceSearch) => (
@@ -278,15 +293,37 @@ export class WorldProjectileRuntime implements
   private readonly physicsBinding: ProjectilePhysicsBinding;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
+  private hostFrameNowMs = 0;
   private interactionNowMs = 0;
   private destroyed = false;
 
   constructor(options: WorldProjectileRuntimeOptions) {
     this.physicsBinding = options.physicsBinding as ProjectilePhysicsBinding;
+    this.presentation = options.presentation;
     this.hostNowMs = options.hostNowMs;
     this.onDestroy = options.onDestroy;
     this.projectiles = new ProjectileStore(options.identityScope);
     const runtime = this;
+    this.bindingOwner = {
+      readProjectileStepOrder: () => runtime.projectiles.stepOrder,
+      readActiveProjectileRecords: () => runtime.projectiles.activeRecords,
+      readProjectileRecord: (id) => runtime.projectiles.getById(id),
+      deactivateProjectileRecord: (record) => runtime.projectiles.deactivate(record),
+      dropProjectileStepEntryAt: (index) => runtime.projectiles.dropStepEntryAt(index),
+      spawnProjectileConfig: (x, y, angle, ownerId, cfg) => runtime.spawnProjectileConfig(x, y, angle, ownerId, cfg),
+      destroyProjectile: (id) => runtime.destroyProjectile(id),
+      releaseProjectile: (record) => runtime.releaseProjectile(record),
+      runHostProjectileStage: (deltaMs, nowMs) => runtime.runHostProjectileStage(deltaMs, nowMs),
+      resumeMiniRocketExplosion: (projectileId) => runtime.resumeMiniRocketExplosion(projectileId),
+      setProjectileTimeFieldPort: (port) => runtime.setProjectileTimeFieldPort(port),
+      setProjectileTargetQueryPort: (port) => runtime.setProjectileTargetQueryPort(port),
+      setProjectileTargetabilityPort: (port) => runtime.setProjectileTargetabilityPort(port),
+      setLineOfFireReadPort: (port) => runtime.setLineOfFireReadPort(port),
+      resolveProjectileHoming: (request, simulatedAgeMs, forceSearch) => (
+        runtime.resolveProjectileHoming(request, simulatedAgeMs, forceSearch)
+      ),
+      setHostFrameTime: (nowMs) => runtime.setHostFrameTime(nowMs),
+    };
     this.collisionDependencies = {
       get targetQuery() { return runtime.collisionTargetQueryPort; },
       get targetability() { return runtime.targetabilityPort; },
@@ -298,11 +335,7 @@ export class WorldProjectileRuntime implements
         this.physicsBinding.completeDirectImpact?.(record.id, target, impact, outcome) ?? false
       ),
     };
-    this.physicsBinding.bindOwner(this);
-  }
-
-  get store(): ProjectileStoreAccess {
-    return this.projectiles;
+    this.physicsBinding.bindOwner(this.bindingOwner);
   }
 
   /** Anzahl der aktuell wirksamen Projectiles dieser World. */
@@ -310,46 +343,94 @@ export class WorldProjectileRuntime implements
     return this.projectiles.activeCount;
   }
 
+  /** Builds the read-only host projection consumed by the world-scoped presentation owner. */
+  private get presentationProjectiles(): readonly ProjectilePresentationState[] {
+    const states = this.presentationStates;
+    states.length = 0;
+    for (const projectile of this.projectiles.stepOrder) {
+      const sprite = projectile.sprite;
+      states.push({
+        id: projectile.id,
+        ownerId: projectile.ownerId,
+        x: sprite.x,
+        y: sprite.y,
+        vx: projectile.body.velocity.x,
+        vy: projectile.body.velocity.y,
+        size: sprite.displayWidth,
+        color: projectile.color,
+        ownerColor: projectile.ownerColor,
+        projectileVisualScale: projectile.projectileVisualScale,
+        smokeTrailColor: projectile.smokeTrailColor,
+        style: projectile.projectileStyle,
+        sporeVisualVariant: projectile.sporeVisualVariant,
+        bulletVisualPreset: projectile.bulletVisualPreset,
+        grenadeVisualPreset: projectile.grenadeVisualPreset,
+        energyBallVariant: projectile.energyBallVariant,
+        tracer: projectile.tracerConfig,
+        shotAudioKey: projectile.shotAudioKey,
+        suppressSpawnFx: projectile.suppressSpawnFx,
+        miniRocketPhase: projectile.miniRocketPhase,
+        miniRocketCascadeStage: (projectile.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
+          ? projectile.miniRocketExplosionIndex
+          : undefined,
+        projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
+        burning: !projectile.isFlame && !projectile.isGrenade && (
+          ((projectile.burnDurationMs ?? 0) > 0 && (projectile.burnDamagePerTick ?? 0) > 0)
+          || ((projectile.supplementalBurnOnHit?.durationMs ?? 0) > 0
+            && (projectile.supplementalBurnOnHit?.damagePerTick ?? 0) > 0)
+        ),
+        sourceTurretId: projectile.sourceTurretId,
+      });
+    }
+    return states;
+  }
+
   /** World-scoped Presentation owner; it is created and destroyed with this runtime. */
   getPresentationRuntime(): ProjectilePresentationRuntime {
-    return this.physicsBinding.getPresentationRuntime();
+    return this.presentation;
   }
 
   /** World-scoped client replica; it never crosses into authoritative gameplay. */
   getClientReplica(): ProjectileClientReplica {
-    return this.physicsBinding.getClientReplica();
+    return this.clientReplica;
   }
 
   getDebugActiveProjectileCount(): number {
-    return this.physicsBinding.getDebugActiveProjectileCount();
+    return Math.max(this.projectiles.activeCount, this.clientReplica.size, this.presentation.clientVisualCount);
   }
 
   getShadowSamples(): readonly ShadowProjectileSample[] {
-    return this.physicsBinding.getShadowSamples();
+    return this.presentation.getShadowSamples(
+      this.projectiles.activeCount > 0 ? this.presentationProjectiles : [],
+      this.clientReplica,
+    );
   }
 
   getLightSamples(): readonly ProjectileLightSample[] {
-    return this.physicsBinding.getLightSamples();
+    return this.presentation.getLightSamples(
+      this.projectiles.activeCount > 0 ? this.presentationProjectiles : [],
+      this.clientReplica,
+    );
   }
 
-  setProjectileReplicationAdapter(adapter: import('./ProjectileReplicationAdapter').ProjectileReplicationAdapter | null): void {
-    this.physicsBinding.setProjectileReplicationAdapter?.(adapter);
+  setProjectileReplicationAdapter(adapter: ProjectileReplicationAdapter | null): void {
+    this.projectileReplicationAdapter = adapter;
   }
 
   requestFullNetSnapshot(): void {
-    this.physicsBinding.requestFullNetSnapshot();
+    this.projectileReplicationAdapter?.requestFullSnapshot();
   }
 
   getNetSnapshot() {
-    return this.physicsBinding.getNetSnapshot();
+    return this.projectileReplicationAdapter?.getSnapshot(this.hostFrameNowMs) ?? null;
   }
 
   presentClientProjectileFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
-    this.physicsBinding.presentClientProjectileFrame(frame, localPlayerId);
+    this.presentation.presentClientFrame(frame, localPlayerId);
   }
 
   clientExtrapolate(): void {
-    this.physicsBinding.clientExtrapolate();
+    this.presentation.extrapolateClient(this.clientReplica);
   }
 
   applyPlasmaSwarmImpact(impact: ProjectilePlasmaSwarmImpact): void {
@@ -505,7 +586,7 @@ export class WorldProjectileRuntime implements
     this.projectiles.dropStepEntryAt(index);
   }
 
-  releaseProjectile(record: TrackedProjectile): void {
+  private releaseProjectile(record: ProjectileRuntimeRecord): void {
     this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
     this.physicsBinding.releaseProjectileResources(record);
@@ -648,9 +729,9 @@ export class WorldProjectileRuntime implements
     };
   }
 
-  hasActiveProjectileStyle(style: import('../types').ProjectileStyle): boolean {
+  hasActiveBfgProjectile(): boolean {
     for (const record of this.projectiles.activeRecords) {
-      if (record.projectileStyle === style && record.sprite.active) return true;
+      if (record.isBfg === true && record.sprite.active) return true;
     }
     return false;
   }
@@ -670,6 +751,7 @@ export class WorldProjectileRuntime implements
         countdownEvents: coreStage.countdownEvents,
       };
     this.runMiniRocketStateStage();
+    this.presentation.syncHostRenderers(this.presentationProjectiles);
     return stage;
   }
 
@@ -788,7 +870,7 @@ export class WorldProjectileRuntime implements
   }
 
   private applyBarrierResolution(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     resolution: ProjectileBarrierResolution,
     nowMs: number,
   ): void {
@@ -881,7 +963,7 @@ export class WorldProjectileRuntime implements
 
   /** Target-lokale Defense: Absorption entfernt, Reflexion erzeugt den Nachfolger beim Owner. */
   private applyDefense(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     defense: ProjectileDefenseResolution,
     candidate: ProjectileImpactCandidate,
   ): void {
@@ -912,7 +994,7 @@ export class WorldProjectileRuntime implements
    * die Restwirkung des Ursprungs bleibt erhalten.
    */
   private spawnReflectedProjectile(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     options: ReflectedProjectileOptions,
   ): void {
     const elapsed = Math.max(0, options.nowMs - record.createdAt);
@@ -980,7 +1062,7 @@ export class WorldProjectileRuntime implements
     }
   }
 
-  private createHomingRequest(projectile: TrackedProjectile): ProjectileHomingRequest {
+  private createHomingRequest(projectile: ProjectileRuntimeRecord): ProjectileHomingRequest {
     if (projectile.homingRequest) return projectile.homingRequest;
     const state = projectile.homingState ??= {
       lockedTargetId: projectile.lockedTargetId ?? null,
@@ -1004,7 +1086,7 @@ export class WorldProjectileRuntime implements
     return request;
   }
 
-  private resetHomingState(projectile: TrackedProjectile): void {
+  private resetHomingState(projectile: ProjectileRuntimeRecord): void {
     const state = projectile.homingState ??= { lockedTargetId: null };
     state.lockedTargetId = null;
     state.lockedTargetType = undefined;
@@ -1014,7 +1096,7 @@ export class WorldProjectileRuntime implements
     projectile.lastHomingSearchAt = undefined;
   }
 
-  private hasVisibleProjectileBurn(projectile: TrackedProjectile): boolean {
+  private hasVisibleProjectileBurn(projectile: ProjectileRuntimeRecord): boolean {
     if (projectile.isFlame || projectile.isGrenade) return false;
     return ((projectile.burnDurationMs ?? 0) > 0 && (projectile.burnDamagePerTick ?? 0) > 0)
       || ((projectile.supplementalBurnOnHit?.durationMs ?? 0) > 0
@@ -1022,7 +1104,7 @@ export class WorldProjectileRuntime implements
   }
 
   private updateProjectileHoming(
-    projectile: TrackedProjectile,
+    projectile: ProjectileRuntimeRecord,
     simulatedAgeMs: number,
     forceSearch = false,
   ): boolean {
@@ -1045,6 +1127,7 @@ export class WorldProjectileRuntime implements
   }
 
   setHostFrameTime(nowMs: number): void {
+    this.hostFrameNowMs = nowMs;
     this.physicsBinding.setHostFrameTime?.(nowMs);
     this.directImpactPort?.setHostFrameTime?.(nowMs);
   }
@@ -1069,6 +1152,11 @@ export class WorldProjectileRuntime implements
     this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
+    this.projectileReplicationAdapter?.reset();
+    this.projectileReplicationAdapter = null;
+    this.presentation.releaseWorldPresentation();
+    this.presentationStates.length = 0;
+    this.clientReplica.reset();
     this.physicsBinding.releaseWorldState();
     this.physicsBinding.bindOwner(null);
     this.onDestroy?.();
@@ -1109,7 +1197,7 @@ export class WorldProjectileRuntime implements
   }
 }
 
-function hasTravelEffect(record: TrackedProjectile): boolean {
+function hasTravelEffect(record: ProjectileRuntimeRecord): boolean {
   return record.canReceiveFireImbue === true
     || record.fireTrail !== undefined
     || record.awpCorridorHalfWidth !== undefined
@@ -1120,7 +1208,7 @@ function hasTravelEffect(record: TrackedProjectile): boolean {
     || record.awpCorridorKnockbackDurationMs !== undefined;
 }
 
-function createTravelPathEffect(record: TrackedProjectile): ProjectileTravelCapabilities['pathEffect'] {
+function createTravelPathEffect(record: ProjectileRuntimeRecord): ProjectileTravelCapabilities['pathEffect'] {
   const fireTrail = record.fireTrail
     ? {
       effect: record.fireTrail,

@@ -54,7 +54,7 @@ export class ProjectileReplicationAdapter {
    * Baut einen Snapshot nur für einen tatsächlichen Network-Tick.
    * `u` bleibt vollständig und Despawn läuft unverändert über Abwesenheit.
    */
-  getSnapshot(nowMs = Date.now()): SyncedProjectileSnapshot | null {
+  getSnapshot(nowMs: number): SyncedProjectileSnapshot | null {
     const full = this.forceFullSnapshot;
     this.forceFullSnapshot = false;
     const refreshIds = full ? null : this.collectStaticRefreshIds(nowMs);

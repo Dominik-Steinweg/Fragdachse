@@ -69,7 +69,7 @@ describe('temporary utility collection lifecycle', () => {
     const publishTemporaryUtilityInstances = vi.fn();
     const manager = new PlayerUtilityActionRuntime({
       playerManager: {} as never,
-      projectileManager: {} as never,
+      projectileSpawn: {} as never,
       combatSystem: {} as never,
       actor: {} as never,
       loadout: {
@@ -117,7 +117,7 @@ describe('temporary utility collection lifecycle', () => {
     const publishCooldown = vi.fn();
     const manager = new PlayerUtilityActionRuntime({
       playerManager: {} as never,
-      projectileManager: {} as never,
+      projectileSpawn: {} as never,
       combatSystem: {} as never,
       actor: {} as never,
       loadout: {
@@ -159,7 +159,7 @@ describe('temporary utility collection lifecycle', () => {
     const config = UTILITY_CONFIGS.HE_GRENADE;
     const manager = new PlayerUtilityActionRuntime({
       playerManager: {} as never,
-      projectileManager: {} as never,
+      projectileSpawn: {} as never,
       combatSystem: {} as never,
       actor: {} as never,
       loadout: {

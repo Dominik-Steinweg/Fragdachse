@@ -8,6 +8,7 @@ import {
 import { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import { ProjectilePhysicsBinding } from '../../projectile/ProjectilePhysicsBinding';
 import { ProjectileReplicationAdapter } from '../../projectile/ProjectileReplicationAdapter';
+import { ProjectilePresentationRuntime } from '../../projectile/ProjectilePresentationRuntime';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedProjectile } from '../../types';
@@ -32,8 +33,10 @@ export function composeWorldProjectileRuntime(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, worldRuntime } = input;
+  const presentation = new ProjectilePresentationRuntime(input.scene);
   const projectileRuntime = new WorldProjectileRuntime({
-    physicsBinding: new ProjectilePhysicsBinding(input.scene),
+    physicsBinding: new ProjectilePhysicsBinding(input.scene, presentation),
+    presentation,
     identityScope: worldRuntime.projectileIdentityScope,
     hostNowMs: () => bridge.getSynchronizedNow(),
     onDestroy: () => {

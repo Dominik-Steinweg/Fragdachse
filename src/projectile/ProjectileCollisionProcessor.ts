@@ -1,4 +1,4 @@
-import type { TrackedProjectile } from '../types';
+import type { ProjectileRuntimeRecord } from '../types';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import { shouldIgnorePlasmaSwarmOriginHit } from '../systems/PlasmaCharge';
 import type { ProjectileId } from './ProjectileSpawnPort';
@@ -64,13 +64,13 @@ export interface ProjectileCollisionDependencies {
   destroyProjectile(id: ProjectileId): void;
   /** Wendet eine target-lokale Defense an (Absorption oder Reflexion). */
   applyDefense(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     defense: ProjectileDefenseResolution,
     candidate: ProjectileImpactCandidate,
   ): void;
   /** Resolves the terminal projectile lifecycle after Combat accepted the direct effect. */
   completeDirectImpact?(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     target: ProjectileCombatTargetRef,
     impact: { readonly x: number; readonly y: number },
     outcome: ProjectileDirectImpactOutcome,
@@ -95,7 +95,7 @@ const MIN_SWEEP_TRAVEL_PX = 0.5;
 export class ProjectileCollisionProcessor {
   private readonly targetPool: CollisionTargetSlot[] = [];
   private readonly targetSlotsByPhysicalKey = new Map<string, CollisionTargetSlot>();
-  private readonly projectileTargetRecords: TrackedProjectile[] = [];
+  private readonly projectileTargetRecords: ProjectileRuntimeRecord[] = [];
   private readonly overlapCandidates: CollisionTargetSlot[] = [];
   private readonly sweepCandidates: SweepCandidate[] = [];
   private targetCount = 0;
@@ -137,7 +137,7 @@ export class ProjectileCollisionProcessor {
 
   /** Verarbeitet alle wirksamen Projectiles dieses Frames gegen die aktuelle Zielsicht. */
   run(
-    records: Iterable<TrackedProjectile>,
+    records: Iterable<ProjectileRuntimeRecord>,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
@@ -215,7 +215,7 @@ export class ProjectileCollisionProcessor {
     slot.obstacleKind = ref.kind === 'rock' ? ref.obstacleKind : undefined;
   }
 
-  private emitProjectileTarget(record: TrackedProjectile): void {
+  private emitProjectileTarget(record: ProjectileRuntimeRecord): void {
     const bounds = record.sprite.getBounds();
     this.emitTarget(
       'projectile',
@@ -246,7 +246,7 @@ export class ProjectileCollisionProcessor {
   }
 
   private processRecord(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
@@ -266,7 +266,7 @@ export class ProjectileCollisionProcessor {
   }
 
   private processSweep(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
@@ -346,7 +346,7 @@ export class ProjectileCollisionProcessor {
   }
 
   private processOverlap(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
@@ -378,7 +378,7 @@ export class ProjectileCollisionProcessor {
     }
   }
 
-  private sortOverlapCandidates(record: TrackedProjectile): void {
+  private sortOverlapCandidates(record: ProjectileRuntimeRecord): void {
     for (let index = 1; index < this.overlapCandidates.length; index += 1) {
       const current = this.overlapCandidates[index];
       const currentDistance = overlapDistanceAlongTravel(record, current);
@@ -401,7 +401,7 @@ export class ProjectileCollisionProcessor {
    * Kontaktgedächtnis, Schwarmursprung und Beziehung.
    */
   private isCandidateAllowed(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     slot: CollisionTargetSlot,
     deps: ProjectileCollisionDependencies,
     overlapBounds?: { left: number; right: number; top: number; bottom: number },
@@ -447,7 +447,7 @@ export class ProjectileCollisionProcessor {
   }
 
   private applyCandidate(
-    record: TrackedProjectile,
+    record: ProjectileRuntimeRecord,
     candidate: ProjectileImpactCandidate,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
@@ -496,7 +496,7 @@ function asCombatTarget(target: ProjectileTargetRef): ProjectileCombatTargetRef 
 }
 
 function createDirectImpactRequest(
-  record: TrackedProjectile,
+  record: ProjectileRuntimeRecord,
   target: ProjectileCombatTargetRef,
   candidate: ProjectileImpactCandidate,
 ): ProjectileDirectImpactRequest {
@@ -592,7 +592,7 @@ function overlaps(
  * Flammenkontakt und verbrauchen das Projectile deshalb wie ein normales Ziel.
  */
 export function resolveContactMemory(
-  record: TrackedProjectile,
+  record: ProjectileRuntimeRecord,
   kind: CollisionTargetKind,
 ): { readonly mode: ProjectileContactMode; readonly memory: Set<string> | null } {
   if (record.energyInjectorPayload) return { mode: 'support', memory: null };
@@ -646,7 +646,7 @@ function isCombatTarget(kind: CollisionTargetKind): kind is 'player' | 'enemy' |
   return kind === 'player' || kind === 'enemy' || kind === 'decoy';
 }
 
-function overlapDistanceAlongTravel(record: TrackedProjectile, slot: CollisionTargetSlot): number {
+function overlapDistanceAlongTravel(record: ProjectileRuntimeRecord, slot: CollisionTargetSlot): number {
   const dx = record.sprite.x - record.lastX;
   const dy = record.sprite.y - record.lastY;
   const length = Math.hypot(dx, dy);
@@ -654,6 +654,6 @@ function overlapDistanceAlongTravel(record: TrackedProjectile, slot: CollisionTa
   return Math.max(0, Math.min(length, ((slot.x - record.lastX) * dx + (slot.y - record.lastY) * dy) / length));
 }
 
-function hasGaussDischarge(record: TrackedProjectile): boolean {
+function hasGaussDischarge(record: ProjectileRuntimeRecord): boolean {
   return (record.gaussChainRadius ?? 0) > 0 && (record.gaussChainDamageFactor ?? 0) > 0;
 }

@@ -38,12 +38,11 @@ describe('CombatSystem Chain Lightning – Runtime/Shared Resolver Parity', () =
     const playerManager = {
       getAllPlayers: () => [fakeEntity({ id: 'player_equal', x: 35, y: 0 })],
     };
-    const projectileManager = { getActiveProjectiles: () => [] };
     const bridge = {
       getPlayerProfile: () => undefined,
       areTeammates: () => false,
     };
-    const combat = new CombatSystem(playerManager as never, projectileManager as never, bridge as never);
+    const combat = new CombatSystem(playerManager as never, bridge as never);
     const runtime = combat as any;
     runtime.enemyManager = enemyManager;
     runtime.canDamageTarget = vi.fn(() => true);

@@ -1,4 +1,3 @@
-import type { ProjectileStyle } from '../types';
 import type { ProjectileProvenance } from './ProjectileSpawnRequest';
 import type { ProjectileId } from './ProjectileSpawnPort';
 
@@ -26,7 +25,7 @@ export interface ProjectileDiagnosticsReadPort {
   getSummary(): ProjectileDiagnosticsSummary;
 }
 
-/** Presentation-only Summary-Query; Simulation interprets keine Presentation-Metadaten. */
+/** Presentation-only semantic query; gameplay does not inspect visual style metadata. */
 export interface ProjectilePresentationReadPort {
-  hasActiveProjectileStyle(style: ProjectileStyle): boolean;
+  hasActiveBfgProjectile(): boolean;
 }

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectileFlightProcessor } from '../src/projectile/ProjectileFlightProcessor';
 import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
-import type { TrackedProjectile } from '../src/types';
+import type { ProjectileRuntimeRecord } from '../src/types';
 
-function makeProjectile(overrides: Partial<TrackedProjectile> = {}): TrackedProjectile {
+function makeProjectile(overrides: Partial<ProjectileRuntimeRecord> = {}): ProjectileRuntimeRecord {
   const body = {
     velocity: { x: 100, y: 0 },
     setVelocity: vi.fn((x: number, y: number) => {
@@ -42,7 +42,7 @@ function makeProjectile(overrides: Partial<TrackedProjectile> = {}): TrackedProj
     colliders: [],
     boundsListener: () => {},
     ...overrides,
-  } as unknown as TrackedProjectile;
+  } as unknown as ProjectileRuntimeRecord;
 }
 
 describe('ProjectileFlightProcessor', () => {

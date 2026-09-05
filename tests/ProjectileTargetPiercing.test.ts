@@ -53,7 +53,7 @@ import { CombatSystem } from '../src/systems/CombatSystem';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileSpawnConfig, TrackedProjectile } from '../src/types';
+import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../src/types';
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
 
@@ -64,7 +64,7 @@ function makeEnemy(id: string, x: number) {
       getBounds: () => new Phaser.Geom.Rectangle(x - 8, -8, 16, 16) });
 }
 
-function makeProjectile(piercesTargets: boolean): TrackedProjectile {
+function makeProjectile(piercesTargets: boolean): ProjectileRuntimeRecord {
   return fakeEntity({ id: 1,
     ownerId: 'player-1',
     sourceId: 'TESLA_DOME',
@@ -78,11 +78,11 @@ function makeProjectile(piercesTargets: boolean): TrackedProjectile {
     lastY: 0, x: 0,
       y: 0,
       // Ein bewusst breites Projektil, damit beide Gegner in einem Frame überlappen.
-      getBounds: () => new Phaser.Geom.Rectangle(-20, -6, 40, 12), body: { velocity: { x: 100, y: 0 } } }) as unknown as TrackedProjectile;
+      getBounds: () => new Phaser.Geom.Rectangle(-20, -6, 40, 12), body: { velocity: { x: 100, y: 0 } } }) as unknown as ProjectileRuntimeRecord;
 }
 
 /** Ein vom Owner erzeugter Reflect-/Deflect-Nachfolger, den der Test nicht selbst vorbereitet. */
-function makeSpawnedRecord(id: number, x: number, y: number, ownerId: string): TrackedProjectile {
+function makeSpawnedRecord(id: number, x: number, y: number, ownerId: string): ProjectileRuntimeRecord {
   return fakeEntity({
     id,
     ownerId,
@@ -95,7 +95,7 @@ function makeSpawnedRecord(id: number, x: number, y: number, ownerId: string): T
     projectileStyle: 'tesla_bolt',
     getBounds: () => new Phaser.Geom.Rectangle(x - 1, y - 1, 2, 2),
     body: { velocity: { x: 0, y: 0 } },
-  }) as unknown as TrackedProjectile;
+  }) as unknown as ProjectileRuntimeRecord;
 }
 
 /**
@@ -103,11 +103,11 @@ function makeSpawnedRecord(id: number, x: number, y: number, ownerId: string): T
  * und Verbrauch, `CombatSystem` liefert Ziele, Beziehung, Barriere und Direct-Impact.
  */
 function makeSystem(
-  proj: TrackedProjectile,
+  proj: ProjectileRuntimeRecord,
   enemies: ReturnType<typeof makeEnemy>[],
-  active: readonly TrackedProjectile[] = [proj],
+  active: readonly ProjectileRuntimeRecord[] = [proj],
 ) {
-  const released: TrackedProjectile[] = [];
+  const released: ProjectileRuntimeRecord[] = [];
   const spawnedRequests: Array<{
     x: number; y: number; angle: number; ownerId: string; cfg: ProjectileSpawnConfig;
   }> = [];
@@ -144,7 +144,7 @@ function makeSystem(
   const playerManager = { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager;
   const bridge = { isHost: () => true } as unknown as NetworkBridge;
 
-  const system = new CombatSystem(playerManager, runtime as never, bridge);
+  const system = new CombatSystem(playerManager, bridge);
   system.setEnemyManager({
     getAllEnemies: () => enemies,
     getEnemy: (id: string) => enemies.find(enemy => enemy.id === id),
@@ -313,7 +313,7 @@ describe('generic projectile target piercing', () => {
       y: 0,
       getBounds: () => new Phaser.Geom.Rectangle(-20, -10, 40, 20),
       body: { velocity: { x: 0, y: 100 } },
-    }) as unknown as TrackedProjectile;
+    }) as unknown as ProjectileRuntimeRecord;
     const { runtime, destroyProjectile, spawnedRequests } = makeSystem(target, [], [target, blower]);
 
     runtime.runHostInteractionStage(0);
