@@ -24,7 +24,7 @@ export interface ProjectileBodyProfile {
 
 /**
  * Gemeinsames Body-Profil für Safe-Muzzle und die anschließende Arcade-Body-Erzeugung.
- * Die Werte spiegeln bewusst die bisherige ProjectileManager-Logik wider.
+ * Die Werte spiegeln bewusst die bestehende Projectile-Physics-Logik wider.
  */
 export function resolveProjectileBodyProfile(
   cfg: ProjectileSpawnConfig,

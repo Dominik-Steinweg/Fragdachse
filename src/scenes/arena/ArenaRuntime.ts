@@ -19,6 +19,7 @@ import type { WorldPresentationRequirement } from '../../world/WorldPresentation
 import type { PlayerCapabilities } from '../../world/PlayerCapabilities';
 import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
+import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
 import type {
   ArenaLayout,
@@ -585,6 +586,10 @@ export class ArenaRuntime {
 
   getWorldDescriptor(): WorldDescriptor | null {
     return this.flow.getWorldRuntime()?.context?.descriptor ?? null;
+  }
+
+  getWorldProjectileRuntime(): WorldProjectileRuntime | null {
+    return this.flow.getWorldProjectileRuntime();
   }
 
   getWorldLayout(): ArenaLayout | null {

@@ -286,7 +286,7 @@ export class PlayerManager implements OwnerVisualSource {
   }
 
   /**
-   * Besitzerzustand für Renderer und `ProjectileManager` ({@link OwnerVisualSource}) aus der
+   * Besitzerzustand für Renderer und Projectile-Presentation ({@link OwnerVisualSource}) aus der
    * zugehoerigen PlayerEntity und ihrer Runtime. Die Sichtbarkeit bleibt ein lokales
    * Presentation-Merkmal.
    */

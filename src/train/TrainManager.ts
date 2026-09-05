@@ -107,7 +107,7 @@ export class TrainManager {
 
   // ── Zugriff auf Physics-Gruppe ───────────────────────────────────────────
 
-  /** Gibt die StaticGroup zurück – für Projektil-Overlap im ProjectileManager. */
+  /** Gibt die StaticGroup zurück – für Projektil-Overlap im world-scoped Projectile-Owner. */
   getGroup(): Phaser.Physics.Arcade.StaticGroup { return this.group; }
 
   /** Gibt die Segment-Rectangles zurück – für Hitscan-/Melee-Kollisionserkennung. */

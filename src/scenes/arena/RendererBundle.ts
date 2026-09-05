@@ -55,7 +55,7 @@ import { CombatGoreGpuRenderer } from '../../effects/CombatGoreGpuRenderer';
 import { ShadowSystem }        from '../../effects/ShadowSystem';
 import { LightingSystem }      from '../../effects/LightingSystem';
 import { TrainRenderer }       from '../../train/TrainRenderer';
-import type { ProjectileManager } from '../../entities/ProjectileManager';
+import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { OwnerVisualSource } from '../../entities/OwnerVisualSource';
 import type { EffectSystem }      from '../../effects/EffectSystem';
 import type { CameraFeedbackController } from '../../effects/camera/CameraFeedbackController';
@@ -304,7 +304,7 @@ export function createRendererBundle(
   powerUp.setLightingSystem(lighting);
   beer.setLightingSystem(lighting);
   // Projektil-Eigenleuchten läuft nicht hier, sondern zentral über
-  // `ProjectileManager.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
+  // `WorldProjectileRuntime.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
     bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
@@ -321,45 +321,17 @@ export function createRendererBundle(
 }
 
 /**
- * Verbindet einen ProjectileManager mit allen Projektil-Renderern.
+ * Verbindet die world-scoped Projectile-Runtime mit allen Projektil-Renderern.
  *
- * Bewusst getrennt von {@link wireRenderersToProjManager}: Diese Funktion berührt
- * ausschliesslich den übergebenen Manager und darf die *bundle-weiten* Provider des
- * Gameplay-Managers nicht überschreiben.
+ * Die Funktion berührt ausschließlich die Projectile-Presentation der übergebenen World und
+ * darf die bundle-weiten Provider des übrigen Gameplay nicht überschreiben.
  */
 export function wireProjectileRenderers(
   bundle: RendererBundle,
-  pm: ProjectileManager,
+  runtime: WorldProjectileRuntime,
   owners: OwnerVisualSource,
 ): void {
-  pm.getPresentationRuntime().bindRenderers({
-    bullet: bundle.bullet,
-    projectileBurn: bundle.projectileBurn,
-    flame: bundle.flame,
-    leafBlower: bundle.leafBlower,
-    bfg: bundle.bfg,
-    energyBall: bundle.energyBall,
-    hydra: bundle.hydra,
-    gauss: bundle.gauss,
-    holyGrenade: bundle.holyGrenade,
-    rocket: bundle.rocket,
-    fireball: bundle.fireball,
-    spore: bundle.spore,
-    grenade: bundle.grenade,
-    translocatorPuck: bundle.translocatorPuck,
-    teslaBolt: bundle.teslaBolt,
-    tracer: bundle.tracer,
-    muzzleFlash: bundle.muzzleFlash,
-  }, (ownerId) => owners.getOwnerVisualState(ownerId));
-}
-
-/** Wire all renderers to the ProjectileManager and register the owner-position provider. */
-export function wireRenderersToProjManager(
-  bundle: RendererBundle,
-  pm: ProjectileManager,
-  owners: OwnerVisualSource,
-): void {
-  pm.getPresentationRuntime().bindRenderers({
+  runtime.getPresentationRuntime().bindRenderers({
     bullet: bundle.bullet,
     projectileBurn: bundle.projectileBurn,
     flame: bundle.flame,

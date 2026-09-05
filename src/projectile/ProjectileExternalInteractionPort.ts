@@ -75,7 +75,7 @@ export interface TranslocatorProjectilePort {
 }
 
 /** Interne Brücke vom world-owned Owner in die noch bestehende Phaser-Simulation. */
-export interface LegacyProjectileExternalInteractionAccess {
+export interface ProjectileExternalInteractionAccess {
   searchDetonableProjectiles(
     detonableIds: ReadonlySet<ProjectileId>,
     request: ProjectileDetonationSearchRequest,

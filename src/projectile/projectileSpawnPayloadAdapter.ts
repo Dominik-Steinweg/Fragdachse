@@ -2,18 +2,13 @@ import type { ProjectileSpawnConfig, TrackedProjectile } from '../types';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 
 /**
- * Übersetzt einen aufgelösten Spawn-Auftrag in die noch bestehende Payload-Form der
- * Host-Simulation.
+ * Übersetzt einen aufgelösten Spawn-Auftrag in die Phaser-Physics-Binding-Payload.
  *
  * Die Abbildung ist eine reine Funktion ohne State, Identity oder Lifecycle. Sie lebt so lange,
- * wie Flight, Kollision und Wirkung den Legacy-Record verwenden, und verschwindet mit dessen
- * Ablösung.
- *
- * Die Payload führt weiterhin nur den für den Legacy-Code nötigen operativen `ownerId`-Anteil.
- * Die vollständige Provenance wird von der World-Runtime separat und unverändert in den
- * kanonischen Runtime-Record übergeben.
+ * Die Abbildung ist eine reine Funktion ohne State, Identity oder Lifecycle. Die vollständige
+ * Provenance wird von der World-Runtime separat und unverändert in den Runtime-Record übergeben.
  */
-export function toLegacyProjectileSpawnConfig(request: ProjectileSpawnRequest): ProjectileSpawnConfig {
+export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): ProjectileSpawnConfig {
   const { flight, provenance, interaction, presentation } = request;
   const directHit = interaction.directHit;
   const swarm = directHit?.plasmaSwarm;

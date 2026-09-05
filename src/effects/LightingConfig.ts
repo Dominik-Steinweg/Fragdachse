@@ -733,7 +733,7 @@ export interface ProjectileLightSpec {
 
 /**
  * Ein Projektil, wie es die Beleuchtung sieht. Gegenstück zu `ShadowProjectileSample`:
- * `ProjectileManager` liefert die Liste pro Frame für Host und Client aus derselben
+ * `WorldProjectileRuntime` liefert die Liste pro Frame für Host und Client aus derselben
  * Methode, der Aufrufer meldet daraus die Lichter an.
  */
 export interface ProjectileLightSample {

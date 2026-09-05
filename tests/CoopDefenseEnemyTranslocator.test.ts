@@ -16,7 +16,7 @@ vi.mock('phaser', () => ({
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import type { TranslocatorProjectilePort } from '../src/projectile/ProjectileExternalInteractionPort';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
@@ -53,7 +53,7 @@ function createSystem(
   } as unknown as CombatSystem;
   const projectileManager = {
     spawnProjectile,
-  } as unknown as ProjectileManager;
+  } as unknown as ProjectilePhysicsBinding;
   const translocatorProjectilePort: TranslocatorProjectilePort = {
     spawnPuck,
     getPuckPosition: () => null,

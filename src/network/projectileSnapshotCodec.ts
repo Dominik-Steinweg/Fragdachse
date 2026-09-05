@@ -17,7 +17,7 @@
  * ZWEI VERSCHIEDENE SEMANTIKEN – hier liegt die einzige echte Fallgrube:
  *   - Statik ist VOLLERSATZ: "Bit nicht gesetzt" heißt `undefined`, nicht "unverändert". Das ist
  *     zwingend, weil `style === undefined` clientseitig NICHT dasselbe ist wie `style === 'bullet'`
- *     (der Renderer-Dispatch in ProjectileManager.clientSyncVisuals fällt sonst in den generischen
+ *     (der Renderer-Dispatch in der Projectile-Presentation fällt sonst in den generischen
  *     Rechteck-Zweig).
  *   - Dynamik ist VOLLSTÄNDIG, nicht inkrementell. Die beiden Maskenbits vergleichen gegen eine
  *     Konstante (0 bzw. `undefined`), nie gegen einen zuletzt gesendeten Wert. Jeder Eintrag ist
@@ -379,7 +379,7 @@ export const EMPTY_FULL_PROJECTILE_SNAPSHOT: SyncedProjectileSnapshot = { s: [],
 
 /**
  * Baut aus Statik-Cache und Snapshot die vollständige Projektilliste, die der Rest des Clients
- * unverändert weiterverwendet (ProjectileManager.clientSyncVisuals, ArenaScene-Spawnsicherheit).
+ * unverändert weiterverwendet (World-Runtime-Clientprojektion, ArenaScene-Spawnsicherheit).
  *
  * Der übergebene Cache wird dabei fortgeschrieben: neue Statiken landen darin, und Einträge, deren
  * ID nicht mehr im Dynamik-Strom vorkommt, werden entfernt. Das hält die Despawn-Semantik

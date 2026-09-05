@@ -134,7 +134,7 @@ export interface WeaponFireParams {
   targetY:     number;
   ownerId:     string;
   ownerColor:  number;
-  /** Gewünschter physischer Muzzle-Punkt; der ProjectileManager löst ihn sicher auf. */
+  /** Gewünschter physischer Muzzle-Punkt; die World-Runtime löst ihn sicher auf. */
   gameplayMuzzleOrigin?: MuzzleOrigin;
   /** Visueller Mündungsursprung; verschiebt niemals den Gameplay-Spawn. */
   visualMuzzleOrigin?: MuzzleOrigin;

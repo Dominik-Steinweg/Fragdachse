@@ -403,8 +403,8 @@ export class ArenaLifecycleCoordinator {
         },
         isLocalPlayerAttachedToWorld: () => this.isPlayerAttachedToWorld(bridge.getLocalPlayerId()),
         getPlayers: () => this.ctx.playerManager.getAllPlayers(),
-        getProjectileShadowSamples: () => this.ctx.projectileManager.getShadowSamples(),
-        getProjectileLightSamples: () => this.ctx.projectileManager.getLightSamples(),
+        getProjectileShadowSamples: () => this.worldGameplay?.projectiles?.getShadowSamples() ?? [],
+        getProjectileLightSamples: () => this.worldGameplay?.projectiles?.getLightSamples() ?? [],
         getTrainState: (inRoundWorld) => inRoundWorld
           ? (this.renderers.train?.getShadowState()
             ?? (bridge.isHost()
@@ -687,7 +687,7 @@ export class ArenaLifecycleCoordinator {
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getPlayerManager: () => this.ctx.playerManager,
       getCombatSystem: () => this.ctx.combatSystem,
-      getProjectileManager: () => this.ctx.projectileManager,
+      getProjectileSpawnPort: () => this.worldGameplay?.projectiles ?? null,
       getProjectileThreatReadPort: () => this.worldGameplay?.projectiles ?? null,
       getTranslocatorProjectilePort: () => this.worldGameplay?.projectiles ?? null,
       getHostPhysics: () => this.ctx.hostPhysics,

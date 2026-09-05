@@ -1,7 +1,12 @@
 import type { LoadoutSlot, ProjectileSpawnConfig, TrackedProjectile } from '../types';
+import type { ProjectilePhysicsBinding } from './ProjectilePhysicsBinding';
+import { ProjectileClientReplica, type ProjectileClientReplicaFrame } from './ProjectileClientReplica';
+import type { ProjectilePresentationRuntime } from './ProjectilePresentationRuntime';
+import type { ShadowProjectileSample } from '../effects/ShadowConfig';
+import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { WorldScopedBinding } from '../world/WorldRuntime';
 import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
-import { toLegacyProjectileSpawnConfig } from './legacyProjectileSpawnPayload';
+import { toProjectileSpawnConfig } from './projectileSpawnPayloadAdapter';
 import {
   ProjectileFlightProcessor,
   type ProjectileCoreStageResult,
@@ -31,7 +36,7 @@ import type {
   ProjectileTravelSample,
 } from './ProjectileTravelPort';
 import type {
-  LegacyProjectileExternalInteractionAccess,
+  ProjectileExternalInteractionAccess,
   ProjectileExternalInteractionPort,
   ProjectileDetonationOutcome,
   ProjectileDetonationSearchRequest,
@@ -63,6 +68,7 @@ import type {
   ProjectileCombatPort,
   ProjectileCombatTargetRef,
   ProjectileDirectImpactOutcome,
+  ProjectilePlasmaSwarmImpact,
 } from './ProjectileCombatPort';
 import type {
   ProjectileExplosionRequest,
@@ -81,8 +87,8 @@ import type {
   ProjectileTargetabilityPort,
   ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
-import { createInheritedProjectilePayload } from './legacyProjectileSpawnPayload';
-import { ProjectileStore, type LegacyProjectileStoreAccess } from './ProjectileStore';
+import { createInheritedProjectilePayload } from './projectileSpawnPayloadAdapter';
+import { ProjectileStore, type ProjectileStoreAccess } from './ProjectileStore';
 
 /** Parameter eines vom Owner erzeugten Reflect-/Deflect-Nachfolgers. */
 interface ReflectedProjectileOptions {
@@ -116,9 +122,9 @@ export interface ProjectileHostStageResult {
  * Identity noch Registry: beides liegt beim Owner. Jede hier genannte Operation entfällt mit dem
  * Cutover ihres Fachbereichs (Phasen 3–14).
  */
-export interface LegacyProjectileHostSimulation {
-  /** Verbindet die Legacy-Verarbeitung mit dem kanonischen Store dieser World. */
-  bindProjectileOwner(owner: ProjectileOwnerSeam | null): void;
+export interface ProjectilePhysicsBindingPort {
+  /** Verbindet das Phaser-Physics-Binding mit dem kanonischen Store dieser World. */
+  bindOwner(owner: ProjectileRuntimeOwnerPort | null): void;
   /** Baut Physics-Handle, Collider, Spawn-Darstellung und Runtime-Record zu einer vergebenen Id. */
   createProjectile(
     id: ProjectileId,
@@ -132,8 +138,8 @@ export interface LegacyProjectileHostSimulation {
   ): TrackedProjectile;
   /** Gibt Physics-, Collider- und Darstellungsressourcen eines entfernten Records frei. */
   releaseProjectileResources(record: TrackedProjectile): void;
-  /** Führt nur die noch nicht migrierten Collision-/Effect-/Presentation-Reste aus. */
-  runLegacyProjectileStage?(
+  /** Führt den Physics-/Effect-Rest nach dem deterministischen Flight-Stage aus. */
+  runProjectileEffectsStage?(
     deltaMs: number,
     nowMs: number,
     coreStage: ProjectileCoreStageResult,
@@ -142,8 +148,8 @@ export interface LegacyProjectileHostSimulation {
   setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
   setHostFrameTime?(nowMs: number): void;
   /** Semantische External-Interaction-Brücke; Runtime-Records bleiben intern. */
-  externalInteraction?: LegacyProjectileExternalInteractionAccess;
-  /** Übergangshilfe: der Legacy-Simulationsowner schreibt den kanonischen Burn-Zustand. */
+  externalInteraction?: ProjectileExternalInteractionAccess;
+  /** Der Physics-Binding-Owner schreibt den kanonischen Burn-Zustand. */
   applyProjectileBurnAugment?(projectileId: ProjectileId, augment: ProjectileBurnAugment): boolean;
   /** Queues a typed explosion or terminal lifecycle after an authoritative Direct Outcome. */
   completeDirectImpact?(
@@ -154,8 +160,8 @@ export interface LegacyProjectileHostSimulation {
   ): boolean;
   /** Applies the small same-frame domain outcome to projectile continuation state. */
   completeProjectileExplosion?(projectileId: ProjectileId, damagedTargetKeys: readonly string[]): void;
-  /** Räumt den registry-fremden Rest ab: Renderer, Snapshot-Zustand und Client-Visuals. */
-  releaseWorldProjectileState(): void;
+  /** Räumt den registry-fremden Rest ab: Physics-Binding-State wird world-lokal freigegeben. */
+  releaseWorldState(): void;
 }
 
 /**
@@ -164,10 +170,10 @@ export interface LegacyProjectileHostSimulation {
  * Der Seam zeigt ausschließlich auf denselben kanonischen Store; er kopiert nichts, vergibt keine
  * zweite Identity und wird nicht an neue Consumer verteilt.
  */
-export interface ProjectileOwnerSeam {
-  readonly store: LegacyProjectileStoreAccess;
-  /** Spawn im Legacy-Payload-Shape der noch nicht migrierten Quellen. */
-  spawnLegacyProjectile(
+export interface ProjectileRuntimeOwnerPort {
+  readonly store: ProjectileStoreAccess;
+  /** Erstellt ein Projectile aus der aufgelösten, bestehenden Spawn-Payload. */
+  spawnProjectileConfig(
     x: number,
     y: number,
     angle: number,
@@ -191,7 +197,7 @@ export interface ProjectileOwnerSeam {
 }
 
 export interface WorldProjectileRuntimeOptions {
-  readonly simulation: LegacyProjectileHostSimulation;
+  readonly physicsBinding: ProjectilePhysicsBindingPort;
   /** World-Revision-Scope für monotone Projectile-Identity über lokale Runtime-Rebuilds. */
   readonly identityScope: ProjectileIdentityScope;
   /** Hostautoritative Frame-/Weltzeit; die Runtime liest keine eigene Wall Clock. */
@@ -208,12 +214,12 @@ export interface WorldProjectileRuntimeOptions {
  * läuft ausschließlich über diese Grenze – aus der aufgelösten Execution über {@link spawnProjectile},
  * aus noch nicht migrierten Host-Quellen über den befristeten Seam.
  *
- * Flight, Kollision, Wirkung und Darstellung liegen bis zu ihren Cutover-Phasen weiterhin in der
- * Legacy-Simulation; sie arbeitet dabei auf **demselben** Store, nie auf einer Kopie.
+ * Phaser-Physics-Ressourcen und ihre Kollisionseinstiegspunkte liegen in einem world-komponierten
+ * Binding; dieses arbeitet auf **demselben** Store, nie auf einer Kopie.
  */
 export class WorldProjectileRuntime implements
   ProjectileSpawnPort,
-  ProjectileOwnerSeam,
+  ProjectileRuntimeOwnerPort,
   ProjectileExternalInteractionPort,
   TranslocatorProjectilePort,
   ProjectileThreatReadPort,
@@ -269,14 +275,14 @@ export class WorldProjectileRuntime implements
   private targetabilityPort: ProjectileTargetabilityPort | null = null;
   private barrierPort: ProjectileBarrierPort | null = null;
   private directImpactPort: ProjectileCombatPort | null = null;
-  private readonly simulation: LegacyProjectileHostSimulation;
+  private readonly physicsBinding: ProjectilePhysicsBinding;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
   private interactionNowMs = 0;
   private destroyed = false;
 
   constructor(options: WorldProjectileRuntimeOptions) {
-    this.simulation = options.simulation;
+    this.physicsBinding = options.physicsBinding as ProjectilePhysicsBinding;
     this.hostNowMs = options.hostNowMs;
     this.onDestroy = options.onDestroy;
     this.projectiles = new ProjectileStore(options.identityScope);
@@ -289,19 +295,137 @@ export class WorldProjectileRuntime implements
       destroyProjectile: (id) => this.destroyProjectile(id),
       applyDefense: (record, defense, candidate) => this.applyDefense(record, defense, candidate),
       completeDirectImpact: (record, target, impact, outcome) => (
-        this.simulation.completeDirectImpact?.(record.id, target, impact, outcome) ?? false
+        this.physicsBinding.completeDirectImpact?.(record.id, target, impact, outcome) ?? false
       ),
     };
-    this.simulation.bindProjectileOwner(this);
+    this.physicsBinding.bindOwner(this);
   }
 
-  get store(): LegacyProjectileStoreAccess {
+  get store(): ProjectileStoreAccess {
     return this.projectiles;
   }
 
   /** Anzahl der aktuell wirksamen Projectiles dieser World. */
   get activeCount(): number {
     return this.projectiles.activeCount;
+  }
+
+  /** World-scoped Presentation owner; it is created and destroyed with this runtime. */
+  getPresentationRuntime(): ProjectilePresentationRuntime {
+    return this.physicsBinding.getPresentationRuntime();
+  }
+
+  /** World-scoped client replica; it never crosses into authoritative gameplay. */
+  getClientReplica(): ProjectileClientReplica {
+    return this.physicsBinding.getClientReplica();
+  }
+
+  getDebugActiveProjectileCount(): number {
+    return this.physicsBinding.getDebugActiveProjectileCount();
+  }
+
+  getShadowSamples(): readonly ShadowProjectileSample[] {
+    return this.physicsBinding.getShadowSamples();
+  }
+
+  getLightSamples(): readonly ProjectileLightSample[] {
+    return this.physicsBinding.getLightSamples();
+  }
+
+  setProjectileReplicationAdapter(adapter: import('./ProjectileReplicationAdapter').ProjectileReplicationAdapter | null): void {
+    this.physicsBinding.setProjectileReplicationAdapter?.(adapter);
+  }
+
+  requestFullNetSnapshot(): void {
+    this.physicsBinding.requestFullNetSnapshot();
+  }
+
+  getNetSnapshot() {
+    return this.physicsBinding.getNetSnapshot();
+  }
+
+  presentClientProjectileFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
+    this.physicsBinding.presentClientProjectileFrame(frame, localPlayerId);
+  }
+
+  clientExtrapolate(): void {
+    this.physicsBinding.clientExtrapolate();
+  }
+
+  applyPlasmaSwarmImpact(impact: ProjectilePlasmaSwarmImpact): void {
+    this.physicsBinding.applyPlasmaSwarmImpact(impact);
+  }
+
+  setNaturalFlameExpiryCallback(callback: Parameters<ProjectilePhysicsBinding['setNaturalFlameExpiryCallback']>[0]): void {
+    this.physicsBinding.setNaturalFlameExpiryCallback(callback);
+  }
+
+  setProjectileImpactCallback(callback: Parameters<ProjectilePhysicsBinding['setProjectileImpactCallback']>[0]): void {
+    this.physicsBinding.setProjectileImpactCallback(callback);
+  }
+
+  setProjectileResolvedCallback(callback: Parameters<ProjectilePhysicsBinding['setProjectileResolvedCallback']>[0]): void {
+    this.physicsBinding.setProjectileResolvedCallback(callback);
+  }
+
+  setMiniRocketDestroyedCallback(callback: Parameters<ProjectilePhysicsBinding['setMiniRocketDestroyedCallback']>[0]): void {
+    this.physicsBinding.setMiniRocketDestroyedCallback(callback);
+  }
+
+  setStandaloneExplosionRequestCallback(callback: Parameters<ProjectilePhysicsBinding['setStandaloneExplosionRequestCallback']>[0]): void {
+    this.physicsBinding.setStandaloneExplosionRequestCallback(callback);
+  }
+
+  setProximityPulseCallback(callback: Parameters<ProjectilePhysicsBinding['setProximityPulseCallback']>[0]): void {
+    this.physicsBinding.setProximityPulseCallback(callback);
+  }
+
+  setTimeBubbleFactorProvider(provider: Parameters<ProjectilePhysicsBinding['setTimeBubbleFactorProvider']>[0]): void {
+    this.physicsBinding.setTimeBubbleFactorProvider(provider);
+  }
+
+  setHomingTargetProvider(provider: Parameters<ProjectilePhysicsBinding['setHomingTargetProvider']>[0]): void {
+    this.physicsBinding.setHomingTargetProvider(provider);
+  }
+
+  setHomingLineOfFireChecker(checker: Parameters<ProjectilePhysicsBinding['setHomingLineOfFireChecker']>[0]): void {
+    this.physicsBinding.setHomingLineOfFireChecker(checker);
+  }
+
+  setRockHitCallback(callback: Parameters<ProjectilePhysicsBinding['setRockHitCallback']>[0]): void {
+    this.physicsBinding.setRockHitCallback(callback);
+  }
+
+  setObstacleKindResolver(resolver: Parameters<ProjectilePhysicsBinding['setObstacleKindResolver']>[0]): void {
+    this.physicsBinding.setObstacleKindResolver(resolver);
+  }
+
+  setBaseHitCallback(callback: Parameters<ProjectilePhysicsBinding['setBaseHitCallback']>[0]): void {
+    this.physicsBinding.setBaseHitCallback(callback);
+  }
+
+  setSupportImpactCallback(callback: Parameters<ProjectilePhysicsBinding['setSupportImpactCallback']>[0]): void {
+    this.physicsBinding.setSupportImpactCallback(callback);
+  }
+
+  setRockGroup(...args: Parameters<ProjectilePhysicsBinding['setRockGroup']>): void {
+    this.physicsBinding.setRockGroup(...args);
+  }
+
+  setBaseGroup(...args: Parameters<ProjectilePhysicsBinding['setBaseGroup']>): void {
+    this.physicsBinding.setBaseGroup(...args);
+  }
+
+  setObstacleIndex(...args: Parameters<ProjectilePhysicsBinding['setObstacleIndex']>): void {
+    this.physicsBinding.setObstacleIndex(...args);
+  }
+
+  setTrainGroup(...args: Parameters<ProjectilePhysicsBinding['setTrainGroup']>): void {
+    this.physicsBinding.setTrainGroup(...args);
+  }
+
+  setTrainHitCallback(callback: Parameters<ProjectilePhysicsBinding['setTrainHitCallback']>[0]): void {
+    this.physicsBinding.setTrainHitCallback(callback);
   }
 
   /** Liefert ausschließlich die Client-Projektion; interne Runtime-Records verlassen die World nicht. */
@@ -349,25 +473,27 @@ export class WorldProjectileRuntime implements
   }
 
   spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
+    if (this.destroyed) return null;
     const { origin } = request;
     return this.spawnResolved(
       origin.x,
       origin.y,
       origin.angle,
       request.provenance.allegiance.ownerId,
-      toLegacyProjectileSpawnConfig(request),
+      toProjectileSpawnConfig(request),
       request.provenance,
     );
   }
 
-  spawnLegacyProjectile(
+  spawnProjectileConfig(
     x: number,
     y: number,
     angle: number,
     ownerId: string,
     cfg: ProjectileSpawnConfig,
   ): ProjectileId {
-    return this.spawnResolved(x, y, angle, ownerId, cfg, createLegacyProjectileProvenance(ownerId, cfg));
+    if (this.destroyed) return -1;
+    return this.spawnResolved(x, y, angle, ownerId, cfg, createProjectileProvenance(ownerId, cfg));
   }
 
   destroyProjectile(id: ProjectileId): void {
@@ -382,12 +508,12 @@ export class WorldProjectileRuntime implements
   releaseProjectile(record: TrackedProjectile): void {
     this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
-    this.simulation.releaseProjectileResources(record);
+    this.physicsBinding.releaseProjectileResources(record);
   }
 
   searchDetonableProjectiles(request: ProjectileDetonationSearchRequest): readonly ProjectileDetonationTarget[] {
     if (this.destroyed) return [];
-    return this.simulation.externalInteraction?.searchDetonableProjectiles(this.detonableIds, request) ?? [];
+    return this.physicsBinding.externalInteraction?.searchDetonableProjectiles(this.detonableIds, request) ?? [];
   }
 
   detonateProjectile(
@@ -395,12 +521,12 @@ export class WorldProjectileRuntime implements
     detonatorOwnerId: string,
   ): ProjectileDetonationOutcome | null {
     if (this.destroyed || !this.detonableIds.has(projectileId)) return null;
-    return this.simulation.externalInteraction?.detonateProjectile(projectileId, detonatorOwnerId) ?? null;
+    return this.physicsBinding.externalInteraction?.detonateProjectile(projectileId, detonatorOwnerId) ?? null;
   }
 
   detonateOverlappingProjectiles(): readonly ProjectileDetonationOutcome[] {
     if (this.destroyed) return [];
-    return this.simulation.externalInteraction?.detonateOverlappingProjectiles(
+    return this.physicsBinding.externalInteraction?.detonateOverlappingProjectiles(
       this.detonatorIds,
       this.detonableIds,
     ) ?? [];
@@ -482,7 +608,7 @@ export class WorldProjectileRuntime implements
         : undefined);
     if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
 
-    const applied = this.simulation.applyProjectileBurnAugment?.(projectileId, augment) ?? false;
+    const applied = this.physicsBinding.applyProjectileBurnAugment?.(projectileId, augment) ?? false;
     if (!applied) return false;
     this.burnAugments.set(projectileId, augment);
     return true;
@@ -531,13 +657,13 @@ export class WorldProjectileRuntime implements
 
   /**
    * Host Frame Port: der Owner taktet zuerst den Runtime-Core und reicht danach ausschließlich
-   * dessen schmale Ergebnisse an die noch offene Legacy-Phase weiter.
+   * dessen schmale Ergebnisse an das nachgelagerte Physics-/Effect-Binding weiter.
    */
   runHostProjectileStage(deltaMs: number, nowMs: number): ProjectileHostStageResult {
     if (this.destroyed) return emptyHostStageResult();
     this.setHostFrameTime(nowMs);
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
-    const stage = this.simulation.runLegacyProjectileStage?.(deltaMs, nowMs, coreStage)
+    const stage = this.physicsBinding.runProjectileEffectsStage?.(deltaMs, nowMs, coreStage)
       ?? {
         projectileExplosions: [],
         grenadePayloads: [],
@@ -549,7 +675,7 @@ export class WorldProjectileRuntime implements
 
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
     this.flightProcessor.setTimeFieldPort(port);
-    this.simulation.setProjectileTimeFieldPort?.(port);
+    this.physicsBinding.setProjectileTimeFieldPort?.(port);
   }
 
   setProjectileTargetQueryPort(port: ProjectileTargetQueryPort | null): void {
@@ -919,7 +1045,7 @@ export class WorldProjectileRuntime implements
   }
 
   setHostFrameTime(nowMs: number): void {
-    this.simulation.setHostFrameTime?.(nowMs);
+    this.physicsBinding.setHostFrameTime?.(nowMs);
     this.directImpactPort?.setHostFrameTime?.(nowMs);
   }
 
@@ -929,7 +1055,7 @@ export class WorldProjectileRuntime implements
     this.destroyed = true;
     for (const record of this.projectiles.stepOrder) {
       this.projectiles.detach(record);
-      this.simulation.releaseProjectileResources(record);
+      this.physicsBinding.releaseProjectileResources(record);
     }
     this.projectiles.clear();
     this.detonableIds.clear();
@@ -943,8 +1069,8 @@ export class WorldProjectileRuntime implements
     this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
-    this.simulation.releaseWorldProjectileState();
-    this.simulation.bindProjectileOwner(null);
+    this.physicsBinding.releaseWorldState();
+    this.physicsBinding.bindOwner(null);
     this.onDestroy?.();
   }
 
@@ -957,7 +1083,7 @@ export class WorldProjectileRuntime implements
     provenance: ProjectileProvenance,
   ): ProjectileId {
     const id = this.projectiles.allocateId();
-    const record = this.simulation.createProjectile(id, x, y, angle, ownerId, cfg, this.hostNowMs(), provenance);
+    const record = this.physicsBinding.createProjectile(id, x, y, angle, ownerId, cfg, this.hostNowMs(), provenance);
     this.projectiles.insert(record);
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
@@ -1026,7 +1152,7 @@ function burnDps(burn: { damagePerTick: number }): number {
   return burn.damagePerTick * 1000 / BURN_TICK_INTERVAL_MS;
 }
 
-function createLegacyProjectileProvenance(
+function createProjectileProvenance(
   ownerId: string,
   cfg: ProjectileSpawnConfig,
 ): ProjectileProvenance {

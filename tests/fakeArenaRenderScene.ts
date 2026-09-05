@@ -497,8 +497,12 @@ export function createFakePhaserModule(): Record<string, unknown> {
       RND: { pick: <T>(items: readonly T[]) => items[0] },
       Vector2: class { x = 0; y = 0; },
     },
-    Geom: { Rectangle: class {} },
-    GameObjects: { Image: FakeDetachedImage, Zone: FakeZone },
+    Geom: { Rectangle: class {}, Circle: class {} },
+    GameObjects: {
+      Image: FakeDetachedImage,
+      Zone: FakeZone,
+      Particles: { ParticleProcessor: class {} },
+    },
   };
 }
 

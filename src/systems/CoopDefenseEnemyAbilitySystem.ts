@@ -11,7 +11,6 @@ import {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { FireSystem } from '../effects/FireSystem';
 import {
@@ -30,6 +29,8 @@ import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
+import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 
 interface EnemyTeleportState {
   nextReadyAt: number;
@@ -121,7 +122,7 @@ export class CoopDefenseEnemyAbilitySystem {
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
-    private readonly projectileManager: ProjectileManager,
+    private readonly projectileSpawn: ProjectileSpawnPort,
     private readonly combatSystem: CombatSystem,
     private readonly energyShieldSystem: EnergyShieldSystem | null,
     private readonly stinkCloudSystem: StinkCloudSystem,
@@ -382,27 +383,30 @@ export class CoopDefenseEnemyAbilitySystem {
       ability.projectileSpeed * ENEMY_THROW_SPEED_MULTIPLIER,
     );
 
-    this.projectileManager.spawnProjectile(
-      enemy.sprite.x + Math.cos(angle) * spawnDistance,
-      enemy.sprite.y + Math.sin(angle) * spawnDistance,
-      angle,
-      enemy.id,
-      {
+    const sourceId = `enemy.${enemy.kind}.spawn_throw`;
+    this.projectileSpawn.spawnProjectile({
+      origin: {
+        x: enemy.sprite.x + Math.cos(angle) * spawnDistance,
+        y: enemy.sprite.y + Math.sin(angle) * spawnDistance,
+        angle,
+      },
+      provenance: createSingleOwnerProvenance(enemy.id, { weaponSourceId: sourceId, sourceSlot: 'utility' }),
+      flight: {
         speed: throwSpeed,
         size: ability.projectileSize,
-        damage: 0,
-        color: ability.color,
-        ownerColor: ability.color,
-        lifetime: ability.fuseTimeMs,
+        lifetimeMs: ability.fuseTimeMs,
         maxBounces: ability.maxBounces,
         isGrenade: true,
-        fuseTime: ability.fuseTimeMs,
-        adrenalinGain: 0,
-        sourceId: `enemy.${enemy.kind}.spawn_throw`,
-        projectileStyle: 'grenade',
-        grenadeVisualPreset: 'fur_ball',
-        rockDamageMult: 0,
-        trainDamageMult: 0,
+        fuseTimeMs: ability.fuseTimeMs,
+        drag: {
+          frictionDelayMs: ENEMY_THROW_FLIGHT_PHYSICS.frictionDelayMs,
+          airFrictionDecayPerSec: ENEMY_THROW_FLIGHT_PHYSICS.airFrictionDecayPerSec,
+          bounceFrictionMultiplier: ENEMY_THROW_FLIGHT_PHYSICS.bounceFrictionMultiplier,
+          stopSpeedThreshold: ENEMY_THROW_FLIGHT_PHYSICS.stopSpeedThreshold,
+        },
+      },
+      interaction: {
+        directHit: { damage: 0, rockDamageMult: 0, trainDamageMult: 0 },
         grenadeEffect: {
           type: 'spawn_enemy',
           enemyKind: ability.enemyKind,
@@ -410,9 +414,14 @@ export class CoopDefenseEnemyAbilitySystem {
           offsetPx: ability.spawnOffsetPx,
           color: ability.color,
         },
-        ...ENEMY_THROW_FLIGHT_PHYSICS,
       },
-    );
+      presentation: {
+        color: ability.color,
+        ownerColor: ability.color,
+        style: 'grenade',
+        grenadePreset: 'fur_ball',
+      },
+    });
     this.spawnThrowReadyAt.set(enemy.id, now + ability.cooldownMs);
   }
 
@@ -575,27 +584,26 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.projectileSpeed * ENEMY_THROW_SPEED_MULTIPLIER,
     );
 
-    this.projectileManager.spawnProjectile(
-      spawnX,
-      spawnY,
-      angle,
-      enemy.id,
-      {
+    const sourceId = `enemy.${enemy.kind}.void_molotov`;
+    this.projectileSpawn.spawnProjectile({
+      origin: { x: spawnX, y: spawnY, angle },
+      provenance: createSingleOwnerProvenance(enemy.id, { weaponSourceId: sourceId, sourceSlot: 'utility' }),
+      flight: {
         speed: throwSpeed,
         size: projectileSize,
-        damage: 0,
-        color: VOID_FIRE_COLOR,
-        ownerColor: VOID_FIRE_COLOR,
-        lifetime: utility.fuseTime,
+        lifetimeMs: utility.fuseTime,
         maxBounces: utility.maxBounces,
         isGrenade: true,
-        fuseTime: utility.fuseTime,
-        adrenalinGain: 0,
-        sourceId: `enemy.${enemy.kind}.void_molotov`,
-        projectileStyle: utility.projectileStyle,
-        grenadeVisualPreset: utility.grenadeVisualPreset,
-        rockDamageMult: 0,
-        trainDamageMult: 0,
+        fuseTimeMs: utility.fuseTime,
+        drag: {
+          frictionDelayMs: ENEMY_THROW_FLIGHT_PHYSICS.frictionDelayMs,
+          airFrictionDecayPerSec: ENEMY_THROW_FLIGHT_PHYSICS.airFrictionDecayPerSec,
+          bounceFrictionMultiplier: ENEMY_THROW_FLIGHT_PHYSICS.bounceFrictionMultiplier,
+          stopSpeedThreshold: ENEMY_THROW_FLIGHT_PHYSICS.stopSpeedThreshold,
+        },
+      },
+      interaction: {
+        directHit: { damage: 0, rockDamageMult: 0, trainDamageMult: 0 },
         grenadeEffect: {
           type: 'fire',
           radius: utility.fireRadius,
@@ -605,13 +613,18 @@ export class CoopDefenseEnemyAbilitySystem {
           burnDamagePerTick: utility.fireBurnDamagePerTick,
           rockDamageMult: 0,
           trainDamageMult: 0,
-          sourceId: `enemy.${enemy.kind}.void_molotov`,
+          sourceId,
           visualStyle: 'void',
           damageTarget: 'players',
         },
-        ...ENEMY_THROW_FLIGHT_PHYSICS,
       },
-    );
+      presentation: {
+        color: VOID_FIRE_COLOR,
+        ownerColor: VOID_FIRE_COLOR,
+        style: utility.projectileStyle,
+        grenadePreset: utility.grenadeVisualPreset,
+      },
+    });
   }
 
   private cancelVoidMolotovWindup(enemy: EnemyEntity): void {

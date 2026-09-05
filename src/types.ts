@@ -526,7 +526,7 @@ export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 /**
  * Nutzlast eines Energieinjektor-Projektils. Es bleibt ein Support-Geschoss:
  * `CombatSystem` laesst es aus, und Treffer werden ausschliesslich ueber
- * `ProjectileManager.setSupportImpactCallback` aufgeloest.
+ * über den world-scoped Projectile-Owner aufgeloest.
  */
 export interface ProjectileEnergyInjectorPayload {
   readonly durationMs: number;
@@ -1036,7 +1036,7 @@ export interface UtilityPlacementPreviewState {
   sourceRuntimeId?: number;
 }
 
-/** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
+/** Konfiguration für ein gespawntes Projektil (wird von der World-Runtime aufgelöst) */
 export interface ProjectileSpawnConfig {
   proximityPulse?: ProjectileProximityPulseConfig;
   /** Authoritative collision candidate mode; presentation style is never used for this choice. */
@@ -1049,7 +1049,7 @@ export interface ProjectileSpawnConfig {
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
   color:           number;        // hex
-  /** Gewünschter physischer Muzzle-Punkt; der ProjectileManager löst ihn sicher auf. */
+  /** Gewünschter physischer Muzzle-Punkt; die World-Runtime löst ihn sicher auf. */
   gameplayMuzzleOrigin?: MuzzleOrigin;
   /** Reiner VFX-Ursprung; x/y bleibt Fire-Request-Ursprung, resolvedSpawn wird die initiale Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };

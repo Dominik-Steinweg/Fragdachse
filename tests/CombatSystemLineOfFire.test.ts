@@ -90,7 +90,7 @@ vi.mock('phaser', () => {
 
 import { CombatSystem } from '../src/systems/CombatSystem';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 
 const TRACK_X = 500;
@@ -115,7 +115,7 @@ function makeSegment(centerY: number, enabled = true) {
 function makeCombatSystem(): CombatSystem {
   const system = new CombatSystem(
     {} as unknown as PlayerManager,
-    {} as unknown as ProjectileManager,
+    {} as unknown as ProjectilePhysicsBinding,
     {} as unknown as NetworkBridge,
   );
   // Kein Fels, kein Baumstamm, keine Basis: übrig bleibt genau der bewegliche Blocker.

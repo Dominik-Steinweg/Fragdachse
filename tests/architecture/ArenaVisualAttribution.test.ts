@@ -314,7 +314,7 @@ describe('ArenaVisualAttributionCollector', () => {
     const expected = [
       ['PowerUpRenderer', 'powerUpEffects', ['graphic']],
       ['ArenaVisualFactory', 'treeTrunks', ['trunk']],
-      ['ProjectileManager', 'projectileShapes', ['sprite']],
+      ['ProjectilePresentationRuntime', 'projectileShapes', ['sprite']],
       ['EnemyEntity', 'enemyStatus', ['ring', 'this.voidMolotovWindupRing']],
     ] as const;
     for (const [sourceName, family, objects] of expected) {

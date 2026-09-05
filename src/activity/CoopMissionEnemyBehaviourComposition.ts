@@ -21,10 +21,11 @@ import type { TrainEventConfig } from '../types';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
 export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly playerManager: PlayerManager;
-  readonly projectileManager: import('../entities/ProjectileManager').ProjectileManager;
+  readonly projectileSpawn: ProjectileSpawnPort;
   readonly projectileThreatReadPort: ProjectileThreatReadPort;
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
   readonly combatSystem: CombatSystem;
@@ -99,7 +100,7 @@ export class CoopMissionEnemyBehaviourComposition {
     const ability = new CoopDefenseEnemyAbilitySystem(
       enemyManager,
       this.options.playerManager,
-      this.options.projectileManager,
+      this.options.projectileSpawn,
       this.options.combatSystem,
       this.options.energyShieldSystem,
       this.options.stinkCloudSystem,

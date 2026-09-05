@@ -1,4 +1,3 @@
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -23,7 +22,6 @@ export interface WorldSupportGameplaySystems {
 }
 
 export interface WorldSupportGameplayRuntimeOptions {
-  readonly projectileManager: ProjectileManager;
   readonly projectileExternalInteraction: ProjectileExternalInteractionPort;
   readonly playerManager: PlayerManager;
   readonly combatSystem: CombatSystem;

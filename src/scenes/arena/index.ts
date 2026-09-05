@@ -46,5 +46,5 @@ export type {
   ArenaCombatPresentationFrame,
   ArenaCombatPresentationSourcePort,
 } from './ArenaCombatPresentationController';
-export { createRendererBundle, wireRenderersToProjManager, wireRenderersToEffectSystem, wireRenderersToAudioSystem, wireRenderersToCameraFeedback, wireRenderersToDistortion } from './RendererBundle';
+export { createRendererBundle, wireProjectileRenderers, wireRenderersToEffectSystem, wireRenderersToAudioSystem, wireRenderersToCameraFeedback, wireRenderersToDistortion } from './RendererBundle';
 export type { RendererBundle }           from './RendererBundle';

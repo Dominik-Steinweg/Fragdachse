@@ -7,7 +7,7 @@ import type {
 } from '../../loadout/WeaponFireExecutor';
 import type { ProjectileSpawnResult } from '../../projectile/ProjectileSpawnPort';
 import type { ProjectileSpawnRequest } from '../../projectile/ProjectileSpawnRequest';
-import { toLegacyProjectileSpawnConfig } from '../../projectile/legacyProjectileSpawnPayload';
+import { toProjectileSpawnConfig } from '../../projectile/projectileSpawnPayloadAdapter';
 import { getHitscanRequestRange } from '../../loadout/WeaponFireExecutor';
 import {
   checkHitscanRayCircleHit,
@@ -382,7 +382,7 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
     const { x, y, angle } = request.origin;
     const ownerId = request.provenance.attributionId;
     // Der Benchmark prüft die aufgelöste Payload weiterhin in ihrer Wirkungsform.
-    const cfg = toLegacyProjectileSpawnConfig(request);
+    const cfg = toProjectileSpawnConfig(request);
 
     // Zweite Sicherheitsgrenze auf empfangene Projektil-Payloads
     validateProjectileSpawnPayload(cfg, this.scenario);

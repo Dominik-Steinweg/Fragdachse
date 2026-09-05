@@ -376,7 +376,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const { projectileExplosions, grenadePayloads, countdownEvents } = countdownActive
       ? { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] }
       : projectileRuntime?.runHostProjectileStage(delta, now)
-        ?? this.ctx.projectileManager.hostUpdate(delta, now);
+        ?? { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] };
     const playerPostProjectile = this.playerGameplayRuntime?.runHostPostProjectileStage(delta, now, countdownActive)
       ?? { guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] } };
     const guardianSpirits = [...playerPostProjectile.guardianSpirits];
@@ -905,7 +905,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.rockRegistry?.requestFullNetSnapshot();
       this.powerUpSystem?.requestFullNetSnapshot();
       this.enemyManager?.requestFullNetSnapshot();
-      this.ctx.projectileManager.requestFullNetSnapshot();
+      this.worldFramePort?.getProjectileRuntime?.()?.requestFullNetSnapshot();
     }
 
     for (const expiredRock of this.placementSystem?.update(now) ?? []) {
@@ -1016,7 +1016,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // raeumt einen etwaigen Client-Statikcache ab, statt ihn unveraendert stehen zu lassen.
     const projectiles = countdownActive
       ? EMPTY_FULL_PROJECTILE_SNAPSHOT
-      : this.ctx.projectileManager.getNetSnapshot();
+      : this.worldFramePort?.getProjectileRuntime?.()?.getNetSnapshot() ?? null;
     const playerSnapshot = this.playerGameplayRuntime?.prepareHostSnapshot(now)
       ?? { ak47StrategicTargets: [], tunnels: [] };
     const remoteControlTurrets = this.playerGameplayRuntime?.getRemoteControlSnapshot(
@@ -1368,7 +1368,6 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const runtime = this.worldFramePort?.getProjectileRuntime?.();
       const completeProjectileExplosion = runtime?.completeProjectileExplosion;
       if (completeProjectileExplosion) completeProjectileExplosion.call(runtime, continuation.projectileId, continuation);
-      else this.ctx.projectileManager.resumeMultiExplosionProjectile(continuation.projectileId, continuation.damagedTargetKeys);
     }
     return { damagedTargetKeys };
   }
@@ -1842,7 +1841,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
   /**
    * Hindernistreffer eines Energieinjektor-Projektils.
-   * Wird vom `ProjectileManager` aus dem Fels- bzw. Basis-Collider gemeldet, weil nur dort
+   * Wird vom world-scoped Projectile-Physics-Binding aus dem Fels- bzw. Basis-Collider gemeldet,
+   * weil nur dort
    * bekannt ist, welches Hindernis getroffen wurde.
    *
    * Der Energieinjektor sucht am Einschlagsort einen Turm: bei Felstreffern ist das die

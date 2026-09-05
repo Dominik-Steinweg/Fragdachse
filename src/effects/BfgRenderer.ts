@@ -102,7 +102,7 @@ interface BfgVisual {
  * - Outer: breiterer äußerer Energiering (Grün→Dunkelgrün)
  * - Spark: leuchtende Funken die nach außen strahlen
  *
- * Standalone-Modul – wird vom ProjectileManager für style='bfg' genutzt.
+ * Standalone-Modul – wird von der Projectile-Presentation für style='bfg' genutzt.
  */
 export class BfgRenderer {
   private visuals = new Map<number, BfgVisual>();

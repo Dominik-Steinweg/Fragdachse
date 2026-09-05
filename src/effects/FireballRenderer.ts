@@ -85,7 +85,7 @@ export class FireballRenderer {
 
   destroyAll(): void {
     for (const id of [...this.visuals.keys()]) this.destroyVisual(id);
-    // ProjectileManager.destroyAll() wird auch zwischen Runden aufgerufen; die
+    // Der world-scoped Projectile-Owner räumt auch zwischen Runden auf; die
     // szenenweiten Pool-Emitter bleiben deshalb fuer die naechste Runde erhalten.
     killAllAndResetParticlePositions(this.tail);
     killAllAndResetParticlePositions(this.sparks);

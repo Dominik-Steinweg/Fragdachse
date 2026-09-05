@@ -23,7 +23,7 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
 import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
@@ -84,7 +84,7 @@ function createPlacement(playerManager: PlayerManager): PlacementSystem {
 
 interface TurretFixture {
   readonly binding: WorldCombatGameplayBinding;
-  readonly projectileManager: ProjectileManager;
+  readonly projectileRuntime: ProjectilePhysicsBinding;
   readonly projectileSpawn: { spawnProjectile: ReturnType<typeof vi.fn> };
   readonly projectileInteraction: Record<string, ReturnType<typeof vi.fn>>;
   readonly playerLoadout: LoadoutManager;
@@ -122,9 +122,9 @@ function createFixture(options: {
     getPlayer: (id: string) => options.players.find((player) => player.id === id) as PlayerEntity | undefined,
     setSpawnContextProvider: vi.fn(),
   } as unknown as PlayerManager;
-  const projectileManager = methodBag({
+  const projectileRuntime = methodBag({
     spawnProjectile: vi.fn(),
-  }) as unknown as ProjectileManager;
+  }) as unknown as ProjectilePhysicsBinding;
   const combatSystem = options.combatSystem ?? (methodBag({
     isAlive: vi.fn(() => true),
     isBurrowed: vi.fn(() => false),
@@ -236,7 +236,7 @@ function createFixture(options: {
   const placement = options.placementSystem ?? createPlacement(playerManager);
   const binding = new WorldCombatGameplayBinding({
     playerManager,
-    projectileManager,
+    projectileRuntime,
     projectileSpawn,
     projectileInteraction,
     combatSystem,
@@ -298,7 +298,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, projectileManager, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics };
+  return { binding, projectileRuntime, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics };
 }
 
 afterEach(() => {
@@ -479,9 +479,6 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
       }),
     }) as unknown as CombatSystem;
 
-    const projectileManager = methodBag({
-      spawnProjectile: vi.fn(),
-    }) as unknown as ProjectileManager;
     const resource = methodBag() as unknown as ResourceSystem;
     const playerLoadout = new LoadoutManager(
       resource,

@@ -34,7 +34,7 @@ vi.mock('phaser', () => {
 import { CombatSystem } from '../src/systems/CombatSystem';
 import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { hasWorldFigure, type WorldParticipation } from '../src/world/WorldParticipation';
 
@@ -53,7 +53,7 @@ describe('CombatSystem respawn lifecycle', () => {
         isHost: () => true,
         broadcastEffect: vi.fn(),
       } as unknown as NetworkBridge;
-      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+      const combat = new CombatSystem(playerManager, {} as ProjectilePhysicsBinding, bridge);
       const survival = new CoopDefenseRespawnBudgetSystem({ respawnsPerPlayer: 1, participantIds: ['p1'] });
 
       combat.setInitialSpawnAllowedResolver(() => true);
@@ -99,7 +99,7 @@ describe('CombatSystem respawn lifecycle', () => {
         getWorldSpawnPoint: () => ({ x: 512, y: 320 }),
       } as unknown as PlayerManager;
       const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
-      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+      const combat = new CombatSystem(playerManager, {} as ProjectilePhysicsBinding, bridge);
 
       // Genau die Aufloesung der LobbyWorld: keine Runde, nur Teilnahme.
       combat.setInitialSpawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
@@ -139,7 +139,7 @@ describe('CombatSystem respawn lifecycle', () => {
         getPlayerProfile: (id: string) => players.has(id) ? { id, name: id, colorHex: 0xffffff } : undefined,
         areTeammates: () => false,
       } as unknown as NetworkBridge;
-      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+      const combat = new CombatSystem(playerManager, {} as ProjectilePhysicsBinding, bridge);
       const participation = new Map<string, WorldParticipation>([
         ['p1', 'interactive'],
         ['p2', 'interactive'],
@@ -175,7 +175,7 @@ describe('CombatSystem respawn lifecycle', () => {
         getWorldSpawnPoint: () => ({ x: 512, y: 320 }),
       } as unknown as PlayerManager;
       const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
-      const combat = new CombatSystem(playerManager, {} as ProjectileManager, bridge);
+      const combat = new CombatSystem(playerManager, {} as ProjectilePhysicsBinding, bridge);
 
       // `none` steht ausserhalb, `observer` steht drin – aber ohne Figur.
       for (const outside of ['none', 'observer'] as const) {

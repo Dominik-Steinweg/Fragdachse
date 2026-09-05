@@ -161,8 +161,8 @@ export function composeArenaWorldGameplay(
   const { flow, isCoopMission, coopMissionRuntime, activityDescriptor, layout } = input;
   const gameplay = new ArenaWorldGameplay();
 
-  composeWorldGeometry(input, gameplay);
   composeWorldProjectileRuntime(input, gameplay);
+  composeWorldGeometry(input, gameplay);
   if (coopMissionRuntime && isCoopMission) {
     // Benannter Activity-Schritt: welche Systeme darin entstehen, gehoert der Activity.
     flow.materializeActivityCore(activityDescriptor, coopMissionRuntime, layout);

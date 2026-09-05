@@ -1,5 +1,5 @@
 import type { PlayerManager }       from '../../entities/PlayerManager';
-import type { ProjectileManager }   from '../../entities/ProjectileManager';
+import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { CombatSystem }        from '../../systems/CombatSystem';
 import type { EffectSystem }        from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
@@ -34,7 +34,8 @@ interface PlayerStatusRingLike {
 export interface ArenaContext {
   // ── Scene-lifetime (always present after create()) ────────────────────────
   readonly playerManager:     PlayerManager;
-  readonly projectileManager: ProjectileManager;
+  /** World-scoped projectile owner; outside a materialized World this is null. */
+  readonly getProjectileRuntime: () => WorldProjectileRuntime | null;
   readonly combatSystem:      CombatSystem;
   readonly effectSystem:      EffectSystem;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Nie `camera.shake()` direkt rufen. */

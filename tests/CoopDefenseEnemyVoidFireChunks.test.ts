@@ -21,7 +21,7 @@ vi.mock('phaser', () => ({
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
@@ -63,7 +63,7 @@ describe('Inferno Colossus void fire chunks', () => {
     const system = new CoopDefenseEnemyAbilitySystem(
       enemyManager,
       { getAllPlayers: () => [] } as unknown as PlayerManager,
-      {} as ProjectileManager,
+      {} as ProjectilePhysicsBinding,
       {} as CombatSystem,
       null as EnergyShieldSystem | null,
       {} as StinkCloudSystem,

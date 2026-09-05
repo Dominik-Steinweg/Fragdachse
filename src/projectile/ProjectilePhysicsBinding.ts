@@ -14,7 +14,7 @@ import type {
   ProjectileHomingRequest,
   ProjectileTargetQueryPort,
   ProjectileTargetabilityPort,
-} from './ProjectileHomingController';
+} from '../entities/ProjectileHomingController';
 import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import { CombatGeometry } from '../systems/CombatGeometry';
 import {
@@ -26,49 +26,49 @@ import {
 import { type GeometryHit, findNearestRectangleHit as geomNearestRectangleHit } from '../utils/geometry';
 import { getMiniRocketCascadeMultiplier } from '../utils/miniRocketCascade';
 import type {
-  LegacyProjectileHostSimulation,
+  ProjectilePhysicsBindingPort,
   ProjectileHostStageResult,
-  ProjectileOwnerSeam,
-} from '../projectile/WorldProjectileRuntime';
+  ProjectileRuntimeOwnerPort,
+} from './WorldProjectileRuntime';
 import {
   effectiveAirFrictionDecay,
   type ProjectileCoreStageResult,
-} from '../projectile/ProjectileFlightProcessor';
-import type { ProjectileTimeFieldPort } from '../projectile/ProjectileTimeFieldPort';
-import type { ProjectileReplicationAdapter } from '../projectile/ProjectileReplicationAdapter';
+} from './ProjectileFlightProcessor';
+import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
+import type { ProjectileReplicationAdapter } from './ProjectileReplicationAdapter';
 import {
   ProjectileClientReplica,
   type ProjectileClientReplicaFrame,
-} from '../projectile/ProjectileClientReplica';
+} from './ProjectileClientReplica';
 import {
   ProjectilePresentationRuntime,
   type ProjectilePresentationState,
-} from '../projectile/ProjectilePresentationRuntime';
+} from './ProjectilePresentationRuntime';
 import type {
-  LegacyProjectileExternalInteractionAccess,
+  ProjectileExternalInteractionAccess,
   ProjectileDetonationOutcome,
   ProjectileDetonationSearchRequest,
   ProjectileDetonationTarget,
-} from '../projectile/ProjectileExternalInteractionPort';
-import type { ProjectileBurnAugment } from '../projectile/ProjectileTravelPort';
+} from './ProjectileExternalInteractionPort';
+import type { ProjectileBurnAugment } from './ProjectileTravelPort';
 import type {
   ProjectileFlameExpiryEvent,
   ProjectileImpactSource,
   ProjectileLifecycleOutcome,
   ProjectileMiniRocketDestroyedOutcome,
   ProjectileResolvedOutcome,
-} from '../projectile/ProjectileGameplayPort';
-import { createSingleOwnerProvenance, type ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
+} from './ProjectileGameplayPort';
+import { createSingleOwnerProvenance, type ProjectileProvenance } from './ProjectileSpawnRequest';
 import type {
   ProjectileCombatTargetRef,
   ProjectileDirectImpactOutcome,
   ProjectilePlasmaSwarmImpact,
-} from '../projectile/ProjectileCombatPort';
+} from './ProjectileCombatPort';
 import type {
   ProjectileExplosionRequest,
   ProjectileExplosionOutcome,
   ProjectileGrenadePayloadRequest,
-} from '../projectile/ProjectileExplosionPort';
+} from './ProjectileExplosionPort';
 import {
   PLASMA_SWARM_EXPLOSION_DURATION_MS,
   resolvePlasmaSwarmProjectileProfile,
@@ -79,7 +79,14 @@ import {
 const NO_PROJECTILE_RECORDS: readonly TrackedProjectile[] = [];
 const NO_ACTIVE_PROJECTILES: ReadonlySet<TrackedProjectile> = new Set<TrackedProjectile>();
 
-export class ProjectileManager implements LegacyProjectileHostSimulation {
+/**
+ * World-local Phaser binding for ProjectileRuntime.
+ *
+ * This class owns only physics handles, colliders and the small adapter callbacks needed by the
+ * world runtime. Identity, active membership and authoritative lifecycle decisions remain in
+ * `WorldProjectileRuntime`.
+ */
+export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   private scene:       Phaser.Scene;
   /**
    * §5.1-Seam auf die kanonische Registry der laufenden World.
@@ -87,7 +94,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * Der Owner bindet ihn beim World-Aufbau und löst ihn beim Teardown wieder; ohne World gibt es
    * keine Host-Projectiles zu verarbeiten. Es ist derselbe Store, keine Kopie.
    */
-  private owner: ProjectileOwnerSeam | null = null;
+  private owner: ProjectileRuntimeOwnerPort | null = null;
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
 
   /** World-lokaler Host-Replication-Adapter; der Manager besitzt weder Codec- noch Resend-State. */
@@ -104,7 +111,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private hostFrameNowMs: number | null = null;
 
   /** Semantische Brücke für den world-owned External-Interaction-Port. */
-  readonly externalInteraction: LegacyProjectileExternalInteractionAccess = {
+  readonly externalInteraction: ProjectileExternalInteractionAccess = {
     searchDetonableProjectiles: (detonableIds, request) => (
       this.searchDetonableProjectiles(detonableIds, request)
     ),
@@ -146,7 +153,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private readonly bestRockRect        = new Phaser.Geom.Rectangle();
   private readonly scratchTrainBounds  = new Phaser.Geom.Rectangle();
   /**
-   * Coop-Defense-Basis-Gruppe. Wird vom ProjectileManager wie trunkGroup
+   * Coop-Defense-Basis-Gruppe. Wird wie die Trunk-Gruppe
    * behandelt: physische Kollision/Impact; direkter Schaden wird über den
    * zentralen Basistreffer-Callback weitergeleitet.
    */
@@ -166,7 +173,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   /** Der world-owned Owner bindet und löst diese Verarbeitung mit seiner eigenen Lifetime. */
-  bindProjectileOwner(owner: ProjectileOwnerSeam | null): void {
+  bindOwner(owner: ProjectileRuntimeOwnerPort | null): void {
     this.owner = owner;
     owner?.setProjectileTimeFieldPort?.(this.timeFieldPort);
     owner?.setProjectileTargetQueryPort?.(
@@ -458,7 +465,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     impact: { readonly x: number; readonly y: number },
     outcome: ProjectileDirectImpactOutcome,
   ): boolean {
-    const projectile = this.getProjectileById(projectileId);
+    const projectile = this.getActiveProjectileById(projectileId);
     if (!projectile) return false;
     if (!outcome.accepted || projectile.pendingDestroy) return false;
     if (projectile.impactCloud) this.emitProjectileImpact(projectile, impact.x, impact.y);
@@ -517,7 +524,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     const speed = Math.max(1, profile.speed);
     const lifetime = Math.max(1, (profile.range / speed) * 1000);
     for (const angle of resolvePlasmaSwarmRadialAngles(impact.projectileCount)) {
-      this.spawnProjectile(impact.x, impact.y, angle, impact.ownerId, {
+      this.spawnProjectileConfig(impact.x, impact.y, angle, impact.ownerId, {
         speed,
         size: Math.max(1, profile.size),
         damage: profile.damage,
@@ -576,19 +583,19 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * und explodieren nach fuseTime ms.
    */
   /**
-   * §5.1-Seam: Spawn im Legacy-Payload-Shape der noch nicht migrierten Host-Quellen.
+   * Übergang aus den bestehenden authored Spawn-Payloads; Identity und Registry bleiben beim Owner.
    *
    * Identity, Registry und Lifetime gehören dem world-owned Owner; dieser Aufruf reicht den
    * Auftrag nur an ihn weiter. Ohne gebundene World entsteht kein Projectile.
    */
-  spawnProjectile(
+  spawnProjectileConfig(
     x:       number,
     y:       number,
     angle:   number,
     ownerId: string,
     cfg:     ProjectileSpawnConfig,
   ): number {
-    return this.owner?.spawnLegacyProjectile(x, y, angle, ownerId, cfg) ?? -1;
+    return this.owner?.spawnProjectileConfig(x, y, angle, ownerId, cfg) ?? -1;
   }
 
   /**
@@ -1702,7 +1709,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     this.queueDestroyProjectile(proj);
 
     for (const childAngle of childAngles) {
-      this.spawnProjectile(impactX, impactY, childAngle, proj.ownerId, {
+      this.spawnProjectileConfig(impactX, impactY, childAngle, proj.ownerId, {
         speed: childBaseSpeed,
         size: childSize,
         damage: childDamage,
@@ -1971,7 +1978,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     effect: TrackedProjectile['explosion'] = proj.explosion,
     continuesAfterExplosion = false,
   ): ProjectileExplosionRequest {
-    if (!effect) throw new Error(`[ProjectileManager] explosion request without effect for ${proj.id}`);
+    if (!effect) throw new Error(`[ProjectilePhysicsBinding] explosion request without effect for ${proj.id}`);
     const excludedTargetKey = proj.multiExplosionExcludedTargetKeys?.values().next().value as string | undefined;
     return {
       x: proj.sprite.x,
@@ -1985,25 +1992,12 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     };
   }
 
-  /** Host: stabile, allokationsfreie Sicht für Kollisionen und Host-Systeme. */
-  getActiveProjectiles(): ReadonlySet<TrackedProjectile> {
-    return this.activeProjectiles;
-  }
-
   getDebugActiveProjectileCount(): number {
     return Math.max(
       this.activeProjectiles.size,
       this.clientReplica.size,
       this.presentation.clientVisualCount,
     );
-  }
-
-  /**
-   * Host: Gibt ein aktives Projektil anhand seiner ID zurück.
-   */
-  getProjectileById(id: number): TrackedProjectile | undefined {
-    const projectile = this.owner?.store.getById(id);
-    return projectile?.pendingDestroy ? undefined : projectile;
   }
 
   /** Applies a travel-acquired burn to the canonical record; callers never receive that record. */
@@ -2110,7 +2104,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   triggerProjectileExplosion(id: number, impactTargetKey?: string): boolean {
-    const proj = this.getProjectileById(id);
+    const proj = this.getActiveProjectileById(id);
     if (!proj?.explosion) return false;
     // Nur das Ziel, das die aktuelle Explosion ausgeloest hat, wird waehrend der
     // anschliessenden Geradeausphase ignoriert. Andere Ziele und alle Phaser-
@@ -2132,7 +2126,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * Explosivbolzen). Nutzt denselben Explosions-Pfad wie reguläre Projektil-Explosionen.
    */
   triggerEnemyImpactExplosion(id: number): boolean {
-    const proj = this.getProjectileById(id);
+    const proj = this.getActiveProjectileById(id);
     if (!proj?.enemyHitExplosion || proj.pendingExplosion) return false;
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push({
@@ -2150,7 +2144,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * Räumt beim World-Teardown den registry-fremden Rest ab: Renderer, Snapshot-Zustand und
    * Client-Visuals. Records und Identity hat der Owner zu diesem Zeitpunkt bereits entfernt.
    */
-  releaseWorldProjectileState(): void {
+  releaseWorldState(): void {
     this.projectileReplicationAdapter?.reset();
     this.projectileReplicationAdapter = null;
     this.pendingProjectileExplosions = [];
@@ -2164,7 +2158,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * Granaten die ihre fuseTime erreicht haben werden als typisierte Payload-Requests zurückgegeben.
    */
   hostUpdate(deltaMs = 16.67, nowMs?: number): ProjectileHostStageResult {
-    const now = nowMs ?? this.resolveLegacyHostNow(deltaMs);
+    const now = nowMs ?? this.resolveBindingHostNow(deltaMs);
     this.setHostFrameTime(now);
     return this.owner?.runHostProjectileStage?.(deltaMs, now) ?? {
       projectileExplosions: [],
@@ -2174,7 +2168,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   /** Executes the Manager remainder after the World-owned Flight/Lifetime core. */
-  runLegacyProjectileStage(
+  runProjectileEffectsStage(
     _deltaMs: number,
     nowMs: number,
     coreStage: ProjectileCoreStageResult,
@@ -2191,7 +2185,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       }
     }
     for (let index = this.projectiles.length - 1; index >= 0; index -= 1) {
-      if (!this.stepLegacyProjectile(this.projectiles[index], coreStage, projectileExplosions, grenadePayloads)) {
+      if (!this.stepProjectileEffects(this.projectiles[index], coreStage, projectileExplosions, grenadePayloads)) {
         this.owner?.store.dropStepEntryAt(index);
       }
     }
@@ -2200,10 +2194,10 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   /**
-   * Pro-Projektil-Schritt der verbleibenden Legacy-Stufe: Kollision, Wirkung und
+   * Pro-Projektil-Schritt der nachgelagerten Physics-/Effect-Stufe: Kollision, Wirkung und
    * Spezialausgänge. Flight, Lifetime und Homing werden zuvor vom World-Owner verarbeitet.
    */
-  private stepLegacyProjectile(
+  private stepProjectileEffects(
     proj: TrackedProjectile,
     coreStage: ProjectileCoreStageResult,
     projectileExplosions: ProjectileExplosionRequest[],
@@ -2342,7 +2336,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     return request;
   }
 
-  private resolveLegacyHostNow(deltaMs: number): number {
+  private resolveBindingHostNow(deltaMs: number): number {
     if (this.hostFrameNowMs !== null) return this.hostFrameNowMs + Math.max(0, deltaMs);
     let latestCreatedAt = 0;
     for (const projectile of this.projectiles) latestCreatedAt = Math.max(latestCreatedAt, projectile.createdAt);

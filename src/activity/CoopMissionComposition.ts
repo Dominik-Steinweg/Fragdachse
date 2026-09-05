@@ -4,7 +4,6 @@ import type { ArenaLayout } from '../types';
 import type { BaseManager } from '../entities/BaseManager';
 import type { CombatSystem } from '../systems/CombatSystem';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
@@ -45,6 +44,7 @@ import type { CoopTrainPort } from './CoopTrainPort';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 import type { ProjectileThreatReadPort } from '../projectile/ProjectileReadPorts';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
+import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 
 export interface CoopMissionCompositionOptions {
   readonly scene: Phaser.Scene;
@@ -54,7 +54,7 @@ export interface CoopMissionCompositionOptions {
   readonly getBaseManager: () => BaseManager | null;
   readonly getPlayerManager: () => PlayerManager;
   readonly getCombatSystem: () => CombatSystem;
-  readonly getProjectileManager: () => ProjectileManager;
+  readonly getProjectileSpawnPort: () => ProjectileSpawnPort | null;
   readonly getProjectileThreatReadPort: () => ProjectileThreatReadPort | null;
   readonly getTranslocatorProjectilePort: () => TranslocatorProjectilePort | null;
   readonly getHostPhysics: () => HostPhysicsSystem;
@@ -195,6 +195,7 @@ export class CoopMissionComposition {
     const temporaryUtilityPort = this.options.getTemporaryUtilityPort();
     const weaponExecution = this.options.getAutomatedWeaponExecution();
     const placementSystem = this.options.getPlacementSystem();
+    const projectileSpawnPort = this.options.getProjectileSpawnPort();
     const projectileThreatReadPort = this.options.getProjectileThreatReadPort();
     const translocatorProjectilePort = this.options.getTranslocatorProjectilePort();
     // The concrete train child lives behind the World owner's Activity slot. Register the
@@ -243,10 +244,11 @@ export class CoopMissionComposition {
     }).materialize(runtime);
 
     if (!this.options.isHost() || !runtime.enemyManager || !baseManager || !placementSystem || !weaponExecution
+      || !projectileSpawnPort
       || !projectileThreatReadPort || !translocatorProjectilePort) return;
     new CoopMissionEnemyBehaviourComposition({
       playerManager,
-      projectileManager: this.options.getProjectileManager(),
+      projectileSpawn: projectileSpawnPort,
       projectileThreatReadPort,
       translocatorProjectilePort,
       combatSystem,

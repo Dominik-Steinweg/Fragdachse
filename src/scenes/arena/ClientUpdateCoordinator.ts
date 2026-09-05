@@ -407,8 +407,11 @@ export class ClientUpdateCoordinator {
 
       if (this.performanceMetricsEnabled) playersMs = performance.now() - playersStartedAt;
       const effectsStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-      const projectileReplicaFrame = this.ctx.projectileManager.getClientReplica().sync(state.projectiles);
-      this.ctx.projectileManager.presentClientProjectileFrame(projectileReplicaFrame, bridge.getLocalPlayerId());
+      const projectileRuntime = this.ctx.getProjectileRuntime();
+      if (projectileRuntime) {
+        const projectileReplicaFrame = projectileRuntime.getClientReplica().sync(state.projectiles);
+        projectileRuntime.presentClientProjectileFrame(projectileReplicaFrame, bridge.getLocalPlayerId());
+      }
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.smokeSystem.syncVisuals(state.smokes);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
@@ -550,7 +553,7 @@ export class ClientUpdateCoordinator {
 
     this.ctx.decoySystem.updateVisuals(lerpFactor);
 
-    this.ctx.projectileManager.clientExtrapolate();
+    this.ctx.getProjectileRuntime()?.clientExtrapolate();
     this.ctx.stinkCloudSystem.clientUpdate(delta);
 
     const localId2 = bridge.getLocalPlayerId();

@@ -1,7 +1,7 @@
 /**
  * Sichtbarer Zustand des Besitzers eines Projektils oder Effekts.
  *
- * Renderer und der {@link ProjectileManager} brauchen von einem Besitzer nur Position, Farbe
+ * Renderer und die Projectile-Presentation brauchen von einem Besitzer nur Position, Farbe
  * und Sichtbarkeit. Woher dieser Zustand stammt, bleibt dieser Grenze ueberlassen; die Quelle
  * kann aus der jeweils zustaendigen Player-/World-Runtime kommen.
  */

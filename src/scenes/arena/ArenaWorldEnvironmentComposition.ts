@@ -50,7 +50,7 @@ export function composeWorldGeometry(
     playerManager: ctx.playerManager,
     combatSystem: ctx.combatSystem,
     decoySystem: ctx.decoySystem,
-    projectileManager: ctx.projectileManager,
+    projectileRuntime: gameplay.projectiles!,
     hostPhysics: ctx.hostPhysics,
     fireSystem: ctx.fireSystem,
     leafBlower: renderers.leafBlower,
@@ -84,7 +84,7 @@ export function composeWorldTrain(
   const trainRuntime = new WorldTrainRuntime({
     scene: scene,
     playerManager: ctx.playerManager,
-    projectileManager: ctx.projectileManager,
+    projectileRuntime: gameplay.projectiles!,
     combatSystem: ctx.combatSystem,
     hostPhysics: ctx.hostPhysics,
     worldMetrics: world.metrics,
@@ -143,7 +143,6 @@ export function composeWorldSupportGameplay(
   
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
     playerManager: ctx.playerManager,
-    projectileManager: ctx.projectileManager,
     projectileExternalInteraction: gameplay.projectiles,
     combatSystem: ctx.combatSystem,
     setBurrowStinkCloudSystem: (system) => gameplay.player?.setBurrowStinkCloudSystem(system),

@@ -53,7 +53,6 @@ import { CombatSystem } from '../src/systems/CombatSystem';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../src/types';
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
@@ -116,8 +115,8 @@ function makeSystem(
   let nextSpawnedId = 100;
 
   const runtime = new WorldProjectileRuntime({
-    simulation: {
-      bindProjectileOwner: () => {},
+    physicsBinding: {
+      bindOwner: () => {},
       createProjectile: (id, x, y, angle, ownerId, cfg, _hostNowMs, provenance) => {
         spawnedRequests.push({ x, y, angle, ownerId, cfg });
         const record = prepared.shift() ?? makeSpawnedRecord(nextSpawnedId++, x, y, ownerId);
@@ -126,7 +125,7 @@ function makeSystem(
         return record;
       },
       releaseProjectileResources: (record) => { released.push(record); },
-      releaseWorldProjectileState: () => {},
+      releaseWorldState: () => {},
     },
     identityScope: new ProjectileIdentityScope(1),
     hostNowMs: () => 0,
@@ -140,18 +139,12 @@ function makeSystem(
   };
 
   const spawnProjectile = vi.fn((x: number, y: number, angle: number, ownerId: string, cfg: ProjectileSpawnConfig) => (
-    runtime.spawnLegacyProjectile(x, y, angle, ownerId, cfg)
+    runtime.spawnProjectileConfig(x, y, angle, ownerId, cfg)
   ));
-  const projectileManager = {
-    getProjectileById: (id: number) => runtime.store.getById(id),
-    destroyProjectile: (id: number) => runtime.destroyProjectile(id),
-    spawnProjectile,
-    queueStandaloneExplosion: vi.fn(),
-  } as unknown as ProjectileManager;
   const playerManager = { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager;
   const bridge = { isHost: () => true } as unknown as NetworkBridge;
 
-  const system = new CombatSystem(playerManager, projectileManager, bridge);
+  const system = new CombatSystem(playerManager, runtime as never, bridge);
   system.setEnemyManager({
     getAllEnemies: () => enemies,
     getEnemy: (id: string) => enemies.find(enemy => enemy.id === id),
@@ -194,7 +187,7 @@ function makeSystem(
   runtime.setProjectileCombatPort({ resolveDirectImpact: (request) => system.resolveDirectImpact(request) });
 
   for (const record of active) {
-    runtime.spawnLegacyProjectile(record.sprite.x, record.sprite.y, 0, record.ownerId, {} as ProjectileSpawnConfig);
+    runtime.spawnProjectileConfig(record.sprite.x, record.sprite.y, 0, record.ownerId, {} as ProjectileSpawnConfig);
   }
   spawnedRequests.length = 0;
 

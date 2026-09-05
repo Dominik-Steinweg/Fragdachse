@@ -17,7 +17,6 @@ import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
 import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { PlayerManager }         from '../entities/PlayerManager';
-import { ProjectileManager }     from '../entities/ProjectileManager';
 import { InputSystem }           from '../systems/InputSystem';
 import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
 import { CombatSystem }          from '../systems/CombatSystem';
@@ -159,7 +158,6 @@ import {
   CoopMissionPresentationInfrastructure,
   GaussWarningRenderer,
   createRendererBundle,
-  wireRenderersToProjManager,
   wireRenderersToEffectSystem,
   wireRenderersToAudioSystem,
   wireRenderersToCameraFeedback,
@@ -497,8 +495,7 @@ export class ArenaScene extends Phaser.Scene {
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
     playerManager.setRelationshipResolver((localPlayerId, otherPlayerId) => bridge.isEnemyPair(localPlayerId, otherPlayerId));
     playerManager.setTeamResolver((playerId) => bridge.getPlayerTeam(playerId));
-    const projectileManager = new ProjectileManager(this);
-    const combatSystem     = new CombatSystem(playerManager, projectileManager, bridge);
+    const combatSystem     = new CombatSystem(playerManager, null, bridge);
     const decoySystem      = new DecoySystem(this, playerManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
     effectSystem.setPlayerDeathResolver((targetId) => playerManager.getPlayer(targetId) !== undefined);
@@ -524,7 +521,6 @@ export class ArenaScene extends Phaser.Scene {
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
     );
-    projectileManager.getPresentationRuntime().setAudioSystem(gameAudioSystem);
     effectSystem.setAudioSystem(gameAudioSystem);
 
     this.visualFeedback = new VisualFeedbackDirector(this, {
@@ -805,7 +801,8 @@ export class ArenaScene extends Phaser.Scene {
 
     // ── Assemble ArenaContext ──────────────────────────────────────────────
     this.ctx = {
-      playerManager, projectileManager, combatSystem, effectSystem,
+      playerManager, combatSystem, effectSystem,
+      getProjectileRuntime: () => this.arenaRuntime?.getWorldProjectileRuntime() ?? null,
       visualFeedback: this.visualFeedback,
       gameAudioSystem,
       decoySystem,
@@ -842,7 +839,6 @@ export class ArenaScene extends Phaser.Scene {
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
     stinkCloudSystem.setGpuVfxSystem(this.renderers.gpuVfx);
     smokeSystem.setLightingSystem(this.renderers.lighting);
-    wireRenderersToProjManager(this.renderers, projectileManager, playerManager);
     wireRenderersToEffectSystem(this.renderers, effectSystem);
     wireRenderersToAudioSystem(this.renderers, gameAudioSystem);
     wireRenderersToCameraFeedback(this.renderers, this.visualFeedback.camera);
@@ -1503,7 +1499,7 @@ export class ArenaScene extends Phaser.Scene {
         ultimatePlacementActive,
         optionsOpen,
         enemyCount: this.combatPresentation?.getEnemyCount() ?? 0,
-        projectileCount: this.ctx.projectileManager.getDebugActiveProjectileCount(),
+        projectileCount: this.arenaRuntime?.getWorldProjectileRuntime()?.getDebugActiveProjectileCount() ?? 0,
         playerCount: this.ctx.playerManager.getAllPlayers().length,
       };
       this.diagnostics?.endFrame(diagnosticsInput);

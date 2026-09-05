@@ -6,6 +6,7 @@ import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
 import { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
+import { ProjectilePhysicsBinding } from '../../projectile/ProjectilePhysicsBinding';
 import { ProjectileReplicationAdapter } from '../../projectile/ProjectileReplicationAdapter';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
@@ -17,6 +18,7 @@ import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
 } from './ArenaWorldGameplayComposition';
+import { wireProjectileRenderers } from './RendererBundle';
 
 /**
  * Der world-owned Owner der autoritativen Projectile-Registry.
@@ -31,14 +33,16 @@ export function composeWorldProjectileRuntime(
 ): void {
   const { ctx, worldRuntime } = input;
   const projectileRuntime = new WorldProjectileRuntime({
-    simulation: ctx.projectileManager,
+    physicsBinding: new ProjectilePhysicsBinding(input.scene),
     identityScope: worldRuntime.projectileIdentityScope,
-    hostNowMs: () => Date.now(),
+    hostNowMs: () => bridge.getSynchronizedNow(),
     onDestroy: () => {
       if (gameplay.projectiles === projectileRuntime) gameplay.projectiles = null;
     },
   });
-  ctx.projectileManager.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(projectileRuntime));
+  projectileRuntime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(projectileRuntime));
+  projectileRuntime.getPresentationRuntime().setAudioSystem(ctx.gameAudioSystem);
+  wireProjectileRenderers(input.renderers, projectileRuntime, ctx.playerManager);
   gameplay.projectiles = projectileRuntime;
   worldRuntime.bind(projectileRuntime);
 }
@@ -71,7 +75,7 @@ export function composeWorldCombatGameplay(
   };
   const combatGameplayBinding = new WorldCombatGameplayBinding({
     playerManager: ctx.playerManager,
-    projectileManager: ctx.projectileManager,
+    projectileRuntime,
     projectileSpawn: projectileRuntime,
     projectileInteraction: projectileRuntime,
     combatSystem: ctx.combatSystem,

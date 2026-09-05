@@ -88,7 +88,7 @@ function createSceneScopedCollaborators() {
     setObstacleGroups: vi.fn(),
   };
 
-  const projectileManager = {
+  const projectileRuntime = {
     rockGroup: undefined as unknown,
     setRockGroup(value: unknown) { this.rockGroup = value; },
     setBaseGroup: vi.fn(),
@@ -123,7 +123,7 @@ function createSceneScopedCollaborators() {
     playerManager,
     combatSystem,
     decoySystem,
-    projectileManager,
+    projectileRuntime,
     hostPhysics,
     leafBlower,
     lighting,
@@ -176,7 +176,7 @@ function createBinding(
     playerManager: shared.playerManager,
     combatSystem: shared.combatSystem,
     decoySystem: shared.decoySystem,
-    projectileManager: shared.projectileManager,
+    projectileRuntime: shared.projectileRuntime,
     hostPhysics: shared.hostPhysics,
     fireSystem: shared.fire,
     leafBlower: shared.leafBlower,

@@ -6,7 +6,7 @@ vi.mock('phaser', () => ({
     NORMAL: 0,
     ADD: 1,
   },
-  // Der ProjectileManager legt Scratch-Geometrie schon im Feld-Initialisierer an.
+  // Der ProjectilePhysicsBinding legt Scratch-Geometrie schon im Feld-Initialisierer an.
   Geom: {
     Rectangle: class {
       x = 0; y = 0; width = 0; height = 0;
@@ -90,43 +90,44 @@ import * as Phaser from 'phaser';
 import { RocketRenderer } from '../../src/effects/RocketRenderer';
 import { GpuVfxSystem } from '../../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
-import { ProjectileManager } from '../../src/entities/ProjectileManager';
+import { ProjectilePhysicsBinding } from '../../src/projectile/ProjectilePhysicsBinding';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../../src/types';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
 import { ProjectileReplicationAdapter } from '../../src/projectile/ProjectileReplicationAdapter';
 
 /**
- * Bindet den Manager an eine echte world-owned Registry und nimmt vorbereitete Records auf.
+ * Bindet den Physics-Adapter an eine echte world-owned Registry und nimmt vorbereitete Records auf.
  *
  * Identity, Aufnahme und Entfernung bleiben beim Owner; der Test liefert nur die Records, die er
  * ohne vollstaendige Phaser-Szene nicht spawnen kann.
  */
 function bindProjectileRegistry(
-  manager: ProjectileManager,
+  manager: ProjectilePhysicsBinding,
   records: readonly TrackedProjectile[],
 ): WorldProjectileRuntime {
   const pending = [...records];
   const runtime = new WorldProjectileRuntime({
-    simulation: {
-      bindProjectileOwner: (owner) => manager.bindProjectileOwner(owner),
+    physicsBinding: {
+      bindOwner: (owner) => manager.bindOwner(owner),
+      setProjectileReplicationAdapter: (adapter) => manager.setProjectileReplicationAdapter(adapter),
       createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
         const record = pending.shift() as TrackedProjectile;
         record.provenance = provenance;
         return record;
       },
       releaseProjectileResources: (record) => manager.releaseProjectileResources(record),
-      runLegacyProjectileStage: (deltaMs, nowMs, coreStage) => manager.runLegacyProjectileStage(deltaMs, nowMs, coreStage),
+      runProjectileEffectsStage: (deltaMs, nowMs, coreStage) => manager.runProjectileEffectsStage(deltaMs, nowMs, coreStage),
       setProjectileTimeFieldPort: (port) => manager.setProjectileTimeFieldPort(port),
       setHostFrameTime: (nowMs) => manager.setHostFrameTime(nowMs),
-      releaseWorldProjectileState: () => manager.releaseWorldProjectileState(),
+      releaseWorldState: () => manager.releaseWorldState(),
     },
     identityScope: new ProjectileIdentityScope(1),
     hostNowMs: () => 0,
   });
-  manager.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
+  runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
   for (const record of records) {
-    runtime.spawnLegacyProjectile(0, 0, 0, record.ownerId, {} as ProjectileSpawnConfig);
+    runtime.spawnProjectileConfig(0, 0, 0, record.ownerId, {} as ProjectileSpawnConfig);
   }
   return runtime;
 }
@@ -146,7 +147,7 @@ describe('projectile performance paths', () => {
         },
       },
     } as unknown as Phaser.Scene;
-    const manager = new ProjectileManager(scene);
+    const manager = new ProjectilePhysicsBinding(scene);
     manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
 
     const body = { setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
@@ -202,7 +203,7 @@ describe('projectile performance paths', () => {
         },
       },
     } as unknown as Phaser.Scene;
-    const manager = new ProjectileManager(scene);
+    const manager = new ProjectilePhysicsBinding(scene);
     manager.setBaseGroup({} as Phaser.Physics.Arcade.StaticGroup);
 
     const body = { setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
@@ -255,7 +256,7 @@ describe('projectile performance paths', () => {
         },
       },
     } as unknown as Phaser.Scene;
-    const manager = new ProjectileManager(scene);
+    const manager = new ProjectilePhysicsBinding(scene);
     manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [ownRock, otherRock], null);
 
     const body = { setBounce: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
@@ -277,7 +278,7 @@ describe('projectile performance paths', () => {
   it('skips only the supporting rock in continuous bullet collision', () => {
     const ownRock = { active: true, getBounds: () => ({ left: 0, top: 0, right: 32, bottom: 32 }) };
     const otherRock = { active: true, getBounds: () => ({ left: 0, top: 0, right: 32, bottom: 32 }) };
-    const manager = new ProjectileManager({} as Phaser.Scene);
+    const manager = new ProjectilePhysicsBinding({} as Phaser.Scene);
     manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [ownRock, otherRock], null);
 
     const body = {
@@ -318,8 +319,8 @@ describe('projectile performance paths', () => {
     const scene = {
       physics: { world: { off: vi.fn() } },
     } as unknown as Phaser.Scene;
-    const manager = new ProjectileManager(scene);
-    const tracked = fakeEntity({ id: 1, x: 0, y: 0, displayWidth: 16, destroy: vi.fn(), body: {},
+    const manager = new ProjectilePhysicsBinding(scene);
+    const tracked = fakeEntity({ id: 1, x: 0, y: 0, displayWidth: 16, destroy: vi.fn(), body: { velocity: { x: 0, y: 0 } },
       boundsListener: vi.fn(),
       colliders: [],
       hitObstacleIds: new Set([4]),
@@ -393,18 +394,18 @@ describe('projectile performance paths', () => {
         },
       },
     } as unknown as Phaser.Scene;
-    const manager = new ProjectileManager(scene);
+    const manager = new ProjectilePhysicsBinding(scene);
     const sprites = [7, 8].map((id) => (fakeEntity({ id, x: 10,
         y: 20,
         displayWidth: 8,
-        destroy: vi.fn(), body: {},
+        destroy: vi.fn(), body: { velocity: { x: 0, y: 0 } },
       boundsListener: vi.fn(),
       colliders: [] }) as unknown as TrackedProjectile));
     const registry = bindProjectileRegistry(manager, sprites);
 
-    const firstView = manager.getActiveProjectiles();
-    expect(manager.getActiveProjectiles()).toBe(firstView);
-    expect(manager.getProjectileById(7)).toBe(sprites[0]);
+    const firstView = registry.store.activeRecords;
+    expect(registry.store.activeRecords).toBe(firstView);
+    expect(registry.store.getById(7)).toBe(sprites[0]);
 
     const visitedIds: number[] = [];
     for (const projectile of firstView) {
@@ -414,14 +415,14 @@ describe('projectile performance paths', () => {
 
     expect(visitedIds).toEqual([7, 8]);
     expect(firstView.size).toBe(0);
-    expect(manager.getProjectileById(7)).toBeUndefined();
+    expect(registry.store.getById(7)).toBeUndefined();
     expect(sprites[0].sprite.destroy).toHaveBeenCalledOnce();
     expect(sprites[1].sprite.destroy).toHaveBeenCalledOnce();
 
     // Nach dem World-Teardown bleibt kein Host-Projektil sichtbar und kein Spawn wirksam.
     registry.destroy();
-    expect(manager.getActiveProjectiles().size).toBe(0);
-    expect(manager.spawnProjectile(0, 0, 0, 'owner', {} as ProjectileSpawnConfig)).toBe(-1);
+    expect(registry.activeCount).toBe(0);
+    expect(registry.spawnProjectileConfig(0, 0, 0, 'owner', {} as ProjectileSpawnConfig)).toBe(-1);
   });
 
   it('resolves the nearer obstacle first during a continuous projectile sweep', () => {
@@ -433,7 +434,7 @@ describe('projectile performance paths', () => {
       active: true,
       getBounds: () => ({ left: 20, top: 8, right: 28, bottom: 24 }),
     };
-    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
     manager.setRockGroup(
       {} as Phaser.Physics.Arcade.StaticGroup,
       [farRock, nearRock],
@@ -493,7 +494,7 @@ describe('projectile performance paths', () => {
         },
       },
     } as unknown as Phaser.Scene;
-    const manager = new ProjectileManager(scene);
+    const manager = new ProjectilePhysicsBinding(scene);
     const rock = {} as Phaser.GameObjects.Image;
     manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
     manager.setTrainGroup({} as Phaser.Physics.Arcade.StaticGroup);
@@ -546,9 +547,9 @@ describe('projectile performance paths', () => {
   });
 
   it('splits Hydra at the impact point and forwards each child through the normal spawn path', () => {
-    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
     const spawnedIds = [2, 3];
-    const spawn = vi.spyOn(manager, 'spawnProjectile').mockImplementation(() => spawnedIds.shift() ?? 4);
+    const spawn = vi.spyOn(manager, 'spawnProjectileConfig').mockImplementation(() => spawnedIds.shift() ?? 4);
     const body = {
       velocity: {
         x: 100,
@@ -626,7 +627,7 @@ describe('projectile performance paths', () => {
         colliders: [],
         boundsListener: vi.fn(),
       } as unknown as TrackedProjectile;
-      const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+      const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
       manager.setTimeBubbleFactorProvider(() => 0.1);
       bindProjectileRegistry(manager, [projectile]);
 
@@ -671,18 +672,18 @@ describe('projectile performance paths', () => {
         colliders: [],
         boundsListener: vi.fn(),
       } as unknown as TrackedProjectile;
-      const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+      const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
       manager.setTimeBubbleFactorProvider(() => 0.5);
-      bindProjectileRegistry(manager, [projectile]);
+      const registry = bindProjectileRegistry(manager, [projectile]);
 
       manager.hostUpdate(100);
       manager.hostUpdate(100);
       expect(projectile.simulatedAgeMs).toBe(100);
-      expect(manager.getProjectileById(projectile.id)).toBe(projectile);
+      expect(registry.store.getById(projectile.id)).toBe(projectile);
       expect(body.velocity.x).toBe(50);
 
       manager.hostUpdate(1);
-      expect(manager.getProjectileById(projectile.id)).toBeUndefined();
+      expect(registry.store.getById(projectile.id)).toBeUndefined();
       expect(sprite.destroy).toHaveBeenCalledOnce();
     } finally {
       vi.useRealTimers();
@@ -746,8 +747,8 @@ describe('projectile performance paths', () => {
       colliders: [],
       boundsListener: vi.fn(),
     } as unknown as TrackedProjectile;
-    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    bindProjectileRegistry(manager, [projectile]);
+    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const registry = bindProjectileRegistry(manager, [projectile]);
 
     expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:target')).toBe(true);
     const first = manager.hostUpdate(0);
@@ -765,11 +766,11 @@ describe('projectile performance paths', () => {
     expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:next')).toBe(true);
     const second = manager.hostUpdate(0);
     expect(second.projectileExplosions).toHaveLength(1);
-    expect(manager.getProjectileById(projectile.id)).toBeUndefined();
+    expect(registry.store.getById(projectile.id)).toBeUndefined();
   });
 
   it('collects a spent mini-rocket when its explicit return phase reaches the owner', () => {
-    const manager = new ProjectileManager({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
+    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
     const body = {
       velocity: { x: 100, y: 0, length: () => 100 },
       setVelocity: vi.fn(),
@@ -806,7 +807,7 @@ describe('projectile performance paths', () => {
   });
 
   it('resends new projectile statics, supports a full late-join snapshot, and cleans absent IDs', () => {
-    const manager = new ProjectileManager({} as Phaser.Scene);
+    const manager = new ProjectilePhysicsBinding({} as Phaser.Scene);
     const projectile = fakeEntity({
       id: 7,
       ownerId: 'shooter',

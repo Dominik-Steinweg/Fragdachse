@@ -26,7 +26,7 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectileManager } from '../src/entities/ProjectileManager';
+import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
 import type { CombatSystem } from '../src/systems/CombatSystem';
@@ -355,7 +355,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         getHostileEnemies: () => [],
       } as unknown as EnemyManager,
       { getAllPlayers: () => players } as unknown as PlayerManager,
-      { spawnProjectile } as unknown as ProjectileManager,
+      { spawnProjectile } as unknown as ProjectilePhysicsBinding,
       {
         isAlive: () => true,
         isBurrowed: () => false,
@@ -397,19 +397,27 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
     expect(enemy.specialAction).toBe('none');
 
     const molotov = UTILITY_CONFIGS.MOLOTOV_GRENADE as MolotovUtilityConfig;
-    const spawnOptions = spawnProjectile.mock.calls[0][4];
-    expect(spawnOptions).toMatchObject({
-      color: VOID_FIRE_COLOR,
-      isGrenade: true,
-      rockDamageMult: 0,
-      trainDamageMult: 0,
-      grenadeEffect: {
+    const spawnRequest = spawnProjectile.mock.calls[0][0];
+    expect(spawnRequest).toMatchObject({
+      flight: {
+        isGrenade: true,
+      },
+      interaction: {
+        directHit: {
+          rockDamageMult: 0,
+          trainDamageMult: 0,
+        },
+        grenadeEffect: {
         type: 'fire',
         radius: molotov.fireRadius,
         damagePerTick: molotov.fireDamagePerTick,
         lingerDuration: molotov.fireLingerDuration,
         visualStyle: 'void',
         damageTarget: 'players',
+      },
+      },
+      presentation: {
+        color: VOID_FIRE_COLOR,
       },
     });
   });
@@ -433,9 +441,9 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
       system.hostUpdate(readyAt);
       system.hostUpdate(readyAt + VOID_MOLOTOV.windupMs);
 
-      const [spawnX, , , , options] = spawnProjectile.mock.calls[0];
-      const aimDistance = playerX - spawnX;
-      const flownDistance = options.speed * travelPerUnitSpeed(molotov.fuseTime);
+      const request = spawnProjectile.mock.calls[0][0];
+      const aimDistance = playerX - request.origin.x;
+      const flownDistance = request.flight.speed * travelPerUnitSpeed(molotov.fuseTime);
       // Der Brandsatz landet auf dem Ziel; frueher trug ihn der pauschale Aufschlag fast doppelt so weit.
       expect(flownDistance / aimDistance).toBeCloseTo(1, 1);
     }
@@ -502,7 +510,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         getHostileEnemies: () => [],
       } as unknown as EnemyManager,
       { getAllPlayers: () => [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })] } as unknown as PlayerManager,
-      { spawnProjectile } as unknown as ProjectileManager,
+      { spawnProjectile } as unknown as ProjectilePhysicsBinding,
       {
         isAlive: () => true,
         isBurrowed: () => false,

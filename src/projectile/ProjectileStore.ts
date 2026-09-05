@@ -93,7 +93,7 @@ export class ProjectileStore {
  * endgültige Entfernung bleiben beim Owner. Mit dem Cutover der jeweiligen Verarbeitung
  * (Phasen 3–14) entfällt sie.
  */
-export type LegacyProjectileStoreAccess = Pick<
+export type ProjectileStoreAccess = Pick<
   ProjectileStore,
   'stepOrder' | 'activeRecords' | 'activeCount' | 'getById' | 'deactivate' | 'dropStepEntryAt'
 >;

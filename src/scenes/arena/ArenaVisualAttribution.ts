@@ -87,7 +87,7 @@ export const GRAPHICS_FAMILIES = {
   ],
   encounterTelegraphs: ['CoopDefenseEncounterTelegraphRenderer'],
   powerUpEffects: ['PowerUpRenderer'],
-  projectileShapes: ['ProjectileManager'],
+  projectileShapes: ['ProjectilePresentationRuntime'],
   captureObjectiveEffects: ['CaptureTheBeerRenderer'],
   healingAura: ['HealingAuraRenderer'],
   teleportEffects: ['TranslocatorTeleportRenderer'],

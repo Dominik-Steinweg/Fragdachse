@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   WorldProjectileRuntime,
-  type LegacyProjectileHostSimulation,
-  type ProjectileOwnerSeam,
+  type ProjectilePhysicsBindingPort,
+  type ProjectileRuntimeOwnerPort,
 } from '../src/projectile/WorldProjectileRuntime';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../src/types';
 import {
@@ -19,16 +19,16 @@ import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPo
 function createSimulation() {
   const created: TrackedProjectile[] = [];
   const released: TrackedProjectile[] = [];
-  let boundOwner: ProjectileOwnerSeam | null = null;
-  const simulation: LegacyProjectileHostSimulation = {
-    bindProjectileOwner: (owner) => { boundOwner = owner; },
+  let boundOwner: ProjectileRuntimeOwnerPort | null = null;
+  const simulation: ProjectilePhysicsBindingPort = {
+    bindOwner: (owner) => { boundOwner = owner; },
     createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
       const record = { id: _id, pendingDestroy: false, provenance } as unknown as TrackedProjectile;
       created.push(record);
       return record;
     },
     releaseProjectileResources: (record) => { released.push(record); },
-    releaseWorldProjectileState: vi.fn(),
+    releaseWorldState: vi.fn(),
   };
   return { simulation, created, released, getBoundOwner: () => boundOwner };
 }
@@ -36,7 +36,7 @@ function createSimulation() {
 function createRuntime(identityScope = new ProjectileIdentityScope(1)) {
   const simulation = createSimulation();
   const runtime = new WorldProjectileRuntime({
-    simulation: simulation.simulation,
+    physicsBinding: simulation.simulation,
     identityScope,
     hostNowMs: () => 1_000,
   });
@@ -49,8 +49,8 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
   it('vergibt Identity genau einmal und macht jeden Spawn auffindbar', () => {
     const { runtime } = createRuntime();
 
-    const first = runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
-    const second = runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+    const first = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
+    const second = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
 
     expect(second).not.toBe(first);
     expect(runtime.store.getById(first)?.id).toBe(first);
@@ -85,11 +85,11 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     const lifecycle = new WorldLifecycle(sink);
     lifecycle.beginCreate(context.descriptor, null);
     lifecycle.attachRuntime(context);
-    const firstId = current!.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+    const firstId = current!.spawnProjectileConfig(0, 0, 0, 'owner', payload);
 
     lifecycle.detachRuntime();
     lifecycle.attachRuntime(context);
-    const secondId = current!.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+    const secondId = current!.spawnProjectileConfig(0, 0, 0, 'owner', payload);
 
     expect(runtimes).toHaveLength(2);
     expect(secondId).toBeGreaterThan(firstId);
@@ -100,7 +100,7 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
 
   it('entfernt ein Projectile vollständig und bleibt bei Wiederholung wirkungslos', () => {
     const { runtime, released } = createRuntime();
-    const id = runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
 
     runtime.destroyProjectile(id);
     runtime.destroyProjectile(id);
@@ -114,15 +114,15 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
 
   it('gibt beim World-Teardown jeden Record frei und löst die Simulation', () => {
     const { runtime, simulation, released, getBoundOwner } = createRuntime();
-    runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
-    runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+    runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
+    runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
     expect(getBoundOwner()).toBe(runtime);
 
     runtime.destroy();
     runtime.destroy();
 
     expect(released).toHaveLength(2);
-    expect(simulation.releaseWorldProjectileState).toHaveBeenCalledOnce();
+    expect(simulation.releaseWorldState).toHaveBeenCalledOnce();
     expect(getBoundOwner()).toBeNull();
     expect(runtime.store.stepOrder).toHaveLength(0);
     expect(runtime.activeCount).toBe(0);
@@ -148,24 +148,24 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     } as unknown as TrackedProjectile;
     let stageNowMs = 0;
     let receivedAge = 0;
-    const simulation: LegacyProjectileHostSimulation = {
-      bindProjectileOwner: () => {},
+    const simulation: ProjectilePhysicsBindingPort = {
+      bindOwner: () => {},
       createProjectile: () => projectile,
       releaseProjectileResources: () => {},
-      runLegacyProjectileStage: (_deltaMs, nowMs, coreStage) => {
+      runProjectileEffectsStage: (_deltaMs, nowMs, coreStage) => {
         stageNowMs = nowMs;
         receivedAge = projectile.simulatedAgeMs ?? 0;
         expect(coreStage.lifetimeExpiredIds.has(projectile.id)).toBe(false);
         return { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] };
       },
-      releaseWorldProjectileState: () => {},
+      releaseWorldState: () => {},
     };
     const runtime = new WorldProjectileRuntime({
-      simulation,
+      physicsBinding: simulation,
       identityScope: new ProjectileIdentityScope(1),
       hostNowMs: () => 0,
     });
-    runtime.spawnLegacyProjectile(0, 0, 0, 'owner', payload);
+    runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
 
     runtime.runHostProjectileStage(100, 1_234);
 
@@ -205,8 +205,8 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       awpCorridorDamage: 40,
     } as unknown as TrackedProjectile;
     let appliedAugment: ProjectileBurnAugment | null = null;
-    const simulation: LegacyProjectileHostSimulation = {
-      bindProjectileOwner: () => {},
+    const simulation: ProjectilePhysicsBindingPort = {
+      bindOwner: () => {},
       createProjectile: () => projectile,
       releaseProjectileResources: () => {},
       applyProjectileBurnAugment: (_id, augment) => {
@@ -215,14 +215,14 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
         projectile.supplementalBurnProvenance = augment.provenance;
         return true;
       },
-      releaseWorldProjectileState: () => {},
+      releaseWorldState: () => {},
     };
     const runtime = new WorldProjectileRuntime({
-      simulation,
+      physicsBinding: simulation,
       identityScope: new ProjectileIdentityScope(1),
       hostNowMs: () => 0,
     });
-    runtime.spawnLegacyProjectile(0, 8, 0, 'owner', payload);
+    runtime.spawnProjectileConfig(0, 8, 0, 'owner', payload);
 
     expect(runtime.getTravelSamples()).toMatchObject([{
       projectileId: 0,
@@ -280,18 +280,18 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       sprite: { active: true, x: 100, y: 8, displayWidth: 4, displayHeight: 4 },
       body: { velocity: { x: 10, y: 0 } },
     } as unknown as TrackedProjectile;
-    const simulation: LegacyProjectileHostSimulation = {
-      bindProjectileOwner: () => {},
+    const simulation: ProjectilePhysicsBindingPort = {
+      bindOwner: () => {},
       createProjectile: (id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, receivedProvenance) => ({
         ...baseRecord,
         id,
         provenance: receivedProvenance,
       }),
       releaseProjectileResources: () => {},
-      releaseWorldProjectileState: () => {},
+      releaseWorldState: () => {},
     };
     const runtime = new WorldProjectileRuntime({
-      simulation,
+      physicsBinding: simulation,
       identityScope: new ProjectileIdentityScope(1),
       hostNowMs: () => 0,
     });
