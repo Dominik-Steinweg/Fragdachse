@@ -70,6 +70,7 @@ import {
 } from '../config';
 import { getBaseDestructionBlast } from '../effects/BaseDestructionPlan';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type TeslaDomeWeaponFireConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
+import { TRAIN } from '../train/TrainConfig';
 import { TeslaDomeSystem as ConcreteTeslaDomeSystem } from '../systems/TeslaDomeSystem';
 import { EnergyShieldSystem as ConcreteEnergyShieldSystem } from '../systems/EnergyShieldSystem';
 import { ShieldBuffSystem as ConcreteShieldBuffSystem } from '../systems/ShieldBuffSystem';
@@ -214,7 +215,17 @@ export interface WorldCombatGameplayBindingOptions {
   readonly reconcilePersistentBaseWorld: () => void;
   readonly syncActiveBaseIds: () => void;
   readonly getMissionBarrierObstacles: () => Parameters<CombatSystem['setBarrierObstacles']>[0];
-  readonly getRockTargets: () => readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
+  readonly getRockTargets: () => readonly {
+    id?: number;
+    index: number;
+    active: boolean;
+    x: number;
+    y: number;
+    left?: number;
+    top?: number;
+    right?: number;
+    bottom?: number;
+  }[];
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
@@ -862,7 +873,13 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
         target.kind === 'decoy'
           ? true
-          : o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, String(target.id), allowTeamDamage)
+          : target.kind === 'player' || target.kind === 'enemy'
+            ? o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, String(target.id), allowTeamDamage)
+            // World targets have their own owner/domain path. Projectile targets use the
+            // projectile-owner relationship rather than masquerading as Combat entities.
+            : target.kind === 'projectile'
+              ? o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, String(target.id), allowTeamDamage)
+              : true
       ),
       canDamageOwner: (provenance, otherOwnerId, allowTeamDamage) => (
         o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, otherOwnerId, allowTeamDamage)
@@ -870,7 +887,78 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       isTargetCurrentlyValid: (id, type, ownerId) => o.isHomingTargetValid?.(id, type, ownerId) ?? true,
     });
     o.projectileInteraction.setProjectileCollisionTargetQueryPort({
-      readCollisionTargets: (sink) => o.combatSystem.readCollisionTargets(sink),
+      readCollisionTargets: (sink) => {
+        // Combat contributes only its own canonical subset. World-owned objects are added here
+        // with one ref per physical entity; runtime constructions deliberately use the shared
+        // `rock` representation and are never emitted again as `construction`.
+        o.combatSystem.readCollisionTargets(sink);
+        for (const rock of o.getRockTargets()) {
+          if (!rock.active) continue;
+          const left = rock.left ?? rock.x - CELL_SIZE * 0.5;
+          const top = rock.top ?? rock.y - CELL_SIZE * 0.5;
+          const right = rock.right ?? rock.x + CELL_SIZE * 0.5;
+          const bottom = rock.bottom ?? rock.y + CELL_SIZE * 0.5;
+          sink(
+            'rock', rock.id ?? rock.index, '__world__', rock.x, rock.y,
+            Math.hypot(right - left, bottom - top) * 0.5,
+            left, top, right, bottom,
+            'rock',
+          );
+        }
+        for (const rock of o.placementSystem.getAllRuntimeRocks()) {
+          if (rock.collisionMode === 'none') continue;
+          const x = o.worldMetrics.offsetX + (rock.gridX + 0.5) * CELL_SIZE;
+          const y = o.worldMetrics.offsetY + (rock.gridY + 0.5) * CELL_SIZE;
+          const half = CELL_SIZE * 0.5;
+          sink(
+            'rock', rock.id, '__world__', x, y, half * Math.SQRT2,
+            x - half, y - half, x + half, y + half, rock.kind,
+          );
+        }
+        for (const base of o.baseManager?.getBases() ?? []) {
+          if (base.isInert()) continue;
+          const cells = base.getCellBodies();
+          if (cells.length === 0) continue;
+          let left = Number.POSITIVE_INFINITY;
+          let top = Number.POSITIVE_INFINITY;
+          let right = Number.NEGATIVE_INFINITY;
+          let bottom = Number.NEGATIVE_INFINITY;
+          for (const cell of cells) {
+            const bounds = cell.getBounds();
+            left = Math.min(left, bounds.left);
+            top = Math.min(top, bounds.top);
+            right = Math.max(right, bounds.right);
+            bottom = Math.max(bottom, bounds.bottom);
+          }
+          const x = (left + right) * 0.5;
+          const y = (top + bottom) * 0.5;
+          sink(
+            'base', base.id, '__world__', x, y, Math.hypot(right - left, bottom - top) * 0.5,
+            left, top, right, bottom,
+          );
+        }
+        const train = o.getWorldTrain();
+        const segments = train?.getActiveSegmentPositions() ?? [];
+        if (segments.length > 0) {
+          let left = Number.POSITIVE_INFINITY;
+          let top = Number.POSITIVE_INFINITY;
+          let right = Number.NEGATIVE_INFINITY;
+          let bottom = Number.NEGATIVE_INFINITY;
+          for (let index = 0; index < segments.length; index += 1) {
+            const segment = segments[index];
+            const height = index === 0 ? TRAIN.LOCO_HEIGHT : TRAIN.WAGON_HEIGHT;
+            left = Math.min(left, segment.x - TRAIN.HITBOX_WIDTH * 0.5);
+            right = Math.max(right, segment.x + TRAIN.HITBOX_WIDTH * 0.5);
+            top = Math.min(top, segment.y - height * 0.5);
+            bottom = Math.max(bottom, segment.y + height * 0.5);
+          }
+          sink(
+            'train', 'main', TRAIN.TRAIN_KILLER_ID, (left + right) * 0.5, (top + bottom) * 0.5,
+            Math.hypot(right - left, bottom - top) * 0.5,
+            left, top, right, bottom,
+          );
+        }
+      },
     });
     o.projectileInteraction.setProjectileWorldBlockerPort({
       getNearestBlockerDistance: (startX, startY, endX, endY, ignoreRocks) => (

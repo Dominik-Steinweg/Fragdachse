@@ -542,6 +542,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         lifetimeMs: (cfg.range / cfg.projectileSpeed) * 1000,
         maxBounces: 0,
         isGrenade: false,
+        collisionMode: 'overlap',
         remainingRangePx: cfg.range,
         isBfg: true,
       },

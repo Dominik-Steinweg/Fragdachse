@@ -122,6 +122,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         lifetimeMs: lifetime,
         maxBounces: 999999,
         isGrenade: false,
+        collisionMode: 'overlap',
         isFlame: true,
         flamePiercing: (fireConfig.piercingCount ?? 0) > 0,
         collisionFilter: {
@@ -176,6 +177,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         lifetimeMs: lifetime,
         maxBounces: 999999,
         isGrenade: false,
+        collisionMode: 'overlap',
         collisionFilter: {
           ignoreBaseCollisions: params.options?.ignoreBaseCollisions,
           ignoreRockIndex: params.options?.ignoreRockIndex,

@@ -174,7 +174,7 @@ describe('ProjectileSpawnResolver', () => {
     expect(fastBullet.conservativeClearance).toBeCloseTo(Math.hypot(10, 4) / 2, 8);
 
     const leaf = resolveProjectileBodyProfile(
-      projectileConfig({ size: 20, projectileStyle: 'leaf_blower' }),
+      projectileConfig({ size: 20, leafBlowerMinKnockback: 1 }),
       Math.PI / 4,
     );
     expect(leaf.width).toBe(Math.max(20 * LEAF_BLOWER_OBSTACLE_BODY_SCALE, 10));

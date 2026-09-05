@@ -296,6 +296,7 @@ describe('projectile performance paths', () => {
       bounceProcessedThisStep: false,
       penetratesRocks: false,
       projectileStyle: 'bullet',
+      collisionMode: 'sweep',
       isGrenade: false,
       isFlame: false,
       isBfg: false,
@@ -505,6 +506,9 @@ describe('projectile performance paths', () => {
       damage: 12,
       body,
       projectileStyle: style,
+      collisionMode: 'overlap',
+      isBfg: style === 'bfg',
+      piercesTargets: style === 'gauss',
       colliders: [],
     } as unknown as TrackedProjectile;
     const rockHits: Array<{ id: number; damage: number }> = [];
@@ -522,7 +526,12 @@ describe('projectile performance paths', () => {
         tracked: TrackedProjectile,
         cfg: unknown,
       ) => void;
-    }).setupProjectileColliders(1, 0, 0, {}, body, projectile, { projectileStyle: style });
+    }).setupProjectileColliders(1, 0, 0, {}, body, projectile, {
+      collisionMode: 'overlap',
+      isBfg: style === 'bfg',
+      piercesTargets: style === 'gauss',
+      projectileStyle: style,
+    });
 
     expect(overlapCallbacks).toHaveLength(2);
     overlapCallbacks[0]?.({}, rock);

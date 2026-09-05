@@ -26,6 +26,20 @@ export function projectileTargetKey(target: ProjectileTargetRef): string {
 }
 
 /**
+ * Physical identity used while composing one immutable target view.
+ *
+ * Runtime constructions are backed by the shared rock/obstacle representation. If an adapter
+ * accidentally exposes the same numeric object once as `rock` and once as `construction`, the
+ * collision owner keeps the canonical rock representation instead of creating two hit chances.
+ */
+export function projectileTargetPhysicalKey(target: ProjectileTargetRef): string {
+  if (target.kind === 'rock' || target.kind === 'construction') {
+    return `obstacle:${target.id}`;
+  }
+  return projectileTargetKey(target);
+}
+
+/**
  * Key-Raum der Homing-/Explosionsausschlüsse.
  *
  * Homing-Kandidaten kommen mit ihren eigenen Typnamen (`players`, `enemies`, …) herein; der
@@ -38,8 +52,8 @@ export function projectileExclusionKey(target: ProjectileTargetRef): string | nu
   return null;
 }
 
-/** Zieltypen, die über die Collision-Kandidatenerzeugung laufen. */
-export type ProjectileCollisionTargetKind = 'player' | 'enemy' | 'decoy';
+/** Alle Zieltypen, die in der kanonischen Collision-Sicht materialisiert werden dürfen. */
+export type ProjectileCollisionTargetKind = ProjectileTargetRef['kind'];
 
 /**
  * Nimmt ein kollidierbares Ziel in die Frame-Sicht auf.
@@ -48,7 +62,8 @@ export type ProjectileCollisionTargetKind = 'player' | 'enemy' | 'decoy';
  * Entity-Objekte oder erzeugen pro Frame neue Zielobjekte.
  *
  * `ownerId` ist die Entität, deren Beziehung über Selbsttreffer entscheidet (bei Ködern ihr
- * Besitzer); `radius` ist der Trefferkreis der Sweep-Auflösung ohne Projektilradius.
+ * Besitzer); `radius` ist der Trefferkreis der Sweep-Auflösung ohne Projektilradius. `obstacleKind`
+ * bleibt an der kanonischen `rock`-Ref und verhindert eine parallele Construction-Identität.
  */
 export type ProjectileCollisionTargetSink = (
   kind: ProjectileCollisionTargetKind,
@@ -61,6 +76,7 @@ export type ProjectileCollisionTargetSink = (
   top: number,
   right: number,
   bottom: number,
+  obstacleKind?: PlaceableKind,
 ) => void;
 
 /**
@@ -71,6 +87,20 @@ export type ProjectileCollisionTargetSink = (
  */
 export interface ProjectileCollisionTargetQueryPort {
   readCollisionTargets(sink: ProjectileCollisionTargetSink): void;
+}
+
+/** Gemeinsamer Contract-Typ für Tests und World-Adapter, ohne Entity-Objekte zu leaken. */
+export interface ProjectileCollisionTarget {
+  readonly ref: ProjectileTargetRef;
+  readonly ownerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly active: boolean;
 }
 
 /** Weltgeometrie entlang eines Travel-Segments; kein zweiter Spatial-Index. */
@@ -113,5 +143,9 @@ export interface ProjectileImpactCandidate {
   readonly x: number;
   readonly y: number;
   readonly distanceAlongTravel?: number;
-  readonly source: 'sweep' | 'overlap';
+  readonly normal?: { readonly x: number; readonly y: number };
+  readonly source: 'sweep' | 'overlap' | 'physics-collider' | 'world-boundary';
 }
+
+/** Exported with the target contract so collision modes cannot be reintroduced via style names. */
+export type { ProjectileCollisionMode } from '../types';

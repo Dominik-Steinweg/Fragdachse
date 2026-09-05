@@ -41,6 +41,12 @@ export interface ProjectileExternalInteractionPort {
     detonatorOwnerId: string,
   ): ProjectileDetonationOutcome | null;
   detonateOverlappingProjectiles(): readonly ProjectileDetonationOutcome[];
+  /** Authoritative Projectile↔Projectile transform; mutation stays in the Projectile owner. */
+  deflectProjectile?(
+    projectileId: ProjectileId,
+    deflectorId: ProjectileId,
+    nowMs: number,
+  ): boolean;
 }
 
 /** Schmale Puck-Capability für Player- und Enemy-Translocatoren. */

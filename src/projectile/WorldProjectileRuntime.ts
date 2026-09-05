@@ -312,6 +312,7 @@ export class WorldProjectileRuntime implements
       lifetime: request.lifetimeMs,
       maxBounces: request.maxBounces,
       isGrenade: true,
+      isTranslocatorPuck: true,
       adrenalinGain: 0,
       sourceId: request.sourceId,
       projectileStyle: 'translocator_puck',
@@ -556,31 +557,34 @@ export class WorldProjectileRuntime implements
     if (this.deflectorIds.size === 0) return;
     for (const target of this.projectiles.activeRecords) {
       if (target.pendingDestroy) continue;
-      if (target.projectileStyle === 'leaf_blower') continue;
+      if (target.leafBlowerDeflectsProjectiles === true) continue;
       // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
       if (target.isGrenade) continue;
       if (target.miniRocketDeferredExplosion || target.miniRocketSpent) continue;
 
-      const targetBounds = target.sprite.getBounds();
       for (const deflectorId of this.deflectorIds) {
-        const blower = this.projectiles.getById(deflectorId);
-        if (!blower || blower.pendingDestroy || !this.projectiles.activeRecords.has(blower)) continue;
-        const blowerOwnerId = blower.provenance.allegiance.ownerId;
-        if (blowerOwnerId === target.provenance.allegiance.ownerId) continue;
-        if (this.targetabilityPort && !this.targetabilityPort.canDamageOwner(
-          target.provenance,
-          blowerOwnerId,
-          target.allowTeamDamage === true,
-        )) continue;
-        if (!boundsOverlap(targetBounds, blower.sprite.getBounds())) continue;
-
-        this.deflectProjectile(target, blower, nowMs);
-        break;
+        if (this.deflectProjectile(target.id, deflectorId, nowMs)) break;
       }
     }
   }
 
-  private deflectProjectile(target: TrackedProjectile, blower: TrackedProjectile, nowMs: number): void {
+  deflectProjectile(projectileId: ProjectileId, deflectorId: ProjectileId, nowMs: number): boolean {
+    const target = this.projectiles.getById(projectileId);
+    const blower = this.projectiles.getById(deflectorId);
+    if (!target || !blower || target === blower) return false;
+    if (target.pendingDestroy || blower.pendingDestroy) return false;
+    if (!this.projectiles.activeRecords.has(target) || !this.projectiles.activeRecords.has(blower)) return false;
+    if (target.leafBlowerDeflectsProjectiles === true || target.isGrenade) return false;
+    if (target.miniRocketDeferredExplosion || target.miniRocketSpent) return false;
+    const blowerOwnerId = blower.provenance.allegiance.ownerId;
+    if (blowerOwnerId === target.provenance.allegiance.ownerId) return false;
+    if (this.targetabilityPort && !this.targetabilityPort.canDamageOwner(
+      target.provenance,
+      blowerOwnerId,
+      target.allowTeamDamage === true,
+    )) return false;
+    if (!boundsOverlap(target.sprite.getBounds(), blower.sprite.getBounds())) return false;
+
     const blowLength = Math.hypot(blower.body.velocity.x, blower.body.velocity.y);
     const angle = blowLength > 0.001
       ? Math.atan2(blower.body.velocity.y, blower.body.velocity.x)
@@ -603,6 +607,7 @@ export class WorldProjectileRuntime implements
       nowMs,
     });
     this.destroyProjectile(target.id);
+    return true;
   }
 
   /** Target-lokale Defense: Absorption entfernt, Reflexion erzeugt den Nachfolger beim Owner. */
@@ -740,8 +745,8 @@ export class WorldProjectileRuntime implements
     this.projectiles.insert(record);
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
-    if (record.projectileStyle === 'translocator_puck') this.translocatorPuckIds.add(id);
-    if (record.leafBlowerDeflectsProjectiles && record.projectileStyle === 'leaf_blower') this.deflectorIds.add(id);
+    if (record.isTranslocatorPuck === true) this.translocatorPuckIds.add(id);
+    if (record.leafBlowerDeflectsProjectiles === true) this.deflectorIds.add(id);
     if (hasTravelEffect(record)) this.travelEffectIds.add(id);
     if (record.supplementalBurnOnHit) {
       this.burnAugments.set(id, {

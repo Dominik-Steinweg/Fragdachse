@@ -162,7 +162,10 @@ export class ProjectileFlightProcessor {
   }
 
   private updateGrowingHitbox(projectile: TrackedProjectile, deltaSeconds: number): void {
-    if (!projectile.isFlame && projectile.projectileStyle !== 'leaf_blower') return;
+    if (!projectile.isFlame
+      && projectile.leafBlowerMinKnockback === undefined
+      && projectile.leafBlowerMaxKnockback === undefined
+      && projectile.leafBlowerDeflectsProjectiles !== true) return;
     const growRate = projectile.hitboxGrowRate ?? 0;
     const currentSize = projectile.hitboxSize ?? projectile.sprite.displayWidth;
     const maxSize = projectile.hitboxMaxSize ?? currentSize;

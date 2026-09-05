@@ -12,7 +12,7 @@ import {
 import { encodeProjectileDynamic, encodeProjectileStatic } from '../network/projectileSnapshotCodec';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, SyncedProjectileSnapshot, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, SyncedProjectileSnapshot, ExplodedGrenade, ExplodedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
 import type {
   HomingLineOfFireChecker,
   HomingTargetProvider,
@@ -790,6 +790,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       createdAt:      hostNowMs,
       ownerId,
       provenance,
+      collisionMode:  resolveProjectileCollisionMode(cfg),
       ignoreBaseCollisions: cfg.ignoreBaseCollisions,
       ignoreRockIndex: cfg.ignoreRockIndex,
       color:          cfg.color,
@@ -802,6 +803,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       lifetime:       cfg.lifetime,
       maxBounces:     cfg.maxBounces,
       isGrenade:      cfg.isGrenade,
+      isTranslocatorPuck: cfg.isTranslocatorPuck,
       adrenalinGain:  cfg.adrenalinGain,
       sourceId:     cfg.sourceId ?? 'weapon.unknown',
       plasmaSwarmEnabled: cfg.plasmaSwarmEnabled,
@@ -846,9 +848,9 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       penetrationDamageRetention: cfg.penetrationDamageRetention,
       penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
       piercesTargets:  cfg.piercesTargets,
-      piercingHitIds: (cfg.isBfg || cfg.piercesTargets || (cfg.projectileStyle === 'energy_ball'
-        && (cfg.proximityPulse?.radius ?? 0) > 0
-        && (cfg.proximityPulse?.damage ?? 0) > 0)) ? new Set<string>() : undefined,
+      piercingHitIds: (cfg.isBfg || cfg.piercesTargets
+        || ((cfg.proximityPulse?.radius ?? 0) > 0 && (cfg.proximityPulse?.damage ?? 0) > 0))
+        ? new Set<string>() : undefined,
       penetratesRocks: cfg.penetratesRocks,
       penetratedRockIds: cfg.penetratesRocks ? new Set<number>() : undefined,
       reflected: cfg.reflected,
@@ -935,10 +937,10 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         && (cfg.proximityPulse?.damage ?? 0) > 0 ? 0 : undefined,
       // Anti-Tunneling
       originalBodySize: cfg.size < MIN_BODY_LEN
-        && cfg.projectileStyle !== 'flame'
-        && cfg.projectileStyle !== 'leaf_blower'
-        && cfg.projectileStyle !== 'bfg'
-        && cfg.projectileStyle !== 'gauss'
+        && cfg.isFlame !== true
+        && !hasLeafBlowerCapability(cfg)
+        && cfg.isBfg !== true
+        && !hasGaussDischarge(cfg)
         && !cfg.isGrenade
         ? cfg.size : undefined,
 
@@ -1022,10 +1024,12 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     tracked: TrackedProjectile,
     cfg: ProjectileSpawnConfig,
   ): void {
-    const isBfg = cfg.projectileStyle === 'bfg';
-    const isGauss = cfg.projectileStyle === 'gauss';
-    const isFlame = cfg.projectileStyle === 'flame';
-    const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
+    const isBfg = cfg.isBfg === true;
+    const isGauss = hasGaussDischarge(cfg)
+      || (cfg.collisionMode === 'overlap' && cfg.piercesTargets === true && cfg.isBfg !== true
+        && cfg.isFlame !== true && !hasLeafBlowerCapability(cfg));
+    const isFlame = cfg.isFlame === true;
+    const isLeafBlower = hasLeafBlowerCapability(cfg);
 
     if (isBfg || isGauss) {
       // BFG: Welt-Bounds zerstören das Projektil; Felsen/Zug werden per Overlap beschädigt,
@@ -1358,7 +1362,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     // (nicht nur die Normalkomponente) mit dem Multiplikator reduziert wird.
     body.setBounce(1, 1);
 
-    const isTranslocatorPuck = tracked.projectileStyle === 'translocator_puck';
+    const isTranslocatorPuck = tracked.isTranslocatorPuck === true;
 
     // Hilfsfunktion: reduziert bei jedem Abprallen die Gesamtgeschwindigkeit
     const applyBounceFriction = () => {
@@ -1382,7 +1386,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       if (hitBody !== body) return;
       applyBounceFriction();
       const impact = this.getProjectileBodyCenter(tracked);
-      if (tracked.projectileStyle === 'hydra') {
+      if (hasHydraSplitCapability(tracked)) {
         if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount = tracked.maxBounces + 1;
         body.reset(impact.x, impact.y);
@@ -1459,7 +1463,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
             onHit(idx, tracked.damage * obstacleMult, tracked.ownerId);
           }
         }
-        if (tracked.projectileStyle === 'hydra') {
+        if (hasHydraSplitCapability(tracked)) {
           if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
           tracked.bounceCount = tracked.maxBounces + 1;
           body.reset(impact.x, impact.y);
@@ -1498,7 +1502,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
             tracked.color,
           );
         }
-        if (tracked.projectileStyle === 'hydra') {
+        if (hasHydraSplitCapability(tracked)) {
           if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
           tracked.bounceCount = tracked.maxBounces + 1;
           body.reset(impact.x, impact.y);
@@ -1542,7 +1546,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
             tracked.color,
           );
         }
-        if (tracked.projectileStyle === 'hydra') {
+        if (hasHydraSplitCapability(tracked)) {
           if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
           tracked.bounceCount = tracked.maxBounces + 1;
           body.reset(impact.x, impact.y);
@@ -1587,7 +1591,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         }
         applyBounceFriction();
         tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
-        if (tracked.projectileStyle === 'hydra') {
+        if (hasHydraSplitCapability(tracked)) {
           if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
           tracked.bounceCount = tracked.maxBounces + 1;
           body.reset(impact.x, impact.y);
@@ -1606,7 +1610,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   private shouldUseContinuousRockCollision(proj: TrackedProjectile): boolean {
-    return (proj.projectileStyle === 'bullet' || proj.projectileStyle === 'awp')
+    return proj.collisionMode === 'sweep'
       && !proj.isGrenade
       && !proj.isFlame
       && !proj.isBfg
@@ -1815,8 +1819,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     outgoingVx: number,
     outgoingVy: number,
   ): boolean {
-    if (proj.projectileStyle !== 'hydra') return false;
-
     const splitCount = Math.max(0, Math.floor(proj.splitCount ?? 0));
     if (splitCount <= 0) return false;
 
@@ -1866,6 +1868,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         lifetime: childLifetime,
         maxBounces: proj.maxBounces,
         isGrenade: proj.isGrenade,
+        isTranslocatorPuck: proj.isTranslocatorPuck,
+        collisionMode: proj.collisionMode,
         adrenalinGain: childAdrenalinGain,
         sourceId: proj.sourceId,
         explosion: proj.explosion,
@@ -1897,7 +1901,15 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         leafBlowerMaxKnockback: proj.leafBlowerMaxKnockback,
         leafBlowerSelfPush: proj.leafBlowerSelfPush,
         isBfg: proj.isBfg,
+        piercesTargets: proj.piercesTargets,
+        penetrationCount: proj.penetrationRemaining,
+        penetrationDamageRetention: proj.penetrationDamageRetention,
+        penetratesRocks: proj.penetratesRocks,
+        flamePiercing: proj.flamePierceHitIds !== undefined,
+        leafBlowerDeflectsProjectiles: proj.leafBlowerDeflectsProjectiles,
         proximityPulse: proj.proximityPulse,
+        gaussChainRadius: proj.gaussChainRadius,
+        gaussChainDamageFactor: proj.gaussChainDamageFactor,
         frictionDelayMs: proj.frictionDelayMs,
         airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
         bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
@@ -2452,7 +2464,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     const explodedGrenades: ExplodedGrenade[] = [];
     const countdownEvents = coreStage.countdownEvents;
     for (const projectile of this.projectiles) {
-      if ((projectile.isFlame || projectile.projectileStyle === 'leaf_blower')
+      if ((projectile.isFlame || hasLeafBlowerCapability(projectile))
         && projectile.hitboxSize !== undefined
         && Math.abs(projectile.sprite.displayWidth - projectile.hitboxSize) > 0.0001) {
         projectile.sprite.setDisplaySize(projectile.hitboxSize, projectile.hitboxSize);
@@ -3611,6 +3623,34 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       velocityY: state.vy,
     };
   }
+}
+
+function resolveProjectileCollisionMode(cfg: ProjectileSpawnConfig): ProjectileCollisionMode {
+  if (cfg.collisionMode) return cfg.collisionMode;
+  if (cfg.isGrenade) return 'physics';
+  if (cfg.isFlame === true || hasLeafBlowerCapability(cfg) || cfg.isBfg === true) return 'overlap';
+  if ((cfg.proximityPulse?.radius ?? 0) > 0 && (cfg.proximityPulse?.damage ?? 0) > 0) return 'overlap';
+  if (hasGaussDischarge(cfg)) return 'overlap';
+  return 'sweep';
+}
+
+function hasLeafBlowerCapability(
+  projectile: Pick<ProjectileSpawnConfig, 'leafBlowerMinKnockback' | 'leafBlowerMaxKnockback' | 'leafBlowerDeflectsProjectiles'>,
+): boolean {
+  return projectile.leafBlowerMinKnockback !== undefined
+    || projectile.leafBlowerMaxKnockback !== undefined
+    || projectile.leafBlowerDeflectsProjectiles === true;
+}
+
+function hasGaussDischarge(
+  projectile: Pick<ProjectileSpawnConfig, 'gaussChainRadius' | 'gaussChainDamageFactor'>,
+): boolean {
+  return (projectile.gaussChainRadius ?? 0) > 0
+    && (projectile.gaussChainDamageFactor ?? 0) > 0;
+}
+
+function hasHydraSplitCapability(projectile: Pick<TrackedProjectile, 'splitCount'>): boolean {
+  return (projectile.splitCount ?? 0) > 0;
 }
 
 function createDetonationTarget(projectile: TrackedProjectile): ProjectileDetonationTarget {

@@ -30,12 +30,18 @@ export function resolveProjectileBodyProfile(
   cfg: ProjectileSpawnConfig,
   angle: number,
 ): ProjectileBodyProfile {
-  const isFlame = cfg.projectileStyle === 'flame';
-  const isLeafBlower = cfg.projectileStyle === 'leaf_blower';
-  const isBfg = cfg.projectileStyle === 'bfg';
+  const isFlame = cfg.isFlame === true;
+  const isLeafBlower = cfg.leafBlowerMinKnockback !== undefined
+    || cfg.leafBlowerMaxKnockback !== undefined
+    || cfg.leafBlowerDeflectsProjectiles === true;
+  const isBfg = cfg.isBfg === true;
+  const isOverlapPiercing = cfg.collisionMode === 'overlap' && cfg.piercesTargets === true;
   const isAntiTunnelingBody = !isFlame
     && !isLeafBlower
     && !isBfg
+    && !isOverlapPiercing
+    && (cfg.gaussChainRadius ?? 0) <= 0
+    && (cfg.gaussChainDamageFactor ?? 0) <= 0
     && !cfg.isGrenade
     && cfg.size < MIN_BODY_LEN;
 
@@ -110,7 +116,9 @@ export function resolveSafeMuzzleSpawn(
 
   let blockerDistance = Number.POSITIVE_INFINITY;
 
-  const isBfgOrGauss = cfg.projectileStyle === 'bfg' || cfg.projectileStyle === 'gauss';
+  const isBfgOrGauss = cfg.isBfg === true
+    || (cfg.gaussChainRadius ?? 0) > 0
+    || (cfg.gaussChainDamageFactor ?? 0) > 0;
   // Diese Projektiltypen passieren Welt-Hindernisse im normalen Flug per Overlap. Für sie
   // werden deshalb nur die normalen World-Bounds berücksichtigt.
   const resolvesWorldObstacleBlockers = !isBfgOrGauss;

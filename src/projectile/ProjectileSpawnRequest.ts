@@ -13,6 +13,7 @@ import type {
   LoadoutSlot,
   ProjectileEnergyInjectorPayload,
   ProjectileExplosionConfig,
+  ProjectileCollisionMode,
   ProjectileHomingConfig,
   ProjectileProximityPulseConfig,
   ProjectilePathEffectKind,
@@ -56,6 +57,8 @@ export interface ProjectileFlightSpec {
   readonly lifetimeMs: number;
   readonly maxBounces: number;
   readonly isGrenade: boolean;
+  /** Kandidatenerzeugung der Projectile-Runtime; unabhängig vom Darstellungsstil. */
+  readonly collisionMode?: ProjectileCollisionMode;
   readonly initialBounceCount?: number;
   /** Reststrecke, ab der das Projectile seine Reichweite erschöpft hat. */
   readonly remainingRangePx?: number;

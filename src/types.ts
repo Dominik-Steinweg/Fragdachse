@@ -159,6 +159,9 @@ export interface PlayerInput {
 
 export type PlaceableKind = 'rock' | 'turret' | 'pedestal' | 'tunnel';
 
+/** Candidate-generation mode owned by projectile gameplay, independent of presentation. */
+export type ProjectileCollisionMode = 'sweep' | 'overlap' | 'physics' | 'none';
+
 /** Ownership of a normal construction runtime. Phase-3 base ownership is reserved here so the
  * dismantle/restore paths do not need a second identity model later. */
 export type ConstructionOwnership = 'host-persistent' | 'guest-session' | 'base-owned';
@@ -1036,6 +1039,8 @@ export interface UtilityPlacementPreviewState {
 /** Konfiguration für ein gespawntes Projektil (wird von LoadoutManager an ProjectileManager übergeben) */
 export interface ProjectileSpawnConfig {
   proximityPulse?: ProjectileProximityPulseConfig;
+  /** Authoritative collision candidate mode; presentation style is never used for this choice. */
+  collisionMode?: ProjectileCollisionMode;
   /** Base-mounted turret projectiles pass through their own base footprint. */
   ignoreBaseCollisions?: boolean;
   /** Placeable turret projectiles pass through the runtime rock they are mounted on. */
@@ -1054,6 +1059,8 @@ export interface ProjectileSpawnConfig {
   lifetime:        number;        // ms (für Bullets Lebensdauer, für Granaten = fuseTime)
   maxBounces:      number;        // 0 für Granaten
   isGrenade:       boolean;
+  /** Semantic translocator puck capability; presentation style remains renderer metadata. */
+  isTranslocatorPuck?: boolean;
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   sourceId?:     string;        // Waffenname für Killfeed
   /** Marker für das Coop-Defense-Bossupgrade der Plasma Gun. */
@@ -1382,6 +1389,8 @@ export interface SyncedTimeBubble {
 /** Internes Tracking eines aktiven Projektils (nur auf dem Host) */
 export interface TrackedProjectile {
   proximityPulse?: ProjectileProximityPulseConfig;
+  /** Collision candidate mode resolved from the semantic spawn capabilities. */
+  collisionMode: ProjectileCollisionMode;
   lastProximityPulseAt?: number;
   id:              number;
   sprite:          Phaser.GameObjects.Shape;  // Rectangle (bullet) oder Arc (ball)
@@ -1406,6 +1415,7 @@ export interface TrackedProjectile {
   lifetime:        number;        // ms Lebensdauer (Bullets) / fuseTime (Granaten)
   maxBounces:      number;        // maximale Abpraller
   isGrenade:       boolean;
+  isTranslocatorPuck?: boolean;
   adrenalinGain:   number;        // Adrenalin-Gewinn für den Schützen bei Treffer
   sourceId:      string;        // Waffenname für Killfeed
   plasmaSwarmEnabled?: boolean;

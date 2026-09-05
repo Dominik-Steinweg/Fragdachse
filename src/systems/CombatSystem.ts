@@ -1235,6 +1235,7 @@ export class CombatSystem {
     damage: number,
     sourceX: number,
     sourceY: number,
+    now = Date.now(),
   ): boolean {
     if (!this.energyShieldSystem) return false;
     return this.energyShieldSystem.tryBlockDamage({
@@ -1243,7 +1244,7 @@ export class CombatSystem {
       damage,
       sourceX,
       sourceY,
-      now: Date.now(),
+      now,
     });
   }
 
@@ -1267,6 +1268,7 @@ export class CombatSystem {
       );
     }
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+      if (!enemy.sprite.active || !this.isAlive(enemy.id)) continue;
       const bounds = enemy.sprite.getBounds();
       sink(
         'enemy', enemy.id, enemy.id,
@@ -1276,6 +1278,7 @@ export class CombatSystem {
       );
     }
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+      if (!decoy.sprite.active) continue;
       const bounds = decoy.sprite.getBounds();
       sink(
         'decoy', decoy.id, decoy.ownerId,
@@ -1477,7 +1480,7 @@ export class CombatSystem {
       return { kind: 'applied' };
     }
 
-    if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, candidate.x, candidate.y)) {
+    if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, candidate.x, candidate.y, nowMs)) {
       const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(playerId) ?? 0);
       if (reflectionFactor <= 0) return { kind: 'defended', defense: { kind: 'absorbed' } };
       // Der Overlap-Treffer reflektiert am Spieler, der Sweep am aufgelösten Trefferpunkt.
@@ -1506,11 +1509,11 @@ export class CombatSystem {
 
     if (contact === 'pierce') {
       this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
-      if (proj.piercesTargets === true) {
+      if (hasGaussDischarge(proj)) {
+        this.resolveGaussDischarge(proj, playerId, undefined, actualDamage);
+      } else if (proj.piercesTargets === true) {
         this.applyProjectileBurn(playerId, proj);
-        return { kind: 'applied' };
       }
-      if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, playerId, undefined, actualDamage);
       return { kind: 'applied' };
     }
 
@@ -1581,11 +1584,13 @@ export class CombatSystem {
 
     if (contact === 'pierce') {
       // Durchschlag gilt nur gegen logische Kampfziele; Felsen und Zug bleiben Weltblocker.
-      if (proj.piercesTargets === true || !(proj.isBfg === true || proj.projectileStyle === 'gauss')) {
+      if (proj.piercesTargets === true || !(proj.isBfg === true || hasGaussDischarge(proj))) {
+        if (hasGaussDischarge(proj)) this.registerAk47Hit(proj, nowMs);
         this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
           sourceSlot: proj.sourceSlot,
           damageKind: 'direct',
         });
+        if (hasGaussDischarge(proj)) this.resolveGaussDischarge(proj, undefined, enemyId, actualDamage);
         return { kind: 'applied' };
       }
       this.registerAk47Hit(proj, nowMs);
@@ -1594,7 +1599,7 @@ export class CombatSystem {
         sourceSlot: proj.sourceSlot,
         damageKind: 'direct',
       });
-      if (proj.projectileStyle === 'gauss') this.resolveGaussDischarge(proj, undefined, enemyId, actualDamage);
+      if (hasGaussDischarge(proj)) this.resolveGaussDischarge(proj, undefined, enemyId, actualDamage);
       return { kind: 'applied' };
     }
 
@@ -3761,4 +3766,11 @@ export class CombatSystem {
   private clearBurnByAttacker(attackerId: string): void {
     this.burnStateMachine.clearByAttacker(attackerId);
   }
+}
+
+function hasGaussDischarge(
+  projectile: Pick<TrackedProjectile, 'gaussChainRadius' | 'gaussChainDamageFactor'>,
+): boolean {
+  return (projectile.gaussChainRadius ?? 0) > 0
+    && (projectile.gaussChainDamageFactor ?? 0) > 0;
 }

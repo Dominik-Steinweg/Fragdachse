@@ -97,6 +97,8 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
         lifetimeMs: lifetime,
         maxBounces: 0,
         isGrenade: false,
+        collisionMode: 'overlap',
+        piercesTargets: true,
         remainingRangePx: config.range,
       },
       provenance: createSingleOwnerProvenance(params.ownerId, { weaponSourceId: config.id }),

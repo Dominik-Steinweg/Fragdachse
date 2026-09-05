@@ -9,8 +9,10 @@ import type {
 } from './ProjectileInteractionPorts';
 import {
   projectileExclusionKey,
+  projectileTargetPhysicalKey,
   projectileTargetKey,
   type ProjectileCollisionTargetQueryPort,
+  type ProjectileCollisionTargetKind,
   type ProjectileImpactCandidate,
   type ProjectileTargetRef,
   type ProjectileTargetabilityPort,
@@ -18,7 +20,7 @@ import {
 } from './ProjectileTargetPort';
 
 /** Zieltypen, die über die Collision-Kandidatenerzeugung laufen. */
-type CollisionTargetKind = 'player' | 'enemy' | 'decoy';
+type CollisionTargetKind = ProjectileCollisionTargetKind;
 
 /** Gepoolter Slot der Frame-Zielsicht; die Runtime hält keine fremden Entity-Objekte. */
 interface CollisionTargetSlot {
@@ -34,7 +36,15 @@ interface CollisionTargetSlot {
   top: number;
   right: number;
   bottom: number;
+  obstacleKind?: import('../types').PlaceableKind;
   ref: ProjectileTargetRef;
+}
+
+interface SweepCandidate {
+  slot: CollisionTargetSlot;
+  x: number;
+  y: number;
+  distance: number;
 }
 
 /** Was der Owner für die Kandidatenverarbeitung bereitstellt. */
@@ -55,8 +65,6 @@ export interface ProjectileCollisionDependencies {
 
 type CandidateOutcome = 'ignored' | 'passed' | 'consumed';
 
-/** Startüberlappung wird beim Sweep ignoriert; ein näherer Weltblocker gewinnt. */
-const BLOCKER_TOLERANCE_PX = 0.75;
 /** Unterhalb dieser Streckenlänge bleibt es beim Overlap-Test. */
 const MIN_SWEEP_TRAVEL_PX = 0.5;
 
@@ -72,6 +80,10 @@ const MIN_SWEEP_TRAVEL_PX = 0.5;
  */
 export class ProjectileCollisionProcessor {
   private readonly targetPool: CollisionTargetSlot[] = [];
+  private readonly targetSlotsByPhysicalKey = new Map<string, CollisionTargetSlot>();
+  private readonly projectileTargetRecords: TrackedProjectile[] = [];
+  private readonly overlapCandidates: CollisionTargetSlot[] = [];
+  private readonly sweepCandidates: SweepCandidate[] = [];
   private targetCount = 0;
 
   private readonly emitTarget = (
@@ -85,8 +97,19 @@ export class ProjectileCollisionProcessor {
     top: number,
     right: number,
     bottom: number,
+    obstacleKind?: import('../types').PlaceableKind,
   ): void => {
-    const slot = this.acquireSlot(kind, id);
+    const requestedRef = createTargetRef(kind, id, obstacleKind);
+    const physicalKey = projectileTargetPhysicalKey(requestedRef);
+    let slot = this.targetSlotsByPhysicalKey.get(physicalKey);
+    if (!slot) {
+      slot = this.acquireSlot(requestedRef);
+      this.targetSlotsByPhysicalKey.set(physicalKey, slot);
+      this.targetCount += 1;
+    } else if (targetKindRank(requestedRef.kind) < targetKindRank(slot.kind)) {
+      // A shared runtime rock is canonical even if a construction adapter reported it first.
+      this.replaceSlotRef(slot, requestedRef);
+    }
     slot.ownerId = ownerId;
     slot.x = x;
     slot.y = y;
@@ -95,7 +118,7 @@ export class ProjectileCollisionProcessor {
     slot.top = top;
     slot.right = right;
     slot.bottom = bottom;
-    this.targetCount += 1;
+    slot.obstacleKind = obstacleKind;
   };
 
   /** Verarbeitet alle wirksamen Projectiles dieses Frames gegen die aktuelle Zielsicht. */
@@ -104,10 +127,21 @@ export class ProjectileCollisionProcessor {
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
-    if (!deps.directImpact || !deps.targetQuery) return;
+    if (!deps.targetQuery) return;
+    this.projectileTargetRecords.length = 0;
+    for (const record of records) {
+      if (!record.pendingDestroy && record.sprite.active !== false) {
+        this.projectileTargetRecords.push(record);
+      }
+    }
     this.readTargets(deps.targetQuery);
+    for (const record of this.projectileTargetRecords) this.emitProjectileTarget(record);
+    this.sortTargetsDeterministically();
     if (this.targetCount === 0) return;
 
+    // Keep the owner collection live for the explicit same-stage spawn contract. The snapshot
+    // above is only the immutable target view for this invocation; newly spawned children must
+    // still receive their own collision pass while the owner iterates its active set.
     for (const record of records) {
       if (record.pendingDestroy) continue;
       // Granaten wirken nur über ihre terminale Payload, nicht über Direkttreffer.
@@ -120,15 +154,21 @@ export class ProjectileCollisionProcessor {
   /** Gibt die gepoolte Frame-Sicht frei. */
   reset(): void {
     this.targetPool.length = 0;
+    this.targetSlotsByPhysicalKey.clear();
+    this.projectileTargetRecords.length = 0;
+    this.overlapCandidates.length = 0;
+    this.sweepCandidates.length = 0;
     this.targetCount = 0;
   }
 
   private readTargets(port: ProjectileCollisionTargetQueryPort): void {
     this.targetCount = 0;
+    this.targetSlotsByPhysicalKey.clear();
     port.readCollisionTargets(this.emitTarget);
   }
 
-  private acquireSlot(kind: CollisionTargetKind, id: string | number): CollisionTargetSlot {
+  private acquireSlot(ref: ProjectileTargetRef): CollisionTargetSlot {
+    const kind = ref.kind;
     let slot = this.targetPool[this.targetCount];
     if (!slot || slot.kind !== kind) {
       slot = {
@@ -143,15 +183,50 @@ export class ProjectileCollisionProcessor {
         top: 0,
         right: 0,
         bottom: 0,
-        ref: (kind === 'decoy' ? { kind, id: 0 } : { kind, id: '' }) as ProjectileTargetRef,
+        ref,
       };
       this.targetPool[this.targetCount] = slot;
     }
-    slot.id = String(id);
-    slot.numericId = Number(id);
-    if (slot.kind === 'decoy') (slot.ref as { id: number }).id = slot.numericId;
-    else (slot.ref as { id: string }).id = slot.id;
+    this.replaceSlotRef(slot, ref);
     return slot;
+  }
+
+  private replaceSlotRef(slot: CollisionTargetSlot, ref: ProjectileTargetRef): void {
+    slot.kind = ref.kind;
+    slot.ref = ref;
+    slot.id = String(ref.id);
+    slot.numericId = Number(ref.id);
+    slot.obstacleKind = ref.kind === 'rock' ? ref.obstacleKind : undefined;
+  }
+
+  private emitProjectileTarget(record: TrackedProjectile): void {
+    const bounds = record.sprite.getBounds();
+    this.emitTarget(
+      'projectile',
+      record.id,
+      record.provenance.allegiance.ownerId,
+      record.sprite.x,
+      record.sprite.y,
+      Math.max(record.sprite.displayWidth, record.sprite.displayHeight) * 0.5,
+      bounds.left,
+      bounds.top,
+      bounds.right,
+      bounds.bottom,
+    );
+  }
+
+  private sortTargetsDeterministically(): void {
+    // The provider order is an implementation detail. Stable key order makes overlap and all
+    // equal-distance sweep ties deterministic even when an adapter enumerates in another order.
+    for (let index = 1; index < this.targetCount; index += 1) {
+      const current = this.targetPool[index];
+      let insertAt = index - 1;
+      while (insertAt >= 0 && projectileTargetKey(this.targetPool[insertAt].ref) > projectileTargetKey(current.ref)) {
+        this.targetPool[insertAt + 1] = this.targetPool[insertAt];
+        insertAt -= 1;
+      }
+      this.targetPool[insertAt + 1] = current;
+    }
   }
 
   private processRecord(
@@ -159,11 +234,14 @@ export class ProjectileCollisionProcessor {
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
-    if (usesContinuousCollision(record)) {
+    const mode = record.collisionMode ?? 'overlap';
+    if (mode === 'none' || mode === 'physics') return;
+    if (mode === 'sweep') {
       const travelX = record.sprite.x - record.lastX;
       const travelY = record.sprite.y - record.lastY;
       if (Math.hypot(travelX, travelY) > MIN_SWEEP_TRAVEL_PX) {
-        // Ein Sweep-Frame löst höchstens einen Treffer auf und fällt nicht auf Overlap zurück.
+        // Ein Sweep-Frame verarbeitet alle zulässigen Kandidaten entlang des Segments; ein
+        // nicht-penetrativer Kontakt beendet ihn im Ergebnis, statt auf Overlap zurückzufallen.
         this.processSweep(record, nowMs, deps);
         return;
       }
@@ -189,10 +267,7 @@ export class ProjectileCollisionProcessor {
     ) ?? null;
     const projectileRadius = Math.max(record.sprite.displayWidth, record.sprite.displayHeight) * 0.5;
 
-    let bestSlot: CollisionTargetSlot | null = null;
-    let bestDistance = Number.POSITIVE_INFINITY;
-    let bestX = 0;
-    let bestY = 0;
+    this.sweepCandidates.length = 0;
     for (let index = 0; index < this.targetCount; index += 1) {
       const slot = this.targetPool[index];
       if (!this.isCandidateAllowed(record, slot, deps)) continue;
@@ -207,28 +282,51 @@ export class ProjectileCollisionProcessor {
         ignoreStartingOverlap: true,
       });
       if (!hit) continue;
-      // Ein näherer Weltblocker verhindert den Treffer.
-      if (blockerDistance !== null && blockerDistance < hit.distance - BLOCKER_TOLERANCE_PX) continue;
-      if (hit.distance >= bestDistance) continue;
-      bestSlot = slot;
-      bestDistance = hit.distance;
-      bestX = hit.x;
-      bestY = hit.y;
+      // Ein näherer Weltblocker verhindert den Treffer, gleiche Distanz bleibt durch die
+      // kanonische Zielreihenfolge definiert.
+      if (blockerDistance !== null && blockerDistance < hit.distance - 0.000001) continue;
+      this.sweepCandidates.push({ slot, x: hit.x, y: hit.y, distance: hit.distance });
     }
-    if (!bestSlot) return;
+    this.sortSweepCandidates();
+    for (const candidate of this.sweepCandidates) {
+      if (!this.isCandidateAllowed(record, candidate.slot, deps)) continue;
+      // Das Projectile steht für jede Auflösung am tatsächlichen Trefferpunkt. Bei Penetration
+      // läuft die Kandidatenliste weiter; ein normaler Treffer beendet sie im applyCandidate.
+      const velocityX = record.body.velocity.x;
+      const velocityY = record.body.velocity.y;
+      record.body.reset(candidate.x, candidate.y);
+      record.body.setVelocity(velocityX, velocityY);
+      const outcome = this.applyCandidate(
+        record,
+        {
+          projectileId: record.id,
+          target: candidate.slot.ref,
+          x: candidate.x,
+          y: candidate.y,
+          distanceAlongTravel: candidate.distance,
+          source: 'sweep',
+        },
+        nowMs,
+        deps,
+      );
+      if (outcome === 'consumed') return;
+    }
+  }
 
-    // Das Projectile steht für die Auflösung am tatsächlichen Trefferpunkt.
-    const velocityX = record.body.velocity.x;
-    const velocityY = record.body.velocity.y;
-    record.body.reset(bestX, bestY);
-    record.body.setVelocity(velocityX, velocityY);
-
-    this.applyCandidate(
-      record,
-      { projectileId: record.id, target: bestSlot.ref, x: bestX, y: bestY, distanceAlongTravel: bestDistance, source: 'sweep' },
-      nowMs,
-      deps,
-    );
+  private sortSweepCandidates(): void {
+    for (let index = 1; index < this.sweepCandidates.length; index += 1) {
+      const current = this.sweepCandidates[index];
+      let insertAt = index - 1;
+      while (insertAt >= 0) {
+        const previous = this.sweepCandidates[insertAt];
+        if (previous.distance < current.distance - 0.000001
+          || (Math.abs(previous.distance - current.distance) <= 0.000001
+            && projectileTargetKey(previous.slot.ref) <= projectileTargetKey(current.slot.ref))) break;
+        this.sweepCandidates[insertAt + 1] = previous;
+        insertAt -= 1;
+      }
+      this.sweepCandidates[insertAt + 1] = current;
+    }
   }
 
   private processOverlap(
@@ -237,17 +335,48 @@ export class ProjectileCollisionProcessor {
     deps: ProjectileCollisionDependencies,
   ): void {
     const bounds = record.sprite.getBounds();
+    this.overlapCandidates.length = 0;
     for (let index = 0; index < this.targetCount; index += 1) {
       const slot = this.targetPool[index];
       if (!this.isCandidateAllowed(record, slot, deps, bounds)) continue;
       if (!overlaps(bounds, slot)) continue;
+      this.overlapCandidates.push(slot);
+    }
+    this.sortOverlapCandidates(record);
+    for (const slot of this.overlapCandidates) {
+      if (!this.isCandidateAllowed(record, slot, deps, bounds)) continue;
       const outcome = this.applyCandidate(
         record,
-        { projectileId: record.id, target: slot.ref, x: record.sprite.x, y: record.sprite.y, source: 'overlap' },
+        {
+          projectileId: record.id,
+          target: slot.ref,
+          x: record.sprite.x,
+          y: record.sprite.y,
+          distanceAlongTravel: overlapDistanceAlongTravel(record, slot),
+          source: 'overlap',
+        },
         nowMs,
         deps,
       );
       if (outcome === 'consumed') return;
+    }
+  }
+
+  private sortOverlapCandidates(record: TrackedProjectile): void {
+    for (let index = 1; index < this.overlapCandidates.length; index += 1) {
+      const current = this.overlapCandidates[index];
+      const currentDistance = overlapDistanceAlongTravel(record, current);
+      let insertAt = index - 1;
+      while (insertAt >= 0) {
+        const previous = this.overlapCandidates[insertAt];
+        const previousDistance = overlapDistanceAlongTravel(record, previous);
+        if (previousDistance < currentDistance - 0.000001
+          || (Math.abs(previousDistance - currentDistance) <= 0.000001
+            && projectileTargetKey(previous.ref) <= projectileTargetKey(current.ref))) break;
+        this.overlapCandidates[insertAt + 1] = previous;
+        insertAt -= 1;
+      }
+      this.overlapCandidates[insertAt + 1] = current;
     }
   }
 
@@ -262,6 +391,12 @@ export class ProjectileCollisionProcessor {
     overlapBounds?: { left: number; right: number; top: number; bottom: number },
   ): boolean {
     if (record.provenance.allegiance.ownerId === slot.ownerId) return false;
+
+    if (slot.kind === 'rock'
+      && record.penetratesRocks === true
+      && (slot.obstacleKind === undefined || slot.obstacleKind === 'rock')) return false;
+    if (slot.kind === 'rock' && record.ignoreRockIndex !== undefined
+      && record.ignoreRockIndex === slot.numericId) return false;
 
     const exclusionKey = projectileExclusionKey(slot.ref);
     if (exclusionKey !== null && record.multiExplosionExcludedTargetKeys?.has(exclusionKey)) return false;
@@ -280,8 +415,13 @@ export class ProjectileCollisionProcessor {
     }
 
     // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
-    if (slot.kind !== 'decoy' && deps.targetability
+    if (isCombatTarget(slot.kind) && deps.targetability
       && !deps.targetability.canDamage(record.provenance, slot.ref, record.allowTeamDamage === true)) {
+      return false;
+    }
+
+    if (slot.kind === 'projectile' && deps.targetability
+      && !deps.targetability.canDamageOwner(record.provenance, slot.ownerId, record.allowTeamDamage === true)) {
       return false;
     }
 
@@ -296,9 +436,15 @@ export class ProjectileCollisionProcessor {
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): CandidateOutcome {
+    // World and Projectile refs are candidate-owned here, but their domain mutation remains in
+    // the existing world/external owners until their later cutover. They still claim the nearest
+    // overlap so combat targets behind a world blocker cannot be hit in the same frame.
+    if (!isCombatTarget(candidate.target.kind)) {
+      return candidate.target.kind === 'projectile' ? 'ignored' : 'consumed';
+    }
     const impactPort = deps.directImpact;
     if (!impactPort) return 'ignored';
-    const kind = candidate.target.kind as CollisionTargetKind;
+    const kind = candidate.target.kind;
     const contact = resolveContactMemory(record, kind);
 
     const resolution = impactPort.resolveDirectImpact({ candidate, contact: contact.mode, nowMs });
@@ -324,11 +470,6 @@ export class ProjectileCollisionProcessor {
   }
 }
 
-/** Nur die geraden, schnellen Flugbahnen lösen kontinuierlich auf. */
-function usesContinuousCollision(record: TrackedProjectile): boolean {
-  return record.projectileStyle === 'bullet' || record.projectileStyle === 'awp';
-}
-
 function overlaps(
   bounds: { left: number; right: number; top: number; bottom: number },
   slot: { left: number; right: number; top: number; bottom: number },
@@ -352,16 +493,15 @@ export function resolveContactMemory(
   if (record.energyInjectorPayload) return { mode: 'support', memory: null };
   if (record.penetrationHitIds) return { mode: 'penetration', memory: record.penetrationHitIds };
 
-  const asmdProximityPiercing = kind === 'enemy'
-    && record.projectileStyle === 'energy_ball'
+  const proximityPiercing = kind !== 'decoy'
     && (record.proximityPulse?.radius ?? 0) > 0
     && (record.proximityPulse?.damage ?? 0) > 0;
-  if (kind !== 'decoy' && (record.piercesTargets === true || asmdProximityPiercing)) {
+  if (kind !== 'decoy' && (record.piercesTargets === true || proximityPiercing)) {
     const memory = record.piercingHitIds ??= new Set<string>();
     return { mode: 'pierce', memory };
   }
 
-  if (record.projectileStyle === 'gauss') {
+  if (hasGaussDischarge(record)) {
     const memory = record.gaussHitPlayers ??= new Set<string>();
     return { mode: 'pierce', memory };
   }
@@ -374,4 +514,41 @@ export function resolveContactMemory(
     return { mode: 'flame', memory: record.flamePierceHitIds };
   }
   return { mode: 'single', memory: null };
+}
+
+function createTargetRef(
+  kind: CollisionTargetKind,
+  id: string | number,
+  obstacleKind?: import('../types').PlaceableKind,
+): ProjectileTargetRef {
+  switch (kind) {
+    case 'player': return { kind, id: String(id) };
+    case 'enemy': return { kind, id: String(id) };
+    case 'decoy': return { kind, id: Number(id) };
+    case 'rock': return { kind, id: Number(id), obstacleKind };
+    case 'base': return { kind, id: String(id) };
+    case 'train': return { kind, id: String(id) };
+    case 'construction': return { kind, id: typeof id === 'number' ? id : String(id) };
+    case 'projectile': return { kind, id: Number(id) };
+  }
+}
+
+function targetKindRank(kind: CollisionTargetKind): number {
+  return kind === 'rock' ? 0 : kind === 'construction' ? 1 : 2;
+}
+
+function isCombatTarget(kind: CollisionTargetKind): kind is 'player' | 'enemy' | 'decoy' {
+  return kind === 'player' || kind === 'enemy' || kind === 'decoy';
+}
+
+function overlapDistanceAlongTravel(record: TrackedProjectile, slot: CollisionTargetSlot): number {
+  const dx = record.sprite.x - record.lastX;
+  const dy = record.sprite.y - record.lastY;
+  const length = Math.hypot(dx, dy);
+  if (length <= 0.000001) return 0;
+  return Math.max(0, Math.min(length, ((slot.x - record.lastX) * dx + (slot.y - record.lastY) * dy) / length));
+}
+
+function hasGaussDischarge(record: TrackedProjectile): boolean {
+  return (record.gaussChainRadius ?? 0) > 0 && (record.gaussChainDamageFactor ?? 0) > 0;
 }
