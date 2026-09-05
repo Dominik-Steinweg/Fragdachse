@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `12 – Client Replica` (offen)
-- **Gesamtstatus:** Phase 11 abgeschlossen; Host-Replication projiziert den autoritativen Projectile-State über einen separaten Adapter mit unveränderter Wire-Semantik
+- **Nächste Phase:** `13 – Presentation` (offen)
+- **Gesamtstatus:** Phase 12 abgeschlossen; Client-State und Extrapolation laufen in einer rendererfreien, nichtautoritativen Projectile-Replica
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm run check` sowie den fokussierten Explosion-, Grenade-, Reflection-, Environment-, World-Effect-, Plasma- und Continuation-Suiten (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -50,7 +50,7 @@
 | 9 | ✅ | Complex Projectile State Machines |
 | 10 | ✅ | Sonderfall-Parität Host Gameplay |
 | 11 | ✅ | Host Replication Adapter |
-| 12 | ⬜ | Client Replica |
+| 12 | ✅ | Client Replica |
 | 13 | ⬜ | Presentation |
 | 14 | ⬜ | Composition + Legacy Removal |
 | 15 | ⬜ | Final Cleanup + Gesamtverifikation |
@@ -93,7 +93,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort`, `ProjectileImpactSource`, `ProjectileLifecycleOutcome`, `MiniRocketPickupSpec`, `ProjectileMiniRocketCollectedOutcome`, `ProjectileMiniRocketDestroyedOutcome` (`src/projectile/ProjectileGameplayPort.ts`) |
 | Detonable Combat Read | `ProjectileDetonableReadPort`, `ProjectileDetonableSample` (`src/projectile/ProjectileGameplayPort.ts`) |
 | Replication | `ProjectileReplicationAdapter`, `ProjectileReplicationRecord`, `ProjectileReplicationReadPort` (`src/projectile/ProjectileReplicationAdapter.ts`); Manager bis Phase 14 nur Weiterleitung |
-| Client Replica | — |
+| Client Replica | `ProjectileClientReplica`, `ProjectileClientReplicaState`, `ProjectileClientReplicaFrame`, `ProjectileClientExtrapolatedState` (`src/projectile/ProjectileClientReplica.ts`) |
 | Presentation | — |
 
 Phase-6-Normalisierung: Combat liefert `player`/`enemy`/`decoy`; statische und runtime-gebundene Placeables werden als `rock` mit `obstacleKind`, Basen und Zug als eigene World-Targets geführt. Der Projectile-Owner ergänzt aktive `projectile`-Targets; `projectileTargetPhysicalKey` dedupliziert Rock/Construction.
@@ -110,7 +110,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 12 bearbeiten; Client Replica für Snapshot-State und Extrapolation materialisieren.**
+**Phase 13 bearbeiten; Projectile-Presentation aus dem Manager in einen separaten Presentation-Owner schneiden.**
 
 ---
 

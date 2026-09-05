@@ -56,6 +56,11 @@ import {
 } from '../projectile/ProjectileFlightProcessor';
 import type { ProjectileTimeFieldPort } from '../projectile/ProjectileTimeFieldPort';
 import type { ProjectileReplicationAdapter } from '../projectile/ProjectileReplicationAdapter';
+import {
+  ProjectileClientReplica,
+  type ProjectileClientReplicaFrame,
+  type ProjectileClientReplicaState,
+} from '../projectile/ProjectileClientReplica';
 import type {
   LegacyProjectileExternalInteractionAccess,
   ProjectileDetonationOutcome,
@@ -88,30 +93,6 @@ import {
   resolvePlasmaSwarmHoming,
 } from '../systems/PlasmaCharge';
 
-/** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
-interface ClientProjectileState {
-  serverX: number;
-  serverY: number;
-  vx: number;
-  vy: number;
-  size: number;
-  color: number;
-  receivedAt: number;
-  style?: string;
-  bulletVisualPreset?: BulletVisualPreset;
-  grenadeVisualPreset?: GrenadeVisualPreset;
-  energyBallVariant?: EnergyBallVariant;
-  sporeVisualVariant?: 'spore' | 'spore_void';
-  ownerColor?: number;
-  projectileVisualScale?: number;
-  isDecaying: boolean;
-  velocityDecay: number;
-  miniRocketPhase?: import('../types').MiniRocketFlightPhase;
-  miniRocketCascadeStage?: number;
-  projectileBurnVisualStyle?: GroundFireVisualStyle;
-  burning: boolean;
-}
-
 function resolveBulletVisualPreset(style?: string, preset?: BulletVisualPreset): BulletVisualPreset {
   if (preset) return preset;
   if (style === 'gauss') return 'gauss';
@@ -139,8 +120,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   /** World-lokaler Host-Replication-Adapter; der Manager besitzt weder Codec- noch Resend-State. */
   private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;
 
-  // ── Client-Extrapolation ──────────────────────────────────────────────────
-  private clientProjStates = new Map<number, ClientProjectileState>();
+  /** Rendererfreier Client-Owner für Snapshot-State und Extrapolation. */
+  private readonly clientReplica = new ProjectileClientReplica();
 
   // ── Bullet-Renderer (Enhanced Bullet Visuals) ─────────────────────────────
   private bulletRenderer: BulletRenderer | null = null;
@@ -271,6 +252,10 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   setProjectileReplicationAdapter(adapter: ProjectileReplicationAdapter | null): void {
     this.projectileReplicationAdapter = adapter;
+  }
+
+  getClientReplica(): ProjectileClientReplica {
+    return this.clientReplica;
   }
 
   /** Host: Verarbeitungsreihenfolge der laufenden World; außerhalb einer World leer. */
@@ -2322,7 +2307,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   getDebugActiveProjectileCount(): number {
     return Math.max(
       this.activeProjectiles.size,
-      this.clientProjStates.size,
+      this.clientReplica.size,
       this.clientVisuals.size,
     );
   }
@@ -2425,17 +2410,15 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     }
 
     const now = performance.now();
-    for (const [id, state] of this.clientProjStates) {
-      const extrapolated = this.extrapolateClientProjectileState(state, now);
-      if (!extrapolated) continue;
+    this.clientReplica.readExtrapolated(now, ({ id, state, x, y }) => {
       samples.push({
         id,
-        x: extrapolated.x,
-        y: extrapolated.y,
+        x,
+        y,
         size: state.size,
-        style: state.style as ProjectileStyle | undefined,
+        style: state.style,
       });
-    }
+    });
     return samples;
   }
 
@@ -2468,20 +2451,18 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     }
 
     const now = performance.now();
-    for (const [id, state] of this.clientProjStates) {
-      const extrapolated = this.extrapolateClientProjectileState(state, now);
-      if (!extrapolated) continue;
+    this.clientReplica.readExtrapolated(now, ({ id, state, x, y }) => {
       samples.push({
         id,
-        x: extrapolated.x,
-        y: extrapolated.y,
+        x,
+        y,
         size: state.size,
         color: state.color,
-        style: state.style as ProjectileStyle | undefined,
+        style: state.style,
         energyBallVariant: state.energyBallVariant,
         grenadeVisualPreset: state.grenadeVisualPreset,
       });
-    }
+    });
     return samples;
   }
 
@@ -2560,7 +2541,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     this.pendingProjectileExplosions = [];
     for (const sprite of this.clientVisuals.values()) sprite.destroy();
     this.clientVisuals.clear();
-    this.clientProjStates.clear();
+    this.clientReplica.reset();
   }
 
   /**
@@ -2949,12 +2930,16 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   // ── Client ────────────────────────────────────────────────────────────────
 
   /**
-   * Client: Empfängt neue Server-Snapshots und speichert den State für Extrapolation.
-   * Erstellt/entfernt visuelle Sprites. Positionsupdate passiert in clientExtrapolate().
+   * Übergangsfassade: nimmt den Snapshot in der Replica an und aktualisiert anschließend die
+   * Presentation. Neue Client-Aufrufer sollen die Replica direkt verwenden.
    */
   clientSyncVisuals(data: SyncedProjectile[], localPlayerId?: string): void {
-    const now       = performance.now();
-    const activeIds = new Set(data.map(d => d.id));
+    this.presentClientProjectileFrame(this.clientReplica.sync(data), localPlayerId);
+  }
+
+  /** Aktualisiert die verbleibende Manager-Presentation aus einem rendererfreien Replica-Frame. */
+  presentClientProjectileFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
+    const { projectiles: data, activeIds } = frame;
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
     const leafBlowers = this.leafBlowerRenderer;
@@ -2971,10 +2956,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     const tracerRc = this.tracerRenderer;
     const burningIds = new Set<number>();
 
-    this.cleanupOrphanedClientVisuals(data, activeIds);
+    this.cleanupOrphanedClientVisuals(data, activeIds, frame.removed, frame.newIds);
 
     // Server-State aktualisieren und neue Visuals erstellen
-    for (const proj of data) {
+    for (const update of frame.updates) {
+      const { projectile: proj, previous: prev, velocityFlipped } = update;
       const isBullet = proj.style === 'bullet';
       const isFlame  = proj.style === 'flame';
       const isLeafBlower = proj.style === 'leaf_blower';
@@ -2990,38 +2976,10 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       const isGrenadeP = proj.style === 'grenade';
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
 
-      // Bounce-Erkennung: Velocity-Richtungswechsel zwischen zwei Server-Snapshots
-      const prev = this.clientProjStates.get(proj.id);
-      const velocityFlipped = prev && (isBullet || isAwpP || isGaussP) &&
-        (prev.vx * proj.vx < -1 || prev.vy * proj.vy < -1);
       // Tracer-Spawn nach Abpraller zurücksetzen (vor dem Tracer-Update weiter unten)
       if (velocityFlipped && tracerRc && tracerRc.has(proj.id)) {
         tracerRc.notifyBounce(proj.id, proj.x, proj.y);
       }
-
-      // Extrapolations-State speichern/aktualisieren
-      this.clientProjStates.set(proj.id, {
-        serverX: proj.x,
-        serverY: proj.y,
-        vx: proj.vx,
-        vy: proj.vy,
-        size: proj.size,
-        color: proj.color,
-        receivedAt: now,
-        style: proj.style,
-        bulletVisualPreset: proj.bulletVisualPreset,
-        grenadeVisualPreset: proj.grenadeVisualPreset,
-        energyBallVariant: proj.energyBallVariant,
-        sporeVisualVariant: proj.sporeVisualVariant,
-        ownerColor: proj.ownerColor,
-        projectileVisualScale: proj.projectileVisualScale,
-        isDecaying: isFlame || isLeafBlower,
-        velocityDecay: proj.velocityDecay ?? 1,
-        miniRocketPhase: proj.miniRocketPhase,
-        miniRocketCascadeStage: proj.miniRocketCascadeStage,
-        projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
-        burning: proj.burning === true,
-      });
 
       if (!prev && !proj.suppressSpawnFx) {
         const ownerPos = this.ownerPositionProvider?.(proj.ownerId) ?? null;
@@ -3189,7 +3147,12 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    * nicht mehr enthalten sind. Spielt dabei (wo vorhanden) Impact-Effekte ab – für Hydra inkl.
    * Split-Erkennung anhand neu eingetroffener, unterdrückter Kind-Projektile gleicher Farbe/Nähe.
    */
-  private cleanupOrphanedClientVisuals(data: SyncedProjectile[], activeIds: Set<number>): void {
+  private cleanupOrphanedClientVisuals(
+    data: readonly SyncedProjectile[],
+    activeIds: ReadonlySet<number>,
+    removedStates: ReadonlyMap<number, ProjectileClientReplicaState>,
+    newProjectileIds: ReadonlySet<number>,
+  ): void {
     const renderer  = this.bulletRenderer;
     const flames    = this.flameRenderer;
     const leafBlowers = this.leafBlowerRenderer;
@@ -3206,23 +3169,19 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     const tracerRc = this.tracerRenderer;
     const incomingHydras = data.filter((proj) => proj.style === 'hydra');
     const newIncomingHydraIds = new Set(
-      incomingHydras
-        .filter((proj) => !this.clientProjStates.has(proj.id))
-        .map((proj) => proj.id),
+      incomingHydras.filter((proj) => newProjectileIds.has(proj.id)).map((proj) => proj.id),
     );
 
     for (const [id, sprite] of this.clientVisuals) {
       if (!activeIds.has(id)) {
         sprite.destroy();
         this.clientVisuals.delete(id);
-        this.clientProjStates.delete(id);
       }
     }
     if (renderer) {
       for (const id of renderer.getActiveIds()) {
         if (!activeIds.has(id)) {
           renderer.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3230,7 +3189,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of flames.getActiveIds()) {
         if (!activeIds.has(id)) {
           flames.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3238,7 +3196,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of leafBlowers.getActiveIds()) {
         if (!activeIds.has(id)) {
           leafBlowers.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3246,7 +3203,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of rockets.getActiveIds()) {
         if (!activeIds.has(id)) {
           rockets.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3254,38 +3210,35 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of fireballs.getActiveIds()) {
         if (!activeIds.has(id)) {
           fireballs.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
     if (spores) {
       for (const id of spores.getActiveIds()) {
         if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
+          const state = removedStates.get(id);
           if (state?.style === 'spore') {
             spores.playImpact(state.serverX, state.serverY, state.color, Math.max(state.size / 16, 0.9));
           }
           spores.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
     if (energyBalls) {
       for (const id of energyBalls.getActiveIds()) {
         if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
+          const state = removedStates.get(id);
           if (state?.style === 'energy_ball') {
             energyBalls.playImpact(state.serverX, state.serverY, state.color, state.energyBallVariant, state.size / 16);
           }
           energyBalls.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
     if (hydras) {
       for (const id of hydras.getActiveIds()) {
         if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
+          const state = removedStates.get(id);
           if (state?.style === 'hydra') {
             const splitChildren = incomingHydras
               .filter((proj) => newIncomingHydraIds.has(proj.id) && proj.suppressSpawnFx)
@@ -3299,7 +3252,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
             }
           }
           hydras.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3307,7 +3259,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of grenades.getActiveIds()) {
         if (!activeIds.has(id)) {
           grenades.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3315,7 +3266,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of holyGrenades.getActiveIds()) {
         if (!activeIds.has(id)) {
           holyGrenades.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3323,19 +3273,17 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of tlPucks.getActiveIds()) {
         if (!activeIds.has(id)) {
           tlPucks.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
     if (teslaBolts) {
       for (const id of teslaBolts.getActiveIds()) {
         if (!activeIds.has(id)) {
-          const state = this.clientProjStates.get(id);
+          const state = removedStates.get(id);
           if (state?.style === 'tesla_bolt') {
             teslaBolts.playImpact(state.serverX, state.serverY, state.size, state.color);
           }
           teslaBolts.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3343,7 +3291,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       for (const id of bfgR.getActiveIds()) {
         if (!activeIds.has(id)) {
           bfgR.destroyVisual(id);
-          this.clientProjStates.delete(id);
         }
       }
     }
@@ -3367,11 +3314,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     const flames   = this.flameRenderer;
     const leafBlowers = this.leafBlowerRenderer;
 
-    for (const [id, state] of this.clientProjStates) {
-      const extrapolated = this.extrapolateClientProjectileState(state, now);
-      if (!extrapolated) continue;
-
-      const { x: ex, y: ey, velocityX, velocityY } = extrapolated;
+    this.clientReplica.readExtrapolated(now, ({ id, state, x: ex, y: ey, velocityX, velocityY }) => {
 
       const bfgRe = this.bfgRenderer;
       if (state.style === 'bfg' && bfgRe && bfgRe.has(id)) {
@@ -3433,7 +3376,7 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         tracerRe.updateTracer(id, ex, ey, velocityX, velocityY);
       }
       this.projectileBurnRenderer?.sync(id, ex, ey, state.size, state.burning, true, state.projectileBurnVisualStyle);
-    }
+    });
   }
 
   private hasVisibleProjectileBurn(proj: TrackedProjectile): boolean {
@@ -3443,33 +3386,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         && (proj.supplementalBurnOnHit?.damagePerTick ?? 0) > 0);
   }
 
-  private extrapolateClientProjectileState(
-    state: ClientProjectileState,
-    now: number,
-  ): { x: number; y: number; velocityX: number; velocityY: number } | null {
-    const dt = (now - state.receivedAt) / 1000;
-    if (dt <= 0) return null;
-
-    if (state.isDecaying) {
-      const decay = Phaser.Math.Clamp(state.velocityDecay, 0.001, 1);
-      const lnDecay = Math.log(decay);
-      const integralFactor = (1 - Math.pow(decay, dt)) / (-lnDecay);
-      const decayFactor = Math.pow(decay, dt);
-      return {
-        x: state.serverX + state.vx * integralFactor,
-        y: state.serverY + state.vy * integralFactor,
-        velocityX: state.vx * decayFactor,
-        velocityY: state.vy * decayFactor,
-      };
-    }
-
-    return {
-      x: state.serverX + state.vx * dt,
-      y: state.serverY + state.vy * dt,
-      velocityX: state.vx,
-      velocityY: state.vy,
-    };
-  }
 }
 
 function resolveProjectileCollisionMode(cfg: ProjectileSpawnConfig): ProjectileCollisionMode {

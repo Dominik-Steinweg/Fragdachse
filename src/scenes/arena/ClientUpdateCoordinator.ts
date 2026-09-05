@@ -407,7 +407,8 @@ export class ClientUpdateCoordinator {
 
       if (this.performanceMetricsEnabled) playersMs = performance.now() - playersStartedAt;
       const effectsStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-      this.ctx.projectileManager.clientSyncVisuals(state.projectiles, bridge.getLocalPlayerId());
+      const projectileReplicaFrame = this.ctx.projectileManager.getClientReplica().sync(state.projectiles);
+      this.ctx.projectileManager.presentClientProjectileFrame(projectileReplicaFrame, bridge.getLocalPlayerId());
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
       this.ctx.smokeSystem.syncVisuals(state.smokes);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
