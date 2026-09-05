@@ -3,16 +3,12 @@ import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import {
   DEPTH,
   MUZZLE_PROJECTILE_FALLBACK_BACKTRACK,
-  PROJECTILE_NET_LONG_LIVED_AGE_MS,
-  PROJECTILE_NET_REFRESH_CYCLE_TICKS,
-  PROJECTILE_NET_STATIC_RESEND_TICKS,
   getTopDownMuzzleOrigin,
   getTopDownMuzzleOriginFromVector,
 } from '../config';
-import { encodeProjectileDynamic, encodeProjectileStatic } from '../network/projectileSnapshotCodec';
 import type { ShadowProjectileSample } from '../effects/ShadowConfig';
 import type { ProjectileLightSample } from '../effects/LightingConfig';
-import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, SyncedProjectileSnapshot, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
+import type { BulletVisualPreset, GrenadeVisualPreset, GroundFireVisualStyle, PlaceableKind, TrackedProjectile, SyncedProjectile, ProjectileSpawnConfig, ProjectileHomingConfig, EnergyBallVariant, ProjectileStyle, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
 import type {
   HomingLineOfFireChecker,
   HomingTargetProvider,
@@ -59,6 +55,7 @@ import {
   type ProjectileCoreStageResult,
 } from '../projectile/ProjectileFlightProcessor';
 import type { ProjectileTimeFieldPort } from '../projectile/ProjectileTimeFieldPort';
+import type { ProjectileReplicationAdapter } from '../projectile/ProjectileReplicationAdapter';
 import type {
   LegacyProjectileExternalInteractionAccess,
   ProjectileDetonationOutcome,
@@ -139,16 +136,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private clientVisuals = new Map<number, Phaser.GameObjects.Shape>(); // Client: Visuals (ball-Stil)
   private readonly scratchPoints: Phaser.Math.Vector2[] = [];
 
-  // ── Host-Netzwerk-Snapshot ────────────────────────────────────────────────
-  // Nur die Statik ist zustandsbehaftet, und zwar bewusst ohne Wertecache: die Werte sind
-  // unveraenderlich und werden bei jedem Senden frisch aus dem TrackedProjectile gebaut. Der Eintrag
-  // haelt lediglich fest, wie oft der Block noch wiederholt werden muss; seine blosse Existenz
-  // bedeutet "Client kennt die Statik bereits".
-  private readonly netStaticResendLeft = new Map<number, number>();
-  /** Wiederverwendetes Scratch-Set der IDs des laufenden Snapshots. */
-  private readonly netSeenIds = new Set<number>();
-  private netRefreshCursor = 0;
-  private forceFullNetSnapshot = false;
+  /** World-lokaler Host-Replication-Adapter; der Manager besitzt weder Codec- noch Resend-State. */
+  private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;
 
   // ── Client-Extrapolation ──────────────────────────────────────────────────
   private clientProjStates = new Map<number, ClientProjectileState>();
@@ -278,6 +267,10 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         : null,
     );
     if (this.hostFrameNowMs !== null) owner?.setHostFrameTime?.(this.hostFrameNowMs);
+  }
+
+  setProjectileReplicationAdapter(adapter: ProjectileReplicationAdapter | null): void {
+    this.projectileReplicationAdapter = adapter;
   }
 
   /** Host: Verarbeitungsreihenfolge der laufenden World; außerhalb einer World leer. */
@@ -2544,12 +2537,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
    */
   releaseWorldProjectileState(): void {
     this.activeBurningProjectileIds.clear();
-    // Ohne diesen Reset traegt der Statik-Zustand der Vorrunde in die neue hinein und der Client
-    // bekaeme fuer wiederverwendete Snapshot-Slots nie wieder einen Statik-Block.
-    this.netStaticResendLeft.clear();
-    this.netSeenIds.clear();
-    this.netRefreshCursor = 0;
-    this.forceFullNetSnapshot = false;
+    this.projectileReplicationAdapter?.reset();
+    this.projectileReplicationAdapter = null;
     this.shadowSamples.length = 0;
     this.lightSamples.length = 0;
     this.bulletRenderer?.destroyAll();
@@ -2950,119 +2939,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   /** Host-only: der naechste Netzwerk-Snapshot traegt die Statik aller aktiven Projektile. */
   requestFullNetSnapshot(): void {
-    this.forceFullNetSnapshot = true;
+    this.projectileReplicationAdapter?.requestFullSnapshot();
   }
 
-  /**
-   * Host: kompakten Netzwerk-Snapshot nur bei einem tatsächlichen Network-Tick bauen.
-   *
-   * Der Dynamik-Strom `u` enthält IMMER jedes aktive Projektil vollständig; nur der Statik-Strom `s`
-   * ist selektiv. Daraus folgen zwei Invarianten, auf die sich der Client verlässt:
-   *  - Solange irgendein Projektil aktiv ist, ist `u` nicht leer. `null` heisst deshalb eindeutig
-   *    "keine aktiven Projektile" und nicht "kein Update" – exakt die frühere Semantik, in der
-   *    `payload.j` bei leerer Liste wegfiel.
-   *  - Bei `f === 1` deckt `s` jede ID in `u` ab. Ein Latejoiner kann den Bootstrap damit ohne
-   *    jeden Vorzustand auflösen; die Statiken kommen aus dem lebenden TrackedProjectile, nie aus
-   *    einem Host-Cache.
-   */
-  getNetSnapshot(): SyncedProjectileSnapshot | null {
-    const full = this.forceFullNetSnapshot;
-    this.forceFullNetSnapshot = false;
-
-    const refreshIds = full ? null : this.collectStaticRefreshIds();
-    const s: Array<number | string> = [];
-    const u: Array<number | string> = [];
-    const seen = this.netSeenIds;
-    seen.clear();
-
-    for (const p of this.activeProjectiles) {
-      seen.add(p.id);
-      const resendLeft = this.netStaticResendLeft.get(p.id);
-      if (resendLeft === undefined) {
-        // Erstes Auftauchen: Statik senden und für die nächsten Ticks zur Wiederholung vormerken.
-        this.netStaticResendLeft.set(p.id, PROJECTILE_NET_STATIC_RESEND_TICKS - 1);
-        this.encodeStaticFor(s, p);
-      } else if (resendLeft > 0) {
-        this.netStaticResendLeft.set(p.id, resendLeft - 1);
-        this.encodeStaticFor(s, p);
-      } else if (full || refreshIds?.has(p.id)) {
-        this.encodeStaticFor(s, p);
-      }
-
-      encodeProjectileDynamic(u, {
-        id:   p.id,
-        x:    Math.round(p.sprite.x),
-        y:    Math.round(p.sprite.y),
-        vx:   Math.round(p.body.velocity.x),
-        vy:   Math.round(p.body.velocity.y),
-        size: Math.round(p.sprite.displayWidth),
-        miniRocketPhase: p.miniRocketPhase,
-        miniRocketCascadeStage: (p.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
-          ? p.miniRocketExplosionIndex
-          : undefined,
-        projectileBurnVisualStyle: p.projectileBurnVisualStyle,
-        burning: this.hasVisibleProjectileBurn(p) || undefined,
-      });
-    }
-
-    // Despawn laeuft ueber Abwesenheit aus `u`; das hier ist der einzige Aufraeumpfad fuer den
-    // Statik-Zustand und braucht deshalb keinen Hook in removeActiveProjectile(). Massgeblich ist
-    // `activeProjectiles`, nicht `projectilesById`: ein zum Abbau vorgemerktes Projektil verlaesst
-    // die Aktivmenge sofort, bleibt aber bis zum verzoegerten Cleanup in der Id-Map.
-    if (this.netStaticResendLeft.size > seen.size) {
-      for (const id of this.netStaticResendLeft.keys()) {
-        if (!seen.has(id)) this.netStaticResendLeft.delete(id);
-      }
-    }
-
-    if (u.length === 0 && !full) return null;
-    return full ? { s, u, f: 1 } : { s, u };
-  }
-
-  private encodeStaticFor(out: Array<number | string>, p: TrackedProjectile): void {
-    encodeProjectileStatic(out, {
-      id:      p.id,
-      ownerId: p.ownerId,
-      color:   p.color,
-      allowTeamDamage: p.allowTeamDamage,
-      ownerColor: p.ownerColor,
-      visualMuzzleOrigin: p.visualMuzzleOrigin,
-      projectileVisualScale: p.projectileVisualScale,
-      smokeTrailColor: p.smokeTrailColor,
-      style:   p.projectileStyle,
-      sporeVisualVariant: p.sporeVisualVariant,
-      bulletVisualPreset: p.bulletVisualPreset,
-      grenadeVisualPreset: p.grenadeVisualPreset,
-      energyBallVariant: p.energyBallVariant,
-      velocityDecay: p.velocityDecay,
-      tracer:  p.tracerConfig,
-      shotAudioKey: p.shotAudioKey,
-      suppressSpawnFx: p.suppressSpawnFx,
-    });
-  }
-
-  /**
-   * Rollierender Statik-Refresh: pro Tick ein Bruchteil der langlebigen Projektile. Kurzlebige
-   * bleiben aussen vor – sie sterben vor dem naechsten Zyklus, und ein kurz fehlendes Bullet ist
-   * kosmetisch, waehrend eine sekundenlang unsichtbare Granate ein echter Fehler waere.
-   */
-  private collectStaticRefreshIds(): Set<number> | null {
-    const now = Date.now();
-    const candidates: number[] = [];
-    for (const p of this.activeProjectiles) {
-      if (now - p.createdAt >= PROJECTILE_NET_LONG_LIVED_AGE_MS) candidates.push(p.id);
-    }
-    if (candidates.length === 0) {
-      this.netRefreshCursor = 0;
-      return null;
-    }
-    const perTick = Math.ceil(candidates.length / PROJECTILE_NET_REFRESH_CYCLE_TICKS);
-    const ids = new Set<number>();
-    for (let i = 0; i < perTick; i++) {
-      ids.add(candidates[(this.netRefreshCursor + i) % candidates.length]);
-    }
-    this.netRefreshCursor = (this.netRefreshCursor + perTick) % candidates.length;
-    return ids;
+  getNetSnapshot() {
+    return this.projectileReplicationAdapter?.getSnapshot(this.hostFrameNowMs ?? Date.now()) ?? null;
   }
 
   // ── Client ────────────────────────────────────────────────────────────────

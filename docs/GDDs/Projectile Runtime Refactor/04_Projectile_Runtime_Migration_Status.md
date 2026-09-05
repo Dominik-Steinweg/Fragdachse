@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `11 – Host Replication Adapter und Wire-Semantik` (offen)
-- **Gesamtstatus:** Phase 10 abgeschlossen; autoritatives Host-Gameplay nutzt semantische Projectile-Quellen, Lifecycle-Outcomes und einen schmalen Detonable-Read-Port
+- **Nächste Phase:** `12 – Client Replica` (offen)
+- **Gesamtstatus:** Phase 11 abgeschlossen; Host-Replication projiziert den autoritativen Projectile-State über einen separaten Adapter mit unveränderter Wire-Semantik
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm run check` sowie den fokussierten Explosion-, Grenade-, Reflection-, Environment-, World-Effect-, Plasma- und Continuation-Suiten (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -49,7 +49,7 @@
 | 8 | ✅ | Explosion / Domain Effects / Grenades |
 | 9 | ✅ | Complex Projectile State Machines |
 | 10 | ✅ | Sonderfall-Parität Host Gameplay |
-| 11 | ⬜ | Host Replication Adapter |
+| 11 | ✅ | Host Replication Adapter |
 | 12 | ⬜ | Client Replica |
 | 13 | ⬜ | Presentation |
 | 14 | ⬜ | Composition + Legacy Removal |
@@ -63,7 +63,7 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge, Interaction-Stage und Mini-Rocket-State in `WorldProjectileRuntime` liegen.
+- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle- und Presentation-Reste weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge, Interaction-Stage und Mini-Rocket-State in `WorldProjectileRuntime` liegen.
 - [Transition] `ProjectileStageContract` benennt die Spawn-Reentrancy: bestehende Plasma-Swarm-Interaction-Spawns dürfen im selben Collision-Stage verarbeitet werden; Hydra-/sonstige Child-Splits folgen der Next-Stage-Policy.
 - [Transition] `HostUpdateCoordinator` ist der schmale `ProjectileExplosionResolutionPort`-Adapter: Combat-AoE läuft über `ProjectileCombatPort`, Environment-/Fire-/Knockback-/World-Effect-Owner bleiben außerhalb der Projectile-Simulation; Standalone-Explosionen werden dort gepuffert und nicht in die Runtime-Registry aufgenommen.
 - [Transition] `ProjectileIdentityScope` gehört zur `WorldLifecycle`-Lifetime und wird an jede lokale `WorldRuntime`-Materialisierung derselben `worldRevision` weitergereicht; er endet erst mit `endInstance`.
@@ -92,7 +92,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Complex Projectile State | `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `ProjectileStageSpawnPolicy`, `PROJECTILE_STAGE_SPAWN_CONTRACT` (`src/projectile/`) |
 | Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort`, `ProjectileImpactSource`, `ProjectileLifecycleOutcome`, `MiniRocketPickupSpec`, `ProjectileMiniRocketCollectedOutcome`, `ProjectileMiniRocketDestroyedOutcome` (`src/projectile/ProjectileGameplayPort.ts`) |
 | Detonable Combat Read | `ProjectileDetonableReadPort`, `ProjectileDetonableSample` (`src/projectile/ProjectileGameplayPort.ts`) |
-| Replication | — |
+| Replication | `ProjectileReplicationAdapter`, `ProjectileReplicationRecord`, `ProjectileReplicationReadPort` (`src/projectile/ProjectileReplicationAdapter.ts`); Manager bis Phase 14 nur Weiterleitung |
 | Client Replica | — |
 | Presentation | — |
 
@@ -110,7 +110,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 11 bearbeiten; Host-Replication-Adapter und unveränderte Wire-Semantik materialisieren.**
+**Phase 12 bearbeiten; Client Replica für Snapshot-State und Extrapolation materialisieren.**
 
 ---
 

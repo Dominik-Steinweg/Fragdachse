@@ -94,6 +94,7 @@ import { ProjectileManager } from '../../src/entities/ProjectileManager';
 import type { ProjectileSpawnConfig, TrackedProjectile } from '../../src/types';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
+import { ProjectileReplicationAdapter } from '../../src/projectile/ProjectileReplicationAdapter';
 
 /**
  * Bindet den Manager an eine echte world-owned Registry und nimmt vorbereitete Records auf.
@@ -123,6 +124,7 @@ function bindProjectileRegistry(
     identityScope: new ProjectileIdentityScope(1),
     hostNowMs: () => 0,
   });
+  manager.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
   for (const record of records) {
     runtime.spawnLegacyProjectile(0, 0, 0, record.ownerId, {} as ProjectileSpawnConfig);
   }

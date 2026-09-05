@@ -6,6 +6,7 @@ import {
   WorldCombatGameplayBinding,
 } from '../../world/WorldCombatGameplayBinding';
 import { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
+import { ProjectileReplicationAdapter } from '../../projectile/ProjectileReplicationAdapter';
 import { resolveObstacleDamage, resolveTargetFootprint } from './arenaWorldQueries';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedProjectile } from '../../types';
@@ -37,6 +38,7 @@ export function composeWorldProjectileRuntime(
       if (gameplay.projectiles === projectileRuntime) gameplay.projectiles = null;
     },
   });
+  ctx.projectileManager.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(projectileRuntime));
   gameplay.projectiles = projectileRuntime;
   worldRuntime.bind(projectileRuntime);
 }

@@ -72,6 +72,10 @@ import type {
 } from './ProjectileExplosionPort';
 import type { ProjectileDetonableReadPort, ProjectileDetonableSample } from './ProjectileGameplayPort';
 import type {
+  ProjectileReplicationReadPort,
+  ProjectileReplicationRecord,
+} from './ProjectileReplicationAdapter';
+import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileImpactCandidate,
   ProjectileTargetabilityPort,
@@ -219,6 +223,7 @@ export class WorldProjectileRuntime implements
   ProjectileEnvironmentInteractionPort,
   ProjectileExplosionContinuationPort,
   ProjectileDetonableReadPort,
+  ProjectileReplicationReadPort,
   WorldScopedBinding {
   private readonly projectiles: ProjectileStore;
   private readonly flightProcessor = new ProjectileFlightProcessor();
@@ -297,6 +302,50 @@ export class WorldProjectileRuntime implements
   /** Anzahl der aktuell wirksamen Projectiles dieser World. */
   get activeCount(): number {
     return this.projectiles.activeCount;
+  }
+
+  /** Liefert ausschließlich die Client-Projektion; interne Runtime-Records verlassen die World nicht. */
+  readProjectileReplication(sink: (record: ProjectileReplicationRecord) => void): void {
+    for (const projectile of this.projectiles.activeRecords) {
+      const replication: ProjectileReplicationRecord = {
+        id: projectile.id,
+        createdAt: projectile.createdAt,
+        static: {
+          id: projectile.id,
+          ownerId: projectile.ownerId,
+          color: projectile.color,
+          allowTeamDamage: projectile.allowTeamDamage,
+          ownerColor: projectile.ownerColor,
+          visualMuzzleOrigin: projectile.visualMuzzleOrigin,
+          projectileVisualScale: projectile.projectileVisualScale,
+          smokeTrailColor: projectile.smokeTrailColor,
+          style: projectile.projectileStyle,
+          sporeVisualVariant: projectile.sporeVisualVariant,
+          bulletVisualPreset: projectile.bulletVisualPreset,
+          grenadeVisualPreset: projectile.grenadeVisualPreset,
+          energyBallVariant: projectile.energyBallVariant,
+          velocityDecay: projectile.velocityDecay,
+          tracer: projectile.tracerConfig,
+          shotAudioKey: projectile.shotAudioKey,
+          suppressSpawnFx: projectile.suppressSpawnFx,
+        },
+        dynamic: {
+          id: projectile.id,
+          x: Math.round(projectile.sprite.x),
+          y: Math.round(projectile.sprite.y),
+          vx: Math.round(projectile.body.velocity.x),
+          vy: Math.round(projectile.body.velocity.y),
+          size: Math.round(projectile.sprite.displayWidth),
+          miniRocketPhase: projectile.miniRocketPhase,
+          miniRocketCascadeStage: (projectile.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
+            ? projectile.miniRocketExplosionIndex
+            : undefined,
+          projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
+          burning: this.hasVisibleProjectileBurn(projectile) || undefined,
+        },
+      };
+      sink(replication);
+    }
   }
 
   spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {
@@ -837,6 +886,13 @@ export class WorldProjectileRuntime implements
     projectile.lockedTargetId = null;
     projectile.lockedTargetType = undefined;
     projectile.lastHomingSearchAt = undefined;
+  }
+
+  private hasVisibleProjectileBurn(projectile: TrackedProjectile): boolean {
+    if (projectile.isFlame || projectile.isGrenade) return false;
+    return ((projectile.burnDurationMs ?? 0) > 0 && (projectile.burnDamagePerTick ?? 0) > 0)
+      || ((projectile.supplementalBurnOnHit?.durationMs ?? 0) > 0
+        && (projectile.supplementalBurnOnHit?.damagePerTick ?? 0) > 0);
   }
 
   private updateProjectileHoming(
