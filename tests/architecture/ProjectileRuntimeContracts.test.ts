@@ -40,6 +40,16 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(binding).not.toContain('Date.now');
   });
 
+  it('keeps Hydra split authority in the world owner with an explicit next-stage queue', () => {
+    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
+    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
+
+    expect(binding).not.toContain('trySplitHydraProjectile');
+    expect(binding).toContain('queueHydraSplit');
+    expect(runtime).toContain('pendingNextStageSpawns');
+    expect(runtime).toContain('readyAfterCompletedStages');
+  });
+
   it('keeps presentation, replica and replication state world-scoped', () => {
     const runtime = read('src/projectile/WorldProjectileRuntime.ts');
     const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');

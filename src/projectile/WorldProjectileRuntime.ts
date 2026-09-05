@@ -112,6 +112,23 @@ interface ReflectedProjectileOptions {
   readonly nowMs: number;
 }
 
+/**
+ * Ein Split-Kind wird erst nach Abschluss der laufenden Interaction-Stage materialisiert.
+ * Die Queue transportiert weiterhin denselben semantischen Spawn-Pfad und die Provenance des
+ * Eltern-Projectiles; sie ist kein zweiter Store und keine öffentliche Runtime-Fassade.
+ */
+interface PendingNextStageProjectileSpawn {
+  readonly x: number;
+  readonly y: number;
+  readonly angle: number;
+  readonly ownerId: string;
+  readonly cfg: ProjectileSpawnConfig;
+  readonly provenance: ProjectileProvenance;
+  readonly hostNowMs: number;
+  /** Number of completed interaction stages after which this spawn is eligible. */
+  readonly readyAfterCompletedStages: number;
+}
+
 export interface ProjectileHostStageResult {
   /** Typed requests; domain fan-out is resolved after the post-projectile stage. */
   projectileExplosions: ProjectileExplosionRequest[];
@@ -191,6 +208,14 @@ export interface ProjectileRuntimeOwnerPort {
   ): ProjectileId;
   /** Entfernt ein Projectile vollständig; unbekannte Ids sind wirkungslos. */
   destroyProjectile(id: ProjectileId): void;
+  /** Queues a Hydra split without exposing Runtime records to the physics binding. */
+  queueHydraSplit?(
+    projectileId: ProjectileId,
+    impactX: number,
+    impactY: number,
+    outgoingVx: number,
+    outgoingVy: number,
+  ): boolean;
   /** Beendet Identity und Aktivmenge und gibt die Ressourcen frei; der Step-Eintrag bleibt. */
   releaseProjectile(record: ProjectileRuntimeRecord): void;
   /** Host Frame: deterministische Flight-/Lifetime-/Homing-Verarbeitung. */
@@ -293,6 +318,10 @@ export class WorldProjectileRuntime implements
   private readonly physicsBinding: ProjectilePhysicsBinding;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
+  private projectileTimeFieldPort: ProjectileTimeFieldPort | null = null;
+  private readonly pendingNextStageSpawns: PendingNextStageProjectileSpawn[] = [];
+  private completedInteractionStages = 0;
+  private hasStartedInteractionStage = false;
   private hostFrameNowMs = 0;
   private interactionNowMs = 0;
   private destroyed = false;
@@ -312,6 +341,9 @@ export class WorldProjectileRuntime implements
       dropProjectileStepEntryAt: (index) => runtime.projectiles.dropStepEntryAt(index),
       spawnProjectileConfig: (x, y, angle, ownerId, cfg) => runtime.spawnProjectileConfig(x, y, angle, ownerId, cfg),
       destroyProjectile: (id) => runtime.destroyProjectile(id),
+      queueHydraSplit: (projectileId, impactX, impactY, outgoingVx, outgoingVy) => (
+        runtime.queueHydraSplit(projectileId, impactX, impactY, outgoingVx, outgoingVy)
+      ),
       releaseProjectile: (record) => runtime.releaseProjectile(record),
       runHostProjectileStage: (deltaMs, nowMs) => runtime.runHostProjectileStage(deltaMs, nowMs),
       resumeMiniRocketExplosion: (projectileId) => runtime.resumeMiniRocketExplosion(projectileId),
@@ -586,6 +618,177 @@ export class WorldProjectileRuntime implements
     this.projectiles.dropStepEntryAt(index);
   }
 
+  /**
+   * Owner-controlled deferred cleanup for technical contacts.
+   *
+   * The record remains addressable until the normal teardown pass, but leaves the active set
+   * immediately so no later interaction in the current host frame can consume it again.
+   */
+  private queueProjectileDestroy(id: ProjectileId): void {
+    const record = this.projectiles.getById(id);
+    if (!record || record.pendingDestroy) return;
+    record.pendingDestroy = true;
+    record.body.setVelocity(0, 0);
+    record.body.enable = false;
+    this.projectiles.deactivate(record);
+  }
+
+  /**
+   * Resolves a Hydra impact at the authoritative World boundary.
+   *
+   * The Physics Binding supplies only the contact point and post-bounce velocity. Split limits,
+   * range, child payload, provenance and deferred materialization are all owner decisions.
+   */
+  queueHydraSplit(
+    projectileId: ProjectileId,
+    impactX: number,
+    impactY: number,
+    outgoingVx: number,
+    outgoingVy: number,
+  ): boolean {
+    if (this.destroyed) return false;
+    const projectile = this.projectiles.getById(projectileId);
+    if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return false;
+
+    const splitCount = Math.max(0, Math.floor(projectile.splitCount ?? 0));
+    if (splitCount <= 0) return false;
+
+    const nextBounceCount = projectile.bounceCount + 1;
+    const outgoingSpeed = Math.hypot(outgoingVx, outgoingVy);
+    const nowMs = this.hostNowMs();
+    const timeBubbleFactor = clampProjectileTimeFactor(
+      this.projectileTimeFieldPort?.getMovementFactor(
+        impactX,
+        impactY,
+        nowMs,
+        projectile.provenance,
+      ) ?? projectile.timeBubbleFactor ?? 1,
+    );
+    const childBaseSpeed = outgoingSpeed / timeBubbleFactor;
+    const remainingRangePx = this.getRemainingRangeAfterImpact(projectile, impactX, impactY);
+    const childAngles = this.getHydraSplitAngles(
+      Math.atan2(outgoingVy, outgoingVx),
+      splitCount,
+      projectile.splitSpread ?? 0,
+    );
+
+    // Hydra owns the bounce terminal: a failed split is still consumed exactly as before.
+    if (nextBounceCount > projectile.maxBounces
+      || outgoingSpeed <= 0.001
+      || remainingRangePx <= 0.5
+      || childAngles.length === 0) {
+      projectile.bounceCount = projectile.maxBounces + 1;
+      projectile.body.reset(impactX, impactY);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+
+    const splitFactor = projectile.splitFactor ?? 1;
+    const childSize = Math.max(4, (projectile.sprite.displayWidth / splitCount) * splitFactor);
+    const childDamage = Math.max(1, (projectile.damage / splitCount) * splitFactor);
+    const childAdrenalinGain = Math.max(0, (projectile.adrenalinGain / splitCount) * splitFactor);
+    const childLifetime = (remainingRangePx / childBaseSpeed) * 1000;
+    const childProvenance: ProjectileProvenance = {
+      ...projectile.provenance,
+      lineage: {
+        ...projectile.provenance.lineage,
+        parentProjectileId: projectile.id,
+      },
+    };
+
+    projectile.pendingHydraSplit = {
+      x: impactX,
+      y: impactY,
+      angles: childAngles,
+    };
+    this.queueProjectileDestroy(projectile.id);
+
+    for (const childAngle of childAngles) {
+      this.pendingNextStageSpawns.push({
+        x: impactX,
+        y: impactY,
+        angle: childAngle,
+        ownerId: projectile.ownerId,
+        hostNowMs: nowMs,
+        provenance: childProvenance,
+        readyAfterCompletedStages: this.hasStartedInteractionStage
+          ? this.completedInteractionStages
+          : this.completedInteractionStages + 1,
+        cfg: {
+          ...createInheritedProjectilePayload(projectile),
+          speed: childBaseSpeed,
+          size: childSize,
+          damage: childDamage,
+          color: projectile.color,
+          allowTeamDamage: projectile.allowTeamDamage,
+          ignoreBaseCollisions: projectile.ignoreBaseCollisions,
+          ownerColor: projectile.ownerColor,
+          lifetime: childLifetime,
+          maxBounces: projectile.maxBounces,
+          isGrenade: projectile.isGrenade,
+          isTranslocatorPuck: projectile.isTranslocatorPuck,
+          collisionMode: projectile.collisionMode,
+          adrenalinGain: childAdrenalinGain,
+          sourceId: projectile.sourceId,
+          explosion: projectile.explosion,
+          enemyHitExplosion: projectile.enemyHitExplosion,
+          impactCloud: projectile.impactCloud,
+          sporeVisualVariant: projectile.sporeVisualVariant,
+          homing: projectile.splitHoming ?? projectile.homing,
+          projectileVisualScale: projectile.projectileVisualScale,
+          smokeTrailColor: projectile.smokeTrailColor,
+          fuseTime: projectile.fuseTime,
+          grenadeEffect: projectile.grenadeEffect,
+          projectileStyle: projectile.projectileStyle,
+          bulletVisualPreset: projectile.bulletVisualPreset,
+          grenadeVisualPreset: projectile.grenadeVisualPreset,
+          energyBallVariant: projectile.energyBallVariant,
+          tracerConfig: projectile.tracerConfig,
+          detonable: projectile.detonable,
+          detonator: projectile.detonator,
+          rockDamageMult: projectile.rockDamageMult,
+          trainDamageMult: projectile.trainDamageMult,
+          baseDamageMult: projectile.baseDamageMult,
+          isFlame: projectile.isFlame,
+          hitboxGrowRate: projectile.hitboxGrowRate,
+          hitboxMaxSize: projectile.hitboxMaxSize,
+          velocityDecay: projectile.velocityDecay,
+          burnDurationMs: projectile.burnDurationMs,
+          burnDamagePerTick: projectile.burnDamagePerTick,
+          projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
+          leafBlowerMinKnockback: projectile.leafBlowerMinKnockback,
+          leafBlowerMaxKnockback: projectile.leafBlowerMaxKnockback,
+          leafBlowerSelfPush: projectile.leafBlowerSelfPush,
+          isBfg: projectile.isBfg,
+          piercesTargets: projectile.piercesTargets,
+          penetrationCount: projectile.penetrationRemaining,
+          penetrationDamageRetention: projectile.penetrationDamageRetention,
+          penetratesRocks: projectile.penetratesRocks,
+          flamePiercing: projectile.flamePierceHitIds !== undefined,
+          leafBlowerDeflectsProjectiles: projectile.leafBlowerDeflectsProjectiles,
+          proximityPulse: projectile.proximityPulse,
+          gaussChainRadius: projectile.gaussChainRadius,
+          gaussChainDamageFactor: projectile.gaussChainDamageFactor,
+          frictionDelayMs: projectile.frictionDelayMs,
+          airFrictionDecayPerSec: projectile.airFrictionDecayPerSec,
+          bounceFrictionMultiplier: projectile.bounceFrictionMultiplier,
+          stopSpeedThreshold: projectile.stopSpeedThreshold,
+          sourceSlot: projectile.sourceSlot,
+          shotAudioKey: projectile.shotAudioKey,
+          splitCount: projectile.splitCount,
+          splitSpread: projectile.splitSpread,
+          splitFactor: projectile.splitFactor,
+          splitHoming: projectile.splitHoming,
+          initialBounceCount: nextBounceCount,
+          remainingRangePx,
+          suppressSpawnFx: true,
+        },
+      });
+    }
+
+    return true;
+  }
+
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
     this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
@@ -756,6 +959,7 @@ export class WorldProjectileRuntime implements
   }
 
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
+    this.projectileTimeFieldPort = port;
     this.flightProcessor.setTimeFieldPort(port);
     this.physicsBinding.setProjectileTimeFieldPort?.(port);
   }
@@ -828,11 +1032,74 @@ export class WorldProjectileRuntime implements
    */
   runHostInteractionStage(nowMs: number): void {
     if (this.destroyed) return;
+    this.flushPendingNextStageSpawns();
+    this.hasStartedInteractionStage = true;
     this.interactionNowMs = nowMs;
     this.setHostFrameTime(nowMs);
-    this.runBarrierStage(nowMs);
-    this.runDeflectionStage(nowMs);
-    this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+    try {
+      this.runBarrierStage(nowMs);
+      this.runDeflectionStage(nowMs);
+      this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+    } finally {
+      this.completedInteractionStages += 1;
+    }
+  }
+
+  private flushPendingNextStageSpawns(): void {
+    const pendingCount = this.pendingNextStageSpawns.length;
+    let retainedCount = 0;
+    for (let index = 0; index < pendingCount; index += 1) {
+      const pending = this.pendingNextStageSpawns[index];
+      if (pending.readyAfterCompletedStages > this.completedInteractionStages) {
+        this.pendingNextStageSpawns[retainedCount] = pending;
+        retainedCount += 1;
+        continue;
+      }
+      this.spawnResolved(
+        pending.x,
+        pending.y,
+        pending.angle,
+        pending.ownerId,
+        pending.cfg,
+        pending.provenance,
+        pending.hostNowMs,
+      );
+    }
+    if (retainedCount < pendingCount) {
+      this.pendingNextStageSpawns.splice(retainedCount, pendingCount - retainedCount);
+    }
+  }
+
+  private getHydraSplitAngles(baseAngle: number, splitCount: number, splitSpreadDeg: number): number[] {
+    if (splitCount <= 0) return [];
+
+    const half = Math.floor(splitCount / 2);
+    const offsets: number[] = [];
+    if (splitCount % 2 === 1) {
+      for (let index = -half; index <= half; index += 1) offsets.push(index * splitSpreadDeg);
+    } else {
+      for (let index = -half; index <= -1; index += 1) offsets.push(index * splitSpreadDeg);
+      for (let index = 1; index <= half; index += 1) offsets.push(index * splitSpreadDeg);
+    }
+
+    return offsets.map((offsetDeg) => baseAngle + (offsetDeg * Math.PI) / 180);
+  }
+
+  private getRemainingRangeAfterImpact(
+    projectile: ProjectileRuntimeRecord,
+    impactX: number,
+    impactY: number,
+  ): number {
+    const baseRange = projectile.remainingRangePx
+      ?? (Math.max(projectile.initialSpeed ?? Math.hypot(
+        projectile.body.velocity.x,
+        projectile.body.velocity.y,
+      ), 0) * projectile.lifetime) / 1000;
+    const impactDistance = Math.hypot(
+      impactX - projectile.lastX,
+      impactY - projectile.lastY,
+    );
+    return Math.max(0, baseRange - impactDistance);
   }
 
   /**
@@ -1136,6 +1403,9 @@ export class WorldProjectileRuntime implements
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.pendingNextStageSpawns.length = 0;
+    this.completedInteractionStages = 0;
+    this.hasStartedInteractionStage = false;
     for (const record of this.projectiles.stepOrder) {
       this.projectiles.detach(record);
       this.physicsBinding.releaseProjectileResources(record);
@@ -1152,6 +1422,7 @@ export class WorldProjectileRuntime implements
     this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
+    this.projectileTimeFieldPort = null;
     this.projectileReplicationAdapter?.reset();
     this.projectileReplicationAdapter = null;
     this.presentation.releaseWorldPresentation();
@@ -1169,9 +1440,10 @@ export class WorldProjectileRuntime implements
     ownerId: string,
     cfg: ProjectileSpawnConfig,
     provenance: ProjectileProvenance,
+    spawnHostNowMs = this.hostNowMs(),
   ): ProjectileId {
     const id = this.projectiles.allocateId();
-    const record = this.physicsBinding.createProjectile(id, x, y, angle, ownerId, cfg, this.hostNowMs(), provenance);
+    const record = this.physicsBinding.createProjectile(id, x, y, angle, ownerId, cfg, spawnHostNowMs, provenance);
     this.projectiles.insert(record);
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
@@ -1238,6 +1510,10 @@ function createTravelPathEffect(record: ProjectileRuntimeRecord): ProjectileTrav
 
 function burnDps(burn: { damagePerTick: number }): number {
   return burn.damagePerTick * 1000 / BURN_TICK_INTERVAL_MS;
+}
+
+function clampProjectileTimeFactor(value: number): number {
+  return Math.max(0.0001, Math.min(1, value));
 }
 
 function createProjectileProvenance(

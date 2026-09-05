@@ -25,11 +25,11 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** keine (Refactoring abgeschlossen)
-- **Gesamtstatus:** Phase 15 abgeschlossen; WorldProjectileRuntime ist die einzige World-Projectile-Boundary, der Store bleibt owner-intern und Physics-, Replication-, Client- und Presentation-State sind world-lokal komponiert
-- **Baseline:** Final-Gate verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:architecture`, `npm run test:integration`, `npm run test:stress`, `npm run test:balance-lab`, `npm run test:assets` und `git diff --check` (alle grün)
+- **Nächste Phase:** Korrekturphase C2 – technische Kontaktkandidaten und World-Interaction-Authority
+- **Gesamtstatus:** Korrekturschleife aktiv; Phasen 1–15 bleiben abgeschlossen, der technische Endzustand ist wegen Host-/Physics-Authority-Abweichungen wieder offen
+- **Baseline:** Phase-15-Gates waren grün, beweisen aber keine Ownership-Korrektheit; Korrektur-Gates laufen pro Korrekturphase
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
-- **Final-Gate:** grün
+- **Final-Gate:** technisch grün, Gesamt-Abnahme bis C5 ausgesetzt
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
 
 ---
@@ -57,11 +57,25 @@
 
 ---
 
+## 2a. Korrekturphasenfolge
+
+Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand definiert; jede Korrekturphase ist ein zusammenhängender Ownership-Schnitt.
+
+| Korrekturphase | Status | Gegenstand |
+|---|:---:|---|
+| C1 | ✅ | Hydra-/Split-Entscheidung aus dem Physics-Binding gelöst; Child-Spawns explizit in die `next-stage`-Queue gegeben |
+| C2 | ⬜ | Phaser-Kontakte als technische Kandidaten melden; Rock/Base/Train/Support/Explosion nicht mehr im Binding fachlich entscheiden |
+| C3 | ⬜ | Collision-/Interaction-Authority konsolidieren und verbleibende autoritative `projectileStyle`-Verzweigungen entfernen |
+| C4 | ⬜ | World-/Activity-Consumer auf tatsächlich benötigte schmale Ports umstellen; Universal-Forwarder abbauen |
+| C5 | ⬜ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
+
+---
+
 ## 3. Aktive Transitionen / Blocker
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- keine
+- [Transition C2+] Das Binding enthält weiterhin fachliche Rock-/Base-/Train-/Support-/Explosion-/Lifecycle-Entscheidungen; der Forward-Fix folgt erst nach C1.
 
 ---
 
@@ -71,25 +85,19 @@ Nur tatsächliche Namen im Code dokumentieren.
 
 | Contract-Familie | Realisierter Type/API |
 |---|---|
-| Projectile Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` (`src/projectile/`) |
-| World Projectile Runtime / Host Frame | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort` (`src/projectile/`) |
-| Projectile Store / Runtime Record | `ProjectileStore`, `ProjectileIdentityScope`, internes `ProjectileRuntimeRecord` mit kanonischer `provenance` (`src/projectile/ProjectileStore.ts`, `src/types.ts`) |
-| World Physics Binding | `ProjectilePhysicsBindingPort`, `ProjectileRuntimeOwnerPort`, `ProjectilePhysicsBinding`, `ProjectilePresentationPort` (`src/projectile/WorldProjectileRuntime.ts`, `src/projectile/ProjectilePhysicsBinding.ts`, `src/projectile/ProjectilePresentationPort.ts`) |
-| External Interaction | `ProjectileExternalInteractionPort`, `ProjectileDetonationSearchRequest`, `ProjectileDetonationTarget`, `ProjectileDetonationOutcome`, `TranslocatorProjectilePort`, `TranslocatorPuckSpawnRequest` (`src/projectile/ProjectileExternalInteractionPort.ts`) |
-| Read Ports | `ProjectileThreatReadPort`, `ProjectileThreatSample`, `ProjectileDiagnosticsReadPort`, `ProjectileDiagnosticsSummary`, `ProjectilePresentationReadPort` (`src/projectile/ProjectileReadPorts.ts`) |
-| Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileFireTrailCapability`, `ProjectileAwpCorridorCapability`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment` (`src/projectile/ProjectileTravelPort.ts`); `ProjectilePathEffectKind` (`src/types.ts`) |
-| Target / Geometry / Targetability | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileCollisionTarget`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectileCollisionMode` (`src/projectile/ProjectileTargetPort.ts`, `src/types.ts`); Homing-Reads bleiben daneben bestehen |
-| Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution` (`src/projectile/ProjectileInteractionPorts.ts`); `ProjectileExternalInteractionPort.deflectProjectile` für Projectile↔Projectile-Transform |
-| Projectile Combat | `ProjectileCombatPort`, `ProjectileCombatTargetRef`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileCombatExplosionRequest`, `ProjectileCombatExplosionOutcome`, `ProjectileAk47HitContext`, `ProjectileEnergyInjectorImpact`, `ProjectilePlasmaSwarmImpact` (`src/projectile/ProjectileCombatPort.ts`, `src/projectile/ProjectileExplosionPort.ts`) |
-| Domain Effect / Explosion Resolution | `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome`, `ProjectileExplosionContinuationPort` (`src/projectile/ProjectileExplosionPort.ts`); `HostUpdateCoordinator.resolveProjectileExplosion` als Domain-Adapter |
-| Complex Projectile State | `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `ProjectileStageSpawnPolicy`, `PROJECTILE_STAGE_SPAWN_CONTRACT` (`src/projectile/`) |
-| Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort`, `ProjectileImpactSource`, `ProjectileLifecycleOutcome`, `MiniRocketPickupSpec`, `ProjectileMiniRocketCollectedOutcome`, `ProjectileMiniRocketDestroyedOutcome` (`src/projectile/ProjectileGameplayPort.ts`) |
-| Detonable Combat Read | `ProjectileDetonableReadPort`, `ProjectileDetonableSample` (`src/projectile/ProjectileGameplayPort.ts`) |
-| Replication | `ProjectileReplicationAdapter`, `ProjectileReplicationRecord`, `ProjectileReplicationReadPort` (`src/projectile/ProjectileReplicationAdapter.ts`); `WorldProjectileRuntime` ist die world-lokale Composition-Grenze |
-| Client Replica | `ProjectileClientReplica`, `ProjectileClientReplicaState`, `ProjectileClientReplicaFrame`, `ProjectileClientExtrapolatedState` (`src/projectile/ProjectileClientReplica.ts`) |
-| Presentation | `ProjectilePresentationRuntime`, `ProjectilePresentationRenderers` (`src/projectile/ProjectilePresentationRuntime.ts`) |
+| Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` |
+| World / Host / Store | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort`, `ProjectileStore`, `ProjectileIdentityScope`, internes `ProjectileRuntimeRecord` mit `provenance` |
+| Physics Binding | `ProjectilePhysicsBindingPort`, `ProjectileRuntimeOwnerPort`, `ProjectilePhysicsBinding`, `ProjectilePresentationPort` |
+| External / Reads | `ProjectileExternalInteractionPort`, `TranslocatorProjectilePort`, `ProjectileThreatReadPort`, `ProjectileDiagnosticsReadPort`, `ProjectilePresentationReadPort` |
+| Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment`, `ProjectilePathEffectKind` |
+| Target / Geometry | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectileCollisionMode` |
+| Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution`; `deflectProjectile` für Projectile↔Projectile-Transform |
+| Combat / Domain Effects | `ProjectileCombatPort`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome` |
+| Complex State / Lifecycle | `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `ProjectileStageSpawnPolicy`, `PROJECTILE_STAGE_SPAWN_CONTRACT`; WorldRuntime führt die explizite Next-Stage-Queue; `ProjectileImpactSource`, `ProjectileLifecycleOutcome` |
+| Detonable / Replication | `ProjectileDetonableReadPort`, `ProjectileDetonableSample`, `ProjectileReplicationAdapter`, `ProjectileReplicationRecord`, `ProjectileReplicationReadPort` |
+| Client / Presentation | `ProjectileClientReplica`, `ProjectileClientReplicaState`, `ProjectileClientReplicaFrame`, `ProjectileClientExtrapolatedState`, `ProjectilePresentationRuntime`, `ProjectilePresentationRenderers` |
 
-Phase-6-Normalisierung: Combat liefert `player`/`enemy`/`decoy`; statische und runtime-gebundene Placeables werden als `rock` mit `obstacleKind`, Basen und Zug als eigene World-Targets geführt. Der Projectile-Owner ergänzt aktive `projectile`-Targets; `projectileTargetPhysicalKey` dedupliziert Rock/Construction.
+Phase-6-Normalisierung: Combat liefert `player`/`enemy`/`decoy`; Placeables laufen als `rock` mit `obstacleKind`, Basen/Zug als eigene World-Targets. `projectileTargetPhysicalKey` dedupliziert Rock/Construction.
 
 ---
 
@@ -97,13 +105,13 @@ Phase-6-Normalisierung: Combat liefert `player`/`enemy`/`decoy`; statische und r
 
 Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
-- keiner
+- keiner; die genannten Punkte sind planbare Forward-Fixes und kein Architekturblocker.
 
 ---
 
 ## 6. Nächster Schritt
 
-**Projectile Runtime Refactoring abgeschlossen; alle Phasen, Architektur-Ratchets sowie die finalen Test- und Build-Gates sind grün.**
+**C2 beginnen. Die ursprüngliche Phase-15-Abnahme bleibt bis C5 ausgesetzt.**
 
 ---
 

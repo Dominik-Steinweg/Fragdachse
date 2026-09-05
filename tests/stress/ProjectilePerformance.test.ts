@@ -547,65 +547,6 @@ describe('projectile performance paths', () => {
     expect(trainHits).toEqual([12]);
   });
 
-  it('splits Hydra at the impact point and forwards each child through the normal spawn path', () => {
-    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    const spawnedIds = [2, 3];
-    const spawn = vi.spyOn(manager, 'spawnProjectileConfig').mockImplementation(() => spawnedIds.shift() ?? 4);
-    const body = {
-      velocity: {
-        x: 100,
-        y: 0,
-        length: () => 100,
-      },
-      setVelocity: vi.fn(),
-      enable: true,
-    } as unknown as Phaser.Physics.Arcade.Body;
-    const projectile = fakeEntity({
-      id: 1,
-      ownerId: 'shooter',
-      lastX: 0,
-      lastY: 0,
-      displayWidth: 10,
-      body,
-      color: 0x22ccff,
-      damage: 20,
-      adrenalinGain: 4,
-      lifetime: 1_000,
-      maxBounces: 2,
-      bounceCount: 0,
-      splitCount: 2,
-      splitSpread: 30,
-      splitFactor: 1,
-      remainingRangePx: 100,
-      initialSpeed: 100,
-      timeBubbleFactor: 1,
-      pendingDestroy: false,
-      colliders: [],
-      projectileStyle: 'hydra',
-      isGrenade: false,
-    }) as unknown as ProjectileRuntimeRecord;
-
-    const didSplit = (manager as unknown as {
-      trySplitHydraProjectile: (
-        projectile: ProjectileRuntimeRecord,
-        impactX: number,
-        impactY: number,
-        outgoingVx: number,
-        outgoingVy: number,
-      ) => boolean;
-    }).trySplitHydraProjectile(projectile, 20, 0, 100, 0);
-
-    expect(didSplit).toBe(true);
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(spawn.mock.calls.map((call) => call.slice(0, 4))).toEqual([
-      [20, 0, -Math.PI / 6, 'shooter'],
-      [20, 0, Math.PI / 6, 'shooter'],
-    ]);
-    expect(spawn.mock.calls.every((call) => (call[4] as { suppressSpawnFx?: boolean }).suppressSpawnFx === true)).toBe(true);
-    expect(projectile.pendingDestroy).toBe(true);
-    expect(body.setVelocity).toHaveBeenCalledWith(0, 0);
-  });
-
   it('keeps grenade fuse timing on real time even when projectile time is slowed', () => {
     vi.useFakeTimers();
     try {

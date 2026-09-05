@@ -1181,13 +1181,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       if (hitBody !== body) return;
       applyBounceFriction();
       const impact = this.getProjectileBodyCenter(tracked);
-      if (hasHydraSplitCapability(tracked)) {
-        if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
-        tracked.bounceCount = tracked.maxBounces + 1;
-        body.reset(impact.x, impact.y);
-        this.queueDestroyProjectile(tracked);
-        return;
-      }
+      if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
       tracked.bounceCount++;
       // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
       playImpact(
@@ -1254,13 +1248,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
             onHit(idx, tracked.damage * obstacleMult, tracked.ownerId);
           }
         }
-        if (hasHydraSplitCapability(tracked)) {
-          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
-          tracked.bounceCount = tracked.maxBounces + 1;
-          body.reset(impact.x, impact.y);
-          this.queueDestroyProjectile(tracked);
-          return;
-        }
+        if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
@@ -1291,13 +1279,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
           body.velocity.x, body.velocity.y,
           tracked.color,
         );
-        if (hasHydraSplitCapability(tracked)) {
-          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
-          tracked.bounceCount = tracked.maxBounces + 1;
-          body.reset(impact.x, impact.y);
-          this.queueDestroyProjectile(tracked);
-          return;
-        }
+        if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
@@ -1333,13 +1315,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
           body.velocity.x, body.velocity.y,
           tracked.color,
         );
-        if (hasHydraSplitCapability(tracked)) {
-          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
-          tracked.bounceCount = tracked.maxBounces + 1;
-          body.reset(impact.x, impact.y);
-          this.queueDestroyProjectile(tracked);
-          return;
-        }
+        if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         if (tracked.bounceCount > tracked.maxBounces) {
           body.setVelocity(0, 0);
@@ -1376,13 +1352,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         );
         applyBounceFriction();
         tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
-        if (hasHydraSplitCapability(tracked)) {
-          if (this.trySplitHydraProjectile(tracked, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
-          tracked.bounceCount = tracked.maxBounces + 1;
-          body.reset(impact.x, impact.y);
-          this.queueDestroyProjectile(tracked);
-          return;
-        }
+        if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
         if (tracked.bounceCount > tracked.maxBounces) {
@@ -1568,150 +1538,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
     const hit = this.findNearestRectangleHit(line, obstacle.getBounds());
     return hit ? { x: hit.x, y: hit.y } : fallback;
-  }
-
-  private getHydraSplitAngles(baseAngle: number, splitCount: number, splitSpreadDeg: number): number[] {
-    if (splitCount <= 0) return [];
-
-    const half = Math.floor(splitCount / 2);
-    const offsets: number[] = [];
-    if (splitCount % 2 === 1) {
-      for (let index = -half; index <= half; index++) {
-        offsets.push(index * splitSpreadDeg);
-      }
-    } else {
-      for (let index = -half; index <= -1; index++) {
-        offsets.push(index * splitSpreadDeg);
-      }
-      for (let index = 1; index <= half; index++) {
-        offsets.push(index * splitSpreadDeg);
-      }
-    }
-
-    return offsets.map((offsetDeg) => baseAngle + Phaser.Math.DegToRad(offsetDeg));
-  }
-
-  private getRemainingRangeAfterImpact(proj: ProjectileRuntimeRecord, impactX: number, impactY: number): number {
-    const baseRange = proj.remainingRangePx ?? (Math.max(proj.initialSpeed ?? proj.body.velocity.length(), 0) * proj.lifetime) / 1000;
-    const impactDistance = Phaser.Math.Distance.Between(proj.lastX, proj.lastY, impactX, impactY);
-    return Math.max(0, baseRange - impactDistance);
-  }
-
-  private trySplitHydraProjectile(
-    proj: ProjectileRuntimeRecord,
-    impactX: number,
-    impactY: number,
-    outgoingVx: number,
-    outgoingVy: number,
-  ): boolean {
-    const splitCount = Math.max(0, Math.floor(proj.splitCount ?? 0));
-    if (splitCount <= 0) return false;
-
-    const nextBounceCount = proj.bounceCount + 1;
-    if (nextBounceCount > proj.maxBounces) return false;
-
-    const outgoingSpeed = Math.hypot(outgoingVx, outgoingVy);
-    if (outgoingSpeed <= 0.001) return false;
-
-    const spawnTimeBubbleFactor = Phaser.Math.Clamp(
-      this.timeBubbleFactorProvider?.(impactX, impactY, this.hostFrameNowMs ?? proj.createdAt, proj.ownerId)
-        ?? (proj.timeBubbleFactor ?? 1),
-      0.0001,
-      1,
-    );
-    const childBaseSpeed = outgoingSpeed / spawnTimeBubbleFactor;
-
-    const remainingRangePx = this.getRemainingRangeAfterImpact(proj, impactX, impactY);
-    if (remainingRangePx <= 0.5) return false;
-
-    const splitSpread = proj.splitSpread ?? 0;
-    const childAngles = this.getHydraSplitAngles(Math.atan2(outgoingVy, outgoingVx), splitCount, splitSpread);
-    if (childAngles.length === 0) return false;
-
-    const splitFactor = proj.splitFactor ?? 1;
-    const childSize = Math.max(4, (proj.sprite.displayWidth / splitCount) * splitFactor);
-    const childDamage = Math.max(1, (proj.damage / splitCount) * splitFactor);
-    const childAdrenalinGain = Math.max(0, (proj.adrenalinGain / splitCount) * splitFactor);
-    const childLifetime = (remainingRangePx / childBaseSpeed) * 1000;
-
-    proj.pendingHydraSplit = {
-      x: impactX,
-      y: impactY,
-      angles: childAngles,
-    };
-    this.queueDestroyProjectile(proj);
-
-    for (const childAngle of childAngles) {
-      this.spawnProjectileConfig(impactX, impactY, childAngle, proj.ownerId, {
-        speed: childBaseSpeed,
-        size: childSize,
-        damage: childDamage,
-        color: proj.color,
-        allowTeamDamage: proj.allowTeamDamage,
-        ignoreBaseCollisions: proj.ignoreBaseCollisions,
-        ownerColor: proj.ownerColor,
-        lifetime: childLifetime,
-        maxBounces: proj.maxBounces,
-        isGrenade: proj.isGrenade,
-        isTranslocatorPuck: proj.isTranslocatorPuck,
-        collisionMode: proj.collisionMode,
-        adrenalinGain: childAdrenalinGain,
-        sourceId: proj.sourceId,
-        explosion: proj.explosion,
-        impactCloud: proj.impactCloud,
-        sporeVisualVariant: proj.sporeVisualVariant,
-        homing: proj.splitHoming ?? proj.homing,
-        projectileVisualScale: proj.projectileVisualScale,
-        smokeTrailColor: proj.smokeTrailColor,
-        fuseTime: proj.fuseTime,
-        grenadeEffect: proj.grenadeEffect,
-        projectileStyle: proj.projectileStyle,
-        bulletVisualPreset: proj.bulletVisualPreset,
-        grenadeVisualPreset: proj.grenadeVisualPreset,
-        energyBallVariant: proj.energyBallVariant,
-        tracerConfig: proj.tracerConfig,
-        detonable: proj.detonable,
-        detonator: proj.detonator,
-        rockDamageMult: proj.rockDamageMult,
-        trainDamageMult: proj.trainDamageMult,
-        baseDamageMult: proj.baseDamageMult,
-        isFlame: proj.isFlame,
-        hitboxGrowRate: proj.hitboxGrowRate,
-        hitboxMaxSize: proj.hitboxMaxSize,
-        velocityDecay: proj.velocityDecay,
-        burnDurationMs: proj.burnDurationMs,
-        burnDamagePerTick: proj.burnDamagePerTick,
-        projectileBurnVisualStyle: proj.projectileBurnVisualStyle,
-        leafBlowerMinKnockback: proj.leafBlowerMinKnockback,
-        leafBlowerMaxKnockback: proj.leafBlowerMaxKnockback,
-        leafBlowerSelfPush: proj.leafBlowerSelfPush,
-        isBfg: proj.isBfg,
-        piercesTargets: proj.piercesTargets,
-        penetrationCount: proj.penetrationRemaining,
-        penetrationDamageRetention: proj.penetrationDamageRetention,
-        penetratesRocks: proj.penetratesRocks,
-        flamePiercing: proj.flamePierceHitIds !== undefined,
-        leafBlowerDeflectsProjectiles: proj.leafBlowerDeflectsProjectiles,
-        proximityPulse: proj.proximityPulse,
-        gaussChainRadius: proj.gaussChainRadius,
-        gaussChainDamageFactor: proj.gaussChainDamageFactor,
-        frictionDelayMs: proj.frictionDelayMs,
-        airFrictionDecayPerSec: proj.airFrictionDecayPerSec,
-        bounceFrictionMultiplier: proj.bounceFrictionMultiplier,
-        stopSpeedThreshold: proj.stopSpeedThreshold,
-        sourceSlot: proj.sourceSlot,
-        shotAudioKey: proj.shotAudioKey,
-        splitCount: proj.splitCount,
-        splitSpread: proj.splitSpread,
-        splitFactor: proj.splitFactor,
-        splitHoming: proj.splitHoming,
-        initialBounceCount: nextBounceCount,
-        remainingRangePx,
-        suppressSpawnFx: true,
-      });
-    }
-
-    return true;
   }
 
   /**
@@ -2299,10 +2125,6 @@ function hasGaussDischarge(
 ): boolean {
   return (projectile.gaussChainRadius ?? 0) > 0
     && (projectile.gaussChainDamageFactor ?? 0) > 0;
-}
-
-function hasHydraSplitCapability(projectile: Pick<ProjectileRuntimeRecord, 'splitCount'>): boolean {
-  return (projectile.splitCount ?? 0) > 0;
 }
 
 function createDetonationTarget(projectile: ProjectileRuntimeRecord): ProjectileDetonationTarget {

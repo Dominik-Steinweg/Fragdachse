@@ -57,6 +57,59 @@ function createRuntime(identityScope = new ProjectileIdentityScope(1)) {
   return { runtime, ...simulation };
 }
 
+function createHydraRecord(
+  id: number,
+  x: number,
+  y: number,
+  angle: number,
+  ownerId: string,
+  cfg: ProjectileSpawnConfig,
+  provenance: ProjectileProvenance,
+): ProjectileRuntimeRecord {
+  const body = {
+    velocity: {
+      x: Math.cos(angle) * cfg.speed,
+      y: Math.sin(angle) * cfg.speed,
+    },
+    setVelocity: vi.fn((nextX: number, nextY: number) => {
+      body.velocity.x = nextX;
+      body.velocity.y = nextY;
+    }),
+    reset: vi.fn(),
+    enable: true,
+  };
+  return {
+    ...cfg,
+    id,
+    ownerId,
+    provenance,
+    sourceId: cfg.sourceId ?? 'weapon.HYDRA',
+    collisionMode: cfg.collisionMode ?? 'physics',
+    sprite: {
+      active: true,
+      x,
+      y,
+      displayWidth: cfg.size,
+      displayHeight: cfg.size,
+    },
+    body,
+    lastX: 0,
+    lastY: 0,
+    pendingDestroy: false,
+    bounceCount: cfg.initialBounceCount ?? 0,
+    createdAt: 0,
+    boundsListener: () => {},
+    colliders: [],
+    lifetime: cfg.lifetime,
+    maxBounces: cfg.maxBounces,
+    isGrenade: cfg.isGrenade,
+    adrenalinGain: cfg.adrenalinGain,
+    damage: cfg.damage,
+    color: cfg.color,
+    timeBubbleFactor: 1,
+  } as unknown as ProjectileRuntimeRecord;
+}
+
 const payload = {} as ProjectileSpawnConfig;
 
 describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
@@ -183,6 +236,68 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
 
     expect(stageNowMs).toBe(1_234);
     expect(receivedAge).toBe(100);
+  });
+
+  it('materialisiert Hydra-Kinder erst über die explizite nächste Interaction-Stage', () => {
+    const created: Array<{
+      x: number;
+      y: number;
+      angle: number;
+      cfg: ProjectileSpawnConfig;
+      provenance: ProjectileProvenance;
+    }> = [];
+    let boundOwner: ProjectileRuntimeOwnerPort | null = null;
+    const simulation: ProjectilePhysicsBindingPort = {
+      bindOwner: (owner) => { boundOwner = owner; },
+      createProjectile: (id, x, y, angle, ownerId, cfg, _hostNowMs, provenance) => {
+        created.push({ x, y, angle, cfg, provenance });
+        return createHydraRecord(id, x, y, angle, ownerId, cfg, provenance);
+      },
+      releaseProjectileResources: () => {},
+      releaseWorldState: () => {},
+    };
+    const runtime = new WorldProjectileRuntime({
+      physicsBinding: simulation,
+      presentation: createPresentation(),
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 500,
+    });
+    const parentId = runtime.spawnProjectileConfig(0, 0, 0, 'shooter', {
+      speed: 100,
+      size: 10,
+      damage: 20,
+      color: 0x22ccff,
+      ownerColor: 0x22ccff,
+      lifetime: 1_000,
+      maxBounces: 2,
+      isGrenade: false,
+      adrenalinGain: 4,
+      sourceId: 'weapon.HYDRA',
+      collisionMode: 'physics',
+      splitCount: 2,
+      splitSpread: 30,
+      splitFactor: 1,
+      remainingRangePx: 100,
+    });
+
+    if (!boundOwner?.queueHydraSplit) throw new Error('Expected the world owner Hydra seam');
+    expect(boundOwner.queueHydraSplit(parentId, 20, 0, 100, 0)).toBe(true);
+    expect(created).toHaveLength(1);
+    expect(runtime.activeCount).toBe(0);
+
+    // The queued children are not part of this interaction pass, even though the parent contact
+    // was reported before the host stage began.
+    runtime.runHostInteractionStage(500);
+    expect(created).toHaveLength(1);
+    expect(runtime.activeCount).toBe(0);
+
+    runtime.runHostInteractionStage(516);
+    expect(created).toHaveLength(3);
+    expect(runtime.activeCount).toBe(2);
+    expect(created.slice(1).map((entry) => entry.angle)).toEqual([-Math.PI / 6, Math.PI / 6]);
+    expect(created.slice(1).every((entry) => entry.cfg.suppressSpawnFx === true)).toBe(true);
+    expect(created.slice(1).every((entry) => entry.cfg.initialBounceCount === 1)).toBe(true);
+    expect(created.slice(1).every((entry) => entry.provenance.lineage?.parentProjectileId === parentId)).toBe(true);
   });
 
   it('materialisiert Travel-Capabilities und wendet Burn-Augments im Owner an', () => {
