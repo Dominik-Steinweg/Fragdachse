@@ -24,6 +24,7 @@ import {
   type ProjectileTargetabilityPort,
   type ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
+import { PROJECTILE_STAGE_SPAWN_CONTRACT } from './ProjectileStageContract';
 
 /** Zieltypen, die über die Collision-Kandidatenerzeugung laufen. */
 type CollisionTargetKind = ProjectileCollisionTargetKind;
@@ -152,10 +153,12 @@ export class ProjectileCollisionProcessor {
     this.sortTargetsDeterministically();
     if (this.targetCount === 0) return;
 
-    // Keep the owner collection live for the explicit same-stage spawn contract. The snapshot
-    // above is only the immutable target view for this invocation; newly spawned children must
-    // still receive their own collision pass while the owner iterates its active set.
-    for (const record of records) {
+    // The live collection is intentional only because the named stage contract preserves the
+    // existing Plasma Swarm same-frame outcome. Split/child creation uses the next-stage policy.
+    const recordsForInteraction = PROJECTILE_STAGE_SPAWN_CONTRACT.collisionInteractionSpawns === 'same-stage'
+      ? records
+      : this.projectileTargetRecords;
+    for (const record of recordsForInteraction) {
       if (record.pendingDestroy) continue;
       // Granaten wirken nur über ihre terminale Payload, nicht über Direkttreffer.
       if (record.isGrenade) continue;

@@ -223,7 +223,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   private pendingProjectileExplosions: ProjectileExplosionRequest[] = [];
   private projectileImpactCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private projectileResolvedCallback: ((proj: TrackedProjectile) => void) | null = null;
-  private miniRocketCollectedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private miniRocketDestroyedCallback: ((proj: TrackedProjectile, x: number, y: number) => void) | null = null;
   private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
 
@@ -645,10 +644,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   setProjectileResolvedCallback(cb: ((proj: TrackedProjectile) => void) | null): void {
     this.projectileResolvedCallback = cb;
-  }
-
-  setMiniRocketCollectedCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
-    this.miniRocketCollectedCallback = cb;
   }
 
   setMiniRocketDestroyedCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
@@ -2235,7 +2230,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push(this.createExplosionRequest(proj, resolvedEffect, resumesAfterExplosion));
     if (resumesAfterExplosion) {
-      this.resetHomingState(proj);
       proj.body.setVelocity(0, 0);
       proj.body.enable = false;
     } else {
@@ -2460,40 +2454,8 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
   }
 
   resumeMultiExplosionProjectile(id: number, excludedTargetKeys: readonly string[]): void {
-    const proj = this.getProjectileById(id);
-    if (!proj || ((proj.multiExplosionsRemaining ?? 0) <= 0 && !proj.miniRocketSpent)) return;
     void excludedTargetKeys;
-    proj.pendingExplosion = false;
-    this.resetHomingState(proj);
-    if (proj.miniRocketStageRangePx !== undefined) {
-      proj.miniRocketHasExploded = true;
-      if (proj.miniRocketSpent) {
-        // Die letzte Detonation ist verbraucht: Der Rueckflug bleibt als
-        // einsammelbares Objekt bestehen, darf aber weder Ziele suchen noch
-        // Direkttreffer oder weitere Explosionen ausloesen.
-        proj.explosion = undefined;
-        proj.multiExplosionExcludedTargetKeys?.clear();
-        proj.body.enable = true;
-        const vx = proj.miniRocketContinuationVx ?? proj.body.velocity.x;
-        const vy = proj.miniRocketContinuationVy ?? proj.body.velocity.y;
-        this.setMiniRocketVelocityFromDirection(proj, vx, vy);
-        this.enterMiniRocketReturn(proj);
-        return;
-      }
-      proj.miniRocketPhase = 'coast';
-      proj.miniRocketCoastUntilAgeMs = (proj.simulatedAgeMs ?? 0) + Math.max(0, proj.multiExplosionCoastMs ?? 0);
-      proj.miniRocketNextExplosionAtAgeMs = proj.miniRocketCoastUntilAgeMs;
-      proj.miniRocketReturnReserveGranted = false;
-      proj.remainingRangePx = proj.miniRocketStageRangePx;
-      proj.lastX = proj.sprite.x;
-      proj.lastY = proj.sprite.y;
-      const vx = proj.miniRocketContinuationVx ?? proj.body.velocity.x;
-      const vy = proj.miniRocketContinuationVy ?? proj.body.velocity.y;
-      if (Math.hypot(vx, vy) > 0.001) {
-        proj.body.enable = true;
-        this.setMiniRocketVelocityFromDirection(proj, vx, vy);
-      }
-    }
+    this.owner?.resumeMiniRocketExplosion?.(id);
   }
 
   /**
@@ -2688,16 +2650,9 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
         this.emitSpentMiniRocketDestruction(proj);
       }
       this.destroyTrackedProjectile(proj);
-    } else if (proj.homing) {
+    } else if (proj.homing && proj.miniRocketStageRangePx === undefined) {
       const simulatedAge = proj.simulatedAgeMs ?? 0;
-      if (proj.miniRocketStageRangePx !== undefined) {
-        if (this.updateMiniRocketFlight(proj, simulatedAge)) {
-          this.destroyTrackedProjectile(proj);
-          return false;
-        }
-      } else {
-        this.owner?.resolveProjectileHoming?.(this.createHomingRequest(proj), simulatedAge);
-      }
+      this.owner?.resolveProjectileHoming?.(this.createHomingRequest(proj), simulatedAge);
     }
 
     const proximityPulse = proj.proximityPulse;
@@ -2741,159 +2696,11 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
     return request;
   }
 
-  private resetHomingState(proj: TrackedProjectile): void {
-    const state = proj.homingState ??= { lockedTargetId: null };
-    state.lockedTargetId = null;
-    state.lockedTargetType = undefined;
-    state.lastSearchAtSimulatedMs = undefined;
-    proj.lockedTargetId = null;
-    proj.lockedTargetType = undefined;
-    proj.lastHomingSearchAt = undefined;
-  }
-
-  private updateProjectileHoming(
-    proj: TrackedProjectile,
-    simulatedAgeMs: number,
-    forceSearch = false,
-  ): boolean {
-    const foundTarget = this.owner?.resolveProjectileHoming?.(
-      this.createHomingRequest(proj),
-      simulatedAgeMs,
-      forceSearch,
-    ) ?? false;
-    const state = proj.homingState;
-    if (state) {
-      proj.lockedTargetId = state.lockedTargetId;
-      proj.lockedTargetType = state.lockedTargetType;
-      proj.lastHomingSearchAt = state.lastSearchAtSimulatedMs;
-    }
-    return foundTarget;
-  }
-
   private resolveLegacyHostNow(deltaMs: number): number {
     if (this.hostFrameNowMs !== null) return this.hostFrameNowMs + Math.max(0, deltaMs);
     let latestCreatedAt = 0;
     for (const projectile of this.projectiles) latestCreatedAt = Math.max(latestCreatedAt, projectile.createdAt);
     return latestCreatedAt + Math.max(0, deltaMs);
-  }
-
-  /**
-   * Steuert die erweiterten Mini-Raketen-Phasen. Die Geradeausphase deaktiviert
-   * ausschliesslich Zielsuche/Lenkung; Phaser-Collider bleiben durchgehend aktiv.
-   */
-  private updateMiniRocketFlight(proj: TrackedProjectile, simulatedAge: number): boolean {
-    if (!proj.homing || proj.miniRocketStageRangePx === undefined) return false;
-
-    if (proj.miniRocketSpent && proj.miniRocketPhase !== 'return') {
-      this.enterMiniRocketReturn(proj);
-    }
-
-    if (proj.miniRocketPhase === 'coast') {
-      if (simulatedAge < (proj.miniRocketCoastUntilAgeMs ?? 0)) return false;
-      proj.miniRocketPhase = 'attack';
-      proj.multiExplosionExcludedTargetKeys?.clear();
-      this.resetHomingState(proj);
-      const foundTarget = this.updateProjectileHoming(proj, simulatedAge, true);
-      if (!foundTarget && proj.miniRocketReturnEnabled && proj.miniRocketHasExploded) {
-        this.enterMiniRocketReturn(proj);
-      }
-      return false;
-    }
-
-    if (proj.miniRocketPhase === 'return') {
-      if (proj.miniRocketSpent) {
-        const owner = this.ownerPositionProvider?.(proj.ownerId) ?? null;
-        if (!owner) return false;
-        const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);
-        if (distance <= Math.max(1, proj.miniRocketPickupRadius ?? 32)) {
-          this.miniRocketCollectedCallback?.(proj, owner.x, owner.y);
-          return true;
-        }
-        const steerInterval = Math.max(1, proj.homing.retargetIntervalMs);
-        if (
-          proj.lastHomingSearchAt === undefined
-          || simulatedAge - proj.lastHomingSearchAt >= steerInterval
-        ) {
-          proj.lastHomingSearchAt = simulatedAge;
-          this.steerMiniRocketTowards(proj, owner.x, owner.y);
-        }
-        return false;
-      }
-      const previousSearchAt = proj.lastHomingSearchAt;
-      const foundTarget = this.updateProjectileHoming(proj, simulatedAge);
-      if (foundTarget) {
-        // Das vorhandene Restbudget laeuft unveraendert weiter: kein Reset, keine Pause.
-        proj.miniRocketPhase = 'attack';
-        return false;
-      }
-
-      const owner = this.ownerPositionProvider?.(proj.ownerId) ?? null;
-      if (!owner) return false;
-      const distance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);
-      if (distance <= Math.max(1, proj.miniRocketPickupRadius ?? 32)) {
-        this.miniRocketCollectedCallback?.(proj, owner.x, owner.y);
-        return true;
-      }
-
-      // Auf demselben Takt wie die gegnerische Zielsuche lenken, damit die Rakete
-      // auf dem Rueckweg nicht implizit wendiger wird.
-      if (proj.lastHomingSearchAt !== previousSearchAt) {
-        this.steerMiniRocketTowards(proj, owner.x, owner.y);
-      }
-      return false;
-    }
-
-    const foundTarget = this.updateProjectileHoming(proj, simulatedAge);
-    if (foundTarget || !proj.miniRocketReturnEnabled) return false;
-
-    const mayReturn = proj.miniRocketHasExploded
-      || (proj.remainingRangePx ?? Number.POSITIVE_INFINITY) <= Math.max(1, proj.homing.searchRadius);
-    if (mayReturn) this.enterMiniRocketReturn(proj);
-    return false;
-  }
-
-  private enterMiniRocketReturn(proj: TrackedProjectile): void {
-    const owner = this.ownerPositionProvider?.(proj.ownerId) ?? null;
-    if (!owner) return;
-
-    proj.miniRocketPhase = 'return';
-    this.resetHomingState(proj);
-
-    if (!proj.miniRocketReturnReserveGranted) {
-      const ownerDistance = Phaser.Math.Distance.Between(proj.sprite.x, proj.sprite.y, owner.x, owner.y);
-      const buffer = Math.max(0, proj.miniRocketReturnRangeBuffer ?? 0.5);
-      const requiredReturnRange = ownerDistance * (1 + buffer);
-      proj.remainingRangePx = Math.max(proj.remainingRangePx ?? 0, requiredReturnRange);
-      proj.miniRocketReturnReserveGranted = true;
-    }
-
-    // Der Rueckflug erhaelt keinen Tempobonus, uebernimmt aber auch keine durch
-    // Kollisionen oder einen kurz deaktivierten Body entstandene Restgeschwindigkeit.
-    // Direkt beim Phasenwechsel auf das normale, von der Time-Bubble beeinflusste
-    // Projektiltempo normalisieren.
-    this.steerMiniRocketTowards(proj, owner.x, owner.y);
-  }
-
-  private steerMiniRocketTowards(proj: TrackedProjectile, targetX: number, targetY: number): void {
-    const velocitySpeed = proj.body.velocity.length();
-    const normalFlightSpeed = this.getMiniRocketFlightSpeed(proj);
-    const currentSpeed = normalFlightSpeed > 0.001 ? normalFlightSpeed : velocitySpeed;
-    if (currentSpeed <= 0.001) return;
-
-    const targetAngle = Phaser.Math.Angle.Between(proj.sprite.x, proj.sprite.y, targetX, targetY);
-    const currentAngle = velocitySpeed > 0.001
-      ? Math.atan2(proj.body.velocity.y, proj.body.velocity.x)
-      : targetAngle;
-    const maxTurn = Phaser.Math.DegToRad(proj.homing?.maxTurnDegreesPerStep ?? 0);
-    const angleDelta = Phaser.Math.Angle.Wrap(targetAngle - currentAngle);
-    const nextAngle = currentAngle + Phaser.Math.Clamp(angleDelta, -maxTurn, maxTurn);
-    proj.body.setVelocity(Math.cos(nextAngle) * currentSpeed, Math.sin(nextAngle) * currentSpeed);
-  }
-
-  private getMiniRocketFlightSpeed(proj: TrackedProjectile): number {
-    const completedExplosions = Math.max(0, proj.miniRocketExplosionIndex ?? 0);
-    const explosionSpeedFactor = Math.max(0.1, 1 - completedExplosions * 0.2);
-    return (proj.initialSpeed ?? 0) * (proj.timeBubbleFactor ?? 1) * explosionSpeedFactor;
   }
 
   private resolveMiniRocketCascadeColor(baseColor: number, explosionIndex: number): number {
@@ -2917,13 +2724,6 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
       Math.round(Phaser.Math.Linear(sourceG, targetG, t)),
       Math.round(Phaser.Math.Linear(sourceB, targetB, t)),
     );
-  }
-
-  private setMiniRocketVelocityFromDirection(proj: TrackedProjectile, vx: number, vy: number): void {
-    const directionLength = Math.hypot(vx, vy);
-    const speed = this.getMiniRocketFlightSpeed(proj);
-    if (directionLength <= 0.001 || speed <= 0.001) return;
-    proj.body.setVelocity((vx / directionLength) * speed, (vy / directionLength) * speed);
   }
 
   private emitSpentMiniRocketDestruction(proj: TrackedProjectile): void {

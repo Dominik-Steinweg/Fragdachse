@@ -50,6 +50,10 @@ import {
   ProjectileCollisionProcessor,
   type ProjectileCollisionDependencies,
 } from './ProjectileCollisionProcessor';
+import {
+  ProjectileMiniRocketProcessor,
+  type ProjectileMiniRocketStatePort,
+} from './ProjectileMiniRocketProcessor';
 import type {
   ProjectileBarrierPort,
   ProjectileBarrierResolution,
@@ -171,6 +175,8 @@ export interface ProjectileOwnerSeam {
   releaseProjectile(record: TrackedProjectile): void;
   /** Host Frame: deterministische Flight-/Lifetime-/Homing-Verarbeitung. */
   runHostProjectileStage?(deltaMs: number, nowMs: number): ProjectileHostStageResult;
+  /** Completes the local Mini-Rocket state machine after deferred explosion resolution. */
+  resumeMiniRocketExplosion?(projectileId: ProjectileId): void;
   setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
   setProjectileTargetQueryPort?(port: ProjectileTargetQueryPort | null): void;
   setProjectileTargetabilityPort?(port: ProjectileTargetabilityPort | null): void;
@@ -224,6 +230,27 @@ export class WorldProjectileRuntime implements
   private readonly travelSamples: ProjectileTravelSample[] = [];
   private readonly activeProjectilesByOwner = new Map<string, number>();
   private readonly collisionProcessor = new ProjectileCollisionProcessor();
+  private readonly miniRocketProcessor = new ProjectileMiniRocketProcessor({
+    getOwnerPosition: (ownerId) => this.miniRocketStatePort?.getOwnerPosition(ownerId) ?? null,
+    updateHoming: (projectile, simulatedAgeMs, forceSearch) => (
+      this.updateProjectileHoming(projectile, simulatedAgeMs, forceSearch)
+    ),
+    resetHoming: (projectile) => this.resetHomingState(projectile),
+    onCollected: (projectile, x, y) => {
+      this.miniRocketStatePort?.onCollected({
+        projectileId: projectile.id,
+        ownerId: projectile.ownerId,
+        x,
+        y,
+        color: projectile.color,
+        ownerColor: projectile.ownerColor,
+        adrenalineRefund: Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0)
+          * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0),
+        armorRefund: Math.max(0, projectile.miniRocketPickupArmor ?? 0),
+      });
+    },
+  });
+  private miniRocketStatePort: ProjectileMiniRocketStatePort | null = null;
   /** Capability-Index der aktiven Luftstöße, die gegnerische Projectiles umlenken. */
   private readonly deflectorIds = new Set<ProjectileId>();
   private readonly collisionDependencies: ProjectileCollisionDependencies;
@@ -456,12 +483,14 @@ export class WorldProjectileRuntime implements
     if (this.destroyed) return emptyHostStageResult();
     this.setHostFrameTime(nowMs);
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
-    return this.simulation.runLegacyProjectileStage?.(deltaMs, nowMs, coreStage)
+    const stage = this.simulation.runLegacyProjectileStage?.(deltaMs, nowMs, coreStage)
       ?? {
         projectileExplosions: [],
         grenadePayloads: [],
         countdownEvents: coreStage.countdownEvents,
       };
+    this.runMiniRocketStateStage();
+    return stage;
   }
 
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
@@ -476,6 +505,11 @@ export class WorldProjectileRuntime implements
   setProjectileTargetabilityPort(port: ProjectileTargetabilityPort | null): void {
     this.targetabilityPort = port;
     this.homingController.setTargetabilityPort(port);
+  }
+
+  /** Binds owner-position and lifecycle effects without exposing Runtime records to gameplay. */
+  setProjectileMiniRocketStatePort(port: ProjectileMiniRocketStatePort | null): void {
+    this.miniRocketStatePort = port;
   }
 
   setProjectileCollisionTargetQueryPort(port: ProjectileCollisionTargetQueryPort | null): void {
@@ -495,7 +529,18 @@ export class WorldProjectileRuntime implements
   }
 
   completeProjectileExplosion(projectileId: ProjectileId, outcome: ProjectileExplosionOutcome): void {
-    this.simulation.completeProjectileExplosion?.(projectileId, outcome.damagedTargetKeys);
+    void outcome;
+    this.resumeMiniRocketExplosion(projectileId);
+  }
+
+  resumeMiniRocketExplosion(projectileId: ProjectileId): void {
+    const projectile = this.projectiles.getById(projectileId);
+    if (!projectile || ((projectile.multiExplosionsRemaining ?? 0) <= 0 && !projectile.miniRocketSpent)) return;
+    projectile.pendingExplosion = false;
+    this.resetHomingState(projectile);
+    if (projectile.miniRocketStageRangePx !== undefined) {
+      this.miniRocketProcessor.completeExplosion(projectile);
+    }
   }
 
   /**
@@ -726,6 +771,71 @@ export class WorldProjectileRuntime implements
 
   setLineOfFireReadPort(port: LineOfFireReadPort | null): void {
     this.homingController.setLineOfFireReadPort(port);
+  }
+
+  private runMiniRocketStateStage(): void {
+    for (const projectile of this.projectiles.activeRecords) {
+      if (projectile.pendingDestroy
+        || projectile.miniRocketStageRangePx === undefined
+        || !projectile.homing
+        || (projectile.pendingExplosion && (projectile.multiExplosionsRemaining ?? 0) > 0)) continue;
+      if (this.miniRocketProcessor.update(projectile, projectile.simulatedAgeMs ?? 0)) {
+        this.destroyProjectile(projectile.id);
+      }
+    }
+  }
+
+  private createHomingRequest(projectile: TrackedProjectile): ProjectileHomingRequest {
+    if (projectile.homingRequest) return projectile.homingRequest;
+    const state = projectile.homingState ??= {
+      lockedTargetId: projectile.lockedTargetId ?? null,
+      lockedTargetType: projectile.lockedTargetType,
+      lastSearchAtSimulatedMs: projectile.lastHomingSearchAt,
+    };
+    const request: ProjectileHomingRequest = {
+      ownerId: projectile.ownerId,
+      homing: projectile.homing!,
+      kinematics: {
+        get x() { return projectile.sprite.x; },
+        get y() { return projectile.sprite.y; },
+        get velocityX() { return projectile.body.velocity.x; },
+        get velocityY() { return projectile.body.velocity.y; },
+        setVelocity: (x, y) => projectile.body.setVelocity(x, y),
+      },
+      state,
+      excludedTargetKeys: projectile.multiExplosionExcludedTargetKeys,
+    };
+    projectile.homingRequest = request;
+    return request;
+  }
+
+  private resetHomingState(projectile: TrackedProjectile): void {
+    const state = projectile.homingState ??= { lockedTargetId: null };
+    state.lockedTargetId = null;
+    state.lockedTargetType = undefined;
+    state.lastSearchAtSimulatedMs = undefined;
+    projectile.lockedTargetId = null;
+    projectile.lockedTargetType = undefined;
+    projectile.lastHomingSearchAt = undefined;
+  }
+
+  private updateProjectileHoming(
+    projectile: TrackedProjectile,
+    simulatedAgeMs: number,
+    forceSearch = false,
+  ): boolean {
+    const foundTarget = this.homingController.update(
+      this.createHomingRequest(projectile),
+      simulatedAgeMs,
+      forceSearch,
+    );
+    const state = projectile.homingState;
+    if (state) {
+      projectile.lockedTargetId = state.lockedTargetId;
+      projectile.lockedTargetType = state.lockedTargetType;
+      projectile.lastHomingSearchAt = state.lastSearchAtSimulatedMs;
+    }
+    return foundTarget;
   }
 
   resolveProjectileHoming(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false): boolean {

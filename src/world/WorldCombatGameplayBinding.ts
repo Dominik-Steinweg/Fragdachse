@@ -8,6 +8,7 @@ import type {
 } from '../projectile/ProjectileInteractionPorts';
 import type { ProjectileCombatPort, ProjectileEnergyInjectorImpact } from '../projectile/ProjectileCombatPort';
 import type { ProjectileExplosionRequest } from '../projectile/ProjectileExplosionPort';
+import type { ProjectileMiniRocketStatePort } from '../projectile/ProjectileMiniRocketProcessor';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileTargetabilityPort,
@@ -169,6 +170,7 @@ export interface ProjectileInteractionBinding {
   setProjectileWorldBlockerPort(port: ProjectileWorldBlockerPort | null): void;
   setProjectileBarrierPort(port: ProjectileBarrierPort | null): void;
   setProjectileCombatPort(port: ProjectileCombatPort | null): void;
+  setProjectileMiniRocketStatePort(port: ProjectileMiniRocketStatePort | null): void;
 }
 
 export interface WorldCombatGameplayBindingOptions {
@@ -358,7 +360,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     projectileManager.setNaturalFlameExpiryCallback(null);
     projectileManager.setProjectileImpactCallback(null);
     projectileManager.setProjectileResolvedCallback(null);
-    projectileManager.setMiniRocketCollectedCallback(null);
     projectileManager.setMiniRocketDestroyedCallback(null);
     projectileManager.setStandaloneExplosionRequestCallback(null);
     projectileManager.setProximityPulseCallback(null);
@@ -374,6 +375,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileInteraction.setProjectileWorldBlockerPort(null);
     this.options.projectileInteraction.setProjectileBarrierPort(null);
     this.options.projectileInteraction.setProjectileCombatPort(null);
+    this.options.projectileInteraction.setProjectileMiniRocketStatePort(null);
     decoySystem.setCombatStateReader(null);
     decoySystem.setRunSpeedResolver(null);
     decoySystem.setCooldownStarter(null);
@@ -805,12 +807,18 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   private bindProjectiles(): void {
     const o = this.options;
     o.projectileManager.setProjectileResolvedCallback((projectile) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(projectile));
-    o.projectileManager.setMiniRocketCollectedCallback((projectile, x, y) => {
-      const refund = Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0) * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0);
-      const armor = Math.max(0, projectile.miniRocketPickupArmor ?? 0);
-      if (refund > 0) o.getPlayerCombatIntegration()?.resource.refundAdrenaline(projectile.ownerId, refund);
-      if (armor > 0) o.combatSystem.addArmor(projectile.ownerId, armor);
-      o.network.effects.broadcastMiniRocketCollectionEffect(x, y, projectile.ownerColor ?? projectile.color);
+    o.projectileInteraction.setProjectileMiniRocketStatePort({
+      getOwnerPosition: (ownerId) => {
+        const owner = o.playerManager.getOwnerVisualState(ownerId);
+        return owner ? { x: owner.x, y: owner.y } : null;
+      },
+      onCollected: (event) => {
+        if (event.adrenalineRefund > 0) {
+          o.getPlayerCombatIntegration()?.resource.refundAdrenaline(event.ownerId, event.adrenalineRefund);
+        }
+        if (event.armorRefund > 0) o.combatSystem.addArmor(event.ownerId, event.armorRefund);
+        o.network.effects.broadcastMiniRocketCollectionEffect(event.x, event.y, event.ownerColor ?? event.color);
+      },
     });
     o.projectileManager.setMiniRocketDestroyedCallback((projectile, x, y) => o.network.effects.broadcastMiniRocketDestructionEffect(x, y, projectile.ownerColor ?? projectile.color));
     o.projectileManager.setStandaloneExplosionRequestCallback((request) => {

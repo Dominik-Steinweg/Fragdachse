@@ -754,11 +754,9 @@ describe('projectile performance paths', () => {
 
     manager.resumeMultiExplosionProjectile(projectile.id, []);
     expect(projectile.miniRocketPhase).toBe('coast');
-    expect((manager as unknown as { updateMiniRocketFlight: (p: TrackedProjectile, age: number) => boolean })
-      .updateMiniRocketFlight(projectile, 120)).toBe(false);
+    manager.hostUpdate(20);
     expect(projectile.miniRocketPhase).toBe('coast');
-    expect((manager as unknown as { updateMiniRocketFlight: (p: TrackedProjectile, age: number) => boolean })
-      .updateMiniRocketFlight(projectile, 150)).toBe(false);
+    manager.hostUpdate(30);
     expect(projectile.miniRocketPhase).toBe('attack');
 
     projectile.simulatedAgeMs = 150;
@@ -786,17 +784,23 @@ describe('projectile performance paths', () => {
       miniRocketSpent: true,
       miniRocketPickupRadius: 32,
       simulatedAgeMs: 200,
+      colliders: [],
+      destroy: vi.fn(),
     }) as unknown as TrackedProjectile;
     const collected = vi.fn();
-    manager.setOwnerPositionProvider(() => ({ x: 100, y: 100 }));
-    manager.setMiniRocketCollectedCallback(collected);
+    const runtime = bindProjectileRegistry(manager, [projectile]);
+    runtime.setProjectileMiniRocketStatePort({
+      getOwnerPosition: () => ({ x: 100, y: 100 }),
+      onCollected: collected,
+    });
+    manager.hostUpdate(0, 200);
 
-    const returned = (manager as unknown as {
-      updateMiniRocketFlight: (p: TrackedProjectile, age: number) => boolean;
-    }).updateMiniRocketFlight(projectile, 200);
-
-    expect(returned).toBe(true);
-    expect(collected).toHaveBeenCalledWith(projectile, 100, 100);
+    expect(collected).toHaveBeenCalledWith(expect.objectContaining({
+      projectileId: projectile.id,
+      ownerId: projectile.ownerId,
+      x: 100,
+      y: 100,
+    }));
   });
 
   it('resends new projectile statics, supports a full late-join snapshot, and cleans absent IDs', () => {

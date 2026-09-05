@@ -25,8 +25,8 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `9 – Complex Projectile State Machines`
-- **Gesamtstatus:** Phase 8 abgeschlossen; typisierte Explosion-/Grenade-Requests, separate Domain-Effect-Orchestrierung, Combat-AoE-Grenze und deferred Continuation sind verdrahtet
+- **Nächste Phase:** `10 – Sonderfall-Parität und Host-Gameplay-Vollständigkeit` (offen)
+- **Gesamtstatus:** Phase 9 abgeschlossen; Mini-Rocket-State und Homing-Integration liegen im World-Owner, und Spawn-during-stage ist über einen benannten Stage-Contract charakterisiert
 - **Baseline:** verifiziert mit `npm run typecheck`, `npm run check` sowie den fokussierten Explosion-, Grenade-, Reflection-, Environment-, World-Effect-, Plasma- und Continuation-Suiten (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
@@ -47,7 +47,7 @@
 | 6 | ✅ | Collision + Targets + Defense |
 | 7 | ✅ | Combat Port + Direct Outcomes |
 | 8 | ✅ | Explosion / Domain Effects / Grenades |
-| 9 | ⬜ | Complex Projectile State Machines |
+| 9 | ✅ | Complex Projectile State Machines |
 | 10 | ⬜ | Sonderfall-Parität Host Gameplay |
 | 11 | ⬜ | Host Replication Adapter |
 | 12 | ⬜ | Client Replica |
@@ -63,7 +63,8 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle-/Special-State-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge und der Interaction-Stage in `WorldProjectileRuntime` liegen.
+- [Transition] `ProjectileManager` verarbeitet Physics-/Obstacle-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; typisierte Explosion-/Grenade-Requests werden an die deferred Domain-Orchestrierung ausgegeben, während Target-Collision, semantische Combat-Aufträge, Interaction-Stage und Mini-Rocket-State in `WorldProjectileRuntime` liegen.
+- [Transition] `ProjectileStageContract` benennt die Spawn-Reentrancy: bestehende Plasma-Swarm-Interaction-Spawns dürfen im selben Collision-Stage verarbeitet werden; Hydra-/sonstige Child-Splits folgen der Next-Stage-Policy.
 - [Transition] `HostUpdateCoordinator` ist der schmale `ProjectileExplosionResolutionPort`-Adapter: Combat-AoE läuft über `ProjectileCombatPort`, Environment-/Fire-/Knockback-/World-Effect-Owner bleiben außerhalb der Projectile-Simulation; Standalone-Explosionen werden dort gepuffert und nicht in die Runtime-Registry aufgenommen.
 - [Transition] `ProjectileIdentityScope` gehört zur `WorldLifecycle`-Lifetime und wird an jede lokale `WorldRuntime`-Materialisierung derselben `worldRevision` weitergereicht; er endet erst mit `endInstance`.
 - [Transition] `TrackedProjectile.provenance` ist die kanonische vollständige Provenance; Legacy-Spawn-Shape und flache Legacy-Felder bleiben nur bis zu ihren späteren Cutovers als Adapter-/Migrationsdaten bestehen.
@@ -88,6 +89,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution` (`src/projectile/ProjectileInteractionPorts.ts`); `ProjectileExternalInteractionPort.deflectProjectile` für Projectile↔Projectile-Transform |
 | Projectile Combat | `ProjectileCombatPort`, `ProjectileCombatTargetRef`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileCombatExplosionRequest`, `ProjectileCombatExplosionOutcome`, `ProjectileAk47HitContext`, `ProjectileEnergyInjectorImpact`, `ProjectilePlasmaSwarmImpact` (`src/projectile/ProjectileCombatPort.ts`, `src/projectile/ProjectileExplosionPort.ts`) |
 | Domain Effect / Explosion Resolution | `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome`, `ProjectileExplosionContinuationPort` (`src/projectile/ProjectileExplosionPort.ts`); `HostUpdateCoordinator.resolveProjectileExplosion` als Domain-Adapter |
+| Complex Projectile State | `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `ProjectileStageSpawnPolicy`, `PROJECTILE_STAGE_SPAWN_CONTRACT` (`src/projectile/`) |
 | Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata`, `ProjectileExplosionContinuationPort` |
 | Replication | — |
 | Client Replica | — |
@@ -107,7 +109,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 9 starten; bei tatsächlichem Beginn Phase 9 auf 🟨 setzen.**
+**Phase 10 bearbeiten; Sonderfall-Parität und Host-Gameplay-Vollständigkeit gegen die Referenzmatrix schließen.**
 
 ---
 
