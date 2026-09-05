@@ -28,6 +28,9 @@ export class ProjectileStore {
 
   /** Nimmt einen fertig erzeugten Record in Identity, Aktivmenge und Verarbeitung auf. */
   insert(record: ProjectileRuntimeRecord): void {
+    if (this.byId.has(record.id)) {
+      throw new Error(`[ProjectileStore] Duplicate projectile identity ${record.id}`);
+    }
     this.records.push(record);
     this.active.add(record);
     this.byId.set(record.id, record);

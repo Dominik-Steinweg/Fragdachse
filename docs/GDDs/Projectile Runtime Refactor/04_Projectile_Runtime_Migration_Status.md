@@ -25,11 +25,11 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** Korrekturphase C5 – Runtime-Record-/Provenance-/Identity-Audit und dauerhafte Ratchets
-- **Gesamtstatus:** Korrekturschleife aktiv; Phasen 1–15 bleiben abgeschlossen, der technische Endzustand ist wegen Host-/Physics-Authority-Abweichungen wieder offen
-- **Baseline:** Phase-15-Gates waren grün, beweisen aber keine Ownership-Korrektheit; C2-, C3- und C4-Gates sind grün, Korrektur-Gates laufen pro Korrekturphase
+- **Nächste Phase:** Korrekturschleife abgeschlossen (C5)
+- **Gesamtstatus:** Korrekturphasen C1–C5 technisch abgeschlossen; Phasen 1–15 bleiben abgeschlossen
+- **Baseline:** Phase-15-Gates und die Korrektur-Gates C1–C5 sind grün; die Runtime-Record-/Provenance-/Identity-Verträge sind ratifiziert
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
-- **Final-Gate:** technisch grün, Gesamt-Abnahme bis C5 ausgesetzt
+- **Final-Gate:** vollständig grün
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
 
 ---
@@ -67,7 +67,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 | C2 | ✅ | Phaser-Kontakte als technische Kandidaten melden; Rock/Base/Train/Support/Explosion nicht mehr im Binding fachlich entscheiden |
 | C3 | ✅ | Collision-/Interaction-Authority konsolidiert und autoritative `projectileStyle`-Verzweigung entfernt |
 | C4 | ✅ | World-/Activity-Consumer auf tatsächlich benötigte schmale Ports umgestellt; Universal-Forwarder abgebaut |
-| C5 | ⬜ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
+| C5 | ✅ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
 
 ---
 
@@ -75,7 +75,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- [Transition C5+] Runtime-Record-/Provenance-/Identity-Verträge und die dauerhaften Architektur-Ratchets werden gegen den abgeschlossenen Korrekturstand erneut auditiert.
+- keiner.
 
 ---
 
@@ -113,7 +113,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**C5 beginnen. Die ursprüngliche Phase-15-Abnahme bleibt bis C5 ausgesetzt.**
+**Korrekturschleife abgeschlossen; keine weitere Phase offen.**
 
 ---
 

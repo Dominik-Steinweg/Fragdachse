@@ -12,6 +12,7 @@ import {
   type ProjectileSpawnRequest,
 } from '../src/projectile/ProjectileSpawnRequest';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
+import { ProjectileStore } from '../src/projectile/ProjectileStore';
 import type { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
 import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
@@ -123,6 +124,26 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
     expect(runtime.getSummary().activeCount).toBe(2);
     expect(runtime.getSummary().activeProjectilesByOwner.get('owner')).toBe(2);
     expect(runtime.activeCount).toBe(2);
+  });
+
+  it('beendet eine Identity erst mit der World und verwendet sie nicht bei einem Runtime-Rebuild wieder', () => {
+    const scope = new ProjectileIdentityScope(21);
+    const firstRuntime = createRuntime(scope).runtime;
+    expect(firstRuntime.spawnProjectileConfig(0, 0, 0, 'owner', payload)).toBe(0);
+    firstRuntime.destroy();
+
+    const secondRuntime = createRuntime(scope).runtime;
+    expect(secondRuntime.spawnProjectileConfig(0, 0, 0, 'owner', payload)).toBe(1);
+    secondRuntime.destroy();
+  });
+
+  it('verwirft doppelte Record-Identities statt eine parallele Registry-Sicht zu erzeugen', () => {
+    const store = new ProjectileStore(new ProjectileIdentityScope(22));
+    const record = { id: 0 } as unknown as ProjectileRuntimeRecord;
+
+    store.insert(record);
+
+    expect(() => store.insert(record)).toThrow('Duplicate projectile identity 0');
   });
 
   it('verwendet nach Runtime-Rebuild derselben World-Revision keine Projectile-Id erneut', () => {

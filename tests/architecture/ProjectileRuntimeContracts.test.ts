@@ -86,6 +86,8 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     const runtime = read('src/projectile/WorldProjectileRuntime.ts');
     const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
     const presentation = read('src/projectile/ProjectilePresentationRuntime.ts');
+    const replica = read('src/projectile/ProjectileClientReplica.ts');
+    const replication = read('src/projectile/ProjectileReplicationAdapter.ts');
 
     expect(runtime).toContain('private readonly clientReplica = new ProjectileClientReplica();');
     expect(runtime).toContain('private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;');
@@ -94,6 +96,9 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(composition).toContain('physicsBinding: new ProjectilePhysicsBinding(input.scene, presentation)');
     expect(presentation).not.toContain('ProjectileRuntimeRecord');
     expect(presentation).not.toContain('ProjectilePhysicsBinding');
+    expect(replica).not.toContain('CombatSystem');
+    expect(replica).not.toContain('WorldProjectileRuntime');
+    expect(replication).not.toContain('WorldProjectileRuntime');
   });
 
   it('keeps combat and execution on semantic projectile ports', () => {
@@ -138,5 +143,42 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(combat).toContain('ProjectileWorldImpactBindingPort');
     expect(combat).not.toContain('readonly projectileRuntime:');
     expect(combat).not.toContain('o.projectileRuntime.');
+  });
+
+  it('keeps mutable Runtime records private to Projectile internals and the World owner', () => {
+    const consumerPaths = [
+      'src/world/WorldCombatGameplayBinding.ts',
+      'src/world/WorldGeometryBinding.ts',
+      'src/world/WorldTrainRuntime.ts',
+      'src/scenes/arena/ArenaWorldGameplayComposition.ts',
+      'src/scenes/arena/HostUpdateCoordinator.ts',
+      'src/scenes/arena/RendererBundle.ts',
+      'src/scenes/arena/ArenaRuntimeAdapters.ts',
+    ];
+    for (const path of consumerPaths) {
+      expect(read(path), path).not.toContain('ProjectileRuntimeRecord');
+    }
+
+    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
+    const store = read('src/projectile/ProjectileStore.ts');
+    const physics = read('src/projectile/ProjectilePhysicsBinding.ts');
+    expect(runtime.match(/new ProjectileStore\(/g) ?? []).toHaveLength(1);
+    expect(store).toContain('private readonly records: ProjectileRuntimeRecord[]');
+    expect(physics).not.toContain('new ProjectileStore(');
+  });
+
+  it('keeps the final non-authoritative boundaries free of domain mutation ownership', () => {
+    const replica = read('src/projectile/ProjectileClientReplica.ts');
+    const presentation = read('src/projectile/ProjectilePresentationRuntime.ts');
+    const replication = read('src/projectile/ProjectileReplicationAdapter.ts');
+
+    for (const source of [replica, presentation, replication]) {
+      expect(source).not.toContain('applyDamage');
+      expect(source).not.toContain('resolveDirectImpact');
+      expect(source).not.toContain('ProjectileRuntimeRecord');
+    }
+    expect(replica).toContain('Nichtautoritativer');
+    expect(presentation).toContain('keine Gameplay-Entscheidung');
+    expect(replication).toContain('liest nur die schmale Client-Projektion');
   });
 });

@@ -110,7 +110,12 @@ function makeSystem(
 ) {
   const released: ProjectileRuntimeRecord[] = [];
   const spawnedRequests: Array<{
-    x: number; y: number; angle: number; ownerId: string; cfg: ProjectileSpawnConfig;
+    x: number;
+    y: number;
+    angle: number;
+    ownerId: string;
+    cfg: ProjectileSpawnConfig;
+    provenance: import('../src/projectile/ProjectileSpawnRequest').ProjectileProvenance;
   }> = [];
   const prepared = [...active];
   let nextSpawnedId = 100;
@@ -119,7 +124,7 @@ function makeSystem(
     physicsBinding: {
       bindOwner: () => {},
       createProjectile: (id, x, y, angle, ownerId, cfg, _hostNowMs, provenance) => {
-        spawnedRequests.push({ x, y, angle, ownerId, cfg });
+        spawnedRequests.push({ x, y, angle, ownerId, cfg, provenance });
         const record = prepared.shift() ?? makeSpawnedRecord(nextSpawnedId++, x, y, ownerId);
         // Der Owner vergibt die Identity; der Test liefert nur den vorbereiteten Record.
         Object.assign(record, { id, provenance });
@@ -310,6 +315,12 @@ describe('generic projectile target piercing', () => {
       reflected: true,
       explosion: proj.explosion,
     });
+    expect(spawnedRequests[0].provenance).toMatchObject({
+      gameplaySourceId: proj.provenance.gameplaySourceId,
+      attributionId: 'shield-owner',
+      allegiance: { ownerId: 'shield-owner' },
+      lineage: { reflected: true, parentProjectileId: proj.id },
+    });
     expect(destroyProjectile).toHaveBeenCalledWith(proj.id);
   });
 
@@ -382,6 +393,12 @@ describe('generic projectile target piercing', () => {
       sourceId: 'weapon.leaf_blower_deflect',
       reflected: true,
       explosion: target.explosion,
+    });
+    expect(spawnedRequests[0].provenance).toMatchObject({
+      gameplaySourceId: target.provenance.gameplaySourceId,
+      attributionId: 'blower-owner',
+      allegiance: { ownerId: 'blower-owner' },
+      lineage: { reflected: true, parentProjectileId: target.id },
     });
     expect(destroyProjectile).toHaveBeenCalledWith(target.id);
   });
