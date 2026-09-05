@@ -164,6 +164,23 @@ function makeSystem(
   (system as unknown as { canDamageTarget: unknown }).canDamageTarget = () => true;
   (system as unknown as { computeProjectileDamage: unknown }).computeProjectileDamage = () => proj.damage;
   (system as unknown as { registerAk47Hit: unknown }).registerAk47Hit = () => {};
+  system.setPlasmaSwarmReactionHandler((impact) => {
+    for (let index = 0; index < impact.projectileCount; index += 1) {
+      spawnProjectile(impact.x, impact.y, (index * Math.PI * 2) / impact.projectileCount, impact.ownerId, {
+        speed: impact.normalSpeed * 0.5,
+        size: Math.max(1, impact.normalSize * 0.5),
+        damage: impact.normalDamage * 0.5,
+        color: impact.color,
+        lifetime: 100,
+        maxBounces: 0,
+        isGrenade: false,
+        adrenalinGain: 0,
+        sourceId: 'weapon.plasma.swarm',
+        plasmaSwarmProjectile: true,
+        plasmaSwarmOriginEnemyId: impact.enemyId,
+      });
+    }
+  });
 
   runtime.setProjectileTargetabilityPort({
     canDamage: () => true,
@@ -175,7 +192,7 @@ function makeSystem(
   });
   runtime.setProjectileWorldBlockerPort({ getNearestBlockerDistance: () => null });
   runtime.setProjectileBarrierPort({ resolveBarrier: (request) => system.resolveProjectileBarrier(request) });
-  runtime.setProjectileDirectImpactPort({ resolveDirectImpact: (request) => system.resolveProjectileImpact(request) });
+  runtime.setProjectileCombatPort({ resolveDirectImpact: (request) => system.resolveDirectImpact(request) });
 
   for (const record of active) {
     runtime.spawnLegacyProjectile(record.sprite.x, record.sprite.y, 0, record.ownerId, {} as ProjectileSpawnConfig);

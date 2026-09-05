@@ -44,6 +44,7 @@ import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplay
 import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
+import type { ProjectileEnergyInjectorImpact } from '../../projectile/ProjectileCombatPort';
 import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import type { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
 
@@ -2007,9 +2008,9 @@ export class HostUpdateCoordinator {
     targetId: string,
     x: number,
     y: number,
-    projectile: TrackedProjectile,
+    projectile: TrackedProjectile | ProjectileEnergyInjectorImpact,
   ): void {
-    const payload = projectile.energyInjectorPayload;
+    const payload = 'payload' in projectile ? projectile.payload : projectile.energyInjectorPayload;
     if (!payload || !this.targetingSystems?.targetStatus) return;
     const now = Date.now();
     const target = { targetType, targetId } as const;

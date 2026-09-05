@@ -5,8 +5,14 @@ import type { ProjectileId } from './ProjectileSpawnPort';
 import type {
   ProjectileContactMode,
   ProjectileDefenseResolution,
-  ProjectileDirectImpactPort,
 } from './ProjectileInteractionPorts';
+import type {
+  ProjectileCombatPort,
+  ProjectileCombatTargetRef,
+  ProjectileDirectImpactOutcome,
+  ProjectileDirectImpactRequest,
+  ProjectileEnergyInjectorAugment,
+} from './ProjectileCombatPort';
 import {
   projectileExclusionKey,
   projectileTargetPhysicalKey,
@@ -52,7 +58,7 @@ export interface ProjectileCollisionDependencies {
   readonly targetQuery: ProjectileCollisionTargetQueryPort | null;
   readonly targetability: ProjectileTargetabilityPort | null;
   readonly worldBlocker: ProjectileWorldBlockerPort | null;
-  readonly directImpact: ProjectileDirectImpactPort | null;
+  readonly directImpact: ProjectileCombatPort | null;
   /** Entfernt ein verbrauchtes Projectile über den Owner. */
   destroyProjectile(id: ProjectileId): void;
   /** Wendet eine target-lokale Defense an (Absorption oder Reflexion). */
@@ -61,6 +67,13 @@ export interface ProjectileCollisionDependencies {
     defense: ProjectileDefenseResolution,
     candidate: ProjectileImpactCandidate,
   ): void;
+  /** Resolves the terminal projectile lifecycle after Combat accepted the direct effect. */
+  finalizeDirectImpact?(
+    record: TrackedProjectile,
+    target: ProjectileCombatTargetRef,
+    impact: { readonly x: number; readonly y: number },
+    outcome: ProjectileDirectImpactOutcome,
+  ): boolean;
 }
 
 type CandidateOutcome = 'ignored' | 'passed' | 'consumed';
@@ -444,17 +457,16 @@ export class ProjectileCollisionProcessor {
     }
     const impactPort = deps.directImpact;
     if (!impactPort) return 'ignored';
-    const kind = candidate.target.kind;
-    const contact = resolveContactMemory(record, kind);
-
-    const resolution = impactPort.resolveDirectImpact({ candidate, contact: contact.mode, nowMs });
-    if (resolution.kind === 'ignored') return 'ignored';
-    if (resolution.kind === 'defended') {
-      deps.applyDefense(record, resolution.defense, candidate);
+    const target = asCombatTarget(candidate.target);
+    if (!target) return 'ignored';
+    const contact = resolveContactMemory(record, target.kind);
+    void nowMs;
+    const outcome = impactPort.resolveDirectImpact(createDirectImpactRequest(record, target, candidate));
+    if (!outcome.accepted) return 'ignored';
+    if (outcome.defense) {
+      deps.applyDefense(record, outcome.defense, candidate);
       return 'consumed';
     }
-    // Die Wirkung hat das Projectile bereits beendet (Explosion oder Direktentfernung).
-    if (resolution.kind === 'consumed') return 'consumed';
 
     contact.memory?.add(projectileTargetKey(candidate.target));
 
@@ -465,9 +477,99 @@ export class ProjectileCollisionProcessor {
     }
     if (contact.mode === 'pierce' || contact.mode === 'flame') return 'passed';
 
-    deps.destroyProjectile(record.id);
+    const keptAlive = deps.finalizeDirectImpact?.(record, target, {
+      x: candidate.x,
+      y: candidate.y,
+    }, outcome) ?? false;
+    if (!keptAlive) deps.destroyProjectile(record.id);
     return 'consumed';
   }
+}
+
+function asCombatTarget(target: ProjectileTargetRef): ProjectileCombatTargetRef | null {
+  return target.kind === 'player' || target.kind === 'enemy' || target.kind === 'decoy'
+    ? target
+    : null;
+}
+
+function createDirectImpactRequest(
+  record: TrackedProjectile,
+  target: ProjectileCombatTargetRef,
+  candidate: ProjectileImpactCandidate,
+): ProjectileDirectImpactRequest {
+  const augments: Array<ProjectileDirectImpactRequest['augments'][number]> = [];
+  if ((record.burnDurationMs ?? 0) > 0 && (record.burnDamagePerTick ?? 0) > 0) {
+    augments.push({
+      burn: {
+        durationMs: record.burnDurationMs ?? 0,
+        damagePerTick: record.burnDamagePerTick ?? 0,
+      },
+      provenance: record.provenance,
+    });
+  }
+  if (record.supplementalBurnOnHit) {
+    augments.push({
+      burn: record.supplementalBurnOnHit,
+      provenance: record.supplementalBurnProvenance ?? record.provenance,
+    });
+  }
+  if (record.energyInjectorPayload) {
+    const augment: ProjectileEnergyInjectorAugment = {
+      kind: 'energy-injector',
+      payload: record.energyInjectorPayload,
+      provenance: record.provenance,
+    };
+    augments.push(augment);
+  }
+
+  return {
+    projectileId: record.id,
+    target,
+    impact: { x: candidate.x, y: candidate.y },
+    velocity: { x: record.body.velocity.x, y: record.body.velocity.y },
+    provenance: record.provenance,
+    directHit: {
+      damage: record.damage,
+      adrenalinGain: record.adrenalinGain,
+      rockDamageMult: record.rockDamageMult,
+      trainDamageMult: record.trainDamageMult,
+      baseDamageMult: record.baseDamageMult,
+      slowFraction: record.hitSlowFraction,
+      slowDurationMs: record.hitSlowDurationMs,
+      vulnerabilityDurationMs: record.hitVulnerabilityDurationMs,
+      knockback: record.hitKnockback,
+      knockbackDurationMs: record.hitKnockbackDurationMs,
+      shotgun: record.shotgunOriginX === undefined || record.shotgunOriginY === undefined
+        || record.shotgunResolvedRange === undefined
+        ? undefined
+        : {
+          originX: record.shotgunOriginX,
+          originY: record.shotgunOriginY,
+          resolvedRange: record.shotgunResolvedRange,
+          proximityMaxDamageBonus: record.shotgunProximityMaxDamageBonus,
+          slowFraction: record.shotgunSlowFraction,
+          slowDurationMs: record.shotgunSlowDurationMs,
+        },
+      gaussChain: record.gaussChainRadius === undefined && record.gaussChainDamageFactor === undefined
+        ? undefined
+        : { radius: record.gaussChainRadius, damageFactor: record.gaussChainDamageFactor },
+      plasmaSwarm: record.plasmaSwarmEnabled !== true
+        ? undefined
+        : {
+          projectileCount: record.plasmaSwarmProjectileCount,
+          explosionRadius: record.plasmaSwarmExplosionRadius,
+          explosionDamage: record.plasmaSwarmExplosionDamage,
+          explosionSlowFraction: record.plasmaSwarmExplosionSlowFraction,
+        },
+      ak47: record.ak47ShotId === undefined
+        ? undefined
+        : {
+          damageMultiplier: record.ak47DamageMultiplier,
+          fireSuperiorityShot: record.ak47FireSuperiorityShot,
+        },
+    },
+    augments,
+  };
 }
 
 function overlaps(

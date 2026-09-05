@@ -5,6 +5,7 @@ import type {
   Ak47LoadoutReadPort,
   Ak47ShotPreparation,
 } from '../loadout/Ak47BehaviorPort';
+import type { ProjectileAk47HitContext } from '../projectile/ProjectileCombatPort';
 
 interface Ak47CombatState {
   stacks: number;
@@ -13,6 +14,7 @@ interface Ak47CombatState {
   pendingFireSuperiorityShotIds: Set<number>;
   nextShotId: number;
   confirmedShotIds: Set<number>;
+  refundedShotIds: Set<number>;
 }
 
 /**
@@ -72,21 +74,20 @@ export class Ak47BehaviorRuntime implements Ak47BehaviorPort {
     state.pendingFireSuperiorityShotIds.add(shotId);
   }
 
-  registerProjectileHit(projectile: TrackedProjectile, nowMs: number): void {
+  registerProjectileHit(context: ProjectileAk47HitContext, nowMs: number): void {
     if (this.destroyed) return;
-    const shotId = projectile.ak47ShotId;
-    if (shotId === undefined || projectile.ak47HitConfirmed) return;
-    projectile.ak47HitConfirmed = true;
+    const shotId = context.shotId;
 
-    const focus = this.getAk47Config(projectile.ownerId)?.ak47Focus;
+    const focus = this.getAk47Config(context.ownerId)?.ak47Focus;
     if (!focus || this.getMaxStacks(focus) <= 0) return;
 
-    const state = this.getOrCreateState(projectile.ownerId);
+    const state = this.getOrCreateState(context.ownerId);
+    if (state.confirmedShotIds.has(shotId)) return;
     state.confirmedShotIds.add(shotId);
     void nowMs;
 
     // Breakthrough ammunition does not start a second reward cycle while the magazine resolves.
-    if (projectile.ak47FireSuperiorityShot) return;
+    if (context.fireSuperiorityShot) return;
 
     const maxStacks = this.getMaxStacks(focus);
     state.stacks = Math.min(maxStacks, state.stacks + 1);
@@ -120,18 +121,19 @@ export class Ak47BehaviorRuntime implements Ak47BehaviorPort {
     }
   }
 
-  registerStrategicTargetHit(projectile: TrackedProjectile, enemyId: string): boolean {
+  registerStrategicTargetHit(context: ProjectileAk47HitContext, enemyId: string): boolean {
     if (this.destroyed) return false;
-    const shotId = projectile.ak47ShotId;
-    if (!projectile.ak47FireSuperiorityShot || shotId === undefined || projectile.ak47StrategicRefunded) return false;
+    const shotId = context.shotId;
+    if (!context.fireSuperiorityShot) return false;
     void enemyId;
 
-    const state = this.states.get(projectile.ownerId);
+    const state = this.states.get(context.ownerId);
     if (!state || !state.pendingFireSuperiorityShotIds.has(shotId)) return false;
+    if (state.refundedShotIds.has(shotId)) return false;
 
     state.pendingFireSuperiorityShotIds.delete(shotId);
     state.fireSuperiorityShotsAvailable += 1;
-    projectile.ak47StrategicRefunded = true;
+    state.refundedShotIds.add(shotId);
     return true;
   }
 
@@ -195,6 +197,7 @@ export class Ak47BehaviorRuntime implements Ak47BehaviorPort {
       pendingFireSuperiorityShotIds: new Set<number>(),
       nextShotId: 1,
       confirmedShotIds: new Set<number>(),
+      refundedShotIds: new Set<number>(),
     });
   }
 

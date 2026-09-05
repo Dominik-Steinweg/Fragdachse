@@ -161,7 +161,7 @@ function createFixture(options: {
     setProjectileCollisionTargetQueryPort: vi.fn(),
     setProjectileWorldBlockerPort: vi.fn(),
     setProjectileBarrierPort: vi.fn(),
-    setProjectileDirectImpactPort: vi.fn(),
+    setProjectileCombatPort: vi.fn(),
   };
   const weaponExecution = new WorldWeaponExecutionRuntime({
     projectileSpawn,

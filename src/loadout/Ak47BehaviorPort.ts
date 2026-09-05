@@ -1,4 +1,5 @@
 import type { SyncedActiveHudBuff, TrackedProjectile } from '../types';
+import type { ProjectileAk47HitContext } from '../projectile/ProjectileCombatPort';
 import type { WeaponConfig } from './LoadoutConfig';
 
 /** Read-only equipment boundary consumed by the world-owned AK47 behavior. */
@@ -18,9 +19,9 @@ export interface Ak47ShotPreparation {
 export interface Ak47BehaviorPort {
   prepareShot(playerId: string, config: WeaponConfig): Ak47ShotPreparation | null;
   commitShot(playerId: string, shotId: number, fireSuperiorityShot: boolean): void;
-  registerProjectileHit(projectile: TrackedProjectile, nowMs: number): void;
+  registerProjectileHit(context: ProjectileAk47HitContext, nowMs: number): void;
   resolveProjectile(projectile: TrackedProjectile): void;
-  registerStrategicTargetHit(projectile: TrackedProjectile, enemyId: string): boolean;
+  registerStrategicTargetHit(context: ProjectileAk47HitContext, enemyId: string): boolean;
   resetPlayer(playerId: string): void;
   removePlayer(playerId: string): void;
   getHudBuffs(playerId: string, nowMs: number): readonly SyncedActiveHudBuff[];

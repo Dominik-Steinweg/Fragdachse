@@ -1,4 +1,4 @@
-import type { Ak47DirectEnemyHitImpact, CombatDamageKind } from '../systems/CombatSystem';
+import type { CombatDamageKind } from '../systems/CombatSystem';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { SlimeDeathBurst } from '../systems/SlimeTrailSystem';
 import type { ActiveBurnSource } from '../systems/CombatSystem';
@@ -6,6 +6,7 @@ import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { WeaponKillReactionOutcome } from '../loadout/WeaponReactionPort';
 import type { SustainedWeaponBehaviorPort } from '../loadout/SustainedWeaponBehaviorPort';
 import type { LoadoutSlot, TrackedProjectile } from '../types';
+import type { ProjectileAk47DirectImpact, ProjectileAk47HitContext } from '../projectile/ProjectileCombatPort';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CoopDefenseClassDefinition } from '../config/coopDefenseClasses';
 import type { ResourceSystem } from '../systems/ResourceSystem';
@@ -119,10 +120,10 @@ export interface PlayerCombatReactionPort {
     nowMs: number,
   ): { adrenalineGain: number; reflectedDamage: number; reflectTargetId?: string };
   handleDirectAk47EnemyHit(
-    projectile: TrackedProjectile,
+    context: ProjectileAk47HitContext,
     enemyId: string,
     nowMs: number,
-  ): Ak47DirectEnemyHitImpact | null;
+  ): ProjectileAk47DirectImpact | null;
   handleNaturalFlameExpiry(projectile: TrackedProjectile, x: number, y: number, nowMs: number): void;
   handleEnemyDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], nowMs: number): SlimeDeathBurst | null;
   removeEnemy(enemyId: string): void;

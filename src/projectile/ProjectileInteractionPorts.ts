@@ -1,7 +1,6 @@
 import type { LoadoutSlot } from '../types';
 import type { ProjectileId } from './ProjectileSpawnPort';
 import type { ProjectileAllegianceRef, ProjectileProvenance } from './ProjectileSpawnRequest';
-import type { ProjectileImpactCandidate } from './ProjectileTargetPort';
 
 /**
  * Wie ein Projectile ein einzelnes Ziel berührt.
@@ -21,13 +20,6 @@ export type ProjectileContactMode =
   /** Verbraucht sich am ersten getroffenen Ziel. */
   | 'single';
 
-/** Auftrag an die noch nicht migrierte Direct-Impact-Auflösung. */
-export interface ProjectileImpactRequest {
-  readonly candidate: ProjectileImpactCandidate;
-  readonly contact: ProjectileContactMode;
-  readonly nowMs: number;
-}
-
 /**
  * Auflösung einer target-lokalen Defense (z. B. Energieschild).
  *
@@ -46,28 +38,6 @@ export type ProjectileDefenseResolution =
     readonly sourceSlot?: LoadoutSlot;
   };
 
-/** Ergebnis eines aufgelösten Direct-Impact-Kandidaten. */
-export type ProjectileImpactResolution =
-  /** Kein Treffer angewendet; der nächste Kandidat darf geprüft werden. */
-  | { readonly kind: 'ignored' }
-  /** Wirkung angewendet; Dedupe und Verbrauch folgen dem Kontaktmodus. */
-  | { readonly kind: 'applied' }
-  /** Wirkung angewendet und das Projectile ist dadurch verbraucht. */
-  | { readonly kind: 'consumed' }
-  /** Target-lokale Defense hat den Treffer aufgelöst. */
-  | { readonly kind: 'defended'; readonly defense: ProjectileDefenseResolution };
-
-/**
- * Direct-Impact-Grenze der Collision-Verarbeitung.
- *
- * Sie erhält ausschließlich Kandidat, Kontaktmodus und Host-Zeit und liefert ein typisiertes
- * Ergebnis zurück. Zielcontract ist der `ProjectileCombatPort` aus Phase 7; bis dahin adaptiert sie
- * die bestehende Combat-Auflösung.
- */
-export interface ProjectileDirectImpactPort {
-  resolveDirectImpact(request: ProjectileImpactRequest): ProjectileImpactResolution;
-}
-
 /** Anfrage an eine world-space Barriere entlang der Projectile-Position. */
 export interface ProjectileBarrierRequest {
   readonly projectileId: ProjectileId;
@@ -80,6 +50,8 @@ export interface ProjectileBarrierRequest {
   /** Wurfgeschoss, das die Barriere übernehmen darf (heute: Brut-Granate). */
   readonly capturable: boolean;
   readonly allowTeamDamage: boolean;
+  /** Aufgelöster Basisschaden für Shield-/Dome-Feedback; keine Runtime-Records. */
+  readonly damage?: number;
   /** Hostautoritative Frame-Zeit dieser Stage. */
   readonly nowMs: number;
 }

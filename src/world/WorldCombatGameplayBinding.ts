@@ -5,8 +5,8 @@ import type { ProjectileManager } from '../entities/ProjectileManager';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type {
   ProjectileBarrierPort,
-  ProjectileDirectImpactPort,
 } from '../projectile/ProjectileInteractionPorts';
+import type { ProjectileCombatPort, ProjectileEnergyInjectorImpact } from '../projectile/ProjectileCombatPort';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileTargetabilityPort,
@@ -138,7 +138,7 @@ export interface WorldCombatImpactPort {
     targetId: string,
     x: number,
     y: number,
-    projectile: TrackedProjectile,
+    projectile: TrackedProjectile | ProjectileEnergyInjectorImpact,
   ) => void;
   readonly applyHitscanSupportImpact: (
     impact: HitscanSupportImpact,
@@ -166,7 +166,7 @@ export interface ProjectileInteractionBinding {
   setProjectileCollisionTargetQueryPort(port: ProjectileCollisionTargetQueryPort | null): void;
   setProjectileWorldBlockerPort(port: ProjectileWorldBlockerPort | null): void;
   setProjectileBarrierPort(port: ProjectileBarrierPort | null): void;
-  setProjectileDirectImpactPort(port: ProjectileDirectImpactPort | null): void;
+  setProjectileCombatPort(port: ProjectileCombatPort | null): void;
 }
 
 export interface WorldCombatGameplayBindingOptions {
@@ -307,7 +307,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setRockDamageCallback(null);
     combatSystem.setBaseDamageCallback(null);
     combatSystem.setTrainDamageCallback(null);
-    combatSystem.setProjectileImpactCallback(null);
     combatSystem.setPlayerImpulseCallback(null);
     combatSystem.setEnemyImpulseCallback(null);
     combatSystem.setKillCallback(() => { /* noop */ });
@@ -334,6 +333,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setTargetIncomingDamageMultiplierResolver(null);
     combatSystem.setApplyVulnerabilityHandler(null);
     combatSystem.setEnergyInjectorTargetHitCallback(null);
+    combatSystem.setPlasmaSwarmReactionHandler(null);
     combatSystem.setHitscanSupportImpactCallback(null);
     combatSystem.setDirectPrimaryHitHandler(null);
     combatSystem.setPlayerDamageTakenHandler(null);
@@ -370,7 +370,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileInteraction.setProjectileCollisionTargetQueryPort(null);
     this.options.projectileInteraction.setProjectileWorldBlockerPort(null);
     this.options.projectileInteraction.setProjectileBarrierPort(null);
-    this.options.projectileInteraction.setProjectileDirectImpactPort(null);
+    this.options.projectileInteraction.setProjectileCombatPort(null);
     decoySystem.setCombatStateReader(null);
     decoySystem.setRunSpeedResolver(null);
     decoySystem.setCooldownStarter(null);
@@ -479,9 +479,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       return vulnerability * (o.getMatrixDamageMultiplier?.(footprint, matrixApplies) ?? 1);
     });
     combat.setApplyVulnerabilityHandler((target, durationMs) => o.getTargetStatusSystem()?.applyVulnerability(target, durationMs));
-    combat.setEnergyInjectorTargetHitCallback((targetType, targetId, x, y, projectile) => {
-      if (targetType === 'player' && !o.network.authority.isEnemyPair(projectile.ownerId, targetId)) return;
-      o.hostUpdate.applyEnergyInjectorTargetHit(targetType, targetId, x, y, projectile);
+    combat.setEnergyInjectorTargetHitCallback((impact: ProjectileEnergyInjectorImpact) => {
+      if (impact.targetType === 'player' && !o.network.authority.isEnemyPair(impact.ownerId, impact.targetId)) return;
+      o.hostUpdate.applyEnergyInjectorTargetHit(impact.targetType, impact.targetId, impact.x, impact.y, impact);
     });
     combat.setHitscanSupportImpactCallback((impact, effect, attackerId, sourceSlot) => o.hostUpdate.applyHitscanSupportImpact(impact, effect, attackerId, sourceSlot));
     combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
@@ -553,10 +553,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const p = o.getPlayerCombatIntegration();
       const resolvedDamage = p?.modifier.resolveOutgoingDamage(attackerId, 'train', damage, false).amount ?? damage;
       o.getWorldTrain()?.applyDamage(resolvedDamage, attackerId);
-    });
-    combat.setProjectileImpactCallback((projectileId, x, y) => {
-      const projectile = o.projectileManager.getProjectileById(projectileId);
-      if (projectile) o.spawnImpactCloud(projectile, x, y);
     });
     combat.setPlayerImpulseCallback((playerId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(playerId, vx, vy, durationMs, sourcePlayerId));
     combat.setEnemyImpulseCallback((enemyId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId));
@@ -764,6 +760,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.combatSystem.setResourceSystem(playerCombat.resource);
     o.combatSystem.setLoadoutManager(playerCombat.loadout);
     o.combatSystem.setAk47Behavior(playerCombat.ak47);
+    o.combatSystem.setPlasmaSwarmReactionHandler((impact) => o.projectileManager.applyPlasmaSwarmImpact(impact));
     o.combatSystem.setAk47DirectEnemyHitHandler((projectile, enemyId, nowMs) => (
       playerCombat.reactions.handleDirectAk47EnemyHit(projectile, enemyId, nowMs)
     ));
@@ -968,9 +965,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.projectileInteraction.setProjectileBarrierPort({
       resolveBarrier: (request) => o.combatSystem.resolveProjectileBarrier(request),
     });
-    o.projectileInteraction.setProjectileDirectImpactPort({
-      resolveDirectImpact: (request) => o.combatSystem.resolveProjectileImpact(request),
-    });
+    o.projectileInteraction.setProjectileCombatPort(o.combatSystem);
     o.projectileManager.setRockHitCallback((rockId, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;

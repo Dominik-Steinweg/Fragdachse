@@ -49,30 +49,35 @@ import { isCoopDefenseMode } from '../gameModes';
 import type {
   ProjectileBarrierRequest,
   ProjectileBarrierResolution,
-  ProjectileImpactRequest,
-  ProjectileImpactResolution,
 } from '../projectile/ProjectileInteractionPorts';
+import type {
+  ProjectileAk47DirectImpact,
+  ProjectileAk47HitContext,
+  ProjectileCombatPort,
+  ProjectileDirectImpactRequest,
+  ProjectileDirectImpactOutcome,
+  ProjectileEnergyInjectorAugment,
+  ProjectileEnergyInjectorImpact,
+  ProjectilePlasmaSwarmImpact,
+} from '../projectile/ProjectileCombatPort';
 import type { ProjectileCollisionTargetSink } from '../projectile/ProjectileTargetPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 import { getRageGeneratingDamage } from '../utils/rageDamage';
 import { mergeEnemySlow, type EnemySlowState } from '../utils/enemySlow';
 import {
-  canTriggerPlasmaSwarm,
   PLASMA_SWARM_BASE_EXPLOSION_DAMAGE,
   PLASMA_SWARM_BASE_EXPLOSION_RADIUS,
   PLASMA_SWARM_BASE_PROJECTILE_COUNT,
-  PLASMA_SWARM_EXPLOSION_DURATION_MS,
   PLASMA_SWARM_CHANCE_PER_STACK_PERCENT,
   PlasmaChargeTracker,
   resolvePlasmaSwarmProjectileCount,
-  resolvePlasmaSwarmProjectileProfile,
-  resolvePlasmaSwarmRadialAngles,
-  resolvePlasmaSwarmHoming,
   shouldIgnorePlasmaSwarmOriginHit,
 } from './PlasmaCharge';
 import type { TargetStatusTarget } from './TargetStatusSystem';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
+
+type Ak47DirectEnemyHitImpact = ProjectileAk47DirectImpact;
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -107,11 +112,7 @@ interface AoeDamageOptions {
   killSource?: KillSourceContext;
 }
 
-export interface Ak47DirectEnemyHitImpact {
-  readonly damageMultiplier: number;
-  readonly explosionRadius?: number;
-  readonly explosionDamageFraction?: number;
-}
+export type { ProjectileAk47DirectImpact as Ak47DirectEnemyHitImpact } from '../projectile/ProjectileCombatPort';
 
 /**
  * Herkunft eines Schadensereignisses.
@@ -278,7 +279,7 @@ type SweptProjectileHit =
   | { kind: 'enemy'; enemyId: string; distance: number; x: number; y: number }
   | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
 
-export class CombatSystem {
+export class CombatSystem implements ProjectileCombatPort {
   private hp:            Map<string, number>                           = new Map();
   private maxHp:         Map<string, number>                           = new Map();
   private armor:         Map<string, number>                           = new Map();
@@ -342,7 +343,7 @@ export class CombatSystem {
   private onKillCb: ((killerId: string, victimId: string, sourceId: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null = null;
-  private onAk47DirectEnemyHit: ((projectile: TrackedProjectile, enemyId: string, nowMs: number) => Ak47DirectEnemyHitImpact | null) | null = null;
+  private onAk47DirectEnemyHit: ((context: ProjectileAk47HitContext, enemyId: string, nowMs: number) => ProjectileAk47DirectImpact | null) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
   private burrowSystem:     BurrowSystemType    | null  = null;
@@ -371,7 +372,6 @@ export class CombatSystem {
   // Callbacks für Objekt-Schaden (gesetzt von ArenaScene)
   private onRockDamage:  ((rockIndex: number, damage: number, attackerId: string) => void) | null = null;
   private onTrainDamage: ((damage: number, attackerId: string) => void) | null = null;
-  private onProjectileImpact: ((projectileId: number, x: number, y: number) => void) | null = null;
   private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
@@ -393,13 +393,9 @@ export class CombatSystem {
   private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
   /** Gemeinsamer zielseitiger Multiplikator fuer Gegner und hostautoritäre Strukturen. */
   private targetIncomingDamageMultiplierResolver: ((target: TargetStatusTarget) => number) | null = null;
-  private onEnergyInjectorTargetHit: ((
-    targetType: 'player' | 'enemy',
-    targetId: string,
-    x: number,
-    y: number,
-    projectile: TrackedProjectile,
-  ) => void) | null = null;
+  private onEnergyInjectorTargetHit: ((impact: ProjectileEnergyInjectorImpact) => void) | null = null;
+  private onPlasmaSwarmReaction: ((impact: ProjectilePlasmaSwarmImpact) => void) | null = null;
+  private hostFrameNowMs = 0;
   private onHitscanSupportImpact: ((
     impact: HitscanSupportImpact,
     effect: HitscanSupportEffect,
@@ -505,14 +501,11 @@ export class CombatSystem {
   setTargetIncomingDamageMultiplierResolver(resolver: ((target: TargetStatusTarget) => number) | null): void {
     this.targetIncomingDamageMultiplierResolver = resolver;
   }
-  setEnergyInjectorTargetHitCallback(handler: ((
-    targetType: 'player' | 'enemy',
-    targetId: string,
-    x: number,
-    y: number,
-    projectile: TrackedProjectile,
-  ) => void) | null): void {
+  setEnergyInjectorTargetHitCallback(handler: ((impact: ProjectileEnergyInjectorImpact) => void) | null): void {
     this.onEnergyInjectorTargetHit = handler;
+  }
+  setPlasmaSwarmReactionHandler(handler: ((impact: ProjectilePlasmaSwarmImpact) => void) | null): void {
+    this.onPlasmaSwarmReaction = handler;
   }
   setHitscanSupportImpactCallback(handler: ((
     impact: HitscanSupportImpact,
@@ -662,10 +655,6 @@ export class CombatSystem {
     this.onTrainDamage = cb;
   }
 
-  setProjectileImpactCallback(cb: ((projectileId: number, x: number, y: number) => void) | null): void {
-    this.onProjectileImpact = cb;
-  }
-
   setPlayerImpulseCallback(cb: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null): void {
     this.onPlayerImpulse = cb;
   }
@@ -687,8 +676,12 @@ export class CombatSystem {
     this.onEnemyDeathCb = cb;
   }
 
-  setAk47DirectEnemyHitHandler(handler: ((projectile: TrackedProjectile, enemyId: string, nowMs: number) => Ak47DirectEnemyHitImpact | null) | null): void {
+  setAk47DirectEnemyHitHandler(handler: ((context: ProjectileAk47HitContext, enemyId: string, nowMs: number) => Ak47DirectEnemyHitImpact | null) | null): void {
     this.onAk47DirectEnemyHit = handler;
+  }
+
+  setHostFrameTime(nowMs: number): void {
+    this.hostFrameNowMs = nowMs;
   }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
@@ -1321,9 +1314,7 @@ export class CombatSystem {
       const dy = request.y - dome.y;
       if (dx * dx + dy * dy > dome.radius * dome.radius) continue;
 
-      // Legacy-Read der Trefferwirkung; er entfällt mit dem `ProjectileCombatPort` in Phase 7.
-      const projectile = this.projectileManager.getProjectileById(request.projectileId);
-      const blockedDamage = projectile ? this.computeProjectileDamage(projectile) : 0;
+      const blockedDamage = request.damage ?? 0;
       this.energyShieldSystem?.onDomeAbsorb(dome.ownerId, blockedDamage, request.nowMs);
 
       // Reine Absorptionskuppel: das Geschoss verschwindet folgenlos, bei Brutbomben
@@ -1396,33 +1387,46 @@ export class CombatSystem {
     );
   }
 
-  private registerAk47Hit(proj: TrackedProjectile, nowMs: number): void {
-    if (proj.ak47ShotId === undefined || proj.ak47HitConfirmed) return;
-    this.ak47Behavior?.registerProjectileHit(proj, nowMs);
+  private registerAk47Hit(context: ProjectileAk47HitContext | undefined): void {
+    if (!context) return;
+    this.ak47Behavior?.registerProjectileHit(context, this.hostFrameNowMs);
   }
 
-  private resolveAk47DirectEnemyHit(proj: TrackedProjectile, enemyId: string, nowMs: number): Ak47DirectEnemyHitImpact {
-    if (proj.ak47ShotId === undefined || proj.sourceSlot !== 'weapon2') {
+  private resolveAk47DirectEnemyHit(
+    request: ProjectileDirectImpactRequest,
+    enemyId: string,
+  ): ProjectileAk47DirectImpact {
+    const shotId = request.provenance.correlation?.ak47ShotId;
+    const fireSuperiorityShot = request.directHit.ak47?.fireSuperiorityShot === true;
+    if (shotId === undefined || request.provenance.sourceSlot !== 'weapon2') {
       return { damageMultiplier: 1 };
     }
-    return this.onAk47DirectEnemyHit?.(proj, enemyId, nowMs) ?? { damageMultiplier: 1 };
+    const context: ProjectileAk47HitContext = {
+      ownerId: request.provenance.allegiance.ownerId,
+      shotId,
+      fireSuperiorityShot,
+    };
+    this.registerAk47Hit(context);
+    return this.onAk47DirectEnemyHit?.(context, enemyId, this.hostFrameNowMs) ?? { damageMultiplier: 1 };
   }
 
   private applyAk47TargetExplosion(
-    proj: TrackedProjectile,
+    x: number,
+    y: number,
+    ownerId: string,
     enemyId: string,
     directDamage: number,
-    impact: Ak47DirectEnemyHitImpact,
+    impact: ProjectileAk47DirectImpact,
   ): void {
     const radius = impact.explosionRadius ?? 0;
     const fraction = impact.explosionDamageFraction ?? 0;
     if (radius <= 0 || fraction <= 0 || directDamage <= 0) return;
     this.applyAoeDamage(
-      proj.sprite.x,
-      proj.sprite.y,
+      x,
+      y,
       radius,
       directDamage * fraction,
-      proj.ownerId,
+      ownerId,
       false,
       {
         category: 'explosion',
@@ -1442,246 +1446,265 @@ export class CombatSystem {
    * Kontaktgedächtnis und Verbrauch liegen dort. Hier entstehen nur Schaden, Brand, Kettenwirkung
    * und die target-lokale Defense-Entscheidung.
    */
-  resolveProjectileImpact(request: ProjectileImpactRequest): ProjectileImpactResolution {
-    // Legacy-Read des Runtime-Records; er entfällt mit dem `ProjectileCombatPort` in Phase 7.
-    const proj = this.projectileManager.getProjectileById(request.candidate.projectileId);
-    if (!proj) return { kind: 'ignored' };
-    const target = request.candidate.target;
-    if (target.kind === 'player') return this.applyProjectilePlayerImpact(proj, target.id, request);
-    if (target.kind === 'enemy') return this.applyProjectileEnemyImpact(proj, target.id, request);
-    if (target.kind === 'decoy') return this.applyProjectileDecoyImpact(proj, target.id, request);
-    return { kind: 'ignored' };
+  resolveDirectImpact(request: ProjectileDirectImpactRequest): ProjectileDirectImpactOutcome {
+    if (request.target.kind === 'player') return this.applyDirectPlayerImpact(request, request.target.id);
+    if (request.target.kind === 'enemy') return this.applyDirectEnemyImpact(request, request.target.id);
+    return this.applyDirectDecoyImpact(request, request.target.id);
   }
 
   /** Trefferwirkung gegen einen Spieler inklusive Schild-Auflösung. */
-  private applyProjectilePlayerImpact(
-    proj: TrackedProjectile,
+  private applyDirectPlayerImpact(
+    request: ProjectileDirectImpactRequest,
     playerId: string,
-    request: ProjectileImpactRequest,
-  ): ProjectileImpactResolution {
+  ): ProjectileDirectImpactOutcome {
     const player = this.playerManager.getPlayer(playerId);
-    if (!player) return { kind: 'ignored' };
-    const { candidate, contact, nowMs } = request;
-    const actualDamage = this.computeProjectileDamage(proj);
+    if (!player) return { accepted: false };
+    const actualDamage = this.computeDirectDamage(request);
     const impactSource = {
-      sourceX: candidate.x,
-      sourceY: candidate.y,
-      dirX: proj.body.velocity.x,
-      dirY: proj.body.velocity.y,
+      sourceX: request.impact.x,
+      sourceY: request.impact.y,
+      dirX: request.velocity.x,
+      dirY: request.velocity.y,
     };
     const damageOptions = {
-      allowTeamDamage: proj.allowTeamDamage,
-      sourceSlot: proj.sourceSlot,
+      allowTeamDamage: request.provenance.allegiance.allowTeamDamage,
+      sourceSlot: request.provenance.sourceSlot,
       damageKind: 'direct' as const,
     };
 
-    if (proj.energyInjectorPayload) {
-      this.onEnergyInjectorTargetHit?.('player', playerId, player.x, player.y, proj);
-      return { kind: 'applied' };
+    const energyInjector = findEnergyInjector(request);
+    if (energyInjector) {
+      this.onEnergyInjectorTargetHit?.({
+        projectileId: request.projectileId,
+        ownerId: request.provenance.allegiance.ownerId,
+        provenance: energyInjector.provenance,
+        payload: energyInjector.payload,
+        targetType: 'player',
+        targetId: playerId,
+        x: player.x,
+        y: player.y,
+      });
+      return { accepted: true, actualDamage: 0 };
     }
 
-    if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, candidate.x, candidate.y, nowMs)) {
-      const reflectionFactor = proj.reflected ? 0 : (this.energyShieldSystem?.getReflectionDamageFactor(playerId) ?? 0);
-      if (reflectionFactor <= 0) return { kind: 'defended', defense: { kind: 'absorbed' } };
-      // Der Overlap-Treffer reflektiert am Spieler, der Sweep am aufgelösten Trefferpunkt.
+    if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, request.impact.x, request.impact.y, this.hostFrameNowMs)) {
+      const reflectionFactor = request.provenance.lineage?.reflected
+        ? 0
+        : (this.energyShieldSystem?.getReflectionDamageFactor(playerId) ?? 0);
+      if (reflectionFactor <= 0) return { accepted: true, blocked: true, actualDamage: 0, defense: { kind: 'absorbed' } };
       return {
-        kind: 'defended',
+        accepted: true,
+        blocked: true,
         defense: {
           kind: 'reflected',
           damageFactor: reflectionFactor,
           attributionId: playerId,
           allegiance: { ownerId: playerId },
-          originX: candidate.source === 'sweep' ? candidate.x : player.x,
-          originY: candidate.source === 'sweep' ? candidate.y : player.y,
+          originX: request.impact.x,
+          originY: request.impact.y,
           sourceId: 'environment.reflector',
           sourceSlot: 'weapon2',
         },
       };
     }
 
-    this.registerAk47Hit(proj, nowMs);
-
-    if (contact === 'penetration') {
-      this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
-      this.applyProjectileBurn(playerId, proj);
-      return { kind: 'applied' };
+    const ownerId = request.provenance.allegiance.ownerId;
+    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
+    this.registerAk47Hit(createAk47Context(request));
+    this.applyProjectileBurnAugments(playerId, request);
+    const before = this.getHP(playerId) + this.getArmor(playerId);
+    this.applyDamage(playerId, actualDamage, false, ownerId, sourceId, impactSource, damageOptions);
+    const dealt = Math.max(0, before - this.getHP(playerId) - this.getArmor(playerId));
+    if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
-
-    if (contact === 'pierce') {
-      this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
-      if (hasGaussDischarge(proj)) {
-        this.resolveGaussDischarge(proj, playerId, undefined, actualDamage);
-      } else if (proj.piercesTargets === true) {
-        this.applyProjectileBurn(playerId, proj);
-      }
-      return { kind: 'applied' };
-    }
-
-    if (contact === 'flame') {
-      this.applyBurnHit(
-        playerId,
-        proj.ownerId,
-        proj.burnDurationMs ?? 0,
-        proj.burnDamagePerTick ?? 0,
-        `weapon:${proj.sourceId}`,
-        proj.sourceId,
-        'flamethrower_direct',
-      );
-      this.applyDamage(playerId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, damageOptions);
-      return { kind: 'applied' };
-    }
-
-    // Brennende Treffer werden zentral in handleHit aus den Burn-Feldern angewendet.
-    this.handleHit(proj.id, playerId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId, true);
-    return { kind: 'consumed' };
+    this.resolveGaussDischarge(request, playerId, undefined, dealt);
+    return {
+      accepted: true,
+      actualDamage: dealt,
+      becameDead: !this.isAlive(playerId),
+      reaction: createReactionMetadata(request),
+    };
   }
 
   /** Trefferwirkung gegen einen Gegner inklusive AK47-Fokus und Gauss-Entladung. */
-  private applyProjectileEnemyImpact(
-    proj: TrackedProjectile,
+  private applyDirectEnemyImpact(
+    request: ProjectileDirectImpactRequest,
     enemyId: string,
-    request: ProjectileImpactRequest,
-  ): ProjectileImpactResolution {
+  ): ProjectileDirectImpactOutcome {
     const enemy = this.enemyManager?.getEnemy(enemyId);
-    if (!enemy) return { kind: 'ignored' };
-    const { candidate, contact, nowMs } = request;
-    const actualDamage = this.computeProjectileDamage(proj);
+    if (!enemy) return { accepted: false };
+    const ak47Impact = this.resolveAk47DirectEnemyHit(request, enemyId);
+    const actualDamage = this.computeDirectDamage(request) * Math.max(0, ak47Impact.damageMultiplier);
+    const plasmaSwarm = this.resolvePlasmaSwarmReaction(request, enemyId, enemy.sprite.x, enemy.sprite.y);
+    if (plasmaSwarm) this.onPlasmaSwarmReaction?.(plasmaSwarm);
     const impactSource = {
-      sourceX: candidate.x,
-      sourceY: candidate.y,
-      dirX: proj.body.velocity.x,
-      dirY: proj.body.velocity.y,
+      sourceX: request.impact.x,
+      sourceY: request.impact.y,
+      dirX: request.velocity.x,
+      dirY: request.velocity.y,
     };
-
-    if (proj.energyInjectorPayload) {
-      this.onEnergyInjectorTargetHit?.('enemy', enemyId, enemy.sprite.x, enemy.sprite.y, proj);
-      return { kind: 'applied' };
-    }
-
-    if (contact === 'penetration') {
-      const impact = this.resolveAk47DirectEnemyHit(proj, enemyId, nowMs);
-      const impactDamage = actualDamage * impact.damageMultiplier;
-      this.registerAk47Hit(proj, nowMs);
-      // Der Sweep verrechnet den Treffer vor dem Brand, der Overlap-Treffer danach.
-      if (candidate.source === 'sweep') {
-        this.applyDamage(enemyId, impactDamage, false, proj.ownerId, proj.sourceId, impactSource, {
-          allowTeamDamage: proj.allowTeamDamage,
-          sourceSlot: proj.sourceSlot,
-          damageKind: 'direct',
-        });
-        this.applyProjectileBurn(enemyId, proj);
-      } else {
-        this.applyProjectileBurn(enemyId, proj);
-        this.applyDamage(enemyId, impactDamage, false, proj.ownerId, proj.sourceId, impactSource, {
-          allowTeamDamage: proj.allowTeamDamage,
-          sourceSlot: proj.sourceSlot,
-          damageKind: 'direct',
-        });
-      }
-      this.applyAk47TargetExplosion(proj, enemyId, impactDamage, impact);
-      return { kind: 'applied' };
-    }
-
-    if (contact === 'pierce') {
-      // Durchschlag gilt nur gegen logische Kampfziele; Felsen und Zug bleiben Weltblocker.
-      if (proj.piercesTargets === true || !(proj.isBfg === true || hasGaussDischarge(proj))) {
-        if (hasGaussDischarge(proj)) this.registerAk47Hit(proj, nowMs);
-        this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
-          sourceSlot: proj.sourceSlot,
-          damageKind: 'direct',
-        });
-        if (hasGaussDischarge(proj)) this.resolveGaussDischarge(proj, undefined, enemyId, actualDamage);
-        return { kind: 'applied' };
-      }
-      this.registerAk47Hit(proj, nowMs);
-      this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
-        allowTeamDamage: proj.allowTeamDamage,
-        sourceSlot: proj.sourceSlot,
-        damageKind: 'direct',
+    const energyInjector = findEnergyInjector(request);
+    if (energyInjector) {
+      this.onEnergyInjectorTargetHit?.({
+        projectileId: request.projectileId,
+        ownerId: request.provenance.allegiance.ownerId,
+        provenance: energyInjector.provenance,
+        payload: energyInjector.payload,
+        targetType: 'enemy',
+        targetId: enemyId,
+        x: enemy.sprite.x,
+        y: enemy.sprite.y,
       });
-      if (hasGaussDischarge(proj)) this.resolveGaussDischarge(proj, undefined, enemyId, actualDamage);
-      return { kind: 'applied' };
+      return { accepted: true, actualDamage: 0, reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm) };
     }
-
-    if (contact === 'flame') {
-      this.registerAk47Hit(proj, nowMs);
-      this.applyBurnHit(
-        enemyId,
-        proj.ownerId,
-        proj.burnDurationMs ?? 0,
-        proj.burnDamagePerTick ?? 0,
-        `weapon:${proj.sourceId}`,
-        proj.sourceId,
-        'flamethrower_direct',
-      );
-      this.applyDamage(enemyId, actualDamage, false, proj.ownerId, proj.sourceId, impactSource, {
-        allowTeamDamage: proj.allowTeamDamage,
-        sourceSlot: proj.sourceSlot,
-        damageKind: 'direct',
-      });
-      return { kind: 'applied' };
+    const ownerId = request.provenance.allegiance.ownerId;
+    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
+    const before = typeof enemy.getHp === 'function' ? enemy.getHp() : undefined;
+    this.applyEnemySlowFromDirectHit(enemyId, request);
+    this.applyProjectileVulnerability({ targetType: 'enemy', targetId: enemyId }, request.directHit.vulnerabilityDurationMs ?? 0);
+    this.applyProjectileBurnAugments(enemyId, request);
+    this.applyDamage(enemyId, actualDamage, false, ownerId, sourceId, impactSource, {
+      allowTeamDamage: request.provenance.allegiance.allowTeamDamage,
+      sourceSlot: request.provenance.sourceSlot,
+      damageKind: 'direct',
+    });
+    const dealt = before === undefined ? actualDamage : Math.max(0, before - enemy.getHp());
+    this.applyAk47TargetExplosion(request.impact.x, request.impact.y, ownerId, enemyId, dealt, ak47Impact);
+    this.resolveGaussDischarge(request, undefined, enemyId, dealt);
+    if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
-
-    // Brennende Treffer werden zentral in handleEnemyHit angewendet.
-    const impact = this.resolveAk47DirectEnemyHit(proj, enemyId, nowMs);
-    this.registerAk47Hit(proj, nowMs);
-    this.handleEnemyHit(
-      proj.id,
-      enemyId,
-      actualDamage * impact.damageMultiplier,
-      proj.ownerId,
-      proj.adrenalinGain,
-      proj.sourceId,
-      impact,
-    );
-    return { kind: 'consumed' };
+    return {
+      accepted: true,
+      actualDamage: dealt,
+      becameDead: before !== undefined && enemy.getHp() <= 0,
+      reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm),
+    };
   }
 
   /** Trefferwirkung gegen einen Köder. */
-  private applyProjectileDecoyImpact(
-    proj: TrackedProjectile,
+  private applyDirectDecoyImpact(
+    request: ProjectileDirectImpactRequest,
     decoyId: number,
-    request: ProjectileImpactRequest,
-  ): ProjectileImpactResolution {
-    const { candidate, contact, nowMs } = request;
-    const actualDamage = this.computeProjectileDamage(proj);
+  ): ProjectileDirectImpactOutcome {
+    const actualDamage = this.computeDirectDamage(request);
     const impactSource = {
-      sourceX: candidate.x,
-      sourceY: candidate.y,
-      dirX: proj.body.velocity.x,
-      dirY: proj.body.velocity.y,
+      sourceX: request.impact.x,
+      sourceY: request.impact.y,
+      dirX: request.velocity.x,
+      dirY: request.velocity.y,
     };
-    this.registerAk47Hit(proj, nowMs);
-
-    if (contact === 'penetration') {
-      this.decoySystem?.applyDamage(decoyId, actualDamage, proj.ownerId, proj.sourceId, impactSource);
-      return { kind: 'applied' };
+    const ownerId = request.provenance.allegiance.ownerId;
+    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
+    const hit = this.decoySystem?.applyDamage(decoyId, actualDamage, ownerId, sourceId, impactSource) ?? false;
+    if (hit && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
+      this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
-
-    if (contact === 'pierce') {
-      const hit = this.decoySystem?.applyDamage(decoyId, actualDamage, proj.ownerId, proj.sourceId, impactSource) ?? false;
-      if (hit && proj.adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(proj.ownerId, proj.adrenalinGain);
-      }
-      return { kind: 'applied' };
-    }
-
-    this.handleDecoyHit(proj.id, decoyId, actualDamage, proj.ownerId, proj.adrenalinGain, proj.sourceId);
-    return { kind: 'consumed' };
+    return { accepted: hit, actualDamage: hit ? actualDamage : 0, reaction: createReactionMetadata(request) };
   }
-  private resolveGaussDischarge(proj: TrackedProjectile, hitPlayerId: string | undefined, hitEnemyId: string | undefined, damage: number): void {
-    const radius = proj.gaussChainRadius ?? 0;
-    const factor = proj.gaussChainDamageFactor ?? 0;
+
+  private computeDirectDamage(request: ProjectileDirectImpactRequest): number {
+    const directHit = request.directHit;
+    let multiplier = directHit.ak47?.damageMultiplier ?? 1;
+    if (
+      directHit.shotgun?.proximityMaxDamageBonus && directHit.shotgun.resolvedRange > 0
+    ) {
+      const distance = Phaser.Math.Distance.Between(
+        directHit.shotgun.originX,
+        directHit.shotgun.originY,
+        request.impact.x,
+        request.impact.y,
+      );
+      const closeness = Phaser.Math.Clamp(1 - distance / directHit.shotgun.resolvedRange, 0, 1);
+      multiplier *= 1 + closeness * directHit.shotgun.proximityMaxDamageBonus;
+    }
+    return Math.max(0, directHit.damage * multiplier)
+      * this.getPlayerRuntimeDamageMultiplier(
+        request.provenance.allegiance.ownerId,
+        request.provenance.sourceSlot,
+      );
+  }
+
+  private applyProjectileBurnAugments(targetId: string, request: ProjectileDirectImpactRequest): void {
+    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
+    for (const augment of request.augments) {
+      if (!('burn' in augment)) continue;
+      const burn = augment.burn;
+      this.applyBurnHit(
+        targetId,
+        augment.provenance.allegiance.ownerId,
+        burn.durationMs,
+        burn.damagePerTick,
+        `weapon:${sourceId}`,
+        augment.provenance.weaponSourceId ?? sourceId,
+        'generic',
+      );
+    }
+  }
+
+  private applyEnemySlowFromDirectHit(enemyId: string, request: ProjectileDirectImpactRequest): void {
+    const slowFraction = request.directHit.slowFraction ?? request.directHit.shotgun?.slowFraction ?? 0;
+    const slowDurationMs = request.directHit.slowDurationMs ?? request.directHit.shotgun?.slowDurationMs ?? 0;
+    if (slowFraction > 0 && slowDurationMs > 0) this.applyEnemySlow(enemyId, slowFraction, slowDurationMs);
+  }
+
+  private resolvePlasmaSwarmReaction(
+    request: ProjectileDirectImpactRequest,
+    enemyId: string,
+    x: number,
+    y: number,
+  ): ProjectilePlasmaSwarmImpact | undefined {
+    const spec = request.directHit.plasmaSwarm;
+    if (!spec || request.provenance.lineage?.plasmaSwarmChild === true) return undefined;
+    const enemy = this.enemyManager?.getEnemy(enemyId);
+    if (!enemy) return undefined;
+    const charge = this.plasmaChargeTracker.addHit(enemyId, this.hostFrameNowMs);
+    enemy.updatePlasmaChargeStacks(charge.stacks);
+    const procCount = resolvePlasmaSwarmProjectileCount(charge.stacks * PLASMA_SWARM_CHANCE_PER_STACK_PERCENT);
+    if (procCount <= 0) return undefined;
+
+    const normalSpeed = Math.max(1, Math.hypot(request.velocity.x, request.velocity.y));
+    return {
+      ownerId: request.provenance.allegiance.ownerId,
+      enemyId,
+      x,
+      y,
+      projectileCount: Math.max(PLASMA_SWARM_BASE_PROJECTILE_COUNT, Math.floor(spec.projectileCount ?? PLASMA_SWARM_BASE_PROJECTILE_COUNT)),
+      normalDamage: Math.max(0, request.directHit.damage),
+      normalSize: 1,
+      normalSpeed,
+      normalRange: normalSpeed,
+      explosionRadius: Math.max(1, spec.explosionRadius ?? PLASMA_SWARM_BASE_EXPLOSION_RADIUS),
+      explosionDamage: Math.max(0, spec.explosionDamage ?? PLASMA_SWARM_BASE_EXPLOSION_DAMAGE),
+      explosionSlowFraction: Math.max(0, spec.explosionSlowFraction ?? 0),
+      color: COLORS.GREEN_2,
+      ownerColor: COLORS.GREEN_2,
+      sourceId: request.provenance.weaponSourceId ?? 'weapon.plasma',
+      sourceSlot: request.provenance.sourceSlot,
+      allowTeamDamage: request.provenance.allegiance.allowTeamDamage,
+      baseDamageMult: request.directHit.baseDamageMult,
+    };
+  }
+
+  private resolveGaussDischarge(
+    request: ProjectileDirectImpactRequest,
+    hitPlayerId: string | undefined,
+    hitEnemyId: string | undefined,
+    damage: number,
+  ): void {
+    const radius = request.directHit.gaussChain?.radius ?? 0;
+    const factor = request.directHit.gaussChain?.damageFactor ?? 0;
     if (radius <= 0 || factor <= 0) return;
     this.resolveChainLightning({
-      shooterId: proj.ownerId,
-      originX: proj.sprite.x,
-      originY: proj.sprite.y,
+      shooterId: request.provenance.allegiance.ownerId,
+      originX: request.impact.x,
+      originY: request.impact.y,
       baseDamage: damage,
       chainCfg: { maxJumps: 1, searchRadius: radius, damageFalloffPerJump: 1 - factor, targetPlayers: true, targetEnemies: true, targetDecoys: false },
       sourceId: 'weapon.gauss.discharge',
       adrenalinGain: 0,
-      playerColor: proj.ownerColor ?? proj.color,
+      playerColor: COLORS.GREEN_2,
       visualPreset: 'asmd_primary',
       baseThickness: 2,
       visitedPlayers: new Set(hitPlayerId ? [hitPlayerId] : []),
@@ -3144,17 +3167,8 @@ export class CombatSystem {
           projectileColor: projectile.color,
         }
       : undefined;
-    if (projectile?.impactCloud) {
-      this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
-    }
-    if (allowDamage && this.hasEnemyHitExplosion(projectile)) {
-      // Explosion nur bei tatsächlichem Treffer auf einen gültigen Gegner (z.B. XXX-BOW Explosivbolzen).
-      this.projectileManager.triggerEnemyImpactExplosion(projectileId);
-    } else if (projectile?.explosion) {
-      this.projectileManager.triggerProjectileExplosion(projectileId, `players:${playerId}`);
-    } else {
-      this.projectileManager.destroyProjectile(projectileId);
-    }
+    void projectileId;
+    void playerId;
     if (allowDamage) {
       this.applyProjectileBurn(playerId, projectile);
       this.applyProjectileVulnerability({ targetType: 'player', targetId: playerId }, projectile);
@@ -3194,22 +3208,8 @@ export class CombatSystem {
           projectileColor: projectile.color,
         }
       : undefined;
-    if (projectile?.impactCloud) {
-      this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
-    }
-    // Plasma-Aufladung und Schwarm werden vor dem Cleanup des Primärprojektils aufgelöst,
-    // damit die aktuell aufgelösten Visual-/Homing-/Projektilwerte noch live verfügbar sind.
-    if (projectile && canTriggerPlasmaSwarm(projectile)) {
-      this.applyPlasmaChargeAndSpawnSwarm(projectile, enemyId);
-    }
-    if (this.hasEnemyHitExplosion(projectile)) {
-      // Explosion nur bei Gegner-Treffer (z.B. XXX-BOW Explosivbolzen).
-      this.projectileManager.triggerEnemyImpactExplosion(projectileId);
-    } else if (projectile?.explosion) {
-      this.projectileManager.triggerProjectileExplosion(projectileId, `enemies:${enemyId}`);
-    } else {
-      this.projectileManager.destroyProjectile(projectileId);
-    }
+    void projectileId;
+    void enemyId;
 
     const slowFraction = projectile?.hitSlowFraction ?? projectile?.shotgunSlowFraction ?? 0;
     const slowDurationMs = projectile?.hitSlowDurationMs ?? projectile?.shotgunSlowDurationMs ?? 0;
@@ -3223,7 +3223,7 @@ export class CombatSystem {
       damageKind: 'direct',
     });
     if (projectile && ak47Impact) {
-      this.applyAk47TargetExplosion(projectile, enemyId, damage, ak47Impact);
+      this.applyAk47TargetExplosion(projectile.sprite.x, projectile.sprite.y, projectile.ownerId, enemyId, damage, ak47Impact);
     }
     if (leafBlowerImpulse && this.enemyManager?.hasEnemy(enemyId)) {
       this.onEnemyImpulse?.(enemyId, leafBlowerImpulse.vx, leafBlowerImpulse.vy, leafBlowerImpulse.durationMs, shooterId);
@@ -3234,99 +3234,6 @@ export class CombatSystem {
 
     if (adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-    }
-  }
-
-  private applyPlasmaChargeAndSpawnSwarm(projectile: TrackedProjectile, enemyId: string): void {
-    const enemy = this.enemyManager?.getEnemy(enemyId);
-    if (!enemy) return;
-
-    const charge = this.plasmaChargeTracker.addHit(enemyId, Date.now());
-    enemy.updatePlasmaChargeStacks(charge.stacks);
-
-    const procCount = resolvePlasmaSwarmProjectileCount(
-      charge.stacks * PLASMA_SWARM_CHANCE_PER_STACK_PERCENT,
-    );
-    if (procCount <= 0) return;
-
-    const normalSpeed = Math.max(1, projectile.initialSpeed ?? projectile.body.velocity.length());
-    const normalSize = Math.max(1, projectile.sprite.displayWidth);
-    const normalDamage = Math.max(0, projectile.damage);
-    const normalRange = Math.max(1, (projectile.lifetime * normalSpeed) / 1000);
-    const explosionRadius = Math.max(
-      1,
-      projectile.plasmaSwarmExplosionRadius ?? PLASMA_SWARM_BASE_EXPLOSION_RADIUS,
-    );
-    const explosionDamage = Math.max(
-      0,
-      projectile.plasmaSwarmExplosionDamage ?? PLASMA_SWARM_BASE_EXPLOSION_DAMAGE,
-    );
-    const explosionSlowFraction = Math.max(0, projectile.plasmaSwarmExplosionSlowFraction ?? 0);
-
-    this.projectileManager.queueStandaloneExplosion(
-      enemy.sprite.x,
-      enemy.sprite.y,
-      projectile.ownerId,
-      {
-        radius: explosionRadius,
-        maxDamage: explosionDamage,
-        minDamage: explosionDamage,
-        knockback: 0,
-        selfDamageMult: 0,
-        damageTarget: 'enemies',
-        enemySlowFraction: explosionSlowFraction,
-        enemySlowDurationMs: PLASMA_SWARM_EXPLOSION_DURATION_MS,
-        baseDamageMult: 1,
-        rockDamageMult: 1,
-        trainDamageMult: 0,
-        color: projectile.color,
-        visualStyle: 'energy',
-      },
-      projectile.sourceSlot ?? 'weapon1',
-      `${projectile.sourceId}:swarm-explosion`,
-    );
-
-    const projectileCount = Math.max(
-      PLASMA_SWARM_BASE_PROJECTILE_COUNT,
-      Math.floor(projectile.plasmaSwarmProjectileCount ?? PLASMA_SWARM_BASE_PROJECTILE_COUNT),
-    );
-    const swarmProfile = resolvePlasmaSwarmProjectileProfile({
-      damage: normalDamage,
-      size: normalSize,
-      speed: normalSpeed,
-      range: normalRange,
-    });
-    const swarmSpeed = Math.max(1, swarmProfile.speed);
-    const swarmSize = Math.max(1, swarmProfile.size);
-    const swarmDamage = swarmProfile.damage;
-    const swarmLifetime = Math.max(1, (swarmProfile.range / swarmSpeed) * 1000);
-    const angles = resolvePlasmaSwarmRadialAngles(projectileCount);
-
-    for (const angle of angles) {
-      this.projectileManager.spawnProjectile(enemy.sprite.x, enemy.sprite.y, angle, projectile.ownerId, {
-        speed: swarmSpeed,
-        size: swarmSize,
-        damage: swarmDamage,
-        color: projectile.color,
-        ownerColor: projectile.ownerColor,
-        projectileVisualScale: projectile.projectileVisualScale,
-        lifetime: swarmLifetime,
-        remainingRangePx: swarmProfile.range,
-        maxBounces: 0,
-        isGrenade: false,
-        adrenalinGain: 0,
-        sourceId: 'weapon.plasma.swarm',
-        homing: resolvePlasmaSwarmHoming(projectile.homing),
-        projectileStyle: projectile.projectileStyle,
-        energyBallVariant: projectile.energyBallVariant,
-        tracerConfig: projectile.tracerConfig,
-        allowTeamDamage: projectile.allowTeamDamage,
-        baseDamageMult: projectile.baseDamageMult,
-        suppressSpawnFx: true,
-        plasmaSwarmProjectile: true,
-        plasmaSwarmOriginEnemyId: enemyId,
-        sourceSlot: projectile.sourceSlot ?? 'weapon1',
-      });
     }
   }
 
@@ -3347,14 +3254,7 @@ export class CombatSystem {
           dirY: projectile.body.velocity.y,
         }
       : undefined;
-    if (projectile?.impactCloud) {
-      this.onProjectileImpact?.(projectileId, projectile.sprite.x, projectile.sprite.y);
-    }
-    if (projectile?.explosion) {
-      this.projectileManager.triggerProjectileExplosion(projectileId);
-    } else {
-      this.projectileManager.destroyProjectile(projectileId);
-    }
+    void projectileId;
     this.decoySystem?.applyDamage(decoyId, damage, shooterId, sourceId, visualContext);
 
     if (adrenalinGain > 0) {
@@ -3365,9 +3265,11 @@ export class CombatSystem {
   /** Setzt die zentrale Verwundbarkeit, wenn das treffende Projektil sie mitfuehrt. */
   private applyProjectileVulnerability(
     target: TargetStatusTarget,
-    projectile: TrackedProjectile | undefined,
+    durationOrProjectile: number | TrackedProjectile | undefined,
   ): void {
-    const durationMs = projectile?.hitVulnerabilityDurationMs ?? 0;
+    const durationMs = typeof durationOrProjectile === 'number'
+      ? durationOrProjectile
+      : durationOrProjectile?.hitVulnerabilityDurationMs ?? 0;
     if (durationMs > 0) this.onApplyVulnerability?.(target, durationMs);
   }
 
@@ -3773,4 +3675,32 @@ function hasGaussDischarge(
 ): boolean {
   return (projectile.gaussChainRadius ?? 0) > 0
     && (projectile.gaussChainDamageFactor ?? 0) > 0;
+}
+
+function createAk47Context(request: ProjectileDirectImpactRequest): ProjectileAk47HitContext | undefined {
+  const shotId = request.provenance.correlation?.ak47ShotId;
+  if (shotId === undefined) return undefined;
+  return {
+    ownerId: request.provenance.allegiance.ownerId,
+    shotId,
+    fireSuperiorityShot: request.directHit.ak47?.fireSuperiorityShot === true,
+  };
+}
+
+function createReactionMetadata(
+  request: ProjectileDirectImpactRequest,
+  _ak47Impact?: ProjectileAk47DirectImpact,
+  plasmaSwarm?: ProjectilePlasmaSwarmImpact,
+): { readonly ak47?: ProjectileAk47HitContext; readonly plasmaSwarm?: ProjectilePlasmaSwarmImpact } | undefined {
+  const ak47 = createAk47Context(request);
+  return ak47 || plasmaSwarm ? { ak47, plasmaSwarm } : undefined;
+}
+
+function findEnergyInjector(
+  request: ProjectileDirectImpactRequest,
+): ProjectileEnergyInjectorAugment | undefined {
+  for (const augment of request.augments) {
+    if ('kind' in augment && augment.kind === 'energy-injector') return augment;
+  }
+  return undefined;
 }

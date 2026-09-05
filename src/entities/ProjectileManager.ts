@@ -67,6 +67,17 @@ import type {
 } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileBurnAugment } from '../projectile/ProjectileTravelPort';
 import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
+import type {
+  ProjectileCombatTargetRef,
+  ProjectileDirectImpactOutcome,
+  ProjectilePlasmaSwarmImpact,
+} from '../projectile/ProjectileCombatPort';
+import {
+  PLASMA_SWARM_EXPLOSION_DURATION_MS,
+  resolvePlasmaSwarmProjectileProfile,
+  resolvePlasmaSwarmRadialAngles,
+  resolvePlasmaSwarmHoming,
+} from '../systems/PlasmaCharge';
 
 /** Client-seitiger Projektil-State für Extrapolation zwischen Netzwerk-Ticks. */
 interface ClientProjectileState {
@@ -529,6 +540,93 @@ export class ProjectileManager implements LegacyProjectileHostSimulation {
 
   setProjectileImpactCallback(cb: ((proj: TrackedProjectile, x: number, y: number) => void) | null): void {
     this.projectileImpactCallback = cb;
+  }
+
+  /**
+   * Completes the owner-side lifecycle after Combat has accepted a semantic direct outcome.
+   * Combat never receives this record or calls these legacy lifecycle operations itself.
+   */
+  finalizeDirectImpact(
+    projectile: TrackedProjectile,
+    target: ProjectileCombatTargetRef,
+    impact: { readonly x: number; readonly y: number },
+    outcome: ProjectileDirectImpactOutcome,
+  ): boolean {
+    if (!outcome.accepted || projectile.pendingDestroy) return false;
+    if (projectile.impactCloud) this.emitProjectileImpact(projectile, impact.x, impact.y);
+
+    const impactTargetKey = target.kind === 'player'
+      ? `players:${target.id}`
+      : target.kind === 'enemy'
+        ? `enemies:${target.id}`
+        : undefined;
+    const queuedExplosion = projectile.enemyHitExplosion
+      ? this.triggerEnemyImpactExplosion(projectile.id)
+      : projectile.explosion
+        ? this.triggerProjectileExplosion(projectile.id, impactTargetKey)
+        : false;
+    if (!queuedExplosion) this.queueDestroyProjectile(projectile);
+    return !projectile.pendingDestroy;
+  }
+
+  /** Applies the semantic Plasma reaction through the normal world-owned spawn path. */
+  applyPlasmaSwarmImpact(impact: ProjectilePlasmaSwarmImpact): void {
+    this.queueStandaloneExplosion(
+      impact.x,
+      impact.y,
+      impact.ownerId,
+      {
+        radius: impact.explosionRadius,
+        maxDamage: impact.explosionDamage,
+        minDamage: impact.explosionDamage,
+        knockback: 0,
+        selfDamageMult: 0,
+        damageTarget: 'enemies',
+        enemySlowFraction: impact.explosionSlowFraction,
+        enemySlowDurationMs: PLASMA_SWARM_EXPLOSION_DURATION_MS,
+        baseDamageMult: 1,
+        rockDamageMult: 1,
+        trainDamageMult: 0,
+        color: impact.color,
+        visualStyle: 'energy',
+      },
+      impact.sourceSlot ?? 'weapon1',
+      `${impact.sourceId}:swarm-explosion`,
+    );
+
+    const profile = resolvePlasmaSwarmProjectileProfile({
+      damage: impact.normalDamage,
+      size: impact.normalSize,
+      speed: impact.normalSpeed,
+      range: impact.normalRange,
+    });
+    const speed = Math.max(1, profile.speed);
+    const lifetime = Math.max(1, (profile.range / speed) * 1000);
+    for (const angle of resolvePlasmaSwarmRadialAngles(impact.projectileCount)) {
+      this.spawnProjectile(impact.x, impact.y, angle, impact.ownerId, {
+        speed,
+        size: Math.max(1, profile.size),
+        damage: profile.damage,
+        color: impact.color,
+        ownerColor: impact.ownerColor ?? impact.color,
+        lifetime,
+        remainingRangePx: profile.range,
+        maxBounces: 0,
+        isGrenade: false,
+        adrenalinGain: 0,
+        sourceId: 'weapon.plasma.swarm',
+        homing: resolvePlasmaSwarmHoming(impact.homing),
+        projectileStyle: impact.projectileStyle,
+        energyBallVariant: impact.energyBallVariant,
+        tracerConfig: impact.tracerConfig,
+        allowTeamDamage: impact.allowTeamDamage,
+        baseDamageMult: impact.baseDamageMult,
+        suppressSpawnFx: true,
+        plasmaSwarmProjectile: true,
+        plasmaSwarmOriginEnemyId: impact.enemyId,
+        sourceSlot: impact.sourceSlot ?? 'weapon1',
+      });
+    }
   }
 
   setProjectileResolvedCallback(cb: ((proj: TrackedProjectile) => void) | null): void {

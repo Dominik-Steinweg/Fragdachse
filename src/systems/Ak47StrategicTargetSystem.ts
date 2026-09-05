@@ -1,8 +1,9 @@
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { TrackedProjectile, SyncedAk47StrategicTarget } from '../types';
-import type { CombatSystem, Ak47DirectEnemyHitImpact } from './CombatSystem';
+import type { SyncedAk47StrategicTarget } from '../types';
+import type { ProjectileAk47DirectImpact, ProjectileAk47HitContext } from '../projectile/ProjectileCombatPort';
+import type { CombatSystem } from './CombatSystem';
 import type { Ak47BehaviorPort, Ak47LoadoutReadPort } from '../loadout/Ak47BehaviorPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 
@@ -72,9 +73,9 @@ export class Ak47StrategicTargetSystem {
     }
   }
 
-  handleDirectAk47EnemyHit(projectile: TrackedProjectile, enemyId: string, nowMs: number): Ak47DirectEnemyHitImpact | null {
-    const state = this.states.get(projectile.ownerId);
-    const focus = this.loadout.getEquippedWeaponConfig(projectile.ownerId, 'weapon2')?.ak47Focus;
+  handleDirectAk47EnemyHit(context: ProjectileAk47HitContext, enemyId: string, nowMs: number): ProjectileAk47DirectImpact | null {
+    const state = this.states.get(context.ownerId);
+    const focus = this.loadout.getEquippedWeaponConfig(context.ownerId, 'weapon2')?.ak47Focus;
     if (
       !state
       || !focus
@@ -83,7 +84,7 @@ export class Ak47StrategicTargetSystem {
     ) return null;
 
     state.confirmationUntil = nowMs + TARGET_HIT_CONFIRMATION_MS;
-    this.behavior.registerStrategicTargetHit(projectile, enemyId);
+    this.behavior.registerStrategicTargetHit(context, enemyId);
     const explosion = EXPLOSION_BY_LEVEL[Math.max(0, Math.min(
       EXPLOSION_BY_LEVEL.length - 1,
       Math.round(focus.explosiveTargetAcquisitionLevel),

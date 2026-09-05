@@ -25,9 +25,9 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** `7 – ProjectileCombatPort + Direct Outcomes`
-- **Gesamtstatus:** Phase 6 abgeschlossen; Collision Candidate Authority, kanonische Targets, World-Geometry-Reads, Barrier-/Defense-Aufteilung und Projectile↔Projectile-Deflection liegen im world-owned Projectile-Interaction-Stage
-- **Baseline:** verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab` (alle grün)
+- **Nächste Phase:** `8 – Explosion / Domain Effects / Grenades`
+- **Gesamtstatus:** Phase 7 abgeschlossen; semantischer ProjectileCombatPort, autoritative Direct Outcomes, target-lokale Defense und owner-seitige terminale Projectile-Reaktionen sind verdrahtet
+- **Baseline:** verifiziert mit `npm run typecheck`, `npm run check`, `npm run test:architecture` sowie den fokussierten Direct-Impact-, Burn-, AK47- und Binding-Suiten (alle grün)
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** ausstehend
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
@@ -45,7 +45,7 @@
 | 4 | ✅ | External Interaction + Read Ports |
 | 5 | ✅ | Travel / Environment / Augments |
 | 6 | ✅ | Collision + Targets + Defense |
-| 7 | ⬜ | Combat Port + Direct Outcomes |
+| 7 | ✅ | Combat Port + Direct Outcomes |
 | 8 | ⬜ | Explosion / Domain Effects / Grenades |
 | 9 | ⬜ | Complex Projectile State Machines |
 | 10 | ⬜ | Sonderfall-Parität Host Gameplay |
@@ -63,10 +63,10 @@ Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erle
 
 Der §5.1-Seam ist der einzige Legacy-Zugriff und zeigt ausschließlich auf denselben kanonischen Store: `ProjectileOwnerSeam` (owner-vermittelter Spawn/Destroy/Release und Host-Frame-Port) und `LegacyProjectileStoreAccess` (Lesen, Deaktivieren, Step-Eintrag entfernen).
 
-- [Transition] `ProjectileManager` verarbeitet World-Obstacle-/Effect-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; die Target-Collision-Kandidatenerzeugung und der Interaction-Stage liegen in `WorldProjectileRuntime`, Direct Impact/Defense-Wirkung bleibt bis Phase 7 ein schmaler Legacy-Adapter.
+- [Transition] `ProjectileManager` verarbeitet World-Obstacle-/Effect-Reste, Snapshot und Presentation weiter auf demselben kanonischen Store; die Target-Collision-Kandidatenerzeugung, semantische Combat-Aufträge und der Interaction-Stage liegen in `WorldProjectileRuntime`.
 - [Transition] `ProjectileIdentityScope` gehört zur `WorldLifecycle`-Lifetime und wird an jede lokale `WorldRuntime`-Materialisierung derselben `worldRevision` weitergereicht; er endet erst mit `endInstance`.
 - [Transition] `TrackedProjectile.provenance` ist die kanonische vollständige Provenance; Legacy-Spawn-Shape und flache Legacy-Felder bleiben nur bis zu ihren späteren Cutovers als Adapter-/Migrationsdaten bestehen.
-- [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: `CombatSystem`-Plasma-Schwarmkinder (7), übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
+- [Transition] Legacy-Spawn-Shape `spawnProjectile(x, y, angle, ownerId, cfg)` der noch nicht migrierten Quellen, owner-vermittelt: übrige Gegner-Wurfquellen (9–10), interner Hydra-Split (3).
 - [Transition] `toLegacyProjectileSpawnConfig` bildet den Spawn-Auftrag auf den Legacy-Record ab; entfällt mit dessen Ablösung (14).
 
 ---
@@ -84,8 +84,10 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Read Ports | `ProjectileThreatReadPort`, `ProjectileThreatSample`, `ProjectileDiagnosticsReadPort`, `ProjectileDiagnosticsSummary`, `ProjectilePresentationReadPort` (`src/projectile/ProjectileReadPorts.ts`) |
 | Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileFireTrailCapability`, `ProjectileAwpCorridorCapability`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment` (`src/projectile/ProjectileTravelPort.ts`); `ProjectilePathEffectKind` (`src/types.ts`) |
 | Target / Geometry / Targetability | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileCollisionTarget`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectileCollisionMode` (`src/projectile/ProjectileTargetPort.ts`, `src/types.ts`); Homing-Reads bleiben daneben bestehen |
-| Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDirectImpactPort`, `ProjectileImpactRequest`, `ProjectileImpactResolution`, `ProjectileDefenseResolution` (`src/projectile/ProjectileInteractionPorts.ts`); `ProjectileExternalInteractionPort.deflectProjectile` für Projectile↔Projectile-Transform |
-| Projectile Combat | — |
+| Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution` (`src/projectile/ProjectileInteractionPorts.ts`); `ProjectileExternalInteractionPort.deflectProjectile` für Projectile↔Projectile-Transform |
+| Projectile Combat | `ProjectileCombatPort`, `ProjectileCombatTargetRef`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileAk47HitContext`, `ProjectileEnergyInjectorImpact`, `ProjectilePlasmaSwarmImpact` (`src/projectile/ProjectileCombatPort.ts`) |
+| Domain Effect / Explosion Resolution | `ProjectileManager.finalizeDirectImpact`, `ProjectileManager.applyPlasmaSwarmImpact` als aktueller owner-seitiger Übergang |
+| Lifecycle / Outcomes | `ProjectileDirectImpactOutcome`, `ProjectileReactionMetadata` |
 | Domain Effect / Explosion Resolution | — |
 | Lifecycle / Outcomes | — |
 | Replication | — |
@@ -106,7 +108,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**Phase 7 starten; bei tatsächlichem Beginn Phase 7 auf 🟨 setzen.**
+**Phase 8 starten; bei tatsächlichem Beginn Phase 8 auf 🟨 setzen.**
 
 ---
 

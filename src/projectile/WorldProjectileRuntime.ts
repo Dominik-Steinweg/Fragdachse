@@ -54,8 +54,12 @@ import type {
   ProjectileBarrierPort,
   ProjectileBarrierResolution,
   ProjectileDefenseResolution,
-  ProjectileDirectImpactPort,
 } from './ProjectileInteractionPorts';
+import type {
+  ProjectileCombatPort,
+  ProjectileCombatTargetRef,
+  ProjectileDirectImpactOutcome,
+} from './ProjectileCombatPort';
 import type {
   ProjectileCollisionTargetQueryPort,
   ProjectileImpactCandidate,
@@ -125,6 +129,13 @@ export interface LegacyProjectileHostSimulation {
   externalInteraction?: LegacyProjectileExternalInteractionAccess;
   /** Übergangshilfe: der Legacy-Simulationsowner schreibt den kanonischen Burn-Zustand. */
   applyProjectileBurnAugment?(projectileId: ProjectileId, augment: ProjectileBurnAugment): boolean;
+  /** Führt die terminale Legacy-Reaktion nach einem autoritativen Direct Outcome aus. */
+  finalizeDirectImpact?(
+    record: TrackedProjectile,
+    target: ProjectileCombatTargetRef,
+    impact: { readonly x: number; readonly y: number },
+    outcome: ProjectileDirectImpactOutcome,
+  ): boolean;
   /** Räumt den registry-fremden Rest ab: Renderer, Snapshot-Zustand und Client-Visuals. */
   releaseWorldProjectileState(): void;
 }
@@ -210,7 +221,7 @@ export class WorldProjectileRuntime implements
   private worldBlockerPort: ProjectileWorldBlockerPort | null = null;
   private targetabilityPort: ProjectileTargetabilityPort | null = null;
   private barrierPort: ProjectileBarrierPort | null = null;
-  private directImpactPort: ProjectileDirectImpactPort | null = null;
+  private directImpactPort: ProjectileCombatPort | null = null;
   private readonly simulation: LegacyProjectileHostSimulation;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
@@ -230,6 +241,9 @@ export class WorldProjectileRuntime implements
       get directImpact() { return runtime.directImpactPort; },
       destroyProjectile: (id) => this.destroyProjectile(id),
       applyDefense: (record, defense, candidate) => this.applyDefense(record, defense, candidate),
+      finalizeDirectImpact: (record, target, impact, outcome) => (
+        this.simulation.finalizeDirectImpact?.(record, target, impact, outcome) ?? false
+      ),
     };
     this.simulation.bindProjectileOwner(this);
   }
@@ -466,7 +480,7 @@ export class WorldProjectileRuntime implements
     this.barrierPort = port;
   }
 
-  setProjectileDirectImpactPort(port: ProjectileDirectImpactPort | null): void {
+  setProjectileCombatPort(port: ProjectileCombatPort | null): void {
     this.directImpactPort = port;
   }
 
@@ -511,6 +525,7 @@ export class WorldProjectileRuntime implements
         isGrenade: record.isGrenade,
         capturable,
         allowTeamDamage: record.allowTeamDamage === true,
+        damage: record.damage,
         nowMs,
       });
       if (resolution.kind === 'passed') continue;
@@ -705,6 +720,7 @@ export class WorldProjectileRuntime implements
 
   setHostFrameTime(nowMs: number): void {
     this.simulation.setHostFrameTime?.(nowMs);
+    this.directImpactPort?.setHostFrameTime?.(nowMs);
   }
 
   /** World-Teardown: kein Record, kein Identity-Eintrag und kein Restzustand überlebt ihn. */
