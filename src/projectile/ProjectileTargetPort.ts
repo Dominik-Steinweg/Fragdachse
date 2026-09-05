@@ -147,5 +147,28 @@ export interface ProjectileImpactCandidate {
   readonly source: 'sweep' | 'overlap' | 'physics-collider' | 'world-boundary';
 }
 
+/**
+ * Technical contact reported by the Phaser adapter.
+ *
+ * The binding identifies only the physical contact and its stable world target. It does not
+ * apply damage, consume a projectile, queue an explosion, or decide support effects.
+ */
+export type ProjectilePhysicsContactTarget =
+  | { readonly kind: 'rock'; readonly id: number }
+  | { readonly kind: 'trunk' }
+  | { readonly kind: 'base'; readonly id: string }
+  | { readonly kind: 'train'; readonly id: 'main' }
+  | { readonly kind: 'world-boundary' };
+
+export interface ProjectilePhysicsContact {
+  readonly projectileId: ProjectileId;
+  readonly target: ProjectilePhysicsContactTarget;
+  readonly x: number;
+  readonly y: number;
+  readonly velocityX: number;
+  readonly velocityY: number;
+  readonly source: 'physics-collider' | 'world-boundary';
+}
+
 /** Exported with the target contract so collision modes cannot be reintroduced via style names. */
 export type { ProjectileCollisionMode } from '../types';

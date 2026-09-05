@@ -50,6 +50,26 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(runtime).toContain('readyAfterCompletedStages');
   });
 
+  it('routes Phaser world contacts through the World-owned interaction authority', () => {
+    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
+    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
+    const contactStageStart = binding.indexOf('private setupProjectileColliders');
+    const contactStageEnd = binding.indexOf('private shouldUseContinuousRockCollision');
+    const contactStage = binding.slice(contactStageStart, contactStageEnd);
+
+    expect(binding).toContain('reportPhysicsContact');
+    expect(binding).not.toContain('onRockHit');
+    expect(binding).not.toContain('onBaseHit');
+    expect(binding).not.toContain('onSupportImpact');
+    expect(binding).not.toContain('onTrainHit');
+    expect(contactStage).not.toContain('queueProjectileExplosion');
+    expect(contactStage).not.toContain('applyBaseHit');
+    expect(runtime).toContain('private reportPhysicsContact');
+    expect(runtime).toContain('resolveRockPhysicsContact');
+    expect(runtime).toContain('resolveBasePhysicsContact');
+    expect(runtime).toContain('resolveTrainPhysicsContact');
+  });
+
   it('keeps presentation, replica and replication state world-scoped', () => {
     const runtime = read('src/projectile/WorldProjectileRuntime.ts');
     const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');

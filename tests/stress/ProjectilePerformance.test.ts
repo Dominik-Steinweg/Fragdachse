@@ -159,11 +159,13 @@ describe('projectile performance paths', () => {
     const manager = new ProjectilePhysicsBinding(scene);
     manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
 
-    const body = { setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
-    const makeTracked = (multiplier: number): ProjectileRuntimeRecord => ({
+    const body = { velocity: { x: 0, y: 0 }, setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
+    const makeTracked = (id: number, multiplier: number): ProjectileRuntimeRecord => ({
+      id,
       ownerId: 'flame-owner',
       damage: 20,
       rockDamageMult: multiplier,
+      sprite: fakeEntity({ x: 10, y: 10, displayWidth: 8 }),
       body,
       pendingDestroy: false,
       hitObstacleIds: new Set<number>(),
@@ -171,10 +173,13 @@ describe('projectile performance paths', () => {
     } as unknown as ProjectileRuntimeRecord);
 
     const rockHits: Array<{ id: number; damage: number; ownerId: string }> = [];
-    manager.setRockHitCallback((rockId, damage, ownerId) => rockHits.push({ id: rockId, damage, ownerId }));
+    const staticRockFlame = makeTracked(1, 0);
+    const turretFlame = makeTracked(2, 0);
+    const secondFlame = makeTracked(3, 0.25);
+    const runtime = bindProjectileRegistry(manager, [staticRockFlame, turretFlame, secondFlame]);
+    runtime.setRockHitCallback((rockId, damage, ownerId) => rockHits.push({ id: rockId, damage, ownerId }));
 
-    const staticRockFlame = makeTracked(0);
-    manager.setObstacleKindResolver(() => undefined);
+    runtime.setObstacleKindResolver(() => undefined);
     (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
       .setupFlameColliders({}, body, staticRockFlame);
     callbacks.shift()?.({}, rock);
@@ -182,16 +187,14 @@ describe('projectile performance paths', () => {
     expect(rockHits).toEqual([]);
     expect(body.setBounce).toHaveBeenCalledWith(0, 0);
 
-    const turretFlame = makeTracked(0);
-    manager.setObstacleKindResolver(() => 'turret');
+    runtime.setObstacleKindResolver(() => 'turret');
     (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
       .setupFlameColliders({}, body, turretFlame);
     callbacks.shift()?.({}, rock);
     callbacks.shift()?.({}, rock);
     expect(rockHits).toEqual([{ id: 0, damage: 20, ownerId: 'flame-owner' }]);
 
-    const secondFlame = makeTracked(0.25);
-    manager.setObstacleKindResolver(() => undefined);
+    runtime.setObstacleKindResolver(() => undefined);
     (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
       .setupFlameColliders({}, body, secondFlame);
     callbacks.shift()?.({}, rock);
@@ -215,11 +218,13 @@ describe('projectile performance paths', () => {
     const manager = new ProjectilePhysicsBinding(scene);
     manager.setBaseGroup({} as Phaser.Physics.Arcade.StaticGroup);
 
-    const body = { setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
+    const body = { velocity: { x: 0, y: 0 }, setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
     const tracked = {
+      id: 1,
       ownerId: 'flame-owner',
       damage: 20,
       rockDamageMult: 0,
+      sprite: fakeEntity({ x: 10, y: 10, displayWidth: 8 }),
       body,
       pendingDestroy: false,
       colliders: [],
@@ -228,7 +233,8 @@ describe('projectile performance paths', () => {
       getData: vi.fn((key: string) => key === 'baseId' ? baseId : undefined),
     }) as unknown as Phaser.GameObjects.GameObject;
     const baseHits: Array<{ baseId: string; damage: number; attackerId: string; projectile?: unknown }> = [];
-    manager.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
+    const runtime = bindProjectileRegistry(manager, [tracked]);
+    runtime.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
       baseHits.push({ baseId, damage, attackerId, projectile });
     });
 
@@ -314,7 +320,8 @@ describe('projectile performance paths', () => {
       isBfg: false,
       colliders: [] }) as unknown as ProjectileRuntimeRecord;
     const rockHits: number[] = [];
-    manager.setRockHitCallback((rockId) => rockHits.push(rockId));
+    const runtime = bindProjectileRegistry(manager, [tracked]);
+    runtime.setRockHitCallback((rockId) => rockHits.push(rockId));
 
     (manager as unknown as { resolveContinuousRockCollision: (projectile: ProjectileRuntimeRecord) => void })
       .resolveContinuousRockCollision(tracked);
@@ -471,7 +478,8 @@ describe('projectile performance paths', () => {
       colliders: [],
     }) as unknown as ProjectileRuntimeRecord;
     const rockHits: number[] = [];
-    manager.setRockHitCallback((rockId) => rockHits.push(rockId));
+    const runtime = bindProjectileRegistry(manager, [projectile]);
+    runtime.setRockHitCallback((rockId) => rockHits.push(rockId));
 
     (manager as unknown as { resolveContinuousRockCollision: (projectile: ProjectileRuntimeRecord) => void })
       .resolveContinuousRockCollision(projectile);
@@ -508,6 +516,7 @@ describe('projectile performance paths', () => {
       id: 1,
       ownerId: 'shooter',
       damage: 12,
+      sprite: fakeEntity({ x: 10, y: 10, displayWidth: 8 }),
       body,
       projectileStyle: style,
       collisionMode: 'overlap',
@@ -517,8 +526,9 @@ describe('projectile performance paths', () => {
     } as unknown as ProjectileRuntimeRecord;
     const rockHits: Array<{ id: number; damage: number }> = [];
     const trainHits: number[] = [];
-    manager.setRockHitCallback((rockId, damage) => rockHits.push({ id: rockId, damage }));
-    manager.setTrainHitCallback((damage) => trainHits.push(damage));
+    const runtime = bindProjectileRegistry(manager, [projectile]);
+    runtime.setRockHitCallback((rockId, damage) => rockHits.push({ id: rockId, damage }));
+    runtime.setTrainHitCallback((damage) => trainHits.push(damage));
 
     (manager as unknown as {
       setupProjectileColliders: (

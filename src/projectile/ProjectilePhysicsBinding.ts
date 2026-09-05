@@ -3,7 +3,7 @@ import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import {
   DEPTH,
 } from '../config';
-import type { PlaceableKind, ProjectileRuntimeRecord, ProjectileSpawnConfig, ProjectileHomingConfig, SupportProjectileImpact, ProjectileCollisionMode } from '../types';
+import type { ProjectileRuntimeRecord, ProjectileSpawnConfig, ProjectileHomingConfig, ProjectileCollisionMode } from '../types';
 import type {
   HomingLineOfFireChecker,
   HomingTargetProvider,
@@ -28,6 +28,7 @@ import type {
   ProjectileHostStageResult,
   ProjectileRuntimeOwnerPort,
 } from './WorldProjectileRuntime';
+import type { ProjectilePhysicsContact, ProjectilePhysicsContactTarget } from './ProjectileTargetPort';
 import {
   effectiveAirFrictionDecay,
   type ProjectileCoreStageResult,
@@ -142,14 +143,8 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
    * zentralen Basistreffer-Callback weitergeleitet.
    */
   private baseGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
-  private onRockHit:   ((rockId: number, damage: number, attackerId: string) => void) | null = null;
-  private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
-  private onBaseHit:   ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
-  private onSupportImpact: ((proj: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null = null;
-
   // ── Zug-Kollision ─────────────────────────────────────────────────────────
   private trainGroup:  Phaser.Physics.Arcade.StaticGroup | null = null;
-  private onTrainHit:  ((damage: number, attackerId: string) => void) | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -256,59 +251,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   /**
-   * Registriert den Empfaenger fuer Projektil-Basis-Treffer (Host). Analog zu
-   * {@link setRockHitCallback}: nur der Collider weiss, welche Basiszelle getroffen wurde.
-   * Das optionale Projektil wird mitgereicht, damit der Empfaenger denselben effektiven
-   * Projektilschaden wie beim Gegner-Treffer berechnen kann.
-   */
-  setBaseHitCallback(cb: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void {
-    this.onBaseHit = cb;
-  }
-
-  /**
-   * Meldet einen Basistreffer genau einmal je Projektil und Basis.
-   *
-   * Die Entprellung ist Pflicht: Overlap-Waffen wie BFG und Gauss beruehren jede Zelle einer
-   * Basis einzeln und wuerden eine 17-Zellen-Basis sonst pro Schuss 17-mal treffen – dasselbe
-   * Problem, das fuer Felsen bereits ueber `bfgHitRocks` geloest ist.
-   */
-  private applyBaseHit(tracked: ProjectileRuntimeRecord, baseObject: Phaser.GameObjects.GameObject): void {
-    if (!this.onBaseHit || tracked.damage <= 0) return;
-    const baseId = baseObject.getData('baseId') as string | undefined;
-    if (!baseId) return;
-    tracked.hitBaseIds ??= new Set<string>();
-    if (tracked.hitBaseIds.has(baseId)) return;
-    tracked.hitBaseIds.add(baseId);
-    this.onBaseHit(baseId, tracked.damage, tracked.ownerId, this.createImpactSource(tracked));
-  }
-
-  /**
-   * Registriert einen Callback, der bei jedem Projektil-Felsen-Treffer (Host)
-   * aufgerufen wird. Gibt den Index in layout.rocks[] weiter.
-   */
-  setRockHitCallback(cb: (rockId: number, damage: number, attackerId: string) => void): void {
-    this.onRockHit = cb;
-  }
-
-  /** Resolves dynamic obstacle kinds without coupling projectile logic to loadout IDs. */
-  setObstacleKindResolver(resolver: ((rockId: number) => PlaceableKind | undefined) | null): void {
-    this.obstacleKindResolver = resolver;
-  }
-
-  /**
-   * Registriert den Empfaenger fuer Hindernistreffer von kontextabhaengigen
-   * Unterstuetzungsprojektilen (derzeit Energieinjektor). Diese Projektile richten keinen
-   * direkten Schaden an; ihre
-   * Wirkung entsteht ausschliesslich hier, weil nur der Collider weiss, welcher Fels bzw.
-   * welche Basiszelle getroffen wurde.
-   */
-  setSupportImpactCallback(
-    cb: ((proj: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null,
-  ): void {
-    this.onSupportImpact = cb;
-  }
-
-  /**
    * Setzt die StaticGroup des Zugs für Projektil-Kollision (Host-only).
    * null = kein Zug aktiv (deaktiviert die Kollision).
    */
@@ -340,14 +282,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
     if (!Number.isFinite(minX)) return null;
     return this.scratchTrainBounds.setTo(minX, minY, maxX - minX, maxY - minY);
-  }
-
-  /**
-   * Registriert einen Callback, der bei jedem Projektil-Zug-Treffer aufgerufen wird.
-   * null = kein Handler (deaktiviert den Callback ohne die Kollision zu entfernen).
-   */
-  setTrainHitCallback(cb: ((damage: number, attackerId: string) => void) | null): void {
-    this.onTrainHit = cb;
   }
 
   setNaturalFlameExpiryCallback(
@@ -812,6 +746,30 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     return this.canCollideWithRockIndex(tracked, rockIndex);
   }
 
+  /** Reports only the technical contact; WorldProjectileRuntime owns the domain outcome. */
+  private reportPhysicsContact(
+    tracked: ProjectileRuntimeRecord,
+    target: ProjectilePhysicsContactTarget,
+    x = tracked.sprite.x,
+    y = tracked.sprite.y,
+    source: ProjectilePhysicsContact['source'] = 'physics-collider',
+  ): boolean {
+    return this.owner?.reportPhysicsContact({
+      projectileId: tracked.id,
+      target,
+      x,
+      y,
+      velocityX: tracked.body.velocity.x,
+      velocityY: tracked.body.velocity.y,
+      source,
+    }) ?? false;
+  }
+
+  private getBaseId(baseObject: Phaser.GameObjects.GameObject): string | null {
+    const baseId = baseObject.getData('baseId') as string | undefined;
+    return baseId ?? null;
+  }
+
   /**
    * Richtet je nach Projektiltyp die Welt-Bounds-/Hindernis-Collider ein:
    * BFG/Gauss durchdringen (Overlap-Schaden), Impact-Cloud/Explosion zerstören bei Kontakt,
@@ -840,7 +798,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       body.onWorldBounds = true;
       const bfgBoundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        tracked.bounceCount = tracked.maxBounces + 1; // zum Entfernen markieren
+        this.reportPhysicsContact(tracked, { kind: 'world-boundary' }, body.x + body.halfWidth, body.y + body.halfHeight, 'world-boundary');
       };
       tracked.boundsListener = bfgBoundsListener;
       this.scene.physics.world.on('worldbounds', bfgBoundsListener);
@@ -848,17 +806,15 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       // Felsen: Overlap → beschädigt Fels, Projektil fliegt weiter
       if (this.rockGroup) {
         const rockObjects = this.rockObjects;
-        const onHit       = this.onRockHit;
         const c = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
-          if (!rockObjects || !onHit) return;
-            if (isGauss && !tracked.gaussHitRocks) tracked.gaussHitRocks = new Set();
-            if (!isGauss && !tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
+          if (!rockObjects) return;
+          if (isGauss && !tracked.gaussHitRocks) tracked.gaussHitRocks = new Set();
+          if (!isGauss && !tracked.bfgHitRocks) tracked.bfgHitRocks = new Set();
           const idx = rockObjects.indexOf(rockGO as RockPhysicsProxy);
           const hitSet = isGauss ? tracked.gaussHitRocks : tracked.bfgHitRocks;
           if (idx !== -1 && hitSet && !hitSet.has(idx)) {
             hitSet.add(idx);
-            const rockMult = tracked.rockDamageMult ?? 1;
-            onHit(idx, tracked.damage * rockMult, tracked.ownerId);
+            this.reportPhysicsContact(tracked, { kind: 'rock', id: idx });
           }
         }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
@@ -866,13 +822,11 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
       // Zug: Overlap → beschädigt Zug, Projektil fliegt weiter
       if (this.trainGroup) {
-        const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.overlap(sprite, this.trainGroup, () => {
           if (isGauss ? tracked.gaussHitTrain : tracked.bfgHitTrain) return;
           if (isGauss) tracked.gaussHitTrain = true;
           else tracked.bfgHitTrain = true;
-          const trainMult = tracked.trainDamageMult ?? 1;
-          onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+          this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' });
         });
         tracked.colliders.push(c);
       }
@@ -886,43 +840,34 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       body.setBounce(0, 0);
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
-        this.queueDestroyProjectile(tracked);
+        this.reportPhysicsContact(tracked, { kind: 'world-boundary' }, body.x + body.halfWidth, body.y + body.halfHeight, 'world-boundary');
       };
       tracked.boundsListener = boundsListener;
       this.scene.physics.world.on('worldbounds', boundsListener);
 
       if (this.rockGroup) {
-        const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
-          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
-          this.queueDestroyProjectile(tracked);
+        const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+          const idx = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
+          if (idx >= 0) this.reportPhysicsContact(tracked, { kind: 'rock', id: idx });
         }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
         const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
-          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
-          this.queueDestroyProjectile(tracked);
+          this.reportPhysicsContact(tracked, { kind: 'trunk' });
         });
         tracked.colliders.push(c);
       }
       if (this.baseGroup && !tracked.ignoreBaseCollisions) {
         const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
-          this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
-          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
-          this.queueDestroyProjectile(tracked);
+          const baseId = this.getBaseId(baseGO as Phaser.GameObjects.GameObject);
+          if (baseId) this.reportPhysicsContact(tracked, { kind: 'base', id: baseId });
         });
         tracked.colliders.push(c);
       }
       if (this.trainGroup) {
-        const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
-          const trainMult = tracked.trainDamageMult ?? 1;
-          if (trainMult !== 0 && tracked.damage > 0) {
-            onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
-          }
-          this.emitProjectileImpact(tracked, tracked.sprite.x, tracked.sprite.y);
-          this.queueDestroyProjectile(tracked);
+          this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' });
         });
         tracked.colliders.push(c);
       }
@@ -932,39 +877,36 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       body.setBounce(0, 0);
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        this.queueProjectileExplosion(tracked, false, true);
+        this.reportPhysicsContact(tracked, { kind: 'world-boundary' }, body.x + body.halfWidth, body.y + body.halfHeight, 'world-boundary');
       };
       tracked.boundsListener = boundsListener;
       this.scene.physics.world.on('worldbounds', boundsListener);
 
       if (this.rockGroup) {
-        const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
-          this.queueProjectileExplosion(tracked, false, true);
+        const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+          const idx = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
+          if (idx >= 0) this.reportPhysicsContact(tracked, { kind: 'rock', id: idx });
         }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
         const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
-          this.queueProjectileExplosion(tracked, false, true);
+          this.reportPhysicsContact(tracked, { kind: 'trunk' });
         });
         tracked.colliders.push(c);
       }
       if (this.baseGroup && !tracked.ignoreBaseCollisions) {
         // Explosionsprojektile richten ihren Basisschaden ueber die Explosion selbst an
         // (`applyExplosionDamage`); ein direkter Treffer wuerde ihn sonst doppelt zaehlen.
-        const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
-          this.queueProjectileExplosion(tracked, false, true);
+        const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
+          const baseId = this.getBaseId(baseGO as Phaser.GameObjects.GameObject);
+          if (baseId) this.reportPhysicsContact(tracked, { kind: 'base', id: baseId });
         });
         tracked.colliders.push(c);
       }
       if (this.trainGroup) {
-        const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
-          const trainMult = tracked.trainDamageMult ?? 1;
-          if (!tracked.miniRocketSpent && trainMult !== 0 && tracked.damage > 0) {
-            onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
-          }
-          this.queueProjectileExplosion(tracked, false, true);
+          this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' });
         });
         tracked.colliders.push(c);
       }
@@ -975,6 +917,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       body.onWorldBounds = true;
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
+        this.reportPhysicsContact(tracked, { kind: 'world-boundary' }, body.x + body.halfWidth, body.y + body.halfHeight, 'world-boundary');
         // Flamme an Wand → anhalten (Lifetime bestimmt weiterlaufend die Lebensdauer)
         body.setVelocity(0, 0);
       };
@@ -987,7 +930,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       body.onWorldBounds = true;
       const boundsListener = (hitBody: Phaser.Physics.Arcade.Body) => {
         if (hitBody !== body) return;
-        this.queueDestroyProjectile(tracked);
+        this.reportPhysicsContact(tracked, { kind: 'world-boundary' }, body.x + body.halfWidth, body.y + body.halfHeight, 'world-boundary');
       };
       tracked.boundsListener = boundsListener;
       this.scene.physics.world.on('worldbounds', boundsListener);
@@ -995,7 +938,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       this.setupLeafBlowerColliders(sprite, body, tracked);
     } else if (!cfg.isGrenade || cfg.maxBounces > 0) {
       // Bounce-Physik: für normale Projektile immer; für Granaten nur wenn maxBounces > 0
-      this.setupBouncePhysics(sprite, body, tracked, !cfg.isGrenade);
+      this.setupBouncePhysics(sprite, body, tracked);
     } else if (cfg.isGrenade && cfg.maxBounces === 0) {
       // Granate ohne Bounces (z.B. Heilige Handgranate): Wand-Kollision, aber kein Abprallen.
       // Bleibt an der Aufprallstelle liegen und explodiert nach fuseTime.
@@ -1011,29 +954,32 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
       // Fels-/Trunk-/Zug-Kollision: Granate bleibt stecken
       if (this.rockGroup) {
-        const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
+        const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
           body.setVelocity(0, 0);
+          const idx = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
+          if (idx >= 0) this.reportPhysicsContact(tracked, { kind: 'rock', id: idx });
         }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(c);
       }
       if (this.trunkGroup) {
         const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
           body.setVelocity(0, 0);
+          this.reportPhysicsContact(tracked, { kind: 'trunk' });
         });
         tracked.colliders.push(c);
       }
       if (this.baseGroup && !tracked.ignoreBaseCollisions) {
-        const c = this.scene.physics.add.collider(sprite, this.baseGroup, () => {
+        const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
           body.setVelocity(0, 0);
+          const baseId = this.getBaseId(baseGO as Phaser.GameObjects.GameObject);
+          if (baseId) this.reportPhysicsContact(tracked, { kind: 'base', id: baseId });
         });
         tracked.colliders.push(c);
       }
       if (this.trainGroup) {
-        const onTrainHit = this.onTrainHit;
         const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
           body.setVelocity(0, 0);
-          const trainMult = tracked.trainDamageMult ?? 1;
-          if (trainMult !== 0) onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
+          this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' });
         });
         tracked.colliders.push(c);
       }
@@ -1059,31 +1005,24 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       // collider statt overlap: Phaser stoppt den Body physisch am Felsen. Der
       // Callback meldet den Treffer nur einmal pro Flamme; Lebensdauer und
       // Zerstörung der Flamme bleiben vom Hindernis unabhängig.
-      const rockObjects = this.rockObjects;
-      const onHit = this.onRockHit;
       const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         if (tracked.pendingDestroy) return;
-        const idx = rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
+        const idx = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
         if (idx < 0) return;
-        tracked.hitObstacleIds ??= new Set<number>();
-        if (tracked.hitObstacleIds.has(idx)) return;
-        tracked.hitObstacleIds.add(idx);
-
-        const obstacleKind = this.obstacleKindResolver?.(idx);
-        const damage = obstacleKind !== undefined && obstacleKind !== 'rock'
-          ? tracked.damage
-          : tracked.damage * (tracked.rockDamageMult ?? 1);
-        if (damage !== 0) onHit?.(idx, damage, tracked.ownerId);
+        this.reportPhysicsContact(tracked, { kind: 'rock', id: idx });
       }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
       tracked.colliders.push(c);
     }
     if (this.trunkGroup) {
-      const c = this.scene.physics.add.collider(sprite, this.trunkGroup);
+      const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
+        this.reportPhysicsContact(tracked, { kind: 'trunk' });
+      });
       tracked.colliders.push(c);
     }
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
-        this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
+        const baseId = this.getBaseId(baseGO as Phaser.GameObjects.GameObject);
+        if (baseId) this.reportPhysicsContact(tracked, { kind: 'base', id: baseId });
         // A base blocks the flame physically, but the flame remains alive until its lifetime ends.
         body.setVelocity(0, 0);
       });
@@ -1091,12 +1030,8 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }
     if (this.trainGroup) {
       // Zug: Flamme verursacht genau einmal Schaden und verschwindet sofort.
-      const onTrainHit = this.onTrainHit;
       const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
-        if (tracked.pendingDestroy) return;
-        const trainMult = tracked.trainDamageMult ?? 1;
-        if (trainMult !== 0) onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
-        this.queueDestroyProjectile(tracked);
+        this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' });
       });
       tracked.colliders.push(c);
     }
@@ -1110,33 +1045,28 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     body.setBounce(0, 0);
 
     if (this.rockGroup) {
-      const c = this.scene.physics.add.collider(sprite, this.rockGroup, () => {
-        this.queueDestroyProjectile(tracked);
+      const c = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
+        const idx = this.rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
+        if (idx >= 0) this.reportPhysicsContact(tracked, { kind: 'rock', id: idx });
       }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
       tracked.colliders.push(c);
     }
     if (this.trunkGroup) {
       const c = this.scene.physics.add.collider(sprite, this.trunkGroup, () => {
-        this.queueDestroyProjectile(tracked);
+        this.reportPhysicsContact(tracked, { kind: 'trunk' });
       });
       tracked.colliders.push(c);
     }
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const c = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
-        this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
-        this.queueDestroyProjectile(tracked);
+        const baseId = this.getBaseId(baseGO as Phaser.GameObjects.GameObject);
+        if (baseId) this.reportPhysicsContact(tracked, { kind: 'base', id: baseId });
       });
       tracked.colliders.push(c);
     }
     if (this.trainGroup) {
-      const onTrainHit = this.onTrainHit;
       const c = this.scene.physics.add.collider(sprite, this.trainGroup, () => {
-        if (tracked.pendingDestroy) return;
-        const trainMult = tracked.trainDamageMult ?? 1;
-        if (trainMult !== 0 && tracked.damage > 0) {
-          onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
-        }
-        this.queueDestroyProjectile(tracked);
+        this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' });
       });
       tracked.colliders.push(c);
     }
@@ -1153,7 +1083,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     sprite:          Phaser.GameObjects.Shape,
     body:            Phaser.Physics.Arcade.Body,
     tracked:         ProjectileRuntimeRecord,
-    applyRockDamage: boolean,
   ): void {
     body.setCollideWorldBounds(true);
     body.onWorldBounds = true;
@@ -1161,8 +1090,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     // erfolgt manuell über applyBounceFriction, damit die GESAMTE Geschwindigkeit
     // (nicht nur die Normalkomponente) mit dem Multiplikator reduziert wird.
     body.setBounce(1, 1);
-
-    const isTranslocatorPuck = tracked.isTranslocatorPuck === true;
 
     // Hilfsfunktion: reduziert bei jedem Abprallen die Gesamtgeschwindigkeit
     const applyBounceFriction = () => {
@@ -1181,6 +1108,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       if (hitBody !== body) return;
       applyBounceFriction();
       const impact = this.getProjectileBodyCenter(tracked);
+      this.reportPhysicsContact(tracked, { kind: 'world-boundary' }, impact.x, impact.y, 'world-boundary');
       if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
       tracked.bounceCount++;
       // Funken an Arena-Wand: Velocity ist nach Bounce bereits reflektiert
@@ -1200,27 +1128,19 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
     if (this.rockGroup) {
       const rockObjects = this.rockObjects;
-      const onHit       = this.onRockHit;
       if (tracked.penetratesRocks) {
         const rockOverlap = this.scene.physics.add.overlap(sprite, this.rockGroup, (_proj, rockGO) => {
           const idx = rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
           if (idx < 0 || tracked.penetratedRockIds?.has(idx)) return;
           tracked.penetratedRockIds?.add(idx);
-          const obstacleKind = this.obstacleKindResolver?.(idx);
-          const obstacleMult = obstacleKind !== undefined && obstacleKind !== 'rock'
-            ? 1
-            : tracked.rockDamageMult ?? 1;
-          if (applyRockDamage && obstacleMult !== 0) {
-            onHit?.(idx, tracked.damage * obstacleMult, tracked.ownerId);
-          }
           const impact = this.resolveObstacleImpactPoint(tracked, rockGO as Phaser.GameObjects.GameObject);
+          this.reportPhysicsContact(tracked, { kind: 'rock', id: idx }, impact.x, impact.y);
           playImpact(impact.x, impact.y, body.velocity.x, body.velocity.y, tracked.color);
         }, (_proj, rockGO) => this.canCollideWithRock(tracked, rockGO as Phaser.GameObjects.GameObject));
         tracked.colliders.push(rockOverlap);
       } else {
       const rockCollider = this.scene.physics.add.collider(sprite, this.rockGroup, (_proj, rockGO) => {
         const idx = rockObjects?.indexOf(rockGO as RockPhysicsProxy) ?? -1;
-        if (this.tryResolveSupportImpact(tracked, rockGO as Phaser.GameObjects.GameObject, idx)) return;
         if (tracked.bounceProcessedThisStep) {
           // Phasers zweite Velocity-Spiegelung rückgängig machen, damit keine Doppelumkehr entsteht
           if (tracked.velocityAfterFirstBounce) {
@@ -1239,15 +1159,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
           body.velocity.x, body.velocity.y,
           tracked.color,
         );
-        if (applyRockDamage && rockObjects && onHit) {
-          const obstacleKind = idx !== -1 ? this.obstacleKindResolver?.(idx) : undefined;
-          const obstacleMult = obstacleKind !== undefined && obstacleKind !== 'rock'
-            ? 1
-            : tracked.rockDamageMult ?? 1;
-          if (obstacleMult !== 0 && idx !== -1) {
-            onHit(idx, tracked.damage * obstacleMult, tracked.ownerId);
-          }
-        }
+        if (idx !== -1 && this.reportPhysicsContact(tracked, { kind: 'rock', id: idx }, impact.x, impact.y)) return;
         if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
@@ -1279,6 +1191,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
           body.velocity.x, body.velocity.y,
           tracked.color,
         );
+        if (this.reportPhysicsContact(tracked, { kind: 'trunk' }, impact.x, impact.y)) return;
         if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
@@ -1292,13 +1205,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
     if (this.baseGroup && !tracked.ignoreBaseCollisions) {
       const baseCollider = this.scene.physics.add.collider(sprite, this.baseGroup, (_proj, baseGO) => {
-        if (this.tryResolveSupportImpact(tracked, baseGO as Phaser.GameObjects.GameObject, -1)) return;
-        // Explosionsprojektile melden Basisschaden ausschließlich über ihre Explosion;
-        // ein direkter Treffer würde bei bouncenden Varianten doppelt zählen.
-        if (!tracked.explosion) {
-          // Vor dem Bounce-Early-Return: sonst zaehlte ein Treffer im selben Schritt nicht.
-          this.applyBaseHit(tracked, baseGO as Phaser.GameObjects.GameObject);
-        }
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
             body.velocity.x = tracked.velocityAfterFirstBounce.x;
@@ -1315,6 +1221,8 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
           body.velocity.x, body.velocity.y,
           tracked.color,
         );
+        const baseId = this.getBaseId(baseGO as Phaser.GameObjects.GameObject);
+        if (baseId && this.reportPhysicsContact(tracked, { kind: 'base', id: baseId }, impact.x, impact.y)) return;
         if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         if (tracked.bounceCount > tracked.maxBounces) {
@@ -1326,7 +1234,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }
 
     if (this.trainGroup) {
-      const onTrainHit = this.onTrainHit;
       const trainCollider = this.scene.physics.add.collider(sprite, this.trainGroup, (_proj, trainGO) => {
         if (tracked.bounceProcessedThisStep) {
           if (tracked.velocityAfterFirstBounce) {
@@ -1337,13 +1244,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         }
         tracked.bounceProcessedThisStep = true;
         const impact = this.resolveObstacleImpactPoint(tracked, trainGO as Phaser.GameObjects.GameObject);
-        // Translocator prallt am Zug ab ohne Schaden
-        if (!isTranslocatorPuck) {
-          const trainMult = tracked.trainDamageMult ?? 1;
-          if (trainMult !== 0) {
-            onTrainHit?.(tracked.damage * trainMult, tracked.ownerId);
-          }
-        }
         // Funken bei Zug-Aufprall
         playImpact(
           body.x + body.halfWidth, body.y + body.halfHeight,
@@ -1352,6 +1252,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         );
         applyBounceFriction();
         tracked.velocityAfterFirstBounce = { x: body.velocity.x, y: body.velocity.y };
+        if (this.reportPhysicsContact(tracked, { kind: 'train', id: 'main' }, impact.x, impact.y)) return;
         if (this.owner?.queueHydraSplit?.(tracked.id, impact.x, impact.y, body.velocity.x, body.velocity.y)) return;
         tracked.bounceCount++;
         // Sofort stoppen, damit kein weiteres Objekt vor hostUpdate getroffen wird
@@ -1443,13 +1344,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
 
     proj.bounceCount++;
 
-    const obstacleKind = this.obstacleKindResolver?.(bestRockIndex);
-    const obstacleMult = obstacleKind !== undefined && obstacleKind !== 'rock'
-      ? 1
-      : proj.rockDamageMult ?? 1;
-    if (obstacleMult !== 0) {
-      this.onRockHit?.(bestRockIndex, proj.damage * obstacleMult, proj.ownerId);
-    }
+    if (this.reportPhysicsContact(proj, { kind: 'rock', id: bestRockIndex }, bestHit.x, bestHit.y)) return;
 
     this.presentation.playBounceImpact(proj.id, bestHit.x, bestHit.y, nextVx, nextVy, proj.color, proj.projectileStyle);
 
@@ -1538,32 +1433,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     const line = new Phaser.Geom.Line(proj.lastX, proj.lastY, proj.sprite.x, proj.sprite.y);
     const hit = this.findNearestRectangleHit(line, obstacle.getBounds());
     return hit ? { x: hit.x, y: hit.y } : fallback;
-  }
-
-  /**
-   * Meldet den Hindernistreffer eines Unterstuetzungsprojektils und verbraucht es dabei.
-   * Gibt `true` zurueck, wenn der Aufrufer die normale Abpraller-Behandlung ueberspringen soll.
-   *
-   * `rockId < 0` kennzeichnet eine Basiszelle: die Basis wird ueber den Einschlagspunkt
-   * aufgeloest, weil der Collider nur die einzelne Zelle kennt.
-   */
-  private tryResolveSupportImpact(
-    proj: ProjectileRuntimeRecord,
-    obstacle: Phaser.GameObjects.GameObject,
-    rockId: number,
-  ): boolean {
-    if (!proj.energyInjectorPayload) return false;
-    if (proj.supportConsumed) return true;
-    proj.supportConsumed = true;
-    const impact = this.resolveObstacleImpactPoint(proj, obstacle);
-    this.onSupportImpact?.(
-      this.createImpactSource(proj, impact.x, impact.y),
-      rockId >= 0
-        ? { kind: 'rock', rockId, x: impact.x, y: impact.y }
-        : { kind: 'base', x: impact.x, y: impact.y },
-    );
-    this.queueDestroyProjectile(proj);
-    return true;
   }
 
   /**

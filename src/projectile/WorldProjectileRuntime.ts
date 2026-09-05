@@ -1,4 +1,4 @@
-import type { LoadoutSlot, ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../types';
+import type { LoadoutSlot, PlaceableKind, ProjectileSpawnConfig, ProjectileRuntimeRecord, SupportProjectileImpact } from '../types';
 import type { ProjectilePhysicsBinding } from './ProjectilePhysicsBinding';
 import { ProjectileClientReplica, type ProjectileClientReplicaFrame } from './ProjectileClientReplica';
 import type {
@@ -87,10 +87,12 @@ import type {
 import { ProjectileReplicationAdapter } from './ProjectileReplicationAdapter';
 import type {
   ProjectileCollisionTargetQueryPort,
+  ProjectilePhysicsContact,
   ProjectileImpactCandidate,
   ProjectileTargetabilityPort,
   ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
+import type { ProjectileImpactSource } from './ProjectileGameplayPort';
 import { createInheritedProjectilePayload } from './projectileSpawnPayloadAdapter';
 import { ProjectileStore } from './ProjectileStore';
 
@@ -206,6 +208,8 @@ export interface ProjectileRuntimeOwnerPort {
     ownerId: string,
     cfg: ProjectileSpawnConfig,
   ): ProjectileId;
+  /** Delivers a raw Phaser contact to the world-owned interaction authority. */
+  readonly reportPhysicsContact: (contact: ProjectilePhysicsContact) => boolean;
   /** Entfernt ein Projectile vollständig; unbekannte Ids sind wirkungslos. */
   destroyProjectile(id: ProjectileId): void;
   /** Queues a Hydra split without exposing Runtime records to the physics binding. */
@@ -315,6 +319,12 @@ export class WorldProjectileRuntime implements
   private targetabilityPort: ProjectileTargetabilityPort | null = null;
   private barrierPort: ProjectileBarrierPort | null = null;
   private directImpactPort: ProjectileCombatPort | null = null;
+  private projectileImpactCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
+  private rockHitCallback: ((rockId: number, damage: number, attackerId: string) => void) | null = null;
+  private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
+  private baseHitCallback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
+  private supportImpactCallback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null = null;
+  private trainHitCallback: ((damage: number, attackerId: string) => void) | null = null;
   private readonly physicsBinding: ProjectilePhysicsBinding;
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
@@ -339,6 +349,7 @@ export class WorldProjectileRuntime implements
       readProjectileRecord: (id) => runtime.projectiles.getById(id),
       deactivateProjectileRecord: (record) => runtime.projectiles.deactivate(record),
       dropProjectileStepEntryAt: (index) => runtime.projectiles.dropStepEntryAt(index),
+      reportPhysicsContact: (contact) => runtime.reportPhysicsContact(contact),
       spawnProjectileConfig: (x, y, angle, ownerId, cfg) => runtime.spawnProjectileConfig(x, y, angle, ownerId, cfg),
       destroyProjectile: (id) => runtime.destroyProjectile(id),
       queueHydraSplit: (projectileId, impactX, impactY, outgoingVx, outgoingVy) => (
@@ -473,7 +484,8 @@ export class WorldProjectileRuntime implements
     this.physicsBinding.setNaturalFlameExpiryCallback(callback);
   }
 
-  setProjectileImpactCallback(callback: Parameters<ProjectilePhysicsBinding['setProjectileImpactCallback']>[0]): void {
+  setProjectileImpactCallback(callback: ((projectile: ProjectileImpactSource) => void) | null): void {
+    this.projectileImpactCallback = callback;
     this.physicsBinding.setProjectileImpactCallback(callback);
   }
 
@@ -505,20 +517,20 @@ export class WorldProjectileRuntime implements
     this.physicsBinding.setHomingLineOfFireChecker(checker);
   }
 
-  setRockHitCallback(callback: Parameters<ProjectilePhysicsBinding['setRockHitCallback']>[0]): void {
-    this.physicsBinding.setRockHitCallback(callback);
+  setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string) => void) | null): void {
+    this.rockHitCallback = callback;
   }
 
-  setObstacleKindResolver(resolver: Parameters<ProjectilePhysicsBinding['setObstacleKindResolver']>[0]): void {
-    this.physicsBinding.setObstacleKindResolver(resolver);
+  setObstacleKindResolver(resolver: ((rockId: number) => PlaceableKind | undefined) | null): void {
+    this.obstacleKindResolver = resolver;
   }
 
-  setBaseHitCallback(callback: Parameters<ProjectilePhysicsBinding['setBaseHitCallback']>[0]): void {
-    this.physicsBinding.setBaseHitCallback(callback);
+  setBaseHitCallback(callback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null): void {
+    this.baseHitCallback = callback;
   }
 
-  setSupportImpactCallback(callback: Parameters<ProjectilePhysicsBinding['setSupportImpactCallback']>[0]): void {
-    this.physicsBinding.setSupportImpactCallback(callback);
+  setSupportImpactCallback(callback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null): void {
+    this.supportImpactCallback = callback;
   }
 
   setRockGroup(...args: Parameters<ProjectilePhysicsBinding['setRockGroup']>): void {
@@ -537,8 +549,246 @@ export class WorldProjectileRuntime implements
     this.physicsBinding.setTrainGroup(...args);
   }
 
-  setTrainHitCallback(callback: Parameters<ProjectilePhysicsBinding['setTrainHitCallback']>[0]): void {
-    this.physicsBinding.setTrainHitCallback(callback);
+  setTrainHitCallback(callback: ((damage: number, attackerId: string) => void) | null): void {
+    this.trainHitCallback = callback;
+  }
+
+  private createImpactSource(
+    projectile: ProjectileRuntimeRecord,
+    x = projectile.sprite?.x ?? 0,
+    y = projectile.sprite?.y ?? 0,
+  ): ProjectileImpactSource {
+    return {
+      projectileId: projectile.id,
+      ownerId: projectile.ownerId,
+      provenance: projectile.provenance,
+      x,
+      y,
+      velocityX: projectile.body?.velocity?.x ?? 0,
+      velocityY: projectile.body?.velocity?.y ?? 0,
+      color: projectile.color,
+      ownerColor: projectile.ownerColor,
+      sourceId: projectile.sourceId,
+      sourceSlot: projectile.sourceSlot,
+      allowTeamDamage: projectile.allowTeamDamage,
+      damage: projectile.damage,
+      ak47DamageMultiplier: projectile.ak47DamageMultiplier,
+      baseDamageMult: projectile.baseDamageMult,
+      rockDamageMult: projectile.rockDamageMult,
+      trainDamageMult: projectile.trainDamageMult,
+      impactCloud: projectile.impactCloud,
+      energyInjectorPayload: projectile.energyInjectorPayload,
+      proximityPulse: projectile.proximityPulse,
+      isBfg: projectile.isBfg,
+      isFlame: projectile.isFlame,
+      hitboxSize: projectile.hitboxSize,
+      hitboxMaxSize: projectile.hitboxMaxSize,
+      bodyWidth: projectile.body?.width ?? 0,
+      projectileStyle: projectile.projectileStyle,
+      projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
+      shotAudioKey: projectile.shotAudioKey,
+      shotgunProximityMaxDamageBonus: projectile.shotgunProximityMaxDamageBonus,
+      shotgunOriginX: projectile.shotgunOriginX,
+      shotgunOriginY: projectile.shotgunOriginY,
+      shotgunResolvedRange: projectile.shotgunResolvedRange,
+    };
+  }
+
+  /**
+   * Resolves a technical Phaser contact at the world-owned authority boundary.
+   *
+   * The PhysicsBinding supplies only a stable target identity and contact geometry. All damage,
+   * support delivery, explosion queuing, and projectile consumption decisions happen here so a
+   * collider callback cannot become a second gameplay authority.
+   */
+  private reportPhysicsContact(contact: ProjectilePhysicsContact): boolean {
+    if (this.destroyed) return true;
+    const projectile = this.projectiles.getById(contact.projectileId);
+    if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return true;
+
+    const impact = this.createImpactSource(projectile, contact.x, contact.y);
+    switch (contact.target.kind) {
+      case 'rock':
+        return this.resolveRockPhysicsContact(projectile, contact.target.id, contact.x, contact.y, impact);
+      case 'trunk':
+        return this.resolveTrunkPhysicsContact(projectile);
+      case 'base':
+        return this.resolveBasePhysicsContact(projectile, contact.target.id, contact.x, contact.y, impact);
+      case 'train':
+        return this.resolveTrainPhysicsContact(projectile, impact);
+      case 'world-boundary':
+        return this.resolveWorldBoundaryPhysicsContact(projectile, impact);
+    }
+  }
+
+  private resolveRockPhysicsContact(
+    projectile: ProjectileRuntimeRecord,
+    rockId: number,
+    x: number,
+    y: number,
+    impact: ProjectileImpactSource,
+  ): boolean {
+    if (projectile.energyInjectorPayload) {
+      if (projectile.supportConsumed) return true;
+      projectile.supportConsumed = true;
+      this.supportImpactCallback?.(impact, { kind: 'rock', rockId, x, y });
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.impactCloud && projectile.maxBounces === 0) {
+      this.projectileImpactCallback?.(impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.explosion && projectile.maxBounces === 0) {
+      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      return true;
+    }
+    if (projectile.isFlame) {
+      if (projectile.hitObstacleIds?.has(rockId)) return false;
+      projectile.hitObstacleIds ??= new Set<number>();
+      projectile.hitObstacleIds.add(rockId);
+      const obstacleKind = this.obstacleKindResolver?.(rockId);
+      const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
+        ? 1
+        : projectile.rockDamageMult ?? 1;
+      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.ownerId);
+      return false;
+    }
+    if (hasLeafBlowerCapability(projectile)) {
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.isGrenade && projectile.maxBounces === 0) return false;
+
+    if (!projectile.isGrenade) {
+      const obstacleKind = this.obstacleKindResolver?.(rockId);
+      const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
+        ? 1
+        : projectile.rockDamageMult ?? 1;
+      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.ownerId);
+    }
+    return false;
+  }
+
+  private resolveTrunkPhysicsContact(projectile: ProjectileRuntimeRecord): boolean {
+    if (projectile.impactCloud && projectile.maxBounces === 0) {
+      this.projectileImpactCallback?.(this.createImpactSource(projectile));
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.explosion && projectile.maxBounces === 0) {
+      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      return true;
+    }
+    if (hasLeafBlowerCapability(projectile)) {
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    return false;
+  }
+
+  private resolveBasePhysicsContact(
+    projectile: ProjectileRuntimeRecord,
+    baseId: string,
+    x: number,
+    y: number,
+    impact: ProjectileImpactSource,
+  ): boolean {
+    if (projectile.energyInjectorPayload) {
+      if (projectile.supportConsumed) return true;
+      projectile.supportConsumed = true;
+      this.supportImpactCallback?.(impact, { kind: 'base', x, y });
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.impactCloud && projectile.maxBounces === 0) {
+      this.applyBaseContact(projectile, baseId, impact);
+      this.projectileImpactCallback?.(impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.explosion && projectile.maxBounces === 0) {
+      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      return true;
+    }
+    if (hasLeafBlowerCapability(projectile)) {
+      this.applyBaseContact(projectile, baseId, impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.isFlame) {
+      this.applyBaseContact(projectile, baseId, impact);
+      return false;
+    }
+    if (projectile.isGrenade && projectile.maxBounces === 0) return false;
+    if (!projectile.explosion) this.applyBaseContact(projectile, baseId, impact);
+    return false;
+  }
+
+  private applyBaseContact(
+    projectile: ProjectileRuntimeRecord,
+    baseId: string,
+    impact: ProjectileImpactSource,
+  ): void {
+    if (projectile.damage <= 0 || projectile.hitBaseIds?.has(baseId)) return;
+    projectile.hitBaseIds ??= new Set<string>();
+    projectile.hitBaseIds.add(baseId);
+    this.baseHitCallback?.(baseId, projectile.damage, projectile.ownerId, impact);
+  }
+
+  private resolveTrainPhysicsContact(
+    projectile: ProjectileRuntimeRecord,
+    impact: ProjectileImpactSource,
+  ): boolean {
+    const appliesTrainDamage = !projectile.isTranslocatorPuck && (projectile.trainDamageMult ?? 1) !== 0;
+    const applyTrainDamage = (): void => {
+      if (appliesTrainDamage) {
+        this.trainHitCallback?.(projectile.damage * (projectile.trainDamageMult ?? 1), projectile.ownerId);
+      }
+    };
+    if (projectile.impactCloud && projectile.maxBounces === 0) {
+      applyTrainDamage();
+      this.projectileImpactCallback?.(impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.explosion && projectile.maxBounces === 0) {
+      if (!projectile.miniRocketSpent) applyTrainDamage();
+      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      return true;
+    }
+    if (projectile.isFlame || hasLeafBlowerCapability(projectile)) {
+      applyTrainDamage();
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    applyTrainDamage();
+    return projectile.isGrenade && projectile.maxBounces === 0;
+  }
+
+  private resolveWorldBoundaryPhysicsContact(
+    projectile: ProjectileRuntimeRecord,
+    impact: ProjectileImpactSource,
+  ): boolean {
+    if (projectile.isBfg) {
+      projectile.bounceCount = projectile.maxBounces + 1;
+      return false;
+    }
+    if (projectile.impactCloud && projectile.maxBounces === 0) {
+      this.projectileImpactCallback?.(impact);
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    if (projectile.explosion && projectile.maxBounces === 0) {
+      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      return true;
+    }
+    if (hasLeafBlowerCapability(projectile)) {
+      this.queueProjectileDestroy(projectile.id);
+      return true;
+    }
+    return false;
   }
 
   /** Liefert ausschließlich die Client-Projektion; interne Runtime-Records verlassen die World nicht. */
@@ -1478,6 +1728,14 @@ function hasTravelEffect(record: ProjectileRuntimeRecord): boolean {
     || record.awpCorridorDotTickIntervalMs !== undefined
     || record.awpCorridorKnockback !== undefined
     || record.awpCorridorKnockbackDurationMs !== undefined;
+}
+
+function hasLeafBlowerCapability(
+  projectile: Pick<ProjectileRuntimeRecord, 'leafBlowerMinKnockback' | 'leafBlowerMaxKnockback' | 'leafBlowerDeflectsProjectiles'>,
+): boolean {
+  return projectile.leafBlowerMinKnockback !== undefined
+    || projectile.leafBlowerMaxKnockback !== undefined
+    || projectile.leafBlowerDeflectsProjectiles === true;
 }
 
 function createTravelPathEffect(record: ProjectileRuntimeRecord): ProjectileTravelCapabilities['pathEffect'] {

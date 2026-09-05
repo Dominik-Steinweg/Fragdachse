@@ -25,9 +25,9 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** Korrekturphase C2 – technische Kontaktkandidaten und World-Interaction-Authority
+- **Nächste Phase:** Korrekturphase C3 – Collision-/Interaction-Authority und Style-Restverzweigungen
 - **Gesamtstatus:** Korrekturschleife aktiv; Phasen 1–15 bleiben abgeschlossen, der technische Endzustand ist wegen Host-/Physics-Authority-Abweichungen wieder offen
-- **Baseline:** Phase-15-Gates waren grün, beweisen aber keine Ownership-Korrektheit; Korrektur-Gates laufen pro Korrekturphase
+- **Baseline:** Phase-15-Gates waren grün, beweisen aber keine Ownership-Korrektheit; C2-Gates sind grün, Korrektur-Gates laufen pro Korrekturphase
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
 - **Final-Gate:** technisch grün, Gesamt-Abnahme bis C5 ausgesetzt
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
@@ -64,7 +64,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 | Korrekturphase | Status | Gegenstand |
 |---|:---:|---|
 | C1 | ✅ | Hydra-/Split-Entscheidung aus dem Physics-Binding gelöst; Child-Spawns explizit in die `next-stage`-Queue gegeben |
-| C2 | ⬜ | Phaser-Kontakte als technische Kandidaten melden; Rock/Base/Train/Support/Explosion nicht mehr im Binding fachlich entscheiden |
+| C2 | ✅ | Phaser-Kontakte als technische Kandidaten melden; Rock/Base/Train/Support/Explosion nicht mehr im Binding fachlich entscheiden |
 | C3 | ⬜ | Collision-/Interaction-Authority konsolidieren und verbleibende autoritative `projectileStyle`-Verzweigungen entfernen |
 | C4 | ⬜ | World-/Activity-Consumer auf tatsächlich benötigte schmale Ports umstellen; Universal-Forwarder abbauen |
 | C5 | ⬜ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
@@ -75,7 +75,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- [Transition C2+] Das Binding enthält weiterhin fachliche Rock-/Base-/Train-/Support-/Explosion-/Lifecycle-Entscheidungen; der Forward-Fix folgt erst nach C1.
+- [Transition C3+] Der CollisionProcessor behandelt World-Kandidaten noch als verbrauchend, während die technische Kontaktstrecke ihre World-Interaction-Authority bereits an die Runtime meldet; der nächste Schnitt konsolidiert diese Pfade und entfernt verbleibende Style-Verzweigungen.
 
 ---
 
@@ -90,7 +90,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Physics Binding | `ProjectilePhysicsBindingPort`, `ProjectileRuntimeOwnerPort`, `ProjectilePhysicsBinding`, `ProjectilePresentationPort` |
 | External / Reads | `ProjectileExternalInteractionPort`, `TranslocatorProjectilePort`, `ProjectileThreatReadPort`, `ProjectileDiagnosticsReadPort`, `ProjectilePresentationReadPort` |
 | Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment`, `ProjectilePathEffectKind` |
-| Target / Geometry | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectileCollisionMode` |
+| Target / Geometry | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectilePhysicsContact`, `ProjectilePhysicsContactTarget`, `ProjectileCollisionMode` |
 | Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution`; `deflectProjectile` für Projectile↔Projectile-Transform |
 | Combat / Domain Effects | `ProjectileCombatPort`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome` |
 | Complex State / Lifecycle | `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `ProjectileStageSpawnPolicy`, `PROJECTILE_STAGE_SPAWN_CONTRACT`; WorldRuntime führt die explizite Next-Stage-Queue; `ProjectileImpactSource`, `ProjectileLifecycleOutcome` |
@@ -111,7 +111,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**C2 beginnen. Die ursprüngliche Phase-15-Abnahme bleibt bis C5 ausgesetzt.**
+**C3 beginnen. Die ursprüngliche Phase-15-Abnahme bleibt bis C5 ausgesetzt.**
 
 ---
 
