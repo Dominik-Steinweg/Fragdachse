@@ -61,7 +61,8 @@ describe('World HP pooled load, actual Host and Client state paths', () => {
     }
     for (const fake of [hostFake, clientFake]) {
       expect(fake.rectangles.filter(rect => rect.active)).toHaveLength(300);
-      expect(fake.rectangles.every(rect => Number.isFinite(rect.width) && rect.width >= 0)).toBe(true);
+      expect(fake.rectangles.every(rect => Number.isFinite(rect.width * rect.scaleX)
+        && rect.width * rect.scaleX >= 0 && rect.width * rect.scaleX <= rect.width)).toBe(true);
     }
     now += HEALTH_BAR_TUNING.visibleAfterDamageMs + 100;
     hostRenderer.update(true); clientRenderer.update(true);

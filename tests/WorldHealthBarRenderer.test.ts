@@ -59,7 +59,7 @@ describe('World HP view ownership', () => {
     h.at(0);
     const [bg, trail, fill] = h.rectangles;
     expect([bg.x, bg.y, bg.width]).toEqual([80, 90, 40]);
-    expect([fill.x, fill.y, fill.width, trail.width]).toEqual([60, 90, 14, 28]);
+    expect([fill.x, fill.y, fill.width * fill.scaleX, trail.width * trail.scaleX]).toEqual([60, 90, 14, 28]);
     h.renderer.closeWorld(h.scope);
     expect(h.renderer.bind(TURRET_HEALTH_BAR_STYLE, 10, 100, 0, 0)).toBeNull();
     expect(h.renderer.getStats().bindings).toBe(0);
@@ -82,7 +82,7 @@ describe('World HP view ownership', () => {
     h.at(0);
     expect(h.rectangles).toHaveLength(3);
     expect([bg.x, bg.y, bg.width, bg.alpha]).toEqual([30, 40, 60, 1]);
-    expect([fill.width, trail.width, fill.alpha, fill.fillColor]).toEqual([12, 12, 1, 0x654321]);
+    expect([fill.width * fill.scaleX, trail.width * trail.scaleX, fill.alpha, fill.fillColor]).toEqual([12, 12, 1, 0x654321]);
     expect(fill.cameraFilter).toBe(2);
     expect(trail.visible).toBe(false);
     expect(h.renderer.isValid(second)).toBe(true);
@@ -98,7 +98,8 @@ describe('World HP view ownership', () => {
     h.renderer.observe(handle, 30, 100);
     h.at(1);
     expect(h.renderer.getStats().active).toBe(1);
-    expect(h.rectangles[2].width).toBeCloseTo(playerHealthBarStyle(false).width * 0.3);
+    const fill = h.rectangles[2];
+    expect(fill.width * fill.scaleX).toBeCloseTo(playerHealthBarStyle(false).width * 0.3);
   });
 
   it('continues through offscreen movement, discards explicit suppression and ignores duplicate frame time', () => {
@@ -107,10 +108,10 @@ describe('World HP view ownership', () => {
     h.renderer.observe(handle, 60, 100);
     h.at(100);
     const trail = h.rectangles[1];
-    const width = trail.width;
+    const width = trail.width * trail.scaleX;
     h.renderer.position(handle, 999999, 999999);
     h.at(100);
-    expect(trail.width).toBe(width);
+    expect(trail.width * trail.scaleX).toBe(width);
     h.at(10_000);
     expect(h.renderer.getStats().active).toBe(0);
     h.renderer.observe(handle, 50, 100);
@@ -138,6 +139,62 @@ describe('World HP view ownership', () => {
     expect(h.renderer.getStats()).toMatchObject({ bindings: 0, active: 0, free: 2 });
     h.renderer.destroy();
     expect(h.rectangles.every(rect => !rect.active)).toBe(true);
+  });
+
+  it('animates left-anchored HP and trails without rebuilding geometry, including pooled reuse', () => {
+    const h = harness();
+    const style = baseHealthBarStyle(80, 0x345678);
+    const handle = h.renderer.bind(style, 100, 100, 100, 20)!;
+    h.at(0);
+    const [bg, trail, fill] = h.rectangles;
+    const sizes = h.rectangles.map(rect => vi.spyOn(rect, 'setSize'));
+    let previousTrailWidth = trail.width * trail.scaleX;
+    let trailShrank = false;
+    for (let frame = 1; frame <= 40; frame++) {
+      const hp = 100 - frame;
+      h.renderer.observe(handle, hp, 100);
+      h.renderer.position(handle, 100 + frame, 20 + frame);
+      h.at(frame * 50);
+      const hpWidth = fill.width * fill.scaleX;
+      const trailWidth = trail.width * trail.scaleX;
+      expect(hpWidth).toBeCloseTo(style.width * hp / 100);
+      expect(trailWidth).toBeGreaterThanOrEqual(hpWidth);
+      trailShrank ||= trailWidth < previousTrailWidth;
+      previousTrailWidth = trailWidth;
+      for (const rect of [fill, trail]) {
+        expect([rect.width, rect.height, rect.scaleY]).toEqual([style.width, style.height, 1]);
+        expect([rect.originX, rect.originY]).toEqual([0, 0.5]);
+        expect([rect.x, rect.y]).toEqual([bg.x - style.width / 2, bg.y]);
+      }
+    }
+    expect(trailShrank).toBe(true);
+    h.renderer.observe(handle, 75, 100); // Healing cancels the trail without resizing it.
+    h.at(2001);
+    expect(fill.width * fill.scaleX).toBe(60);
+    expect(trail.width * trail.scaleX).toBe(60);
+    expect(trail.visible).toBe(false);
+    h.renderer.observe(handle, 75, 200); // A silent max-HP change also only changes displayed width.
+    h.at(2002);
+    expect(fill.width * fill.scaleX).toBe(30);
+    for (const size of sizes) expect(size).not.toHaveBeenCalled();
+
+    h.renderer.release(handle);
+    const nextStyle = { ...style, width: 60, height: style.height + 2 };
+    const next = h.renderer.bind(nextStyle, 100, 100, 200, 30)!;
+    h.at(2003);
+    expect(h.rectangles).toHaveLength(3);
+    for (const rect of [fill, trail]) {
+      expect([rect.width, rect.height, rect.scaleX, rect.scaleY]).toEqual([60, nextStyle.height, 1, 1]);
+      expect(rect.x).toBe(170);
+    }
+    for (const size of sizes) size.mockClear(); // Geometry may be initialized when borrowed.
+    h.renderer.observe(next, 50, 100);
+    h.at(2004);
+    expect(fill.width * fill.scaleX).toBe(30);
+    h.at(100_000);
+    expect(trail.width * trail.scaleX).toBe(30);
+    expect(trail.visible).toBe(false);
+    for (const size of sizes) expect(size).not.toHaveBeenCalled();
   });
 
   it('does not rewrite static geometry or settled presentation values', () => {

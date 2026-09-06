@@ -56,8 +56,8 @@ describe('World HP consumer boundaries', () => {
     upsert(manager, { id: 'e2', hp: 40, maxHp: 100 });
     manager.getEnemy('e2')!.setHealthBarRenderer(h.renderer); // Idempotent visual wiring preserves the trail.
     h.tick();
-    expect(h.rectangles[2].width / h.rectangles[0].width).toBeCloseTo(0.4);
-    expect(h.rectangles[1].width / h.rectangles[0].width).toBeCloseTo(0.6);
+    expect(h.rectangles[2].width * h.rectangles[2].scaleX / h.rectangles[0].width).toBeCloseTo(0.4);
+    expect(h.rectangles[1].width * h.rectangles[1].scaleX / h.rectangles[0].width).toBeCloseTo(0.6);
     for (let t = 100; t <= HEALTH_BAR_TUNING.visibleAfterDamageMs + 200; t += 100) {
       h.clock(t);
       upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 40, maxHp: 100 });
@@ -112,7 +112,7 @@ describe('World HP consumer boundaries', () => {
     player.updateHP(60, 100);
     h.tick();
     const [bg, trail, fill] = h.rectangles.slice(-3);
-    expect(fill.width / bg.width).toBeCloseTo(0.6);
+    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.6);
     expect(trail.visible).toBe(false);
     player.updateArmor(30);
     player.updateHP(60, 100);
@@ -130,7 +130,7 @@ describe('World HP consumer boundaries', () => {
     expect(trail.visible).toBe(false);
     player.updateHP(0, 100); player.setVisible(false); h.tick();
     player.updateHP(100, 100); player.setVisible(true); h.tick();
-    expect(fill.width).toBe(bg.width);
+    expect(fill.width * fill.scaleX).toBe(bg.width);
     expect(trail.visible).toBe(false);
     player.destroy();
     expect(h.renderer.getStats().bindings).toBe(0);
@@ -154,7 +154,7 @@ describe('World HP consumer boundaries', () => {
     const bases = new BaseManager(h.scene, [baseSpec], resolveCoopDefenseWorldMetrics(20, 20), {}, true, true, h.renderer);
     h.tick();
     const [bg, trail, fill] = h.rectangles.slice(-3);
-    expect(fill.width / bg.width).toBeCloseTo(0.7);
+    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.7);
     bases.applySnapshot([{ id: 'base', hp: 50, maxHp: 100 }]); h.tick();
     expect(trail.visible).toBe(false);
     bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
@@ -164,14 +164,14 @@ describe('World HP consumer boundaries', () => {
     expect(trail.visible).toBe(false);
     const color = fill.fillColor;
     bases.heal('base', 10); h.tick();
-    expect(fill.width / bg.width).toBeCloseTo(0.4);
+    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.4);
     expect(fill.fillColor).not.toBe(color);
     const activity = bases.createActivityBinding([{ baseId: 'base', hpMax: 200, startHp: 100,
       dormant: true, powerUpPedestals: [] }]);
     activity.attach(); h.tick();
     expect(h.renderer.getStats().bindings).toBe(0);
     bases.getBase('base')!.activate(); h.tick();
-    expect(fill.width / bg.width).toBeCloseTo(0.5);
+    expect(fill.width * fill.scaleX / bg.width).toBeCloseTo(0.5);
     expect(trail.visible).toBe(false);
     activity.detach(); h.tick();
     expect(h.renderer.getStats().bindings).toBe(0);
@@ -189,7 +189,7 @@ describe('World HP consumer boundaries', () => {
       angle: 0, ownerColor: 0x123456, ownerId: 'p' } as SyncedPlaceableRock;
     helper.createOrUpdateTurretVisual(rock); h.tick();
     const [bg, trail, fill] = h.rectangles;
-    expect(fill.width).toBe(TURRET_HEALTH_BAR_STYLE.width * 0.7);
+    expect(fill.width * fill.scaleX).toBe(TURRET_HEALTH_BAR_STYLE.width * 0.7);
     expect(trail.visible).toBe(false);
     helper.createOrUpdateTurretVisual({ ...rock, hp: 40 }); h.tick();
     expect(trail.visible).toBe(true);

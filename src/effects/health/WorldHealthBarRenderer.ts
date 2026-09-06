@@ -222,9 +222,9 @@ export class WorldHealthBarRenderer {
     const s = b.style;
     view.background.setOrigin(0.5, 0.5).setSize(s.width, s.height).setDepth(s.backgroundDepth)
       .setFillStyle(0x333333).setStrokeStyle(s.stroke === undefined ? 0 : 1, s.stroke);
-    view.trail.setOrigin(0, 0.5).setDepth((s.backgroundDepth + s.fillDepth) / 2)
+    view.trail.setOrigin(0, 0.5).setSize(s.width, s.height).setDepth((s.backgroundDepth + s.fillDepth) / 2)
       .setFillStyle(HEALTH_BAR_TRAIL.color).setStrokeStyle();
-    view.fill.setOrigin(0, 0.5).setDepth(s.fillDepth).setStrokeStyle();
+    view.fill.setOrigin(0, 0.5).setSize(s.width, s.height).setDepth(s.fillDepth).setStrokeStyle();
     this.resetObject(view.background);
     this.resetObject(view.trail);
     this.resetObject(view.fill);
@@ -243,8 +243,10 @@ export class WorldHealthBarRenderer {
     const ratio = b.model.hp / b.model.maxHp;
     const hpWidth = s.width * ratio;
     const trailWidth = s.width * (b.model.trailHp / b.model.maxHp);
-    if (v.hpWidth !== hpWidth) { v.fill.setSize(hpWidth, s.height); v.hpWidth = hpWidth; }
-    if (v.trailWidth !== trailWidth) { v.trail.setSize(trailWidth, s.height); v.trailWidth = trailWidth; }
+    // Rectangle.setSize rebuilds pathData in Phaser 4.2.1. Scale the borrowed geometry instead;
+    // originX = 0 keeps both bars anchored to the same left edge throughout the animation.
+    if (v.hpWidth !== hpWidth) { v.fill.scaleX = ratio; v.hpWidth = hpWidth; }
+    if (v.trailWidth !== trailWidth) { v.trail.scaleX = b.model.trailHp / b.model.maxHp; v.trailWidth = trailWidth; }
     const baseColor = ratio > 0.5 ? s.healthy : ratio > 0.25 ? s.hurt : s.critical;
     const strength = b.model.healEmphasis(now);
     const r = (baseColor >> 16) & 255, g = (baseColor >> 8) & 255, blue = baseColor & 255;
