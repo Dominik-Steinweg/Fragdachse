@@ -40,46 +40,12 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(binding).not.toContain('Date.now');
   });
 
-  it('keeps Hydra split authority in the world owner with an explicit next-stage queue', () => {
+  it('keeps the technical physics contract free of projectile lifecycle and runtime records', () => {
     const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
-    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
-
-    expect(binding).not.toContain('trySplitHydraProjectile');
-    expect(binding).toContain('queueHydraSplit');
-    expect(runtime).toContain('pendingNextStageSpawns');
-    expect(runtime).toContain('readyAfterCompletedStages');
-  });
-
-  it('routes Phaser world contacts through the World-owned interaction authority', () => {
-    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
-    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
-    const contactStageStart = binding.indexOf('private setupProjectileColliders');
-    const contactStageEnd = binding.indexOf('private shouldUseContinuousRockCollision');
-    const contactStage = binding.slice(contactStageStart, contactStageEnd);
-
-    expect(binding).toContain('reportPhysicsContact');
-    expect(binding).not.toContain('onRockHit');
-    expect(binding).not.toContain('onBaseHit');
-    expect(binding).not.toContain('onSupportImpact');
-    expect(binding).not.toContain('onTrainHit');
-    expect(contactStage).not.toContain('queueProjectileExplosion');
-    expect(contactStage).not.toContain('applyBaseHit');
-    expect(runtime).toContain('private reportPhysicsContact');
-    expect(runtime).toContain('resolveRockPhysicsContact');
-    expect(runtime).toContain('resolveBasePhysicsContact');
-    expect(runtime).toContain('resolveTrainPhysicsContact');
-  });
-
-  it('uses one World candidate authority and keeps Physics independent of presentation style', () => {
-    const processor = read('src/projectile/ProjectileCollisionProcessor.ts');
-    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
-    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
-
-    expect(processor).toContain('resolveWorldImpact');
-    expect(processor).not.toContain("candidate.target.kind === 'projectile' ? 'ignored' : 'consumed'");
-    expect(binding).not.toContain('cfg.projectileStyle ===');
-    expect(runtime).toContain('resolvedWorldContacts');
-    expect(runtime).toContain('projectileTargetPhysicalKey(candidate.target)');
+    for (const forbidden of [
+      'ProjectileRuntimeRecord', 'ProjectileRuntimeOwnerPort', 'ProjectileExternalInteractionAccess',
+      'ProjectileExplosionRequest', 'ProjectileBurnAugment', 'ProjectileCombatPort',
+    ]) expect(binding).not.toContain(forbidden);
   });
 
   it('keeps presentation, replica and replication state world-scoped', () => {
@@ -93,7 +59,7 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(runtime).toContain('private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;');
     expect(runtime).toContain('readonly presentation: ProjectilePresentationRuntime;');
     expect(composition).toContain('const presentation = new ProjectilePresentationRuntime(input.scene);');
-    expect(composition).toContain('physicsBinding: new ProjectilePhysicsBinding(input.scene, presentation)');
+    expect(composition).toContain('physicsBinding: new ProjectilePhysicsBinding(input.scene)');
     expect(presentation).not.toContain('ProjectileRuntimeRecord');
     expect(presentation).not.toContain('ProjectilePhysicsBinding');
     expect(replica).not.toContain('CombatSystem');

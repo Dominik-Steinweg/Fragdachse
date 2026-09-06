@@ -165,6 +165,8 @@ export interface ProjectilePhysicsContact {
   readonly target: ProjectilePhysicsContactTarget;
   readonly x: number;
   readonly y: number;
+  /** Technical target geometry used by the runtime to reconstruct a stable impact point. */
+  readonly targetBounds?: Readonly<{ left: number; right: number; top: number; bottom: number }>;
   readonly velocityX: number;
   readonly velocityY: number;
   readonly source: 'physics-collider' | 'world-boundary';

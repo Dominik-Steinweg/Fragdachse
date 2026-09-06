@@ -1,5 +1,17 @@
+import * as Phaser from 'phaser';
+import { findNearestRectangleHit } from '../utils/geometry';
 import type { LoadoutSlot, PlaceableKind, ProjectileSpawnConfig, ProjectileRuntimeRecord, SupportProjectileImpact } from '../types';
-import type { ProjectilePhysicsBinding } from './ProjectilePhysicsBinding';
+import {
+  type ProjectilePhysicsBindingPort,
+  type ProjectilePhysicsHandle,
+  type ProjectilePhysicsMechanics,
+} from './ProjectilePhysicsBinding';
+import {
+  resolveProjectileBodyProfile,
+  MIN_BODY_LEN,
+} from '../systems/ProjectileSpawnResolver';
+import { resolveSafeMuzzleSpawn } from '../systems/ProjectileSpawnResolver';
+import { effectiveAirFrictionDecay } from './ProjectileFlightProcessor';
 import { ProjectileClientReplica, type ProjectileClientReplicaFrame } from './ProjectileClientReplica';
 import type {
   ProjectilePresentationRuntime,
@@ -10,10 +22,7 @@ import type { ProjectileLightSample } from '../effects/LightingConfig';
 import type { WorldScopedBinding } from '../world/WorldRuntime';
 import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import { toProjectileSpawnConfig } from './projectileSpawnPayloadAdapter';
-import {
-  ProjectileFlightProcessor,
-  type ProjectileCoreStageResult,
-} from './ProjectileFlightProcessor';
+import { ProjectileFlightProcessor } from './ProjectileFlightProcessor';
 import { ProjectileHomingController } from '../entities/ProjectileHomingController';
 import type {
   LineOfFireReadPort,
@@ -39,7 +48,6 @@ import type {
   ProjectileTravelSample,
 } from './ProjectileTravelPort';
 import type {
-  ProjectileExternalInteractionAccess,
   ProjectileExternalInteractionPort,
   ProjectileDetonationOutcome,
   ProjectileDetonationSearchRequest,
@@ -94,9 +102,19 @@ import {
   type ProjectileTargetabilityPort,
   type ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
-import type { ProjectileImpactSource } from './ProjectileGameplayPort';
+import type {
+  ProjectileFlameExpiryEvent,
+  ProjectileImpactSource,
+  ProjectileLifecycleOutcome,
+} from './ProjectileGameplayPort';
+import type { ProjectileTrainImpactPort } from './ProjectileBoundaryPorts';
+import {
+  ProjectileLifecycleProcessor,
+  type ProjectileLifecycleDependencies,
+} from './ProjectileLifecycleProcessor';
 import { createInheritedProjectilePayload } from './projectileSpawnPayloadAdapter';
 import { ProjectileStore } from './ProjectileStore';
+import { PLASMA_SWARM_EXPLOSION_DURATION_MS, resolvePlasmaSwarmProjectileProfile, resolvePlasmaSwarmRadialAngles, resolvePlasmaSwarmHoming } from '../systems/PlasmaCharge';
 
 /** Parameter eines vom Owner erzeugten Reflect-/Deflect-Nachfolgers. */
 interface ReflectedProjectileOptions {
@@ -145,102 +163,6 @@ export interface ProjectileHostStageResult {
   countdownEvents: Array<{ x: number; y: number; value: number }>;
 }
 
-/**
- * Noch nicht migrierte Host-Simulation eines Projectiles (`03 §5.1`).
- *
- * Sie erzeugt und entsorgt weiterhin Physics-Handle, Collider und Darstellung, besitzt aber weder
- * Identity noch Registry: beides liegt beim Owner. Jede hier genannte Operation entfällt mit dem
- * Cutover ihres Fachbereichs (Phasen 3–14).
- */
-export interface ProjectilePhysicsBindingPort {
-  /** Verbindet das Phaser-Physics-Binding mit dem kanonischen Store dieser World. */
-  bindOwner(owner: ProjectileRuntimeOwnerPort | null): void;
-  /** Baut Physics-Handle, Collider, Spawn-Darstellung und Runtime-Record zu einer vergebenen Id. */
-  createProjectile(
-    id: ProjectileId,
-    x: number,
-    y: number,
-    angle: number,
-    ownerId: string,
-    cfg: ProjectileSpawnConfig,
-    hostNowMs: number,
-    provenance: ProjectileProvenance,
-  ): ProjectileRuntimeRecord;
-  /** Gibt Physics-, Collider- und Darstellungsressourcen eines entfernten Records frei. */
-  releaseProjectileResources(record: ProjectileRuntimeRecord): void;
-  /** Führt den Physics-/Effect-Rest nach dem deterministischen Flight-Stage aus. */
-  runProjectileEffectsStage?(
-    deltaMs: number,
-    nowMs: number,
-    coreStage: ProjectileCoreStageResult,
-  ): ProjectileHostStageResult;
-  /** Übergangshilfe für die bestehende Spawn-Initialisierung. */
-  setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
-  setHostFrameTime?(nowMs: number): void;
-  /** Semantische External-Interaction-Brücke; Runtime-Records bleiben intern. */
-  externalInteraction?: ProjectileExternalInteractionAccess;
-  /** Der Physics-Binding-Owner schreibt den kanonischen Burn-Zustand. */
-  applyProjectileBurnAugment?(projectileId: ProjectileId, augment: ProjectileBurnAugment): boolean;
-  /** Queues a typed explosion or terminal lifecycle after an authoritative Direct Outcome. */
-  completeDirectImpact?(
-    projectileId: ProjectileId,
-    target: ProjectileCombatTargetRef,
-    impact: { readonly x: number; readonly y: number },
-    outcome: ProjectileDirectImpactOutcome,
-  ): boolean;
-  /** Applies the small same-frame domain outcome to projectile continuation state. */
-  completeProjectileExplosion?(projectileId: ProjectileId, damagedTargetKeys: readonly string[]): void;
-  /** Räumt den registry-fremden Rest ab: Physics-Binding-State wird world-lokal freigegeben. */
-  releaseWorldState(): void;
-}
-
-/**
- * Owner-vermittelte Operationen für den noch nicht migrierten Host-Code (`03 §5.1`).
- *
- * Der Seam zeigt ausschließlich auf denselben kanonischen Store; er kopiert nichts, vergibt keine
- * zweite Identity und wird nicht an neue Consumer verteilt.
- */
-export interface ProjectileRuntimeOwnerPort {
-  /** Internal binding seam; the Store itself never crosses the World boundary. */
-  readonly readProjectileStepOrder: () => readonly ProjectileRuntimeRecord[];
-  readonly readActiveProjectileRecords: () => ReadonlySet<ProjectileRuntimeRecord>;
-  readonly readProjectileRecord: (id: ProjectileId) => ProjectileRuntimeRecord | undefined;
-  readonly deactivateProjectileRecord: (record: ProjectileRuntimeRecord) => void;
-  readonly dropProjectileStepEntryAt: (index: number) => void;
-  /** Erstellt ein Projectile aus der aufgelösten, bestehenden Spawn-Payload. */
-  spawnProjectileConfig(
-    x: number,
-    y: number,
-    angle: number,
-    ownerId: string,
-    cfg: ProjectileSpawnConfig,
-  ): ProjectileId;
-  /** Delivers a raw Phaser contact to the world-owned interaction authority. */
-  readonly reportPhysicsContact: (contact: ProjectilePhysicsContact) => boolean;
-  /** Entfernt ein Projectile vollständig; unbekannte Ids sind wirkungslos. */
-  destroyProjectile(id: ProjectileId): void;
-  /** Queues a Hydra split without exposing Runtime records to the physics binding. */
-  queueHydraSplit?(
-    projectileId: ProjectileId,
-    impactX: number,
-    impactY: number,
-    outgoingVx: number,
-    outgoingVy: number,
-  ): boolean;
-  /** Beendet Identity und Aktivmenge und gibt die Ressourcen frei; der Step-Eintrag bleibt. */
-  releaseProjectile(record: ProjectileRuntimeRecord): void;
-  /** Host Frame: deterministische Flight-/Lifetime-/Homing-Verarbeitung. */
-  runHostProjectileStage?(deltaMs: number, nowMs: number): ProjectileHostStageResult;
-  /** Completes the local Mini-Rocket state machine after deferred explosion resolution. */
-  resumeMiniRocketExplosion?(projectileId: ProjectileId): void;
-  setProjectileTimeFieldPort?(port: ProjectileTimeFieldPort | null): void;
-  setProjectileTargetQueryPort?(port: ProjectileTargetQueryPort | null): void;
-  setProjectileTargetabilityPort?(port: ProjectileTargetabilityPort | null): void;
-  setLineOfFireReadPort?(port: LineOfFireReadPort | null): void;
-  resolveProjectileHoming?(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch?: boolean): boolean;
-  setHostFrameTime?(nowMs: number): void;
-}
-
 export interface WorldProjectileRuntimeOptions {
   readonly physicsBinding: ProjectilePhysicsBindingPort;
   /** World-scoped visual owner; it is never constructed by the physics binding. */
@@ -278,6 +200,7 @@ export class WorldProjectileRuntime implements
   ProjectileReplicationReadPort,
   WorldScopedBinding {
   private readonly projectiles: ProjectileStore;
+  private readonly physicsHandles = new Map<ProjectileId, ProjectilePhysicsHandle>();
   private readonly flightProcessor = new ProjectileFlightProcessor();
   private readonly homingController = new ProjectileHomingController();
   private readonly detonableIds = new Set<ProjectileId>();
@@ -289,7 +212,6 @@ export class WorldProjectileRuntime implements
   private readonly travelSamples: ProjectileTravelSample[] = [];
   private readonly activeProjectilesByOwner = new Map<string, number>();
   private readonly collisionProcessor = new ProjectileCollisionProcessor();
-  private readonly bindingOwner: ProjectileRuntimeOwnerPort;
   private readonly clientReplica = new ProjectileClientReplica();
   private readonly presentation: ProjectilePresentationRuntime;
   private readonly presentationStates: ProjectilePresentationState[] = [];
@@ -321,21 +243,34 @@ export class WorldProjectileRuntime implements
   /** Capability-Index der aktiven Luftstöße, die gegnerische Projectiles umlenken. */
   private readonly deflectorIds = new Set<ProjectileId>();
   private readonly collisionDependencies: ProjectileCollisionDependencies;
+  private readonly lifecycleProcessor: ProjectileLifecycleProcessor;
   private collisionTargetQueryPort: ProjectileCollisionTargetQueryPort | null = null;
   private worldBlockerPort: ProjectileWorldBlockerPort | null = null;
   private targetabilityPort: ProjectileTargetabilityPort | null = null;
   private barrierPort: ProjectileBarrierPort | null = null;
   private directImpactPort: ProjectileCombatPort | null = null;
-  private projectileImpactCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
+  private projectileImpactEventCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
+  private naturalFlameExpiryCallback: ((projectile: ProjectileFlameExpiryEvent) => void) | null = null;
+  private projectileResolvedCallback: ((outcome: ProjectileLifecycleOutcome) => void) | null = null;
+  private miniRocketDestroyedCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
+  private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
+  private proximityPulseCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
+  private timeBubbleProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
+  private homingTargetProvider: import('../entities/ProjectileHomingController').HomingTargetProvider | null = null;
+  private homingLineOfFireChecker: import('../entities/ProjectileHomingController').HomingLineOfFireChecker | null = null;
   private rockHitCallback: ((rockId: number, damage: number, attackerId: string) => void) | null = null;
   private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
   private baseHitCallback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
   private supportImpactCallback: ((projectile: ProjectileImpactSource, impact: SupportProjectileImpact) => void) | null = null;
-  private trainHitCallback: ((damage: number, attackerId: string) => void) | null = null;
-  private readonly physicsBinding: ProjectilePhysicsBinding;
+  private trainImpactPort: ProjectileTrainImpactPort | null = null;
+  private readonly physicsBinding: ProjectilePhysicsBindingPort;
+  private readonly contactLine = new Phaser.Geom.Line();
+  private readonly contactRect = new Phaser.Geom.Rectangle();
+  private readonly contactPoints: Phaser.Math.Vector2[] = [];
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
   private projectileTimeFieldPort: ProjectileTimeFieldPort | null = null;
+  private timeBubbleMovementPort: ProjectileTimeFieldPort | null = null;
   private readonly pendingNextStageSpawns: PendingNextStageProjectileSpawn[] = [];
   private completedInteractionStages = 0;
   private hasStartedInteractionStage = false;
@@ -347,36 +282,12 @@ export class WorldProjectileRuntime implements
   private destroyed = false;
 
   constructor(options: WorldProjectileRuntimeOptions) {
-    this.physicsBinding = options.physicsBinding as ProjectilePhysicsBinding;
+    this.physicsBinding = options.physicsBinding;
     this.presentation = options.presentation;
     this.hostNowMs = options.hostNowMs;
     this.onDestroy = options.onDestroy;
     this.projectiles = new ProjectileStore(options.identityScope);
     const runtime = this;
-    this.bindingOwner = {
-      readProjectileStepOrder: () => runtime.projectiles.stepOrder,
-      readActiveProjectileRecords: () => runtime.projectiles.activeRecords,
-      readProjectileRecord: (id) => runtime.projectiles.getById(id),
-      deactivateProjectileRecord: (record) => runtime.projectiles.deactivate(record),
-      dropProjectileStepEntryAt: (index) => runtime.projectiles.dropStepEntryAt(index),
-      reportPhysicsContact: (contact) => runtime.reportPhysicsContact(contact),
-      spawnProjectileConfig: (x, y, angle, ownerId, cfg) => runtime.spawnProjectileConfig(x, y, angle, ownerId, cfg),
-      destroyProjectile: (id) => runtime.destroyProjectile(id),
-      queueHydraSplit: (projectileId, impactX, impactY, outgoingVx, outgoingVy) => (
-        runtime.queueHydraSplit(projectileId, impactX, impactY, outgoingVx, outgoingVy)
-      ),
-      releaseProjectile: (record) => runtime.releaseProjectile(record),
-      runHostProjectileStage: (deltaMs, nowMs) => runtime.runHostProjectileStage(deltaMs, nowMs),
-      resumeMiniRocketExplosion: (projectileId) => runtime.resumeMiniRocketExplosion(projectileId),
-      setProjectileTimeFieldPort: (port) => runtime.setProjectileTimeFieldPort(port),
-      setProjectileTargetQueryPort: (port) => runtime.setProjectileTargetQueryPort(port),
-      setProjectileTargetabilityPort: (port) => runtime.setProjectileTargetabilityPort(port),
-      setLineOfFireReadPort: (port) => runtime.setLineOfFireReadPort(port),
-      resolveProjectileHoming: (request, simulatedAgeMs, forceSearch) => (
-        runtime.resolveProjectileHoming(request, simulatedAgeMs, forceSearch)
-      ),
-      setHostFrameTime: (nowMs) => runtime.setHostFrameTime(nowMs),
-    };
     this.collisionDependencies = {
       get targetQuery() { return runtime.collisionTargetQueryPort; },
       get targetability() { return runtime.targetabilityPort; },
@@ -384,12 +295,23 @@ export class WorldProjectileRuntime implements
       get directImpact() { return runtime.directImpactPort; },
       destroyProjectile: (id) => this.destroyProjectile(id),
       applyDefense: (record, defense, candidate) => this.applyDefense(record, defense, candidate),
-      completeDirectImpact: (record, target, impact, outcome) => (
-        this.physicsBinding.completeDirectImpact?.(record.id, target, impact, outcome) ?? false
-      ),
+      completeDirectImpact: (record, target, impact, outcome) => this.completeDirectImpact(record, target, impact, outcome),
       resolveWorldImpact: (record, candidate) => this.resolveWorldImpact(record, candidate),
     };
-    this.physicsBinding.bindOwner(this.bindingOwner);
+    const lifecycleDependencies: ProjectileLifecycleDependencies = {
+      queueDestroy: (projectile) => this.queueProjectileDestroy(projectile.id),
+      release: (projectile) => this.releaseProjectile(projectile),
+      dropStepEntryAt: (index) => this.projectiles.dropStepEntryAt(index),
+      shouldSweepRocks: (projectile) => this.shouldSweepRocks(projectile),
+      sweepRocks: (projectile) => this.sweepRocks(projectile),
+      updateHoming: (projectile, simulatedAgeMs) => { this.updateProjectileHoming(projectile, simulatedAgeMs); },
+      onImpact: (projectile, x, y) => this.projectileImpactEventCallback?.(this.createImpactSource(projectile, x, y)),
+      onNaturalFlameExpiry: (projectile) => this.naturalFlameExpiryCallback?.(this.createImpactSource(projectile) as ProjectileFlameExpiryEvent),
+      onProximityPulse: (projectile) => this.proximityPulseCallback?.(this.createImpactSource(projectile)),
+      onSpentDestruction: (projectile) => this.miniRocketDestroyedCallback?.(this.createImpactSource(projectile)),
+    };
+    this.lifecycleProcessor = new ProjectileLifecycleProcessor(lifecycleDependencies);
+    this.physicsBinding.setPhysicsContactHandler((contact) => this.reportPhysicsContact(contact));
   }
 
   /** Anzahl der aktuell wirksamen Projectiles dieser World. */
@@ -488,44 +410,84 @@ export class WorldProjectileRuntime implements
   }
 
   applyPlasmaSwarmImpact(impact: ProjectilePlasmaSwarmImpact): void {
-    this.physicsBinding.applyPlasmaSwarmImpact(impact);
+    if (this.destroyed) return;
+    this.standaloneExplosionRequestCallback?.({
+      x: impact.x,
+      y: impact.y,
+      provenance: createSingleOwnerProvenance(impact.ownerId, {
+        weaponSourceId: `${impact.sourceId}:swarm-explosion`,
+        sourceSlot: impact.sourceSlot ?? 'weapon1',
+        allowTeamDamage: impact.allowTeamDamage,
+      }),
+      effect: {
+        radius: impact.explosionRadius, maxDamage: impact.explosionDamage, minDamage: impact.explosionDamage,
+        knockback: 0, selfDamageMult: 0, damageTarget: 'enemies',
+        enemySlowFraction: impact.explosionSlowFraction,
+        enemySlowDurationMs: PLASMA_SWARM_EXPLOSION_DURATION_MS,
+        baseDamageMult: 1, rockDamageMult: 1, trainDamageMult: 0,
+        color: impact.color, visualStyle: 'energy',
+      },
+    });
+    const profile = resolvePlasmaSwarmProjectileProfile({
+      damage: impact.normalDamage, size: impact.normalSize, speed: impact.normalSpeed, range: impact.normalRange,
+    });
+    const speed = Math.max(1, profile.speed);
+    const lifetime = Math.max(1, (profile.range / speed) * 1000);
+    for (const angle of resolvePlasmaSwarmRadialAngles(impact.projectileCount)) {
+      this.spawnProjectileConfig(impact.x, impact.y, angle, impact.ownerId, {
+        speed, size: Math.max(1, profile.size), damage: profile.damage,
+        color: impact.color, ownerColor: impact.ownerColor ?? impact.color, lifetime,
+        remainingRangePx: profile.range, maxBounces: 0, isGrenade: false, adrenalinGain: 0,
+        sourceId: 'weapon.plasma.swarm', homing: resolvePlasmaSwarmHoming(impact.homing),
+        projectileStyle: impact.projectileStyle, energyBallVariant: impact.energyBallVariant,
+        tracerConfig: impact.tracerConfig, allowTeamDamage: impact.allowTeamDamage,
+        baseDamageMult: impact.baseDamageMult, suppressSpawnFx: true,
+        plasmaSwarmProjectile: true, plasmaSwarmOriginEnemyId: impact.enemyId,
+        sourceSlot: impact.sourceSlot ?? 'weapon1',
+      });
+    }
   }
 
-  setNaturalFlameExpiryCallback(callback: Parameters<ProjectilePhysicsBinding['setNaturalFlameExpiryCallback']>[0]): void {
-    this.physicsBinding.setNaturalFlameExpiryCallback(callback);
+  setNaturalFlameExpiryCallback(callback: ((projectile: ProjectileFlameExpiryEvent) => void) | null): void {
+    this.naturalFlameExpiryCallback = callback;
   }
 
   setProjectileImpactCallback(callback: ((projectile: ProjectileImpactSource) => void) | null): void {
-    this.projectileImpactCallback = callback;
-    this.physicsBinding.setProjectileImpactCallback(callback);
+    this.projectileImpactEventCallback = callback;
   }
 
-  setProjectileResolvedCallback(callback: Parameters<ProjectilePhysicsBinding['setProjectileResolvedCallback']>[0]): void {
-    this.physicsBinding.setProjectileResolvedCallback(callback);
+  setProjectileResolvedCallback(callback: ((outcome: ProjectileLifecycleOutcome) => void) | null): void {
+    this.projectileResolvedCallback = callback;
   }
 
-  setMiniRocketDestroyedCallback(callback: Parameters<ProjectilePhysicsBinding['setMiniRocketDestroyedCallback']>[0]): void {
-    this.physicsBinding.setMiniRocketDestroyedCallback(callback);
+  setMiniRocketDestroyedCallback(callback: ((projectile: ProjectileImpactSource) => void) | null): void {
+    this.miniRocketDestroyedCallback = callback;
   }
 
-  setStandaloneExplosionRequestCallback(callback: Parameters<ProjectilePhysicsBinding['setStandaloneExplosionRequestCallback']>[0]): void {
-    this.physicsBinding.setStandaloneExplosionRequestCallback(callback);
+  setStandaloneExplosionRequestCallback(callback: ((request: ProjectileExplosionRequest) => void) | null): void {
+    this.standaloneExplosionRequestCallback = callback;
   }
 
-  setProximityPulseCallback(callback: Parameters<ProjectilePhysicsBinding['setProximityPulseCallback']>[0]): void {
-    this.physicsBinding.setProximityPulseCallback(callback);
+  setProximityPulseCallback(callback: ((projectile: ProjectileImpactSource) => void) | null): void {
+    this.proximityPulseCallback = callback;
   }
 
-  setTimeBubbleFactorProvider(provider: Parameters<ProjectilePhysicsBinding['setTimeBubbleFactorProvider']>[0]): void {
-    this.physicsBinding.setTimeBubbleFactorProvider(provider);
+  setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number, ownerId?: string) => number) | null): void {
+    this.timeBubbleProvider = provider;
+    this.timeBubbleMovementPort = provider ? {
+      getMovementFactor: (x, y, nowMs, provenance) => provider(x, y, nowMs, provenance.allegiance.ownerId),
+    } : null;
+    this.flightProcessor.setTimeFieldPort(this.timeBubbleMovementPort ?? this.projectileTimeFieldPort);
   }
 
-  setHomingTargetProvider(provider: Parameters<ProjectilePhysicsBinding['setHomingTargetProvider']>[0]): void {
-    this.physicsBinding.setHomingTargetProvider(provider);
+  setHomingTargetProvider(provider: import('../entities/ProjectileHomingController').HomingTargetProvider | null): void {
+    this.homingTargetProvider = provider;
+    this.homingController.setTargetQueryPort(provider ? { queryTargets: provider } : null);
   }
 
-  setHomingLineOfFireChecker(checker: Parameters<ProjectilePhysicsBinding['setHomingLineOfFireChecker']>[0]): void {
-    this.physicsBinding.setHomingLineOfFireChecker(checker);
+  setHomingLineOfFireChecker(checker: import('../entities/ProjectileHomingController').HomingLineOfFireChecker | null): void {
+    this.homingLineOfFireChecker = checker;
+    this.homingController.setLineOfFireReadPort(checker ? { hasClearLineOfFire: checker } : null);
   }
 
   setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string) => void) | null): void {
@@ -544,24 +506,24 @@ export class WorldProjectileRuntime implements
     this.supportImpactCallback = callback;
   }
 
-  setRockGroup(...args: Parameters<ProjectilePhysicsBinding['setRockGroup']>): void {
+  setRockGroup(...args: Parameters<ProjectilePhysicsBindingPort['setRockGroup']>): void {
     this.physicsBinding.setRockGroup(...args);
   }
 
-  setBaseGroup(...args: Parameters<ProjectilePhysicsBinding['setBaseGroup']>): void {
+  setBaseGroup(...args: Parameters<ProjectilePhysicsBindingPort['setBaseGroup']>): void {
     this.physicsBinding.setBaseGroup(...args);
   }
 
-  setObstacleIndex(...args: Parameters<ProjectilePhysicsBinding['setObstacleIndex']>): void {
+  setObstacleIndex(...args: Parameters<ProjectilePhysicsBindingPort['setObstacleIndex']>): void {
     this.physicsBinding.setObstacleIndex(...args);
   }
 
-  setTrainGroup(...args: Parameters<ProjectilePhysicsBinding['setTrainGroup']>): void {
+  setTrainGroup(...args: Parameters<ProjectilePhysicsBindingPort['setTrainGroup']>): void {
     this.physicsBinding.setTrainGroup(...args);
   }
 
-  setTrainHitCallback(callback: ((damage: number, attackerId: string) => void) | null): void {
-    this.trainHitCallback = callback;
+  setTrainImpactPort(port: ProjectileTrainImpactPort | null): void {
+    this.trainImpactPort = port;
   }
 
   private createImpactSource(
@@ -617,45 +579,205 @@ export class WorldProjectileRuntime implements
     const projectile = this.projectiles.getById(contact.projectileId);
     if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return true;
 
+    const bounceEligible = this.shouldBounceAfterContact(projectile, contact.target);
+    if (bounceEligible && contact.target.kind !== 'world-boundary'
+      && projectile.bounceProcessedThisStep && projectile.velocityAfterFirstBounce) {
+      // Phaser may reflect each collider independently in one step. Restore the first
+      // authoritative result before handling the next technical contact.
+      projectile.body.velocity.x = projectile.velocityAfterFirstBounce.x;
+      projectile.body.velocity.y = projectile.velocityAfterFirstBounce.y;
+      return true;
+    }
+    const usesPenetratingRockContact = contact.target.kind === 'rock' && projectile.penetratesRocks
+      && this.shouldBounceAfterContact(projectile, { kind: 'trunk' });
+    const impactPoint = bounceEligible || usesPenetratingRockContact
+      ? this.resolveContactImpactPoint(projectile, contact)
+      : contact.target.kind === 'world-boundary'
+        ? { x: contact.x, y: contact.y }
+        : { x: projectile.sprite.x, y: projectile.sprite.y };
+    if (bounceEligible) {
+      const multiplier = projectile.bounceFrictionMultiplier;
+      if (multiplier !== undefined && multiplier < 1) {
+        projectile.body.velocity.x *= multiplier;
+        projectile.body.velocity.y *= multiplier;
+      }
+      if (contact.target.kind !== 'world-boundary') {
+        projectile.bounceProcessedThisStep = true;
+        projectile.velocityAfterFirstBounce = {
+          x: projectile.body.velocity.x, y: projectile.body.velocity.y,
+        };
+        this.presentation.playBounceImpact(projectile.id, contact.x, contact.y,
+          projectile.body.velocity.x, projectile.body.velocity.y, projectile.color, projectile.projectileStyle);
+      }
+    }
+    let consumed = false;
     switch (contact.target.kind) {
       case 'rock': {
         const resolution = this.resolveWorldImpactCandidate(projectile, {
           projectileId: projectile.id,
           target: { kind: 'rock', id: contact.target.id },
-          x: contact.x,
-          y: contact.y,
+          x: impactPoint.x,
+          y: impactPoint.y,
           source: contact.source,
         });
-        return resolution.technicalContactConsumed;
+        consumed = resolution.technicalContactConsumed;
+        break;
       }
       case 'trunk':
-        return this.resolveTrunkPhysicsContact(projectile);
+        consumed = this.resolveTrunkPhysicsContact(projectile);
+        break;
       case 'base': {
         const resolution = this.resolveWorldImpactCandidate(projectile, {
           projectileId: projectile.id,
           target: { kind: 'base', id: contact.target.id },
-          x: contact.x,
-          y: contact.y,
+          x: impactPoint.x,
+          y: impactPoint.y,
           source: contact.source,
         });
-        return resolution.technicalContactConsumed;
+        consumed = resolution.technicalContactConsumed;
+        break;
       }
       case 'train': {
         const resolution = this.resolveWorldImpactCandidate(projectile, {
           projectileId: projectile.id,
           target: { kind: 'train', id: contact.target.id },
-          x: contact.x,
-          y: contact.y,
+          x: impactPoint.x,
+          y: impactPoint.y,
           source: contact.source,
         });
-        return resolution.technicalContactConsumed;
+        consumed = resolution.technicalContactConsumed;
+        break;
       }
       case 'world-boundary':
-        return this.resolveWorldBoundaryPhysicsContact(
+        consumed = this.resolveWorldBoundaryPhysicsContact(
           projectile,
-          this.createImpactSource(projectile, contact.x, contact.y),
+          this.createImpactSource(projectile, impactPoint.x, impactPoint.y),
         );
+        break;
     }
+    if (!consumed && bounceEligible) {
+      this.completeAuthoritativeBounce(projectile, impactPoint.x, impactPoint.y, contact.target.kind === 'world-boundary');
+    }
+    return consumed;
+  }
+
+  private resolveContactImpactPoint(
+    projectile: ProjectileRuntimeRecord,
+    contact: ProjectilePhysicsContact,
+  ): { x: number; y: number } {
+    const bounds = contact.targetBounds;
+    if (!bounds) return { x: contact.x, y: contact.y };
+    const line = this.contactLine.setTo(projectile.lastX, projectile.lastY, projectile.sprite.x, projectile.sprite.y);
+    const rect = this.contactRect.setTo(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
+    const hit = findNearestRectangleHit(line, rect, this.contactPoints);
+    return hit ? { x: hit.x, y: hit.y } : { x: contact.x, y: contact.y };
+  }
+
+  private shouldBounceAfterContact(
+    projectile: ProjectileRuntimeRecord,
+    target: ProjectilePhysicsContact['target'],
+  ): boolean {
+    if (projectile.isBfg || hasGaussDischarge(projectile)
+      || (projectile.collisionMode === 'overlap' && projectile.piercesTargets === true)
+      || projectile.isFlame || hasLeafBlowerCapability(projectile)) return false;
+    if (target.kind === 'rock' && projectile.penetratesRocks === true) return false;
+    if (projectile.isGrenade && projectile.maxBounces === 0) return false;
+    if (projectile.impactCloud && projectile.maxBounces === 0) return false;
+    if (projectile.explosion && projectile.maxBounces === 0) return false;
+    return target.kind !== 'world-boundary' || !projectile.isBfg;
+  }
+
+  private completeAuthoritativeBounce(projectile: ProjectileRuntimeRecord, x: number, y: number, worldBoundary: boolean): void {
+    if (this.queueHydraSplit(
+      projectile.id, x, y, projectile.body.velocity.x, projectile.body.velocity.y,
+    )) return;
+    projectile.bounceCount += 1;
+    if (worldBoundary) this.presentation.playBounceImpact(
+      projectile.id, x, y, projectile.body.velocity.x, projectile.body.velocity.y,
+      projectile.color, projectile.projectileStyle,
+    );
+    if (projectile.bounceCount > projectile.maxBounces) {
+      projectile.body.setVelocity(0, 0);
+      projectile.body.enable = false;
+    }
+  }
+
+  private shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean {
+    return projectile.collisionMode === 'sweep'
+      && !projectile.isGrenade
+      && !projectile.isFlame
+      && !projectile.isBfg
+      && !projectile.pendingDestroy
+      && !projectile.bounceProcessedThisStep
+      && !projectile.penetratesRocks;
+  }
+
+  private sweepRocks(projectile: ProjectileRuntimeRecord): void {
+    const segmentLength = Math.hypot(projectile.sprite.x - projectile.lastX, projectile.sprite.y - projectile.lastY);
+    if (segmentLength <= 0.5) return;
+    const hit = this.physicsBinding.findNearestRockSweep(
+      projectile.lastX, projectile.lastY, projectile.sprite.x, projectile.sprite.y,
+      projectile.ignoreRockIndex,
+    );
+    if (!hit) return;
+    const normalLength = Math.hypot(hit.normalX, hit.normalY) || 1;
+    let nextVx = projectile.body.velocity.x;
+    let nextVy = projectile.body.velocity.y;
+    if (Math.abs(hit.normalX) > 0.001) nextVx *= -1;
+    if (Math.abs(hit.normalY) > 0.001) nextVy *= -1;
+    const frictionMultiplier = projectile.bounceFrictionMultiplier;
+    if (frictionMultiplier !== undefined && frictionMultiplier < 1) {
+      nextVx *= frictionMultiplier;
+      nextVy *= frictionMultiplier;
+    }
+    projectile.bounceCount += 1;
+    projectile.bounceProcessedThisStep = true;
+    projectile.velocityAfterFirstBounce = { x: nextVx, y: nextVy };
+    const resolution = this.resolveWorldImpactCandidate(projectile, {
+      projectileId: projectile.id,
+      target: { kind: 'rock', id: hit.rockIndex },
+      x: hit.x,
+      y: hit.y,
+      source: 'physics-collider',
+    });
+    if (resolution.technicalContactConsumed) return;
+    this.presentation.playBounceImpact(
+      projectile.id, hit.x, hit.y, nextVx, nextVy, projectile.color, projectile.projectileStyle,
+    );
+    if (projectile.bounceCount > projectile.maxBounces) {
+      projectile.body.reset(hit.x, hit.y);
+      projectile.body.setVelocity(0, 0);
+      projectile.body.enable = false;
+      return;
+    }
+    const offsetDistance = Math.max(projectile.sprite.displayWidth * 0.5 + 0.5, 1);
+    projectile.body.reset(
+      hit.x + (hit.normalX / normalLength) * offsetDistance,
+      hit.y + (hit.normalY / normalLength) * offsetDistance,
+    );
+    projectile.body.setVelocity(nextVx, nextVy);
+  }
+
+  private completeDirectImpact(
+    projectile: ProjectileRuntimeRecord,
+    target: ProjectileCombatTargetRef,
+    impact: { readonly x: number; readonly y: number },
+    outcome: ProjectileDirectImpactOutcome,
+  ): boolean {
+    if (!outcome.accepted || projectile.pendingDestroy) return false;
+    if (projectile.impactCloud) this.projectileImpactEventCallback?.(this.createImpactSource(projectile, impact.x, impact.y));
+    const targetKey = target.kind === 'player' ? `players:${target.id}`
+      : target.kind === 'enemy' ? `enemies:${target.id}` : undefined;
+    if (projectile.enemyHitExplosion) {
+      this.lifecycleProcessor.triggerEnemyImpactExplosion(projectile);
+      return false;
+    }
+    if (projectile.explosion) {
+      this.lifecycleProcessor.triggerExplosion(projectile, targetKey);
+      return !projectile.pendingDestroy;
+    }
+    this.queueProjectileDestroy(projectile.id);
+    return false;
   }
 
   /**
@@ -687,7 +809,9 @@ export class WorldProjectileRuntime implements
     let technicalContactConsumed = false;
     switch (candidate.target.kind) {
       case 'rock':
-        this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id);
+        if (!this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id)) {
+          return { outcome: 'passed', technicalContactConsumed: false };
+        }
         technicalContactConsumed = this.resolveRockPhysicsContact(
           projectile,
           candidate.target.id,
@@ -695,6 +819,10 @@ export class WorldProjectileRuntime implements
           candidate.y,
           impact,
         );
+        if (projectile.penetratesRocks && this.shouldBounceAfterContact(projectile, { kind: 'trunk' })) {
+          this.presentation.playBounceImpact(projectile.id, candidate.x, candidate.y,
+            projectile.body.velocity.x, projectile.body.velocity.y, projectile.color, projectile.projectileStyle);
+        }
         break;
       case 'base':
         technicalContactConsumed = this.resolveBasePhysicsContact(
@@ -706,7 +834,9 @@ export class WorldProjectileRuntime implements
         );
         break;
       case 'train':
-        this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id);
+        if (!this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id)) {
+          return { outcome: 'passed', technicalContactConsumed: false };
+        }
         technicalContactConsumed = this.resolveTrainPhysicsContact(projectile, impact);
         break;
       case 'construction':
@@ -730,23 +860,35 @@ export class WorldProjectileRuntime implements
     projectile: ProjectileRuntimeRecord,
     targetKind: 'rock' | 'train',
     targetId: number | string,
-  ): void {
+  ): boolean {
     if (projectile.isBfg === true) {
       if (targetKind === 'rock') {
         projectile.bfgHitRocks ??= new Set<number>();
+        if (projectile.bfgHitRocks.has(Number(targetId))) return false;
         projectile.bfgHitRocks.add(Number(targetId));
       } else {
+        if (projectile.bfgHitTrain) return false;
         projectile.bfgHitTrain = true;
       }
     }
-    if (hasGaussDischarge(projectile)) {
+    if (hasGaussDischarge(projectile)
+      || (projectile.collisionMode === 'overlap' && projectile.piercesTargets === true
+        && !projectile.isBfg && !projectile.isFlame && !hasLeafBlowerCapability(projectile))) {
       if (targetKind === 'rock') {
         projectile.gaussHitRocks ??= new Set<number>();
+        if (projectile.gaussHitRocks.has(Number(targetId))) return false;
         projectile.gaussHitRocks.add(Number(targetId));
       } else {
+        if (projectile.gaussHitTrain) return false;
         projectile.gaussHitTrain = true;
       }
     }
+    if (targetKind === 'rock' && projectile.penetratesRocks) {
+      projectile.penetratedRockIds ??= new Set<number>();
+      if (projectile.penetratedRockIds.has(Number(targetId))) return false;
+      projectile.penetratedRockIds.add(Number(targetId));
+    }
+    return true;
   }
 
   private resolveRockPhysicsContact(
@@ -764,12 +906,12 @@ export class WorldProjectileRuntime implements
       return true;
     }
     if (projectile.impactCloud && projectile.maxBounces === 0) {
-      this.projectileImpactCallback?.(impact);
+      this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
     if (projectile.explosion && projectile.maxBounces === 0) {
-      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      this.triggerProjectileExplosion(projectile.id);
       return true;
     }
     if (projectile.isFlame) {
@@ -801,12 +943,12 @@ export class WorldProjectileRuntime implements
 
   private resolveTrunkPhysicsContact(projectile: ProjectileRuntimeRecord): boolean {
     if (projectile.impactCloud && projectile.maxBounces === 0) {
-      this.projectileImpactCallback?.(this.createImpactSource(projectile));
+      this.projectileImpactEventCallback?.(this.createImpactSource(projectile));
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
     if (projectile.explosion && projectile.maxBounces === 0) {
-      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      this.triggerProjectileExplosion(projectile.id);
       return true;
     }
     if (hasLeafBlowerCapability(projectile)) {
@@ -832,12 +974,12 @@ export class WorldProjectileRuntime implements
     }
     if (projectile.impactCloud && projectile.maxBounces === 0) {
       this.applyBaseContact(projectile, baseId, impact);
-      this.projectileImpactCallback?.(impact);
+      this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
     if (projectile.explosion && projectile.maxBounces === 0) {
-      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      this.triggerProjectileExplosion(projectile.id);
       return true;
     }
     if (hasLeafBlowerCapability(projectile)) {
@@ -872,18 +1014,21 @@ export class WorldProjectileRuntime implements
     const appliesTrainDamage = !projectile.isTranslocatorPuck && (projectile.trainDamageMult ?? 1) !== 0;
     const applyTrainDamage = (): void => {
       if (appliesTrainDamage) {
-        this.trainHitCallback?.(projectile.damage * (projectile.trainDamageMult ?? 1), projectile.ownerId);
+        this.trainImpactPort?.resolveTrainImpact({
+          damage: projectile.damage * (projectile.trainDamageMult ?? 1),
+          attributionId: projectile.ownerId,
+        });
       }
     };
     if (projectile.impactCloud && projectile.maxBounces === 0) {
       applyTrainDamage();
-      this.projectileImpactCallback?.(impact);
+      this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
     if (projectile.explosion && projectile.maxBounces === 0) {
       if (!projectile.miniRocketSpent) applyTrainDamage();
-      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      this.triggerProjectileExplosion(projectile.id);
       return true;
     }
     if (projectile.isFlame || hasLeafBlowerCapability(projectile)) {
@@ -904,12 +1049,12 @@ export class WorldProjectileRuntime implements
       return false;
     }
     if (projectile.impactCloud && projectile.maxBounces === 0) {
-      this.projectileImpactCallback?.(impact);
+      this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
     if (projectile.explosion && projectile.maxBounces === 0) {
-      this.physicsBinding.triggerProjectileExplosion(projectile.id);
+      this.triggerProjectileExplosion(projectile.id);
       return true;
     }
     if (hasLeafBlowerCapability(projectile)) {
@@ -1017,7 +1162,7 @@ export class WorldProjectileRuntime implements
    * The Physics Binding supplies only the contact point and post-bounce velocity. Split limits,
    * range, child payload, provenance and deferred materialization are all owner decisions.
    */
-  queueHydraSplit(
+  private queueHydraSplit(
     projectileId: ProjectileId,
     impactX: number,
     impactY: number,
@@ -1168,14 +1313,56 @@ export class WorldProjectileRuntime implements
   }
 
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
+    const handle = this.physicsHandles.get(record.id);
+    if (!handle) return;
+    this.physicsHandles.delete(record.id);
     this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
-    this.physicsBinding.releaseProjectileResources(record);
+    record.hitObstacleIds?.clear();
+    record.hitBaseIds?.clear();
+    const lifecycle: ProjectileLifecycleOutcome = record.miniRocketSpent
+      ? { kind: 'mini-rocket-destroyed', projectileId: record.id }
+      : {
+          kind: 'resolved',
+          projectileId: record.id,
+          provenance: record.provenance,
+          ...(record.ak47ShotId === undefined ? {} : {
+            reaction: {
+              ak47: {
+                shotId: record.ak47ShotId,
+                fireSuperiorityShot: record.ak47FireSuperiorityShot === true,
+                hitConfirmed: record.ak47HitConfirmed === true,
+              },
+            },
+          }),
+        };
+    this.projectileResolvedCallback?.(lifecycle);
+    this.presentation.destroyProjectileVisuals({
+      id: record.id, ownerId: record.ownerId, x: record.sprite.x, y: record.sprite.y,
+      vx: record.body.velocity.x, vy: record.body.velocity.y, size: record.sprite.displayWidth,
+      color: record.color, style: record.projectileStyle,
+      energyBallVariant: record.energyBallVariant, sporeVisualVariant: record.sporeVisualVariant,
+      pendingHydraSplit: record.pendingHydraSplit,
+      destroyX: record.pendingHydraSplit?.x ?? record.sprite.x,
+      destroyY: record.pendingHydraSplit?.y ?? record.sprite.y,
+      destroyScale: record.sprite.displayWidth / 16,
+    });
+    this.physicsBinding.releaseProjectileResources(handle);
   }
 
   searchDetonableProjectiles(request: ProjectileDetonationSearchRequest): readonly ProjectileDetonationTarget[] {
     if (this.destroyed) return [];
-    return this.physicsBinding.externalInteraction?.searchDetonableProjectiles(this.detonableIds, request) ?? [];
+    const line = new Phaser.Geom.Line(request.startX, request.startY, request.endX, request.endY);
+    const targets: ProjectileDetonationTarget[] = [];
+    for (const id of this.detonableIds) {
+      const projectile = this.projectiles.getById(id);
+      if (!projectile?.detonable) continue;
+      if (!request.detonator.triggerTags.includes(projectile.detonable.tag)) continue;
+      if (!projectile.detonable.allowCrossTeam && projectile.ownerId !== request.shooterId) continue;
+      if (!Phaser.Geom.Intersects.LineToRectangle(line, projectile.sprite.getBounds())) continue;
+      targets.push(createDetonationTarget(projectile));
+    }
+    return targets;
   }
 
   detonateProjectile(
@@ -1183,15 +1370,28 @@ export class WorldProjectileRuntime implements
     detonatorOwnerId: string,
   ): ProjectileDetonationOutcome | null {
     if (this.destroyed || !this.detonableIds.has(projectileId)) return null;
-    return this.physicsBinding.externalInteraction?.detonateProjectile(projectileId, detonatorOwnerId) ?? null;
+    const projectile = this.projectiles.getById(projectileId);
+    if (!projectile?.detonable) return null;
+    const target = createDetonationTarget(projectile);
+    this.destroyProjectile(projectileId);
+    return { ...target, detonatorOwnerId };
   }
 
   detonateOverlappingProjectiles(): readonly ProjectileDetonationOutcome[] {
     if (this.destroyed) return [];
-    return this.physicsBinding.externalInteraction?.detonateOverlappingProjectiles(
-      this.detonatorIds,
-      this.detonableIds,
-    ) ?? [];
+    const outcomes: ProjectileDetonationOutcome[] = [];
+    for (const detonator of this.projectiles.activeRecords) {
+      if (!this.detonatorIds.has(detonator.id)) continue;
+      for (const target of this.projectiles.activeRecords) {
+        if (target.id === detonator.id || !this.detonableIds.has(target.id) || !target.detonable) continue;
+        if (!detonator.detonator?.triggerTags.includes(target.detonable.tag)) continue;
+        if (!target.detonable.allowCrossTeam && target.ownerId !== detonator.ownerId) continue;
+        if (!boundsOverlap(detonator.sprite.getBounds(), target.sprite.getBounds())) continue;
+        const result = this.detonateProjectile(target.id, detonator.ownerId);
+        if (result) outcomes.push(result);
+      }
+    }
+    return outcomes;
   }
 
   spawnPuck(request: TranslocatorPuckSpawnRequest): ProjectileId {
@@ -1270,8 +1470,8 @@ export class WorldProjectileRuntime implements
         : undefined);
     if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
 
-    const applied = this.physicsBinding.applyProjectileBurnAugment?.(projectileId, augment) ?? false;
-    if (!applied) return false;
+    record.supplementalBurnOnHit = { ...augment.burn };
+    record.supplementalBurnProvenance = augment.provenance;
     this.burnAugments.set(projectileId, augment);
     return true;
   }
@@ -1319,18 +1519,13 @@ export class WorldProjectileRuntime implements
 
   /**
    * Host Frame Port: der Owner taktet zuerst den Runtime-Core und reicht danach ausschließlich
-   * dessen schmale Ergebnisse an das nachgelagerte Physics-/Effect-Binding weiter.
+   * dessen Ergebnisse an den privaten Lifecycle-Processor weiter.
    */
   runHostProjectileStage(deltaMs: number, nowMs: number): ProjectileHostStageResult {
     if (this.destroyed) return emptyHostStageResult();
     this.setHostFrameTime(nowMs);
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
-    const stage = this.physicsBinding.runProjectileEffectsStage?.(deltaMs, nowMs, coreStage)
-      ?? {
-        projectileExplosions: [],
-        grenadePayloads: [],
-        countdownEvents: coreStage.countdownEvents,
-      };
+    const stage = this.lifecycleProcessor.run(this.projectiles.stepOrder, coreStage);
     this.runMiniRocketStateStage();
     this.presentation.syncHostRenderers(this.presentationProjectiles);
     return stage;
@@ -1338,8 +1533,7 @@ export class WorldProjectileRuntime implements
 
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
     this.projectileTimeFieldPort = port;
-    this.flightProcessor.setTimeFieldPort(port);
-    this.physicsBinding.setProjectileTimeFieldPort?.(port);
+    this.flightProcessor.setTimeFieldPort(this.timeBubbleMovementPort ?? port);
   }
 
   setProjectileTargetQueryPort(port: ProjectileTargetQueryPort | null): void {
@@ -1392,7 +1586,13 @@ export class WorldProjectileRuntime implements
     this.resumeMiniRocketExplosion(projectileId);
   }
 
-  resumeMiniRocketExplosion(projectileId: ProjectileId): void {
+  private triggerProjectileExplosion(id: ProjectileId, impactTargetKey?: string): boolean {
+    const projectile = this.projectiles.getById(id);
+    return projectile !== undefined && !projectile.pendingDestroy
+      && this.lifecycleProcessor.triggerExplosion(projectile, impactTargetKey);
+  }
+
+  private resumeMiniRocketExplosion(projectileId: ProjectileId): void {
     const projectile = this.projectiles.getById(projectileId);
     if (!projectile || ((projectile.multiExplosionsRemaining ?? 0) <= 0 && !projectile.miniRocketSpent)) return;
     projectile.pendingExplosion = false;
@@ -1767,17 +1967,12 @@ export class WorldProjectileRuntime implements
     return foundTarget;
   }
 
-  resolveProjectileHoming(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false): boolean {
-    return this.homingController.update(request, simulatedAgeMs, forceSearch);
-  }
-
   setHostFrameTime(nowMs: number): void {
     if (this.contactFrameNowMs !== nowMs) {
       this.resolvedWorldContacts.clear();
       this.contactFrameNowMs = nowMs;
     }
     this.hostFrameNowMs = nowMs;
-    this.physicsBinding.setHostFrameTime?.(nowMs);
     this.directImpactPort?.setHostFrameTime?.(nowMs);
   }
 
@@ -1788,10 +1983,7 @@ export class WorldProjectileRuntime implements
     this.pendingNextStageSpawns.length = 0;
     this.completedInteractionStages = 0;
     this.hasStartedInteractionStage = false;
-    for (const record of this.projectiles.stepOrder) {
-      this.projectiles.detach(record);
-      this.physicsBinding.releaseProjectileResources(record);
-    }
+    for (const record of [...this.projectiles.stepOrder]) this.releaseProjectile(record);
     this.projectiles.clear();
     this.detonableIds.clear();
     this.detonatorIds.clear();
@@ -1806,14 +1998,40 @@ export class WorldProjectileRuntime implements
     this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
+    this.homingController.setTargetQueryPort(null);
+    this.homingController.setTargetabilityPort(null);
+    this.homingController.setLineOfFireReadPort(null);
+    this.lifecycleProcessor.reset();
+    this.physicsHandles.clear();
     this.projectileTimeFieldPort = null;
+    this.timeBubbleMovementPort = null;
+    this.collisionTargetQueryPort = null;
+    this.worldBlockerPort = null;
+    this.targetabilityPort = null;
+    this.barrierPort = null;
+    this.directImpactPort = null;
+    this.trainImpactPort = null;
+    this.miniRocketStatePort = null;
+    this.homingTargetProvider = null;
+    this.homingLineOfFireChecker = null;
+    this.timeBubbleProvider = null;
+    this.projectileImpactEventCallback = null;
+    this.naturalFlameExpiryCallback = null;
+    this.projectileResolvedCallback = null;
+    this.miniRocketDestroyedCallback = null;
+    this.standaloneExplosionRequestCallback = null;
+    this.proximityPulseCallback = null;
+    this.rockHitCallback = null;
+    this.obstacleKindResolver = null;
+    this.baseHitCallback = null;
+    this.supportImpactCallback = null;
     this.projectileReplicationAdapter?.reset();
     this.projectileReplicationAdapter = null;
     this.presentation.releaseWorldPresentation();
     this.presentationStates.length = 0;
     this.clientReplica.reset();
     this.physicsBinding.releaseWorldState();
-    this.physicsBinding.bindOwner(null);
+    this.physicsBinding.setPhysicsContactHandler(null);
     this.onDestroy?.();
   }
 
@@ -1827,7 +2045,7 @@ export class WorldProjectileRuntime implements
     spawnHostNowMs = this.hostNowMs(),
   ): ProjectileId {
     const id = this.projectiles.allocateId();
-    const record = this.physicsBinding.createProjectile(id, x, y, angle, ownerId, cfg, spawnHostNowMs, provenance);
+    const record = this.createProjectileRecord(id, x, y, angle, ownerId, cfg, spawnHostNowMs, provenance);
     this.projectiles.insert(record);
     if (record.detonable) this.detonableIds.add(id);
     if (record.detonator) this.detonatorIds.add(id);
@@ -1841,6 +2059,120 @@ export class WorldProjectileRuntime implements
       });
     }
     return id;
+  }
+
+  /** Creates authoritative state; the PhysicsBinding only creates the Phaser handle. */
+  private createProjectileRecord(
+    id: ProjectileId,
+    x: number,
+    y: number,
+    angle: number,
+    ownerId: string,
+    cfg: ProjectileSpawnConfig,
+    hostNowMs: number,
+    provenance: ProjectileProvenance,
+  ): ProjectileRuntimeRecord {
+    const bodyProfile = resolveProjectileBodyProfile(cfg, angle);
+    const resolvedSpawn = cfg.gameplayMuzzleOrigin
+      ? resolveSafeMuzzleSpawn(
+        x, y, cfg.gameplayMuzzleOrigin, angle, cfg,
+        this.physicsBinding.getSafeMuzzleGeometry(), bodyProfile,
+      )
+      : { x, y };
+    const timeFactor = clampProjectileTimeFactor(this.timeBubbleProvider?.(
+      resolvedSpawn.x, resolvedSpawn.y, hostNowMs, ownerId,
+    ) ?? this.projectileTimeFieldPort?.getMovementFactor(
+      resolvedSpawn.x, resolvedSpawn.y, hostNowMs, provenance,
+    ) ?? 1);
+    const mechanics = resolvePhysicsMechanics(cfg);
+    const handle = this.physicsBinding.createPhysicsHandle({
+      id, x: resolvedSpawn.x, y: resolvedSpawn.y, size: cfg.size, color: cfg.color,
+      bodyWidth: bodyProfile.width,
+      bodyHeight: bodyProfile.height,
+      bodyOffsetX: bodyProfile.offsetX,
+      bodyOffsetY: bodyProfile.offsetY,
+      velocityX: Math.cos(angle) * cfg.speed * timeFactor,
+      velocityY: Math.sin(angle) * cfg.speed * timeFactor,
+      mechanics,
+    });
+    this.physicsHandles.set(id, handle);
+    const record: ProjectileRuntimeRecord = {
+      ...cfg,
+      id,
+      sprite: handle.sprite,
+      body: handle.body,
+      lastX: resolvedSpawn.x,
+      lastY: resolvedSpawn.y,
+      pendingDestroy: false,
+      pendingExplosion: false,
+      bounceCount: cfg.initialBounceCount ?? 0,
+      createdAt: hostNowMs,
+      ownerId,
+      provenance,
+      collisionMode: resolveProjectileCollisionMode(cfg),
+      color: cfg.color,
+      sourceId: cfg.sourceId ?? 'weapon.unknown',
+      lifetime: cfg.lifetime,
+      maxBounces: cfg.maxBounces,
+      isGrenade: cfg.isGrenade,
+      adrenalinGain: cfg.adrenalinGain,
+      boundsListener: handle.boundsListener,
+      colliders: handle.colliders,
+      lockedTargetId: null,
+      homingState: cfg.homing ? { lockedTargetId: null } : undefined,
+      hitboxSize: cfg.size,
+      flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
+      hitObstacleIds: cfg.isFlame ? new Set<number>() : undefined,
+      penetrationRemaining: cfg.penetrationCount,
+      penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
+      piercingHitIds: (cfg.isBfg || cfg.piercesTargets
+        || ((cfg.proximityPulse?.radius ?? 0) > 0 && (cfg.proximityPulse?.damage ?? 0) > 0))
+        ? new Set<string>() : undefined,
+      penetratedRockIds: cfg.penetratesRocks ? new Set<number>() : undefined,
+      awpCorridorHitIds: cfg.awpCorridorHalfWidth !== undefined ? new Set<string>() : undefined,
+      multiExplosionsRemaining: Math.max(1, Math.floor(cfg.multiExplosionCount ?? 1)),
+      multiExplosionExcludedTargetKeys: (cfg.multiExplosionCount ?? 1) > 1 ? new Set<string>() : undefined,
+      miniRocketPhase: cfg.miniRocketStageRangePx !== undefined ? 'attack' : undefined,
+      miniRocketCoastUntilAgeMs: undefined,
+      miniRocketNextExplosionAtAgeMs: undefined,
+      miniRocketDeferredExplosion: false,
+      miniRocketDeferredExplosionStopsAtObstacle: false,
+      miniRocketSpent: false,
+      miniRocketDestructionFxEmitted: false,
+      miniRocketHasExploded: false,
+      miniRocketReturnReserveGranted: false,
+      miniRocketExplosionIndex: 0,
+      ak47HitConfirmed: false,
+      lastCountdownEmitted: null,
+      lastProximityPulseAt: (cfg.proximityPulse?.radius ?? 0) > 0
+        && (cfg.proximityPulse?.damage ?? 0) > 0 ? 0 : undefined,
+      frictionActivated: false,
+      simulatedAgeMs: 0,
+      timeBubbleFactor: timeFactor,
+      initialSpeed: cfg.speed,
+      bounceProcessedThisStep: false,
+      originalBodySize: cfg.size < MIN_BODY_LEN
+        && cfg.isFlame !== true
+        && !hasLeafBlowerCapability(cfg)
+        && cfg.isBfg !== true
+        && !hasGaussDischarge(cfg)
+        && !cfg.isGrenade ? cfg.size : undefined,
+    };
+    if (cfg.airFrictionDecayPerSec !== undefined) {
+      handle.body.useDamping = true;
+      const effectiveDecay = !cfg.frictionDelayMs || cfg.frictionDelayMs <= 0
+        ? effectiveAirFrictionDecay(cfg.airFrictionDecayPerSec, timeFactor) : 1;
+      handle.body.setDrag(effectiveDecay, effectiveDecay);
+      if (!cfg.frictionDelayMs || cfg.frictionDelayMs <= 0) {
+        record.frictionActivated = true;
+        record.appliedAirFrictionDecay = effectiveDecay;
+      }
+    }
+    this.presentation.createSpawnRendererVisuals(id, handle.sprite, resolvedSpawn.x, resolvedSpawn.y, cfg);
+    this.presentation.registerFallbackShape(handle.sprite);
+    if (cfg.isBfg) this.presentation.createBfgVisual(id, resolvedSpawn.x, resolvedSpawn.y, cfg.size);
+    this.presentation.createSpawnFeedback(id, resolvedSpawn.x, resolvedSpawn.y, x, y, angle, ownerId, cfg);
+    return record;
   }
 
   private removeCapabilityIds(id: ProjectileId): void {
@@ -1862,6 +2194,46 @@ function hasTravelEffect(record: ProjectileRuntimeRecord): boolean {
     || record.awpCorridorDotTickIntervalMs !== undefined
     || record.awpCorridorKnockback !== undefined
     || record.awpCorridorKnockbackDurationMs !== undefined;
+}
+
+function resolveProjectileCollisionMode(cfg: ProjectileSpawnConfig): import('../types').ProjectileCollisionMode {
+  if (cfg.collisionMode) return cfg.collisionMode;
+  if (cfg.isGrenade) return 'physics';
+  if (cfg.isFlame === true || hasLeafBlowerCapability(cfg) || cfg.isBfg === true) return 'overlap';
+  if ((cfg.proximityPulse?.radius ?? 0) > 0 && (cfg.proximityPulse?.damage ?? 0) > 0) return 'overlap';
+  if (hasGaussDischarge(cfg)) return 'overlap';
+  return 'sweep';
+}
+
+function resolvePhysicsMechanics(cfg: ProjectileSpawnConfig): ProjectilePhysicsMechanics {
+  const bfg = cfg.isBfg === true;
+  const gauss = hasGaussDischarge(cfg)
+    || (cfg.collisionMode === 'overlap' && cfg.piercesTargets === true && !bfg
+      && cfg.isFlame !== true && !hasLeafBlowerCapability(cfg));
+  const flame = cfg.isFlame === true;
+  const leaf = hasLeafBlowerCapability(cfg);
+  const passThrough = bfg || gauss;
+  const noBounce = flame || leaf || (cfg.isGrenade && cfg.maxBounces === 0)
+    || ((cfg.impactCloud || cfg.explosion) && cfg.maxBounces === 0);
+  const stopOnContact = cfg.isGrenade && cfg.maxBounces === 0;
+  return {
+    bodyResponse: noBounce || passThrough ? 'none' : 'bounce',
+    rockContactMode: passThrough || (!noBounce && cfg.penetratesRocks === true) ? 'overlap' : 'collider',
+    trunkContactMode: 'collider',
+    baseContactMode: 'collider',
+    trainContactMode: passThrough ? 'overlap' : 'collider',
+    stopOnRockContact: stopOnContact,
+    stopOnTrunkContact: stopOnContact,
+    stopOnBaseContact: stopOnContact || flame,
+    stopOnTrainContact: stopOnContact,
+    stopOnWorldBoundary: flame || stopOnContact,
+    worldBounds: true,
+    rock: true,
+    trunk: !passThrough,
+    base: !passThrough && !cfg.ignoreBaseCollisions,
+    train: true,
+    ignoreRockIndex: cfg.ignoreRockIndex,
+  };
 }
 
 function hasLeafBlowerCapability(
@@ -1916,7 +2288,7 @@ function burnDps(burn: { damagePerTick: number }): number {
 }
 
 function clampProjectileTimeFactor(value: number): number {
-  return Math.max(0.0001, Math.min(1, value));
+  return Math.max(0, Math.min(1, value));
 }
 
 function createProjectileProvenance(
@@ -1954,6 +2326,18 @@ function boundsOverlap(
     && first.right > second.left
     && first.top < second.bottom
     && first.bottom > second.top;
+}
+
+function createDetonationTarget(projectile: ProjectileRuntimeRecord): ProjectileDetonationTarget {
+  return {
+    id: projectile.id,
+    x: projectile.sprite.x,
+    y: projectile.sprite.y,
+    projectileOwnerId: projectile.ownerId,
+    effect: projectile.detonable!,
+    sourceId: projectile.sourceId,
+    sourceSlot: projectile.sourceSlot,
+  };
 }
 
 function emptyHostStageResult(): ProjectileHostStageResult {

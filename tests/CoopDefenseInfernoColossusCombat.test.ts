@@ -26,7 +26,7 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { ProjectilePhysicsBinding } from '../src/projectile/ProjectilePhysicsBinding';
+import type { ProjectileSpawnPort } from '../src/projectile/ProjectileSpawnPort';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
 import type { CombatSystem } from '../src/systems/CombatSystem';
@@ -355,7 +355,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         getHostileEnemies: () => [],
       } as unknown as EnemyManager,
       { getAllPlayers: () => players } as unknown as PlayerManager,
-      { spawnProjectile } as unknown as ProjectilePhysicsBinding,
+      { spawnProjectile } as unknown as ProjectileSpawnPort,
       {
         isAlive: () => true,
         isBurrowed: () => false,
@@ -510,7 +510,7 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
         getHostileEnemies: () => [],
       } as unknown as EnemyManager,
       { getAllPlayers: () => [fakeEntity({ id: 'p1', x: 600, y: 100, active: true })] } as unknown as PlayerManager,
-      { spawnProjectile } as unknown as ProjectilePhysicsBinding,
+      { spawnProjectile } as unknown as ProjectileSpawnPort,
       {
         isAlive: () => true,
         isBurrowed: () => false,

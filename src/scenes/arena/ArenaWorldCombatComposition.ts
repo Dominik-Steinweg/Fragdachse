@@ -35,7 +35,7 @@ export function composeWorldProjectileRuntime(
   const { ctx, worldRuntime } = input;
   const presentation = new ProjectilePresentationRuntime(input.scene);
   const projectileRuntime = new WorldProjectileRuntime({
-    physicsBinding: new ProjectilePhysicsBinding(input.scene, presentation),
+    physicsBinding: new ProjectilePhysicsBinding(input.scene),
     presentation,
     identityScope: worldRuntime.projectileIdentityScope,
     hostNowMs: () => bridge.getSynchronizedNow(),

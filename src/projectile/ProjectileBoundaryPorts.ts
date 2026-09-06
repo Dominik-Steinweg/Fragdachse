@@ -25,10 +25,18 @@ export interface ProjectileGeometryBindingPort {
   setObstacleIndex(index: ArenaObstacleIndex | null): void;
 }
 
-/** Train-only geometry and domain-contact capability. */
+/** Damage is applied by the canonical WorldTrainRuntime, never by Projectile physics. */
+export interface ProjectileTrainImpactPort {
+  resolveTrainImpact(request: {
+    readonly damage: number;
+    readonly attributionId: string;
+  }): void;
+}
+
+/** Train-only geometry and domain-request binding. */
 export interface ProjectileTrainBindingPort {
   setTrainGroup(group: Phaser.Physics.Arcade.StaticGroup | null): void;
-  setTrainHitCallback(callback: ((damage: number, attackerId: string) => void) | null): void;
+  setTrainImpactPort(port: ProjectileTrainImpactPort | null): void;
 }
 
 /** World-owned effects produced by a projectile contact. */

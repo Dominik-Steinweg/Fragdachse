@@ -153,13 +153,15 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.activityTrain = null;
     if (this.classicTrain) {
       this.options.projectileTrain.setTrainGroup(this.classicTrain.getGroup());
-      this.options.projectileTrain.setTrainHitCallback((damage, attackerId) => {
-        this.classicTrain?.applyDamage(damage, attackerId);
+      this.options.projectileTrain.setTrainImpactPort({
+        resolveTrainImpact: ({ damage, attributionId }) => {
+          this.classicTrain?.applyDamage(damage, attributionId);
+        },
       });
       this.options.setTranslocatorTrainManager(this.classicTrain);
     } else {
       this.options.combatSystem.setTrainSegments(null);
-      this.options.projectileTrain.setTrainHitCallback(null);
+      this.options.projectileTrain.setTrainImpactPort(null);
       this.options.projectileTrain.setTrainGroup(null);
       this.options.setTranslocatorTrainManager(null);
     }
@@ -182,7 +184,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     this.classicTrain = null;
     this.pendingClassic = null;
     this.options.combatSystem.setTrainSegments(null);
-    this.options.projectileTrain.setTrainHitCallback(null);
+    this.options.projectileTrain.setTrainImpactPort(null);
     this.options.projectileTrain.setTrainGroup(null);
     this.options.setTranslocatorTrainManager(null);
     this.cancelExplosionTimers();
@@ -203,8 +205,10 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
     train.setEnemyManager(this.options.getEnemyManager());
     this.options.setTranslocatorTrainManager(train);
     this.options.projectileTrain.setTrainGroup(train.getGroup());
-    this.options.projectileTrain.setTrainHitCallback((damage, attackerId) => {
-      this.getCurrentTrain()?.applyDamage(damage, attackerId);
+    this.options.projectileTrain.setTrainImpactPort({
+      resolveTrainImpact: ({ damage, attributionId }) => {
+        this.getCurrentTrain()?.applyDamage(damage, attributionId);
+      },
     });
     train.setCanHitPlayerCallback((playerId) => !this.options.isPlayerBurrowed(playerId));
     train.setPlayerHitCallback((playerId, sourceX, sourceY) => {

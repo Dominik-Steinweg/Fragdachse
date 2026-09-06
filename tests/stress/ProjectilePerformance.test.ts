@@ -1,6 +1,4 @@
-import { fakeEntity } from '../fakeEntity';
 import { describe, expect, it, vi } from 'vitest';
-
 vi.mock('phaser', () => ({
   BlendModes: {
     NORMAL: 0,
@@ -85,715 +83,184 @@ vi.mock('phaser', () => ({
     FloatBetween: (min: number, max: number) => (min + max) / 2,
   },
 }));
-
 import * as Phaser from 'phaser';
 import { RocketRenderer } from '../../src/effects/RocketRenderer';
 import { GpuVfxSystem } from '../../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
-import { ProjectilePhysicsBinding } from '../../src/projectile/ProjectilePhysicsBinding';
-import type { ProjectilePresentationRuntime } from '../../src/projectile/ProjectilePresentationRuntime';
-import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../../src/types';
+import { createProjectileRuntimeTestWorld, projectilePhysicsContact } from '../ProjectileRuntimeTestHelper';
+import type { ProjectileSpawnRequest } from '../../src/projectile/ProjectileSpawnRequest';
+import { createSingleOwnerProvenance } from '../../src/projectile/ProjectileSpawnRequest';
+import type { ProjectileInteractionSpec } from '../../src/projectile/ProjectileSpawnRequest';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
-import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
-import { ProjectileReplicationAdapter } from '../../src/projectile/ProjectileReplicationAdapter';
-
-/**
- * Bindet den Physics-Adapter an eine echte world-owned Registry und nimmt vorbereitete Records auf.
- *
- * Identity, Aufnahme und Entfernung bleiben beim Owner; der Test liefert nur die Records, die er
- * ohne vollstaendige Phaser-Szene nicht spawnen kann.
- */
-function bindProjectileRegistry(
-  manager: ProjectilePhysicsBinding,
-  records: readonly ProjectileRuntimeRecord[],
-): WorldProjectileRuntime {
-  const pending = [...records];
-  const runtime = new WorldProjectileRuntime({
-    physicsBinding: {
-      bindOwner: (owner) => manager.bindOwner(owner),
-      createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
-        const record = pending.shift() as ProjectileRuntimeRecord;
-        record.provenance = provenance;
-        return record;
-      },
-      releaseProjectileResources: (record) => manager.releaseProjectileResources(record),
-      runProjectileEffectsStage: (deltaMs, nowMs, coreStage) => manager.runProjectileEffectsStage(deltaMs, nowMs, coreStage),
-      setProjectileTimeFieldPort: (port) => manager.setProjectileTimeFieldPort(port),
-      setHostFrameTime: (nowMs) => manager.setHostFrameTime(nowMs),
-      releaseWorldState: () => manager.releaseWorldState(),
-    },
-    presentation: {
-      clientVisualCount: 0,
-      syncHostRenderers: () => {},
-      getShadowSamples: () => [],
-      getLightSamples: () => [],
-      presentClientFrame: () => {},
-      extrapolateClient: () => {},
-      releaseWorldPresentation: () => {},
-    } as unknown as ProjectilePresentationRuntime,
-    identityScope: new ProjectileIdentityScope(1),
-    hostNowMs: () => 0,
-  });
-  runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
-  for (const record of records) {
-    runtime.spawnProjectileConfig(0, 0, 0, record.ownerId, {} as ProjectileSpawnConfig);
-  }
-  return runtime;
+function makeRequest(overrides: {
+  origin?: Partial<ProjectileSpawnRequest['origin']>;
+  flight?: Partial<ProjectileSpawnRequest['flight']>;
+  interaction?: Partial<ProjectileInteractionSpec>;
+  presentation?: Partial<ProjectileSpawnRequest['presentation']>;
+  ownerId?: string;
+} = {}): ProjectileSpawnRequest {
+  const ownerId = overrides.ownerId ?? 'shooter';
+  return {
+    origin: { x: 10, y: 10, angle: 0, ...overrides.origin },
+    flight: { speed: 100, size: 8, lifetimeMs: 2_000, maxBounces: 0, isGrenade: false, ...overrides.flight },
+    provenance: createSingleOwnerProvenance(ownerId),
+    interaction: { directHit: { damage: 20 }, ...overrides.interaction },
+    presentation: { color: 0xffffff, ownerColor: 0xffffff, ...overrides.presentation },
+  };
 }
-
+function spawnRequest(runtime: WorldProjectileRuntime, overrides: Parameters<typeof makeRequest>[0] = {}): number {
+  const id = runtime.spawnProjectile(makeRequest(overrides));
+  if (id === null) throw new Error('Expected projectile spawn');
+  return id;
+}
 describe('projectile performance paths', () => {
-  it('damages each obstacle once per flame and uses kind-specific rock scaling', () => {
-    type ColliderCallback = (object1: unknown, object2: unknown) => void;
-    const rock = {} as Phaser.GameObjects.Image;
-    const callbacks: ColliderCallback[] = [];
-    const scene = {
-      physics: {
-        add: {
-          collider: vi.fn((_left: unknown, _right: unknown, callback?: ColliderCallback) => {
-            if (callback) callbacks.push(callback);
-            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
-          }),
-        },
-      },
-    } as unknown as Phaser.Scene;
-    const manager = new ProjectilePhysicsBinding(scene);
-    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
-
-    const body = { velocity: { x: 0, y: 0 }, setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
-    const makeTracked = (id: number, multiplier: number): ProjectileRuntimeRecord => ({
-      id,
-      ownerId: 'flame-owner',
-      damage: 20,
-      rockDamageMult: multiplier,
-      sprite: fakeEntity({ x: 10, y: 10, displayWidth: 8 }),
-      body,
-      pendingDestroy: false,
-      hitObstacleIds: new Set<number>(),
-      colliders: [],
-    } as unknown as ProjectileRuntimeRecord);
-
-    const rockHits: Array<{ id: number; damage: number; ownerId: string }> = [];
-    const staticRockFlame = makeTracked(1, 0);
-    const turretFlame = makeTracked(2, 0);
-    const secondFlame = makeTracked(3, 0.25);
-    const runtime = bindProjectileRegistry(manager, [staticRockFlame, turretFlame, secondFlame]);
-    runtime.setRockHitCallback((rockId, damage, ownerId) => rockHits.push({ id: rockId, damage, ownerId }));
-
-    runtime.setObstacleKindResolver(() => undefined);
-    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
-      .setupFlameColliders({}, body, staticRockFlame);
-    callbacks.shift()?.({}, rock);
-    callbacks.shift()?.({}, rock);
-    expect(rockHits).toEqual([]);
-    expect(body.setBounce).toHaveBeenCalledWith(0, 0);
-
+  it('damages each obstacle once per flame and scales turret rocks independently', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hits: Array<{ id: number; damage: number; ownerId: string }> = [];
+    runtime.setRockHitCallback((id, damage, ownerId) => hits.push({ id, damage, ownerId }));
+    const staticFlame = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true }, interaction: { directHit: { damage: 20, rockDamageMult: 0 } } });
+    physics.emit(projectilePhysicsContact(staticFlame, { kind: 'rock', id: 0 }));
+    physics.emit(projectilePhysicsContact(staticFlame, { kind: 'rock', id: 0 }));
+    expect(hits).toEqual([]);
     runtime.setObstacleKindResolver(() => 'turret');
-    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
-      .setupFlameColliders({}, body, turretFlame);
-    callbacks.shift()?.({}, rock);
-    callbacks.shift()?.({}, rock);
-    expect(rockHits).toEqual([{ id: 0, damage: 20, ownerId: 'flame-owner' }]);
-
+    const turretFlame = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true }, interaction: { directHit: { damage: 20, rockDamageMult: 0 } } });
+    physics.emit(projectilePhysicsContact(turretFlame, { kind: 'rock', id: 0 }));
+    physics.emit(projectilePhysicsContact(turretFlame, { kind: 'rock', id: 0 }));
+    expect(hits).toEqual([{ id: 0, damage: 20, ownerId: 'shooter' }]);
     runtime.setObstacleKindResolver(() => undefined);
-    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
-      .setupFlameColliders({}, body, secondFlame);
-    callbacks.shift()?.({}, rock);
-    expect(rockHits).toHaveLength(2);
-    expect(rockHits[1]).toMatchObject({ id: 0, damage: 5 });
+    const secondFlame = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true }, interaction: { directHit: { damage: 20, rockDamageMult: 0.25 } } });
+    physics.emit(projectilePhysicsContact(secondFlame, { kind: 'rock', id: 0 }));
+    expect(hits[1]).toMatchObject({ id: 0, damage: 5 });
   });
-
-  it('damages a multi-cell hostile base once per flame, even with zero rock damage', () => {
-    type ColliderCallback = (object1: unknown, object2: unknown) => void;
-    const callbacks: ColliderCallback[] = [];
-    const scene = {
-      physics: {
-        add: {
-          collider: vi.fn((_left: unknown, _right: unknown, callback?: ColliderCallback) => {
-            if (callback) callbacks.push(callback);
-            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
-          }),
-        },
-      },
-    } as unknown as Phaser.Scene;
-    const manager = new ProjectilePhysicsBinding(scene);
-    manager.setBaseGroup({} as Phaser.Physics.Arcade.StaticGroup);
-
-    const body = { velocity: { x: 0, y: 0 }, setBounce: vi.fn(), setVelocity: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
-    const tracked = {
-      id: 1,
-      ownerId: 'flame-owner',
-      damage: 20,
-      rockDamageMult: 0,
-      sprite: fakeEntity({ x: 10, y: 10, displayWidth: 8 }),
-      body,
-      pendingDestroy: false,
-      colliders: [],
-    } as unknown as ProjectileRuntimeRecord;
-    const baseCell = (baseId: string) => ({
-      getData: vi.fn((key: string) => key === 'baseId' ? baseId : undefined),
-    }) as unknown as Phaser.GameObjects.GameObject;
-    const baseHits: Array<{ baseId: string; damage: number; attackerId: string; projectile?: unknown }> = [];
-    const runtime = bindProjectileRegistry(manager, [tracked]);
-    runtime.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
-      baseHits.push({ baseId, damage, attackerId, projectile });
-    });
-
-    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
-      .setupFlameColliders({}, body, tracked);
-
-    // Two different cells expose the same logical base ID.
-    callbacks[0]?.({}, baseCell('enemy-base'));
-    callbacks[0]?.({}, baseCell('enemy-base'));
-
-    expect(baseHits).toHaveLength(1);
-    expect(baseHits[0]).toMatchObject({
-      baseId: 'enemy-base',
-      damage: 20,
-      attackerId: 'flame-owner',
-      projectile: expect.objectContaining({ ownerId: tracked.ownerId }),
-    });
-    expect(body.setVelocity).toHaveBeenCalledWith(0, 0);
+  it('deduplicates multi-cell hostile base contacts and keeps zero rock damage', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hits: Array<{ baseId: string; damage: number; attackerId: string }> = [];
+    runtime.setBaseHitCallback((baseId, damage, attackerId) => hits.push({ baseId, damage, attackerId }));
+    const id = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true }, interaction: { directHit: { damage: 20, rockDamageMult: 0 } } });
+    physics.emit(projectilePhysicsContact(id, { kind: 'base', id: 'enemy-base' }));
+    physics.emit(projectilePhysicsContact(id, { kind: 'base', id: 'enemy-base' }));
+    expect(hits).toEqual([{ baseId: 'enemy-base', damage: 20, attackerId: 'shooter' }]);
   });
-
-  it('skips only the supporting rock for a turret projectile', () => {
-    type ColliderCallback = (object1: unknown, object2: unknown) => void;
-    type ProcessCallback = (object1: unknown, object2: unknown) => boolean;
-    const ownRock = {} as Phaser.GameObjects.Image;
-    const otherRock = {} as Phaser.GameObjects.Image;
-    const processCallbacks: ProcessCallback[] = [];
-    const scene = {
-      physics: {
-        add: {
-          collider: vi.fn((_left: unknown, _right: unknown, callback?: ColliderCallback, process?: ProcessCallback) => {
-            if (process) processCallbacks.push(process);
-            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
-          }),
-        },
-      },
-    } as unknown as Phaser.Scene;
-    const manager = new ProjectilePhysicsBinding(scene);
-    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [ownRock, otherRock], null);
-
-    const body = { setBounce: vi.fn() } as unknown as Phaser.Physics.Arcade.Body;
-    const tracked = {
-      ignoreRockIndex: 0,
-      pendingDestroy: false,
-      body,
-      colliders: [],
-    } as unknown as ProjectileRuntimeRecord;
-
-    (manager as unknown as { setupFlameColliders: (sprite: unknown, body: unknown, tracked: ProjectileRuntimeRecord) => void })
-      .setupFlameColliders({}, body, tracked);
-
-    expect(processCallbacks).toHaveLength(1);
-    expect(processCallbacks[0]?.({}, ownRock)).toBe(false);
-    expect(processCallbacks[0]?.({}, otherRock)).toBe(true);
+  it('carries supporting-rock exclusion in the physics order and sweep owner', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const id = spawnRequest(runtime, { flight: { collisionFilter: { ignoreRockIndex: 0 }, isFlame: true, flamePiercing: true } });
+    expect(physics.specs.find((spec) => spec.id === id)?.mechanics.ignoreRockIndex).toBe(0);
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 0 }));
+    expect(runtime.activeCount).toBe(1);
+    const sweep = spawnRequest(runtime, { origin: { x: 0, y: 16 }, flight: { collisionMode: 'sweep', collisionFilter: { ignoreRockIndex: 0 } } });
+    const sweepSprite = physics.handles.get(sweep)!.sprite as unknown as { x: number; y: number };
+    sweepSprite.x = 100; sweepSprite.y = 16;
+    runtime.setRockHitCallback((rockId) => { if (rockId === 1) sweepSprite.x = 24; });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: (sink) => {
+      sink('rock', 0, 'world', 24, 16, 8, 20, 8, 28, 24);
+      sink('rock', 1, 'world', 64, 16, 8, 60, 8, 68, 24);
+    } });
+    runtime.runHostInteractionStage(100);
+    expect(runtime.activeCount).toBe(2);
   });
-
-  it('skips only the supporting rock in continuous bullet collision', () => {
-    const ownRock = { active: true, getBounds: () => ({ left: 0, top: 0, right: 32, bottom: 32 }) };
-    const otherRock = { active: true, getBounds: () => ({ left: 0, top: 0, right: 32, bottom: 32 }) };
-    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [ownRock, otherRock], null);
-
-    const body = {
-      velocity: { x: 100, y: 0 },
-      reset: vi.fn(),
-      setVelocity: vi.fn(),
-      enable: true,
-    } as unknown as Phaser.Physics.Arcade.Body;
-    const tracked = fakeEntity({ ignoreRockIndex: 0,
-      lastX: 1,
-      lastY: 16, x: 2, y: 16, displayWidth: 5, body,
-      bounceCount: 0,
-      maxBounces: 0,
-      damage: 7,
-      ownerId: 'turret-owner',
-      color: 0xffffff,
-      pendingDestroy: false,
-      bounceProcessedThisStep: false,
-      penetratesRocks: false,
-      projectileStyle: 'bullet',
-      collisionMode: 'sweep',
-      isGrenade: false,
-      isFlame: false,
-      isBfg: false,
-      colliders: [] }) as unknown as ProjectileRuntimeRecord;
-    const rockHits: number[] = [];
-    const runtime = bindProjectileRegistry(manager, [tracked]);
-    runtime.setRockHitCallback((rockId) => rockHits.push(rockId));
-
-    (manager as unknown as { resolveContinuousRockCollision: (projectile: ProjectileRuntimeRecord) => void })
-      .resolveContinuousRockCollision(tracked);
-
-    expect(rockHits).toEqual([1]);
-    expect(body.reset).toHaveBeenCalled();
-    expect(body.enable).toBe(false);
+  it('releases canonical flame contacts with the world owner', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const id = spawnRequest(runtime, { flight: { isFlame: true, flamePiercing: true } });
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 4 }));
+    runtime.destroyProjectile(id);
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 4 }));
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toContain(id);
   });
-
-  it('clears a flame obstacle-hit set during projectile cleanup', () => {
-    const scene = {
-      physics: { world: { off: vi.fn() } },
-    } as unknown as Phaser.Scene;
-    const manager = new ProjectilePhysicsBinding(scene);
-    const tracked = fakeEntity({ id: 1, x: 0, y: 0, displayWidth: 16, destroy: vi.fn(), body: { velocity: { x: 0, y: 0 } },
-      boundsListener: vi.fn(),
-      colliders: [],
-      hitObstacleIds: new Set([4]),
-      hitBaseIds: new Set(['enemy-base']) }) as unknown as ProjectileRuntimeRecord;
-
-    (manager as unknown as { destroyProjectileRuntimeRecord: (projectile: ProjectileRuntimeRecord) => void })
-      .destroyProjectileRuntimeRecord(tracked);
-
-    expect(tracked.hitObstacleIds).toEqual(new Set());
-    expect(tracked.hitBaseIds).toEqual(new Set());
-  });
-
   it('reuses one shared gpu lane for all rocket smoke puffs', () => {
-    // Der Smoke laeuft nicht mehr ueber einen `ParticleEmitter`, sondern ueber einen geteilten
-    // SpriteGPULayer. Die Puff-Charakteristik bleibt: dynamischer Startscale aus der
-    // Raketengroesse, Tint je Puff, Wachstum auf `startScale * (1 + Quad.easeOut(t) * 1.3)`
-    // und eine Alphakurve 0.95 -> 0. Die Kurven liegen jetzt im Shader, nicht in Callbacks.
     const scene = makeFakeGpuVfxScene();
     const system = new GpuVfxSystem(scene as never);
     const renderer = new RocketRenderer(scene as never);
     renderer.generateTextures();
     renderer.registerGpuVfx(system);
-    const internals = renderer as unknown as {
-      spawnSmokePuff: (x: number, y: number, size: number, color: number) => void;
-    };
-
+    const internals = renderer as unknown as { spawnSmokePuff: (x: number, y: number, size: number, color: number) => void };
     internals.spawnSmokePuff(10, 20, 6, 0x123456);
     internals.spawnSmokePuff(30, 40, 28, 0xabcdef);
-
-    // Eine Lane fuer allen Rauch; alle Lanes teilen sich den Atlas.
     const smoke = [findFakeLane(scene, 'rocket-smoke')];
     expect(scene.emitters).toHaveLength(0);
-    // Entspricht dem bisherigen `maxAliveParticles: 640`.
     expect(smoke[0].size).toBe(640);
     expect(smoke[0].members.every((member) => member.frame === 'rocket-smoke')).toBe(true);
-
     const [small, large] = smoke[0].members;
-    // Bisher: `startScale * (1 + Quadratic.Out(t) * 1.3)` mit `startScale = max(size/28, 0.28)`.
     const legacyScale = (startScale: number, t: number) => startScale * (1 + t * (2 - t) * 1.3);
-
     expect(small.scaleX.ease).toBe('Quad.easeOut');
-    expect(evaluateFakeAnimation(small.scaleX, 0)).toBeCloseTo(legacyScale(0.28, 0), 10);
     expect(evaluateFakeAnimation(small.scaleX, 0.5)).toBeCloseTo(legacyScale(0.28, 0.5), 10);
-    expect(small.x.base).toBe(10);
-    expect(small.y.base).toBe(20);
-    expect(small.tint).toBe(0x123456);
-
-    // Groesse 28 ergibt startScale 1, die Wachstums-Amplitude wird damit > 1 – genau der Fall,
-    // in dem der Shader ohne Basiskorrektur `floor(amplitude) * amplitude` danebenlegen wuerde.
-    expect(evaluateFakeAnimation(large.scaleX, 0)).toBeCloseTo(legacyScale(1, 0), 10);
-    expect(evaluateFakeAnimation(large.scaleX, 0.5)).toBeCloseTo(legacyScale(1, 0.5), 10);
     expect(large.x.base).toBe(30);
     expect(large.y.base).toBe(40);
     expect(large.tint).toBe(0xabcdef);
-
-    // Alpha 0.95 -> 0 auf derselben Quad-Kurve, ueber die volle Lebenszeit.
-    expect(evaluateFakeAnimation(small.alpha, 0)).toBeCloseTo(0.95, 10);
     expect(evaluateFakeAnimation(small.alpha, 0.5)).toBeCloseTo(0.95 - 0.95 * 0.75, 10);
     expect(small.alpha.duration).toBe(1000);
     expect(small.scaleX.duration).toBe(1000);
-
     renderer.destroyAll();
     expect(smoke[0].patched).toHaveLength(2);
   });
-
   it('removes destroyed projectiles centrally through the world owner', () => {
-    const scene = {
-      physics: {
-        world: {
-          off: vi.fn(),
-        },
-      },
-    } as unknown as Phaser.Scene;
-    const manager = new ProjectilePhysicsBinding(scene);
-    const sprites = [7, 8].map((id) => (fakeEntity({ id, x: 10,
-        y: 20,
-        displayWidth: 8,
-        destroy: vi.fn(), body: { velocity: { x: 0, y: 0 } },
-      boundsListener: vi.fn(),
-      colliders: [] }) as unknown as ProjectileRuntimeRecord));
-    const registry = bindProjectileRegistry(manager, sprites);
-
-    expect(registry.activeCount).toBe(2);
-    registry.destroyProjectile(sprites[0].id);
-    registry.destroyProjectile(sprites[1].id);
-
-    expect(registry.activeCount).toBe(0);
-    expect(sprites[0].sprite.destroy).toHaveBeenCalledOnce();
-    expect(sprites[1].sprite.destroy).toHaveBeenCalledOnce();
-
-    // Nach dem World-Teardown bleibt kein Host-Projektil sichtbar und kein Spawn wirksam.
-    registry.destroy();
-    expect(registry.activeCount).toBe(0);
-    expect(registry.spawnProjectileConfig(0, 0, 0, 'owner', {} as ProjectileSpawnConfig)).toBe(-1);
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const first = spawnRequest(runtime);
+    const second = spawnRequest(runtime);
+    runtime.destroyProjectile(first);
+    runtime.destroyProjectile(second);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toEqual([first, second]);
+    runtime.destroy();
+    expect(runtime.spawnProjectile(makeRequest())).toBeNull();
   });
-
-  it('resolves the nearer obstacle first during a continuous projectile sweep', () => {
-    const farRock = {
-      active: true,
-      getBounds: () => ({ left: 60, top: 8, right: 68, bottom: 24 }),
-    };
-    const nearRock = {
-      active: true,
-      getBounds: () => ({ left: 20, top: 8, right: 28, bottom: 24 }),
-    };
-    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    manager.setRockGroup(
-      {} as Phaser.Physics.Arcade.StaticGroup,
-      [farRock, nearRock],
-      null,
-    );
-
-    const body = {
-      velocity: { x: 100, y: 0 },
-      reset: vi.fn(),
-      setVelocity: vi.fn(),
-      enable: true,
-    } as unknown as Phaser.Physics.Arcade.Body;
-    const projectile = fakeEntity({
-      id: 1,
-      ownerId: 'shooter',
-      lastX: 0,
-      lastY: 16,
-      x: 100,
-      y: 16,
-      displayWidth: 4,
-      body,
-      bounceCount: 0,
-      maxBounces: 0,
-      damage: 7,
-      color: 0xffffff,
-      pendingDestroy: false,
-      bounceProcessedThisStep: false,
-      penetratesRocks: false,
-      projectileStyle: 'bullet',
-      isGrenade: false,
-      isFlame: false,
-      isBfg: false,
-      colliders: [],
-    }) as unknown as ProjectileRuntimeRecord;
-    const rockHits: number[] = [];
-    const runtime = bindProjectileRegistry(manager, [projectile]);
-    runtime.setRockHitCallback((rockId) => rockHits.push(rockId));
-
-    (manager as unknown as { resolveContinuousRockCollision: (projectile: ProjectileRuntimeRecord) => void })
-      .resolveContinuousRockCollision(projectile);
-
-    expect(rockHits).toEqual([1]);
-    expect(body.reset).toHaveBeenCalledOnce();
-    expect(body.enable).toBe(false);
-  });
-
-  it.each(['bfg', 'gauss'] as const)('deduplicates repeated rock and train overlaps for %s', (style) => {
-    type OverlapCallback = (object1: unknown, object2: unknown) => void;
-    const overlapCallbacks: OverlapCallback[] = [];
-    const scene = {
-      physics: {
-        world: { on: vi.fn(), off: vi.fn() },
-        add: {
-          overlap: vi.fn((_left: unknown, _right: unknown, callback?: OverlapCallback) => {
-            if (callback) overlapCallbacks.push(callback);
-            return { destroy: vi.fn() } as unknown as Phaser.Physics.Arcade.Collider;
-          }),
-        },
-      },
-    } as unknown as Phaser.Scene;
-    const manager = new ProjectilePhysicsBinding(scene);
-    const rock = {} as Phaser.GameObjects.Image;
-    manager.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock], null);
-    manager.setTrainGroup({} as Phaser.Physics.Arcade.StaticGroup);
-
-    const body = {
-      velocity: { x: 100, y: 0 },
-      setCollideWorldBounds: vi.fn(),
-    } as unknown as Phaser.Physics.Arcade.Body;
-    const projectile = {
-      id: 1,
-      ownerId: 'shooter',
-      damage: 12,
-      sprite: fakeEntity({ x: 10, y: 10, displayWidth: 8 }),
-      body,
-      projectileStyle: style,
-      collisionMode: 'overlap',
-      isBfg: style === 'bfg',
-      piercesTargets: style === 'gauss',
-      colliders: [],
-    } as unknown as ProjectileRuntimeRecord;
+  it.each(['bfg', 'gauss'] as const)('deduplicates repeated rock and train contacts for %s', (style) => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
     const rockHits: Array<{ id: number; damage: number }> = [];
     const trainHits: number[] = [];
-    const runtime = bindProjectileRegistry(manager, [projectile]);
-    runtime.setRockHitCallback((rockId, damage) => rockHits.push({ id: rockId, damage }));
-    runtime.setTrainHitCallback((damage) => trainHits.push(damage));
-
-    (manager as unknown as {
-      setupProjectileColliders: (
-        id: number,
-        x: number,
-        y: number,
-        sprite: unknown,
-        body: Phaser.Physics.Arcade.Body,
-        tracked: ProjectileRuntimeRecord,
-        cfg: unknown,
-      ) => void;
-    }).setupProjectileColliders(1, 0, 0, {}, body, projectile, {
-      collisionMode: 'overlap',
-      isBfg: style === 'bfg',
-      piercesTargets: style === 'gauss',
-      projectileStyle: style,
-    });
-
-    expect(overlapCallbacks).toHaveLength(2);
-    overlapCallbacks[0]?.({}, rock);
-    overlapCallbacks[0]?.({}, rock);
-    overlapCallbacks[1]?.({}, {});
-    overlapCallbacks[1]?.({}, {});
-
-    expect(rockHits).toEqual([{ id: 0, damage: 12 }]);
-    expect(trainHits).toEqual([12]);
+    runtime.setRockHitCallback((id, damage) => rockHits.push({ id, damage }));
+    runtime.setTrainImpactPort({ resolveTrainImpact: ({ damage }) => trainHits.push(damage) });
+    const id = spawnRequest(runtime, { flight: { collisionMode: 'overlap', isBfg: style === 'bfg', piercesTargets: style === 'gauss' }, interaction: style === 'gauss' ? { directHit: { damage: 20, gaussChain: {} } } : undefined, presentation: { style } });
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 0 }));
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 0 }));
+    physics.emit(projectilePhysicsContact(id, { kind: 'train', id: 'main' }));
+    physics.emit(projectilePhysicsContact(id, { kind: 'train', id: 'main' }));
+    expect(rockHits).toEqual([{ id: 0, damage: 20 }]);
+    expect(trainHits).toEqual([20]);
   });
-
-  it('keeps grenade fuse timing on real time even when projectile time is slowed', () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(5_000);
-      const sprite = fakeEntity({ id: 1, x: 10, y: 20, displayWidth: 8, destroy: vi.fn() });
-      const projectile = {
-        id: 1,
-        ownerId: 'shooter',
-        sprite,
-        body: {
-          velocity: { x: 0, y: 0 },
-          setVelocity: vi.fn(),
-        },
-        createdAt: 4_600,
-        simulatedAgeMs: 0,
-        timeBubbleFactor: 0.1,
-        isGrenade: true,
-        fuseTime: 300,
-        grenadeEffect: { type: 'fire' },
-        colliders: [],
-        boundsListener: vi.fn(),
-      } as unknown as ProjectileRuntimeRecord;
-      const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-      manager.setTimeBubbleFactorProvider(() => 0.1);
-      bindProjectileRegistry(manager, [projectile]);
-
-      const result = manager.hostUpdate(1_000);
-
-      expect(result.grenadePayloads).toHaveLength(1);
-      expect(result.grenadePayloads[0]?.effect).toBe(projectile.grenadeEffect);
-      expect(projectile.simulatedAgeMs).toBe(100);
-      expect(sprite.destroy).toHaveBeenCalledOnce();
-    } finally {
-      vi.useRealTimers();
-    }
+  it('uses host stage timing for fuse and time-bubble flight', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    runtime.setTimeBubbleFactorProvider(() => 0.1);
+    const grenade = spawnRequest(runtime, { flight: { isGrenade: true, fuseTimeMs: 300, maxBounces: 0 }, interaction: { grenadeEffect: { type: 'damage', radius: 20, damage: 10 } } });
+    runtime.runHostProjectileStage(1_000, 1_000);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toContain(grenade);
+    const bullet = spawnRequest(runtime, { flight: { lifetimeMs: 100, speed: 100 } });
+    runtime.setTimeBubbleFactorProvider(() => 0.5);
+    runtime.runHostProjectileStage(100, 100);
+    expect(runtime.activeCount).toBe(1);
+    expect(physics.handles.get(bullet)!.body.velocity.x).toBe(50);
+    runtime.runHostProjectileStage(1_000, 1_100);
+    expect(runtime.activeCount).toBe(0);
   });
-
-  it('advances flight lifetime by the explicit time-bubble factor', () => {
-    vi.useFakeTimers();
-    try {
-      vi.setSystemTime(1_000);
-      const body = {
-        velocity: { x: 100, y: 0 },
-        setVelocity: vi.fn((x: number, y: number) => {
-          body.velocity.x = x;
-          body.velocity.y = y;
-        }),
-      };
-      const sprite = fakeEntity({ id: 1, x: 10, y: 20, displayWidth: 4, destroy: vi.fn() });
-      const projectile = {
-        id: 1,
-        ownerId: 'shooter',
-        sprite,
-        body,
-        createdAt: 1_000,
-        lastX: 10,
-        lastY: 20,
-        simulatedAgeMs: 0,
-        timeBubbleFactor: 1,
-        lifetime: 100,
-        maxBounces: 0,
-        bounceCount: 0,
-        isGrenade: false,
-        pendingDestroy: false,
-        colliders: [],
-        boundsListener: vi.fn(),
-      } as unknown as ProjectileRuntimeRecord;
-      const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-      manager.setTimeBubbleFactorProvider(() => 0.5);
-      const registry = bindProjectileRegistry(manager, [projectile]);
-
-      manager.hostUpdate(100);
-      manager.hostUpdate(100);
-      expect(projectile.simulatedAgeMs).toBe(100);
-      expect(registry.activeCount).toBe(1);
-      expect(body.velocity.x).toBe(50);
-
-      manager.hostUpdate(1);
-      expect(registry.activeCount).toBe(0);
-      expect(sprite.destroy).toHaveBeenCalledOnce();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('keeps mini-rocket explosions separated by a coast stage before the next detonation', () => {
-    const explosion = {
-      radius: 40,
-      maxDamage: 20,
-      minDamage: 10,
-      knockback: 0,
-      selfDamageMult: 0,
-      damageTarget: 'enemies',
-    } as unknown as ProjectileRuntimeRecord['explosion'];
-    const body = {
-      velocity: {
-        x: 100,
-        y: 0,
-        length: () => Math.hypot(body.velocity.x, body.velocity.y),
-      },
-      setVelocity: vi.fn((x: number, y: number) => {
-        body.velocity.x = x;
-        body.velocity.y = y;
-      }),
-      enable: true,
-    };
-    const sprite = fakeEntity({ id: 1, x: 100, y: 20, displayWidth: 8, destroy: vi.fn() });
-    const projectile = {
-      id: 1,
-      ownerId: 'shooter',
-      sprite,
-      body,
-      lastX: 100,
-      lastY: 20,
-      color: 0xffaa00,
-      ownerColor: 0xffffff,
-      sourceId: 'weapon.mini_rocket',
-      sourceSlot: 'weapon2',
-      createdAt: Date.now(),
-      lifetime: 2_000,
-      maxBounces: 0,
-      bounceCount: 0,
-      isGrenade: false,
-      pendingDestroy: false,
-      pendingExplosion: false,
-      explosion,
-      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
-      miniRocketStageRangePx: 100,
-      miniRocketPhase: 'attack',
-      miniRocketNextExplosionAtAgeMs: 0,
-      miniRocketDeferredExplosion: false,
-      miniRocketSpent: false,
-      miniRocketHasExploded: false,
-      miniRocketReturnEnabled: false,
-      multiExplosionsRemaining: 2,
-      multiExplosionCoastMs: 50,
-      miniRocketExplosionIndex: 0,
-      simulatedAgeMs: 100,
-      remainingRangePx: 100,
-      colliders: [],
-      boundsListener: vi.fn(),
-    } as unknown as ProjectileRuntimeRecord;
-    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    const registry = bindProjectileRegistry(manager, [projectile]);
-
-    expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:target')).toBe(true);
-    const first = manager.hostUpdate(0);
-    expect(first.projectileExplosions).toHaveLength(1);
-    expect(projectile.pendingExplosion).toBe(true);
-
-    manager.resumeMultiExplosionProjectile(projectile.id, []);
-    expect(projectile.miniRocketPhase).toBe('coast');
-    manager.hostUpdate(20);
-    expect(projectile.miniRocketPhase).toBe('coast');
-    manager.hostUpdate(30);
-    expect(projectile.miniRocketPhase).toBe('attack');
-
-    projectile.simulatedAgeMs = 150;
-    expect(manager.triggerProjectileExplosion(projectile.id, 'enemies:next')).toBe(true);
-    const second = manager.hostUpdate(0);
-    expect(second.projectileExplosions).toHaveLength(1);
-    expect(registry.activeCount).toBe(0);
-  });
-
-  it('collects a spent mini-rocket when its explicit return phase reaches the owner', () => {
-    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    const body = {
-      velocity: { x: 100, y: 0, length: () => 100 },
-      setVelocity: vi.fn(),
-    } as unknown as Phaser.Physics.Arcade.Body;
-    const projectile = fakeEntity({
-      id: 1,
-      ownerId: 'shooter',
-      x: 100,
-      y: 100,
-      body,
-      homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 },
-      miniRocketStageRangePx: 100,
-      miniRocketPhase: 'return',
-      miniRocketSpent: true,
-      miniRocketPickupRadius: 32,
-      simulatedAgeMs: 200,
-      colliders: [],
-      destroy: vi.fn(),
-    }) as unknown as ProjectileRuntimeRecord;
-    const collected = vi.fn();
-    const runtime = bindProjectileRegistry(manager, [projectile]);
+  it('keeps mini-rocket continuation and explicit return ports on the owner', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const outcomes: unknown[] = [];
     runtime.setProjectileMiniRocketStatePort({
-      getOwnerPosition: () => ({ x: 100, y: 100 }),
-      onOutcome: collected,
+      getOwnerPosition: () => ({ x: 0, y: 0 }),
+      onOutcome: (outcome) => outcomes.push(outcome),
     });
-    manager.hostUpdate(0, 200);
-
-    expect(collected).toHaveBeenCalledWith(expect.objectContaining({
-      kind: 'mini-rocket-collected',
-      projectileId: projectile.id,
-      collectorId: projectile.ownerId,
-      pickup: expect.objectContaining({ x: 100, y: 100 }),
-    }));
+    const id = spawnRequest(runtime, {
+      flight: { speed: 100, remainingRangePx: 100, homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90 }, miniRocket: { stageRangePx: 100, returnEnabled: true, pickupRadius: 32 } },
+      interaction: { explosion: { radius: 40, maxDamage: 20, minDamage: 10, knockback: 0, selfDamageMult: 0, damageTarget: 'enemies' } },
+    });
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 0 }));
+    const firstStage = runtime.runHostProjectileStage(0, 0);
+    expect(firstStage.projectileExplosions).toHaveLength(1);
+    runtime.completeProjectileExplosion(id, { damagedTargetKeys: [] });
+    runtime.runHostProjectileStage(0, 1);
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({ kind: 'mini-rocket-collected', projectileId: id, collectorId: 'shooter' });
+    expect(runtime.activeCount).toBe(0);
   });
-
-  it('resends new projectile statics, supports a full late-join snapshot, and cleans absent IDs', () => {
-    const manager = new ProjectilePhysicsBinding({ physics: { world: { off: vi.fn() } } } as unknown as Phaser.Scene);
-    const projectile = fakeEntity({
-      id: 7,
-      ownerId: 'shooter',
-      x: 10,
-      y: 20,
-      displayWidth: 6,
-      projectileStyle: 'bullet',
-      color: 0xffcc00,
-      body: { velocity: { x: 800, y: 0 } },
-      isFlame: false,
-      isGrenade: false,
-      createdAt: Date.now(),
-      colliders: [],
-      boundsListener: vi.fn(),
-      destroy: vi.fn(),
-    }) as unknown as ProjectileRuntimeRecord;
-    const registry = bindProjectileRegistry(manager, [projectile]);
-
-    const first = registry.getNetSnapshot();
-    const second = registry.getNetSnapshot();
-    const third = registry.getNetSnapshot();
-    const fourth = registry.getNetSnapshot();
-    expect(first?.s.length).toBeGreaterThan(0);
-    expect(second?.s.length).toBeGreaterThan(0);
-    expect(third?.s.length).toBeGreaterThan(0);
-    expect(fourth?.s).toEqual([]);
-    expect(fourth?.u.length).toBeGreaterThan(0);
-
-    registry.requestFullNetSnapshot();
-    expect(registry.getNetSnapshot()).toMatchObject({ f: 1 });
-
-    registry.destroyProjectile(projectile.id);
-    expect(registry.getNetSnapshot()).toBeNull();
-    const rebuilt = bindProjectileRegistry(manager, [projectile]);
-    expect(rebuilt.getNetSnapshot()?.s.length).toBeGreaterThan(0);
+  it('keeps replication statics, full late join and absent-id cleanup', () => {
+    const { runtime } = createProjectileRuntimeTestWorld();
+    const id = spawnRequest(runtime, { presentation: { style: 'bullet' } });
+    expect(runtime.getNetSnapshot()?.s.length).toBeGreaterThan(0);
+    expect(runtime.getNetSnapshot()?.u.length).toBeGreaterThan(0);
+    runtime.requestFullNetSnapshot();
+    expect(runtime.getNetSnapshot()).toMatchObject({ f: 1 });
+    runtime.destroyProjectile(id);
+    expect(runtime.getNetSnapshot()).toBeNull();
   });
 });

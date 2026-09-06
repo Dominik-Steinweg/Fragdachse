@@ -1,405 +1,128 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  WorldProjectileRuntime,
-  type ProjectilePhysicsBindingPort,
-  type ProjectileRuntimeOwnerPort,
-} from '../src/projectile/WorldProjectileRuntime';
-import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../src/types';
-import {
-  createSingleOwnerProvenance,
-  type ProjectileProvenance,
-  type ProjectileSpawnRequest,
+vi.mock('phaser', () => ({
+  Geom: {
+    Line: class { constructor(public x1 = 0, public y1 = 0, public x2 = 0, public y2 = 0) {} },
+    Rectangle: class {
+      constructor(
+        public x = 0,
+        public y = 0,
+        public width = 0,
+        public height = 0,
+      ) {}
+      get left() { return this.x; }
+      get right() { return this.x + this.width; }
+      get top() { return this.y; }
+      get bottom() { return this.y + this.height; }
+    },
+    Intersects: {
+      LineToRectangle: () => false,
+      RectangleToRectangle: () => false,
+    },
+  },
+}));
+
+import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
+import type { ProjectileRuntimeRecord, ProjectileSpawnConfig } from '../src/types';
+import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
+import type {
+  ProjectileProvenance,
+  ProjectileSpawnRequest,
 } from '../src/projectile/ProjectileSpawnRequest';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
 import { ProjectileStore } from '../src/projectile/ProjectileStore';
-import type { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
-import { WorldLifecycle, type WorldLifecycleSink } from '../src/world/WorldLifecycle';
-import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
-import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
+import {
+  createTechnicalPhysicsBinding,
+  createPresentation,
+} from './ProjectileRuntimeTestHelper';
 
-function createSimulation() {
-  const created: ProjectileRuntimeRecord[] = [];
-  const released: ProjectileRuntimeRecord[] = [];
-  let boundOwner: ProjectileRuntimeOwnerPort | null = null;
-  const simulation: ProjectilePhysicsBindingPort = {
-    bindOwner: (owner) => { boundOwner = owner; },
-    createProjectile: (_id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, provenance) => {
-      const record = { id: _id, pendingDestroy: false, provenance } as unknown as ProjectileRuntimeRecord;
-      created.push(record);
-      return record;
-    },
-    releaseProjectileResources: (record) => { released.push(record); },
-    releaseWorldState: vi.fn(),
-  };
-  return { simulation, created, released, getBoundOwner: () => boundOwner };
-}
-
-function createPresentation(): ProjectilePresentationRuntime {
-  return {
-    clientVisualCount: 0,
-    syncHostRenderers: () => {},
-    getShadowSamples: () => [],
-    getLightSamples: () => [],
-    presentClientFrame: () => {},
-    extrapolateClient: () => {},
-    releaseWorldPresentation: () => {},
-  } as unknown as ProjectilePresentationRuntime;
-}
-
-function createRuntime(identityScope = new ProjectileIdentityScope(1)) {
-  const simulation = createSimulation();
+function createRuntimeHarness(
+  physics = createTechnicalPhysicsBinding(),
+  identityScope = new ProjectileIdentityScope(1),
+) {
   const runtime = new WorldProjectileRuntime({
-    physicsBinding: simulation.simulation,
+    physicsBinding: physics.binding,
     presentation: createPresentation(),
     identityScope,
     hostNowMs: () => 1_000,
   });
-  return { runtime, ...simulation };
+  return { runtime, physics };
 }
 
-function createHydraRecord(
-  id: number,
-  x: number,
-  y: number,
-  angle: number,
-  ownerId: string,
-  cfg: ProjectileSpawnConfig,
-  provenance: ProjectileProvenance,
-): ProjectileRuntimeRecord {
-  const body = {
-    velocity: {
-      x: Math.cos(angle) * cfg.speed,
-      y: Math.sin(angle) * cfg.speed,
-    },
-    setVelocity: vi.fn((nextX: number, nextY: number) => {
-      body.velocity.x = nextX;
-      body.velocity.y = nextY;
-    }),
-    reset: vi.fn(),
-    enable: true,
-  };
+function baseConfig(overrides: Partial<ProjectileSpawnConfig> = {}): ProjectileSpawnConfig {
   return {
-    ...cfg,
-    id,
-    ownerId,
-    provenance,
-    sourceId: cfg.sourceId ?? 'weapon.HYDRA',
-    collisionMode: cfg.collisionMode ?? 'physics',
-    sprite: {
-      active: true,
-      x,
-      y,
-      displayWidth: cfg.size,
-      displayHeight: cfg.size,
-    },
-    body,
-    lastX: 0,
-    lastY: 0,
-    pendingDestroy: false,
-    bounceCount: cfg.initialBounceCount ?? 0,
-    createdAt: 0,
-    boundsListener: () => {},
-    colliders: [],
-    lifetime: cfg.lifetime,
-    maxBounces: cfg.maxBounces,
-    isGrenade: cfg.isGrenade,
-    adrenalinGain: cfg.adrenalinGain,
-    damage: cfg.damage,
-    color: cfg.color,
-    timeBubbleFactor: 1,
-  } as unknown as ProjectileRuntimeRecord;
+    speed: 100,
+    size: 8,
+    damage: 10,
+    color: 0xffffff,
+    ownerColor: 0xffffff,
+    lifetime: 1_000,
+    maxBounces: 0,
+    isGrenade: false,
+    adrenalinGain: 0,
+    ...overrides,
+  };
 }
 
-const payload = {} as ProjectileSpawnConfig;
+function baseExplosion() {
+  return {
+    radius: 24,
+    maxDamage: 20,
+    minDamage: 5,
+    knockback: 0,
+    selfDamageMult: 0,
+    damageTarget: 'enemies' as const,
+  };
+}
 
-describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
-  it('vergibt Identity genau einmal und macht jeden Spawn auffindbar', () => {
-    const { runtime } = createRuntime();
+function makeProvenance(ownerId: string): ProjectileProvenance {
+  return {
+    gameplaySourceId: 'weapon.test',
+    attributionId: ownerId,
+    allegiance: { ownerId, allowTeamDamage: false },
+  };
+}
 
-    const first = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-    const second = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
+function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(() => ({ accepted: true }))) {
+  runtime.setProjectileCollisionTargetQueryPort({
+    readCollisionTargets: (sink) => sink(
+      'enemy', 'enemy-1', 'enemy-owner', 0, 0, 8, -8, -8, 8, 8,
+    ),
+  });
+  runtime.setProjectileTargetabilityPort({
+    canDamage: () => true,
+    canDamageOwner: () => true,
+    isTargetCurrentlyValid: () => true,
+  });
+  runtime.setProjectileCombatPort({
+    resolveDirectImpact: combat,
+    resolveExplosionCombat: vi.fn(() => ({ damagedTargetKeys: [] })),
+  });
+  return combat;
+}
+
+describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('owns identity and sends only technical spawn mechanics to Physics', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const first = runtime.spawnProjectileConfig(10, 20, 0, 'owner', baseConfig());
+    const second = runtime.spawnProjectileConfig(10, 20, Math.PI / 2, 'owner', baseConfig());
 
     expect(second).not.toBe(first);
-    expect(runtime.getSummary().activeCount).toBe(2);
+    expect(runtime.activeCount).toBe(2);
     expect(runtime.getSummary().activeProjectilesByOwner.get('owner')).toBe(2);
-    expect(runtime.activeCount).toBe(2);
-  });
-
-  it('beendet eine Identity erst mit der World und verwendet sie nicht bei einem Runtime-Rebuild wieder', () => {
-    const scope = new ProjectileIdentityScope(21);
-    const firstRuntime = createRuntime(scope).runtime;
-    expect(firstRuntime.spawnProjectileConfig(0, 0, 0, 'owner', payload)).toBe(0);
-    firstRuntime.destroy();
-
-    const secondRuntime = createRuntime(scope).runtime;
-    expect(secondRuntime.spawnProjectileConfig(0, 0, 0, 'owner', payload)).toBe(1);
-    secondRuntime.destroy();
-  });
-
-  it('verwirft doppelte Record-Identities statt eine parallele Registry-Sicht zu erzeugen', () => {
-    const store = new ProjectileStore(new ProjectileIdentityScope(22));
-    const record = { id: 0 } as unknown as ProjectileRuntimeRecord;
-
-    store.insert(record);
-
-    expect(() => store.insert(record)).toThrow('Duplicate projectile identity 0');
-  });
-
-  it('verwendet nach Runtime-Rebuild derselben World-Revision keine Projectile-Id erneut', () => {
-    const context = {
-      descriptor: {
-        worldRevision: 21,
-        definitionId: 'world:test',
-        seed: 1,
-        generatorVersion: 1,
-        layoutFingerprint: 'test',
-      },
-    } as WorldRuntimeContext;
-    let current: WorldProjectileRuntime | null = null;
-    const runtimes: WorldProjectileRuntime[] = [];
-    const sink: WorldLifecycleSink = {
-      publish: () => {},
-      clear: () => {},
-      attach: (_worldContext, identityScope) => {
-        current = createRuntime(identityScope).runtime;
-        runtimes.push(current);
-      },
-      detach: () => {
-        current?.destroy();
-        current = null;
-      },
-    };
-    const lifecycle = new WorldLifecycle(sink);
-    lifecycle.beginCreate(context.descriptor, null);
-    lifecycle.attachRuntime(context);
-    const firstId = current!.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-
-    lifecycle.detachRuntime();
-    lifecycle.attachRuntime(context);
-    const secondId = current!.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-
-    expect(runtimes).toHaveLength(2);
-    expect(secondId).toBeGreaterThan(firstId);
-    expect(secondId).toBe(1);
-
-    lifecycle.endInstance();
-  });
-
-  it('entfernt ein Projectile vollständig und bleibt bei Wiederholung wirkungslos', () => {
-    const { runtime, released } = createRuntime();
-    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-
-    runtime.destroyProjectile(id);
-    runtime.destroyProjectile(id);
-    runtime.destroyProjectile(4711);
-
-    expect(released).toHaveLength(1);
-    expect(runtime.activeCount).toBe(0);
-  });
-
-  it('gibt beim World-Teardown jeden Record frei und löst die Simulation', () => {
-    const { runtime, simulation, released, getBoundOwner } = createRuntime();
-    runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-    runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-    expect(getBoundOwner()).not.toBeNull();
-
+    expect(physics.specs[0]).toMatchObject({
+      id: first,
+      x: 10,
+      y: 20,
+      velocityX: 100,
+      velocityY: 0,
+        mechanics: { rockContactMode: 'collider', bodyResponse: 'bounce', worldBounds: true },
+    });
     runtime.destroy();
-    runtime.destroy();
-
-    expect(released).toHaveLength(2);
-    expect(simulation.releaseWorldState).toHaveBeenCalledOnce();
-    expect(getBoundOwner()).toBeNull();
-    expect(runtime.activeCount).toBe(0);
   });
 
-  it('taktet den Flight-Core mit der vom Host gelieferten Zeit vor der Binding-Stufe', () => {
-    const projectile = {
-      id: 0,
-      ownerId: 'owner',
-      provenance: createSingleOwnerProvenance('owner'),
-      sprite: { x: 0, y: 0, displayWidth: 4 },
-      body: { velocity: { x: 10, y: 0 } },
-      lastX: 0,
-      lastY: 0,
-      createdAt: 0,
-      simulatedAgeMs: 0,
-      timeBubbleFactor: 1,
-      lifetime: 1_000,
-      maxBounces: 0,
-      bounceCount: 0,
-      isGrenade: false,
-      colliders: [],
-    } as unknown as ProjectileRuntimeRecord;
-    let stageNowMs = 0;
-    let receivedAge = 0;
-    const simulation: ProjectilePhysicsBindingPort = {
-      bindOwner: () => {},
-      createProjectile: () => projectile,
-      releaseProjectileResources: () => {},
-      runProjectileEffectsStage: (_deltaMs, nowMs, coreStage) => {
-        stageNowMs = nowMs;
-        receivedAge = projectile.simulatedAgeMs ?? 0;
-        expect(coreStage.lifetimeExpiredIds.has(projectile.id)).toBe(false);
-        return { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] };
-      },
-      releaseWorldState: () => {},
-    };
-    const runtime = new WorldProjectileRuntime({
-      physicsBinding: simulation,
-      presentation: createPresentation(),
-      identityScope: new ProjectileIdentityScope(1),
-      hostNowMs: () => 0,
-    });
-    runtime.spawnProjectileConfig(0, 0, 0, 'owner', payload);
-
-    runtime.runHostProjectileStage(100, 1_234);
-
-    expect(stageNowMs).toBe(1_234);
-    expect(receivedAge).toBe(100);
-  });
-
-  it('materialisiert Hydra-Kinder erst über die explizite nächste Interaction-Stage', () => {
-    const created: Array<{
-      x: number;
-      y: number;
-      angle: number;
-      cfg: ProjectileSpawnConfig;
-      provenance: ProjectileProvenance;
-    }> = [];
-    let boundOwner: ProjectileRuntimeOwnerPort | null = null;
-    const simulation: ProjectilePhysicsBindingPort = {
-      bindOwner: (owner) => { boundOwner = owner; },
-      createProjectile: (id, x, y, angle, ownerId, cfg, _hostNowMs, provenance) => {
-        created.push({ x, y, angle, cfg, provenance });
-        return createHydraRecord(id, x, y, angle, ownerId, cfg, provenance);
-      },
-      releaseProjectileResources: () => {},
-      releaseWorldState: () => {},
-    };
-    const runtime = new WorldProjectileRuntime({
-      physicsBinding: simulation,
-      presentation: createPresentation(),
-      identityScope: new ProjectileIdentityScope(1),
-      hostNowMs: () => 500,
-    });
-    const parentId = runtime.spawnProjectileConfig(0, 0, 0, 'shooter', {
-      speed: 100,
-      size: 10,
-      damage: 20,
-      color: 0x22ccff,
-      ownerColor: 0x22ccff,
-      lifetime: 1_000,
-      maxBounces: 2,
-      isGrenade: false,
-      adrenalinGain: 4,
-      sourceId: 'weapon.HYDRA',
-      collisionMode: 'physics',
-      splitCount: 2,
-      splitSpread: 30,
-      splitFactor: 1,
-      remainingRangePx: 100,
-    });
-
-    if (!boundOwner?.queueHydraSplit) throw new Error('Expected the world owner Hydra seam');
-    expect(boundOwner.queueHydraSplit(parentId, 20, 0, 100, 0)).toBe(true);
-    expect(created).toHaveLength(1);
-    expect(runtime.activeCount).toBe(0);
-
-    // The queued children are not part of this interaction pass, even though the parent contact
-    // was reported before the host stage began.
-    runtime.runHostInteractionStage(500);
-    expect(created).toHaveLength(1);
-    expect(runtime.activeCount).toBe(0);
-
-    runtime.runHostInteractionStage(516);
-    expect(created).toHaveLength(3);
-    expect(runtime.activeCount).toBe(2);
-    expect(created.slice(1).map((entry) => entry.angle)).toEqual([-Math.PI / 6, Math.PI / 6]);
-    expect(created.slice(1).every((entry) => entry.cfg.suppressSpawnFx === true)).toBe(true);
-    expect(created.slice(1).every((entry) => entry.cfg.initialBounceCount === 1)).toBe(true);
-    expect(created.slice(1).every((entry) => entry.provenance.lineage?.parentProjectileId === parentId)).toBe(true);
-  });
-
-  it('materialisiert Travel-Capabilities und wendet Burn-Augments im Owner an', () => {
-    const projectile = {
-      id: 0,
-      ownerId: 'owner',
-      provenance: createSingleOwnerProvenance('owner', {
-        weaponSourceId: 'weapon.GLOCK',
-        sourceSlot: 'weapon2',
-        allowTeamDamage: false,
-      }),
-      sourceId: 'weapon.GLOCK',
-      sourceSlot: 'weapon1',
-      allowTeamDamage: false,
-      sprite: { active: true, x: 100, y: 8 },
-      body: { velocity: { x: 10, y: 0 } },
-      lastX: 0,
-      lastY: 8,
-      pendingDestroy: false,
-      isGrenade: false,
-      isFlame: false,
-      canReceiveFireImbue: true,
-      fireTrail: {
-        durationMs: 1_000,
-        burnDurationMs: 500,
-        burnDamagePerTick: 2,
-        sourceId: 'weapon.AWP.fire_trail',
-      },
-      pathEffectKind: 'awp',
-      fireTrailHalfWidthCells: 1,
-      awpCorridorHalfWidth: 24,
-      awpCorridorDamage: 40,
-    } as unknown as ProjectileRuntimeRecord;
-    let appliedAugment: ProjectileBurnAugment | null = null;
-    const simulation: ProjectilePhysicsBindingPort = {
-      bindOwner: () => {},
-      createProjectile: () => projectile,
-      releaseProjectileResources: () => {},
-      applyProjectileBurnAugment: (_id, augment) => {
-        appliedAugment = augment;
-        projectile.supplementalBurnOnHit = augment.burn;
-        projectile.supplementalBurnProvenance = augment.provenance;
-        return true;
-      },
-      releaseWorldState: () => {},
-    };
-    const runtime = new WorldProjectileRuntime({
-      physicsBinding: simulation,
-      presentation: createPresentation(),
-      identityScope: new ProjectileIdentityScope(1),
-      hostNowMs: () => 0,
-    });
-    runtime.spawnProjectileConfig(0, 8, 0, 'owner', payload);
-
-    expect(runtime.getTravelSamples()).toMatchObject([{
-      projectileId: 0,
-      fromX: 0,
-      fromY: 8,
-      toX: 100,
-      toY: 8,
-      capabilities: {
-        canReceiveFireImbue: true,
-        pathEffect: {
-          kind: 'awp',
-          fireTrail: { halfWidthCells: 1, cellKey: '6:0' },
-          awpCorridor: { halfWidth: 24, damage: 40 },
-        },
-      },
-    }]);
-
-    const augment: ProjectileBurnAugment = {
-      burn: { durationMs: 750, damagePerTick: 4 },
-      provenance: createSingleOwnerProvenance('fire-owner', { weaponSourceId: 'ground-fire' }),
-    };
-    expect(runtime.addBurnAugment(0, augment)).toBe(true);
-    expect(appliedAugment).toEqual(augment);
-    expect(projectile.supplementalBurnOnHit).toEqual(augment.burn);
-    expect(projectile.supplementalBurnProvenance).toEqual(augment.provenance);
-  });
-
-  it('erhält getrennte Provenance-Dimensionen von Semantic Spawn bis Runtime und Reads', () => {
+  it('preserves semantic source, attribution, and allegiance across owner read projections', () => {
+    const { runtime } = createRuntimeHarness();
     const provenance: ProjectileProvenance = {
       gameplaySourceId: 'weapon-source',
       attributionId: 'credit-owner',
@@ -407,44 +130,9 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
       weaponSourceId: 'weapon.test',
       sourceSlot: 'weapon2',
       sourceTurretId: 'turret-17',
-      lineage: {
-        parentProjectileId: 77,
-        reflected: true,
-        plasmaSwarmChild: true,
-        plasmaSwarmOriginEnemyId: 'enemy-9',
-      },
+      lineage: { parentProjectileId: 77, reflected: true },
       correlation: { ak47ShotId: 1234 },
     };
-    const baseRecord = {
-      id: 0,
-      pendingDestroy: false,
-      isGrenade: false,
-      isFlame: false,
-      canReceiveFireImbue: true,
-      pathEffectKind: 'awp' as const,
-      awpCorridorHalfWidth: 24,
-      awpCorridorDamage: 40,
-      lastX: 0,
-      lastY: 8,
-      sprite: { active: true, x: 100, y: 8, displayWidth: 4, displayHeight: 4 },
-      body: { velocity: { x: 10, y: 0 } },
-    } as unknown as ProjectileRuntimeRecord;
-    const simulation: ProjectilePhysicsBindingPort = {
-      bindOwner: () => {},
-      createProjectile: (id, _x, _y, _angle, _ownerId, _cfg, _hostNowMs, receivedProvenance) => ({
-        ...baseRecord,
-        id,
-        provenance: receivedProvenance,
-      }),
-      releaseProjectileResources: () => {},
-      releaseWorldState: () => {},
-    };
-    const runtime = new WorldProjectileRuntime({
-      physicsBinding: simulation,
-      presentation: createPresentation(),
-      identityScope: new ProjectileIdentityScope(1),
-      hostNowMs: () => 0,
-    });
     const request: ProjectileSpawnRequest = {
       origin: { x: 0, y: 8, angle: 0 },
       flight: {
@@ -464,10 +152,220 @@ describe('WorldProjectileRuntime – world-owned Projectile-Registry', () => {
 
     const id = runtime.spawnProjectile(request);
     if (id === null) throw new Error('Expected semantic projectile spawn to succeed');
-    expect(id).toBe(0);
-    expect(runtime.getTravelSamples()[0]?.provenance).toBe(provenance);
+
     expect(runtime.getThreatSamples()[0]?.provenance).toBe(provenance);
-    expect(runtime.getSummary().activeProjectilesByOwner.get(provenance.allegiance.ownerId)).toBe(1);
-    expect(runtime.getSummary().activeProjectilesByOwner.get(provenance.attributionId)).toBeUndefined();
+    expect(runtime.getTravelSamples()[0]).toMatchObject({
+      projectileId: id,
+      provenance,
+      capabilities: {
+        canReceiveFireImbue: true,
+        pathEffect: {
+          kind: 'awp',
+          awpCorridor: { halfWidth: 24, damage: 40 },
+        },
+      },
+    });
+    const replication: Array<{ id: number; static: { ownerId: string; allowTeamDamage?: boolean } }> = [];
+    runtime.readProjectileReplication((record) => replication.push(record));
+    expect(replication).toEqual([expect.objectContaining({
+      id,
+      static: expect.objectContaining({
+        id,
+        ownerId: 'team-owner',
+        allowTeamDamage: true,
+      }),
+    })]);
+    runtime.destroy();
+  });
+
+  it('expires by host lifetime and emits one terminal explosion request', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+      lifetime: 100,
+      explosion: baseExplosion(),
+    }));
+
+    const stage = runtime.runHostProjectileStage(101, 1_101);
+
+    expect(stage.projectileExplosions).toHaveLength(1);
+    expect(stage.projectileExplosions[0]?.effect).toEqual(baseExplosion());
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toHaveLength(1);
+    runtime.destroy();
+  });
+
+  it('resolves direct combat through public ports and owns terminal cleanup', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const resolveDirectImpact = configureEnemyImpact(runtime);
+
+    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({ collisionMode: 'overlap' }));
+    runtime.runHostInteractionStage(1_000);
+
+    expect(resolveDirectImpact).toHaveBeenCalledWith(expect.objectContaining({
+      projectileId: id,
+      target: { kind: 'enemy', id: 'enemy-1' },
+      directHit: expect.objectContaining({ damage: 10 }),
+    }));
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toHaveLength(1);
+    runtime.destroy();
+  });
+
+  it('keeps a multi explosion projectile alive across explosion completion and then releases it', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    configureEnemyImpact(runtime);
+    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+      collisionMode: 'overlap',
+      explosion: baseExplosion(),
+      multiExplosionCount: 2,
+    }));
+
+    runtime.runHostInteractionStage(1_000);
+    const first = runtime.runHostProjectileStage(0, 1_000);
+    expect(first.projectileExplosions).toHaveLength(1);
+    expect(first.projectileExplosions[0]).toMatchObject({
+      projectileId: id,
+      continuation: { projectileId: id },
+    });
+    expect(runtime.activeCount).toBe(1);
+
+    runtime.completeProjectileExplosion(id, { damagedTargetKeys: ['enemies:enemy-1'] });
+    expect(runtime.activeCount).toBe(1);
+    runtime.destroyProjectile(id);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toHaveLength(1);
+    runtime.destroy();
+  });
+
+  it('reports and consumes a detonable owner projectile exactly once', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const id = runtime.spawnProjectileConfig(12, 4, 0, 'owner', baseConfig({
+      detonable: {
+        tag: 'asmd_ball',
+        aoeDamage: 12,
+        aoeRadius: 24,
+        allowCrossTeam: true,
+      },
+    }));
+
+    const samples: unknown[] = [];
+    runtime.readDetonableProjectiles((sample) => samples.push(sample));
+    expect(samples).toHaveLength(1);
+    expect(runtime.detonateProjectile(id, 'enemy-detonator')).toMatchObject({
+      id,
+      effect: { tag: 'asmd_ball' },
+      detonatorOwnerId: 'enemy-detonator',
+    });
+    expect(runtime.detonateProjectile(id, 'enemy-detonator')).toBeNull();
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toHaveLength(1);
+    runtime.destroy();
+  });
+
+  it('applies the strongest owner burn augment and rejects stale ownership after teardown', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+      canReceiveFireImbue: true,
+      pathEffectKind: 'awp',
+      awpCorridorHalfWidth: 24,
+      awpCorridorDamage: 40,
+    }));
+    const weak: ProjectileBurnAugment = {
+      burn: { durationMs: 100, damagePerTick: 1 },
+      provenance: makeProvenance('fire-weak'),
+    };
+    const strong: ProjectileBurnAugment = {
+      burn: { durationMs: 300, damagePerTick: 4 },
+      provenance: makeProvenance('fire-strong'),
+    };
+
+    expect(runtime.addBurnAugment(id, weak)).toBe(true);
+    expect(runtime.addBurnAugment(id, strong)).toBe(true);
+    expect(runtime.addBurnAugment(id, {
+      burn: { durationMs: 50, damagePerTick: 1 },
+      provenance: makeProvenance('fire-ignored'),
+    })).toBe(false);
+    expect(runtime.getTravelSamples()[0]?.provenance).toEqual(
+      expect.objectContaining({ gameplaySourceId: 'owner', attributionId: 'owner' }),
+    );
+    const replication: Array<{ dynamic: { burning?: boolean } }> = [];
+    runtime.readProjectileReplication((record) => replication.push(record));
+    expect(replication[0]?.dynamic.burning).toBe(true);
+    runtime.destroy();
+
+    expect(runtime.addBurnAugment(id, strong)).toBe(false);
+    expect(physics.released).toHaveLength(1);
+  });
+
+  it('materializes Hydra children on the following interaction stage', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const parentId = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+      size: 10,
+      damage: 20,
+      maxBounces: 2,
+      splitCount: 2,
+      splitSpread: 30,
+      splitFactor: 1,
+      remainingRangePx: 100,
+      sourceId: 'weapon.HYDRA',
+    }));
+
+    physics.emit({
+      projectileId: parentId,
+      target: { kind: 'world-boundary' },
+      x: 0,
+      y: 0,
+      velocityX: 100,
+      velocityY: 0,
+      source: 'world-boundary',
+    });
+
+    expect(runtime.activeCount).toBe(0);
+    runtime.runHostInteractionStage(1_000);
+    expect(runtime.activeCount).toBe(0);
+    runtime.runHostInteractionStage(1_016);
+    expect(runtime.activeCount).toBe(2);
+    expect(physics.specs).toHaveLength(3);
+    expect(physics.specs.slice(1).every((spec) => spec.mechanics.worldBounds)).toBe(true);
+    runtime.destroy();
+  });
+
+  it('releases each technical handle once and ignores contacts after teardown', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig());
+
+    runtime.destroyProjectile(id);
+    runtime.destroyProjectile(id);
+    runtime.destroy();
+    physics.emit({
+      projectileId: id,
+      target: { kind: 'world-boundary' },
+      x: 0,
+      y: 0,
+      velocityX: 0,
+      velocityY: 0,
+      source: 'world-boundary',
+    });
+
+    expect(physics.released).toHaveLength(1);
+    expect(physics.releaseWorldState).toHaveBeenCalledOnce();
+    expect(runtime.activeCount).toBe(0);
+  });
+
+  it('retains monotonic identity across runtime rebuild and rejects duplicate Store entries', () => {
+    const scope = new ProjectileIdentityScope(21);
+    const first = createRuntimeHarness(createTechnicalPhysicsBinding(), scope).runtime;
+    const firstId = first.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig());
+    first.destroy();
+
+    const second = createRuntimeHarness(createTechnicalPhysicsBinding(), scope).runtime;
+    const secondId = second.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig());
+    expect(secondId).toBeGreaterThan(firstId);
+
+    const store = new ProjectileStore(new ProjectileIdentityScope(22));
+    const record = { id: 0 } as unknown as ProjectileRuntimeRecord;
+    store.insert(record);
+    expect(() => store.insert(record)).toThrow('Duplicate projectile identity 0');
+    second.destroy();
   });
 });

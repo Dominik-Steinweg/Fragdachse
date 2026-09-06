@@ -73,19 +73,3 @@ export interface TranslocatorProjectilePort {
   getPuckPosition(id: ProjectileId): { x: number; y: number } | null;
   consumePuck(id: ProjectileId): boolean;
 }
-
-/** Interne Brücke vom world-owned Owner in die noch bestehende Phaser-Simulation. */
-export interface ProjectileExternalInteractionAccess {
-  searchDetonableProjectiles(
-    detonableIds: ReadonlySet<ProjectileId>,
-    request: ProjectileDetonationSearchRequest,
-  ): readonly ProjectileDetonationTarget[];
-  detonateProjectile(
-    projectileId: ProjectileId,
-    detonatorOwnerId: string,
-  ): ProjectileDetonationOutcome | null;
-  detonateOverlappingProjectiles(
-    detonatorIds: ReadonlySet<ProjectileId>,
-    detonableIds: ReadonlySet<ProjectileId>,
-  ): readonly ProjectileDetonationOutcome[];
-}

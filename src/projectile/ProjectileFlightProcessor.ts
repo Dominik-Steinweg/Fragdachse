@@ -2,7 +2,7 @@ import type { ProjectileRuntimeRecord } from '../types';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 
-/** Core results consumed by the downstream collision/effect binding stage. */
+/** Core results consumed by the world owner's downstream lifecycle stage. */
 export interface ProjectileCoreStageResult {
   readonly lifetimeExpiredIds: ReadonlySet<number>;
   readonly grenadeExpiredIds: ReadonlySet<number>;
