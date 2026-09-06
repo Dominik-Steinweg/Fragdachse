@@ -32,14 +32,7 @@
         "durationMs": 0,
         "damagePerTick": 0
       },
-      "tracerConfig": {
-        "widthCore": 1,
-        "widthGlow": 2,
-        "alphaCore": 0.25,
-        "alphaGlow": 0.05,
-        "segments": 4,
-        "fadeMs": 80
-      },
+      "tracerConfig": {"profile": "light"},
       "shotAudio": {
         "successKey": "shot_glock",
         "failureKey": "shot_dry_trigger"
@@ -77,17 +70,7 @@
         "durationMs": 2000,
         "damagePerTick": 2
       },
-      "tracerConfig": {
-        "widthCore": 1.5,
-        "widthGlow": 5,
-        "alphaCore": 0.55,
-        "alphaGlow": 0.38,
-        "segments": 4,
-        "fadeMs": 260,
-        "maxLength": 170,
-        "colorCore": "#f9e8ff",
-        "colorGlow": "#6f16a8"
-      },
+      "tracerConfig": {"profile": "scatter", "color": "#6f16a8"},
       "shotAudio": {
         "successKey": "shot_shotgun",
         "failureKey": "shot_dry_trigger"
@@ -124,16 +107,7 @@
         "durationMs": 2000,
         "damagePerTick": 2
       },
-      "tracerConfig": {
-        "widthCore": 1,
-        "widthGlow": 2,
-        "alphaCore": 0.3,
-        "alphaGlow": 0.08,
-        "segments": 4,
-        "fadeMs": 90,
-        "colorCore": "#e8c170",
-        "colorGlow": "#cf573c"
-      },
+      "tracerConfig": {"profile": "light", "color": "#cf573c"},
       "showCrosshair": false,
       "rockDamageMult": 0,
       "trainDamageMult": 0,
@@ -197,15 +171,7 @@
       "projectileColor": "#8d7a5a",
       "projectileStyle": "bullet",
       "bulletVisualPreset": "xbow",
-      "tracerConfig": {
-        "widthCore": 1,
-        "widthGlow": 2,
-        "alphaCore": 0.24,
-        "alphaGlow": 0.08,
-        "segments": 5,
-        "fadeMs": 120,
-        "maxLength": 120
-      },
+      "tracerConfig": {"profile": "light"},
       "shotAudio": {
         "successKey": "shot_crossbow",
         "failureKey": "shot_dry_trigger"
@@ -255,15 +221,7 @@
       "projectileColor": "#d7b06b",
       "projectileStyle": "bullet",
       "bulletVisualPreset": "p90",
-      "tracerConfig": {
-        "widthCore": 1,
-        "widthGlow": 4,
-        "alphaCore": 0.45,
-        "alphaGlow": 0.16,
-        "segments": 5,
-        "fadeMs": 140,
-        "maxLength": 95
-      },
+      "tracerConfig": {"profile": "automatic"},
       "shotAudio": {
         "successKey": "shot_p90",
         "failureKey": "shot_dry_trigger"
@@ -309,15 +267,7 @@
       "projectileColor": "#c88444",
       "projectileStyle": "bullet",
       "bulletVisualPreset": "ak47",
-      "tracerConfig": {
-        "widthCore": 1.5,
-        "widthGlow": 4,
-        "alphaCore": 0.75,
-        "alphaGlow": 0.22,
-        "segments": 5,
-        "fadeMs": 220,
-        "maxLength": 150
-      },
+      "tracerConfig": {"profile": "heavy"},
       "shotAudio": {
         "successKey": "shot_ak47",
         "failureKey": "shot_dry_trigger"
@@ -361,15 +311,7 @@
       "projectileColor": "#a9a097",
       "projectileStyle": "bullet",
       "bulletVisualPreset": "shotgun",
-      "tracerConfig": {
-        "widthCore": 1.2,
-        "widthGlow": 3.5,
-        "alphaCore": 0.3,
-        "alphaGlow": 0.3,
-        "segments": 3,
-        "fadeMs": 210,
-        "maxLength": 150
-      },
+      "tracerConfig": {"profile": "scatter"},
       "shotAudio": {
         "successKey": "shot_shotgun",
         "failureKey": "shot_dry_trigger"
@@ -402,15 +344,7 @@
       "showCrosshair": false,
       "rockDamageMult": 0,
       "trainDamageMult": 1,
-      "tracerConfig": {
-        "widthCore": 1.5,
-        "widthGlow": 4,
-        "alphaCore": 0.75,
-        "alphaGlow": 0.22,
-        "segments": 5,
-        "fadeMs": 220,
-        "maxLength": 150
-      },
+      "tracerConfig": {"profile": "heavy"},
       "shotAudio": {
         "successKey": "shot_ak47",
         "failureKey": "shot_dry_trigger"
@@ -466,15 +400,7 @@
         "corridorKnockback": 900,
         "corridorKnockbackDurationMs": 260
       },
-      "tracerConfig": {
-        "widthCore": 2,
-        "widthGlow": 6,
-        "alphaCore": 0.95,
-        "alphaGlow": 0.45,
-        "segments": 6,
-        "fadeMs": 750,
-        "colorCore": "#ffffff"
-      },
+      "tracerConfig": {"profile": "sniper"},
       "scopeConfig": {
         "scopeInMs": 1000,
         "fullScopeViewRadius": 48,
@@ -541,14 +467,7 @@
         "duration": 60,
         "intensity": 0.002
       },
-      "tracerConfig": {
-        "widthCore": 1,
-        "widthGlow": 4,
-        "alphaCore": 0.45,
-        "alphaGlow": 0.15,
-        "segments": 4,
-        "fadeMs": 160
-      },
+      "tracerConfig": {"profile": "sustained"},
       "shotAudio": {
         "successKey": "shot_negev",
         "failureKey": "shot_dry_trigger"

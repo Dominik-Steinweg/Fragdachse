@@ -4,6 +4,7 @@ import type {
   ProjectilePhysicsBindingPort,
   ProjectilePhysicsHandle,
   ProjectilePhysicsSpawnSpec,
+  ProjectileMovementObserver,
 } from '../src/projectile/ProjectilePhysicsBinding';
 import type { ProjectilePhysicsContact } from '../src/projectile/ProjectileTargetPort';
 import type { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
@@ -18,17 +19,20 @@ export interface TechnicalPhysicsBindingFixture {
   readonly released: number[];
   readonly releaseWorldState: ReturnType<typeof vi.fn>;
   emit(contact: ProjectilePhysicsContact): boolean | undefined;
+  observe(id: number, x: number, y: number, vx: number, vy: number): void;
 }
 
 /** Headless technical Physics boundary; gameplay ownership remains in WorldProjectileRuntime. */
 export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture {
   let contactHandler: ((contact: ProjectilePhysicsContact) => boolean) | null = null;
+  let movementObserver: ProjectileMovementObserver | null = null;
   const handles = new Map<number, ProjectilePhysicsHandle>();
   const specs: ProjectilePhysicsSpawnSpec[] = [];
   const released: number[] = [];
   const releaseWorldState = vi.fn();
 
   const binding = {
+    setMovementObserver: (observer: ProjectileMovementObserver | null) => { movementObserver = observer; },
     setRockGroup: vi.fn(),
     setBaseGroup: vi.fn(),
     setTrainGroup: vi.fn(),
@@ -114,6 +118,7 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
     released,
     releaseWorldState,
     emit: (contact) => contactHandler?.(contact),
+    observe: (id, x, y, vx, vy) => movementObserver?.(id, x, y, vx, vy),
   };
 }
 

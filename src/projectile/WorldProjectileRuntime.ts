@@ -1,3 +1,4 @@
+import { ProjectilePathRecorder } from './ProjectileFlightPath';
 import * as Phaser from 'phaser';
 import { findNearestRectangleHit } from '../utils/geometry';
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
@@ -201,6 +202,8 @@ export class WorldProjectileRuntime implements
   ProjectileReplicationReadPort,
   WorldScopedBinding {
   private readonly projectiles: ProjectileStore;
+  private readonly flightPaths = new ProjectilePathRecorder();
+  private readonly flightContactPoints = new Map<number, { x: number; y: number }>();
   private readonly flightProcessor = new ProjectileFlightProcessor();
   private readonly homingController = new ProjectileHomingController();
   private readonly detonableIds = new Set<ProjectileId>();
@@ -307,6 +310,8 @@ export class WorldProjectileRuntime implements
     };
     this.lifecycleProcessor = new ProjectileLifecycleProcessor(lifecycleDependencies);
     this.physicsBinding.setPhysicsContactHandler((contact) => this.reportPhysicsContact(contact));
+    this.physicsBinding.setMovementObserver?.((id, x, y, vx, vy) =>
+      this.flightPaths.observe(id, x, y, vx, vy, this.hostNowMs()));
   }
 
   /** Anzahl der aktuell wirksamen Projectiles dieser World. */
@@ -320,11 +325,13 @@ export class WorldProjectileRuntime implements
     states.length = 0;
     for (const projectile of this.projectiles.stepOrder) {
       const sprite = projectile.physics.sprite;
+      const flightPath = this.flightPaths.read(projectile.id, this.hostNowMs());
+      const pathHead = flightPath?.points[flightPath.points.length - 1];
       states.push({
         id: projectile.id,
         ownerId: projectile.provenance.allegiance.ownerId,
-        x: sprite.x,
-        y: sprite.y,
+        x: pathHead?.x ?? sprite.x,
+        y: pathHead?.y ?? sprite.y,
         vx: projectile.physics.body.velocity.x,
         vy: projectile.physics.body.velocity.y,
         size: sprite.displayWidth,
@@ -351,6 +358,7 @@ export class WorldProjectileRuntime implements
             && (projectile.interaction.burnAugment?.burn?.damagePerTick ?? 0) > 0)
         ),
         sourceTurretId: projectile.provenance.sourceTurretId,
+        flightPath,
       });
     }
     return states;
@@ -598,6 +606,7 @@ export class WorldProjectileRuntime implements
         );
       }
     }
+    this.flightContactPoints.set(projectile.id, impactPoint);
     let consumed = false;
     switch (contact.target.kind) {
       case 'rock': {
@@ -646,6 +655,7 @@ export class WorldProjectileRuntime implements
     if (!consumed && bounceEligible) {
       this.completeAuthoritativeBounce(projectile, impactPoint.x, impactPoint.y, contact.target.kind === 'world-boundary');
     }
+    if (!projectile.pendingDestroy) this.flightContactPoints.delete(projectile.id);
     return consumed;
   }
 
@@ -691,6 +701,8 @@ export class WorldProjectileRuntime implements
       vy,
       tracerBounce,
     };
+    this.flightPaths.discardPending(projectile.id);
+    this.flightPaths.append(projectile.id, x, y, vx, vy, this.hostNowMs(), false, presentation.sequence);
     projectile.lastBouncePresentation = presentation;
     this.presentation.playBounceImpact(
       projectile.id,
@@ -786,6 +798,7 @@ export class WorldProjectileRuntime implements
     outcome: ProjectileDirectImpactOutcome,
   ): boolean {
     if (!outcome.accepted || projectile.pendingDestroy) return false;
+    this.flightContactPoints.set(projectile.id, impact);
     if (projectile.spec.interaction.impactCloud) this.projectileImpactEventCallback?.(this.createImpactSource(projectile, impact.x, impact.y));
     const targetKey = target.kind === 'player' ? `players:${target.id}`
       : target.kind === 'enemy' ? `enemies:${target.id}` : undefined;
@@ -795,6 +808,7 @@ export class WorldProjectileRuntime implements
     }
     if (projectile.interaction.explosion) {
       this.lifecycleProcessor.triggerExplosion(projectile, targetKey);
+      if (!projectile.pendingDestroy) this.flightContactPoints.delete(projectile.id);
       return !projectile.pendingDestroy;
     }
     this.queueProjectileDestroy(projectile.id);
@@ -814,6 +828,23 @@ export class WorldProjectileRuntime implements
   }
 
   private resolveWorldImpactCandidate(
+    projectile: ProjectileRuntimeRecord,
+    candidate: ProjectileImpactCandidate,
+  ): ResolvedWorldContact {
+    this.flightContactPoints.set(projectile.id, candidate);
+    try {
+      const result = this.resolveWorldImpactCandidateCore(projectile, candidate);
+      if (result.outcome === 'consumed') {
+        this.flightPaths.discardPending(projectile.id);
+        this.flightPaths.append(projectile.id, candidate.x, candidate.y,
+          projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, this.hostNowMs());
+      }
+      return result;
+    }
+    finally { if (!projectile.pendingDestroy) this.flightContactPoints.delete(projectile.id); }
+  }
+
+  private resolveWorldImpactCandidateCore(
     projectile: ProjectileRuntimeRecord,
     candidate: ProjectileImpactCandidate,
   ): ResolvedWorldContact {
@@ -1137,6 +1168,7 @@ export class WorldProjectileRuntime implements
         projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
         burning: this.hasVisibleProjectileBurn(projectile) || undefined,
         bounce: projectile.lastBouncePresentation,
+        flightPath: this.flightPaths.read(projectile.id, this.hostNowMs()),
       },
     };
   }
@@ -1332,6 +1364,23 @@ export class WorldProjectileRuntime implements
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
     if (this.projectiles.getById(record.id) !== record) return;
     const handle = record.physics;
+    if (!this.destroyed) {
+      const finalContact = this.flightContactPoints.get(record.id);
+      if (finalContact) {
+        this.flightPaths.discardPending(record.id);
+        this.flightPaths.append(record.id, finalContact.x, finalContact.y,
+          record.physics.body.velocity.x, record.physics.body.velocity.y, this.hostNowMs());
+      } else this.recordFlightPosition(record, this.hostNowMs());
+      const finalRecord = this.createProjectileReplicationRecord(record);
+      const flightPath = this.flightPaths.read(record.id, this.hostNowMs(), true);
+      if (flightPath) {
+        this.presentation.presentFinalPath?.({ ...finalRecord.static, ...finalRecord.dynamic, ownerId: finalRecord.static.ownerId,
+          color: finalRecord.static.color ?? 0, flightPath });
+        this.projectileReplicationAdapter?.recordFlightEnd({ ...finalRecord, dynamic: { ...finalRecord.dynamic, flightPath } });
+      }
+    }
+    this.flightPaths.remove(record.id);
+    this.flightContactPoints.delete(record.id);
     this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
     record.contacts.hitObstacleIds?.clear();
@@ -1538,6 +1587,7 @@ export class WorldProjectileRuntime implements
     const stage = this.lifecycleProcessor.run(this.projectiles.stepOrder, coreStage);
     if (this.destroyed) return emptyHostStageResult();
     this.runMiniRocketStateStage();
+    for (const record of this.projectiles.activeRecords) this.recordFlightPosition(record, nowMs);
     this.presentation.syncHostRenderers(this.presentationProjectiles);
     return stage;
   }
@@ -1856,6 +1906,10 @@ export class WorldProjectileRuntime implements
     record.maxBounces = options.keepGrenade ? record.maxBounces : 0;
     record.bounceCount = options.keepGrenade ? record.bounceCount : 0;
     record.presentation = { ...record.presentation, color: options.color, ownerColor: options.ownerColor };
+    this.flightPaths.discardPending(record.id);
+    this.flightContactPoints.delete(record.id);
+    this.flightPaths.append(record.id, options.x, options.y, Math.cos(options.angle) * options.speed,
+      Math.sin(options.angle) * options.speed, options.nowMs, true);
     record.physics.body.reset(options.x, options.y);
     record.lastX = options.x;
     record.lastY = options.y;
@@ -1941,6 +1995,8 @@ export class WorldProjectileRuntime implements
     this.hasStartedInteractionStage = false;
     for (const record of [...this.projectiles.stepOrder]) this.releaseProjectile(record);
     this.projectiles.clear();
+    this.flightPaths.clear();
+    this.flightContactPoints.clear();
     this.detonableIds.clear();
     this.detonatorIds.clear();
     this.translocatorPuckIds.clear();
@@ -2221,11 +2277,28 @@ export class WorldProjectileRuntime implements
         record.appliedAirFrictionDecay = effectiveDecay;
       }
     }
+    if (cfg.tracerConfig || cfg.projectileStyle === 'rocket' || cfg.canReceiveFireImbue
+      || (cfg.burnDurationMs ?? 0) > 0) {
+      this.flightPaths.begin(id, resolvedSpawn.x, resolvedSpawn.y, handle.body.velocity.x, handle.body.velocity.y, hostNowMs);
+    }
     this.presentation.createSpawnRendererVisuals(id, handle.sprite, resolvedSpawn.x, resolvedSpawn.y, cfg, ownerId);
     this.presentation.registerFallbackShape(handle.sprite);
     if (cfg.isBfg) this.presentation.createBfgVisual(id, resolvedSpawn.x, resolvedSpawn.y, cfg.size);
     this.presentation.createSpawnFeedback(id, resolvedSpawn.x, resolvedSpawn.y, x, y, angle, ownerId, cfg);
     return record;
+  }
+
+  private recordFlightPosition(record: ProjectileRuntimeRecord, nowMs: number): void {
+    const contact = this.flightContactPoints.get(record.id);
+    if (contact && (record.pendingDestroy || !this.projectiles.activeRecords.has(record))) {
+      this.flightPaths.discardPending(record.id);
+      this.flightPaths.append(record.id, contact.x, contact.y, record.physics.body.velocity.x, record.physics.body.velocity.y, nowMs);
+    } else {
+      this.flightContactPoints.delete(record.id);
+      if (!this.flightPaths.commitThrough(record.id, record.physics.sprite.x, record.physics.sprite.y)) return;
+      this.flightPaths.append(record.id, record.physics.sprite.x, record.physics.sprite.y,
+        record.physics.body.velocity.x, record.physics.body.velocity.y, nowMs);
+    }
   }
 
   private removeCapabilityIds(id: ProjectileId): void {

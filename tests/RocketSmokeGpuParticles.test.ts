@@ -18,6 +18,9 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 }));
 
 import { RocketRenderer } from '../src/effects/RocketRenderer';
+import { TracerRenderer } from '../src/effects/TracerRenderer';
+import { ProjectileBurnRenderer } from '../src/effects/ProjectileBurnRenderer';
+import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { gpuVfxEasedBase } from '../src/effects/gpu/GpuVfxMember';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
@@ -33,15 +36,13 @@ function setup() {
   return { scene, registry, renderer, smoke: findFakeLane(scene, 'rocket-smoke') };
 }
 
-/**
- * Fuehrt eine Rakete so weit, dass die distanz-/zeitbasierte Puff-Logik ausloest. Die Gate-Regel
- * bleibt unveraendert: `dist >= max(visualSize * 0.55, 5)` oder 22 ms seit dem letzten Puff.
- */
-function flyRocket(renderer: RocketRenderer, id: number, steps: number): void {
+function fly(renderer: RocketRenderer, registry: GpuVfxSystem, id = 1, x = 60, y = 0): void {
   renderer.createVisual(id, 0, 0, 10, 0xff0000, 0x00ff00, 0x445566);
-  for (let step = 1; step <= steps; step += 1) {
-    renderer.updateVisual(id, step * 60, 0, 10, 200, 0);
-  }
+  renderer.emitTrailSegment(id, {
+    from: { sequence: 1, timeMs: 0, x: 0, y: 0, vx: x * 60, vy: y * 60 },
+    to: { sequence: 2, timeMs: 16, x, y, vx: x * 60, vy: y * 60 }, ageMs: 0,
+  }, 10, 1, 0x445566);
+  registry.update(0);
 }
 
 beforeEach(() => {
@@ -49,175 +50,131 @@ beforeEach(() => {
   qualityFactors.standard = 1;
   vi.spyOn(Math, 'random').mockReturnValue(0.5);
 });
+afterEach(() => vi.restoreAllMocks());
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-describe('rocket smoke gpu particles', () => {
-  it('replaces the shared emitter with one normally blended lane', () => {
-    const { scene, smoke } = setup();
-    // Der Smoke-Emitter hatte keinen Blend-Mode im Config, zeichnete also normal statt additiv.
+describe('rocket smoke path particles', () => {
+  it('distributes smoke along the travelled segment with its local nozzle offset', () => {
+    const { renderer, registry, smoke } = setup();
+    fly(renderer, registry);
+    const puffs = smoke.edited.map(i => smoke.members[i]);
+    expect(puffs.length).toBeGreaterThan(1);
+    const xs = puffs.map(p => evaluateFakeAnimation(p.x, 0));
+    expect(Math.min(...xs)).toBeLessThan(10);
+    expect(Math.max(...xs)).toBeGreaterThan(40);
     expect(smoke.blendMode).toBe(0);
-    expect(smoke.enabledEases).toEqual(['Linear', 'Quad.easeOut']);
-    expect(smoke.added).toBe(smoke.size);
-    // Entspricht dem bisherigen maxAliveParticles-Deckel.
-    expect(smoke.size).toBe(640);
-    expect(scene.emitters.length).toBe(0);
-    // Alle Lanes teilen sich den Atlas; das Motiv steckt im Frame des Members.
-    expect(smoke.key).toBe('__gpu_vfx_atlas');
-  });
-
-  it('keeps DEPTH.FIRE without an epsilon offset', () => {
-    // Anders als der Exhaust entstand der geteilte Smoke-Emitter schon beim Szenenaufbau und
-    // lag bei gleicher Depth ohnehin unter allem zur Laufzeit Erzeugten.
-    const { smoke } = setup();
-    expect(smoke.depth).toBe(DEPTH.FIRE);
-  });
-
-  it('emits a puff per trigger of the unchanged distance gate', () => {
-    const { renderer, smoke } = setup();
-    // createVisual ruft updateVisual einmal mit Distanz 0 – der Zeit-Gate greift dort bereits.
-    flyRocket(renderer, 1, 4);
-    expect(smoke.edited.length).toBe(5);
-  });
-
-  it('reproduces the legacy scale, alpha and velocity curves on the gpu', () => {
-    const { renderer, smoke } = setup();
-    // FloatBetween ist auf die Mitte gemockt: speedX 0, speedY -6.
-    renderer.createVisual(1, 50, 70, 10, 0xff0000, 0x00ff00, 0x445566);
-    const puff = smoke.members[0];
-
-    // Startscale max(visualSize/28, 0.28) mit visualSize = 10 -> 0.357…
-    const startScale = Math.max(10 / 28, 0.28);
-    const legacyScale = (t: number) => startScale * (1 + t * (2 - t) * 1.3);
-    for (const t of [0, 0.25, 0.5, 0.75]) {
-      expect(evaluateFakeAnimation(puff.scaleX, t)).toBeCloseTo(legacyScale(t), 10);
+    for (const p of puffs) {
+      expect(evaluateFakeAnimation(p.y, 0)).toBeCloseTo(0);
+      expect(evaluateFakeAnimation(p.scaleX, 0.5)).toBeGreaterThan(evaluateFakeAnimation(p.scaleX, 0));
+      expect(evaluateFakeAnimation(p.alpha, 0.999)).toBeCloseTo(0);
     }
-
-    // alpha: { start: 0.95, end: 0, ease: 'Quad.easeOut' }
-    const legacyAlpha = (t: number) => 0.95 - 0.95 * t * (2 - t);
-    for (const t of [0, 0.25, 0.5, 0.75]) {
-      expect(evaluateFakeAnimation(puff.alpha, t)).toBeCloseTo(legacyAlpha(t), 10);
-    }
-
-    // speedX/speedY sind nicht-radial und wirken ueber die konstante Lebenszeit von 1000 ms.
-    expect(evaluateFakeAnimation(puff.x, 0)).toBeCloseTo(50 - 10 * 0.9, 10);
-    expect(evaluateFakeAnimation(puff.y, 1) - evaluateFakeAnimation(puff.y, 0)).toBeCloseTo(-6, 10);
-    expect(puff.tint).toBe(0x445566);
-    expect(puff.frame).toBe('rocket-smoke');
   });
 
-  it('never touches a spawned puff again', () => {
-    const { registry, renderer, smoke } = setup();
-    flyRocket(renderer, 1, 4);
-    const spawned = smoke.edited.length;
-
-    for (let frame = 0; frame < 20; frame += 1) registry.update(16);
-    // Kein Edit ausserhalb der Spawns; nur Retire-Patches nach Ablauf der Lebenszeit.
-    expect(smoke.edited.length).toBe(spawned);
+  it('samples the outgoing bounce leg independently of the incoming direction', () => {
+    const { renderer, registry, smoke } = setup();
+    fly(renderer, registry);
+    const count = smoke.edited.length;
+    renderer.emitTrailSegment(1, {
+      from: { sequence: 2, timeMs: 16, x: 60, y: 0, vx: 0, vy: 1000 },
+      to: { sequence: 3, timeMs: 32, x: 60, y: 60, vx: 0, vy: 1000 }, ageMs: 0,
+    }, 10, 1, 0x445566);
+    registry.update(0);
+    for (const index of smoke.edited.slice(count)) expect(evaluateFakeAnimation(smoke.members[index].x, 0)).toBeCloseTo(60);
   });
 
-  it('reproduces the fractional carry of the quality-scaled manual emission', () => {
-    // `emitParticleAt` wurde vom Quality-Controller gewrappt: pro Aufruf waechst der Uebertrag
-    // um `factor`, emittiert wird der ganzzahlige Anteil. Bei 0.5 also jeder zweite Puff.
-    qualityFactors.standard = 0.5;
-    const { renderer, smoke } = setup();
-    flyRocket(renderer, 1, 9);
-    expect(smoke.edited.length).toBe(5);
-  });
-
-  it('stops emitting smoke when the quality factor is zero', () => {
-    qualityFactors.standard = 0;
-    const { renderer, smoke } = setup();
-    flyRocket(renderer, 1, 20);
-    expect(smoke.edited.length).toBe(0);
-  });
-
-  it('lets the puffs of a single destroyed rocket run out', () => {
-    // Der geteilte Emitter kannte keine Zugehoerigkeit; seine Schwaden liefen weiter.
-    const { renderer, smoke } = setup();
-    flyRocket(renderer, 1, 4);
-    flyRocket(renderer, 2, 4);
-    const spawned = smoke.edited.length;
-
+  it('leaves emitted smoke alive after the rocket and clears it on world teardown', () => {
+    const { renderer, registry } = setup();
+    fly(renderer, registry);
+    const alive = registry.getStats()!['rocket-smoke'].liveCount;
+    expect(alive).toBeGreaterThan(0);
     renderer.destroyVisual(1);
-    expect(smoke.patched).toEqual([]);
-    expect(smoke.edited.length).toBe(spawned);
-  });
-
-  it('clears every puff on teardown', () => {
-    const { registry, renderer, smoke } = setup();
-    flyRocket(renderer, 1, 4);
-    const spawned = smoke.edited.length;
-
+    expect(registry.getStats()!['rocket-smoke'].liveCount).toBe(alive);
     renderer.destroyAll();
-    expect(smoke.patched.length).toBe(spawned);
-    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
+    expect(registry.getStats()!['rocket-smoke'].liveCount).toBe(0);
   });
 
-  it('retires puffs after their 1000 ms lifespan', () => {
-    const { registry, renderer, smoke } = setup();
-    flyRocket(renderer, 1, 1);
-    const spawned = smoke.edited.length;
-    expect(spawned).toBeGreaterThan(0);
-
-    registry.update(500);
-    expect(smoke.patched.length).toBe(0);
-    registry.update(500);
-    expect(smoke.patched.length).toBe(spawned);
-  });
-
-  it('drops puffs at the pool limit instead of overwriting living ones', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { registry, renderer, smoke } = setup();
-    // Deutlich mehr Puffs als der 640er-Deckel traegt, alle innerhalb einer Lebenszeit.
-    for (let id = 1; id <= 40; id += 1) flyRocket(renderer, id, 30);
-
-    const stats = registry.getStats()?.['rocket-smoke'];
-    expect(stats!.liveCount).toBeLessThanOrEqual(640);
-    expect(stats!.capacityDrops).toBeGreaterThan(0);
-    // Jeder Edit gehoert zu genau einem Rearm: kein lebender Slot wurde ueberschrieben.
-    expect(smoke.edited.length).toBe(stats!.rearms);
-    warn.mockRestore();
-  });
-
-  it('does not spawn smoke or advance emission carry while the backend is suppressed', () => {
-    qualityFactors.standard = 0.5;
-    const { registry, renderer, smoke } = setup();
-
-    // 1 Vorab-Puff bei 0.5 Factor (Schritt 1: carry 0.5, Schritt 2: carry 1.0 -> 1 Puff)
-    flyRocket(renderer, 1, 2);
-    expect(smoke.edited.length).toBe(1);
-
-    // Ablation aktivieren
+  it('does not replay suppressed paths and removes smoke at zero standard quality', () => {
+    const { renderer, registry, smoke } = setup();
     registry.setSuppressed(true);
-    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
-
-    // Waehrend der Ablation fliegen: weder Spawns noch Carry-Akkumulation
-    flyRocket(renderer, 2, 20);
-    renderer.playSpentDestruction(100, 100, 0xff0000);
-    expect(smoke.edited.length).toBe(1);
-    expect(registry.getStats()?.['rocket-smoke'].liveCount).toBe(0);
-
-    // Ablation deaktivieren
+    fly(renderer, registry);
     registry.setSuppressed(false);
+    registry.update(16);
+    expect(smoke.edited).toHaveLength(0);
+    qualityFactors.standard = 0;
+    const other = setup();
+    fly(other.renderer, other.registry);
+    expect(other.smoke.edited).toHaveLength(0);
+  });
 
-    // Nach Ende der Ablation: Kein Catch-up-Burst aus den 20 unterdrueckten Schritten.
-    // Carry stand vor Ablation nach Step 2 auf 0.5.
-    // Neuer Flugschritt bringt +0.5 -> Carry erreicht 1.0 -> genau 1 Puff (insgesamt 2).
-    // Folgeschritt bringt +0.5 -> Carry 0.5 -> kein neuer Puff (bleibt bei 2).
-    // Weiterer Schritt bringt +0.5 -> Carry 1.0 -> weiterer Puff (insgesamt 3).
-    renderer.updateVisual(1, 300, 0, 10, 200, 0);
-    expect(smoke.edited.length).toBe(2);
-    renderer.updateVisual(1, 360, 0, 10, 200, 0);
-    expect(smoke.edited.length).toBe(2);
-    renderer.updateVisual(1, 420, 0, 10, 200, 0);
-    expect(smoke.edited.length).toBe(3);
+  it('bounds a hitch without rewriting live members and retires their remaining lifetime', () => {
+    const { renderer, registry, smoke } = setup();
+    fly(renderer, registry, 1, 100000);
+    const writes = smoke.edited.length;
+    expect(writes).toBeGreaterThan(0);
+    expect(writes).toBeLessThan(100);
+    registry.update(100);
+    expect(smoke.edited.length).toBe(writes);
+    renderer.destroyVisual(1);
+    registry.update(1100);
+    expect(registry.getStats()!['rocket-smoke'].liveCount).toBe(0);
   });
 });
 
 describe('gpu vfx eased base', () => {
+  it('uses historical creation time and only the remaining GPU pool lifetime', () => {
+    const { scene, registry } = setup();
+    const lane = findFakeLane(scene, 'flight-signature');
+    lane.timeElapsed = 200;
+    const spec = registry.createSpec(GpuVfxEffectId.FlightCore);
+    spec.lifeMs = 100;
+    const source = registry.createSource(GpuVfxEffectId.FlightCore);
+    expect(registry.spawn(spec, source, 0, 60)).toBe(true);
+    expect(lane.members[lane.edited[0]].creationTime).toBe(140);
+    registry.update(39);
+    expect(registry.getStats()!['flight-signature'].liveCount).toBe(1);
+    registry.update(2);
+    expect(registry.getStats()!['flight-signature'].liveCount).toBe(0);
+    expect(registry.spawn(spec, source, 41, 100)).toBe(false);
+  });
+
+  it('keeps essential core geometry when wake quality is disabled and does not edit living strips', () => {
+    qualityFactors.standard = 0; qualityFactors.decorative = 0;
+    const { scene, registry } = setup();
+    const tracer = new TracerRenderer(scene as never);
+    tracer.registerGpuVfx(registry);
+    tracer.createTracer(1, 0, 0, { profile: 'heavy' }, 0xffaa00);
+    tracer.addSegment(1, { from: { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
+      to: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 0, vy: 1000 }, ageMs: 0 });
+    tracer.addSegment(1, { from: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 0, vy: 1000 },
+      to: { sequence: 3, timeMs: 40, x: 20, y: 20, vx: 0, vy: 1000 }, ageMs: 0 });
+    registry.update(0);
+    const lane = findFakeLane(scene, 'flight-signature');
+    expect(lane.edited).toHaveLength(2);
+    const a = lane.members[lane.edited[0]], b = lane.members[lane.edited[1]];
+    expect(evaluateFakeAnimation(a.x, 0)).toBe(10);
+    expect(evaluateFakeAnimation(a.y, 0.5)).toBe(0);
+    expect(evaluateFakeAnimation(b.x, 0.5)).toBe(20);
+    expect(evaluateFakeAnimation(b.rotation, 0)).toBeCloseTo(Math.PI / 2);
+    expect(evaluateFakeAnimation(a.scaleX, 0)).toBeCloseTo(20);
+    tracer.destroyTracer(1); registry.update(1);
+    expect(lane.edited).toHaveLength(2);
+    tracer.destroyAll();
+    expect(registry.getStats()!['flight-signature'].liveCount).toBe(0);
+    qualityFactors.decorative = 1;
+  });
+
+  it('preserves fire identity on sampled paths and lets final fire outlive its source', () => {
+    const { scene, registry } = setup();
+    const burn = new ProjectileBurnRenderer(scene as never);
+    burn.registerGpuVfx(registry);
+    burn.emitTrailSegment(1, { from: { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
+      to: { sequence: 2, timeMs: 20, x: 60, y: 0, vx: 1000, vy: 0 }, ageMs: 0 }, 6, 'void');
+    burn.destroyVisual(1); registry.update(0);
+    const lane = findFakeLane(scene, 'projectile-burn');
+    expect(lane.edited.length).toBeGreaterThan(1);
+    expect(lane.members[lane.edited[0]].frame).toContain('void');
+    burn.destroyAll(); registry.update(0);
+    expect(registry.getStats()!['projectile-burn'].liveCount).toBe(0);
+  });
   it('cancels the shader repeats term so base + amplitude * ease(t) comes out exact', () => {
     // Alpha 0.95 -> 0 mit Quad.easeOut: ohne Korrektur addiert der Shader floor(-0.95) * -0.95.
     const base = gpuVfxEasedBase(0.95, -0.95);

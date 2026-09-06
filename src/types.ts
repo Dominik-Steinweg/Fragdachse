@@ -372,20 +372,9 @@ export interface RadialDamageFalloffConfig {
 }
 
 /**
- * Konfiguration für die Tracer-Leuchtlinie eines Projektils (data-driven).
- * Alle Felder ohne `?` sind Pflichtangaben.
+ * Authored Flight-Signature-Profil mit optionalen visuellen Overrides.
  */
-export interface TracerConfig {
-  readonly widthCore:  number;   // Breite der inneren hellen Linie (px)
-  readonly widthGlow:  number;   // Breite des äußeren Leucht-Halos (px)
-  readonly alphaCore:  number;   // Max-Opazität der inneren Linie am Bullet-Kopf (0–1)
-  readonly alphaGlow:  number;   // Max-Opazität des äußeren Halos am Bullet-Kopf (0–1)
-  readonly segments:   number;   // Anzahl Gradient-Abschnitte (mehr = weicherer Fade)
-  readonly fadeMs:     number;   // Fadeout-Dauer nach Einschlag (ms)
-  readonly maxLength?: number;   // Max. sichtbare Trail-Länge in px (undefined = voller Pfad ab Spawn)
-  readonly colorCore?: number;   // Farb-Override innere Linie (undefined = Projektil-/Spielerfarbe)
-  readonly colorGlow?: number;   // Farb-Override äußerer Halo (undefined = Projektil-/Spielerfarbe)
-}
+export type TracerConfig = import('./projectile/FlightSignature').FlightSignatureConfig;
 
 /**
  * Vereinheitlichte Burn-Konfiguration für „brennende Treffer". Wird an Waffen
@@ -570,12 +559,13 @@ export interface ProjectileBouncePresentation {
   readonly y: number;
   readonly vx: number;
   readonly vy: number;
-  /** Setzt den Tracer-Anker zurück; false bedeutet Sparks-only bei einem Impact ohne Bounce. */
+  /** Unterscheidet einen Bounce von Sparks-only; die Pfadgeometrie kommt aus flightPath. */
   readonly tracerBounce: boolean;
 }
 
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
+  flightPath?: import('./projectile/ProjectileFlightPath').ProjectileFlightPath;
   id:      number;
   ownerId: string;
   x:       number;
@@ -647,6 +637,7 @@ export interface SyncedProjectileStatic {
  * genau einen Tick kostet statt einen Wert dauerhaft zu verschlucken.
  */
 export interface SyncedProjectileDynamic {
+  flightPath?: import('./projectile/ProjectileFlightPath').ProjectileFlightPath;
   id:   number;
   x:    number;
   y:    number;
@@ -675,6 +666,8 @@ export interface SyncedProjectileSnapshot {
   s: Array<number | string>;
   /** Dynamik-Strom, siehe `encodeProjectileDynamic`. */
   u: Array<number | string>;
+  /** Completed presentation paths, never active gameplay projectiles. */
+  e?: Array<number | string>;
   /** Nur bei einem echten Full-Snapshot gesetzt: Client verwirft seinen Statik-Cache vorher. */
   f?: 1;
 }
@@ -1809,7 +1802,9 @@ export interface SyncedEnemyDeltaState {
  */
 export interface SyncedEnemySnapshot {
   c: number;    // Gesamtzahl aktiver Gegner (nur Telemetrie)
-  u: Array<number | string>;  // flacher Upsert-Strom (siehe encodeEnemyUpsert)
+  u: Array<number | string>;
+  /** Completed presentation paths, never active gameplay projectiles. */
+  e?: Array<number | string>;  // flacher Upsert-Strom (siehe encodeEnemyUpsert)
   r: number[];  // entfernte Gegner-IDs (numerisch, Sticky-Removals)
   a?: number[]; // optional: vollständige Liste aktiver IDs (periodische Reconciliation)
 }

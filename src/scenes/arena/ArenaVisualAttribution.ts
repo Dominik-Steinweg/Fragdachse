@@ -93,7 +93,6 @@ export const GRAPHICS_FAMILIES = {
   teleportEffects: ['TranslocatorTeleportRenderer'],
   rocketLifecycleGraphics: ['RocketRenderer'],
   stinkCloudGraphics: ['StinkCloudSystem'],
-  weaponTrails: ['TracerRenderer'],
   biteEffects: ['BiteRenderer'],
   zeusTaserEffects: ['ZeusTaserRenderer'],
   baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator'],

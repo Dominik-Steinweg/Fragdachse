@@ -36,6 +36,27 @@ Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../
 
 Player- und Tree-Runtime folgen demselben Prinzip: PlayerBody und TreePhysicsProxy sind Simulation; Sprite, Licht, Textur und Overlay sind Präsentation. Kollisionen werden aus expliziter Runtime-Geometrie abgeleitet, nicht aus Displaymaßen.
 
+## Pfadgebundene Projectile-Präsentation
+
+[`WorldProjectileRuntime`](../../src/projectile/WorldProjectileRuntime.ts) besitzt den rendererfreien
+[`ProjectilePathRecorder`](../../src/projectile/ProjectileFlightPath.ts) als abgeleitete World-Projektion.
+Technische Bewegung bleibt bis zur Bestätigung durch den Runtime-Owner vorläufig; bestätigte Kontakte
+begrenzen diese Strecke. Gameplay und Physik lesen den Präsentationspfad niemals zurück.
+Bounce-Punkte bleiben Ecken, räumliche Unterbrechungen werden nicht verbunden. Die Historie ist nach
+Alter und Punktzahl begrenzt; nur unveränderte geradlinige Bewegung darf zusammengefasst werden.
+
+Ein zeitlich fortschreitender Cursor konsumiert bestätigte Segmente einmalig. Flight Signature,
+Rocket-Smoke und Projectile-Burn teilen den neutralen Distanz-Sampler, besitzen aber eigene Dichten,
+Paletten und Lebenszeiten. Rocket-Exhaust bleibt zeitbasiert an der dargestellten Triebwerksposition.
+Kopfgebundene Akzente gehören weiterhin den spezialisierten Projectile-Renderern.
+
+Flight-Material wird nach dem GPU-Retire-Sweep emittiert: zuerst alle kritischen Cores, danach Wake
+und Dekoration. Historische Spawns setzen GPU-Animationsalter und Pool-Restlebenszeit gemeinsam;
+abgelaufenes Material wird verworfen. Bereits emittierte Segmente werden bei Bounce oder Despawn
+nicht umorientiert oder gelöscht. World-Teardown entfernt auch nachlaufende Member, Cursor,
+gepufferte Pfade und ausstehende Emissionen. Details der Client-Zeitbasis stehen in
+[networking.md](networking.md#projectile-flight-replikation).
+
 ## GPU-VFX-Framefolgen
 
 Ein `GpuVfxSpawnSpec` darf optional eine benannte One-Shot-Framefolge aus

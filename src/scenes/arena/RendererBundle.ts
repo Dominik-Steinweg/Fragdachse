@@ -246,6 +246,7 @@ export function createRendererBundle(
   beer.generateTextures();
 
   const tracer = new TracerRenderer(scene);
+  tracer.registerGpuVfx(gpuVfx);
 
   const muzzleFlash = new MuzzleFlashRenderer(scene);
   muzzleFlash.registerGpuVfx(gpuVfx);

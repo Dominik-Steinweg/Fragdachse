@@ -83,6 +83,7 @@ export const GpuVfxLaneId = {
   GoreAdd:               28,
   PowerUpPedestal:       29,
   MuzzleFlash:           30,
+  FlightSignature:       31,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -694,5 +695,13 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
       + '236 ms decken den laengsten Muzzle-Lebenszyklus mit reichlich Burst- und Turret-Reserve. '
       + '512 Slots begrenzen die Lane belastbar fuer Multiplayer-Spitzen, waehrend 64 kritische '
       + 'Reserveplaetze den stets sichtbaren Body gegen Spark-Ueberlast schuetzen.',
+  },
+  {
+    id: GpuVfxLaneId.FlightSignature, label: 'flight-signature',
+    depth: DEPTH.PROJECTILES - 1.8, blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    capacity: 16384, maxLifetimeMs: 1000, order: 'add-over-opaque', reserveCritical: 8192,
+    rationale: 'Path-local light segments share one additive band below projectile heads.',
+    capacityRationale: 'Reserves half the bounded lane for critical paths; wake and motes cannot consume that reserve.',
   },
 ];

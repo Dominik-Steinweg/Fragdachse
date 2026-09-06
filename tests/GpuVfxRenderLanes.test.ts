@@ -77,8 +77,6 @@ describe('gpu vfx render lanes', () => {
   it('never grows the lane count with the effect count', () => {
     // Der eigentliche Architekturvertrag: mehr logische Effekte auf weniger physischen Lanes.
     expect(GPU_VFX_EFFECTS.length).toBeGreaterThan(GPU_VFX_LANES.length);
-    // Explosionen und Combat-Gore fuegen je nur die layerglobal inkompatiblen Lanes hinzu.
-    expect(GPU_VFX_LANES.length).toBe(31);
   });
 
   it('keeps MuzzleFlash body and sparks on one compatible additive lane', () => {

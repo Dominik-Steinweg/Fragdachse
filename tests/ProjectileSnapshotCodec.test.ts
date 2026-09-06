@@ -49,17 +49,7 @@ describe('Projektil-Statik-Codec', () => {
       grenadeVisualPreset: 'molotov',
       energyBallVariant: 'plasma',
       velocityDecay: 0.82,
-      tracer: {
-        widthCore: 1.5,
-        widthGlow: 4,
-        alphaCore: 0.75,
-        alphaGlow: 0.22,
-        segments: 5,
-        fadeMs: 220,
-        maxLength: 150,
-        colorCore: 0xffffff,
-        colorGlow: 0xffcc00,
-      },
+      tracer: { profile: 'heavy', coreIntensity: 0.75, coreWidth: 1.5, coreLength: 80, wakePersistence: 120, wakeSpread: 3, heatContrast: 0.85, wakeTurbulence: 0.3, moteAmount: 0.05, speedResponse: 0.5, color: 0xffcc00 },
       shotAudioKey: 'ak47',
       suppressSpawnFx: true,
     };
@@ -81,24 +71,17 @@ describe('Projektil-Statik-Codec', () => {
     const decoded = roundTripStatic({
       id: 8,
       ownerId: 'p1',
-      tracer: { widthCore: 2, widthGlow: 5, alphaCore: 0.9, alphaGlow: 0.35, segments: 8, fadeMs: 120 },
+      tracer: { profile: 'heavy' },
     });
-    expect(decoded.tracer?.maxLength).toBeUndefined();
-    expect(decoded.tracer?.colorCore).toBeUndefined();
-    expect(decoded.tracer?.colorGlow).toBeUndefined();
-    expect(decoded.tracer?.segments).toBe(8);
+    expect(decoded.tracer?.coreLength).toBeUndefined();
+    expect(decoded.tracer?.coreIntensity).toBeUndefined();
+    expect(decoded.tracer?.color).toBeUndefined();
+    expect(decoded.tracer?.profile).toBe('heavy');
   });
 
-  it('quantises tracer alphas without loss for authored two-decimal values', () => {
-    for (const [alphaCore, alphaGlow] of [[0.05, 0.22], [0.96, 0.5], [1, 0]] as const) {
-      const decoded = roundTripStatic({
-        id: 9,
-        ownerId: 'p1',
-        tracer: { widthCore: 1, widthGlow: 2, alphaCore, alphaGlow, segments: 4, fadeMs: 90 },
-      });
-      expect(decoded.tracer?.alphaCore).toBeCloseTo(alphaCore, 10);
-      expect(decoded.tracer?.alphaGlow).toBeCloseTo(alphaGlow, 10);
-    }
+  it('round-trips visual overrides without quantising artist values', () => {
+    const tracer = { profile: 'sniper' as const, coreIntensity: 0.7543, wakeTurbulence: 0.2317 };
+    expect(roundTripStatic({ id: 9, ownerId: 'p1', tracer }).tracer).toEqual(tracer);
   });
 
   it('transmits the muzzle origin unrounded so the flash does not shift', () => {
@@ -124,7 +107,7 @@ describe('Projektil-Statik-Codec', () => {
       {
         id: 2,
         ownerId: 'p2',
-        tracer: { widthCore: 1, widthGlow: 3, alphaCore: 0.4, alphaGlow: 0.1, segments: 6, fadeMs: 200, colorGlow: 0x00ff00 },
+        tracer: { profile: 'scatter', color: 0x00ff00 },
       },
       { id: 3, ownerId: 'p3', color: 0x123456, suppressSpawnFx: true },
     ];

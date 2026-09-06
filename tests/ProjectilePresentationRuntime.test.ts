@@ -34,13 +34,50 @@ function passiveRenderer(): Record<string, unknown> {
     destroyVisual: vi.fn(),
     destroyAll: vi.fn(),
     createTracer: vi.fn(),
-    updateTracer: vi.fn(),
-    notifyBounce: vi.fn(),
+    addSegment: vi.fn(),
     destroyTracer: vi.fn(),
   };
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('buffers heads and trails together and preserves the cursor when terminal history arrives late', () => {
+    let now = 1000;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      const renderer = { ...passiveRenderer(), sync: vi.fn(), retain: vi.fn(), playProjectileFlash: vi.fn() };
+      const runtime = new ProjectilePresentationRuntime({} as never);
+      const replica = new ProjectileClientReplica();
+      runtime.bindRenderers(Object.fromEntries(['bullet', 'projectileBurn', 'flame', 'leafBlower', 'bfg',
+        'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
+        'translocatorPuck', 'teslaBolt', 'tracer', 'muzzleFlash'].map(key => [key, renderer])) as never, null);
+      const path = { timeMs: 100, points: [
+        { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0, breakBefore: true },
+        { sequence: 2, timeMs: 100, x: 100, y: 0, vx: 1000, vy: 0 },
+      ] };
+      const shot = projectile({ tracer: { profile: 'heavy' }, flightPath: path, suppressSpawnFx: true });
+      runtime.presentClientFrame(replica.sync([shot], now));
+      expect(renderer.updatePosition).toHaveBeenLastCalledWith(7, 50, 0, 1000, 0);
+      expect(renderer.addSegment).toHaveBeenLastCalledWith(7, expect.objectContaining({
+        to: expect.objectContaining({ x: 50 }),
+      }), false);
+      now = 1100;
+      runtime.presentClientFrame(replica.sync([], now));
+      const calls = (renderer.addSegment as ReturnType<typeof vi.fn>).mock.calls.length;
+      const end = { ...shot, flightPath: { timeMs: 120, ended: true, points: [...path.points,
+        { sequence: 3, timeMs: 120, x: 120, y: 0, vx: 1000, vy: 0 }] } };
+      now = 1120;
+      runtime.presentClientFrame(replica.sync([end], now));
+      expect(renderer.addSegment).toHaveBeenCalledTimes(calls + 1);
+      expect(renderer.addSegment).toHaveBeenLastCalledWith(7, expect.objectContaining({
+        from: expect.objectContaining({ x: 100 }), to: expect.objectContaining({ x: 120 }),
+      }), false);
+      runtime.presentClientFrame(replica.sync([end], now));
+      expect(renderer.addSegment).toHaveBeenCalledTimes(calls + 1);
+      expect(renderer.updatePosition).toHaveBeenCalledTimes(1);
+      runtime.releaseWorldPresentation();
+    } finally { clock.mockRestore(); }
+  });
+
   it('does not replay predicted local projectile audio on snapshot presentation', () => {
     const muzzleFlash = { playProjectileFlash: vi.fn() };
     const projectileBurn = {
@@ -172,7 +209,5 @@ describe('ProjectilePresentationRuntime', () => {
 
     expect(renderers.playImpactSparks).toHaveBeenCalledTimes(1);
     expect(renderers.playImpactSparks).toHaveBeenCalledWith(7, 123.25, 198.5, -120, 0, 0xffcc00);
-    expect(renderers.notifyBounce).toHaveBeenCalledTimes(1);
-    expect(renderers.notifyBounce).toHaveBeenCalledWith(7, 123.25, 198.5);
   });
 });

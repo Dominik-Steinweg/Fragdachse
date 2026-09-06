@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { validateFlightSignature } from '../../projectile/FlightSignature';
 import type { GameMode } from '../../types';
 import type {
   UltimateConfigShape,
@@ -198,6 +199,9 @@ function validateNumericContracts(value: unknown, path: string, issues: string[]
 }
 
 function validateCommonConfig(record: Record<string, unknown>, issues: string[]): void {
+  if (record.tracerConfig !== undefined && !validateFlightSignature(record.tracerConfig)) {
+    issues.push('tracerConfig: Ungueltiges Flight-Signature-Profil oder Tuning');
+  }
   if (typeof record.id !== 'string' || record.id.length === 0) issues.push('id: nichtleere ID erforderlich');
   validateFiniteNumbers(record, '$', issues);
   validateNumericContracts(record, '$', issues, typeof record.id === 'string' ? record.id : '');

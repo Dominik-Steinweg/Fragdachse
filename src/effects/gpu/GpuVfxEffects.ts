@@ -66,6 +66,10 @@ export const GpuVfxEffectId = {
   MuzzleFlashBody: 52,
   MuzzleFlashSpark: 53,
   DeathFragmentGlow: 54,
+  FlightCore: 55,
+  FlightWake: 56,
+  FlightMote: 57,
+  FlightPressure: 58,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -546,4 +550,12 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     importance: 'standard',
     release: 'linger',
   },
+  { id: GpuVfxEffectId.FlightCore, label: 'flight.core', lane: GpuVfxLaneId.FlightSignature,
+    frame: GpuVfxFrameId.FlightCoreStrip, importance: 'critical', release: 'linger' },
+  { id: GpuVfxEffectId.FlightWake, label: 'flight.wake', lane: GpuVfxLaneId.FlightSignature,
+    frame: GpuVfxFrameId.ExplosionStreak, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.FlightMote, label: 'flight.mote', lane: GpuVfxLaneId.FlightSignature,
+    frame: GpuVfxFrameId.MuzzleSpark, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.FlightPressure, label: 'flight.pressure', lane: GpuVfxLaneId.FlightSignature,
+    frame: GpuVfxFrameId.ExplosionStreak, importance: 'decorative', release: 'linger' },
 ];

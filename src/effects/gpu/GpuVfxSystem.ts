@@ -100,6 +100,9 @@ export class GpuVfxSystem {
   /** Gemeinsame monotone Uhr fuer Slot-Lebenszeiten, gleich getaktet mit den GPU-Animationen. */
   private clockMs = 0;
   private suppressed = false;
+  private generation = 0;
+  /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */
+  get emissionGeneration(): number { return this.generation; }
 
   constructor(scene: Phaser.Scene) {
     // Der Atlas muss vollstaendig sein, bevor die erste Lane entsteht: `frameDataTexture` wird im
@@ -178,7 +181,9 @@ export class GpuVfxSystem {
    * Liefert `false`, wenn der Spawn verworfen wurde; getrennt gezaehlt nach Kapazitaet und
    * kritischer Reserve.
    */
-  spawn(spec: GpuVfxSpawnSpec, sourceIndex: number, nowMs: number): boolean {
+  spawn(spec: GpuVfxSpawnSpec, sourceIndex: number, nowMs: number, ageMs = 0): boolean {
+    ageMs = Math.max(0, ageMs);
+    if (!Number.isFinite(ageMs) || ageMs >= spec.lifeMs) return false;
     const lane = this.lanes[spec.lane];
     this.profiler.recordAttempt(spec.effect);
     if (!lane) return false;
@@ -195,7 +200,7 @@ export class GpuVfxSystem {
       return false;
     }
 
-    const slot = lane.pool.acquire(sourceIndex, nowMs, spec.lifeMs);
+    const slot = lane.pool.acquire(sourceIndex, nowMs, spec.lifeMs - ageMs);
     if (slot === GPU_VFX_NO_SLOT) {
       this.profiler.recordCapacityDrop(spec.effect);
       return false;
@@ -204,15 +209,13 @@ export class GpuVfxSystem {
     const frameAnimation = spec.frameAnimation === GPU_VFX_NO_FRAME_ANIMATION
       ? null
       : getGpuVfxFrameAnimation(spec.frameAnimation);
+    const member = writeGpuVfxMember(spec, getGpuVfxFrame(spec.frame), frameAnimation);
+    member.creationTime = lane.layer.timeElapsed - ageMs;
     lane.layer.editMember(
       slot,
       // Phaser 4.2.1 verarbeitet hier ein MemberAnimation-Objekt (SpriteGPULayer.js), waehrend
       // seine d.ts fuer `animation` noch nur string|number nennt.
-      writeGpuVfxMember(
-        spec,
-        getGpuVfxFrame(spec.frame),
-        frameAnimation,
-      ) as unknown as Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>,
+      member as unknown as Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>,
     );
     this.profiler.recordSpawn(spec.effect);
     // Auch Spawns ausserhalb des Emissions-Ticks muessen ihre Lane sofort sichtbar machen,
@@ -347,6 +350,7 @@ export class GpuVfxSystem {
   setSuppressed(suppressed: boolean): void {
     if (this.suppressed === suppressed) return;
     this.suppressed = suppressed;
+    if (suppressed) this.generation++;
     for (const lane of this.lanes) {
       if (suppressed) lane.pool.releaseAll();
       this.applyVisibility(lane);
@@ -354,6 +358,7 @@ export class GpuVfxSystem {
   }
 
   releaseAll(): void {
+    this.generation++;
     for (const lane of this.lanes) {
       lane.pool.releaseAll();
       this.applyVisibility(lane);

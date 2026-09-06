@@ -1,3 +1,4 @@
+import { ProjectileTrailSampler, type ProjectileTrailSegment } from '../projectile/ProjectileFlightPath';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { MiniRocketFlightPhase } from '../types';
@@ -62,9 +63,6 @@ interface RocketVisual {
   accentColor: number;
   smokeColor: number;
   visualScale: number;
-  lastSmokeX: number;
-  lastSmokeY: number;
-  lastSmokeAt: number;
 }
 
 // ── GPU-Smoke: Konstanten ───────────────────────────────────────────────────
@@ -92,6 +90,8 @@ export class RocketRenderer {
   private exhaustSpec: GpuVfxSpawnSpec | null = null;
   private smokeSpec: GpuVfxSpawnSpec | null = null;
   /** Gemeinsame Quelle aller Rauchschwaden; ueberlebt jede einzelne Rakete. */
+  private readonly trailSamplers = new Map<number, ProjectileTrailSampler>();
+  private readonly pendingSmoke: Array<{ x: number; y: number; size: number; color: number; age: number; queued: number; generation: number }> = [];
   private smokeSource = GPU_VFX_NO_SOURCE_HANDLE;
 
   constructor(private readonly scene: Phaser.Scene) {}
@@ -119,6 +119,10 @@ export class RocketRenderer {
     this.smokeSpec.alphaEase = GpuVfxEase.QuadOut;
 
     this.smokeSource = system.createSource(GpuVfxEffectId.RocketSmoke);
+    system.registerEmission((_delta, now) => {
+      for (const p of this.pendingSmoke) if (p.generation === system.emissionGeneration) this.spawnSmokePuff(p.x, p.y, p.size, p.color, p.age + now - p.queued);
+      this.pendingSmoke.length = 0;
+    });
     system.registerEmission((deltaMs, nowMs) => this.emitExhaust(deltaMs, nowMs));
   }
 
@@ -296,9 +300,6 @@ export class RocketRenderer {
       accentColor,
       smokeColor,
       visualScale,
-      lastSmokeX: x,
-      lastSmokeY: y,
-      lastSmokeAt: this.scene.time.now,
     };
     this.rockets.set(id, visual);
     this.activeRockets.push(visual);
@@ -312,7 +313,7 @@ export class RocketRenderer {
    * `emitParticleAt()` legt: pro Aufruf waechst der Uebertrag um `particleFactors.standard`,
    * emittiert wird sein ganzzahliger Anteil. Ein Faktor von 0 unterbindet die Emission ganz.
    */
-  private spawnSmokePuff(x: number, y: number, visualSize: number, smokeColor: number): void {
+  private spawnSmokePuff(x: number, y: number, visualSize: number, smokeColor: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.smokeSpec;
     if (!system || !spec || system.isSuppressed()) return;
@@ -323,9 +324,7 @@ export class RocketRenderer {
       return;
     }
 
-    // Der Puff entsteht ausserhalb des Emissions-Ticks, die Uhr steht also noch auf dem Stand
-    // des Vorframes. Der Retire-Sweep greift dadurch hoechstens einen Frame zu frueh – dort ist
-    // die Alpha der Quad-Kurve bereits praktisch null.
+    // Queued path material is emitted after the retire sweep with its original age.
     const nowMs = system.now();
     const startScale = Math.max(visualSize / 28, 0.28);
 
@@ -340,7 +339,7 @@ export class RocketRenderer {
       // `lifespan` ist konstant 1000 ms, die Geschwindigkeit ist damit direkt die Amplitude.
       spec.vx = Phaser.Math.FloatBetween(-SMOKE_SPEED_X, SMOKE_SPEED_X);
       spec.vy = Phaser.Math.FloatBetween(SMOKE_SPEED_Y_MIN, SMOKE_SPEED_Y_MAX);
-      if (!system.spawn(spec, this.smokeSource, nowMs)) return;
+      if (!system.spawn(spec, this.smokeSource, nowMs, ageMs)) return;
     }
   }
 
@@ -403,22 +402,23 @@ export class RocketRenderer {
     visual.engine.setTint(phaseColor);
     visual.engine.setAlpha(0.72 + Math.min(speed / 1200, 0.22) + (miniRocketPhase === 'coast' ? pulse * 0.06 : 0));
 
-    const distSinceSmoke = Phaser.Math.Distance.Between(visual.lastSmokeX, visual.lastSmokeY, tailX, tailY);
-    const now = this.scene.time.now;
-    if (distSinceSmoke >= Math.max(visualSize * 0.55, 5) || now - visual.lastSmokeAt >= 22) {
-      const resolvedSmokeColor = miniRocketPhase === 'return'
-        ? visual.accentColor
-        : visual.smokeColor;
-      this.spawnSmokePuff(tailX, tailY, visualSize, resolvedSmokeColor);
-      visual.lastSmokeX = tailX;
-      visual.lastSmokeY = tailY;
-      visual.lastSmokeAt = now;
-    }
-
     // Nur die Spawn-Position nachfuehren. Bereits gespawnte Partikel laufen vollstaendig auf
     // der GPU weiter und bekommen kein Update pro Frame.
     visual.exhaustX = tailX;
     visual.exhaustY = tailY;
+  }
+
+  emitTrailSegment(id: number, segment: ProjectileTrailSegment, size: number, scale: number, color: number): void {
+    const system = this.gpuVfx;
+    if (!system || system.isSuppressed()) return;
+    let sampler = this.trailSamplers.get(id);
+    if (!sampler) { sampler = new ProjectileTrailSampler(); this.trailSamplers.set(id, sampler); }
+    const visualSize = size * scale;
+    sampler.sample(segment, Math.max(5, visualSize * 0.55), 12, (x, y, nx, ny, age) => {
+      if (this.pendingSmoke.length >= 512) return;
+      this.pendingSmoke.push({ x: x - nx * visualSize * 0.9, y: y - ny * visualSize * 0.9,
+        size: visualSize, color, age, queued: system.now(), generation: system.emissionGeneration });
+    });
   }
 
   playCollection(x: number, y: number, color: number): void {
@@ -487,6 +487,7 @@ export class RocketRenderer {
   }
 
   destroyVisual(id: number): void {
+    this.trailSamplers.delete(id);
     const visual = this.rockets.get(id);
     if (!visual) return;
     visual.body.destroy();
@@ -509,6 +510,7 @@ export class RocketRenderer {
   }
 
   destroyAll(): void {
+    this.pendingSmoke.length = 0; this.trailSamplers.clear();
     for (const id of this.getActiveIds()) {
       this.destroyVisual(id);
     }

@@ -1,53 +1,20 @@
+import { FLIGHT_SIGNATURE_FIELDS, validateFlightSignature } from '../projectile/FlightSignature';
+import { PROJECTILE_PATH_MAX_POINTS, PROJECTILE_PATH_HISTORY_MS, type ProjectilePathPoint } from '../projectile/ProjectileFlightPath';
 /**
- * Kompakte (De-)Serialisierung des Projektil-Stroms für {@link SyncedProjectileSnapshot}.
+ * Independently decodable projectile streams:
+ * - s: complete static replacements, resent on spawn/change and periodically refreshed.
+ *   Flight signatures carry a profile name, override mask and only authored override values.
+ * - u: every active head with full position/velocity and optional burn, phase, bounce and path.
+ * - e: completed paths, including their final endpoint, without active-head semantics.
  *
- * Motivation: Der `j`-Slice des GameState war der größte Posten der unreliable Payload. Der Host
- * schickte pro Tick für JEDES aktive Projektil ein volles JSON-Objekt mit bis zu 28 Feldern
- * (~340 Zeichen für ein Bullet mit Tracer), obwohl sich zwischen zwei Ticks praktisch nur
- * x/y/vx/vy ändern. Alles andere sind unveränderliche Visual-, Audio-, Preset- und Tracer-Daten.
+ * A path is timeMs, endedFlag, pointCount, followed by fixed-width point records:
+ * sequence, timeMs, x, y, vx, vy, breakBeforeFlag, bounceSequence (zero if absent).
+ * Histories are repeated for packet-loss healing; presentation cursors deduplicate sequences
+ * and clip partially consumed segments by time. No decoded value depends on a prior packet.
  *
- * Deshalb zerfällt ein Projektil hier in zwei flache Zahlenströme:
- *
- *   s = STATIK  – Felder, die sich über die Lebensdauer nie ändern (Besitzer, Stil, Farbe,
- *                 Presets, Tracer, Mündungsursprung, Audio-Key …). Wird beim Spawn gesendet,
- *                 PROJECTILE_NET_STATIC_RESEND_TICKS mal wiederholt (Paketverlust) und danach
- *                 nur noch über den rollierenden Refresh für langlebige Projektile aufgefrischt.
- *   u = DYNAMIK – x/y/vx/vy/size für JEDES aktive Projektil in JEDEM Tick, vollständig.
- *
- * ZWEI VERSCHIEDENE SEMANTIKEN – hier liegt die einzige echte Fallgrube:
- *   - Statik ist VOLLERSATZ: "Bit nicht gesetzt" heißt `undefined`, nicht "unverändert". Das ist
- *     zwingend, weil `style === undefined` clientseitig NICHT dasselbe ist wie `style === 'bullet'`
- *     (der Renderer-Dispatch in der Projectile-Presentation fällt sonst in den generischen
- *     Rechteck-Zweig).
- *   - Dynamik ist VOLLSTÄNDIG, nicht inkrementell. Die beiden Maskenbits vergleichen gegen eine
- *     Konstante (0 bzw. `undefined`), nie gegen einen zuletzt gesendeten Wert. Jeder Eintrag ist
- *     damit aus sich heraus interpretierbar und idempotent.
- *
- * Bewusst KEINE Dead-Zone auf x/y/vx/vy: `clientSyncVisuals` setzt bei jedem Eintrag
- * `receivedAt = now`, und `clientExtrapolate` rechnet ab `serverX + vx·dt`. Ein ausgelassenes x/y
- * würde die alte Position mit neuem Zeitstempel rehydrieren und das Projektil einfrieren; ein
- * ausgelassenes vx/vy würde die Extrapolation zwischen zwei Ticks verfälschen. Ausserdem gäbe es
- * ohne vollständige Dynamik keinen zustandslosen Weg, einen verlorenen einmaligen Wechsel
- * (`burning`, `miniRocketPhase`) je zu heilen – der Host hielte ihn für zugestellt. Das
- * Bounce-Presentation-Ergebnis ist deshalb als sequenziertes, sticky Feld Teil jedes aktiven
- * Dynamik-Eintrags.
- *
- * Da `u` jeden Tick alle aktiven Projektile führt, wird Despawn – wie vor der Kompaktierung – rein
- * über Abwesenheit synchronisiert. Es gibt keine Removal-Liste und keine Phantom-Projektile. Das
- * letzte Bounce-Presentation-Ergebnis bleibt als Teil eines aktiven `u`-Eintrags sticky.
- *
- * Stromformat `s` (Einträge hintereinander, variable Länge):
- *   id, mask, ownerId,
- *     [styleIdx]?, [color]?, [ownerColor]?, [mx, my]?, [visualScale]?, [smokeTrailColor]?,
- *     [velocityDecay]?, [bulletPresetIdx]?, [grenadePresetIdx]?, [energyVariantIdx]?,
- *     [sporeVariantIdx]?, [shotAudioKey]?, [flags]?,
- *     [tmask, widthCore, widthGlow, alphaCoreQ, alphaGlowQ, segments, fadeMs,
- *      [maxLength]?, [colorCore]?, [colorGlow]?]?, [sourceTurretId]?
- *
- * Stromformat `u`:
- *   id, mask, x, y, vx, vy, size, [burnPacked]?, [miniRocketPhaseCode, miniRocketCascadeStage]?,
- *   [bounceSequence, bounceX, bounceY, bounceVx, bounceVy, bounceTracerFlag]?,
- *   [bounceCount, bounce×(sequence, x, y, vx, vy, tracerFlag)]?
+ * Missing static bits mean undefined. Absence from u removes an active projectile; e can
+ * extend its residual material but cannot reintroduce that head. The enclosing protocol
+ * version protects both the profile layout and path payload from incompatible peers.
  */
 import type {
   BulletVisualPreset,
@@ -85,14 +52,7 @@ const FLAG_ALLOW_TEAM_DAMAGE = 1;
 const FLAG_SUPPRESS_SPAWN_FX = 2;
 
 // ── Tracer-Untermaske ───────────────────────────────────────────────────────
-const T_MAX_LENGTH = 1;
-const T_COLOR_CORE = 2;
-const T_COLOR_GLOW = 4;
-
-/** Tracer-Alphas werden als Integer übertragen; alle Autorenwerte haben höchstens 2 Nachkommastellen. */
-const TRACER_ALPHA_QUANT = 100;
-
-// ── Dynamik-Maske ───────────────────────────────────────────────────────────
+const D_FLIGHT_PATH = 16;
 const D_BURN = 1;              // burnPacked (Brand + Brandstil in einem Wert)
 const D_MINI_ROCKET = 2;       // Flugphase + Kaskadenstufe
 const D_BOUNCE = 4;            // sticky sequenziertes Bounce-/Impact-Presentation-Ergebnis
@@ -209,22 +169,10 @@ export function encodeProjectileStatic(
   if (mask & S_FLAGS) out.push(flags);
   if (mask & S_TRACER) {
     const tracer = entry.tracer as TracerConfig;
-    let tmask = 0;
-    if (tracer.maxLength !== undefined) tmask |= T_MAX_LENGTH;
-    if (tracer.colorCore !== undefined) tmask |= T_COLOR_CORE;
-    if (tracer.colorGlow !== undefined) tmask |= T_COLOR_GLOW;
-    out.push(
-      tmask,
-      tracer.widthCore,
-      tracer.widthGlow,
-      Math.round(tracer.alphaCore * TRACER_ALPHA_QUANT),
-      Math.round(tracer.alphaGlow * TRACER_ALPHA_QUANT),
-      tracer.segments,
-      tracer.fadeMs,
-    );
-    if (tmask & T_MAX_LENGTH) out.push(tracer.maxLength as number);
-    if (tmask & T_COLOR_CORE) out.push(tracer.colorCore as number);
-    if (tmask & T_COLOR_GLOW) out.push(tracer.colorGlow as number);
+    let fields = 0;
+    FLIGHT_SIGNATURE_FIELDS.forEach((field, index) => { if (tracer[field] !== undefined) fields |= 1 << index; });
+    out.push(tracer.profile, fields);
+    FLIGHT_SIGNATURE_FIELDS.forEach((field, index) => { if (fields & (1 << index)) out.push(tracer[field] as number); });
   }
   if (mask & S_SOURCE_TURRET) out.push(entry.sourceTurretId as string);
 }
@@ -270,23 +218,11 @@ export function decodeProjectileStatics(
       if (flags & FLAG_SUPPRESS_SPAWN_FX) entry.suppressSpawnFx = true;
     }
     if (mask & S_TRACER) {
-      const tmask = stream[i++] as number;
-      const tracer: {
-        widthCore: number; widthGlow: number; alphaCore: number; alphaGlow: number;
-        segments: number; fadeMs: number;
-        maxLength?: number; colorCore?: number; colorGlow?: number;
-      } = {
-        widthCore: stream[i++] as number,
-        widthGlow: stream[i++] as number,
-        alphaCore: (stream[i++] as number) / TRACER_ALPHA_QUANT,
-        alphaGlow: (stream[i++] as number) / TRACER_ALPHA_QUANT,
-        segments: stream[i++] as number,
-        fadeMs: stream[i++] as number,
-      };
-      if (tmask & T_MAX_LENGTH) tracer.maxLength = stream[i++] as number;
-      if (tmask & T_COLOR_CORE) tracer.colorCore = stream[i++] as number;
-      if (tmask & T_COLOR_GLOW) tracer.colorGlow = stream[i++] as number;
-      entry.tracer = tracer;
+      const tracer: Record<string, unknown> = { profile: stream[i++] };
+      const fields = stream[i++] as number;
+      FLIGHT_SIGNATURE_FIELDS.forEach((field, index) => { if (fields & (1 << index)) tracer[field] = stream[i++]; });
+      if (!validateFlightSignature(tracer)) throw new Error('Invalid flight signature');
+      entry.tracer = tracer as unknown as TracerConfig;
     }
     if (mask & S_SOURCE_TURRET) entry.sourceTurretId = stream[i++] as string;
     result.push(entry);
@@ -321,6 +257,7 @@ export function encodeProjectileDynamic(
   const burnPacked = encodeBurn(entry);
   let mask = 0;
   if (burnPacked !== 0) mask |= D_BURN;
+  if (entry.flightPath) mask |= D_FLIGHT_PATH;
   if (entry.miniRocketPhase !== undefined || entry.miniRocketCascadeStage !== undefined) {
     mask |= D_MINI_ROCKET;
   }
@@ -348,6 +285,10 @@ export function encodeProjectileDynamic(
     for (const bounce of bounceOutcomes ?? []) {
       out.push(bounce.sequence, bounce.x, bounce.y, bounce.vx, bounce.vy, bounce.tracerBounce ? 1 : 0);
     }
+  }
+  if (entry.flightPath) {
+    out.push(entry.flightPath.timeMs, entry.flightPath.ended ? 1 : 0, entry.flightPath.points.length);
+    for (const p of entry.flightPath.points) out.push(p.sequence, p.timeMs, p.x, p.y, p.vx, p.vy, p.breakBefore ? 1 : 0, p.bounceSequence ?? 0);
   }
 }
 
@@ -405,6 +346,26 @@ export function decodeProjectileDynamics(
       }
       entry.bounceOutcomes = outcomes;
     }
+    if (mask & D_FLIGHT_PATH) {
+      const timeMs = stream[i++] as number, endedFlag = stream[i++], count = stream[i++] as number;
+      const ended = endedFlag === 1;
+      if (!Number.isFinite(timeMs) || (endedFlag !== 0 && endedFlag !== 1)
+        || !Number.isInteger(count) || count < 1 || count > PROJECTILE_PATH_MAX_POINTS
+        || i + count * 8 > stream.length) throw new Error('Invalid projectile path');
+      const points: ProjectilePathPoint[] = [];
+      for (let n = 0; n < count; n++) {
+        const sequence = stream[i++] as number, time = stream[i++] as number;
+        const x = stream[i++] as number, y = stream[i++] as number, vx = stream[i++] as number, vy = stream[i++] as number;
+        const breakFlag = stream[i++], bounceSequence = stream[i++] as number;
+        const breakBefore = breakFlag === 1;
+        if (![time, x, y, vx, vy].every(Number.isFinite) || !Number.isSafeInteger(sequence) || sequence <= 0
+          || time > timeMs || time < timeMs - PROJECTILE_PATH_HISTORY_MS - 0.001
+          || (breakFlag !== 0 && breakFlag !== 1) || !Number.isSafeInteger(bounceSequence) || bounceSequence < 0
+          || (n > 0 && (sequence <= points[n - 1].sequence || time < points[n - 1].timeMs))) throw new Error('Invalid projectile path point');
+        points.push({ sequence, timeMs: time, x, y, vx, vy, ...(breakBefore ? { breakBefore: true } : {}), ...(bounceSequence ? { bounceSequence } : {}) });
+      }
+      entry.flightPath = { timeMs, points, ...(ended ? { ended: true } : {}) };
+    }
     result.push(entry);
   }
   return result;
@@ -421,6 +382,7 @@ export function countProjectileDynamics(stream: readonly (number | string)[]): n
     if (mask & D_MINI_ROCKET) i += 2;
     if (mask & D_BOUNCE) i += 6;
     if (mask & D_BOUNCE_OUTCOMES) i += 1 + Math.max(0, Math.floor(stream[i] as number)) * 6;
+    if (mask & D_FLIGHT_PATH) i += 3 + Math.max(0, Math.floor(stream[i + 2] as number)) * 8;
     count += 1;
   }
   return count;
@@ -460,7 +422,7 @@ export function applyProjectileSnapshot(
 
   const seen = new Set<number>();
   const result: SyncedProjectile[] = [];
-  for (const dynamic of decodeProjectileDynamics(snapshot.u)) {
+  for (const dynamic of decodeProjectileDynamics([...(snapshot.u), ...(snapshot.e ?? [])])) {
     seen.add(dynamic.id);
     const shared = staticCache.get(dynamic.id);
     if (!shared) continue;
@@ -494,6 +456,7 @@ export function applyProjectileSnapshot(
       burning: dynamic.burning,
       bounce: dynamic.bounce,
       bounceOutcomes: dynamic.bounceOutcomes,
+      flightPath: dynamic.flightPath,
     });
   }
 

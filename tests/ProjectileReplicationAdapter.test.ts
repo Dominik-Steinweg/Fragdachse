@@ -27,6 +27,23 @@ function createRecord(id: number, createdAt = 0): ProjectileReplicationRecord {
 }
 
 describe('ProjectileReplicationAdapter', () => {
+  it('repeats completed paths separately for four ticks without resurrecting active projectiles', () => {
+    const adapter = new ProjectileReplicationAdapter({ readProjectileReplication: () => {} });
+    const record = createRecord(1);
+    adapter.recordFlightEnd({ ...record, dynamic: { ...record.dynamic, flightPath: {
+      timeMs: 20, ended: true, points: [
+        { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
+        { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 1000, vy: 0 },
+      ],
+    } } });
+    for (let tick = 0; tick < 4; tick++) {
+      const snapshot = adapter.getSnapshot(tick)!;
+      expect(decodeProjectileDynamics(snapshot.u)).toHaveLength(0);
+      expect(decodeProjectileDynamics(snapshot.e!)[0].flightPath?.ended).toBe(true);
+      expect(decodeProjectileStatics(snapshot.s)).toHaveLength(1);
+    }
+    expect(adapter.getSnapshot(4)).toBeNull();
+  });
   it('resends changed allegiance under the same identity after packet loss', () => {
     const records = [createRecord(1)];
     const adapter = new ProjectileReplicationAdapter({

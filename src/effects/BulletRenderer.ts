@@ -1,28 +1,21 @@
 import * as Phaser from 'phaser';
 import { DEPTH, isPointInsideArena } from '../config';
 import type { BulletVisualPreset } from '../types';
-import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, makeAdditive, recordParticleSpawn, registerParticleEmitter, setEmitterAngleRange } from './EffectUtils';
+import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, makeAdditive, recordParticleSpawn, registerParticleEmitter } from './EffectUtils';
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_TRAIL = '__bullet_trail';
 const TEX_GLOW  = '__bullet_glow';
 const TEX_SPARK = '__bullet_spark';
 const TEX_AURA  = '__bullet_charge_aura';
-const TEX_WIND  = '__bullet_charge_wind';
-const TEX_GUST  = '__bullet_charge_gust';
 
 // ── Textur-Dimensionen ─────────────────────────────────────────────────────
 const TRAIL_TEX_W   = 48;
 const TRAIL_TEX_H   = 8;
 const GLOW_TEX_SIZE = 24;
 const AURA_TEX_SIZE = 72;
-const WIND_TEX_W    = 40;
-const WIND_TEX_H    = 6;
-const GUST_TEX_W    = 72;
-const GUST_TEX_H    = 26;
 
 // Depth-Layer
-const DEPTH_WIND   = DEPTH.PROJECTILES - 1.5;
 const DEPTH_TRAIL  = DEPTH.PROJECTILES - 1;
 const DEPTH_GLOW   = DEPTH.PROJECTILES - 1;
 const DEPTH_AURA   = DEPTH.PROJECTILES - 0.5;
@@ -30,10 +23,6 @@ const DEPTH_BULLET = DEPTH.PROJECTILES;
 const DEPTH_ACCENT = DEPTH.PROJECTILES + 1;
 const DEPTH_SPARK  = DEPTH.PROJECTILES + 1;
 
-/** Obergrenze pro Frame, damit ein einzelner Physik-Sprung keine Partikelflut ausloest. */
-const MAX_EMISSIONS_PER_FRAME = 16;
-/** Nachlaufzeit der Sturm-Emitter nach dem Einschlag (deckt die laengste Partikel-Lifespan ab). */
-const WIND_LINGER_MS = 420;
 
 /**
  * Zusatz-VFX voll aufgeladener AWP-Schuesse: pulsierende Hitze-Aura und – mit
@@ -46,30 +35,6 @@ export interface BulletChargeFxConfig {
   auraColor:      number;
   /** Pulsfrequenz der Aura in rad/ms. */
   auraPulseSpeed: number;
-  wind?: BulletChargeWindConfig;
-}
-
-export interface BulletChargeWindConfig {
-  /** Streckenabstand zweier Wind-Emissionen entlang der Flugbahn (px). */
-  streakSpacingPx: number;
-  streakQuantity:  number;
-  streakSpeedMin:  number;
-  streakSpeedMax:  number;
-  /** Wie weit die Boe entgegen der Flugrichtung nachgezogen wird (Grad). */
-  sweepMinDeg:     number;
-  sweepMaxDeg:     number;
-  streakLifespanMin: number;
-  streakLifespanMax: number;
-  streakScaleStart: number;
-  streakScaleEnd:   number;
-  streakAlpha:      number;
-  streakColors:     readonly number[];
-  /** Streckenabstand der seitlichen Druckwellen-Klingen (px). */
-  gustSpacingPx:  number;
-  gustReachPx:    number;
-  gustDurationMs: number;
-  gustAlpha:      number;
-  gustColor:      number;
 }
 
 // ── Stil-Konfiguration ────────────────────────────────────────────────────
@@ -381,25 +346,6 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
       auraAlpha:      0.62,
       auraColor:      0xff6a1e,
       auraPulseSpeed: 0.038,
-      wind: {
-        streakSpacingPx:   18,
-        streakQuantity:    2,
-        streakSpeedMin:    340,
-        streakSpeedMax:    820,
-        sweepMinDeg:       78,
-        sweepMaxDeg:       136,
-        streakLifespanMin: 170,
-        streakLifespanMax: 360,
-        streakScaleStart:  1.15,
-        streakScaleEnd:    0.05,
-        streakAlpha:       0.62,
-        streakColors:      [0xffffff, 0xffe8c4, 0xffb063, 0xd9d4cc],
-        gustSpacingPx:  110,
-        gustReachPx:    150,
-        gustDurationMs: 260,
-        gustAlpha:      0.55,
-        gustColor:      0xfff0d2,
-      },
     },
   },
   gauss: {
@@ -458,11 +404,6 @@ const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
 /** Laufender Zustand der Aufladungs-VFX (nur bei Presets mit chargeFx belegt). */
 interface BulletChargeFxState {
   aura:      Phaser.GameObjects.Image;
-  windLeft:  Phaser.GameObjects.Particles.ParticleEmitter | null;
-  windRight: Phaser.GameObjects.Particles.ParticleEmitter | null;
-  /** Reststrecke seit der letzten Emission – haelt den Abstand geschwindigkeitsunabhaengig. */
-  streakCarryPx: number;
-  gustCarryPx:   number;
   scaleFactor:   number;
 }
 
@@ -471,8 +412,6 @@ interface BulletVisual {
   accent:  Phaser.GameObjects.Image | null;
   trail:   Phaser.GameObjects.Image;
   glow:    Phaser.GameObjects.Image;
-  prevX:   number;
-  prevY:   number;
   config:  BulletStyleConfig;
   accentColor: number;
   chargeFx: BulletChargeFxState | null;
@@ -494,7 +433,6 @@ export class BulletRenderer {
   // Pool für Impact-Emitter (auto-destroy nach Lifespan)
   private activeSparkEmitters: Phaser.GameObjects.Particles.ParticleEmitter[] = [];
   // Kurzlebige Druckwellen-Klingen der Sturmboe (per Tween selbst aufräumend)
-  private activeGusts: Phaser.GameObjects.Image[] = [];
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -781,58 +719,6 @@ export class BulletRenderer {
       canvas.refresh();
     }
 
-    // ── Wind-Streifen: beidseitig auslaufender Strich für Sturmpartikel ──
-    if (!texMgr.exists(TEX_WIND)) {
-      const tw = WIND_TEX_W, th = WIND_TEX_H;
-      const canvas = texMgr.createCanvas(TEX_WIND, tw, th)!;
-      const ctx = canvas.context;
-      const imgData = ctx.createImageData(tw, th);
-      const d = imgData.data;
-      const cy = th / 2;
-
-      for (let y = 0; y < th; y++) {
-        const vDist = Math.abs(y - cy) / cy;
-        const vAlpha = 1.0 - vDist * vDist;
-        for (let x = 0; x < tw; x++) {
-          // Symmetrischer Sinus-Bogen: beide Enden laufen weich aus.
-          const hAlpha = Math.sin((x / (tw - 1)) * Math.PI) ** 1.4;
-          const idx = (y * tw + x) * 4;
-          d[idx] = 255;
-          d[idx + 1] = 255;
-          d[idx + 2] = 255;
-          d[idx + 3] = Math.round(vAlpha * hAlpha * 255);
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-      canvas.refresh();
-    }
-
-    // ── Druckwellen-Klinge: nach aussen gewölbter Bogen mit weichen Enden ─
-    if (!texMgr.exists(TEX_GUST)) {
-      const gw = GUST_TEX_W, gh = GUST_TEX_H;
-      const canvas = texMgr.createCanvas(TEX_GUST, gw, gh)!;
-      const ctx = canvas.context;
-      const fade = ctx.createLinearGradient(0, 0, gw, 0);
-      fade.addColorStop(0.0, 'rgba(255,255,255,0.0)');
-      fade.addColorStop(0.28, 'rgba(255,255,255,0.85)');
-      fade.addColorStop(0.5, 'rgba(255,255,255,1.0)');
-      fade.addColorStop(0.72, 'rgba(255,255,255,0.85)');
-      fade.addColorStop(1.0, 'rgba(255,255,255,0.0)');
-      ctx.strokeStyle = fade;
-      ctx.lineCap = 'round';
-      // Drei versetzte Bögen erzeugen eine dichte Mitte und ausgefranste Ränder.
-      for (const [offsetY, width, alpha] of [[0, 5, 1.0], [5, 2.6, 0.55], [-4, 2.0, 0.4]] as const) {
-        ctx.globalAlpha = alpha;
-        ctx.lineWidth = width;
-        ctx.beginPath();
-        ctx.moveTo(1, gh - 3 + offsetY * 0.2);
-        ctx.quadraticCurveTo(gw / 2, -8 + offsetY, gw - 1, gh - 3 + offsetY * 0.2);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      canvas.refresh();
-    }
-
     // ── Spark-Textur: kleiner elongierter Funke (6×3 px) ─────────────────
     if (!texMgr.exists(TEX_SPARK)) {
       const sw = 6, sh = 3;
@@ -885,7 +771,7 @@ export class BulletRenderer {
 
     const trail = this.scene.add.image(x, y, TEX_TRAIL);
     trail.setOrigin(1.0, 0.5);
-    trail.setScale((size * config.trailLengthMult) / TRAIL_TEX_W, scaleFactor * config.trailScaleYMult);
+    trail.setScale((size * Math.min(1.8, config.trailLengthMult)) / TRAIL_TEX_W, scaleFactor * config.trailScaleYMult);
     trail.setTint(config.trailTint ?? accentColor);
     trail.setAlpha(config.trailAlpha);
     makeAdditive(trail);
@@ -903,8 +789,6 @@ export class BulletRenderer {
       accent,
       trail,
       glow,
-      prevX: x,
-      prevY: y,
       config,
       accentColor,
       chargeFx: this.createChargeFx(config, x, y, scaleFactor),
@@ -929,47 +813,13 @@ export class BulletRenderer {
       fx.auraColor,
     );
 
-    const wind = fx.wind;
-    const makeWindEmitter = (): Phaser.GameObjects.Particles.ParticleEmitter | null => {
-      if (!wind) return null;
-      // Der Emitter bleibt untransformiert im Ursprung, damit emitParticleAt()
-      // direkt in Weltkoordinaten arbeiten kann.
-      const emitter = this.scene.add.particles(0, 0, TEX_WIND, {
-        lifespan: { min: wind.streakLifespanMin, max: wind.streakLifespanMax },
-        speed:    { min: wind.streakSpeedMin, max: wind.streakSpeedMax },
-        // Startwert; die echte Stossrichtung folgt pro Frame aus der Flugrichtung.
-        angle:    { min: wind.sweepMinDeg, max: wind.sweepMaxDeg },
-        // Streifen zeigen in ihre Flugrichtung – sonst stehen sie quer zum Wind.
-        // onUpdate statt onEmit: beim Emit ist die Velocity noch nicht gesetzt.
-        rotate:   { onUpdate: (particle: Phaser.GameObjects.Particles.Particle) =>
-          Phaser.Math.RadToDeg(Math.atan2(particle.velocityY, particle.velocityX)) },
-        scale:    { start: wind.streakScaleStart, end: wind.streakScaleEnd },
-        alpha:    { start: wind.streakAlpha, end: 0 },
-        color:    [...wind.streakColors],
-        blendMode: Phaser.BlendModes.ADD,
-        emitting: false,
-      });
-      registerParticleEmitter(this.scene, 'bullet', emitter);
-      emitter.setDepth(DEPTH_WIND);
-      return emitter;
-    };
-
-    return {
-      aura,
-      windLeft: makeWindEmitter(),
-      windRight: makeWindEmitter(),
-      streakCarryPx: 0,
-      gustCarryPx: 0,
-      scaleFactor,
-    };
+    return { aura, scaleFactor };
   }
 
   /**
-   * Treibt Aura und Sturmboe entlang des in diesem Frame zurueckgelegten Segments an.
-   * Emissionen werden streckenbasiert verteilt, damit die Boe bei jeder
-   * Projektilgeschwindigkeit gleichmaessig dicht bleibt.
+   * Head-bound charge aura. Historical pressure material belongs to TracerRenderer.
    */
-  private updateChargeFx(bv: BulletVisual, x: number, y: number, vx: number, vy: number): void {
+  private updateChargeFx(bv: BulletVisual, x: number, y: number): void {
     const state = bv.chargeFx;
     const fx = bv.config.chargeFx;
     if (!state || !fx) return;
@@ -980,153 +830,34 @@ export class BulletRenderer {
       .setScale(state.scaleFactor * fx.auraScale * pulse)
       .setAlpha(fx.auraAlpha * pulse);
 
-    const wind = fx.wind;
-    if (!wind || !state.windLeft || !state.windRight) return;
-
-    const dx = x - bv.prevX;
-    const dy = y - bv.prevY;
-    const travel = Math.hypot(dx, dy);
-    if (travel <= 0.01) return;
-
-    const headingDeg = Phaser.Math.RadToDeg(Math.atan2(vy, vx));
-    // Nach hinten gezogene Boe: die Luft wird seitlich verdraengt und bleibt zurueck.
-    setEmitterAngleRange(state.windRight, headingDeg + wind.sweepMinDeg, headingDeg + wind.sweepMaxDeg);
-    setEmitterAngleRange(state.windLeft, headingDeg - wind.sweepMaxDeg, headingDeg - wind.sweepMinDeg);
-
-    this.walkSegment(state.streakCarryPx, travel, wind.streakSpacingPx, (t) => {
-      const px = bv.prevX + dx * t;
-      const py = bv.prevY + dy * t;
-      state.windRight!.emitParticleAt(px, py, wind.streakQuantity);
-      state.windLeft!.emitParticleAt(px, py, wind.streakQuantity);
-    }, (carry) => { state.streakCarryPx = carry; });
-
-    const normalX = -dy / travel;
-    const normalY = dx / travel;
-    this.walkSegment(state.gustCarryPx, travel, wind.gustSpacingPx, (t) => {
-      const px = bv.prevX + dx * t;
-      const py = bv.prevY + dy * t;
-      this.spawnGustBlade(px, py, normalX, normalY, 1, wind);
-      this.spawnGustBlade(px, py, normalX, normalY, -1, wind);
-    }, (carry) => { state.gustCarryPx = carry; });
   }
 
-  /**
-   * Ruft `emit` an gleichmaessig verteilten Punkten des Segments auf und meldet die
-   * uebrig gebliebene Reststrecke via `storeCarry` zurueck.
-   */
-  private walkSegment(
-    carryPx: number,
-    travelPx: number,
-    spacingPx: number,
-    emit: (t: number) => void,
-    storeCarry: (carry: number) => void,
-  ): void {
-    const spacing = Math.max(1, spacingPx);
-    let distance = spacing - carryPx;
-    let emissions = 0;
-    while (distance <= travelPx && emissions < MAX_EMISSIONS_PER_FRAME) {
-      emit(distance / travelPx);
-      distance += spacing;
-      emissions += 1;
-    }
-    storeCarry(Phaser.Math.Clamp(travelPx - (distance - spacing), 0, spacing));
-  }
-
-  /** Einzelne Druckwelle, die seitlich aus der Flugbahn nach aussen gedrueckt wird. */
-  private spawnGustBlade(
-    x: number,
-    y: number,
-    normalX: number,
-    normalY: number,
-    side: 1 | -1,
-    wind: BulletChargeWindConfig,
-  ): void {
-    if (!isPointInsideArena(x, y)) return;
-
-    const blade = configureAdditiveImage(
-      this.scene.add.image(x, y, TEX_GUST),
-      DEPTH_WIND,
-      wind.gustAlpha,
-      wind.gustColor,
-    );
-    // Die Klinge woelbt sich in Stossrichtung: Laengsachse entlang der Flugbahn.
-    blade.setOrigin(0.5, 1);
-    blade.setRotation(Math.atan2(normalY * side, normalX * side) - Math.PI / 2);
-    blade.setScale(0.55, 0.75);
-
-    this.activeGusts.push(blade);
-    this.scene.tweens.add({
-      targets: blade,
-      x: x + normalX * side * wind.gustReachPx,
-      y: y + normalY * side * wind.gustReachPx,
-      scaleX: 1.75,
-      scaleY: 0.22,
-      alpha: 0,
-      duration: wind.gustDurationMs,
-      ease: 'Cubic.easeOut',
-      onComplete: () => {
-        const index = this.activeGusts.indexOf(blade);
-        if (index !== -1) this.activeGusts.splice(index, 1);
-        if (blade.scene) blade.destroy();
-      },
-    });
-  }
-
-  /**
-   * Aura sofort entfernen, die Sturm-Emitter aber noch ausklingen lassen –
-   * abrupt verschwindende Partikel wuerden den Einschlag unsauber wirken lassen.
-   */
-  private destroyChargeFx(state: BulletChargeFxState | null, lingerMs = WIND_LINGER_MS): void {
-    if (!state) return;
-    state.aura.destroy();
-    for (const emitter of [state.windLeft, state.windRight]) {
-      if (!emitter) continue;
-      if (lingerMs <= 0) {
-        destroyEmitter(emitter);
-        continue;
-      }
-      emitter.stop();
-      this.activeSparkEmitters.push(emitter);
-      this.scene.time.delayedCall(lingerMs, () => {
-        const index = this.activeSparkEmitters.indexOf(emitter);
-        if (index !== -1) this.activeSparkEmitters.splice(index, 1);
-        if (emitter.scene) emitter.destroy();
-      });
-    }
+  private destroyChargeFx(state: BulletChargeFxState | null): void {
+    state?.aura.destroy();
   }
 
   /**
    * Host-seitig: Position und Rotation anhand der Physik-Velocity setzen.
-   * Gibt true zurück wenn ein Bounce erkannt wurde.
    */
-  syncToBody(id: number, x: number, y: number, vx: number, vy: number): boolean {
+  syncToBody(id: number, x: number, y: number, vx: number, vy: number): void {
     const bv = this.bullets.get(id);
-    if (!bv) return false;
+    if (!bv) return;
 
     const rot = Math.atan2(vy, vx);
     bv.bullet.setPosition(x, y).setRotation(rot);
     bv.accent?.setPosition(x, y).setRotation(rot);
     bv.trail.setPosition(x, y).setRotation(rot);
     bv.glow.setPosition(x, y);
-    this.updateChargeFx(bv, x, y, vx, vy);
+    this.updateChargeFx(bv, x, y);
 
-    // Bounce-Erkennung: Richtungswechsel in X oder Y
-    const dx = x - bv.prevX;
-    const dy = y - bv.prevY;
-    const bounced = (dx !== 0 || dy !== 0) && (dx * vx < -0.5 || dy * vy < -0.5);
-
-    bv.prevX = x;
-    bv.prevY = y;
-    return bounced;
   }
 
   /**
    * Client-seitig: Position setzen und Rotation aus Velocity berechnen.
-   * Gibt true zurück wenn ein Bounce erkannt wurde.
    */
-  updatePosition(id: number, x: number, y: number, vx: number, vy: number): boolean {
+  updatePosition(id: number, x: number, y: number, vx: number, vy: number): void {
     const bv = this.bullets.get(id);
-    if (!bv) return false;
+    if (!bv) return;
 
     const speed = Math.sqrt(vx * vx + vy * vy);
     if (speed > 1) {
@@ -1140,17 +871,8 @@ export class BulletRenderer {
     bv.accent?.setPosition(x, y);
     bv.trail.setPosition(x, y);
     bv.glow.setPosition(x, y);
-    this.updateChargeFx(bv, x, y, vx, vy);
+    this.updateChargeFx(bv, x, y);
 
-    // Bounce-Erkennung: Delta vs. Velocity
-    const dx = x - bv.prevX;
-    const dy = y - bv.prevY;
-    const delta = Math.sqrt(dx * dx + dy * dy);
-    const bounced = delta > 2 && speed > 1 && (dx * vx + dy * vy) < 0;
-
-    bv.prevX = x;
-    bv.prevY = y;
-    return bounced;
   }
 
   /**
@@ -1237,7 +959,7 @@ export class BulletRenderer {
       bv.accent?.destroy();
       bv.trail.destroy();
       bv.glow.destroy();
-      this.destroyChargeFx(bv.chargeFx, 0);
+      this.destroyChargeFx(bv.chargeFx);
     }
     this.bullets.clear();
 
@@ -1246,10 +968,5 @@ export class BulletRenderer {
     }
     this.activeSparkEmitters.length = 0;
 
-    for (const gust of this.activeGusts) {
-      this.scene.tweens.killTweensOf(gust);
-      if (gust.scene) gust.destroy();
-    }
-    this.activeGusts.length = 0;
   }
 }

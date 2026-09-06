@@ -56,6 +56,7 @@ export function evaluateFakeAnimation(anim: FakeGpuAnimation, t: number): number
 }
 
 export interface FakeGpuMemberSnapshot {
+  creationTime: number;
   x: FakeGpuAnimation;
   y: FakeGpuAnimation;
   scaleX: FakeGpuAnimation;
@@ -113,6 +114,7 @@ function snapshotMember(member: Record<string, unknown>): FakeGpuMemberSnapshot 
     : null;
   return {
     x: readAnimation(member.x),
+    creationTime: (member.creationTime as number) ?? 0,
     y: readAnimation(member.y),
     scaleX: readAnimation(member.scaleX),
     scaleY: readAnimation(member.scaleY),

@@ -1,3 +1,4 @@
+import { ProjectileTrailSampler, type ProjectileTrailSegment } from '../projectile/ProjectileFlightPath';
 import * as Phaser from 'phaser';
 import { DEPTH, VOID_FIRE_COLOR } from '../config';
 import type { GroundFireVisualStyle } from '../types';
@@ -22,17 +23,9 @@ interface BurningProjectileVisual {
   glow: Phaser.GameObjects.Image;
   x: number;
   y: number;
-  lastEmitX: number;
-  lastEmitY: number;
-  lastEmitAt: number;
   size: number;
   visualStyle: GroundFireVisualStyle;
 }
-
-const MAX_TRAIL_SAMPLES_PER_SYNC = 7;
-const TARGET_TRAIL_SAMPLES_PER_SYNC = 36;
-const MIN_TRAIL_EMIT_INTERVAL_MS = 14;
-const MAX_TRAIL_SAMPLES_PER_MS = 2.5;
 
 /**
  * Die Trail-Palette ist eigenstaendig und bewusst nicht `FLAME_COLORS_*`: sie ist waermer und
@@ -45,6 +38,8 @@ const TRAIL_COLORS_SPARK = [0xffffff, 0xffd94f, 0xff7a22, 0xed2d15] as const;
 
 /** Starkes, rendererunabhaengiges Brand-Overlay fuer schnelle und kleine Projektile. */
 export class ProjectileBurnRenderer {
+  private readonly trailSamplers = new Map<number, ProjectileTrailSampler>();
+  private readonly pendingTrail: Array<{ x: number; y: number; size: number; style: GroundFireVisualStyle; age: number; queued: number; generation: number }> = [];
   private readonly visuals = new Map<number, BurningProjectileVisual>();
   private lighting: LightingSystem | null = null;
   private gpuVfx: GpuVfxSystem | null = null;
@@ -95,6 +90,10 @@ export class ProjectileBurnRenderer {
     this.sparkSpec = spark;
 
     this.source = system.createSource(GpuVfxEffectId.ProjectileBurnOuter);
+    system.registerEmission((_delta, now) => {
+      for (const p of this.pendingTrail) if (p.generation === system.emissionGeneration) this.emitAt(p.x, p.y, p.size, 1, p.style, p.age + now - p.queued);
+      this.pendingTrail.length = 0;
+    });
   }
 
   sync(
@@ -103,7 +102,6 @@ export class ProjectileBurnRenderer {
     y: number,
     size: number,
     burning: boolean,
-    emitTrail = true,
     visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
     if (!burning) {
@@ -123,14 +121,11 @@ export class ProjectileBurnRenderer {
         glow,
         x,
         y,
-        lastEmitX: x,
-        lastEmitY: y,
-        lastEmitAt: this.scene.time.now,
         size,
         visualStyle,
       };
       this.visuals.set(id, visual);
-      this.emitAt(x, y, size, 3, visualStyle);
+
     }
 
     if (visual.visualStyle !== visualStyle) {
@@ -142,42 +137,6 @@ export class ProjectileBurnRenderer {
     }
 
     const now = this.scene.time.now;
-    if (!emitTrail) {
-      // Network snapshots correct the extrapolation anchor. Emission happens in
-      // clientExtrapolate(), otherwise clients emit twice on snapshot frames.
-      visual.lastEmitX = x;
-      visual.lastEmitY = y;
-    } else {
-      const visualCount = Math.max(1, this.visuals.size);
-      const minEmitInterval = Math.max(
-        MIN_TRAIL_EMIT_INTERVAL_MS,
-        visualCount / MAX_TRAIL_SAMPLES_PER_MS,
-      );
-      const dx = x - visual.lastEmitX;
-      const dy = y - visual.lastEmitY;
-      const distance = Math.hypot(dx, dy);
-      const spacing = Math.max(3, Math.min(8, size * 0.75));
-
-      if (distance > 0.01 && now - visual.lastEmitAt >= minEmitInterval) {
-        // Share the fixed particle pools between all burning projectiles. With a
-        // fully upgraded shotgun this deliberately becomes one sample per pellet
-        // and update instead of silently exhausting the emitters for later pellets.
-        const sampleBudget = Phaser.Math.Clamp(
-          Math.floor(TARGET_TRAIL_SAMPLES_PER_SYNC / visualCount),
-          1,
-          MAX_TRAIL_SAMPLES_PER_SYNC,
-        );
-        const samples = Math.min(Math.ceil(distance / spacing), sampleBudget);
-        for (let sample = 1; sample <= samples; sample++) {
-          const t = sample / samples;
-          this.emitAt(visual.lastEmitX + dx * t, visual.lastEmitY + dy * t, size, 1, visual.visualStyle);
-        }
-        visual.lastEmitX = x;
-        visual.lastEmitY = y;
-        visual.lastEmitAt = now;
-      }
-    }
-
     visual.x = x;
     visual.y = y;
     visual.size = size;
@@ -195,6 +154,17 @@ export class ProjectileBurnRenderer {
     });
   }
 
+  emitTrailSegment(id: number, segment: ProjectileTrailSegment, size: number, style: GroundFireVisualStyle = 'normal'): void {
+    const system = this.gpuVfx;
+    if (!system || system.isSuppressed()) return;
+    let sampler = this.trailSamplers.get(id);
+    if (!sampler) { sampler = new ProjectileTrailSampler(); this.trailSamplers.set(id, sampler); }
+    const budget = Math.max(1, Math.min(7, Math.floor(36 / Math.max(1, this.visuals.size))));
+    sampler.sample(segment, Math.max(3, Math.min(8, size * 0.75)), budget, (x, y, _nx, _ny, age) => {
+      if (this.pendingTrail.length < 256) this.pendingTrail.push({ x, y, size, style, age, queued: system.now(), generation: system.emissionGeneration });
+    });
+  }
+
   retain(activeBurningIds: ReadonlySet<number>): void {
     for (const id of this.visuals.keys()) {
       if (!activeBurningIds.has(id)) this.destroyVisual(id);
@@ -206,6 +176,7 @@ export class ProjectileBurnRenderer {
   }
 
   destroyVisual(id: number): void {
+    this.trailSamplers.delete(id);
     this.lighting?.releaseLight(`projburn:${id}`);
     const visual = this.visuals.get(id);
     if (!visual) return;
@@ -214,6 +185,7 @@ export class ProjectileBurnRenderer {
   }
 
   destroyAll(): void {
+    this.pendingTrail.length = 0; this.trailSamplers.clear();
     for (const id of [...this.visuals.keys()]) this.destroyVisual(id);
     // Die Quelle bleibt bestehen; nur ihre Member werden stillgelegt.
     this.gpuVfx?.clearSource(this.source);
@@ -226,25 +198,20 @@ export class ProjectileBurnRenderer {
     this.destroyAll();
   }
 
-  /**
-   * Ein Trail-Sample. Die Emission laeuft nicht ueber den GPUFX-Emissions-Tick, sondern direkt
-   * aus dem CPU-Sync-Pfad: Sampling-Budget und Distanzinterpolation in `sync()` bestimmen
-   * weiterhin, wann und wo ein Sample entsteht.
-   */
-  private emitAt(x: number, y: number, size: number, strength: number, visualStyle: GroundFireVisualStyle): void {
+  /** Age-correct GPU material emitted by the shared post-retirement tick. */
+  private emitAt(x: number, y: number, size: number, strength: number, visualStyle: GroundFireVisualStyle, ageMs = 0): void {
     const system = this.gpuVfx;
     if (!system || system.isSuppressed()) return;
     const jitter = Math.max(1.5, size * 0.35);
     const px = x + Phaser.Math.FloatBetween(-jitter, jitter);
     const py = y + Phaser.Math.FloatBetween(-jitter, jitter);
     const isVoid = visualStyle === 'void';
-    // Der Spawn liegt ausserhalb des Emissions-Ticks; die Partikeluhr steht auf dem Vorframe.
     const nowMs = system.now();
 
-    this.spawnTrailOuter(px, py, Math.max(1, strength), isVoid, nowMs);
-    this.spawnTrailCore(px, py + 1, isVoid, nowMs);
+    this.spawnTrailOuter(px, py, Math.max(1, strength), isVoid, nowMs, ageMs);
+    this.spawnTrailCore(px, py + 1, isVoid, nowMs, ageMs);
     if ((Math.floor(this.scene.time.now) + Math.round(x + y)) % 3 === 0) {
-      this.spawnTrailSpark(px, py, isVoid, nowMs);
+      this.spawnTrailSpark(px, py, isVoid, nowMs, ageMs);
     }
   }
 
@@ -260,7 +227,7 @@ export class ProjectileBurnRenderer {
     return amount;
   }
 
-  private spawnTrailOuter(x: number, y: number, count: number, isVoid: boolean, nowMs: number): void {
+  private spawnTrailOuter(x: number, y: number, count: number, isVoid: boolean, nowMs: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.outerSpec;
     if (!system || !spec) return;
@@ -276,11 +243,11 @@ export class ProjectileBurnRenderer {
       spec.vx = Phaser.Math.FloatBetween(-25, 25);
       spec.vy = Phaser.Math.FloatBetween(-55, -15);
       spec.tint = pickGpuVfxTint(tints);
-      system.spawn(spec, this.source, nowMs);
+      system.spawn(spec, this.source, nowMs, ageMs);
     }
   }
 
-  private spawnTrailCore(x: number, y: number, isVoid: boolean, nowMs: number): void {
+  private spawnTrailCore(x: number, y: number, isVoid: boolean, nowMs: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.coreSpec;
     if (!system || !spec) return;
@@ -293,10 +260,10 @@ export class ProjectileBurnRenderer {
     spec.vx = Phaser.Math.FloatBetween(-15, 15);
     spec.vy = Phaser.Math.FloatBetween(-42, -9);
     spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_CORE : TRAIL_COLORS_CORE);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, ageMs);
   }
 
-  private spawnTrailSpark(x: number, y: number, isVoid: boolean, nowMs: number): void {
+  private spawnTrailSpark(x: number, y: number, isVoid: boolean, nowMs: number, ageMs = 0): void {
     const system = this.gpuVfx;
     const spec = this.sparkSpec;
     if (!system || !spec) return;
@@ -309,6 +276,6 @@ export class ProjectileBurnRenderer {
     spec.vx = Phaser.Math.FloatBetween(-52, 52);
     spec.vy = Phaser.Math.FloatBetween(-105, -36);
     spec.tint = pickGpuVfxTint(isVoid ? VOID_FLAME_COLORS_SPARK : TRAIL_COLORS_SPARK);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, ageMs);
   }
 }

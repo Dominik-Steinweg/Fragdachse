@@ -8,7 +8,7 @@ export const LOADOUT_ALLOWED_KEYS_BY_PATH: Readonly<Record<string, ReadonlySet<s
   "ultimate.aura": new Set(["damagePerTick","radius","tickIntervalMs"]),
   "ultimate.placement": new Set(["entranceRadius","kind","ownerTintStrength","previewAlpha","range","spawnShakeDuration","spawnShakeIntensity"]),
   "ultimate.shotAudio": new Set(["failureKey","successKey"]),
-  "ultimate.tracerConfig": new Set(["alphaCore","alphaGlow","colorCore","colorGlow","fadeMs","maxLength","segments","widthCore","widthGlow"]),
+  "ultimate.tracerConfig": new Set(["profile","coreIntensity","coreWidth","coreLength","wakePersistence","wakeSpread","heatContrast","wakeTurbulence","moteAmount","speedResponse","color"]),
   "utility": new Set(["activation","airFrictionDecayPerSec","allowTeamDamage","allowedSlots","aoeDamage","aoeRadius","bounceFrictionMultiplier","bubbleColor","bubbleDistortion","bubbleDuration","bubbleRadius","cloudDamagePerTick","cloudDuration","cloudRadius","cloudTickInterval","continuous","cooldown","damage","damageFalloff","decoyLifetimeMs","directDamage","dissipateDustBurst","explosionVisualStyle","fireBurnDamagePerTick","fireBurnDurationMs","fireDamagePerTick","fireLingerDuration","fireRadius","frictionDelayMs","fuseTime","grenadeVisualPreset","hitArcDegrees","id","maxBounces","placeable","playerSlowFactor","projectileColor","projectileSize","projectileSlowFactor","projectileSpeed","projectileStyle","proximityPulse","range","rockDamageMult","shotAudio","skipCooldownPublish","smokeDissipateDuration","smokeDotDamagePerTick","smokeDotTickIntervalMs","smokeExpandDuration","smokeLingerDuration","smokeMaxAlpha","smokeRadius","stealthAlphaMax","stealthAlphaMin","stealthDurationMs","stealthGlowOuterStrength","stopSpeedThreshold","trainDamageMult","trainSlowFactor","type","visualPreset","visualVariant","weaponId","wildfireEnabled","wildfirePanicSpeedMultiplier","wildfireTrailDamagePerTick","wildfireTrailDurationMs","wobblePeriodMs"]),
   "utility.activation": new Set(["fullChargeDuration","minThrowSpeed","type"]),
   "utility.damageFalloff": new Set(["minDamage"]),
@@ -45,7 +45,7 @@ export const LOADOUT_ALLOWED_KEYS_BY_PATH: Readonly<Record<string, ReadonlySet<s
   "weapon.scopeConfig": new Set(["edgeSoftnessPx","fullScopeViewRadius","scopeInMs","unscopeSpeedMs","unscopedSpreadDeg"]),
   "weapon.shotAudio": new Set(["failureKey","successKey"]),
   "weapon.shotScreenShake": new Set(["duration","intensity"]),
-  "weapon.tracerConfig": new Set(["alphaCore","alphaGlow","colorCore","colorGlow","fadeMs","maxLength","segments","widthCore","widthGlow"]),
+  "weapon.tracerConfig": new Set(["profile","coreIntensity","coreWidth","coreLength","wakePersistence","wakeSpread","heatContrast","wakeTurbulence","moteAmount","speedResponse","color"]),
 };
 
 // Schadensfaktor gegen feindliche Coop-Basen. Diese Sets werden aus dem Content-Router

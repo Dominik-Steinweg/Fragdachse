@@ -49,6 +49,16 @@ export class ProjectileReplicationAdapter {
   private refreshCursor = 0;
   private forceFullSnapshot = false;
   private snapshotSerial = 0;
+  private readonly flightEnds = new Map<number, { record: ProjectileReplicationRecord; expiresAt: number }>();
+
+  recordFlightEnd(record: ProjectileReplicationRecord): void {
+    if (!record.dynamic.flightPath) return;
+    const outcomes = this.bounceRetentions.get(record.id)?.outcomes;
+    this.flightEnds.set(record.id, { record: { ...record,
+      dynamic: projectDynamicWithBounceOutcomes(record.dynamic, outcomes) },
+      expiresAt: this.snapshotSerial + BOUNCE_TOMBSTONE_TICKS });
+    this.bounceRetentions.delete(record.id);
+  }
 
   constructor(private readonly source: ProjectileReplicationReadPort) {}
 
@@ -82,6 +92,7 @@ export class ProjectileReplicationAdapter {
     this.previousStatic.clear();
     this.seenIds.clear();
     this.bounceRetentions.clear();
+    this.flightEnds.clear();
     this.refreshCursor = 0;
     this.forceFullSnapshot = false;
     this.snapshotSerial = 0;
@@ -152,8 +163,14 @@ export class ProjectileReplicationAdapter {
       }
     }
 
-    if (u.length === 0 && !full) return null;
-    return full ? { s, u, f: 1 } : { s, u };
+    const e: Array<number | string> = [];
+    for (const [id, ended] of this.flightEnds) {
+      if (snapshotSerial > ended.expiresAt) { this.flightEnds.delete(id); continue; }
+      encodeProjectileStatic(s, ended.record.static);
+      encodeProjectileDynamic(e, ended.record.dynamic);
+    }
+    if (u.length === 0 && e.length === 0 && !full) return null;
+    return { s, u, ...(e.length ? { e } : {}), ...(full ? { f: 1 as const } : {}) };
   }
 
   private collectStaticRefreshIds(nowMs: number): Set<number> | null {

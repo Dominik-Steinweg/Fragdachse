@@ -67,8 +67,10 @@ export interface ProjectilePhysicsHandle {
 }
 
 export type ProjectilePhysicsContactHandler = (contact: ProjectilePhysicsContact) => void;
+export type ProjectileMovementObserver = (id: number, x: number, y: number, vx: number, vy: number) => void;
 
 export interface ProjectilePhysicsBindingPort {
+  setMovementObserver?(observer: ProjectileMovementObserver | null): void;
   setRockGroup(
     group: Phaser.Physics.Arcade.StaticGroup | null,
     objects: (RockPhysicsProxy | null)[] | null,
@@ -96,6 +98,24 @@ export interface ProjectilePhysicsBindingPort {
  * Contact meaning and lifecycle decisions return to WorldProjectileRuntime as primitive contacts.
  */
 export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
+  private movementObserver: ProjectileMovementObserver | null = null;
+  private readonly observedHandles = new Map<number, ProjectilePhysicsHandle>();
+  private readonly observeStep = (): void => {
+    if (!this.movementObserver) return;
+    for (const handle of this.observedHandles.values()) {
+      const { body, sprite } = handle;
+      if (!body.enable || !sprite.active) continue;
+      // Arcade postUpdate applies precisely this displacement to the display anchor later.
+      this.movementObserver(handle.id, sprite.x + body.x - body.prevFrame.x,
+        sprite.y + body.y - body.prevFrame.y, body.velocity.x, body.velocity.y);
+    }
+  };
+
+  setMovementObserver(observer: ProjectileMovementObserver | null): void {
+    this.scene.physics.world.off('worldstep', this.observeStep);
+    this.movementObserver = observer;
+    if (observer) this.scene.physics.world.on('worldstep', this.observeStep);
+  }
   private contactHandler: ProjectilePhysicsContactHandler | null = null;
   private rockGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private rockObjects: (RockPhysicsProxy | null)[] | null = null;
@@ -309,16 +329,21 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     }, spec.mechanics.base, spec.mechanics.baseContactMode, spec.mechanics.stopOnBaseContact);
     register(this.trainGroup, () => ({ kind: 'train', id: 'main' }), spec.mechanics.train,
       spec.mechanics.trainContactMode, spec.mechanics.stopOnTrainContact);
-    return { id: spec.id, sprite, body, colliders, boundsListener };
+    const handle = { id: spec.id, sprite, body, colliders, boundsListener };
+    this.observedHandles.set(spec.id, handle);
+    return handle;
   }
 
   releaseProjectileResources(handle: ProjectilePhysicsHandle): void {
+    this.observedHandles.delete(handle.id);
     this.scene.physics.world.off('worldbounds', handle.boundsListener);
     for (const collider of handle.colliders) collider.destroy();
     handle.sprite.destroy();
   }
 
   releaseWorldState(): void {
+    this.setMovementObserver(null);
+    this.observedHandles.clear();
     this.contactHandler = null;
     this.rockGroup = null;
     this.rockObjects = null;

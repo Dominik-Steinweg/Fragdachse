@@ -96,7 +96,7 @@ export class ProjectileClientReplica {
   sync(data: readonly SyncedProjectile[], receivedAt = performance.now()): ProjectileClientReplicaFrame {
     const incoming = new Map<number, SyncedProjectile>();
     for (const projectile of data) {
-      if (!this.retiredIds.has(projectile.id)) incoming.set(projectile.id, projectile);
+      if (!projectile.flightPath?.ended && !this.retiredIds.has(projectile.id)) incoming.set(projectile.id, projectile);
     }
 
     const activeIds = new Set(incoming.keys());
@@ -129,7 +129,7 @@ export class ProjectileClientReplica {
     }
 
     return {
-      projectiles: [...incoming.values()],
+      projectiles: [...incoming.values(), ...data.filter(p => p.flightPath?.ended)],
       activeIds,
       updates,
       removed,

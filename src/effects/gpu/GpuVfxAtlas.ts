@@ -178,6 +178,7 @@ export const GpuVfxFrameId = {
   DeathMorphVapor:       49,
   DeathDustMoteD:        50,
   DeathDustMoteE:        51,
+  FlightCoreStrip:       52,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -190,6 +191,8 @@ interface GpuVfxAtlasEntry {
   readonly sourceTextureKey: string | null;
   readonly width: number;
   readonly height: number;
+  /** Optional bit-exact source crop; reuses existing art without resampling it. */
+  readonly sourceX?: number;
   /** Erzeugt die Quelltextur, falls der zustaendige Renderer noch nicht gelaufen ist. */
   readonly ensure: ((scene: Phaser.Scene) => void) | null;
 }
@@ -199,6 +202,8 @@ interface GpuVfxAtlasEntry {
  * `buildGpuVfxAtlas`, indem es nach `id` sortiert und `Void` die 0 hat.
  */
 export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
+  { id: GpuVfxFrameId.FlightCoreStrip, frame: 'flight-core-strip', sourceTextureKey: TEX_EXPLOSION_STREAK,
+    sourceX: 17, width: 1, height: 8, ensure: ensureExplosionStreakTexture },
   { id: GpuVfxFrameId.Void, frame: '__void', sourceTextureKey: null, width: 1, height: 1, ensure: null },
   {
     id: GpuVfxFrameId.AirstrikeBomb, frame: 'airstrike-bomb',
@@ -511,7 +516,9 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
     if (ctx && entry.sourceTextureKey && scene.textures.exists(entry.sourceTextureKey)) {
       const source = scene.textures.get(entry.sourceTextureKey).getSourceImage();
       // Ganzzahlige Zielkoordinaten: alles andere waere eine resamplete, nicht pixelgleiche Kopie.
-      ctx.drawImage(source as CanvasImageSource, rect.x | 0, rect.y | 0);
+      if (entry.sourceX !== undefined) ctx.drawImage(source as CanvasImageSource,
+        entry.sourceX, 0, entry.width, entry.height, rect.x, rect.y, rect.width, rect.height);
+      else ctx.drawImage(source as CanvasImageSource, rect.x | 0, rect.y | 0);
     }
     // `__void` hat `id === 0` und wird deshalb zuerst eingefuegt: `Texture.add()` befoerdert den
     // ersten Frame zu `firstFrame`, und der ist ab dann der Default fuer Member ohne `frame`.

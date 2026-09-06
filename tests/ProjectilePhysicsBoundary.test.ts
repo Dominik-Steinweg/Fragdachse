@@ -117,8 +117,8 @@ function fixture() {
     } },
     physics: { add: { existing: vi.fn(), collider: register('collider'), overlap: register('overlap') },
       world: { bounds: new Phaser.Geom.Rectangle(),
-        on: (_event: string, fn: (body: unknown) => void) => listeners.add(fn),
-        off: (_event: string, fn: (body: unknown) => void) => listeners.delete(fn) } },
+        on: (event: string, fn: (body: unknown) => void) => { if (event === 'worldbounds') listeners.add(fn); },
+        off: (event: string, fn: (body: unknown) => void) => { if (event === 'worldbounds') listeners.delete(fn); } } },
   } as unknown as Phaser.Scene;
   const binding = new ProjectilePhysicsBinding(scene);
   const runtime = new WorldProjectileRuntime({ physicsBinding: binding, presentation: createPresentation(),

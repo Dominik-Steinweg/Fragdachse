@@ -68,6 +68,22 @@ Zeitlich begrenzte replizierte Zustände verwenden bevorzugt einen absoluten fac
 
 Wenn jede einzelne Auslösung eines wiederkehrenden Host-Ereignisses fachlich oder für die Presentation eindeutig erkannt werden muss, darf der Client sie nicht nur aus Dauer, Phase oder lokalem Timing rekonstruieren. In solchen Fällen ist eine monotone Sequence/Revision das bevorzugte Muster. Ein initialer Snapshot setzt typischerweise die aktuelle Baseline; vergangene Presentation-Ereignisse werden nicht automatisch nachgespielt. Das ist kein Zwang für rein kontinuierliche Zustände, bei denen nur der aktuelle Zustand zählt. Der Tesla-Dome nutzt dafür `pulseSequence`; sein Renderer löst Effekte nur bei fortschreitender Sequenz aus.
 
+## Projectile-Flight-Replikation
+
+Der [`projectileSnapshotCodec`](../../src/network/projectileSnapshotCodec.ts) führt Flight-Profile
+und optionale visuelle Overrides im statischen Vertrag. Aktive Dynamik enthält unabhängig
+decodierbare, sequenzierte Pfadhistorien mit Position, Zeit, lokaler Richtung und expliziten
+Unterbrechungen. Wiederholte Historien heilen Paketverlust; Cursor verhindern doppelte Emissionen.
+Abgeschlossene Pfade werden einschließlich Endpunkt separat von aktiven Köpfen über mehrere
+Netzwerk-Ticks nachgeliefert. Sie dürfen Restmaterial ergänzen, aber keinen Kopf wiederbeleben.
+
+[`ProjectileFlightPlayback`](../../src/projectile/ProjectileFlightPlayback.ts) stellt betroffene
+Client-Köpfe, Bounce-Feedback und Trails gemeinsam um einen Netzwerk-Tick verzögert dar. Sie
+interpoliert ausschließlich bestätigte Segmente und hält bei Puffer-Unterlauf am letzten Punkt;
+vorhandenes Material altert weiter. Diese Präsentationszeit verändert keine Gameplay-Replica.
+Verspätete Endsegmente behalten ihr Alter und ergänzen nur den noch nicht konsumierten Abschnitt.
+Playback und Deduplizierung gehören zur World-Lifetime und werden beim World-Wechsel geleert.
+
 ## Join, Resume und Sichtbarkeit
 
 Welcome- und Resume-Pfade liefern den für den aktuellen Peer relevanten Store- und Zustandsstand. Die replizierte World darf dabei unabhängig von lokaler Presentation resident werden. Ein passiver Peer braucht weder Player-Sprite noch Gameplay-Eingaben, um eine Preview korrekt zu zeigen.

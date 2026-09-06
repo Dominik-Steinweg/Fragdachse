@@ -1,3 +1,5 @@
+import { ProjectilePathCursor } from './ProjectileFlightPath';
+import { ProjectileFlightPlayback } from './ProjectileFlightPlayback';
 import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -59,7 +61,8 @@ export type ProjectilePresentationState = Readonly<Pick<SyncedProjectile,
   | 'miniRocketPhase'
   | 'miniRocketCascadeStage'
   | 'projectileBurnVisualStyle'
-  | 'burning'>>;
+  | 'burning'
+  | 'flightPath'>>;
 
 export interface ProjectilePresentationDespawnState extends ProjectilePresentationState {
   readonly pendingHydraSplit?: { readonly angles: number[] };
@@ -95,6 +98,12 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
+  private readonly flightPlayback = new ProjectileFlightPlayback();
+  private readonly pathCursors = new Map<number, ProjectilePathCursor>();
+  private readonly clientPathHeads = new Map<number, SyncedProjectile>();
+  private readonly pathTimes = new Map<number, number>();
+  private nonFlightFrame: ProjectileClientReplicaFrame | null = null;
+  private clientPlayerId: string | undefined;
   private readonly clientVisuals = new Map<number, Phaser.GameObjects.Shape>();
   private readonly shadowSamples: ShadowProjectileSample[] = [];
   private readonly lightSamples: ProjectileLightSample[] = [];
@@ -238,7 +247,7 @@ export class ProjectilePresentationRuntime {
     cfg: ProjectileSpawnConfig,
   ): void {
     if (cfg.tracerConfig) {
-      this.tracerRenderer?.createTracer(id, tracerX, tracerY, cfg.tracerConfig, cfg.ownerColor ?? cfg.color);
+      this.tracerRenderer?.createTracer(id, tracerX, tracerY, cfg.tracerConfig, cfg.color);
     }
     if (cfg.suppressSpawnFx) return;
     const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(muzzleX, muzzleY, angle);
@@ -265,7 +274,7 @@ export class ProjectilePresentationRuntime {
     style?: ProjectileStyle,
     tracerBounce = true,
   ): void {
-    if (tracerBounce) this.tracerRenderer?.notifyBounce(id, x, y);
+    // Path corners are supplied by authoritative history, never inferred from velocity.
     if (style === 'bullet' || style === 'awp' || style === 'gauss') {
       this.bulletRenderer?.playImpactSparks(id, x, y, vx, vy, color);
     }
@@ -273,6 +282,9 @@ export class ProjectilePresentationRuntime {
 
   destroyProjectileVisuals(projectile: ProjectilePresentationDespawnState): void {
     this.ownershipAppearance.delete(projectile.id);
+    this.pathCursors.delete(projectile.id);
+    this.pathTimes.delete(projectile.id);
+    this.clientPathHeads.delete(projectile.id);
     const destroyX = projectile.destroyX ?? projectile.x;
     const destroyY = projectile.destroyY ?? projectile.y;
     const destroyScale = projectile.destroyScale ?? projectile.size / 16;
@@ -359,12 +371,12 @@ export class ProjectilePresentationRuntime {
           this.bulletRenderer?.createVisual(id, x, y, size, projectile.color,
             resolveBulletVisualPreset(style, projectile.bulletVisualPreset), projectile.ownerColor ?? projectile.color);
         }
-        if (projectile.tracer) this.tracerRenderer?.createTracer(id, x, y, projectile.tracer, projectile.ownerColor ?? projectile.color);
+        if (projectile.tracer) this.tracerRenderer?.createTracer(id, x, y, projectile.tracer, projectile.color);
       }
       const burning = projectile.burning === true;
-      this.projectileBurnRenderer?.sync(id, x, y, size, burning, true, projectile.projectileBurnVisualStyle);
+      this.projectileBurnRenderer?.sync(id, x, y, size, burning, projectile.projectileBurnVisualStyle);
       if (burning) burningProjectiles.add(id);
-      if (projectile.tracer) this.tracerRenderer?.updateTracer(id, x, y, vx, vy);
+      this.consumeFlightPath(projectile);
       if (style === 'bullet' || style === 'awp' || style === 'gauss') this.bulletRenderer?.syncToBody(id, x, y, vx, vy);
       switch (style) {
         case 'flame':
@@ -462,7 +474,9 @@ export class ProjectilePresentationRuntime {
       return samples;
     }
     replica.readExtrapolated(performance.now(), ({ id, state, x, y }) => {
-      samples.push({ id, x, y, size: state.size, style: state.style });
+      const head = this.clientPathHeads.get(id);
+      if (this.flightPlayback.has(id) && !head) return;
+      samples.push({ id, x: head?.x ?? x, y: head?.y ?? y, size: state.size, style: state.style });
     });
     return samples;
   }
@@ -477,16 +491,83 @@ export class ProjectilePresentationRuntime {
       return samples;
     }
     replica.readExtrapolated(performance.now(), ({ id, state, x, y }) => {
-      samples.push({ id, x, y, size: state.size, color: state.color, style: state.style, energyBallVariant: state.energyBallVariant, grenadeVisualPreset: state.grenadeVisualPreset });
+      const head = this.clientPathHeads.get(id);
+      if (this.flightPlayback.has(id) && !head) return;
+      samples.push({ id, x: head?.x ?? x, y: head?.y ?? y, size: state.size, color: state.color, style: state.style, energyBallVariant: state.energyBallVariant, grenadeVisualPreset: state.grenadeVisualPreset });
     });
     return samples;
   }
 
   presentClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
+    this.clientPlayerId = localPlayerId;
+    this.flightPlayback.sync(frame.projectiles, performance.now());
+    const data = frame.projectiles.filter(p => !p.flightPath);
+    this.nonFlightFrame = { ...frame, projectiles: data, activeIds: new Set(data.map(p => p.id)),
+      updates: frame.updates.filter(u => !u.projectile.flightPath) };
+    this.renderBufferedClient(performance.now(), true);
+  }
+
+  private renderBufferedClient(now: number, includeSnapshotUpdates = false): void {
+    const base = this.nonFlightFrame;
+    if (!base) return;
+    const data = [...base.projectiles], activeIds = new Set(base.activeIds);
+    const updates = includeSnapshotUpdates ? [...base.updates] : [];
+    this.flightPlayback.read(now, (projectile, time, isNew, bounces, complete, headless) => {
+      this.pathTimes.set(projectile.id, time);
+      if (complete || headless) {
+        this.presentFinalPath(projectile);
+        for (const bounce of bounces) this.playBounceImpact(projectile.id, bounce.x, bounce.y,
+          bounce.vx, bounce.vy, projectile.color, projectile.style, bounce.tracerBounce);
+        if (complete) {
+          const cursor = this.pathCursors.get(projectile.id);
+          this.destroyProjectileVisuals(projectile);
+          // Retain consumption progress for late terminal healing after removal-by-absence.
+          if (cursor) this.pathCursors.set(projectile.id, cursor);
+        }
+        return;
+      }
+      this.clientPathHeads.set(projectile.id, projectile);
+      data.push(projectile); activeIds.add(projectile.id);
+      updates.push({ projectile, isNew, bounces, state: {
+        serverX: projectile.x, serverY: projectile.y, vx: projectile.vx, vy: projectile.vy,
+        size: projectile.size, color: projectile.color, receivedAt: now, isDecaying: false,
+        velocityDecay: 1, burning: projectile.burning === true,
+      } });
+    });
+    this.drawClientFrame({ ...base, projectiles: data, activeIds, updates }, this.clientPlayerId);
+    for (const id of this.pathCursors.keys()) if (!this.flightPlayback.has(id)) {
+      this.pathCursors.delete(id); this.pathTimes.delete(id);
+    }
+  }
+
+  /** Final history can arrive after removal or before a projectile was ever visible. */
+  presentFinalPath(projectile: SyncedProjectile): void {
+    if (projectile.tracer && !this.tracerRenderer?.has(projectile.id)) {
+      this.tracerRenderer?.createTracer(projectile.id, projectile.x, projectile.y,
+        projectile.tracer, projectile.color);
+    }
+    this.consumeFlightPath(projectile);
+  }
+
+  private consumeFlightPath(projectile: ProjectilePresentationState): void {
+    const path = projectile.flightPath;
+    if (!path) return;
+    let cursor = this.pathCursors.get(projectile.id);
+    if (!cursor) { cursor = new ProjectilePathCursor(); this.pathCursors.set(projectile.id, cursor); }
+    cursor.consume(path, this.pathTimes.get(projectile.id) ?? path.timeMs, segment => {
+      this.tracerRenderer?.addSegment?.(projectile.id, segment, projectile.bulletVisualPreset === 'awp_corridor');
+      if (projectile.style === 'rocket') this.rocketRenderer?.emitTrailSegment?.(projectile.id, segment,
+        projectile.size, projectile.projectileVisualScale ?? 1, projectile.miniRocketPhase === 'return' ? projectile.ownerColor ?? projectile.color : projectile.smokeTrailColor ?? projectile.ownerColor ?? projectile.color);
+      if (projectile.burning) this.projectileBurnRenderer?.emitTrailSegment?.(projectile.id, segment,
+        projectile.size, projectile.projectileBurnVisualStyle);
+    });
+  }
+
+  private drawClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
     const { projectiles: data, activeIds } = frame;
     this.cleanupOrphanedClientVisuals(data, activeIds, frame.removed, frame.newIds);
     for (const id of this.ownershipAppearance.keys()) if (!activeIds.has(id)) this.ownershipAppearance.delete(id);
-    const burningIds = new Set<number>();
+    const burningIds = new Set<number>(data.filter(p => p.burning).map(p => p.id));
     for (const update of frame.updates) {
       const { projectile: proj, bounces } = update;
       this.refreshOwnershipAppearance(proj);
@@ -560,7 +641,7 @@ export class ProjectilePresentationRuntime {
         } else sprite.setPosition(proj.x, proj.y);
       }
       if (proj.tracer && this.tracerRenderer) {
-        if (!this.tracerRenderer.has(id)) this.tracerRenderer.createTracer(id, proj.x, proj.y, proj.tracer, proj.ownerColor ?? proj.color);
+        if (!this.tracerRenderer.has(id)) this.tracerRenderer.createTracer(id, proj.x, proj.y, proj.tracer, proj.color);
       }
       for (const bounce of bounces) {
         this.playBounceImpact(
@@ -574,10 +655,8 @@ export class ProjectilePresentationRuntime {
           bounce.tracerBounce,
         );
       }
-      if (proj.tracer && this.tracerRenderer) {
-        this.tracerRenderer.updateTracer(id, proj.x, proj.y, proj.vx, proj.vy);
-      }
-      this.projectileBurnRenderer?.sync(id, proj.x, proj.y, proj.size, proj.burning === true, false, proj.projectileBurnVisualStyle);
+      this.consumeFlightPath(proj);
+      this.projectileBurnRenderer?.sync(id, proj.x, proj.y, proj.size, proj.burning === true, proj.projectileBurnVisualStyle);
       if (proj.burning) burningIds.add(id);
     }
     this.projectileBurnRenderer?.retain(burningIds);
@@ -635,7 +714,9 @@ export class ProjectilePresentationRuntime {
   }
 
   extrapolateClient(replica: ProjectileClientReplica, now = performance.now()): void {
+    this.renderBufferedClient(now);
     replica.readExtrapolated(now, ({ id, state, x, y, velocityX, velocityY }) => {
+      if (this.flightPlayback.has(id)) return;
       if (state.style === 'bfg' && this.bfgRenderer?.has(id)) this.bfgRenderer.updateVisual(id, x, y, state.size);
       else if (state.style === 'gauss' && this.gaussRenderer?.has(id)) this.gaussRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY, state.color);
       else if (state.style === 'grenade' && this.grenadeRenderer?.has(id)) this.grenadeRenderer.updateVisual(id, x, y, state.size, velocityX, velocityY);
@@ -652,12 +733,13 @@ export class ProjectilePresentationRuntime {
       else if ((state.style === 'awp' || state.style === 'gauss') && this.bulletRenderer?.has(id)) this.bulletRenderer.syncToBody(id, x, y, velocityX, velocityY);
       else if (state.style === 'bullet' && this.bulletRenderer?.has(id)) this.bulletRenderer.updatePosition(id, x, y, velocityX, velocityY);
       else this.clientVisuals.get(id)?.setPosition(x, y);
-      if (this.tracerRenderer?.has(id)) this.tracerRenderer.updateTracer(id, x, y, velocityX, velocityY);
-      this.projectileBurnRenderer?.sync(id, x, y, state.size, state.burning, true, state.projectileBurnVisualStyle);
+
+      this.projectileBurnRenderer?.sync(id, x, y, state.size, state.burning, state.projectileBurnVisualStyle);
     });
   }
 
   releaseWorldPresentation(): void {
+    this.flightPlayback.clear(); this.pathCursors.clear(); this.pathTimes.clear(); this.nonFlightFrame = null; this.clientPathHeads.clear();
     this.ownershipAppearance.clear();
     this.activeBurningProjectileIds.clear();
     this.shadowSamples.length = 0;

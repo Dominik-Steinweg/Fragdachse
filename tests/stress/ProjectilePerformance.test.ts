@@ -85,6 +85,9 @@ vi.mock('phaser', () => ({
 }));
 import * as Phaser from 'phaser';
 import { RocketRenderer } from '../../src/effects/RocketRenderer';
+import { ProjectilePathRecorder } from '../../src/projectile/ProjectileFlightPath';
+import { TracerRenderer } from '../../src/effects/TracerRenderer';
+import { decodeProjectileDynamics } from '../../src/network/projectileSnapshotCodec';
 import { GpuVfxSystem } from '../../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from '../fakeGpuVfxScene';
 import { createProjectileRuntimeTestWorld, projectilePhysicsContact } from '../ProjectileRuntimeTestHelper';
@@ -114,6 +117,63 @@ function spawnRequest(runtime: WorldProjectileRuntime, overrides: Parameters<typ
   return id;
 }
 describe('projectile performance paths', () => {
+  it('retains the confirmed impact endpoint when a swept projectile despawns in the same frame', () => {
+    const { runtime, physics, setHostNowMs } = createProjectileRuntimeTestWorld();
+    const id = spawnRequest(runtime, { origin: { x: 0, y: 16 },
+      flight: { speed: 1000 }, presentation: { style: 'bullet', tracer: { profile: 'heavy' } } });
+    setHostNowMs(100);
+    physics.observe(id, 100, 16, 1000, 0);
+    const sprite = physics.handles.get(id)!.sprite as unknown as { x: number; y: number };
+    sprite.x = 100;
+    runtime.setRockHitCallback(() => runtime.destroyProjectile(id));
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      sink('rock', 0, 'world', 40, 16, 8, 36, 8, 44, 24);
+    } });
+    runtime.runHostInteractionStage(100);
+    runtime.runHostProjectileStage(0, 100);
+    const snapshot = runtime.getNetSnapshot()!;
+    expect(runtime.activeCount).toBe(0);
+    expect(snapshot.u).toHaveLength(0);
+    const path = decodeProjectileDynamics(snapshot.e!)[0].flightPath!;
+    expect(path.ended).toBe(true);
+    expect(path.points[path.points.length - 1].x).toBeCloseTo(28);
+    expect(path.points.every(p => p.x <= 28.000001)).toBe(true);
+    runtime.destroy();
+    expect(runtime.getNetSnapshot()).toBeNull();
+  });
+
+  it('bounds histories and GPU work under sustained projectile load', () => {
+    const recorder = new ProjectilePathRecorder();
+    const scene = makeFakeGpuVfxScene();
+    const gpu = new GpuVfxSystem(scene as never);
+    const tracer = new TracerRenderer(scene as never);
+    tracer.registerGpuVfx(gpu);
+    for (let id = 0; id < 1500; id++) {
+      recorder.begin(id, 0, id, 1000, 0, 0);
+      tracer.createTracer(id, 0, id, { profile: 'heavy' }, 0xffaa00);
+      for (let step = 1; step <= 150; step++) {
+        recorder.append(id, step * 8, id + Math.sin(step * 0.1), 1000, Math.cos(step * 0.1), step * 8);
+      }
+      const path = recorder.read(id, 1200)!;
+      expect(path.points.length).toBeLessThanOrEqual(128);
+      expect(path.points[0].timeMs).toBeGreaterThanOrEqual(200);
+      expect(path.points[path.points.length - 1].x).toBe(1200);
+      for (let n = path.points.length - 8; n < path.points.length; n++) {
+        tracer.addSegment(id, { from: path.points[n - 1], to: path.points[n], ageMs: 1200 - path.points[n].timeMs });
+      }
+    }
+    gpu.update(0);
+    const lane = findFakeLane(scene, 'flight-signature');
+    expect(gpu.getStats()!['flight-signature'].liveCount).toBeGreaterThan(0);
+    expect(lane.edited.length).toBeLessThanOrEqual(lane.size);
+    const frames = lane.edited.map(index => lane.members[index].frame);
+    const firstWake = frames.findIndex(frame => frame !== 'flight-core-strip');
+    if (firstWake >= 0) expect(frames.slice(firstWake)).not.toContain('flight-core-strip');
+    tracer.destroyAll(); recorder.clear(); gpu.update(0);
+    expect(gpu.getStats()!['flight-signature'].liveCount).toBe(0);
+    expect(recorder.read(1, 1200)).toBeUndefined();
+  });
+
   it('damages each obstacle once per flame and scales turret rocks independently', () => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();
     const hits: Array<{ id: number; damage: number; ownerId: string }> = [];
