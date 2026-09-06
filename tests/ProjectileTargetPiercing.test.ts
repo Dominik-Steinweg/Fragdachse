@@ -76,6 +76,107 @@ function spawn(runtime: ReturnType<typeof createProjectileRuntimeTestWorld>['run
   return id;
 }
 
+describe('provider-independent collision order', () => {
+  const permutations = [[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [2, 0, 4, 1, 3]];
+  for (const collisionMode of ['sweep', 'overlap'] as const) {
+    it.each([true, false])(`${collisionMode} preserves distance, key and epsilon-chain order (piercing=%s)`, piercesTargets => {
+      for (const permutation of permutations) {
+        const { runtime, physics } = createProjectileRuntimeTestWorld();
+        const hits: string[] = [];
+        const targets = [
+          { id: 'a', x: 24 + 1.5e-6 },
+          { id: 'b', x: 24 + 0.75e-6 },
+          { id: 'c', x: 24 },
+          { id: 'd', x: 24 },
+          { id: 'z', x: 20 },
+        ];
+        let order = permutation;
+        runtime.setProjectileCombatPort({
+          resolveDirectImpact: ({ target }) => { hits.push(target.id); return { accepted: true }; },
+          resolveExplosionCombat: () => ({ damagedTargetKeys: [] }),
+        });
+        runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+          for (const index of order) {
+            const target = targets[index];
+            sink('enemy', target.id, 'enemy', target.x, 0, 8, target.x - 8, -8, target.x + 8, 8);
+          }
+        } });
+        const id = spawn(runtime, request({ flight: { collisionMode, piercesTargets } }));
+        physics.handles.get(id)!.sprite.x = 30;
+        runtime.runHostInteractionStage(0);
+        // Characterizes the existing key-seeded epsilon ordering, including a non-transitive chain.
+        expect(hits).toEqual(piercesTargets ? ['z', 'a', 'b', 'c', 'd'] : ['z']);
+        expect(runtime.activeCount).toBe(piercesTargets ? 1 : 0);
+        order = [...permutation].reverse();
+        runtime.runHostInteractionStage(16);
+        expect(hits).toEqual(piercesTargets ? ['z', 'a', 'b', 'c', 'd'] : ['z']);
+        runtime.destroy();
+      }
+    });
+  }
+
+  it.each([[0, 1], [1, 0]])('keeps the nearer world blocker with provider order %j', (first, second) => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hits: string[] = [];
+    runtime.setProjectileCombatPort({
+      resolveDirectImpact: ({ target }) => { hits.push(target.id); return { accepted: true }; },
+      resolveExplosionCombat: () => ({ damagedTargetKeys: [] }),
+    });
+    runtime.setProjectileWorldBlockerPort({ getNearestBlockerDistance: () => 20 });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      for (const index of [first, second]) {
+        const x = index === 0 ? 24 : 60;
+        sink('enemy', String(index), 'enemy', x, 0, 8, x - 8, -8, x + 8, 8);
+      }
+    } });
+    const id = spawn(runtime, request({ flight: { collisionMode: 'sweep', piercesTargets: true } }));
+    physics.handles.get(id)!.sprite.x = 100;
+    runtime.runHostInteractionStage(0);
+    expect(hits).toEqual(['0']);
+    expect(physics.handles.get(id)!.sprite.x).toBe(100);
+    runtime.destroy();
+  });
+
+  it('deflects in the host stage with an empty general target view and replicates the same identity', () => {
+    const { runtime } = createProjectileRuntimeTestWorld();
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: () => {} });
+    const target = spawn(runtime);
+    const blower = spawn(runtime, request({
+      ownerId: 'blower-owner', interaction: { impulse: { deflectsProjectiles: true } },
+    }));
+    runtime.runHostInteractionStage(0);
+    const threat = runtime.getThreatSamples().find(sample => sample.id === target)!;
+    expect(threat.provenance.allegiance.ownerId).toBe('blower-owner');
+    expect(runtime.activeCount).toBe(2);
+    const replicas: Array<{ id: number; static: { ownerId: string } }> = [];
+    runtime.readProjectileReplication(record => replicas.push(record));
+    expect(replicas).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: target, static: expect.objectContaining({ ownerId: 'blower-owner' }) }),
+      expect.objectContaining({ id: blower }),
+    ]));
+    runtime.destroy();
+  });
+
+  it.each(['rock', 'construction'] as const)('deduplicates world aliases with %s reported first across frames', first => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hits: number[] = [];
+    runtime.setRockHitCallback(id => hits.push(id));
+    const id = spawn(runtime, request({ flight: { collisionMode: 'overlap', isBfg: true } }));
+    let kinds: Array<'rock' | 'construction'> = first === 'rock'
+      ? ['rock', 'construction'] : ['construction', 'rock'];
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      for (const kind of kinds) sink(kind, 7, 'world', 0, 0, 12, -12, -12, 12, 12, 'rock');
+    } });
+    runtime.runHostInteractionStage(0);
+    kinds.reverse();
+    runtime.runHostInteractionStage(16);
+    physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 7 }));
+    expect(hits).toEqual([7]);
+    expect(runtime.activeCount).toBe(1);
+    runtime.destroy();
+  });
+});
+
 describe('world contact dedupe ordering', () => {
   it.each(['bfg', 'gauss'] as const)('%s keeps pass-through when canonical and technical contact order changes', (style) => {
     for (const order of ['canonical-first', 'technical-first'] as const) {

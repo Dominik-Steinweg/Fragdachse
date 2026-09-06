@@ -117,6 +117,70 @@ function spawnRequest(runtime: WorldProjectileRuntime, overrides: Parameters<typ
   return id;
 }
 describe('projectile performance paths', () => {
+  it('bounds collision work with 4000 world targets and 1500 active projectiles regardless of provider order', async () => {
+    const medians: number[] = [];
+    for (const order of ['ascending', 'descending', 'shuffled'] as const) {
+      const { runtime, physics } = createProjectileRuntimeTestWorld();
+      const targets = Array.from({ length: 4000 }, (_, index) => ({
+        id: String(index).padStart(5, '0'),
+        x: (index % 100) * 64,
+        y: 1000 + Math.floor(index / 100) * 64,
+      }));
+      if (order === 'descending') targets.reverse();
+      if (order === 'shuffled') {
+        let seed = 731;
+        for (let index = targets.length - 1; index > 0; index--) {
+          seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+          const other = seed % (index + 1);
+          [targets[index], targets[other]] = [targets[other], targets[index]];
+        }
+      }
+      let hits = 0;
+      runtime.setProjectileCombatPort({
+        resolveDirectImpact: () => { hits++; return { accepted: true }; },
+        resolveExplosionCombat: () => ({ damagedTargetKeys: [] }),
+      });
+      runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+        for (const target of targets) {
+          sink('base', target.id, 'world', target.x, target.y, 8,
+            target.x - 8, target.y - 8, target.x + 8, target.y + 8);
+        }
+        // A few real piercing contacts prove that candidate processing remains enabled.
+        sink('enemy', 'contact', 'enemy', 24, 0, 8, 16, -8, 32, 8);
+      } });
+      for (let index = 0; index < 1500; index++) {
+        const id = spawnRequest(runtime, {
+          ownerId: `owner-${index % 8}`,
+          origin: { x: 0, y: index * 0.5 },
+          flight: { collisionMode: index % 2 === 0 ? 'sweep' : 'overlap', piercesTargets: true },
+        });
+        physics.handles.get(id)!.sprite.x = 24;
+      }
+      const samples: number[] = [];
+      try {
+        for (let frame = 0; frame < 20; frame++) {
+          const start = performance.now();
+          runtime.runHostInteractionStage(frame * 16);
+          const elapsed = performance.now() - start;
+          if (frame >= 5) samples.push(elapsed);
+          // Let the runner service its RPC outside the measurement even on a regressed stage.
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+        // 13 swept circles (including the tangent) and 12 overlapping rectangles.
+        expect(hits).toBe(25);
+        expect(runtime.activeCount).toBe(1500);
+        samples.sort((a, b) => a - b);
+        medians.push(samples[7]);
+      } finally {
+        runtime.destroy();
+      }
+    }
+    console.info('Collision stage median ms (ascending, descending, shuffled):', medians);
+    // Same fixture: regressed main 1013–1519 ms; candidate-only ordering 468–551 ms.
+    // Headless stage budget, not a browser FPS claim. Leaves headroom for shared CI runners.
+    expect(Math.max(...medians)).toBeLessThan(900);
+  }, 120_000);
+
   it('retains the confirmed impact endpoint when a swept projectile despawns in the same frame', () => {
     const { runtime, physics, setHostNowMs } = createProjectileRuntimeTestWorld();
     const id = spawnRequest(runtime, { origin: { x: 0, y: 16 },

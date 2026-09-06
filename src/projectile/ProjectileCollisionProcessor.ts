@@ -24,10 +24,11 @@ import {
   type ProjectileTargetabilityPort,
   type ProjectileWorldBlockerPort,
 } from './ProjectileTargetPort';
-import { PROJECTILE_STAGE_SPAWN_CONTRACT } from './ProjectileStageContract';
 
 /** Zieltypen, die über die Collision-Kandidatenerzeugung laufen. */
 type CollisionTargetKind = ProjectileCollisionTargetKind;
+type CollisionTargetRef = Exclude<ProjectileTargetRef, { kind: 'projectile' }>;
+type CollisionCandidate = Omit<ProjectileImpactCandidate, 'target'> & { readonly target: CollisionTargetRef };
 
 /** Gepoolter Slot der Frame-Zielsicht; die Runtime hält keine fremden Entity-Objekte. */
 interface CollisionTargetSlot {
@@ -44,7 +45,7 @@ interface CollisionTargetSlot {
   right: number;
   bottom: number;
   obstacleKind?: import('../types').PlaceableKind;
-  ref: ProjectileTargetRef;
+  ref: CollisionTargetRef;
 }
 
 interface SweepCandidate {
@@ -100,7 +101,6 @@ const MIN_SWEEP_TRAVEL_PX = 0.5;
 export class ProjectileCollisionProcessor {
   private readonly targetPool: CollisionTargetSlot[] = [];
   private readonly targetSlotsByPhysicalKey = new Map<string, CollisionTargetSlot>();
-  private readonly projectileTargetRecords: ProjectileRuntimeRecord[] = [];
   private readonly overlapCandidates: CollisionTargetSlot[] = [];
   private readonly sweepCandidates: SweepCandidate[] = [];
   private targetCount = 0;
@@ -147,23 +147,12 @@ export class ProjectileCollisionProcessor {
     deps: ProjectileCollisionDependencies,
   ): void {
     if (!deps.targetQuery) return;
-    this.projectileTargetRecords.length = 0;
-    for (const record of records) {
-      if (!record.pendingDestroy && record.physics.sprite.active !== false) {
-        this.projectileTargetRecords.push(record);
-      }
-    }
     this.readTargets(deps.targetQuery);
-    for (const record of this.projectileTargetRecords) this.emitProjectileTarget(record);
-    this.sortTargetsDeterministically();
     if (this.targetCount === 0) return;
 
-    // The live collection is intentional only because the named stage contract preserves the
-    // existing Plasma Swarm same-frame outcome. Split/child creation uses the next-stage policy.
-    const recordsForInteraction = PROJECTILE_STAGE_SPAWN_CONTRACT.collisionInteractionSpawns === 'same-stage'
-      ? records
-      : this.projectileTargetRecords;
-    for (const record of recordsForInteraction) {
+    // PROJECTILE_STAGE_SPAWN_CONTRACT.collisionInteractionSpawns is same-stage: live iteration
+    // preserves Plasma Swarm children. Split/child creation uses the owner's next-stage queue.
+    for (const record of records) {
       if (record.pendingDestroy) continue;
       // Granaten wirken nur über ihre terminale Payload, nicht über Direkttreffer.
       if (record.spec.flight.isGrenade) continue;
@@ -176,7 +165,6 @@ export class ProjectileCollisionProcessor {
   reset(): void {
     this.targetPool.length = 0;
     this.targetSlotsByPhysicalKey.clear();
-    this.projectileTargetRecords.length = 0;
     this.overlapCandidates.length = 0;
     this.sweepCandidates.length = 0;
     this.targetCount = 0;
@@ -188,7 +176,7 @@ export class ProjectileCollisionProcessor {
     port.readCollisionTargets(this.emitTarget);
   }
 
-  private acquireSlot(ref: ProjectileTargetRef): CollisionTargetSlot {
+  private acquireSlot(ref: CollisionTargetRef): CollisionTargetSlot {
     const kind = ref.kind;
     let slot = this.targetPool[this.targetCount];
     if (!slot || slot.kind !== kind) {
@@ -212,42 +200,12 @@ export class ProjectileCollisionProcessor {
     return slot;
   }
 
-  private replaceSlotRef(slot: CollisionTargetSlot, ref: ProjectileTargetRef): void {
+  private replaceSlotRef(slot: CollisionTargetSlot, ref: CollisionTargetRef): void {
     slot.kind = ref.kind;
     slot.ref = ref;
     slot.id = String(ref.id);
     slot.numericId = Number(ref.id);
     slot.obstacleKind = ref.kind === 'rock' ? ref.obstacleKind : undefined;
-  }
-
-  private emitProjectileTarget(record: ProjectileRuntimeRecord): void {
-    const bounds = record.physics.sprite.getBounds();
-    this.emitTarget(
-      'projectile',
-      record.id,
-      record.provenance.allegiance.ownerId,
-      record.physics.sprite.x,
-      record.physics.sprite.y,
-      Math.max(record.physics.sprite.displayWidth, record.physics.sprite.displayHeight) * 0.5,
-      bounds.left,
-      bounds.top,
-      bounds.right,
-      bounds.bottom,
-    );
-  }
-
-  private sortTargetsDeterministically(): void {
-    // The provider order is an implementation detail. Stable key order makes overlap and all
-    // equal-distance sweep ties deterministic even when an adapter enumerates in another order.
-    for (let index = 1; index < this.targetCount; index += 1) {
-      const current = this.targetPool[index];
-      let insertAt = index - 1;
-      while (insertAt >= 0 && projectileTargetKey(this.targetPool[insertAt].ref) > projectileTargetKey(current.ref)) {
-        this.targetPool[insertAt + 1] = this.targetPool[insertAt];
-        insertAt -= 1;
-      }
-      this.targetPool[insertAt + 1] = current;
-    }
   }
 
   private processRecord(
@@ -347,6 +305,9 @@ export class ProjectileCollisionProcessor {
   }
 
   private sortSweepCandidates(): void {
+    // Seed only actual candidates in key order. The epsilon relation below is non-transitive;
+    // preserving its canonical input also preserves near-equal distance chains across providers.
+    this.sweepCandidates.sort((a, b) => compareTargetKeys(a.slot, b.slot));
     for (let index = 1; index < this.sweepCandidates.length; index += 1) {
       const current = this.sweepCandidates[index];
       let insertAt = index - 1;
@@ -396,6 +357,8 @@ export class ProjectileCollisionProcessor {
   }
 
   private sortOverlapCandidates(record: ProjectileRuntimeRecord): void {
+    // See sortSweepCandidates: canonical input is required even for epsilon-distance chains.
+    this.overlapCandidates.sort(compareTargetKeys);
     for (let index = 1; index < this.overlapCandidates.length; index += 1) {
       const current = this.overlapCandidates[index];
       const currentDistance = overlapDistanceAlongTravel(record, current);
@@ -455,11 +418,6 @@ export class ProjectileCollisionProcessor {
       return false;
     }
 
-    if (slot.kind === 'projectile' && deps.targetability
-      && !deps.targetability.canDamageOwner(record.provenance, slot.ownerId, record.provenance.allegiance.allowTeamDamage === true)) {
-      return false;
-    }
-
     const contact = resolveContactMemory(record, slot.kind);
     if (contact.memory?.has(projectileTargetKey(slot.ref))) return false;
     return true;
@@ -467,11 +425,10 @@ export class ProjectileCollisionProcessor {
 
   private applyCandidate(
     record: ProjectileRuntimeRecord,
-    candidate: ProjectileImpactCandidate,
+    candidate: CollisionCandidate,
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): ProjectileCollisionOutcome {
-    if (candidate.target.kind === 'projectile') return 'ignored';
     if (!isCombatTarget(candidate.target.kind)) {
       // World interaction is resolved by the WorldProjectileRuntime through the narrow callback.
       // The processor remains responsible only for candidate order and the terminal outcome.
@@ -639,7 +596,7 @@ function createTargetRef(
   kind: CollisionTargetKind,
   id: string | number,
   obstacleKind?: import('../types').PlaceableKind,
-): ProjectileTargetRef {
+): CollisionTargetRef {
   switch (kind) {
     case 'player': return { kind, id: String(id) };
     case 'enemy': return { kind, id: String(id) };
@@ -648,12 +605,17 @@ function createTargetRef(
     case 'base': return { kind, id: String(id) };
     case 'train': return { kind, id: String(id) };
     case 'construction': return { kind, id: typeof id === 'number' ? id : String(id) };
-    case 'projectile': return { kind, id: Number(id) };
   }
 }
 
 function targetKindRank(kind: CollisionTargetKind): number {
   return kind === 'rock' ? 0 : kind === 'construction' ? 1 : 2;
+}
+
+function compareTargetKeys(a: CollisionTargetSlot, b: CollisionTargetSlot): number {
+  const left = projectileTargetKey(a.ref);
+  const right = projectileTargetKey(b.ref);
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function isCombatTarget(kind: CollisionTargetKind): kind is 'player' | 'enemy' | 'decoy' {

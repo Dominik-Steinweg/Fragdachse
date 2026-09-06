@@ -53,7 +53,7 @@ export function projectileExclusionKey(target: ProjectileTargetRef): string | nu
 }
 
 /** Alle Zieltypen, die in der kanonischen Collision-Sicht materialisiert werden dürfen. */
-export type ProjectileCollisionTargetKind = ProjectileTargetRef['kind'];
+export type ProjectileCollisionTargetKind = Exclude<ProjectileTargetRef['kind'], 'projectile'>;
 
 /**
  * Nimmt ein kollidierbares Ziel in die Frame-Sicht auf.
@@ -82,8 +82,9 @@ export type ProjectileCollisionTargetSink = (
 /**
  * Schmale, allokationsarme Zielabfrage der Collision-Verarbeitung.
  *
- * Sie liefert kollidierbare Ziele einmal pro Stage in fachlich stabiler Reihenfolge; die Runtime
- * sieht dabei weder Entity-Objekte noch fremde Systeme.
+ * Sie liefert World-/Combat-Ziele einmal pro Stage; die Provider-Reihenfolge ist unerheblich.
+ * Die Runtime ordnet nur tatsächliche Trefferkandidaten und sieht keine fremden Entity-Objekte.
+ * Projectile-Interaktionen laufen separat beim Runtime-Owner, nicht über diese Target-Sicht.
  */
 export interface ProjectileCollisionTargetQueryPort {
   readCollisionTargets(sink: ProjectileCollisionTargetSink): void;
