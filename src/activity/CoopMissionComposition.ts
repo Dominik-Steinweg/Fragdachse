@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import type { ArenaLayout } from '../types';
@@ -115,6 +116,7 @@ export interface CoopMissionCompositionOptions {
   readonly onDiagnosticEvent: (type: string, fields: Record<string, unknown>) => void;
   readonly onBossSpawned: (spawnedAtMs: number) => void;
   readonly visualSink: EnemyVisualSink | null;
+  readonly getHealthBarRenderer?: () => WorldHealthBarRenderer | null;
   readonly entityBurnGpuController: EntityBurnGpuController | null;
 }
 
@@ -169,6 +171,7 @@ export class CoopMissionComposition {
       nextGenerationId: this.options.nextGenerationId,
       visualSink: this.options.visualSink,
       lighting: this.options.getLightingSystem(),
+      healthBars: this.options.getHealthBarRenderer?.(),
       entityBurnGpuController: this.options.entityBurnGpuController,
       onBossSpawned: this.options.onBossSpawned,
       onDiagnosticEvent: this.options.onDiagnosticEvent,

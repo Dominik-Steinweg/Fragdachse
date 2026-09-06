@@ -36,6 +36,19 @@ Camera-Feedback besitzt einen zentralen Owner: [CameraFeedbackController.ts](../
 
 Player- und Tree-Runtime folgen demselben Prinzip: PlayerBody und TreePhysicsProxy sind Simulation; Sprite, Licht, Textur und Overlay sind Präsentation. Kollisionen werden aus expliziter Runtime-Geometrie abgeleitet, nicht aus Displaymaßen.
 
+Welt-HP-Balken beobachten bestaetigte HP-/Max-HP-Paare; Erstzustand, Respawn und bewusste
+Resets sind stille Baselines, unveraenderte Refreshes keine Treffer. Der
+[HealthBarFeedbackModel](../../src/effects/health/HealthBarFeedbackModel.ts) besitzt nur lokale
+Feedbackzeit und Sichtbarkeit, keine Health-Authority. Der
+[WorldHealthBarRenderer](../../src/effects/health/WorldHealthBarRenderer.ts) wird einmal nach
+Zustands- und Positionssynchronisation vom Combat-Presentation-Controller getaktet. Seine
+View-Pools sind scene-langlebig; Entity-Bindings und ihre HP-Historie enden mit dem jeweiligen
+Owner. Der World-Presentation-Frame-Binding loest die verbleibenden World-Bindings vor dem
+statischen Handoff. HP null verbirgt die Anzeige, invalidiert aber noch nicht das Handle:
+Die echte Entity-Entfernung bleibt beim Lifecycle-Owner. Die Consumer- und Handoff-Vertraege
+sichern [WorldHealthBarConsumers.test.ts](../../tests/integration/WorldHealthBarConsumers.test.ts)
+und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresentationFrameLifetime.test.ts).
+
 ## Pfadgebundene Projectile-Präsentation
 
 [`WorldProjectileRuntime`](../../src/projectile/WorldProjectileRuntime.ts) besitzt den rendererfreien

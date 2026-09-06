@@ -179,6 +179,7 @@ export const GpuVfxFrameId = {
   DeathDustMoteD:        50,
   DeathDustMoteE:        51,
   FlightCoreStrip:       52,
+  FlightWakeStrip:       53,
 } as const;
 
 export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
@@ -204,6 +205,9 @@ interface GpuVfxAtlasEntry {
 export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
   { id: GpuVfxFrameId.FlightCoreStrip, frame: 'flight-core-strip', sourceTextureKey: TEX_EXPLOSION_STREAK,
     sourceX: 17, width: 1, height: 8, ensure: ensureExplosionStreakTexture },
+  // A constant longitudinal cross-section: adjacent trail pieces must not repeat end fades.
+  { id: GpuVfxFrameId.FlightWakeStrip, frame: 'flight-wake-strip', sourceTextureKey: TEX_DEATH_GLOW,
+    sourceX: 11, width: 1, height: 24, ensure: ensureDeathGlowTexture },
   { id: GpuVfxFrameId.Void, frame: '__void', sourceTextureKey: null, width: 1, height: 1, ensure: null },
   {
     id: GpuVfxFrameId.AirstrikeBomb, frame: 'airstrike-bomb',

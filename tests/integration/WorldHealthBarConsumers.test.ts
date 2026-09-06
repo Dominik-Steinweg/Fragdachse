@@ -1,0 +1,211 @@
+import { describe, expect, it, vi } from 'vitest';
+vi.mock('phaser', async () => (await import('../fakeArenaRenderScene')).createFakePhaserModule());
+vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
+  SpawnEffectRenderer: class { setLightingSystem() {} play() {} },
+}));
+import { EnemyManager } from '../../src/entities/EnemyManager';
+import { PlayerEntity } from '../../src/entities/PlayerEntity';
+import { BaseEntity } from '../../src/entities/BaseEntity';
+import { BaseManager } from '../../src/entities/BaseManager';
+import { RockVisualHelper } from '../../src/scenes/arena/RockVisualHelper';
+import { encodeEnemyUpsert } from '../../src/network/enemySnapshotCodec';
+import { COOP_DEFENSE_ENEMY_KINDS, resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
+import { HEALTH_BAR_TUNING, TURRET_HEALTH_BAR_STYLE } from '../../src/effects/health/healthBarStyles';
+import { WorldHealthBarRenderer } from '../../src/effects/health/WorldHealthBarRenderer';
+import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
+import { COOP_DEFENSE_CONSTRUCTION_IDS, getCoopDefenseConstructionDefinition } from '../../src/config/coopDefenseConstructions';
+import type { BaseSpec } from '../../src/arena/BaseRegistry';
+import type { PlayerProfile, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
+import { healthBarTestScene } from '../healthBarTestScene';
+
+function harness() {
+  const fake = healthBarTestScene();
+  let time = 0;
+  const renderer = new WorldHealthBarRenderer(fake.scene, () => time, HEALTH_BAR_TUNING,
+    { prewarmEnemyViews: 0, maxFreeViews: 100 });
+  renderer.openWorld({});
+  return { ...fake, renderer, clock(t: number) { time = t; }, tick() { renderer.update(true); } };
+}
+const kind = COOP_DEFENSE_ENEMY_KINDS[0];
+function enemies(h: ReturnType<typeof harness>, boss = false) {
+  const configs = resolveCoopDefenseEnemyConfigs(1);
+  // Preserve the real codec kind, but exclude unrelated authored attacks and glow from the fixture.
+  configs[kind] = { ...configs[kind], isBoss: boss, glow: undefined, weapons: [], imageKey: 'health-test' };
+  const manager = new EnemyManager(h.scene, configs);
+  manager.setHealthBarRenderer(h.renderer);
+  return manager;
+}
+function upsert(manager: EnemyManager, entry: SyncedEnemyDeltaState) {
+  const u: (number | string)[] = [];
+  encodeEnemyUpsert(u, entry);
+  manager.applySnapshot({ u, r: [] });
+}
+const baseSpec: BaseSpec = {
+  id: 'base', hpMax: 100, startHp: 70, faction: 'friendly', role: 'main',
+  cells: [{ gridX: 1, gridY: 1 }], region: { minGridX: 1, maxGridX: 1, minGridY: 1, maxGridY: 1 },
+  turrets: [], powerUpPedestals: [],
+};
+
+describe('World HP consumer boundaries', () => {
+  it('uses per-entity baselines and real encoded full/refresh upserts without extending visibility', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 60, maxHp: 100 });
+    h.tick();
+    expect(h.renderer.getStats()).toMatchObject({ bindings: 2, active: 0 });
+    upsert(manager, { id: 'e2', hp: 40, maxHp: 100 });
+    manager.getEnemy('e2')!.setHealthBarRenderer(h.renderer); // Idempotent visual wiring preserves the trail.
+    h.tick();
+    expect(h.rectangles[2].width / h.rectangles[0].width).toBeCloseTo(0.4);
+    expect(h.rectangles[1].width / h.rectangles[0].width).toBeCloseTo(0.6);
+    for (let t = 100; t <= HEALTH_BAR_TUNING.visibleAfterDamageMs + 200; t += 100) {
+      h.clock(t);
+      upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 40, maxHp: 100 });
+      h.tick();
+    }
+    expect(h.renderer.getStats().active).toBe(0);
+    upsert(manager, { id: 'e2', hp: 39, maxHp: 100 });
+    h.tick();
+    expect(h.renderer.getStats().active).toBe(1);
+    manager.destroy();
+    expect(h.renderer.getStats().bindings).toBe(0);
+  });
+
+  it('silently absorbs burrow recovery snapshots and resets removed/reused entity IDs', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
+    upsert(manager, { id: 'e1', hp: 70, maxHp: 100 });
+    h.tick();
+    upsert(manager, { id: 'e1', burrowed: true, hp: 50, maxHp: 100 });
+    upsert(manager, { id: 'e1', burrowed: false, hp: 30, maxHp: 100 });
+    h.tick();
+    expect(h.renderer.getStats().active).toBe(0);
+    manager.applySnapshot({ u: [], r: [1] });
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 15, maxHp: 100 });
+    h.tick();
+    expect(h.renderer.getStats()).toMatchObject({ bindings: 1, active: 0 });
+  });
+
+  it('keeps bosses visible and retains non-HP decorations, including lethal guard rescue', () => {
+    const h = harness(), manager = enemies(h, true);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
+    h.tick();
+    expect(h.renderer.getStats().active).toBe(1);
+    const enemy = manager.getEnemy('e1')!;
+    enemy.setPosition(90, 100);
+    enemy.syncBar();
+    expect(h.cosmetic.some(object => object.x === 90 && object !== enemy.sprite)).toBe(true);
+    manager.setLethalDamageGuard(target => { target.setHp(30); return true; });
+    expect(manager.applyDamage('e1', 1000)?.died).toBe(false);
+    h.tick();
+    expect(h.renderer.getStats()).toMatchObject({ bindings: 1, active: 1 });
+    h.clock(100_000); h.tick();
+    expect(h.renderer.getStats().active).toBe(1);
+    manager.destroy();
+  });
+
+  it('keeps Player world policies, health baselines, armor separation, stealth and respawn', () => {
+    const h = harness();
+    const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+      10, 20, true, null, { spawnEffect: false });
+    player.setHealthBarRenderer(h.renderer);
+    player.updateHP(60, 100);
+    h.tick();
+    const [bg, trail, fill] = h.rectangles.slice(-3);
+    expect(fill.width / bg.width).toBeCloseTo(0.6);
+    expect(trail.visible).toBe(false);
+    player.updateArmor(30);
+    player.updateHP(60, 100);
+    h.tick();
+    expect(trail.visible).toBe(false);
+    player.updateHP(40, 100); h.tick();
+    expect(trail.visible).toBe(true);
+    player.setWorldBarsVisible(false); h.tick();
+    expect(h.renderer.getStats().active).toBe(0);
+    player.setWorldBarsVisible(true); h.tick();
+    expect(h.renderer.getStats().active).toBe(1);
+    player.setDecoyStealth(true); player.updateHP(20, 100); h.tick();
+    expect(h.renderer.getStats().active).toBe(0);
+    player.setDecoyStealth(false); h.tick();
+    expect(trail.visible).toBe(false);
+    player.updateHP(0, 100); player.setVisible(false); h.tick();
+    player.updateHP(100, 100); player.setVisible(true); h.tick();
+    expect(fill.width).toBe(bg.width);
+    expect(trail.visible).toBe(false);
+    player.destroy();
+    expect(h.renderer.getStats().bindings).toBe(0);
+  });
+
+  it('creates no bars or animation resources for rendererless player/base simulation', () => {
+    const h = harness();
+    const player = new PlayerEntity(h.scene, { id: 'p', colorHex: 1, name: 'P' } as PlayerProfile,
+      0, 0, false, null, { visuals: false });
+    player.setHealthBarRenderer(h.renderer);
+    player.updateHP(20, 100);
+    const base = new BaseEntity(h.scene, baseSpec, resolveCoopDefenseWorldMetrics(20, 20), false, true, h.renderer);
+    base.applyDamage(10);
+    h.tick();
+    expect(h.renderer.getStats()).toMatchObject({ bindings: 0, active: 0, created: 0 });
+    player.destroy(); base.destroy();
+  });
+
+  it('applies base snapshots once, preserves start HP, and treats repair/overlay/dormancy correctly', () => {
+    const h = harness();
+    const bases = new BaseManager(h.scene, [baseSpec], resolveCoopDefenseWorldMetrics(20, 20), {}, true, true, h.renderer);
+    h.tick();
+    const [bg, trail, fill] = h.rectangles.slice(-3);
+    expect(fill.width / bg.width).toBeCloseTo(0.7);
+    bases.applySnapshot([{ id: 'base', hp: 50, maxHp: 100 }]); h.tick();
+    expect(trail.visible).toBe(false);
+    bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
+    expect(trail.visible).toBe(true);
+    h.clock(10_000);
+    bases.applySnapshot([{ id: 'base', hp: 30, maxHp: 100 }]); h.tick();
+    expect(trail.visible).toBe(false);
+    const color = fill.fillColor;
+    bases.heal('base', 10); h.tick();
+    expect(fill.width / bg.width).toBeCloseTo(0.4);
+    expect(fill.fillColor).not.toBe(color);
+    const activity = bases.createActivityBinding([{ baseId: 'base', hpMax: 200, startHp: 100,
+      dormant: true, powerUpPedestals: [] }]);
+    activity.attach(); h.tick();
+    expect(h.renderer.getStats().bindings).toBe(0);
+    bases.getBase('base')!.activate(); h.tick();
+    expect(fill.width / bg.width).toBeCloseTo(0.5);
+    expect(trail.visible).toBe(false);
+    activity.detach(); h.tick();
+    expect(h.renderer.getStats().bindings).toBe(0);
+    bases.destroy();
+  });
+
+  it('keeps construction bars damaged until repair, without a timed enemy deadline', () => {
+    const h = harness();
+    const world = { context: { metrics: resolveCoopDefenseWorldMetrics(20, 20) },
+      materialization: { arena: { rockVisualSystem: {} } }, presentation: { layout: {} } };
+    const helper = new RockVisualHelper(h.scene, {} as never, null, {} as never, null,
+      { getWorldRuntime: () => world as never, getTargetingRuntime: () => null,
+        getPlayerGameplayRuntime: () => null, getPowerUpRuntime: () => null }, h.renderer);
+    const rock = { id: 1, kind: 'turret', gridX: 2, gridY: 2, hp: 70, maxHp: 100,
+      angle: 0, ownerColor: 0x123456, ownerId: 'p' } as SyncedPlaceableRock;
+    helper.createOrUpdateTurretVisual(rock); h.tick();
+    const [bg, trail, fill] = h.rectangles;
+    expect(fill.width).toBe(TURRET_HEALTH_BAR_STYLE.width * 0.7);
+    expect(trail.visible).toBe(false);
+    helper.createOrUpdateTurretVisual({ ...rock, hp: 40 }); h.tick();
+    expect(trail.visible).toBe(true);
+    h.clock(100_000); h.tick();
+    expect(fill.visible).toBe(true);
+    helper.createOrUpdateTurretVisual({ ...rock, hp: 40, gridX: 4 }); h.tick();
+    expect(trail.visible).toBe(false);
+    expect(bg.x).toBeGreaterThan(0);
+    helper.createOrUpdateTurretVisual({ ...rock, hp: 100 }); h.tick();
+    expect(fill.visible).toBe(false);
+    helper.destroyAllTurretVisuals();
+    expect(h.renderer.getStats().bindings).toBe(0);
+    const indestructible = COOP_DEFENSE_CONSTRUCTION_IDS.find(id => getCoopDefenseConstructionDefinition(id).indestructible)!;
+    expect(indestructible).toBeDefined();
+    helper.createOrUpdateTurretVisual({ ...rock, id: 2, constructionId: indestructible }); h.tick();
+    expect(h.renderer.getStats().bindings).toBe(0);
+    helper.destroyAllTurretVisuals();
+  });
+});

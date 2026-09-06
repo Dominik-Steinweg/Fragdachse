@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../arena/ArenaGenerator';
@@ -164,6 +165,7 @@ export interface MaterializeWorldCompositionInput {
   readonly baseDestructionHooks: BaseDestructionHooks;
   readonly lighting: LightingSystem;
   readonly createRockRegistry: boolean;
+  readonly healthBars?: WorldHealthBarRenderer;
 }
 
 export interface MaterializedWorldComposition {
@@ -256,6 +258,7 @@ export function materializeWorldComposition(
       input.baseDestructionHooks,
       presentationRequired,
       false,
+      input.healthBars,
     )
     : null;
   materialization.setBases(baseManager);

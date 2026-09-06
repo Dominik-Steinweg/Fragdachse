@@ -76,7 +76,7 @@
       "projectileColor": "#b347ff",
       "projectileStyle": "gauss",
       "projectileVisualScale": 1.25,
-      "tracerConfig": {"profile": "light", "color": "#b347ff"},
+      "tracerConfig": {"profile": "highEnergy", "color": "#b347ff"},
       "damage": 200,
       "range": 1500,
       "rockDamageMult": 1

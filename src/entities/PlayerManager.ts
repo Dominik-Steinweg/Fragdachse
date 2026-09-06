@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { WorldSpawnFocusCell } from '../config/authoring/WorldDefinition';
 import * as Phaser from 'phaser';
@@ -163,6 +164,7 @@ export class PlayerManager implements OwnerVisualSource {
   private relationshipResolver: ((localPlayerId: string, otherPlayerId: string) => boolean) | null = null;
   private teamResolver: ((playerId: string) => TeamId | null) | null = null;
   private lighting: LightingSystem | null = null;
+  private healthBars: WorldHealthBarRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private worldGeometry: PlayerWorldGeometry | null = null;
 
@@ -191,6 +193,12 @@ export class PlayerManager implements OwnerVisualSource {
   setLightingSystem(lighting: LightingSystem | null): void {
     this.lighting = lighting;
     for (const entity of this.players.values()) entity.setLightingSystem(lighting);
+  }
+
+  /** Reicht den scene-lifetime HP-Renderer an neue und bestehende Entities durch. */
+  setHealthBarRenderer(renderer: WorldHealthBarRenderer | null): void {
+    this.healthBars = renderer;
+    for (const entity of this.players.values()) entity.setHealthBarRenderer(renderer);
   }
 
   /** Reicht den scene-lifetime Brand-Partikelcontroller durch, genau wie die Beleuchtung. */
@@ -255,6 +263,7 @@ export class PlayerManager implements OwnerVisualSource {
     // Die Beleuchtung geht ueber den Konstruktor, der Brandcontroller ueber den Setter – beide
     // sind scene-lifetime und muessen auch bei spaeter dazukommenden Spielern anliegen.
     entity.setEntityBurnGpuController(this.burnGpu);
+    entity.setHealthBarRenderer(this.healthBars);
     this.players.set(profile.id, entity);
   }
 

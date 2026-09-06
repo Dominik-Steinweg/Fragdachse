@@ -61,8 +61,8 @@ export const GRAPHICS_FAMILIES = {
   dynamicShadows: ['ShadowSystem'],
   treeTrunks: ['ArenaVisualFactory'],
   spawnRings: ['SpawnEffectRenderer'],
-  playerStatus: ['PlayerStatusRing', 'PlayerEntity', 'DecoyEntity'],
-  enemyStatus: ['EnemyEntity'],
+  playerStatus: ['PlayerStatusRing', 'PlayerEntity', 'DecoyEntity', 'WorldHealthBarRenderer'],
+  enemyStatus: ['EnemyEntity', 'WorldHealthBarRenderer'],
   bossDecoration: ['EnemyEntity'],
   smokeStorm: ['SmokeSystem'],
   asmdEffects: ['AsmdPrimaryRenderer'],
@@ -95,9 +95,9 @@ export const GRAPHICS_FAMILIES = {
   stinkCloudGraphics: ['StinkCloudSystem'],
   biteEffects: ['BiteRenderer'],
   zeusTaserEffects: ['ZeusTaserRenderer'],
-  baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator'],
+  baseMarkers: ['BaseEntity', 'ArenaBuilder', 'HostileBaseIndicator', 'WorldHealthBarRenderer'],
   placementPreview: ['PlacementPreviewRenderer', 'PersistentBaseVisuals'],
-  rockTools: ['RockVisualHelper'],
+  rockTools: ['RockVisualHelper', 'WorldHealthBarRenderer'],
   gameplayHud: ['ArenaHUD', 'CenterHUD', 'CoopDefenseSecondaryObjectiveHud'],
 } as const;
 
@@ -322,6 +322,10 @@ export class ArenaVisualAttributionCollector implements ArenaVisualAttributionSo
    * Hides only already-attributed members of one family for a targeted diagnostic ablation.
    * This deliberately reuses the registration registry; it never traverses a Scene display list.
    */
+  isGraphicsFamilySuppressed(family: GraphicsFamily): boolean {
+    return this.suppressedGraphicsFamilies.has(family);
+  }
+
   setGraphicsFamilySuppressed(family: GraphicsFamily, suppressed: boolean): void {
     if (!this.active) return;
     const registrations = this.graphicsRegistrations.get(family);
@@ -339,7 +343,8 @@ export class ArenaVisualAttributionCollector implements ArenaVisualAttributionSo
     for (const registration of registrations?.values() ?? []) {
       const target = registration.object as Phaser.GameObjects.GameObject & { setVisible?: (visible: boolean) => unknown };
       if (registration.visibilityBeforeSuppression !== undefined) {
-        target.setVisible?.(registration.visibilityBeforeSuppression);
+        // A pooled resource may have been returned while the family was hidden.
+        target.setVisible?.(registration.visibilityBeforeSuppression && target.active !== false);
         registration.visibilityBeforeSuppression = undefined;
       }
     }

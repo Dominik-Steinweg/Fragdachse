@@ -370,7 +370,7 @@ export class ClientUpdateCoordinator {
         if (id !== localId) {
           player.setTargetRotation(dequantizeAngle(ps.rot));
         }
-        player.updateHP(ps.hp, ps.maxHp);
+        player.updateHP(ps.hp, ps.maxHp, countdownActive || (ps.alive && !wasAlive));
         player.updateArmor(ps.armor);
         player.updateBurnStacks(ps.burnStacks ?? 0, ps.burnVisualStyle ?? 'normal');
         player.setVisible(ps.alive);

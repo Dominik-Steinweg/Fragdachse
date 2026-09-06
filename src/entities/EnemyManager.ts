@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import {
   ENEMY_NET_REFRESH_CYCLE_TICKS,
@@ -155,6 +156,7 @@ export class EnemyManager {
   private lethalDamageGuard: EnemyLethalDamageGuard | null = null;
   private visualSink: EnemyVisualSink | null = null;
   private lighting: LightingSystem | null = null;
+  private healthBars: WorldHealthBarRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private worldMetrics: WorldMetrics | null = null;
   /**
@@ -167,6 +169,11 @@ export class EnemyManager {
   constructor(scene: Phaser.Scene, resolvedConfigs: ResolvedCoopDefenseEnemyConfigs = resolveCoopDefenseEnemyConfigs(1)) {
     this.scene = scene;
     this.resolvedConfigs = resolvedConfigs;
+  }
+
+  setHealthBarRenderer(renderer: WorldHealthBarRenderer | null): void {
+    this.healthBars = renderer;
+    for (const enemy of this.enemies.values()) enemy.setHealthBarRenderer(renderer);
   }
 
   setWorldMetrics(metrics: WorldMetrics): void {
@@ -250,7 +257,7 @@ export class EnemyManager {
   ): EnemyEntity {
     const enemy = this.hostSpawnUnitAtWorld(x, y, kind, 'allied', ownerId, ownerColor);
     const maxHp = Math.max(1, Math.round(enemy.getMaxHp() * Math.max(1, hpMultiplier)));
-    enemy.setHp(maxHp, maxHp);
+    enemy.setHp(maxHp, maxHp, true);
     return enemy;
   }
 
@@ -279,6 +286,7 @@ export class EnemyManager {
     );
     enemy.setLightingSystem(this.lighting);
     enemy.setEntityBurnGpuController(this.burnGpu);
+    enemy.setHealthBarRenderer(this.healthBars);
     this.enemies.set(id, enemy);
     this.playSpawnEffect(enemy, options);
     this.onEnemySpawned?.(enemy, options);
@@ -1180,10 +1188,11 @@ export class EnemyManager {
       );
       enemy.setLightingSystem(this.lighting);
       enemy.setEntityBurnGpuController(this.burnGpu);
+      enemy.setHealthBarRenderer(this.healthBars);
       const rotation = remote.rot ?? 0;
       enemy.faceAngle(rotation);
       enemy.setTargetRotation(rotation);
-      enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1);
+      enemy.setHp(remote.hp ?? remote.maxHp ?? 1, remote.maxHp ?? remote.hp ?? 1, true);
       enemy.updateBurnStacks(remote.burnStacks ?? 0, remote.burnVisualStyle ?? 'normal');
       enemy.updatePlasmaChargeStacks(remote.plasmaChargeStacks ?? 0);
       enemy.setDashPhase(remote.dashPhase ?? 0);
@@ -1200,10 +1209,11 @@ export class EnemyManager {
       return;
     }
 
+    const wasBurrowed = enemy.isBurrowed();
     if (remote.burrowed !== undefined) this.setEnemyBurrowed(remote.id, remote.burrowed);
 
     if (remote.hp !== undefined || remote.maxHp !== undefined) {
-      enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp());
+      enemy.setHp(remote.hp ?? enemy.getHp(), remote.maxHp ?? enemy.getMaxHp(), wasBurrowed);
     }
     if (remote.burnStacks !== undefined || remote.burnVisualStyle !== undefined) {
       const currentBurn = enemy.getNetSnapshot();

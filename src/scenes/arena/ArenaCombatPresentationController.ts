@@ -9,6 +9,7 @@ import type { RendererBundle } from './RendererBundle';
 import type { ArenaDiagnosticsFrame } from './ArenaDiagnosticsController';
 
 type CombatRenderers = Pick<RendererBundle,
+  | 'healthBars'
   | 'beer'
   | 'timeBubble'
   | 'blackHole'
@@ -78,6 +79,7 @@ export class ArenaCombatPresentationController {
     diagnosticsFrame?.begin('visualEnemy');
     const auraEnemies = frame.inArena ? this.sources.getEnemyVisuals() : [];
     this.sources.syncEnemyHostVisuals();
+    this.renderers.healthBars.update(frame.inArena);
     diagnosticsFrame?.end('visualEnemy');
     this.renderers.healingAura.syncEnemies(auraEnemies);
     this.renderers.healingAura.update(frame.delta);

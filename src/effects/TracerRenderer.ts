@@ -75,9 +75,15 @@ export class TracerRenderer {
     const dx = segment.to.x - segment.from.x, dy = segment.to.y - segment.from.y;
     const length = Math.hypot(dx, dy), nx = dx / length, ny = dy / length;
     const duration = Math.max(0, segment.to.timeMs - segment.from.timeMs);
-    const speed = duration > 0 ? length * 1000 / duration : Math.hypot(segment.to.vx, segment.to.vy);
+    // Fixed physics steps may be observed milliseconds apart in one render frame. Their
+    // callback interval is not travel time. Use recorded physical velocity for visual response;
+    // positions still own geometry, and timestamps still own historical material age.
+    const speed = Math.hypot(segment.from.vx, segment.from.vy)
+      || Math.hypot(segment.to.vx, segment.to.vy)
+      || (duration > 0 ? length * 1000 / duration : 0);
     const response = Math.max(0.45, Math.min(2.5, 1 + (speed / 1000 - 1) * t.speedResponse));
-    const hotMs = Math.max(18, Math.min(260, t.coreLength * response * 1000 / Math.max(100, speed)));
+    // Up to 500 ms of core plus 500 ms of wake fits the recorded history and GPU lane.
+    const hotMs = Math.max(18, Math.min(500, t.coreLength * response * 1000 / Math.max(100, speed)));
     const ageMs = segment.ageMs + Math.max(0, now - queuedAt);
     const factor = system.quality.getFactor('standard');
     const spec = decoration ? this.wake! : this.core!;
@@ -100,17 +106,21 @@ export class TracerRenderer {
       if (sampleAge >= spec.lifeMs) continue;
       spec.x = segment.from.x + dx * u; spec.y = segment.from.y + dy * u;
       spec.rotation = Math.atan2(dy, dx);
-      spec.scaleStart = (decoration ? width * 1.3 : width) / 4;
-      spec.scaleEnd = decoration ? (width * 1.3 + t.wakeSpread * factor) / 4 : spec.scaleStart;
-      // Butt-ended core strips meet at the recorded vertices without extending past a bounce.
-      const frameWidth = decoration ? 24 : 1;
-      spec.stretchStart = piece / (frameWidth * spec.scaleStart);
-      spec.stretchEnd = piece / (frameWidth * spec.scaleEnd);
+      // Both motifs are one-pixel columns: constant along the path, with their own
+      // transverse edge profile. The wake's soft 24px column has a ~12px bright center.
+      const crossSection = decoration ? 12 : 4;
+      spec.scaleStart = (decoration ? width * 1.3 : width) / crossSection;
+      spec.scaleEnd = decoration ? (width * 1.3 + t.wakeSpread * factor) / crossSection : spec.scaleStart;
+      // Butt joints cover each segment exactly, without tapered holes or additive overlap.
+      spec.stretchStart = piece / spec.scaleStart;
+      spec.stretchEnd = piece / spec.scaleEnd;
       spec.scaleEase = decoration ? GpuVfxEase.CubicIn : GpuVfxEase.Linear;
-      spec.alphaStart = emissiveAlpha(t.coreIntensity * (decoration ? 0.23 * factor : 0.95));
+      spec.alphaStart = emissiveAlpha(decoration ? t.wakeIntensity * factor : t.coreIntensity * 0.95);
       spec.alphaEnd = 0; spec.alphaEase = GpuVfxEase.QuadOut;
       spec.tint = color; spec.tintBlendStart = decoration ? 0.65 : 1 - t.heatContrast; spec.tintBlendEnd = 1;
-      const wave = Math.sin((segment.from.sequence + u) * 1.73) * t.wakeTurbulence;
+      // A continuous spatial field keeps neighbouring pieces coherent across frame/packet
+      // boundaries. Sequence numbers must never turn the wake into independently drifting tiles.
+      const wave = Math.sin((spec.x * 0.6 + spec.y * 0.8) / 96) * t.wakeTurbulence;
       const spread = decoration ? wave * t.wakeSpread * factor : 0;
       spec.vx = -ny * spread * 1000 / spec.lifeMs; spec.vy = nx * spread * 1000 / spec.lifeMs;
       spec.positionEase = GpuVfxEase.CubicIn;

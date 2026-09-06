@@ -836,6 +836,7 @@ export class ArenaScene extends Phaser.Scene {
     // Renderer – der Manager reicht die Beleuchtung deshalb an seine Entities durch.
     playerManager.setLightingSystem(this.renderers.lighting);
     playerManager.setEntityBurnGpuController(this.renderers.entityBurnGpu);
+    playerManager.setHealthBarRenderer(this.renderers.healthBars);
     stinkCloudSystem.setLightingSystem(this.renderers.lighting);
     stinkCloudSystem.setGpuVfxSystem(this.renderers.gpuVfx);
     smokeSystem.setLightingSystem(this.renderers.lighting);
@@ -862,6 +863,8 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers.shadow,
       this.renderers.rockDestruction,
       this.renderers.lighting,
+      null,
+      this.renderers.healthBars,
     );
     const placementPreview = new PlacementPreviewRenderer(this, this.ctx);
     this.persistentBaseVisuals = new PersistentBaseVisuals(this);
@@ -1202,6 +1205,7 @@ export class ArenaScene extends Phaser.Scene {
       this.lobbyOverlay?.destroy();
       this.aimPresentation?.destroy();
       this.aimPresentation = null;
+      this.renderers.healthBars.destroy();
       this.combatPresentation?.destroy();
       this.combatPresentation = null;
       this.persistentBaseVisuals?.destroy();

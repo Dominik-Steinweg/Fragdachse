@@ -515,7 +515,6 @@ export const HIT_FEEDBACK_VFX = {
 export const HP_BAR_WIDTH    = PLAYER_SIZE;     // gleiche Breite wie Spieler
 export const HP_BAR_HEIGHT   = 5;
 export const HP_BAR_OFFSET_Y = 24;              // Pixel unter Sprite-Mittelpunkt
-export const ENEMY_HP_BAR_VISIBLE_MS = 3000;
 export const ARMOR_BAR_WIDTH    = PLAYER_SIZE;
 export const ARMOR_BAR_HEIGHT   = 3;
 export const ARMOR_BAR_OFFSET_Y = HP_BAR_OFFSET_Y + HP_BAR_HEIGHT + 1;

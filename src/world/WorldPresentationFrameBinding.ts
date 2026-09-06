@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import {
@@ -131,6 +132,8 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly healthBars?: WorldHealthBarRenderer;
+  readonly healthBarScope?: object;
   /** Die Scene, deren Hauptkamera diese World-Instanz waehrend ihrer Lebenszeit positioniert. */
   readonly scene: Phaser.Scene;
   /** Wie dieser Peer die World lokal darstellt; die Weltkamera ist eine ihrer Flaechen. */
@@ -511,13 +514,14 @@ export class WorldPresentationFrameBinding {
   }
 
   /**
-   * Idempotent; danach sind alle Methoden wirkungslos. Es raeumt bewusst nichts auf – insbesondere
-   * bleibt `camera.scrollX/Y` unveraendert stehen, der erste Frame der naechsten World ueberschreibt
-   * ihn ohnehin ueber `syncCamera()`.
+   * Idempotent; loest die aktiven HP-Bindings und Light-Occluder dieser World vor dem Handoff.
+   * Danach sind alle Methoden wirkungslos. `camera.scrollX/Y` bleibt unveraendert stehen;
+   * der erste Frame der naechsten World ueberschreibt ihn ueber `syncCamera()`.
    */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
     this.trainLightOccluders.clear();
     this.input.lighting.clearDynamicOccluderSource(this.trainLightOccluders);
   }

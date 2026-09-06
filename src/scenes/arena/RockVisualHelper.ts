@@ -1,3 +1,5 @@
+import type { WorldHealthBarRenderer, HealthBarHandle } from '../../effects/health/WorldHealthBarRenderer';
+import { TURRET_HEALTH_BAR_STYLE } from '../../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
 import { ArenaBuilder }     from '../../arena/ArenaBuilder';
 import { RockPresentation, arenaWorldFrameSource } from '../../arena/RockPresentation';
@@ -34,8 +36,7 @@ interface TurretVisualState {
   aura:      Phaser.GameObjects.Image;
   rangeCircle: Phaser.GameObjects.Graphics;
 
-  hpBarBg:   Phaser.GameObjects.Rectangle;
-  hpBarFg:   Phaser.GameObjects.Rectangle;
+  healthBar: HealthBarHandle | null;
   constructionId?: SyncedPlaceableRock['constructionId'];
   turretWeaponId?: SyncedPlaceableRock['turretWeaponId'];
 }
@@ -64,6 +65,7 @@ export class RockVisualHelper {
     private readonly rockDestructionRenderer: RockDestructionRenderer,
     private readonly lighting: LightingSystem | null,
     worldPort?: RockVisualWorldPort | null,
+    private readonly healthBars: WorldHealthBarRenderer | null = null,
   ) {
     this.worldPort = worldPort ?? null;
     this.ensureTurretTextures();
@@ -464,6 +466,7 @@ export class RockVisualHelper {
   }
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {
+    if (!this.arenaResult || this.arenaResult.rockVisualSystem === null) return;
     const world = this.gridToWorld(rock.gridX, rock.gridY);
     const weaponId = rock.turretWeaponId ?? 'SPORES';
     const visualSpec = getTurretVisualSpec(weaponId);
@@ -480,22 +483,13 @@ export class RockVisualHelper {
         .setDepth(DEPTH.ROCKS + 0.2);
 
       const rangeCircle = this.scene.add.graphics().setDepth(DEPTH.ROCKS - 0.2);
-      const hpBarBg = this.scene.add.rectangle(world.x, world.y + 22, 24, 4, 0x333333)
-        .setDepth(DEPTH.ROCKS + 0.35);
-      const hpBarFg = this.scene.add.rectangle(world.x - 12, world.y + 22, 24, 4, 0x00cc44)
-        .setOrigin(0, 0.5)
-        .setDepth(DEPTH.ROCKS + 0.4);
-
       registerGraphicsObject(this.scene, 'rockTools', rangeCircle);
-      registerGraphicsObject(this.scene, 'rockTools', hpBarBg);
-      registerGraphicsObject(this.scene, 'rockTools', hpBarFg);
 
       visual = {
         image,
         aura,
         rangeCircle,
-        hpBarBg,
-        hpBarFg,
+        healthBar: null,
         constructionId: rock.constructionId,
         turretWeaponId: rock.turretWeaponId,
       };
@@ -506,7 +500,6 @@ export class RockVisualHelper {
       ? getCoopDefenseConstructionDefinition(rock.constructionId)
       : undefined;
     const indestructible = definition?.indestructible === true;
-    const ratio = Phaser.Math.Clamp(rock.hp / Math.max(1, rock.maxHp), 0, 1);
     const transform = getTurretVisualTransform(visualSpec, world.x, world.y, rock.angle);
     visual.image
       .setTexture(visualSpec.textureKey)
@@ -530,12 +523,13 @@ export class RockVisualHelper {
     }
     visual.rangeCircle.setVisible(!rock.constructionId || rock.turretWeaponId === 'TURRET_SPORES');
 
-    visual.hpBarBg.setPosition(world.x, world.y + 22).setVisible(!indestructible && ratio < 1);
-    visual.hpBarFg
-      .setPosition(world.x - 12, world.y + 22)
-      .setSize(24 * ratio, 4)
-      .setFillStyle(ratio > 0.5 ? 0x00cc44 : ratio > 0.25 ? 0xffcc00 : 0xff3300)
-      .setVisible(!indestructible && ratio < 1);
+    if (!indestructible && !this.healthBars?.isValid(visual.healthBar)) {
+      visual.healthBar = this.healthBars?.bind(TURRET_HEALTH_BAR_STYLE, rock.hp, rock.maxHp,
+        world.x, world.y + 22, !visual.image.visible) ?? null;
+    }
+    this.healthBars?.suppress(visual.healthBar, indestructible || !visual.image.visible);
+    this.healthBars?.observe(visual.healthBar, rock.hp, rock.maxHp);
+    this.healthBars?.position(visual.healthBar, world.x, world.y + 22);
   }
 
   updateTurretAngle(rockId: number, angle: number): void {
@@ -580,8 +574,7 @@ export class RockVisualHelper {
     visual.image.destroy();
     visual.aura.destroy();
     visual.rangeCircle.destroy();
-    visual.hpBarBg.destroy();
-    visual.hpBarFg.destroy();
+    this.healthBars?.release(visual.healthBar);
     this.turretVisuals.delete(id);
   }
 

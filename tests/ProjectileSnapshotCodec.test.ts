@@ -49,7 +49,7 @@ describe('Projektil-Statik-Codec', () => {
       grenadeVisualPreset: 'molotov',
       energyBallVariant: 'plasma',
       velocityDecay: 0.82,
-      tracer: { profile: 'heavy', coreIntensity: 0.75, coreWidth: 1.5, coreLength: 80, wakePersistence: 120, wakeSpread: 3, heatContrast: 0.85, wakeTurbulence: 0.3, moteAmount: 0.05, speedResponse: 0.5, color: 0xffcc00 },
+      tracer: { profile: 'heavy', coreIntensity: 0.75, coreWidth: 1.5, coreLength: 80, wakeIntensity: 0.6, wakePersistence: 120, wakeSpread: 3, heatContrast: 0.85, wakeTurbulence: 0.3, moteAmount: 0.05, speedResponse: 0.5, color: 0xffcc00 },
       shotAudioKey: 'ak47',
       suppressSpawnFx: true,
     };

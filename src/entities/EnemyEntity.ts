@@ -1,3 +1,5 @@
+import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
+import { enemyHealthBarStyle } from '../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
 import { WEAPON_CONFIGS, type WeaponConfig } from '../loadout/LoadoutConfig';
@@ -6,8 +8,6 @@ import type { BaseWeapon } from '../loadout/BaseWeapon';
 import {
   COLORS,
   DEPTH,
-  ENEMY_HP_BAR_VISIBLE_MS,
-  HP_BAR_HEIGHT,
   HP_BAR_OFFSET_Y,
   HP_BAR_WIDTH,
   VOID_FIRE_COLOR,
@@ -76,8 +76,8 @@ export class EnemyEntity {
   private readonly authoritative: boolean;
   private readonly config: ResolvedCoopDefenseEnemyConfig;
   private readonly attackWeapons: readonly EnemyAttackWeapon[];
-  private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
-  private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
+  private healthBars: WorldHealthBarRenderer | null = null;
+  private healthBar: HealthBarHandle | null = null;
   private glowHalo: Phaser.GameObjects.Image | null = null;
   private timebombFuseRenderer: TimebombFuseRenderer | null = null;
   private voidMolotovWindupRing: Phaser.GameObjects.Arc | null = null;
@@ -97,7 +97,6 @@ export class EnemyEntity {
   private nextAttackScanAt = 0;
   private currentAimAngle = 0;
   private targetAimAngle = 0;
-  private hpBarVisibleUntilMs = 0;
   private burnRenderer: EntityBurnRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
@@ -281,23 +280,29 @@ export class EnemyEntity {
     this.targetAimAngle = aimAngle;
   }
 
-  setHp(hp: number, maxHp: number = this.maxHp): void {
+  setHealthBarRenderer(renderer: WorldHealthBarRenderer | null): void {
+    if (renderer === this.healthBars) return;
+    this.healthBars?.release(this.healthBar);
+    this.healthBar = null;
+    this.healthBars = renderer;
+    this.bindHealthBar();
+  }
+
+  private bindHealthBar(): void {
+    if (!this.sprite.active || !this.healthBars || this.healthBars.isValid(this.healthBar)) return;
+    this.healthBar = this.healthBars.bind(
+      enemyHealthBarStyle(this.faction === 'hostile' && this.config.isBoss === true, this.getHpBarWidth()),
+      this.currentHp, this.maxHp, this.sprite.x, this.sprite.y + this.getHpBarOffsetY(),
+      this.burrowed || !this.sprite.visible,
+    );
+  }
+
+  setHp(hp: number, maxHp: number = this.maxHp, baseline = false): void {
     this.maxHp = Math.max(1, maxHp);
     this.currentHp = Phaser.Math.Clamp(hp, 0, this.maxHp);
-    if (this.currentHp < this.maxHp && this.currentHp > 0) {
-      this.hpBarVisibleUntilMs = Date.now() + ENEMY_HP_BAR_VISIBLE_MS;
-      this.ensureHpBars();
-    }
-    const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
-    if (this.hpBarFg) {
-      this.hpBarFg.width = this.getHpBarWidth() * ratio;
-    }
-    const color = ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4;
-    this.hpBarFg?.setFillStyle(color);
-
-    if (((this.faction === 'allied' || !this.config.isBoss) && this.currentHp >= this.maxHp) || this.currentHp <= 0) {
-      this.destroyHpBars();
-    }
+    this.bindHealthBar();
+    if (baseline) this.healthBars?.baseline(this.healthBar, this.currentHp, this.maxHp);
+    else this.healthBars?.observe(this.healthBar, this.currentHp, this.maxHp);
   }
 
   getHp(): number {
@@ -486,7 +491,7 @@ export class EnemyEntity {
     this.bossAura?.setVisible(!burrowed);
     this.bossRing?.setVisible(!burrowed);
     this.bossLabel?.setVisible(!burrowed);
-    if (burrowed) this.destroyHpBars();
+    this.healthBars?.suppress(this.healthBar, burrowed);
     this.syncWalkingAnimation();
     this.syncBar();
     return true;
@@ -626,18 +631,9 @@ export class EnemyEntity {
     this.syncBurnEffect();
     this.syncPlasmaChargeEffect();
     this.syncVulnerableMarker();
-    if (!this.shouldShowHpBars()) {
-      this.destroyHpBars();
-      return;
-    }
-
-    this.ensureHpBars();
-    if (!this.hpBarBg || !this.hpBarFg) return;
-    const x = this.sprite.x;
-    const hpBarWidth = this.getHpBarWidth();
-    const y = this.sprite.y + this.getHpBarOffsetY();
-    this.hpBarBg.setPosition(x, y);
-    this.hpBarFg.setPosition(x - hpBarWidth * 0.5, y);
+    this.bindHealthBar();
+    this.healthBars?.suppress(this.healthBar, this.burrowed || !this.sprite.visible);
+    this.healthBars?.position(this.healthBar, this.sprite.x, this.sprite.y + this.getHpBarOffsetY());
   }
 
   getNetSnapshot(): SyncedEnemyState {
@@ -665,7 +661,8 @@ export class EnemyEntity {
   }
 
   destroy(): void {
-    this.destroyHpBars();
+    this.healthBars?.release(this.healthBar);
+    this.healthBar = null;
     this.burnRenderer?.destroy();
     this.burnRenderer = null;
     this.plasmaChargeRenderer?.destroy();
@@ -707,35 +704,6 @@ export class EnemyEntity {
       this.plasmaChargeStacks,
       this.sprite.visible && this.currentHp > 0 && !this.burrowed,
     );
-  }
-
-  private shouldShowHpBars(): boolean {
-    if (this.burrowed) return false;
-    return this.currentHp > 0 && (
-      (this.faction === 'hostile' && this.config.isBoss === true)
-      || (this.currentHp < this.maxHp && Date.now() <= this.hpBarVisibleUntilMs)
-    );
-  }
-
-  private ensureHpBars(): void {
-    if (this.hpBarBg && this.hpBarFg) return;
-    const x = this.sprite.x;
-    const hpBarWidth = this.getHpBarWidth();
-    const y = this.sprite.y + this.getHpBarOffsetY();
-    this.hpBarBg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, 0x333333);
-    this.hpBarBg.setDepth(DEPTH.SMOKE + 0.5);
-    this.hpBarFg = this.sprite.scene.add.rectangle(x, y, hpBarWidth, HP_BAR_HEIGHT, COLORS.RED_2);
-    this.hpBarFg.setOrigin(0, 0.5);
-    this.hpBarFg.setDepth(DEPTH.SMOKE + 0.6);
-    registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.hpBarBg);
-    registerGraphicsObject(this.sprite.scene, 'enemyStatus', this.hpBarFg);
-  }
-
-  private destroyHpBars(): void {
-    this.hpBarBg?.destroy();
-    this.hpBarFg?.destroy();
-    this.hpBarBg = null;
-    this.hpBarFg = null;
   }
 
   private getHpBarWidth(): number {

@@ -65,6 +65,15 @@ afterEach(() => {
 });
 
 describe('gpu vfx atlas', () => {
+  it('uses constant longitudinal cross-sections for continuous flight strips', () => {
+    const { atlas } = build();
+    for (const name of ['flight-core-strip', 'flight-wake-strip']) {
+      const frame = atlas.get(name);
+      expect(frame.cutWidth).toBe(1);
+      expect(frame.cutHeight).toBeGreaterThan(1);
+    }
+  });
+
   it('packs into the smallest fitting power of two', () => {
     const layout = packGpuVfxAtlas();
     // Die Groesse steht nicht im Code, sie ergibt sich aus dem Manifest.

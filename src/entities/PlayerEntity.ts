@@ -1,3 +1,5 @@
+import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
+import { playerHealthBarStyle } from '../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
 import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
 import {
@@ -21,7 +23,7 @@ import {
   toCssColor,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
-  HP_MAX, HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
+  HP_MAX, HP_BAR_OFFSET_Y,
   getAimAngleFromPlayerSpriteRotation,
   getPlayerSpriteRotationFromAimAngle,
 } from '../config';
@@ -75,8 +77,9 @@ export class PlayerEntity {
   private displayName: string;
   private readonly nameLabel: Phaser.GameObjects.Text | null = null;
   private nameLabelVisible = false;
-  private hpBarBg:  Phaser.GameObjects.Rectangle | null = null;
-  private hpBarFg:  Phaser.GameObjects.Rectangle | null = null;
+  private healthBars: WorldHealthBarRenderer | null = null;
+  private healthBar: HealthBarHandle | null = null;
+  private healthObserved = false;
   private armorBarBg: Phaser.GameObjects.Rectangle | null = null;
   private armorBarFg: Phaser.GameObjects.Rectangle | null = null;
   private currentHp = HP_MAX;
@@ -252,24 +255,11 @@ export class PlayerEntity {
       // Presentation-Modus entstehen sie deshalb gar nicht erst, statt dauerhaft unsichtbar in
       // der Display-Liste zu liegen.
       if (this.presentation) {
-        this.hpBarBg = null;
-        this.hpBarFg = null;
         this.armorBarBg = null;
         this.armorBarFg = null;
         this.nameLabel = null;
         this.worldBarsVisible = false;
       } else {
-        // HP-Balken Hintergrund (dunkelgrau, zentriert)
-        this.hpBarBg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, 0x333333);
-        this.hpBarBg.setDepth(DEPTH.PLAYERS + 1);
-        registerGraphicsObject(scene, 'playerStatus', this.hpBarBg);
-
-        // HP-Balken Vordergrund (farbig, links ausgerichtet)
-        this.hpBarFg = scene.add.rectangle(x, y + HP_BAR_OFFSET_Y, HP_BAR_WIDTH, HP_BAR_HEIGHT, isEnemy ? COLORS.RED_2 : 0x00cc44);
-        this.hpBarFg.setOrigin(0, 0.5);   // linke Kante als Ankerpunkt → schrumpft von rechts
-        this.hpBarFg.setDepth(DEPTH.PLAYERS + 2);
-        registerGraphicsObject(scene, 'playerStatus', this.hpBarFg);
-
         this.armorBarBg = scene.add.rectangle(x, y + ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH, ARMOR_BAR_HEIGHT, 0x333333);
         this.armorBarBg.setDepth(DEPTH.PLAYERS + 1);
         this.armorBarBg.setVisible(false);
@@ -503,8 +493,8 @@ export class PlayerEntity {
     const x = this.runtime.x;
     const hpY = this.runtime.y + HP_BAR_OFFSET_Y;
     const armorY = this.runtime.y + ARMOR_BAR_OFFSET_Y;
-    this.hpBarBg?.setPosition(x, hpY);
-    this.hpBarFg?.setPosition(x - HP_BAR_WIDTH / 2, hpY);
+    this.bindHealthBar();
+    this.healthBars?.position(this.healthBar, x, hpY);
     this.armorBarBg?.setPosition(x, armorY);
     this.armorBarFg?.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
     this.nameLabel?.setPosition(x, this.runtime.y - PLAYER_SIZE * 0.72);
@@ -513,17 +503,32 @@ export class PlayerEntity {
     this.syncWalkingAnimation();
   }
 
-  /** HP-Wert aktualisieren und Balken neu zeichnen. */
-  updateHP(hp: number, maxHp: number = this.maxHp): void {
+  setHealthBarRenderer(renderer: WorldHealthBarRenderer | null): void {
+    if (renderer === this.healthBars) return;
+    this.healthBars?.release(this.healthBar);
+    this.healthBar = null;
+    this.healthBars = renderer;
+    this.bindHealthBar();
+  }
+
+  private bindHealthBar(): void {
+    if (!this.sprite?.active || this.presentation || !this.healthBars || this.healthBars.isValid(this.healthBar)) return;
+    this.healthBar = this.healthBars.bind(
+      playerHealthBarStyle(this.isEnemy), this.currentHp, this.maxHp,
+      this.runtime.x, this.runtime.y + HP_BAR_OFFSET_Y,
+      !this.baseVisible || !this.worldBarsVisible || this.isDecoyStealthed
+        || this.burrowPhase === 'underground' || this.burrowPhase === 'trapped',
+    );
+  }
+
+  /** HP projection; the first state of this entity and explicit resets are silent. */
+  updateHP(hp: number, maxHp: number = this.maxHp, baseline = false): void {
     this.maxHp = Math.max(1, maxHp);
     this.currentHp = Math.max(0, Math.min(this.maxHp, hp));
-    if (!this.hpBarFg) return;
-    const ratio = this.currentHp / this.maxHp;
-    this.hpBarFg.width = HP_BAR_WIDTH * ratio;
-    const color = this.isEnemy
-      ? (ratio > 0.5 ? COLORS.RED_2 : ratio > 0.25 ? COLORS.RED_3 : COLORS.RED_4)
-      : (ratio > 0.5 ? 0x00cc44 : ratio > 0.25 ? 0xffcc00 : 0xff3300);
-    this.hpBarFg.setFillStyle(color);
+    this.bindHealthBar();
+    if (baseline || !this.healthObserved) this.healthBars?.baseline(this.healthBar, this.currentHp, this.maxHp);
+    else this.healthBars?.observe(this.healthBar, this.currentHp, this.maxHp);
+    this.healthObserved = true;
   }
 
   /** Anteil verbleibender Lebenspunkte, 1 … 0. Speist die Bildkomposition bei niedriger Gesundheit. */
@@ -590,6 +595,7 @@ export class PlayerEntity {
       // Übergang alive → dead: der Death-Event enthält den bereits erfassten Sprite-Frame.
       this.isAliveVisual = false;
     } else if (visible && !this.isAliveVisual) {
+      this.healthBars?.baseline(this.healthBar, this.currentHp, this.maxHp);
       // Übergang dead → alive (Respawn): Spawn-Effekt
       this.isAliveVisual = true;
       this.playSpawnEffect();
@@ -983,12 +989,10 @@ export class PlayerEntity {
     const alpha = this.burrowTweenAlpha * (this.isDecoyStealthed ? this.stealthTweenAlpha : 1);
     this.sprite.setVisible(visible);
     this.nameLabel?.setVisible(this.nameLabelVisible && visible);
-    this.hpBarBg?.setVisible(barsVisible);
-    this.hpBarFg?.setVisible(barsVisible);
+    this.healthBars?.suppress(this.healthBar, !barsVisible);
     this.armorBarBg?.setVisible(barsVisible && this.currentArmor > 0);
     this.armorBarFg?.setVisible(barsVisible && this.currentArmor > 0);
-    this.hpBarBg?.setAlpha(alpha * 0.92);
-    this.hpBarFg?.setAlpha(alpha);
+    this.healthBars?.alpha(this.healthBar, alpha, alpha * 0.92);
     this.armorBarBg?.setAlpha(alpha * 0.92);
     this.armorBarFg?.setAlpha(alpha);
     this.stealthShell?.setVisible(visible && this.isDecoyStealthed);
@@ -1117,8 +1121,8 @@ export class PlayerEntity {
     this.burnRenderer?.destroy();
     this.rageRenderer?.destroy();
     this.heldItem?.destroy();
-    this.hpBarBg?.destroy();
-    this.hpBarFg?.destroy();
+    this.healthBars?.release(this.healthBar);
+    this.healthBar = null;
     this.armorBarBg?.destroy();
     this.armorBarFg?.destroy();
     if (this.sprite) removeInternalFx(this.sprite, this.glowFx);

@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import { CELL_SIZE, COOP_DEFENSE_NAV_TICK_DIVISOR_STRATEGIC, COOP_DEFENSE_NAV_TICK_INTERVAL_MS } from '../config';
 import type { BaseSpec } from '../arena/BaseRegistry';
@@ -66,6 +67,7 @@ export interface CoopMissionCombatCompositionOptions {
   readonly nextGenerationId: () => number;
   readonly visualSink: EnemyVisualSink | null;
   readonly lighting: LightingSystem | null;
+  readonly healthBars?: WorldHealthBarRenderer | null;
   readonly entityBurnGpuController: EntityBurnGpuController | null;
   readonly onBossSpawned?: (spawnedAtMs: number) => void;
   readonly onDiagnosticEvent?: (type: string, fields: Record<string, unknown>) => void;
@@ -110,6 +112,7 @@ export class CoopMissionCombatComposition {
     enemyManager.setVisualSink(this.options.visualSink);
     enemyManager.setLightingSystem(this.options.lighting);
     enemyManager.setEntityBurnGpuController(this.options.entityBurnGpuController);
+    enemyManager.setHealthBarRenderer(this.options.healthBars ?? null);
     return enemyManager;
   }
 

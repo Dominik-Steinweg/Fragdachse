@@ -654,7 +654,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);
       }
       if (!countdownActive) this.prevAliveStates.set(player.id, alive);
-      player.updateHP(hp, maxHp);
+      player.updateHP(hp, maxHp, countdownActive || (alive && !wasAlive));
       player.updateArmor(armor);
       const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);

@@ -1,3 +1,4 @@
+import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import type { SyncedBaseState } from '../types';
 import type { CoopBaseFaction } from '../config/coopDefenseMaps';
@@ -56,6 +57,8 @@ export class BaseManager {
   private readonly worldMetrics: WorldMetrics;
   private activeActivityBinding: BaseActivityBinding | null = null;
   private destroyed = false;
+  private readonly snapshotSeen = new Set<string>();
+  private readonly snapshotById = new Map<string, SyncedBaseState>();
   /** Projection of the live base entities, rebuilt only when obstacleGeneration changes. */
   private movementBlockedCells: Set<number> | null = null;
   private movementBlockedCellsGeneration = -1;
@@ -67,13 +70,14 @@ export class BaseManager {
     destructionHooks: BaseDestructionHooks = {},
     presentation = true,
     damageable = false,
+    healthBars: WorldHealthBarRenderer | null = null,
   ) {
     this.presentation = presentation;
     this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
     for (const spec of baseSpecs) {
-      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable);
+      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);
@@ -133,6 +137,7 @@ export class BaseManager {
         this.activeActivityBinding?.detach();
         attached = true;
         this.activeActivityBinding = binding;
+        this.snapshotSeen.clear();
         for (const entity of this.entities) entity.applyActivityOverlay(overlayById.get(entity.id)!);
         this.rebuildActivityIndexes();
         onChanged();
@@ -142,6 +147,7 @@ export class BaseManager {
         attached = false;
         if (this.activeActivityBinding !== binding) return;
         this.activeActivityBinding = null;
+        this.snapshotSeen.clear();
         for (const entity of this.entities) entity.clearActivityOverlay();
         this.rebuildActivityIndexes();
         onChanged();
@@ -406,19 +412,19 @@ export class BaseManager {
 
   /** Client-only: Übernahme des Server-State aus GameState.bases. */
   applySnapshot(snapshot: readonly SyncedBaseState[]): void {
-    // Fehlende Einträge = volle HP und keine synchronisierten Turret-Winkel
-    // (Delta-Convention). Erst auf Max setzen, dann gesendete Werte überschreiben.
-    // Dormante und bereits zerstörte Basen bleiben vom Reset ausgespart. Dadurch bleibt der
-    // authored Startzustand dormanter B2-Strukturen erhalten und ein zerstörter Client-State
-    // kann durch ein später fehlendes Delta nicht wiederbelebt werden.
+    // Resolve the net value once: a refresh must not manufacture full-heal/damage pairs.
+    this.snapshotById.clear();
+    for (const remote of snapshot) this.snapshotById.set(remote.id, remote);
     for (const entity of this.entities) {
-      if (entity.isInert()) continue;
-      entity.setHp(entity.getMaxHp());
-    }
-    for (const remote of snapshot) {
-      const entity = this.byId.get(remote.id);
-      entity?.setHp(remote.hp);
-      if (remote.turrets) entity?.applyTurretSnapshot(remote.turrets);
+      const remote = this.snapshotById.get(entity.id);
+      const baseline = !this.snapshotSeen.has(entity.id);
+      if (remote) {
+        entity.setHp(remote.hp, baseline);
+        if (remote.turrets) entity.applyTurretSnapshot(remote.turrets);
+      } else if (!entity.isInert()) {
+        entity.setHp(entity.getMaxHp(), baseline);
+      }
+      if (remote || !entity.isInert()) this.snapshotSeen.add(entity.id);
     }
   }
 
@@ -431,6 +437,8 @@ export class BaseManager {
     for (const entity of this.entities) entity.destroy();
     this.entities.length = 0;
     this.byId.clear();
+    this.snapshotSeen.clear();
+    this.snapshotById.clear();
     this.turretOwners.clear();
     this.movementBlockedCells = null;
     this.movementBlockedCellsGeneration = -1;

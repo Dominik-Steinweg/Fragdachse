@@ -1,3 +1,5 @@
+import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
+import { baseHealthBarStyle } from '../effects/health/healthBarStyles';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import * as Phaser from 'phaser';
 import {
@@ -5,7 +7,6 @@ import {
   COLORS,
   COOP_DEFENSE_BASE_HP_BAR_FILL,
   COOP_DEFENSE_BASE_HP_BAR_GAP,
-  COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
   COOP_DEFENSE_HOSTILE_BASE_HP_BAR_FILL,
   DEPTH,
   TEAM_BLUE_COLOR,
@@ -72,12 +73,10 @@ export class BaseEntity {
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
   private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
   private readonly turretAngles = new Map<string, number>();
-  private hpBarBg: Phaser.GameObjects.Rectangle | null = null;
-  private hpBarFg: Phaser.GameObjects.Rectangle | null = null;
+  private healthBar: HealthBarHandle | null = null;
   private readonly hpBarWidth: number;
   /**
-   * Fraktionsfarbe des HP-Balkens. Als Feld gehalten, weil `refreshHpBar()` die Fuellfarbe bei
-   * jeder HP-Aenderung neu setzt – ohne das wuerde der Balken beim ersten Treffer zurueckspringen.
+   * Fraktionsfarbe fuer das konstante Base-Profil, auch nach einem Activity-Overlay-Reset.
    */
   private readonly hpBarFill: number;
   /**
@@ -101,6 +100,7 @@ export class BaseEntity {
     metrics: WorldMetrics,
     presentation = true,
     damageable = false,
+    private readonly healthBars: WorldHealthBarRenderer | null = null,
   ) {
     this.scene = scene;
     this.metrics = metrics;
@@ -196,29 +196,11 @@ export class BaseEntity {
     const bounds = getBaseWorldBounds(this.spec.region, this.metrics);
     const centerX = bounds.x + bounds.width / 2;
     const hpBarY = bounds.y + bounds.height + COOP_DEFENSE_BASE_HP_BAR_GAP;
-    const hpBarBg = this.scene.add.rectangle(
-      centerX,
-      hpBarY,
-      this.hpBarWidth,
-      COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
-      0x333333,
-    );
-    hpBarBg.setStrokeStyle(1, COLORS.GREY_6);
-    hpBarBg.setDepth(DEPTH.BASES + 1);
-    registerGraphicsObject(this.scene, 'baseMarkers', hpBarBg);
-    this.hpBarBg = hpBarBg;
-    const hpBarFg = this.scene.add.rectangle(
-      centerX - this.hpBarWidth / 2,
-      hpBarY,
-      this.hpBarWidth,
-      COOP_DEFENSE_BASE_HP_BAR_HEIGHT,
-      this.hpBarFill,
-    );
-    hpBarFg.setOrigin(0, 0.5);
-    hpBarFg.setDepth(DEPTH.BASES + 2);
-    registerGraphicsObject(this.scene, 'baseMarkers', hpBarFg);
-    this.hpBarFg = hpBarFg;
-    this.refreshHpBar();
+    if (!this.healthBars?.isValid(this.healthBar)) {
+      this.healthBar = this.healthBars?.bind(baseHealthBarStyle(this.hpBarWidth, this.hpBarFill),
+        this.currentHp, this.maxHp, centerX, hpBarY) ?? null;
+    }
+    this.healthBars?.position(this.healthBar, centerX, hpBarY);
   }
 
   /** Lichtpunkte des Basisleuchtens, oder leer wenn die Basis inert ist. */
@@ -430,21 +412,18 @@ export class BaseEntity {
   }
 
   /** Setzt die HP (Host nach Schaden, Client beim State-Apply). */
-  setHp(hp: number): void {
+  setHp(hp: number, baseline = false): void {
     // Auch ein fremder Snapshot darf eine unverwundbare Struktur nicht fallen lassen.
     if (!this.damageable) return;
     const clamped = Math.max(0, Math.min(this.maxHp, hp));
-    if (clamped === this.currentHp) return;
+    if (clamped === this.currentHp) {
+      if (baseline) this.healthBars?.baseline(this.healthBar, clamped, this.maxHp);
+      return;
+    }
     this.currentHp = clamped;
-    this.refreshHpBar();
+    if (baseline) this.healthBars?.baseline(this.healthBar, clamped, this.maxHp);
+    else this.healthBars?.observe(this.healthBar, clamped, this.maxHp);
     if (this.currentHp <= 0) this.handleDestruction();
-  }
-
-  private refreshHpBar(): void {
-    const ratio = this.maxHp > 0 ? this.currentHp / this.maxHp : 0;
-    if (!this.hpBarFg) return;
-    this.hpBarFg.width = this.hpBarWidth * ratio;
-    this.hpBarFg.setFillStyle(this.hpBarFill);
   }
 
   /** Entfernt Gameplay-Bodies sofort; Zellbilder übernimmt die gestaffelte Zerstörung. */
@@ -466,8 +445,7 @@ export class BaseEntity {
 
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
 
-    if (this.hpBarBg?.active) this.hpBarBg.setVisible(false);
-    if (this.hpBarFg?.active) this.hpBarFg.setVisible(false);
+    this.healthBars?.suppress(this.healthBar, true);
 
     if (this.onDestroyed) {
       this.onDestroyed();
@@ -495,8 +473,8 @@ export class BaseEntity {
     this.turretAngles.clear();
     this.spawnCenterTween?.stop();
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
-    if (this.hpBarBg?.active) this.hpBarBg.destroy();
-    if (this.hpBarFg?.active) this.hpBarFg.destroy();
+    this.healthBars?.release(this.healthBar);
+    this.healthBar = null;
   }
 
   private resetRepresentation(): void {
@@ -518,10 +496,8 @@ export class BaseEntity {
     this.spawnCenterTween = null;
     if (this.spawnCenterMarker?.active) this.spawnCenterMarker.destroy();
     this.spawnCenterMarker = null;
-    if (this.hpBarBg?.active) this.hpBarBg.destroy();
-    if (this.hpBarFg?.active) this.hpBarFg.destroy();
-    this.hpBarBg = null;
-    this.hpBarFg = null;
+    this.healthBars?.release(this.healthBar);
+    this.healthBar = null;
   }
 
   private resetTurretAngles(): void {

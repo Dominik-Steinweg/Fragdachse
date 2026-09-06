@@ -1,3 +1,4 @@
+import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
 import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
@@ -64,6 +65,7 @@ import type { GameAudioSystem }   from '../../audio/GameAudioSystem';
 
 /** All visual renderers grouped together. World-dependent renderers start as null. */
 export interface RendererBundle {
+  healthBars: WorldHealthBarRenderer;
   bullet:              BulletRenderer;
   asmdPrimary:         AsmdPrimaryRenderer;
   plasmaBurner:        PlasmaBurnerRenderer;
@@ -312,6 +314,7 @@ export function createRendererBundle(
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
+    healthBars: new WorldHealthBarRenderer(scene),
     gpuVfx,
     combatGoreGpu,
     entityBurnGpu,

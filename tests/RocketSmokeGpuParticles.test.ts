@@ -25,6 +25,7 @@ import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { gpuVfxEasedBase } from '../src/effects/gpu/GpuVfxMember';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { DEPTH } from '../src/config';
+import type { FlightSignatureConfig } from '../src/projectile/FlightSignature';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 function setup() {
@@ -120,6 +121,75 @@ describe('rocket smoke path particles', () => {
 });
 
 describe('gpu vfx eased base', () => {
+  it('keeps adjoining flight strips continuous across tightly batched physics observations', () => {
+    const { scene, registry } = setup();
+    const tracer = new TracerRenderer(scene as never);
+    tracer.registerGpuVfx(registry);
+    tracer.createTracer(1, 0, 0, { profile: 'automatic', moteAmount: 0 }, 0xffaa00);
+    const points = [
+      { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
+      { sequence: 2, timeMs: 16, x: 8, y: 0, vx: 1000, vy: 0 },
+      { sequence: 90, timeMs: 16.1, x: 16, y: 0, vx: 1000, vy: 0 },
+      { sequence: 91, timeMs: 32, x: 24, y: 0, vx: 1000, vy: 0 },
+    ];
+    for (let i = 1; i < points.length; i++) tracer.addSegment(1, {
+      from: points[i - 1], to: points[i], ageMs: 32 - points[i].timeMs,
+    });
+    registry.update(0);
+    const lane = findFakeLane(scene, 'flight-signature');
+    for (const frame of ['flight-core-strip', 'flight-wake-strip']) {
+      const members = lane.edited.map(i => lane.members[i]).filter(m => m.frame === frame);
+      expect(members).toHaveLength(3);
+      expect(new Set(members.map(m => m.alpha.duration)).size).toBe(1);
+      expect(new Set(members.map(m => evaluateFakeAnimation(m.scaleY, 0))).size).toBe(1);
+      // Longitudinal coverage stays exact even while the wake expands and fades.
+      for (const age of [0, 0.5]) for (let i = 1; i < members.length; i++) {
+        const previous = members[i - 1], next = members[i];
+        const end = evaluateFakeAnimation(previous.x, age) + evaluateFakeAnimation(previous.scaleX, age) / 2;
+        const start = evaluateFakeAnimation(next.x, age) - evaluateFakeAnimation(next.scaleX, age) / 2;
+        expect(end).toBeCloseTo(start);
+      }
+      // Renumbering a path must not introduce a lateral jump in an otherwise straight wake.
+      const drift = members.map(m => m.y.amplitude);
+      expect(Math.abs(drift[2] - drift[1])).toBeLessThanOrEqual(Math.abs(drift[1] - drift[0]) * 1.1);
+    }
+    tracer.destroyAll();
+  });
+
+  it('tunes wake opacity independently from the core and honors long core lengths within the shared lifetime', () => {
+    const render = (overrides: Partial<FlightSignatureConfig>) => {
+      const { scene, registry } = setup();
+      const tracer = new TracerRenderer(scene as never);
+      tracer.registerGpuVfx(registry);
+      tracer.createTracer(1, 0, 0, { profile: 'automatic', coreIntensity: 0.5,
+        wakeIntensity: 0.25, coreLength: 300, wakePersistence: 500, moteAmount: 0, ...overrides }, 0xffaa00);
+      tracer.addSegment(1, { from: { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
+        to: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 1000, vy: 0 }, ageMs: 0 });
+      registry.update(0);
+      const lane = findFakeLane(scene, 'flight-signature');
+      const members = lane.edited.map(i => lane.members[i]);
+      const core = members.find(m => m.frame === 'flight-core-strip')!;
+      const wake = members.find(m => m.frame === 'flight-wake-strip')!;
+      const result = { coreAlpha: evaluateFakeAnimation(core.alpha, 0),
+        wakeAlpha: evaluateFakeAnimation(wake.alpha, 0), coreLife: core.alpha.duration,
+        wakeLife: wake.alpha.duration };
+      registry.update(1000);
+      expect(registry.getStats()!['flight-signature'].liveCount).toBe(0);
+      tracer.destroyAll();
+      return result;
+    };
+    const base = render({});
+    const brightWake = render({ wakeIntensity: 0.75 });
+    const brightCore = render({ coreIntensity: 1 });
+    const longCore = render({ coreLength: 450 });
+    expect(brightWake.coreAlpha).toBe(base.coreAlpha);
+    expect(brightWake.wakeAlpha).toBeCloseTo(base.wakeAlpha * 3);
+    expect(brightCore.wakeAlpha).toBe(base.wakeAlpha);
+    expect(brightCore.coreAlpha).toBeCloseTo(base.coreAlpha * 2);
+    expect(longCore.coreLife).toBeCloseTo(base.coreLife * 1.5);
+    expect(longCore.wakeLife - longCore.coreLife).toBe(base.wakeLife - base.coreLife);
+  });
+
   it('uses historical creation time and only the remaining GPU pool lifetime', () => {
     const { scene, registry } = setup();
     const lane = findFakeLane(scene, 'flight-signature');

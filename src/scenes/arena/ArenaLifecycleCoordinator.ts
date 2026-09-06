@@ -162,6 +162,7 @@ import {
 import { resolvePlayerCapabilities, type PlayerCapabilities } from '../../world/PlayerCapabilities';
 import {
   resolveWorldPresentation,
+  allowsWorldPresentationSurface,
   WORLD_PRESENTATION_SURFACES,
   type WorldPresentationRequirement,
 } from '../../world/WorldPresentation';
@@ -350,6 +351,7 @@ export class ArenaLifecycleCoordinator {
     clear: () => bridge.clearWorldAndActivity(),
     attach: (context) => {
       this.worldRuntime = new WorldRuntime(context, this.worldLifecycle.getProjectileIdentityScope());
+      this.renderers.healthBars.openWorld(this.worldRuntime);
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
       this.worldRuntime.setPlayers(this.composePlayerRuntime());
@@ -357,6 +359,8 @@ export class ArenaLifecycleCoordinator {
       // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
       // Handoff dieser World.
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
+        healthBars: this.renderers.healthBars,
+        healthBarScope: this.worldRuntime,
         scene: this.scene,
         getLocalWorldPresentation: () => this.getLocalWorldPresentation(),
         getSpectatorCameraInput: this.getSpectatorCameraInput,
@@ -768,6 +772,8 @@ export class ArenaLifecycleCoordinator {
       },
       visualSink: this.ctx.effectSystem,
       entityBurnGpuController: this.renderers.entityBurnGpu,
+      getHealthBarRenderer: () => allowsWorldPresentationSurface(this.getLocalWorldPresentation(), 'worldCamera')
+        ? this.renderers.healthBars : null,
     });
   }
 
@@ -2397,6 +2403,7 @@ export class ArenaLifecycleCoordinator {
     const builtWorld = materializeWorldComposition({
       scene: this.scene,
       runtime: worldRuntime,
+      healthBars: this.renderers.healthBars,
       prepared: preparedWorld,
       presentationRequired: presentation,
       reusablePresentation,
