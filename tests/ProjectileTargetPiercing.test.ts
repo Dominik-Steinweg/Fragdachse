@@ -313,3 +313,79 @@ describe('generic projectile target piercing', () => {
     expect(hits).toEqual(['enemy-a', 'enemy-b']);
   });
 });
+
+describe('projectile sweep positions', () => {
+  function configureSweepEnemy(
+    runtime: ReturnType<typeof createProjectileRuntimeTestWorld>['runtime'],
+    combat: ReturnType<typeof vi.fn>,
+  ): void {
+    runtime.setProjectileTargetabilityPort({
+      canDamage: () => true,
+      canDamageOwner: () => true,
+      isTargetCurrentlyValid: () => true,
+    });
+    runtime.setProjectileCombatPort({
+      resolveDirectImpact: combat,
+      resolveExplosionCombat: () => ({ damagedTargetKeys: [] }),
+    });
+    runtime.setProjectileCollisionTargetQueryPort({
+      readCollisionTargets: (sink) => sink(
+        'enemy', 'enemy-a', 'enemy-owner', 40, 0, 8, 32, -8, 48, 8,
+      ),
+    });
+  }
+
+  it('keeps the frame endpoint when a sweep candidate is ignored', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const combat = vi.fn(() => ({ accepted: false }));
+    const id = spawn(runtime, request({ flight: { collisionMode: 'sweep' } }));
+    configureSweepEnemy(runtime, combat);
+    const handle = physics.handles.get(id)!;
+    handle.sprite.x = 100;
+
+    runtime.runHostInteractionStage(0);
+
+    expect(combat).toHaveBeenCalledOnce();
+    expect(handle.sprite.x).toBe(100);
+    expect(handle.sprite.y).toBe(0);
+    expect(handle.body.velocity.x).toBe(100);
+  });
+
+  it('keeps the remaining frame movement after a non-terminal piercing hit', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const combat = vi.fn(() => ({ accepted: true }));
+    const id = spawn(runtime, request({
+      flight: { collisionMode: 'sweep', piercesTargets: true },
+    }));
+    configureSweepEnemy(runtime, combat);
+    const handle = physics.handles.get(id)!;
+    handle.sprite.x = 100;
+
+    runtime.runHostInteractionStage(0);
+
+    expect(combat).toHaveBeenCalledOnce();
+    expect(runtime.activeCount).toBe(1);
+    expect(handle.sprite.x).toBe(100);
+    expect(handle.sprite.y).toBe(0);
+  });
+
+  it('leaves a terminal consumed sweep projectile at its confirmed impact point', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    let confirmedImpact: { x: number; y: number } | undefined;
+    const combat = vi.fn(({ impact }: { impact: { x: number; y: number } }) => {
+      confirmedImpact = impact;
+      return { accepted: true };
+    });
+    const id = spawn(runtime, request({ flight: { collisionMode: 'sweep' } }));
+    configureSweepEnemy(runtime, combat);
+    const handle = physics.handles.get(id)!;
+    handle.sprite.x = 100;
+
+    runtime.runHostInteractionStage(0);
+
+    expect(confirmedImpact).toBeDefined();
+    expect(runtime.activeCount).toBe(0);
+    expect(handle.sprite.x).toBeCloseTo(confirmedImpact!.x, 6);
+    expect(handle.sprite.y).toBeCloseTo(confirmedImpact!.y, 6);
+  });
+});

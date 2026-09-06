@@ -331,6 +331,18 @@ export class ProjectileCollisionProcessor {
         deps,
       );
       if (outcome === 'consumed') return;
+      // A candidate is resolved at its impact point, but a non-terminal outcome does not end
+      // this frame. Keep the already simulated tail of the sweep unless the resolution moved the
+      // projectile itself (for example through a local redirect or lifecycle transition). This
+      // deliberately avoids restoring over mutations that belong to applyCandidate().
+      if (!record.pendingDestroy && record.physics.body.enable
+        && Math.abs(record.physics.sprite.x - candidate.x) <= 0.000001
+        && Math.abs(record.physics.sprite.y - candidate.y) <= 0.000001) {
+        const nextVelocityX = record.physics.body.velocity.x;
+        const nextVelocityY = record.physics.body.velocity.y;
+        record.physics.body.reset(endX, endY);
+        record.physics.body.setVelocity(nextVelocityX, nextVelocityY);
+      }
     }
   }
 

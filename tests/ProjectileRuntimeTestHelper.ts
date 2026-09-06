@@ -40,6 +40,21 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
     })),
     findNearestRockSweep: vi.fn(() => null),
     createPhysicsHandle: vi.fn((spec: ProjectilePhysicsSpawnSpec) => {
+      const sprite = {
+        active: true,
+        x: spec.x,
+        y: spec.y,
+        displayWidth: spec.size,
+        displayHeight: spec.size,
+        setDisplaySize: vi.fn(),
+        destroy: vi.fn(() => { sprite.active = false; }),
+        getBounds: vi.fn(() => ({
+          left: sprite.x - spec.size / 2,
+          right: sprite.x + spec.size / 2,
+          top: sprite.y - spec.size / 2,
+          bottom: sprite.y + spec.size / 2,
+        })),
+      };
       const body = {
         enable: true,
         onWorldBounds: false,
@@ -66,23 +81,10 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
         reset: vi.fn((x: number, y: number) => {
           body.x = x;
           body.y = y;
+          sprite.x = x;
+          sprite.y = y;
           body.enable = true;
         }),
-      };
-      const sprite = {
-        active: true,
-        x: spec.x,
-        y: spec.y,
-        displayWidth: spec.size,
-        displayHeight: spec.size,
-        setDisplaySize: vi.fn(),
-        destroy: vi.fn(() => { sprite.active = false; }),
-        getBounds: vi.fn(() => ({
-          left: sprite.x - spec.size / 2,
-          right: sprite.x + spec.size / 2,
-          top: sprite.y - spec.size / 2,
-          bottom: sprite.y + spec.size / 2,
-        })),
       };
       const handle = {
         id: spec.id,
