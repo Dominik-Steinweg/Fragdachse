@@ -9,7 +9,7 @@ import { projectExplosionCascadeAppearance } from './ProjectileExplosionProjecti
 export interface ProjectileLifecycleDependencies {
   queueDestroy(projectile: ProjectileRuntimeRecord): void;
   release(projectile: ProjectileRuntimeRecord): void;
-  dropStepEntryAt(index: number): void;
+  isCurrent(projectile: ProjectileRuntimeRecord): boolean;
   shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean;
   sweepRocks(projectile: ProjectileRuntimeRecord): void;
   updateHoming(projectile: ProjectileRuntimeRecord, simulatedAgeMs: number): void;
@@ -25,9 +25,13 @@ export interface ProjectileLifecycleDependencies {
  */
 export class ProjectileLifecycleProcessor {
   private readonly pendingProjectileExplosions: ProjectileExplosionRequest[] = [];
+  private readonly finalizationRecords: ProjectileRuntimeRecord[] = [];
   constructor(private readonly deps: ProjectileLifecycleDependencies) {}
 
-  reset(): void { this.pendingProjectileExplosions.length = 0; }
+  reset(): void {
+    this.pendingProjectileExplosions.length = 0;
+    this.finalizationRecords.length = 0;
+  }
 
   triggerExplosion(projectile: ProjectileRuntimeRecord, impactTargetKey?: string): boolean {
     if (!projectile.interaction.explosion) return false;
@@ -59,10 +63,12 @@ export class ProjectileLifecycleProcessor {
         projectile.physics.sprite.setDisplaySize(projectile.hitboxSize, projectile.hitboxSize);
       }
     }
-    // A fixed reverse start index excludes new spawns during finalization.
-    for (let index = projectiles.length - 1; index >= 0; index -= 1) {
-      if (!this.stepProjectileEffects(projectiles[index], coreStage, projectileExplosions, grenadePayloads)) {
-        this.deps.dropStepEntryAt(index);
+    // Snapshot membership, not array indices: terminal reactions may remove siblings or spawn.
+    for (const projectile of projectiles) this.finalizationRecords.push(projectile);
+    while (this.finalizationRecords.length > 0) {
+      const projectile = this.finalizationRecords.pop()!;
+      if (this.deps.isCurrent(projectile)) {
+        this.stepProjectileEffects(projectile, coreStage, projectileExplosions, grenadePayloads);
       }
     }
     return { projectileExplosions, grenadePayloads, countdownEvents: coreStage.countdownEvents };

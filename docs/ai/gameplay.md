@@ -41,6 +41,24 @@ Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody i
 
 `WorldPlayerGameplayRuntime` besitzt den World-Lifetime der Player-Gameplay-Systeme und stellt nach außen nur benannte Lifecycle-, Action-, Read-, Resource- und Combat-Integration-Ports bereit. Activity-, Construction-, Support-, Host- und Client-Adapter konsumieren diese semantischen Sichten; sie traversieren weder den internen Child-Graphen noch greifen sie auf `.systems` zu. Die Runtime bleibt dabei ohne Renderer, ArenaContext und direkte NetworkBridge-Abhängigkeit.
 
+## Projectile-Runtime
+
+[`WorldProjectileRuntime`](../../src/projectile/WorldProjectileRuntime.ts) ist die einzige
+world-owned Projectile-Authority. Execution übergibt aufgelöste Spawn-Requests; externe Systeme
+erhalten semantische Commands oder zweckgebundene Reads, keine Runtime-Records oder Physics-Handles.
+Die private Registry beendet alle ihre Sichten vor terminalen Reactions. Bereits verbrauchte,
+noch nicht freigegebene Projectiles sind für weitere externe Interaktionen nicht mehr aktiv.
+Finalisierung verwendet eine feste Stage-Menge, damit reentrante Entfernung, Spawn und World-Teardown
+keine fremde Identity aus der Verarbeitung entfernen. Die Contracts sichern
+[`WorldProjectileRuntime.test.ts`](../../tests/WorldProjectileRuntime.test.ts) und die
+[`Projectile-Architecture-Ratchets`](../../tests/architecture/ProjectileRuntimeContracts.test.ts).
+
+Projectile-IDs bleiben innerhalb einer `worldRevision` einmalig, auch bei lokalem Runtime-Rebuild.
+Reflection/Deflection ändern den bestehenden Record; Source, Attribution, Allegiance und Lineage
+bleiben getrennte Dimensionen. Combat-, World- und Explosion-Ports lassen fremde Mutation bei ihren
+Domain-Ownern. Replication, Client-Replica und Presentation sind abgeleitete World-Ressourcen ohne
+Projectile-Gameplay-Authority.
+
 ## Eingaben und Aktionen
 
 World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem Handler zentral geprüft. Activity- oder Round-Aktionen erhalten zusätzlich die fachlich nötige Activity-/Round-Identität. Ein alter Client kann so weder nach einem World-Wechsel noch nach einem Activity-Wechsel veraltete Aktionen ausführen.
@@ -65,6 +83,6 @@ Aktivitäts- und Rundensysteme arbeiten mit ihrer definierten Simulationszeit un
 - [src/world/PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts)
 - [tests/PlayerCapabilityContracts.test.ts](../../tests/PlayerCapabilityContracts.test.ts)
 - [tests/PlayerWorldRuntimeContracts.test.ts](../../tests/PlayerWorldRuntimeContracts.test.ts)
-- [tests/SharedWorldWithoutActivity.test.ts](../../tests/SharedWorldWithoutActivity.test.ts)
+- [tests/integration/SharedWorldWithoutActivity.test.ts](../../tests/integration/SharedWorldWithoutActivity.test.ts)
 - [tests/TemporaryUtilityLifecycle.test.ts](../../tests/TemporaryUtilityLifecycle.test.ts)
 - [tests/RadialActionInput.test.ts](../../tests/RadialActionInput.test.ts)

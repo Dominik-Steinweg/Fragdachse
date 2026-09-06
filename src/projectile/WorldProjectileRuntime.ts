@@ -296,7 +296,7 @@ export class WorldProjectileRuntime implements
     const lifecycleDependencies: ProjectileLifecycleDependencies = {
       queueDestroy: (projectile) => this.queueProjectileDestroy(projectile.id),
       release: (projectile) => this.releaseProjectile(projectile),
-      dropStepEntryAt: (index) => this.projectiles.dropStepEntryAt(index),
+      isCurrent: (projectile) => this.projectiles.getById(projectile.id) === projectile,
       shouldSweepRocks: (projectile) => this.shouldSweepRocks(projectile),
       sweepRocks: (projectile) => this.sweepRocks(projectile),
       updateHoming: (projectile, simulatedAgeMs) => { this.updateProjectileHoming(projectile, simulatedAgeMs); },
@@ -1156,10 +1156,7 @@ export class WorldProjectileRuntime implements
   destroyProjectile(id: ProjectileId): void {
     const record = this.projectiles.getById(id);
     if (!record) return;
-    const index = this.projectiles.indexOfStepEntry(record);
-    if (index === -1) return;
     this.releaseProjectile(record);
-    this.projectiles.dropStepEntryAt(index);
   }
 
   /**
@@ -1355,7 +1352,6 @@ export class WorldProjectileRuntime implements
             },
           }),
         };
-    this.projectileResolvedCallback?.(lifecycle);
     this.presentation.destroyProjectileVisuals({
       id: record.id, ownerId: record.provenance.allegiance.ownerId, x: record.physics.sprite.x, y: record.physics.sprite.y,
       vx: record.physics.body.velocity.x, vy: record.physics.body.velocity.y, size: record.physics.sprite.displayWidth,
@@ -1367,6 +1363,8 @@ export class WorldProjectileRuntime implements
       destroyScale: record.physics.sprite.displayWidth / 16,
     });
     this.physicsBinding.releaseProjectileResources(handle);
+    // Finish all owned teardown before a reaction can remove siblings, spawn or destroy the World.
+    this.projectileResolvedCallback?.(lifecycle);
   }
 
   searchDetonableProjectiles(request: ProjectileDetonationSearchRequest): readonly ProjectileDetonationTarget[] {
@@ -1375,7 +1373,8 @@ export class WorldProjectileRuntime implements
     const targets: ProjectileDetonationTarget[] = [];
     for (const id of this.detonableIds) {
       const projectile = this.projectiles.getById(id);
-      if (!projectile?.spec.interaction.detonable) continue;
+      if (!projectile?.spec.interaction.detonable || projectile.pendingDestroy
+        || !this.projectiles.activeRecords.has(projectile)) continue;
       if (!request.detonator.triggerTags.includes(projectile.spec.interaction.detonable.tag)) continue;
       if (!projectile.spec.interaction.detonable.allowCrossTeam && projectile.provenance.allegiance.ownerId !== request.shooterId) continue;
       if (!Phaser.Geom.Intersects.LineToRectangle(line, projectile.physics.sprite.getBounds())) continue;
@@ -1390,7 +1389,8 @@ export class WorldProjectileRuntime implements
   ): ProjectileDetonationOutcome | null {
     if (this.destroyed || !this.detonableIds.has(projectileId)) return null;
     const projectile = this.projectiles.getById(projectileId);
-    if (!projectile?.spec.interaction.detonable) return null;
+    if (!projectile?.spec.interaction.detonable || projectile.pendingDestroy
+      || !this.projectiles.activeRecords.has(projectile)) return null;
     const target = createDetonationTarget(projectile);
     this.destroyProjectile(projectileId);
     return { ...target, detonatorOwnerId };
@@ -1536,6 +1536,7 @@ export class WorldProjectileRuntime implements
     this.setHostFrameTime(nowMs);
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
     const stage = this.lifecycleProcessor.run(this.projectiles.stepOrder, coreStage);
+    if (this.destroyed) return emptyHostStageResult();
     this.runMiniRocketStateStage();
     this.presentation.syncHostRenderers(this.presentationProjectiles);
     return stage;

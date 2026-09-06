@@ -64,20 +64,12 @@ export class ProjectileStore {
     this.active.delete(record);
   }
 
-  /** Beendet Identity und Aktivmenge; der Record bleibt bis zum Drop in der Verarbeitung. */
+  /** Removes all registry views atomically before the owner publishes a terminal outcome. */
   detach(record: ProjectileRuntimeRecord): void {
     this.active.delete(record);
     this.byId.delete(record.id);
-  }
-
-  /** Entfernt den Eintrag an dieser Position aus der Verarbeitungsreihenfolge. */
-  dropStepEntryAt(index: number): void {
-    this.records.splice(index, 1);
-  }
-
-  /** Position des Records in der Verarbeitungsreihenfolge; `-1`, wenn er dort fehlt. */
-  indexOfStepEntry(record: ProjectileRuntimeRecord): number {
-    return this.records.indexOf(record);
+    const index = this.records.indexOf(record);
+    if (index >= 0) this.records.splice(index, 1);
   }
 
   /** Leert Identity, Aktivmenge und Verarbeitungsreihenfolge. */

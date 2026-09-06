@@ -245,6 +245,48 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     expect(physics.released).toEqual([id]);
   });
 
+  it('aborts finalization when a terminal outcome tears down a world with multiple projectiles', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const ids = [runtime.spawnProjectile(baseRequest())!, runtime.spawnProjectile(baseRequest())!];
+    runtime.setProjectileResolvedCallback(() => runtime.destroy());
+    expect(() => runtime.runHostProjectileStage(1_001, 2_001)).not.toThrow();
+    expect([...physics.released].sort()).toEqual(ids);
+    expect(runtime.activeCount).toBe(0);
+  });
+
+  it('keeps a reentrant replacement registered when a terminal callback removes a sibling', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const sibling = runtime.spawnProjectile(baseRequest())!;
+    const terminal = runtime.spawnProjectile(baseRequest())!;
+    let replacement: number | null = null;
+    runtime.setProjectileResolvedCallback((outcome) => {
+      if (outcome.projectileId !== terminal) return;
+      runtime.destroyProjectile(sibling);
+      replacement = runtime.spawnProjectile(baseRequest());
+    });
+    runtime.destroyProjectile(terminal);
+    expect(runtime.activeCount).toBe(1);
+    runtime.runHostProjectileStage(1_001, 2_001);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toContain(replacement);
+    runtime.destroy();
+  });
+
+  it('rejects external detonation after a contact has already consumed the projectile', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const id = runtime.spawnProjectile(baseRequest({
+      explosion: baseExplosion(),
+      detonable: { tag: 'orb', allowCrossTeam: true, aoeDamage: 12, aoeRadius: 24 },
+    }))!;
+    physics.emit({ projectileId: id, target: { kind: 'world-boundary' },
+      x: 0, y: 0, velocityX: 100, velocityY: 0, source: 'world-boundary' });
+    expect(runtime.activeCount).toBe(0);
+    expect(runtime.detonateProjectile(id, 'detonator')).toBeNull();
+    expect(runtime.runHostProjectileStage(16, 1_016).projectileExplosions).toHaveLength(1);
+    expect(physics.released).toEqual([id]);
+    runtime.destroy();
+  });
+
   it('owns identity and sends only technical spawn mechanics to Physics', () => {
     const { runtime, physics } = createRuntimeHarness();
     const first = runtime.spawnProjectile(baseRequest({}, { x: 10, y: 20, angle: 0 }))!;

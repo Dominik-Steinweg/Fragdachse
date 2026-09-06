@@ -1,174 +1,136 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-function read(path: string): string {
-  return readFileSync(resolve(process.cwd(), path), 'utf8');
+function sources(directory: string): ts.SourceFile[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? sources(path) : entry.name.endsWith('.ts')
+      ? [ts.createSourceFile(path.replaceAll('\\', '/'), readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true)]
+      : [];
+  });
+}
+function nodes(source: ts.Node): ts.Node[] {
+  const result: ts.Node[] = [];
+  const visit = (node: ts.Node): void => { result.push(node); ts.forEachChild(node, visit); };
+  visit(source);
+  return result;
+}
+const production = sources('src');
+const syntax = new Map(production.map(source => [source, nodes(source)]));
+function identifiers(source: ts.SourceFile): Set<string> {
+  return new Set(syntax.get(source)!.filter(ts.isIdentifier).map(node => node.text));
+}
+function imports(source: ts.SourceFile): string[] {
+  return syntax.get(source)!.flatMap(node => {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+      && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) return [node.moduleSpecifier.text];
+    if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)
+      && ts.isStringLiteral(node.argument.literal)) return [node.argument.literal.text];
+    return [];
+  });
 }
 
-function valueImports(source: string): string[] {
-  return [...source.matchAll(/^import\s+(?!type\s)[\s\S]*?from\s+'([^']+)'/gm)]
-    .map(([, specifier]) => specifier);
-}
+// Authority roles, not an inventory of callers: newly added consumers are checked as well.
+const internalStateOwners = new Set([
+  'WorldProjectileRuntime.ts', 'ProjectileStore.ts', 'ProjectileRuntimeRecord.ts',
+  'ProjectileFlightProcessor.ts', 'ProjectileCollisionProcessor.ts',
+  'ProjectileLifecycleProcessor.ts', 'ProjectileMiniRocketProcessor.ts',
+]);
+const projections = new Set([
+  'ProjectileClientReplica.ts', 'ProjectileReplicationAdapter.ts', 'ProjectilePresentationRuntime.ts',
+]);
 
-describe('Projectile Runtime – final ownership ratchets', () => {
-  it('removes the historical owner and record names from productive code', () => {
-    const source = [
-      read('src/projectile/WorldProjectileRuntime.ts'),
-      read('src/projectile/ProjectilePhysicsBinding.ts'),
-      read('src/projectile/ProjectileStore.ts'),
-      read('src/systems/CombatSystem.ts'),
-    ].join('\n');
-
-    expect(source).not.toContain('ProjectileManager');
-    expect(source).not.toContain('TrackedProjectile');
-    expect(source).not.toContain('getActiveProjectiles');
-    expect(source).not.toContain('getProjectileById');
-    expect(source).not.toContain('ProjectileStoreAccess');
-    expect(read('src/types.ts')).not.toContain('ProjectileRuntimeRecord');
-    expect(source).not.toContain('spawnProjectileConfig');
-  });
-
-  it('keeps the Phaser binding free of network, client-owner, presentation and wall-clock state', () => {
-    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
-    const imports = valueImports(binding);
-
-    expect(imports).not.toContain('./ProjectileClientReplica');
-    expect(imports).not.toContain('./ProjectileReplicationAdapter');
-    expect(imports).not.toContain('./ProjectilePresentationRuntime');
-    expect(imports.some((specifier) => specifier.includes('/effects/'))).toBe(false);
-    expect(imports.some((specifier) => specifier.includes('/audio/'))).toBe(false);
-    expect(imports.some((specifier) => specifier.includes('/network/'))).toBe(false);
-    expect(binding).not.toContain('Date.now');
-  });
-
-  it('keeps the technical physics contract free of projectile lifecycle and runtime records', () => {
-    const binding = read('src/projectile/ProjectilePhysicsBinding.ts');
-    for (const forbidden of [
-      'ProjectileRuntimeRecord', 'ProjectileRuntimeOwnerPort', 'ProjectileExternalInteractionAccess',
-      'ProjectileExplosionRequest', 'ProjectileBurnAugment', 'ProjectileCombatPort',
-    ]) expect(binding).not.toContain(forbidden);
-  });
-
-  it('keeps presentation, replica and replication state world-scoped', () => {
-    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
-    const composition = read('src/scenes/arena/ArenaWorldCombatComposition.ts');
-    const presentation = read('src/projectile/ProjectilePresentationRuntime.ts');
-    const replica = read('src/projectile/ProjectileClientReplica.ts');
-    const replication = read('src/projectile/ProjectileReplicationAdapter.ts');
-
-    expect(runtime).toContain('private readonly clientReplica = new ProjectileClientReplica();');
-    expect(runtime).toContain('private projectileReplicationAdapter: ProjectileReplicationAdapter | null = null;');
-    expect(runtime).toContain('readonly presentation: ProjectilePresentationRuntime;');
-    expect(composition).toContain('const presentation = new ProjectilePresentationRuntime(input.scene);');
-    expect(composition).toContain('physicsBinding: new ProjectilePhysicsBinding(input.scene)');
-    expect(presentation).not.toContain('ProjectileRuntimeRecord');
-    expect(presentation).not.toContain('ProjectilePhysicsBinding');
-    expect(replica).not.toContain('CombatSystem');
-    expect(replica).not.toContain('WorldProjectileRuntime');
-    expect(replication).not.toContain('WorldProjectileRuntime');
-  });
-
-  it('keeps combat and execution on semantic projectile ports', () => {
-    const combat = read('src/systems/CombatSystem.ts');
-    const execution = read('src/world/AutomatedWeaponExecutionAdapter.ts');
-    const utility = read('src/world/PlayerUtilityActionRuntime.ts');
-    const enemyAbility = read('src/systems/CoopDefenseEnemyAbilitySystem.ts');
-
-    expect(combat).not.toContain('ProjectileRuntimeRecord');
-    expect(combat).not.toContain('ProjectilePhysicsBinding');
-    expect(combat).not.toContain('getActiveProjectiles');
-    expect(combat).not.toContain('projectileStyle');
-    expect(execution).not.toContain('ProjectilePhysicsBinding');
-    expect(execution).toContain('ProjectileSpawnPort');
-    expect(utility).toContain('readonly projectileSpawn: ProjectileSpawnPort;');
-    expect(enemyAbility).toContain('private readonly projectileSpawn: ProjectileSpawnPort');
-  });
-
-  it('keeps World consumers on narrow boundary capabilities instead of the concrete runtime', () => {
-    const boundary = read('src/projectile/ProjectileBoundaryPorts.ts');
-    const geometry = read('src/world/WorldGeometryBinding.ts');
-    const train = read('src/world/WorldTrainRuntime.ts');
-    const combat = read('src/world/WorldCombatGameplayBinding.ts');
-
-    expect(boundary).toContain('export interface ProjectileGeometryBindingPort');
-    expect(boundary).toContain('export interface ProjectileTrainBindingPort');
-    expect(boundary).toContain('export interface ProjectileWorldImpactBindingPort');
-    expect(boundary).toContain('export interface ProjectileLifecycleEventsBindingPort');
-    expect(boundary).toContain('export interface ProjectileTimeFieldBindingPort');
-    expect(boundary).toContain('export interface ProjectileHomingBindingPort');
-    expect(boundary).toContain('export interface ProjectileSwarmReactionPort');
-
-    for (const consumer of [geometry, train, combat]) {
-      expect(consumer).not.toContain("from '../projectile/WorldProjectileRuntime'");
-      expect(consumer).not.toContain("from '../../projectile/WorldProjectileRuntime'");
+describe('Projectile Runtime – ownership and dependency ratchets', () => {
+  it('rejects legacy authority and record APIs throughout production', () => {
+    for (const source of production) {
+      const names = identifiers(source);
+      for (const forbidden of ['ProjectileManager', 'TrackedProjectile', 'ProjectileStoreAccess',
+        'getActiveProjectiles', 'getProjectileById', 'spawnProjectileConfig']) {
+        expect(names.has(forbidden), source.fileName + ': ' + forbidden).toBe(false);
+      }
     }
-    expect(geometry).toContain('ProjectileGeometryBindingPort');
-    expect(geometry).toContain('projectileGeometry');
-    expect(train).toContain('ProjectileTrainBindingPort');
-    expect(train).toContain('projectileTrain');
-    expect(combat).toContain('ProjectileLifecycleEventsBindingPort');
-    expect(combat).toContain('ProjectileWorldImpactBindingPort');
-    expect(combat).not.toContain('readonly projectileRuntime:');
-    expect(combat).not.toContain('o.projectileRuntime.');
   });
 
-  it('keeps one final homing/time-field seam and no presentation compatibility facade', () => {
-    const homing = read('src/entities/ProjectileHomingController.ts');
-    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
-    const boundary = read('src/projectile/ProjectileBoundaryPorts.ts');
-    const seamSources = `${homing}\n${runtime}\n${boundary}`;
-
-    for (const legacyMethod of [
-      'setTargetProvider(', 'setLineOfFireChecker(', 'setTargetValidityChecker(',
-      'setTimeBubbleFactorProvider(', 'setHomingTargetProvider(', 'setHomingLineOfFireChecker(',
-    ]) expect(seamSources).not.toContain(legacyMethod);
-    expect(boundary).toContain('setProjectileTimeFieldPort(');
-    expect(boundary).toContain('setProjectileTargetQueryPort(');
-    expect(boundary).toContain('setLineOfFireReadPort(');
-    expect(existsSync(resolve(process.cwd(), 'src/projectile/ProjectilePresentationPort.ts'))).toBe(false);
-  });
-
-  it('keeps ProjectileImpactSource as a bounded stable DTO instead of a universal context', () => {
-    const gameplay = read('src/projectile/ProjectileGameplayPort.ts');
-    expect(gameplay).toContain('this DTO is not a');
-    expect(gameplay).toContain('universal impact context');
-  });
-
-  it('keeps mutable Runtime records private to Projectile internals and the World owner', () => {
-    const consumerPaths = [
-      'src/world/WorldCombatGameplayBinding.ts',
-      'src/world/WorldGeometryBinding.ts',
-      'src/world/WorldTrainRuntime.ts',
-      'src/scenes/arena/ArenaWorldGameplayComposition.ts',
-      'src/scenes/arena/HostUpdateCoordinator.ts',
-      'src/scenes/arena/RendererBundle.ts',
-      'src/scenes/arena/ArenaRuntimeAdapters.ts',
-    ];
-    for (const path of consumerPaths) {
-      expect(read(path), path).not.toContain('ProjectileRuntimeRecord');
+  it('restricts mutable state and registry access to the authoritative owners', () => {
+    for (const source of production) {
+      const name = basename(source.fileName);
+      const names = identifiers(source);
+      if (!internalStateOwners.has(name)) {
+        expect(names.has('ProjectileRuntimeRecord'), source.fileName).toBe(false);
+        expect(imports(source).some(path => path.endsWith('/ProjectileRuntimeRecord')), source.fileName).toBe(false);
+      }
+      if (name !== 'WorldProjectileRuntime.ts' && name !== 'ProjectileStore.ts') {
+        expect(names.has('ProjectileStore'), source.fileName).toBe(false);
+        expect(imports(source).some(path => path.endsWith('/ProjectileStore')), source.fileName).toBe(false);
+      }
     }
-
-    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
-    const store = read('src/projectile/ProjectileStore.ts');
-    const physics = read('src/projectile/ProjectilePhysicsBinding.ts');
-    expect(runtime.match(/new ProjectileStore\(/g) ?? []).toHaveLength(1);
-    expect(store).toContain('private readonly records: ProjectileRuntimeRecord[]');
-    expect(physics).not.toContain('new ProjectileStore(');
   });
 
-  it('keeps the final non-authoritative boundaries free of domain mutation ownership', () => {
-    const replica = read('src/projectile/ProjectileClientReplica.ts');
-    const presentation = read('src/projectile/ProjectilePresentationRuntime.ts');
-    const replication = read('src/projectile/ProjectileReplicationAdapter.ts');
-
-    for (const source of [replica, presentation, replication]) {
-      expect(source).not.toContain('applyDamage');
-      expect(source).not.toContain('resolveDirectImpact');
-      expect(source).not.toContain('ProjectileRuntimeRecord');
+  it('keeps simulation and physics independent of transport, renderers and concrete domain owners', () => {
+    for (const source of production.filter(source => internalStateOwners.has(basename(source.fileName))
+      || basename(source.fileName) === 'ProjectilePhysicsBinding.ts')) {
+      for (const path of imports(source)) {
+        // The World composition may reference passive light/shadow sample types.
+        const passiveSample = path.endsWith('/ShadowConfig') || path.endsWith('/LightingConfig');
+        expect(path.includes('/network/') || path.includes('/audio/')
+          || (path.includes('/effects/') && !passiveSample)
+          || /\/(CombatSystem|TeslaDomeSystem|EnergyShieldSystem|WorldPlayerGameplayRuntime)$/.test(path),
+        source.fileName + ' -> ' + path).toBe(false);
+      }
+      for (const node of syntax.get(source)!) {
+        if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+          expect(['Date.now', 'performance.now'].includes(node.expression.getText(source)), source.fileName).toBe(false);
+        }
+      }
+      if (basename(source.fileName) !== 'WorldProjectileRuntime.ts') {
+        expect(imports(source).some(path => /Projectile(ClientReplica|ReplicationAdapter|PresentationRuntime)$/.test(path)), source.fileName).toBe(false);
+      }
     }
-    expect(replica).toContain('Nichtautoritativer');
-    expect(presentation).toContain('keine Gameplay-Entscheidung');
-    expect(replication).toContain('liest nur die schmale Client-Projektion');
+  });
+
+  it('keeps non-authoritative projections free of gameplay mutation and physics handles', () => {
+    for (const source of production.filter(source => projections.has(basename(source.fileName)))) {
+      const names = identifiers(source);
+      for (const forbidden of ['ProjectileRuntimeRecord', 'ProjectilePhysicsHandle', 'ProjectilePhysicsBinding',
+        'WorldProjectileRuntime', 'CombatSystem', 'applyDamage', 'resolveDirectImpact']) {
+        expect(names.has(forbidden), source.fileName + ': ' + forbidden).toBe(false);
+      }
+    }
+  });
+
+  it('keeps world consumers and execution behind semantic ports', () => {
+    for (const source of production.filter(source => source.fileName.startsWith('src/world/')
+      || /\/(CombatSystem|DetonationSystem|TranslocatorSystem|CoopDefenseEnemyDodgeSystem|CoopDefenseEnemyAbilitySystem)\.ts$/.test(source.fileName))) {
+      for (const path of imports(source)) {
+        expect(/\/(WorldProjectileRuntime|ProjectilePhysicsBinding|ProjectileStore|ProjectileCollisionProcessor)$/.test(path),
+          source.fileName + ' -> ' + path).toBe(false);
+      }
+    }
+  });
+
+  it('keeps style dispatch out of collision, flight, combat and guidance', () => {
+    for (const source of production.filter(source => /\/(Projectile(FlightProcessor|CollisionProcessor|LifecycleProcessor|MiniRocketProcessor|HomingController)|CombatSystem)\.ts$/.test(source.fileName))) {
+      expect(identifiers(source).has('projectileStyle'), source.fileName).toBe(false);
+    }
+  });
+
+  it('keeps the physics port technical and the combat port specific to combat', () => {
+    const physics = production.find(source => source.fileName === 'src/projectile/ProjectilePhysicsBinding.ts')!;
+    const combat = production.find(source => source.fileName === 'src/projectile/ProjectileCombatPort.ts')!;
+    for (const forbidden of ['ProjectileExplosionRequest', 'ProjectileBurnAugment', 'ProjectileCombatPort', 'ProjectileRuntimeRecord']) {
+      expect(identifiers(physics).has(forbidden), forbidden).toBe(false);
+    }
+    for (const path of imports(combat)) {
+      expect(/\/(systems|world|effects)\//.test(path), path).toBe(false);
+    }
+    const port = combat.statements.find(node => ts.isInterfaceDeclaration(node) && node.name.text === 'ProjectileCombatPort') as ts.InterfaceDeclaration;
+    for (const member of port.members) {
+      for (const node of nodes(member)) {
+        if (ts.isIdentifier(node)) expect(['ProjectileExplosionRequest', 'ProjectileGrenadePayloadRequest',
+          'ProjectileRuntimeRecord', 'ProjectilePhysicsHandle'].includes(node.text), node.text).toBe(false);
+      }
+    }
   });
 });

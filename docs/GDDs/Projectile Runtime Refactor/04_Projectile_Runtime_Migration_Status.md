@@ -1,38 +1,50 @@
-# Fragdachse – Projectile Runtime Refactoring: Migrationsstatus
+# Fragdachse – Projectile Runtime Refactoring: Abschlussstatus
 
 **Architektur:** `01_Projectile_Runtime_Architecture_Core.md` + `02_Projectile_Runtime_Architecture_Details.md`
-**Plan:** `03_Projectile_Runtime_Implementation_Plan.md`
-**Test-Basis:** abgeschlossenes Test-Refactoring; Runner/Policy aus `package.json` und `docs/ai/testing.md`
+**Plan/Gates:** `03_Projectile_Runtime_Implementation_Plan.md`
+**Gesamtstatus:** ✅ Architektonisch und technisch abgeschlossen. Keine aktive Transition, kein offener Architekturblocker, keine weitere Refactoring-Phase.
 
-> Kleiner aktueller Zustandszettel für Coding-KIs – **keine Historie**.
-> Git ist die Commit-Historie; hier werden **keine Commit-SHAs** geführt.
-> Keine vollständigen Datei-, Consumer- oder Testinventare eintragen.
-> Erledigte Transitionen/Blocker löschen statt archivieren.
-> Zielgröße: möglichst unter **8 KB**. Wenn die Datei wächst, vor dem nächsten Commit verdichten.
-> `01`, `02` und `03` werden von Coding-KIs nicht selbständig umdefiniert.
+## 1. Endabnahme
 
----
+Der aktuelle `main` wurde unabhängig gegen 01–03 geprüft, einschließlich C1–C7, C8-Vorarbeiten
+und Multiplayer-/Bounce-Änderungen. Frühere Findings waren Hinweise, keine abschließende Prüfliste.
 
-## Statuslegende
+Geprüft sind die einzige world-owned Registry und ihre Lifetime, monotone Identity über
+Runtime-Rebuilds, getrennte Provenance, private Spec-/Runtime-/Feature-Daten, Physics-/Collision-/
+Interaction-Grenzen, kanonische Targets, semantische Combat-/World-/Explosion-/External-Ports,
+Same-/Next-Stage-Verträge, Reflection/Deflection mit stabiler ID sowie Replica-/Presentation-Parität.
+Static-Resend/Refresh, Packet-Loss-Heilung, Bounce-Sequenzen und Same-ID-Appearance bleiben abgeleitet.
 
-- ⬜ offen
-- 🟨 aktiv
-- 🟧 blockiert
-- ✅ abgeschlossen
+Drei reproduzierte Fehler sind korrigiert und durch bestehende Runtime-Tests abgesichert:
 
----
+- Finalisierungsabsturz bei reentrantem World-Teardown.
+- Verlust eines reentrant erzeugten Ersatzprojektils aus der Verarbeitungsliste.
+- Zusätzliche externe Detonation eines bereits verbrauchten Projectiles vor dessen Freigabe.
 
-## 1. Aktueller Stand
+Registry-Entfernung ist vor terminalen Reactions vollständig; Finalisierung verwendet eine feste
+Startmenge mit Mitgliedschaftsprüfung. Architecture-Ratchets prüfen produktionsweit Legacy-/State-
+Grenzen und relevante Abhängigkeiten anhand TypeScript-Syntax statt Konstruktorzeilen,
+Kommentartexten oder privaten Array-Deklarationen.
 
-- **Nächste Phase:** C8 – Architekturabschluss und technische Endabnahme (offen, nicht begonnen)
-- **Gesamtstatus:** Phasen 1–15 und C1–C7 umgesetzt; C8 bleibt für den Architekturabschluss notwendig
-- **C7-Abnahme:** Typecheck, `npm run check` (Core, Architecture, Build), Integration, Stress und Balance Lab grün. Gezielte Verträge sichern stabile Redirect-Identity, getrennte Attribution/Allegiance, Child-Lineage, Homing-Reacquisition, Kontaktgedächtnis, Restfuse, Static-Resend nach Übernahme und reentranten World-Teardown.
-- **C8-Vorarbeiten:** World-Contact-Dedupe cached das vollständige Ergebnis reihenfolgeunabhängig; stabile Same-ID-Redirects replizieren owner-/farb-/quellenabhängige Presentation; tote parallele Homing-/TimeField-/Presentation-Seams sind entfernt. Diese Vorarbeiten markieren C8 nicht als abgeschlossen.
-- **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
-- **Final-Gate:** vollständiger Abgleich gegen 01–03 und sämtliche Endabnahme-Suites bleiben C8; C8 ist noch nicht final abgeschlossen, die unabhängige vollständige C8-Endabnahme steht noch aus
-- **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
+### Automatisierter Final-Gate
 
----
+Alle Gates auf dem finalen Produktionscode grün:
+
+| Gate | Ergebnis |
+|---|---|
+| `npm run typecheck` | ✅ |
+| `npm run check` | ✅ Core: 321 Dateien / 2620 Tests; Architecture: 6 / 32; Build |
+| `npm run test:architecture` | ✅ separat und innerhalb von check |
+| `npm run test:integration` | ✅ 14 Dateien / 167 Tests |
+| `npm run test:stress` | ✅ 7 Dateien / 39 Tests |
+| `npm run test:balance-lab` | ✅ 15 Dateien / 94 Tests |
+| `npm run test:assets` | ✅ 4 Dateien / 44 Tests |
+| fokussierte Projectile-/Combat-/Multiplayer-/Lifecycle-Tests | ✅ 32 Dateien / 239 Tests |
+| `git diff --check` | ✅ |
+
+Der Build meldet unveränderte, erst zur Laufzeit aufzulösende Font-Pfade. Das ist kein
+Projectile-Architekturblocker. Keine Browser-/Sichtprüfung durchgeführt; menschliche
+Gameplay-/Sichtabnahme bleibt gemäß 03 ein separater Gate.
 
 ## 2. Phasenstatus
 
@@ -59,8 +71,6 @@
 
 ## 2a. Korrekturphasenfolge
 
-Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand definiert; jede Korrekturphase ist ein zusammenhängender Ownership-Schnitt.
-
 | Korrekturphase | Status | Gegenstand |
 |---|:---:|---|
 | C1 | ✅ | Hydra-/Split-Entscheidung aus dem Physics-Binding gelöst; Child-Spawns explizit in die `next-stage`-Queue gegeben |
@@ -70,69 +80,45 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 | C5 | ✅ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
 | C6 | ✅ | Physics-Authority-Cut; technische Handles/Kontakte getrennt von Projectile-Lifecycle und Wirkung |
 | C7 | ✅ | Interner resolved Spec-/Runtime-/Feature-State; kanonische Provenance, ein Physics-Handle/Homing-State und Redirects mit stabiler Identity |
-| C8 | ⬜ | Dauerhafte Dependency-/Ownership-Ratchets, Gesamtprüfung gegen 01–03 und technische Endabnahme |
+| C8 | ✅ | Dependency-/Ownership-Ratchets, unabhängige Gesamtprüfung und vollständige technische Endabnahme |
 
 ---
 
-## 3. Aktive Transitionen / Blocker
+## 3. Bewusst akzeptierte Ausprägungen
 
-Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
+- `ProjectileImpactSource` bleibt ein breiter, schreibgeschützter Reaktions-DTO ohne
+  Runtime-Record-/Physics-Zugriff. Eine Aufteilung nur nach Feldzahl verbessert die Authority-Grenze nicht.
+- Der reine Payload-Adapter zu `ProjectileSpawnConfig` bleibt für Resolver, Presentation und
+  Headless-Lab. Er besitzt weder aktiven State noch einen öffentlichen parallelen Spawn-Einstieg.
+- Phaser Arcade Physics, technische synchrone Kontaktmeldungen und die getrennten Host-Interaction-/
+  Finalisierungsaufrufe bleiben erhalten; die Runtime entscheidet ihre Semantik. Kein Physics-Rewrite,
+  Scheduler oder allgemeines Framework ist erforderlich.
+- Bestehende Combat-Regeln und der konkrete Domain-Fan-out bleiben hinter ihren Ports.
+  Passive Presentation-Metadaten und begrenzte Bounce-Retention sind zulässige Projektionen,
+  keine Legacy-Gameplay-Seams.
 
-- C8: Die bekannten Vorarbeiten sind erledigt; unabhängiges abschließendes Audit, vollständiger Abgleich gegen 01–03 und alle technischen Endabnahme-Gates stehen weiterhin aus.
-
-C7 speichert keinen flachen `ProjectileSpawnConfig` mehr. Der verbleibende reine Payload-Adapter bedient Spawn-/Body-Resolver, Presentation und das Headless-Lab; Provenance bleibt separat. Der öffentliche Config-Spawn-Einstieg ist entfernt. Reflection/Deflection verändern den bestehenden Record und behalten Source, Parent-Lineage, Correlation, Kontaktgedächtnis und Lifetime; Replication und Presentation aktualisieren dieselbe ID ohne neue Gameplay-Authority. Der C6-Physics-Cut und die Stage-Reihenfolge bleiben erhalten. Die C8-Vorarbeiten stabilisieren zusätzlich die vollständige World-Contact-Resolution und die owner-/farb-/quellenabhängige Presentation bei gleicher ID; die unabhängige vollständige C8-Endabnahme ist noch offen.
-
----
+Diese Ausprägungen benötigen keine normative Architekturänderung. Das Projectile-Runtime-Refactoring
+kann architektonisch endgültig abgeschlossen werden.
 
 ## 4. Realisierte Contract-Namen
-
-Nur tatsächliche Namen im Code dokumentieren.
 
 | Contract-Familie | Realisierter Type/API |
 |---|---|
 | Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` |
-| World / Host / Store | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort`, `ProjectileStore`, `ProjectileIdentityScope`; internes `ProjectileRuntimeRecord`, `ProjectileResolvedSpec`, `ProjectileInteractionState`, `ProjectileMiniRocketState`, `ProjectileContactMemory`, passive `ProjectilePresentationMetadata` |
-| Physics Binding | `ProjectilePhysicsBindingPort`, `ProjectilePhysicsSpawnSpec`, `ProjectilePhysicsMechanics`, `ProjectilePhysicsHandle`; technische Ressourcen/Kontakte/Geometrie ohne Runtime-Record-Zugriff |
-| World Boundary | `ProjectileGeometryBindingPort`, `ProjectileTrainBindingPort`, `ProjectileTrainImpactPort`, `ProjectileWorldImpactBindingPort`, `ProjectileLifecycleEventsBindingPort`, `ProjectileTimeFieldBindingPort`, `ProjectileHomingBindingPort`, `ProjectileSwarmReactionPort` |
-| External / Reads | `ProjectileExternalInteractionPort`, `TranslocatorProjectilePort`, `ProjectileThreatReadPort`, `ProjectileDiagnosticsReadPort`, `ProjectilePresentationReadPort` |
-| Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileTravelCapabilities`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileInteractionAugment`, `ProjectilePathEffectKind` |
-| Target / Geometry | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectilePhysicsContact`, `ProjectilePhysicsContactTarget`, `ProjectileCollisionMode` |
-| Collision Resolution | `ProjectileCollisionOutcome`; World-Kandidaten und technische Kontakte werden pro Host-Zeitpunkt über die Runtime dedupliziert |
-| Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierRequest`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution`; `deflectProjectile` für Projectile↔Projectile-Transform |
-| Combat / Domain Effects | `ProjectileCombatPort`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome` |
-| Complex State / Lifecycle | private Verarbeitung durch `ProjectileLifecycleProcessor` und `ProjectileMiniRocketProcessor`; `ProjectileMiniRocketStatePort`, `PROJECTILE_STAGE_SPAWN_CONTRACT`, `ProjectileImpactSource`, `ProjectileLifecycleOutcome`; WorldRuntime besitzt Explosion-/Continuation-, Direct-Impact-, Detonation-, Burn-, Swarm- und Next-Stage-Authority |
-| Detonable / Replication | `ProjectileDetonableReadPort`, `ProjectileDetonableSample`, `ProjectileReplicationAdapter`, `ProjectileReplicationRecord`, `ProjectileReplicationReadPort` |
-| Client / Presentation | `ProjectileClientReplica`, `ProjectileClientReplicaState`, `ProjectileClientReplicaFrame`, `ProjectileClientExtrapolatedState`, `ProjectilePresentationRuntime`, `ProjectilePresentationRenderers` |
+| World / interner State | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileStore`, `ProjectileIdentityScope`, `ProjectileRuntimeRecord`, `ProjectileResolvedSpec` |
+| Physics / Geometry | `ProjectilePhysicsBindingPort`, `ProjectilePhysicsSpawnSpec`, `ProjectilePhysicsMechanics`, `ProjectilePhysicsHandle`, `ProjectileGeometryBindingPort` |
+| World-Bindings | `ProjectileTrainBindingPort`, `ProjectileTrainImpactPort`, `ProjectileWorldImpactBindingPort`, `ProjectileLifecycleEventsBindingPort`, `ProjectileTimeFieldBindingPort`, `ProjectileHomingBindingPort`, `ProjectileSwarmReactionPort` |
+| External / Reads | `ProjectileExternalInteractionPort`, `TranslocatorProjectilePort`, `ProjectileThreatReadPort`, `ProjectileDiagnosticsReadPort`, `ProjectilePresentationReadPort`, `ProjectileDetonableReadPort` |
+| Travel / Environment | `ProjectileTravelReadPort`, `ProjectileTravelSample`, `ProjectileEnvironmentInteractionPort`, `ProjectileBurnAugment`, `ProjectileTimeFieldPort` |
+| Collision / Targets | `ProjectileTargetRef`, `projectileTargetKey`, `projectileTargetPhysicalKey`, `ProjectileCollisionTargetQueryPort`, `ProjectileWorldBlockerPort`, `ProjectileTargetabilityPort`, `ProjectileImpactCandidate`, `ProjectilePhysicsContact`, `ProjectileCollisionOutcome` |
+| Barrier / Defense | `ProjectileBarrierPort`, `ProjectileBarrierResolution`, `ProjectileDefenseResolution`, `deflectProjectile` |
+| Combat / Explosion | `ProjectileCombatPort`, `ProjectileDirectImpactRequest`, `ProjectileDirectImpactOutcome`, `ProjectileExplosionResolutionPort`, `ProjectileExplosionRequest`, `ProjectileGrenadePayloadRequest`, `ProjectileExplosionOutcome` |
+| Lifecycle / Stages | `ProjectileLifecycleProcessor`, `ProjectileMiniRocketProcessor`, `ProjectileMiniRocketStatePort`, `PROJECTILE_STAGE_SPAWN_CONTRACT`, `ProjectileImpactSource`, `ProjectileLifecycleOutcome` |
+| Replication / Presentation | `ProjectileReplicationAdapter`, `ProjectileReplicationReadPort`, `ProjectileClientReplica`, `ProjectileClientReplicaFrame`, `ProjectilePresentationRuntime`, `ProjectilePresentationRenderers` |
 
-Phase-6-Normalisierung: Combat liefert `player`/`enemy`/`decoy`; Placeables laufen als `rock` mit `obstacleKind`, Basen/Zug als eigene World-Targets. `projectileTargetPhysicalKey` dedupliziert Rock/Construction.
+Placeables sind kanonisch `rock` mit `obstacleKind`; Basen/Zug haben eigene World-Targets.
+`projectileTargetPhysicalKey` dedupliziert Rock/Construction.
 
----
+## 5. Knowledge Writeback
 
-## 5. Architektur-Review-Bedarf
-
-Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
-
-- Die oben benannten Abschlussphasen beheben reale Abweichungen von 01/02; keine normative Architekturänderung erforderlich.
-
----
-
-## 6. Nächster Schritt
-
-**C8 ist die nächste offene Phase. Die dokumentierten Vorarbeiten sind kein Abschluss der Phase: C8 ist noch nicht final abgeschlossen, und die unabhängige vollständige C8-Endabnahme steht noch aus.**
-
----
-
-## Update-Regel nach jeder Phase
-
-Nur:
-
-1. abgeschlossene Phase auf ✅ setzen.
-2. `Nächste Phase` auf die folgende offene Phase aktualisieren; sie bleibt ⬜, solange ihre Bearbeitung noch nicht begonnen hat.
-3. Erst beim tatsächlichen Beginn einer Phase deren Status auf 🟨 setzen.
-4. aktive Transitionen/Blocker ersetzen oder löschen.
-5. neue realisierte Contract-Namen eintragen.
-6. Baseline/Final-Gate aktualisieren, falls betroffen; Typecheck-Abschluss ist Voraussetzung für ✅.
-7. Nur aktuell relevante Test-/Runner-Abweichungen dokumentieren; keine Testinventare oder gelöschte historische Ratchets wieder aufbauen.
-8. nächsten Schritt auf genau die nächste Phase setzen.
-
-Danach die abgeschlossene Phase **inklusive dieser Statusänderung** committen. Kein SHA-Nachtrag. Ein späterer Start der nächsten Phase setzt deren Status erst dann auf 🟨.
+`docs/ai/gameplay.md`: verifizierte Ownership-, Identity- und Removal-Verträge. 01–03 unverändert.
