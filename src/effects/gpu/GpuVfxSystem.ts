@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { GPU_VFX_ATLAS_KEY, buildGpuVfxAtlas, getGpuVfxFrame } from './GpuVfxAtlas';
+import { GPU_VFX_ATLAS_KEY, GpuVfxFrameId, buildGpuVfxAtlas, getGpuVfxFrame } from './GpuVfxAtlas';
 import { GPU_VFX_EASE_NAMES } from './GpuVfxEase';
 import { GPU_VFX_EFFECTS, type GpuVfxEffectId, type GpuVfxImportance } from './GpuVfxEffects';
 import {
@@ -10,8 +10,11 @@ import { GPU_VFX_DEAD_MEMBER, writeGpuVfxMember } from './GpuVfxMember';
 import { GPU_VFX_NO_SLOT, GpuVfxPool, type GpuVfxPoolStats } from './GpuVfxPool';
 import { GpuVfxProfiler, type GpuVfxCompanionCounters, type GpuVfxReport } from './GpuVfxProfiler';
 import { GpuVfxQuality } from './GpuVfxQuality';
-import { GPU_VFX_LANES, type GpuVfxLaneId, type GpuVfxLaneSpec } from './GpuVfxRenderLanes';
+import { GPU_VFX_LANES, GpuVfxLaneId, type GpuVfxLaneSpec } from './GpuVfxRenderLanes';
 import type { GpuVfxSpawnSpec } from './GpuVfxSpawnSpec';
+import { GpuFlightRibbonStore, type FlightRibbonHandle, type FlightRibbonStyle } from './GpuFlightRibbon';
+import { createFlightRibbonLayer } from './GpuFlightRibbonLayer';
+import type { ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 
 /**
  * GpuVfxSystem – das gemeinsame GPU-VFX-Backend einer Szene.
@@ -84,6 +87,9 @@ interface GpuVfxLane {
 }
 
 export class GpuVfxSystem {
+  readonly flightRibbons: GpuFlightRibbonStore;
+  private readonly ribbonLayer: Phaser.GameObjects.Image | null;
+  private flightPeak = 0;
   private readonly lanes: GpuVfxLane[] = [];
   private readonly ticks: GpuVfxEmissionTick[] = [];
   private readonly laneStats: GpuVfxPoolStats[] = [];
@@ -144,6 +150,31 @@ export class GpuVfxSystem {
     }
 
     for (let index = 0; index < MAX_SOURCES; index += 1) this.sourceFreeList[index] = index;
+    const flightLane = this.lanes[GpuVfxLaneId.FlightSignature];
+    const frames = [GpuVfxFrameId.FlightCoreStrip, GpuVfxFrameId.FlightWakeStrip].map(id => {
+      const frame = getGpuVfxFrame(id);
+      return { u: (frame.u0 + frame.u1) / 2, top: frame.v0, bottom: frame.v1 };
+    });
+    this.flightRibbons = new GpuFlightRibbonStore({
+      admit: effect => admitGpuVfxSpawn(this.flightLiveCount(), flightLane.spec.capacity,
+        flightLane.spec.reserveCritical, GPU_VFX_EFFECTS[effect].importance),
+      attempt: effect => this.profiler.recordAttempt(effect),
+      spawn: effect => { this.profiler.recordSpawn(effect); this.flightPeak = Math.max(this.flightPeak, this.flightLiveCount()); },
+      drop: effect => this.profiler.recordCapacityDrop(effect),
+    }, [frames[0], frames[1]], flightLane.spec.capacity);
+    this.ribbonLayer = createFlightRibbonLayer(scene, this.flightRibbons, flightLane.spec.depth, () => this.clockMs);
+  }
+
+  createFlightRibbon(source: number, style: FlightRibbonStyle): FlightRibbonHandle | null {
+    return this.flightRibbons.create(source, style);
+  }
+  appendFlightRibbon(handle: FlightRibbonHandle, segment: ProjectileTrailSegment, wake: boolean): void {
+    if (!this.suppressed) this.flightRibbons.append(handle, segment, this.clockMs, wake, this.quality.getFactor('standard'));
+  }
+  breakFlightRibbon(handle: FlightRibbonHandle): void { this.flightRibbons.break(handle); }
+  endFlightRibbon(handle: FlightRibbonHandle): void { this.flightRibbons.end(handle); }
+  private flightLiveCount(): number {
+    return this.lanes[GpuVfxLaneId.FlightSignature].pool.getLiveCount() + (this.flightRibbons?.liveCount ?? 0);
   }
 
   // ── Spawn-Schnittstelle ────────────────────────────────────────────────────
@@ -189,7 +220,7 @@ export class GpuVfxSystem {
     if (!lane) return false;
 
     if (!admitGpuVfxSpawn(
-      lane.pool.getLiveCount(),
+      spec.lane === GpuVfxLaneId.FlightSignature ? this.flightLiveCount() : lane.pool.getLiveCount(),
       lane.spec.capacity,
       lane.spec.reserveCritical,
       GPU_VFX_EFFECTS[spec.effect].importance,
@@ -218,6 +249,7 @@ export class GpuVfxSystem {
       member as unknown as Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>,
     );
     this.profiler.recordSpawn(spec.effect);
+    if (spec.lane === GpuVfxLaneId.FlightSignature) this.flightPeak = Math.max(this.flightPeak, this.flightLiveCount());
     // Auch Spawns ausserhalb des Emissions-Ticks muessen ihre Lane sofort sichtbar machen,
     // sonst faellt das erste Partikel eines Bursts einen Frame lang aus.
     this.applyVisibility(lane);
@@ -253,6 +285,10 @@ export class GpuVfxSystem {
     const mode = this.sourceMode[sourceIndex];
     if (mode === SOURCE_FREE) return;
 
+    this.flightRibbons.clearSource(sourceIndex, mode === SOURCE_LINGER);
+    this.flightRibbons.flush();
+    this.applyRibbonVisibility();
+
     for (let index = 0; index < this.lanes.length; index += 1) {
       const pool = this.lanes[index].pool;
       if (mode === SOURCE_LINGER) pool.detachSource(sourceIndex);
@@ -273,6 +309,9 @@ export class GpuVfxSystem {
   clearSource(sourceIndex: number): void {
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES) return;
     if (this.sourceMode[sourceIndex] === SOURCE_FREE) return;
+    this.flightRibbons.clearSource(sourceIndex);
+    this.flightRibbons.flush();
+    this.applyRibbonVisibility();
     for (let index = 0; index < this.lanes.length; index += 1) {
       const lane = this.lanes[index];
       lane.pool.releaseSource(sourceIndex);
@@ -306,6 +345,7 @@ export class GpuVfxSystem {
    */
   update(deltaMs: number): void {
     this.clockMs += deltaMs;
+    this.flightRibbons.retire(this.clockMs);
 
     for (let index = 0; index < this.lanes.length; index += 1) {
       const lane = this.lanes[index];
@@ -322,13 +362,15 @@ export class GpuVfxSystem {
       }
     }
 
+    this.flightRibbons.flush();
+    this.applyRibbonVisibility();
     let activeMask = 0;
     for (let index = 0; index < this.lanes.length; index += 1) {
       const lane = this.lanes[index];
       this.applyVisibility(lane);
-      if (lane.pool.getLiveCount() > 0) activeMask |= (1 << index);
+      const liveCount = index === GpuVfxLaneId.FlightSignature ? this.flightLiveCount() : lane.pool.getLiveCount();
+      if (liveCount > 0) activeMask |= (1 << index);
       const capacity = Math.max(1, lane.pool.getCapacity());
-      const liveCount = lane.pool.getLiveCount();
       const high = liveCount / capacity >= 0.9;
       if (high && !this.highUtilizationState[index]) {
         this.diagnosticEventSink?.('gpu:vfx_high_utilization', {
@@ -351,6 +393,9 @@ export class GpuVfxSystem {
     if (this.suppressed === suppressed) return;
     this.suppressed = suppressed;
     if (suppressed) this.generation++;
+    if (suppressed) this.flightRibbons.clear();
+    if (suppressed) this.flightRibbons.flush();
+    this.applyRibbonVisibility();
     for (const lane of this.lanes) {
       if (suppressed) lane.pool.releaseAll();
       this.applyVisibility(lane);
@@ -359,6 +404,9 @@ export class GpuVfxSystem {
 
   releaseAll(): void {
     this.generation++;
+    this.flightRibbons.clear();
+    this.flightRibbons.flush();
+    this.applyRibbonVisibility();
     for (const lane of this.lanes) {
       lane.pool.releaseAll();
       this.applyVisibility(lane);
@@ -367,6 +415,8 @@ export class GpuVfxSystem {
   }
 
   destroy(): void {
+    this.releaseAll();
+    this.ribbonLayer?.destroy();
     this.quality.destroy();
   }
 
@@ -376,7 +426,7 @@ export class GpuVfxSystem {
   getStats(): Record<string, GpuVfxPoolStats> | null {
     if (this.lanes.length === 0) return null;
     const stats: Record<string, GpuVfxPoolStats> = {};
-    for (const lane of this.lanes) stats[lane.spec.label] = lane.pool.getStats();
+    for (const lane of this.lanes) stats[lane.spec.label] = this.getLaneStats(lane.spec.id)!;
     return stats;
   }
 
@@ -388,7 +438,7 @@ export class GpuVfxSystem {
   /** Vollstaendiger Zwei-Ebenen-Report fuer den Performance-Export. */
   buildReport(): GpuVfxReport {
     this.laneStats.length = 0;
-    for (const lane of this.lanes) this.laneStats.push(lane.pool.getStats());
+    for (const lane of this.lanes) this.laneStats.push(this.getLaneStats(lane.spec.id)!);
     return this.profiler.buildReport(this.laneStats);
   }
 
@@ -396,12 +446,22 @@ export class GpuVfxSystem {
   resetProfiling(): void {
     this.profiler.reset();
     for (const lane of this.lanes) lane.pool.resetStats();
+    this.flightRibbons.resetStats();
+    this.flightPeak = this.flightLiveCount();
     this.highUtilizationState.fill(false);
   }
 
   getLaneStats(id: GpuVfxLaneId): GpuVfxPoolStats | null {
-    return this.lanes[id]?.pool.getStats() ?? null;
+    const stats = this.lanes[id]?.pool.getStats();
+    if (!stats) return null;
+    if (id !== GpuVfxLaneId.FlightSignature) return stats;
+    const ribbon = this.flightRibbons.stats();
+    return { ...stats, liveCount: stats.liveCount + ribbon.liveCount, peakLive: this.flightPeak,
+      rearms: stats.rearms + ribbon.rearms, retirements: stats.retirements + ribbon.retirements,
+      capacityDrops: stats.capacityDrops + ribbon.capacityDrops, segmentsTouched: stats.segmentsTouched + ribbon.segmentsTouched };
   }
+
+  private applyRibbonVisibility(): void { this.ribbonLayer?.setVisible(!this.suppressed && this.flightRibbons.liveCount > 0); }
 
   // ── Interna ────────────────────────────────────────────────────────────────
 

@@ -22,6 +22,7 @@ import { TracerRenderer } from '../src/effects/TracerRenderer';
 import { ProjectileBurnRenderer } from '../src/effects/ProjectileBurnRenderer';
 import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
+import type { FlightRibbonHandle } from '../src/effects/gpu/GpuFlightRibbon';
 import { gpuVfxEasedBase } from '../src/effects/gpu/GpuVfxMember';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { DEPTH } from '../src/config';
@@ -121,8 +122,37 @@ describe('rocket smoke path particles', () => {
 });
 
 describe('gpu vfx eased base', () => {
-  it('keeps adjoining flight strips continuous across tightly batched physics observations', () => {
+  it('keeps final paths separate from reused projectile IDs and invalidates queued ribbons on suppression', () => {
     const { scene, registry } = setup();
+    const create = vi.spyOn(registry, 'createFlightRibbon');
+    const tracer = new TracerRenderer(scene as never);
+    tracer.registerGpuVfx(registry);
+    const point = (x: number) => ({ sequence: x + 1, timeMs: x, x, y: 0, vx: 1000, vy: 0 });
+    const begin = (x: number) => {
+      tracer.createTracer(1, x, 0, { profile: 'heavy', moteAmount: 0 }, 0xffaa00);
+      tracer.addSegment(1, { from: point(x), to: point(x + 20), ageMs: 0 });
+    };
+    begin(0); tracer.destroyTracer(1); begin(200); registry.update(0);
+    const first = create.mock.results[0].value as FlightRibbonHandle;
+    const second = create.mock.results[1].value as FlightRibbonHandle;
+    expect(first).not.toEqual(second);
+    expect(registry.flightRibbons.spans(first)[0].to.x).toBe(20);
+    expect(registry.flightRibbons.spans(second)[0].from.x).toBe(200);
+    tracer.addSegment(1, { from: point(220), to: point(240), ageMs: 0 });
+    registry.setSuppressed(true); registry.setSuppressed(false);
+    tracer.addSegment(1, { from: point(400), to: point(420), ageMs: 0 });
+    registry.update(0);
+    expect(registry.flightRibbons.spans(first)).toHaveLength(0);
+    expect(registry.flightRibbons.spans(second)).toHaveLength(0);
+    const third = create.mock.results[2].value as FlightRibbonHandle;
+    expect(registry.flightRibbons.spans(third)).toHaveLength(1);
+    expect(registry.flightRibbons.spans(third)[0].from.x).toBe(400);
+    tracer.destroyAll();
+  });
+
+  it('preserves shared knot ages across separately delivered physics observations', () => {
+    const { scene, registry } = setup();
+    const create = vi.spyOn(registry, 'createFlightRibbon');
     const tracer = new TracerRenderer(scene as never);
     tracer.registerGpuVfx(registry);
     tracer.createTracer(1, 0, 0, { profile: 'automatic', moteAmount: 0 }, 0xffaa00);
@@ -132,33 +162,28 @@ describe('gpu vfx eased base', () => {
       { sequence: 90, timeMs: 16.1, x: 16, y: 0, vx: 1000, vy: 0 },
       { sequence: 91, timeMs: 32, x: 24, y: 0, vx: 1000, vy: 0 },
     ];
-    for (let i = 1; i < points.length; i++) tracer.addSegment(1, {
-      from: points[i - 1], to: points[i], ageMs: 32 - points[i].timeMs,
-    });
-    registry.update(0);
-    const lane = findFakeLane(scene, 'flight-signature');
-    for (const frame of ['flight-core-strip', 'flight-wake-strip']) {
-      const members = lane.edited.map(i => lane.members[i]).filter(m => m.frame === frame);
-      expect(members).toHaveLength(3);
-      expect(new Set(members.map(m => m.alpha.duration)).size).toBe(1);
-      expect(new Set(members.map(m => evaluateFakeAnimation(m.scaleY, 0))).size).toBe(1);
-      // Longitudinal coverage stays exact even while the wake expands and fades.
-      for (const age of [0, 0.5]) for (let i = 1; i < members.length; i++) {
-        const previous = members[i - 1], next = members[i];
-        const end = evaluateFakeAnimation(previous.x, age) + evaluateFakeAnimation(previous.scaleX, age) / 2;
-        const start = evaluateFakeAnimation(next.x, age) - evaluateFakeAnimation(next.scaleX, age) / 2;
-        expect(end).toBeCloseTo(start);
-      }
-      // Renumbering a path must not introduce a lateral jump in an otherwise straight wake.
-      const drift = members.map(m => m.y.amplitude);
-      expect(Math.abs(drift[2] - drift[1])).toBeLessThanOrEqual(Math.abs(drift[1] - drift[0]) * 1.1);
+    for (let i = 1; i < points.length; i++) {
+      tracer.addSegment(1, { from: points[i - 1], to: points[i], ageMs: 32 - points[i].timeMs });
+      registry.update(0);
     }
+    const handle = create.mock.results[0].value as FlightRibbonHandle;
+    for (const wake of [false, true]) {
+      const spans = registry.flightRibbons.spans(handle, wake);
+      expect(spans).toHaveLength(points.length - 1);
+      for (let i = 1; i < spans.length; i++) {
+        expect(spans[i].from).toBe(spans[i - 1].to);
+        expect(spans[i].from.born).toBeCloseTo(points[i].timeMs - 32);
+        expect(spans[i].from.life).toBe(spans[0].from.life);
+      }
+    }
+    expect(findFakeLane(scene, 'flight-signature').edited).toHaveLength(0);
     tracer.destroyAll();
   });
 
   it('tunes wake opacity independently from the core and honors long core lengths within the shared lifetime', () => {
     const render = (overrides: Partial<FlightSignatureConfig>) => {
       const { scene, registry } = setup();
+      const create = vi.spyOn(registry, 'createFlightRibbon');
       const tracer = new TracerRenderer(scene as never);
       tracer.registerGpuVfx(registry);
       tracer.createTracer(1, 0, 0, { profile: 'automatic', coreIntensity: 0.5,
@@ -166,13 +191,10 @@ describe('gpu vfx eased base', () => {
       tracer.addSegment(1, { from: { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
         to: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 1000, vy: 0 }, ageMs: 0 });
       registry.update(0);
-      const lane = findFakeLane(scene, 'flight-signature');
-      const members = lane.edited.map(i => lane.members[i]);
-      const core = members.find(m => m.frame === 'flight-core-strip')!;
-      const wake = members.find(m => m.frame === 'flight-wake-strip')!;
-      const result = { coreAlpha: evaluateFakeAnimation(core.alpha, 0),
-        wakeAlpha: evaluateFakeAnimation(wake.alpha, 0), coreLife: core.alpha.duration,
-        wakeLife: wake.alpha.duration };
+      const handle = create.mock.results[0].value as FlightRibbonHandle;
+      const core = registry.flightRibbons.spans(handle)[0].to;
+      const wake = registry.flightRibbons.spans(handle, true)[0].to;
+      const result = { coreAlpha: core.alpha, wakeAlpha: wake.alpha, coreLife: core.life, wakeLife: wake.life };
       registry.update(1000);
       expect(registry.getStats()!['flight-signature'].liveCount).toBe(0);
       tracer.destroyAll();
@@ -206,29 +228,31 @@ describe('gpu vfx eased base', () => {
     expect(registry.spawn(spec, source, 41, 100)).toBe(false);
   });
 
-  it('keeps essential core geometry when wake quality is disabled and does not edit living strips', () => {
+  it('keeps essential core geometry at zero wake quality and uploads nothing while only aging', () => {
     qualityFactors.standard = 0; qualityFactors.decorative = 0;
     const { scene, registry } = setup();
+    const create = vi.spyOn(registry, 'createFlightRibbon');
     const tracer = new TracerRenderer(scene as never);
     tracer.registerGpuVfx(registry);
     tracer.createTracer(1, 0, 0, { profile: 'heavy' }, 0xffaa00);
     tracer.addSegment(1, { from: { sequence: 1, timeMs: 0, x: 0, y: 0, vx: 1000, vy: 0 },
-      to: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 0, vy: 1000 }, ageMs: 0 });
+      to: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 0, vy: 1000 }, ageMs: 20 });
     tracer.addSegment(1, { from: { sequence: 2, timeMs: 20, x: 20, y: 0, vx: 0, vy: 1000 },
       to: { sequence: 3, timeMs: 40, x: 20, y: 20, vx: 0, vy: 1000 }, ageMs: 0 });
+    // Closing before the emission tick must preserve both terminal segments.
+    tracer.destroyTracer(1);
     registry.update(0);
-    const lane = findFakeLane(scene, 'flight-signature');
-    expect(lane.edited).toHaveLength(2);
-    const a = lane.members[lane.edited[0]], b = lane.members[lane.edited[1]];
-    expect(evaluateFakeAnimation(a.x, 0)).toBe(10);
-    expect(evaluateFakeAnimation(a.y, 0.5)).toBe(0);
-    expect(evaluateFakeAnimation(b.x, 0.5)).toBe(20);
-    expect(evaluateFakeAnimation(b.rotation, 0)).toBeCloseTo(Math.PI / 2);
-    expect(evaluateFakeAnimation(a.scaleX, 0)).toBeCloseTo(20);
-    tracer.destroyTracer(1); registry.update(1);
-    expect(lane.edited).toHaveLength(2);
+    const handle = create.mock.results[0].value as FlightRibbonHandle;
+    const spans = registry.flightRibbons.spans(handle);
+    expect(spans).toHaveLength(2);
+    expect(registry.flightRibbons.spans(handle, true)).toHaveLength(0);
+    expect(spans.map(s => [s.from.x, s.from.y, s.to.x, s.to.y])).toEqual([[0, 0, 20, 0], [20, 0, 20, 20]]);
+    const versions = [...registry.flightRibbons.pageVersion];
+    registry.update(1);
+    expect([...registry.flightRibbons.pageVersion]).toEqual(versions);
     tracer.destroyAll();
     expect(registry.getStats()!['flight-signature'].liveCount).toBe(0);
+    expect(registry.flightRibbons.handleCount).toBe(0);
     qualityFactors.decorative = 1;
   });
 

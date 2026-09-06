@@ -19,6 +19,7 @@ import { GpuVfxFrameAnimationId } from '../src/effects/gpu/GpuVfxFrameAnimations
 import { GPU_VFX_EFFECTS, GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem';
+import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 function setup() {
@@ -53,6 +54,28 @@ afterEach(() => {
 });
 
 describe('gpu vfx system: lanes', () => {
+  it('shares flight admission, critical reserve, profiling and source cleanup across both primitives', () => {
+    const { system } = setup();
+    const source = system.createSource(GpuVfxEffectId.FlightCore);
+    const handle = system.createFlightRibbon(source, { tuning: FLIGHT_SIGNATURE_PROFILES.heavy, color: 0xffffff, emissive: 1 })!;
+    const point = (x: number) => ({ sequence: x + 1, timeMs: x, x, y: 0, vx: 1000, vy: 0 });
+    system.appendFlightRibbon(handle, { from: point(0), to: point(20), ageMs: 0 }, false);
+    const lane = GPU_VFX_LANES[GpuVfxLaneId.FlightSignature];
+    const mote = spawnSpec(system, GpuVfxEffectId.FlightMote);
+    for (let i = 1; i < lane.capacity - lane.reserveCritical; i++) expect(system.spawn(mote, source, 0)).toBe(true);
+    expect(system.spawn(mote, source, 0)).toBe(false);
+    system.appendFlightRibbon(handle, { from: point(20), to: point(40), ageMs: 0 }, false);
+    system.update(0);
+    const report = system.buildReport().lanes[GpuVfxLaneId.FlightSignature];
+    expect(report.active).toBe(lane.capacity - lane.reserveCritical + 1);
+    expect(report.highWaterMark).toBe(report.active);
+    expect(report.capacityDrops).toBe(1);
+    system.clearSource(source);
+    expect(system.getLaneStats(GpuVfxLaneId.FlightSignature)!.liveCount).toBe(0);
+    expect(system.flightRibbons.handleCount).toBe(0);
+    expect(system.flightRibbons.data.every(n => n === 0)).toBe(true);
+  });
+
   it('creates every lane of the manifest, configured and primed', () => {
     const { scene } = setup();
     expect(scene.layers.length).toBe(GPU_VFX_LANES.length);

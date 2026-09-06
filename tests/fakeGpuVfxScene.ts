@@ -232,6 +232,7 @@ export interface FakeDrawCall {
 
 export interface FakeFrame {
   name: string;
+  u0: number; u1: number; v0: number; v1: number;
   cutX: number;
   cutY: number;
   cutWidth: number;
@@ -283,7 +284,7 @@ function makeFakeCanvasTexture(key: string, width: number, height: number): Fake
     height,
     firstFrame: '__BASE',
     frameOrder: ['__BASE'],
-    frames: new Map([['__BASE', { name: '__BASE', cutX: 0, cutY: 0, cutWidth: width, cutHeight: height }]]),
+    frames: new Map([['__BASE', { name: '__BASE', cutX: 0, cutY: 0, cutWidth: width, cutHeight: height, u0: 0, u1: 1, v0: 0, v1: 1 }]]),
     refreshed: 0,
     drawCalls: [],
     // Unbekannte Canvas-Methoden sind No-Ops: die Renderer zeichnen hier echte Pfade, die
@@ -316,7 +317,8 @@ function makeFakeCanvasTexture(key: string, width: number, height: number): Fake
     }) as unknown as FakeCanvasContext,
     add: (name, _sourceIndex, x, y, w, h) => {
       if (texture.frames.has(name)) return null;
-      const frame: FakeFrame = { name, cutX: x, cutY: y, cutWidth: w, cutHeight: h };
+      const frame: FakeFrame = { name, cutX: x, cutY: y, cutWidth: w, cutHeight: h,
+        u0: x / width, u1: (x + w) / width, v0: y / height, v1: (y + h) / height };
       texture.frames.set(name, frame);
       texture.frameOrder.push(name);
       // Phaser befoerdert den ersten hinzugefuegten Frame zum Default der Textur.

@@ -65,8 +65,13 @@ Kopfgebundene Akzente gehören weiterhin den spezialisierten Projectile-Renderer
 
 Flight-Material wird nach dem GPU-Retire-Sweep emittiert: zuerst alle kritischen Cores, danach Wake
 und Dekoration. Historische Spawns setzen GPU-Animationsalter und Pool-Restlebenszeit gemeinsam;
-abgelaufenes Material wird verworfen. Bereits emittierte Segmente werden bei Bounce oder Despawn
-nicht umorientiert oder gelöscht. World-Teardown entfernt auch nachlaufende Member, Cursor,
+abgelaufenes Material wird verworfen. Core und Haupt-Wake verwenden zusammenhängende GPU-Ribbons:
+gemeinsame Knoten bewahren Position und Entstehungszeit; neue Nachbarn dürfen nur den geometrischen
+Anschluss ergänzen. Alterung läuft entlang der Fläche, nicht einheitlich je Sprite. Die Ribbon-
+Geometrie und die Sprite-Dekoration teilen Budget, Prioritäten, Source-Lifetime und Profiler der
+Flight-Lane. Ribbon-Handles gehören einer Präsentationsinstanz; wiederverwendete Projectile-IDs
+oder unterbrochene Historien verbinden keine alten Trails. Die historischen Mittellinien werden
+bei Bounce oder Despawn nicht umorientiert oder gelöscht. World-Teardown entfernt auch nachlaufende Member, Cursor,
 gepufferte Pfade und ausstehende Emissionen. Details der Client-Zeitbasis stehen in
 [networking.md](networking.md#projectile-flight-replikation).
 

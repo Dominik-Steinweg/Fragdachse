@@ -148,6 +148,7 @@ describe('projectile performance paths', () => {
     const gpu = new GpuVfxSystem(scene as never);
     const tracer = new TracerRenderer(scene as never);
     tracer.registerGpuVfx(gpu);
+    const ribbonEmission = vi.spyOn(gpu, 'appendFlightRibbon');
     for (let id = 0; id < 1500; id++) {
       recorder.begin(id, 0, id, 1000, 0, 0);
       tracer.createTracer(id, 0, id, { profile: 'heavy' }, 0xffaa00);
@@ -166,11 +167,18 @@ describe('projectile performance paths', () => {
     const lane = findFakeLane(scene, 'flight-signature');
     expect(gpu.getStats()!['flight-signature'].liveCount).toBeGreaterThan(0);
     expect(lane.edited.length).toBeLessThanOrEqual(lane.size);
-    const frames = lane.edited.map(index => lane.members[index].frame);
-    const firstWake = frames.findIndex(frame => frame !== 'flight-core-strip');
-    if (firstWake >= 0) expect(frames.slice(firstWake)).not.toContain('flight-core-strip');
+    const kinds = ribbonEmission.mock.calls.map(call => call[2]);
+    const firstWake = kinds.indexOf(true);
+    expect(firstWake).toBeGreaterThan(0);
+    expect(kinds.slice(firstWake).every(wake => wake)).toBe(true);
+    expect(gpu.getStats()!['flight-signature'].liveCount).toBeLessThanOrEqual(lane.size);
+    expect(gpu.flightRibbons.handleCount).toBeLessThanOrEqual(1500);
+    const versions = [...gpu.flightRibbons.pageVersion];
+    gpu.update(0);
+    expect([...gpu.flightRibbons.pageVersion]).toEqual(versions);
     tracer.destroyAll(); recorder.clear(); gpu.update(0);
     expect(gpu.getStats()!['flight-signature'].liveCount).toBe(0);
+    expect(gpu.flightRibbons.handleCount).toBe(0);
     expect(recorder.read(1, 1200)).toBeUndefined();
   });
 

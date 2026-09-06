@@ -7,7 +7,8 @@ import {
 } from './GpuVfxFrameAnimations';
 
 /**
- * GpuVfxRenderLanes – der Manifest aller physischen `SpriteGPULayer`.
+ * GpuVfxRenderLanes – Manifest der GPU-Renderbaender. Normalerweise genau ein SpriteGPULayer;
+ * FlightSignature teilt ihr Budget mit der spezialisierten Ribbon-Primitive.
  *
  * Eine **Render-Lane** ist genau ein Layer. Ein **logischer Effekt** ist etwas anderes und steht
  * in `GpuVfxEffects.ts`: mehrere Effekte duerfen sich eine kompatible Lane teilen, und ein Effekt
@@ -701,7 +702,7 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     depth: DEPTH.PROJECTILES - 1.8, blendMode: Phaser.BlendModes.ADD,
     eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
     capacity: 16384, maxLifetimeMs: 1000, order: 'add-over-opaque', reserveCritical: 8192,
-    rationale: 'Path-local light segments share one additive band below projectile heads.',
+    rationale: 'Continuous core/wake ribbons and sprite decoration share one additive band below projectile heads and one admission budget.',
     capacityRationale: 'Reserves half the bounded lane for critical paths; wake and motes cannot consume that reserve.',
   },
 ];
