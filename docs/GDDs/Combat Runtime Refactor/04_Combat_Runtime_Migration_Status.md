@@ -2,24 +2,24 @@
 
 **Architektur:** [01](01_Combat_Runtime_Architecture_Core.md) + [02](02_Combat_Runtime_Architecture_Details.md) · **Plan:** [03](03_Combat_Runtime_Implementation_Plan.md) · **Betrieb:** [05](05_Combat_Runtime_Implementation_Cheatsheet.md)
 
-> Einziger operativer Status; keine Historie. **Nur der Orchestrator schreibt.** Worker liefern Belege, Reviewer ein Urteil. Keine Interface-Kopien, Vollinventare, Rohlogs oder SHA-Chronik. Zielgröße unter 8 KB.
+> Operativer Status ohne Historie. **Nur der Orchestrator schreibt.** Keine Interface-Kopien, Vollinventare, Rohlogs oder SHA-Chronik. Zielgröße unter 8 KB.
 
 ## 1. Steuerung und aktueller Stand
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A aktiv; P1-Fixrunde 1 bestanden, erneutes R1 als nächstes |
+| Gesamtstatus | Block A nach zwei nicht bestandenen R1-Runden angehalten |
 | Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
 | Freigabequelle | Nutzerauftrag vom 07.09.2026: ausschließlich Block A |
-| Nächster Arbeitsschritt | Unabhängiges R1 auf dem geprüften Fix-Checkpoint |
+| Nächster Arbeitsschritt | Nutzerentscheidung zum verbleibenden P1-Contract-Blocker |
 | Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine zwischen Fix-Checkpoint und R1 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `dd13de75` |
+| Aktive Phase / Aufgabe | Keine; Reparaturlimit aus 03 § 4.3 erreicht |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `491b778c` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | R1-Fixes benötigen Sol / High; Wiederholungsreview Astra / High |
-| Aktueller Reparaturzähler | R1-Fixrunde 1 abgeschlossen; Wiederholungsreview ausstehend |
+| Aktuell nötiger Modell-/Reviewstopp | Nutzerentscheidung nach erreichtem R1-Reparaturlimit |
+| Aktueller Reparaturzähler | Eine Fixrunde; zwei R1-Runden nicht bestanden – Blockstopp |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -37,7 +37,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 |---|:---:|:---:|---|
 | P0 | A | ✅ | Baseline / Delta |
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
-| R1 | A | 🟨 | Vertragsreview; Fixrunde 1 und Wiederholungsreview |
+| R1 | A | 🟧 | Zwei Review-Runden nicht bestanden; Blockstopp |
 | P2 | B | ⬜ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
@@ -65,7 +65,7 @@ Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest
 
 ## 4. Aktive Übergänge und Blocker
 
-P1 ist implementiert; die drei Befunde aus R1-Runde 1 sind in Fixrunde 1 geschlossen:
+P1 ist implementiert; zwei Lifecycle-Befunde aus R1-Runde 1 sind geschlossen. Ein Contract-Blocker bleibt:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
@@ -74,6 +74,7 @@ P1 ist implementiert; die drei Befunde aus R1-Runde 1 sind in Fixrunde 1 geschlo
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
+| Contract-Blocker | `appliedSourceDamageFactors` geht in Spawn-Config/ResolvedInteraction/Direct-Impact verloren; Realpfad klassifiziert skaliertes Damage wieder als `authored` | Nutzerentscheidung; gezielter P1-Fix |
 
 ## 5. Nachweise und Reviews
 
@@ -81,11 +82,11 @@ P1 ist implementiert; die drei Befunde aus R1-Runde 1 sind in Fixrunde 1 geschlo
 
 **P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus P1-Lieferung. Fokussierte Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. R1 fand danach drei Contract-Blocker.
 
-**P1-Fixrunde 1:** bestanden auf `dd13de75` plus Fixdelta. Fokussierte Tests: 44/44, Integration: 175/175, Typecheck und Diff-Check: Exit 0. Damage-Basis/Faktorherkunft, runtime-gebundene Clear-Lease und frühe Teardown-Invalidierung korrigiert.
+**P1-Fixrunde 1:** lokales Gate auf `dd13de75` plus Fixdelta: 44/44 fokussierte und 175/175 Integrationstests, Typecheck und Diff-Check grün. Clear-Lease und frühe Teardown-Invalidierung korrigiert; R1-Runde 2 belegte eine Lücke der Faktorherkunft im Realpfad.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
-| R1 | Nicht bestanden | `3524b918` | Damage-Basis/Faktorherkunft; Combat-Slot-Rebinding; Teardown-Invalidierungsreihenfolge |
+| R1 | Runde 2 nicht bestanden | `491b778c` | Faktorherkunft geht im realen Projectile-Runtime-Pfad verloren |
 | R2 | Nicht ausgeführt | – | – |
 | P13 | Nicht ausgeführt | – | – |
 
