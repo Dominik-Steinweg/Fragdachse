@@ -5,21 +5,25 @@ import type { RockDestructionVisualSnapshot } from '../arena/rocks/RockVisualSys
 import {
   createEmitter,
   destroyEmitter,
-  fillRadialGradientTexture,
   killAllAndResetParticlePositions,
   setEmitterTintArray,
 } from './EffectUtils';
 
-const TEX_ROCK_DUST = '__rock_destruction_dust';
+import {
+  ensureExplosionChunkTexture, ensureExplosionSmokeTexture,
+  TEX_EXPLOSION_CHUNK, TEX_EXPLOSION_SMOKE,
+} from './gpu/GpuVfxSourceTextures';
+
+const TEX_ROCK_DUST = TEX_EXPLOSION_SMOKE;
 const ROCK_TEXTURE_KEY = 'rocks';
 
 /**
  * Wie weit ein Truemmerstueck oder eine Staubwolke ueber den Fels hinausreicht.
  *
- * Der Flug betraegt hoechstens 0,9 Zellbreiten, dazu kommt der Radius der Staubwolke. Ein Fels
+ * Der Flug betraegt hoechstens 1,4 Zellbreiten, dazu kommt der Radius der Staubwolke. Ein Fels
  * weiter draussen kann nichts Sichtbares mehr beitragen.
  */
-const DESTRUCTION_VISIBILITY_MARGIN_PX = 64;
+const DESTRUCTION_VISIBILITY_MARGIN_PX = 80;
 
 /** Harte Obergrenze fuer gleichzeitig bewegte Fragment-Images. */
 const MAX_FRAGMENT_SLOTS = 144;
@@ -67,10 +71,6 @@ interface FragmentSlot {
 interface FragmentSpawnConfig {
   readonly x: number;
   readonly y: number;
-  readonly cropX: number;
-  readonly cropY: number;
-  readonly cropWidth: number;
-  readonly cropHeight: number;
   readonly worldWidth: number;
   readonly worldHeight: number;
   readonly tint: number;
@@ -122,7 +122,7 @@ export class RockDestructionRenderer {
    * Sichtbarkeitstest steht deshalb ganz vorne und verhindert bereits das Anlegen eines Requests
    * fuer Felsen ausserhalb des Bildes.
    */
-  private isWorthShowing(x: number, y: number): boolean {
+  private isWorthShowing(x: number, y: number, size: number): boolean {
     const camera = this.scene.cameras?.main;
     if (!camera) return true;
     // Der Ausschnitt gilt fuer den ganzen Frame; bei tausenden Aufrufen zaehlt jede Division.
@@ -132,20 +132,17 @@ export class RockDestructionRenderer {
       this.cachedViewFrame = frame;
     }
     const view = this.cachedView;
-    return x >= view.x - DESTRUCTION_VISIBILITY_MARGIN_PX
-      && x <= view.x + view.width + DESTRUCTION_VISIBILITY_MARGIN_PX
-      && y >= view.y - DESTRUCTION_VISIBILITY_MARGIN_PX
-      && y <= view.y + view.height + DESTRUCTION_VISIBILITY_MARGIN_PX;
+    const margin = Math.max(DESTRUCTION_VISIBILITY_MARGIN_PX, size * (1.4 + Math.SQRT2));
+    return x >= view.x - margin
+      && x <= view.x + view.width + margin
+      && y >= view.y - margin
+      && y <= view.y + view.height + margin;
   }
 
   generateTextures(): void {
     if (this.destroyed) return;
-    fillRadialGradientTexture(this.scene.textures, TEX_ROCK_DUST, 28, [
-      [0, 'rgba(255,255,255,0.95)'],
-      [0.26, 'rgba(255,255,255,0.5)'],
-      [0.6, 'rgba(255,255,255,0.18)'],
-      [1, 'rgba(255,255,255,0)'],
-    ]);
+    ensureExplosionChunkTexture(this.scene);
+    ensureExplosionSmokeTexture(this.scene);
 
     this.ensureSharedEmitters();
     this.prewarmFragmentPool();
@@ -153,10 +150,12 @@ export class RockDestructionRenderer {
 
   /** Nimmt ausschliesslich den rendererunabhaengigen Zustandssnapshot entgegen. */
   playDestruction(snapshot: RockDestructionVisualSnapshot): void {
-    if (this.destroyed || !this.isWorthShowing(snapshot.x, snapshot.y)) return;
+    if (this.destroyed || !this.isWorthShowing(snapshot.x, snapshot.y,
+      snapshot.size * Math.max(Math.abs(snapshot.scaleX), Math.abs(snapshot.scaleY)))) return;
 
-    const frameWidth = Math.max(1, Math.round(snapshot.size));
-    const frameHeight = frameWidth;
+    const frame = this.scene.textures.getFrame(ROCK_TEXTURE_KEY, snapshot.frame);
+    const frameWidth = frame.realWidth;
+    const frameHeight = frame.realHeight;
     this.pendingRequests.push({
       x: snapshot.x,
       y: snapshot.y,
@@ -168,8 +167,8 @@ export class RockDestructionRenderer {
       frameName: snapshot.frame,
       tint: snapshot.tint,
       angle: snapshot.angle,
-      columns: Phaser.Math.Clamp(Math.round(frameWidth / 6), 4, 6),
-      rows: Phaser.Math.Clamp(Math.round(frameHeight / 6), 4, 6),
+      columns: Phaser.Math.Clamp(Math.round(frameWidth / 12), 2, Math.min(4, frameWidth)),
+      rows: Phaser.Math.Clamp(Math.round(frameHeight / 12), 2, Math.min(4, frameHeight)),
     });
   }
 
@@ -179,6 +178,8 @@ export class RockDestructionRenderer {
    */
   clear(): void {
     this.pendingRequests.length = 0;
+    this.cachedView = null;
+    this.cachedViewFrame = -1;
     while (this.activeFragments.length > 0) {
       this.releaseFragment(this.activeFragments[this.activeFragments.length - 1]);
     }
@@ -199,20 +200,17 @@ export class RockDestructionRenderer {
     const fullLimit = requests.length <= SMALL_DESTRUCTION_BATCH_LIMIT
       ? requests.length
       : MAX_FULL_DESTRUCTIONS_IN_MASS;
-    const fragmentCount = requests[0].columns * requests[0].rows;
-    const poolLimit = Math.min(fullLimit, Math.floor(this.freeFragments.length / fragmentCount));
-    const preferredFullIndices = this.selectSpatiallyDistributed(requests, poolLimit);
+    const preferredFullIndices = this.selectSpatiallyDistributed(requests, fullLimit);
     const fullIndices = new Set<number>();
 
     for (const index of preferredFullIndices) {
       if (this.spawnFullFragments(requests[index])) {
         fullIndices.add(index);
-        this.emitDust(requests[index], FULL_DUST_PARTICLES);
+        this.emitDust(requests[index], FULL_DUST_PARTICLES, CHEAP_DEBRIS_PARTICLES);
       }
     }
 
-    // Bei Einzel- und Kleinstwellen bekommt weiterhin jeder Fels die volle Staubwolke. Bei einer
-    // Massenwelle wird der Rest durch wenige raeumlich verteilte Shared-Bursts repraesentiert.
+    // Ohne Fragmentbudget bleibt ein kompakter Staubstoss. Massenwellen werden raeumlich verteilt.
     const cheapCandidates = requests
       .map((_request, index) => index)
       .filter((index) => !fullIndices.has(index));
@@ -288,50 +286,35 @@ export class RockDestructionRenderer {
   }
 
   private spawnFullFragments(request: RockDestructionRequest): boolean {
-    const worldScaleX = request.displayWidth / request.frameWidth;
-    const worldScaleY = request.displayHeight / request.frameHeight;
-
+    if (request.columns * request.rows > this.freeFragments.length) return false;
     const fragmentConfigs: FragmentSpawnConfig[] = [];
-    for (let row = 0; row < request.rows; row += 1) {
-      const cropY = Math.round((row * request.frameHeight) / request.rows);
-      const nextCropY = Math.round(((row + 1) * request.frameHeight) / request.rows);
-      const cropHeight = Math.max(1, nextCropY - cropY);
-
-      for (let column = 0; column < request.columns; column += 1) {
-        const cropX = Math.round((column * request.frameWidth) / request.columns);
-        const nextCropX = Math.round(((column + 1) * request.frameWidth) / request.columns);
-        const cropWidth = Math.max(1, nextCropX - cropX);
-        const offsetX = ((cropX + cropWidth * 0.5) / request.frameWidth - 0.5) * request.displayWidth;
-        const offsetY = ((cropY + cropHeight * 0.5) / request.frameHeight - 0.5) * request.displayHeight;
-        const fragmentX = request.x + offsetX;
-        const fragmentY = request.y + offsetY;
-        const radialAngle = Phaser.Math.Angle.Between(request.x, request.y, fragmentX, fragmentY);
-        const launchAngle = radialAngle + Phaser.Math.FloatBetween(-0.26, 0.26);
-        const distance = Phaser.Math.FloatBetween(request.displayWidth * 0.28, request.displayWidth * 0.9);
-        const driftX = Math.cos(launchAngle) * distance;
-        const driftY = Math.sin(launchAngle) * distance - Phaser.Math.FloatBetween(4, 14);
-
-        fragmentConfigs.push({
-          x: fragmentX,
-          y: fragmentY,
-          cropX,
-          cropY,
-          cropWidth,
-          cropHeight,
-          worldWidth: cropWidth * worldScaleX,
-          worldHeight: cropHeight * worldScaleY,
-          tint: request.tint,
-          angle: request.angle,
-          endX: fragmentX + driftX,
-          endY: fragmentY + driftY + Phaser.Math.FloatBetween(10, 26),
-          endAngle: request.angle + Phaser.Math.Between(-120, 120),
-          durationMs: Phaser.Math.Between(280, 460),
-          endScaleX: Phaser.Math.FloatBetween(0.88, 1.08),
-          endScaleY: Phaser.Math.FloatBetween(0.88, 1.08),
-          textureKey: request.textureKey,
-          frameName: request.frameName,
-        });
-      }
+    const count = request.columns * request.rows;
+    const size = Math.max(Math.abs(request.displayWidth), Math.abs(request.displayHeight));
+    // Stratifizierte Winkel statt sichtbarem Schnittgitter: jeder Brocken hat eine eigene Masse.
+    const phase = Phaser.Math.FloatBetween(0, Math.PI * 2);
+    for (let index = 0; index < count; index += 1) {
+      const direction = phase + (index + Phaser.Math.FloatBetween(-0.35, 0.35)) * Math.PI * 2 / count;
+      const radius = Phaser.Math.FloatBetween(0.08, 0.32);
+      const x = request.x + Math.cos(direction) * request.displayWidth * radius;
+      const y = request.y + Math.sin(direction) * request.displayHeight * radius;
+      const distance = size * Phaser.Math.FloatBetween(0.35, 1.05);
+      const mass = Phaser.Math.FloatBetween(0.12, 0.26);
+      const angle = Phaser.Math.FloatBetween(-180, 180);
+      fragmentConfigs.push({
+        x, y,
+        worldWidth: Math.abs(request.displayWidth) * mass,
+        worldHeight: Math.abs(request.displayHeight) * mass * Phaser.Math.FloatBetween(0.65, 1.15),
+        tint: request.tint,
+        angle,
+        endX: x + Math.cos(direction) * distance,
+        endY: y + Math.sin(direction) * distance,
+        endAngle: angle + Phaser.Math.FloatBetween(-55, 55),
+        durationMs: Phaser.Math.Between(520, 820),
+        endScaleX: 0.72,
+        endScaleY: 0.72,
+        textureKey: TEX_EXPLOSION_CHUNK,
+        frameName: '__BASE',
+      });
     }
 
     // Der Check vor der Erzeugung ist wichtig: eine angefangene Teilwolke waere lesbar falsch und
@@ -349,12 +332,13 @@ export class RockDestructionRenderer {
       .setActive(true)
       .setVisible(true)
       .setTexture(config.textureKey, config.frameName)
-      .setCrop(config.cropX, config.cropY, config.cropWidth, config.cropHeight)
       .setDisplaySize(config.worldWidth, config.worldHeight)
+      .setOrigin(0.5, 0.5)
+      .setPosition(config.x, config.y)
       .setTint(config.tint)
       .setDepth(DEPTH_TRACE - 0.15)
       .setAngle(config.angle)
-      .setAlpha(1);
+      .setAlpha(0.82);
 
     slot.active = true;
     slot.ageMs = 0;
@@ -367,8 +351,8 @@ export class RockDestructionRenderer {
     slot.endAngle = config.endAngle;
     slot.startScaleX = image.scaleX;
     slot.startScaleY = image.scaleY;
-    slot.endScaleX = config.endScaleX;
-    slot.endScaleY = config.endScaleY;
+    slot.endScaleX = image.scaleX * config.endScaleX;
+    slot.endScaleY = image.scaleY * config.endScaleY;
     this.activeFragments.push(slot);
   }
 
@@ -386,7 +370,8 @@ export class RockDestructionRenderer {
         Phaser.Math.Linear(slot.startY, slot.endY, eased),
       );
       image.setAngle(Phaser.Math.Linear(slot.startAngle, slot.endAngle, eased));
-      image.setAlpha(1 - eased);
+      const fade = Phaser.Math.Clamp((progress - 0.18) / 0.82, 0, 1);
+      image.setAlpha(0.82 * (1 - fade * fade * (3 - 2 * fade)));
       image.setScale(
         Phaser.Math.Linear(slot.startScaleX, slot.endScaleX, eased),
         Phaser.Math.Linear(slot.startScaleY, slot.endScaleY, eased),
@@ -430,14 +415,15 @@ export class RockDestructionRenderer {
       maxParticles: 192,
       maxAliveParticles: 192,
       reserve: 192,
-      lifespan: { min: 220, max: 480 },
-      speed: { min: 28, max: 96 },
+      lifespan: { min: 480, max: 720 },
+      speed: { min: 22, max: 66 },
       angle: { min: 0, max: 360 },
       quantity: 1,
-      scale: { start: 0.52, end: 0.06 },
-      alpha: { start: 0.34, end: 0 },
+      scale: { start: 0.18, end: 0.85, ease: 'Cubic.Out' },
+      rotate: { min: -180, max: 180 },
+      alpha: { start: 0.46, end: 0, ease: 'Sine.InOut' },
       tint: [0xffffff, COLORS.BROWN_2, COLORS.BROWN_5],
-      gravityY: 10,
+      blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
     }, DEPTH_TRACE - 0.3, undefined, 'rockDestruction');
 
@@ -446,21 +432,22 @@ export class RockDestructionRenderer {
       maxParticles: 96,
       maxAliveParticles: 96,
       reserve: 96,
-      lifespan: { min: 180, max: 360 },
-      speed: { min: 76, max: 164 },
+      lifespan: { min: 240, max: 460 },
+      speed: { min: 60, max: 120 },
       angle: { min: 0, max: 360 },
       quantity: 1,
-      scale: { start: 0.24, end: 0.02 },
-      alpha: { start: 0.42, end: 0 },
+      scale: { start: 0.08, end: 0.24 },
+      rotate: { min: -180, max: 180 },
+      alpha: { start: 0.3, end: 0 },
       tint: [0xffffff, COLORS.BROWN_2, COLORS.BROWN_5],
-      gravityY: 90,
+      blendMode: Phaser.BlendModes.NORMAL,
       emitting: false,
     }, DEPTH_TRACE - 0.25, undefined, 'rockDestruction');
   }
 
   private prewarmFragmentPool(): void {
     while (this.freeFragments.length + this.activeFragments.length < MAX_FRAGMENT_SLOTS) {
-      const image = this.scene.add.image(0, 0, ROCK_TEXTURE_KEY, 0)
+      const image = this.scene.add.image(0, 0, TEX_EXPLOSION_CHUNK)
         .setActive(false)
         .setVisible(false)
         .setAlpha(0)
