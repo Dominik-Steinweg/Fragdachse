@@ -30,6 +30,44 @@ function evaluate(v: number[], now: number) {
 }
 
 describe('GPU flight ribbon geometry and lifetime', () => {
+  it.each(['end', 'linger'] as const)('tapers only the final real span on %s, leaving live heads and joins intact', closeMode => {
+    const { store, handle, append } = setup();
+    const a = point(0, 0, 0), b = point(40, 0, 40, true), c = point(40, 24, 64);
+    const before = [false, true].map(wake => {
+      append(a, b, 64, wake); append(b, c, 64, wake);
+      const [previous, last] = store.spans(handle, wake);
+      const end = vertex(store, last, 2);
+      // Appending a live head must not introduce any spatial taper.
+      expect(end[13]).toBeCloseTo(last.to.alpha);
+      expect(end[8]).toBeCloseTo(last.to.width);
+      return { previous, last, end, start: vertex(store, last, 0), join: vertex(store, previous, 2) };
+    });
+    const count = store.liveCount;
+    const close = () => closeMode === 'end' ? store.end(handle) : store.clearSource(3, true);
+    close(); store.flush();
+    expect(store.liveCount).toBe(count);
+    for (const { previous, last, end, start, join } of before) {
+      expect(vertex(store, previous, 2)).toEqual(join);
+      expect(vertex(store, last, 0)).toEqual(start);
+      for (const index of [2, 3, 5]) {
+        const terminal = vertex(store, last, index);
+        expect(terminal[13]).toBe(0);
+        expect(terminal[8]).toBeGreaterThan(0);
+        expect(terminal[8]).toBeLessThan(end[8]);
+        expect(terminal[9]).toBeLessThanOrEqual(end[9]);
+        // No extra distance, lifetime reset or invented endpoint.
+        expect(terminal.slice(0, 2)).toEqual([c.x, c.y]);
+        expect(terminal.slice(6, 8)).toEqual(end.slice(6, 8));
+        const middle = start.map((value, i) => (value + terminal[i]) / 2);
+        expect(middle[13]).toBeGreaterThan(terminal[13]);
+        expect(middle[13]).toBeLessThan(start[13]);
+      }
+    }
+    const versions = [...store.pageVersion];
+    close(); store.flush();
+    expect([...store.pageVersion]).toEqual(versions);
+  });
+
   it('shares both edges and aging at straight and curved joins at the same absolute time', () => {
     const { store, handle, append } = setup();
     const points = [point(0, 0, 0), point(32, 0, 32), point(55, 24, 64), point(50, 50, 96), point(24, 60, 128)];
@@ -150,8 +188,9 @@ describe('GPU flight ribbon geometry and lifetime', () => {
     append(point(0, 0, 0), point(0, 0, 10));
     expect(store.liveCount).toBe(0);
     append(point(0, 0, 10), point(40, 0, 50));
+    store.end(handle); store.flush();
     const data = store.data.slice(), versions = [...store.pageVersion];
-    store.end(handle); store.retire(100); store.flush();
+    store.retire(100); store.flush();
     expect(store.data).toEqual(data); expect([...store.pageVersion]).toEqual(versions);
   });
 });

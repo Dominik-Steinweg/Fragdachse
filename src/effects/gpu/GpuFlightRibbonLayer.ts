@@ -8,7 +8,6 @@ export const FLIGHT_RIBBON_VERTEX_SHADER = `
 precision highp float;
 uniform mat4 uProjectionMatrix;
 uniform mat3 uViewMatrix;
-uniform vec2 uScroll;
 uniform float uTime;
 attribute vec2 inCenter;
 attribute vec2 inOffset;
@@ -26,7 +25,7 @@ void main() {
   float age = clamp((uTime - inTime.x) / max(0.001, inTime.y), 0.0, 1.0);
   float cubic = age * age * age;
   vec2 position = inCenter + inOffset * (inWidth.x + inWidth.y * cubic) + inDrift * cubic;
-  vec3 view = uViewMatrix * vec3(position - uScroll, 1.0);
+  vec3 view = uViewMatrix * vec3(position, 1.0);
   gl_Position = uProjectionMatrix * vec4(view.xy, 0.0, 1.0);
   timeData = inTime; colorData = inColor; styleData = inStyle; uv = inUV;
 }`;
@@ -101,11 +100,11 @@ export function createFlightRibbonLayer(scene: Phaser.Scene, store: GpuFlightRib
           this.vertexBufferLayout.buffer.update(data.byteLength);
           this.uploadedVersion = store.pageVersion[this.page];
         }
-        const camera = context.camera!, m = camera.matrixCombined;
+        // The view matrix already includes scroll and selects the PostFX framebuffer space.
+        const m = context.camera!.getViewMatrix();
         renderer!.setProjectionMatrixFromDrawingContext(context);
         program.setUniform('uProjectionMatrix', renderer!.projectionMatrix.val);
         program.setUniform('uViewMatrix', [m.a, m.b, 0, m.c, m.d, 0, m.tx, m.ty, 1]);
-        program.setUniform('uScroll', [camera.scrollX, camera.scrollY]);
         program.setUniform('uTime', now());
         program.setUniform('uAlpha', layer.alpha);
         program.setUniform('uMainSampler', 0);

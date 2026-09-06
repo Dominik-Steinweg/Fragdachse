@@ -11,6 +11,7 @@ export const FLIGHT_RIBBON_SLOT_WORDS = FLIGHT_RIBBON_VERTICES * FLIGHT_RIBBON_V
 const MAX_HANDLES = 8192;
 const MAX_SPANS = 255;
 const MAX_AGE_MS = 1000;
+const TERMINAL_WIDTH_SCALE = 0.65;
 
 export interface FlightRibbonStyle {
   readonly tuning: FlightSignatureTuning;
@@ -28,6 +29,7 @@ export interface FlightRibbonKnot {
 export interface FlightRibbonSpan {
   readonly slot: number; readonly from: FlightRibbonKnot; readonly to: FlightRibbonKnot;
   readonly wake: boolean; previous: FlightRibbonSpan | null; next: FlightRibbonSpan | null;
+  terminal: boolean;
 }
 interface Chain { spans: FlightRibbonSpan[]; last: FlightRibbonKnot | null; knots: number }
 interface Flight {
@@ -121,7 +123,19 @@ export class GpuFlightRibbonStore {
     const f = this.get(handle);
     if (f) { f.core.last = null; f.wake.last = null; }
   }
-  end(handle: FlightRibbonHandle): void { const f = this.get(handle); if (f) f.closed = true; }
+  end(handle: FlightRibbonHandle): void { const f = this.get(handle); if (f) this.close(f); }
+  private close(flight: Flight): void {
+    if (flight.closed) return;
+    flight.closed = true;
+    for (const chain of [flight.core, flight.wake]) {
+      const last = chain.spans[chain.spans.length - 1];
+      if (!last) continue;
+      // Only the final real span tapers. Live heads and historical joins stay full-strength;
+      // positions, birth times and pool lifetimes are not changed by closing.
+      last.terminal = true;
+      this.dirty.add(last.slot);
+    }
+  }
 
   append(handle: FlightRibbonHandle, segment: ProjectileTrailSegment, now: number, wake: boolean, factor: number): void {
     const flight = this.get(handle);
@@ -191,7 +205,7 @@ export class GpuFlightRibbonStore {
       }
       const previous = connects ? chain.spans[chain.spans.length - 1] ?? null : null;
       const slot = this.free.pop()!;
-      const span: FlightRibbonSpan = { slot, from: a, to, wake, previous, next: null };
+      const span: FlightRibbonSpan = { slot, from: a, to, wake, previous, next: null, terminal: false };
       if (previous && previous.to === a) { previous.next = span; this.dirty.add(previous.slot); }
       else span.previous = null;
       chain.knots += span.previous ? 1 : 2;
@@ -240,7 +254,7 @@ export class GpuFlightRibbonStore {
   }
   clearSource(source: number, detach = false): void {
     for (const [id, f] of this.flights) if (f.source === source) {
-      if (detach) { f.source = -1; f.closed = true; continue; }
+      if (detach) { f.source = -1; this.close(f); continue; }
       for (const chain of [f.core, f.wake]) while (chain.spans.length) this.removeFirst(chain);
       this.flights.delete(id);
     }
@@ -269,16 +283,18 @@ export class GpuFlightRibbonStore {
     const frame = this.frames[s.wake ? 1 : 0];
     const data = this.data;
     const vertex = (k: FlightRibbonKnot, v: Vec, normal: Vec, side: number) => {
+      const terminal = s.terminal && k === s.to;
+      const widthScale = terminal ? TERMINAL_WIDTH_SCALE : 1;
       const drift = k.bounce ? 0 : Math.sin((k.x * 0.6 + k.y * 0.8) / 96) * k.turbulence * k.spread;
       data[offset++] = k.x; data[offset++] = k.y;
       data[offset++] = v[0]; data[offset++] = v[1];
       data[offset++] = normal[0] * drift; data[offset++] = normal[1] * drift;
       data[offset++] = k.born; data[offset++] = k.life;
-      data[offset++] = k.width; data[offset++] = k.spread;
+      data[offset++] = k.width * widthScale; data[offset++] = k.spread * widthScale;
       data[offset++] = ((k.color >> 16) & 255) / 255;
       data[offset++] = ((k.color >> 8) & 255) / 255;
       data[offset++] = (k.color & 255) / 255;
-      data[offset++] = k.alpha; data[offset++] = k.heat;
+      data[offset++] = terminal ? 0 : k.alpha; data[offset++] = k.heat;
       data[offset++] = s.wake ? 1 : 0;
       data[offset++] = frame.u; data[offset++] = frame.top + (frame.bottom - frame.top) * side;
     };
