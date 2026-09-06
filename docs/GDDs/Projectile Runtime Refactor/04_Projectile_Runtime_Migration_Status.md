@@ -24,11 +24,11 @@
 
 ## 1. Aktueller Stand
 
-- **Nächste Phase:** C7 – Runtime-State-Cleanup (offen, nicht begonnen)
-- **Gesamtstatus:** Phasen 1–15 und C1–C6 umgesetzt; C7/C8 bleiben für den Architekturabschluss notwendig
-- **C6-Abnahme:** `npm run check` (Core, Architecture, TypeScript/Build), Integration und Stress grün; gezielte Tests prüfen technische Collider-Kontakte, Lifetime-Dedupe, Bounce-/Grenade-Lifecycle, Continuation, Provenance, Reflection und World-Teardown
+- **Nächste Phase:** C8 – Architekturabschluss und technische Endabnahme (offen, nicht begonnen)
+- **Gesamtstatus:** Phasen 1–15 und C1–C7 umgesetzt; C8 bleibt für den Architekturabschluss notwendig
+- **C7-Abnahme:** Typecheck, `npm run check` (Core, Architecture, Build), Integration, Stress und Balance Lab grün. Gezielte Verträge sichern stabile Redirect-Identity, getrennte Attribution/Allegiance, Child-Lineage, Homing-Reacquisition, Kontaktgedächtnis, Restfuse, Static-Resend nach Übernahme und reentranten World-Teardown.
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
-- **Final-Gate:** vollständiger Abgleich gegen 01–03 und sämtliche Endabnahme-Suites bleiben C8; C6 ist keine Gesamtabschlussbehauptung
+- **Final-Gate:** vollständiger Abgleich gegen 01–03 und sämtliche Endabnahme-Suites bleiben C8; C7 ist keine Gesamtabschlussbehauptung
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
 
 ---
@@ -68,7 +68,7 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 | C4 | ✅ | World-/Activity-Consumer auf tatsächlich benötigte schmale Ports umgestellt; Universal-Forwarder abgebaut |
 | C5 | ✅ | Runtime-Record-/Provenance-/Identity-Audit, dauerhafte Ratchets und erneute Gesamtverifikation |
 | C6 | ✅ | Physics-Authority-Cut; technische Handles/Kontakte getrennt von Projectile-Lifecycle und Wirkung |
-| C7 | ⬜ | Privater resolved Spec-/Runtime-/Feature-State; Provenance und stabile Identity ohne Legacy-Dopplungen |
+| C7 | ✅ | Interner resolved Spec-/Runtime-/Feature-State; kanonische Provenance, ein Physics-Handle/Homing-State und Redirects mit stabiler Identity |
 | C8 | ⬜ | Dauerhafte Dependency-/Ownership-Ratchets, Gesamtprüfung gegen 01–03 und technische Endabnahme |
 
 ---
@@ -77,8 +77,9 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- C7: globaler flacher Runtime-Record, Legacy-Spawn-Payload und doppelte Provenance-/Homing-/Handle-Daten sind noch zu bereinigen; Reflection/Deflection ersetzen weiterhin Identity durch Destroy+Respawn.
 - C8: bestehende Ratchets prüfen teilweise private Sourceform statt vollständiger Dependency-Grenzen; abschließendes Audit und alle technischen Gates stehen aus.
+
+C7 speichert keinen flachen `ProjectileSpawnConfig` mehr. Der verbleibende reine Payload-Adapter bedient Spawn-/Body-Resolver, Presentation und das Headless-Lab; Provenance bleibt separat. Der öffentliche Config-Spawn-Einstieg ist entfernt. Reflection/Deflection verändern den bestehenden Record und behalten Source, Parent-Lineage, Correlation, Kontaktgedächtnis und Lifetime; Replication und Presentation aktualisieren dieselbe ID ohne neue Gameplay-Authority. Der C6-Physics-Cut und die Stage-Reihenfolge bleiben erhalten.
 
 ---
 
@@ -89,7 +90,7 @@ Nur tatsächliche Namen im Code dokumentieren.
 | Contract-Familie | Realisierter Type/API |
 |---|---|
 | Spawn | `ProjectileSpawnPort`, `ProjectileSpawnRequest`, `ProjectileId`, `ProjectileSpawnResult` |
-| World / Host / Store | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort`, `ProjectileStore`, `ProjectileIdentityScope`, internes `ProjectileRuntimeRecord` mit `provenance` |
+| World / Host / Store | `WorldProjectileRuntime`, `ProjectileHostStageResult`, `ProjectileTimeFieldPort`, `ProjectileStore`, `ProjectileIdentityScope`; internes `ProjectileRuntimeRecord`, `ProjectileResolvedSpec`, `ProjectileInteractionState`, `ProjectileMiniRocketState`, `ProjectileContactMemory`, passive `ProjectilePresentationMetadata` |
 | Physics Binding | `ProjectilePhysicsBindingPort`, `ProjectilePhysicsSpawnSpec`, `ProjectilePhysicsMechanics`, `ProjectilePhysicsHandle`; technische Ressourcen/Kontakte/Geometrie ohne Runtime-Record-Zugriff |
 | World Boundary | `ProjectileGeometryBindingPort`, `ProjectileTrainBindingPort`, `ProjectileTrainImpactPort`, `ProjectileWorldImpactBindingPort`, `ProjectileLifecycleEventsBindingPort`, `ProjectileTimeFieldBindingPort`, `ProjectileHomingBindingPort`, `ProjectileSwarmReactionPort` |
 | External / Reads | `ProjectileExternalInteractionPort`, `TranslocatorProjectilePort`, `ProjectileThreatReadPort`, `ProjectileDiagnosticsReadPort`, `ProjectilePresentationReadPort` |
@@ -116,7 +117,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**C7 ist die nächste offene Phase. Nach dem C6-Commit endet der aktuelle Arbeitsauftrag; C7/C8 werden nicht begonnen.**
+**C8 ist die nächste offene Phase. Der aktuelle Arbeitsauftrag endet mit dem C7-Commit; C8 wird nicht begonnen.**
 
 ---
 

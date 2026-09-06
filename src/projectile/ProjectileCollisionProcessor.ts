@@ -1,4 +1,4 @@
-import type { ProjectileRuntimeRecord } from '../types';
+import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import { shouldIgnorePlasmaSwarmOriginHit } from '../systems/PlasmaCharge';
 import type { ProjectileId } from './ProjectileSpawnPort';
@@ -149,7 +149,7 @@ export class ProjectileCollisionProcessor {
     if (!deps.targetQuery) return;
     this.projectileTargetRecords.length = 0;
     for (const record of records) {
-      if (!record.pendingDestroy && record.sprite.active !== false) {
+      if (!record.pendingDestroy && record.physics.sprite.active !== false) {
         this.projectileTargetRecords.push(record);
       }
     }
@@ -166,8 +166,8 @@ export class ProjectileCollisionProcessor {
     for (const record of recordsForInteraction) {
       if (record.pendingDestroy) continue;
       // Granaten wirken nur über ihre terminale Payload, nicht über Direkttreffer.
-      if (record.isGrenade) continue;
-      if (record.miniRocketDeferredExplosion || record.miniRocketSpent) continue;
+      if (record.spec.flight.isGrenade) continue;
+      if (record.miniRocket.deferredExplosion || record.miniRocket.spent) continue;
       this.processRecord(record, nowMs, deps);
     }
   }
@@ -221,14 +221,14 @@ export class ProjectileCollisionProcessor {
   }
 
   private emitProjectileTarget(record: ProjectileRuntimeRecord): void {
-    const bounds = record.sprite.getBounds();
+    const bounds = record.physics.sprite.getBounds();
     this.emitTarget(
       'projectile',
       record.id,
       record.provenance.allegiance.ownerId,
-      record.sprite.x,
-      record.sprite.y,
-      Math.max(record.sprite.displayWidth, record.sprite.displayHeight) * 0.5,
+      record.physics.sprite.x,
+      record.physics.sprite.y,
+      Math.max(record.physics.sprite.displayWidth, record.physics.sprite.displayHeight) * 0.5,
       bounds.left,
       bounds.top,
       bounds.right,
@@ -255,11 +255,11 @@ export class ProjectileCollisionProcessor {
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
-    const mode = record.collisionMode ?? 'overlap';
+    const mode = record.spec.flight.collisionMode ?? 'overlap';
     if (mode === 'none' || mode === 'physics') return;
     if (mode === 'sweep') {
-      const travelX = record.sprite.x - record.lastX;
-      const travelY = record.sprite.y - record.lastY;
+      const travelX = record.physics.sprite.x - record.lastX;
+      const travelY = record.physics.sprite.y - record.lastY;
       if (Math.hypot(travelX, travelY) > MIN_SWEEP_TRAVEL_PX) {
         // Ein Sweep-Frame verarbeitet alle zulässigen Kandidaten entlang des Segments; ein
         // nicht-penetrativer Kontakt beendet ihn im Ergebnis, statt auf Overlap zurückzufallen.
@@ -277,16 +277,16 @@ export class ProjectileCollisionProcessor {
   ): void {
     const startX = record.lastX;
     const startY = record.lastY;
-    const endX = record.sprite.x;
-    const endY = record.sprite.y;
+    const endX = record.physics.sprite.x;
+    const endY = record.physics.sprite.y;
     const blockerDistance = deps.worldBlocker?.getNearestBlockerDistance(
       startX,
       startY,
       endX,
       endY,
-      record.penetratesRocks === true,
+      record.spec.flight.penetration.penetratesRocks === true,
     ) ?? null;
-    const projectileRadius = Math.max(record.sprite.displayWidth, record.sprite.displayHeight) * 0.5;
+    const projectileRadius = Math.max(record.physics.sprite.displayWidth, record.physics.sprite.displayHeight) * 0.5;
 
     this.sweepCandidates.length = 0;
     for (let index = 0; index < this.targetCount; index += 1) {
@@ -313,10 +313,10 @@ export class ProjectileCollisionProcessor {
       if (!this.isCandidateAllowed(record, candidate.slot, deps)) continue;
       // Das Projectile steht für jede Auflösung am tatsächlichen Trefferpunkt. Bei Penetration
       // läuft die Kandidatenliste weiter; ein normaler Treffer beendet sie im applyCandidate.
-      const velocityX = record.body.velocity.x;
-      const velocityY = record.body.velocity.y;
-      record.body.reset(candidate.x, candidate.y);
-      record.body.setVelocity(velocityX, velocityY);
+      const velocityX = record.physics.body.velocity.x;
+      const velocityY = record.physics.body.velocity.y;
+      record.physics.body.reset(candidate.x, candidate.y);
+      record.physics.body.setVelocity(velocityX, velocityY);
       const outcome = this.applyCandidate(
         record,
         {
@@ -355,7 +355,7 @@ export class ProjectileCollisionProcessor {
     nowMs: number,
     deps: ProjectileCollisionDependencies,
   ): void {
-    const bounds = record.sprite.getBounds();
+    const bounds = record.physics.sprite.getBounds();
     this.overlapCandidates.length = 0;
     for (let index = 0; index < this.targetCount; index += 1) {
       const slot = this.targetPool[index];
@@ -371,8 +371,8 @@ export class ProjectileCollisionProcessor {
         {
           projectileId: record.id,
           target: slot.ref,
-          x: record.sprite.x,
-          y: record.sprite.y,
+          x: record.physics.sprite.x,
+          y: record.physics.sprite.y,
           distanceAlongTravel: overlapDistanceAlongTravel(record, slot),
           source: 'overlap',
         },
@@ -414,37 +414,37 @@ export class ProjectileCollisionProcessor {
     if (record.provenance.allegiance.ownerId === slot.ownerId) return false;
 
     if (slot.kind === 'rock'
-      && record.penetratesRocks === true
+      && record.spec.flight.penetration.penetratesRocks === true
       && (slot.obstacleKind === undefined || slot.obstacleKind === 'rock')) return false;
-    if (slot.kind === 'rock' && record.ignoreRockIndex !== undefined
-      && record.ignoreRockIndex === slot.numericId) return false;
-    if (slot.kind === 'base' && record.ignoreBaseCollisions === true) return false;
+    if (slot.kind === 'rock' && record.spec.flight.collisionFilter.ignoreRockIndex !== undefined
+      && record.spec.flight.collisionFilter.ignoreRockIndex === slot.numericId) return false;
+    if (slot.kind === 'base' && record.spec.flight.collisionFilter.ignoreBaseCollisions === true) return false;
     if (hasPersistentWorldContact(record, slot)) return false;
 
     const exclusionKey = projectileExclusionKey(slot.ref);
-    if (exclusionKey !== null && record.multiExplosionExcludedTargetKeys?.has(exclusionKey)) return false;
+    if (exclusionKey !== null && record.interaction.multiExplosionExcludedTargetKeys?.has(exclusionKey)) return false;
 
-    if (slot.kind === 'enemy' && record.plasmaSwarmOriginEnemyId === slot.id) {
+    if (slot.kind === 'enemy' && !record.contacts.swarmOriginExited && record.provenance.lineage?.plasmaSwarmOriginEnemyId === slot.id) {
       const stillInsideOrigin = overlapBounds !== undefined && overlaps(overlapBounds, slot);
       if (shouldIgnorePlasmaSwarmOriginHit(
-        record,
-        record.plasmaSwarmOriginEnemyId,
+        { plasmaSwarmProjectile: record.provenance.lineage?.plasmaSwarmChild },
+        record.provenance.lineage?.plasmaSwarmOriginEnemyId,
         slot.id,
         !stillInsideOrigin,
       )) {
         return false;
       }
-      if (!stillInsideOrigin) record.plasmaSwarmOriginEnemyId = undefined;
+      if (!stillInsideOrigin) record.contacts.swarmOriginExited = true;
     }
 
     // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
     if (isCombatTarget(slot.kind) && deps.targetability
-      && !deps.targetability.canDamage(record.provenance, slot.ref, record.allowTeamDamage === true)) {
+      && !deps.targetability.canDamage(record.provenance, slot.ref, record.provenance.allegiance.allowTeamDamage === true)) {
       return false;
     }
 
     if (slot.kind === 'projectile' && deps.targetability
-      && !deps.targetability.canDamageOwner(record.provenance, slot.ownerId, record.allowTeamDamage === true)) {
+      && !deps.targetability.canDamageOwner(record.provenance, slot.ownerId, record.provenance.allegiance.allowTeamDamage === true)) {
       return false;
     }
 
@@ -480,9 +480,9 @@ export class ProjectileCollisionProcessor {
 
     contact.memory?.add(projectileTargetKey(candidate.target));
 
-    if (contact.mode === 'penetration' && (record.penetrationRemaining ?? 0) > 0) {
-      record.penetrationRemaining = (record.penetrationRemaining ?? 0) - 1;
-      record.damage *= record.penetrationDamageRetention ?? 1;
+    if (contact.mode === 'penetration' && (record.interaction.penetrationRemaining ?? 0) > 0) {
+      record.interaction.penetrationRemaining = (record.interaction.penetrationRemaining ?? 0) - 1;
+      record.damage *= record.spec.flight.penetration.damageRetention ?? 1;
       return 'passed';
     }
     if (contact.mode === 'pierce' || contact.mode === 'flame') return 'passed';
@@ -508,25 +508,20 @@ function createDirectImpactRequest(
   candidate: ProjectileImpactCandidate,
 ): ProjectileDirectImpactRequest {
   const augments: Array<ProjectileDirectImpactRequest['augments'][number]> = [];
-  if ((record.burnDurationMs ?? 0) > 0 && (record.burnDamagePerTick ?? 0) > 0) {
+  if ((record.spec.interaction.burn.burnDurationMs ?? 0) > 0 && (record.spec.interaction.burn.burnDamagePerTick ?? 0) > 0) {
     augments.push({
       burn: {
-        durationMs: record.burnDurationMs ?? 0,
-        damagePerTick: record.burnDamagePerTick ?? 0,
+        durationMs: record.spec.interaction.burn.burnDurationMs ?? 0,
+        damagePerTick: record.spec.interaction.burn.burnDamagePerTick ?? 0,
       },
       provenance: record.provenance,
     });
   }
-  if (record.supplementalBurnOnHit) {
-    augments.push({
-      burn: record.supplementalBurnOnHit,
-      provenance: record.supplementalBurnProvenance ?? record.provenance,
-    });
-  }
-  if (record.energyInjectorPayload) {
+  if (record.interaction.burnAugment) augments.push(record.interaction.burnAugment);
+  if (record.spec.interaction.energyInjectorPayload) {
     const augment: ProjectileEnergyInjectorAugment = {
       kind: 'energy-injector',
-      payload: record.energyInjectorPayload,
+      payload: record.spec.interaction.energyInjectorPayload,
       provenance: record.provenance,
     };
     augments.push(augment);
@@ -536,46 +531,46 @@ function createDirectImpactRequest(
     projectileId: record.id,
     target,
     impact: { x: candidate.x, y: candidate.y },
-    velocity: { x: record.body.velocity.x, y: record.body.velocity.y },
+    velocity: { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y },
     provenance: record.provenance,
     directHit: {
       damage: record.damage,
       adrenalinGain: record.adrenalinGain,
-      rockDamageMult: record.rockDamageMult,
-      trainDamageMult: record.trainDamageMult,
-      baseDamageMult: record.baseDamageMult,
-      slowFraction: record.hitSlowFraction,
-      slowDurationMs: record.hitSlowDurationMs,
-      vulnerabilityDurationMs: record.hitVulnerabilityDurationMs,
-      knockback: record.hitKnockback,
-      knockbackDurationMs: record.hitKnockbackDurationMs,
-      shotgun: record.shotgunOriginX === undefined || record.shotgunOriginY === undefined
-        || record.shotgunResolvedRange === undefined
+      rockDamageMult: record.spec.interaction.directHit.rockDamageMult,
+      trainDamageMult: record.spec.interaction.directHit.trainDamageMult,
+      baseDamageMult: record.spec.interaction.directHit.baseDamageMult,
+      slowFraction: record.spec.interaction.directHit.hitSlowFraction,
+      slowDurationMs: record.spec.interaction.directHit.hitSlowDurationMs,
+      vulnerabilityDurationMs: record.spec.interaction.directHit.hitVulnerabilityDurationMs,
+      knockback: record.spec.interaction.directHit.hitKnockback,
+      knockbackDurationMs: record.spec.interaction.directHit.hitKnockbackDurationMs,
+      shotgun: record.spec.interaction.directHit.shotgunOriginX === undefined || record.spec.interaction.directHit.shotgunOriginY === undefined
+        || record.spec.interaction.directHit.shotgunResolvedRange === undefined
         ? undefined
         : {
-          originX: record.shotgunOriginX,
-          originY: record.shotgunOriginY,
-          resolvedRange: record.shotgunResolvedRange,
-          proximityMaxDamageBonus: record.shotgunProximityMaxDamageBonus,
-          slowFraction: record.shotgunSlowFraction,
-          slowDurationMs: record.shotgunSlowDurationMs,
+          originX: record.spec.interaction.directHit.shotgunOriginX,
+          originY: record.spec.interaction.directHit.shotgunOriginY,
+          resolvedRange: record.spec.interaction.directHit.shotgunResolvedRange,
+          proximityMaxDamageBonus: record.spec.interaction.directHit.shotgunProximityMaxDamageBonus,
+          slowFraction: record.spec.interaction.directHit.shotgunSlowFraction,
+          slowDurationMs: record.spec.interaction.directHit.shotgunSlowDurationMs,
         },
-      gaussChain: record.gaussChainRadius === undefined && record.gaussChainDamageFactor === undefined
+      gaussChain: record.spec.interaction.directHit.gaussChainRadius === undefined && record.spec.interaction.directHit.gaussChainDamageFactor === undefined
         ? undefined
-        : { radius: record.gaussChainRadius, damageFactor: record.gaussChainDamageFactor },
-      plasmaSwarm: record.plasmaSwarmEnabled !== true
+        : { radius: record.spec.interaction.directHit.gaussChainRadius, damageFactor: record.spec.interaction.directHit.gaussChainDamageFactor },
+      plasmaSwarm: record.spec.interaction.directHit.plasmaSwarmEnabled !== true
         ? undefined
         : {
-          projectileCount: record.plasmaSwarmProjectileCount,
-          explosionRadius: record.plasmaSwarmExplosionRadius,
-          explosionDamage: record.plasmaSwarmExplosionDamage,
-          explosionSlowFraction: record.plasmaSwarmExplosionSlowFraction,
+          projectileCount: record.spec.interaction.directHit.plasmaSwarmProjectileCount,
+          explosionRadius: record.spec.interaction.directHit.plasmaSwarmExplosionRadius,
+          explosionDamage: record.spec.interaction.directHit.plasmaSwarmExplosionDamage,
+          explosionSlowFraction: record.spec.interaction.directHit.plasmaSwarmExplosionSlowFraction,
         },
-      ak47: record.ak47ShotId === undefined
+      ak47: record.provenance.correlation?.ak47ShotId === undefined
         ? undefined
         : {
-          damageMultiplier: record.ak47DamageMultiplier,
-          fireSuperiorityShot: record.ak47FireSuperiorityShot,
+          damageMultiplier: record.spec.interaction.directHit.ak47DamageMultiplier,
+          fireSuperiorityShot: record.spec.interaction.directHit.ak47FireSuperiorityShot,
         },
     },
     augments,
@@ -602,28 +597,28 @@ export function resolveContactMemory(
   record: ProjectileRuntimeRecord,
   kind: CollisionTargetKind,
 ): { readonly mode: ProjectileContactMode; readonly memory: Set<string> | null } {
-  if (record.energyInjectorPayload) return { mode: 'support', memory: null };
-  if (record.penetrationHitIds) return { mode: 'penetration', memory: record.penetrationHitIds };
+  if (record.spec.interaction.energyInjectorPayload) return { mode: 'support', memory: null };
+  if (record.contacts.penetrationHitIds) return { mode: 'penetration', memory: record.contacts.penetrationHitIds };
 
   const proximityPiercing = kind !== 'decoy'
-    && (record.proximityPulse?.radius ?? 0) > 0
-    && (record.proximityPulse?.damage ?? 0) > 0;
-  if (kind !== 'decoy' && (record.piercesTargets === true || proximityPiercing)) {
-    const memory = record.piercingHitIds ??= new Set<string>();
+    && (record.spec.interaction.proximityPulse?.radius ?? 0) > 0
+    && (record.spec.interaction.proximityPulse?.damage ?? 0) > 0;
+  if (kind !== 'decoy' && (record.spec.flight.piercesTargets === true || proximityPiercing)) {
+    const memory = record.contacts.piercingHitIds ??= new Set<string>();
     return { mode: 'pierce', memory };
   }
 
   if (hasGaussDischarge(record)) {
-    const memory = record.gaussHitPlayers ??= new Set<string>();
+    const memory = record.contacts.gaussHitPlayers ??= new Set<string>();
     return { mode: 'pierce', memory };
   }
-  if (record.isBfg === true) {
-    const memory = record.bfgHitPlayers ??= new Set<string>();
+  if (record.spec.flight.isBfg === true) {
+    const memory = record.contacts.bfgHitPlayers ??= new Set<string>();
     return { mode: 'pierce', memory };
   }
 
-  if (kind !== 'decoy' && record.isFlame === true && record.flamePierceHitIds) {
-    return { mode: 'flame', memory: record.flamePierceHitIds };
+  if (kind !== 'decoy' && record.spec.flight.isFlame === true && record.contacts.flamePierceHitIds) {
+    return { mode: 'flame', memory: record.contacts.flamePierceHitIds };
   }
   return { mode: 'single', memory: null };
 }
@@ -654,15 +649,15 @@ function isCombatTarget(kind: CollisionTargetKind): kind is 'player' | 'enemy' |
 }
 
 function overlapDistanceAlongTravel(record: ProjectileRuntimeRecord, slot: CollisionTargetSlot): number {
-  const dx = record.sprite.x - record.lastX;
-  const dy = record.sprite.y - record.lastY;
+  const dx = record.physics.sprite.x - record.lastX;
+  const dy = record.physics.sprite.y - record.lastY;
   const length = Math.hypot(dx, dy);
   if (length <= 0.000001) return 0;
   return Math.max(0, Math.min(length, ((slot.x - record.lastX) * dx + (slot.y - record.lastY) * dy) / length));
 }
 
 function hasGaussDischarge(record: ProjectileRuntimeRecord): boolean {
-  return (record.gaussChainRadius ?? 0) > 0 && (record.gaussChainDamageFactor ?? 0) > 0;
+  return (record.spec.interaction.directHit.gaussChainRadius ?? 0) > 0 && (record.spec.interaction.directHit.gaussChainDamageFactor ?? 0) > 0;
 }
 
 function hasPersistentWorldContact(
@@ -670,12 +665,12 @@ function hasPersistentWorldContact(
   slot: CollisionTargetSlot,
 ): boolean {
   if (slot.kind === 'rock') {
-    if (record.isBfg === true && record.bfgHitRocks?.has(slot.numericId)) return true;
-    if (hasGaussDischarge(record) && record.gaussHitRocks?.has(slot.numericId)) return true;
+    if (record.spec.flight.isBfg === true && record.contacts.bfgHitRocks?.has(slot.numericId)) return true;
+    if (hasGaussDischarge(record) && record.contacts.gaussHitRocks?.has(slot.numericId)) return true;
   }
   if (slot.kind === 'train') {
-    if (record.isBfg === true && record.bfgHitTrain) return true;
-    if (hasGaussDischarge(record) && record.gaussHitTrain) return true;
+    if (record.spec.flight.isBfg === true && record.contacts.bfgHitTrain) return true;
+    if (hasGaussDischarge(record) && record.contacts.gaussHitTrain) return true;
   }
   return false;
 }

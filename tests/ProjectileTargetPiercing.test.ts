@@ -146,6 +146,11 @@ describe('generic projectile target piercing', () => {
       gameplaySourceId: 'player-1', lineage: { reflected: true },
     });
     expect(reflectedThreat).toBeDefined();
+    expect(reflectedThreat!.id).toBe(id);
+    expect(reflectedThreat!.provenance.lineage?.parentProjectileId).toBeUndefined();
+    expect(reflectedThreat!.provenance.weaponSourceId).toBe('weapon.test');
+    expect(physics.specs).toHaveLength(1);
+    expect(physics.released).toEqual([]);
     const replication: Array<{ id: number; static: { ownerId: string; color: number } }> = [];
     runtime.readProjectileReplication((record) => replication.push(record as typeof replication[number]));
     expect(replication).toMatchObject([{ id: reflectedThreat!.id, static: { ownerId: 'shield-owner' } }]);
@@ -191,11 +196,55 @@ describe('generic projectile target piercing', () => {
       gameplaySourceId: 'player-1', lineage: { reflected: true },
     });
     expect(reflected).toBeDefined();
+    expect(reflected!.id).toBe(target);
+    expect(reflected!.provenance.lineage?.parentProjectileId).toBeUndefined();
     expect(reflected!.vx).toBeCloseTo(0);
     expect(reflected!.vy).toBeCloseTo(100);
     physics.emit(projectilePhysicsContact(reflected!.id, { kind: 'rock', id: 0 }));
     expect(runtime.runHostProjectileStage(0, 0).projectileExplosions[0]?.effect)
       .toMatchObject({ radius: 20, maxDamage: 10, minDamage: 5 });
+  });
+
+  it('keeps contact memory and lineage while redirecting cached homing to the new allegiance', () => {
+    const { runtime } = createProjectileRuntimeTestWorld();
+    const queryTargets = vi.fn();
+    runtime.setProjectileTargetQueryPort({ queryTargets });
+    runtime.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true, isTargetCurrentlyValid: () => true });
+    const hits: number[] = [];
+    runtime.setProjectileCombatPort({
+      resolveDirectImpact: ({ projectileId }) => { hits.push(projectileId); return { accepted: true }; },
+      resolveExplosionCombat: () => ({ damagedTargetKeys: [] }),
+    });
+    const id = spawn(runtime, request({
+      provenance: {
+        gameplaySourceId: 'original-source', attributionId: 'original-credit',
+        allegiance: { ownerId: 'original-team' }, weaponSourceId: 'weapon.test',
+        lineage: { parentProjectileId: 77 }, correlation: { ak47ShotId: 9 },
+      },
+      flight: {
+        collisionMode: 'overlap', piercesTargets: true,
+        homing: { acquireDelayMs: 0, searchRadius: 100, retargetIntervalMs: 100, maxTurnDegreesPerStep: 10 },
+      },
+    }));
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => sink('enemy', 'enemy-a', 'enemy', 0, 0, 8, -8, -8, 8, 8) });
+    runtime.runHostInteractionStage(0);
+    runtime.runHostProjectileStage(10, 10);
+    expect(queryTargets.mock.calls.at(-1)?.[1]).toBe('original-team');
+    const blower = spawn(runtime, request({
+      provenance: { gameplaySourceId: 'blower-source', attributionId: 'blower-credit', allegiance: { ownerId: 'blower-team' } },
+      interaction: { impulse: { deflectsProjectiles: true } },
+    }));
+    expect(runtime.deflectProjectile(id, blower, 10)).toBe(true);
+    runtime.destroyProjectile(blower);
+    runtime.runHostInteractionStage(11);
+    runtime.runHostProjectileStage(1, 11);
+    expect(hits).toEqual([id]);
+    expect(queryTargets.mock.calls.at(-1)?.[1]).toBe('blower-team');
+    expect(runtime.getThreatSamples()[0]?.provenance).toMatchObject({
+      gameplaySourceId: 'original-source', attributionId: 'blower-credit',
+      allegiance: { ownerId: 'blower-team' }, weaponSourceId: 'weapon.test',
+      lineage: { parentProjectileId: 77, reflected: true }, correlation: { ak47ShotId: 9 },
+    });
   });
 
   it('keeps plasma child creation on the semantic spawn path', () => {

@@ -1,18 +1,16 @@
-import type { ProjectileSpawnConfig, ProjectileRuntimeRecord } from '../types';
+import type { ProjectileSpawnConfig } from '../types';
 import type { ProjectileSpawnRequest } from './ProjectileSpawnRequest';
 
 /**
- * Übersetzt einen aufgelösten Spawn-Auftrag in die Phaser-Physics-Binding-Payload.
+ * Projiziert einen Spawn-Auftrag für die vorhandenen Spawn-/Body-Resolver und Presentation.
  *
- * Die Abbildung ist eine reine Funktion ohne State, Identity oder Lifecycle. Sie lebt so lange,
  * Die Abbildung ist eine reine Funktion ohne State, Identity oder Lifecycle. Die vollständige
  * Provenance wird von der World-Runtime separat und unverändert in den Runtime-Record übergeben.
  */
 export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): ProjectileSpawnConfig {
-  const { flight, provenance, interaction, presentation } = request;
+  const { flight, interaction, presentation } = request;
   const directHit = interaction.directHit;
   const swarm = directHit?.plasmaSwarm;
-  const lineage = provenance.lineage;
   const corridor = interaction.pathEffect?.awpCorridor;
   const miniRocket = flight.miniRocket;
 
@@ -29,12 +27,6 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
 
     gameplayMuzzleOrigin: request.origin.gameplayMuzzleOrigin,
     visualMuzzleOrigin:   presentation.visualMuzzleOrigin,
-    allowTeamDamage: provenance.allegiance.allowTeamDamage,
-    sourceId:        provenance.weaponSourceId,
-    sourceSlot:      provenance.sourceSlot,
-    sourceTurretId:  provenance.sourceTurretId,
-    reflected:       lineage?.reflected,
-    ak47ShotId:      provenance.correlation?.ak47ShotId,
 
     ignoreBaseCollisions: flight.collisionFilter?.ignoreBaseCollisions,
     ignoreRockIndex:      flight.collisionFilter?.ignoreRockIndex,
@@ -93,8 +85,6 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     plasmaSwarmExplosionRadius: swarm?.explosionRadius,
     plasmaSwarmExplosionDamage: swarm?.explosionDamage,
     plasmaSwarmExplosionSlowFraction: swarm?.explosionSlowFraction,
-    plasmaSwarmProjectile:     lineage?.plasmaSwarmChild,
-    plasmaSwarmOriginEnemyId:  lineage?.plasmaSwarmOriginEnemyId,
 
     explosion:         interaction.explosion,
     enemyHitExplosion: interaction.enemyHitExplosion,
@@ -136,63 +126,5 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     tracerConfig:          presentation.tracer,
     shotAudioKey:          presentation.shotAudioKey,
     suppressSpawnFx:       presentation.suppressSpawnFx,
-  };
-}
-
-/**
- * Trägt die Restwirkung eines übernommenen Projectiles in seinen Nachfolger.
- *
- * Reflexion und Deflexion erzeugen ein neues Projectile; ohne diese Übertragung gingen Wolken,
- * Explosionen, Brand und Debuffs des Ursprungs still verloren.
- */
-export function createInheritedProjectilePayload(
-  record: ProjectileRuntimeRecord,
-): Partial<ProjectileSpawnConfig> {
-  return {
-    explosion:            record.explosion,
-    enemyHitExplosion:    record.enemyHitExplosion,
-    impactCloud:          record.impactCloud,
-    grenadeEffect:        record.grenadeEffect,
-    burnDurationMs:       record.burnDurationMs,
-    burnDamagePerTick:    record.burnDamagePerTick,
-    projectileBurnVisualStyle: record.projectileBurnVisualStyle,
-    supplementalBurnOnHit: record.supplementalBurnOnHit,
-    supplementalBurnProvenance: record.supplementalBurnProvenance,
-    canReceiveFireImbue:  record.canReceiveFireImbue,
-    fireTrail:            record.fireTrail,
-    pathEffectKind:       record.pathEffectKind,
-    fireTrailHalfWidthCells: record.fireTrailHalfWidthCells,
-    awpCorridorHalfWidth: record.awpCorridorHalfWidth,
-    awpCorridorDamage:    record.awpCorridorDamage,
-    awpCorridorDotDurationMs: record.awpCorridorDotDurationMs,
-    awpCorridorDotTickIntervalMs: record.awpCorridorDotTickIntervalMs,
-    awpCorridorKnockback: record.awpCorridorKnockback,
-    awpCorridorKnockbackDurationMs: record.awpCorridorKnockbackDurationMs,
-    detonable:            record.detonable,
-    detonator:            record.detonator,
-    proximityPulse:       record.proximityPulse,
-    collisionMode:        record.collisionMode,
-    isTranslocatorPuck:   record.isTranslocatorPuck,
-    piercesTargets:       record.piercesTargets,
-    penetrationCount:     record.penetrationRemaining,
-    penetrationDamageRetention: record.penetrationDamageRetention,
-    penetratesRocks:      record.penetratesRocks,
-    isFlame:              record.isFlame,
-    flamePiercing:        record.flamePierceHitIds !== undefined,
-    isBfg:                record.isBfg,
-    leafBlowerDeflectsProjectiles: record.leafBlowerDeflectsProjectiles,
-    leafBlowerMinKnockback: record.leafBlowerMinKnockback,
-    leafBlowerMaxKnockback: record.leafBlowerMaxKnockback,
-    leafBlowerSelfPush:   record.leafBlowerSelfPush,
-    gaussChainRadius:     record.gaussChainRadius,
-    gaussChainDamageFactor: record.gaussChainDamageFactor,
-    rockDamageMult:       record.rockDamageMult,
-    trainDamageMult:      record.trainDamageMult,
-    baseDamageMult:       record.baseDamageMult,
-    hitSlowFraction:      record.hitSlowFraction,
-    hitSlowDurationMs:    record.hitSlowDurationMs,
-    hitVulnerabilityDurationMs: record.hitVulnerabilityDurationMs,
-    hitKnockback:         record.hitKnockback,
-    hitKnockbackDurationMs: record.hitKnockbackDurationMs,
   };
 }

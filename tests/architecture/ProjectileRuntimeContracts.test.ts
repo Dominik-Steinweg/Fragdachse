@@ -25,6 +25,8 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(source).not.toContain('getActiveProjectiles');
     expect(source).not.toContain('getProjectileById');
     expect(source).not.toContain('ProjectileStoreAccess');
+    expect(read('src/types.ts')).not.toContain('ProjectileRuntimeRecord');
+    expect(source).not.toContain('spawnProjectileConfig');
   });
 
   it('keeps the Phaser binding free of network, client-owner, presentation and wall-clock state', () => {

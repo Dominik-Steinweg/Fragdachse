@@ -45,7 +45,8 @@ export interface ProjectileAk47DirectImpact {
 
 /** Semantic reaction data consumed by the Projectile owner for a Plasma swarm spawn. */
 export interface ProjectilePlasmaSwarmImpact {
-  readonly ownerId: string;
+  readonly projectileId: ProjectileId;
+  readonly provenance: ProjectileProvenance;
   readonly enemyId: string;
   readonly x: number;
   readonly y: number;
@@ -59,13 +60,10 @@ export interface ProjectilePlasmaSwarmImpact {
   readonly explosionSlowFraction: number;
   readonly color: number;
   readonly ownerColor?: number;
-  readonly sourceId: string;
-  readonly sourceSlot?: import('../types').LoadoutSlot;
   readonly homing?: ProjectileHomingConfig;
   readonly projectileStyle?: ProjectileStyle;
   readonly energyBallVariant?: EnergyBallVariant;
   readonly tracerConfig?: TracerConfig;
-  readonly allowTeamDamage?: boolean;
   readonly baseDamageMult?: number;
 }
 

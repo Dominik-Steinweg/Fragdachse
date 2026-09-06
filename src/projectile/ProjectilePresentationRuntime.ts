@@ -120,6 +120,7 @@ export class ProjectilePresentationRuntime {
   private teslaBoltRenderer: TeslaBoltRenderer | null = null;
   private tracerRenderer: TracerRenderer | null = null;
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
+  private readonly ownershipAppearance = new Map<number, { color: number; ownerColor?: number }>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -168,6 +169,7 @@ export class ProjectilePresentationRuntime {
     y: number,
     cfg: ProjectileSpawnConfig,
   ): void {
+    this.ownershipAppearance.set(id, { color: cfg.color, ownerColor: cfg.ownerColor });
     const style = cfg.projectileStyle;
     if (style === 'bullet' && this.bulletRenderer) {
       sprite.setVisible(false); sprite.setAlpha(0);
@@ -250,6 +252,7 @@ export class ProjectilePresentationRuntime {
   }
 
   destroyProjectileVisuals(projectile: ProjectilePresentationDespawnState): void {
+    this.ownershipAppearance.delete(projectile.id);
     const destroyX = projectile.destroyX ?? projectile.x;
     const destroyY = projectile.destroyY ?? projectile.y;
     const destroyScale = projectile.destroyScale ?? projectile.size / 16;
@@ -287,6 +290,19 @@ export class ProjectilePresentationRuntime {
     this.teslaBoltRenderer?.destroyVisual(projectile.id);
   }
 
+  /** Rebuild color-cached visuals on ownership changes without spawn or impact feedback. */
+  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'color' | 'ownerColor'>): boolean {
+    const previous = this.ownershipAppearance.get(projectile.id);
+    if (previous?.color === projectile.color && previous.ownerColor === projectile.ownerColor) return false;
+    this.ownershipAppearance.set(projectile.id, { color: projectile.color, ownerColor: projectile.ownerColor });
+    if (!previous) return false;
+    this.bulletRenderer?.destroyVisual(projectile.id);
+    this.rocketRenderer?.destroyVisual(projectile.id);
+    this.grenadeRenderer?.destroyVisual(projectile.id);
+    this.tracerRenderer?.destroyTracer(projectile.id);
+    return true;
+  }
+
   syncHostRenderers(projectiles: readonly ProjectilePresentationState[]): void {
     const burningProjectiles = this.activeBurningProjectileIds;
     burningProjectiles.clear();
@@ -298,6 +314,13 @@ export class ProjectilePresentationRuntime {
       const vx = projectile.vx;
       const vy = projectile.vy;
       const style = projectile.style;
+      if (this.refreshOwnershipAppearance(projectile)) {
+        if (style === 'bullet' || style === 'awp' || style === 'gauss') {
+          this.bulletRenderer?.createVisual(id, x, y, size, projectile.color,
+            resolveBulletVisualPreset(style, projectile.bulletVisualPreset), projectile.ownerColor ?? projectile.color);
+        }
+        if (projectile.tracer) this.tracerRenderer?.createTracer(id, x, y, projectile.tracer, projectile.ownerColor ?? projectile.color);
+      }
       const burning = projectile.burning === true;
       this.projectileBurnRenderer?.sync(id, x, y, size, burning, true, projectile.projectileBurnVisualStyle);
       if (burning) burningProjectiles.add(id);
@@ -422,9 +445,11 @@ export class ProjectilePresentationRuntime {
   presentClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
     const { projectiles: data, activeIds } = frame;
     this.cleanupOrphanedClientVisuals(data, activeIds, frame.removed, frame.newIds);
+    for (const id of this.ownershipAppearance.keys()) if (!activeIds.has(id)) this.ownershipAppearance.delete(id);
     const burningIds = new Set<number>();
     for (const update of frame.updates) {
       const { projectile: proj, velocityFlipped } = update;
+      this.refreshOwnershipAppearance(proj);
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
       if (velocityFlipped && this.tracerRenderer?.has(proj.id)) this.tracerRenderer.notifyBounce(proj.id, proj.x, proj.y);
       if (update.isNew && !proj.suppressSpawnFx) {
@@ -582,6 +607,7 @@ export class ProjectilePresentationRuntime {
   }
 
   releaseWorldPresentation(): void {
+    this.ownershipAppearance.clear();
     this.activeBurningProjectileIds.clear();
     this.shadowSamples.length = 0;
     this.lightSamples.length = 0;

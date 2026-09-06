@@ -33,6 +33,7 @@ export interface ProjectileReplicationReadPort {
  */
 export class ProjectileReplicationAdapter {
   private readonly staticResendLeft = new Map<number, number>();
+  private readonly previousStatic = new Map<number, SyncedProjectileStatic>();
   private readonly seenIds = new Set<number>();
   private refreshCursor = 0;
   private forceFullSnapshot = false;
@@ -45,6 +46,7 @@ export class ProjectileReplicationAdapter {
 
   reset(): void {
     this.staticResendLeft.clear();
+    this.previousStatic.clear();
     this.seenIds.clear();
     this.refreshCursor = 0;
     this.forceFullSnapshot = false;
@@ -64,7 +66,10 @@ export class ProjectileReplicationAdapter {
 
     this.source.readProjectileReplication((record) => {
       this.seenIds.add(record.id);
-      const resendLeft = this.staticResendLeft.get(record.id);
+      const previous = this.previousStatic.get(record.id);
+      const changed = previous !== undefined && staticProjectionChanged(previous, record.static);
+      this.previousStatic.set(record.id, record.static);
+      const resendLeft = changed ? undefined : this.staticResendLeft.get(record.id);
       if (resendLeft === undefined) {
         this.staticResendLeft.set(record.id, PROJECTILE_NET_STATIC_RESEND_TICKS - 1);
         encodeProjectileStatic(s, record.static);
@@ -78,7 +83,10 @@ export class ProjectileReplicationAdapter {
     });
 
     for (const id of this.staticResendLeft.keys()) {
-      if (!this.seenIds.has(id)) this.staticResendLeft.delete(id);
+      if (!this.seenIds.has(id)) {
+        this.staticResendLeft.delete(id);
+        this.previousStatic.delete(id);
+      }
     }
 
     if (u.length === 0 && !full) return null;
@@ -105,4 +113,10 @@ export class ProjectileReplicationAdapter {
     this.refreshCursor = (this.refreshCursor + perTick) % candidates.length;
     return ids;
   }
+}
+
+/** A stable projectile ID can change allegiance/presentation after a redirect. */
+function staticProjectionChanged(previous: SyncedProjectileStatic, next: SyncedProjectileStatic): boolean {
+  return (Object.keys(previous) as Array<keyof SyncedProjectileStatic>).some(key => previous[key] !== next[key])
+    || (Object.keys(next) as Array<keyof SyncedProjectileStatic>).some(key => previous[key] !== next[key]);
 }

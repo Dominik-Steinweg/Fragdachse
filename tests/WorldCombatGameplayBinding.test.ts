@@ -39,7 +39,8 @@ import { PlacementSystem } from '../src/systems/PlacementSystem';
 import { TurretSystem } from '../src/systems/TurretSystem';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
 import type { TargetStatusSystem, TargetStatusTarget } from '../src/systems/TargetStatusSystem';
-import type { ArenaLayout, PlayerProfile, ProjectileRuntimeRecord } from '../src/types';
+import type { ArenaLayout, PlayerProfile } from '../src/types';
+import type { ProjectileAk47HitContext } from '../src/projectile/ProjectileCombatPort';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import {
   WorldCombatGameplayBinding,
@@ -472,7 +473,7 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
       setSpawnContextProvider: vi.fn(),
     } as unknown as PlayerManager;
 
-    let registeredHitHandler: ((proj: ProjectileRuntimeRecord, enemyId: string, nowMs: number) => any) | null = null;
+    let registeredHitHandler: ((proj: ProjectileAk47HitContext, enemyId: string, nowMs: number) => any) | null = null;
     const combatSystem = methodBag({
       isAlive: () => true,
       isBurrowed: () => false,
@@ -531,14 +532,11 @@ describe('WorldCombatGameplayBinding AK47 strategic target wiring', () => {
     expect(registeredHitHandler).not.toBeNull();
     const hitHandler = registeredHitHandler!;
 
-    const ak47Projectile: ProjectileRuntimeRecord = {
-      id: 42,
+    const ak47Projectile: ProjectileAk47HitContext = {
       ownerId: player.id,
-      ak47ShotId: 1,
-      sourceSlot: 'weapon2',
-      damage: 20,
-      sprite: { x: enemy.x, y: enemy.y } as any,
-    } as ProjectileRuntimeRecord;
+      shotId: 1,
+      fireSuperiorityShot: false,
+    };
 
     // Hit on marked strategic target
     const impact = hitHandler(ak47Projectile, enemy.id, 1_000);

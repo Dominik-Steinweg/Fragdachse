@@ -1647,7 +1647,8 @@ export class CombatSystem implements ProjectileCombatPort {
 
     const normalSpeed = Math.max(1, Math.hypot(request.velocity.x, request.velocity.y));
     return {
-      ownerId: request.provenance.allegiance.ownerId,
+      projectileId: request.projectileId,
+      provenance: request.provenance,
       enemyId,
       x,
       y,
@@ -1661,9 +1662,6 @@ export class CombatSystem implements ProjectileCombatPort {
       explosionSlowFraction: Math.max(0, spec.explosionSlowFraction ?? 0),
       color: COLORS.GREEN_2,
       ownerColor: COLORS.GREEN_2,
-      sourceId: request.provenance.weaponSourceId ?? 'weapon.plasma',
-      sourceSlot: request.provenance.sourceSlot,
-      allowTeamDamage: request.provenance.allegiance.allowTeamDamage,
       baseDamageMult: request.directHit.baseDamageMult,
     };
   }

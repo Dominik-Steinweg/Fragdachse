@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectileFlightProcessor } from '../src/projectile/ProjectileFlightProcessor';
 import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
-import type { ProjectileRuntimeRecord } from '../src/types';
+import type { ProjectileRuntimeRecord } from '../src/projectile/ProjectileRuntimeRecord';
 
-function makeProjectile(overrides: Partial<ProjectileRuntimeRecord> = {}): ProjectileRuntimeRecord {
+function makeProjectile(overrides: { isGrenade?: boolean; fuseTime?: number; lifetime?: number } = {}): ProjectileRuntimeRecord {
   const body = {
     velocity: { x: 100, y: 0 },
     setVelocity: vi.fn((x: number, y: number) => {
@@ -28,20 +28,24 @@ function makeProjectile(overrides: Partial<ProjectileRuntimeRecord> = {}): Proje
     id: 1,
     ownerId: 'owner',
     provenance: createSingleOwnerProvenance('owner'),
-    sprite,
-    body,
+    physics: { sprite, body },
+    spec: {
+      flight: {
+        lifetimeMs: overrides.lifetime ?? 1_000, isGrenade: overrides.isGrenade ?? false,
+        fuseTime: overrides.fuseTime, drag: {}, miniRocket: {}, hitboxGrowth: {},
+      },
+      interaction: { impulse: {} },
+    },
+    interaction: {},
+    miniRocket: {},
+    contacts: {},
     lastX: 0,
     lastY: 0,
     createdAt: 0,
     simulatedAgeMs: 0,
     timeBubbleFactor: 1,
-    lifetime: 1_000,
     maxBounces: 0,
     bounceCount: 0,
-    isGrenade: false,
-    colliders: [],
-    boundsListener: () => {},
-    ...overrides,
   } as unknown as ProjectileRuntimeRecord;
 }
 
@@ -57,7 +61,7 @@ describe('ProjectileFlightProcessor', () => {
     expect(timeField).toHaveBeenCalledWith(0, 0, 500, expect.objectContaining({ allegiance: { ownerId: 'owner' } }));
     expect(projectile.simulatedAgeMs).toBe(50);
     expect(projectile.timeBubbleFactor).toBe(0.5);
-    expect(projectile.body.setVelocity).toHaveBeenCalledWith(50, 0);
+    expect(projectile.physics.body.setVelocity).toHaveBeenCalledWith(50, 0);
   });
 
   it('keeps grenade fuse expiry on host time while slowing simulated age', () => {
@@ -75,7 +79,7 @@ describe('ProjectileFlightProcessor', () => {
     expect(result.grenadeExpiredIds.has(projectile.id)).toBe(true);
   });
 
-  it('reports lifetime expiry to the legacy outcome stage without resolving it itself', () => {
+  it('reports lifetime expiry to the lifecycle stage without resolving it itself', () => {
     const processor = new ProjectileFlightProcessor();
     const projectile = makeProjectile({ lifetime: 100 });
 

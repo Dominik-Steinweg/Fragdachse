@@ -403,7 +403,7 @@ export class HeadlessStaticTargetWorld implements WeaponFireSink {
       lifetimeMs: cfg.lifetime,
       ageMs: 0,
       adrenalinGain: cfg.adrenalinGain,
-      sourceId: cfg.sourceId ?? 'weapon.unknown',
+      sourceId: request.provenance.weaponSourceId ?? 'weapon.unknown',
       ownerId: ownerId || 'sim_player',
       burnDurationMs: cfg.burnDurationMs,
       burnDamagePerTick: cfg.burnDamagePerTick,

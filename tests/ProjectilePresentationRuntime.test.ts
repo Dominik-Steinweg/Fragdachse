@@ -75,8 +75,11 @@ describe('ProjectilePresentationRuntime', () => {
 
     runtime.presentClientFrame(replica.sync([projectile()], 1_000), 'local');
     runtime.presentClientFrame(replica.sync([projectile({ x: 120 })], 1_100), 'local');
+    runtime.presentClientFrame(replica.sync([projectile({ ownerId: 'reflector', ownerColor: 0x123456 })], 1_200), 'local');
 
     expect(muzzleFlash.playProjectileFlash).toHaveBeenCalledTimes(1);
     expect(audio.playSound).not.toHaveBeenCalled();
+    expect(renderers.destroyVisual).toHaveBeenCalledWith(7);
+    expect(renderers.destroyTracer).toHaveBeenCalledWith(7);
   });
 });

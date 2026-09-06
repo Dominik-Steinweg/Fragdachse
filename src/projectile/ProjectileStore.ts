@@ -1,4 +1,4 @@
-import type { ProjectileRuntimeRecord } from '../types';
+import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import type { ProjectileIdentityScope } from './ProjectileIdentityScope';
 import type { ProjectileId } from './ProjectileSpawnPort';
 

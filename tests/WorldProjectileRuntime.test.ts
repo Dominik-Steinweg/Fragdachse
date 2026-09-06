@@ -23,7 +23,8 @@ vi.mock('phaser', () => ({
 }));
 
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
-import type { ProjectileRuntimeRecord, ProjectileSpawnConfig } from '../src/types';
+import type { ProjectileSpawnConfig } from '../src/types';
+import type { ProjectileRuntimeRecord } from '../src/projectile/ProjectileRuntimeRecord';
 import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
 import type {
   ProjectileProvenance,
@@ -49,8 +50,11 @@ function createRuntimeHarness(
   return { runtime, physics };
 }
 
-function baseConfig(overrides: Partial<ProjectileSpawnConfig> = {}): ProjectileSpawnConfig {
-  return {
+function baseRequest(
+  overrides: Partial<ProjectileSpawnConfig> = {},
+  origin = { x: 0, y: 0, angle: 0 },
+): ProjectileSpawnRequest {
+  const cfg = {
     speed: 100,
     size: 8,
     damage: 10,
@@ -61,6 +65,23 @@ function baseConfig(overrides: Partial<ProjectileSpawnConfig> = {}): ProjectileS
     isGrenade: false,
     adrenalinGain: 0,
     ...overrides,
+  };
+  return {
+    origin,
+    provenance: { gameplaySourceId: 'owner', attributionId: 'owner', allegiance: { ownerId: 'owner' }, weaponSourceId: cfg.sourceId },
+    flight: {
+      speed: cfg.speed, size: cfg.size, lifetimeMs: cfg.lifetime, maxBounces: cfg.maxBounces,
+      isGrenade: cfg.isGrenade, collisionMode: cfg.collisionMode, remainingRangePx: cfg.remainingRangePx,
+      split: { count: cfg.splitCount, spread: cfg.splitSpread, speedFactor: cfg.splitFactor },
+    },
+    interaction: {
+      directHit: { damage: cfg.damage, adrenalinGain: cfg.adrenalinGain },
+      explosion: cfg.explosion, detonable: cfg.detonable,
+      multiExplosion: { count: cfg.multiExplosionCount },
+      burn: { canReceiveFireImbue: cfg.canReceiveFireImbue },
+      pathEffect: { kind: cfg.pathEffectKind, awpCorridor: { halfWidth: cfg.awpCorridorHalfWidth, damage: cfg.awpCorridorDamage } },
+    },
+    presentation: { color: cfg.color, ownerColor: cfg.ownerColor },
   };
 }
 
@@ -102,10 +123,42 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('preserves source, attribution and parent lineage when a swarm reaction creates children', () => {
+    const { runtime } = createRuntimeHarness();
+    const provenance: ProjectileProvenance = {
+      gameplaySourceId: 'source', attributionId: 'credit', allegiance: { ownerId: 'team' },
+      weaponSourceId: 'weapon.plasma', correlation: { ak47ShotId: 7 },
+    };
+    runtime.applyPlasmaSwarmImpact({
+      projectileId: 12, provenance, enemyId: 'enemy-origin', x: 0, y: 0,
+      projectileCount: 2, normalDamage: 10, normalSize: 8, normalSpeed: 100, normalRange: 100,
+      explosionRadius: 10, explosionDamage: 5, explosionSlowFraction: 0, color: 0xffffff,
+    });
+    expect(runtime.getThreatSamples()).toHaveLength(2);
+    for (const child of runtime.getThreatSamples()) {
+      expect(child.provenance).toMatchObject({
+        gameplaySourceId: 'source', attributionId: 'credit', allegiance: { ownerId: 'team' },
+        lineage: { parentProjectileId: 12, plasmaSwarmChild: true, plasmaSwarmOriginEnemyId: 'enemy-origin' },
+        correlation: { ak47ShotId: 7 },
+      });
+    }
+    runtime.destroy();
+  });
+
+  it('releases a handle once when a terminal callback tears down its world', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const id = runtime.spawnProjectile(baseRequest())!;
+    const resolved = vi.fn(() => runtime.destroy());
+    runtime.setProjectileResolvedCallback(resolved);
+    runtime.destroyProjectile(id);
+    expect(resolved).toHaveBeenCalledTimes(1);
+    expect(physics.released).toEqual([id]);
+  });
+
   it('owns identity and sends only technical spawn mechanics to Physics', () => {
     const { runtime, physics } = createRuntimeHarness();
-    const first = runtime.spawnProjectileConfig(10, 20, 0, 'owner', baseConfig());
-    const second = runtime.spawnProjectileConfig(10, 20, Math.PI / 2, 'owner', baseConfig());
+    const first = runtime.spawnProjectile(baseRequest({}, { x: 10, y: 20, angle: 0 }))!;
+    const second = runtime.spawnProjectile(baseRequest({}, { x: 10, y: 20, angle: Math.PI / 2 }))!;
 
     expect(second).not.toBe(first);
     expect(runtime.activeCount).toBe(2);
@@ -180,7 +233,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
 
   it('expires by host lifetime and emits one terminal explosion request', () => {
     const { runtime, physics } = createRuntimeHarness();
-    runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+    runtime.spawnProjectile(baseRequest({
       lifetime: 100,
       explosion: baseExplosion(),
     }));
@@ -198,7 +251,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     const { runtime, physics } = createRuntimeHarness();
     const resolveDirectImpact = configureEnemyImpact(runtime);
 
-    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({ collisionMode: 'overlap' }));
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode: 'overlap' }))!;
     runtime.runHostInteractionStage(1_000);
 
     expect(resolveDirectImpact).toHaveBeenCalledWith(expect.objectContaining({
@@ -214,7 +267,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
   it('keeps a multi explosion projectile alive across explosion completion and then releases it', () => {
     const { runtime, physics } = createRuntimeHarness();
     configureEnemyImpact(runtime);
-    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+    const id = runtime.spawnProjectile(baseRequest({
       collisionMode: 'overlap',
       explosion: baseExplosion(),
       multiExplosionCount: 2,
@@ -239,7 +292,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
 
   it('reports and consumes a detonable owner projectile exactly once', () => {
     const { runtime, physics } = createRuntimeHarness();
-    const id = runtime.spawnProjectileConfig(12, 4, 0, 'owner', baseConfig({
+    const id = runtime.spawnProjectile(baseRequest({
       detonable: {
         tag: 'asmd_ball',
         aoeDamage: 12,
@@ -264,7 +317,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
 
   it('applies the strongest owner burn augment and rejects stale ownership after teardown', () => {
     const { runtime, physics } = createRuntimeHarness();
-    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+    const id = runtime.spawnProjectile(baseRequest({
       canReceiveFireImbue: true,
       pathEffectKind: 'awp',
       awpCorridorHalfWidth: 24,
@@ -299,7 +352,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
 
   it('materializes Hydra children on the following interaction stage', () => {
     const { runtime, physics } = createRuntimeHarness();
-    const parentId = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig({
+    const parentId = runtime.spawnProjectile(baseRequest({
       size: 10,
       damage: 20,
       maxBounces: 2,
@@ -332,7 +385,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
 
   it('releases each technical handle once and ignores contacts after teardown', () => {
     const { runtime, physics } = createRuntimeHarness();
-    const id = runtime.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig());
+    const id = runtime.spawnProjectile(baseRequest())!;
 
     runtime.destroyProjectile(id);
     runtime.destroyProjectile(id);
@@ -355,11 +408,11 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
   it('retains monotonic identity across runtime rebuild and rejects duplicate Store entries', () => {
     const scope = new ProjectileIdentityScope(21);
     const first = createRuntimeHarness(createTechnicalPhysicsBinding(), scope).runtime;
-    const firstId = first.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig());
+    const firstId = first.spawnProjectile(baseRequest())!;
     first.destroy();
 
     const second = createRuntimeHarness(createTechnicalPhysicsBinding(), scope).runtime;
-    const secondId = second.spawnProjectileConfig(0, 0, 0, 'owner', baseConfig());
+    const secondId = second.spawnProjectile(baseRequest())!;
     expect(secondId).toBeGreaterThan(firstId);
 
     const store = new ProjectileStore(new ProjectileIdentityScope(22));

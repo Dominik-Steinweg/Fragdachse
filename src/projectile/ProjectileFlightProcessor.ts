@@ -1,4 +1,4 @@
-import type { ProjectileRuntimeRecord } from '../types';
+import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 
@@ -76,8 +76,8 @@ export class ProjectileFlightProcessor {
 
     this.decrementRange(projectile);
 
-    if (projectile.isGrenade) {
-      const fuseExpired = realAgeMs >= (projectile.fuseTime ?? Number.POSITIVE_INFINITY);
+    if (projectile.spec.flight.isGrenade) {
+      const fuseExpired = realAgeMs >= (projectile.spec.flight.fuseTime ?? Number.POSITIVE_INFINITY);
       const bouncedOut = projectile.maxBounces > 0 && projectile.bounceCount >= projectile.maxBounces;
       if (fuseExpired || bouncedOut) this.grenadeExpiredIds.add(projectile.id);
 
@@ -89,20 +89,20 @@ export class ProjectileFlightProcessor {
     }
 
     const awaitingContinuation = projectile.pendingExplosion
-      && (projectile.multiExplosionsRemaining ?? 0) > 0;
-    const deferredExplosion = projectile.miniRocketDeferredExplosion === true;
+      && (projectile.interaction.multiExplosionsRemaining ?? 0) > 0;
+    const deferredExplosion = projectile.miniRocket.deferredExplosion === true;
 
-    if (projectile.miniRocketStageRangePx !== undefined
-      && simulatedAgeMs >= (projectile.miniRocketSafetyLifetimeMs ?? projectile.lifetime)) {
+    if (projectile.spec.flight.miniRocket.stageRangePx !== undefined
+      && simulatedAgeMs >= (projectile.spec.flight.miniRocket.safetyLifetimeMs ?? projectile.spec.flight.lifetimeMs)) {
       this.miniRocketSafetyExpiredIds.add(projectile.id);
     }
 
-    if (!awaitingContinuation && !deferredExplosion && projectile.miniRocketStageRangePx === undefined
-      && simulatedAgeMs > projectile.lifetime) {
+    if (!awaitingContinuation && !deferredExplosion && projectile.spec.flight.miniRocket.stageRangePx === undefined
+      && simulatedAgeMs > projectile.spec.flight.lifetimeMs) {
       this.lifetimeExpiredIds.add(projectile.id);
     }
-    if (!awaitingContinuation && !deferredExplosion && projectile.miniRocketStageRangePx === undefined
-      && simulatedAgeMs > projectile.lifetime && projectile.impactCloud) {
+    if (!awaitingContinuation && !deferredExplosion && projectile.spec.flight.miniRocket.stageRangePx === undefined
+      && simulatedAgeMs > projectile.spec.flight.lifetimeMs && projectile.spec.interaction.impactCloud) {
       this.lifetimeExpiredIds.add(projectile.id);
     }
 
@@ -124,8 +124,8 @@ export class ProjectileFlightProcessor {
 
   private resolveMovementFactor(projectile: ProjectileRuntimeRecord, nowMs: number): number {
     const queried = this.timeFieldPort?.getMovementFactor(
-      projectile.sprite.x,
-      projectile.sprite.y,
+      projectile.physics.sprite.x,
+      projectile.physics.sprite.y,
       nowMs,
       projectile.provenance,
     );
@@ -134,7 +134,7 @@ export class ProjectileFlightProcessor {
     if (Math.abs(nextFactor - previousFactor) > 0.0001) {
       if (previousFactor > 0.0001) {
         const ratio = nextFactor / previousFactor;
-        projectile.body.setVelocity(projectile.body.velocity.x * ratio, projectile.body.velocity.y * ratio);
+        projectile.physics.body.setVelocity(projectile.physics.body.velocity.x * ratio, projectile.physics.body.velocity.y * ratio);
       }
       projectile.timeBubbleFactor = nextFactor;
       this.syncTimeBubbleDrag(projectile);
@@ -146,79 +146,79 @@ export class ProjectileFlightProcessor {
 
   private decrementRange(projectile: ProjectileRuntimeRecord): void {
     if (projectile.remainingRangePx === undefined) return;
-    const dx = projectile.sprite.x - projectile.lastX;
-    const dy = projectile.sprite.y - projectile.lastY;
+    const dx = projectile.physics.sprite.x - projectile.lastX;
+    const dy = projectile.physics.sprite.y - projectile.lastY;
     const distance = Math.hypot(dx, dy);
     if (distance > 0.01) projectile.remainingRangePx = Math.max(0, projectile.remainingRangePx - distance);
   }
 
   private emitCountdown(projectile: ProjectileRuntimeRecord, realAgeMs: number): void {
-    const fuseTimeMs = projectile.fuseTime ?? 0;
+    const fuseTimeMs = projectile.spec.flight.fuseTime ?? 0;
     if (fuseTimeMs < 1500) return;
     const remainingSeconds = Math.max(0, Math.ceil((fuseTimeMs - realAgeMs) / 1000));
     if (remainingSeconds <= 0 || projectile.lastCountdownEmitted === remainingSeconds) return;
     projectile.lastCountdownEmitted = remainingSeconds;
-    this.countdownEvents.push({ x: projectile.sprite.x, y: projectile.sprite.y, value: remainingSeconds });
+    this.countdownEvents.push({ x: projectile.physics.sprite.x, y: projectile.physics.sprite.y, value: remainingSeconds });
   }
 
   private updateGrowingHitbox(projectile: ProjectileRuntimeRecord, deltaSeconds: number): void {
-    if (!projectile.isFlame
-      && projectile.leafBlowerMinKnockback === undefined
-      && projectile.leafBlowerMaxKnockback === undefined
-      && projectile.leafBlowerDeflectsProjectiles !== true) return;
-    const growRate = projectile.hitboxGrowRate ?? 0;
-    const currentSize = projectile.hitboxSize ?? projectile.sprite.displayWidth;
-    const maxSize = projectile.hitboxMaxSize ?? currentSize;
+    if (!projectile.spec.flight.isFlame
+      && projectile.spec.interaction.impulse.leafBlowerMinKnockback === undefined
+      && projectile.spec.interaction.impulse.leafBlowerMaxKnockback === undefined
+      && projectile.spec.interaction.impulse.leafBlowerDeflectsProjectiles !== true) return;
+    const growRate = projectile.spec.flight.hitboxGrowth.growRatePerSec ?? 0;
+    const currentSize = projectile.hitboxSize ?? projectile.physics.sprite.displayWidth;
+    const maxSize = projectile.spec.flight.hitboxGrowth.maxSize ?? currentSize;
     if (currentSize < maxSize) {
       const nextSize = Math.min(maxSize, currentSize + growRate * deltaSeconds);
       projectile.hitboxSize = nextSize;
     }
-    const decay = projectile.velocityDecay ?? 1;
+    const decay = projectile.spec.flight.drag.velocityDecayPerSec ?? 1;
     if (decay < 1) {
       const factor = Math.pow(decay, deltaSeconds);
-      projectile.body.setVelocity(projectile.body.velocity.x * factor, projectile.body.velocity.y * factor);
+      projectile.physics.body.setVelocity(projectile.physics.body.velocity.x * factor, projectile.physics.body.velocity.y * factor);
     }
   }
 
   private updateDragAndStop(projectile: ProjectileRuntimeRecord, timeFactor: number, simulatedAgeMs: number): void {
-    if (projectile.airFrictionDecayPerSec !== undefined && !projectile.frictionActivated
-      && (projectile.frictionDelayMs === undefined || simulatedAgeMs >= projectile.frictionDelayMs)) {
-      const effectiveDecay = effectiveAirFrictionDecay(projectile.airFrictionDecayPerSec, timeFactor);
-      projectile.body.setDrag(effectiveDecay, effectiveDecay);
+    if (projectile.spec.flight.drag.airFrictionDecayPerSec !== undefined && !projectile.frictionActivated
+      && (projectile.spec.flight.drag.frictionDelayMs === undefined || simulatedAgeMs >= projectile.spec.flight.drag.frictionDelayMs)) {
+      const effectiveDecay = effectiveAirFrictionDecay(projectile.spec.flight.drag.airFrictionDecayPerSec, timeFactor);
+      projectile.physics.body.setDrag(effectiveDecay, effectiveDecay);
       projectile.frictionActivated = true;
       projectile.appliedAirFrictionDecay = effectiveDecay;
     }
     this.syncTimeBubbleDrag(projectile);
-    if (projectile.frictionActivated && projectile.stopSpeedThreshold !== undefined) {
-      const speedSq = projectile.body.velocity.lengthSq();
-      const effectiveThreshold = projectile.stopSpeedThreshold * timeFactor;
-      if (speedSq > 0 && speedSq < effectiveThreshold * effectiveThreshold) projectile.body.setVelocity(0, 0);
+    if (projectile.frictionActivated && projectile.spec.flight.drag.stopSpeedThreshold !== undefined) {
+      const speedSq = projectile.physics.body.velocity.lengthSq();
+      const effectiveThreshold = projectile.spec.flight.drag.stopSpeedThreshold * timeFactor;
+      if (speedSq > 0 && speedSq < effectiveThreshold * effectiveThreshold) projectile.physics.body.setVelocity(0, 0);
     }
   }
 
   private syncTimeBubbleDrag(projectile: ProjectileRuntimeRecord): void {
-    if (!projectile.frictionActivated || projectile.airFrictionDecayPerSec === undefined) return;
+    if (!projectile.frictionActivated || projectile.spec.flight.drag.airFrictionDecayPerSec === undefined) return;
     const effectiveDecay = effectiveAirFrictionDecay(
-      projectile.airFrictionDecayPerSec,
+      projectile.spec.flight.drag.airFrictionDecayPerSec,
       projectile.timeBubbleFactor ?? 1,
     );
     if (projectile.appliedAirFrictionDecay !== undefined
       && Math.abs(projectile.appliedAirFrictionDecay - effectiveDecay) <= 0.0001) return;
-    projectile.body.setDrag(effectiveDecay, effectiveDecay);
+    projectile.physics.body.setDrag(effectiveDecay, effectiveDecay);
     projectile.appliedAirFrictionDecay = effectiveDecay;
   }
 
   private updateAntiTunnelingBody(projectile: ProjectileRuntimeRecord): void {
-    if (projectile.originalBodySize === undefined) return;
-    const velocityX = Math.abs(projectile.body.velocity.x);
-    const velocityY = Math.abs(projectile.body.velocity.y);
+    if (projectile.spec.flight.originalBodySize === undefined) return;
+    const velocityX = Math.abs(projectile.physics.body.velocity.x);
+    const velocityY = Math.abs(projectile.physics.body.velocity.y);
     const speed = Math.hypot(velocityX, velocityY);
     if (speed <= 1) return;
-    const originalSize = projectile.originalBodySize;
+    const originalSize = projectile.spec.flight.originalBodySize;
     const width = Math.max(originalSize, (velocityX / speed) * MIN_PROJECTILE_BODY_LENGTH);
     const height = Math.max(originalSize, (velocityY / speed) * MIN_PROJECTILE_BODY_LENGTH);
-    projectile.body.setSize(width, height);
-    projectile.body.setOffset((originalSize - width) / 2, (originalSize - height) / 2);
+    projectile.physics.body.setSize(width, height);
+    projectile.physics.body.setOffset((originalSize - width) / 2, (originalSize - height) / 2);
   }
 }
 

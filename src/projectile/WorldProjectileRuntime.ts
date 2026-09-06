@@ -1,9 +1,9 @@
 import * as Phaser from 'phaser';
 import { findNearestRectangleHit } from '../utils/geometry';
-import type { LoadoutSlot, PlaceableKind, ProjectileSpawnConfig, ProjectileRuntimeRecord, SupportProjectileImpact } from '../types';
+import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
+import type { PlaceableKind, ProjectileSpawnConfig, SupportProjectileImpact } from '../types';
 import {
   type ProjectilePhysicsBindingPort,
-  type ProjectilePhysicsHandle,
   type ProjectilePhysicsMechanics,
 } from './ProjectilePhysicsBinding';
 import {
@@ -112,11 +112,10 @@ import {
   ProjectileLifecycleProcessor,
   type ProjectileLifecycleDependencies,
 } from './ProjectileLifecycleProcessor';
-import { createInheritedProjectilePayload } from './projectileSpawnPayloadAdapter';
 import { ProjectileStore } from './ProjectileStore';
 import { PLASMA_SWARM_EXPLOSION_DURATION_MS, resolvePlasmaSwarmProjectileProfile, resolvePlasmaSwarmRadialAngles, resolvePlasmaSwarmHoming } from '../systems/PlasmaCharge';
 
-/** Parameter eines vom Owner erzeugten Reflect-/Deflect-Nachfolgers. */
+/** Parameter einer Übernahme bei stabiler Projectile-Identität. */
 interface ReflectedProjectileOptions {
   readonly x: number;
   readonly y: number;
@@ -127,8 +126,6 @@ interface ReflectedProjectileOptions {
   readonly damage: number;
   readonly color: number;
   readonly ownerColor: number;
-  readonly sourceId: string;
-  readonly sourceSlot?: LoadoutSlot;
   /** Übernommene Granate: Granatensemantik und Restzündzeit bleiben erhalten. */
   readonly keepGrenade: boolean;
   readonly nowMs: number;
@@ -143,7 +140,6 @@ interface PendingNextStageProjectileSpawn {
   readonly x: number;
   readonly y: number;
   readonly angle: number;
-  readonly ownerId: string;
   readonly cfg: ProjectileSpawnConfig;
   readonly provenance: ProjectileProvenance;
   readonly hostNowMs: number;
@@ -181,10 +177,10 @@ export interface WorldProjectileRuntimeOptions {
  * Er lebt und stirbt mit seiner `WorldRuntime`: Registry, Runtime-Records und ihr Teardown gehören
  * ihm allein; die monotone Identity-Vergabe kommt aus dem worldRevision-langlebigen Scope. Spawn
  * läuft ausschließlich über diese Grenze – aus der aufgelösten Execution über {@link spawnProjectile},
- * aus noch nicht migrierten Host-Quellen über den befristeten Seam.
+ * aus Child-Spawns über denselben privaten Spawn-Pfad.
  *
  * Phaser-Physics-Ressourcen und ihre Kollisionseinstiegspunkte liegen in einem world-komponierten
- * Binding; dieses arbeitet auf **demselben** Store, nie auf einer Kopie.
+ * Binding; dieses kennt ausschließlich technische Handles und Kontakte.
  */
 export class WorldProjectileRuntime implements
   ProjectileSpawnPort,
@@ -200,14 +196,12 @@ export class WorldProjectileRuntime implements
   ProjectileReplicationReadPort,
   WorldScopedBinding {
   private readonly projectiles: ProjectileStore;
-  private readonly physicsHandles = new Map<ProjectileId, ProjectilePhysicsHandle>();
   private readonly flightProcessor = new ProjectileFlightProcessor();
   private readonly homingController = new ProjectileHomingController();
   private readonly detonableIds = new Set<ProjectileId>();
   private readonly detonatorIds = new Set<ProjectileId>();
   private readonly translocatorPuckIds = new Set<ProjectileId>();
   private readonly travelEffectIds = new Set<ProjectileId>();
-  private readonly burnAugments = new Map<ProjectileId, ProjectileBurnAugment>();
   private readonly threatSamples: ProjectileThreatSample[] = [];
   private readonly travelSamples: ProjectileTravelSample[] = [];
   private readonly activeProjectilesByOwner = new Map<string, number>();
@@ -226,15 +220,15 @@ export class WorldProjectileRuntime implements
       this.miniRocketStatePort?.onOutcome({
         kind: 'mini-rocket-collected',
         projectileId: projectile.id,
-        collectorId: projectile.ownerId,
+        collectorId: projectile.provenance.allegiance.ownerId,
         pickup: {
           x,
           y,
-          color: projectile.color,
-          ownerColor: projectile.ownerColor,
-          adrenalineRefund: Math.max(0, projectile.miniRocketAdrenalineCostPaid ?? 0)
-            * Math.max(0, projectile.miniRocketPickupAdrenalineRefundFraction ?? 0),
-          armorRefund: Math.max(0, projectile.miniRocketPickupArmor ?? 0),
+          color: projectile.presentation.color,
+          ownerColor: projectile.presentation.ownerColor,
+          adrenalineRefund: Math.max(0, projectile.spec.flight.miniRocket.adrenalineCostPaid ?? 0)
+            * Math.max(0, projectile.spec.flight.miniRocket.pickupAdrenalineRefundFraction ?? 0),
+          armorRefund: Math.max(0, projectile.spec.flight.miniRocket.pickupArmor ?? 0),
         },
       });
     },
@@ -324,38 +318,38 @@ export class WorldProjectileRuntime implements
     const states = this.presentationStates;
     states.length = 0;
     for (const projectile of this.projectiles.stepOrder) {
-      const sprite = projectile.sprite;
+      const sprite = projectile.physics.sprite;
       states.push({
         id: projectile.id,
-        ownerId: projectile.ownerId,
+        ownerId: projectile.provenance.allegiance.ownerId,
         x: sprite.x,
         y: sprite.y,
-        vx: projectile.body.velocity.x,
-        vy: projectile.body.velocity.y,
+        vx: projectile.physics.body.velocity.x,
+        vy: projectile.physics.body.velocity.y,
         size: sprite.displayWidth,
-        color: projectile.color,
-        ownerColor: projectile.ownerColor,
-        projectileVisualScale: projectile.projectileVisualScale,
-        smokeTrailColor: projectile.smokeTrailColor,
-        style: projectile.projectileStyle,
-        sporeVisualVariant: projectile.sporeVisualVariant,
-        bulletVisualPreset: projectile.bulletVisualPreset,
-        grenadeVisualPreset: projectile.grenadeVisualPreset,
-        energyBallVariant: projectile.energyBallVariant,
-        tracer: projectile.tracerConfig,
-        shotAudioKey: projectile.shotAudioKey,
-        suppressSpawnFx: projectile.suppressSpawnFx,
-        miniRocketPhase: projectile.miniRocketPhase,
-        miniRocketCascadeStage: (projectile.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
-          ? projectile.miniRocketExplosionIndex
+        color: projectile.presentation.color,
+        ownerColor: projectile.presentation.ownerColor,
+        projectileVisualScale: projectile.presentation.projectileVisualScale,
+        smokeTrailColor: projectile.presentation.smokeTrailColor,
+        style: projectile.presentation.projectileStyle,
+        sporeVisualVariant: projectile.presentation.sporeVisualVariant,
+        bulletVisualPreset: projectile.presentation.bulletVisualPreset,
+        grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
+        energyBallVariant: projectile.presentation.energyBallVariant,
+        tracer: projectile.presentation.tracerConfig,
+        shotAudioKey: projectile.presentation.shotAudioKey,
+        suppressSpawnFx: projectile.presentation.suppressSpawnFx,
+        miniRocketPhase: projectile.miniRocket.phase,
+        miniRocketCascadeStage: (projectile.spec.flight.miniRocket.cascadeDamageBonusPerExplosion ?? 0) > 0
+          ? projectile.miniRocket.explosionIndex
           : undefined,
-        projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
-        burning: !projectile.isFlame && !projectile.isGrenade && (
-          ((projectile.burnDurationMs ?? 0) > 0 && (projectile.burnDamagePerTick ?? 0) > 0)
-          || ((projectile.supplementalBurnOnHit?.durationMs ?? 0) > 0
-            && (projectile.supplementalBurnOnHit?.damagePerTick ?? 0) > 0)
+        projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
+        burning: !projectile.spec.flight.isFlame && !projectile.spec.flight.isGrenade && (
+          ((projectile.spec.interaction.burn.burnDurationMs ?? 0) > 0 && (projectile.spec.interaction.burn.burnDamagePerTick ?? 0) > 0)
+          || ((projectile.interaction.burnAugment?.burn?.durationMs ?? 0) > 0
+            && (projectile.interaction.burnAugment?.burn?.damagePerTick ?? 0) > 0)
         ),
-        sourceTurretId: projectile.sourceTurretId,
+        sourceTurretId: projectile.provenance.sourceTurretId,
       });
     }
     return states;
@@ -414,11 +408,10 @@ export class WorldProjectileRuntime implements
     this.standaloneExplosionRequestCallback?.({
       x: impact.x,
       y: impact.y,
-      provenance: createSingleOwnerProvenance(impact.ownerId, {
-        weaponSourceId: `${impact.sourceId}:swarm-explosion`,
-        sourceSlot: impact.sourceSlot ?? 'weapon1',
-        allowTeamDamage: impact.allowTeamDamage,
-      }),
+      provenance: {
+        ...impact.provenance,
+        weaponSourceId: `${impact.provenance.weaponSourceId ?? 'weapon.plasma'}:swarm-explosion`,
+      },
       effect: {
         radius: impact.explosionRadius, maxDamage: impact.explosionDamage, minDamage: impact.explosionDamage,
         knockback: 0, selfDamageMult: 0, damageTarget: 'enemies',
@@ -434,16 +427,23 @@ export class WorldProjectileRuntime implements
     const speed = Math.max(1, profile.speed);
     const lifetime = Math.max(1, (profile.range / speed) * 1000);
     for (const angle of resolvePlasmaSwarmRadialAngles(impact.projectileCount)) {
-      this.spawnProjectileConfig(impact.x, impact.y, angle, impact.ownerId, {
+      this.spawnResolved(impact.x, impact.y, angle, {
         speed, size: Math.max(1, profile.size), damage: profile.damage,
         color: impact.color, ownerColor: impact.ownerColor ?? impact.color, lifetime,
         remainingRangePx: profile.range, maxBounces: 0, isGrenade: false, adrenalinGain: 0,
-        sourceId: 'weapon.plasma.swarm', homing: resolvePlasmaSwarmHoming(impact.homing),
+        homing: resolvePlasmaSwarmHoming(impact.homing),
         projectileStyle: impact.projectileStyle, energyBallVariant: impact.energyBallVariant,
-        tracerConfig: impact.tracerConfig, allowTeamDamage: impact.allowTeamDamage,
+        tracerConfig: impact.tracerConfig,
         baseDamageMult: impact.baseDamageMult, suppressSpawnFx: true,
-        plasmaSwarmProjectile: true, plasmaSwarmOriginEnemyId: impact.enemyId,
-        sourceSlot: impact.sourceSlot ?? 'weapon1',
+      }, {
+        ...impact.provenance,
+        weaponSourceId: 'weapon.plasma.swarm',
+        lineage: {
+          ...impact.provenance.lineage,
+          parentProjectileId: impact.projectileId,
+          plasmaSwarmChild: true,
+          plasmaSwarmOriginEnemyId: impact.enemyId,
+        },
       });
     }
   }
@@ -528,42 +528,42 @@ export class WorldProjectileRuntime implements
 
   private createImpactSource(
     projectile: ProjectileRuntimeRecord,
-    x = projectile.sprite?.x ?? 0,
-    y = projectile.sprite?.y ?? 0,
+    x = projectile.physics.sprite?.x ?? 0,
+    y = projectile.physics.sprite?.y ?? 0,
   ): ProjectileImpactSource {
     return {
       projectileId: projectile.id,
-      ownerId: projectile.ownerId,
+      ownerId: projectile.provenance.attributionId,
       provenance: projectile.provenance,
       x,
       y,
-      velocityX: projectile.body?.velocity?.x ?? 0,
-      velocityY: projectile.body?.velocity?.y ?? 0,
-      color: projectile.color,
-      ownerColor: projectile.ownerColor,
-      sourceId: projectile.sourceId,
-      sourceSlot: projectile.sourceSlot,
-      allowTeamDamage: projectile.allowTeamDamage,
+      velocityX: projectile.physics.body?.velocity?.x ?? 0,
+      velocityY: projectile.physics.body?.velocity?.y ?? 0,
+      color: projectile.presentation.color,
+      ownerColor: projectile.presentation.ownerColor,
+      sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
+      sourceSlot: projectile.provenance.sourceSlot,
+      allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
       damage: projectile.damage,
-      ak47DamageMultiplier: projectile.ak47DamageMultiplier,
-      baseDamageMult: projectile.baseDamageMult,
-      rockDamageMult: projectile.rockDamageMult,
-      trainDamageMult: projectile.trainDamageMult,
-      impactCloud: projectile.impactCloud,
-      energyInjectorPayload: projectile.energyInjectorPayload,
-      proximityPulse: projectile.proximityPulse,
-      isBfg: projectile.isBfg,
-      isFlame: projectile.isFlame,
+      ak47DamageMultiplier: projectile.spec.interaction.directHit.ak47DamageMultiplier,
+      baseDamageMult: projectile.spec.interaction.directHit.baseDamageMult,
+      rockDamageMult: projectile.spec.interaction.directHit.rockDamageMult,
+      trainDamageMult: projectile.spec.interaction.directHit.trainDamageMult,
+      impactCloud: projectile.spec.interaction.impactCloud,
+      energyInjectorPayload: projectile.spec.interaction.energyInjectorPayload,
+      proximityPulse: projectile.spec.interaction.proximityPulse,
+      isBfg: projectile.spec.flight.isBfg,
+      isFlame: projectile.spec.flight.isFlame,
       hitboxSize: projectile.hitboxSize,
-      hitboxMaxSize: projectile.hitboxMaxSize,
-      bodyWidth: projectile.body?.width ?? 0,
-      projectileStyle: projectile.projectileStyle,
-      projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
-      shotAudioKey: projectile.shotAudioKey,
-      shotgunProximityMaxDamageBonus: projectile.shotgunProximityMaxDamageBonus,
-      shotgunOriginX: projectile.shotgunOriginX,
-      shotgunOriginY: projectile.shotgunOriginY,
-      shotgunResolvedRange: projectile.shotgunResolvedRange,
+      hitboxMaxSize: projectile.spec.flight.hitboxGrowth.maxSize,
+      bodyWidth: projectile.physics.body?.width ?? 0,
+      projectileStyle: projectile.presentation.projectileStyle,
+      projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
+      shotAudioKey: projectile.presentation.shotAudioKey,
+      shotgunProximityMaxDamageBonus: projectile.spec.interaction.directHit.shotgunProximityMaxDamageBonus,
+      shotgunOriginX: projectile.spec.interaction.directHit.shotgunOriginX,
+      shotgunOriginY: projectile.spec.interaction.directHit.shotgunOriginY,
+      shotgunResolvedRange: projectile.spec.interaction.directHit.shotgunResolvedRange,
     };
   }
 
@@ -584,30 +584,30 @@ export class WorldProjectileRuntime implements
       && projectile.bounceProcessedThisStep && projectile.velocityAfterFirstBounce) {
       // Phaser may reflect each collider independently in one step. Restore the first
       // authoritative result before handling the next technical contact.
-      projectile.body.velocity.x = projectile.velocityAfterFirstBounce.x;
-      projectile.body.velocity.y = projectile.velocityAfterFirstBounce.y;
+      projectile.physics.body.velocity.x = projectile.velocityAfterFirstBounce.x;
+      projectile.physics.body.velocity.y = projectile.velocityAfterFirstBounce.y;
       return true;
     }
-    const usesPenetratingRockContact = contact.target.kind === 'rock' && projectile.penetratesRocks
+    const usesPenetratingRockContact = contact.target.kind === 'rock' && projectile.spec.flight.penetration.penetratesRocks
       && this.shouldBounceAfterContact(projectile, { kind: 'trunk' });
     const impactPoint = bounceEligible || usesPenetratingRockContact
       ? this.resolveContactImpactPoint(projectile, contact)
       : contact.target.kind === 'world-boundary'
         ? { x: contact.x, y: contact.y }
-        : { x: projectile.sprite.x, y: projectile.sprite.y };
+        : { x: projectile.physics.sprite.x, y: projectile.physics.sprite.y };
     if (bounceEligible) {
-      const multiplier = projectile.bounceFrictionMultiplier;
+      const multiplier = projectile.spec.flight.drag.bounceFrictionMultiplier;
       if (multiplier !== undefined && multiplier < 1) {
-        projectile.body.velocity.x *= multiplier;
-        projectile.body.velocity.y *= multiplier;
+        projectile.physics.body.velocity.x *= multiplier;
+        projectile.physics.body.velocity.y *= multiplier;
       }
       if (contact.target.kind !== 'world-boundary') {
         projectile.bounceProcessedThisStep = true;
         projectile.velocityAfterFirstBounce = {
-          x: projectile.body.velocity.x, y: projectile.body.velocity.y,
+          x: projectile.physics.body.velocity.x, y: projectile.physics.body.velocity.y,
         };
         this.presentation.playBounceImpact(projectile.id, contact.x, contact.y,
-          projectile.body.velocity.x, projectile.body.velocity.y, projectile.color, projectile.projectileStyle);
+          projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, projectile.presentation.color, projectile.presentation.projectileStyle);
       }
     }
     let consumed = false;
@@ -667,7 +667,7 @@ export class WorldProjectileRuntime implements
   ): { x: number; y: number } {
     const bounds = contact.targetBounds;
     if (!bounds) return { x: contact.x, y: contact.y };
-    const line = this.contactLine.setTo(projectile.lastX, projectile.lastY, projectile.sprite.x, projectile.sprite.y);
+    const line = this.contactLine.setTo(projectile.lastX, projectile.lastY, projectile.physics.sprite.x, projectile.physics.sprite.y);
     const rect = this.contactRect.setTo(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
     const hit = findNearestRectangleHit(line, rect, this.contactPoints);
     return hit ? { x: hit.x, y: hit.y } : { x: contact.x, y: contact.y };
@@ -677,55 +677,55 @@ export class WorldProjectileRuntime implements
     projectile: ProjectileRuntimeRecord,
     target: ProjectilePhysicsContact['target'],
   ): boolean {
-    if (projectile.isBfg || hasGaussDischarge(projectile)
-      || (projectile.collisionMode === 'overlap' && projectile.piercesTargets === true)
-      || projectile.isFlame || hasLeafBlowerCapability(projectile)) return false;
-    if (target.kind === 'rock' && projectile.penetratesRocks === true) return false;
-    if (projectile.isGrenade && projectile.maxBounces === 0) return false;
-    if (projectile.impactCloud && projectile.maxBounces === 0) return false;
-    if (projectile.explosion && projectile.maxBounces === 0) return false;
-    return target.kind !== 'world-boundary' || !projectile.isBfg;
+    if (projectile.spec.flight.isBfg || hasGaussDischarge(projectile.spec.interaction.directHit)
+      || (projectile.spec.flight.collisionMode === 'overlap' && projectile.spec.flight.piercesTargets === true)
+      || projectile.spec.flight.isFlame || hasLeafBlowerCapability(projectile.spec.interaction.impulse)) return false;
+    if (target.kind === 'rock' && projectile.spec.flight.penetration.penetratesRocks === true) return false;
+    if (projectile.spec.flight.isGrenade && projectile.maxBounces === 0) return false;
+    if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) return false;
+    if (projectile.interaction.explosion && projectile.maxBounces === 0) return false;
+    return target.kind !== 'world-boundary' || !projectile.spec.flight.isBfg;
   }
 
   private completeAuthoritativeBounce(projectile: ProjectileRuntimeRecord, x: number, y: number, worldBoundary: boolean): void {
     if (this.queueHydraSplit(
-      projectile.id, x, y, projectile.body.velocity.x, projectile.body.velocity.y,
+      projectile.id, x, y, projectile.physics.body.velocity.x, projectile.physics.body.velocity.y,
     )) return;
     projectile.bounceCount += 1;
     if (worldBoundary) this.presentation.playBounceImpact(
-      projectile.id, x, y, projectile.body.velocity.x, projectile.body.velocity.y,
-      projectile.color, projectile.projectileStyle,
+      projectile.id, x, y, projectile.physics.body.velocity.x, projectile.physics.body.velocity.y,
+      projectile.presentation.color, projectile.presentation.projectileStyle,
     );
     if (projectile.bounceCount > projectile.maxBounces) {
-      projectile.body.setVelocity(0, 0);
-      projectile.body.enable = false;
+      projectile.physics.body.setVelocity(0, 0);
+      projectile.physics.body.enable = false;
     }
   }
 
   private shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean {
-    return projectile.collisionMode === 'sweep'
-      && !projectile.isGrenade
-      && !projectile.isFlame
-      && !projectile.isBfg
+    return projectile.spec.flight.collisionMode === 'sweep'
+      && !projectile.spec.flight.isGrenade
+      && !projectile.spec.flight.isFlame
+      && !projectile.spec.flight.isBfg
       && !projectile.pendingDestroy
       && !projectile.bounceProcessedThisStep
-      && !projectile.penetratesRocks;
+      && !projectile.spec.flight.penetration.penetratesRocks;
   }
 
   private sweepRocks(projectile: ProjectileRuntimeRecord): void {
-    const segmentLength = Math.hypot(projectile.sprite.x - projectile.lastX, projectile.sprite.y - projectile.lastY);
+    const segmentLength = Math.hypot(projectile.physics.sprite.x - projectile.lastX, projectile.physics.sprite.y - projectile.lastY);
     if (segmentLength <= 0.5) return;
     const hit = this.physicsBinding.findNearestRockSweep(
-      projectile.lastX, projectile.lastY, projectile.sprite.x, projectile.sprite.y,
-      projectile.ignoreRockIndex,
+      projectile.lastX, projectile.lastY, projectile.physics.sprite.x, projectile.physics.sprite.y,
+      projectile.spec.flight.collisionFilter.ignoreRockIndex,
     );
     if (!hit) return;
     const normalLength = Math.hypot(hit.normalX, hit.normalY) || 1;
-    let nextVx = projectile.body.velocity.x;
-    let nextVy = projectile.body.velocity.y;
+    let nextVx = projectile.physics.body.velocity.x;
+    let nextVy = projectile.physics.body.velocity.y;
     if (Math.abs(hit.normalX) > 0.001) nextVx *= -1;
     if (Math.abs(hit.normalY) > 0.001) nextVy *= -1;
-    const frictionMultiplier = projectile.bounceFrictionMultiplier;
+    const frictionMultiplier = projectile.spec.flight.drag.bounceFrictionMultiplier;
     if (frictionMultiplier !== undefined && frictionMultiplier < 1) {
       nextVx *= frictionMultiplier;
       nextVy *= frictionMultiplier;
@@ -742,20 +742,20 @@ export class WorldProjectileRuntime implements
     });
     if (resolution.technicalContactConsumed) return;
     this.presentation.playBounceImpact(
-      projectile.id, hit.x, hit.y, nextVx, nextVy, projectile.color, projectile.projectileStyle,
+      projectile.id, hit.x, hit.y, nextVx, nextVy, projectile.presentation.color, projectile.presentation.projectileStyle,
     );
     if (projectile.bounceCount > projectile.maxBounces) {
-      projectile.body.reset(hit.x, hit.y);
-      projectile.body.setVelocity(0, 0);
-      projectile.body.enable = false;
+      projectile.physics.body.reset(hit.x, hit.y);
+      projectile.physics.body.setVelocity(0, 0);
+      projectile.physics.body.enable = false;
       return;
     }
-    const offsetDistance = Math.max(projectile.sprite.displayWidth * 0.5 + 0.5, 1);
-    projectile.body.reset(
+    const offsetDistance = Math.max(projectile.physics.sprite.displayWidth * 0.5 + 0.5, 1);
+    projectile.physics.body.reset(
       hit.x + (hit.normalX / normalLength) * offsetDistance,
       hit.y + (hit.normalY / normalLength) * offsetDistance,
     );
-    projectile.body.setVelocity(nextVx, nextVy);
+    projectile.physics.body.setVelocity(nextVx, nextVy);
   }
 
   private completeDirectImpact(
@@ -765,14 +765,14 @@ export class WorldProjectileRuntime implements
     outcome: ProjectileDirectImpactOutcome,
   ): boolean {
     if (!outcome.accepted || projectile.pendingDestroy) return false;
-    if (projectile.impactCloud) this.projectileImpactEventCallback?.(this.createImpactSource(projectile, impact.x, impact.y));
+    if (projectile.spec.interaction.impactCloud) this.projectileImpactEventCallback?.(this.createImpactSource(projectile, impact.x, impact.y));
     const targetKey = target.kind === 'player' ? `players:${target.id}`
       : target.kind === 'enemy' ? `enemies:${target.id}` : undefined;
-    if (projectile.enemyHitExplosion) {
+    if (projectile.spec.interaction.enemyHitExplosion) {
       this.lifecycleProcessor.triggerEnemyImpactExplosion(projectile);
       return false;
     }
-    if (projectile.explosion) {
+    if (projectile.interaction.explosion) {
       this.lifecycleProcessor.triggerExplosion(projectile, targetKey);
       return !projectile.pendingDestroy;
     }
@@ -819,9 +819,9 @@ export class WorldProjectileRuntime implements
           candidate.y,
           impact,
         );
-        if (projectile.penetratesRocks && this.shouldBounceAfterContact(projectile, { kind: 'trunk' })) {
+        if (projectile.spec.flight.penetration.penetratesRocks && this.shouldBounceAfterContact(projectile, { kind: 'trunk' })) {
           this.presentation.playBounceImpact(projectile.id, candidate.x, candidate.y,
-            projectile.body.velocity.x, projectile.body.velocity.y, projectile.color, projectile.projectileStyle);
+            projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, projectile.presentation.color, projectile.presentation.projectileStyle);
         }
         break;
       case 'base':
@@ -861,32 +861,32 @@ export class WorldProjectileRuntime implements
     targetKind: 'rock' | 'train',
     targetId: number | string,
   ): boolean {
-    if (projectile.isBfg === true) {
+    if (projectile.spec.flight.isBfg === true) {
       if (targetKind === 'rock') {
-        projectile.bfgHitRocks ??= new Set<number>();
-        if (projectile.bfgHitRocks.has(Number(targetId))) return false;
-        projectile.bfgHitRocks.add(Number(targetId));
+        projectile.contacts.bfgHitRocks ??= new Set<number>();
+        if (projectile.contacts.bfgHitRocks.has(Number(targetId))) return false;
+        projectile.contacts.bfgHitRocks.add(Number(targetId));
       } else {
-        if (projectile.bfgHitTrain) return false;
-        projectile.bfgHitTrain = true;
+        if (projectile.contacts.bfgHitTrain) return false;
+        projectile.contacts.bfgHitTrain = true;
       }
     }
-    if (hasGaussDischarge(projectile)
-      || (projectile.collisionMode === 'overlap' && projectile.piercesTargets === true
-        && !projectile.isBfg && !projectile.isFlame && !hasLeafBlowerCapability(projectile))) {
+    if (hasGaussDischarge(projectile.spec.interaction.directHit)
+      || (projectile.spec.flight.collisionMode === 'overlap' && projectile.spec.flight.piercesTargets === true
+        && !projectile.spec.flight.isBfg && !projectile.spec.flight.isFlame && !hasLeafBlowerCapability(projectile.spec.interaction.impulse))) {
       if (targetKind === 'rock') {
-        projectile.gaussHitRocks ??= new Set<number>();
-        if (projectile.gaussHitRocks.has(Number(targetId))) return false;
-        projectile.gaussHitRocks.add(Number(targetId));
+        projectile.contacts.gaussHitRocks ??= new Set<number>();
+        if (projectile.contacts.gaussHitRocks.has(Number(targetId))) return false;
+        projectile.contacts.gaussHitRocks.add(Number(targetId));
       } else {
-        if (projectile.gaussHitTrain) return false;
-        projectile.gaussHitTrain = true;
+        if (projectile.contacts.gaussHitTrain) return false;
+        projectile.contacts.gaussHitTrain = true;
       }
     }
-    if (targetKind === 'rock' && projectile.penetratesRocks) {
-      projectile.penetratedRockIds ??= new Set<number>();
-      if (projectile.penetratedRockIds.has(Number(targetId))) return false;
-      projectile.penetratedRockIds.add(Number(targetId));
+    if (targetKind === 'rock' && projectile.spec.flight.penetration.penetratesRocks) {
+      projectile.contacts.penetratedRockIds ??= new Set<number>();
+      if (projectile.contacts.penetratedRockIds.has(Number(targetId))) return false;
+      projectile.contacts.penetratedRockIds.add(Number(targetId));
     }
     return true;
   }
@@ -898,60 +898,60 @@ export class WorldProjectileRuntime implements
     y: number,
     impact: ProjectileImpactSource,
   ): boolean {
-    if (projectile.energyInjectorPayload) {
-      if (projectile.supportConsumed) return true;
-      projectile.supportConsumed = true;
+    if (projectile.spec.interaction.energyInjectorPayload) {
+      if (projectile.interaction.supportConsumed) return true;
+      projectile.interaction.supportConsumed = true;
       this.supportImpactCallback?.(impact, { kind: 'rock', rockId, x, y });
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.impactCloud && projectile.maxBounces === 0) {
+    if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) {
       this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.explosion && projectile.maxBounces === 0) {
+    if (projectile.interaction.explosion && projectile.maxBounces === 0) {
       this.triggerProjectileExplosion(projectile.id);
       return true;
     }
-    if (projectile.isFlame) {
-      if (projectile.hitObstacleIds?.has(rockId)) return false;
-      projectile.hitObstacleIds ??= new Set<number>();
-      projectile.hitObstacleIds.add(rockId);
+    if (projectile.spec.flight.isFlame) {
+      if (projectile.contacts.hitObstacleIds?.has(rockId)) return false;
+      projectile.contacts.hitObstacleIds ??= new Set<number>();
+      projectile.contacts.hitObstacleIds.add(rockId);
       const obstacleKind = this.obstacleKindResolver?.(rockId);
       const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
         ? 1
-        : projectile.rockDamageMult ?? 1;
-      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.ownerId);
+        : projectile.spec.interaction.directHit.rockDamageMult ?? 1;
+      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId);
       return false;
     }
-    if (hasLeafBlowerCapability(projectile)) {
+    if (hasLeafBlowerCapability(projectile.spec.interaction.impulse)) {
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.isGrenade && projectile.maxBounces === 0) return false;
+    if (projectile.spec.flight.isGrenade && projectile.maxBounces === 0) return false;
 
-    if (!projectile.isGrenade) {
+    if (!projectile.spec.flight.isGrenade) {
       const obstacleKind = this.obstacleKindResolver?.(rockId);
       const multiplier = obstacleKind !== undefined && obstacleKind !== 'rock'
         ? 1
-        : projectile.rockDamageMult ?? 1;
-      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.ownerId);
+        : projectile.spec.interaction.directHit.rockDamageMult ?? 1;
+      if (multiplier !== 0) this.rockHitCallback?.(rockId, projectile.damage * multiplier, projectile.provenance.attributionId);
     }
     return false;
   }
 
   private resolveTrunkPhysicsContact(projectile: ProjectileRuntimeRecord): boolean {
-    if (projectile.impactCloud && projectile.maxBounces === 0) {
+    if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) {
       this.projectileImpactEventCallback?.(this.createImpactSource(projectile));
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.explosion && projectile.maxBounces === 0) {
+    if (projectile.interaction.explosion && projectile.maxBounces === 0) {
       this.triggerProjectileExplosion(projectile.id);
       return true;
     }
-    if (hasLeafBlowerCapability(projectile)) {
+    if (hasLeafBlowerCapability(projectile.spec.interaction.impulse)) {
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
@@ -965,34 +965,34 @@ export class WorldProjectileRuntime implements
     y: number,
     impact: ProjectileImpactSource,
   ): boolean {
-    if (projectile.energyInjectorPayload) {
-      if (projectile.supportConsumed) return true;
-      projectile.supportConsumed = true;
+    if (projectile.spec.interaction.energyInjectorPayload) {
+      if (projectile.interaction.supportConsumed) return true;
+      projectile.interaction.supportConsumed = true;
       this.supportImpactCallback?.(impact, { kind: 'base', x, y });
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.impactCloud && projectile.maxBounces === 0) {
+    if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) {
       this.applyBaseContact(projectile, baseId, impact);
       this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.explosion && projectile.maxBounces === 0) {
+    if (projectile.interaction.explosion && projectile.maxBounces === 0) {
       this.triggerProjectileExplosion(projectile.id);
       return true;
     }
-    if (hasLeafBlowerCapability(projectile)) {
+    if (hasLeafBlowerCapability(projectile.spec.interaction.impulse)) {
       this.applyBaseContact(projectile, baseId, impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.isFlame) {
+    if (projectile.spec.flight.isFlame) {
       this.applyBaseContact(projectile, baseId, impact);
       return false;
     }
-    if (projectile.isGrenade && projectile.maxBounces === 0) return false;
-    if (!projectile.explosion) this.applyBaseContact(projectile, baseId, impact);
+    if (projectile.spec.flight.isGrenade && projectile.maxBounces === 0) return false;
+    if (!projectile.interaction.explosion) this.applyBaseContact(projectile, baseId, impact);
     return false;
   }
 
@@ -1001,63 +1001,63 @@ export class WorldProjectileRuntime implements
     baseId: string,
     impact: ProjectileImpactSource,
   ): void {
-    if (projectile.damage <= 0 || projectile.hitBaseIds?.has(baseId)) return;
-    projectile.hitBaseIds ??= new Set<string>();
-    projectile.hitBaseIds.add(baseId);
-    this.baseHitCallback?.(baseId, projectile.damage, projectile.ownerId, impact);
+    if (projectile.damage <= 0 || projectile.contacts.hitBaseIds?.has(baseId)) return;
+    projectile.contacts.hitBaseIds ??= new Set<string>();
+    projectile.contacts.hitBaseIds.add(baseId);
+    this.baseHitCallback?.(baseId, projectile.damage, projectile.provenance.attributionId, impact);
   }
 
   private resolveTrainPhysicsContact(
     projectile: ProjectileRuntimeRecord,
     impact: ProjectileImpactSource,
   ): boolean {
-    const appliesTrainDamage = !projectile.isTranslocatorPuck && (projectile.trainDamageMult ?? 1) !== 0;
+    const appliesTrainDamage = !projectile.spec.flight.isTranslocatorPuck && (projectile.spec.interaction.directHit.trainDamageMult ?? 1) !== 0;
     const applyTrainDamage = (): void => {
       if (appliesTrainDamage) {
         this.trainImpactPort?.resolveTrainImpact({
-          damage: projectile.damage * (projectile.trainDamageMult ?? 1),
-          attributionId: projectile.ownerId,
+          damage: projectile.damage * (projectile.spec.interaction.directHit.trainDamageMult ?? 1),
+          attributionId: projectile.provenance.attributionId,
         });
       }
     };
-    if (projectile.impactCloud && projectile.maxBounces === 0) {
+    if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) {
       applyTrainDamage();
       this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.explosion && projectile.maxBounces === 0) {
-      if (!projectile.miniRocketSpent) applyTrainDamage();
+    if (projectile.interaction.explosion && projectile.maxBounces === 0) {
+      if (!projectile.miniRocket.spent) applyTrainDamage();
       this.triggerProjectileExplosion(projectile.id);
       return true;
     }
-    if (projectile.isFlame || hasLeafBlowerCapability(projectile)) {
+    if (projectile.spec.flight.isFlame || hasLeafBlowerCapability(projectile.spec.interaction.impulse)) {
       applyTrainDamage();
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
     applyTrainDamage();
-    return projectile.isGrenade && projectile.maxBounces === 0;
+    return projectile.spec.flight.isGrenade && projectile.maxBounces === 0;
   }
 
   private resolveWorldBoundaryPhysicsContact(
     projectile: ProjectileRuntimeRecord,
     impact: ProjectileImpactSource,
   ): boolean {
-    if (projectile.isBfg) {
+    if (projectile.spec.flight.isBfg) {
       projectile.bounceCount = projectile.maxBounces + 1;
       return false;
     }
-    if (projectile.impactCloud && projectile.maxBounces === 0) {
+    if (projectile.spec.interaction.impactCloud && projectile.maxBounces === 0) {
       this.projectileImpactEventCallback?.(impact);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
-    if (projectile.explosion && projectile.maxBounces === 0) {
+    if (projectile.interaction.explosion && projectile.maxBounces === 0) {
       this.triggerProjectileExplosion(projectile.id);
       return true;
     }
-    if (hasLeafBlowerCapability(projectile)) {
+    if (hasLeafBlowerCapability(projectile.spec.interaction.impulse)) {
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
@@ -1072,35 +1072,35 @@ export class WorldProjectileRuntime implements
         createdAt: projectile.createdAt,
         static: {
           id: projectile.id,
-          ownerId: projectile.ownerId,
-          color: projectile.color,
-          allowTeamDamage: projectile.allowTeamDamage,
-          ownerColor: projectile.ownerColor,
-          visualMuzzleOrigin: projectile.visualMuzzleOrigin,
-          projectileVisualScale: projectile.projectileVisualScale,
-          smokeTrailColor: projectile.smokeTrailColor,
-          style: projectile.projectileStyle,
-          sporeVisualVariant: projectile.sporeVisualVariant,
-          bulletVisualPreset: projectile.bulletVisualPreset,
-          grenadeVisualPreset: projectile.grenadeVisualPreset,
-          energyBallVariant: projectile.energyBallVariant,
-          velocityDecay: projectile.velocityDecay,
-          tracer: projectile.tracerConfig,
-          shotAudioKey: projectile.shotAudioKey,
-          suppressSpawnFx: projectile.suppressSpawnFx,
+          ownerId: projectile.provenance.allegiance.ownerId,
+          color: projectile.presentation.color,
+          allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
+          ownerColor: projectile.presentation.ownerColor,
+          visualMuzzleOrigin: projectile.presentation.visualMuzzleOrigin,
+          projectileVisualScale: projectile.presentation.projectileVisualScale,
+          smokeTrailColor: projectile.presentation.smokeTrailColor,
+          style: projectile.presentation.projectileStyle,
+          sporeVisualVariant: projectile.presentation.sporeVisualVariant,
+          bulletVisualPreset: projectile.presentation.bulletVisualPreset,
+          grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
+          energyBallVariant: projectile.presentation.energyBallVariant,
+          velocityDecay: projectile.spec.flight.drag.velocityDecayPerSec,
+          tracer: projectile.presentation.tracerConfig,
+          shotAudioKey: projectile.presentation.shotAudioKey,
+          suppressSpawnFx: projectile.presentation.suppressSpawnFx,
         },
         dynamic: {
           id: projectile.id,
-          x: Math.round(projectile.sprite.x),
-          y: Math.round(projectile.sprite.y),
-          vx: Math.round(projectile.body.velocity.x),
-          vy: Math.round(projectile.body.velocity.y),
-          size: Math.round(projectile.sprite.displayWidth),
-          miniRocketPhase: projectile.miniRocketPhase,
-          miniRocketCascadeStage: (projectile.miniRocketCascadeDamageBonusPerExplosion ?? 0) > 0
-            ? projectile.miniRocketExplosionIndex
+          x: Math.round(projectile.physics.sprite.x),
+          y: Math.round(projectile.physics.sprite.y),
+          vx: Math.round(projectile.physics.body.velocity.x),
+          vy: Math.round(projectile.physics.body.velocity.y),
+          size: Math.round(projectile.physics.sprite.displayWidth),
+          miniRocketPhase: projectile.miniRocket.phase,
+          miniRocketCascadeStage: (projectile.spec.flight.miniRocket.cascadeDamageBonusPerExplosion ?? 0) > 0
+            ? projectile.miniRocket.explosionIndex
             : undefined,
-          projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
+          projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
           burning: this.hasVisibleProjectileBurn(projectile) || undefined,
         },
       };
@@ -1115,21 +1115,9 @@ export class WorldProjectileRuntime implements
       origin.x,
       origin.y,
       origin.angle,
-      request.provenance.allegiance.ownerId,
       toProjectileSpawnConfig(request),
       request.provenance,
     );
-  }
-
-  spawnProjectileConfig(
-    x: number,
-    y: number,
-    angle: number,
-    ownerId: string,
-    cfg: ProjectileSpawnConfig,
-  ): ProjectileId {
-    if (this.destroyed) return -1;
-    return this.spawnResolved(x, y, angle, ownerId, cfg, createProjectileProvenance(ownerId, cfg));
   }
 
   destroyProjectile(id: ProjectileId): void {
@@ -1151,8 +1139,8 @@ export class WorldProjectileRuntime implements
     const record = this.projectiles.getById(id);
     if (!record || record.pendingDestroy) return;
     record.pendingDestroy = true;
-    record.body.setVelocity(0, 0);
-    record.body.enable = false;
+    record.physics.body.setVelocity(0, 0);
+    record.physics.body.enable = false;
     this.projectiles.deactivate(record);
   }
 
@@ -1173,7 +1161,7 @@ export class WorldProjectileRuntime implements
     const projectile = this.projectiles.getById(projectileId);
     if (!projectile || projectile.pendingDestroy || !this.projectiles.activeRecords.has(projectile)) return false;
 
-    const splitCount = Math.max(0, Math.floor(projectile.splitCount ?? 0));
+    const splitCount = Math.max(0, Math.floor(projectile.spec.flight.split.count ?? 0));
     if (splitCount <= 0) return false;
 
     const nextBounceCount = projectile.bounceCount + 1;
@@ -1192,7 +1180,7 @@ export class WorldProjectileRuntime implements
     const childAngles = this.getHydraSplitAngles(
       Math.atan2(outgoingVy, outgoingVx),
       splitCount,
-      projectile.splitSpread ?? 0,
+      projectile.spec.flight.split.spread ?? 0,
     );
 
     // Hydra owns the bounce terminal: a failed split is still consumed exactly as before.
@@ -1201,13 +1189,13 @@ export class WorldProjectileRuntime implements
       || remainingRangePx <= 0.5
       || childAngles.length === 0) {
       projectile.bounceCount = projectile.maxBounces + 1;
-      projectile.body.reset(impactX, impactY);
+      projectile.physics.body.reset(impactX, impactY);
       this.queueProjectileDestroy(projectile.id);
       return true;
     }
 
-    const splitFactor = projectile.splitFactor ?? 1;
-    const childSize = Math.max(4, (projectile.sprite.displayWidth / splitCount) * splitFactor);
+    const splitFactor = projectile.spec.flight.split.speedFactor ?? 1;
+    const childSize = Math.max(4, (projectile.physics.sprite.displayWidth / splitCount) * splitFactor);
     const childDamage = Math.max(1, (projectile.damage / splitCount) * splitFactor);
     const childAdrenalinGain = Math.max(0, (projectile.adrenalinGain / splitCount) * splitFactor);
     const childLifetime = (remainingRangePx / childBaseSpeed) * 1000;
@@ -1219,7 +1207,7 @@ export class WorldProjectileRuntime implements
       },
     };
 
-    projectile.pendingHydraSplit = {
+    projectile.interaction.pendingHydraSplit = {
       x: impactX,
       y: impactY,
       angles: childAngles,
@@ -1231,7 +1219,6 @@ export class WorldProjectileRuntime implements
         x: impactX,
         y: impactY,
         angle: childAngle,
-        ownerId: projectile.ownerId,
         hostNowMs: nowMs,
         provenance: childProvenance,
         readyAfterCompletedStages: this.hasStartedInteractionStage
@@ -1242,66 +1229,66 @@ export class WorldProjectileRuntime implements
           speed: childBaseSpeed,
           size: childSize,
           damage: childDamage,
-          color: projectile.color,
-          allowTeamDamage: projectile.allowTeamDamage,
-          ignoreBaseCollisions: projectile.ignoreBaseCollisions,
-          ownerColor: projectile.ownerColor,
+          color: projectile.presentation.color,
+          allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
+          ignoreBaseCollisions: projectile.spec.flight.collisionFilter.ignoreBaseCollisions,
+          ownerColor: projectile.presentation.ownerColor,
           lifetime: childLifetime,
           maxBounces: projectile.maxBounces,
-          isGrenade: projectile.isGrenade,
-          isTranslocatorPuck: projectile.isTranslocatorPuck,
-          collisionMode: projectile.collisionMode,
+          isGrenade: projectile.spec.flight.isGrenade,
+          isTranslocatorPuck: projectile.spec.flight.isTranslocatorPuck,
+          collisionMode: projectile.spec.flight.collisionMode,
           adrenalinGain: childAdrenalinGain,
-          sourceId: projectile.sourceId,
-          explosion: projectile.explosion,
-          enemyHitExplosion: projectile.enemyHitExplosion,
-          impactCloud: projectile.impactCloud,
-          sporeVisualVariant: projectile.sporeVisualVariant,
-          homing: projectile.splitHoming ?? projectile.homing,
-          projectileVisualScale: projectile.projectileVisualScale,
-          smokeTrailColor: projectile.smokeTrailColor,
-          fuseTime: projectile.fuseTime,
-          grenadeEffect: projectile.grenadeEffect,
-          projectileStyle: projectile.projectileStyle,
-          bulletVisualPreset: projectile.bulletVisualPreset,
-          grenadeVisualPreset: projectile.grenadeVisualPreset,
-          energyBallVariant: projectile.energyBallVariant,
-          tracerConfig: projectile.tracerConfig,
-          detonable: projectile.detonable,
-          detonator: projectile.detonator,
-          rockDamageMult: projectile.rockDamageMult,
-          trainDamageMult: projectile.trainDamageMult,
-          baseDamageMult: projectile.baseDamageMult,
-          isFlame: projectile.isFlame,
-          hitboxGrowRate: projectile.hitboxGrowRate,
-          hitboxMaxSize: projectile.hitboxMaxSize,
-          velocityDecay: projectile.velocityDecay,
-          burnDurationMs: projectile.burnDurationMs,
-          burnDamagePerTick: projectile.burnDamagePerTick,
-          projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
-          leafBlowerMinKnockback: projectile.leafBlowerMinKnockback,
-          leafBlowerMaxKnockback: projectile.leafBlowerMaxKnockback,
-          leafBlowerSelfPush: projectile.leafBlowerSelfPush,
-          isBfg: projectile.isBfg,
-          piercesTargets: projectile.piercesTargets,
-          penetrationCount: projectile.penetrationRemaining,
-          penetrationDamageRetention: projectile.penetrationDamageRetention,
-          penetratesRocks: projectile.penetratesRocks,
-          flamePiercing: projectile.flamePierceHitIds !== undefined,
-          leafBlowerDeflectsProjectiles: projectile.leafBlowerDeflectsProjectiles,
-          proximityPulse: projectile.proximityPulse,
-          gaussChainRadius: projectile.gaussChainRadius,
-          gaussChainDamageFactor: projectile.gaussChainDamageFactor,
-          frictionDelayMs: projectile.frictionDelayMs,
-          airFrictionDecayPerSec: projectile.airFrictionDecayPerSec,
-          bounceFrictionMultiplier: projectile.bounceFrictionMultiplier,
-          stopSpeedThreshold: projectile.stopSpeedThreshold,
-          sourceSlot: projectile.sourceSlot,
-          shotAudioKey: projectile.shotAudioKey,
-          splitCount: projectile.splitCount,
-          splitSpread: projectile.splitSpread,
-          splitFactor: projectile.splitFactor,
-          splitHoming: projectile.splitHoming,
+          sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
+          explosion: projectile.interaction.explosion,
+          enemyHitExplosion: projectile.spec.interaction.enemyHitExplosion,
+          impactCloud: projectile.spec.interaction.impactCloud,
+          sporeVisualVariant: projectile.presentation.sporeVisualVariant,
+          homing: projectile.spec.flight.split.homing ?? projectile.spec.flight.homing,
+          projectileVisualScale: projectile.presentation.projectileVisualScale,
+          smokeTrailColor: projectile.presentation.smokeTrailColor,
+          fuseTime: projectile.spec.flight.fuseTime,
+          grenadeEffect: projectile.spec.interaction.grenadeEffect,
+          projectileStyle: projectile.presentation.projectileStyle,
+          bulletVisualPreset: projectile.presentation.bulletVisualPreset,
+          grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
+          energyBallVariant: projectile.presentation.energyBallVariant,
+          tracerConfig: projectile.presentation.tracerConfig,
+          detonable: projectile.spec.interaction.detonable,
+          detonator: projectile.spec.interaction.detonator,
+          rockDamageMult: projectile.spec.interaction.directHit.rockDamageMult,
+          trainDamageMult: projectile.spec.interaction.directHit.trainDamageMult,
+          baseDamageMult: projectile.spec.interaction.directHit.baseDamageMult,
+          isFlame: projectile.spec.flight.isFlame,
+          hitboxGrowRate: projectile.spec.flight.hitboxGrowth.growRatePerSec,
+          hitboxMaxSize: projectile.spec.flight.hitboxGrowth.maxSize,
+          velocityDecay: projectile.spec.flight.drag.velocityDecayPerSec,
+          burnDurationMs: projectile.spec.interaction.burn.burnDurationMs,
+          burnDamagePerTick: projectile.spec.interaction.burn.burnDamagePerTick,
+          projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
+          leafBlowerMinKnockback: projectile.spec.interaction.impulse.leafBlowerMinKnockback,
+          leafBlowerMaxKnockback: projectile.spec.interaction.impulse.leafBlowerMaxKnockback,
+          leafBlowerSelfPush: projectile.spec.interaction.impulse.leafBlowerSelfPush,
+          isBfg: projectile.spec.flight.isBfg,
+          piercesTargets: projectile.spec.flight.piercesTargets,
+          penetrationCount: projectile.interaction.penetrationRemaining,
+          penetrationDamageRetention: projectile.spec.flight.penetration.damageRetention,
+          penetratesRocks: projectile.spec.flight.penetration.penetratesRocks,
+          flamePiercing: projectile.contacts.flamePierceHitIds !== undefined,
+          leafBlowerDeflectsProjectiles: projectile.spec.interaction.impulse.leafBlowerDeflectsProjectiles,
+          proximityPulse: projectile.spec.interaction.proximityPulse,
+          gaussChainRadius: projectile.spec.interaction.directHit.gaussChainRadius,
+          gaussChainDamageFactor: projectile.spec.interaction.directHit.gaussChainDamageFactor,
+          frictionDelayMs: projectile.spec.flight.drag.frictionDelayMs,
+          airFrictionDecayPerSec: projectile.spec.flight.drag.airFrictionDecayPerSec,
+          bounceFrictionMultiplier: projectile.spec.flight.drag.bounceFrictionMultiplier,
+          stopSpeedThreshold: projectile.spec.flight.drag.stopSpeedThreshold,
+          sourceSlot: projectile.provenance.sourceSlot,
+          shotAudioKey: projectile.presentation.shotAudioKey,
+          splitCount: projectile.spec.flight.split.count,
+          splitSpread: projectile.spec.flight.split.spread,
+          splitFactor: projectile.spec.flight.split.speedFactor,
+          splitHoming: projectile.spec.flight.split.homing,
           initialBounceCount: nextBounceCount,
           remainingRangePx,
           suppressSpawnFx: true,
@@ -1313,39 +1300,38 @@ export class WorldProjectileRuntime implements
   }
 
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
-    const handle = this.physicsHandles.get(record.id);
-    if (!handle) return;
-    this.physicsHandles.delete(record.id);
+    if (this.projectiles.getById(record.id) !== record) return;
+    const handle = record.physics;
     this.removeCapabilityIds(record.id);
     this.projectiles.detach(record);
-    record.hitObstacleIds?.clear();
-    record.hitBaseIds?.clear();
-    const lifecycle: ProjectileLifecycleOutcome = record.miniRocketSpent
+    record.contacts.hitObstacleIds?.clear();
+    record.contacts.hitBaseIds?.clear();
+    const lifecycle: ProjectileLifecycleOutcome = record.miniRocket.spent
       ? { kind: 'mini-rocket-destroyed', projectileId: record.id }
       : {
           kind: 'resolved',
           projectileId: record.id,
           provenance: record.provenance,
-          ...(record.ak47ShotId === undefined ? {} : {
+          ...(record.provenance.correlation?.ak47ShotId === undefined ? {} : {
             reaction: {
               ak47: {
-                shotId: record.ak47ShotId,
-                fireSuperiorityShot: record.ak47FireSuperiorityShot === true,
-                hitConfirmed: record.ak47HitConfirmed === true,
+                shotId: record.provenance.correlation?.ak47ShotId,
+                fireSuperiorityShot: record.spec.interaction.directHit.ak47FireSuperiorityShot === true,
+                hitConfirmed: record.interaction.ak47HitConfirmed === true,
               },
             },
           }),
         };
     this.projectileResolvedCallback?.(lifecycle);
     this.presentation.destroyProjectileVisuals({
-      id: record.id, ownerId: record.ownerId, x: record.sprite.x, y: record.sprite.y,
-      vx: record.body.velocity.x, vy: record.body.velocity.y, size: record.sprite.displayWidth,
-      color: record.color, style: record.projectileStyle,
-      energyBallVariant: record.energyBallVariant, sporeVisualVariant: record.sporeVisualVariant,
-      pendingHydraSplit: record.pendingHydraSplit,
-      destroyX: record.pendingHydraSplit?.x ?? record.sprite.x,
-      destroyY: record.pendingHydraSplit?.y ?? record.sprite.y,
-      destroyScale: record.sprite.displayWidth / 16,
+      id: record.id, ownerId: record.provenance.allegiance.ownerId, x: record.physics.sprite.x, y: record.physics.sprite.y,
+      vx: record.physics.body.velocity.x, vy: record.physics.body.velocity.y, size: record.physics.sprite.displayWidth,
+      color: record.presentation.color, style: record.presentation.projectileStyle,
+      energyBallVariant: record.presentation.energyBallVariant, sporeVisualVariant: record.presentation.sporeVisualVariant,
+      pendingHydraSplit: record.interaction.pendingHydraSplit,
+      destroyX: record.interaction.pendingHydraSplit?.x ?? record.physics.sprite.x,
+      destroyY: record.interaction.pendingHydraSplit?.y ?? record.physics.sprite.y,
+      destroyScale: record.physics.sprite.displayWidth / 16,
     });
     this.physicsBinding.releaseProjectileResources(handle);
   }
@@ -1356,10 +1342,10 @@ export class WorldProjectileRuntime implements
     const targets: ProjectileDetonationTarget[] = [];
     for (const id of this.detonableIds) {
       const projectile = this.projectiles.getById(id);
-      if (!projectile?.detonable) continue;
-      if (!request.detonator.triggerTags.includes(projectile.detonable.tag)) continue;
-      if (!projectile.detonable.allowCrossTeam && projectile.ownerId !== request.shooterId) continue;
-      if (!Phaser.Geom.Intersects.LineToRectangle(line, projectile.sprite.getBounds())) continue;
+      if (!projectile?.spec.interaction.detonable) continue;
+      if (!request.detonator.triggerTags.includes(projectile.spec.interaction.detonable.tag)) continue;
+      if (!projectile.spec.interaction.detonable.allowCrossTeam && projectile.provenance.allegiance.ownerId !== request.shooterId) continue;
+      if (!Phaser.Geom.Intersects.LineToRectangle(line, projectile.physics.sprite.getBounds())) continue;
       targets.push(createDetonationTarget(projectile));
     }
     return targets;
@@ -1371,7 +1357,7 @@ export class WorldProjectileRuntime implements
   ): ProjectileDetonationOutcome | null {
     if (this.destroyed || !this.detonableIds.has(projectileId)) return null;
     const projectile = this.projectiles.getById(projectileId);
-    if (!projectile?.detonable) return null;
+    if (!projectile?.spec.interaction.detonable) return null;
     const target = createDetonationTarget(projectile);
     this.destroyProjectile(projectileId);
     return { ...target, detonatorOwnerId };
@@ -1383,11 +1369,11 @@ export class WorldProjectileRuntime implements
     for (const detonator of this.projectiles.activeRecords) {
       if (!this.detonatorIds.has(detonator.id)) continue;
       for (const target of this.projectiles.activeRecords) {
-        if (target.id === detonator.id || !this.detonableIds.has(target.id) || !target.detonable) continue;
-        if (!detonator.detonator?.triggerTags.includes(target.detonable.tag)) continue;
-        if (!target.detonable.allowCrossTeam && target.ownerId !== detonator.ownerId) continue;
-        if (!boundsOverlap(detonator.sprite.getBounds(), target.sprite.getBounds())) continue;
-        const result = this.detonateProjectile(target.id, detonator.ownerId);
+        if (target.id === detonator.id || !this.detonableIds.has(target.id) || !target.spec.interaction.detonable) continue;
+        if (!detonator.spec.interaction.detonator?.triggerTags.includes(target.spec.interaction.detonable.tag)) continue;
+        if (!target.spec.interaction.detonable.allowCrossTeam && target.provenance.allegiance.ownerId !== detonator.provenance.allegiance.ownerId) continue;
+        if (!boundsOverlap(detonator.physics.sprite.getBounds(), target.physics.sprite.getBounds())) continue;
+        const result = this.detonateProjectile(target.id, detonator.provenance.allegiance.ownerId);
         if (result) outcomes.push(result);
       }
     }
@@ -1396,7 +1382,7 @@ export class WorldProjectileRuntime implements
 
   spawnPuck(request: TranslocatorPuckSpawnRequest): ProjectileId {
     if (this.destroyed) return -1;
-    return this.spawnResolved(request.x, request.y, request.angle, request.ownerId, {
+    return this.spawnResolved(request.x, request.y, request.angle, {
       speed: request.speed,
       size: request.size,
       damage: 0,
@@ -1420,7 +1406,7 @@ export class WorldProjectileRuntime implements
     if (!this.translocatorPuckIds.has(id)) return null;
     const record = this.projectiles.getById(id);
     if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return null;
-    return { x: record.sprite.x, y: record.sprite.y };
+    return { x: record.physics.sprite.x, y: record.physics.sprite.y };
   }
 
   consumePuck(id: ProjectileId): boolean {
@@ -1436,18 +1422,18 @@ export class WorldProjectileRuntime implements
     if (this.destroyed) return this.travelSamples;
     for (const projectileId of this.travelEffectIds) {
       const record = this.projectiles.getById(projectileId);
-      if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.sprite.active) continue;
+      if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.physics.sprite.active) continue;
 
       const pathEffect = createTravelPathEffect(record);
       this.travelSamples.push({
         projectileId: record.id,
         fromX: record.lastX,
         fromY: record.lastY,
-        toX: record.sprite.x,
-        toY: record.sprite.y,
+        toX: record.physics.sprite.x,
+        toY: record.physics.sprite.y,
         provenance: record.provenance,
         capabilities: {
-          canReceiveFireImbue: record.canReceiveFireImbue === true && !record.isGrenade && !record.isFlame,
+          canReceiveFireImbue: record.spec.interaction.burn.canReceiveFireImbue === true && !record.spec.flight.isGrenade && !record.spec.flight.isFlame,
           pathEffect,
         },
       });
@@ -1459,20 +1445,11 @@ export class WorldProjectileRuntime implements
     if (this.destroyed) return false;
     const record = this.projectiles.getById(projectileId);
     if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return false;
-    if (!record.canReceiveFireImbue || record.isGrenade || record.isFlame) return false;
+    if (!record.spec.interaction.burn.canReceiveFireImbue || record.spec.flight.isGrenade || record.spec.flight.isFlame) return false;
 
-    const current = this.burnAugments.get(projectileId)
-      ?? (record.supplementalBurnOnHit
-        ? {
-          burn: record.supplementalBurnOnHit,
-          provenance: record.supplementalBurnProvenance ?? record.provenance,
-        }
-        : undefined);
+    const current = record.interaction.burnAugment;
     if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
-
-    record.supplementalBurnOnHit = { ...augment.burn };
-    record.supplementalBurnProvenance = augment.provenance;
-    this.burnAugments.set(projectileId, augment);
+    record.interaction.burnAugment = { burn: { ...augment.burn }, provenance: augment.provenance };
     return true;
   }
 
@@ -1480,17 +1457,17 @@ export class WorldProjectileRuntime implements
     this.threatSamples.length = 0;
     if (this.destroyed) return this.threatSamples;
     for (const record of this.projectiles.activeRecords) {
-      if (!record.sprite.active) continue;
-      const radius = Math.max(record.sprite.displayWidth, record.sprite.displayHeight) * 0.5;
+      if (!record.physics.sprite.active) continue;
+      const radius = Math.max(record.physics.sprite.displayWidth, record.physics.sprite.displayHeight) * 0.5;
       this.threatSamples.push({
         id: record.id,
-        x: record.sprite.x,
-        y: record.sprite.y,
-        vx: record.body.velocity.x,
-        vy: record.body.velocity.y,
+        x: record.physics.sprite.x,
+        y: record.physics.sprite.y,
+        vx: record.physics.body.velocity.x,
+        vy: record.physics.body.velocity.y,
         radius,
         provenance: record.provenance,
-        dodgeRelevant: !record.isGrenade && !record.isFlame,
+        dodgeRelevant: !record.spec.flight.isGrenade && !record.spec.flight.isFlame,
       });
     }
     return this.threatSamples;
@@ -1512,7 +1489,7 @@ export class WorldProjectileRuntime implements
 
   hasActiveBfgProjectile(): boolean {
     for (const record of this.projectiles.activeRecords) {
-      if (record.isBfg === true && record.sprite.active) return true;
+      if (record.spec.flight.isBfg === true && record.physics.sprite.active) return true;
     }
     return false;
   }
@@ -1569,14 +1546,14 @@ export class WorldProjectileRuntime implements
   readDetonableProjectiles(sink: (sample: ProjectileDetonableSample) => void): void {
     for (const projectileId of this.detonableIds) {
       const record = this.projectiles.getById(projectileId);
-      if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.detonable) continue;
+      if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.spec.interaction.detonable) continue;
       sink({
         projectileId: record.id,
-        ownerId: record.ownerId,
-        x: record.sprite.x,
-        y: record.sprite.y,
-        tag: record.detonable.tag,
-        allowCrossTeam: record.detonable.allowCrossTeam,
+        ownerId: record.provenance.allegiance.ownerId,
+        x: record.physics.sprite.x,
+        y: record.physics.sprite.y,
+        tag: record.spec.interaction.detonable.tag,
+        allowCrossTeam: record.spec.interaction.detonable.allowCrossTeam,
       });
     }
   }
@@ -1594,10 +1571,10 @@ export class WorldProjectileRuntime implements
 
   private resumeMiniRocketExplosion(projectileId: ProjectileId): void {
     const projectile = this.projectiles.getById(projectileId);
-    if (!projectile || ((projectile.multiExplosionsRemaining ?? 0) <= 0 && !projectile.miniRocketSpent)) return;
+    if (!projectile || ((projectile.interaction.multiExplosionsRemaining ?? 0) <= 0 && !projectile.miniRocket.spent)) return;
     projectile.pendingExplosion = false;
     this.resetHomingState(projectile);
-    if (projectile.miniRocketStageRangePx !== undefined) {
+    if (projectile.spec.flight.miniRocket.stageRangePx !== undefined) {
       this.miniRocketProcessor.completeExplosion(projectile);
     }
   }
@@ -1637,7 +1614,6 @@ export class WorldProjectileRuntime implements
         pending.x,
         pending.y,
         pending.angle,
-        pending.ownerId,
         pending.cfg,
         pending.provenance,
         pending.hostNowMs,
@@ -1669,10 +1645,10 @@ export class WorldProjectileRuntime implements
     impactY: number,
   ): number {
     const baseRange = projectile.remainingRangePx
-      ?? (Math.max(projectile.initialSpeed ?? Math.hypot(
-        projectile.body.velocity.x,
-        projectile.body.velocity.y,
-      ), 0) * projectile.lifetime) / 1000;
+      ?? (Math.max(projectile.spec.flight.speed ?? Math.hypot(
+        projectile.physics.body.velocity.x,
+        projectile.physics.body.velocity.y,
+      ), 0) * projectile.spec.flight.lifetimeMs) / 1000;
     const impactDistance = Math.hypot(
       impactX - projectile.lastX,
       impactY - projectile.lastY,
@@ -1692,20 +1668,20 @@ export class WorldProjectileRuntime implements
     for (const record of this.projectiles.activeRecords) {
       if (record.pendingDestroy) continue;
       // Geworfene Utilities passieren; nur übernehmbare Wurfgeschosse hält die Barriere auf.
-      const capturable = record.grenadeEffect?.type === 'spawn_enemy';
-      if (record.isGrenade && !capturable) continue;
-      if (record.miniRocketDeferredExplosion || record.miniRocketSpent) continue;
+      const capturable = record.spec.interaction.grenadeEffect?.type === 'spawn_enemy';
+      if (record.spec.flight.isGrenade && !capturable) continue;
+      if (record.miniRocket.deferredExplosion || record.miniRocket.spent) continue;
 
       const resolution = port.resolveBarrier({
         projectileId: record.id,
         provenance: record.provenance,
-        x: record.sprite.x,
-        y: record.sprite.y,
-        velocityX: record.body.velocity.x,
-        velocityY: record.body.velocity.y,
-        isGrenade: record.isGrenade,
+        x: record.physics.sprite.x,
+        y: record.physics.sprite.y,
+        velocityX: record.physics.body.velocity.x,
+        velocityY: record.physics.body.velocity.y,
+        isGrenade: record.spec.flight.isGrenade,
         capturable,
-        allowTeamDamage: record.allowTeamDamage === true,
+        allowTeamDamage: record.provenance.allegiance.allowTeamDamage === true,
         damage: record.damage,
         nowMs,
       });
@@ -1724,23 +1700,20 @@ export class WorldProjectileRuntime implements
       return;
     }
     if (resolution.kind !== 'reflected') return;
-    const speed = Math.hypot(record.body.velocity.x, record.body.velocity.y) || 400;
-    this.spawnReflectedProjectile(record, {
-      x: record.sprite.x,
-      y: record.sprite.y,
+    const speed = Math.hypot(record.physics.body.velocity.x, record.physics.body.velocity.y) || 400;
+    this.redirectProjectile(record, {
+      x: record.physics.sprite.x,
+      y: record.physics.sprite.y,
       angle: resolution.angle,
       speed,
       ownerId: resolution.attributionId,
       allegiance: resolution.allegiance,
       damage: resolution.keepGrenade ? 0 : record.damage,
-      color: resolution.keepGrenade ? resolution.ownerColor : record.color,
+      color: resolution.keepGrenade ? resolution.ownerColor : record.presentation.color,
       ownerColor: resolution.ownerColor,
-      sourceId: resolution.sourceId,
-      sourceSlot: resolution.sourceSlot,
       keepGrenade: resolution.keepGrenade,
       nowMs,
     });
-    this.destroyProjectile(record.id);
   }
 
   /**
@@ -1753,10 +1726,10 @@ export class WorldProjectileRuntime implements
     if (this.deflectorIds.size === 0) return;
     for (const target of this.projectiles.activeRecords) {
       if (target.pendingDestroy) continue;
-      if (target.leafBlowerDeflectsProjectiles === true) continue;
+      if (target.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true) continue;
       // Geworfene Utilities fliegen weiter; nur echte Geschosse werden umgelenkt.
-      if (target.isGrenade) continue;
-      if (target.miniRocketDeferredExplosion || target.miniRocketSpent) continue;
+      if (target.spec.flight.isGrenade) continue;
+      if (target.miniRocket.deferredExplosion || target.miniRocket.spent) continue;
 
       for (const deflectorId of this.deflectorIds) {
         if (this.deflectProjectile(target.id, deflectorId, nowMs)) break;
@@ -1770,125 +1743,90 @@ export class WorldProjectileRuntime implements
     if (!target || !blower || target === blower) return false;
     if (target.pendingDestroy || blower.pendingDestroy) return false;
     if (!this.projectiles.activeRecords.has(target) || !this.projectiles.activeRecords.has(blower)) return false;
-    if (target.leafBlowerDeflectsProjectiles === true || target.isGrenade) return false;
-    if (target.miniRocketDeferredExplosion || target.miniRocketSpent) return false;
+    if (target.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true || target.spec.flight.isGrenade) return false;
+    if (target.miniRocket.deferredExplosion || target.miniRocket.spent) return false;
     const blowerOwnerId = blower.provenance.allegiance.ownerId;
     if (blowerOwnerId === target.provenance.allegiance.ownerId) return false;
     if (this.targetabilityPort && !this.targetabilityPort.canDamageOwner(
       target.provenance,
       blowerOwnerId,
-      target.allowTeamDamage === true,
+      target.provenance.allegiance.allowTeamDamage === true,
     )) return false;
-    if (!boundsOverlap(target.sprite.getBounds(), blower.sprite.getBounds())) return false;
+    if (!boundsOverlap(target.physics.sprite.getBounds(), blower.physics.sprite.getBounds())) return false;
 
-    const blowLength = Math.hypot(blower.body.velocity.x, blower.body.velocity.y);
+    const blowLength = Math.hypot(blower.physics.body.velocity.x, blower.physics.body.velocity.y);
     const angle = blowLength > 0.001
-      ? Math.atan2(blower.body.velocity.y, blower.body.velocity.x)
-      : Math.atan2(-target.body.velocity.y, -target.body.velocity.x);
-    const speed = Math.hypot(target.body.velocity.x, target.body.velocity.y) || 400;
+      ? Math.atan2(blower.physics.body.velocity.y, blower.physics.body.velocity.x)
+      : Math.atan2(-target.physics.body.velocity.y, -target.physics.body.velocity.x);
+    const speed = Math.hypot(target.physics.body.velocity.x, target.physics.body.velocity.y) || 400;
 
-    this.spawnReflectedProjectile(target, {
-      x: target.sprite.x,
-      y: target.sprite.y,
+    this.redirectProjectile(target, {
+      x: target.physics.sprite.x,
+      y: target.physics.sprite.y,
       angle,
       speed,
-      ownerId: blower.provenance.allegiance.ownerId,
+      ownerId: blower.provenance.attributionId,
       allegiance: blower.provenance.allegiance,
       damage: target.damage,
-      color: target.color,
-      ownerColor: blower.ownerColor ?? target.color,
-      sourceId: 'weapon.leaf_blower_deflect',
-      sourceSlot: 'weapon1',
+      color: target.presentation.color,
+      ownerColor: blower.presentation.ownerColor ?? target.presentation.color,
       keepGrenade: false,
       nowMs,
     });
-    this.destroyProjectile(target.id);
     return true;
   }
 
-  /** Target-lokale Defense: Absorption entfernt, Reflexion erzeugt den Nachfolger beim Owner. */
+  /** Target-lokale Defense: Absorption entfernt, Reflexion transformiert beim Owner. */
   private applyDefense(
     record: ProjectileRuntimeRecord,
     defense: ProjectileDefenseResolution,
     candidate: ProjectileImpactCandidate,
   ): void {
     if (defense.kind === 'reflected' && defense.damageFactor > 0) {
-      this.spawnReflectedProjectile(record, {
+      this.redirectProjectile(record, {
         x: defense.originX,
         y: defense.originY,
-        angle: Math.atan2(-record.body.velocity.y, -record.body.velocity.x),
-        speed: Math.hypot(record.body.velocity.x, record.body.velocity.y),
+        angle: Math.atan2(-record.physics.body.velocity.y, -record.physics.body.velocity.x),
+        speed: Math.hypot(record.physics.body.velocity.x, record.physics.body.velocity.y),
         ownerId: defense.attributionId,
         allegiance: defense.allegiance,
         damage: record.damage * defense.damageFactor,
-        color: record.color,
-        ownerColor: record.ownerColor ?? record.color,
-        sourceId: defense.sourceId,
-        sourceSlot: defense.sourceSlot,
+        color: record.presentation.color,
+        ownerColor: record.presentation.ownerColor ?? record.presentation.color,
         keepGrenade: false,
         nowMs: this.interactionNowMs,
       });
+      return;
     }
     this.destroyProjectile(record.id);
   }
 
   /**
-   * Erzeugt den Nachfolger eines übernommenen Projectiles.
+   * Transformiert ein übernommenes Projectile bei stabiler Identity und unveränderter Lifetime.
    *
    * Attribution und Allegiance wechseln, Gameplay-Source und Abstammung bleiben unterscheidbar;
    * die Restwirkung des Ursprungs bleibt erhalten.
    */
-  private spawnReflectedProjectile(
+  private redirectProjectile(
     record: ProjectileRuntimeRecord,
     options: ReflectedProjectileOptions,
   ): void {
-    const elapsed = Math.max(0, options.nowMs - record.createdAt);
-    const remainingFuse = Math.max(1, (record.fuseTime ?? record.lifetime) - elapsed);
-    const remainingLifetime = Math.max(1, record.lifetime - elapsed);
-    const cfg: ProjectileSpawnConfig = {
-      ...createInheritedProjectilePayload(record),
-      speed: options.speed,
-      size: Math.max(1, record.sprite.displayWidth),
-      damage: options.damage,
-      color: options.color,
-      ownerColor: options.ownerColor,
-      lifetime: options.keepGrenade ? remainingFuse : remainingLifetime,
-      maxBounces: options.keepGrenade ? record.maxBounces : 0,
-      isGrenade: options.keepGrenade,
-      adrenalinGain: 0,
-      sourceId: options.sourceId,
-      projectileStyle: record.projectileStyle,
-      reflected: true,
-      sourceSlot: options.sourceSlot,
-      ...(options.keepGrenade
-        ? {
-          fuseTime: remainingFuse,
-          grenadeVisualPreset: record.grenadeVisualPreset,
-          frictionDelayMs: record.frictionDelayMs,
-          airFrictionDecayPerSec: record.airFrictionDecayPerSec,
-          bounceFrictionMultiplier: record.bounceFrictionMultiplier,
-          stopSpeedThreshold: record.stopSpeedThreshold,
-        }
-        : {
-          bulletVisualPreset: record.bulletVisualPreset,
-          tracerConfig: record.tracerConfig,
-        }),
-    };
-    const provenance: ProjectileProvenance = {
-      gameplaySourceId: record.provenance.gameplaySourceId,
+    record.provenance = {
+      ...record.provenance,
       attributionId: options.ownerId,
       allegiance: options.allegiance,
-      weaponSourceId: options.sourceId,
-      sourceSlot: options.sourceSlot,
-      sourceTurretId: record.provenance.sourceTurretId,
-      lineage: {
-        ...record.provenance.lineage,
-        reflected: true,
-        parentProjectileId: record.id,
-      },
-      correlation: record.provenance.correlation,
+      lineage: { ...record.provenance.lineage, reflected: true },
     };
-    this.spawnResolved(options.x, options.y, options.angle, options.ownerId, cfg, provenance);
+    record.damage = options.damage;
+    record.adrenalinGain = 0;
+    record.maxBounces = options.keepGrenade ? record.maxBounces : 0;
+    record.bounceCount = options.keepGrenade ? record.bounceCount : 0;
+    record.presentation = { ...record.presentation, color: options.color, ownerColor: options.ownerColor };
+    record.physics.body.reset(options.x, options.y);
+    record.lastX = options.x;
+    record.lastY = options.y;
+    record.physics.body.setVelocity(Math.cos(options.angle) * options.speed, Math.sin(options.angle) * options.speed);
+    this.resetHomingState(record);
   }
 
   setLineOfFireReadPort(port: LineOfFireReadPort | null): void {
@@ -1898,9 +1836,9 @@ export class WorldProjectileRuntime implements
   private runMiniRocketStateStage(): void {
     for (const projectile of this.projectiles.activeRecords) {
       if (projectile.pendingDestroy
-        || projectile.miniRocketStageRangePx === undefined
-        || !projectile.homing
-        || (projectile.pendingExplosion && (projectile.multiExplosionsRemaining ?? 0) > 0)) continue;
+        || projectile.spec.flight.miniRocket.stageRangePx === undefined
+        || !projectile.spec.flight.homing
+        || (projectile.pendingExplosion && (projectile.interaction.multiExplosionsRemaining ?? 0) > 0)) continue;
       if (this.miniRocketProcessor.update(projectile, projectile.simulatedAgeMs ?? 0)) {
         this.destroyProjectile(projectile.id);
       }
@@ -1908,44 +1846,34 @@ export class WorldProjectileRuntime implements
   }
 
   private createHomingRequest(projectile: ProjectileRuntimeRecord): ProjectileHomingRequest {
-    if (projectile.homingRequest) return projectile.homingRequest;
-    const state = projectile.homingState ??= {
-      lockedTargetId: projectile.lockedTargetId ?? null,
-      lockedTargetType: projectile.lockedTargetType,
-      lastSearchAtSimulatedMs: projectile.lastHomingSearchAt,
-    };
-    const request: ProjectileHomingRequest = {
-      ownerId: projectile.ownerId,
-      homing: projectile.homing!,
+    return projectile.interaction.guidance ??= {
+      get ownerId() { return projectile.provenance.allegiance.ownerId; },
+      homing: projectile.spec.flight.homing!,
       kinematics: {
-        get x() { return projectile.sprite.x; },
-        get y() { return projectile.sprite.y; },
-        get velocityX() { return projectile.body.velocity.x; },
-        get velocityY() { return projectile.body.velocity.y; },
-        setVelocity: (x, y) => projectile.body.setVelocity(x, y),
+        get x() { return projectile.physics.sprite.x; },
+        get y() { return projectile.physics.sprite.y; },
+        get velocityX() { return projectile.physics.body.velocity.x; },
+        get velocityY() { return projectile.physics.body.velocity.y; },
+        setVelocity: (x, y) => projectile.physics.body.setVelocity(x, y),
       },
-      state,
-      excludedTargetKeys: projectile.multiExplosionExcludedTargetKeys,
+      state: { lockedTargetId: null },
+      excludedTargetKeys: projectile.interaction.multiExplosionExcludedTargetKeys,
     };
-    projectile.homingRequest = request;
-    return request;
   }
 
   private resetHomingState(projectile: ProjectileRuntimeRecord): void {
-    const state = projectile.homingState ??= { lockedTargetId: null };
+    const state = projectile.interaction.guidance?.state;
+    if (!state) return;
     state.lockedTargetId = null;
     state.lockedTargetType = undefined;
     state.lastSearchAtSimulatedMs = undefined;
-    projectile.lockedTargetId = null;
-    projectile.lockedTargetType = undefined;
-    projectile.lastHomingSearchAt = undefined;
   }
 
   private hasVisibleProjectileBurn(projectile: ProjectileRuntimeRecord): boolean {
-    if (projectile.isFlame || projectile.isGrenade) return false;
-    return ((projectile.burnDurationMs ?? 0) > 0 && (projectile.burnDamagePerTick ?? 0) > 0)
-      || ((projectile.supplementalBurnOnHit?.durationMs ?? 0) > 0
-        && (projectile.supplementalBurnOnHit?.damagePerTick ?? 0) > 0);
+    if (projectile.spec.flight.isFlame || projectile.spec.flight.isGrenade) return false;
+    return ((projectile.spec.interaction.burn.burnDurationMs ?? 0) > 0 && (projectile.spec.interaction.burn.burnDamagePerTick ?? 0) > 0)
+      || ((projectile.interaction.burnAugment?.burn?.durationMs ?? 0) > 0
+        && (projectile.interaction.burnAugment?.burn?.damagePerTick ?? 0) > 0);
   }
 
   private updateProjectileHoming(
@@ -1958,12 +1886,6 @@ export class WorldProjectileRuntime implements
       simulatedAgeMs,
       forceSearch,
     );
-    const state = projectile.homingState;
-    if (state) {
-      projectile.lockedTargetId = state.lockedTargetId;
-      projectile.lockedTargetType = state.lockedTargetType;
-      projectile.lastHomingSearchAt = state.lastSearchAtSimulatedMs;
-    }
     return foundTarget;
   }
 
@@ -1993,7 +1915,6 @@ export class WorldProjectileRuntime implements
     this.resolvedWorldContacts.clear();
     this.contactFrameNowMs = null;
     this.collisionProcessor.reset();
-    this.burnAugments.clear();
     this.threatSamples.length = 0;
     this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
@@ -2002,7 +1923,6 @@ export class WorldProjectileRuntime implements
     this.homingController.setTargetabilityPort(null);
     this.homingController.setLineOfFireReadPort(null);
     this.lifecycleProcessor.reset();
-    this.physicsHandles.clear();
     this.projectileTimeFieldPort = null;
     this.timeBubbleMovementPort = null;
     this.collisionTargetQueryPort = null;
@@ -2039,25 +1959,18 @@ export class WorldProjectileRuntime implements
     x: number,
     y: number,
     angle: number,
-    ownerId: string,
     cfg: ProjectileSpawnConfig,
     provenance: ProjectileProvenance,
     spawnHostNowMs = this.hostNowMs(),
   ): ProjectileId {
     const id = this.projectiles.allocateId();
-    const record = this.createProjectileRecord(id, x, y, angle, ownerId, cfg, spawnHostNowMs, provenance);
+    const record = this.createProjectileRecord(id, x, y, angle, provenance.allegiance.ownerId, cfg, spawnHostNowMs, provenance);
     this.projectiles.insert(record);
-    if (record.detonable) this.detonableIds.add(id);
-    if (record.detonator) this.detonatorIds.add(id);
-    if (record.isTranslocatorPuck === true) this.translocatorPuckIds.add(id);
-    if (record.leafBlowerDeflectsProjectiles === true) this.deflectorIds.add(id);
+    if (record.spec.interaction.detonable) this.detonableIds.add(id);
+    if (record.spec.interaction.detonator) this.detonatorIds.add(id);
+    if (record.spec.flight.isTranslocatorPuck === true) this.translocatorPuckIds.add(id);
+    if (record.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true) this.deflectorIds.add(id);
     if (hasTravelEffect(record)) this.travelEffectIds.add(id);
-    if (record.supplementalBurnOnHit) {
-      this.burnAugments.set(id, {
-        burn: record.supplementalBurnOnHit,
-        provenance: record.supplementalBurnProvenance ?? record.provenance,
-      });
-    }
     return id;
   }
 
@@ -2095,69 +2008,181 @@ export class WorldProjectileRuntime implements
       velocityY: Math.sin(angle) * cfg.speed * timeFactor,
       mechanics,
     });
-    this.physicsHandles.set(id, handle);
     const record: ProjectileRuntimeRecord = {
-      ...cfg,
       id,
-      sprite: handle.sprite,
-      body: handle.body,
       lastX: resolvedSpawn.x,
       lastY: resolvedSpawn.y,
       pendingDestroy: false,
       pendingExplosion: false,
       bounceCount: cfg.initialBounceCount ?? 0,
       createdAt: hostNowMs,
-      ownerId,
       provenance,
-      collisionMode: resolveProjectileCollisionMode(cfg),
-      color: cfg.color,
-      sourceId: cfg.sourceId ?? 'weapon.unknown',
-      lifetime: cfg.lifetime,
+      damage: cfg.damage,
       maxBounces: cfg.maxBounces,
-      isGrenade: cfg.isGrenade,
       adrenalinGain: cfg.adrenalinGain,
-      boundsListener: handle.boundsListener,
-      colliders: handle.colliders,
-      lockedTargetId: null,
-      homingState: cfg.homing ? { lockedTargetId: null } : undefined,
       hitboxSize: cfg.size,
-      flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
-      hitObstacleIds: cfg.isFlame ? new Set<number>() : undefined,
-      penetrationRemaining: cfg.penetrationCount,
-      penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
-      piercingHitIds: (cfg.isBfg || cfg.piercesTargets
-        || ((cfg.proximityPulse?.radius ?? 0) > 0 && (cfg.proximityPulse?.damage ?? 0) > 0))
-        ? new Set<string>() : undefined,
-      penetratedRockIds: cfg.penetratesRocks ? new Set<number>() : undefined,
-      awpCorridorHitIds: cfg.awpCorridorHalfWidth !== undefined ? new Set<string>() : undefined,
-      multiExplosionsRemaining: Math.max(1, Math.floor(cfg.multiExplosionCount ?? 1)),
-      multiExplosionExcludedTargetKeys: (cfg.multiExplosionCount ?? 1) > 1 ? new Set<string>() : undefined,
-      miniRocketPhase: cfg.miniRocketStageRangePx !== undefined ? 'attack' : undefined,
-      miniRocketCoastUntilAgeMs: undefined,
-      miniRocketNextExplosionAtAgeMs: undefined,
-      miniRocketDeferredExplosion: false,
-      miniRocketDeferredExplosionStopsAtObstacle: false,
-      miniRocketSpent: false,
-      miniRocketDestructionFxEmitted: false,
-      miniRocketHasExploded: false,
-      miniRocketReturnReserveGranted: false,
-      miniRocketExplosionIndex: 0,
-      ak47HitConfirmed: false,
       lastCountdownEmitted: null,
-      lastProximityPulseAt: (cfg.proximityPulse?.radius ?? 0) > 0
-        && (cfg.proximityPulse?.damage ?? 0) > 0 ? 0 : undefined,
       frictionActivated: false,
       simulatedAgeMs: 0,
       timeBubbleFactor: timeFactor,
-      initialSpeed: cfg.speed,
+      remainingRangePx: cfg.remainingRangePx,
       bounceProcessedThisStep: false,
-      originalBodySize: cfg.size < MIN_BODY_LEN
-        && cfg.isFlame !== true
-        && !hasLeafBlowerCapability(cfg)
-        && cfg.isBfg !== true
-        && !hasGaussDischarge(cfg)
-        && !cfg.isGrenade ? cfg.size : undefined,
+      physics: handle,
+      spec: {
+        flight: {
+          lifetimeMs: cfg.lifetime,
+          isGrenade: cfg.isGrenade,
+          speed: cfg.speed,
+          originalBodySize: cfg.size < MIN_BODY_LEN
+            && cfg.isFlame !== true
+            && !hasLeafBlowerCapability(cfg)
+            && cfg.isBfg !== true
+            && !hasGaussDischarge(cfg)
+            && !cfg.isGrenade ? cfg.size : undefined,
+          collisionMode: resolveProjectileCollisionMode(cfg),
+          isTranslocatorPuck: cfg.isTranslocatorPuck,
+          homing: cfg.homing,
+          piercesTargets: cfg.piercesTargets,
+          fuseTime: cfg.fuseTime,
+          isFlame: cfg.isFlame,
+          isBfg: cfg.isBfg,
+          collisionFilter: {
+            ignoreBaseCollisions: cfg.ignoreBaseCollisions,
+            ignoreRockIndex: cfg.ignoreRockIndex
+          },
+          hitboxGrowth: {
+            growRatePerSec: cfg.hitboxGrowRate,
+            maxSize: cfg.hitboxMaxSize
+          },
+          drag: {
+            velocityDecayPerSec: cfg.velocityDecay,
+            frictionDelayMs: cfg.frictionDelayMs,
+            airFrictionDecayPerSec: cfg.airFrictionDecayPerSec,
+            bounceFrictionMultiplier: cfg.bounceFrictionMultiplier,
+            stopSpeedThreshold: cfg.stopSpeedThreshold
+          },
+          split: {
+            count: cfg.splitCount,
+            spread: cfg.splitSpread,
+            speedFactor: cfg.splitFactor,
+            homing: cfg.splitHoming
+          },
+          penetration: {
+            damageRetention: cfg.penetrationDamageRetention,
+            penetratesRocks: cfg.penetratesRocks
+          },
+          miniRocket: {
+            stageRangePx: cfg.miniRocketStageRangePx,
+            returnEnabled: cfg.miniRocketReturnEnabled,
+            returnRangeBuffer: cfg.miniRocketReturnRangeBuffer,
+            pickupRadius: cfg.miniRocketPickupRadius,
+            pickupAdrenalineRefundFraction: cfg.miniRocketPickupAdrenalineRefundFraction,
+            pickupArmor: cfg.miniRocketPickupArmor,
+            adrenalineCostPaid: cfg.miniRocketAdrenalineCostPaid,
+            safetyLifetimeMs: cfg.miniRocketSafetyLifetimeMs,
+            cascadeDamageBonusPerExplosion: cfg.miniRocketCascadeDamageBonusPerExplosion
+          }
+        },
+        interaction: {
+          proximityPulse: cfg.proximityPulse,
+          enemyHitExplosion: cfg.enemyHitExplosion,
+          impactCloud: cfg.impactCloud,
+          energyInjectorPayload: cfg.energyInjectorPayload,
+          grenadeEffect: cfg.grenadeEffect,
+          detonable: cfg.detonable,
+          detonator: cfg.detonator,
+          multiExplosionCoastMs: cfg.multiExplosionCoastMs,
+          directHit: {
+            plasmaSwarmEnabled: cfg.plasmaSwarmEnabled,
+            plasmaSwarmProjectileCount: cfg.plasmaSwarmProjectileCount,
+            plasmaSwarmExplosionRadius: cfg.plasmaSwarmExplosionRadius,
+            plasmaSwarmExplosionDamage: cfg.plasmaSwarmExplosionDamage,
+            plasmaSwarmExplosionSlowFraction: cfg.plasmaSwarmExplosionSlowFraction,
+            rockDamageMult: cfg.rockDamageMult,
+            trainDamageMult: cfg.trainDamageMult,
+            baseDamageMult: cfg.baseDamageMult,
+            gaussChainRadius: cfg.gaussChainRadius,
+            gaussChainDamageFactor: cfg.gaussChainDamageFactor,
+            ak47DamageMultiplier: cfg.ak47DamageMultiplier,
+            ak47FireSuperiorityShot: cfg.ak47FireSuperiorityShot,
+            shotgunOriginX: cfg.shotgunOriginX,
+            shotgunOriginY: cfg.shotgunOriginY,
+            shotgunResolvedRange: cfg.shotgunResolvedRange,
+            shotgunProximityMaxDamageBonus: cfg.shotgunProximityMaxDamageBonus,
+            shotgunSlowFraction: cfg.shotgunSlowFraction,
+            shotgunSlowDurationMs: cfg.shotgunSlowDurationMs,
+            hitSlowFraction: cfg.hitSlowFraction,
+            hitSlowDurationMs: cfg.hitSlowDurationMs,
+            hitVulnerabilityDurationMs: cfg.hitVulnerabilityDurationMs,
+            hitKnockback: cfg.hitKnockback,
+            hitKnockbackDurationMs: cfg.hitKnockbackDurationMs
+          },
+          burn: {
+            burnDurationMs: cfg.burnDurationMs,
+            burnDamagePerTick: cfg.burnDamagePerTick,
+            canReceiveFireImbue: cfg.canReceiveFireImbue
+          },
+          pathEffect: {
+            fireTrail: cfg.fireTrail,
+            pathEffectKind: cfg.pathEffectKind,
+            fireTrailHalfWidthCells: cfg.fireTrailHalfWidthCells,
+            awpCorridorHalfWidth: cfg.awpCorridorHalfWidth,
+            awpCorridorDamage: cfg.awpCorridorDamage,
+            awpCorridorDotDurationMs: cfg.awpCorridorDotDurationMs,
+            awpCorridorDotTickIntervalMs: cfg.awpCorridorDotTickIntervalMs,
+            awpCorridorKnockback: cfg.awpCorridorKnockback,
+            awpCorridorKnockbackDurationMs: cfg.awpCorridorKnockbackDurationMs
+          },
+          impulse: {
+            leafBlowerMinKnockback: cfg.leafBlowerMinKnockback,
+            leafBlowerMaxKnockback: cfg.leafBlowerMaxKnockback,
+            leafBlowerSelfPush: cfg.leafBlowerSelfPush,
+            leafBlowerDeflectsProjectiles: cfg.leafBlowerDeflectsProjectiles
+          }
+        },
+      },
+      presentation: {
+        color: cfg.color,
+        ownerColor: cfg.ownerColor,
+        visualMuzzleOrigin: cfg.visualMuzzleOrigin,
+        projectileVisualScale: cfg.projectileVisualScale,
+        smokeTrailColor: cfg.smokeTrailColor,
+        projectileStyle: cfg.projectileStyle,
+        sporeVisualVariant: cfg.sporeVisualVariant,
+        bulletVisualPreset: cfg.bulletVisualPreset,
+        grenadeVisualPreset: cfg.grenadeVisualPreset,
+        energyBallVariant: cfg.energyBallVariant,
+        tracerConfig: cfg.tracerConfig,
+        projectileBurnVisualStyle: cfg.projectileBurnVisualStyle,
+        shotAudioKey: cfg.shotAudioKey,
+        suppressSpawnFx: cfg.suppressSpawnFx,
+      },
+      interaction: {
+        ak47HitConfirmed: false,
+        lastProximityPulseAt: (cfg.proximityPulse?.radius ?? 0) > 0
+          && (cfg.proximityPulse?.damage ?? 0) > 0 ? 0 : undefined,
+        explosion: cfg.explosion,
+        burnAugment: cfg.supplementalBurnOnHit ? {
+          burn: cfg.supplementalBurnOnHit,
+          provenance: cfg.supplementalBurnProvenance ?? provenance,
+        } : undefined,
+        penetrationRemaining: cfg.penetrationCount,
+        multiExplosionsRemaining: Math.max(1, Math.floor(cfg.multiExplosionCount ?? 1)),
+        multiExplosionExcludedTargetKeys: (cfg.multiExplosionCount ?? 1) > 1 ? new Set<string>() : undefined
+      },
+      miniRocket: cfg.miniRocketStageRangePx === undefined ? {} : { phase: 'attack' },
+      contacts: {
+        flamePierceHitIds: cfg.isFlame && cfg.flamePiercing ? new Set<string>() : undefined,
+        hitObstacleIds: cfg.isFlame ? new Set<number>() : undefined,
+        penetrationHitIds: (cfg.penetrationCount ?? 0) > 0 ? new Set<string>() : undefined,
+        piercingHitIds: (cfg.isBfg || cfg.piercesTargets
+          || ((cfg.proximityPulse?.radius ?? 0) > 0 && (cfg.proximityPulse?.damage ?? 0) > 0))
+          ? new Set<string>() : undefined,
+        penetratedRockIds: cfg.penetratesRocks ? new Set<number>() : undefined,
+        awpCorridorHitIds: cfg.awpCorridorHalfWidth !== undefined ? new Set<string>() : undefined,
+      },
     };
+    if (cfg.homing) this.createHomingRequest(record);
     if (cfg.airFrictionDecayPerSec !== undefined) {
       handle.body.useDamping = true;
       const effectiveDecay = !cfg.frictionDelayMs || cfg.frictionDelayMs <= 0
@@ -2181,19 +2206,18 @@ export class WorldProjectileRuntime implements
     this.detonatorIds.delete(id);
     this.translocatorPuckIds.delete(id);
     this.travelEffectIds.delete(id);
-    this.burnAugments.delete(id);
   }
 }
 
 function hasTravelEffect(record: ProjectileRuntimeRecord): boolean {
-  return record.canReceiveFireImbue === true
-    || record.fireTrail !== undefined
-    || record.awpCorridorHalfWidth !== undefined
-    || record.awpCorridorDamage !== undefined
-    || record.awpCorridorDotDurationMs !== undefined
-    || record.awpCorridorDotTickIntervalMs !== undefined
-    || record.awpCorridorKnockback !== undefined
-    || record.awpCorridorKnockbackDurationMs !== undefined;
+  return record.spec.interaction.burn.canReceiveFireImbue === true
+    || record.spec.interaction.pathEffect.fireTrail !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorHalfWidth !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorDamage !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorDotDurationMs !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorDotTickIntervalMs !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorKnockback !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorKnockbackDurationMs !== undefined;
 }
 
 function resolveProjectileCollisionMode(cfg: ProjectileSpawnConfig): import('../types').ProjectileCollisionMode {
@@ -2237,7 +2261,7 @@ function resolvePhysicsMechanics(cfg: ProjectileSpawnConfig): ProjectilePhysicsM
 }
 
 function hasLeafBlowerCapability(
-  projectile: Pick<ProjectileRuntimeRecord, 'leafBlowerMinKnockback' | 'leafBlowerMaxKnockback' | 'leafBlowerDeflectsProjectiles'>,
+  projectile: Pick<ProjectileSpawnConfig, 'leafBlowerMinKnockback' | 'leafBlowerMaxKnockback' | 'leafBlowerDeflectsProjectiles'>,
 ): boolean {
   return projectile.leafBlowerMinKnockback !== undefined
     || projectile.leafBlowerMaxKnockback !== undefined
@@ -2245,42 +2269,42 @@ function hasLeafBlowerCapability(
 }
 
 function hasGaussDischarge(
-  projectile: Pick<ProjectileRuntimeRecord, 'gaussChainRadius' | 'gaussChainDamageFactor'>,
+  projectile: Pick<ProjectileSpawnConfig, 'gaussChainRadius' | 'gaussChainDamageFactor'>,
 ): boolean {
   return (projectile.gaussChainRadius ?? 0) > 0
     && (projectile.gaussChainDamageFactor ?? 0) > 0;
 }
 
 function shouldPassThroughWorldTarget(projectile: ProjectileRuntimeRecord): boolean {
-  return projectile.isBfg === true || hasGaussDischarge(projectile);
+  return projectile.spec.flight.isBfg === true || hasGaussDischarge(projectile.spec.interaction.directHit);
 }
 
 function createTravelPathEffect(record: ProjectileRuntimeRecord): ProjectileTravelCapabilities['pathEffect'] {
-  const fireTrail = record.fireTrail
+  const fireTrail = record.spec.interaction.pathEffect.fireTrail
     ? {
-      effect: record.fireTrail,
-      halfWidthCells: Math.max(0, Math.floor(record.fireTrailHalfWidthCells ?? 0)),
-      cellKey: `${Math.floor(record.sprite.x / 16)}:${Math.floor(record.sprite.y / 16)}`,
+      effect: record.spec.interaction.pathEffect.fireTrail,
+      halfWidthCells: Math.max(0, Math.floor(record.spec.interaction.pathEffect.fireTrailHalfWidthCells ?? 0)),
+      cellKey: `${Math.floor(record.physics.sprite.x / 16)}:${Math.floor(record.physics.sprite.y / 16)}`,
     }
     : undefined;
-  const hasCorridor = record.awpCorridorHalfWidth !== undefined
-    || record.awpCorridorDamage !== undefined
-    || record.awpCorridorDotDurationMs !== undefined
-    || record.awpCorridorDotTickIntervalMs !== undefined
-    || record.awpCorridorKnockback !== undefined
-    || record.awpCorridorKnockbackDurationMs !== undefined;
+  const hasCorridor = record.spec.interaction.pathEffect.awpCorridorHalfWidth !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorDamage !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorDotDurationMs !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorDotTickIntervalMs !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorKnockback !== undefined
+    || record.spec.interaction.pathEffect.awpCorridorKnockbackDurationMs !== undefined;
   const awpCorridor = hasCorridor
     ? {
-      halfWidth: record.awpCorridorHalfWidth ?? 0,
-      damage: record.awpCorridorDamage ?? 0,
-      dotDurationMs: record.awpCorridorDotDurationMs,
-      dotTickIntervalMs: record.awpCorridorDotTickIntervalMs,
-      knockback: record.awpCorridorKnockback,
-      knockbackDurationMs: record.awpCorridorKnockbackDurationMs,
+      halfWidth: record.spec.interaction.pathEffect.awpCorridorHalfWidth ?? 0,
+      damage: record.spec.interaction.pathEffect.awpCorridorDamage ?? 0,
+      dotDurationMs: record.spec.interaction.pathEffect.awpCorridorDotDurationMs,
+      dotTickIntervalMs: record.spec.interaction.pathEffect.awpCorridorDotTickIntervalMs,
+      knockback: record.spec.interaction.pathEffect.awpCorridorKnockback,
+      knockbackDurationMs: record.spec.interaction.pathEffect.awpCorridorKnockbackDurationMs,
     }
     : undefined;
   if (!fireTrail && !awpCorridor) return undefined;
-  return { kind: record.pathEffectKind, fireTrail, awpCorridor };
+  return { kind: record.spec.interaction.pathEffect.pathEffectKind, fireTrail, awpCorridor };
 }
 
 function burnDps(burn: { damagePerTick: number }): number {
@@ -2289,33 +2313,6 @@ function burnDps(burn: { damagePerTick: number }): number {
 
 function clampProjectileTimeFactor(value: number): number {
   return Math.max(0, Math.min(1, value));
-}
-
-function createProjectileProvenance(
-  ownerId: string,
-  cfg: ProjectileSpawnConfig,
-): ProjectileProvenance {
-  const hasLineage = cfg.reflected !== undefined
-    || cfg.plasmaSwarmProjectile !== undefined
-    || cfg.plasmaSwarmOriginEnemyId !== undefined;
-  const lineage = hasLineage
-    ? {
-      reflected: cfg.reflected,
-      plasmaSwarmChild: cfg.plasmaSwarmProjectile,
-      plasmaSwarmOriginEnemyId: cfg.plasmaSwarmOriginEnemyId,
-    }
-    : undefined;
-  const correlation = cfg.ak47ShotId === undefined
-    ? undefined
-    : { ak47ShotId: cfg.ak47ShotId };
-  return createSingleOwnerProvenance(ownerId, {
-    weaponSourceId: cfg.sourceId,
-    sourceSlot: cfg.sourceSlot,
-    sourceTurretId: cfg.sourceTurretId,
-    allowTeamDamage: cfg.allowTeamDamage,
-    lineage,
-    correlation,
-  });
 }
 
 function boundsOverlap(
@@ -2331,15 +2328,72 @@ function boundsOverlap(
 function createDetonationTarget(projectile: ProjectileRuntimeRecord): ProjectileDetonationTarget {
   return {
     id: projectile.id,
-    x: projectile.sprite.x,
-    y: projectile.sprite.y,
-    projectileOwnerId: projectile.ownerId,
-    effect: projectile.detonable!,
-    sourceId: projectile.sourceId,
-    sourceSlot: projectile.sourceSlot,
+    x: projectile.physics.sprite.x,
+    y: projectile.physics.sprite.y,
+    projectileOwnerId: projectile.provenance.allegiance.ownerId,
+    effect: projectile.spec.interaction.detonable!,
+    sourceId: projectile.provenance.weaponSourceId ?? 'weapon.unknown',
+    sourceSlot: projectile.provenance.sourceSlot,
   };
 }
 
 function emptyHostStageResult(): ProjectileHostStageResult {
   return { projectileExplosions: [], grenadePayloads: [], countdownEvents: [] };
+}
+
+/**
+ * Projiziert die verbleibenden Fähigkeiten für einen normalen Child-Spawn.
+ *
+ * Identity und Provenance bleiben am Spawn-Pfad; dieser Adapter kopiert keinen Runtime-State.
+ */
+function createInheritedProjectilePayload(
+  record: ProjectileRuntimeRecord,
+): Partial<ProjectileSpawnConfig> {
+  return {
+    explosion:            record.interaction.explosion,
+    enemyHitExplosion:    record.spec.interaction.enemyHitExplosion,
+    impactCloud:          record.spec.interaction.impactCloud,
+    grenadeEffect:        record.spec.interaction.grenadeEffect,
+    burnDurationMs:       record.spec.interaction.burn.burnDurationMs,
+    burnDamagePerTick:    record.spec.interaction.burn.burnDamagePerTick,
+    projectileBurnVisualStyle: record.presentation.projectileBurnVisualStyle,
+    supplementalBurnOnHit: record.interaction.burnAugment?.burn,
+    supplementalBurnProvenance: record.interaction.burnAugment?.provenance,
+    canReceiveFireImbue:  record.spec.interaction.burn.canReceiveFireImbue,
+    fireTrail:            record.spec.interaction.pathEffect.fireTrail,
+    pathEffectKind:       record.spec.interaction.pathEffect.pathEffectKind,
+    fireTrailHalfWidthCells: record.spec.interaction.pathEffect.fireTrailHalfWidthCells,
+    awpCorridorHalfWidth: record.spec.interaction.pathEffect.awpCorridorHalfWidth,
+    awpCorridorDamage:    record.spec.interaction.pathEffect.awpCorridorDamage,
+    awpCorridorDotDurationMs: record.spec.interaction.pathEffect.awpCorridorDotDurationMs,
+    awpCorridorDotTickIntervalMs: record.spec.interaction.pathEffect.awpCorridorDotTickIntervalMs,
+    awpCorridorKnockback: record.spec.interaction.pathEffect.awpCorridorKnockback,
+    awpCorridorKnockbackDurationMs: record.spec.interaction.pathEffect.awpCorridorKnockbackDurationMs,
+    detonable:            record.spec.interaction.detonable,
+    detonator:            record.spec.interaction.detonator,
+    proximityPulse:       record.spec.interaction.proximityPulse,
+    collisionMode:        record.spec.flight.collisionMode,
+    isTranslocatorPuck:   record.spec.flight.isTranslocatorPuck,
+    piercesTargets:       record.spec.flight.piercesTargets,
+    penetrationCount:     record.interaction.penetrationRemaining,
+    penetrationDamageRetention: record.spec.flight.penetration.damageRetention,
+    penetratesRocks:      record.spec.flight.penetration.penetratesRocks,
+    isFlame:              record.spec.flight.isFlame,
+    flamePiercing:        record.contacts.flamePierceHitIds !== undefined,
+    isBfg:                record.spec.flight.isBfg,
+    leafBlowerDeflectsProjectiles: record.spec.interaction.impulse.leafBlowerDeflectsProjectiles,
+    leafBlowerMinKnockback: record.spec.interaction.impulse.leafBlowerMinKnockback,
+    leafBlowerMaxKnockback: record.spec.interaction.impulse.leafBlowerMaxKnockback,
+    leafBlowerSelfPush:   record.spec.interaction.impulse.leafBlowerSelfPush,
+    gaussChainRadius:     record.spec.interaction.directHit.gaussChainRadius,
+    gaussChainDamageFactor: record.spec.interaction.directHit.gaussChainDamageFactor,
+    rockDamageMult:       record.spec.interaction.directHit.rockDamageMult,
+    trainDamageMult:      record.spec.interaction.directHit.trainDamageMult,
+    baseDamageMult:       record.spec.interaction.directHit.baseDamageMult,
+    hitSlowFraction:      record.spec.interaction.directHit.hitSlowFraction,
+    hitSlowDurationMs:    record.spec.interaction.directHit.hitSlowDurationMs,
+    hitVulnerabilityDurationMs: record.spec.interaction.directHit.hitVulnerabilityDurationMs,
+    hitKnockback:         record.spec.interaction.directHit.hitKnockback,
+    hitKnockbackDurationMs: record.spec.interaction.directHit.hitKnockbackDurationMs,
+  };
 }

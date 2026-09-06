@@ -1,4 +1,4 @@
-import type { ProjectileRuntimeRecord } from '../types';
+import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import type { ProjectileCoreStageResult } from './ProjectileFlightProcessor';
 import type { ProjectileExplosionRequest, ProjectileGrenadePayloadRequest } from './ProjectileExplosionPort';
 import type { ProjectileHostStageResult } from './WorldProjectileRuntime';
@@ -30,18 +30,18 @@ export class ProjectileLifecycleProcessor {
   reset(): void { this.pendingProjectileExplosions.length = 0; }
 
   triggerExplosion(projectile: ProjectileRuntimeRecord, impactTargetKey?: string): boolean {
-    if (!projectile.explosion) return false;
+    if (!projectile.interaction.explosion) return false;
     // Only the direct trigger target is excluded during coast, not every AoE recipient.
-    projectile.multiExplosionExcludedTargetKeys?.clear();
-    if (impactTargetKey) projectile.multiExplosionExcludedTargetKeys?.add(impactTargetKey);
+    projectile.interaction.multiExplosionExcludedTargetKeys?.clear();
+    if (impactTargetKey) projectile.interaction.multiExplosionExcludedTargetKeys?.add(impactTargetKey);
     this.queueExplosion(projectile, true);
     return true;
   }
 
   triggerEnemyImpactExplosion(projectile: ProjectileRuntimeRecord): boolean {
-    if (!projectile.enemyHitExplosion || projectile.pendingExplosion) return false;
+    if (!projectile.spec.interaction.enemyHitExplosion || projectile.pendingExplosion) return false;
     projectile.pendingExplosion = true;
-    this.pendingProjectileExplosions.push(this.createExplosionRequest(projectile, projectile.enemyHitExplosion));
+    this.pendingProjectileExplosions.push(this.createExplosionRequest(projectile, projectile.spec.interaction.enemyHitExplosion));
     this.deps.queueDestroy(projectile);
     return true;
   }
@@ -52,11 +52,11 @@ export class ProjectileLifecycleProcessor {
     const projectileExplosions = this.pendingProjectileExplosions.splice(0);
     const grenadePayloads: ProjectileGrenadePayloadRequest[] = [];
     for (const projectile of projectiles) {
-      if ((projectile.isFlame || projectile.leafBlowerMinKnockback !== undefined
-        || projectile.leafBlowerMaxKnockback !== undefined || projectile.leafBlowerDeflectsProjectiles === true)
+      if ((projectile.spec.flight.isFlame || projectile.spec.interaction.impulse.leafBlowerMinKnockback !== undefined
+        || projectile.spec.interaction.impulse.leafBlowerMaxKnockback !== undefined || projectile.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true)
         && projectile.hitboxSize !== undefined
-        && Math.abs(projectile.sprite.displayWidth - projectile.hitboxSize) > 0.0001) {
-        projectile.sprite.setDisplaySize(projectile.hitboxSize, projectile.hitboxSize);
+        && Math.abs(projectile.physics.sprite.displayWidth - projectile.hitboxSize) > 0.0001) {
+        projectile.physics.sprite.setDisplaySize(projectile.hitboxSize, projectile.hitboxSize);
       }
     }
     // A fixed reverse start index excludes new spawns during finalization.
@@ -74,80 +74,80 @@ export class ProjectileLifecycleProcessor {
     stopMultiContinuationAtObstacle = false,
   ): void {
     if (proj.pendingExplosion) return;
-    if (!proj.explosion) {
-      if (proj.miniRocketSpent) this.queueSpentMiniRocketDestruction(proj);
+    if (!proj.interaction.explosion) {
+      if (proj.miniRocket.spent) this.queueSpentMiniRocketDestruction(proj);
       return;
     }
     const simulatedAge = proj.simulatedAgeMs ?? 0;
-    const nextExplosionAt = proj.miniRocketNextExplosionAtAgeMs ?? 0;
-    if (proj.miniRocketStageRangePx !== undefined && simulatedAge < nextExplosionAt) {
-      const velocityLength = proj.body.velocity.length();
+    const nextExplosionAt = proj.miniRocket.nextExplosionAtAgeMs ?? 0;
+    if (proj.spec.flight.miniRocket.stageRangePx !== undefined && simulatedAge < nextExplosionAt) {
+      const velocityLength = proj.physics.body.velocity.length();
       if (velocityLength > 0.001) {
-        proj.miniRocketContinuationVx = proj.body.velocity.x;
-        proj.miniRocketContinuationVy = proj.body.velocity.y;
+        proj.miniRocket.continuationVx = proj.physics.body.velocity.x;
+        proj.miniRocket.continuationVy = proj.physics.body.velocity.y;
       }
-      proj.miniRocketDeferredExplosion = true;
-      proj.miniRocketDeferredExplosionStopsAtObstacle =
-        (proj.miniRocketDeferredExplosionStopsAtObstacle ?? false) || stopMultiContinuationAtObstacle;
-      proj.body.setVelocity(0, 0);
-      proj.body.enable = false;
+      proj.miniRocket.deferredExplosion = true;
+      proj.miniRocket.deferredExplosionStopsAtObstacle =
+        (proj.miniRocket.deferredExplosionStopsAtObstacle ?? false) || stopMultiContinuationAtObstacle;
+      proj.physics.body.setVelocity(0, 0);
+      proj.physics.body.enable = false;
       return;
     }
-    proj.miniRocketDeferredExplosion = false;
-    const stopsAtObstacle = (proj.miniRocketDeferredExplosionStopsAtObstacle ?? false)
+    proj.miniRocket.deferredExplosion = false;
+    const stopsAtObstacle = (proj.miniRocket.deferredExplosionStopsAtObstacle ?? false)
       || stopMultiContinuationAtObstacle;
-    proj.miniRocketDeferredExplosionStopsAtObstacle = false;
-    const remaining = Math.max(1, proj.multiExplosionsRemaining ?? 1);
-    const explosionIndex = Math.max(0, proj.miniRocketExplosionIndex ?? 0);
+    proj.miniRocket.deferredExplosionStopsAtObstacle = false;
+    const remaining = Math.max(1, proj.interaction.multiExplosionsRemaining ?? 1);
+    const explosionIndex = Math.max(0, proj.miniRocket.explosionIndex ?? 0);
     const cascadeMultiplier = getMiniRocketCascadeMultiplier(
       explosionIndex,
-      proj.miniRocketCascadeDamageBonusPerExplosion ?? 0,
+      proj.spec.flight.miniRocket.cascadeDamageBonusPerExplosion ?? 0,
     );
     const resolvedEffect = cascadeMultiplier > 1.0001
       ? {
-          ...proj.explosion,
-          radius: proj.explosion.radius * cascadeMultiplier,
-          maxDamage: proj.explosion.maxDamage * cascadeMultiplier,
-          minDamage: proj.explosion.minDamage === undefined
+          ...proj.interaction.explosion,
+          radius: proj.interaction.explosion.radius * cascadeMultiplier,
+          maxDamage: proj.interaction.explosion.maxDamage * cascadeMultiplier,
+          minDamage: proj.interaction.explosion.minDamage === undefined
             ? undefined
-            : proj.explosion.minDamage * cascadeMultiplier,
-          ...projectExplosionCascadeAppearance(proj.explosion, explosionIndex),
+            : proj.interaction.explosion.minDamage * cascadeMultiplier,
+          ...projectExplosionCascadeAppearance(proj.interaction.explosion, explosionIndex),
         }
-      : proj.explosion;
-    if (proj.miniRocketStageRangePx !== undefined) {
-      proj.miniRocketExplosionIndex = explosionIndex + 1;
+      : proj.interaction.explosion;
+    if (proj.spec.flight.miniRocket.stageRangePx !== undefined) {
+      proj.miniRocket.explosionIndex = explosionIndex + 1;
     }
-    const isExtendedMiniRocket = proj.miniRocketStageRangePx !== undefined;
+    const isExtendedMiniRocket = proj.spec.flight.miniRocket.stageRangePx !== undefined;
     const continuesChainAfterExplosion = !stopsAtObstacle
       && (allowMultiContinue || isExtendedMiniRocket)
       && remaining > 1;
     const returnsSpentAfterExplosion = isExtendedMiniRocket
-      && proj.miniRocketReturnEnabled === true
+      && proj.spec.flight.miniRocket.returnEnabled === true
       && !continuesChainAfterExplosion;
     const resumesAfterExplosion = continuesChainAfterExplosion || returnsSpentAfterExplosion;
     if (resumesAfterExplosion && isExtendedMiniRocket) {
-      const velocityLength = proj.body.velocity.length();
+      const velocityLength = proj.physics.body.velocity.length();
       if (velocityLength > 0.001) {
-        proj.miniRocketContinuationVx = proj.body.velocity.x;
-        proj.miniRocketContinuationVy = proj.body.velocity.y;
+        proj.miniRocket.continuationVx = proj.physics.body.velocity.x;
+        proj.miniRocket.continuationVy = proj.physics.body.velocity.y;
       } else {
-        const dx = proj.sprite.x - proj.lastX;
-        const dy = proj.sprite.y - proj.lastY;
+        const dx = proj.physics.sprite.x - proj.lastX;
+        const dy = proj.physics.sprite.y - proj.lastY;
         const distance = Math.hypot(dx, dy);
-        const fallbackSpeed = Math.max(1, (proj.initialSpeed ?? 1) * (proj.timeBubbleFactor ?? 1));
+        const fallbackSpeed = Math.max(1, (proj.spec.flight.speed ?? 1) * (proj.timeBubbleFactor ?? 1));
         if (distance > 0.001) {
-          proj.miniRocketContinuationVx = (dx / distance) * fallbackSpeed;
-          proj.miniRocketContinuationVy = (dy / distance) * fallbackSpeed;
+          proj.miniRocket.continuationVx = (dx / distance) * fallbackSpeed;
+          proj.miniRocket.continuationVy = (dy / distance) * fallbackSpeed;
         }
       }
     }
-    proj.multiExplosionsRemaining = returnsSpentAfterExplosion ? 0 : remaining - 1;
-    proj.miniRocketSpent = returnsSpentAfterExplosion;
+    proj.interaction.multiExplosionsRemaining = returnsSpentAfterExplosion ? 0 : remaining - 1;
+    proj.miniRocket.spent = returnsSpentAfterExplosion;
     proj.pendingExplosion = true;
     this.pendingProjectileExplosions.push(this.createExplosionRequest(proj, resolvedEffect, resumesAfterExplosion));
     if (resumesAfterExplosion) {
-      proj.body.setVelocity(0, 0);
-      proj.body.enable = false;
+      proj.physics.body.setVelocity(0, 0);
+      proj.physics.body.enable = false;
     } else {
       this.deps.queueDestroy(proj);
     }
@@ -155,14 +155,14 @@ export class ProjectileLifecycleProcessor {
 
   private createExplosionRequest(
     proj: ProjectileRuntimeRecord,
-    effect: ProjectileRuntimeRecord['explosion'] = proj.explosion,
+    effect: ProjectileRuntimeRecord['interaction']['explosion'] = proj.interaction.explosion,
     continuesAfterExplosion = false,
   ): ProjectileExplosionRequest {
     if (!effect) throw new Error(`[ProjectileLifecycleProcessor] explosion request without effect for ${proj.id}`);
-    const excludedTargetKey = proj.multiExplosionExcludedTargetKeys?.values().next().value as string | undefined;
+    const excludedTargetKey = proj.interaction.multiExplosionExcludedTargetKeys?.values().next().value as string | undefined;
     return {
-      x: proj.sprite.x,
-      y: proj.sprite.y,
+      x: proj.physics.sprite.x,
+      y: proj.physics.sprite.y,
       projectileId: proj.id,
       provenance: proj.provenance,
       effect,
@@ -183,14 +183,14 @@ export class ProjectileLifecycleProcessor {
       return false;
     }
 
-    if (proj.isGrenade) {
-      if (coreStage.grenadeExpiredIds.has(proj.id) && proj.grenadeEffect) {
+    if (proj.spec.flight.isGrenade) {
+      if (coreStage.grenadeExpiredIds.has(proj.id) && proj.spec.interaction.grenadeEffect) {
         grenadePayloads.push({
-          x: proj.sprite.x,
-          y: proj.sprite.y,
+          x: proj.physics.sprite.x,
+          y: proj.physics.sprite.y,
           projectileId: proj.id,
           provenance: proj.provenance,
-          effect: proj.grenadeEffect,
+          effect: proj.spec.interaction.grenadeEffect,
         });
         this.deps.release(proj);
         return false;
@@ -201,23 +201,23 @@ export class ProjectileLifecycleProcessor {
     }
 
     const awaitingContinuation = proj.pendingExplosion
-      && (proj.multiExplosionsRemaining ?? 0) > 0;
+      && (proj.interaction.multiExplosionsRemaining ?? 0) > 0;
     if (awaitingContinuation) {
-      proj.lastX = proj.sprite.x;
-      proj.lastY = proj.sprite.y;
+      proj.lastX = proj.physics.sprite.x;
+      proj.lastY = proj.physics.sprite.y;
       return true;
     }
 
-    if (proj.miniRocketDeferredExplosion) {
-      if ((proj.simulatedAgeMs ?? 0) >= (proj.miniRocketNextExplosionAtAgeMs ?? 0)) {
+    if (proj.miniRocket.deferredExplosion) {
+      if ((proj.simulatedAgeMs ?? 0) >= (proj.miniRocket.nextExplosionAtAgeMs ?? 0)) {
         this.queueExplosion(
           proj,
           true,
-          proj.miniRocketDeferredExplosionStopsAtObstacle ?? false,
+          proj.miniRocket.deferredExplosionStopsAtObstacle ?? false,
         );
       }
-      proj.lastX = proj.sprite.x;
-      proj.lastY = proj.sprite.y;
+      proj.lastX = proj.physics.sprite.x;
+      proj.lastY = proj.physics.sprite.y;
       return true;
     }
 
@@ -226,14 +226,14 @@ export class ProjectileLifecycleProcessor {
       return false;
     }
 
-    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.explosion) {
+    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.interaction.explosion) {
       projectileExplosions.push(this.createExplosionRequest(proj));
       this.deps.release(proj);
       return false;
     }
 
-    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.impactCloud) {
-      this.deps.onImpact(proj, proj.sprite.x, proj.sprite.y);
+    if (coreStage.lifetimeExpiredIds.has(proj.id) && proj.spec.interaction.impactCloud) {
+      this.deps.onImpact(proj, proj.physics.sprite.x, proj.physics.sprite.y);
       this.deps.release(proj);
       return false;
     }
@@ -247,8 +247,8 @@ export class ProjectileLifecycleProcessor {
     }
 
     if (coreStage.rangeDepletedIds.has(proj.id)
-      && proj.miniRocketStageRangePx !== undefined
-      && proj.explosion) {
+      && proj.spec.flight.miniRocket.stageRangePx !== undefined
+      && proj.interaction.explosion) {
       this.queueExplosion(proj, true);
       return true;
     }
@@ -258,38 +258,38 @@ export class ProjectileLifecycleProcessor {
         || coreStage.rangeDepletedIds.has(proj.id)
         || coreStage.bounceLimitReachedIds.has(proj.id));
     if (dead) {
-      if (proj.isFlame && coreStage.lifetimeExpiredIds.has(proj.id)) {
+      if (proj.spec.flight.isFlame && coreStage.lifetimeExpiredIds.has(proj.id)) {
         this.deps.onNaturalFlameExpiry(proj);
       }
-      if (proj.miniRocketSpent && coreStage.rangeDepletedIds.has(proj.id)) {
+      if (proj.miniRocket.spent && coreStage.rangeDepletedIds.has(proj.id)) {
         this.emitSpentMiniRocketDestruction(proj);
       }
       this.deps.release(proj);
-    } else if (proj.homing && proj.miniRocketStageRangePx === undefined) {
+    } else if (proj.spec.flight.homing && proj.spec.flight.miniRocket.stageRangePx === undefined) {
       const simulatedAge = proj.simulatedAgeMs ?? 0;
       this.deps.updateHoming(proj, simulatedAge);
     }
 
-    const proximityPulse = proj.proximityPulse;
+    const proximityPulse = proj.spec.interaction.proximityPulse;
     if (proximityPulse && proximityPulse.radius > 0 && proximityPulse.damage > 0) {
       const interval = Math.max(50, proximityPulse.scanIntervalMs);
       const simulatedAge = proj.simulatedAgeMs ?? 0;
-      if (proj.lastProximityPulseAt === undefined || simulatedAge - proj.lastProximityPulseAt >= interval) {
-        proj.lastProximityPulseAt = simulatedAge;
+      if (proj.interaction.lastProximityPulseAt === undefined || simulatedAge - proj.interaction.lastProximityPulseAt >= interval) {
+        proj.interaction.lastProximityPulseAt = simulatedAge;
         this.deps.onProximityPulse(proj);
       }
     }
 
-    proj.lastX = proj.sprite.x;
-    proj.lastY = proj.sprite.y;
+    proj.lastX = proj.physics.sprite.x;
+    proj.lastY = proj.physics.sprite.y;
     proj.bounceProcessedThisStep = false;
     proj.velocityAfterFirstBounce = undefined;
     return !dead;
   }
 
   private emitSpentMiniRocketDestruction(proj: ProjectileRuntimeRecord): void {
-    if (proj.miniRocketDestructionFxEmitted) return;
-    proj.miniRocketDestructionFxEmitted = true;
+    if (proj.miniRocket.destructionFxEmitted) return;
+    proj.miniRocket.destructionFxEmitted = true;
     this.deps.onSpentDestruction(proj);
   }
 

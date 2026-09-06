@@ -27,6 +27,23 @@ function createRecord(id: number, createdAt = 0): ProjectileReplicationRecord {
 }
 
 describe('ProjectileReplicationAdapter', () => {
+  it('resends changed allegiance under the same identity after packet loss', () => {
+    const records = [createRecord(1)];
+    const adapter = new ProjectileReplicationAdapter({
+      readProjectileReplication: sink => records.forEach(sink),
+    });
+    for (let tick = 0; tick < 10; tick++) adapter.getSnapshot(tick);
+    records[0] = {
+      ...records[0],
+      static: { ...records[0].static, ownerId: 'reflector', ownerColor: 0x123456 },
+    };
+    expect(decodeProjectileStatics(adapter.getSnapshot(10)!.s)).toMatchObject([{ id: 1, ownerId: 'reflector' }]);
+    // The first redirect packet may be lost; the next tick heals the same ID.
+    const healed = adapter.getSnapshot(11)!;
+    expect(decodeProjectileStatics(healed.s)).toMatchObject([{ id: 1, ownerId: 'reflector' }]);
+    expect(decodeProjectileDynamics(healed.u)).toMatchObject([{ id: 1 }]);
+  });
+
   it('keeps dynamic updates complete while static data is resent only for healing', () => {
     const records = [createRecord(1)];
     const adapter = new ProjectileReplicationAdapter({

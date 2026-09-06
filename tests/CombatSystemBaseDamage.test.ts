@@ -78,8 +78,8 @@ import type {
   HitscanSupportEffect,
   ProjectileExplosionConfig,
   SyncedDeathEffect,
-  ProjectileRuntimeRecord,
 } from '../src/types';
+import type { ProjectileImpactSource } from '../src/projectile/ProjectileGameplayPort';
 
 function makeCombatHarness() {
   const base = {
@@ -186,7 +186,7 @@ describe('CombatSystem base damage routing', () => {
       damage: 10,
       ownerId: 'player-1',
       sourceSlot: 'weapon1',
-    } as ProjectileRuntimeRecord);
+    } as ProjectileImpactSource);
 
     const internals = combat as unknown as {
       traceHitscan: () => {
@@ -248,7 +248,7 @@ describe('CombatSystem base damage routing', () => {
       damage: 10,
       ownerId: 'player-1',
       sourceSlot: 'weapon1',
-    } as ProjectileRuntimeRecord);
+    } as ProjectileImpactSource);
     const explosion: ProjectileExplosionConfig = {
       radius: 200,
       maxDamage: 10,

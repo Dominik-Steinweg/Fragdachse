@@ -20,7 +20,8 @@ import {
   getCoopDefenseResolvedEffectTotals,
   getCoopDefenseUpgradeDefinition,
 } from '../src/utils/coopDefenseUpgrades';
-import type { CoopDefenseUpgradeProfile, ProjectileRuntimeRecord } from '../src/types';
+import type { CoopDefenseUpgradeProfile } from '../src/types';
+import type { ProjectileAk47HitContext } from '../src/projectile/ProjectileCombatPort';
 import { Ak47BehaviorRuntime } from '../src/world/Ak47BehaviorRuntime';
 import { Ak47StrategicTargetSystem } from '../src/systems/Ak47StrategicTargetSystem';
 import { Ak47StrategicTargetRenderer } from '../src/effects/Ak47StrategicTargetRenderer';
@@ -53,15 +54,13 @@ function makeBehavior(config: ReturnType<typeof akConfig>): any {
   return behavior;
 }
 
-function projectile(shotId: number, overrides: Partial<ProjectileRuntimeRecord> = {}): ProjectileRuntimeRecord {
+function projectile(shotId: number, overrides: Partial<ProjectileAk47HitContext> = {}): ProjectileAk47HitContext {
   return {
-    id: shotId,
     ownerId: 'p1',
-    ak47ShotId: shotId,
-    ak47HitConfirmed: false,
-    ak47FireSuperiorityShot: false,
+    shotId,
+    fireSuperiorityShot: false,
     ...overrides,
-  } as ProjectileRuntimeRecord;
+  };
 }
 
 function resolvedProjectile(shotId: number, fireSuperiorityShot = false): ProjectileLifecycleOutcome {
