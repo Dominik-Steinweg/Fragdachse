@@ -1,3 +1,5 @@
+import { captureBouncePivot, captureBounceFollow, tracerBounceDebug } from './ProjectileBounceDiagnostics';
+
 /** Presentation-only samples. No renderer or gameplay owner may derive collisions from these. */
 export interface ProjectilePathPoint {
   readonly sequence: number;
@@ -44,6 +46,7 @@ export class ProjectilePathRecorder {
     const x = speed > 0 ? last.x + nx * Math.max(0, distance) : centerX;
     const y = speed > 0 ? last.y + ny * Math.max(0, distance) : centerY;
     this.append(id, x, y, vx, vy, timeMs, false, bounceSequence);
+    captureBouncePivot(id, last, points![points!.length - 1], centerX, centerY);
     this.bounceOrigins.set(id, { x: centerX, y: centerY, timeMs: Math.max(timeMs, last.timeMs) });
   }
 
@@ -62,7 +65,10 @@ export class ProjectilePathRecorder {
   /** Arcade moves bodies before sprite postUpdate. Only publish the runtime-confirmed prefix. */
   commitThrough(id: number, x: number, y: number): boolean {
     const samples = this.pending.get(id);
-    if (!samples?.length) return true;
+    if (!samples) return true;
+    // An invalidated queue must wait for fresh Physics confirmation. Absence of
+    // samples after a contact does not mean the sprite has reached body.postUpdate.
+    if (!samples.length) return false;
     let confirmed = -1;
     for (let i = 0; i < samples.length; i++) {
       if (Math.abs(samples[i].x - x) < 1e-6 && Math.abs(samples[i].y - y) < 1e-6) confirmed = i;
@@ -73,7 +79,9 @@ export class ProjectilePathRecorder {
     return true;
   }
 
-  discardPending(id: number): void { this.pending.delete(id); }
+  discardPending(id: number): void {
+    if (this.paths.has(id)) this.pending.set(id, []);
+  }
 
   begin(id: number, x: number, y: number, vx: number, vy: number, timeMs: number): void {
     this.pending.delete(id);
@@ -109,6 +117,7 @@ export class ProjectilePathRecorder {
       ...(breakBefore ? { breakBefore: true } : {}),
       ...(bounceSequence === undefined ? {} : { bounceSequence }) });
     this.trim(path, timeMs);
+    captureBounceFollow(id, path.points[path.points.length - 1]);
   }
 
   private trim(path: { points: ProjectilePathPoint[] }, timeMs: number): void {
@@ -136,7 +145,7 @@ export class ProjectilePathRecorder {
   }
 
   remove(id: number): void { this.paths.delete(id); this.pending.delete(id); this.bounceOrigins.delete(id); }
-  clear(): void { this.paths.clear(); this.pending.clear(); this.bounceOrigins.clear(); }
+  clear(): void { this.paths.clear(); this.pending.clear(); this.bounceOrigins.clear(); tracerBounceDebug.clear(); }
 }
 
 export interface ProjectileTrailSegment {
@@ -144,6 +153,8 @@ export interface ProjectileTrailSegment {
   readonly to: ProjectilePathPoint;
   /** Age at the end of the segment in the consuming presentation clock. */
   readonly ageMs: number;
+  /** Presentation-only launch provenance, cleared by interpolation/history clipping. */
+  readonly birth?: boolean;
 }
 
 /** Incremental path consumption, including partial segments during client interpolation. */
@@ -177,7 +188,10 @@ export class ProjectilePathCursor {
             breakBefore: undefined, bounceSequence: undefined };
         };
         sink({ from: startTime === a.timeMs ? a : pointAt(startTime),
-          to: endTime === b.timeMs ? b : pointAt(endTime), ageMs: Math.max(0, presentationTime - endTime) });
+          to: endTime === b.timeMs ? b : pointAt(endTime), ageMs: Math.max(0, presentationTime - endTime),
+          ...(a.sequence === 1 && a.breakBefore && a.bounceSequence === undefined
+            && startTime === a.timeMs && a.timeMs > path.timeMs - PROJECTILE_PATH_HISTORY_MS
+            ? { birth: true } : {}) });
       }
       this.sequence = b.sequence;
       this.timeMs = endTime;

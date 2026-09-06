@@ -58,6 +58,8 @@ export type ObstacleRectVisitor = (
   /** Index in `rockObjects` bei Felsen, sonst -1. */
   rockIndex: number,
   left: number, top: number, right: number, bottom: number,
+  /** Original body for callers that need its domain identity (e.g. a base cell). */
+  source: ObstacleRectBody,
 ) => boolean;
 
 /** Wie `ObstacleRectVisitor`, für Baumstämme. */
@@ -354,6 +356,7 @@ export class ArenaObstacleIndex {
               this.rectData[offset + 1],
               this.rectData[offset + 2],
               this.rectData[offset + 3],
+              this.rectSource[entry],
             );
             if (stop) return;
           } else {

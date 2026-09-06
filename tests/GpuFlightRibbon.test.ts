@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
 import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
-import type { ProjectilePathPoint } from '../src/projectile/ProjectileFlightPath';
+import { tracerBounceDebug } from '../src/effects/TracerBounceDebugSettings';
+import { ProjectilePathCursor, ProjectilePathRecorder, type ProjectilePathPoint } from '../src/projectile/ProjectileFlightPath';
 import { FLIGHT_RIBBON_SLOT_WORDS, FLIGHT_RIBBON_VERTEX_WORDS, GpuFlightRibbonStore,
   type FlightRibbonSpan } from '../src/effects/gpu/GpuFlightRibbon';
 
@@ -13,7 +14,8 @@ function setup(capacity = 512) {
   const store = new GpuFlightRibbonStore(admission, [{ u: 0.1, top: 0.9, bottom: 0.8 }, { u: 0.2, top: 0.7, bottom: 0.6 }], capacity);
   const handle = store.create(3, { tuning: FLIGHT_SIGNATURE_PROFILES.heavy, color: 0xffaa66, emissive: 1 })!;
   const append = (from: ProjectilePathPoint, to: ProjectilePathPoint, now = to.timeMs, wake = false, h = handle) => {
-    store.append(h, { from, to, ageMs: now - to.timeMs }, now, wake, 1); store.flush();
+    store.append(h, { from, to, ageMs: now - to.timeMs,
+      birth: from.sequence === 1 && from.breakBefore }, now, wake, 1); store.flush();
   };
   return { store, handle, append, admission };
 }
@@ -30,6 +32,109 @@ function evaluate(v: number[], now: number) {
 }
 
 describe('GPU flight ribbon geometry and lifetime', () => {
+  it('rejects a clipped sequence-one prefix during client interpolation, but recognizes launch', () => {
+    for (const clipped of [false, true]) {
+      const { store, handle } = setup();
+      const recorder = new ProjectilePathRecorder(), cursor = new ProjectilePathCursor();
+      recorder.begin(1, 0, 0, 1000, 0, 0);
+      recorder.append(1, clipped ? 1100 : 40, 0, 1000, 0, clipped ? 1100 : 40);
+      const path = recorder.read(1, clipped ? 1100 : 40)!;
+      expect(path.points[0].sequence).toBe(1);
+      cursor.consume(path, clipped ? 1050 : 20, segment => store.append(handle, segment, 0, false, 1));
+      store.flush();
+      const first = store.spans(handle)[0];
+      expect(first).toBeDefined();
+      if (clipped) expect(vertex(store, first, 0)[13]).toBeCloseTo(first.from.alpha);
+      else expect(vertex(store, first, 0)[13]).toBe(0);
+    }
+  });
+  it('debug pinning changes only wake spread at bounce vertices and is reversible live', () => {
+    const { store, append } = setup(16);
+    const a = point(0, 0, 0), b = point(40, 0, 40, true), c = point(20, 30, 70);
+    for (const wake of [false, true]) { append(a, b, 70, wake); append(b, c, 70, wake); }
+    const original = store.data.slice();
+    try {
+      tracerBounceDebug.pinBounceWake = true;
+      store.flush();
+      let changed = 0;
+      for (let offset = 0; offset < original.length; offset += FLIGHT_RIBBON_VERTEX_WORDS) {
+        for (let word = 0; word < FLIGHT_RIBBON_VERTEX_WORDS; word++) {
+          const atBounceWake = original[offset] === b.x && original[offset + 1] === b.y
+            && original[offset + 15] === 1;
+          if (atBounceWake && word === 9) {
+            expect(store.data[offset + word]).toBe(0);
+            if (original[offset + word] !== 0) changed++;
+          } else expect(store.data[offset + word]).toBe(original[offset + word]);
+        }
+      }
+      expect(changed).toBeGreaterThan(0);
+    } finally {
+      tracerBounceDebug.pinBounceWake = false;
+      store.flush();
+    }
+    expect(store.data).toEqual(original);
+  });
+
+  it.each([false, true])('tapers only the real birth along the shared path (wake=%s)', wake => {
+    const { store, handle, append } = setup();
+    const origin = { ...point(100, 80, 0), sequence: 1, breakBefore: true };
+    const contact = point(102, 80, 2, true);
+    append(origin, contact, 2, wake);
+    const first = store.spans(handle, wake)[0];
+    const birth = vertex(store, first, 0);
+    expect(birth.slice(0, 2)).toEqual([100, 80]);
+    expect(birth[13]).toBe(0);
+    expect(birth[8]).toBeGreaterThan(0);
+    expect(birth[8]).toBeLessThan(first.from.width);
+    append(contact, point(102, 120, 42), 42, wake);
+    const spans = store.spans(handle, wake);
+    expect(vertex(store, spans[1], 0)).toEqual(vertex(store, first, 2));
+    let alpha = 0;
+    for (const span of spans) {
+      const end = vertex(store, span, 2);
+      expect(end[13]).toBeGreaterThanOrEqual(alpha);
+      alpha = end[13];
+      expect(end[0]).toBeGreaterThanOrEqual(100);
+    }
+    const last = spans[spans.length - 1];
+    expect(vertex(store, last, 0)[13]).toBeCloseTo(last.from.alpha);
+    expect(vertex(store, last, 0)[8]).toBeCloseTo(last.from.width);
+    store.end(handle); store.flush();
+    expect(vertex(store, first, 0)).toEqual(birth);
+    expect(vertex(store, last, 2)[13]).toBe(0);
+  });
+
+  it.each(['break', 'aging', 'eviction', 'missing', 'clipped'] as const)('does not promote %s to a new birth', mode => {
+    const { store, handle, append } = setup(mode === 'eviction' ? 2 : 512);
+    const origin = { ...point(0, 0, 0), sequence: 1, breakBefore: true };
+    if (mode !== 'missing' && mode !== 'clipped') append(origin, point(40, 0, 40));
+    if (mode === 'break') store.break(handle);
+    if (mode === 'aging') store.retire(1000);
+    const from = mode === 'clipped' ? origin : point(40, 0, 40);
+    append(from, point(80, 0, 80), mode === 'clipped' ? 1000 : 80);
+    // The clipped ancient segment is expired; a later visible suffix stays full strength.
+    if (mode === 'clipped') append(point(80, 0, 1000), point(100, 0, 1020));
+    const spans = store.spans(handle), last = spans[spans.length - 1];
+    expect(vertex(store, last, 0)[13]).toBeCloseTo(last.from.alpha);
+    expect(vertex(store, last, 0)[8]).toBeCloseTo(last.from.width);
+  });
+
+  it('keeps birth distance through partial replay and does not restart after the taper', () => {
+    const { store, handle, append } = setup();
+    const origin = { ...point(0, 0, 0), sequence: 1, breakBefore: true };
+    append(origin, point(2, 0, 2));
+    const early = store.spans(handle)[0];
+    append(origin, point(40, 0, 40));
+    expect(store.spans(handle)[1].from).toBe(early.to);
+    expect(vertex(store, early, 2)).toEqual(vertex(store, store.spans(handle)[1], 0));
+    const before = store.spans(handle).length;
+    append(origin, point(60, 0, 60));
+    const continuation = store.spans(handle)[before];
+    expect(continuation.from.x).toBe(40);
+    expect(vertex(store, continuation, 0)[13]).toBeCloseTo(continuation.from.alpha);
+    expect(vertex(store, continuation, 2)[13]).toBeCloseTo(continuation.to.alpha);
+  });
+
   it.each(['end', 'linger'] as const)('tapers only the final real span on %s, leaving live heads and joins intact', closeMode => {
     const { store, handle, append } = setup();
     const a = point(0, 0, 0), b = point(40, 0, 40, true), c = point(40, 24, 64);

@@ -125,6 +125,62 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('waits for a post-contact physics confirmation before publishing a stale sprite as bounce travel', () => {
+    let now = 0;
+    const physics = createTechnicalPhysicsBinding();
+    const presentation = createPresentation();
+    const runtime = new WorldProjectileRuntime({ physicsBinding: physics.binding, presentation,
+      identityScope: new ProjectileIdentityScope(1), hostNowMs: () => now });
+    runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
+    const incoming = { x: 1065.9498440288482, y: 621.5250329367449 };
+    const center = { x: 1058.6701708697478, y: 608.8430895629104 };
+    const stale = { x: 1061.919010796671, y: 615.1345310340141 };
+    const velocity = { x: 480.63075655464695, y: -760.9166024300612 };
+    const id = runtime.spawnProjectile(baseRequest({ speed: Math.hypot(velocity.x, velocity.y),
+      maxBounces: 3, tracerConfig: { profile: 'heavy' } },
+    { ...incoming, angle: Math.atan2(velocity.y, -velocity.x) }))!;
+    const handle = physics.handles.get(id)!;
+    const readPath = () => {
+      let path: import('../src/projectile/ProjectileFlightPath').ProjectileFlightPath | undefined;
+      runtime.readProjectileReplication(record => { path = record.dynamic.flightPath; });
+      return path!;
+    };
+    now = 5;
+    // The sprite still belongs to the incoming frame when the body reports its bounce.
+    Object.assign(handle.sprite, stale);
+    physics.observe(id, stale.x, stale.y, -velocity.x, velocity.y);
+    handle.body.setVelocity(velocity.x, velocity.y);
+    physics.emit({ projectileId: id, target: { kind: 'trunk' }, x: 1058, y: 608.6157751049657,
+      flightPosition: center, velocityX: velocity.x, velocityY: velocity.y, source: 'physics-collider' });
+    const bounced = readPath();
+    now = 13;
+    runtime.runHostProjectileStage(8, now);
+    expect(readPath().points).toEqual(bounced.points);
+
+    // A new worldstep observation is not sufficient while the display anchor is stale.
+    physics.observe(id, center.x, center.y, velocity.x, velocity.y);
+    runtime.runHostProjectileStage(0, now);
+    expect(readPath().points).toEqual(bounced.points);
+    Object.assign(handle.sprite, center); // Arcade postUpdate
+    runtime.runHostProjectileStage(0, now);
+    expect(readPath().points).toEqual(bounced.points); // separation itself is not travel
+
+    now = 21;
+    const next = { x: center.x + velocity.x * 0.008, y: center.y + velocity.y * 0.008 };
+    physics.observe(id, next.x, next.y, velocity.x, velocity.y);
+    Object.assign(handle.sprite, next);
+    runtime.runHostProjectileStage(8, now);
+    const points = readPath().points;
+    expect(points).toHaveLength(3);
+    expect(points[2]).toMatchObject(next);
+    expect(points[2].y).toBeLessThan(points[1].y);
+    const hostFrames = vi.mocked(presentation.syncHostRenderers).mock.calls;
+    expect(hostFrames[hostFrames.length - 1][0][0].flightPath?.points).toEqual(points);
+    const wire = runtime.getNetSnapshot();
+    expect(decodeProjectileDynamics(wire?.u ?? [])[0].flightPath?.points).toEqual(points);
+    runtime.destroy();
+  });
+
   it.each(['sweep', 'physics', 'world-boundary'] as const)('publishes one flight pivot for a %s bounce', (mode) => {
     let now = 0;
     const physics = createTechnicalPhysicsBinding();

@@ -58,6 +58,9 @@ begrenzen diese Strecke. Gameplay und Physik lesen den Präsentationspfad niemal
 Bounce-Feedback bleibt am Kontaktpunkt; der Flight-Pivot verbindet die ankommende und ausgehende
 Center-Bewegung. Collider-Separation und Sweep-Depenetration sind technische Urspruenge, keine
 zusaetzlichen Flugsegmente. Erst neue Bewegung verlaengert den Pfad nach einem Bounce.
+Verworfene Physics-Beobachtungen geben keine Sprite-Position frei: Nach einem Kontakt muss eine
+frische Physics-Beobachtung mit dem synchronisierten Sprite uebereinstimmen, bevor dessen Position
+wieder als Bewegung aufgezeichnet wird.
 Bounce-Punkte bleiben Ecken, räumliche Unterbrechungen werden nicht verbunden. Die Historie ist nach
 Alter und Punktzahl begrenzt; nur unveränderte geradlinige Bewegung darf zusammengefasst werden.
 

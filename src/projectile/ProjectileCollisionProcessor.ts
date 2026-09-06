@@ -1,4 +1,5 @@
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
+import { usesRockSweep } from './ProjectileRockSweep';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import { shouldIgnorePlasmaSwarmOriginHit } from '../systems/PlasmaCharge';
 import type { ProjectileId } from './ProjectileSpawnPort';
@@ -387,6 +388,9 @@ export class ProjectileCollisionProcessor {
     overlapBounds?: { left: number; right: number; top: number; bottom: number },
   ): boolean {
     if (record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    // Rock and base cells share the rectangular body sweep. Their target circles
+    // must not reset the projectile before that sweep resolves the exterior face.
+    if ((slot.kind === 'rock' || slot.kind === 'base') && usesRockSweep(record.spec.flight)) return false;
 
     if (slot.kind === 'rock'
       && record.spec.flight.penetration.penetratesRocks === true

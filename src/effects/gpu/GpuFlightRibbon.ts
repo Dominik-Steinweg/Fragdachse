@@ -1,4 +1,5 @@
 import type { FlightSignatureTuning } from '../../projectile/FlightSignature';
+import { tracerBounceDebug } from '../TracerBounceDebugSettings';
 import type { ProjectilePathPoint, ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 import type { GpuVfxPoolStats } from './GpuVfxPool';
 import { GpuVfxEffectId } from './GpuVfxEffects';
@@ -12,6 +13,7 @@ const MAX_HANDLES = 8192;
 const MAX_SPANS = 255;
 const MAX_AGE_MS = 1000;
 const TERMINAL_WIDTH_SCALE = 0.65;
+const BIRTH_DISTANCE = 12;
 
 export interface FlightRibbonStyle {
   readonly tuning: FlightSignatureTuning;
@@ -25,13 +27,14 @@ export interface FlightRibbonKnot {
   readonly life: number; readonly width: number; readonly spread: number;
   readonly alpha: number; readonly heat: number; readonly turbulence: number;
   readonly color: number; bounce: boolean;
+  readonly birthDistance: number;
 }
 export interface FlightRibbonSpan {
   readonly slot: number; readonly from: FlightRibbonKnot; readonly to: FlightRibbonKnot;
   readonly wake: boolean; previous: FlightRibbonSpan | null; next: FlightRibbonSpan | null;
   terminal: boolean;
 }
-interface Chain { spans: FlightRibbonSpan[]; last: FlightRibbonKnot | null; knots: number }
+interface Chain { spans: FlightRibbonSpan[]; last: FlightRibbonKnot | null; knots: number; birthPending: boolean }
 interface Flight {
   source: number; readonly style: FlightRibbonStyle; readonly core: Chain; readonly wake: Chain;
   closed: boolean;
@@ -99,6 +102,7 @@ export class GpuFlightRibbonStore {
   private writes = 0;
   private coreWork: number;
   private wakeWork: number;
+  private debugPinBounceWake = false;
 
   constructor(private readonly admission: FlightRibbonAdmission,
     private readonly frames: readonly [FlightRibbonFrame, FlightRibbonFrame],
@@ -113,7 +117,7 @@ export class GpuFlightRibbonStore {
   create(source: number, style: FlightRibbonStyle): FlightRibbonHandle | null {
     if (this.flights.size >= MAX_HANDLES) return null;
     const id = this.nextId++;
-    this.flights.set(id, { source, style, core: { spans: [], last: null, knots: 0 }, wake: { spans: [], last: null, knots: 0 }, closed: false });
+    this.flights.set(id, { source, style, core: { spans: [], last: null, knots: 0, birthPending: true }, wake: { spans: [], last: null, knots: 0, birthPending: true }, closed: false });
     return { id, generation: this.generation };
   }
   private get(handle: FlightRibbonHandle): Flight | undefined {
@@ -121,7 +125,7 @@ export class GpuFlightRibbonStore {
   }
   break(handle: FlightRibbonHandle): void {
     const f = this.get(handle);
-    if (f) { f.core.last = null; f.wake.last = null; }
+    if (f) for (const chain of [f.core, f.wake]) { chain.last = null; chain.birthPending = false; }
   }
   end(handle: FlightRibbonHandle): void { const f = this.get(handle); if (f) this.close(f); }
   private close(flight: Flight): void {
@@ -141,14 +145,22 @@ export class GpuFlightRibbonStore {
     const flight = this.get(handle);
     if (!flight || flight.closed) return;
     const chain = wake ? flight.wake : flight.core;
-    if (segment.to.breakBefore) { chain.last = null; return; }
-    if (wake && factor <= 0) { chain.last = null; return; }
+    if (segment.to.breakBefore || (wake && factor <= 0)) { chain.last = null; chain.birthPending = false; return; }
     const dx = segment.to.x - segment.from.x, dy = segment.to.y - segment.from.y;
     const length = Math.hypot(dx, dy), duration = Math.max(0, segment.to.timeMs - segment.from.timeMs);
     if (length < 0.01 || !Number.isFinite(length + duration + segment.ageMs)) return;
     // Duplicate/overlapping data cannot move a material cursor backwards.
     if (chain.last && segment.to.timeMs <= chain.last.pathTime
       && (duration > 0 || Math.hypot(segment.to.x - chain.last.x, segment.to.y - chain.last.y) < 0.01)) return;
+    // Launch provenance comes from the path cursor, never from a missing predecessor.
+    let birthBase = chain.birthPending && segment.birth ? 0 : Infinity;
+    chain.birthPending = false;
+    const cursor = chain.last;
+    const cursorU = cursor && duration > 0 ? (cursor.pathTime - segment.from.timeMs) / duration : 0;
+    if (cursor && cursorU >= 0 && cursorU <= 1
+      && Math.hypot(cursor.x - segment.from.x - dx * cursorU, cursor.y - segment.from.y - dy * cursorU) < 0.01) {
+      birthBase = cursor.birthDistance - length * cursorU;
+    }
     const response = flightRibbonResponse(flight.style.tuning, segment.from,
       Math.hypot(segment.to.vx, segment.to.vy) || (duration ? length * 1000 / duration : 0));
     const life = response.hotMs + (wake ? flight.style.tuning.wakePersistence * factor : 0);
@@ -158,7 +170,14 @@ export class GpuFlightRibbonStore {
     if (chain.last && duration > 0 && chain.last.pathTime > segment.from.timeMs) {
       start = Math.max(start, Math.min(1, (chain.last.pathTime - segment.from.timeMs) / duration));
     }
-    const parts = Math.max(1, Math.ceil(length * (1 - start) / 64));
+    // Refine only the short birth region, on the confirmed segment itself.
+    const birthEnd = Math.max(start, Math.min(1, (BIRTH_DISTANCE - birthBase) / length));
+    const birthParts = Math.max(0, Math.ceil(length * (birthEnd - start) / 4));
+    const bodyParts = Math.max(0, Math.ceil(length * (1 - birthEnd) / 64));
+    const parts = Math.max(1, birthParts + bodyParts);
+    const fraction = (index: number) => birthParts && index <= birthParts
+      ? start + (birthEnd - start) * index / birthParts
+      : birthEnd + (1 - birthEnd) * (index - birthParts) / Math.max(1, bodyParts);
     // Retain a recent suffix if a single huge confirmed step exceeds the local bound.
     const count = Math.min(parts, MAX_SPANS, wake ? this.wakeWork : this.coreWork);
     if (wake) this.wakeWork -= count; else this.coreWork -= count;
@@ -179,11 +198,12 @@ export class GpuFlightRibbonStore {
       heat: wake ? 0.65 : 1 - flight.style.tuning.heatContrast,
       turbulence: wake ? flight.style.tuning.wakeTurbulence : 0,
       color: flight.style.color,
+      birthDistance: birthBase + length * u,
       bounce: (u === 0 && segment.from.bounceSequence !== undefined) || (u === 1 && segment.to.bounceSequence !== undefined),
     });
     // Count the bounded work, not a potentially unrepresentable huge world-distance index.
     for (let i = 0; i < count; i++) {
-      const from = point(start + (1 - start) * (first + i) / parts), to = point(start + (1 - start) * (first + i + 1) / parts);
+      const from = point(fraction(first + i)), to = point(fraction(first + i + 1));
       if (Math.hypot(to.x - from.x, to.y - from.y) < 0.01) continue;
       const last = chain.last;
       const connects = last && Math.abs(last.pathTime - from.pathTime) < 0.001 && Math.hypot(last.x - from.x, last.y - from.y) < 0.01;
@@ -265,6 +285,12 @@ export class GpuFlightRibbonStore {
     this.flights.clear();
   }
   flush(): void {
+    if (this.debugPinBounceWake !== tracerBounceDebug.pinBounceWake) {
+      this.debugPinBounceWake = tracerBounceDebug.pinBounceWake;
+      for (const span of this.slots) {
+        if (span?.wake && (span.from.bounce || span.to.bounce)) this.dirty.add(span.slot);
+      }
+    }
     const pages = new Set<number>();
     for (const slot of this.dirty) {
       const span = this.slots[slot], offset = slot * FLIGHT_RIBBON_SLOT_WORDS;
@@ -284,17 +310,21 @@ export class GpuFlightRibbonStore {
     const data = this.data;
     const vertex = (k: FlightRibbonKnot, v: Vec, normal: Vec, side: number) => {
       const terminal = s.terminal && k === s.to;
-      const widthScale = terminal ? TERMINAL_WIDTH_SCALE : 1;
-      const drift = k.bounce ? 0 : Math.sin((k.x * 0.6 + k.y * 0.8) / 96) * k.turbulence * k.spread;
+      const progress = Math.max(0, Math.min(1, k.birthDistance / BIRTH_DISTANCE));
+      const birth = progress * progress * (3 - 2 * progress);
+      const widthScale = (0.2 + 0.8 * birth) * (terminal ? TERMINAL_WIDTH_SCALE : 1);
+      const drift = k.bounce ? 0 : Math.sin((k.x * 0.6 + k.y * 0.8) / 96) * k.turbulence * k.spread * birth;
       data[offset++] = k.x; data[offset++] = k.y;
       data[offset++] = v[0]; data[offset++] = v[1];
       data[offset++] = normal[0] * drift; data[offset++] = normal[1] * drift;
       data[offset++] = k.born; data[offset++] = k.life;
-      data[offset++] = k.width * widthScale; data[offset++] = k.spread * widthScale;
+      data[offset++] = k.width * widthScale;
+      // Diagnostic only: drift is already zero at bounce knots above. Keep neighbours unchanged.
+      data[offset++] = this.debugPinBounceWake && s.wake && k.bounce ? 0 : k.spread * widthScale;
       data[offset++] = ((k.color >> 16) & 255) / 255;
       data[offset++] = ((k.color >> 8) & 255) / 255;
       data[offset++] = (k.color & 255) / 255;
-      data[offset++] = terminal ? 0 : k.alpha; data[offset++] = k.heat;
+      data[offset++] = terminal ? 0 : k.alpha * birth; data[offset++] = k.heat;
       data[offset++] = s.wake ? 1 : 0;
       data[offset++] = frame.u; data[offset++] = frame.top + (frame.bottom - frame.top) * side;
     };

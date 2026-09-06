@@ -1,4 +1,6 @@
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
+import { usesRockSweep } from './ProjectileRockSweep';
+import { captureBounceContact, captureFlightStep, tracerBounceDebug } from './ProjectileBounceDiagnostics';
 import * as Phaser from 'phaser';
 import { findNearestRectangleHit } from '../utils/geometry';
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
@@ -707,6 +709,7 @@ export class WorldProjectileRuntime implements
     if (tracerBounce) {
       this.flightPaths.bounce(projectile.id, flightPosition?.x ?? x, flightPosition?.y ?? y,
         vx, vy, this.hostNowMs(), presentation.sequence);
+      captureBounceContact(projectile.id, presentation.sequence, x, y);
     } else {
       this.flightPaths.discardPending(projectile.id);
       this.flightPaths.append(projectile.id, x, y, vx, vy, this.hostNowMs(), false, presentation.sequence);
@@ -749,13 +752,9 @@ export class WorldProjectileRuntime implements
   }
 
   private shouldSweepRocks(projectile: ProjectileRuntimeRecord): boolean {
-    return projectile.spec.flight.collisionMode === 'sweep'
-      && !projectile.spec.flight.isGrenade
-      && !projectile.spec.flight.isFlame
-      && !projectile.spec.flight.isBfg
+    return usesRockSweep(projectile.spec.flight)
       && !projectile.pendingDestroy
-      && !projectile.bounceProcessedThisStep
-      && !projectile.spec.flight.penetration.penetratesRocks;
+      && !projectile.bounceProcessedThisStep;
   }
 
   private sweepRocks(projectile: ProjectileRuntimeRecord): void {
@@ -764,6 +763,8 @@ export class WorldProjectileRuntime implements
     const hit = this.physicsBinding.findNearestRockSweep(
       projectile.lastX, projectile.lastY, projectile.physics.sprite.x, projectile.physics.sprite.y,
       projectile.spec.flight.collisionFilter.ignoreRockIndex,
+      projectile.physics.body.width / 2, projectile.physics.body.height / 2, projectile.id,
+      !projectile.spec.flight.collisionFilter.ignoreBaseCollisions,
     );
     if (!hit) return;
     const normalLength = Math.hypot(hit.normalX, hit.normalY) || 1;
@@ -781,21 +782,24 @@ export class WorldProjectileRuntime implements
     projectile.velocityAfterFirstBounce = { x: nextVx, y: nextVy };
     const resolution = this.resolveWorldImpactCandidate(projectile, {
       projectileId: projectile.id,
-      target: { kind: 'rock', id: hit.rockIndex },
+      target: hit.baseId === undefined ? { kind: 'rock', id: hit.rockIndex } : { kind: 'base', id: hit.baseId },
       x: hit.x,
       y: hit.y,
       source: 'physics-collider',
     }, true);
-    if (resolution.technicalContactConsumed) return;
+    // Impact callbacks may synchronously release the shot. Do not recreate its
+    // bounce replication or reset a body whose lifetime already ended.
+    if (resolution.technicalContactConsumed || projectile.pendingDestroy
+      || !this.projectiles.activeRecords.has(projectile)) return;
     const offsetDistance = projectile.bounceCount > projectile.maxBounces ? 0
-      : Math.max(projectile.physics.sprite.displayWidth * 0.5 + 0.5, 1);
+      : hit.centerX !== undefined ? 0.5 : Math.max(projectile.physics.sprite.displayWidth * 0.5 + 0.5, 1);
     const flightPosition = {
-      x: hit.x + (hit.normalX / normalLength) * offsetDistance,
-      y: hit.y + (hit.normalY / normalLength) * offsetDistance,
+      x: (hit.centerX ?? hit.x) + (hit.normalX / normalLength) * offsetDistance,
+      y: (hit.centerY ?? hit.y) + (hit.normalY / normalLength) * offsetDistance,
     };
     this.playAuthoritativeBouncePresentation(projectile, hit.x, hit.y, nextVx, nextVy, true, flightPosition);
     if (projectile.bounceCount > projectile.maxBounces) {
-      projectile.physics.body.reset(hit.x, hit.y);
+      projectile.physics.body.reset(flightPosition.x, flightPosition.y);
       projectile.physics.body.setVelocity(0, 0);
       projectile.physics.body.enable = false;
       return;
@@ -1602,8 +1606,10 @@ export class WorldProjectileRuntime implements
   runHostProjectileStage(deltaMs: number, nowMs: number): ProjectileHostStageResult {
     if (this.destroyed) return emptyHostStageResult();
     this.setHostFrameTime(nowMs);
+    this.captureDebugFlightSteps('before-flight');
     const coreStage = this.flightProcessor.run(this.projectiles.stepOrder, deltaMs, nowMs);
     const stage = this.lifecycleProcessor.run(this.projectiles.stepOrder, coreStage);
+    this.captureDebugFlightSteps('after-flight');
     if (this.destroyed) return emptyHostStageResult();
     this.runMiniRocketStateStage();
     for (const record of this.projectiles.activeRecords) this.recordFlightPosition(record, nowMs);
@@ -1694,12 +1700,26 @@ export class WorldProjectileRuntime implements
     this.hasStartedInteractionStage = true;
     this.interactionNowMs = nowMs;
     this.setHostFrameTime(nowMs);
+    this.captureDebugFlightSteps('before-interaction');
     try {
       this.runBarrierStage(nowMs);
       this.runDeflectionStage(nowMs);
       this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+      this.captureDebugFlightSteps('after-interaction');
     } finally {
       this.completedInteractionStages += 1;
+    }
+  }
+
+  private captureDebugFlightSteps(stage: string): void {
+    if (!tracerBounceDebug.centerline) return;
+    for (const record of this.projectiles.activeRecords) {
+      const { sprite, body } = record.physics;
+      captureFlightStep({ projectileId: record.id, stage,
+        x: sprite.x, y: sprite.y, lastX: record.lastX, lastY: record.lastY,
+        vx: body.velocity.x, vy: body.velocity.y, width: body.width, height: body.height,
+        collisionMode: record.spec.flight.collisionMode, sweepEnabled: this.shouldSweepRocks(record),
+        pendingDestroy: record.pendingDestroy === true, bounceProcessed: record.bounceProcessedThisStep === true });
     }
   }
 
@@ -2372,9 +2392,14 @@ function resolvePhysicsMechanics(cfg: ProjectileSpawnConfig): ProjectilePhysicsM
     stopOnTrainContact: stopOnContact,
     stopOnWorldBoundary: flame || stopOnContact,
     worldBounds: true,
-    rock: true,
+    // Swept shots resolve rock contact, damage and reflection in sweepRocks.
+    // An Arcade collider would reflect first from a potentially different tile face.
+    rock: !usesRockSweep({ ...cfg, collisionMode: resolveProjectileCollisionMode(cfg),
+      penetration: { penetratesRocks: cfg.penetratesRocks } }),
     trunk: !passThrough,
-    base: !passThrough && !cfg.ignoreBaseCollisions,
+    base: !passThrough && !cfg.ignoreBaseCollisions
+      && !usesRockSweep({ ...cfg, collisionMode: resolveProjectileCollisionMode(cfg),
+        penetration: { penetratesRocks: cfg.penetratesRocks } }),
     train: true,
     ignoreRockIndex: cfg.ignoreRockIndex,
   };

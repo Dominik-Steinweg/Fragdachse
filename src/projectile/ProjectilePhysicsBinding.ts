@@ -1,8 +1,8 @@
 import * as Phaser from 'phaser';
+import { beginRockSweepDiagnostic, tracerBounceDebug } from './ProjectileBounceDiagnostics';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
-import { OBSTACLE_ROCK, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import { OBSTACLE_ROCK, OBSTACLE_BASE, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import { CombatGeometry } from '../systems/CombatGeometry';
-import { findNearestRectangleHit } from '../utils/geometry';
 import { DEPTH } from '../config';
 import type { ProjectilePhysicsContact, ProjectilePhysicsContactTarget } from './ProjectileTargetPort';
 import type { ProjectileId } from './ProjectileSpawnPort';
@@ -51,10 +51,15 @@ export interface ProjectileSafeMuzzleGeometry {
 
 export interface ProjectileRockSweepHit {
   readonly rockIndex: number;
+  /** Base cells use the same sweep, but retain their base damage identity. */
+  readonly baseId?: string;
   readonly x: number;
   readonly y: number;
   readonly normalX: number;
   readonly normalY: number;
+  /** Center at first body contact, distinct from the surface point x/y. */
+  readonly centerX?: number;
+  readonly centerY?: number;
 }
 
 /** Phaser-owned resources. This type must not cross a public gameplay boundary. */
@@ -86,6 +91,10 @@ export interface ProjectilePhysicsBindingPort {
     endX: number,
     endY: number,
     ignoreRockIndex?: number,
+    halfWidth?: number,
+    halfHeight?: number,
+    diagnosticProjectileId?: number,
+    includeBases?: boolean,
   ): ProjectileRockSweepHit | null;
   createPhysicsHandle(spec: ProjectilePhysicsSpawnSpec): ProjectilePhysicsHandle;
   releaseProjectileResources(handle: ProjectilePhysicsHandle): void;
@@ -124,9 +133,6 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   private trainGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private obstacleIndex: ArenaObstacleIndex | null = null;
   private obstacleGeometry: CombatGeometry | null = null;
-  private readonly sweepLine = new Phaser.Geom.Line();
-  private readonly sweepRect = new Phaser.Geom.Rectangle();
-  private readonly sweepPoints: Phaser.Math.Vector2[] = [];
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -165,57 +171,117 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
     endX: number,
     endY: number,
     ignoreRockIndex?: number,
+    halfWidth = 0,
+    halfHeight = 0,
+    diagnosticProjectileId?: number,
+    includeBases = false,
   ): ProjectileRockSweepHit | null {
-    const line = this.sweepLine.setTo(startX, startY, endX, endY);
-    const best = { index: -1, x: 0, y: 0, distance: Number.POSITIVE_INFINITY, left: 0, top: 0, right: 0, bottom: 0 };
-    const consider = (index: number, left: number, top: number, right: number, bottom: number): void => {
-      if (index < 0 || index === ignoreRockIndex) return;
-      const hit = this.obstacleGeometry
-        ? this.obstacleGeometry.nearestRectangleHit(line, this.obstacleGeometry.obstacleRect(left, top, right, bottom))
-        : findNearestRectangleHit(line, this.sweepRect.setTo(left, top, right - left, bottom - top), this.sweepPoints);
-      if (!hit || hit.distance >= best.distance) return;
+    const diagnostic = tracerBounceDebug.centerline ? beginRockSweepDiagnostic({
+      projectileId: diagnosticProjectileId, start: { x: startX, y: startY }, end: { x: endX, y: endY },
+      halfWidth, halfHeight, indexed: this.obstacleIndex !== null,
+    }) : undefined;
+    const dx = endX - startX, dy = endY - startY, length = Math.hypot(dx, dy);
+    if (length < 1e-9) return null;
+    const best = { index: -1, x: 0, y: 0, distance: Number.POSITIVE_INFINITY, normalX: 0, normalY: 0,
+      left: 0, top: 0, right: 0, bottom: 0, baseId: undefined as string | undefined };
+    const tangencies: { distance: number; normalX: number; normalY: number }[] = [];
+    const mergeNormal = (normalX: number, normalY: number): void => {
+      const commonX = best.normalX === normalX ? normalX : 0;
+      const commonY = best.normalY === normalY ? normalY : 0;
+      best.normalX = commonX || commonY ? commonX : Math.sign(best.normalX + normalX);
+      best.normalY = commonX || commonY ? commonY : Math.sign(best.normalY + normalY);
+    };
+    const consider = (index: number, left: number, top: number, right: number, bottom: number, baseId?: string): void => {
+      const candidate: NonNullable<typeof diagnostic>['candidates'][number] | undefined = diagnostic
+        ? { index, left, top, right, bottom, baseId } : undefined;
+      if (candidate && diagnostic!.candidates.length < 64) diagnostic!.candidates.push(candidate);
+      if (index < 0 || (baseId === undefined && index === ignoreRockIndex)) {
+        if (candidate) candidate.rejected = 'ignored-rock';
+        return;
+      }
+      const surfaceLeft = left, surfaceTop = top, surfaceRight = right, surfaceBottom = bottom;
+      // Sweep the existing Arcade rectangle via Minkowski-expanded obstacle bounds.
+      left -= halfWidth; right += halfWidth; top -= halfHeight; bottom += halfHeight;
+      if ((!dx && (startX < left || startX > right)) || (!dy && (startY < top || startY > bottom))) {
+        if (candidate) candidate.rejected = 'parallel-outside';
+        return;
+      }
+      // Slab entry times identify the surface actually entered, not the nearest
+      // edge of an overlap or a surface the projectile is already leaving.
+      const nearX = dx ? ((dx > 0 ? left : right) - startX) / dx : -Infinity;
+      const farX = dx ? ((dx > 0 ? right : left) - startX) / dx : Infinity;
+      const nearY = dy ? ((dy > 0 ? top : bottom) - startY) / dy : -Infinity;
+      const farY = dy ? ((dy > 0 ? bottom : top) - startY) / dy : Infinity;
+      const enter = Math.max(nearX, nearY), exit = Math.min(farX, farY);
+      if (candidate) { candidate.enter = enter; candidate.exit = exit; }
+      if (enter < 0 || enter > 1 || exit < enter) {
+        if (candidate) candidate.rejected = enter < 0 && exit >= 0 ? 'starts-inside' : 'no-entry';
+        return;
+      }
+      const distance = enter * length;
+      const entersInterior = exit > enter;
+      if (distance > best.distance + 1e-7) return;
+      const normalX = Math.abs(nearX - enter) < 1e-9 ? -Math.sign(dx) : 0;
+      const normalY = Math.abs(nearY - enter) < 1e-9 ? -Math.sign(dy) : 0;
+      if (!entersInterior) { tangencies.push({ distance, normalX, normalY }); return; }
+      if (Math.abs(distance - best.distance) <= 1e-7) {
+        // At a shared tile corner retain the common exterior face. An internal
+        // seam must not add a second reflection; distinct concave faces still do.
+        mergeNormal(normalX, normalY);
+        if (index < best.index || (index === best.index && (baseId ?? '') < (best.baseId ?? ''))) {
+          best.index = index;
+          best.baseId = baseId;
+          best.left = surfaceLeft; best.top = surfaceTop; best.right = surfaceRight; best.bottom = surfaceBottom;
+        }
+        return;
+      }
       best.index = index;
-      best.x = hit.x; best.y = hit.y; best.distance = hit.distance;
-      best.left = left; best.top = top; best.right = right; best.bottom = bottom;
+      best.baseId = baseId;
+      best.x = startX + dx * enter; best.y = startY + dy * enter; best.distance = distance;
+      best.normalX = normalX; best.normalY = normalY;
+      best.left = surfaceLeft; best.top = surfaceTop; best.right = surfaceRight; best.bottom = surfaceBottom;
     };
     if (this.obstacleIndex && this.obstacleGeometry) {
       this.obstacleIndex.querySegment(
         startX, startY, endX, endY,
-        (kind, rockIndex, left, top, right, bottom) => {
+        (kind, rockIndex, left, top, right, bottom, source) => {
           if (kind === OBSTACLE_ROCK) consider(rockIndex, left, top, right, bottom);
+          else if (kind === OBSTACLE_BASE && includeBases) {
+            const baseId = (source as { getData?: (key: string) => unknown }).getData?.('baseId');
+            if (typeof baseId === 'string' && baseId) consider(0, left, top, right, bottom, baseId);
+          }
           return false;
         },
         () => false,
+        Math.max(halfWidth, halfHeight),
       );
-    } else if (this.rockObjects) {
-      for (let index = 0; index < this.rockObjects.length; index += 1) {
-        const rock = this.rockObjects[index];
+    } else {
+      for (let index = 0; index < (this.rockObjects?.length ?? 0); index += 1) {
+        const rock = this.rockObjects![index];
         if (!rock?.active) continue;
         const bounds = rock.getBounds();
         consider(index, bounds.left, bounds.top, bounds.right, bounds.bottom);
       }
+      if (includeBases) for (const child of this.baseGroup?.getChildren() ?? []) {
+        const cell = child as Phaser.GameObjects.Rectangle;
+        if (!cell.active) continue;
+        const baseId = cell.getData('baseId') as string | undefined;
+        if (!baseId) continue;
+        const bounds = cell.getBounds();
+        consider(0, bounds.left, bounds.top, bounds.right, bounds.bottom, baseId);
+      }
     }
     if (best.index < 0) return null;
-    const distances = [
-      { axis: 'left', value: Math.abs(best.x - best.left) },
-      { axis: 'right', value: Math.abs(best.x - best.right) },
-      { axis: 'top', value: Math.abs(best.y - best.top) },
-      { axis: 'bottom', value: Math.abs(best.y - best.bottom) },
-    ] as const;
-    const minDistance = Math.min(...distances.map((entry) => entry.value));
-    let normalX = 0; let normalY = 0;
-    for (const edge of distances) {
-      if (edge.value > minDistance + 0.75) continue;
-      if (edge.axis === 'left') normalX -= 1;
-      if (edge.axis === 'right') normalX += 1;
-      if (edge.axis === 'top') normalY -= 1;
-      if (edge.axis === 'bottom') normalY += 1;
+    // A tangent neighbour identifies an internal seam, but must neither receive
+    // damage nor hide a later genuine entry when touched in isolation.
+    for (const tangent of tangencies) if (Math.abs(tangent.distance - best.distance) <= 1e-7) {
+      mergeNormal(tangent.normalX, tangent.normalY);
     }
-    if (normalX === 0 && normalY === 0) {
-      normalX = Math.sign(best.x - (best.left + best.right) * 0.5);
-      normalY = Math.sign(best.y - (best.top + best.bottom) * 0.5);
-    }
-    return { rockIndex: best.index, x: best.x, y: best.y, normalX, normalY };
+    const hit = { rockIndex: best.baseId === undefined ? best.index : -1, baseId: best.baseId,
+      x: Math.max(best.left, Math.min(best.right, best.x)), y: Math.max(best.top, Math.min(best.bottom, best.y)),
+      centerX: best.x, centerY: best.y, normalX: best.normalX, normalY: best.normalY };
+    if (diagnostic) diagnostic.hit = { ...hit };
+    return hit;
   }
 
   private getActiveTrainBounds(): Phaser.Geom.Rectangle | null {

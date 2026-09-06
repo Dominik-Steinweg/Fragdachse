@@ -59,6 +59,18 @@ bleiben getrennte Dimensionen. Combat-, World- und Explosion-Ports lassen fremde
 Domain-Ownern. Replication, Client-Replica und Presentation sind abgeleitete World-Ressourcen ohne
 Projectile-Gameplay-Authority.
 
+Nicht-penetrierende Geschosse mit aktivem Zell-Sweep erhalten weder Arcade-Rock- noch Arcade-Base-Collider.
+Auch die generische Combat-Zielaufloesung laesst diese Kontakte dem Runtime-Sweep.
+BaseEntity-Zellkoerper (einschliesslich persistenter Basiszellen) sind im Index OBSTACLE_BASE,
+nicht OBSTACLE_ROCK; beide nutzen dieselbe Kontaktgeometrie, behalten aber ihre Schadensidentitaet.
+ignoreBaseCollisions schliesst Basiszellen auch vom Sweep aus. Der Runtime-Sweep besitzt fuer diese Kontakte
+Positionierung, Schaden und Reflexion; Physics- und Overlap-Geschosse behalten ihre eigenen Kontaktwege.
+Der Sweep beruecksichtigt die Ausdehnung des Projektilkoerpers auch bei der raeumlichen Vorauswahl
+und trennt dessen Kontakt-Center vom Oberflaechenpunkt. Die Sweep-Normale folgt der zuerst betretenen Rechteckflaeche,
+nicht einer benachbarten Kante oder einer Austrittsflaeche. Gemeinsame Wandkanten erzeugen keine
+zusaetzliche Reflexionsachse. Dies prueft
+[`ProjectilePhysicsBoundary.test.ts`](../../tests/ProjectilePhysicsBoundary.test.ts).
+
 ## Eingaben und Aktionen
 
 World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem Handler zentral geprüft. Activity- oder Round-Aktionen erhalten zusätzlich die fachlich nötige Activity-/Round-Identität. Ein alter Client kann so weder nach einem World-Wechsel noch nach einem Activity-Wechsel veraltete Aktionen ausführen.

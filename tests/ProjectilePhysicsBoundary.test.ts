@@ -6,6 +6,7 @@ vi.mock('phaser', () => ({
   },
   // Der ProjectilePhysicsBinding legt Scratch-Geometrie schon im Feld-Initialisierer an.
   Geom: {
+    Circle: class {},
     Rectangle: class {
       constructor(public x = 0, public y = 0, public width = 0, public height = 0) {}
       get left() { return this.x; }
@@ -95,6 +96,7 @@ import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentitySco
 import { createSingleOwnerProvenance, type ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 import { createPresentation, createTechnicalPhysicsBinding } from './ProjectileRuntimeTestHelper';
 import type { RockPhysicsProxy } from '../src/arena/rocks/RockPhysicsProxy';
+import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 
 function fixture() {
   const doubles = createTechnicalPhysicsBinding();
@@ -113,6 +115,10 @@ function fixture() {
       const handle = doubles.binding.createPhysicsHandle({ id: nextId++, x, y, size, color,
         bodyWidth: size, bodyHeight: size, bodyOffsetX: 0, bodyOffsetY: 0,
         velocityX: 0, velocityY: 0, mechanics: {} as never });
+      vi.mocked(handle.body.setSize).mockImplementation((width = size, height = width) => {
+        Object.assign(handle.body, { width, height, halfWidth: Math.floor(width / 2), halfHeight: Math.floor(height / 2) });
+        return handle.body;
+      });
       return Object.assign(handle.sprite, { body: handle.body, setDepth: vi.fn() });
     } },
     physics: { add: { existing: vi.fn(), collider: register('collider'), overlap: register('overlap') },
@@ -138,6 +144,230 @@ function rock(x: number): RockPhysicsProxy {
 }
 
 describe('technical Phaser boundary with the authoritative runtime', () => {
+  it('gives swept rock impacts one response owner, while physics projectiles retain their collider', () => {
+    const { runtime, binding, contacts } = fixture();
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock(50)], null);
+    runtime.spawnProjectile(request());
+    expect(contacts).toHaveLength(0);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, collisionMode: 'physics' } });
+    expect(contacts.map(c => c.mode)).toEqual(['collider']);
+    runtime.destroy();
+  });
+
+  it('uses the entered face near a corner instead of reflecting a nearby second axis', () => {
+    const { runtime, binding } = fixture();
+    const target = { active: true, getBounds: () => new Phaser.Geom.Rectangle(0, 0, 10, 10) } as RockPhysicsProxy;
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [target], null);
+    expect(binding.findNearestRockSweep(20, 20, 0, -1)).toMatchObject({ x: 10, y: 9.5, normalX: 1, normalY: 0 });
+    expect(binding.findNearestRockSweep(20, 20, 0, 1)).toMatchObject({ normalX: 0, normalY: 1 });
+    expect(binding.findNearestRockSweep(20, 0, 0, 20)).toBeNull(); // isolated tangency, no entry
+    expect(binding.findNearestRockSweep(5, 5, 20, 20)).toBeNull(); // exiting is not entering
+    expect(binding.findNearestRockSweep(20, 20, 0, 0)).toMatchObject({ normalX: 1, normalY: 1 });
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [target,
+      { active: true, getBounds: () => new Phaser.Geom.Rectangle(0, 12, 8, 8) } as RockPhysicsProxy], null);
+    expect(binding.findNearestRockSweep(20, 0, 0, 20)).toMatchObject({ rockIndex: 1, x: 8, y: 12 });
+    runtime.destroy();
+  });
+
+  it.each([false, true])('sweeps the projectile body across a cell edge even when its centerline misses (indexed: %s)', indexed => {
+    const { runtime, binding } = fixture();
+    const targets = [{ active: true, getBounds: () => new Phaser.Geom.Rectangle(128, 128, 32, 32) } as RockPhysicsProxy];
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, targets, null);
+    if (indexed) binding.setObstacleIndex(new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: 0, offsetY: 0, width: 512, height: 512 }),
+      rocks: () => targets, trunks: () => null, bases: () => null,
+    }));
+    // The line stays in the neighbouring spatial bucket, but a Glock-sized body hits.
+    expect(binding.findNearestRockSweep(100, 127.5, 180, 127.5, undefined, 4, 2)).toMatchObject({
+      rockIndex: 0, centerX: 124, centerY: 127.5, x: 128, y: 128, normalX: -1, normalY: 0,
+    });
+    runtime.destroy();
+  });
+
+  it.each([[false, false], [true, false], [false, true], [true, true]])(
+    'does not reflect from an internal wall seam (reversed: %s, indexed: %s)', (reverse, indexed) => {
+    const { runtime, binding } = fixture();
+    const targets = [0, 10].map(y => ({ active: true,
+      getBounds: () => new Phaser.Geom.Rectangle(0, y, 10, 10) }) as RockPhysicsProxy);
+    if (reverse) targets.reverse();
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, targets, null);
+    if (indexed) {
+      const index = new ArenaObstacleIndex({ bounds: () => ({ offsetX: 0, offsetY: 0, width: 100, height: 100 }),
+        rocks: () => targets, trunks: () => null, bases: () => null });
+      binding.setObstacleIndex(index);
+    }
+    expect(binding.findNearestRockSweep(20, 20, 0, 0)).toMatchObject({
+      rockIndex: reverse ? 1 : 0, x: 10, y: 10, normalX: 1, normalY: 0,
+    });
+    runtime.destroy();
+  });
+
+  it('bounces a swept shot up-right once at a vertical wall and keeps travelling away next frame', () => {
+    const { runtime, binding, doubles, contacts } = fixture();
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup,
+      [{ active: true, getBounds: () => new Phaser.Geom.Rectangle(0, 0, 10, 10) } as RockPhysicsProxy], null);
+    const hit = vi.fn();
+    runtime.setRockHitCallback(hit);
+    const spawn = request();
+    const id = runtime.spawnProjectile({ ...spawn, origin: { x: 20, y: 20, angle: Math.atan2(-21, -20) } })!;
+    const { body, sprite } = doubles.handles.get(0)!;
+    const before = { ...body.velocity };
+    expect(contacts).toHaveLength(0); // Arcade must not reflect from a tile overlap first.
+    sprite.x = 0; sprite.y = -1;
+    runtime.runHostProjectileStage(16, 16);
+    expect(body.velocity.x).toBe(-before.x);
+    expect(body.velocity.y).toBe(before.y);
+    expect(hit).toHaveBeenCalledOnce();
+    sprite.x += body.velocity.x * 0.016; sprite.y += body.velocity.y * 0.016;
+    runtime.runHostProjectileStage(16, 32);
+    expect(body.velocity.x).toBe(-before.x);
+    expect(body.velocity.y).toBe(before.y);
+    expect(hit).toHaveBeenCalledOnce();
+    runtime.readProjectileReplication(record => {
+      expect(record.id).toBe(id);
+      expect(record.dynamic.bounce).toMatchObject({ sequence: 1, vx: -before.x, vy: before.y });
+    });
+    runtime.destroy();
+  });
+
+  it('does not let the combat target circle move a Glock-sized shot inside a persistent-base cell before its wall sweep', () => {
+    const { runtime, binding, doubles } = fixture();
+    const target = { active: true, getBounds: () => new Phaser.Geom.Rectangle(128, 128, 32, 32) } as RockPhysicsProxy;
+    binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [target], null);
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('rock', 0, '__world__', 144, 144, 16 * Math.SQRT2, 128, 128, 160, 160, 'rock') });
+    const hit = vi.fn(); runtime.setRockHitCallback(hit);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 200, y: 128, angle: Math.PI },
+      flight: { ...spawn.flight, size: 2, speed: 900 }, presentation: { color: 0xffffff, tracer: { profile: 'light' } } });
+    const { sprite, body } = doubles.handles.get(0)!;
+    sprite.x = 130; sprite.y = 128;
+    runtime.runHostInteractionStage(16);
+    expect(sprite.x).toBe(130); // only the wall sweep may resolve this movement
+    expect(hit).not.toHaveBeenCalled();
+    runtime.runHostProjectileStage(16, 16);
+    expect(body.velocity.x).toBeGreaterThan(0);
+    expect(hit).toHaveBeenCalledOnce();
+    runtime.readProjectileReplication(record => {
+      expect(record.dynamic.bounce?.sequence).toBe(1);
+      expect(record.dynamic.flightPath!.points.every(p => p.x >= 160)).toBe(true);
+    });
+    runtime.destroy();
+  });
+
+  it.each([0, Math.PI, Math.PI / 2, -Math.PI / 2])('blocks Glock shots across a raster seam from angle %s in successive physics steps', angle => {
+    for (const seamOffset of [-0.75, 0, 0.75]) {
+      const { runtime, binding, doubles } = fixture();
+      const targets = [128, 160].map(y => ({ active: true,
+        getBounds: () => new Phaser.Geom.Rectangle(128, y, 32, 32) } as RockPhysicsProxy));
+      binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, targets, null);
+      binding.setObstacleIndex(new ArenaObstacleIndex({
+        bounds: () => ({ offsetX: 0, offsetY: 0, width: 512, height: 512 }),
+        rocks: () => targets, trunks: () => null, bases: () => null,
+      }));
+      runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+        for (let index = 0; index < 2; index++) sink('rock', index, '__world__', 144, 144 + index * 32,
+          16 * Math.SQRT2, 128, 128 + index * 32, 160, 160 + index * 32, 'rock');
+      } });
+      const hit = vi.fn(); runtime.setRockHitCallback(hit);
+      const spawn = request();
+      const horizontal = Math.abs(Math.cos(angle)) > 0.5;
+      runtime.spawnProjectile({ ...spawn,
+        origin: { x: horizontal ? 144 - Math.cos(angle) * 70 : 144 + seamOffset,
+          y: horizontal ? 160 + seamOffset : 160 - Math.sin(angle) * 80, angle },
+        flight: { ...spawn.flight, size: 2, speed: 900 } });
+      const { sprite, body } = doubles.handles.get(0)!;
+      for (let step = 1; step <= 16; step++) {
+        sprite.x += body.velocity.x / 120; sprite.y += body.velocity.y / 120;
+        runtime.runHostInteractionStage(step * 1000 / 120);
+        runtime.runHostProjectileStage(1000 / 120, step * 1000 / 120);
+      }
+      expect(hit).toHaveBeenCalledOnce();
+      expect(body.velocity.x * Math.cos(angle) + body.velocity.y * Math.sin(angle)).toBeLessThan(0);
+      runtime.destroy();
+    }
+  });
+
+  it.each([false, true])('reflects the exported lateral Glock shot once at the exterior of actual base cells (indexed: %s)', indexed => {
+    for (const mirror of [false, true]) {
+      const { runtime, binding, doubles, contacts } = fixture();
+      // Two BaseEntity cells touch at y=588. They are OBSTACLE_BASE, not rocks.
+      const cells = [556, 588].map(y => ({ active: true, getData: () => 'persistent-main',
+        getBounds: () => new Phaser.Geom.Rectangle(1026, y, 32, 32) }));
+      binding.setBaseGroup({ getChildren: () => cells } as unknown as Phaser.Physics.Arcade.StaticGroup);
+      if (indexed) binding.setObstacleIndex(new ArenaObstacleIndex({
+        bounds: () => ({ offsetX: 0, offsetY: 0, width: 2048, height: 1024 }),
+        rocks: () => [], trunks: () => null, bases: () => cells,
+      }));
+      runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+        sink('base', 'persistent-main', '__world__', 1042, 588, 36, 1026, 556, 1058, 620);
+      } });
+      // The previous rock-only lookup returns no candidate for the exported entry.
+      expect(binding.findNearestRockSweep(1064.3135946483026, 588.2906038102445,
+        1056.8144512897586, 588.177250874655, undefined, 4.9994289056959405, 1)).toBeNull();
+      expect(binding.findNearestRockSweep(1064.3135946483026, 588.2906038102445,
+        1056.8144512897586, 588.177250874655, undefined, 4.9994289056959405, 1, undefined, true))
+        .toMatchObject({ baseId: 'persistent-main', normalX: 1, normalY: 0 });
+      const hit = vi.fn(); runtime.setBaseHitCallback(hit);
+      const spawn = request();
+      const vx = mirror ? 899.8972030252693 : -899.8972030252693;
+      const vy = -13.602352270739633;
+      const id = runtime.spawnProjectile({ ...spawn,
+        origin: { x: mirror ? 2084 - 1152.5824537536853 : 1152.5824537536853,
+          y: 589.624827443846, angle: Math.atan2(vy, vx) },
+        flight: { ...spawn.flight, size: 2, speed: 900 },
+        presentation: { color: 0xffffff, tracer: { profile: 'light' } } })!;
+      expect(contacts).toHaveLength(0);
+      const { sprite, body } = doubles.handles.get(0)!;
+      for (let step = 1; step <= 32; step++) {
+        sprite.x += body.velocity.x / 120; sprite.y += body.velocity.y / 120;
+        runtime.runHostInteractionStage(step * 1000 / 120);
+        runtime.runHostProjectileStage(1000 / 120, step * 1000 / 120);
+        // The center must stay outside the solid block for the entire flight.
+        expect(mirror ? sprite.x < 1026 : sprite.x > 1058).toBe(true);
+      }
+      expect(hit).toHaveBeenCalledOnce();
+      expect(hit.mock.calls[0][0]).toBe('persistent-main');
+      expect(body.velocity.x).toBeCloseTo(-vx);
+      expect(body.velocity.y).toBeCloseTo(vy);
+      runtime.readProjectileReplication(record => {
+        expect(record.id).toBe(id);
+        expect(record.dynamic.bounce?.sequence).toBe(1);
+        expect(record.dynamic.flightPath!.points.every(p => mirror ? p.x < 1026 : p.x > 1058)).toBe(true);
+      });
+      runtime.destroy();
+    }
+  });
+
+  it('keeps a real opening between base cells passable and preserves base collision opt-out', () => {
+    const { runtime, binding, doubles, contacts } = fixture();
+    const cells = [100, 164].map(y => ({ active: true, getData: () => 'main',
+      getBounds: () => new Phaser.Geom.Rectangle(100, y, 32, 32) }));
+    binding.setBaseGroup({ getChildren: () => cells } as unknown as Phaser.Physics.Arcade.StaticGroup);
+    expect(binding.findNearestRockSweep(160, 148, 80, 148, undefined, 5, 1, undefined, true)).toBeNull();
+    const hit = vi.fn(); runtime.setBaseHitCallback(hit);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, origin: { x: 160, y: 116, angle: Math.PI },
+      flight: { ...spawn.flight, collisionFilter: { ignoreBaseCollisions: true } } });
+    expect(contacts).toHaveLength(0);
+    doubles.handles.get(0)!.sprite.x = 80;
+    runtime.runHostInteractionStage(16);
+    runtime.runHostProjectileStage(16, 16);
+    expect(hit).not.toHaveBeenCalled();
+    expect(doubles.handles.get(0)!.body.velocity.x).toBeLessThan(0);
+    runtime.destroy();
+  });
+
+  it.each(['physics', 'overlap'] as const)('preserves base colliders for %s shots', collisionMode => {
+    const { runtime, binding, contacts } = fixture();
+    binding.setBaseGroup({ getChildren: () => [] } as unknown as Phaser.Physics.Arcade.StaticGroup);
+    const spawn = request();
+    runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, collisionMode } });
+    expect(contacts.map(contact => contact.mode)).toEqual(['collider']);
+    runtime.destroy();
+  });
+
   it('uses overlap for rock penetration, applies one hit and keeps flight velocity', () => {
     const { runtime, binding, contacts, doubles, listeners } = fixture();
     const target = rock(50);
@@ -165,7 +395,7 @@ describe('technical Phaser boundary with the authoritative runtime', () => {
     const hit = vi.fn();
     runtime.setRockHitCallback(hit);
     const spawn = request();
-    runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, drag: { bounceFrictionMultiplier: 0.5 } } });
+    runtime.spawnProjectile({ ...spawn, flight: { ...spawn.flight, collisionMode: 'physics', drag: { bounceFrictionMultiplier: 0.5 } } });
     const body = doubles.handles.get(0)!.body;
     body.setVelocity(-100, 0);
     contacts[0].callback({}, targets[0]);

@@ -3,6 +3,7 @@ vi.mock('phaser', () => ({}));
 import { ProjectilePathRecorder, ProjectilePathCursor, ProjectileTrailSampler, sampleProjectilePath,
   type ProjectileFlightPath, type ProjectileTrailSegment } from '../src/projectile/ProjectileFlightPath';
 import { ProjectileFlightPlayback } from '../src/projectile/ProjectileFlightPlayback';
+import { tracerBounceDebug, captureBounceContact } from '../src/projectile/ProjectileBounceDiagnostics';
 import { encodeProjectileDynamic, decodeProjectileDynamics, countProjectileDynamics } from '../src/network/projectileSnapshotCodec';
 import type { SyncedProjectile } from '../src/types';
 
@@ -21,6 +22,35 @@ function projectile(path = curve()): SyncedProjectile {
 }
 
 describe('projectile flight path', () => {
+  it('captures separated centers and the first confirmed follow point without altering flight geometry', () => {
+    const run = (enabled: boolean) => {
+      tracerBounceDebug.centerline = enabled;
+      const recorder = new ProjectilePathRecorder();
+      recorder.begin(1, 60, 80, -1000, -1000, 0);
+      recorder.bounce(1, 24, 40, 1000, -1000, 40, 1);
+      captureBounceContact(1, 1, 20, 40);
+      recorder.append(1, 24, 40, 1000, -1000, 40); // correction, not travel
+      recorder.observe(1, 34, 30, 1000, -1000, 50);
+      recorder.commitThrough(1, 34, 30);
+      recorder.append(1, 44, 20, 1000, -1000, 60);
+      return recorder.read(1, 60);
+    };
+    tracerBounceDebug.clear();
+    try {
+      const normal = run(false);
+      expect(tracerBounceDebug.records).toHaveLength(0);
+      expect(run(true)).toEqual(normal);
+      expect(tracerBounceDebug.records).toHaveLength(1);
+      expect(tracerBounceDebug.records[0]).toMatchObject({
+        contact: { x: 20, y: 40 }, correctedCenter: { x: 24, y: 40 },
+        pivot: { x: 22, y: 42 }, firstFollow: { x: 34, y: 30, timeMs: 50 },
+      });
+    } finally {
+      tracerBounceDebug.centerline = false;
+      tracerBounceDebug.clear();
+    }
+  });
+
   it('turns once on the center trajectories and excludes reset positions on host and wire', () => {
     const recorder = new ProjectilePathRecorder();
     recorder.begin(1, 0, 0, 1000, 1000, 0);

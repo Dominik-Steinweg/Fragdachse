@@ -193,6 +193,10 @@ describe('projectile performance paths', () => {
     runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
       sink('rock', 0, 'world', 40, 16, 8, 36, 8, 44, 24);
     } });
+    // Rock contacts belong to the rectangular body sweep, not the generic target circle.
+    vi.mocked(physics.binding.findNearestRockSweep).mockReturnValue({
+      rockIndex: 0, x: 36, y: 16, centerX: 32, centerY: 16, normalX: -1, normalY: 0,
+    });
     runtime.runHostInteractionStage(100);
     runtime.runHostProjectileStage(0, 100);
     const snapshot = runtime.getNetSnapshot()!;
@@ -200,8 +204,8 @@ describe('projectile performance paths', () => {
     expect(snapshot.u).toHaveLength(0);
     const path = decodeProjectileDynamics(snapshot.e!)[0].flightPath!;
     expect(path.ended).toBe(true);
-    expect(path.points[path.points.length - 1].x).toBeCloseTo(28);
-    expect(path.points.every(p => p.x <= 28.000001)).toBe(true);
+    expect(path.points[path.points.length - 1].x).toBeCloseTo(36);
+    expect(path.points.every(p => p.x <= 36.000001)).toBe(true);
     runtime.destroy();
     expect(runtime.getNetSnapshot()).toBeNull();
   });

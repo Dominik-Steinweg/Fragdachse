@@ -1,4 +1,6 @@
 import { ProjectilePathCursor } from './ProjectileFlightPath';
+import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
+import { TracerBounceDebugOverlay } from '../effects/TracerBounceDebugOverlay';
 import { ProjectileFlightPlayback } from './ProjectileFlightPlayback';
 import * as Phaser from 'phaser';
 import { DEPTH, MUZZLE_PROJECTILE_FALLBACK_BACKTRACK, getTopDownMuzzleOrigin, getTopDownMuzzleOriginFromVector } from '../config';
@@ -98,6 +100,7 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
+  private bounceDebugOverlay: TracerBounceDebugOverlay | null = null;
   private readonly flightPlayback = new ProjectileFlightPlayback();
   private readonly pathCursors = new Map<number, ProjectilePathCursor>();
   private readonly clientPathHeads = new Map<number, SyncedProjectile>();
@@ -275,6 +278,9 @@ export class ProjectilePresentationRuntime {
     tracerBounce = true,
   ): void {
     // Path corners are supplied by authoritative history, never inferred from velocity.
+    if (tracerBounceDebug.centerline && tracerBounce) {
+      (this.bounceDebugOverlay ??= new TracerBounceDebugOverlay(this.scene)).impact(x, y);
+    }
     if (style === 'bullet' || style === 'awp' || style === 'gauss') {
       this.bulletRenderer?.playImpactSparks(id, x, y, vx, vy, color);
     }
@@ -552,6 +558,10 @@ export class ProjectilePresentationRuntime {
   private consumeFlightPath(projectile: ProjectilePresentationState): void {
     const path = projectile.flightPath;
     if (!path) return;
+    if (tracerBounceDebug.centerline) {
+      (this.bounceDebugOverlay ??= new TracerBounceDebugOverlay(this.scene))
+        .observe(projectile.id, path, this.pathTimes.get(projectile.id) ?? path.timeMs);
+    }
     let cursor = this.pathCursors.get(projectile.id);
     if (!cursor) { cursor = new ProjectilePathCursor(); this.pathCursors.set(projectile.id, cursor); }
     cursor.consume(path, this.pathTimes.get(projectile.id) ?? path.timeMs, segment => {
@@ -739,6 +749,7 @@ export class ProjectilePresentationRuntime {
   }
 
   releaseWorldPresentation(): void {
+    this.bounceDebugOverlay?.destroy(); this.bounceDebugOverlay = null;
     this.flightPlayback.clear(); this.pathCursors.clear(); this.pathTimes.clear(); this.nonFlightFrame = null; this.clientPathHeads.clear();
     this.ownershipAppearance.clear();
     this.activeBurningProjectileIds.clear();
