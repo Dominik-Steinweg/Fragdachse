@@ -1,6 +1,5 @@
 import { COOP_DEFENSE_AFFIX_RULES } from '../config/coopDefenseItems';
-import type { LoadoutSlot } from '../types';
-import type { CombatDamageKind } from './CombatSystem';
+import type { CombatDamageKind, LoadoutSlot } from '../types';
 import type { TargetStatusSystem } from './TargetStatusSystem';
 
 /**

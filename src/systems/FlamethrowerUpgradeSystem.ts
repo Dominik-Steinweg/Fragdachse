@@ -19,7 +19,8 @@ import type {
 } from '../projectile/ProjectileTravelPort';
 import type { ProjectileId } from '../projectile/ProjectileSpawnPort';
 import type { ProjectileFlameExpiryEvent } from '../projectile/ProjectileGameplayPort';
-import type { ActiveBurnSource, CombatSystem } from './CombatSystem';
+import type { ActiveBurnSource } from '../combat/rules/BurnStateMachine';
+import type { CombatSystem } from './CombatSystem';
 
 interface ResolvedFlameOwner {
   playerId: string;

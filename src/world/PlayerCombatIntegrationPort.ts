@@ -1,7 +1,7 @@
-import type { CombatDamageKind } from '../systems/CombatSystem';
+import type { CombatDamageKind } from '../types';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { SlimeDeathBurst } from '../systems/SlimeTrailSystem';
-import type { ActiveBurnSource } from '../systems/CombatSystem';
+import type { ActiveBurnSource } from '../combat/rules/BurnStateMachine';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { WeaponKillReactionOutcome } from '../loadout/WeaponReactionPort';
 import type { SustainedWeaponBehaviorPort } from '../loadout/SustainedWeaponBehaviorPort';

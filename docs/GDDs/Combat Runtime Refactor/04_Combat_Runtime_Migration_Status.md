@@ -2,19 +2,19 @@
 
 **Architektur:** [01](01_Combat_Runtime_Architecture_Core.md) + [02](02_Combat_Runtime_Architecture_Details.md) · **Plan:** [03](03_Combat_Runtime_Implementation_Plan.md) · **Betrieb:** [05](05_Combat_Runtime_Implementation_Cheatsheet.md)
 
-> Einziger operativer Status; keine Historie. **Nur der Orchestrator schreibt diese Datei.** Worker liefern Belege, Reviewer ein Urteil. Keine Interface-Kopien, Vollinventare oder Rohlogs. Nur wenige aktuelle Git-Anker gemäß 03 § 4.4; keine SHA-Chronik. Zielgröße unter 8 KB.
+> Einziger operativer Status; keine Historie. **Nur der Orchestrator schreibt.** Worker liefern Belege, Reviewer ein Urteil. Keine Interface-Kopien, Vollinventare, Rohlogs oder SHA-Chronik. Zielgröße unter 8 KB.
 
 ## 1. Steuerung und aktueller Stand
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A aktiv; P0-Baseline bestanden |
+| Gesamtstatus | Block A aktiv; P0 und P1 bestanden, R1 als nächstes |
 | Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
 | Freigabequelle | Nutzerauftrag vom 07.09.2026: ausschließlich Block A |
-| Nächster Arbeitsschritt | P1 – neutrale Contracts und verbindlicher World-Aufbauplan |
+| Nächster Arbeitsschritt | Unabhängiges R1-Vertragsreview; danach Nutzerstopp |
 | Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine zwischen den Phasen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `8457a193` |
+| Aktive Phase / Aufgabe | Keine zwischen P1-Checkpoint und R1 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `496a5208` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Codex-Desktop-App; native Subagenten per Auftrag, keine eigene Agentenkonfiguration |
@@ -23,9 +23,9 @@
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
-Analysegrundlage: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26` vom 06.09.2026. Der lokale Checkout kann davon abweichen. Projectile ist laut eigenem Status einschließlich C8 abgeschlossen; Sweep-Endpunkterhalt und Flight Signature sind in dieser neueren Analysebasis enthalten. Das ersetzt weder den lokalen Startcheck noch P0/F für Combat. Die Betriebsvereinfachung ist kein neuer Quellcode-Abgleich.
+Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile einschließlich Sweep-Endpunkterhalt und Flight Signature ist abgeschlossen. P0/F bleiben eigenständige Combat-Gates.
 
-**Freigaberegel:** R1-Pass ≠ Freigabe B; R2-Pass ≠ Freigabe C. Der Orchestrator übernimmt eine Freigabe nur aus einer tatsächlichen Nutzernachricht und notiert sie knapp. Nach Blockende wartet er; die Spalte „nächste Aufgabe“ erteilt keine Arbeitsberechtigung.
+**Freigaberegel:** R1/R2 erteilen keine Freigabe für B/C; dafür zählt nur eine tatsächliche Nutzernachricht.
 
 ## 2. Phasen und Review-Gates
 
@@ -36,7 +36,7 @@ Analysegrundlage: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26` vom 06.09.
 | Schritt | Block | Status | Gegenstand |
 |---|:---:|:---:|---|
 | P0 | A | ✅ | Baseline / Delta |
-| P1 | A | ⬜ | Contracts / World-Aufbauplan |
+| P1 | A | ✅ | Contracts / World-Aufbauplan |
 | R1 | A | ⬜ | Vertragsreview; danach Nutzerstopp |
 | P2 | B | ⬜ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
@@ -55,7 +55,11 @@ Analysegrundlage: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26` vom 06.09.
 
 ## 3. Realisierte Contracts
 
-Noch keine neuen Combat-Contracts realisiert. P1 trägt nur tatsächliche Namen und Dateipfade für die benötigten CF-Familien aus 03 § 3.1 ein. Spätere Phasen verwenden sie, statt parallele Typen anzulegen.
+- `src/combat/CombatScope.ts`: `CombatScope`, `CombatTargetRef`, `CombatSource` (CF-SCOPE).
+- `src/combat/CombatMutation.ts`: `TargetMutationOutcome`, Target-Mutation-Ports, `CombatDamagePort`, `CombatSupportPort` und explizite Damage-Basen (CF-MUTATION/CF-RESOLVE).
+- `src/combat/CombatCapabilities.ts`: schmale CF-READ/QUERY/ATTACK/STATUS/REACTION/LIFE/FRAME/WORLD-Ports.
+- `src/combat/WorldCombatRuntime.ts`: world-owned Build/Bind/Activate/Detach/Destroy-Grenze mit Required-Port-Prüfung; Besitzslot in `src/world/WorldRuntime.ts`.
+- `src/combat/ProjectileCombatContractAdapter.ts`: reiner Provenance-/Target-/Direct-Basis-Adapter auf die unveränderten Projectile-Nachbarverträge.
 
 Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest/Outcome`, `ProjectileCombatExplosionRequest/Outcome`, `ProjectileExplosionResolutionPort` und Continuation. Vorhanden bedeutet nicht bereits an neue Combat-Owner angeschlossen.
 
@@ -71,12 +75,15 @@ Nur tatsächliche offene Punkte eintragen:
 | Geplanter Integrationsübergang | Faktorherkunft, Support-/Status-Eligibility und explizite Herkunft statt `direct`-Default (D3/D5/D9) | P4/P5/P7/P10 |
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
+| Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
 
 Erlaubte Arten: geplanter Integrationsübergang, bestehender Baseline-Fehler, neue Regression, Contract-Blocker oder Betriebsblocker. Keine Sammelausnahme „alles rot wegen Refactoring“. Übergänge nach Schließung löschen. Abweichende fachliche Entscheidungen nicht allein über 04 legitimieren.
 
 ## 5. Nachweise und Reviews
 
-**P0-Baseline:** bestanden auf `8457a193`. `npm run check`, `npm run test:integration`, `npm run test:stress`, `npm run test:balance-lab`, `npm run test:assets` und `git diff --check`: jeweils Exit 0. V1–V12 besitzen vorhandene Einstiegspunkte; keine neue Charakterisierung nötig. **Letztes lokales Gate:** P0. Kein früherer Projectile-Testlauf wurde als Combat-Nachweis übernommen.
+**P0-Baseline:** bestanden auf `8457a193`. `npm run check`, `npm run test:integration`, `npm run test:stress`, `npm run test:balance-lab`, `npm run test:assets` und `git diff --check`: jeweils Exit 0. V1–V12 besitzen vorhandene Einstiegspunkte; keine neue Charakterisierung nötig. Kein früherer Projectile-Testlauf wurde als Combat-Nachweis übernommen.
+
+**P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus unveränderter P1-Lieferung. Fokussierte Contract-/Vitals-/Projectile-/Burn-Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. Keine Blocking-Findings; produktive Anschlüsse bleiben den ausgewiesenen Folgephasen zugeordnet.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

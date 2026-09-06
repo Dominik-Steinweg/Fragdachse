@@ -249,6 +249,7 @@ export interface PlayerNetState {
   aim:        PlayerAimNetState;
 }
 
+/** Semantic origin; it is explicit and never inferred from a display/source id. */
 export type CombatDamageKind =
   | 'direct'
   | 'explosion'

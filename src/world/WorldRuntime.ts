@@ -7,6 +7,7 @@ import type { WorldPresentationBinding } from './WorldPresentationBinding';
 import type { WorldPresentationFrameBinding } from './WorldPresentationFrameBinding';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 import { ProjectileIdentityScope } from '../projectile/ProjectileIdentityScope';
+import type { WorldCombatRuntime } from '../combat/WorldCombatRuntime';
 
 /**
  * Lokale Realisierung genau einer World-Instanz.
@@ -41,6 +42,7 @@ export class WorldRuntime {
   private presentationFrameBinding: WorldPresentationFrameBinding | null = null;
   private persistentBaseBinding: PersistentBaseWorldBinding | null = null;
   private playerRuntime: PlayerWorldRuntime | null = null;
+  private combatRuntime: WorldCombatRuntime | null = null;
   private worldScopedBindings: WorldScopedBinding[] = [];
   private destroyed = false;
 
@@ -97,6 +99,31 @@ export class WorldRuntime {
    */
   get players(): PlayerWorldRuntime | null {
     return this.playerRuntime;
+  }
+
+  /**
+   * Installs Combat exactly once for this World. Replacement requires a new WorldRuntime so old
+   * target/scope references can never become valid again against a successor boundary. The slot
+   * has intentionally no public getter: Composition distributes narrow ports directly instead of
+   * turning WorldRuntime into a service locator.
+   */
+  setCombat(runtime: WorldCombatRuntime | null): void {
+    this.assertAlive('combat runtime');
+    if (runtime === this.combatRuntime) return;
+    if (runtime && runtime.scope.worldRevision !== this.descriptor.worldRevision) {
+      throw new Error(
+        `[WorldRuntime] Combat runtime belongs to world revision ${runtime.scope.worldRevision}, `
+        + `not ${this.descriptor.worldRevision}`,
+      );
+    }
+    if (runtime && this.combatRuntime) {
+      throw new Error(
+        `[WorldRuntime] Combat runtime of world ${this.descriptor.definitionId} is already bound`,
+      );
+    }
+    const previous = this.combatRuntime;
+    this.combatRuntime = runtime;
+    previous?.destroy();
   }
 
   /** Setzt die Player-Runtime dieser World; eine vorhandene loest zuvor alle ihre Spieler. */
@@ -226,15 +253,19 @@ export class WorldRuntime {
     const persistentBase = this.persistentBaseBinding;
     const materialization = this.materializedWorld;
     const players = this.playerRuntime;
+    const combat = this.combatRuntime;
     const bindings = this.worldScopedBindings;
     this.presentationBinding = null;
     this.persistentBaseBinding = null;
     this.materializedWorld = null;
     this.playerRuntime = null;
+    this.combatRuntime = null;
     this.worldScopedBindings = [];
     // Nur was diese Runtime noch besitzt: eine zuvor freigegebene Darstellung gehoert bereits
     // jemand anderem und wird hier nicht abgeraeumt.
     presentation?.destroy();
+    // Combat rejects retained inputs before any mutation/query dependency is dismantled.
+    combat?.destroy();
     players?.detachAll();
     this.activity.close();
     persistentBase?.destroy();

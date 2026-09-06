@@ -119,15 +119,6 @@ interface AoeDamageOptions {
 export type { ProjectileAk47DirectImpact as Ak47DirectEnemyHitImpact } from '../projectile/ProjectileCombatPort';
 
 /**
- * Herkunft eines Schadensereignisses.
- *
- * `direct` ist der unmittelbare Treffer einer Waffe – Projektil, Hitscan oder Nahkampf. Alles
- * andere ist Folgeschaden und darf trefferabhaengige Effekte nicht erneut ausloesen. Die
- * Unterscheidung ist nicht aus `sourceId` ableitbar: das ist ein Anzeigetext.
- */
-export type { CombatDamageKind, CombatDamageTargetType };
-
-/**
  * Begleitdaten eines Schadensereignisses.
  *
  * `sourceSlot` und `damageKind` beschreiben die Quelle. Fehlen sie, gilt ein direkter Treffer
@@ -196,7 +187,6 @@ function toDamageOptions(
 
 
 import { BurnStateMachine, type ActiveBurnSource } from '../combat/rules/BurnStateMachine';
-export type { ActiveBurnSource };
 
 export interface HitscanTraceResult {
   readonly endX: number;
