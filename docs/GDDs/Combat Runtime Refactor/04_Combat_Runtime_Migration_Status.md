@@ -8,22 +8,22 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A aktiv; P0 und P1 bestanden, R1 als nächstes |
+| Gesamtstatus | Block A am R1-Stopp; P0/P1 lokal bestanden, R1 nicht bestanden |
 | Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
 | Freigabequelle | Nutzerauftrag vom 07.09.2026: ausschließlich Block A |
-| Nächster Arbeitsschritt | Unabhängiges R1-Vertragsreview; danach Nutzerstopp |
+| Nächster Arbeitsschritt | Wartet auf Nutzerentscheidung; zulässig wäre ein begrenztes P1-Fixpaket mit erneutem R1 |
 | Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine zwischen P1-Checkpoint und R1 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `496a5208` |
+| Aktive Phase / Aufgabe | Keine; R1-Blocker dokumentiert |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `3524b918` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
-| Betriebsmodus | Codex-Desktop-App; native Subagenten per Auftrag, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Keiner; Luna / Medium für P0 erfolgreich nativ beauftragt |
+| Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
+| Aktuell nötiger Modell-/Reviewstopp | R1-Fixes benötigen Sol / High; Wiederholungsreview Astra / High |
 | Aktueller Reparaturzähler | Kein offenes Reparaturpaket |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
-Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile einschließlich Sweep-Endpunkterhalt und Flight Signature ist abgeschlossen. P0/F bleiben eigenständige Combat-Gates.
+Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile ist abgeschlossen. P0/F bleiben eigene Combat-Gates.
 
 **Freigaberegel:** R1/R2 erteilen keine Freigabe für B/C; dafür zählt nur eine tatsächliche Nutzernachricht.
 
@@ -37,7 +37,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile ei
 |---|:---:|:---:|---|
 | P0 | A | ✅ | Baseline / Delta |
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
-| R1 | A | ⬜ | Vertragsreview; danach Nutzerstopp |
+| R1 | A | 🟧 | Vertragsreview; danach Nutzerstopp |
 | P2 | B | ⬜ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
@@ -65,9 +65,7 @@ Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest
 
 ## 4. Aktive Übergänge und Blocker
 
-Keine Implementierung begonnen; keine als aktiv behauptete Migration.
-
-Nur tatsächliche offene Punkte eintragen:
+P1 ist implementiert; R1 hat drei Contract-Blocker bestätigt:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
@@ -76,18 +74,19 @@ Nur tatsächliche offene Punkte eintragen:
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
-
-Erlaubte Arten: geplanter Integrationsübergang, bestehender Baseline-Fehler, neue Regression, Contract-Blocker oder Betriebsblocker. Keine Sammelausnahme „alles rot wegen Refactoring“. Übergänge nach Schließung löschen. Abweichende fachliche Entscheidungen nicht allein über 04 legitimieren.
+| Contract-Blocker | Projectile-Direct-Adapter markiert bereits skalierte automatische Payloads als `authored`; Faktorherkunftstest fehlt | P1-Fix, dann R1 |
+| Contract-Blocker | `WorldRuntime.setCombat(null)` erlaubt Wiederbelegung und stale Clear gegen einen Nachfolger | P1-Fix, dann R1 |
+| Contract-Blocker | World-Teardown invalidiert Combat erst nach externen Presentation-Aufrufen | P1-Fix, dann R1 |
 
 ## 5. Nachweise und Reviews
 
 **P0-Baseline:** bestanden auf `8457a193`. `npm run check`, `npm run test:integration`, `npm run test:stress`, `npm run test:balance-lab`, `npm run test:assets` und `git diff --check`: jeweils Exit 0. V1–V12 besitzen vorhandene Einstiegspunkte; keine neue Charakterisierung nötig. Kein früherer Projectile-Testlauf wurde als Combat-Nachweis übernommen.
 
-**P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus unveränderter P1-Lieferung. Fokussierte Contract-/Vitals-/Projectile-/Burn-Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. Keine Blocking-Findings; produktive Anschlüsse bleiben den ausgewiesenen Folgephasen zugeordnet.
+**P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus P1-Lieferung. Fokussierte Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. R1 fand danach drei Contract-Blocker.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
-| R1 | Nicht ausgeführt | – | – |
+| R1 | Nicht bestanden | `3524b918` | Damage-Basis/Faktorherkunft; Combat-Slot-Rebinding; Teardown-Invalidierungsreihenfolge |
 | R2 | Nicht ausgeführt | – | – |
 | P13 | Nicht ausgeführt | – | – |
 
