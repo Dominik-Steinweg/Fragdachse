@@ -47,7 +47,7 @@ interface PedestalRuntime {
   respawnMs: number;
   spawnOnArenaStart: boolean;
   linkedBaseId?: string;
-  /** Activity-local clock origin; layout/construction pedestals use the arena clock instead. */
+  /** Activity-local clock origin; only legacy layout pedestals use the arena clock. */
   activityStartTime?: number;
   activityInitialSpawnPending?: boolean;
   currentUid: number | null;
@@ -191,6 +191,8 @@ export class PowerUpSystem {
       this.activityPedestalStartPending = false;
     }
     for (const pedestal of this.pedestals.values()) {
+      // World registrations retain their item and running cooldown across round transitions.
+      if (this.isWorldOwnedPedestal(pedestal)) continue;
       if (pedestal.currentUid !== null) {
         this.worldItems.delete(pedestal.currentUid);
         this.netSnapshotCache.delete(pedestal.currentUid);
@@ -459,6 +461,14 @@ export class PowerUpSystem {
       }
     }
 
+    // World-owned pedestals spawn at registration and respawn without an Activity/round clock.
+    for (const pedestal of this.pedestals.values()) {
+      if (this.isWorldOwnedPedestal(pedestal)
+        && pedestal.currentUid === null
+        && pedestal.nextRespawnAt > 0
+        && now >= pedestal.nextRespawnAt) this.spawnPedestalItem(pedestal);
+    }
+
     // 2) Activity-Podeste folgen ihrem eigenen Zeitursprung. Das ist absichtlich unabhängig vom
     // Aufrufzeitpunkt von setArenaStartTime(), damit World- und Activity-Aufbau vertauschbar sind.
     for (const pedestal of this.pedestals.values()) {
@@ -471,12 +481,13 @@ export class PowerUpSystem {
       if (now >= pedestal.nextRespawnAt) this.spawnPedestalItem(pedestal);
     }
 
-    // Feste World-/Construction-/Persistent-Podeste aktivieren und respawnen.
+    // Legacy layout placement remains arena-bound until the TD-10 / RK-6 authoring cutover.
     if (this.arenaStartTime > 0) {
       if (!this.pedestalsActivated && now >= this.arenaStartTime) {
         this.pedestalsActivated = true;
         for (const pedestal of this.pedestals.values()) {
-          if (pedestal.activityStartTime === undefined
+          if (!this.isWorldOwnedPedestal(pedestal)
+            && pedestal.activityStartTime === undefined
             && pedestal.spawnOnArenaStart
             && pedestal.currentUid === null
             && pedestal.nextRespawnAt <= 0) {
@@ -486,7 +497,8 @@ export class PowerUpSystem {
       }
 
       for (const pedestal of this.pedestals.values()) {
-        if (pedestal.currentUid !== null || pedestal.activityStartTime !== undefined) continue;
+        if (this.isWorldOwnedPedestal(pedestal)
+          || pedestal.currentUid !== null || pedestal.activityStartTime !== undefined) continue;
         if (pedestal.nextRespawnAt <= 0) continue;
         if (now < pedestal.nextRespawnAt) continue;
         this.spawnPedestalItem(pedestal);
@@ -1166,6 +1178,10 @@ export class PowerUpSystem {
     pedestal.activityInitialSpawnPending = false;
     pedestal.nextRespawnAt = 0;
     this.itemToPedestal.set(uid, pedestal.id);
+  }
+
+  private isWorldOwnedPedestal(pedestal: PedestalRuntime): boolean {
+    return pedestal.constructionId !== undefined || pedestal.persistentRewardId !== undefined;
   }
 
   private resolveActivityPedestalRespawnAt(pedestal: PedestalRuntime): number {

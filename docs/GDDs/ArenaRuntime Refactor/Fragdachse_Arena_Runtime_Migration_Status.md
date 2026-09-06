@@ -41,6 +41,10 @@ Wenn Code und Dokumentvorgabe nicht mehr sinnvoll zusammenpassen:
 **Manueller Final Gate:** `OFFEN – User-Abnahme erforderlich.`
 **TD-10:** `OFFEN – separater Architektur-/Authoring-Entscheid (außerhalb des Phase-12-Cleanups).`
 
+World-Pedestal-Lifecycle korrigiert: Construction- und Persistent-Base-Reward-Podeste behalten
+Items und laufende Respawns unabhängig von `arenaStartTime` und Activity-Bindings. Der Fix
+ändert weder freie Layout-Platzierung noch Activity-Authoring; TD-10 und RK-6 bleiben offen.
+
 | Phase | Status | Kurznotiz |
 |---|---|---|
 | 1 Contracts | ✅ abgeschlossen | Lifecycle-/World-/Activity-/Persistent-Base-Contracts gezielt abgesichert. |

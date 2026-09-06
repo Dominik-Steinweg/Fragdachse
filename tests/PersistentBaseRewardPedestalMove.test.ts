@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+afterEach(() => vi.restoreAllMocks());
 
 vi.mock('phaser', async () => {
   const { createFakePhaserModule } = await import('./fakeArenaRenderScene');
@@ -48,6 +50,58 @@ function rewardPedestal(system: PowerUpSystem) {
 }
 
 describe('Persistent-Base-Reward-Podest verschieben', () => {
+  it.each(['persistent', 'construction'] as const)(
+    'keeps the %s World pedestal lifecycle independent of Activity and round clocks',
+    (kind) => {
+      let now = 10_000;
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+      const system = makePowerUpSystem();
+      if (kind === 'persistent') registerRewardPedestal(system);
+      else expect(system.registerConstructionPedestal(42, 'HEALTH_PACK', 100, 100)).toBe(true);
+
+      // Activity binding may be waiting for an authoritative start while the World runs.
+      const binding = system.createActivityPedestalBinding([{
+        id: 'pending', baseId: 'base', gridX: 10, gridY: 10,
+        defId: 'HEALTH_PACK', respawnMs: 1_000, spawnOnArenaStart: false,
+      }]);
+      binding.attach();
+      const pedestalId = system.getPedestalSnapshot()[0].id;
+      for (let cycle = 0; cycle < 2; cycle++) {
+        const item = system.getWorldItemSnapshot()[0];
+        expect(system.tryPickup('p1', item.uid, 100, 100)).toBe(true);
+        const waiting = system.getPedestalSnapshot().find((p) => p.id === pedestalId)!;
+        expect(waiting.nextRespawnAt).toBeGreaterThan(now);
+        if (cycle === 1) {
+          binding.detach();
+          system.setArenaStartTime(now + 1_000_000);
+          system.setArenaStartTime(0);
+          expect(system.getPedestalSnapshot()).toEqual([waiting]);
+        }
+        now = waiting.nextRespawnAt - 1;
+        system.update(0);
+        expect(system.getWorldItemSnapshot()).toEqual([]);
+        now++;
+        system.update(0);
+        const respawned = system.getWorldItemSnapshot();
+        expect(respawned).toEqual([expect.objectContaining({ defId: 'HEALTH_PACK', x: 100, y: 100 })]);
+        expect(respawned[0].uid).not.toBe(item.uid);
+        expect(system.getPedestalSnapshot().find((p) => p.id === pedestalId))
+          .toMatchObject({ hasPowerUp: true, nextRespawnAt: 0 });
+        system.update(0);
+        expect(system.getWorldItemSnapshot()).toEqual(respawned);
+      }
+
+      const present = system.getWorldItemSnapshot();
+      system.setArenaStartTime(now + 100);
+      expect(system.getWorldItemSnapshot()).toEqual(present);
+      system.reset();
+      now += 1_000_000;
+      system.update(0);
+      expect(system.getWorldItemSnapshot()).toEqual([]);
+      expect(system.getPedestalSnapshot()).toEqual([]);
+    },
+  );
+
   it('nimmt ein noch vorhandenes Power-up mit derselben UID mit', () => {
     const system = makePowerUpSystem();
     registerRewardPedestal(system);

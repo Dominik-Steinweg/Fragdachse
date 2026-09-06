@@ -24,6 +24,13 @@ World und Activity haben getrennte Lebenszyklen:
 - Arena-Aufbau und vollständige Entkopplung liegen beim [ArenaLifecycleCoordinator](../../src/scenes/arena/ArenaLifecycleCoordinator.ts). Ein lokales Runtime-Detach darf die replizierte World-Identität nicht zerstören.
 - Außerhalb einer aktiven World sind World- und Activity-Runtime null oder abgebaut. Ein Activity-Start erzeugt keine zweite Welt.
 
+Construction- und Persistent-Base-Reward-Podeste werden im World-eigenen
+[PowerUpSystem](../../src/powerups/PowerUpSystem.ts) bei Registrierung initial bestückt. Ihre
+laufenden Respawns sowie vorhandenen Items bleiben unabhängig vom Activity-/Rundenzeitanker;
+`setArenaStartTime` setzt sie nicht zurück. Activity-Bindings entfernen nur ihre eigenen Podeste,
+World-Teardown entfernt auch World-Podeste. Freie Layout-Podeste nutzen weiterhin den bisherigen
+Arena-Zeitanker (offener Authoring-Cutover TD-10/RK-6).
+
 Die zentrale Reihenfolge ist deshalb: World definieren und laden, optional Activity starten, Teilnahme admittieren, lokale Runtime anbinden; beim Abbau zuerst Activity, dann World-Runtime und schließlich die World-Instance lösen. Die konkrete Orchestrierung bleibt im Coordinator und soll nicht in Renderer oder UI kopiert werden.
 
 ## Loading ist World- und Activity-bewusst

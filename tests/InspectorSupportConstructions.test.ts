@@ -373,7 +373,6 @@ describe('dynamic construction pedestals', () => {
       },
       layout,
     );
-    system.setArenaStartTime(1);
     return { system, healToFull, addArmor };
   }
 
