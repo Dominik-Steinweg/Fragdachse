@@ -724,6 +724,9 @@ export class WorldProjectileRuntime implements
       projectile.presentation.projectileStyle,
       tracerBounce,
     );
+    this.projectileReplicationAdapter?.recordBouncePresentation(
+      this.createProjectileReplicationRecord(projectile),
+    );
   }
 
   private completeAuthoritativeBounce(projectile: ProjectileRuntimeRecord, x: number, y: number, worldBoundary: boolean): void {
@@ -1112,47 +1115,48 @@ export class WorldProjectileRuntime implements
 
   /** Liefert ausschließlich die Client-Projektion; interne Runtime-Records verlassen die World nicht. */
   readProjectileReplication(sink: (record: ProjectileReplicationRecord) => void): void {
-    for (const projectile of this.projectiles.activeRecords) {
-      const replication: ProjectileReplicationRecord = {
+    for (const projectile of this.projectiles.activeRecords) sink(this.createProjectileReplicationRecord(projectile));
+  }
+
+  private createProjectileReplicationRecord(projectile: ProjectileRuntimeRecord): ProjectileReplicationRecord {
+    return {
+      id: projectile.id,
+      createdAt: projectile.createdAt,
+      static: {
         id: projectile.id,
-        createdAt: projectile.createdAt,
-        static: {
-          id: projectile.id,
-          ownerId: projectile.provenance.allegiance.ownerId,
-          color: projectile.presentation.color,
-          allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
-          ownerColor: projectile.presentation.ownerColor,
-          visualMuzzleOrigin: projectile.presentation.visualMuzzleOrigin,
-          projectileVisualScale: projectile.presentation.projectileVisualScale,
-          smokeTrailColor: projectile.presentation.smokeTrailColor,
-          style: projectile.presentation.projectileStyle,
-          sporeVisualVariant: projectile.presentation.sporeVisualVariant,
-          bulletVisualPreset: projectile.presentation.bulletVisualPreset,
-          grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
-          energyBallVariant: projectile.presentation.energyBallVariant,
-          velocityDecay: projectile.spec.flight.drag.velocityDecayPerSec,
-          tracer: projectile.presentation.tracerConfig,
-          shotAudioKey: projectile.presentation.shotAudioKey,
-          suppressSpawnFx: projectile.presentation.suppressSpawnFx,
-        },
-        dynamic: {
-          id: projectile.id,
-          x: Math.round(projectile.physics.sprite.x),
-          y: Math.round(projectile.physics.sprite.y),
-          vx: Math.round(projectile.physics.body.velocity.x),
-          vy: Math.round(projectile.physics.body.velocity.y),
-          size: Math.round(projectile.physics.sprite.displayWidth),
-          miniRocketPhase: projectile.miniRocket.phase,
-          miniRocketCascadeStage: (projectile.spec.flight.miniRocket.cascadeDamageBonusPerExplosion ?? 0) > 0
-            ? projectile.miniRocket.explosionIndex
-            : undefined,
-          projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
-          burning: this.hasVisibleProjectileBurn(projectile) || undefined,
-          bounce: projectile.lastBouncePresentation,
-        },
-      };
-      sink(replication);
-    }
+        ownerId: projectile.provenance.allegiance.ownerId,
+        color: projectile.presentation.color,
+        allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
+        ownerColor: projectile.presentation.ownerColor,
+        visualMuzzleOrigin: projectile.presentation.visualMuzzleOrigin,
+        projectileVisualScale: projectile.presentation.projectileVisualScale,
+        smokeTrailColor: projectile.presentation.smokeTrailColor,
+        style: projectile.presentation.projectileStyle,
+        sporeVisualVariant: projectile.presentation.sporeVisualVariant,
+        bulletVisualPreset: projectile.presentation.bulletVisualPreset,
+        grenadeVisualPreset: projectile.presentation.grenadeVisualPreset,
+        energyBallVariant: projectile.presentation.energyBallVariant,
+        velocityDecay: projectile.spec.flight.drag.velocityDecayPerSec,
+        tracer: projectile.presentation.tracerConfig,
+        shotAudioKey: projectile.presentation.shotAudioKey,
+        suppressSpawnFx: projectile.presentation.suppressSpawnFx,
+      },
+      dynamic: {
+        id: projectile.id,
+        x: Math.round(projectile.physics.sprite.x),
+        y: Math.round(projectile.physics.sprite.y),
+        vx: Math.round(projectile.physics.body.velocity.x),
+        vy: Math.round(projectile.physics.body.velocity.y),
+        size: Math.round(projectile.physics.sprite.displayWidth),
+        miniRocketPhase: projectile.miniRocket.phase,
+        miniRocketCascadeStage: (projectile.spec.flight.miniRocket.cascadeDamageBonusPerExplosion ?? 0) > 0
+          ? projectile.miniRocket.explosionIndex
+          : undefined,
+        projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
+        burning: this.hasVisibleProjectileBurn(projectile) || undefined,
+        bounce: projectile.lastBouncePresentation,
+      },
+    };
   }
 
   spawnProjectile(request: ProjectileSpawnRequest): ProjectileSpawnResult {

@@ -177,6 +177,14 @@ describe('Projektil-Dynamik-Codec', () => {
     expect(roundTripDynamic({ ...base, bounce })).toEqual({ ...base, bounce });
   });
 
+  it('round-trips multiple ordered bounce outcomes without collapsing them to the last one', () => {
+    const bounceOutcomes = [
+      { sequence: 1, x: 1234.375, y: 566.625, vx: -799.5, vy: 299.25, tracerBounce: true },
+      { sequence: 2, x: 1198.125, y: 580.5, vx: 799.5, vy: 299.25, tracerBounce: true },
+    ] as const;
+    expect(roundTripDynamic({ ...base, bounceOutcomes })).toEqual({ ...base, bounceOutcomes });
+  });
+
   it('keeps a steady-state bullet tick tiny - the whole point of splitting static from dynamic', () => {
     // Regressionsschutz: rutscht ein statisches Feld (Farbe, Preset, Tracer, ownerId) zurueck in den
     // Dynamik-Strom, waechst dieser Wert sofort deutlich und der Bandbreitengewinn ist dahin.

@@ -23,6 +23,8 @@ vi.mock('phaser', () => ({
 }));
 
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
+import { decodeProjectileDynamics, decodeProjectileStatics } from '../src/network/projectileSnapshotCodec';
+import { ProjectileReplicationAdapter } from '../src/projectile/ProjectileReplicationAdapter';
 import type { ProjectileSpawnConfig } from '../src/types';
 import type { ProjectileRuntimeRecord } from '../src/projectile/ProjectileRuntimeRecord';
 import type { ProjectileBurnAugment } from '../src/projectile/ProjectileTravelPort';
@@ -123,6 +125,57 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('publishes a terminal bounce tombstone after the host releases the projectile', () => {
+    const physics = createTechnicalPhysicsBinding();
+    const runtime = new WorldProjectileRuntime({
+      physicsBinding: physics.binding,
+      presentation: createPresentation(),
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 1_000,
+    });
+    runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
+    const id = runtime.spawnProjectile(baseRequest({ maxBounces: 0 }))!;
+    physics.emit({
+      projectileId: id,
+      target: { kind: 'world-boundary' },
+      x: 37.25,
+      y: 48.5,
+      velocityX: -100,
+      velocityY: 0,
+      source: 'world-boundary',
+    });
+    runtime.destroyProjectile(id);
+
+    const snapshot = runtime.getNetSnapshot();
+    expect(snapshot).not.toBeNull();
+    expect(decodeProjectileStatics(snapshot?.s ?? [])).toMatchObject([{ id }]);
+    expect(decodeProjectileDynamics(snapshot?.u ?? [])[0]?.bounce).toMatchObject({
+      sequence: 1, x: 37.25, y: 48.5,
+    });
+    runtime.destroy();
+  });
+
+  it('publishes multiple host bounces in order instead of keeping only the last one', () => {
+    const physics = createTechnicalPhysicsBinding();
+    const runtime = new WorldProjectileRuntime({
+      physicsBinding: physics.binding,
+      presentation: createPresentation(),
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 1_000,
+    });
+    runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
+    const id = runtime.spawnProjectile(baseRequest({ maxBounces: 4 }))!;
+    physics.emit({ projectileId: id, target: { kind: 'world-boundary' }, x: 37.25, y: 48.5, velocityX: -100, velocityY: 0, source: 'world-boundary' });
+    physics.emit({ projectileId: id, target: { kind: 'world-boundary' }, x: 18.75, y: 48.5, velocityX: 100, velocityY: 0, source: 'world-boundary' });
+
+    const snapshot = runtime.getNetSnapshot();
+    expect(decodeProjectileDynamics(snapshot?.u ?? [])[0]?.bounceOutcomes).toEqual([
+      { sequence: 1, x: 37.25, y: 48.5, vx: 100, vy: 0, tracerBounce: true },
+      { sequence: 2, x: 18.75, y: 48.5, vx: 100, vy: 0, tracerBounce: true },
+    ]);
+    runtime.destroy();
+  });
+
   it('records the host collision point and post-contact velocity for client presentation', () => {
     const physics = createTechnicalPhysicsBinding();
     const presentation = { ...createPresentation(), playBounceImpact: vi.fn() };

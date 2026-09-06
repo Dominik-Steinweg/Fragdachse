@@ -607,6 +607,8 @@ export interface SyncedProjectile {
   burning?: boolean;
   /** Letztes hostautoritatives Bounce-/Impact-Ergebnis; wird bis zum Despawn wiederholt übertragen. */
   bounce?: ProjectileBouncePresentation;
+  /** Bei mehreren Bounces: geordnete, sticky Outcomes; ersetzt `bounce` im Wire-Eintrag. */
+  bounceOutcomes?: readonly ProjectileBouncePresentation[];
 }
 
 /**
@@ -653,6 +655,8 @@ export interface SyncedProjectileDynamic {
   burning?: boolean;
   /** Sticky, sequenziertes Presentation-Ergebnis; wird zur Paketverlustheilung wiederholt. */
   bounce?: ProjectileBouncePresentation;
+  /** Geordnete Outcome-Historie, wenn seit dem letzten Snapshot mehrere Bounces anfielen. */
+  bounceOutcomes?: readonly ProjectileBouncePresentation[];
 }
 
 /**

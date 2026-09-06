@@ -5,10 +5,20 @@ import {
 } from '../config';
 import { encodeProjectileDynamic, encodeProjectileStatic } from '../network/projectileSnapshotCodec';
 import type {
+  ProjectileBouncePresentation,
   SyncedProjectileDynamic,
   SyncedProjectileSnapshot,
   SyncedProjectileStatic,
 } from '../types';
+
+const BOUNCE_TOMBSTONE_TICKS = 4;
+const MAX_RETAINED_BOUNCE_OUTCOMES = 32;
+
+interface BounceRetention {
+  record: ProjectileReplicationRecord;
+  outcomes: ProjectileBouncePresentation[];
+  expiresAtSnapshot?: number;
+}
 
 /** Client-relevante Projektion eines aktiven Projectiles für den Host-Netzwerkadapter. */
 export interface ProjectileReplicationRecord {
@@ -35,8 +45,10 @@ export class ProjectileReplicationAdapter {
   private readonly staticResendLeft = new Map<number, number>();
   private readonly previousStatic = new Map<number, SyncedProjectileStatic>();
   private readonly seenIds = new Set<number>();
+  private readonly bounceRetentions = new Map<number, BounceRetention>();
   private refreshCursor = 0;
   private forceFullSnapshot = false;
+  private snapshotSerial = 0;
 
   constructor(private readonly source: ProjectileReplicationReadPort) {}
 
@@ -44,19 +56,44 @@ export class ProjectileReplicationAdapter {
     this.forceFullSnapshot = true;
   }
 
+  /**
+   * Retains a presentation outcome independently of the gameplay record. The latest complete
+   * projection is kept briefly after despawn so unreliable snapshots can still carry the impact.
+   */
+  recordBouncePresentation(record: ProjectileReplicationRecord): void {
+    const bounce = record.dynamic.bounce;
+    if (!bounce) return;
+    const existing = this.bounceRetentions.get(record.id);
+    const outcomes = existing?.outcomes ?? [];
+    const duplicateIndex = outcomes.findIndex((outcome) => outcome.sequence === bounce.sequence);
+    if (duplicateIndex >= 0) outcomes[duplicateIndex] = bounce;
+    else outcomes.push(bounce);
+    if (outcomes.length > MAX_RETAINED_BOUNCE_OUTCOMES) {
+      outcomes.splice(0, outcomes.length - MAX_RETAINED_BOUNCE_OUTCOMES);
+    }
+    this.bounceRetentions.set(record.id, {
+      record,
+      outcomes,
+    });
+  }
+
   reset(): void {
     this.staticResendLeft.clear();
     this.previousStatic.clear();
     this.seenIds.clear();
+    this.bounceRetentions.clear();
     this.refreshCursor = 0;
     this.forceFullSnapshot = false;
+    this.snapshotSerial = 0;
   }
 
   /**
    * Baut einen Snapshot nur für einen tatsächlichen Network-Tick.
-   * `u` bleibt vollständig und Despawn läuft unverändert über Abwesenheit.
+   * `u` bleibt vollständig; gewöhnliches Despawn läuft über Abwesenheit, ein Bounce-Tombstone
+   * bleibt nur für die kurze, begrenzte Heilungsfrist im Strom.
    */
   getSnapshot(nowMs: number): SyncedProjectileSnapshot | null {
+    const snapshotSerial = ++this.snapshotSerial;
     const full = this.forceFullSnapshot;
     this.forceFullSnapshot = false;
     const refreshIds = full ? null : this.collectStaticRefreshIds(nowMs);
@@ -66,6 +103,14 @@ export class ProjectileReplicationAdapter {
 
     this.source.readProjectileReplication((record) => {
       this.seenIds.add(record.id);
+      // Keep the adapter correct even for a projection source that only exposes the sticky latest
+      // outcome; the World runtime additionally calls recordBouncePresentation for every outcome.
+      if (record.dynamic.bounce) this.recordBouncePresentation(record);
+      const retention = this.bounceRetentions.get(record.id);
+      if (retention) {
+        retention.record = record;
+        retention.expiresAtSnapshot = undefined;
+      }
       const previous = this.previousStatic.get(record.id);
       const changed = previous !== undefined && staticProjectionChanged(previous, record.static);
       this.previousStatic.set(record.id, record.static);
@@ -79,8 +124,26 @@ export class ProjectileReplicationAdapter {
       } else if (full || refreshIds?.has(record.id)) {
         encodeProjectileStatic(s, record.static);
       }
-      encodeProjectileDynamic(u, record.dynamic);
+      encodeProjectileDynamic(u, projectDynamicWithBounceOutcomes(record.dynamic, retention?.outcomes));
     });
+
+    for (const [id, retention] of this.bounceRetentions) {
+      if (this.seenIds.has(id)) continue;
+      retention.expiresAtSnapshot ??= snapshotSerial + BOUNCE_TOMBSTONE_TICKS - 1;
+      if (snapshotSerial > retention.expiresAtSnapshot) {
+        this.bounceRetentions.delete(id);
+        this.staticResendLeft.delete(id);
+        this.previousStatic.delete(id);
+        continue;
+      }
+      this.seenIds.add(id);
+      // A tombstone may be the first packet this peer receives for a very short-lived projectile.
+      encodeProjectileStatic(s, retention.record.static);
+      encodeProjectileDynamic(u, projectDynamicWithBounceOutcomes(
+        retention.record.dynamic,
+        retention.outcomes,
+      ));
+    }
 
     for (const id of this.staticResendLeft.keys()) {
       if (!this.seenIds.has(id)) {
@@ -119,4 +182,15 @@ export class ProjectileReplicationAdapter {
 function staticProjectionChanged(previous: SyncedProjectileStatic, next: SyncedProjectileStatic): boolean {
   return (Object.keys(previous) as Array<keyof SyncedProjectileStatic>).some(key => previous[key] !== next[key])
     || (Object.keys(next) as Array<keyof SyncedProjectileStatic>).some(key => previous[key] !== next[key]);
+}
+
+function projectDynamicWithBounceOutcomes(
+  dynamic: SyncedProjectileDynamic,
+  outcomes: readonly ProjectileBouncePresentation[] | undefined,
+): SyncedProjectileDynamic {
+  if (!outcomes || outcomes.length === 0) return dynamic;
+  if (outcomes.length === 1) {
+    return { ...dynamic, bounce: outcomes[0], bounceOutcomes: undefined };
+  }
+  return { ...dynamic, bounce: undefined, bounceOutcomes: outcomes };
 }

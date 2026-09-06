@@ -40,7 +40,9 @@ export interface ProjectileClientReplicaUpdate {
   readonly state: ProjectileClientReplicaState;
   readonly previous?: ProjectileClientReplicaState;
   readonly isNew: boolean;
-  /** New host-authoritative outcome, emitted once per sequence. */
+  /** New host-authoritative outcomes, emitted once per sequence. */
+  readonly bounces: readonly ProjectileBouncePresentation[];
+  /** Latest entry in `bounces`, retained as a small compatibility convenience. */
   readonly bounce?: ProjectileBouncePresentation;
 }
 
@@ -110,13 +112,15 @@ export class ProjectileClientReplica {
     const newIds = new Set<number>();
     for (const projectile of incoming.values()) {
       const previous = this.states.get(projectile.id);
-      const bounce = readNewBounce(projectile.bounce, previous?.bounceSequence);
-      const state = createReplicaState(projectile, receivedAt, previous?.bounceSequence, bounce);
+      const bounces = readNewBounces(projectile, previous?.bounceSequence);
+      const bounce = bounces.length > 0 ? bounces[bounces.length - 1] : undefined;
+      const state = createReplicaState(projectile, receivedAt, previous?.bounceSequence, bounces);
       updates.push({
         projectile,
         state,
         previous,
         isNew: previous === undefined,
+        bounces,
         bounce,
       });
       if (previous === undefined) newIds.add(projectile.id);
@@ -149,9 +153,9 @@ function createReplicaState(
   projectile: SyncedProjectile,
   receivedAt: number,
   previousBounceSequence: number | undefined,
-  bounce: ProjectileBouncePresentation | undefined,
+  bounces: readonly ProjectileBouncePresentation[],
 ): ProjectileClientReplicaState {
-  const bounceSequence = Math.max(previousBounceSequence ?? 0, bounce?.sequence ?? 0);
+  const bounceSequence = Math.max(previousBounceSequence ?? 0, ...bounces.map((bounce) => bounce.sequence));
   return {
     serverX: projectile.x,
     serverY: projectile.y,
@@ -177,13 +181,22 @@ function createReplicaState(
   };
 }
 
-function readNewBounce(
-  bounce: ProjectileBouncePresentation | undefined,
+function readNewBounces(
+  projectile: SyncedProjectile,
   previousSequence: number | undefined,
-): ProjectileBouncePresentation | undefined {
-  if (!bounce || !Number.isSafeInteger(bounce.sequence) || bounce.sequence <= (previousSequence ?? 0)) return undefined;
-  if (![bounce.x, bounce.y, bounce.vx, bounce.vy].every(Number.isFinite)) return undefined;
-  return bounce;
+): ProjectileBouncePresentation[] {
+  const outcomes = projectile.bounceOutcomes
+    ?? (projectile.bounce === undefined ? [] : [projectile.bounce]);
+  const seen = new Set<number>();
+  return outcomes
+    .filter((bounce) => {
+      if (seen.has(bounce.sequence) || !Number.isSafeInteger(bounce.sequence)
+        || bounce.sequence <= (previousSequence ?? 0)) return false;
+      if (![bounce.x, bounce.y, bounce.vx, bounce.vy].every(Number.isFinite)) return false;
+      seen.add(bounce.sequence);
+      return true;
+    })
+    .sort((left, right) => left.sequence - right.sequence);
 }
 
 function extrapolateReplicaState(

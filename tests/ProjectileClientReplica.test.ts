@@ -67,4 +67,21 @@ describe('ProjectileClientReplica', () => {
     expect(repeated.updates[0]?.bounce).toBeUndefined();
     expect(repeated.updates[0]?.state.bounceSequence).toBe(1);
   });
+
+  it('presents every retained bounce sequence once when one snapshot contains multiple outcomes', () => {
+    const replica = new ProjectileClientReplica();
+    replica.sync([projectile()], 1_000);
+    const bounces = [
+      { sequence: 1, x: 121.5, y: 198, vx: -100, vy: -40, tracerBounce: true },
+      { sequence: 2, x: 96.25, y: 187.75, vx: 100, vy: -40, tracerBounce: true },
+    ] as const;
+
+    const frame = replica.sync([projectile({ bounceOutcomes: bounces })], 1_100);
+    expect(frame.updates[0]?.bounces).toEqual(bounces);
+    expect(frame.updates[0]?.bounce).toEqual(bounces[1]);
+    expect(frame.updates[0]?.state.bounceSequence).toBe(2);
+
+    const repeated = replica.sync([projectile({ bounceOutcomes: bounces })], 1_200);
+    expect(repeated.updates[0]?.bounces).toEqual([]);
+  });
 });

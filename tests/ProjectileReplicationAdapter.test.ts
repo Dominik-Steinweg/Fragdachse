@@ -82,6 +82,42 @@ describe('ProjectileReplicationAdapter', () => {
     });
   });
 
+  it('keeps a terminal bounce as a bounded tombstone after the source disappears', () => {
+    let records = [createRecord(1)];
+    const adapter = new ProjectileReplicationAdapter({
+      readProjectileReplication: (sink) => records.forEach(sink),
+    });
+    const outcome = { sequence: 1, x: 12.5, y: 19.25, vx: -300, vy: -40, tracerBounce: true } as const;
+    adapter.recordBouncePresentation({
+      ...records[0],
+      dynamic: { ...records[0].dynamic, bounce: outcome },
+    });
+    records = [];
+
+    for (let tick = 0; tick < 4; tick++) {
+      const snapshot = adapter.getSnapshot(tick)!;
+      expect(decodeProjectileStatics(snapshot.s)).toMatchObject([{ id: 1 }]);
+      expect(decodeProjectileDynamics(snapshot.u)[0]?.bounce).toEqual(outcome);
+    }
+    expect(adapter.getSnapshot(4)).toBeNull();
+  });
+
+  it('retains and repeats multiple outcomes in order until the projectile is gone', () => {
+    const records = [createRecord(1)];
+    const adapter = new ProjectileReplicationAdapter({
+      readProjectileReplication: (sink) => records.forEach(sink),
+    });
+    const first = { sequence: 1, x: 12.5, y: 19.25, vx: -300, vy: -40, tracerBounce: true } as const;
+    const second = { sequence: 2, x: 8.25, y: 18.5, vx: 300, vy: -40, tracerBounce: true } as const;
+    adapter.recordBouncePresentation({ ...records[0], dynamic: { ...records[0].dynamic, bounce: first } });
+    adapter.recordBouncePresentation({ ...records[0], dynamic: { ...records[0].dynamic, bounce: second } });
+
+    const snapshot = adapter.getSnapshot(0)!;
+    expect(decodeProjectileDynamics(snapshot.u)[0]?.bounceOutcomes).toEqual([first, second]);
+    const repeated = adapter.getSnapshot(1)!;
+    expect(decodeProjectileDynamics(repeated.u)[0]?.bounceOutcomes).toEqual([first, second]);
+  });
+
   it('refreshes long-lived statics, supports full snapshots, and removes absent IDs', () => {
     const records = [createRecord(1), createRecord(2)];
     const adapter = new ProjectileReplicationAdapter({

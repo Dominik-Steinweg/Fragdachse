@@ -458,7 +458,7 @@ export class ProjectilePresentationRuntime {
     for (const id of this.ownershipAppearance.keys()) if (!activeIds.has(id)) this.ownershipAppearance.delete(id);
     const burningIds = new Set<number>();
     for (const update of frame.updates) {
-      const { projectile: proj, bounce } = update;
+      const { projectile: proj, bounces } = update;
       this.refreshOwnershipAppearance(proj);
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
       if (update.isNew && !proj.suppressSpawnFx) {
@@ -532,7 +532,7 @@ export class ProjectilePresentationRuntime {
       if (proj.tracer && this.tracerRenderer) {
         if (!this.tracerRenderer.has(id)) this.tracerRenderer.createTracer(id, proj.x, proj.y, proj.tracer, proj.ownerColor ?? proj.color);
       }
-      if (bounce) {
+      for (const bounce of bounces) {
         this.playBounceImpact(
           id,
           bounce.x,

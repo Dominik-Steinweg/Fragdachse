@@ -46,7 +46,8 @@
  *
  * Stromformat `u`:
  *   id, mask, x, y, vx, vy, size, [burnPacked]?, [miniRocketPhaseCode, miniRocketCascadeStage]?,
- *   [bounceSequence, bounceX, bounceY, bounceVx, bounceVy, bounceTracerFlag]?
+ *   [bounceSequence, bounceX, bounceY, bounceVx, bounceVy, bounceTracerFlag]?,
+ *   [bounceCount, bounce×(sequence, x, y, vx, vy, tracerFlag)]?
  */
 import type {
   BulletVisualPreset,
@@ -94,6 +95,7 @@ const TRACER_ALPHA_QUANT = 100;
 const D_BURN = 1;              // burnPacked (Brand + Brandstil in einem Wert)
 const D_MINI_ROCKET = 2;       // Flugphase + Kaskadenstufe
 const D_BOUNCE = 4;            // sticky sequenziertes Bounce-/Impact-Presentation-Ergebnis
+const D_BOUNCE_OUTCOMES = 8;   // geordnete sticky Historie mehrerer Presentation-Ergebnisse
 
 /** `miniRocketCascadeStage === undefined` auf dem Draht. Echte Stufen sind nie negativ. */
 const MINI_ROCKET_CASCADE_NONE = -1;
@@ -318,7 +320,12 @@ export function encodeProjectileDynamic(
   if (entry.miniRocketPhase !== undefined || entry.miniRocketCascadeStage !== undefined) {
     mask |= D_MINI_ROCKET;
   }
-  if (entry.bounce !== undefined) mask |= D_BOUNCE;
+  const bounceOutcomes = entry.bounceOutcomes && entry.bounceOutcomes.length > 1
+    ? entry.bounceOutcomes
+    : undefined;
+  const singleBounce = entry.bounce ?? entry.bounceOutcomes?.[0];
+  if (bounceOutcomes !== undefined) mask |= D_BOUNCE_OUTCOMES;
+  else if (singleBounce !== undefined) mask |= D_BOUNCE;
 
   out.push(entry.id, mask, entry.x, entry.y, entry.vx, entry.vy, entry.size);
   if (mask & D_BURN) out.push(burnPacked);
@@ -329,8 +336,14 @@ export function encodeProjectileDynamic(
     );
   }
   if (mask & D_BOUNCE) {
-    const bounce = entry.bounce as ProjectileBouncePresentation;
+    const bounce = singleBounce as ProjectileBouncePresentation;
     out.push(bounce.sequence, bounce.x, bounce.y, bounce.vx, bounce.vy, bounce.tracerBounce ? 1 : 0);
+  }
+  if (mask & D_BOUNCE_OUTCOMES) {
+    out.push(bounceOutcomes?.length ?? 0);
+    for (const bounce of bounceOutcomes ?? []) {
+      out.push(bounce.sequence, bounce.x, bounce.y, bounce.vx, bounce.vy, bounce.tracerBounce ? 1 : 0);
+    }
   }
 }
 
@@ -373,6 +386,21 @@ export function decodeProjectileDynamics(
         tracerBounce: (stream[i++] as number) === 1,
       };
     }
+    if (mask & D_BOUNCE_OUTCOMES) {
+      const count = Math.max(0, Math.floor(stream[i++] as number));
+      const outcomes: ProjectileBouncePresentation[] = [];
+      for (let bounceIndex = 0; bounceIndex < count; bounceIndex++) {
+        outcomes.push({
+          sequence: stream[i++] as number,
+          x: stream[i++] as number,
+          y: stream[i++] as number,
+          vx: stream[i++] as number,
+          vy: stream[i++] as number,
+          tracerBounce: (stream[i++] as number) === 1,
+        });
+      }
+      entry.bounceOutcomes = outcomes;
+    }
     result.push(entry);
   }
   return result;
@@ -388,6 +416,7 @@ export function countProjectileDynamics(stream: readonly (number | string)[]): n
     if (mask & D_BURN) i += 1;
     if (mask & D_MINI_ROCKET) i += 2;
     if (mask & D_BOUNCE) i += 6;
+    if (mask & D_BOUNCE_OUTCOMES) i += 1 + Math.max(0, Math.floor(stream[i] as number)) * 6;
     count += 1;
   }
   return count;
@@ -459,6 +488,7 @@ export function applyProjectileSnapshot(
       projectileBurnVisualStyle: dynamic.projectileBurnVisualStyle,
       burning: dynamic.burning,
       bounce: dynamic.bounce,
+      bounceOutcomes: dynamic.bounceOutcomes,
     });
   }
 
