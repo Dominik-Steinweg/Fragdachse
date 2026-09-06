@@ -49,10 +49,10 @@ describe('projectile homing against hostile bases', () => {
 
   it('locks the nearest base surface candidate when the shot line is clear', () => {
     const controller = new ProjectileHomingController();
-    controller.setTargetProvider((_config, _ownerId, _x, _y, _radius, emit) => {
+    controller.setTargetQueryPort({ queryTargets: (_config, _ownerId, _x, _y, _radius, emit) => {
       emit('hostile-base', 'bases', 100, 0);
-    });
-    controller.setLineOfFireChecker(() => true);
+    } });
+    controller.setLineOfFireReadPort({ hasClearLineOfFire: () => true });
 
     const projectile = makeProjectile(BASE_HOMING);
     expect(controller.update(projectile, 0, true)).toBe(true);
@@ -63,10 +63,10 @@ describe('projectile homing against hostile bases', () => {
   it('does not lock a base behind an obstacle', () => {
     const controller = new ProjectileHomingController();
     const lineOfFire = vi.fn(() => false);
-    controller.setTargetProvider((_config, _ownerId, _x, _y, _radius, emit) => {
+    controller.setTargetQueryPort({ queryTargets: (_config, _ownerId, _x, _y, _radius, emit) => {
       emit('hostile-base', 'bases', 100, 0);
-    });
-    controller.setLineOfFireChecker(lineOfFire);
+    } });
+    controller.setLineOfFireReadPort({ hasClearLineOfFire: lineOfFire });
 
     const projectile = makeProjectile(BASE_HOMING);
     expect(controller.update(projectile, 0, true)).toBe(false);
@@ -77,14 +77,14 @@ describe('projectile homing against hostile bases', () => {
   it('filters stealthed reacquire candidates while keeping decoys valid', () => {
     const controller = new ProjectileHomingController();
     let stealthed = false;
-    controller.setTargetProvider((_config, _ownerId, _x, _y, _radius, emit) => {
+    controller.setTargetQueryPort({ queryTargets: (_config, _ownerId, _x, _y, _radius, emit) => {
       emit('player-2', 'players', 120, 0);
       emit('decoy-7', 'decoys', 180, 0);
-    });
-    controller.setLineOfFireChecker(() => true);
-    controller.setTargetValidityChecker((id, type) => (
+    } });
+    controller.setLineOfFireReadPort({ hasClearLineOfFire: () => true });
+    controller.setTargetabilityPort({ isTargetCurrentlyValid: (id, type) => (
       type === 'decoys' || id !== 'player-2' || !stealthed
-    ));
+    ) });
 
     const projectile = makeProjectile({
       ...BASE_HOMING,

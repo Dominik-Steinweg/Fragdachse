@@ -1,5 +1,5 @@
 import type { PlaceableKind } from '../types';
-import type { HomingTargetValidityChecker } from '../entities/ProjectileHomingController';
+import type { HomingTargetType } from '../types';
 import type { ProjectileId } from './ProjectileSpawnPort';
 import type { ProjectileProvenance } from './ProjectileSpawnRequest';
 
@@ -133,7 +133,7 @@ export interface ProjectileTargetabilityPort {
     allowTeamDamage: boolean,
   ): boolean;
   /** Homing-Sicht derselben Familie: ist ein bereits gewähltes Ziel noch gültig? */
-  readonly isTargetCurrentlyValid: HomingTargetValidityChecker;
+  readonly isTargetCurrentlyValid: (id: string, type: HomingTargetType, ownerId: string) => boolean;
 }
 
 /** Geometrischer Trefferkandidat ohne jede Domain-Mutation. */

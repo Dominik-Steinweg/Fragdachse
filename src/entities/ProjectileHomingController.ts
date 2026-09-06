@@ -34,9 +34,6 @@ export interface ProjectileTargetQueryPort {
   readonly queryTargets: HomingTargetProvider;
 }
 
-/** Prüft die fachliche Gültigkeit eines bereits bekannten Zieles. */
-export type HomingTargetValidityChecker = (id: string, type: HomingTargetType, ownerId: string) => boolean;
-
 /**
  * Targetability-Familie der Projectile-Runtime; die Homing-Suche nutzt nur ihre Gültigkeitssicht.
  */
@@ -104,25 +101,12 @@ export class ProjectileHomingController {
     this.candidateCount += 1;
   };
 
-  /** Kompatibler Name für die bestehende Composition; bindet nur den schmalen Query-Port. */
-  setTargetProvider(provider: HomingTargetProvider | null): void {
-    this.targetQueryPort = provider ? { queryTargets: provider } : null;
-  }
-
   setTargetQueryPort(port: ProjectileTargetQueryPort | null): void {
     this.targetQueryPort = port;
   }
 
-  setLineOfFireChecker(checker: HomingLineOfFireChecker | null): void {
-    this.lineOfFirePort = checker ? { hasClearLineOfFire: checker } : null;
-  }
-
   setLineOfFireReadPort(port: LineOfFireReadPort | null): void {
     this.lineOfFirePort = port;
-  }
-
-  setTargetValidityChecker(checker: HomingTargetValidityChecker | null): void {
-    this.targetabilityPort = checker ? { isTargetCurrentlyValid: checker } : null;
   }
 
   setTargetabilityPort(port: HomingTargetabilityView | null): void {

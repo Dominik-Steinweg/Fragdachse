@@ -45,6 +45,7 @@ export type ProjectilePresentationState = Readonly<Pick<SyncedProjectile,
   | 'size'
   | 'color'
   | 'ownerColor'
+  | 'sourceTurretId'
   | 'projectileVisualScale'
   | 'smokeTrailColor'
   | 'style'
@@ -58,9 +59,7 @@ export type ProjectilePresentationState = Readonly<Pick<SyncedProjectile,
   | 'miniRocketPhase'
   | 'miniRocketCascadeStage'
   | 'projectileBurnVisualStyle'
-  | 'burning'>> & {
-  readonly sourceTurretId?: string;
-};
+  | 'burning'>>;
 
 export interface ProjectilePresentationDespawnState extends ProjectilePresentationState {
   readonly pendingHydraSplit?: { readonly angles: number[] };
@@ -120,7 +119,12 @@ export class ProjectilePresentationRuntime {
   private teslaBoltRenderer: TeslaBoltRenderer | null = null;
   private tracerRenderer: TracerRenderer | null = null;
   private muzzleFlashRenderer: MuzzleFlashRenderer | null = null;
-  private readonly ownershipAppearance = new Map<number, { color: number; ownerColor?: number }>();
+  private readonly ownershipAppearance = new Map<number, {
+    ownerId: string;
+    color: number;
+    ownerColor?: number;
+    sourceTurretId?: string;
+  }>();
 
   constructor(private readonly scene: Phaser.Scene) {}
 
@@ -168,8 +172,14 @@ export class ProjectilePresentationRuntime {
     x: number,
     y: number,
     cfg: ProjectileSpawnConfig,
+    ownerId: string,
   ): void {
-    this.ownershipAppearance.set(id, { color: cfg.color, ownerColor: cfg.ownerColor });
+    this.ownershipAppearance.set(id, {
+      ownerId,
+      color: cfg.color,
+      ownerColor: cfg.ownerColor,
+      sourceTurretId: cfg.sourceTurretId,
+    });
     const style = cfg.projectileStyle;
     if (style === 'bullet' && this.bulletRenderer) {
       sprite.setVisible(false); sprite.setAlpha(0);
@@ -300,16 +310,36 @@ export class ProjectilePresentationRuntime {
     this.teslaBoltRenderer?.destroyVisual(projectile.id);
   }
 
-  /** Rebuild color-cached visuals on ownership changes without spawn or impact feedback. */
-  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'color' | 'ownerColor'>): boolean {
+  /** Rebuild cached visuals when a stable ID receives new owner/source appearance metadata. */
+  private refreshOwnershipAppearance(projectile: Pick<ProjectilePresentationState, 'id' | 'ownerId' | 'color' | 'ownerColor' | 'sourceTurretId'>): boolean {
     const previous = this.ownershipAppearance.get(projectile.id);
-    if (previous?.color === projectile.color && previous.ownerColor === projectile.ownerColor) return false;
-    this.ownershipAppearance.set(projectile.id, { color: projectile.color, ownerColor: projectile.ownerColor });
+    if (previous?.ownerId === projectile.ownerId
+      && previous.color === projectile.color
+      && previous.ownerColor === projectile.ownerColor
+      && previous.sourceTurretId === projectile.sourceTurretId) return false;
+    this.ownershipAppearance.set(projectile.id, {
+      ownerId: projectile.ownerId,
+      color: projectile.color,
+      ownerColor: projectile.ownerColor,
+      sourceTurretId: projectile.sourceTurretId,
+    });
     if (!previous) return false;
     this.bulletRenderer?.destroyVisual(projectile.id);
+    this.gaussRenderer?.destroyVisual(projectile.id);
     this.rocketRenderer?.destroyVisual(projectile.id);
+    this.energyBallRenderer?.destroyVisual(projectile.id);
+    this.hydraRenderer?.destroyVisual(projectile.id);
+    this.sporeRenderer?.destroyVisual(projectile.id);
     this.grenadeRenderer?.destroyVisual(projectile.id);
+    this.translocatorPuckRenderer?.destroyVisual(projectile.id);
+    this.teslaBoltRenderer?.destroyVisual(projectile.id);
+    this.flameRenderer?.destroyVisual(projectile.id);
     this.tracerRenderer?.destroyTracer(projectile.id);
+    const fallback = this.clientVisuals.get(projectile.id);
+    if (fallback) {
+      fallback.destroy();
+      this.clientVisuals.delete(projectile.id);
+    }
     return true;
   }
 
@@ -511,7 +541,7 @@ export class ProjectilePresentationRuntime {
         if (!this.leafBlowerRenderer.has(id)) this.leafBlowerRenderer.createVisual(id, proj.x, proj.y, proj.size);
         this.leafBlowerRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if (proj.style === 'flame' && this.flameRenderer) {
-        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.ownerId);
+        if (!this.flameRenderer.has(id)) this.flameRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, proj.sourceTurretId ?? proj.ownerId);
         this.flameRenderer.updateVisual(id, proj.x, proj.y, proj.size, proj.vx, proj.vy);
       } else if ((proj.style === 'awp' || proj.style === 'gauss') && this.bulletRenderer) {
         if (!this.bulletRenderer.has(id)) this.bulletRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);

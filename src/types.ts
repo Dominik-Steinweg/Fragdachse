@@ -586,6 +586,8 @@ export interface SyncedProjectile {
   color:   number;  // hex
   allowTeamDamage?: boolean;
   ownerColor?: number; // Spielerfarbe des Schützen für projektilspezifische Akzente/VFX
+  /** Visuelle Quellenkennung; insbesondere für owner-/quellenabhängige Flame-Ketten. */
+  sourceTurretId?: string;
   /** Reiner VFX-Ursprung; x/y ist hier die replizierte tatsächliche Projektilposition. */
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number; // optionaler Render-Faktor ohne Einfluss auf Hitbox/Physik
@@ -622,6 +624,8 @@ export interface SyncedProjectileStatic {
   color?:  number;
   allowTeamDamage?: boolean;
   ownerColor?: number;
+  /** Visuelle Quellenkennung; bleibt bei Static-Updates derselben Projectile-ID explizit. */
+  sourceTurretId?: string;
   visualMuzzleOrigin?: { x: number; y: number };
   projectileVisualScale?: number;
   smokeTrailColor?: number;

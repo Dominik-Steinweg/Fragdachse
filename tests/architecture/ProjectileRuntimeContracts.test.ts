@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -111,6 +111,28 @@ describe('Projectile Runtime – final ownership ratchets', () => {
     expect(combat).toContain('ProjectileWorldImpactBindingPort');
     expect(combat).not.toContain('readonly projectileRuntime:');
     expect(combat).not.toContain('o.projectileRuntime.');
+  });
+
+  it('keeps one final homing/time-field seam and no presentation compatibility facade', () => {
+    const homing = read('src/entities/ProjectileHomingController.ts');
+    const runtime = read('src/projectile/WorldProjectileRuntime.ts');
+    const boundary = read('src/projectile/ProjectileBoundaryPorts.ts');
+    const seamSources = `${homing}\n${runtime}\n${boundary}`;
+
+    for (const legacyMethod of [
+      'setTargetProvider(', 'setLineOfFireChecker(', 'setTargetValidityChecker(',
+      'setTimeBubbleFactorProvider(', 'setHomingTargetProvider(', 'setHomingLineOfFireChecker(',
+    ]) expect(seamSources).not.toContain(legacyMethod);
+    expect(boundary).toContain('setProjectileTimeFieldPort(');
+    expect(boundary).toContain('setProjectileTargetQueryPort(');
+    expect(boundary).toContain('setLineOfFireReadPort(');
+    expect(existsSync(resolve(process.cwd(), 'src/projectile/ProjectilePresentationPort.ts'))).toBe(false);
+  });
+
+  it('keeps ProjectileImpactSource as a bounded stable DTO instead of a universal context', () => {
+    const gameplay = read('src/projectile/ProjectileGameplayPort.ts');
+    expect(gameplay).toContain('this DTO is not a');
+    expect(gameplay).toContain('universal impact context');
   });
 
   it('keeps mutable Runtime records private to Projectile internals and the World owner', () => {

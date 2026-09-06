@@ -35,12 +35,16 @@ describe('ProjectileReplicationAdapter', () => {
     for (let tick = 0; tick < 10; tick++) adapter.getSnapshot(tick);
     records[0] = {
       ...records[0],
-      static: { ...records[0].static, ownerId: 'reflector', ownerColor: 0x123456 },
+      static: { ...records[0].static, ownerId: 'reflector', ownerColor: 0x123456, sourceTurretId: 'turret-reflector' },
     };
-    expect(decodeProjectileStatics(adapter.getSnapshot(10)!.s)).toMatchObject([{ id: 1, ownerId: 'reflector' }]);
+    expect(decodeProjectileStatics(adapter.getSnapshot(10)!.s)).toMatchObject([{
+      id: 1, ownerId: 'reflector', ownerColor: 0x123456, sourceTurretId: 'turret-reflector',
+    }]);
     // The first redirect packet may be lost; the next tick heals the same ID.
     const healed = adapter.getSnapshot(11)!;
-    expect(decodeProjectileStatics(healed.s)).toMatchObject([{ id: 1, ownerId: 'reflector' }]);
+    expect(decodeProjectileStatics(healed.s)).toMatchObject([{
+      id: 1, ownerId: 'reflector', ownerColor: 0x123456, sourceTurretId: 'turret-reflector',
+    }]);
     expect(decodeProjectileDynamics(healed.u)).toMatchObject([{ id: 1 }]);
   });
 

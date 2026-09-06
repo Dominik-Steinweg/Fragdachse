@@ -220,13 +220,13 @@ describe('projectile performance paths', () => {
   });
   it('uses host stage timing for fuse and time-bubble flight', () => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();
-    runtime.setTimeBubbleFactorProvider(() => 0.1);
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: () => 0.1 });
     const grenade = spawnRequest(runtime, { flight: { isGrenade: true, fuseTimeMs: 300, maxBounces: 0 }, interaction: { grenadeEffect: { type: 'damage', radius: 20, damage: 10 } } });
     runtime.runHostProjectileStage(1_000, 1_000);
     expect(runtime.activeCount).toBe(0);
     expect(physics.released).toContain(grenade);
     const bullet = spawnRequest(runtime, { flight: { lifetimeMs: 100, speed: 100 } });
-    runtime.setTimeBubbleFactorProvider(() => 0.5);
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: () => 0.5 });
     runtime.runHostProjectileStage(100, 100);
     expect(runtime.activeCount).toBe(1);
     expect(physics.handles.get(bullet)!.body.velocity.x).toBe(50);

@@ -22,7 +22,11 @@ export interface ProjectileDetonableReadPort {
   readDetonableProjectiles(sink: (sample: ProjectileDetonableSample) => void): void;
 }
 
-/** Read-only source data for host gameplay reactions; Runtime records stay private. */
+/**
+ * Stable read-only source data for host gameplay reactions; Runtime records stay private.
+ * Keep unrelated domain or presentation payloads behind their owning ports: this DTO is not a
+ * universal impact context and must only grow when a real shared reaction boundary requires it.
+ */
 export interface ProjectileImpactSource {
   readonly projectileId: number;
   readonly ownerId: string;

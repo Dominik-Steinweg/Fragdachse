@@ -19,6 +19,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     size:   flight.size,
     damage: directHit?.damage ?? 0,
     color:  presentation.color,
+    sourceTurretId: request.provenance.sourceTurretId,
     lifetime:   flight.lifetimeMs,
     maxBounces: flight.maxBounces,
     isGrenade:  flight.isGrenade,

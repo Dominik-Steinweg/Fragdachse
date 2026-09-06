@@ -42,7 +42,7 @@
  *     [velocityDecay]?, [bulletPresetIdx]?, [grenadePresetIdx]?, [energyVariantIdx]?,
  *     [sporeVariantIdx]?, [shotAudioKey]?, [flags]?,
  *     [tmask, widthCore, widthGlow, alphaCoreQ, alphaGlowQ, segments, fadeMs,
- *      [maxLength]?, [colorCore]?, [colorGlow]?]?
+ *      [maxLength]?, [colorCore]?, [colorGlow]?]?, [sourceTurretId]?
  *
  * Stromformat `u`:
  *   id, mask, x, y, vx, vy, size, [burnPacked]?, [miniRocketPhaseCode, miniRocketCascadeStage]?,
@@ -79,6 +79,7 @@ const S_SPORE_VARIANT = 1024;
 const S_AUDIO = 2048;
 const S_FLAGS = 4096;          // Bit0 allowTeamDamage, Bit1 suppressSpawnFx
 const S_TRACER = 8192;
+const S_SOURCE_TURRET = 16384; // appended: source-sensitive presentation chain key
 
 const FLAG_ALLOW_TEAM_DAMAGE = 1;
 const FLAG_SUPPRESS_SPAWN_FX = 2;
@@ -183,6 +184,7 @@ export function encodeProjectileStatic(
   if (entry.shotAudioKey !== undefined) mask |= S_AUDIO;
   if (flags !== 0) mask |= S_FLAGS;
   if (entry.tracer !== undefined) mask |= S_TRACER;
+  if (entry.sourceTurretId !== undefined) mask |= S_SOURCE_TURRET;
 
   out.push(entry.id, mask, entry.ownerId);
   if (mask & S_STYLE) out.push(indexIn(PROJECTILE_STYLES, entry.style));
@@ -224,6 +226,7 @@ export function encodeProjectileStatic(
     if (tmask & T_COLOR_CORE) out.push(tracer.colorCore as number);
     if (tmask & T_COLOR_GLOW) out.push(tracer.colorGlow as number);
   }
+  if (mask & S_SOURCE_TURRET) out.push(entry.sourceTurretId as string);
 }
 
 /** Dekodiert den Statik-Strom zurück in Vollersatz-Einträge. */
@@ -285,6 +288,7 @@ export function decodeProjectileStatics(
       if (tmask & T_COLOR_GLOW) tracer.colorGlow = stream[i++] as number;
       entry.tracer = tracer;
     }
+    if (mask & S_SOURCE_TURRET) entry.sourceTurretId = stream[i++] as string;
     result.push(entry);
   }
   return result;
@@ -471,6 +475,7 @@ export function applyProjectileSnapshot(
       color: shared.color ?? 0,
       allowTeamDamage: shared.allowTeamDamage,
       ownerColor: shared.ownerColor,
+      sourceTurretId: shared.sourceTurretId,
       visualMuzzleOrigin: shared.visualMuzzleOrigin,
       projectileVisualScale: shared.projectileVisualScale,
       smokeTrailColor: shared.smokeTrailColor,

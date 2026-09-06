@@ -21,6 +21,8 @@ import type {
   ProjectileTargetabilityPort,
   ProjectileWorldBlockerPort,
 } from '../projectile/ProjectileTargetPort';
+import type { LineOfFireReadPort, ProjectileTargetQueryPort } from '../entities/ProjectileHomingController';
+import type { ProjectileTimeFieldPort } from '../projectile/ProjectileTimeFieldPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -375,13 +377,13 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileEvents.setMiniRocketDestroyedCallback(null);
     this.options.projectileEvents.setStandaloneExplosionRequestCallback(null);
     this.options.projectileEvents.setProximityPulseCallback(null);
-    this.options.projectileTimeField.setTimeBubbleFactorProvider(null);
+    this.options.projectileTimeField.setProjectileTimeFieldPort(null);
     this.options.projectileWorldImpact.setRockHitCallback(() => { /* noop */ });
     this.options.projectileWorldImpact.setObstacleKindResolver(null);
     this.options.projectileWorldImpact.setBaseHitCallback(null);
     this.options.projectileWorldImpact.setSupportImpactCallback(null);
-    this.options.projectileHoming.setHomingTargetProvider(null);
-    this.options.projectileHoming.setHomingLineOfFireChecker(null);
+    this.options.projectileHoming.setProjectileTargetQueryPort(null);
+    this.options.projectileHoming.setLineOfFireReadPort(null);
     this.options.projectileInteraction.setProjectileTargetabilityPort(null);
     this.options.projectileInteraction.setProjectileCollisionTargetQueryPort(null);
     this.options.projectileInteraction.setProjectileWorldBlockerPort(null);
@@ -847,55 +849,62 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const playerLines = projectile.isBfg ? o.hostUpdate.resolveBfgPlayerProximityPulse(projectile) : [];
       o.network.effects.broadcastBfgLaserBatch([...playerLines, ...pulse.lines], projectile.isBfg ? COLORS.GREEN_2 : projectile.color, projectile.isBfg ? undefined : 'asmd_primary', projectile.isBfg ? projectile.projectileId : undefined);
     });
-    o.projectileTimeField.setTimeBubbleFactorProvider((x, y, now, ownerId) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, ownerId) ?? 1);
-    o.projectileHoming.setHomingTargetProvider((config, ownerId, originX, originY, searchRadius, emit) => {
-      if (!o.network.authority.isHost()) return;
-      const radiusSq = searchRadius * searchRadius;
-      const inRange = (x: number, y: number): boolean => {
-        const dx = x - originX;
-        const dy = y - originY;
-        return dx * dx + dy * dy <= radiusSq;
-      };
-      if (config.targetTypes?.includes('turrets')) {
-        for (const turret of this.systems?.turret.getTurrets() ?? []) {
-          if (!inRange(turret.x, turret.y)) continue;
-          emit(String(turret.id), 'turrets', turret.x, turret.y);
+    const timeFieldPort: ProjectileTimeFieldPort = {
+      getMovementFactor: (x, y, now, provenance) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, provenance.allegiance.ownerId) ?? 1,
+    };
+    o.projectileTimeField.setProjectileTimeFieldPort(timeFieldPort);
+    const targetQueryPort: ProjectileTargetQueryPort = {
+      queryTargets: (config, ownerId, originX, originY, searchRadius, emit) => {
+        if (!o.network.authority.isHost()) return;
+        const radiusSq = searchRadius * searchRadius;
+        const inRange = (x: number, y: number): boolean => {
+          const dx = x - originX;
+          const dy = y - originY;
+          return dx * dx + dy * dy <= radiusSq;
+        };
+        if (config.targetTypes?.includes('turrets')) {
+          for (const turret of this.systems?.turret.getTurrets() ?? []) {
+            if (!inRange(turret.x, turret.y)) continue;
+            emit(String(turret.id), 'turrets', turret.x, turret.y);
+          }
         }
-      }
-      for (const player of o.playerManager.getAllPlayers()) {
-        if (player.id === ownerId || !player.active) continue;
-        if (!inRange(player.x, player.y)) continue;
-        if (!o.combatSystem.isAlive(player.id)) continue;
-        if (o.getPlayerCombatIntegration()?.state.isBurrowed(player.id)) continue;
-        if (!o.combatSystem.canDamageTarget(ownerId, player.id)) continue;
-        emit(player.id, 'players', player.x, player.y);
-      }
-      if (config.targetTypes?.includes('decoys')) {
-        for (const decoy of o.decoySystem.getHostTargets()) {
-          if (decoy.ownerId === ownerId) continue;
-          if (!inRange(decoy.sprite.x, decoy.sprite.y)) continue;
-          emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
+        for (const player of o.playerManager.getAllPlayers()) {
+          if (player.id === ownerId || !player.active) continue;
+          if (!inRange(player.x, player.y)) continue;
+          if (!o.combatSystem.isAlive(player.id)) continue;
+          if (o.getPlayerCombatIntegration()?.state.isBurrowed(player.id)) continue;
+          if (!o.combatSystem.canDamageTarget(ownerId, player.id)) continue;
+          emit(player.id, 'players', player.x, player.y);
         }
-      }
-      for (const enemy of o.getEnemyManager()?.getAllEnemies() ?? []) {
-        if (!enemy.sprite.active) continue;
-        if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
-        if (!o.combatSystem.isAlive(enemy.id)) continue;
-        if (!o.combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
-        emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
-      }
-      if (config.targetTypes?.includes('bases') && !o.getEnemyManager()?.hasEnemy(ownerId)) {
-        for (const base of o.baseManager?.getBasesByFaction('hostile') ?? []) {
-          if (base.isInert?.() === true || base.getHp() <= 0) continue;
-          const surface = base.getNearestSurfacePoint(originX, originY);
-          if (!surface || !inRange(surface.x, surface.y)) continue;
-          emit(base.id, 'bases', surface.x, surface.y);
+        if (config.targetTypes?.includes('decoys')) {
+          for (const decoy of o.decoySystem.getHostTargets()) {
+            if (decoy.ownerId === ownerId) continue;
+            if (!inRange(decoy.sprite.x, decoy.sprite.y)) continue;
+            emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
+          }
         }
-      }
-    });
-    o.projectileHoming.setHomingLineOfFireChecker((sx, sy, ex, ey) => (
-      o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey)
-    ));
+        for (const enemy of o.getEnemyManager()?.getAllEnemies() ?? []) {
+          if (!enemy.sprite.active) continue;
+          if (!inRange(enemy.sprite.x, enemy.sprite.y)) continue;
+          if (!o.combatSystem.isAlive(enemy.id)) continue;
+          if (!o.combatSystem.canDamageTarget(ownerId, enemy.id)) continue;
+          emit(enemy.id, 'enemies', enemy.sprite.x, enemy.sprite.y);
+        }
+        if (config.targetTypes?.includes('bases') && !o.getEnemyManager()?.hasEnemy(ownerId)) {
+          for (const base of o.baseManager?.getBasesByFaction('hostile') ?? []) {
+            if (base.isInert?.() === true || base.getHp() <= 0) continue;
+            const surface = base.getNearestSurfacePoint(originX, originY);
+            if (!surface || !inRange(surface.x, surface.y)) continue;
+            emit(base.id, 'bases', surface.x, surface.y);
+          }
+        }
+      },
+    };
+    o.projectileHoming.setProjectileTargetQueryPort(targetQueryPort);
+    const lineOfFirePort: LineOfFireReadPort = {
+      hasClearLineOfFire: (sx, sy, ex, ey) => o.combatSystem.hasClearLineOfFire(sx, sy, ex, ey),
+    };
+    o.projectileHoming.setLineOfFireReadPort(lineOfFirePort);
     // Targetability-Familie: Beziehung und Homing-Gültigkeit kommen aus ihren kanonischen Ownern.
     o.projectileInteraction.setProjectileTargetabilityPort({
       canDamage: (provenance, target, allowTeamDamage) => (

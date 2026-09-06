@@ -254,9 +254,6 @@ export class WorldProjectileRuntime implements
   private miniRocketDestroyedCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
   private standaloneExplosionRequestCallback: ((request: ProjectileExplosionRequest) => void) | null = null;
   private proximityPulseCallback: ((projectile: ProjectileImpactSource) => void) | null = null;
-  private timeBubbleProvider: ((x: number, y: number, now: number, ownerId?: string) => number) | null = null;
-  private homingTargetProvider: import('../entities/ProjectileHomingController').HomingTargetProvider | null = null;
-  private homingLineOfFireChecker: import('../entities/ProjectileHomingController').HomingLineOfFireChecker | null = null;
   private rockHitCallback: ((rockId: number, damage: number, attackerId: string) => void) | null = null;
   private obstacleKindResolver: ((rockId: number) => PlaceableKind | undefined) | null = null;
   private baseHitCallback: ((baseId: string, damage: number, attackerId: string, projectile?: ProjectileImpactSource) => void) | null = null;
@@ -269,14 +266,13 @@ export class WorldProjectileRuntime implements
   private readonly hostNowMs: () => number;
   private readonly onDestroy?: () => void;
   private projectileTimeFieldPort: ProjectileTimeFieldPort | null = null;
-  private timeBubbleMovementPort: ProjectileTimeFieldPort | null = null;
   private readonly pendingNextStageSpawns: PendingNextStageProjectileSpawn[] = [];
   private completedInteractionStages = 0;
   private hasStartedInteractionStage = false;
   private hostFrameNowMs = 0;
   private interactionNowMs = 0;
   /** Same-frame bridge between technical Phaser contacts and canonical target candidates. */
-  private readonly resolvedWorldContacts = new Map<string, boolean>();
+  private readonly resolvedWorldContacts = new Map<string, ResolvedWorldContact>();
   private contactFrameNowMs: number | null = null;
   private destroyed = false;
 
@@ -475,24 +471,6 @@ export class WorldProjectileRuntime implements
 
   setProximityPulseCallback(callback: ((projectile: ProjectileImpactSource) => void) | null): void {
     this.proximityPulseCallback = callback;
-  }
-
-  setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number, ownerId?: string) => number) | null): void {
-    this.timeBubbleProvider = provider;
-    this.timeBubbleMovementPort = provider ? {
-      getMovementFactor: (x, y, nowMs, provenance) => provider(x, y, nowMs, provenance.allegiance.ownerId),
-    } : null;
-    this.flightProcessor.setTimeFieldPort(this.timeBubbleMovementPort ?? this.projectileTimeFieldPort);
-  }
-
-  setHomingTargetProvider(provider: import('../entities/ProjectileHomingController').HomingTargetProvider | null): void {
-    this.homingTargetProvider = provider;
-    this.homingController.setTargetQueryPort(provider ? { queryTargets: provider } : null);
-  }
-
-  setHomingLineOfFireChecker(checker: import('../entities/ProjectileHomingController').HomingLineOfFireChecker | null): void {
-    this.homingLineOfFireChecker = checker;
-    this.homingController.setLineOfFireReadPort(checker ? { hasClearLineOfFire: checker } : null);
   }
 
   setRockHitCallback(callback: ((rockId: number, damage: number, attackerId: string) => void) | null): void {
@@ -840,20 +818,17 @@ export class WorldProjectileRuntime implements
     candidate: ProjectileImpactCandidate,
   ): ResolvedWorldContact {
     const contactKey = `${candidate.projectileId}:${projectileTargetPhysicalKey(candidate.target)}`;
-    const previousTechnicalConsumption = this.resolvedWorldContacts.get(contactKey);
-    if (previousTechnicalConsumption !== undefined) {
-      return {
-        outcome: 'consumed',
-        technicalContactConsumed: previousTechnicalConsumption,
-      };
-    }
+    const previousResolution = this.resolvedWorldContacts.get(contactKey);
+    if (previousResolution) return previousResolution;
 
     const impact = this.createImpactSource(projectile, candidate.x, candidate.y);
     let technicalContactConsumed = false;
     switch (candidate.target.kind) {
       case 'rock':
         if (!this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id)) {
-          return { outcome: 'passed', technicalContactConsumed: false };
+          const passed: ResolvedWorldContact = { outcome: 'passed', technicalContactConsumed: false };
+          this.resolvedWorldContacts.set(contactKey, passed);
+          return passed;
         }
         technicalContactConsumed = this.resolveRockPhysicsContact(
           projectile,
@@ -884,7 +859,9 @@ export class WorldProjectileRuntime implements
         break;
       case 'train':
         if (!this.rememberPiercingWorldContact(projectile, candidate.target.kind, candidate.target.id)) {
-          return { outcome: 'passed', technicalContactConsumed: false };
+          const passed: ResolvedWorldContact = { outcome: 'passed', technicalContactConsumed: false };
+          this.resolvedWorldContacts.set(contactKey, passed);
+          return passed;
         }
         technicalContactConsumed = this.resolveTrainPhysicsContact(projectile, impact);
         break;
@@ -894,15 +871,19 @@ export class WorldProjectileRuntime implements
         technicalContactConsumed = false;
         break;
       default:
-        this.resolvedWorldContacts.set(contactKey, false);
-        return { outcome: 'ignored', technicalContactConsumed: false };
+        {
+          const ignored: ResolvedWorldContact = { outcome: 'ignored', technicalContactConsumed: false };
+          this.resolvedWorldContacts.set(contactKey, ignored);
+          return ignored;
+        }
     }
 
-    this.resolvedWorldContacts.set(contactKey, technicalContactConsumed);
-    return {
+    const resolved: ResolvedWorldContact = {
       outcome: shouldPassThroughWorldTarget(projectile) ? 'passed' : 'consumed',
       technicalContactConsumed,
     };
+    this.resolvedWorldContacts.set(contactKey, resolved);
+    return resolved;
   }
 
   private rememberPiercingWorldContact(
@@ -1128,6 +1109,7 @@ export class WorldProjectileRuntime implements
         color: projectile.presentation.color,
         allowTeamDamage: projectile.provenance.allegiance.allowTeamDamage,
         ownerColor: projectile.presentation.ownerColor,
+        sourceTurretId: projectile.provenance.sourceTurretId,
         visualMuzzleOrigin: projectile.presentation.visualMuzzleOrigin,
         projectileVisualScale: projectile.presentation.projectileVisualScale,
         smokeTrailColor: projectile.presentation.smokeTrailColor,
@@ -1561,7 +1543,7 @@ export class WorldProjectileRuntime implements
 
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
     this.projectileTimeFieldPort = port;
-    this.flightProcessor.setTimeFieldPort(this.timeBubbleMovementPort ?? port);
+    this.flightProcessor.setTimeFieldPort(port);
   }
 
   setProjectileTargetQueryPort(port: ProjectileTargetQueryPort | null): void {
@@ -1975,7 +1957,6 @@ export class WorldProjectileRuntime implements
     this.homingController.setLineOfFireReadPort(null);
     this.lifecycleProcessor.reset();
     this.projectileTimeFieldPort = null;
-    this.timeBubbleMovementPort = null;
     this.collisionTargetQueryPort = null;
     this.worldBlockerPort = null;
     this.targetabilityPort = null;
@@ -1983,9 +1964,6 @@ export class WorldProjectileRuntime implements
     this.directImpactPort = null;
     this.trainImpactPort = null;
     this.miniRocketStatePort = null;
-    this.homingTargetProvider = null;
-    this.homingLineOfFireChecker = null;
-    this.timeBubbleProvider = null;
     this.projectileImpactEventCallback = null;
     this.naturalFlameExpiryCallback = null;
     this.projectileResolvedCallback = null;
@@ -2043,9 +2021,7 @@ export class WorldProjectileRuntime implements
         this.physicsBinding.getSafeMuzzleGeometry(), bodyProfile,
       )
       : { x, y };
-    const timeFactor = clampProjectileTimeFactor(this.timeBubbleProvider?.(
-      resolvedSpawn.x, resolvedSpawn.y, hostNowMs, ownerId,
-    ) ?? this.projectileTimeFieldPort?.getMovementFactor(
+    const timeFactor = clampProjectileTimeFactor(this.projectileTimeFieldPort?.getMovementFactor(
       resolvedSpawn.x, resolvedSpawn.y, hostNowMs, provenance,
     ) ?? 1);
     const mechanics = resolvePhysicsMechanics(cfg);
@@ -2244,7 +2220,7 @@ export class WorldProjectileRuntime implements
         record.appliedAirFrictionDecay = effectiveDecay;
       }
     }
-    this.presentation.createSpawnRendererVisuals(id, handle.sprite, resolvedSpawn.x, resolvedSpawn.y, cfg);
+    this.presentation.createSpawnRendererVisuals(id, handle.sprite, resolvedSpawn.x, resolvedSpawn.y, cfg, ownerId);
     this.presentation.registerFallbackShape(handle.sprite);
     if (cfg.isBfg) this.presentation.createBfgVisual(id, resolvedSpawn.x, resolvedSpawn.y, cfg.size);
     this.presentation.createSpawnFeedback(id, resolvedSpawn.x, resolvedSpawn.y, x, y, angle, ownerId, cfg);

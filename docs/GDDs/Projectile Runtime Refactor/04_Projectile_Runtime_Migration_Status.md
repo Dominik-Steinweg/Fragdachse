@@ -27,8 +27,9 @@
 - **Nächste Phase:** C8 – Architekturabschluss und technische Endabnahme (offen, nicht begonnen)
 - **Gesamtstatus:** Phasen 1–15 und C1–C7 umgesetzt; C8 bleibt für den Architekturabschluss notwendig
 - **C7-Abnahme:** Typecheck, `npm run check` (Core, Architecture, Build), Integration, Stress und Balance Lab grün. Gezielte Verträge sichern stabile Redirect-Identity, getrennte Attribution/Allegiance, Child-Lineage, Homing-Reacquisition, Kontaktgedächtnis, Restfuse, Static-Resend nach Übernahme und reentranten World-Teardown.
+- **C8-Vorarbeiten:** World-Contact-Dedupe cached das vollständige Ergebnis reihenfolgeunabhängig; stabile Same-ID-Redirects replizieren owner-/farb-/quellenabhängige Presentation; tote parallele Homing-/TimeField-/Presentation-Seams sind entfernt. Diese Vorarbeiten markieren C8 nicht als abgeschlossen.
 - **Typecheck-Regel:** jede erfolgreich abgeschlossene Phase muss `npm run typecheck` grün halten
-- **Final-Gate:** vollständiger Abgleich gegen 01–03 und sämtliche Endabnahme-Suites bleiben C8; C7 ist keine Gesamtabschlussbehauptung
+- **Final-Gate:** vollständiger Abgleich gegen 01–03 und sämtliche Endabnahme-Suites bleiben C8; C8 ist noch nicht final abgeschlossen, die unabhängige vollständige C8-Endabnahme steht noch aus
 - **Manuelle Prüfung:** nicht durch Coding-KI; standardmäßig erst nach technischem Abschluss
 
 ---
@@ -77,9 +78,9 @@ Die Folge ist nach der erneuten Prüfung von `01`–`03` und dem Code-Stand defi
 
 Nur **aktuell offene** Punkte eintragen. Maximal wenige präzise Einträge; erledigte löschen.
 
-- C8: bestehende Ratchets prüfen teilweise private Sourceform statt vollständiger Dependency-Grenzen; abschließendes Audit und alle technischen Gates stehen aus.
+- C8: Die bekannten Vorarbeiten sind erledigt; unabhängiges abschließendes Audit, vollständiger Abgleich gegen 01–03 und alle technischen Endabnahme-Gates stehen weiterhin aus.
 
-C7 speichert keinen flachen `ProjectileSpawnConfig` mehr. Der verbleibende reine Payload-Adapter bedient Spawn-/Body-Resolver, Presentation und das Headless-Lab; Provenance bleibt separat. Der öffentliche Config-Spawn-Einstieg ist entfernt. Reflection/Deflection verändern den bestehenden Record und behalten Source, Parent-Lineage, Correlation, Kontaktgedächtnis und Lifetime; Replication und Presentation aktualisieren dieselbe ID ohne neue Gameplay-Authority. Der C6-Physics-Cut und die Stage-Reihenfolge bleiben erhalten.
+C7 speichert keinen flachen `ProjectileSpawnConfig` mehr. Der verbleibende reine Payload-Adapter bedient Spawn-/Body-Resolver, Presentation und das Headless-Lab; Provenance bleibt separat. Der öffentliche Config-Spawn-Einstieg ist entfernt. Reflection/Deflection verändern den bestehenden Record und behalten Source, Parent-Lineage, Correlation, Kontaktgedächtnis und Lifetime; Replication und Presentation aktualisieren dieselbe ID ohne neue Gameplay-Authority. Der C6-Physics-Cut und die Stage-Reihenfolge bleiben erhalten. Die C8-Vorarbeiten stabilisieren zusätzlich die vollständige World-Contact-Resolution und die owner-/farb-/quellenabhängige Presentation bei gleicher ID; die unabhängige vollständige C8-Endabnahme ist noch offen.
 
 ---
 
@@ -117,7 +118,7 @@ Nur echte offene Abweichungen von `01`/`02`; keine Verbesserungsideen-Sammlung.
 
 ## 6. Nächster Schritt
 
-**C8 ist die nächste offene Phase. Der aktuelle Arbeitsauftrag endet mit dem C7-Commit; C8 wird nicht begonnen.**
+**C8 ist die nächste offene Phase. Die dokumentierten Vorarbeiten sind kein Abschluss der Phase: C8 ist noch nicht final abgeschlossen, und die unabhängige vollständige C8-Endabnahme steht noch aus.**
 
 ---
 

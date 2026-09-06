@@ -84,6 +84,51 @@ describe('ProjectilePresentationRuntime', () => {
     expect(renderers.destroyTracer).toHaveBeenCalledWith(7);
   });
 
+  it('rebuilds a same-ID flame chain when owner, color or source changes', () => {
+    const projectileBurn = {
+      sync: vi.fn(),
+      retain: vi.fn(),
+      destroyVisual: vi.fn(),
+      destroyAll: vi.fn(),
+    };
+    const flameIds = new Set<number>();
+    const flame = {
+      ...passiveRenderer(),
+      has: (id: number) => flameIds.has(id),
+      createVisual: vi.fn((id: number) => { flameIds.add(id); }),
+      destroyVisual: vi.fn((id: number) => { flameIds.delete(id); }),
+    };
+    const runtime = new ProjectilePresentationRuntime({} as never);
+    const replica = new ProjectileClientReplica();
+    const renderers = passiveRenderer();
+    runtime.bindRenderers({
+      bullet: renderers,
+      projectileBurn,
+      flame,
+      leafBlower: renderers,
+      bfg: renderers,
+      energyBall: renderers,
+      hydra: renderers,
+      gauss: renderers,
+      holyGrenade: renderers,
+      rocket: renderers,
+      fireball: renderers,
+      spore: renderers,
+      grenade: renderers,
+      translocatorPuck: renderers,
+      teslaBolt: renderers,
+      tracer: renderers,
+    } as never, null);
+
+    runtime.presentClientFrame(replica.sync([projectile({ style: 'flame', sourceTurretId: 'turret-a' })], 1_000));
+    runtime.presentClientFrame(replica.sync([projectile({
+      style: 'flame', ownerId: 'reflector', color: 0x123456, ownerColor: 0x654321, sourceTurretId: 'turret-b',
+    })], 1_100));
+
+    expect(flame.destroyVisual).toHaveBeenCalledWith(7);
+    expect(flame.createVisual).toHaveBeenLastCalledWith(7, 100, 200, 12, 0x123456, 'turret-b');
+  });
+
   it('presents the authoritative impact point instead of the following snapshot position', () => {
     const projectileBurn = {
       sync: vi.fn(),

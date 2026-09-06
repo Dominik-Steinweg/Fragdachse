@@ -7,7 +7,6 @@ import type {
 } from '../src/projectile/ProjectilePhysicsBinding';
 import type { ProjectilePhysicsContact } from '../src/projectile/ProjectileTargetPort';
 import type { ProjectilePresentationRuntime } from '../src/projectile/ProjectilePresentationRuntime';
-import { EMPTY_PROJECTILE_PRESENTATION } from '../src/projectile/ProjectilePresentationPort';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
 import { ProjectileReplicationAdapter } from '../src/projectile/ProjectileReplicationAdapter';
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
@@ -18,12 +17,12 @@ export interface TechnicalPhysicsBindingFixture {
   readonly specs: ProjectilePhysicsSpawnSpec[];
   readonly released: number[];
   readonly releaseWorldState: ReturnType<typeof vi.fn>;
-  emit(contact: ProjectilePhysicsContact): void;
+  emit(contact: ProjectilePhysicsContact): boolean | undefined;
 }
 
 /** Headless technical Physics boundary; gameplay ownership remains in WorldProjectileRuntime. */
 export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture {
-  let contactHandler: ((contact: ProjectilePhysicsContact) => void) | null = null;
+  let contactHandler: ((contact: ProjectilePhysicsContact) => boolean) | null = null;
   const handles = new Map<number, ProjectilePhysicsHandle>();
   const specs: ProjectilePhysicsSpawnSpec[] = [];
   const released: number[] = [];
@@ -101,7 +100,7 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
       (handle.sprite.destroy as unknown as () => void)();
     }),
     setPhysicsContactHandler: vi.fn((handler: ((contact: ProjectilePhysicsContact) => void) | null) => {
-      contactHandler = handler;
+      contactHandler = handler as ((contact: ProjectilePhysicsContact) => boolean) | null;
     }),
     releaseWorldState,
   } satisfies ProjectilePhysicsBindingPort;
@@ -118,7 +117,12 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
 
 export function createPresentation(): ProjectilePresentationRuntime {
   return {
-    ...EMPTY_PROJECTILE_PRESENTATION,
+    registerFallbackShape: () => {},
+    createSpawnRendererVisuals: () => {},
+    createBfgVisual: () => {},
+    createSpawnFeedback: () => {},
+    playBounceImpact: () => {},
+    destroyProjectileVisuals: () => {},
     clientVisualCount: 0,
     syncHostRenderers: vi.fn(),
     getShadowSamples: () => [],

@@ -9,9 +9,10 @@ import type {
 import type { ProjectileExplosionRequest } from './ProjectileExplosionPort';
 import type { SupportProjectileImpact } from '../types';
 import type {
-  HomingLineOfFireChecker,
-  HomingTargetProvider,
+  LineOfFireReadPort,
+  ProjectileTargetQueryPort,
 } from '../entities/ProjectileHomingController';
+import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 import type { ProjectilePlasmaSwarmImpact } from './ProjectileCombatPort';
 
 /** World geometry capability required by the technical Projectile PhysicsBinding. */
@@ -59,13 +60,13 @@ export interface ProjectileLifecycleEventsBindingPort {
 
 /** Host time-field capability for the movement core. */
 export interface ProjectileTimeFieldBindingPort {
-  setTimeBubbleFactorProvider(provider: ((x: number, y: number, now: number, ownerId?: string) => number) | null): void;
+  setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void;
 }
 
 /** Homing's two host-provided read capabilities. */
 export interface ProjectileHomingBindingPort {
-  setHomingTargetProvider(provider: HomingTargetProvider | null): void;
-  setHomingLineOfFireChecker(checker: HomingLineOfFireChecker | null): void;
+  setProjectileTargetQueryPort(port: ProjectileTargetQueryPort | null): void;
+  setLineOfFireReadPort(port: LineOfFireReadPort | null): void;
 }
 
 /** Semantic owner input for the Plasma swarm reaction. */

@@ -51,12 +51,14 @@ import { createProjectileRuntimeTestWorld, projectilePhysicsContact } from './Pr
 import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
 import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
 import type { ProjectileInteractionSpec } from '../src/projectile/ProjectileSpawnRequest';
+import type { ProjectileCollisionTargetQueryPort } from '../src/projectile/ProjectileTargetPort';
 
 function request(overrides: {
   ownerId?: string;
   provenance?: ProjectileSpawnRequest['provenance'];
   flight?: Partial<ProjectileSpawnRequest['flight']>;
   interaction?: Partial<ProjectileInteractionSpec>;
+  presentation?: Partial<ProjectileSpawnRequest['presentation']>;
 } = {}): ProjectileSpawnRequest {
   const ownerId = overrides.ownerId ?? 'player-1';
   return {
@@ -64,7 +66,7 @@ function request(overrides: {
     flight: { speed: 100, size: 12, lifetimeMs: 1_000, maxBounces: 0, isGrenade: false, ...overrides.flight },
     provenance: overrides.provenance ?? createSingleOwnerProvenance(ownerId, { weaponSourceId: 'weapon.test' }),
     interaction: { directHit: { damage: 6 }, ...overrides.interaction },
-    presentation: { color: 0xffffff, ownerColor: 0xffffff, style: 'tesla_bolt' },
+    presentation: { color: 0xffffff, ownerColor: 0xffffff, style: 'tesla_bolt', ...overrides.presentation },
   };
 }
 
@@ -73,6 +75,44 @@ function spawn(runtime: ReturnType<typeof createProjectileRuntimeTestWorld>['run
   if (id === null) throw new Error('Expected projectile spawn');
   return id;
 }
+
+describe('world contact dedupe ordering', () => {
+  it.each(['bfg', 'gauss'] as const)('%s keeps pass-through when canonical and technical contact order changes', (style) => {
+    for (const order of ['canonical-first', 'technical-first'] as const) {
+      const { runtime, physics } = createProjectileRuntimeTestWorld();
+      const hits: number[] = [];
+      runtime.setRockHitCallback((id) => hits.push(id));
+      const id = spawn(runtime, request(style === 'bfg'
+        ? { flight: { collisionMode: 'overlap', isBfg: true }, presentation: { style: 'bfg' } }
+        : {
+          flight: { collisionMode: 'overlap', piercesTargets: true },
+          interaction: { directHit: { damage: 6, gaussChain: { radius: 10, damageFactor: 1 } } },
+          presentation: { style: 'gauss' },
+        }));
+      const readWorldRocks: ProjectileCollisionTargetQueryPort['readCollisionTargets'] = (sink) => {
+        sink('rock', 7, 'world', 0, 0, 12, -12, -12, 12, 12, 'rock');
+        sink('rock', 8, 'world', 0, 0, 12, -12, -12, 12, 12, 'rock');
+      };
+
+      if (order === 'canonical-first') {
+        runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: readWorldRocks });
+        runtime.runHostInteractionStage(0);
+      } else {
+        runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: () => {} });
+        runtime.runHostInteractionStage(0);
+        expect(physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 7 }))).toBe(false);
+        runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: readWorldRocks });
+        runtime.runHostInteractionStage(0);
+      }
+
+      expect(hits).toEqual([7, 8]);
+      if (order === 'canonical-first') {
+        expect(physics.emit(projectilePhysicsContact(id, { kind: 'rock', id: 7 }))).toBe(false);
+        expect(hits).toEqual([7, 8]);
+      }
+    }
+  });
+});
 
 describe('generic projectile target piercing', () => {
   it('resolves one world candidate and deduplicates a later technical contact', () => {
