@@ -8,6 +8,7 @@ import type { WorldPresentationFrameBinding } from './WorldPresentationFrameBind
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 import { ProjectileIdentityScope } from '../projectile/ProjectileIdentityScope';
 import type { WorldCombatRuntime } from '../combat/WorldCombatRuntime';
+import type { CombatBoundaryAttachment } from '../combat/CombatCapabilities';
 
 /**
  * Lokale Realisierung genau einer World-Instanz.
@@ -102,28 +103,33 @@ export class WorldRuntime {
   }
 
   /**
-   * Installs Combat exactly once for this World. Replacement requires a new WorldRuntime so old
-   * target/scope references can never become valid again against a successor boundary. The slot
-   * has intentionally no public getter: Composition distributes narrow ports directly instead of
-   * turning WorldRuntime into a service locator.
+   * Installs the one current Combat boundary. Its returned lease clears only that exact runtime;
+   * a stale lease cannot detach a later replacement. The slot has intentionally no public getter:
+   * Composition distributes narrow ports directly instead of turning WorldRuntime into a service
+   * locator.
    */
-  setCombat(runtime: WorldCombatRuntime | null): void {
+  setCombat(runtime: WorldCombatRuntime): CombatBoundaryAttachment {
     this.assertAlive('combat runtime');
-    if (runtime === this.combatRuntime) return;
-    if (runtime && runtime.scope.worldRevision !== this.descriptor.worldRevision) {
+    if (runtime.scope.worldRevision !== this.descriptor.worldRevision) {
       throw new Error(
         `[WorldRuntime] Combat runtime belongs to world revision ${runtime.scope.worldRevision}, `
         + `not ${this.descriptor.worldRevision}`,
       );
     }
-    if (runtime && this.combatRuntime) {
+    if (this.combatRuntime) {
       throw new Error(
         `[WorldRuntime] Combat runtime of world ${this.descriptor.definitionId} is already bound`,
       );
     }
-    const previous = this.combatRuntime;
     this.combatRuntime = runtime;
-    previous?.destroy();
+    return { detach: () => { this.clearCombat(runtime); } };
+  }
+
+  /** Clears only the concrete runtime represented by its attachment lease. */
+  private clearCombat(runtime: WorldCombatRuntime): void {
+    if (this.destroyed || this.combatRuntime !== runtime) return;
+    this.combatRuntime = null;
+    runtime.destroy();
   }
 
   /** Setzt die Player-Runtime dieser World; eine vorhandene loest zuvor alle ihre Spieler. */
@@ -244,6 +250,10 @@ export class WorldRuntime {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    const combat = this.combatRuntime;
+    this.combatRuntime = null;
+    // Invalidate authoritative inputs before the first external teardown sink can run or throw.
+    combat?.destroy();
     // Sicherheitsnetz zuerst: eine ohne expliziten `detachPresentationFrame()` zerstoerte Runtime
     // (z. B. ein technischer Abbruch) darf die aktive Presentation-Verdrahtung nicht leaken. Der
     // regulaere Pfad hat den Slot an dieser Stelle bereits geleert; hier ist der Aufruf dann ein
@@ -253,19 +263,15 @@ export class WorldRuntime {
     const persistentBase = this.persistentBaseBinding;
     const materialization = this.materializedWorld;
     const players = this.playerRuntime;
-    const combat = this.combatRuntime;
     const bindings = this.worldScopedBindings;
     this.presentationBinding = null;
     this.persistentBaseBinding = null;
     this.materializedWorld = null;
     this.playerRuntime = null;
-    this.combatRuntime = null;
     this.worldScopedBindings = [];
     // Nur was diese Runtime noch besitzt: eine zuvor freigegebene Darstellung gehoert bereits
     // jemand anderem und wird hier nicht abgeraeumt.
     presentation?.destroy();
-    // Combat rejects retained inputs before any mutation/query dependency is dismantled.
-    combat?.destroy();
     players?.detachAll();
     this.activity.close();
     persistentBase?.destroy();

@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A am R1-Stopp; P0/P1 lokal bestanden, R1 nicht bestanden |
+| Gesamtstatus | Block A aktiv; P1-Fixrunde 1 bestanden, erneutes R1 als nächstes |
 | Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
 | Freigabequelle | Nutzerauftrag vom 07.09.2026: ausschließlich Block A |
-| Nächster Arbeitsschritt | Wartet auf Nutzerentscheidung; zulässig wäre ein begrenztes P1-Fixpaket mit erneutem R1 |
+| Nächster Arbeitsschritt | Unabhängiges R1 auf dem geprüften Fix-Checkpoint |
 | Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine; R1-Blocker dokumentiert |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `3524b918` |
+| Aktive Phase / Aufgabe | Keine zwischen Fix-Checkpoint und R1 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `dd13de75` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | R1-Fixes benötigen Sol / High; Wiederholungsreview Astra / High |
-| Aktueller Reparaturzähler | Kein offenes Reparaturpaket |
+| Aktueller Reparaturzähler | R1-Fixrunde 1 abgeschlossen; Wiederholungsreview ausstehend |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -37,7 +37,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 |---|:---:|:---:|---|
 | P0 | A | ✅ | Baseline / Delta |
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
-| R1 | A | 🟧 | Vertragsreview; danach Nutzerstopp |
+| R1 | A | 🟨 | Vertragsreview; Fixrunde 1 und Wiederholungsreview |
 | P2 | B | ⬜ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
@@ -65,7 +65,7 @@ Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest
 
 ## 4. Aktive Übergänge und Blocker
 
-P1 ist implementiert; R1 hat drei Contract-Blocker bestätigt:
+P1 ist implementiert; die drei Befunde aus R1-Runde 1 sind in Fixrunde 1 geschlossen:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
@@ -74,15 +74,14 @@ P1 ist implementiert; R1 hat drei Contract-Blocker bestätigt:
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
-| Contract-Blocker | Projectile-Direct-Adapter markiert bereits skalierte automatische Payloads als `authored`; Faktorherkunftstest fehlt | P1-Fix, dann R1 |
-| Contract-Blocker | `WorldRuntime.setCombat(null)` erlaubt Wiederbelegung und stale Clear gegen einen Nachfolger | P1-Fix, dann R1 |
-| Contract-Blocker | World-Teardown invalidiert Combat erst nach externen Presentation-Aufrufen | P1-Fix, dann R1 |
 
 ## 5. Nachweise und Reviews
 
 **P0-Baseline:** bestanden auf `8457a193`. `npm run check`, `npm run test:integration`, `npm run test:stress`, `npm run test:balance-lab`, `npm run test:assets` und `git diff --check`: jeweils Exit 0. V1–V12 besitzen vorhandene Einstiegspunkte; keine neue Charakterisierung nötig. Kein früherer Projectile-Testlauf wurde als Combat-Nachweis übernommen.
 
 **P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus P1-Lieferung. Fokussierte Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. R1 fand danach drei Contract-Blocker.
+
+**P1-Fixrunde 1:** bestanden auf `dd13de75` plus Fixdelta. Fokussierte Tests: 44/44, Integration: 175/175, Typecheck und Diff-Check: Exit 0. Damage-Basis/Faktorherkunft, runtime-gebundene Clear-Lease und frühe Teardown-Invalidierung korrigiert.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

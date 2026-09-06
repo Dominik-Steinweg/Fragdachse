@@ -337,6 +337,13 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
       interaction: {
         directHit: {
           damage:        config.directDamageOverride ?? config.damage,
+          appliedSourceDamageFactors: options?.directDamageMultiplier === undefined
+            ? undefined
+            : [{
+              kind: 'automated-source',
+              multiplier: Math.max(0, options.directDamageMultiplier),
+              resolvedAt: 'execution',
+            }],
           adrenalinGain: config.adrenalinGain,
           rockDamageMult:  config.rockDamageMult,
           trainDamageMult: config.trainDamageMult,

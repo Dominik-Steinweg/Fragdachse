@@ -241,8 +241,17 @@ export interface ProjectileInteractionSpec {
 }
 
 /** Unmittelbare Trefferwirkung am getroffenen Ziel. */
+export interface ProjectileDirectDamageSourceFactor {
+  /** Source-owned automatic execution already applied this factor before Projectile spawn. */
+  readonly kind: 'automated-source';
+  readonly multiplier: number;
+  readonly resolvedAt: 'execution';
+}
+
 export interface ProjectileDirectHitSpec {
   readonly damage: number;
+  /** Absent means the payload is still authored/unscaled at the Combat adapter boundary. */
+  readonly appliedSourceDamageFactors?: readonly ProjectileDirectDamageSourceFactor[];
   /** Ressourcengewinn der Attribution bei Treffer. */
   readonly adrenalinGain?: number;
   readonly rockDamageMult?: number;

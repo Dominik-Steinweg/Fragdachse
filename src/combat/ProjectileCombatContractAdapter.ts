@@ -62,8 +62,9 @@ export function adaptProjectileCombatTarget(
 }
 
 /**
- * Maps only the stable direct-impact contract. Runtime/source factors remain pending; neither
- * Projectile flight state nor target modifiers are read at this boundary.
+ * Maps only the stable direct-impact contract. Unmarked payloads still need source resolution;
+ * factors explicitly applied by automatic execution remain visible and are not applied twice.
+ * Neither Projectile flight state nor target modifiers are read at this boundary.
  */
 export function adaptProjectileDirectDamageRequest(
   request: ProjectileDirectImpactRequest,
@@ -72,13 +73,20 @@ export function adaptProjectileDirectDamageRequest(
   instance: CombatTargetInstance,
   classification: ProjectileCombatSourceClassification,
 ): DirectCombatDamageRequest {
+  const appliedSourceFactors = request.directHit.appliedSourceDamageFactors;
   return {
     outcomeId,
     entry: 'projectile-direct',
     damageKind: 'direct',
     target: adaptProjectileCombatTarget(request.target, scope, instance),
     source: adaptProjectileCombatSource(request.provenance, request.projectileId, classification),
-    basis: { kind: 'authored', amount: request.directHit.damage },
+    basis: appliedSourceFactors && appliedSourceFactors.length > 0
+      ? {
+        kind: 'source-resolved',
+        amount: request.directHit.damage,
+        sourceFactors: appliedSourceFactors.map((factor) => ({ ...factor })),
+      }
+      : { kind: 'authored', amount: request.directHit.damage },
     targetScaling: 'pending',
     allowCritical: true,
   };

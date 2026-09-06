@@ -24,6 +24,7 @@ export type CombatTargetStateSnapshot = CombatantVitalsSnapshot | CombatIntegrit
 export type CombatSourceFactorKind =
   | 'runtime-power'
   | 'loadout-slot'
+  | 'automated-source'
   | 'outgoing-modifier'
   | 'critical'
   | 'falloff'

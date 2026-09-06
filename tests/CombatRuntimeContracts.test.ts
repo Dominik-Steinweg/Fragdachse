@@ -26,6 +26,7 @@ import { WorldCombatRuntime } from '../src/combat/WorldCombatRuntime';
 import type { ProjectileDirectImpactRequest } from '../src/projectile/ProjectileCombatPort';
 import { WorldRuntime } from '../src/world/WorldRuntime';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
+import type { WorldPresentationFrameBinding } from '../src/world/WorldPresentationFrameBinding';
 
 const scope: CombatScope = { worldRevision: 7, runtimeGeneration: 2 };
 
@@ -233,5 +234,63 @@ describe('WorldCombatRuntime build and ownership contract', () => {
 
     expect(combat.phase).toBe('destroyed');
     expect(combat.accepts(target)).toBe(false);
+  });
+
+  it('does not let a stale clear lease detach a replacement Combat runtime', () => {
+    const world = new WorldRuntime({
+      descriptor: {
+        worldRevision: 7,
+        definitionId: 'world:test',
+        seed: 1,
+        generatorVersion: 1,
+        layoutFingerprint: 'test',
+      },
+    } as WorldRuntimeContext);
+    const first = new WorldCombatRuntime(7, 2);
+    first.attachRequiredBindings(requiredBindings());
+    first.activate();
+    const clearFirst = world.setCombat(first);
+
+    clearFirst.detach();
+    expect(first.phase).toBe('destroyed');
+
+    const replacement = new WorldCombatRuntime(7, 3);
+    replacement.attachRequiredBindings(requiredBindings());
+    replacement.activate();
+    world.setCombat(replacement);
+    clearFirst.detach();
+
+    expect(replacement.phase).toBe('active');
+    expect(replacement.accepts({ worldRevision: 7, runtimeGeneration: 3 })).toBe(true);
+    world.destroy();
+    expect(replacement.phase).toBe('destroyed');
+  });
+
+  it('invalidates Combat before a throwing Presentation teardown sink runs', () => {
+    const world = new WorldRuntime({
+      descriptor: {
+        worldRevision: 7,
+        definitionId: 'world:test',
+        seed: 1,
+        generatorVersion: 1,
+        layoutFingerprint: 'test',
+      },
+    } as WorldRuntimeContext);
+    const combat = new WorldCombatRuntime(7, 2);
+    combat.attachRequiredBindings(requiredBindings());
+    combat.activate();
+    world.setCombat(combat);
+    let acceptsDuringPresentationDestroy: boolean | null = null;
+    world.bindPresentationFrame({
+      destroy: () => {
+        acceptsDuringPresentationDestroy = combat.accepts(scope);
+        throw new Error('presentation teardown failed');
+      },
+    } as WorldPresentationFrameBinding);
+
+    expect(() => world.destroy()).toThrow('presentation teardown failed');
+    expect(acceptsDuringPresentationDestroy).toBe(false);
+    expect(combat.phase).toBe('destroyed');
+    expect(combat.accepts(scope)).toBe(false);
   });
 });
