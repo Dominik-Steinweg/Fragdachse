@@ -38,6 +38,7 @@ export interface ProjectilePresentationPort {
     vy: number,
     color: number,
     style?: ProjectileStyle,
+    tracerBounce?: boolean,
   ): void;
   destroyProjectileVisuals(projectile: ProjectilePresentationDespawnState): void;
 }

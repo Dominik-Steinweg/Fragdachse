@@ -245,7 +245,17 @@ export class ProjectilePresentationRuntime {
     this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
   }
 
-  playBounceImpact(id: number, x: number, y: number, vx: number, vy: number, color: number, style?: ProjectileStyle): void {
+  playBounceImpact(
+    id: number,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    color: number,
+    style?: ProjectileStyle,
+    tracerBounce = true,
+  ): void {
+    if (tracerBounce) this.tracerRenderer?.notifyBounce(id, x, y);
     if (style === 'bullet' || style === 'awp' || style === 'gauss') {
       this.bulletRenderer?.playImpactSparks(id, x, y, vx, vy, color);
     }
@@ -448,10 +458,9 @@ export class ProjectilePresentationRuntime {
     for (const id of this.ownershipAppearance.keys()) if (!activeIds.has(id)) this.ownershipAppearance.delete(id);
     const burningIds = new Set<number>();
     for (const update of frame.updates) {
-      const { projectile: proj, velocityFlipped } = update;
+      const { projectile: proj, bounce } = update;
       this.refreshOwnershipAppearance(proj);
       const bulletPreset = resolveBulletVisualPreset(proj.style, proj.bulletVisualPreset);
-      if (velocityFlipped && this.tracerRenderer?.has(proj.id)) this.tracerRenderer.notifyBounce(proj.id, proj.x, proj.y);
       if (update.isNew && !proj.suppressSpawnFx) {
         const ownerPos = this.ownerPositionProvider?.(proj.ownerId) ?? null;
         const speed = Math.hypot(proj.vx, proj.vy);
@@ -507,11 +516,9 @@ export class ProjectilePresentationRuntime {
       } else if ((proj.style === 'awp' || proj.style === 'gauss') && this.bulletRenderer) {
         if (!this.bulletRenderer.has(id)) this.bulletRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
         this.bulletRenderer.syncToBody(id, proj.x, proj.y, proj.vx, proj.vy);
-        if (velocityFlipped) this.bulletRenderer.playImpactSparks(id, proj.x, proj.y, proj.vx, proj.vy, proj.color);
       } else if (proj.style === 'bullet' && this.bulletRenderer) {
         if (!this.bulletRenderer.has(id)) this.bulletRenderer.createVisual(id, proj.x, proj.y, proj.size, proj.color, bulletPreset, proj.ownerColor ?? proj.color);
         this.bulletRenderer.updatePosition(id, proj.x, proj.y, proj.vx, proj.vy);
-        if (velocityFlipped) this.bulletRenderer.playImpactSparks(id, proj.x, proj.y, proj.vx, proj.vy, proj.color);
       } else {
         let sprite = this.clientVisuals.get(id);
         if (!sprite) {
@@ -524,6 +531,20 @@ export class ProjectilePresentationRuntime {
       }
       if (proj.tracer && this.tracerRenderer) {
         if (!this.tracerRenderer.has(id)) this.tracerRenderer.createTracer(id, proj.x, proj.y, proj.tracer, proj.ownerColor ?? proj.color);
+      }
+      if (bounce) {
+        this.playBounceImpact(
+          id,
+          bounce.x,
+          bounce.y,
+          bounce.vx,
+          bounce.vy,
+          proj.color,
+          proj.style,
+          bounce.tracerBounce,
+        );
+      }
+      if (proj.tracer && this.tracerRenderer) {
         this.tracerRenderer.updateTracer(id, proj.x, proj.y, proj.vx, proj.vy);
       }
       this.projectileBurnRenderer?.sync(id, proj.x, proj.y, proj.size, proj.burning === true, false, proj.projectileBurnVisualStyle);

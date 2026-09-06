@@ -67,7 +67,7 @@ export class TracerRenderer {
    */
   /**
    * Setzt spawnX/spawnY + prevX/prevY auf die aktuelle Position zurück.
-   * Muss nach einem erkannten Abpraller aufgerufen werden (z.B. via velocityFlipped im Client).
+   * Muss nach einem hostautoritativen Bounce-Presentation-Ergebnis aufgerufen werden.
    */
   notifyBounce(id: number, x: number, y: number): void {
     const v = this.visuals.get(id);

@@ -58,6 +58,30 @@ describe('ProjectileReplicationAdapter', () => {
     expect(decodeProjectileDynamics(steady?.u ?? [])).toMatchObject([{ id: 1, x: 10, y: 20 }]);
   });
 
+  it('repeats the latest bounce outcome in dynamic snapshots so a lost packet can heal', () => {
+    const records = [createRecord(1)];
+    const adapter = new ProjectileReplicationAdapter({
+      readProjectileReplication: (sink) => records.forEach(sink),
+    });
+    adapter.getSnapshot(0);
+    records[0] = {
+      ...records[0],
+      dynamic: {
+        ...records[0].dynamic,
+        bounce: { sequence: 1, x: 12.5, y: 19.25, vx: -300, vy: -40, tracerBounce: true },
+      },
+    };
+
+    const first = adapter.getSnapshot(1)!;
+    const healed = adapter.getSnapshot(2)!;
+    expect(decodeProjectileDynamics(first.u)[0]?.bounce).toEqual({
+      sequence: 1, x: 12.5, y: 19.25, vx: -300, vy: -40, tracerBounce: true,
+    });
+    expect(decodeProjectileDynamics(healed.u)[0]?.bounce).toEqual({
+      sequence: 1, x: 12.5, y: 19.25, vx: -300, vy: -40, tracerBounce: true,
+    });
+  });
+
   it('refreshes long-lived statics, supports full snapshots, and removes absent IDs', () => {
     const records = [createRecord(1), createRecord(2)];
     const adapter = new ProjectileReplicationAdapter({

@@ -165,6 +165,18 @@ describe('Projektil-Dynamik-Codec', () => {
     expect(withStage.miniRocketCascadeStage).toBe(0);
   });
 
+  it('round-trips the exact host bounce point and post-bounce velocity', () => {
+    const bounce = {
+      sequence: 3,
+      x: 1234.375,
+      y: 566.625,
+      vx: -799.5,
+      vy: 299.25,
+      tracerBounce: true,
+    } as const;
+    expect(roundTripDynamic({ ...base, bounce })).toEqual({ ...base, bounce });
+  });
+
   it('keeps a steady-state bullet tick tiny - the whole point of splitting static from dynamic', () => {
     // Regressionsschutz: rutscht ein statisches Feld (Farbe, Preset, Tracer, ownerId) zurueck in den
     // Dynamik-Strom, waechst dieser Wert sofort deutlich und der Bandbreitengewinn ist dahin.
@@ -253,6 +265,23 @@ describe('Projektil-Snapshot-Zusammenfuehrung', () => {
     expect(projectile.bulletVisualPreset).toBe('ak47');
     expect(projectile.x).toBe(140);
     expect(projectile.vy).toBe(-20);
+  });
+
+  it('carries the bounce outcome through static/dynamic snapshot joining', () => {
+    const cache = new Map<number, SyncedProjectileStatic>();
+    const bounce = {
+      sequence: 1,
+      x: 107.75,
+      y: 201.125,
+      vx: -800,
+      vy: 0,
+      tracerBounce: true,
+    } as const;
+    const [projectile] = applyProjectileSnapshot(
+      cache,
+      snapshot([bulletStatic], [{ ...bulletDynamic, x: 120, bounce }]),
+    );
+    expect(projectile.bounce).toEqual(bounce);
   });
 
   it('despawns via absence from the dynamic stream and releases the cached static', () => {

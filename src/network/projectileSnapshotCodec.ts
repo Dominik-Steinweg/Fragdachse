@@ -28,11 +28,13 @@
  * würde die alte Position mit neuem Zeitstempel rehydrieren und das Projektil einfrieren; ein
  * ausgelassenes vx/vy würde die Extrapolation zwischen zwei Ticks verfälschen. Ausserdem gäbe es
  * ohne vollständige Dynamik keinen zustandslosen Weg, einen verlorenen einmaligen Wechsel
- * (Bounce, `burning`, `miniRocketPhase`) je zu heilen – der Host hielte ihn für zugestellt.
+ * (`burning`, `miniRocketPhase`) je zu heilen – der Host hielte ihn für zugestellt. Das
+ * Bounce-Presentation-Ergebnis ist deshalb als sequenziertes, sticky Feld Teil jedes aktiven
+ * Dynamik-Eintrags.
  *
  * Da `u` jeden Tick alle aktiven Projektile führt, wird Despawn – wie vor der Kompaktierung – rein
- * über Abwesenheit synchronisiert. Es gibt keine Removal-Liste, keine Sticky-Resends und keine
- * Phantom-Projektile.
+ * über Abwesenheit synchronisiert. Es gibt keine Removal-Liste und keine Phantom-Projektile. Das
+ * letzte Bounce-Presentation-Ergebnis bleibt als Teil eines aktiven `u`-Eintrags sticky.
  *
  * Stromformat `s` (Einträge hintereinander, variable Länge):
  *   id, mask, ownerId,
@@ -43,7 +45,8 @@
  *      [maxLength]?, [colorCore]?, [colorGlow]?]?
  *
  * Stromformat `u`:
- *   id, mask, x, y, vx, vy, size, [burnPacked]?, [miniRocketPhaseCode, miniRocketCascadeStage]?
+ *   id, mask, x, y, vx, vy, size, [burnPacked]?, [miniRocketPhaseCode, miniRocketCascadeStage]?,
+ *   [bounceSequence, bounceX, bounceY, bounceVx, bounceVy, bounceTracerFlag]?
  */
 import type {
   BulletVisualPreset,
@@ -52,6 +55,7 @@ import type {
   GroundFireVisualStyle,
   MiniRocketFlightPhase,
   ProjectileStyle,
+  ProjectileBouncePresentation,
   SyncedProjectile,
   SyncedProjectileDynamic,
   SyncedProjectileSnapshot,
@@ -89,6 +93,7 @@ const TRACER_ALPHA_QUANT = 100;
 // ── Dynamik-Maske ───────────────────────────────────────────────────────────
 const D_BURN = 1;              // burnPacked (Brand + Brandstil in einem Wert)
 const D_MINI_ROCKET = 2;       // Flugphase + Kaskadenstufe
+const D_BOUNCE = 4;            // sticky sequenziertes Bounce-/Impact-Presentation-Ergebnis
 
 /** `miniRocketCascadeStage === undefined` auf dem Draht. Echte Stufen sind nie negativ. */
 const MINI_ROCKET_CASCADE_NONE = -1;
@@ -313,6 +318,7 @@ export function encodeProjectileDynamic(
   if (entry.miniRocketPhase !== undefined || entry.miniRocketCascadeStage !== undefined) {
     mask |= D_MINI_ROCKET;
   }
+  if (entry.bounce !== undefined) mask |= D_BOUNCE;
 
   out.push(entry.id, mask, entry.x, entry.y, entry.vx, entry.vy, entry.size);
   if (mask & D_BURN) out.push(burnPacked);
@@ -321,6 +327,10 @@ export function encodeProjectileDynamic(
       encodeMiniRocketPhase(entry.miniRocketPhase),
       entry.miniRocketCascadeStage ?? MINI_ROCKET_CASCADE_NONE,
     );
+  }
+  if (mask & D_BOUNCE) {
+    const bounce = entry.bounce as ProjectileBouncePresentation;
+    out.push(bounce.sequence, bounce.x, bounce.y, bounce.vx, bounce.vy, bounce.tracerBounce ? 1 : 0);
   }
 }
 
@@ -353,6 +363,16 @@ export function decodeProjectileDynamics(
       const cascade = stream[i++] as number;
       if (cascade !== MINI_ROCKET_CASCADE_NONE) entry.miniRocketCascadeStage = cascade;
     }
+    if (mask & D_BOUNCE) {
+      entry.bounce = {
+        sequence: stream[i++] as number,
+        x: stream[i++] as number,
+        y: stream[i++] as number,
+        vx: stream[i++] as number,
+        vy: stream[i++] as number,
+        tracerBounce: (stream[i++] as number) === 1,
+      };
+    }
     result.push(entry);
   }
   return result;
@@ -367,6 +387,7 @@ export function countProjectileDynamics(stream: readonly (number | string)[]): n
     i += 7;
     if (mask & D_BURN) i += 1;
     if (mask & D_MINI_ROCKET) i += 2;
+    if (mask & D_BOUNCE) i += 6;
     count += 1;
   }
   return count;
@@ -437,6 +458,7 @@ export function applyProjectileSnapshot(
       miniRocketCascadeStage: dynamic.miniRocketCascadeStage,
       projectileBurnVisualStyle: dynamic.projectileBurnVisualStyle,
       burning: dynamic.burning,
+      bounce: dynamic.bounce,
     });
   }
 

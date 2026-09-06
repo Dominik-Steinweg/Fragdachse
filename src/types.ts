@@ -559,6 +559,21 @@ export interface ProjectileHomingConfig {
   readonly forwardWeight?: number;
 }
 
+/**
+ * Hostautoritatives Presentation-Ergebnis eines Projektil-Aufpralls im Projektil-Snapshot.
+ * `sequence` bleibt im dynamischen Snapshot sticky, damit ein verlorener Snapshot den Effekt
+ * nachliefern kann; die Client-Replica emittiert jede Sequenz höchstens einmal.
+ */
+export interface ProjectileBouncePresentation {
+  readonly sequence: number;
+  readonly x: number;
+  readonly y: number;
+  readonly vx: number;
+  readonly vy: number;
+  /** Setzt den Tracer-Anker zurück; false bedeutet Sparks-only bei einem Impact ohne Bounce. */
+  readonly tracerBounce: boolean;
+}
+
 /** Projektil-Snapshot für Netzwerk-Synchronisation (Host → Clients) */
 export interface SyncedProjectile {
   id:      number;
@@ -590,6 +605,8 @@ export interface SyncedProjectile {
   projectileBurnVisualStyle?: GroundFireVisualStyle;
   /** Aktiver Brand auf dem Projektil (Waffen-Upgrade oder Feuerflaechen-Imbue). */
   burning?: boolean;
+  /** Letztes hostautoritatives Bounce-/Impact-Ergebnis; wird bis zum Despawn wiederholt übertragen. */
+  bounce?: ProjectileBouncePresentation;
 }
 
 /**
@@ -634,6 +651,8 @@ export interface SyncedProjectileDynamic {
   miniRocketCascadeStage?: number;
   projectileBurnVisualStyle?: GroundFireVisualStyle;
   burning?: boolean;
+  /** Sticky, sequenziertes Presentation-Ergebnis; wird zur Paketverlustheilung wiederholt. */
+  bounce?: ProjectileBouncePresentation;
 }
 
 /**

@@ -6,6 +6,7 @@ import type {
   EnergyBallVariant,
   GroundFireVisualStyle,
   MiniRocketFlightPhase,
+  ProjectileBouncePresentation,
 } from '../types';
 
 /** Nichtautoritativer, rendererfreier Zustand eines replizierten Projectiles. */
@@ -30,6 +31,8 @@ export interface ProjectileClientReplicaState {
   readonly miniRocketCascadeStage?: number;
   readonly projectileBurnVisualStyle?: GroundFireVisualStyle;
   readonly burning: boolean;
+  /** Highest applied host presentation sequence for packet-loss healing and deduplication. */
+  readonly bounceSequence?: number;
 }
 
 export interface ProjectileClientReplicaUpdate {
@@ -37,7 +40,8 @@ export interface ProjectileClientReplicaUpdate {
   readonly state: ProjectileClientReplicaState;
   readonly previous?: ProjectileClientReplicaState;
   readonly isNew: boolean;
-  readonly velocityFlipped: boolean;
+  /** New host-authoritative outcome, emitted once per sequence. */
+  readonly bounce?: ProjectileBouncePresentation;
 }
 
 export interface ProjectileClientReplicaRemovedState {
@@ -106,18 +110,14 @@ export class ProjectileClientReplica {
     const newIds = new Set<number>();
     for (const projectile of incoming.values()) {
       const previous = this.states.get(projectile.id);
-      const state = createReplicaState(projectile, receivedAt);
-      const isBulletLike = projectile.style === 'bullet'
-        || projectile.style === 'awp'
-        || projectile.style === 'gauss';
+      const bounce = readNewBounce(projectile.bounce, previous?.bounceSequence);
+      const state = createReplicaState(projectile, receivedAt, previous?.bounceSequence, bounce);
       updates.push({
         projectile,
         state,
         previous,
         isNew: previous === undefined,
-        velocityFlipped: previous !== undefined
-          && isBulletLike
-          && (previous.vx * projectile.vx < -1 || previous.vy * projectile.vy < -1),
+        bounce,
       });
       if (previous === undefined) newIds.add(projectile.id);
       this.states.set(projectile.id, state);
@@ -148,7 +148,10 @@ export class ProjectileClientReplica {
 function createReplicaState(
   projectile: SyncedProjectile,
   receivedAt: number,
+  previousBounceSequence: number | undefined,
+  bounce: ProjectileBouncePresentation | undefined,
 ): ProjectileClientReplicaState {
+  const bounceSequence = Math.max(previousBounceSequence ?? 0, bounce?.sequence ?? 0);
   return {
     serverX: projectile.x,
     serverY: projectile.y,
@@ -170,7 +173,17 @@ function createReplicaState(
     miniRocketCascadeStage: projectile.miniRocketCascadeStage,
     projectileBurnVisualStyle: projectile.projectileBurnVisualStyle,
     burning: projectile.burning === true,
+    bounceSequence: bounceSequence > 0 ? bounceSequence : undefined,
   };
+}
+
+function readNewBounce(
+  bounce: ProjectileBouncePresentation | undefined,
+  previousSequence: number | undefined,
+): ProjectileBouncePresentation | undefined {
+  if (!bounce || !Number.isSafeInteger(bounce.sequence) || bounce.sequence <= (previousSequence ?? 0)) return undefined;
+  if (![bounce.x, bounce.y, bounce.vx, bounce.vy].every(Number.isFinite)) return undefined;
+  return bounce;
 }
 
 function extrapolateReplicaState(

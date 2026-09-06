@@ -10,6 +10,7 @@ import type {
   ProjectileHitboxGrowthSpec, ProjectileDragSpec, ProjectileSplitSpec,
   ProjectilePenetrationSpec, ProjectileMiniRocketFlightSpec,
 } from './ProjectileSpawnRequest';
+import type { ProjectileBouncePresentation } from '../types';
 import type { ProjectileBurnAugment } from './ProjectileTravelPort';
 import type { ProjectileId } from './ProjectileSpawnPort';
 import type { ProjectileHomingRequest } from '../entities/ProjectileHomingController';
@@ -42,6 +43,8 @@ export interface ProjectileRuntimeRecord {
   readonly spec: ProjectileResolvedSpec;
   /** Opaque transport data: only projections and presentation consume these fields. */
   presentation: ProjectilePresentationMetadata;
+  /** Latest host-authoritative presentation outcome, repeated in dynamic snapshots until despawn. */
+  lastBouncePresentation?: ProjectileBouncePresentation;
   interaction: ProjectileInteractionState;
   miniRocket: ProjectileMiniRocketState;
   contacts: ProjectileContactMemory;

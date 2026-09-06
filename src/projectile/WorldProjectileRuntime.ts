@@ -1,7 +1,12 @@
 import * as Phaser from 'phaser';
 import { findNearestRectangleHit } from '../utils/geometry';
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
-import type { PlaceableKind, ProjectileSpawnConfig, SupportProjectileImpact } from '../types';
+import type {
+  PlaceableKind,
+  ProjectileBouncePresentation,
+  ProjectileSpawnConfig,
+  SupportProjectileImpact,
+} from '../types';
 import {
   type ProjectilePhysicsBindingPort,
   type ProjectilePhysicsMechanics,
@@ -606,8 +611,13 @@ export class WorldProjectileRuntime implements
         projectile.velocityAfterFirstBounce = {
           x: projectile.physics.body.velocity.x, y: projectile.physics.body.velocity.y,
         };
-        this.presentation.playBounceImpact(projectile.id, contact.x, contact.y,
-          projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, projectile.presentation.color, projectile.presentation.projectileStyle);
+        this.playAuthoritativeBouncePresentation(
+          projectile,
+          impactPoint.x,
+          impactPoint.y,
+          projectile.physics.body.velocity.x,
+          projectile.physics.body.velocity.y,
+        );
       }
     }
     let consumed = false;
@@ -687,14 +697,46 @@ export class WorldProjectileRuntime implements
     return target.kind !== 'world-boundary' || !projectile.spec.flight.isBfg;
   }
 
+  private playAuthoritativeBouncePresentation(
+    projectile: ProjectileRuntimeRecord,
+    x: number,
+    y: number,
+    vx: number,
+    vy: number,
+    tracerBounce = true,
+  ): void {
+    const presentation: ProjectileBouncePresentation = {
+      sequence: (projectile.lastBouncePresentation?.sequence ?? 0) + 1,
+      x,
+      y,
+      vx,
+      vy,
+      tracerBounce,
+    };
+    projectile.lastBouncePresentation = presentation;
+    this.presentation.playBounceImpact(
+      projectile.id,
+      x,
+      y,
+      vx,
+      vy,
+      projectile.presentation.color,
+      projectile.presentation.projectileStyle,
+      tracerBounce,
+    );
+  }
+
   private completeAuthoritativeBounce(projectile: ProjectileRuntimeRecord, x: number, y: number, worldBoundary: boolean): void {
     if (this.queueHydraSplit(
       projectile.id, x, y, projectile.physics.body.velocity.x, projectile.physics.body.velocity.y,
     )) return;
     projectile.bounceCount += 1;
-    if (worldBoundary) this.presentation.playBounceImpact(
-      projectile.id, x, y, projectile.physics.body.velocity.x, projectile.physics.body.velocity.y,
-      projectile.presentation.color, projectile.presentation.projectileStyle,
+    if (worldBoundary) this.playAuthoritativeBouncePresentation(
+      projectile,
+      x,
+      y,
+      projectile.physics.body.velocity.x,
+      projectile.physics.body.velocity.y,
     );
     if (projectile.bounceCount > projectile.maxBounces) {
       projectile.physics.body.setVelocity(0, 0);
@@ -741,9 +783,7 @@ export class WorldProjectileRuntime implements
       source: 'physics-collider',
     });
     if (resolution.technicalContactConsumed) return;
-    this.presentation.playBounceImpact(
-      projectile.id, hit.x, hit.y, nextVx, nextVy, projectile.presentation.color, projectile.presentation.projectileStyle,
-    );
+    this.playAuthoritativeBouncePresentation(projectile, hit.x, hit.y, nextVx, nextVy);
     if (projectile.bounceCount > projectile.maxBounces) {
       projectile.physics.body.reset(hit.x, hit.y);
       projectile.physics.body.setVelocity(0, 0);
@@ -820,8 +860,14 @@ export class WorldProjectileRuntime implements
           impact,
         );
         if (projectile.spec.flight.penetration.penetratesRocks && this.shouldBounceAfterContact(projectile, { kind: 'trunk' })) {
-          this.presentation.playBounceImpact(projectile.id, candidate.x, candidate.y,
-            projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, projectile.presentation.color, projectile.presentation.projectileStyle);
+          this.playAuthoritativeBouncePresentation(
+            projectile,
+            candidate.x,
+            candidate.y,
+            projectile.physics.body.velocity.x,
+            projectile.physics.body.velocity.y,
+            false,
+          );
         }
         break;
       case 'base':
@@ -1102,6 +1148,7 @@ export class WorldProjectileRuntime implements
             : undefined,
           projectileBurnVisualStyle: projectile.presentation.projectileBurnVisualStyle,
           burning: this.hasVisibleProjectileBurn(projectile) || undefined,
+          bounce: projectile.lastBouncePresentation,
         },
       };
       sink(replication);

@@ -123,6 +123,43 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('records the host collision point and post-contact velocity for client presentation', () => {
+    const physics = createTechnicalPhysicsBinding();
+    const presentation = { ...createPresentation(), playBounceImpact: vi.fn() };
+    const runtime = new WorldProjectileRuntime({
+      physicsBinding: physics.binding,
+      presentation,
+      identityScope: new ProjectileIdentityScope(1),
+      hostNowMs: () => 1_000,
+    });
+    const id = runtime.spawnProjectile(baseRequest({ maxBounces: 2 }))!;
+
+    physics.emit({
+      projectileId: id,
+      target: { kind: 'world-boundary' },
+      x: 37.25,
+      y: 48.5,
+      velocityX: -100,
+      velocityY: 0,
+      source: 'world-boundary',
+    });
+
+    const replication: Array<{ dynamic: { bounce?: unknown } }> = [];
+    runtime.readProjectileReplication((record) => replication.push(record));
+    expect(presentation.playBounceImpact).toHaveBeenCalledWith(
+      id, 37.25, 48.5, 100, 0, 0xffffff, undefined, true,
+    );
+    expect(replication[0]?.dynamic.bounce).toEqual({
+      sequence: 1,
+      x: 37.25,
+      y: 48.5,
+      vx: 100,
+      vy: 0,
+      tracerBounce: true,
+    });
+    runtime.destroy();
+  });
+
   it('preserves source, attribution and parent lineage when a swarm reaction creates children', () => {
     const { runtime } = createRuntimeHarness();
     const provenance: ProjectileProvenance = {

@@ -35,6 +35,7 @@ function passiveRenderer(): Record<string, unknown> {
     destroyAll: vi.fn(),
     createTracer: vi.fn(),
     updateTracer: vi.fn(),
+    notifyBounce: vi.fn(),
     destroyTracer: vi.fn(),
   };
 }
@@ -81,5 +82,52 @@ describe('ProjectilePresentationRuntime', () => {
     expect(audio.playSound).not.toHaveBeenCalled();
     expect(renderers.destroyVisual).toHaveBeenCalledWith(7);
     expect(renderers.destroyTracer).toHaveBeenCalledWith(7);
+  });
+
+  it('presents the authoritative impact point instead of the following snapshot position', () => {
+    const projectileBurn = {
+      sync: vi.fn(),
+      retain: vi.fn(),
+      destroyVisual: vi.fn(),
+      destroyAll: vi.fn(),
+    };
+    const runtime = new ProjectilePresentationRuntime({} as never);
+    const replica = new ProjectileClientReplica();
+    const renderers = passiveRenderer();
+    runtime.bindRenderers({
+      bullet: renderers,
+      projectileBurn,
+      flame: renderers,
+      leafBlower: renderers,
+      bfg: renderers,
+      energyBall: renderers,
+      hydra: renderers,
+      gauss: renderers,
+      holyGrenade: renderers,
+      rocket: renderers,
+      fireball: renderers,
+      spore: renderers,
+      grenade: renderers,
+      translocatorPuck: renderers,
+      teslaBolt: renderers,
+      tracer: renderers,
+    } as never, null);
+
+    runtime.presentClientFrame(replica.sync([projectile()], 1_000), 'local');
+    runtime.presentClientFrame(replica.sync([projectile({
+      x: 160,
+      vx: -120,
+      bounce: { sequence: 1, x: 123.25, y: 198.5, vx: -120, vy: 0, tracerBounce: true },
+    })], 1_100), 'local');
+    runtime.presentClientFrame(replica.sync([projectile({
+      x: 172,
+      vx: -120,
+      bounce: { sequence: 1, x: 123.25, y: 198.5, vx: -120, vy: 0, tracerBounce: true },
+    })], 1_200), 'local');
+
+    expect(renderers.playImpactSparks).toHaveBeenCalledTimes(1);
+    expect(renderers.playImpactSparks).toHaveBeenCalledWith(7, 123.25, 198.5, -120, 0, 0xffcc00);
+    expect(renderers.notifyBounce).toHaveBeenCalledTimes(1);
+    expect(renderers.notifyBounce).toHaveBeenCalledWith(7, 123.25, 198.5);
   });
 });
