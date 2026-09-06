@@ -256,6 +256,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         target,
         x: body.x + body.halfWidth,
         y: body.y + body.halfHeight,
+        flightPosition: { x: sprite.x + body.x - body.prevFrame.x, y: sprite.y + body.y - body.prevFrame.y },
         velocityX: body.velocity.x,
         velocityY: body.velocity.y,
         source,
@@ -297,6 +298,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
             target: resolved,
             x: body.x + body.halfWidth,
             y: body.y + body.halfHeight,
+            flightPosition: { x: sprite.x + body.x - body.prevFrame.x, y: sprite.y + body.y - body.prevFrame.y },
             targetBounds: bounds
               ? { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom }
               : undefined,

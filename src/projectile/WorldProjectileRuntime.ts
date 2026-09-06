@@ -603,6 +603,8 @@ export class WorldProjectileRuntime implements
           impactPoint.y,
           projectile.physics.body.velocity.x,
           projectile.physics.body.velocity.y,
+          true,
+          contact.flightPosition ?? contact,
         );
       }
     }
@@ -653,7 +655,7 @@ export class WorldProjectileRuntime implements
         break;
     }
     if (!consumed && bounceEligible) {
-      this.completeAuthoritativeBounce(projectile, impactPoint.x, impactPoint.y, contact.target.kind === 'world-boundary');
+      this.completeAuthoritativeBounce(projectile, impactPoint.x, impactPoint.y, contact.target.kind === 'world-boundary', contact.flightPosition ?? contact);
     }
     if (!projectile.pendingDestroy) this.flightContactPoints.delete(projectile.id);
     return consumed;
@@ -692,6 +694,7 @@ export class WorldProjectileRuntime implements
     vx: number,
     vy: number,
     tracerBounce = true,
+    flightPosition?: { readonly x: number; readonly y: number },
   ): void {
     const presentation: ProjectileBouncePresentation = {
       sequence: (projectile.lastBouncePresentation?.sequence ?? 0) + 1,
@@ -701,8 +704,13 @@ export class WorldProjectileRuntime implements
       vy,
       tracerBounce,
     };
-    this.flightPaths.discardPending(projectile.id);
-    this.flightPaths.append(projectile.id, x, y, vx, vy, this.hostNowMs(), false, presentation.sequence);
+    if (tracerBounce) {
+      this.flightPaths.bounce(projectile.id, flightPosition?.x ?? x, flightPosition?.y ?? y,
+        vx, vy, this.hostNowMs(), presentation.sequence);
+    } else {
+      this.flightPaths.discardPending(projectile.id);
+      this.flightPaths.append(projectile.id, x, y, vx, vy, this.hostNowMs(), false, presentation.sequence);
+    }
     projectile.lastBouncePresentation = presentation;
     this.presentation.playBounceImpact(
       projectile.id,
@@ -719,7 +727,8 @@ export class WorldProjectileRuntime implements
     );
   }
 
-  private completeAuthoritativeBounce(projectile: ProjectileRuntimeRecord, x: number, y: number, worldBoundary: boolean): void {
+  private completeAuthoritativeBounce(projectile: ProjectileRuntimeRecord, x: number, y: number, worldBoundary: boolean,
+    flightPosition: { readonly x: number; readonly y: number }): void {
     if (this.queueHydraSplit(
       projectile.id, x, y, projectile.physics.body.velocity.x, projectile.physics.body.velocity.y,
     )) return;
@@ -730,6 +739,8 @@ export class WorldProjectileRuntime implements
       y,
       projectile.physics.body.velocity.x,
       projectile.physics.body.velocity.y,
+      true,
+      flightPosition,
     );
     if (projectile.bounceCount > projectile.maxBounces) {
       projectile.physics.body.setVelocity(0, 0);
@@ -774,19 +785,24 @@ export class WorldProjectileRuntime implements
       x: hit.x,
       y: hit.y,
       source: 'physics-collider',
-    });
+    }, true);
     if (resolution.technicalContactConsumed) return;
-    this.playAuthoritativeBouncePresentation(projectile, hit.x, hit.y, nextVx, nextVy);
+    const offsetDistance = projectile.bounceCount > projectile.maxBounces ? 0
+      : Math.max(projectile.physics.sprite.displayWidth * 0.5 + 0.5, 1);
+    const flightPosition = {
+      x: hit.x + (hit.normalX / normalLength) * offsetDistance,
+      y: hit.y + (hit.normalY / normalLength) * offsetDistance,
+    };
+    this.playAuthoritativeBouncePresentation(projectile, hit.x, hit.y, nextVx, nextVy, true, flightPosition);
     if (projectile.bounceCount > projectile.maxBounces) {
       projectile.physics.body.reset(hit.x, hit.y);
       projectile.physics.body.setVelocity(0, 0);
       projectile.physics.body.enable = false;
       return;
     }
-    const offsetDistance = Math.max(projectile.physics.sprite.displayWidth * 0.5 + 0.5, 1);
     projectile.physics.body.reset(
-      hit.x + (hit.normalX / normalLength) * offsetDistance,
-      hit.y + (hit.normalY / normalLength) * offsetDistance,
+      flightPosition.x,
+      flightPosition.y,
     );
     projectile.physics.body.setVelocity(nextVx, nextVy);
   }
@@ -830,11 +846,14 @@ export class WorldProjectileRuntime implements
   private resolveWorldImpactCandidate(
     projectile: ProjectileRuntimeRecord,
     candidate: ProjectileImpactCandidate,
+    awaitingFlightBounce = false,
   ): ResolvedWorldContact {
     this.flightContactPoints.set(projectile.id, candidate);
     try {
       const result = this.resolveWorldImpactCandidateCore(projectile, candidate);
-      if (result.outcome === 'consumed') {
+      // A swept bounce supplies its center pivot after impact rules resolve. The
+      // surface contact is only a flight endpoint when those rules stop the shot.
+      if (result.outcome === 'consumed' && (!awaitingFlightBounce || result.technicalContactConsumed)) {
         this.flightPaths.discardPending(projectile.id);
         this.flightPaths.append(projectile.id, candidate.x, candidate.y,
           projectile.physics.body.velocity.x, projectile.physics.body.velocity.y, this.hostNowMs());

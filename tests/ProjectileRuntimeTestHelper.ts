@@ -70,6 +70,7 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
         x: spec.x,
         y: spec.y,
         width: spec.bodyWidth,
+        prevFrame: { x: spec.x, y: spec.y },
         height: spec.bodyHeight,
         halfWidth: spec.bodyWidth / 2,
         halfHeight: spec.bodyHeight / 2,

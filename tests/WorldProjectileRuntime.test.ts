@@ -83,7 +83,7 @@ function baseRequest(
       burn: { canReceiveFireImbue: cfg.canReceiveFireImbue },
       pathEffect: { kind: cfg.pathEffectKind, awpCorridor: { halfWidth: cfg.awpCorridorHalfWidth, damage: cfg.awpCorridorDamage } },
     },
-    presentation: { color: cfg.color, ownerColor: cfg.ownerColor },
+    presentation: { color: cfg.color, ownerColor: cfg.ownerColor, tracer: cfg.tracerConfig },
   };
 }
 
@@ -125,6 +125,50 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it.each(['sweep', 'physics', 'world-boundary'] as const)('publishes one flight pivot for a %s bounce', (mode) => {
+    let now = 0;
+    const physics = createTechnicalPhysicsBinding();
+    const runtime = new WorldProjectileRuntime({ physicsBinding: physics.binding,
+      presentation: createPresentation(), identityScope: new ProjectileIdentityScope(1), hostNowMs: () => now });
+    const id = runtime.spawnProjectile(baseRequest({ maxBounces: 3, tracerConfig: { profile: 'heavy' }, collisionMode: mode === 'sweep' ? 'sweep' : undefined },
+      { x: 0, y: 0, angle: Math.PI / 4 }))!;
+    const handle = physics.handles.get(id)!;
+    const speed = handle.body.velocity.x;
+    now = 20;
+    handle.sprite.x = 30; handle.sprite.y = 30;
+    physics.observe(id, 30, 30, speed, speed);
+    if (mode === 'sweep') {
+      vi.mocked(physics.binding.findNearestRockSweep).mockReturnValueOnce({
+        rockIndex: 0, x: 20, y: 20, normalX: -1, normalY: 0,
+      });
+    } else {
+      handle.body.setVelocity(-speed, speed);
+      physics.emit({ projectileId: id, target: mode === 'physics' ? { kind: 'trunk' } : { kind: 'world-boundary' },
+        x: 20, y: 20, flightPosition: { x: 15.5, y: 20 },
+        velocityX: -speed, velocityY: speed, source: mode === 'physics' ? 'physics-collider' : 'world-boundary' });
+      handle.sprite.x = 15.5; handle.sprite.y = 20;
+    }
+    runtime.runHostProjectileStage(20, now);
+    const readPath = () => {
+      let path: import('../src/projectile/ProjectileFlightPath').ProjectileFlightPath | undefined;
+      runtime.readProjectileReplication(record => { path = record.dynamic.flightPath; });
+      return path!;
+    };
+    const pivot = readPath().points.at(-1)!;
+    expect(readPath().points).toHaveLength(2);
+    expect(pivot.x).toBeCloseTo(17.75);
+    expect(pivot.y).toBeCloseTo(17.75);
+    expect(pivot.bounceSequence).toBe(1);
+    now = 30;
+    handle.sprite.x -= 10; handle.sprite.y += 10;
+    physics.observe(id, handle.sprite.x, handle.sprite.y, handle.body.velocity.x, handle.body.velocity.y);
+    runtime.runHostProjectileStage(10, now);
+    const points = readPath().points;
+    expect(points).toHaveLength(3);
+    expect(points[2].x - pivot.x).toBeCloseTo(-(points[2].y - pivot.y));
+    runtime.destroy();
+  });
+
   it('publishes a terminal bounce tombstone after the host releases the projectile', () => {
     const physics = createTechnicalPhysicsBinding();
     const runtime = new WorldProjectileRuntime({

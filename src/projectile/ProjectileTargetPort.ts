@@ -166,6 +166,8 @@ export interface ProjectilePhysicsContact {
   readonly target: ProjectilePhysicsContactTarget;
   readonly x: number;
   readonly y: number;
+  /** Display anchor after Arcade separation/postUpdate, distinct from surface contact FX. */
+  readonly flightPosition?: Readonly<{ x: number; y: number }>;
   /** Technical target geometry used by the runtime to reconstruct a stable impact point. */
   readonly targetBounds?: Readonly<{ left: number; right: number; top: number; bottom: number }>;
   readonly velocityX: number;

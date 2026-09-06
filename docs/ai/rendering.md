@@ -55,6 +55,9 @@ und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresen
 [`ProjectilePathRecorder`](../../src/projectile/ProjectileFlightPath.ts) als abgeleitete World-Projektion.
 Technische Bewegung bleibt bis zur Bestätigung durch den Runtime-Owner vorläufig; bestätigte Kontakte
 begrenzen diese Strecke. Gameplay und Physik lesen den Präsentationspfad niemals zurück.
+Bounce-Feedback bleibt am Kontaktpunkt; der Flight-Pivot verbindet die ankommende und ausgehende
+Center-Bewegung. Collider-Separation und Sweep-Depenetration sind technische Urspruenge, keine
+zusaetzlichen Flugsegmente. Erst neue Bewegung verlaengert den Pfad nach einem Bounce.
 Bounce-Punkte bleiben Ecken, räumliche Unterbrechungen werden nicht verbunden. Die Historie ist nach
 Alter und Punktzahl begrenzt; nur unveränderte geradlinige Bewegung darf zusammengefasst werden.
 

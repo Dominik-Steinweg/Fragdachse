@@ -21,6 +21,73 @@ function projectile(path = curve()): SyncedProjectile {
 }
 
 describe('projectile flight path', () => {
+  it('turns once on the center trajectories and excludes reset positions on host and wire', () => {
+    const recorder = new ProjectilePathRecorder();
+    recorder.begin(1, 0, 0, 1000, 1000, 0);
+    recorder.observe(1, 30, 30, 1000, 1000, 20);
+    // Surface impact (20,20), technical separation to (16,20).
+    recorder.bounce(1, 16, 20, -1000, 1000, 20, 1);
+    recorder.append(1, 16, 20, -1000, 1000, 20);
+    recorder.append(1, 16, 20, -1000, 1000, 20 + 1e-8);
+    recorder.observe(1, 16, 20, -1000, 1000, 21);
+    recorder.commitThrough(1, 16, 20);
+    expect(recorder.read(1, 21)!.points.map(p => [p.x, p.y])).toEqual([[0, 0], [18, 18]]);
+    recorder.observe(1, 6, 30, -1000, 1000, 30);
+    recorder.commitThrough(1, 6, 30);
+    const path = recorder.read(1, 30)!;
+    const wire: Array<number | string> = [];
+    encodeProjectileDynamic(wire, { ...projectile(path), bounce: {
+      sequence: 1, x: 20, y: 20, vx: -1000, vy: 1000, tracerBounce: true,
+    } });
+    const decoded = decodeProjectileDynamics(wire)[0];
+    expect(decoded.bounce).toMatchObject({ x: 20, y: 20 });
+    for (const candidate of [path, decoded.flightPath!]) {
+      const segments: ProjectileTrailSegment[] = [];
+      new ProjectilePathCursor().consume(candidate, 30, s => segments.push(s));
+      expect(segments.map(s => [s.from.x, s.from.y, s.to.x, s.to.y])).toEqual([
+        [0, 0, 18, 18], [18, 18, 6, 30],
+      ]);
+    }
+  });
+
+  it('plays the corrected pivot and separate impact once on the client', () => {
+    const recorder = new ProjectilePathRecorder();
+    recorder.begin(1, 0, 0, 1000, 1000, 0);
+    recorder.bounce(1, 16, 20, -1000, 1000, 20, 1);
+    recorder.append(1, 6, 30, -1000, 1000, 30);
+    const shot = { ...projectile(recorder.read(1, 30)!), bounce: {
+      sequence: 1, x: 20, y: 20, vx: -1000, vy: 1000, tracerBounce: true,
+    } };
+    const playback = new ProjectileFlightPlayback(), cursor = new ProjectilePathCursor();
+    const segments: ProjectileTrailSegment[] = [], impacts: unknown[] = [];
+    playback.sync([shot], 1000);
+    for (let now = 1000; now <= 1100; now += 5) {
+      playback.read(now, (state, time, _new, bounces) => {
+        cursor.consume(state.flightPath!, time, s => segments.push(s));
+        impacts.push(...bounces);
+      });
+    }
+    expect(impacts).toEqual([shot.bounce]);
+    expect(segments.length).toBeGreaterThan(0);
+    for (const { from, to } of segments) {
+      if (to.timeMs <= 20) expect(to.x).toBeCloseTo(to.y);
+      else expect(to.x - from.x).toBeCloseTo(-(to.y - from.y));
+    }
+  });
+
+  it('keeps head-on pivots finite and clears bounce origins on discontinuity and reuse', () => {
+    const recorder = new ProjectilePathRecorder();
+    recorder.begin(1, 0, 0, 1000, 0, 0);
+    recorder.bounce(1, 18, 0, -1000, 0, 20, 1);
+    recorder.append(1, 18, 0, -1000, 0, 25);
+    expect(recorder.read(1, 25)!.points.map(p => p.x)).toEqual([0, 18]);
+    recorder.append(1, 100, 100, 0, 1000, 20, true);
+    expect(recorder.read(1, 25)!.points.at(-1)).toMatchObject({ x: 100, breakBefore: true });
+    recorder.begin(1, 0, 0, 1000, 0, 0);
+    recorder.append(1, 18, 0, 1000, 0, 10);
+    expect(recorder.read(1, 10)!.points).toHaveLength(2);
+  });
+
   it('publishes only the confirmed physics prefix and preserves recent movement after an observation overflow', () => {
     const recorder = new ProjectilePathRecorder();
     recorder.begin(1, 0, 0, 1000, 0, 0);

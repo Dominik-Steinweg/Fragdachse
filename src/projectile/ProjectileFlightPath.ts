@@ -24,6 +24,28 @@ export const PROJECTILE_PATH_MAX_POINTS = 128;
 export class ProjectilePathRecorder {
   private readonly paths = new Map<number, { sequence: number; points: ProjectilePathPoint[] }>();
   private readonly pending = new Map<number, Array<{ x: number; y: number; vx: number; vy: number; timeMs: number; breakBefore?: boolean }>>();
+  private readonly bounceOrigins = new Map<number, { x: number; y: number; timeMs: number }>();
+
+  /** Contact FX use the surface impact; flight turns where the incoming and outgoing
+   * center trajectories meet. The separated center is an origin, never extra travel. */
+  bounce(id: number, centerX: number, centerY: number, vx: number, vy: number,
+    timeMs: number, bounceSequence: number): void {
+    const points = this.paths.get(id)?.points;
+    const last = points?.[points.length - 1];
+    if (!last) return;
+    this.discardPending(id);
+    const speed = Math.hypot(last.vx, last.vy);
+    const nx = speed > 0 ? last.vx / speed : 0, ny = speed > 0 ? last.vy / speed : 0;
+    const dx = centerX - last.x, dy = centerY - last.y;
+    const cross = nx * vy - ny * vx;
+    // Head-on reflection is collinear; projection also handles a stopped projectile.
+    const distance = Math.abs(cross) > Math.hypot(vx, vy) * 1e-6
+      ? (dx * vy - dy * vx) / cross : dx * nx + dy * ny;
+    const x = speed > 0 ? last.x + nx * Math.max(0, distance) : centerX;
+    const y = speed > 0 ? last.y + ny * Math.max(0, distance) : centerY;
+    this.append(id, x, y, vx, vy, timeMs, false, bounceSequence);
+    this.bounceOrigins.set(id, { x: centerX, y: centerY, timeMs: Math.max(timeMs, last.timeMs) });
+  }
 
   /** Physics observations stay tentative until the runtime has resolved swept contacts. */
   observe(id: number, x: number, y: number, vx: number, vy: number, timeMs: number): void {
@@ -55,6 +77,7 @@ export class ProjectilePathRecorder {
 
   begin(id: number, x: number, y: number, vx: number, vy: number, timeMs: number): void {
     this.pending.delete(id);
+    this.bounceOrigins.delete(id);
     this.paths.set(id, { sequence: 0, points: [] });
     this.append(id, x, y, vx, vy, timeMs, true);
   }
@@ -63,6 +86,13 @@ export class ProjectilePathRecorder {
     breakBefore = false, bounceSequence?: number): void {
     const path = this.paths.get(id);
     if (!path || ![x, y, vx, vy, timeMs].every(Number.isFinite)) return;
+    const origin = this.bounceOrigins.get(id);
+    if (breakBefore) this.bounceOrigins.delete(id);
+    else if (origin && bounceSequence === undefined) {
+      if (timeMs <= origin.timeMs + 1e-6
+        || Math.hypot(x - origin.x, y - origin.y) < 1e-6) return;
+      this.bounceOrigins.delete(id);
+    }
     const last = path.points[path.points.length - 1];
     timeMs = Math.max(timeMs, last?.timeMs ?? timeMs);
     if (last && last.x === x && last.y === y && last.vx === vx && last.vy === vy
@@ -105,8 +135,8 @@ export class ProjectilePathRecorder {
     return path ? { timeMs, points: path.points.slice(), ...(ended ? { ended: true } : {}) } : undefined;
   }
 
-  remove(id: number): void { this.paths.delete(id); this.pending.delete(id); }
-  clear(): void { this.paths.clear(); this.pending.clear(); }
+  remove(id: number): void { this.paths.delete(id); this.pending.delete(id); this.bounceOrigins.delete(id); }
+  clear(): void { this.paths.clear(); this.pending.clear(); this.bounceOrigins.clear(); }
 }
 
 export interface ProjectileTrailSegment {

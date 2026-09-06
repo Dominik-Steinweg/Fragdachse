@@ -132,8 +132,10 @@ describe('GPU flight ribbon geometry and lifetime', () => {
     store.end(handle);
     append(point(40, 0, 40), point(60, 0, 60), 220);
     expect(store.spans(handle)).toHaveLength(2);
-    store.retire(479); expect(store.liveCount).toBeGreaterThan(0);
-    store.retire(481); expect(store.liveCount).toBe(0);
+    // At 1000 px/s, coreLength in pixels equals the lifetime in milliseconds.
+    const expiry = 40 + FLIGHT_SIGNATURE_PROFILES.heavy.coreLength;
+    store.retire(expiry - 1); expect(store.liveCount).toBeGreaterThan(0);
+    store.retire(expiry + 1); expect(store.liveCount).toBe(0);
     expect(store.handleCount).toBe(0);
   });
 
