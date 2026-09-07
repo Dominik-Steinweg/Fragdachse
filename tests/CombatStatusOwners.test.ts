@@ -124,6 +124,28 @@ describe('P5 canonical status owners', () => {
     expect(owner.advance(500, () => true)).toEqual([]);
   });
 
+  it('invalidates issued final ticks on detach even when identical source facts are attached again', () => {
+    const owner = new CombatBurnStatusOwner();
+    const target = enemy('victim');
+    const tick = BURN_TICK_INTERVAL_MS;
+    const request = { target, source: source('attacker'), damagePerTick: 3,
+      tickIntervalMs: tick, durationMs: 2 * tick, nowMs: 0 };
+    owner.applyBurn(request);
+    const due = owner.advance(2 * tick, () => true);
+    expect(due).toHaveLength(1);
+    // The stack has expired, but its legitimately due tick remains valid until source detach.
+    expect(owner.getActiveSources(target, 2 * tick)).toEqual([]);
+    expect(due[0].isSourceValid()).toBe(true);
+    owner.clearSource('attacker');
+    owner.applyBurn({ ...request, nowMs: 2 * tick });
+    const replacement = owner.advance(3 * tick, () => true);
+    expect(replacement).toHaveLength(1);
+    expect(due[0].isSourceValid()).toBe(false);
+    expect(replacement[0].isSourceValid()).toBe(true);
+    owner.destroy();
+    expect(replacement[0].isSourceValid()).toBe(false);
+  });
+
   it('merges Enemy slow in one target slot and never prunes from movement reads', () => {
     const owner = new EnemyMovementStatusSystem();
     const target = enemy('e1');

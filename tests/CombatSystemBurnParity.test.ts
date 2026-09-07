@@ -27,6 +27,7 @@ vi.mock('phaser', () => {
 });
 
 import { CombatSystem } from '../src/systems/CombatSystem';
+import { BURN_TICK_INTERVAL_MS } from '../src/config';
 
 describe('CombatSystem & BurnStateMachine Parity', () => {
   function createTestSetup() {
@@ -166,4 +167,36 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
 
     expect(damageCalls.filter((call) => call.damageKind === 'burn')).toHaveLength(1);
   });
+
+  it.each(['detach', 'reattach', 'death'] as const)(
+    'revalidates buffered and catch-up Burn after a DamageTaken hook causes source %s', (change) => {
+      const { cs, damageCalls, now, setNow } = createTestSetup();
+      const tick = BURN_TICK_INTERVAL_MS;
+      cs.applyBurnHit('p_target', 'p1', 10 * tick, 2, 'first', 'weapon.FIRST');
+      cs.applyBurnHit('p_target', 'p2', 10 * tick, 1, 'second', 'weapon.SECOND');
+      const oldSource = cs.getPlayerCombatTarget('p2');
+      let handled = false;
+      cs.setPlayerDamageTakenHandler((_target, attacker) => {
+        if (handled || attacker !== 'p1') return;
+        handled = true;
+        if (change === 'death') cs.applyDamage('p2', 2000, false, 'p1', 'weapon.RAILGUN');
+        else {
+          cs.removePlayer('p2');
+          if (change === 'reattach') {
+            cs.initPlayer('p2');
+            // Reattach within the same World runtime must not reactivate the buffered source facts.
+            expect(cs.getPlayerCombatTarget('p2')?.scope).toEqual(oldSource?.scope);
+            cs.applyBurnHit('p_target', 'p2', 10 * tick, 1, 'second', 'weapon.SECOND');
+          }
+        }
+      });
+      setNow(now() + 3 * tick);
+      cs.updateBurnEffects(now());
+      const secondSourceDamage = () => damageCalls.filter(call => call.damageKind === 'burn' && call.attackerId === 'p2');
+      expect(secondSourceDamage()).toHaveLength(change === 'death' ? 3 : 0);
+      setNow(now() + tick);
+      cs.updateBurnEffects(now());
+      expect(secondSourceDamage()).toHaveLength(change === 'death' ? 4 : change === 'reattach' ? 1 : 0);
+    },
+  );
 });

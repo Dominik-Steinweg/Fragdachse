@@ -17,6 +17,8 @@ import { EnemyManager } from '../../src/entities/EnemyManager';
 import { CombatSystem } from '../../src/systems/CombatSystem';
 import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';
 import { WorldCombatGameplayBinding } from '../../src/world/WorldCombatGameplayBinding';
+import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
+import { CoopDefenseItemRuntimeSystem } from '../../src/systems/CoopDefenseItemRuntimeSystem';
 import { TargetStatusSystem } from '../../src/systems/TargetStatusSystem';
 import { EnergyInjectorSystem } from '../../src/systems/EnergyInjectorSystem';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
@@ -90,6 +92,17 @@ describe('World HP consumer boundaries', () => {
     statuses.applyVulnerability(target, 10000, 1000); injector.setFocusTarget('old-owner', target, 10000, 1000);
     injector.setFocusTarget('renewed-owner', target, 10000, 1000);
     const inert = new Proxy({}, { get: () => () => undefined }); // Unrelated attachment ports only.
+    const itemRuntime = new CoopDefenseItemRuntimeSystem({
+      getAffixValue: () => 0, getPlayerHp: () => null,
+    });
+    itemRuntime.setTargetStatusSystem(statuses);
+    // Exercise the production reaction adapters with the real item/status owners.
+    const playerRuntime = Object.assign(Object.create(WorldPlayerGameplayRuntime.prototype), {
+      systems: { resource: inert, loadout: inert, playerModifier: inert, burrow: inert,
+        itemRuntime, utilityAction: inert },
+    }) as WorldPlayerGameplayRuntime;
+    const playerCombat = playerRuntime.getPlayerCombatIntegrationPort();
+    let playerCombatAttached = false;
     const players = { getPlayer: () => undefined, getAllPlayers: () => [], setSpawnContextProvider: () => {} } as unknown as PlayerManager;
     const combat = new CombatSystem(players,
       { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
@@ -110,7 +123,7 @@ describe('World HP consumer boundaries', () => {
     if (hook === 'death-spawn') manager.setEnemySpawnedCallback(replace);
     const binding = new WorldCombatGameplayBinding({
       playerManager: players, combatSystem: combat, baseManager: null, automatedWeaponExecution: null,
-      getPlayerCombatIntegration: () => null, getEnemyManager: () => manager,
+      getPlayerCombatIntegration: () => playerCombatAttached ? playerCombat : null, getEnemyManager: () => manager,
       getTargetStatusSystem: () => statuses, getEnergyInjectorSystem: () => injector,
       getTargetFootprint: () => null, getPowerUpSystem: () => null,
       getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
@@ -124,6 +137,7 @@ describe('World HP consumer boundaries', () => {
       network: { authority: { isHost: () => true, getPlayerProfile: () => undefined, getConnectedPlayers: () => [] },
         stats: inert, effects: inert, round: inert },
     } as never);
+    playerCombatAttached = true;
     const result = combat.applyDamage('e1', 100, false, 'old-attacker', 'test');
     expect(result).toMatchObject({ actualDamage: 40, transition: { kind: 'dead' } });
     expect(statuses.getSnapshot(1234)).toEqual(applyNewStatus ? [{ ...target, expiresAt: 2234 }] : []);

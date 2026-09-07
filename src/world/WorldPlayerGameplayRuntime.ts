@@ -739,7 +739,6 @@ export class WorldPlayerGameplayRuntime implements
         handleEnemyDeath: (enemyId, x, y, burnSources, nowMs) => {
           systems.flamethrowerUpgrade?.handleEnemyDeath(x, y, burnSources, nowMs);
           const burst = systems.slimeTrail?.handleEnemyDeath(enemyId, x, y, nowMs) ?? null;
-          systems.itemRuntime.removeEnemy(enemyId);
           return burst;
         },
         removeEnemy: (enemyId) => systems.itemRuntime.removeEnemy(enemyId),

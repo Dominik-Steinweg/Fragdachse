@@ -1187,7 +1187,8 @@ export class CombatSystem implements ProjectileCombatPort {
 
     for (const contribution of contributions) {
       const targetId = String(contribution.target.id);
-      if (!this.isCurrentCombatantTarget(contribution.target) || !this.isAlive(targetId)) continue;
+      if (!contribution.isSourceValid()
+        || !this.isCurrentCombatantTarget(contribution.target) || !this.isAlive(targetId)) continue;
       this.applyDamage(
         targetId,
         contribution.damage,

@@ -17,6 +17,8 @@ export interface CombatBurnMetadata {
 export interface DueCombatBurnContribution extends DueBurnContribution {
   readonly target: CombatTargetRef;
   readonly source: CombatSource;
+  /** Recheck immediately before mutation: an earlier contribution may detach this source. */
+  readonly isSourceValid: () => boolean;
 }
 
 function sourceActorId(source: CombatSource): string {
@@ -55,6 +57,8 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
   private readonly machine = new BurnStateMachine();
   private readonly targets = new Map<string, CombatTargetRef>();
   private readonly sources = new Map<string, Map<string, BurnSourceFacts>>();
+  private readonly sourceDetachGenerations = new Map<string, number>();
+  private generation = 0;
 
   applyBurn(request: CombatBurnRequest, metadata: CombatBurnMetadata = {}): boolean {
     if ((request.target.kind !== 'player' && request.target.kind !== 'enemy')
@@ -106,8 +110,12 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
       const target = this.targets.get(contribution.targetId);
       const facts = this.sources.get(contribution.targetId)?.get(contribution.sourceKey);
       if (!target || !facts) continue;
+      const generation = this.generation;
+      const sourceGeneration = this.sourceDetachGenerations.get(contribution.attackerId) ?? 0;
       resolved.push(Object.freeze({
         ...contribution, sourceKey: facts.stackKey, target, source: facts.source,
+        isSourceValid: () => generation === this.generation
+          && sourceGeneration === (this.sourceDetachGenerations.get(contribution.attackerId) ?? 0),
       }));
     }
     this.pruneIndexes();
@@ -138,11 +146,15 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
 
   /** Final source detach only. A source death intentionally does not call this operation. */
   clearSource(actorId: string): void {
+    // Numeric actor/target generations may be reused; final detach cancels even issued ticks.
+    this.sourceDetachGenerations.set(actorId, (this.sourceDetachGenerations.get(actorId) ?? 0) + 1);
     this.machine.clearByAttacker(actorId);
     this.pruneIndexes();
   }
 
   destroy(): void {
+    this.generation += 1;
+    this.sourceDetachGenerations.clear();
     this.machine.reset();
     this.targets.clear();
     this.sources.clear();

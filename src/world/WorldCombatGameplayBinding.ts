@@ -539,6 +539,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (this.destroyed || (successor && !isSameCombatTargetInstance(successor, target))) return;
       o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
       o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+      // Item cleanup must finish at this instance boundary, before death hooks can reuse the ID.
+      o.getPlayerCombatIntegration()?.reactions.removeEnemy(enemyId);
     });
     combat.setEnergyInjectorTargetHitCallback((impact: ProjectileEnergyInjectorImpact) => {
       if (impact.targetType === 'player' && !o.network.authority.isEnemyPair(impact.ownerId, impact.targetId)) return;
@@ -577,7 +579,6 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {
-        o.getPlayerCombatIntegration()?.reactions.removeEnemy(enemyId);
         return true;
       }
       const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources, combat.getHostTime()) ?? null;
