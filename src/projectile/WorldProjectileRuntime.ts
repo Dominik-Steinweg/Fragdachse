@@ -1668,7 +1668,18 @@ export class WorldProjectileRuntime implements
   }
 
   completeProjectileExplosion(projectileId: ProjectileId, outcome: ProjectileExplosionOutcome): void {
-    void outcome;
+    const projectile = this.projectiles.getById(projectileId);
+    if (!projectile || projectile.pendingDestroy) return;
+    // The domain outcome is a same-frame receipt. Keep the physical keys at the Projectile owner
+    // so the next coast/impact stage can preserve its established exclusion memory without
+    // leaking a RuntimeRecord into Combat or re-running the AoE resolution.
+    if (outcome.damagedTargetKeys.length > 0) {
+      const excluded = projectile.interaction.multiExplosionExcludedTargetKeys
+        ??= new Set<string>();
+      for (const key of outcome.damagedTargetKeys) {
+        if (typeof key === 'string' && key.length > 0) excluded.add(key);
+      }
+    }
     this.resumeMiniRocketExplosion(projectileId);
   }
 

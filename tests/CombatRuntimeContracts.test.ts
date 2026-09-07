@@ -279,6 +279,69 @@ describe('Canonical Player vitals mutation', () => {
     expect(Object.isFrozen(source)).toBe(false);
   });
 
+  it('keeps a real Projectile adapter receipt stable when the target is culled afterwards', () => {
+    const vitals = owner();
+    const player = vitals.attachAndBeginInitialLife('p1');
+    const request: ProjectileDirectImpactRequest = {
+      projectileId: 42,
+      target: { kind: 'player', id: 'p1' },
+      impact: { x: 10, y: 20 },
+      velocity: { x: 1, y: 0 },
+      provenance: {
+        gameplaySourceId: 'source-player',
+        attributionId: 'credited-player',
+        allegiance: { ownerId: 'team-owner' },
+        weaponSourceId: 'weapon.projectile',
+        sourceSlot: 'weapon1',
+      },
+      directHit: { damage: 12 },
+      augments: [],
+    };
+    const adapted = adaptProjectileDirectDamageRequest(
+      request,
+      'projectile:42:p1',
+      scope,
+      player.instance,
+      { gameplaySourceKind: 'player', attributionKind: 'player' },
+    );
+    const receipt = vitals.commitDamage({
+      outcomeId: adapted.outcomeId,
+      target: adapted.target,
+      source: adapted.source,
+      damage: {
+        amount: adapted.basis.amount,
+        damageKind: 'direct',
+        basis: adapted.basis,
+        sourceFactors: [],
+        targetFactors: [],
+        isCritical: false,
+      },
+    });
+
+    expect(receipt).toMatchObject({ kind: 'damage-applied', actualDamage: 12 });
+    expect(Object.isFrozen(receipt)).toBe(true);
+    vitals.detachCurrentPlayer('p1');
+    expect(receipt).toMatchObject({
+      kind: 'damage-applied',
+      outcomeId: 'projectile:42:p1',
+      target: adapted.target,
+      actualDamage: 12,
+    });
+    expect(vitals.commitDamage({
+      outcomeId: 'after-cull',
+      target: adapted.target,
+      source: adapted.source,
+      damage: {
+        amount: adapted.basis.amount,
+        damageKind: 'direct',
+        basis: adapted.basis,
+        sourceFactors: [],
+        targetFactors: [],
+        isCritical: false,
+      },
+    })).toMatchObject({ kind: 'rejected', reason: 'target-missing' });
+  });
+
   it('rejects non-finite mutation values and clamps non-finite caps to valid state', () => {
     const vitals = new PlayerVitalsOwner(scope, {
       resolveMaxHp: () => Number.NaN,

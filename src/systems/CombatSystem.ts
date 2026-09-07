@@ -78,9 +78,20 @@ import { PlayerVitalsOwner } from '../combat/PlayerVitalsOwner';
 import { PlayerLifeRuntime } from '../world/PlayerLifeRuntime';
 import type { CombatScope, CombatSource, CombatTargetRef } from '../combat/CombatScope';
 import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
+import {
+  adaptProjectileDirectDamageRequest,
+  type ProjectileCombatSourceClassification,
+} from '../combat/ProjectileCombatContractAdapter';
 import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
 import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
-import type { CombatDamageBasis, CombatDamageRequest, CombatDamageMutationOutcome, CombatSupportRequest, CombatSupportMutationOutcome } from '../combat/CombatMutation';
+import type {
+  CombatDamageBasis,
+  CombatDamageRequest,
+  CombatDamageMutationOutcome,
+  CombatResolvedDamage,
+  CombatSupportRequest,
+  CombatSupportMutationOutcome,
+} from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
 import { CombatBurnStatusOwner } from '../combat/CombatBurnStatusOwner';
 import type { CombatMovementStatusPort } from '../combat/CombatCapabilities';
@@ -144,9 +155,13 @@ interface DamageApplicationOptions {
   allowCritical?: boolean;
   sourceSlot?: LoadoutSlot;
   damageKind?: CombatDamageKind;
+  /** Explicit Projectile entry keeps the canonical source/basis contract at the boundary. */
+  entry?: Extract<CombatDamageRequest['entry'], 'projectile-direct' | 'automated'>;
   /** P7–P10 migrate legacy callers to these fully resolved facts. */
   source?: CombatSource;
   basis?: CombatDamageBasis;
+  /** Projectile supplies the concrete target instance; the writer revalidates it on commit. */
+  target?: CombatTargetRef;
   /**
    * Interner Schalter fuer den Hinrichtungsschlag: Er soll den Gegner toeten, aber keinen
    * Lifeleech und keine schadensabhaengigen Folgeeffekte ausloesen.
@@ -986,7 +1001,9 @@ export class CombatSystem implements ProjectileCombatPort {
     if (this.enemyManager?.hasEnemy(targetId)) {
       return this.applyEnemyDamage(targetId, amount, attackerId, sourceId, visualContext, options);
     }
-    const target = this.playerVitals.getTargetRef(targetId);
+    const target = options?.target?.kind === 'player' && String(options.target.id) === targetId
+      ? options.target
+      : this.playerVitals.getTargetRef(targetId);
     if (!target) return null;
     this.prepareAttributionTarget(target);
     const request = this.createDamageRequest(target, amount, attackerId, sourceId, options, skipBurrowCheck);
@@ -1338,12 +1355,14 @@ export class CombatSystem implements ProjectileCombatPort {
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
       if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin);
-      this.applyDamage(player.id, roundedDamage, false, ownerId, sourceId, { sourceX: x, sourceY: y }, {
+      const outcome = this.applyDamage(player.id, roundedDamage, false, ownerId, sourceId, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
         damageKind: 'explosion',
       });
-      damagedTargetKeys.push(`players:${player.id}`);
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
+        damagedTargetKeys.push(`players:${player.id}`);
+      }
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
@@ -1360,12 +1379,14 @@ export class CombatSystem implements ProjectileCombatPort {
         this.applyEnemySlow(enemy.id, effect.enemySlowFraction ?? 0, effect.enemySlowDurationMs ?? 0);
       }
       this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin);
-      this.applyDamage(enemy.id, roundedDamage, false, ownerId, sourceId, { sourceX: x, sourceY: y }, {
+      const outcome = this.applyDamage(enemy.id, roundedDamage, false, ownerId, sourceId, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
         damageKind: 'explosion',
       });
-      damagedTargetKeys.push(`enemies:${enemy.id}`);
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
+        damagedTargetKeys.push(`enemies:${enemy.id}`);
+      }
     }
 
     // Basen erhalten denselben zentralen Schadenstrichter wie direkte Treffer; die
@@ -1643,25 +1664,117 @@ export class CombatSystem implements ProjectileCombatPort {
     };
   }
 
-  /** Trefferwirkung gegen einen Spieler inklusive Schild-Auflösung. */
-  private applyDirectPlayerImpact(
+  /**
+   * Resolves the concrete target instance at the Projectile boundary. The narrow Projectile
+   * request intentionally carries only the collision identity; the owner supplies scope and
+   * generation to the canonical mutation writer and that writer revalidates both on commit.
+   */
+  private resolveProjectileCombatTarget(request: ProjectileDirectImpactRequest): CombatTargetRef | null {
+    if (request.target.kind === 'player') return this.playerVitals.getTargetRef(request.target.id);
+    if (request.target.kind === 'enemy') return this.enemyManager?.getCombatTargetRef(request.target.id) ?? null;
+    return this.decoySystem?.getCombatTargetRef(request.target.id) ?? null;
+  }
+
+  private classifyProjectileSource(
     request: ProjectileDirectImpactRequest,
-    playerId: string,
-  ): ProjectileDirectImpactOutcome {
-    const player = this.playerManager.getPlayer(playerId);
-    if (!player) return { accepted: false };
-    const actualDamage = this.computeDirectDamage(request);
+  ): ProjectileCombatSourceClassification {
+    const gameplaySourceId = request.provenance.gameplaySourceId;
+    const gameplaySourceKind: ProjectileCombatSourceClassification['gameplaySourceKind'] =
+      this.enemyManager?.hasEnemy(gameplaySourceId) ? 'enemy'
+        : this.playerManager.getPlayer(gameplaySourceId) ? 'player'
+          : request.provenance.sourceTurretId ? 'turret'
+            : gameplaySourceId === 'world' ? 'world' : 'environment';
+    const attributionId = request.provenance.attributionId;
+    const attributionKind: ProjectileCombatSourceClassification['attributionKind'] =
+      this.playerManager.getPlayer(attributionId) ? 'player'
+        : this.enemyManager?.hasEnemy(attributionId) ? 'enemy' : 'world';
+    return {
+      gameplaySourceKind,
+      attributionKind,
+      actor: request.provenance.sourceTurretId
+        ? { kind: 'turret', id: request.provenance.sourceTurretId }
+        : request.provenance.lineage?.reflected
+          ? { kind: attributionKind, id: attributionId } as CombatSource['actor']
+          : undefined,
+    };
+  }
+
+  /** Direct payload factors belong to the source-side payload; runtime M/T remains pending. */
+  private computeDirectPayloadDamage(request: ProjectileDirectImpactRequest): number {
+    const directHit = request.directHit;
+    let multiplier = directHit.ak47?.damageMultiplier ?? 1;
+    if (directHit.shotgun?.proximityMaxDamageBonus && directHit.shotgun.resolvedRange > 0) {
+      const distance = Phaser.Math.Distance.Between(
+        directHit.shotgun.originX,
+        directHit.shotgun.originY,
+        request.impact.x,
+        request.impact.y,
+      );
+      const closeness = Phaser.Math.Clamp(1 - distance / directHit.shotgun.resolvedRange, 0, 1);
+      multiplier *= 1 + closeness * directHit.shotgun.proximityMaxDamageBonus;
+    }
+    return Math.max(0, directHit.damage * multiplier);
+  }
+
+  private adaptProjectileDirectRequest(
+    request: ProjectileDirectImpactRequest,
+    target: CombatTargetRef,
+    outcomeId: string,
+    additionalSourceMultiplier = 1,
+  ): ReturnType<typeof adaptProjectileDirectDamageRequest> {
+    const adapted = adaptProjectileDirectDamageRequest(
+      request,
+      outcomeId,
+      target.scope,
+      target.instance,
+      this.classifyProjectileSource(request),
+    );
+    const amount = this.computeDirectPayloadDamage(request) * Math.max(0, additionalSourceMultiplier);
+    return {
+      ...adapted,
+      basis: { ...adapted.basis, amount },
+    };
+  }
+
+  private commitProjectileCombatantDamage(
+    request: ProjectileDirectImpactRequest,
+    target: CombatTargetRef,
+    adapted: ReturnType<typeof adaptProjectileDirectDamageRequest>,
+  ): CombatDamageMutationOutcome | null {
+    if (target.kind !== 'player' && target.kind !== 'enemy') return null;
     const impactSource = {
       sourceX: request.impact.x,
       sourceY: request.impact.y,
       dirX: request.velocity.x,
       dirY: request.velocity.y,
     };
-    const damageOptions = {
-      allowTeamDamage: request.provenance.allegiance.allowTeamDamage,
-      sourceSlot: request.provenance.sourceSlot,
-      damageKind: 'direct' as const,
-    };
+    return this.applyDamage(
+      String(target.id),
+      adapted.basis.amount,
+      false,
+      adapted.source.attribution.id,
+      adapted.source.authoredSourceId,
+      impactSource,
+      {
+        allowTeamDamage: adapted.source.allegiance.allowTeamDamage,
+        sourceSlot: adapted.source.sourceSlot,
+        damageKind: 'direct',
+        entry: 'projectile-direct',
+        source: adapted.source,
+        basis: adapted.basis,
+        target,
+      },
+    );
+  }
+
+  /** Trefferwirkung gegen einen Spieler inklusive Schild-Auflösung. */
+  private applyDirectPlayerImpact(
+    request: ProjectileDirectImpactRequest,
+    playerId: string,
+  ): ProjectileDirectImpactOutcome {
+    const player = this.playerManager.getPlayer(playerId);
+    const target = this.resolveProjectileCombatTarget(request);
+    if (!player || !target || target.kind !== 'player') return { accepted: false };
 
     const energyInjector = findEnergyInjector(request);
     if (energyInjector) {
@@ -1678,6 +1791,7 @@ export class CombatSystem implements ProjectileCombatPort {
       return { accepted: true, actualDamage: 0 };
     }
 
+    const actualDamage = this.computeDirectDamage(request);
     if (this.shouldBlockWithShield(playerId, 'projectile', actualDamage, request.impact.x, request.impact.y, this.hostFrameNowMs)) {
       const reflectionFactor = request.provenance.lineage?.reflected
         ? 0
@@ -1699,13 +1813,18 @@ export class CombatSystem implements ProjectileCombatPort {
       };
     }
 
-    const ownerId = request.provenance.allegiance.ownerId;
-    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
+    const adapted = this.adaptProjectileDirectRequest(
+      request,
+      target,
+      this.nextMutationOutcomeId('projectile-direct', playerId),
+    );
     this.registerAk47Hit(createAk47Context(request));
-    this.applyProjectileBurnAugments(playerId, request);
-    const before = this.getHP(playerId) + this.getArmor(playerId);
-    this.applyDamage(playerId, actualDamage, false, ownerId, sourceId, impactSource, damageOptions);
-    const dealt = Math.max(0, before - this.getHP(playerId) - this.getArmor(playerId));
+    if (this.isCurrentCombatantTarget(target)) this.applyProjectileBurnAugments(playerId, request);
+    const mutation = this.commitProjectileCombatantDamage(request, target, adapted);
+    const outcome = projectileMutationOutcome(mutation);
+    if (!outcome.accepted) return { accepted: false, reaction: createReactionMetadata(request) };
+    const dealt = outcome.actualDamage;
+    const ownerId = request.provenance.allegiance.ownerId;
     if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
@@ -1713,7 +1832,8 @@ export class CombatSystem implements ProjectileCombatPort {
     return {
       accepted: true,
       actualDamage: dealt,
-      becameDead: !this.isAlive(playerId),
+      becameDead: outcome.becameDead,
+      ...(outcome.blocked ? { blocked: true } : {}),
       reaction: createReactionMetadata(request),
     };
   }
@@ -1724,17 +1844,11 @@ export class CombatSystem implements ProjectileCombatPort {
     enemyId: string,
   ): ProjectileDirectImpactOutcome {
     const enemy = this.enemyManager?.getEnemy(enemyId);
-    if (!enemy) return { accepted: false };
+    const target = this.resolveProjectileCombatTarget(request);
+    if (!enemy || !target || target.kind !== 'enemy') return { accepted: false };
     const ak47Impact = this.resolveAk47DirectEnemyHit(request, enemyId);
-    const actualDamage = this.computeDirectDamage(request) * Math.max(0, ak47Impact.damageMultiplier);
     const plasmaSwarm = this.resolvePlasmaSwarmReaction(request, enemyId, enemy.sprite.x, enemy.sprite.y);
     if (plasmaSwarm) this.onPlasmaSwarmReaction?.(plasmaSwarm);
-    const impactSource = {
-      sourceX: request.impact.x,
-      sourceY: request.impact.y,
-      dirX: request.velocity.x,
-      dirY: request.velocity.y,
-    };
     const energyInjector = findEnergyInjector(request);
     if (energyInjector) {
       this.onEnergyInjectorTargetHit?.({
@@ -1750,17 +1864,26 @@ export class CombatSystem implements ProjectileCombatPort {
       return { accepted: true, actualDamage: 0, reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm) };
     }
     const ownerId = request.provenance.allegiance.ownerId;
-    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
-    const before = typeof enemy.getHp === 'function' ? enemy.getHp() : undefined;
-    this.applyEnemySlowFromDirectHit(enemyId, request);
-    this.applyProjectileVulnerability({ targetType: 'enemy', targetId: enemyId }, request.directHit.vulnerabilityDurationMs ?? 0);
-    this.applyProjectileBurnAugments(enemyId, request);
-    this.applyDamage(enemyId, actualDamage, false, ownerId, sourceId, impactSource, {
-      allowTeamDamage: request.provenance.allegiance.allowTeamDamage,
-      sourceSlot: request.provenance.sourceSlot,
-      damageKind: 'direct',
-    });
-    const dealt = before === undefined ? actualDamage : Math.max(0, before - enemy.getHp());
+    const adapted = this.adaptProjectileDirectRequest(
+      request,
+      target,
+      this.nextMutationOutcomeId('projectile-direct', enemyId),
+      ak47Impact.damageMultiplier,
+    );
+    // Reactions remain before the canonical commit for the established direct-hit ordering, but
+    // a reentrant AK47/Plasma hook may have culled or rebuilt this target. Never leak status into
+    // that stale incarnation; the mutation writer remains the final scope/instance authority.
+    if (this.isCurrentCombatantTarget(target)) {
+      this.applyEnemySlowFromDirectHit(enemyId, request);
+      this.applyProjectileVulnerability({ targetType: 'enemy', targetId: enemyId }, request.directHit.vulnerabilityDurationMs ?? 0);
+      this.applyProjectileBurnAugments(enemyId, request);
+    }
+    const mutation = this.commitProjectileCombatantDamage(request, target, adapted);
+    const outcome = projectileMutationOutcome(mutation);
+    if (!outcome.accepted) {
+      return { accepted: false, reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm) };
+    }
+    const dealt = outcome.actualDamage;
     this.applyAk47TargetExplosion(request.impact.x, request.impact.y, ownerId, enemyId, dealt, ak47Impact);
     this.resolveGaussDischarge(request, undefined, enemyId, dealt);
     if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
@@ -1769,7 +1892,8 @@ export class CombatSystem implements ProjectileCombatPort {
     return {
       accepted: true,
       actualDamage: dealt,
-      becameDead: before !== undefined && enemy.getHp() <= 0,
+      becameDead: outcome.becameDead,
+      ...(outcome.blocked ? { blocked: true } : {}),
       reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm),
     };
   }
@@ -1779,39 +1903,55 @@ export class CombatSystem implements ProjectileCombatPort {
     request: ProjectileDirectImpactRequest,
     decoyId: number,
   ): ProjectileDirectImpactOutcome {
+    const target = this.resolveProjectileCombatTarget(request);
+    if (!target || target.kind !== 'decoy') return { accepted: false };
+    const adapted = this.adaptProjectileDirectRequest(
+      request,
+      target,
+      this.nextMutationOutcomeId('projectile-direct', String(decoyId)),
+    );
+    // Decoys are Combat mutation owners but do not run the shared M/T resolver. Their authored
+    // payload therefore receives the same source runtime factor at this boundary exactly once.
     const actualDamage = this.computeDirectDamage(request);
+    const basis = { ...adapted.basis, amount: actualDamage };
+    const damage: CombatResolvedDamage = {
+      amount: actualDamage,
+      damageKind: 'direct',
+      basis,
+      sourceFactors: adapted.basis.kind === 'source-resolved' ? adapted.basis.sourceFactors : [],
+      targetFactors: [],
+      isCritical: false,
+    };
     const impactSource = {
       sourceX: request.impact.x,
       sourceY: request.impact.y,
       dirX: request.velocity.x,
       dirY: request.velocity.y,
     };
+    const mutation = this.decoySystem?.commitDamage({
+      outcomeId: adapted.outcomeId,
+      target,
+      source: adapted.source,
+      damage,
+    }, impactSource) ?? null;
+    const outcome = projectileMutationOutcome(mutation);
+    if (!outcome.accepted) return { accepted: false, reaction: createReactionMetadata(request) };
+    const appliedDamage = outcome.actualDamage;
     const ownerId = request.provenance.allegiance.ownerId;
-    const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
-    const outcome = this.decoySystem?.applyDamage(decoyId, actualDamage, ownerId, sourceId, impactSource) ?? null;
-    const appliedDamage = outcome?.kind === 'damage-applied' ? outcome.actualDamage : 0;
     if (appliedDamage > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
-    return { accepted: outcome?.kind !== 'rejected' && outcome !== null, actualDamage: appliedDamage, reaction: createReactionMetadata(request) };
+    return {
+      accepted: true,
+      actualDamage: appliedDamage,
+      becameDead: outcome.becameDead,
+      ...(outcome.blocked ? { blocked: true } : {}),
+      reaction: createReactionMetadata(request),
+    };
   }
 
   private computeDirectDamage(request: ProjectileDirectImpactRequest): number {
-    const directHit = request.directHit;
-    let multiplier = directHit.ak47?.damageMultiplier ?? 1;
-    if (
-      directHit.shotgun?.proximityMaxDamageBonus && directHit.shotgun.resolvedRange > 0
-    ) {
-      const distance = Phaser.Math.Distance.Between(
-        directHit.shotgun.originX,
-        directHit.shotgun.originY,
-        request.impact.x,
-        request.impact.y,
-      );
-      const closeness = Phaser.Math.Clamp(1 - distance / directHit.shotgun.resolvedRange, 0, 1);
-      multiplier *= 1 + closeness * directHit.shotgun.proximityMaxDamageBonus;
-    }
-    return Math.max(0, directHit.damage * multiplier)
+    return this.computeDirectPayloadDamage(request)
       * this.getPlayerRuntimeDamageMultiplier(
         request.provenance.allegiance.ownerId,
         request.provenance.sourceSlot,
@@ -3372,7 +3512,9 @@ export class CombatSystem implements ProjectileCombatPort {
     options?: DamageApplicationOptions,
   ): CombatDamageMutationOutcome | null {
     const enemy = this.enemyManager?.getEnemy(targetId);
-    const target = this.enemyManager?.getCombatTargetRef(targetId);
+    const target = options?.target?.kind === 'enemy' && String(options.target.id) === targetId
+      ? options.target
+      : this.enemyManager?.getCombatTargetRef(targetId);
     if (!enemy || !target || !this.enemyManager) return null;
     this.prepareAttributionTarget(target);
     const x = enemy.sprite.x;
@@ -3856,9 +3998,10 @@ export class CombatSystem implements ProjectileCombatPort {
       return { ...common, entry: 'derived-reaction', damageKind, basis: options.basis };
     }
     // Old entry paths have already applied their P/falloff/object factors. Never add P here.
-    const basis = options?.basis?.kind === 'source-resolved' ? options.basis
-      : { kind: 'source-resolved' as const, amount, sourceFactors: [] };
-    return { ...common, entry: 'automated', damageKind, basis };
+    // A Projectile adapter can intentionally retain an authored basis so the canonical resolver
+    // applies pending outgoing factors exactly once.
+    const basis = options?.basis ?? { kind: 'source-resolved' as const, amount, sourceFactors: [] };
+    return { ...common, entry: options?.entry ?? 'automated', damageKind, basis } as CombatDamageRequest;
   }
 
   private createPlayerVitalsOwner(scope: CombatScope): PlayerVitalsOwner {
@@ -3957,4 +4100,30 @@ function findEnergyInjector(
     if ('kind' in augment && augment.kind === 'energy-injector') return augment;
   }
   return undefined;
+}
+
+/** Translate one immutable mutation receipt to the intentionally small Projectile outcome. */
+function projectileMutationOutcome(outcome: CombatDamageMutationOutcome | null): {
+  readonly accepted: boolean;
+  readonly blocked: boolean;
+  readonly actualDamage: number;
+  readonly becameDead: boolean;
+} {
+  if (!outcome || outcome.kind === 'rejected') {
+    return { accepted: false, blocked: false, actualDamage: 0, becameDead: false };
+  }
+  if (outcome.kind === 'accepted-no-effect') {
+    return {
+      accepted: true,
+      blocked: outcome.reason === 'blocked',
+      actualDamage: 0,
+      becameDead: false,
+    };
+  }
+  return {
+    accepted: true,
+    blocked: false,
+    actualDamage: outcome.actualDamage,
+    becameDead: outcome.transition.kind === 'dead',
+  };
 }

@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B abgeschlossen; R2 bestanden |
-| Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
-| Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Nutzerfreigabe für Block C abwarten; P7 nicht beginnen |
-| Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine; Nutzerstopp nach bestandenem R2 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `b74a1b07` |
-| Start-HEAD der laufenden Aufgabe | – |
-| Aktiver Worker / Thread | Keiner |
+| Gesamtstatus | Block C aktiv; P7-Gate erfüllt, P8 als Nächstes |
+| Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
+| Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
+| Nächster Arbeitsschritt | P8 Hitscan/Melee/Preview im selben Luna-/XHigh-Kontext |
+| Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
+| Aktive Phase / Aufgabe | Keine; P7 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `8ed3d1be` |
+| Start-HEAD der laufenden Aufgabe | `8ed3d1be` |
+| Aktiver Worker / Thread | Keiner; P7/P8-Kontext für P8 wird fortgesetzt |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Nutzerfreigabe C erforderlich |
-| Aktueller Reparaturzähler | Nutzer-Ausnahme Fix 6 genutzt; Review 7 bestanden |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner |
+| Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -42,7 +42,7 @@
 | P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
 | R2 | B | ✅ | Bestanden; keine reproduzierbaren Block-B-Stopper |
-| P7 | C | ⬜ | Projectile-Adapter |
+| P7 | C | ✅ | Projectile-Adapter |
 | P8 | C | ⬜ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
 | P10 | C | ⬜ | Verbleibende Consumer |
@@ -63,19 +63,18 @@
 - `CombatResolution` und `CombatRelationshipPolicy`: Phaser-freie Damage-/Support-Regeln mit expliziter Faktorherkunft, Eligibility, Host-Zeit/RNG und kanonischem Mutation-Commit.
 - `CombatBurnStatusOwner`, `EnemyMovementStatusSystem`, `TargetStatusSystem` und `PlasmaSwarmReactionSystem`: je ein World-lokaler Writer mit passiven Reads und explizitem Advance/Prune/Clear.
 - `PlayerLifeRuntime` und `WorldCombatReactions`: deadline-basierter Respawn ohne Timer sowie geordnete, reentrancy-sichere Reaction-/Kill-Folgen aus gesicherten Fakten.
+- Projectile-Direct-Adapter committen Player-/Enemy-/Decoy-Schaden über konkrete Targets und Receipts; `WorldProjectileRuntime` übernimmt tatsächliche AoE-Keys in seine Same-Frame-Continuation.
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P4 sind realisiert:
+P1–P7 sind realisiert:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
-| Geplanter Integrationsübergang | Legacy-Projectile-Adapter nutzen die neuen Receipts noch nicht vollständig (D1/D4) | P7 |
-| Geplanter Integrationsübergang | Explizite Herkunft statt Legacy-`direct`-Default (D9) | P7/P10 |
+| Geplanter Integrationsübergang | Verbleibende Nicht-Projectile-Consumer auf explizite Herkunft umstellen (D9) | P8/P10 |
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten und renderer-unabhängige World-Mutation (D6/D8) | P9 |
-| Geplanter Integrationsübergang | Verbleibende Projectile-Callback-Reaktionen auf den einen Ausführungspfad umstellen (D10) | P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
-| Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
+| Geplanter Integrationsübergang | Verbleibende Attack-, World-, Consumer- und Composition-Ports produktiv schließen | P8–P11 gemäß Contract-Manifest |
 
 ## 5. Nachweise und Reviews
 
@@ -83,19 +82,9 @@ P1–P4 sind realisiert:
 
 **P2–P6 Gates L:** jeweilige Fokus-/Integrationssuiten, Architektur, TypeScript, Build, Writer- und Diff-Audits grün; Details in den Phasen-Commits.
 
-**R2-Fix 1:** drei Repros geschlossen; 2772 Core/32 Architektur, Integration 183/183, Fokus 26/26 und Build grün.
+**R2:** bestanden auf `b74a1b07`; 133/133 Fokus, 201/201 Integration und 32/32 Architektur grün; keine reproduzierbaren P2–P6-Stopper.
 
-**R2-Fix 2:** zwei Repros geschlossen; 2775 Core/32 Architektur, Integration 188/188, Fokus 46/46 und Build grün.
-
-**R2-Fix 3:** terminaler Enemy-Status-Cleanup vor externen Hooks; Fokus 38/38, Integration 192/192 und Check 2775 Core/32 Architektur plus Build grün.
-
-**R2-Fix 4:** Provenance-Lifetimes getrennt bei unveränderten Stack-/Tick-Summen; Fokus 39/39, Integration 195/195, Check 2776 Core/32 Architektur plus Build grün.
-
-**R2-Fix 5:** Batch prüft Owner und Combat-Scope nach jedem Spawn-Hook; Fokus 48/48, Integration 201/201, Check 2776 Core/32 Architektur plus Build grün.
-
-**R2-Fix 6:** beide Repros geschlossen; Fokus 79/79, Integration 201/201, Check 2780 Core/32 Architektur plus Build grün. Review 7 bewertet nur reproduzierbare Block-B-Stopper.
-
-**R2 Review 7:** bestanden; 133/133 Fokus, 201/201 Integration und 32/32 Architektur grün. Keine reproduzierbaren P2–P6-Stopper; P7–P13 bleiben Folgearbeit.
+**P7-Gate L:** Fokus 63/63, Check 2781 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 57/57, TypeScript/Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
