@@ -1558,7 +1558,10 @@ export class WorldProjectileRuntime implements
 
     const current = record.interaction.burnAugment;
     if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
-    record.interaction.burnAugment = { burn: { ...augment.burn }, provenance: augment.provenance };
+    record.interaction.burnAugment = {
+      burn: { ...augment.burn },
+      provenance: this.resolveProvenance?.(augment.provenance) ?? augment.provenance,
+    };
     return true;
   }
 
@@ -2306,7 +2309,9 @@ export class WorldProjectileRuntime implements
         explosion: cfg.explosion,
         burnAugment: cfg.supplementalBurnOnHit ? {
           burn: cfg.supplementalBurnOnHit,
-          provenance: cfg.supplementalBurnProvenance ?? provenance,
+          provenance: cfg.supplementalBurnProvenance
+            ? this.resolveProvenance?.(cfg.supplementalBurnProvenance) ?? cfg.supplementalBurnProvenance
+            : provenance,
         } : undefined,
         penetrationRemaining: cfg.penetrationCount,
         multiExplosionsRemaining: Math.max(1, Math.floor(cfg.multiExplosionCount ?? 1)),

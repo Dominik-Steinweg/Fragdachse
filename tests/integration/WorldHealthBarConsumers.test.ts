@@ -21,6 +21,7 @@ import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayR
 import { CoopDefenseItemRuntimeSystem } from '../../src/systems/CoopDefenseItemRuntimeSystem';
 import { TargetStatusSystem } from '../../src/systems/TargetStatusSystem';
 import { EnergyInjectorSystem } from '../../src/systems/EnergyInjectorSystem';
+import { DecoySystem } from '../../src/systems/DecoySystem';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { NetworkBridge } from '../../src/network/NetworkBridge';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
@@ -44,7 +45,8 @@ import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentity
 import { createSingleOwnerProvenance } from '../../src/projectile/ProjectileSpawnRequest';
 import { WorldWeaponExecutionRuntime } from '../../src/world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../../src/world/AutomatedWeaponExecutionAdapter';
-import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { WEAPON_CONFIGS, type WeaponConfig } from '../../src/loadout/LoadoutConfig';
+import type { WeaponFireOptions } from '../../src/loadout/WeaponFireExecutor';
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 import { fakeEntity } from '../fakeEntity';
 
@@ -86,6 +88,7 @@ const baseSpec: BaseSpec = {
 describe('World HP consumer boundaries', () => {
   function projectileFixture() {
     const h = harness(), manager = enemies(h);
+    let hostNowMs = 1000;
     const players = ['p1', 'p2'].map(id => {
       const x = id === 'p1' ? 100 : 200;
       return fakeEntity({ id, x, y: 100, color: 0xffffff,
@@ -94,7 +97,7 @@ describe('World HP consumer boundaries', () => {
     const combat = new CombatSystem({ getPlayer: (id: string) => players.find(p => p.id === id), getAllPlayers: () => players } as unknown as PlayerManager,
       { isHost: () => true, getPlayerProfile: (id: string) => players.find(p => p.id === id),
         broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
-    combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
+    combat.bindHostExecutionSources({ nowMs: () => hostNowMs, random: () => 0.25 });
     combat.setEnemyManager(manager);
     combat.setPlayerMaxHpResolver(() => 1000);
     players.forEach(p => combat.initPlayer(p.id));
@@ -106,7 +109,7 @@ describe('World HP consumer boundaries', () => {
         top: enemy.sprite.y - 8, bottom: enemy.sprite.y + 8 }) });
     }
     const runtime = new WorldProjectileRuntime({ physicsBinding: createTechnicalPhysicsBinding().binding,
-      presentation: createPresentation(), identityScope: new ProjectileIdentityScope(1), hostNowMs: () => 1000,
+      presentation: createPresentation(), identityScope: new ProjectileIdentityScope(1), hostNowMs: () => hostNowMs,
       resolveProvenance: provenance => combat.captureProjectileProvenance(provenance) });
     runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => combat.readCollisionTargets(sink) });
     runtime.setProjectileTargetabilityPort({
@@ -118,12 +121,17 @@ describe('World HP consumer boundaries', () => {
     runtime.setProjectileCombatPort({ resolveDirectImpact: direct, resolveExplosionCombat: combat.resolveExplosionCombat.bind(combat) });
     const shared = new WorldWeaponExecutionRuntime({ projectileSpawn: runtime, combatSystem: combat });
     const automated = new AutomatedWeaponExecutionAdapter(shared, runtime);
-    const fire = (ownerId: string, x: number, automatic = false) => {
-      const config = { ...WEAPON_CONFIGS.GLOCK, damage: 20, directDamageOverride: undefined };
+    const fireConfig = (config: WeaponConfig, ownerId: string, x: number, options?: WeaponFireOptions) => {
       const params = { ownerId, ownerColor: 0xffffff, x, y: 100, angle: 0, targetX: x + 100, targetY: 100 };
-      return automatic ? automated.fire(config, { ...params, options: { directDamageMultiplier: 2 } }) : shared.fire(config, params);
+      return options ? automated.fire(config, { ...params, options }) : shared.fire(config, params);
     };
-    return { combat, manager, runtime, direct, fire, close: () => { runtime.destroy(); manager.destroy(); } };
+    const fire = (ownerId: string, x: number, automatic = false) => fireConfig(
+      { ...WEAPON_CONFIGS.GLOCK, damage: 20, directDamageOverride: undefined }, ownerId, x,
+      automatic ? { directDamageMultiplier: 2 } : undefined,
+    );
+    return { combat, manager, runtime, direct, fire, fireConfig,
+      advanceBurn: (nowMs: number) => { hostNowMs = nowMs; combat.updateBurnEffects(nowMs); },
+      close: () => { runtime.destroy(); manager.destroy(); } };
   }
 
   it.each([false, true])('keeps hostile projectile allegiance after source removal (%s)', remove => {
@@ -164,12 +172,195 @@ describe('World HP consumer boundaries', () => {
       f.combat.setEnergyShieldSystem({ tryBlockDamage: shield, tryDomeProtect: () => false } as never);
       expect(f.fire('p1', target === 'player' ? 200 : 300, automatic)).toBe(true);
       f.runtime.runHostInteractionStage(1000);
-      const expected = automatic ? 40 : 120;
+      const expected = 20 * (automatic ? 2 : 1) * 2 * 3;
       expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: expected });
       expect(target === 'player' ? f.combat.getHP('p2') : f.manager.getEnemy('e1')!.getHp()).toBe(1000 - expected);
       if (target === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: expected }));
       f.close();
     }
+  });
+
+  it.each([false, true])('keeps authored hostile projectile Burn after source removal (%s)', remove => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.PYRO_BADGER_GLOCK;
+    expect(f.fireConfig(config, 'e1', 400)).toBe(true);
+    if (remove) f.manager.applySnapshot({ u: [], r: [1] });
+    f.runtime.runHostInteractionStage(1000);
+    expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: config.damage });
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(f.manager.getEnemy('e2')!.getHp()).toBe(1000 - config.damage - config.burnOnHit!.damagePerTick);
+    f.close();
+  });
+
+  it.each([false, true])('keeps authored allied projectile Burn kill attribution after source removal (%s)', remove => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.PYRO_BADGER_GLOCK, kill = vi.fn();
+    f.combat.setKillCallback(kill);
+    upsert(f.manager, { id: 'e1', hp: config.damage + config.burnOnHit!.damagePerTick / 2, maxHp: 1000 });
+    expect(f.fireConfig(config, 'e2', 300)).toBe(true);
+    if (remove) f.manager.applySnapshot({ u: [], r: [2] });
+    f.runtime.runHostInteractionStage(1000);
+    expect(kill).not.toHaveBeenCalled();
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(kill).toHaveBeenCalledExactlyOnceWith('p1', 'e1', config.id, 300, 100, expect.objectContaining({
+      provenance: expect.objectContaining({ gameplaySource: { kind: 'enemy', id: 'e2' },
+        attribution: { kind: 'player', id: 'p1' }, origin: 'burn' }),
+    }));
+    f.close();
+  });
+
+  it('retains committed projectile Burn when its player cannot start another action', () => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.PYRO_BADGER_GLOCK;
+    expect(f.fireConfig(config, 'p1', 300)).toBe(true);
+    f.combat.setPlayerActionAllowedResolver(() => false);
+    f.runtime.runHostInteractionStage(1000);
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(f.manager.getEnemy('e1')!.getHp()).toBe(1000 - config.damage - config.burnOnHit!.damagePerTick);
+    f.close();
+  });
+
+  it('keeps equal projectile Burn stacks in one tick source after source removal', () => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.PYRO_BADGER_GLOCK;
+    f.fireConfig(config, 'e2', 300);
+    f.fireConfig(config, 'e2', 300);
+    f.manager.applySnapshot({ u: [], r: [2] });
+    f.runtime.runHostInteractionStage(1000);
+    expect(f.combat.getActiveBurnSources('e1', 1000)).toHaveLength(1);
+    expect(f.combat.getBurnStackCount('e1', 1000)).toBe(2);
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(f.manager.getEnemy('e1')!.getHp()).toBe(1000 - 2 * (config.damage + config.burnOnHit!.damagePerTick));
+    f.close();
+  });
+
+  it('captures an independent Burn augment source before it disappears', () => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.GLOCK, kill = vi.fn();
+    f.combat.setKillCallback(kill);
+    upsert(f.manager, { id: 'e1', hp: config.damage + 1, maxHp: 1000 });
+    f.fireConfig(config, 'p2', 300, { sourceSlot: 'weapon1' });
+    expect(f.runtime.addBurnAugment(f.runtime.getThreatSamples()[0].id, {
+      burn: { durationMs: 2000, damagePerTick: 2 },
+      provenance: createSingleOwnerProvenance('e2', { weaponSourceId: 'ground.allied-fire' }),
+    })).toBe(true);
+    f.manager.applySnapshot({ u: [], r: [2] });
+    f.runtime.runHostInteractionStage(1000);
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(kill).toHaveBeenCalledExactlyOnceWith('p1', 'e1', 'ground.allied-fire', 300, 100, expect.objectContaining({
+      provenance: expect.objectContaining({ gameplaySource: { kind: 'enemy', id: 'e2' },
+        attribution: { kind: 'player', id: 'p1' }, origin: 'burn' }),
+    }));
+    f.close();
+  });
+
+  it.each(['player', 'enemy'] as const)('keeps a player turret automation factor distinct from runtime P against %s', target => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.TURRET_MG;
+    const automatedFactor = 1.25, loadoutFactor = 1.5, powerFactor = 2;
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => loadoutFactor, getWeaponDamageMultiplier: () => loadoutFactor });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => powerFactor } as never);
+    const shield = vi.fn(() => false);
+    f.combat.setEnergyShieldSystem({ tryBlockDamage: shield, tryDomeProtect: () => false } as never);
+    // These are the distinct direct/payload options emitted by the construction-turret binding.
+    expect(f.fireConfig(config, 'p1', target === 'player' ? 200 : 300, {
+      sourceSlot: 'utility', sourceTurretId: '42', directDamageMultiplier: automatedFactor,
+      payloadDamageMultiplier: automatedFactor * loadoutFactor * powerFactor,
+    })).toBe(true);
+    f.runtime.runHostInteractionStage(1000);
+    const expected = config.damage * automatedFactor * loadoutFactor * powerFactor;
+    expect(f.direct.mock.calls[0]?.[0].directHit.damage).toBe(config.damage * automatedFactor);
+    expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: expected });
+    expect(target === 'player' ? f.combat.getHP('p2') : f.manager.getEnemy('e1')!.getHp()).toBe(1000 - expected);
+    if (target === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: expected }));
+    f.close();
+  });
+
+  it.each([false, true])('applies pending Runtime-P once to the real Decoy writer (automatic: %s)', automatic => {
+    const f = projectileFixture();
+    const system = new DecoySystem({} as never, { getPlayer: () => undefined } as never,
+      { broadcastEffect: () => {} } as never);
+    const entity = fakeEntity({ x: 700, y: 100, active: true, updateVitals: () => {}, destroy: () => {},
+      getBounds: () => ({ left: 684, right: 716, top: 84, bottom: 116 }) });
+    const decoy = { id: 9, ownerId: 'p2', entity, expiresAt: 10000, hp: 1000, armor: 0, maxHp: 1000,
+      maxArmor: 100, entityGeneration: 1, colliders: [], color: 0xffffff, rotation: 0, speed: 0,
+      explosionRadius: 0, explosionDamage: 0, explosionKnockback: 0 };
+    // Baseline only; the real collision adapter and canonical writer perform every damage mutation.
+    (system as unknown as { hostDecoys: Map<number, typeof decoy> }).hostDecoys.set(decoy.id, decoy);
+    f.combat.setDecoySystem(system);
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+    expect(f.fire('p1', 700, automatic)).toBe(true);
+    f.runtime.runHostInteractionStage(1000);
+    const expected = 20 * (automatic ? 2 : 1) * 2 * 3;
+    expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: expected });
+    expect(decoy.hp).toBe(1000 - expected);
+    f.close();
+  });
+
+  it.each(['player', 'enemy'] as const)('does not repeat explicitly pre-resolved Runtime-P against %s', kind => {
+    const f = projectileFixture(), shield = vi.fn(() => false);
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+    f.combat.setEnergyShieldSystem({ tryBlockDamage: shield, tryDomeProtect: () => false } as never);
+    const amount = 20 * 2 * 6;
+    const result = f.combat.resolveDirectImpact({ projectileId: 77,
+      target: kind === 'player' ? { kind, id: 'p2' } : { kind, id: 'e1' },
+      impact: { x: kind === 'player' ? 200 : 300, y: 100 }, velocity: { x: 1, y: 0 },
+      provenance: createSingleOwnerProvenance('p1'), augments: [],
+      directHit: { damage: amount, appliedSourceDamageFactors: [
+        { kind: 'automated-source', multiplier: 2, resolvedAt: 'execution' },
+        { kind: 'runtime-power', multiplier: 6, resolvedAt: 'execution' },
+      ] },
+    });
+    expect(result).toMatchObject({ accepted: true, actualDamage: amount });
+    if (kind === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: amount }));
+    f.close();
+  });
+
+  it('retains reflected source facts for Burn and child projectiles after the original enemy disappears', () => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.PYRO_BADGER_GLOCK, kill = vi.fn();
+    f.combat.setKillCallback(kill);
+    expect(f.fireConfig(config, 'e1', 700)).toBe(true);
+    f.manager.applySnapshot({ u: [], r: [1] });
+    f.runtime.setProjectileBarrierPort({ resolveBarrier: () => ({ kind: 'reflected', attributionId: 'p1',
+      allegiance: { ownerId: 'p1' }, ownerColor: 0xffffff, sourceId: 'environment.reflector',
+      sourceSlot: 'weapon2', angle: 0, keepGrenade: false }) });
+    f.runtime.runHostInteractionStage(1000);
+    const reflected = f.runtime.getThreatSamples()[0];
+    expect(reflected.provenance).toMatchObject({ gameplaySourceId: 'e1', gameplaySourceKind: 'enemy',
+      attributionId: 'p1', attributionKind: 'player', allegiance: { kind: 'player', ownerId: 'p1' },
+      lineage: { reflected: true } });
+    expect(f.combat.canProjectileDamageTarget(reflected.provenance, 'e2')).toBe(false);
+    expect(f.combat.canProjectileDamageTarget(reflected.provenance, 'e3')).toBe(true);
+    f.runtime.applyPlasmaSwarmImpact({ projectileId: reflected.id, provenance: reflected.provenance,
+      enemyId: 'e3', x: 700, y: 100, normalDamage: 20, normalSize: 5, normalSpeed: 100, normalRange: 100,
+      projectileCount: 2, color: 0xffffff, explosionRadius: 10, explosionDamage: 5, explosionSlowFraction: 0.5 });
+    const children = f.runtime.getThreatSamples().filter(sample => sample.id !== reflected.id);
+    expect(children).toHaveLength(2);
+    for (const child of children) {
+      expect(child.provenance).toMatchObject({ gameplaySourceKind: 'enemy', attributionKind: 'player',
+        allegiance: { kind: 'player' }, lineage: { reflected: true, plasmaSwarmChild: true } });
+      expect(f.combat.canProjectileDamageTarget(child.provenance, 'e3')).toBe(true);
+    }
+    f.runtime.setProjectileBarrierPort(null);
+    upsert(f.manager, { id: 'e3', x: 700, y: 100, hp: config.damage + config.burnOnHit!.damagePerTick / 2, maxHp: 1000 });
+    f.manager.getEnemy('e3')!.sprite.setPosition(700, 100);
+    f.runtime.runHostInteractionStage(1000);
+    expect(kill).not.toHaveBeenCalled();
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(kill).toHaveBeenCalledExactlyOnceWith('p1', 'e3', config.id, 700, 100, expect.objectContaining({
+      provenance: expect.objectContaining({ origin: 'burn', gameplaySource: { kind: 'enemy', id: 'e1' },
+        attribution: { kind: 'player', id: 'p1' }, lineage: { reflected: true } }),
+    }));
+    f.close();
+  });
+
+  it('retains projectile explosion Burn allegiance after source removal', () => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.PYRO_BADGER_GLOCK;
+    expect(f.fireConfig(config, 'e1', 700)).toBe(true);
+    const provenance = f.runtime.getThreatSamples()[0].provenance;
+    f.manager.applySnapshot({ u: [], r: [1] });
+    f.combat.resolveExplosionCombat({ provenance, x: 400, y: 100,
+      effect: { radius: 25, maxDamage: config.damage, minDamage: config.damage,
+        knockback: 0, selfDamageMult: 0, damageTarget: 'player-side', burnOnHit: config.burnOnHit } });
+    f.advanceBurn(1000 + BURN_TICK_INTERVAL_MS);
+    expect(f.manager.getEnemy('e2')!.getHp()).toBe(1000 - config.damage - config.burnOnHit!.damagePerTick);
+    f.close();
   });
 
   it('applies Plasma explosion slow only to eligible enemies', () => {

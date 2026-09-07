@@ -1274,16 +1274,19 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceId: string,
     origin: BurnOrigin,
     visualStyle: GroundFireVisualStyle,
+    source?: CombatSource,
   ): void {
     if (!this.isAlive(targetId)) return;
-    if (!this.canDamageTarget(attackerId, targetId)) return;
+    if (source
+      ? this.isBurrowed(targetId) || !this.relationshipForSource(source, targetId).canDamage
+      : !this.canDamageTarget(attackerId, targetId)) return;
     if (durationMs <= 0 || damagePerTick <= 0 || !sourceId) return;
 
     const target = this.resolveCurrentCombatantTarget(targetId);
     if (!target) return;
     this.burnStatus.applyBurn({
       target,
-      source: this.createLegacyMutationSource(attackerId, sourceId, 'burn'),
+      source: source ?? this.createLegacyMutationSource(attackerId, sourceId, 'burn'),
       durationMs,
       damagePerTick,
       tickIntervalMs: BURN_TICK_INTERVAL_MS,
@@ -1301,9 +1304,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     burn:       BurnOnHitConfig | undefined,
     sourceId: string,
     origin: BurnOrigin = 'generic',
+    source?: CombatSource,
   ): void {
     if (!burn) return;
-    this.applyBurnHit(
+    this.applyBurnHitAtHostTime(
       targetId,
       attackerId,
       burn.durationMs,
@@ -1311,6 +1315,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       `weapon:${sourceId}`,
       sourceId,
       origin,
+      'normal',
+      source ? { ...source, origin: 'burn', correlation: undefined } : undefined,
     );
   }
 
@@ -1483,7 +1489,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const roundedDamage = Math.round(damage);
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
-      if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin);
+      if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin, source);
       const outcome = this.applyDamage(player.id, roundedDamage, false, ownerId, sourceId, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
@@ -1511,7 +1517,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if ((effect.enemySlowFraction ?? 0) > 0 && (effect.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, effect.enemySlowFraction ?? 0, effect.enemySlowDurationMs ?? 0);
       }
-      this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin);
+      this.applyBurnOnHit(enemy.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin, source);
       const outcome = this.applyDamage(enemy.id, roundedDamage, false, ownerId, sourceId, { sourceX: x, sourceY: y }, {
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
@@ -1903,9 +1909,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       this.classifyProjectileSource(request),
     );
     const sourceFactors = adapted.basis.kind === 'source-resolved' ? [...adapted.basis.sourceFactors] : [];
-    const runtimeMultiplier = sourceFactors.some(factor => factor.kind === 'automated-source')
-      ? 1 : this.getPlayerRuntimeDamageMultiplier(request.provenance.allegiance.ownerId, request.provenance.sourceSlot);
-    if (!sourceFactors.some(factor => factor.kind === 'automated-source')) {
+    const runtimeMultiplier = this.getPendingDirectRuntimeMultiplier(request);
+    if (!sourceFactors.some(factor => factor.kind === 'runtime-power')) {
       sourceFactors.push({ kind: 'runtime-power', multiplier: runtimeMultiplier, resolvedAt: 'impact' });
     }
     const amount = this.computeDirectPayloadDamage(request) * Math.max(0, additionalSourceMultiplier) * runtimeMultiplier;
@@ -2131,10 +2136,16 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   private computeDirectDamage(request: ProjectileDirectImpactRequest): number {
     return this.computeDirectPayloadDamage(request)
-      * (request.directHit.appliedSourceDamageFactors?.some(factor => factor.kind === 'automated-source') ? 1 : this.getPlayerRuntimeDamageMultiplier(
+      * this.getPendingDirectRuntimeMultiplier(request);
+  }
+
+  private getPendingDirectRuntimeMultiplier(request: ProjectileDirectImpactRequest): number {
+    // Automation records its own turret/Injector factor; it does not imply that owner P is included.
+    return request.directHit.appliedSourceDamageFactors?.some(factor => factor.kind === 'runtime-power')
+      ? 1 : this.getPlayerRuntimeDamageMultiplier(
         request.provenance.allegiance.ownerId,
         request.provenance.sourceSlot,
-      ));
+      );
   }
 
   private applyProjectileBurnAugments(targetId: string, request: ProjectileDirectImpactRequest): void {
@@ -2142,7 +2153,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     for (const augment of request.augments) {
       if (!('burn' in augment)) continue;
       const burn = augment.burn;
-      this.applyBurnHit(
+      const provenance = this.captureProjectileProvenance(augment.provenance);
+      const source: CombatSource = {
+        ...adaptProjectileCombatSource(provenance, request.projectileId, this.classifyProjectileSource({ provenance })),
+        origin: 'burn',
+        // Burn owns a stacked lifetime; per-shot correlation must not split identical tick sources.
+        correlation: undefined,
+      };
+      this.applyBurnHitAtHostTime(
         targetId,
         augment.provenance.allegiance.ownerId,
         burn.durationMs,
@@ -2150,6 +2168,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         `weapon:${sourceId}`,
         augment.provenance.weaponSourceId ?? sourceId,
         'generic',
+        'normal',
+        source,
       );
     }
   }

@@ -1060,7 +1060,7 @@ export interface UtilityPlacementPreviewState {
 
 /** Source-owned factor that was already applied before a projectile entered its Runtime. */
 export interface ProjectileDirectDamageSourceFactor {
-  readonly kind: 'automated-source';
+  readonly kind: 'automated-source' | 'runtime-power';
   readonly multiplier: number;
   readonly resolvedAt: 'execution';
 }

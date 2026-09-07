@@ -11,15 +11,15 @@
 | Gesamtstatus | Block C aktiv; P13 läuft |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Frisches P13-Review auf Korrekturcheckpoint 1 |
+| Nächster Arbeitsschritt | Frisches P13-Review 3 auf Korrekturcheckpoint 2 |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | P13 – Review 2 nach Korrekturschleife 1 |
+| Aktive Phase / Aufgabe | P13 – Review 3 nach Korrekturschleife 2 |
 | Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `d015ba61` |
 | Start-HEAD der laufenden Aufgabe | `d015ba61` |
 | Aktiver Worker / Thread | Frischer Astra-/High-Reviewer, read-only |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
-| Aktueller Reparaturzähler | P13: 1/2 automatische Fixschleifen |
+| Aktueller Reparaturzähler | P13: 2/2 automatische Fixschleifen |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
@@ -72,7 +72,7 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P12 sind realisiert. Drei Blocker aus P13 Review 1 sind in Korrekturcheckpoint 1 behoben; unabhängige Prüfung steht aus.
+P1–P12 sind realisiert. Die zwei Blocker aus Review 2 sind in Fix 2 behoben; Review 3 entscheidet Abschluss oder manuellen Stopp.
 
 ## 5. Nachweise und Reviews
 
