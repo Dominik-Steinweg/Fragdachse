@@ -1,12 +1,14 @@
 import { EnergyInjectorSystem } from '../systems/EnergyInjectorSystem';
 import { ReinforcementMatrixSystem } from '../systems/ReinforcementMatrixSystem';
 import { TargetStatusSystem } from '../systems/TargetStatusSystem';
+import { EnemyMovementStatusSystem } from '../systems/EnemyMovementStatusSystem';
 import type { WorldScopedBinding } from './WorldRuntime';
 
 export interface WorldTargetingSystems {
   readonly reinforcementMatrix: ReinforcementMatrixSystem;
   readonly energyInjector: EnergyInjectorSystem;
   readonly targetStatus: TargetStatusSystem;
+  readonly enemyMovementStatus: EnemyMovementStatusSystem;
 }
 
 /** Owns the World-local target, matrix and energy-injector state shared by host and clients. */
@@ -15,6 +17,7 @@ export class WorldTargetingRuntime implements WorldScopedBinding {
     reinforcementMatrix: new ReinforcementMatrixSystem(),
     energyInjector: new EnergyInjectorSystem(),
     targetStatus: new TargetStatusSystem(),
+    enemyMovementStatus: new EnemyMovementStatusSystem(),
   };
   private destroyed = false;
 
@@ -24,5 +27,6 @@ export class WorldTargetingRuntime implements WorldScopedBinding {
     this.systems.reinforcementMatrix.clear();
     this.systems.energyInjector.clear();
     this.systems.targetStatus.clear();
+    this.systems.enemyMovementStatus.clear();
   }
 }

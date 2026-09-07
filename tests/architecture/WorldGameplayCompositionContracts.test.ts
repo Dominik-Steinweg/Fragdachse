@@ -99,14 +99,28 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
 
   it('räumt World-Target-Systeme am Owner-Teardown idempotent auf', () => {
     const runtime = new WorldTargetingRuntime();
+    const target = {
+      kind: 'enemy' as const,
+      id: 'e1',
+      scope: { worldRevision: 1, runtimeGeneration: 1 },
+      instance: { entityGeneration: 1, activityRevision: 1 },
+    };
+    const source = {
+      gameplaySource: { kind: 'player' as const, id: 'p1' },
+      attribution: { kind: 'player' as const, id: 'p1' },
+      allegiance: { ownerId: 'p1' },
+      origin: 'direct' as const,
+    };
 
     runtime.systems.reinforcementMatrix.spawnMatrix('p1', 0, 0, 20, 1_000, 0.2, 0.1, 0xffffff, 0);
     runtime.systems.energyInjector.setFocusTarget('p1', { targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
     runtime.systems.targetStatus.applyVulnerability({ targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
+    runtime.systems.enemyMovementStatus.applySlow({ target, source, factor: 0.5, durationMs: 1_000, nowMs: 0 });
 
     expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(1);
     expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(1);
     expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(1);
+    expect(runtime.systems.enemyMovementStatus.getMovementFactor(target, 0)).toBe(0.5);
 
     runtime.destroy();
     runtime.destroy();
@@ -114,5 +128,6 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
     expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(0);
     expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(0);
     expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(0);
+    expect(runtime.systems.enemyMovementStatus.getMovementFactor(target, 0)).toBe(1);
   });
 });

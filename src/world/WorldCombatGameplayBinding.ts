@@ -33,6 +33,9 @@ import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
+import type { EnemyMovementStatusSystem } from '../systems/EnemyMovementStatusSystem';
+import { PlasmaSwarmReactionSystem } from '../systems/PlasmaCharge';
+import { isSameCombatTargetInstance } from '../combat/CombatScope';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { WorldGeometryBinding } from './WorldGeometryBinding';
@@ -140,6 +143,7 @@ export interface WorldCombatGameplaySystems {
   readonly teslaDome: TeslaDomeSystem;
   readonly energyShield: EnergyShieldSystem;
   readonly turret: TurretSystem;
+  readonly plasmaSwarmReaction: PlasmaSwarmReactionSystem;
 }
 
 export interface WorldCombatImpactPort {
@@ -211,6 +215,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly automatedWeaponExecution: AutomatedWeaponExecution | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getTargetStatusSystem: () => TargetStatusSystem | null;
+  readonly getEnemyMovementStatusSystem?: () => EnemyMovementStatusSystem | null;
   readonly getEnergyInjectorSystem: () => EnergyInjectorSystem | null;
   readonly getWorldGeometryBinding: () => WorldGeometryBinding | null;
   readonly getPersistentBaseId: () => string | undefined;
@@ -272,7 +277,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const teslaDome = new ConcreteTeslaDomeSystem(options.playerManager, options.combatSystem, playerCombat.resource);
       const energyShield = options.createEnergyShieldSystem(playerCombat.resource, shieldBuff);
       const turret = new ConcreteTurretSystem(options.playerManager, options.combatSystem);
-      this.systems = { shieldBuff, timeBubble, teslaDome, energyShield, turret };
+      const plasmaSwarmReaction = new PlasmaSwarmReactionSystem((target, stacks) => {
+        if (target.kind !== 'enemy') return;
+        const manager = options.getEnemyManager();
+        const current = manager?.getCombatTargetRef(target.id);
+        if (!current || !isSameCombatTargetInstance(current, target)) return;
+        manager?.getEnemy(target.id)?.updatePlasmaChargeStacks(stacks);
+      });
+      this.systems = { shieldBuff, timeBubble, teslaDome, energyShield, turret, plasmaSwarmReaction };
       options.bindPlayerShieldBuffPort?.(shieldBuff);
       this.bindHostSystems(this.systems, playerCombat);
     } else {
@@ -297,6 +309,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   clearActivityBindings(): void {
     if (this.destroyed) return;
     this.options.combatSystem.setBarrierObstacles(null);
+    this.options.getTargetStatusSystem()?.removeTargetsOfType?.('enemy');
+    this.options.getEnemyMovementStatusSystem?.()?.clear();
+    this.systems?.plasmaSwarmReaction.clear();
   }
 
   setPowerUpSystem(powerUpSystem: PowerUpSystem | null): void {
@@ -350,6 +365,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setEnemyIncomingDamageMultiplierResolver(null);
     combatSystem.setTargetIncomingDamageMultiplierResolver(null);
     combatSystem.setApplyVulnerabilityHandler(null);
+    combatSystem.setMovementStatusPort(null);
+    combatSystem.setPlasmaSwarmMechanicPort(null);
     combatSystem.setEnergyInjectorTargetHitCallback(null);
     combatSystem.setPlasmaSwarmReactionHandler(null);
     combatSystem.setHitscanSupportImpactCallback(null);
@@ -426,6 +443,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const o = this.options;
     const { combatSystem: combat, hostPhysics, baseManager } = o;
     combat.setEnemyManager(o.getEnemyManager());
+    combat.setMovementStatusPort(o.getEnemyMovementStatusSystem?.() ?? null);
+    combat.setPlasmaSwarmMechanicPort(this.systems?.plasmaSwarmReaction ?? null);
     combat.setPlayerMaxHpResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getMaxHp(playerId) ?? HP_MAX);
     combat.setInitialSpawnAllowedResolver((playerId) => (
       o.isActivityActive() ? o.network.round.canPlayerInitialSpawn(playerId) : hasWorldFigure(o.getWorldParticipation(playerId))
@@ -498,7 +517,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
               : () => false;
       return vulnerability * (o.getMatrixDamageMultiplier?.(footprint, matrixApplies, nowMs) ?? 1);
     });
-    combat.setApplyVulnerabilityHandler((target, durationMs) => o.getTargetStatusSystem()?.applyVulnerability(target, durationMs));
+    combat.setApplyVulnerabilityHandler((target, durationMs, nowMs) => o.getTargetStatusSystem()?.applyVulnerability(target, durationMs, nowMs));
     combat.setEnergyInjectorTargetHitCallback((impact: ProjectileEnergyInjectorImpact) => {
       if (impact.targetType === 'player' && !o.network.authority.isEnemyPair(impact.ownerId, impact.targetId)) return;
       o.hostUpdate.applyEnergyInjectorTargetHit(impact.targetType, impact.targetId, impact.x, impact.y, impact);

@@ -188,6 +188,7 @@ export function composeWorldCombatGameplay(
     automatedWeaponExecution: gameplay.automatedWeaponExecution,
     getPowerUpSystem: () => gameplay.powerUp?.system ?? null,
     getTargetStatusSystem: () => gameplay.targeting?.systems.targetStatus ?? null,
+    getEnemyMovementStatusSystem: () => gameplay.targeting?.systems.enemyMovementStatus ?? null,
     getEnergyInjectorSystem: () => gameplay.targeting?.systems.energyInjector ?? null,
     getWorldGeometryBinding: () => gameplay.geometry,
     getPersistentBaseId: () => world.persistentBaseSite?.baseId,

@@ -664,7 +664,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!countdownActive) this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp, maxHp, countdownActive || (alive && !wasAlive));
       player.updateArmor(armor);
-      const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
+      const burn = this.ctx.combatSystem.getBurnVisualState(player.id, now);
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
       player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
@@ -704,7 +704,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      const burn = this.ctx.combatSystem.getBurnVisualState(enemy.id);
+      const burn = this.ctx.combatSystem.getBurnVisualState(enemy.id, now);
       enemy.updateBurnStacks(burn.stackCount, burn.visualStyle);
       const combatIntegration = this.playerGameplayRuntime?.getPlayerCombatIntegrationPort();
       if (combatIntegration) {
@@ -945,7 +945,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const maxHp      = this.ctx.combatSystem.getMaxHp(player.id);
       const armor      = this.ctx.combatSystem.getArmor(player.id);
       const alive      = this.ctx.combatSystem.isAlive(player.id);
-      const burn = this.ctx.combatSystem.getBurnVisualState(player.id);
+      const burn = this.ctx.combatSystem.getBurnVisualState(player.id, now);
       const isDecoyStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const decoyStealthRemainingFrac = this.ctx.decoySystem.getStealthRemainingFrac(player.id, now);
       const isMoving = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);

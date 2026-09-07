@@ -30,6 +30,7 @@ import { CombatSystem } from '../src/systems/CombatSystem';
 
 describe('CombatSystem & BurnStateMachine Parity', () => {
   function createTestSetup() {
+    let now = 1_000;
     const playerManagerMock: any = {
       getPlayer: vi.fn().mockReturnValue(fakeEntity({ x: 0, y: 0, body: { enable: true } })),
       getAllPlayers: vi.fn().mockReturnValue([]),
@@ -46,7 +47,7 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
       playerManagerMock,
       networkBridgeMock,
     );
-    cs.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
+    cs.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 });
 
     cs.initPlayer('p_target', 1000);
     cs.initPlayer('p1', 1000);
@@ -64,29 +65,28 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
       damageCalls.push({ targetType, targetId, attackerId, damage, damageKind });
     });
 
-    return { cs, damageCalls };
+    return { cs, damageCalls, now: () => now, setNow: (value: number) => { now = value; } };
   }
 
   it('1. Delegiert Brandtreffer, Schadensbeiträge und Abfragen 1:1 an die BurnStateMachine', () => {
-    const { cs, damageCalls } = createTestSetup();
+    const { cs, damageCalls, now } = createTestSetup();
     const observedDamage = vi.fn();
     const unsubscribe = cs.addDamageDealtObserver(observedDamage);
 
     cs.applyBurnHit('p_target', 'p1', 2000, 5, 'glock', 'weapon.GLOCK', 'generic', 'normal');
 
-    const visual = cs.getBurnVisualState('p_target');
+    const visual = cs.getBurnVisualState('p_target', now());
     expect(visual.stackCount).toBe(1);
     expect(visual.visualStyle).toBe('normal');
-    expect(cs.getBurnStackCount('p_target')).toBe(1);
+    expect(cs.getBurnStackCount('p_target', now())).toBe(1);
 
-    const active = cs.getActiveBurnSources('p_target');
+    const active = cs.getActiveBurnSources('p_target', now());
     expect(active.length).toBe(1);
     expect(active[0].attackerId).toBe('p1');
     expect(active[0].sourceId).toBe('weapon.GLOCK');
     expect(active[0].stackCount).toBe(1);
 
-    const now = Date.now();
-    cs.updateBurnEffects(now + 250);
+    cs.updateBurnEffects(now() + 250);
 
     expect(damageCalls.length).toBe(1);
     expect(damageCalls[0].targetType).toBe('player');
@@ -106,28 +106,26 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
   });
 
   it('2. Stackt zwei Treffer derselben Quelle und summiert den Schaden korrekt', () => {
-    const { cs, damageCalls } = createTestSetup();
+    const { cs, damageCalls, now } = createTestSetup();
 
     cs.applyBurnHit('p_target', 'p1', 2000, 5, 'glock', 'weapon.GLOCK');
     cs.applyBurnHit('p_target', 'p1', 2000, 5, 'glock', 'weapon.GLOCK');
 
-    expect(cs.getBurnStackCount('p_target')).toBe(2);
+    expect(cs.getBurnStackCount('p_target', now())).toBe(2);
 
-    const now = Date.now();
-    cs.updateBurnEffects(now + 250);
+    cs.updateBurnEffects(now() + 250);
 
     expect(damageCalls.length).toBe(1);
     expect(damageCalls[0].damage).toBe(10); // 2 Stacks * 5 = 10
   });
 
   it('3. Mehrere Quellen sortieren deterministisch nach Schaden absteigend und attackerId', () => {
-    const { cs, damageCalls } = createTestSetup();
+    const { cs, damageCalls, now } = createTestSetup();
 
     cs.applyBurnHit('p_target', 'p2', 2000, 4, 'molotov', 'weapon.MOLOTOV');
     cs.applyBurnHit('p_target', 'p1', 2000, 10, 'flamethrower', 'weapon.FLAME');
 
-    const now = Date.now();
-    cs.updateBurnEffects(now + 250);
+    cs.updateBurnEffects(now() + 250);
 
     expect(damageCalls.length).toBe(2);
     // Höherer Schaden (p1, 10) zuerst!
@@ -138,20 +136,34 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
   });
 
   it('4. Bereinigt Brand bei Tod des Ziels', () => {
-    const { cs, damageCalls } = createTestSetup();
+    const { cs, damageCalls, now } = createTestSetup();
 
     cs.applyBurnHit('p_target', 'p1', 2000, 5, 'glock', 'weapon.GLOCK');
-    expect(cs.getBurnStackCount('p_target')).toBe(1);
+    expect(cs.getBurnStackCount('p_target', now())).toBe(1);
 
     // Ziel stirbt durch Direktschaden
     cs.applyDamage('p_target', 2000, false, 'p1', 'weapon.RAILGUN');
 
-    const now = Date.now();
-    cs.updateBurnEffects(now + 250);
+    cs.updateBurnEffects(now() + 250);
 
     // Kein weiterer Brandschaden auf tote Spieler
     const burnDamages = damageCalls.filter((c) => c.damageKind === 'burn');
     expect(burnDamages.length).toBe(0);
-    expect(cs.getBurnStackCount('p_target')).toBe(0);
+    expect(cs.getBurnStackCount('p_target', now() + 250)).toBe(0);
+  });
+
+  it('5. Behaelt committed Burn nach Source-Tod und entfernt ihn erst beim finalen Source-Detach', () => {
+    const { cs, damageCalls, now } = createTestSetup();
+
+    cs.applyBurnHit('p_target', 'p1', 2_000, 5, 'glock', 'weapon.GLOCK');
+    cs.applyDamage('p1', 2_000, false, 'p2', 'weapon.RAILGUN');
+    cs.updateBurnEffects(now() + 250);
+
+    expect(damageCalls.filter((call) => call.damageKind === 'burn')).toHaveLength(1);
+
+    cs.removePlayer('p1');
+    cs.updateBurnEffects(now() + 500);
+
+    expect(damageCalls.filter((call) => call.damageKind === 'burn')).toHaveLength(1);
   });
 });

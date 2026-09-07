@@ -36,7 +36,7 @@ export class TargetStatusSystem {
   applyVulnerability(
     target: TargetStatusTarget,
     durationMs: number,
-    now = Date.now(),
+    now: number,
   ): SyncedTargetVulnerability | null {
     if (durationMs <= 0 || !Number.isFinite(durationMs) || !target.targetId) return null;
     const key = statusKey(target);
@@ -51,26 +51,23 @@ export class TargetStatusSystem {
     return { ...next };
   }
 
-  isVulnerable(target: TargetStatusTarget, now = Date.now()): boolean {
+  /** Passive read: an expired entry is neutral but remains until the explicit prune step. */
+  isVulnerable(target: TargetStatusTarget, now: number): boolean {
     const entry = this.vulnerableUntil.get(statusKey(target));
-    if (!entry) return false;
-    if (now >= entry.expiresAt) {
-      this.vulnerableUntil.delete(statusKey(target));
-      return false;
-    }
-    return true;
+    return Boolean(entry && now < entry.expiresAt);
   }
 
   /** Eingehender Multiplikator aus allen allgemeinen Verwundbarkeitsquellen. */
-  getIncomingDamageMultiplier(target: TargetStatusTarget, now = Date.now()): number {
+  getIncomingDamageMultiplier(target: TargetStatusTarget, now: number): number {
     return this.isVulnerable(target, now)
       ? 1 + VULNERABILITY_INCOMING_DAMAGE_BONUS
       : 1;
   }
 
-  getSnapshot(now = Date.now()): SyncedTargetVulnerability[] {
-    this.prune(now);
+  /** Snapshot construction is a read and cannot advance the authoritative state. */
+  getSnapshot(now: number): SyncedTargetVulnerability[] {
     return [...this.vulnerableUntil.values()]
+      .filter((entry) => now < entry.expiresAt)
       .sort((left, right) => `${left.targetType}:${left.targetId}`.localeCompare(`${right.targetType}:${right.targetId}`))
       .map((entry) => ({ ...entry }));
   }
@@ -94,7 +91,13 @@ export class TargetStatusSystem {
     }
   }
 
-  prune(now = Date.now()): void {
+  removeTargetsOfType(targetType: TargetStatusTargetType): void {
+    for (const [key, entry] of this.vulnerableUntil) {
+      if (entry.targetType === targetType) this.vulnerableUntil.delete(key);
+    }
+  }
+
+  prune(now: number): void {
     for (const [key, entry] of this.vulnerableUntil) {
       if (now >= entry.expiresAt) this.vulnerableUntil.delete(key);
     }

@@ -317,7 +317,7 @@ export class WeaponBalanceLabRuntime {
       ?.getSummary().activeProjectilesByOwner.get(playerId) ?? 0;
     let activeBurnSourcesAtEnd = 0;
     for (const targetId of this.targetPositions.keys()) {
-      activeBurnSourcesAtEnd += ctx.combatSystem.getActiveBurnSources(targetId)
+      activeBurnSourcesAtEnd += ctx.combatSystem.getActiveBurnSources(targetId, Date.now())
         .filter((source) => source.attackerId === playerId)
         .length;
     }

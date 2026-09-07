@@ -51,4 +51,16 @@ describe('general target vulnerability', () => {
     expect(client.getIncomingDamageMultiplier({ targetType: 'construction', targetId: '42' }, 16_000)).toBe(1);
     expect(client.getSnapshot(17_000)).toEqual([]);
   });
+
+  it('keeps reads and snapshot construction passive until the named prune step', () => {
+    const system = new TargetStatusSystem();
+    const target = { targetType: 'enemy' as const, targetId: 'enemy-1' };
+    system.applyVulnerability(target, 1_000, 1_000);
+
+    expect(system.isVulnerable(target, 2_000)).toBe(false);
+    expect(system.getSnapshot(2_000)).toEqual([]);
+    expect(system.isVulnerable(target, 1_999)).toBe(true);
+    system.prune(2_000);
+    expect(system.isVulnerable(target, 1_999)).toBe(false);
+  });
 });

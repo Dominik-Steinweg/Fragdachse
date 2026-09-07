@@ -57,6 +57,16 @@ describe('Plasma Gun Plasma-Aufladung', () => {
     expect(tracker.getState('enemy-2', 3_100)?.stacks).toBe(PLASMA_CHARGE_MAX_STACKS);
   });
 
+  it('keeps expiry reads passive until explicit prune', () => {
+    const tracker = new PlasmaChargeTracker();
+    tracker.addHit('enemy-1', 0);
+
+    expect(tracker.getState('enemy-1', PLASMA_CHARGE_DURATION_MS)).toBeUndefined();
+    expect(tracker.getState('enemy-1', PLASMA_CHARGE_DURATION_MS - 1)?.stacks).toBe(1);
+    expect(tracker.prune(PLASMA_CHARGE_DURATION_MS)).toEqual(['enemy-1']);
+    expect(tracker.getState('enemy-1', 0)).toBeUndefined();
+  });
+
   it('uses two percentage points per stack and caps each primary hit at one proc', () => {
     const chance = PLASMA_SWARM_CHANCE_PER_STACK_PERCENT / 100;
     expect(chance).toBeGreaterThan(0);

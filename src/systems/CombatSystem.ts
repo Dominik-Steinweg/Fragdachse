@@ -67,14 +67,11 @@ import type { ProjectileCollisionTargetSink } from '../projectile/ProjectileTarg
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { computeProjectileExplosionDamage, computeRadialDamage } from '../utils/radialDamage';
 import { getRageGeneratingDamage } from '../utils/rageDamage';
-import { mergeEnemySlow, type EnemySlowState } from '../utils/enemySlow';
 import {
   PLASMA_SWARM_BASE_EXPLOSION_DAMAGE,
   PLASMA_SWARM_BASE_EXPLOSION_RADIUS,
   PLASMA_SWARM_BASE_PROJECTILE_COUNT,
-  PLASMA_SWARM_CHANCE_PER_STACK_PERCENT,
-  PlasmaChargeTracker,
-  resolvePlasmaSwarmProjectileCount,
+  type PlasmaSwarmMechanicPort,
   shouldIgnorePlasmaSwarmOriginHit,
 } from './PlasmaCharge';
 import type { TargetStatusTarget } from './TargetStatusSystem';
@@ -82,11 +79,13 @@ import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { ProjectileDetonableReadPort, ProjectileImpactSource } from '../projectile/ProjectileGameplayPort';
 import { PlayerVitalsOwner } from '../combat/PlayerVitalsOwner';
 import type { CombatScope, CombatSource, CombatTargetRef } from '../combat/CombatScope';
-import { isSameCombatScope } from '../combat/CombatScope';
+import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
 import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
 import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
 import type { CombatDamageBasis, CombatDamageRequest, CombatDamageMutationOutcome, CombatSupportRequest, CombatSupportMutationOutcome } from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
+import { CombatBurnStatusOwner } from '../combat/CombatBurnStatusOwner';
+import type { CombatMovementStatusPort } from '../combat/CombatCapabilities';
 
 type Ak47DirectEnemyHitImpact = ProjectileAk47DirectImpact;
 
@@ -202,7 +201,7 @@ function toDamageOptions(
 }
 
 
-import { BurnStateMachine, type ActiveBurnSource } from '../combat/rules/BurnStateMachine';
+import type { ActiveBurnSource } from '../combat/rules/BurnStateMachine';
 
 export interface HitscanTraceResult {
   readonly endX: number;
@@ -292,9 +291,9 @@ type SweptProjectileHit =
 export class CombatSystem implements ProjectileCombatPort {
   private playerVitals: PlayerVitalsOwner;
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
-  private readonly burnStateMachine = new BurnStateMachine();
-  private enemySlowStates: Map<string, EnemySlowState> = new Map();
-  private readonly plasmaChargeTracker = new PlasmaChargeTracker();
+  private burnStatus = new CombatBurnStatusOwner();
+  private movementStatus: CombatMovementStatusPort | null = null;
+  private plasmaSwarmMechanic: PlasmaSwarmMechanicPort | null = null;
   private readonly hitscanLine       = new Phaser.Geom.Line();
   /** Scratch-Segment der Projectile-Blockerabfrage. */
   private readonly projectileBlockerLine = new Phaser.Geom.Line();
@@ -445,7 +444,7 @@ export class CombatSystem implements ProjectileCombatPort {
     isBoss: boolean,
   ) => void) | null = null;
   /** Setzt die zentrale Verwundbarkeit auf einem Ziel; ohne Handler bleibt der Treffereffekt aus. */
-  private onApplyVulnerability: ((target: TargetStatusTarget, durationMs: number) => void) | null = null;
+  private onApplyVulnerability: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null = null;
   private onPlayerDamageTaken: ((
     playerId: string,
     attackerId: string | undefined,
@@ -538,11 +537,15 @@ export class CombatSystem implements ProjectileCombatPort {
       throw new Error('[CombatSystem] Cannot replace Player vitals while Players are attached');
     }
     this.playerVitals.destroy();
+    this.burnStatus.destroy();
     const owner = this.createPlayerVitalsOwner(scope);
+    const burnStatus = new CombatBurnStatusOwner();
     this.playerVitals = owner;
+    this.burnStatus = burnStatus;
     return {
       destroy: () => {
         if (this.playerVitals === owner) owner.destroy();
+        if (this.burnStatus === burnStatus) burnStatus.destroy();
       },
     };
   }
@@ -581,8 +584,10 @@ export class CombatSystem implements ProjectileCombatPort {
   setDecoySystem(ds: DecoySystem | null): void { this.decoySystem = ds; }
   setEnemyManager(manager: EnemyManager | null): void {
     this.enemyManager = manager;
-    if (!manager) this.plasmaChargeTracker.clearAll();
+    if (!manager) this.plasmaSwarmMechanic?.clear();
   }
+  setMovementStatusPort(port: CombatMovementStatusPort | null): void { this.movementStatus = port; }
+  setPlasmaSwarmMechanicPort(port: PlasmaSwarmMechanicPort | null): void { this.plasmaSwarmMechanic = port; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   /**
    * Einziger Trichter fuer Basisschaden. Wie `setRockDamageCallback` verdrahtet, damit der
@@ -646,7 +651,7 @@ export class CombatSystem implements ProjectileCombatPort {
     this.onDirectPrimaryHit = handler;
   }
   /** Uebergibt die zentrale Verwundbarkeit an den Host, wenn ein Projektil sie auf Treffer setzt. */
-  setApplyVulnerabilityHandler(handler: ((target: TargetStatusTarget, durationMs: number) => void) | null): void {
+  setApplyVulnerabilityHandler(handler: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null): void {
     this.onApplyVulnerability = handler;
   }
   /** Meldung ueber tatsaechlich verlorene HP/Ruestung eines Spielers, nach der Verteilung. */
@@ -908,17 +913,21 @@ export class CombatSystem implements ProjectileCombatPort {
   }
   getBurnVisualState(
     id: string,
-    now = Date.now(),
+    now: number,
   ): { stackCount: number; visualStyle: GroundFireVisualStyle } {
-    return this.burnStateMachine.getVisualState(id, now);
+    const target = this.resolveCurrentCombatantTarget(id);
+    return target
+      ? this.burnStatus.getVisualState(target, now)
+      : { stackCount: 0, visualStyle: 'normal' };
   }
 
-  getBurnStackCount(id: string): number {
-    return this.getBurnVisualState(id).stackCount;
+  getBurnStackCount(id: string, now: number): number {
+    return this.getBurnVisualState(id, now).stackCount;
   }
 
-  getActiveBurnSources(id: string, now = Date.now()): ActiveBurnSource[] {
-    return this.burnStateMachine.getActiveSources(id, now);
+  getActiveBurnSources(id: string, now: number): ActiveBurnSource[] {
+    const target = this.resolveCurrentCombatantTarget(id);
+    return target ? this.burnStatus.getActiveSources(target, now) : [];
   }
 
   // ── Öffentliche Schadens-Methode ───────────────────────────────────────────
@@ -1033,11 +1042,7 @@ export class CombatSystem implements ProjectileCombatPort {
     origin: BurnOrigin = 'generic',
     visualStyle: GroundFireVisualStyle = 'normal',
   ): void {
-    if (!this.isAlive(targetId)) return;
-    if (!this.canDamageTarget(attackerId, targetId)) return;
-    if (durationMs <= 0 || damagePerTick <= 0 || !sourceId) return;
-
-    this.burnStateMachine.applyHit({
+    this.runHostExecution(() => this.applyBurnHitAtHostTime(
       targetId,
       attackerId,
       durationMs,
@@ -1046,8 +1051,33 @@ export class CombatSystem implements ProjectileCombatPort {
       sourceId,
       origin,
       visualStyle,
-      now: Date.now(),
-    });
+    ));
+  }
+
+  private applyBurnHitAtHostTime(
+    targetId: string,
+    attackerId: string,
+    durationMs: number,
+    damagePerTick: number,
+    sourceKey: string,
+    sourceId: string,
+    origin: BurnOrigin,
+    visualStyle: GroundFireVisualStyle,
+  ): void {
+    if (!this.isAlive(targetId)) return;
+    if (!this.canDamageTarget(attackerId, targetId)) return;
+    if (durationMs <= 0 || damagePerTick <= 0 || !sourceId) return;
+
+    const target = this.resolveCurrentCombatantTarget(targetId);
+    if (!target) return;
+    this.burnStatus.applyBurn({
+      target,
+      source: this.createLegacyMutationSource(attackerId, sourceId, 'burn'),
+      durationMs,
+      damagePerTick,
+      tickIntervalMs: BURN_TICK_INTERVAL_MS,
+      nowMs: this.hostFrameNowMs,
+    }, { stackKey: sourceKey, origin, visualStyle });
   }
 
   /**
@@ -1073,15 +1103,27 @@ export class CombatSystem implements ProjectileCombatPort {
     );
   }
 
+  /** Future frame port: P11 replaces the existing Burn-only stage with this combined advance. */
+  advanceStatuses(now: number): void {
+    this.movementStatus?.prune(now);
+    this.plasmaSwarmMechanic?.advance(now);
+    this.updateBurnEffects(now);
+  }
+
+  /** Existing PreCombat Burn stage retained until the P11 frame-port cutover. */
   updateBurnEffects(now: number): void {
-    const isTargetValid = (targetId: string) => this.isAlive(targetId) && !this.isBurrowed(targetId);
-    const contributions = this.burnStateMachine.advanceTo(now, isTargetValid);
+    const contributions = this.burnStatus.advance(now, (target) => (
+      this.isCurrentCombatantTarget(target)
+      && this.isAlive(String(target.id))
+      && !this.isBurrowed(String(target.id))
+    ));
 
     for (const contribution of contributions) {
-      if (!this.isAlive(contribution.targetId)) continue;
+      const targetId = String(contribution.target.id);
+      if (!this.isCurrentCombatantTarget(contribution.target) || !this.isAlive(targetId)) continue;
       const attacker = this.playerManager.getPlayer(contribution.attackerId);
       this.applyDamage(
-        contribution.targetId,
+        targetId,
         contribution.damage,
         false,
         contribution.attackerId,
@@ -1160,29 +1202,10 @@ export class CombatSystem implements ProjectileCombatPort {
     }
   }
 
-  getEnemyMovementFactor(enemyId: string, now = Date.now()): number {
-    const state = this.enemySlowStates.get(enemyId);
-    let movementFactor = 1;
-    if (state) {
-      if (now >= state.expiresAt) {
-        this.enemySlowStates.delete(enemyId);
-      } else {
-        movementFactor = state.movementFactor;
-      }
-    }
-
-    const enemy = this.enemyManager?.getEnemy(enemyId);
-    if (!enemy) {
-      this.plasmaChargeTracker.clear(enemyId);
-      return movementFactor;
-    }
-
-    const plasmaState = this.plasmaChargeTracker.getState(enemyId, now);
-    const plasmaStacks = plasmaState?.stacks ?? 0;
-    if (enemy.getPlasmaChargeStacks() !== plasmaStacks) {
-      enemy.updatePlasmaChargeStacks(plasmaStacks);
-    }
-    return movementFactor;
+  /** Passive movement projection; expiry cleanup belongs to the explicit status advance. */
+  getEnemyMovementFactor(enemyId: string, now: number): number {
+    const target = this.enemyManager?.getCombatTargetRef(enemyId);
+    return target ? (this.movementStatus?.getMovementFactor(target, now) ?? 1) : 1;
   }
 
   /**
@@ -1193,12 +1216,21 @@ export class CombatSystem implements ProjectileCombatPort {
    * spaete Anwendung – etwa Unterdrueckungsmunition neben einer ausgebauten Bremsladung – einen
    * starken laufenden Slow verkuerzen.
    */
-  applyEnemySlow(enemyId: string, slowFraction: number, durationMs: number, now = Date.now()): void {
+  applyEnemySlow(enemyId: string, slowFraction: number, durationMs: number, now?: number): void {
+    this.runHostExecution(() => this.applyEnemySlowAtHostTime(enemyId, slowFraction, durationMs), now);
+  }
+
+  private applyEnemySlowAtHostTime(enemyId: string, slowFraction: number, durationMs: number): void {
     if (slowFraction <= 0 || durationMs <= 0 || !this.enemyManager?.hasEnemy(enemyId)) return;
-    this.enemySlowStates.set(
-      enemyId,
-      mergeEnemySlow(this.enemySlowStates.get(enemyId), slowFraction, durationMs, now),
-    );
+    const target = this.enemyManager.getCombatTargetRef(enemyId);
+    if (!target) return;
+    this.movementStatus?.applySlow({
+      target,
+      source: this.createLegacyMutationSource(undefined, 'status.enemy-slow', 'support'),
+      factor: 1 - slowFraction,
+      durationMs,
+      nowMs: this.hostFrameNowMs,
+    });
   }
 
   private applyExplosionDamageAtHostTime(
@@ -1744,11 +1776,24 @@ export class CombatSystem implements ProjectileCombatPort {
     const spec = request.directHit.plasmaSwarm;
     if (!spec || request.provenance.lineage?.plasmaSwarmChild === true) return undefined;
     const enemy = this.enemyManager?.getEnemy(enemyId);
-    if (!enemy) return undefined;
-    const charge = this.plasmaChargeTracker.addHit(enemyId, this.hostFrameNowMs);
-    enemy.updatePlasmaChargeStacks(charge.stacks);
-    const procCount = resolvePlasmaSwarmProjectileCount(charge.stacks * PLASMA_SWARM_CHANCE_PER_STACK_PERCENT);
-    if (procCount <= 0) return undefined;
+    const target = this.enemyManager?.getCombatTargetRef(enemyId);
+    if (!enemy || !target || !this.plasmaSwarmMechanic) return undefined;
+    const source = this.createLegacyMutationSource(
+      request.provenance.allegiance.ownerId,
+      request.provenance.weaponSourceId ?? 'weapon.plasma',
+      'direct',
+    );
+    const contact = this.plasmaSwarmMechanic.registerDirectContact({
+      target,
+      source: {
+        ...source,
+        lineage: request.provenance.lineage ? { ...request.provenance.lineage } : undefined,
+        correlation: { projectileId: request.projectileId },
+      },
+      nowMs: this.hostFrameNowMs,
+      random: this.hostRandom,
+    });
+    if (!contact?.shouldProc) return undefined;
 
     const normalSpeed = Math.max(1, Math.hypot(request.velocity.x, request.velocity.y));
     return {
@@ -3241,7 +3286,7 @@ export class CombatSystem implements ProjectileCombatPort {
     durationOrProjectile: number | undefined,
   ): void {
     const durationMs = durationOrProjectile ?? 0;
-    if (durationMs > 0) this.onApplyVulnerability?.(target, durationMs);
+    if (durationMs > 0) this.onApplyVulnerability?.(target, durationMs, this.hostFrameNowMs);
   }
 
   private applyEnemyDamage(
@@ -3325,15 +3370,18 @@ export class CombatSystem implements ProjectileCombatPort {
     });
 
     if (result.died) {
-      this.enemySlowStates.delete(targetId);
-      this.plasmaChargeTracker.clear(targetId);
+      const deadTarget = outcome.target;
+      const activeBurnSources = this.burnStatus.getActiveSources(deadTarget, this.hostFrameNowMs);
+      this.movementStatus?.clearMovementStatus(deadTarget);
+      this.plasmaSwarmMechanic?.clearTarget(deadTarget);
       const suppressStandardDeathEffect = this.onEnemyDeathCb?.(
         targetId,
         x,
         y,
-        this.getActiveBurnSources(targetId),
+        activeBurnSources,
         result.death,
       ) === true;
+      this.burnStatus.clearBurn(deadTarget);
       if (!suppressStandardDeathEffect) {
         this.bridge.broadcastEffect({
           type: 'death',
@@ -3734,11 +3782,21 @@ export class CombatSystem implements ProjectileCombatPort {
   }
 
   private clearBurnForPlayer(playerId: string): void {
-    this.burnStateMachine.clearTarget(playerId);
+    const target = this.playerVitals.getTargetRef(playerId);
+    if (target) this.burnStatus.clearBurn(target);
   }
 
   private clearBurnByAttacker(attackerId: string): void {
-    this.burnStateMachine.clearByAttacker(attackerId);
+    this.burnStatus.clearSource(attackerId);
+  }
+
+  private resolveCurrentCombatantTarget(id: string): CombatTargetRef | null {
+    return this.enemyManager?.getCombatTargetRef(id) ?? this.playerVitals.getTargetRef(id);
+  }
+
+  private isCurrentCombatantTarget(target: CombatTargetRef): boolean {
+    const current = this.resolveCurrentCombatantTarget(String(target.id));
+    return current !== null && isSameCombatTargetInstance(current, target);
   }
 }
 

@@ -1,4 +1,6 @@
 import type { ProjectileHomingConfig } from '../types';
+import type { CombatSource, CombatTargetRef } from '../combat/CombatScope';
+import { combatTargetInstanceKey } from '../combat/CombatScope';
 
 export const PLASMA_CHARGE_DURATION_MS = 2_000;
 export const PLASMA_CHARGE_MAX_STACKS = 10;
@@ -69,12 +71,18 @@ export class PlasmaChargeTracker {
 
   getState(enemyId: string, now: number): PlasmaChargeState | undefined {
     const state = this.states.get(enemyId);
-    if (!state) return undefined;
-    if (now >= state.expiresAt) {
+    return state && now < state.expiresAt ? state : undefined;
+  }
+
+  /** Physical expiry is confined to the named periodic step. */
+  prune(now: number): string[] {
+    const removed: string[] = [];
+    for (const [enemyId, state] of this.states) {
+      if (now < state.expiresAt) continue;
       this.states.delete(enemyId);
-      return undefined;
+      removed.push(enemyId);
     }
-    return state;
+    return removed;
   }
 
   clear(enemyId: string): void {
@@ -83,6 +91,85 @@ export class PlasmaChargeTracker {
 
   clearAll(): void {
     this.states.clear();
+  }
+}
+
+export interface PlasmaSwarmDirectContact {
+  readonly target: CombatTargetRef;
+  readonly source: CombatSource;
+  readonly nowMs: number;
+  readonly random: () => number;
+}
+
+export interface PlasmaSwarmContactOutcome {
+  readonly stacks: number;
+  readonly shouldProc: boolean;
+}
+
+export interface PlasmaSwarmMechanicPort {
+  registerDirectContact(request: PlasmaSwarmDirectContact): PlasmaSwarmContactOutcome | null;
+  advance(nowMs: number): void;
+  clearTarget(target: CombatTargetRef): void;
+  clearTargetId(enemyId: string): void;
+  clear(): void;
+}
+
+/** Target-wide Plasma charges owned by the mechanic, never by a shooter or Damage core. */
+export class PlasmaSwarmReactionSystem implements PlasmaSwarmMechanicPort {
+  private readonly tracker = new PlasmaChargeTracker();
+  private readonly targets = new Map<string, CombatTargetRef>();
+
+  constructor(private readonly projectStacks: (target: CombatTargetRef, stacks: number) => void) {}
+
+  registerDirectContact(request: PlasmaSwarmDirectContact): PlasmaSwarmContactOutcome | null {
+    if (request.target.kind !== 'enemy'
+      || request.source.lineage?.plasmaSwarmChild === true
+      || !Number.isFinite(request.nowMs)) return null;
+    const key = combatTargetInstanceKey(request.target);
+    const charge = this.tracker.addHit(key, request.nowMs);
+    this.targets.set(key, request.target);
+    this.projectStacks(request.target, charge.stacks);
+    return Object.freeze({
+      stacks: charge.stacks,
+      shouldProc: resolvePlasmaSwarmProjectileCount(
+        charge.stacks * PLASMA_SWARM_CHANCE_PER_STACK_PERCENT,
+        request.random,
+      ) > 0,
+    });
+  }
+
+  read(target: CombatTargetRef, nowMs: number): PlasmaChargeState | undefined {
+    return this.tracker.getState(combatTargetInstanceKey(target), nowMs);
+  }
+
+  advance(nowMs: number): void {
+    for (const key of this.tracker.prune(nowMs)) {
+      const target = this.targets.get(key);
+      if (target) this.projectStacks(target, 0);
+      this.targets.delete(key);
+    }
+  }
+
+  clearTarget(target: CombatTargetRef): void {
+    const key = combatTargetInstanceKey(target);
+    this.tracker.clear(key);
+    this.targets.delete(key);
+    this.projectStacks(target, 0);
+  }
+
+  clearTargetId(enemyId: string): void {
+    for (const [key, target] of this.targets) {
+      if (target.kind !== 'enemy' || target.id !== enemyId) continue;
+      this.tracker.clear(key);
+      this.targets.delete(key);
+      this.projectStacks(target, 0);
+    }
+  }
+
+  clear(): void {
+    for (const target of this.targets.values()) this.projectStacks(target, 0);
+    this.tracker.clearAll();
+    this.targets.clear();
   }
 }
 

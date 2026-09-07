@@ -94,6 +94,7 @@ export interface CombatMovementStatusPort {
     readonly nowMs: number;
   }): boolean;
   getMovementFactor(target: CombatTargetRef, nowMs: number): number;
+  prune(nowMs: number): void;
   clearMovementStatus(target: CombatTargetRef): void;
 }
 

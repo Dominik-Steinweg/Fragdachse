@@ -670,7 +670,7 @@ describe('WorldCombatGameplayBinding Tesla rock target indexing', () => {
 
 describe('WorldCombatGameplayBinding lifecycle hardening', () => {
   it('registers and cleans up vulnerability handler and line-of-fire/sight checkers symmetrically on destroy', () => {
-    let vulnerabilityHandler: ((target: TargetStatusTarget, durationMs: number) => void) | null = null;
+    let vulnerabilityHandler: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null = null;
 
     const combatSystem = methodBag({
       isAlive: () => true,
@@ -683,10 +683,10 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
       }),
     }) as unknown as CombatSystem;
 
-    const appliedVulnerabilities: Array<{ target: TargetStatusTarget; durationMs: number }> = [];
+    const appliedVulnerabilities: Array<{ target: TargetStatusTarget; durationMs: number; nowMs: number }> = [];
     const targetStatusSystem = {
-      applyVulnerability: (target: TargetStatusTarget, durationMs: number) => {
-        appliedVulnerabilities.push({ target, durationMs });
+      applyVulnerability: (target: TargetStatusTarget, durationMs: number, nowMs: number) => {
+        appliedVulnerabilities.push({ target, durationMs, nowMs });
       },
     } as unknown as TargetStatusSystem;
 
@@ -701,8 +701,8 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
     expect(vulnerabilityHandler).not.toBeNull();
 
     const sampleTarget: TargetStatusTarget = { targetType: 'enemy', targetId: 'enemy-1' } as any;
-    vulnerabilityHandler!(sampleTarget, 5000);
-    expect(appliedVulnerabilities).toEqual([{ target: sampleTarget, durationMs: 5000 }]);
+    vulnerabilityHandler!(sampleTarget, 5000, 12_345);
+    expect(appliedVulnerabilities).toEqual([{ target: sampleTarget, durationMs: 5000, nowMs: 12_345 }]);
 
     const turret = fixture.binding.systems?.turret;
     const teslaDome = fixture.binding.systems?.teslaDome;
@@ -712,6 +712,8 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
     fixture.binding.destroy();
 
     expect(combatSystem.setApplyVulnerabilityHandler).toHaveBeenLastCalledWith(null);
+    expect(combatSystem.setMovementStatusPort).toHaveBeenLastCalledWith(null);
+    expect(combatSystem.setPlasmaSwarmMechanicPort).toHaveBeenLastCalledWith(null);
     expect(turretLofSpy).toHaveBeenCalledWith(null);
     expect(teslaLosSpy).toHaveBeenCalledWith(null);
   });

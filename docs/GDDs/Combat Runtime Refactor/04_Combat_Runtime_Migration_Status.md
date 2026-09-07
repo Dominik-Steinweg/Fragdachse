@@ -8,14 +8,14 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B aktiv; P2–P4 bestanden, P5 als Nächstes |
+| Gesamtstatus | Block B aktiv; P2–P5 bestanden, P6 als Nächstes |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P5 – Status und zielgebundene Mechanikzustände |
+| Nächster Arbeitsschritt | P6 – Reaktionen, Tod, Attribution und Player-Lifecycle |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine; P4 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `bba9fa0d` |
-| Start-HEAD der laufenden Aufgabe | `bba9fa0d` |
+| Aktive Phase / Aufgabe | Keine; P5 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `b032ea84` |
+| Start-HEAD der laufenden Aufgabe | `b032ea84` |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
@@ -41,7 +41,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 | P2 | B | ✅ | Combatant-Mutation |
 | P3 | B | ✅ | Geometrie / Queries |
 | P4 | B | ✅ | Damage / Support / Modifier / Defense |
-| P5 | B | ⬜ | Status / Mechanikzustände |
+| P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ⬜ | Reaktionen / Death / Kill / Player-Lifecycle |
 | R2 | B | ⬜ | Semantikreview; danach Nutzerstopp |
 | P7 | C | ⬜ | Projectile-Adapter |
@@ -63,6 +63,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 - `src/combat/PlayerVitalsOwner.ts`, `EnemyManager`, `DecoySystem`: kanonische Combatant-Writer mit atomaren, unveränderlichen Mutation-Receipts und Instanz-/Life-Prüfung.
 - `WorldGeometryBinding` bindet den einzigen `ArenaObstacleIndex` an die World und stellt schmale, read-only LoS-/LoF-/Muzzle-/Target-Geometriequeries bereit; Legacy-Consumer wechseln in P10.
 - `CombatResolution` und `CombatRelationshipPolicy`: Phaser-freie Damage-/Support-Regeln mit expliziter Faktorherkunft, Eligibility, Host-Zeit/RNG und kanonischem Mutation-Commit.
+- `CombatBurnStatusOwner`, `EnemyMovementStatusSystem`, `TargetStatusSystem` und `PlasmaSwarmReactionSystem`: je ein World-lokaler Writer mit passiven Reads und explizitem Advance/Prune/Clear.
 
 Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest/Outcome`, `ProjectileCombatExplosionRequest/Outcome`, `ProjectileExplosionResolutionPort` und Continuation. Vorhanden bedeutet nicht bereits an neue Combat-Owner angeschlossen.
 
@@ -74,7 +75,7 @@ P1–P4 sind realisiert:
 |---|---|---|
 | Geplanter Integrationsübergang | Legacy-Projectile-Adapter nutzen die neuen Receipts noch nicht vollständig (D1/D4) | P7 |
 | Geplanter Integrationsübergang | Verbleibende Life-/Death-Callbacks und Respawn-Orchestrierung außerhalb des Vitals-Owners (D2) | P6 |
-| Geplanter Integrationsübergang | Status-Eligibility und explizite Herkunft statt Legacy-`direct`-Default (D5/D9) | P5/P7/P10 |
+| Geplanter Integrationsübergang | Explizite Herkunft statt Legacy-`direct`-Default (D9) | P7/P10 |
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
@@ -86,11 +87,13 @@ P1–P4 sind realisiert:
 
 **P1-Gate L:** 43/43 fokussiert, Integration 175/175, Typecheck und Diff-Check grün; R1 nach Korrekturen bestanden.
 
-**P2-Gate L / letztes lokales Gate:** bestanden auf `2fd046a7` plus P2-Lieferung. `npm run check`: 2738 Core-/32 Architecturetests und Build grün; Integration 176/176; fokussiert 32/32; Typecheck, Writer-Audit und Diff-Check grün.
+**P2-Gate L:** Check 2738 Core/32 Architektur, Integration 176/176, Fokus 32/32, Typecheck/Writer-/Diff-Audit grün.
 
-**P3-Gate L / letztes lokales Gate:** bestanden auf `fbcb208c` plus P3-Lieferung. Fokussiert 14/14 und Integration 176/176; `npm run typecheck` und `git diff --check`: Exit 0. Gemeinsamer Index, stale-sicheres Detach und renderer-unabhängige Zielmaße sind abgedeckt.
+**P3-Gate L:** Fokus 14/14, Integration 176/176, Typecheck/Diff-Check grün; gemeinsamer Index und stale-sicheres Detach abgedeckt.
 
-**P4-Gate L / letztes lokales Gate:** bestanden auf `bba9fa0d` plus P4-Lieferung. `npm run check`: 2752 Core-/32 Architecturetests und Build grün; Integration 177/177; Orchestrator-Fokus 34/34; Typecheck und Diff-Check grün. D3 ohne Tuningänderung; Enemy-Rettung meldet tatsächlichen Schaden getrennt von Rettungsheilung.
+**P4-Gate L:** Check 2752 Core/32 Architektur und Build grün; Integration 177/177, Fokus 34/34, Typecheck/Diff-Check grün. D3 ohne Tuningänderung; Rettung trennt Schaden und Heilung.
+
+**P5-Gate L / letztes lokales Gate:** bestanden auf `b032ea84` plus P5-Lieferung. Check: 2759 Core-/32 Architekturtests und Build grün; Integration 177/177; Orchestrator-Fokus 50/50; Typecheck, Writer- und Diff-Audit grün. Source-Tod bleibt vom endgültigen Source-Detach getrennt; kein zweiter Tick.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
