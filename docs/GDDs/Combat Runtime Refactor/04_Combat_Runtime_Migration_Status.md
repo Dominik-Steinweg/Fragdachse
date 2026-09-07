@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B aktiv; R2 Review 1 nicht bestanden, Fixschleife 1 aktiv |
+| Gesamtstatus | Block B aktiv; R2-Fix 1 geprüft, Review 2 als Nächstes |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Begrenzter P5/P6-Fix, danach frisches R2 Review 2 |
+| Nächster Arbeitsschritt | Frisches, unabhängiges R2 Review 2 |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | R2-Fix 1 – Target-Inkarnation, Burn-Provenance, Player-Status-Lifetime |
+| Aktive Phase / Aufgabe | Keine; R2-Fix 1 lokal abgeschlossen |
 | Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ac5a77ba` |
 | Start-HEAD der laufenden Aufgabe | `ac5a77ba` |
-| Aktiver Worker / Thread | P6-Fix-Worker, Astra / High |
+| Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
-| Aktueller Reparaturzähler | R2 Fixschleife 1 von max. 2 |
+| Aktueller Reparaturzähler | R2 Fix 1 genutzt; Review 2 als Nächstes |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -43,7 +43,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 | P4 | B | ✅ | Damage / Support / Modifier / Defense |
 | P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
-| R2 | B | 🟧 | Review 1 mit drei lokalen Blockern; Fix 1 aktiv |
+| R2 | B | 🟨 | Review 1 korrigiert; Review 2 ausstehend |
 | P7 | C | ⬜ | Projectile-Adapter |
 | P8 | C | ⬜ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
@@ -78,9 +78,6 @@ P1–P4 sind realisiert:
 | Geplanter Integrationsübergang | Verbleibende Projectile-Callback-Reaktionen auf den einen Ausführungspfad umstellen (D10) | P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
-| R2-Fix 1 | Enemy-Child-Reaktion prüft Target-Inkarnation nach externen Hooks nicht erneut | P6-Fix |
-| R2-Fix 1 | Burn-Tick verwirft gespeicherte `CombatSource` und rekonstruiert Legacy-Herkunft | P5/P6-Fix |
-| R2-Fix 1 | Player-Vulnerability endet nicht mit der Life-Instanz | P5/P6-Fix |
 
 ## 5. Nachweise und Reviews
 
@@ -95,6 +92,8 @@ P1–P4 sind realisiert:
 **P5-Gate L / letztes lokales Gate:** bestanden auf `b032ea84` plus P5-Lieferung. Check: 2759 Core-/32 Architekturtests und Build grün; Integration 177/177; Orchestrator-Fokus 50/50; Typecheck, Writer- und Diff-Audit grün. Source-Tod bleibt vom endgültigen Source-Detach getrennt; kein zweiter Tick.
 
 **P6-Gate L / letztes lokales Gate:** bestanden auf `bc03fee1` plus P6-Lieferung. Check: 2770 Core-/32 Architekturtests und Build grün; Integration 179/179; Orchestrator-Fokus 35/35; Typecheck, Timer-/Writer- und Diff-Audit grün.
+
+**R2-Fix 1:** drei Review-Repros geschlossen. Check 2772 Core/32 Architektur und Build grün; Integration 183/183; Orchestrator-Fokus 26/26; Typecheck/Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

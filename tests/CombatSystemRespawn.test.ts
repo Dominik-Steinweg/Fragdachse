@@ -32,6 +32,7 @@ vi.mock('phaser', () => {
 });
 
 import { CombatSystem } from '../src/systems/CombatSystem';
+import { TargetStatusSystem } from '../src/systems/TargetStatusSystem';
 import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { PlayerManager } from '../src/entities/PlayerManager';
@@ -65,6 +66,28 @@ function lifecycleFixture() {
 }
 
 describe('integrated Combat damage, reaction and Player life', () => {
+  it.each([false, true])('ends old-life vulnerability before a reentrant new life can acquire status (%s)', reentrant => {
+    const f = lifecycleFixture(), statuses = new TargetStatusSystem();
+    const target = { targetType: 'player' as const, targetId: 'p2' };
+    f.combat.setTargetIncomingDamageMultiplierResolver((ref, now) => statuses.getIncomingDamageMultiplier(ref, now));
+    f.combat.setPlayerLifeEndedHandler(ref => {
+      if (f.combat.isCurrentCombatantTarget(ref)) statuses.removeTarget({ targetType: 'player', targetId: String(ref.id) });
+    });
+    statuses.applyVulnerability(target, 10000, 1000);
+    if (reentrant) f.combat.setPlayerDamageTakenHandler(() => {
+      expect(statuses.isVulnerable(target, 1000)).toBe(false);
+      f.budget.handlePlayerDeath('p2');
+      expect(f.combat.spawnPlayerAfterReconnect('p2')).toBe(true);
+      statuses.applyVulnerability(target, 10000, 1000);
+    });
+    f.hit();
+    f.combat.setPlayerDamageTakenHandler(null);
+    if (!reentrant) f.advance();
+    const hit = f.combat.applyDamage('p2', 10, false, 'p1', 'test');
+    expect(hit).toMatchObject({ actualDamage: reentrant ? 12 : 10 });
+    expect(statuses.isVulnerable(target, 6000)).toBe(reentrant);
+  });
+
   it('commits death and its attribution exactly once despite repeated lethal requests', () => {
     const f = lifecycleFixture();
     const outcome = f.hit(); f.hit();

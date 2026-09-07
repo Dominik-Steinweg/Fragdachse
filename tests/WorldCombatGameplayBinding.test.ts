@@ -13,6 +13,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { RockGridIndex } from '../src/arena/RockGridIndex';
+import type { CombatTargetRef } from '../src/combat/CombatScope';
 import {
   CELL_SIZE,
   COOP_DEFENSE_BASE_TURRET_OWNER_ID,
@@ -671,6 +672,8 @@ describe('WorldCombatGameplayBinding Tesla rock target indexing', () => {
 describe('WorldCombatGameplayBinding lifecycle hardening', () => {
   it('registers and cleans up vulnerability handler and line-of-fire/sight checkers symmetrically on destroy', () => {
     let vulnerabilityHandler: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null = null;
+    let lifeEnded: ((target: CombatTargetRef) => void) | null = null;
+    let currentLife = true;
 
     const combatSystem = methodBag({
       isAlive: () => true,
@@ -681,10 +684,13 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
       setApplyVulnerabilityHandler: vi.fn((handler) => {
         vulnerabilityHandler = handler;
       }),
+      isCurrentCombatantTarget: () => currentLife,
+      setPlayerLifeEndedHandler: vi.fn(handler => { lifeEnded = handler; }),
     }) as unknown as CombatSystem;
 
     const appliedVulnerabilities: Array<{ target: TargetStatusTarget; durationMs: number; nowMs: number }> = [];
     const targetStatusSystem = {
+      removeTarget: vi.fn(),
       applyVulnerability: (target: TargetStatusTarget, durationMs: number, nowMs: number) => {
         appliedVulnerabilities.push({ target, durationMs, nowMs });
       },
@@ -703,6 +709,12 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
     const sampleTarget: TargetStatusTarget = { targetType: 'enemy', targetId: 'enemy-1' } as any;
     vulnerabilityHandler!(sampleTarget, 5000, 12_345);
     expect(appliedVulnerabilities).toEqual([{ target: sampleTarget, durationMs: 5000, nowMs: 12_345 }]);
+    const oldLife: CombatTargetRef = { kind: 'player', id: 'p1', scope: { worldRevision: 1, runtimeGeneration: 1 },
+      instance: { entityGeneration: 1, lifeRevision: 1 } };
+    lifeEnded!(oldLife);
+    expect(targetStatusSystem.removeTarget).toHaveBeenCalledExactlyOnceWith({ targetType: 'player', targetId: 'p1' });
+    currentLife = false; lifeEnded!(oldLife);
+    expect(targetStatusSystem.removeTarget).toHaveBeenCalledTimes(1);
 
     const turret = fixture.binding.systems?.turret;
     const teslaDome = fixture.binding.systems?.teslaDome;
@@ -712,6 +724,7 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
     fixture.binding.destroy();
 
     expect(combatSystem.setApplyVulnerabilityHandler).toHaveBeenLastCalledWith(null);
+    expect(combatSystem.setPlayerLifeEndedHandler).toHaveBeenLastCalledWith(null);
     expect(combatSystem.setMovementStatusPort).toHaveBeenLastCalledWith(null);
     expect(combatSystem.setPlasmaSwarmMechanicPort).toHaveBeenLastCalledWith(null);
     expect(turretLofSpy).toHaveBeenCalledWith(null);

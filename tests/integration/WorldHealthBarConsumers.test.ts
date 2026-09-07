@@ -15,6 +15,7 @@ vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
 }));
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { CombatSystem } from '../../src/systems/CombatSystem';
+import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { NetworkBridge } from '../../src/network/NetworkBridge';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
@@ -68,6 +69,66 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it.each(['leech', 'primary', 'slow'] as const)('does not Cull a replacement enemy after the %s hook', stage => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+    const actor = { id: 'attacker', x: 0, y: 0, body: { enable: true } };
+    const combat = new CombatSystem({ getPlayer: (id: string) => id === actor.id ? actor : undefined } as unknown as PlayerManager,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
+    combat.setEnemyManager(manager); combat.initPlayer(actor.id);
+    const observed = vi.fn(); combat.addDamageDealtObserver(observed);
+    const replace = () => {
+      manager.applySnapshot({ u: [], r: [1] });
+      upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
+    };
+    if (stage === 'leech') {
+      combat.applyDamage(actor.id, 20, false);
+      combat.setPlayerLifeLeechFractionResolver(() => 1);
+      combat.setHealingReceivedHandler(replace);
+    }
+    if (stage === 'slow') vi.spyOn(combat, 'applyEnemySlow').mockImplementation(replace);
+    const primary = vi.fn(() => {
+      if (stage === 'primary') replace();
+      return { slowFraction: 0.1, slowDurationMs: 1000, shouldCull: true };
+    });
+    const reactions = new WorldCombatReactions({ combatSystem: combat,
+      getPlayerCombatIntegration: () => ({ reactions: { handleDirectPrimaryHit: primary } }),
+    } as never);
+    combat.setDirectPrimaryHitHandler((attacker, id, hp, max, boss, target) =>
+      reactions.handleDirectPrimaryHit(attacker, id, hp, max, boss, 1234, target, () => true));
+    const parent = combat.applyDamage('e1', 10, false, actor.id, 'synthetic', undefined,
+      { damageKind: 'direct', sourceSlot: 'weapon1' });
+    expect(parent).toMatchObject({ actualDamage: 10, resultingState: { hp: 30, alive: true } });
+    expect(manager.getEnemy('e1')!.getHp()).toBe(100);
+    expect(primary).toHaveBeenCalledTimes(stage === 'leech' ? 0 : 1);
+    expect(observed).toHaveBeenCalledWith(expect.objectContaining({ targetId: 'e1', damage: 10 }));
+    manager.destroy();
+  });
+
+  it('retains the allied Burn source snapshot and player attribution after the source disappears', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 10, maxHp: 100 });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'credited' });
+    let now = 1000;
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 }); combat.setEnemyManager(manager);
+    const kill = vi.fn(); combat.setKillCallback(kill);
+    combat.applyBurnHit('e1', 'e2', 2000, 10, 'fire', 'summon.fire', 'generic');
+    manager.applySnapshot({ u: [], r: [2] });
+    now += 250; combat.updateBurnEffects(now);
+    expect(manager.getEnemy('e1')).toBeUndefined();
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(kill.mock.calls[0]?.[0]).toBe('credited');
+    expect(kill.mock.calls[0]?.[5]).toMatchObject({ damageOrigin: { kind: 'burn' }, provenance: {
+      gameplaySource: { kind: 'enemy', id: 'e2' }, actor: { kind: 'enemy', id: 'e2' },
+      attribution: { kind: 'player', id: 'credited' }, allegiance: { ownerId: 'e2', factionId: 'allied' },
+      authoredSourceId: 'summon.fire', origin: 'burn',
+    } });
+    manager.destroy();
+  });
+
   it('keeps a nonlethal parent receipt separate from the Cull death and its terminal attribution', () => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });

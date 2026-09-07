@@ -452,7 +452,9 @@ export class CombatSystem implements ProjectileCombatPort {
     remainingHp: number,
     maxHp: number,
     isBoss: boolean,
+    target: CombatTargetRef,
   ) => void) | null = null;
+  private onPlayerLifeEnded: ((target: CombatTargetRef) => void) | null = null;
   /** Setzt die zentrale Verwundbarkeit auf einem Ziel; ohne Handler bleibt der Treffereffekt aus. */
   private onApplyVulnerability: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null = null;
   private onPlayerDamageTaken: ((
@@ -672,8 +674,11 @@ export class CombatSystem implements ProjectileCombatPort {
    * Meldung ueber einen direkten Primaerwaffentreffer, der den Gegner nicht getoetet hat.
    * Ausschliesslich `damageKind === 'direct'` und `sourceSlot === 'weapon1'`.
    */
-  setDirectPrimaryHitHandler(handler: ((attackerId: string, enemyId: string, remainingHp: number, maxHp: number, isBoss: boolean) => void) | null): void {
+  setDirectPrimaryHitHandler(handler: ((attackerId: string, enemyId: string, remainingHp: number, maxHp: number, isBoss: boolean, target: CombatTargetRef) => void) | null): void {
     this.onDirectPrimaryHit = handler;
+  }
+  setPlayerLifeEndedHandler(handler: ((target: CombatTargetRef) => void) | null): void {
+    this.onPlayerLifeEnded = handler;
   }
   /** Uebergibt die zentrale Verwundbarkeit an den Host, wenn ein Projektil sie auf Treffer setzt. */
   setApplyVulnerabilityHandler(handler: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null): void {
@@ -987,8 +992,10 @@ export class CombatSystem implements ProjectileCombatPort {
     };
     const outcome = applyCombatDamage(request, this.combatResolutionContext(), this.playerVitals);
     // Eligible incoming damage reveals stealth even when a Dome/reduction absorbs the loss.
-    if (outcome.kind !== 'rejected' && amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
-    if (outcome.kind !== 'damage-applied') return outcome;
+    if (outcome.kind !== 'damage-applied') {
+      if (outcome.kind !== 'rejected' && amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
+      return outcome;
+    }
     if (!current()) return outcome;
     const damageKind = request.damageKind;
     const isCritical = outcome.damage.isCritical;
@@ -1021,6 +1028,14 @@ export class CombatSystem implements ProjectileCombatPort {
       ? this.resolveDamageDirection(targetId, attackerId, visualContext, deathSeed, x, y) : undefined;
     const deathEffect = outcome.transition.kind === 'dead'
       ? this.buildDeathEffect(targetId, x, y, deathSeed, deathDirection) : undefined;
+
+    // Facts are secured; end old-life status before hooks can create a new life/status.
+    if (outcome.transition.kind === 'dead') {
+      this.onPlayerLifeEnded?.(target);
+      if (!current()) return outcome;
+    }
+    if (amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
+    if (!current()) return outcome;
 
     // Armor-Schaden zaehlt nur mit dem passenden Coop-Defense-Upgrade als Rage-Quelle.
     const rageDamage = getRageGeneratingDamage(
@@ -1163,15 +1178,17 @@ export class CombatSystem implements ProjectileCombatPort {
     for (const contribution of contributions) {
       const targetId = String(contribution.target.id);
       if (!this.isCurrentCombatantTarget(contribution.target) || !this.isAlive(targetId)) continue;
-      const attacker = this.playerManager.getPlayer(contribution.attackerId);
       this.applyDamage(
         targetId,
         contribution.damage,
         false,
         contribution.attackerId,
         contribution.sourceId,
-        attacker ? { sourceX: attacker.x, sourceY: attacker.y } : undefined,
-        { allowCritical: false, damageKind: 'burn' },
+        undefined,
+        {
+          allowCritical: false, damageKind: 'burn', source: contribution.source,
+          basis: { kind: 'source-resolved', amount: contribution.damage, sourceFactors: [] },
+        },
       );
     }
   }
@@ -1363,13 +1380,17 @@ export class CombatSystem implements ProjectileCombatPort {
     if (attackerId === targetId) return true;
     const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
+    const source = {
+      allegiance: { ownerId: attackerId, factionId: attackerEnemy?.faction },
+      actor: attackerEnemy ? { kind: 'enemy' as const, id: attackerId } : undefined,
+    };
     if (attackerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) {
-      return this.relationshipForSource({ allegiance: { ownerId: attackerId } }, targetId).canDamage;
+      return this.relationshipForSource(source, targetId).canDamage;
     }
     if (allowTeamDamage) return true;
     // Eingebuddelte Gegner sind – wie eingebuddelte Spieler – weder Ziel noch Angreifer.
     if (targetEnemy?.isBurrowed() || attackerEnemy?.isBurrowed()) return false;
-    return this.relationshipForSource({ allegiance: { ownerId: attackerId } }, targetId).canDamage;
+    return this.relationshipForSource(source, targetId).canDamage;
   }
 
   private shouldBlockWithShield(
@@ -3348,11 +3369,14 @@ export class CombatSystem implements ProjectileCombatPort {
     const maxHp = enemy.getMaxHp();
     const isBoss = options?.damageKind === 'direct' && options.sourceSlot === 'weapon1' ? enemy.isBoss() : false;
     const targetFaction = enemy.faction;
-    const current = this.captureReactionValidity();
+    const worldCurrent = this.captureReactionValidity();
     const activeBurnSources = this.burnStatus.getActiveSources(target, this.hostFrameNowMs);
     const request = this.createDamageRequest(target, amount, attackerId, sourceId, options);
     const outcome = applyCombatDamage(request, this.combatResolutionContext(), this.enemyManager);
     if (outcome.kind !== 'damage-applied') return outcome;
+    // Terminal consequences and passive observation belong to the committed receipt.
+    // Immediate children additionally require the original live target incarnation.
+    const current = worldCurrent;
     if (!current()) return outcome;
     const result = {
       died: outcome.transition.kind === 'dead',
@@ -3394,8 +3418,9 @@ export class CombatSystem implements ProjectileCombatPort {
       && !result.died
       && options?.damageKind === 'direct'
       && options.sourceSlot === 'weapon1'
+      && this.isCurrentCombatantTarget(target)
     ) {
-      this.onDirectPrimaryHit?.(attackerId, targetId, result.remainingHp, maxHp, isBoss);
+      this.onDirectPrimaryHit?.(attackerId, targetId, result.remainingHp, maxHp, isBoss, target);
       if (!current()) return outcome;
     }
 
@@ -3415,6 +3440,7 @@ export class CombatSystem implements ProjectileCombatPort {
       dirY: direction.dirY,
       seed: hitSeed,
     });
+    if (!current()) return outcome;
 
     if (result.died) {
       const deadTarget = outcome.target;
@@ -3518,6 +3544,11 @@ export class CombatSystem implements ProjectileCombatPort {
       const life = this.playerVitals.getTargetRef(playerId);
       return worldCurrent() && !!life && !!deadLife && isSameCombatTargetInstance(life, deadLife);
     };
+    if (!current()) return;
+    if (!transitionCommitted && deadLife) {
+      this.onPlayerLifeEnded?.(deadLife);
+      if (!current()) return;
+    }
     this.clearBurnForPlayer(playerId);
     // Capture the current animation frame before any death callback hides or changes the Sprite.
     const deathEffect = terminal?.effect ?? this.buildDeathEffect(playerId, x, y, seed, direction);
@@ -3771,11 +3802,11 @@ export class CombatSystem implements ProjectileCombatPort {
     };
   }
 
-  private relationshipForSource(source: Pick<CombatSource, 'allegiance'>, targetId: string) {
+  private relationshipForSource(source: Pick<CombatSource, 'allegiance' | 'actor'> & Partial<Pick<CombatSource, 'gameplaySource'>>, targetId: string) {
     const sourceId = source.allegiance.ownerId;
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
-    const sourceEnemy = this.enemyManager?.getEnemy(sourceId);
-    const sourceFaction = source.allegiance.factionId === 'hostile' || sourceEnemy?.faction === 'hostile'
+    const sourceEnemy = source.actor?.kind === 'enemy' || source.gameplaySource?.kind === 'enemy';
+    const sourceFaction = source.allegiance.factionId === 'hostile'
       || sourceId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID ? 'hostile' : 'players';
     const result = resolveCombatRelationship({
       sameActor: sourceId === targetId,
@@ -3879,7 +3910,7 @@ export class CombatSystem implements ProjectileCombatPort {
     return this.enemyManager?.getCombatTargetRef(id) ?? this.playerVitals.getTargetRef(id);
   }
 
-  private isCurrentCombatantTarget(target: CombatTargetRef): boolean {
+  isCurrentCombatantTarget(target: CombatTargetRef): boolean {
     const current = this.resolveCurrentCombatantTarget(String(target.id));
     return current !== null && isSameCombatTargetInstance(current, target);
   }

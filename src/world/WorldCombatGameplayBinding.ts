@@ -372,6 +372,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setEnemyIncomingDamageMultiplierResolver(null);
     combatSystem.setTargetIncomingDamageMultiplierResolver(null);
     combatSystem.setApplyVulnerabilityHandler(null);
+    combatSystem.setPlayerLifeEndedHandler(null);
     combatSystem.setMovementStatusPort(null);
     combatSystem.setPlasmaSwarmMechanicPort(null);
     combatSystem.setEnergyInjectorTargetHitCallback(null);
@@ -526,15 +527,20 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       return vulnerability * (o.getMatrixDamageMultiplier?.(footprint, matrixApplies, nowMs) ?? 1);
     });
     combat.setApplyVulnerabilityHandler((target, durationMs, nowMs) => o.getTargetStatusSystem()?.applyVulnerability(target, durationMs, nowMs));
+    combat.setPlayerLifeEndedHandler(target => {
+      if (combat.isCurrentCombatantTarget(target)) {
+        o.getTargetStatusSystem()?.removeTarget({ targetType: 'player', targetId: String(target.id) });
+      }
+    });
     combat.setEnergyInjectorTargetHitCallback((impact: ProjectileEnergyInjectorImpact) => {
       if (impact.targetType === 'player' && !o.network.authority.isEnemyPair(impact.ownerId, impact.targetId)) return;
       o.hostUpdate.applyEnergyInjectorTargetHit(impact.targetType, impact.targetId, impact.x, impact.y, impact);
     });
     combat.setHitscanSupportImpactCallback((impact, effect, attackerId, sourceSlot) => o.hostUpdate.applyHitscanSupportImpact(impact, effect, attackerId, sourceSlot));
     const killReactions = new WorldCombatReactions(o);
-    combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
+    combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss, target) => {
       const generation = this.activityGeneration;
-      killReactions.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss, combat.getHostTime(),
+      killReactions.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss, combat.getHostTime(), target,
         () => !this.destroyed && generation === this.activityGeneration);
     });
     combat.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind) => {

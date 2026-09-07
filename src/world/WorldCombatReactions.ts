@@ -3,6 +3,7 @@ import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKE
 import type { KillSourceContext } from '../systems/CombatSystem';
 import type { WorldCombatGameplayBindingOptions } from './WorldCombatGameplayBinding';
 import type { CombatDamageKind } from '../types';
+import type { CombatTargetRef } from '../combat/CombatScope';
 
 type CombatReactionOptions = Pick<WorldCombatGameplayBindingOptions,
   'network' | 'combatSystem' | 'getPlayerCombatIntegration' | 'getPowerUpSystem' | 'isCoopMission' | 'isActivityActive'>;
@@ -12,8 +13,10 @@ export class WorldCombatReactions {
   constructor(private readonly options: CombatReactionOptions) {}
 
   handleDirectPrimaryHit(attackerId: string, enemyId: string, hp: number, maxHp: number, isBoss: boolean,
-    nowMs: number, current: () => boolean): void {
+    nowMs: number, target: CombatTargetRef, scopeCurrent: () => boolean): void {
     const o = this.options;
+    const current = () => scopeCurrent() && o.combatSystem.isCurrentCombatantTarget(target);
+    if (!current()) return;
     const result = o.getPlayerCombatIntegration()?.reactions.handleDirectPrimaryHit(attackerId, enemyId, hp, maxHp, isBoss, nowMs);
     if (!result || !current()) return;
     if (result.slowFraction > 0) o.combatSystem.applyEnemySlow(enemyId, result.slowFraction, result.slowDurationMs);
