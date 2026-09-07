@@ -495,7 +495,6 @@ export class ArenaScene extends Phaser.Scene {
     playerManager.setLocalPlayerId(bridge.getLocalPlayerId());
     playerManager.setRelationshipResolver((localPlayerId, otherPlayerId) => bridge.isEnemyPair(localPlayerId, otherPlayerId));
     playerManager.setTeamResolver((playerId) => bridge.getPlayerTeam(playerId));
-    const combatSystem     = new CombatSystem(playerManager, bridge);
     const decoySystem      = new DecoySystem(this, playerManager, bridge);
     const effectSystem     = new EffectSystem(this, bridge);
     effectSystem.setPlayerDeathResolver((targetId) => playerManager.getPlayer(targetId) !== undefined);
@@ -517,7 +516,7 @@ export class ArenaScene extends Phaser.Scene {
       fireSystem.setPerformanceMetricsEnabled(enabled && this.diagnostics?.wantsDetailedSampling() === true);
     });
     const stinkCloudSystem = new StinkCloudSystem(this);
-    const hostPhysics      = new HostPhysicsSystem(this, playerManager, bridge, combatSystem);
+    const hostPhysics      = new HostPhysicsSystem(this, playerManager, bridge);
     const inputSystem      = new InputSystem(
       this, bridge, () => playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject ?? undefined,
     );
@@ -800,8 +799,15 @@ export class ArenaScene extends Phaser.Scene {
     arenaCountdown.setAudioSystem(gameAudioSystem);
 
     // ── Assemble ArenaContext ──────────────────────────────────────────────
+    const getCombatSystem = (): CombatSystem | null => this.arenaRuntime?.getCombatSystem() ?? null;
     this.ctx = {
-      playerManager, combatSystem, effectSystem,
+      playerManager, effectSystem,
+      getCombatSystem,
+      get combatSystem(): CombatSystem {
+        const combat = getCombatSystem();
+        if (!combat) throw new Error('[ArenaContext] Combat runtime is not active');
+        return combat;
+      },
       getProjectileRuntime: () => this.arenaRuntime?.getWorldProjectileRuntime() ?? null,
       visualFeedback: this.visualFeedback,
       gameAudioSystem,
@@ -1034,7 +1040,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.centerHUD,
       this.ctx.playerManager,
       this.ctx.hostPhysics,
-      this.ctx.combatSystem,
+      () => this.ctx.getCombatSystem(),
       this.ctx.decoySystem,
       this.ctx.effectSystem,
       this.ctx.visualFeedback,
@@ -1046,6 +1052,7 @@ export class ArenaScene extends Phaser.Scene {
       this.arenaRuntime.rpcPorts.playerLoadout,
       this.arenaRuntime.rpcPorts.heldAction,
       this.arenaRuntime.rpcPorts.train,
+      () => bridge.getSynchronizedNow(),
     );
     this.rpcCoordinator.registerAll();
     // Host-Abbruch der laufenden Partie (Optionsmenue, in jedem Spielmodus).

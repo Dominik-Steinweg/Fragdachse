@@ -1,16 +1,26 @@
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../config';
 import type { KillSourceContext } from '../systems/CombatSystem';
-import type { WorldCombatGameplayBindingOptions } from './WorldCombatGameplayBinding';
+import type { WorldCombatNetworkPort } from './WorldCombatGameplayBinding';
 import type { CombatDamageKind } from '../types';
 import type { CombatTargetRef } from '../combat/CombatScope';
+import type { PlayerCombatIntegrationPort } from './PlayerCombatIntegrationPort';
+import type { PowerUpSystem } from '../powerups/PowerUpSystem';
+import type { CombatSystem } from '../systems/CombatSystem';
 
-type CombatReactionOptions = Pick<WorldCombatGameplayBindingOptions,
-  'network' | 'combatSystem' | 'getPlayerCombatIntegration' | 'getPowerUpSystem' | 'isCoopMission' | 'isActivityActive'>;
+export interface WorldCombatReactionOptions {
+  readonly network: WorldCombatNetworkPort;
+  readonly combatSystem: Pick<CombatSystem,
+    'isCurrentCombatantTarget' | 'applyEnemySlow' | 'applyDamage'>;
+  readonly getPlayerCombatIntegration: () => PlayerCombatIntegrationPort | null;
+  readonly getPowerUpSystem: () => PowerUpSystem | null;
+  readonly isCoopMission: () => boolean;
+  readonly isActivityActive: () => boolean;
+}
 
 /** Concrete ordered gameplay reactions to committed Combat facts. */
 export class WorldCombatReactions {
-  constructor(private readonly options: CombatReactionOptions) {}
+  constructor(private readonly options: WorldCombatReactionOptions) {}
 
   handleDirectPrimaryHit(attackerId: string, enemyId: string, hp: number, maxHp: number, isBoss: boolean,
     nowMs: number, target: CombatTargetRef, scopeCurrent: () => boolean): void {

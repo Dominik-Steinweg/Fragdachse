@@ -2,26 +2,26 @@
 
 **Architektur:** [01](01_Combat_Runtime_Architecture_Core.md) + [02](02_Combat_Runtime_Architecture_Details.md) · **Plan:** [03](03_Combat_Runtime_Implementation_Plan.md) · **Betrieb:** [05](05_Combat_Runtime_Implementation_Cheatsheet.md)
 
-> Operativer Status ohne Historie. **Nur der Orchestrator schreibt.** Keine Interface-Kopien, Vollinventare, Rohlogs oder SHA-Chronik. Zielgröße unter 8 KB.
+> Operativer Status ohne Historie. **Nur der Orchestrator schreibt.** Keine Vollinventare/Rohlogs. Zielgröße unter 8 KB.
 
 ## 1. Steuerung und aktueller Stand
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P10-Gate erfüllt, P11 als Nächstes |
+| Gesamtstatus | Block C aktiv; P11 abgeschlossen, P12 als Nächstes |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P11 Gesamtgraph / Frame / Network / Presentation mit frischem Sol-/High-Worker schließen |
+| Nächster Arbeitsschritt | P12 Legacy entfernen, Ratchets/Wissen abgleichen und Gate L prüfen |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | Keine; P10 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `94df67e8` |
-| Start-HEAD der laufenden Aufgabe | `94df67e8` |
-| Aktiver Worker / Thread | Keiner; frischer P11-Kontext als Nächstes |
+| Aktive Phase / Aufgabe | Keine; P12 wird nach P11-Checkpoint gestartet |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `63df8803` |
+| Start-HEAD der laufenden Aufgabe | `63df8803` |
+| Aktiver Worker / Thread | Keiner; P12 erhält einen frischen Luna-/xhigh-Worker |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
 | Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
-| Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
+| Browserprüfung / Deployment | Nicht durchgeführt |
 
 **Freigaberegel:** R1/R2 erteilen keine Freigabe für B/C; dafür zählt nur eine tatsächliche Nutzernachricht.
 
@@ -46,7 +46,7 @@
 | P8 | C | ✅ | Hitscan / Melee / Preview |
 | P9 | C | ✅ | World-Mutation / Domain-Fan-out |
 | P10 | C | ✅ | Verbleibende Consumer |
-| P11 | C | ⬜ | Gesamtgraph / Frame / Network / Presentation |
+| P11 | C | ✅ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ⬜ | Legacy-Entfernung / Ratchets / Wissen |
 | P13 | C | ⬜ | Unabhängiger Abschluss / technisches Gate F |
 | M | Nutzer | ⬜ | Gebündelte Gameplay-/Sichtabnahme |
@@ -67,14 +67,11 @@
 - Normalisierte Hitscan-/Melee-Aufträge laufen über `CombatImmediateAttackPort`; sichere Mündung/Range bleiben bei Execution, der Host führt Query→Resolution→Mutation aus und Melee friert die geometrische Grundzielmenge vor der ersten Mutation ein.
 - `WorldObjectMutationRuntime` dedupliziert World-Aliase und projiziert atomare Owner-Outcomes; Rock-/Construction-/Base-/Train-HP, Removal und Cleanup bleiben bei den fachlichen Ownern, während `RockVisualHelper` nur noch präsentiert.
 - Gameplay-Consumer hängen an expliziten Actor-/Relationship-/Geometry-/Damage-/Support-/Modifier-/Status-Slices; Burrow nutzt die World-Geometrie und lehnt einen Exit ohne gebundenen Query-Port fail-closed ab.
+- Combat-Kern und `WorldCombatRuntime` entstehen einmal pro lokaler World im Build→Bind→Activate-Ablauf; Scope-Generation und identitätsgesicherte Leases machen Rebuild/Teardown stale-sicher. Host-Frame und Combat-RPCs verwenden synchronisierte Host-Zeit bei erhaltener Stage-Reihenfolge.
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P10 sind realisiert:
-
-| Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
-|---|---|---|
-| Geplanter Integrationsübergang | Gesamtgraph, Frame-Prep, Network-/Presentation-Projektion und verbleibende Composition-Ports produktiv schließen | P11 gemäß Contract-Manifest |
+P1–P11 sind realisiert. Offen sind ausschließlich die geplante P12-Legacy-/Ratchet-Bereinigung und danach P13; kein bekannter produktiver Blocker.
 
 ## 5. Nachweise und Reviews
 
@@ -91,6 +88,8 @@ P1–P10 sind realisiert:
 **P9-Gate L:** Headless-Integration 3/3, Fokus 54/54, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 27/27, TypeScript/Writer-/Diff-Check grün.
 
 **P10-Gate L:** Fokus 171/171 einschließlich V3/V9/V12, Check 2786 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 55/55, TypeScript/RG-/Diff-Check grün.
+
+**P11-Gate L:** Fokus 87/87, RPC 11/11, Headless-Integration 89/89, Check 2789 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25 sowie Ownership-/Zeit-/Stage-/Diff-Ratchets grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

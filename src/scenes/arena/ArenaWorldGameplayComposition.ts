@@ -6,7 +6,12 @@ import {
   composeWorldTrain,
 } from './ArenaWorldEnvironmentComposition';
 import { composeWorldPlayerGameplay } from './ArenaWorldPlayerComposition';
-import { composeWorldCombatGameplay, composeWorldProjectileRuntime } from './ArenaWorldCombatComposition';
+import {
+  activateWorldCombatRuntime,
+  composeWorldCombatGameplay,
+  composeWorldCombatRuntime,
+  composeWorldProjectileRuntime,
+} from './ArenaWorldCombatComposition';
 import {
   composeWorldConstruction,
   composeWorldObjectMutation,
@@ -36,6 +41,8 @@ import { WorldWeaponExecutionRuntime } from '../../world/WorldWeaponExecutionRun
 import type { AutomatedWeaponExecution } from '../../world/AutomatedWeaponExecutionAdapter';
 import type { SpecializedWeaponExecutionCapability } from '../../loadout/WeaponFireExecutor';
 import { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
+import { WorldCombatRuntime } from '../../combat/WorldCombatRuntime';
+import { CombatSystem } from '../../systems/CombatSystem';
 import { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
 import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
@@ -59,6 +66,8 @@ import type { WorldParticipation } from '../../world/WorldParticipation';
 
 /** Die Fragen der World-Composition an Flow und laufende Activity. */
 export interface ArenaWorldGameplayFlowPorts {
+  /** Monotonic local incarnation, including rebuilds of the same replicated World revision. */
+  readonly nextCombatRuntimeGeneration: () => number;
   readonly getCoopMissionRuntime: () => CoopMissionRuntime | null;
   readonly getCaptureTheBeerSystem: () => import('../../systems/CaptureTheBeerSystem').CaptureTheBeerSystem | null;
   readonly getPlayerActivityRuntime: () => CoopMissionPlayerRuntime | null;
@@ -136,6 +145,9 @@ export interface ArenaWorldGameplayCompositionInput {
  * der Owner selbst geleert.
  */
 export class ArenaWorldGameplay {
+  /** Concrete Combat core and lifecycle boundary are created once per local World runtime. */
+  combatSystem: CombatSystem | null = null;
+  combatRuntime: WorldCombatRuntime | null = null;
   geometry: WorldGeometryBinding | null = null;
   projectiles: WorldProjectileRuntime | null = null;
   targeting: WorldTargetingRuntime | null = null;
@@ -160,11 +172,12 @@ export class ArenaWorldGameplay {
  */
 export function composeArenaWorldGameplay(
   input: ArenaWorldGameplayCompositionInput,
+  gameplay = new ArenaWorldGameplay(),
 ): ArenaWorldGameplay {
   const { flow, isCoopMission, coopMissionRuntime, activityDescriptor, layout } = input;
-  const gameplay = new ArenaWorldGameplay();
 
   composeWorldProjectileRuntime(input, gameplay);
+  composeWorldCombatRuntime(input, gameplay);
   composeWorldGeometry(input, gameplay);
   if (coopMissionRuntime && isCoopMission) {
     // Benannter Activity-Schritt: welche Systeme darin entstehen, gehoert der Activity.
@@ -185,5 +198,6 @@ export function composeArenaWorldGameplay(
     composeWorldObjectMutation(input, gameplay);
     composeWorldSupportGameplay(input, gameplay);
   }
+  activateWorldCombatRuntime(input, gameplay);
   return gameplay;
 }

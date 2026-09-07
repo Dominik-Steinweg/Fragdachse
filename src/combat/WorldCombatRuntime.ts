@@ -1,19 +1,51 @@
 import type {
   CombatBoundaryAttachment,
+  CombatRelationshipReadPort,
+  CombatTargetReadPort,
   WorldCombatRequiredBindings,
 } from './CombatCapabilities';
 import type { CombatScope, CombatTargetRef } from './CombatScope';
 import { isSameCombatScope } from './CombatScope';
+import type { CombatDamagePort, CombatSupportPort } from './CombatMutation';
+import { freezeTargetMutationOutcome } from './CombatMutation';
 
 export type WorldCombatRuntimePhase = 'building' | 'active' | 'detached' | 'destroyed';
 
 /**
- * World-owned lifecycle boundary for Combat. It deliberately does not resolve gameplay yet:
- * P2+ add the implementations behind the required neutral ports, while this owner already makes
- * build/bind/activate and stale teardown enforceable.
+ * World-owned lifecycle boundary for Combat. Concrete gameplay stays behind required neutral
+ * ports; this owner makes build/bind/activate and stale teardown enforceable.
  */
 export class WorldCombatRuntime {
   readonly scope: CombatScope;
+  /** Stable public capabilities; retained references fail closed after detach/destroy. */
+  readonly damage: CombatDamagePort = {
+    applyDamage: (request) => {
+      if (!this.accepts(request.target)) return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'stale-scope',
+      });
+      return this.requireBindings().damage.applyDamage(request);
+    },
+  };
+  readonly support: CombatSupportPort = {
+    applySupport: (request) => {
+      if (!this.accepts(request.target)) return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'stale-scope',
+      });
+      return this.requireBindings().support.applySupport(request);
+    },
+  };
+  readonly targetRead: CombatTargetReadPort = {
+    resolveTarget: (target) => this.accepts(target)
+      ? this.requireBindings().targetRead.resolveTarget(target)
+      : null,
+  };
+  readonly relationships: CombatRelationshipReadPort = {
+    resolveRelationship: (source, target) => this.accepts(target)
+      ? this.requireBindings().relationships.resolveRelationship(source, target)
+      : { relationship: 'neutral', canDamage: false, canSupport: false },
+  };
 
   private currentPhase: WorldCombatRuntimePhase = 'building';
   private bindings: WorldCombatRequiredBindings | null = null;
@@ -73,6 +105,13 @@ export class WorldCombatRuntime {
     this.currentPhase = 'destroyed';
     this.bindings = null;
     this.attachmentToken = null;
+  }
+
+  private requireBindings(): WorldCombatRequiredBindings {
+    if (this.currentPhase !== 'active' || !this.bindings) {
+      throw new Error(`[WorldCombatRuntime] Combat ports are unavailable while ${this.currentPhase}`);
+    }
+    return this.bindings;
   }
 
   private detachBindings(token: symbol): void {

@@ -90,7 +90,7 @@ export class HostPhysicsSystem {
   private scene:         Phaser.Scene;
   private playerManager: PlayerManager;
   private bridge:        NetworkBridge;
-  private combatSystem:  CombatActorStatePort & CombatDamageEffectPort;
+  private combatSystem:  (CombatActorStatePort & CombatDamageEffectPort) | null;
 
   // Obstacle-Gruppen – werden nach Arena-Aufbau injiziert
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -145,7 +145,7 @@ export class HostPhysicsSystem {
     scene:         Phaser.Scene,
     playerManager: PlayerManager,
     bridge:        NetworkBridge,
-    combatSystem:  CombatActorStatePort & CombatDamageEffectPort,
+    combatSystem:  (CombatActorStatePort & CombatDamageEffectPort) | null = null,
   ) {
     this.scene         = scene;
     this.playerManager = playerManager;
@@ -156,6 +156,13 @@ export class HostPhysicsSystem {
   // ── Referenz-Injection ────────────────────────────────────────────────────
 
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
+  /** World binding; the returned lease cannot clear a later World's Combat port. */
+  bindCombatSystem(combatSystem: CombatActorStatePort & CombatDamageEffectPort): { destroy(): void } {
+    this.combatSystem = combatSystem;
+    return { destroy: () => {
+      if (this.combatSystem === combatSystem) this.combatSystem = null;
+    } };
+  }
   setLoadoutManager(lm: LoadoutManagerType | null): void  { this.loadoutManager = lm; }
   setTimeBubbleSystem(system: TimeBubbleSystem | null): void { this.timeBubbleSystem = system; }
 
@@ -238,7 +245,7 @@ export class HostPhysicsSystem {
     durationMs = 260,
   ): void {
     for (const player of this.playerManager.getAllPlayers()) {
-      if (!this.combatSystem.isAlive(player.id)) continue;
+      if (!this.combatSystem?.isAlive(player.id)) continue;
 
       const dx = player.x - x;
       const dy = player.y - y;
@@ -344,7 +351,7 @@ export class HostPhysicsSystem {
     const now = Date.now();
     if (!(this.canMoveResolver?.(playerId)
       ?? maySendWorldInput(this.bridge.getWorldParticipation(playerId)))) return;
-    if (!this.combatSystem.isAlive(playerId)) return;
+    if (!this.combatSystem?.isAlive(playerId)) return;
     if (this.burrowSystem?.isDashBlocked(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
 
@@ -379,7 +386,7 @@ export class HostPhysicsSystem {
   startEnemyDash(enemyId: string, dx: number, dy: number): boolean {
     if (this.enemyDashStates.has(enemyId)) return false;
     const enemy = this.enemyManager?.getEnemy(enemyId);
-    if (!enemy?.sprite.active || !this.combatSystem.isAlive(enemyId)) return false;
+    if (!enemy?.sprite.active || !this.combatSystem?.isAlive(enemyId)) return false;
 
     const length = Math.hypot(dx, dy);
     if (length === 0) return false;
@@ -571,7 +578,7 @@ export class HostPhysicsSystem {
       }
 
       // Tote Spieler überspringen (body.enable = false durch CombatSystem)
-      if (!this.combatSystem.isAlive(player.id)) continue;
+      if (!this.combatSystem?.isAlive(player.id)) continue;
 
       const impulse = this.consumeImpulseVelocity(player.id, now);
       const forcedMovement = this.forcedMovement.get(player.id);
@@ -667,7 +674,7 @@ export class HostPhysicsSystem {
               if (dash.hitIds.has(enemy.id) || !enemy.sprite.active) continue;
               if (Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
               dash.hitIds.add(enemy.id);
-              this.combatSystem.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.x, sourceY: player.y });
+              this.combatSystem?.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.x, sourceY: player.y });
               this.addRecoil(enemy.id, dirX * impactKnockback, dirY * impactKnockback, 180, player.id);
             }
           }
@@ -840,7 +847,7 @@ export class HostPhysicsSystem {
     if (!dash) return null;
 
     // Unter der Erde bzw. im Tod bricht der Schritt sofort ab, damit die Hitbox nicht klein bleibt.
-    if (enemy.isBurrowed() || !this.combatSystem.isAlive(enemy.id)) {
+    if (enemy.isBurrowed() || !this.combatSystem?.isAlive(enemy.id)) {
       this.endEnemyDash(enemy);
       return null;
     }

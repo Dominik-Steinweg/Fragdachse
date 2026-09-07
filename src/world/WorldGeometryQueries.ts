@@ -17,6 +17,8 @@ export interface WorldTargetGeometry {
 
 export interface WorldGeometryQueries {
   readonly metrics: WorldMetrics;
+  /** Explicit startup warmup; does not mutate gameplay state. */
+  prepare(): void;
   getWorldMetrics(): WorldMetrics;
   hasLineOfSight(
     startX: number, startY: number, endX: number, endY: number,
@@ -132,6 +134,7 @@ export function createWorldGeometryQueries(input: WorldGeometryQueryInput): Worl
 
   return {
     metrics: input.metrics,
+    prepare: () => { if (active()) input.index.prepare(); },
     getWorldMetrics: () => input.metrics,
     hasLineOfSight: (startX, startY, endX, endY, options = {}) => (
       !active() || ensureGeometry().geometry.hasLineOfSight(startX, startY, endX, endY, options)

@@ -6,10 +6,12 @@ const bridgeMock = vi.hoisted(() => ({
   getGamePhase: vi.fn(() => 'ARENA'),
   getGameMode: vi.fn(() => 'coop_defense'),
   getActiveGameMode: vi.fn(() => 'coop_defense'),
+  getSynchronizedNow: vi.fn(() => 424_242),
   getPlayerCommittedLoadout: vi.fn(),
   getPlayerCurrentLoadoutSnapshot: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
   registerHeldActionHandler: vi.fn(),
+  registerDecoyStealthBreakHandler: vi.fn(),
   registerPersistentBaseRewardPlacementHandler: vi.fn(),
   registerPersistentBaseMoveHandler: vi.fn(),
   registerWorldParticipationRequestHandler: vi.fn(),
@@ -142,6 +144,7 @@ function createFixture() {
   const playerManager = { getPlayer: vi.fn(() => player) };
   const centerHUD = { showTrainDestroyed: vi.fn() };
   const gameAudioSystem = { playSound: vi.fn(), playLocalSound: vi.fn() };
+  const decoySystem = { breakStealth: vi.fn() };
   const participation = { handleRequest: vi.fn(() => true) };
   const persistentBase = {
     placeReward: vi.fn((): LoadoutUseResult => ({ ok: true })),
@@ -159,7 +162,7 @@ function createFixture() {
     playerManager as never,
     {} as never,
     ctx.combatSystem as never,
-    {} as never,
+    decoySystem as never,
     {} as never,
     {} as never,
     gameAudioSystem as never,
@@ -187,6 +190,7 @@ function createFixture() {
       clearPlayer: (playerId: string) => ctx.hostHeldActionSystem.clearPlayer(playerId),
     },
     train,
+    () => bridgeMock.getSynchronizedNow(),
   );
 
   return {
@@ -205,6 +209,7 @@ function createFixture() {
     powerUpSystem,
     train,
     gameAudioSystem,
+    decoySystem,
   };
 }
 
@@ -226,6 +231,7 @@ beforeEach(() => {
   bridgeMock.isArenaCountdownActive.mockReturnValue(false);
   bridgeMock.getGamePhase.mockReturnValue('ARENA');
   bridgeMock.getGameMode.mockReturnValue('coop_defense');
+  bridgeMock.getSynchronizedNow.mockReturnValue(424_242);
   bridgeMock.getPlayerCommittedLoadout.mockReturnValue(INSPECTOR_COMMITTED);
   bridgeMock.getPlayerCurrentLoadoutSnapshot.mockImplementation(() => bridgeMock.getPlayerCommittedLoadout());
 });
@@ -252,7 +258,7 @@ describe('radial action RPC classification', () => {
     const moveObject = bridgeMock.registerPersistentBaseMoveHandler.mock.calls.at(-1)?.[0];
     const moveRequest = { sourceRuntimeId: 'runtime-1' };
     expect(moveObject?.('p1', moveRequest)).toEqual({ ok: true });
-    expect(fixture.persistentBase.moveObject).toHaveBeenCalledWith('p1', moveRequest, expect.any(Number));
+    expect(fixture.persistentBase.moveObject).toHaveBeenCalledWith('p1', moveRequest, 424_242);
 
     const pickup = bridgeMock.registerPickupPowerUpHandler.mock.calls.at(-1)?.[0];
     expect(pickup?.(7, 'p1')).toBe(true);
@@ -407,19 +413,39 @@ describe('radial action RPC classification', () => {
     fixture.consume.mockReturnValue({ elapsedMs: 900, chargeFraction: 1 });
     const handler = registerLoadoutHandler(fixture.coordinator);
 
-    const before = Date.now();
     const result = handler('utility', 0, 220, 180, 'p1', undefined, {
       temporaryUtilityInstanceId: 'temporary-utility-7',
       heldActionId: 'temporary-bfg-action',
     });
-    const after = Date.now();
 
     expect(result).toEqual({ ok: true });
     const commitNow = fixture.usePlayerAction.mock.calls.at(-1)?.[0].hostNowMs as number;
-    expect(commitNow).toBeGreaterThanOrEqual(before);
-    expect(commitNow).toBeLessThanOrEqual(after);
+    expect(commitNow).toBe(424_242);
     // Held-Action-Consume und Gameplay-Commit teilen sich denselben hostseitigen nowMs.
     expect(fixture.consume).not.toHaveBeenCalled();
+  });
+
+  it('uses the synchronized Host clock for decoy stealth breaks', () => {
+    const fixture = createFixture();
+    const coordinator = fixture.coordinator as unknown as Record<string, () => void>;
+    coordinator.registerDecoyStealthBreakHandler();
+
+    const breakStealth = bridgeMock.registerDecoyStealthBreakHandler.mock.calls.at(-1)?.[0];
+    breakStealth?.('p1');
+
+    expect(fixture.decoySystem.breakStealth).toHaveBeenCalledWith('p1', 424_242);
+  });
+
+  it('fails visibly when the synchronized Host clock is not finite', () => {
+    bridgeMock.getSynchronizedNow.mockReturnValue(Number.NaN);
+    const fixture = createFixture();
+    const coordinator = fixture.coordinator as unknown as Record<string, () => void>;
+    coordinator.registerPersistentBaseMoveHandler();
+
+    const moveObject = bridgeMock.registerPersistentBaseMoveHandler.mock.calls.at(-1)?.[0];
+    expect(() => moveObject?.('p1', { sourceRuntimeId: 'runtime-1' }))
+      .toThrow('[RpcCoordinator] Host action time must be finite');
+    expect(fixture.persistentBase.moveObject).not.toHaveBeenCalled();
   });
 
   it('rejects a held charge when the release names another equal temporary instance', () => {

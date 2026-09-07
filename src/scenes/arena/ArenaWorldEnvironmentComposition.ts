@@ -27,6 +27,8 @@ export function composeWorldGeometry(
     scene, ctx, renderers, flow, worldRuntime, world, layout, layoutMode,
     arenaResult, placementSystem, baseManager, worldBases, presentation,
   } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   placementSystem.setClosedBarrierCellResolver((gridX, gridY) => (
     flow.getCoopMissionRuntime()?.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false
   ));
@@ -48,7 +50,7 @@ export function composeWorldGeometry(
     baseManager,
     presentationRequired: presentation,
     playerManager: ctx.playerManager,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     decoySystem: ctx.decoySystem,
     projectileGeometry: gameplay.projectiles!,
     hostPhysics: ctx.hostPhysics,
@@ -92,13 +94,15 @@ export function composeWorldTrain(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { scene, ctx, renderers, hostUpdate, flow, worldRuntime, world, presentation } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   // The renderer is World-scoped on every peer; authoritative train setup is owned by the
   // World train runtime after the systems it references have been bound.
   const trainRuntime = new WorldTrainRuntime({
     scene: scene,
     playerManager: ctx.playerManager,
     projectileTrain: gameplay.projectiles!,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     hostPhysics: ctx.hostPhysics,
     worldMetrics: world.metrics,
     presentationRequired: presentation,
@@ -147,6 +151,8 @@ export function composeWorldSupportGameplay(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, hostUpdate, flow, worldRuntime, world, layout, arenaResult, isCoopMission } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   if (!gameplay.player) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
   }
@@ -157,7 +163,7 @@ export function composeWorldSupportGameplay(
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
     playerManager: ctx.playerManager,
     projectileExternalInteraction: gameplay.projectiles,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     setBurrowStinkCloudSystem: (system) => gameplay.player?.setBurrowStinkCloudSystem(system),
     gameAudioSystem: ctx.gameAudioSystem,
     worldMetrics: world.metrics,

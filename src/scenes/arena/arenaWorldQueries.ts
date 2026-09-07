@@ -3,7 +3,6 @@ import type { TargetStatusTarget } from '../../systems/TargetStatusSystem';
 import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import { CELL_SIZE } from '../../config';
 import type { RockVisualHelper } from './RockVisualHelper';
-import type { CombatSystem } from '../../systems/CombatSystem';
 import type { PlacementSystem } from '../../systems/PlacementSystem';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { WorldRuntime } from '../../world/WorldRuntime';
@@ -60,7 +59,13 @@ export function hasWalkableEnemyCircleLine(
 
 /** Gemeinsamer externer Hindernisschaden fuer Projektile und Gegner-Spezialeffekte. */
 export function resolveObstacleDamage(
-  combatSystem: CombatSystem,
+  combatSystem: {
+    resolveExternalTargetDamage(
+      target: { targetType: 'rock' | 'construction'; targetId: string },
+      damage: number,
+      attackerId: string,
+    ): number;
+  },
   placementSystem: PlacementSystem | null,
   index: number,
   damage: number,

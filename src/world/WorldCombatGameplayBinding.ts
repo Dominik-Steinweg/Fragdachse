@@ -36,11 +36,12 @@ import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { EnemyMovementStatusSystem } from '../systems/EnemyMovementStatusSystem';
 import { PlasmaSwarmReactionSystem } from '../systems/PlasmaCharge';
 import { WorldCombatReactions } from './WorldCombatReactions';
-import { isSameCombatTargetInstance } from '../combat/CombatScope';
+import { isSameCombatTargetInstance, type CombatTargetRef } from '../combat/CombatScope';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldObjectMutationRuntime } from './WorldObjectMutationRuntime';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { WorldGeometryBinding } from './WorldGeometryBinding';
+import type { WorldCombatRequiredBindings } from '../combat/CombatCapabilities';
 import type { WorldParticipation } from './WorldParticipation';
 import { hasWorldFigure } from './WorldParticipation';
 import type { PlayerCombatIntegrationPort, PlayerCombatResourcePort } from './PlayerCombatIntegrationPort';
@@ -296,6 +297,27 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     }
     this.bindSharedSystems();
     options.playerManager.setSpawnContextProvider(options.getSpawnContext);
+  }
+
+  /** Required cyclic ports are exposed only to the World Combat build/activate boundary. */
+  getRequiredCombatBindings(): WorldCombatRequiredBindings {
+    const combat = this.options.combatSystem;
+    const assertCurrent = (target: CombatTargetRef): void => {
+      if (this.destroyed || !combat.isCurrentCombatantTarget(target)) return;
+    };
+    return {
+      damage: { applyDamage: (request) => combat.applyCombatDamageRequest(request) },
+      support: { applySupport: (request) => combat.applySupport(request) },
+      targetRead: { resolveTarget: (target) => combat.readCombatTarget(target) },
+      relationships: {
+        resolveRelationship: (source, target) => combat.resolveCombatRelationship(source, target),
+      },
+      reactions: {
+        onAcceptedHit: (hit) => { assertCurrent(hit.target); },
+        onDamageApplied: (outcome) => { assertCurrent(outcome.target); },
+        onTerminalTransition: (outcome) => { assertCurrent(outcome.target); },
+      },
+    };
   }
 
   updateEnemyManager(enemyManager: EnemyManager | null): void {

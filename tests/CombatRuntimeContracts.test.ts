@@ -357,6 +357,27 @@ describe('Canonical Player vitals mutation', () => {
 });
 
 describe('WorldCombatRuntime build and ownership contract', () => {
+  it('exposes only active bound capabilities and makes retained ports stale-safe', () => {
+    const runtime = new WorldCombatRuntime(7, 2);
+    runtime.attachRequiredBindings(requiredBindings());
+    const damage = runtime.damage;
+    const targetRead = runtime.targetRead;
+    runtime.activate();
+
+    expect(damage.applyDamage({
+      outcomeId: 'active-damage', target, source, entry: 'automated',
+      damageKind: 'direct', basis: { kind: 'authored', amount: 1 },
+      targetScaling: 'pending', allowCritical: false,
+    })).toMatchObject({ kind: 'rejected', reason: 'not-eligible' });
+    runtime.destroy();
+    expect(damage.applyDamage({
+      outcomeId: 'stale-damage', target, source, entry: 'automated',
+      damageKind: 'direct', basis: { kind: 'authored', amount: 1 },
+      targetScaling: 'pending', allowCritical: false,
+    })).toMatchObject({ kind: 'rejected', reason: 'stale-scope' });
+    expect(targetRead.resolveTarget(target)).toBeNull();
+  });
+
   it('refuses activation without required ports and makes an active detach terminal', () => {
     const runtime = new WorldCombatRuntime(7, 2);
     expect(() => runtime.activate()).toThrow(/required bindings/i);

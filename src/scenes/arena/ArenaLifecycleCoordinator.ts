@@ -76,8 +76,8 @@ import {
 import { ResultApplication } from '../../activity/ResultApplication';
 import type { ArenaPersistentBaseSession } from './ArenaPersistentBaseSession';
 import {
+  ArenaWorldGameplay,
   composeArenaWorldGameplay,
-  type ArenaWorldGameplay,
   type ArenaWorldGameplayFlowPorts,
 } from './ArenaWorldGameplayComposition';
 import {
@@ -151,6 +151,7 @@ import {
   resolveWorldCompositionProfile,
 } from '../../world/WorldComposition';
 import type { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
+import type { CombatSystem } from '../../systems/CombatSystem';
 import {
   hasWorldFigure,
   hasWorldRuntimeEntry,
@@ -315,6 +316,12 @@ export class ArenaLifecycleCoordinator {
   private get worldCombatGameplayBinding(): WorldCombatGameplayBinding | null {
     return this.worldGameplay?.combat ?? null;
   }
+  /** Concrete core owned by the current World composition. */
+  private get combatSystem(): CombatSystem {
+    const combat = this.worldGameplay?.combatSystem;
+    if (!combat) throw new Error('[ArenaLifecycleCoordinator] Combat runtime is not active');
+    return combat;
+  }
   /** World-owned construction rules and Loadout handlers. */
   private get constructionWorldRuntime(): ConstructionWorldRuntime | null {
     return this.worldGameplay?.construction ?? null;
@@ -353,10 +360,6 @@ export class ArenaLifecycleCoordinator {
     clear: () => bridge.clearWorldAndActivity(),
     attach: (context) => {
       this.worldRuntime = new WorldRuntime(context, this.worldLifecycle.getProjectileIdentityScope());
-      this.worldRuntime.bind(this.ctx.combatSystem.bindPlayerVitalsScope({
-        worldRevision: context.descriptor.worldRevision,
-        runtimeGeneration: ++this.combatRuntimeGeneration,
-      }));
       this.renderers.healthBars.openWorld(this.worldRuntime);
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
@@ -482,6 +485,7 @@ export class ArenaLifecycleCoordinator {
    * Systeme baut.
    */
   private readonly worldGameplayFlowPorts: ArenaWorldGameplayFlowPorts = {
+    nextCombatRuntimeGeneration: () => ++this.combatRuntimeGeneration,
     getCoopMissionRuntime: () => this.coopMissionRuntime,
     getCaptureTheBeerSystem: () => this.captureTheBeerActivityRuntime?.system ?? null,
     getPlayerActivityRuntime: () => this.playerActivityRuntime,
@@ -554,11 +558,11 @@ export class ArenaLifecycleCoordinator {
         this.ctx.playerManager.removePlayer(playerId);
       },
       attachCombat: (profile, reconnectAfterDeath) => {
-        if (reconnectAfterDeath) return this.ctx.combatSystem.spawnPlayerAfterReconnect(profile.id);
-        this.ctx.combatSystem.initPlayer(profile.id);
+        if (reconnectAfterDeath) return this.combatSystem.spawnPlayerAfterReconnect(profile.id);
+        this.combatSystem.initPlayer(profile.id);
         return true;
       },
-      detachCombat: (playerId) => { this.ctx.combatSystem.removePlayer(playerId); },
+      detachCombat: (playerId) => { this.combatSystem.removePlayer(playerId); },
       attachCombatResources: (playerId) => { this.worldPlayerGameplayRuntime?.attachPlayerResources(playerId); },
       detachCombatResources: (playerId) => {
         this.worldPlayerGameplayRuntime?.detachPlayerResources(playerId);
@@ -696,7 +700,7 @@ export class ArenaLifecycleCoordinator {
       getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getPlayerManager: () => this.ctx.playerManager,
-      getCombatSystem: () => this.ctx.combatSystem,
+      getCombatSystem: () => this.combatSystem,
       getProjectileSpawnPort: () => this.worldGameplay?.projectiles ?? null,
       getProjectileThreatReadPort: () => this.worldGameplay?.projectiles ?? null,
       getTranslocatorProjectilePort: () => this.worldGameplay?.projectiles ?? null,
@@ -739,7 +743,7 @@ export class ArenaLifecycleCoordinator {
       ),
       damageConstruction: (id, damage, attackerId) => {
         const resolvedDamage = resolveObstacleDamage(
-          this.ctx.combatSystem,
+          this.combatSystem,
           this.worldRuntime?.materialization?.placement ?? null,
           id,
           damage,
@@ -995,6 +999,7 @@ export class ArenaLifecycleCoordinator {
   /** Direkter Zugriff auf die tatsaechlichen Runtime-Owner fuer Scene-/Coordinator-Consumer. */
   getWorldRuntime(): WorldRuntime | null { return this.worldRuntime; }
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
+  getWorldGeometryBinding(): WorldGeometryBinding | null { return this.worldGeometryBinding; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
   getWorldProjectileRuntime(): WorldProjectileRuntime | null { return this.worldGameplay?.projectiles ?? null; }
   getWorldObjectMutationRuntime(): import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime | null {
@@ -1002,6 +1007,7 @@ export class ArenaLifecycleCoordinator {
   }
   getWorldPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null { return this.worldPlayerGameplayRuntime; }
   getWorldCombatGameplayBinding(): WorldCombatGameplayBinding | null { return this.worldCombatGameplayBinding; }
+  getWorldCombatSystem(): CombatSystem | null { return this.worldGameplay?.combatSystem ?? null; }
   getWorldPowerUpRuntime(): WorldPowerUpRuntime | null { return this.worldPowerUpRuntime; }
   getConstructionWorldRuntime(): ConstructionWorldRuntime | null { return this.constructionWorldRuntime; }
   getWorldSupportGameplayRuntime(): WorldSupportGameplayRuntime | null { return this.worldGameplay?.support ?? null; }
@@ -1037,7 +1043,7 @@ export class ArenaLifecycleCoordinator {
       const runtime = new CaptureTheBeerActivityRuntime({
         playerManager: this.ctx.playerManager,
         isPlayerInteractionAllowed: (playerId) => (
-          this.ctx.combatSystem.isAlive(playerId)
+          this.combatSystem.isAlive(playerId)
           && !(this.worldPlayerGameplayRuntime?.isBurrowed(playerId) ?? false)
         ),
         roster: {
@@ -1066,7 +1072,7 @@ export class ArenaLifecycleCoordinator {
         // The World combat owner projects the current Activity barrier; objective materialization
         // republishes this binding once the actual BarrierManager exists.
         this.worldCombatGameplayBinding?.updateActivityBindings();
-        this.ctx.combatSystem.setEnemyManager(enemyManager);
+        this.combatSystem.setEnemyManager(enemyManager);
         this.ctx.hostPhysics.setEnemyManager(enemyManager);
         this.worldTrainRuntime?.setEnemyManager(enemyManager);
         this.worldCombatGameplayBinding?.updateEnemyManager(enemyManager);
@@ -1079,7 +1085,7 @@ export class ArenaLifecycleCoordinator {
         this.worldCombatGameplayBinding?.updateEnemyManager(null);
         this.ctx.hostPhysics.setEnemyRockContactCallback(null);
         this.ctx.hostPhysics.setEnemyManager(null);
-        this.ctx.combatSystem.setEnemyManager(null);
+        this.combatSystem.setEnemyManager(null);
       },
     });
     const activityConfiguration = resolveCoopMissionActivityConfiguration(
@@ -1130,7 +1136,7 @@ export class ArenaLifecycleCoordinator {
       world.metrics,
     );
     const binding = baseManager.createActivityBinding(overlays, () => {
-      this.ctx.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
+      this.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
       this.worldGeometryBinding?.syncBaseObstacles();
     });
     runtime.bind({
@@ -1655,7 +1661,7 @@ export class ArenaLifecycleCoordinator {
     if (requiredIds.length === 0) return false;
     const allInitialPlayersSpawned = requiredIds.every((id) => {
       const player = this.ctx.playerManager.getPlayer(id);
-      return player?.active === true && this.ctx.combatSystem.isAlive(id);
+      return player?.active === true && this.combatSystem.isAlive(id);
     });
     if (!allInitialPlayersSpawned) return false;
 
@@ -1685,7 +1691,7 @@ export class ArenaLifecycleCoordinator {
       if (!this.ctx.playerManager.hasPlayer(profile.id)) continue;
       const loadoutChanged = playerGameplay.reconcilePlayerLoadout(profile.id, this.resolveCommittedLoadoutSelection(profile.id));
       if (loadoutChanged) this.constructionWorldRuntime?.resetPlayerReadiness(profile.id);
-      this.ctx.combatSystem.reconcilePlayerRuntimeState(profile.id);
+      this.combatSystem.reconcilePlayerRuntimeState(profile.id);
     }
   }
 
@@ -2490,6 +2496,10 @@ export class ArenaLifecycleCoordinator {
     }
     // Der konkrete World-Gameplay-Graph entsteht an seiner eigenen Composition-Grenze; der Flow
     // kennt weder die beteiligten Systeme noch ihre Verdrahtung.
+    // Publish the build object only inside this synchronous composition call so cyclic Activity
+    // adapters can bind to the new World core. Host work is still rejected until activation.
+    const buildingGameplay = new ArenaWorldGameplay();
+    this.worldGameplay = buildingGameplay;
     this.worldGameplay = composeArenaWorldGameplay({
       scene: this.scene,
       ctx: this.ctx,
@@ -2514,7 +2524,7 @@ export class ArenaLifecycleCoordinator {
       isCoopMission,
       coopMissionRuntime,
       activityDescriptor,
-    });
+    }, buildingGameplay);
 
     if (coopMissionRuntime && activityConfiguration) {
       this.coopMissionComposition.materializeDependents(activityConfiguration, coopMissionRuntime);

@@ -36,7 +36,10 @@ export interface ArenaContext {
   readonly playerManager:     PlayerManager;
   /** World-scoped projectile owner; outside a materialized World this is null. */
   readonly getProjectileRuntime: () => WorldProjectileRuntime | null;
-  readonly combatSystem:      CombatSystem;
+  /** Current world-owned Combat core; absent while no local World is materialized. */
+  readonly getCombatSystem: () => CombatSystem | null;
+  /** @deprecated P12 removes this compatibility view; the concrete instance is World-owned. */
+  readonly combatSystem: CombatSystem;
   readonly effectSystem:      EffectSystem;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Nie `camera.shake()` direkt rufen. */
   readonly visualFeedback:    VisualFeedbackDirector;

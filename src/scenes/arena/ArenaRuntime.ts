@@ -21,6 +21,7 @@ import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
+import type { CombatSystem } from '../../systems/CombatSystem';
 import type {
   ArenaLayout,
   SyncedReinforcementMatrix,
@@ -241,6 +242,7 @@ export class ArenaRuntime {
       getTrainRuntime: () => this.flow.getWorldTrainRuntime(),
       getWorldMutationRuntime: () => this.flow.getWorldObjectMutationRuntime(),
       getProjectileRuntime: () => this.flow.getWorldProjectileRuntime(),
+      getGeometryBinding: () => this.flow.getWorldGeometryBinding(),
     });
     this.hostUpdate.setPlayerFramePort({
       getPlayerGameplayRuntime: () => this.flow.getWorldPlayerGameplayRuntime(),
@@ -591,6 +593,11 @@ export class ArenaRuntime {
 
   getWorldProjectileRuntime(): WorldProjectileRuntime | null {
     return this.flow.getWorldProjectileRuntime();
+  }
+
+  /** Current world-owned Combat core; null during World handoff or before materialization. */
+  getCombatSystem(): CombatSystem | null {
+    return this.flow.getWorldCombatSystem();
   }
 
   getWorldLayout(): ArenaLayout | null {

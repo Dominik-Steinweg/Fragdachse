@@ -25,6 +25,8 @@ export function composeWorldPlayerGameplay(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, flow, worldRuntime, world, placementSystem } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   // Gemeinsame Immediate-Weapon-Execution-Capability: world-composed, ohne Player-Resource-/
   // Loadout-Autoritaet. Der Loadout delegiert seinen Player-Fire hierher; automatische Quellen
   // verwenden den daneben liegenden world-lokalen Adapter.
@@ -34,7 +36,7 @@ export function composeWorldPlayerGameplay(
   }
   const weaponExecution = new WorldWeaponExecutionRuntime({
     projectileSpawn,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
   });
   const specializedWeaponExecution = new SpecializedWeaponExecutionAdapter(projectileSpawn);
   gameplay.weaponExecution = weaponExecution;
@@ -55,7 +57,7 @@ export function composeWorldPlayerGameplay(
     translocatorProjectilePort: projectileSpawn,
     projectileTravelReadPort: projectileSpawn,
     projectileEnvironmentInteractionPort: projectileSpawn,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     hostPhysics: ctx.hostPhysics,
     fireSystem: ctx.fireSystem,
     placementSystem,
@@ -71,7 +73,7 @@ export function composeWorldPlayerGameplay(
     getTeamAdrenalineRegenMultiplier: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getAdrenalineRegenMultiplier(
       Date.now(),
       bridge.canPlayerReceiveRoundRewards(playerId),
-      ctx.combatSystem.isAlive(playerId),
+      combatSystem.isAlive(playerId),
     ) ?? 1,
     resetPlayerPosition: (playerId, x, y) => {
       flow.getCoopMissionRuntime()?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y);
@@ -99,7 +101,7 @@ export function composeWorldPlayerGameplay(
     createBurrowSystem: (resourceSystem) => new BurrowSystem(
       resourceSystem,
       ctx.playerManager,
-      ctx.combatSystem,
+      combatSystem,
       ctx.hostPhysics,
       bridge,
     ),

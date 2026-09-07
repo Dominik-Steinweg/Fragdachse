@@ -70,7 +70,7 @@ export class RpcCoordinator {
     private readonly centerHUD: CenterHUD,
     private readonly playerManager: PlayerManager,
     private readonly hostPhysics: HostPhysicsSystem,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystemSource: CombatSystem | (() => CombatSystem | null),
     private readonly decoySystem: DecoySystem,
     private readonly effectSystem: EffectSystem,
     private readonly visualFeedback: VisualFeedbackDirector,
@@ -82,7 +82,22 @@ export class RpcCoordinator {
     private readonly playerLoadout: PlayerLoadoutRpcPort,
     private readonly heldActions: HeldActionRpcPort,
     private readonly train: TrainRpcPort,
+    private readonly getHostNowMs: () => number,
   ) {}
+
+  private get combatSystem(): CombatSystem | null {
+    return typeof this.combatSystemSource === 'function'
+      ? this.combatSystemSource()
+      : this.combatSystemSource;
+  }
+
+  private resolveHostActionTime(): number {
+    const hostNowMs = this.getHostNowMs();
+    if (!Number.isFinite(hostNowMs)) {
+      throw new RangeError('[RpcCoordinator] Host action time must be finite');
+    }
+    return hostNowMs;
+  }
 
   registerAll(): void {
     this.registerDashHandler();
@@ -124,7 +139,7 @@ export class RpcCoordinator {
 
   private registerPersistentBaseMoveHandler(): void {
     bridge.registerPersistentBaseMoveHandler((playerId, request) => (
-      this.persistentBase.moveObject(playerId, request, Date.now())
+      this.persistentBase.moveObject(playerId, request, this.resolveHostActionTime())
     ));
   }
 
@@ -162,7 +177,7 @@ export class RpcCoordinator {
       if (!this.capabilities.get(playerId).canUseCombat) return;
       const player = this.playerManager.getPlayer(playerId);
       if (player) this.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
-      this.decoySystem.breakStealth(playerId, Date.now());
+      this.decoySystem.breakStealth(playerId, this.resolveHostActionTime());
     });
   }
 
@@ -182,13 +197,13 @@ export class RpcCoordinator {
         return true;
       }
       if (!kind || !this.capabilities.get(playerId).canInteract || bridge.isArenaCountdownActive()
-        || !this.combatSystem.isAlive(playerId)
+        || !this.combatSystem?.isAlive(playerId)
         || this.playerLoadout.isBurrowed(playerId)
         || this.playerLoadout.isStunned(playerId)) return false;
       // Die Host-Zeit wird einmal an der RPC-Orchestrierungsgrenze aufgelöst und unverändert
       // durch die Held-Action-Grenze gereicht. Retries mit derselben actionId werden dort
       // duplicate-safe behandelt und dürfen den ursprünglichen Startzeitpunkt nicht verschieben.
-      const hostNowMs = Date.now();
+      const hostNowMs = this.resolveHostActionTime();
 
       if (kind === 'global_dismantle') {
         if (toolRef || temporaryUtilityInstanceId) return false;
@@ -220,7 +235,7 @@ export class RpcCoordinator {
       // Charge-Validierung, Construction-Use und der Gameplay-Commit teilen sich `hostNowMs`.
       // `clientX`/`clientY` bleiben Positions-/Latenzkompensation und sind davon unberührt;
       // eine Client-Uhr fließt bewusst nicht mehr in Cooldown-/Commit-Entscheidungen ein.
-      const hostNowMs = Date.now();
+      const hostNowMs = this.resolveHostActionTime();
       const isGaussCancellation = slot === 'ultimate'
         && params?.ultimateAction === 'cancel'
         && params?.gaussChargeId !== undefined;

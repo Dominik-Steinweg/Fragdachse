@@ -98,6 +98,7 @@ import type {
   CombatImmediateAttackOutcome,
   CombatImmediateAttackPort,
   CombatMovementStatusPort,
+  CombatTargetSnapshot,
 } from '../combat/CombatCapabilities';
 import type { HitscanShotRequest, MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 
@@ -651,6 +652,52 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
   applySupport(...args: Parameters<CombatSystem['applySupportAtHostTime']>): ReturnType<CombatSystem['applySupportAtHostTime']> {
     return this.runHostExecution(() => this.applySupportAtHostTime(...args));
+  }
+
+  /** Canonical request-shaped port used by the world Combat lifecycle boundary. */
+  applyCombatDamageRequest(request: CombatDamageRequest): CombatDamageMutationOutcome {
+    const outcome = this.runHostExecution(() => this.applyDamageAtHostTime(
+      String(request.target.id),
+      request.basis.amount,
+      request.burrowException === 'burrow-stuck',
+      request.source.attribution.id,
+      request.source.authoredSourceId,
+      undefined,
+      {
+        allowTeamDamage: request.source.allegiance.allowTeamDamage,
+        allowCritical: request.allowCritical,
+        sourceSlot: request.source.sourceSlot,
+        damageKind: request.damageKind,
+        entry: request.entry === 'projectile-direct' ? 'projectile-direct' : 'automated',
+        source: request.source,
+        basis: request.basis,
+        target: request.target,
+      },
+    ));
+    return outcome ?? freezeTargetMutationOutcome({
+      kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+      source: request.source, reason: 'target-missing',
+    });
+  }
+
+  /** Passive read model for the build-time target port; it never advances status. */
+  readCombatTarget(target: CombatTargetRef): CombatTargetSnapshot | null {
+    if (!this.isCurrentCombatantTarget(target)) return null;
+    const state = target.kind === 'player'
+      ? this.playerVitals.readVitals(target)
+      : target.kind === 'enemy' ? this.enemyManager?.readCombatVitals(target) ?? null : null;
+    if (!state) return null;
+    const player = target.kind === 'player' ? this.playerManager.getPlayer(target.id) : null;
+    const enemy = target.kind === 'enemy' ? this.enemyManager?.getEnemy(target.id) : null;
+    return {
+      target,
+      state,
+      position: { x: player?.x ?? enemy?.sprite.x ?? 0, y: player?.y ?? enemy?.sprite.y ?? 0 },
+    };
+  }
+
+  resolveCombatRelationship(source: CombatSource, target: CombatTargetRef) {
+    return this.relationshipForSource(source, String(target.id));
   }
 
   constructor(

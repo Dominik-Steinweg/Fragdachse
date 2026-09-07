@@ -45,6 +45,7 @@ import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplay
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import type { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
+import type { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
 import type { ProjectileEnergyInjectorImpact } from '../../projectile/ProjectileCombatPort';
 import type { ProjectileImpactSource } from '../../projectile/ProjectileGameplayPort';
 import type {
@@ -96,6 +97,7 @@ export interface HostWorldFramePort {
   getTrainRuntime(): WorldTrainRuntime | null;
   getWorldMutationRuntime(): WorldObjectMutationRuntime | null;
   getProjectileRuntime?(): WorldProjectileRuntime | null;
+  getGeometryBinding?(): WorldGeometryBinding | null;
 }
 
 /** World-owned player/loadout reads used by the host frame. */
@@ -306,7 +308,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
    */
   prepareStartupCaches(now: number): void {
     if (!bridge.isHost()) return;
-    this.ctx.combatSystem.getObstacleIndex().prepare();
+    this.worldFramePort?.getGeometryBinding?.()?.getQueries().prepare();
     this.activityStep()?.hostPrepareStartupCaches(now);
   }
 
@@ -315,7 +317,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
     }
-    const now = Date.now();
+    const now = bridge.getSynchronizedNow();
     this.ctx.combatSystem.runHostExecution(() => this.runHostUpdateAtTime(delta, now), now);
   }
 
@@ -380,7 +382,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.supportSystems?.detonation?.checkProjectileDetonations();
       this.playerGameplayRuntime?.runHostPreCombatStage(now, countdownActive);
       this.worldFramePort?.getProjectileRuntime?.()?.runHostInteractionStage(now);
-      this.ctx.combatSystem.updateBurnEffects(now);
+      this.ctx.combatSystem.advanceStatuses(now);
     }
 
     const projectileRuntime = this.worldFramePort?.getProjectileRuntime?.() ?? null;
@@ -426,7 +428,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     const { synced: smokes, damageEvents: smokeDmg } = countdownActive
       ? { synced: [], damageEvents: [] }
-      : this.ctx.smokeSystem.hostUpdate(Date.now());
+      : this.ctx.smokeSystem.hostUpdate(now);
     const {
       synced: fires,
       ground: liveBurningGround,
@@ -446,7 +448,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     const { synced: stinkClouds, damageEvents: stinkDmg } = countdownActive
       ? { synced: [], damageEvents: [] }
-      : this.ctx.stinkCloudSystem.hostUpdate(Date.now(), (id) => {
+      : this.ctx.stinkCloudSystem.hostUpdate(now, (id) => {
           const player = this.ctx.playerManager.getPlayer(id);
           if (player) {
             const profile = bridge.getConnectedPlayers().find(p => p.id === id);
@@ -469,16 +471,16 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
             color: 0x8aaa32,
           };
         });
-    const timeBubbles = countdownActive ? [] : (this.combatSystems?.timeBubble?.hostUpdate(Date.now()) ?? []);
+    const timeBubbles = countdownActive ? [] : (this.combatSystems?.timeBubble?.hostUpdate(now) ?? []);
 
     if (!countdownActive) {
       const turretCfg    = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const turretWeapon = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
-      this.combatSystems?.turret?.hostUpdate(Date.now(), turretCfg, turretWeapon);
+      this.combatSystems?.turret?.hostUpdate(now, turretCfg, turretWeapon);
     }
 
-    const teslaDomes = countdownActive ? [] : (this.combatSystems?.teslaDome?.hostUpdate(Date.now()) ?? []);
-    const energyShields = countdownActive ? [] : (this.combatSystems?.energyShield?.hostUpdate(Date.now()) ?? []);
+    const teslaDomes = countdownActive ? [] : (this.combatSystems?.teslaDome?.hostUpdate(now) ?? []);
+    const energyShields = countdownActive ? [] : (this.combatSystems?.energyShield?.hostUpdate(now) ?? []);
     this.visuals?.timeBubble.syncVisuals(timeBubbles);
     this.visuals?.teslaDome.syncVisuals(teslaDomes);
     this.visuals?.energyShield.syncVisuals(energyShields);
@@ -593,7 +595,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.supportSystems?.airstrike?.update(now);
     }
 
-    const meteorImpacts = countdownActive ? [] : (this.supportSystems?.armageddon?.update(Date.now(), delta) ?? []);
+    const meteorImpacts = countdownActive ? [] : (this.supportSystems?.armageddon?.update(now, delta) ?? []);
     for (const mi of meteorImpacts) {
       if (mi.variant === 'void') {
         this.ctx.combatSystem.applyExplosionDamage(mi.x, mi.y, {
@@ -644,7 +646,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       && this.trainManager) {
       if (!this.classicTrainSpawned) {
         const trainEvent = bridge.getTrainEvent();
-        if (trainEvent && Date.now() >= trainEvent.spawnAt) {
+        if (trainEvent && now >= trainEvent.spawnAt) {
           this.trainManager.spawn();
           this.classicTrainSpawned = true;
           this.ctx.combatSystem.setTrainSegments(this.trainManager.getSegObjects());
@@ -769,7 +771,6 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         this.moveLoopHandle = null;
       }
 
-      const now = Date.now();
       const playerFrame = this.playerGameplayRuntime?.getHostPlayerFrameReadModel(localId, now, isMovingLocal);
       const aimLocal      = playerFrame?.aim ?? this.getDefaultAimState(isMovingLocal);
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);

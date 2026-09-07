@@ -20,6 +20,8 @@ import type {
   ArenaWorldGameplayCompositionInput,
 } from './ArenaWorldGameplayComposition';
 import { wireProjectileRenderers } from './RendererBundle';
+import { CombatSystem } from '../../systems/CombatSystem';
+import { WorldCombatRuntime } from '../../combat/WorldCombatRuntime';
 
 /**
  * Der world-owned Owner der autoritativen Projectile-Registry.
@@ -50,6 +52,40 @@ export function composeWorldProjectileRuntime(
   worldRuntime.bind(projectileRuntime);
 }
 
+/** Build phase: creates the concrete Combat instance and installs only its World identity. */
+export function composeWorldCombatRuntime(
+  input: ArenaWorldGameplayCompositionInput,
+  gameplay: ArenaWorldGameplay,
+): void {
+  const generation = input.flow.nextCombatRuntimeGeneration();
+  const combatSystem = new CombatSystem(input.ctx.playerManager, bridge);
+  const combatRuntime = new WorldCombatRuntime(input.worldRuntime.descriptor.worldRevision, generation);
+  input.worldRuntime.setCombat(combatRuntime);
+  gameplay.combatSystem = combatSystem;
+  gameplay.combatRuntime = combatRuntime;
+  input.worldRuntime.bind(combatSystem.bindPlayerVitalsScope(combatRuntime.scope));
+}
+
+/** Bind/activate phase: closes every required cyclic edge after all World owners exist. */
+export function activateWorldCombatRuntime(
+  input: ArenaWorldGameplayCompositionInput,
+  gameplay: ArenaWorldGameplay,
+): void {
+  const combat = gameplay.combatSystem;
+  const runtime = gameplay.combatRuntime;
+  const binding = gameplay.combat;
+  if (!combat || !runtime || !binding) {
+    throw new Error('[ArenaWorldComposition] Combat graph is incomplete before activation');
+  }
+  runtime.attachRequiredBindings(binding.getRequiredCombatBindings());
+  input.worldRuntime.bind(input.ctx.hostPhysics.bindCombatSystem(combat));
+  input.worldRuntime.bind(combat.bindHostExecutionSources({
+    nowMs: () => bridge.getSynchronizedNow(),
+    random: Math.random,
+  }));
+  runtime.activate();
+}
+
 /**
  * Die World-Projektion der scene-langlebigen Kampf-, Physik- und Projektilsysteme.
  *
@@ -69,6 +105,8 @@ export function composeWorldCombatGameplay(
   if (!projectileRuntime) {
     throw new Error('[ArenaWorldComposition] Projectile runtime is missing');
   }
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   // Eine Basisaenderung trifft alle Felder gemeinsam: Der Coordinator verschickt den Patch
   // prioritaer und sperrt die entfallenen Zielzellen sofort, bis das neue Feld aktiv ist.
   const syncActiveBaseIds = (): void => {
@@ -85,7 +123,7 @@ export function composeWorldCombatGameplay(
     projectileWorldImpact: projectileRuntime,
     projectileSwarm: projectileRuntime,
     projectileInteraction: projectileRuntime,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     hostPhysics: ctx.hostPhysics,
     decoySystem: ctx.decoySystem,
     fireSystem: ctx.fireSystem,
@@ -120,7 +158,7 @@ export function composeWorldCombatGameplay(
           .filter((placeable) => (
             placeable.kind === 'turret'
             && playerId !== null
-            && ctx.combatSystem.canDamageTarget(placeable.ownerId, playerId)
+            && combatSystem.canDamageTarget(placeable.ownerId, playerId)
           ))
           .map((placeable) => ({
             x: ARENA_OFFSET_X + placeable.gridX * CELL_SIZE + CELL_SIZE * 0.5,
@@ -129,7 +167,7 @@ export function composeWorldCombatGameplay(
             range: placeable.targetRange ?? turretRange,
           })),
         projectiles: (latestState?.projectiles ?? [])
-          .filter((projectile) => playerId !== null && ctx.combatSystem.canDamageTarget(projectile.ownerId, playerId, projectile.allowTeamDamage))
+          .filter((projectile) => playerId !== null && combatSystem.canDamageTarget(projectile.ownerId, playerId, projectile.allowTeamDamage))
           .map((projectile) => ({
             x: projectile.x,
             y: projectile.y,
@@ -140,7 +178,7 @@ export function composeWorldCombatGameplay(
           const livingBases = baseManager?.getBasesByFaction('friendly')
             ?.filter((base) => !(base.isInert?.() ?? false) && base.getHp() > 0) ?? [];
           return (flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [])
-            .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && ctx.combatSystem.isAlive(enemy.id))
+            .filter((enemy) => enemy.faction === 'hostile' && enemy.sprite.active && combatSystem.isAlive(enemy.id))
             .map((enemy) => {
               let targetBaseId: string | undefined;
               let targetBaseDistance = Number.POSITIVE_INFINITY;
@@ -175,9 +213,9 @@ export function composeWorldCombatGameplay(
           }
           : undefined,
         isRelevantOpponent: (otherPlayerId) => playerId === null
-          ? ctx.combatSystem.isAlive(otherPlayerId)
-          : ctx.combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
-        hasLineOfSight: (sx, sy, ex, ey) => ctx.combatSystem.hasLineOfSight(sx, sy, ex, ey),
+          ? combatSystem.isAlive(otherPlayerId)
+          : combatSystem.isAlive(otherPlayerId) && bridge.isEnemyPair(playerId, otherPlayerId),
+        hasLineOfSight: (sx, sy, ex, ey) => combatSystem.hasLineOfSight(sx, sy, ex, ey),
       };
     },
     getWorldParticipation: (playerId) => flow.getWorldParticipation(playerId),
@@ -201,7 +239,7 @@ export function composeWorldCombatGameplay(
       target,
     ),
     resolveObstacleDamage: (rockId, damage, attackerId) => resolveObstacleDamage(
-      ctx.combatSystem,
+      combatSystem,
       placementSystem,
       rockId,
       damage,
@@ -279,7 +317,7 @@ export function composeWorldCombatGameplay(
     },
     respawnPlayer: (playerId) => flow.getPlayerActivityRuntime()?.consumeRespawn(playerId, false) ?? true,
     publishRespawn: () => flow.getPlayerActivityRuntime()?.publishRespawnBudget(),
-    getTeamHpRegenBonus: (playerId, nowMs) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(nowMs, bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
+    getTeamHpRegenBonus: (playerId, nowMs) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(nowMs, bridge.canPlayerReceiveRoundRewards(playerId), combatSystem.isAlive(playerId)) ?? 0,
     getMatrixDamageReduction: (footprint, applies, nowMs) => gameplay.targeting?.systems.reinforcementMatrix.getDamageReductionForFootprint(footprint, nowMs, applies) ?? 0,
     getMatrixDamageMultiplier: (footprint, applies, nowMs) => gameplay.targeting?.systems.reinforcementMatrix.getDamageMultiplierForFootprint(footprint, nowMs, applies) ?? 1,
     isHomingTargetValid: (id, type, ownerId) => {
@@ -292,11 +330,6 @@ export function composeWorldCombatGameplay(
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
-  // Registered after the gameplay binding so reverse teardown invalidates Host entries first.
-  worldRuntime.bind(ctx.combatSystem.bindHostExecutionSources({
-    nowMs: () => bridge.getSynchronizedNow(),
-    random: Math.random,
-  }));
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

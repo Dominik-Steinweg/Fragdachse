@@ -31,9 +31,11 @@ export function composeWorldPowerUp(
     ctx, rockVisualHelper, hostUpdate, flow, worldRuntime, world, layout,
     placementSystem, baseManager,
   } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   const powerUpRuntime = new WorldPowerUpRuntime({
     playerManager: ctx.playerManager,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     layout,
     worldMetrics: world.metrics,
     recordPowerUpCollected: (playerId) => bridge.recordPowerUpCollected(playerId),
@@ -88,6 +90,8 @@ export function composeWorldConstruction(
     scene, ctx, rockVisualHelper, flow, persistentBaseStores, worldRuntime, world,
     placementSystem, baseManager, persistentBaseBinding, coopMissionRuntime, activityDescriptor,
   } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   const playerGameplay = gameplay.player;
   if (!playerGameplay) {
     throw new Error('[ArenaWorldComposition] Player gameplay runtime is missing on host');
@@ -95,7 +99,7 @@ export function composeWorldConstruction(
   const constructionRuntime = new ConstructionWorldRuntime({
     scene: scene,
     playerManager: ctx.playerManager,
-    combatSystem: ctx.combatSystem,
+    combatSystem,
     placementSystem,
     utilityAction: playerGameplay,
     targetStatusSystem: gameplay.targeting?.systems.targetStatus ?? null,
@@ -143,7 +147,7 @@ export function composeWorldConstruction(
       if (cause === 'damage' && runtime.kind === 'rock'
         && attackerId !== runtime.ownerId && (runtime.enemyDestroyedExplosionRadius ?? 0) > 0) {
         const point = worldCellCenter(world.metrics, runtime.gridX, runtime.gridY);
-        ctx.combatSystem.applyAoeDamage(
+        combatSystem.applyAoeDamage(
           point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0,
           runtime.enemyDestroyedExplosionDamage ?? 0, runtime.ownerId, false,
           { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.rock_collapse', sourceSlot: 'utility' },
@@ -244,6 +248,8 @@ export function composeWorldObjectMutation(
   gameplay: ArenaWorldGameplay,
 ): void {
   const { ctx, worldRuntime, world, layout, arenaResult, placementSystem, baseManager, rockVisualHelper } = input;
+  const combatSystem = gameplay.combatSystem;
+  if (!combatSystem) throw new Error('[ArenaWorldComposition] Combat runtime is missing');
   const construction = gameplay.construction;
   const rockRegistry = worldRuntime.materialization?.rocks;
   if (!construction || !rockRegistry) {
@@ -276,7 +282,7 @@ export function composeWorldObjectMutation(
     },
   });
   const runtime = new WorldObjectMutationRuntime({
-    scope: ctx.combatSystem.getCombatScope(),
+    scope: combatSystem.getCombatScope(),
     metrics: world.metrics,
     rockRegistry,
     rockRuntime,
