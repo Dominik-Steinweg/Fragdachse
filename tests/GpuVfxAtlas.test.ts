@@ -6,6 +6,7 @@ import {
   GPU_VFX_ATLAS,
   GPU_VFX_ATLAS_KEY,
   GPU_VFX_ATLAS_PADDING,
+  GPU_VFX_DEATH_MORPH_FRAME_IDS,
   GpuVfxFrameId,
   buildGpuVfxAtlas,
   getGpuVfxFrame,
@@ -39,7 +40,14 @@ import {
   TEX_DEATH_DUST_MOTE_C,
   TEX_DEATH_DUST_MOTE_D,
   TEX_DEATH_DUST_MOTE_E,
+  ensureDeathMorphTextures,
 } from '../src/effects/gpu/GpuVfxSourceTextures';
+import {
+  DEATH_MORPH_FRAME_COUNT,
+  DEATH_MORPH_FRAME_SIZE,
+  sampleDeathMorphBlend,
+  writeDeathMorphPixels,
+} from '../src/effects/gpu/DeathMorphFrames';
 import {
   TEX_FLAME_CORE,
   TEX_FLAME_EMBER,
@@ -65,6 +73,63 @@ afterEach(() => {
 });
 
 describe('gpu vfx atlas', () => {
+  it('interpolates alpha without darkening shared or transparent pixels', () => {
+    const from = new Uint8ClampedArray([0, 0, 0, 0, 255, 255, 255, 200, 255, 255, 255, 144]);
+    const to = new Uint8ClampedArray([255, 255, 255, 240, 255, 255, 255, 40, 255, 255, 255, 144]);
+    const output = new Uint8ClampedArray(from.length);
+    writeDeathMorphPixels(output, from, to, 0.25);
+    expect([...output]).toEqual([255, 255, 255, 60, 255, 255, 255, 160, 255, 255, 255, 144]);
+    writeDeathMorphPixels(output, from, to, 0);
+    expect([...output]).toEqual([255, 255, 255, 0, 255, 255, 255, 200, 255, 255, 255, 144]);
+    writeDeathMorphPixels(output, from, to, 1);
+    expect(output).toEqual(to);
+  });
+
+  it('bakes the whole morph once with fixed geometry and exact endpoint alpha', () => {
+    const scene = makeFakeGpuVfxScene();
+    ensureDeathMorphTextures(scene as never);
+    const sources = [
+      TEX_DEATH_MORPH_COMPACT, TEX_DEATH_MORPH_FRAYED, TEX_DEATH_MORPH_POROUS,
+      TEX_DEATH_MORPH_FRAGMENTED, TEX_DEATH_MORPH_DUST, TEX_DEATH_MORPH_FINE_DUST,
+      TEX_DEATH_MORPH_HAZE, TEX_DEATH_MORPH_VAPOR,
+    ];
+    const reads = sources.map((key, index) => {
+      const data = new Uint8ClampedArray(DEATH_MORPH_FRAME_SIZE ** 2 * 4);
+      for (let offset = 3; offset < data.length; offset += 4) data[offset] = index * 32;
+      return vi.spyOn(scene.textures.get(key).context, 'getImageData').mockReturnValue({ data });
+    });
+    const layout = packGpuVfxAtlas();
+    const atlas = scene.textures.createCanvas(GPU_VFX_ATLAS_KEY, layout.size, layout.size);
+    const pixels = new Map<string, number[]>();
+    vi.spyOn(atlas.context, 'putImageData').mockImplementation((image, x, y) => {
+      pixels.set(`${x},${y}`, [...image.data.slice(0, 4)]);
+    });
+    buildGpuVfxAtlas(scene as never);
+    expect(new Set(GPU_VFX_ATLAS.map((entry) => entry.id)).size).toBe(GPU_VFX_ATLAS.length);
+    expect(GPU_VFX_DEATH_MORPH_FRAME_IDS).toHaveLength(DEATH_MORPH_FRAME_COUNT);
+    const baked = GPU_VFX_DEATH_MORPH_FRAME_IDS.map((id) => {
+      const frame = getGpuVfxFrame(id);
+      expect(frame.cutWidth).toBe(DEATH_MORPH_FRAME_SIZE);
+      expect(frame.cutHeight).toBe(DEATH_MORPH_FRAME_SIZE);
+      return pixels.get(`${frame.cutX},${frame.cutY}`)!;
+    });
+    expect(baked[0]).toEqual([255, 255, 255, 0]);
+    expect(baked.at(-1)).toEqual([255, 255, 255, 224]);
+    expect(baked.slice(1, 10).every((pixel) => pixel[3] > 0 && pixel[3] < 32)).toBe(true);
+    expect(sampleDeathMorphBlend(0).from).toBe(TEX_DEATH_MORPH_COMPACT);
+    expect(sampleDeathMorphBlend(1)).toMatchObject({ to: TEX_DEATH_MORPH_VAPOR, mix: 1 });
+    // Keine Rueckspruenge oder groben Spruenge zwischen aufeinanderfolgenden Motiven.
+    for (let index = 1; index < baked.length; index += 1) {
+      const delta = baked[index][3] - baked[index - 1][3];
+      expect(delta).toBeGreaterThanOrEqual(0);
+      expect(delta).toBeLessThan(8);
+    }
+    buildGpuVfxAtlas(scene as never);
+    expect(reads.every((read) => read.mock.calls.length === 1)).toBe(true);
+    expect(atlas.context.putImageData).toHaveBeenCalledTimes(DEATH_MORPH_FRAME_COUNT);
+    expect(atlas.refreshed).toBe(1);
+  });
+
   it('uses constant longitudinal cross-sections for continuous flight strips', () => {
     const { atlas } = build();
     for (const name of ['flight-core-strip', 'flight-wake-strip']) {
@@ -78,8 +143,8 @@ describe('gpu vfx atlas', () => {
     const layout = packGpuVfxAtlas();
     // Die Groesse steht nicht im Code, sie ergibt sich aus dem Manifest.
     expect(layout.size & (layout.size - 1)).toBe(0);
-    // Der gemeinsame Atlas waechst fuer die Gore-Motive, bleibt aber weit unter der WebGL2-Grenze.
-    expect(layout.size).toBe(512);
+    // Vorbereitete Morphs duerfen den garantierten Atlasrahmen nicht sprengen.
+    expect(layout.size).toBeLessThanOrEqual(2048);
     expect(layout.rects.length).toBe(GPU_VFX_ATLAS.length);
   });
 

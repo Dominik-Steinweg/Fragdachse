@@ -402,14 +402,14 @@ export const DEATH_DISINTEGRATION_VFX = {
   microLifetimeMaxMs: 640,
   /** Obergrenze der Morph-Streckung je Hauptfragment; 1 waere ein synchron schaltender Burst. */
   morphDesyncMaxScale: 1.32,
-  /** Sofortiger gemeinsamer Treffer-Drift, bevor die spaete Cubic-In-Freigabe sichtbar wird. */
-  cohesionHitDriftPx: 1.6,
+  /** Sofortiger gemeinsamer Treffer-Drift, bevor sich der Burst oeffnet. */
+  cohesionHitDriftPx: 1.2,
   /** Display-Groesse, auf die `chunkSizePx` als World-Space-Fragmentmass kalibriert ist. */
   referenceDisplaySizePx: 32,
   chunkSizePx: 4,
-  travelMinPx: 22,
-  travelMaxPx: 104,
-  jitterPx: 18,
+  travelMinPx: 16.5,
+  travelMaxPx: 78,
+  jitterPx: 13.5,
   rotationMaxDeg: 58,
   scaleStart: 1.55,
   scaleEnd: 1.06,
@@ -427,8 +427,8 @@ export const DEATH_DISINTEGRATION_VFX = {
   neutralTargetColorBoost: 0.08,
   maxChunksPerEffect: 64,
   glowCount: 8,
-  glowTravelMinPx: 26,
-  glowTravelMaxPx: 118,
+  glowTravelMinPx: 19.5,
+  glowTravelMaxPx: 88.5,
   glowScaleMin: 0.34,
   glowScaleMax: 0.96,
   glowAlpha: 0.78,

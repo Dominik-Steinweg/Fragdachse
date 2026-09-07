@@ -1,5 +1,12 @@
 import * as Phaser from 'phaser';
 import {
+  DEATH_MORPH_FRAME_COUNT,
+  DEATH_MORPH_FRAME_SIZE,
+  sampleDeathMorphBlend,
+  writeDeathMorphPixels,
+  type DeathMorphBlend,
+} from './DeathMorphFrames';
+import {
   TEX_AIRSTRIKE_BOMB,
   TEX_AIRSTRIKE_SPARK,
   TEX_ROCKET_EXHAUST,
@@ -182,21 +189,42 @@ export const GpuVfxFrameId = {
   FlightWakeStrip:       53,
 } as const;
 
-export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId];
+/** Nur die unten erzeugte, zusammenhaengende Morph-Folge darf diesen ID-Bereich belegen. */
+type DeathMorphFrameId = number & { readonly deathMorphFrame: unique symbol };
+export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId] | DeathMorphFrameId;
 
 interface GpuVfxAtlasEntry {
   readonly id: GpuVfxFrameId;
   /** Frame-Name im Atlas. Erscheint in der Diagnose und in Phasers `frameDataIndices`. */
   readonly frame: string;
-  /** Quelltextur, aus der geblittet wird; `null` beim leeren Platzhalter. */
+  /** Quelltextur zum Blitten; `null` beim Platzhalter und direkt gebackenen Morphs. */
   readonly sourceTextureKey: string | null;
   readonly width: number;
   readonly height: number;
   /** Optional bit-exact source crop; reuses existing art without resampling it. */
   readonly sourceX?: number;
+  /** Vorbereitete Alpha-Mischung vorhandener Motive, direkt in den Atlas geschrieben. */
+  readonly deathMorph?: DeathMorphBlend;
   /** Erzeugt die Quelltextur, falls der zustaendige Renderer noch nicht gelaufen ist. */
   readonly ensure: ((scene: Phaser.Scene) => void) | null;
 }
+
+const DEATH_MORPH_ATLAS_ENTRIES: readonly GpuVfxAtlasEntry[] = Array.from(
+  { length: DEATH_MORPH_FRAME_COUNT },
+  (_, index) => ({
+    // IDs 0–53 bleiben unveraendert; weitere statische Frames hinter diesem Bereich anhaengen.
+    id: (54 + index) as DeathMorphFrameId,
+    frame: `death-morph-blend-${index}`,
+    sourceTextureKey: null,
+    width: DEATH_MORPH_FRAME_SIZE,
+    height: DEATH_MORPH_FRAME_SIZE,
+    deathMorph: sampleDeathMorphBlend(index / (DEATH_MORPH_FRAME_COUNT - 1)),
+    ensure: null,
+  }),
+);
+
+export const GPU_VFX_DEATH_MORPH_FRAME_IDS: readonly GpuVfxFrameId[] =
+  DEATH_MORPH_ATLAS_ENTRIES.map((entry) => entry.id);
 
 /**
  * Reihenfolge egal fuer die IDs, aber `Void` muss zuerst *eingefuegt* werden – das erledigt
@@ -418,6 +446,7 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
     id: GpuVfxFrameId.DeathDustMoteE, frame: 'death-dust-mote-e',
     sourceTextureKey: TEX_DEATH_DUST_MOTE_E, width: 48, height: 48, ensure: ensureDeathDustMoteTextures,
   },
+  ...DEATH_MORPH_ATLAS_ENTRIES,
 ];
 
 /** Transparenter Rand um jeden Frame, in Pixeln. */
@@ -506,6 +535,17 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
 
   const canvas = existing;
   const ctx = canvas.context;
+  const morphPixels = ctx?.createImageData(DEATH_MORPH_FRAME_SIZE, DEATH_MORPH_FRAME_SIZE);
+  const morphSources = new Map<string, Uint8ClampedArray>();
+  const readMorphSource = (key: string): Uint8ClampedArray => {
+    let pixels = morphSources.get(key);
+    if (!pixels) {
+      const source = scene.textures.get(key) as Phaser.Textures.CanvasTexture;
+      pixels = source.context.getImageData(0, 0, DEATH_MORPH_FRAME_SIZE, DEATH_MORPH_FRAME_SIZE).data;
+      morphSources.set(key, pixels);
+    }
+    return pixels;
+  };
   if (ctx) {
     ctx.clearRect(0, 0, layout.size, layout.size);
     ctx.imageSmoothingEnabled = false;
@@ -517,6 +557,11 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
     // `layout.rects` liegt in der Reihenfolge von `GPU_VFX_ATLAS`, `resolvedFrames` dagegen
     // unter der stabilen Manifest-Id – die Reihenfolge im Manifest darf keinen Frame verschieben.
     const rect = layout.rects[GPU_VFX_ATLAS.indexOf(entry)];
+    if (ctx && morphPixels && entry.deathMorph) {
+      const blend = entry.deathMorph;
+      writeDeathMorphPixels(morphPixels.data, readMorphSource(blend.from), readMorphSource(blend.to), blend.mix);
+      ctx.putImageData(morphPixels, rect.x, rect.y);
+    }
     if (ctx && entry.sourceTextureKey && scene.textures.exists(entry.sourceTextureKey)) {
       const source = scene.textures.get(entry.sourceTextureKey).getSourceImage();
       // Ganzzahlige Zielkoordinaten: alles andere waere eine resamplete, nicht pixelgleiche Kopie.

@@ -13,9 +13,9 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
   }),
 }));
 
-import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
+import { getGpuVfxFrame, resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
-import { GpuVfxFrameAnimationId } from '../src/effects/gpu/GpuVfxFrameAnimations';
+import { getGpuVfxFrameAnimation, GpuVfxFrameAnimationId } from '../src/effects/gpu/GpuVfxFrameAnimations';
 import { GPU_VFX_EFFECTS, GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem';
@@ -115,24 +115,8 @@ describe('gpu vfx system: lanes', () => {
       .toEqual([GpuVfxFrameAnimationId.DeathDisintegration]);
     expect(gore.frameAnimations).toEqual([{
       name: 'death-disintegration',
-      frames: [
-        'death-morph-compact',
-        'death-morph-compact',
-        'death-morph-frayed',
-        'death-morph-frayed',
-        'death-morph-porous',
-        'death-morph-fragmented',
-        'death-morph-dust',
-        'death-morph-fine-dust',
-        'death-morph-haze',
-        'death-morph-haze',
-        'death-morph-haze',
-        'death-morph-haze',
-        'death-morph-haze',
-        'death-morph-haze',
-        'death-morph-vapor',
-        'death-morph-vapor',
-      ],
+      frames: getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration).frames
+        .map((id) => getGpuVfxFrame(id).name),
       duration: 1,
     }]);
     expect(scene.layers.filter((lane) => lane.frameAnimations.length > 0)).toEqual([gore]);

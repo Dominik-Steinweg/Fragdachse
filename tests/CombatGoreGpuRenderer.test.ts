@@ -19,6 +19,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 import { CombatGoreGpuRenderer } from '../src/effects/CombatGoreGpuRenderer';
 import { BLOOD_HIT_VFX, COLORS, DEATH_DISINTEGRATION_VFX } from '../src/config';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
+import { getGpuVfxFrameAnimation, GpuVfxFrameAnimationId } from '../src/effects/gpu/GpuVfxFrameAnimations';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
@@ -297,7 +298,7 @@ describe('combat gore gpu renderer', () => {
     expect(primary.alpha.ease).toBe('Cubic.easeIn');
     expect(primary.frameAnimation).toMatchObject({
       name: 'death-disintegration',
-      amplitude: 16,
+      amplitude: getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration).frames.length,
       loop: false,
       yoyo: false,
     });

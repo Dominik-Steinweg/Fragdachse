@@ -269,6 +269,7 @@ export interface FakeCanvasContext {
   createLinearGradient(...args: number[]): { addColorStop(): void };
   /** Die GroundFire-Motive werden pixelweise geschrieben und brauchen einen echten Puffer. */
   createImageData(width: number, height: number): { width: number; height: number; data: Uint8ClampedArray };
+  getImageData(x: number, y: number, width: number, height: number): { data: Uint8ClampedArray };
   putImageData(image: { data: Uint8ClampedArray }, x: number, y: number): void;
   /** Alle uebrigen Canvas-Methoden sind No-Ops (siehe Proxy in `makeFakeCanvasTexture`). */
   [method: string]: unknown;
@@ -306,6 +307,9 @@ function makeFakeCanvasTexture(key: string, width: number, height: number): Fake
       },
       createRadialGradient: () => gradient,
       createLinearGradient: () => gradient,
+      getImageData: (_x: number, _y: number, width: number, height: number) => ({
+        data: new Uint8ClampedArray(width * height * 4),
+      }),
       createImageData: (width: number, height: number) => ({
         width,
         height,

@@ -194,6 +194,21 @@ describe('gpu vfx member: position ease', () => {
 });
 
 describe('gpu vfx member: frame animation', () => {
+  it.each([0.5, 1, 1.32])('keeps the one-shot before its wrap point at duration scale %s', (scale) => {
+    const animation = getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration);
+    const lifeMs = 1420;
+    const member = writeGpuVfxMember(spec({ lifeMs, frameAnimationDurationScale: scale }), FRAME, animation);
+    const frame = member.animation as { amplitude: number; duration: number };
+    expect(frame.duration).toBeGreaterThan(lifeMs);
+    let previous = -1;
+    for (const age of [0, 100, 500, lifeMs - 1, lifeMs]) {
+      const index = Math.floor((age % frame.duration) / frame.duration * frame.amplitude);
+      expect(index).toBeGreaterThanOrEqual(previous);
+      expect(index).toBeLessThan(animation.frames.length);
+      previous = index;
+    }
+  });
+
   it('writes a deterministic one-shot without affecting static members', () => {
     const animation = getGpuVfxFrameAnimation(GpuVfxFrameAnimationId.DeathDisintegration);
     const animated = writeGpuVfxMember(spec({ lifeMs: 1350 }), FRAME, animation);
@@ -206,7 +221,7 @@ describe('gpu vfx member: frame animation', () => {
     };
 
     expect(frame.base).toBe('death-disintegration');
-    expect(frame.amplitude).toBe(16);
+    expect(frame.amplitude).toBe(animation.frames.length);
     expect(frame.duration).toBe(1351);
     expect(frame.loop).toBe(false);
     expect(frame.yoyo).toBe(false);

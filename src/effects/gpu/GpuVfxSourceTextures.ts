@@ -96,10 +96,8 @@ export function ensureDeathMorphTextures(scene: Phaser.Scene): void {
     ctx.fillRect(20.8, 10.8, 4.8, 2.8);
   });
 
-  // Ab hier mischen sich weiche Koerner unter die harten Massen. Die Framefolge kann nicht
-  // ueberblenden, jeder Wechsel ist ein harter Schnitt - der Uebergang muss deshalb im Motiv
-  // selbst liegen: aufeinanderfolgende Frames teilen sich ihr Vokabular, damit der Sprung
-  // zwischen ihnen klein bleibt.
+  // Ab hier mischen sich weiche Koerner unter die harten Massen. Der Atlas berechnet zwischen
+  // diesen Schluesselmotiven feine Alpha-Ueberblendungen fuer die GPU-Framefolge.
   ensureCanvasTexture(scene.textures, TEX_DEATH_MORPH_POROUS, 48, 48, (ctx) => {
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.fillRect(12.8, 14.4, 9.6, 8.4);

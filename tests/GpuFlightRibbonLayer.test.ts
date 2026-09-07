@@ -18,7 +18,8 @@ vi.mock('phaser', () => ({
     },
   } } },
 }));
-vi.mock('../src/effects/gpu/GpuVfxAtlas', () => ({
+vi.mock('../src/effects/gpu/GpuVfxAtlas', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../src/effects/gpu/GpuVfxAtlas')>(),
   GPU_VFX_ATLAS_KEY: 'atlas', GpuVfxFrameId: { FlightCoreStrip: 0 },
   getGpuVfxFrame: () => ({ name: 'strip' }),
 }));
