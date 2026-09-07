@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B aktiv; R2-Fix 3 geprüft, Review 4 als Nächstes |
+| Gesamtstatus | Block B gestoppt; R2 Review 4 mit Blocker |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Frisches R2 Review 4; P7 nicht beginnen |
+| Nächster Arbeitsschritt | Manuelle Prüfung/Freigabe des R2-Blockers; P7 nicht beginnen |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine; R2-Fix 3 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ece1781a` |
-| Start-HEAD der laufenden Aufgabe | `ece1781a` |
+| Aktive Phase / Aufgabe | Keine; Nutzerstopp nach Zusatzschleife |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ae6685e8` |
+| Start-HEAD der laufenden Aufgabe | – |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Keiner; zusätzliche Schleife ausdrücklich freigegeben |
-| Aktueller Reparaturzähler | Nutzer-Ausnahme Fix 3 genutzt; Review 4 ausstehend |
+| Aktuell nötiger Modell-/Reviewstopp | Nutzerentscheidung erforderlich |
+| Aktueller Reparaturzähler | Nutzer-Ausnahme Fix 3 genutzt; Review 4 fehlgeschlagen |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -41,7 +41,7 @@
 | P4 | B | ✅ | Damage / Support / Modifier / Defense |
 | P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
-| R2 | B | 🟨 | Review-3-Blocker korrigiert; Review 4 ausstehend |
+| R2 | B | 🟧 | Review 4: Burn-Provenance-Blocker; Nutzerstopp |
 | P7 | C | ⬜ | Projectile-Adapter |
 | P8 | C | ⬜ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
@@ -76,6 +76,7 @@ P1–P4 sind realisiert:
 | Geplanter Integrationsübergang | Verbleibende Projectile-Callback-Reaktionen auf den einen Ausführungspfad umstellen (D10) | P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
+| R2-Blocker | Neue Burn-Anwendung kann abgelaufene Herkunft derselben Source-ID erben | Manuelle Prüfung |
 
 ## 5. Nachweise und Reviews
 
@@ -95,14 +96,14 @@ P1–P4 sind realisiert:
 
 **R2-Fix 2:** zwei Review-Repros plus angrenzender instanzgebundener Clear geschlossen. Check 2775 Core/32 Architektur und Build grün; Integration 188/188; Orchestrator-Fokus 46/46; Typecheck/Diff-Check grün.
 
-**R2 Review 3:** 119/119 Fokus, Integration 188/188 und Architektur 32/32 grün. Die fünf früheren Blocker bleiben geschlossen; Repro zeigt jedoch alten TargetStatus-/EnergyInjector-Zustand auf einer gleichnamigen Nachfolgerinstanz.
-
 **R2-Fix 3:** terminaler Enemy-Status-Cleanup vor externen Hooks; Fokus 38/38, Integration 192/192 und Check 2775 Core/32 Architektur plus Build grün.
+
+**R2 Review 4:** 2775/2775 Core, 32/32 Architektur und 192/192 Integration grün; alle sechs früheren Blocker geschlossen. Zusatzrepro bestätigt stale Burn-Herkunft bei erneut verwendeter Source-ID.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
 | R1 | Bestanden | `ee5742b4` | Keine |
-| R2 Review 3 | Nicht bestanden | `8c8b8dc5` | Status-Lifetime bei Enemy-ID-Wiederverwendung |
+| R2 Review 4 | Nicht bestanden | `ae6685e8` | Burn-Provenance bei wiederverwendeter Source-ID |
 | P13 | Nicht ausgeführt | – | – |
 
 Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlender Beleg verlangt erneute Prüfung; alter Review-Pass gilt nach Code-Delta nicht automatisch weiter.
