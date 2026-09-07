@@ -1,0 +1,335 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('phaser', () => {
+  class Line {
+    constructor(public x1 = 0, public y1 = 0, public x2 = 0, public y2 = 0) {}
+    setTo(x1: number, y1: number, x2: number, y2: number) {
+      Object.assign(this, { x1, y1, x2, y2 }); return this;
+    }
+    static Length(l: Line) { return Math.hypot(l.x2 - l.x1, l.y2 - l.y1); }
+  }
+  class Rectangle {
+    constructor(public x = 0, public y = 0, public width = 0, public height = 0) {}
+    setTo(x: number, y: number, width: number, height: number) {
+      Object.assign(this, { x, y, width, height }); return this;
+    }
+  }
+  return {
+    BlendModes: { ADD: 1, NORMAL: 0 },
+    Geom: { Line, Rectangle, Circle: class {
+      setTo(x: number, y: number, radius: number) { Object.assign(this, { x, y, radius }); return this; }
+    }, Intersects: {
+      GetLineToCircle: (l: Line, c: { x: number; y: number; radius: number }, out: { x: number; y: number }[] = []) => {
+        const dx = l.x2 - l.x1, dy = l.y2 - l.y1;
+        const x = l.x1 - c.x, y = l.y1 - c.y;
+        const a = dx * dx + dy * dy, b = 2 * (x * dx + y * dy);
+        const d = b * b - 4 * a * (x * x + y * y - c.radius * c.radius);
+        if (a > 0 && d >= 0) for (const t of [(-b - Math.sqrt(d)) / (2 * a), (-b + Math.sqrt(d)) / (2 * a)]) {
+          if (t >= 0 && t <= 1) out.push({ x: l.x1 + t * dx, y: l.y1 + t * dy });
+        }
+        return out;
+      },
+      GetLineToRectangle: (l: Line, r: Rectangle, out: { x: number; y: number }[] = []) => {
+        const dx = l.x2 - l.x1, dy = l.y2 - l.y1;
+        for (const x of [r.x, r.x + r.width]) {
+          const t = (x - l.x1) / dx, y = l.y1 + t * dy;
+          if (t >= 0 && t <= 1 && y >= r.y && y <= r.y + r.height) out.push({ x, y });
+        }
+        for (const y of [r.y, r.y + r.height]) {
+          const t = (y - l.y1) / dy, x = l.x1 + t * dx;
+          if (t >= 0 && t <= 1 && x >= r.x && x <= r.x + r.width) out.push({ x, y });
+        }
+        return out;
+      },
+    } },
+    Math: {
+      Clamp: (n: number, min: number, max: number) => Math.max(min, Math.min(max, n)),
+      Distance: { Between: (x: number, y: number, tx: number, ty: number) => Math.hypot(tx - x, ty - y) },
+    },
+  };
+});
+
+const network = vi.hoisted(() => ({
+  isHost: () => true,
+  getLocalPlayerId: () => 'shooter',
+  getCurrentWorldRevision: () => 1,
+  getLatestGameState: () => ({ worldRevision: 1, players: {} }),
+  isArenaCountdownActive: () => false,
+  getActiveGameMode: () => 'deathmatch',
+  getPlayerCurrentLoadoutSnapshot: () => null,
+  registerLoadoutUseHandler: vi.fn(),
+}));
+vi.mock('../../src/network/bridge', () => ({ bridge: network }));
+
+import { ArenaInputBindings, type ArenaInputBindingsInput } from '../../src/scenes/arena/ArenaInputBindings';
+import { ClientUpdateCoordinator } from '../../src/scenes/arena/ClientUpdateCoordinator';
+import { RpcCoordinator } from '../../src/scenes/arena/RpcCoordinator';
+import { PlayerWeaponActivationRuntime } from '../../src/world/PlayerWeaponActivationRuntime';
+import { PlayerActionRuntime } from '../../src/world/PlayerActionRuntime';
+import { WorldWeaponExecutionRuntime } from '../../src/world/WorldWeaponExecutionRuntime';
+import { WorldCombatCore } from '../../src/combat/WorldCombatCore';
+import { LoadoutManager } from '../../src/loadout/LoadoutManager';
+import type { BaseWeapon } from '../../src/loadout/BaseWeapon';
+import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { EffectSystem } from '../../src/effects/EffectSystem';
+import { fakeEntity } from '../fakeEntity';
+import type { SyncedHitscanTrace, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../../src/types';
+
+// Compose the real input, prediction, RPC, activation, cooldown, combat and trace-dedupe paths.
+// Only renderer/audio and the transport delivery are headless ports.
+function fixture(remote = false) {
+  let now = 1_000;
+  let processingDelay = 0;
+  let processingHost = false;
+  let resourceCost = 0;
+  vi.spyOn(network, 'isHost').mockImplementation(() => !remote || processingHost);
+  vi.spyOn(network, 'getLocalPlayerId').mockImplementation(() => remote && processingHost ? 'host' : 'shooter');
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const config = WEAPON_CONFIGS.ASMD_PRIM;
+  const players = [
+    fakeEntity({ id: 'shooter', x: 300, y: 200, color: 0xffffff, rotation: 0 }),
+    fakeEntity({ id: 'target', x: 500, y: 200, color: 0xffffff, rotation: 0 }),
+  ];
+  const playerManager = {
+    getAllPlayers: () => players,
+    getPlayer: (id: string) => players.find(p => p.id === id),
+  };
+  function effects(localId: string) {
+    const effect = Object.create(EffectSystem.prototype);
+    Object.assign(effect, {
+      bridge: { getLocalPlayerId: () => localId },
+      scene: { time: { now: 0 } },
+      pendingPredictedTracerIds: new Map(), processedSyncedTracerKeys: new Map(),
+      // Same dedupe storage as the live EffectSystem, without allocating renderers.
+      audioSystem: { playSound: vi.fn(), playLocalSound: vi.fn() },
+      playHitscanTracer: vi.fn(),
+    });
+    return effect as EffectSystem & { audioSystem: { playSound: ReturnType<typeof vi.fn>; playLocalSound: ReturnType<typeof vi.fn> } };
+  }
+  const localEffects = effects('shooter');
+  const remoteEffects = effects('target');
+  const traces: SyncedHitscanTrace[] = [];
+  const combat = new WorldCombatCore(playerManager as never, {
+    getLatestGameState: () => null,
+    isHost: () => true,
+    areTeammates: () => false,
+    getPlayerProfile: () => undefined,
+    broadcastEffect: vi.fn(),
+    broadcastHitscanTracer: (...args: unknown[]) => {
+      const [startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, visualStartX, visualStartY] = args;
+      const trace = { startX, startY, endX, endY, color, thickness, impactKind, visualPreset, shooterId, shotId, shotAudioKey, visualStartX, visualStartY } as SyncedHitscanTrace;
+      traces.push(trace);
+      localEffects.playSyncedHitscanTracer(trace);
+      remoteEffects.playSyncedHitscanTracer(trace);
+    },
+  } as never);
+  combat.bindHostExecutionSources({ nowMs: () => now + processingDelay, random: () => 0.5 });
+  combat.setPlayerMaxHpResolver(() => config.damage * 100);
+  players.forEach(p => combat.initPlayer(p.id as string));
+  const prediction = Object.create(ClientUpdateCoordinator.prototype) as ClientUpdateCoordinator;
+  const aim = vi.fn();
+  const hud = vi.fn();
+  Object.assign(prediction, {
+    ctx: { playerManager, getWorldCombatCore: () => combat, effectSystem: localEffects,
+      aimSystem: { notifyShot: aim }, leftPanel: { flashSlot: hud } },
+    weaponLastFired: { weapon1: 0, weapon2: 0 },
+    localFirePredictions: { weapon1: [], weapon2: [] },
+    pendingAdrenalineSpends: new Map(), authoritativeAdrenaline: null,
+    nextPredictionId: 1, nextPrimaryPredictionId: 1, nextPredictedHitscanShotId: 1,
+    getLocalWeaponConfig: () => config,
+  });
+  const loadout = new LoadoutManager({} as never, { getGameMode: () => 'deathmatch' });
+  loadout.assignDefaultLoadout('shooter', { weapon1: config });
+  const item = (loadout as unknown as { loadouts: Map<string, { weapon1: BaseWeapon }> }).loadouts.get('shooter')!.weapon1;
+  const commits = vi.spyOn(item, 'recordUse');
+  const execution = new WorldWeaponExecutionRuntime({ combatSystem: combat, projectileSpawn: { spawnProjectile: () => null } as never });
+  const activation = new PlayerWeaponActivationRuntime({
+    playerManager: playerManager as never,
+    loadout,
+    resourceSystem: { getAdrenaline: () => 100, resolveAdrenalineCost: () => resourceCost, drainAdrenaline: vi.fn() },
+    weaponExecution: execution, specializedWeaponExecution: { fire: () => false },
+  });
+  const playerAction = new PlayerActionRuntime({
+    getPlayer: playerManager.getPlayer as never,
+    canInteract: () => true, isAlive: () => true,
+    isWeaponBlocked: () => false, isDashBurst: () => false,
+  }, loadout, null, activation);
+  const capabilities = { canInteract: true, canUseCombat: true };
+  const rpc = Object.create(RpcCoordinator.prototype);
+  Object.assign(rpc, {
+    clientUpdate: prediction,
+    capabilities: { get: () => capabilities },
+    getHostNowMs: () => now + processingDelay,
+    playerLoadout: {
+      usePlayerAction: playerAction.execute.bind(playerAction),
+      getAdrenaline: () => 100, getAdrenalineRevision: () => 1,
+    },
+  });
+  rpc.registerLoadoutUseHandler();
+  const handler = network.registerLoadoutUseHandler.mock.calls.at(-1)![0];
+  let fire!: (...args: any[]) => void;
+  const replies: (() => void)[] = [];
+  const inputSystem = new Proxy({ setupLoadoutListener: (listener: typeof fire) => { fire = listener; } }, {
+    get: (target, key) => Reflect.get(target, key) ?? vi.fn(),
+  });
+  const actions = new Proxy({
+    getPlayerCapabilities: () => capabilities,
+    isLocalPlayerAlive: () => true, isLocalPlayerBurrowed: () => false,
+    isHost: () => network.isHost(),
+    getLocalWeaponConfig: () => config,
+    getWeaponLastFired: (slot: WeaponSlot) => prediction.weaponLastFiredRecord()[slot],
+    notifyLoadoutFired: prediction.notifyLoadoutFired.bind(prediction),
+    rollbackRejectedLoadoutFire: prediction.rollbackRejectedLoadoutFire.bind(prediction),
+    sendLoadoutUse: (slot: WeaponSlot, angle: number, tx: number, ty: number, shotId: number, params: unknown, _x: unknown, _y: unknown, awaitResult: boolean) => {
+      processingHost = true;
+      let result: LoadoutUseResult;
+      try { result = handler(slot, angle, tx, ty, 'shooter', shotId, params); }
+      finally { processingHost = false; }
+      if (!remote) return Promise.resolve(result);
+      if (!awaitResult) return Promise.resolve(null);
+      return new Promise<LoadoutUseResult>(resolve => replies.push(() => resolve(result)));
+    },
+  }, { get: (target, key) => Reflect.get(target, key) ?? vi.fn() });
+  const input = new ArenaInputBindings({ inputSystem, actions, audioSystem: { playLocalSound: vi.fn() } } as unknown as ArenaInputBindingsInput);
+  // Bind only the loadout listener; keyboard/UI setup is unrelated to held-fire dispatch.
+  (input as any).setupActionBindings();
+  return {
+    config, item, commits, combat, traces, localEffects, remoteEffects, aim, hud, prediction, actions, replies,
+    setResourceCost: (cost: number) => { resourceCost = cost; },
+    shoot: (time: number, delay: number, inputStarted = false, angle = 0, params?: LoadoutUseParams) => {
+      now = time; processingDelay = delay;
+      fire('weapon1', angle, 600, 200, { inputStarted, ...params });
+    },
+  };
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('held weapon fire at the authoritative cooldown boundary', () => {
+  it('keeps host resource rejections and scope holds silent without reserving a predicted cooldown', async () => {
+    const f = fixture();
+    f.setResourceCost(101);
+    f.shoot(1_000, 0);
+    expect(f.commits).not.toHaveBeenCalled();
+    expect(f.traces).toHaveLength(0);
+    expect(f.localEffects.playHitscanTracer).not.toHaveBeenCalled();
+    expect(f.localEffects.audioSystem.playSound).not.toHaveBeenCalled();
+    expect(f.aim).not.toHaveBeenCalled();
+    expect(f.hud).not.toHaveBeenCalled();
+    f.setResourceCost(0);
+    f.shoot(1_001, 0, false, 0, { scopeHolding: true });
+    expect(f.commits).not.toHaveBeenCalled();
+    expect(f.hud).not.toHaveBeenCalled();
+    f.shoot(1_002, 0);
+    expect(f.commits).toHaveBeenCalledTimes(1);
+    expect(f.localEffects.audioSystem.playSound).toHaveBeenCalledTimes(1);
+    await Promise.resolve();
+    expect(f.hud).toHaveBeenCalledTimes(1);
+  });
+  it('never displays a rejected host attempt and fires immediately once authoritative readiness permits', async () => {
+    const f = fixture();
+    const start = 1_000;
+    f.shoot(start, 7, true);
+    const initialHp = f.combat.getMaxHp('target');
+    expect(f.commits).toHaveBeenCalledTimes(1);
+    expect(f.traces[0]).toMatchObject({ impactKind: 'player' });
+    expect(f.combat.getHP('target')).toBe(initialHp - f.config.damage);
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(1);
+    f.shoot(start + f.config.cooldown, 1);
+    expect(f.commits).toHaveBeenCalledTimes(1);
+    expect(f.combat.getHP('target')).toBe(initialHp - f.config.damage);
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(1);
+    f.shoot(start + f.config.cooldown + 6, 1);
+    expect(f.commits).toHaveBeenCalledTimes(2);
+    expect(f.traces).toHaveLength(2);
+    expect(f.combat.getHP('target')).toBe(initialHp - 2 * f.config.damage);
+    expect(f.remoteEffects.playHitscanTracer).toHaveBeenCalledTimes(2);
+    expect(f.aim).toHaveBeenCalledTimes(2);
+    expect(f.hud).toHaveBeenCalledTimes(2);
+    await Promise.resolve();
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(2);
+    expect(f.localEffects.audioSystem.playSound).toHaveBeenCalledTimes(2);
+    expect(f.remoteEffects.audioSystem.playSound).toHaveBeenCalledTimes(2);
+    expect(f.prediction.weaponLastFiredRecord().weapon1).toBe(0);
+  });
+
+  it('keeps host commits, HP and both presentations in lockstep under changing processing delays', async () => {
+    const f = fixture();
+    f.shoot(1_000, 7, true);
+    let accepted = 1;
+    for (const delay of [1, 9, 2, 5, 0, 8, 3, 6]) {
+      const ready = f.item.getLastUsedAt() + f.config.cooldown;
+      f.shoot(ready - delay - 1, delay);
+      expect(f.commits).toHaveBeenCalledTimes(accepted);
+      expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(accepted);
+      f.shoot(ready - delay, delay);
+      accepted++;
+      // All assertions precede Promise callbacks: no additional host frame/round trip.
+      expect(f.commits).toHaveBeenCalledTimes(accepted);
+      expect(f.traces).toHaveLength(accepted);
+      expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(accepted);
+      expect(f.remoteEffects.playHitscanTracer).toHaveBeenCalledTimes(accepted);
+      expect(f.localEffects.audioSystem.playSound).toHaveBeenCalledTimes(accepted);
+      expect(f.aim).toHaveBeenCalledTimes(accepted);
+      expect(f.hud).toHaveBeenCalledTimes(accepted);
+      expect(f.combat.getHP('target')).toBe(f.combat.getMaxHp('target') - accepted * f.config.damage);
+    }
+    await Promise.resolve();
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(accepted);
+    const hp = f.combat.getHP('target');
+    f.shoot(f.item.getLastUsedAt() + f.config.cooldown, 0, false, Math.PI / 2);
+    expect(f.commits).toHaveBeenCalledTimes(accepted + 1);
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(accepted + 1);
+    expect(f.combat.getHP('target')).toBe(hp); // A real miss still has shot feedback.
+  });
+
+  it('corrects held client rejections without waiting another cooldown and deduplicates confirmed predictions', async () => {
+    const f = fixture(true);
+    f.shoot(1_000, 7, true);
+    f.replies.shift()!();
+    await Promise.resolve();
+    const t = 1_000 + f.config.cooldown;
+    f.shoot(t, 1);
+    expect(f.commits).toHaveBeenCalledTimes(1);
+    expect(f.replies).toHaveLength(1); // Held input must request the rejection too.
+    f.replies.shift()!();
+    await Promise.resolve();
+    f.shoot(t + 6, 1);
+    expect(f.commits).toHaveBeenCalledTimes(2);
+    f.replies.shift()!();
+    await Promise.resolve();
+    for (let i = 1; i <= 5; i++) {
+      f.shoot(t + 6 + i * f.config.cooldown, 1);
+      f.replies.shift()!();
+      await Promise.resolve();
+    }
+    expect(f.commits).toHaveBeenCalledTimes(7);
+    expect(f.traces).toHaveLength(7);
+    expect(f.remoteEffects.playHitscanTracer).toHaveBeenCalledTimes(7);
+    // One rejected prediction remains visible, but confirmations never replay prediction FX.
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(8);
+    expect(f.localEffects.audioSystem.playSound).toHaveBeenCalledTimes(8);
+    expect(f.aim).toHaveBeenCalledTimes(8);
+    expect(f.hud).toHaveBeenCalledTimes(8);
+    expect(f.combat.getHP('target')).toBe(f.combat.getMaxHp('target') - 7 * f.config.damage);
+  });
+
+  it('does not roll back a newer client prediction when an older held rejection arrives late', async () => {
+    const f = fixture(true);
+    f.shoot(1_000, 7, true);
+    f.replies.shift()!();
+    await Promise.resolve();
+    const t = 1_000 + f.config.cooldown;
+    f.shoot(t, 1);
+    const rejectOld = f.replies.shift()!;
+    f.shoot(t + f.config.cooldown, 1);
+    f.replies.shift()!();
+    await Promise.resolve();
+    rejectOld();
+    await Promise.resolve();
+    expect(f.prediction.weaponLastFiredRecord().weapon1).toBe(t + f.config.cooldown);
+    f.shoot(t + f.config.cooldown + 1, 1);
+    expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(3);
+    expect(f.commits).toHaveBeenCalledTimes(2);
+  });
+});

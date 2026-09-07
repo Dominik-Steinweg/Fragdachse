@@ -368,7 +368,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
     if (!countdownActive) this.activityStep()?.hostPrePhysicsStep(now);
-    this.ctx.hostPhysics.update(countdownActive);
+    this.ctx.hostPhysics.update(countdownActive, now);
     if (!countdownActive) {
       this.targetingSystems?.reinforcementMatrix?.update(now);
       this.targetingSystems?.energyInjector?.update(now);

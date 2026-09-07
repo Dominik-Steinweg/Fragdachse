@@ -113,7 +113,7 @@ export const LIGHT_PRESETS = {
     // Etwas länger und mit flacherem Abklingen als ein reiner Ein-Frame-Blitz, sonst
     // ist der Impuls bei 60 fps kaum als Licht zu erkennen.
     durationMs: 130,
-    decayExponent: 1.5,
+    decayExponent: 0.8,
     occludes: false,
     priority: 2,
     flickerAmount: 0,

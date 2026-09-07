@@ -1230,11 +1230,11 @@ export class EffectSystem implements EnemyVisualSink {
     }
 
     if (visualPreset === 'asmd_primary' && this.asmdPrimaryRenderer) {
-      this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind);
+      this.asmdPrimaryRenderer.playTracer(startX, startY, renderEndX, renderEndY, playerColor, thickness, resolvedImpactKind, beamId);
       return;
     }
 
-    this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, visualPreset, playerColor);
+    this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, visualPreset, playerColor, beamId);
 
     const gfx = this.scene.add.graphics();
     registerGraphicsObject(this.scene, 'effectSystemGraphics', gfx);

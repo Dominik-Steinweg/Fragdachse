@@ -20,6 +20,7 @@ import { GPU_VFX_EFFECTS, GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffect
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem';
 import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
+import { createGpuVfxMemberHandle } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 function setup() {
@@ -27,6 +28,24 @@ function setup() {
   const system = new GpuVfxSystem(scene as never);
   return { scene, system };
 }
+
+it('invalidates tracked handles on expiry, recycling and global release', () => {
+  const { system, scene } = setup();
+  const spec = spawnSpec(system, GpuVfxEffectId.MuzzleFlashBody);
+  const first = createGpuVfxMemberHandle(), second = createGpuVfxMemberHandle();
+  system.spawn(spec, -1, system.now(), 0, first);
+  const lane = findFakeLane(scene, 'muzzle-flash');
+  expect(system.updateTransform(first, 30, 40, 1, 2, 0.4)).toBe(true);
+  expect(lane.patched).toHaveLength(1);
+  system.update(spec.lifeMs + 1);
+  system.spawn(spec, -1, system.now(), 0, second);
+  expect(first.slot).toBe(second.slot);
+  expect(system.updateTransform(first, 0, 0, 0, 0, 0)).toBe(false);
+  system.releaseMember(first);
+  expect(system.isMemberLive(second)).toBe(true);
+  system.releaseAll();
+  expect(system.updateTransform(second, 0, 0, 0, 0, 0)).toBe(false);
+});
 
 /** Ein Spec mit allen Feldern gesetzt, damit die Tests nichts von Defaults abhaengig machen. */
 function spawnSpec(system: GpuVfxSystem, effect: GpuVfxEffectId) {

@@ -389,7 +389,7 @@ export class ArenaLifecycleCoordinator {
           repairDrone: this.renderers.repairDrone,
           slimeTrail: this.renderers.slimeTrail,
           flamethrowerUpgrades: this.renderers.flamethrowerUpgrades,
-          train: this.renderers.train,
+          getTrain: () => this.renderers.train,
           powerUp: this.renderers.powerUp,
           nuke: this.renderers.nuke,
           airstrike: this.renderers.airstrike,

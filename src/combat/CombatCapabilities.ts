@@ -275,6 +275,12 @@ export interface CombatBurnPort {
 }
 
 export interface CombatMovementStatusPort {
+  applyHitStagger(request: {
+    readonly target: CombatTargetRef;
+    readonly durationMs: number;
+    readonly nowMs: number;
+  }): boolean;
+  isHitStaggered(target: CombatTargetRef, nowMs: number): boolean;
   applySlow(request: {
     readonly target: CombatTargetRef;
     readonly source: CombatSource;
@@ -283,7 +289,7 @@ export interface CombatMovementStatusPort {
     readonly nowMs: number;
   }): boolean;
   getMovementFactor(target: CombatTargetRef, nowMs: number): number;
-  prune(nowMs: number): void;
+  prune(nowMs: number, isCurrentTarget?: (target: CombatTargetRef) => boolean): void;
   clearMovementStatus(target: CombatTargetRef): void;
 }
 

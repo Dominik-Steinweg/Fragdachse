@@ -488,6 +488,16 @@ export const DAMAGE_VIGNETTE_VFX = {
   frameAlphaRatio: 0.2,
 } as const;
 
+/** Mündungsfeuer: drei Master-Regler für GPU-Body, Sparks und lokalen Lichtpuls. */
+export const MUZZLE_FLASH_VFX = {
+  /** Global size/presence and light strength. 0 disables the entire muzzle effect. */
+  muzzleFlashIntensity: 1.8,
+  /** AK reference lifetime in ms (60–400). Automatic weapons retain short, separate pulses. */
+  muzzleFlashDuration: 100,
+  /** Relative streak thickness, length and reach. 0 disables sparks only. */
+  muzzleFlashSparkStrength: 1.5,
+} as const;
+
 /**
  * Trefferreaktion am Ziel: kurzlebige gefüllte Silhouette der eigenen Textur
  * plus ein rein visueller Positionsimpuls. Die Stärke folgt kontinuierlich dem
@@ -497,6 +507,7 @@ export const DAMAGE_VIGNETTE_VFX = {
  * liefern viele winzige Trefferereignisse. Ohne Deckel bliebe die Silhouette dauerhaft
  * erleuchtet statt zu pulsieren.
  */
+
 export const HIT_FEEDBACK_VFX = {
   /** Master-Stärke der Damage-Kurve. 0 schaltet das gesamte HitFeedback ab. */
   strength: 1.6,
@@ -1081,6 +1092,8 @@ export const COOP_DEFENSE_BASE_TURRET_OWNER_ID = '__coop_base_turret__';
 export const COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID = '__coop_hostile_base_turret__';
 /** Synthetic attacker id for enemy airstrikes in Coop Defense. */
 export const COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID = 'coop-zombie-bomber';
+/** Kurzer Bewegungsstopp nach KI-Treffern, skaliert mit knockbackFactor; 0 deaktiviert ihn. */
+export const ENEMY_HIT_STAGGER_BASE_MS = 90;
 export const CAPTURE_THE_BEER_BASE_TINT_ALPHA = 0.80;
 export const CAPTURE_THE_BEER_BLUE_BASE_TINT = TEAM_BLUE_COLOR;
 export const CAPTURE_THE_BEER_RED_BASE_TINT = TEAM_RED_COLOR;

@@ -13,7 +13,7 @@ import type {
   SyncedTeslaDome,
 } from '../types';
 import { PlayerEntity }       from './PlayerEntity';
-import type { OwnerVisualSource, OwnerVisualState } from './OwnerVisualSource';
+import type { OwnerVisualSource, OwnerVisualState, OwnerRenderPose } from './OwnerVisualSource';
 import type { LightingSystem } from '../effects/LightingSystem';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import {
@@ -303,6 +303,13 @@ export class PlayerManager implements OwnerVisualSource {
     const player = this.players.get(ownerId);
     if (!player) return null;
     return { x: player.x, y: player.y, color: player.color, visible: player.displayObject?.visible ?? false };
+  }
+
+  readOwnerRenderPose(ownerId: string, out: OwnerRenderPose): boolean {
+    const sprite = this.players.get(ownerId)?.displayObject;
+    if (!sprite?.active || !sprite.visible) return false;
+    out.x = sprite.x; out.y = sprite.y; out.rotation = sprite.rotation;
+    return true;
   }
 
   /**

@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_FX } from '../../config';
 import { GpuVfxEase } from './GpuVfxEase';
+import { MUZZLE_MAX_LIFETIME } from '../muzzleFlashModel';
 import {
   GpuVfxFrameAnimationId,
   type GpuVfxFrameAnimationId as GpuVfxFrameAnimationIdType,
@@ -681,21 +682,21 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     label: 'muzzle-flash',
     depth: DEPTH.PROJECTILES + 2 + GPU_VFX_DEPTH_EPSILON,
     blendMode: Phaser.BlendModes.ADD,
-    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut],
-    capacity: 512,
-    maxLifetimeMs: 236,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicInOut],
+    capacity: 1024,
+    maxLifetimeMs: MUZZLE_MAX_LIFETIME,
     order: 'add-over-opaque',
-    reserveCritical: 64,
+    reserveCritical: 128,
     rationale:
       'Body und Sparks bleiben in einer gemeinsamen additiven Lane auf PROJECTILES + 2 + epsilon. '
       + 'Der epsilon-Versatz bildet die Laufzeit-Reihenfolge des alten Emitters auf der persistenten '
       + 'Lane nach; die Sparks wandern dabei von + 1.5 auf + 2.001. ADD ueber opaker Geometrie ist '
-      + 'reihenfolgeunkritisch, und Linear/QuadOut decken alle Member-Animationen ab.',
+      + 'reihenfolgeunkritisch. CubicInOut haelt den Core lesbar; Position und Scale teilen ihre Ease.',
     capacityRationale:
-      '12 Spieler x 16.7 Negev-Schuesse/s x 5 Sparks x 80 ms ergeben rund 80 lebende Sparks; '
-      + '236 ms decken den laengsten Muzzle-Lebenszyklus mit reichlich Burst- und Turret-Reserve. '
-      + '512 Slots begrenzen die Lane belastbar fuer Multiplayer-Spitzen, waehrend 64 kritische '
-      + 'Reserveplaetze den stets sichtbaren Body gegen Spark-Ueberlast schuetzen.',
+      '12 Spieler x 16.7 Negev-Schuesse/s x 7 Sparks x 324 ms ergeben hoechstens 455 Sparks '
+      + 'plus rund 24 Bodies bei Default-Timing. 1024 Slots bieten Reserve fuer Bursts; '
+      + '128 kritische Reserveplaetze schuetzen Bodies bei extremem Dauer-Tuning. '
+      + 'Die deklarierte Maximallebenszeit folgt dem maximal erlaubten AWP-Spark-Tail.',
   },
   {
     id: GpuVfxLaneId.FlightSignature, label: 'flight-signature',

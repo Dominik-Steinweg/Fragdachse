@@ -122,6 +122,7 @@ export class HostPhysicsSystem {
   private dashGroundFireHandler: DashGroundFireHandler | null = null;
   private dashHoldEnabledResolver: ((playerId: string) => boolean) | null = null;
   private enemyMovementFactorResolver: ((enemyId: string, now: number) => number) | null = null;
+  private enemyHitStaggerResolver: ((enemyId: string, now: number) => boolean) | null = null;
   private enemyRockContactCallback: ((enemyId: string, rock: RockPhysicsProxy, now: number) => void) | null = null;
   private canMoveResolver: ((playerId: string) => boolean) | null = null;
   private movementBlockedCellResolver: MovementBlockedCell | null = null;
@@ -180,6 +181,7 @@ export class HostPhysicsSystem {
   setDashGroundFireHandler(handler: DashGroundFireHandler | null): void { this.dashGroundFireHandler = handler; }
   setDashHoldEnabledResolver(resolver: ((playerId: string) => boolean) | null): void { this.dashHoldEnabledResolver = resolver; }
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
+  setEnemyHitStaggerResolver(resolver: ((enemyId: string, now: number) => boolean) | null): void { this.enemyHitStaggerResolver = resolver; }
   setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
   setMovementBlockedCellResolver(resolver: MovementBlockedCell | null): void {
     this.movementBlockedCellResolver = resolver;
@@ -530,10 +532,8 @@ export class HostPhysicsSystem {
    * Jeden Frame – nur auf dem Host aktiv.
    * Priorität: Stun > Dash (2-Phasen) > Burrow-Speed > Normale Bewegung.
    */
-  update(movementLocked = false): void {
+  update(movementLocked = false, now = Date.now()): void {
     if (!this.bridge.isHost()) return;
-
-    const now = Date.now();
 
     for (const enemyId of this.enemyColliders.keys()) {
       if (this.enemyManager?.hasEnemy(enemyId)) continue;
@@ -811,6 +811,8 @@ export class HostPhysicsSystem {
       const impulse = this.consumeImpulseVelocity(enemy.id, now);
       const dashVelocity = this.advanceEnemyDash(enemy, now);
       const desiredVelocity = dashVelocity ?? enemy.getDesiredVelocity();
+      // The dash clock keeps running; stagger suppresses propulsion, never external impulses.
+      const hitStaggerFactor = this.enemyHitStaggerResolver?.(enemy.id, now) ? 0 : 1;
       const worldFactor = this.getWorldMovementFactor(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -819,8 +821,8 @@ export class HostPhysicsSystem {
       const enemyMovementFactor = Phaser.Math.Clamp(this.enemyMovementFactorResolver?.(enemy.id, now) ?? 1, 0, 1);
       const combinedFactor = worldFactor * enemyMovementFactor;
       enemyBody.setVelocity(
-        (desiredVelocity.vx + impulse.vx) * combinedFactor,
-        (desiredVelocity.vy + impulse.vy) * combinedFactor,
+        (desiredVelocity.vx * hitStaggerFactor + impulse.vx) * combinedFactor,
+        (desiredVelocity.vy * hitStaggerFactor + impulse.vy) * combinedFactor,
       );
       enemy.setWalking(isVelocityMoving(enemyBody.velocity.x, enemyBody.velocity.y));
       // Visual sync (HP bar, boss decorations, glow, burn, fuse) is handled

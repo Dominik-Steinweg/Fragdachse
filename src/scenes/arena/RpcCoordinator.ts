@@ -373,6 +373,10 @@ export class RpcCoordinator {
             params: authoritativeParams,
             clientPosition: { x: clientX, y: clientY },
           });
+      if (result.ok && (slot === 'weapon1' || slot === 'weapon2')
+        && senderId === bridge.getLocalPlayerId() && !params?.scopeHolding) {
+        this.clientUpdate.notifyAuthoritativeLocalWeaponFired(slot);
+      }
       if (slot !== 'weapon2') return result;
       return {
         ...result,

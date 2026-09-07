@@ -251,6 +251,7 @@ export function createRendererBundle(
   tracer.registerGpuVfx(gpuVfx);
 
   const muzzleFlash = new MuzzleFlashRenderer(scene);
+  muzzleFlash.setOwnerVisualSource(owners);
   muzzleFlash.registerGpuVfx(gpuVfx);
   muzzleFlash.generateTextures();
 

@@ -48,7 +48,7 @@ import type { BaseSpec } from '../../src/arena/BaseRegistry';
 import type { PlayerProfile, ProjectileExplosionConfig, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
 import type { CombatSource } from '../../src/combat/CombatScope';
 import { healthBarTestScene } from '../healthBarTestScene';
-import { BURN_TICK_INTERVAL_MS } from '../../src/config';
+import { BURN_TICK_INTERVAL_MS, ENEMY_HIT_STAGGER_BASE_MS } from '../../src/config';
 import { EnemyMovementStatusSystem } from '../../src/systems/EnemyMovementStatusSystem';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
@@ -766,6 +766,63 @@ describe('World HP consumer boundaries', () => {
     f.close();
   });
 
+  it.each([
+    ['direct', true], ['explosion', true], ['chain', true], ['reflect', true],
+    ['burn', false], ['ground', false], ['reaction', false],
+  ] as const)('stagger follows committed %s enemy damage (eligible: %s)', (damageKind, eligible) => {
+    const f = projectileFixture(), movement = new EnemyMovementStatusSystem();
+    f.combat.setMovementStatusPort(movement);
+    const target = f.manager.getCombatTargetRef('e1')!;
+    const outcome = f.combat.applyDamage('e1', 10, false, 'p1', 'test', undefined, { damageKind });
+    expect(outcome).toMatchObject({ kind: 'damage-applied', hpLost: 10 });
+    expect(movement.isHitStaggered(target, 1000)).toBe(eligible);
+    f.close();
+  });
+
+  it('refreshes stagger before hit callbacks, and clears dead or removed target instances', () => {
+    const f = projectileFixture(), movement = new EnemyMovementStatusSystem();
+    f.combat.setMovementStatusPort(movement);
+    vi.spyOn(f.manager.getEnemy('e1')!, 'getKnockbackFactor').mockReturnValue(1);
+    const target = f.manager.getCombatTargetRef('e1')!;
+    f.combat.setDirectPrimaryHitHandler(() => {
+      expect(movement.isHitStaggered(target, 1000)).toBe(true);
+    });
+    f.combat.applyDamage('e1', 10, false, 'p1', 'test', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' });
+    const nextHitAt = 1000 + ENEMY_HIT_STAGGER_BASE_MS / 2;
+    f.combat.runHostExecution(() => f.combat.applyDamage('e1', 10, false, 'p1'), nextHitAt);
+    expect(f.combat.isEnemyHitStaggered('e1', 1000 + ENEMY_HIT_STAGGER_BASE_MS)).toBe(true);
+    expect(f.combat.isEnemyHitStaggered('e1', nextHitAt + ENEMY_HIT_STAGGER_BASE_MS)).toBe(false);
+    f.combat.applyDamage('e1', 10000, false, 'p1');
+    expect(movement.isHitStaggered(target, 1000)).toBe(false);
+    upsert(f.manager, { id: 'e1', kind, x: 300, y: 100, hp: 100, maxHp: 100 });
+    expect(f.combat.isEnemyHitStaggered('e1', 1000)).toBe(false);
+    f.combat.applyDamage('e1', 10, false, 'p1');
+    const replacement = f.manager.getCombatTargetRef('e1')!;
+    expect(movement.isHitStaggered(replacement, 1000)).toBe(true);
+    f.manager.hostRemoveWithoutKill('e1');
+    f.combat.advanceStatuses(1000);
+    expect(movement.isHitStaggered(replacement, 1000)).toBe(false);
+    f.close();
+  });
+
+  it('does not stagger players, allies, immune targets or contacts without HP loss', () => {
+    const f = projectileFixture(), movement = new EnemyMovementStatusSystem();
+    f.combat.setMovementStatusPort(movement);
+    const applyStagger = vi.spyOn(movement, 'applyHitStagger');
+    expect(f.combat.applyDamage('p1', 10, false, 'e1')).toMatchObject({ kind: 'damage-applied' });
+    expect(f.combat.applyDamage('e2', 10, false, 'e1')).toMatchObject({ kind: 'damage-applied' });
+    f.combat.applyDamage('e1', 0, false, 'p1');
+    f.combat.setEnemyIncomingDamageMultiplierResolver(() => 0);
+    const hp = f.manager.getEnemy('e1')!.getHp();
+    f.combat.applyDamage('e1', 10, false, 'p1');
+    expect(f.manager.getEnemy('e1')!.getHp()).toBe(hp);
+    f.combat.setEnemyIncomingDamageMultiplierResolver(null);
+    vi.spyOn(f.manager.getEnemy('e1')!, 'getKnockbackFactor').mockReturnValue(0);
+    expect(f.combat.applyDamage('e1', 10, false, 'p1')).toMatchObject({ kind: 'damage-applied' });
+    expect(applyStagger).not.toHaveBeenCalled();
+    f.close();
+  });
+
   it('applies Plasma explosion slow only to eligible enemies', () => {
     const f = projectileFixture(), movement = new EnemyMovementStatusSystem();
     f.combat.setMovementStatusPort(movement);
@@ -799,6 +856,8 @@ describe('World HP consumer boundaries', () => {
     const statuses = new TargetStatusSystem(), injector = new EnergyInjectorSystem();
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
     const oldTarget = manager.getCombatTargetRef('e1');
+    const movement = new EnemyMovementStatusSystem();
+    movement.applyHitStagger({ target: oldTarget!, durationMs: 1000, nowMs: 1000 });
     const target = { targetType: 'enemy' as const, targetId: 'e1' };
     statuses.applyVulnerability(target, 10000, 1000); injector.setFocusTarget('old-owner', target, 10000, 1000);
     injector.setFocusTarget('renewed-owner', target, 10000, 1000);
@@ -819,6 +878,7 @@ describe('World HP consumer boundaries', () => {
       { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     const replace = () => {
+      expect(movement.isHitStaggered(oldTarget!, 1234)).toBe(false);
       expect(statuses.isVulnerable(target, 1234)).toBe(false);
       expect(injector.getFocusTarget('old-owner', 1234)).toBeNull();
       expect(injector.getFocusTarget('renewed-owner', 1234)).toBeNull();
@@ -826,6 +886,7 @@ describe('World HP consumer boundaries', () => {
       expect(manager.getCombatTargetRef('e1')).not.toEqual(oldTarget);
       if (applyNewStatus) {
         // A successor's shorter application must not merge with the old lifetime.
+        movement.applyHitStagger({ target: manager.getCombatTargetRef('e1')!, durationMs: 80, nowMs: 1234 });
         statuses.applyVulnerability(target, 1000, 1234);
         injector.setFocusTarget('new-owner', target, 1000, 1234);
         injector.setFocusTarget('renewed-owner', target, 1000, 1234);
@@ -836,6 +897,7 @@ describe('World HP consumer boundaries', () => {
       playerManager: players, combatSystem: combat, baseManager: null, automatedWeaponExecution: null,
       getPlayerCombatIntegration: () => playerCombatAttached ? playerCombat : null, getEnemyManager: () => manager,
       getTargetStatusSystem: () => statuses, getEnergyInjectorSystem: () => injector,
+      getEnemyMovementStatusSystem: () => movement,
       getTargetFootprint: () => null, getPowerUpSystem: () => null,
       getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
       syncActiveBaseIds: () => {},
@@ -859,6 +921,11 @@ describe('World HP consumer boundaries', () => {
     ] : []);
     if (hook !== 'none') expect(manager.getEnemy('e1')!.getHp()).toBe(100);
     else expect(manager.getEnemy('e1')).toBeUndefined();
+    expect(movement.isHitStaggered(oldTarget!, 1234)).toBe(false);
+    expect(combat.isEnemyHitStaggered('e1', 1234)).toBe(applyNewStatus);
+    const successor = manager.getCombatTargetRef('e1');
+    binding.clearActivityBindings();
+    if (successor) expect(movement.isHitStaggered(successor, 1234)).toBe(false);
     binding.destroy(); manager.destroy();
   });
 

@@ -85,7 +85,7 @@ export interface WorldClientPresentationState {
   readonly meteors: SyncedMeteorStrike[];
 }
 
-/** Kleine Renderer-Ports fuer die World-Projektion; die Renderer selbst bleiben scene-langlebig. */
+/** Kleine Renderer-Ports fuer die World-Projektion. */
 export interface WorldClientPresentationRenderers {
   readonly timeBubble: { syncVisuals(snapshots: readonly SyncedTimeBubble[]): void };
   readonly teslaDome: { syncVisuals(domes: SyncedTeslaDome[]): void };
@@ -99,7 +99,8 @@ export interface WorldClientPresentationRenderers {
     syncGround(snapshot: SyncedBurningGroundSnapshot, now: number): void;
     syncRings(players: Readonly<Record<string, PlayerNetState>>): void;
   };
-  readonly train: {
+  /** Der World-eigene Zug-Renderer entsteht erst nach dem Frame-Binding. */
+  readonly getTrain: () => {
     setTarget(state: SyncedTrainState | null): void;
     render(lerpFactor: number): void;
   } | null;
@@ -321,6 +322,7 @@ export class WorldPresentationFrameBinding {
   ): void {
     if (this.destroyed || !this.input.getLocalWorldPresentation().required) return;
     const renderers = this.input.clientWorldPresentation;
+    const train = renderers.getTrain();
     const now = this.input.getSynchronizedNow();
 
     if (state) {
@@ -337,7 +339,7 @@ export class WorldPresentationFrameBinding {
         now,
       );
       renderers.flamethrowerUpgrades.syncRings(state.players);
-      renderers.train?.setTarget(state.train);
+      train?.setTarget(state.train);
       renderers.powerUp.syncPedestals(
         countdownActive && state.pedestals.length === 0
           ? countdownPedestals
@@ -354,7 +356,7 @@ export class WorldPresentationFrameBinding {
     }
 
     renderers.powerUp.updatePedestals(now);
-    renderers.train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
+    train?.render(1 - Math.exp(-delta / NET_SMOOTH_TIME_MS));
   }
 
   /** View-bezogene World-Readiness fuer Ladebarriere und Boot-Reveal. */

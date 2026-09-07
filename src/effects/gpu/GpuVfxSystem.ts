@@ -6,7 +6,8 @@ import {
   GPU_VFX_NO_FRAME_ANIMATION,
   getGpuVfxFrameAnimation,
 } from './GpuVfxFrameAnimations';
-import { GPU_VFX_DEAD_MEMBER, writeGpuVfxMember } from './GpuVfxMember';
+import { GPU_VFX_DEAD_MEMBER, gpuVfxEasedBase, writeGpuVfxMember } from './GpuVfxMember';
+import { GpuVfxEase, isLinearGpuVfxEase } from './GpuVfxEase';
 import { GPU_VFX_NO_SLOT, GpuVfxPool, type GpuVfxPoolStats } from './GpuVfxPool';
 import { GpuVfxProfiler, type GpuVfxCompanionCounters, type GpuVfxReport } from './GpuVfxProfiler';
 import { GpuVfxQuality } from './GpuVfxQuality';
@@ -68,6 +69,15 @@ export type GpuVfxDiagnosticEventSink = (type: string, fields?: Record<string, u
 /** Rueckgabe von `createSource()`, wenn die Source-Tabelle erschoepft ist. */
 export const GPU_VFX_NO_SOURCE_HANDLE = -1;
 
+/** Reused by controllers; a recycled pool slot cannot be addressed with an old handle. */
+export interface GpuVfxMemberHandle {
+  lane: number; slot: number; version: number; generation: number;
+  lifeMs: number; linear: boolean;
+}
+export const createGpuVfxMemberHandle = (): GpuVfxMemberHandle => ({
+  lane: -1, slot: -1, version: 0, generation: -1, lifeMs: 0, linear: true,
+});
+
 /**
  * Gleichzeitig lebende Quellen ueber alle Effekte. Grosszuegig bemessen: Raketen sind mit Abstand
  * am zahlreichsten und teilen sich fuer den Rauch ohnehin eine Quelle.
@@ -105,6 +115,9 @@ export class GpuVfxSystem {
 
   /** Gemeinsame monotone Uhr fuer Slot-Lebenszeiten, gleich getaktet mit den GPU-Animationen. */
   private clockMs = 0;
+  private readonly transformData = new Uint32Array(9);
+  private readonly transformFloats = new Float32Array(this.transformData.buffer);
+  private readonly transformMask = [1, 1, 0, 0, 1, 1, 0, 0, 1];
   private suppressed = false;
   private generation = 0;
   /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */
@@ -212,7 +225,8 @@ export class GpuVfxSystem {
    * Liefert `false`, wenn der Spawn verworfen wurde; getrennt gezaehlt nach Kapazitaet und
    * kritischer Reserve.
    */
-  spawn(spec: GpuVfxSpawnSpec, sourceIndex: number, nowMs: number, ageMs = 0): boolean {
+  spawn(spec: GpuVfxSpawnSpec, sourceIndex: number, nowMs: number, ageMs = 0, out?: GpuVfxMemberHandle): boolean {
+    if (out) out.slot = -1;
     ageMs = Math.max(0, ageMs);
     if (!Number.isFinite(ageMs) || ageMs >= spec.lifeMs) return false;
     const lane = this.lanes[spec.lane];
@@ -249,11 +263,38 @@ export class GpuVfxSystem {
       member as unknown as Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>,
     );
     this.profiler.recordSpawn(spec.effect);
+    if (out && spec.yMode !== GpuVfxEase.Gravity && spec.angularVelocity === 0) {
+      out.lane = spec.lane; out.slot = slot; out.version = lane.pool.getVersion(slot);
+      out.generation = this.generation; out.lifeMs = spec.lifeMs;
+      out.linear = isLinearGpuVfxEase(spec.positionEase);
+    }
     if (spec.lane === GpuVfxLaneId.FlightSignature) this.flightPeak = Math.max(this.flightPeak, this.flightLiveCount());
     // Auch Spawns ausserhalb des Emissions-Ticks muessen ihre Lane sofort sichtbar machen,
     // sonst faellt das erste Partikel eines Bursts einen Frame lang aus.
     this.applyVisibility(lane);
     return true;
+  }
+
+  isMemberLive(handle: GpuVfxMemberHandle): boolean {
+    return handle.generation === this.generation
+      && !!this.lanes[handle.lane]?.pool.isLiveVersion(handle.slot, handle.version);
+  }
+
+  /** Only x/y base + amplitude and static rotation. Handles exclude gravity/angular animation. */
+  updateTransform(handle: GpuVfxMemberHandle, x: number, y: number, vx: number, vy: number, rotation: number): boolean {
+    if (!this.isMemberLive(handle)) return false;
+    if (!Number.isFinite(x + y + vx + vy + rotation)) return false;
+    const ax = vx * handle.lifeMs / 1000, ay = vy * handle.lifeMs / 1000;
+    const data = this.transformFloats;
+    data[0] = handle.linear ? x : gpuVfxEasedBase(x, ax); data[1] = ax;
+    data[4] = handle.linear ? y : gpuVfxEasedBase(y, ay); data[5] = ay;
+    data[8] = rotation;
+    return this.lanes[handle.lane].pool.patchVersion(handle.slot, handle.version, this.transformData, this.transformMask);
+  }
+
+  releaseMember(handle: GpuVfxMemberHandle): void {
+    if (this.isMemberLive(handle)) this.lanes[handle.lane].pool.releaseVersion(handle.slot, handle.version);
+    handle.slot = -1;
   }
 
   /** Ein vom Controller unterdrueckter Spawn (Qualitaetsfaktor) – zaehlt getrennt. */

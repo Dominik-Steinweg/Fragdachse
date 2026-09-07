@@ -79,7 +79,7 @@ describe('ProjectilePresentationRuntime', () => {
   });
 
   it('does not replay predicted local projectile audio on snapshot presentation', () => {
-    const muzzleFlash = { playProjectileFlash: vi.fn() };
+    const muzzleFlash = { playProjectileFlash: vi.fn(), clear: vi.fn() };
     const projectileBurn = {
       sync: vi.fn(),
       retain: vi.fn(),
@@ -116,9 +116,12 @@ describe('ProjectilePresentationRuntime', () => {
     runtime.presentClientFrame(replica.sync([projectile({ ownerId: 'reflector', ownerColor: 0x123456 })], 1_200), 'local');
 
     expect(muzzleFlash.playProjectileFlash).toHaveBeenCalledTimes(1);
+    expect(muzzleFlash.playProjectileFlash.mock.calls[0][8]).toBe('local');
     expect(audio.playSound).not.toHaveBeenCalled();
     expect(renderers.destroyVisual).toHaveBeenCalledWith(7);
     expect(renderers.destroyTracer).toHaveBeenCalledWith(7);
+    runtime.releaseWorldPresentation();
+    expect(muzzleFlash.clear).toHaveBeenCalledOnce();
   });
 
   it('rebuilds a same-ID flame chain when owner, color or source changes', () => {

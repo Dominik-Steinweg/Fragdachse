@@ -22,6 +22,7 @@ import {
 } from '../systems/ArenaObstacleIndex';
 import { CombatGeometry } from '../systems/CombatGeometry';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
+import { resolveEnemyHitStaggerDuration } from './rules/EnemyHitStagger';
 import {
   resolveChainLightning as resolveChainLightningTraversal,
   type ChainLightningTarget,
@@ -31,6 +32,7 @@ import {
   BURN_TICK_INTERVAL_MS,
   COLORS,
   COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID,
+  ENEMY_HIT_STAGGER_BASE_MS,
   HP_MAX, RESPAWN_DELAY_MS,
   DEFAULT_ARENA_HEIGHT,
   DEFAULT_ARENA_OFFSET_X,
@@ -1341,7 +1343,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   /** Future frame port: P11 replaces the existing Burn-only stage with this combined advance. */
   advanceStatuses(now: number): void {
-    this.movementStatus?.prune(now);
+    this.movementStatus?.prune(now, target => this.isCurrentCombatantTarget(target));
     this.plasmaSwarmMechanic?.advance(now);
     this.updateBurnEffects(now);
   }
@@ -1464,6 +1466,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   getEnemyMovementFactor(enemyId: string, now: number): number {
     const target = this.enemyManager?.getCombatTargetRef(enemyId);
     return target ? (this.movementStatus?.getMovementFactor(target, now) ?? 1) : 1;
+  }
+
+  isEnemyHitStaggered(enemyId: string, now: number): boolean {
+    const target = this.enemyManager?.getCombatTargetRef(enemyId);
+    return target ? (this.movementStatus?.isHitStaggered(target, now) ?? false) : false;
   }
 
   /**
@@ -3796,6 +3803,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
 
     const hpLost = outcome.hpLost;
+    if (this.movementStatus && hpLost > 0 && !result.died && targetFaction === 'hostile'
+      && this.isCurrentCombatantTarget(target)) {
+      const durationMs = resolveEnemyHitStaggerDuration(request.damageKind, enemy.getKnockbackFactor(), ENEMY_HIT_STAGGER_BASE_MS);
+      if (durationMs > 0) this.movementStatus.applyHitStagger({ target, durationMs, nowMs: this.hostFrameNowMs });
+    }
     const terminalSource = this.captureKillSource(targetId, outcome, result.death);
     const creditedSource = this.lastSource.get(targetId);
     const killerId = creditedSource?.attribution.id;

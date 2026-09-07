@@ -65,7 +65,7 @@ describe('HitFeedbackRenderer', () => {
     target.originX = 0.2; target.originY = 0.8; target.flipX = true; target.flipY = true;
     target.displayWidth = 100; target.displayHeight = 120; target.depth = 10;
     target.texture.key = 'new-enemy'; target.frame.name = 'hurt';
-    s.renderer.update(100);
+    s.renderer.update(HIT_FEEDBACK_TIMING.maxRearmLifetimeMs * 0.3);
     expect(flash.x).toBe(23); expect(flash.y).toBe(38);
     expect(flash.rotation).toBe(target.rotation);
     expect(flash.originX).toBe(target.originX); expect(flash.originY).toBe(target.originY);

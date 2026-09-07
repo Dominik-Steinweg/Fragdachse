@@ -17,6 +17,7 @@ import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatC
 import type { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
+import { DASH_T1_S, DASH_T2_S } from '../src/config';
 
 function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
   const setVelocity = vi.fn();
@@ -42,6 +43,7 @@ function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
     syncBar,
     getDesiredVelocity,
     getKnockbackFactor,
+    getMoveSpeed: () => 100,
     setDashPhase: vi.fn(),
     setDashScale: vi.fn(),
     isBurrowed: () => false,
@@ -159,6 +161,57 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
     expect(getAllEnemies).not.toHaveBeenCalled();
     expect(enemy1.setVelocity).toHaveBeenCalledWith(40, 30);
     expect(enemy2.setVelocity).toHaveBeenCalledWith(-20, 10);
+  });
+
+  it('stops only enemy propulsion while retaining recoil, slow and player movement', () => {
+    const { system, enemies, players } = createHarness();
+    const enemy = createMockEnemy('e1', 200, 200, 100, 50);
+    const player = createMockPlayer('p1');
+    enemies.set(enemy.id, enemy);
+    players.set(player.id, player);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      system.setRunSpeedResolver(() => 100);
+      system.setEnemyMovementFactorResolver(() => 0.5);
+      system.setEnemyHitStaggerResolver((_id, now) => now < 1080);
+      system.update(false, 1000);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(0, 0);
+      expect(player.setVelocity).toHaveBeenLastCalledWith(100, 0);
+      system.addRecoil(enemy.id, 200, 100, 80);
+      system.update(false, 1000);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(100, 50);
+      // The supplied host time, not the still-frozen wall clock, ends both effects.
+      system.update(false, 1080);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(50, 25);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('suppresses dash movement without pausing its phases or extending its lifetime', () => {
+    const { system, enemies } = createHarness();
+    const enemy = createMockEnemy('e1', 200, 200, 100, 50);
+    enemies.set(enemy.id, enemy);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      system.setEnemyHitStaggerResolver(() => true);
+      expect(system.startEnemyDash(enemy.id, 1, 0)).toBe(true);
+      system.update(false, 1000);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(0, 0);
+      expect(system.isEnemyDashing(enemy.id)).toBe(true);
+      const recoveryStart = 1000 + DASH_T1_S * 1000 + 1;
+      system.update(false, recoveryStart);
+      expect(enemy.setDashPhase).toHaveBeenLastCalledWith(2);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(0, 0);
+      system.update(false, recoveryStart + DASH_T2_S * 1000 + 1);
+      expect(system.isEnemyDashing(enemy.id)).toBe(false);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(0, 0);
+      system.setEnemyHitStaggerResolver(null);
+      system.update(false, recoveryStart + DASH_T2_S * 1000 + 2);
+      expect(enemy.setVelocity).toHaveBeenLastCalledWith(100, 50);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('uses forEachEnemy instead of getAllEnemies in applyRadialImpulse()', () => {

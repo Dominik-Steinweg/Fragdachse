@@ -83,6 +83,7 @@ export class AsmdPrimaryRenderer {
     playerColor: number,
     thickness: number,
     impactKind: HitscanImpactKind = 'environment',
+    sourceId?: string,
   ): void {
     const clippedEnd = clipPointToArenaRay(startX, startY, endX, endY);
     const renderEndX = clippedEnd.x;
@@ -92,7 +93,7 @@ export class AsmdPrimaryRenderer {
     const clippedByArena = (clippedDx * clippedDx) + (clippedDy * clippedDy) > 0.25;
     const resolvedImpactKind: HitscanImpactKind = impactKind === 'none' && clippedByArena ? 'environment' : impactKind;
 
-    this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, 'asmd_primary', playerColor);
+    this.muzzleFlashRenderer?.playHitscanFlash(startX, startY, renderEndX - startX, renderEndY - startY, 'asmd_primary', playerColor, sourceId);
 
     const dx = renderEndX - startX;
     const dy = renderEndY - startY;

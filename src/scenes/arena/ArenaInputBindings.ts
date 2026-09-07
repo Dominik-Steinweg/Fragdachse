@@ -676,8 +676,7 @@ export class ArenaInputBindings {
         inputSystem.cancelLocalUltimateChargePreview();
       }
 
-      if ((slot === 'weapon1' || slot === 'weapon2')
-        && (result.reason === 'cooldown' || result.reason === 'resource')) {
+      if ((slot === 'weapon1' || slot === 'weapon2') && predictionId !== undefined) {
         actions.rollbackRejectedLoadoutFire(slot, predictionId);
       }
 
@@ -731,7 +730,7 @@ export class ArenaInputBindings {
       if (!actions.isLocalPlayerAlive() || actions.isLocalPlayerBurrowed()) return;
 
       let shotId: number | undefined;
-      let predictedWeapon2Id: number | undefined;
+      let predictionId: number | undefined;
       const inputStarted = params?.inputStarted === true;
 
       if ((slot === 'weapon1' || slot === 'weapon2') && !params?.constructionId) {
@@ -741,28 +740,30 @@ export class ArenaInputBindings {
           void actions.sendLoadoutUse(slot, angle, targetX, targetY, undefined, params);
           return;
         }
-        const now = Date.now();
-        const lastFired = actions.getWeaponLastFired(slot);
-        const wepConfig = actions.getLocalWeaponConfig(slot);
-        if (!wepConfig) return;
-        if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
-          handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
-          return;
+        // The local host dispatches immediately through authoritative readiness. Prediction
+        // would create a second clock and present attempts that the weapon can still reject.
+        if (!actions.isHost()) {
+          const now = Date.now();
+          const lastFired = actions.getWeaponLastFired(slot);
+          const wepConfig = actions.getLocalWeaponConfig(slot);
+          if (!wepConfig) return;
+          if (lastFired > 0 && now - lastFired < wepConfig.cooldown) {
+            handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
+            return;
+          }
+          // Remote resource prediction must precede success presentation as well.
+          if (slot === 'weapon2' && isWeapon2AdrenalineInsufficient()) {
+            handleLocalFailureFeedback(slot, 'resource', inputStarted, 'adrenaline');
+            return;
+          }
+          const localFire = actions.notifyLoadoutFired(slot, angle, targetX, targetY);
+          if (!localFire.fired) {
+            handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
+            return;
+          }
+          shotId = localFire.shotId;
+          predictionId = localFire.predictionId;
         }
-        // Der Host prueft Ressourcen autoritativ im LoadoutManager. Dasselbe Gate muss vor
-        // der lokalen Prediction liegen, die sowohl Host als auch Clients ausfuehren; sonst
-        // werden trotz abgelehntem Schuss weiterhin Strahl und Erfolgssound dargestellt.
-        if (slot === 'weapon2' && isWeapon2AdrenalineInsufficient()) {
-          handleLocalFailureFeedback(slot, 'resource', inputStarted, 'adrenaline');
-          return;
-        }
-        const localFire = actions.notifyLoadoutFired(slot, angle, targetX, targetY);
-        if (!localFire.fired) {
-          handleLocalFailureFeedback(slot, 'cooldown', inputStarted, undefined, slot === 'weapon2');
-          return;
-        }
-        shotId = localFire.shotId;
-        if (slot === 'weapon2') predictedWeapon2Id = localFire.predictionId;
       }
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
       if (slot === 'utility' && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
@@ -783,9 +784,9 @@ export class ArenaInputBindings {
       }
 
       const localPosition = actions.getLocalPlayerPosition();
-      if (slot === 'weapon2' && predictedWeapon2Id !== undefined && !actions.isHost()) {
+      if (slot === 'weapon2' && predictionId !== undefined && !actions.isHost()) {
         actions.beginPredictedWeapon2Use(
-          predictedWeapon2Id,
+          predictionId,
           {
             angle,
             targetX,
@@ -796,7 +797,7 @@ export class ArenaInputBindings {
             clientY: localPosition?.y,
           },
           getLocalWeapon2AdrenalineCost(),
-          (result) => handleLocalLoadoutFailure('weapon2', result, inputStarted, predictedWeapon2Id),
+          (result) => handleLocalLoadoutFailure('weapon2', result, inputStarted, predictionId),
         );
         return;
       }
@@ -818,9 +819,9 @@ export class ArenaInputBindings {
         || isTemporaryUtilityAction
         || isDismantleAction
         || isGaussLifecycleAction;
-      const awaitFailureResult = inputStarted
-        && !params?.constructionId
-        && (slot === 'weapon1' || slot === 'ultimate' || (slot === 'weapon2' && actions.isHost()));
+      const awaitFailureResult = !params?.constructionId
+        && (predictionId !== undefined
+          || (inputStarted && (slot === 'weapon1' || slot === 'ultimate' || (slot === 'weapon2' && actions.isHost()))));
       const loadoutPromise = actions.sendLoadoutUse(
         slot,
         angle,
@@ -834,8 +835,8 @@ export class ArenaInputBindings {
       );
       if (awaitFailureResult) {
         void loadoutPromise.then((result) => {
-          handleLocalLoadoutFailure(slot, result, inputStarted);
-        });
+          handleLocalLoadoutFailure(slot, result, inputStarted, predictionId);
+        }).catch(() => { /* No authoritative rejection was received. */ });
       }
       if (awaitResult) {
         void loadoutPromise.then((result) => {

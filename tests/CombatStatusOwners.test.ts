@@ -4,6 +4,7 @@ import { CombatBurnStatusOwner } from '../src/combat/CombatBurnStatusOwner';
 import { BurnStateMachine } from '../src/combat/rules/BurnStateMachine';
 import type { CombatSource, CombatTargetRef } from '../src/combat/CombatScope';
 import { EnemyMovementStatusSystem } from '../src/systems/EnemyMovementStatusSystem';
+import { resolveEnemyHitStaggerDuration } from '../src/combat/rules/EnemyHitStagger';
 import { PlasmaSwarmReactionSystem } from '../src/systems/PlasmaCharge';
 
 const scope = Object.freeze({ worldRevision: 7, runtimeGeneration: 2 });
@@ -158,6 +159,54 @@ describe('P5 canonical status owners', () => {
     owner.prune(5_500);
     expect(owner.getMovementFactor(target, 1_000)).toBe(1);
     expect(owner.getMovementFactor(enemy('e1', 2), 1_000)).toBe(1);
+  });
+
+  it('scales hit stagger with weight and one base duration, including disable and immunity', () => {
+    const base = 90;
+    const duration = (factor: number, tuning = base) => resolveEnemyHitStaggerDuration('direct', factor, tuning);
+    expect(duration(1)).toBe(base);
+    expect(duration(0.1)).toBeLessThan(duration(1));
+    expect(duration(1.5)).toBeGreaterThan(duration(1));
+    expect(duration(0.01)).toBe(duration(1 / 3));
+    expect(duration(100)).toBe(duration(2));
+    expect(duration(1.5, base / 2)).toBe(duration(1.5) / 2);
+    expect(duration(1, 0)).toBe(0);
+    expect(duration(0)).toBe(0);
+    expect(duration(-1)).toBe(0);
+    expect(duration(NaN)).toBe(0);
+    expect(duration(1, Infinity)).toBe(0);
+  });
+
+  it('refreshes stagger without extending a slow or accumulating hit durations', () => {
+    const owner = new EnemyMovementStatusSystem(), target = enemy('e1');
+    owner.applySlow({ target, source: source('p1'), factor: 0.5, durationMs: 1000, nowMs: 0 });
+    owner.applyHitStagger({ target, durationMs: 80, nowMs: 0 });
+    owner.applyHitStagger({ target, durationMs: 80, nowMs: 60 });
+    expect(owner.isHitStaggered(target, 139)).toBe(true);
+    expect(owner.getMovementFactor(target, 139)).toBe(0.5);
+    expect(owner.isHitStaggered(target, 140)).toBe(false);
+    expect(owner.getMovementFactor(target, 140)).toBe(0.5);
+    expect(owner.isHitStaggered(enemy('e1', 2), 60)).toBe(false);
+    expect(owner.applyHitStagger({ target: player('p1'), durationMs: 80, nowMs: 0 })).toBe(false);
+    expect(owner.isHitStaggered(player('p1'), 0)).toBe(false);
+    expect(owner.applyHitStagger({ target, durationMs: 0, nowMs: 0 })).toBe(false);
+    // Reads do not mutate; pruning only removes the expired stagger, preserving the slow.
+    expect(owner.isHitStaggered(target, 139)).toBe(true);
+    owner.prune(140);
+    expect(owner.isHitStaggered(target, 139)).toBe(false);
+    expect(owner.getMovementFactor(target, 140)).toBe(0.5);
+  });
+
+  it.each(['target', 'id', 'stale', 'world'] as const)('clears both movement statuses at the %s boundary', boundary => {
+    const owner = new EnemyMovementStatusSystem(), target = enemy('e1');
+    owner.applySlow({ target, source: source('p1'), factor: 0.5, durationMs: 1000, nowMs: 0 });
+    owner.applyHitStagger({ target, durationMs: 80, nowMs: 0 });
+    if (boundary === 'target') owner.clearMovementStatus(target);
+    if (boundary === 'id') owner.clearTargetId('e1');
+    if (boundary === 'stale') owner.prune(1, () => false);
+    if (boundary === 'world') owner.clear();
+    expect(owner.isHitStaggered(target, 1)).toBe(false);
+    expect(owner.getMovementFactor(target, 1)).toBe(1);
   });
 
   it('keeps Plasma charges target-wide, rejects child double-procs and prunes explicitly', () => {

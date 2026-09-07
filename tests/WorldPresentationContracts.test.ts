@@ -129,7 +129,6 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
     expect(scene).not.toContain('syncClientWorldSnapshotPresentation');
     expect(frameBinding).toContain('syncClientWorldPresentation(');
     expect(frameBinding).toContain('renderers.powerUp.sync(state.powerups);');
-    expect(frameBinding).toContain('renderers.train?.render(');
     expect(runtime).toContain('presentationFrame?.syncClientWorldPresentation(');
   });
 

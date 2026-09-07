@@ -21,6 +21,10 @@ export interface OwnerVisualState {
  * erlaubt derselben Renderkette, lokale wie replizierte Besitzerzustaende zu bedienen.
  */
 export interface OwnerVisualSource {
+  /** Render pose, written into caller-owned storage without allocating. */
+  readOwnerRenderPose?(ownerId: string, out: OwnerRenderPose): boolean;
   /** Aktueller Zustand oder `null`, wenn der Besitzer nicht (mehr) existiert. */
   getOwnerVisualState(ownerId: string): OwnerVisualState | null;
 }
+
+export interface OwnerRenderPose { x: number; y: number; rotation: number; }

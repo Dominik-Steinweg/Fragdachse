@@ -263,6 +263,7 @@ export class ProjectilePresentationRuntime {
       cfg.bulletVisualPreset,
       cfg.energyBallVariant,
       cfg.ownerColor ?? cfg.color,
+      cfg.sourceTurretId ? undefined : ownerId,
     );
     this.audioSystem?.playSound(cfg.shotAudioKey, muzzleOrigin.x, muzzleOrigin.y, ownerId);
   }
@@ -593,7 +594,7 @@ export class ProjectilePresentationRuntime {
               proj.vx,
               proj.vy,
             ));
-        this.muzzleFlashRenderer?.playProjectileFlash(flashOrigin.x, flashOrigin.y, proj.vx, proj.vy, proj.style as ProjectileStyle | undefined, proj.bulletVisualPreset, proj.energyBallVariant, proj.ownerColor ?? proj.color);
+        this.muzzleFlashRenderer?.playProjectileFlash(flashOrigin.x, flashOrigin.y, proj.vx, proj.vy, proj.style as ProjectileStyle | undefined, proj.bulletVisualPreset, proj.energyBallVariant, proj.ownerColor ?? proj.color, proj.sourceTurretId ? undefined : proj.ownerId);
         const isUtilityProjectile = proj.style === 'grenade' || proj.style === 'holy_grenade' || proj.style === 'bfg';
         if (proj.ownerId !== localPlayerId || isUtilityProjectile) this.audioSystem?.playSound(proj.shotAudioKey, flashOrigin.x, flashOrigin.y, proj.ownerId);
       }
@@ -756,6 +757,7 @@ export class ProjectilePresentationRuntime {
     this.shadowSamples.length = 0;
     this.lightSamples.length = 0;
     this.bulletRenderer?.destroyAll();
+    this.muzzleFlashRenderer?.clear?.();
     this.tracerRenderer?.destroyAll();
     this.flameRenderer?.destroyAll();
     this.projectileBurnRenderer?.destroyAll();

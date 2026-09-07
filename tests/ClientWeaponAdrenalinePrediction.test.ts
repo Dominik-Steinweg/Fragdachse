@@ -64,6 +64,7 @@ function makeCoordinator(authoritativeAdrenaline?: () => number): TestCoordinato
     weapon2: 0,
   };
   (coordinator as unknown as { nextPredictionId: number }).nextPredictionId = 1;
+  (coordinator as unknown as { nextPrimaryPredictionId: number }).nextPrimaryPredictionId = 1;
   return coordinator;
 }
 
@@ -148,6 +149,8 @@ describe('client weapon adrenaline prediction', () => {
     firePrediction.getLocalWeaponAdrenalineCost = () => 30;
     firePrediction.playPredictedLocalHitscanTracer = () => undefined;
 
+    // Primary response correlation must not create holes in Weapon-2's contiguous ACKs.
+    expect(coordinator.notifyLoadoutFired('weapon1', 0, 1, 2)).toMatchObject({ fired: true });
     const fired = coordinator.notifyLoadoutFired('weapon2', 0, 1, 2);
     const aborted = coordinator.notifyLoadoutFired('weapon2', 0, 1, 2);
 

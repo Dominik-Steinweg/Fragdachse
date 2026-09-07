@@ -126,11 +126,13 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
     runtime.systems.energyInjector.setFocusTarget('p1', { targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
     runtime.systems.targetStatus.applyVulnerability({ targetType: 'enemy', targetId: 'e1' }, 1_000, 0);
     runtime.systems.enemyMovementStatus.applySlow({ target, source, factor: 0.5, durationMs: 1_000, nowMs: 0 });
+    runtime.systems.enemyMovementStatus.applyHitStagger({ target, durationMs: 100, nowMs: 0 });
 
     expect(runtime.systems.reinforcementMatrix.getNetSnapshot()).toHaveLength(1);
     expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(1);
     expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(1);
     expect(runtime.systems.enemyMovementStatus.getMovementFactor(target, 0)).toBe(0.5);
+    expect(runtime.systems.enemyMovementStatus.isHitStaggered(target, 0)).toBe(true);
 
     runtime.destroy();
     runtime.destroy();
@@ -139,5 +141,6 @@ describe('World gameplay composition – dauerhafte Grenzen', () => {
     expect(runtime.systems.energyInjector.getNetFocusSnapshot(0)).toHaveLength(0);
     expect(runtime.systems.targetStatus.getSnapshot(0)).toHaveLength(0);
     expect(runtime.systems.enemyMovementStatus.getMovementFactor(target, 0)).toBe(1);
+    expect(runtime.systems.enemyMovementStatus.isHitStaggered(target, 0)).toBe(false);
   });
 });

@@ -155,6 +155,8 @@ export class ClientUpdateCoordinator {
     weapon2: [],
   };
   private nextPredictionId = 1;
+  // Separate from Weapon-2's contiguous network ACK sequence; never reused across Worlds.
+  private nextPrimaryPredictionId = 1;
   private nextPredictedHitscanShotId = 1;
   private pickupCooldownUntil = 0;
   private moveLoopHandle: string | null = null;
@@ -721,6 +723,7 @@ export class ClientUpdateCoordinator {
    * A rejected local cooldown attempt is deliberately distinct from a predicted fire.
    */
   notifyLoadoutFired(slot: WeaponSlot, angle: number, targetX: number, targetY: number): LocalWeaponPredictionResult {
+    if (bridge.isHost()) return { fired: false };
     if (slot !== 'weapon1' && slot !== 'weapon2') return { fired: false };
     const now = Date.now();
     const lastFired = this.weaponLastFired[slot];
@@ -746,7 +749,7 @@ export class ClientUpdateCoordinator {
       }
     }
 
-    const predictionId = slot === 'weapon2' ? this.nextPredictionId++ : undefined;
+    const predictionId = slot === 'weapon2' ? this.nextPredictionId++ : this.nextPrimaryPredictionId++;
     this.localFirePredictions[slot].push({
       worldRevision: this.getPredictionWorldRevision(),
       predictionId,
@@ -755,13 +758,18 @@ export class ClientUpdateCoordinator {
     });
     this.weaponLastFired[slot] = now;
     this.ctx.leftPanel.flashSlot(slot);
-    return predictionId === undefined
-      ? { fired: true, predictionId: 0, shotId }
-      : { fired: true, predictionId, shotId };
+    return { fired: true, predictionId, shotId };
+  }
+
+  /** The host already emitted authoritative weapon FX during the synchronous dispatch. */
+  notifyAuthoritativeLocalWeaponFired(slot: WeaponSlot): void {
+    this.ctx.aimSystem?.notifyShot(slot);
+    this.ctx.leftPanel.flashSlot(slot);
   }
 
   rollbackRejectedLoadoutFire(slot: WeaponSlot, predictionId?: number): void {
     if (slot !== 'weapon1' && slot !== 'weapon2') return;
+    this.ensureCurrentPredictionWorld();
     const predictions = this.localFirePredictions[slot];
     const candidate = predictionId === undefined
       ? [...predictions].reverse().find((prediction) => prediction.status === 'pending')

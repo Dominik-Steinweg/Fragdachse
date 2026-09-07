@@ -64,8 +64,8 @@ describe('continuous hit intensity', () => {
   });
 
   it('scales time independently of brightness and keeps safety limits outside the full pulse', () => {
-    const base = profile(100);
-    const longer = resolveHitFlashProfile(hit(100), { ...HIT_FEEDBACK_VFX, durationMs: HIT_FEEDBACK_VFX.durationMs * 2 });
+    const base = resolveHitFlashProfile(hit(100), { ...HIT_FEEDBACK_VFX, durationMs: 220 });
+    const longer = resolveHitFlashProfile(hit(100), { ...HIT_FEEDBACK_VFX, durationMs: 440 });
     expect(longer.durationMs).toBeCloseTo(base.durationMs * 2);
     expect(longer.joltMs).toBeCloseTo(base.joltMs * 2);
     expect(longer.alpha).toBe(base.alpha);

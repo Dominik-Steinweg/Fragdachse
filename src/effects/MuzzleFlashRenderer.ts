@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { VOID_FIRE_COLOR } from '../config';
+import { MUZZLE_FLASH_VFX, VOID_FIRE_COLOR } from '../config';
 import type { BulletVisualPreset, EnergyBallVariant, HitscanVisualPreset, ProjectileStyle } from '../types';
 import { mixColors } from './EffectUtils';
 import { getEmissiveScale } from './EmissiveScale';
@@ -8,288 +8,190 @@ import { ensureMuzzleFlashTextures } from './gpu/GpuVfxSourceTextures';
 import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
-import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem } from './gpu/GpuVfxSystem';
+import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem, createGpuVfxMemberHandle, type GpuVfxMemberHandle } from './gpu/GpuVfxSystem';
+import type { OwnerVisualSource, OwnerRenderPose } from '../entities/OwnerVisualSource';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
+import { type MuzzleFlashPreset, type MuzzleProfile, resolveMuzzleProfile, resolveProjectileMuzzlePreset } from './muzzleFlashModel';
 
-type MuzzleFlashPreset =
-  | 'glock'
-  | 'xbow'
-  | 'p90'
-  | 'ak47'
-  | 'shotgun'
-  | 'awp'
-  | 'gauss'
-  | 'negev'
-  | 'rocket'
-  | 'flame'
-  | 'energy'
-  | 'plasma'
-  | 'asmd_primary'
-  | 'default';
+const emissiveAlpha = (alpha: number) => alpha * (0.9 + getEmissiveScale() * 0.1);
 
-interface FlashPresetConfig {
-  tint: number;
-  alpha: number;
-  scaleX: number;
-  scaleY: number;
-  duration: number;
-  sparkCount: number;
-  sparkSpeed: number;
-  sparkSpread: number;
-  sparkTints: readonly number[];
-  useEnergyCore?: boolean;
-}
-
-const FLASH_PRESETS: Record<MuzzleFlashPreset, FlashPresetConfig> = {
-  default: { tint: 0xffd794, alpha: 0.84, scaleX: 0.9, scaleY: 0.7, duration: 64, sparkCount: 5, sparkSpeed: 60, sparkSpread: 18, sparkTints: [0xffffff, 0xffd48d, 0xff8c42] },
-  glock: { tint: 0xffe0b2, alpha: 0.7, scaleX: 0.75, scaleY: 0.56, duration: 60, sparkCount: 4, sparkSpeed: 52, sparkSpread: 14, sparkTints: [0xffffff, 0xffdb9b, 0xff9a4d] },
-  xbow: { tint: 0xe8dcc2, alpha: 0.26, scaleX: 0.7, scaleY: 0.28, duration: 48, sparkCount: 2, sparkSpeed: 36, sparkSpread: 10, sparkTints: [0xfef8e9, 0xd2c09d] },
-  p90: { tint: 0xffd183, alpha: 0.75, scaleX: 0.95, scaleY: 0.58, duration: 60, sparkCount: 6, sparkSpeed: 80, sparkSpread: 14, sparkTints: [0xffffff, 0xffe5a4, 0xffa04e] },
-  ak47: { tint: 0xffc46e, alpha: 0.84, scaleX: 1.08, scaleY: 0.62, duration: 70, sparkCount: 8, sparkSpeed: 86, sparkSpread: 17, sparkTints: [0xffffff, 0xffd28f, 0xff8e35] },
-  shotgun: { tint: 0xffe6b3, alpha: 0.84, scaleX: 1.22, scaleY: 0.9, duration: 96, sparkCount: 10, sparkSpeed: 96, sparkSpread: 26, sparkTints: [0xffffff, 0xffdf9e, 0xff9145] },
-  awp: { tint: 0xfff3c2, alpha: 0.88, scaleX: 1.35, scaleY: 0.62, duration: 108, sparkCount: 11, sparkSpeed: 110, sparkSpread: 14, sparkTints: [0xffffff, 0xfff0c8, 0xffb35f] },
-  gauss: { tint: 0xbef4ff, alpha: 0.98, scaleX: 1.65, scaleY: 1.02, duration: 110, sparkCount: 12, sparkSpeed: 96, sparkSpread: 20, sparkTints: [0xffffff, 0xcff8ff, 0x78d6ff], useEnergyCore: true },
-  negev: { tint: 0xffcc74, alpha: 0.8, scaleX: 1.0, scaleY: 0.58, duration: 60, sparkCount: 7, sparkSpeed: 90, sparkSpread: 20, sparkTints: [0xffffff, 0xffd98d, 0xff8f2e] },
-  rocket: { tint: 0xffa247, alpha: 0.8, scaleX: 1.12, scaleY: 0.76, duration: 100, sparkCount: 8, sparkSpeed: 72, sparkSpread: 16, sparkTints: [0xffffff, 0xffc475, 0xff7131] },
-  flame: { tint: 0xff8c34, alpha: 0.42, scaleX: 0.95, scaleY: 0.62, duration: 54, sparkCount: 5, sparkSpeed: 48, sparkSpread: 22, sparkTints: [0xffffff, 0xffcf6f, 0xff6326] },
-  energy: { tint: 0xc8f7ff, alpha: 0.76, scaleX: 1.0, scaleY: 0.82, duration: 96, sparkCount: 8, sparkSpeed: 64, sparkSpread: 24, sparkTints: [0xffffff, 0xc8f7ff, 0x73bed3], useEnergyCore: true },
-  plasma: { tint: 0xf1f1f1, alpha: 0.7, scaleX: 0.92, scaleY: 0.78, duration: 84, sparkCount: 8, sparkSpeed: 54, sparkSpread: 24, sparkTints: [0xffffff, 0xdedede, 0x9ea4a8], useEnergyCore: true },
-  asmd_primary: { tint: 0xd7fbff, alpha: 0.96, scaleX: 1.42, scaleY: 1.04, duration: 118, sparkCount: 14, sparkSpeed: 104, sparkSpread: 22, sparkTints: [0xffffff, 0xdaf9ff, 0x9de7ff, 0x73bed3], useEnergyCore: true },
-};
-
-const CORE_SCALE_END_MULTIPLIER = 1.35;
-const OUTER_SCALE_START_MULTIPLIER = 1.35;
-const OUTER_SCALE_END_MULTIPLIER = 1.12;
-const OUTER_LIFETIME_MULTIPLIER = 1.2;
-const OUTER_ALPHA_MULTIPLIER = 0.68;
-const OUTER_TINT_BLEND_START = 0.42;
-const MUZZLE_EMISSIVE_FLOOR = 0.7;
-
-/**
- * Muzzle flashes sit above the world grade on an additive lane. Keep their local daylight
- * floor high enough to read over bright floors without changing the shared emissive balance.
- * At the night end (scale 1) this returns the exact authored alpha.
- */
-function muzzleEmissiveAlpha(alpha: number): number {
-  return alpha * (MUZZLE_EMISSIVE_FLOOR + getEmissiveScale() * (1 - MUZZLE_EMISSIVE_FLOOR));
-}
-
+/** Two persistent GPU templates plus sparks. No per-shot Phaser objects, timers or tweens. */
 export class MuzzleFlashRenderer {
   private lighting: LightingSystem | null = null;
   private gpuVfx: GpuVfxSystem | null = null;
   private coreSpec: GpuVfxSpawnSpec | null = null;
   private outerSpec: GpuVfxSpawnSpec | null = null;
   private sparkSpec: GpuVfxSpawnSpec | null = null;
+  private readonly profile = {} as MuzzleProfile;
+  private readonly lightOverrides = { color: 0, radiusPx: 0, intensity: 0, durationMs: 0 };
+  private readonly repeats = Array.from({ length: 128 }, () => ({ source: '', preset: '', until: 0 }));
+  private owners: OwnerVisualSource | null = null;
+  private readonly pose: OwnerRenderPose = { x: 0, y: 0, rotation: 0 };
+  private readonly attachments = Array.from({ length: 128 }, () => ({
+    source: '', core: createGpuVfxMemberHandle(), outer: createGpuVfxMemberHandle(),
+    localX: 0, localY: 0, localAngle: 0, x: 0, y: 0, rotation: 0, offset: 0,
+  }));
+  private readonly followTick = (): void => {
+    const system = this.gpuVfx;
+    if (!system) return;
+    for (const entry of this.attachments) {
+      if (!entry.source) continue;
+      if (!system.isMemberLive(entry.core) && !system.isMemberLive(entry.outer)) { entry.source = ''; continue; }
+      if (!this.owners?.readOwnerRenderPose?.(entry.source, this.pose)) {
+        system.releaseMember(entry.core); system.releaseMember(entry.outer); entry.source = ''; continue;
+      }
+      const pose = this.pose;
+      if (pose.x === entry.x && pose.y === entry.y && pose.rotation === entry.rotation) continue;
+      entry.x = pose.x; entry.y = pose.y; entry.rotation = pose.rotation;
+      const c = Math.cos(pose.rotation), s = Math.sin(pose.rotation);
+      const x = pose.x + entry.localX * c - entry.localY * s;
+      const y = pose.y + entry.localX * s + entry.localY * c;
+      const angle = pose.rotation + entry.localAngle;
+      this.moveBody(entry.core, x, y, angle, entry.offset, 1.15);
+      this.moveBody(entry.outer, x, y, angle, entry.offset * 1.25, 1.08);
+    }
+  };
+
+  setOwnerVisualSource(owners: OwnerVisualSource): void { this.owners = owners; }
+
+  private moveBody(handle: GpuVfxMemberHandle, x: number, y: number, angle: number, offset: number, growth: number): void {
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const speed = offset * (growth - 1) * 1000 / handle.lifeMs;
+    this.gpuVfx!.updateTransform(handle, x + dx * offset, y + dy * offset, dx * speed, dy * speed, angle);
+  }
 
   constructor(private readonly scene: Phaser.Scene) {}
-
-  setLightingSystem(lighting: LightingSystem | null): void {
-    this.lighting = lighting;
+  setLightingSystem(lighting: LightingSystem | null): void { this.lighting = lighting; }
+  generateTextures(): void { ensureMuzzleFlashTextures(this.scene); }
+  clear(): void {
+    for (const entry of this.repeats) { entry.source = ''; entry.until = 0; }
+    for (const entry of this.attachments) {
+      this.gpuVfx?.releaseMember(entry.core); this.gpuVfx?.releaseMember(entry.outer); entry.source = '';
+    }
   }
 
-  generateTextures(): void {
-    ensureMuzzleFlashTextures(this.scene);
+  private acceptRepeat(source: string | undefined, preset: MuzzleFlashPreset, now: number, life: number): boolean {
+    if (!source || (preset !== 'p90' && preset !== 'negev')) return true;
+    let free = null;
+    for (const entry of this.repeats) {
+      if (entry.source === source && entry.preset === preset) {
+        if (now < entry.until) return false;
+        entry.until = now + life + 10;
+        return true;
+      }
+      if (!free && entry.until <= now) free = entry;
+    }
+    if (!free) return false;
+    free.source = source; free.preset = preset; free.until = now + life + 10;
+    return true;
   }
 
-  /** Meldet die eventgetriebenen One-Shot-Effekte beim gemeinsamen GPU-VFX-Backend an. */
   registerGpuVfx(system: GpuVfxSystem): void {
     if (this.gpuVfx) return;
     this.gpuVfx = system;
-
+    system.registerEmission(this.followTick);
     this.coreSpec = system.createSpec(GpuVfxEffectId.MuzzleFlashBody);
-    this.coreSpec.positionEase = GpuVfxEase.Linear;
-    this.coreSpec.yMode = GpuVfxEase.Linear;
-    this.coreSpec.scaleEase = GpuVfxEase.QuadOut;
-    this.coreSpec.alphaEase = GpuVfxEase.QuadOut;
-    this.coreSpec.angularVelocity = 0;
-    this.coreSpec.gravityFactor = 1;
-    this.coreSpec.tintBlendStart = 1;
-    this.coreSpec.tintBlendEnd = 1;
-
     this.outerSpec = system.createSpec(GpuVfxEffectId.MuzzleFlashBody);
-    this.outerSpec.positionEase = GpuVfxEase.Linear;
-    this.outerSpec.yMode = GpuVfxEase.Linear;
-    this.outerSpec.scaleEase = GpuVfxEase.Linear;
-    this.outerSpec.alphaEase = GpuVfxEase.Linear;
-    this.outerSpec.angularVelocity = 0;
-    this.outerSpec.gravityFactor = 1;
-    this.outerSpec.tintBlendStart = OUTER_TINT_BLEND_START;
-    this.outerSpec.tintBlendEnd = 1;
-
     this.sparkSpec = system.createSpec(GpuVfxEffectId.MuzzleFlashSpark);
+    this.coreSpec.positionEase = GpuVfxEase.QuadOut;
+    this.coreSpec.scaleEase = GpuVfxEase.QuadOut;
+    this.coreSpec.alphaEase = GpuVfxEase.CubicInOut;
+    this.outerSpec.positionEase = GpuVfxEase.Linear;
+    this.outerSpec.scaleEase = GpuVfxEase.Linear;
+    this.outerSpec.alphaEase = GpuVfxEase.CubicInOut;
+    this.outerSpec.tintBlendStart = 0.42;
+    this.outerSpec.tintBlendEnd = 1;
     this.sparkSpec.positionEase = GpuVfxEase.Linear;
-    this.sparkSpec.yMode = GpuVfxEase.Linear;
     this.sparkSpec.scaleEase = GpuVfxEase.Linear;
     this.sparkSpec.alphaEase = GpuVfxEase.Linear;
-    this.sparkSpec.angularVelocity = 0;
-    this.sparkSpec.gravityFactor = 1;
-    this.sparkSpec.stretchStart = 1;
-    this.sparkSpec.stretchEnd = 1;
-    this.sparkSpec.tintBlendStart = 1;
-    this.sparkSpec.tintBlendEnd = 1;
   }
 
-  playProjectileFlash(
-    x: number,
-    y: number,
-    vx: number,
-    vy: number,
-    style?: ProjectileStyle,
-    bulletPreset?: BulletVisualPreset,
-    energyBallVariant?: EnergyBallVariant,
-    color?: number,
-  ): void {
-    const preset = this.resolveProjectilePreset(style, bulletPreset, energyBallVariant);
-    if (!preset) return;
-    this.playFlash(x, y, vx, vy, preset, color);
+  playProjectileFlash(x: number, y: number, vx: number, vy: number, style?: ProjectileStyle,
+    bulletPreset?: BulletVisualPreset, energyBallVariant?: EnergyBallVariant, color?: number, sourceId?: string): void {
+    const preset = resolveProjectileMuzzlePreset(style, bulletPreset, energyBallVariant);
+    if (preset) this.playFlash(x, y, vx, vy, preset, color, sourceId);
   }
 
-  playHitscanFlash(
-    x: number,
-    y: number,
-    vx: number,
-    vy: number,
-    preset: HitscanVisualPreset = 'default',
-    color?: number,
-  ): void {
-    const resolvedPreset = preset === 'asmd_primary' ? preset : 'default';
-    this.playFlash(x, y, vx, vy, resolvedPreset, color);
+  playHitscanFlash(x: number, y: number, vx: number, vy: number,
+    preset: HitscanVisualPreset = 'default', color?: number, sourceId?: string): void {
+    this.playFlash(x, y, vx, vy, preset === 'asmd_primary' ? preset : 'default', color, sourceId);
   }
 
-  private playFlash(
-    x: number,
-    y: number,
-    vx: number,
-    vy: number,
-    preset: MuzzleFlashPreset,
-    color?: number,
-  ): void {
-    const cfg = FLASH_PRESETS[preset];
+  private playFlash(x: number, y: number, vx: number, vy: number, preset: MuzzleFlashPreset,
+    color?: number, sourceId?: string): void {
+    const cfg = resolveMuzzleProfile(preset, MUZZLE_FLASH_VFX, this.profile);
+    if (cfg.alpha <= 0) return;
+    const now = this.gpuVfx?.now() ?? this.scene.time.now;
+    if (!this.acceptRepeat(sourceId, preset, now, cfg.outerDuration)) return;
     const angle = Math.atan2(vy, vx);
+    const dx = Math.cos(angle), dy = Math.sin(angle);
+    const voidFlame = preset === 'flame' && color === VOID_FIRE_COLOR;
+    const lightColor = voidFlame ? mixColors(color!, 0xffffff, 0.58) : color ?? cfg.tint;
+    this.lightOverrides.color = lightColor;
+    this.lightOverrides.radiusPx = cfg.lightRadius;
+    this.lightOverrides.intensity = cfg.lightIntensity;
+    this.lightOverrides.durationMs = cfg.lightDuration;
+    this.lighting?.pulse('muzzleFlash', x, y, this.lightOverrides);
+    const system = this.gpuVfx, core = this.coreSpec, outer = this.outerSpec, spark = this.sparkSpec;
+    if (!system || !core || !outer || !spark) return;
 
-    // Kurzer Lichtimpuls in der Mündungsfarbe. Bewusst ohne Lichtverdeckung: Schüsse
-    // sind die mit Abstand häufigste Lichtquelle, und der Impuls ist zu kurz, als dass
-    // ein Schlagschatten überhaupt lesbar wäre.
-    const isVoidFlame = preset === 'flame' && color === VOID_FIRE_COLOR;
-    const lightColor = isVoidFlame
-      ? mixColors(color, 0xffffff, 0.58)
-      : color ?? cfg.tint;
-    this.lighting?.pulse('muzzleFlash', x, y, {
-      color: lightColor,
-      radiusPx: 170 * (0.8 + cfg.scaleX * 0.4),
-      intensity: Phaser.Math.Clamp(cfg.alpha * 1.35, 0.45, 1),
-    });
-
-    const system = this.gpuVfx;
-    const coreSpec = this.coreSpec;
-    const outerSpec = this.outerSpec;
-    const sparkSpec = this.sparkSpec;
-    if (!system || !coreSpec || !outerSpec || !sparkSpec) return;
-
-    const nowMs = system.now();
-    const forwardOffset = (cfg.useEnergyCore ? 15 : 14) * cfg.scaleX;
-    const bodyX = x + Math.cos(angle) * forwardOffset;
-    const bodyY = y + Math.sin(angle) * forwardOffset;
-    const bodyStretch = cfg.scaleX / cfg.scaleY;
     const frame = cfg.useEnergyCore ? GpuVfxFrameId.MuzzleEnergy : GpuVfxFrameId.MuzzleFlash;
-
-    // The asymmetric texture starts at the real muzzle and extends forward. Only the two body
-    // members use this offset; sparks deliberately stay at the original muzzle origin.
-    coreSpec.lifeMs = cfg.duration;
-    coreSpec.x = bodyX;
-    coreSpec.y = bodyY;
-    coreSpec.vx = 0;
-    coreSpec.vy = 0;
-    coreSpec.rotation = angle;
-    coreSpec.scaleStart = cfg.scaleY;
-    coreSpec.scaleEnd = cfg.scaleY * CORE_SCALE_END_MULTIPLIER;
-    coreSpec.stretchStart = bodyStretch;
-    coreSpec.stretchEnd = bodyStretch;
-    coreSpec.alphaStart = muzzleEmissiveAlpha(cfg.alpha);
-    coreSpec.alphaEnd = 0;
-    coreSpec.tint = color ?? cfg.tint;
-    coreSpec.frame = frame;
-    // Both bodies are critical and intentionally bypass burst quality scaling; standard quality
-    // only reduces the optional sparks.
-    system.spawn(coreSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
-
-    outerSpec.lifeMs = Math.round(cfg.duration * OUTER_LIFETIME_MULTIPLIER);
-    outerSpec.x = bodyX;
-    outerSpec.y = bodyY;
-    outerSpec.vx = 0;
-    outerSpec.vy = 0;
-    outerSpec.rotation = angle;
-    outerSpec.scaleStart = cfg.scaleY * OUTER_SCALE_START_MULTIPLIER;
-    outerSpec.scaleEnd = cfg.scaleY * OUTER_SCALE_START_MULTIPLIER * OUTER_SCALE_END_MULTIPLIER;
-    outerSpec.stretchStart = bodyStretch;
-    outerSpec.stretchEnd = bodyStretch;
-    outerSpec.alphaStart = muzzleEmissiveAlpha(cfg.alpha * OUTER_ALPHA_MULTIPLIER);
-    outerSpec.alphaEnd = 0;
-    outerSpec.tint = color ?? cfg.tint;
-    outerSpec.frame = frame;
-    system.spawn(outerSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
-
-    const sparkCount = system.quality.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount);
-    if (sparkCount < cfg.sparkCount) {
-      system.recordQualityDrop(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount - sparkCount);
+    // Source motifs begin at x=2/3, relative to centered 32/36 px frames.
+    const anchor = cfg.useEnergyCore ? 15 : 14;
+    let attachment: (typeof this.attachments)[number] | undefined;
+    if (sourceId && this.owners?.readOwnerRenderPose?.(sourceId, this.pose)) {
+      for (const entry of this.attachments) {
+        if (entry.source && (system.isMemberLive(entry.core) || system.isMemberLive(entry.outer))) continue;
+        attachment = entry; break;
+      }
+      if (attachment) {
+        const pose = this.pose, c = Math.cos(pose.rotation), s = Math.sin(pose.rotation);
+        attachment.source = sourceId;
+        attachment.localX = (x - pose.x) * c + (y - pose.y) * s;
+        attachment.localY = -(x - pose.x) * s + (y - pose.y) * c;
+        attachment.localAngle = angle - pose.rotation;
+        attachment.x = pose.x; attachment.y = pose.y; attachment.rotation = pose.rotation;
+        attachment.offset = anchor * cfg.scaleX;
+      }
     }
+    this.configureBody(core, x, y, dx, dy, angle, anchor, cfg, 1, 1.15, cfg.duration, cfg.alpha, color ?? cfg.tint, frame);
+    system.spawn(core, GPU_VFX_NO_SOURCE_HANDLE, now, 0, attachment?.core);
+    this.configureBody(outer, x, y, dx, dy, angle, anchor, cfg, 1.25, 1.08, cfg.outerDuration, cfg.alpha * 0.38, color ?? cfg.tint, frame);
+    system.spawn(outer, GPU_VFX_NO_SOURCE_HANDLE, now, 0, attachment?.outer);
 
-    sparkSpec.lifeMs = 0;
-    sparkSpec.x = x;
-    sparkSpec.y = y;
-    sparkSpec.scaleStart = 0.6;
-    sparkSpec.scaleEnd = 0.04;
-    sparkSpec.alphaStart = muzzleEmissiveAlpha(0.82);
-    sparkSpec.alphaEnd = 0;
-    sparkSpec.rotation = 0;
-    sparkSpec.stretchStart = 1;
-    sparkSpec.stretchEnd = 1;
-    sparkSpec.tintBlendStart = 1;
-    sparkSpec.tintBlendEnd = 1;
-
-    const sparkTints = isVoidFlame
-      ? [0xffffff, mixColors(color, 0xffffff, 0.58), color]
-      : cfg.sparkTints;
-    for (let index = 0; index < sparkCount; index += 1) {
-      sparkSpec.lifeMs = Phaser.Math.FloatBetween(Math.max(cfg.duration * 1.1, 50), cfg.duration * 2);
-      const sparkAngle = angle + Phaser.Math.FloatBetween(-cfg.sparkSpread, cfg.sparkSpread) * Math.PI / 180;
-      const speed = Phaser.Math.FloatBetween(cfg.sparkSpeed * 0.35, cfg.sparkSpeed);
-      sparkSpec.vx = Math.cos(sparkAngle) * speed;
-      sparkSpec.vy = Math.sin(sparkAngle) * speed;
-      const stretchBand = index % 3;
-      sparkSpec.rotation = sparkAngle;
-      sparkSpec.stretchStart = 1.8 + stretchBand * 0.25;
-      sparkSpec.stretchEnd = 0.65 + stretchBand * 0.15;
-      sparkSpec.tint = sparkTints[Math.floor(Phaser.Math.FloatBetween(0, sparkTints.length)) % sparkTints.length];
-      system.spawn(sparkSpec, GPU_VFX_NO_SOURCE_HANDLE, nowMs);
+    const count = system.quality.scaleDiscreteBurst(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount);
+    if (count < cfg.sparkCount) system.recordQualityDrop(GpuVfxEffectId.MuzzleFlashSpark, cfg.sparkCount - count);
+    spark.x = x; spark.y = y;
+    spark.scaleStart = cfg.sparkScale; spark.scaleEnd = cfg.sparkScale * 0.35;
+    spark.alphaStart = emissiveAlpha(0.95); spark.alphaEnd = 0;
+    spark.tintBlendStart = 1; spark.tintBlendEnd = 1;
+    for (let i = 0; i < count; i++) {
+      spark.lifeMs = Phaser.Math.FloatBetween(cfg.sparkLifeMin, cfg.sparkLifeMax);
+      const direction = angle + Phaser.Math.FloatBetween(-cfg.sparkSpread, cfg.sparkSpread) * Math.PI / 180;
+      const speed = Phaser.Math.FloatBetween(cfg.sparkSpeed * 0.5, cfg.sparkSpeed);
+      spark.vx = Math.cos(direction) * speed; spark.vy = Math.sin(direction) * speed;
+      spark.rotation = direction;
+      spark.stretchStart = cfg.sparkStretch + (i % 3) * 0.35;
+      spark.stretchEnd = cfg.sparkStretch * 0.7 + (i % 3) * 0.2;
+      const tintIndex = Math.floor(Phaser.Math.FloatBetween(0, cfg.sparkTints.length)) % cfg.sparkTints.length;
+      spark.tint = voidFlame ? (tintIndex % 3 === 0 ? 0xffffff : tintIndex % 3 === 1 ? lightColor : color!) : cfg.sparkTints[tintIndex];
+      system.spawn(spark, GPU_VFX_NO_SOURCE_HANDLE, now);
     }
   }
 
-  private resolveProjectilePreset(
-    style?: ProjectileStyle,
-    bulletPreset?: BulletVisualPreset,
-    energyBallVariant?: EnergyBallVariant,
-  ): MuzzleFlashPreset | null {
-    if (style === 'grenade' || style === 'holy_grenade' || style === 'translocator_puck') return null;
-    if (style === 'energy_ball') return energyBallVariant === 'plasma' ? 'plasma' : 'energy';
-    if (style === 'hydra') return 'energy';
-    if (style === 'rocket') return 'rocket';
-    if (style === 'flame') return 'flame';
-    if (style === 'leaf_blower') return null;
-    if (style === 'bfg') return 'energy';
-    if (style === 'gauss') return 'gauss';
-    if (style === 'awp') return 'awp';
-
-    switch (bulletPreset) {
-      case 'glock': return 'glock';
-      case 'xbow': return 'xbow';
-      case 'p90': return 'p90';
-      case 'ak47': return 'ak47';
-      case 'shotgun': return 'shotgun';
-      case 'awp': return 'awp';
-      case 'gauss': return 'gauss';
-      case 'negev': return 'negev';
-      default: return 'default';
-    }
+  private configureBody(spec: GpuVfxSpawnSpec, x: number, y: number, dx: number, dy: number,
+    angle: number, anchor: number, cfg: MuzzleProfile, size: number, growth: number,
+    life: number, alpha: number, tint: number, frame: GpuVfxFrameId): void {
+    const offset = anchor * cfg.scaleX * size;
+    spec.lifeMs = life;
+    spec.x = x + dx * offset; spec.y = y + dy * offset;
+    // Position and scale use the same ease: the rear tip stays on the muzzle throughout growth.
+    spec.vx = dx * offset * (growth - 1) * 1000 / life;
+    spec.vy = dy * offset * (growth - 1) * 1000 / life;
+    spec.rotation = angle;
+    spec.scaleStart = cfg.scaleY * size; spec.scaleEnd = cfg.scaleY * size * growth;
+    spec.stretchStart = cfg.scaleX / cfg.scaleY; spec.stretchEnd = spec.stretchStart;
+    spec.alphaStart = emissiveAlpha(alpha); spec.alphaEnd = 0;
+    spec.tint = tint; spec.frame = frame;
   }
 }

@@ -17,7 +17,7 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
   }),
 }));
 
-import { DEPTH, VOID_FIRE_COLOR } from '../src/config';
+import { DEPTH, VOID_FIRE_COLOR, MUZZLE_FLASH_VFX } from '../src/config';
 import { setEmissiveScale } from '../src/effects/EmissiveScale';
 import { MuzzleFlashRenderer } from '../src/effects/MuzzleFlashRenderer';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
@@ -48,189 +48,219 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('muzzle flash renderer gpu particles', () => {
-  it('spawns no short-lived Phaser image, tween, emitter or cleanup timer', () => {
-    const { scene, renderer, lane } = setup();
-    const image = vi.spyOn(scene.add, 'image');
-    const particles = vi.spyOn(scene.add, 'particles');
-    const tween = vi.spyOn(scene.tweens, 'add');
-    const delayedCall = vi.spyOn(scene.time, 'delayedCall');
 
-    renderer.playProjectileFlash(100, 120, 1, 0, 'bullet', 'p90', undefined, 0x123456);
+import { resolveMuzzleProfile, MUZZLE_MAX_LIFETIME, type MuzzleFlashPreset } from '../src/effects/muzzleFlashModel';
 
-    expect(image).not.toHaveBeenCalled();
-    expect(particles).not.toHaveBeenCalled();
-    expect(tween).not.toHaveBeenCalled();
-    expect(delayedCall).not.toHaveBeenCalled();
-    expect(scene.objects).toHaveLength(0);
-    expect(scene.emitters).toHaveLength(0);
-    expect(lane.members).toHaveLength(8);
+describe('muzzle flash GPU presentation', () => {
+  it('falls back to an unbound burst when tracking is full and reuses entries after teardown', () => {
+    const { renderer, system, lane } = setup();
+    qualityFactors.standard = 0;
+    let x = 0;
+    renderer.setOwnerVisualSource({ getOwnerVisualState: () => null,
+      readOwnerRenderPose: (_id, out) => { out.x = x; out.y = 0; out.rotation = 0; return true; } });
+    for (let i = 0; i < 129; i++) renderer.playHitscanFlash(10, 0, 1, 0, 'default', undefined, String(i));
+    expect(lane.members).toHaveLength(258);
+    x = 10; system.update(1);
+    expect(lane.patched).toHaveLength(256);
+    renderer.clear();
+    expect(system.buildReport().lanes.find(l => l.label === 'muzzle-flash')!.active).toBe(2);
+    system.releaseAll();
+    renderer.playHitscanFlash(10, 0, 1, 0, 'default', undefined, 'new-world');
+    const before = lane.patched.length;
+    x = 20; system.update(1);
+    expect(lane.patched.length - before).toBe(2);
   });
 
-  it('keeps body rotation, anisotropic scale growth, alpha fade and the additive lane contract', () => {
-    const { renderer, lane } = setup();
-    renderer.playProjectileFlash(100, 120, 0, 1, 'bullet', 'p90');
-
-    const core = lane.members[0];
-    const outer = lane.members[1];
-    expect(lane.depth).toBe(DEPTH.PROJECTILES + 2 + GPU_VFX_DEPTH_EPSILON);
-    expect(lane.blendMode).toBe(1);
-    expect(lane.enabledEases).toEqual(expect.arrayContaining(['Linear', 'Quad.easeOut']));
-    for (const body of [core, outer]) {
-      expect(body.frame).toBe('muzzle-flash');
-      expect(body.x.base).toBeCloseTo(100, 10);
-      expect(body.y.base).toBeCloseTo(120 + 14 * 0.95, 10);
-      expect(body.rotation.base).toBeCloseTo(Math.PI / 2, 10);
+  it.each([Math.PI / 2, Math.PI, -Math.PI / 2])('follows the visible owner pose at rotation %f without touching sparks or animation time', (rotation) => {
+    const { renderer, system, lane } = setup();
+    const pose = { x: 100, y: 100, rotation: 0 };
+    renderer.setOwnerVisualSource({ getOwnerVisualState: () => null,
+      readOwnerRenderPose: (_id, out) => { Object.assign(out, pose); return true; } });
+    renderer.playProjectileFlash(120, 104, 1, 0, 'bullet', 'ak47', undefined, undefined, 'a');
+    const patches: { index: number; values: Float32Array; mask: number[] }[] = [];
+    vi.spyOn(lane, 'patchMember').mockImplementation((index, data, mask) => {
+      patches.push({ index, values: new Float32Array(data.buffer.slice(0)), mask: [...mask!] });
+    });
+    system.update(10);
+    expect(patches).toHaveLength(0);
+    pose.x = 200; pose.y = 150; pose.rotation = rotation;
+    system.update(10);
+    expect(patches).toHaveLength(2);
+    for (let i = 0; i < 2; i++) {
+      const body = lane.members[i], patch = patches[i];
+      expect(patch.mask).toEqual([1, 1, 0, 0, 1, 1, 0, 0, 1]);
+      expect(patch.values[8]).toBeCloseTo(rotation);
+      for (const t of [0.1, 0.5, 0.9]) {
+        const scale = evaluateFakeAnimation(body.scaleX, t);
+        const x = evaluateFakeAnimation({ ...body.x, base: patch.values[0], amplitude: patch.values[1] }, t);
+        const y = evaluateFakeAnimation({ ...body.y, base: patch.values[4], amplitude: patch.values[5] }, t);
+        expect(x - 14 * scale * Math.cos(rotation)).toBeCloseTo(200 + 20 * Math.cos(rotation) - 4 * Math.sin(rotation), 4);
+        expect(y - 14 * scale * Math.sin(rotation)).toBeCloseTo(150 + 20 * Math.sin(rotation) + 4 * Math.cos(rotation), 4);
+      }
     }
-    expect(core.scaleY.base).toBeCloseTo(0.58, 10);
-    expect(core.scaleY.amplitude).toBeCloseTo(0.58 * 0.35, 10);
-    expect(core.scaleX.base).toBeCloseTo(0.95, 10);
-    expect(core.scaleX.amplitude).toBeCloseTo(0.95 * 0.35, 10);
-    expect(core.scaleY.ease).toBe('Quad.easeOut');
-    expect(evaluateFakeAnimation(core.alpha, 0)).toBeCloseTo(0.75, 10);
-    expect(core.alpha.amplitude).toBeCloseTo(-0.75, 10);
-    expect(core.alpha.ease).toBe('Quad.easeOut');
-    expect(outer.scaleY.base).toBeCloseTo(0.58 * 1.35, 10);
-    expect(outer.scaleY.amplitude).toBeCloseTo(0.58 * 1.35 * 0.12, 10);
-    expect(outer.scaleX.base).toBeCloseTo(0.95 * 1.35, 10);
-    expect(outer.scaleX.amplitude).toBeCloseTo(0.95 * 1.35 * 0.12, 10);
-    expect(outer.scaleY.ease).toBe('Linear');
-    expect(outer.alpha.base).toBeCloseTo(0.75 * 0.68, 10);
-    expect(outer.alpha.amplitude).toBeCloseTo(-0.75 * 0.68, 10);
-    expect(outer.alpha.ease).toBe('Linear');
-    expect(outer.tintBlend.base).toBeCloseTo(0.42, 10);
-    expect(outer.tintBlend.amplitude).toBeCloseTo(0.58, 10);
+    system.update(10);
+    expect(patches).toHaveLength(2);
   });
 
-  it('keeps the muzzle readable in daylight with a local correction while preserving the night alpha', () => {
-    const { renderer, lane } = setup();
-    setEmissiveScale(0);
-    renderer.playProjectileFlash(100, 120, 1, 0, 'bullet', 'p90');
-
-    const core = lane.members[0];
-    const outer = lane.members[1];
-    expect(evaluateFakeAnimation(core.alpha, 0)).toBeCloseTo(0.75 * 0.7, 10);
-    expect(outer.alpha.base).toBeCloseTo(0.75 * 0.68 * 0.7, 10);
-
-    setEmissiveScale(1);
-    renderer.playProjectileFlash(100, 120, 1, 0, 'bullet', 'p90');
-    expect(evaluateFakeAnimation(lane.members[8].alpha, 0)).toBeCloseTo(0.75, 10);
+  it('ends attached bodies when the owner disappears and leaves sparks alive', () => {
+    const { renderer, system, lane } = setup();
+    let visible = true;
+    renderer.setOwnerVisualSource({ getOwnerVisualState: () => null,
+      readOwnerRenderPose: (_id, out) => { Object.assign(out, { x: 0, y: 0, rotation: 0 }); return visible; } });
+    renderer.playHitscanFlash(10, 0, 1, 0, 'asmd_primary', undefined, 'a');
+    visible = false; system.update(1);
+    expect(lane.patched).toEqual([0, 1]);
+    expect(system.buildReport().lanes.find(l => l.label === 'muzzle-flash')!.active).toBe(resolveMuzzleProfile('asmd_primary').sparkCount);
+    visible = true;
+    renderer.playProjectileFlash(10, 0, 1, 0, 'gauss', undefined, undefined, undefined, 'b');
+    renderer.clear();
+    expect(lane.patched).toHaveLength(4);
+    system.update(MUZZLE_MAX_LIFETIME + 1);
+    expect(system.buildReport().lanes.find(l => l.label === 'muzzle-flash')!.active).toBe(0);
   });
 
-  it('selects the old flash and energy motifs for every public preset path', () => {
-    const cases: Array<(renderer: MuzzleFlashRenderer) => void> = [
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'default'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'glock'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'xbow'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'ak47'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'shotgun'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'awp'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'gauss'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'negev'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'rocket'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'flame'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'energy_ball', undefined, 'default'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'energy_ball', undefined, 'plasma'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'hydra'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'bfg'),
-      (renderer) => renderer.playProjectileFlash(0, 0, 1, 0, 'gauss'),
-      (renderer) => renderer.playHitscanFlash(0, 0, 1, 0, 'default'),
-      (renderer) => renderer.playHitscanFlash(0, 0, 1, 0, 'asmd_primary'),
-    ];
-    const expectedFrames = [
-      'muzzle-flash', 'muzzle-flash', 'muzzle-flash', 'muzzle-flash', 'muzzle-flash',
-      'muzzle-flash', 'muzzle-flash', 'muzzle-energy', 'muzzle-flash', 'muzzle-flash',
-      'muzzle-flash', 'muzzle-energy', 'muzzle-energy', 'muzzle-energy', 'muzzle-energy',
-      'muzzle-energy', 'muzzle-flash', 'muzzle-energy',
-    ];
-    const expectedSparkCounts = [5, 4, 2, 6, 8, 10, 11, 12, 7, 8, 5, 8, 8, 8, 8, 12, 5, 14];
-
-    // Each case builds an independent atlas/system so the first member is the body.
-    cases.forEach((play, index) => {
-      const scene = makeFakeGpuVfxScene();
-      const system = new GpuVfxSystem(scene as never);
-      const renderer = new MuzzleFlashRenderer(scene as never);
-      renderer.registerGpuVfx(system);
-      play(renderer);
-      const lane = findFakeLane(scene, 'muzzle-flash');
-      expect(lane.members[0].frame).toBe(expectedFrames[index]);
-      expect(lane.members[1].frame).toBe(expectedFrames[index]);
-      expect(lane.members).toHaveLength(2 + expectedSparkCounts[index]);
+  it('derives the existing light pulse from the same AK profile', () => {
+    const { renderer } = setup();
+    const pulse = vi.fn();
+    renderer.setLightingSystem({ pulse } as never);
+    renderer.playProjectileFlash(10, 20, 1, 0, 'bullet', 'ak47', undefined, 0xffcc88);
+    const profile = resolveMuzzleProfile('ak47');
+    expect(pulse).toHaveBeenCalledWith('muzzleFlash', 10, 20, {
+      color: 0xffcc88, radiusPx: profile.lightRadius,
+      intensity: profile.lightIntensity, durationMs: profile.lightDuration,
     });
   });
 
-  it('preserves Void-Flame body and spark tint semantics', () => {
-    const { renderer, lane } = setup();
-    renderer.playProjectileFlash(0, 0, 1, 0, 'flame', undefined, undefined, VOID_FIRE_COLOR);
-
-    const tintValues = new Set(lane.members.slice(2).map((member) => member.tint));
-    expect(lane.members[0].tint).toBe(VOID_FIRE_COLOR);
-    expect(lane.members[1].tint).toBe(VOID_FIRE_COLOR);
-    expect([...tintValues].every((tint) => [0xffffff, 0xdfb2ff, VOID_FIRE_COLOR].includes(tint))).toBe(true);
+  it('uses existing GPU members without per-shot Phaser objects', () => {
+    const { scene, renderer, lane } = setup();
+    const image = vi.spyOn(scene.add, 'image'), particles = vi.spyOn(scene.add, 'particles');
+    const tween = vi.spyOn(scene.tweens, 'add'), timer = vi.spyOn(scene.time, 'delayedCall');
+    renderer.playProjectileFlash(10, 20, 1, 0, 'bullet', 'ak47');
+    expect(image).not.toHaveBeenCalled(); expect(particles).not.toHaveBeenCalled();
+    expect(tween).not.toHaveBeenCalled(); expect(timer).not.toHaveBeenCalled();
+    expect(lane.members).toHaveLength(2 + resolveMuzzleProfile('ak47').sparkCount);
   });
 
-  it('keeps spark count, lifetime, direction, speed, scale and alpha semantics', () => {
+  it.each([0, Math.PI / 2, Math.PI, -Math.PI / 2])('anchors both growing bodies at the muzzle at angle %f', (angle) => {
     const { renderer, lane } = setup();
-    renderer.playProjectileFlash(10, 20, 0, -1, 'bullet', 'p90');
-
-    const sparks = lane.members.slice(2);
-    expect(sparks).toHaveLength(6);
-    for (const spark of sparks) {
-      expect(spark.frame).toBe('muzzle-spark');
-      expect(spark.x.base).toBe(10);
-      expect(spark.y.base).toBe(20);
-      expect(spark.x.amplitude).toBeCloseTo(0, 10);
-      expect(spark.y.amplitude).toBeCloseTo(-54 * 93 / 1000, 10);
-      expect(spark.rotation.base).toBeCloseTo(-Math.PI / 2, 10);
-      expect(spark.scaleY.base).toBeCloseTo(0.6, 10);
-      expect(spark.scaleY.amplitude).toBeCloseTo(-0.56, 10);
-      expect(spark.scaleX.base).toBeGreaterThan(0.6);
-      expect(spark.alpha.base).toBeCloseTo(0.82, 10);
-      expect(spark.alpha.amplitude).toBeCloseTo(-0.82, 10);
-      expect(spark.scaleY.duration).toBeGreaterThanOrEqual(50);
-      expect(spark.scaleY.duration).toBeLessThanOrEqual(120);
+    renderer.playProjectileFlash(100, 120, Math.cos(angle), Math.sin(angle), 'bullet', 'ak47');
+    expect(lane.depth).toBe(DEPTH.PROJECTILES + 2 + GPU_VFX_DEPTH_EPSILON);
+    expect(lane.blendMode).toBe(1);
+    for (const body of lane.members.slice(0, 2)) {
+      expect(body.frame).toBe('muzzle-flash');
+      for (const t of [0, 0.25, 0.5, 0.9]) {
+        const scale = evaluateFakeAnimation(body.scaleX, t);
+        expect(evaluateFakeAnimation(body.x, t) - Math.cos(angle) * 14 * scale).toBeCloseTo(100, 6);
+        expect(evaluateFakeAnimation(body.y, t) - Math.sin(angle) * 14 * scale).toBeCloseTo(120, 6);
+      }
+      expect(evaluateFakeAnimation(body.alpha, 0.25)).toBeGreaterThan(evaluateFakeAnimation(body.alpha, 0) * 0.8);
     }
-    expect(sparks[0].scaleY.duration).toBe(93);
   });
 
-  it('keeps the critical body visible while standard spark quality scales and reports drops', () => {
-    const { system, renderer, lane } = setup();
+  it('preserves daylight contrast, energy motifs and Void palette overrides', () => {
+    const { renderer, lane } = setup();
+    setEmissiveScale(0);
+    renderer.playHitscanFlash(0, 0, 1, 0, 'asmd_primary');
+    const dayAlpha = evaluateFakeAnimation(lane.members[0].alpha, 0);
+    expect(lane.members[0].frame).toBe('muzzle-energy');
+    const count = lane.members.length;
+    setEmissiveScale(1);
+    renderer.playProjectileFlash(0, 0, 1, 0, 'gauss');
+    expect(lane.members[count].frame).toBe('muzzle-energy');
+    expect(dayAlpha).toBeGreaterThan(0.7);
+    const start = lane.members.length;
+    renderer.playProjectileFlash(0, 0, 1, 0, 'flame', undefined, undefined, VOID_FIRE_COLOR);
+    expect(lane.members[start].tint).toBe(VOID_FIRE_COLOR);
+    expect(lane.members.slice(start + 2).every(m => [0xffffff, 0xdfb2ff, VOID_FIRE_COLOR].includes(m.tint))).toBe(true);
+  });
+
+  it('keeps long sparks directed away from the actual muzzle', () => {
+    const { renderer, lane } = setup();
+    renderer.playProjectileFlash(10, 20, 0, -1, 'bullet', 'ak47');
+    for (const spark of lane.members.slice(2)) {
+      expect(spark.frame).toBe('muzzle-spark');
+      expect(spark.x.base).toBe(10); expect(spark.y.base).toBe(20);
+      expect(spark.y.amplitude).toBeLessThan(0);
+      expect(spark.rotation.base).toBeCloseTo(-Math.PI / 2);
+      expect(spark.scaleX.base).toBeGreaterThan(spark.scaleY.base * 2);
+      expect(evaluateFakeAnimation(spark.scaleY, 0.5)).toBeGreaterThan(spark.scaleY.base * 0.5);
+      expect(spark.alpha.duration).toBeGreaterThan(lane.members[0].alpha.duration);
+    }
+  });
+
+  it('scales and reports optional sparks without removing critical bodies', () => {
+    const { renderer, system, lane } = setup();
     qualityFactors.standard = 0;
     renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
-
     expect(lane.members).toHaveLength(2);
-    const report = system.buildReport();
-    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.body')?.spawns).toBe(2);
-    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.spawns).toBe(0);
-    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.qualityDrops).toBe(6);
-  });
-
-  it('uses discrete burst rounding without carrying quality between shots', () => {
-    const { system, renderer, lane } = setup();
+    const spark = system.buildReport().effects.find(e => e.label === 'muzzleFlash.spark')!;
+    expect(spark.qualityDrops).toBe(resolveMuzzleProfile('p90').sparkCount);
     qualityFactors.standard = 0.35;
-    renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
-    renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
-
-    // round(6 * 0.35) = 2 for each independent explode-style burst; no second shot inherits a
-    // fractional remainder from the first one.
-    expect(lane.members).toHaveLength(8);
-    const report = system.buildReport();
-    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.body')?.spawns).toBe(4);
-    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.spawns).toBe(4);
-    expect(report.effects.find((effect) => effect.label === 'muzzleFlash.spark')?.qualityDrops).toBe(8);
+    const reduced = setup();
+    reduced.renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
+    reduced.renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
+    expect(reduced.lane.members.length).toBe(2 * (2 + Math.round(resolveMuzzleProfile('p90').sparkCount * 0.35)));
   });
 
-  it('keeps body and sparks as separate profiler effects on one lane', () => {
-    const { system, renderer } = setup();
-    renderer.playProjectileFlash(0, 0, 1, 0, 'bullet', 'p90');
+  it('separates shooters, suppresses rapid retriggers including light, and clears on teardown', () => {
+    const { renderer, system, scene } = setup();
+    const pulse = vi.fn();
+    renderer.setLightingSystem({ pulse } as never);
+    const fire = (owner: string, x = 0) => renderer.playProjectileFlash(x, 0, 1, 0, 'bullet', 'negev', undefined, undefined, owner);
+    fire('a'); fire('a', 100); fire('b');
+    expect(pulse).toHaveBeenCalledTimes(2);
+    const light = { ...pulse.mock.calls[0][3] };
+    expect(light.durationMs).toBeLessThanOrEqual(resolveMuzzleProfile('negev').outerDuration);
+    system.update(60); scene.time.now += 60;
+    fire('a');
+    expect(pulse).toHaveBeenCalledTimes(3);
+    renderer.clear(); fire('a');
+    expect(pulse).toHaveBeenCalledTimes(4);
+  });
 
+  it.each(['p90', 'negev'] as const)('bounds twelve simultaneous %s streams and retires every member', (preset) => {
+    const { renderer, system } = setup();
+    let poseTime = 0;
+    renderer.setOwnerVisualSource({ getOwnerVisualState: () => null,
+      readOwnerRenderPose: (id, out) => {
+        out.x = Number(id.slice(6)) * 30 + poseTime; out.y = poseTime; out.rotation = poseTime / 100;
+        return true;
+      } });
+    const interval = preset === 'p90' ? 80 : 60;
+    for (let time = 0; time < 3000; time += 20) {
+      poseTime = time;
+      system.update(20);
+      if (time % interval === 0) for (let source = 0; source < 12; source++) {
+        renderer.playProjectileFlash(source * 30, 0, 1, 0, 'bullet', preset, undefined, undefined, 'player' + source);
+      }
+    }
     const report = system.buildReport();
-    const body = report.effects.find((effect) => effect.label === 'muzzleFlash.body')!;
-    const sparks = report.effects.find((effect) => effect.label === 'muzzleFlash.spark')!;
-    expect(body.spawns).toBe(2);
-    expect(sparks.spawns).toBe(6);
-    expect(body.laneLabel).toBe('muzzle-flash');
-    expect(sparks.laneLabel).toBe('muzzle-flash');
+    expect(report.effects.find(e => e.label === 'muzzleFlash.body')!.capacityDrops).toBe(0);
+    expect(report.lanes.find(l => l.label === 'muzzle-flash')!.highWaterMark).toBeLessThanOrEqual(1024);
+    system.update(MUZZLE_MAX_LIFETIME + 1);
+    expect(system.buildReport().lanes.find(l => l.label === 'muzzle-flash')!.active).toBe(0);
+  });
+});
+
+describe('muzzle tuning model', () => {
+  it('keeps the ballistic hierarchy and energy proportions', () => {
+    for (const preset of ['glock', 'p90', 'negev'] as const) expect(resolveMuzzleProfile(preset).scaleX).toBeLessThan(resolveMuzzleProfile('ak47').scaleX);
+    expect(resolveMuzzleProfile('shotgun').scaleX).toBeGreaterThan(resolveMuzzleProfile('ak47').scaleX);
+    expect(resolveMuzzleProfile('awp').scaleX).toBeGreaterThan(resolveMuzzleProfile('shotgun').scaleX);
+    for (const preset of ['gauss', 'asmd_primary', 'energy', 'plasma'] as const) expect(resolveMuzzleProfile(preset).useEnergyCore).toBe(true);
+  });
+  it('offers independent time, intensity and spark controls with finite upper bounds', () => {
+    const base = resolveMuzzleProfile('ak47');
+    const longer = resolveMuzzleProfile('ak47', { ...MUZZLE_FLASH_VFX, muzzleFlashDuration: 300 });
+    expect(longer.duration).toBeGreaterThan(base.duration);
+    expect(longer.scaleX).toBe(base.scaleX);
+    expect(resolveMuzzleProfile('ak47', { ...MUZZLE_FLASH_VFX, muzzleFlashIntensity: 0 }).alpha).toBe(0);
+    expect(resolveMuzzleProfile('ak47', { ...MUZZLE_FLASH_VFX, muzzleFlashIntensity: 0 }).lightIntensity).toBe(0);
+    expect(resolveMuzzleProfile('ak47', { ...MUZZLE_FLASH_VFX, muzzleFlashSparkStrength: 0 }).sparkCount).toBe(0);
+    for (const preset of ['ak47', 'awp', 'gauss', 'asmd_primary', 'p90', 'negev'] as MuzzleFlashPreset[]) {
+      const cfg = resolveMuzzleProfile(preset, { muzzleFlashIntensity: Infinity, muzzleFlashDuration: 10000, muzzleFlashSparkStrength: NaN });
+      expect(Number.isFinite(cfg.scaleX)).toBe(true);
+      expect(cfg.sparkLifeMax).toBeLessThanOrEqual(MUZZLE_MAX_LIFETIME);
+    }
   });
 });

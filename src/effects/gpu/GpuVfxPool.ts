@@ -97,6 +97,7 @@ export class GpuVfxPool {
   private readonly capacity: number;
   /** Ablaufzeitpunkt je Slot, in der Uhr, die der Aufrufer uebergibt. */
   private readonly expiresAt: Float64Array;
+  private readonly versions: Float64Array;
   /** Quelle je Slot, `GPU_VFX_NO_SOURCE` wenn keine (mehr). */
   private readonly sourceOf: Int32Array;
 
@@ -139,6 +140,7 @@ export class GpuVfxPool {
   ) {
     this.capacity  = Math.max(1, Math.min(capacity, layer.size));
     this.expiresAt = new Float64Array(this.capacity);
+    this.versions = new Float64Array(this.capacity);
     this.sourceOf  = new Int32Array(this.capacity).fill(GPU_VFX_NO_SOURCE);
     this.liveSlots = new Int32Array(this.capacity);
     this.slotPos   = new Int32Array(this.capacity).fill(NONE);
@@ -208,12 +210,30 @@ export class GpuVfxPool {
     if (this.liveCount > this.peakLive) this.peakLive = this.liveCount;
 
     this.expiresAt[slot] = nowMs + lifetimeMs;
+    this.versions[slot] += 1;
     this.linkToSource(slot, sourceIndex);
 
     this.head = slot + 1 === this.capacity ? 0 : slot + 1;
     this.rearms += 1;
     this.markSegment(slot);
     return slot;
+  }
+
+  getVersion(slot: number): number { return this.versions[slot]; }
+
+  isLiveVersion(slot: number, version: number): boolean {
+    return slot >= 0 && slot < this.capacity && this.slotPos[slot] !== NONE && this.versions[slot] === version;
+  }
+
+  patchVersion(slot: number, version: number, data: Uint32Array, mask: number[]): boolean {
+    if (!this.isLiveVersion(slot, version)) return false;
+    this.layer.patchMember(slot, data, mask);
+    this.markSegment(slot);
+    return true;
+  }
+
+  releaseVersion(slot: number, version: number): void {
+    if (this.isLiveVersion(slot, version)) this.retire(slot);
   }
 
   /** Legt abgelaufene Slots still. Laeuft ueber exakt die lebenden Member. */
