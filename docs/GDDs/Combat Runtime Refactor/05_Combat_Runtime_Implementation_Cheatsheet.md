@@ -57,6 +57,8 @@ P3/P10/P12 bei sichtbar gewordener ungeklärter Fachsemantik zu Sol / High eskal
 
 **Nur passende Prüfungen:** lokale Gates pro Phase; vollständige Matrix in P0/P13. Bereits für denselben Code belegte Tests nicht doppelt ausführen. Nach relevanten Änderungen Belege erneuern. Bekannte Integrationslücken bleiben nur mit Ursache und Schließphase zulässig. Keine Browserprüfung, kein automatisches Push/Merge/Deployment.
 
+**Review-Schleifen:** Nach dem initialen R1-, R2- oder P13-Review darf der Orchestrator bei lokalen Blocking-Findings automatisch bis zu zwei begrenzte Fix-/Wiederholungsreview-Schleifen anstoßen. Damit ist Review 3 die letzte automatische Prüfung. Bleiben dort Blocker, endet der Block zur manuellen Nutzerprüfung. Fixes schreibt der passende Implementierungsagent; jedes Wiederholungsreview läuft read-only in einem frischen unabhängigen Kontext auf dem neuen Fix-Checkpoint. Grundlegende Vertragskonflikte aus 03 § 4.3 stoppen sofort.
+
 Subagenten sind nicht kostenlos: Ihre zusätzlichen Modell-/Tool-Aufrufe verbrauchen weitere Tokens. Die geplante Ersparnis entsteht aus begrenztem Kontext und passender Aufgabenverteilung, nicht aus möglichst vielen Agenten.[^agents]
 
 ## 3. Kurzer Startcheck und einfacher Rückfallweg
@@ -135,7 +137,7 @@ nicht ausreichend verifiziert samt geprüftem Code-Stand. Erteile keine
 Freigabe für den Folgeblock. Fordere notwendige Testbelege konkret an.
 ```
 
-Das Ergebnis an den koordinierenden Chat zurückgeben; dieser trägt es in 04 ein. Bei Findings nur das begrenzte Korrekturpaket und erneutes Review bearbeiten. Nach A/B genügt normalerweise die nächste Blockfreigabe; nach C folgt M gemäß 03 § 6.3.
+Das Ergebnis an den koordinierenden Chat zurückgeben; dieser trägt es in 04 ein. Bei Findings gelten die höchstens zwei automatischen Fix-/Wiederholungsreview-Schleifen aus 03 § 4.3; nach einem weiterhin negativen Review 3 wird angehalten. Nach A/B genügt bei bestandenem Review normalerweise die nächste Blockfreigabe; nach C folgt M gemäß 03 § 6.3.
 
 ## Technische Quellen
 
