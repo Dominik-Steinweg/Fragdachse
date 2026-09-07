@@ -402,7 +402,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private enemyManager:     EnemyManager | null = null;
   private projectileDetonableReadPort: ProjectileDetonableReadPort | null = null;
   private baseManager:      BaseManager | null = null;
-  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null = null;
+  private baseDamageCallback: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => CombatDamageMutationOutcome | null) | null = null;
   private trunkObjects: readonly ObstacleCircleBody[] | null = null;
   /**
    * Coop-Defense-Basen als rechteckige LoS-/Hitscan-/Melee-Blocker.
@@ -775,7 +775,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * Schaden durch `resolveOutgoingDamage` laeuft und Klassen-, Item- sowie optionale
    * Quell-Slot-Modifikatoren sieht.
    */
-  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => void) | null): void {
+  setBaseDamageCallback(cb: ((baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot) => CombatDamageMutationOutcome | null) | null): void {
     this.baseDamageCallback = cb;
   }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
@@ -1538,8 +1538,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (source ? source.allegiance.kind === 'enemy' : this.enemyManager?.hasEnemy(ownerId)) continue;
       const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
       if (damage <= 0) continue;
-      this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult, effect.appliedSourceDamageFactors);
-      damagedTargetKeys.push(`bases:${base.id}`);
+      const outcome = this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult, effect.appliedSourceDamageFactors);
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
+        damagedTargetKeys.push(`bases:${base.id}`);
+      }
     }
     return damagedTargetKeys;
   }
@@ -3110,8 +3112,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   /**
-   * Host-only: Basisschaden ueber den gemeinsamen Trichter. Ohne verdrahteten Callback faellt es
-   * auf den direkten Weg zurueck, damit ein fehlendes Setup keinen Schaden verschluckt.
+   * Host-only: Base modifiers precede the canonical World mutation. Its receipt remains intact;
+   * a detached World binding cannot fall back to an unreported mutation.
    */
   private applyBaseDamageAtHostTime(
     baseId: string,
@@ -3120,16 +3122,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
     appliedSourceFactors?: readonly ProjectileDamageSourceFactor[],
-  ): void {
-    if (!this.bridge.isHost() || !Number.isFinite(damage) || !Number.isFinite(baseDamageMult) || damage <= 0 || baseDamageMult <= 0) return;
+  ): CombatDamageMutationOutcome | null {
+    if (!this.bridge.isHost() || !Number.isFinite(damage) || !Number.isFinite(baseDamageMult) || damage <= 0 || baseDamageMult <= 0) return null;
     const runtimeDamage = damage * baseDamageMult
       * this.getPendingProjectileRuntimeMultiplier(attackerId, sourceSlot, appliedSourceFactors);
     const resolvedDamage = this.resolveLegacyWorldModifiers(
       { targetType: 'base', targetId: baseId }, runtimeDamage, attackerId, sourceSlot, true,
     );
-    if (resolvedDamage <= 0) return;
-    if (this.baseDamageCallback) this.baseDamageCallback(baseId, resolvedDamage, attackerId, sourceSlot);
-    else this.baseManager?.applyDamage(baseId, resolvedDamage);
+    if (resolvedDamage <= 0) return null;
+    return this.baseDamageCallback?.(baseId, resolvedDamage, attackerId, sourceSlot) ?? null;
   }
 
   /**

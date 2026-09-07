@@ -272,6 +272,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly systems: WorldCombatGameplaySystems | null;
   private destroyed = false;
   private activityGeneration = 0;
+  /** Only the current synchronous Base commit delays its Objective reward until its receipt. */
+  private baseObjectiveCommit: { readonly baseId: string; complete?: () => void } | null = null;
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
@@ -618,10 +620,29 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       );
     });
     combat.setBaseDamageCallback((baseId, damage, attackerId) => {
+      if (this.destroyed) return null;
+      const generation = this.activityGeneration;
+      const worldMutation = this.requireWorldMutation();
       const base = o.baseManager?.getBase(baseId);
       const objectiveId = base?.getSpec().dormantObjectiveId;
-      if (objectiveId && o.network.round.canPlayerReceiveRoundRewards(attackerId)) o.reportTargetContribution(objectiveId, baseId);
-      this.requireWorldMutation().applyResolvedDamage('base', baseId, damage, attackerId, 'combat.base');
+      const objectiveCommit: NonNullable<WorldCombatGameplayBinding['baseObjectiveCommit']> = { baseId };
+      const previousCommit = this.baseObjectiveCommit;
+      this.baseObjectiveCommit = objectiveCommit;
+      let outcome: ReturnType<WorldObjectMutationRuntime['applyResolvedDamage']>;
+      try {
+        outcome = worldMutation.applyResolvedDamage('base', baseId, damage, attackerId, 'combat.base');
+      } finally {
+        this.baseObjectiveCommit = previousCommit;
+      }
+      const current = () => !this.destroyed && generation === this.activityGeneration
+        && o.getWorldMutation() === worldMutation;
+      const damaged = outcome?.kind === 'damage-applied' && outcome.actualDamage > 0;
+      if (objectiveId && damaged
+        && current() && o.network.round.canPlayerReceiveRoundRewards(attackerId) && current()) {
+        o.reportTargetContribution(objectiveId, baseId);
+      }
+      if (damaged && current()) objectiveCommit.complete?.();
+      return outcome;
     });
     combat.setTrainDamageCallback((damage, attackerId) => {
       const p = o.getPlayerCombatIntegration();
@@ -1070,6 +1091,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.baseManager?.setOnBaseActivated(updateActivatedBasePresentation);
     }
     o.baseManager?.setOnBaseDestroyed((destroyedBase) => {
+      const generation = this.activityGeneration;
+      const worldMutation = o.getWorldMutation();
+      const current = () => !this.destroyed && generation === this.activityGeneration
+        && o.getWorldMutation() === worldMutation;
       o.getWorldGeometryBinding()?.removeBase(destroyedBase.id);
       o.getTargetStatusSystem()?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
       o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'base', targetId: destroyedBase.id });
@@ -1077,8 +1102,15 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.reconcilePersistentBaseWorld();
       if (o.network.authority.isHost()) {
         const objectiveId = destroyedBase.dormantObjectiveId;
-        const xp = objectiveId ? o.reportTargetDestroyed(objectiveId, destroyedBase.id) : 0;
-        if (xp > 0) o.network.round.addCoopDefenseRoundXp(xp);
+        if (objectiveId) {
+          const complete = () => {
+            if (!current()) return;
+            const xp = o.reportTargetDestroyed(objectiveId, destroyedBase.id);
+            if (xp > 0 && current()) o.network.round.addCoopDefenseRoundXp(xp);
+          };
+          if (this.baseObjectiveCommit?.baseId === destroyedBase.id) this.baseObjectiveCommit.complete = complete;
+          else complete();
+        }
         const blast = getBaseDestructionBlast(destroyedBase);
         o.hostPhysics.applyRadialImpulse(blast.x, blast.y, blast.radius, blast.force, undefined, 1, blast.durationMs);
       }

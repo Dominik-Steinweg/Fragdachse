@@ -17,8 +17,10 @@ import { EnemyManager } from '../../src/entities/EnemyManager';
 import { WorldCombatCore as CombatSystem } from '../../src/combat/WorldCombatCore';
 import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';
 import { WorldCombatGameplayBinding } from '../../src/world/WorldCombatGameplayBinding';
+import { WorldObjectMutationRuntime } from '../../src/world/WorldObjectMutationRuntime';
 import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
 import { CoopDefenseItemRuntimeSystem } from '../../src/systems/CoopDefenseItemRuntimeSystem';
+import { CoopDefenseSecondaryObjectiveSystem } from '../../src/systems/CoopDefenseSecondaryObjectiveSystem';
 import { TargetStatusSystem } from '../../src/systems/TargetStatusSystem';
 import { EnergyInjectorSystem } from '../../src/systems/EnergyInjectorSystem';
 import { DecoySystem } from '../../src/systems/DecoySystem';
@@ -35,7 +37,7 @@ import { WorldHealthBarRenderer } from '../../src/effects/health/WorldHealthBarR
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 import { COOP_DEFENSE_CONSTRUCTION_IDS, getCoopDefenseConstructionDefinition } from '../../src/config/coopDefenseConstructions';
 import type { BaseSpec } from '../../src/arena/BaseRegistry';
-import type { PlayerProfile, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
+import type { PlayerProfile, ProjectileExplosionConfig, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
 import type { CombatSource } from '../../src/combat/CombatScope';
 import { healthBarTestScene } from '../healthBarTestScene';
 import { BURN_TICK_INTERVAL_MS } from '../../src/config';
@@ -133,6 +135,207 @@ describe('World HP consumer boundaries', () => {
       advanceBurn: (nowMs: number) => { hostNowMs = nowMs; combat.updateBurnEffects(nowMs); },
       close: () => { runtime.destroy(); manager.destroy(); } };
   }
+
+  function baseExplosionFixture(damageable: boolean) {
+    const h = harness(), metrics = resolveCoopDefenseWorldMetrics(20, 20);
+    const bases = new BaseManager(h.scene, [{ ...baseSpec, faction: 'hostile', hpMax: 1000, startHp: 1000,
+      dormantObjectiveId: 'base-objective' }],
+      metrics, {}, false, damageable);
+    const base = bases.getBase('base')!;
+    // Only the technical body geometry is supplied by the headless renderer.
+    for (const cell of base.getCellBodies()) Object.assign(cell, {
+      getBounds: () => ({ left: cell.x - cell.width / 2, right: cell.x + cell.width / 2,
+        top: cell.y - cell.height / 2, bottom: cell.y + cell.height / 2 }),
+    });
+    const cell = base.getCellBodies()[0], x = cell.x, y = cell.y;
+    const players = { getPlayer: () => undefined, getAllPlayers: () => [], setSpawnContextProvider: () => {} } as unknown as PlayerManager;
+    const combat = new CombatSystem(players, { isHost: () => true, getPlayerProfile: () => undefined } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
+    combat.setBaseManager(bases);
+    const worldOwner = new WorldObjectMutationRuntime({
+      scope: { worldRevision: 1, runtimeGeneration: 1 }, metrics, bases, train: null,
+    } as ConstructorParameters<typeof WorldObjectMutationRuntime>[0]);
+    const mutations = vi.spyOn(worldOwner, 'applyResolvedDamage');
+    const getWorldMutation = vi.fn<() => WorldObjectMutationRuntime | null>(() => worldOwner);
+    const rewardXp = 17;
+    const objectives = new CoopDefenseSecondaryObjectiveSystem([{
+      id: 'base-objective', type: 'destroy', start: { type: 'time', atMs: 0 },
+      targets: ['base'], targetGoal: 1, rewards: { xpPerTarget: rewardXp },
+    }]);
+    objectives.hostUpdate(0, false);
+    const contributions = vi.fn((objectiveId: string, targetId: string) => {
+      expect(base.getHp()).toBeLessThan(1000);
+      objectives.reportTargetContribution(objectiveId, targetId);
+    });
+    const targetDestroyed = vi.fn((objectiveId: string, targetId: string) => objectives.reportTargetDestroyed(objectiveId, targetId));
+    const addXp = vi.fn();
+    const baseCleanup = vi.fn();
+    const rewardEligible = vi.fn(() => true);
+    const physics = createTechnicalPhysicsBinding();
+    const runtime = new WorldProjectileRuntime({ physicsBinding: physics.binding, presentation: createPresentation(),
+      identityScope: new ProjectileIdentityScope(1), hostNowMs: () => 1000 });
+    const inert = new Proxy({ getAllRuntimeRocks: () => [], getHostTargets: () => [] }, {
+      get: (target, key) => Reflect.get(target, key) ?? (() => undefined),
+    });
+    const binding = new WorldCombatGameplayBinding({
+      playerManager: players, combatSystem: combat, baseManager: bases, automatedWeaponExecution: null,
+      worldMetrics: metrics, getWorldMutation, getWorldTrain: () => null, getRockTargets: () => [],
+      getPlayerCombatIntegration: () => null, getEnemyManager: () => null,
+      getTargetStatusSystem: () => null, getEnergyInjectorSystem: () => null,
+      getTargetFootprint: () => null, getPowerUpSystem: () => null,
+      getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
+      syncActiveBaseIds: () => {}, reconcilePersistentBaseWorld: baseCleanup,
+      reportTargetContribution: contributions, reportTargetDestroyed: targetDestroyed,
+      isCoopMission: () => false, isActivityActive: () => damageable, getSpawnContext: () => undefined,
+      hostPhysics: inert, decoySystem: inert, fireSystem: inert, gameAudioSystem: inert, placementSystem: inert,
+      projectileEvents: inert, projectileTimeField: inert, projectileHoming: inert, projectileWorldImpact: inert,
+      projectileSwarm: inert, projectileInteraction: runtime, hostUpdate: inert,
+      network: { authority: { isHost: () => true, getPlayerProfile: () => undefined, getConnectedPlayers: () => [] },
+        stats: inert, effects: inert, round: { canPlayerReceiveRoundRewards: rewardEligible, addCoopDefenseRoundXp: addXp } },
+    } as never);
+    function startExplosion(effect: Partial<ProjectileExplosionConfig> = {}) {
+      const id = runtime.spawnProjectile({ origin: { x, y, angle: 0 },
+        provenance: createSingleOwnerProvenance('p1', { weaponSourceId: 'MINI_ROCKET', sourceSlot: 'utility' }),
+        flight: { speed: 100, size: 8, lifetimeMs: 1000, maxBounces: 0, isGrenade: false, collisionMode: 'overlap' },
+        interaction: { directHit: { damage: 0 }, multiExplosion: { count: 3 },
+          explosion: { radius: 96, maxDamage: 20, knockback: 0, selfDamageMult: 0, ...effect } },
+        presentation: { color: 0xffffff },
+      });
+      physics.emit({ projectileId: id, target: { kind: 'base', id: base.id }, x, y,
+        velocityX: 100, velocityY: 0, source: 'physics-collider' });
+      const request = runtime.runHostProjectileStage(0, 1000).projectileExplosions[0];
+      expect(request.continuation).toEqual({ projectileId: id });
+      return { id, request };
+    }
+    return { base, bases, combat, worldOwner, mutations, runtime, startExplosion, binding,
+      contributions, targetDestroyed, rewardEligible, getWorldMutation, baseCleanup, objectives, rewardXp, addXp,
+      close: () => { binding.destroy(); runtime.destroy(); worldOwner.destroy(); bases.destroy(); } };
+  }
+
+  it.each([false, true])('feeds only canonical Base damage into multi-explosion continuation (damageable: %s)', damageable => {
+    const f = baseExplosionFixture(damageable), { id, request } = f.startExplosion();
+    const outcome = f.combat.resolveExplosionCombat(request);
+    expect(f.mutations.mock.results[0].value).toMatchObject(damageable
+      ? { kind: 'damage-applied', actualDamage: 20, integrityLost: 20, transition: { kind: 'none' } }
+      : { kind: 'accepted-no-effect', reason: 'immune' });
+    expect(f.base.getHp()).toBe(damageable ? 980 : 1000);
+    expect(outcome.damagedTargetKeys).toEqual(damageable ? ['bases:base'] : []);
+    expect(f.contributions).toHaveBeenCalledTimes(damageable ? 1 : 0);
+    if (damageable) expect(f.contributions).toHaveBeenCalledWith('base-objective', 'base');
+    f.runtime.completeProjectileExplosion(id, outcome);
+    // The real binding supplies the base to collision again. Only an actual damaging hit
+    // excludes it from this continuation; an immune base must remain contactable.
+    f.runtime.runHostInteractionStage(1000);
+    const next = f.runtime.runHostProjectileStage(0, 1000).projectileExplosions;
+    expect(next).toHaveLength(damageable ? 0 : 1);
+    if (!damageable) {
+      expect(f.combat.resolveExplosionCombat(next[0]).damagedTargetKeys).toEqual([]);
+      expect(f.base.getHp()).toBe(1000);
+      expect(f.contributions).not.toHaveBeenCalled();
+    }
+    f.close();
+  });
+
+  it('keeps a terminal Base receipt and reports the destroyed target once', () => {
+    const f = baseExplosionFixture(true), { id, request } = f.startExplosion({ maxDamage: 2000 });
+    const outcome = f.combat.resolveExplosionCombat(request);
+    expect(f.mutations.mock.results[0].value).toMatchObject({
+      kind: 'damage-applied', actualDamage: 1000, integrityLost: 1000, transition: { kind: 'destroyed' },
+    });
+    expect(f.base.getHp()).toBe(0);
+    expect(outcome.damagedTargetKeys).toEqual(['bases:base']);
+    f.runtime.completeProjectileExplosion(id, outcome);
+    expect(f.combat.resolveExplosionCombat(request).damagedTargetKeys).toEqual([]);
+    expect(f.mutations).toHaveBeenCalledTimes(1);
+    expect(f.contributions).toHaveBeenCalledExactlyOnceWith('base-objective', 'base');
+    expect(f.targetDestroyed).toHaveBeenCalledExactlyOnceWith('base-objective', 'base');
+    expect(f.addXp).toHaveBeenCalledExactlyOnceWith(f.rewardXp);
+    expect(f.objectives.getObjectiveState('base-objective')).toBe('completed');
+    f.close();
+  });
+
+  it.each(['zero', 'stale', 'missing', 'detached'] as const)('does not report Base damage after %s resolution', mode => {
+    const f = baseExplosionFixture(true), { request } = f.startExplosion();
+    if (mode === 'zero') f.combat.setTargetIncomingDamageMultiplierResolver(() => 0);
+    if (mode === 'stale') f.worldOwner.destroy();
+    if (mode === 'missing') f.combat.setTargetIncomingDamageMultiplierResolver(() => { f.bases.destroy(); return 1; });
+    if (mode === 'detached') f.combat.setBaseDamageCallback(null);
+    expect(f.combat.resolveExplosionCombat(request).damagedTargetKeys).toEqual([]);
+    expect(f.base.getHp()).toBe(1000);
+    expect(f.contributions).not.toHaveBeenCalled();
+    if (mode === 'stale') expect(f.mutations.mock.results[0].value).toMatchObject({ kind: 'rejected', reason: 'stale-scope' });
+    if (mode === 'missing') expect(f.mutations.mock.results[0].value).toBeNull();
+    f.close();
+  });
+
+  it.each(['ineligible', 'activity', 'binding', 'world-owner', 'eligibility-hook'] as const)(
+    'retains the terminal Base receipt without a contribution after %s changes', mode => {
+      const f = baseExplosionFixture(true);
+      if (mode === 'ineligible') f.rewardEligible.mockReturnValue(false);
+      if (mode === 'eligibility-hook') f.rewardEligible.mockImplementation(() => {
+        f.binding.clearActivityBindings();
+        return true;
+      });
+      f.baseCleanup.mockImplementation(() => {
+        if (mode === 'activity') f.binding.clearActivityBindings();
+        if (mode === 'binding') f.binding.destroy();
+        if (mode === 'world-owner') f.getWorldMutation.mockReturnValue(null);
+      });
+      const receipt = f.combat.applyBaseDamage('base', 2000, 'p1', 'utility');
+      expect(receipt).toBe(f.mutations.mock.results[0].value);
+      expect(receipt).toMatchObject({ kind: 'damage-applied', actualDamage: 1000,
+        integrityLost: 1000, transition: { kind: 'destroyed' } });
+      expect(f.contributions).not.toHaveBeenCalled();
+      expect(f.targetDestroyed).toHaveBeenCalledTimes(mode === 'ineligible' ? 1 : 0);
+      expect(f.addXp).not.toHaveBeenCalled();
+      f.close();
+    },
+  );
+
+  it('does not rewrite a confirmed Base receipt when its contribution hook changes Activity', () => {
+    const f = baseExplosionFixture(true);
+    f.contributions.mockImplementation(() => f.binding.clearActivityBindings());
+    const receipt = f.combat.applyBaseDamage('base', 20, 'p1', 'utility');
+    expect(receipt).toBe(f.mutations.mock.results[0].value);
+    expect(receipt).toMatchObject({ kind: 'damage-applied', actualDamage: 20, integrityLost: 20 });
+    expect(f.contributions).toHaveBeenCalledExactlyOnceWith('base-objective', 'base');
+    f.close();
+  });
+
+  it('does not send Objective XP into a successor Activity after terminal resolution', () => {
+    const f = baseExplosionFixture(true);
+    f.targetDestroyed.mockImplementation((objectiveId, targetId) => {
+      const xp = f.objectives.reportTargetDestroyed(objectiveId, targetId);
+      f.binding.clearActivityBindings();
+      return xp;
+    });
+    const receipt = f.combat.applyBaseDamage('base', 2000, 'p1', 'utility');
+    expect(receipt).toBe(f.mutations.mock.results[0].value);
+    expect(receipt).toMatchObject({ kind: 'damage-applied', actualDamage: 1000, transition: { kind: 'destroyed' } });
+    expect(f.contributions).toHaveBeenCalledExactlyOnceWith('base-objective', 'base');
+    expect(f.objectives.getObjectiveState('base-objective')).toBe('completed');
+    expect(f.addXp).not.toHaveBeenCalled();
+    f.close();
+  });
+
+  it.each([false, true])('preserves Base factor, P and M/T at the canonical writer (frozen: %s)', frozen => {
+    const f = baseExplosionFixture(true), authored = 14, power = 6, baseFactor = 0.5, outgoing = 2, incoming = 1.5;
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+    f.combat.setPlayerOutgoingDamageResolver((_source, _target, amount) => ({ amount: amount * outgoing, isCritical: false }));
+    f.combat.setTargetIncomingDamageMultiplierResolver(() => incoming);
+    const { request } = f.startExplosion({ maxDamage: authored * (frozen ? power : 1), baseDamageMult: baseFactor,
+      appliedSourceDamageFactors: frozen ? [{ kind: 'runtime-power', multiplier: power, resolvedAt: 'execution' }] : undefined });
+    const outcome = f.combat.resolveExplosionCombat(request);
+    const expected = authored * power * baseFactor * outgoing * incoming;
+    expect(f.base.getHp()).toBe(1000 - expected);
+    expect(f.mutations.mock.results[0].value).toMatchObject({ kind: 'damage-applied', actualDamage: expected, integrityLost: expected });
+    expect(outcome.damagedTargetKeys).toEqual(['bases:base']);
+    const direct = f.combat.applyBaseDamage('base', authored, 'p1', 'utility', baseFactor);
+    expect(direct).toBe(f.mutations.mock.results[1].value);
+    expect(direct).toMatchObject({ kind: 'damage-applied', actualDamage: expected });
+    f.close();
+  });
 
   it.each([false, true])('keeps hostile projectile allegiance after source removal (%s)', remove => {
     const f = projectileFixture();

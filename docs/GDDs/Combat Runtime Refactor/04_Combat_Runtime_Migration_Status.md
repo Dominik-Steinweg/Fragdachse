@@ -11,15 +11,15 @@
 | Gesamtstatus | Block C aktiv; P13-Korrekturschleife 3 läuft |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Frisches P13-Review 4 auf Korrekturcheckpoint 3 |
+| Nächster Arbeitsschritt | Frisches P13-Review 5 auf Korrekturcheckpoint 4 |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | P13 – Review 4 nach Korrekturschleife 3 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `c7cba601` |
+| Aktive Phase / Aufgabe | P13 – Review 5 nach Korrekturschleife 4 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `260a99d1` |
 | Start-HEAD der laufenden Aufgabe | `d015ba61` |
 | Aktiver Worker / Thread | Frischer Astra-/High-Reviewer, read-only |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner; zwei zusätzliche Schleifen freigegeben |
-| Aktueller Reparaturzähler | P13: 3/4 automatische Fixschleifen |
+| Aktueller Reparaturzähler | P13: 4/4 automatische Fixschleifen |
 | Technische Endabnahme F / manuelle Abnahme M | F aktiv; M nicht begonnen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
@@ -72,7 +72,7 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P12 sind realisiert. Der Review-3-Blocker ist in Fix 3 behoben (Rocket-Explosion 84 statt 504); Review 4 steht aus.
+P1–P12 sind realisiert. Der Review-4-Blocker ist in Fix 4 behoben; Review 5 entscheidet Abschluss oder manuellen Stopp.
 
 ## 5. Nachweise und Reviews
 
