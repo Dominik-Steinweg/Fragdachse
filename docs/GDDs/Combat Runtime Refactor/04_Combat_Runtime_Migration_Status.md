@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B aktiv; R2-Fix 1 geprüft, Review 2 als Nächstes |
+| Gesamtstatus | Block B aktiv; R2 Review 2 fehlgeschlagen, letzte Fixschleife aktiv |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Frisches, unabhängiges R2 Review 2 |
+| Nächster Arbeitsschritt | R2-Fix 2, danach letztes automatisches Review 3 |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine; R2-Fix 1 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ac5a77ba` |
-| Start-HEAD der laufenden Aufgabe | `ac5a77ba` |
-| Aktiver Worker / Thread | Keiner |
+| Aktive Phase / Aufgabe | R2-Fix 2 – instanzgebundenes Cleanup und Player-Life-Reaktionen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `88bf6347` |
+| Start-HEAD der laufenden Aufgabe | `88bf6347` |
+| Aktiver Worker / Thread | P6-Fix-Worker, Astra / High |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
-| Aktueller Reparaturzähler | R2 Fix 1 genutzt; Review 2 als Nächstes |
+| Aktueller Reparaturzähler | R2 Fixschleife 2 von max. 2; danach Review 3 final |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -43,7 +43,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 | P4 | B | ✅ | Damage / Support / Modifier / Defense |
 | P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
-| R2 | B | 🟨 | Review 1 korrigiert; Review 2 ausstehend |
+| R2 | B | 🟧 | Review 2 mit zwei lokalen Blockern; letzter Fix aktiv |
 | P7 | C | ⬜ | Projectile-Adapter |
 | P8 | C | ⬜ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
@@ -78,6 +78,8 @@ P1–P4 sind realisiert:
 | Geplanter Integrationsübergang | Verbleibende Projectile-Callback-Reaktionen auf den einen Ausführungspfad umstellen (D10) | P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
+| R2-Fix 2 | Alter Enemy-Death-Cleanup löscht Attribution der Nachfolgerinstanz | P6-Fix |
+| R2-Fix 2 | DamageTaken-Folgen überschreiten die Player-Life-Grenze | P6-Fix |
 
 ## 5. Nachweise und Reviews
 
@@ -98,7 +100,7 @@ P1–P4 sind realisiert:
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
 | R1 | Bestanden | `ee5742b4` | Keine |
-| R2 Review 1 | Nicht bestanden | `ac5a77ba` | 3 lokale Fixes: Inkarnation, Burn-Source, Player-Status |
+| R2 Review 2 | Nicht bestanden | `88bf6347` | 2 lokale Fixes: instanzgebundenes Cleanup, Player-Life-Reaktion |
 | P13 | Nicht ausgeführt | – | – |
 
 Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlender Beleg verlangt erneute Prüfung; alter Review-Pass gilt nach Code-Delta nicht automatisch weiter.
