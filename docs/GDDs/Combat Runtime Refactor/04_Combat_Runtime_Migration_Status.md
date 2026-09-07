@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B gestoppt; R2 Review 4 mit Blocker |
+| Gesamtstatus | Block B aktiv; R2-Fix 4 geprüft, Review 5 als Nächstes |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Manuelle Prüfung/Freigabe des R2-Blockers; P7 nicht beginnen |
+| Nächster Arbeitsschritt | Frisches R2 Review 5; P7 nicht beginnen |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine; Nutzerstopp nach Zusatzschleife |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ae6685e8` |
-| Start-HEAD der laufenden Aufgabe | – |
+| Aktive Phase / Aufgabe | Keine; R2-Fix 4 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `194dd9e4` |
+| Start-HEAD der laufenden Aufgabe | `194dd9e4` |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Nutzerentscheidung erforderlich |
-| Aktueller Reparaturzähler | Nutzer-Ausnahme Fix 3 genutzt; Review 4 fehlgeschlagen |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner; weitere Schleife ausdrücklich freigegeben |
+| Aktueller Reparaturzähler | Nutzer-Ausnahme Fix 4 genutzt; Review 5 ausstehend |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -41,7 +41,7 @@
 | P4 | B | ✅ | Damage / Support / Modifier / Defense |
 | P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
-| R2 | B | 🟧 | Review 4: Burn-Provenance-Blocker; Nutzerstopp |
+| R2 | B | 🟨 | Review-4-Blocker korrigiert; Review 5 ausstehend |
 | P7 | C | ⬜ | Projectile-Adapter |
 | P8 | C | ⬜ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
@@ -76,7 +76,6 @@ P1–P4 sind realisiert:
 | Geplanter Integrationsübergang | Verbleibende Projectile-Callback-Reaktionen auf den einen Ausführungspfad umstellen (D10) | P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
-| R2-Blocker | Neue Burn-Anwendung kann abgelaufene Herkunft derselben Source-ID erben | Manuelle Prüfung |
 
 ## 5. Nachweise und Reviews
 
@@ -94,11 +93,13 @@ P1–P4 sind realisiert:
 
 **R2-Fix 1:** drei Repros geschlossen; 2772 Core/32 Architektur, Integration 183/183, Fokus 26/26 und Build grün.
 
-**R2-Fix 2:** zwei Review-Repros plus angrenzender instanzgebundener Clear geschlossen. Check 2775 Core/32 Architektur und Build grün; Integration 188/188; Orchestrator-Fokus 46/46; Typecheck/Diff-Check grün.
+**R2-Fix 2:** zwei Repros geschlossen; 2775 Core/32 Architektur, Integration 188/188, Fokus 46/46 und Build grün.
 
 **R2-Fix 3:** terminaler Enemy-Status-Cleanup vor externen Hooks; Fokus 38/38, Integration 192/192 und Check 2775 Core/32 Architektur plus Build grün.
 
 **R2 Review 4:** 2775/2775 Core, 32/32 Architektur und 192/192 Integration grün; alle sechs früheren Blocker geschlossen. Zusatzrepro bestätigt stale Burn-Herkunft bei erneut verwendeter Source-ID.
+
+**R2-Fix 4:** Provenance-Lifetimes getrennt bei unveränderten Stack-/Tick-Summen; Fokus 39/39, Integration 195/195, Check 2776 Core/32 Architektur plus Build grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

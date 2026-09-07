@@ -25,8 +25,25 @@ function sourceActorId(source: CombatSource): string {
     : String(source.gameplaySource.id);
 }
 
-function sourceFactsKey(targetKey: string, attackerId: string, stackKey: string): string {
-  return `${targetKey}\u001e${attackerId}\u001e${stackKey}`;
+interface BurnSourceFacts {
+  readonly source: CombatSource;
+  readonly stackKey: string;
+}
+
+/** Equal authored stacks can share buckets only when all retained provenance agrees. */
+function sourceFactsKey(stackKey: string, source: CombatSource): string {
+  return JSON.stringify([
+    stackKey,
+    source.gameplaySource.kind, source.gameplaySource.id,
+    source.actor?.kind, source.actor?.id,
+    source.attribution.kind, source.attribution.id,
+    source.allegiance.ownerId, source.allegiance.factionId, source.allegiance.allowTeamDamage,
+    source.authoredSourceId, source.sourceSlot, source.origin,
+    source.lineage?.parentEffectId, source.lineage?.parentProjectileId,
+    source.lineage?.reflected, source.lineage?.plasmaSwarmChild,
+    source.lineage?.plasmaSwarmOriginEnemyId,
+    source.correlation?.executionId, source.correlation?.projectileId, source.correlation?.shotId,
+  ]);
 }
 
 /**
@@ -37,7 +54,7 @@ function sourceFactsKey(targetKey: string, attackerId: string, stackKey: string)
 export class CombatBurnStatusOwner implements CombatBurnPort {
   private readonly machine = new BurnStateMachine();
   private readonly targets = new Map<string, CombatTargetRef>();
-  private readonly sources = new Map<string, CombatSource>();
+  private readonly sources = new Map<string, Map<string, BurnSourceFacts>>();
 
   applyBurn(request: CombatBurnRequest, metadata: CombatBurnMetadata = {}): boolean {
     if ((request.target.kind !== 'player' && request.target.kind !== 'enemy')
@@ -50,12 +67,13 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
       ?? request.source.authoredSourceId
       ?? `${request.source.gameplaySource.kind}:${request.source.gameplaySource.id}`;
     const sourceId = request.source.authoredSourceId ?? stackKey;
+    const factsKey = sourceFactsKey(stackKey, request.source);
     const applied = this.machine.applyHit({
       targetId: targetKey,
       attackerId,
       durationMs: request.durationMs,
       damagePerTick: request.damagePerTick,
-      sourceKey: stackKey,
+      sourceKey: factsKey,
       sourceId,
       origin: metadata.origin,
       visualStyle: metadata.visualStyle,
@@ -63,8 +81,14 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
     });
     if (!applied) return false;
     this.targets.set(targetKey, request.target);
-    const factsKey = sourceFactsKey(targetKey, attackerId, stackKey);
-    if (!this.sources.has(factsKey)) this.sources.set(factsKey, request.source);
+    let targetSources = this.sources.get(targetKey);
+    if (!targetSources) {
+      targetSources = new Map();
+      this.sources.set(targetKey, targetSources);
+    }
+    if (!targetSources.has(factsKey)) {
+      targetSources.set(factsKey, { source: request.source, stackKey });
+    }
     return true;
   }
 
@@ -80,15 +104,13 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
     const resolved: DueCombatBurnContribution[] = [];
     for (const contribution of due) {
       const target = this.targets.get(contribution.targetId);
-      const source = this.sources.get(sourceFactsKey(
-        contribution.targetId,
-        contribution.attackerId,
-        contribution.sourceKey,
-      ));
-      if (!target || !source) continue;
-      resolved.push(Object.freeze({ ...contribution, target, source }));
+      const facts = this.sources.get(contribution.targetId)?.get(contribution.sourceKey);
+      if (!target || !facts) continue;
+      resolved.push(Object.freeze({
+        ...contribution, sourceKey: facts.stackKey, target, source: facts.source,
+      }));
     }
-    this.pruneIndexes(nowMs);
+    this.pruneIndexes();
     return resolved;
   }
 
@@ -100,24 +122,23 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
   }
 
   getActiveSources(target: CombatTargetRef, nowMs: number): ActiveBurnSource[] {
-    return this.machine.getActiveSources(combatTargetInstanceKey(target), nowMs);
+    const targetKey = combatTargetInstanceKey(target);
+    return this.machine.getActiveSources(targetKey, nowMs).map((source) => ({
+      ...source,
+      sourceKey: this.sources.get(targetKey)!.get(source.sourceKey)!.stackKey,
+    }));
   }
 
   clearBurn(target: CombatTargetRef): void {
     const targetKey = combatTargetInstanceKey(target);
     this.machine.clearTarget(targetKey);
     this.targets.delete(targetKey);
-    for (const key of this.sources.keys()) {
-      if (key.startsWith(`${targetKey}\u001e`)) this.sources.delete(key);
-    }
+    this.sources.delete(targetKey);
   }
 
   /** Final source detach only. A source death intentionally does not call this operation. */
   clearSource(actorId: string): void {
     this.machine.clearByAttacker(actorId);
-    for (const [key, source] of this.sources) {
-      if (sourceActorId(source) === actorId) this.sources.delete(key);
-    }
     this.pruneIndexes();
   }
 
@@ -127,15 +148,17 @@ export class CombatBurnStatusOwner implements CombatBurnPort {
     this.sources.clear();
   }
 
-  private pruneIndexes(nowMs?: number): void {
+  private pruneIndexes(): void {
     for (const [targetKey] of this.targets) {
-      const active = nowMs === undefined
-        ? this.machine.hasTarget(targetKey)
-        : this.machine.getStackCount(targetKey, nowMs) > 0;
-      if (active) continue;
-      this.targets.delete(targetKey);
-      for (const key of this.sources.keys()) {
-        if (key.startsWith(`${targetKey}\u001e`)) this.sources.delete(key);
+      if (!this.machine.hasTarget(targetKey)) {
+        this.targets.delete(targetKey);
+        this.sources.delete(targetKey);
+        continue;
+      }
+      for (const [key, facts] of this.sources.get(targetKey)!) {
+        if (!this.machine.hasSource(targetKey, sourceActorId(facts.source), key)) {
+          this.sources.get(targetKey)!.delete(key);
+        }
       }
     }
   }

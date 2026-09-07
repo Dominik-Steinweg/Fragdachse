@@ -35,6 +35,7 @@ import type { BaseSpec } from '../../src/arena/BaseRegistry';
 import type { PlayerProfile, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
 import type { CombatSource } from '../../src/combat/CombatScope';
 import { healthBarTestScene } from '../healthBarTestScene';
+import { BURN_TICK_INTERVAL_MS } from '../../src/config';
 
 function harness() {
   const fake = healthBarTestScene();
@@ -224,6 +225,62 @@ describe('World HP consumer boundaries', () => {
       attribution: { kind: 'player', id: 'credited' }, allegiance: { ownerId: 'e2', factionId: 'allied' },
       authoredSourceId: 'summon.fire', origin: 'burn',
     } });
+    manager.destroy();
+  });
+
+  it.each([false, true])('uses the new Burn lifetime attribution after expiry (another source remains: %s)', keepOtherSource => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'old-owner' });
+    upsert(manager, { id: 'e3', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'other-owner' });
+    const tick = BURN_TICK_INTERVAL_MS;
+    let now = 4 * tick;
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 }); combat.setEnemyManager(manager);
+    const kill = vi.fn(); combat.setKillCallback(kill);
+    combat.applyBurnHit('e1', 'e2', 2 * tick, 1, 'fire', 'summon.fire', 'generic');
+    if (keepOtherSource) combat.applyBurnHit('e1', 'e3', 10 * tick, 1, 'fire', 'summon.fire', 'generic');
+    now += 2 * tick; combat.updateBurnEffects(now);
+    expect(combat.getActiveBurnSources('e1', now).map(entry => entry.attackerId))
+      .toEqual(keepOtherSource ? ['e3'] : []);
+    manager.applySnapshot({ u: [], r: [2] });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'new-owner' });
+    combat.applyBurnHit('e1', 'e2', 3 * tick, 100, 'fire', 'summon.fire', 'generic');
+    // Both the new effect's attribution and its actor survive removal before the lethal tick.
+    manager.applySnapshot({ u: [], r: [2] });
+    now += tick; combat.updateBurnEffects(now);
+    expect(manager.getEnemy('e1')).toBeUndefined();
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(kill.mock.calls[0]?.[0]).toBe('new-owner');
+    expect(kill.mock.calls[0]?.[5].provenance).toMatchObject({
+      gameplaySource: { kind: 'enemy', id: 'e2' }, actor: { kind: 'enemy', id: 'e2' },
+      attribution: { kind: 'player', id: 'new-owner' }, authoredSourceId: 'summon.fire', origin: 'burn',
+    });
+    manager.destroy();
+  });
+
+  it('keeps old Burn ticks credited to their source while a replacement source overlaps', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 10, maxHp: 100 });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'old-owner' });
+    const tick = BURN_TICK_INTERVAL_MS;
+    let now = 4 * tick;
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 }); combat.setEnemyManager(manager);
+    const kill = vi.fn(); combat.setKillCallback(kill);
+    combat.applyBurnHit('e1', 'e2', 3 * tick, 10, 'fire', 'summon.fire', 'generic');
+    manager.applySnapshot({ u: [], r: [2] });
+    upsert(manager, { id: 'e2', kind, x: 30, y: 40, hp: 100, maxHp: 100, faction: 'allied', ownerId: 'new-owner' });
+    combat.applyBurnHit('e1', 'e2', 3 * tick, 1, 'fire', 'summon.fire', 'generic');
+    manager.applySnapshot({ u: [], r: [2] });
+    now += tick; combat.updateBurnEffects(now);
+    expect(kill).toHaveBeenCalledTimes(1);
+    expect(kill.mock.calls[0]?.[0]).toBe('old-owner');
+    expect(kill.mock.calls[0]?.[5].provenance).toMatchObject({
+      actor: { kind: 'enemy', id: 'e2' }, attribution: { kind: 'player', id: 'old-owner' },
+    });
     manager.destroy();
   });
 

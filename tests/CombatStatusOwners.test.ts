@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BURN_TICK_INTERVAL_MS } from '../src/config';
 import { CombatBurnStatusOwner } from '../src/combat/CombatBurnStatusOwner';
+import { BurnStateMachine } from '../src/combat/rules/BurnStateMachine';
 import type { CombatSource, CombatTargetRef } from '../src/combat/CombatScope';
 import { EnemyMovementStatusSystem } from '../src/systems/EnemyMovementStatusSystem';
 import { PlasmaSwarmReactionSystem } from '../src/systems/PlasmaCharge';
@@ -38,6 +39,47 @@ function source(id: string, child = false): CombatSource {
 }
 
 describe('P5 canonical status owners', () => {
+  it('preserves overlapping provenance without changing stack counts, expiry or tick damage totals', () => {
+    const owner = new CombatBurnStatusOwner();
+    const baseline = new BurnStateMachine();
+    const target = enemy('victim');
+    const oldSource: CombatSource = {
+      ...source('e2'), gameplaySource: { kind: 'enemy', id: 'e2' },
+      actor: { kind: 'enemy', id: 'e2' }, attribution: { kind: 'player', id: 'old-owner' },
+    };
+    const newSource: CombatSource = { ...oldSource, attribution: { kind: 'player', id: 'new-owner' } };
+    const tick = BURN_TICK_INTERVAL_MS;
+    for (const [now, provenance, duration, damage] of [
+      [0, oldSource, 3 * tick, 4],
+      // A separate object with equal facts still shares its contribution with the old source.
+      [0, { ...oldSource }, 3 * tick, 4],
+      [0, newSource, 3 * tick, 4],
+      [tick / 2, newSource, 5 * tick, 2],
+    ] as const) {
+      owner.applyBurn({ target, source: provenance, durationMs: duration,
+        damagePerTick: damage, tickIntervalMs: tick, nowMs: now }, { stackKey: 'fire' });
+      baseline.applyHit({ targetId: 'victim', attackerId: 'e2', sourceKey: 'fire',
+        sourceId: oldSource.authoredSourceId!, durationMs: duration, damagePerTick: damage, now });
+    }
+    expect(owner.getActiveSources(target, tick).map(entry => entry.sourceKey)).toEqual(['fire', 'fire']);
+    for (const now of [tick, 2 * tick, 3 * tick, 12 * tick]) {
+      expect(owner.getVisualState(target, now).stackCount).toBe(baseline.getStackCount('victim', now));
+      const actual = owner.advance(now, () => true);
+      const expected = baseline.advanceTo(now);
+      for (const tickAt of new Set([...actual, ...expected].map(entry => entry.tickAt))) {
+        const sum = (entries: readonly { tickAt: number; damage: number }[]) => entries
+          .filter(entry => entry.tickAt === tickAt).reduce((total, entry) => total + entry.damage, 0);
+        expect(sum(actual)).toBe(sum(expected));
+      }
+      if (now === tick) {
+        expect(actual.map(entry => [entry.source.attribution.id, entry.damage])).toEqual([
+          ['old-owner', 8], ['new-owner', 6],
+        ]);
+        expect(actual.every(entry => entry.sourceKey === 'fire')).toBe(true);
+      }
+    }
+  });
+
   it('keeps Burn on the concrete target life and retains source facts until final source detach', () => {
     const owner = new CombatBurnStatusOwner();
     const targetLife = player('victim', 1);

@@ -305,6 +305,11 @@ export class BurnStateMachine {
     return this.burnStates.has(targetId);
   }
 
+  /** Physical effect lifetime; reads do not expire pending catch-up contributions. */
+  hasSource(targetId: string, attackerId: string, sourceKey: string): boolean {
+    return this.burnStates.get(targetId)?.has(`${attackerId}\u001f${sourceKey}`) ?? false;
+  }
+
   hasAnyActiveBurns(now?: number): boolean {
     if (this.burnStates.size === 0) return false;
     if (now === undefined) return true;
