@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A aktiv; P1-Fixversuch 2 bestanden, R1-Runde 3 als nächstes |
+| Gesamtstatus | Block A technisch bestanden; wartet auf Nutzerfreigabe B |
 | Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
 | Freigabequelle | Block A vom 07.09.2026; zusätzlicher Fix-/R1-Auftrag nach Runde 2 |
-| Nächster Arbeitsschritt | Unabhängiges R1 auf dem zweiten Fix-Checkpoint |
+| Nächster Arbeitsschritt | Nutzerfreigabe B abwarten; P2 nicht begonnen |
 | Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine zwischen Fix-Checkpoint und R1 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `5ae6d37e` |
+| Aktive Phase / Aufgabe | Keine; Block-A-Stopp nach bestandenem R1 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ee5742b4` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Keiner; Nutzer hat den gezielten zweiten Fixversuch beauftragt |
-| Aktueller Reparaturzähler | Zweiter Faktorherkunfts-Fixversuch abgeschlossen; R1 ausstehend |
+| Aktuell nötiger Modell-/Reviewstopp | Nutzerfreigabe B erforderlich |
+| Aktueller Reparaturzähler | Geschlossen; R1-Runde 3 bestanden |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -37,7 +37,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 |---|:---:|:---:|---|
 | P0 | A | ✅ | Baseline / Delta |
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
-| R1 | A | 🟨 | Fixversuch 2 und R1-Runde 3 beauftragt |
+| R1 | A | ✅ | Vertragsreview bestanden; Nutzerstopp |
 | P2 | B | ⬜ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
@@ -87,7 +87,7 @@ P1 ist implementiert; die bisherigen R1-Befunde sind im Fix-Checkpoint geschloss
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
-| R1 | Runde 2 nicht bestanden | `491b778c` | Faktorherkunft geht im realen Projectile-Runtime-Pfad verloren |
+| R1 | Bestanden | `ee5742b4` | Keine |
 | R2 | Nicht ausgeführt | – | – |
 | P13 | Nicht ausgeführt | – | – |
 
