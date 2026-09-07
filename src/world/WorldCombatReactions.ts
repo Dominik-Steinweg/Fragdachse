@@ -27,17 +27,17 @@ export class WorldCombatReactions {
   }
 
   handlePlayerDamageTaken(playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number,
-    damageKind: CombatDamageKind, nowMs: number, current: () => boolean): void {
+    damageKind: CombatDamageKind, nowMs: number, target: CombatTargetRef, scopeCurrent: () => boolean): void {
     const o = this.options, playerCombat = o.getPlayerCombatIntegration();
-    const result = playerCombat?.reactions.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, nowMs);
-    if (!current()) return;
-    if (result && result.adrenalineGain > 0) playerCombat?.resource.addAdrenaline(playerId, result.adrenalineGain);
-    if (!current()) return;
-    if (damageKind !== 'reflect' && result && result.reflectedDamage > 0 && result.reflectTargetId) {
+    const current = () => scopeCurrent() && o.combatSystem.isCurrentCombatantTarget(target);
+    const result = current()
+      ? playerCombat?.reactions.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, nowMs) : undefined;
+    if (current() && result && result.adrenalineGain > 0) playerCombat?.resource.addAdrenaline(playerId, result.adrenalineGain);
+    if (current() && damageKind !== 'reflect' && result && result.reflectedDamage > 0 && result.reflectTargetId) {
       o.combatSystem.applyDamage(result.reflectTargetId, result.reflectedDamage, false, playerId, 'Dornenplatten', undefined,
         { damageKind: 'reflect', allowCritical: false });
     }
-    if (current()) o.network.stats.recordPlayerDamageTaken(playerId, hpLost, armorLost);
+    if (scopeCurrent()) o.network.stats.recordPlayerDamageTaken(playerId, hpLost, armorLost);
   }
 
   handleKill(killerId: string, victimId: string, sourceId: string, x: number, y: number,

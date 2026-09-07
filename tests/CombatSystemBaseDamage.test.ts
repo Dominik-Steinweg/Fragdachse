@@ -532,7 +532,8 @@ describe('CombatSystem actual damage callbacks', () => {
     combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
 
     expect(damage).toHaveBeenCalledWith('player', victim.id, 'attacker', 105, 'direct', undefined);
-    expect(damageTaken).toHaveBeenCalledWith(victim.id, 'attacker', 100, 5, 'direct');
+    expect(damageTaken).toHaveBeenCalledWith(victim.id, 'attacker', 100, 5, 'direct',
+      expect.objectContaining({ kind: 'player', id: victim.id, instance: expect.objectContaining({ lifeRevision: 1 }) }));
     expect(death).toHaveBeenCalledOnce();
   });
 

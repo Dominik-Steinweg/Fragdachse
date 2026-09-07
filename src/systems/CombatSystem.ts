@@ -359,7 +359,7 @@ export class CombatSystem implements ProjectileCombatPort {
   // Callback: (killerId, victimId, sourceId) – Host-only
   private onKillCb: ((killerId: string, victimId: string, sourceId: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
-  private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null = null;
+  private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death: EnemyDeathInfo | undefined, target: CombatTargetRef) => boolean | void) | null = null;
   private onAk47DirectEnemyHit: ((context: ProjectileAk47HitContext, enemyId: string, nowMs: number) => ProjectileAk47DirectImpact | null) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
@@ -463,6 +463,7 @@ export class CombatSystem implements ProjectileCombatPort {
     hpLost: number,
     armorLost: number,
     damageKind: CombatDamageKind,
+    target: CombatTargetRef,
   ) => void) | null = null;
   private onDamageDealt: ((
     targetType: CombatDamageTargetType,
@@ -685,7 +686,7 @@ export class CombatSystem implements ProjectileCombatPort {
     this.onApplyVulnerability = handler;
   }
   /** Meldung ueber tatsaechlich verlorene HP/Ruestung eines Spielers, nach der Verteilung. */
-  setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind) => void) | null): void {
+  setPlayerDamageTakenHandler(handler: ((playerId: string, attackerId: string | undefined, hpLost: number, armorLost: number, damageKind: CombatDamageKind, target: CombatTargetRef) => void) | null): void {
     this.onPlayerDamageTaken = handler;
   }
   /** Meldet nach der Zielverteilung nur tatsächlich verlorene HP/Rüstung bzw. Gegner-HP. */
@@ -834,7 +835,7 @@ export class CombatSystem implements ProjectileCombatPort {
     this.onDeathCb = cb;
   }
 
-  setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death?: EnemyDeathInfo) => boolean | void) | null): void {
+  setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death: EnemyDeathInfo | undefined, target: CombatTargetRef) => boolean | void) | null): void {
     this.onEnemyDeathCb = cb;
   }
 
@@ -1018,6 +1019,14 @@ export class CombatSystem implements ProjectileCombatPort {
     const y = player?.y ?? 0;
 
     const { armorLost, hpLost, actualDamage: totalDamage } = outcome;
+    const finish = () => {
+      // A new life stops old-life gameplay, not observation of the committed parent.
+      if (worldCurrent()) this.notifyDamageDealt({
+        targetType: 'player', targetId, attackerId: outcome.source.attribution.id,
+        damage: totalDamage, damageKind, sourceSlot: request.source.sourceSlot, isCritical,
+      });
+      return outcome;
+    };
     const newHp = outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : 0;
     const terminalSource = this.captureKillSource(targetId, outcome);
     const creditedSource = this.lastSource.get(targetId);
@@ -1032,10 +1041,10 @@ export class CombatSystem implements ProjectileCombatPort {
     // Facts are secured; end old-life status before hooks can create a new life/status.
     if (outcome.transition.kind === 'dead') {
       this.onPlayerLifeEnded?.(target);
-      if (!current()) return outcome;
+      if (!current()) return finish();
     }
     if (amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
-    if (!current()) return outcome;
+    if (!current()) return finish();
 
     // Armor-Schaden zaehlt nur mit dem passenden Coop-Defense-Upgrade als Rage-Quelle.
     const rageDamage = getRageGeneratingDamage(
@@ -1045,7 +1054,7 @@ export class CombatSystem implements ProjectileCombatPort {
     );
     if (rageDamage > 0) {
       this.resourceSystem?.addRage(targetId, rageDamage * RAGE_PER_DAMAGE);
-      if (!current()) return outcome;
+      if (!current()) return finish();
     }
 
     if (totalDamage > 0) {
@@ -1057,10 +1066,11 @@ export class CombatSystem implements ProjectileCombatPort {
         hpLost,
         armorLost,
         damageKind,
+        target,
       );
-      if (!current()) return outcome;
+      if (!current()) return finish();
       this.applyLifeLeech(attackerId, targetId, totalDamage);
-      if (!current()) return outcome;
+      if (!current()) return finish();
       const hitSeed = this.nextEffectSeed();
       this.bridge.broadcastEffect(this.buildHitEffect(
         targetId,
@@ -1082,11 +1092,7 @@ export class CombatSystem implements ProjectileCombatPort {
         killerId, weapon: killWeapon, source: terminalSource, effect: deathEffect!, target,
       });
     }
-    if (current()) this.notifyDamageDealt({
-      targetType: 'player', targetId, attackerId: outcome.source.attribution.id,
-      damage: totalDamage, damageKind, sourceSlot: request.source.sourceSlot, isCritical,
-    });
-    return outcome;
+    return finish();
   }
 
   applyBurnHit(
@@ -3455,6 +3461,7 @@ export class CombatSystem implements ProjectileCombatPort {
         y,
         activeBurnSources,
         result.death,
+        deadTarget,
       ) === true;
       if (!current()) return outcome;
       if (!suppressStandardDeathEffect) {
@@ -3485,12 +3492,10 @@ export class CombatSystem implements ProjectileCombatPort {
 
       // Erst nach `onKillCb`/`onEnemyDeathCb` aufraeumen: Kill-Handler duerfen die Herkunft des
       // toedlichen Treffers noch lesen.
-      this.lastAttacker.delete(targetId);
-      this.lastWeapon.delete(targetId);
-      this.lastKillSource.delete(targetId);
-      this.lastDamageOrigin.delete(targetId);
-      this.lastSource.delete(targetId);
-      this.attributionTargets.delete(targetId);
+      const attributedTarget = this.attributionTargets.get(targetId);
+      if (attributedTarget && isSameCombatTargetInstance(attributedTarget, outcome.target)) {
+        this.clearAttribution(targetId);
+      }
     }
     if (current()) this.notifyDamageDealt({
       targetType: 'enemy', targetId, attackerId: outcome.source.attribution.id,

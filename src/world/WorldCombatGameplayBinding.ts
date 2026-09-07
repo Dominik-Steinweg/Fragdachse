@@ -543,9 +543,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       killReactions.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss, combat.getHostTime(), target,
         () => !this.destroyed && generation === this.activityGeneration);
     });
-    combat.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind) => {
+    combat.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind, target) => {
       const generation = this.activityGeneration;
-      killReactions.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, combat.getHostTime(),
+      killReactions.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, combat.getHostTime(), target,
         () => !this.destroyed && generation === this.activityGeneration);
     });
     combat.setDamageDealtHandler((targetType, targetId, attackerId, damage, _kind, targetFaction) => {
@@ -563,14 +563,19 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.getPlayerCombatIntegration()?.slimeTrail?.getEnemyMovementFactor(enemyId, now) ?? 1,
       combat.getEnemyMovementFactor(enemyId, now),
     ));
-    combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death) => {
+    combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death, target) => {
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;
+      const clearDeadTarget = () => {
+        const successor = o.getEnemyManager()?.getCombatTargetRef(enemyId);
+        if (!current() || (successor && !isSameCombatTargetInstance(successor, target))) return;
+        o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+        o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+      };
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {
-        o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
-        o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+        clearDeadTarget();
         o.getPlayerCombatIntegration()?.reactions.removeEnemy(enemyId);
         return true;
       }
@@ -579,8 +584,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       if (burst) o.network.effects.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
       if (death) o.getNecromancySystem()?.recordEnemyDeath(death);
       if (!current()) return true;
-      o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
-      o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
+      clearDeadTarget();
       return false;
     });
     combat.setRockDamageCallback((rockIndex, damage, attackerId) => {

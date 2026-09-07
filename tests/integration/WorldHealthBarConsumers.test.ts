@@ -16,6 +16,9 @@ vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
 import { EnemyManager } from '../../src/entities/EnemyManager';
 import { CombatSystem } from '../../src/systems/CombatSystem';
 import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';
+import { WorldCombatGameplayBinding } from '../../src/world/WorldCombatGameplayBinding';
+import { TargetStatusSystem } from '../../src/systems/TargetStatusSystem';
+import { EnergyInjectorSystem } from '../../src/systems/EnergyInjectorSystem';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { NetworkBridge } from '../../src/network/NetworkBridge';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
@@ -69,6 +72,77 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it.each(['timebomb', 'necromancy', 'none'] as const)('keeps replacement status and Injector focus after the %s death hook', hook => {
+    const h = harness(), manager = enemies(h), statuses = new TargetStatusSystem(), injector = new EnergyInjectorSystem();
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+    const target = { targetType: 'enemy' as const, targetId: 'e1' };
+    statuses.applyVulnerability(target, 1000, 1000); injector.setFocusTarget('old-owner', target, 1000, 1000);
+    const inert = new Proxy({}, { get: () => () => undefined }); // Unrelated attachment ports only.
+    const players = { getPlayer: () => undefined, getAllPlayers: () => [], setSpawnContextProvider: () => {} } as unknown as PlayerManager;
+    const combat = new CombatSystem(players,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
+    const replace = () => {
+      upsert(manager, { id: 'e1', kind, x: 30, y: 40, hp: 100, maxHp: 100 });
+      statuses.applyVulnerability(target, 10000, 1234);
+      injector.setFocusTarget('new-owner', target, 10000, 1234);
+    };
+    const binding = new WorldCombatGameplayBinding({
+      playerManager: players, combatSystem: combat, baseManager: null, automatedWeaponExecution: null,
+      getPlayerCombatIntegration: () => null, getEnemyManager: () => manager,
+      getTargetStatusSystem: () => statuses, getEnergyInjectorSystem: () => injector,
+      getTargetFootprint: () => null, getPowerUpSystem: () => null,
+      getWorldGeometryBinding: () => null, getMissionBarrierObstacles: () => null,
+      syncActiveBaseIds: () => {},
+      getTimebombSystem: () => ({ handleKilled: () => { if (hook === 'timebomb') replace(); return hook === 'timebomb'; } }),
+      getNecromancySystem: () => ({ recordEnemyDeath: () => { if (hook === 'necromancy') replace(); } }),
+      isCoopMission: () => false, isActivityActive: () => false, getSpawnContext: () => undefined,
+      hostPhysics: inert, decoySystem: inert, fireSystem: inert, gameAudioSystem: inert, placementSystem: inert,
+      projectileEvents: inert, projectileTimeField: inert, projectileHoming: inert, projectileWorldImpact: inert,
+      projectileSwarm: inert, projectileInteraction: inert, hostUpdate: inert,
+      network: { authority: { isHost: () => true, getPlayerProfile: () => undefined, getConnectedPlayers: () => [] },
+        stats: inert, effects: inert, round: inert },
+    } as never);
+    const result = combat.applyDamage('e1', 100, false, 'old-attacker', 'test');
+    expect(result).toMatchObject({ actualDamage: 40, transition: { kind: 'dead' } });
+    expect(statuses.isVulnerable(target, 1234)).toBe(hook !== 'none');
+    expect(injector.getFocusTarget('new-owner', 1234)).toEqual(hook === 'none' ? null : target);
+    if (hook === 'none') expect(injector.getFocusTarget('old-owner', 1234)).toBeNull();
+    else expect(manager.getEnemy('e1')!.getHp()).toBe(100);
+    binding.destroy(); manager.destroy();
+  });
+
+  it.each(['death', 'kill'] as const)('preserves successor attribution across the old enemy %s hook', hook => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 }); combat.setEnemyManager(manager);
+    const observed = vi.fn(); combat.addDamageDealtObserver(observed);
+    let replaced = false;
+    const replaceAndHit = () => {
+      if (replaced) return;
+      replaced = true;
+      upsert(manager, { id: 'e1', kind, x: 30, y: 40, hp: 100, maxHp: 100 });
+      combat.applyDamage('e1', 10, false, 'new-attacker', 'new-weapon', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' });
+    };
+    const kills = vi.fn(() => { if (hook === 'kill') replaceAndHit(); });
+    combat.setKillCallback(kills);
+    combat.setEnemyDeathCallback(() => { if (hook === 'death') replaceAndHit(); });
+    const oldOutcome = combat.applyDamage('e1', 40, false, 'old-attacker', 'old-weapon');
+    expect(oldOutcome).toMatchObject({ actualDamage: 40, transition: { kind: 'dead' } });
+    expect(manager.getEnemy('e1')!.getHp()).toBe(90);
+    expect(combat.getLastDamageOrigin('e1')).toEqual({ kind: 'direct', slot: 'weapon1' });
+    const newOutcome = combat.applyDamage('e1', 100, false);
+    expect(newOutcome).toMatchObject({ actualDamage: 90, transition: { kind: 'dead' } });
+    expect(kills.mock.calls.map(call => (call as unknown[]).slice(0, 3))).toEqual([
+      ['old-attacker', 'e1', 'old-weapon'], ['new-attacker', 'e1', 'new-weapon'],
+    ]);
+    expect(observed.mock.calls.map(call => call[0].damage)).toEqual([10, 40, 90]);
+    expect(combat.getLastDamageOrigin('e1')).toBeUndefined();
+    manager.destroy();
+  });
+
   it.each(['leech', 'primary', 'slow'] as const)('does not Cull a replacement enemy after the %s hook', stage => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });

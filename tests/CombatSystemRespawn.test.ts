@@ -32,6 +32,7 @@ vi.mock('phaser', () => {
 });
 
 import { CombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatReactions } from '../src/world/WorldCombatReactions';
 import { TargetStatusSystem } from '../src/systems/TargetStatusSystem';
 import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
@@ -66,6 +67,35 @@ function lifecycleFixture() {
 }
 
 describe('integrated Combat damage, reaction and Player life', () => {
+  it.each(['damage-taken', 'adrenaline', 'none'] as const)('checks the damaged life after each reaction hook (%s)', respawnAt => {
+    const f = lifecycleFixture(), observed = vi.fn(), damageTaken = vi.fn();
+    f.combat.addDamageDealtObserver(observed);
+    f.combat.setRespawnAllowedResolver(() => true); f.combat.setRespawnCallback(() => true);
+    const reconnect = () => expect(f.combat.spawnPlayerAfterReconnect('p2')).toBe(true);
+    const adrenaline = vi.fn(() => {
+      expect(f.combat.isAlive('p2')).toBe(false); // Any admitted gain still belongs to the old life.
+      if (respawnAt === 'adrenaline') reconnect();
+    });
+    const reactions = new WorldCombatReactions({ combatSystem: f.combat,
+      getPlayerCombatIntegration: () => ({ resource: { addAdrenaline: adrenaline }, reactions: {
+        handlePlayerDamageTaken: () => {
+          if (respawnAt === 'damage-taken') reconnect();
+          return { adrenalineGain: 10, reflectedDamage: 5, reflectTargetId: 'p1' };
+        },
+      } }), network: { stats: { recordPlayerDamageTaken: damageTaken } },
+    } as never);
+    f.combat.setPlayerDamageTakenHandler((id, attacker, hp, armor, kind, target) => {
+      if (id === 'p2') reactions.handlePlayerDamageTaken(id, attacker, hp, armor, kind, 1000, target, () => true);
+    });
+    const parent = f.hit();
+    expect(parent).toMatchObject({ actualDamage: HP_MAX, transition: { kind: 'dead' }, resultingState: { hp: 0, alive: false } });
+    expect(adrenaline).toHaveBeenCalledTimes(respawnAt === 'damage-taken' ? 0 : 1);
+    expect(f.combat.getHP('p1')).toBe(HP_MAX - (respawnAt === 'none' ? 5 : 0));
+    expect(f.combat.isAlive('p2')).toBe(respawnAt !== 'none');
+    expect(damageTaken).toHaveBeenCalledExactlyOnceWith('p2', HP_MAX, 0);
+    expect(observed.mock.calls.filter(call => call[0].targetId === 'p2').map(call => call[0].damage)).toEqual([HP_MAX]);
+  });
+
   it.each([false, true])('ends old-life vulnerability before a reentrant new life can acquire status (%s)', reentrant => {
     const f = lifecycleFixture(), statuses = new TargetStatusSystem();
     const target = { targetType: 'player' as const, targetId: 'p2' };
