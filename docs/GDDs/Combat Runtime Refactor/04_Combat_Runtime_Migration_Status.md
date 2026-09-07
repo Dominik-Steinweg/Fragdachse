@@ -8,19 +8,19 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P13 läuft |
+| Gesamtstatus | Block C gestoppt; P13 nach Review 3 blockiert |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Frisches P13-Review 3 auf Korrekturcheckpoint 2 |
+| Nächster Arbeitsschritt | Manuelle Prüfung/Entscheidung zum verbleibenden D3-Blocker |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | P13 – Review 3 nach Korrekturschleife 2 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `d015ba61` |
+| Aktive Phase / Aufgabe | P13 blockiert; keine weitere automatische Korrektur |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `0be2eecd` |
 | Start-HEAD der laufenden Aufgabe | `d015ba61` |
-| Aktiver Worker / Thread | Frischer Astra-/High-Reviewer, read-only |
+| Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Keiner |
-| Aktueller Reparaturzähler | P13: 2/2 automatische Fixschleifen |
-| Technische Endabnahme F / manuelle Abnahme M | Beide offen |
+| Aktuell nötiger Modell-/Reviewstopp | Nutzerentscheidung nach Review 3 |
+| Aktueller Reparaturzähler | P13: 2/2 ausgeschöpft |
+| Technische Endabnahme F / manuelle Abnahme M | F blockiert; M nicht begonnen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
 **Freigaberegel:** R1/R2 erteilen keine Freigabe für B/C; dafür zählt nur eine tatsächliche Nutzernachricht.
@@ -48,7 +48,7 @@
 | P10 | C | ✅ | Verbleibende Consumer |
 | P11 | C | ✅ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ✅ | Legacy-Entfernung / Ratchets / Wissen |
-| P13 | C | 🟨 | Unabhängiger Abschluss / technisches Gate F |
+| P13 | C | 🟧 | Review 3: D3-Blocker, manueller Stopp |
 | M | Nutzer | ⬜ | Gebündelte Gameplay-/Sichtabnahme |
 
 ## 3. Realisierte Contracts
@@ -72,19 +72,17 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P12 sind realisiert. Die zwei Blocker aus Review 2 sind in Fix 2 behoben; Review 3 entscheidet Abschluss oder manuellen Stopp.
+P1–P12 sind realisiert. Review 3 reproduziert doppelte Runtime-P-Skalierung bei automatisierten Rocket-Explosionen (`TURRET_ROCKET_BURST`: 504 statt 84); Fixschleifen ausgeschöpft.
 
 ## 5. Nachweise und Reviews
 
 **P0–P6/R1:** Phasengates und Vertragsreview grün; Details in den Commits.
 
-**P2–P6 Gates L:** Fokus/Integration, Architektur, TypeScript, Build und Writer-Audits grün.
-
 **R2:** bestanden auf `b74a1b07`; keine reproduzierbaren P2–P6-Stopper.
 
-**P7–P10 Gates L:** jeweilige Fokus-/Regressionstests, vollständiger Check, TypeScript-, Writer- und Diff-Audits grün; genaue Zahlen stehen in den Phasencommits.
+**P7–P10 Gates L:** Fokus/Regression, Check und Writer-Audits grün; Details in den Commits.
 
-**P11-Gate L:** Fokus 87/87, RPC 11/11, Headless-Integration 89/89, Check 2789 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25 sowie Ownership-/Zeit-/Stage-/Diff-Ratchets grün.
+**P11-Gate L:** Fokus 87, RPC 11, Integration 89, Check 2789/32/Build und Ratchets grün.
 
 **P12-Gate L:** Check 2789 Core/33 Architektur/Build, Integration 204 und Balance-Lab 94 grün; Orchestrator-Stichprobe 41/41 plus Architektur 33/33, Legacy-/Writer-/Diff-Audits grün.
 
@@ -94,7 +92,7 @@ P1–P12 sind realisiert. Die zwei Blocker aus Review 2 sind in Fix 2 behoben; R
 |---|---|---|---|
 | R1 | Bestanden | `ee5742b4` | Keine |
 | R2 Review 7 | Bestanden | `b74a1b07` | Keine |
-| P13 | Nicht ausgeführt | – | – |
+| P13 Review 3 | Blockiert | `0be2eecd` | Automation-Rocket-Explosion skaliert Runtime-P doppelt |
 
 Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlender Beleg verlangt erneute Prüfung; alter Review-Pass gilt nach Code-Delta nicht automatisch weiter.
 
