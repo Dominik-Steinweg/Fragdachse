@@ -13,6 +13,7 @@ import type {
   TargetSupportMutationPort,
 } from './CombatMutation';
 import type { CombatSource, CombatTargetRef } from './CombatScope';
+import type { HitscanShotRequest, MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 
 // CF-READ
 export interface CombatVitalsReadPort {
@@ -54,15 +55,28 @@ export interface CombatLineQueryPort {
 }
 
 // CF-ATTACK
-export interface CombatImmediateAttackRequest {
-  readonly kind: 'hitscan' | 'melee';
-  readonly source: CombatSource;
-  readonly origin: { readonly x: number; readonly y: number };
-  readonly aim: { readonly x: number; readonly y: number };
-  readonly range: number;
-}
+export type CombatImmediateAttackRequest =
+  | {
+    readonly kind: 'hitscan';
+    /** Normalized execution request; host resolves the source and commits the outcome. */
+    readonly payload: HitscanShotRequest;
+    readonly source?: CombatSource;
+    readonly origin: { readonly x: number; readonly y: number };
+    readonly aim: { readonly x: number; readonly y: number };
+    readonly range: number;
+  }
+  | {
+    readonly kind: 'melee';
+    /** Normalized execution request; host resolves the source and commits the outcome. */
+    readonly payload: MeleeSwingRequest;
+    readonly source?: CombatSource;
+    readonly origin: { readonly x: number; readonly y: number };
+    readonly aim: { readonly x: number; readonly y: number };
+    readonly range: number;
+  };
 
 export interface CombatImmediateAttackOutcome {
+  readonly accepted: boolean;
   readonly interactions: readonly CombatDamageMutationOutcome[];
 }
 

@@ -27,6 +27,8 @@ import {
 import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
 import { PLAYER_SIZE, COLORS, type MuzzleOrigin } from '../config';
 import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatImmediateAttackPort } from '../combat/CombatCapabilities';
+import type { MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { TranslocatorSystem } from '../systems/TranslocatorSystem';
 import type { HeldActionIdentity } from '../systems/HostHeldActionSystem';
@@ -89,7 +91,8 @@ export interface PlayerUtilityActionNetworkPort {
 
 export interface PlayerUtilityActionRuntimeOptions {
   readonly projectileSpawn: ProjectileSpawnPort;
-  readonly combatSystem: Pick<CombatSystem, 'resolveMeleeSwing'>;
+  /** Immediate attacks use the same normalized capability as regular weapon execution. */
+  readonly combatSystem: Partial<Pick<CombatSystem, 'resolveMeleeSwing'>> & Partial<CombatImmediateAttackPort>;
   readonly actor: UtilityActorPort;
   readonly loadout: UtilityLoadoutPort;
   readonly heldAction: UtilityHeldActionPort;
@@ -584,23 +587,49 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   private activateTaser(cfg: TaserUtilityConfig, playerId: string, x: number, y: number, angle: number, playerColor: number): boolean {
+    const request: MeleeSwingRequest = {
+      shooterId: playerId,
+      x,
+      y,
+      angle,
+      range: cfg.range,
+      arcDegrees: cfg.hitArcDegrees,
+      damage: cfg.damage,
+      adrenalinGain: 0,
+      sourceId: cfg.id,
+      color: playerColor,
+      rockDamageMult: cfg.rockDamageMult ?? 1,
+      trainDamageMult: cfg.trainDamageMult ?? 1,
+      baseDamageMult: cfg.baseDamageMult ?? 1,
+      visualPreset: cfg.visualPreset,
+      shotAudioKey: cfg.shotAudio?.successKey,
+      hitHeal: 0,
+      hitAdrenaline: 0,
+      bloodEffectMultiplier: 1,
+      damageTargets: undefined,
+      chain: (cfg.chainCount ?? 0) > 0
+        ? { count: cfg.chainCount ?? 0, radius: cfg.chainRadius ?? 0, damageFactor: cfg.chainDamageFactor ?? 0 }
+        : undefined,
+    };
+    if (this.options.combatSystem.resolveImmediateAttack) {
+      return this.options.combatSystem.resolveImmediateAttack({
+        kind: 'melee',
+        payload: request,
+        origin: { x, y },
+        aim: { x: Math.cos(angle), y: Math.sin(angle) },
+        range: cfg.range,
+      }).accepted;
+    }
+    // Compatibility for isolated utility test doubles; the composed World uses the port above.
+    if (!this.options.combatSystem.resolveMeleeSwing) return false;
     return this.options.combatSystem.resolveMeleeSwing(
-      playerId, x, y, angle,
-      cfg.range, cfg.hitArcDegrees, cfg.damage,
-      0, cfg.id, playerColor, undefined,
-      cfg.rockDamageMult ?? 1,
-      cfg.trainDamageMult ?? 1,
-      cfg.visualPreset,
-      cfg.shotAudio?.successKey,
-      undefined,
+      playerId, x, y, angle, cfg.range, cfg.hitArcDegrees, cfg.damage, 0, cfg.id, playerColor,
+      undefined, cfg.rockDamageMult ?? 1, cfg.trainDamageMult ?? 1, cfg.visualPreset,
+      cfg.shotAudio?.successKey, undefined,
       (cfg.chainCount ?? 0) > 0
         ? { count: cfg.chainCount ?? 0, radius: cfg.chainRadius ?? 0, damageFactor: cfg.chainDamageFactor ?? 0 }
         : undefined,
-      undefined,
-      undefined,
-      1,
-      undefined,
-      cfg.baseDamageMult ?? 1,
+      undefined, undefined, 1, undefined, cfg.baseDamageMult ?? 1,
     );
   }
 

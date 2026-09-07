@@ -94,7 +94,12 @@ import type {
 } from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
 import { CombatBurnStatusOwner } from '../combat/CombatBurnStatusOwner';
-import type { CombatMovementStatusPort } from '../combat/CombatCapabilities';
+import type {
+  CombatImmediateAttackOutcome,
+  CombatImmediateAttackPort,
+  CombatMovementStatusPort,
+} from '../combat/CombatCapabilities';
+import type { HitscanShotRequest, MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 
 type Ak47DirectEnemyHitImpact = ProjectileAk47DirectImpact;
 
@@ -309,7 +314,18 @@ type SweptProjectileHit =
   | { kind: 'enemy'; enemyId: string; distance: number; x: number; y: number }
   | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
 
-export class CombatSystem implements ProjectileCombatPort {
+/** Immutable combatant facts selected before a Melee swing starts mutating the world. */
+type MeleeSwingTarget =
+  | { readonly kind: 'player'; readonly id: string; readonly key: string; readonly x: number; readonly y: number; readonly radius: number; readonly distance: number }
+  | { readonly kind: 'enemy'; readonly id: string; readonly key: string; readonly x: number; readonly y: number; readonly radius: number; readonly distance: number }
+  | { readonly kind: 'decoy'; readonly id: number; readonly key: string; readonly x: number; readonly y: number; readonly radius: number; readonly distance: number };
+
+type MeleeSwingTargetCandidate =
+  | Omit<Extract<MeleeSwingTarget, { readonly kind: 'player' }>, 'distance'>
+  | Omit<Extract<MeleeSwingTarget, { readonly kind: 'enemy' }>, 'distance'>
+  | Omit<Extract<MeleeSwingTarget, { readonly kind: 'decoy' }>, 'distance'>;
+
+export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttackPort {
   private playerVitals: PlayerVitalsOwner;
   private playerLife: PlayerLifeRuntime;
   private burnStatus = new CombatBurnStatusOwner();
@@ -490,6 +506,8 @@ export class CombatSystem implements ProjectileCombatPort {
     targetFaction?: 'hostile' | 'allied',
   ) => void) | null = null;
   private readonly damageDealtObservers = new Set<(event: CombatDamageObservation) => void>();
+  /** Scoped receipt collector used only by the normalized immediate-attack boundary. */
+  private immediateMutationOutcomes: CombatDamageMutationOutcome[] | null = null;
   private onHealingReceived: ((playerId: string, amount: number) => void) | null = null;
   private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
   private mutationOutcomeSequence = 0;
@@ -499,7 +517,9 @@ export class CombatSystem implements ProjectileCombatPort {
   }
 
   applyDamage(...args: Parameters<CombatSystem['applyDamageAtHostTime']>): ReturnType<CombatSystem['applyDamageAtHostTime']> {
-    return this.runHostExecution(() => this.applyDamageAtHostTime(...args));
+    const outcome = this.runHostExecution(() => this.applyDamageAtHostTime(...args));
+    if (outcome && this.immediateMutationOutcomes) this.immediateMutationOutcomes.push(outcome);
+    return outcome;
   }
 
   applyAoeDamage(...args: Parameters<CombatSystem['applyAoeDamageAtHostTime']>): ReturnType<CombatSystem['applyAoeDamageAtHostTime']> {
@@ -528,6 +548,85 @@ export class CombatSystem implements ProjectileCombatPort {
 
   resolveMeleeSwing(...args: Parameters<CombatSystem['resolveMeleeSwingAtHostTime']>): ReturnType<CombatSystem['resolveMeleeSwingAtHostTime']> {
     return this.runHostExecution(() => this.resolveMeleeSwingAtHostTime(...args));
+  }
+
+  /**
+   * Normalized immediate-attack boundary for Hitscan and Melee.
+   *
+   * Weapon execution owns normalization (weapon config, gameplay/visual muzzle and cursor
+   * range). Combat owns the host-only query → resolution → mutation sequence. Keeping this
+   * adapter at the boundary removes the positional argument chain from world composition while
+   * retaining the established per-weapon semantics in the concrete resolvers below.
+   */
+  resolveImmediateAttack(request: Parameters<CombatImmediateAttackPort['resolveImmediateAttack']>[0]): CombatImmediateAttackOutcome {
+    return this.runHostExecution(() => {
+      const previousCollector = this.immediateMutationOutcomes;
+      const interactions: CombatDamageMutationOutcome[] = [];
+      this.immediateMutationOutcomes = interactions;
+      try {
+        if (request.kind === 'hitscan') {
+          const payload: HitscanShotRequest = request.payload;
+          return {
+            accepted: this.resolveHitscanShotAtHostTime(
+              payload.shooterId,
+              payload.startX,
+              payload.startY,
+              payload.angle,
+              payload.range,
+              payload.damage,
+              payload.traceThickness,
+              payload.color,
+              payload.adrenalinGain,
+              payload.sourceId,
+              payload.visualPreset,
+              payload.shotAudioKey,
+              payload.sourceSlot,
+              payload.shotId,
+              payload.detonator,
+              payload.rockDamageMult,
+              payload.trainDamageMult,
+              payload.chainLightning,
+              payload.burnOnHit,
+              payload.supportEffect,
+              payload.visualMuzzleOrigin,
+              payload.baseDamageMult,
+            ),
+            interactions: Object.freeze([...interactions]),
+          };
+        }
+
+        const payload: MeleeSwingRequest = request.payload;
+        return {
+          accepted: this.resolveMeleeSwingAtHostTime(
+            payload.shooterId,
+            payload.x,
+            payload.y,
+            payload.angle,
+            payload.range,
+            payload.arcDegrees,
+            payload.damage,
+            payload.adrenalinGain,
+            payload.sourceId,
+            payload.color,
+            payload.sourceSlot,
+            payload.rockDamageMult,
+            payload.trainDamageMult,
+            payload.visualPreset,
+            payload.shotAudioKey,
+            payload.burnOnHit,
+            payload.chain,
+            payload.hitHeal,
+            payload.hitAdrenaline,
+            payload.bloodEffectMultiplier,
+            payload.damageTargets,
+            payload.baseDamageMult,
+          ),
+          interactions: Object.freeze([...interactions]),
+        };
+      } finally {
+        this.immediateMutationOutcomes = previousCollector;
+      }
+    });
   }
 
   applyBaseDamage(...args: Parameters<CombatSystem['applyBaseDamageAtHostTime']>): ReturnType<CombatSystem['applyBaseDamageAtHostTime']> {
@@ -2663,128 +2762,95 @@ export class CombatSystem implements ProjectileCombatPort {
     const meleeHitIds = new Set<string>();
     const damageTargetSet = damageTargets ? new Set<MeleeDamageTarget>(damageTargets) : null;
     const canDamageKind = (kind: MeleeDamageTarget): boolean => damageTargetSet?.has(kind) ?? true;
+    // Query phase: freeze the complete combatant target set before the first mutation. This
+    // prevents a death callback or spawn during one target's commit from changing the base swing
+    // membership, while preserving the existing geometry and eligibility rules.
+    const swingTargets: MeleeSwingTarget[] = [];
+    const selectSwingTarget = (candidate: MeleeSwingTargetCandidate): void => {
+      const dx = candidate.x - x;
+      const dy = candidate.y - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      if (distance > range + candidate.radius) return;
+      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) return;
 
-    for (const player of canDamageKind('players') ? this.playerManager.getAllPlayers() : []) {
-      if (!this.isMeleeTargetCandidate(player.id, shooterId)) continue;
-
-      const dx   = player.x - x;
-      const dy   = player.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      // Reichweite – Spieler-Radius als Toleranz hinzurechnen
-      if (dist > range + PLAYER_SIZE * 0.5) continue;
-
-      // Winkelprüfung: liegt das Ziel innerhalb des Trefferbogens?
-      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
-
-      // Hindernischeck: liegt ein Fels/Stamm zwischen Schütze und Ziel?
-      this.meleeLine.setTo(x, y, player.x, player.y);
-      if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
-
-      const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
-      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-      const actualDamage = damage * loadoutMult * powerUpMult;
-      const canDealDamage = this.canDamageTarget(shooterId, player.id);
-      if (canDealDamage && this.shouldBlockWithShield(player.id, 'melee', actualDamage, x, y)) continue;
-      this.applyDamage(player.id, actualDamage, false, shooterId, sourceId, {
-        sourceX: x,
-        sourceY: y,
-        dirX: Math.cos(angle),
-        dirY: Math.sin(angle),
-      }, { sourceSlot, damageKind: 'direct' });
-      this.applyBurnOnHit(player.id, shooterId, burnOnHit, sourceId);
-      meleeHitIds.add(player.id);
-      hitPlayer = true;
-      if (dist < nearestHitDistance) {
-        nearestHitDistance = dist;
-        impactX = player.x;
-        impactY = player.y;
+      // The complete geometric membership decision belongs to the query phase. The scratch line
+      // is safe to reuse here; no target has been mutated yet.
+      this.meleeLine.setTo(x, y, candidate.x, candidate.y);
+      if (this.isMeleePathBlocked(distance - candidate.radius)) return;
+      swingTargets.push({ ...candidate, distance });
+    };
+    if (canDamageKind('players')) {
+      for (const player of this.playerManager.getAllPlayers()) {
+        if (this.isMeleeTargetCandidate(player.id, shooterId)) {
+          selectSwingTarget({ kind: 'player', id: player.id, key: `player:${player.id}`, x: player.x, y: player.y, radius: PLAYER_SIZE * 0.5 });
+        }
       }
-
-      if (canDealDamage && adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+    }
+    if (canDamageKind('enemies')) {
+      for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
+        if (enemy.id === shooterId) continue;
+        selectSwingTarget({
+          kind: 'enemy', id: enemy.id, key: `enemy:${enemy.id}`,
+          x: enemy.sprite.x, y: enemy.sprite.y,
+          radius: Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5,
+        });
       }
-      if (canDealDamage) this.applyMeleeHitRewards(shooterId, hitHeal, hitAdrenaline);
+    }
+    if (canDamageKind('decoys')) {
+      for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
+        if (decoy.ownerId === shooterId) continue;
+        selectSwingTarget({
+          kind: 'decoy', id: decoy.id, key: `decoy:${decoy.id}`,
+          x: decoy.sprite.x, y: decoy.sprite.y, radius: PLAYER_SIZE * 0.5,
+        });
+      }
     }
 
-    for (const enemy of canDamageKind('enemies') ? (this.enemyManager?.getAllEnemies() ?? []) : []) {
-      if (enemy.id === shooterId) continue;
+    const visualContext = {
+      sourceX: x,
+      sourceY: y,
+      dirX: Math.cos(angle),
+      dirY: Math.sin(angle),
+    };
 
-      const enemyRadius = Math.max(enemy.sprite.displayWidth, enemy.sprite.displayHeight) * 0.5;
-      const dx   = enemy.sprite.x - x;
-      const dy   = enemy.sprite.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+    // Resolution + mutation phase: each selected physical entity is processed at most once.
+    for (const target of swingTargets) {
+      const dist = target.distance;
 
-      if (dist > range + enemyRadius) continue;
-
-      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
-
-      this.meleeLine.setTo(x, y, enemy.sprite.x, enemy.sprite.y);
-      if (this.isMeleePathBlocked(dist - enemyRadius)) continue;
-
-      const loadoutMult  = sourceSlot
+      // Keep source-side factors at the immediate impact, matching the prior per-target
+      // resolution point and avoiding a hidden second scaling stage in the mutation writer.
+      const loadoutMult = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
         : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
-      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
+      const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      this.applyDamage(enemy.id, actualDamage, false, shooterId, sourceId, {
-        sourceX: x,
-        sourceY: y,
-        dirX: Math.cos(angle),
-        dirY: Math.sin(angle),
-      }, { sourceSlot, damageKind: 'direct' });
-      this.applyBurnOnHit(enemy.id, shooterId, burnOnHit, sourceId);
-      meleeHitIds.add(enemy.id);
+
+      if (target.kind === 'decoy') {
+        const outcome = this.decoySystem?.applyDamage(target.id, actualDamage, shooterId, sourceId, visualContext) ?? null;
+        if (outcome?.kind !== 'damage-applied' || outcome.actualDamage <= 0) continue;
+      } else {
+        const canDealDamage = this.canDamageTarget(shooterId, target.id);
+        if (canDealDamage && this.shouldBlockWithShield(target.id, 'melee', actualDamage, x, y)) continue;
+        const outcome = this.applyDamage(target.id, actualDamage, false, shooterId, sourceId, visualContext, {
+          sourceSlot,
+          damageKind: 'direct',
+        });
+        if (canDealDamage) this.applyBurnOnHit(target.id, shooterId, burnOnHit, sourceId);
+        if (canDealDamage && adrenalinGain > 0) this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+        if (canDealDamage) this.applyMeleeHitRewards(shooterId, hitHeal, hitAdrenaline);
+        // A geometrically accepted friendly contact still contributes to the swing projection;
+        // only damage/reaction eligibility is gated by the relationship result.
+        void outcome;
+      }
+
+      meleeHitIds.add(target.key);
       hitPlayer = true;
       if (dist < nearestHitDistance) {
         nearestHitDistance = dist;
-        impactX = enemy.sprite.x;
-        impactY = enemy.sprite.y;
+        impactX = target.x;
+        impactY = target.y;
       }
-
-      if (adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-      }
-      this.applyMeleeHitRewards(shooterId, hitHeal, hitAdrenaline);
-    }
-
-    for (const decoy of canDamageKind('decoys') ? (this.decoySystem?.getHostTargets() ?? []) : []) {
-      if (decoy.ownerId === shooterId) continue;
-
-      const dx   = decoy.sprite.x - x;
-      const dy   = decoy.sprite.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist > range + PLAYER_SIZE * 0.5) continue;
-
-      if (!CombatGeometry.isWithinArc(dx, dy, angle, halfArcRad)) continue;
-
-      this.meleeLine.setTo(x, y, decoy.sprite.x, decoy.sprite.y);
-      if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
-
-      const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
-      const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
-      const actualDamage = damage * loadoutMult * powerUpMult;
-      const outcome = this.decoySystem?.applyDamage(decoy.id, actualDamage, shooterId, sourceId, {
-        sourceX: x,
-        sourceY: y,
-        dirX: Math.cos(angle),
-        dirY: Math.sin(angle),
-      }) ?? null;
-      if (outcome?.kind !== 'damage-applied' || outcome.actualDamage <= 0) continue;
-
-      hitPlayer = true;
-      if (dist < nearestHitDistance) {
-        nearestHitDistance = dist;
-        impactX = decoy.sprite.x;
-        impactY = decoy.sprite.y;
-      }
-
-      if (adrenalinGain > 0) {
+      if (target.kind === 'decoy' && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     }
@@ -2801,25 +2867,25 @@ export class CombatSystem implements ProjectileCombatPort {
       let chainY = impactY;
       let chainDamage = damage;
       for (let jump = 0; jump < chain.count; jump += 1) {
-        let next: { id: string; x: number; y: number } | null = null;
+        let next: { id: string; key: string; x: number; y: number } | null = null;
         let best = chain.radius;
         const candidates = [
           ...(canDamageKind('players')
-            ? this.playerManager.getAllPlayers().map(player => ({ id: player.id, x: player.x, y: player.y }))
+            ? this.playerManager.getAllPlayers().map(player => ({ id: player.id, key: `player:${player.id}`, x: player.x, y: player.y }))
             : []),
           ...(canDamageKind('enemies')
-            ? (this.enemyManager?.getAllEnemies() ?? []).map(enemy => ({ id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y }))
+            ? (this.enemyManager?.getAllEnemies() ?? []).map(enemy => ({ id: enemy.id, key: `enemy:${enemy.id}`, x: enemy.sprite.x, y: enemy.sprite.y }))
             : []),
         ];
         for (const candidate of candidates) {
-          if (candidate.id === shooterId || meleeHitIds.has(candidate.id) || !this.isAlive(candidate.id) || !this.canDamageTarget(shooterId, candidate.id)) continue;
+          if (candidate.id === shooterId || meleeHitIds.has(candidate.key) || !this.isAlive(candidate.id) || !this.canDamageTarget(shooterId, candidate.id)) continue;
           const distance = Phaser.Math.Distance.Between(chainX, chainY, candidate.x, candidate.y);
           if (distance > best) continue;
           best = distance;
           next = candidate;
         }
         if (!next) break;
-        meleeHitIds.add(next.id);
+        meleeHitIds.add(next.key);
         chainDamage *= chain.damageFactor;
         this.applyDamage(next.id, chainDamage, false, shooterId, sourceId, { sourceX: chainX, sourceY: chainY }, { damageKind: 'chain' });
         chainX = next.x;

@@ -96,6 +96,8 @@ export interface MeleeSwingRequest {
   hitAdrenaline:         number;
   bloodEffectMultiplier: number;
   damageTargets?:        readonly MeleeDamageTarget[];
+  /** Optional utility-specific chain; regular weapon melee keeps this absent. */
+  chain?: { readonly count: number; readonly radius: number; readonly damageFactor: number };
 }
 
 /**

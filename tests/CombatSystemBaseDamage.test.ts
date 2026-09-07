@@ -53,6 +53,43 @@ vi.mock('phaser', () => {
     x = 0;
     y = 0;
     radius = 0;
+
+    setTo(x: number, y: number, radius: number): this {
+      this.x = x;
+      this.y = y;
+      this.radius = radius;
+      return this;
+    }
+  }
+
+  function segmentIntersection(
+    ax: number, ay: number, bx: number, by: number,
+    cx: number, cy: number, dx: number, dy: number,
+  ): { x: number; y: number } | null {
+    const rx = bx - ax;
+    const ry = by - ay;
+    const sx = dx - cx;
+    const sy = dy - cy;
+    const denominator = rx * sy - ry * sx;
+    if (Math.abs(denominator) < 1e-9) return null;
+    const t = ((cx - ax) * sy - (cy - ay) * sx) / denominator;
+    const u = ((cx - ax) * ry - (cy - ay) * rx) / denominator;
+    if (t < 0 || t > 1 || u < 0 || u > 1) return null;
+    return { x: ax + rx * t, y: ay + ry * t };
+  }
+
+  function getLineToRectangle(line: TestLine, rect: TestRectangle, out: { x: number; y: number }[] = []) {
+    const edges: ReadonlyArray<readonly [number, number, number, number]> = [
+      [rect.left, rect.top, rect.right, rect.top],
+      [rect.right, rect.top, rect.right, rect.bottom],
+      [rect.right, rect.bottom, rect.left, rect.bottom],
+      [rect.left, rect.bottom, rect.left, rect.top],
+    ];
+    for (const [cx, cy, dx, dy] of edges) {
+      const point = segmentIntersection(line.x1, line.y1, line.x2, line.y2, cx, cy, dx, dy);
+      if (point) out.push(point);
+    }
+    return out;
   }
 
   return {
@@ -60,6 +97,10 @@ vi.mock('phaser', () => {
       Line: TestLine,
       Rectangle: TestRectangle,
       Circle: TestCircle,
+      Intersects: {
+        GetLineToRectangle: getLineToRectangle,
+        GetLineToCircle: (_line: TestLine, _circle: TestCircle, out: { x: number; y: number }[] = []) => out,
+      },
     },
     Math: {
       Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
@@ -71,6 +112,7 @@ vi.mock('phaser', () => {
 });
 
 import { CombatSystem as RuntimeCombatSystem } from '../src/systems/CombatSystem';
+import * as Phaser from 'phaser';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
@@ -580,6 +622,46 @@ describe('CombatSystem actual damage callbacks', () => {
     expect(healing).toHaveBeenCalledTimes(2);
     expect(healing).toHaveBeenLastCalledWith(player.id, 3);
     expect(armor).toHaveBeenLastCalledWith(player.id, 2);
+  });
+});
+
+describe('CombatSystem melee query target set', () => {
+  it('keeps the pre-query second target excluded when the first mutation removes its blocker', () => {
+    const shooter = fakeEntity({ id: 'shooter', x: 0, y: 0 });
+    const first = fakeEntity({ id: 'first', x: 40, y: 0 });
+    const second = fakeEntity({ id: 'second', x: 100, y: 0 });
+    const players = [shooter, first, second];
+    const bridge = {
+      isHost: vi.fn(() => true),
+      getPlayerProfile: vi.fn(() => undefined),
+      areTeammates: vi.fn(() => false),
+      broadcastEffect: vi.fn(),
+      broadcastMeleeSwing: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new CombatSystem(
+      {
+        getAllPlayers: () => players,
+        getPlayer: (id: string) => players.find((player) => player.id === id),
+      } as unknown as PlayerManager,
+      bridge,
+    );
+    for (const player of players) combat.initPlayer(player.id as string);
+
+    const blocker = {
+      active: true,
+      getBounds: () => new Phaser.Geom.Rectangle(70, -12, 20, 24),
+    };
+    combat.setArenaObstacles([blocker], []);
+    combat.setPlayerDamageTakenHandler(() => { blocker.active = false; });
+
+    combat.resolveMeleeSwing(
+      'shooter', 0, 0, 0, 120, 60, 10, 0, 'test-melee', 0xffffff,
+      undefined, 1, 1, 'default', undefined, undefined, undefined, 0, 0, 1, ['players'],
+    );
+
+    expect(blocker.active).toBe(false);
+    expect(combat.getHP('first')).toBe(90);
+    expect(combat.getHP('second')).toBe(100);
   });
 });
 

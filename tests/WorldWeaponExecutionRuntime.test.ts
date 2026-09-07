@@ -81,4 +81,29 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
     expect(() => { runtime.destroy(); runtime.destroy(); }).not.toThrow();
   });
 
+  it('delegiert Hitscan und Melee als normalisierte Immediate-Attacks statt positionaler Legacy-Aufrufe', () => {
+    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 7);
+    const resolveImmediateAttack = vi.fn(() => ({ accepted: true, interactions: [] }));
+    const runtime = new WorldWeaponExecutionRuntime({
+      projectileSpawn: { spawnProjectile },
+      combatSystem: { resolveImmediateAttack },
+    });
+    const params = {
+      x: 100, y: 200, angle: 0, targetX: 500, targetY: 200,
+      ownerId: 'p1', ownerColor: 0xffffff, sourceSlot: 'weapon1' as const,
+    };
+
+    expect(runtime.fire(WEAPON_CONFIGS.PLASMA_BURNER, params)).toBe(true);
+    expect(runtime.fire(WEAPON_CONFIGS.BITE, params)).toBe(true);
+    expect(resolveImmediateAttack).toHaveBeenCalledTimes(2);
+    const hitscan = resolveImmediateAttack.mock.calls[0]?.[0];
+    expect(hitscan).toMatchObject({ kind: 'hitscan', payload: { shooterId: 'p1', startY: 200 } });
+    expect(hitscan?.payload.startX).toBeGreaterThan(100);
+    expect(hitscan?.payload.range).toBeLessThan(WEAPON_CONFIGS.PLASMA_BURNER.range);
+    expect(resolveImmediateAttack.mock.calls[1]?.[0]).toMatchObject({
+      kind: 'melee',
+      payload: { shooterId: 'p1', x: 100, y: 200, range: WEAPON_CONFIGS.BITE.range },
+    });
+  });
+
 });

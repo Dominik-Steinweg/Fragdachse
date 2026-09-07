@@ -1,5 +1,6 @@
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatImmediateAttackPort } from '../combat/CombatCapabilities';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import {
@@ -11,7 +12,8 @@ import {
 
 /** Combat-Senke des gemeinsamen Immediate-Fire-Pfads (Hitscan/Melee). */
 type WeaponFireCombatResolver =
-  Pick<CombatSystem, 'resolveHitscanShot' | 'resolveMeleeSwing'>
+  Partial<Pick<CombatSystem, 'resolveHitscanShot' | 'resolveMeleeSwing'>>
+  & Partial<CombatImmediateAttackPort>
   & Partial<Pick<CombatSystem, 'resolveSafeHitscanStart'>>;
 
 export interface WorldWeaponExecutionRuntimeOptions {
@@ -43,55 +45,49 @@ export class WorldWeaponExecutionRuntime implements WorldScopedBinding, WeaponEx
           ? combatSystem.resolveSafeHitscanStart(shooterX, shooterY, request.startX, request.startY)
           : { x: request.startX, y: request.startY };
         const resolvedRange = getHitscanRequestRange(request, resolvedStart.x, resolvedStart.y, request.angle);
+        const normalizedRequest = { ...request, startX: resolvedStart.x, startY: resolvedStart.y, range: resolvedRange };
+        if (combatSystem.resolveImmediateAttack) {
+          return combatSystem.resolveImmediateAttack({
+            kind: 'hitscan',
+            payload: normalizedRequest,
+            origin: { x: resolvedStart.x, y: resolvedStart.y },
+            aim: { x: Math.cos(request.angle), y: Math.sin(request.angle) },
+            range: resolvedRange,
+          }).accepted;
+        }
+        // Compatibility for isolated pre-P8 test doubles. The composed CombatSystem always
+        // exposes the normalized port above; no production binding uses this fallback.
+        if (!combatSystem.resolveHitscanShot) return false;
         return combatSystem.resolveHitscanShot(
-          request.shooterId,
-          resolvedStart.x,
-          resolvedStart.y,
-          request.angle,
-          resolvedRange,
-          request.damage,
-          request.traceThickness,
-          request.color,
-          request.adrenalinGain,
-          request.sourceId,
-          request.visualPreset,
-          request.shotAudioKey,
-          request.sourceSlot,
-          request.shotId,
-          request.detonator,
-          request.rockDamageMult,
-          request.trainDamageMult,
-          request.chainLightning,
-          request.burnOnHit,
-          request.supportEffect,
-          request.visualMuzzleOrigin,
-          request.baseDamageMult,
+          request.shooterId, resolvedStart.x, resolvedStart.y, request.angle, resolvedRange,
+          request.damage, request.traceThickness, request.color, request.adrenalinGain,
+          request.sourceId, request.visualPreset, request.shotAudioKey, request.sourceSlot,
+          request.shotId, request.detonator, request.rockDamageMult, request.trainDamageMult,
+          request.chainLightning, request.burnOnHit, request.supportEffect,
+          request.visualMuzzleOrigin, request.baseDamageMult,
         );
       },
-      resolveMelee: (request) => combatSystem.resolveMeleeSwing(
-        request.shooterId,
-        request.x,
-        request.y,
-        request.angle,
-        request.range,
-        request.arcDegrees,
-        request.damage,
-        request.adrenalinGain,
-        request.sourceId,
-        request.color,
-        request.sourceSlot,
-        request.rockDamageMult,
-        request.trainDamageMult,
-        request.visualPreset,
-        request.shotAudioKey,
-        request.burnOnHit,
-        undefined,
-        request.hitHeal,
-        request.hitAdrenaline,
-        request.bloodEffectMultiplier,
-        request.damageTargets,
-        request.baseDamageMult,
-      ) ?? false,
+      resolveMelee: (request) => {
+        if (combatSystem.resolveImmediateAttack) {
+          return combatSystem.resolveImmediateAttack({
+            kind: 'melee',
+            payload: request,
+            origin: { x: request.x, y: request.y },
+            aim: { x: Math.cos(request.angle), y: Math.sin(request.angle) },
+            range: request.range,
+          }).accepted;
+        }
+        // Compatibility for isolated pre-P8 test doubles; see the Hitscan fallback above.
+        if (!combatSystem.resolveMeleeSwing) return false;
+        return combatSystem.resolveMeleeSwing(
+          request.shooterId, request.x, request.y, request.angle, request.range,
+          request.arcDegrees, request.damage, request.adrenalinGain, request.sourceId,
+          request.color, request.sourceSlot, request.rockDamageMult, request.trainDamageMult,
+          request.visualPreset, request.shotAudioKey, request.burnOnHit, undefined,
+          request.hitHeal, request.hitAdrenaline, request.bloodEffectMultiplier,
+          request.damageTargets, request.baseDamageMult,
+        ) ?? false;
+      },
     });
   }
 

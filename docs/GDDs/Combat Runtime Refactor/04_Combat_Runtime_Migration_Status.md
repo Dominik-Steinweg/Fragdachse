@@ -8,15 +8,15 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P7-Gate erfüllt, P8 als Nächstes |
+| Gesamtstatus | Block C aktiv; P8-Gate erfüllt, P9 als Nächstes |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P8 Hitscan/Melee/Preview im selben Luna-/XHigh-Kontext |
+| Nächster Arbeitsschritt | P9 World-Mutation / Support / Domain-Fan-out mit frischem Sol-/High-Worker |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | Keine; P7 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `8ed3d1be` |
-| Start-HEAD der laufenden Aufgabe | `8ed3d1be` |
-| Aktiver Worker / Thread | Keiner; P7/P8-Kontext für P8 wird fortgesetzt |
+| Aktive Phase / Aufgabe | Keine; P8 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `08fc9e8a` |
+| Start-HEAD der laufenden Aufgabe | `08fc9e8a` |
+| Aktiver Worker / Thread | Keiner; frischer P9-Kontext als Nächstes |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
 | Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
@@ -43,7 +43,7 @@
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
 | R2 | B | ✅ | Bestanden; keine reproduzierbaren Block-B-Stopper |
 | P7 | C | ✅ | Projectile-Adapter |
-| P8 | C | ⬜ | Hitscan / Melee / Preview |
+| P8 | C | ✅ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
 | P10 | C | ⬜ | Verbleibende Consumer |
 | P11 | C | ⬜ | Gesamtgraph / Frame / Network / Presentation |
@@ -64,6 +64,7 @@
 - `CombatBurnStatusOwner`, `EnemyMovementStatusSystem`, `TargetStatusSystem` und `PlasmaSwarmReactionSystem`: je ein World-lokaler Writer mit passiven Reads und explizitem Advance/Prune/Clear.
 - `PlayerLifeRuntime` und `WorldCombatReactions`: deadline-basierter Respawn ohne Timer sowie geordnete, reentrancy-sichere Reaction-/Kill-Folgen aus gesicherten Fakten.
 - Projectile-Direct-Adapter committen Player-/Enemy-/Decoy-Schaden über konkrete Targets und Receipts; `WorldProjectileRuntime` übernimmt tatsächliche AoE-Keys in seine Same-Frame-Continuation.
+- Normalisierte Hitscan-/Melee-Aufträge laufen über `CombatImmediateAttackPort`; sichere Mündung/Range bleiben bei Execution, der Host führt Query→Resolution→Mutation aus und Melee friert die geometrische Grundzielmenge vor der ersten Mutation ein.
 
 ## 4. Aktive Übergänge und Blocker
 
@@ -85,6 +86,8 @@ P1–P7 sind realisiert:
 **R2:** bestanden auf `b74a1b07`; 133/133 Fokus, 201/201 Integration und 32/32 Architektur grün; keine reproduzierbaren P2–P6-Stopper.
 
 **P7-Gate L:** Fokus 63/63, Check 2781 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 57/57, TypeScript/Diff-Check grün.
+
+**P8-Gate L:** Fokus 27/27 und Melee-Regression 18/18, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25, TypeScript/Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
