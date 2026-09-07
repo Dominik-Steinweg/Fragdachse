@@ -26,7 +26,7 @@ import { BaseEntity } from '../../src/entities/BaseEntity';
 import { BaseManager } from '../../src/entities/BaseManager';
 import { RockVisualHelper } from '../../src/scenes/arena/RockVisualHelper';
 import { encodeEnemyUpsert } from '../../src/network/enemySnapshotCodec';
-import { COOP_DEFENSE_ENEMY_KINDS, resolveCoopDefenseEnemyConfigs } from '../../src/config/coopDefenseEnemies';
+import { COOP_DEFENSE_ENEMY_KINDS, resolveCoopDefenseEnemyConfigs, type CoopDefenseEnemyDeathSpawnConfig } from '../../src/config/coopDefenseEnemies';
 import { HEALTH_BAR_TUNING, TURRET_HEALTH_BAR_STYLE } from '../../src/effects/health/healthBarStyles';
 import { WorldHealthBarRenderer } from '../../src/effects/health/WorldHealthBarRenderer';
 import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
@@ -46,7 +46,7 @@ function harness() {
   return { ...fake, renderer, clock(t: number) { time = t; }, tick() { renderer.update(true); } };
 }
 const kind = COOP_DEFENSE_ENEMY_KINDS[0];
-function enemies(h: ReturnType<typeof harness>, boss = false, withDeathSpawn = false) {
+function enemies(h: ReturnType<typeof harness>, boss = false, deathSpawns: readonly CoopDefenseEnemyDeathSpawnConfig[] = []) {
   const configs = resolveCoopDefenseEnemyConfigs(1);
   // Preserve the real codec kind, but exclude unrelated authored attacks and glow from the fixture.
   configs[kind] = {
@@ -55,7 +55,7 @@ function enemies(h: ReturnType<typeof harness>, boss = false, withDeathSpawn = f
     glow: undefined,
     weapons: [],
     imageKey: 'health-test',
-    deathSpawns: withDeathSpawn ? [{ enemyKind: kind, count: 1, offsetPx: 0 }] : [],
+    deathSpawns,
   };
   const manager = new EnemyManager(h.scene, configs);
   manager.setHealthBarRenderer(h.renderer);
@@ -82,7 +82,7 @@ describe('World HP consumer boundaries', () => {
     { hook: 'death-spawn', applyNewStatus: true },
     { hook: 'none', applyNewStatus: false },
   ] as const)('ends old target status before $hook (new status: $applyNewStatus)', ({ hook, applyNewStatus }) => {
-    const h = harness(), manager = enemies(h, false, hook === 'death-spawn');
+    const h = harness(), manager = enemies(h, false, hook === 'death-spawn' ? [{ enemyKind: kind, count: 1, offsetPx: 0 }] : []);
     const statuses = new TargetStatusSystem(), injector = new EnergyInjectorSystem();
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
     const oldTarget = manager.getCombatTargetRef('e1');
@@ -135,6 +135,55 @@ describe('World HP consumer boundaries', () => {
     if (hook !== 'none') expect(manager.getEnemy('e1')!.getHp()).toBe(100);
     else expect(manager.getEnemy('e1')).toBeUndefined();
     binding.destroy(); manager.destroy();
+  });
+
+  it.each([
+    { teardown: 'owner', afterSpawn: 1 },
+    { teardown: 'owner', afterSpawn: 2 },
+    { teardown: 'owner', afterSpawn: 4 },
+    { teardown: 'activity', afterSpawn: 1 },
+    { teardown: 'world', afterSpawn: 4 },
+    { teardown: 'none', afterSpawn: 0 },
+  ] as const)('bounds death spawns by $teardown lifetime after spawn $afterSpawn', ({ teardown, afterSpawn }) => {
+    const deathSpawns = [
+      { enemyKind: kind, count: 2, offsetPx: 10 },
+      { enemyKind: kind, count: 3, offsetPx: 20 },
+      { enemyKind: kind, count: 1, offsetPx: 30 },
+    ];
+    const h = harness(), manager = enemies(h, false, deathSpawns);
+    const parent = manager.hostSpawnAtWorld(10, 20, kind, { originId: 'encounter' });
+    manager.hostSetVitalsBaseline(parent.id, 40, 100);
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager,
+      { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    const world = combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
+    combat.setEnemyManager(manager);
+    const spawned: { x: number; y: number; kind: string; originId?: string }[] = [];
+    manager.setEnemySpawnedCallback(enemy => {
+      expect(manager.getAllEnemies()).not.toContain(parent);
+      spawned.push({ x: enemy.sprite.x, y: enemy.sprite.y, kind: enemy.kind, originId: enemy.originId });
+      if (spawned.length !== afterSpawn) return;
+      if (teardown === 'owner') manager.destroy();
+      if (teardown === 'activity') combat.invalidatePlayerLifecyclePolicy();
+      if (teardown === 'world') world.destroy();
+    });
+    const death = vi.fn(), kill = vi.fn();
+    combat.setEnemyDeathCallback(death); combat.setKillCallback(kill);
+    const outcome = combat.applyDamage(parent.id, 100, false, 'attacker', 'synthetic');
+    expect(outcome).toMatchObject({ actualDamage: 40, resultingState: { hp: 0, alive: false }, transition: { kind: 'dead' } });
+    const expectedBatch = deathSpawns.flatMap(config => Array.from({ length: config.count }, (_, index) => ({
+      x: 10 + Math.cos(index * Math.PI * 2 / config.count) * config.offsetPx,
+      y: 20 + Math.sin(index * Math.PI * 2 / config.count) * config.offsetPx,
+      kind: config.enemyKind, originId: 'encounter',
+    })));
+    expect(spawned).toEqual(teardown === 'none' ? expectedBatch : expectedBatch.slice(0, afterSpawn));
+    expect(manager.getAllEnemies()).toHaveLength(teardown === 'owner' ? 0 : spawned.length);
+    // Owner removal alone does not cancel the committed parent's terminal facts.
+    const terminalCalls = teardown === 'activity' || teardown === 'world' ? 0 : 1;
+    expect(death).toHaveBeenCalledTimes(terminalCalls);
+    expect(kill).toHaveBeenCalledTimes(terminalCalls);
+    manager.completeCombatDeath(outcome!);
+    expect(spawned).toHaveLength(teardown === 'none' ? expectedBatch.length : afterSpawn);
+    manager.destroy(); world.destroy();
   });
 
   it.each(['death', 'kill'] as const)('preserves successor attribution across the old enemy %s hook', hook => {
@@ -434,7 +483,7 @@ describe('World HP consumer boundaries', () => {
   });
 
   it('freezes terminal Enemy facts before removal and runs death spawns after cleanup', () => {
-    const h = harness(), manager = enemies(h, false, true);
+    const h = harness(), manager = enemies(h, false, [{ enemyKind: kind, count: 1, offsetPx: 0 }]);
     const enemy = manager.hostSpawnAtWorld(45, 67, kind);
     const target = manager.getCombatTargetRef(enemy.id)!;
     const spawnedAfterRemoval = vi.fn(() => {

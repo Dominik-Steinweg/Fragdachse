@@ -162,7 +162,7 @@ export interface EnemySpawnOptions {
 }
 
 export class EnemyManager {
-  private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, () => void>();
+  private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, (isCurrent: () => boolean) => void>();
   private combatActive = true;
   /** Distinguishes rebuilt Activity owners until P4 supplies the full World/Activity target binding. */
   private readonly combatScope: CombatScope = Object.freeze({
@@ -1109,10 +1109,11 @@ export class EnemyManager {
   }
 
   /** Runs death spawns only after the receipt has escaped the canonical mutation. */
-  completeCombatDeath(outcome: CombatDamageMutationOutcome): void {
+  completeCombatDeath(outcome: CombatDamageMutationOutcome, isScopeCurrent?: () => boolean): void {
     const work = this.committedDeathWork.get(outcome);
     this.committedDeathWork.delete(outcome);
-    if (this.combatActive) work?.();
+    const isCurrent = () => this.combatActive && (isScopeCurrent?.() ?? true);
+    if (isCurrent()) work?.(isCurrent);
   }
 
   private commitDamageInternal(request: TargetDamageMutationRequest): EnemyDamageResult {
@@ -1221,18 +1222,21 @@ export class EnemyManager {
     this.wildfirePanicStates.delete(id);
     this.smokeConfusionStates.delete(id);
     const originId = enemy.originId;
-    this.committedDeathWork.set(outcome, () => { for (const spawnConfig of deathSpawns) {
-      const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
-      for (let index = 0; index < spawnConfig.count; index += 1) {
-        const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, spawnConfig.count));
-        this.hostSpawnAtWorld(
-          deathX + Math.cos(angle) * spawnConfig.offsetPx,
-          deathY + Math.sin(angle) * spawnConfig.offsetPx,
-          spawnConfig.enemyKind,
-          { originId },
-        );
+    this.committedDeathWork.set(outcome, isCurrent => {
+      for (const spawnConfig of deathSpawns) {
+        const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
+        for (let index = 0; index < spawnConfig.count; index += 1) {
+          const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, spawnConfig.count));
+          this.hostSpawnAtWorld(
+            deathX + Math.cos(angle) * spawnConfig.offsetPx,
+            deathY + Math.sin(angle) * spawnConfig.offsetPx,
+            spawnConfig.enemyKind,
+            { originId },
+          );
+          // A spawn hook may end the owner or its enclosing Combat scope mid-batch.
+          if (!isCurrent()) return;
+        }
       }
-    }
     });
     return { outcome, died: true, remainingHp: 0, death };
   }

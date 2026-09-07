@@ -3462,7 +3462,7 @@ export class CombatSystem implements ProjectileCombatPort {
 
     if (result.died) {
       const deadTarget = outcome.target;
-      this.enemyManager?.completeCombatDeath(outcome);
+      this.enemyManager?.completeCombatDeath(outcome, current);
       if (!current()) return outcome;
       const suppressStandardDeathEffect = this.onEnemyDeathCb?.(
         targetId,
