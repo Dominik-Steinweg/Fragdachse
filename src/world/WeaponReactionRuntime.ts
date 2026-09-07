@@ -42,6 +42,7 @@ export class WeaponReactionRuntime implements WeaponReactionPort {
     const sourceConfig = weaponConfigs.find((config) => config?.id === outcome.sourceId);
     if (!sourceConfig) return;
     if ((sourceConfig.killHeal ?? 0) > 0) this.options.combatSystem.heal(outcome.killerId, sourceConfig.killHeal ?? 0);
+    if (this.destroyed) return;
     if ((sourceConfig.killAdrenaline ?? 0) > 0) {
       this.options.resourceSystem.addAdrenaline(outcome.killerId, sourceConfig.killAdrenaline ?? 0);
     }
@@ -53,6 +54,7 @@ export class WeaponReactionRuntime implements WeaponReactionPort {
     // Große Ketten werden über mehrere Frames verteilt, aber logisch nicht begrenzt.
     const events = this.shotgunLightningQueue.splice(0, 256);
     for (const event of events) {
+      if (this.destroyed) return;
       const shotgun = this.options.loadout.getEquippedWeaponConfig(event.ownerId, 'weapon2');
       if (!shotgun || shotgun.id !== 'SHOTGUN') continue;
 
@@ -81,6 +83,7 @@ export class WeaponReactionRuntime implements WeaponReactionPort {
         enemySlowDurationMs: shotgun.shotgunSlowDurationMs ?? 0,
         killSource: { shotgunLightningGeneration: event.generation },
       });
+      if (this.destroyed) return;
       this.options.network.broadcastExplosionEffect(event.x, event.y, radius, 0x78dfff, 'lightning');
     }
   }

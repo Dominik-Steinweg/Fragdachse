@@ -98,11 +98,12 @@ export class CoopMissionPlayerRuntime {
   }
 
   /** Der tatsaechlich ausgefuehrte Respawn; ohne Budget ist er immer erlaubt. */
-  consumeRespawn(playerId: string): boolean {
+  consumeRespawn(playerId: string, publish = true): boolean {
+    if (this.destroyed || !this.attachedPlayers.has(playerId)) return false;
     const budget = this.options.respawnBudget;
     if (!budget) return true;
     const consumed = budget.consumeRespawn(playerId);
-    if (consumed) this.options.publishRespawnBudget(budget.getSnapshot());
+    if (consumed && publish) this.options.publishRespawnBudget(budget.getSnapshot());
     return consumed;
   }
 

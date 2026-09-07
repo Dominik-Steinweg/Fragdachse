@@ -325,6 +325,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // publish/render presentation state; every authoritative system below keeps its own gameplay
     // gate via countdownActive.
     const countdownActive = bridge.isArenaCountdownActive();
+    if (!countdownActive) this.ctx.combatSystem.advancePlayerLifecycle(now);
     const worldMapId = this.world ? toMapId(this.world.descriptor.definitionId) : null;
     const activeMapConfig = worldMapId === null ? null : getCoopDefenseMapConfig(worldMapId);
     const weaponBalanceLabActive = worldMapId !== null && isWeaponBalanceLabMapId(worldMapId);

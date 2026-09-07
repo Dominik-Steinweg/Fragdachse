@@ -68,6 +68,58 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('keeps a nonlethal parent receipt separate from the Cull death and its terminal attribution', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager, {
+      isHost: () => true, broadcastEffect: () => {},
+    } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
+    combat.setEnemyManager(manager);
+    const kill = vi.fn(), death = vi.fn();
+    combat.setKillCallback(kill); combat.setEnemyDeathCallback(death);
+    const primary = vi.fn((attacker: string, id: string, hp: number) => {
+      combat.applyDamage(id, hp, false, attacker, 'cull', undefined, { damageKind: 'reaction', sourceSlot: 'weapon1', skipLifeLeech: true });
+    });
+    combat.setDirectPrimaryHitHandler(primary);
+    const parent = combat.applyDamage('e1', 10, false, 'attacker', 'synthetic', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' });
+    expect(parent).toMatchObject({ actualDamage: 10, resultingState: { hp: 30, alive: true }, transition: { kind: 'none' } });
+    expect(primary).toHaveBeenCalledTimes(1); expect(death).toHaveBeenCalledTimes(1); expect(kill).toHaveBeenCalledTimes(1);
+    expect(manager.getEnemy('e1')).toBeUndefined();
+    expect(kill.mock.calls[0]?.[5]).toMatchObject({ enemyKind: kind, victimFaction: 'hostile', damageOrigin: { kind: 'reaction' } });
+    manager.destroy();
+  });
+
+  it('retains saved attribution after source and victim removal and stops on Activity teardown', () => {
+    for (const teardown of [false, true]) {
+      const h = harness(), manager = enemies(h);
+      upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+      const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager, {
+        isHost: () => true, broadcastEffect: () => {},
+      } as unknown as NetworkBridge);
+      combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 }); combat.setEnemyManager(manager);
+      const source: CombatSource = {
+        gameplaySource: { kind: 'enemy', id: 'removed-summon' }, actor: { kind: 'enemy', id: 'removed-summon' },
+        attribution: { kind: 'player', id: 'credited-player' },
+        allegiance: { ownerId: 'different-team-owner', factionId: 'allied' }, origin: 'burn',
+      };
+      const kill = vi.fn(); combat.setKillCallback(kill);
+      combat.setEnemyDeathCallback(() => {
+        expect(manager.getEnemy('e1')).toBeUndefined();
+        if (teardown) { combat.invalidatePlayerLifecyclePolicy(); manager.destroy(); }
+      });
+      const outcome = combat.applyDamage('e1', 100, false, 'removed-summon', 'burn', undefined, { source, damageKind: 'burn' });
+      expect(outcome).toMatchObject({ actualDamage: 40, transition: { kind: 'dead' } });
+      if (teardown) expect(kill).not.toHaveBeenCalled();
+      else {
+        expect(kill).toHaveBeenCalledTimes(1);
+        expect(kill.mock.calls[0]?.[0]).toBe('credited-player');
+        expect(kill.mock.calls[0]?.[5].provenance).toEqual(source);
+      }
+      manager.destroy();
+    }
+  });
+
   it('reports real Combat resolution damage separately from Enemy rescue healing', () => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
@@ -82,7 +134,7 @@ describe('World HP consumer boundaries', () => {
     combat.setDirectPrimaryHitHandler(primary);
     const outcome = combat.applyDamage('e1', 100, false, 'attacker', 'synthetic', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' });
     expect(outcome).toMatchObject({ kind: 'damage-applied', actualDamage: 40, rescueHealing: 20, transition: { kind: 'none' }, resultingState: { hp: 20, alive: true } });
-    expect(damage).toHaveBeenCalledWith('enemy', 'e1', 'attacker', 40, 'direct');
+    expect(damage).toHaveBeenCalledWith('enemy', 'e1', 'attacker', 40, 'direct', 'hostile');
     expect(primary).toHaveBeenCalledOnce();
     const target = manager.getCombatTargetRef('e1')!;
     const supported = combat.applySupport({ outcomeId: 'enemy-heal', target, source: {

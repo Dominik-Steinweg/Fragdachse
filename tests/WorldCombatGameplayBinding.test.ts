@@ -222,7 +222,7 @@ function createFixture(options: {
     authority: {
       isHost: () => true,
       isEnemyPair: () => true,
-      getPlayerProfile: () => undefined,
+      getPlayerProfile: (id: string) => options.players.find(player => player.id === id) as unknown as PlayerProfile | undefined,
       getConnectedPlayers: (): readonly PlayerProfile[] => [],
     },
     round: {
@@ -605,7 +605,7 @@ describe('WorldCombatGameplayBinding weapon reactions', () => {
       sourceId: 'weapon.SHOTGUN.lightning',
       x: 10,
       y: 20,
-      source,
+      source: { ...source, enemyXp: 0 },
     });
     fixture.binding.destroy();
   });

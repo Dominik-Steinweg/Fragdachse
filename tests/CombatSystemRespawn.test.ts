@@ -36,10 +36,111 @@ import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespaw
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { hasWorldFigure, type WorldParticipation } from '../src/world/WorldParticipation';
+import { HP_MAX, RESPAWN_DELAY_MS } from '../src/config';
+
+function lifecycleFixture() {
+  let now = 1000;
+  const players = new Map(['p1', 'p2'].map(id => [id,
+    fakeEntity({ id, x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() })]));
+  const combat = new CombatSystem({
+    getPlayer: (id: string) => players.get(id), getAllPlayers: () => [...players.values()],
+    getWorldSpawnPoint: () => ({ x: 260, y: 42 }),
+  } as unknown as PlayerManager, {
+    isHost: () => true, broadcastEffect: vi.fn(), areTeammates: () => false,
+    getPlayerProfile: (id: string) => players.has(id) ? { id } : undefined,
+  } as unknown as NetworkBridge);
+  const world = combat.bindPlayerVitalsScope({ worldRevision: 1, runtimeGeneration: 7 });
+  combat.bindHostExecutionSources({ nowMs: () => now, random: () => 0.25 });
+  const budget = new CoopDefenseRespawnBudgetSystem({ respawnsPerPlayer: 1, participantIds: ['p1', 'p2'] });
+  const consume = vi.fn((id: string) => budget.consumeRespawn(id));
+  const death = vi.fn((id: string) => budget.handlePlayerDeath(id));
+  combat.setRespawnAllowedResolver(id => budget.canPlayerRespawn(id));
+  combat.setRespawnCallback(consume); combat.setDeathCallback(death);
+  combat.initPlayer('p1'); combat.initPlayer('p2');
+  const kill = vi.fn(); combat.setKillCallback(kill);
+  return { combat, world, players, budget, consume, death, kill,
+    advance: () => { now += RESPAWN_DELAY_MS; combat.advancePlayerLifecycle(now); },
+    hit: () => combat.applyDamage('p2', HP_MAX * 2, false, 'p1', 'test', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' }),
+  };
+}
+
+describe('integrated Combat damage, reaction and Player life', () => {
+  it('commits death and its attribution exactly once despite repeated lethal requests', () => {
+    const f = lifecycleFixture();
+    const outcome = f.hit(); f.hit();
+    expect(outcome).toMatchObject({ kind: 'damage-applied', actualDamage: HP_MAX, transition: { kind: 'dead' } });
+    expect(f.death).toHaveBeenCalledTimes(1); expect(f.kill).toHaveBeenCalledTimes(1);
+    f.advance(); f.advance();
+    expect(f.consume).toHaveBeenCalledTimes(1);
+    expect(f.players.get('p2')!.setPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks actor prerequisites before budget consumption and shares reconnect with deadline commit', () => {
+    const f = lifecycleFixture(); const actor = f.players.get('p2')!;
+    f.hit(); f.players.delete('p2'); f.advance();
+    expect(f.combat.spawnPlayerAfterReconnect('p2')).toBe(false);
+    expect(f.consume).not.toHaveBeenCalled();
+    f.players.set('p2', actor);
+    expect(f.combat.spawnPlayerAfterReconnect('p2')).toBe(true);
+    expect(f.combat.spawnPlayerAfterReconnect('p2')).toBe(false);
+    f.advance(); expect(f.consume).toHaveBeenCalledTimes(1);
+    expect(actor.setPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates pending respawn when its Activity policy or World ends', () => {
+    for (const worldEnds of [false, true]) {
+      const f = lifecycleFixture(); f.hit();
+      if (worldEnds) f.world.destroy(); else f.combat.invalidatePlayerLifecyclePolicy();
+      f.advance(); expect(f.consume).not.toHaveBeenCalled();
+    }
+  });
+
+  it('keeps parent loss and attribution through mutual reflect and removal of its source actor', () => {
+    const f = lifecycleFixture(); const observed = vi.fn();
+    f.combat.addDamageDealtObserver(observed);
+    f.combat.setPlayerDamageTakenHandler((id, attacker, hp, armor, kind) => {
+      if (kind !== 'reflect') f.combat.applyDamage(attacker!, hp + armor, false, id, 'thorns', undefined, { damageKind: 'reflect' });
+      else f.players.delete('p1');
+    });
+    const outcome = f.hit();
+    expect(outcome).toMatchObject({ kind: 'damage-applied', actualDamage: HP_MAX, transition: { kind: 'dead' } });
+    expect(Object.isFrozen(outcome)).toBe(true);
+    expect(f.death).toHaveBeenCalledTimes(2); expect(f.kill).toHaveBeenCalledTimes(2);
+    expect(f.kill.mock.calls.find(call => call[1] === 'p2')?.[0]).toBe('p1');
+    expect(observed.mock.calls.map(call => call[0].damage)).toEqual([HP_MAX, HP_MAX]);
+  });
+
+  it('retains a committed receipt but stops stale reactions after reentrant teardown', () => {
+    const f = lifecycleFixture();
+    f.combat.setPlayerDamageTakenHandler(() => f.world.destroy());
+    expect(f.hit()).toMatchObject({ kind: 'damage-applied', transition: { kind: 'dead' } });
+    expect(f.death).not.toHaveBeenCalled(); expect(f.kill).not.toHaveBeenCalled();
+    f.advance(); expect(f.consume).not.toHaveBeenCalled();
+  });
+
+  it('isolates passive observer failures after authoritative death and kill work', () => {
+    const f = lifecycleFixture();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      f.combat.addDamageDealtObserver(() => { throw new Error('observer'); });
+      expect(() => f.hit()).not.toThrow(); expect(f.kill).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
+  });
+
+  it('does not deactivate a new life created reentrantly by a permitted reconnect', () => {
+    const f = lifecycleFixture();
+    f.combat.setRespawnAllowedResolver(() => true);
+    f.combat.setRespawnCallback(() => true);
+    f.combat.setPlayerDamageTakenHandler(id => { expect(f.combat.spawnPlayerAfterReconnect(id)).toBe(true); });
+    expect(f.hit()).toMatchObject({ transition: { kind: 'dead' } });
+    expect(f.combat.isAlive('p2')).toBe(true);
+    expect(f.players.get('p2')!.body.enable).toBe(true);
+    expect(f.death).not.toHaveBeenCalled();
+  });
+});
 
 describe('CombatSystem respawn lifecycle', () => {
   it('does not consume budget during repeated gate checks and consumes once at actual respawn', () => {
-    vi.useFakeTimers();
     try {
       const player = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true },
         setPosition: vi.fn() });
@@ -53,7 +154,7 @@ describe('CombatSystem respawn lifecycle', () => {
         broadcastEffect: vi.fn(),
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
-      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
+      combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
       const survival = new CoopDefenseRespawnBudgetSystem({ respawnsPerPlayer: 1, participantIds: ['p1'] });
 
       combat.setInitialSpawnAllowedResolver(() => true);
@@ -63,13 +164,12 @@ describe('CombatSystem respawn lifecycle', () => {
       combat.initPlayer('p1');
 
       const gate = (): boolean => survival.canPlayerRespawn('p1');
-      (combat as unknown as { handleDeath: (id: string, x: number, y: number, seed: number) => void })
-        .handleDeath('p1', 100, 100, 1);
+      combat.applyDamage('p1', 9999);
       expect(gate()).toBe(true);
       expect(gate()).toBe(true);
       expect(survival.getPlayerState('p1')?.remainingRespawns).toBe(1);
 
-      vi.advanceTimersByTime(5000);
+      combat.advancePlayerLifecycle(6000);
       expect(survival.getPlayerState('p1')).toEqual({
         remainingRespawns: 0,
         alive: true,
@@ -90,7 +190,6 @@ describe('CombatSystem respawn lifecycle', () => {
    * dafuer keinen zweiten, lobby-eigenen Pfad.
    */
   it('laesst eine World ohne Activity ueber die World-Teilnahme sterben und respawnen', () => {
-    vi.useFakeTimers();
     try {
       const player = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() });
       const playerManager = {
@@ -100,7 +199,7 @@ describe('CombatSystem respawn lifecycle', () => {
       } as unknown as PlayerManager;
       const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
-      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
+      combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
 
       // Genau die Aufloesung der LobbyWorld: keine Runde, nur Teilnahme.
       combat.setInitialSpawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
@@ -111,11 +210,10 @@ describe('CombatSystem respawn lifecycle', () => {
       expect(combat.isAlive('p1')).toBe(true);
 
       participation.set('p1', 'interactive');
-      (combat as unknown as { handleDeath: (id: string, x: number, y: number, seed: number) => void })
-        .handleDeath('p1', 100, 100, 1);
+      combat.applyDamage('p1', 9999);
       expect(combat.isAlive('p1')).toBe(false);
 
-      vi.advanceTimersByTime(5000);
+      combat.advancePlayerLifecycle(6000);
       expect(combat.isAlive('p1')).toBe(true);
       expect(player.setPosition).toHaveBeenCalledWith(512, 320);
     } finally {
@@ -124,7 +222,6 @@ describe('CombatSystem respawn lifecycle', () => {
   });
 
   it('laesst zwei interaktive Spieler ohne Activity gegenseitig kaempfen, sterben und respawnen', () => {
-    vi.useFakeTimers();
     try {
       const attacker = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() });
       const victim = fakeEntity({ id: 'p2', x: 140, y: 100, body: { enable: true }, setPosition: vi.fn() });
@@ -141,7 +238,7 @@ describe('CombatSystem respawn lifecycle', () => {
         areTeammates: () => false,
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
-      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
+      combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
       const participation = new Map<string, WorldParticipation>([
         ['p1', 'interactive'],
         ['p2', 'interactive'],
@@ -157,9 +254,9 @@ describe('CombatSystem respawn lifecycle', () => {
       expect(combat.canDamageTarget('p1', 'p2')).toBe(true);
       combat.applyDamage('p2', 9999, false, 'p1', 'GLOCK');
       expect(combat.isAlive('p2')).toBe(false);
-      expect(killed).toHaveBeenCalledWith('p1', 'p2', 'GLOCK', victim.x, victim.y, undefined);
+      expect(killed).toHaveBeenCalledWith('p1', 'p2', 'GLOCK', victim.x, victim.y, expect.objectContaining({ damageOrigin: { kind: 'direct', slot: undefined } }));
 
-      vi.advanceTimersByTime(5000);
+      combat.advancePlayerLifecycle(6000);
       expect(combat.isAlive('p2')).toBe(true);
       expect(victim.setPosition).toHaveBeenCalledWith(544, 320);
     } finally {
@@ -168,7 +265,6 @@ describe('CombatSystem respawn lifecycle', () => {
   });
 
   it('gibt einem Peer ausserhalb der World weder Figur noch Respawn', () => {
-    vi.useFakeTimers();
     try {
       const player = fakeEntity({ id: 'p1', x: 100, y: 100, body: { enable: true }, setPosition: vi.fn() });
       const playerManager = {
@@ -178,7 +274,7 @@ describe('CombatSystem respawn lifecycle', () => {
       } as unknown as PlayerManager;
       const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
-      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
+      combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
 
       // `none` steht ausserhalb, `observer` steht drin – aber ohne Figur.
       for (const outside of ['none', 'observer'] as const) {
@@ -187,7 +283,7 @@ describe('CombatSystem respawn lifecycle', () => {
         combat.initPlayer('p1');
         expect(combat.isAlive('p1'), outside).toBe(false);
       }
-      vi.advanceTimersByTime(5000);
+      combat.advancePlayerLifecycle(6000);
       expect(player.setPosition).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();

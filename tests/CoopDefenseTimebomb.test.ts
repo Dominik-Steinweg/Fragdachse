@@ -131,6 +131,7 @@ describe('Zeitbombendachs', () => {
       'e1',
       'Zeitbombendachs',
       { sourceX: 60, sourceY: 0 },
+      expect.objectContaining({ origin: 'explosion', gameplaySource: { kind: 'enemy', id: 'e1' } }),
     );
     expect(fireChunks.hostCreateFireChunkBurst).toHaveBeenCalledTimes(1);
     expect(sound).toHaveBeenCalledWith(expect.objectContaining({ type: 'timebomb-detonate' }));
@@ -336,6 +337,9 @@ describe('Zeitbombendachs', () => {
       'e7',
       'Zeitbomben-Verpuffung',
       { sourceX: 0, sourceY: 0 },
+      expect.objectContaining({ damageKind: 'explosion', source: expect.objectContaining({
+        gameplaySource: { kind: 'enemy', id: 'e7' }, attribution: { kind: 'enemy', id: 'e7' },
+      }) }),
     );
     expect(sound).toHaveBeenCalledWith(expect.objectContaining({ type: 'timebomb-killed-pop' }));
   });

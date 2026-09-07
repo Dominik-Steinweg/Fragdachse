@@ -25,6 +25,7 @@ import { PlacementSystem } from '../../src/systems/PlacementSystem';
 import type { LobbyLoadoutPreviewState, PlayerNetState, SyncedPlaceableRock, SyncedRockSnapshot } from '../../src/types';
 import { resolvePlayerCapabilities } from '../../src/world/PlayerCapabilities';
 import { PlayerWorldRuntime, resolvePlayerRuntimeFeatures } from '../../src/world/PlayerWorldRuntime';
+import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';
 import { createAuthoredWorldDescriptor } from '../../src/world/WorldLayout';
 import { resolveActiveGameMode, toWorldDefinitionId } from '../../src/world/arenaDescriptorAdapter';
 import { worldCellCenter } from '../../src/world/WorldMetrics';
@@ -497,8 +498,22 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
     expect(host.getPlayerRoomDeaths('p1')).toBe(0);
     expect(host.getRoundResultEligiblePlayerIds()).toEqual([]);
 
-    const lifecycle = read('src/world/WorldCombatGameplayBinding.ts');
-    expect(lifecycle).toContain('const allowKillDrop = o.isActivityActive() && !o.isCoopMission();');
+    const drop = vi.fn();
+    const reactions = new WorldCombatReactions({
+      isActivityActive: () => false, isCoopMission: () => false,
+      combatSystem: {} as never,
+      getPlayerCombatIntegration: () => null,
+      getPowerUpSystem: () => ({ onPlayerKilled: drop }) as never,
+      network: {
+        authority: { isHost: () => true, isEnemyPair: () => true,
+          getPlayerProfile: id => host.getPlayerProfile(id), getConnectedPlayers: () => host.getConnectedPlayers() },
+        stats: { incrementPlayerFrags: id => host.incrementPlayerFrags(id), recordPlayerKill: (id, kind) => host.recordPlayerKill(id, kind) } as never,
+        round: {} as never, effects: { broadcastKillEvent: () => {} } as never,
+      },
+    });
+    reactions.handleKill('p0', 'p1', 'test', 10, 20, undefined, () => true);
+    expect(drop).not.toHaveBeenCalled();
+    expect(host.getPlayerFrags('p0')).toBe(0);
   });
 });
 

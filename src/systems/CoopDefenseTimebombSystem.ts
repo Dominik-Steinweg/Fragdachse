@@ -10,6 +10,7 @@ import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { CombatSystem } from './CombatSystem';
 import type { PlacementSystem } from './PlacementSystem';
 import type { DecoySystem } from './DecoySystem';
+import type { CombatSource } from '../combat/CombatScope';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 import {
   EnemyStrategicTargetService,
@@ -158,7 +159,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     return phase === 'chase' || phase === 'fuse';
   }
 
-  handleKilled(death: EnemyDeathInfo, now = Date.now()): boolean {
+  handleKilled(death: EnemyDeathInfo, _nowMs: number): boolean {
     const config = getCoopDefenseEnemyConfig(death.kind).timebomb;
     if (!config || death.faction !== 'hostile') return false;
     this.states.delete(death.id);
@@ -389,7 +390,9 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       const distance = Math.hypot(player.x - x, player.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
-      this.combatSystem.applyDamage(player.id, damage, false, attackerId, sourceId, { sourceX: x, sourceY: y });
+      this.combatSystem.applyDamage(player.id, damage, false, attackerId, sourceId, { sourceX: x, sourceY: y }, {
+        damageKind: 'explosion', source: this.explosionSource(attackerId, sourceId),
+      });
     }
   }
 
@@ -407,8 +410,17 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       const distance = Math.hypot(decoy.sprite.x - x, decoy.sprite.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
-      this.decoySystem.applyDamage(decoy.id, damage, attackerId, sourceId, { sourceX: x, sourceY: y });
+      this.decoySystem.applyDamage(decoy.id, damage, attackerId, sourceId, { sourceX: x, sourceY: y },
+        this.explosionSource(attackerId, sourceId));
     }
+  }
+
+  private explosionSource(enemyId: string, sourceId: string): CombatSource {
+    return {
+      gameplaySource: { kind: 'enemy', id: enemyId }, actor: { kind: 'enemy', id: enemyId },
+      attribution: { kind: 'enemy', id: enemyId }, allegiance: { ownerId: enemyId, factionId: 'hostile' },
+      authoredSourceId: sourceId, origin: 'explosion',
+    };
   }
 
   private damageConstructions(attackerId: string, x: number, y: number, radius: number, maxDamage: number): void {

@@ -269,6 +269,7 @@ export function composeWorldCombatGameplay(
         incrementPlayerFrags: (playerId) => bridge.incrementPlayerFrags(playerId),
       },
       effects: {
+        broadcastCoopDefenseXpPopup: (x, y, xp) => bridge.broadcastCoopDefenseXpPopup(x, y, xp),
         broadcastSlimeBloomEffect: (x, y, targets) => bridge.broadcastSlimeBloomEffect(x, y, targets),
         broadcastExplosionEffect: (x, y, radius, color, style) => bridge.broadcastExplosionEffect(x, y, radius, color, style),
         broadcastBfgLaserBatch: (lines, color, preset, projectileId) => bridge.broadcastBfgLaserBatch([...lines], color, preset, projectileId),
@@ -277,7 +278,8 @@ export function composeWorldCombatGameplay(
         broadcastKillEvent: (event) => bridge.broadcastKillEvent(event),
       },
     },
-    respawnPlayer: (playerId) => flow.getPlayerActivityRuntime()?.consumeRespawn(playerId) ?? true,
+    respawnPlayer: (playerId) => flow.getPlayerActivityRuntime()?.consumeRespawn(playerId, false) ?? true,
+    publishRespawn: () => flow.getPlayerActivityRuntime()?.publishRespawnBudget(),
     getTeamHpRegenBonus: (playerId, nowMs) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(nowMs, bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
     getMatrixDamageReduction: (footprint, applies, nowMs) => gameplay.targeting?.systems.reinforcementMatrix.getDamageReductionForFootprint(footprint, nowMs, applies) ?? 0,
     getMatrixDamageMultiplier: (footprint, applies, nowMs) => gameplay.targeting?.systems.reinforcementMatrix.getDamageMultiplierForFootprint(footprint, nowMs, applies) ?? 1,

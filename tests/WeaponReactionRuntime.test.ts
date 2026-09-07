@@ -35,6 +35,15 @@ function makeRuntime(config: Record<string, unknown> = {}) {
 }
 
 describe('WeaponReactionRuntime – Shotgun Lightning und einfache Kill-Reaktionen', () => {
+  it('stops the current queue batch and its presentation after reentrant World teardown', () => {
+    const { runtime, combatSystem, network } = makeRuntime();
+    runtime.registerKill({ killerId: 'p1', sourceId: 'SHOTGUN', x: 10, y: 20 });
+    runtime.registerKill({ killerId: 'p1', sourceId: 'SHOTGUN', x: 30, y: 40 });
+    combatSystem.applyAoeDamage.mockImplementation(() => runtime.destroy());
+    runtime.update(); runtime.update();
+    expect(combatSystem.applyAoeDamage).toHaveBeenCalledTimes(1);
+    expect(network.broadcastExplosionEffect).not.toHaveBeenCalled();
+  });
   it('führt eine Shotgun-Kill-Reaktion als AoE-Schaden plus Lightning-Broadcast aus', () => {
     const { runtime, combatSystem, network } = makeRuntime({
       shotgunLightningAppliesSlow: 1,

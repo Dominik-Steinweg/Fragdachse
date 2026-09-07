@@ -256,6 +256,7 @@ export type CombatDamageKind =
   | 'burn'
   | 'chain'
   | 'ground'
+  | 'reaction'
   | 'reflect';
 
 export type CombatDamageTargetType = 'player' | 'enemy';

@@ -162,6 +162,8 @@ export interface EnemySpawnOptions {
 }
 
 export class EnemyManager {
+  private readonly committedDeathWork = new WeakMap<CombatDamageMutationOutcome, () => void>();
+  private combatActive = true;
   /** Distinguishes rebuilt Activity owners until P4 supplies the full World/Activity target binding. */
   private readonly combatScope: CombatScope = Object.freeze({
     worldRevision: 1,
@@ -1084,7 +1086,7 @@ export class EnemyManager {
     const enemy = this.enemies.get(id);
     const target = this.getCombatTargetRef(id);
     if (!enemy || !target) return null;
-    return this.commitDamageInternal({
+    const result = this.commitDamageInternal({
       outcomeId: `legacy:enemy:${id}:${++this.mutationOutcomeSequence}`,
       target,
       source: {
@@ -1102,9 +1104,19 @@ export class EnemyManager {
         isCritical: false,
       },
     });
+    this.completeCombatDeath(result.outcome);
+    return result;
+  }
+
+  /** Runs death spawns only after the receipt has escaped the canonical mutation. */
+  completeCombatDeath(outcome: CombatDamageMutationOutcome): void {
+    const work = this.committedDeathWork.get(outcome);
+    this.committedDeathWork.delete(outcome);
+    if (this.combatActive) work?.();
   }
 
   private commitDamageInternal(request: TargetDamageMutationRequest): EnemyDamageResult {
+    if (!this.combatActive) return this.rejectedEnemyDamage(request, 'stale-scope');
     const enemy = request.target.kind === 'enemy' ? this.enemies.get(request.target.id) : undefined;
     const currentTarget = request.target.kind === 'enemy' ? this.getCombatTargetRef(request.target.id) : null;
     if (!isSameCombatScope(request.target.scope, this.combatScope)) {
@@ -1208,7 +1220,8 @@ export class EnemyManager {
     this.destroyEnemyEntity(id, enemy);
     this.wildfirePanicStates.delete(id);
     this.smokeConfusionStates.delete(id);
-    for (const spawnConfig of deathSpawns) {
+    const originId = enemy.originId;
+    this.committedDeathWork.set(outcome, () => { for (const spawnConfig of deathSpawns) {
       const baseAngle = Phaser.Math.RND.realInRange(0, Math.PI * 2);
       for (let index = 0; index < spawnConfig.count; index += 1) {
         const angle = baseAngle + index * (Math.PI * 2 / Math.max(1, spawnConfig.count));
@@ -1216,10 +1229,11 @@ export class EnemyManager {
           deathX + Math.cos(angle) * spawnConfig.offsetPx,
           deathY + Math.sin(angle) * spawnConfig.offsetPx,
           spawnConfig.enemyKind,
-          { originId: enemy.originId },
+          { originId },
         );
       }
     }
+    });
     return { outcome, died: true, remainingHp: 0, death };
   }
 
@@ -1312,6 +1326,7 @@ export class EnemyManager {
   }
 
   destroy(): void {
+    this.combatActive = false;
     for (const [id, enemy] of this.enemies) {
       this.visualSink?.clearBurrowState(id);
       enemy.destroy();

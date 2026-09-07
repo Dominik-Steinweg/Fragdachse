@@ -95,6 +95,7 @@ function enemyMutationPort(enemy: { id: string; getHp(): number; getMaxHp(): num
   const state = () => ({ kind: 'combatant' as const, hp: enemy.getHp(), maxHp: enemy.getMaxHp(), armor: 0, maxArmor: 0, alive: true });
   return {
     getCombatTargetRef: () => target,
+    completeCombatDeath: () => {},
     readCombatVitals: state,
     commitDamage: (request: TargetDamageMutationRequest) => {
       const before = enemy.getHp();
@@ -501,7 +502,7 @@ describe('CombatSystem actual damage callbacks', () => {
 
     combat.applyDamage(enemy.id, 25, false, 'player', 'test');
 
-    expect(damage).toHaveBeenCalledWith('enemy', enemy.id, 'player', 10, 'direct');
+    expect(damage).toHaveBeenCalledWith('enemy', enemy.id, 'player', 10, 'direct', 'hostile');
   });
 
   it('reports player damage after armor/HP clamping and only one death', () => {
@@ -530,7 +531,7 @@ describe('CombatSystem actual damage callbacks', () => {
     combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
     combat.applyDamage(victim.id, 200, false, 'attacker', 'test');
 
-    expect(damage).toHaveBeenCalledWith('player', victim.id, 'attacker', 105, 'direct');
+    expect(damage).toHaveBeenCalledWith('player', victim.id, 'attacker', 105, 'direct', undefined);
     expect(damageTaken).toHaveBeenCalledWith(victim.id, 'attacker', 100, 5, 'direct');
     expect(death).toHaveBeenCalledOnce();
   });

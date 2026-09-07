@@ -35,6 +35,7 @@ import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { EnemyMovementStatusSystem } from '../systems/EnemyMovementStatusSystem';
 import { PlasmaSwarmReactionSystem } from '../systems/PlasmaCharge';
+import { WorldCombatReactions } from './WorldCombatReactions';
 import { isSameCombatTargetInstance } from '../combat/CombatScope';
 import type { WorldMetrics } from './WorldMetrics';
 import type { WorldScopedBinding } from './WorldRuntime';
@@ -123,6 +124,7 @@ export interface WorldCombatNetworkPort {
     readonly incrementPlayerFrags: (playerId: string) => void;
   };
   readonly effects: {
+    readonly broadcastCoopDefenseXpPopup: (x: number, y: number, xp: number) => void;
     readonly broadcastSlimeBloomEffect: (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
     readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, style?: ExplosionVisualStyle) => void;
     readonly broadcastBfgLaserBatch: (
@@ -256,6 +258,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly bindPlayerShieldBuffPort?: (port: ShieldBuffPort | null) => void;
   readonly network: WorldCombatNetworkPort;
   readonly respawnPlayer: (playerId: string) => boolean;
+  readonly publishRespawn?: (playerId: string) => void;
   readonly getTeamHpRegenBonus?: (playerId: string, nowMs: number) => number;
   readonly getMatrixDamageReduction?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean, nowMs: number) => number;
   readonly getMatrixDamageMultiplier?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean, nowMs: number) => number;
@@ -267,6 +270,7 @@ export interface WorldCombatGameplayBindingOptions {
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly systems: WorldCombatGameplaySystems | null;
   private destroyed = false;
+  private activityGeneration = 0;
 
   constructor(private readonly options: WorldCombatGameplayBindingOptions) {
     const playerCombat = options.getPlayerCombatIntegration();
@@ -308,6 +312,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   /** Removes the Activity projection without touching the World-owned CombatSystem itself. */
   clearActivityBindings(): void {
     if (this.destroyed) return;
+    this.activityGeneration += 1;
+    this.options.combatSystem.invalidatePlayerLifecyclePolicy();
     this.options.combatSystem.setBarrierObstacles(null);
     this.options.getTargetStatusSystem()?.removeTargetsOfType?.('enemy');
     this.options.getEnemyMovementStatusSystem?.()?.clear();
@@ -351,6 +357,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combatSystem.setInitialSpawnAllowedResolver(null);
     combatSystem.setRespawnAllowedResolver(null);
     combatSystem.setRespawnCallback(null);
+    combatSystem.setRespawnCommittedCallback(null);
     combatSystem.setAuthoritativePositionResetCallback(null);
     combatSystem.setPlayerActionAllowedResolver(null);
     combatSystem.setPlayerDamageReductionResolver(null);
@@ -453,6 +460,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.isActivityActive() ? o.network.round.canPlayerRespawn(playerId) : hasWorldFigure(o.getWorldParticipation(playerId))
     ));
     combat.setRespawnCallback((playerId) => o.respawnPlayer(playerId));
+    combat.setRespawnCommittedCallback((playerId) => o.publishRespawn?.(playerId));
     combat.setAuthoritativePositionResetCallback((playerId, x, y) => o.resetPlayerPosition(playerId, x, y));
     combat.setPlayerActionAllowedResolver((playerId) => o.getPlayerCapabilities(playerId).canUseCombat);
     combat.setPlayerDamageReductionResolver((playerId, nowMs) => {
@@ -523,34 +531,22 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.hostUpdate.applyEnergyInjectorTargetHit(impact.targetType, impact.targetId, impact.x, impact.y, impact);
     });
     combat.setHitscanSupportImpactCallback((impact, effect, attackerId, sourceSlot) => o.hostUpdate.applyHitscanSupportImpact(impact, effect, attackerId, sourceSlot));
+    const killReactions = new WorldCombatReactions(o);
     combat.setDirectPrimaryHitHandler((attackerId, enemyId, remainingHp, maxHp, isBoss) => {
-      const reaction = o.getPlayerCombatIntegration()?.reactions;
-      if (!reaction) return;
-      const result = reaction.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss, Date.now());
-      const slow = result;
-      if (slow.slowFraction > 0) combat.applyEnemySlow(enemyId, slow.slowFraction, slow.slowDurationMs);
-      if (result.shouldCull) {
-        combat.applyDamage(enemyId, remainingHp, false, attackerId, 'Hinrichtung', undefined, {
-          damageKind: 'direct', sourceSlot: 'weapon1', allowCritical: false, skipLifeLeech: true,
-        });
-      }
+      const generation = this.activityGeneration;
+      killReactions.handleDirectPrimaryHit(attackerId, enemyId, remainingHp, maxHp, isBoss, combat.getHostTime(),
+        () => !this.destroyed && generation === this.activityGeneration);
     });
     combat.setPlayerDamageTakenHandler((playerId, attackerId, hpLost, armorLost, damageKind) => {
-      o.network.stats.recordPlayerDamageTaken(playerId, hpLost, armorLost);
-      const playerCombat = o.getPlayerCombatIntegration();
-      const reaction = playerCombat?.reactions;
-      if (!reaction) return;
-      const result = reaction.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, Date.now());
-      if (result.adrenalineGain > 0) playerCombat?.resource.addAdrenaline(playerId, result.adrenalineGain);
-      if (result.reflectedDamage > 0 && result.reflectTargetId) {
-        combat.applyDamage(result.reflectTargetId, result.reflectedDamage, false, playerId, 'Dornenplatten', undefined, { damageKind: 'reflect', allowCritical: false });
-      }
+      const generation = this.activityGeneration;
+      killReactions.handlePlayerDamageTaken(playerId, attackerId, hpLost, armorLost, damageKind, combat.getHostTime(),
+        () => !this.destroyed && generation === this.activityGeneration);
     });
-    combat.setDamageDealtHandler((targetType, targetId, attackerId, damage) => {
+    combat.setDamageDealtHandler((targetType, targetId, attackerId, damage, _kind, targetFaction) => {
       if (!o.network.authority.isHost() || !attackerId || attackerId === targetId || damage <= 0) return;
       if (!o.network.authority.getPlayerProfile(attackerId)) return;
       if (targetType === 'enemy') {
-        if (o.getEnemyManager()?.getEnemy(targetId)?.faction !== 'hostile') return;
+        if (targetFaction !== 'hostile') return;
       } else if (o.isCoopMission() || !o.network.authority.isEnemyPair(attackerId, targetId)) return;
       o.network.stats.addPlayerRoomDamage(attackerId, damage);
     });
@@ -562,16 +558,21 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       combat.getEnemyMovementFactor(enemyId, now),
     ));
     combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death) => {
-      const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death) ?? false) : false;
+      const generation = this.activityGeneration;
+      const current = () => !this.destroyed && generation === this.activityGeneration;
+      const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
+      if (!current()) return true;
       if (wasTimebomb) {
         o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
         o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
         o.getPlayerCombatIntegration()?.reactions.removeEnemy(enemyId);
         return true;
       }
-      const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources, Date.now()) ?? null;
+      const burst = o.getPlayerCombatIntegration()?.reactions.handleEnemyDeath(enemyId, x, y, burnSources, combat.getHostTime()) ?? null;
+      if (!current()) return true;
       if (burst) o.network.effects.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets);
       if (death) o.getNecromancySystem()?.recordEnemyDeath(death);
+      if (!current()) return true;
       o.getTargetStatusSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
       o.getEnergyInjectorSystem()?.removeTarget({ targetType: 'enemy', targetId: enemyId });
       return false;
@@ -596,66 +597,25 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setPlayerImpulseCallback((playerId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(playerId, vx, vy, durationMs, sourcePlayerId));
     combat.setEnemyImpulseCallback((enemyId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId));
     combat.setDeathCallback((playerId, x, y) => {
-      o.network.stats.recordPlayerDeath(playerId);
+      const generation = this.activityGeneration;
+      const current = () => !this.destroyed && generation === this.activityGeneration;
       o.handlePlayerUnavailable(playerId);
+      if (!current()) return;
       o.handlePlayerDeath(playerId);
+      if (!current()) return;
       o.getPlayerCombatIntegration()?.reactions.handlePlayerDeath(playerId, x, y);
+      if (!current()) return;
       o.dropCarryForPlayer(playerId, x, y);
+      if (!current()) return;
       o.dropBeer(playerId, x, y);
+      if (!current()) return;
+      o.network.stats.recordPlayerDeath(playerId);
       o.gameAudioSystem.playSound('sfx_player_death', x, y);
     });
     combat.setKillCallback((killerId, victimId, sourceId, x, y, source) => {
-      const killerProfile = o.network.authority.getPlayerProfile(killerId);
-      if (killerProfile) {
-        if (o.network.authority.getPlayerProfile(victimId)
-          && o.network.authority.isEnemyPair(killerId, victimId)) {
-          o.network.stats.recordPlayerKill(killerId, 'pvp');
-        } else if (o.getEnemyManager()?.getEnemy(victimId)?.faction === 'hostile') {
-          o.network.stats.recordPlayerKill(killerId, 'pve');
-        }
-      }
-      o.getPlayerCombatIntegration()?.reactions.registerKill({ killerId, victimId, sourceId, x, y, source });
-      if (o.isCoopMission() && (source?.enemyXp ?? 0) > 0 && o.network.authority.isHost()) {
-        if (killerProfile) {
-          o.getPlayerCombatIntegration()?.reactions.handleCoopDefenseItemKill(killerId, victimId, x, y, Date.now());
-        }
-        o.getPowerUpSystem()?.onCoopDefenseEnemyKilled(killerId, source?.enemyXp ?? 0, x, y);
-        for (const profile of o.network.authority.getConnectedPlayers()) {
-          const playerCombat = o.getPlayerCombatIntegration();
-          const gain = playerCombat?.modifier.getClassDefinition(profile.id)?.adrenalinePerEnemyDeath ?? 0;
-          if (gain > 0) playerCombat?.resource.addAdrenaline(profile.id, gain);
-        }
-      }
-      const allowKillDrop = o.isActivityActive() && !o.isCoopMission();
-      if (killerId === '__train__' || killerId === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID) {
-        if (killerId === '__train__' && allowKillDrop) o.getPowerUpSystem()?.onPlayerKilled(x, y);
-        const victimProfile = o.network.authority.getConnectedPlayers().find(profile => profile.id === victimId);
-        if (victimProfile) o.network.effects.broadcastKillEvent({
-          killerId,
-          killerName: killerId === '__train__' ? 'RB 54' : 'Zombie-Bomber',
-          killerColor: killerId === '__train__' ? 0xcf573c : 0xff9933,
-          sourceId: killerId === '__train__' ? 'environment.train_push' : 'environment.airstrike',
-          victimId,
-          victimName: victimProfile.name,
-          victimColor: victimProfile.colorHex,
-        });
-        return;
-      }
-      const profiles = o.network.authority.getConnectedPlayers();
-      const victimProfile = profiles.find(profile => profile.id === victimId);
-      if (victimProfile) o.network.stats.incrementPlayerFrags(killerId);
-      if (killerProfile && victimProfile) {
-        o.network.effects.broadcastKillEvent({
-          killerId,
-          killerName: killerProfile.name,
-          killerColor: killerProfile.colorHex,
-          sourceId,
-          victimId,
-          victimName: victimProfile.name,
-          victimColor: victimProfile.colorHex,
-        });
-        if (allowKillDrop) o.getPowerUpSystem()?.onPlayerKilled(x, y);
-      }
+      const generation = this.activityGeneration;
+      killReactions.handleKill(killerId, victimId, sourceId, x, y, source,
+        () => !this.destroyed && generation === this.activityGeneration);
     });
     o.projectileEvents.setProjectileImpactCallback((projectile: ProjectileImpactSource) => o.spawnImpactCloud(projectile));
     hostPhysics.setEnemyManager(o.getEnemyManager());

@@ -8,7 +8,7 @@ import { DecoyEntity } from '../entities/DecoyEntity';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { CombatDamageMutationOutcome, TargetDamageMutationRequest } from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
-import type { CombatScope, CombatTargetRef } from '../combat/CombatScope';
+import type { CombatScope, CombatSource, CombatTargetRef } from '../combat/CombatScope';
 import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
 
 type CombatStateReader = {
@@ -351,6 +351,7 @@ export class DecoySystem {
     attackerId?: string,
     sourceId?: string,
     visualContext?: { sourceX?: number; sourceY?: number; dirX?: number; dirY?: number },
+    source?: CombatSource,
   ): CombatDamageMutationOutcome {
     const decoy = this.hostDecoys.get(decoyId);
     const target = this.getCombatTargetRef(decoyId) ?? Object.freeze({
@@ -362,7 +363,7 @@ export class DecoySystem {
     return this.commitDamage({
       outcomeId: `legacy:decoy:${decoyId}:${++this.mutationOutcomeSequence}`,
       target,
-      source: {
+      source: source ?? {
         gameplaySource: { kind: 'player', id: attackerId ?? 'legacy-combat' },
         attribution: { kind: 'player', id: attackerId ?? 'legacy-combat' },
         allegiance: { ownerId: attackerId ?? 'world' },
@@ -371,7 +372,7 @@ export class DecoySystem {
       },
       damage: {
         amount,
-        damageKind: 'direct',
+        damageKind: source?.origin === 'support' ? 'direct' : source?.origin ?? 'direct',
         basis: { kind: 'authored', amount },
         sourceFactors: [],
         targetFactors: [],

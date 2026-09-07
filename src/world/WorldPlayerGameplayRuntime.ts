@@ -753,13 +753,12 @@ export class WorldPlayerGameplayRuntime implements
           systems.negevBehavior.registerKill({ killerId: outcome.killerId, sourceId: outcome.sourceId });
           systems.weaponReaction.registerKill(outcome);
         },
-        handleCoopDefenseItemKill: (killerId, victimId, x, y, nowMs) => {
+        handleCoopDefenseItemKill: (killerId, _victimId, x, y, nowMs, origin) => {
           // Nur der tatsaechliche Killer, nicht das ganze Team, bekommt die Kill-Affixe.
           systems.itemRuntime.registerOwnKill(killerId, nowMs);
 
           // Brandzerfall verlangt einen Kill durch direkten Primaerwaffenschaden; Explosionen,
           // Brand, Kettenblitze und Bodenflaechen loesen ihn nicht aus.
-          const origin = this.options.combatSystem.getLastDamageOrigin(victimId);
           if (origin?.kind !== 'direct' || origin.slot !== 'weapon1') return;
           if (!systems.itemRuntime.rollFireChunksOnKill(killerId)) return;
           systems.flamethrowerUpgrade?.hostCreateFireChunkBurst(killerId, x, y, {
