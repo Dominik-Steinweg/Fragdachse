@@ -88,7 +88,7 @@ vi.mock('phaser', () => {
   };
 });
 
-import { CombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 import { createWorldGeometryQueries } from '../src/world/WorldGeometryQueries';
 import * as Phaser from 'phaser';

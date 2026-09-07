@@ -19,7 +19,7 @@ import { preloadTurretVisualAssets } from '../config/turretVisuals';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { InputSystem }           from '../systems/InputSystem';
 import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
-import { CombatSystem }          from '../systems/CombatSystem';
+import { WorldCombatCore }          from '../combat/WorldCombatCore';
 import { DecoySystem }           from '../systems/DecoySystem';
 import { EffectSystem }          from '../effects/EffectSystem';
 import { VisualFeedbackDirector } from '../effects/VisualFeedbackDirector';
@@ -799,15 +799,10 @@ export class ArenaScene extends Phaser.Scene {
     arenaCountdown.setAudioSystem(gameAudioSystem);
 
     // ── Assemble ArenaContext ──────────────────────────────────────────────
-    const getCombatSystem = (): CombatSystem | null => this.arenaRuntime?.getCombatSystem() ?? null;
+    const getWorldCombatCore = (): WorldCombatCore | null => this.arenaRuntime?.getWorldCombatCore() ?? null;
     this.ctx = {
       playerManager, effectSystem,
-      getCombatSystem,
-      get combatSystem(): CombatSystem {
-        const combat = getCombatSystem();
-        if (!combat) throw new Error('[ArenaContext] Combat runtime is not active');
-        return combat;
-      },
+      getWorldCombatCore,
       getProjectileRuntime: () => this.arenaRuntime?.getWorldProjectileRuntime() ?? null,
       visualFeedback: this.visualFeedback,
       gameAudioSystem,
@@ -1040,7 +1035,7 @@ export class ArenaScene extends Phaser.Scene {
       this.ctx.centerHUD,
       this.ctx.playerManager,
       this.ctx.hostPhysics,
-      () => this.ctx.getCombatSystem(),
+      () => this.ctx.getWorldCombatCore(),
       this.ctx.decoySystem,
       this.ctx.effectSystem,
       this.ctx.visualFeedback,
@@ -1584,7 +1579,7 @@ export class ArenaScene extends Phaser.Scene {
         // Initial spawn is part of the hidden local build. It must happen before the first
         // residency check so the startup working set follows the actual local player focus.
         this.arenaRuntime.spawnReadyPlayers();
-        this.localPlayerState.alive = this.ctx.combatSystem.isAlive(bridge.getLocalPlayerId());
+        this.localPlayerState.alive = this.ctx.getWorldCombatCore()!.isAlive(bridge.getLocalPlayerId());
       } else if (arenaLoading || countdownActive) {
         // The client receives the first authoritative alive bit with the first post-start
         // snapshot; the local prepared entity is nevertheless a valid camera focus meanwhile.
@@ -2287,7 +2282,7 @@ export class ArenaScene extends Phaser.Scene {
       worldMetrics?.heightPx ?? ARENA_HEIGHT,
     );
     this.syncMainCameraBounds();
-    this.ctx?.combatSystem.setWorldMetrics(worldMetrics);
+    this.ctx?.getWorldCombatCore()!.setWorldMetrics(worldMetrics);
   }
 
   /**
@@ -2376,7 +2371,7 @@ export class ArenaScene extends Phaser.Scene {
     const localWounded = inArena
       && !this.localPlayerState.spectator
       && !bridge.isLocalSpectator()
-      && (this.ctx?.combatSystem.isAlive(localId) ?? false);
+      && (this.ctx?.getWorldCombatCore()!.isAlive(localId) ?? false);
 
     return {
       skyState: resolveSkyState(minutes),
@@ -2566,7 +2561,7 @@ export class ArenaScene extends Phaser.Scene {
     const roundState = bridge.getRoundState();
     if (!roundState || roundState.coopDefenseHumanPlayerCount !== 1) return;
     const localPlayerId = bridge.getLocalPlayerId();
-    const localPlayerState = this.ctx.combatSystem;
+    const localPlayerState = this.ctx.getWorldCombatCore()!;
     const baseSummary = this.arenaRuntime?.getCoopDefenseBaseHpSummary() ?? {
       ownBase: null,
       hostileBase: null,

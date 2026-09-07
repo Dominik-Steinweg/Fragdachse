@@ -23,7 +23,7 @@ import type { PlayerManager } from '../src/entities/PlayerManager';
 import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { ArmageddonSystem } from '../src/systems/ArmageddonSystem';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { CoopDefenseEnemyBurrowSystem } from '../src/systems/CoopDefenseEnemyBurrowSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';
 import {

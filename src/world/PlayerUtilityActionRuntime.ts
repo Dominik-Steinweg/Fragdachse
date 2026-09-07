@@ -28,7 +28,6 @@ import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
 import { PLAYER_SIZE, COLORS, type MuzzleOrigin } from '../config';
 import type {
   CombatImmediateAttackPort,
-  CombatLegacyMeleeAttackPort,
 } from '../combat/CombatCapabilities';
 import type { MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 import type { DecoySystem } from '../systems/DecoySystem';
@@ -94,7 +93,7 @@ export interface PlayerUtilityActionNetworkPort {
 export interface PlayerUtilityActionRuntimeOptions {
   readonly projectileSpawn: ProjectileSpawnPort;
   /** Immediate attacks use the same normalized capability as regular weapon execution. */
-  readonly combatSystem: Partial<CombatLegacyMeleeAttackPort> & Partial<CombatImmediateAttackPort>;
+  readonly combatSystem: CombatImmediateAttackPort;
   readonly actor: UtilityActorPort;
   readonly loadout: UtilityLoadoutPort;
   readonly heldAction: UtilityHeldActionPort;
@@ -613,26 +612,13 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         ? { count: cfg.chainCount ?? 0, radius: cfg.chainRadius ?? 0, damageFactor: cfg.chainDamageFactor ?? 0 }
         : undefined,
     };
-    if (this.options.combatSystem.resolveImmediateAttack) {
-      return this.options.combatSystem.resolveImmediateAttack({
-        kind: 'melee',
-        payload: request,
-        origin: { x, y },
-        aim: { x: Math.cos(angle), y: Math.sin(angle) },
-        range: cfg.range,
-      }).accepted;
-    }
-    // Compatibility for isolated utility test doubles; the composed World uses the port above.
-    if (!this.options.combatSystem.resolveMeleeSwing) return false;
-    return this.options.combatSystem.resolveMeleeSwing(
-      playerId, x, y, angle, cfg.range, cfg.hitArcDegrees, cfg.damage, 0, cfg.id, playerColor,
-      undefined, cfg.rockDamageMult ?? 1, cfg.trainDamageMult ?? 1, cfg.visualPreset,
-      cfg.shotAudio?.successKey, undefined,
-      (cfg.chainCount ?? 0) > 0
-        ? { count: cfg.chainCount ?? 0, radius: cfg.chainRadius ?? 0, damageFactor: cfg.chainDamageFactor ?? 0 }
-        : undefined,
-      undefined, undefined, 1, undefined, cfg.baseDamageMult ?? 1,
-    );
+    return this.options.combatSystem.resolveImmediateAttack({
+      kind: 'melee',
+      payload: request,
+      origin: { x, y },
+      aim: { x: Math.cos(angle), y: Math.sin(angle) },
+      range: cfg.range,
+    }).accepted;
   }
 
   private buildGrenadeEffect(cfg: UtilityConfig, playerColor?: number) {

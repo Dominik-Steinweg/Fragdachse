@@ -8,15 +8,15 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P11 abgeschlossen, P12 als Nächstes |
+| Gesamtstatus | Block C aktiv; P12 abgeschlossen, P13 als Nächstes |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P12 Legacy entfernen, Ratchets/Wissen abgleichen und Gate L prüfen |
+| Nächster Arbeitsschritt | P13 unabhängiger Architekturabschluss und Gate F |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | Keine; P12 wird nach P11-Checkpoint gestartet |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `63df8803` |
-| Start-HEAD der laufenden Aufgabe | `63df8803` |
-| Aktiver Worker / Thread | Keiner; P12 erhält einen frischen Luna-/xhigh-Worker |
+| Aktive Phase / Aufgabe | Keine; P13 wird nach P12-Checkpoint gestartet |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `6f8fc6ad` |
+| Start-HEAD der laufenden Aufgabe | `6f8fc6ad` |
+| Aktiver Worker / Thread | Keiner; P13 erhält einen frischen Astra-/High-Reviewer |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
 | Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
@@ -47,7 +47,7 @@
 | P9 | C | ✅ | World-Mutation / Domain-Fan-out |
 | P10 | C | ✅ | Verbleibende Consumer |
 | P11 | C | ✅ | Gesamtgraph / Frame / Network / Presentation |
-| P12 | C | ⬜ | Legacy-Entfernung / Ratchets / Wissen |
+| P12 | C | ✅ | Legacy-Entfernung / Ratchets / Wissen |
 | P13 | C | ⬜ | Unabhängiger Abschluss / technisches Gate F |
 | M | Nutzer | ⬜ | Gebündelte Gameplay-/Sichtabnahme |
 
@@ -68,28 +68,25 @@
 - `WorldObjectMutationRuntime` dedupliziert World-Aliase und projiziert atomare Owner-Outcomes; Rock-/Construction-/Base-/Train-HP, Removal und Cleanup bleiben bei den fachlichen Ownern, während `RockVisualHelper` nur noch präsentiert.
 - Gameplay-Consumer hängen an expliziten Actor-/Relationship-/Geometry-/Damage-/Support-/Modifier-/Status-Slices; Burrow nutzt die World-Geometrie und lehnt einen Exit ohne gebundenen Query-Port fail-closed ab.
 - Combat-Kern und `WorldCombatRuntime` entstehen einmal pro lokaler World im Build→Bind→Activate-Ablauf; Scope-Generation und identitätsgesicherte Leases machen Rebuild/Teardown stale-sicher. Host-Frame und Combat-RPCs verwenden synchronisierte Host-Zeit bei erhaltener Stage-Reihenfolge.
+- `WorldCombatCore` ersetzt den produktiven `CombatSystem`; Scene-Slot, Legacy-Ports, optionale Attack-Fallbacks und tote Attribution-Maps sind entfernt. Architektur-/Gameplay-/Networking-Wissen und Syntax-Ratchet halten die verifizierten Grenzen fest.
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P11 sind realisiert. Offen sind ausschließlich die geplante P12-Legacy-/Ratchet-Bereinigung und danach P13; kein bekannter produktiver Blocker.
+P1–P12 sind realisiert. Offen ist ausschließlich P13; kein bekannter produktiver Blocker.
 
 ## 5. Nachweise und Reviews
 
 **P0/P1:** Baseline-Matrix grün; P1 Fokus 43/43, Integration 175/175, Typecheck/Diff-Check grün; R1 nach Korrekturen bestanden.
 
-**P2–P6 Gates L:** jeweilige Fokus-/Integrationssuiten, Architektur, TypeScript, Build, Writer- und Diff-Audits grün; Details in den Phasen-Commits.
+**P2–P6 Gates L:** Fokus/Integration, Architektur, TypeScript, Build und Writer-Audits grün.
 
 **R2:** bestanden auf `b74a1b07`; 133/133 Fokus, 201/201 Integration und 32/32 Architektur grün; keine reproduzierbaren P2–P6-Stopper.
 
-**P7-Gate L:** Fokus 63/63, Check 2781 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 57/57, TypeScript/Diff-Check grün.
-
-**P8-Gate L:** Fokus 27/27 und Melee-Regression 18/18, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25, TypeScript/Diff-Check grün.
-
-**P9-Gate L:** Headless-Integration 3/3, Fokus 54/54, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 27/27, TypeScript/Writer-/Diff-Check grün.
-
-**P10-Gate L:** Fokus 171/171 einschließlich V3/V9/V12, Check 2786 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 55/55, TypeScript/RG-/Diff-Check grün.
+**P7–P10 Gates L:** jeweilige Fokus-/Regressionstests, vollständiger Check, TypeScript-, Writer- und Diff-Audits grün; genaue Zahlen stehen in den Phasencommits.
 
 **P11-Gate L:** Fokus 87/87, RPC 11/11, Headless-Integration 89/89, Check 2789 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25 sowie Ownership-/Zeit-/Stage-/Diff-Ratchets grün.
+
+**P12-Gate L:** Check 2789 Core/33 Architektur/Build, Integration 204 und Balance-Lab 94 grün; Orchestrator-Stichprobe 41/41 plus Architektur 33/33, Legacy-/Writer-/Diff-Audits grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

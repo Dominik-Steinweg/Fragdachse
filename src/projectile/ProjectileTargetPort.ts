@@ -118,7 +118,7 @@ export interface ProjectileWorldBlockerPort {
 /**
  * Targetability: darf dieses Projectile dieses Ziel überhaupt treffen?
  *
- * Die Beziehungsentscheidung bleibt beim kanonischen Owner; die Runtime kennt weder `CombatSystem`
+ * Die Beziehungsentscheidung bleibt beim kanonischen Owner; die Runtime kennt weder `WorldCombatCore`
  * noch `NetworkBridge`.
  */
 export interface ProjectileTargetabilityPort {

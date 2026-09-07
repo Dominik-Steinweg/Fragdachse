@@ -14,7 +14,7 @@ vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
   SpawnEffectRenderer: class { setLightingSystem() {} play() {} },
 }));
 import { EnemyManager } from '../../src/entities/EnemyManager';
-import { CombatSystem } from '../../src/systems/CombatSystem';
+import { WorldCombatCore as CombatSystem } from '../../src/combat/WorldCombatCore';
 import { WorldCombatReactions } from '../../src/world/WorldCombatReactions';
 import { WorldCombatGameplayBinding } from '../../src/world/WorldCombatGameplayBinding';
 import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
@@ -220,14 +220,12 @@ describe('World HP consumer boundaries', () => {
     const oldOutcome = combat.applyDamage('e1', 40, false, 'old-attacker', 'old-weapon');
     expect(oldOutcome).toMatchObject({ actualDamage: 40, transition: { kind: 'dead' } });
     expect(manager.getEnemy('e1')!.getHp()).toBe(90);
-    expect(combat.getLastDamageOrigin('e1')).toEqual({ kind: 'direct', slot: 'weapon1' });
     const newOutcome = combat.applyDamage('e1', 100, false);
     expect(newOutcome).toMatchObject({ actualDamage: 90, transition: { kind: 'dead' } });
     expect(kills.mock.calls.map(call => (call as unknown[]).slice(0, 3))).toEqual([
       ['old-attacker', 'e1', 'old-weapon'], ['new-attacker', 'e1', 'new-weapon'],
     ]);
     expect(observed.mock.calls.map(call => call[0].damage)).toEqual([10, 40, 90]);
-    expect(combat.getLastDamageOrigin('e1')).toBeUndefined();
     manager.destroy();
   });
 

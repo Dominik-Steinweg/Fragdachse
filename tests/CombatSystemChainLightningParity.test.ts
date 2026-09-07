@@ -23,7 +23,7 @@ vi.mock('phaser', () => {
   };
 });
 
-import { CombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 
 describe('CombatSystem Chain Lightning – Runtime/Shared Resolver Parity', () => {
   it('keeps primary exclusion, nearest-first tie order, 1-based falloff, chain damage kind and resources', () => {

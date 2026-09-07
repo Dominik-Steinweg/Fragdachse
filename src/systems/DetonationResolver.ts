@@ -4,7 +4,7 @@ import type { DetonationEvent } from './DetonationSystem';
 /**
  * Wirkungen, die eine ausgelöste Detonation nach sich zieht.
  *
- * Das Gameplay füllt diese Grenze mit `CombatSystem`, `HostPhysicsSystem`, dem replizierten
+ * Das Gameplay füllt diese Grenze mit `WorldCombatCore`, `HostPhysicsSystem`, dem replizierten
  * Explosionskanal und dem Ressourcensystem; der Ablauf selbst – Reihenfolge, Verrechnung der
  * optionalen Felder und Farbwahl – liegt ausschließlich im Resolver, damit es keinen zweiten
  * Detonationspfad mit abweichender Reihenfolge gibt.

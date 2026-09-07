@@ -31,7 +31,7 @@ import {
   type PlaceableTurretUtilityConfig,
 } from '../src/loadout/LoadoutConfig';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
-import { CombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { TurretSystem } from '../src/systems/TurretSystem';
 
 describe('hostile base turrets', () => {

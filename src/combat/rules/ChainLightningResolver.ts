@@ -55,7 +55,7 @@ export interface ChainLightningResolution {
  * Die erste Auswahl beginnt am echten Aufschlagspunkt. Pro Sprung wird das erste
  * sichtbare Ziel mit der kleinsten Distanz gewählt; bei Distanzgleichheit gewinnt die
  * zuerst gelieferte Runtime-Reihenfolge (`<`, nicht `<=`). Dadurch bleibt die bisherige
- * CombatSystem-Tie-Semantik bei der Extraktion unverändert. VFX, Damage-Pipeline,
+ * WorldCombatCore-Tie-Semantik bei der Extraktion unverändert. VFX, Damage-Pipeline,
  * Ressourcen und Zielerfassung bleiben vollständig beim Aufrufer.
  */
 export function resolveChainLightning(

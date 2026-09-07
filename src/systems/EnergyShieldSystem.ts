@@ -59,7 +59,7 @@ export class EnergyShieldSystem {
     private readonly shieldBuffSystem: ShieldBuffSystem,
   ) {}
 
-  setCombatSystem(system: CombatPlayerSupportPort | null): void { this.combatSystem = system; }
+  setWorldCombatCore(system: CombatPlayerSupportPort | null): void { this.combatSystem = system; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   setWeaponUsageBlockedChecker(checker: ((playerId: string) => boolean) | null): void {

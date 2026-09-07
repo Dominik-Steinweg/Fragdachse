@@ -13,7 +13,7 @@ import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';

@@ -16,19 +16,21 @@ import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRe
 
 function createManagerWithSpawnSpy() {
   const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 42);
-  const resolveHitscanShot = vi.fn(() => true);
-  const resolveMeleeSwing = vi.fn(() => true);
+  const resolveImmediateAttack = vi.fn(() => ({ accepted: true }));
   const sharedExecution = new WorldWeaponExecutionRuntime({
     projectileSpawn: { spawnProjectile },
-    combatSystem: { resolveHitscanShot, resolveMeleeSwing },
+    combatSystem: {
+      resolveSafeHitscanStart: vi.fn((_shooterX, _shooterY, startX, startY) => ({ x: startX, y: startY })),
+      resolveImmediateAttack,
+    },
   });
   const adapter = new AutomatedWeaponExecutionAdapter(sharedExecution, { spawnProjectile });
-  return { adapter, spawnProjectile, resolveHitscanShot };
+  return { adapter, spawnProjectile, resolveImmediateAttack };
 }
 
 describe('inspector support weapons', () => {
   it('fires the Plasmabrenner as a continuous, context-sensitive hitscan', () => {
-    const { adapter, spawnProjectile, resolveHitscanShot } = createManagerWithSpawnSpy();
+    const { adapter, spawnProjectile, resolveImmediateAttack } = createManagerWithSpawnSpy();
     const productionConfig = WEAPON_CONFIGS.PLASMA_BURNER;
 
     expect(getLoadoutItemName(productionConfig.id, 'de').trim().length).toBeGreaterThan(0);
@@ -72,18 +74,19 @@ describe('inspector support weapons', () => {
     )).toBe(true);
 
     expect(spawnProjectile).not.toHaveBeenCalled();
-    const call = resolveHitscanShot.mock.calls[0];
-    expect(call?.[4]).toBe(testConfig.range);
-    expect(call?.[5]).toBe(testConfig.damage);
-    expect(call?.[6]).toBe(testConfig.fire.traceThickness);
-    expect(call?.[8]).toBe(testConfig.adrenalinGain);
-    expect(call?.[9]).toBe(testConfig.id);
-    expect(call?.[10]).toBe(testConfig.fire.visualPreset);
-    expect(call?.[19]).toEqual(supportEffect);
+    const call = resolveImmediateAttack.mock.calls[0]?.[0];
+    expect(call?.kind).toBe('hitscan');
+    expect(call?.payload.range).toBe(testConfig.range);
+    expect(call?.payload.damage).toBe(testConfig.damage);
+    expect(call?.payload.traceThickness).toBe(testConfig.fire.traceThickness);
+    expect(call?.payload.adrenalinGain).toBe(testConfig.adrenalinGain);
+    expect(call?.payload.sourceId).toBe(testConfig.id);
+    expect(call?.payload.visualPreset).toBe(testConfig.fire.visualPreset);
+    expect(call?.payload.supportEffect).toEqual(supportEffect);
   });
 
   it('limits the Plasmabrenner trace to the cursor while retaining its maximum range', () => {
-    const { adapter, resolveHitscanShot } = createManagerWithSpawnSpy();
+    const { adapter, resolveImmediateAttack } = createManagerWithSpawnSpy();
     const config = WEAPON_CONFIGS.PLASMA_BURNER;
     const startX = 100;
     const startY = 200;
@@ -94,7 +97,10 @@ describe('inspector support weapons', () => {
     const secondAdapter = new AutomatedWeaponExecutionAdapter(
       new WorldWeaponExecutionRuntime({
         projectileSpawn: { spawnProjectile: vi.fn() },
-        combatSystem: { resolveHitscanShot, resolveMeleeSwing: vi.fn(() => true) },
+        combatSystem: {
+          resolveSafeHitscanStart: vi.fn((_shooterX, _shooterY, x, y) => ({ x, y })),
+          resolveImmediateAttack,
+        },
       }),
       { spawnProjectile: vi.fn() },
     );
@@ -103,7 +109,8 @@ describe('inspector support weapons', () => {
       x: startX, y: startY, angle, targetX: cursorX, targetY: startY,
       ownerId: 'inspector', ownerColor: 0x22cc88,
     });
-    expect(resolveHitscanShot.mock.calls[0]?.[4]).toBeCloseTo(cursorX - muzzle.x, 10);
+    expect(resolveImmediateAttack.mock.calls[0]?.[0].kind).toBe('hitscan');
+    expect(resolveImmediateAttack.mock.calls[0]?.[0].payload.range).toBeCloseTo(cursorX - muzzle.x, 10);
 
     secondAdapter.fire(
       config,
@@ -112,7 +119,7 @@ describe('inspector support weapons', () => {
         ownerId: 'inspector', ownerColor: 0x22cc88,
       },
     );
-    expect(resolveHitscanShot.mock.calls[1]?.[4]).toBe(config.range);
+    expect(resolveImmediateAttack.mock.calls[1]?.[0].payload.range).toBe(config.range);
   });
 
   it('fires the energy injector as a precise non-homing projectile', () => {

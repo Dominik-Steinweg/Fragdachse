@@ -21,7 +21,7 @@ import type { WorldMetrics } from '../../world/WorldMetrics';
 import type { WorldDescriptor } from '../../world/WorldDescriptor';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
 import type { EnemyVisualSource } from '../../entities/EnemyVisualSource';
-import type { CombatSystem } from '../../systems/CombatSystem';
+import type { WorldCombatCore } from '../../combat/WorldCombatCore';
 import type {
   ArenaLayout,
   SyncedReinforcementMatrix,
@@ -596,8 +596,8 @@ export class ArenaRuntime {
   }
 
   /** Current world-owned Combat core; null during World handoff or before materialization. */
-  getCombatSystem(): CombatSystem | null {
-    return this.flow.getWorldCombatSystem();
+  getWorldCombatCore(): WorldCombatCore | null {
+    return this.flow.getWorldCombatCore();
   }
 
   getWorldLayout(): ArenaLayout | null {

@@ -12,7 +12,7 @@ import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CoopDefenseClassDefinition } from '../config/coopDefenseClasses';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 
-/** The resource operations that the legacy CombatSystem and world effects actually require. */
+/** The resource operations that the legacy WorldCombatCore and world effects actually require. */
 export type PlayerCombatResourcePort = Pick<
   ResourceSystem,
   'getAdrenaline'

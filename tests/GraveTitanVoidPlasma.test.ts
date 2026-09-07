@@ -21,7 +21,7 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { AutomatedWeaponExecution } from '../src/world/AutomatedWeaponExecutionAdapter';
 
 const TITAN = getCoopDefenseEnemyConfig('grave-titan');

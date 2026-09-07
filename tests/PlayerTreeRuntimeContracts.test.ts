@@ -173,7 +173,7 @@ describe('PlayerEntity – das Sprite ist keine Runtime-API mehr', () => {
   });
 
   it('entscheidet Treffer nicht mehr ueber das Anzeigemass', () => {
-    const combat = read('src/systems/CombatSystem.ts');
+    const combat = read('src/combat/WorldCombatCore.ts');
     expect(combat).toContain('interface HitscanTarget {');
     expect(combat).toContain('readonly hitRadius: number;');
     expect(combat).toContain('const baseRadius = target.hitRadius + traceThickness * 0.5;');
@@ -185,7 +185,7 @@ describe('Simulation greift auf kein Figuren-Sprite mehr zu', () => {
   /** Module, die die autoritative Simulation tragen. */
   const SIMULATION_MODULES = [
     'src/systems/HostPhysicsSystem.ts',
-    'src/systems/CombatSystem.ts',
+    'src/combat/WorldCombatCore.ts',
     'src/systems/TranslocatorSystem.ts',
     'src/systems/TunnelSystem.ts',
     'src/systems/CoopDefenseCarrySystem.ts',
@@ -207,7 +207,7 @@ describe('Simulation greift auf kein Figuren-Sprite mehr zu', () => {
     expect(source).toContain('get displayObject(): Phaser.GameObjects.Sprite | null {');
     // Der Todeseffekt ist Darstellung und wird von der Entity beantwortet, nicht abgegriffen.
     expect(source).toContain('getDeathVisual(): PlayerDeathVisual {');
-    expect(read('src/systems/CombatSystem.ts')).toContain('player?.getDeathVisual()');
+    expect(read('src/combat/WorldCombatCore.ts')).toContain('player?.getDeathVisual()');
   });
 });
 
@@ -236,7 +236,7 @@ describe('Baeume – Runtime und Darstellung getrennt', () => {
     expect(binding).toContain('combatSystem.setArenaObstacles(arena.rockPhysicsProxies, arena.trunkBodies)');
     expect(binding).toContain('trunks: () => this.input.arena.trunkBodies');
     // Und beide Indices sprechen denselben Geometrie-Vertrag.
-    expect(read('src/systems/CombatSystem.ts'))
+    expect(read('src/combat/WorldCombatCore.ts'))
       .toContain('private trunkObjects: readonly ObstacleCircleBody[] | null = null;');
     expect(read('src/effects/LightOccluderIndex.ts'))
       .toContain('readonly trunks: () => readonly ObstacleCircleBody[] | null;');

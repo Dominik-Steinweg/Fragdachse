@@ -28,7 +28,7 @@ import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
-import type { CombatSystem, HitscanSupportImpact } from '../systems/CombatSystem';
+import type { WorldCombatCore, HitscanSupportImpact } from '../combat/WorldCombatCore';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { BurrowSystem } from '../systems/BurrowSystem';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
@@ -201,7 +201,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly projectileSwarm: ProjectileSwarmReactionPort;
   /** Bindet Ziel-, Blocker-, Barrier- und Direct-Impact-Grenzen an den Projectile-Owner. */
   readonly projectileInteraction: ProjectileInteractionBinding;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: WorldCombatCore;
   readonly hostPhysics: HostPhysicsSystem;
   readonly decoySystem: DecoySystem;
   readonly fireSystem: FireSystem;
@@ -238,7 +238,7 @@ export interface WorldCombatGameplayBindingOptions {
   readonly reportTargetDestroyed: (objectiveId: string, baseId: string) => number;
   readonly reconcilePersistentBaseWorld: () => void;
   readonly syncActiveBaseIds: () => void;
-  readonly getMissionBarrierObstacles: () => Parameters<CombatSystem['setBarrierObstacles']>[0];
+  readonly getMissionBarrierObstacles: () => Parameters<WorldCombatCore['setBarrierObstacles']>[0];
   readonly getRockTargets: () => readonly {
     id?: number;
     index: number;
@@ -325,13 +325,13 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.systems?.energyShield.setEnemyManager(enemyManager);
   }
 
-  /** Projects the currently materialized Activity barrier into the World-owned CombatSystem. */
+  /** Projects the currently materialized Activity barrier into the World-owned WorldCombatCore. */
   updateActivityBindings(): void {
     if (this.destroyed) return;
     this.options.combatSystem.setBarrierObstacles(this.options.getMissionBarrierObstacles());
   }
 
-  /** Removes the Activity projection without touching the World-owned CombatSystem itself. */
+  /** Removes the Activity projection without touching the World-owned WorldCombatCore itself. */
   clearActivityBindings(): void {
     if (this.destroyed) return;
     this.activityGeneration += 1;
@@ -786,7 +786,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const distance = Math.hypot(dx, dy);
       o.hostPhysics.addRecoil(hit.targetId, (distance > 0.001 ? dx / distance : 0) * hit.knockback, (distance > 0.001 ? dy / distance : -1) * hit.knockback, 260, hit.ownerId);
     });
-    energyShield.setCombatSystem(o.combatSystem);
+    energyShield.setWorldCombatCore(o.combatSystem);
     energyShield.setEnemyManager(o.getEnemyManager());
     energyShield.setBaseManager(o.baseManager);
     energyShield.setWeaponUsageBlockedChecker((playerId) => !o.combatSystem.isAlive(playerId) || playerCombat.state.isWeaponBlocked(playerId) || o.hostPhysics.isDashBurst(playerId));

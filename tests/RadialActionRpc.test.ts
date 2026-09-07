@@ -107,11 +107,12 @@ function createFixture() {
       identity,
     );
   });
+  const combatCore = { isAlive: vi.fn(() => true) };
   const ctx: any = {
     loadoutManager: { getEquippedUtilityConfig, getTemporaryUtilityConfig, use },
     hostHeldActionSystem: { consume, start, clearPlayer },
     translocatorSystem: { getActivePuckId: vi.fn(() => undefined) },
-    combatSystem: { isAlive: vi.fn(() => true) },
+    getWorldCombatCore: () => combatCore,
     burrowSystem: { isBurrowed: vi.fn(() => false), isStunned: vi.fn(() => false) },
   };
   const lifecycle = {
@@ -161,7 +162,7 @@ function createFixture() {
     centerHUD as never,
     playerManager as never,
     {} as never,
-    ctx.combatSystem as never,
+    ctx.getWorldCombatCore()! as never,
     decoySystem as never,
     {} as never,
     {} as never,

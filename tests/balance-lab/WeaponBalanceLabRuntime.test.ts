@@ -84,7 +84,7 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
     const runtime = new WeaponBalanceLabRuntime(
       () => ({
         playerManager: { getPlayer: vi.fn(() => player) },
-        combatSystem: { addDamageDealtObserver: vi.fn(() => () => {}) },
+        getWorldCombatCore: () => ({ addDamageDealtObserver: vi.fn(() => () => {}) }),
       } as never),
       {
         getProjectileDiagnostics: () => null,

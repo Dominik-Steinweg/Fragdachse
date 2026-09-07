@@ -76,7 +76,7 @@ describe('Projectile Runtime – ownership and dependency ratchets', () => {
         const passiveSample = path.endsWith('/ShadowConfig') || path.endsWith('/LightingConfig');
         expect(path.includes('/network/') || path.includes('/audio/')
           || (path.includes('/effects/') && !passiveSample)
-          || /\/(CombatSystem|TeslaDomeSystem|EnergyShieldSystem|WorldPlayerGameplayRuntime)$/.test(path),
+          || /\/(WorldCombatCore|TeslaDomeSystem|EnergyShieldSystem|WorldPlayerGameplayRuntime)$/.test(path),
         source.fileName + ' -> ' + path).toBe(false);
       }
       for (const node of syntax.get(source)!) {
@@ -94,7 +94,7 @@ describe('Projectile Runtime – ownership and dependency ratchets', () => {
     for (const source of production.filter(source => projections.has(basename(source.fileName)))) {
       const names = identifiers(source);
       for (const forbidden of ['ProjectileRuntimeRecord', 'ProjectilePhysicsHandle', 'ProjectilePhysicsBinding',
-        'WorldProjectileRuntime', 'CombatSystem', 'applyDamage', 'resolveDirectImpact']) {
+        'WorldProjectileRuntime', 'WorldCombatCore', 'applyDamage', 'resolveDirectImpact']) {
         expect(names.has(forbidden), source.fileName + ': ' + forbidden).toBe(false);
       }
     }
@@ -102,7 +102,7 @@ describe('Projectile Runtime – ownership and dependency ratchets', () => {
 
   it('keeps world consumers and execution behind semantic ports', () => {
     for (const source of production.filter(source => source.fileName.startsWith('src/world/')
-      || /\/(CombatSystem|DetonationSystem|TranslocatorSystem|CoopDefenseEnemyDodgeSystem|CoopDefenseEnemyAbilitySystem)\.ts$/.test(source.fileName))) {
+      || /\/(WorldCombatCore|DetonationSystem|TranslocatorSystem|CoopDefenseEnemyDodgeSystem|CoopDefenseEnemyAbilitySystem)\.ts$/.test(source.fileName))) {
       for (const path of imports(source)) {
         expect(/\/(WorldProjectileRuntime|ProjectilePhysicsBinding|ProjectileStore|ProjectileCollisionProcessor)$/.test(path),
           source.fileName + ' -> ' + path).toBe(false);
@@ -111,7 +111,7 @@ describe('Projectile Runtime – ownership and dependency ratchets', () => {
   });
 
   it('keeps style dispatch out of collision, flight, combat and guidance', () => {
-    for (const source of production.filter(source => /\/(Projectile(FlightProcessor|CollisionProcessor|LifecycleProcessor|MiniRocketProcessor|HomingController)|CombatSystem)\.ts$/.test(source.fileName))) {
+    for (const source of production.filter(source => /\/(Projectile(FlightProcessor|CollisionProcessor|LifecycleProcessor|MiniRocketProcessor|HomingController)|WorldCombatCore)\.ts$/.test(source.fileName))) {
       expect(identifiers(source).has('projectileStyle'), source.fileName).toBe(false);
     }
   });

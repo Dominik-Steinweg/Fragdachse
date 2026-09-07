@@ -7,7 +7,7 @@ import type { RightSidePanel } from '../../ui/RightSidePanel';
 import type { CenterHUD } from '../../ui/CenterHUD';
 import type { PlayerManager } from '../../entities/PlayerManager';
 import type { HostPhysicsSystem } from '../../systems/HostPhysicsSystem';
-import type { CombatSystem } from '../../systems/CombatSystem';
+import type { WorldCombatCore } from '../../combat/WorldCombatCore';
 import type { DecoySystem } from '../../systems/DecoySystem';
 import type { EffectSystem } from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
@@ -70,7 +70,7 @@ export class RpcCoordinator {
     private readonly centerHUD: CenterHUD,
     private readonly playerManager: PlayerManager,
     private readonly hostPhysics: HostPhysicsSystem,
-    private readonly combatSystemSource: CombatSystem | (() => CombatSystem | null),
+    private readonly combatSystemSource: WorldCombatCore | (() => WorldCombatCore | null),
     private readonly decoySystem: DecoySystem,
     private readonly effectSystem: EffectSystem,
     private readonly visualFeedback: VisualFeedbackDirector,
@@ -85,7 +85,7 @@ export class RpcCoordinator {
     private readonly getHostNowMs: () => number,
   ) {}
 
-  private get combatSystem(): CombatSystem | null {
+  private get combatSystem(): WorldCombatCore | null {
     return typeof this.combatSystemSource === 'function'
       ? this.combatSystemSource()
       : this.combatSystemSource;

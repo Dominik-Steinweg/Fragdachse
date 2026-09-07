@@ -107,6 +107,7 @@ function createFixture(order: readonly number[], materialize = true) {
     rebuildArenaStaticShadowRegions: vi.fn(),
   };
   const runtimeRocks = new Map(changes.added.map((rock) => [rock.id, rock]));
+  const combatCore = { invalidateObstacleIndex: vi.fn() };
   const ctx = {
     arenaResult: result,
     currentLayout: layout,
@@ -114,7 +115,7 @@ function createFixture(order: readonly number[], materialize = true) {
       getRuntimeRock: (id: number) => runtimeRocks.get(id),
       getAllRuntimeRocks: () => [...runtimeRocks.values()],
     },
-    combatSystem: { invalidateObstacleIndex: vi.fn() },
+    getWorldCombatCore: () => combatCore,
     gameAudioSystem: { playSound: vi.fn() },
     lightOccluderIndex: { markDirty: vi.fn() },
     visualFeedback: { camera: { request: vi.fn() } },
@@ -202,7 +203,7 @@ describe('RockVisualHelper client snapshot materialization', () => {
     expect(fixture.rockOverlaySurface.refreshRegions).toHaveBeenCalledTimes(1);
     expect(fixture.shadowSystem.rebuildArenaStaticShadows).not.toHaveBeenCalled();
     expect(fixture.shadowSystem.rebuildArenaStaticShadowRegions).toHaveBeenCalledTimes(1);
-    expect(fixture.ctx.combatSystem.invalidateObstacleIndex).toHaveBeenCalledTimes(1);
+    expect(fixture.ctx.getWorldCombatCore()!.invalidateObstacleIndex).toHaveBeenCalledTimes(1);
   });
 
   it('is independent of snapshot order', () => {

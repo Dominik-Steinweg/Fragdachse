@@ -98,7 +98,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     this.enemyManager = enemyManager;
   }
 
-  /** Must run before CombatSystem.update so a swept projectile is imbued before a same-frame hit. */
+  /** Must run before WorldCombatCore.update so a swept projectile is imbued before a same-frame hit. */
   prepareProjectileBurns(now: number): void {
     const rings = this.getActiveRings();
     for (const sample of this.projectileTravel.getTravelSamples()) {

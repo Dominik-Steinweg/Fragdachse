@@ -41,6 +41,8 @@ Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody i
 
 `WorldPlayerGameplayRuntime` besitzt den World-Lifetime der Player-Gameplay-Systeme und stellt nach außen nur benannte Lifecycle-, Action-, Read-, Resource- und Combat-Integration-Ports bereit. Activity-, Construction-, Support-, Host- und Client-Adapter konsumieren diese semantischen Sichten; sie traversieren weder den internen Child-Graphen noch greifen sie auf `.systems` zu. Die Runtime bleibt dabei ohne Renderer, ArenaContext und direkte NetworkBridge-Abhängigkeit.
 
+Die Combat-Authority gehört zur laufenden World und wird über [WorldCombatRuntime](../../src/combat/WorldCombatRuntime.ts) gebunden. [WorldCombatCore](../../src/combat/WorldCombatCore.ts) stellt den autoritativen Resolution-/Mutation-Kern bereit; andere Gameplay-Owner erhalten nur die jeweils benötigten schmalen Ports. Immediate-Attacks verwenden den normalisierten `CombatImmediateAttackPort`, nicht optionale positional Legacy-Aufrufe.
+
 ## Projectile-Runtime
 
 [`WorldProjectileRuntime`](../../src/projectile/WorldProjectileRuntime.ts) ist die einzige

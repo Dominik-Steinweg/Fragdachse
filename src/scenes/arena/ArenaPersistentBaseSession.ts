@@ -264,8 +264,8 @@ export class ArenaPersistentBaseSession {
     const player = this.ctx.playerManager.getPlayer(playerId);
     if (!player || !player.active || !this.mayManagePersistentBase(playerId)
       || !this.world.getPlayerCapabilities(playerId).canPlace
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)) {
+      || !this.ctx.getWorldCombatCore()!.isAlive(playerId)
+      || this.ctx.getWorldCombatCore()!.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
     }
 
@@ -398,8 +398,8 @@ export class ArenaPersistentBaseSession {
    */
   isPlayerAvailableForPersistentBaseAction(playerId: string): boolean {
     if (bridge.isHost()) {
-      return this.ctx.combatSystem.isAlive(playerId)
-        && !this.ctx.combatSystem.isBurrowed(playerId);
+      return this.ctx.getWorldCombatCore()!.isAlive(playerId)
+        && !this.ctx.getWorldCombatCore()!.isBurrowed(playerId);
     }
 
     const state = bridge.getLatestGameState()?.players[playerId];
@@ -629,8 +629,8 @@ export class ArenaPersistentBaseSession {
     if (!player || !player.active
       || !this.mayManagePersistentBase(playerId)
       || !this.world.getPlayerCapabilities(playerId).canDismantle
-      || !this.ctx.combatSystem.isAlive(playerId)
-      || this.ctx.combatSystem.isBurrowed(playerId)) {
+      || !this.ctx.getWorldCombatCore()!.isAlive(playerId)
+      || this.ctx.getWorldCombatCore()!.isBurrowed(playerId)) {
       return { ok: false, reason: 'blocked' };
     }
     const readiness = this.world.getConstructionReadiness();

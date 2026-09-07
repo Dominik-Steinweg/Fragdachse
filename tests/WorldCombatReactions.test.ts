@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WorldCombatReactions } from '../src/world/WorldCombatReactions';
 import { COOP_DEFENSE_ENEMY_KINDS, getCoopDefenseEnemyXp } from '../src/config/coopDefenseEnemies';
-import type { KillSourceContext } from '../src/systems/CombatSystem';
+import type { KillSourceContext } from '../src/combat/WorldCombatCore';
 import type { CombatTargetRef } from '../src/combat/CombatScope';
 
 const playerLife: CombatTargetRef = { kind: 'player', id: 'credited',

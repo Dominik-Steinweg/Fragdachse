@@ -18,7 +18,7 @@ import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 
 const MOVE_SPEED = 175;
 

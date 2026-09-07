@@ -156,7 +156,7 @@ function circlesOverlap(
  * Geometrie ist also über die Runde konstant und gehört gecacht.
  *
  * Bewusst ein reiner Cache und kein zweiter Bestand – gebaut wird ausschließlich aus
- * denselben Referenzen, die `CombatSystem` ohnehin hält. Der `active`-Zustand wird
+ * denselben Referenzen, die `WorldCombatCore` ohnehin hält. Der `active`-Zustand wird
  * **live** beim Query gelesen, nicht gecacht: ein zerstörter Fels blockiert damit sofort
  * nicht mehr, ohne dass irgendwer invalidieren müsste. Neu gebaut wird nur, wenn sich die
  * Geometrie ändert – also bei `markDirty()` (Fels gesetzt/entfernt) oder wenn eines der

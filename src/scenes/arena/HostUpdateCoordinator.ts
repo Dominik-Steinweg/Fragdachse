@@ -28,7 +28,7 @@ import { emitArenaMapGridChanged } from './ArenaEvents';
 import { hasCoopDefenseEnemyKind } from '../../config/coopDefenseEnemies';
 import { BlackHoleSystem } from '../../systems/BlackHoleSystem';
 import type { TargetFootprint } from '../../systems/ReinforcementMatrixSystem';
-import type { HitscanSupportImpact } from '../../systems/CombatSystem';
+import type { HitscanSupportImpact } from '../../combat/WorldCombatCore';
 import { EnemyDashVisualTracker } from '../../effects/EnemyDashVisuals';
 import { applyRadialEnvironmentDamage, type EnvironmentRockSink } from '../../systems/EnvironmentDamageResolver';
 import { resolveDetonations, type DetonationEffectSink } from '../../systems/DetonationResolver';
@@ -318,7 +318,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       return;
     }
     const now = bridge.getSynchronizedNow();
-    this.ctx.combatSystem.runHostExecution(() => this.runHostUpdateAtTime(delta, now), now);
+    this.ctx.getWorldCombatCore()!.runHostExecution(() => this.runHostUpdateAtTime(delta, now), now);
   }
 
   private runHostUpdateAtTime(delta: number, now: number): void {
@@ -330,7 +330,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // publish/render presentation state; every authoritative system below keeps its own gameplay
     // gate via countdownActive.
     const countdownActive = bridge.isArenaCountdownActive();
-    if (!countdownActive) this.ctx.combatSystem.advancePlayerLifecycle(now);
+    if (!countdownActive) this.ctx.getWorldCombatCore()!.advancePlayerLifecycle(now);
     const worldMapId = this.world ? toMapId(this.world.descriptor.definitionId) : null;
     const activeMapConfig = worldMapId === null ? null : getCoopDefenseMapConfig(worldMapId);
     const weaponBalanceLabActive = worldMapId !== null && isWeaponBalanceLabMapId(worldMapId);
@@ -382,7 +382,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.supportSystems?.detonation?.checkProjectileDetonations();
       this.playerGameplayRuntime?.runHostPreCombatStage(now, countdownActive);
       this.worldFramePort?.getProjectileRuntime?.()?.runHostInteractionStage(now);
-      this.ctx.combatSystem.advanceStatuses(now);
+      this.ctx.getWorldCombatCore()!.advanceStatuses(now);
     }
 
     const projectileRuntime = this.worldFramePort?.getProjectileRuntime?.() ?? null;
@@ -455,7 +455,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
             return {
               x:        player.x,
               y:        player.y,
-              alive:    this.ctx.combatSystem.isAlive(id),
+              alive:    this.ctx.getWorldCombatCore()!.isAlive(id),
               burrowed: this.playerGameplayRuntime?.isBurrowed(id) ?? false,
               color:    profile?.colorHex ?? 0xffffff,
             };
@@ -487,12 +487,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     if (fireDamageTick) {
       for (const player of this.ctx.playerManager.getAllPlayers()) {
-        if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+        if (!this.ctx.getWorldCombatCore()!.isAlive(player.id)) continue;
         const radius = player.getHitRadius();
         for (const contact of this.ctx.fireSystem.collectContacts(player.x, player.y, radius, now)) {
           if (contact.damageTarget === 'enemies') continue;
           if (contact.damagePerTick > 0 && player.id !== contact.ownerId) {
-            this.ctx.combatSystem.applyDamage(
+            this.ctx.getWorldCombatCore()!.applyDamage(
               player.id,
               Math.round(contact.damagePerTick),
               false,
@@ -507,9 +507,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           if (
             contact.burn
             && player.id !== contact.ownerId
-            && this.ctx.combatSystem.canDamageTarget(contact.ownerId, player.id)
+            && this.ctx.getWorldCombatCore()!.canDamageTarget(contact.ownerId, player.id)
           ) {
-            this.ctx.combatSystem.applyBurnHit(
+            this.ctx.getWorldCombatCore()!.applyBurnHit(
               player.id,
               contact.ownerId,
               contact.burn.durationMs,
@@ -524,7 +524,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       }
 
       for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-        if (!this.ctx.combatSystem.isAlive(enemy.id)) continue;
+        if (!this.ctx.getWorldCombatCore()!.isAlive(enemy.id)) continue;
         for (const contact of this.ctx.fireSystem.collectContacts(
           enemy.sprite.x,
           enemy.sprite.y,
@@ -533,7 +533,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         )) {
           if (contact.damageTarget === 'players') continue;
           if (contact.damagePerTick > 0) {
-            this.ctx.combatSystem.applyDamage(
+            this.ctx.getWorldCombatCore()!.applyDamage(
               enemy.id,
               Math.round(contact.damagePerTick),
               false,
@@ -544,7 +544,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
             );
           }
           if (contact.burn) {
-            this.ctx.combatSystem.applyBurnHit(
+            this.ctx.getWorldCombatCore()!.applyBurnHit(
               enemy.id,
               contact.ownerId,
               contact.burn.durationMs,
@@ -560,7 +560,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const ev of fireDamageEvents) {
-      this.ctx.combatSystem.applyRadialHostileBaseDamage(
+      this.ctx.getWorldCombatCore()!.applyRadialHostileBaseDamage(
         ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, undefined, undefined, ev.baseDamageMult,
       );
       this.applyAoeEnvironmentDamage(
@@ -570,7 +570,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const ev of stinkDmg) {
-      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
+      this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
         sourceId: 'weapon.stink_cloud',
         sourceSlot: 'utility',
@@ -583,7 +583,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const ev of smokeDmg) {
-      this.ctx.combatSystem.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
+      this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
         sourceId: 'ultimate.thunderstorm',
         sourceSlot: 'utility',
@@ -598,7 +598,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const meteorImpacts = countdownActive ? [] : (this.supportSystems?.armageddon?.update(now, delta) ?? []);
     for (const mi of meteorImpacts) {
       if (mi.variant === 'void') {
-        this.ctx.combatSystem.applyExplosionDamage(mi.x, mi.y, {
+        this.ctx.getWorldCombatCore()!.applyExplosionDamage(mi.x, mi.y, {
           radius: mi.radius,
           maxDamage: mi.damage,
           minDamage: mi.damageFalloff?.minDamage ?? mi.damage,
@@ -609,7 +609,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         }, `void-armageddon:${mi.ownerId}`, 'ultimate', 'environment.void_meteor');
         bridge.broadcastExplosionEffect(mi.x, mi.y, mi.radius, 0xa631ff, 'energy');
       } else {
-        this.ctx.combatSystem.applyAoeDamage(
+        this.ctx.getWorldCombatCore()!.applyAoeDamage(
           mi.x, mi.y, mi.radius, mi.damage, mi.ownerId,
           mi.selfDamageMult > 0,
           {
@@ -649,7 +649,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         if (trainEvent && now >= trainEvent.spawnAt) {
           this.trainManager.spawn();
           this.classicTrainSpawned = true;
-          this.ctx.combatSystem.setTrainSegments(this.trainManager.getSegObjects());
+          this.ctx.getWorldCombatCore()!.setTrainSegments(this.trainManager.getSegObjects());
         }
       }
       if (this.classicTrainSpawned) {
@@ -659,10 +659,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     // Host-local visuals each frame
     for (const player of this.ctx.playerManager.getAllPlayers()) {
-      const hp    = this.ctx.combatSystem.getHP(player.id);
-      const maxHp = this.ctx.combatSystem.getMaxHp(player.id);
-      const armor = this.ctx.combatSystem.getArmor(player.id);
-      const alive    = this.ctx.combatSystem.isAlive(player.id);
+      const hp    = this.ctx.getWorldCombatCore()!.getHP(player.id);
+      const maxHp = this.ctx.getWorldCombatCore()!.getMaxHp(player.id);
+      const armor = this.ctx.getWorldCombatCore()!.getArmor(player.id);
+      const alive    = this.ctx.getWorldCombatCore()!.isAlive(player.id);
       const wasAlive = this.prevAliveStates.get(player.id) ?? false;
       if (alive && !wasAlive && !countdownActive) {
         this.audio?.playSound('sfx_player_spawn', player.x, player.y, player.id);
@@ -670,7 +670,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!countdownActive) this.prevAliveStates.set(player.id, alive);
       player.updateHP(hp, maxHp, countdownActive || (alive && !wasAlive));
       player.updateArmor(armor);
-      const burn = this.ctx.combatSystem.getBurnVisualState(player.id, now);
+      const burn = this.ctx.getWorldCombatCore()!.getBurnVisualState(player.id, now);
       player.updateBurnStacks(burn.stackCount, burn.visualStyle);
       player.setVisible(alive);
       player.setWalking(isVelocityMoving(player.body.velocity.x, player.body.velocity.y) && alive);
@@ -710,7 +710,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
-      const burn = this.ctx.combatSystem.getBurnVisualState(enemy.id, now);
+      const burn = this.ctx.getWorldCombatCore()!.getBurnVisualState(enemy.id, now);
       enemy.updateBurnStacks(burn.stackCount, burn.visualStyle);
       const combatIntegration = this.playerGameplayRuntime?.getPlayerCombatIntegrationPort();
       if (combatIntegration) {
@@ -762,7 +762,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const isMovingLocal = isVelocityMoving(localPlayer.body.velocity.x, localPlayer.body.velocity.y);
 
       // Movement loop for local player
-      const localAlive = this.ctx.combatSystem.isAlive(localId);
+      const localAlive = this.ctx.getWorldCombatCore()!.isAlive(localId);
       const localBurrowed = this.playerGameplayRuntime?.isBurrowed(localId) ?? false;
       if (isMovingLocal && localAlive && !localBurrowed && !this.moveLoopHandle) {
         this.moveLoopHandle = this.audio?.startLoop('sfx_player_move') ?? null;
@@ -823,9 +823,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const shieldBuff = playerFrame?.shieldBuff;
       const ultimateThresholds = playerFrame?.ultimateThresholds ?? [ultCfg?.rageRequired ?? 300];
       const hudData = buildLocalArenaHudData({
-        hp:                      this.ctx.combatSystem.getHP(localId),
-        maxHp:                   this.ctx.combatSystem.getMaxHp(localId),
-        armor:                   this.ctx.combatSystem.getArmor(localId),
+        hp:                      this.ctx.getWorldCombatCore()!.getHP(localId),
+        maxHp:                   this.ctx.getWorldCombatCore()!.getMaxHp(localId),
+        armor:                   this.ctx.getWorldCombatCore()!.getArmor(localId),
         maxArmor:                playerFrame?.maxArmor ?? 100,
         adrenaline:              playerFrame?.adrenaline ?? 0,
         maxAdrenaline:           playerFrame?.maxAdrenaline ?? 100,
@@ -865,7 +865,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           })
           : 0,
       });
-      this.localPlayerState.alive    = this.ctx.combatSystem.isAlive(localId);
+      this.localPlayerState.alive    = this.ctx.getWorldCombatCore()!.isAlive(localId);
       this.localPlayerState.burrowed = playerFrame?.isBurrowed ?? false;
       // Das World-HUD ist eine Darstellungsflaeche. Ohne lokale World-Presentation entsteht
       // der Snapshot weiterhin - er wird nur nicht angezeigt.
@@ -938,11 +938,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     const players: Record<string, PlayerNetState> = {};
     for (const player of this.ctx.playerManager.getAllPlayers()) {
-      const hp         = this.ctx.combatSystem.getHP(player.id);
-      const maxHp      = this.ctx.combatSystem.getMaxHp(player.id);
-      const armor      = this.ctx.combatSystem.getArmor(player.id);
-      const alive      = this.ctx.combatSystem.isAlive(player.id);
-      const burn = this.ctx.combatSystem.getBurnVisualState(player.id, now);
+      const hp         = this.ctx.getWorldCombatCore()!.getHP(player.id);
+      const maxHp      = this.ctx.getWorldCombatCore()!.getMaxHp(player.id);
+      const armor      = this.ctx.getWorldCombatCore()!.getArmor(player.id);
+      const alive      = this.ctx.getWorldCombatCore()!.isAlive(player.id);
+      const burn = this.ctx.getWorldCombatCore()!.getBurnVisualState(player.id, now);
       const isDecoyStealthed = this.ctx.decoySystem.isStealthed(player.id);
       const decoyStealthRemainingFrac = this.ctx.decoySystem.getStealthRemainingFrac(player.id, now);
       const isMoving = isVelocityMoving(player.body.velocity.x, player.body.velocity.y);
@@ -1325,7 +1325,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         : effect.timeBubble;
       this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, bubble, now);
     } else {
-      damagedTargetKeys = this.ctx.combatSystem.resolveExplosionCombat({
+      damagedTargetKeys = this.ctx.getWorldCombatCore()!.resolveExplosionCombat({
         projectileId: request.projectileId,
         x: request.x,
         y: request.y,
@@ -1381,7 +1381,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const ownerId = request.provenance.allegiance.ownerId;
     const effect = request.effect;
     if (effect.type === 'damage') {
-      this.ctx.combatSystem.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
+      this.ctx.getWorldCombatCore()!.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
         category: 'explosion',
         allowTeamDamage: effect.allowTeamDamage,
         sourceId: request.provenance.weaponSourceId ?? 'weapon.grenade',
@@ -1401,7 +1401,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         const damage = effect.damage * (effect.clusterDamageFactor ?? 0);
         const cx = request.x + Math.cos(angle) * effect.radius * 0.45;
         const cy = request.y + Math.sin(angle) * effect.radius * 0.45;
-        this.ctx.combatSystem.applyAoeDamage(cx, cy, radius, damage, ownerId, false, {
+        this.ctx.getWorldCombatCore()!.applyAoeDamage(cx, cy, radius, damage, ownerId, false, {
           category: 'explosion',
           allowTeamDamage: effect.allowTeamDamage,
           sourceId: 'weapon.cluster_charge',
@@ -1518,7 +1518,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const isEnemyAirstrike = triggeredBy === COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID;
 
     // Spieler-Schaden
-    this.ctx.combatSystem.applyAoeDamage(x, y, radius, cfg.maxDamage, triggeredBy, cfg.selfDamageMult > 0, {
+    this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, cfg.maxDamage, triggeredBy, cfg.selfDamageMult > 0, {
       category:       'explosion',
       sourceId:     'environment.airstrike',
       sourceSlot:     'ultimate',
@@ -1545,7 +1545,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         if (minDist > radius) continue;
         const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
         if (baseDmg > 0) {
-          this.ctx.combatSystem.applyBaseDamage(
+          this.ctx.getWorldCombatCore()!.applyBaseDamage(
             base.id, baseDmg, triggeredBy, undefined, cfg.friendlyBaseDamageMult,
           );
         }
@@ -1594,15 +1594,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const lineTo = (x: number, y: number) => ({ sx: originX, sy: originY, ex: x, ey: y });
 
     // Nur feindliche Coop-Gegner sind gemeinsame Pulsziele. Die Faction-Regel
-    // bleibt im CombatSystem; insbesondere allied/captured Enemies werden hier
+    // bleibt im WorldCombatCore; insbesondere allied/captured Enemies werden hier
     // nicht über getAllEnemies() blind beschädigt.
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
-      if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, enemy.id)) continue;
+      if (!this.ctx.getWorldCombatCore()!.canDamageTarget(proj.ownerId, enemy.id)) continue;
       if (Phaser.Math.Distance.Squared(originX, originY, enemy.sprite.x, enemy.sprite.y) > radiusSquared) continue;
-      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y)) continue;
+      if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, enemy.sprite.x, enemy.sprite.y)) continue;
 
-      this.ctx.combatSystem.applyDamage(enemy.id, config.damage, false, proj.ownerId, proj.isBfg ? 'BFG' : 'ASMD Kugelgewitter', {
+      this.ctx.getWorldCombatCore()!.applyDamage(enemy.id, config.damage, false, proj.ownerId, proj.isBfg ? 'BFG' : 'ASMD Kugelgewitter', {
         sourceX: originX,
         sourceY: originY,
       }, {
@@ -1615,7 +1615,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (arenaResult) {
       this.forEachArenaRockInRadius(originX, originY, config.radius, (i, rock) => {
         if (Phaser.Math.Distance.Squared(originX, originY, rock.x, rock.y) > radiusSquared) return;
-        if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, rock.x, rock.y, i)) return;
+        if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, rock.x, rock.y, i)) return;
         const resolvedDamage = this.resolveObstacleDamage(
           i,
           config.damage * (proj.rockDamageMult ?? 1),
@@ -1633,7 +1633,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (trainState?.alive) {
         for (const seg of this.trainManager.getSegmentPositions()) {
           if (Phaser.Math.Distance.Squared(originX, originY, seg.x, seg.y) > radiusSquared) continue;
-          if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, seg.x, seg.y)) continue;
+          if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, seg.x, seg.y)) continue;
           this.worldMutation?.applyResolvedDamage('train', 'main', config.damage * trainMult, proj.ownerId, 'environment.projectile_pulse');
           lines.push(lineTo(seg.x, seg.y));
           break;
@@ -1655,11 +1655,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       if (player.id === proj.ownerId) continue;
-      if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+      if (!this.ctx.getWorldCombatCore()!.isAlive(player.id)) continue;
       if (this.playerGameplayRuntime?.isBurrowed(player.id)) continue;
       if (Phaser.Math.Distance.Squared(originX, originY, player.x, player.y) > radiusSquared) continue;
-      if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, player.x, player.y)) continue;
-      if (!this.ctx.combatSystem.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
+      if (!this.ctx.getWorldCombatCore()!.hasLineOfSight(originX, originY, player.x, player.y)) continue;
+      if (!this.ctx.getWorldCombatCore()!.canDamageTarget(proj.ownerId, player.id, proj.allowTeamDamage)) continue;
       if (this.combatSystems?.energyShield?.tryBlockDamage({
         targetId: player.id,
         category: 'hitscan',
@@ -1669,7 +1669,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         now: this.hostFrameNowMs,
       })) continue;
 
-      this.ctx.combatSystem.applyDamage(player.id, config.damage, false, proj.ownerId, 'BFG', {
+      this.ctx.getWorldCombatCore()!.applyDamage(player.id, config.damage, false, proj.ownerId, 'BFG', {
         sourceX: originX,
         sourceY: originY,
       }, {
@@ -1703,7 +1703,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.playerGameplayRuntime?.getPlayerCombatIntegrationPort()?.resource.addAdrenaline(ownerId, amount);
     },
     applyAoeDamage: (x, y, radius, damage, attackerId, falloff, baseDamageMult, sourceSlot) => {
-      this.ctx.combatSystem.applyAoeDamage(x, y, radius, damage, attackerId, false, {
+      this.ctx.getWorldCombatCore()!.applyAoeDamage(x, y, radius, damage, attackerId, false, {
         category: 'explosion',
         sourceId: 'environment.detonation',
         damageFalloff: falloff,
@@ -1755,7 +1755,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */
   private resolveObstacleDamage(index: number, damage: number, attackerId: string): number {
     const runtimeRock = this.placementSystem?.getRuntimeRock(index);
-    return this.ctx.combatSystem.resolveExternalTargetDamage(
+    return this.ctx.getWorldCombatCore()!.resolveExternalTargetDamage(
       {
         targetType: runtimeRock?.constructionId ? 'construction' : 'rock',
         targetId: String(index),
@@ -1773,7 +1773,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     sourceSlot?: LoadoutSlot,
   ): void {
     if (impact.targetType === 'player') {
-      // CombatSystem hat die Heilung bereits angewendet; hier wird nur der replizierte
+      // WorldCombatCore hat die Heilung bereits angewendet; hier wird nur der replizierte
       // Regenerationsimpuls erzeugt. Friendly Fire kann so auch bei fehlerhaften Clients
       // nicht aus dem VFX-Pfad entstehen.
       if (!bridge.isEnemyPair(attackerId, impact.targetId)) {
@@ -1821,7 +1821,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       }
 
       if (effect.damagePerHit <= 0) return;
-      const resolvedDamage = this.ctx.combatSystem.resolveExternalTargetDamage(
+      const resolvedDamage = this.ctx.getWorldCombatCore()!.resolveExternalTargetDamage(
         {
           targetType: runtimeRock.constructionId ? 'construction' : 'rock',
           targetId: String(runtimeRock.id),
@@ -1845,7 +1845,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     } else if (effect.damagePerHit > 0) {
       // Basisschaden geht ausschliesslich ueber den zentralen Basistrichter, damit
       // Verwundbarkeit, Matrixschutz und ausgehende Modifikatoren gleich greifen.
-      this.ctx.combatSystem.applyBaseDamage(
+      this.ctx.getWorldCombatCore()!.applyBaseDamage(
         base.id,
         effect.damagePerHit,
         attackerId,
@@ -1923,7 +1923,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     };
 
     for (const player of this.ctx.playerManager.getAllPlayers()) {
-      if (!this.ctx.combatSystem.isAlive(player.id)) continue;
+      if (!this.ctx.getWorldCombatCore()!.isAlive(player.id)) continue;
       const bounds = player.getBounds();
       applyFromFootprint(
         { targetType: 'player', targetId: player.id },
@@ -2075,7 +2075,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     return this.coopMissionRuntime?.coopDefenseTeamBuffSystem?.getHudBuff(
       now,
       bridge.canPlayerReceiveRoundRewards(playerId),
-      this.ctx.combatSystem.isAlive(playerId),
+      this.ctx.getWorldCombatCore()!.isAlive(playerId),
     ) ?? null;
   }
 

@@ -6,7 +6,7 @@ import type { BaseManager } from '../src/entities/BaseManager';
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { CoopDefenseTimebombSystem } from '../src/systems/CoopDefenseTimebombSystem';
 import type { EnemyFlowFieldService } from '../src/systems/EnemyFlowFieldService';
 import type { EnemyStrategicTargetService } from '../src/systems/EnemyStrategicTargetService';

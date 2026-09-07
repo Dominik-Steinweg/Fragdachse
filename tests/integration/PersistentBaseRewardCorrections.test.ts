@@ -233,12 +233,13 @@ function testCoordinator(
   const baseManager = {
     getBase: () => ({ isInert: () => false }),
   };
+  const combatCore = { isAlive: () => true, isBurrowed: () => false };
 
   Object.assign(coordinator, {
     scene: { game: { events: { emit: vi.fn() } } },
     ctx: {
       playerManager: { getPlayer: () => ({ id: playerId, active: true, x: 0, y: 0 }) },
-      combatSystem: { isAlive: () => true, isBurrowed: () => false },
+      getWorldCombatCore: () => combatCore,
     },
     rockVisualHelper: {
       gridToWorld: () => ({ x: 0, y: 0 }),

@@ -40,7 +40,10 @@ describe('automated projectile weapons', () => {
     const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 42);
     const sharedExecution = new WorldWeaponExecutionRuntime({
       projectileSpawn: { spawnProjectile },
-      combatSystem: { resolveHitscanShot: vi.fn(() => true), resolveMeleeSwing: vi.fn(() => true) },
+      combatSystem: {
+        resolveSafeHitscanStart: vi.fn((_shooterX, _shooterY, startX, startY) => ({ x: startX, y: startY })),
+        resolveImmediateAttack: vi.fn(() => ({ accepted: true })),
+      },
     });
     const adapter = new AutomatedWeaponExecutionAdapter(sharedExecution, { spawnProjectile });
 

@@ -259,7 +259,7 @@ export class BaseManager {
 
   /**
    * Liefert die Per-Zell-Rectangles aller noch lebenden Basen als
-   * Hitscan-/LoS-Hindernisse (CombatSystem). Flach gemerged über alle Basen.
+   * Hitscan-/LoS-Hindernisse (WorldCombatCore). Flach gemerged über alle Basen.
    */
   getObstacleRectangles(): readonly Phaser.GameObjects.Rectangle[] {
     const result: Phaser.GameObjects.Rectangle[] = [];

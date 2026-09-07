@@ -7,19 +7,18 @@ import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRe
 
 function makeRuntime() {
   const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 7);
-  const resolveHitscanShot = vi.fn(() => true);
-  const resolveMeleeSwing = vi.fn(() => true);
+  const resolveImmediateAttack = vi.fn(() => ({ accepted: true, interactions: [] }));
   const resolveSafeHitscanStart = vi.fn((_sx: number, _sy: number, startX: number, startY: number) => ({ x: startX, y: startY }));
   const runtime = new WorldWeaponExecutionRuntime({
     projectileSpawn: { spawnProjectile },
-    combatSystem: { resolveHitscanShot, resolveMeleeSwing, resolveSafeHitscanStart },
+    combatSystem: { resolveImmediateAttack, resolveSafeHitscanStart },
   });
-  return { runtime, spawnProjectile, resolveHitscanShot, resolveMeleeSwing, resolveSafeHitscanStart };
+  return { runtime, spawnProjectile, resolveImmediateAttack, resolveSafeHitscanStart };
 }
 
 describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-Capability', () => {
   it('verdrahtet Projektil-, Hitscan- und Melee-Fire einmalig mit Spawn-Port und Combat-Senken', () => {
-    const { runtime, spawnProjectile, resolveHitscanShot, resolveMeleeSwing } = makeRuntime();
+    const { runtime, spawnProjectile, resolveImmediateAttack } = makeRuntime();
 
     const params = {
       x: 100, y: 200, angle: 0, targetX: 500, targetY: 200,
@@ -39,16 +38,16 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
     });
 
     expect(runtime.fire(WEAPON_CONFIGS.PLASMA_BURNER, params)).toBe(true);
-    expect(resolveHitscanShot).toHaveBeenCalledTimes(1);
-    expect(resolveHitscanShot.mock.calls[0]?.[0]).toBe('p1');
+    expect(resolveImmediateAttack).toHaveBeenCalledTimes(1);
+    expect(resolveImmediateAttack.mock.calls[0]?.[0]).toMatchObject({ kind: 'hitscan', payload: { shooterId: 'p1' } });
 
     expect(runtime.fire(WEAPON_CONFIGS.BITE, { ...params, sourceSlot: 'weapon2' })).toBe(true);
-    expect(resolveMeleeSwing).toHaveBeenCalledTimes(1);
-    expect(resolveMeleeSwing.mock.calls[0]?.[0]).toBe('p1');
+    expect(resolveImmediateAttack).toHaveBeenCalledTimes(2);
+    expect(resolveImmediateAttack.mock.calls[1]?.[0]).toMatchObject({ kind: 'melee', payload: { shooterId: 'p1' } });
   });
 
   it('trägt gameplay-/visual-Muzzle sowie sourceSlot/shotId unverändert in den Hitscan-Request', () => {
-    const { runtime, resolveHitscanShot } = makeRuntime();
+    const { runtime, resolveImmediateAttack } = makeRuntime();
     const config = WEAPON_CONFIGS.PLASMA_BURNER;
     const muzzle = getHeldWeaponGameplayMuzzleOrigin(config.id, 100, 200, 0, 32);
     if (!muzzle) throw new Error('erwartete einen expliziten Gameplay-Muzzle');
@@ -59,12 +58,12 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
       shotId: 42, gameplayMuzzleOrigin: muzzle,
     });
 
-    const call = resolveHitscanShot.mock.calls[0];
-    // resolveHitscanShot(shooterId, startX, startY, angle, range, damage, ..., sourceSlot, shotId, ...)
-    expect(call?.[1]).toBe(muzzle.x);
-    expect(call?.[2]).toBe(muzzle.y);
-    expect(call?.[12]).toBe('weapon2');
-    expect(call?.[13]).toBe(42);
+    const call = resolveImmediateAttack.mock.calls[0]?.[0];
+    expect(call?.kind).toBe('hitscan');
+    expect(call?.payload.startX).toBe(muzzle.x);
+    expect(call?.payload.startY).toBe(muzzle.y);
+    expect(call?.payload.sourceSlot).toBe('weapon2');
+    expect(call?.payload.shotId).toBe(42);
   });
 
   it('gibt für nicht-shared Fire-Typen false zurück (Spezialpfade bleiben beim Aufrufer)', () => {
@@ -84,9 +83,10 @@ describe('WorldWeaponExecutionRuntime – gemeinsame Immediate-Weapon-Execution-
   it('delegiert Hitscan und Melee als normalisierte Immediate-Attacks statt positionaler Legacy-Aufrufe', () => {
     const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 7);
     const resolveImmediateAttack = vi.fn(() => ({ accepted: true, interactions: [] }));
+    const resolveSafeHitscanStart = vi.fn((_sx: number, _sy: number, startX: number, startY: number) => ({ x: startX, y: startY }));
     const runtime = new WorldWeaponExecutionRuntime({
       projectileSpawn: { spawnProjectile },
-      combatSystem: { resolveImmediateAttack },
+      combatSystem: { resolveImmediateAttack, resolveSafeHitscanStart },
     });
     const params = {
       x: 100, y: 200, angle: 0, targetX: 500, targetY: 200,

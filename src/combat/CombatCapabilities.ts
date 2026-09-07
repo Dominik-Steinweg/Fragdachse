@@ -68,7 +68,7 @@ export interface CombatLineQueryPort {
 /**
  * Legacy-facing slices used by world-owned mechanics while their authored payloads are
  * normalized at the existing Combat boundary.  These are grouped by semantic responsibility;
- * consumers must not depend on the concrete CombatSystem implementation.
+ * consumers must not depend on the concrete WorldCombatCore implementation.
  */
 export interface CombatActorStatePort {
   isAlive(id: string): boolean;
@@ -219,61 +219,6 @@ export type CombatActivityPort =
   & CombatDamageEffectPort
   & CombatGeometryPort
   & CombatRelationshipQueryPort;
-
-/** Transitional compatibility view for the already normalized utility execution path. */
-export interface CombatLegacyMeleeAttackPort {
-  resolveMeleeSwing(
-    shooterId: MeleeSwingRequest['shooterId'],
-    x: MeleeSwingRequest['x'],
-    y: MeleeSwingRequest['y'],
-    angle: MeleeSwingRequest['angle'],
-    range: MeleeSwingRequest['range'],
-    arcDegrees: MeleeSwingRequest['arcDegrees'],
-    damage: MeleeSwingRequest['damage'],
-    adrenalinGain: MeleeSwingRequest['adrenalinGain'],
-    sourceId: MeleeSwingRequest['sourceId'],
-    playerColor: MeleeSwingRequest['color'],
-    sourceSlot?: MeleeSwingRequest['sourceSlot'],
-    rockDamageMult?: MeleeSwingRequest['rockDamageMult'],
-    trainDamageMult?: MeleeSwingRequest['trainDamageMult'],
-    visualPreset?: MeleeSwingRequest['visualPreset'],
-    shotAudioKey?: MeleeSwingRequest['shotAudioKey'],
-    burnOnHit?: MeleeSwingRequest['burnOnHit'],
-    chain?: MeleeSwingRequest['chain'],
-    hitHeal?: MeleeSwingRequest['hitHeal'],
-    hitAdrenaline?: MeleeSwingRequest['hitAdrenaline'],
-    bloodEffectMultiplier?: MeleeSwingRequest['bloodEffectMultiplier'],
-    damageTargets?: MeleeSwingRequest['damageTargets'],
-    baseDamageMult?: MeleeSwingRequest['baseDamageMult'],
-  ): boolean;
-}
-
-export interface CombatLegacyHitscanAttackPort {
-  resolveHitscanShot(
-    shooterId: HitscanShotRequest['shooterId'],
-    startX: HitscanShotRequest['startX'],
-    startY: HitscanShotRequest['startY'],
-    angle: HitscanShotRequest['angle'],
-    range: HitscanShotRequest['range'],
-    damage: HitscanShotRequest['damage'],
-    traceThickness: HitscanShotRequest['traceThickness'],
-    playerColor: HitscanShotRequest['color'],
-    adrenalinGain: HitscanShotRequest['adrenalinGain'],
-    sourceId: HitscanShotRequest['sourceId'],
-    visualPreset?: HitscanShotRequest['visualPreset'],
-    shotAudioKey?: HitscanShotRequest['shotAudioKey'],
-    sourceSlot?: HitscanShotRequest['sourceSlot'],
-    shotId?: HitscanShotRequest['shotId'],
-    detonatorCfg?: HitscanShotRequest['detonator'],
-    rockDamageMult?: HitscanShotRequest['rockDamageMult'],
-    trainDamageMult?: HitscanShotRequest['trainDamageMult'],
-    chainCfg?: HitscanShotRequest['chainLightning'],
-    burnOnHit?: HitscanShotRequest['burnOnHit'],
-    supportEffect?: HitscanShotRequest['supportEffect'],
-    visualMuzzleOrigin?: HitscanShotRequest['visualMuzzleOrigin'],
-    baseDamageMult?: HitscanShotRequest['baseDamageMult'],
-  ): boolean;
-}
 
 export interface CombatSafeMuzzlePort {
   resolveSafeHitscanStart(

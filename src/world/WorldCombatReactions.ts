@@ -1,16 +1,16 @@
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 import { COOP_DEFENSE_BASE_TURRET_OWNER_ID, COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID } from '../config';
-import type { KillSourceContext } from '../systems/CombatSystem';
+import type { KillSourceContext } from '../combat/WorldCombatCore';
 import type { WorldCombatNetworkPort } from './WorldCombatGameplayBinding';
 import type { CombatDamageKind } from '../types';
 import type { CombatTargetRef } from '../combat/CombatScope';
 import type { PlayerCombatIntegrationPort } from './PlayerCombatIntegrationPort';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { WorldCombatCore } from '../combat/WorldCombatCore';
 
 export interface WorldCombatReactionOptions {
   readonly network: WorldCombatNetworkPort;
-  readonly combatSystem: Pick<CombatSystem,
+  readonly combatSystem: Pick<WorldCombatCore,
     'isCurrentCombatantTarget' | 'applyEnemySlow' | 'applyDamage'>;
   readonly getPlayerCombatIntegration: () => PlayerCombatIntegrationPort | null;
   readonly getPowerUpSystem: () => PowerUpSystem | null;

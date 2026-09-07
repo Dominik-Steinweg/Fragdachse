@@ -54,7 +54,7 @@ export type CircleOccluderVisitor = (
  * Räumlicher Index der lichtblockierenden Hindernisse einer Runde.
  *
  * Bewusst ein reiner Cache und kein zweiter Bestand: gebaut wird ausschließlich aus
- * denselben Referenzen, die `CombatSystem` für Hitscan und Line-of-Sight nutzt
+ * denselben Referenzen, die `WorldCombatCore` für Hitscan und Line-of-Sight nutzt
  * (`arenaResult.rockPhysicsProxies`, `arenaResult.trunkBodies`,
  * `BaseManager.getObstacleRectangles()`). Ein zerstörter Fels verschwindet damit
  * zwangsläufig auch aus der Lichtverdeckung – es gibt keine eigene Liste, die

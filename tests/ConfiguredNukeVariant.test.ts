@@ -13,7 +13,7 @@ vi.mock('phaser', () => ({
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { ArenaLayout } from '../src/types';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 
 describe('configured Nuke variants', () => {
   it('snapshots the fixed Void target and leaves normal player Nukes normal', () => {

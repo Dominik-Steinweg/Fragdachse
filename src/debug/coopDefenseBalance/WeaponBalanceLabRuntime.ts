@@ -221,7 +221,7 @@ export class WeaponBalanceLabRuntime {
       }
     }
 
-    const damageObserverPort: CombatDamageObservationPort = ctx.combatSystem;
+    const damageObserverPort: CombatDamageObservationPort = ctx.getWorldCombatCore()!;
     this.removeDamageObserver = damageObserverPort.addDamageDealtObserver((event) => {
       this.recordDamage(event);
     });
@@ -318,7 +318,7 @@ export class WeaponBalanceLabRuntime {
       ?.getSummary().activeProjectilesByOwner.get(playerId) ?? 0;
     let activeBurnSourcesAtEnd = 0;
     for (const targetId of this.targetPositions.keys()) {
-      activeBurnSourcesAtEnd += ctx.combatSystem.getActiveBurnSources(targetId, Date.now())
+      activeBurnSourcesAtEnd += ctx.getWorldCombatCore()!.getActiveBurnSources(targetId, Date.now())
         .filter((source) => source.attackerId === playerId)
         .length;
     }

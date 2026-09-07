@@ -21,7 +21,7 @@ import { toWorldDefinition } from '../../src/config/authoring/coopDefenseAuthori
 import type { PlayerEntity } from '../../src/entities/PlayerEntity';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import { RockGridIndex } from '../../src/arena/RockGridIndex';
-import type { CombatSystem } from '../../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../../src/combat/WorldCombatCore';
 import { HostPhysicsSystem } from '../../src/systems/HostPhysicsSystem';
 import { PlacementSystem } from '../../src/systems/PlacementSystem';
 import type { NetworkBridge } from '../../src/network/NetworkBridge';

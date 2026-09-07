@@ -531,8 +531,8 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     const sharedExecution = new WorldWeaponExecutionRuntime({
       projectileSpawn: runtime,
       combatSystem: {
-        resolveHitscanShot: vi.fn(() => true),
-        resolveMeleeSwing: vi.fn(() => true),
+        resolveSafeHitscanStart: vi.fn((_shooterX, _shooterY, startX, startY) => ({ x: startX, y: startY })),
+        resolveImmediateAttack: vi.fn(() => ({ accepted: true })),
       },
     });
     const automated = new AutomatedWeaponExecutionAdapter(sharedExecution, runtime);

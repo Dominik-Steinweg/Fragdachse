@@ -151,7 +151,7 @@ import {
   resolveWorldCompositionProfile,
 } from '../../world/WorldComposition';
 import type { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
-import type { CombatSystem } from '../../systems/CombatSystem';
+import type { WorldCombatCore } from '../../combat/WorldCombatCore';
 import {
   hasWorldFigure,
   hasWorldRuntimeEntry,
@@ -317,7 +317,7 @@ export class ArenaLifecycleCoordinator {
     return this.worldGameplay?.combat ?? null;
   }
   /** Concrete core owned by the current World composition. */
-  private get combatSystem(): CombatSystem {
+  private get combatSystem(): WorldCombatCore {
     const combat = this.worldGameplay?.combatSystem;
     if (!combat) throw new Error('[ArenaLifecycleCoordinator] Combat runtime is not active');
     return combat;
@@ -700,7 +700,7 @@ export class ArenaLifecycleCoordinator {
       getArenaResult: () => this.worldRuntime?.materialization?.arena ?? null,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
       getPlayerManager: () => this.ctx.playerManager,
-      getCombatSystem: () => this.combatSystem,
+      getWorldCombatCore: () => this.combatSystem,
       getProjectileSpawnPort: () => this.worldGameplay?.projectiles ?? null,
       getProjectileThreatReadPort: () => this.worldGameplay?.projectiles ?? null,
       getTranslocatorProjectilePort: () => this.worldGameplay?.projectiles ?? null,
@@ -1007,7 +1007,7 @@ export class ArenaLifecycleCoordinator {
   }
   getWorldPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null { return this.worldPlayerGameplayRuntime; }
   getWorldCombatGameplayBinding(): WorldCombatGameplayBinding | null { return this.worldCombatGameplayBinding; }
-  getWorldCombatSystem(): CombatSystem | null { return this.worldGameplay?.combatSystem ?? null; }
+  getWorldCombatCore(): WorldCombatCore | null { return this.worldGameplay?.combatSystem ?? null; }
   getWorldPowerUpRuntime(): WorldPowerUpRuntime | null { return this.worldPowerUpRuntime; }
   getConstructionWorldRuntime(): ConstructionWorldRuntime | null { return this.constructionWorldRuntime; }
   getWorldSupportGameplayRuntime(): WorldSupportGameplayRuntime | null { return this.worldGameplay?.support ?? null; }

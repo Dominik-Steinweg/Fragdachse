@@ -160,7 +160,7 @@ interface ResolvedSmokeCloudState {
   stormTickMs?: number;
 }
 
-/* ── Damage event (returned to host for CombatSystem processing) ── */
+/* ── Damage event (returned to host for WorldCombatCore processing) ── */
 export interface SmokeDamageEvent {
   x:       number;
   y:       number;

@@ -513,7 +513,7 @@ export class ClientUpdateCoordinator {
       this.targetingSystems?.targetStatus?.syncFromSnapshot(state.targetVulnerabilities ?? []);
 
       const trainState = state.train;
-      this.ctx.combatSystem.setClientTrainBounds(
+      this.ctx.getWorldCombatCore()!.setClientTrainBounds(
         trainState?.alive ? { x: trainState.x, y: trainState.y, dir: trainState.dir } : null,
       );
 
@@ -1503,7 +1503,7 @@ export class ClientUpdateCoordinator {
       angle,
       localPlayer.displayObject?.displayWidth ?? PLAYER_SIZE,
     ) ?? getTopDownMuzzleOrigin(localPlayer.x, localPlayer.y, angle);
-    const resolvedStart = this.ctx.combatSystem.resolveSafeHitscanStart(
+    const resolvedStart = this.ctx.getWorldCombatCore()!.resolveSafeHitscanStart(
       localPlayer.x,
       localPlayer.y,
       desiredGameplayMuzzle.x,
@@ -1516,7 +1516,7 @@ export class ClientUpdateCoordinator {
       localPlayer.rotation,
       localPlayer.displayObject?.displayWidth ?? PLAYER_SIZE,
     ) ?? desiredGameplayMuzzle;
-    const trace  = this.ctx.combatSystem.traceHitscan({
+    const trace  = this.ctx.getWorldCombatCore()!.traceHitscan({
       shooterId:  bridge.getLocalPlayerId(),
       startX:     resolvedStart.x,
       startY:     resolvedStart.y,

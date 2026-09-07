@@ -50,7 +50,7 @@ interface WorldGeometryQueryInput {
 /**
  * Read-only World geometry adapter.  It owns no Combat state and can therefore be used by
  * host queries and passive client previews alike.  The index and train provider are supplied by
- * the World binding; callers never reach into CombatSystem internals.
+ * the World binding; callers never reach into WorldCombatCore internals.
  */
 export function createWorldGeometryQueries(input: WorldGeometryQueryInput): WorldGeometryQueries {
   // Keep the binding constructible in headless/lobby contexts where Phaser geometry classes are

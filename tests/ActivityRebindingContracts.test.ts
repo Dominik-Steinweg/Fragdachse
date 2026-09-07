@@ -8,7 +8,7 @@ import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
 import { WorldLifecycle } from '../src/world/WorldLifecycle';
 

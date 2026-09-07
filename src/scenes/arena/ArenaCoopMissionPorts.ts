@@ -82,7 +82,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         const player = ctx.playerManager.getPlayer(playerId);
         return player ? { x: player.x, y: player.y } : null;
       },
-      isPlayerAlive: (playerId) => ctx.combatSystem.isAlive(playerId),
+      isPlayerAlive: (playerId) => ctx.getWorldCombatCore()!.isAlive(playerId),
       isPlayerBurrowed,
       isPlayerStealthed: (playerId) => ctx.decoySystem.isStealthed(playerId),
       canUseMissionActions: (playerId) => getPlayerCapabilities(playerId).canUseMissionActions,
@@ -136,7 +136,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         return outposts;
       },
       syncDormantBaseStates: () => { getWorldRuntime()?.materialization?.bases?.syncDormantStates(); },
-      getActiveBurnSources: (enemyId, atMs) => ctx.combatSystem.getActiveBurnSources(enemyId, atMs),
+      getActiveBurnSources: (enemyId, atMs) => ctx.getWorldCombatCore()!.getActiveBurnSources(enemyId, atMs),
       getFireSystem: () => ctx.fireSystem,
       getSmokeSystem: () => ctx.smokeSystem,
       publishEncounterPresentation: (state) => {

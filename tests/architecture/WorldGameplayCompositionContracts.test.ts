@@ -6,6 +6,7 @@ import { WorldTargetingRuntime } from '../../src/world/WorldTargetingRuntime';
 /** Dauerhafte Layer-Grenzen; die Legacy-Ausnahme bleibt bewusst schrumpfbar. */
 const DOMAIN_ROOTS = [
   'src/activity',
+  'src/combat',
   'src/effects',
   'src/entities',
   'src/loadout',
@@ -24,7 +25,7 @@ const WORLD_ACTIVITY_ROOTS = ['src/activity', 'src/world'];
 const LEGACY_NETWORK_BRIDGE_CONSUMERS = new Set([
   'src/effects/EffectSystem.ts',
   'src/systems/BurrowSystem.ts',
-  'src/systems/CombatSystem.ts',
+  'src/combat/WorldCombatCore.ts',
   'src/systems/DecoySystem.ts',
   'src/systems/EnergyShieldSystem.ts',
   'src/systems/HostPhysicsSystem.ts',
@@ -46,6 +47,15 @@ function listTypeScriptFiles(root: string): string[] {
 }
 
 describe('World gameplay composition – dauerhafte Grenzen', () => {
+  it('hält die World-Combat-Boundary frei von entfernten Legacy-Namen und Fallback-Ports', () => {
+    const production = DOMAIN_ROOTS.flatMap(listTypeScriptFiles);
+    const source = production.map(path => ({ path, text: read(path) }));
+    expect(source.filter(({ text }) => /CombatSystem|CombatLegacy/.test(text))).toEqual([]);
+    expect(source.filter(({ text }) => /Partial<[^>]*Combat(?:ImmediateAttack|SafeMuzzle)/.test(text))).toEqual([]);
+    expect(source.filter(({ text }) => /\.resolve(?:HitscanShot|MeleeSwing)\s*\(/.test(text))).toEqual([]);
+    expect(read('src/scenes/arena/ArenaContext.ts')).not.toMatch(/\bcombatSystem\b|\bgetCombatSystem\b/);
+  });
+
   it('hält Domain-Schichten vom Transport-Singleton und World-Owner vom Scene-Context frei', () => {
     const domainFiles = DOMAIN_ROOTS.flatMap(listTypeScriptFiles);
     const singletonOffenders = domainFiles

@@ -74,6 +74,8 @@ dadurch aber nicht fachlicher Eigentümer der Konstruktionen.
 
 Die Verträge sind in [PlayerWorldRuntime.ts](../../src/world/PlayerWorldRuntime.ts), [PlayerCapabilities.ts](../../src/world/PlayerCapabilities.ts) und den Tests [PlayerTreeRuntimeContracts.test.ts](../../tests/PlayerTreeRuntimeContracts.test.ts), [WorldPresentationContracts.test.ts](../../tests/WorldPresentationContracts.test.ts) und [WorldWithoutActivityProof.test.ts](../../tests/WorldWithoutActivityProof.test.ts) verankert.
 
+Combat ist pro World-Instanz an eine World-owned Boundary gebunden: [WorldCombatRuntime.ts](../../src/combat/WorldCombatRuntime.ts) erzwingt Build/Bind/Activate/Detach, während [WorldCombatCore.ts](../../src/combat/WorldCombatCore.ts) den konkreten Resolver-Kern hinter dieser Composition-Grenze hält. Szenen- und Activity-Consumer verwenden benannte Combat-Ports; ein scene-langlebiger `combatSystem`-Service-Slot oder alte Compatibility-Fassaden sind kein gültiger Anschluss.
+
 ## Geometrie und World-Kontext
 
 Eine World hat genau eine aufgelöste Layout-Quelle. [WorldLayout.ts](../../src/world/WorldLayout.ts) entscheidet zwischen authored Layout und deterministischem Generator; beide erfüllen denselben ArenaLayout-Vertrag. Das Ergebnis muss aus World-Identität und Seed reproduzierbar sein und liefert einen Fingerprint für Paritätsprüfungen. Activity besitzt keine eigene Geometriequelle.

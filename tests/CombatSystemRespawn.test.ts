@@ -31,7 +31,7 @@ vi.mock('phaser', () => {
   };
 });
 
-import { CombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { WorldCombatReactions } from '../src/world/WorldCombatReactions';
 import { TargetStatusSystem } from '../src/systems/TargetStatusSystem';
 import { CoopDefenseRespawnBudgetSystem } from '../src/systems/CoopDefenseRespawnBudgetSystem';

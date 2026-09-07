@@ -2,7 +2,7 @@
  * Gemeinsamer mathematischer Resolver für direkte Trefferprüfungen (Projektil, Hitscan, Melee).
  *
  * Vollständig entkoppelt von Phaser GameObjects, Scenes, Rendering und Netzwerk.
- * Wird sowohl von Gameplay/Runtime (CombatGeometry, CombatSystem) als auch vom Headless
+ * Wird sowohl von Gameplay/Runtime (CombatGeometry, WorldCombatCore) als auch vom Headless
  * Balance Lab verwendet.
  */
 

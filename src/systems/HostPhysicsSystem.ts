@@ -157,7 +157,7 @@ export class HostPhysicsSystem {
 
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
   /** World binding; the returned lease cannot clear a later World's Combat port. */
-  bindCombatSystem(combatSystem: CombatActorStatePort & CombatDamageEffectPort): { destroy(): void } {
+  bindCombatCore(combatSystem: CombatActorStatePort & CombatDamageEffectPort): { destroy(): void } {
     this.combatSystem = combatSystem;
     return { destroy: () => {
       if (this.combatSystem === combatSystem) this.combatSystem = null;
@@ -577,7 +577,7 @@ export class HostPhysicsSystem {
         this.baseCollidersSetup.add(player.id);
       }
 
-      // Tote Spieler überspringen (body.enable = false durch CombatSystem)
+      // Tote Spieler überspringen (body.enable = false durch WorldCombatCore)
       if (!this.combatSystem?.isAlive(player.id)) continue;
 
       const impulse = this.consumeImpulseVelocity(player.id, now);

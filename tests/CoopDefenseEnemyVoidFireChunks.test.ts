@@ -27,7 +27,7 @@ import type { FireSystem } from '../src/effects/FireSystem';
 import { getCoopDefenseEnemyConfig } from '../src/config/coopDefenseEnemies';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { VOID_FIRE_COLOR } from '../src/config';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { CoopDefenseEnemyAbilitySystem } from '../src/systems/CoopDefenseEnemyAbilitySystem';
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';

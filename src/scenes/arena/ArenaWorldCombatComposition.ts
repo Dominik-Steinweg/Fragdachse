@@ -20,7 +20,7 @@ import type {
   ArenaWorldGameplayCompositionInput,
 } from './ArenaWorldGameplayComposition';
 import { wireProjectileRenderers } from './RendererBundle';
-import { CombatSystem } from '../../systems/CombatSystem';
+import { WorldCombatCore } from '../../combat/WorldCombatCore';
 import { WorldCombatRuntime } from '../../combat/WorldCombatRuntime';
 
 /**
@@ -58,7 +58,7 @@ export function composeWorldCombatRuntime(
   gameplay: ArenaWorldGameplay,
 ): void {
   const generation = input.flow.nextCombatRuntimeGeneration();
-  const combatSystem = new CombatSystem(input.ctx.playerManager, bridge);
+  const combatSystem = new WorldCombatCore(input.ctx.playerManager, bridge);
   const combatRuntime = new WorldCombatRuntime(input.worldRuntime.descriptor.worldRevision, generation);
   input.worldRuntime.setCombat(combatRuntime);
   gameplay.combatSystem = combatSystem;
@@ -78,7 +78,7 @@ export function activateWorldCombatRuntime(
     throw new Error('[ArenaWorldComposition] Combat graph is incomplete before activation');
   }
   runtime.attachRequiredBindings(binding.getRequiredCombatBindings());
-  input.worldRuntime.bind(input.ctx.hostPhysics.bindCombatSystem(combat));
+  input.worldRuntime.bind(input.ctx.hostPhysics.bindCombatCore(combat));
   input.worldRuntime.bind(combat.bindHostExecutionSources({
     nowMs: () => bridge.getSynchronizedNow(),
     random: Math.random,

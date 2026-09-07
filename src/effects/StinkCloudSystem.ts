@@ -125,7 +125,7 @@ const BLOB_TEMPLATES: readonly BlobTemplate[] = [
   { angle: 2.88,          dist: 0.78, scale: 0.90, alpha: 0.18, drift: 20, swirl: 1.12, tint: TINT_TOXIC },
 ];
 
-/* ── Damage event (returned to host for CombatSystem processing) ── */
+/* ── Damage event (returned to host for WorldCombatCore processing) ── */
 export interface StinkCloudDamageEvent {
   x:              number;
   y:              number;

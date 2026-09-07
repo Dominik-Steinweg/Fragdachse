@@ -44,7 +44,7 @@ export class DetonationSystem {
 
   /**
    * Prüft ob eine Hitscan-Linie detonierbare Projektile schneidet.
-   * Wird von CombatSystem.resolveHitscanShot aufgerufen, wenn die
+   * Wird vom WorldCombatCore-Immediate-Attack-Pfad aufgerufen, wenn die
    * feuernde Waffe eine DetonatorConfig besitzt.
    *
    * @param startX / startY  Startpunkt des Hitscan-Strahls

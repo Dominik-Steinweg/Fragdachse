@@ -16,7 +16,7 @@ import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { TeslaDomeWeaponFireConfig, WeaponConfig } from '../src/loadout/LoadoutConfig';
 import { TeslaDomeSystem, type TeslaNovaHit, type TeslaStormProjectileRequest } from '../src/systems/TeslaDomeSystem';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { ResourceSystem } from '../src/systems/ResourceSystem';
 import type { TeslaDomeTargetType } from '../src/types';
 

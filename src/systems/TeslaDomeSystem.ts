@@ -63,7 +63,7 @@ interface TeslaConstructionSource {
   x: number;
   y: number;
   color: number;
-  /** Laufzeitboni des Besitzers und lokale Turmbuffs; globale Coop-Werte folgen im CombatSystem. */
+  /** Laufzeitboni des Besitzers und lokale Turmbuffs; globale Coop-Werte folgen im WorldCombatCore. */
   damageMultiplier?: number;
   config: WeaponConfig & { fire: TeslaDomeWeaponFireConfig };
 }

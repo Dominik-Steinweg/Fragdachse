@@ -8,7 +8,7 @@ import type { TargetStatusSystem } from './TargetStatusSystem';
  * Die gewuerfelten Affixwerte selbst liegen im `CoopDefensePlayerModifierSystem` – das ist eine
  * reine Projektion des aktuell gueltigen Coop-Player-Builds (Live-Lobby oder Commit). Alles, was sich waehrend einer
  * Runde aendert (Stapel, Timer, Wegstrecke, Debuffs), gehoert hierher, damit weder
- * `CombatSystem` noch `ResourceSystem` weiter anwachsen und die Regeln an einer Stelle stehen.
+ * `WorldCombatCore` noch `ResourceSystem` weiter anwachsen und die Regeln an einer Stelle stehen.
  *
  * World-Lifetime: die Instanz wird in `buildArena()` erzeugt und in `tearDownArena()` verworfen.
  * Damit kann sie auch in einer Activity-losen World leben; keine Spieler- oder Gegner-ID darf
@@ -196,7 +196,7 @@ export class CoopDefenseItemRuntimeSystem {
 
   /**
    * Tatsaechlich erlittener Schaden. Liefert den Dornen-Rueckwurf zurueck, damit der Aufrufer
-   * ihn ueber den regulaeren Schadenspfad zufuegen kann – dieses System kennt kein `CombatSystem`.
+   * ihn ueber den regulaeren Schadenspfad zufuegen kann – dieses System kennt kein `WorldCombatCore`.
    */
   handlePlayerDamageTaken(
     playerId: string,

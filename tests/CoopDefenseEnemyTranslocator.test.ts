@@ -20,7 +20,7 @@ import type { ProjectileSpawnPort } from '../src/projectile/ProjectileSpawnPort'
 import type { TranslocatorProjectilePort } from '../src/projectile/ProjectileExternalInteractionPort';
 import type { StinkCloudSystem } from '../src/effects/StinkCloudSystem';
 import type { FireSystem } from '../src/effects/FireSystem';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { CoopDefenseEnemyAbilitySystem } from '../src/systems/CoopDefenseEnemyAbilitySystem';
 import type { EnergyShieldSystem } from '../src/systems/EnergyShieldSystem';
 import type { FlamethrowerUpgradeSystem } from '../src/systems/FlamethrowerUpgradeSystem';

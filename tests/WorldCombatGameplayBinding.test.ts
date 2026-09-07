@@ -31,7 +31,7 @@ import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRe
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { UTILITY_CONFIGS, WEAPON_CONFIGS, type PlaceableTurretUtilityConfig } from '../src/loadout/LoadoutConfig';
 import type { ResourceSystem } from '../src/systems/ResourceSystem';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { DecoySystem } from '../src/systems/DecoySystem';
 import type { FireSystem } from '../src/effects/FireSystem';
 import type { GameAudioSystem } from '../src/audio/GameAudioSystem';

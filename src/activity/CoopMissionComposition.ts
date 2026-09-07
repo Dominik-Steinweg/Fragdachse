@@ -54,7 +54,7 @@ export interface CoopMissionCompositionOptions {
   readonly getArenaResult: () => ArenaBuilderResult | null;
   readonly getBaseManager: () => BaseManager | null;
   readonly getPlayerManager: () => PlayerManager;
-  readonly getCombatSystem: () => CombatActivityPort;
+  readonly getWorldCombatCore: () => CombatActivityPort;
   readonly getProjectileSpawnPort: () => ProjectileSpawnPort | null;
   readonly getProjectileThreatReadPort: () => ProjectileThreatReadPort | null;
   readonly getTranslocatorProjectilePort: () => TranslocatorProjectilePort | null;
@@ -193,7 +193,7 @@ export class CoopMissionComposition {
     const humanPlayerCount = this.options.getHumanPlayerCount();
     const activityMapConfig = activity.mapConfig;
     const playerManager = this.options.getPlayerManager();
-    const combatSystem = this.options.getCombatSystem();
+    const combatSystem = this.options.getWorldCombatCore();
     const powerUpSystem = this.options.getPowerUpSystem();
     const temporaryUtilityPort = this.options.getTemporaryUtilityPort();
     const weaponExecution = this.options.getAutomatedWeaponExecution();

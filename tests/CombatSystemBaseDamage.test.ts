@@ -111,7 +111,7 @@ vi.mock('phaser', () => {
   };
 });
 
-import { CombatSystem as RuntimeCombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatCore as RuntimeCombatSystem } from '../src/combat/WorldCombatCore';
 import * as Phaser from 'phaser';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
@@ -124,12 +124,92 @@ import type {
 import type { ProjectileImpactSource } from '../src/projectile/ProjectileGameplayPort';
 import type { TargetDamageMutationRequest } from '../src/combat/CombatMutation';
 import type { CombatTargetRef } from '../src/combat/CombatScope';
+import type { HitscanShotRequest, MeleeSwingRequest } from '../src/loadout/WeaponFireExecutor';
 
 class CombatSystem extends RuntimeCombatSystem {
   constructor(...args: ConstructorParameters<typeof RuntimeCombatSystem>) {
     super(...args);
     this.bindHostExecutionSources({ nowMs: () => 0, random: () => 0.25 });
   }
+}
+
+/** Test adapter keeps the old characterization arguments while exercising the normalized port. */
+function resolveHitscan(
+  combat: RuntimeCombatSystem,
+  shooterId: string,
+  startX: number,
+  startY: number,
+  angle: number,
+  range: number,
+  damage: number,
+  traceThickness: number,
+  color: number,
+  adrenalinGain: number,
+  sourceId: string,
+  visualPreset: HitscanShotRequest['visualPreset'] = 'default',
+  shotAudioKey?: HitscanShotRequest['shotAudioKey'],
+  sourceSlot?: HitscanShotRequest['sourceSlot'],
+  shotId?: number,
+  detonator?: HitscanShotRequest['detonator'],
+  rockDamageMult = 1,
+  trainDamageMult = 1,
+  chainLightning?: HitscanShotRequest['chainLightning'],
+  burnOnHit?: HitscanShotRequest['burnOnHit'],
+  supportEffect?: HitscanShotRequest['supportEffect'],
+  visualMuzzleOrigin?: HitscanShotRequest['visualMuzzleOrigin'],
+  baseDamageMult = 1,
+): boolean {
+  return combat.resolveImmediateAttack({
+    kind: 'hitscan',
+    payload: {
+      shooterId, startX, startY, angle, range, damage, traceThickness, color, adrenalinGain,
+      sourceId, visualPreset, shotAudioKey, sourceSlot, shotId, detonator,
+      rockDamageMult, trainDamageMult, chainLightning, burnOnHit, supportEffect,
+      visualMuzzleOrigin, baseDamageMult,
+    },
+    origin: { x: startX, y: startY },
+    aim: { x: Math.cos(angle), y: Math.sin(angle) },
+    range,
+  }).accepted;
+}
+
+/** Test adapter for the normalized immediate melee capability. */
+function resolveMelee(
+  combat: RuntimeCombatSystem,
+  shooterId: string,
+  x: number,
+  y: number,
+  angle: number,
+  range: number,
+  arcDegrees: number,
+  damage: number,
+  adrenalinGain: number,
+  sourceId: string,
+  color: number,
+  sourceSlot?: MeleeSwingRequest['sourceSlot'],
+  rockDamageMult = 1,
+  trainDamageMult = 1,
+  visualPreset: MeleeSwingRequest['visualPreset'] = 'default',
+  shotAudioKey?: MeleeSwingRequest['shotAudioKey'],
+  burnOnHit?: MeleeSwingRequest['burnOnHit'],
+  chain?: MeleeSwingRequest['chain'],
+  hitHeal = 0,
+  hitAdrenaline = 0,
+  bloodEffectMultiplier = 1,
+  damageTargets?: MeleeSwingRequest['damageTargets'],
+  baseDamageMult = 1,
+): boolean {
+  return combat.resolveImmediateAttack({
+    kind: 'melee',
+    payload: {
+      shooterId, x, y, angle, range, arcDegrees, damage, adrenalinGain, sourceId, color,
+      sourceSlot, rockDamageMult, trainDamageMult, visualPreset, shotAudioKey, burnOnHit,
+      chain, hitHeal, hitAdrenaline, bloodEffectMultiplier, damageTargets, baseDamageMult,
+    },
+    origin: { x, y },
+    aim: { x: Math.cos(angle), y: Math.sin(angle) },
+    range,
+  }).accepted;
 }
 
 function enemyMutationPort(enemy: { id: string; getHp(): number; getMaxHp(): number }, apply: (id: string, amount: number) => { died: boolean; remainingHp: number }) {
@@ -280,12 +360,12 @@ describe('CombatSystem base damage routing', () => {
       hitDecoyId: null,
       hitObstacle: true,
     }));
-    combat.resolveHitscanShot(
+    resolveHitscan(combat,
       'player-1', 0, 0, 0, 100, 7, 2, 0xffffff, 0, 'Hitscan',
       'default', undefined, 'weapon1',
     );
 
-    combat.resolveMeleeSwing(
+    resolveMelee(combat,
       'player-1', 0, 0, 0, 150, 90, 5, 0, 'Melee', 0xffffff,
       'weapon1', 1, 1, 'default', undefined, undefined, undefined, 0, 0, 1, ['bases'],
     );
@@ -654,7 +734,7 @@ describe('CombatSystem melee query target set', () => {
     combat.setArenaObstacles([blocker], []);
     combat.setPlayerDamageTakenHandler(() => { blocker.active = false; });
 
-    combat.resolveMeleeSwing(
+    resolveMelee(combat,
       'shooter', 0, 0, 0, 120, 60, 10, 0, 'test-melee', 0xffffff,
       undefined, 1, 1, 'default', undefined, undefined, undefined, 0, 0, 1, ['players'],
     );
@@ -739,7 +819,7 @@ describe('Plasmabrenner hitscan support impact', () => {
       hitDecoyId: null,
       hitObstacle: false,
     }));
-    combat.resolveHitscanShot(
+    resolveHitscan(combat,
       'shooter', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
       'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
     );
@@ -755,7 +835,7 @@ describe('Plasmabrenner hitscan support impact', () => {
       hitObstacle: false,
     });
     combat.setTargetIncomingDamageMultiplierResolver((target) => target.targetType === 'player' ? 1.2 : 1);
-    combat.resolveHitscanShot(
+    resolveHitscan(combat,
       'shooter', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
       'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
     );
@@ -777,7 +857,7 @@ describe('Plasmabrenner hitscan support impact', () => {
       hitObstacle: true,
       hitObstacleKind: 'base',
     }));
-    combat.resolveHitscanShot(
+    resolveHitscan(combat,
       'player-1', 0, 0, 0, 420, 0, 5, 0x5cf58f, 0, 'Plasmabrenner',
       'plasma_burner', undefined, 'weapon2', undefined, undefined, 1, 1, undefined, undefined, effect,
     );

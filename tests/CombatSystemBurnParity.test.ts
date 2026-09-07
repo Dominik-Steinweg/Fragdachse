@@ -26,7 +26,7 @@ vi.mock('phaser', () => {
   };
 });
 
-import { CombatSystem } from '../src/systems/CombatSystem';
+import { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import { BURN_TICK_INTERVAL_MS } from '../src/config';
 
 describe('CombatSystem & BurnStateMachine Parity', () => {

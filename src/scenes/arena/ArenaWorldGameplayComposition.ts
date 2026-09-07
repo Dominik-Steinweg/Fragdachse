@@ -42,7 +42,7 @@ import type { AutomatedWeaponExecution } from '../../world/AutomatedWeaponExecut
 import type { SpecializedWeaponExecutionCapability } from '../../loadout/WeaponFireExecutor';
 import { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
 import { WorldCombatRuntime } from '../../combat/WorldCombatRuntime';
-import { CombatSystem } from '../../systems/CombatSystem';
+import { WorldCombatCore } from '../../combat/WorldCombatCore';
 import { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
 import { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
 import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
@@ -146,7 +146,7 @@ export interface ArenaWorldGameplayCompositionInput {
  */
 export class ArenaWorldGameplay {
   /** Concrete Combat core and lifecycle boundary are created once per local World runtime. */
-  combatSystem: CombatSystem | null = null;
+  combatSystem: WorldCombatCore | null = null;
   combatRuntime: WorldCombatRuntime | null = null;
   geometry: WorldGeometryBinding | null = null;
   projectiles: WorldProjectileRuntime | null = null;

@@ -14,7 +14,7 @@ import {
   ARENA_MAP_GRID_CHANGED_EVENT,
   type ArenaMapGridChangedEvent,
 } from '../scenes/arena/ArenaEvents';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { WorldCombatCore } from '../combat/WorldCombatCore';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
@@ -35,7 +35,7 @@ export interface WorldGeometryBindingInput {
   readonly baseManager: BaseManager | null;
   readonly presentationRequired: boolean;
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: WorldCombatCore;
   readonly decoySystem: DecoySystem;
   readonly projectileGeometry: ProjectileGeometryBindingPort;
   readonly hostPhysics: HostPhysicsSystem;
@@ -84,7 +84,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       leafBlower,
     } = input;
 
-    // CombatSystem created this sole index before the World existed. Binding claims that
+    // WorldCombatCore created this sole index before the World existed. Binding claims that
     // instance after installing the World arrays; Projectile and Queries receive the same object.
     this.obstacleIndex = combatSystem.claimObstacleIndex(this.bindingToken);
     this.geometryQueries = createWorldGeometryQueries({
@@ -223,7 +223,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       leafBlower,
       lighting,
     } = this.input;
-    const releaseGeometryBinding = (combatSystem as CombatSystem & {
+    const releaseGeometryBinding = (combatSystem as WorldCombatCore & {
       releaseGeometryBinding?: (token: object) => boolean;
     }).releaseGeometryBinding;
     const ownsGeometry = releaseGeometryBinding ? releaseGeometryBinding.call(combatSystem, this.bindingToken) : true;

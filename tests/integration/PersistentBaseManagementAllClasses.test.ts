@@ -144,6 +144,7 @@ function createHarness(classId: string) {
   const playerCell = rewardCell(0, 0);
   const playerWorld = worldCellCenter(METRICS, playerCell.gridX, playerCell.gridY);
   const player = { id: playerId, active: true, x: playerWorld.x, y: playerWorld.y, color: 0xffffff };
+  const combatCore = { isAlive: vi.fn(() => true), isBurrowed: vi.fn(() => false) };
 
   vi.spyOn(bridge, 'getPlayerCurrentLoadoutSnapshot').mockReturnValue({ coopDefenseClassId: classId } as never);
 
@@ -157,7 +158,7 @@ function createHarness(classId: string) {
     scene: { game: { events: { emit: vi.fn() } } },
     ctx: {
       playerManager: { getPlayer: () => player },
-      combatSystem: { isAlive: vi.fn(() => true), isBurrowed: vi.fn(() => false) },
+      getWorldCombatCore: () => combatCore,
       gameAudioSystem: { playSound: vi.fn() },
     },
     rockVisualHelper: {
@@ -195,7 +196,7 @@ function createHarness(classId: string) {
   coordinator.constructionWorldRuntime = new ConstructionWorldRuntime({
     scene: coordinator.scene,
     playerManager: coordinator.ctx.playerManager,
-    combatSystem: coordinator.ctx.combatSystem,
+    combatSystem: combatCore,
     placementSystem,
     loadoutManager,
     targetStatusSystem: null,
@@ -357,8 +358,8 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       mode: 'move-source',
       sourceRuntimeId: source.id,
     });
-    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
-    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isBurrowed).not.toHaveBeenCalled();
     expect(placementSystem.getRuntimeRock(source.id)).toBeDefined();
 
     const target = rewardCell(-1, 1);
@@ -375,8 +376,8 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
       gridX: target.gridX,
       gridY: target.gridY,
     });
-    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
-    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isBurrowed).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -388,8 +389,8 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     useClientPreviewState(playerId, state);
 
     expect(coordinator.getPersistentBaseMoveSourcePreview(playerId, 0, 0)).toBeUndefined();
-    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
-    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isBurrowed).not.toHaveBeenCalled();
   });
 
   it('verwendet beim Client die replizierte Verfuegbarkeit fuer Reward-Placement', () => {
@@ -407,8 +408,8 @@ describe('Base-Reward-Verwaltung durch alle Coop-Klassen', () => {
     );
 
     expect(preview).toMatchObject({ isValid: true, mode: 'place', gridX: target.gridX, gridY: target.gridY });
-    expect(coordinator.ctx.combatSystem.isAlive).not.toHaveBeenCalled();
-    expect(coordinator.ctx.combatSystem.isBurrowed).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isAlive).not.toHaveBeenCalled();
+    expect(coordinator.ctx.getWorldCombatCore()!.isBurrowed).not.toHaveBeenCalled();
   });
 
   it('laesst Client-Commits trotz lokaler Preview nicht autoritativ durch', () => {

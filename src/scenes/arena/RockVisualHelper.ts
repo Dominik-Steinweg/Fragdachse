@@ -616,7 +616,7 @@ export class RockVisualHelper {
     // Ein neu gesetzter Fels muss noch im selben Frame blockieren. Entfernte Felsen brauchen
     // dagegen keinen Rebuild: ArenaObstacleIndex liest `active` live und ueberspringt das
     // zerstoerte Quellobjekt sofort. Das vermeidet einen Vollaufbau zwischen Shotgun-Pellets.
-    if (requiresIndexRebuild) this.ctx.combatSystem.invalidateObstacleIndex();
+    if (requiresIndexRebuild) this.ctx.getWorldCombatCore()!.invalidateObstacleIndex();
     if (rockIds === undefined) {
       this.obstacleVisualsRequireFullRefresh = true;
       this.dirtyRockIds.clear();

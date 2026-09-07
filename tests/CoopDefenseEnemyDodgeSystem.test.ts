@@ -9,7 +9,7 @@ import { CoopDefenseEnemyDodgeSystem } from '../src/systems/CoopDefenseEnemyDodg
 import type { EnemyEntity } from '../src/entities/EnemyEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
-import type { CombatSystem } from '../src/systems/CombatSystem';
+import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatCore';
 import type { HostPhysicsSystem } from '../src/systems/HostPhysicsSystem';
 import type { ProjectileThreatReadPort } from '../src/projectile/ProjectileReadPorts';
 

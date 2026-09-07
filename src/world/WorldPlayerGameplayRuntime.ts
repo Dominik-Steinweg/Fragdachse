@@ -2,7 +2,6 @@ import type {
   CombatActivityPort,
   CombatDamageEffectPort,
   CombatImmediateAttackPort,
-  CombatLegacyMeleeAttackPort,
   CombatPlayerSupportPort,
 } from '../combat/CombatCapabilities';
 import type { EnemyManager } from '../entities/EnemyManager';
@@ -375,7 +374,6 @@ export interface WorldPlayerGameplayRuntimeOptions {
     & CombatPlayerSupportPort
     & CombatDamageEffectPort
     & CombatActivityPort
-    & CombatLegacyMeleeAttackPort
     & CombatImmediateAttackPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;

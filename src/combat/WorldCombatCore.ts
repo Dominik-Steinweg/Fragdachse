@@ -6,9 +6,9 @@ import type { PlayerManager }     from '../entities/PlayerManager';
 import type { NetworkBridge }     from '../network/NetworkBridge';
 import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { WorldMetrics } from '../world/WorldMetrics';
-import type { DetonationSystem }  from './DetonationSystem';
-import type { EnergyShieldSystem } from './EnergyShieldSystem';
-import type { DecoySystem, DecoyTargetSnapshot } from './DecoySystem';
+import type { DetonationSystem }  from '../systems/DetonationSystem';
+import type { EnergyShieldSystem } from '../systems/EnergyShieldSystem';
+import type { DecoySystem, DecoyTargetSnapshot } from '../systems/DecoySystem';
 import type { BurnOnHitConfig, BurnOrigin, ChainLightningConfig, CombatDamageKind, CombatDamageTargetType, GroundFireVisualStyle, HitscanSupportEffect, HitscanVisualPreset, LoadoutSlot, MeleeDamageTarget, MeleeVisualPreset, ProjectileSpawnConfig, RadialDamageFalloffConfig, ShieldBlockCategory, ShotAudioKey, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing, DetonatorConfig, ProjectileExplosionConfig, WeaponSlot } from '../types';
 import {
   type GeometryHit,
@@ -19,8 +19,8 @@ import {
   type ObstacleCircleVisitor,
   type ObstacleCircleBody,
   type ObstacleRectBody,
-} from './ArenaObstacleIndex';
-import { CombatGeometry } from './CombatGeometry';
+} from '../systems/ArenaObstacleIndex';
+import { CombatGeometry } from '../systems/CombatGeometry';
 import { resolveProjectileTargetImpact } from '../combat/rules/ProjectileImpactResolver';
 import {
   resolveChainLightning as resolveChainLightningTraversal,
@@ -70,8 +70,8 @@ import {
   PLASMA_SWARM_BASE_PROJECTILE_COUNT,
   type PlasmaSwarmMechanicPort,
   shouldIgnorePlasmaSwarmOriginHit,
-} from './PlasmaCharge';
-import type { TargetStatusTarget } from './TargetStatusSystem';
+} from '../systems/PlasmaCharge';
+import type { TargetStatusTarget } from '../systems/TargetStatusSystem';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { ProjectileDetonableReadPort, ProjectileImpactSource } from '../projectile/ProjectileGameplayPort';
 import { PlayerVitalsOwner } from '../combat/PlayerVitalsOwner';
@@ -258,7 +258,7 @@ export type HitscanObstacleKind = 'arena' | 'rock' | 'base' | 'barrier' | 'trunk
 /**
  * Optionen der Schusslinienprüfung.
  *
- * Dieselben drei Freiheitsgrade wie bei {@link CombatSystem.hasLineOfSight}, nur gebündelt:
+ * Dieselben drei Freiheitsgrade wie bei {@link WorldCombatCore.hasLineOfSight}, nur gebündelt:
  * `hasClearLineOfFire` reicht sie an den statischen Hinderniskern **und** an die beweglichen
  * Blocker weiter, deshalb wären drei optionale Positionsparameter an der Aufrufstelle nicht
  * mehr lesbar.
@@ -326,7 +326,7 @@ type MeleeSwingTargetCandidate =
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'enemy' }>, 'distance'>
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'decoy' }>, 'distance'>;
 
-export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttackPort {
+export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAttackPort {
   private playerVitals: PlayerVitalsOwner;
   private playerLife: PlayerLifeRuntime;
   private burnStatus = new CombatBurnStatusOwner();
@@ -375,18 +375,10 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
   private meleeSwingIdCounter = 0;
   private effectSeedCounter = 1;
 
-  // Kill-Tracking: letzter Angreifer & Waffe pro Ziel (für Frag-Vergabe)
-  private lastAttacker: Map<string, string> = new Map();  // victimId → attackerId
-  private lastWeapon:   Map<string, string> = new Map();  // victimId → sourceId
   private lastKillSource: Map<string, KillSourceContext> = new Map();
   private lastSource = new Map<string, CombatSource>();
   private attributionTargets = new Map<string, CombatTargetRef>();
   private reactionGeneration = 0;
-  /**
-   * Herkunft des toedlichen Treffers. Getrennt von {@link lastKillSource}, weil dieser Kontext
-   * an die Clients repliziert wird und rein visuell ist – die Quelle ist reine Host-Regel.
-   */
-  private lastDamageOrigin: Map<string, { kind: CombatDamageKind; slot?: LoadoutSlot }> = new Map();
 
   // Callback: (killerId, victimId, sourceId) – Host-only
   private onKillCb: ((killerId: string, victimId: string, sourceId: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
@@ -452,14 +444,14 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
   private get hostFrameNowMs(): number {
     if (!this.currentHostExecution || this.currentHostExecution.sources !== this.hostExecutionSources) {
-      throw new Error('[CombatSystem] Missing active Host execution context');
+      throw new Error('[WorldCombatCore] Missing active Host execution context');
     }
     return this.currentHostExecution.nowMs;
   }
 
   private get hostRandom(): () => number {
     if (!this.currentHostExecution || this.currentHostExecution.sources !== this.hostExecutionSources) {
-      throw new Error('[CombatSystem] Missing active Host execution context');
+      throw new Error('[WorldCombatCore] Missing active Host execution context');
     }
     return this.currentHostExecution.sources.random;
   }
@@ -513,42 +505,34 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
   private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
   private mutationOutcomeSequence = 0;
 
-  getTargetIncomingDamageMultiplier(...args: Parameters<CombatSystem['getTargetIncomingDamageMultiplierAtHostTime']>): ReturnType<CombatSystem['getTargetIncomingDamageMultiplierAtHostTime']> {
+  getTargetIncomingDamageMultiplier(...args: Parameters<WorldCombatCore['getTargetIncomingDamageMultiplierAtHostTime']>): ReturnType<WorldCombatCore['getTargetIncomingDamageMultiplierAtHostTime']> {
     return this.runHostExecution(() => this.getTargetIncomingDamageMultiplierAtHostTime(...args));
   }
 
-  applyDamage(...args: Parameters<CombatSystem['applyDamageAtHostTime']>): ReturnType<CombatSystem['applyDamageAtHostTime']> {
+  applyDamage(...args: Parameters<WorldCombatCore['applyDamageAtHostTime']>): ReturnType<WorldCombatCore['applyDamageAtHostTime']> {
     const outcome = this.runHostExecution(() => this.applyDamageAtHostTime(...args));
     if (outcome && this.immediateMutationOutcomes) this.immediateMutationOutcomes.push(outcome);
     return outcome;
   }
 
-  applyAoeDamage(...args: Parameters<CombatSystem['applyAoeDamageAtHostTime']>): ReturnType<CombatSystem['applyAoeDamageAtHostTime']> {
+  applyAoeDamage(...args: Parameters<WorldCombatCore['applyAoeDamageAtHostTime']>): ReturnType<WorldCombatCore['applyAoeDamageAtHostTime']> {
     return this.runHostExecution(() => this.applyAoeDamageAtHostTime(...args));
   }
 
-  applyExplosionDamage(...args: Parameters<CombatSystem['applyExplosionDamageAtHostTime']>): ReturnType<CombatSystem['applyExplosionDamageAtHostTime']> {
+  applyExplosionDamage(...args: Parameters<WorldCombatCore['applyExplosionDamageAtHostTime']>): ReturnType<WorldCombatCore['applyExplosionDamageAtHostTime']> {
     return this.runHostExecution(() => this.applyExplosionDamageAtHostTime(...args));
   }
 
-  getPlayerRuntimeDamageMultiplier(...args: Parameters<CombatSystem['getPlayerRuntimeDamageMultiplierAtHostTime']>): ReturnType<CombatSystem['getPlayerRuntimeDamageMultiplierAtHostTime']> {
+  getPlayerRuntimeDamageMultiplier(...args: Parameters<WorldCombatCore['getPlayerRuntimeDamageMultiplierAtHostTime']>): ReturnType<WorldCombatCore['getPlayerRuntimeDamageMultiplierAtHostTime']> {
     return this.runHostExecution(() => this.getPlayerRuntimeDamageMultiplierAtHostTime(...args));
   }
 
-  resolveDirectImpact(...args: Parameters<CombatSystem['resolveDirectImpactAtHostTime']>): ReturnType<CombatSystem['resolveDirectImpactAtHostTime']> {
+  resolveDirectImpact(...args: Parameters<WorldCombatCore['resolveDirectImpactAtHostTime']>): ReturnType<WorldCombatCore['resolveDirectImpactAtHostTime']> {
     return this.runHostExecution(() => this.resolveDirectImpactAtHostTime(...args));
   }
 
-  resolveExplosionCombat(...args: Parameters<CombatSystem['resolveExplosionCombatAtHostTime']>): ReturnType<CombatSystem['resolveExplosionCombatAtHostTime']> {
+  resolveExplosionCombat(...args: Parameters<WorldCombatCore['resolveExplosionCombatAtHostTime']>): ReturnType<WorldCombatCore['resolveExplosionCombatAtHostTime']> {
     return this.runHostExecution(() => this.resolveExplosionCombatAtHostTime(...args));
-  }
-
-  resolveHitscanShot(...args: Parameters<CombatSystem['resolveHitscanShotAtHostTime']>): ReturnType<CombatSystem['resolveHitscanShotAtHostTime']> {
-    return this.runHostExecution(() => this.resolveHitscanShotAtHostTime(...args));
-  }
-
-  resolveMeleeSwing(...args: Parameters<CombatSystem['resolveMeleeSwingAtHostTime']>): ReturnType<CombatSystem['resolveMeleeSwingAtHostTime']> {
-    return this.runHostExecution(() => this.resolveMeleeSwingAtHostTime(...args));
   }
 
   /**
@@ -630,27 +614,27 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     });
   }
 
-  applyBaseDamage(...args: Parameters<CombatSystem['applyBaseDamageAtHostTime']>): ReturnType<CombatSystem['applyBaseDamageAtHostTime']> {
+  applyBaseDamage(...args: Parameters<WorldCombatCore['applyBaseDamageAtHostTime']>): ReturnType<WorldCombatCore['applyBaseDamageAtHostTime']> {
     return this.runHostExecution(() => this.applyBaseDamageAtHostTime(...args));
   }
 
-  resolveExternalTargetDamage(...args: Parameters<CombatSystem['resolveExternalTargetDamageAtHostTime']>): ReturnType<CombatSystem['resolveExternalTargetDamageAtHostTime']> {
+  resolveExternalTargetDamage(...args: Parameters<WorldCombatCore['resolveExternalTargetDamageAtHostTime']>): ReturnType<WorldCombatCore['resolveExternalTargetDamageAtHostTime']> {
     return this.runHostExecution(() => this.resolveExternalTargetDamageAtHostTime(...args));
   }
 
-  applyRadialHostileBaseDamage(...args: Parameters<CombatSystem['applyRadialHostileBaseDamageAtHostTime']>): ReturnType<CombatSystem['applyRadialHostileBaseDamageAtHostTime']> {
+  applyRadialHostileBaseDamage(...args: Parameters<WorldCombatCore['applyRadialHostileBaseDamageAtHostTime']>): ReturnType<WorldCombatCore['applyRadialHostileBaseDamageAtHostTime']> {
     return this.runHostExecution(() => this.applyRadialHostileBaseDamageAtHostTime(...args));
   }
 
-  hpRegenTick(...args: Parameters<CombatSystem['hpRegenTickAtHostTime']>): ReturnType<CombatSystem['hpRegenTickAtHostTime']> {
+  hpRegenTick(...args: Parameters<WorldCombatCore['hpRegenTickAtHostTime']>): ReturnType<WorldCombatCore['hpRegenTickAtHostTime']> {
     return this.runHostExecution(() => this.hpRegenTickAtHostTime(...args));
   }
 
-  armorRegenTick(...args: Parameters<CombatSystem['armorRegenTickAtHostTime']>): ReturnType<CombatSystem['armorRegenTickAtHostTime']> {
+  armorRegenTick(...args: Parameters<WorldCombatCore['armorRegenTickAtHostTime']>): ReturnType<WorldCombatCore['armorRegenTickAtHostTime']> {
     return this.runHostExecution(() => this.armorRegenTickAtHostTime(...args));
   }
 
-  applySupport(...args: Parameters<CombatSystem['applySupportAtHostTime']>): ReturnType<CombatSystem['applySupportAtHostTime']> {
+  applySupport(...args: Parameters<WorldCombatCore['applySupportAtHostTime']>): ReturnType<WorldCombatCore['applySupportAtHostTime']> {
     return this.runHostExecution(() => this.applySupportAtHostTime(...args));
   }
 
@@ -715,7 +699,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
   bindPlayerVitalsScope(scope: CombatScope): { destroy(): void } {
     if (this.playerVitals.hasAttachedPlayers()) {
-      throw new Error('[CombatSystem] Cannot replace Player vitals while Players are attached');
+      throw new Error('[WorldCombatCore] Cannot replace Player vitals while Players are attached');
     }
     this.playerVitals.destroy();
     this.playerLife.destroy();
@@ -731,7 +715,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
         if (this.playerVitals === owner) {
           this.reactionGeneration += 1;
           this.lastSource.clear(); this.attributionTargets.clear();
-          this.lastAttacker.clear(); this.lastWeapon.clear(); this.lastKillSource.clear(); this.lastDamageOrigin.clear();
+          this.lastKillSource.clear();
         }
         playerLife.destroy();
         if (this.playerVitals === owner) owner.destroy();
@@ -878,7 +862,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     );
     for (const observer of this.damageDealtObservers) {
       try { observer(Object.freeze({ ...event })); }
-      catch (error) { console.error('[CombatSystem] Passive damage observer failed', error); }
+      catch (error) { console.error('[WorldCombatCore] Passive damage observer failed', error); }
     }
   }
   setHealingReceivedHandler(handler: ((playerId: string, amount: number) => void) | null): void {
@@ -1023,7 +1007,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
   /** A regular Host frame supplies nowMs; an immediate outer entry samples the bound Host clock. */
   runHostExecution<T>(work: () => T, nowMs?: number): T {
     const sources = this.hostExecutionSources;
-    if (!sources) throw new Error('[CombatSystem] Host execution sources are not bound to a World');
+    if (!sources) throw new Error('[WorldCombatCore] Host execution sources are not bound to a World');
     const previous = this.currentHostExecution;
     if (previous?.sources === sources) return work();
     const now = nowMs ?? sources.nowMs();
@@ -1041,10 +1025,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     this.playerVitals.attachAndBeginInitialLife(id);
     this.clearAttribution(id);
     this.clearBurnForPlayer(id);
-    this.lastAttacker.delete(id);
-    this.lastWeapon.delete(id);
     this.lastKillSource.delete(id);
-    this.lastDamageOrigin.delete(id);
   }
 
   /** Host-only reconnect after a registered death; consumes through the normal respawn callback. */
@@ -1074,10 +1055,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     this.clearBurnForPlayer(id);
     this.clearBurnByAttacker(id);
     this.playerVitals.detachCurrentPlayer(id);
-    this.lastAttacker.delete(id);
-    this.lastWeapon.delete(id);
     this.lastKillSource.delete(id);
-    this.lastDamageOrigin.delete(id);
     this.playerLife.removePlayer(id);
   }
 
@@ -1174,15 +1152,12 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
     // Attribution is updated only by a confirmed mutation, not a fully blocked candidate.
     if (attackerId && attackerId !== targetId) {
-      this.lastAttacker.set(targetId, attackerId);
       this.lastSource.set(targetId, outcome.source);
-      if (sourceId) this.lastWeapon.set(targetId, sourceId);
       if (visualContext) this.lastKillSource.set(targetId, {
         dirX: visualContext.dirX,
         dirY: visualContext.dirY,
         projectileColor: visualContext.projectileColor,
       });
-      this.rememberDamageOrigin(targetId, options);
     }
 
     const player = this.playerManager.getPlayer(targetId);
@@ -1201,8 +1176,8 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     const newHp = outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : 0;
     const terminalSource = this.captureKillSource(targetId, outcome);
     const creditedSource = this.lastSource.get(targetId);
-    const killerId = creditedSource?.attribution.id ?? this.lastAttacker.get(targetId);
-    const killWeapon = this.lastWeapon.get(targetId) ?? sourceId ?? 'source.unknown';
+    const killerId = creditedSource?.attribution.id;
+    const killWeapon = creditedSource?.authoredSourceId ?? sourceId ?? 'source.unknown';
     const deathSeed = outcome.transition.kind === 'dead' ? this.nextEffectSeed() : 0;
     const deathDirection = outcome.transition.kind === 'dead'
       ? this.resolveDamageDirection(targetId, attackerId, visualContext, deathSeed, x, y) : undefined;
@@ -2443,7 +2418,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
   /**
    * Kontextabhaengiger Hitscan-Treffer des Plasmabrenners. Die Zielentscheidung bleibt im
-   * CombatSystem, waehrend Reparaturen an hostautoritaeren Strukturen beim Host-Update liegen.
+   * WorldCombatCore, waehrend Reparaturen an hostautoritaeren Strukturen beim Host-Update liegen.
    * Feindlicher Schaden nutzt bewusst denselben Schadenstrichter wie jede andere Hitscan-Waffe.
    */
   private resolveHitscanSupportImpact(
@@ -3057,7 +3032,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
   /**
    * Wendet ausgehenden und zielseitigen Schaden auf eine hostautoritäre Struktur an, ohne
-   * den konkreten Lifecycle des Objekts in den CombatSystem zu ziehen. Der Aufrufer entscheidet
+   * den konkreten Lifecycle des Objekts in den WorldCombatCore zu ziehen. Der Aufrufer entscheidet
    * anschliessend, ob es ein Fels, Konstrukt, Aussenposten oder eine andere Struktur war.
    */
   private resolveExternalTargetDamageAtHostTime(
@@ -3657,23 +3632,20 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     const isCritical = outcome.damage.isCritical;
 
     if (attackerId && attackerId !== targetId) {
-      this.lastAttacker.set(targetId, attackerId);
       this.lastSource.set(targetId, outcome.source);
-      if (sourceId) this.lastWeapon.set(targetId, sourceId);
       if (visualContext) this.lastKillSource.set(targetId, {
         dirX: visualContext.dirX,
         dirY: visualContext.dirY,
         projectileColor: visualContext.projectileColor,
         shotgunLightningGeneration: visualContext.shotgunLightningGeneration,
       });
-      this.rememberDamageOrigin(targetId, options);
     }
 
     const hpLost = outcome.hpLost;
     const terminalSource = this.captureKillSource(targetId, outcome, result.death);
     const creditedSource = this.lastSource.get(targetId);
-    const killerId = creditedSource?.attribution.id ?? this.lastAttacker.get(targetId);
-    const killSourceId = this.lastWeapon.get(targetId) ?? sourceId ?? 'source.unknown';
+    const killerId = creditedSource?.attribution.id;
+    const killSourceId = creditedSource?.authoredSourceId ?? sourceId ?? 'source.unknown';
     // Facts are secured; end target status before any hook can create a successor.
     if (result.died) {
       this.movementStatus?.clearMovementStatus(target);
@@ -3790,8 +3762,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
 
   private clearAttribution(id: string): void {
     this.lastSource.delete(id); this.attributionTargets.delete(id);
-    this.lastAttacker.delete(id); this.lastWeapon.delete(id);
-    this.lastKillSource.delete(id); this.lastDamageOrigin.delete(id);
+    this.lastKillSource.delete(id);
   }
 
   private prepareAttributionTarget(target: CombatTargetRef): void {
@@ -3826,8 +3797,8 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
     this.clearBurnForPlayer(playerId);
     // Capture the current animation frame before any death callback hides or changes the Sprite.
     const deathEffect = terminal?.effect ?? this.buildDeathEffect(playerId, x, y, seed, direction);
-    const killerId = terminal?.killerId ?? this.lastSource.get(playerId)?.attribution.id ?? this.lastAttacker.get(playerId);
-    const weapon = terminal?.weapon ?? this.lastWeapon.get(playerId) ?? 'Waffe';
+    const killerId = terminal?.killerId ?? this.lastSource.get(playerId)?.attribution.id;
+    const weapon = terminal?.weapon ?? this.lastSource.get(playerId)?.authoredSourceId ?? 'Waffe';
     const killSource = terminal?.source ?? this.lastKillSource.get(playerId);
 
     // Aktive Duration-Buffs (z.B. Adrenalinspritze) beim Tod entfernen
@@ -3884,26 +3855,6 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
       : outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : this.getHP(playerId);
   }
 
-  /**
-   * Merkt sich, woher der letzte Treffer auf dieses Ziel kam. Ohne Angabe gilt ein direkter
-   * Treffer ohne bekannten Slot – dieselbe Vorgabe wie beim Lesen der Optionen.
-   */
-  private rememberDamageOrigin(targetId: string, options?: DamageApplicationOptions): void {
-    this.lastDamageOrigin.set(targetId, {
-      kind: options?.damageKind ?? 'direct',
-      slot: options?.sourceSlot,
-    });
-  }
-
-  /**
-   * Herkunft des Treffers, der dieses Ziel zuletzt getroffen hat.
-   *
-   * Gemeint ist der Treffer, nicht der Schadensanteil: die Kill-Zuordnung folgt im ganzen
-   * `CombatSystem` dem letzten Treffer, nicht der Schadensverteilung.
-   */
-  getLastDamageOrigin(targetId: string): { kind: CombatDamageKind; slot?: LoadoutSlot } | undefined {
-    return this.lastDamageOrigin.get(targetId);
-  }
 
   private applyLifeLeech(attackerId: string | undefined, targetId: string, actualDamage: number): void {
     if (!attackerId || attackerId === targetId || actualDamage <= 0) return;
@@ -3960,10 +3911,7 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
       resetLifeResources: (id) => {
         this.clearAttribution(id);
         this.clearBurnForPlayer(id);
-        this.lastAttacker.delete(id);
-        this.lastWeapon.delete(id);
         this.lastKillSource.delete(id);
-        this.lastDamageOrigin.delete(id);
         this.resourceSystem?.resetAdrenalineForSpawn(id);
       },
       publishRespawn: (id) => this.onRespawnCommitted?.(id),

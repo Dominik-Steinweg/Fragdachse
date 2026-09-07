@@ -1,6 +1,5 @@
 import type { PlayerManager }       from '../../entities/PlayerManager';
 import type { WorldProjectileRuntime } from '../../projectile/WorldProjectileRuntime';
-import type { CombatSystem }        from '../../systems/CombatSystem';
 import type { EffectSystem }        from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem }     from '../../audio/GameAudioSystem';
@@ -16,6 +15,7 @@ import type { AimSystem }           from '../../ui/AimSystem';
 import type { ArenaCountdownOverlay } from '../../ui/ArenaCountdownOverlay';
 import type { LocalArenaHudData }   from '../../ui/LocalArenaHudData';
 import type { DecoySystem }         from '../../systems/DecoySystem';
+import type { WorldCombatCore }     from '../../combat/WorldCombatCore';
 
 interface PlayerStatusRingLike {
   setActive(active: boolean): void;
@@ -37,9 +37,7 @@ export interface ArenaContext {
   /** World-scoped projectile owner; outside a materialized World this is null. */
   readonly getProjectileRuntime: () => WorldProjectileRuntime | null;
   /** Current world-owned Combat core; absent while no local World is materialized. */
-  readonly getCombatSystem: () => CombatSystem | null;
-  /** @deprecated P12 removes this compatibility view; the concrete instance is World-owned. */
-  readonly combatSystem: CombatSystem;
+  readonly getWorldCombatCore: () => WorldCombatCore | null;
   readonly effectSystem:      EffectSystem;
   /** Zentrale Regie für Kamerabewegung und Trefferreaktion. Nie `camera.shake()` direkt rufen. */
   readonly visualFeedback:    VisualFeedbackDirector;

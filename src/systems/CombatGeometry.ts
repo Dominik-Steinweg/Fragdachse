@@ -31,7 +31,7 @@ export interface ObstacleTraceOptions {
 /**
  * Gemeinsamer mathematischer Kern aller segmentbasierten Trefferprüfungen.
  *
- * Gameplay (`CombatSystem`) und eigenständige oder Headless-Aufrufer benutzen dieselbe Instanz-Art
+ * Gameplay (`WorldCombatCore`) und eigenständige oder Headless-Aufrufer benutzen dieselbe Instanz-Art
  * dieser Klasse: Sichtlinie, Hitscan-Hindernis, Melee-Bogen und Korridorfreiheit dürfen sich
  * nicht zwischen Aufrufern unterscheiden. Die Klasse hält ausschließlich Scratch-Objekte
  * – keinen Spiel-, Activity-, Runden- oder Netzwerkzustand – und liest die Hindernisgeometrie über den
@@ -39,7 +39,7 @@ export interface ObstacleTraceOptions {
  *
  * Die Scratch-Objekte machen die Methoden bewusst nicht wiedereintrittsfähig: ein Ergebnis
  * muss ausgewertet sein, bevor der nächste Aufruf startet. Genau das war schon vorher die
- * Bedingung der entsprechenden `CombatSystem`-Privatmethoden.
+ * Bedingung der entsprechenden `WorldCombatCore`-Privatmethoden.
  */
 export class CombatGeometry {
   private readonly scratchCircle = new Phaser.Geom.Circle();

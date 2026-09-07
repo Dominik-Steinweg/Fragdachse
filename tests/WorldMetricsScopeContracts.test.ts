@@ -27,7 +27,7 @@ const WORLD_SCOPED_MODULES = [
   'src/scenes/arena/HostUpdateCoordinator.ts',
   'src/scenes/arena/PersistentBaseVisuals.ts',
   'src/scenes/arena/RockVisualHelper.ts',
-  'src/systems/CombatSystem.ts',
+  'src/combat/WorldCombatCore.ts',
   'src/systems/PlacementSystem.ts',
   'src/entities/EnemyManager.ts',
   'src/powerups/PowerUpSystem.ts',
@@ -138,7 +138,7 @@ describe('World-scoped Metrik – Basisgeometrie folgt ihrer Map', () => {
     const baseManager = read('src/entities/BaseManager.ts');
     const playerManager = read('src/entities/PlayerManager.ts');
     const persistentVisuals = read('src/scenes/arena/PersistentBaseVisuals.ts');
-    const combatSystem = read('src/systems/CombatSystem.ts');
+    const combatSystem = read('src/combat/WorldCombatCore.ts');
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
     const composition = read('src/world/WorldComposition.ts');
     const geometryBinding = read('src/world/WorldGeometryBinding.ts');
@@ -222,7 +222,7 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
 
   it('bindet den gemeinsamen Hindernisindex an die Bounds seines Besitzers', () => {
     const index = read('src/systems/ArenaObstacleIndex.ts');
-    const combat = read('src/systems/CombatSystem.ts');
+    const combat = read('src/combat/WorldCombatCore.ts');
 
     expect(index).not.toMatch(/from ['"][^'"]*config['"]/);
     expect(index).toContain('readonly bounds: () => ArenaObstacleBounds');

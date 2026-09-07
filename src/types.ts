@@ -516,7 +516,7 @@ export type MiniRocketFlightPhase = 'attack' | 'coast' | 'return';
 
 /**
  * Nutzlast eines Energieinjektor-Projektils. Es bleibt ein Support-Geschoss:
- * `CombatSystem` laesst es aus, und Treffer werden ausschliesslich ueber
+ * `WorldCombatCore` laesst es aus, und Treffer werden ausschliesslich ueber
  * über den world-scoped Projectile-Owner aufgeloest.
  */
 export interface ProjectileEnergyInjectorPayload {

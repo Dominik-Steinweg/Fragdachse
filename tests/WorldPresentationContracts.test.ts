@@ -67,7 +67,7 @@ describe('World Presentation – besitzt die Simulation nicht', () => {
   /** Module, die die autoritative Simulation tragen. */
   const SIMULATION_MODULES = [
     'src/systems/PlacementSystem.ts',
-    'src/systems/CombatSystem.ts',
+    'src/combat/WorldCombatCore.ts',
     'src/systems/HostPhysicsSystem.ts',
     'src/entities/PlayerManager.ts',
     'src/world/WorldRuntimeContext.ts',
