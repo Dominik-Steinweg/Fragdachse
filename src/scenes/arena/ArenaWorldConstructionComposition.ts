@@ -1,7 +1,7 @@
 import { bridge } from '../../network/bridge';
 import { PLAYER_COLORS } from '../../config';
 import { getStoredLocalOwnerId } from '../../utils/localPreferences';
-import { emitArenaMapGridChanged } from './ArenaEvents';
+import { emitArenaMapGridChanged, emitArenaRockDestroyed } from './ArenaEvents';
 import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import { ConstructionWorldRuntime, type ConstructionPersistentBaseContext } from '../../world/ConstructionWorldRuntime';
 import { PersistentBaseWorldMaterializer } from '../../world/PersistentBaseWorldMaterializer';
@@ -9,6 +9,10 @@ import type {
   ArenaWorldGameplay,
   ArenaWorldGameplayCompositionInput,
 } from './ArenaWorldGameplayComposition';
+import { shouldDropRockArmor, WorldRockRuntime } from '../../world/WorldRockRuntime';
+import { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
+import { isCoopDefenseMode } from '../../gameModes';
+import { worldCellCenter } from '../../world/WorldMetrics';
 
 /**
  * Der host-seitige Bau- und PowerUp-Anteil einer World.
@@ -81,7 +85,7 @@ export function composeWorldConstruction(
   gameplay: ArenaWorldGameplay,
 ): void {
   const {
-    scene, ctx, rockVisualHelper, flow, persistentBaseStores, worldRuntime,
+    scene, ctx, rockVisualHelper, flow, persistentBaseStores, worldRuntime, world,
     placementSystem, baseManager, persistentBaseBinding, coopMissionRuntime, activityDescriptor,
   } = input;
   const playerGameplay = gameplay.player;
@@ -135,6 +139,30 @@ export function composeWorldConstruction(
     publishRewardSessionState: () => flow.publishPersistentBaseRewardSessionState(),
     publishUtilityCooldown: (playerId, until, key) => bridge.publishUtilityCooldownUntil(playerId, until, key),
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
+    onConstructionDestroyed: (runtime, cause, attackerId) => {
+      if (cause === 'damage' && runtime.kind === 'rock'
+        && attackerId !== runtime.ownerId && (runtime.enemyDestroyedExplosionRadius ?? 0) > 0) {
+        const point = worldCellCenter(world.metrics, runtime.gridX, runtime.gridY);
+        ctx.combatSystem.applyAoeDamage(
+          point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0,
+          runtime.enemyDestroyedExplosionDamage ?? 0, runtime.ownerId, false,
+          { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.rock_collapse', sourceSlot: 'utility' },
+        );
+        ctx.hostPhysics.applyRadialImpulse(
+          point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0,
+          runtime.enemyDestroyedExplosionKnockback ?? 0, runtime.ownerId, 0,
+        );
+        try { bridge.broadcastExplosionEffect(point.x, point.y, runtime.enemyDestroyedExplosionRadius ?? 0); }
+        catch (error) { console.error('[ConstructionWorldRuntime] Collapse presentation failed', error); }
+      }
+      if (runtime.kind === 'rock' && (cause === 'damage' || cause === 'decay')) {
+        emitArenaRockDestroyed(scene.game.events, { rockId: runtime.id, source: 'placeable_rock', reason: cause });
+      }
+      if ((cause === 'damage' || cause === 'decay') && runtime.kind === 'turret') {
+        try { rockVisualHelper.spawnTurretDeathCloud(runtime); }
+        catch (error) { console.error('[ConstructionWorldRuntime] Death presentation failed', error); }
+      }
+    },
     onDestroy: () => {
       playerGameplay.setTunnelPlacementCapability(null);
       if (gameplay.construction === constructionRuntime) gameplay.construction = null;
@@ -142,6 +170,7 @@ export function composeWorldConstruction(
     rockVisualHelper: {
       gridToWorld: (gridX, gridY) => rockVisualHelper.gridToWorld(gridX, gridY),
       materializePlaceableRock: (runtime, playDust) => rockVisualHelper.materializePlaceableRock(runtime, playDust),
+      updatePlaceableRock: (runtime) => rockVisualHelper.updateRockVisualById(runtime.id, runtime.hp),
       removePlaceableRockVisual: (runtime, playDust) => rockVisualHelper.removePlaceableRockVisual(runtime, playDust),
     },
   });
@@ -207,4 +236,56 @@ export function composeWorldConstruction(
     );
   }
   gameplay.combat?.setPowerUpSystem(gameplay.powerUp?.system ?? null);
+}
+
+/** Atomic World-object writers plus the narrow alias-deduplicating domain dispatcher. */
+export function composeWorldObjectMutation(
+  input: ArenaWorldGameplayCompositionInput,
+  gameplay: ArenaWorldGameplay,
+): void {
+  const { ctx, worldRuntime, world, layout, arenaResult, placementSystem, baseManager, rockVisualHelper } = input;
+  const construction = gameplay.construction;
+  const rockRegistry = worldRuntime.materialization?.rocks;
+  if (!construction || !rockRegistry) {
+    throw new Error('[ArenaWorldComposition] World mutation dependencies are missing');
+  }
+  const rockRuntime = new WorldRockRuntime({
+    registry: rockRegistry,
+    arena: arenaResult,
+    layout,
+    metrics: world.metrics,
+    onIntegrityChanged: (id, integrity) => rockVisualHelper.updateRockVisualById(id, integrity),
+    onBeforeDestroyedPresentation: (id) => rockVisualHelper.presentStaticRockDestruction(id),
+    onDestroyed: ({ id, cause, attackerId }) => {
+      if (cause === 'damage' || cause === 'decay') {
+        emitArenaRockDestroyed(input.scene.game.events, { rockId: id, source: 'static_rock', reason: cause });
+      }
+      const dropsArmor = shouldDropRockArmor(
+        isCoopDefenseMode(bridge.getActiveGameMode()),
+        cause,
+        gameplay.player?.getPlayerClassId(attackerId ?? ''),
+      );
+      if (dropsArmor) gameplay.powerUp?.system.onRockDestroyed(id);
+      const cell = layout.rocks[id];
+      emitArenaMapGridChanged(input.scene.game.events, {
+        reason: 'static_rock_destroyed', source: 'static_rock', obstacleId: id,
+        gridX: cell?.gridX, gridY: cell?.gridY,
+      });
+      try { rockVisualHelper.observeStaticRockRemoved(id); }
+      catch (error) { console.error('[WorldRockRuntime] Removal presentation failed', error); }
+    },
+  });
+  const runtime = new WorldObjectMutationRuntime({
+    scope: ctx.combatSystem.getCombatScope(),
+    metrics: world.metrics,
+    rockRegistry,
+    rockRuntime,
+    placement: placementSystem,
+    construction,
+    bases: baseManager,
+    train: gameplay.train,
+    onDestroy: (destroyed) => { if (gameplay.worldMutation === destroyed) gameplay.worldMutation = null; },
+  });
+  gameplay.worldMutation = runtime;
+  worldRuntime.bind(runtime);
 }

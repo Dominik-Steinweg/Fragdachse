@@ -207,8 +207,6 @@ export function composeWorldCombatGameplay(
       damage,
       attackerId,
     ),
-    applyObstacleDamageById: (rockId, damage, attackerId) => rockVisualHelper.applyObstacleDamageById(rockId, damage, attackerId),
-    handleDestroyedRock: (rockId, reason, attackerId) => rockVisualHelper.handleDestroyedRock(rockId, reason, attackerId),
     updateTurretAngle: (rockId, angle) => rockVisualHelper.updateTurretAngle(rockId, angle),
     spawnImpactCloud: (projectile) => spawnImpactCloudFromProjectile(ctx, projectile),
     resetPlayerPosition: (playerId, x, y) => flow.getCoopMissionRuntime()?.coopDefenseMissionProgressSystem?.resetPlayerPosition(playerId, x, y),
@@ -242,6 +240,7 @@ export function composeWorldCombatGameplay(
       })() : []
     )),
     getWorldTrain: () => gameplay.train,
+    getWorldMutation: () => gameplay.worldMutation,
     getTimebombSystem: () => flow.getCoopMissionRuntime()?.coopDefenseTimebombSystem ?? null,
     getNecromancySystem: () => flow.getCoopMissionRuntime()?.necromancySystem ?? null,
     hostUpdate: hostUpdate,

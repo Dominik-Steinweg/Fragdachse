@@ -662,6 +662,10 @@ export class CombatSystem implements ProjectileCombatPort, CombatImmediateAttack
   }
 
   /** World composition replaces the empty fallback owner before attaching any Player. */
+  getCombatScope(): CombatScope {
+    return this.playerVitals.scope;
+  }
+
   bindPlayerVitalsScope(scope: CombatScope): { destroy(): void } {
     if (this.playerVitals.hasAttachedPlayers()) {
       throw new Error('[CombatSystem] Cannot replace Player vitals while Players are attached');

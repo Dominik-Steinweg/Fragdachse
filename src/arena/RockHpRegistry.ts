@@ -1,5 +1,10 @@
 import { ROCK_HP_MAX } from '../config';
 import type { ArenaLayout } from '../types';
+import {
+  integrityState,
+  type WorldIntegrityMutationResult,
+  type WorldIntegrityState,
+} from '../world/WorldIntegrityMutation';
 
 /**
  * Reiner HP-Zustand eines Felsbestands – ohne Netzwerk, World-/Activity-Lifecycle oder Autorität.
@@ -59,19 +64,56 @@ export class RockHpRegistry {
     return this.hpMap.get(id)?.maxHp ?? ROCK_HP_MAX;
   }
 
+  /** Missing IDs stay distinguishable from full-health rocks at mutation boundaries. */
+  readIntegrity(id: number): WorldIntegrityState | null {
+    const current = this.hpMap.get(id);
+    return current ? integrityState(current.hp, current.maxHp) : null;
+  }
+
+  commitDamage(id: number, damage: number): WorldIntegrityMutationResult {
+    const current = this.hpMap.get(id);
+    if (!current) return { kind: 'missing' };
+    const before = integrityState(current.hp, current.maxHp);
+    if (current.hp <= 0) return { kind: 'inert', state: before };
+    if (this.indestructibleIds.has(id)) return { kind: 'immune', state: before };
+    if (!Number.isFinite(damage) || damage <= 0) {
+      return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
+    }
+    const nextHp = Math.max(0, current.hp - damage);
+    this.hpMap.set(id, { hp: nextHp, maxHp: current.maxHp });
+    return {
+      kind: 'applied',
+      actualAmount: current.hp - nextHp,
+      state: integrityState(nextHp, current.maxHp),
+      transition: nextHp <= 0 ? 'destroyed' : 'none',
+    };
+  }
+
+  commitRepair(id: number, amount: number): WorldIntegrityMutationResult {
+    const current = this.hpMap.get(id);
+    if (!current) return { kind: 'missing' };
+    const before = integrityState(current.hp, current.maxHp);
+    if (current.hp <= 0) return { kind: 'inert', state: before };
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
+    }
+    const nextHp = Math.min(current.maxHp, current.hp + amount);
+    this.hpMap.set(id, { hp: nextHp, maxHp: current.maxHp });
+    return {
+      kind: 'applied',
+      actualAmount: nextHp - current.hp,
+      state: integrityState(nextHp, current.maxHp),
+      transition: 'none',
+    };
+  }
+
   /**
    * Zieht Schaden vom Felsen ab.
    * Gibt den neuen HP-Wert zurück (mindestens 0).
    */
   applyDamage(id: number, damage: number): number {
-    const current = this.hpMap.get(id);
-    if (current === undefined) return 0; // Bereits zerstört
-    // Geschützte Struktur bleibt unversehrt und meldet ihren vollen Stand zurück; der Treffer
-    // selbst (Aufprall, Effekt, Sound) bleibt davon unberührt.
-    if (this.indestructibleIds.has(id)) return current.hp;
-    const newHp = Math.max(0, current.hp - damage);
-    this.hpMap.set(id, { hp: newHp, maxHp: current.maxHp });
-    return newHp;
+    const outcome = this.commitDamage(id, damage);
+    return outcome.kind === 'missing' ? 0 : outcome.state.integrity;
   }
 
   /**

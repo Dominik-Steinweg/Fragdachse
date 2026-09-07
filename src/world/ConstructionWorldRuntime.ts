@@ -41,6 +41,10 @@ import {
   type CoopDefenseConstructionDefinition,
 } from '../config/coopDefenseConstructions';
 import { getConstructionAccessContext, getActiveConstructionToolRefs, resolveConstructionAccess } from '../systems/ConstructionAccessResolver';
+import type {
+  WorldIntegrityMutationResult,
+  WorldRemovalCause,
+} from './WorldIntegrityMutation';
 
 export interface ConstructionRewardPlacementRuntime {
   readonly canPlace: (objectiveId: string, playerId: string) => boolean;
@@ -89,10 +93,16 @@ export interface ConstructionWorldRuntimeOptions {
   readonly publishRewardSessionState: () => void;
   readonly publishUtilityCooldown: (playerId: string, until: number, key: string) => void;
   readonly recordConstructionBuilt: (playerId: string) => void;
+  readonly onConstructionDestroyed?: (
+    runtime: SyncedPlaceableRock,
+    cause: WorldRemovalCause,
+    attackerId?: string,
+  ) => void;
   readonly onDestroy?: (runtime: ConstructionWorldRuntime) => void;
   readonly rockVisualHelper: {
     readonly gridToWorld: (gridX: number, gridY: number) => { x: number; y: number };
     readonly materializePlaceableRock: (runtime: SyncedPlaceableRock, playDust: boolean) => void;
+    readonly updatePlaceableRock?: (runtime: SyncedPlaceableRock) => void;
     readonly removePlaceableRockVisual: (runtime: SyncedPlaceableRock, playDust: boolean) => void;
   };
 }
@@ -101,6 +111,7 @@ export interface ConstructionWorldRuntimeOptions {
 export class ConstructionWorldRuntime implements WorldScopedBinding, ConstructionReadinessPort {
   private destroyed = false;
   private readonly readiness = new ConstructionReadinessRuntime();
+  private readonly finalizedRuntimeIds = new Set<number>();
 
   constructor(private readonly options: ConstructionWorldRuntimeOptions) {}
 
@@ -378,11 +389,54 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   }
 
   releaseRuntime(removed: SyncedPlaceableRock, playDust: boolean): void {
+    this.finalizeRemovedRuntime(removed, 'removal', playDust);
+  }
+
+  /** Cleanup for a record already removed from PlacementSystem (expiry/PB/teardown). */
+  finalizeRemovedRuntime(
+    removed: SyncedPlaceableRock,
+    cause: WorldRemovalCause,
+    playDust: boolean,
+    attackerId?: string,
+  ): void {
+    if (this.finalizedRuntimeIds.has(removed.id)) return;
+    this.finalizedRuntimeIds.add(removed.id);
     this.options.targetStatusSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
     this.options.energyInjectorSystem?.removeTarget({ targetType: 'construction', targetId: String(removed.id) });
     if (removed.persistentRewardId !== undefined) this.options.powerUpSystem?.unregisterPersistentBaseRewardPedestal(removed.persistentRewardId);
     else if (removed.kind === 'pedestal') this.options.powerUpSystem?.unregisterConstructionPedestal(removed.id);
-    this.options.rockVisualHelper.removePlaceableRockVisual(removed, playDust);
+    this.options.onConstructionDestroyed?.(removed, cause, attackerId);
+    try { this.options.rockVisualHelper.removePlaceableRockVisual(removed, playDust); }
+    catch (error) { console.error('[ConstructionWorldRuntime] Removal presentation failed', error); }
+  }
+
+  commitDamage(id: number, damage: number, attackerId?: string): WorldIntegrityMutationResult {
+    const runtime = this.options.placementSystem.getRuntimeRock(id);
+    if (!runtime) return { kind: 'missing' };
+    const result = this.options.placementSystem.commitDamage(id, damage, attackerId);
+    if (result.kind !== 'applied' || result.transition !== 'destroyed') {
+      if (result.kind === 'applied') {
+        try { this.options.rockVisualHelper.updatePlaceableRock?.({ ...runtime, hp: result.state.integrity }); }
+        catch (error) { console.error('[ConstructionWorldRuntime] Integrity presentation failed', error); }
+      }
+      return result;
+    }
+    const removed = this.options.placementSystem.removeRock(id);
+    if (!removed) return result;
+    this.options.emitGridChanged({ reason: 'placeable_removed', source: this.sourceFor(removed), runtime: removed });
+    this.finalizeRemovedRuntime(removed, 'damage', true, attackerId);
+    return result;
+  }
+
+  commitRepair(id: number, amount: number): WorldIntegrityMutationResult {
+    const runtime = this.options.placementSystem.getRuntimeRock(id);
+    if (!runtime) return { kind: 'missing' };
+    const result = this.options.placementSystem.commitRepair(id, amount);
+    if (result.kind === 'applied' && result.actualAmount > 0) {
+      try { this.options.rockVisualHelper.updatePlaceableRock?.({ ...runtime, hp: result.state.integrity }); }
+      catch (error) { console.error('[ConstructionWorldRuntime] Integrity presentation failed', error); }
+    }
+    return result;
   }
 
   buildRestoreTools(playerId: string): readonly PersistentRestoreToolDefinition[] {
@@ -510,6 +564,9 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    for (const removed of this.options.placementSystem.clearRuntimeRocks()) {
+      this.finalizeRemovedRuntime(removed, 'teardown', false);
+    }
     this.readiness.destroy();
     this.options.utilityAction.setUtilityPlacementCapability(null);
     this.options.onDestroy?.(this);

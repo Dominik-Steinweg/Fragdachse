@@ -37,8 +37,12 @@ export interface EnvironmentRockSink {
    * Ein Bestand ohne solche Regeln gibt den Schaden unverändert zurück.
    */
   resolveRockDamage(index: number, damage: number, attackerId: string): number;
-  /** Zieht den Schaden ab und liefert die verbleibenden HP. */
-  applyRockDamage(index: number, damage: number, attackerId: string): number;
+  /** Zieht den Schaden atomar ab; `null` bedeutet beim Commit nicht mehr vorhanden/stale. */
+  applyRockDamage(index: number, damage: number, attackerId: string): {
+    readonly actualDamage: number;
+    readonly remainingIntegrity: number;
+    readonly becameDestroyed: boolean;
+  } | null;
   /** Der Fels ist auf 0 HP gefallen. */
   onRockDestroyed(index: number, attackerId: string): void;
 }
@@ -78,6 +82,9 @@ export function applyRadialEnvironmentDamage(
   const { x, y, radius, damage, rockDamageMult, falloff } = request;
   if (rockDamageMult === 0) return result;
 
+  const prepared: { index: number; damage: number }[] = [];
+  const preparedIds = new Set<number>();
+
   const visitRock = (index: number, rockX: number, rockY: number): void => {
     // Bewusst dieselbe Formel wie `Phaser.Math.Distance.Between`, damit Grenzfälle exakt am
     // Radius sich nicht zwischen Arena und Lobby unterscheiden.
@@ -91,23 +98,31 @@ export function applyRadialEnvironmentDamage(
 
     const resolvedDamage = sink.resolveRockDamage(index, scaledDamage, attackerId);
     if (resolvedDamage <= 0) return;
-
-    const remainingHp = sink.applyRockDamage(index, resolvedDamage, attackerId);
-    if (!collectResult) {
-      if (remainingHp <= 0) sink.onRockDestroyed(index, attackerId);
-      return;
-    }
-    result.damagedRockIndices.push(index);
-    if (remainingHp <= 0) {
-      result.destroyedRockIndices.push(index);
-      sink.onRockDestroyed(index, attackerId);
-    }
+    // A physical rock can surface through more than one query alias; one effect unit commits it
+    // once. The complete start set is prepared before any destruction callback can spawn targets.
+    if (preparedIds.has(index)) return;
+    preparedIds.add(index);
+    prepared.push({ index, damage: resolvedDamage });
   };
 
   if (sink.forEachRockInRadius) {
     sink.forEachRockInRadius(x, y, radius, visitRock);
   } else {
     sink.forEachActiveRock?.(visitRock);
+  }
+
+  for (const candidate of prepared) {
+    const outcome = sink.applyRockDamage(candidate.index, candidate.damage, attackerId);
+    if (!outcome || outcome.actualDamage <= 0) continue;
+    if (!collectResult) {
+      if (outcome.becameDestroyed) sink.onRockDestroyed(candidate.index, attackerId);
+      continue;
+    }
+    result.damagedRockIndices.push(candidate.index);
+    if (outcome.becameDestroyed) {
+      result.destroyedRockIndices.push(candidate.index);
+      sink.onRockDestroyed(candidate.index, attackerId);
+    }
   }
 
   return result;

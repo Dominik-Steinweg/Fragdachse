@@ -9,6 +9,7 @@ import { composeWorldPlayerGameplay } from './ArenaWorldPlayerComposition';
 import { composeWorldCombatGameplay, composeWorldProjectileRuntime } from './ArenaWorldCombatComposition';
 import {
   composeWorldConstruction,
+  composeWorldObjectMutation,
   composeWorldPowerUp,
 } from './ArenaWorldConstructionComposition';
 import type { ArenaContext } from './ArenaContext';
@@ -36,6 +37,7 @@ import type { AutomatedWeaponExecution } from '../../world/AutomatedWeaponExecut
 import type { SpecializedWeaponExecutionCapability } from '../../loadout/WeaponFireExecutor';
 import { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
 import { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
+import { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
 import { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import { ConstructionWorldRuntime, type ConstructionPersistentBaseContext } from '../../world/ConstructionWorldRuntime';
 import type { PersistentBaseContributionStore } from '../../persistentBase/PersistentBaseContributionStore';
@@ -145,6 +147,7 @@ export class ArenaWorldGameplay {
   combat: WorldCombatGameplayBinding | null = null;
   powerUp: WorldPowerUpRuntime | null = null;
   construction: ConstructionWorldRuntime | null = null;
+  worldMutation: WorldObjectMutationRuntime | null = null;
   support: WorldSupportGameplayRuntime | null = null;
 }
 
@@ -179,6 +182,7 @@ export function composeArenaWorldGameplay(
   if (bridge.isHost()) {
     composeWorldPowerUp(input, gameplay);
     composeWorldConstruction(input, gameplay);
+    composeWorldObjectMutation(input, gameplay);
     composeWorldSupportGameplay(input, gameplay);
   }
   return gameplay;

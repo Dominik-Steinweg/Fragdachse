@@ -14,8 +14,6 @@ import type { ShadowSystem } from '../../effects/ShadowSystem';
 import type { LightingSystem } from '../../effects/LightingSystem';
 import type { ArenaContext } from './ArenaContext';
 import type { SyncedPlaceableRock } from '../../types';
-import { emitArenaMapGridChanged, emitArenaRockDestroyed } from './ArenaEvents';
-import { isCoopDefenseMode } from '../../gameModes';
 import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import { getCoopDefenseConstructionDefinition } from '../../config/coopDefenseConstructions';
 import { getTurretVisualSpec, getTurretVisualTransform } from '../../config/turretVisuals';
@@ -335,6 +333,23 @@ export class RockVisualHelper {
     );
   }
 
+  /** Presentation-only observation captured before the World owner removes the rock proxy. */
+  presentStaticRockDestruction(rockId: number): void {
+    const snapshot = this.arenaResult?.rockVisualSystem?.getDestructionSnapshot(rockId);
+    if (snapshot) this.rockDestructionRenderer.playDestruction(snapshot);
+  }
+
+  /** Presentation invalidation after authoritative World removal. */
+  observeStaticRockRemoved(rockId: number): void {
+    this.markObstaclesDirty(rockId, false);
+  }
+
+  /** Applies an authoritative replicated removal; no HP or gameplay consequence is decided here. */
+  applyStaticRockRemovalProjection(rockId: number): void {
+    this.rockPresentation.destroyRock(rockId);
+    this.markObstaclesDirty(rockId, false);
+  }
+
   private get worldRuntime(): WorldRuntime | null { return this.worldPort?.getWorldRuntime() ?? null; }
   private get arenaResult() { return this.worldRuntime?.materialization?.arena ?? null; }
   private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
@@ -342,127 +357,11 @@ export class RockVisualHelper {
   private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
   private get lightOccluderIndex() { return this.worldRuntime?.materialization?.lightOccluders ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
-  private get targetingSystems() { return this.worldPort?.getTargetingRuntime()?.systems ?? null; }
-  private get powerUpSystem() { return this.worldPort?.getPowerUpRuntime()?.system ?? null; }
 
   private destroyRockProxyIfPresent(rockId: number): void {
     if (this.arenaResult?.rockPhysicsProxies[rockId]) {
       ArenaBuilder.destroyRock(this.arenaResult, rockId);
     }
-  }
-
-  applyObstacleDamageById(rockId: number, damage: number, attackerId: string): number {
-    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
-    if (runtimeRock) {
-      if (runtimeRock.kind === 'turret' && runtimeRock.ownerId === attackerId) {
-        return runtimeRock.hp;
-      }
-      const updated = this.placementSystem?.applyDamage(rockId, damage, attackerId);
-      const hp = updated?.hp ?? 0;
-      this.updateRockVisualById(rockId, hp);
-      return hp;
-    }
-
-    if (!this.rockRegistry) return 0;
-    const newHp = this.rockRegistry.applyDamage(rockId, damage);
-    this.updateRockVisualById(rockId, newHp);
-    return newHp;
-  }
-
-  /**
-   * Gegenstueck zu {@link applyObstacleDamageById} fuer den Plasmabrenner. Deckt beide
-   * Herkuenfte ab: platzierte Konstrukte fuehrt das `PlacementSystem`, Layout-Felsen die
-   * `RockRegistry`. Gibt die tatsaechlich zugefuehrten HP zurueck (0 = nichts zu reparieren),
-   * damit der Aufrufer den Heileffekt nur bei echter Wirkung zeigt.
-   */
-  applyObstacleRepairById(rockId: number, amount: number): number {
-    if (amount <= 0) return 0;
-    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
-    if (runtimeRock) {
-      const before = runtimeRock.hp;
-      const updated = this.placementSystem?.repairRock(rockId, amount);
-      if (!updated) return 0;
-      this.updateRockVisualById(rockId, updated.hp);
-      return updated.hp - before;
-    }
-
-    const registry = this.rockRegistry;
-    if (!registry) return 0;
-    const before = registry.getHP(rockId);
-    const maxHp = registry.getMaxHP(rockId);
-    if (before <= 0 || before >= maxHp) return 0;
-    const newHp = Math.min(maxHp, before + amount);
-    registry.setHP(rockId, newHp);
-    this.updateRockVisualById(rockId, newHp);
-    return newHp - before;
-  }
-
-  handleDestroyedRock(rockId: number, reason: 'damage' | 'decay', attackerId?: string): void {
-    const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
-    if (runtimeRock) {
-      this.targetingSystems?.targetStatus?.removeTarget({ targetType: 'construction', targetId: String(rockId) });
-      this.targetingSystems?.energyInjector?.removeTarget({ targetType: 'construction', targetId: String(rockId) });
-      if (runtimeRock.kind === 'turret') {
-        this.spawnTurretDeathCloud(runtimeRock);
-      }
-      if (runtimeRock.kind === 'pedestal') {
-        if (runtimeRock.persistentRewardId !== undefined) {
-          this.powerUpSystem?.unregisterPersistentBaseRewardPedestal(runtimeRock.persistentRewardId);
-        } else {
-          this.powerUpSystem?.unregisterConstructionPedestal(runtimeRock.id);
-        }
-      }
-      if (runtimeRock.kind === 'rock' && reason === 'damage' && runtimeRock.lastAttackerId !== runtimeRock.ownerId && (runtimeRock.enemyDestroyedExplosionRadius ?? 0) > 0) {
-        const world = this.gridToWorld(runtimeRock.gridX, runtimeRock.gridY);
-        this.ctx.combatSystem.applyAoeDamage(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionDamage ?? 0, runtimeRock.ownerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.rock_collapse', sourceSlot: 'utility' });
-        this.ctx.hostPhysics.applyRadialImpulse(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0, runtimeRock.enemyDestroyedExplosionKnockback ?? 0, runtimeRock.ownerId, 0);
-        bridge.broadcastExplosionEffect(world.x, world.y, runtimeRock.enemyDestroyedExplosionRadius ?? 0);
-      }
-      this.placementSystem?.removeRock(rockId);
-      this.removePlaceableRockVisual(runtimeRock, true);
-      emitArenaMapGridChanged(this.scene.game.events, {
-        reason: 'placeable_removed',
-        source: runtimeRock.kind === 'rock'
-          ? 'placeable_rock'
-          : runtimeRock.kind === 'pedestal' ? 'placeable_pedestal' : 'placeable_turret',
-        obstacleId: runtimeRock.id,
-        gridX: runtimeRock.gridX,
-        gridY: runtimeRock.gridY,
-      });
-      if (runtimeRock.kind === 'rock') {
-        emitArenaRockDestroyed(this.scene.game.events, {
-          rockId,
-          source: 'placeable_rock',
-          reason,
-        });
-      }
-      return;
-    }
-
-    if (!this.rockPresentation.destroyRock(rockId)) return;
-    const removed = this.rockRegistry?.remove(rockId) ?? false;
-    if (removed) {
-      emitArenaRockDestroyed(this.scene.game.events, {
-        rockId,
-        source: 'static_rock',
-        reason,
-      });
-    }
-    this.markObstaclesDirty(rockId, false);
-    const dropsArmor = !isCoopDefenseMode(bridge.getActiveGameMode())
-      || (
-        reason === 'damage'
-        && this.worldPort?.getPlayerGameplayRuntime()?.getPlayerClassId(attackerId ?? '') === 'dachs_of_steel'
-      );
-    if (dropsArmor) this.powerUpSystem?.onRockDestroyed(rockId);
-    const rockCell = this.currentLayout?.rocks[rockId];
-    emitArenaMapGridChanged(this.scene.game.events, {
-      reason: 'static_rock_destroyed',
-      source: 'static_rock',
-      obstacleId: rockId,
-      gridX: rockCell?.gridX,
-      gridY: rockCell?.gridY,
-    });
   }
 
   createOrUpdateTurretVisual(rock: SyncedPlaceableRock): void {

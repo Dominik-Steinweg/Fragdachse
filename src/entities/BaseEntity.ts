@@ -22,6 +22,10 @@ import {
 import { makeAdditive, registerGraphicsObject } from '../effects/EffectUtils';
 import type { SyncedBaseTurretState } from '../types';
 import { createBaseSurfaceImages, getBaseLightSpots } from './BaseVisuals';
+import {
+  integrityState,
+  type WorldIntegrityMutationResult,
+} from '../world/WorldIntegrityMutation';
 
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
 const VULNERABLE_MARKER_COLOR = 0xc86bff;
@@ -407,8 +411,37 @@ export class BaseEntity {
    * Host-only: Schaden anwenden und HP-Bar-Visual aktualisieren.
    */
   applyDamage(damage: number): void {
-    if (damage <= 0 || this.isInert() || !this.damageable) return;
+    this.commitDamage(damage);
+  }
+
+  commitDamage(damage: number): WorldIntegrityMutationResult {
+    const before = integrityState(this.currentHp, this.maxHp);
+    if (this.isInert()) return { kind: 'inert', state: before };
+    if (!this.damageable) return { kind: 'immune', state: before };
+    if (!Number.isFinite(damage) || damage <= 0) return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
+    const previousHp = this.currentHp;
     this.setHp(Math.max(0, this.currentHp - damage));
+    return {
+      kind: 'applied',
+      actualAmount: previousHp - this.currentHp,
+      state: integrityState(this.currentHp, this.maxHp),
+      transition: previousHp > 0 && this.currentHp <= 0 ? 'destroyed' : 'none',
+    };
+  }
+
+  commitRepair(amount: number): WorldIntegrityMutationResult {
+    const before = integrityState(this.currentHp, this.maxHp);
+    if (this.isInert()) return { kind: 'inert', state: before };
+    if (!this.damageable) return { kind: 'immune', state: before };
+    if (!Number.isFinite(amount) || amount <= 0) return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
+    const previousHp = this.currentHp;
+    this.setHp(this.currentHp + amount);
+    return {
+      kind: 'applied',
+      actualAmount: this.currentHp - previousHp,
+      state: integrityState(this.currentHp, this.maxHp),
+      transition: 'none',
+    };
   }
 
   /** Setzt die HP (Host nach Schaden, Client beim State-Apply). */
@@ -421,8 +454,12 @@ export class BaseEntity {
       return;
     }
     this.currentHp = clamped;
-    if (baseline) this.healthBars?.baseline(this.healthBar, clamped, this.maxHp);
-    else this.healthBars?.observe(this.healthBar, clamped, this.maxHp);
+    try {
+      if (baseline) this.healthBars?.baseline(this.healthBar, clamped, this.maxHp);
+      else this.healthBars?.observe(this.healthBar, clamped, this.maxHp);
+    } catch (error) {
+      console.error('[BaseEntity] Health-bar presentation failed', error);
+    }
     if (this.currentHp <= 0) this.handleDestruction();
   }
 
@@ -430,22 +467,24 @@ export class BaseEntity {
   private handleDestruction(): void {
     if (this.destroyedBroadcasted) return;
     this.destroyedBroadcasted = true;
-    this.vulnerableMarker?.destroy();
-    this.vulnerableMarker = null;
 
     for (const body of this.cellBodies) {
       if (body.active) body.destroy();
     }
     this.cellBodies.length = 0;
 
-    for (const image of this.turretImages.values()) {
-      if (image.active) image.destroy();
+    try {
+      this.vulnerableMarker?.destroy();
+      this.vulnerableMarker = null;
+      for (const image of this.turretImages.values()) {
+        if (image.active) image.destroy();
+      }
+      this.turretImages.clear();
+      if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
+      this.healthBars?.suppress(this.healthBar, true);
+    } catch (error) {
+      console.error('[BaseEntity] Destruction presentation failed', error);
     }
-    this.turretImages.clear();
-
-    if (this.spawnCenterMarker?.active) this.spawnCenterMarker.setVisible(false);
-
-    this.healthBars?.suppress(this.healthBar, true);
 
     if (this.onDestroyed) {
       this.onDestroyed();

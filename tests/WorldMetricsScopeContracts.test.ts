@@ -242,14 +242,14 @@ describe('World-scoped Runtime – kein Lobby-Fallback nach dem Aufbau', () => {
   it('laesst Host-Simulation und RPC-Pruefung den aktiven Modus vor der Lobby lesen', () => {
     const hostUpdate = read('src/scenes/arena/HostUpdateCoordinator.ts');
     const rpc = read('src/scenes/arena/RpcCoordinator.ts');
-    const rockVisuals = read('src/scenes/arena/RockVisualHelper.ts');
+    const worldConstruction = read('src/scenes/arena/ArenaWorldConstructionComposition.ts');
 
     expect(hostUpdate).not.toContain('getCoopDefenseMapId');
     expect(hostUpdate).not.toContain('coopDefenseMapId');
     for (const [path, source] of [
       ['src/scenes/arena/HostUpdateCoordinator.ts', hostUpdate],
       ['src/scenes/arena/RpcCoordinator.ts', rpc],
-      ['src/scenes/arena/RockVisualHelper.ts', rockVisuals],
+      ['src/scenes/arena/ArenaWorldConstructionComposition.ts', worldConstruction],
     ] as const) {
       expect(source, `${path} must use the active Activity before the lobby fallback`).toContain('getActiveGameMode()');
     }

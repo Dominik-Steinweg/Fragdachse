@@ -27,8 +27,13 @@ function createSink(rocks: FakeRock[], maxHp = 100): EnvironmentRockSink & { roc
     resolveRockDamage: (_index, damage) => damage,
     applyRockDamage(index, damage) {
       const rock = rocks[index];
+      const before = Math.min(maxHp, rock.hp);
       rock.hp = Math.max(0, Math.min(maxHp, rock.hp) - damage);
-      return rock.hp;
+      return {
+        actualDamage: before - rock.hp,
+        remainingIntegrity: rock.hp,
+        becameDestroyed: before > 0 && rock.hp <= 0,
+      };
     },
     onRockDestroyed: () => {},
   };

@@ -6,6 +6,11 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import type { TimeBubbleSystem } from '../systems/TimeBubbleSystem';
 import { TRAIN } from './TrainConfig';
 import { resolveCoopDefenseWorldMetrics, type WorldMetrics } from '../world/WorldMetrics';
+import {
+  integrityState,
+  type WorldIntegrityMutationResult,
+  type WorldIntegrityState,
+} from '../world/WorldIntegrityMutation';
 
 // ── Öffentliche Ergebnis-Typen ────────────────────────────────────────────────
 
@@ -119,6 +124,10 @@ export class TrainManager {
   isAlive():     boolean { return this.alive;     }
   isDestroyed(): boolean { return this.destroyed; }
 
+  readIntegrity(): WorldIntegrityState {
+    return integrityState(this.hp, TRAIN.HP_MAX);
+  }
+
   getTrackX(): number { return this.trackX; }
 
   getCurrentSpeed(now = Date.now()): number {
@@ -197,12 +206,25 @@ export class TrainManager {
    * Wird vom TrainHitCallback in ArenaScene aufgerufen.
    */
   applyDamage(amount: number, attackerId: string): void {
-    if (!this.alive || this.destroyed) return;
+    this.commitDamage(amount, attackerId);
+  }
+
+  commitDamage(amount: number, attackerId: string): WorldIntegrityMutationResult {
+    const before = this.readIntegrity();
+    if (!this.alive || this.destroyed) return { kind: 'inert', state: before };
+    if (!Number.isFinite(amount) || amount <= 0) return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
     if (attackerId !== TRAIN.TRAIN_KILLER_ID) {
       this.lastHitter = attackerId;
     }
+    const previousHp = this.hp;
     this.hp = Math.max(0, this.hp - amount);
     if (this.hp <= 0) this.handleDestruction();
+    return {
+      kind: 'applied',
+      actualAmount: previousHp - this.hp,
+      state: this.readIntegrity(),
+      transition: previousHp > 0 && this.hp <= 0 ? 'destroyed' : 'none',
+    };
   }
 
   /**

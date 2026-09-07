@@ -38,6 +38,7 @@ import { PlasmaSwarmReactionSystem } from '../systems/PlasmaCharge';
 import { WorldCombatReactions } from './WorldCombatReactions';
 import { isSameCombatTargetInstance } from '../combat/CombatScope';
 import type { WorldMetrics } from './WorldMetrics';
+import type { WorldObjectMutationRuntime } from './WorldObjectMutationRuntime';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { WorldGeometryBinding } from './WorldGeometryBinding';
 import type { WorldParticipation } from './WorldParticipation';
@@ -224,8 +225,6 @@ export interface WorldCombatGameplayBindingOptions {
   readonly getConstructionMuzzleOffset: (constructionId: string | number | undefined) => number | undefined;
   readonly getTargetFootprint: (target: TargetStatusTarget) => TargetFootprint | null;
   readonly resolveObstacleDamage: (rockId: number, damage: number, attackerId: string) => number;
-  readonly applyObstacleDamageById: (rockId: number, damage: number, attackerId: string) => number;
-  readonly handleDestroyedRock: (rockId: number, reason: 'damage', attackerId: string) => void;
   readonly updateTurretAngle: (rockId: number, angle: number) => void;
   readonly spawnImpactCloud: (projectile: ProjectileImpactSource) => void;
   readonly resetPlayerPosition: (playerId: string, x: number, y: number) => void;
@@ -251,6 +250,7 @@ export interface WorldCombatGameplayBindingOptions {
     bottom?: number;
   }[];
   readonly getWorldTrain: () => { getActiveSegmentPositions: () => { x: number; y: number }[]; applyDamage: (damage: number, ownerId: string) => void } | null;
+  readonly getWorldMutation: () => WorldObjectMutationRuntime | null;
   readonly getTimebombSystem: () => CoopDefenseTimebombSystem | null;
   readonly getNecromancySystem: () => NecromancySystem | null;
   readonly hostUpdate: WorldCombatImpactPort;
@@ -591,19 +591,20 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setRockDamageCallback((rockIndex, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockIndex, damage, attackerId);
       if (resolvedDamage <= 0) return;
-      const newHp = o.applyObstacleDamageById(rockIndex, resolvedDamage, attackerId);
-      if (newHp <= 0) o.handleDestroyedRock(rockIndex, 'damage', attackerId);
+      this.requireWorldMutation().applyResolvedDamage(
+        'rock', rockIndex, resolvedDamage, attackerId, 'combat.world_object',
+      );
     });
     combat.setBaseDamageCallback((baseId, damage, attackerId) => {
       const base = o.baseManager?.getBase(baseId);
       const objectiveId = base?.getSpec().dormantObjectiveId;
       if (objectiveId && o.network.round.canPlayerReceiveRoundRewards(attackerId)) o.reportTargetContribution(objectiveId, baseId);
-      base?.applyDamage(damage);
+      this.requireWorldMutation().applyResolvedDamage('base', baseId, damage, attackerId, 'combat.base');
     });
     combat.setTrainDamageCallback((damage, attackerId) => {
       const p = o.getPlayerCombatIntegration();
       const resolvedDamage = p?.modifier.resolveOutgoingDamage(attackerId, 'train', damage, false).amount ?? damage;
-      o.getWorldTrain()?.applyDamage(resolvedDamage, attackerId);
+      this.requireWorldMutation().applyResolvedDamage('train', 'main', resolvedDamage, attackerId, 'combat.train');
     });
     combat.setPlayerImpulseCallback((playerId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(playerId, vx, vy, durationMs, sourcePlayerId));
     combat.setEnemyImpulseCallback((enemyId, vx, vy, durationMs, sourcePlayerId) => hostPhysics.addRecoil(enemyId, vx, vy, durationMs, sourcePlayerId));
@@ -723,7 +724,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     teslaDome.setEnergyShieldSystem(energyShield);
     teslaDome.setTrainCallbacks(
       () => o.getWorldTrain()?.getActiveSegmentPositions() ?? [],
-      (damage, ownerId) => o.getWorldTrain()?.applyDamage(damage, ownerId),
+      (damage, ownerId) => this.requireWorldMutation().applyResolvedDamage(
+        'train', 'main', damage, ownerId, 'environment.tesla',
+      ),
     );
     teslaDome.setStormProjectileSpawner((request) => {
       const lifetime = request.speed > 0 ? request.rangePx / request.speed * 1000 : 0;
@@ -1002,8 +1005,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.projectileWorldImpact.setRockHitCallback((rockId, damage, attackerId) => {
       const resolvedDamage = o.resolveObstacleDamage(rockId, damage, attackerId);
       if (resolvedDamage <= 0) return;
-      const newHp = o.applyObstacleDamageById(rockId, resolvedDamage, attackerId);
-      if (newHp <= 0) o.handleDestroyedRock(rockId, 'damage', attackerId);
+      this.requireWorldMutation().applyResolvedDamage(
+        'rock', rockId, resolvedDamage, attackerId, 'projectile.world_object',
+      );
     });
     o.projectileWorldImpact.setObstacleKindResolver((rockId) => o.placementSystem.getRuntimeRock(rockId)?.kind);
     o.projectileWorldImpact.setBaseHitCallback((baseId, damage, attackerId, projectile) => {
@@ -1013,6 +1017,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       else o.combatSystem.applyBaseDamage(baseId, damage, attackerId);
     });
     o.projectileWorldImpact.setSupportImpactCallback((projectile, impact) => o.hostUpdate.applySupportProjectileImpact(projectile, impact));
+  }
+
+  private requireWorldMutation(): WorldObjectMutationRuntime {
+    const runtime = this.options.getWorldMutation();
+    if (!runtime) throw new Error('[WorldCombatGameplayBinding] World mutation runtime is not bound');
+    return runtime;
   }
 
   private bindBaseManager(): void {

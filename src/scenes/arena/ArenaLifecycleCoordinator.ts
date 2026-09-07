@@ -746,8 +746,9 @@ export class ArenaLifecycleCoordinator {
           attackerId,
         );
         if (resolvedDamage <= 0) return;
-        const hp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, attackerId);
-        if (hp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', attackerId);
+        this.worldGameplay?.worldMutation?.applyResolvedDamage(
+          'construction', id, resolvedDamage, attackerId, 'activity.construction_damage',
+        );
       },
       releaseMissionObjectives: (runtime, playerId) => {
         runtime.coopDefenseObjectivePlacementRewardSystem?.handlePlayerUnavailable(playerId);
@@ -996,6 +997,9 @@ export class ArenaLifecycleCoordinator {
   getWorldTargetingRuntime(): WorldTargetingRuntime | null { return this.worldGameplay?.targeting ?? null; }
   getWorldTrainRuntime(): WorldTrainRuntime | null { return this.worldTrainRuntime; }
   getWorldProjectileRuntime(): WorldProjectileRuntime | null { return this.worldGameplay?.projectiles ?? null; }
+  getWorldObjectMutationRuntime(): import('../../world/WorldObjectMutationRuntime').WorldObjectMutationRuntime | null {
+    return this.worldGameplay?.worldMutation ?? null;
+  }
   getWorldPlayerGameplayRuntime(): WorldPlayerGameplayRuntime | null { return this.worldPlayerGameplayRuntime; }
   getWorldCombatGameplayBinding(): WorldCombatGameplayBinding | null { return this.worldCombatGameplayBinding; }
   getWorldPowerUpRuntime(): WorldPowerUpRuntime | null { return this.worldPowerUpRuntime; }

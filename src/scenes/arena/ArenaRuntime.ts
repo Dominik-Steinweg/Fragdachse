@@ -239,6 +239,7 @@ export class ArenaRuntime {
     this.hostUpdate.setWorldFramePort({
       getWorldRuntime: () => this.flow.getWorldRuntime(),
       getTrainRuntime: () => this.flow.getWorldTrainRuntime(),
+      getWorldMutationRuntime: () => this.flow.getWorldObjectMutationRuntime(),
       getProjectileRuntime: () => this.flow.getWorldProjectileRuntime(),
     });
     this.hostUpdate.setPlayerFramePort({

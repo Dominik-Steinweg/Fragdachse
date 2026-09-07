@@ -20,6 +20,7 @@ import { getClassicTrainEventPlan, getNextClassicTrainArrivalAt, type TrainEvent
 import type { CoopTrainPort } from '../activity/CoopTrainPort';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { ExplosionVisualStyle, PlayerProfile, TrainEventConfig } from '../types';
+import type { WorldIntegrityMutationResult, WorldIntegrityState } from './WorldIntegrityMutation';
 
 export interface WorldTrainKillEvent {
   readonly killerId: string;
@@ -89,6 +90,8 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
   private explosionTimers: Phaser.Time.TimerEvent[] = [];
   private renderer: TrainRenderer | null = null;
   private destroyed = false;
+  private nextTrainGeneration = 1;
+  private readonly trainGenerations = new WeakMap<TrainManager, number>();
 
   constructor(private readonly options: WorldTrainRuntimeOptions) {
     if (options.presentationRequired) {
@@ -133,7 +136,21 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
   }
 
   applyDamage(amount: number, attackerId: string): void {
-    this.getCurrentTrain()?.applyDamage(amount, attackerId);
+    this.commitDamage(amount, attackerId);
+  }
+
+  commitDamage(amount: number, attackerId: string): WorldIntegrityMutationResult {
+    const train = this.getCurrentTrain();
+    return train?.commitDamage(amount, attackerId) ?? { kind: 'missing' };
+  }
+
+  readIntegrity(): WorldIntegrityState | null {
+    return this.getCurrentTrain()?.readIntegrity() ?? null;
+  }
+
+  getCurrentTargetGeneration(): number | null {
+    const train = this.getCurrentTrain();
+    return train ? (this.trainGenerations.get(train) ?? null) : null;
   }
 
   getActiveSegmentPositions(): { x: number; y: number }[] {
@@ -201,6 +218,7 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       direction,
       this.options.worldMetrics,
     );
+    this.trainGenerations.set(train, this.nextTrainGeneration++);
     train.setTimeBubbleSystem(this.options.getTimeBubbleSystem());
     train.setEnemyManager(this.options.getEnemyManager());
     this.options.setTranslocatorTrainManager(train);
@@ -280,18 +298,6 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
         victimColor: 0xcf573c,
       });
     }
-    let latestWagonDelay = 0;
-    for (const segment of result.segmentPositions) {
-      const delay = Math.round(Math.random() * TRAIN.EXPLOSION_WAGON_DELAY_MAX_MS);
-      latestWagonDelay = Math.max(latestWagonDelay, delay);
-      this.scheduleExplosion(segment.x, segment.y, 80, delay);
-    }
-    this.scheduleExplosion(
-      result.centerX,
-      result.centerY,
-      160,
-      latestWagonDelay + TRAIN.EXPLOSION_CENTER_DELAY_MS,
-    );
     const validSegments = result.segmentPositions.filter((segment) => (
       segment.y >= worldMetrics.offsetY && segment.y <= worldMetrics.maxY
     ));
@@ -303,6 +309,22 @@ export class WorldTrainRuntime implements WorldScopedBinding, CoopTrainPort {
       powerUps?.spawnFromTable('TRAIN_DESTROY', segment.x + (Math.random() - 0.5) * 28, segment.y + (Math.random() - 0.5) * 28);
     }
     this.options.network.matchEvents.broadcastTrainDestroyed();
+    try {
+      let latestWagonDelay = 0;
+      for (const segment of result.segmentPositions) {
+        const delay = Math.round(Math.random() * TRAIN.EXPLOSION_WAGON_DELAY_MAX_MS);
+        latestWagonDelay = Math.max(latestWagonDelay, delay);
+        this.scheduleExplosion(segment.x, segment.y, 80, delay);
+      }
+      this.scheduleExplosion(
+        result.centerX,
+        result.centerY,
+        160,
+        latestWagonDelay + TRAIN.EXPLOSION_CENTER_DELAY_MS,
+      );
+    } catch (error) {
+      console.error('[WorldTrainRuntime] Destruction presentation failed', error);
+    }
   }
 
   private scheduleExplosion(x: number, y: number, radius: number, delayMs: number): void {

@@ -22,6 +22,11 @@ import {
   sumPlaceableCapacity,
   type CoopDefenseConstructionDefinition,
 } from '../config/coopDefenseConstructions';
+import {
+  integrityState,
+  type WorldIntegrityMutationResult,
+  type WorldIntegrityState,
+} from '../world/WorldIntegrityMutation';
 
 interface RuntimeRockRecord extends SyncedPlaceableRock { lastAttackerId?: string }
 
@@ -163,6 +168,11 @@ export class PlacementSystem {
     return this.runtimeRocks.has(id);
   }
 
+  readIntegrity(id: number): WorldIntegrityState | null {
+    const rock = this.runtimeRocks.get(id);
+    return rock ? integrityState(rock.hp, rock.maxHp) : null;
+  }
+
   getNetSnapshot(): SyncedPlaceableRock[] {
     return [...this.runtimeRocks.values()]
       .sort((left, right) => left.id - right.id)
@@ -201,8 +211,15 @@ export class PlacementSystem {
   }
 
   applyDamage(id: number, damage: number, attackerId?: string): SyncedPlaceableRock | undefined {
+    const outcome = this.commitDamage(id, damage, attackerId);
+    return outcome.kind === 'missing' ? undefined : this.getRuntimeRock(id);
+  }
+
+  commitDamage(id: number, damage: number, attackerId?: string): WorldIntegrityMutationResult {
     const rock = this.runtimeRocks.get(id);
-    if (!rock) return undefined;
+    if (!rock) return { kind: 'missing' };
+    const before = integrityState(rock.hp, rock.maxHp);
+    if (rock.hp <= 0) return { kind: 'inert', state: before };
     if (
       rock.indestructible === true
       || (
@@ -210,11 +227,20 @@ export class PlacementSystem {
       && getCoopDefenseConstructionDefinition(rock.constructionId).indestructible === true
       )
     ) {
-      return { ...rock };
+      return { kind: 'immune', state: before };
     }
+    if (!Number.isFinite(damage) || damage <= 0) {
+      return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
+    }
+    const previousHp = rock.hp;
     rock.hp = Math.max(0, rock.hp - damage);
-    rock.lastAttackerId = attackerId;
-    return { ...rock };
+    if (rock.hp < previousHp) rock.lastAttackerId = attackerId;
+    return {
+      kind: 'applied',
+      actualAmount: previousHp - rock.hp,
+      state: integrityState(rock.hp, rock.maxHp),
+      transition: rock.hp <= 0 ? 'destroyed' : 'none',
+    };
   }
 
   updateAngle(id: number, angle: number): void {
@@ -224,10 +250,28 @@ export class PlacementSystem {
   }
 
   repairRock(id: number, amount: number): SyncedPlaceableRock | undefined {
+    const outcome = this.commitRepair(id, amount);
+    return outcome.kind === 'applied' && outcome.actualAmount > 0
+      ? this.getRuntimeRock(id)
+      : undefined;
+  }
+
+  commitRepair(id: number, amount: number): WorldIntegrityMutationResult {
     const rock = this.runtimeRocks.get(id);
-    if (!rock || amount <= 0 || rock.hp <= 0 || rock.hp >= rock.maxHp) return undefined;
+    if (!rock) return { kind: 'missing' };
+    const before = integrityState(rock.hp, rock.maxHp);
+    if (rock.hp <= 0) return { kind: 'inert', state: before };
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { kind: 'applied', actualAmount: 0, state: before, transition: 'none' };
+    }
+    const previousHp = rock.hp;
     rock.hp = Math.min(rock.maxHp, rock.hp + amount);
-    return { ...rock };
+    return {
+      kind: 'applied',
+      actualAmount: rock.hp - previousHp,
+      state: integrityState(rock.hp, rock.maxHp),
+      transition: 'none',
+    };
   }
 
   getOwnedConstructions(ownerId: string): readonly SyncedPlaceableRock[] {

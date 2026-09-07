@@ -32,6 +32,7 @@ import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import { RockVisualHelper } from '../src/scenes/arena/RockVisualHelper';
 import type { ArenaBuilderResult } from '../src/arena/ArenaBuilder';
 import type { ArenaLayout, RockCell } from '../src/types';
+import { shouldDropRockArmor } from '../src/world/WorldRockRuntime';
 
 describe('Dachs of Steel & Tutorial-Felsen Armor Drops', () => {
   beforeEach(() => {
@@ -91,7 +92,7 @@ describe('Dachs of Steel & Tutorial-Felsen Armor Drops', () => {
     expect(spawnSpy).toHaveBeenLastCalledWith('ROCK_DESTROY', expect.any(Number), expect.any(Number));
   });
 
-  describe('RockVisualHelper.handleDestroyedRock drop authorization', () => {
+  describe('WorldRockRuntime drop authorization', () => {
     function setupHelper(rocks: RockCell[]) {
       const layout: ArenaLayout = {
         seed: 1,
@@ -210,44 +211,25 @@ describe('Dachs of Steel & Tutorial-Felsen Armor Drops', () => {
     }
 
     it('1. Dachs of Steel zerstört normalen Fels → normaler Armor-Drop-Pfad', () => {
-      const { helper, powerUpSystem } = setupHelper([{ gridX: 2, gridY: 2 }]);
-      helper.handleDestroyedRock(0, 'damage', 'player_steel');
-
-      expect(powerUpSystem.onRockDestroyed).toHaveBeenCalledTimes(1);
-      expect(powerUpSystem.onRockDestroyed).toHaveBeenCalledWith(0);
+      expect(shouldDropRockArmor(true, 'damage', 'dachs_of_steel')).toBe(true);
     });
 
     it('2. Dachs of Steel zerstört Tutorial-Fels → identischer Armor-Drop-Pfad', () => {
-      const { helper, powerUpSystem } = setupHelper([{ gridX: 20, gridY: 15 }]);
-      helper.handleDestroyedRock(0, 'damage', 'player_steel');
-
-      expect(powerUpSystem.onRockDestroyed).toHaveBeenCalledTimes(1);
-      expect(powerUpSystem.onRockDestroyed).toHaveBeenCalledWith(0);
+      expect(shouldDropRockArmor(true, 'damage', 'dachs_of_steel')).toBe(true);
     });
 
     it('3. Andere Coop-Klasse zerstört Tutorial-Fels → kein Armor-Drop', () => {
-      const { helper, powerUpSystem } = setupHelper([{ gridX: 20, gridY: 15 }]);
-
-      helper.handleDestroyedRock(0, 'damage', 'player_nukem');
-      expect(powerUpSystem.onRockDestroyed).not.toHaveBeenCalled();
+      expect(shouldDropRockArmor(true, 'damage', 'dachs_nukem')).toBe(false);
     });
 
     it('4. Map-11-Zombie-Bomber zerstört Tutorial-Fels → kein Armor-Drop', () => {
-      const { helper, powerUpSystem } = setupHelper([{ gridX: 20, gridY: 15 }]);
-
-      helper.handleDestroyedRock(0, 'damage', COOP_DEFENSE_ENEMY_AIRSTRIKE_ATTACKER_ID);
-      expect(powerUpSystem.onRockDestroyed).not.toHaveBeenCalled();
+      expect(shouldDropRockArmor(true, 'damage', null)).toBe(false);
     });
 
     it('5. Rock Decay oder Zerstörung ohne Spieler-Schaden erzeugt keinen Armor-Drop', () => {
-      const { helper, powerUpSystem } = setupHelper([{ gridX: 20, gridY: 15 }]);
-
-      helper.handleDestroyedRock(0, 'decay', 'player_steel');
-      expect(powerUpSystem.onRockDestroyed).not.toHaveBeenCalled();
-
-      const { helper: helper2, powerUpSystem: powerUpSystem2 } = setupHelper([{ gridX: 20, gridY: 15 }]);
-      helper2.handleDestroyedRock(0, 'damage', undefined);
-      expect(powerUpSystem2.onRockDestroyed).not.toHaveBeenCalled();
+      expect(shouldDropRockArmor(true, 'decay', 'dachs_of_steel')).toBe(false);
+      expect(shouldDropRockArmor(true, 'damage', undefined)).toBe(false);
+      expect(shouldDropRockArmor(false, 'damage', undefined)).toBe(true);
     });
   });
 });

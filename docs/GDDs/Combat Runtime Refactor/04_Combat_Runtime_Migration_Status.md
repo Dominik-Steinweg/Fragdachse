@@ -8,15 +8,15 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P8-Gate erfüllt, P9 als Nächstes |
+| Gesamtstatus | Block C aktiv; P9-Gate erfüllt, P10 als Nächstes |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P9 World-Mutation / Support / Domain-Fan-out mit frischem Sol-/High-Worker |
+| Nächster Arbeitsschritt | P10 verbleibende Consumer mit frischem Luna-/XHigh-Worker migrieren |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | Keine; P8 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `08fc9e8a` |
-| Start-HEAD der laufenden Aufgabe | `08fc9e8a` |
-| Aktiver Worker / Thread | Keiner; frischer P9-Kontext als Nächstes |
+| Aktive Phase / Aufgabe | Keine; P9 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `4dde7818` |
+| Start-HEAD der laufenden Aufgabe | `4dde7818` |
+| Aktiver Worker / Thread | Keiner; frischer P10-Kontext als Nächstes |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
 | Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
@@ -44,7 +44,7 @@
 | R2 | B | ✅ | Bestanden; keine reproduzierbaren Block-B-Stopper |
 | P7 | C | ✅ | Projectile-Adapter |
 | P8 | C | ✅ | Hitscan / Melee / Preview |
-| P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
+| P9 | C | ✅ | World-Mutation / Domain-Fan-out |
 | P10 | C | ⬜ | Verbleibende Consumer |
 | P11 | C | ⬜ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ⬜ | Legacy-Entfernung / Ratchets / Wissen |
@@ -65,17 +65,17 @@
 - `PlayerLifeRuntime` und `WorldCombatReactions`: deadline-basierter Respawn ohne Timer sowie geordnete, reentrancy-sichere Reaction-/Kill-Folgen aus gesicherten Fakten.
 - Projectile-Direct-Adapter committen Player-/Enemy-/Decoy-Schaden über konkrete Targets und Receipts; `WorldProjectileRuntime` übernimmt tatsächliche AoE-Keys in seine Same-Frame-Continuation.
 - Normalisierte Hitscan-/Melee-Aufträge laufen über `CombatImmediateAttackPort`; sichere Mündung/Range bleiben bei Execution, der Host führt Query→Resolution→Mutation aus und Melee friert die geometrische Grundzielmenge vor der ersten Mutation ein.
+- `WorldObjectMutationRuntime` dedupliziert World-Aliase und projiziert atomare Owner-Outcomes; Rock-/Construction-/Base-/Train-HP, Removal und Cleanup bleiben bei den fachlichen Ownern, während `RockVisualHelper` nur noch präsentiert.
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P7 sind realisiert:
+P1–P9 sind realisiert:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
-| Geplanter Integrationsübergang | Verbleibende Nicht-Projectile-Consumer auf explizite Herkunft umstellen (D9) | P8/P10 |
-| Geplanter Integrationsübergang | Explizite Wirkungseinheiten und renderer-unabhängige World-Mutation (D6/D8) | P9 |
+| Geplanter Integrationsübergang | Verbleibende Nicht-Projectile-Consumer auf explizite Herkunft umstellen (D9) | P10 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
-| Geplanter Integrationsübergang | Verbleibende Attack-, World-, Consumer- und Composition-Ports produktiv schließen | P8–P11 gemäß Contract-Manifest |
+| Geplanter Integrationsübergang | Verbleibende Consumer- und Composition-Ports produktiv schließen | P10–P11 gemäß Contract-Manifest |
 
 ## 5. Nachweise und Reviews
 
@@ -88,6 +88,8 @@ P1–P7 sind realisiert:
 **P7-Gate L:** Fokus 63/63, Check 2781 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 57/57, TypeScript/Diff-Check grün.
 
 **P8-Gate L:** Fokus 27/27 und Melee-Regression 18/18, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25, TypeScript/Diff-Check grün.
+
+**P9-Gate L:** Headless-Integration 3/3, Fokus 54/54, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 27/27, TypeScript/Writer-/Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

@@ -44,6 +44,7 @@ import type { WorldPlayerGameplayRuntime } from '../../world/WorldPlayerGameplay
 import type { WorldCombatGameplayBinding } from '../../world/WorldCombatGameplayBinding';
 import type { WorldPowerUpRuntime } from '../../world/WorldPowerUpRuntime';
 import type { WorldSupportGameplayRuntime } from '../../world/WorldSupportGameplayRuntime';
+import type { WorldObjectMutationRuntime } from '../../world/WorldObjectMutationRuntime';
 import type { ProjectileEnergyInjectorImpact } from '../../projectile/ProjectileCombatPort';
 import type { ProjectileImpactSource } from '../../projectile/ProjectileGameplayPort';
 import type {
@@ -93,6 +94,7 @@ export interface HostUpdatePerformanceMetrics {
 export interface HostWorldFramePort {
   getWorldRuntime(): WorldRuntime | null;
   getTrainRuntime(): WorldTrainRuntime | null;
+  getWorldMutationRuntime(): WorldObjectMutationRuntime | null;
   getProjectileRuntime?(): WorldProjectileRuntime | null;
 }
 
@@ -219,6 +221,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   private get currentLayout() { return this.worldRuntime?.presentation?.layout ?? null; }
   private get placementSystem() { return this.worldRuntime?.materialization?.placement ?? null; }
   private get rockRegistry() { return this.worldRuntime?.materialization?.rocks ?? null; }
+  private get worldMutation() { return this.worldFramePort?.getWorldMutationRuntime() ?? null; }
   private get baseManager() { return this.worldRuntime?.materialization?.bases ?? null; }
   private get world() { return this.worldRuntime?.context ?? null; }
   private get targetingSystems() { return this.combatFramePort?.getTargetingRuntime()?.systems ?? null; }
@@ -918,15 +921,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const expiredRock of this.placementSystem?.update(now) ?? []) {
-      this.targetingSystems?.targetStatus?.removeTarget({ targetType: 'construction', targetId: String(expiredRock.id) });
-      this.targetingSystems?.energyInjector?.removeTarget({ targetType: 'construction', targetId: String(expiredRock.id) });
-      if (expiredRock.kind === 'turret') {
-        this.rockVisualHelper.spawnTurretDeathCloud(expiredRock);
-      }
-      if (expiredRock.kind === 'pedestal') {
-        this.powerUpSystem?.unregisterConstructionPedestal(expiredRock.id);
-      }
-      this.rockVisualHelper.removePlaceableRockVisual(expiredRock, true);
+      this.worldMutation?.finalizeRemovedConstruction(expiredRock, 'decay', true);
       emitArenaMapGridChanged(this.scene.game.events, {
         reason: 'placeable_expired',
         source: expiredRock.kind === 'rock'
@@ -1220,7 +1215,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           if (dist <= radius) {
             const scaledDamage = Math.round(computeRadialDamage(dist, radius, damage, damageFalloff) * trainMult);
             if (scaledDamage <= 0) continue;
-            this.trainManager.applyDamage(scaledDamage, attackerId);
+            this.worldMutation?.applyResolvedDamage('train', 'main', scaledDamage, attackerId, 'environment.radial', 'explosion');
             break;
           }
         }
@@ -1467,7 +1462,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         }
         if (minDist <= effect.radius) {
           const damage = Math.round(computeProjectileExplosionDamage(minDist, effect) * trainMult);
-          if (damage > 0) this.trainManager.applyDamage(damage, attackerId);
+          if (damage > 0) this.worldMutation?.applyResolvedDamage('train', 'main', damage, attackerId, 'environment.projectile_explosion', 'explosion');
         }
       }
     }
@@ -1504,7 +1499,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         }
         if (minDist <= radius) {
           const baseDmg = computeRadialDamage(minDist, radius, NUKE_CONFIG.maxDamage, { minDamage: NUKE_CONFIG.minDamage });
-          this.trainManager.applyDamage(Math.round(baseDmg * trainMult), triggeredBy);
+          this.worldMutation?.applyResolvedDamage('train', 'main', Math.round(baseDmg * trainMult), triggeredBy, 'environment.nuke', 'explosion');
         }
       }
     }
@@ -1577,7 +1572,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         }
         if (minDist <= radius) {
           const baseDmg = computeRadialDamage(minDist, radius, cfg.maxDamage, falloff);
-          this.trainManager.applyDamage(Math.round(baseDmg * cfg.trainDamageMult), triggeredBy);
+          this.worldMutation?.applyResolvedDamage('train', 'main', Math.round(baseDmg * cfg.trainDamageMult), triggeredBy, 'environment.airstrike', 'explosion');
         }
       }
     }
@@ -1626,8 +1621,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
           proj.ownerId,
         );
         if (resolvedDamage <= 0) return;
-        const newHp = this.rockVisualHelper.applyObstacleDamageById(i, resolvedDamage, proj.ownerId);
-        if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(i, 'damage', proj.ownerId);
+        this.worldMutation?.applyResolvedDamage('rock', i, resolvedDamage, proj.ownerId, 'environment.projectile_pulse');
         lines.push(lineTo(rock.x, rock.y));
       });
     }
@@ -1639,7 +1633,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         for (const seg of this.trainManager.getSegmentPositions()) {
           if (Phaser.Math.Distance.Squared(originX, originY, seg.x, seg.y) > radiusSquared) continue;
           if (!this.ctx.combatSystem.hasLineOfSight(originX, originY, seg.x, seg.y)) continue;
-          this.trainManager.applyDamage(config.damage * trainMult, proj.ownerId);
+          this.worldMutation?.applyResolvedDamage('train', 'main', config.damage * trainMult, proj.ownerId, 'environment.projectile_pulse');
           lines.push(lineTo(seg.x, seg.y));
           break;
         }
@@ -1690,15 +1684,13 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (!this.arenaResult || !this.currentLayout) return;
     const resolvedDamage = this.resolveObstacleDamage(index, damage, ownerId);
     if (resolvedDamage <= 0) return;
-    const newHp = this.rockVisualHelper.applyObstacleDamageById(index, resolvedDamage, ownerId);
-    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(index, 'damage', ownerId);
+    this.worldMutation?.applyResolvedDamage('rock', index, resolvedDamage, ownerId, 'environment.tesla');
   }
 
   applyTeslaTurretDamage(id: number, damage: number, ownerId: string): void {
     const resolvedDamage = this.resolveObstacleDamage(id, damage, ownerId);
     if (resolvedDamage <= 0) return;
-    const newHp = this.rockVisualHelper.applyObstacleDamageById(id, resolvedDamage, ownerId);
-    if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(id, 'damage', ownerId);
+    this.worldMutation?.applyResolvedDamage('construction', id, resolvedDamage, ownerId, 'environment.tesla');
   }
 
   /**
@@ -1745,8 +1737,18 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       });
     },
     resolveRockDamage: (index, damage, attackerId) => this.resolveObstacleDamage(index, damage, attackerId),
-    applyRockDamage: (index, damage, attackerId) => this.rockVisualHelper.applyObstacleDamageById(index, damage, attackerId),
-    onRockDestroyed: (index, attackerId) => this.rockVisualHelper.handleDestroyedRock(index, 'damage', attackerId),
+    applyRockDamage: (index, damage, attackerId) => {
+      const outcome = this.worldMutation?.applyResolvedDamage(
+        'rock', index, damage, attackerId, 'environment.radial', 'explosion',
+      );
+      if (!outcome || outcome.kind === 'rejected' || outcome.resultingState.kind !== 'integrity') return null;
+      return {
+        actualDamage: outcome.kind === 'damage-applied' ? outcome.actualDamage : 0,
+        remainingIntegrity: outcome.resultingState.integrity,
+        becameDestroyed: outcome.kind === 'damage-applied' && outcome.transition.kind === 'destroyed',
+      };
+    },
+    onRockDestroyed: () => { /* terminal cleanup is part of the atomic owner commit */ },
   };
 
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */
@@ -1804,13 +1806,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (!Number.isInteger(rockId) || rockId < 0) return;
       const runtimeRock = this.placementSystem?.getRuntimeRock(rockId);
       if (!runtimeRock) {
-        const healed = this.rockVisualHelper.applyObstacleRepairById(rockId, effect.healPerHit);
+        const outcome = this.worldMutation?.applyRepair('rock', rockId, effect.healPerHit, attackerId, 'support.plasma_torch');
+        const healed = outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
         if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
         return;
       }
 
       if (!bridge.isEnemyPair(attackerId, runtimeRock.ownerId)) {
-        const healed = this.rockVisualHelper.applyObstacleRepairById(rockId, effect.healPerHit);
+        const outcome = this.worldMutation?.applyRepair('rock', rockId, effect.healPerHit, attackerId, 'support.plasma_torch');
+        const healed = outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
         if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
         return;
       }
@@ -1825,15 +1829,17 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         attackerId,
         sourceSlot,
       );
-      const newHp = this.rockVisualHelper.applyObstacleDamageById(rockId, resolvedDamage, attackerId);
-      if (newHp <= 0) this.rockVisualHelper.handleDestroyedRock(rockId, 'damage', attackerId);
+      this.worldMutation?.applyResolvedDamage(
+        runtimeRock.constructionId ? 'construction' : 'rock', rockId, resolvedDamage,
+        attackerId, 'support.plasma_torch', 'direct', sourceSlot,
+      );
       return;
     }
 
     const base = this.baseManager?.getBase(targetId) ?? this.findNearestBase(x, y);
     if (!base || base.isInert?.() === true || base.getHp() <= 0) return;
     if (base.faction === 'friendly') {
-      const healed = this.healBase(base.id, effect.healPerHit);
+      const healed = this.healBase(base.id, effect.healPerHit, attackerId);
       if (healed > 0) this.emitRegenerationEffect(x, y, effect.beamColor);
     } else if (effect.damagePerHit > 0) {
       // Basisschaden geht ausschliesslich ueber den zentralen Basistrichter, damit
@@ -2017,13 +2023,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     return bestBase;
   }
 
-  private healBase(baseId: string, amount: number): number {
+  private healBase(baseId: string, amount: number, supporterId = '__world__'): number {
     if (amount <= 0) return 0;
-    const base = this.baseManager?.getBase(baseId);
-    if (!base || base.isInert?.() === true || base.getHp() <= 0) return 0;
-    const before = base.getHp();
-    this.baseManager?.heal(baseId, amount);
-    return base.getHp() - before;
+    const outcome = this.worldMutation?.applyRepair('base', baseId, amount, supporterId, 'support.base_repair');
+    return outcome?.kind === 'support-applied' ? outcome.actualAmount : 0;
   }
 
   applyEnergyInjectorTargetHit(

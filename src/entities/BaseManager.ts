@@ -17,6 +17,7 @@ import {
   type BaseDestructionHooks,
 } from '../effects/BaseDestructionRenderer';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type { WorldIntegrityMutationResult } from '../world/WorldIntegrityMutation';
 
 /**
  * Verwaltet die world-owned Base-Geometrie und bindet bei Bedarf genau einen Activity-Overlay.
@@ -365,25 +366,34 @@ export class BaseManager {
    * an den Konsumenten weitergereicht wird.
    */
   applyDamage(baseId: string, damage: number): void {
-    this.byId.get(baseId)?.applyDamage(damage);
+    this.commitDamage(baseId, damage);
+  }
+
+  commitDamage(baseId: string, damage: number): WorldIntegrityMutationResult {
+    return this.byId.get(baseId)?.commitDamage(damage) ?? { kind: 'missing' };
   }
 
   /** Host-only: Heilt eine Basis bis zum Maximum (z.B. Energie-Kuppel). */
   heal(baseId: string, amount: number): void {
-    if (amount <= 0) return;
-    const base = this.byId.get(baseId);
-    if (!base || base.isInert()) return;
-    base.setHp(base.getHp() + amount);
+    this.commitRepair(baseId, amount);
+  }
+
+  commitRepair(baseId: string, amount: number): WorldIntegrityMutationResult {
+    return this.byId.get(baseId)?.commitRepair(amount) ?? { kind: 'missing' };
   }
 
   private handleBaseDestroyed(entity: BaseEntity): void {
     this.obstacleGeneration += 1;
     this.movementBlockedCells = null;
-    this.destructionRenderer?.play(
-      entity.getSpec(),
-      (cellIndex) => entity.destroyCellVisual(cellIndex),
-    );
     this.onBaseDestroyed?.(entity.getSpec());
+    try {
+      this.destructionRenderer?.play(
+        entity.getSpec(),
+        (cellIndex) => entity.destroyCellVisual(cellIndex),
+      );
+    } catch (error) {
+      console.error('[BaseManager] Destruction presentation failed', error);
+    }
   }
 
   /**

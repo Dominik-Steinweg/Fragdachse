@@ -427,13 +427,13 @@ export class ClientUpdateCoordinator {
         const nextDamagedStaticRockIds = new Set<number>();
         for (const rockId of state.rockRemovals) {
           if (!this.placementSystem?.getRuntimeRock(rockId)) {
-            this.rockVisualHelper.handleDestroyedRock(rockId, 'damage');
+            this.rockVisualHelper.applyStaticRockRemovalProjection(rockId);
             this.damagedStaticRockIds.delete(rockId);
           }
         }
         for (const rs of state.rocks) {
           if (rs.hp <= 0) {
-            this.rockVisualHelper.handleDestroyedRock(rs.id, 'damage');
+            this.rockVisualHelper.applyStaticRockRemovalProjection(rs.id);
             this.damagedStaticRockIds.delete(rs.id);
             continue;
           }
