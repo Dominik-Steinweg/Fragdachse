@@ -4,6 +4,7 @@ import type {
   ProjectileStyle, BulletVisualPreset, GrenadeVisualPreset, EnergyBallVariant, TracerConfig,
   DetonableConfig, DetonatorConfig, GroundFireVisualStyle, GroundFireCellEffect,
   ProjectilePathEffectKind, ShotAudioKey, MiniRocketFlightPhase,
+  ProjectileDirectDamageSourceFactor,
 } from '../types';
 import type {
   ProjectileProvenance, ProjectileFlightSpec, ProjectileCollisionFilterSpec,
@@ -79,6 +80,7 @@ export interface ProjectileResolvedInteraction {
   readonly detonator?: DetonatorConfig;
   readonly multiExplosionCoastMs?: number;
   readonly directHit: {
+    readonly appliedSourceDamageFactors?: readonly ProjectileDirectDamageSourceFactor[];
     readonly plasmaSwarmEnabled?: boolean;
     readonly plasmaSwarmProjectileCount?: number;
     readonly plasmaSwarmExplosionRadius?: number;

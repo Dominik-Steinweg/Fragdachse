@@ -2216,6 +2216,7 @@ export class WorldProjectileRuntime implements
           detonator: cfg.detonator,
           multiExplosionCoastMs: cfg.multiExplosionCoastMs,
           directHit: {
+            appliedSourceDamageFactors: cfg.appliedSourceDamageFactors?.map((factor) => ({ ...factor })),
             plasmaSwarmEnabled: cfg.plasmaSwarmEnabled,
             plasmaSwarmProjectileCount: cfg.plasmaSwarmProjectileCount,
             plasmaSwarmExplosionRadius: cfg.plasmaSwarmExplosionRadius,
@@ -2495,6 +2496,8 @@ function createInheritedProjectilePayload(
   record: ProjectileRuntimeRecord,
 ): Partial<ProjectileSpawnConfig> {
   return {
+    appliedSourceDamageFactors: record.spec.interaction.directHit.appliedSourceDamageFactors
+      ?.map((factor) => ({ ...factor })),
     explosion:            record.interaction.explosion,
     enemyHitExplosion:    record.spec.interaction.enemyHitExplosion,
     impactCloud:          record.spec.interaction.impactCloud,

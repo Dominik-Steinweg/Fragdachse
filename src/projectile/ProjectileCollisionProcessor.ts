@@ -508,6 +508,7 @@ function createDirectImpactRequest(
     provenance: record.provenance,
     directHit: {
       damage: record.damage,
+      appliedSourceDamageFactors: record.spec.interaction.directHit.appliedSourceDamageFactors,
       adrenalinGain: record.adrenalinGain,
       rockDamageMult: record.spec.interaction.directHit.rockDamageMult,
       trainDamageMult: record.spec.interaction.directHit.trainDamageMult,

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
+  Math: {
+    Clamp: (value: number, min: number, max: number) => Math.max(min, Math.min(max, value)),
+  },
   Geom: {
     Line: class { constructor(public x1 = 0, public y1 = 0, public x2 = 0, public y2 = 0) {} },
     Rectangle: class {
@@ -34,6 +37,11 @@ import type {
 } from '../src/projectile/ProjectileSpawnRequest';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
 import { ProjectileStore } from '../src/projectile/ProjectileStore';
+import { adaptProjectileDirectDamageRequest } from '../src/combat/ProjectileCombatContractAdapter';
+import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
+import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
+import type { ProjectileDirectImpactRequest } from '../src/projectile/ProjectileCombatPort';
 import {
   createTechnicalPhysicsBinding,
   createPresentation,
@@ -481,7 +489,17 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
 
   it('resolves direct combat through public ports and owns terminal cleanup', () => {
     const { runtime, physics } = createRuntimeHarness();
-    const resolveDirectImpact = configureEnemyImpact(runtime);
+    let adapted: ReturnType<typeof adaptProjectileDirectDamageRequest> | undefined;
+    const resolveDirectImpact = configureEnemyImpact(runtime, vi.fn((request: ProjectileDirectImpactRequest) => {
+      adapted = adaptProjectileDirectDamageRequest(
+        request,
+        `authored:${request.projectileId}:${request.target.id}`,
+        { worldRevision: 7, runtimeGeneration: 2 },
+        { entityGeneration: 1, activityRevision: 3 },
+        { gameplaySourceKind: 'player', attributionKind: 'player' },
+      );
+      return { accepted: true };
+    }));
 
     const id = runtime.spawnProjectile(baseRequest({ collisionMode: 'overlap' }))!;
     runtime.runHostInteractionStage(1_000);
@@ -491,8 +509,52 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
       target: { kind: 'enemy', id: 'enemy-1' },
       directHit: expect.objectContaining({ damage: 10 }),
     }));
+    expect(adapted?.basis).toEqual({ kind: 'authored', amount: 10 });
     expect(runtime.activeCount).toBe(0);
     expect(physics.released).toHaveLength(1);
+    runtime.destroy();
+  });
+
+  it('preserves an applied automatic source factor through spawn, runtime record and direct impact', () => {
+    const { runtime } = createRuntimeHarness();
+    let adapted: ReturnType<typeof adaptProjectileDirectDamageRequest> | undefined;
+    configureEnemyImpact(runtime, vi.fn((request: ProjectileDirectImpactRequest) => {
+      adapted = adaptProjectileDirectDamageRequest(
+        request,
+        `automatic:${request.projectileId}:${request.target.id}`,
+        { worldRevision: 7, runtimeGeneration: 2 },
+        { entityGeneration: 1, activityRevision: 3 },
+        { gameplaySourceKind: 'player', attributionKind: 'player' },
+      );
+      return { accepted: true };
+    }));
+    const sharedExecution = new WorldWeaponExecutionRuntime({
+      projectileSpawn: runtime,
+      combatSystem: {
+        resolveHitscanShot: vi.fn(() => true),
+        resolveMeleeSwing: vi.fn(() => true),
+      },
+    });
+    const automated = new AutomatedWeaponExecutionAdapter(sharedExecution, runtime);
+    const authoredConfig = {
+      ...WEAPON_CONFIGS.TURRET_ROCKET_BURST,
+      damage: 10,
+      directDamageOverride: undefined,
+    };
+
+    expect(automated.fire(authoredConfig, {
+      x: 0, y: 0, angle: 0, targetX: 100, targetY: 0,
+      ownerId: 'owner', ownerColor: 0xffffff,
+      options: { directDamageMultiplier: 2, sourceSlot: 'utility' },
+    })).toBe(true);
+
+    runtime.runHostInteractionStage(1_000);
+
+    expect(adapted?.basis).toEqual({
+      kind: 'source-resolved',
+      amount: 20,
+      sourceFactors: [{ kind: 'automated-source', multiplier: 2, resolvedAt: 'execution' }],
+    });
     runtime.destroy();
   });
 

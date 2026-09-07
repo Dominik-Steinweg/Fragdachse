@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A nach zwei nicht bestandenen R1-Runden angehalten |
+| Gesamtstatus | Block A aktiv; P1-Fixversuch 2 bestanden, R1-Runde 3 als nächstes |
 | Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
-| Freigabequelle | Nutzerauftrag vom 07.09.2026: ausschließlich Block A |
-| Nächster Arbeitsschritt | Nutzerentscheidung zum verbleibenden P1-Contract-Blocker |
+| Freigabequelle | Block A vom 07.09.2026; zusätzlicher Fix-/R1-Auftrag nach Runde 2 |
+| Nächster Arbeitsschritt | Unabhängiges R1 auf dem zweiten Fix-Checkpoint |
 | Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine; Reparaturlimit aus 03 § 4.3 erreicht |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `491b778c` |
+| Aktive Phase / Aufgabe | Keine zwischen Fix-Checkpoint und R1 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `5ae6d37e` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Nutzerentscheidung nach erreichtem R1-Reparaturlimit |
-| Aktueller Reparaturzähler | Eine Fixrunde; zwei R1-Runden nicht bestanden – Blockstopp |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner; Nutzer hat den gezielten zweiten Fixversuch beauftragt |
+| Aktueller Reparaturzähler | Zweiter Faktorherkunfts-Fixversuch abgeschlossen; R1 ausstehend |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -37,7 +37,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 |---|:---:|:---:|---|
 | P0 | A | ✅ | Baseline / Delta |
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
-| R1 | A | 🟧 | Zwei Review-Runden nicht bestanden; Blockstopp |
+| R1 | A | 🟨 | Fixversuch 2 und R1-Runde 3 beauftragt |
 | P2 | B | ⬜ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
@@ -65,7 +65,7 @@ Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest
 
 ## 4. Aktive Übergänge und Blocker
 
-P1 ist implementiert; zwei Lifecycle-Befunde aus R1-Runde 1 sind geschlossen. Ein Contract-Blocker bleibt:
+P1 ist implementiert; die bisherigen R1-Befunde sind im Fix-Checkpoint geschlossen:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
@@ -74,7 +74,6 @@ P1 ist implementiert; zwei Lifecycle-Befunde aus R1-Runde 1 sind geschlossen. Ei
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
-| Contract-Blocker | `appliedSourceDamageFactors` geht in Spawn-Config/ResolvedInteraction/Direct-Impact verloren; Realpfad klassifiziert skaliertes Damage wieder als `authored` | Nutzerentscheidung; gezielter P1-Fix |
 
 ## 5. Nachweise und Reviews
 
@@ -82,7 +81,9 @@ P1 ist implementiert; zwei Lifecycle-Befunde aus R1-Runde 1 sind geschlossen. Ei
 
 **P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus P1-Lieferung. Fokussierte Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. R1 fand danach drei Contract-Blocker.
 
-**P1-Fixrunde 1:** lokales Gate auf `dd13de75` plus Fixdelta: 44/44 fokussierte und 175/175 Integrationstests, Typecheck und Diff-Check grün. Clear-Lease und frühe Teardown-Invalidierung korrigiert; R1-Runde 2 belegte eine Lücke der Faktorherkunft im Realpfad.
+**P1-Fixrunde 1:** 44/44 fokussierte und 175/175 Integrationstests, Typecheck und Diff-Check grün. Clear-Lease und frühe Teardown-Invalidierung korrigiert; R1-Runde 2 fand eine Faktorherkunftslücke.
+
+**P1-Fixversuch 2:** lokales Gate auf `5ae6d37e` plus Fixdelta: 66/66 fokussierte Tests, Typecheck und Diff-Check grün. Faktorherkunft bleibt durch SpawnConfig, Runtime-Record, Child-Copy und Direct-Impact erhalten; Realpfad prüft skaliert und unmarkiert.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

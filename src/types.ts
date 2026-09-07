@@ -1057,6 +1057,13 @@ export interface UtilityPlacementPreviewState {
   sourceRuntimeId?: number;
 }
 
+/** Source-owned factor that was already applied before a projectile entered its Runtime. */
+export interface ProjectileDirectDamageSourceFactor {
+  readonly kind: 'automated-source';
+  readonly multiplier: number;
+  readonly resolvedAt: 'execution';
+}
+
 /** Konfiguration für ein gespawntes Projektil (wird von der World-Runtime aufgelöst) */
 export interface ProjectileSpawnConfig {
   proximityPulse?: ProjectileProximityPulseConfig;
@@ -1069,6 +1076,8 @@ export interface ProjectileSpawnConfig {
   speed:           number;
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
+  /** Absent means the direct damage remains authored/unscaled at the Combat boundary. */
+  appliedSourceDamageFactors?: readonly ProjectileDirectDamageSourceFactor[];
   color:           number;        // hex
   /** Gewünschter physischer Muzzle-Punkt; die World-Runtime löst ihn sicher auf. */
   gameplayMuzzleOrigin?: MuzzleOrigin;

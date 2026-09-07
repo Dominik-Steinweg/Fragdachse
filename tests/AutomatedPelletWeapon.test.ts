@@ -10,7 +10,6 @@ import { ULTIMATE_CONFIGS, WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRequest';
-import { adaptProjectileDirectDamageRequest } from '../src/combat/ProjectileCombatContractAdapter';
 
 describe('automated projectile weapons', () => {
   it('forwards construction damage as owner-attributed utility damage', () => {
@@ -117,53 +116,6 @@ describe('automated projectile weapons', () => {
         : 0,
       10,
     );
-  });
-
-  it('carries an already applied automatic direct factor into the Combat damage basis', () => {
-    const spawnProjectile = vi.fn((_request: ProjectileSpawnRequest) => 42);
-    const sharedExecution = new WorldWeaponExecutionRuntime({
-      projectileSpawn: { spawnProjectile },
-      combatSystem: { resolveHitscanShot: vi.fn(() => true), resolveMeleeSwing: vi.fn(() => true) },
-    });
-    const adapter = new AutomatedWeaponExecutionAdapter(sharedExecution, { spawnProjectile });
-    const authoredConfig = {
-      ...WEAPON_CONFIGS.TURRET_ROCKET_BURST,
-      damage: 10,
-      directDamageOverride: undefined,
-    };
-
-    adapter.fire(authoredConfig, {
-      x: 0, y: 0, angle: 0, targetX: 100, targetY: 0,
-      ownerId: 'owner', ownerColor: 0xffffff,
-      options: { directDamageMultiplier: 2, sourceSlot: 'utility' },
-    });
-
-    const spawned = spawnProjectile.mock.calls[0]?.[0];
-    const directHit = spawned?.interaction.directHit;
-    if (!spawned || !directHit) throw new Error('Expected an automated direct projectile payload');
-    expect(directHit.damage).toBe(20);
-
-    const combatRequest = adaptProjectileDirectDamageRequest({
-      projectileId: 42,
-      target: { kind: 'enemy', id: 'enemy-1' },
-      impact: { x: 100, y: 0 },
-      velocity: { x: 1, y: 0 },
-      provenance: spawned.provenance,
-      directHit,
-      augments: [],
-    }, 'automatic:42:enemy-1', { worldRevision: 7, runtimeGeneration: 2 }, {
-      entityGeneration: 1,
-      activityRevision: 3,
-    }, {
-      gameplaySourceKind: 'player',
-      attributionKind: 'player',
-    });
-
-    expect(combatRequest.basis).toEqual({
-      kind: 'source-resolved',
-      amount: 20,
-      sourceFactors: [{ kind: 'automated-source', multiplier: 2, resolvedAt: 'execution' }],
-    });
   });
 
   it('dispatches the Void Hunter shotgun as five spread pellets with one shared shot sound', () => {
