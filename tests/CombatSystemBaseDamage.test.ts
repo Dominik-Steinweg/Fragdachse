@@ -297,6 +297,19 @@ function makeSupportCombatHarness() {
 }
 
 describe('CombatSystem base damage routing', () => {
+  it.each([false, true])('applies explosion P once at the base boundary (frozen: %s)', frozen => {
+    const { combat, baseDamage } = makeCombatHarness();
+    const authoredDamage = 14, runtimeP = 6;
+    combat.applyExplosionDamage(0, 0, {
+      radius: 200, maxDamage: authoredDamage * (frozen ? runtimeP : 1),
+      knockback: 0, selfDamageMult: 0,
+      appliedSourceDamageFactors: frozen
+        ? [{ kind: 'runtime-power', multiplier: runtimeP, resolvedAt: 'execution' }]
+        : undefined,
+    }, 'player-1', 'utility');
+    expect(baseDamage).toHaveBeenCalledExactlyOnceWith('hostile-base', authoredDamage * runtimeP, 'player-1', 'utility');
+  });
+
   it('applies general vulnerability in the central base path', () => {
     const { combat, baseDamage } = makeCombatHarness();
     combat.setTargetIncomingDamageMultiplierResolver((target) => target.targetType === 'base' ? 1.2 : 1);

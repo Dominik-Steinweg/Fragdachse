@@ -7,6 +7,7 @@ import type {
   LoadoutSlot,
   MeleeDamageTarget,
   MeleeVisualPreset,
+  ProjectileDamageSourceFactor,
   ShotAudioKey,
   WeaponSlot,
 } from '../types';
@@ -124,6 +125,8 @@ export interface WeaponFireOptions {
   directDamageMultiplier?: number;
   /** Gesamtfaktor fuer Folgeschaden, der nicht erneut durch den Projektiltreffer-Resolver laeuft. */
   payloadDamageMultiplier?: number;
+  /** Factors included in the payload multiplier; omission denotes an automation factor only. */
+  payloadSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
 }
 
 /** Aufrufkontext eines einzelnen Schusses. */

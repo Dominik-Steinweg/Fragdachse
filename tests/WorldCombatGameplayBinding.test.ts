@@ -362,6 +362,10 @@ describe('WorldCombatGameplayBinding turret fire wiring', () => {
     expect(request.interaction.directHit?.damage)
       .toBe(WEAPON_CONFIGS.TURRET_ROCKET_BURST.damage * 1.25);
     expect(request.interaction.explosion?.maxDamage).toBe(14 * 1.25 * 1.5 * 2);
+    expect(request.interaction.explosion?.appliedSourceDamageFactors).toEqual([
+      { kind: 'automated-source', multiplier: 1.25, resolvedAt: 'execution' },
+      { kind: 'runtime-power', multiplier: 1.5 * 2, resolvedAt: 'execution' },
+    ]);
     fixture.binding.destroy();
   });
 

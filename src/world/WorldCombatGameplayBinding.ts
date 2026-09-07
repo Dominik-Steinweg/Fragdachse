@@ -717,9 +717,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             sourceSlot: isBaseTurret ? undefined : 'utility',
             sourceTurretId: sourceTurretId === undefined ? undefined : String(sourceTurretId),
             directDamageMultiplier: damageFactor,
-            // Explosionen, Brand und Schadenswolken laufen nicht durch computeProjectileDamage;
-            // ihr Besitzer-/Power-up-Faktor wird deshalb beim Turmschuss eingefroren.
+            // Payload P is frozen at execution; explosion resolution must retain that ownership.
             payloadDamageMultiplier: damageFactor * ownerRuntimeDamageMultiplier,
+            payloadSourceDamageFactors: [
+              { kind: 'automated-source', multiplier: damageFactor, resolvedAt: 'execution' },
+              { kind: 'runtime-power', multiplier: ownerRuntimeDamageMultiplier, resolvedAt: 'execution' },
+            ],
           },
         },
       );

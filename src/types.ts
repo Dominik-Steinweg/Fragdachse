@@ -441,6 +441,8 @@ export type OverchargeFieldEffect = ReinforcementMatrixEffect;
 export interface ProjectileExplosionConfig {
   readonly radius: number;
   readonly maxDamage: number;
+  /** Execution factors already included in max/min damage; pending runtime P remains at impact. */
+  readonly appliedSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
   readonly minDamage?: number;  // undefined = konstanter Schaden im gesamten Radius
   readonly falloffReduction?: number; // 0 = normaler Falloff, 1 = voller Schaden bis zum Rand
   readonly knockback: number;
@@ -1059,7 +1061,7 @@ export interface UtilityPlacementPreviewState {
 }
 
 /** Source-owned factor that was already applied before a projectile entered its Runtime. */
-export interface ProjectileDirectDamageSourceFactor {
+export interface ProjectileDamageSourceFactor {
   readonly kind: 'automated-source' | 'runtime-power';
   readonly multiplier: number;
   readonly resolvedAt: 'execution';
@@ -1078,7 +1080,7 @@ export interface ProjectileSpawnConfig {
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
   /** Absent means the direct damage remains authored/unscaled at the Combat boundary. */
-  appliedSourceDamageFactors?: readonly ProjectileDirectDamageSourceFactor[];
+  appliedSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
   color:           number;        // hex
   /** Gewünschter physischer Muzzle-Punkt; die World-Runtime löst ihn sicher auf. */
   gameplayMuzzleOrigin?: MuzzleOrigin;

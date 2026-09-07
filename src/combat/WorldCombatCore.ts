@@ -84,6 +84,7 @@ import {
   type ProjectileCombatSourceClassification,
 } from '../combat/ProjectileCombatContractAdapter';
 import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
+import type { ProjectileDamageSourceFactor } from '../types';
 import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
 import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
 import type {
@@ -93,6 +94,7 @@ import type {
   CombatResolvedDamage,
   CombatSupportRequest,
   CombatSupportMutationOutcome,
+  SourceResolvedDamageBasis,
 } from '../combat/CombatMutation';
 import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
 import { CombatBurnStatusOwner } from '../combat/CombatBurnStatusOwner';
@@ -1478,15 +1480,13 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > effect.radius) continue;
 
-      let damage = computeProjectileExplosionDamage(dist, effect)
-        * this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
-      if (player.id === ownerId) {
-        damage *= effect.selfDamageMult;
-      }
+      const basis = this.resolveExplosionDamageBasis(
+        dist, effect, ownerId, sourceSlot, player.id === ownerId ? effect.selfDamageMult : 1,
+      );
       if (source ? !this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } }, player.id).canDamage
         : !this.canDamageTarget(ownerId, player.id, effect.allowTeamDamage)) continue;
 
-      const roundedDamage = Math.round(damage);
+      const roundedDamage = basis.amount;
       if (roundedDamage <= 0) continue;
       if (this.shouldBlockWithShield(player.id, 'explosion', roundedDamage, x, y)) continue;
       if (player.id !== ownerId) this.applyBurnOnHit(player.id, ownerId, effect.burnOnHit, sourceId, effect.burnOrigin, source);
@@ -1494,6 +1494,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
         damageKind: 'explosion',
+        basis,
         source: source ? { ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } } : undefined,
       });
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
@@ -1509,10 +1510,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > effect.radius) continue;
 
-      const roundedDamage = Math.round(
-        computeProjectileExplosionDamage(dist, effect)
-        * this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot),
-      );
+      const basis = this.resolveExplosionDamageBasis(dist, effect, ownerId, sourceSlot);
+      const roundedDamage = basis.amount;
       if (roundedDamage <= 0) continue;
       if ((effect.enemySlowFraction ?? 0) > 0 && (effect.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, effect.enemySlowFraction ?? 0, effect.enemySlowDurationMs ?? 0);
@@ -1522,6 +1521,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
         damageKind: 'explosion',
+        basis,
         source: source ? { ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } } : undefined,
       });
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
@@ -1538,7 +1538,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (source ? source.allegiance.kind === 'enemy' : this.enemyManager?.hasEnemy(ownerId)) continue;
       const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
       if (damage <= 0) continue;
-      this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult);
+      this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult, effect.appliedSourceDamageFactors);
       damagedTargetKeys.push(`bases:${base.id}`);
     }
     return damagedTargetKeys;
@@ -2140,12 +2140,39 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   private getPendingDirectRuntimeMultiplier(request: ProjectileDirectImpactRequest): number {
+    return this.getPendingProjectileRuntimeMultiplier(
+      request.provenance.allegiance.ownerId, request.provenance.sourceSlot,
+      request.directHit.appliedSourceDamageFactors,
+    );
+  }
+
+  private resolveExplosionDamageBasis(
+    distance: number,
+    effect: ProjectileExplosionConfig,
+    ownerId: string,
+    sourceSlot: LoadoutSlot | undefined,
+    selfDamageMultiplier = 1,
+  ): SourceResolvedDamageBasis {
+    const sourceFactors = effect.appliedSourceDamageFactors ?? [];
+    const pending = !sourceFactors.some(factor => factor.kind === 'runtime-power');
+    const multiplier = pending ? this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot) : 1;
+    return {
+      kind: 'source-resolved',
+      amount: Math.round(computeProjectileExplosionDamage(distance, effect) * multiplier * selfDamageMultiplier),
+      sourceFactors: pending
+        ? [...sourceFactors, { kind: 'runtime-power', multiplier, resolvedAt: 'impact' }]
+        : sourceFactors,
+    };
+  }
+
+  private getPendingProjectileRuntimeMultiplier(
+    ownerId: string,
+    sourceSlot: LoadoutSlot | undefined,
+    appliedSourceFactors: readonly ProjectileDamageSourceFactor[] | undefined,
+  ): number {
     // Automation records its own turret/Injector factor; it does not imply that owner P is included.
-    return request.directHit.appliedSourceDamageFactors?.some(factor => factor.kind === 'runtime-power')
-      ? 1 : this.getPlayerRuntimeDamageMultiplier(
-        request.provenance.allegiance.ownerId,
-        request.provenance.sourceSlot,
-      );
+    return appliedSourceFactors?.some(factor => factor.kind === 'runtime-power')
+      ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
   }
 
   private applyProjectileBurnAugments(targetId: string, request: ProjectileDirectImpactRequest): void {
@@ -3092,10 +3119,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     attackerId: string,
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
+    appliedSourceFactors?: readonly ProjectileDamageSourceFactor[],
   ): void {
     if (!this.bridge.isHost() || !Number.isFinite(damage) || !Number.isFinite(baseDamageMult) || damage <= 0 || baseDamageMult <= 0) return;
     const runtimeDamage = damage * baseDamageMult
-      * this.getPlayerRuntimeDamageMultiplier(attackerId, sourceSlot);
+      * this.getPendingProjectileRuntimeMultiplier(attackerId, sourceSlot, appliedSourceFactors);
     const resolvedDamage = this.resolveLegacyWorldModifiers(
       { targetType: 'base', targetId: baseId }, runtimeDamage, attackerId, sourceSlot, true,
     );

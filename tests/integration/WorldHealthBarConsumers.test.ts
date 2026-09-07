@@ -260,6 +260,10 @@ describe('World HP consumer boundaries', () => {
     expect(f.fireConfig(config, 'p1', target === 'player' ? 200 : 300, {
       sourceSlot: 'utility', sourceTurretId: '42', directDamageMultiplier: automatedFactor,
       payloadDamageMultiplier: automatedFactor * loadoutFactor * powerFactor,
+      payloadSourceDamageFactors: [
+        { kind: 'automated-source', multiplier: automatedFactor, resolvedAt: 'execution' },
+        { kind: 'runtime-power', multiplier: loadoutFactor * powerFactor, resolvedAt: 'execution' },
+      ],
     })).toBe(true);
     f.runtime.runHostInteractionStage(1000);
     const expected = config.damage * automatedFactor * loadoutFactor * powerFactor;
@@ -267,6 +271,91 @@ describe('World HP consumer boundaries', () => {
     expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: expected });
     expect(target === 'player' ? f.combat.getHP('p2') : f.manager.getEnemy('e1')!.getHp()).toBe(1000 - expected);
     if (target === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: expected }));
+    f.close();
+  });
+
+  it.each(['player', 'enemy'] as const)('resolves frozen and pending rocket explosion P once against %s', target => {
+    for (const mode of ['player', 'automation', 'turret', 'buffed-turret'] as const) {
+      for (const impactPower of [3, 2]) {
+        const f = projectileFixture(), config = WEAPON_CONFIGS.TURRET_ROCKET_BURST;
+        if (config.fire.type !== 'projectile' || !config.fire.impactExplosion) throw new Error('Expected rocket explosion');
+        let power = 3;
+        const loadout = 2, frozenP = loadout * power;
+        const automatic = mode !== 'player', frozen = mode === 'turret' || mode === 'buffed-turret';
+        // The construction/Injector/Remote-Control factor is independent of owner loadout/power.
+        const automation = mode === 'automation' || mode === 'buffed-turret' ? 2 : 1;
+        f.combat.setLoadoutManager({ getDamageMultiplier: () => loadout, getWeaponDamageMultiplier: () => loadout });
+        f.combat.setPowerUpSystem({ getDamageMultiplier: () => power } as never);
+        const shield = vi.fn(() => false);
+        f.combat.setEnergyShieldSystem({ tryBlockDamage: shield, tryDomeProtect: () => false } as never);
+        expect(f.fireConfig(config, 'p1', target === 'player' ? 200 : 300, automatic ? {
+          sourceSlot: 'utility', sourceTurretId: '42', directDamageMultiplier: automation,
+          payloadDamageMultiplier: automation * (frozen ? frozenP : 1),
+          payloadSourceDamageFactors: frozen ? [
+            { kind: 'automated-source', multiplier: automation, resolvedAt: 'execution' },
+            { kind: 'runtime-power', multiplier: frozenP, resolvedAt: 'execution' },
+          ] : undefined,
+        } : undefined)).toBe(true);
+        power = impactPower;
+        f.runtime.runHostInteractionStage(1000);
+        expect(f.direct.mock.results[0]?.value).toMatchObject({
+          actualDamage: config.damage * automation * loadout * impactPower,
+        });
+        const events = f.runtime.runHostProjectileStage(0, 1000);
+        expect(events.projectileExplosions).toHaveLength(1);
+        const request = events.projectileExplosions[0];
+        const authoredDamage = config.fire.impactExplosion.maxDamage;
+        expect(request.effect.maxDamage).toBe(authoredDamage * automation * (frozen ? frozenP : 1));
+        const readHp = () => target === 'player' ? f.combat.getHP('p2') : f.manager.getEnemy('e1')!.getHp();
+        const before = readHp();
+        shield.mockClear();
+        const damage = vi.spyOn(f.combat, 'applyDamage');
+        const result = f.combat.resolveExplosionCombat(request);
+        // Unbuffed turret: authored 14 × frozen P 6 = 84, never 504 from repeated P.
+        const expected = Math.round(authoredDamage * automation * (frozen ? frozenP : loadout * impactPower));
+        expect(before - readHp()).toBe(expected);
+        const receipt = damage.mock.results[0]?.value;
+        expect(receipt?.kind).toBe('damage-applied');
+        if (receipt?.kind !== 'damage-applied') throw new Error('Expected canonical explosion receipt');
+        const expectedPower = [{ kind: 'runtime-power', multiplier: frozen ? frozenP : loadout * impactPower,
+          resolvedAt: frozen ? 'execution' : 'impact' }];
+        expect(receipt.damage.sourceFactors.filter(factor => factor.kind === 'runtime-power')).toEqual(expectedPower);
+        expect(receipt.damage.basis.kind).toBe('source-resolved');
+        if (receipt.damage.basis.kind !== 'source-resolved') throw new Error('Expected resolved explosion basis');
+        expect(receipt.damage.basis.sourceFactors.filter(factor => factor.kind === 'runtime-power')).toEqual(expectedPower);
+        expect(receipt.damage.basis.sourceFactors.filter(factor => factor.kind === 'automated-source')).toEqual(automatic
+          ? [{ kind: 'automated-source', multiplier: automation, resolvedAt: 'execution' }] : []);
+        expect(result.damagedTargetKeys).toContain(target === 'player' ? 'players:p2' : 'enemies:e1');
+        if (target === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+          damage: expected, category: 'explosion',
+        }));
+        f.close();
+      }
+    }
+  });
+
+  it('keeps pending outgoing/target modifiers after a frozen explosion P and reports a shield block without damage', () => {
+    const f = projectileFixture(), config = WEAPON_CONFIGS.TURRET_ROCKET_BURST;
+    if (config.fire.type !== 'projectile' || !config.fire.impactExplosion) throw new Error('Expected rocket explosion');
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+    expect(f.fireConfig(config, 'p1', 200, {
+      sourceSlot: 'utility', directDamageMultiplier: 1, payloadDamageMultiplier: 6,
+      payloadSourceDamageFactors: [{ kind: 'runtime-power', multiplier: 6, resolvedAt: 'execution' }],
+    })).toBe(true);
+    f.runtime.runHostInteractionStage(1000);
+    const request = f.runtime.runHostProjectileStage(0, 1000).projectileExplosions[0];
+    f.combat.setPlayerOutgoingDamageResolver((_source, _target, amount) => ({ amount: amount * 2, isCritical: false }));
+    f.combat.setTargetIncomingDamageMultiplierResolver(() => 1.5);
+    const before = f.combat.getHP('p2');
+    f.combat.resolveExplosionCombat(request);
+    expect(before - f.combat.getHP('p2')).toBe(Math.round(config.fire.impactExplosion.maxDamage * 6) * 2 * 1.5);
+    const shield = vi.fn(() => true);
+    f.combat.setEnergyShieldSystem({ tryBlockDamage: shield, tryDomeProtect: () => false } as never);
+    const beforeBlock = f.combat.getHP('p2');
+    expect(f.combat.resolveExplosionCombat(request).damagedTargetKeys).not.toContain('players:p2');
+    expect(f.combat.getHP('p2')).toBe(beforeBlock);
+    expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: request.effect.maxDamage }));
     f.close();
   });
 

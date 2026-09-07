@@ -8,7 +8,7 @@ import type {
   WeaponExecutionCapability,
   WeaponFireOptions,
 } from '../loadout/WeaponFireExecutor';
-import type { ProjectileExplosionConfig } from '../types';
+import type { ProjectileDamageSourceFactor, ProjectileExplosionConfig } from '../types';
 import type { MuzzleOrigin } from '../config';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -60,6 +60,7 @@ export class AutomatedWeaponExecutionAdapter implements AutomatedWeaponExecution
       config,
       params.options?.directDamageMultiplier ?? 1,
       params.options?.payloadDamageMultiplier ?? params.options?.directDamageMultiplier ?? 1,
+      params.options?.payloadSourceDamageFactors,
     );
     const pelletCount = Math.max(
       1,
@@ -167,9 +168,13 @@ function scaleAutomatedWeaponDamage(
   config: WeaponConfig,
   directDamageMultiplier: number,
   payloadDamageMultiplier: number,
+  payloadSourceDamageFactors?: readonly ProjectileDamageSourceFactor[],
 ): WeaponConfig {
   const directFactor = Math.max(0, directDamageMultiplier);
   const payloadFactor = Math.max(0, payloadDamageMultiplier);
+  const payloadFactors = payloadSourceDamageFactors ?? [{
+    kind: 'automated-source' as const, multiplier: payloadFactor, resolvedAt: 'execution' as const,
+  }];
   const baseConfig: WeaponConfig = {
     ...config,
     damage: config.damage * directFactor,
@@ -186,8 +191,8 @@ function scaleAutomatedWeaponDamage(
       ...baseConfig,
       fire: {
         ...config.fire,
-        impactExplosion: scaleAutomatedExplosion(config.fire.impactExplosion, payloadFactor),
-        enemyHitExplosion: scaleAutomatedExplosion(config.fire.enemyHitExplosion, payloadFactor),
+        impactExplosion: scaleAutomatedExplosion(config.fire.impactExplosion, payloadFactor, payloadFactors),
+        enemyHitExplosion: scaleAutomatedExplosion(config.fire.enemyHitExplosion, payloadFactor, payloadFactors),
         impactCloud: config.fire.impactCloud
           ? { ...config.fire.impactCloud, damagePerTick: config.fire.impactCloud.damagePerTick * payloadFactor }
           : undefined,
@@ -229,10 +234,13 @@ function scaleAutomatedWeaponDamage(
 function scaleAutomatedExplosion(
   effect: ProjectileExplosionConfig | undefined,
   multiplier: number,
+  sourceFactors: readonly ProjectileDamageSourceFactor[],
 ): ProjectileExplosionConfig | undefined {
   if (!effect) return undefined;
   return {
     ...effect,
+    appliedSourceDamageFactors: [...effect.appliedSourceDamageFactors ?? [], ...sourceFactors]
+      .map(factor => ({ ...factor })),
     maxDamage: effect.maxDamage * multiplier,
     minDamage: effect.minDamage === undefined ? undefined : effect.minDamage * multiplier,
     burnOnHit: effect.burnOnHit

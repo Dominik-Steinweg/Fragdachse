@@ -8,19 +8,19 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C gestoppt; P13 nach Review 3 blockiert |
+| Gesamtstatus | Block C aktiv; P13-Korrekturschleife 3 läuft |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Manuelle Prüfung/Entscheidung zum verbleibenden D3-Blocker |
+| Nächster Arbeitsschritt | Frisches P13-Review 4 auf Korrekturcheckpoint 3 |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | P13 blockiert; keine weitere automatische Korrektur |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `0be2eecd` |
+| Aktive Phase / Aufgabe | P13 – Review 4 nach Korrekturschleife 3 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `c7cba601` |
 | Start-HEAD der laufenden Aufgabe | `d015ba61` |
-| Aktiver Worker / Thread | Keiner |
+| Aktiver Worker / Thread | Frischer Astra-/High-Reviewer, read-only |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Nutzerentscheidung nach Review 3 |
-| Aktueller Reparaturzähler | P13: 2/2 ausgeschöpft |
-| Technische Endabnahme F / manuelle Abnahme M | F blockiert; M nicht begonnen |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner; zwei zusätzliche Schleifen freigegeben |
+| Aktueller Reparaturzähler | P13: 3/4 automatische Fixschleifen |
+| Technische Endabnahme F / manuelle Abnahme M | F aktiv; M nicht begonnen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
 **Freigaberegel:** R1/R2 erteilen keine Freigabe für B/C; dafür zählt nur eine tatsächliche Nutzernachricht.
@@ -48,7 +48,7 @@
 | P10 | C | ✅ | Verbleibende Consumer |
 | P11 | C | ✅ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ✅ | Legacy-Entfernung / Ratchets / Wissen |
-| P13 | C | 🟧 | Review 3: D3-Blocker, manueller Stopp |
+| P13 | C | 🟨 | Korrekturschleife 3 nach D3-Blocker |
 | M | Nutzer | ⬜ | Gebündelte Gameplay-/Sichtabnahme |
 
 ## 3. Realisierte Contracts
@@ -72,7 +72,7 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P12 sind realisiert. Review 3 reproduziert doppelte Runtime-P-Skalierung bei automatisierten Rocket-Explosionen (`TURRET_ROCKET_BURST`: 504 statt 84); Fixschleifen ausgeschöpft.
+P1–P12 sind realisiert. Der Review-3-Blocker ist in Fix 3 behoben (Rocket-Explosion 84 statt 504); Review 4 steht aus.
 
 ## 5. Nachweise und Reviews
 

@@ -14,7 +14,7 @@ import type {
   ProjectileEnergyInjectorPayload,
   ProjectileExplosionConfig,
   ProjectileCollisionMode,
-  ProjectileDirectDamageSourceFactor,
+  ProjectileDamageSourceFactor,
   ProjectileHomingConfig,
   ProjectileProximityPulseConfig,
   ProjectilePathEffectKind,
@@ -250,7 +250,7 @@ export interface ProjectileInteractionSpec {
 export interface ProjectileDirectHitSpec {
   readonly damage: number;
   /** Absent means the payload is still authored/unscaled at the Combat adapter boundary. */
-  readonly appliedSourceDamageFactors?: readonly ProjectileDirectDamageSourceFactor[];
+  readonly appliedSourceDamageFactors?: readonly ProjectileDamageSourceFactor[];
   /** Ressourcengewinn der Attribution bei Treffer. */
   readonly adrenalinGain?: number;
   readonly rockDamageMult?: number;
