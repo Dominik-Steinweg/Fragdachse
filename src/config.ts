@@ -489,26 +489,28 @@ export const DAMAGE_VIGNETTE_VFX = {
 } as const;
 
 /**
- * Trefferreaktion am Ziel: kurzlebige additive Kopie der **eigenen** Textur des Getroffenen
- * plus ein rein visueller Positionsimpuls. Die Schadensbänder werden aus
- * {@link BLOOD_HIT_VFX} abgeleitet, damit Blut und Blitz dieselbe Schwelle benutzen.
+ * Trefferreaktion am Ziel: kurzlebige gefüllte Silhouette der eigenen Textur
+ * plus ein rein visueller Positionsimpuls. Die Stärke folgt kontinuierlich dem
+ * tatsächlichen Damage; Schadensbänder dienen nur noch Kamera-/Kill-Semantik.
  *
- * `maxRearmLifetimeMs` deckelt das Nachtriggern: Schaden über Zeit und Schnellfeuerwaffen
+ * Aus `durationMs` abgeleitete Zeitgrenzen deckeln das Nachtriggern: Schnellfeuerwaffen
  * liefern viele winzige Trefferereignisse. Ohne Deckel bliebe die Silhouette dauerhaft
  * erleuchtet statt zu pulsieren.
  */
 export const HIT_FEEDBACK_VFX = {
-  refractoryMs: 45,
-  maxRearmLifetimeMs: 320,
-  maxJoltPx: 5,
+  /** Master-Stärke der Damage-Kurve. 0 schaltet das gesamte HitFeedback ab. */
+  strength: 1.6,
+  /** Relative Helligkeit und Scale-Pop der Silhouette. 0 schaltet nur den Flash ab. */
+  flashStrength: 1.05,
+  /** Relative Körperauslenkung. 0 schaltet nur den Jolt ab. */
+  joltStrength: 1.2,
+  /** Zeit-Master in ms: länger = länger lesbar, nicht heller. Flash, Jolt und Pausen folgen mit.
+   * 220 ist der Default; zum Vergleichen z. B. 300 probieren. Bereich: 60–600 ms. */
+  durationMs: 320,
+  // Technische Grenzen, normalerweise kein Finetuning nötig.
+  maxJoltPx: 12,
   /** Der eigene Dachs zuckt bewusst schwächer – sonst löst er sich beim Zielen vom Fadenkreuz. */
   localPlayerJoltFactor: 0.4,
-  bands: {
-    light:  { alpha: 0.35, durationMs:  70, scaleBoost: 1.00, whiteMix: 0.55, joltPx: 0.9, joltMs:  90, cameraKickPx: 0 },
-    medium: { alpha: 0.55, durationMs:  95, scaleBoost: 1.05, whiteMix: 0.70, joltPx: 1.8, joltMs: 110, cameraKickPx: 0 },
-    heavy:  { alpha: 0.78, durationMs: 125, scaleBoost: 1.10, whiteMix: 0.85, joltPx: 3.0, joltMs: 130, cameraKickPx: 4 },
-    lethal: { alpha: 0.95, durationMs: 150, scaleBoost: 1.14, whiteMix: 1.00, joltPx: 4.4, joltMs: 150, cameraKickPx: 7 },
-  },
 } as const;
 
 // ---- HP-Balken ----

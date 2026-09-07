@@ -1,5 +1,5 @@
 import type * as Phaser from 'phaser';
-import { type JoltState, stepJolt, superposeJolt } from './entityJoltModel';
+import { type JoltState, type JoltOffset, stepJolt, superposeJolt } from './entityJoltModel';
 
 /**
  * Ein Ziel ist strukturell alles mit `x`/`y` – in der Praxis ein Entity-Sprite.
@@ -13,7 +13,10 @@ export interface JoltTarget {
 
 interface JoltEntry {
   state: JoltState;
-  /** Der zuletzt aufgetragene Versatz. Wird **nie** neu berechnet, sondern exakt so abgezogen. */
+  offset: JoltOffset;
+  baseX: number;
+  baseY: number;
+  /** Current render offset; baseX/Y restore the exact pre-render coordinates. */
   offsetX: number;
   offsetY: number;
 }
@@ -22,6 +25,7 @@ interface JoltEntry {
 // auskommt und mit einem leeren Phaser-Stub getestet werden kann.
 const PRE_RENDER_EVENT = 'prerender';
 const POST_RENDER_EVENT = 'postrender';
+const ZERO_OFFSET = Object.freeze({ x: 0, y: 0 });
 
 type RenderEventEmitter = {
   on: (event: string, listener: () => void, context?: unknown) => unknown;
@@ -34,7 +38,7 @@ type RenderEventEmitter = {
  * `sprite.x/y` ist beim Host die maßgebliche Position für Nahkampfkegel, Explosionsradien,
  * Projektil-Treffertests und Zielauswahl. Ein dauerhafter Versatz dort wäre eine
  * Gameplay-Änderung. Deshalb wird der Versatz ausschließlich im **Renderfenster** aufgetragen:
- * bei `prerender` addiert, bei `postrender` mit exakt denselben Zahlen wieder abgezogen.
+ * bei `prerender` addiert, bei `postrender` werden die gespeicherten Originalwerte restauriert.
  *
  * Phasers Schrittfolge ist `scene.update` → `prerender` → `scene.render` → `postrender`.
  * Gameplay, Netzwerk, Snapshot-Aufbau und das Nachführen der Geschwister (HP-Balken, Glow,
@@ -67,8 +71,15 @@ export class EntityJoltRegistry {
     const existing = this.entries.get(target);
     const state = superposeJolt(existing?.state ?? null, dirX, dirY, px, durationMs);
     if (!state) return;
-    if (existing) existing.state = state;
-    else this.entries.set(target, { state, offsetX: 0, offsetY: 0 });
+    if (existing) {
+      existing.state = state;
+      stepJolt(state, 0, existing.offset);
+      existing.offsetX = existing.offset.x;
+      existing.offsetY = existing.offset.y;
+    } else {
+      const offset = stepJolt(state, 0);
+      this.entries.set(target, { state, offset, offsetX: offset.x, offsetY: offset.y, baseX: 0, baseY: 0 });
+    }
   }
 
   /**
@@ -81,7 +92,7 @@ export class EntityJoltRegistry {
         this.entries.delete(target);
         continue;
       }
-      const offset = stepJolt(entry.state, deltaMs);
+      const offset = stepJolt(entry.state, deltaMs, entry.offset);
       if (offset.finished) {
         this.entries.delete(target);
         continue;
@@ -94,15 +105,15 @@ export class EntityJoltRegistry {
   /** Aktueller Versatz als Datum – für Effekte, die dem gezuckten Körper folgen sollen. */
   getOffset(target: JoltTarget): { x: number; y: number } {
     const entry = this.entries.get(target);
-    return entry ? { x: entry.offsetX, y: entry.offsetY } : { x: 0, y: 0 };
+    return entry?.offset ?? ZERO_OFFSET;
   }
 
   release(target: JoltTarget): void {
     const entry = this.entries.get(target);
     if (!entry) return;
     if (this.applied) {
-      target.x -= entry.offsetX;
-      target.y -= entry.offsetY;
+      target.x = entry.baseX;
+      target.y = entry.baseY;
     }
     this.entries.delete(target);
   }
@@ -124,6 +135,8 @@ export class EntityJoltRegistry {
     if (this.applied) return;
     this.applied = true;
     for (const [target, entry] of this.entries) {
+      entry.baseX = target.x;
+      entry.baseY = target.y;
       target.x += entry.offsetX;
       target.y += entry.offsetY;
     }
@@ -133,8 +146,8 @@ export class EntityJoltRegistry {
     if (!this.applied) return;
     this.applied = false;
     for (const [target, entry] of this.entries) {
-      target.x -= entry.offsetX;
-      target.y -= entry.offsetY;
+      target.x = entry.baseX;
+      target.y = entry.baseY;
     }
   }
 }

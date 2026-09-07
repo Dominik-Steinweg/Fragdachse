@@ -1,13 +1,4 @@
-/**
- * Rein visueller Trefferimpuls. Ohne Phaser-Import, damit Betrag, Abklingen und die Deckelung
- * bei Schaden über Zeit unit-testbar bleiben.
- *
- * Wichtig: dieses Modell rechnet nur Offsets aus. Es schreibt sie **nicht** in `sprite.x/y`.
- * Diese Position ist beim Host maßgeblich für Nahkampfkegel, Explosionsradien und
- * Projektil-Treffertests; ein dauerhafter Versatz dort wäre eine Gameplay-Änderung. Das
- * Auftragen übernimmt {@link EntityJoltRegistry} ausschließlich im Renderfenster.
- */
-
+/** Visual offsets only; EntityJoltRegistry applies them exclusively inside the render window. */
 import { HIT_FEEDBACK_VFX } from '../config';
 
 export interface JoltState {
@@ -17,84 +8,59 @@ export interface JoltState {
   elapsedMs: number;
   durationMs: number;
 }
-
 export interface JoltOffset {
-  readonly x: number;
-  readonly y: number;
-  readonly finished: boolean;
+  x: number;
+  y: number;
+  finished: boolean;
 }
 
-const ATTACK_FRACTION = 0.3;
-
-/**
- * Schneller Ausschlag, weiches Zurücklaufen, bei `t = 1` exakt 0. Bewusst kein Überschwingen:
- * ein zurückfederndes Ziel liest sich cartoonhaft und im Mehrspielerbetrieb wie ein
- * Interpolationsfehler.
- */
+/** Immediate attack, short readable hold, then a single fast return. No oscillation. */
 export function joltEnvelope(t: number): number {
-  if (t <= 0) return 0;
+  if (t <= 0.22) return 1;
   if (t >= 1) return 0;
-  if (t < ATTACK_FRACTION) return t / ATTACK_FRACTION;
-  const u = (t - ATTACK_FRACTION) / (1 - ATTACK_FRACTION);
+  const u = (t - 0.22) / 0.78;
   return 1 - u * u * (3 - 2 * u);
 }
 
-/**
- * Betrag des Impulses. `knockbackFactor` stammt aus der Gegnerkonfiguration und ist dort die
- * inverse Gewichtsangabe (leichte Gegner ~1.9, Bossgegner bis 0.1) – schwere Ziele reagieren
- * damit automatisch träger. Der Deckel verhindert, dass eine sehr leichte Einheit bei einem
- * tödlichen Treffer sichtbar von ihrer echten Position wegspringt.
- */
-export function resolveJoltPx(basePx: number, knockbackFactor: number, scale = 1): number {
-  if (!Number.isFinite(basePx) || basePx <= 0) return 0;
-  const factor = Number.isFinite(knockbackFactor) && knockbackFactor > 0 ? knockbackFactor : 0;
-  const px = basePx * factor * scale;
-  return Math.min(px, HIT_FEEDBACK_VFX.maxJoltPx);
+export function resolveJoltPx(basePx: number, knockbackFactor: number, scale = 1, silhouetteSize = Infinity): number {
+  if (!Number.isFinite(basePx) || basePx <= 0 || !Number.isFinite(scale) || scale <= 0
+    || !Number.isFinite(knockbackFactor) || knockbackFactor <= 0 || !(silhouetteSize > 0)) return 0;
+  const weight = Math.max(0.6, Math.min(1.3, Math.sqrt(knockbackFactor)));
+  const cap = Math.min(HIT_FEEDBACK_VFX.maxJoltPx, silhouetteSize * 0.18);
+  // Smooth saturation keeps AWP/crit distinguishable even on small silhouettes.
+  return cap * Math.tanh(basePx * weight * scale / cap);
 }
 
-/**
- * Überlagert einen neuen Impuls mit einem laufenden. Ein einzelner Schadenstick soll den
- * Ausschlag verstärken können, viele kleine Ticks dürfen ihn aber nicht aufaddieren –
- * deshalb wird der Summenvektor hart auf `maxJoltPx` begrenzt.
- */
-export function superposeJolt(
-  current: JoltState | null,
-  dirX: number,
-  dirY: number,
-  px: number,
-  durationMs: number,
-): JoltState | null {
-  if (px <= 0 || durationMs <= 0) return current;
-
+/** Replace rather than sum impulses. Retriggers never extend a running impulse's lifetime. */
+export function superposeJolt(current: JoltState | null, dirX: number, dirY: number, px: number, durationMs: number): JoltState | null {
   const length = Math.hypot(dirX, dirY);
-  const nx = length > 1e-6 ? dirX / length : 1;
-  const ny = length > 1e-6 ? dirY / length : 0;
-
-  if (!current) {
-    return { dirX: nx, dirY: ny, peakPx: px, elapsedMs: 0, durationMs };
+  if (!Number.isFinite(length) || length <= 1e-6 || !Number.isFinite(px) || px <= 0
+    || !Number.isFinite(durationMs) || durationMs <= 0) return current;
+  const peak = Math.min(px, HIT_FEEDBACK_VFX.maxJoltPx);
+  if (current && current.elapsedMs < current.durationMs) {
+    // Equal/weaker rapid hits cannot hold the body away from its actual position.
+    if (peak <= current.peakPx) return current;
+    current.dirX = dirX / length;
+    current.dirY = dirY / length;
+    current.peakPx = peak;
+    return current;
   }
-
-  const remaining = joltEnvelope(current.elapsedMs / current.durationMs) * current.peakPx;
-  const sumX = current.dirX * remaining + nx * px;
-  const sumY = current.dirY * remaining + ny * px;
-  const sumLength = Math.hypot(sumX, sumY);
-  if (sumLength <= 1e-6) return null;
-
-  const peakPx = Math.min(sumLength, HIT_FEEDBACK_VFX.maxJoltPx);
-  return {
-    dirX: sumX / sumLength,
-    dirY: sumY / sumLength,
-    peakPx,
-    elapsedMs: 0,
-    durationMs: Math.max(current.durationMs - current.elapsedMs, durationMs),
-  };
+  const state = current ?? { dirX: 0, dirY: 0, peakPx: 0, elapsedMs: 0, durationMs: 0 };
+  state.dirX = dirX / length;
+  state.dirY = dirY / length;
+  state.peakPx = peak;
+  state.elapsedMs = 0;
+  state.durationMs = durationMs;
+  return state;
 }
 
-/** Schreibt `elapsedMs` fort und liefert den aktuellen Offset. */
-export function stepJolt(state: JoltState, deltaMs: number): JoltOffset {
-  state.elapsedMs += deltaMs;
+/** Reusable output keeps the registry's frame loop allocation-free. */
+export function stepJolt(state: JoltState, deltaMs: number, out: JoltOffset = { x: 0, y: 0, finished: false }): JoltOffset {
+  state.elapsedMs += Number.isFinite(deltaMs) ? Math.max(0, deltaMs) : 0;
   const t = state.durationMs > 0 ? state.elapsedMs / state.durationMs : 1;
-  if (t >= 1) return { x: 0, y: 0, finished: true };
   const magnitude = joltEnvelope(t) * state.peakPx;
-  return { x: state.dirX * magnitude, y: state.dirY * magnitude, finished: false };
+  out.x = state.dirX * magnitude;
+  out.y = state.dirY * magnitude;
+  out.finished = t >= 1;
+  return out;
 }

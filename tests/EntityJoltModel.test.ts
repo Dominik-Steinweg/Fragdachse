@@ -38,19 +38,20 @@ function makeFakeGame() {
 }
 
 describe('joltEnvelope', () => {
-  it('beginnt und endet exakt bei null', () => {
-    expect(joltEnvelope(0)).toBe(0);
+  it('beginnt am Peak und endet exakt bei null', () => {
+    expect(joltEnvelope(0)).toBe(1);
     expect(joltEnvelope(1)).toBe(0);
     expect(joltEnvelope(1.5)).toBe(0);
   });
 
-  it('erreicht den vollen Ausschlag am Ende des Anstiegs', () => {
-    expect(joltEnvelope(0.3)).toBeCloseTo(1, 6);
+  it('haelt den fruehen Impuls lesbar und kehrt danach deutlich zurueck', () => {
+    expect(joltEnvelope(0.3)).toBeGreaterThan(0.85);
+    expect(joltEnvelope(0.8)).toBeLessThan(0.2);
   });
 
   it('laeuft danach monoton zurueck, ohne ueberzuschwingen', () => {
     let previous = 1;
-    for (let t = 0.3; t <= 1; t += 0.05) {
+    for (let t = 0; t <= 1; t += 0.05) {
       const value = joltEnvelope(t);
       expect(value).toBeLessThanOrEqual(previous + 1e-9);
       expect(value).toBeGreaterThanOrEqual(0);
@@ -69,7 +70,9 @@ describe('resolveJoltPx', () => {
   });
 
   it('deckelt den Ausschlag global', () => {
-    expect(resolveJoltPx(100, 1.9)).toBe(HIT_FEEDBACK_VFX.maxJoltPx);
+    expect(resolveJoltPx(100, 1.9)).toBeLessThanOrEqual(HIT_FEEDBACK_VFX.maxJoltPx);
+    expect(resolveJoltPx(9, 1, 1, 24)).toBeLessThan(resolveJoltPx(10, 1, 1, 24));
+    expect(resolveJoltPx(100, 1, 1, 24)).toBeLessThanOrEqual(24 * 0.18);
   });
 
   it('liefert null bei unbrauchbaren Eingaben', () => {
@@ -95,24 +98,29 @@ describe('superposeJolt', () => {
     expect(state!.peakPx).toBeLessThanOrEqual(HIT_FEEDBACK_VFX.maxJoltPx);
   });
 
-  it('verrechnet gegenlaeufige Impulse, statt sie zu addieren', () => {
-    // Erst auf den vollen Ausschlag laufen lassen – zum Startzeitpunkt ist die Huellkurve null,
-    // dann gaebe es noch nichts zu verrechnen.
+  it('ignoriert schwache Gegenimpulse und verlaengert starke Folgetreffer nicht', () => {
     const first = superposeJolt(null, 1, 0, 4, 120)!;
     stepJolt(first, 36);
 
     const partially = superposeJolt(first, -1, 0, 1.5, 120)!;
-    expect(partially.peakPx).toBeCloseTo(2.5, 6);
+    expect(partially).toBe(first);
+    expect(partially.peakPx).toBe(4);
     expect(partially.dirX).toBeCloseTo(1, 6);
 
     const second = superposeJolt(null, 1, 0, 4, 120)!;
     stepJolt(second, 36);
-    expect(superposeJolt(second, -1, 0, 4, 120)).toBeNull();
+    expect(superposeJolt(second, -1, 0, 6, 120)).toBe(second);
+    expect(second.dirX).toBe(-1);
+    expect(second.elapsedMs).toBe(36);
+    expect(stepJolt(second, 84).finished).toBe(true);
   });
 
   it('ignoriert Impulse ohne Betrag oder Dauer', () => {
     expect(superposeJolt(null, 1, 0, 0, 120)).toBeNull();
     expect(superposeJolt(null, 1, 0, 4, 0)).toBeNull();
+    expect(superposeJolt(null, 0, 0, 4, 90)).toBeNull();
+    expect(superposeJolt(null, NaN, 1, 4, 90)).toBeNull();
+    expect(superposeJolt(null, Infinity, 1, 4, 90)).toBeNull();
   });
 });
 

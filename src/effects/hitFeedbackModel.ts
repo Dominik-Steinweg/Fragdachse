@@ -1,129 +1,107 @@
-/**
- * Deterministische Logik der Trefferreaktion. Ohne Phaser-Import, damit Bandauflösung,
- * Profilabstufung und das Verhalten bei Schaden über Zeit unit-testbar bleiben.
- *
- * Die Schwellen kommen aus {@link BLOOD_HIT_VFX}: Blutspritzer und Silhouettenblitz sollen
- * denselben Treffer gleich einordnen, und Balancing-Zahlen sollen nur an einer Stelle stehen.
- */
-
+/** Pure presentation rules. Bands label camera/kill semantics, never flash/jolt intensity. */
 import { BLOOD_HIT_VFX, HIT_FEEDBACK_VFX } from '../config';
+import type { SyncedHitEffect } from '../types';
 
 export type HitBand = 'light' | 'medium' | 'heavy' | 'lethal';
 export type FlashAction = 'spawn' | 'rearm' | 'skip';
-
-export interface HitFlashProfile {
-  readonly band: HitBand;
-  readonly alpha: number;
+export interface HitFeedbackTuning {
+  readonly strength: number;
+  readonly flashStrength: number;
+  readonly joltStrength: number;
   readonly durationMs: number;
-  readonly scaleBoost: number;
-  /** 0 = reine Materialfarbe, 1 = weiß. */
-  readonly whiteMix: number;
-  /** Grundbetrag des visuellen Impulses, vor `knockbackFactor`. */
-  readonly joltPx: number;
-  readonly joltMs: number;
-  /** Nur schwere und tödliche Treffer schlagen auf die Kamera durch. */
-  readonly cameraKickPx: number;
 }
-
+export interface HitFlashProfile {
+  band: HitBand;
+  intensity: number;
+  alpha: number;
+  durationMs: number;
+  scaleBoost: number;
+  whiteMix: number;
+  joltPx: number;
+  joltMs: number;
+  cameraKickPx: number;
+}
 export interface ActiveFlashState {
-  readonly band: HitBand;
-  /** Zeit seit dem letzten (Neu-)Start. */
+  readonly intensity: number;
   readonly ageMs: number;
-  /** Zeit seit dem allerersten Start dieser Silhouette. */
   readonly totalLifeMs: number;
+  readonly darkRemainingMs: number;
 }
 
-const BAND_RANK: Readonly<Record<HitBand, number>> = {
-  light: 0,
-  medium: 1,
-  heavy: 2,
-  lethal: 3,
-};
-
-const ORDERED_BANDS: readonly HitBand[] = ['light', 'medium', 'heavy', 'lethal'];
-
-function promote(band: HitBand): HitBand {
-  return ORDERED_BANDS[Math.min(ORDERED_BANDS.length - 1, BAND_RANK[band] + 1)];
-}
-
-function cap(band: HitBand, ceiling: HitBand): HitBand {
-  return BAND_RANK[band] > BAND_RANK[ceiling] ? ceiling : band;
-}
-
-/**
- * Ordnet einen Treffer einem Band zu.
- *
- * - Ein tödlicher Treffer ist immer `lethal`.
- * - Ein kritischer Treffer wird um ein Band hochgestuft, damit er klar erkennbar bleibt.
- * - Ein Treffer, den die Rüstung vollständig geschluckt hat, wird auf `medium` gedeckelt: er
- *   hat den Körper nicht erreicht und darf sich nicht wie ein schwerer Körpertreffer lesen.
- */
-export function resolveHitBand(
-  totalDamage: number,
-  hpLost: number,
-  armorLost: number,
-  isKill: boolean,
-  isCritical: boolean,
-): HitBand {
+export function resolveHitBand(totalDamage: number, hpLost: number, armorLost: number, isKill: boolean): HitBand {
   if (isKill) return 'lethal';
-
   const damage = Number.isFinite(totalDamage) ? totalDamage : 0;
-  let band: HitBand =
-    damage <= BLOOD_HIT_VFX.bands.light.maxDamage ? 'light'
-    : damage <= BLOOD_HIT_VFX.bands.medium.maxDamage ? 'medium'
-    : 'heavy';
-
-  if (isCritical) band = promote(band);
-  if (hpLost <= 0 && armorLost > 0) band = cap(band, 'medium');
-  return band;
+  if (damage <= BLOOD_HIT_VFX.bands.light.maxDamage) return 'light';
+  if (damage <= BLOOD_HIT_VFX.bands.medium.maxDamage || (hpLost <= 0 && armorLost > 0)) return 'medium';
+  return 'heavy';
 }
 
-export function resolveHitFlashProfile(band: HitBand): HitFlashProfile {
-  const preset = HIT_FEEDBACK_VFX.bands[band];
+const positive = (value: number): number => Number.isFinite(value) && value > 0 ? value : 0;
+
+const feedbackDuration = (value: number): number =>
+  Number.isFinite(value) ? Math.max(60, Math.min(600, value)) : 220;
+
+/** One time master; safety limits must grow with the pulse instead of clipping it. */
+export function resolveHitFeedbackTiming(durationMs = HIT_FEEDBACK_VFX.durationMs as number) {
+  const duration = feedbackDuration(durationMs);
   return {
-    band,
-    alpha: preset.alpha,
-    durationMs: preset.durationMs,
-    scaleBoost: preset.scaleBoost,
-    whiteMix: preset.whiteMix,
-    joltPx: preset.joltPx,
-    joltMs: preset.joltMs,
-    cameraKickPx: preset.cameraKickPx,
+    refractoryMs: duration * 0.35,
+    maxRearmLifetimeMs: duration * 1.6,
+    darkMs: duration * 0.25,
+    fadeMs: duration * 0.3,
   };
 }
 
-/** Mischt die Materialfarbe kanalweise Richtung Weiß. */
+// Computed once, not allocated per hit or per frame.
+export const HIT_FEEDBACK_TIMING = resolveHitFeedbackTiming();
+
+/** Optional output lets the renderer reuse one scratch profile for every hit. */
+export function resolveHitFlashProfile(
+  hit: Pick<SyncedHitEffect, 'totalDamage' | 'hpLost' | 'armorLost' | 'isKill' | 'isCritical'>,
+  tuning: HitFeedbackTuning = HIT_FEEDBACK_VFX,
+  out: HitFlashProfile = {} as HitFlashProfile,
+): HitFlashProfile {
+  const damage = positive(hit.totalDamage);
+  const strength = positive(tuning.strength);
+  const intensity = -Math.expm1(-strength * (damage / 100) ** 0.6 * (hit.isCritical ? 1.08 : 1));
+  const flash = positive(tuning.flashStrength);
+  const jolt = positive(tuning.joltStrength);
+  const f = Math.min(1, intensity * flash);
+  out.band = resolveHitBand(damage, hit.hpLost, hit.armorLost, hit.isKill);
+  out.intensity = intensity;
+  out.alpha = intensity > 0 && flash > 0 ? Math.min(0.95, (0.45 + intensity * 0.5) * flash) : 0;
+  const duration = feedbackDuration(tuning.durationMs);
+  out.durationMs = duration * (0.85 + 0.35 * intensity);
+  out.scaleBoost = 1 + 0.06 * f;
+  out.whiteMix = 0.9 + 0.1 * f;
+  out.joltPx = intensity > 0 ? Math.min(HIT_FEEDBACK_VFX.maxJoltPx, (1 + 10 * intensity) * jolt) : 0;
+  out.joltMs = duration * (0.55 + 0.2 * intensity);
+  // Existing camera/kill choreography stays separate from the body response.
+  out.cameraKickPx = intensity <= 0 ? 0 : out.band === 'lethal' ? 7 : out.band === 'heavy' ? 4 : 0;
+  return out;
+}
+
 export function mixFlashColor(materialColor: number, whiteMix: number): number {
-  const t = whiteMix < 0 ? 0 : whiteMix > 1 ? 1 : whiteMix;
+  const t = Math.max(0, Math.min(1, whiteMix));
   const r = (materialColor >> 16) & 0xff;
   const g = (materialColor >> 8) & 0xff;
   const b = materialColor & 0xff;
-  const mix = (channel: number) => Math.round(channel + (0xff - channel) * t);
-  return (mix(r) << 16) | (mix(g) << 8) | mix(b);
+  return (Math.round(r + (255 - r) * t) << 16)
+    | (Math.round(g + (255 - g) * t) << 8) | Math.round(b + (255 - b) * t);
 }
 
-/**
- * Antwort auf Schnellfeuerwaffen und Schaden über Zeit.
- *
- * Ein schwererer Treffer bekommt immer einen frischen Blitz mit voller Stärke. Innerhalb des
- * Refraktärfensters wird ein bestehender Blitz nur aufgefrischt, statt einen zweiten Pool-Slot
- * zu belegen – ein Flammenwerfer mit 20 Ticks pro Sekunde erzeugt so eine durchgehende
- * Silhouette statt 20 gestapelter additiver Kopien. Der Lebenszeitdeckel sorgt dafür, dass
- * daraus ein Pulsieren wird und keine dauerhaft weiße Figur.
- */
-export function resolveFlashAction(existing: ActiveFlashState | null, incoming: HitBand): FlashAction {
+/** A readable plateau followed by a smooth fade, rather than losing most energy immediately. */
+export function flashEnvelope(t: number): number {
+  if (t <= 0.35) return 1;
+  if (t >= 1) return 0;
+  const u = (t - 0.35) / 0.65;
+  return 1 - u * u * (3 - 2 * u);
+}
+
+/** Lifetime and darkness take precedence even over arbitrarily strong incoming hits. */
+export function resolveFlashAction(existing: ActiveFlashState | null, incoming: number): FlashAction {
   if (!existing) return 'spawn';
-  if (BAND_RANK[incoming] > BAND_RANK[existing.band]) return 'spawn';
-  if (existing.ageMs >= HIT_FEEDBACK_VFX.refractoryMs) return 'spawn';
-  if (existing.totalLifeMs >= HIT_FEEDBACK_VFX.maxRearmLifetimeMs) return 'skip';
-  return 'rearm';
-}
-
-/** Stärkeres Band gewinnt beim Auffrischen. */
-export function strongerBand(a: HitBand, b: HitBand): HitBand {
-  return BAND_RANK[a] >= BAND_RANK[b] ? a : b;
-}
-
-export function hitBandRank(band: HitBand): number {
-  return BAND_RANK[band];
+  if (existing.darkRemainingMs > 0 || existing.totalLifeMs >= HIT_FEEDBACK_TIMING.maxRearmLifetimeMs) return 'skip';
+  if (incoming > existing.intensity || existing.ageMs >= HIT_FEEDBACK_TIMING.refractoryMs) return 'rearm';
+  return 'skip';
 }

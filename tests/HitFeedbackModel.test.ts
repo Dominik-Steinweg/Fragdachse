@@ -1,150 +1,109 @@
 import { describe, expect, it } from 'vitest';
 import { BLOOD_HIT_VFX, HIT_FEEDBACK_VFX } from '../src/config';
-import {
-  type HitBand,
-  hitBandRank,
-  mixFlashColor,
-  resolveFlashAction,
-  resolveHitBand,
-  resolveHitFlashProfile,
-  strongerBand,
-} from '../src/effects/hitFeedbackModel';
+import { HIT_FEEDBACK_TIMING, resolveHitFeedbackTiming, flashEnvelope, mixFlashColor, resolveFlashAction, resolveHitBand, resolveHitFlashProfile } from '../src/effects/hitFeedbackModel';
 
-// Schwellen werden aus der Konfiguration abgeleitet, nie als Literal gespiegelt.
-const LIGHT_MAX = BLOOD_HIT_VFX.bands.light.maxDamage;
-const MEDIUM_MAX = BLOOD_HIT_VFX.bands.medium.maxDamage;
+const hit = (damage: number, isCritical = false, isKill = false) => ({
+  totalDamage: damage, hpLost: damage, armorLost: 0, isCritical, isKill,
+});
+const profile = (damage: number, crit = false) => resolveHitFlashProfile(hit(damage, crit));
 
-describe('resolveHitBand', () => {
-  it('folgt den Schadensbaendern des Blutspritzers', () => {
-    expect(resolveHitBand(LIGHT_MAX, LIGHT_MAX, 0, false, false)).toBe('light');
-    expect(resolveHitBand(LIGHT_MAX + 1, LIGHT_MAX + 1, 0, false, false)).toBe('medium');
-    expect(resolveHitBand(MEDIUM_MAX, MEDIUM_MAX, 0, false, false)).toBe('medium');
-    expect(resolveHitBand(MEDIUM_MAX + 1, MEDIUM_MAX + 1, 0, false, false)).toBe('heavy');
+describe('continuous hit intensity', () => {
+  it('orders actual damage and crit accents without promoting bands', () => {
+    const sequence = [profile(8), profile(10), profile(12, true), profile(40), profile(100), profile(150, true)];
+    for (let i = 1; i < sequence.length; i++) {
+      for (const field of ['intensity', 'alpha', 'joltPx'] as const) {
+        expect(sequence[i][field]).toBeGreaterThan(sequence[i - 1][field]);
+      }
+    }
+    expect(profile(12, true).intensity).toBeLessThan(profile(100).intensity * 0.6);
+    for (const damage of [1, 8, 12, 40, 100]) {
+      expect(profile(damage, true).band).toBe(profile(damage).band);
+      expect(profile(damage, true).intensity).toBeGreaterThan(profile(damage).intensity);
+      expect(profile(damage, true).band).not.toBe('lethal');
+    }
+  });
+  it('has no visible steps at damage band boundaries', () => {
+    for (const damage of [BLOOD_HIT_VFX.bands.light.maxDamage, BLOOD_HIT_VFX.bands.medium.maxDamage]) {
+      for (const field of ['alpha', 'joltPx', 'durationMs', 'scaleBoost'] as const) {
+        expect(Math.abs(profile(damage + 0.00001)[field] - profile(damage)[field])).toBeLessThan(0.0001);
+      }
+    }
+  });
+  it('keeps kill and armor semantics separate from body strength', () => {
+    expect(resolveHitBand(1, 1, 0, true)).toBe('lethal');
+    expect(resolveHitBand(100, 0, 100, false)).toBe('medium');
+    expect(resolveHitFlashProfile(hit(8, false, true)).intensity).toBe(profile(8).intensity);
+    expect(resolveHitFlashProfile(hit(8, false, true)).cameraKickPx).toBeGreaterThan(0);
+  });
+  it('rejects invalid damage and caps extreme inputs', () => {
+    for (const damage of [0, -1, NaN, Infinity]) {
+      const result = profile(damage);
+      expect(result.alpha).toBe(0);
+      expect(result.joltPx).toBe(0);
+      expect(result.cameraKickPx).toBe(0);
+    }
+    const extreme = profile(Number.MAX_VALUE, true);
+    expect(extreme.intensity).toBeLessThanOrEqual(1);
+    expect(extreme.alpha).toBeLessThanOrEqual(1);
+    expect(extreme.joltPx).toBeLessThanOrEqual(HIT_FEEDBACK_VFX.maxJoltPx);
+    for (const value of Object.values(extreme)) if (typeof value === 'number') expect(Number.isFinite(value)).toBe(true);
+  });
+  it('supports independent master controls and reusable output', () => {
+    const base = profile(20);
+    const globalOff = resolveHitFlashProfile(hit(20), { ...HIT_FEEDBACK_VFX, strength: 0 });
+    expect(globalOff.alpha + globalOff.joltPx + globalOff.cameraKickPx).toBe(0);
+    const flashOff = resolveHitFlashProfile(hit(20), { ...HIT_FEEDBACK_VFX, flashStrength: 0 });
+    expect(flashOff.alpha).toBe(0);
+    expect(flashOff.scaleBoost).toBe(1);
+    expect(flashOff.joltPx).toBe(base.joltPx);
+    const joltOff = resolveHitFlashProfile(hit(20), { ...HIT_FEEDBACK_VFX, joltStrength: 0 });
+    expect(joltOff.joltPx).toBe(0);
+    expect(joltOff.alpha).toBe(base.alpha);
+    expect(resolveHitFlashProfile(hit(30), HIT_FEEDBACK_VFX, base)).toBe(base);
+    expect(resolveHitFlashProfile(hit(20), { ...HIT_FEEDBACK_VFX, strength: 2 }).intensity).toBeGreaterThan(profile(20).intensity);
   });
 
-  it('stuft einen toedlichen Treffer immer auf lethal', () => {
-    expect(resolveHitBand(1, 1, 0, true, false)).toBe('lethal');
-  });
-
-  it('stuft einen kritischen Treffer um ein Band hoch', () => {
-    expect(resolveHitBand(LIGHT_MAX, LIGHT_MAX, 0, false, true)).toBe('medium');
-    expect(resolveHitBand(MEDIUM_MAX, MEDIUM_MAX, 0, false, true)).toBe('heavy');
-  });
-
-  /** Ein von der Ruestung geschluckter Treffer hat den Koerper nicht erreicht. */
-  it('deckelt einen rein von Ruestung absorbierten Treffer auf medium', () => {
-    expect(resolveHitBand(MEDIUM_MAX + 40, 0, MEDIUM_MAX + 40, false, false)).toBe('medium');
-    // Sobald Lebenspunkte verloren gehen, gilt der Deckel nicht mehr.
-    expect(resolveHitBand(MEDIUM_MAX + 40, 5, MEDIUM_MAX + 35, false, false)).toBe('heavy');
-  });
-
-  it('bleibt bei unbrauchbaren Zahlen im schwaechsten Band', () => {
-    expect(resolveHitBand(Number.NaN, 0, 0, false, false)).toBe('light');
+  it('scales time independently of brightness and keeps safety limits outside the full pulse', () => {
+    const base = profile(100);
+    const longer = resolveHitFlashProfile(hit(100), { ...HIT_FEEDBACK_VFX, durationMs: HIT_FEEDBACK_VFX.durationMs * 2 });
+    expect(longer.durationMs).toBeCloseTo(base.durationMs * 2);
+    expect(longer.joltMs).toBeCloseTo(base.joltMs * 2);
+    expect(longer.alpha).toBe(base.alpha);
+    expect(longer.joltPx).toBe(base.joltPx);
+    expect(longer.intensity).toBe(base.intensity);
+    for (const durationMs of [60, 220, 440, 600, NaN, Infinity, -1]) {
+      const timing = resolveHitFeedbackTiming(durationMs);
+      const result = resolveHitFlashProfile(hit(Number.MAX_VALUE), { ...HIT_FEEDBACK_VFX, durationMs });
+      expect(result.durationMs).toBeLessThan(timing.maxRearmLifetimeMs - timing.fadeMs);
+      expect(timing.darkMs).toBeGreaterThan(0);
+      expect(Number.isFinite(result.durationMs)).toBe(true);
+    }
   });
 });
 
-describe('resolveHitFlashProfile', () => {
-  const bands: readonly HitBand[] = ['light', 'medium', 'heavy', 'lethal'];
-
-  it('steigert alle Kennwerte monoton mit dem Band', () => {
-    for (let i = 1; i < bands.length; i += 1) {
-      const weaker = resolveHitFlashProfile(bands[i - 1]);
-      const stronger = resolveHitFlashProfile(bands[i]);
-      expect(stronger.alpha).toBeGreaterThanOrEqual(weaker.alpha);
-      expect(stronger.durationMs).toBeGreaterThanOrEqual(weaker.durationMs);
-      expect(stronger.scaleBoost).toBeGreaterThanOrEqual(weaker.scaleBoost);
-      expect(stronger.joltPx).toBeGreaterThanOrEqual(weaker.joltPx);
-      expect(stronger.cameraKickPx).toBeGreaterThanOrEqual(weaker.cameraKickPx);
+describe('flash pulse policy', () => {
+  const state = { intensity: 0.3, ageMs: 1, totalLifeMs: 1, darkRemainingMs: 0 };
+  it('accepts upgrades but never bypasses lifetime or darkness', () => {
+    expect(resolveFlashAction(null, 0.3)).toBe('spawn');
+    expect(resolveFlashAction(state, 0.3)).toBe('skip');
+    expect(resolveFlashAction(state, 0.4)).toBe('rearm');
+    expect(resolveFlashAction({ ...state, ageMs: HIT_FEEDBACK_TIMING.refractoryMs }, 0.3)).toBe('rearm');
+    expect(resolveFlashAction({ ...state, totalLifeMs: HIT_FEEDBACK_TIMING.maxRearmLifetimeMs }, 1)).toBe('skip');
+    expect(resolveFlashAction({ ...state, darkRemainingMs: 1 }, 1)).toBe('skip');
+  });
+  it('starts at full brightness and fades monotonically to zero', () => {
+    expect(flashEnvelope(0)).toBe(1);
+    let previous = 1;
+    for (let t = 0; t <= 1; t += 0.01) {
+      expect(flashEnvelope(t)).toBeLessThanOrEqual(previous);
+      previous = flashEnvelope(t);
     }
+    expect(flashEnvelope(1)).toBe(0);
   });
-
-  it('stoesst die Kamera nur bei schweren und toedlichen Treffern an', () => {
-    expect(resolveHitFlashProfile('light').cameraKickPx).toBe(0);
-    expect(resolveHitFlashProfile('medium').cameraKickPx).toBe(0);
-    expect(resolveHitFlashProfile('heavy').cameraKickPx).toBeGreaterThan(0);
-  });
-
-  it('haelt den visuellen Impuls unter dem globalen Deckel', () => {
-    for (const band of bands) {
-      expect(resolveHitFlashProfile(band).joltPx).toBeLessThanOrEqual(HIT_FEEDBACK_VFX.maxJoltPx);
-    }
-  });
-});
-
-describe('mixFlashColor', () => {
-  it('behaelt die Materialfarbe ohne Beimischung', () => {
+  it('mixes material color toward white', () => {
     expect(mixFlashColor(0x3366cc, 0)).toBe(0x3366cc);
-  });
-
-  it('ergibt bei voller Beimischung reines Weiss', () => {
     expect(mixFlashColor(0x3366cc, 1)).toBe(0xffffff);
-  });
-
-  it('klemmt Werte ausserhalb des Bereichs', () => {
     expect(mixFlashColor(0x3366cc, -1)).toBe(0x3366cc);
     expect(mixFlashColor(0x3366cc, 5)).toBe(0xffffff);
-  });
-});
-
-describe('resolveFlashAction', () => {
-  it('startet ohne laufenden Blitz einen neuen', () => {
-    expect(resolveFlashAction(null, 'light')).toBe('spawn');
-  });
-
-  it('gibt einem staerkeren Treffer immer einen frischen Blitz', () => {
-    const existing = { band: 'light' as const, ageMs: 5, totalLifeMs: 5 };
-    expect(resolveFlashAction(existing, 'heavy')).toBe('spawn');
-  });
-
-  it('frischt innerhalb des Refraktaerfensters nur auf', () => {
-    const existing = { band: 'light' as const, ageMs: HIT_FEEDBACK_VFX.refractoryMs - 1, totalLifeMs: 20 };
-    expect(resolveFlashAction(existing, 'light')).toBe('rearm');
-  });
-
-  it('startet nach Ablauf des Refraktaerfensters wieder neu', () => {
-    const existing = { band: 'light' as const, ageMs: HIT_FEEDBACK_VFX.refractoryMs, totalLifeMs: 60 };
-    expect(resolveFlashAction(existing, 'light')).toBe('spawn');
-  });
-
-  /**
-   * Schaden ueber Zeit liefert viele winzige Treffer. Ohne Lebenszeitdeckel bliebe die
-   * Silhouette dauerhaft erleuchtet, statt zu pulsieren.
-   */
-  it('laesst einen dauerhaft aufgefrischten Blitz irgendwann ausklingen', () => {
-    const existing = {
-      band: 'light' as const,
-      ageMs: 1,
-      totalLifeMs: HIT_FEEDBACK_VFX.maxRearmLifetimeMs,
-    };
-    expect(resolveFlashAction(existing, 'light')).toBe('skip');
-  });
-
-  it('haelt einen Dauerschaden-Strom unter dem Lebenszeitdeckel', () => {
-    // 200 Ticks in zwei Sekunden: es darf nie zu einem dauerhaft gehaltenen Blitz kommen.
-    let ageMs = 0;
-    let totalLifeMs = 0;
-    let held = 0;
-    for (let tick = 0; tick < 200; tick += 1) {
-      const action = resolveFlashAction({ band: 'light', ageMs, totalLifeMs }, 'light');
-      if (action === 'spawn') {
-        ageMs = 0;
-        totalLifeMs = 0;
-        held = 0;
-      } else if (action === 'rearm') {
-        ageMs = 0;
-        held += 1;
-      }
-      expect(held).toBeLessThanOrEqual(HIT_FEEDBACK_VFX.maxRearmLifetimeMs / 10);
-      ageMs += 10;
-      totalLifeMs += 10;
-    }
-  });
-});
-
-describe('strongerBand', () => {
-  it('waehlt das hoehere Band', () => {
-    expect(strongerBand('light', 'heavy')).toBe('heavy');
-    expect(strongerBand('lethal', 'medium')).toBe('lethal');
-    expect(hitBandRank('lethal')).toBeGreaterThan(hitBandRank('light'));
   });
 });
