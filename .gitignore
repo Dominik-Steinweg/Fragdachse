@@ -71,3 +71,6 @@ Tiled/
 # Local helper scripts
 scripts/process-sprite.mjs
 scripts/generate-fallback.mjs
+
+# Local visual asset proofs of concept
+/art/poc/
