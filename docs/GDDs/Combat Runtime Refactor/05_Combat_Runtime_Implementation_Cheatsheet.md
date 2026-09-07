@@ -38,26 +38,27 @@ Die Bezeichnungen Luna, Sol und Astra entsprechen der bisherigen Arbeitsplanung.
 | P5 | Sol / High | Status und Mechanik-Lifetimes |
 | P6 | Astra / High | Reentrancy, Tod, Attribution, Respawn |
 | R2 | Astra / High | unabhängiges Semantikreview |
-| P7–P9 | Sol / High | Projectile-, Attack- und World-Anschluss |
-| P10 | Luna / High | Consumer an fertige Contracts anbinden |
+| P7–P8 | Luna / XHigh | konkrete Projectile-/Attack-Cuts mit festen Contracts |
+| P9 | Sol / High | verteilte World-Owner und Domain-Fan-out |
+| P10 | Luna / XHigh | Consumer an fertige Contracts anbinden |
 | P11 | Sol / High | Gesamtgraph, Zeit und Ausgabe |
-| P12 | Luna / High | Legacy-Cleanup und Ratchets |
+| P12 | Luna / XHigh | Legacy-Cleanup und Ratchets |
 | P13 | Astra / High | unabhängige technische Endprüfung |
 | M | Nutzer | praktische Gameplay-/Sichtabnahme |
 
-Pro Phase möglichst ein abgegrenzter Subagentenauftrag; keine Spezialrolle pro Methode, kein Unteragentenbaum. Kleine geklärte Folgekorrekturen im bestehenden Kontext erledigen. P0 darf der Hauptchat bei fehlender Luna-Delegation selbst übernehmen. Für anspruchsvollere Phasen gilt die Auswahl oben; ein notwendiger Modellwechsel wird nicht nur behauptet.
+Pro Phase ein abgegrenzter Subagentenauftrag; keine Spezialrolle pro Methode, kein Unteragentenbaum. P7 und P8 darf derselbe Luna-/xhigh-Worker nacheinander bearbeiten, jedoch nur mit getrenntem Auftrag, Gate und Checkpoint. P9, P10, P11 und P12 beginnen jeweils in einem neuen Kontext; insbesondere P10 wird nicht nur zur Kontextkontinuität auf Sol hochgestuft. Kleine geklärte Folgekorrekturen dürfen gemäß 03 § 4.3 im passenden bestehenden Kontext erfolgen. P0 darf der Hauptchat bei fehlender Luna-Delegation selbst übernehmen.
 
-P3/P10/P12 bei sichtbar gewordener ungeklärter Fachsemantik zu Sol / High eskalieren. Astra gezielt bei Ownership-/Source-/Lifecycle-Konflikten einsetzen. Reparaturlimits aus 03 § 4.3 gelten unverändert. Kein pauschales Hochstufen aller Folgephasen.
+P7/P8/P10/P12 nur bei sichtbar gewordener ungeklärter Damage-/Reward-/Ownership-/Lifecycle-Semantik zu Sol / High eskalieren; Diff-Größe allein genügt nicht. Astra gezielt für unabhängige Reviews und echte Ownership-/Source-/Lifecycle-Konflikte einsetzen. Reparaturlimits aus 03 § 4.3 gelten unverändert. Luna ist für kostenbewusste, volumenstarke Arbeit vorgesehen und unterstützt xhigh; Sol bleibt das Modell für komplexe professionelle Arbeit.[^models]
 
 ### 2.2 Wenige Arbeitsregeln
 
-**Nur ein Writer:** Während ein Subagent implementiert, schreibt der Hauptchat nicht mit. Der Hauptchat prüft anschließend die Lieferung, führt 04 und erstellt lokale Phasen-Commits. Reviewer arbeiten ohne Dateiänderungen in einem frischen Kontext. Das ist eine ausdrückliche Arbeitsregel, keine durch diese Dokumente erzeugte technische Sandbox.
+**Nur ein Writer:** Während ein Subagent implementiert, schreibt der Hauptchat nicht mit. Der Hauptchat prüft anschließend die Lieferung, führt 04 und erstellt lokale Phasen-Commits. Initiale Reviews arbeiten ohne Dateiänderungen in einem frischen Kontext; Wiederholungsreviews folgen 03 § 4.3. Das ist eine ausdrückliche Arbeitsregel, keine durch diese Dokumente erzeugte technische Sandbox.
 
 **Nur nötigen Kontext:** Lesevertrag aus 03 § 1 einhalten. Worker erhalten Phasenkarte, zugeordnete 02-Abschnitte, relevante Contracts und Code; keine vollständigen Vorgängeranalysen. Kurze Rückgabe nach 03 § 4.2. Der Hauptchat wiederholt nicht die gesamte Recherche.
 
-**Nur passende Prüfungen:** lokale Gates pro Phase; vollständige Matrix in P0/P13. Bereits für denselben Code belegte Tests nicht doppelt ausführen. Nach relevanten Änderungen Belege erneuern. Bekannte Integrationslücken bleiben nur mit Ursache und Schließphase zulässig. Keine Browserprüfung, kein automatisches Push/Merge/Deployment.
+**Nur passende Prüfungen:** lokale Gates pro Phase; vollständige Matrix in P0/P13. Exakte grüne Belege desselben Code-HEAD wiederverwenden: Worker führt das lokale Gate aus, Orchestrator prüft Diff/Checkpoint und kritische Stellen, Reviewer nur eigene Repros und nötige Stichproben. Nach relevanten Änderungen betroffene Belege erneuern. Keine Browserprüfung, kein automatisches Push/Merge/Deployment.
 
-**Review-Schleifen:** Nach dem initialen R1-, R2- oder P13-Review darf der Orchestrator bei lokalen Blocking-Findings automatisch bis zu zwei begrenzte Fix-/Wiederholungsreview-Schleifen anstoßen. Damit ist Review 3 die letzte automatische Prüfung. Bleiben dort Blocker, endet der Block zur manuellen Nutzerprüfung. Fixes schreibt der passende Implementierungsagent; jedes Wiederholungsreview läuft read-only in einem frischen unabhängigen Kontext auf dem neuen Fix-Checkpoint. Grundlegende Vertragskonflikte aus 03 § 4.3 stoppen sofort.
+**Review-Schleifen:** Das initiale Review prüft einmal vollständig eine endliche Risikomatrix und bündelt Findings. Ein Gate stoppt nur für einen reproduzierbaren Fehler in einem plausiblen Produktivpfad mit materieller Verletzung eines bereits geschlossenen Vertrags; Perfektions-, Struktur-, Härtungs- und spätere Phasenarbeit blockieren nicht. Danach sind höchstens zwei begrenzte Fix-/Nachprüfungen erlaubt. Re-Reviews prüfen Findings und direkt berührte Verträge statt erneut das gesamte Delta explorativ zu durchsuchen. Den Fix schreibt je nach Umfang Luna / XHigh oder bei verflochtener Ownership-/Source-/Lifecycle-Arbeit der identifizierende Astra-/High-Agent. Wer den Fix schreibt, darf ihn nicht selbst freigeben; dann prüft ein anderer frischer Astra-Kontext. Bleibt Astra read-only, darf derselbe Kontext den Luna-Fix nachprüfen. Details und Stopps: 03 § 4.3.
 
 Subagenten sind nicht kostenlos: Ihre zusätzlichen Modell-/Tool-Aufrufe verbrauchen weitere Tokens. Die geplante Ersparnis entsteht aus begrenztem Kontext und passender Aufgabenverteilung, nicht aus möglichst vielen Agenten.[^agents]
 
@@ -110,10 +111,13 @@ P7 nicht beginnen. Kein Browser, Push/Merge/Deployment.
 
 ```text
 Block C ist freigegeben: P7 bis P13. Prüfe 04, Git-Stand und Gültigkeit
-von R2. Folge 03/05 ohne neue Agentenkonfiguration. P13 benötigt ein
-unabhängiges Review und die technischen Gates auf dem finalen Code;
-Reviewer ändern ihre Prüfgrundlage nicht selbst. Kein Browser,
-Push/Merge/Deployment. Manuelle Abnahme M bleibt offen.
+von R2. Folge 03/05 ohne neue Agentenkonfiguration: P7/P8 nacheinander
+mit einem Luna-/xhigh-Worker, P9 Sol/high, P10 Luna/xhigh, P11 Sol/high,
+P12 Luna/xhigh, jeweils mit eigenem Gate und Checkpoint. P13 benötigt
+einen frischen unabhängigen Astra-/high-Reviewer und die technischen Gates
+auf dem finalen Code. Nur reproduzierbare materielle Stopper blockieren;
+Perfektions- und spätere Arbeit nicht. Kein Browser, Push/Merge/Deployment.
+Manuelle Abnahme M bleibt offen.
 ```
 
 ### 4.4 Fortsetzen nach Unterbrechung
@@ -133,8 +137,10 @@ Prüfe den aktuell ausstehenden Review-Punkt R1, R2 oder P13 gemäß 04
 und der zugehörigen Karte in 03. Lies 01, die betroffenen 02-Verträge,
 den tatsächlichen Code/Diff und Nachweise. Keine Dateiänderungen,
 kein Browser. Melde überprüfbare Findings und bestanden / nicht bestanden /
-nicht ausreichend verifiziert samt geprüftem Code-Stand. Erteile keine
-Freigabe für den Folgeblock. Fordere notwendige Testbelege konkret an.
+nicht ausreichend verifiziert samt geprüftem Code-Stand. Blockiere nur
+mit reproduzierbarem Produktivpfad und materieller Verletzung eines bereits
+geschlossenen Vertrags; Perfektion, Härtung und spätere Phasen sind Hinweise.
+Erteile keine Freigabe für den Folgeblock. Fordere Testbelege konkret an.
 ```
 
 Das Ergebnis an den koordinierenden Chat zurückgeben; dieser trägt es in 04 ein. Bei Findings gelten die höchstens zwei automatischen Fix-/Wiederholungsreview-Schleifen aus 03 § 4.3; nach einem weiterhin negativen Review 3 wird angehalten. Nach A/B genügt bei bestandenem Review normalerweise die nächste Blockfreigabe; nach C folgt M gemäß 03 § 6.3.
@@ -145,3 +151,4 @@ Nur bei Betriebsfragen laden, nicht in jedes Worker-Kontextpaket übernehmen. Lo
 
 [^agents]: OpenAI, [Subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents), geprüft am 06.09.2026: direkte Aufträge, Modell-/Reasoning-Anforderung, Vererbung und optionale Custom Agents.
 [^goals]: OpenAI, [Follow a goal](https://learn.chatgpt.com/use-cases/follow-goals), geprüft am 06.09.2026: Zielverfolgung über Turns mit begrenztem Ziel und Stoppbedingung.
+[^models]: OpenAI, [GPT-5.6 Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna) und [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol), geprüft am 07.09.2026: Positionierung und verfügbare Reasoning-Stufen.
