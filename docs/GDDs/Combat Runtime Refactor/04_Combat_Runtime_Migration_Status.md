@@ -8,14 +8,14 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B aktiv; P2 bestanden |
+| Gesamtstatus | Block B aktiv; P2–P3 bestanden, P4 als Nächstes |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P3 – gemeinsame World-Geometrie und reine Queries |
+| Nächster Arbeitsschritt | P4 – Damage, Support, Modifier und Defense |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine zwischen den Phasen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `2fd046a7` |
-| Start-HEAD der laufenden Aufgabe | Keiner |
+| Aktive Phase / Aufgabe | Keine; P3 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `fbcb208c` |
+| Start-HEAD der laufenden Aufgabe | `fbcb208c` |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
@@ -39,7 +39,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
 | R1 | A | ✅ | Vertragsreview bestanden; Nutzerstopp |
 | P2 | B | ✅ | Combatant-Mutation |
-| P3 | B | ⬜ | Geometrie / Queries |
+| P3 | B | ✅ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
 | P5 | B | ⬜ | Status / Mechanikzustände |
 | P6 | B | ⬜ | Reaktionen / Death / Kill / Player-Lifecycle |
@@ -61,6 +61,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 - `src/combat/WorldCombatRuntime.ts`: world-owned Build/Bind/Activate/Detach/Destroy-Grenze mit Required-Port-Prüfung; Besitzslot in `src/world/WorldRuntime.ts`.
 - `src/combat/ProjectileCombatContractAdapter.ts`: reiner Provenance-/Target-/Direct-Basis-Adapter auf die unveränderten Projectile-Nachbarverträge.
 - `src/combat/PlayerVitalsOwner.ts`, `EnemyManager`, `DecoySystem`: kanonische Combatant-Writer mit atomaren, unveränderlichen Mutation-Receipts und Instanz-/Life-Prüfung.
+- `WorldGeometryBinding` bindet den einzigen `ArenaObstacleIndex` an die World und stellt schmale, read-only LoS-/LoF-/Muzzle-/Target-Geometriequeries bereit; Legacy-Consumer wechseln in P10.
 
 Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest/Outcome`, `ProjectileCombatExplosionRequest/Outcome`, `ProjectileExplosionResolutionPort` und Continuation. Vorhanden bedeutet nicht bereits an neue Combat-Owner angeschlossen.
 
@@ -75,6 +76,7 @@ P1-Contracts und P2-Combatant-Mutation sind realisiert:
 | Geplanter Integrationsübergang | Faktorherkunft, Support-/Status-Eligibility und explizite Herkunft statt `direct`-Default (D3/D5/D9) | P4/P5/P7/P10 |
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
+| Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
 
 ## 5. Nachweise und Reviews
@@ -85,19 +87,19 @@ P1-Contracts und P2-Combatant-Mutation sind realisiert:
 
 **P2-Gate L / letztes lokales Gate:** bestanden auf `2fd046a7` plus P2-Lieferung. `npm run check`: 2738 Core-/32 Architecturetests und Build grün; Integration 176/176; fokussiert 32/32; Typecheck, Writer-Audit und Diff-Check grün.
 
+**P3-Gate L / letztes lokales Gate:** bestanden auf `fbcb208c` plus P3-Lieferung. Fokussiert 14/14 und Integration 176/176; `npm run typecheck` und `git diff --check`: Exit 0. Gemeinsamer Index, stale-sicheres Detach und renderer-unabhängige Zielmaße sind abgedeckt.
+
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
 | R1 | Bestanden | `ee5742b4` | Keine |
 | R2 | Nicht ausgeführt | – | – |
 | P13 | Nicht ausgeführt | – | – |
 
-Nach Tests nur Befehl/Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Abgebrochene, nicht gestartete oder von Berechtigungen verhinderte Läufe nicht grün markieren. Kurze Logs optional unter `tmp/combat-refactor/`; sie sind keine Voraussetzung für Wiederaufnahme, wenn sie fehlen. Fehlender Beleg bedeutet nötige erneute Prüfung.
-
-Nach relevantem Code-Delta gilt ein alter Review-Pass nicht automatisch weiter. Reine Status-Commits sind davon unterscheidbar. Code-Anker müssen erreichbar sein; keinen eigenen noch nicht existierenden Commit-SHA in diese Datei schreiben.
+Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlender Beleg verlangt erneute Prüfung; alter Review-Pass gilt nach Code-Delta nicht automatisch weiter.
 
 ## 6. Fortschreibung und Wiederanlauf
 
-Vor Workerstart Freigabe, Voraussetzungen und Working Tree prüfen; Aufgabe auf 🟨, Start-HEAD und aktiven Worker eintragen. Während der Worker schreibt, bleibt der Orchestrator schreibend inaktiv. Nach Rückgabe reale Lieferung, lokale Gates und Übergangsfristen prüfen; nur erfüllte Arbeit ✅ setzen und gemeinsam mit Code committen. Ein Zwischen-/Review-Fix-Commit sichert Arbeit, lässt das noch unerfüllte Gate aber offen. Danach Worker schließen und nächste zulässige Aufgabe wählen.
+Vor Workerstart Freigabe, Voraussetzungen und Working Tree prüfen; 🟨, Start-HEAD und Worker eintragen. Währenddessen schreibt nur der Worker. Nach Rückgabe Lieferung und Gates prüfen; nur erfüllte Arbeit ✅ setzen und mit Code committen.
 
 Beim Wiederanlauf zuerst Branch/HEAD, Index, Working Tree und offene Threads mit § 1 abgleichen. Keine Phase blind wiederholen, keine Nutzeränderung verwerfen. Nach R1/R2 ausdrücklich „wartet auf Nutzerfreigabe B/C“ setzen. 01–03/05 werden nicht eigenmächtig umdefiniert. Keine Clientkonfiguration oder zusätzliche Agentenarchitektur erzeugen.
 

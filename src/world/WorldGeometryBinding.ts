@@ -22,6 +22,8 @@ import type { ArenaLayout } from '../types';
 import type { WorldMaterialization } from './WorldMaterialization';
 import type { WorldRuntimeContext } from './WorldRuntimeContext';
 import type { WorldScopedBinding } from './WorldRuntime';
+import type { ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
+import { createWorldGeometryQueries, type WorldGeometryQueries, type WorldTargetGeometry } from './WorldGeometryQueries';
 
 export interface WorldGeometryBindingInput {
   readonly scene: Phaser.Scene;
@@ -42,6 +44,10 @@ export interface WorldGeometryBindingInput {
   readonly lighting: LightingSystem;
   readonly isCaptureTheBeer: boolean;
   readonly getBarrierCellBlocked: (gridX: number, gridY: number) => boolean;
+  /** Optional moving blocker source; absent on worlds without a train. */
+  readonly getTrainBounds?: () => Phaser.Geom.Rectangle | null;
+  /** Canonical gameplay target measures; deliberately not sourced from rendered sprite size. */
+  readonly resolveTargetGeometry?: (targetId: string, targetType: string) => WorldTargetGeometry | null;
   readonly onDestroy?: (binding: WorldGeometryBinding) => void;
 }
 
@@ -53,6 +59,9 @@ export interface WorldGeometryBindingInput {
  */
 export class WorldGeometryBinding implements WorldScopedBinding {
   private readonly fireObstacles: FireObstacleIndex;
+  private readonly obstacleIndex: ArenaObstacleIndex;
+  private readonly geometryQueries: WorldGeometryQueries;
+  private readonly bindingToken = {};
   private readonly gridListener: (event: ArenaMapGridChangedEvent) => void;
   private destroyed = false;
 
@@ -74,6 +83,17 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       fireSystem,
       leafBlower,
     } = input;
+
+    // CombatSystem created this sole index before the World existed. Binding claims that
+    // instance after installing the World arrays; Projectile and Queries receive the same object.
+    this.obstacleIndex = combatSystem.claimObstacleIndex(this.bindingToken);
+    this.geometryQueries = createWorldGeometryQueries({
+      metrics: world.metrics,
+      index: this.obstacleIndex,
+      getTrainBounds: input.getTrainBounds,
+      resolveTargetGeometry: input.resolveTargetGeometry,
+      isActive: () => !this.destroyed,
+    });
 
     playerManager.setVisualsEnabledResolver(() => presentationRequired);
     playerManager.setWorldGeometry({
@@ -99,7 +119,8 @@ export class WorldGeometryBinding implements WorldScopedBinding {
     decoySystem.setObstacleGroups(arena.rockGroup, arena.trunkGroup);
     combatSystem.setArenaObstacles(arena.rockPhysicsProxies, arena.trunkBodies);
     combatSystem.setBaseObstacles(baseManager?.getObstacleRectangles() ?? null);
-    projectileGeometry.setObstacleIndex(combatSystem.getObstacleIndex());
+    // The World binding owns the one live index; Combat and Projectile receive the same object.
+    projectileGeometry.setObstacleIndex(this.obstacleIndex);
     combatSystem.setBaseManager(baseManager);
 
     hostPhysics.setRockGroup(arena.rockGroup, arena.trunkGroup);
@@ -132,6 +153,12 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       () => this.fireObstacles.revision,
     );
   }
+
+  /** Read-only geometry capability for host queries and passive client previews. */
+  getGeometryQueries(): WorldGeometryQueries { return this.geometryQueries; }
+
+  /** Short alias used by neutral composition code. */
+  getQueries(): WorldGeometryQueries { return this.geometryQueries; }
 
   /** Aktualisiert den world-lokalen Brandhindernisindex bei einer aktivierten Basis. */
   setBase(baseId: string, bounds: readonly Phaser.Geom.Rectangle[]): void {
@@ -196,25 +223,31 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       leafBlower,
       lighting,
     } = this.input;
+    const releaseGeometryBinding = (combatSystem as CombatSystem & {
+      releaseGeometryBinding?: (token: object) => boolean;
+    }).releaseGeometryBinding;
+    const ownsGeometry = releaseGeometryBinding ? releaseGeometryBinding.call(combatSystem, this.bindingToken) : true;
     scene.game.events.off(ARENA_MAP_GRID_CHANGED_EVENT, this.gridListener);
     this.fireObstacles.reset();
-    fireSystem.setGroundResolvers(null, null);
-    lighting.setOccluderIndex(null);
-    leafBlower.setTerrainMaterialLayout(null);
-    hostPhysics.setMovementBlockedCellResolver(null);
-    hostPhysics.setWorldMetrics(null);
-    hostPhysics.setBaseGroup(null);
-    hostPhysics.setRockGroup(null, null);
-    projectileGeometry.setObstacleIndex(null);
-    projectileGeometry.setBaseGroup(null);
-    projectileGeometry.setRockGroup(null, null, null);
-    decoySystem.setObstacleGroups(null, null);
-    decoySystem.setWorldMetrics(null);
-    combatSystem.setBaseManager(null);
-    combatSystem.setBaseObstacles(null);
-    combatSystem.setArenaObstacles(null, null);
-    combatSystem.setWorldMetrics(null);
-    playerManager.setWorldGeometry(null);
+    if (ownsGeometry) {
+      fireSystem.setGroundResolvers(null, null);
+      lighting.setOccluderIndex(null);
+      leafBlower.setTerrainMaterialLayout(null);
+      hostPhysics.setMovementBlockedCellResolver(null);
+      hostPhysics.setWorldMetrics(null);
+      hostPhysics.setBaseGroup(null);
+      hostPhysics.setRockGroup(null, null);
+      projectileGeometry.setObstacleIndex(null);
+      projectileGeometry.setBaseGroup(null);
+      projectileGeometry.setRockGroup(null, null, null);
+      decoySystem.setObstacleGroups(null, null);
+      decoySystem.setWorldMetrics(null);
+      combatSystem.setBaseManager(null);
+      combatSystem.setBaseObstacles(null);
+      combatSystem.setArenaObstacles(null, null);
+      combatSystem.setWorldMetrics(null);
+      playerManager.setWorldGeometry(null);
+    }
     this.input.onDestroy?.(this);
   }
 

@@ -307,6 +307,7 @@ export class CombatSystem implements ProjectileCombatPort {
    * Hitscan, Melee, Projektilpfad). Liest dieselben Arrays, die `setArenaObstacles` und
    * `setBaseObstacles` setzen – es gibt keinen zweiten Bestand.
    */
+  /** Einziger Index; WorldGeometryBinding übernimmt seine Lifetime-Bindung pro World. */
   private readonly obstacleIndex = new ArenaObstacleIndex({
     bounds: () => this.obstacleBounds,
     rocks:  () => this.rockObjects,
@@ -314,11 +315,12 @@ export class CombatSystem implements ProjectileCombatPort {
     bases:  () => this.baseObstacles,
     barriers: () => this.barrierObstacles,
   });
+  private activeGeometryBinding: object | null = null;
   /**
    * Gemeinsamer mathematischer Kern aller Segmentprüfungen. Die gebundene World nutzt dieselbe
    * Geometrie für Sichtlinie, Hitscan und Melee-Bogen; die Klasse hält nur den Rechenkern.
    */
-  private readonly geometry = new CombatGeometry(this.obstacleIndex);
+  private geometry = new CombatGeometry(this.obstacleIndex);
   private meleeSwingIdCounter = 0;
   private effectSeedCounter = 1;
 
@@ -609,6 +611,19 @@ export class CombatSystem implements ProjectileCombatPort {
     this.obstacleIndex.markDirty();
   }
 
+  /** Transfers the existing single index to the current World binding; no parallel index is made. */
+  claimObstacleIndex(bindingToken?: object): ArenaObstacleIndex {
+    if (bindingToken) this.activeGeometryBinding = bindingToken;
+    return this.obstacleIndex;
+  }
+
+  /** Clears the shared index only for the binding that currently owns it. */
+  releaseGeometryBinding(bindingToken: object): boolean {
+    if (this.activeGeometryBinding !== bindingToken) return false;
+    this.activeGeometryBinding = null;
+    return true;
+  }
+
   /**
    * Nach jeder Änderung der Hindernis-*Geometrie* aufrufen – also wenn ein Fels gesetzt
    * oder entfernt wurde. Der `active`-Zustand allein braucht das nicht: den liest der
@@ -623,6 +638,7 @@ export class CombatSystem implements ProjectileCombatPort {
    * zweiten Index: sie hängt an denselben Arrays und an derselben Invalidierung, damit
    * Sichtlinie und Projektil-Kollision nie auseinanderlaufen können.
    */
+  /** @deprecated World-bound consumers receive geometry queries; retained for legacy P10 cutover. */
   getObstacleIndex(): ArenaObstacleIndex {
     return this.obstacleIndex;
   }

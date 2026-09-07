@@ -73,9 +73,11 @@ function createSceneScopedCollaborators() {
 
   const combatSystem = {
     worldMetrics: undefined as unknown,
+    obstacleIndex: undefined as unknown,
     arenaObstacles: undefined as unknown,
     baseManager: undefined as unknown,
     setWorldMetrics(value: unknown) { this.worldMetrics = value; },
+    claimObstacleIndex() { return this.obstacleIndex = {}; },
     setArenaObstacles(rocks: unknown, trunks: unknown) { this.arenaObstacles = [rocks, trunks]; },
     setBaseObstacles: vi.fn(),
     setBaseManager(value: unknown) { this.baseManager = value; },
@@ -214,6 +216,15 @@ describe('WorldGeometryBinding – Lifetime-Symmetrie', () => {
     // Der Fels dieser World steht im Brandhindernisindex.
     expect(isFireCellBlocked(shared, 2, 2)).toBe(true);
     expect(shared.hostPhysics.movementBlockedResolver?.(2, 2)).toBe(true);
+  });
+
+  it('teilt den World-Index zwischen Combat und Projectile', () => {
+    const shared = createSceneScopedCollaborators();
+    createBinding(shared, { gridX: 2, gridY: 2 });
+
+    const boundIndex = shared.projectileRuntime.setObstacleIndex.mock.calls[0]?.[0];
+    expect(boundIndex).toBe(shared.combatSystem.obstacleIndex);
+    expect(shared.projectileRuntime.setObstacleIndex).toHaveBeenCalledWith(boundIndex);
   });
 
   it('loest beim destroy() jede installierte Referenz wieder auf', () => {

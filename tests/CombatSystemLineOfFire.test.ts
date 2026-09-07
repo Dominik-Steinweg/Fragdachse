@@ -89,6 +89,9 @@ vi.mock('phaser', () => {
 });
 
 import { CombatSystem } from '../src/systems/CombatSystem';
+import { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
+import { createWorldGeometryQueries } from '../src/world/WorldGeometryQueries';
+import * as Phaser from 'phaser';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
 
@@ -179,5 +182,27 @@ describe('CombatSystem.resolveSafeHitscanStart', () => {
     // Zugkante: 500 - 22. Der Resolver zieht nur sein kleines Epsilon ab, keine doppelte Body-Clearance.
     expect(resolved.x).toBeCloseTo(477.75, 6);
     expect(resolved.y).toBe(300);
+  });
+});
+
+describe('WorldGeometryQueries – headless read-only boundary', () => {
+  it('produces the same blocker and safe-muzzle result without a CombatSystem instance', () => {
+    const rock = {
+      active: true,
+      getBounds: () => new Phaser.Geom.Rectangle(480, 280, 40, 40),
+    };
+    const index = new ArenaObstacleIndex({
+      bounds: () => ({ offsetX: 0, offsetY: 0, width: 1000, height: 1000 }),
+      rocks: () => [rock],
+      trunks: () => [],
+      bases: () => [],
+    });
+    const queries = createWorldGeometryQueries({
+      metrics: { offsetX: 0, offsetY: 0, widthPx: 1000, heightPx: 1000 },
+      index,
+    });
+
+    expect(queries.hasLineOfFire(300, 300, 700, 300)).toBe(false);
+    expect(queries.resolveSafeGameplayMuzzle(300, 300, { x: 700, y: 300 })).toEqual({ x: 479.75, y: 300 });
   });
 });

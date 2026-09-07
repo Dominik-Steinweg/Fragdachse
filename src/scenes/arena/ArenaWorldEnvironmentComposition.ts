@@ -59,6 +59,19 @@ export function composeWorldGeometry(
     getBarrierCellBlocked: (gridX, gridY) => (
       flow.getCoopMissionRuntime()?.coopDefenseMissionBarrierManager?.isCellClosed(gridX, gridY) ?? false
     ),
+    resolveTargetGeometry: (targetId, targetType) => {
+      if (targetType === 'player') {
+        const player = ctx.playerManager.getPlayer(targetId);
+        return player?.active ? { x: player.x, y: player.y, hitRadius: player.getHitRadius() } : null;
+      }
+      if (targetType === 'enemy') {
+        const enemy = flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(targetId);
+        return enemy?.sprite.active
+          ? { x: enemy.sprite.x, y: enemy.sprite.y, hitRadius: enemy.getCollisionRadius() }
+          : null;
+      }
+      return null;
+    },
     onDestroy: (binding) => {
       if (gameplay.geometry === binding) gameplay.geometry = null;
     },
