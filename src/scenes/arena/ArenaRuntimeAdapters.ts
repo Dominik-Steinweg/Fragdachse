@@ -281,7 +281,7 @@ export function createWeaponBalanceLabWorldPort(
       const enemy = enemyManager.hostSpawnAtWorld(x, y, 'zombie-badger', {
         originId: 'weapon-balance-lab',
       });
-      enemy.setHp(1_000_000_000, 1_000_000_000);
+      enemyManager.hostSetVitalsBaseline(enemy.id, 1_000_000_000, 1_000_000_000);
       enemy.setPosition(x, y);
       enemy.body.setVelocity(0, 0);
       return { id: enemy.id };

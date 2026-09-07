@@ -6,6 +6,10 @@ import { ARMOR_MAX, COLORS } from '../config';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { DecoyEntity } from '../entities/DecoyEntity';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type { CombatDamageMutationOutcome, TargetDamageMutationRequest } from '../combat/CombatMutation';
+import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
+import type { CombatScope, CombatTargetRef } from '../combat/CombatScope';
+import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
 
 type CombatStateReader = {
   getHP(playerId: string): number;
@@ -30,6 +34,7 @@ interface HostDecoy {
   explosionRadius: number;
   explosionDamage: number;
   explosionKnockback: number;
+  entityGeneration: number;
 }
 
 interface StealthState {
@@ -48,10 +53,13 @@ export interface DecoyTargetSnapshot {
 }
 
 export class DecoySystem {
+  private readonly combatScope: CombatScope = Object.freeze({ worldRevision: 1, runtimeGeneration: 1 });
   private readonly entities = new Map<number, DecoyEntity>();
   private readonly hostDecoys = new Map<number, HostDecoy>();
   private readonly stealthStates = new Map<string, StealthState>();
   private nextDecoyId = 1;
+  private nextDecoyGeneration = 1;
+  private mutationOutcomeSequence = 0;
   private effectSeedCounter = 1;
   private combatStateReader: CombatStateReader | null = null;
   private resolveRunSpeed: ((playerId: string) => number) | null = null;
@@ -142,6 +150,7 @@ export class DecoySystem {
       explosionRadius: cfg.explosionRadius ?? 0,
       explosionDamage: cfg.explosionDamage ?? 0,
       explosionKnockback: cfg.explosionKnockback ?? 0,
+      entityGeneration: this.nextDecoyGeneration++,
     };
 
     this.entities.set(id, entity);
@@ -342,9 +351,83 @@ export class DecoySystem {
     attackerId?: string,
     sourceId?: string,
     visualContext?: { sourceX?: number; sourceY?: number; dirX?: number; dirY?: number },
-  ): boolean {
+  ): CombatDamageMutationOutcome {
     const decoy = this.hostDecoys.get(decoyId);
-    if (!decoy || amount <= 0) return false;
+    const target = this.getCombatTargetRef(decoyId) ?? Object.freeze({
+      kind: 'decoy' as const,
+      id: decoyId,
+      scope: this.combatScope,
+      instance: Object.freeze({ entityGeneration: 0 }),
+    });
+    return this.commitDamage({
+      outcomeId: `legacy:decoy:${decoyId}:${++this.mutationOutcomeSequence}`,
+      target,
+      source: {
+        gameplaySource: { kind: 'player', id: attackerId ?? 'legacy-combat' },
+        attribution: { kind: 'player', id: attackerId ?? 'legacy-combat' },
+        allegiance: { ownerId: attackerId ?? 'world' },
+        authoredSourceId: sourceId,
+        origin: 'direct',
+      },
+      damage: {
+        amount,
+        damageKind: 'direct',
+        basis: { kind: 'authored', amount },
+        sourceFactors: [],
+        targetFactors: [],
+        isCritical: false,
+      },
+    }, visualContext);
+  }
+
+  getCombatTargetRef(decoyId: number): CombatTargetRef | null {
+    const decoy = this.hostDecoys.get(decoyId);
+    if (!decoy) return null;
+    return Object.freeze({
+      kind: 'decoy' as const,
+      id: decoyId,
+      scope: this.combatScope,
+      instance: Object.freeze({ entityGeneration: decoy.entityGeneration }),
+    });
+  }
+
+  commitDamage(
+    request: TargetDamageMutationRequest,
+    visualContext?: { sourceX?: number; sourceY?: number; dirX?: number; dirY?: number },
+  ): CombatDamageMutationOutcome {
+    if (!isSameCombatScope(request.target.scope, this.combatScope)) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'stale-scope',
+      });
+    }
+    const decoy = request.target.kind === 'decoy' ? this.hostDecoys.get(request.target.id) : undefined;
+    const currentTarget = request.target.kind === 'decoy' ? this.getCombatTargetRef(request.target.id) : null;
+    if (!decoy || !currentTarget) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'target-missing',
+      });
+    }
+    if (!isSameCombatTargetInstance(request.target, currentTarget)) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'stale-target',
+      });
+    }
+    const amount = request.damage.amount;
+    if (!Number.isFinite(amount) || amount < 0) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'invalid-value',
+      });
+    }
+    if (amount === 0) {
+      return freezeTargetMutationOutcome({
+        kind: 'accepted-no-effect', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'zero-effect', resultingState: this.decoyVitals(decoy),
+      });
+    }
 
     const absorbedByArmor = Math.min(decoy.armor, amount);
     const hpDamage = Math.max(0, amount - absorbedByArmor);
@@ -356,17 +439,53 @@ export class DecoySystem {
     decoy.hp = Math.max(0, decoy.hp - hpDamage);
     decoy.entity.updateVitals(decoy.hp, decoy.maxHp, decoy.armor, decoy.maxArmor);
 
-    if (totalDamage > 0) {
-      const effect = this.buildHitEffect(decoy, attackerId, totalDamage, hpLost, armorLost, decoy.hp <= 0, visualContext);
-      this.bridge.broadcastEffect(effect);
-    }
+    const hitEffect = totalDamage > 0
+      ? this.buildHitEffect(
+        decoy,
+        String(request.source.actor?.id ?? request.source.gameplaySource.id),
+        totalDamage,
+        hpLost,
+        armorLost,
+        decoy.hp <= 0,
+        visualContext,
+      )
+      : null;
+
+    const base = {
+      kind: 'damage-applied' as const,
+      outcomeId: request.outcomeId,
+      target: request.target,
+      source: request.source,
+      damage: request.damage,
+      actualDamage: totalDamage,
+      hpLost,
+      armorLost,
+      integrityLost: 0,
+      resultingState: this.decoyVitals(decoy),
+    };
+    const outcome = decoy.hp <= 0
+      ? freezeTargetMutationOutcome({
+        ...base,
+        transition: {
+          kind: 'dead' as const,
+          facts: {
+            target: request.target,
+            position: { x: decoy.entity.sprite.x, y: decoy.entity.sprite.y },
+            targetAllegiance: { ownerId: decoy.ownerId },
+            targetCategory: 'decoy',
+            rewardEligible: false,
+          },
+        },
+      })
+      : freezeTargetMutationOutcome({ ...base, transition: { kind: 'none' as const }, rescueHealing: 0 });
 
     if (decoy.hp <= 0) {
-      this.destroyDecoy(decoyId, true);
-    }
+      this.destroyDecoy(decoy.id, true, () => {
+        if (hitEffect) this.bridge.broadcastEffect(hitEffect);
+      });
+    } else if (hitEffect) this.bridge.broadcastEffect(hitEffect);
 
-    void sourceId;
-    return totalDamage > 0;
+    return outcome;
   }
 
   private createDecoyColliders(entity: DecoyEntity): Phaser.Physics.Arcade.Collider[] {
@@ -378,20 +497,48 @@ export class DecoySystem {
     return colliders;
   }
 
-  private destroyDecoy(decoyId: number, playEffect: boolean): void {
+  private destroyDecoy(decoyId: number, playEffect: boolean, afterRemoval?: () => void): void {
     const decoy = this.hostDecoys.get(decoyId);
     if (!decoy) return;
 
-    for (const collider of decoy.colliders) collider.destroy();
-    if (playEffect) {
-      this.bridge.broadcastEffect(this.buildDeathEffect(decoy));
-      if (decoy.explosionRadius > 0 && decoy.explosionDamage > 0) {
-        this.explosionCallback?.(decoy.ownerId, decoy.entity.sprite.x, decoy.entity.sprite.y, decoy.explosionRadius, decoy.explosionDamage, decoy.explosionKnockback);
+    const deathEffect = playEffect ? this.buildDeathEffect(decoy) : null;
+    const explosion = playEffect && decoy.explosionRadius > 0 && decoy.explosionDamage > 0
+      ? {
+        ownerId: decoy.ownerId,
+        x: decoy.entity.sprite.x,
+        y: decoy.entity.sprite.y,
+        radius: decoy.explosionRadius,
+        damage: decoy.explosionDamage,
+        knockback: decoy.explosionKnockback,
       }
-    }
+      : null;
+    for (const collider of decoy.colliders) collider.destroy();
     decoy.entity.destroy();
     this.entities.delete(decoyId);
     this.hostDecoys.delete(decoyId);
+    afterRemoval?.();
+    if (deathEffect) this.bridge.broadcastEffect(deathEffect);
+    if (explosion) {
+      this.explosionCallback?.(
+        explosion.ownerId,
+        explosion.x,
+        explosion.y,
+        explosion.radius,
+        explosion.damage,
+        explosion.knockback,
+      );
+    }
+  }
+
+  private decoyVitals(decoy: HostDecoy) {
+    return Object.freeze({
+      kind: 'combatant' as const,
+      hp: decoy.hp,
+      maxHp: decoy.maxHp,
+      armor: decoy.armor,
+      maxArmor: decoy.maxArmor,
+      alive: decoy.hp > 0,
+    });
   }
 
   private buildHitEffect(

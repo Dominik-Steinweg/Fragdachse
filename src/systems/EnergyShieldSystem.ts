@@ -345,7 +345,7 @@ export class EnergyShieldSystem {
     for (const ally of this.enemyManager?.getAlliedEnemies() ?? []) {
       if (!ally.sprite.active || ally.getHp() <= 0) continue;
       if (Phaser.Math.Distance.Between(cx, cy, ally.sprite.x, ally.sprite.y) > radius) continue;
-      ally.setHp(Math.min(ally.getMaxHp(), ally.getHp() + amount));
+      this.enemyManager?.applyHealing(ally.id, amount);
     }
 
     // Die Kuppel heilt nur eigene Basen; eine Gegnerbasis darf sie nicht aufpaeppeln.

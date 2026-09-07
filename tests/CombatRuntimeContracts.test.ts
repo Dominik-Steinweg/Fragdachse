@@ -23,6 +23,7 @@ import {
   type CombatTargetRef,
 } from '../src/combat/CombatScope';
 import { WorldCombatRuntime } from '../src/combat/WorldCombatRuntime';
+import { PlayerVitalsOwner } from '../src/combat/PlayerVitalsOwner';
 import type { ProjectileDirectImpactRequest } from '../src/projectile/ProjectileCombatPort';
 import { WorldRuntime } from '../src/world/WorldRuntime';
 import type { WorldRuntimeContext } from '../src/world/WorldRuntimeContext';
@@ -194,6 +195,101 @@ describe('Combat damage origin contracts', () => {
       supportKind: 'heal',
       amount: 15,
     });
+  });
+});
+
+describe('Canonical Player vitals mutation', () => {
+  function owner() {
+    return new PlayerVitalsOwner(scope, {
+      resolveMaxHp: () => 100,
+      resolveMaxArmor: () => 25,
+      captureTerminalFacts: (terminalTarget) => ({
+        target: terminalTarget,
+        position: { x: 12, y: 34 },
+        targetCategory: 'player',
+      }),
+    });
+  }
+
+  function resolved(amount: number) {
+    return {
+      amount,
+      damageKind: 'direct' as const,
+      basis: { kind: 'authored' as const, amount },
+      sourceFactors: [],
+      targetFactors: [],
+      isCritical: false,
+    };
+  }
+
+  it('caps armor and reports Armor-to-HP overkill as actual loss with one terminal transition', () => {
+    const vitals = owner();
+    const player = vitals.attachAndBeginInitialLife('p1');
+    const armor = vitals.commitSupport({
+      outcomeId: 'armor', target: player, source: { ...source, origin: 'support' },
+      supportKind: 'armor', amount: 100,
+    });
+    expect(armor).toMatchObject({
+      kind: 'support-applied', actualAmount: 25,
+      resultingState: { hp: 100, armor: 25, maxArmor: 25, alive: true },
+    });
+
+    const lethal = vitals.commitDamage({
+      outcomeId: 'lethal', target: player, source, damage: resolved(1000),
+    });
+    expect(lethal).toMatchObject({
+      kind: 'damage-applied', actualDamage: 125, armorLost: 25, hpLost: 100,
+      resultingState: { hp: 0, armor: 0, alive: false },
+      transition: { kind: 'dead', facts: { position: { x: 12, y: 34 } } },
+    });
+    expect(Object.isFrozen(lethal)).toBe(true);
+    expect(Object.isFrozen(lethal.resultingState)).toBe(true);
+    expect(vitals.commitDamage({
+      outcomeId: 'again', target: player, source, damage: resolved(1),
+    })).toMatchObject({ kind: 'rejected', reason: 'target-dead' });
+  });
+
+  it('keeps initial attach, death and respawn as distinct life revisions and rejects stale life refs', () => {
+    const vitals = owner();
+    const firstLife = vitals.attachAndBeginInitialLife('p1');
+    vitals.commitDamage({ outcomeId: 'death', target: firstLife, source, damage: resolved(100) });
+    expect(vitals.commitSupport({
+      outcomeId: 'no-revive', target: firstLife, source: { ...source, origin: 'support' },
+      supportKind: 'heal', amount: 100,
+    })).toMatchObject({ kind: 'rejected', reason: 'target-dead' });
+
+    const secondLife = vitals.commitRespawn('p1', firstLife.instance.lifeRevision!);
+    expect(secondLife?.instance.entityGeneration).toBe(firstLife.instance.entityGeneration);
+    expect(secondLife?.instance.lifeRevision).toBe(firstLife.instance.lifeRevision! + 1);
+    expect(vitals.commitDamage({
+      outcomeId: 'stale-life', target: firstLife, source, damage: resolved(1),
+    })).toMatchObject({ kind: 'rejected', reason: 'stale-target' });
+    expect(vitals.readVitals(secondLife!)).toMatchObject({ hp: 100, armor: 0, alive: true });
+
+    vitals.detachCurrentPlayer('p1');
+    expect(vitals.commitDamage({
+      outcomeId: 'removed', target: secondLife!, source, damage: resolved(1),
+    })).toMatchObject({ kind: 'rejected', reason: 'target-missing' });
+    const reattached = vitals.attachAndBeginInitialLife('p1');
+    expect(reattached.instance.entityGeneration).toBeGreaterThan(secondLife!.instance.entityGeneration);
+    vitals.destroy();
+    expect(vitals.commitDamage({
+      outcomeId: 'stale-scope', target: reattached, source, damage: resolved(1),
+    })).toMatchObject({ kind: 'rejected', reason: 'stale-scope' });
+    expect(Object.isFrozen(source)).toBe(false);
+  });
+
+  it('rejects non-finite mutation values and clamps non-finite caps to valid state', () => {
+    const vitals = new PlayerVitalsOwner(scope, {
+      resolveMaxHp: () => Number.NaN,
+      resolveMaxArmor: () => Number.POSITIVE_INFINITY,
+      captureTerminalFacts: (terminalTarget) => ({ target: terminalTarget, position: { x: 0, y: 0 } }),
+    });
+    const player = vitals.attachAndBeginInitialLife('p1');
+    expect(vitals.readVitals(player)).toMatchObject({ hp: 1, maxHp: 1, armor: 0, maxArmor: 0 });
+    expect(vitals.commitDamage({
+      outcomeId: 'nan', target: player, source, damage: resolved(Number.NaN),
+    })).toMatchObject({ kind: 'rejected', reason: 'invalid-value' });
   });
 });
 

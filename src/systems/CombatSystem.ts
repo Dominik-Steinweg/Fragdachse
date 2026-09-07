@@ -80,6 +80,8 @@ import {
 import type { TargetStatusTarget } from './TargetStatusSystem';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { ProjectileDetonableReadPort, ProjectileImpactSource } from '../projectile/ProjectileGameplayPort';
+import { PlayerVitalsOwner } from '../combat/PlayerVitalsOwner';
+import type { CombatScope, CombatSource, CombatTargetRef } from '../combat/CombatScope';
 
 type Ak47DirectEnemyHitImpact = ProjectileAk47DirectImpact;
 
@@ -274,10 +276,7 @@ type SweptProjectileHit =
   | { kind: 'decoy'; decoyId: number; distance: number; x: number; y: number };
 
 export class CombatSystem implements ProjectileCombatPort {
-  private hp:            Map<string, number>                           = new Map();
-  private maxHp:         Map<string, number>                           = new Map();
-  private armor:         Map<string, number>                           = new Map();
-  private alive:         Map<string, boolean>                          = new Map();
+  private playerVitals: PlayerVitalsOwner;
   private respawnTimers: Map<string, ReturnType<typeof setTimeout>>    = new Map();
   private readonly burnStateMachine = new BurnStateMachine();
   private enemySlowStates: Map<string, EnemySlowState> = new Map();
@@ -431,11 +430,29 @@ export class CombatSystem implements ProjectileCombatPort {
   private readonly damageDealtObservers = new Set<(event: CombatDamageObservation) => void>();
   private onHealingReceived: ((playerId: string, amount: number) => void) | null = null;
   private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
+  private mutationOutcomeSequence = 0;
 
   constructor(
     private playerManager:     PlayerManager,
     private bridge:            NetworkBridge,
-  ) {}
+  ) {
+    this.playerVitals = this.createPlayerVitalsOwner({ worldRevision: 1, runtimeGeneration: 1 });
+  }
+
+  /** World composition replaces the empty fallback owner before attaching any Player. */
+  bindPlayerVitalsScope(scope: CombatScope): { destroy(): void } {
+    if (this.playerVitals.hasAttachedPlayers()) {
+      throw new Error('[CombatSystem] Cannot replace Player vitals while Players are attached');
+    }
+    this.playerVitals.destroy();
+    const owner = this.createPlayerVitalsOwner(scope);
+    this.playerVitals = owner;
+    return {
+      destroy: () => {
+        if (this.playerVitals === owner) owner.destroy();
+      },
+    };
+  }
 
   /** Bindet Kollisions- und Spatial-Index-Bounds an genau eine World-Instanz. */
   setWorldMetrics(metrics: WorldMetrics | null): void {
@@ -685,11 +702,7 @@ export class CombatSystem implements ProjectileCombatPort {
 
   initPlayer(id: string): void {
     if (this.initialSpawnAllowedResolver && !this.initialSpawnAllowedResolver(id)) return;
-    const maxHp = this.resolvePlayerMaxHp(id);
-    this.maxHp.set(id, maxHp);
-    this.hp.set(id, maxHp);
-    this.armor.set(id, 0);
-    this.alive.set(id, true);
+    if (!this.playerVitals.getTargetRef(id)) this.playerVitals.attachAndBeginInitialLife(id);
     this.clearBurnForPlayer(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
@@ -700,12 +713,12 @@ export class CombatSystem implements ProjectileCombatPort {
   /** Host-only reconnect after a registered death; consumes through the normal respawn callback. */
   spawnPlayerAfterReconnect(id: string): boolean {
     if (!this.playerManager.getPlayer(id)) return false;
+    const currentLife = this.playerVitals.getTargetRef(id);
+    if (!currentLife || this.playerVitals.readVitals(currentLife)?.alive !== false) return false;
     if (this.respawnAllowedResolver && !this.respawnAllowedResolver(id)) return false;
     if (this.onRespawnCb && this.onRespawnCb(id) === false) return false;
 
-    this.hp.set(id, this.getMaxHp(id));
-    this.armor.set(id, 0);
-    this.alive.set(id, true);
+    if (!this.playerVitals.commitRespawn(id, currentLife.instance.lifeRevision ?? 0)) return false;
     this.clearBurnForPlayer(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
@@ -726,10 +739,7 @@ export class CombatSystem implements ProjectileCombatPort {
   removePlayer(id: string): void {
     this.clearBurnForPlayer(id);
     this.clearBurnByAttacker(id);
-    this.hp.delete(id);
-    this.maxHp.delete(id);
-    this.armor.delete(id);
-    this.alive.delete(id);
+    this.playerVitals.detachCurrentPlayer(id);
     this.lastAttacker.delete(id);
     this.lastWeapon.delete(id);
     this.lastKillSource.delete(id);
@@ -740,27 +750,31 @@ export class CombatSystem implements ProjectileCombatPort {
 
   // ── Abfragen ───────────────────────────────────────────────────────────────
 
-  getHP(id: string):    number  { return this.hp.get(id)    ?? this.getMaxHp(id); }
-  getMaxHp(id: string): number  { return this.maxHp.get(id) ?? this.resolvePlayerMaxHp(id); }
-  getArmor(id: string): number  { return this.armor.get(id) ?? 0;      }
+  getHP(id: string): number { return this.playerVitals.readCurrent(id)?.hp ?? this.resolvePlayerMaxHp(id); }
+  getMaxHp(id: string): number { return this.playerVitals.readCurrent(id)?.maxHp ?? this.resolvePlayerMaxHp(id); }
+  getArmor(id: string): number { return this.playerVitals.readCurrent(id)?.armor ?? 0; }
+
+  getPlayerCombatTarget(id: string): CombatTargetRef | null {
+    return this.playerVitals.getTargetRef(id);
+  }
 
   /**
    * Reconciles live build-derived caps without recreating the player runtime. This is used when
    * a World-only Coop build changes while the player is already in the test area.
    */
   reconcilePlayerRuntimeState(id: string): void {
-    if (!this.hp.has(id) && !this.armor.has(id)) return;
-    const maxHp = this.resolvePlayerMaxHp(id);
-    this.maxHp.set(id, maxHp);
-    const currentHp = this.hp.get(id);
-    if (currentHp !== undefined && currentHp > maxHp) this.hp.set(id, maxHp);
-
-    const maxArmor = Math.max(0, this.playerMaxArmorResolver?.(id) ?? ARMOR_MAX);
-    const currentArmor = this.armor.get(id);
-    if (currentArmor !== undefined && currentArmor > maxArmor) this.armor.set(id, maxArmor);
+    const target = this.playerVitals.getTargetRef(id);
+    if (!target) return;
+    this.playerVitals.commitSupport({
+      outcomeId: this.nextMutationOutcomeId('cap', id),
+      target,
+      source: this.createLegacyMutationSource(id, 'combat.cap-adjustment', 'support'),
+      supportKind: 'cap-adjustment',
+      amount: 0,
+    });
   }
 
-  isAlive(id: string):  boolean { return (this.alive.get(id) ?? false) || this.enemyManager?.hasEnemy(id) === true; }
+  isAlive(id: string): boolean { return (this.playerVitals.readCurrent(id)?.alive ?? false) || this.enemyManager?.hasEnemy(id) === true; }
   isBurrowed(id: string): boolean {
     const enemy = this.enemyManager?.getEnemy(id);
     if (enemy) return enemy.isBurrowed();
@@ -841,17 +855,27 @@ export class CombatSystem implements ProjectileCombatPort {
 
     const damageReduction = Phaser.Math.Clamp(this.playerDamageReductionResolver?.(targetId) ?? 0, 0, 1);
     const reducedAmount = amount * (1 - damageReduction);
-    const currentArmor = this.armor.get(targetId) ?? 0;
-    const absorbedByArmor = Math.min(currentArmor, reducedAmount);
-    const overflowDamage = Math.max(0, reducedAmount - absorbedByArmor);
-    const newArmor = Math.max(0, currentArmor - absorbedByArmor);
-    const currentHp = this.hp.get(targetId) ?? this.getMaxHp(targetId);
-    const newHp = Math.max(0, currentHp - overflowDamage);
-    const armorLost = currentArmor - newArmor;
-    const hpLost = currentHp - newHp;
-    const totalDamage = armorLost + hpLost;
-    this.armor.set(targetId, newArmor);
-    this.hp.set(targetId, newHp);
+    const target = this.playerVitals.getTargetRef(targetId);
+    if (!target) return;
+    const damageKind = options?.damageKind ?? 'direct';
+    const outcome = this.playerVitals.commitDamage({
+      outcomeId: this.nextMutationOutcomeId('damage', targetId),
+      target,
+      source: this.createLegacyMutationSource(attackerId, sourceId, damageKind),
+      damage: {
+        amount: reducedAmount,
+        damageKind,
+        basis: { kind: 'authored', amount: reducedAmount },
+        sourceFactors: [],
+        targetFactors: damageReduction > 0
+          ? [{ kind: 'damage-reduction', multiplier: 1 - damageReduction, resolvedAt: 'commit' }]
+          : [],
+        isCritical: outgoing.isCritical,
+      },
+    });
+    if (outcome.kind !== 'damage-applied') return;
+    const { armorLost, hpLost, actualDamage: totalDamage } = outcome;
+    const newHp = outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : 0;
 
     // Armor-Schaden zaehlt nur mit dem passenden Coop-Defense-Upgrade als Rage-Quelle.
     const rageDamage = getRageGeneratingDamage(
@@ -871,14 +895,14 @@ export class CombatSystem implements ProjectileCombatPort {
         attackerId,
         hpLost,
         armorLost,
-        options?.damageKind ?? 'direct',
+        damageKind,
       );
       this.notifyDamageDealt({
         targetType: 'player',
         targetId,
         attackerId: this.resolveDamageOwner(attackerId),
         damage: totalDamage,
-        damageKind: options?.damageKind ?? 'direct',
+        damageKind,
         sourceSlot: options?.sourceSlot,
         isCritical: outgoing.isCritical,
       });
@@ -899,10 +923,10 @@ export class CombatSystem implements ProjectileCombatPort {
       ));
     }
 
-    if (newHp === 0) {
+    if (outcome.transition.kind === 'dead') {
       const deathSeed = this.nextEffectSeed();
       const deathDirection = this.resolveDamageDirection(targetId, attackerId, visualContext, deathSeed, x, y);
-      this.handleDeath(targetId, x, y, deathSeed, deathDirection);
+      this.handleDeath(targetId, x, y, deathSeed, deathDirection, true);
     }
   }
 
@@ -1568,11 +1592,12 @@ export class CombatSystem implements ProjectileCombatPort {
     };
     const ownerId = request.provenance.allegiance.ownerId;
     const sourceId = request.provenance.weaponSourceId ?? 'weapon.projectile';
-    const hit = this.decoySystem?.applyDamage(decoyId, actualDamage, ownerId, sourceId, impactSource) ?? false;
-    if (hit && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
+    const outcome = this.decoySystem?.applyDamage(decoyId, actualDamage, ownerId, sourceId, impactSource) ?? null;
+    const appliedDamage = outcome?.kind === 'damage-applied' ? outcome.actualDamage : 0;
+    if (appliedDamage > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
-    return { accepted: hit, actualDamage: hit ? actualDamage : 0, reaction: createReactionMetadata(request) };
+    return { accepted: outcome?.kind !== 'rejected' && outcome !== null, actualDamage: appliedDamage, reaction: createReactionMetadata(request) };
   }
 
   private computeDirectDamage(request: ProjectileDirectImpactRequest): number {
@@ -1864,14 +1889,14 @@ export class CombatSystem implements ProjectileCombatPort {
         : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      const hit = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
+      const outcome = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
         sourceX: startX,
         sourceY: startY,
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
-      }) ?? false;
+      }) ?? null;
 
-      if (hit && adrenalinGain > 0) {
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && adrenalinGain > 0) {
         this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     } else {
@@ -1988,13 +2013,15 @@ export class CombatSystem implements ProjectileCombatPort {
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
       if (actualDamage <= 0) return;
-      const hit = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
+      const outcome = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
         sourceX: startX,
         sourceY: startY,
         dirX,
         dirY,
-      }) ?? false;
-      if (hit && adrenalinGain > 0) this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }) ?? null;
+      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && adrenalinGain > 0) {
+        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      }
       return;
     }
 
@@ -2391,13 +2418,13 @@ export class CombatSystem implements ProjectileCombatPort {
         : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      const hit = this.decoySystem?.applyDamage(decoy.id, actualDamage, shooterId, sourceId, {
+      const outcome = this.decoySystem?.applyDamage(decoy.id, actualDamage, shooterId, sourceId, {
         sourceX: x,
         sourceY: y,
         dirX: Math.cos(angle),
         dirY: Math.sin(angle),
-      }) ?? false;
-      if (!hit) continue;
+      }) ?? null;
+      if (outcome?.kind !== 'damage-applied' || outcome.actualDamage <= 0) continue;
 
       hitPlayer = true;
       if (dist < nearestHitDistance) {
@@ -3294,9 +3321,9 @@ export class CombatSystem implements ProjectileCombatPort {
     y: number,
     seed: number,
     direction?: { dirX: number; dirY: number },
+    transitionCommitted = false,
   ): void {
-    this.alive.set(playerId, false);
-    this.armor.set(playerId, 0);
+    if (!transitionCommitted && !this.playerVitals.endCurrentLife(playerId)) return;
     this.clearBurnForPlayer(playerId);
     // Capture the current animation frame before any death callback hides or changes the Sprite.
     const deathEffect = this.buildDeathEffect(playerId, x, y, seed, direction);
@@ -3342,11 +3369,19 @@ export class CombatSystem implements ProjectileCombatPort {
 
   heal(playerId: string, amount: number): number {
     if (!this.isAlive(playerId) || amount <= 0) return this.getHP(playerId);
-    const current = this.getHP(playerId);
-    const next = Math.min(this.getMaxHp(playerId), this.getHP(playerId) + amount);
-    this.hp.set(playerId, next);
-    if (next > current) this.onHealingReceived?.(playerId, next - current);
-    return next;
+    const target = this.playerVitals.getTargetRef(playerId);
+    if (!target) return this.getHP(playerId);
+    const outcome = this.playerVitals.commitSupport({
+      outcomeId: this.nextMutationOutcomeId('heal', playerId),
+      target,
+      source: this.createLegacyMutationSource(playerId, 'combat.heal', 'support'),
+      supportKind: 'heal',
+      amount,
+    });
+    if (outcome.kind === 'support-applied') this.onHealingReceived?.(playerId, outcome.actualAmount);
+    return outcome.kind === 'rejected'
+      ? this.getHP(playerId)
+      : outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : this.getHP(playerId);
   }
 
   /**
@@ -3383,21 +3418,31 @@ export class CombatSystem implements ProjectileCombatPort {
     const adjustedAmount = amount > 0
       ? amount * Math.max(0, this.playerArmorGainMultiplierResolver?.(playerId) ?? 1)
       : amount;
-    const maxArmor = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);
-    const currentArmor = this.getArmor(playerId);
-    const newArmor = Phaser.Math.Clamp(currentArmor + adjustedAmount, 0, maxArmor);
-    this.armor.set(playerId, newArmor);
-    if (newArmor > currentArmor) this.onArmorReceived?.(playerId, newArmor - currentArmor);
-    return newArmor;
+    const target = this.playerVitals.getTargetRef(playerId);
+    if (!target) return this.getArmor(playerId);
+    const outcome = this.playerVitals.commitSupport({
+      outcomeId: this.nextMutationOutcomeId('armor', playerId),
+      target,
+      source: this.createLegacyMutationSource(playerId, 'combat.armor', 'support'),
+      supportKind: adjustedAmount >= 0 ? 'armor' : 'armor-loss',
+      amount: Math.abs(adjustedAmount),
+    });
+    if (outcome.kind === 'support-applied' && adjustedAmount > 0) {
+      this.onArmorReceived?.(playerId, outcome.actualAmount);
+    }
+    return outcome.kind === 'rejected'
+      ? this.getArmor(playerId)
+      : outcome.resultingState.kind === 'combatant' ? outcome.resultingState.armor : this.getArmor(playerId);
   }
 
   private respawn(playerId: string): void {
     this.respawnTimers.delete(playerId);
+    const currentLife = this.playerVitals.getTargetRef(playerId);
+    if (!currentLife || this.playerVitals.readVitals(currentLife)?.alive !== false) return;
     if (this.respawnAllowedResolver && !this.respawnAllowedResolver(playerId)) return;
     if (this.onRespawnCb && this.onRespawnCb(playerId) === false) return;
-    this.hp.set(playerId, this.getMaxHp(playerId));
-    this.armor.set(playerId, 0);
-    this.alive.set(playerId, true);
+    const previous = currentLife.instance.lifeRevision;
+    if (previous === undefined || !this.playerVitals.commitRespawn(playerId, previous)) return;
     this.clearBurnForPlayer(playerId);
     this.lastAttacker.delete(playerId);
     this.lastWeapon.delete(playerId);
@@ -3418,36 +3463,98 @@ export class CombatSystem implements ProjectileCombatPort {
   }
 
   hpRegenTick(playerId: string, deltaMs: number): void {
-    if (!(this.alive.get(playerId) ?? false)) return;
+    if (!(this.playerVitals.readCurrent(playerId)?.alive ?? false)) return;
     const regenPerSecond = this.playerHpRegenPerSecondResolver?.(playerId) ?? 0;
     if (regenPerSecond <= 0) return;
-    const current = this.hp.get(playerId) ?? 0;
+    const current = this.getHP(playerId);
     const max = this.getMaxHp(playerId);
     if (current >= max) return;
-    const next = Math.min(max, current + regenPerSecond * deltaMs / 1000);
-    this.hp.set(playerId, next);
-    if (next > current) this.onHealingReceived?.(playerId, next - current);
+    const target = this.playerVitals.getTargetRef(playerId);
+    if (!target) return;
+    const outcome = this.playerVitals.commitSupport({
+      outcomeId: this.nextMutationOutcomeId('hp-regen', playerId),
+      target,
+      source: this.createLegacyMutationSource(playerId, 'combat.hp-regeneration', 'support'),
+      supportKind: 'hp-regeneration',
+      amount: regenPerSecond * Math.max(0, deltaMs) / 1000,
+    });
+    if (outcome.kind === 'support-applied') this.onHealingReceived?.(playerId, outcome.actualAmount);
   }
 
   armorRegenTick(playerId: string, deltaMs: number): void {
-    if (!(this.alive.get(playerId) ?? false)) return;
+    if (!(this.playerVitals.readCurrent(playerId)?.alive ?? false)) return;
     // Der Bonus wird *vor* dem Frueh-Ausstieg addiert: sonst wirkte die Notfallreparatur nicht
     // bei einem Spieler ohne jede Grund-Ruestungsregeneration.
     const regenPerSecond = (this.playerArmorRegenPerSecondResolver?.(playerId) ?? 0)
       + Math.max(0, this.playerBonusArmorRegenPerSecondResolver?.(playerId) ?? 0);
     if (regenPerSecond <= 0) return;
-    const current = this.armor.get(playerId) ?? 0;
+    const current = this.getArmor(playerId);
     const max = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);
     if (current >= max) return;
     // Exakt der konfigurierte Regenerationswert; player.armorGain skaliert andere Ruestungsquellen.
-    const next = Math.min(max, current + regenPerSecond * deltaMs / 1000);
-    this.armor.set(playerId, next);
-    if (next > current) this.onArmorReceived?.(playerId, next - current);
+    const target = this.playerVitals.getTargetRef(playerId);
+    if (!target) return;
+    const outcome = this.playerVitals.commitSupport({
+      outcomeId: this.nextMutationOutcomeId('armor-regen', playerId),
+      target,
+      source: this.createLegacyMutationSource(playerId, 'combat.armor-regeneration', 'support'),
+      supportKind: 'armor-regeneration',
+      amount: regenPerSecond * Math.max(0, deltaMs) / 1000,
+    });
+    if (outcome.kind === 'support-applied') this.onArmorReceived?.(playerId, outcome.actualAmount);
   }
 
   private resolvePlayerMaxHp(playerId: string): number {
     const resolved = this.playerMaxHpResolver?.(playerId) ?? HP_MAX;
     return Math.max(1, Math.floor(resolved));
+  }
+
+  private createPlayerVitalsOwner(scope: CombatScope): PlayerVitalsOwner {
+    return new PlayerVitalsOwner(Object.freeze({ ...scope }), {
+      resolveMaxHp: (playerId) => this.resolvePlayerMaxHp(playerId),
+      resolveMaxArmor: (playerId) => Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX),
+      captureTerminalFacts: (target) => {
+        const player = this.playerManager.getPlayer(String(target.id));
+        return {
+          target,
+          position: { x: player?.x ?? 0, y: player?.y ?? 0 },
+          targetCategory: 'player',
+        };
+      },
+    });
+  }
+
+  private nextMutationOutcomeId(kind: string, targetId: string): string {
+    this.mutationOutcomeSequence += 1;
+    return `legacy:${kind}:${targetId}:${this.mutationOutcomeSequence}`;
+  }
+
+  /** Transitional P2 adapter; P4 replaces legacy ids with fully resolved CombatSource input. */
+  private createLegacyMutationSource(
+    actorId: string | undefined,
+    authoredSourceId: string | undefined,
+    origin: CombatDamageKind | 'support',
+  ): CombatSource {
+    const actorIsEnemy = actorId ? this.enemyManager?.hasEnemy(actorId) === true : false;
+    const actorIsPlayer = actorId ? this.playerManager.getPlayer(actorId) !== undefined : false;
+    const gameplaySource = actorIsEnemy
+      ? { kind: 'enemy' as const, id: actorId as string }
+      : actorIsPlayer
+        ? { kind: 'player' as const, id: actorId as string }
+        : { kind: 'environment' as const, id: actorId ?? authoredSourceId ?? 'legacy-combat' };
+    const attribution = actorIsEnemy
+      ? { kind: 'enemy' as const, id: actorId as string }
+      : actorIsPlayer
+        ? { kind: 'player' as const, id: actorId as string }
+        : { kind: 'world' as const, id: actorId ?? authoredSourceId ?? 'legacy-combat' };
+    return {
+      gameplaySource,
+      actor: gameplaySource,
+      attribution,
+      allegiance: { ownerId: actorId ?? 'world' },
+      authoredSourceId,
+      origin,
+    };
   }
 
   private clearBurnForPlayer(playerId: string): void {

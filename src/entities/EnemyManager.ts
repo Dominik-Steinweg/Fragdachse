@@ -29,6 +29,17 @@ import {
   type ResolvedCoopDefenseEnemyConfigs,
 } from '../config/coopDefenseEnemies';
 import type { WorldMetrics } from '../world/WorldMetrics';
+import type {
+  CombatDamageMutationOutcome,
+  CombatSupportMutationOutcome,
+  TargetDamageMutationRequest,
+  TargetSupportMutationRequest,
+} from '../combat/CombatMutation';
+import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
+import type { CombatScope, CombatTargetRef } from '../combat/CombatScope';
+import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
+
+let nextEnemyCombatOwnerGeneration = 1;
 
 const STEER_RESPONSIVENESS = 8;
 const SPAWN_LANE_JITTER_PX = CELL_SIZE * 0.3;
@@ -71,12 +82,29 @@ export interface EnemyDeathInfo {
   readonly tint: number;
 }
 
-/**
- * Letzte Instanz vor dem Tod eines Gegners. Gibt der Wächter `true` zurück, hat er den Gegner
- * bereits wieder mit HP versorgt und der Tod entfällt – genutzt von der Nekromantie, damit die
- * stärksten Wiederbelebten einen tödlichen Treffer überstehen.
- */
-export type EnemyLethalDamageGuard = (enemy: EnemyEntity) => boolean;
+export interface EnemyLethalDamageContext {
+  readonly id: string;
+  readonly kind: CoopDefenseEnemyKind;
+  readonly faction: EnemyFaction;
+  readonly ownerId?: string;
+  readonly maxHp: number;
+}
+
+export type EnemyLethalDamageDecision =
+  | { readonly kind: 'allow-death' }
+  | { readonly kind: 'rescue'; readonly healing: number };
+
+/** A rescue decision may consume guard-owned charges, but cannot mutate Enemy HP. */
+export type EnemyLethalDamageGuard = (
+  enemy: Readonly<EnemyLethalDamageContext>,
+) => EnemyLethalDamageDecision;
+
+export interface EnemyDamageResult {
+  readonly outcome: CombatDamageMutationOutcome;
+  readonly died: boolean;
+  readonly remainingHp: number;
+  readonly death?: EnemyDeathInfo;
+}
 
 /**
  * Minimal-Schnittstelle des Gegner-Einbuddel-Systems für die Bewegung – als lokaler Typ gehalten,
@@ -133,6 +161,14 @@ export interface EnemySpawnOptions {
 }
 
 export class EnemyManager {
+  /** Distinguishes rebuilt Activity owners until P4 supplies the full World/Activity target binding. */
+  private readonly combatScope: CombatScope = Object.freeze({
+    worldRevision: 1,
+    runtimeGeneration: nextEnemyCombatOwnerGeneration++,
+  });
+  private readonly enemyGenerations = new Map<string, number>();
+  private nextEnemyGeneration = 1;
+  private mutationOutcomeSequence = 0;
   private readonly scene: Phaser.Scene;
   private readonly resolvedConfigs: ResolvedCoopDefenseEnemyConfigs;
   private readonly enemies = new Map<string, EnemyEntity>();
@@ -288,6 +324,7 @@ export class EnemyManager {
     enemy.setEntityBurnGpuController(this.burnGpu);
     enemy.setHealthBarRenderer(this.healthBars);
     this.enemies.set(id, enemy);
+    this.enemyGenerations.set(id, this.nextEnemyGeneration++);
     this.playSpawnEffect(enemy, options);
     this.onEnemySpawned?.(enemy, options);
     return enemy;
@@ -938,21 +975,192 @@ export class EnemyManager {
     return death;
   }
 
-  applyDamage(id: string, damage: number): { died: boolean; remainingHp: number; death?: EnemyDeathInfo } | null {
-    const enemy = this.enemies.get(id);
-    if (!enemy || damage <= 0) return null;
+  getCombatTargetRef(id: string): CombatTargetRef | null {
+    const generation = this.enemyGenerations.get(id);
+    if (!this.enemies.has(id) || generation === undefined) return null;
+    return Object.freeze({
+      kind: 'enemy' as const,
+      id,
+      scope: this.combatScope,
+      instance: Object.freeze({ entityGeneration: generation }),
+    });
+  }
 
-    const remainingHp = Math.max(0, enemy.getHp() - damage);
-    enemy.setHp(remainingHp);
-    if (remainingHp > 0) {
-      return { died: false, remainingHp };
+  commitDamage(request: TargetDamageMutationRequest): CombatDamageMutationOutcome {
+    return this.commitDamageInternal(request).outcome;
+  }
+
+  commitSupport(request: TargetSupportMutationRequest): CombatSupportMutationOutcome {
+    if (!isSameCombatScope(request.target.scope, this.combatScope)) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'stale-scope',
+      });
+    }
+    const enemy = request.target.kind === 'enemy' ? this.enemies.get(request.target.id) : undefined;
+    const currentTarget = request.target.kind === 'enemy' ? this.getCombatTargetRef(request.target.id) : null;
+    if (!enemy || !currentTarget) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'target-missing',
+      });
+    }
+    if (!isSameCombatTargetInstance(request.target, currentTarget)) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'stale-target',
+      });
+    }
+    if (enemy.getHp() <= 0) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'target-dead',
+      });
+    }
+    if (request.supportKind !== 'heal' && request.supportKind !== 'hp-regeneration') {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'not-eligible',
+      });
+    }
+    if (!Number.isFinite(request.amount) || request.amount < 0) {
+      return freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'invalid-value',
+      });
+    }
+    const before = enemy.getHp();
+    const next = Math.min(enemy.getMaxHp(), before + request.amount);
+    if (next === before) {
+      return freezeTargetMutationOutcome({
+        kind: 'accepted-no-effect', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason: 'zero-effect', resultingState: this.enemyVitals(enemy, true),
+      });
+    }
+    enemy.setHp(next);
+    return freezeTargetMutationOutcome({
+      kind: 'support-applied', outcomeId: request.outcomeId, target: request.target,
+      source: request.source, supportKind: request.supportKind, actualAmount: next - before,
+      resultingState: this.enemyVitals(enemy, true), revived: false,
+    });
+  }
+
+  applyHealing(id: string, amount: number, kind: 'heal' | 'hp-regeneration' = 'heal'): CombatSupportMutationOutcome | null {
+    const target = this.getCombatTargetRef(id);
+    if (!target) return null;
+    return this.commitSupport({
+      outcomeId: `legacy:enemy-support:${id}:${++this.mutationOutcomeSequence}`,
+      target,
+      source: {
+        gameplaySource: { kind: 'environment', id: 'legacy-support' },
+        attribution: { kind: 'world', id: 'legacy-support' },
+        allegiance: { ownerId: 'world' },
+        origin: 'support',
+      },
+      supportKind: kind,
+      amount,
+    });
+  }
+
+  /** Debug/initialization adapter; runtime combat healing must use applyHealing. */
+  hostSetVitalsBaseline(id: string, hp: number, maxHp: number): boolean {
+    const enemy = this.enemies.get(id);
+    if (!enemy || !Number.isFinite(hp) || !Number.isFinite(maxHp) || maxHp <= 0) return false;
+    const cappedMax = Math.max(1, maxHp);
+    enemy.setHp(Math.min(cappedMax, Math.max(0, hp)), cappedMax, true);
+    return true;
+  }
+
+  applyDamage(id: string, damage: number): EnemyDamageResult | null {
+    const enemy = this.enemies.get(id);
+    const target = this.getCombatTargetRef(id);
+    if (!enemy || !target) return null;
+    return this.commitDamageInternal({
+      outcomeId: `legacy:enemy:${id}:${++this.mutationOutcomeSequence}`,
+      target,
+      source: {
+        gameplaySource: { kind: 'environment', id: 'legacy-combat' },
+        attribution: { kind: 'world', id: 'legacy-combat' },
+        allegiance: { ownerId: 'world' },
+        origin: 'direct',
+      },
+      damage: {
+        amount: damage,
+        damageKind: 'direct',
+        basis: { kind: 'authored', amount: damage },
+        sourceFactors: [],
+        targetFactors: [],
+        isCritical: false,
+      },
+    });
+  }
+
+  private commitDamageInternal(request: TargetDamageMutationRequest): EnemyDamageResult {
+    const enemy = request.target.kind === 'enemy' ? this.enemies.get(request.target.id) : undefined;
+    const currentTarget = request.target.kind === 'enemy' ? this.getCombatTargetRef(request.target.id) : null;
+    if (!isSameCombatScope(request.target.scope, this.combatScope)) {
+      return this.rejectedEnemyDamage(request, 'stale-scope');
+    }
+    if (!enemy || !currentTarget) return this.rejectedEnemyDamage(request, 'target-missing');
+    const id = enemy.id;
+    if (!isSameCombatTargetInstance(request.target, currentTarget)) {
+      return this.rejectedEnemyDamage(request, 'stale-target');
+    }
+    const damage = request.damage.amount;
+    if (!Number.isFinite(damage) || damage < 0) return this.rejectedEnemyDamage(request, 'invalid-value');
+    if (damage === 0) {
+      return {
+        outcome: freezeTargetMutationOutcome({
+          kind: 'accepted-no-effect', outcomeId: request.outcomeId, target: request.target,
+          source: request.source, reason: 'zero-effect',
+          resultingState: this.enemyVitals(enemy, true),
+        }),
+        died: false,
+        remainingHp: enemy.getHp(),
+      };
     }
 
-    // Der Wächter setzt die HP selbst neu. Zurückgemeldet wird trotzdem der tatsächlich
-    // zugefügte Schaden (`remainingHp` 0), denn die Rettung ist eine eigene Heilung – sonst
-    // fiele der Treffer für Trefferfeedback und Lifeleech ersatzlos aus.
-    if (this.lethalDamageGuard?.(enemy)) {
-      return { died: false, remainingHp: 0 };
+    const hpLost = Math.min(enemy.getHp(), damage);
+    const remainingHp = enemy.getHp() - hpLost;
+    enemy.setHp(remainingHp);
+    if (remainingHp > 0) {
+      return {
+        outcome: freezeTargetMutationOutcome({
+          kind: 'damage-applied', outcomeId: request.outcomeId, target: request.target,
+          source: request.source, damage: request.damage, actualDamage: hpLost,
+          hpLost, armorLost: 0, integrityLost: 0,
+          resultingState: this.enemyVitals(enemy, true), transition: { kind: 'none' }, rescueHealing: 0,
+        }),
+        died: false,
+        remainingHp,
+      };
+    }
+
+    const decision = this.lethalDamageGuard?.({
+      id: enemy.id,
+      kind: enemy.kind,
+      faction: enemy.faction,
+      ownerId: enemy.ownerId,
+      maxHp: enemy.getMaxHp(),
+    }) ?? { kind: 'allow-death' as const };
+    if (decision.kind === 'rescue') {
+      const rescueHealing = Number.isFinite(decision.healing)
+        ? Math.min(enemy.getMaxHp(), Math.max(0, decision.healing))
+        : 0;
+      if (rescueHealing > 0) {
+        enemy.setHp(rescueHealing);
+        return {
+          outcome: freezeTargetMutationOutcome({
+            kind: 'damage-applied', outcomeId: request.outcomeId, target: request.target,
+            source: request.source, damage: request.damage, actualDamage: hpLost,
+            hpLost, armorLost: 0, integrityLost: 0,
+            resultingState: this.enemyVitals(enemy, true), transition: { kind: 'none' }, rescueHealing,
+          }),
+          died: false,
+          // Legacy consumers used zero to preserve actual lethal damage despite the rescue.
+          remainingHp: 0,
+        };
+      }
     }
 
     const visual = captureEnemyDeathVisual(enemy);
@@ -969,6 +1177,23 @@ export class EnemyManager {
       ...visual,
     };
     const deathSpawns = enemy.faction === 'hostile' ? (this.resolvedConfigs[enemy.kind].deathSpawns ?? []) : [];
+    const outcome = freezeTargetMutationOutcome({
+      kind: 'damage-applied', outcomeId: request.outcomeId, target: request.target,
+      source: request.source, damage: request.damage, actualDamage: hpLost,
+      hpLost, armorLost: 0, integrityLost: 0,
+      resultingState: this.enemyVitals(enemy, false),
+      transition: {
+        kind: 'dead',
+        facts: {
+          target: request.target,
+          position: { x: death.x, y: death.y },
+          targetAllegiance: enemy.ownerId ? { ownerId: enemy.ownerId, factionId: enemy.faction } : undefined,
+          targetCategory: enemy.kind,
+          rewardEligible: enemy.faction === 'hostile',
+          presentation: { ...death },
+        },
+      },
+    });
     this.pendingRemovals.set(id, ENEMY_NET_REMOVAL_RESEND_TICKS);
     this.netSnapshotCache.delete(id);
     this.destroyEnemyEntity(id, enemy);
@@ -986,7 +1211,32 @@ export class EnemyManager {
         );
       }
     }
-    return { died: true, remainingHp: 0, death };
+    return { outcome, died: true, remainingHp: 0, death };
+  }
+
+  private rejectedEnemyDamage(
+    request: TargetDamageMutationRequest,
+    reason: 'stale-scope' | 'stale-target' | 'target-missing' | 'invalid-value',
+  ): EnemyDamageResult {
+    return {
+      outcome: freezeTargetMutationOutcome({
+        kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+        source: request.source, reason,
+      }),
+      died: false,
+      remainingHp: 0,
+    };
+  }
+
+  private enemyVitals(enemy: EnemyEntity, alive: boolean) {
+    return Object.freeze({
+      kind: 'combatant' as const,
+      hp: enemy.getHp(),
+      maxHp: enemy.getMaxHp(),
+      armor: 0,
+      maxArmor: 0,
+      alive,
+    });
   }
 
   hostRemoveEnemy(id: string): void {
@@ -1006,6 +1256,7 @@ export class EnemyManager {
     this.visualSink?.clearBurrowState(id);
     enemy.destroy();
     this.enemies.delete(id);
+    this.enemyGenerations.delete(id);
   }
 
   syncHostVisuals(): void {
@@ -1057,6 +1308,7 @@ export class EnemyManager {
       enemy.destroy();
     }
     this.enemies.clear();
+    this.enemyGenerations.clear();
     this.wildfirePanicStates.clear();
     this.smokeConfusionStates.clear();
     this.netSnapshotCache.clear();
@@ -1203,6 +1455,7 @@ export class EnemyManager {
         remote.gaussAimAngle ?? rotation,
       );
       this.enemies.set(remote.id, enemy);
+      this.enemyGenerations.set(remote.id, this.nextEnemyGeneration++);
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);

@@ -2,7 +2,12 @@ import * as Phaser from 'phaser';
 import { COLORS } from '../config';
 import { getCoopDefenseEnemyXp, type CoopDefenseEnemyKind } from '../config/coopDefenseEnemies';
 import type { EnemyEntity } from '../entities/EnemyEntity';
-import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
+import type {
+  EnemyDeathInfo,
+  EnemyLethalDamageContext,
+  EnemyLethalDamageDecision,
+  EnemyManager,
+} from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatSystem } from './CombatSystem';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
@@ -118,10 +123,9 @@ export class NecromancySystem {
    * Fängt den Tod der stärksten Wiederbelebten ab (Upgrade „Untote Wiederkehr"). Der Gegner wird
    * dabei vollständig geheilt; der Rang wird einmal pro Frame in `hostUpdate` bestimmt.
    */
-  handleLethalDamage(enemy: EnemyEntity): boolean {
-    if (enemy.faction !== 'allied' || !this.undyingAllyIds.has(enemy.id)) return false;
-    enemy.setHp(enemy.getMaxHp());
-    return true;
+  handleLethalDamage(enemy: Readonly<EnemyLethalDamageContext>): EnemyLethalDamageDecision {
+    if (enemy.faction !== 'allied' || !this.undyingAllyIds.has(enemy.id)) return { kind: 'allow-death' };
+    return { kind: 'rescue', healing: enemy.maxHp };
   }
 
   /**
@@ -394,7 +398,11 @@ export class NecromancySystem {
   ): void {
     ally.setMoveSpeedMultiplier(cfg.moveSpeedMultiplier);
     if (cfg.hpRegenPerSecond > 0 && ally.getHp() > 0 && ally.getHp() < ally.getMaxHp()) {
-      ally.setHp(Math.min(ally.getMaxHp(), ally.getHp() + cfg.hpRegenPerSecond * Math.max(0, deltaMs) / 1000));
+      this.enemyManager.applyHealing(
+        ally.id,
+        cfg.hpRegenPerSecond * Math.max(0, deltaMs) / 1000,
+        'hp-regeneration',
+      );
     }
 
     if (Phaser.Math.Distance.Between(ally.sprite.x, ally.sprite.y, ownerX, ownerY) <= cfg.teleportDistance) return;

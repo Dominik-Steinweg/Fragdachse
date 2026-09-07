@@ -235,7 +235,7 @@ export class CoopDefenseEnemyAbilitySystem {
       if (target === enemy || !target.sprite.active || target.getHp() <= 0 || target.getHp() >= target.getMaxHp()) continue;
       const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
       if (distanceSq > radiusSq) continue;
-      target.setHp(Math.min(target.getMaxHp(), target.getHp() + healing));
+      this.enemyManager.applyHealing(target.id, healing);
     }
   }
 

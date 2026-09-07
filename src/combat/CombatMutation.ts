@@ -153,7 +153,14 @@ export type TargetDamageAppliedOutcome =
   | TargetDamageSurvivedOutcome
   | TargetDamageTerminalOutcome;
 
-export type CombatSupportKind = 'heal' | 'armor' | 'repair' | 'cap-adjustment';
+export type CombatSupportKind =
+  | 'heal'
+  | 'armor'
+  | 'armor-loss'
+  | 'hp-regeneration'
+  | 'armor-regeneration'
+  | 'repair'
+  | 'cap-adjustment';
 
 export interface TargetSupportAppliedOutcome {
   readonly kind: 'support-applied';
@@ -325,4 +332,25 @@ export function createDerivedDamageBasis(
     parentActualDamage: parent.actualDamage,
     fraction,
   };
+}
+
+/** Runtime immutability for receipts handed to reactions and presentation. */
+export function freezeTargetMutationOutcome<T extends TargetMutationOutcome>(outcome: T): T {
+  return deepFreeze(cloneValue(outcome));
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+  return Object.freeze(value);
+}
+
+function cloneValue<T>(value: T): T {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((entry) => cloneValue(entry)) as T;
+  const clone: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    clone[key] = cloneValue(nested);
+  }
+  return clone as T;
 }

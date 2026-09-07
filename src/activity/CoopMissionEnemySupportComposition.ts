@@ -12,7 +12,6 @@ import type { ArmageddonSystem } from '../systems/ArmageddonSystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { CoopDefensePlayerModifierReadPort } from '../systems/CoopDefensePlayerModifierSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
-import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
@@ -137,7 +136,7 @@ export class CoopMissionEnemySupportComposition {
             },
             onCorpseRemoved: (corpseId) => this.options.removeCorpseMarker(corpseId),
           });
-          enemyManager.setLethalDamageGuard((currentEnemy: EnemyEntity) => (
+          enemyManager.setLethalDamageGuard((currentEnemy) => (
             necromancy.handleLethalDamage(currentEnemy)
           ));
         }

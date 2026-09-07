@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-vi.mock('phaser', async () => (await import('../fakeArenaRenderScene')).createFakePhaserModule());
+vi.mock('phaser', async () => {
+  const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
+  return {
+    ...phaser,
+    Math: {
+      ...phaser.Math,
+      RND: { realInRange: (min: number) => min },
+    },
+  };
+});
 vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
   SpawnEffectRenderer: class { setLightingSystem() {} play() {} },
 }));
@@ -16,6 +25,7 @@ import { resolveCoopDefenseWorldMetrics } from '../../src/world/WorldMetrics';
 import { COOP_DEFENSE_CONSTRUCTION_IDS, getCoopDefenseConstructionDefinition } from '../../src/config/coopDefenseConstructions';
 import type { BaseSpec } from '../../src/arena/BaseRegistry';
 import type { PlayerProfile, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
+import type { CombatSource } from '../../src/combat/CombatScope';
 import { healthBarTestScene } from '../healthBarTestScene';
 
 function harness() {
@@ -27,10 +37,17 @@ function harness() {
   return { ...fake, renderer, clock(t: number) { time = t; }, tick() { renderer.update(true); } };
 }
 const kind = COOP_DEFENSE_ENEMY_KINDS[0];
-function enemies(h: ReturnType<typeof harness>, boss = false) {
+function enemies(h: ReturnType<typeof harness>, boss = false, withDeathSpawn = false) {
   const configs = resolveCoopDefenseEnemyConfigs(1);
   // Preserve the real codec kind, but exclude unrelated authored attacks and glow from the fixture.
-  configs[kind] = { ...configs[kind], isBoss: boss, glow: undefined, weapons: [], imageKey: 'health-test' };
+  configs[kind] = {
+    ...configs[kind],
+    isBoss: boss,
+    glow: undefined,
+    weapons: [],
+    imageKey: 'health-test',
+    deathSpawns: withDeathSpawn ? [{ enemyKind: kind, count: 1, offsetPx: 0 }] : [],
+  };
   const manager = new EnemyManager(h.scene, configs);
   manager.setHealthBarRenderer(h.renderer);
   return manager;
@@ -95,12 +112,76 @@ describe('World HP consumer boundaries', () => {
     enemy.setPosition(90, 100);
     enemy.syncBar();
     expect(h.cosmetic.some(object => object.x === 90 && object !== enemy.sprite)).toBe(true);
-    manager.setLethalDamageGuard(target => { target.setHp(30); return true; });
-    expect(manager.applyDamage('e1', 1000)?.died).toBe(false);
+    manager.setLethalDamageGuard(() => ({ kind: 'rescue', healing: 30 }));
+    const rescued = manager.applyDamage('e1', 1000);
+    expect(rescued?.died).toBe(false);
+    expect(rescued?.outcome).toMatchObject({
+      kind: 'damage-applied',
+      actualDamage: 100,
+      hpLost: 100,
+      rescueHealing: 30,
+      transition: { kind: 'none' },
+      resultingState: { hp: 30, alive: true },
+    });
+    expect(manager.applyHealing('e1', 100, 'hp-regeneration')).toMatchObject({
+      kind: 'support-applied',
+      supportKind: 'hp-regeneration',
+      actualAmount: 70,
+      resultingState: { hp: 100, alive: true },
+    });
     h.tick();
     expect(h.renderer.getStats()).toMatchObject({ bindings: 1, active: 1 });
     h.clock(100_000); h.tick();
     expect(h.renderer.getStats().active).toBe(1);
+    manager.destroy();
+  });
+
+  it('freezes terminal Enemy facts before removal and runs death spawns after cleanup', () => {
+    const h = harness(), manager = enemies(h, false, true);
+    const enemy = manager.hostSpawnAtWorld(45, 67, kind);
+    const target = manager.getCombatTargetRef(enemy.id)!;
+    const spawnedAfterRemoval = vi.fn(() => {
+      expect(manager.hasEnemy(enemy.id)).toBe(false);
+    });
+    manager.setEnemySpawnedCallback(spawnedAfterRemoval);
+
+    const result = manager.applyDamage(enemy.id, enemy.getMaxHp() + 100)!;
+
+    expect(result.outcome).toMatchObject({
+      kind: 'damage-applied',
+      actualDamage: enemy.getMaxHp(),
+      hpLost: enemy.getMaxHp(),
+      transition: {
+        kind: 'dead',
+        facts: {
+          position: { x: 45, y: 67 },
+          targetCategory: kind,
+          rewardEligible: true,
+        },
+      },
+    });
+    expect(Object.isFrozen(result.outcome)).toBe(true);
+    expect(spawnedAfterRemoval).toHaveBeenCalledOnce();
+
+    const source: CombatSource = {
+      gameplaySource: { kind: 'player', id: 'p1' },
+      attribution: { kind: 'player', id: 'p1' },
+      allegiance: { ownerId: 'p1' },
+      origin: 'direct',
+    };
+    expect(manager.commitDamage({
+      outcomeId: 'stale-enemy',
+      target,
+      source,
+      damage: {
+        amount: 1,
+        damageKind: 'direct',
+        basis: { kind: 'authored', amount: 1 },
+        sourceFactors: [],
+        targetFactors: [],
+        isCritical: false,
+      },
+    })).toMatchObject({ kind: 'rejected', reason: 'target-missing' });
     manager.destroy();
   });
 

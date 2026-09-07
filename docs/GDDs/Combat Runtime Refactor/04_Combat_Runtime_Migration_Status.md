@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block A technisch bestanden; wartet auf Nutzerfreigabe B |
-| Freigegebener Arbeitsblock | **A – Grundlagen** (kurzer Startcheck → P0 → P1 → R1) |
-| Freigabequelle | Block A vom 07.09.2026; zusätzlicher Fix-/R1-Auftrag nach Runde 2 |
-| Nächster Arbeitsschritt | Nutzerfreigabe B abwarten; P2 nicht begonnen |
-| Nächster geplanter Nutzerstopp | Nach R1; P2 benötigt gesonderte Freigabe B |
-| Aktive Phase / Aufgabe | Keine; Block-A-Stopp nach bestandenem R1 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ee5742b4` |
+| Gesamtstatus | Block B aktiv; P2 bestanden |
+| Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
+| Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
+| Nächster Arbeitsschritt | P3 – gemeinsame World-Geometrie und reine Queries |
+| Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
+| Aktive Phase / Aufgabe | Keine zwischen den Phasen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `2fd046a7` |
 | Start-HEAD der laufenden Aufgabe | Keiner |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Nutzerfreigabe B erforderlich |
-| Aktueller Reparaturzähler | Geschlossen; R1-Runde 3 bestanden |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner |
+| Aktueller Reparaturzähler | Kein offenes Reparaturpaket |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -38,7 +38,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 | P0 | A | ✅ | Baseline / Delta |
 | P1 | A | ✅ | Contracts / World-Aufbauplan |
 | R1 | A | ✅ | Vertragsreview bestanden; Nutzerstopp |
-| P2 | B | ⬜ | Combatant-Mutation |
+| P2 | B | ✅ | Combatant-Mutation |
 | P3 | B | ⬜ | Geometrie / Queries |
 | P4 | B | ⬜ | Damage / Support / Modifier / Defense |
 | P5 | B | ⬜ | Status / Mechanikzustände |
@@ -60,16 +60,18 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 - `src/combat/CombatCapabilities.ts`: schmale CF-READ/QUERY/ATTACK/STATUS/REACTION/LIFE/FRAME/WORLD-Ports.
 - `src/combat/WorldCombatRuntime.ts`: world-owned Build/Bind/Activate/Detach/Destroy-Grenze mit Required-Port-Prüfung; Besitzslot in `src/world/WorldRuntime.ts`.
 - `src/combat/ProjectileCombatContractAdapter.ts`: reiner Provenance-/Target-/Direct-Basis-Adapter auf die unveränderten Projectile-Nachbarverträge.
+- `src/combat/PlayerVitalsOwner.ts`, `EnemyManager`, `DecoySystem`: kanonische Combatant-Writer mit atomaren, unveränderlichen Mutation-Receipts und Instanz-/Life-Prüfung.
 
 Vorhandene Nachbargrenze: `ProjectileCombatPort`, `ProjectileDirectImpactRequest/Outcome`, `ProjectileCombatExplosionRequest/Outcome`, `ProjectileExplosionResolutionPort` und Continuation. Vorhanden bedeutet nicht bereits an neue Combat-Owner angeschlossen.
 
 ## 4. Aktive Übergänge und Blocker
 
-P1 ist implementiert; die bisherigen R1-Befunde sind im Fix-Checkpoint geschlossen:
+P1-Contracts und P2-Combatant-Mutation sind realisiert:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
-| Geplanter Integrationsübergang | Mutation-Receipts statt HP-Nachlesen; atomarer Life-Commit und terminale Source-Facts (D1/D2/D4) | P4/P6/P7 |
+| Geplanter Integrationsübergang | Legacy-Damage-/Projectile-Adapter nutzen die neuen Receipts noch nicht vollständig (D1/D4) | P4/P7 |
+| Geplanter Integrationsübergang | Verbleibende Life-/Death-Callbacks und Respawn-Orchestrierung außerhalb des Vitals-Owners (D2) | P6 |
 | Geplanter Integrationsübergang | Faktorherkunft, Support-/Status-Eligibility und explizite Herkunft statt `direct`-Default (D3/D5/D9) | P4/P5/P7/P10 |
 | Geplanter Integrationsübergang | Explizite Wirkungseinheiten, Host-Zeit und Renderer-unabhängige World-Mutation (D6/D7/D8) | P5/P6/P9 |
 | Geplanter Integrationsübergang | Parallele Callback-/Metadatenreaktionen auf genau einen Ausführungspfad reduzieren (D10) | P6/P7 |
@@ -81,9 +83,7 @@ P1 ist implementiert; die bisherigen R1-Befunde sind im Fix-Checkpoint geschloss
 
 **P1-Gate L / letztes lokales Gate:** bestanden auf `496a5208` plus P1-Lieferung. Fokussierte Tests: 43/43, Integration: 175/175, `npm run typecheck` und `git diff --check`: Exit 0. R1 fand danach drei Contract-Blocker.
 
-**P1-Fixrunde 1:** 44/44 fokussierte und 175/175 Integrationstests, Typecheck und Diff-Check grün. Clear-Lease und frühe Teardown-Invalidierung korrigiert; R1-Runde 2 fand eine Faktorherkunftslücke.
-
-**P1-Fixversuch 2:** lokales Gate auf `5ae6d37e` plus Fixdelta: 66/66 fokussierte Tests, Typecheck und Diff-Check grün. Faktorherkunft bleibt durch SpawnConfig, Runtime-Record, Child-Copy und Direct-Impact erhalten; Realpfad prüft skaliert und unmarkiert.
+**P2-Gate L / letztes lokales Gate:** bestanden auf `2fd046a7` plus P2-Lieferung. `npm run check`: 2738 Core-/32 Architecturetests und Build grün; Integration 176/176; fokussiert 32/32; Typecheck, Writer-Audit und Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

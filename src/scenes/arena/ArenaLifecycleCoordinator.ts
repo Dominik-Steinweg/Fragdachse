@@ -286,6 +286,8 @@ export class ArenaLifecycleCoordinator {
    * Ausserhalb ihrer Lifetime ist sie `null` und wird nicht als Dependency weitergereicht.
    */
   private worldRuntime: WorldRuntime | null = null;
+  /** Advances whenever a local Combat owner is rebuilt, even for the same World revision. */
+  private combatRuntimeGeneration = 0;
   /** World-owned PowerUp runtime exposed by the current gameplay composition. */
   private get worldPowerUpRuntime(): WorldPowerUpRuntime | null {
     return this.worldGameplay?.powerUp ?? null;
@@ -351,6 +353,10 @@ export class ArenaLifecycleCoordinator {
     clear: () => bridge.clearWorldAndActivity(),
     attach: (context) => {
       this.worldRuntime = new WorldRuntime(context, this.worldLifecycle.getProjectileIdentityScope());
+      this.worldRuntime.bind(this.ctx.combatSystem.bindPlayerVitalsScope({
+        worldRevision: context.descriptor.worldRevision,
+        runtimeGeneration: ++this.combatRuntimeGeneration,
+      }));
       this.renderers.healthBars.openWorld(this.worldRuntime);
       // Wer in dieser World steht, gehoert ihr: Die Player-Runtime entsteht mit der Instanz und
       // ueberlebt darin jeden Activity-Wechsel.
