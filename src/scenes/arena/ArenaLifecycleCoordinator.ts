@@ -558,7 +558,7 @@ export class ArenaLifecycleCoordinator {
         this.ctx.playerManager.removePlayer(playerId);
       },
       attachCombat: (profile, reconnectAfterDeath) => {
-        if (reconnectAfterDeath) return this.combatSystem.spawnPlayerAfterReconnect(profile.id);
+        if (reconnectAfterDeath) return this.combatSystem.preparePlayerAfterDeathReconnect(profile.id);
         this.combatSystem.initPlayer(profile.id);
         return true;
       },
@@ -2261,13 +2261,29 @@ export class ArenaLifecycleCoordinator {
   ): boolean {
     const playerRuntime = this.playerRuntime;
     if (!playerRuntime) return false;
-    const attached = playerRuntime.attach(
-      { profile, reconnectAfterDeath, spawn, nowMs: Date.now() },
-      this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
-    );
-    // Erst die World, dann ihre Activity: Der Missionsanteil setzt eine stehende Figur voraus.
-    if (attached) this.playerActivityRuntime?.attach(profile.id, reconnectAfterDeath);
-    return attached;
+    const wasWorldAttached = playerRuntime.isAttached(profile.id);
+    const activityRuntime = this.playerActivityRuntime;
+    const wasActivityAttached = activityRuntime?.isAttached(profile.id) ?? false;
+    let attached = false;
+    try {
+      attached = playerRuntime.attach(
+        { profile, reconnectAfterDeath, spawn, nowMs: Date.now() },
+        this.resolvePlayerFeatures(this.getWorldParticipation(profile.id)),
+      );
+      if (!attached) return false;
+      // Erst die World, dann ihre Activity: Das Budget darf erst danach den Respawn committen.
+      activityRuntime?.attach(profile.id, reconnectAfterDeath);
+      if (reconnectAfterDeath && !this.combatSystem.spawnPlayerAfterReconnect(profile.id)) {
+        if (!wasActivityAttached) activityRuntime?.detach(profile.id);
+        if (!wasWorldAttached) playerRuntime.detach(profile.id);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      if (!wasActivityAttached) activityRuntime?.detach(profile.id);
+      if (attached && !wasWorldAttached) playerRuntime.detach(profile.id);
+      throw error;
+    }
   }
 
   /** Einziger Detach-Pfad fuer Host und Client; der volle Abbau bleibt idempotent. */

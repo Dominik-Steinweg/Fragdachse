@@ -245,7 +245,7 @@ export interface DamageOverTimeRequest extends CombatDamageRequestBase {
 
 export interface DerivedCombatDamageRequest extends CombatDamageRequestBase {
   readonly entry: 'derived-reaction';
-  readonly damageKind: 'chain' | 'reflect';
+  readonly damageKind: 'chain' | 'reflect' | 'explosion';
   readonly basis: DerivedDamageBasis;
   /** A Reflect source may add its own modifiers, never repeat its parent's source modifiers. */
   readonly newSourceModifiers?: boolean;

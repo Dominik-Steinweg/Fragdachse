@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C implementiert; Startup-Regressionen aus M korrigiert, erneute Gameplay-Abnahme offen |
+| Gesamtstatus | Block C implementiert; Startup-Regressionen und drei Nachreview-Findings korrigiert, erneute Gameplay-Abnahme offen |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
 | Nächster Arbeitsschritt | Nutzer führt gebündelte Gameplay-/Sichtabnahme M durch |
 | Nächster geplanter Nutzerstopp | Jetzt; M bleibt Nutzerentscheidung |
 | Aktive Phase / Aufgabe | Keine automatische Phase; M offen |
-| Arbeitsbranch / geprüfter Code-HEAD | `codex/combat-runtime-refactor` @ `cea8e595` |
-| Start-HEAD der laufenden Aufgabe | `d015ba61` |
+| Arbeitsbranch / geprüfter Code-HEAD | `main` @ `0670b9a9` plus geprüfter Arbeitsbaum |
+| Start-HEAD der laufenden Aufgabe | `0670b9a9` |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner; früherer technischer Abschluss deckte den Coop-Startup nicht ausreichend ab |
-| Aktueller Reparaturzähler | P13: 4 Schleifen abgeschlossen; Review 5 bestanden |
+| Aktueller Reparaturzähler | P13: 4 Schleifen abgeschlossen; Review 5 bestanden; Nachreview `b8254304`: 3 Findings korrigiert |
 | Technische Endabnahme F / manuelle Abnahme M | F bestanden; M offen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
@@ -79,14 +79,33 @@ Die Bindings tolerieren jetzt den Aufbau vor der Combat-Erzeugung und partiellen
 WorldGeometryBinding übernimmt initiale Basishindernisse, WorldCombatGameplayBinding den
 initialen EnemyManager. Der Coordinator-Regressionstest
 `tests/integration/CoopMissionCombatStartup.test.ts` schützt frühes Base-Attach, spätere Projektion
-und Abbau ohne Combat. Er ersetzt keinen vollständigen Map-Start. M bleibt offen; ein
+und Abbau ohne Combat. Zusätzlich schützt er das Scene-Grading beim Arena-Exit nach
+Combat-Teardown: Die weiterlaufende Ausblendung verwendet dann neutrale Gesundheit statt
+`isAlive` auf einer fehlenden Runtime aufzurufen. Er ersetzt keinen vollständigen Map-Start. M bleibt offen; ein
 fehlerfreier Gesamtabschluss ist bis zur erneuten Gameplay-Abnahme nicht bestätigt.
+
+Das Nachreview zu `b8254304` bestätigte drei weitere produktive Fehler. Der Reconnect nach
+Tod und vollständigem Detach bereitet nun zuerst eine neue, inaktive Combat-Instanz vor und
+committet den budgetierten Respawn erst nach erfolgreichem World-/Activity-Attach; Ablehnung
+rollt beide Attach-Schritte zurück. Melee-Basisschaden bestimmt zulässige Ziele aus der
+tatsächlichen Quellenfraktion statt aus dem speichernden `EnemyManager`. AK47-Zielexplosionen
+und Gauss-Entladungen führen den bestätigten Direct-Damage als abgeleitete Damage-Basis fort,
+damit bereits enthaltene Quellenfaktoren und Crit nicht erneut laufen, während Zielmodifier
+eigenständig bleiben. Normale, noch nicht aufgelöste Chains behalten ihre einmalige
+Quellenskalierung. M bleibt offen.
 
 ## 5. Nachweise und Reviews
 
-**Startup-Korrektur:** `npm run check` (2791 Core, 33 Architektur, Build) und
-`npm run test:integration` (245 Tests) bestanden. Neuer Coordinator-Test reproduzierte den
+**Startup-/Exit-Korrektur:** `npm run check` (2796 Core, 33 Architektur, Build) und
+`npm run test:integration` (246 Tests, einschließlich Exit-Grading) bestanden. Neuer Coordinator-Test reproduzierte den
 gemeldeten Base-Binding-Fehler vor dem Fix und besteht danach. Kein Browser-/Map-Start geprüft.
+
+**Nachreview `b8254304`:** Fokussierte Regressionen (112 Unit-Tests sowie 80 betroffene
+Integrationstests), `npm run check` (2797 Core, 33 Architektur, Build) und
+`npm run test:integration` (251 Tests) bestanden. Die neuen produktiven Nachweise decken
+Tod → vollständigen Detach → Reattach mit und ohne Berechtigung, allied/hostile Melee gegen
+Basen sowie Direct-Impact → AK47-/Gauss-Folgewirkung mit getrennten Quellen- und Zielfaktoren
+ab. Kein Browser-/Map-Start geprüft; M bleibt offen.
 
 **P0–P6/R1:** Phasengates und Vertragsreview grün; Details in den Commits.
 

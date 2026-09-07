@@ -39,6 +39,7 @@ export function composePlayerWorldRuntime(
         id: 'combat-state',
         feature: 'combat',
         run: ({ profile, reconnectAfterDeath }) => ports.attachCombat(profile, reconnectAfterDeath),
+        rollback: ({ profile }) => { ports.detachCombat(profile.id); },
       },
       {
         id: 'combat-resources',

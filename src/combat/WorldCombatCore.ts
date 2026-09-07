@@ -84,7 +84,6 @@ import {
   type ProjectileCombatSourceClassification,
 } from '../combat/ProjectileCombatContractAdapter';
 import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
-import type { ProjectileDamageSourceFactor } from '../types';
 import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
 import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
 import type {
@@ -92,11 +91,13 @@ import type {
   CombatDamageRequest,
   CombatDamageMutationOutcome,
   CombatResolvedDamage,
+  CombatSourceFactor,
   CombatSupportRequest,
   CombatSupportMutationOutcome,
   SourceResolvedDamageBasis,
+  TargetDamageAppliedOutcome,
 } from '../combat/CombatMutation';
-import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
+import { createDerivedDamageBasis, freezeTargetMutationOutcome } from '../combat/CombatMutation';
 import { CombatBurnStatusOwner } from '../combat/CombatBurnStatusOwner';
 import type {
   CombatImmediateAttackOutcome,
@@ -142,8 +143,8 @@ interface AoeDamageOptions {
   skipEnemies?: boolean;
   /** Explosionen können ihr direkt getroffenes Primärziel ausdrücklich ausnehmen. */
   excludeTargetId?: string;
-  /** The supplied damage already contains the originating direct-hit multipliers. */
-  damageAlreadyScaled?: boolean;
+  /** Confirmed parent loss from which this complete AoE payload is derived. */
+  derivedFrom?: TargetDamageAppliedOutcome;
   killSource?: KillSourceContext;
 }
 
@@ -1037,6 +1038,22 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     return this.bridge.isHost() && this.playerLife.reconnect(id);
   }
 
+  /**
+   * Installs the new entity incarnation as a dormant combatant. The later respawn commit remains
+   * the only operation that consumes Activity budget and begins its life.
+   */
+  preparePlayerAfterDeathReconnect(id: string): boolean {
+    if (!this.bridge.isHost()) return false;
+    const current = this.playerVitals.readCurrent(id);
+    if (current) return !current.alive;
+    if (this.respawnAllowedResolver && !this.respawnAllowedResolver(id)) return false;
+    const player = this.playerManager.getPlayer(id);
+    if (!player?.body) return false;
+    this.playerVitals.attachForReconnect(id);
+    player.body.enable = false;
+    return true;
+  }
+
   advancePlayerLifecycle(nowMs: number): void {
     if (this.bridge.isHost()) this.playerLife.advance(nowMs);
   }
@@ -1369,7 +1386,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     includeSelf = false,
     options?: AoeDamageOptions,
   ): void {
-    const runtimeDamage = options?.damageAlreadyScaled
+    const derivedFrom = options?.derivedFrom;
+    const runtimeDamage = derivedFrom
       ? damage
       : damage * this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
     for (const player of this.playerManager.getAllPlayers()) {
@@ -1387,6 +1405,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const roundedDamage = Math.round(appliedDamage);
       if (roundedDamage <= 0) continue;
+      const derivedBasis = derivedFrom
+        ? createDerivedDamageBasis(derivedFrom, roundedDamage / derivedFrom.actualDamage)
+        : undefined;
 
       const category = options?.category ?? 'explosion';
       if (this.shouldBlockWithShield(player.id, category, roundedDamage, x, y)) continue;
@@ -1394,12 +1415,18 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
-      }, toDamageOptions(options, 'explosion'));
+      }, {
+        ...toDamageOptions(options, 'explosion'),
+        ...(derivedBasis ? {
+          basis: derivedBasis,
+          source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: 'explosion' as const },
+        } : {}),
+      });
     }
 
     this.applyRadialHostileBaseDamage(
       x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot,
-      options?.baseDamageMult,
+      options?.baseDamageMult, derivedFrom?.damage.sourceFactors,
     );
 
     if (options?.skipEnemies) return;
@@ -1413,6 +1440,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const roundedDamage = Math.round(computeRadialDamage(dist, radius, runtimeDamage, options?.damageFalloff));
       if (roundedDamage <= 0) continue;
+      const derivedBasis = derivedFrom
+        ? createDerivedDamageBasis(derivedFrom, roundedDamage / derivedFrom.actualDamage)
+        : undefined;
       if ((options?.enemySlowFraction ?? 0) > 0 && (options?.enemySlowDurationMs ?? 0) > 0) {
         this.applyEnemySlow(enemy.id, options?.enemySlowFraction ?? 0, options?.enemySlowDurationMs ?? 0);
       }
@@ -1420,7 +1450,13 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceX: x,
         sourceY: y,
         ...options?.killSource,
-      }, toDamageOptions(options, 'explosion'));
+      }, {
+        ...toDamageOptions(options, 'explosion'),
+        ...(derivedBasis ? {
+          basis: derivedBasis,
+          source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: 'explosion' as const },
+        } : {}),
+      });
     }
   }
 
@@ -1755,17 +1791,17 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     y: number,
     ownerId: string,
     enemyId: string,
-    directDamage: number,
+    directOutcome: TargetDamageAppliedOutcome | null,
     impact: ProjectileAk47DirectImpact,
   ): void {
     const radius = impact.explosionRadius ?? 0;
     const fraction = impact.explosionDamageFraction ?? 0;
-    if (radius <= 0 || fraction <= 0 || directDamage <= 0) return;
+    if (radius <= 0 || fraction <= 0 || !directOutcome || directOutcome.actualDamage <= 0) return;
     this.applyAoeDamage(
       x,
       y,
       radius,
-      directDamage * fraction,
+      directOutcome.actualDamage * fraction,
       ownerId,
       false,
       {
@@ -1774,7 +1810,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceId: 'weapon.ak47.explosive',
         sourceSlot: 'weapon2',
         excludeTargetId: enemyId,
-        damageAlreadyScaled: true,
+        derivedFrom: directOutcome,
       },
     );
   }
@@ -2014,7 +2050,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
-    this.resolveGaussDischarge(request, playerId, undefined, dealt);
+    this.resolveGaussDischarge(
+      request,
+      playerId,
+      undefined,
+      mutation?.kind === 'damage-applied' ? mutation : null,
+    );
     return {
       accepted: true,
       actualDamage: dealt,
@@ -2070,8 +2111,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       return { accepted: false, reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm) };
     }
     const dealt = outcome.actualDamage;
-    this.applyAk47TargetExplosion(request.impact.x, request.impact.y, ownerId, enemyId, dealt, ak47Impact);
-    this.resolveGaussDischarge(request, undefined, enemyId, dealt);
+    const directOutcome = mutation?.kind === 'damage-applied' ? mutation : null;
+    this.applyAk47TargetExplosion(request.impact.x, request.impact.y, ownerId, enemyId, directOutcome, ak47Impact);
+    this.resolveGaussDischarge(request, undefined, enemyId, directOutcome);
     if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
       this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
     }
@@ -2170,7 +2212,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private getPendingProjectileRuntimeMultiplier(
     ownerId: string,
     sourceSlot: LoadoutSlot | undefined,
-    appliedSourceFactors: readonly ProjectileDamageSourceFactor[] | undefined,
+    appliedSourceFactors: readonly CombatSourceFactor[] | undefined,
   ): number {
     // Automation records its own turret/Injector factor; it does not imply that owner P is included.
     return appliedSourceFactors?.some(factor => factor.kind === 'runtime-power')
@@ -2262,16 +2304,16 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     request: ProjectileDirectImpactRequest,
     hitPlayerId: string | undefined,
     hitEnemyId: string | undefined,
-    damage: number,
+    directOutcome: TargetDamageAppliedOutcome | null,
   ): void {
     const radius = request.directHit.gaussChain?.radius ?? 0;
     const factor = request.directHit.gaussChain?.damageFactor ?? 0;
-    if (radius <= 0 || factor <= 0) return;
+    if (radius <= 0 || factor <= 0 || !directOutcome || directOutcome.actualDamage <= 0) return;
     this.resolveChainLightning({
       shooterId: request.provenance.allegiance.ownerId,
       originX: request.impact.x,
       originY: request.impact.y,
-      baseDamage: damage,
+      baseDamage: directOutcome.actualDamage,
       chainCfg: { maxJumps: 1, searchRadius: radius, damageFalloffPerJump: 1 - factor, targetPlayers: true, targetEnemies: true, targetDecoys: false },
       sourceId: 'weapon.gauss.discharge',
       adrenalinGain: 0,
@@ -2281,6 +2323,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       visitedPlayers: new Set(hitPlayerId ? [hitPlayerId] : []),
       visitedEnemies: new Set(hitEnemyId ? [hitEnemyId] : []),
       visitedDecoys: new Set(),
+      derivedFrom: directOutcome,
     });
   }
 
@@ -2665,6 +2708,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     visitedPlayers: Set<string>;
     visitedEnemies: Set<string>;
     visitedDecoys:  Set<number>;
+    derivedFrom?: TargetDamageAppliedOutcome;
   }): void {
     const { chainCfg } = opts;
     const thicknessFalloff = chainCfg.thicknessFalloffPerJump ?? 0.2;
@@ -2753,15 +2797,20 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
         const runtimeId = jump.target.id.slice(jump.target.id.indexOf(':') + 1);
         const visualContext: DamageVisualContext = { sourceX: jump.originX, sourceY: jump.originY };
+        const damageOptions = opts.derivedFrom ? {
+          damageKind: 'chain' as const,
+          basis: createDerivedDamageBasis(opts.derivedFrom, jump.damage / opts.derivedFrom.actualDamage),
+          source: { ...opts.derivedFrom.source, authoredSourceId: opts.sourceId, origin: 'chain' as const },
+        } : { damageKind: 'chain' as const };
         if (jump.target.kind === 'enemy') {
           opts.visitedEnemies.add(runtimeId);
-          this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, { damageKind: 'chain' });
+          this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
           if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
         } else if (jump.target.kind === 'player') {
           opts.visitedPlayers.add(runtimeId);
           const canDeal = this.canDamageTarget(opts.shooterId, runtimeId);
           if (!(canDeal && this.shouldBlockWithShield(runtimeId, 'hitscan', jump.damage, jump.originX, jump.originY))) {
-            this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, { damageKind: 'chain' });
+            this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
             if (canDeal && opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
           }
         } else if (jump.target.kind === 'decoy') {
@@ -3121,13 +3170,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     attackerId: string,
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
-    appliedSourceFactors?: readonly ProjectileDamageSourceFactor[],
+    appliedSourceFactors?: readonly CombatSourceFactor[],
   ): CombatDamageMutationOutcome | null {
     if (!this.bridge.isHost() || !Number.isFinite(damage) || !Number.isFinite(baseDamageMult) || damage <= 0 || baseDamageMult <= 0) return null;
     const runtimeDamage = damage * baseDamageMult
       * this.getPendingProjectileRuntimeMultiplier(attackerId, sourceSlot, appliedSourceFactors);
     const resolvedDamage = this.resolveLegacyWorldModifiers(
       { targetType: 'base', targetId: baseId }, runtimeDamage, attackerId, sourceSlot, true,
+      appliedSourceFactors,
     );
     if (resolvedDamage <= 0) return null;
     return this.baseDamageCallback?.(baseId, resolvedDamage, attackerId, sourceSlot) ?? null;
@@ -3150,10 +3200,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private resolveLegacyWorldModifiers(
     target: TargetStatusTarget, amount: number, attackerId: string,
     sourceSlot: LoadoutSlot | undefined, allowCritical: boolean,
+    sourceFactors: readonly CombatSourceFactor[] = [],
   ): number {
     if (!this.bridge.isHost()) return 0;
     return resolveCombatDamageModifiers({
-      amount, sourceFactors: [], allowCritical, nowMs: this.hostFrameNowMs, random: this.hostRandom,
+      amount, sourceFactors, allowCritical, nowMs: this.hostFrameNowMs, random: this.hostRandom,
       outgoing: (value, critical, nowMs, random) => this.playerOutgoingDamageResolver?.(
         attackerId, `${target.targetType}:${target.targetId}`, value, critical, sourceSlot, nowMs, random,
       ) ?? { amount: value, isCritical: false },
@@ -3174,6 +3225,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     falloff?: RadialDamageFalloffConfig,
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
+    appliedSourceFactors?: readonly CombatSourceFactor[],
   ): void {
     if (!attackerId || radius <= 0 || maxDamage <= 0) return;
     if (this.enemyManager?.hasEnemy(attackerId)) return;
@@ -3183,7 +3235,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > radius) continue;
       const damage = computeRadialDamage(surface.distance, radius, maxDamage, falloff);
-      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot, baseDamageMult);
+      this.applyBaseDamage(base.id, damage, attackerId, sourceSlot, baseDamageMult, appliedSourceFactors);
     }
   }
 
@@ -3204,11 +3256,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     let impactX: number | undefined;
     let impactY: number | undefined;
 
-    // Gegner schlagen ausschliesslich auf eigene Basen ein, Spieler ausschliesslich auf
-    // feindliche. Damit bleibt das bisherige Verhalten unveraendert und niemand kann die
-    // Basis der eigenen Seite beschaedigen.
-    const shooterIsEnemy = this.enemyManager?.hasEnemy(shooterId) === true;
-    const targetFaction = shooterIsEnemy ? 'friendly' : 'hostile';
+    // The actor's allegiance decides which base is hostile. Allied summons share the player
+    // side even though their entities are stored by EnemyManager.
+    const source = this.createLegacyMutationSource(shooterId, sourceId, 'direct');
+    const targetFaction = source.allegiance.factionId === 'hostile' ? 'friendly' : 'hostile';
 
     for (const base of this.baseManager?.getBasesByFaction(targetFaction) ?? []) {
       if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
@@ -4163,7 +4214,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       targetScaling: 'pending' as const, allowCritical: options?.allowCritical ?? true,
       burrowException: skipBurrowCheck ? 'burrow-stuck' as const : undefined,
     };
-    if (options?.basis?.kind === 'derived-outcome' && (damageKind === 'chain' || damageKind === 'reflect')) {
+    if (options?.basis?.kind === 'derived-outcome'
+      && (damageKind === 'chain' || damageKind === 'reflect' || damageKind === 'explosion')) {
       return { ...common, entry: 'derived-reaction', damageKind, basis: options.basis };
     }
     // Old entry paths have already applied their P/falloff/object factors. Never add P here.

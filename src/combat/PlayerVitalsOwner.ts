@@ -77,6 +77,13 @@ export class PlayerVitalsOwner implements
     return this.beginLife({ playerId, entityGeneration, lifeRevision: 1 });
   }
 
+  /** Attaches a new Player entity incarnation without granting its reconnect life. */
+  attachForReconnect(playerId: string): CombatTargetRef {
+    const entityGeneration = this.nextEntityGeneration.get(playerId) ?? 1;
+    this.attachPlayer({ playerId, entityGeneration });
+    return this.getTargetRef(playerId)!;
+  }
+
   beginLife(request: {
     readonly playerId: string;
     readonly entityGeneration: number;

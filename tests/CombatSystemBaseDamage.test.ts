@@ -487,6 +487,65 @@ describe('CombatSystem base damage routing', () => {
     expect(enemyDamage.mock.calls.map(([, amount]) => amount)).toEqual([10, 10]);
     expect(baseDamage.mock.calls.map(([, amount]) => amount)).toEqual([10, 20]);
   });
+
+  it('routes hostile and allied melee actors to bases by allegiance, not EnemyManager storage', () => {
+    const allied = fakeEntity({ id: 'raised-ally', faction: 'allied' as const, ownerId: 'player-1', x: 0, y: 0,
+      isBurrowed: () => false, getHp: () => 100, getMaxHp: () => 100 });
+    const hostile = fakeEntity({ id: 'hostile-melee', faction: 'hostile' as const, x: 80, y: 0,
+      isBurrowed: () => false, getHp: () => 100, getMaxHp: () => 100 });
+    const enemies = [allied, hostile];
+    const refs = new Map(enemies.map((enemy, index) => [enemy.id, {
+      kind: 'enemy' as const,
+      id: enemy.id,
+      scope: { worldRevision: 1, runtimeGeneration: 1 },
+      instance: { entityGeneration: index + 1 },
+    }]));
+    const enemyManager = {
+      getAllEnemies: () => enemies,
+      getEnemy: (id: string) => enemies.find(enemy => enemy.id === id),
+      hasEnemy: (id: string) => enemies.some(enemy => enemy.id === id),
+      getCombatTargetRef: (id: string) => refs.get(id) ?? null,
+      readCombatVitals: () => ({ kind: 'combatant' as const, hp: 100, maxHp: 100, armor: 0, maxArmor: 0, alive: true }),
+      commitDamage: (request: TargetDamageMutationRequest) => ({
+        kind: 'damage-applied' as const,
+        outcomeId: request.outcomeId,
+        target: request.target,
+        source: request.source,
+        damage: request.damage,
+        actualDamage: request.damage.amount,
+        hpLost: request.damage.amount,
+        armorLost: 0,
+        integrityLost: 0,
+        resultingState: { kind: 'combatant' as const, hp: 100 - request.damage.amount, maxHp: 100, armor: 0, maxArmor: 0, alive: true },
+        transition: { kind: 'none' as const },
+        rescueHealing: 0,
+      }),
+    } as unknown as import('../src/entities/EnemyManager').EnemyManager;
+    const bases = {
+      friendly: { id: 'friendly-base', faction: 'friendly' as const, getHp: () => 100,
+        getNearestSurfacePoint: () => ({ x: 40, y: 0, distance: 40 }) },
+      hostile: { id: 'hostile-base', faction: 'hostile' as const, getHp: () => 100,
+        getNearestSurfacePoint: () => ({ x: 40, y: 0, distance: 40 }) },
+    };
+    const baseDamage = vi.fn();
+    const combat = new CombatSystem(
+      { getAllPlayers: () => [], getPlayer: () => undefined } as unknown as PlayerManager,
+      { isHost: () => true, getPlayerProfile: () => undefined, areTeammates: () => false,
+        broadcastMeleeSwing: vi.fn(), broadcastEffect: vi.fn() } as unknown as NetworkBridge,
+    );
+    combat.setEnemyManager(enemyManager);
+    combat.setBaseManager({
+      getBasesByFaction: (faction: 'friendly' | 'hostile') => [bases[faction]],
+    } as unknown as BaseManager);
+    combat.setBaseDamageCallback(baseDamage);
+
+    resolveMelee(combat, allied.id, 0, 0, 0, 100, 90, 10, 0, 'ally-bite', 0xffffff,
+      undefined, 1, 1, 'default', undefined, undefined, undefined, 0, 0, 1, ['enemies', 'bases']);
+    resolveMelee(combat, hostile.id, 0, 0, 0, 100, 90, 10, 0, 'enemy-bite', 0xffffff,
+      undefined, 1, 1, 'default', undefined, undefined, undefined, 0, 0, 1, ['bases']);
+
+    expect(baseDamage.mock.calls.map(([baseId]) => baseId)).toEqual(['hostile-base', 'friendly-base']);
+  });
 });
 
 describe('CombatSystem death visual snapshots', () => {

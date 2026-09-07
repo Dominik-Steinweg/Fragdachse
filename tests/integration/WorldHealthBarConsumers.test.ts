@@ -1,9 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => {
   const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
+  class Line {
+    x1 = 0; y1 = 0; x2 = 0; y2 = 0;
+    setTo(x1: number, y1: number, x2: number, y2: number) {
+      this.x1 = x1; this.y1 = y1; this.x2 = x2; this.y2 = y2;
+      return this;
+    }
+    static Length(line: Line): number { return Math.hypot(line.x2 - line.x1, line.y2 - line.y1); }
+  }
   return {
     ...phaser,
-    Geom: { ...phaser.Geom, Line: class {} },
+    Geom: { ...phaser.Geom, Line },
     Math: {
       ...phaser.Math,
       RND: { realInRange: (min: number) => min },
@@ -98,7 +106,7 @@ describe('World HP consumer boundaries', () => {
     });
     const combat = new CombatSystem({ getPlayer: (id: string) => players.find(p => p.id === id), getAllPlayers: () => players } as unknown as PlayerManager,
       { isHost: () => true, getPlayerProfile: (id: string) => players.find(p => p.id === id),
-        broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+        broadcastEffect: () => {}, broadcastHitscanTracer: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => hostNowMs, random: () => 0.25 });
     combat.setEnemyManager(manager);
     combat.setPlayerMaxHpResolver(() => 1000);
@@ -601,6 +609,109 @@ describe('World HP consumer boundaries', () => {
     });
     expect(result).toMatchObject({ accepted: true, actualDamage: amount });
     if (kind === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: amount }));
+    f.close();
+  });
+
+  it('derives the real AK47 target explosion from confirmed direct damage without rerolling source modifiers', () => {
+    const f = projectileFixture();
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+    const outgoing = vi.fn((_source, _target, amount: number, allowCritical: boolean, _slot, _now, random: () => number) => {
+      const critical = allowCritical && random() < 0.5;
+      return { amount: amount * 2 * (critical ? 3 : 1), isCritical: critical };
+    });
+    f.combat.setPlayerOutgoingDamageResolver(outgoing);
+    f.combat.setTargetIncomingDamageMultiplierResolver(target => target.targetId === 'e3' ? 0.5 : 1);
+    f.combat.setAk47DirectEnemyHitHandler(() => ({
+      damageMultiplier: 1,
+      explosionRadius: 250,
+      explosionDamageFraction: 0.5,
+    }));
+
+    const beforeDirect = f.manager.getEnemy('e1')!.getHp();
+    const beforeChild = f.manager.getEnemy('e3')!.getHp();
+    const result = f.combat.resolveDirectImpact({
+      projectileId: 401,
+      target: { kind: 'enemy', id: 'e1' },
+      impact: { x: 300, y: 100 },
+      velocity: { x: 1, y: 0 },
+      provenance: createSingleOwnerProvenance('p1', {
+        weaponSourceId: 'AK47',
+        sourceSlot: 'weapon2',
+        correlation: { ak47ShotId: 7 },
+      }),
+      directHit: { damage: 10, ak47: {} },
+      augments: [],
+    });
+
+    expect(result).toMatchObject({ accepted: true, actualDamage: 360 });
+    expect(beforeDirect - f.manager.getEnemy('e1')!.getHp()).toBe(360);
+    // Parent 360 × explosion 0.5 × this target's incoming 0.5. P/outgoing/crit stay in the parent.
+    expect(beforeChild - f.manager.getEnemy('e3')!.getHp()).toBe(90);
+    expect(outgoing).toHaveBeenCalledExactlyOnceWith('p1', 'e1', 60, true, 'weapon2', 1000, expect.any(Function));
+    f.close();
+  });
+
+  it('derives the real Gauss discharge from confirmed direct damage without rerolling source modifiers', () => {
+    const f = projectileFixture();
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+    const outgoing = vi.fn((_source, _target, amount: number, allowCritical: boolean, _slot, _now, random: () => number) => {
+      const critical = allowCritical && random() < 0.5;
+      return { amount: amount * 2 * (critical ? 3 : 1), isCritical: critical };
+    });
+    f.combat.setPlayerOutgoingDamageResolver(outgoing);
+    f.combat.setTargetIncomingDamageMultiplierResolver(target => target.targetId === 'p2' ? 2 : 1);
+
+    const beforeChild = f.combat.getHP('p2');
+    const result = f.combat.resolveDirectImpact({
+      projectileId: 402,
+      target: { kind: 'enemy', id: 'e1' },
+      impact: { x: 300, y: 100 },
+      velocity: { x: 1, y: 0 },
+      provenance: createSingleOwnerProvenance('p1', {
+        weaponSourceId: 'GAUSS_RIFLE',
+        sourceSlot: 'ultimate',
+      }),
+      directHit: { damage: 10, gaussChain: { radius: 250, damageFactor: 0.25 } },
+      augments: [],
+    });
+
+    expect(result).toMatchObject({ accepted: true, actualDamage: 360 });
+    // Parent 360 × Gauss 0.25 × this target's incoming 2. No second P/outgoing/critical roll.
+    expect(beforeChild - f.combat.getHP('p2')).toBe(180);
+    expect(outgoing).toHaveBeenCalledExactlyOnceWith('p1', 'e1', 60, true, 'ultimate', 1000, expect.any(Function));
+    f.close();
+  });
+
+  it('keeps unresolved normal chains on their one legitimate outgoing and target modifier pass', () => {
+    const f = projectileFixture();
+    const outgoing = vi.fn((_source, _target, amount: number) => ({ amount: amount * 2, isCritical: false }));
+    f.combat.setPlayerOutgoingDamageResolver(outgoing);
+    f.combat.setTargetIncomingDamageMultiplierResolver(target => target.targetId === 'p2' ? 3 : 1);
+    const before = f.combat.getHP('p2');
+
+    f.combat.runHostExecution(() => {
+      (f.combat as any).resolveChainLightning({
+        shooterId: 'p1',
+        originX: 300,
+        originY: 100,
+        baseDamage: 10,
+        chainCfg: { maxJumps: 1, searchRadius: 150, damageFalloffPerJump: 0.5,
+          targetPlayers: true, targetEnemies: false, targetDecoys: false },
+        sourceId: 'normal-chain',
+        adrenalinGain: 0,
+        playerColor: 0xffffff,
+        visualPreset: 'asmd_primary',
+        baseThickness: 2,
+        visitedPlayers: new Set(),
+        visitedEnemies: new Set(['e1']),
+        visitedDecoys: new Set(),
+      });
+    }, 1000);
+
+    expect(before - f.combat.getHP('p2')).toBe(30);
+    expect(outgoing).toHaveBeenCalledOnce();
     f.close();
   });
 

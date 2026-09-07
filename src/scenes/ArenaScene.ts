@@ -2371,7 +2371,8 @@ export class ArenaScene extends Phaser.Scene {
     const localWounded = inArena
       && !this.localPlayerState.spectator
       && !bridge.isLocalSpectator()
-      && (this.ctx?.getWorldCombatCore()!.isAlive(localId) ?? false);
+      // Exit presentation outlives the World combat runtime; it has no wounded body to grade.
+      && (this.ctx?.getWorldCombatCore()?.isAlive(localId) ?? false);
 
     return {
       skyState: resolveSkyState(minutes),
