@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block B aktiv; P2–P6 bestanden, R2 als Nächstes |
+| Gesamtstatus | Block B aktiv; R2 Review 1 nicht bestanden, Fixschleife 1 aktiv |
 | Freigegebener Arbeitsblock | **B – fachlicher Kern** (P2 → P3 → P4 → P5 → P6 → R2) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R1; Block B ausdrücklich gestartet |
-| Nächster Arbeitsschritt | R2 – unabhängiges Semantik- und Reentrancyreview |
+| Nächster Arbeitsschritt | Begrenzter P5/P6-Fix, danach frisches R2 Review 2 |
 | Nächster geplanter Nutzerstopp | Nach R2; P7 benötigt gesonderte Freigabe C |
-| Aktive Phase / Aufgabe | Keine; P6 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `bc03fee1` |
-| Start-HEAD der laufenden Aufgabe | `bc03fee1` |
-| Aktiver Worker / Thread | Keiner |
+| Aktive Phase / Aufgabe | R2-Fix 1 – Target-Inkarnation, Burn-Provenance, Player-Status-Lifetime |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `ac5a77ba` |
+| Start-HEAD der laufenden Aufgabe | `ac5a77ba` |
+| Aktiver Worker / Thread | P6-Fix-Worker, Astra / High |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
-| Aktueller Reparaturzähler | Kein offenes Reparaturpaket |
+| Aktueller Reparaturzähler | R2 Fixschleife 1 von max. 2 |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht beauftragt, nicht durchgeführt |
 
@@ -43,7 +43,7 @@ Analysebasis: `main` @ `d5cb4519fb06dd74e22d21e8d63e635ea75bbc26`; Projectile is
 | P4 | B | ✅ | Damage / Support / Modifier / Defense |
 | P5 | B | ✅ | Status / Mechanikzustände |
 | P6 | B | ✅ | Reaktionen / Death / Kill / Player-Lifecycle |
-| R2 | B | ⬜ | Semantikreview; danach Nutzerstopp |
+| R2 | B | 🟧 | Review 1 mit drei lokalen Blockern; Fix 1 aktiv |
 | P7 | C | ⬜ | Projectile-Adapter |
 | P8 | C | ⬜ | Hitscan / Melee / Preview |
 | P9 | C | ⬜ | World-Mutation / Domain-Fan-out |
@@ -78,12 +78,13 @@ P1–P4 sind realisiert:
 | Geplanter Integrationsübergang | Verbleibende Projectile-Callback-Reaktionen auf den einen Ausführungspfad umstellen (D10) | P7 |
 | Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
 | Geplanter Integrationsübergang | P1-Contracts sind bewusst noch nicht produktiv verdrahtet; konkrete Target-/Life-Generationen und fachliche Capability-Owner fehlen | P2–P11 gemäß Contract-Manifest |
+| R2-Fix 1 | Enemy-Child-Reaktion prüft Target-Inkarnation nach externen Hooks nicht erneut | P6-Fix |
+| R2-Fix 1 | Burn-Tick verwirft gespeicherte `CombatSource` und rekonstruiert Legacy-Herkunft | P5/P6-Fix |
+| R2-Fix 1 | Player-Vulnerability endet nicht mit der Life-Instanz | P5/P6-Fix |
 
 ## 5. Nachweise und Reviews
 
-**P0-Baseline:** bestanden auf `8457a193`. Check, Integration, Stress, Balance-Lab, Assets und Diff-Check: Exit 0; V1–V12 besitzen Einstiegspunkte.
-
-**P1-Gate L:** 43/43 fokussiert, Integration 175/175, Typecheck und Diff-Check grün; R1 nach Korrekturen bestanden.
+**P0/P1:** Baseline-Matrix grün; P1 Fokus 43/43, Integration 175/175, Typecheck/Diff-Check grün; R1 nach Korrekturen bestanden.
 
 **P2-Gate L:** Check 2738 Core/32 Architektur, Integration 176/176, Fokus 32/32, Typecheck/Writer-/Diff-Audit grün.
 
@@ -98,7 +99,7 @@ P1–P4 sind realisiert:
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
 | R1 | Bestanden | `ee5742b4` | Keine |
-| R2 | Nicht ausgeführt | – | – |
+| R2 Review 1 | Nicht bestanden | `ac5a77ba` | 3 lokale Fixes: Inkarnation, Burn-Source, Player-Status |
 | P13 | Nicht ausgeführt | – | – |
 
 Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlender Beleg verlangt erneute Prüfung; alter Review-Pass gilt nach Code-Delta nicht automatisch weiter.
@@ -107,6 +108,4 @@ Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlend
 
 Vor Workerstart Freigabe, Voraussetzungen und Working Tree prüfen; 🟨, Start-HEAD und Worker eintragen. Währenddessen schreibt nur der Worker. Nach Rückgabe Lieferung und Gates prüfen; nur erfüllte Arbeit ✅ setzen und mit Code committen.
 
-Beim Wiederanlauf zuerst Branch/HEAD, Index, Working Tree und offene Threads mit § 1 abgleichen. Keine Phase blind wiederholen, keine Nutzeränderung verwerfen. Nach R1/R2 ausdrücklich „wartet auf Nutzerfreigabe B/C“ setzen. 01–03/05 werden nicht eigenmächtig umdefiniert. Keine Clientkonfiguration oder zusätzliche Agentenarchitektur erzeugen.
-
-Nach P13: „technisch/architektonisch abgeschlossen; M offen“. Ohne Nutzerrückmeldung bleibt M offen. Ein gemeldeter In-Scope-Defekt öffnet P13 zur beauftragten gezielten Korrektur wieder.
+Beim Wiederanlauf Branch/HEAD, Working Tree und Threads mit § 1 abgleichen. Keine Phase wiederholen oder Nutzeränderung verwerfen. Nach R1/R2 Nutzerfreigabe abwarten; 01–03/05 nicht eigenmächtig umdefinieren.
