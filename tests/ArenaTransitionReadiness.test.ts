@@ -371,7 +371,7 @@ describe('ArenaLifecycleCoordinator – TerrainSnapshotLifecycle', () => {
   const source = readFileSync(
     resolve(process.cwd(), 'src/scenes/arena/ArenaLifecycleCoordinator.ts'),
     'utf8',
-  );
+  ).replace(/\r\n/g, '\n');
 
   function section(startAnchor: string, endAnchor: string): string {
     const start = source.indexOf(startAnchor);

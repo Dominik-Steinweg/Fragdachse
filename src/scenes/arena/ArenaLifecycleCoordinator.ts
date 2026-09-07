@@ -1072,7 +1072,9 @@ export class ArenaLifecycleCoordinator {
         // The World combat owner projects the current Activity barrier; objective materialization
         // republishes this binding once the actual BarrierManager exists.
         this.worldCombatGameplayBinding?.updateActivityBindings();
-        this.combatSystem.setEnemyManager(enemyManager);
+        // Activity attachment precedes World gameplay composition. The combat binding reads
+        // the current manager when built; later materialization updates it through this hook.
+        this.getWorldCombatCore()?.setEnemyManager(enemyManager);
         this.ctx.hostPhysics.setEnemyManager(enemyManager);
         this.worldTrainRuntime?.setEnemyManager(enemyManager);
         this.worldCombatGameplayBinding?.updateEnemyManager(enemyManager);
@@ -1085,7 +1087,7 @@ export class ArenaLifecycleCoordinator {
         this.worldCombatGameplayBinding?.updateEnemyManager(null);
         this.ctx.hostPhysics.setEnemyRockContactCallback(null);
         this.ctx.hostPhysics.setEnemyManager(null);
-        this.combatSystem.setEnemyManager(null);
+        this.getWorldCombatCore()?.setEnemyManager(null);
       },
     });
     const activityConfiguration = resolveCoopMissionActivityConfiguration(
@@ -1136,7 +1138,9 @@ export class ArenaLifecycleCoordinator {
       world.metrics,
     );
     const binding = baseManager.createActivityBinding(overlays, () => {
-      this.combatSystem.setBaseObstacles(baseManager.getObstacleRectangles());
+      // Initial overlays are installed before World gameplay is composed. Combat reads the
+      // resulting obstacles on bind; this callback also projects subsequent Activity changes.
+      this.getWorldCombatCore()?.setBaseObstacles(baseManager.getObstacleRectangles());
       this.worldGeometryBinding?.syncBaseObstacles();
     });
     runtime.bind({

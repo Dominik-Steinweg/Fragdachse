@@ -8,7 +8,7 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C technisch/architektonisch abgeschlossen; M offen |
+| Gesamtstatus | Block C implementiert; Startup-Regressionen aus M korrigiert, erneute Gameplay-Abnahme offen |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
 | Nächster Arbeitsschritt | Nutzer führt gebündelte Gameplay-/Sichtabnahme M durch |
@@ -18,7 +18,7 @@
 | Start-HEAD der laufenden Aufgabe | `d015ba61` |
 | Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Keiner; technischer Abschluss bestätigt |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner; früherer technischer Abschluss deckte den Coop-Startup nicht ausreichend ab |
 | Aktueller Reparaturzähler | P13: 4 Schleifen abgeschlossen; Review 5 bestanden |
 | Technische Endabnahme F / manuelle Abnahme M | F bestanden; M offen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
@@ -72,9 +72,21 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P13 sind technisch/architektonisch abgeschlossen. Keine aktive Transition und kein bekannter In-Scope-Defekt; M bleibt offen.
+Die früheren P1–P13-Gates bleiben als historische Prüfergebnisse bestehen, belegen aber keinen
+fehlerfreien Gameplay-Start. Bei M wurden vorzeitig zwingende Combat-Zugriffe im Enemy- und
+Base-Activity-Binding sowie ein Null-Zugriff in der Scene-Metrics-Synchronisierung gemeldet.
+Die Bindings tolerieren jetzt den Aufbau vor der Combat-Erzeugung und partiellen Teardown;
+WorldGeometryBinding übernimmt initiale Basishindernisse, WorldCombatGameplayBinding den
+initialen EnemyManager. Der Coordinator-Regressionstest
+`tests/integration/CoopMissionCombatStartup.test.ts` schützt frühes Base-Attach, spätere Projektion
+und Abbau ohne Combat. Er ersetzt keinen vollständigen Map-Start. M bleibt offen; ein
+fehlerfreier Gesamtabschluss ist bis zur erneuten Gameplay-Abnahme nicht bestätigt.
 
 ## 5. Nachweise und Reviews
+
+**Startup-Korrektur:** `npm run check` (2791 Core, 33 Architektur, Build) und
+`npm run test:integration` (245 Tests) bestanden. Neuer Coordinator-Test reproduzierte den
+gemeldeten Base-Binding-Fehler vor dem Fix und besteht danach. Kein Browser-/Map-Start geprüft.
 
 **P0–P6/R1:** Phasengates und Vertragsreview grün; Details in den Commits.
 

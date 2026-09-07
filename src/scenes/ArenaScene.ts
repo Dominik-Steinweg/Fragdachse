@@ -2282,7 +2282,7 @@ export class ArenaScene extends Phaser.Scene {
       worldMetrics?.heightPx ?? ARENA_HEIGHT,
     );
     this.syncMainCameraBounds();
-    this.ctx?.getWorldCombatCore()!.setWorldMetrics(worldMetrics);
+    this.ctx?.getWorldCombatCore()?.setWorldMetrics(worldMetrics);
   }
 
   /**
