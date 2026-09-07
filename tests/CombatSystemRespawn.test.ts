@@ -53,6 +53,7 @@ describe('CombatSystem respawn lifecycle', () => {
         broadcastEffect: vi.fn(),
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
+      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
       const survival = new CoopDefenseRespawnBudgetSystem({ respawnsPerPlayer: 1, participantIds: ['p1'] });
 
       combat.setInitialSpawnAllowedResolver(() => true);
@@ -99,6 +100,7 @@ describe('CombatSystem respawn lifecycle', () => {
       } as unknown as PlayerManager;
       const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
+      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
 
       // Genau die Aufloesung der LobbyWorld: keine Runde, nur Teilnahme.
       combat.setInitialSpawnAllowedResolver((id) => hasWorldFigure(participation.get(id) ?? 'none'));
@@ -139,6 +141,7 @@ describe('CombatSystem respawn lifecycle', () => {
         areTeammates: () => false,
       } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
+      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
       const participation = new Map<string, WorldParticipation>([
         ['p1', 'interactive'],
         ['p2', 'interactive'],
@@ -175,6 +178,7 @@ describe('CombatSystem respawn lifecycle', () => {
       } as unknown as PlayerManager;
       const bridge = { isHost: () => true, broadcastEffect: vi.fn() } as unknown as NetworkBridge;
       const combat = new CombatSystem(playerManager, bridge);
+      combat.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
 
       // `none` steht ausserhalb, `observer` steht drin – aber ohne Figur.
       for (const outside of ['none', 'observer'] as const) {

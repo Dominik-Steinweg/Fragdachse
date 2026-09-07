@@ -46,6 +46,7 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
       playerManagerMock,
       networkBridgeMock,
     );
+    cs.bindHostExecutionSources({ nowMs: () => Date.now(), random: () => 0.25 });
 
     cs.initPlayer('p_target', 1000);
     cs.initPlayer('p1', 1000);

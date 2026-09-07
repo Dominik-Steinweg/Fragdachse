@@ -70,7 +70,7 @@ vi.mock('phaser', () => {
   };
 });
 
-import { CombatSystem } from '../src/systems/CombatSystem';
+import { CombatSystem as RuntimeCombatSystem } from '../src/systems/CombatSystem';
 import type { BaseManager } from '../src/entities/BaseManager';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import type { NetworkBridge } from '../src/network/NetworkBridge';
@@ -80,6 +80,35 @@ import type {
   SyncedDeathEffect,
 } from '../src/types';
 import type { ProjectileImpactSource } from '../src/projectile/ProjectileGameplayPort';
+import type { TargetDamageMutationRequest } from '../src/combat/CombatMutation';
+import type { CombatTargetRef } from '../src/combat/CombatScope';
+
+class CombatSystem extends RuntimeCombatSystem {
+  constructor(...args: ConstructorParameters<typeof RuntimeCombatSystem>) {
+    super(...args);
+    this.bindHostExecutionSources({ nowMs: () => 0, random: () => 0.25 });
+  }
+}
+
+function enemyMutationPort(enemy: { id: string; getHp(): number; getMaxHp(): number }, apply: (id: string, amount: number) => { died: boolean; remainingHp: number }) {
+  const target: CombatTargetRef = { kind: 'enemy', id: enemy.id, scope: { worldRevision: 1, runtimeGeneration: 1 }, instance: { entityGeneration: 1 } };
+  const state = () => ({ kind: 'combatant' as const, hp: enemy.getHp(), maxHp: enemy.getMaxHp(), armor: 0, maxArmor: 0, alive: true });
+  return {
+    getCombatTargetRef: () => target,
+    readCombatVitals: state,
+    commitDamage: (request: TargetDamageMutationRequest) => {
+      const before = enemy.getHp();
+      const result = apply(enemy.id, request.damage.amount);
+      return {
+        ...request, kind: 'damage-applied' as const,
+        actualDamage: Math.min(before, request.damage.amount), hpLost: Math.min(before, request.damage.amount), armorLost: 0, integrityLost: 0,
+        resultingState: { ...state(), hp: result.remainingHp, alive: !result.died },
+        transition: result.died ? { kind: 'dead' as const, facts: { target, position: { x: 0, y: 0 } } } : { kind: 'none' as const },
+        ...(result.died ? {} : { rescueHealing: 0 }),
+      };
+    },
+  };
+}
 
 function makeCombatHarness() {
   const base = {
@@ -259,8 +288,8 @@ describe('CombatSystem base damage routing', () => {
     };
     combat.applyExplosionDamage(0, 0, explosion, 'player-1', 'utility', 'Explosion');
 
-    expect(outgoing).toHaveBeenNthCalledWith(1, 'player-1', 'base:hostile-base', 60, true, 'weapon1');
-    expect(outgoing).toHaveBeenNthCalledWith(2, 'player-1', 'base:hostile-base', 60, true, 'utility');
+    expect(outgoing).toHaveBeenNthCalledWith(1, 'player-1', 'base:hostile-base', 60, true, 'weapon1', 0, expect.any(Function));
+    expect(outgoing).toHaveBeenNthCalledWith(2, 'player-1', 'base:hostile-base', 60, true, 'utility', 0, expect.any(Function));
     expect(baseDamage.mock.calls[0]?.[1]).toBe(120);
     expect(baseDamage.mock.calls[1]?.[1]).toBe(120);
   });
@@ -303,7 +332,7 @@ describe('CombatSystem base damage routing', () => {
       getAllEnemies: () => [enemy],
       hasEnemy: (id: string) => id === enemy.id,
       getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
-      applyDamage: enemyDamage,
+      ...enemyMutationPort(enemy, enemyDamage),
     } as unknown as import('../src/entities/EnemyManager').EnemyManager);
     const baseDamage = vi.fn();
     combat.setBaseManager({
@@ -380,6 +409,65 @@ describe('CombatSystem death visual snapshots', () => {
 });
 
 describe('CombatSystem actual damage callbacks', () => {
+  it('pins Host-frame time, samples fresh immediate time and supplies one RNG draw per target', () => {
+    const { combat } = makeSupportCombatHarness();
+    let wallTime = 1000;
+    const clock = vi.fn(() => wallTime), random = vi.fn(() => 0.25);
+    combat.bindHostExecutionSources({ nowMs: clock, random });
+    const modifierTimes: number[] = [], defenseTimes: number[] = [], incomingTimes: number[] = [];
+    combat.setPlayerOutgoingDamageResolver((_source, _target, amount, allowCritical, _slot, nowMs, rng) => {
+      modifierTimes.push(nowMs);
+      wallTime = 2000; // A nested phase must not pick up an independently changing wall clock.
+      if (allowCritical) { rng(); rng(); }
+      return { amount: amount * (nowMs < 1500 ? 2 : 3), isCritical: false };
+    });
+    combat.setTargetIncomingDamageMultiplierResolver((_target, nowMs) => { incomingTimes.push(nowMs); return 1; });
+    combat.setEnergyShieldSystem({ tryDomeProtect: (_x: number, _y: number, _id: string, _amount: number, nowMs: number) => {
+      defenseTimes.push(nowMs); return false;
+    } } as unknown as import('../src/systems/EnergyShieldSystem').EnergyShieldSystem);
+    combat.runHostExecution(() => {
+      combat.applyDamage('victim', 10, false, 'shooter');
+      combat.applyDamage('victim', 10, false, 'shooter');
+    }, 500);
+    expect(clock).not.toHaveBeenCalled();
+    expect(combat.getHP('victim')).toBe(60);
+    combat.applyDamage('victim', 10, false, 'shooter');
+    expect(combat.getHP('victim')).toBe(30);
+    expect(clock).toHaveBeenCalledOnce();
+    expect(modifierTimes).toEqual([500, 500, 2000]);
+    expect(incomingTimes).toEqual(modifierTimes);
+    expect(defenseTimes).toEqual(modifierTimes);
+    expect(random).toHaveBeenCalledTimes(3);
+  });
+
+  it('uses fresh Host time for immediate runtime factors and invalidates only its own World binding', () => {
+    const { combat } = makeSupportCombatHarness();
+    const oldBinding = combat.bindHostExecutionSources({ nowMs: () => 100, random: () => 0.1 });
+    const currentBinding = combat.bindHostExecutionSources({ nowMs: () => 200, random: () => 0.2 });
+    oldBinding.destroy();
+    combat.setLoadoutManager({ getDamageMultiplier: (_id, nowMs) => nowMs / 100, getWeaponDamageMultiplier: (_id, _slot, nowMs) => nowMs / 100 });
+    expect(combat.getPlayerRuntimeDamageMultiplier('shooter', 'weapon1')).toBe(2);
+    expect(() => combat.runHostExecution(() => { throw new Error('synthetic entry failure'); }, 400)).toThrow('synthetic entry failure');
+    expect(combat.getPlayerRuntimeDamageMultiplier('shooter', 'weapon1')).toBe(2);
+    currentBinding.destroy();
+    expect(() => combat.applyDamage('victim', 10, false, 'shooter')).toThrow('not bound to a World');
+    expect(combat.getHP('victim')).toBe(100);
+  });
+
+  it('keeps protected contact separate from damage rewards and preserves stealth reveal', () => {
+    const { combat } = makeSupportCombatHarness();
+    const reveal = vi.fn(), damage = vi.fn(), dome = vi.fn(() => true);
+    combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
+    combat.setDecoySystem({ breakStealth: reveal } as unknown as import('../src/systems/DecoySystem').DecoySystem);
+    combat.setEnergyShieldSystem({ tryDomeProtect: dome } as unknown as import('../src/systems/EnergyShieldSystem').EnergyShieldSystem);
+    combat.setDamageDealtHandler(damage);
+    const outcome = combat.applyDamage('victim', 10, false, 'shooter');
+    expect(outcome).toMatchObject({ kind: 'accepted-no-effect', reason: 'blocked' });
+    expect(reveal).toHaveBeenCalledWith('victim', 1234);
+    expect(dome).toHaveBeenCalledOnce();
+    expect(damage).not.toHaveBeenCalled();
+  });
+
   it('reports clamped hostile-enemy damage without overkill', () => {
     const enemy = fakeEntity({ id: 'zombie',
       kind: 'zombie-badger',
@@ -403,10 +491,10 @@ describe('CombatSystem actual damage callbacks', () => {
     combat.setEnemyManager({
       hasEnemy: (id: string) => id === enemy.id,
       getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
-      applyDamage: (_id: string, amount: number) => {
+      ...enemyMutationPort(enemy, (_id: string, amount: number) => {
         hp = Math.max(0, hp - amount);
         return { died: hp === 0, remainingHp: hp };
-      },
+      }),
     } as unknown as import('../src/entities/EnemyManager').EnemyManager);
     const damage = vi.fn();
     combat.setDamageDealtHandler(damage);

@@ -220,6 +220,8 @@ interface CombatDamageRequestBase {
   /** Target-side modifiers and defense are unresolved until the canonical commit. */
   readonly targetScaling: 'pending';
   readonly allowCritical: boolean;
+  /** Only these named causes bypass Burrow; all other eligibility/defense still applies. */
+  readonly burrowException?: 'telefrag' | 'burrow-stuck';
 }
 
 export interface DirectCombatDamageRequest extends CombatDamageRequestBase {
@@ -245,6 +247,8 @@ export interface DerivedCombatDamageRequest extends CombatDamageRequestBase {
   readonly entry: 'derived-reaction';
   readonly damageKind: 'chain' | 'reflect';
   readonly basis: DerivedDamageBasis;
+  /** A Reflect source may add its own modifiers, never repeat its parent's source modifiers. */
+  readonly newSourceModifiers?: boolean;
 }
 
 export interface BaseCombatDamageRequest extends CombatDamageRequestBase {

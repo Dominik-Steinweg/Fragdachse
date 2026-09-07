@@ -277,9 +277,9 @@ export function composeWorldCombatGameplay(
       },
     },
     respawnPlayer: (playerId) => flow.getPlayerActivityRuntime()?.consumeRespawn(playerId) ?? true,
-    getTeamHpRegenBonus: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(Date.now(), bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
-    getMatrixDamageReduction: (footprint, applies) => gameplay.targeting?.systems.reinforcementMatrix.getDamageReductionForFootprint(footprint, Date.now(), applies) ?? 0,
-    getMatrixDamageMultiplier: (footprint, applies) => gameplay.targeting?.systems.reinforcementMatrix.getDamageMultiplierForFootprint(footprint, Date.now(), applies) ?? 1,
+    getTeamHpRegenBonus: (playerId, nowMs) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getHpRegenBonus(nowMs, bridge.canPlayerReceiveRoundRewards(playerId), ctx.combatSystem.isAlive(playerId)) ?? 0,
+    getMatrixDamageReduction: (footprint, applies, nowMs) => gameplay.targeting?.systems.reinforcementMatrix.getDamageReductionForFootprint(footprint, nowMs, applies) ?? 0,
+    getMatrixDamageMultiplier: (footprint, applies, nowMs) => gameplay.targeting?.systems.reinforcementMatrix.getDamageMultiplierForFootprint(footprint, nowMs, applies) ?? 1,
     isHomingTargetValid: (id, type, ownerId) => {
       void ownerId;
       if (type !== 'players' && type !== 'decoys') return true;
@@ -290,6 +290,11 @@ export function composeWorldCombatGameplay(
   });
   gameplay.combat = combatGameplayBinding;
   worldRuntime.bind(combatGameplayBinding);
+  // Registered after the gameplay binding so reverse teardown invalidates Host entries first.
+  worldRuntime.bind(ctx.combatSystem.bindHostExecutionSources({
+    nowMs: () => bridge.getSynchronizedNow(),
+    random: Math.random,
+  }));
 }
 
 function resolveSpawnProjectileDangerRadius(projectile: SyncedProjectile): number {

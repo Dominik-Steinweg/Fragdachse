@@ -251,9 +251,9 @@ export interface WorldCombatGameplayBindingOptions {
   readonly bindPlayerShieldBuffPort?: (port: ShieldBuffPort | null) => void;
   readonly network: WorldCombatNetworkPort;
   readonly respawnPlayer: (playerId: string) => boolean;
-  readonly getTeamHpRegenBonus?: (playerId: string) => number;
-  readonly getMatrixDamageReduction?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean) => number;
-  readonly getMatrixDamageMultiplier?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean) => number;
+  readonly getTeamHpRegenBonus?: (playerId: string, nowMs: number) => number;
+  readonly getMatrixDamageReduction?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean, nowMs: number) => number;
+  readonly getMatrixDamageMultiplier?: (footprint: TargetFootprint, applies: (field: { ownerId: string }) => boolean, nowMs: number) => number;
   /** World-composed validity for replicated Activity targets (players/decoys). */
   readonly isHomingTargetValid?: (id: string, type: HomingTargetType, ownerId: string) => boolean;
 }
@@ -436,7 +436,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setRespawnCallback((playerId) => o.respawnPlayer(playerId));
     combat.setAuthoritativePositionResetCallback((playerId, x, y) => o.resetPlayerPosition(playerId, x, y));
     combat.setPlayerActionAllowedResolver((playerId) => o.getPlayerCapabilities(playerId).canUseCombat);
-    combat.setPlayerDamageReductionResolver((playerId) => {
+    combat.setPlayerDamageReductionResolver((playerId, nowMs) => {
       const playerCombat = o.getPlayerCombatIntegration();
       const fromWeapon = playerCombat?.loadout.getEquippedWeaponConfig(playerId, 'weapon1')?.damageReduction ?? 0;
       const fromItems = playerCombat?.modifier.getPercentageStat(playerId, 'player.damageReduction') ?? 0;
@@ -446,13 +446,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       const matrix = footprint ? (o.getMatrixDamageReduction?.(
         footprint,
         field => !o.network.authority.isEnemyPair(field.ownerId, playerId),
+        nowMs,
       ) ?? 0) : 0;
       return fromWeapon + fromItems + conditional + matrix;
     });
-    combat.setPlayerHpRegenPerSecondResolver((playerId) => {
+    combat.setPlayerHpRegenPerSecondResolver((playerId, nowMs) => {
       const p = o.getPlayerCombatIntegration();
       return (p?.modifier.getHpRegenPerSecond(playerId) ?? 0)
-        + (o.getTeamHpRegenBonus?.(playerId) ?? 0);
+        + (o.getTeamHpRegenBonus?.(playerId, nowMs) ?? 0);
     });
     combat.setPlayerMaxArmorResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.maxArmor', 100) ?? 100);
     combat.setPlayerArmorGainMultiplierResolver((playerId) => 1 + (o.getPlayerCombatIntegration()?.modifier.getPercentageStat(playerId, 'player.armorGain') ?? 0));
@@ -462,22 +463,22 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       + (o.getPlayerCombatIntegration()?.item.getConditionalLifeLeechBonus(playerId) ?? 0)
     ));
     combat.setPlayerArmorRegenPerSecondResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getNumericStat(playerId, 'player.armorRegenPerSecond') ?? 0);
-    combat.setPlayerBonusArmorRegenPerSecondResolver((playerId) => o.getPlayerCombatIntegration()?.item.getBonusArmorRegenPerSecond(playerId, Date.now()) ?? 0);
-    combat.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical, sourceSlot) => {
+    combat.setPlayerBonusArmorRegenPerSecondResolver((playerId, nowMs) => o.getPlayerCombatIntegration()?.item.getBonusArmorRegenPerSecond(playerId, nowMs) ?? 0);
+    combat.setPlayerOutgoingDamageResolver((attackerId, targetId, amount, allowCritical, sourceSlot, nowMs, random) => {
       const p = o.getPlayerCombatIntegration();
       return p?.modifier.resolveOutgoingDamage(
         attackerId,
         targetId,
         amount,
         allowCritical,
-        Math.random,
-        p.item.getConditionalOutgoingDamageBonus(attackerId, sourceSlot, Date.now()),
+        random,
+        p.item.getConditionalOutgoingDamageBonus(attackerId, sourceSlot, nowMs),
       ) ?? { amount, isCritical: false };
     });
-    combat.setEnemyIncomingDamageMultiplierResolver((enemyId) => o.getPlayerCombatIntegration()?.item.getEnemyIncomingDamageMultiplier(enemyId, Date.now()) ?? 1);
-    combat.setTargetIncomingDamageMultiplierResolver((target) => {
+    combat.setEnemyIncomingDamageMultiplierResolver((enemyId, nowMs) => o.getPlayerCombatIntegration()?.item.getEnemyIncomingDamageMultiplier(enemyId, nowMs) ?? 1);
+    combat.setTargetIncomingDamageMultiplierResolver((target, nowMs) => {
       const targeting = o.getTargetStatusSystem();
-      const vulnerability = targeting?.getIncomingDamageMultiplier(target) ?? 1;
+      const vulnerability = targeting?.getIncomingDamageMultiplier(target, nowMs) ?? 1;
       const footprint = o.getTargetFootprint(target);
       if (!footprint || target.targetType === 'enemy') return vulnerability;
       const matrixApplies = target.targetType === 'player'
@@ -495,7 +496,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
                 return !rock || !o.network.authority.isEnemyPair(field.ownerId, rock.ownerId);
               }
               : () => false;
-      return vulnerability * (o.getMatrixDamageMultiplier?.(footprint, matrixApplies) ?? 1);
+      return vulnerability * (o.getMatrixDamageMultiplier?.(footprint, matrixApplies, nowMs) ?? 1);
     });
     combat.setApplyVulnerabilityHandler((target, durationMs) => o.getTargetStatusSystem()?.applyVulnerability(target, durationMs));
     combat.setEnergyInjectorTargetHitCallback((impact: ProjectileEnergyInjectorImpact) => {

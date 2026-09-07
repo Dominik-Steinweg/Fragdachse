@@ -3,6 +3,7 @@ vi.mock('phaser', async () => {
   const phaser = (await import('../fakeArenaRenderScene')).createFakePhaserModule();
   return {
     ...phaser,
+    Geom: { ...phaser.Geom, Line: class {} },
     Math: {
       ...phaser.Math,
       RND: { realInRange: (min: number) => min },
@@ -13,6 +14,9 @@ vi.mock('../../src/effects/SpawnEffectRenderer', () => ({
   SpawnEffectRenderer: class { setLightingSystem() {} play() {} },
 }));
 import { EnemyManager } from '../../src/entities/EnemyManager';
+import { CombatSystem } from '../../src/systems/CombatSystem';
+import type { PlayerManager } from '../../src/entities/PlayerManager';
+import type { NetworkBridge } from '../../src/network/NetworkBridge';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
 import { BaseEntity } from '../../src/entities/BaseEntity';
 import { BaseManager } from '../../src/entities/BaseManager';
@@ -64,6 +68,31 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('reports real Combat resolution damage separately from Enemy rescue healing', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+    manager.setLethalDamageGuard(() => ({ kind: 'rescue', healing: 20 }));
+    const combat = new CombatSystem({ getPlayer: () => undefined } as unknown as PlayerManager, {
+      isHost: () => true, broadcastEffect: () => {},
+    } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
+    combat.setEnemyManager(manager);
+    const damage = vi.fn(), primary = vi.fn();
+    combat.setDamageDealtHandler(damage);
+    combat.setDirectPrimaryHitHandler(primary);
+    const outcome = combat.applyDamage('e1', 100, false, 'attacker', 'synthetic', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' });
+    expect(outcome).toMatchObject({ kind: 'damage-applied', actualDamage: 40, rescueHealing: 20, transition: { kind: 'none' }, resultingState: { hp: 20, alive: true } });
+    expect(damage).toHaveBeenCalledWith('enemy', 'e1', 'attacker', 40, 'direct');
+    expect(primary).toHaveBeenCalledOnce();
+    const target = manager.getCombatTargetRef('e1')!;
+    const supported = combat.applySupport({ outcomeId: 'enemy-heal', target, source: {
+      gameplaySource: { kind: 'enemy', id: 'e1' }, attribution: { kind: 'enemy', id: 'e1' },
+      allegiance: { ownerId: 'e1', factionId: 'hostile' }, origin: 'support',
+    }, supportKind: 'heal', amount: 30 });
+    expect(supported).toMatchObject({ kind: 'support-applied', actualAmount: 30, resultingState: { hp: 50 } });
+    expect(outcome).toMatchObject({ actualDamage: 40, resultingState: { hp: 20 } });
+  });
+
   it('uses per-entity baselines and real encoded full/refresh upserts without extending visibility', () => {
     const h = harness(), manager = enemies(h);
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 100, maxHp: 100 });

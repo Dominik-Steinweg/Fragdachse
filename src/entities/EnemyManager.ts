@@ -32,6 +32,7 @@ import type { WorldMetrics } from '../world/WorldMetrics';
 import type {
   CombatDamageMutationOutcome,
   CombatSupportMutationOutcome,
+  CombatantVitalsSnapshot,
   TargetDamageMutationRequest,
   TargetSupportMutationRequest,
 } from '../combat/CombatMutation';
@@ -988,6 +989,14 @@ export class EnemyManager {
 
   commitDamage(request: TargetDamageMutationRequest): CombatDamageMutationOutcome {
     return this.commitDamageInternal(request).outcome;
+  }
+
+  readCombatVitals(target: CombatTargetRef): CombatantVitalsSnapshot | null {
+    if (target.kind !== 'enemy') return null;
+    const current = this.getCombatTargetRef(target.id);
+    const enemy = this.enemies.get(target.id);
+    return current && enemy && isSameCombatTargetInstance(current, target)
+      ? this.enemyVitals(enemy, enemy.getHp() > 0) : null;
   }
 
   commitSupport(request: TargetSupportMutationRequest): CombatSupportMutationOutcome {

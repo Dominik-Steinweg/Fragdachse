@@ -308,6 +308,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   runHostUpdate(delta: number): void {
+    if (!this.active || !this.world) {
+      this.lastPerformance = emptyHostUpdatePerformanceMetrics();
+      return;
+    }
+    const now = Date.now();
+    this.ctx.combatSystem.runHostExecution(() => this.runHostUpdateAtTime(delta, now), now);
+  }
+
+  private runHostUpdateAtTime(delta: number, now: number): void {
     if (!this.active) {
       this.lastPerformance = emptyHostUpdatePerformanceMetrics();
       return;
@@ -328,7 +337,6 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
     const startedAt = this.coarsePerformanceMetricsEnabled ? performance.now() : 0;
     const metrics = this.performanceMetricsEnabled ? emptyHostUpdatePerformanceMetrics() : null;
-    const now = Date.now();
     this.hostFrameNowMs = now;
     this.worldFramePort?.getProjectileRuntime?.()?.setHostFrameTime(now);
     let phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;

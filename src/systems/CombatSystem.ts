@@ -82,8 +82,19 @@ import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { ProjectileDetonableReadPort, ProjectileImpactSource } from '../projectile/ProjectileGameplayPort';
 import { PlayerVitalsOwner } from '../combat/PlayerVitalsOwner';
 import type { CombatScope, CombatSource, CombatTargetRef } from '../combat/CombatScope';
+import { isSameCombatScope } from '../combat/CombatScope';
+import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
+import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
+import type { CombatDamageBasis, CombatDamageRequest, CombatDamageMutationOutcome, CombatSupportRequest, CombatSupportMutationOutcome } from '../combat/CombatMutation';
+import { freezeTargetMutationOutcome } from '../combat/CombatMutation';
 
 type Ak47DirectEnemyHitImpact = ProjectileAk47DirectImpact;
+
+/** Installed by the active World composition; no rule owns a clock or RNG fallback. */
+export interface CombatHostExecutionSources {
+  readonly nowMs: () => number;
+  readonly random: () => number;
+}
 
 // Hitscan-Traces und Melee-Swings werden jetzt per RPC statt State gesendet
 
@@ -136,6 +147,9 @@ interface DamageApplicationOptions {
   allowCritical?: boolean;
   sourceSlot?: LoadoutSlot;
   damageKind?: CombatDamageKind;
+  /** P7–P10 migrate legacy callers to these fully resolved facts. */
+  source?: CombatSource;
+  basis?: CombatDamageBasis;
   /**
    * Interner Schalter fuer den Hinrichtungsschlag: Er soll den Gegner toeten, aber keinen
    * Lifeleech und keine schadensabhaengigen Folgeeffekte ausloesen.
@@ -371,8 +385,8 @@ export class CombatSystem implements ProjectileCombatPort {
   private onPlayerImpulse: ((playerId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private onEnemyImpulse: ((enemyId: string, vx: number, vy: number, durationMs: number, sourcePlayerId?: string) => void) | null = null;
   private playerMaxHpResolver: ((playerId: string) => number) | null = null;
-  private playerDamageReductionResolver: ((playerId: string) => number) | null = null;
-  private playerHpRegenPerSecondResolver: ((playerId: string) => number) | null = null;
+  private playerDamageReductionResolver: ((playerId: string, nowMs: number) => number) | null = null;
+  private playerHpRegenPerSecondResolver: ((playerId: string, nowMs: number) => number) | null = null;
   private playerMaxArmorResolver: ((playerId: string) => number) | null = null;
   private playerArmorGainMultiplierResolver: ((playerId: string) => number) | null = null;
   private playerArmorDamageGrantsRageResolver: ((playerId: string) => boolean) | null = null;
@@ -384,14 +398,31 @@ export class CombatSystem implements ProjectileCombatPort {
     amount: number,
     allowCritical: boolean,
     sourceSlot: LoadoutSlot | undefined,
+    nowMs: number,
+    random: () => number,
   ) => { amount: number; isCritical: boolean }) | null = null;
-  private playerBonusArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
-  private enemyIncomingDamageMultiplierResolver: ((enemyId: string) => number) | null = null;
+  private playerBonusArmorRegenPerSecondResolver: ((playerId: string, nowMs: number) => number) | null = null;
+  private enemyIncomingDamageMultiplierResolver: ((enemyId: string, nowMs: number) => number) | null = null;
   /** Gemeinsamer zielseitiger Multiplikator fuer Gegner und hostautoritäre Strukturen. */
-  private targetIncomingDamageMultiplierResolver: ((target: TargetStatusTarget) => number) | null = null;
+  private targetIncomingDamageMultiplierResolver: ((target: TargetStatusTarget, nowMs: number) => number) | null = null;
   private onEnergyInjectorTargetHit: ((impact: ProjectileEnergyInjectorImpact) => void) | null = null;
   private onPlasmaSwarmReaction: ((impact: ProjectilePlasmaSwarmImpact) => void) | null = null;
-  private hostFrameNowMs = 0;
+  private hostExecutionSources: CombatHostExecutionSources | null = null;
+  private currentHostExecution: { readonly sources: CombatHostExecutionSources; readonly nowMs: number } | null = null;
+
+  private get hostFrameNowMs(): number {
+    if (!this.currentHostExecution || this.currentHostExecution.sources !== this.hostExecutionSources) {
+      throw new Error('[CombatSystem] Missing active Host execution context');
+    }
+    return this.currentHostExecution.nowMs;
+  }
+
+  private get hostRandom(): () => number {
+    if (!this.currentHostExecution || this.currentHostExecution.sources !== this.hostExecutionSources) {
+      throw new Error('[CombatSystem] Missing active Host execution context');
+    }
+    return this.currentHostExecution.sources.random;
+  }
   private onHitscanSupportImpact: ((
     impact: HitscanSupportImpact,
     effect: HitscanSupportEffect,
@@ -433,6 +464,66 @@ export class CombatSystem implements ProjectileCombatPort {
   private onHealingReceived: ((playerId: string, amount: number) => void) | null = null;
   private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
   private mutationOutcomeSequence = 0;
+
+  getTargetIncomingDamageMultiplier(...args: Parameters<CombatSystem['getTargetIncomingDamageMultiplierAtHostTime']>): ReturnType<CombatSystem['getTargetIncomingDamageMultiplierAtHostTime']> {
+    return this.runHostExecution(() => this.getTargetIncomingDamageMultiplierAtHostTime(...args));
+  }
+
+  applyDamage(...args: Parameters<CombatSystem['applyDamageAtHostTime']>): ReturnType<CombatSystem['applyDamageAtHostTime']> {
+    return this.runHostExecution(() => this.applyDamageAtHostTime(...args));
+  }
+
+  applyAoeDamage(...args: Parameters<CombatSystem['applyAoeDamageAtHostTime']>): ReturnType<CombatSystem['applyAoeDamageAtHostTime']> {
+    return this.runHostExecution(() => this.applyAoeDamageAtHostTime(...args));
+  }
+
+  applyExplosionDamage(...args: Parameters<CombatSystem['applyExplosionDamageAtHostTime']>): ReturnType<CombatSystem['applyExplosionDamageAtHostTime']> {
+    return this.runHostExecution(() => this.applyExplosionDamageAtHostTime(...args));
+  }
+
+  getPlayerRuntimeDamageMultiplier(...args: Parameters<CombatSystem['getPlayerRuntimeDamageMultiplierAtHostTime']>): ReturnType<CombatSystem['getPlayerRuntimeDamageMultiplierAtHostTime']> {
+    return this.runHostExecution(() => this.getPlayerRuntimeDamageMultiplierAtHostTime(...args));
+  }
+
+  resolveDirectImpact(...args: Parameters<CombatSystem['resolveDirectImpactAtHostTime']>): ReturnType<CombatSystem['resolveDirectImpactAtHostTime']> {
+    return this.runHostExecution(() => this.resolveDirectImpactAtHostTime(...args));
+  }
+
+  resolveExplosionCombat(...args: Parameters<CombatSystem['resolveExplosionCombatAtHostTime']>): ReturnType<CombatSystem['resolveExplosionCombatAtHostTime']> {
+    return this.runHostExecution(() => this.resolveExplosionCombatAtHostTime(...args));
+  }
+
+  resolveHitscanShot(...args: Parameters<CombatSystem['resolveHitscanShotAtHostTime']>): ReturnType<CombatSystem['resolveHitscanShotAtHostTime']> {
+    return this.runHostExecution(() => this.resolveHitscanShotAtHostTime(...args));
+  }
+
+  resolveMeleeSwing(...args: Parameters<CombatSystem['resolveMeleeSwingAtHostTime']>): ReturnType<CombatSystem['resolveMeleeSwingAtHostTime']> {
+    return this.runHostExecution(() => this.resolveMeleeSwingAtHostTime(...args));
+  }
+
+  applyBaseDamage(...args: Parameters<CombatSystem['applyBaseDamageAtHostTime']>): ReturnType<CombatSystem['applyBaseDamageAtHostTime']> {
+    return this.runHostExecution(() => this.applyBaseDamageAtHostTime(...args));
+  }
+
+  resolveExternalTargetDamage(...args: Parameters<CombatSystem['resolveExternalTargetDamageAtHostTime']>): ReturnType<CombatSystem['resolveExternalTargetDamageAtHostTime']> {
+    return this.runHostExecution(() => this.resolveExternalTargetDamageAtHostTime(...args));
+  }
+
+  applyRadialHostileBaseDamage(...args: Parameters<CombatSystem['applyRadialHostileBaseDamageAtHostTime']>): ReturnType<CombatSystem['applyRadialHostileBaseDamageAtHostTime']> {
+    return this.runHostExecution(() => this.applyRadialHostileBaseDamageAtHostTime(...args));
+  }
+
+  hpRegenTick(...args: Parameters<CombatSystem['hpRegenTickAtHostTime']>): ReturnType<CombatSystem['hpRegenTickAtHostTime']> {
+    return this.runHostExecution(() => this.hpRegenTickAtHostTime(...args));
+  }
+
+  armorRegenTick(...args: Parameters<CombatSystem['armorRegenTickAtHostTime']>): ReturnType<CombatSystem['armorRegenTickAtHostTime']> {
+    return this.runHostExecution(() => this.armorRegenTickAtHostTime(...args));
+  }
+
+  applySupport(...args: Parameters<CombatSystem['applySupportAtHostTime']>): ReturnType<CombatSystem['applySupportAtHostTime']> {
+    return this.runHostExecution(() => this.applySupportAtHostTime(...args));
+  }
 
   constructor(
     private playerManager:     PlayerManager,
@@ -502,19 +593,19 @@ export class CombatSystem implements ProjectileCombatPort {
     this.baseDamageCallback = cb;
   }
   setPlayerMaxHpResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxHpResolver = resolver; }
-  setPlayerDamageReductionResolver(resolver: ((playerId: string) => number) | null): void { this.playerDamageReductionResolver = resolver; }
-  setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
+  setPlayerDamageReductionResolver(resolver: ((playerId: string, nowMs: number) => number) | null): void { this.playerDamageReductionResolver = resolver; }
+  setPlayerHpRegenPerSecondResolver(resolver: ((playerId: string, nowMs: number) => number) | null): void { this.playerHpRegenPerSecondResolver = resolver; }
   setPlayerMaxArmorResolver(resolver: ((playerId: string) => number) | null): void { this.playerMaxArmorResolver = resolver; }
   setPlayerArmorGainMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorGainMultiplierResolver = resolver; }
   setPlayerArmorDamageGrantsRageResolver(resolver: ((playerId: string) => boolean) | null): void { this.playerArmorDamageGrantsRageResolver = resolver; }
   setPlayerLifeLeechFractionResolver(resolver: ((playerId: string) => number) | null): void { this.playerLifeLeechFractionResolver = resolver; }
   setPlayerArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerArmorRegenPerSecondResolver = resolver; }
   /** Zusatzregeneration aus bedingten Quellen (Notfallreparatur); addiert sich auf den Grundwert. */
-  setPlayerBonusArmorRegenPerSecondResolver(resolver: ((playerId: string) => number) | null): void { this.playerBonusArmorRegenPerSecondResolver = resolver; }
+  setPlayerBonusArmorRegenPerSecondResolver(resolver: ((playerId: string, nowMs: number) => number) | null): void { this.playerBonusArmorRegenPerSecondResolver = resolver; }
   /** Zielseitiger Schadensmultiplikator eines Gegners (Verwundbarkeit); 1 = unveraendert. */
-  setEnemyIncomingDamageMultiplierResolver(resolver: ((enemyId: string) => number) | null): void { this.enemyIncomingDamageMultiplierResolver = resolver; }
+  setEnemyIncomingDamageMultiplierResolver(resolver: ((enemyId: string, nowMs: number) => number) | null): void { this.enemyIncomingDamageMultiplierResolver = resolver; }
   /** Gemeinsamer Zielstatus-Trichter; ersetzt den alten Gegner-only-Resolver, falls gesetzt. */
-  setTargetIncomingDamageMultiplierResolver(resolver: ((target: TargetStatusTarget) => number) | null): void {
+  setTargetIncomingDamageMultiplierResolver(resolver: ((target: TargetStatusTarget, nowMs: number) => number) | null): void {
     this.targetIncomingDamageMultiplierResolver = resolver;
   }
   setEnergyInjectorTargetHitCallback(handler: ((impact: ProjectileEnergyInjectorImpact) => void) | null): void {
@@ -531,8 +622,8 @@ export class CombatSystem implements ProjectileCombatPort {
   ) => void) | null): void {
     this.onHitscanSupportImpact = handler;
   }
-  getTargetIncomingDamageMultiplier(target: TargetStatusTarget): number {
-    return Math.max(0, this.targetIncomingDamageMultiplierResolver?.(target) ?? 1);
+  private getTargetIncomingDamageMultiplierAtHostTime(target: TargetStatusTarget): number {
+    return Math.max(0, this.targetIncomingDamageMultiplierResolver?.(target, this.hostFrameNowMs) ?? 1);
   }
   setRespawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void { this.respawnAllowedResolver = resolver; }
   setInitialSpawnAllowedResolver(resolver: ((playerId: string) => boolean) | null): void {
@@ -598,6 +689,8 @@ export class CombatSystem implements ProjectileCombatPort {
       amount: number,
       allowCritical: boolean,
       sourceSlot: LoadoutSlot | undefined,
+      nowMs: number,
+      random: () => number,
     ) => { amount: number; isCritical: boolean }) | null,
   ): void {
     this.playerOutgoingDamageResolver = resolver;
@@ -710,8 +803,25 @@ export class CombatSystem implements ProjectileCombatPort {
     this.onAk47DirectEnemyHit = handler;
   }
 
-  setHostFrameTime(nowMs: number): void {
-    this.hostFrameNowMs = nowMs;
+  bindHostExecutionSources(sources: CombatHostExecutionSources): { destroy(): void } {
+    const binding = Object.freeze({ ...sources });
+    this.hostExecutionSources = binding;
+    return { destroy: () => {
+      if (this.hostExecutionSources === binding) this.hostExecutionSources = null;
+    } };
+  }
+
+  /** A regular Host frame supplies nowMs; an immediate outer entry samples the bound Host clock. */
+  runHostExecution<T>(work: () => T, nowMs?: number): T {
+    const sources = this.hostExecutionSources;
+    if (!sources) throw new Error('[CombatSystem] Host execution sources are not bound to a World');
+    const previous = this.currentHostExecution;
+    if (previous?.sources === sources) return work();
+    const now = nowMs ?? sources.nowMs();
+    if (!Number.isFinite(now)) throw new RangeError('Combat Host time must be finite');
+    this.currentHostExecution = { sources, nowMs: now };
+    try { return work(); }
+    finally { this.currentHostExecution = previous; }
   }
 
   // ── Spieler-Lifecycle ──────────────────────────────────────────────────────
@@ -818,7 +928,7 @@ export class CombatSystem implements ProjectileCombatPort {
    * (Ausnahme: Stuck-Schaden über skipBurrowCheck=true).
    * attackerId/sourceId werden für die Kill-Zuordnung getrackt.
    */
-  applyDamage(
+  private applyDamageAtHostTime(
     targetId:        string,
     amount:          number,
     skipBurrowCheck  = false,
@@ -826,30 +936,21 @@ export class CombatSystem implements ProjectileCombatPort {
     sourceId?:     string,
     visualContext?:  DamageVisualContext,
     options?:        DamageApplicationOptions,
-  ): void {
+  ): CombatDamageMutationOutcome | null {
     if (this.enemyManager?.hasEnemy(targetId)) {
-      this.applyEnemyDamage(targetId, amount, attackerId, sourceId, visualContext, options);
-      return;
+      return this.applyEnemyDamage(targetId, amount, attackerId, sourceId, visualContext, options);
     }
+    const target = this.playerVitals.getTargetRef(targetId);
+    if (!target) return null;
+    const request = this.createDamageRequest(target, amount, attackerId, sourceId, options, skipBurrowCheck);
+    const outcome = applyCombatDamage(request, this.combatResolutionContext(), this.playerVitals);
+    // Eligible incoming damage reveals stealth even when a Dome/reduction absorbs the loss.
+    if (outcome.kind !== 'rejected' && amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
+    if (outcome.kind !== 'damage-applied') return outcome;
+    const damageKind = request.damageKind;
+    const isCritical = outcome.damage.isCritical;
 
-    if (!this.isAlive(targetId)) return;
-    if (amount <= 0) return;
-    if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
-    if (!skipBurrowCheck && this.burrowSystem?.isBurrowed(targetId)) return;
-    this.decoySystem?.breakStealth(targetId, Date.now());
-    const outgoing = this.playerOutgoingDamageResolver?.(
-      attackerId,
-      targetId,
-      amount,
-      options?.allowCritical ?? true,
-      options?.sourceSlot,
-    ) ?? { amount, isCritical: false };
-    amount = outgoing.amount;
-    // Allgemeine Zielstatus wirken auch auf Spieler, damit der Energieinjektor im PvP und
-    // kuenftige offensive Statusquellen denselben eingehenden Schadenspfad verwenden.
-    amount *= this.getTargetIncomingDamageMultiplier({ targetType: 'player', targetId });
-
-    // Letzten Angreifer tracken (Selbstschaden ausgenommen)
+    // Attribution is updated only by a confirmed mutation, not a fully blocked candidate.
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);
       if (sourceId) this.lastWeapon.set(targetId, sourceId);
@@ -865,31 +966,6 @@ export class CombatSystem implements ProjectileCombatPort {
     const x = player?.x ?? 0;
     const y = player?.y ?? 0;
 
-    // Energie-Kuppel: Liegt der Schadenspunkt in einer verbündeten Kuppel, wird der Schaden
-    // vollständig abgewehrt (jeder abdeckende Kuppel-Besitzer erhält den Schadensbonus).
-    if (this.energyShieldSystem?.tryDomeProtect(x, y, targetId, amount, Date.now())) return;
-
-    const damageReduction = Phaser.Math.Clamp(this.playerDamageReductionResolver?.(targetId) ?? 0, 0, 1);
-    const reducedAmount = amount * (1 - damageReduction);
-    const target = this.playerVitals.getTargetRef(targetId);
-    if (!target) return;
-    const damageKind = options?.damageKind ?? 'direct';
-    const outcome = this.playerVitals.commitDamage({
-      outcomeId: this.nextMutationOutcomeId('damage', targetId),
-      target,
-      source: this.createLegacyMutationSource(attackerId, sourceId, damageKind),
-      damage: {
-        amount: reducedAmount,
-        damageKind,
-        basis: { kind: 'authored', amount: reducedAmount },
-        sourceFactors: [],
-        targetFactors: damageReduction > 0
-          ? [{ kind: 'damage-reduction', multiplier: 1 - damageReduction, resolvedAt: 'commit' }]
-          : [],
-        isCritical: outgoing.isCritical,
-      },
-    });
-    if (outcome.kind !== 'damage-applied') return;
     const { armorLost, hpLost, actualDamage: totalDamage } = outcome;
     const newHp = outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : 0;
 
@@ -920,7 +996,7 @@ export class CombatSystem implements ProjectileCombatPort {
         damage: totalDamage,
         damageKind,
         sourceSlot: options?.sourceSlot,
-        isCritical: outgoing.isCritical,
+        isCritical,
       });
       this.applyLifeLeech(attackerId, targetId, totalDamage);
       const hitSeed = this.nextEffectSeed();
@@ -935,7 +1011,7 @@ export class CombatSystem implements ProjectileCombatPort {
         newHp === 0,
         visualContext,
         hitSeed,
-        outgoing.isCritical,
+        isCritical,
       ));
     }
 
@@ -944,6 +1020,7 @@ export class CombatSystem implements ProjectileCombatPort {
       const deathDirection = this.resolveDamageDirection(targetId, attackerId, visualContext, deathSeed, x, y);
       this.handleDeath(targetId, x, y, deathSeed, deathDirection, true);
     }
+    return outcome;
   }
 
   applyBurnHit(
@@ -1019,7 +1096,7 @@ export class CombatSystem implements ProjectileCombatPort {
    * Flächenschaden um einen Punkt (z.B. Granaten-Explosion).
    * Burrowed-Spieler sind immun (skipBurrowCheck=false).
    */
-  applyAoeDamage(
+  private applyAoeDamageAtHostTime(
     x: number,
     y: number,
     radius: number,
@@ -1124,7 +1201,7 @@ export class CombatSystem implements ProjectileCombatPort {
     );
   }
 
-  applyExplosionDamage(
+  private applyExplosionDamageAtHostTime(
     x: number,
     y: number,
     effect: ProjectileExplosionConfig,
@@ -1213,15 +1290,12 @@ export class CombatSystem implements ProjectileCombatPort {
     const attackerEnemy = this.enemyManager?.getEnemy(attackerId);
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
     if (attackerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID) {
-      return targetEnemy ? targetEnemy.faction !== 'hostile' : true;
+      return this.relationshipForSource({ allegiance: { ownerId: attackerId } }, targetId).canDamage;
     }
     if (allowTeamDamage) return true;
     // Eingebuddelte Gegner sind – wie eingebuddelte Spieler – weder Ziel noch Angreifer.
     if (targetEnemy?.isBurrowed() || attackerEnemy?.isBurrowed()) return false;
-    if (attackerEnemy && targetEnemy) return attackerEnemy.faction !== targetEnemy.faction;
-    if (attackerEnemy) return attackerEnemy.faction === 'hostile';
-    if (targetEnemy) return targetEnemy.faction === 'hostile';
-    return !this.bridge.areTeammates(attackerId, targetId);
+    return this.relationshipForSource({ allegiance: { ownerId: attackerId } }, targetId).canDamage;
   }
 
   private shouldBlockWithShield(
@@ -1230,7 +1304,7 @@ export class CombatSystem implements ProjectileCombatPort {
     damage: number,
     sourceX: number,
     sourceY: number,
-    now = Date.now(),
+    now = this.hostFrameNowMs,
   ): boolean {
     if (!this.energyShieldSystem) return false;
     return this.energyShieldSystem.tryBlockDamage({
@@ -1361,10 +1435,10 @@ export class CombatSystem implements ProjectileCombatPort {
     return proj.damage * projectileMultiplier;
   }
 
-  getPlayerRuntimeDamageMultiplier(playerId: string, sourceSlot?: LoadoutSlot): number {
+  private getPlayerRuntimeDamageMultiplierAtHostTime(playerId: string, sourceSlot?: LoadoutSlot): number {
     const loadoutMult = sourceSlot === 'weapon1' || sourceSlot === 'weapon2'
-      ? (this.loadoutManager?.getWeaponDamageMultiplier(playerId, sourceSlot, Date.now()) ?? 1)
-      : (this.loadoutManager?.getDamageMultiplier(playerId, Date.now()) ?? 1);
+      ? (this.loadoutManager?.getWeaponDamageMultiplier(playerId, sourceSlot, this.hostFrameNowMs) ?? 1)
+      : (this.loadoutManager?.getDamageMultiplier(playerId, this.hostFrameNowMs) ?? 1);
     const powerUpMult = this.powerUpSystem?.getDamageMultiplier(playerId) ?? 1;
     return loadoutMult * powerUpMult;
   }
@@ -1443,14 +1517,14 @@ export class CombatSystem implements ProjectileCombatPort {
    * Kontaktgedächtnis und Verbrauch liegen dort. Hier entstehen nur Schaden, Brand, Kettenwirkung
    * und die target-lokale Defense-Entscheidung.
    */
-  resolveDirectImpact(request: ProjectileDirectImpactRequest): ProjectileDirectImpactOutcome {
+  private resolveDirectImpactAtHostTime(request: ProjectileDirectImpactRequest): ProjectileDirectImpactOutcome {
     if (request.target.kind === 'player') return this.applyDirectPlayerImpact(request, request.target.id);
     if (request.target.kind === 'enemy') return this.applyDirectEnemyImpact(request, request.target.id);
     return this.applyDirectDecoyImpact(request, request.target.id);
   }
 
   /** Combat-only explosion resolution; Environment and World Effects are host-domain concerns. */
-  resolveExplosionCombat(request: ProjectileCombatExplosionRequest): ProjectileCombatExplosionOutcome {
+  private resolveExplosionCombatAtHostTime(request: ProjectileCombatExplosionRequest): ProjectileCombatExplosionOutcome {
     return {
       damagedTargetKeys: this.applyExplosionDamage(
         request.x,
@@ -1785,7 +1859,7 @@ export class CombatSystem implements ProjectileCombatPort {
     };
   }
 
-  resolveHitscanShot(
+  private resolveHitscanShotAtHostTime(
     shooterId: string,
     startX: number,
     startY: number,
@@ -1863,8 +1937,8 @@ export class CombatSystem implements ProjectileCombatPort {
 
     if (trace.hitPlayerId) {
       const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const canDealDamage = this.canDamageTarget(shooterId, trace.hitPlayerId);
@@ -1883,8 +1957,8 @@ export class CombatSystem implements ProjectileCombatPort {
       }
     } else if (trace.hitEnemyId) {
       const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       this.applyDamage(trace.hitEnemyId, actualDamage, false, shooterId, sourceId, {
@@ -1901,8 +1975,8 @@ export class CombatSystem implements ProjectileCombatPort {
       }
     } else if (trace.hitDecoyId !== null) {
       const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const outcome = this.decoySystem?.applyDamage(trace.hitDecoyId, actualDamage, shooterId, sourceId, {
@@ -1926,8 +2000,8 @@ export class CombatSystem implements ProjectileCombatPort {
     // Kettenblitz: vom Einschlagspunkt aus auf weitere Ziele überspringen.
     if (chainCfg && chainCfg.maxJumps > 0) {
       const loadoutMult = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const baseChainDamage = damage * loadoutMult * powerUpMult;
 
@@ -1979,8 +2053,8 @@ export class CombatSystem implements ProjectileCombatPort {
 
     const damageTarget = (targetId: string): void => {
       const loadoutMult = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
       if (actualDamage <= 0) return;
@@ -1999,7 +2073,9 @@ export class CombatSystem implements ProjectileCombatPort {
 
     if (trace.hitPlayerId) {
       const targetId = trace.hitPlayerId;
-      const friendly = targetId === shooterId || !this.canDamageTarget(shooterId, targetId);
+      const friendly = this.relationshipForSource(
+        this.createLegacyMutationSource(shooterId, sourceId, 'support'), targetId,
+      ).canSupport;
       if (friendly) {
         const before = this.getHP(targetId);
         const after = this.heal(targetId, effect.healPerHit);
@@ -2024,8 +2100,8 @@ export class CombatSystem implements ProjectileCombatPort {
 
     if (trace.hitDecoyId !== null) {
       const loadoutMult = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
       if (actualDamage <= 0) return;
@@ -2294,7 +2370,7 @@ export class CombatSystem implements ProjectileCombatPort {
    * Hindernisse (Felsen, Baumstämme) blockieren den Angriff auf dahinter stehende Ziele.
    * Gibt true zurück wenn der Angriff verarbeitet wurde (Host-only).
    */
-  resolveMeleeSwing(
+  private resolveMeleeSwingAtHostTime(
     shooterId:     string,
     x:             number,
     y:             number,
@@ -2347,8 +2423,8 @@ export class CombatSystem implements ProjectileCombatPort {
       if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
 
       const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const canDealDamage = this.canDamageTarget(shooterId, player.id);
@@ -2390,8 +2466,8 @@ export class CombatSystem implements ProjectileCombatPort {
       if (this.isMeleePathBlocked(dist - enemyRadius)) continue;
 
       const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       this.applyDamage(enemy.id, actualDamage, false, shooterId, sourceId, {
@@ -2430,8 +2506,8 @@ export class CombatSystem implements ProjectileCombatPort {
       if (this.isMeleePathBlocked(dist - PLAYER_SIZE * 0.5)) continue;
 
       const loadoutMult  = sourceSlot
-        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, Date.now()) ?? 1)
-        : (this.loadoutManager?.getDamageMultiplier(shooterId, Date.now()) ?? 1);
+        ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
+        : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
       const outcome = this.decoySystem?.applyDamage(decoy.id, actualDamage, shooterId, sourceId, {
@@ -2585,25 +2661,19 @@ export class CombatSystem implements ProjectileCombatPort {
    * Host-only: Basisschaden ueber den gemeinsamen Trichter. Ohne verdrahteten Callback faellt es
    * auf den direkten Weg zurueck, damit ein fehlendes Setup keinen Schaden verschluckt.
    */
-  applyBaseDamage(
+  private applyBaseDamageAtHostTime(
     baseId: string,
     damage: number,
     attackerId: string,
     sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
   ): void {
-    if (damage <= 0 || baseDamageMult <= 0) return;
+    if (!this.bridge.isHost() || !Number.isFinite(damage) || !Number.isFinite(baseDamageMult) || damage <= 0 || baseDamageMult <= 0) return;
     const runtimeDamage = damage * baseDamageMult
       * this.getPlayerRuntimeDamageMultiplier(attackerId, sourceSlot);
-    const outgoing = this.playerOutgoingDamageResolver?.(
-      attackerId,
-      `base:${baseId}`,
-      runtimeDamage,
-      true,
-      sourceSlot,
-    ) ?? { amount: runtimeDamage, isCritical: false };
-    const resolvedDamage = Math.max(0, outgoing.amount)
-      * this.getTargetIncomingDamageMultiplier({ targetType: 'base', targetId: baseId });
+    const resolvedDamage = this.resolveLegacyWorldModifiers(
+      { targetType: 'base', targetId: baseId }, runtimeDamage, attackerId, sourceSlot, true,
+    );
     if (resolvedDamage <= 0) return;
     if (this.baseDamageCallback) this.baseDamageCallback(baseId, resolvedDamage, attackerId, sourceSlot);
     else this.baseManager?.applyDamage(baseId, resolvedDamage);
@@ -2614,28 +2684,34 @@ export class CombatSystem implements ProjectileCombatPort {
    * den konkreten Lifecycle des Objekts in den CombatSystem zu ziehen. Der Aufrufer entscheidet
    * anschliessend, ob es ein Fels, Konstrukt, Aussenposten oder eine andere Struktur war.
    */
-  resolveExternalTargetDamage(
+  private resolveExternalTargetDamageAtHostTime(
     target: TargetStatusTarget,
     damage: number,
     attackerId: string,
     sourceSlot?: LoadoutSlot,
   ): number {
-    if (damage <= 0) return 0;
-    const outgoing = this.playerOutgoingDamageResolver?.(
-      attackerId,
-      `${target.targetType}:${target.targetId}`,
-      damage,
-      false,
-      sourceSlot,
-    ) ?? { amount: damage, isCritical: false };
-    return Math.max(0, outgoing.amount) * this.getTargetIncomingDamageMultiplier(target);
+    return this.resolveLegacyWorldModifiers(target, damage, attackerId, sourceSlot, false);
+  }
+
+  private resolveLegacyWorldModifiers(
+    target: TargetStatusTarget, amount: number, attackerId: string,
+    sourceSlot: LoadoutSlot | undefined, allowCritical: boolean,
+  ): number {
+    if (!this.bridge.isHost()) return 0;
+    return resolveCombatDamageModifiers({
+      amount, sourceFactors: [], allowCritical, nowMs: this.hostFrameNowMs, random: this.hostRandom,
+      outgoing: (value, critical, nowMs, random) => this.playerOutgoingDamageResolver?.(
+        attackerId, `${target.targetType}:${target.targetId}`, value, critical, sourceSlot, nowMs, random,
+      ) ?? { amount: value, isCritical: false },
+      incoming: nowMs => this.targetIncomingDamageMultiplierResolver?.(target, nowMs) ?? 1,
+    })?.amount ?? 0;
   }
 
   /**
    * Radialschaden auf feindliche Basen. Nur Spieler-Quellen treffen hier; Zombie-Luftangriffe
    * laufen weiter ueber ihren eigenen, auf eigene Basen begrenzten Pfad.
    */
-  applyRadialHostileBaseDamage(
+  private applyRadialHostileBaseDamageAtHostTime(
     x: number,
     y: number,
     radius: number,
@@ -2703,7 +2779,7 @@ export class CombatSystem implements ProjectileCombatPort {
       // Nur eigene Basen – eine Spielerkuppel darf die Gegnerbasis nicht abschirmen.
       if (
         base.faction === 'friendly'
-        && this.energyShieldSystem?.tryDomeProtect(targetX, targetY, null, actualDamage, Date.now())
+        && this.energyShieldSystem?.tryDomeProtect(targetX, targetY, null, actualDamage, this.hostFrameNowMs)
       ) {
         hit = true;
         continue;
@@ -3175,28 +3251,22 @@ export class CombatSystem implements ProjectileCombatPort {
     sourceId?: string,
     visualContext?: DamageVisualContext,
     options?: DamageApplicationOptions,
-  ): void {
+  ): CombatDamageMutationOutcome | null {
     const enemy = this.enemyManager?.getEnemy(targetId);
-    if (!enemy) return;
-    if (amount <= 0) return;
-    if (enemy.isBurrowed()) return;
-    if (!this.canDamageTarget(attackerId, targetId, options?.allowTeamDamage)) return;
-
-    const outgoing = this.playerOutgoingDamageResolver?.(
-      attackerId,
-      targetId,
-      amount,
-      options?.allowCritical ?? true,
-      options?.sourceSlot,
-    ) ?? { amount, isCritical: false };
-    // Zielseitiger Multiplikator (Verwundbarkeit). Bewusst hier und nicht im ausgehenden
-    // Resolver: er gilt fuer *jede* Schadensquelle gegen dieses Ziel, auch fuer Verbuendete,
-    // Tuerme und Basen, die gar keinen Angreifer-Modifikator haben.
-    const incomingMultiplier = this.targetIncomingDamageMultiplierResolver?.({
-      targetType: 'enemy',
-      targetId,
-    }) ?? this.enemyIncomingDamageMultiplierResolver?.(targetId) ?? 1;
-    amount = outgoing.amount * Math.max(0, incomingMultiplier);
+    const target = this.enemyManager?.getCombatTargetRef(targetId);
+    if (!enemy || !target || !this.enemyManager) return null;
+    const x = enemy.sprite.x;
+    const y = enemy.sprite.y;
+    const request = this.createDamageRequest(target, amount, attackerId, sourceId, options);
+    const outcome = applyCombatDamage(request, this.combatResolutionContext(), this.enemyManager);
+    if (outcome.kind !== 'damage-applied') return outcome;
+    const result = {
+      died: outcome.transition.kind === 'dead',
+      remainingHp: outcome.resultingState.kind === 'combatant' ? outcome.resultingState.hp : 0,
+      death: outcome.transition.kind === 'dead'
+        ? outcome.transition.facts.presentation as unknown as EnemyDeathInfo : undefined,
+    };
+    const isCritical = outcome.damage.isCritical;
 
     if (attackerId && attackerId !== targetId) {
       this.lastAttacker.set(targetId, attackerId);
@@ -3210,18 +3280,7 @@ export class CombatSystem implements ProjectileCombatPort {
       this.rememberDamageOrigin(targetId, options);
     }
 
-    const x = enemy.sprite.x;
-    const y = enemy.sprite.y;
-
-    // Energie-Kuppel schützt auch verbündete Gegner (Nekromantie), wenn sie in der Kuppel stehen.
-    if (enemy.faction === 'allied' && this.energyShieldSystem?.tryDomeProtect(x, y, null, amount, Date.now())) return;
-
-    const previousHp = enemy.getHp();
-    const result = this.enemyManager?.applyDamage(targetId, amount);
-    if (!result) return;
-
-    const hpLost = previousHp - result.remainingHp;
-    if (hpLost <= 0) return;
+    const hpLost = outcome.hpLost;
     this.notifyDamageDealt({
       targetType: 'enemy',
       targetId,
@@ -3229,7 +3288,7 @@ export class CombatSystem implements ProjectileCombatPort {
       damage: hpLost,
       damageKind: options?.damageKind ?? 'direct',
       sourceSlot: options?.sourceSlot,
-      isCritical: outgoing.isCritical,
+      isCritical,
     });
     if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
 
@@ -3238,6 +3297,7 @@ export class CombatSystem implements ProjectileCombatPort {
     // Debuff nicht rueckwirkend auf den ausloesenden Treffer wirkt.
     if (
       attackerId
+      && !options?.skipLifeLeech
       && !result.died
       && options?.damageKind === 'direct'
       && options.sourceSlot === 'weapon1'
@@ -3258,7 +3318,7 @@ export class CombatSystem implements ProjectileCombatPort {
       hpLost,
       armorLost: 0,
       isKill: result.died,
-      isCritical: outgoing.isCritical,
+      isCritical,
       dirX: direction.dirX,
       dirY: direction.dirY,
       seed: hitSeed,
@@ -3329,6 +3389,7 @@ export class CombatSystem implements ProjectileCombatPort {
       this.lastKillSource.delete(targetId);
       this.lastDamageOrigin.delete(targetId);
     }
+    return outcome;
   }
 
   private handleDeath(
@@ -3387,7 +3448,7 @@ export class CombatSystem implements ProjectileCombatPort {
     if (!this.isAlive(playerId) || amount <= 0) return this.getHP(playerId);
     const target = this.playerVitals.getTargetRef(playerId);
     if (!target) return this.getHP(playerId);
-    const outcome = this.playerVitals.commitSupport({
+    const outcome = this.applySupport({
       outcomeId: this.nextMutationOutcomeId('heal', playerId),
       target,
       source: this.createLegacyMutationSource(playerId, 'combat.heal', 'support'),
@@ -3431,19 +3492,16 @@ export class CombatSystem implements ProjectileCombatPort {
 
   addArmor(playerId: string, amount: number): number {
     if (!this.isAlive(playerId)) return this.getArmor(playerId);
-    const adjustedAmount = amount > 0
-      ? amount * Math.max(0, this.playerArmorGainMultiplierResolver?.(playerId) ?? 1)
-      : amount;
     const target = this.playerVitals.getTargetRef(playerId);
     if (!target) return this.getArmor(playerId);
-    const outcome = this.playerVitals.commitSupport({
+    const outcome = this.applySupport({
       outcomeId: this.nextMutationOutcomeId('armor', playerId),
       target,
       source: this.createLegacyMutationSource(playerId, 'combat.armor', 'support'),
-      supportKind: adjustedAmount >= 0 ? 'armor' : 'armor-loss',
-      amount: Math.abs(adjustedAmount),
+      supportKind: amount >= 0 ? 'armor' : 'armor-loss',
+      amount: Math.abs(amount),
     });
-    if (outcome.kind === 'support-applied' && adjustedAmount > 0) {
+    if (outcome.kind === 'support-applied' && amount > 0) {
       this.onArmorReceived?.(playerId, outcome.actualAmount);
     }
     return outcome.kind === 'rejected'
@@ -3478,16 +3536,16 @@ export class CombatSystem implements ProjectileCombatPort {
     this.onAuthoritativePositionReset?.(playerId, spawnX, spawnY);
   }
 
-  hpRegenTick(playerId: string, deltaMs: number): void {
+  private hpRegenTickAtHostTime(playerId: string, deltaMs: number): void {
     if (!(this.playerVitals.readCurrent(playerId)?.alive ?? false)) return;
-    const regenPerSecond = this.playerHpRegenPerSecondResolver?.(playerId) ?? 0;
+    const regenPerSecond = this.playerHpRegenPerSecondResolver?.(playerId, this.hostFrameNowMs) ?? 0;
     if (regenPerSecond <= 0) return;
     const current = this.getHP(playerId);
     const max = this.getMaxHp(playerId);
     if (current >= max) return;
     const target = this.playerVitals.getTargetRef(playerId);
     if (!target) return;
-    const outcome = this.playerVitals.commitSupport({
+    const outcome = this.applySupport({
       outcomeId: this.nextMutationOutcomeId('hp-regen', playerId),
       target,
       source: this.createLegacyMutationSource(playerId, 'combat.hp-regeneration', 'support'),
@@ -3497,12 +3555,12 @@ export class CombatSystem implements ProjectileCombatPort {
     if (outcome.kind === 'support-applied') this.onHealingReceived?.(playerId, outcome.actualAmount);
   }
 
-  armorRegenTick(playerId: string, deltaMs: number): void {
+  private armorRegenTickAtHostTime(playerId: string, deltaMs: number): void {
     if (!(this.playerVitals.readCurrent(playerId)?.alive ?? false)) return;
     // Der Bonus wird *vor* dem Frueh-Ausstieg addiert: sonst wirkte die Notfallreparatur nicht
     // bei einem Spieler ohne jede Grund-Ruestungsregeneration.
     const regenPerSecond = (this.playerArmorRegenPerSecondResolver?.(playerId) ?? 0)
-      + Math.max(0, this.playerBonusArmorRegenPerSecondResolver?.(playerId) ?? 0);
+      + Math.max(0, this.playerBonusArmorRegenPerSecondResolver?.(playerId, this.hostFrameNowMs) ?? 0);
     if (regenPerSecond <= 0) return;
     const current = this.getArmor(playerId);
     const max = Math.max(0, this.playerMaxArmorResolver?.(playerId) ?? ARMOR_MAX);
@@ -3510,7 +3568,7 @@ export class CombatSystem implements ProjectileCombatPort {
     // Exakt der konfigurierte Regenerationswert; player.armorGain skaliert andere Ruestungsquellen.
     const target = this.playerVitals.getTargetRef(playerId);
     if (!target) return;
-    const outcome = this.playerVitals.commitSupport({
+    const outcome = this.applySupport({
       outcomeId: this.nextMutationOutcomeId('armor-regen', playerId),
       target,
       source: this.createLegacyMutationSource(playerId, 'combat.armor-regeneration', 'support'),
@@ -3523,6 +3581,108 @@ export class CombatSystem implements ProjectileCombatPort {
   private resolvePlayerMaxHp(playerId: string): number {
     const resolved = this.playerMaxHpResolver?.(playerId) ?? HP_MAX;
     return Math.max(1, Math.floor(resolved));
+  }
+
+  /** Shared Support entry; Damage eligibility is deliberately not its inverse. */
+  private applySupportAtHostTime(request: CombatSupportRequest): CombatSupportMutationOutcome {
+    const mutation = request.target.kind === 'player' ? this.playerVitals
+      : request.target.kind === 'enemy' ? this.enemyManager : null;
+    if (!mutation) return freezeTargetMutationOutcome({
+      kind: 'rejected', outcomeId: request.outcomeId, target: request.target,
+      source: request.source, reason: 'target-missing',
+    });
+    return applyCombatSupport(request, {
+      ...this.combatResolutionContext(),
+      armorGainMultiplier: target => this.playerArmorGainMultiplierResolver?.(String(target.id)) ?? 1,
+    }, mutation);
+  }
+
+  private combatResolutionContext(): CombatResolutionContext {
+    return {
+      nowMs: this.hostFrameNowMs,
+      random: this.hostRandom,
+      authorized: this.bridge.isHost(),
+      acceptsScope: target => target.kind === 'enemy'
+        ? this.enemyManager?.getCombatTargetRef(target.id)?.scope !== undefined
+          && isSameCombatScope(target.scope, this.enemyManager.getCombatTargetRef(target.id)!.scope)
+        : isSameCombatScope(target.scope, this.playerVitals.scope),
+      resolveTarget: (target, source) => {
+        const state = target.kind === 'player' ? this.playerVitals.readVitals(target)
+          : target.kind === 'enemy' ? this.enemyManager?.readCombatVitals(target) : null;
+        if (!state) return null;
+        const entity = target.kind === 'player' ? this.playerManager.getPlayer(target.id) : undefined;
+        const enemy = target.kind === 'enemy' ? this.enemyManager?.getEnemy(target.id) : undefined;
+        return {
+          snapshot: { target, state, position: { x: entity?.x ?? enemy?.sprite.x ?? 0, y: entity?.y ?? enemy?.sprite.y ?? 0 } },
+          relationship: this.relationshipForSource(source, String(target.id)),
+          burrowed: target.kind === 'player' ? this.burrowSystem?.isBurrowed(target.id) : enemy?.isBurrowed(),
+        };
+      },
+      resolveOutgoing: (request, amount, allowCritical, nowMs, random) => this.playerOutgoingDamageResolver?.(
+        request.source.allegiance.ownerId === 'world' ? undefined : request.source.allegiance.ownerId,
+        String(request.target.id), amount, allowCritical, request.source.sourceSlot, nowMs, random,
+      ) ?? { amount, isCritical: false },
+      incomingMultiplier: (target, nowMs) => {
+        if (target.kind !== 'player' && target.kind !== 'enemy') return 1;
+        const statusTarget: TargetStatusTarget = { targetType: target.kind, targetId: String(target.id) };
+        return this.targetIncomingDamageMultiplierResolver?.(statusTarget, nowMs)
+          ?? (target.kind === 'enemy' ? this.enemyIncomingDamageMultiplierResolver?.(target.id, nowMs) : undefined) ?? 1;
+      },
+      blockAtTarget: (request, amount, nowMs) => {
+        const target = request.target;
+        const player = target.kind === 'player' ? this.playerManager.getPlayer(target.id) : undefined;
+        const enemy = target.kind === 'enemy' ? this.enemyManager?.getEnemy(target.id) : undefined;
+        if (target.kind !== 'player' && enemy?.faction !== 'allied') return false;
+        return this.energyShieldSystem?.tryDomeProtect(
+          player?.x ?? enemy?.sprite.x ?? 0, player?.y ?? enemy?.sprite.y ?? 0,
+          target.kind === 'player' ? target.id : null, amount, nowMs,
+        ) ?? false;
+      },
+      damageReduction: (target, nowMs) => target.kind === 'player' ? this.playerDamageReductionResolver?.(target.id, nowMs) ?? 0 : 0,
+    };
+  }
+
+  private relationshipForSource(source: Pick<CombatSource, 'allegiance'>, targetId: string) {
+    const sourceId = source.allegiance.ownerId;
+    const targetEnemy = this.enemyManager?.getEnemy(targetId);
+    const sourceEnemy = this.enemyManager?.getEnemy(sourceId);
+    const sourceFaction = source.allegiance.factionId === 'hostile' || sourceEnemy?.faction === 'hostile'
+      || sourceId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID ? 'hostile' : 'players';
+    const result = resolveCombatRelationship({
+      sameActor: sourceId === targetId,
+      sourceFaction,
+      targetFaction: targetEnemy?.faction === 'hostile' ? 'hostile' : 'players',
+      bothPlayers: !sourceEnemy && !targetEnemy && sourceFaction === 'players',
+      playerPairAreTeammates: sourceId !== targetId && sourceId !== 'world' && !sourceEnemy && !targetEnemy
+        ? this.bridge.areTeammates(sourceId, targetId) : false,
+      allowTeamDamage: source.allegiance.allowTeamDamage === true,
+    });
+    // Explicit environmental damage is admitted independently of friendship/support.
+    return sourceId === 'world' ? { relationship: 'neutral' as const, canDamage: true, canSupport: false } : result;
+  }
+
+  private createDamageRequest(
+    target: CombatTargetRef, amount: number, attackerId?: string, sourceId?: string,
+    options?: DamageApplicationOptions, skipBurrowCheck = false,
+  ): CombatDamageRequest {
+    const damageKind = options?.damageKind ?? 'direct'; // Legacy default ends at this adapter (P7–P10).
+    const source = options?.source ?? {
+      ...this.createLegacyMutationSource(attackerId, sourceId, damageKind),
+      sourceSlot: options?.sourceSlot,
+      allegiance: { ownerId: attackerId ?? 'world', allowTeamDamage: options?.allowTeamDamage },
+    };
+    const common = {
+      outcomeId: this.nextMutationOutcomeId('damage', String(target.id)), target, source,
+      targetScaling: 'pending' as const, allowCritical: options?.allowCritical ?? true,
+      burrowException: skipBurrowCheck ? 'burrow-stuck' as const : undefined,
+    };
+    if (options?.basis?.kind === 'derived-outcome' && (damageKind === 'chain' || damageKind === 'reflect')) {
+      return { ...common, entry: 'derived-reaction', damageKind, basis: options.basis };
+    }
+    // Old entry paths have already applied their P/falloff/object factors. Never add P here.
+    const basis = options?.basis?.kind === 'source-resolved' ? options.basis
+      : { kind: 'source-resolved' as const, amount, sourceFactors: [] };
+    return { ...common, entry: 'automated', damageKind, basis };
   }
 
   private createPlayerVitalsOwner(scope: CombatScope): PlayerVitalsOwner {
@@ -3545,7 +3705,7 @@ export class CombatSystem implements ProjectileCombatPort {
     return `legacy:${kind}:${targetId}:${this.mutationOutcomeSequence}`;
   }
 
-  /** Transitional P2 adapter; P4 replaces legacy ids with fully resolved CombatSource input. */
+  /** Legacy source adapter for callers migrating to explicit saved facts in P7–P10. */
   private createLegacyMutationSource(
     actorId: string | undefined,
     authoredSourceId: string | undefined,
