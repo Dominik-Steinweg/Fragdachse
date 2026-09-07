@@ -1,11 +1,11 @@
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { FireSystem } from '../effects/FireSystem';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatDamageEffectPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { HostPhysicsSystem } from './HostPhysicsSystem';
 import type { ProjectileAwpCorridorCapability, ProjectileFireTrailCapability, ProjectileTravelReadPort, ProjectileTravelSample } from '../projectile/ProjectileTravelPort';
 import type { ProjectileId } from '../projectile/ProjectileSpawnPort';
 
-type WeaponUpgradeCombat = Pick<CombatSystem, 'applyDamage' | 'canDamageTarget'>;
+type WeaponUpgradeCombat = CombatDamageEffectPort & CombatRelationshipQueryPort;
 
 const CORRIDOR_WEAPON_NAME = 'AWP-Schneise';
 const CORRIDOR_DOT_FALLBACK_DURATION_MS = 500;

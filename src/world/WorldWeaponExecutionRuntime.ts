@@ -1,6 +1,10 @@
 import type { WorldScopedBinding } from './WorldRuntime';
-import type { CombatSystem } from '../systems/CombatSystem';
-import type { CombatImmediateAttackPort } from '../combat/CombatCapabilities';
+import type {
+  CombatImmediateAttackPort,
+  CombatLegacyHitscanAttackPort,
+  CombatLegacyMeleeAttackPort,
+  CombatSafeMuzzlePort,
+} from '../combat/CombatCapabilities';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import {
@@ -12,9 +16,11 @@ import {
 
 /** Combat-Senke des gemeinsamen Immediate-Fire-Pfads (Hitscan/Melee). */
 type WeaponFireCombatResolver =
-  Partial<Pick<CombatSystem, 'resolveHitscanShot' | 'resolveMeleeSwing'>>
-  & Partial<CombatImmediateAttackPort>
-  & Partial<Pick<CombatSystem, 'resolveSafeHitscanStart'>>;
+  Partial<CombatLegacyHitscanAttackPort>
+  &
+  Partial<CombatLegacyMeleeAttackPort>
+  & Partial<CombatSafeMuzzlePort>
+  & Partial<CombatImmediateAttackPort>;
 
 export interface WorldWeaponExecutionRuntimeOptions {
   readonly projectileSpawn: ProjectileSpawnPort;

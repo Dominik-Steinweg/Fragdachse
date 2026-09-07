@@ -9,7 +9,7 @@ import {
 } from '../config/coopDefenseMaps';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActorStatePort } from '../combat/CombatCapabilities';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { TemporaryUtilityPort } from '../world/PlayerUtilityActionRuntime';
 import { CoopDefenseCarrySystem } from '../systems/CoopDefenseCarrySystem';
@@ -36,7 +36,7 @@ export interface CoopMissionObjectiveCompositionOptions {
   readonly isHost: boolean;
   readonly baseManager: BaseManager | null;
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatActorStatePort;
   readonly powerUpSystem: PowerUpSystem | null;
   readonly temporaryUtilityPort: TemporaryUtilityPort | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;

@@ -3,7 +3,7 @@ import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from './CoopDefenseEnemyTrainAwarenessSystem';
 import type { PlacementSystem } from './PlacementSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
@@ -105,7 +105,7 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
     private readonly baseManager: BaseManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly getRockObjects: () => readonly (RockPhysicsProxy | null)[] | null,
     private readonly trainAwarenessSystem: CoopDefenseEnemyTrainAwarenessSystem | null = null,

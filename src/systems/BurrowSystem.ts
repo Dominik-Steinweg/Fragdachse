@@ -1,11 +1,12 @@
 import type { PlayerManager }      from '../entities/PlayerManager';
-import type { CombatSystem }       from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
 import type { HostPhysicsSystem }  from './HostPhysicsSystem';
 import type { NetworkBridge }      from '../network/NetworkBridge';
 import type { ResourceSystem }     from './ResourceSystem';
 import type { BurrowPhase }        from '../types';
 import type { WorldMetrics }       from '../world/WorldMetrics';
 import { resolveBurrowExitPosition } from './BurrowExitPositionResolver';
+import type { WorldGeometryQueries } from '../world/WorldGeometryQueries';
 import {
   BURROW_DRAIN_AMOUNT_PER_TICK,
   BURROW_DRAIN_INTERVAL_MS,
@@ -41,17 +42,22 @@ export class BurrowSystem {
   private worldMetrics: WorldMetrics | null = null;
   private onPositionResetCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onTunnelTransitEndedCb: ((playerId: string, nowMs: number) => void) | null = null;
+  private worldGeometryQueries: WorldGeometryQueries | null = null;
 
   constructor(
     private resources:    ResourceSystem,
     private playerMgr:    PlayerManager,
-    private combat:       CombatSystem,
+    private combat:       CombatActorStatePort & CombatDamageEffectPort,
     private hostPhysics:  HostPhysicsSystem,
     private bridge:       NetworkBridge,
   ) {}
 
   setWorldMetrics(metrics: WorldMetrics | null): void {
     this.worldMetrics = metrics;
+  }
+
+  setWorldGeometryQueries(queries: WorldGeometryQueries | null): void {
+    this.worldGeometryQueries = queries;
   }
 
   setStinkCloudSystem(sc: StinkCloudSystemType | null): void {
@@ -281,15 +287,17 @@ export class BurrowSystem {
 
     const input = this.bridge.getPlayerInput(id);
     const resolved = this.worldMetrics
-      ? resolveBurrowExitPosition(
-        this.worldMetrics,
-        this.combat.getObstacleIndex(),
-        player.x,
-        player.y,
-        player.getCollisionRadius(),
-        input?.dx ?? 0,
-        input?.dy ?? 0,
-      )
+      ? this.worldGeometryQueries
+        ? resolveBurrowExitPosition(
+          this.worldMetrics,
+          this.worldGeometryQueries,
+          player.x,
+          player.y,
+          player.getCollisionRadius(),
+          input?.dx ?? 0,
+          input?.dy ?? 0,
+        )
+        : null
       : this.isCurrentPositionBlocked(id)
         ? null
         : { x: player.x, y: player.y };
@@ -364,11 +372,14 @@ export class BurrowSystem {
   private isCurrentPositionBlocked(id: string): boolean {
     const player = this.playerMgr.getPlayer(id);
     if (!player) return false;
-    return this.combat.getObstacleIndex().isCircleBlocked(
+    // An active World must provide the authoritative geometry query. Treat a missing binding as
+    // blocked so tunnel exits cannot silently bypass obstacle validation during composition races.
+    if (this.worldMetrics && !this.worldGeometryQueries) return true;
+    return this.worldGeometryQueries?.isCircleBlocked(
       player.x,
       player.y,
       player.getCollisionRadius(),
-    );
+    ) ?? false;
   }
 
   /**

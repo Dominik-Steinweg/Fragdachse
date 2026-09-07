@@ -26,8 +26,10 @@ import {
 } from '../loadout/TemporaryUtilityCollection';
 import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
 import { PLAYER_SIZE, COLORS, type MuzzleOrigin } from '../config';
-import type { CombatSystem } from '../systems/CombatSystem';
-import type { CombatImmediateAttackPort } from '../combat/CombatCapabilities';
+import type {
+  CombatImmediateAttackPort,
+  CombatLegacyMeleeAttackPort,
+} from '../combat/CombatCapabilities';
 import type { MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
 import type { DecoySystem } from '../systems/DecoySystem';
 import type { TranslocatorSystem } from '../systems/TranslocatorSystem';
@@ -92,7 +94,7 @@ export interface PlayerUtilityActionNetworkPort {
 export interface PlayerUtilityActionRuntimeOptions {
   readonly projectileSpawn: ProjectileSpawnPort;
   /** Immediate attacks use the same normalized capability as regular weapon execution. */
-  readonly combatSystem: Partial<Pick<CombatSystem, 'resolveMeleeSwing'>> & Partial<CombatImmediateAttackPort>;
+  readonly combatSystem: Partial<CombatLegacyMeleeAttackPort> & Partial<CombatImmediateAttackPort>;
   readonly actor: UtilityActorPort;
   readonly loadout: UtilityLoadoutPort;
   readonly heldAction: UtilityHeldActionPort;

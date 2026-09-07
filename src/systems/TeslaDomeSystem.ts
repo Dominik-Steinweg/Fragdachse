@@ -9,7 +9,12 @@ import type {
   SyncedTeslaDomeTarget,
   TeslaDomeTargetType,
 } from '../types';
-import type { CombatSystem } from './CombatSystem';
+import type {
+  CombatActorStatePort,
+  CombatDamageEffectPort,
+  CombatDamageModifierReadPort,
+  CombatRelationshipQueryPort,
+} from '../combat/CombatCapabilities';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 
@@ -176,7 +181,11 @@ export class TeslaDomeSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem:
+      & CombatActorStatePort
+      & CombatRelationshipQueryPort
+      & CombatDamageEffectPort
+      & CombatDamageModifierReadPort,
     private readonly resourceSystem: PlayerCombatResourcePort,
   ) {}
 

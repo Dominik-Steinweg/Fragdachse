@@ -1,5 +1,5 @@
 import type { ResourceSystem } from '../systems/ResourceSystem';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatDamageEffectPort, CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import type { ExplosionVisualStyle } from '../types';
 import type { WeaponConfig } from './LoadoutConfig';
 
@@ -29,7 +29,7 @@ export interface WeaponReactionPort {
   destroy(): void;
 }
 
-export type WeaponReactionCombatPort = Pick<CombatSystem, 'heal' | 'applyAoeDamage'>;
+export type WeaponReactionCombatPort = CombatPlayerSupportPort & CombatDamageEffectPort;
 export type WeaponReactionResourcePort = Pick<ResourceSystem, 'addAdrenaline'>;
 export interface WeaponReactionNetworkPort {
   broadcastExplosionEffect(

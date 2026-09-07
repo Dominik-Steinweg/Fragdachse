@@ -9,7 +9,7 @@ import type {
   EnemyManager,
 } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatGeometryPort } from '../combat/CombatCapabilities';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecutionAdapter';
 
@@ -93,7 +93,7 @@ export class NecromancySystem {
   constructor(
     private readonly playerManager: PlayerManager,
     private readonly enemyManager: EnemyManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatGeometryPort,
     private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly allyFlowFields: ReadonlyMap<string, EnemyFlowFieldService>,
     private readonly resolveStat: NecromancyStatResolver,

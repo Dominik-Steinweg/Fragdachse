@@ -3,7 +3,7 @@ import {
 } from '../config/coopDefenseConstructions';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { SyncedPlaceableRock, SyncedRepairDrone } from '../types';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort } from '../combat/CombatCapabilities';
 import type { PlacementSystem } from './PlacementSystem';
 
 interface RepairDroneRuntime extends SyncedRepairDrone {
@@ -19,7 +19,7 @@ export class RepairDroneSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort,
     private readonly placementSystem: PlacementSystem,
     private readonly hasUpgrade: UpgradeResolver,
   ) {}

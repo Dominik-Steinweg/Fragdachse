@@ -29,6 +29,7 @@ interface HarnessOptions {
   blocked?: (x: number, y: number, radius: number) => boolean;
   input?: { dx: number; dy: number };
   metrics?: WorldMetrics | null;
+  geometryQueries?: boolean;
   drainToZero?: boolean;
 }
 
@@ -62,7 +63,6 @@ function createHarness(options: HarnessOptions = {}) {
   };
   const combat = {
     isAlive: vi.fn(() => true),
-    getObstacleIndex: vi.fn(() => obstacleIndex),
     applyDamage: vi.fn(),
   };
   const hostPhysics = {
@@ -83,6 +83,9 @@ function createHarness(options: HarnessOptions = {}) {
     bridge as never,
   );
   system.setWorldMetrics(options.metrics === undefined ? worldMetrics() : options.metrics);
+  if (options.geometryQueries !== false) {
+    system.setWorldGeometryQueries({ isCircleBlocked: obstacleIndex.isCircleBlocked });
+  }
   system.setPositionResetCallback(positionReset);
 
   return {
@@ -230,6 +233,16 @@ describe('BurrowSystem Exit Assist', () => {
     expect(harness.system.getPhase(PLAYER_ID)).toBe('recovery');
   });
 
+  it('lehnt den Exit bei aktiven WorldMetrics ohne GeometryQueries fail-closed ab', () => {
+    const harness = createHarness({ geometryQueries: false });
+    enterUnderground(harness.system);
+
+    harness.system.handleBurrowRequest(PLAYER_ID, false);
+
+    expect(harness.system.getPhase(PLAYER_ID)).toBe('underground');
+    expect(harness.hostPhysics.setPlayerBurrowed).not.toHaveBeenCalledWith(PLAYER_ID, false);
+  });
+
   it('lässt den normalen completeTunnelTransit-Ablauf ohne Exact-Check unverändert', () => {
     const harness = createHarness({ blocked: () => true });
 
@@ -260,6 +273,15 @@ describe('BurrowSystem Exit Assist', () => {
     expect(blocked.system.getPhase(PLAYER_ID)).toBe('underground');
   });
 
+  it('behandelt fehlende GeometryQueries auch im Tunnel-Exit fail-closed', () => {
+    const harness = createHarness({ geometryQueries: false });
+    harness.system.startTunnelTransit(PLAYER_ID);
+    harness.system.handleBurrowRequest(PLAYER_ID, false);
+
+    expect(harness.system.getPhase(PLAYER_ID)).toBe('underground');
+    expect(harness.hostPhysics.setPlayerBurrowed).not.toHaveBeenCalledWith(PLAYER_ID, false);
+  });
+
   it('führt ohne WorldMetrics keinen rasterbasierten Assist aus', () => {
     const harness = createHarness({
       metrics: null,
@@ -273,5 +295,14 @@ describe('BurrowSystem Exit Assist', () => {
     expect(harness.obstacleIndex.isCircleBlocked).toHaveBeenCalledWith(20, 48, 16);
     expect(harness.setPosition).not.toHaveBeenCalled();
     expect(harness.system.getPhase(PLAYER_ID)).toBe('underground');
+  });
+
+  it('bleibt ohne aktive World auch ohne GeometryQueries teardown-sicher', () => {
+    const harness = createHarness({ metrics: null, geometryQueries: false });
+    enterUnderground(harness.system);
+
+    harness.system.handleBurrowRequest(PLAYER_ID, false);
+
+    expect(harness.system.getPhase(PLAYER_ID)).toBe('recovery');
   });
 });

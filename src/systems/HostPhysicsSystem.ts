@@ -4,7 +4,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { NetworkBridge } from '../network/NetworkBridge';
-import type { CombatSystem }  from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
 import type { TimeBubbleSystem } from './TimeBubbleSystem';
 import {
   PLAYER_SPEED, PLAYER_SIZE,
@@ -90,7 +90,7 @@ export class HostPhysicsSystem {
   private scene:         Phaser.Scene;
   private playerManager: PlayerManager;
   private bridge:        NetworkBridge;
-  private combatSystem:  CombatSystem;
+  private combatSystem:  CombatActorStatePort & CombatDamageEffectPort;
 
   // Obstacle-Gruppen – werden nach Arena-Aufbau injiziert
   private rockGroup:   Phaser.Physics.Arcade.StaticGroup | null = null;
@@ -145,7 +145,7 @@ export class HostPhysicsSystem {
     scene:         Phaser.Scene,
     playerManager: PlayerManager,
     bridge:        NetworkBridge,
-    combatSystem:  CombatSystem,
+    combatSystem:  CombatActorStatePort & CombatDamageEffectPort,
   ) {
     this.scene         = scene;
     this.playerManager = playerManager;

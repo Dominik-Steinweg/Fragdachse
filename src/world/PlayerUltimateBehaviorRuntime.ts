@@ -7,7 +7,7 @@ import type {
 } from '../loadout/LoadoutConfig';
 import type { LoadoutUseParams, LoadoutUseResult } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatDamageEffectPort, CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { LoadoutManager, UltimateModifierReadPort } from '../loadout/LoadoutManager';
@@ -74,7 +74,7 @@ export interface PlayerUltimateBehaviorRoundStatsPort {
 
 export interface PlayerUltimateBehaviorRuntimeOptions {
   readonly playerManager: PlayerManager;
-  readonly combatSystem: Pick<CombatSystem, 'addArmor' | 'applyAoeDamage'>;
+  readonly combatSystem: CombatPlayerSupportPort & CombatDamageEffectPort;
   readonly resourceSystem: Pick<ResourceSystem, 'getRage' | 'getMaxRage' | 'addRage'>;
   readonly loadout: Pick<LoadoutManager, 'getEquippedUltimateConfig'>;
   readonly physics: Pick<HostPhysicsSystem, 'addRecoil'>;

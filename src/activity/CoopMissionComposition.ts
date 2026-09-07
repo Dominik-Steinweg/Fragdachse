@@ -3,7 +3,7 @@ import * as Phaser from 'phaser';
 import type { ArenaBuilderResult } from '../arena/ArenaBuilder';
 import type { ArenaLayout } from '../types';
 import type { BaseManager } from '../entities/BaseManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActivityPort } from '../combat/CombatCapabilities';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
@@ -54,7 +54,7 @@ export interface CoopMissionCompositionOptions {
   readonly getArenaResult: () => ArenaBuilderResult | null;
   readonly getBaseManager: () => BaseManager | null;
   readonly getPlayerManager: () => PlayerManager;
-  readonly getCombatSystem: () => CombatSystem;
+  readonly getCombatSystem: () => CombatActivityPort;
   readonly getProjectileSpawnPort: () => ProjectileSpawnPort | null;
   readonly getProjectileThreatReadPort: () => ProjectileThreatReadPort | null;
   readonly getTranslocatorProjectilePort: () => TranslocatorProjectilePort | null;

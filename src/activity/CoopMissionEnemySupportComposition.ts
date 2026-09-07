@@ -1,5 +1,5 @@
 import type { BaseManager } from '../entities/BaseManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActivityPort } from '../combat/CombatCapabilities';
 import type { CoopMissionEnemySpecialRuntime, CoopMissionRuntime } from './CoopMissionRuntime';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { PlacementSystem } from '../systems/PlacementSystem';
@@ -17,7 +17,7 @@ import type { AutomatedWeaponExecution } from '../world/AutomatedWeaponExecution
 
 export interface CoopMissionEnemySupportCompositionOptions {
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatActivityPort;
   readonly baseManager: BaseManager;
   readonly placementSystem: PlacementSystem;
   readonly hostPhysics: HostPhysicsSystem;

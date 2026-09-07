@@ -12,7 +12,7 @@ import {
 import { CoopDefenseGroundHazardEventHandler } from '../systems/CoopDefenseGroundHazardEventHandler';
 import type { AirstrikeSystem, AirstrikeStrikeResolution } from '../systems/AirstrikeSystem';
 import type { BaseManager } from '../entities/BaseManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActorStatePort } from '../combat/CombatCapabilities';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -25,7 +25,7 @@ export interface CoopMissionMapEventCompositionOptions {
   readonly worldMetrics: WorldMetrics;
   readonly worldBases: readonly BaseSpec[];
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatActorStatePort;
   readonly baseManager: BaseManager | null;
   readonly fireSystem: FireSystem;
   readonly airstrikeSystem: AirstrikeSystem;

@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { GuardianSpiritPhase, SyncedGuardianSpirit } from '../types';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
 
 const STAT_PREFIX = 'player.guardianSpirit';
 const IMPACT_VISUAL_MS = 180;
@@ -53,7 +53,7 @@ export class GuardianSpiritSystem {
   constructor(
     private readonly playerManager: PlayerManager,
     enemyManager: EnemyManager | null,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort,
     private readonly resolveStat: GuardianSpiritStatResolver,
   ) {
     this.enemyManager = enemyManager;

@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort } from '../combat/CombatCapabilities';
 import type { PlacementSystem } from './PlacementSystem';
 import type { TunnelUltimateConfig } from '../loadout/LoadoutConfig';
 import type { BurrowSystem } from './BurrowSystem';
@@ -45,7 +45,7 @@ export class TunnelSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort,
     private readonly placementSystem: PlacementSystem,
     private readonly burrowSystem: BurrowSystem,
     private readonly hostPhysics: HostPhysicsSystem,

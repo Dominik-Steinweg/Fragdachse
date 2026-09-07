@@ -20,7 +20,7 @@ import type {
 import type { ProjectileId } from '../projectile/ProjectileSpawnPort';
 import type { ProjectileFlameExpiryEvent } from '../projectile/ProjectileGameplayPort';
 import type { ActiveBurnSource } from '../combat/rules/BurnStateMachine';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
 
 interface ResolvedFlameOwner {
   playerId: string;
@@ -76,7 +76,7 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     enemyManager: EnemyManager | null,
     private readonly projectileTravel: ProjectileTravelReadPort,
     private readonly projectileEnvironment: ProjectileEnvironmentInteractionPort,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort,
     private readonly loadoutManager: LoadoutManager,
     private readonly fireSystem: FireSystem,
     private readonly isBurrowed: FlamethrowerBurrowResolver,

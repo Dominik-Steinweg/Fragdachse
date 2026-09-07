@@ -13,7 +13,7 @@ import { ULTIMATE_CONFIGS, type GaussUltimateConfig } from '../loadout/LoadoutCo
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import type { SyncedNukeStrike } from '../types';
 import type { ArmageddonSystem } from './ArmageddonSystem';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { CoopDefenseEnemyBurrowSystem } from './CoopDefenseEnemyBurrowSystem';
 import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { EnemyAiTargetCatalog, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
@@ -82,7 +82,7 @@ export class CoopDefenseVoidHunterSystem {
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly weaponExecution: AutomatedWeaponExecution,
     private readonly powerUpSystem: PowerUpSystem,
     private readonly armageddonSystem: ArmageddonSystem,

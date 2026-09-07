@@ -1,6 +1,6 @@
 import type { ArenaLayout, ExplosionVisualStyle, SyncedNukeStrike } from '../types';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatDamageEffectPort, CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import type { WorldMetrics } from './WorldMetrics';
 import { PowerUpSystem, type PowerUpSystemOptions } from '../powerups/PowerUpSystem';
 import { UTILITY_CONFIGS, type UtilityConfig } from '../loadout/LoadoutConfig';
@@ -9,7 +9,7 @@ import type { WorldScopedBinding } from './WorldRuntime';
 /** World-owned PowerUp construction and teardown boundary. */
 export interface WorldPowerUpRuntimeOptions {
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatPlayerSupportPort & CombatDamageEffectPort;
   readonly layout: ArenaLayout;
   readonly worldMetrics: WorldMetrics;
   readonly recordPowerUpCollected: (playerId: string) => void;

@@ -1,4 +1,10 @@
-import type { CombatSystem } from '../systems/CombatSystem';
+import type {
+  CombatActivityPort,
+  CombatDamageEffectPort,
+  CombatImmediateAttackPort,
+  CombatLegacyMeleeAttackPort,
+  CombatPlayerSupportPort,
+} from '../combat/CombatCapabilities';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { FireSystem } from '../effects/FireSystem';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -13,6 +19,7 @@ import type {
 } from '../projectile/ProjectileTravelPort';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { WorldMetrics } from './WorldMetrics';
+import type { WorldGeometryQueries } from './WorldGeometryQueries';
 import type { WorldScopedBinding } from './WorldRuntime';
 import type { LoadoutManager, LoadoutSelection } from '../loadout/LoadoutManager';
 import type { HeldItemSlot } from '../loadout/HeldItemSlotTracker';
@@ -364,7 +371,12 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
   readonly projectileTravelReadPort: ProjectileTravelReadPort;
   readonly projectileEnvironmentInteractionPort: ProjectileEnvironmentInteractionPort;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem:
+    & CombatPlayerSupportPort
+    & CombatDamageEffectPort
+    & CombatActivityPort
+    & CombatLegacyMeleeAttackPort
+    & CombatImmediateAttackPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
   readonly placementSystem: PlacementSystem;
@@ -1317,6 +1329,11 @@ export class WorldPlayerGameplayRuntime implements
     return this.systems.tunnel.getSnapshot();
   }
 
+  setWorldGeometryQueries(queries: WorldGeometryQueries | null): void {
+    if (this.destroyed) return;
+    this.systems.burrow.setWorldGeometryQueries(queries);
+  }
+
   getAk47StrategicTargetNetSnapshot(nowMs: number): readonly SyncedAk47StrategicTarget[] {
     return this.systems.ak47StrategicTarget?.getNetSnapshot(nowMs) ?? [];
   }
@@ -1365,6 +1382,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.resource.setAdrenalineCostMultiplierResolver(null);
     systems.resource.setAdrenalineSpawnFullResolver(null);
     systems.burrow.setWorldMetrics(null);
+    systems.burrow.setWorldGeometryQueries?.(null);
     systems.burrow.setStinkCloudSystem(null);
     systems.burrow.setBurrowStartCallback(null);
     systems.burrow.setPositionResetCallback(null);

@@ -26,6 +26,8 @@ export interface WorldGeometryQueries {
     startX: number, startY: number, endX: number, endY: number,
     options?: WorldGeometryQueryOptions,
   ): boolean;
+  /** Circle clearance query for mechanics such as Burrow exit placement. */
+  isCircleBlocked(x: number, y: number, radius: number): boolean;
   resolveSafeGameplayMuzzle(
     shooterX: number,
     shooterY: number,
@@ -138,6 +140,9 @@ export function createWorldGeometryQueries(input: WorldGeometryQueryInput): Worl
       !active()
       || (ensureGeometry().geometry.hasLineOfSight(startX, startY, endX, endY, options)
         && !getTrainHit(startX, startY, endX, endY, Math.max(0, options.clearanceRadius ?? 0)))
+    ),
+    isCircleBlocked: (x, y, radius) => (
+      active() ? input.index.isCircleBlocked(x, y, radius) : false
     ),
     resolveSafeGameplayMuzzle,
     ...(input.resolveTargetGeometry

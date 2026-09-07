@@ -4,7 +4,9 @@ import {
   worldPositionToNearestCell,
   type WorldMetrics,
 } from '../world/WorldMetrics';
-import type { ArenaObstacleIndex } from './ArenaObstacleIndex';
+export interface CircleObstacleQuery {
+  isCircleBlocked(x: number, y: number, radius: number): boolean;
+}
 
 export interface BurrowExitPosition {
   readonly x: number;
@@ -22,7 +24,7 @@ const DISTANCE_SQ_EPSILON_FACTOR = Number.EPSILON * 16;
  */
 export function resolveBurrowExitPosition(
   metrics: WorldMetrics,
-  obstacleIndex: ArenaObstacleIndex,
+  obstacleIndex: CircleObstacleQuery,
   currentX: number,
   currentY: number,
   playerRadius: number,
@@ -103,7 +105,7 @@ export function resolveBurrowExitPosition(
 
 function isValidExitPosition(
   metrics: WorldMetrics,
-  obstacleIndex: ArenaObstacleIndex,
+  obstacleIndex: CircleObstacleQuery,
   x: number,
   y: number,
   radius: number,

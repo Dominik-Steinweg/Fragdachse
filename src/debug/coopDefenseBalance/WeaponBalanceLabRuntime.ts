@@ -2,7 +2,7 @@ import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, GRID_ROWS } from '../../conf
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { isWeaponBalanceLabMapId } from '../../config/coopDefenseMaps';
 import type { ArenaContext } from '../../scenes/arena/ArenaContext';
-import type { CombatDamageObservation } from '../../systems/CombatSystem';
+import type { CombatDamageObservationPort } from '../../combat/CombatCapabilities';
 import type { GamePhase, LoadoutCommitSnapshot, LoadoutUseResult, WeaponSlot } from '../../types';
 import {
   COOP_DEFENSE_UPGRADE_DEFINITIONS,
@@ -221,7 +221,8 @@ export class WeaponBalanceLabRuntime {
       }
     }
 
-    this.removeDamageObserver = ctx.combatSystem.addDamageDealtObserver((event) => {
+    const damageObserverPort: CombatDamageObservationPort = ctx.combatSystem;
+    this.removeDamageObserver = damageObserverPort.addDamageDealtObserver((event) => {
       this.recordDamage(event);
     });
     this.removeAdrenalineObserver = this.worldPort.observeAdrenalineDrain(
@@ -283,7 +284,7 @@ export class WeaponBalanceLabRuntime {
     }
   }
 
-  private recordDamage(event: CombatDamageObservation): void {
+  private recordDamage(event: Parameters<Parameters<CombatDamageObservationPort['addDamageDealtObserver']>[0]>[0]): void {
     const active = this.armed;
     if (!active || event.attackerId !== bridge.getLocalPlayerId()) return;
     if (!this.targetPositions.has(event.targetId)) return;

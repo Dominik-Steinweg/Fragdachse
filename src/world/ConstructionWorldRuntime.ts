@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActorStatePort } from '../combat/CombatCapabilities';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { EnergyInjectorSystem } from '../systems/EnergyInjectorSystem';
@@ -61,7 +61,7 @@ export interface ConstructionPersistentBaseContext {
 export interface ConstructionWorldRuntimeOptions {
   readonly scene: Phaser.Scene;
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatActorStatePort;
   readonly placementSystem: PlacementSystem;
   readonly utilityAction: Pick<PlayerGameplayActionPort, 'useInspectorUtility' | 'setUtilityPlacementCapability'>;
   readonly targetStatusSystem: TargetStatusSystem | null;

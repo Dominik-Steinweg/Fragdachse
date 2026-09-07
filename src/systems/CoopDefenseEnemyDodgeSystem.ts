@@ -8,7 +8,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileThreatReadPort, ProjectileThreatSample } from '../projectile/ProjectileReadPorts';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { HostPhysicsSystem } from './HostPhysicsSystem';
 import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
 
@@ -90,7 +90,7 @@ export class CoopDefenseEnemyDodgeSystem {
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
     private readonly projectileThreats: ProjectileThreatReadPort,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly hostPhysics: HostPhysicsSystem,
     private readonly isFreeGroundAt: FreeGroundResolver,
     private readonly hasWalkableCircleLine?: EnemyCirclePathResolver,

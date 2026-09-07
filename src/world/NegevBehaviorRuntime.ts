@@ -1,5 +1,5 @@
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatDamageEffectPort, CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { SyncedActiveHudBuff } from '../types';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
@@ -17,7 +17,7 @@ interface NegevCombatState {
   lastShotAt: number;
 }
 
-type CombatReactions = Pick<CombatSystem, 'addArmor' | 'heal' | 'applyAoeDamage'>;
+type CombatReactions = CombatPlayerSupportPort & CombatDamageEffectPort;
 type PhysicsReactions = Pick<HostPhysicsSystem, 'applyRadialImpulse'>;
 
 export interface NegevBehaviorRuntimeOptions {

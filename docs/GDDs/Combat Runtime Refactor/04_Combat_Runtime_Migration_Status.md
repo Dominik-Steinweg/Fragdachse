@@ -8,15 +8,15 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P9-Gate erfüllt, P10 als Nächstes |
+| Gesamtstatus | Block C aktiv; P10-Gate erfüllt, P11 als Nächstes |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P10 verbleibende Consumer mit frischem Luna-/XHigh-Worker migrieren |
+| Nächster Arbeitsschritt | P11 Gesamtgraph / Frame / Network / Presentation mit frischem Sol-/High-Worker schließen |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | Keine; P9 lokal abgeschlossen |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `4dde7818` |
-| Start-HEAD der laufenden Aufgabe | `4dde7818` |
-| Aktiver Worker / Thread | Keiner; frischer P10-Kontext als Nächstes |
+| Aktive Phase / Aufgabe | Keine; P10 lokal abgeschlossen |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `94df67e8` |
+| Start-HEAD der laufenden Aufgabe | `94df67e8` |
+| Aktiver Worker / Thread | Keiner; frischer P11-Kontext als Nächstes |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
 | Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
@@ -45,7 +45,7 @@
 | P7 | C | ✅ | Projectile-Adapter |
 | P8 | C | ✅ | Hitscan / Melee / Preview |
 | P9 | C | ✅ | World-Mutation / Domain-Fan-out |
-| P10 | C | ⬜ | Verbleibende Consumer |
+| P10 | C | ✅ | Verbleibende Consumer |
 | P11 | C | ⬜ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ⬜ | Legacy-Entfernung / Ratchets / Wissen |
 | P13 | C | ⬜ | Unabhängiger Abschluss / technisches Gate F |
@@ -66,16 +66,15 @@
 - Projectile-Direct-Adapter committen Player-/Enemy-/Decoy-Schaden über konkrete Targets und Receipts; `WorldProjectileRuntime` übernimmt tatsächliche AoE-Keys in seine Same-Frame-Continuation.
 - Normalisierte Hitscan-/Melee-Aufträge laufen über `CombatImmediateAttackPort`; sichere Mündung/Range bleiben bei Execution, der Host führt Query→Resolution→Mutation aus und Melee friert die geometrische Grundzielmenge vor der ersten Mutation ein.
 - `WorldObjectMutationRuntime` dedupliziert World-Aliase und projiziert atomare Owner-Outcomes; Rock-/Construction-/Base-/Train-HP, Removal und Cleanup bleiben bei den fachlichen Ownern, während `RockVisualHelper` nur noch präsentiert.
+- Gameplay-Consumer hängen an expliziten Actor-/Relationship-/Geometry-/Damage-/Support-/Modifier-/Status-Slices; Burrow nutzt die World-Geometrie und lehnt einen Exit ohne gebundenen Query-Port fail-closed ab.
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P9 sind realisiert:
+P1–P10 sind realisiert:
 
 | Art / Befund | Betroffene Grenze und Ursache | Schließphase / nächste Aktion |
 |---|---|---|
-| Geplanter Integrationsübergang | Verbleibende Nicht-Projectile-Consumer auf explizite Herkunft umstellen (D9) | P10 |
-| Geplanter Integrationsübergang | Direkte `CombatSystem.getObstacleIndex()`-Consumer auf die World-Query-Grenze umstellen | P10 |
-| Geplanter Integrationsübergang | Verbleibende Consumer- und Composition-Ports produktiv schließen | P10–P11 gemäß Contract-Manifest |
+| Geplanter Integrationsübergang | Gesamtgraph, Frame-Prep, Network-/Presentation-Projektion und verbleibende Composition-Ports produktiv schließen | P11 gemäß Contract-Manifest |
 
 ## 5. Nachweise und Reviews
 
@@ -90,6 +89,8 @@ P1–P9 sind realisiert:
 **P8-Gate L:** Fokus 27/27 und Melee-Regression 18/18, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25, TypeScript/Diff-Check grün.
 
 **P9-Gate L:** Headless-Integration 3/3, Fokus 54/54, Check 2783 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 27/27, TypeScript/Writer-/Diff-Check grün.
+
+**P10-Gate L:** Fokus 171/171 einschließlich V3/V9/V12, Check 2786 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 55/55, TypeScript/RG-/Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

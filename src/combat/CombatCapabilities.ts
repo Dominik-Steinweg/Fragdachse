@@ -13,7 +13,18 @@ import type {
   TargetSupportMutationPort,
 } from './CombatMutation';
 import type { CombatSource, CombatTargetRef } from './CombatScope';
+import type { ActiveBurnSource } from './rules/BurnStateMachine';
 import type { HitscanShotRequest, MeleeSwingRequest } from '../loadout/WeaponFireExecutor';
+import type {
+  BurnOrigin,
+  CombatDamageKind,
+  CombatDamageTargetType,
+  GroundFireVisualStyle,
+  LoadoutSlot,
+  ProjectileExplosionConfig,
+  RadialDamageFalloffConfig,
+  ShieldBlockCategory,
+} from '../types';
 
 // CF-READ
 export interface CombatVitalsReadPort {
@@ -52,6 +63,225 @@ export interface CombatLineQueryPort {
     readonly end: { readonly x: number; readonly y: number };
     readonly width?: number;
   }): { readonly blocked: boolean; readonly distance: number };
+}
+
+/**
+ * Legacy-facing slices used by world-owned mechanics while their authored payloads are
+ * normalized at the existing Combat boundary.  These are grouped by semantic responsibility;
+ * consumers must not depend on the concrete CombatSystem implementation.
+ */
+export interface CombatActorStatePort {
+  isAlive(id: string): boolean;
+  isBurrowed(id: string): boolean;
+}
+
+export interface CombatRelationshipQueryPort {
+  canDamageTarget(attackerId: string | undefined, targetId: string, allowTeamDamage?: boolean): boolean;
+}
+
+export interface CombatGeometryPort {
+  hasLineOfSight(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    skipRockIndex?: number,
+    ignoreBaseObstacles?: boolean,
+    clearanceRadius?: number,
+  ): boolean;
+  hasClearLineOfFire(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    options?: {
+      readonly skipRockIndex?: number;
+      readonly ignoreBaseObstacles?: boolean;
+      readonly clearanceRadius?: number;
+    },
+  ): boolean;
+}
+
+/** Explicit legacy damage facts used by migrated world/activity consumers. */
+export interface CombatDamageApplicationOptions {
+  readonly allowTeamDamage?: boolean;
+  readonly allowCritical?: boolean;
+  readonly sourceSlot?: LoadoutSlot;
+  readonly damageKind?: CombatDamageKind;
+  readonly source?: CombatSource;
+  readonly skipLifeLeech?: boolean;
+}
+
+/** Explicit radial-effect modifiers used by migrated world/activity consumers. */
+export interface CombatAoeDamageOptions {
+  readonly category?: ShieldBlockCategory;
+  readonly allowTeamDamage?: boolean;
+  readonly sourceId?: string;
+  readonly sourceSlot?: LoadoutSlot;
+  readonly baseDamageMult?: number;
+  readonly enemySlowFraction?: number;
+  readonly enemySlowDurationMs?: number;
+  readonly killSource?: {
+    readonly shotgunLightningGeneration?: number;
+  };
+}
+
+export interface CombatDamageEffectPort {
+  applyDamage(
+    targetId: string,
+    amount: number,
+    skipBurrowCheck?: boolean,
+    attackerId?: string,
+    sourceId?: string,
+    visualContext?: { readonly sourceX?: number; readonly sourceY?: number; readonly dirX?: number; readonly dirY?: number },
+    options?: CombatDamageApplicationOptions,
+  ): TargetMutationOutcome | null;
+  applyAoeDamage(
+    x: number,
+    y: number,
+    radius: number,
+    damage: number,
+    ownerId: string,
+    includeSelf?: boolean,
+    options?: CombatAoeDamageOptions,
+  ): void;
+  applyExplosionDamage(
+    x: number,
+    y: number,
+    effect: ProjectileExplosionConfig,
+    ownerId: string,
+    sourceSlot?: LoadoutSlot,
+    sourceId?: string,
+  ): readonly string[];
+  applyBaseDamage(baseId: string, damage: number, attackerId: string, sourceSlot?: LoadoutSlot): void;
+  applyRadialHostileBaseDamage(
+    x: number,
+    y: number,
+    radius: number,
+    maxDamage: number,
+    attackerId?: string,
+    falloff?: RadialDamageFalloffConfig,
+    sourceSlot?: LoadoutSlot,
+    baseDamageMult?: number,
+  ): void;
+  applyBurnHit(
+    targetId: string,
+    attackerId: string,
+    durationMs: number,
+    damagePerTick: number,
+    sourceKey: string,
+    sourceId: string,
+    origin?: BurnOrigin,
+    visualStyle?: GroundFireVisualStyle,
+  ): void;
+}
+
+export interface CombatPlayerSupportPort extends CombatActorStatePort {
+  getHP(id: string): number;
+  getMaxHp(id: string): number;
+  getArmor(id: string): number;
+  healToFull(id: string): number;
+  heal(id: string, amount: number): number;
+  addArmor(id: string, amount: number): number;
+  hpRegenTick(id: string, deltaMs: number): void;
+  armorRegenTick(id: string, deltaMs: number): void;
+}
+
+export interface CombatDamageModifierReadPort {
+  getPlayerRuntimeDamageMultiplier(id: string, sourceSlot?: LoadoutSlot): number;
+}
+
+export interface CombatBurnReadPort {
+  getActiveBurnSources(id: string, nowMs: number): readonly ActiveBurnSource[];
+}
+
+export interface CombatDamageObservationPort {
+  addDamageDealtObserver(observer: (event: {
+    readonly targetFaction?: 'hostile' | 'allied';
+    readonly targetType: CombatDamageTargetType;
+    readonly targetId: string;
+    readonly attackerId: string | undefined;
+    readonly damage: number;
+    readonly damageKind: CombatDamageKind;
+    readonly sourceSlot: LoadoutSlot | undefined;
+    readonly isCritical: boolean;
+  }) => void): () => void;
+}
+
+/** World-train geometry attachment; callers only clear/install the current segment view. */
+export interface CombatTrainSegmentPort {
+  setTrainSegments(segments: readonly { readonly x: number; readonly y: number; readonly width: number; readonly height: number }[] | null): void;
+}
+
+/** Activity consumer view for enemy behaviours and authored mission effects. */
+export type CombatActivityPort =
+  & CombatActorStatePort
+  & CombatDamageEffectPort
+  & CombatGeometryPort
+  & CombatRelationshipQueryPort;
+
+/** Transitional compatibility view for the already normalized utility execution path. */
+export interface CombatLegacyMeleeAttackPort {
+  resolveMeleeSwing(
+    shooterId: MeleeSwingRequest['shooterId'],
+    x: MeleeSwingRequest['x'],
+    y: MeleeSwingRequest['y'],
+    angle: MeleeSwingRequest['angle'],
+    range: MeleeSwingRequest['range'],
+    arcDegrees: MeleeSwingRequest['arcDegrees'],
+    damage: MeleeSwingRequest['damage'],
+    adrenalinGain: MeleeSwingRequest['adrenalinGain'],
+    sourceId: MeleeSwingRequest['sourceId'],
+    playerColor: MeleeSwingRequest['color'],
+    sourceSlot?: MeleeSwingRequest['sourceSlot'],
+    rockDamageMult?: MeleeSwingRequest['rockDamageMult'],
+    trainDamageMult?: MeleeSwingRequest['trainDamageMult'],
+    visualPreset?: MeleeSwingRequest['visualPreset'],
+    shotAudioKey?: MeleeSwingRequest['shotAudioKey'],
+    burnOnHit?: MeleeSwingRequest['burnOnHit'],
+    chain?: MeleeSwingRequest['chain'],
+    hitHeal?: MeleeSwingRequest['hitHeal'],
+    hitAdrenaline?: MeleeSwingRequest['hitAdrenaline'],
+    bloodEffectMultiplier?: MeleeSwingRequest['bloodEffectMultiplier'],
+    damageTargets?: MeleeSwingRequest['damageTargets'],
+    baseDamageMult?: MeleeSwingRequest['baseDamageMult'],
+  ): boolean;
+}
+
+export interface CombatLegacyHitscanAttackPort {
+  resolveHitscanShot(
+    shooterId: HitscanShotRequest['shooterId'],
+    startX: HitscanShotRequest['startX'],
+    startY: HitscanShotRequest['startY'],
+    angle: HitscanShotRequest['angle'],
+    range: HitscanShotRequest['range'],
+    damage: HitscanShotRequest['damage'],
+    traceThickness: HitscanShotRequest['traceThickness'],
+    playerColor: HitscanShotRequest['color'],
+    adrenalinGain: HitscanShotRequest['adrenalinGain'],
+    sourceId: HitscanShotRequest['sourceId'],
+    visualPreset?: HitscanShotRequest['visualPreset'],
+    shotAudioKey?: HitscanShotRequest['shotAudioKey'],
+    sourceSlot?: HitscanShotRequest['sourceSlot'],
+    shotId?: HitscanShotRequest['shotId'],
+    detonatorCfg?: HitscanShotRequest['detonator'],
+    rockDamageMult?: HitscanShotRequest['rockDamageMult'],
+    trainDamageMult?: HitscanShotRequest['trainDamageMult'],
+    chainCfg?: HitscanShotRequest['chainLightning'],
+    burnOnHit?: HitscanShotRequest['burnOnHit'],
+    supportEffect?: HitscanShotRequest['supportEffect'],
+    visualMuzzleOrigin?: HitscanShotRequest['visualMuzzleOrigin'],
+    baseDamageMult?: HitscanShotRequest['baseDamageMult'],
+  ): boolean;
+}
+
+export interface CombatSafeMuzzlePort {
+  resolveSafeHitscanStart(
+    shooterX: number,
+    shooterY: number,
+    desiredMuzzleX: number,
+    desiredMuzzleY: number,
+  ): { readonly x: number; readonly y: number };
 }
 
 // CF-ATTACK

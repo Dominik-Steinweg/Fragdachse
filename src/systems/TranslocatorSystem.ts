@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import { PlayerManager } from '../entities/PlayerManager';
-import { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
 import { TrainManager } from '../train/TrainManager';
 import type { TranslocatorUtilityConfig } from '../loadout/LoadoutConfig';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
@@ -34,7 +34,7 @@ export class TranslocatorSystem {
   constructor(
     private playerManager: PlayerManager,
     private projectilePort: TranslocatorProjectilePort,
-    private combatSystem: CombatSystem,
+    private combatSystem: CombatActorStatePort & CombatDamageEffectPort,
     private readonly network: TranslocatorNetworkPort,
     private trainManager?: TrainManager | null
   ) {}

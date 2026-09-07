@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { CELL_SIZE } from '../config';
 import { TRAIN_DROP_COUNT } from '../powerups/PowerUpConfig';
 import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatDamageEffectPort, CombatTrainSegmentPort } from '../combat/CombatCapabilities';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileTrainBindingPort } from '../projectile/ProjectileBoundaryPorts';
@@ -65,7 +65,7 @@ export interface WorldTrainRuntimeOptions {
   readonly scene: Phaser.Scene;
   readonly playerManager: PlayerManager;
   readonly projectileTrain: ProjectileTrainBindingPort;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatDamageEffectPort & CombatTrainSegmentPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly worldMetrics: WorldMetrics;
   readonly presentationRequired: boolean;

@@ -3,7 +3,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { SlimeBloomTarget, SyncedSlimeTrailSnapshot } from '../types';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
 
 const STAT_PREFIX = 'player.slimeTrail';
 const FADE_OUT_MS = 900;
@@ -84,7 +84,7 @@ export class SlimeTrailSystem {
   constructor(
     private readonly playerManager: PlayerManager,
     enemyManager: EnemyManager | null,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort,
     private readonly resolveStat: SlimeTrailStatResolver,
     private readonly isNormallyWalking: SlimeTrailWalkingResolver,
   ) {

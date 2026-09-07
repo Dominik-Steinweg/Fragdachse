@@ -1,5 +1,5 @@
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActorStatePort } from '../combat/CombatCapabilities';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import type { WorldMetrics } from './WorldMetrics';
 import type { RockGridIndex } from '../arena/RockGridIndex';
@@ -15,6 +15,11 @@ import { AirstrikeSystem as ConcreteAirstrikeSystem } from '../systems/Airstrike
 import { ArmageddonSystem as ConcreteArmageddonSystem } from '../systems/ArmageddonSystem';
 import { DetonationSystem as ConcreteDetonationSystem } from '../systems/DetonationSystem';
 
+type WorldSupportCombatBinding = CombatActorStatePort & {
+  setDetonationSystem(system: DetonationSystem | null): void;
+  setStinkCloudSystem(system: StinkCloudSystem | null): void;
+};
+
 export interface WorldSupportGameplaySystems {
   readonly detonation: DetonationSystem;
   readonly armageddon: ArmageddonSystem;
@@ -24,7 +29,7 @@ export interface WorldSupportGameplaySystems {
 export interface WorldSupportGameplayRuntimeOptions {
   readonly projectileExternalInteraction: ProjectileExternalInteractionPort;
   readonly playerManager: PlayerManager;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: WorldSupportCombatBinding;
   readonly setBurrowStinkCloudSystem: (system: StinkCloudSystem | null) => void;
   readonly gameAudioSystem: GameAudioSystem;
   readonly worldMetrics: WorldMetrics;

@@ -7,7 +7,7 @@ import type { BasePowerUpPedestalSpec } from '../arena/BaseRegistry';
 import type { ArenaLayout, ExplosionDamageTarget, SyncedNukeStrike, SyncedPowerUp, SyncedPowerUpPedestal, SyncedPowerUpPedestalSnapshot, SyncedPowerUpSnapshot } from '../types';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem }  from '../systems/CombatSystem';
+import type { CombatDamageEffectPort, CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import {
   POWERUP_DEFS, DROP_TABLES, TIMED_POWERUP_PEDESTAL_CONFIGS,
   PICKUP_RADIUS, NUKE_CONFIG,
@@ -124,7 +124,7 @@ function weightedRandom(weights: Record<string, number>): string | null {
 
 // ── PowerUpSystem ──────────────────────────────────────────────────────────
 
-type PowerUpSystemDeps = Pick<CombatSystem, 'healToFull' | 'addArmor' | 'isAlive' | 'isBurrowed' | 'applyDamage' | 'applyExplosionDamage'>;
+type PowerUpSystemDeps = CombatPlayerSupportPort & CombatDamageEffectPort;
 
 /**
  * Host-autoritäres System für Power-Ups auf dem Boden und aktive Buffs.

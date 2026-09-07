@@ -23,7 +23,7 @@ import {
   type TranslocatorUtilityConfig,
   type WeaponConfig,
 } from '../loadout/LoadoutConfig';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatDamageEffectPort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
@@ -123,7 +123,7 @@ export class CoopDefenseEnemyAbilitySystem {
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
     private readonly projectileSpawn: ProjectileSpawnPort,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatDamageEffectPort & CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly energyShieldSystem: EnergyShieldSystem | null,
     private readonly stinkCloudSystem: StinkCloudSystem,
     private readonly fireChunkPort: FireChunkBurstPort | null,

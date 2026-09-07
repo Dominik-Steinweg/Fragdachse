@@ -130,6 +130,7 @@ export function composeWorldPlayerGameplay(
     },
   });
   gameplay.player = playerGameplayRuntime;
+  playerGameplayRuntime.setWorldGeometryQueries(gameplay.geometry?.getQueries() ?? null);
   worldRuntime.bind(playerGameplayRuntime);
   flow.syncHostPlayerModifiers();
   

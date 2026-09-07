@@ -12,7 +12,7 @@ import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
 import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { FireSystem } from '../effects/FireSystem';
 import type { DecoySystem } from '../systems/DecoySystem';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatActivityPort } from '../combat/CombatCapabilities';
 import type { HostPhysicsSystem } from '../systems/HostPhysicsSystem';
 import type { PlacementSystem } from '../systems/PlacementSystem';
 import type { TrainAwarenessSource } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
@@ -28,7 +28,7 @@ export interface CoopMissionEnemyBehaviourCompositionOptions {
   readonly projectileSpawn: ProjectileSpawnPort;
   readonly projectileThreatReadPort: ProjectileThreatReadPort;
   readonly translocatorProjectilePort: TranslocatorProjectilePort;
-  readonly combatSystem: CombatSystem;
+  readonly combatSystem: CombatActivityPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly baseManager: BaseManager;
   readonly weaponExecution: AutomatedWeaponExecution;

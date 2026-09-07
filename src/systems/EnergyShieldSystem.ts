@@ -6,7 +6,7 @@ import type { ShieldBlockCategory, SyncedEnergyShield } from '../types';
 import { dequantizeAngle } from '../utils/angle';
 import type { PlayerCombatResourcePort } from '../world/PlayerCombatIntegrationPort';
 import type { ShieldBuffSystem } from './ShieldBuffSystem';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatPlayerSupportPort } from '../combat/CombatCapabilities';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { BaseManager } from '../entities/BaseManager';
 
@@ -46,7 +46,7 @@ export class EnergyShieldSystem {
   private readonly domeToggleOn = new Map<string, boolean>();
   private static readonly HOLD_GRACE_MS = 150;
 
-  private combatSystem: CombatSystem | null = null;
+  private combatSystem: CombatPlayerSupportPort | null = null;
   private enemyManager: EnemyManager | null = null;
   private baseManager: BaseManager | null = null;
   /** true, wenn Waffe 2 aktuell nicht nutzbar ist (Tod, Einbuddeln, Dodge-Phase-1 …). */
@@ -59,7 +59,7 @@ export class EnergyShieldSystem {
     private readonly shieldBuffSystem: ShieldBuffSystem,
   ) {}
 
-  setCombatSystem(system: CombatSystem | null): void { this.combatSystem = system; }
+  setCombatSystem(system: CombatPlayerSupportPort | null): void { this.combatSystem = system; }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setBaseManager(manager: BaseManager | null): void { this.baseManager = manager; }
   setWeaponUsageBlockedChecker(checker: ((playerId: string) => boolean) | null): void {

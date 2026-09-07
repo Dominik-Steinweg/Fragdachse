@@ -3,7 +3,7 @@ import type {
   CoopDefenseMapEventCycleFinished,
   CoopDefenseMapEventHandler,
 } from '../systems/CoopDefenseMapEventDirector';
-import type { CombatSystem } from '../systems/CombatSystem';
+import type { CombatTrainSegmentPort } from '../combat/CombatCapabilities';
 import type { TrainManager } from './TrainManager';
 import type { TrainEventConfig } from '../types';
 
@@ -40,7 +40,7 @@ export class CoopDefenseTrainEventHandler implements CoopDefenseMapEventHandler 
 
   constructor(
     private readonly trainManager: TrainManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatTrainSegmentPort,
     initialDirection: 1 | -1,
     private readonly trainEvents: TrainEventReplicationPort,
   ) {

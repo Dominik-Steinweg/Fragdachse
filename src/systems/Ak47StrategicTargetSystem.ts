@@ -3,7 +3,7 @@ import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { SyncedAk47StrategicTarget } from '../types';
 import type { ProjectileAk47DirectImpact, ProjectileAk47HitContext } from '../projectile/ProjectileCombatPort';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { Ak47BehaviorPort, Ak47LoadoutReadPort } from '../loadout/Ak47BehaviorPort';
 import { getCoopDefenseEnemyXp } from '../config/coopDefenseEnemies';
 
@@ -40,7 +40,7 @@ export class Ak47StrategicTargetSystem {
   constructor(
     private readonly playerManager: PlayerManager,
     enemyManager: EnemyManager | null,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly loadout: Ak47LoadoutReadPort,
     private readonly behavior: Pick<Ak47BehaviorPort, 'registerStrategicTargetHit'>,
   ) {

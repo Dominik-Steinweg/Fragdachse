@@ -6,7 +6,7 @@ import {
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyCombatPositioningSource, EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatGeometryPort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
 import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
 
@@ -37,7 +37,7 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
   constructor(
     private readonly enemyManager: EnemyManager,
     private readonly playerManager: PlayerManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatGeometryPort & CombatRelationshipQueryPort,
     private readonly isFreeGroundAt: FreeGroundResolver,
     private readonly hasWalkableCircleLine?: EnemyCirclePathResolver,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,

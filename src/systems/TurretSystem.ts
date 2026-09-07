@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
-import type { CombatSystem } from './CombatSystem';
+import type { CombatActorStatePort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { TurretDamageBuff } from '../types';
 
 /**
@@ -78,7 +78,7 @@ export class TurretSystem {
 
   constructor(
     private readonly playerManager: PlayerManager,
-    private readonly combatSystem: CombatSystem,
+    private readonly combatSystem: CombatActorStatePort & CombatRelationshipQueryPort,
   ) {}
 
   setLineOfFireChecker(checker: LineOfFireChecker | null): void {
