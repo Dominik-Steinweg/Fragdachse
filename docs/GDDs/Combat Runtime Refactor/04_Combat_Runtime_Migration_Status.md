@@ -8,19 +8,19 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P13-Korrekturschleife 3 läuft |
+| Gesamtstatus | Block C technisch/architektonisch abgeschlossen; M offen |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | Frisches P13-Review 5 auf Korrekturcheckpoint 4 |
-| Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | P13 – Review 5 nach Korrekturschleife 4 |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `260a99d1` |
+| Nächster Arbeitsschritt | Nutzer führt gebündelte Gameplay-/Sichtabnahme M durch |
+| Nächster geplanter Nutzerstopp | Jetzt; M bleibt Nutzerentscheidung |
+| Aktive Phase / Aufgabe | Keine automatische Phase; M offen |
+| Arbeitsbranch / geprüfter Code-HEAD | `codex/combat-runtime-refactor` @ `cea8e595` |
 | Start-HEAD der laufenden Aufgabe | `d015ba61` |
-| Aktiver Worker / Thread | Frischer Astra-/High-Reviewer, read-only |
+| Aktiver Worker / Thread | Keiner |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
-| Aktuell nötiger Modell-/Reviewstopp | Keiner; zwei zusätzliche Schleifen freigegeben |
-| Aktueller Reparaturzähler | P13: 4/4 automatische Fixschleifen |
-| Technische Endabnahme F / manuelle Abnahme M | F aktiv; M nicht begonnen |
+| Aktuell nötiger Modell-/Reviewstopp | Keiner; technischer Abschluss bestätigt |
+| Aktueller Reparaturzähler | P13: 4 Schleifen abgeschlossen; Review 5 bestanden |
+| Technische Endabnahme F / manuelle Abnahme M | F bestanden; M offen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
 **Freigaberegel:** R1/R2 erteilen keine Freigabe für B/C; dafür zählt nur eine tatsächliche Nutzernachricht.
@@ -48,7 +48,7 @@
 | P10 | C | ✅ | Verbleibende Consumer |
 | P11 | C | ✅ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ✅ | Legacy-Entfernung / Ratchets / Wissen |
-| P13 | C | 🟨 | Korrekturschleife 3 nach D3-Blocker |
+| P13 | C | ✅ | Review 5 bestanden; Gate F erfüllt |
 | M | Nutzer | ⬜ | Gebündelte Gameplay-/Sichtabnahme |
 
 ## 3. Realisierte Contracts
@@ -72,7 +72,7 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P12 sind realisiert. Der Review-4-Blocker ist in Fix 4 behoben; Review 5 entscheidet Abschluss oder manuellen Stopp.
+P1–P13 sind technisch/architektonisch abgeschlossen. Keine aktive Transition und kein bekannter In-Scope-Defekt; M bleibt offen.
 
 ## 5. Nachweise und Reviews
 
@@ -86,13 +86,13 @@ P1–P12 sind realisiert. Der Review-4-Blocker ist in Fix 4 behoben; Review 5 en
 
 **P12-Gate L:** Check 2789 Core/33 Architektur/Build, Integration 204 und Balance-Lab 94 grün; Orchestrator-Stichprobe 41/41 plus Architektur 33/33, Legacy-/Writer-/Diff-Audits grün.
 
-**P13-Fix 1:** 62 Fokus, Check 2789/33/Build, Integration 210, Stress 44, Balance-Lab 94, Assets 44 und Diff-Check grün.
+**P13 final:** Check 2791/33/Build, Integration 244, Stress 44, Balance-Lab 94, Assets 44 und Diff-Check grün; Review 5 zusätzlich 261 bestehende Tests plus 16 In-Memory-Repros grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|
 | R1 | Bestanden | `ee5742b4` | Keine |
 | R2 Review 7 | Bestanden | `b74a1b07` | Keine |
-| P13 Review 3 | Blockiert | `0be2eecd` | Automation-Rocket-Explosion skaliert Runtime-P doppelt |
+| P13 Review 5 | Bestanden | `cea8e595` | Keine |
 
 Nur Testgruppe, Exit-Code, Ergebnis und gültigen Code-Bezug festhalten. Fehlender Beleg verlangt erneute Prüfung; alter Review-Pass gilt nach Code-Delta nicht automatisch weiter.
 
