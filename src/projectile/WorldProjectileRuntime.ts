@@ -175,6 +175,8 @@ export interface WorldProjectileRuntimeOptions {
   readonly identityScope: ProjectileIdentityScope;
   /** Hostautoritative Frame-/Weltzeit; die Runtime liest keine eigene Wall Clock. */
   readonly hostNowMs: () => number;
+  /** World source facts are captured before the actor can disappear. */
+  readonly resolveProvenance?: (provenance: ProjectileProvenance) => ProjectileProvenance;
   /** Meldet der Composition, dass dieser Owner abgeräumt ist. */
   readonly onDestroy?: () => void;
 }
@@ -269,6 +271,7 @@ export class WorldProjectileRuntime implements
   private readonly contactRect = new Phaser.Geom.Rectangle();
   private readonly contactPoints: Phaser.Math.Vector2[] = [];
   private readonly hostNowMs: () => number;
+  private readonly resolveProvenance?: (provenance: ProjectileProvenance) => ProjectileProvenance;
   private readonly onDestroy?: () => void;
   private projectileTimeFieldPort: ProjectileTimeFieldPort | null = null;
   private readonly pendingNextStageSpawns: PendingNextStageProjectileSpawn[] = [];
@@ -285,6 +288,7 @@ export class WorldProjectileRuntime implements
     this.physicsBinding = options.physicsBinding;
     this.presentation = options.presentation;
     this.hostNowMs = options.hostNowMs;
+    this.resolveProvenance = options.resolveProvenance;
     this.onDestroy = options.onDestroy;
     this.projectiles = new ProjectileStore(options.identityScope);
     const runtime = this;
@@ -1945,12 +1949,14 @@ export class WorldProjectileRuntime implements
     record: ProjectileRuntimeRecord,
     options: ReflectedProjectileOptions,
   ): void {
-    record.provenance = {
+    const provenance: ProjectileProvenance = {
       ...record.provenance,
       attributionId: options.ownerId,
+      attributionKind: undefined,
       allegiance: options.allegiance,
       lineage: { ...record.provenance.lineage, reflected: true },
     };
+    record.provenance = this.resolveProvenance?.(provenance) ?? provenance;
     record.damage = options.damage;
     record.adrenalinGain = 0;
     record.maxBounces = options.keepGrenade ? record.maxBounces : 0;
@@ -2099,6 +2105,7 @@ export class WorldProjectileRuntime implements
     provenance: ProjectileProvenance,
     spawnHostNowMs = this.hostNowMs(),
   ): ProjectileId {
+    provenance = this.resolveProvenance?.(provenance) ?? provenance;
     const id = this.projectiles.allocateId();
     const record = this.createProjectileRecord(id, x, y, angle, provenance.allegiance.ownerId, cfg, spawnHostNowMs, provenance);
     this.projectiles.insert(record);

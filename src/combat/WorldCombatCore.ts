@@ -80,8 +80,10 @@ import type { CombatScope, CombatSource, CombatTargetRef } from '../combat/Comba
 import { isSameCombatScope, isSameCombatTargetInstance } from '../combat/CombatScope';
 import {
   adaptProjectileDirectDamageRequest,
+  adaptProjectileCombatSource,
   type ProjectileCombatSourceClassification,
 } from '../combat/ProjectileCombatContractAdapter';
+import type { ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
 import { applyCombatDamage, applyCombatSupport, resolveCombatDamageModifiers, type CombatResolutionContext } from '../combat/CombatResolution';
 import { resolveCombatRelationship } from '../combat/CombatRelationshipPolicy';
 import type {
@@ -1452,6 +1454,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     ownerId: string,
     sourceSlot?: LoadoutSlot,
     sourceId = 'environment.explosion',
+    source?: CombatSource,
   ): string[] {
     const damagedTargetKeys: string[] = [];
     const damagePlayers = effect.damageTarget === undefined
@@ -1474,7 +1477,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (player.id === ownerId) {
         damage *= effect.selfDamageMult;
       }
-      if (!this.canDamageTarget(ownerId, player.id, effect.allowTeamDamage)) continue;
+      if (source ? !this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } }, player.id).canDamage
+        : !this.canDamageTarget(ownerId, player.id, effect.allowTeamDamage)) continue;
 
       const roundedDamage = Math.round(damage);
       if (roundedDamage <= 0) continue;
@@ -1484,6 +1488,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
         damageKind: 'explosion',
+        source: source ? { ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } } : undefined,
       });
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
         damagedTargetKeys.push(`players:${player.id}`);
@@ -1492,6 +1497,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (enemy.faction === 'hostile' ? !damageHostileEnemies : !damageAlliedEnemies) continue;
+      if (enemy.isBurrowed() || (source
+        ? !this.relationshipForSource({ ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } }, enemy.id).canDamage
+        : !this.canDamageTarget(ownerId, enemy.id, effect.allowTeamDamage))) continue;
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > effect.radius) continue;
 
@@ -1508,6 +1516,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         allowTeamDamage: effect.allowTeamDamage,
         sourceSlot,
         damageKind: 'explosion',
+        source: source ? { ...source, allegiance: { ...source.allegiance, allowTeamDamage: effect.allowTeamDamage } } : undefined,
       });
       if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0) {
         damagedTargetKeys.push(`enemies:${enemy.id}`);
@@ -1520,7 +1529,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if ((base.isInert?.() ?? false) || base.getHp() <= 0) continue;
       const surface = base.getNearestSurfacePoint(x, y);
       if (!surface || surface.distance > effect.radius) continue;
-      if (this.enemyManager?.hasEnemy(ownerId)) continue;
+      if (source ? source.allegiance.kind === 'enemy' : this.enemyManager?.hasEnemy(ownerId)) continue;
       const damage = Math.round(computeProjectileExplosionDamage(surface.distance, effect));
       if (damage <= 0) continue;
       this.applyBaseDamage(base.id, damage, ownerId, sourceSlot, effect.baseDamageMult);
@@ -1770,6 +1779,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * und die target-lokale Defense-Entscheidung.
    */
   private resolveDirectImpactAtHostTime(request: ProjectileDirectImpactRequest): ProjectileDirectImpactOutcome {
+    request = { ...request, provenance: this.captureProjectileProvenance(request.provenance) };
     if (request.target.kind === 'player') return this.applyDirectPlayerImpact(request, request.target.id);
     if (request.target.kind === 'enemy') return this.applyDirectEnemyImpact(request, request.target.id);
     return this.applyDirectDecoyImpact(request, request.target.id);
@@ -1777,6 +1787,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   /** Combat-only explosion resolution; Environment and World Effects are host-domain concerns. */
   private resolveExplosionCombatAtHostTime(request: ProjectileCombatExplosionRequest): ProjectileCombatExplosionOutcome {
+    const provenance = this.captureProjectileProvenance(request.provenance);
+    const source = { ...adaptProjectileCombatSource(provenance, request.projectileId ?? 0,
+      this.classifyProjectileSource({ provenance })), origin: 'explosion' as const };
     return {
       damagedTargetKeys: this.applyExplosionDamage(
         request.x,
@@ -1785,6 +1798,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         request.provenance.allegiance.ownerId,
         request.provenance.sourceSlot,
         request.provenance.weaponSourceId ?? 'environment.explosion',
+        source,
       ),
     };
   }
@@ -1800,19 +1814,53 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     return this.decoySystem?.getCombatTargetRef(request.target.id) ?? null;
   }
 
+  captureProjectileProvenance(provenance: ProjectileProvenance): ProjectileProvenance {
+    if (provenance.gameplaySourceKind && provenance.attributionKind && provenance.allegiance.kind) return provenance;
+    const sourceEnemy = this.enemyManager?.getEnemy(provenance.gameplaySourceId);
+    const creditedEnemy = this.enemyManager?.getEnemy(provenance.attributionId);
+    const allegianceEnemy = this.enemyManager?.getEnemy(provenance.allegiance.ownerId);
+    const creditedPlayer = creditedEnemy?.faction === 'allied' ? creditedEnemy.ownerId : undefined;
+    return Object.freeze({
+      ...provenance,
+      gameplaySourceKind: provenance.gameplaySourceKind ?? (sourceEnemy ? 'enemy'
+        : this.playerManager.getPlayer(provenance.gameplaySourceId) ? 'player'
+          : provenance.sourceTurretId ? 'turret'
+            : provenance.gameplaySourceId === 'world' ? 'world' : 'environment'),
+      attributionId: provenance.attributionKind ? provenance.attributionId : creditedPlayer ?? provenance.attributionId,
+      attributionKind: provenance.attributionKind ?? (creditedPlayer || this.playerManager.getPlayer(provenance.attributionId)
+        ? 'player' : creditedEnemy ? 'enemy' : 'world'),
+      allegiance: Object.freeze({
+        ...provenance.allegiance,
+        kind: provenance.allegiance.kind ?? (allegianceEnemy ? 'enemy'
+          : this.playerManager.getPlayer(provenance.allegiance.ownerId) ? 'player' : 'world'),
+        factionId: provenance.allegiance.factionId ?? allegianceEnemy?.faction,
+      }),
+    });
+  }
+
+  /** Committed effects use saved relationship facts, independently of new-action permission. */
+  canProjectileDamageTarget(provenance: ProjectileProvenance, targetId: string, allowTeamDamage = false): boolean {
+    const saved = this.captureProjectileProvenance(provenance);
+    const source = adaptProjectileCombatSource(saved, 0, this.classifyProjectileSource({ provenance: saved }));
+    if (this.isBurrowed(targetId)) return false;
+    return this.relationshipForSource({ ...source,
+      allegiance: { ...source.allegiance, allowTeamDamage },
+    }, targetId).canDamage;
+  }
+
   private classifyProjectileSource(
-    request: ProjectileDirectImpactRequest,
+    request: Pick<ProjectileDirectImpactRequest, 'provenance'>,
   ): ProjectileCombatSourceClassification {
     const gameplaySourceId = request.provenance.gameplaySourceId;
     const gameplaySourceKind: ProjectileCombatSourceClassification['gameplaySourceKind'] =
-      this.enemyManager?.hasEnemy(gameplaySourceId) ? 'enemy'
+      request.provenance.gameplaySourceKind ?? (this.enemyManager?.hasEnemy(gameplaySourceId) ? 'enemy'
         : this.playerManager.getPlayer(gameplaySourceId) ? 'player'
           : request.provenance.sourceTurretId ? 'turret'
-            : gameplaySourceId === 'world' ? 'world' : 'environment';
+            : gameplaySourceId === 'world' ? 'world' : 'environment');
     const attributionId = request.provenance.attributionId;
     const attributionKind: ProjectileCombatSourceClassification['attributionKind'] =
-      this.playerManager.getPlayer(attributionId) ? 'player'
-        : this.enemyManager?.hasEnemy(attributionId) ? 'enemy' : 'world';
+      request.provenance.attributionKind ?? (this.playerManager.getPlayer(attributionId) ? 'player'
+        : this.enemyManager?.hasEnemy(attributionId) ? 'enemy' : 'world');
     return {
       gameplaySourceKind,
       attributionKind,
@@ -1854,10 +1902,16 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       target.instance,
       this.classifyProjectileSource(request),
     );
-    const amount = this.computeDirectPayloadDamage(request) * Math.max(0, additionalSourceMultiplier);
+    const sourceFactors = adapted.basis.kind === 'source-resolved' ? [...adapted.basis.sourceFactors] : [];
+    const runtimeMultiplier = sourceFactors.some(factor => factor.kind === 'automated-source')
+      ? 1 : this.getPlayerRuntimeDamageMultiplier(request.provenance.allegiance.ownerId, request.provenance.sourceSlot);
+    if (!sourceFactors.some(factor => factor.kind === 'automated-source')) {
+      sourceFactors.push({ kind: 'runtime-power', multiplier: runtimeMultiplier, resolvedAt: 'impact' });
+    }
+    const amount = this.computeDirectPayloadDamage(request) * Math.max(0, additionalSourceMultiplier) * runtimeMultiplier;
     return {
       ...adapted,
-      basis: { ...adapted.basis, amount },
+      basis: { kind: 'source-resolved', amount, sourceFactors },
     };
   }
 
@@ -2077,10 +2131,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   private computeDirectDamage(request: ProjectileDirectImpactRequest): number {
     return this.computeDirectPayloadDamage(request)
-      * this.getPlayerRuntimeDamageMultiplier(
+      * (request.directHit.appliedSourceDamageFactors?.some(factor => factor.kind === 'automated-source') ? 1 : this.getPlayerRuntimeDamageMultiplier(
         request.provenance.allegiance.ownerId,
         request.provenance.sourceSlot,
-      );
+      ));
   }
 
   private applyProjectileBurnAugments(targetId: string, request: ProjectileDirectImpactRequest): void {
@@ -4027,7 +4081,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private relationshipForSource(source: Pick<CombatSource, 'allegiance' | 'actor'> & Partial<Pick<CombatSource, 'gameplaySource'>>, targetId: string) {
     const sourceId = source.allegiance.ownerId;
     const targetEnemy = this.enemyManager?.getEnemy(targetId);
-    const sourceEnemy = source.actor?.kind === 'enemy' || source.gameplaySource?.kind === 'enemy';
+    const sourceEnemy = source.allegiance.kind !== undefined ? source.allegiance.kind === 'enemy'
+      : (source.actor?.kind ?? source.gameplaySource?.kind) === 'enemy';
     const sourceFaction = source.allegiance.factionId === 'hostile'
       || sourceId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID ? 'hostile' : 'players';
     const result = resolveCombatRelationship({

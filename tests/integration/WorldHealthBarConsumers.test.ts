@@ -38,6 +38,15 @@ import type { PlayerProfile, SyncedEnemyDeltaState, SyncedPlaceableRock } from '
 import type { CombatSource } from '../../src/combat/CombatScope';
 import { healthBarTestScene } from '../healthBarTestScene';
 import { BURN_TICK_INTERVAL_MS } from '../../src/config';
+import { EnemyMovementStatusSystem } from '../../src/systems/EnemyMovementStatusSystem';
+import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
+import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
+import { createSingleOwnerProvenance } from '../../src/projectile/ProjectileSpawnRequest';
+import { WorldWeaponExecutionRuntime } from '../../src/world/WorldWeaponExecutionRuntime';
+import { AutomatedWeaponExecutionAdapter } from '../../src/world/AutomatedWeaponExecutionAdapter';
+import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
+import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
+import { fakeEntity } from '../fakeEntity';
 
 function harness() {
   const fake = healthBarTestScene();
@@ -75,6 +84,114 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  function projectileFixture() {
+    const h = harness(), manager = enemies(h);
+    const players = ['p1', 'p2'].map(id => {
+      const x = id === 'p1' ? 100 : 200;
+      return fakeEntity({ id, x, y: 100, color: 0xffffff,
+        getBounds: () => ({ left: x - 16, right: x + 16, top: 84, bottom: 116 }) });
+    });
+    const combat = new CombatSystem({ getPlayer: (id: string) => players.find(p => p.id === id), getAllPlayers: () => players } as unknown as PlayerManager,
+      { isHost: () => true, getPlayerProfile: (id: string) => players.find(p => p.id === id),
+        broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
+    combat.bindHostExecutionSources({ nowMs: () => 1000, random: () => 0.25 });
+    combat.setEnemyManager(manager);
+    combat.setPlayerMaxHpResolver(() => 1000);
+    players.forEach(p => combat.initPlayer(p.id));
+    upsert(manager, { id: 'e1', kind, x: 300, y: 100, hp: 1000, maxHp: 1000 });
+    upsert(manager, { id: 'e2', kind, x: 400, y: 100, hp: 1000, maxHp: 1000, faction: 'allied', ownerId: 'p1' });
+    upsert(manager, { id: 'e3', kind, x: 500, y: 100, hp: 1000, maxHp: 1000 });
+    for (const enemy of manager.getAllEnemies()) {
+      Object.assign(enemy.sprite, { getBounds: () => ({ left: enemy.sprite.x - 8, right: enemy.sprite.x + 8,
+        top: enemy.sprite.y - 8, bottom: enemy.sprite.y + 8 }) });
+    }
+    const runtime = new WorldProjectileRuntime({ physicsBinding: createTechnicalPhysicsBinding().binding,
+      presentation: createPresentation(), identityScope: new ProjectileIdentityScope(1), hostNowMs: () => 1000,
+      resolveProvenance: provenance => combat.captureProjectileProvenance(provenance) });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => combat.readCollisionTargets(sink) });
+    runtime.setProjectileTargetabilityPort({
+      canDamage: (source, target, team) => combat.canProjectileDamageTarget(source, String(target.id), team),
+      canDamageOwner: (source, id, team) => combat.canProjectileDamageTarget(source, id, team),
+      isTargetCurrentlyValid: () => true,
+    });
+    const direct = vi.fn(combat.resolveDirectImpact.bind(combat));
+    runtime.setProjectileCombatPort({ resolveDirectImpact: direct, resolveExplosionCombat: combat.resolveExplosionCombat.bind(combat) });
+    const shared = new WorldWeaponExecutionRuntime({ projectileSpawn: runtime, combatSystem: combat });
+    const automated = new AutomatedWeaponExecutionAdapter(shared, runtime);
+    const fire = (ownerId: string, x: number, automatic = false) => {
+      const config = { ...WEAPON_CONFIGS.GLOCK, damage: 20, directDamageOverride: undefined };
+      const params = { ownerId, ownerColor: 0xffffff, x, y: 100, angle: 0, targetX: x + 100, targetY: 100 };
+      return automatic ? automated.fire(config, { ...params, options: { directDamageMultiplier: 2 } }) : shared.fire(config, params);
+    };
+    return { combat, manager, runtime, direct, fire, close: () => { runtime.destroy(); manager.destroy(); } };
+  }
+
+  it.each([false, true])('keeps hostile projectile allegiance after source removal (%s)', remove => {
+    const f = projectileFixture();
+    expect(f.fire('e1', 100)).toBe(true);
+    const saved = f.combat.captureProjectileProvenance(createSingleOwnerProvenance('e1'));
+    if (remove) f.manager.applySnapshot({ u: [], r: [1] });
+    expect(f.combat.canProjectileDamageTarget(saved, 'p1')).toBe(true);
+    expect(f.combat.canProjectileDamageTarget(saved, 'e2')).toBe(true);
+    expect(f.combat.canProjectileDamageTarget(saved, 'e3')).toBe(false);
+    f.runtime.runHostInteractionStage(1000);
+    expect(f.combat.getHP('p1')).toBe(980);
+    expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: 20 });
+    expect(f.direct.mock.calls[0]?.[0].provenance).toMatchObject({ gameplaySourceKind: 'enemy', allegiance: { kind: 'enemy', factionId: 'hostile' } });
+    f.close();
+  });
+
+  it('keeps an allied projectile reward recipient after its source disappears', () => {
+    const f = projectileFixture(), kill = vi.fn();
+    upsert(f.manager, { id: 'e1', hp: 10, maxHp: 1000 });
+    f.combat.setKillCallback(kill);
+    expect(f.fire('e2', 300)).toBe(true);
+    f.manager.applySnapshot({ u: [], r: [2] });
+    f.runtime.runHostInteractionStage(1000);
+    expect(f.manager.getEnemy('e1')).toBeUndefined();
+    expect(kill).toHaveBeenCalledExactlyOnceWith('p1', 'e1', expect.any(String), 300, 100, expect.objectContaining({
+      provenance: expect.objectContaining({ gameplaySource: { kind: 'enemy', id: 'e2' }, attribution: { kind: 'player', id: 'p1' } }),
+    }));
+    f.close();
+  });
+
+  it.each(['player', 'enemy'] as const)('applies pending projectile power once against %s and retains automatic scaling', target => {
+    for (const automatic of [false, true]) {
+      const f = projectileFixture();
+      f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
+      f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);
+      const shield = vi.fn(() => false);
+      f.combat.setEnergyShieldSystem({ tryBlockDamage: shield, tryDomeProtect: () => false } as never);
+      expect(f.fire('p1', target === 'player' ? 200 : 300, automatic)).toBe(true);
+      f.runtime.runHostInteractionStage(1000);
+      const expected = automatic ? 40 : 120;
+      expect(f.direct.mock.results[0]?.value).toMatchObject({ accepted: true, actualDamage: expected });
+      expect(target === 'player' ? f.combat.getHP('p2') : f.manager.getEnemy('e1')!.getHp()).toBe(1000 - expected);
+      if (target === 'player') expect(shield).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ damage: expected }));
+      f.close();
+    }
+  });
+
+  it('applies Plasma explosion slow only to eligible enemies', () => {
+    const f = projectileFixture(), movement = new EnemyMovementStatusSystem();
+    f.combat.setMovementStatusPort(movement);
+    const source = createSingleOwnerProvenance('p1', { weaponSourceId: 'weapon.plasma:swarm-explosion' });
+    f.combat.resolveExplosionCombat({ x: 350, y: 100, provenance: source,
+      effect: { radius: 100, maxDamage: 20, minDamage: 20, knockback: 0, selfDamageMult: 0,
+        damageTarget: 'enemies', enemySlowFraction: 0.5, enemySlowDurationMs: 1000 } });
+    expect(f.manager.getEnemy('e1')!.getHp()).toBe(980);
+    expect(f.manager.getEnemy('e2')!.getHp()).toBe(1000);
+    expect(movement.getMovementFactor(f.manager.getCombatTargetRef('e1')!, 1000)).toBe(0.5);
+    expect(movement.getMovementFactor(f.manager.getCombatTargetRef('e2')!, 1000)).toBe(1);
+    movement.clear();
+    const statusOnly = f.combat.resolveDirectImpact({ projectileId: 123, target: { kind: 'enemy', id: 'e1' },
+      impact: { x: 300, y: 100 }, velocity: { x: 1, y: 0 }, provenance: source,
+      directHit: { damage: 0, slowFraction: 0.5, slowDurationMs: 1000 }, augments: [] });
+    expect(statusOnly).toMatchObject({ accepted: true, actualDamage: 0 });
+    expect(movement.getMovementFactor(f.manager.getCombatTargetRef('e1')!, 1000)).toBe(0.5);
+    f.close();
+  });
+
   it.each([
     { hook: 'timebomb', applyNewStatus: false },
     { hook: 'timebomb', applyNewStatus: true },

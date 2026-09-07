@@ -39,7 +39,7 @@ function sourceFactsKey(stackKey: string, source: CombatSource): string {
     source.gameplaySource.kind, source.gameplaySource.id,
     source.actor?.kind, source.actor?.id,
     source.attribution.kind, source.attribution.id,
-    source.allegiance.ownerId, source.allegiance.factionId, source.allegiance.allowTeamDamage,
+    source.allegiance.ownerId, source.allegiance.kind, source.allegiance.factionId, source.allegiance.allowTeamDamage,
     source.authoredSourceId, source.sourceSlot, source.origin,
     source.lineage?.parentEffectId, source.lineage?.parentProjectileId,
     source.lineage?.reflected, source.lineage?.plasmaSwarmChild,

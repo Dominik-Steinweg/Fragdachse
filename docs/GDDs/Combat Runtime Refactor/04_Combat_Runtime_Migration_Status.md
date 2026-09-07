@@ -8,18 +8,18 @@
 
 | Feld | Aktueller Wert |
 |---|---|
-| Gesamtstatus | Block C aktiv; P12 abgeschlossen, P13 als Nächstes |
+| Gesamtstatus | Block C aktiv; P13 läuft |
 | Freigegebener Arbeitsblock | **C – Integration und Abschluss** (P7 → P8 → P9 → P10 → P11 → P12 → P13) |
 | Freigabequelle | Nutzerauftrag nach bestandenem R2; Block C ausdrücklich gestartet |
-| Nächster Arbeitsschritt | P13 unabhängiger Architekturabschluss und Gate F |
+| Nächster Arbeitsschritt | Frisches P13-Review auf Korrekturcheckpoint 1 |
 | Nächster geplanter Nutzerstopp | Nach P13; manuelle Gameplay-/Sichtabnahme M bleibt offen |
-| Aktive Phase / Aufgabe | Keine; P13 wird nach P12-Checkpoint gestartet |
-| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `6f8fc6ad` |
-| Start-HEAD der laufenden Aufgabe | `6f8fc6ad` |
-| Aktiver Worker / Thread | Keiner; P13 erhält einen frischen Astra-/High-Reviewer |
+| Aktive Phase / Aufgabe | P13 – Review 2 nach Korrekturschleife 1 |
+| Arbeitsbranch / lokaler Checkout-HEAD | `codex/combat-runtime-refactor` @ `d015ba61` |
+| Start-HEAD der laufenden Aufgabe | `d015ba61` |
+| Aktiver Worker / Thread | Frischer Astra-/High-Reviewer, read-only |
 | Betriebsmodus | Desktop-App; native Subagenten, keine eigene Agentenkonfiguration |
 | Aktuell nötiger Modell-/Reviewstopp | Keiner |
-| Aktueller Reparaturzähler | P13 noch nicht begonnen; 0/2 automatische Fixschleifen |
+| Aktueller Reparaturzähler | P13: 1/2 automatische Fixschleifen |
 | Technische Endabnahme F / manuelle Abnahme M | Beide offen |
 | Browserprüfung / Deployment | Nicht durchgeführt |
 
@@ -48,7 +48,7 @@
 | P10 | C | ✅ | Verbleibende Consumer |
 | P11 | C | ✅ | Gesamtgraph / Frame / Network / Presentation |
 | P12 | C | ✅ | Legacy-Entfernung / Ratchets / Wissen |
-| P13 | C | ⬜ | Unabhängiger Abschluss / technisches Gate F |
+| P13 | C | 🟨 | Unabhängiger Abschluss / technisches Gate F |
 | M | Nutzer | ⬜ | Gebündelte Gameplay-/Sichtabnahme |
 
 ## 3. Realisierte Contracts
@@ -72,21 +72,23 @@
 
 ## 4. Aktive Übergänge und Blocker
 
-P1–P12 sind realisiert. Offen ist ausschließlich P13; kein bekannter produktiver Blocker.
+P1–P12 sind realisiert. Drei Blocker aus P13 Review 1 sind in Korrekturcheckpoint 1 behoben; unabhängige Prüfung steht aus.
 
 ## 5. Nachweise und Reviews
 
-**P0/P1:** Baseline-Matrix grün; P1 Fokus 43/43, Integration 175/175, Typecheck/Diff-Check grün; R1 nach Korrekturen bestanden.
+**P0–P6/R1:** Phasengates und Vertragsreview grün; Details in den Commits.
 
 **P2–P6 Gates L:** Fokus/Integration, Architektur, TypeScript, Build und Writer-Audits grün.
 
-**R2:** bestanden auf `b74a1b07`; 133/133 Fokus, 201/201 Integration und 32/32 Architektur grün; keine reproduzierbaren P2–P6-Stopper.
+**R2:** bestanden auf `b74a1b07`; keine reproduzierbaren P2–P6-Stopper.
 
 **P7–P10 Gates L:** jeweilige Fokus-/Regressionstests, vollständiger Check, TypeScript-, Writer- und Diff-Audits grün; genaue Zahlen stehen in den Phasencommits.
 
 **P11-Gate L:** Fokus 87/87, RPC 11/11, Headless-Integration 89/89, Check 2789 Core/32 Architektur und Build grün; Orchestrator-Stichprobe 25/25 sowie Ownership-/Zeit-/Stage-/Diff-Ratchets grün.
 
 **P12-Gate L:** Check 2789 Core/33 Architektur/Build, Integration 204 und Balance-Lab 94 grün; Orchestrator-Stichprobe 41/41 plus Architektur 33/33, Legacy-/Writer-/Diff-Audits grün.
+
+**P13-Fix 1:** 62 Fokus, Check 2789/33/Build, Integration 210, Stress 44, Balance-Lab 94, Assets 44 und Diff-Check grün.
 
 | Review | Ergebnis | Geprüfter Code-HEAD | Offene Blocking-Findings |
 |---|---|---|---|

@@ -48,6 +48,7 @@ export type CombatAttributionRef =
 /** Relationship input. `ownerId` is not an attribution fallback. */
 export interface CombatAllegianceRef {
   readonly ownerId: string;
+  readonly kind?: 'player' | 'enemy' | 'world';
   readonly factionId?: string;
   readonly allowTeamDamage?: boolean;
 }

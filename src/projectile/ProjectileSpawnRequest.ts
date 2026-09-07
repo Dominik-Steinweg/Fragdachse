@@ -141,8 +141,11 @@ export interface ProjectileMiniRocketFlightSpec {
 export interface ProjectileProvenance {
   /** Entität, die das Projectile erzeugt hat. */
   readonly gameplaySourceId: string;
+  /** Host-captured source classification; survives source removal and child spawns. */
+  readonly gameplaySourceKind?: 'player' | 'enemy' | 'turret' | 'base' | 'world' | 'environment';
   /** Entität, der Treffer, Kills und Ressourcengewinn zugerechnet werden. */
   readonly attributionId: string;
+  readonly attributionKind?: 'player' | 'enemy' | 'world';
   readonly allegiance: ProjectileAllegianceRef;
   /** Authored Waffen-/Ability-Id der Quelle (Killfeed, Statistik). */
   readonly weaponSourceId?: string;
@@ -156,6 +159,8 @@ export interface ProjectileProvenance {
 /** Zugehörigkeit, aus der Freund-/Feind-Beziehungen aufgelöst werden. */
 export interface ProjectileAllegianceRef {
   readonly ownerId: string;
+  readonly kind?: 'player' | 'enemy' | 'world';
+  readonly factionId?: string;
   readonly allowTeamDamage?: boolean;
 }
 

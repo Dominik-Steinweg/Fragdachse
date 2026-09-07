@@ -41,6 +41,10 @@ export function composeWorldProjectileRuntime(
     presentation,
     identityScope: worldRuntime.projectileIdentityScope,
     hostNowMs: () => bridge.getSynchronizedNow(),
+    resolveProvenance: (provenance) => {
+      if (!gameplay.combatSystem) throw new Error('[ArenaWorldComposition] Combat source owner is missing');
+      return gameplay.combatSystem.captureProjectileProvenance(provenance);
+    },
     onDestroy: () => {
       if (gameplay.projectiles === projectileRuntime) gameplay.projectiles = null;
     },

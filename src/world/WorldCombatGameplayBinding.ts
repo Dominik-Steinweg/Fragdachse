@@ -928,15 +928,15 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         target.kind === 'decoy'
           ? true
           : target.kind === 'player' || target.kind === 'enemy'
-            ? o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, String(target.id), allowTeamDamage)
+            ? o.combatSystem.canProjectileDamageTarget(provenance, String(target.id), allowTeamDamage)
             // World targets have their own owner/domain path. Projectile targets use the
             // projectile-owner relationship rather than masquerading as Combat entities.
             : target.kind === 'projectile'
-              ? o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, String(target.id), allowTeamDamage)
+              ? o.combatSystem.canProjectileDamageTarget(provenance, String(target.id), allowTeamDamage)
               : true
       ),
       canDamageOwner: (provenance, otherOwnerId, allowTeamDamage) => (
-        o.combatSystem.canDamageTarget(provenance.allegiance.ownerId, otherOwnerId, allowTeamDamage)
+        o.combatSystem.canProjectileDamageTarget(provenance, otherOwnerId, allowTeamDamage)
       ),
       isTargetCurrentlyValid: (id, type, ownerId) => o.isHomingTargetValid?.(id, type, ownerId) ?? true,
     });
