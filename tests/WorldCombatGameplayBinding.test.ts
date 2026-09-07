@@ -725,6 +725,7 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
 
     expect(combatSystem.setApplyVulnerabilityHandler).toHaveBeenLastCalledWith(null);
     expect(combatSystem.setPlayerLifeEndedHandler).toHaveBeenLastCalledWith(null);
+    expect(combatSystem.setEnemyLifeEndedHandler).toHaveBeenLastCalledWith(null);
     expect(combatSystem.setMovementStatusPort).toHaveBeenLastCalledWith(null);
     expect(combatSystem.setPlasmaSwarmMechanicPort).toHaveBeenLastCalledWith(null);
     expect(turretLofSpy).toHaveBeenCalledWith(null);

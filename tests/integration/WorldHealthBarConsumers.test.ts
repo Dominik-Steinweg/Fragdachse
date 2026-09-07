@@ -72,21 +72,41 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
-  it.each(['timebomb', 'necromancy', 'none'] as const)('keeps replacement status and Injector focus after the %s death hook', hook => {
-    const h = harness(), manager = enemies(h), statuses = new TargetStatusSystem(), injector = new EnergyInjectorSystem();
+  it.each([
+    { hook: 'timebomb', applyNewStatus: false },
+    { hook: 'timebomb', applyNewStatus: true },
+    { hook: 'necromancy', applyNewStatus: false },
+    { hook: 'necromancy', applyNewStatus: true },
+    { hook: 'death-spawn', applyNewStatus: false },
+    { hook: 'death-spawn', applyNewStatus: true },
+    { hook: 'none', applyNewStatus: false },
+  ] as const)('ends old target status before $hook (new status: $applyNewStatus)', ({ hook, applyNewStatus }) => {
+    const h = harness(), manager = enemies(h, false, hook === 'death-spawn');
+    const statuses = new TargetStatusSystem(), injector = new EnergyInjectorSystem();
     upsert(manager, { id: 'e1', kind, x: 10, y: 20, hp: 40, maxHp: 100 });
+    const oldTarget = manager.getCombatTargetRef('e1');
     const target = { targetType: 'enemy' as const, targetId: 'e1' };
-    statuses.applyVulnerability(target, 1000, 1000); injector.setFocusTarget('old-owner', target, 1000, 1000);
+    statuses.applyVulnerability(target, 10000, 1000); injector.setFocusTarget('old-owner', target, 10000, 1000);
+    injector.setFocusTarget('renewed-owner', target, 10000, 1000);
     const inert = new Proxy({}, { get: () => () => undefined }); // Unrelated attachment ports only.
     const players = { getPlayer: () => undefined, getAllPlayers: () => [], setSpawnContextProvider: () => {} } as unknown as PlayerManager;
     const combat = new CombatSystem(players,
       { isHost: () => true, broadcastEffect: () => {}, areTeammates: () => false } as unknown as NetworkBridge);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
     const replace = () => {
+      expect(statuses.isVulnerable(target, 1234)).toBe(false);
+      expect(injector.getFocusTarget('old-owner', 1234)).toBeNull();
+      expect(injector.getFocusTarget('renewed-owner', 1234)).toBeNull();
       upsert(manager, { id: 'e1', kind, x: 30, y: 40, hp: 100, maxHp: 100 });
-      statuses.applyVulnerability(target, 10000, 1234);
-      injector.setFocusTarget('new-owner', target, 10000, 1234);
+      expect(manager.getCombatTargetRef('e1')).not.toEqual(oldTarget);
+      if (applyNewStatus) {
+        // A successor's shorter application must not merge with the old lifetime.
+        statuses.applyVulnerability(target, 1000, 1234);
+        injector.setFocusTarget('new-owner', target, 1000, 1234);
+        injector.setFocusTarget('renewed-owner', target, 1000, 1234);
+      }
     };
+    if (hook === 'death-spawn') manager.setEnemySpawnedCallback(replace);
     const binding = new WorldCombatGameplayBinding({
       playerManager: players, combatSystem: combat, baseManager: null, automatedWeaponExecution: null,
       getPlayerCombatIntegration: () => null, getEnemyManager: () => manager,
@@ -105,10 +125,14 @@ describe('World HP consumer boundaries', () => {
     } as never);
     const result = combat.applyDamage('e1', 100, false, 'old-attacker', 'test');
     expect(result).toMatchObject({ actualDamage: 40, transition: { kind: 'dead' } });
-    expect(statuses.isVulnerable(target, 1234)).toBe(hook !== 'none');
-    expect(injector.getFocusTarget('new-owner', 1234)).toEqual(hook === 'none' ? null : target);
-    if (hook === 'none') expect(injector.getFocusTarget('old-owner', 1234)).toBeNull();
-    else expect(manager.getEnemy('e1')!.getHp()).toBe(100);
+    expect(statuses.getSnapshot(1234)).toEqual(applyNewStatus ? [{ ...target, expiresAt: 2234 }] : []);
+    expect(injector.getFocusTarget('old-owner', 1234)).toBeNull();
+    expect(injector.getNetFocusSnapshot(1234)).toEqual(applyNewStatus ? [
+      { ...target, ownerId: 'new-owner', startedAt: 1234, expiresAt: 2234 },
+      { ...target, ownerId: 'renewed-owner', startedAt: 1234, expiresAt: 2234 },
+    ] : []);
+    if (hook !== 'none') expect(manager.getEnemy('e1')!.getHp()).toBe(100);
+    else expect(manager.getEnemy('e1')).toBeUndefined();
     binding.destroy(); manager.destroy();
   });
 

@@ -455,6 +455,7 @@ export class CombatSystem implements ProjectileCombatPort {
     target: CombatTargetRef,
   ) => void) | null = null;
   private onPlayerLifeEnded: ((target: CombatTargetRef) => void) | null = null;
+  private onEnemyLifeEnded: ((target: CombatTargetRef) => void) | null = null;
   /** Setzt die zentrale Verwundbarkeit auf einem Ziel; ohne Handler bleibt der Treffereffekt aus. */
   private onApplyVulnerability: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null = null;
   private onPlayerDamageTaken: ((
@@ -680,6 +681,9 @@ export class CombatSystem implements ProjectileCombatPort {
   }
   setPlayerLifeEndedHandler(handler: ((target: CombatTargetRef) => void) | null): void {
     this.onPlayerLifeEnded = handler;
+  }
+  setEnemyLifeEndedHandler(handler: ((target: CombatTargetRef) => void) | null): void {
+    this.onEnemyLifeEnded = handler;
   }
   /** Uebergibt die zentrale Verwundbarkeit an den Host, wenn ein Projektil sie auf Treffer setzt. */
   setApplyVulnerabilityHandler(handler: ((target: TargetStatusTarget, durationMs: number, nowMs: number) => void) | null): void {
@@ -3410,6 +3414,14 @@ export class CombatSystem implements ProjectileCombatPort {
     const creditedSource = this.lastSource.get(targetId);
     const killerId = creditedSource?.attribution.id ?? this.lastAttacker.get(targetId);
     const killSourceId = this.lastWeapon.get(targetId) ?? sourceId ?? 'source.unknown';
+    // Facts are secured; end target status before any hook can create a successor.
+    if (result.died) {
+      this.movementStatus?.clearMovementStatus(target);
+      this.plasmaSwarmMechanic?.clearTarget(target);
+      this.burnStatus.clearBurn(target);
+      this.onEnemyLifeEnded?.(target);
+      if (!current()) return outcome;
+    }
     const hitSeed = this.nextEffectSeed();
     const direction = this.resolveDamageDirection(targetId, attackerId, visualContext, hitSeed, x, y);
     if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
@@ -3450,9 +3462,6 @@ export class CombatSystem implements ProjectileCombatPort {
 
     if (result.died) {
       const deadTarget = outcome.target;
-      this.movementStatus?.clearMovementStatus(deadTarget);
-      this.plasmaSwarmMechanic?.clearTarget(deadTarget);
-      this.burnStatus.clearBurn(deadTarget);
       this.enemyManager?.completeCombatDeath(outcome);
       if (!current()) return outcome;
       const suppressStandardDeathEffect = this.onEnemyDeathCb?.(
