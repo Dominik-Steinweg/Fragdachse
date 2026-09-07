@@ -1,5 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const essenceHost = vi.hoisted(() => ({ now: 1000 }));
+const essenceRenderer = vi.hoisted(() => ({
+  update: vi.fn(), clear: vi.fn(), destroy: vi.fn(), setSuppressed: vi.fn(),
+}));
+
+// Only the GPU boundary is replaced; the Coordinator and its presentation/HUD binding run normally.
+vi.mock('../../src/adrenalineEssence/AdrenalineEssenceGpuRenderer', () => ({
+  AdrenalineEssenceGpuRenderer: class {
+    update = essenceRenderer.update;
+    clear = essenceRenderer.clear;
+    destroy = essenceRenderer.destroy;
+    setSuppressed = essenceRenderer.setSuppressed;
+    getStats() { return {}; }
+  },
+}));
+
 vi.mock('phaser', () => ({
   Scene: class {},
   GameObjects: {
@@ -10,11 +26,23 @@ vi.mock('phaser', () => ({
     Vector2: class {},
     Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
     Linear: (a: number, b: number, t: number) => a + (b - a) * t,
+    Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
   },
   BlendModes: { ADD: 1, NORMAL: 0 },
   Geom: {
-    Circle: class {},
-    Rectangle: class {},
+    Circle: class { x = 0; y = 0; radius = 0; },
+    Rectangle: class {
+      x = 0; y = 0; width = 0; height = 0;
+      constructor(x = 0, y = 0, width = 0, height = 0) { this.setTo(x, y, width, height); }
+      setTo(x: number, y: number, width: number, height: number) {
+        this.x = x; this.y = y; this.width = width; this.height = height;
+        return this;
+      }
+      get left() { return this.x; }
+      get right() { return this.x + this.width; }
+      get top() { return this.y; }
+      get bottom() { return this.y + this.height; }
+    },
     Line: class {
       x1 = 0; y1 = 0; x2 = 0; y2 = 0;
       setTo(x1: number, y1: number, x2: number, y2: number) {
@@ -33,10 +61,13 @@ vi.mock('../../src/network/bridge', () => ({
     getRoundState: () => null,
     getGamePhase: () => 'LOBBY',
     getGameMode: () => 'DEATHMATCH',
+    getActiveGameMode: () => 'deathmatch',
+    getSynchronizedNow: () => essenceHost.now,
     getLocalPlayerId: () => 'local',
     isLocalSpectator: () => false,
     isHost: () => true,
     getWorldParticipation: () => 'interactive',
+    getLocalWorldParticipation: () => 'interactive',
     clearWeapon2PredictionState: () => {},
   },
 }));
@@ -57,6 +88,22 @@ import type { NetworkBridge } from '../../src/network/NetworkBridge';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { ActivityDescriptor } from '../../src/world/ActivityDescriptor';
 import { fakeEntity } from '../fakeEntity';
+import { WorldRuntime } from '../../src/world/WorldRuntime';
+import { resolveWorldMetrics } from '../../src/world/WorldMetrics';
+import { createWorldGeometryQueries } from '../../src/world/WorldGeometryQueries';
+import { WorldPlayerGameplayRuntime } from '../../src/world/WorldPlayerGameplayRuntime';
+import { ResourceSystem } from '../../src/systems/ResourceSystem';
+import { BurrowSystem } from '../../src/systems/BurrowSystem';
+import { LoadoutManager } from '../../src/loadout/LoadoutManager';
+import { PlayerActionRuntime } from '../../src/world/PlayerActionRuntime';
+import { PlayerWeaponActivationRuntime } from '../../src/world/PlayerWeaponActivationRuntime';
+import { WorldWeaponExecutionRuntime } from '../../src/world/WorldWeaponExecutionRuntime';
+import { SpecializedWeaponExecutionAdapter } from '../../src/world/SpecializedWeaponExecutionAdapter';
+import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
+import type { PrimaryHitAdrenalineRewardFact } from '../../src/combat/PrimaryHitReward';
+import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
+import { essenceWorldGeometry } from '../essenceWorldGeometry';
+import { ADRENALINE_ESSENCE_CONFIG } from '../../src/adrenalineEssence/AdrenalineEssenceConfig';
 
 const activity: ActivityDescriptor = {
   activityRevision: 2,
@@ -64,6 +111,172 @@ const activity: ActivityDescriptor = {
   kind: 'coop-mission',
   definitionId: 'activity:coop-mission:1',
 };
+
+describe('Lobby World essence composition', () => {
+  function lobbyFixture(definitionId = 'world:lobby') {
+    essenceHost.now = 1000;
+    for (const callback of Object.values(essenceRenderer)) callback.mockClear();
+    const terrain = essenceWorldGeometry('lobby');
+    const origin = terrain.openPoints(ADRENALINE_ESSENCE_CONFIG.scatterMaxRadius + ADRENALINE_ESSENCE_CONFIG.groundClearance)[0];
+    expect(origin).toBeDefined();
+    const world = new WorldRuntime({
+      descriptor: { worldRevision: 73, definitionId, seed: 91, generatorVersion: 1, layoutFingerprint: 'practice' },
+      definition: null, bases: [], persistentBaseSite: null,
+      metrics: terrain.metrics,
+    });
+    const actors = new Map(['local', 'other'].map((id, index) => [id,
+      fakeEntity({ id, x: origin.x - 30 + index * 30, y: origin.y, body: { enable: true }, setPosition: vi.fn() })]));
+    const playerManager = {
+      getPlayer: (id: string) => actors.get(id),
+      getAllPlayers: () => [...actors.values()],
+    } as unknown as PlayerManager;
+    const combatBridge = {
+      isHost: () => true, areTeammates: () => false,
+      getPlayerProfile: (id: string) => actors.has(id) ? { id } : undefined,
+      broadcastEffect: vi.fn(), broadcastHitscanTracer: vi.fn(), broadcastMeleeSwing: vi.fn(),
+    } as unknown as NetworkBridge;
+    const combat = new WorldCombatCore(playerManager, combatBridge);
+    world.bind(combat.bindPlayerVitalsScope({ worldRevision: world.descriptor.worldRevision, runtimeGeneration: 9 }));
+    combat.bindHostExecutionSources({ nowMs: () => essenceHost.now, random: () => 0.25 });
+    combat.setWorldMetrics(world.context.metrics);
+    const resource = new ResourceSystem();
+    combat.setResourceSystem(resource);
+    for (const id of actors.keys()) { combat.initPlayer(id); resource.initPlayer(id); }
+    resource.setAdrenaline('local', 0);
+    const burrow = new BurrowSystem(resource, playerManager, combat, {} as any, combatBridge);
+    // Keep the real gameplay resource/participation methods, excluding unrelated abilities/render setup.
+    const playerGameplay = Object.create(WorldPlayerGameplayRuntime.prototype);
+    playerGameplay.systems = { resource, burrow };
+    playerGameplay.destroyed = false;
+    const geometry = createWorldGeometryQueries({
+      metrics: world.context.metrics, index: terrain.index, isActive: () => !world.isDestroyed(),
+    });
+    const hud = { setEssenceIncoming: vi.fn(), notifyEssenceArrival: vi.fn() };
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.worldRuntime = world;
+    coordinator.worldLifecycle = { isActive: () => !world.isDestroyed() };
+    coordinator.adrenalineEssence = null;
+    coordinator.ctx = { playerManager, playerStatusRing: hud };
+    coordinator.scene = {};
+    coordinator.renderers = { gpuVfx: { isSuppressed: () => false }, lighting: { setLight: vi.fn(), releaseLight: vi.fn() } };
+    coordinator.worldGameplay = { combatSystem: combat, player: playerGameplay, geometry: { getQueries: () => geometry } };
+
+    const facts: PrimaryHitAdrenalineRewardFact[] = [];
+    const removeObserver = combat.addPrimaryHitRewardObserver(fact => facts.push(fact));
+    world.bind({ destroy: removeObserver });
+    const loadout = new LoadoutManager(resource, { getGameMode: () => 'deathmatch' });
+    loadout.assignDefaultLoadout('local');
+    const physics = createTechnicalPhysicsBinding();
+    const projectiles = new WorldProjectileRuntime({
+      physicsBinding: physics.binding, presentation: createPresentation(), identityScope: world.projectileIdentityScope,
+      hostNowMs: () => essenceHost.now,
+      resolveProvenance: provenance => combat.captureProjectileProvenance(provenance),
+    });
+    world.bind(projectiles);
+    projectiles.setProjectileCombatPort(combat);
+    projectiles.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      const target = actors.get('other')!;
+      const x = target.x as number; const y = target.y as number;
+      sink('player', 'other', 'other', x, y, 10, x - 10, y - 10, x + 10, y + 10);
+    } });
+    projectiles.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true, isTargetCurrentlyValid: () => true });
+    const activation = new PlayerWeaponActivationRuntime({
+      playerManager: { getPlayer: id => actors.get(id) }, loadout, resourceSystem: resource,
+      capturePrimaryHitRewardScope: () => combat.getPrimaryHitRewardScope(),
+      weaponExecution: new WorldWeaponExecutionRuntime({ projectileSpawn: projectiles, combatSystem: combat }),
+      specializedWeaponExecution: new SpecializedWeaponExecutionAdapter(projectiles),
+    });
+    const actions = new PlayerActionRuntime({
+      getPlayer: id => actors.get(id), canInteract: () => true, isAlive: id => combat.isAlive(id),
+      isWeaponBlocked: () => false, isDashBurst: () => false,
+    }, loadout, null, activation);
+    const shoot = () => {
+      expect(actions.execute({ category: 'weapon', playerId: 'local', slot: 'weapon1', angle: 0,
+        targetX: origin.x, targetY: origin.y, hostNowMs: essenceHost.now })).toEqual({ ok: true });
+      const spec = physics.specs.at(-1)!;
+      const handle = physics.handles.get(spec.id)!;
+      Object.assign(handle.sprite, origin);
+      physics.observe(spec.id, origin.x, origin.y, handle.body.velocity.x, handle.body.velocity.y);
+      projectiles.runHostProjectileStage(16, essenceHost.now);
+      projectiles.runHostInteractionStage(essenceHost.now);
+    };
+    return { world, coordinator, combat, resource, actors, hud, facts, shoot, loadout, physics };
+  }
+
+  it('attaches practice rewards to the actual World lease and carries an authored Glock hit through pickup and HUD', () => {
+    const f = lobbyFixture();
+    try {
+      expect(f.combat.getPrimaryHitRewardScope()).toBeNull();
+      // Production attachment, after World gameplay composition and with no Activity descriptor.
+      f.coordinator.attachLobbyAdrenalineEssence();
+      const binding = f.coordinator.getAdrenalineEssence()!;
+      expect(binding.scope).toEqual({ worldRevision: 73, activityRevision: null });
+      expect(f.world.activity.isAttached()).toBe(false);
+      expect(f.world.activity.descriptor).toBeNull();
+      expect(f.combat.getPrimaryHitRewardScope()).toEqual({ worldRevision: 73, runtimeGeneration: 9, activityRevision: null });
+      expect(f.loadout.getEquippedWeaponConfig('local', 'weapon1')?.id).toBe('GLOCK');
+
+      const hp = f.combat.getHP('other');
+      f.shoot();
+      expect(f.combat.getHP('other')).toBeLessThan(hp);
+      expect(f.facts).toHaveLength(1);
+      expect(f.facts[0]).toMatchObject({ creatorId: 'local', worldRevision: 73, runtimeGeneration: 9,
+        activityRevision: null, source: { authoredSourceId: 'GLOCK', sourceSlot: 'weapon1' } });
+      expect(f.facts[0].resolvedValue).toBeGreaterThan(0);
+      expect(f.resource.getAdrenaline('local')).toBe(0);
+      const clusters = binding.runtime!.getState().clusters;
+      const totalValue = f.facts[0].resolvedValue;
+      expect(clusters).toHaveLength(ADRENALINE_ESSENCE_CONFIG.fragmentsPerReward);
+      expect(clusters.reduce((sum: number, cluster: { value: number }) => sum + cluster.value, 0)).toBe(totalValue);
+      for (const cluster of clusters) {
+        expect(cluster).toMatchObject({ state: 'ejecting', accessGroup: { kind: 'personal', playerId: 'local' } });
+        for (const other of clusters) if (cluster !== other) {
+          expect(Math.hypot(cluster.x - other.x, cluster.y - other.y)).toBeGreaterThan(ADRENALINE_ESSENCE_CONFIG.mergeRadius);
+        }
+      }
+      binding.render(essenceHost.now);
+      expect(essenceRenderer.update).toHaveBeenLastCalledWith(expect.objectContaining({ clusters }), essenceHost.now, []);
+
+      Object.assign(f.actors.get('local')!, { x: clusters[0].x, y: clusters[0].y });
+      essenceHost.now = Math.max(...clusters.map((cluster: { landAt: number }) => cluster.landAt));
+      binding.updateHost(essenceHost.now);
+      const transfers = binding.runtime!.getState().transfers;
+      expect(transfers).toHaveLength(clusters.length);
+      expect(transfers.every((transfer: { playerId: string }) => transfer.playerId === 'local')).toBe(true);
+      expect(f.resource.getAdrenaline('local')).toBe(0);
+      binding.render(essenceHost.now);
+      expect(f.hud.setEssenceIncoming).toHaveBeenLastCalledWith(totalValue);
+      essenceHost.now = Math.max(...transfers.map((transfer: { arrivalAt: number }) => transfer.arrivalAt));
+      binding.updateHost(essenceHost.now);
+      binding.render(essenceHost.now);
+      expect(f.resource.getAdrenaline('local')).toBe(totalValue);
+      expect(f.hud.notifyEssenceArrival).toHaveBeenCalledExactlyOnceWith(totalValue, 0);
+      expect(binding.runtime!.getDiagnostics()).toMatchObject({ activeValue: 0, committedValue: totalValue, conservationError: 0 });
+
+      // Outstanding ground value and presentation must die with World even though Activity stayed empty.
+      essenceHost.now += 1000;
+      f.shoot();
+      expect(binding.runtime!.getState().clusters).toHaveLength(ADRENALINE_ESSENCE_CONFIG.fragmentsPerReward);
+      f.world.destroy();
+      expect(f.coordinator.getAdrenalineEssence()).toBeNull();
+      expect(f.combat.getPrimaryHitRewardScope()).toBeNull();
+      expect(binding.runtime!.getState()).toMatchObject({ clusters: [], transfers: [] });
+      expect(essenceRenderer.destroy).toHaveBeenCalledOnce();
+      expect(f.physics.releaseWorldState).toHaveBeenCalledOnce();
+      expect(f.world.activity.descriptor).toBeNull();
+    } finally { f.world.destroy(); }
+  });
+
+  it('does not invent practice essence for an ordinary World whose Activity has not started', () => {
+    const f = lobbyFixture('world:coop-defense:1');
+    try {
+      f.coordinator.attachLobbyAdrenalineEssence();
+      expect(f.coordinator.getAdrenalineEssence()).toBeNull();
+      expect(f.combat.getPrimaryHitRewardScope()).toBeNull();
+      expect(f.world.activity.isAttached()).toBe(false);
+    } finally { f.world.destroy(); }
+  });
+});
 
 describe('Coop mission combat startup', () => {
   function reconnectFixture(respawnsPerPlayer: number) {

@@ -1,3 +1,4 @@
+import { createPrimaryHitRewardIntent, type AdrenalineGainBasis, type PrimaryHitAdrenalineRewardIntent, type PrimaryHitRewardScope } from '../combat/PrimaryHitReward';
 import type {
   BurnOnHitConfig,
   ChainLightningConfig,
@@ -40,6 +41,7 @@ export function isAmbientCompatibleWeapon(config: WeaponConfig): boolean {
 
 /** Normalisierter Hitscan-Schuss – frei von Waffen-, Ressourcen- und Netzwerkwissen. */
 export interface HitscanShotRequest {
+  readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   shooterId:       string;
   /** Ursprünglicher Fire-Request-Ursprung; fehlt bei rein lokalen oder Headless-Aufträgen. */
   shooterX?:        number;
@@ -76,6 +78,7 @@ export interface HitscanShotRequest {
 
 /** Normalisierter Nahkampfschlag. */
 export interface MeleeSwingRequest {
+  readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   shooterId:             string;
   x:                     number;
   y:                     number;
@@ -131,6 +134,9 @@ export interface WeaponFireOptions {
 
 /** Aufrufkontext eines einzelnen Schusses. */
 export interface WeaponFireParams {
+  readonly adrenalineGainBasis?: AdrenalineGainBasis | null;
+  readonly primaryHitRewardScope?: PrimaryHitRewardScope | null;
+  readonly primaryHitRewardOrigin?: { readonly x: number; readonly y: number };
   x:           number;
   y:           number;
   angle:       number;
@@ -335,6 +341,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
       },
       provenance: createSingleOwnerProvenance(ownerId, {
         weaponSourceId: config.id,
+        primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:projectile`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, sourceSlot),
         sourceSlot,
         sourceTurretId: options?.sourceTurretId,
         correlation: { ak47ShotId: config.ak47ShotId },
@@ -443,6 +450,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
       ?? getTopDownMuzzleOrigin(params.x, params.y, params.angle);
     const hasGameplayMuzzle = params.gameplayMuzzleOrigin !== undefined;
     return this.sink.resolveHitscan({
+      primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:hitscan`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, params.sourceSlot),
       shooterId:       params.ownerId,
       shooterX:        hasGameplayMuzzle ? params.x : undefined,
       shooterY:        hasGameplayMuzzle ? params.y : undefined,
@@ -479,6 +487,7 @@ export class WeaponFireExecutor implements WeaponExecutionCapability {
     params: WeaponFireParams,
   ): boolean {
     return this.sink.resolveMelee({
+      primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:melee`, params.adrenalineGainBasis, config.adrenalinGain, config.hitAdrenaline ?? 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, params.sourceSlot),
       shooterId:             params.ownerId,
       x:                     params.x,
       y:                     params.y,

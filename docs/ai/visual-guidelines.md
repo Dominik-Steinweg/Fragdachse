@@ -2,7 +2,9 @@
 
 ## Art Direction
 
-Fragdachse verwendet eine orthografische 90°-Top-down-Perspektive mit klarer Pixel-Art-Silhouette. World-Geometrie, Spieler, Gegner, Basen und Interactables müssen aus normaler Spielentfernung unterscheidbar bleiben; Mikrodetails sind nachgeordnet.
+Fragdachse verwendet eine orthografische 90°-Top-down-Perspektive mit klarer Silhouette. World-Geometrie, Spieler, Gegner, Basen und Interactables müssen aus normaler Spielentfernung unterscheidbar bleiben; Mikrodetails sind nachgeordnet.
+
+Für neue Turm-, Gegner- und Character-Sprites präzisiert die [Asset-Pipeline V1](../../scripts/asset-pipeline/README.md) den Stil als modernen, farbenfrohen, texturierten und leicht stilisierten 2D-Look mit weichen Kanten. Künstliche Pixelrasterung, harte schwarze Cartoon-Outlines, fotografische Reflexe und Miniaturbeleuchtung sind dabei ausgeschlossen. Vorhandene Weltassets und 47-Blob-Flächen werden dadurch nicht umgestaltet. Die Abnahme erfolgt bei tatsächlicher Anzeigegröße; höhere Quellauflösung ersetzt diese Prüfung nicht.
 
 - Konturen und Wertkontraste definieren zuerst die Form.
 - Farbflächen tragen Fraktion, Zustand und Bedrohung, ohne die Lesbarkeit der World-Tiles zu überdecken.

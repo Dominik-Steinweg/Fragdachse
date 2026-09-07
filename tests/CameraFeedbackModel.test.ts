@@ -217,4 +217,15 @@ describe('CameraFeedbackModel', () => {
     expect(magnitude(output)).toBe(0);
     expect(output.zoomScale).toBe(1);
   });
+
+  it('cancels shot feedback immediately while preserving explosion sources', () => {
+    const model = makeModel();
+    model.request({ id: 'weapon:local-shot', channel: 'kick', amplitudePx: 3, durationMs: 200, priority: 20, dirX: 1 }, 0);
+    model.request({ id: 'explosion', channel: 'impact', amplitudePx: 20, durationMs: 400, priority: 70 }, 0);
+    model.cancel('weapon:local-shot');
+    const out = model.step(16, 16, 0, 0, 1);
+    expect(out.activeSources).toBe(1);
+    expect(magnitude(out)).toBeGreaterThan(0);
+    expect(model.getDebugSnapshot()[0].id).toBe('explosion');
+  });
 });

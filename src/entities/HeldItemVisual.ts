@@ -1,4 +1,7 @@
 import type * as Phaser from 'phaser';
+import type { WeaponFeedbackProfile } from '../config/weaponFeedback';
+import { HeldWeaponFeedbackModel } from '../effects/weapon/HeldWeaponFeedbackModel';
+import type { OwnerHeldWeaponPose } from './OwnerVisualSource';
 import { getHeldItemAnchor, HELD_ITEM_TEXTURE_SIZE, type MuzzleOrigin } from '../config';
 import {
   getHeldItemPointWorld,
@@ -8,11 +11,8 @@ import {
 /**
  * Das in den Pfoten getragene Loadout-Item einer Figur.
  *
- * Bewusst ein eigenstaendiges Image statt eines Containers um die Figur: `PlayerEntity.sprite`
- * traegt den Physik-Body, ist projektweit die Trefferposition und wird von Trefferblitz,
- * Beleuchtung und Klarheitskamera direkt referenziert – es in einen Container zu verpacken haette
- * all das verschoben. Der Preis ist, dass der Spielerfarben-Glow der Figur das Item nicht erfasst;
- * dafuer bleibt es bei genau einem Filter je Figur statt zweien.
+ * Ein eigenstaendiges Image mit eigener Rueckstosspose. PlayerBody und Player-Runtime bleiben
+ * die Quelle fuer Position und Treffergeometrie; das Item folgt der optionalen Spielerpräsentation.
  *
  * Das Bild bleibt ueber die gesamte Lebensdauer bestehen und wechselt nur seine Textur. Ein
  * Waffenwechsel darf kein Game Object erzeugen: er faellt in einer Runde pro Spieler beliebig oft an.
@@ -22,6 +22,9 @@ export class HeldItemVisual {
   private itemId: string | null = null;
   private hasSprite = false;
   private scrollFactor: number | null = null;
+  private readonly feedback = new HeldWeaponFeedbackModel();
+  private readonly feedbackPose = { recoilPx: 0, rotationRad: 0 };
+  private staleItemId: string | null | undefined;
 
   /**
    * `onImageCreated` laeuft genau einmal, sobald das Bild tatsaechlich entsteht. Das Bild wird
@@ -41,10 +44,14 @@ export class HeldItemVisual {
 
   /**
    * Getragenes Item setzen. `null` oder eine ID ohne Bild (Nahkampf, Konstrukte) blendet aus.
-   * Wiederholte Aufrufe mit derselben ID sind kostenlos – der Aufrufer darf jeden Frame rufen.
+   * Wiederholte Aufrufe mit derselben ID erzeugen keine Arbeit am Image. `force` kennzeichnet
+   * eine bewusste lokale Auswahl; sie darf auch einen laufenden Shot-Slot-Override abbrechen.
    */
-  setItem(itemId: string | null): void {
+  setItem(itemId: string | null, force = false): void {
+    if (!force && itemId === this.staleItemId && this.feedback.isActive(this.scene.time.now)) return;
+    if (itemId === this.itemId) this.staleItemId = undefined;
     if (itemId === this.itemId) return;
+    this.resetFeedback();
 
     const spec = getHeldItemSpriteSpec(itemId);
     if (spec && !this.scene.textures.exists(spec.textureKey)) {
@@ -94,6 +101,7 @@ export class HeldItemVisual {
   ): void {
     if (!this.image) return;
     if (!this.hasSprite || !visible) {
+      this.resetFeedback();
       this.image.setVisible(false);
       return;
     }
@@ -101,11 +109,13 @@ export class HeldItemVisual {
     const textureScale = displaySize / HELD_ITEM_TEXTURE_SIZE;
     const anchor = getHeldItemAnchor(x, y, spriteRotation, textureScale);
     const frame = this.image.frame;
+    this.feedback.sample(this.scene.time.now, this.feedbackPose);
+    const recoil = this.feedbackPose.recoilPx * textureScale;
 
     this.image
       .setVisible(true)
-      .setPosition(anchor.x, anchor.y)
-      .setRotation(spriteRotation)
+      .setPosition(anchor.x - Math.sin(spriteRotation) * recoil, anchor.y + Math.cos(spriteRotation) * recoil)
+      .setRotation(spriteRotation + this.feedbackPose.rotationRad)
       .setDisplaySize(frame.cutWidth * textureScale, frame.cutHeight * textureScale)
       .setAlpha(alpha);
   }
@@ -121,6 +131,32 @@ export class HeldItemVisual {
     return this.image;
   }
 
+  playShot(itemId: string, profile: WeaponFeedbackProfile): 'started' | 'refreshed' | null {
+    const previous = this.itemId;
+    if (itemId !== this.itemId) this.setItem(itemId, true);
+    if (!this.hasSprite) return null;
+    if (previous !== itemId) this.staleItemId = previous;
+    return this.feedback.fire(profile, this.scene.time.now) ? 'started' : 'refreshed';
+  }
+
+  stopSustained(): void { this.feedback.stopSustained(this.scene.time.now); }
+  resetFeedback(): void { this.feedback.reset(); this.staleItemId = undefined; }
+
+  /** Current rendered muzzle; never consumed by simulation. */
+  readWeaponPose(out: OwnerHeldWeaponPose): boolean {
+    const image = this.image;
+    const spec = getHeldItemSpriteSpec(this.itemId);
+    if (!image?.active || !image.visible || !spec || !this.itemId) return false;
+    const x = (spec.muzzleX - spec.gripX) * image.scaleX;
+    const y = (spec.muzzleY - spec.gripY) * image.scaleY;
+    const c = Math.cos(image.rotation), s = Math.sin(image.rotation);
+    out.x = image.x + x * c - y * s;
+    out.y = image.y + x * s + y * c;
+    out.rotation = image.rotation;
+    out.itemId = this.itemId;
+    return true;
+  }
+
   /** Liefert den registrierten Mündungs-Punkt in Weltkoordinaten für Effekte und Audio. */
   getMuzzleOrigin(
     x: number,
@@ -130,7 +166,7 @@ export class HeldItemVisual {
   ): MuzzleOrigin | null {
     const spec = getHeldItemSpriteSpec(this.itemId);
     if (!spec) return null;
-    return getHeldItemPointWorld(
+    const point = getHeldItemPointWorld(
       x,
       y,
       spriteRotation,
@@ -139,9 +175,19 @@ export class HeldItemVisual {
       spec.muzzleX,
       spec.muzzleY,
     );
+    const anchor = getHeldItemAnchor(x, y, spriteRotation, displaySize / HELD_ITEM_TEXTURE_SIZE);
+    this.feedback.sample(this.scene.time.now, this.feedbackPose);
+    const c = Math.cos(this.feedbackPose.rotationRad), s = Math.sin(this.feedbackPose.rotationRad);
+    const dx = point.x - anchor.x, dy = point.y - anchor.y;
+    const recoil = this.feedbackPose.recoilPx * displaySize / HELD_ITEM_TEXTURE_SIZE;
+    return {
+      x: anchor.x + dx * c - dy * s - Math.sin(spriteRotation) * recoil,
+      y: anchor.y + dx * s + dy * c + Math.cos(spriteRotation) * recoil,
+    };
   }
 
   destroy(): void {
+    this.resetFeedback();
     this.image?.destroy();
     this.image = null;
     this.hasSprite = false;

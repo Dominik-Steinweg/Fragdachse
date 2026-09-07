@@ -70,6 +70,9 @@ export const GpuVfxEffectId = {
   FlightWake: 56,
   FlightMote: 57,
   FlightPressure: 58,
+  MovementFootprint: 59,
+  MovementWalkDust: 60,
+  MovementDashDust: 61,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -558,4 +561,10 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.MuzzleSpark, importance: 'decorative', release: 'linger' },
   { id: GpuVfxEffectId.FlightPressure, label: 'flight.pressure', lane: GpuVfxLaneId.FlightSignature,
     frame: GpuVfxFrameId.ExplosionStreak, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.MovementFootprint, label: 'movement.footprint', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.MovementPawCompact, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.MovementWalkDust, label: 'movement.walk-dust', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.LeafBlowerDust, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.MovementDashDust, label: 'movement.dash-dust', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.LeafBlowerDust, importance: 'standard', release: 'linger' },
 ];

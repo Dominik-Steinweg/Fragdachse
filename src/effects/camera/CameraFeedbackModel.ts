@@ -242,6 +242,12 @@ export class CameraFeedbackModel {
     this.evictWeakest(nowMs);
   }
 
+  /** Remove a disabled presentation source without affecting other camera feedback. */
+  cancel(id: string): void {
+    const index = this.sources.findIndex((source) => source.id === id);
+    if (index >= 0) this.sources.splice(index, 1);
+  }
+
   /** Dauerquellen laufen aus, statt hart abzureißen. */
   release(id: string, nowMs: number, releaseMs: number = DEFAULT_RELEASE_MS): void {
     const source = this.sources.find((entry) => entry.id === id);

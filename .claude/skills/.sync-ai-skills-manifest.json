@@ -13,6 +13,7 @@
     "data-manager",
     "events-system",
     "filters-and-postfx",
+    "fragdachse-asset-pipeline",
     "fragdachse-phaser",
     "game-object-components",
     "game-setup-and-config",

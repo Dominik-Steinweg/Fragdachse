@@ -1,14 +1,14 @@
 # Fragdachse – Adrenalin-Essenz GDD
 
-**Status:** Fachliches Zielkonzept nach gemeinsamem Designreview; Entscheidungen abgeschlossen, siehe § 22.1. Umsetzung erfolgt erst in einem gesonderten Folgeauftrag.
+**Status:** Fachliche Entscheidungen einschließlich Dreifachstreuung, Flüssigkeitsoptik und Arenabeleuchtung durch Folgeauftrag autorisiert und integriert. Der [Implementierungsstand](Fragdachse_Adrenalin_Essenz_Implementation_Plan.md#umsetzungsstand-vom-08092026) trennt aktuelle technische Prüfungen von weiterhin ausgeschlossener Sichtprüfung.
 
-**Dokumentversion:** 2.2 – Dokumentreview vom 07.09.2026; Dateiname für bestehende Referenzen beibehalten
+**Dokumentversion:** 2.5 – verteilte Flüssigkeitstropfen und gebündelte Arenabeleuchtung vom 08.09.2026; Dateiname für bestehende Referenzen beibehalten
 
 **Arbeitsbegriff:** „Adrenalin-Orbs“; visuelle Zielidentität: leuchtende Adrenalin-Essenz/Tropfen
 
 **Repository-Abgleich:** Ursprüngliche Analyse bei `0670b9a95c6576e3340dc802bda3d71cd711b186`; gezielter Dokumentreview am 07.09.2026 bei lokalem HEAD `505e5af0404e82e7bec2c499aca7344611fcc07a` plus vorhandenem, nicht sauberem Arbeitsbaum. Resource-Port, AcceptedHit, direkte Reward-Pfade, Geometrie und Lifecycle-Anker stichprobenartig geprüft; keine vollständige technische oder manuelle Abnahme.
 
-**Combat-Stand:** Combat-Refactoring P0–P13 und technische Endabnahme `F` abgeschlossen; Coop-Startup-Bugfix integriert; erneute manuelle Gameplay-/Sichtabnahme `M` laut Migrationsstatus noch offen
+**Implementierungsstart:** sauberer Arbeitsbaum bei `8b9b637202b58b34c854c0d47f8e8ef55f232ee1` (`HitFeedback V3`). Der Folgeauftrag umfasst P1–P5 und schließt eine Sichtprüfung ausdrücklich aus. Die bisher offene manuelle Combat-Abnahme `M` und die visuellen Abnahmen werden dadurch nicht als bestanden behauptet und blockieren diesen autorisierten Auftrag nicht.
 
 **Geltungsbereich:** Primärwaffen-Trefferbelohnung, sammelbare Adrenalin-Essenz, Zugriffsgruppen, Magnettransfer, HUD-Feedback, Multiplayer, Performance und repository-konforme Verantwortungsgrenzen
 
@@ -19,6 +19,8 @@
 ## 0. Geltung und Dokumentrang
 
 Dieses Dokument definiert die **verbindliche Spielerfahrung und fachliche Semantik** der Adrenalin-Essenz. Es ist kein Implementierungsplan und schreibt keine konkrete Klassenzahl oder Dateistruktur vor.
+
+**Ergänzung nach Spieltest:** Essenz funktioniert auch auf der begehbaren Lobby-Testfläche entsprechend dem dort gewählten Spielmodus. Die folgenden Activity-Lifetime-Regeln beschreiben Matches; im Lobby-Testgelände übernimmt ausdrücklich die bestehende Lobby-World denselben Essenz-Lifecycle (§ 14.3). Es wird keine Activity erfunden und es entstehen keine zusätzlichen Score-/XP-/Missions-Rewards. Die früher ausschließlich auf Match-Activities begrenzte Erzeugung ist damit für diese eine World bewusst erweitert.
 
 Für die spätere Umsetzung gelten zusätzlich die aktuellen Architekturverträge aus:
 
@@ -39,7 +41,7 @@ Die hier genannten Repository-Klassen und -Dateien sind **aktuelle Integrationsa
 
 Maßgeblich für technische Ist-Aussagen sind aktueller Code, öffentliche Types und passende Tests. Das [Architektur-Leitbild](../../ai/architecture-principles.md) und die aktuellen Verträge im [AI-Router](../../ai/index.md) ergänzen die Runtime-Dokumente; historische Migrationsstände ersetzen keinen aktuellen Nachweis.
 
-Vor dem tatsächlichen Implementierungsstart ist ein gezieltes Delta-Review gegen den dann verwendeten Checkout einschließlich vorhandener Änderungen erforderlich. Der Status der manuellen Combat-Abnahme `M` wird im Preflight dokumentiert; sie ist spätestens vor dem produktiven Reward-Cutover in P2 abzuschließen. Dokumentreview und isolierte P1-Grundlagen benötigen diese Sichtabnahme nicht. Weder das Abschließen der Designfragen noch dieser Plan erteilen einen Implementierungsauftrag.
+Der gezielte Delta-Review und der Implementierungsauftrag sind erfolgt. Der ausdrückliche Folgeauftrag „komplett umsetzen, keine Sichtprüfung“ ersetzt für diesen Durchlauf die ursprüngliche Freigabewartezeit und das manuelle Combat-Gate vor P2. Die fachlichen Regeln bleiben verbindlich; fehlende manuelle Qualitäts- und Laufzeitnachweise bleiben als solche ausgewiesen.
 
 ---
 
@@ -47,7 +49,7 @@ Vor dem tatsächlichen Implementierungsstart ist ein gezieltes Delta-Review gege
 
 Primärwaffentreffer schreiben Adrenalin künftig nicht mehr unmittelbar und unsichtbar in die Ressource des Angreifers. Erfolgreiche, belohnungsberechtigte Treffer materialisieren stattdessen **blau-cyan leuchtende Adrenalin-Essenz** am Trefferort.
 
-Die Essenz spritzt als kleine magische Flüssigkeitstropfen aus dem Ziel, landet in dessen Umgebung, kann mit naher Essenz zusammenfließen und wird erst anschließend durch räumliche Nähe magnetisch eingesammelt.
+Bereits ein einzelner Glock-Treffer verteilt seinen vollständigen bisherigen Wert auf drei getrennt sammelbare cyanblaue Flüssigkeitsperlen. Sie spritzen in verschiedene Richtungen, können nach der Landung mit naher Essenz zusammenfließen und werden durch räumliche Nähe magnetisch eingesammelt. Ihr Material wirkt zähflüssig zwischen Gel und flüssigem Metall; im Dunkeln erhellen gebündelte lokale Lichtquellen die nahe Arena.
 
 Die gewünschte Belohnungskette lautet:
 
@@ -137,7 +139,7 @@ Die Lösung soll spätere Erweiterungen erlauben, ohne sie in der ersten vollst�
 | Rückgabe | Nicht gutgeschriebener Wert kehrt zur ursprünglichen Bodenposition zurück. |
 | Ablauf im Flug | Rechtzeitig gestarteter Transfer darf ankommen; nach Ablauf abgebrochener oder nicht aufnehmbarer Rest verfällt. |
 | Merge | Kompatible Essenz derselben Zugriffsgruppe darf räumlich-zeitlich zusammenfließen. |
-| Visual | Kleine leuchtende Flüssigkeitstropfen, zwei bis drei Größenstufen, adaptive Dichte. |
+| Visual | Kleine leuchtende Flüssigkeitsperlen, begrenztes Größenwachstum, adaptive Nebentropfen und gebündelte Arenabeleuchtung. |
 | HUD | Dezenter Anflugakzent; gebündelter Ankunfts-Burst; kein Audio im Erstumfang. |
 | Balancing | Nach der ersten vollständigen Implementierung auf Basis gemessener Sammelquoten. |
 
@@ -188,7 +190,7 @@ Ein exakter positiver Wertanteil, der aus genau einem heute belohnten Treffer he
 - Herkunft für Diagnose und Balancing;
 - `worldRevision`, `activityRevision` und relevante Runtime-/Life-Gültigkeit.
 
-Ein Reward-Beitrag ist ein fachliches Konzept. Die Runtime darf kompatible Beiträge in kompakten Buckets verwalten, solange Wert, Ablauf, Attribution und Diagnose korrekt bleiben.
+Ein Treffer erzeugt standardmäßig drei solche Beiträge; Gain-Basis, Trefferstatistik und Attribution werden für den gemeinsamen Reward genau einmal ausgewertet. Die Runtime darf kompatible Beiträge in kompakten Buckets verwalten, solange Wert, Ablauf, Attribution und Diagnose korrekt bleiben.
 
 ### 4.4 Essenz-Cluster
 
@@ -365,6 +367,8 @@ Die Ankunft verwendet den kanonischen Player-Resource-Owner, aber mit einer **be
 
 Der Transfer darf die freie Kapazität nicht separat lesen und anschließend blind schreiben. Der Resource-Commit selbst bestimmt atomar den gutgeschriebenen Wert; nur dessen Differenz zum reservierten Wert kann anschließend zurückgegeben oder verworfen werden.
 
+Steigt der gespeicherte Ressourcenwert, gilt der vom Cap zugelassene Transaktionsbetrag als verbraucht. Eine erneute Subtraktion gerundeter Gesamtsummen darf keine künstlichen Resttropfen erzeugen. Ist selbst die Erhöhung nicht darstellbar, bleibt der echte unbestätigte Teilwert beim Essenz-Owner.
+
 Die Erzeugung eines Reward-Beitrags löst noch keinen normalen Adrenalin-Gain-Observer aus. Erst die bestätigte Ankunft zählt als tatsächlich gewonnene Ressource.
 
 ---
@@ -440,13 +444,13 @@ Die Position darf nicht aus Render-Sprites, Tracern oder lokaler Vorhersage reko
 
 ### 7.2 Kurzer Treffer-Ausstoß
 
-Unmittelbar nach der Materialisierung eines bestätigten Reward-Beitrags spritzen kleine cyanfarbene Tropfen in einem kompakten Bereich auseinander.
+Unmittelbar nach einem bestätigten Reward spritzen standardmäßig drei getrennt sammelbare Teilwerte in verschiedene Richtungen. Der Host berechnet die Richtungen deterministisch aus dem Seed: ungefähr 120° Abstand mit höchstens ±10° Variation je Richtung. Jeder Teilwert erhält einen eigenen Cluster; vorhandene Merge-Regeln bleiben auch zwischen diesen Clustern wirksam.
 
 Ausgangswerte:
 
 - Landungszeit ungefähr 150–250 ms;
-- Streuradius ungefähr 20–45 Weltpixel;
-- geringfügig wertabhängige Dichte und Breite;
+- Streuradius 30–45 Weltpixel, auf freiem Boden außerhalb des gegenseitigen Merge-Radius;
+- drei logische Teilwerte, dazu höchstens wenige wertabhängige dekorative Nebentropfen;
 - keine proportional unbegrenzt wachsende Fläche.
 
 Während des Ausstoßes ist der Wert noch nicht sammelbar.
@@ -465,7 +469,7 @@ Zu vermeiden sind insbesondere:
 
 Die zentrale World-Geometrie ist die Quelle der Wahrheit. Der Landungsresolver darf nicht auf private Daten von `WorldCombatCore` oder auf Darstellungsmaße zugreifen.
 
-Der aktuelle `WorldGeometryQueries`-Vertrag bietet World-Metriken, LoS und `isCircleBlocked`, aber noch keinen fertigen „nächsten sicheren Bodenpunkt“. Der Implementierungsplan muss diese schmale Geometrie-Capability ergänzen oder einen gleichwertigen World-owned Resolver vorsehen.
+Die Runtime streut die Kandidaten; `WorldGeometryQueries.resolveSafeGroundPoint` prüft anschließend jeden Kandidaten und führt bei Bedarf die begrenzte Suche nach einem sicheren Ersatzpunkt aus.
 
 Bewegliche Sonderkörper:
 
@@ -475,7 +479,9 @@ Bewegliche Sonderkörper:
 
 Kann im unmittelbaren Streubereich kein gültiger Punkt gefunden werden, wird mit begrenzter deterministischer Suche ein naher gültiger Fallbackpunkt verwendet. Die normalen Rand-/Hindernisfälle müssen damit abgedeckt sein. Bestehende World-Geometrie und Layout-Gültigkeit reichen als Grundlage; hierfür wird kein neues Navigationssystem aufgebaut.
 
-Dass auch die Fallbacksuche keinen gültigen Punkt liefert, gilt als unerwarteter Geometrie-/Platzierungsfehler. Dafür entstehen weder Warteschlange noch wiederholte Suche, Sonderphysik oder automatische Direktgutschrift. Der betroffene Wert wird einmalig als `placementFailedValue` erfasst und verworfen; eine Diagnose nennt Reward, World/Activity und Ursprung. Dies ist die ausdrücklich ausgewiesene Ausnahme zur Werterhaltung im regulären Ablauf, kein zulässiger Lastabbau. Im normalen Abnahmeszenario muss der Fehlerzähler null bleiben.
+Die Wertaufteilung erfolgt erst nach den Platzierungsversuchen: Fallen Punkte zusammen oder sind nur einzelne Kandidaten gültig, verteilt sich der vollständige Reward auf die unterschiedlichen gültigen Punkte. Es wird nicht gerundet; der letzte Beitrag erhält den rechnerischen Rest. Selbst kleinste positive Werte bleiben erhalten, sofern nicht jeder Anteil separat darstellbar ist auch in weniger Beiträgen.
+
+Nur wenn kein Kandidat einschließlich Fallback einen gültigen Punkt liefert, liegt ein unerwarteter Platzierungsfehler vor. Dafür entstehen weder Warteschlange noch wiederholte Suche, Sonderphysik oder automatische Direktgutschrift. Der vollständige Reward wird einmalig als `placementFailedValue` erfasst und verworfen; eine Diagnose nennt Reward, World/Activity und Ursprung. Dies ist die ausdrücklich ausgewiesene Ausnahme zur Werterhaltung im regulären Ablauf, kein zulässiger Lastabbau. Im normalen Abnahmeszenario muss der Fehlerzähler null bleiben.
 
 ### 7.4 Determinismus
 
@@ -489,7 +495,7 @@ Ausgangswert:
 
 - **8 Sekunden Bodenlebensdauer**
 
-Die letzten ungefähr 1–1,5 Sekunden werden durch schnelleres Flackern, sinkenden Glow oder Verdunsten angekündigt.
+Die letzten ungefähr 1–1,5 Sekunden werden durch sinkenden Glow und weiches Verdunsten angekündigt; harte Blinksignale passen nicht zum Flüssigkeitsmaterial.
 
 ### 7.6 Kein künstliches Verlängern
 
@@ -762,7 +768,7 @@ Verbindlich:
 
 Adrenalin-Essenz wirkt wie:
 
-> **kleine, magisch leuchtende Regentropfen aus flüssiger Energie**
+> **kleine cyanblaue Perlen einer leuchtenden, zähflüssigen magischen Flüssigkeit zwischen Gel und flüssigem Metall**
 
 Sie soll nicht primär wirken wie:
 
@@ -779,31 +785,34 @@ Die Essenz nutzt die vorhandene Adrenalin-Farbfamilie:
 
 - gesättigtes Blau;
 - helles Cyan;
-- fast weißer Energiekern;
+- breite weiche Reflexe mit kleinen hellen Akzenten, ohne weiß auszubrennen;
 - dunkler blauer Rand oder Nachhall.
 
 Sie muss eindeutig mit dem Adrenalinsegment des Spielerstatusrings verwandt sein.
 
 ### 11.3 Größe und Wertwahrnehmung
 
-- Standardtropfen: nur wenige Pixel;
-- zwei bis drei klar begrenzte Größenstufen;
+- kleine Teilwerte: überwiegend eine Kernperle mit etwa 4–6 px Körperdurchmesser;
+- begrenztes Größenwachstum mit wenigen dekorativen Größenvarianten;
 - größere Perlen bleiben deutlich kleiner als eine Spielfigur;
 - kleine Bruchteile erzeugen keine unlesbaren Mikrotropfen;
 - größere Werte nutzen Dichte, Größenmix, Satelliten, Helligkeit und Halo;
 - der exakte Wert muss nicht aus der Grafik ablesbar sein.
 
-Die ursprüngliche Idee „ein Adrenalinpunkt ≈ ein Tropfen“ bleibt eine Dichteheuristik für normale kleine Werte, kein Datenvertrag.
+Logische Teilwerte und dekorative Tropfen sind getrennt: Der Host bestimmt die sammelbaren Cluster; zusätzliche sichtbare Nebentropfen sind eine begrenzte Dichteheuristik, keine eigene Ressource.
 
 ### 11.4 Leuchten
 
-Bevorzugt sind:
+Der Material-Halo ergänzt echte Arenabeleuchtung über das vorhandene `LightingSystem`. Aus den tatsächlich dargestellten Boden- und Flugpositionen werden in 64-px-Zellen gemeinsame Lichtquellen mit gewichtetem Schwerpunkt gebildet. Die Tageszeit dämpft diese Quellen zentral; das cyanfarbene Material bleibt auch tagsüber lesbar.
 
-- additive helle Kerne;
-- kleiner weicher Glow;
-- aggregierter Halo pro Cluster;
-- leichte cyanfarbene Umgebungswirkung;
-- keine individuelle dynamische Lichtquelle pro Tropfen.
+- blasses Cyan, Radius 64–80 px, Intensität 0,2–0,4 bei voller Sichtbarkeit;
+- höchstens 12/8/4 aktive oder ausblendende Essenzlichter bei High/Medium/Low;
+- sichtbare und nahe Quellen werden stabil bevorzugt; keine eigene Schattenberechnung;
+- Aktualisierung in jedem Darstellungsframe, unabhängig von gedrosselten GPU-Updates ruhender Perlen;
+- ausschließlich aktuell zugängliche, lokal sichtbare Essenz liefert Licht;
+- normales Ende darf ausblenden; Zugriffswechsel, Unterdrückung, Scope-Wechsel und Teardown entfernen auch bereits ausblendende Quellen sofort.
+
+Dies ersetzt die frühere Beschränkung auf rein kosmetischen Glow. Individuelle Lichtquellen pro Tropfen bleiben ausgeschlossen.
 
 ### 11.5 Zustandssprache
 
@@ -816,7 +825,8 @@ Bevorzugt sind:
 **Boden**
 
 - kompakte Perlen;
-- ruhiger Puls;
+- kurzes Abflachen bei Landung, gedämpftes Zurückfedern;
+- langsame Formveränderung und sanft wandernde Reflexe;
 - klar sammelbar.
 
 **Merge**
@@ -839,7 +849,7 @@ Bevorzugt sind:
 **Ablauf**
 
 - sinkender Glow;
-- Flackern oder Verdunsten;
+- weiches Verdunsten;
 - weiches Verschwinden.
 
 ### 11.6 Visuelle Hierarchie
@@ -968,7 +978,7 @@ Clients dürfen nur passive Darstellung und kosmetische Vorhersage ausführen.
 
 ### 13.2 Activity- und World-Scope
 
-Der fachliche Essenz-State gehört genau zu einer Activity innerhalb einer World. Jede Identität und jeder Snapshot trägt beziehungsweise impliziert deshalb sowohl `worldRevision` als auch `activityRevision`.
+Der fachliche Essenz-State gehört in Matches genau zu einer Activity innerhalb einer World, im Lobby-Testgelände zur dortigen World. Jede Identität und jeder Snapshot trägt deshalb `worldRevision` und `activityRevision`; letztere ist ausschließlich für das explizite Lobby-World-Binding `null`. Dieses Binding ist von jeder echten, positiv nummerierten Activity getrennt.
 
 Stale Daten einer älteren Activity, World oder lokalen Runtime dürfen:
 
@@ -1064,29 +1074,29 @@ Die Essenz muss sich in diese Grenzen einordnen und darf keine neue God Class od
 | Combat-Mutation und bestätigtes Outcome | bestehende Combat-/Target-Owner |
 | Reward-Intent an der Waffenwirkung | bestehende Execution-/Projectile-/Immediate-Attack-Verträge |
 | Umwandlung eines bestätigten Rewards in Essenz | schmale post-commit Gameplay-Reaktion beziehungsweise Reward-Projektion |
-| Cluster, Beiträge, Ablauf, Merge und Transfers | Activity-owned autoritative Essenz-Runtime beziehungsweise ein strikt activity-tokenisiertes Binding mit identischer Lifetime |
+| Cluster, Beiträge, Ablauf, Merge und Transfers | Autoritative Essenz-Runtime im Match-Activity-Binding beziehungsweise im expliziten Lobby-World-Binding |
 | Spielerressource | bestehender `ResourceSystem`-Owner hinter schmalem Resource-Port |
 | Modus-/Teamzugriff | Domain-Policy auf Basis aktueller Mode-/Relationship-Daten |
 | LoS und sicherer Boden | `WorldGeometryQueries` oder schmale Erweiterung dieser World-Capability |
 | Tod, Life, Burrow und Participation | bestehende Player-/World-Lifecycle-Owner; Essenz konsumiert deren Ereignisse |
-| Netzwerkzustand | eigene Activity-gebundene Essenz-Replikationsprojektion innerhalb der World |
+| Netzwerkzustand | eigene an denselben Essenz-Owner gebundene Replikationsprojektion innerhalb der World |
 | Tropfen, Glow, Merge und Transferanimation | Presentation/GPU-Renderer |
 | HUD-Anflug und Ankunft | lokale HUD-Presentation |
 
-### 14.3 Ownership folgt Activity-Lifetime
+### 14.3 Ownership folgt Match-Activity oder Lobby-World
 
-Alle vier Spielmodi besitzen einen `ActivityDescriptor`. Die Essenz entsteht ausschließlich während einer solchen Match-Activity und wird bei deren Ende vollständig verworfen. Ihre fachliche Lifetime ist deshalb **Activity**, nicht World.
+Alle vier Match-Modi besitzen einen `ActivityDescriptor`. Ihre Essenz wird bei dessen Ende vollständig verworfen und besitzt Activity-Lifetime. Das begehbare Lobby-Testgelände ist die ausdrücklich bestätigte Ausnahme: Es besitzt keine Activity; seine Essenz lebt als Child der Lobby-World und endet vollständig mit deren Teardown oder Ersatz. Ein Moduswechsel erzeugt über den bestehenden Lobby-Lifecycle eine neue World. Eine sonstige World ohne Activity erhält keine automatische Essenz-Simulation.
 
-Bevorzugtes Zielbild:
+Zielbild für Matches (das Lobby-Binding hängt entsprechend direkt an der World):
 
 - eine Activity-owned Essenz-Runtime beziehungsweise ein Activity-Child besitzt Cluster, Beiträge und Transfers;
 - sie konsumiert schmale world-owned Capabilities für Combat-Outcomes, Player-Ressourcen, Geometrie und Participation;
 - ihre Presentation-Bindings fallen mit derselben Activity;
 - World-Teardown schließt die Activity und räumt die Essenz dadurch automatisch mit ab.
 
-Ein tokenisiertes Binding an einen scene- oder world-langlebigen technischen Service ist nur dann gleichwertig, wenn der gesamte fachliche State nachweislich mit `activityRevision` gebunden ist und beim Activity-Detach vollständig fällt. Ein Activity-Wechsel darf weder den world-owned Combat-Owner in die Activity verschieben noch allein für die Essenz einen zweiten Combat-Core erzeugen.
+Für Matches ist ein tokenisiertes Binding an einen scene- oder world-langlebigen technischen Service nur dann gleichwertig, wenn der gesamte fachliche State nachweislich mit `activityRevision` gebunden ist und beim Activity-Detach vollständig fällt. Ein Activity-Wechsel darf weder den world-owned Combat-Owner in die Activity verschieben noch allein für die Essenz einen zweiten Combat-Core erzeugen.
 
-Der aktuelle Stand materialisiert bereits eigene Activity-Runtimes für Coop und Capture the Beer; Deathmatch und Team-Deathmatch besitzen zwar Activity-Descriptoren, aber noch keine gleichartige spezialisierte lokale Runtime. Der Implementierungsplan muss deshalb eine **einheitliche cross-mode Activity-Lifetime** herstellen, ohne Essenz-State in `ArenaLifecycleCoordinator` oder `HostUpdateCoordinator` zu verlagern. Mögliche technische Schnitte werden im Plan bewertet.
+Die Implementierung verwendet `AdrenalineEssenceBinding`: in Matches als Child des `ActivityRuntimeHost`, im Lobby-Testgelände als Child des `WorldRuntime` mit `activityRevision: null`. Coop und Capture the Beer behalten ihre vorhandene Mode-Runtime; Deathmatch und Team-Deathmatch erhalten einen minimalen Activity-Slot. `ArenaLifecycleCoordinator` verdrahtet die Ports und hält nur eine nicht besitzende Referenz; `HostUpdateCoordinator` taktet die Essenz nach den Combat-Mutationen. Lobby-Erzeugung, Sammlung und Darstellung verwenden dieselben Regeln und Resource-Ports wie Matches.
 
 ### 14.4 Kein Essenz-State im Combat-Core
 
@@ -1120,11 +1130,11 @@ Der Implementierungsplan muss daher einen schmalen post-commit Vertrag beziehung
 
 Der aktuelle `CombatReactionPort.onAcceptedHit` ist bereits eine mögliche post-commit Naht, trägt heute aber nur Target, `CombatSource` und Mutation-Outcome; Reward-Intent und kanonische Trefferposition fehlen. Der Plan bewertet deshalb eine gezielte Erweiterung dieser Naht gegen einen eigenen kleinen Reward-Sink. Ein neuer globaler Event-Bus ist dafür nicht erforderlich.
 
-Dieser Vertrag darf als Erweiterung einer bestehenden Reaktionsgrenze oder als eigener kleiner Reward-Sink entstehen. Er darf nicht aus Network-, Renderer- oder dem heutigen reduzierten Damage-Observer rückwärts rekonstruiert werden.
+Dieser Vertrag darf als Erweiterung einer bestehenden Reaktionsgrenze oder als eigener kleiner Reward-Sink entstehen. Er darf nicht aus Network-, Renderer- oder dem heutigen reduzierten Damage-Observer rückwärts rekonstruiert werden. Die private Target-Owner-Scope von Gegnern oder Decoys wird nicht mit der World-Combat-Scope gleichgesetzt: Das bestätigte Target-Outcome wurde bereits vom Target-Owner validiert; die Reward-Projektion prüft ihren eigenen eingefrorenen Aktivierungs-Scope gegen den aktuellen Combat-Owner und das gültige Binding.
 
-### 14.6 Aktuelle Gain-Pfade und Cutover
+### 14.6 Gain-Pfade und Cutover
 
-Der aktuelle Stand verteilt primärtrefferbezogene `addAdrenaline`-Aufrufe noch über mehrere konkrete Pfade, unter anderem:
+Der Ausgangsstand verteilte primärtrefferbezogene `addAdrenaline`-Aufrufe über mehrere konkrete Pfade:
 
 - direkte Projectile-Treffer;
 - Hitscan;
@@ -1132,13 +1142,13 @@ Der aktuelle Stand verteilt primärtrefferbezogene `addAdrenaline`-Aufrufe noch 
 - Kettenziele;
 - zusätzliche Melee-Trefferbelohnungen.
 
-Der Cutover muss alle belohnungsberechtigten Pfade auf den neuen Reward-Vertrag umstellen. Unabhängige Adrenalinquellen bleiben direkt.
+Diese belohnungsberechtigten Pfade veröffentlichen jetzt neutrale `PrimaryHitAdrenalineRewardFact`-Fakten. Unabhängige Adrenalinquellen bleiben direkt; das konkrete Cutover-Inventar steht im Implementierungsplan.
 
 Ein Parallelbetrieb, bei dem derselbe Treffer sowohl Essenz erzeugt als auch direkt Adrenalin schreibt, ist unzulässig.
 
 ### 14.7 Attribution statt Allegiance-Owner
 
-Der aktuelle Projectile-Vertrag definiert `attributionId` ausdrücklich als die Entität, der Treffer, Kills und Ressourcengewinn zugerechnet werden. Einzelne bestehende direkte Gain-Pfade greifen noch auf `allegiance.ownerId` zurück.
+Der Projectile-Vertrag definiert `attributionId` ausdrücklich als die Entität, der Treffer, Kills und Ressourcengewinn zugerechnet werden. Die im Ausgangsstand vorhandenen Primärtreffer-Gain-Pfade mit `allegiance.ownerId` wurden im Cutover auf explizite Erzeugerattribution umgestellt.
 
 Diese Legacy-Abweichung darf nicht in das Essenzsystem übernommen werden. Der Implementierungsplan muss Reward-Attribution und Zugriffsgruppe sauber trennen und die neuen Tests insbesondere für Reflection/Deflection abdecken.
 
@@ -1151,11 +1161,11 @@ Für die Essenz werden zwei saubere Semantiken benötigt:
 1. erzeugerseitige Erfassung der Gain-Basis bei Aktivierung/Übernahme sowie spätere Auflösung des theoretischen Gewinns daraus ohne Cap-Commit;
 2. sammlerseitiger atomarer Commit eines bereits aufgelösten Werts mit aktuellem Cap, Revision und Observern, der den tatsächlich gutgeschriebenen Wert zurückliefert.
 
-Der Implementierungsplan soll dafür einen expliziten Resource-Vertrag ergänzen. `refundAdrenaline` ist kein zulässiger semantischer Shortcut; ebenso unzulässig ist eine Read-then-Write-Sequenz außerhalb des Resource-Owners.
+Der Resource-Vertrag bietet dafür `captureAdrenalineGainBasis`, `resolveAdrenalineGain` und `commitResolvedAdrenalineGain`. `refundAdrenaline` ist kein zulässiger semantischer Shortcut; ebenso unzulässig ist eine Read-then-Write-Sequenz außerhalb des Resource-Owners.
 
 ### 14.9 Lifecycle-Fan-out
 
-Der aktuelle Burrow-Start besitzt einen einzelnen Callback, der bereits für „Bier fallenlassen“ genutzt wird. Essenz darf diesen Callback nicht ersetzen und damit bestehendes Verhalten verlieren.
+Der Burrow-Start behält seinen Callback für „Bier fallenlassen“ und besitzt zusätzlich abmeldbare Observer. Essenz nutzt diesen Fan-out und darf bestehendes Verhalten nicht ersetzen.
 
 Der Plan muss entweder:
 
@@ -1173,7 +1183,7 @@ Dasselbe Prinzip gilt für Tod und Player-Unavailability: keine zweite konkurrie
 - Blockerabfragen;
 - stabile Teardown-Semantik.
 
-Die fehlende sichere Bodenpunktsuche wird als schmale World-Geometrie-Capability ergänzt. Die Essenz greift nicht direkt auf `ArenaObstacleIndex`, private Combat-Felder oder Phaser-Sprites zu.
+`WorldGeometryQueries.resolveSafeGroundPoint` bietet eine begrenzte sichere Bodenpunktsuche einschließlich World-Rand, Blockern und Zuggeometrie. Die Essenz greift nicht direkt auf `ArenaObstacleIndex`, private Combat-Felder oder Phaser-Sprites zu.
 
 ### 14.11 Presentation und GPU
 
@@ -1186,7 +1196,7 @@ Das Repository besitzt mit `GpuVfxSystem` bereits:
 - Profiling;
 - einen gemeinsamen Atlas.
 
-Der aktuelle Lane-Katalog enthält noch keine Essenz-Lane. Der Implementierungsplan muss daher begründet entscheiden:
+Der gemeinsame GPU-Atlas enthält drei eigene prozedurale Flüssigkeitsformen mit jeweils acht Animationsphasen und einen weichen Flüssigkeitsschwanz. Diese Formen ersetzen die bisher für Essenzkörper verwendeten Blutspuren. Der an den jeweiligen Essenz-Owner gebundene `AdrenalineEssenceGpuRenderer` besitzt weiterhin zwei gemeinsame gepoolte Body-/Glow-Layer für sämtliche Cluster und Transfers. Sein Licht-Helper verwendet nur dieselben bereits gefilterten Darstellungspositionen; er besitzt keine Gameplay-Authority. Die in der ursprünglichen Planung geprüften Alternativen waren:
 
 - kurzlebige Ausstoß-, Merge-, Ankunfts- und Rückgabeakzente über das gemeinsame `GpuVfxSystem`;
 - lang lebende Bodenperlen und laufende Transfers über dafür geeignete neue Lane(s) oder einen dedizierten, weiterhin zentral gepoolten Essenz-Renderer mit Activity-gebundenem Binding.
@@ -1201,15 +1211,15 @@ Verbindlich:
 
 ### 14.12 HUD
 
-Der aktuelle `PlayerStatusRing` besitzt bereits Adrenalin-Burst und Sparks, löst sie aber indirekt erst bei einer hinreichend großen relativen Erhöhung aus. Kleine gebrochene Essenzwerte dürfen dadurch nicht ohne Feedback bleiben.
+Der `PlayerStatusRing` ergänzt seinen bisherigen indirekten Adrenalin-Burst um explizite Incoming-/Arrival-Hooks. Kleine gebrochene Essenzwerte erhalten dadurch Feedback; verspätete Receipts werden mit bereits angezeigten Gain-Bursts abgeglichen.
 
 Der Plan ergänzt deshalb explizite Presentation-Hooks für Incoming, Arrival und Cancel, statt die Gameplaylogik an die bestehende Schwellenprüfung anzupassen.
 
 ### 14.13 Balance Lab und Headless-Modelle
 
-Der aktuelle Weapon Balance Lab Runtime misst `adrenalineGenerated` über tatsächlich beobachtete Resource-Gains. Nach Einführung der Essenz wäre dies ohne Anpassung in Wahrheit „eingesammeltes Adrenalin“ und zusätzlich von Entfernung, Landung und Settle-Zeit abhängig.
+Die `WeaponBalanceLabRuntime` misst `adrenalineGenerated` jetzt über bestätigte Brutto-Reward-Fakten. Beobachtete Resource-Gains und Verbrauch bleiben separat. Zusätzlich enthält das Ergebnis eine ausdrücklich Activity-weite Essenz-Bilanz für das Messfenster mit erzeugtem, eingesammeltem und verfallenem Wert sowie Platzierungs-/Lifecycle-Verlusten; Warmup, Settle und fremde Activity-Scopes werden nicht eingemischt.
 
-Der Implementierungsplan muss die Messbegriffe trennen:
+Die Messbegriffe bleiben getrennt:
 
 - theoretisch/materialisiert erzeugter Wert;
 - tatsächlich eingesammelter Wert;
@@ -1266,7 +1276,7 @@ Anforderungen:
 - stabile Instanzslots oder gleichwertig günstige Updates;
 - Quality-Stufen;
 - getrennte Diagnose für Spawnversuche, sichtbare Instanzen und visuelle Drops;
-- keine individuellen Lichter;
+- keine individuellen Lichter pro Tropfen; ausschließlich gebündelte begrenzte Quellen gemäß § 11.4;
 - keine schweren GameObjects pro Tropfen.
 
 ### 15.5 Netzwerk
@@ -1420,8 +1430,8 @@ Alle Werte sind zentral und verständlich konfigurierbar. Sie verändern keine A
 | Bereich | Parameter | Ausgangspunkt | Hauptwirkung |
 |---|---|---:|---|
 | Ausstoß | Zeit bis Landung | 150–250 ms | Sichtbarkeit des Trefferbursts versus Sammelverzögerung |
-| Ausstoß | Streuradius | 20–45 px | Größe der Beutefläche |
-| Ausstoß | wertabhängige Breite | gering | Wirkung großer Treffer ohne extreme Verteilung |
+| Ausstoß | Teilwerte je Reward | 3 | Getrennt sammelbare Landepunkte bei unverändertem Gesamtwert |
+| Ausstoß | Streuradius / Winkel | 30–45 px / ungefähr 120° ±10° je Richtung | Verteilung außerhalb des gegenseitigen Merge-Radius |
 | Boden | Lebensdauer ab Landung | 8 s | Komfort versus Handlungsdruck und Bestand |
 | Boden | Ablaufwarnung | 1–1,5 s | Lesbarkeit des Verfalls |
 | Merge | Zeitfenster | 100–200 ms | Zusammenfassung schneller Trefferfolgen |
@@ -1431,11 +1441,13 @@ Alle Werte sind zentral und verständlich konfigurierbar. Sie verändern keine A
 | Magnet | Maximalflugzeit | ca. 300 ms | Sichtbarkeit und Abbruchfenster |
 | Magnet | Beschleunigung | deutlich zunehmend | magnetisches Gefühl |
 | HUD | Arrival-Bündelung | 80–150 ms | ruhiges statt hektisches Feedback |
-| Visual | Mindesttropfengröße | wenige Pixel | Lesbarkeit kleiner Werte |
-| Visual | Größenstufen | 2–3 | Mengenwirkung und visuelle Sprache |
+| Visual | Körper kleiner Teilwerte | etwa 4–6 px | Lesbarkeit kleiner Werte |
+| Visual | Größenwachstum / Nebentropfen | begrenzt | Mengenwirkung und visuelle Sprache |
 | Visual | Tropfendichte | adaptiv | Regenwirkung versus GPU-Last |
 | Visual | Cluster-Halo | schwach bis mittel | Auffindbarkeit versus Überstrahlung |
 | Visual | Merge-Wabern | niedrig | Flüssigkeitsgefühl versus Unruhe |
+| Licht | Raster / Radius | 64 px / 64–80 px | Lokale Beleuchtung mit gebündelten Quellen |
+| Licht | Intensität / Budget High–Medium–Low | 0,2–0,4 / 12–8–4 | Begrenzte Lichtkosten einschließlich Ausblenden |
 
 Die stärksten Gameplayhebel sind Magnetradius, Bodenlebensdauer und Landungszeit. Die stärksten Juicehebel sind Ausstoßkurve, Tropfenform, Merge-Wachstum, Magnetbeschleunigung und synchroner HUD-Burst.
 
@@ -1460,8 +1472,8 @@ Die stärksten Gameplayhebel sind Magnetradius, Bodenlebensdauer und Landungszei
 - parallele Transfers;
 - Abbruch und Rückgabe;
 - Ablauf während des Flugs;
-- Activity-owned beziehungsweise strikt Activity-gebundener, World-sicherer Teardown;
-- eigene Activity-gebundene Delta-/Full-Replikation;
+- vollständiger Teardown mit der Match-Activity beziehungsweise Lobby-World;
+- eigene an denselben Essenz-Owner gebundene Delta-/Full-Replikation;
 - GPU-optimierte Tropfen-/Perlendarstellung;
 - Incoming- und Arrival-HUD-Signale;
 - Diagnose und Stressfall;
@@ -1554,7 +1566,7 @@ Bis zur funktionalen Netzwerk-/Presentation-Integration dürfen vorläufig sein:
 ### 19.6 Repository-/Architekturgates
 
 - `WorldCombatCore` besitzt keinen Essenz-State.
-- Die neue Runtime besitzt Activity-Lifetime, ist an `activityRevision` und `worldRevision` gebunden und teardown-sicher.
+- Die Runtime besitzt in Matches Activity-Lifetime, im Lobby-Testgelände explizite World-Lifetime; `activityRevision` und `worldRevision` trennen beide Fälle und der jeweilige Teardown räumt vollständig auf.
 - Der Burrow-Hook überschreibt nicht die bestehende Beer-Reaktion.
 - Sichere Bodenpunkte nutzen eine World-Geometrie-Capability.
 - `refundAdrenaline` wird nicht als Arrival-Grant missbraucht.
@@ -1589,8 +1601,8 @@ Vor finalem Abschluss werden mindestens geprüft:
 
 Ein Spieler trifft aus 500 px Entfernung mit einer Primärwaffe und erzeugt 10 materialisiertes Adrenalin.
 
-- Der Treffer erzeugt einen sichtbaren Tropfenburst.
-- Nach ungefähr 200 ms liegt die Essenz am Ziel.
+- Der Treffer erzeugt drei getrennt sammelbare Teilwerte mit zusammen 10 Adrenalin.
+- Nach ungefähr 200 ms liegen die Flüssigkeitsperlen an verschiedenen Punkten um das Ziel und erhellen bei Dunkelheit ihre nahe Umgebung.
 - Der Schütze ist außerhalb von 160 px und erhält nichts unmittelbar.
 - Die Essenz verfällt nach acht Sekunden, sofern kein Berechtigter näher kommt.
 
@@ -1606,8 +1618,8 @@ Ein voller Coop-Spieler erzeugt 8 Adrenalin.
 
 Ein Treffer erzeugt nach Modifikatoren 3,5.
 
-- Der Cluster speichert exakt 3,5.
-- Die Darstellung kann drei kleine und einen geringfügig größeren Tropfen oder eine gleichwertige Perle zeigen.
+- Die Teilwerte speichern zusammen exakt 3,5; der letzte erhält den rechnerischen Rest.
+- Auf freiem Boden erscheinen drei getrennte kleine Flüssigkeitsperlen.
 - Es entsteht kein 0,5-Pixel-Mikrotropfen.
 - Bei Ankunft werden exakt bis zu 3,5 gutgeschrieben.
 
@@ -1703,7 +1715,7 @@ Ein Client verpasst Cluster- und Transfer-Deltas.
 | Nahe Bodenpositionen liegen auf verschiedenen Seiten einer Wand. | Kein Merge durch die Wand. Auch wiederholtes Merge verschiebt den festen Anker nicht. |
 | Rückgabe wird während kosmetischem Rückfluss neu reserviert. | Genau ein Wertbestand und ein neuer Transfer; alte Animation erzeugt keinen zweiten Bodenwert. |
 | Resource-Snapshot trifft vor dem Flug-/Arrival-Ereignis ein. | Ressource sofort korrekt; verspäteten Flug verkürzen/überspringen, kein historischer Doppelburst. |
-| Begrenzte Fallbacksuche findet unerwartet keinen Landepunkt. | Einmaliger diagnostizierter Platzierungsverlust; kein Retry, kein unsichtbarer Direkt-Gain. |
+| Kein Kandidat einschließlich begrenzter Fallbacksuche findet einen Landepunkt. | Einmaliger diagnostizierter Verlust des gesamten Rewards; bei mindestens einem gültigen Punkt bleibt der vollständige Wert erhalten. Kein Retry oder unsichtbarer Direkt-Gain. |
 | Activity endet während des Ausstoßes. | Restwert wird als Lifecycle-Verwurf bilanziert; keine spätere Landung oder Gutschrift. |
 
 ---
@@ -1755,7 +1767,7 @@ Ein Client verpasst Cluster- und Transfer-Deltas.
 
 ### 22.1 Designreview und Entscheidungsstatus
 
-Der gemeinsame Review ist fachlich abgeschlossen. Die folgenden Entscheidungen sind in die Regeln eingearbeitet. Technischer Preflight und spätere manuelle Abnahmen bleiben eigene Nachweise; der nächste Schritt benötigt einen gesonderten Implementierungsauftrag.
+Der gemeinsame Review ist fachlich abgeschlossen. Die folgenden Entscheidungen sind in die Regeln eingearbeitet. Der gesonderte Implementierungsauftrag ist erfolgt; technische und manuelle Nachweise bleiben getrennt, siehe Dokumentstatus und Implementierungsplan.
 
 | ID | Entscheidung | Status am 07.09.2026 |
 |---|---|---|

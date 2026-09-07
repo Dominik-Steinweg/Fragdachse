@@ -73,6 +73,58 @@ function result(runId: string): RuntimeBenchmarkResult {
 }
 
 describe('Weapon Balance Lab 2.0 runtime contracts', () => {
+  it.each([false, true])('separates gross, resources and real Activity accounting without mixing scopes (replacement=%s)', replaceActivity => {
+    let rewardObserver: (fact: { creatorId: string; resolvedValue: number }) => void = () => {};
+    let resourceObserver: (id: string, value: number) => void = () => {};
+    const removeRewardObserver = vi.fn();
+    const completed = vi.fn();
+    const essence = { worldRevision: 1, activityRevision: 2, authoredValue: 100, materializedValue: 100,
+      committedValue: 50, expiredValue: 20, placementFailedValue: 0, lifecycleDiscardedValue: 0 };
+    const player = { setPosition: vi.fn(), body: { setVelocity: vi.fn() } };
+    const combat = { addDamageDealtObserver: () => () => {}, getActiveBurnSources: () => [],
+      addPrimaryHitRewardObserver: (observer: typeof rewardObserver) => {
+        rewardObserver = observer; return removeRewardObserver;
+      } };
+    const runtime = new WeaponBalanceLabRuntime(() => ({
+      playerManager: { getPlayer: () => player }, getWorldCombatCore: () => combat,
+    } as never), {
+      getProjectileDiagnostics: () => null, isReady: () => true,
+      getEssenceAccounting: () => ({ ...essence }),
+      spawnTarget: () => ({ id: 'target' }), pinTarget: vi.fn(), observeAdrenalineDrain: () => null,
+      observeAdrenalineGain: observer => { resourceObserver = observer; return () => {}; },
+      setAdrenaline: vi.fn(), getMaxAdrenaline: () => 100,
+      useWeaponAction: () => ({ ok: true }),
+    }, completed, vi.fn());
+    runtime.arm({ slot: 'weapon1', scenario: 'single_target', distance: 500,
+      warmupMs: 0, measurementMs: 100, settleMs: 50 }, {
+      commit: {} as never, weaponId: 'GLOCK', upgradeLevels: {}, buildSignature: 'base',
+    });
+    runtime.update('ARENA', true, 10);
+    rewardObserver({ creatorId: 'local', resolvedValue: 12.5 });
+    rewardObserver({ creatorId: 'other', resolvedValue: 100 });
+    resourceObserver('local', 2.5);
+    essence.authoredValue += 7;
+    essence.materializedValue += 12.5;
+    essence.committedValue += 1.25;
+    essence.expiredValue += 3.25;
+    if (replaceActivity) essence.activityRevision++;
+    runtime.update('ARENA', true, 100);
+    rewardObserver({ creatorId: 'local', resolvedValue: 100 });
+    resourceObserver('local', 100);
+    essence.committedValue += 100;
+    essence.expiredValue += 100;
+    runtime.update('ARENA', true, 50);
+    expect(completed.mock.calls[0][0]).toMatchObject({ adrenalineGenerated: 12.5,
+      adrenalineGeneratedPerSecond: 125, adrenalineResourceGained: 2.5,
+      adrenalineMeasurement: 'gross-primary-hit-reward' });
+    expect(completed.mock.calls[0][0].essenceAccounting).toEqual(replaceActivity ? undefined : {
+      measurement: 'activity-measurement-window', worldRevision: 1, activityRevision: 2,
+      authoredValue: 7, materializedValue: 12.5, committedValue: 1.25, expiredValue: 3.25,
+      placementFailedValue: 0, lifecycleDiscardedValue: 0,
+    });
+    expect(removeRewardObserver).toHaveBeenCalledOnce();
+  });
+
   it('markiert den ersten Lab-Schuss als Input-Start und Folgeschüsse nicht', () => {
     const player = {
       x: 0,
@@ -84,7 +136,7 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
     const runtime = new WeaponBalanceLabRuntime(
       () => ({
         playerManager: { getPlayer: vi.fn(() => player) },
-        getWorldCombatCore: () => ({ addDamageDealtObserver: vi.fn(() => () => {}) }),
+        getWorldCombatCore: () => ({ addDamageDealtObserver: vi.fn(() => () => {}), addPrimaryHitRewardObserver: vi.fn(() => () => {}) }),
       } as never),
       {
         getProjectileDiagnostics: () => null,
@@ -165,10 +217,16 @@ describe('Weapon Balance Lab 2.0 runtime contracts', () => {
   it('persists bounded results and emits spreadsheet-safe CSV', () => {
     const storage = new MemoryStorage();
     storeRuntimeBenchmarkResult(result('run-1'), storage);
-    storeRuntimeBenchmarkResult({ ...result('run-2'), buildSignature: '=unsafe' }, storage);
+    const essenceAccounting = { measurement: 'activity-measurement-window' as const, worldRevision: 1, activityRevision: 2,
+      authoredValue: 8, materializedValue: 10, committedValue: 2.5, expiredValue: 1.25,
+      placementFailedValue: 0, lifecycleDiscardedValue: 0 };
+    storeRuntimeBenchmarkResult({ ...result('run-2'), buildSignature: '=unsafe', essenceAccounting }, storage);
     expect(loadRuntimeBenchmarkResults(storage).map((entry) => entry.runId)).toEqual(['run-2', 'run-1']);
     expect(runtimeBenchmarkResultsToCsv(loadRuntimeBenchmarkResults(storage)))
       .toContain("\"'=unsafe\"");
+    expect(loadRuntimeBenchmarkResults(storage)[0].essenceAccounting).toEqual(essenceAccounting);
+    expect(runtimeBenchmarkResultsToCsv(loadRuntimeBenchmarkResults(storage)))
+      .toContain('"activity-measurement-window";"8";"10";"2.5";"1.25"');
   });
 
   it('labels the highest measured value only within a comparable runtime group', () => {

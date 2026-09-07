@@ -89,13 +89,13 @@ describe('Weapon2 prediction deduplication', () => {
 
       useRoom(hostRoom);
       // Absurd alte / weit in der Zukunft liegende Client-Zeit darf den Host nicht erreichen.
-      await clientRoom.room.callHost('lu', { slot: 'weapon1', angle: 0, tx: 1, ty: 2, wr: 1, ts: 1 }, 500);
-      await clientRoom.room.callHost('lu', { slot: 'weapon1', angle: 0, tx: 1, ty: 2, wr: 1, ts: 9_999_999_999_999 }, 500);
+      await clientRoom.room.callHost('lu', { slot: 'weapon1', angle: 0, tx: 1, ty: 2, wr: 1, pid: 7, ts: 1 }, 500);
+      await clientRoom.room.callHost('lu', { slot: 'weapon1', angle: 0, tx: 1, ty: 2, wr: 1, pid: 7, ts: 9_999_999_999_999 }, 500);
 
       expect(handler).toHaveBeenCalledTimes(2);
       for (const call of handler.mock.calls) {
-        // (slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) – kein Zeit-Argument.
-        expect(call.length).toBeLessThanOrEqual(9);
+        // The extra argument is shot-presentation correlation, never client simulation time.
+        expect(call.slice(5)).toEqual([undefined, undefined, undefined, undefined, 7]);
         expect(call.slice(0, 4)).toEqual(['weapon1', 0, 1, 2]);
       }
     } finally {

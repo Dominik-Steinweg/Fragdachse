@@ -63,6 +63,7 @@ export interface ArenaRuntimePresentationPort {
 }
 
 export interface ArenaRuntimeDiagnosticsPort {
+  readonly getAdrenalineEssence?: () => ReturnType<import('../../adrenalineEssence/AdrenalineEssenceBinding').AdrenalineEssenceBinding['getDiagnostics']> | null;
   readonly getChunkRenderingDiagnosticsState: (
     staticShadows: boolean,
     shadowSamplingMode: ChunkSamplingMode | null,

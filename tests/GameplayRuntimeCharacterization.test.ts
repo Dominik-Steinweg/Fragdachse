@@ -16,6 +16,7 @@ vi.mock('phaser', () => ({
 }));
 
 import { PlayerWeaponActivationRuntime } from '../src/world/PlayerWeaponActivationRuntime';
+import type { PrimaryHitRewardScope } from '../src/combat/PrimaryHitReward';
 import { ConstructionReadinessRuntime } from '../src/world/ConstructionReadinessRuntime';
 import { getCoopDefenseConstructionDefinition } from '../src/config/coopDefenseConstructions';
 
@@ -44,6 +45,8 @@ function makeWeaponUseManager(options: {
   weapon: unknown;
   adrenaline?: number;
   adrenalineCost?: number;
+  captureGainBasis?: () => { playerId: string; multiplier: number };
+  captureRewardScope?: () => PrimaryHitRewardScope | null;
 }): { activation: PlayerWeaponActivationRuntime; dispatch: ReturnType<typeof vi.fn>; drain: ReturnType<typeof vi.fn> } {
   const dispatch = vi.fn(() => true);
   const drain = vi.fn();
@@ -65,11 +68,13 @@ function makeWeaponUseManager(options: {
       noteWeaponUsed: vi.fn(),
     },
     resourceSystem: {
+      captureAdrenalineGainBasis: options.captureGainBasis ?? (() => ({ playerId: 'p1', multiplier: 1 })),
       resolveAdrenalineCost: vi.fn((_id: string, amount: number) => options.adrenalineCost ?? amount),
       getAdrenaline: vi.fn(() => options.adrenaline ?? 100),
       drainAdrenaline: drain,
     },
     weaponExecution: { fire: dispatch },
+    capturePrimaryHitRewardScope: options.captureRewardScope,
     specializedWeaponExecution: { fire: vi.fn(() => false) },
   });
   return { activation, dispatch, drain };
@@ -106,6 +111,7 @@ describe('PlayerWeaponActivationRuntime – Client-Position im Waffen-Pfad', () 
     expect(result).toEqual({ ok: true });
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(dispatch.mock.calls[0][1]).toMatchObject({ x: 640, y: 480 });
+    expect(dispatch.mock.calls[0][1].primaryHitRewardOrigin).toEqual({ x: 111, y: 222 });
   });
 
   it('faellt ohne Client-Position auf die autoritative Host-Position zurueck', () => {
@@ -121,6 +127,33 @@ describe('PlayerWeaponActivationRuntime – Client-Position im Waffen-Pfad', () 
 });
 
 describe('PlayerWeaponActivationRuntime – Commit-Reihenfolge von Readiness und Ressource', () => {
+  it('captures one immutable gain basis for every pellet and side shot of an activation', () => {
+    const basis = Object.freeze({ playerId: 'p1', multiplier: 1.75 });
+    const captureGainBasis = vi.fn(() => basis);
+    const scope = Object.freeze({ worldRevision: 1, runtimeGeneration: 2, activityRevision: 3 });
+    const captureRewardScope = vi.fn(() => scope);
+    const config = projectileWeaponConfig({ pelletCount: 3, adrenalinGain: 2,
+      sideBurstEveryShots: 1, sideBurstCount: 2, sideBurstDamageFactor: 0.5 });
+    const { activation, dispatch } = makeWeaponUseManager({
+      weapon: { config, isOnCooldown: () => false, getDynamicSpread: () => 0, addSpread: vi.fn(), recordUse: vi.fn() },
+      captureGainBasis,
+      captureRewardScope,
+    });
+    dispatch.mockImplementation(() => {
+      captureGainBasis.mockImplementation(() => ({ playerId: 'p1', multiplier: 99 }));
+      captureRewardScope.mockImplementation(() => ({ ...scope, activityRevision: 4 }));
+      return true;
+    });
+    expect(activateWeapon(activation, config, 0, 0)).toEqual({ ok: true });
+    expect(captureGainBasis).toHaveBeenCalledOnce();
+    expect(captureRewardScope).toHaveBeenCalledOnce();
+    expect(dispatch).toHaveBeenCalledTimes(5);
+    for (const [, params] of dispatch.mock.calls) {
+      expect(params.adrenalineGainBasis).toBe(basis);
+      expect(params.primaryHitRewardScope).toBe(scope);
+    }
+  });
+
   it('zahlt weder Adrenalin noch startet den Cooldown, wenn die Waffe auf Cooldown ist', () => {
     const recordUse = vi.fn();
     const addSpread = vi.fn();

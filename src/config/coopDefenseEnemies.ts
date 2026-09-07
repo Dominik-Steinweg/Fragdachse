@@ -1,4 +1,5 @@
 import rawCoopDefenseEnemies from './coopDefenseEnemies.json';
+import { requirePawCount, type PawCount } from './movementEffects';
 import type { ArmageddonMeteorConfig, UtilityConfig, WeaponConfig } from '../loadout/LoadoutConfig';
 import type { FireChunkBurstConfig, GroundFireCellEffect } from '../types';
 import {
@@ -268,6 +269,7 @@ export interface CoopDefenseEnemySpawnScaling {
 }
 
 export interface CoopDefenseEnemyConfig {
+  readonly pawCount: PawCount;
   readonly maxHp: number;
   readonly xp: number;
   readonly size: number;
@@ -381,6 +383,7 @@ export function resolveCoopDefenseEnemyConfigs(humanPlayerCount: number): Resolv
         attackStopDurationMs: config.attackStopDurationMs,
         obstacleAttackDelayMs: config.obstacleAttackDelayMs,
         imageKey: config.imageKey,
+        pawCount: config.pawCount,
         spriteRotationOffsetDegrees: config.spriteRotationOffsetDegrees,
         isBoss: config.isBoss,
         color: config.color,
@@ -476,6 +479,7 @@ function normalizeEnemyConfig(enemy: CoopDefenseEnemyRegistryEntry): CoopDefense
     attackStopDurationMs: Math.max(0, Math.floor(enemy.attackStopDurationMs)),
     obstacleAttackDelayMs: Math.max(0, Math.floor(enemy.obstacleAttackDelayMs)),
     imageKey: enemy.imageKey,
+    pawCount: requirePawCount(enemy.pawCount, enemy.id),
     spriteRotationOffsetDegrees: typeof enemy.spriteRotationOffsetDegrees === 'number'
       && Number.isFinite(enemy.spriteRotationOffsetDegrees)
       ? enemy.spriteRotationOffsetDegrees

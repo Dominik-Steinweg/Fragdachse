@@ -14,7 +14,6 @@ import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirecto
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
-import { CAMERA_FEEDBACK_PRIORITY, legacyShakeAmplitudePx } from '../../effects/camera/cameraFeedbackPresets';
 import { isValidPlayerActionAttemptId } from '../../world/PlayerActionRuntime';
 import type {
   ConstructionRpcPort,
@@ -226,7 +225,7 @@ export class RpcCoordinator {
   }
 
   private registerLoadoutUseHandler(): void {
-    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY) => {
+    bridge.registerLoadoutUseHandler((slot, angle, targetX, targetY, senderId, shotId, params, clientX, clientY, predictionId) => {
       if (!bridge.isHost()) return { ok: false, reason: 'blocked' };
       const capabilities = this.capabilities.get(senderId);
       if (!capabilities) return { ok: false, reason: 'blocked' };
@@ -347,6 +346,7 @@ export class RpcCoordinator {
           hostNowMs,
           attemptId: params?.attemptId,
           shotId,
+          predictionId,
           params: authoritativeParams,
           clientPosition: { x: clientX, y: clientY },
         })
@@ -521,22 +521,12 @@ export class RpcCoordinator {
   }
 
   private registerShotFxHandler(): void {
-    bridge.registerShotFxHandler((shooterId, duration, intensity) => {
-      if (shooterId !== bridge.getLocalPlayerId()) return;
-      // Rückstoß bleibt ungerichtet: die RPC trägt nur Dauer und Stärke, keine Schussrichtung.
-      // `legacyShakeAmplitudePx` hält die aus der Waffenkonfiguration stammenden Werte gültig.
-      this.visualFeedback.camera.request({
-        channel: 'impact',
-        amplitudePx: legacyShakeAmplitudePx(intensity),
-        durationMs: duration,
-        priority: CAMERA_FEEDBACK_PRIORITY.weaponRecoil,
-        decay: 'impulse',
-      });
-    });
+    bridge.registerShotFxHandler((event) => this.visualFeedback.weaponFire.confirm(event));
   }
 
   private registerTranslocatorFlashHandler(): void {
     bridge.registerTranslocatorFlashHandler((x, y, color, type, subjectId) => {
+      if (subjectId) this.renderers.movement.interruptSource(subjectId);
       this.renderers.translocatorTeleport?.playFlash(x, y, color, type);
       if (type === 'end') {
         this.gameAudioSystem.playSound('sfx_translocator_teleport', x, y);

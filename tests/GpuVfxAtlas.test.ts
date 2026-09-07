@@ -57,6 +57,20 @@ import {
   TEX_VOID_FLAME_SPARK,
 } from '../src/effects/FlameShared';
 import { makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { FOOTPRINT_PIXELS } from '../src/effects/MovementFootprintTextures';
+import { ESSENCE_LIQUID_FRAMES, ESSENCE_LIQUID_TAIL_FRAME, ESSENCE_LIQUID_FRAME_SIZE } from '../src/adrenalineEssence/AdrenalineEssenceLiquidFrames';
+
+it('keeps three distinct north-facing paw masks with transparent margins and separated toe/pad shapes', () => {
+  const masks = Object.values(FOOTPRINT_PIXELS);
+  expect(new Set(masks.map(rows => rows.join(''))).size).toBe(masks.length);
+  for (const rows of masks) {
+    expect(rows).toHaveLength(12);
+    expect(rows.every(row => row.length === 8 && /^[.#s]+$/.test(row))).toBe(true);
+    expect(rows.slice(0, 6).some(row => /#\.+#/.test(row))).toBe(true);
+    expect(rows.slice(6).some(row => row.includes('##'))).toBe(true);
+    expect(rows.some(row => row === '........')).toBe(true);
+  }
+});
 
 function build() {
   const scene = makeFakeGpuVfxScene();
@@ -126,7 +140,8 @@ describe('gpu vfx atlas', () => {
     }
     buildGpuVfxAtlas(scene as never);
     expect(reads.every((read) => read.mock.calls.length === 1)).toBe(true);
-    expect(atlas.context.putImageData).toHaveBeenCalledTimes(DEATH_MORPH_FRAME_COUNT);
+    expect(atlas.context.putImageData).toHaveBeenCalledTimes(
+      GPU_VFX_ATLAS.filter(entry => entry.deathMorph || entry.essenceLiquid || entry.essenceTail).length);
     expect(atlas.refreshed).toBe(1);
   });
 
@@ -136,6 +151,20 @@ describe('gpu vfx atlas', () => {
       const frame = atlas.get(name);
       expect(frame.cutWidth).toBe(1);
       expect(frame.cutHeight).toBeGreaterThan(1);
+    }
+  });
+
+  it('appends the complete liquid material and tail without changing existing frame IDs', () => {
+    const { atlas } = build();
+    expect(GpuVfxFrameId.MovementPawCompact).toBe(182);
+    expect(GpuVfxFrameId.MovementPawBroad).toBe(184);
+    const names = ESSENCE_LIQUID_FRAMES.map(frame => frame.frame).concat(ESSENCE_LIQUID_TAIL_FRAME);
+    for (const name of names) {
+      const frame = atlas.get(name);
+      expect(frame.cutWidth).toBe(ESSENCE_LIQUID_FRAME_SIZE);
+      expect(frame.cutHeight).toBe(ESSENCE_LIQUID_FRAME_SIZE);
+      const entry = GPU_VFX_ATLAS.find(entry => entry.frame === name)!;
+      expect(getGpuVfxFrame(entry.id).name).toBe(name);
     }
   });
 

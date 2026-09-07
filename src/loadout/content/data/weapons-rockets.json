@@ -2,6 +2,7 @@
   "weapons": {
     "ROCKET_LAUNCHER": {
       "id": "ROCKET_LAUNCHER",
+      "shotFeedbackProfile": "heavy",
       "cooldown": 950,
       "damage": 10,
       "range": 900,
@@ -54,10 +55,6 @@
       "trainDamageMult": 1.15,
       "shotRecoilForce": 520,
       "shotRecoilDuration": 170,
-      "shotScreenShake": {
-        "duration": 120,
-        "intensity": 0.004
-      },
       "shotAudio": {
         "successKey": "shot_rocketlauncher",
         "failureKey": "shot_dry_trigger"
@@ -65,6 +62,7 @@
     },
     "MINI_ROCKET_LAUNCHER": {
       "id": "MINI_ROCKET_LAUNCHER",
+      "shotFeedbackProfile": "rapid",
       "cooldown": 75,
       "damage": 2,
       "range": 700,
@@ -130,10 +128,6 @@
       "trainDamageMult": 1,
       "shotRecoilForce": 180,
       "shotRecoilDuration": 110,
-      "shotScreenShake": {
-        "duration": 70,
-        "intensity": 0.0015
-      },
       "shotAudio": {
         "successKey": "shot_minirocketlauncher",
         "failureKey": "shot_dry_trigger"

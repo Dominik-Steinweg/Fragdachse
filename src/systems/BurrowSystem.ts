@@ -39,6 +39,7 @@ export class BurrowSystem {
 
   private stinkCloudSystem: StinkCloudSystemType | null = null;
   private onBurrowStartCb: ((playerId: string) => void) | null = null;
+  private readonly burrowStartObservers = new Set<(playerId: string) => void>();
   private worldMetrics: WorldMetrics | null = null;
   private onPositionResetCb: ((playerId: string, x: number, y: number) => void) | null = null;
   private onTunnelTransitEndedCb: ((playerId: string, nowMs: number) => void) | null = null;
@@ -66,6 +67,11 @@ export class BurrowSystem {
 
   setBurrowStartCallback(cb: ((playerId: string) => void) | null): void {
     this.onBurrowStartCb = cb;
+  }
+
+  addBurrowStartObserver(observer: (playerId: string) => void): () => void {
+    this.burrowStartObservers.add(observer);
+    return () => { this.burrowStartObservers.delete(observer); };
   }
 
   setPositionResetCallback(cb: ((playerId: string, x: number, y: number) => void) | null): void {
@@ -235,6 +241,7 @@ export class BurrowSystem {
       stuckDamageAccum: 0,
     });
     this.onBurrowStartCb?.(id);
+    for (const observer of this.burrowStartObservers) observer(id);
     this.bridge.broadcastBurrowVisual(id, 'windup');
   }
 

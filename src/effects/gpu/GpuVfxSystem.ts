@@ -119,6 +119,7 @@ export class GpuVfxSystem {
   private readonly transformFloats = new Float32Array(this.transformData.buffer);
   private readonly transformMask = [1, 1, 0, 0, 1, 1, 0, 0, 1];
   private suppressed = false;
+  private readonly activeLanes = new Uint8Array(GPU_VFX_LANES.length);
   private generation = 0;
   /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */
   get emissionGeneration(): number { return this.generation; }
@@ -405,12 +406,12 @@ export class GpuVfxSystem {
 
     this.flightRibbons.flush();
     this.applyRibbonVisibility();
-    let activeMask = 0;
+    this.activeLanes.fill(0);
     for (let index = 0; index < this.lanes.length; index += 1) {
       const lane = this.lanes[index];
       this.applyVisibility(lane);
       const liveCount = index === GpuVfxLaneId.FlightSignature ? this.flightLiveCount() : lane.pool.getLiveCount();
-      if (liveCount > 0) activeMask |= (1 << index);
+      if (!this.suppressed && liveCount > 0) this.activeLanes[index] = 1;
       const capacity = Math.max(1, lane.pool.getCapacity());
       const high = liveCount / capacity >= 0.9;
       if (high && !this.highUtilizationState[index]) {
@@ -423,7 +424,7 @@ export class GpuVfxSystem {
       }
       this.highUtilizationState[index] = high;
     }
-    this.profiler.recordFrame(this.suppressed ? 0 : activeMask);
+    this.profiler.recordFrame(this.activeLanes);
   }
 
   /**

@@ -43,6 +43,12 @@ function expectContentError(run: () => unknown, fragment: string): void {
 }
 
 describe('loadout content loader', () => {
+  it('rejects unknown shot-feedback profiles at the authored-content boundary', () => {
+    const sources = clonedSources();
+    documentWith(sources, 'weapons', 'GLOCK').weapons!.GLOCK.shotFeedbackProfile = 'missing-profile';
+    expectContentError(() => buildLoadoutRegistries(sources), 'shotFeedbackProfile');
+  });
+
   it('builds the shipped unified registries and freezes every exposed value', () => {
     const built = buildLoadoutRegistries(clonedSources());
     const registryIds = [

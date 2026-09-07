@@ -1,3 +1,4 @@
+import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
 /**
  * NetworkBridge – die Grenze zwischen Spiellogik und Netzwerk.
  * Kapselt alle Netzwerkoperationen hinter einer spiellogik-agnostischen API.
@@ -80,6 +81,8 @@ import {
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
+import type { EssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceReplication';
+import { decodeEssenceSnapshot, encodeEssenceSnapshot } from '../adrenalineEssence/AdrenalineEssenceWireCodec';
 import { decodePlayerStates, encodePlayerStates } from './playerStateCodec';
 import {
   EMPTY_FULL_PROJECTILE_SNAPSHOT,
@@ -293,6 +296,8 @@ export interface RoundState {
 }
 
 export interface GameState {
+  /** Activity-scoped independent delta stream; consumed only by the passive essence replica. */
+  adrenalineEssence?: EssenceSnapshot | null;
   /** World-Instanz, zu der dieser Snapshot gehoert. */
   worldRevision: number;
   roundStartTime: number;
@@ -333,6 +338,7 @@ export interface GameState {
 }
 
 interface OutboundGameState {
+  adrenalineEssence?: EssenceSnapshot | null;
   /** Optionaler Test-/Host-Anker; die Bridge schreibt immer die aktuelle World-Revision. */
   worldRevision?: number;
   roundStartTime: number;
@@ -442,6 +448,7 @@ type LoadoutUseHandler = (
   params?: LoadoutUseParams,
   clientX?: number,
   clientY?: number,
+  predictionId?: number,
 ) => LoadoutUseResult;
 
 type PersistentBaseRewardPlacementHandler = (
@@ -2675,6 +2682,7 @@ export class NetworkBridge {
       _s: ++this.publishSeq,
     };
     payload.rt = state.roundStartTime;
+    if (state.adrenalineEssence !== undefined) payload.ae = state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null;
     // Fehlender Schluessel heisst hier "keine aktiven Projektile": der Dynamik-Strom fuehrt jeden
     // Tick alle aktiven Projektile, ein leerer Snapshot kann also nur eine leere Arena bedeuten.
     if (state.projectiles)             payload.j = state.projectiles;
@@ -2777,6 +2785,7 @@ export class NetworkBridge {
       p: encodePlayerStates(state.players),
       _s: ++this.publishSeq,
       _full: true,
+      ae: state.adrenalineEssence ? encodeEssenceSnapshot(state.adrenalineEssence) : null,
       rt: state.roundStartTime,
       j: state.projectiles ?? EMPTY_FULL_PROJECTILE_SNAPSHOT,
       e: state.enemies,
@@ -2883,6 +2892,9 @@ export class NetworkBridge {
     );
 
     const state: GameState = {
+      adrenalineEssence: raw.ae === undefined
+        ? this.cachedGameState?.adrenalineEssence ?? null
+        : decodeEssenceSnapshot(raw.ae),
       worldRevision: expectedWorldRevision,
       roundStartTime,
       players:       decodePlayerStates(raw.p as Parameters<typeof decodePlayerStates>[0]),
@@ -3151,7 +3163,7 @@ export class NetworkBridge {
       ? params
       : { ...params, activityRevision };
     if (isHost()) {
-      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY) ?? { ok: false, reason: 'invalid' };
+      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY, predictionId) ?? { ok: false, reason: 'invalid' };
     }
     const payload = {
       slot,
@@ -3186,6 +3198,7 @@ export class NetworkBridge {
       params?: LoadoutUseParams,
       clientX?: number,
       clientY?: number,
+      predictionId?: number,
     ) => LoadoutUseResult,
   ): void {
     this.loadoutUseHandler = handler;
@@ -3245,7 +3258,8 @@ export class NetworkBridge {
         || (sid !== undefined && !isFiniteNumber(sid))
         || (px !== undefined && !isFiniteNumber(px))
         || (py !== undefined && !isFiniteNumber(py))
-        || (prm !== undefined && !isRecord(prm))) {
+        || (prm !== undefined && !isRecord(prm))
+        || (predictionId !== undefined && (!Number.isSafeInteger(predictionId) || (predictionId as number) <= 0))) {
         return finish({ ok: false, reason: 'invalid' });
       }
       if (isWeapon2Prediction) {
@@ -3263,7 +3277,7 @@ export class NetworkBridge {
       // Die autoritative fachliche Zeit einer Player-Aktion bestimmt der Host an der
       // Action-/RPC-Orchestrierungsgrenze (RpcCoordinator), nicht der Client. Der Transport
       // reicht keinen Client-Timestamp mehr für Cooldown-/Commit-Entscheidungen durch.
-      return finish(loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py));
+      return finish(loadoutUseHandler(slot, angle, tx, ty, caller.id, sid, prm, px, py, predictionId as number | undefined));
     });
   }
 
@@ -3531,15 +3545,16 @@ export class NetworkBridge {
     });
   }
 
-  // ── Shot-Feedback-RPC: Host → Alle (Screenshake bei Schuss) ───────────────
-  broadcastShotFx(shooterId: string, duration: number, intensity: number): void {
-    this.broadcastGameplayEvent('sfx', { id: shooterId, d: duration, i: intensity });
+  // One accepted player shot, over the existing reliable World-event boundary.
+  broadcastShotFx(event: WeaponShotFeedbackEvent): void {
+    const wr = this.getCurrentWorldRevision();
+    if (wr === null) return;
+    this.broadcastGameplayEvent('sfx', { ...event, wr });
   }
 
-  registerShotFxHandler(cb: (shooterId: string, duration: number, intensity: number) => void): void {
+  registerShotFxHandler(cb: (event: WeaponShotFeedbackEvent) => void): void {
     this.registerAllRpcHandler('sfx', async (data: unknown): Promise<unknown> => {
-      const { id, d, i } = data as { id: string; d: number; i: number };
-      cb(id, d, i);
+      if (this.acceptsWorldRpc(data) && isWeaponShotFeedbackEvent(data)) cb(data);
       return undefined;
     });
   }

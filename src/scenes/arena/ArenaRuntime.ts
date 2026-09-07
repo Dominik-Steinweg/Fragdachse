@@ -236,6 +236,7 @@ export class ArenaRuntime {
       this.getFlowFieldDebugPort.bind(this),
       this.getFlowFieldDiagnosticsPort.bind(this),
       this.getRockVisualDiagnostics.bind(this),
+      () => this.flow.getAdrenalineEssence()?.getDiagnostics() ?? null,
     );
     this.hostUpdate.setWorldFramePort({
       getWorldRuntime: () => this.flow.getWorldRuntime(),
@@ -254,6 +255,7 @@ export class ArenaRuntime {
       getSupportGameplayRuntime: () => this.flow.getWorldSupportGameplayRuntime(),
     });
     this.hostUpdate.setActivityFramePort({
+      getAdrenalineEssence: () => this.flow.getAdrenalineEssence(),
       getStep: () => this.flow.getActivityStep(),
       getCoopMissionRuntime: () => this.flow.getCoopMissionRuntime(),
       getCaptureTheBeerRuntime: () => this.flow.getCaptureTheBeerActivityRuntime(),
@@ -267,6 +269,7 @@ export class ArenaRuntime {
       getPowerUpRuntime: () => this.flow.getWorldPowerUpRuntime(),
     });
     this.clientUpdate.setActivityFramePort({
+      getAdrenalineEssence: () => this.flow.getAdrenalineEssence(),
       getStep: () => this.flow.getActivityStep(),
     });
   }
@@ -396,6 +399,7 @@ export class ArenaRuntime {
    */
   runHostFrame(deltaMs: number, gameplayActive = false): CoopMissionOutcome | null {
     this.hostUpdate.runHostUpdate(deltaMs);
+    this.flow.getAdrenalineEssence()?.render(this.getSynchronizedNow());
     if (!gameplayActive) return null;
     return this.flow.getActivityStep()?.hostResolveCompletion() ?? null;
   }
@@ -403,6 +407,7 @@ export class ArenaRuntime {
   /** Die darstellende Client-Frame-Phase dieser World. */
   runClientFrame(deltaMs: number): void {
     this.clientUpdate.runClientUpdate(deltaMs);
+    this.flow.getAdrenalineEssence()?.render(this.getSynchronizedNow());
   }
 
   /** Debug-Eingriff auf die laufende Activity; ohne Activity passiert nichts. */
@@ -638,6 +643,10 @@ export class ArenaRuntime {
   }
 
   getCombatEnemyVisuals(): readonly EnemyVisualSource[] {
+    return this.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [];
+  }
+
+  getMovementEnemyVisuals() {
     return this.flow.getCoopMissionRuntime()?.enemyManager?.getAllEnemies() ?? [];
   }
 

@@ -1,3 +1,4 @@
+import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
 import { usesRockSweep } from './ProjectileRockSweep';
 import { captureBounceContact, captureFlightStep, tracerBounceDebug } from './ProjectileBounceDiagnostics';
@@ -453,6 +454,7 @@ export class WorldProjectileRuntime implements
       }, {
         ...impact.provenance,
         weaponSourceId: 'weapon.plasma.swarm',
+        primaryHitReward: undefined,
         lineage: {
           ...impact.provenance.lineage,
           parentProjectileId: impact.projectileId,
@@ -1290,6 +1292,7 @@ export class WorldProjectileRuntime implements
     const childLifetime = (remainingRangePx / childBaseSpeed) * 1000;
     const childProvenance: ProjectileProvenance = {
       ...projectile.provenance,
+      primaryHitReward: scalePrimaryHitRewardIntent(projectile.provenance.primaryHitReward, splitFactor / splitCount),
       lineage: {
         ...projectile.provenance.lineage,
         parentProjectileId: projectile.id,
@@ -1961,7 +1964,7 @@ export class WorldProjectileRuntime implements
     };
     record.provenance = this.resolveProvenance?.(provenance) ?? provenance;
     record.damage = options.damage;
-    record.adrenalinGain = 0;
+    // The explicit reward intent survives ownership transfer; provenance capture replaces its gain basis.
     record.maxBounces = options.keepGrenade ? record.maxBounces : 0;
     record.bounceCount = options.keepGrenade ? record.bounceCount : 0;
     record.presentation = { ...record.presentation, color: options.color, ownerColor: options.ownerColor };

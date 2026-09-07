@@ -1,3 +1,4 @@
+import type { WeaponFeedbackProfileId } from '../config/weaponFeedback';
 import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityPulseConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
@@ -363,10 +364,7 @@ export interface WeaponConfigShape {
   readonly warmupSpeedMultiplier?:  number;  // Multiplikator für spreadPerShot-Rate (Negev-Aufwärmzeit), Default 1.0
   readonly shotRecoilForce?:   number;  // Rückstoßkraft in px/s – Anfangsgeschwindigkeit des Rückstoßimpulses
   readonly shotRecoilDuration?: number; // ms – wie lange der Rückstoß anhält (Default: 180ms, Quad-Ease-Out Decay)
-  readonly shotScreenShake?: {          // Kamera-Shake direkt beim Schuss (nicht während Cooldown)
-    readonly duration:  number;        // ms
-    readonly intensity: number;        // 0–1 (Phaser shake intensity)
-  };
+  readonly shotFeedbackProfile?: WeaponFeedbackProfileId;
 
   // Tracer-Leuchtlinie (optional, data-driven)
   // undefined = kein Tracer; TracerConfig.colorCore/colorGlow undefined = Spielerfarbe

@@ -109,6 +109,7 @@ export interface ClientPlayerFramePort {
 
 /** Activity-owned reads needed by the client frame, absent outside an Activity. */
 export interface ClientActivityFramePort {
+  getAdrenalineEssence?(): import('../../adrenalineEssence/AdrenalineEssenceBinding').AdrenalineEssenceBinding | null;
   getStep(): CoopMissionActivityStep | null;
 }
 
@@ -288,6 +289,7 @@ export class ClientUpdateCoordinator {
       return;
     }
     const state = bridge.getLatestGameState();
+    this.activityFramePort?.getAdrenalineEssence?.()?.applySnapshot(state?.adrenalineEssence);
     // Selection is local presentation state and can change between network snapshots. Keep the
     // local held item in sync every frame; remote players remain driven by the host-published
     // use/animation state below.
@@ -538,6 +540,7 @@ export class ClientUpdateCoordinator {
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       player.lerpStep(lerpFactor);
       const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
+      player.setMovementDashPhase(dashPhase as 0 | 1 | 2);
       if (dashPhase !== 0) {
         this.applyDashVisual(player, player.id, dashPhase as 1 | 2);
       } else {
@@ -731,6 +734,10 @@ export class ClientUpdateCoordinator {
     if (lastFired > 0 && now - lastFired < wepConfig.cooldown) return { fired: false };
 
     this.ensureCurrentPredictionWorld();
+    const predictionId = slot === 'weapon2' ? this.nextPredictionId++ : this.nextPrimaryPredictionId++;
+    this.ctx.visualFeedback?.weaponFire.predict({
+      shooterId: bridge.getLocalPlayerId(), weaponId: wepConfig.id, slot, angle, predictionId,
+    });
     this.ctx.aimSystem?.notifyShot(slot);
     const shotId = this.playPredictedLocalHitscanTracer(slot, angle, targetX, targetY);
     if (shotId === undefined && !bridge.isHost()) {
@@ -749,7 +756,6 @@ export class ClientUpdateCoordinator {
       }
     }
 
-    const predictionId = slot === 'weapon2' ? this.nextPredictionId++ : this.nextPrimaryPredictionId++;
     this.localFirePredictions[slot].push({
       worldRevision: this.getPredictionWorldRevision(),
       predictionId,
@@ -1480,6 +1486,7 @@ export class ClientUpdateCoordinator {
     const selectedHeldItemId = this.ctx.inputSystem.getSelectedHeldItemIdForPresentation?.();
     player.setHeldItemId(
       selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(localId) : selectedHeldItemId,
+      selectedHeldItemId !== undefined,
     );
   }
 

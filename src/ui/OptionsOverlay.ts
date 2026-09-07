@@ -14,6 +14,8 @@ import { ensureGlossyButtonTexture, ensureModalPanelTexture } from './uiTextures
 import { attachHoverEffect } from './uiHover';
 import { BORDER, INTENT, SURFACE, TEXT, textStyle } from './uiTheme';
 import {
+  getStoredWeaponCameraKick,
+  setStoredWeaponCameraKick,
   setStoredEffectsVolume,
   setStoredGraphicsQuality,
   setStoredMasterVolume,
@@ -26,7 +28,7 @@ import { formatPercent, getLocale, setLocale, t } from '../i18n';
 import type { Locale } from '../i18n/types';
 
 const PANEL_W = 680;
-const PANEL_H = 760;
+const PANEL_H = 850;
 const CX = GAME_WIDTH / 2;
 const CY = GAME_HEIGHT / 2;
 
@@ -36,7 +38,7 @@ const TRACK_H = 18;
 const TRACK_X = CX - TRACK_W / 2;
 const PERCENT_X = TRACK_X + TRACK_W;
 const FOOTER_Y = CY + PANEL_H / 2 - 12;
-const QUALITY_BUTTON_Y = CY - 184;
+const QUALITY_BUTTON_Y = CY - 210;
 const QUALITY_BUTTON_W = 150;
 const QUALITY_BUTTON_H = 44;
 const QUALITY_BUTTON_GAP = 12;
@@ -61,14 +63,14 @@ const SECTION_BLOCK_W = PANEL_W - 60;
 const GRAPHICS_HEADING_CONTENT_GAP = 44;
 const AUDIO_HEADING_CONTENT_GAP = 18;
 const GRAPHICS_HEADER_Y = QUALITY_BUTTON_Y - GRAPHICS_HEADING_CONTENT_GAP;
-const AUDIO_HEADER_Y = CY - 84 - AUDIO_HEADING_CONTENT_GAP;
+const AUDIO_HEADER_Y = CY - 58 - AUDIO_HEADING_CONTENT_GAP;
 const GRAPHICS_BLOCK_TOP = GRAPHICS_HEADER_Y - 20;
-const GRAPHICS_BLOCK_BOTTOM = QUALITY_BUTTON_Y + QUALITY_BUTTON_H + 10;
+const GRAPHICS_BLOCK_BOTTOM = CY - 104;
 const AUDIO_BLOCK_TOP = GRAPHICS_BLOCK_BOTTOM + 8;
 const AUDIO_BLOCK_BOTTOM = MUSIC_LOAD_BAR_Y + 16;
-const LOCALE_HEADING_Y = CY - 312;
-const LOCALE_BUTTON_Y = CY - 282;
-const LOCALE_HINT_Y = CY - 252;
+const LOCALE_HEADING_Y = CY - 344;
+const LOCALE_BUTTON_Y = CY - 314;
+const LOCALE_HINT_Y = CY - 284;
 const LOCALE_BUTTON_W = 140;
 const LOCALE_BUTTON_H = 38;
 const LOCALE_BUTTON_GAP = 12;
@@ -84,10 +86,10 @@ const ABORT_HINT_Y = CY + 346;
 /** Fenster, in dem der zweite Klick als Bestaetigung zaehlt; danach faellt der Button zurueck. */
 const ABORT_CONFIRM_TIMEOUT_MS = 5000;
 
-type VolumeSliderKey = 'master' | 'effects' | 'music';
+type OptionsSliderKey = 'master' | 'effects' | 'music' | 'weaponKick';
 
 interface SliderDefinition {
-  key: VolumeSliderKey;
+  key: OptionsSliderKey;
   label: string;
   labelY: number;
   trackY: number;
@@ -150,26 +152,31 @@ const QUALITY_OPTIONS: readonly { level: GraphicsQuality; label: string }[] = [
 
 const SLIDER_DEFINITIONS: readonly SliderDefinition[] = [
   {
+    key: 'weaponKick', label: 'ui.options.weaponCameraKick', labelY: CY - 162, trackY: CY - 130,
+    palette: { dark: COLORS.BLUE_5, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
+    playPreviewOnChange: false,
+  },
+  {
     key: 'master',
     label: 'ui.options.masterVolume',
-    labelY: CY - 84,
-    trackY: CY - 34,
+    labelY: CY - 48,
+    trackY: CY - 14,
     palette: { dark: COLORS.GREEN_4, mid: COLORS.GOLD_2, light: COLORS.RED_1 },
     playPreviewOnChange: true,
   },
   {
     key: 'effects',
     label: 'ui.options.effectsVolume',
-    labelY: CY + 12,
-    trackY: CY + 62,
+    labelY: CY + 40,
+    trackY: CY + 74,
     palette: { dark: COLORS.BLUE_5, mid: COLORS.BLUE_3, light: COLORS.BLUE_1 },
     playPreviewOnChange: true,
   },
   {
     key: 'music',
     label: 'ui.options.musicVolume',
-    labelY: CY + 108,
-    trackY: CY + 158,
+    labelY: CY + 128,
+    trackY: CY + 162,
     palette: { dark: COLORS.PURPLE_5, mid: COLORS.PURPLE_3, light: COLORS.PURPLE_1 },
     playPreviewOnChange: false,
   },
@@ -210,11 +217,11 @@ function ensureOptionsTextures(scene: Phaser.Scene): void {
 export class OptionsOverlay {
   private container: Phaser.GameObjects.Container | null = null;
   private dimRect: Phaser.GameObjects.Rectangle | null = null;
-  private readonly sliders = new Map<VolumeSliderKey, SliderState>();
+  private readonly sliders = new Map<OptionsSliderKey, SliderState>();
   private readonly qualityButtons = new Map<GraphicsQuality, QualityButtonState>();
   private readonly localeButtons = new Map<Locale, LocaleButtonState>();
   private visible = false;
-  private draggingSliderKey: VolumeSliderKey | null = null;
+  private draggingSliderKey: OptionsSliderKey | null = null;
   private dismissDelay: Phaser.Time.TimerEvent | null = null;
   private pointerMoveHandler: ((pointer: Phaser.Input.Pointer) => void) | null = null;
   private pointerUpHandler: (() => void) | null = null;
@@ -478,6 +485,7 @@ export class OptionsOverlay {
   }
 
   private syncFromAudioSystem(): void {
+    this.setSliderValue('weaponKick', getStoredWeaponCameraKick(), false, false);
     this.setSliderValue('master', this.audioSystem.getMasterVolume(), false, false);
     this.setSliderValue('effects', this.audioSystem.getEffectsVolume(), false, false);
     this.setSliderValue('music', this.audioSystem.getMusicVolume(), false, false);
@@ -1007,13 +1015,13 @@ export class OptionsOverlay {
     });
   }
 
-  private applyPointerValue(key: VolumeSliderKey, pointerX: number, playPreview: boolean): void {
+  private applyPointerValue(key: OptionsSliderKey, pointerX: number, playPreview: boolean): void {
     const designPointerX = toDesignSpace(this.scene.scale, pointerX);
     const normalized = Phaser.Math.Clamp((designPointerX - TRACK_X) / TRACK_W, 0, 1);
     this.setSliderValue(key, normalized, true, playPreview);
   }
 
-  private setSliderValue(key: VolumeSliderKey, value: number, persist: boolean, playPreview: boolean): void {
+  private setSliderValue(key: OptionsSliderKey, value: number, persist: boolean, playPreview: boolean): void {
     const slider = this.sliders.get(key);
     if (!slider) return;
 
@@ -1029,6 +1037,9 @@ export class OptionsOverlay {
     slider.fillEffect.setFilledWidth(width);
 
     switch (key) {
+      case 'weaponKick':
+        if (persist) setStoredWeaponCameraKick(nextValue);
+        break;
       case 'master':
         this.audioSystem.setMasterVolume(nextValue);
         if (persist) setStoredMasterVolume(nextValue);

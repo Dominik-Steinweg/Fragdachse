@@ -21,6 +21,8 @@ export interface OwnerVisualState {
  * erlaubt derselben Renderkette, lokale wie replizierte Besitzerzustaende zu bedienen.
  */
 export interface OwnerVisualSource {
+  /** Animated held-item muzzle. Absent for owners without held weapons. */
+  readOwnerHeldWeaponPose?(ownerId: string, out: OwnerHeldWeaponPose): boolean;
   /** Render pose, written into caller-owned storage without allocating. */
   readOwnerRenderPose?(ownerId: string, out: OwnerRenderPose): boolean;
   /** Aktueller Zustand oder `null`, wenn der Besitzer nicht (mehr) existiert. */
@@ -28,3 +30,4 @@ export interface OwnerVisualSource {
 }
 
 export interface OwnerRenderPose { x: number; y: number; rotation: number; }
+export interface OwnerHeldWeaponPose extends OwnerRenderPose { itemId: string; }

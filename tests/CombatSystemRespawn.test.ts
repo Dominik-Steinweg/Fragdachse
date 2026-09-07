@@ -39,6 +39,18 @@ import type { NetworkBridge } from '../src/network/NetworkBridge';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { hasWorldFigure, type WorldParticipation } from '../src/world/WorldParticipation';
 import { HP_MAX, RESPAWN_DELAY_MS } from '../src/config';
+import { ResourceSystem } from '../src/systems/ResourceSystem';
+import { createPrimaryHitRewardIntent, scalePrimaryHitRewardIntent, type PrimaryHitAdrenalineRewardFact } from '../src/combat/PrimaryHitReward';
+import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
+import type { ProjectileDirectImpactRequest } from '../src/projectile/ProjectileCombatPort';
+import { PlayerActionRuntime } from '../src/world/PlayerActionRuntime';
+import { PlayerWeaponActivationRuntime } from '../src/world/PlayerWeaponActivationRuntime';
+import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
+import { SpecializedWeaponExecutionAdapter } from '../src/world/SpecializedWeaponExecutionAdapter';
+import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
+import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
+import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { createTechnicalPhysicsBinding, createPresentation } from './ProjectileRuntimeTestHelper';
 
 function lifecycleFixture() {
   let now = 1000;
@@ -49,6 +61,7 @@ function lifecycleFixture() {
     getWorldSpawnPoint: () => ({ x: 260, y: 42 }),
   } as unknown as PlayerManager, {
     isHost: () => true, broadcastEffect: vi.fn(), areTeammates: () => false,
+    broadcastHitscanTracer: vi.fn(), broadcastMeleeSwing: vi.fn(),
     getPlayerProfile: (id: string) => players.has(id) ? { id } : undefined,
   } as unknown as NetworkBridge);
   const world = combat.bindPlayerVitalsScope({ worldRevision: 1, runtimeGeneration: 7 });
@@ -65,6 +78,228 @@ function lifecycleFixture() {
     hit: () => combat.applyDamage('p2', HP_MAX * 2, false, 'p1', 'test', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' }),
   };
 }
+
+function primaryRewardFixture() {
+  const f = lifecycleFixture();
+  const resource = new ResourceSystem();
+  resource.initPlayer('p1'); resource.initPlayer('p2');
+  resource.setAdrenalineGainMultiplierResolver(id => id === 'p1' ? 1.75 : 3);
+  f.combat.setResourceSystem(resource);
+  const facts: PrimaryHitAdrenalineRewardFact[] = [];
+  const detach = f.combat.bindPrimaryHitRewardSink(4, fact => facts.push(fact));
+  const intent = createPrimaryHitRewardIntent('weapon:projectile', resource.captureAdrenalineGainBasis('p1'), 2, 0, undefined, { x: 0, y: 0 }, 'weapon1')!;
+  const provenance = f.combat.captureProjectileProvenance(createSingleOwnerProvenance('p1', {
+    weaponSourceId: 'test-primary', sourceSlot: 'weapon1', primaryHitReward: intent,
+  }));
+  const request: ProjectileDirectImpactRequest = {
+    projectileId: 10, target: { kind: 'player', id: 'p2' }, impact: { x: 99, y: 100 },
+    velocity: { x: 1, y: 0 }, provenance, directHit: { damage: 10, adrenalinGain: 2 }, augments: [],
+  };
+  return { ...f, resource, facts, detach, intent, request };
+}
+
+describe('primary hit reward cutover', () => {
+  it.each([4, null])('carries a real equipped weapon action through combat with Activity/practice revision %s', activityRevision => {
+    const f = lifecycleFixture();
+    f.players.get('p1')!.x = 0;
+    const resource = new ResourceSystem();
+    resource.initPlayer('p1'); resource.initPlayer('p2');
+    f.combat.setResourceSystem(resource);
+    const facts: PrimaryHitAdrenalineRewardFact[] = [];
+    f.combat.bindPrimaryHitRewardSink(activityRevision, fact => facts.push(fact));
+    const loadout = new LoadoutManager(resource, { getGameMode: () => 'deathmatch' });
+    loadout.assignDefaultLoadout('p1');
+    const physics = createTechnicalPhysicsBinding();
+    const projectiles = new WorldProjectileRuntime({
+      physicsBinding: physics.binding, presentation: createPresentation(),
+      identityScope: new ProjectileIdentityScope(1), hostNowMs: () => 1000,
+      resolveProvenance: provenance => f.combat.captureProjectileProvenance(provenance),
+    });
+    projectiles.setProjectileCombatPort(f.combat);
+    projectiles.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      const p2 = f.players.get('p2')!;
+      sink('player', 'p2', 'p2', p2.x, p2.y, 10, p2.x - 10, p2.y - 10, p2.x + 10, p2.y + 10);
+    } });
+    projectiles.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true, isTargetCurrentlyValid: () => true });
+    const activation = new PlayerWeaponActivationRuntime({
+      playerManager: { getPlayer: id => f.players.get(id) }, loadout, resourceSystem: resource,
+      capturePrimaryHitRewardScope: () => f.combat.getPrimaryHitRewardScope(),
+      weaponExecution: new WorldWeaponExecutionRuntime({ projectileSpawn: projectiles, combatSystem: f.combat }),
+      specializedWeaponExecution: new SpecializedWeaponExecutionAdapter(projectiles),
+    });
+    const actions = new PlayerActionRuntime({ getPlayer: id => f.players.get(id), canInteract: () => true,
+      isAlive: id => f.combat.isAlive(id), isWeaponBlocked: () => false, isDashBurst: () => false,
+    }, loadout, null, activation);
+    expect(actions.execute({ category: 'weapon', playerId: 'p1', slot: 'weapon1', angle: 0,
+      targetX: 100, targetY: 100, hostNowMs: 1000 })).toEqual({ ok: true });
+    expect(physics.handles.size).toBe(1);
+    const [id, handle] = [...physics.handles][0];
+    Object.assign(handle.sprite, { x: 100, y: 100 });
+    physics.observe(id, 100, 100, handle.body.velocity.x, handle.body.velocity.y);
+    projectiles.runHostProjectileStage(16, 1000);
+    projectiles.runHostInteractionStage(1000);
+    expect(f.combat.getHP('p2')).toBeLessThan(HP_MAX);
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({ creatorId: 'p1', activityRevision,
+      source: { sourceSlot: 'weapon1', authoredSourceId: loadout.getEquippedWeaponConfig('p1', 'weapon1')!.id } });
+    expect(facts[0].resolvedValue).toBeGreaterThan(0);
+    projectiles.destroy();
+  });
+
+  it.each(['hitscan', 'melee'] as const)('cuts over effective %s outcomes and includes the melee bonus exactly once', kind => {
+    const f = primaryRewardFixture();
+    const before = f.resource.getAdrenaline('p1');
+    const primaryHitReward = createPrimaryHitRewardIntent(`test:${kind}`, f.intent.gainBasis, 2, kind === 'melee' ? 3 : 0);
+    const traceHitscan = vi.fn(() => ({ endX: 99, endY: 100, hitPlayerId: 'p2', hitEnemyId: null, hitDecoyId: null, hitObstacle: false }));
+    Object.assign(f.combat, { traceHitscan });
+    const common = { shooterId: 'p1', damage: 10, adrenalinGain: 2, sourceId: 'test', color: 0xffffff,
+      sourceSlot: 'weapon1' as const, rockDamageMult: 0, trainDamageMult: 0, baseDamageMult: 0, primaryHitReward };
+    const execute = (damage: number) => f.combat.resolveImmediateAttack(kind === 'hitscan' ? {
+      kind, payload: { ...common, damage, startX: 0, startY: 100, angle: 0, range: 200, traceThickness: 1, visualPreset: 'default' },
+      origin: { x: 0, y: 100 }, aim: { x: 1, y: 0 }, range: 200,
+    } : {
+      kind, payload: { ...common, damage, x: 100, y: 100, angle: 0, range: 200, arcDegrees: 180,
+        visualPreset: 'default', hitHeal: 0, hitAdrenaline: 3, bloodEffectMultiplier: 1 },
+      origin: { x: 100, y: 100 }, aim: { x: 1, y: 0 }, range: 200,
+    });
+    execute(0);
+    expect(f.facts).toHaveLength(0);
+    execute(10);
+    expect(f.facts).toHaveLength(1);
+    expect(f.facts[0].resolvedValue).toBe((kind === 'melee' ? 5 : 2) * 1.75);
+    expect(f.resource.getAdrenaline('p1')).toBe(before);
+  });
+
+  it('retains authored chain reward provenance without enabling new slot-conditional damage modifiers', () => {
+    const f = primaryRewardFixture();
+    const p3 = fakeEntity({ id: 'p3', x: 130, y: 100 });
+    f.players.set('p3', p3); f.combat.initPlayer('p3');
+    const outgoing = vi.fn((_attacker: string | undefined, _target: string, amount: number, _critical: boolean, sourceSlot: string | undefined) => ({
+      amount: amount * (sourceSlot === 'weapon1' ? 2 : 1), isCritical: false,
+    }));
+    f.combat.setPlayerOutgoingDamageResolver(outgoing);
+    Object.assign(f.combat, {
+      traceHitscan: () => ({ endX: 100, endY: 100, hitPlayerId: 'p2', hitEnemyId: null, hitDecoyId: null, hitObstacle: false }),
+      hasChainLineOfSight: () => true,
+    });
+    f.combat.resolveImmediateAttack({ kind: 'hitscan',
+      payload: { shooterId: 'p1', damage: 10, adrenalinGain: 2, sourceId: 'test', color: 0xffffff,
+        sourceSlot: 'weapon1', rockDamageMult: 0, trainDamageMult: 0, baseDamageMult: 0, primaryHitReward: f.intent,
+        startX: 0, startY: 100, angle: 0, range: 200, traceThickness: 1, visualPreset: 'default',
+        chainLightning: { maxJumps: 1, searchRadius: 60, damageFalloffPerJump: 0.1, targetPlayers: true } },
+      origin: { x: 0, y: 100 }, aim: { x: 1, y: 0 }, range: 200,
+    });
+    expect(f.facts).toHaveLength(2);
+    expect(f.facts.map(fact => fact.target.id)).toEqual(['p2', 'p3']);
+    expect(f.facts.map(fact => fact.resolvedValue)).toEqual([3.5, 3.5]);
+    expect(f.facts[1].source.origin).toBe('chain');
+    expect(f.facts[1].source).toMatchObject({ authoredSourceId: 'test', sourceSlot: 'weapon1', attribution: { kind: 'player', id: 'p1' } });
+    expect(f.facts[1].intent.sourceSlot).toBe('weapon1');
+    expect(outgoing.mock.calls.map(call => [call[1], call[2], call[4]])).toEqual([
+      ['p2', 10, 'weapon1'], ['p3', 9, undefined],
+    ]);
+    expect(f.combat.getHP('p2')).toBe(HP_MAX - 20);
+    expect(f.combat.getHP('p3')).toBe(HP_MAX - 9);
+  });
+
+  it('emits separate immutable fractional rewards at canonical impacts without directly adding resources', () => {
+    const f = primaryRewardFixture();
+    f.resource.setAdrenaline('p1', f.resource.getMaxAdrenaline('p1'));
+    f.resource.setAdrenalineGainMultiplierResolver(() => 99);
+    f.combat.resolveDirectImpact(f.request);
+    f.combat.resolveDirectImpact({ ...f.request, projectileId: 11 });
+    expect(f.facts).toHaveLength(2);
+    expect(new Set(f.facts.map(fact => fact.id)).size).toBe(2);
+    expect(f.facts[0]).toMatchObject({ creatorId: 'p1', resolvedValue: 3.5, authoredValue: 2,
+      worldRevision: 1, runtimeGeneration: 7, activityRevision: 4, origin: { x: 99, y: 100 } });
+    expect(Object.isFrozen(f.facts[0])).toBe(true);
+    expect(f.facts[0].distance).toBe(Math.hypot(99, 100));
+    expect(f.resource.getAdrenaline('p1')).toBe(f.resource.getMaxAdrenaline('p1'));
+  });
+
+  it('requires positive HP or armor loss and an explicit intent, while retaining full rewards for overkill', () => {
+    const f = primaryRewardFixture();
+    f.combat.resolveDirectImpact({ ...f.request, directHit: { damage: 0, adrenalinGain: 100 } });
+    f.combat.resolveDirectImpact({ ...f.request, provenance: { ...f.request.provenance, primaryHitReward: undefined } });
+    expect(f.facts).toHaveLength(0);
+    f.combat.addArmor('p2', 10);
+    f.combat.resolveDirectImpact(f.request);
+    expect(f.facts).toHaveLength(1);
+    f.combat.resolveDirectImpact({ ...f.request, directHit: { damage: HP_MAX * 100 } });
+    expect(f.facts[1].resolvedValue).toBe(3.5);
+    f.combat.resolveDirectImpact(f.request);
+    expect(f.facts).toHaveLength(2);
+  });
+
+  it('retains attribution and frozen gain after source death and complete disconnect', () => {
+    const f = primaryRewardFixture();
+    f.combat.applyDamage('p1', HP_MAX * 2, false, 'p2', 'test');
+    f.combat.resolveDirectImpact(f.request);
+    expect(f.facts[0].creatorId).toBe('p1');
+    f.players.delete('p1'); f.resource.removePlayer('p1');
+    f.combat.resolveDirectImpact(f.request);
+    expect(f.facts).toHaveLength(2);
+    expect(f.facts[1].resolvedValue).toBe(3.5);
+  });
+
+  it('replaces the gain basis on reflection and preserves fractional split components', () => {
+    const f = primaryRewardFixture();
+    const reflected = f.combat.captureProjectileProvenance({ ...f.request.provenance,
+      attributionId: 'p2', attributionKind: undefined, allegiance: { ownerId: 'p2' }, lineage: { reflected: true },
+      primaryHitReward: scalePrimaryHitRewardIntent(f.request.provenance.primaryHitReward, 0.25),
+    });
+    f.resource.setAdrenalineGainMultiplierResolver(() => 99);
+    f.combat.resolveDirectImpact({ ...f.request, target: { kind: 'player', id: 'p1' }, provenance: reflected });
+    expect(f.facts[0]).toMatchObject({ creatorId: 'p2', authoredValue: 0.5, resolvedValue: 1.5,
+      source: { gameplaySource: { id: 'p1' }, attribution: { id: 'p2' }, lineage: { reflected: true } } });
+    expect(f.facts[0].distance).toBe(1);
+  });
+
+  it('never revives an old Activity intent and makes old detach callbacks harmless', () => {
+    const f = primaryRewardFixture();
+    const newer: PrimaryHitAdrenalineRewardFact[] = [];
+    f.combat.bindPrimaryHitRewardSink(5, fact => newer.push(fact)); f.detach();
+    f.combat.resolveDirectImpact(f.request);
+    expect(newer).toHaveLength(0);
+    const provenance = f.combat.captureProjectileProvenance({ ...f.request.provenance, primaryHitReward: f.intent });
+    f.combat.resolveDirectImpact({ ...f.request, provenance });
+    expect(newer).toHaveLength(1);
+    expect(f.facts).toHaveLength(0);
+  });
+
+  it('does not revive a shot fired without a reward binding when practice is subsequently enabled', () => {
+    const f = primaryRewardFixture();
+    f.detach();
+    const unbound = f.combat.captureProjectileProvenance({ ...f.request.provenance, primaryHitReward: f.intent });
+    expect(unbound.primaryHitReward!.scope).toBeNull();
+    f.combat.bindPrimaryHitRewardSink(null, fact => f.facts.push(fact));
+    // Reflection captures a new source gain basis, but must not create a reward lifetime.
+    const reflected = f.combat.captureProjectileProvenance({ ...unbound,
+      attributionId: 'p2', attributionKind: undefined, allegiance: { ownerId: 'p2' }, lineage: { reflected: true },
+    });
+    const before = f.combat.getHP('p1');
+    f.combat.resolveDirectImpact({ ...f.request, target: { kind: 'player', id: 'p1' }, provenance: reflected });
+    expect(f.combat.getHP('p1')).toBeLessThan(before);
+    expect(f.facts).toEqual([]);
+  });
+
+  it.each([
+    { worldRevision: 2, runtimeGeneration: 7 },
+    { worldRevision: 1, runtimeGeneration: 8 },
+  ])('does not pay a saved projectile into replacement Combat scope %j', scope => {
+    const f = primaryRewardFixture();
+    f.world.destroy();
+    f.combat.bindPlayerVitalsScope(scope);
+    f.combat.initPlayer('p1'); f.combat.initPlayer('p2');
+    expect(f.combat.getPrimaryHitRewardScope()).toBeNull();
+    const newer: PrimaryHitAdrenalineRewardFact[] = [];
+    f.combat.bindPrimaryHitRewardSink(4, fact => newer.push(fact));
+    f.combat.resolveDirectImpact(f.request);
+    expect(f.combat.getHP('p2')).toBeLessThan(HP_MAX);
+    expect(newer).toEqual([]);
+    expect(f.facts).toEqual([]);
+  });
+});
 
 describe('integrated Combat damage, reaction and Player life', () => {
   it.each(['damage-taken', 'adrenaline', 'none'] as const)('checks the damaged life after each reaction hook (%s)', respawnAt => {

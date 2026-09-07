@@ -12,6 +12,8 @@ import {
   setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
+  getStoredWeaponCameraKick,
+  setStoredWeaponCameraKick,
   getStoredMasterVolume,
   getStoredPlayerName,
   getStoredLocale,
@@ -85,6 +87,24 @@ describe('local progress generation', () => {
     expect(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)).not.toBeNull();
     expect(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)).not.toBeNull();
     expect(storage.getItem(LEGACY_LOCAL_PREFERENCES_KEY)).toBeNull();
+  });
+
+  it('persists shot camera strength separately and defaults older settings without losing audio', () => {
+    storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify({
+      schemaVersion: 2, locale: 'de', audio: { masterVolume: 0.2, effectsVolume: 0.3, musicVolume: 0.4 },
+      graphics: { quality: 'low' },
+    }));
+    expect(getStoredWeaponCameraKick()).toBe(1);
+    setStoredWeaponCameraKick(0);
+    setStoredGraphicsQuality('high');
+    invalidateLocalStorageCache();
+    expect(getStoredWeaponCameraKick()).toBe(0);
+    expect(getStoredGraphicsQuality()).toBe('high');
+    expect(getStoredMasterVolume()).toBe(0.2);
+    setStoredWeaponCameraKick(3);
+    expect(getStoredWeaponCameraKick()).toBe(1);
+    setStoredWeaponCameraKick(NaN);
+    expect(getStoredWeaponCameraKick()).toBe(1);
   });
 
   it('loads a current schema document after cache invalidation', () => {

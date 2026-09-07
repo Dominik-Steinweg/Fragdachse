@@ -1,4 +1,5 @@
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
+import type { MovementEffectsRenderer } from '../effects/MovementEffectsRenderer';
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import {
@@ -133,6 +134,7 @@ export interface WorldClientPresentationRenderers {
  * schmalen, benannten Ports dieses Inputs. Activity-Presentation bleibt ausserhalb dieses Owners.
  */
 export interface WorldPresentationFrameBindingInput {
+  readonly movementEffects?: MovementEffectsRenderer;
   readonly healthBars?: WorldHealthBarRenderer;
   readonly healthBarScope?: object;
   /** Die Scene, deren Hauptkamera diese World-Instanz waehrend ihrer Lebenszeit positioniert. */
@@ -202,6 +204,7 @@ export class WorldPresentationFrameBinding {
   private spectatorCameraScrollY = 0;
 
   constructor(private readonly input: WorldPresentationFrameBindingInput) {
+    this.input.movementEffects?.openWorld(this);
     this.input.lighting.setDynamicOccluderSource(this.trainLightOccluders);
   }
 
@@ -524,6 +527,7 @@ export class WorldPresentationFrameBinding {
     if (this.destroyed) return;
     this.destroyed = true;
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
+    this.input.movementEffects?.closeWorld(this);
     this.trainLightOccluders.clear();
     this.input.lighting.clearDynamicOccluderSource(this.trainLightOccluders);
   }

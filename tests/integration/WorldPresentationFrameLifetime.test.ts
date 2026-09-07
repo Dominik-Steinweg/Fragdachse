@@ -173,6 +173,13 @@ function fakeBindingInput(
 }
 
 describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalten (Phase 6A.2/6B)', () => {
+  it('owns movement presentation in a world without activity and closes it once before handoff', () => {
+    const movementEffects = { openWorld: vi.fn(), closeWorld: vi.fn() };
+    const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene(), { movementEffects: movementEffects as never }));
+    expect(movementEffects.openWorld).toHaveBeenCalledWith(binding);
+    binding.destroy(); binding.destroy();
+    expect(movementEffects.closeWorld).toHaveBeenCalledExactlyOnceWith(binding);
+  });
   it('startet unzerstoert und wird durch destroy() idempotent inert', () => {
     const binding = new WorldPresentationFrameBinding(fakeBindingInput(fakeScene()));
 

@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { DEPTH, DEPTH_FX } from '../../config';
 import { GpuVfxEase } from './GpuVfxEase';
 import { MUZZLE_MAX_LIFETIME } from '../muzzleFlashModel';
+import { MOVEMENT_FX } from '../../config/movementEffects';
 import {
   GpuVfxFrameAnimationId,
   type GpuVfxFrameAnimationId as GpuVfxFrameAnimationIdType,
@@ -86,6 +87,7 @@ export const GpuVfxLaneId = {
   PowerUpPedestal:       29,
   MuzzleFlash:           30,
   FlightSignature:       31,
+  MovementGround:        32,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -705,5 +707,14 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     capacity: 16384, maxLifetimeMs: 1000, order: 'add-over-opaque', reserveCritical: 8192,
     rationale: 'Continuous core/wake ribbons and sprite decoration share one additive band below projectile heads and one admission budget.',
     capacityRationale: 'Reserves half the bounded lane for critical paths; wake and motes cannot consume that reserve.',
+  },
+  {
+    id: GpuVfxLaneId.MovementGround, label: 'movement-ground',
+    depth: DEPTH.DECALS + 0.1, blendMode: Phaser.BlendModes.NORMAL,
+    eases: [GpuVfxEase.Linear, GpuVfxEase.QuadOut, GpuVfxEase.CubicIn],
+    capacity: MOVEMENT_FX.footprintCapacity + MOVEMENT_FX.dustCapacity,
+    maxLifetimeMs: MOVEMENT_FX.footprintLifeMaxMs, order: 'ordered', reserveCritical: 0,
+    rationale: 'Ground contacts must cover terrain decals but remain below rocks, actors and combat signals. Existing NORMAL lanes are all above these obstacles.',
+    capacityRationale: 'The movement renderer admits at most 3072 four-second prints (768/s sustained) and 1024 short dust particles, with player reserves inside both budgets.',
   },
 ];

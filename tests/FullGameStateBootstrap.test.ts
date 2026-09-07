@@ -19,6 +19,10 @@ describe('latejoin game-state bootstrap', () => {
 
     expect(isCompleteGameStatePayload(full)).toBe(true);
 
+    const withoutEssence = { ...full };
+    delete withoutEssence.ae;
+    expect(isCompleteGameStatePayload(withoutEssence)).toBe(false);
+
     const delta = { ...full };
     delete delta.u;
     expect(isCompleteGameStatePayload(delta)).toBe(false);

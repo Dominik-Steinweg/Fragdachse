@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { PrimaryHitAdrenalineRewardFact, PrimaryHitAdrenalineRewardIntent, PrimaryHitRewardScope } from './PrimaryHitReward';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyDeathInfo, EnemyManager } from '../entities/EnemyManager';
@@ -98,6 +99,7 @@ import type {
   CombatSupportMutationOutcome,
   SourceResolvedDamageBasis,
   TargetDamageAppliedOutcome,
+  TargetMutationOutcome,
 } from '../combat/CombatMutation';
 import { createDerivedDamageBasis, freezeTargetMutationOutcome } from '../combat/CombatMutation';
 import { CombatBurnStatusOwner } from '../combat/CombatBurnStatusOwner';
@@ -511,6 +513,68 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private onHealingReceived: ((playerId: string, amount: number) => void) | null = null;
   private onArmorReceived: ((playerId: string, amount: number) => void) | null = null;
   private mutationOutcomeSequence = 0;
+  private primaryHitRewardBinding: { scope: PrimaryHitRewardScope; sink: (fact: PrimaryHitAdrenalineRewardFact) => void } | null = null;
+  private readonly primaryHitRewardObservers = new Set<(fact: PrimaryHitAdrenalineRewardFact) => void>();
+
+  bindPrimaryHitRewardSink(activityRevision: number | null, sink: (fact: PrimaryHitAdrenalineRewardFact) => void): () => void {
+    const binding = { scope: Object.freeze({ ...this.getCombatScope(), activityRevision }), sink };
+    this.primaryHitRewardBinding = binding;
+    return () => { if (this.primaryHitRewardBinding === binding) this.primaryHitRewardBinding = null; };
+  }
+
+  addPrimaryHitRewardObserver(observer: (fact: PrimaryHitAdrenalineRewardFact) => void): () => void {
+    this.primaryHitRewardObservers.add(observer);
+    return () => { this.primaryHitRewardObservers.delete(observer); };
+  }
+
+  getPrimaryHitRewardScope(): PrimaryHitRewardScope | null {
+    const scope = this.primaryHitRewardBinding?.scope;
+    return scope && isSameCombatScope(scope, this.getCombatScope()) ? scope : null;
+  }
+
+  private capturePrimaryHitRewardScope(intent: PrimaryHitAdrenalineRewardIntent | undefined): PrimaryHitAdrenalineRewardIntent | undefined {
+    return intent && intent.scope === undefined
+      ? Object.freeze({ ...intent, scope: this.getPrimaryHitRewardScope() }) : intent;
+  }
+
+  private publishPrimaryHitReward(
+    outcome: TargetMutationOutcome | null | undefined,
+    intent: PrimaryHitAdrenalineRewardIntent | undefined,
+    origin: { readonly x: number; readonly y: number },
+  ): void {
+    const binding = this.primaryHitRewardBinding;
+    const scope = intent?.scope;
+    if (!binding || !scope || !intent || outcome?.kind !== 'damage-applied'
+      || outcome.hpLost + outcome.armorLost <= 0 || outcome.source.attribution.kind !== 'player'
+      || outcome.source.attribution.id !== intent.gainBasis.playerId
+      || scope.activityRevision !== binding.scope.activityRevision
+      || !isSameCombatScope(scope, binding.scope) || !isSameCombatScope(scope, this.getCombatScope())
+      || !Number.isFinite(origin.x) || !Number.isFinite(origin.y)) return;
+    // Target owners validate their own receipt scopes. Enemy/Decoy scopes are owner-local and
+    // do not identify this World; reward lifetime follows its captured source binding instead.
+    const components = intent.components.filter(component => outcome.target.kind !== 'decoy' || component.kind !== 'melee-hit-bonus');
+    const authoredValue = components.reduce((total, component) => total + component.amount, 0);
+    const resolvedValue = this.resourceSystem?.resolveAdrenalineGain(intent.gainBasis, authoredValue) ?? 0;
+    if (!(resolvedValue > 0)) return;
+    const id = `${scope.worldRevision}:${scope.runtimeGeneration}:${scope.activityRevision}:${outcome.outcomeId}:${intent.branchId}`;
+    let seed = 2166136261;
+    for (let i = 0; i < id.length; i++) seed = Math.imul(seed ^ id.charCodeAt(i), 16777619);
+    const sourcePosition = intent.sourcePosition;
+    const distance = sourcePosition && Number.isFinite(sourcePosition.x) && Number.isFinite(sourcePosition.y)
+      ? Math.hypot(origin.x - sourcePosition.x, origin.y - sourcePosition.y) : undefined;
+    const fact: PrimaryHitAdrenalineRewardFact = Object.freeze({
+      ...scope, id, outcomeId: outcome.outcomeId,
+      source: intent.sourceSlot ? Object.freeze({ ...outcome.source, sourceSlot: intent.sourceSlot }) : outcome.source,
+      target: outcome.target,
+      creatorId: outcome.source.attribution.id, intent: Object.freeze({ ...intent, components: Object.freeze(components) }),
+      authoredValue, resolvedValue, distance, origin: Object.freeze({ ...origin }), createdAt: this.hostFrameNowMs, seed: seed >>> 0,
+    });
+    binding.sink(fact);
+    for (const observer of this.primaryHitRewardObservers) {
+      try { observer(fact); }
+      catch (error) { console.error('[WorldCombatCore] Passive reward observer failed', error); }
+    }
+  }
 
   getTargetIncomingDamageMultiplier(...args: Parameters<WorldCombatCore['getTargetIncomingDamageMultiplierAtHostTime']>): ReturnType<WorldCombatCore['getTargetIncomingDamageMultiplierAtHostTime']> {
     return this.runHostExecution(() => this.getTargetIncomingDamageMultiplierAtHostTime(...args));
@@ -582,6 +646,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
               payload.supportEffect,
               payload.visualMuzzleOrigin,
               payload.baseDamageMult,
+              this.capturePrimaryHitRewardScope(payload.primaryHitReward),
             ),
             interactions: Object.freeze([...interactions]),
           };
@@ -612,6 +677,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
             payload.bloodEffectMultiplier,
             payload.damageTargets,
             payload.baseDamageMult,
+            this.capturePrimaryHitRewardScope(payload.primaryHitReward),
           ),
           interactions: Object.freeze([...interactions]),
         };
@@ -1866,13 +1932,24 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
   captureProjectileProvenance(provenance: ProjectileProvenance): ProjectileProvenance {
-    if (provenance.gameplaySourceKind && provenance.attributionKind && provenance.allegiance.kind) return provenance;
+    let primaryHitReward = this.capturePrimaryHitRewardScope(provenance.primaryHitReward);
+    if (primaryHitReward && provenance.lineage?.reflected && provenance.attributionKind === undefined) {
+      const gainBasis = this.resourceSystem?.captureAdrenalineGainBasis(provenance.attributionId);
+      const player = this.playerManager.getPlayer(provenance.attributionId);
+      const sourcePosition = player && Number.isFinite(player.x) && Number.isFinite(player.y)
+        ? Object.freeze({ x: player.x, y: player.y }) : undefined;
+      primaryHitReward = gainBasis ? Object.freeze({ ...primaryHitReward, gainBasis, sourcePosition }) : undefined;
+    }
+    if (provenance.gameplaySourceKind && provenance.attributionKind && provenance.allegiance.kind) {
+      return primaryHitReward === provenance.primaryHitReward ? provenance : Object.freeze({ ...provenance, primaryHitReward });
+    }
     const sourceEnemy = this.enemyManager?.getEnemy(provenance.gameplaySourceId);
     const creditedEnemy = this.enemyManager?.getEnemy(provenance.attributionId);
     const allegianceEnemy = this.enemyManager?.getEnemy(provenance.allegiance.ownerId);
     const creditedPlayer = creditedEnemy?.faction === 'allied' ? creditedEnemy.ownerId : undefined;
     return Object.freeze({
       ...provenance,
+      primaryHitReward,
       gameplaySourceKind: provenance.gameplaySourceKind ?? (sourceEnemy ? 'enemy'
         : this.playerManager.getPlayer(provenance.gameplaySourceId) ? 'player'
           : provenance.sourceTurretId ? 'turret'
@@ -2053,10 +2130,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const outcome = projectileMutationOutcome(mutation);
     if (!outcome.accepted) return { accepted: false, reaction: createReactionMetadata(request) };
     const dealt = outcome.actualDamage;
-    const ownerId = request.provenance.allegiance.ownerId;
-    if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
-    }
+    this.publishPrimaryHitReward(mutation, request.provenance.primaryHitReward, request.impact);
     this.resolveGaussDischarge(
       request,
       playerId,
@@ -2121,9 +2195,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const directOutcome = mutation?.kind === 'damage-applied' ? mutation : null;
     this.applyAk47TargetExplosion(request.impact.x, request.impact.y, ownerId, enemyId, directOutcome, ak47Impact);
     this.resolveGaussDischarge(request, undefined, enemyId, directOutcome);
-    if (dealt > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
-    }
+    this.publishPrimaryHitReward(mutation, request.provenance.primaryHitReward, request.impact);
     return {
       accepted: true,
       actualDamage: dealt,
@@ -2172,10 +2244,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const outcome = projectileMutationOutcome(mutation);
     if (!outcome.accepted) return { accepted: false, reaction: createReactionMetadata(request) };
     const appliedDamage = outcome.actualDamage;
-    const ownerId = request.provenance.allegiance.ownerId;
-    if (appliedDamage > 0 && request.directHit.adrenalinGain && request.directHit.adrenalinGain > 0) {
-      this.resourceSystem?.addAdrenaline(ownerId, request.directHit.adrenalinGain);
-    }
+    this.publishPrimaryHitReward(mutation, request.provenance.primaryHitReward, request.impact);
     return {
       accepted: true,
       actualDamage: appliedDamage,
@@ -2419,6 +2488,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     supportEffect?: HitscanSupportEffect,
     visualMuzzleOrigin?: { x: number; y: number },
     baseDamageMult = 1,
+    primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -2468,6 +2538,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceId,
         sourceSlot,
         adrenalinGain,
+        primaryHitReward,
       );
       return true;
     }
@@ -2480,7 +2551,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const actualDamage = damage * loadoutMult * powerUpMult;
       const canDealDamage = this.canDamageTarget(shooterId, trace.hitPlayerId);
       if (canDealDamage && this.shouldBlockWithShield(trace.hitPlayerId, 'hitscan', actualDamage, startX, startY)) return true;
-      this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, sourceId, {
+      const outcome = this.applyDamage(trace.hitPlayerId, actualDamage, false, shooterId, sourceId, {
         sourceX: startX,
         sourceY: startY,
         dirX: Math.cos(angle),
@@ -2489,16 +2560,14 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       if (canDealDamage) this.applyBurnOnHit(trace.hitPlayerId, shooterId, burnOnHit, sourceId);
 
-      if (canDealDamage && adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-      }
+      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
     } else if (trace.hitEnemyId) {
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
         : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult  = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
       const actualDamage = damage * loadoutMult * powerUpMult;
-      this.applyDamage(trace.hitEnemyId, actualDamage, false, shooterId, sourceId, {
+      const outcome = this.applyDamage(trace.hitEnemyId, actualDamage, false, shooterId, sourceId, {
         sourceX: startX,
         sourceY: startY,
         dirX: Math.cos(angle),
@@ -2507,9 +2576,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       this.applyBurnOnHit(trace.hitEnemyId, shooterId, burnOnHit, sourceId);
 
-      if (adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-      }
+      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
     } else if (trace.hitDecoyId !== null) {
       const loadoutMult  = sourceSlot
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
@@ -2523,9 +2590,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         dirY: Math.sin(angle),
       }) ?? null;
 
-      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-      }
+      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
     } else {
       // Kein Spieler getroffen → prüfen ob Fels oder Zug getroffen wurde
       this.applyHitscanObjectDamage(
@@ -2557,6 +2622,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         chainCfg,
         sourceId,
         adrenalinGain,
+        primaryHitReward,
         playerColor,
         visualPreset,
         baseThickness: traceThickness,
@@ -2583,7 +2649,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     angle: number,
     sourceId: string,
     sourceSlot?: WeaponSlot,
-    adrenalinGain = 0,
+    _adrenalinGain = 0,
+    primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
   ): void {
     const dirX = Math.cos(angle);
     const dirY = Math.sin(angle);
@@ -2596,7 +2663,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const actualDamage = effect.damagePerHit * loadoutMult * powerUpMult;
       if (actualDamage <= 0) return;
       if (this.shouldBlockWithShield(targetId, 'hitscan', actualDamage, startX, startY)) return;
-      this.applyDamage(
+      const outcome = this.applyDamage(
         targetId,
         actualDamage,
         false,
@@ -2605,7 +2672,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         { sourceX: startX, sourceY: startY, dirX, dirY },
         { sourceSlot, damageKind: 'direct' },
       );
-      if (adrenalinGain > 0) this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
+      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
     };
 
     if (trace.hitPlayerId) {
@@ -2648,9 +2715,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         dirX,
         dirY,
       }) ?? null;
-      if (outcome?.kind === 'damage-applied' && outcome.actualDamage > 0 && adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-      }
+      this.publishPrimaryHitReward(outcome, primaryHitReward, { x: trace.endX, y: trace.endY });
       return;
     }
 
@@ -2709,6 +2774,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     chainCfg:       ChainLightningConfig;
     sourceId:      string;
     adrenalinGain:  number;
+    primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
     playerColor:    number;
     visualPreset:   HitscanVisualPreset;
     baseThickness:  number;
@@ -2811,20 +2877,20 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         } : { damageKind: 'chain' as const };
         if (jump.target.kind === 'enemy') {
           opts.visitedEnemies.add(runtimeId);
-          this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
-          if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+          const outcome = this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
+          this.publishPrimaryHitReward(outcome, opts.primaryHitReward, { x: jump.target.x, y: jump.target.y });
         } else if (jump.target.kind === 'player') {
           opts.visitedPlayers.add(runtimeId);
           const canDeal = this.canDamageTarget(opts.shooterId, runtimeId);
           if (!(canDeal && this.shouldBlockWithShield(runtimeId, 'hitscan', jump.damage, jump.originX, jump.originY))) {
-            this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
-            if (canDeal && opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+            const outcome = this.applyDamage(runtimeId, jump.damage, false, opts.shooterId, opts.sourceId, visualContext, damageOptions);
+            this.publishPrimaryHitReward(outcome, opts.primaryHitReward, { x: jump.target.x, y: jump.target.y });
           }
         } else if (jump.target.kind === 'decoy') {
           const decoyId = Number(runtimeId);
           opts.visitedDecoys.add(decoyId);
-          this.decoySystem?.applyDamage(decoyId, jump.damage, opts.shooterId, opts.sourceId, visualContext);
-          if (opts.adrenalinGain > 0) this.resourceSystem?.addAdrenaline(opts.shooterId, opts.adrenalinGain);
+          const outcome = this.decoySystem?.applyDamage(decoyId, jump.damage, opts.shooterId, opts.sourceId, visualContext);
+          this.publishPrimaryHitReward(outcome, opts.primaryHitReward, { x: jump.target.x, y: jump.target.y });
         } else {
           // Detonierbares Ziel (z.B. ASMD-Ball) → Detonation auslösen; Projektil wird zerstört.
           this.detonationSystem?.detonateProjectile(Number(runtimeId), opts.shooterId);
@@ -2921,7 +2987,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     range:         number,
     arcDegrees:    number,
     damage:        number,
-    adrenalinGain: number,
+    _adrenalinGain: number,
     sourceId:    string,
     playerColor:   number,
     sourceSlot?:   WeaponSlot,
@@ -2932,10 +2998,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     burnOnHit?: BurnOnHitConfig,
     chain?: { count: number; radius: number; damageFactor: number },
     hitHeal = 0,
-    hitAdrenaline = 0,
+    _hitAdrenaline = 0,
     bloodEffectMultiplier = 1,
     damageTargets?: readonly MeleeDamageTarget[],
     baseDamageMult = 1,
+    primaryHitReward?: PrimaryHitAdrenalineRewardIntent,
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
@@ -3013,6 +3080,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       if (target.kind === 'decoy') {
         const outcome = this.decoySystem?.applyDamage(target.id, actualDamage, shooterId, sourceId, visualContext) ?? null;
         if (outcome?.kind !== 'damage-applied' || outcome.actualDamage <= 0) continue;
+        this.publishPrimaryHitReward(outcome, primaryHitReward, { x: target.x, y: target.y });
       } else {
         const canDealDamage = this.canDamageTarget(shooterId, target.id);
         if (canDealDamage && this.shouldBlockWithShield(target.id, 'melee', actualDamage, x, y)) continue;
@@ -3021,8 +3089,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
           damageKind: 'direct',
         });
         if (canDealDamage) this.applyBurnOnHit(target.id, shooterId, burnOnHit, sourceId);
-        if (canDealDamage && adrenalinGain > 0) this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
-        if (canDealDamage) this.applyMeleeHitRewards(shooterId, hitHeal, hitAdrenaline);
+        this.publishPrimaryHitReward(outcome, primaryHitReward, { x: target.x, y: target.y });
+        if (canDealDamage) this.applyMeleeHitRewards(shooterId, hitHeal);
         // A geometrically accepted friendly contact still contributes to the swing projection;
         // only damage/reaction eligibility is gated by the relationship result.
         void outcome;
@@ -3034,9 +3102,6 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         nearestHitDistance = dist;
         impactX = target.x;
         impactY = target.y;
-      }
-      if (target.kind === 'decoy' && adrenalinGain > 0) {
-        this.resourceSystem?.addAdrenaline(shooterId, adrenalinGain);
       }
     }
 
@@ -3118,9 +3183,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   // collectReplicatedMeleeSwings entfernt – Swings werden per RPC gesendet
 
-  private applyMeleeHitRewards(shooterId: string, hitHeal: number, hitAdrenaline: number): void {
+  private applyMeleeHitRewards(shooterId: string, hitHeal: number): void {
     if (hitHeal > 0) this.heal(shooterId, hitHeal);
-    if (hitAdrenaline > 0) this.resourceSystem?.addAdrenaline(shooterId, hitAdrenaline);
   }
 
   /**

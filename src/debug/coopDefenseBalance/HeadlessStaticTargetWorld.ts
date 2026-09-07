@@ -73,6 +73,9 @@ export function createMulberry32Prng(seed: number): () => number {
  *
  * Verwendet exaktes Sub-Step Event-Scheduling, dieselben mathematischen Resolver und dieselbe
  * Brand-State-Machine wie die Runtime. Frei von Rendering, Audio, Netzwerk und Wandzeit.
+ * Adrenalin ist hier Brutto-Trefferwert an immer schadensfähigen, unsterblichen Testzielen.
+ * Das Modell simuliert weder Essenzaufnahme noch Entfernung/Cap/Latenz; es ist deshalb mit
+ * dem neutralen Primary-Hit-Reward der Live-Lab-Runtime vergleichbar.
  */
 export class HeadlessStaticTargetWorld implements WeaponFireSink {
   readonly targets: readonly HeadlessTarget[];

@@ -38,6 +38,7 @@ import type {
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
 import { ProjectileStore } from '../src/projectile/ProjectileStore';
 import { adaptProjectileDirectDamageRequest } from '../src/combat/ProjectileCombatContractAdapter';
+import { createPrimaryHitRewardIntent } from '../src/combat/PrimaryHitReward';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
@@ -326,6 +327,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     const provenance: ProjectileProvenance = {
       gameplaySourceId: 'source', attributionId: 'credit', allegiance: { ownerId: 'team' },
       weaponSourceId: 'weapon.plasma', correlation: { ak47ShotId: 7 },
+      primaryHitReward: createPrimaryHitRewardIntent('plasma', { playerId: 'credit', multiplier: 2 }, 4),
     };
     runtime.applyPlasmaSwarmImpact({
       projectileId: 12, provenance, enemyId: 'enemy-origin', x: 0, y: 0,
@@ -334,6 +336,7 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     });
     expect(runtime.getThreatSamples()).toHaveLength(2);
     for (const child of runtime.getThreatSamples()) {
+      expect(child.provenance.primaryHitReward).toBeUndefined();
       expect(child.provenance).toMatchObject({
         gameplaySourceId: 'source', attributionId: 'credit', allegiance: { ownerId: 'team' },
         lineage: { parentProjectileId: 12, plasmaSwarmChild: true, plasmaSwarmOriginEnemyId: 'enemy-origin' },

@@ -8,6 +8,7 @@ import type { RendererBundle } from './RendererBundle';
  * selbst folgt getrennt ihrem Handoff.
  */
 export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): void {
+  bundle.movement.clear();
   bundle.timeBubble.destroyAll();
   bundle.blackHole.destroyAll();
   bundle.reinforcementMatrix.destroyAll();
@@ -53,6 +54,7 @@ export function resetRenderersForWorldPresentationTeardown(
   bundle.carryZones.clear();
   bundle.beer.syncCoopDefenseCarry([]);
   if (!preserveAuthoredPresentation) bundle.leafBlower.setTerrainColorSnapshot(null);
+  if (!preserveAuthoredPresentation) bundle.movement.setTerrainColorSnapshot(null);
   bundle.beer.clear();
   if (preserveAuthoredPresentation) bundle.shadow.clearDynamicShadows();
   else bundle.shadow.clear();

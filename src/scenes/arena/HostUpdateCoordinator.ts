@@ -56,6 +56,7 @@ import type {
 } from '../../projectile/ProjectileExplosionPort';
 import type { CoopMissionRuntime } from '../../activity/CoopMissionRuntime';
 import type { CaptureTheBeerActivityRuntime } from '../../activity/CaptureTheBeerActivityRuntime';
+import type { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
 
 /**
  * Suchradius fuer den Basisturm hinter einem Basistreffer. Der Collider meldet nur die
@@ -115,6 +116,7 @@ export interface HostCombatFramePort {
 
 /** Activity-owned reads needed by the host frame, absent outside an Activity. */
 export interface HostActivityFramePort {
+  getAdrenalineEssence?(): AdrenalineEssenceBinding | null;
   getStep(): CoopMissionActivityStep | null;
   getCoopMissionRuntime(): CoopMissionRuntime | null;
   getCaptureTheBeerRuntime(): CaptureTheBeerActivityRuntime | null;
@@ -318,6 +320,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       return;
     }
     const now = bridge.getSynchronizedNow();
+    this.activityFramePort?.getAdrenalineEssence?.()?.prepare();
     this.ctx.getWorldCombatCore()!.runHostExecution(() => this.runHostUpdateAtTime(delta, now), now);
   }
 
@@ -691,9 +694,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         : undefined;
       player.setHeldItemId(
         selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(player.id) : selectedHeldItemId,
+        selectedHeldItemId !== undefined,
       );
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
+      player.setMovementDashPhase(dashPhase);
       const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;
       if (dashPhase === 1 && prevDashPhase === 0) {
         this.audio?.playSound('sfx_dash', player.x, player.y, player.id);
@@ -722,6 +727,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (this.presentationActive) this.enemyDashVisuals.sync(enemy);
     }
 
+    // All combat/player mutations of this step precede essence arrivals; invalidated lives lose reservations first.
+    if (!countdownActive) this.activityFramePort?.getAdrenalineEssence?.()?.updateHost(now);
     const powerups    = this.powerUpSystem?.getWorldItemSnapshot() ?? [];
     const pedestals   = this.powerUpSystem?.getPedestalSnapshot()  ?? [];
     const nukes       = this.powerUpSystem?.getNukeSnapshot()      ?? [];
@@ -989,7 +996,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         maxHp,
         armor,
         alive,
-        adrenaline: Math.round(adrenaline),
+        adrenaline,
         adrenalineRevision: playerFrame?.adrenalineRevision ?? 0,
         weapon2PredictionAck: bridge.getWeapon2PredictionAck(player.id),
         rage: Math.round(rage),
@@ -1030,6 +1037,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     ) ?? [];
 
     bridge.publishGameState({
+      adrenalineEssence: this.activityFramePort?.getAdrenalineEssence?.()
+        ? this.activityFramePort.getAdrenalineEssence()!.getNetSnapshot(now, fullSnapshotRequested) ?? undefined
+        : null,
       roundStartTime: bridge.getArenaStartTime(),
       players,
       projectiles,

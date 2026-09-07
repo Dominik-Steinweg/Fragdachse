@@ -832,6 +832,7 @@ export class ArenaInputBindings {
         localPosition?.x,
         localPosition?.y,
         awaitResult || awaitFailureResult,
+        predictionId,
       );
       if (awaitFailureResult) {
         void loadoutPromise.then((result) => {

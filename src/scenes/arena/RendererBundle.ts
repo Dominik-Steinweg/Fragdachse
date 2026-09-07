@@ -1,4 +1,5 @@
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
+import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
 import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
@@ -98,6 +99,7 @@ export interface RendererBundle {
   rocket:              RocketRenderer;
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
   gpuVfx:              GpuVfxSystem;
+  movement:            MovementEffectsRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   explosionGpu:        ExplosionGpuRenderer;
@@ -317,6 +319,7 @@ export function createRendererBundle(
     remoteControl,
     healthBars: new WorldHealthBarRenderer(scene),
     gpuVfx,
+    movement: new MovementEffectsRenderer(gpuVfx),
     combatGoreGpu,
     entityBurnGpu,
     explosionGpu,

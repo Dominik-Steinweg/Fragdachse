@@ -1,4 +1,9 @@
 import * as Phaser from 'phaser';
+import { FOOTPRINT_TEXTURE_KEYS, ensureMovementFootprintTextures } from '../MovementFootprintTextures';
+import {
+  ESSENCE_LIQUID_FRAME_SIZE, ESSENCE_LIQUID_FRAMES, ESSENCE_LIQUID_TAIL_FRAME,
+  writeEssenceLiquidPixels, writeEssenceLiquidTailPixels,
+} from '../../adrenalineEssence/AdrenalineEssenceLiquidFrames';
 import {
   DEATH_MORPH_FRAME_COUNT,
   DEATH_MORPH_FRAME_SIZE,
@@ -187,11 +192,18 @@ export const GpuVfxFrameId = {
   DeathDustMoteE:        51,
   FlightCoreStrip:       52,
   FlightWakeStrip:       53,
+  // 54..181 belong to the contiguous death-morph sequence.
+  MovementPawCompact:    182,
+  MovementPawClawed:     183,
+  MovementPawBroad:      184,
+  // 185..208 belong to the three eight-phase liquid materials.
+  EssenceLiquidTail:     209,
 } as const;
 
 /** Nur die unten erzeugte, zusammenhaengende Morph-Folge darf diesen ID-Bereich belegen. */
 type DeathMorphFrameId = number & { readonly deathMorphFrame: unique symbol };
-export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId] | DeathMorphFrameId;
+type EssenceLiquidFrameId = number & { readonly essenceLiquidFrame: unique symbol };
+export type GpuVfxFrameId = (typeof GpuVfxFrameId)[keyof typeof GpuVfxFrameId] | DeathMorphFrameId | EssenceLiquidFrameId;
 
 interface GpuVfxAtlasEntry {
   readonly id: GpuVfxFrameId;
@@ -205,6 +217,8 @@ interface GpuVfxAtlasEntry {
   readonly sourceX?: number;
   /** Vorbereitete Alpha-Mischung vorhandener Motive, direkt in den Atlas geschrieben. */
   readonly deathMorph?: DeathMorphBlend;
+  readonly essenceLiquid?: { readonly variant: number; readonly phase: number };
+  readonly essenceTail?: boolean;
   /** Erzeugt die Quelltextur, falls der zustaendige Renderer noch nicht gelaufen ist. */
   readonly ensure: ((scene: Phaser.Scene) => void) | null;
 }
@@ -447,6 +461,20 @@ export const GPU_VFX_ATLAS: readonly GpuVfxAtlasEntry[] = [
     sourceTextureKey: TEX_DEATH_DUST_MOTE_E, width: 48, height: 48, ensure: ensureDeathDustMoteTextures,
   },
   ...DEATH_MORPH_ATLAS_ENTRIES,
+  { id: GpuVfxFrameId.MovementPawCompact, frame: 'movement-paw-compact',
+    sourceTextureKey: FOOTPRINT_TEXTURE_KEYS.compact, width: 8, height: 12, ensure: ensureMovementFootprintTextures },
+  { id: GpuVfxFrameId.MovementPawClawed, frame: 'movement-paw-clawed',
+    sourceTextureKey: FOOTPRINT_TEXTURE_KEYS.clawed, width: 8, height: 12, ensure: ensureMovementFootprintTextures },
+  { id: GpuVfxFrameId.MovementPawBroad, frame: 'movement-paw-broad',
+    sourceTextureKey: FOOTPRINT_TEXTURE_KEYS.broad, width: 8, height: 12, ensure: ensureMovementFootprintTextures },
+  ...ESSENCE_LIQUID_FRAMES.map((frame, index): GpuVfxAtlasEntry => ({
+    id: (185 + index) as EssenceLiquidFrameId, frame: frame.frame,
+    sourceTextureKey: null, width: ESSENCE_LIQUID_FRAME_SIZE, height: ESSENCE_LIQUID_FRAME_SIZE,
+    essenceLiquid: frame, ensure: null,
+  })),
+  { id: GpuVfxFrameId.EssenceLiquidTail, frame: ESSENCE_LIQUID_TAIL_FRAME,
+    sourceTextureKey: null, width: ESSENCE_LIQUID_FRAME_SIZE, height: ESSENCE_LIQUID_FRAME_SIZE,
+    essenceTail: true, ensure: null },
 ];
 
 /** Transparenter Rand um jeden Frame, in Pixeln. */
@@ -536,6 +564,7 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
   const canvas = existing;
   const ctx = canvas.context;
   const morphPixels = ctx?.createImageData(DEATH_MORPH_FRAME_SIZE, DEATH_MORPH_FRAME_SIZE);
+  const liquidPixels = ctx?.createImageData(ESSENCE_LIQUID_FRAME_SIZE, ESSENCE_LIQUID_FRAME_SIZE);
   const morphSources = new Map<string, Uint8ClampedArray>();
   const readMorphSource = (key: string): Uint8ClampedArray => {
     let pixels = morphSources.get(key);
@@ -561,6 +590,12 @@ export function buildGpuVfxAtlas(scene: Phaser.Scene): void {
       const blend = entry.deathMorph;
       writeDeathMorphPixels(morphPixels.data, readMorphSource(blend.from), readMorphSource(blend.to), blend.mix);
       ctx.putImageData(morphPixels, rect.x, rect.y);
+    }
+    if (ctx && liquidPixels && (entry.essenceLiquid || entry.essenceTail)) {
+      if (entry.essenceLiquid) writeEssenceLiquidPixels(liquidPixels.data,
+        entry.essenceLiquid.variant, entry.essenceLiquid.phase);
+      else writeEssenceLiquidTailPixels(liquidPixels.data);
+      ctx.putImageData(liquidPixels, rect.x, rect.y);
     }
     if (ctx && entry.sourceTextureKey && scene.textures.exists(entry.sourceTextureKey)) {
       const source = scene.textures.get(entry.sourceTextureKey).getSourceImage();

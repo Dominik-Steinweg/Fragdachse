@@ -9,8 +9,22 @@ import {
   resolveCoopDefenseMapPersistentSpawnConfigs,
 } from '../src/config/coopDefenseMaps';
 import { scaleByCoopDefenseHumanPlayers } from '../src/config/coopDefenseScaling';
+import authoredEnemies from '../src/config/coopDefenseEnemies.json';
+import { PLAYER_MOVEMENT_VISUAL, requirePawCount } from '../src/config/movementEffects';
 
 describe('Coop defense multiplayer scaling', () => {
+  it('authors locomotion anatomy explicitly and keeps it independent of multiplayer scaling', () => {
+    expect(PLAYER_MOVEMENT_VISUAL.pawCount).toBe(2);
+    for (const enemy of authoredEnemies.enemies) {
+      expect(enemy.pawCount, enemy.id).toBe(['alien-badger', 'pyro-badger'].includes(enemy.id) ? 2 : 4);
+      expect(COOP_DEFENSE_ENEMY_CONFIGS[enemy.id].pawCount).toBe(enemy.pawCount);
+      for (const count of [1, 4, 12]) expect(resolveCoopDefenseEnemyConfigs(count)[enemy.id].pawCount).toBe(enemy.pawCount);
+    }
+  });
+
+  it.each([undefined, null, 0, 1, 3, 5, '2'])('rejects missing or invalid pawCount %s', value => {
+    expect(() => requirePawCount(value, 'test-enemy')).toThrow('test-enemy');
+  });
   it('keeps every regular enemy at or below the shared 30px size limit', () => {
     for (const [kind, config] of Object.entries(COOP_DEFENSE_ENEMY_CONFIGS)) {
       if (config.isBoss) continue;

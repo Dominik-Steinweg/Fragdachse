@@ -452,6 +452,7 @@ export class ArenaScene extends Phaser.Scene {
         },
       },
       getGpuVfxStats: () => this.renderers?.gpuVfx.getStats() ?? null,
+      getAdrenalineEssence: () => this.arenaRuntime?.diagnostics.getAdrenalineEssence?.() ?? null,
       getFlowFieldDiagnostics: () => this.arenaRuntime?.diagnostics.getFlowFieldDiagnosticsPort() ?? null,
       getRockVisualSystem: (): ArenaDiagnosticsRockVisualSystemPort | null => this.arenaRuntime?.diagnostics.getRockVisualDiagnostics() ?? null,
       getHostPerformanceMetrics: () => this.hostUpdate.getPerformanceMetrics(),
@@ -523,6 +524,9 @@ export class ArenaScene extends Phaser.Scene {
     effectSystem.setAudioSystem(gameAudioSystem);
 
     this.visualFeedback = new VisualFeedbackDirector(this, {
+      getWeaponPlayer: (id) => playerManager.getPlayer(id),
+      getWorldRevision: () => bridge.getCurrentWorldRevision(),
+      isWeaponTriggerHeld: (slot) => inputSystem.isWeaponTriggerHeld(slot),
       getListener: () => {
         const sprite = playerManager.getPlayer(bridge.getLocalPlayerId())?.displayObject;
         return sprite ? { x: sprite.x, y: sprite.y } : null;
@@ -821,6 +825,7 @@ export class ArenaScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.renderers?.explosionGpu.clearPending();
       this.renderers?.combatGoreGpu.destroy();
+      this.renderers?.movement.destroy();
       this.renderers?.gpuVfx.destroy();
     });
     this.diagnostics?.subscribeDiagnostics((enabled) => {
@@ -1379,6 +1384,13 @@ export class ArenaScene extends Phaser.Scene {
     // Der GPU-Partikel-Tick haengt bewusst nicht am Zustands-Sync: auf Clients laufen die
     // Renderer-Syncs nur mit frischem Netzzustand, die bisherigen Emitter liefen dagegen
     // autonom weiter. Erst stilllegen, dann emittieren – die Registry garantiert die Reihenfolge.
+    this.renderers.movement.captureFrame(
+      delta, presentationPolicy.showWorld,
+      presentationPolicy.showWorld ? this.ctx.playerManager.getAllPlayers() : [],
+      presentationPolicy.showWorld ? this.arenaRuntime.getMovementEnemyVisuals() : [],
+      getVisibleWorldView(this.cameras.main),
+    );
+    this.visualFeedback?.weaponFire.update();
     this.renderers.gpuVfx.update(delta);
     const inArena = presentationPolicy.showWorld;
     // Eine Preview zeigt die Welt, ohne dass dieser Peer in ihr steht. Zielhilfe, Systemcursor
@@ -2043,6 +2055,7 @@ export class ArenaScene extends Phaser.Scene {
         : undefined;
       player.setHeldItemId(
         selectedHeldItemId === undefined ? bridge.getPlayerHeldItemId(player.id) : selectedHeldItemId,
+        selectedHeldItemId !== undefined,
       );
       const netState = playerStates?.[player.id];
       const aim = player.id === localId

@@ -20,6 +20,8 @@ import type { WorldCombatCore }     from '../../combat/WorldCombatCore';
 interface PlayerStatusRingLike {
   setActive(active: boolean): void;
   update(data: LocalArenaHudData): void;
+  setEssenceIncoming?(value: number): void;
+  notifyEssenceArrival?(creditedValue: number, completionAgeMs?: number): void;
 }
 
 /**

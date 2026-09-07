@@ -73,6 +73,20 @@ afterEach(() => {
 });
 
 describe('gpu vfx system: lanes', () => {
+  it('profiles lanes 0 and 32 independently without numeric-mask aliasing', () => {
+    const { system } = setup();
+    system.spawn(spawnSpec(system, GpuVfxEffectId.MovementFootprint), -1, 0);
+    system.update(0);
+    let report = system.buildReport();
+    expect(report.lanes[GpuVfxLaneId.MovementGround].visibleFrames).toBe(1);
+    expect(report.lanes[GpuVfxLaneId.AirstrikeSpark].visibleFrames).toBe(0);
+    system.spawn(spawnSpec(system, GpuVfxEffectId.AirstrikeSpark), -1, 0);
+    system.update(0);
+    report = system.buildReport();
+    expect(report.coVisibleFrames[GpuVfxLaneId.MovementGround][GpuVfxLaneId.AirstrikeSpark]).toBe(1);
+    system.setSuppressed(true); system.update(16);
+    expect(system.buildReport().lanes[GpuVfxLaneId.MovementGround].visibleFrames).toBe(2);
+  });
   it('shares flight admission, critical reserve, profiling and source cleanup across both primitives', () => {
     const { system } = setup();
     const source = system.createSource(GpuVfxEffectId.FlightCore);

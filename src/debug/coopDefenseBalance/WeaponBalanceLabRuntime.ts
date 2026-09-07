@@ -16,6 +16,8 @@ import { toMapId } from '../../world/arenaDescriptorAdapter';
 import type {
   RuntimeBenchmarkRequest,
   RuntimeBenchmarkResult,
+  RuntimeBenchmarkEssenceSnapshot,
+  RuntimeBenchmarkEssenceAccounting,
 } from './runtimeBenchmarkTypes';
 import type { ProjectileDiagnosticsReadPort } from '../../projectile/ProjectileReadPorts';
 
@@ -25,6 +27,7 @@ const TARGET_Y_OFFSETS = [-120, -60, 0, 60, 120] as const;
 
 export interface WeaponBalanceLabWorldPort {
   getProjectileDiagnostics(): ProjectileDiagnosticsReadPort | null;
+  getEssenceAccounting?(): RuntimeBenchmarkEssenceSnapshot | null;
   isReady(): boolean;
   spawnTarget(x: number, y: number): { id: string } | null;
   pinTarget(id: string, x: number, y: number): void;
@@ -127,13 +130,17 @@ export class WeaponBalanceLabRuntime {
   private totalDamage = 0;
   private tailDamage = 0;
   private adrenalineGenerated = 0;
+  private adrenalineResourceGained = 0;
   private adrenalineConsumed = 0;
+  private previousEssenceAccounting: RuntimeBenchmarkEssenceSnapshot | null = null;
+  private essenceAccounting: RuntimeBenchmarkEssenceAccounting | undefined;
   private readonly damageByKind: Record<string, number> = {};
   private readonly damagedTargetIds = new Set<string>();
   private readonly targetPositions = new Map<string, { x: number; y: number }>();
   private removeDamageObserver: (() => void) | null = null;
   private removeAdrenalineObserver: (() => void) | null = null;
   private removeAdrenalineGainObserver: (() => void) | null = null;
+  private removePrimaryHitRewardObserver: (() => void) | null = null;
   private shotSequence = 1;
   private hasFired = false;
 
@@ -161,9 +168,11 @@ export class WeaponBalanceLabRuntime {
     this.removeDamageObserver?.();
     this.removeAdrenalineObserver?.();
     this.removeAdrenalineGainObserver?.();
+    this.removePrimaryHitRewardObserver?.();
     this.removeDamageObserver = null;
     this.removeAdrenalineObserver = null;
     this.removeAdrenalineGainObserver = null;
+    this.removePrimaryHitRewardObserver = null;
     this.armed = null;
     this.running = false;
     this.targetPositions.clear();
@@ -174,7 +183,10 @@ export class WeaponBalanceLabRuntime {
     this.totalDamage = 0;
     this.tailDamage = 0;
     this.adrenalineGenerated = 0;
+    this.adrenalineResourceGained = 0;
     this.adrenalineConsumed = 0;
+    this.previousEssenceAccounting = null;
+    this.essenceAccounting = undefined;
     this.shotSequence = 1;
     this.hasFired = false;
     this.damagedTargetIds.clear();
@@ -190,6 +202,8 @@ export class WeaponBalanceLabRuntime {
 
     const active = this.armed;
     if (!active) return;
+    // Attribute counters accrued since the previous update to the same window as its observers.
+    this.sampleEssenceAccounting();
     this.elapsedMs += Math.max(0, deltaMs);
     this.pinParticipants();
 
@@ -234,11 +248,46 @@ export class WeaponBalanceLabRuntime {
     this.removeAdrenalineGainObserver = this.worldPort.observeAdrenalineGain(
       (observedPlayerId, gained) => {
         if (observedPlayerId !== playerId || !this.isInMeasurementWindow()) return;
-        this.adrenalineGenerated += Math.max(0, gained);
+        this.adrenalineResourceGained += Math.max(0, gained);
       },
     ) ?? null;
+    this.removePrimaryHitRewardObserver = ctx.getWorldCombatCore()!.addPrimaryHitRewardObserver(fact => {
+      if (fact.creatorId !== playerId || !this.isInMeasurementWindow()) return;
+      this.adrenalineGenerated += fact.resolvedValue;
+    });
+    const essence = this.worldPort.getEssenceAccounting?.();
+    if (essence) {
+      this.previousEssenceAccounting = { ...essence };
+      this.essenceAccounting = {
+        worldRevision: essence.worldRevision, activityRevision: essence.activityRevision,
+        measurement: 'activity-measurement-window', authoredValue: 0, materializedValue: 0,
+        committedValue: 0, expiredValue: 0, placementFailedValue: 0, lifecycleDiscardedValue: 0,
+      };
+    }
     this.running = true;
     return true;
+  }
+
+  private sampleEssenceAccounting(): void {
+    const request = this.armed?.request;
+    if (!request || this.elapsedMs >= request.warmupMs + request.measurementMs) return;
+    const previous = this.previousEssenceAccounting;
+    if (!previous || !this.essenceAccounting) return;
+    const current = this.worldPort.getEssenceAccounting?.();
+    const counters = ['authoredValue', 'materializedValue', 'committedValue', 'expiredValue', 'placementFailedValue', 'lifecycleDiscardedValue'] as const;
+    if (!current || current.worldRevision !== previous.worldRevision || current.activityRevision !== previous.activityRevision
+      || counters.some(key => !Number.isFinite(current[key]) || current[key] < previous[key])) {
+      // A replacement Activity is a different ledger. Do not manufacture a mixed-scope result.
+      this.previousEssenceAccounting = null;
+      this.essenceAccounting = undefined;
+      return;
+    }
+    if (this.isInMeasurementWindow()) {
+      const next = { ...this.essenceAccounting };
+      for (const key of counters) next[key] += current[key] - previous[key];
+      this.essenceAccounting = next;
+    }
+    this.previousEssenceAccounting = { ...current };
   }
 
   private pinParticipants(): void {
@@ -345,6 +394,9 @@ export class WeaponBalanceLabRuntime {
       damageByKind: { ...this.damageByKind },
       tailDamage: this.tailDamage,
       adrenalineGenerated: this.adrenalineGenerated,
+      adrenalineResourceGained: this.adrenalineResourceGained,
+      essenceAccounting: this.essenceAccounting,
+      adrenalineMeasurement: 'gross-primary-hit-reward',
       adrenalineGeneratedPerSecond: this.adrenalineGenerated / Math.max(0.001, active.request.measurementMs / 1000),
       adrenalineConsumed: this.adrenalineConsumed,
       adrenalinePerSecond: this.adrenalineConsumed / Math.max(0.001, active.request.measurementMs / 1000),
@@ -357,9 +409,11 @@ export class WeaponBalanceLabRuntime {
     this.removeDamageObserver?.();
     this.removeAdrenalineObserver?.();
     this.removeAdrenalineGainObserver?.();
+    this.removePrimaryHitRewardObserver?.();
     this.removeDamageObserver = null;
     this.removeAdrenalineObserver = null;
     this.removeAdrenalineGainObserver = null;
+    this.removePrimaryHitRewardObserver = null;
     this.running = false;
     this.armed = null;
     this.onResult(result);

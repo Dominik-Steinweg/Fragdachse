@@ -1,3 +1,4 @@
+import { isWeaponFeedbackProfileId } from '../../config/weaponFeedback';
 import * as v from 'valibot';
 import { validateFlightSignature } from '../../projectile/FlightSignature';
 import type { GameMode } from '../../types';
@@ -228,6 +229,9 @@ export function validateResolvedWeapon(value: unknown): string[] {
     issues.push('$.fire.type: unbekannter Weapon-Fire-Typ');
   } else {
     requireFields(value.fire, FIRE_REQUIRED[value.fire.type], issues, '$.fire');
+  }
+  if (value.shotFeedbackProfile !== undefined && !isWeaponFeedbackProfileId(value.shotFeedbackProfile)) {
+    issues.push('$.shotFeedbackProfile: unbekanntes Schuss-Feedback-Profil');
   }
   if (value.proximityPulse !== undefined) {
     if (!isRecord(value.proximityPulse)) {

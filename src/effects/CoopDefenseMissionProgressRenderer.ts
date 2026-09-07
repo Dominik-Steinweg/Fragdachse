@@ -2,12 +2,48 @@ import * as Phaser from 'phaser';
 import { ARENA_OFFSET_X, ARENA_OFFSET_Y, CELL_SIZE, COLORS, DEPTH } from '../config';
 import type { ResolvedCoopDefenseMapMissionProgressConfig } from '../config/coopDefenseMaps';
 import type { CoopDefenseMissionProgressPresentationState } from '../types';
+import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { registerGraphicsObject } from './EffectUtils';
+import {
+  CHECKPOINT_ACTIVATION_MS,
+  CHECKPOINT_FRAGMENT_SOURCE,
+  CHECKPOINT_PADDING,
+  CHECKPOINT_SHADER_NAME,
+} from './checkpointMarkerShader';
+
+interface CheckpointVisual {
+  readonly id: string;
+  readonly quad: Phaser.GameObjects.Shader;
+  readonly extraction: boolean;
+  readonly color: Float32Array;
+  next: boolean;
+  opacity: number;
+  activatedAtMs: number | null;
+}
+
+function writeColor(target: Float32Array, color: number): void {
+  target[0] = ((color >>> 16) & 255) / 255;
+  target[1] = ((color >>> 8) & 255) / 255;
+  target[2] = (color & 255) / 255;
+}
+
+function checkpointSeed(id: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < id.length; index += 1) hash = Math.imul(hash ^ id.charCodeAt(index), 16777619);
+  return (hash >>> 0) % 1024;
+}
 
 /** Rein prozedurale Weltpresentation fuer Checkpoints, Extraktion und Missionstore. */
 export class CoopDefenseMissionProgressRenderer {
   private readonly graphics: Phaser.GameObjects.Graphics;
-  private signature = '';
+  private readonly checkpoints: CheckpointVisual[] = [];
+  private config: ResolvedCoopDefenseMapMissionProgressConfig | undefined;
+  private roundRevision = -1;
+  private missionRevision = -1;
+  private elapsedMs = 0;
+  private ambientCount = 12;
+  private burstCount = 24;
+  private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.graphics = scene.add.graphics().setDepth(DEPTH.BASES + 7).setVisible(false);
@@ -17,41 +53,42 @@ export class CoopDefenseMissionProgressRenderer {
   sync(
     config: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
     state: CoopDefenseMissionProgressPresentationState | null,
+    elapsedMs: number,
     active: boolean,
   ): void {
+    if (this.destroyed) return;
     if (!active || !config || !state) {
       this.clear();
       return;
     }
-    const signature = `${state.roundRevision}:${state.missionRevision}`;
-    if (signature === this.signature) return;
-    this.signature = signature;
-    this.graphics.clear().setVisible(true);
+    if (this.config !== config || this.roundRevision !== state.roundRevision) {
+      this.clear();
+      this.config = config;
+      this.roundRevision = state.roundRevision;
+      this.createCheckpoints(config);
+    }
+    // Animation and live quality changes are independent of reliable snapshot revisions.
+    this.elapsedMs = Number.isFinite(elapsedMs) ? Math.max(0, elapsedMs) : 0;
+    const quality = getGraphicsQualityProfile(this.scene).level;
+    this.ambientCount = quality === 'low' ? 0 : quality === 'medium' ? 6 : 12;
+    this.burstCount = this.ambientCount * 2;
+    if (this.missionRevision === state.missionRevision) return;
+    this.missionRevision = state.missionRevision;
 
-    const activated = new Set(state.activatedCheckpoints.map(({ checkpointId }) => checkpointId));
-    // Der letzte Checkpoint der authored Route ist die Extraktion; ein zweiter Marker-Vertrag
-    // entsteht dafuer nicht.
-    const extractionId = config.checkpoints[config.checkpoints.length - 1]?.id ?? null;
-    for (const checkpoint of config.checkpoints) {
-      const x = ARENA_OFFSET_X + (checkpoint.gridX + 0.5) * CELL_SIZE;
-      const y = ARENA_OFFSET_Y + (checkpoint.gridY + 0.5) * CELL_SIZE;
-      const radius = checkpoint.radiusCells * CELL_SIZE;
-      const isNext = state.nextCheckpointId === checkpoint.id;
-      const isActive = activated.has(checkpoint.id);
-      const isExtraction = checkpoint.id === extractionId;
-      const color = isExtraction
-        ? (isActive ? COLORS.GREEN_2 : COLORS.GREEN_3)
-        : isNext ? COLORS.GOLD_1 : isActive ? COLORS.BLUE_3 : COLORS.BLUE_4;
-      const alpha = isNext ? 0.95 : isActive ? 0.34 : isExtraction ? 0.45 : 0.16;
-      this.graphics.fillStyle(color, alpha * 0.16).fillCircle(x, y, radius);
-      this.graphics.lineStyle(isNext ? 3 : 2, color, alpha).strokeCircle(x, y, radius);
-      if (isExtraction) this.drawExtractionMarker(x, y, radius, color, alpha);
-      if (isNext) {
-        this.graphics.lineStyle(1, COLORS.GREY_1, 0.72).strokeCircle(x, y, Math.max(6, radius - 5));
-        this.graphics.fillStyle(COLORS.GOLD_1, 0.9).fillTriangle(x, y - 13, x - 7, y - 2, x + 7, y - 2);
-      }
+    const activated = new Map(state.activatedCheckpoints.map(({ checkpointId, activatedAtRoundMs }) => [
+      checkpointId, activatedAtRoundMs,
+    ]));
+    for (const visual of this.checkpoints) {
+      visual.activatedAtMs = activated.get(visual.id) ?? null;
+      const reached = visual.activatedAtMs !== null;
+      visual.next = !reached && state.nextCheckpointId === visual.id;
+      writeColor(visual.color, visual.extraction
+        ? (reached ? COLORS.GREEN_2 : COLORS.GREEN_3)
+        : visual.next ? COLORS.GOLD_1 : reached ? COLORS.BLUE_3 : COLORS.BLUE_4);
+      visual.opacity = visual.next ? 0.9 : reached ? 0.3 : visual.extraction ? 0.38 : 0.16;
     }
 
+    this.graphics.clear().setVisible(true);
     const barrierOpen = new Map(state.barriers.map((barrier) => [barrier.barrierId, barrier.open]));
     for (const barrier of config.barriers) {
       const open = barrierOpen.get(barrier.id) === true;
@@ -61,36 +98,76 @@ export class CoopDefenseMissionProgressRenderer {
   }
 
   clear(): void {
-    this.signature = '';
+    if (this.destroyed) return;
+    for (const visual of this.checkpoints) visual.quad.destroy();
+    this.checkpoints.length = 0;
+    this.config = undefined;
+    this.roundRevision = -1;
+    this.missionRevision = -1;
+    this.elapsedMs = 0;
     this.graphics.clear().setVisible(false);
   }
 
   destroy(): void {
+    if (this.destroyed) return;
+    this.clear();
     this.graphics.destroy();
+    this.destroyed = true;
   }
 
-  /** Vier nach innen zeigende Keile: die Extraktion sammelt ein, statt weiterzuweisen. */
-  private drawExtractionMarker(x: number, y: number, radius: number, color: number, alpha: number): void {
-    const outer = Math.max(10, radius);
-    const inner = Math.max(5, outer - 9);
-    this.graphics.lineStyle(2, color, Math.min(1, alpha + 0.25)).strokeCircle(x, y, inner);
-    this.graphics.fillStyle(color, Math.min(1, alpha + 0.35));
-    for (let index = 0; index < 4; index += 1) {
-      const angle = (Math.PI / 2) * index;
-      const dirX = Math.cos(angle);
-      const dirY = Math.sin(angle);
-      const tipX = x + dirX * (inner - 2);
-      const tipY = y + dirY * (inner - 2);
-      const baseX = x + dirX * (outer + 3);
-      const baseY = y + dirY * (outer + 3);
-      this.graphics.fillTriangle(
-        tipX,
-        tipY,
-        baseX - dirY * 5,
-        baseY + dirX * 5,
-        baseX + dirY * 5,
-        baseY - dirX * 5,
+  private createCheckpoints(config: ResolvedCoopDefenseMapMissionProgressConfig): void {
+    // Production requires WebGL; headless presentation must not allocate GPU resources.
+    if (!(this.scene.sys.renderer as { gl?: unknown } | undefined)?.gl) return;
+    const extractionId = config.checkpoints[config.checkpoints.length - 1]?.id;
+    for (const checkpoint of config.checkpoints) {
+      const radius = checkpoint.radiusCells * CELL_SIZE;
+      const size = (radius + CHECKPOINT_PADDING) * 2;
+      const seed = checkpointSeed(checkpoint.id);
+      const extraction = checkpoint.id === extractionId;
+      const activationColor = new Float32Array(3);
+      writeColor(activationColor, extraction ? COLORS.GREEN_2 : COLORS.GOLD_1);
+      const quad = new Phaser.GameObjects.Shader(
+        this.scene,
+        {
+          name: CHECKPOINT_SHADER_NAME,
+          shaderName: CHECKPOINT_SHADER_NAME,
+          fragmentSource: CHECKPOINT_FRAGMENT_SOURCE,
+          setupUniforms: (
+            setUniform: (name: string, value: unknown) => void,
+            drawingContext: Phaser.Renderer.WebGL.DrawingContext,
+          ) => {
+            const ageMs = visual.activatedAtMs === null ? -1 : this.elapsedMs - visual.activatedAtMs;
+            const camera = drawingContext.camera;
+            setUniform('uSize', size);
+            setUniform('uRadius', radius);
+            setUniform('uTime', this.elapsedMs / 1000);
+            setUniform('uSeed', seed);
+            setUniform('uPixelSize', camera ? 1 / Math.max(0.001, Math.min(camera.zoomX, camera.zoomY)) : 1);
+            setUniform('uNext', visual.next ? 1 : 0);
+            setUniform('uExtraction', extraction ? 1 : 0);
+            setUniform('uOpacity', visual.opacity);
+            setUniform('uActivationAge', ageMs >= 0 && ageMs < CHECKPOINT_ACTIVATION_MS
+              ? ageMs / CHECKPOINT_ACTIVATION_MS : -1);
+            setUniform('uAmbientCount', this.ambientCount);
+            setUniform('uBurstCount', this.burstCount);
+            setUniform('uColor', visual.color);
+            setUniform('uActivationColor', activationColor);
+          },
+        },
+        ARENA_OFFSET_X + (checkpoint.gridX + 0.5) * CELL_SIZE,
+        ARENA_OFFSET_Y + (checkpoint.gridY + 0.5) * CELL_SIZE,
+        size,
+        size,
       );
+      const visual: CheckpointVisual = {
+        id: checkpoint.id, quad, extraction, color: new Float32Array(3),
+        next: false, opacity: 0, activatedAtMs: null,
+      };
+      quad.setOrigin(0.5).setDepth(DEPTH.ROCKS - 0.5).setBlendMode(Phaser.BlendModes.NORMAL);
+      // Direct display-list children retain normal camera culling and world-camera assignment.
+      this.scene.add.existing(quad);
+      registerGraphicsObject(this.scene, 'objectiveMarkers', quad);
+      this.checkpoints.push(visual);
     }
   }
 

@@ -1,3 +1,5 @@
+import type { WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
+import type { AdrenalineGainBasis, PrimaryHitRewardScope } from '../combat/PrimaryHitReward';
 import * as Phaser from 'phaser';
 import type {
   LoadoutSlot,
@@ -50,6 +52,7 @@ export interface PlayerWeaponActivationPlayerPort {
 }
 
 export interface PlayerWeaponActivationResourcePort {
+  captureAdrenalineGainBasis(playerId: string): AdrenalineGainBasis | null;
   resolveAdrenalineCost(playerId: string, baseCost: number): number;
   getAdrenaline(playerId: string): number;
   drainAdrenaline(playerId: string, amount: number, nowMs: number): void;
@@ -63,6 +66,7 @@ export interface PlayerWeaponActivationRuntimeOptions {
   readonly playerManager: PlayerWeaponActivationPlayerPort;
   readonly loadout: PlayerWeaponActivationLoadoutPort;
   readonly resourceSystem: PlayerWeaponActivationResourcePort;
+  readonly capturePrimaryHitRewardScope?: () => PrimaryHitRewardScope | null;
   readonly physicsSystem?: PlayerWeaponActivationPhysicsPort | null;
   readonly weaponExecution: WeaponExecutionCapability;
   readonly specializedWeaponExecution: SpecializedWeaponExecutionCapability;
@@ -70,7 +74,7 @@ export interface PlayerWeaponActivationRuntimeOptions {
   readonly negevBehavior?: Pick<NegevBehaviorPort, 'prepareShot' | 'commitShot' | 'terminateStreak'> | null;
   readonly consumeMovementCharge?: ((playerId: string) => number) | null;
   readonly registerWeaponFired?: ((playerId: string, sourceSlot: WeaponSlot, nowMs: number) => void) | null;
-  readonly broadcastShotFx?: ((shooterId: string, durationMs: number, intensity: number) => void) | null;
+  readonly broadcastShotFx?: ((event: WeaponShotFeedbackEvent) => void) | null;
 }
 
 /** Semantic host request for one immediate equipped-weapon activation. */
@@ -85,6 +89,7 @@ export interface PlayerWeaponActivationRequest {
   readonly targetY: number;
   readonly nowMs: number;
   readonly shotId?: number;
+  readonly predictionId?: number;
   readonly params?: LoadoutUseParams;
 }
 
@@ -97,6 +102,7 @@ export interface PlayerWeaponActivationRequest {
  */
 export class PlayerWeaponActivationRuntime {
   private destroyed = false;
+  private nextFeedbackSequence = 1;
   private readonly shotCounters = new Map<string, number>();
   private readonly okResult: LoadoutUseResult = { ok: true };
 
@@ -180,6 +186,9 @@ export class PlayerWeaponActivationRuntime {
       if (kineticBonus > 0) shotCfg = { ...shotCfg, damage: shotCfg.damage * (1 + kineticBonus) };
     }
 
+    const adrenalineGainBasis = this.options.resourceSystem.captureAdrenalineGainBasis?.(request.playerId);
+    const primaryHitRewardScope = this.options.capturePrimaryHitRewardScope?.() ?? null;
+    const primaryHitRewardOrigin = Object.freeze({ x: player.x, y: player.y });
     const shotPlan = resolveShotPlan({
       config: shotCfg,
       aimAngle: request.angle,
@@ -205,6 +214,9 @@ export class PlayerWeaponActivationRuntime {
         request.shotId,
         undefined,
         this.getGameplayMuzzleOrigin(request.playerId, shot.config.id, request.x, request.y, shot.angle),
+        adrenalineGainBasis,
+        primaryHitRewardScope,
+        primaryHitRewardOrigin,
       );
       if (fired) didFire = true;
     }
@@ -244,6 +256,9 @@ export class PlayerWeaponActivationRuntime {
           request.shotId,
           undefined,
           this.getGameplayMuzzleOrigin(request.playerId, sideCfg.id, request.x, request.y, request.angle - sideAngle),
+          adrenalineGainBasis,
+          primaryHitRewardScope,
+          primaryHitRewardOrigin,
         );
         this.dispatchWeaponFire(
           sideCfg,
@@ -258,6 +273,9 @@ export class PlayerWeaponActivationRuntime {
           request.shotId,
           undefined,
           this.getGameplayMuzzleOrigin(request.playerId, sideCfg.id, request.x, request.y, request.angle + sideAngle),
+          adrenalineGainBasis,
+          primaryHitRewardScope,
+          primaryHitRewardOrigin,
         );
       }
     }
@@ -282,12 +300,11 @@ export class PlayerWeaponActivationRuntime {
       );
     }
 
-    if (cfg.shotScreenShake) {
-      this.options.broadcastShotFx?.(
-        request.playerId,
-        cfg.shotScreenShake.duration,
-        cfg.shotScreenShake.intensity,
-      );
+    if (cfg.shotFeedbackProfile) {
+      this.options.broadcastShotFx?.({
+        shooterId: request.playerId, weaponId: cfg.id, slot: request.slot,
+        angle: request.angle, sequence: this.nextFeedbackSequence++, predictionId: request.predictionId,
+      });
     }
 
     return this.okResult;
@@ -319,15 +336,18 @@ export class PlayerWeaponActivationRuntime {
     shotId?: number,
     options?: WeaponFireOptions,
     gameplayMuzzleOrigin?: MuzzleOrigin,
+    adrenalineGainBasis?: AdrenalineGainBasis | null,
+    primaryHitRewardScope?: PrimaryHitRewardScope | null,
+    primaryHitRewardOrigin?: { readonly x: number; readonly y: number },
   ): boolean {
     const visualMuzzleOrigin = this.getVisualMuzzleOrigin(playerId, config.id);
     switch (config.fire.type) {
       case 'projectile':
-        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin, gameplayMuzzleOrigin);
+        return this.fireProjectileWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot, options, visualMuzzleOrigin, gameplayMuzzleOrigin, adrenalineGainBasis, primaryHitRewardScope, primaryHitRewardOrigin);
       case 'hitscan':
-        return this.fireHitscanWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin, gameplayMuzzleOrigin);
+        return this.fireHitscanWeapon(config, config.fire, x, y, angle, targetX, targetY, playerId, playerColor, sourceSlot as WeaponSlot | undefined, shotId, visualMuzzleOrigin, gameplayMuzzleOrigin, adrenalineGainBasis, primaryHitRewardScope, primaryHitRewardOrigin);
       case 'melee':
-        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined);
+        return this.fireMeleeWeapon(config, config.fire, x, y, angle, playerId, playerColor, sourceSlot as WeaponSlot | undefined, adrenalineGainBasis, primaryHitRewardScope, primaryHitRewardOrigin);
       case 'flamethrower':
       case 'leaf_blower':
       case 'reinforcement_matrix':
@@ -338,6 +358,9 @@ export class PlayerWeaponActivationRuntime {
           angle,
           targetX,
           targetY,
+          adrenalineGainBasis,
+          primaryHitRewardScope,
+          primaryHitRewardOrigin,
           ownerId: playerId,
           ownerColor: playerColor,
           sourceSlot,
@@ -406,6 +429,9 @@ export class PlayerWeaponActivationRuntime {
     options?: WeaponFireOptions,
     visualMuzzleOrigin?: MuzzleOrigin,
     gameplayMuzzleOrigin?: MuzzleOrigin,
+    adrenalineGainBasis?: AdrenalineGainBasis | null,
+    primaryHitRewardScope?: PrimaryHitRewardScope | null,
+    primaryHitRewardOrigin?: { readonly x: number; readonly y: number },
   ): boolean {
     void fireConfig;
     return this.options.weaponExecution.fire(config, {
@@ -414,6 +440,9 @@ export class PlayerWeaponActivationRuntime {
       angle,
       targetX,
       targetY,
+      adrenalineGainBasis,
+      primaryHitRewardScope,
+      primaryHitRewardOrigin,
       ownerId: playerId,
       ownerColor: playerColor,
       sourceSlot,
@@ -441,6 +470,9 @@ export class PlayerWeaponActivationRuntime {
     shotId: number | undefined,
     visualMuzzleOrigin?: MuzzleOrigin,
     gameplayMuzzleOrigin?: MuzzleOrigin,
+    adrenalineGainBasis?: AdrenalineGainBasis | null,
+    primaryHitRewardScope?: PrimaryHitRewardScope | null,
+    primaryHitRewardOrigin?: { readonly x: number; readonly y: number },
   ): boolean {
     void fireConfig;
     return this.options.weaponExecution.fire(config, {
@@ -449,6 +481,9 @@ export class PlayerWeaponActivationRuntime {
       angle,
       targetX,
       targetY,
+      adrenalineGainBasis,
+      primaryHitRewardScope,
+      primaryHitRewardOrigin,
       ownerId: playerId,
       ownerColor: playerColor,
       sourceSlot,
@@ -467,6 +502,9 @@ export class PlayerWeaponActivationRuntime {
     playerId: string,
     playerColor: number,
     sourceSlot?: WeaponSlot,
+    adrenalineGainBasis?: AdrenalineGainBasis | null,
+    primaryHitRewardScope?: PrimaryHitRewardScope | null,
+    primaryHitRewardOrigin?: { readonly x: number; readonly y: number },
   ): boolean {
     void fireConfig;
     return this.options.weaponExecution.fire(config, {
@@ -475,6 +513,9 @@ export class PlayerWeaponActivationRuntime {
       angle,
       targetX: x,
       targetY: y,
+      adrenalineGainBasis,
+      primaryHitRewardScope,
+      primaryHitRewardOrigin,
       ownerId: playerId,
       ownerColor: playerColor,
       sourceSlot,

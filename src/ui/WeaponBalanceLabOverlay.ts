@@ -157,7 +157,14 @@ export class WeaponBalanceLabOverlay {
     for (const result of results.slice(0, 12)) {
       const row = document.createElement('div');
       Object.assign(row.style, { padding: '7px 0', borderTop: '1px solid #354033', fontFamily: 'monospace', fontSize: '12px' });
-      row.textContent = `${result.weaponId} · ${result.scenario === 'five_target' ? '5T' : 'ST'} · ${result.distance}px · ${result.dps.toFixed(1)} DPS · ${result.totalDamage.toFixed(0)} Schaden · Adr +${result.adrenalineGeneratedPerSecond.toFixed(1)}/s / -${result.adrenalinePerSecond.toFixed(1)}/s · ${result.buildSignature} · Tail ${result.tailStatus}`;
+      row.textContent = `${result.weaponId} · ${result.scenario === 'five_target' ? '5T' : 'ST'} · ${result.distance}px · ${result.dps.toFixed(1)} DPS · ${result.totalDamage.toFixed(0)} Schaden · Adr ${result.adrenalineMeasurement ? 'brutto ' : ''}+${result.adrenalineGeneratedPerSecond.toFixed(1)}/s / -${result.adrenalinePerSecond.toFixed(1)}/s · ${result.buildSignature} · Tail ${result.tailStatus}`;
+      const essence = result.essenceAccounting;
+      if (essence) {
+        const detail = document.createElement('div');
+        detail.style.color = '#aab7a4';
+        detail.textContent = `Essenz im Messfenster (gesamte Activity): authored ${essence.authoredValue.toFixed(2)} · materialisiert ${essence.materializedValue.toFixed(2)} · eingesammelt ${essence.committedValue.toFixed(2)} · verfallen ${essence.expiredValue.toFixed(2)}`;
+        row.appendChild(detail);
+      }
       container.appendChild(row);
     }
   }

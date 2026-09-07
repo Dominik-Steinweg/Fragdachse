@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FRAGDACHSE · Asset Review</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main>
+    <header><div><p class="eyebrow">FRAGDACHSE / ASSET PIPELINE V1</p><h1>Im Spielmaßstab.</h1><p>Form, Kontrast und Bewegung prüfen. Die Quelle darf groß sein – die Figur bleibt klein.</p></div><span id="renderer">Lädt …</span></header>
+    <section class="controls" aria-label="Asset und Darstellung">
+      <label>Asset<select id="asset"></select></label>
+      <label>Untergrund<select id="background"><option value="grass">Gras</option><option value="earth">Erde</option><option value="steel">Dunkler Stahl</option><option value="light">Hell neutral</option></select></label>
+      <label>Anzeigeprofil<select id="profile"><option value="0">Asset-Nominalgröße</option><optgroup label="Normale Gegner"><option>22</option><option>24</option><option>28</option><option>30</option></optgroup><optgroup label="Bosse"><option>52</option><option>56</option><option>68</option></optgroup></select></label>
+      <label>Größenfaktor<select id="factor"><option>0.5</option><option>0.75</option><option selected>1</option><option>1.33</option><option>2</option></select></label>
+    </section>
+    <section class="comparison-controls"><label>A · Quelle<select id="source-a"></select></label><label>B · Quelle<select id="source-b"></select></label><div id="previous-heading" hidden><strong id="previous-title"></strong><p>Identische Anzeigegröße</p></div><div><strong>Original</strong><p>Identische Anzeigegröße</p></div></section>
+    <section class="stage" aria-label="Phaser Vorschau"><div id="canvas"></div><div class="stage-labels"><span id="label-a"></span><span id="label-b"></span><span id="label-previous" hidden></span><span id="label-original"></span></div></section>
+    <section class="motion controls" aria-label="Bewegung und Rotation">
+      <label class="angle">Winkel <output id="angle-value">0°</output><input id="angle" type="range" min="0" max="360" value="0"></label>
+      <div class="buttons"><button data-angle="0">0°</button><button data-angle="45">45°</button><button data-angle="90">90°</button></div>
+      <label class="check"><input id="rotate" type="checkbox"> Kontinuierlich drehen</label>
+      <label class="check"><input id="move" type="checkbox"> Langsam bewegen</label>
+      <label class="check"><input id="collision" type="checkbox" checked> Kollisionskreis</label><span id="collision-info"></span>
+    </section>
+    <section class="inspection"><div><p class="eyebrow">ERGÄNZENDE FORMANALYSE</p><h2>Master-Vergleich</h2><p>Diese Vergrößerung zeigt Material und Anatomie. Die Abnahme erfolgt oben.</p><p id="metrics"></p></div><figure><img id="master-a" alt="Master der Variante A"><figcaption>A</figcaption></figure><figure><img id="master-b" alt="Master der Variante B"><figcaption>B</figcaption></figure></section>
+    <footer>Lokale Vorschau ohne Spielsimulation. 1 Einheit = 1 CSS-Pixel bei Faktor 1; die Pixeldichte des Displays wird berücksichtigt. Browser-Zoom für reproduzierbare Vergleiche auf 100 % stellen. Keine Gameplay-FX oder Weltbeleuchtung.</footer>
+    <p id="error" role="alert" hidden></p>
+  </main><script type="module" src="./viewer.js"></script>
+</body></html>

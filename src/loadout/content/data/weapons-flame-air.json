@@ -2,6 +2,7 @@
   "weapons": {
     "FLAMETHROWER": {
       "id": "FLAMETHROWER",
+      "shotFeedbackProfile": "stream",
       "cooldown": 70,
       "damage": 2,
       "range": 250,
@@ -106,6 +107,7 @@
     },
     "LEAF_BLOWER": {
       "id": "LEAF_BLOWER",
+      "shotFeedbackProfile": "stream",
       "cooldown": 90,
       "damage": 1,
       "directDamageOverride": 1,

@@ -14,6 +14,7 @@ vi.mock('phaser', async () => {
     Geom: { ...phaser.Geom, Line },
     Math: {
       ...phaser.Math,
+      Angle: { ...phaser.Math.Angle, Wrap: (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle)) },
       RND: { realInRange: (min: number) => min },
     },
   };
@@ -59,6 +60,7 @@ import { WEAPON_CONFIGS, type WeaponConfig } from '../../src/loadout/LoadoutConf
 import type { WeaponFireOptions } from '../../src/loadout/WeaponFireExecutor';
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 import { fakeEntity } from '../fakeEntity';
+import { createMovementVisualSample } from '../../src/effects/MovementStepSampler';
 
 function harness() {
   const fake = healthBarTestScene();
@@ -96,6 +98,69 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('projects player movement from final pose, respecting anatomy, stealth, burrow and respawn', () => {
+    const h = harness();
+    const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+      10, 20, true, null, { spawnEffect: false });
+    const out = createMovementVisualSample();
+    player.setWalking(true); player.readMovementVisualSample(out);
+    expect(out).toMatchObject({ x: 10, y: 20, pawCount: 2, player: true, mode: 'walk', visible: true });
+    player.setRotation(Math.PI); player.readMovementVisualSample(out);
+    expect(Math.cos(out.facing)).toBeCloseTo(-1);
+    player.setMovementDashPhase(1); player.readMovementVisualSample(out);
+    expect(out.mode).toBe('dash');
+    player.setDecoyStealth(true); player.readMovementVisualSample(out); expect(out.visible).toBe(false);
+    player.setDecoyStealth(false);
+    player.setBurrowPhase('underground', false); player.readMovementVisualSample(out); expect(out.visible).toBe(false);
+    player.setBurrowPhase('idle', false);
+    const revision = out.revision;
+    player.setPosition(500, 600); player.readMovementVisualSample(out);
+    expect(out.revision).toBeGreaterThan(revision);
+    expect(out).toMatchObject({ x: 500, y: 600 });
+    player.setVisible(false); player.readMovementVisualSample(out); expect(out.visible).toBe(false);
+    player.destroy();
+  });
+
+  it('projects enemy interpolation, authored paw count and dash without building snapshots', () => {
+    const h = harness(), manager = enemies(h);
+    upsert(manager, { id: 'e1', kind, x: 100, y: 100, rot: 0, hp: 10, maxHp: 20, dashPhase: 0 });
+    const enemy = manager.getEnemy('e1')!;
+    const out = createMovementVisualSample();
+    enemy.setTargetPosition(120, 100); enemy.setTargetRotation(Math.PI / 2); manager.updateClientInterpolation(0.5);
+    enemy.readMovementVisualSample(out);
+    expect(out).toMatchObject({ x: 110, y: 100, pawCount: resolveCoopDefenseEnemyConfigs(1)[kind].pawCount,
+      player: false, mode: 'walk', visible: true });
+    expect(out.facing).toBeCloseTo(Math.PI / 4); // Displayed orientation, not the next snapshot target.
+    enemy.setDashPhase(1); enemy.readMovementVisualSample(out); expect(out.mode).toBe('dash');
+    enemy.setBurrowed(true); enemy.readMovementVisualSample(out); expect(out.visible).toBe(false);
+    enemy.setBurrowed(false); enemy.setHp(0, 20); enemy.readMovementVisualSample(out); expect(out.visible).toBe(false);
+    manager.destroy();
+  });
+
+  it('resumes ground effects after a correction while client actors keep walking', () => {
+    const h = harness(), manager = enemies(h);
+    const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+      100, 100, true, null, { spawnEffect: false });
+    upsert(manager, { id: 'e1', kind, x: 100, y: 100, rot: 0, hp: 10, maxHp: 20 });
+    const enemy = manager.getEnemy('e1')!;
+    const out = createMovementVisualSample();
+    for (const actor of [player, enemy]) {
+      actor.setWalking(true);
+      actor.setTargetPosition(1000, 100);
+      actor.lerpStep(0.2);
+      actor.readMovementVisualSample(out);
+      expect(out.visible).toBe(false);
+      for (let frame = 1; frame <= 60; frame++) {
+        // Normal render lag stays above a paw width; only the original jump should suppress.
+        actor.setTargetPosition(1000 + frame * 8, 100);
+        actor.lerpStep(0.2);
+      }
+      actor.readMovementVisualSample(out);
+      expect(out).toMatchObject({ visible: true, mode: 'walk' });
+      expect(out.x).toBeLessThan(1480 - out.size * 0.3);
+    }
+    player.destroy(); manager.destroy();
+  });
   function projectileFixture() {
     const h = harness(), manager = enemies(h);
     let hostNowMs = 1000;

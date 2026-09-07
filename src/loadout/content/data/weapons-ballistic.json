@@ -2,6 +2,7 @@
   "weapons": {
     "GLOCK": {
       "id": "GLOCK",
+      "shotFeedbackProfile": "light",
       "cooldown": 150,
       "damage": 6,
       "range": 500,
@@ -118,6 +119,7 @@
     },
     "XBOW": {
       "id": "XBOW",
+      "shotFeedbackProfile": "medium",
       "cooldown": 700,
       "damage": 5,
       "range": 700,
@@ -179,6 +181,7 @@
     },
     "P90": {
       "id": "P90",
+      "shotFeedbackProfile": "rapid",
       "cooldown": 80,
       "damage": 8,
       "range": 650,
@@ -229,6 +232,7 @@
     },
     "AK47": {
       "id": "AK47",
+      "shotFeedbackProfile": "medium",
       "cooldown": 140,
       "damage": 10,
       "range": 1000,
@@ -275,6 +279,7 @@
     },
     "SHOTGUN": {
       "id": "SHOTGUN",
+      "shotFeedbackProfile": "heavy",
       "cooldown": 700,
       "damage": 10,
       "range": 230,
@@ -352,6 +357,7 @@
     },
     "AWP": {
       "id": "AWP",
+      "shotFeedbackProfile": "precision",
       "cooldown": 800,
       "damage": 100,
       "range": 1800,
@@ -378,10 +384,6 @@
       "holdSpeedFactor": 0.5,
       "shotRecoilForce": 750,
       "shotRecoilDuration": 200,
-      "shotScreenShake": {
-        "duration": 120,
-        "intensity": 0.006
-      },
       "rockDamageMult": 1,
       "penetratesRocks": 0,
       "awpCharge": {
@@ -415,6 +417,7 @@
     },
     "NEGEV": {
       "id": "NEGEV",
+      "shotFeedbackProfile": "rapid",
       "cooldown": 60,
       "damage": 5,
       "range": 850,
@@ -462,10 +465,6 @@
         "fireChunkDurationMs": 3000,
         "fireChunkBurnDurationMs": 2000,
         "fireChunkBurnDamagePerTick": 1
-      },
-      "shotScreenShake": {
-        "duration": 60,
-        "intensity": 0.002
       },
       "tracerConfig": {"profile": "sustained"},
       "shotAudio": {

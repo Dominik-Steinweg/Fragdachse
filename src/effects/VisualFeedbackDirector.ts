@@ -1,3 +1,6 @@
+import { WeaponFireFeedbackController, type WeaponFeedbackPlayer } from './weapon/WeaponFireFeedbackController';
+import { getStoredWeaponCameraKick } from '../utils/localPreferences';
+import type { WeaponSlot } from '../types';
 import type * as Phaser from 'phaser';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { CameraFeedbackController } from './camera/CameraFeedbackController';
@@ -38,6 +41,9 @@ import {
 } from './HitFeedbackRenderer';
 
 export interface VisualFeedbackDeps {
+  readonly getWeaponPlayer?: (id: string) => WeaponFeedbackPlayer | undefined;
+  readonly getWorldRevision?: () => number | null;
+  readonly isWeaponTriggerHeld?: (slot: WeaponSlot) => boolean;
   /** Bezugspunkt der Distanzdämpfung – normalerweise der lokale Spieler. */
   readonly getListener: () => { x: number; y: number } | null;
   readonly getLocalPlayerId: () => string;
@@ -55,6 +61,7 @@ export interface VisualFeedbackDeps {
  */
 export class VisualFeedbackDirector {
   readonly camera: CameraFeedbackController;
+  readonly weaponFire: WeaponFireFeedbackController;
   readonly jolt: EntityJoltRegistry;
   readonly hitFeedback: HitFeedbackRenderer;
   readonly postFx: CameraPostFxController;
@@ -74,6 +81,15 @@ export class VisualFeedbackDirector {
     this.camera = new CameraFeedbackController(scene, {
       getListener: deps.getListener,
       getMotionScale: () => getGraphicsQualityProfile(scene).cameraMotionScale,
+    });
+    this.weaponFire = new WeaponFireFeedbackController({
+      getPlayer: (id) => deps.getWeaponPlayer?.(id),
+      getLocalPlayerId: deps.getLocalPlayerId,
+      getWorldRevision: () => deps.getWorldRevision?.() ?? null,
+      isLocalTriggerHeld: (slot) => deps.isWeaponTriggerHeld?.(slot) ?? false,
+      getCameraScale: getStoredWeaponCameraKick,
+      requestCamera: (request) => this.camera.request(request),
+      cancelCamera: () => this.camera.cancel('weapon:local-shot'),
     });
     this.jolt = new EntityJoltRegistry(scene.game);
     this.hitFeedback = new HitFeedbackRenderer(scene, this.jolt);
@@ -274,6 +290,7 @@ export class VisualFeedbackDirector {
 
   /** Rundenende: laufende Kameraquellen und Trefferkopien fallen lassen. */
   reset(): void {
+    this.weaponFire.reset();
     this.camera.reset();
     this.jolt.reset();
     this.hitFeedback.clear();
@@ -290,6 +307,7 @@ export class VisualFeedbackDirector {
   }
 
   destroy(): void {
+    this.weaponFire.reset();
     this.hitFeedback.destroyAll();
     this.jolt.destroy();
     this.camera.destroy();

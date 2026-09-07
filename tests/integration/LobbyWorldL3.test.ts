@@ -19,6 +19,8 @@ import { LOBBY_WORLD_DEFINITION_ID, getLobbyWorldDefinition } from '../../src/co
 import type { PlayerEntity } from '../../src/entities/PlayerEntity';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
+import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication } from '../../src/adrenalineEssence/AdrenalineEssenceReplication';
+import type { EssenceClusterSnapshot } from '../../src/adrenalineEssence/AdrenalineEssenceTypes';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { CoopDefensePlayerModifierSystem } from '../../src/systems/CoopDefensePlayerModifierSystem';
 import { PlacementSystem } from '../../src/systems/PlacementSystem';
@@ -191,6 +193,54 @@ function worldSnapshot(
 }
 
 afterEach(() => clearActiveSession());
+
+describe('World snapshot essence transport', () => {
+  it('round-trips the compact slice, preserves omissions, applies removals and clears an ended Activity', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const host = bridgeFor(hostRoom);
+    const client = bridgeFor(clientRoom);
+    const scope = { worldRevision: 7340, activityRevision: 3 };
+    const publisher = new AdrenalineEssenceReplication();
+    const replica = new AdrenalineEssenceClientReplica(scope);
+    const cluster: EssenceClusterSnapshot = {
+      id: '7340:3:cluster:1', accessGroup: { kind: 'personal', playerId: 'p1' }, state: 'grounded',
+      x: 11.125, y: 22.375, originX: 10, originY: 20, seed: 4, value: 0.375,
+      createdAt: 0, landAt: 200, expiresAt: 8200,
+    };
+    const base = worldSnapshot({ p1: { ...playerState(15, 25), adrenaline: 0.125 } }, { full: true, count: 0, upserts: [], removals: [] }, []);
+    const full = publisher.build({ ...scope, revision: 1, clusters: [cluster], transfers: [] }, 200, true)!;
+    useRoom(hostRoom);
+    host.publishWorldAndActivity(createAuthoredWorldDescriptor(LOBBY_WORLD_DEFINITION_ID, scope.worldRevision), null);
+    host.hostPublishWorldParticipation({ p1: 'interactive' });
+    host.publishGameState({ ...base, adrenalineEssence: full }, true);
+    useRoom(clientRoom);
+    const received = client.getLatestGameState();
+    expect(received?.adrenalineEssence).toEqual(full);
+    expect(received?.players.p1.adrenaline).toBe(0.125);
+    expect(replica.apply(received?.adrenalineEssence)).toBe(true);
+    expect(replica.getState().clusters).toEqual([cluster]);
+    useRoom(hostRoom);
+    host.publishGameState(base);
+    hostRoom.room.update();
+    useRoom(clientRoom);
+    expect(client.getLatestGameState()?.adrenalineEssence).toEqual(full);
+    const delta = publisher.build({ ...scope, revision: 2, clusters: [], transfers: [] }, 250)!;
+    useRoom(hostRoom);
+    host.publishGameState({ ...base, adrenalineEssence: delta });
+    hostRoom.room.update();
+    useRoom(clientRoom);
+    expect(client.getLatestGameState()?.adrenalineEssence).toEqual(delta);
+    expect(replica.apply(client.getLatestGameState()?.adrenalineEssence)).toBe(true);
+    expect(replica.getState().clusters).toEqual([]);
+    useRoom(hostRoom);
+    host.publishGameState({ ...base, adrenalineEssence: null });
+    hostRoom.room.update();
+    useRoom(clientRoom);
+    expect(client.getLatestGameState()?.adrenalineEssence).toBeNull();
+  });
+});
 
 describe('LobbyWorld L3 – Leave und lokale Presentation', () => {
   it('verarbeitet den Runtime-Detach vor dem Preview-Replication-Gate', () => {

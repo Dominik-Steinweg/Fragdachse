@@ -74,10 +74,12 @@ import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { EffectSystem } from '../../src/effects/EffectSystem';
 import { fakeEntity } from '../fakeEntity';
 import type { SyncedHitscanTrace, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../../src/types';
+import { WeaponFireFeedbackController } from '../../src/effects/weapon/WeaponFireFeedbackController';
+import type { WeaponShotFeedbackEvent } from '../../src/loadout/WeaponShotFeedbackEvent';
 
 // Compose the real input, prediction, RPC, activation, cooldown, combat and trace-dedupe paths.
 // Only renderer/audio and the transport delivery are headless ports.
-function fixture(remote = false) {
+function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   let now = 1_000;
   let processingDelay = 0;
   let processingHost = false;
@@ -85,7 +87,8 @@ function fixture(remote = false) {
   vi.spyOn(network, 'isHost').mockImplementation(() => !remote || processingHost);
   vi.spyOn(network, 'getLocalPlayerId').mockImplementation(() => remote && processingHost ? 'host' : 'shooter');
   vi.spyOn(Date, 'now').mockImplementation(() => now);
-  const config = WEAPON_CONFIGS.ASMD_PRIM;
+  const config = pelletCount === undefined ? WEAPON_CONFIGS[weaponId] : { ...WEAPON_CONFIGS[weaponId], pelletCount };
+  const fireSlot = config.allowedSlots.includes('weapon1') ? 'weapon1' : 'weapon2';
   const players = [
     fakeEntity({ id: 'shooter', x: 300, y: 200, color: 0xffffff, rotation: 0 }),
     fakeEntity({ id: 'target', x: 500, y: 200, color: 0xffffff, rotation: 0 }),
@@ -106,6 +109,19 @@ function fixture(remote = false) {
     });
     return effect as EffectSystem & { audioSystem: { playSound: ReturnType<typeof vi.fn>; playLocalSound: ReturnType<typeof vi.fn> } };
   }
+  const weaponView = () => ({ playHeldWeaponShot: vi.fn(() => 'started' as const),
+    resetHeldWeaponFeedback: vi.fn(), stopHeldWeaponSustain: vi.fn(), updateHeldWeaponFeedback: vi.fn() });
+  const localWeapon = weaponView(), remoteWeapon = weaponView();
+  const localKick = vi.fn(), remoteKick = vi.fn();
+  const feedback = (localId: string, view: ReturnType<typeof weaponView>, camera: ReturnType<typeof vi.fn>) => new WeaponFireFeedbackController({
+    getPlayer: id => id === 'shooter' ? view : undefined, getLocalPlayerId: () => localId,
+    getWorldRevision: () => 1, isLocalTriggerHeld: () => true, getCameraScale: () => 1,
+    requestCamera: camera, cancelCamera: vi.fn(),
+  });
+  const localFeedback = feedback('shooter', localWeapon, localKick);
+  const remoteFeedback = feedback('target', remoteWeapon, remoteKick);
+  const shotEvents: WeaponShotFeedbackEvent[] = [];
+  const projectiles: unknown[] = [];
   const localEffects = effects('shooter');
   const remoteEffects = effects('target');
   const traces: SyncedHitscanTrace[] = [];
@@ -131,6 +147,7 @@ function fixture(remote = false) {
   const hud = vi.fn();
   Object.assign(prediction, {
     ctx: { playerManager, getWorldCombatCore: () => combat, effectSystem: localEffects,
+      visualFeedback: { weaponFire: localFeedback },
       aimSystem: { notifyShot: aim }, leftPanel: { flashSlot: hud } },
     weaponLastFired: { weapon1: 0, weapon2: 0 },
     localFirePredictions: { weapon1: [], weapon2: [] },
@@ -139,15 +156,18 @@ function fixture(remote = false) {
     getLocalWeaponConfig: () => config,
   });
   const loadout = new LoadoutManager({} as never, { getGameMode: () => 'deathmatch' });
-  loadout.assignDefaultLoadout('shooter', { weapon1: config });
-  const item = (loadout as unknown as { loadouts: Map<string, { weapon1: BaseWeapon }> }).loadouts.get('shooter')!.weapon1;
+  loadout.assignDefaultLoadout('shooter', { [fireSlot]: config });
+  const item = (loadout as unknown as { loadouts: Map<string, Record<WeaponSlot, BaseWeapon>> }).loadouts.get('shooter')![fireSlot];
   const commits = vi.spyOn(item, 'recordUse');
-  const execution = new WorldWeaponExecutionRuntime({ combatSystem: combat, projectileSpawn: { spawnProjectile: () => null } as never });
+  const execution = new WorldWeaponExecutionRuntime({ combatSystem: combat, projectileSpawn: {
+    spawnProjectile: (request: unknown) => { projectiles.push(request); return { uid: projectiles.length }; },
+  } as never });
   const activation = new PlayerWeaponActivationRuntime({
     playerManager: playerManager as never,
     loadout,
     resourceSystem: { getAdrenaline: () => 100, resolveAdrenalineCost: () => resourceCost, drainAdrenaline: vi.fn() },
     weaponExecution: execution, specializedWeaponExecution: { fire: () => false },
+    broadcastShotFx: (event) => { shotEvents.push(event); localFeedback.confirm(event); remoteFeedback.confirm(event); },
   });
   const playerAction = new PlayerActionRuntime({
     getPlayer: playerManager.getPlayer as never,
@@ -180,10 +200,10 @@ function fixture(remote = false) {
     getWeaponLastFired: (slot: WeaponSlot) => prediction.weaponLastFiredRecord()[slot],
     notifyLoadoutFired: prediction.notifyLoadoutFired.bind(prediction),
     rollbackRejectedLoadoutFire: prediction.rollbackRejectedLoadoutFire.bind(prediction),
-    sendLoadoutUse: (slot: WeaponSlot, angle: number, tx: number, ty: number, shotId: number, params: unknown, _x: unknown, _y: unknown, awaitResult: boolean) => {
+    sendLoadoutUse: (slot: WeaponSlot, angle: number, tx: number, ty: number, shotId: number, params: unknown, _x: unknown, _y: unknown, awaitResult: boolean, predictionId?: number) => {
       processingHost = true;
       let result: LoadoutUseResult;
-      try { result = handler(slot, angle, tx, ty, 'shooter', shotId, params); }
+      try { result = handler(slot, angle, tx, ty, 'shooter', shotId, params, undefined, undefined, predictionId); }
       finally { processingHost = false; }
       if (!remote) return Promise.resolve(result);
       if (!awaitResult) return Promise.resolve(null);
@@ -195,10 +215,11 @@ function fixture(remote = false) {
   (input as any).setupActionBindings();
   return {
     config, item, commits, combat, traces, localEffects, remoteEffects, aim, hud, prediction, actions, replies,
+    shotEvents, localWeapon, remoteWeapon, localKick, remoteKick, projectiles,
     setResourceCost: (cost: number) => { resourceCost = cost; },
     shoot: (time: number, delay: number, inputStarted = false, angle = 0, params?: LoadoutUseParams) => {
       now = time; processingDelay = delay;
-      fire('weapon1', angle, 600, 200, { inputStarted, ...params });
+      fire(fireSlot, angle, 600, 200, { inputStarted, ...params });
     },
   };
 }
@@ -206,6 +227,24 @@ function fixture(remote = false) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('held weapon fire at the authoritative cooldown boundary', () => {
+  it('presents one recoil for a confirmed predicted shot and one for an entire shotgun blast', async () => {
+    const client = fixture(true);
+    client.shoot(1000, 0, true);
+    client.replies.shift()!();
+    await Promise.resolve();
+    expect(client.shotEvents).toHaveLength(1);
+    expect(client.shotEvents[0].predictionId).toBeDefined();
+    expect(client.localWeapon.playHeldWeaponShot).toHaveBeenCalledTimes(1);
+    expect(client.remoteWeapon.playHeldWeaponShot).toHaveBeenCalledTimes(1);
+    expect(client.localKick).toHaveBeenCalledTimes(1);
+    expect(client.remoteKick).not.toHaveBeenCalled();
+    const shotgun = fixture(false, 'SHOTGUN', 5);
+    shotgun.shoot(1000, 0, true);
+    expect(shotgun.projectiles.length).toBeGreaterThan(1);
+    expect(shotgun.shotEvents).toHaveLength(1);
+    expect(shotgun.localWeapon.playHeldWeaponShot).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps host resource rejections and scope holds silent without reserving a predicted cooldown', async () => {
     const f = fixture();
     f.setResourceCost(101);
@@ -306,6 +345,8 @@ describe('held weapon fire at the authoritative cooldown boundary', () => {
     expect(f.commits).toHaveBeenCalledTimes(7);
     expect(f.traces).toHaveLength(7);
     expect(f.remoteEffects.playHitscanTracer).toHaveBeenCalledTimes(7);
+    expect(f.localWeapon.playHeldWeaponShot).toHaveBeenCalledTimes(8);
+    expect(f.remoteWeapon.playHeldWeaponShot).toHaveBeenCalledTimes(7);
     // One rejected prediction remains visible, but confirmations never replay prediction FX.
     expect(f.localEffects.playHitscanTracer).toHaveBeenCalledTimes(8);
     expect(f.localEffects.audioSystem.playSound).toHaveBeenCalledTimes(8);

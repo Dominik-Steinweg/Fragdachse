@@ -52,6 +52,26 @@ afterEach(() => {
 import { resolveMuzzleProfile, MUZZLE_MAX_LIFETIME, type MuzzleFlashPreset } from '../src/effects/muzzleFlashModel';
 
 describe('muzzle flash GPU presentation', () => {
+  it('follows animated weapon recoil on a stationary owner and releases the flash after an item switch', () => {
+    const { renderer, system, lane } = setup();
+    const weapon = { x: 120, y: 100, rotation: Math.PI / 2, itemId: 'GLOCK' };
+    renderer.setOwnerVisualSource({ getOwnerVisualState: () => null,
+      readOwnerRenderPose: (_id, out) => { Object.assign(out, { x: 100, y: 100, rotation: Math.PI / 2 }); return true; },
+      readOwnerHeldWeaponPose: (_id, out) => { Object.assign(out, weapon); return true; },
+    });
+    renderer.playProjectileFlash(120, 100, 1, 0, 'bullet', 'glock', undefined, undefined, 'shooter');
+    system.update(1);
+    const before = lane.patched.length;
+    weapon.x -= 3;
+    weapon.rotation += 0.02;
+    system.update(1);
+    expect(lane.patched.length - before).toBe(2);
+    const active = system.buildReport().lanes.find(l => l.label === 'muzzle-flash')!.active;
+    weapon.itemId = 'AWP';
+    system.update(1);
+    expect(system.buildReport().lanes.find(l => l.label === 'muzzle-flash')!.active).toBe(active - 2);
+  });
+
   it('falls back to an unbound burst when tracking is full and reuses entries after teardown', () => {
     const { renderer, system, lane } = setup();
     qualityFactors.standard = 0;

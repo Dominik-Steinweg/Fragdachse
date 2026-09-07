@@ -269,6 +269,7 @@ export interface ArenaDiagnosticsInput {
   readonly getGpuVfxStats: () => Record<string, GpuVfxPoolStats> | null;
   readonly getFlowFieldDiagnostics: () => ArenaDiagnosticsFlowFieldPort | null;
   readonly getRockVisualSystem: () => ArenaDiagnosticsRockVisualSystemPort | null;
+  readonly getAdrenalineEssence?: () => object | null;
   readonly getHostPerformanceMetrics: () => HostUpdatePerformanceMetrics;
   readonly getClientPerformanceMetrics: () => ClientUpdatePerformanceMetrics;
   readonly getFrameMetrics: () => ArenaDiagnosticsFrameMetrics;
@@ -1287,6 +1288,7 @@ export class ArenaDiagnosticsController {
         pageSize: rockVisualSystem?.getPageSize() ?? getRockGpuPageSize(),
         gpu: rockVisualSystem?.getGpuDiagnostics() ?? null,
       },
+      adrenalineEssence: this.input.getAdrenalineEssence?.() ?? null,
     };
   }
 

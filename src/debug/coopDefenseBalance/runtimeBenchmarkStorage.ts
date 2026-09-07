@@ -1,7 +1,16 @@
-import type { RuntimeBenchmarkResult } from './runtimeBenchmarkTypes';
+import type { RuntimeBenchmarkResult, RuntimeBenchmarkEssenceAccounting } from './runtimeBenchmarkTypes';
 
 export const RUNTIME_BENCHMARK_STORAGE_KEY = 'fragdachse_weapon_balance_runtime_v1';
 const MAX_RESULTS = 200;
+
+function normalizeEssenceAccounting(value: unknown): RuntimeBenchmarkEssenceAccounting | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const entry = value as Partial<RuntimeBenchmarkEssenceAccounting>;
+  const fields = ['worldRevision', 'activityRevision', 'authoredValue', 'materializedValue', 'committedValue', 'expiredValue', 'placementFailedValue', 'lifecycleDiscardedValue'] as const;
+  return entry.measurement === 'activity-measurement-window'
+    && fields.every(key => typeof entry[key] === 'number' && Number.isFinite(entry[key]) && entry[key]! >= 0)
+    ? entry as RuntimeBenchmarkEssenceAccounting : undefined;
+}
 
 function normalizeResult(value: unknown): RuntimeBenchmarkResult | null {
   if (!value || typeof value !== 'object') return null;
@@ -19,6 +28,7 @@ function normalizeResult(value: unknown): RuntimeBenchmarkResult | null {
   if (!valid) return null;
   return {
     ...(entry as RuntimeBenchmarkResult),
+    essenceAccounting: normalizeEssenceAccounting(entry.essenceAccounting),
     adrenalineGenerated: Number.isFinite(entry.adrenalineGenerated) ? entry.adrenalineGenerated! : 0,
     adrenalineGeneratedPerSecond: Number.isFinite(entry.adrenalineGeneratedPerSecond)
       ? entry.adrenalineGeneratedPerSecond!
@@ -67,6 +77,7 @@ function comparisonKey(result: RuntimeBenchmarkResult): string {
     result.distance,
     result.measurementMs,
     result.buildSignature,
+    result.adrenalineMeasurement ?? 'legacy-resource-gain',
   ].join('|');
 }
 
@@ -98,7 +109,9 @@ export function runtimeBenchmarkResultsToCsv(results: readonly RuntimeBenchmarkR
     'Messdauer (s)', 'Build', 'Schüsse', 'Schadensereignisse', 'Crit-Ereignisse',
     'Getroffene Ziele', 'Gesamtschaden', 'DPS', 'Direkt', 'Explosion', 'Brand',
     'Chain', 'Tail-Schaden', 'Tail-Status', 'Adrenalin erzeugt', 'Adrenalin erzeugt/s',
-    'Adrenalin verbraucht', 'Adrenalin verbraucht/s',
+    'Adrenalin verbraucht', 'Adrenalin verbraucht/s', 'Adrenalin-Messbasis', 'Adrenalin gutgeschrieben',
+    'Essenz-Bilanzfenster', 'Essenz authored', 'Essenz materialisiert', 'Essenz eingesammelt',
+    'Essenz verfallen', 'Essenz Platzierungsfehler', 'Essenz Lifecycle-Verlust', 'Essenz World-Revision', 'Essenz Activity-Revision',
   ]];
   for (const result of results) {
     rows.push([
@@ -127,6 +140,17 @@ export function runtimeBenchmarkResultsToCsv(results: readonly RuntimeBenchmarkR
       result.adrenalineGeneratedPerSecond,
       result.adrenalineConsumed,
       result.adrenalinePerSecond,
+      result.adrenalineMeasurement ?? 'legacy-resource-gain',
+      result.adrenalineResourceGained,
+      result.essenceAccounting?.measurement,
+      result.essenceAccounting?.authoredValue,
+      result.essenceAccounting?.materializedValue,
+      result.essenceAccounting?.committedValue,
+      result.essenceAccounting?.expiredValue,
+      result.essenceAccounting?.placementFailedValue,
+      result.essenceAccounting?.lifecycleDiscardedValue,
+      result.essenceAccounting?.worldRevision,
+      result.essenceAccounting?.activityRevision,
     ]);
   }
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(';')).join('\r\n')}\r\n`;

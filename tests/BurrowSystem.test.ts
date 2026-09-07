@@ -110,6 +110,22 @@ function enterUnderground(system: BurrowSystem): void {
 }
 
 describe('BurrowSystem Exit Assist', () => {
+  it('fans out windup to collection observers without replacing the existing Beer callback', () => {
+    const harness = createHarness();
+    const beer = vi.fn();
+    const essence = vi.fn();
+    harness.system.setBurrowStartCallback(beer);
+    const detach = harness.system.addBurrowStartObserver(essence);
+    harness.system.initPlayer(PLAYER_ID);
+    harness.system.handleBurrowRequest(PLAYER_ID, true);
+    expect(beer).toHaveBeenCalledWith(PLAYER_ID);
+    expect(essence).toHaveBeenCalledWith(PLAYER_ID);
+    detach();
+    harness.system.initPlayer(PLAYER_ID);
+    harness.system.handleBurrowRequest(PLAYER_ID, true);
+    expect(beer).toHaveBeenCalledTimes(2);
+    expect(essence).toHaveBeenCalledTimes(1);
+  });
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

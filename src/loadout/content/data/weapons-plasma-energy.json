@@ -2,6 +2,7 @@
   "weapons": {
     "ASMD_PRIM": {
       "id": "ASMD_PRIM",
+      "shotFeedbackProfile": "medium",
       "cooldown": 600,
       "damage": 10,
       "range": 700,
@@ -45,6 +46,7 @@
     },
     "PLASMA": {
       "id": "PLASMA",
+      "shotFeedbackProfile": "rapid",
       "cooldown": 120,
       "damage": 3,
       "range": 500,
@@ -222,6 +224,7 @@
     },
     "HYDRA": {
       "id": "HYDRA",
+      "shotFeedbackProfile": "medium",
       "cooldown": 800,
       "damage": 12,
       "range": 1000,
@@ -254,6 +257,7 @@
     },
     "ASMD_SEC": {
       "id": "ASMD_SEC",
+      "shotFeedbackProfile": "medium",
       "cooldown": 500,
       "damage": 15,
       "range": 500,

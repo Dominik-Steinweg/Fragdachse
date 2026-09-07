@@ -22,9 +22,13 @@ function createHarness(): {
   readonly runtime: CoopMissionRuntime;
   readonly calls: string[];
   readonly carrySnapshots: readonly SyncedCoopDefenseCarryItem[][];
+  readonly progressTimes: readonly number[];
+  readonly clock: { now: number; arenaStart: number };
 } {
   const calls: string[] = [];
   const carrySnapshots: SyncedCoopDefenseCarryItem[][] = [];
+  const progressTimes: number[] = [];
+  const clock = { now: 1_000, arenaStart: 0 };
   const ui: CoopMissionPresentationUiPort = {
     centerHud: {
       resetCoopMissionPresentation: () => calls.push('center:reset'),
@@ -54,7 +58,10 @@ function createHarness(): {
       },
       syncEnemyDashVisual: (_enemy: EnemyEntity) => calls.push('world:enemy-dash'),
       resetEnemyDashVisuals: () => calls.push('world:enemy-reset'),
-      syncMissionProgress: () => calls.push('world:progress'),
+      syncMissionProgress: (_config, _state, elapsedMs) => {
+        calls.push('world:progress');
+        progressTimes.push(elapsedMs);
+      },
       syncCarryZones: () => calls.push('world:carry'),
       syncObjectiveRepairDrones: () => calls.push('world:repair'),
       syncHostileBaseIndicator: () => calls.push('world:hostile-base'),
@@ -68,8 +75,8 @@ function createHarness(): {
     getSecondaryObjectivePresentationState: () => null,
     getMissionProgressPresentationState: () => null,
     getLocalRespawnBudgetState: () => null,
-    getSynchronizedNow: () => 1_000,
-    getArenaStartTime: () => 0,
+    getSynchronizedNow: () => clock.now,
+    getArenaStartTime: () => clock.arenaStart,
     getHostileBaseProgress: () => null,
     getBossProgress: () => null,
     getEnemyVulnerability: () => false,
@@ -81,10 +88,24 @@ function createHarness(): {
     ui,
   );
   const runtime = new CoopMissionRuntime(activity(1));
-  return { binding, runtime, calls, carrySnapshots };
+  return { binding, runtime, calls, carrySnapshots, progressTimes, clock };
 }
 
 describe('CoopMissionPresentationBinding', () => {
+  it('passes synchronized round time to checkpoint animation every active frame', () => {
+    const { binding, runtime, clock, progressTimes } = createHarness();
+    runtime.bind(binding);
+    clock.arenaStart = 700;
+    binding.sync(16, true);
+    clock.now += 250;
+    binding.sync(16, true);
+    expect(progressTimes).toEqual([300, 550]);
+    binding.sync(16, false);
+    runtime.destroy();
+    binding.sync(16, true);
+    expect(progressTimes).toHaveLength(2);
+  });
+
   it('uses the Activity binding, is idempotent on runtime rebinding, and falls inert after destroy', () => {
     const { binding, runtime, calls } = createHarness();
 

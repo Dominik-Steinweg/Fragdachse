@@ -1,4 +1,10 @@
 import type Phaser from 'phaser';
+import { AdrenalineEssenceBinding } from '../../adrenalineEssence/AdrenalineEssenceBinding';
+import { ADRENALINE_ESSENCE_CONFIG } from '../../adrenalineEssence/AdrenalineEssenceConfig';
+import { AdrenalineEssenceGpuRenderer } from '../../adrenalineEssence/AdrenalineEssenceGpuRenderer';
+import { AdrenalineEssenceLighting } from '../../adrenalineEssence/AdrenalineEssenceLighting';
+import { AdrenalineEssencePresentation } from '../../adrenalineEssence/AdrenalineEssencePresentation';
+import type { EssenceAccessGroup, EssenceScope } from '../../adrenalineEssence/AdrenalineEssenceTypes';
 import { bridge }            from '../../network/bridge';
 import { ArenaBuilder } from '../../arena/ArenaBuilder';
 import { ArenaGenerator, ARENA_GENERATOR_VERSION, resolveArenaGenerationInput } from '../../arena/ArenaGenerator';
@@ -287,6 +293,8 @@ export class ArenaLifecycleCoordinator {
    * Ausserhalb ihrer Lifetime ist sie `null` und wird nicht als Dependency weitergereicht.
    */
   private worldRuntime: WorldRuntime | null = null;
+  /** Non-owning handle to the child held by the match Activity or explicitly by the Lobby World. */
+  private adrenalineEssence: AdrenalineEssenceBinding | null = null;
   /** Advances whenever a local Combat owner is rebuilt, even for the same World revision. */
   private combatRuntimeGeneration = 0;
   /** World-owned PowerUp runtime exposed by the current gameplay composition. */
@@ -368,6 +376,7 @@ export class ArenaLifecycleCoordinator {
       // Activity (LobbyWorld). Er traegt die aktive World-Display-Verdrahtung und faellt vor dem
       // Handoff dieser World.
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
+        movementEffects: this.renderers.movement,
         healthBars: this.renderers.healthBars,
         healthBarScope: this.worldRuntime,
         scene: this.scene,
@@ -993,8 +1002,11 @@ export class ArenaLifecycleCoordinator {
    * damit ausdruecklich ohne Sonderpfad.
    */
   updateWorldRuntime(deltaMs: number): void {
+    this.adrenalineEssence?.prepare();
     this.worldRuntime?.update(deltaMs);
   }
+
+  getAdrenalineEssence(): AdrenalineEssenceBinding | null { return this.adrenalineEssence; }
 
   /** Direkter Zugriff auf die tatsaechlichen Runtime-Owner fuer Scene-/Coordinator-Consumer. */
   getWorldRuntime(): WorldRuntime | null { return this.worldRuntime; }
@@ -1056,16 +1068,22 @@ export class ArenaLifecycleCoordinator {
         },
       });
       worldRuntime.activity.attach(activity, runtime);
+      this.attachAdrenalineEssence(activity, activity.kind);
       this.captureTheBeerPresentation?.bind(runtime);
       return;
     }
-    if (activity.kind !== 'coop-mission') return;
+    if (activity.kind !== 'coop-mission') {
+      worldRuntime.activity.attach(activity, { destroy: () => {} });
+      this.attachAdrenalineEssence(activity, activity.kind);
+      return;
+    }
     const runtime = new CoopMissionRuntime(
       activity,
       (current) => { this.onCoopMissionRuntimeChanged(current); },
       this.coopMissionPorts,
     );
     worldRuntime.activity.attach(activity, runtime);
+    this.attachAdrenalineEssence(activity, activity.kind);
     runtime.bind({
       attach: (current) => {
         const enemyManager = current.enemyManager;
@@ -1115,6 +1133,99 @@ export class ArenaLifecycleCoordinator {
       this.coopMissionComposition.materializeDependents(activityConfiguration, runtime);
       this.onCoopMissionRuntimeChanged(runtime);
     }
+  }
+
+  /** Practice uses the actual World lease and leaves the Activity slot empty. */
+  private attachLobbyAdrenalineEssence(): void {
+    const world = this.worldRuntime;
+    if (!world || world.activity.isAttached() || !isLobbyWorldDefinitionId(world.descriptor.definitionId)) return;
+    this.attachAdrenalineEssence({ worldRevision: world.descriptor.worldRevision, activityRevision: null }, toActivityKind(bridge.getActiveGameMode()));
+  }
+
+  private attachAdrenalineEssence(scope: EssenceScope, kind: ActivityDescriptor['kind']): void {
+    this.adrenalineEssence?.destroy();
+    const accessGroupFor = (playerId: string): EssenceAccessGroup | null => {
+      if (kind === 'coop-mission') return { kind: 'coop' };
+      if (kind === 'deathmatch') return { kind: 'personal', playerId };
+      const teamId = bridge.getPlayerTeam(playerId);
+      return teamId ? { kind: 'team', teamId } : null;
+    };
+    const binding = new AdrenalineEssenceBinding(scope, {
+      isHost: bridge.isHost(),
+      now: () => bridge.getSynchronizedNow(),
+      servicesReady: () => Boolean(this.getWorldCombatCore() && this.worldPlayerGameplayRuntime && this.worldGeometryBinding),
+      bindRewardSink: sink => this.combatSystem.bindPrimaryHitRewardSink(scope.activityRevision, sink),
+      observeBurrow: observer => this.worldPlayerGameplayRuntime!.addBurrowStartObserver(observer),
+      getPlayers: () => {
+        const core = this.getWorldCombatCore();
+        const gameplay = this.worldPlayerGameplayRuntime;
+        if (!core || !gameplay) return [];
+        const resource = gameplay;
+        return this.ctx.playerManager.getAllPlayers().map(player => {
+          const target = core.getPlayerCombatTarget(player.id);
+          const phase = gameplay.getBurrowPhase(player.id);
+          const transit = gameplay.isTunnelTransit(player.id);
+          return {
+            playerId: player.id, x: player.x, y: player.y,
+            lifeRevision: target?.instance.lifeRevision ?? -1,
+            participationRevision: target?.instance.entityGeneration ?? -1,
+            interactive: bridge.getWorldParticipation(player.id) === 'interactive',
+            alive: core.isAlive(player.id),
+            collectible: (phase === 'idle' || phase === 'recovery') && !transit,
+            blockedReason: phase === 'windup' ? 'burrow' as const : 'underground' as const,
+            accessGroup: accessGroupFor(player.id),
+            adrenaline: resource.getAdrenaline(player.id), maxAdrenaline: resource.getMaxAdrenaline(player.id),
+          };
+        });
+      },
+      accessGroupFor,
+      resolveGroundPoint: candidate => this.worldGeometryBinding?.getQueries().resolveSafeGroundPoint(
+        candidate.x, candidate.y, ADRENALINE_ESSENCE_CONFIG.groundClearance,
+      ) ?? null,
+      // The GDD excludes the moving train from magnet/merge LoS; placement still avoids it.
+      hasLineOfSight: (from, to) => this.worldGeometryBinding?.getQueries().hasLineOfSight(from.x, from.y, to.x, to.y) ?? false,
+      commitResolvedGain: (playerId, value) => {
+        const resource = this.worldPlayerGameplayRuntime;
+        return { creditedValue: resource?.commitResolvedAdrenalineGain(playerId, value) ?? 0, resourceRevision: resource?.getAdrenalineRevision(playerId) ?? 0 };
+      },
+      onPlacementFailure: reward => this.runtimeDiagnosticEventSink?.('essence-placement-failed', {
+        rewardId: reward.id, worldRevision: reward.worldRevision, activityRevision: reward.activityRevision,
+        x: reward.origin.x, y: reward.origin.y, value: reward.resolvedValue,
+      }),
+      localPlayerId: () => bridge.getLocalPlayerId(),
+      isLocallyVisible: () => this.getLocalWorldPresentation().required && bridge.getLocalWorldParticipation() === 'interactive',
+      resourceRevisionFor: playerId => bridge.isHost()
+        ? this.worldPlayerGameplayRuntime?.getAdrenalineRevision(playerId) ?? 0
+        : bridge.getLatestGameState()?.players[playerId]?.adrenalineRevision ?? 0,
+      createPresentation: () => {
+        const renderer = new AdrenalineEssenceGpuRenderer(this.scene, playerId => {
+          const player = this.ctx.playerManager.getPlayer(playerId);
+          return player ?? null;
+        }, new AdrenalineEssenceLighting(this.renderers.lighting));
+        const hud = new AdrenalineEssencePresentation({
+          setEssenceIncoming: value => this.ctx.playerStatusRing?.setEssenceIncoming?.(value),
+          notifyEssenceArrival: (value, completionAgeMs) => this.ctx.playerStatusRing?.notifyEssenceArrival?.(value, completionAgeMs),
+        });
+        return {
+          sync: (state, receipts, now, localId) => {
+            hud.sync(state, receipts, now, localId);
+            renderer.setSuppressed(this.renderers.gpuVfx.isSuppressed());
+            renderer.update(state, now, receipts);
+          },
+          getStats: () => renderer.getStats(),
+          clear: () => { hud.clear(); renderer.clear(); },
+          destroy: () => { hud.clear(); renderer.destroy(); },
+        };
+      },
+      onDestroyed: () => {
+        this.runtimeDiagnosticEventSink?.('essence-binding-ended', { ...scope, ...binding.getDiagnostics() });
+        if (this.adrenalineEssence === binding) this.adrenalineEssence = null;
+      },
+    });
+    if (scope.activityRevision === null) this.worldRuntime!.bind(binding);
+    else this.worldRuntime!.activity.bindChild(binding);
+    this.adrenalineEssence = binding;
+    binding.prepare();
   }
 
   /** Bindet nur den aktuellen Coop-Overlay-State an die world-owned Base-Grundlage. */
@@ -2545,6 +2656,8 @@ export class ArenaLifecycleCoordinator {
       coopMissionRuntime,
       activityDescriptor,
     }, buildingGameplay);
+    this.attachLobbyAdrenalineEssence();
+    this.adrenalineEssence?.prepare();
 
     if (coopMissionRuntime && activityConfiguration) {
       this.coopMissionComposition.materializeDependents(activityConfiguration, coopMissionRuntime);
@@ -2940,6 +3053,7 @@ export class ArenaLifecycleCoordinator {
       settled = true;
       timeoutTimer.remove(false);
       this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
+      this.renderers.movement.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
     }).catch((error: unknown) => {
       if (settled || !isCurrent()) return;

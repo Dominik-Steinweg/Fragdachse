@@ -26,6 +26,7 @@ export interface ActivityRuntime {
 export class ActivityRuntimeHost {
   private currentDescriptor: ActivityDescriptor | null = null;
   private currentRuntime: ActivityRuntime | null = null;
+  private children: ActivityRuntime[] = [];
   private closed = false;
 
   /**
@@ -47,6 +48,12 @@ export class ActivityRuntimeHost {
 
   isAttached(): boolean {
     return this.currentRuntime !== null;
+  }
+
+  /** Cross-mode children share this exact Activity lease; they never outlive its mode runtime. */
+  bindChild(child: ActivityRuntime): void {
+    if (this.closed || !this.currentRuntime) throw new Error('[ActivityRuntimeHost] Child needs an attached Activity');
+    this.children.push(child);
   }
 
   /**
@@ -81,6 +88,9 @@ export class ActivityRuntimeHost {
     const runtime = this.currentRuntime;
     this.currentRuntime = null;
     this.currentDescriptor = null;
+    const children = this.children;
+    this.children = [];
+    for (let i = children.length - 1; i >= 0; i--) children[i].destroy();
     runtime?.destroy();
   }
 

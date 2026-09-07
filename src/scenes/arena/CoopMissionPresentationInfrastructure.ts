@@ -146,8 +146,8 @@ export class CoopMissionPresentationInfrastructure {
         resetEnemyDashVisuals: () => {
           if (!this.destroyed) input.clientUpdate.resetEnemyDashVisuals();
         },
-        syncMissionProgress: (config, state) => {
-          if (!this.destroyed) input.renderers.missionProgress.sync(config, state, true);
+        syncMissionProgress: (config, state, elapsedMs) => {
+          if (!this.destroyed) input.renderers.missionProgress.sync(config, state, elapsedMs, true);
         },
         syncCarryZones: (snapshot, configs) => {
           if (!this.destroyed) input.renderers.carryZones.sync(snapshot, configs, true);

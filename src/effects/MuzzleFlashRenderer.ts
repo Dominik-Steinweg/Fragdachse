@@ -9,7 +9,7 @@ import { GpuVfxEase } from './gpu/GpuVfxEase';
 import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import { GpuVfxFrameId } from './gpu/GpuVfxAtlas';
 import { GPU_VFX_NO_SOURCE_HANDLE, GpuVfxSystem, createGpuVfxMemberHandle, type GpuVfxMemberHandle } from './gpu/GpuVfxSystem';
-import type { OwnerVisualSource, OwnerRenderPose } from '../entities/OwnerVisualSource';
+import type { OwnerVisualSource, OwnerRenderPose, OwnerHeldWeaponPose } from '../entities/OwnerVisualSource';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { type MuzzleFlashPreset, type MuzzleProfile, resolveMuzzleProfile, resolveProjectileMuzzlePreset } from './muzzleFlashModel';
 
@@ -27,9 +27,11 @@ export class MuzzleFlashRenderer {
   private readonly repeats = Array.from({ length: 128 }, () => ({ source: '', preset: '', until: 0 }));
   private owners: OwnerVisualSource | null = null;
   private readonly pose: OwnerRenderPose = { x: 0, y: 0, rotation: 0 };
+  private readonly weaponPose: OwnerHeldWeaponPose = { x: 0, y: 0, rotation: 0, itemId: '' };
   private readonly attachments = Array.from({ length: 128 }, () => ({
     source: '', core: createGpuVfxMemberHandle(), outer: createGpuVfxMemberHandle(),
     localX: 0, localY: 0, localAngle: 0, x: 0, y: 0, rotation: 0, offset: 0,
+    itemId: null as string | null, firstFollow: true,
   }));
   private readonly followTick = (): void => {
     const system = this.gpuVfx;
@@ -37,11 +39,22 @@ export class MuzzleFlashRenderer {
     for (const entry of this.attachments) {
       if (!entry.source) continue;
       if (!system.isMemberLive(entry.core) && !system.isMemberLive(entry.outer)) { entry.source = ''; continue; }
-      if (!this.owners?.readOwnerRenderPose?.(entry.source, this.pose)) {
+      const hasWeapon = this.owners?.readOwnerHeldWeaponPose?.(entry.source, this.weaponPose) ?? false;
+      const attachWeaponNow = entry.firstFollow && hasWeapon;
+      if (attachWeaponNow) {
+        // The accepted-shot event may follow projectile creation in the same frame.
+        entry.itemId = this.weaponPose.itemId;
+        entry.localX = entry.localY = 0;
+      }
+      entry.firstFollow = false;
+      if (entry.itemId !== null && (!hasWeapon || entry.itemId !== this.weaponPose.itemId)) {
         system.releaseMember(entry.core); system.releaseMember(entry.outer); entry.source = ''; continue;
       }
-      const pose = this.pose;
-      if (pose.x === entry.x && pose.y === entry.y && pose.rotation === entry.rotation) continue;
+      if (entry.itemId === null && !this.owners?.readOwnerRenderPose?.(entry.source, this.pose)) {
+        system.releaseMember(entry.core); system.releaseMember(entry.outer); entry.source = ''; continue;
+      }
+      const pose = entry.itemId === null ? this.pose : this.weaponPose;
+      if (!attachWeaponNow && pose.x === entry.x && pose.y === entry.y && pose.rotation === entry.rotation) continue;
       entry.x = pose.x; entry.y = pose.y; entry.rotation = pose.rotation;
       const c = Math.cos(pose.rotation), s = Math.sin(pose.rotation);
       const x = pose.x + entry.localX * c - entry.localY * s;
@@ -109,7 +122,8 @@ export class MuzzleFlashRenderer {
   playProjectileFlash(x: number, y: number, vx: number, vy: number, style?: ProjectileStyle,
     bulletPreset?: BulletVisualPreset, energyBallVariant?: EnergyBallVariant, color?: number, sourceId?: string): void {
     const preset = resolveProjectileMuzzlePreset(style, bulletPreset, energyBallVariant);
-    if (preset) this.playFlash(x, y, vx, vy, preset, color, sourceId);
+    if (preset) this.playFlash(x, y, vx, vy, preset, color, sourceId,
+      style !== 'bfg' && style !== 'gauss' && bulletPreset !== 'gauss');
   }
 
   playHitscanFlash(x: number, y: number, vx: number, vy: number,
@@ -118,7 +132,7 @@ export class MuzzleFlashRenderer {
   }
 
   private playFlash(x: number, y: number, vx: number, vy: number, preset: MuzzleFlashPreset,
-    color?: number, sourceId?: string): void {
+    color?: number, sourceId?: string, bindHeldWeapon = true): void {
     const cfg = resolveMuzzleProfile(preset, MUZZLE_FLASH_VFX, this.profile);
     if (cfg.alpha <= 0) return;
     const now = this.gpuVfx?.now() ?? this.scene.time.now;
@@ -147,6 +161,8 @@ export class MuzzleFlashRenderer {
       if (attachment) {
         const pose = this.pose, c = Math.cos(pose.rotation), s = Math.sin(pose.rotation);
         attachment.source = sourceId;
+        attachment.itemId = null;
+        attachment.firstFollow = bindHeldWeapon;
         attachment.localX = (x - pose.x) * c + (y - pose.y) * s;
         attachment.localY = -(x - pose.x) * s + (y - pose.y) * c;
         attachment.localAngle = angle - pose.rotation;

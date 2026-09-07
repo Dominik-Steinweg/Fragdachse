@@ -1,3 +1,5 @@
+import type { WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
+import type { PrimaryHitRewardScopeReadPort } from '../combat/PrimaryHitReward';
 import type {
   CombatActivityPort,
   CombatDamageEffectPort,
@@ -118,7 +120,7 @@ export interface WorldPlayerGameplayNetworkPort {
       ownerId: string,
     ) => void;
     readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
-    readonly broadcastShotFx: (shooterId: string, durationMs: number, intensity: number) => void;
+    readonly broadcastShotFx: (event: WeaponShotFeedbackEvent) => void;
     readonly broadcastFireChunkEffect: (
       x: number,
       y: number,
@@ -374,7 +376,8 @@ export interface WorldPlayerGameplayRuntimeOptions {
     & CombatPlayerSupportPort
     & CombatDamageEffectPort
     & CombatActivityPort
-    & CombatImmediateAttackPort;
+    & CombatImmediateAttackPort
+    & PrimaryHitRewardScopeReadPort;
   readonly hostPhysics: HostPhysicsSystem;
   readonly fireSystem: FireSystem;
   readonly placementSystem: PlacementSystem;
@@ -616,6 +619,7 @@ export class WorldPlayerGameplayRuntime implements
       resourceSystem: resource,
       physicsSystem: options.hostPhysics,
       weaponExecution: options.weaponExecution,
+      capturePrimaryHitRewardScope: () => options.combatSystem.getPrimaryHitRewardScope(),
       specializedWeaponExecution: options.specializedWeaponExecution,
       ak47Behavior,
       negevBehavior,
@@ -1297,6 +1301,19 @@ export class WorldPlayerGameplayRuntime implements
 
   getAdrenaline(playerId: string): number {
     return this.systems.resource.getAdrenaline(playerId);
+  }
+
+  /** Collection uses the existing Resource owner and consumes the actual capped result. */
+  commitResolvedAdrenalineGain(playerId: string, value: number): number {
+    return this.destroyed ? 0 : this.systems.resource.commitResolvedAdrenalineGain(playerId, value);
+  }
+
+  addBurrowStartObserver(observer: (playerId: string) => void): () => void {
+    return this.systems.burrow.addBurrowStartObserver(observer);
+  }
+
+  isTunnelTransit(playerId: string): boolean {
+    return this.systems.burrow.isTunnelTransit(playerId);
   }
 
   getAdrenalineRevision(playerId: string): number {

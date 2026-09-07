@@ -43,6 +43,18 @@ Die Runtime kann ohne Renderer oder lokale Phaser-Szene existieren. PlayerBody i
 
 Die Combat-Authority gehört zur laufenden World und wird über [WorldCombatRuntime](../../src/combat/WorldCombatRuntime.ts) gebunden. [WorldCombatCore](../../src/combat/WorldCombatCore.ts) stellt den autoritativen Resolution-/Mutation-Kern bereit; andere Gameplay-Owner erhalten nur die jeweils benötigten schmalen Ports. Immediate-Attacks verwenden den normalisierten `CombatImmediateAttackPort`, nicht optionale positional Legacy-Aufrufe.
 
+## Primärtreffer und verzögerte Ressourcen
+
+Primärtreffer transportieren einen expliziten neutralen [Reward-Intent](../../src/combat/PrimaryHitReward.ts). Gain-Basis, Erzeugerposition und Activity-/World-/Combat-Scope werden bei der Aktivierung erfasst und durch Salven, Ketten und Kinder erhalten; eine zugerechnete Reflection ersetzt die Erzeugerbasis. Nur bestätigter positiver HP-/Rüstungsschaden veröffentlicht ein Reward-Faktum. Herkunft darf weder aus Allegiance noch aus Darstellung nachträglich erraten werden.
+
+[AdrenalineEssenceBinding](../../src/adrenalineEssence/AdrenalineEssenceBinding.ts) gehört in Matches zum Activity-Slot. Im ausdrücklich unterstützten Lobby-Testgelände gehört dasselbe Binding zur Lobby-World; sein `activityRevision: null` bezeichnet die tatsächlich fehlende Activity, ohne eine Runde oder Ersatz-Activity anzulegen. Andere Activity-lose Worlds erhalten dadurch keinen Reward-Owner. Combat besitzt keinen Essenz-State. Der Host reserviert und validiert Sammler; erst die Ankunft ruft den atomaren Commit eines bereits aufgelösten Gains beim [ResourceSystem](../../src/systems/ResourceSystem.ts) auf. Lifecycle-Abbrüche geben ausschließlich unbestätigten Wert zurück. Synchrone Resource-Observer können eine bereits geschriebene Gutschrift nicht rückgängig machen oder erneut verfügbar machen.
+
+Resource-Replikation bleibt unabhängig von kosmetischen Receipts und Flügen; Clients visualisieren ausschließlich den bestätigten Zustand. Der jeweilige Owner-Detach entfernt Reservierungen, Replica und Presentation gemeinsam. Diese Grenzen sichern [Core-Tests](../../tests/AdrenalineEssenceRuntime.test.ts), [Binding-Integration](../../tests/integration/AdrenalineEssenceBinding.test.ts) und [Replication-Tests](../../tests/AdrenalineEssenceReplication.test.ts).
+
+Die Aufteilung eines Reward-Faktums in mehrere Beiträge vervielfacht weder dessen Wertauflösung noch Treffer- und Attributionszähler. Jeder Beitrag behält bei Merge, Reservierung und Rückgabe seine Herkunft und Ablaufzeit. Abgeleitete Weltlichter konsumieren ausschließlich zugriffsgefilterte Darstellungspositionen; Zugriffsverlust und Owner-Detach entfernen auch ausblendende Lichtquellen sofort. Der Licht-Helper besitzt keine Gameplay-Authority. Dies sichern die [Fragmentierungsregressionen](../../tests/AdrenalineEssenceRuntime.test.ts) sowie [Licht-Lifetime-Tests](../../tests/AdrenalineEssenceLighting.test.ts).
+
+Die `CombatScope` eines Target-Owners ist keine gemeinsame globale Generation: `EnemyManager` und `DecoySystem` besitzen eigene Scope-/Instanzprüfungen. Reward-Projektion prüft den eingefrorenen Aktivierungs-Scope gegen den aktuellen World-Combat-Owner und die aktuelle Reward-Bindung; sie vergleicht ihn nicht mit der privaten Scope des bereits bestätigten Target-Outcomes. Die [Glock-Cutover-Integration](../../tests/integration/AdrenalineEssenceCombatCutover.test.ts) verwendet deshalb echte Target-Owner mit abweichenden Kennungen.
+
 ## Projectile-Runtime
 
 [`WorldProjectileRuntime`](../../src/projectile/WorldProjectileRuntime.ts) ist die einzige

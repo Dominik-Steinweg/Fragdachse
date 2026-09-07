@@ -23,6 +23,7 @@ import type {
   TracerConfig,
 } from '../types';
 import type { ProjectileId } from './ProjectileSpawnPort';
+import type { PrimaryHitAdrenalineRewardIntent } from '../combat/PrimaryHitReward';
 
 /**
  * Aufgelöster Spawn-Auftrag der oberen Execution-Grenze.
@@ -139,6 +140,7 @@ export interface ProjectileMiniRocketFlightSpec {
  * Zurechnung und Zugehörigkeit ändern kann, ohne Herkunft oder Abstammung zu verlieren.
  */
 export interface ProjectileProvenance {
+  readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   /** Entität, die das Projectile erzeugt hat. */
   readonly gameplaySourceId: string;
   /** Host-captured source classification; survives source removal and child spawns. */
@@ -189,6 +191,7 @@ export interface ProjectileCorrelation {
 
 /** Quelle, bei der Gameplay-Source, Attribution und Allegiance dieselbe Entität sind. */
 export interface SingleOwnerProvenanceDetails {
+  readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   readonly weaponSourceId?: string;
   readonly allowTeamDamage?: boolean;
   readonly sourceSlot?: LoadoutSlot;
@@ -209,6 +212,7 @@ export function createSingleOwnerProvenance(
 ): ProjectileProvenance {
   return {
     gameplaySourceId: ownerId,
+    primaryHitReward: details.primaryHitReward,
     attributionId: ownerId,
     allegiance: { ownerId, allowTeamDamage: details.allowTeamDamage },
     weaponSourceId: details.weaponSourceId,

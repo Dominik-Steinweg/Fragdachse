@@ -83,7 +83,8 @@ describe('CombatSystem Chain Lightning – Runtime/Shared Resolver Parity', () =
       { sourceX: 10, sourceY: 0 },
       { damageKind: 'chain' },
     );
-    expect(runtime.resourceSystem.addAdrenaline).toHaveBeenCalledWith('sim_player', 8);
+    // No effective damage receipt and no explicit reward intent: never pay the legacy amount.
+    expect(runtime.resourceSystem.addAdrenaline).not.toHaveBeenCalled();
     expect(runtime.queueHitscanTrace).toHaveBeenCalledTimes(1);
   });
 });

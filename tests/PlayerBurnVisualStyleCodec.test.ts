@@ -32,6 +32,10 @@ function makePlayerState(burnVisualStyle: PlayerNetState['burnVisualStyle']): Pl
 }
 
 describe('player burn visual style codec', () => {
+  it('preserves fractional authoritative adrenaline through the compact wire format', () => {
+    const source = { ...makePlayerState('normal'), adrenaline: 0.375 };
+    expect(decodePlayerStates(encodePlayerStates({ p0: source })).p0.adrenaline).toBe(0.375);
+  });
   it('round-trips void entity fire and defaults older payloads to normal fire', () => {
     const encodedVoid = encodePlayerStates({ p0: makePlayerState('void') });
     expect(decodePlayerStates(encodedVoid).p0.burnVisualStyle).toBe('void');

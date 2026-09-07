@@ -25,6 +25,16 @@ export const MAX_OCCLUDING_LIGHT_RADIUS = (OCCLUDER_SCRATCH_SIZE / LIGHTMAP_SCAL
 export const EXPLOSION_OCCLUSION_REFRESH_MS = 100;
 
 export const MAX_LIGHTS_PER_FRAME = 48;
+/** Per-presentation budget includes active and fading essence light slots. */
+export const ADRENALINE_ESSENCE_LIGHTING = {
+  bucketSizePx: 64,
+  maxLights: { high: 12, medium: 8, low: 4 },
+  minRadiusPx: 64,
+  maxRadiusPx: 80,
+  minIntensity: 0.2,
+  maxIntensity: 0.4,
+  valueHalfSaturation: 4,
+} as const;
 /**
  * Jeder Slot kostet eine eigene Scratch-Textur und einen Renderpass. Sechs reichen für
  * vier Spielertaschenlampen plus die beiden Zugscheinwerfer; darüber hinaus fallen
@@ -104,6 +114,20 @@ export interface LightPreset {
  * gemeinsam – ein Preset braucht deshalb keine eigene Tag-/Nachtunterscheidung mehr.
  */
 export const LIGHT_PRESETS = {
+  /** Small pooled pickup lights; the shared sky state controls their daylight attenuation. */
+  adrenalineEssence: {
+    enabled: true,
+    shape: 'radial',
+    radiusPx: 64,
+    color: 0xa5f4ff,
+    intensity: 0.2,
+    durationMs: 0,
+    decayExponent: 1,
+    occludes: false,
+    priority: 1,
+    flickerAmount: 0,
+    flickerHz: 0,
+  },
   muzzleFlash: {
     enabled: true,
     shape: 'radial',

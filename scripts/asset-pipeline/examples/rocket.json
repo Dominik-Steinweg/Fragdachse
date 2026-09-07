@@ -1,0 +1,13 @@
+{
+  "id": "rocket",
+  "label": "Raketen-Turm",
+  "category": "turret",
+  "recipe": "rocket",
+  "targetSize": 40,
+  "sourceSizes": [80, 160],
+  "forward": "east",
+  "pivot": [0.5, 0.5],
+  "orthoScale": 3.15,
+  "textures": {"technical": "art/poc/pipeline-v1/textures/technical.png"},
+  "reference": "public/assets/sprites/turrets/rocket.png"
+}

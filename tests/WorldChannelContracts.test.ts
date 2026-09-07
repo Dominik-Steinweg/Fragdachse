@@ -4,6 +4,8 @@ import { clearActiveSession, setActiveSession } from '../src/network/peer/sessio
 import type { ActivityDescriptor } from '../src/world/ActivityDescriptor';
 import type { WorldDescriptor } from '../src/world/WorldDescriptor';
 import { FakeNetwork, addClientRoom, createHostRoom, type TestRoom } from './fakePeerNetwork';
+import { AdrenalineEssenceClientReplica, AdrenalineEssenceReplication } from '../src/adrenalineEssence/AdrenalineEssenceReplication';
+import type { EssenceState, EssenceTransferReceipt } from '../src/adrenalineEssence/AdrenalineEssenceTypes';
 
 /**
  * Der eine kanonische World-Kanal.
@@ -122,6 +124,27 @@ describe('World-Kanal – Replikation', () => {
 });
 
 describe('World-Kanal – Host-Autoritaet und Verwerfungsregel', () => {
+  it('delivers typed shot events once per broadcast and rejects stale or malformed world feedback', async () => {
+    const [hostRoom, clientRoom] = await createRoom(2);
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishWorldAndActivity(world(), null);
+      const client = bridgeFor(clientRoom);
+      const received: unknown[] = [];
+      client.registerShotFxHandler(event => received.push(event));
+      setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
+      const shot = { shooterId: 'shooter', weaponId: 'GLOCK', slot: 'weapon1' as const, angle: 0, sequence: 1, predictionId: 7 };
+      host.broadcastShotFx(shot);
+      await Promise.resolve();
+      expect(received).toHaveLength(1);
+      expect(received[0]).toMatchObject(shot);
+      hostRoom.room.broadcast('sfx', { ...shot, wr: 11, sequence: 2 });
+      hostRoom.room.broadcast('sfx', { ...shot, wr: 12, angle: 'invalid' });
+      await Promise.resolve();
+      expect(received).toHaveLength(1);
+    } finally { clearActiveSession(); }
+  });
+
   it('laesst keine Activity zu, die zu einer anderen World-Instanz gehoert', async () => {
     const [hostRoom] = await createRoom(1);
     try {
@@ -176,6 +199,101 @@ describe('World-Kanal – Host-Autoritaet und Verwerfungsregel', () => {
 
       setActiveSession({ room: hostRoom.room, transport: hostRoom.transport, roomCode: 'ABC123' });
       expect(host.getWorldDescriptor()?.worldRevision).toBe(12);
+    } finally {
+      clearActiveSession();
+    }
+  });
+});
+
+describe('World-Kanal – Essenz im Lobby-Testgelaende', () => {
+  it('traegt null-Activity, Deltas und Latejoin durch die echte Bridge und verwirft die vorherige World', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network);
+    const clientRoom = await addClientRoom(network);
+    const useRoom = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'ABC123' });
+    const scope = { worldRevision: 12, activityRevision: null } as const;
+    const publisher = new AdrenalineEssenceReplication();
+    const replica = new AdrenalineEssenceClientReplica(scope);
+    const state = (revision: number, value: number): EssenceState => ({
+      ...scope, revision, transfers: [], clusters: value === 0 ? [] : [{
+        id: '12:null:cluster:1', accessGroup: { kind: 'personal', playerId: 'p1' }, state: 'grounded',
+        x: 100, y: 120, originX: 100, originY: 120, seed: 42, value,
+        createdAt: 0, landAt: 200, expiresAt: 8200,
+      }],
+    });
+    const emptyWorldState: Parameters<NetworkBridge['publishGameState']>[0] = {
+      roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
+      placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
+      remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
+      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      coopDefenseCarry: [], stinkClouds: [], timeBubbles: [], teslaDomes: [], energyShields: [],
+      guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
+      targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
+    };
+    try {
+      const host = bridgeFor(hostRoom);
+      host.publishLobbySync();
+      host.publishWorldAndActivity(world({ definitionId: 'world:lobby' }), null);
+      const client = bridgeFor(clientRoom);
+      const publish = (next: EssenceState, now: number, full = false) => {
+        useRoom(hostRoom);
+        host.publishGameState({ ...emptyWorldState, adrenalineEssence: publisher.build(next, now, full) }, full);
+        hostRoom.room.update();
+        useRoom(clientRoom);
+        return client.getLatestGameState()!.adrenalineEssence;
+      };
+
+      expect(replica.apply(publish(state(1, 0.125), 0, true))).toBe(true);
+      expect(client.getActivityDescriptor()).toBeNull();
+      expect(client.getGamePhase()).toBe('LOBBY');
+      expect(replica.getState()).toMatchObject({ ...scope, clusters: [{ value: 0.125 }] });
+
+      publish(state(2, 0), 50); // The passive replica misses this removal.
+      expect(replica.apply(publish(state(3, 0.375), 100))).toBe(false);
+      expect(replica.isAwaitingFull()).toBe(true);
+      const receipt: EssenceTransferReceipt = {
+        ...scope, id: '12:null:transfer:2', accessGroup: { kind: 'personal', playerId: 'p1' },
+        playerId: 'p1', lifeRevision: 1, participationRevision: 1, status: 'committed',
+        creditedValue: 0.25, returnedValue: 0, expiredValue: 0, resourceRevision: 3,
+        completedAt: 900, sourceX: 100, sourceY: 120, targetX: 130, targetY: 140,
+      };
+      publisher.addReceipts([receipt]);
+      const recoveredFull = publish(state(4, 0.125), 1000, true);
+      expect(replica.apply(recoveredFull)).toBe(true);
+      expect(replica.getState().clusters[0].value).toBe(0.125);
+      expect(replica.drainReceipts()).toEqual([]);
+
+      // A real joining PeerRoom gets the reliable game-state baseline without an Activity.
+      const joiningRoom = await addClientRoom(network);
+      const joining = bridgeFor(joiningRoom);
+      const joinedReplica = new AdrenalineEssenceClientReplica(scope);
+      expect(joinedReplica.apply(joining.getLatestGameState()!.adrenalineEssence)).toBe(true);
+      expect(joinedReplica.getState()).toEqual(replica.getState());
+      const repeatedReceipt = publish(state(4, 0.125), 1050);
+      expect(replica.apply(repeatedReceipt)).toBe(true);
+      expect(replica.drainReceipts()).toEqual([receipt]);
+      useRoom(joiningRoom);
+      expect(joinedReplica.apply(joining.getLatestGameState()!.adrenalineEssence)).toBe(true);
+      expect(joinedReplica.drainReceipts()).toEqual([]);
+
+      // Omitted slices preserve the current packet; explicit null clears the Bridge cache.
+      useRoom(hostRoom);
+      host.publishGameState(emptyWorldState);
+      hostRoom.room.update();
+      useRoom(clientRoom);
+      expect(client.getLatestGameState()!.adrenalineEssence).toEqual(repeatedReceipt);
+      useRoom(hostRoom);
+      host.publishGameState({ ...emptyWorldState, adrenalineEssence: null });
+      hostRoom.room.update();
+      useRoom(clientRoom);
+      expect(client.getLatestGameState()!.adrenalineEssence).toBeNull();
+
+      expect(new AdrenalineEssenceClientReplica({ ...scope, activityRevision: 31 }).apply(recoveredFull)).toBe(false);
+      useRoom(hostRoom);
+      host.publishWorldAndActivity(world({ worldRevision: 13, definitionId: 'world:lobby' }), null);
+      useRoom(clientRoom);
+      expect(client.getLatestGameState()).toBeUndefined();
+      expect(new AdrenalineEssenceClientReplica({ ...scope, worldRevision: 13 }).apply(recoveredFull)).toBe(false);
     } finally {
       clearActiveSession();
     }

@@ -15,6 +15,7 @@ import {
   STATUS_RING_SHADER_NAME,
 } from '../effects/living/statusRingShader';
 import type { LocalArenaHudData } from './LocalArenaHudData';
+import { ESSENCE_PALETTE, EssenceArrivalBurst } from '../adrenalineEssence/AdrenalineEssencePresentation';
 
 type SegmentKey = 'hp' | 'adrenaline' | 'rage';
 
@@ -70,6 +71,7 @@ const MAX_SPARKS = 9;
 
 const PAL_HP: SegmentPalette = { dark: COLORS.GREEN_3, mid: 0x00cc44, light: COLORS.GREEN_1, spark: 0xffffff };
 const PAL_ADR: SegmentPalette = { dark: COLORS.BLUE_3, mid: COLORS.BLUE_2, light: COLORS.BLUE_1, spark: 0xffffff };
+const PAL_ESSENCE: SegmentPalette = { dark: ESSENCE_PALETTE.rim, mid: ESSENCE_PALETTE.body, light: ESSENCE_PALETTE.light, spark: ESSENCE_PALETTE.light };
 const PAL_ADR_LOW: SegmentPalette = { dark: 0x5e1720, mid: COLORS.RED_3, light: 0xff9a8a, spark: 0xffffff };
 const PAL_RAGE: SegmentPalette = { dark: COLORS.RED_3, mid: COLORS.RED_2, light: COLORS.RED_1, spark: 0xffffff };
 const PAL_ARMOR: SegmentPalette = { dark: COLORS.GOLD_3, mid: ARMOR_COLOR, light: COLORS.GOLD_1, spark: COLORS.GREY_1 };
@@ -244,6 +246,10 @@ export class PlayerStatusRing {
   private ultimateActive = false;
   private hpFlashUntil = 0;
   private adrBurstUntil = 0;
+  private essenceIncomingValue = 0;
+  private essenceIncomingFadeUntil = 0;
+  private essenceIncomingFadeStrength = 0;
+  private readonly essenceArrival = new EssenceArrivalBurst(BURST_MS);
   private adrenalineWarningUntil = 0;
   private adrenalineWarningPunchUntil = 0;
   private lastGraphicsSignature = '';
@@ -308,7 +314,40 @@ export class PlayerStatusRing {
 
   setActive(active: boolean): void {
     this.active = active;
-    if (!active) this.container.setVisible(false);
+    if (!active) {
+      this.container.setVisible(false);
+      this.essenceIncomingValue = 0;
+      this.essenceIncomingFadeUntil = 0;
+      this.essenceArrival.clear();
+    }
+  }
+
+  /** This is an unquantified shimmer, never anticipated resource fill. */
+  setEssenceIncoming(value: number): void {
+    const next = Number.isFinite(value) ? Math.max(0, value) : 0;
+    if (next === this.essenceIncomingValue) return;
+    if (next === 0 && this.essenceIncomingValue > 0) {
+      this.essenceIncomingFadeStrength = this.essenceIncomingStrength();
+      this.essenceIncomingFadeUntil = this.scene.time.now + 140;
+    }
+    this.essenceIncomingValue = next;
+    this.lastGraphicsSignature = '';
+    this.render(this.scene.time.now);
+  }
+
+  /** Receipts carry the actually credited value, including sub-point arrivals. */
+  notifyEssenceArrival(creditedValue: number, completionAgeMs = 0): void {
+    if (!Number.isFinite(creditedValue) || creditedValue <= 0) return;
+    const now = this.scene.time.now;
+    this.essenceArrival.recordArrival(creditedValue, now, completionAgeMs);
+    this.lastGraphicsSignature = '';
+    // The coordinator has already observed canonical HUD data this frame. Draw the new
+    // accent now without observing the resource a second time or delaying its fill.
+    this.render(now);
+  }
+
+  private essenceIncomingStrength(): number {
+    return this.essenceIncomingValue > 0 ? 0.25 + 0.35 * (1 - Math.exp(-this.essenceIncomingValue / 12)) : 0;
   }
 
   notifyAdrenalineInsufficientShot(): void {
@@ -343,6 +382,7 @@ export class PlayerStatusRing {
 
     if (nextAdrFrac > this.prevAdrFrac + 0.01) {
       this.adrBurstUntil = now + BURST_MS;
+      this.essenceArrival.recordGenericGain((nextAdrFrac - this.prevAdrFrac) * data.maxAdrenaline, now);
     }
 
     this.hpFrac = nextHpFrac;
@@ -471,6 +511,9 @@ export class PlayerStatusRing {
     const animated = warningFrac > 0.01
       || this.hpFlashUntil > now
       || this.adrBurstUntil > now
+      || this.essenceIncomingValue > 0
+      || this.essenceIncomingFadeUntil > now
+      || this.essenceArrival.until > now
       || this.adrenalineBoostActive
       || this.rageReady
       || this.hpTrailDelayUntil > 0;
@@ -480,7 +523,9 @@ export class PlayerStatusRing {
       | (this.isAdrenalineInsufficientForWeapon2() ? 8 : 0)
       | (warningFrac > 0.01 ? 16 : 0)
       | (this.hpFlashUntil > now ? 32 : 0)
-      | (this.adrBurstUntil > now ? 64 : 0);
+      | (this.adrBurstUntil > now ? 64 : 0)
+      | (this.essenceIncomingValue > 0 || this.essenceIncomingFadeUntil > now ? 128 : 0)
+      | (this.essenceArrival.until > now ? 256 : 0);
     const quantize = (value: number) => Math.round(clamp01(value) * 128);
     const signature = `${quantize(this.hpFrac)}:${quantize(this.hpTrailFrac)}:${quantize(this.adrFrac)}:${quantize(this.rageFrac)}:${quantize(this.armorFrac)}:${flags}`;
     if (signature !== this.lastGraphicsSignature || (animated && now >= this.nextAnimatedGraphicsAt)) {
@@ -520,6 +565,27 @@ export class PlayerStatusRing {
   }
 
   private drawEffectGlows(now: number, warningFrac: number, warningPulse: number, warningPunchFrac: number): void {
+    const incoming = Math.max(this.essenceIncomingStrength(),
+      this.essenceIncomingFadeStrength * clamp01((this.essenceIncomingFadeUntil - now) / 140));
+    if (incoming > 0.005) {
+      const shimmer = 0.78 + 0.22 * Math.sin(now * 0.012);
+      // Only the outer rim lights: an empty resource stays visibly empty during the flight.
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], 1,
+        RING_OUTER_RADIUS + 0.8, RING_OUTER_RADIUS + 3.2, ESSENCE_PALETTE.halo, incoming * shimmer * 0.34);
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], 1,
+        RING_OUTER_RADIUS + 1.2, RING_OUTER_RADIUS + 1.8, ESSENCE_PALETTE.light, incoming * shimmer * 0.43);
+    }
+    const essenceBurst = clamp01((this.essenceArrival.until - now) / BURST_MS);
+    if (essenceBurst > 0.005) {
+      const strength = 0.3 + 0.7 * (1 - Math.exp(-this.essenceArrival.value / 10));
+      const expansion = 5 * (1 - essenceBurst);
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], Math.max(this.adrFrac, 0.06),
+        RING_INNER_RADIUS - expansion * 0.4, RING_OUTER_RADIUS + 2 + expansion,
+        ESSENCE_PALETTE.halo, essenceBurst * strength * 0.4);
+      this.drawSegmentLayer(this.glowGraphics, SEGMENTS[0], Math.max(this.adrFrac, 0.06),
+        RING_INNER_RADIUS + 0.7, RING_OUTER_RADIUS + 0.7,
+        ESSENCE_PALETTE.light, essenceBurst * strength * 0.57);
+    }
     // Auf Canvas bzw. wenn Shader-Quads nicht verfuegbar sind, bleibt der bisherige
     // Polygon-Fallback aktiv. Im WebGL-Pfad liegt der permanente Ambient-Glow im livingQuad.
     if (!this.fillQuad) {
@@ -752,9 +818,11 @@ export class PlayerStatusRing {
   private syncSparks(now: number): void {
     this.sparkCursor = 0;
 
-    const adrBurst = clamp01((this.adrBurstUntil - now) / BURST_MS);
+    const essenceBurst = clamp01((this.essenceArrival.until - now) / BURST_MS);
+    const adrBurst = Math.max(essenceBurst, clamp01((this.adrBurstUntil - now) / BURST_MS));
     if (adrBurst > 0.01) {
-      this.placeEndpointSparks(SEGMENTS[0], this.adrFrac, PAL_ADR, 0.22 + adrBurst * 0.42, now, 3);
+      this.placeEndpointSparks(SEGMENTS[0], Math.max(this.adrFrac, essenceBurst > 0 ? 0.035 : 0),
+        essenceBurst > 0 ? PAL_ESSENCE : PAL_ADR, 0.22 + adrBurst * 0.42, now, 3);
     }
     if (this.adrenalineBoostActive) {
       this.placeEndpointSparks(SEGMENTS[0], Math.max(this.adrFrac, 0.08), PAL_ADR, 0.24, now + 190, 2);

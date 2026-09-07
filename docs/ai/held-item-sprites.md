@@ -30,6 +30,23 @@ Die zentrale Asset-Preload-Funktion lädt jede verwendete Textur höchstens einm
 
 Die visuelle Mündung wird aus Bildpose, Grip und Muzzle-Punkt berechnet. Eine Gameplay-Mündung erhält dagegen Ursprung und Winkel aus dem konkreten Fire-Request und darf nicht von einer lokalen Renderpose abhängen. Beide Pfade dürfen dieselbe Geometrie-Hilfe verwenden, aber nicht ihre Autorität vermischen.
 
+## Schuss-Feedback
+
+[`WeaponShotFeedbackEvent`](../../src/loadout/WeaponShotFeedbackEvent.ts) beschreibt eine erfolgreiche
+Player-Waffenaktivierung, unabhängig von Pellet- oder Folgeprojektilanzahl. Der Host publiziert
+Waffen-ID, Slot, Richtung und Sequenz über die World-geprüfte Shot-FX-Grenze. Die optionale
+Prediction-ID korreliert lokale Darstellung; sie ist weder ein Simulationstimestamp noch eine
+Treffer-ID. Bestätigte lokale Vorhersagen werden nicht erneut abgespielt. Sequenz-Baselines und
+Prediction-Marken gehören im [`WeaponFireFeedbackController`](../../src/effects/weapon/WeaponFireFeedbackController.ts)
+zur jeweiligen World; sie werden zusammen mit den laufenden Posen zurückgesetzt.
+
+[`HeldWeaponFeedbackModel`](../../src/effects/weapon/HeldWeaponFeedbackModel.ts) besitzt ausschließlich
+lokale Animationszeit. Das Held-Item sampelt die Pose relativ zum Griff; die World-Präsentation
+aktualisiert sie vor den angehängten GPU-Effekten auch bei stillstehenden Spielern. Mündungsfeuer
+liest die animierte Mündung über `OwnerVisualSource`, Gameplay liest weiterhin die unveränderte
+Fire-Request-Geometrie. Ein bestätigtes Schuss-Item darf einen noch hinterherhängenden Held-Slot
+kurzzeitig überbrücken; explizite lokale Auswahl beendet diesen Darstellungs-Override.
+
 ## Änderungen prüfen
 
 Bei einer Änderung an Pixelkarte, Grip, Muzzle, Mapping oder Lazy-Lifetime den passenden Test [HeldItemVisuals.test.ts](../../tests/HeldItemVisuals.test.ts) und die vorhandenen Loadout-/Fire-Tests prüfen. Die Art-Direction-Regeln stehen in [visual-guidelines.md](visual-guidelines.md).

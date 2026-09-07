@@ -226,7 +226,7 @@ export const KNOWN_WEAPON_CONFIG_FIELDS = new Set<string>([
   'projectileColor', 'projectileStyle', 'projectileVisualScale', 'bulletVisualPreset',
   'grenadeVisualPreset', 'energyBallVariant', 'projectileBurnVisualStyle',
   'rocketSmokeTrailColor', 'holdSpeedFactor', 'warmupSpeedMultiplier',
-  'shotRecoilForce', 'shotRecoilDuration', 'shotScreenShake', 'tracerConfig',
+  'shotRecoilForce', 'shotRecoilDuration', 'shotFeedbackProfile', 'tracerConfig',
   'showCrosshair', 'shotAudio', 'detonator', 'chainLightning', 'proximityPulse',
   'burnOnHit', 'awpCharge', 'negevKillstreak', 'ak47Focus', 'ak47ShotId',
   'ak47DamageMultiplier', 'ak47FireSuperiorityShot', 'scopeConfig', 'fire',

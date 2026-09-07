@@ -281,24 +281,25 @@ describe('HostPhysicsSystem Allocation Optimization', () => {
 
     system.setRunSpeedResolver(() => 100);
 
-    // Add recoil
-    system.addRecoil('player-1', 200, 100, 1000);
+    // Recoil captures wall-clock time; updates consume explicit host timestamps. Pin the
+    // creation instant so even a millisecond of test-runner scheduling cannot decay it early.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      system.addRecoil('player-1', 200, 100, 1000);
+      system.update(false, 1000);
 
-    system.update(false);
+      // Base movement (100, 0) + the full initial impulse (200, 100).
+      expect(player1.setVelocity).toHaveBeenCalledWith(300, 100);
 
-    // Base movement dx=1 * speed 100 = (100, 0) + impulse (200, 100) = (300, 100)
-    expect(player1.setVelocity).toHaveBeenCalledWith(300, 100);
+      system.setForcedMovement('player-1', -50, -50);
+      player1.setVelocity.mockClear();
+      system.update(false, 1250);
 
-    // Test forced movement
-    system.setForcedMovement('player-1', -50, -50);
-    player1.setVelocity.mockClear();
-
-    system.update(false);
-
-    // Forced movement (-50, -50) + decaying impulse
-    const call = player1.setVelocity.mock.calls[0];
-    expect(call[0]).toBeGreaterThan(-50);
-    expect(call[1]).toBeGreaterThan(-50);
+      // At one quarter of the duration the quadratic decay retains 0.75² of the impulse.
+      expect(player1.setVelocity).toHaveBeenCalledWith(62.5, 6.25);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('applies corner assistance only to the normal input path', () => {

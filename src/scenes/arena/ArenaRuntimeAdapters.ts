@@ -38,9 +38,11 @@ export function createArenaRuntimeDiagnosticsPort(
   getFlowFieldDebugPort: ArenaRuntimeDiagnosticsPort['getFlowFieldDebugPort'],
   getFlowFieldDiagnosticsPort: ArenaRuntimeDiagnosticsPort['getFlowFieldDiagnosticsPort'],
   getRockVisualDiagnostics: ArenaRuntimeDiagnosticsPort['getRockVisualDiagnostics'],
+  getAdrenalineEssence: ArenaRuntimeDiagnosticsPort['getAdrenalineEssence'] = () => null,
 ): ArenaRuntimeDiagnosticsPort {
   return {
     getChunkRenderingDiagnosticsState,
+    getAdrenalineEssence,
     setGroundSurfaceVisible,
     setRockOverlayVisible,
     setChunkSampling,
@@ -270,6 +272,18 @@ export function createWeaponBalanceLabWorldPort(
 ): WeaponBalanceLabWorldPort {
   return {
     getProjectileDiagnostics: () => flow.getWorldProjectileRuntime(),
+    getEssenceAccounting: () => {
+      const activity = flow.getAdrenalineEssence();
+      const diagnostics = activity?.runtime?.getDiagnostics();
+      return activity && diagnostics && activity.scope.activityRevision !== null ? {
+        worldRevision: activity.scope.worldRevision,
+        activityRevision: activity.scope.activityRevision,
+        authoredValue: diagnostics.authoredValue, materializedValue: diagnostics.materializedValue,
+        committedValue: diagnostics.committedValue, expiredValue: diagnostics.expiredValue,
+        placementFailedValue: diagnostics.placementFailedValue,
+        lifecycleDiscardedValue: diagnostics.lifecycleDiscardedValue,
+      } : null;
+    },
     isReady: () => {
       const playerGameplay = flow.getWorldPlayerGameplayRuntime();
       const enemyManager = flow.getCoopMissionRuntime()?.enemyManager;

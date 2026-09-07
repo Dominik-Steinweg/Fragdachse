@@ -1,4 +1,6 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
+import { PLAYER_MOVEMENT_VISUAL } from '../config/movementEffects';
+import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { playerHealthBarStyle } from '../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
 import type { BurrowPhase, GroundFireVisualStyle, PlayerProfile } from '../types';
@@ -120,6 +122,10 @@ export class PlayerEntity {
   private isAliveVisual = true;
   private baseVisible = true;
   private walkingRequested = false;
+  private movementDashPhase: 0 | 1 | 2 = 0;
+  private movementRevision = 0;
+  /** Decaying teleport offset, separate from the normal interpolation lag while walking. */
+  private movementCorrectionRemaining = 0;
 
   /**
    * Grundskalierung des Spielersprites: Die Walking-Textur ist in 64-px-Zellen authored, die
@@ -379,20 +385,33 @@ export class PlayerEntity {
    * Loadout-Item, das die Figur sichtbar in den Pfoten haelt. `null` blendet es aus.
    * Darf jeden Frame gerufen werden; ein unveraenderter Wert kostet nichts.
    */
-  setHeldItemId(itemId: string | null): void {
-    this.heldItem?.setItem(itemId);
+  setHeldItemId(itemId: string | null, force = false): void {
+    this.heldItem?.setItem(itemId, force);
     this.syncHeldItem();
+  }
+
+  playHeldWeaponShot(itemId: string, profile: import('../config/weaponFeedback').WeaponFeedbackProfile): 'started' | 'refreshed' | null {
+    if (!this.sprite?.visible || !this.isAliveVisual || this.burrowPhase !== 'idle') return null;
+    const result = this.heldItem?.playShot(itemId, profile) ?? null;
+    this.syncHeldItem();
+    return result;
+  }
+
+  updateHeldWeaponFeedback(): void { this.syncHeldItem(); }
+  stopHeldWeaponSustain(): void { this.heldItem?.stopSustained(); }
+  resetHeldWeaponFeedback(): void { this.heldItem?.resetFeedback(); this.syncHeldItem(); }
+  readHeldWeaponPose(out: import('./OwnerVisualSource').OwnerHeldWeaponPose): boolean {
+    return this.heldItem?.readWeaponPose(out) ?? false;
   }
 
   /** Weltkoordinate des registrierten Waffen-Mündungs-Punkts, sofern das Item einen Sprite hat. */
   getHeldItemMuzzleOrigin(): { x: number; y: number } | null {
     if (!this.sprite) return null;
-    // Position und Ausrichtung kommen aus der Runtime, nicht aus dem Bild: sonst haengt der
-    // Muendungspunkt an der Nachfuehrung der Darstellung statt am tatsaechlichen Ort.
+    // Reine Presentation: dieselbe Pose wie Image und angehaengtes Muendungsfeuer.
     return this.heldItem?.getMuzzleOrigin(
-      this.runtime.x,
-      this.runtime.y,
-      this.runtime.rotation,
+      this.sprite.x,
+      this.sprite.y,
+      this.sprite.rotation,
       this.sprite.displayWidth,
     ) ?? null;
   }
@@ -410,8 +429,28 @@ export class PlayerEntity {
     this.syncWalkingAnimation();
   }
 
+  setMovementDashPhase(phase: 0 | 1 | 2): void { this.movementDashPhase = phase; }
+
+  /** Project the final render pose without allocating or exposing the gameplay owner. */
+  readMovementVisualSample(out: MovementVisualSample): void {
+    out.id = this.id;
+    out.x = this.sprite?.x ?? this.x; out.y = this.sprite?.y ?? this.y;
+    out.facing = this.getAimAngle();
+    out.size = PLAYER_SIZE;
+    out.pawCount = PLAYER_MOVEMENT_VISUAL.pawCount;
+    out.footprint = PLAYER_MOVEMENT_VISUAL.footprint;
+    out.player = true;
+    out.visible = !!this.sprite?.visible && this.isAliveVisual && !this.isDecoyStealthed
+      && this.burrowPhase === 'idle' && this.movementCorrectionRemaining < PLAYER_SIZE * 0.3;
+    out.mode = this.movementDashPhase === 1 ? 'dash' : this.movementDashPhase === 2 ? 'recovery'
+      : this.walkingRequested ? 'walk' : 'idle';
+    out.revision = this.movementRevision;
+  }
+
   /** Sprite + Physik-Body + HP-Balken positionieren (Host: Respawn). */
   setPosition(x: number, y: number): void {
+    this.movementRevision++;
+    this.movementCorrectionRemaining = 0;
     this.targetX = x;
     this.targetY = y;
     this.runtime.setPosition(x, y);
@@ -433,6 +472,11 @@ export class PlayerEntity {
    * Nicht auf dem Host aufrufen – dort gilt setPosition().
    */
   setTargetPosition(x: number, y: number): void {
+    const correction = Math.hypot(x - this.targetX, y - this.targetY);
+    if (correction > PLAYER_SIZE * 4) {
+      this.movementRevision++;
+      this.movementCorrectionRemaining = correction;
+    }
     this.targetX = x;
     this.targetY = y;
   }
@@ -443,6 +487,7 @@ export class PlayerEntity {
    * @param factor Interpolationsfaktor 0–1 (z. B. 0.2 für weiche Bewegung)
    */
   lerpStep(factor: number): void {
+    this.movementCorrectionRemaining *= Math.max(0, 1 - factor);
     this.runtime.moveTo(
       Phaser.Math.Linear(this.runtime.x, this.targetX, factor),
       Phaser.Math.Linear(this.runtime.y, this.targetY, factor),
@@ -592,6 +637,7 @@ export class PlayerEntity {
     this.applyDisplayVisibility();
 
     if (!visible && this.isAliveVisual) {
+      this.resetHeldWeaponFeedback();
       // Übergang alive → dead: der Death-Event enthält den bereits erfassten Sprite-Frame.
       this.isAliveVisual = false;
     } else if (visible && !this.isAliveVisual) {
@@ -695,6 +741,7 @@ export class PlayerEntity {
     if (!changed && !animate) return;
 
     this.burrowPhase = phase;
+    if (phase !== 'idle') this.resetHeldWeaponFeedback();
 
     if (changed && (phase === 'underground' || phase === 'trapped')) {
       this.stopBurrowTween(true);

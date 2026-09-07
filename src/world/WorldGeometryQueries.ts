@@ -30,6 +30,8 @@ export interface WorldGeometryQueries {
   ): boolean;
   /** Circle clearance query for mechanics such as Burrow exit placement. */
   isCircleBlocked(x: number, y: number, radius: number): boolean;
+  /** Bounded deterministic ground placement. Null means invalid geometry, never a renderer fallback. */
+  resolveSafeGroundPoint(x: number, y: number, radius: number): { x: number; y: number } | null;
   resolveSafeGameplayMuzzle(
     shooterX: number,
     shooterY: number,
@@ -67,6 +69,35 @@ export function createWorldGeometryQueries(input: WorldGeometryQueryInput): Worl
     return { geometry, line: line!, expandedTrain: expandedTrain! };
   };
   const active = (): boolean => input.isActive?.() !== false;
+
+  const resolveSafeGroundPoint = (x: number, y: number, radius: number): { x: number; y: number } | null => {
+    if (!active() || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius) || radius < 0) return null;
+    const { offsetX, offsetY, widthPx, heightPx } = input.metrics;
+    if (widthPx < radius * 2 || heightPx < radius * 2) return null;
+    const cx = Math.max(offsetX + radius, Math.min(offsetX + widthPx - radius, x));
+    const cy = Math.max(offsetY + radius, Math.min(offsetY + heightPx - radius, y));
+    const train = input.getTrainBounds?.();
+    const valid = (px: number, py: number): boolean => (
+      px >= offsetX + radius && px <= offsetX + widthPx - radius
+      && py >= offsetY + radius && py <= offsetY + heightPx - radius
+      && !input.index.isCircleBlocked(px, py, radius)
+      && !(train && px + radius >= train.x && px - radius <= train.x + train.width
+        && py + radius >= train.y && py - radius <= train.y + train.height)
+    );
+    if (valid(cx, cy)) return { x: cx, y: cy };
+    // Fixed radial order and finite work; do not turn malformed layouts into a persistent retry job.
+    for (let ring = 1; ring <= 16; ring++) {
+      const distance = ring * 16;
+      const samples = Math.min(32, ring * 8);
+      for (let sample = 0; sample < samples; sample++) {
+        const angle = sample * Math.PI * 2 / samples;
+        const px = cx + Math.cos(angle) * distance;
+        const py = cy + Math.sin(angle) * distance;
+        if (valid(px, py)) return { x: px, y: py };
+      }
+    }
+    return null;
+  };
 
   const getTrainHit = (
     startX: number,
@@ -136,6 +167,7 @@ export function createWorldGeometryQueries(input: WorldGeometryQueryInput): Worl
     metrics: input.metrics,
     prepare: () => { if (active()) input.index.prepare(); },
     getWorldMetrics: () => input.metrics,
+    resolveSafeGroundPoint,
     hasLineOfSight: (startX, startY, endX, endY, options = {}) => (
       !active() || ensureGeometry().geometry.hasLineOfSight(startX, startY, endX, endY, options)
     ),

@@ -501,9 +501,24 @@ export class LightingSystem {
     light.releasedAt = 0;
   }
 
-  releaseLight(key: string): void {
+  /** Immediate release also removes an already fading source, for visibility/lifetime changes. */
+  releaseLight(key: string, options?: { readonly immediate?: boolean }): void {
     const light = this.keyed.get(key);
-    if (!light || light.releasedAt > 0) return;
+    if (!light) return;
+    if (options?.immediate) {
+      this.keyed.delete(key);
+      this.releaseExplosionCache(light);
+      const index = this.lights.indexOf(light);
+      if (index >= 0) {
+        this.lights[index] = this.lights[this.lights.length - 1];
+        this.lights.pop();
+      }
+      const queuedIndex = this.renderQueue.indexOf(light);
+      if (queuedIndex >= 0) this.renderQueue.splice(queuedIndex, 1);
+      this.pool.push(light);
+      return;
+    }
+    if (light.releasedAt > 0) return;
     light.releasedAt = this.now();
   }
 

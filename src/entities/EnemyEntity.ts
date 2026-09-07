@@ -1,4 +1,6 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
+import { getEnemyFootprintVariant } from '../config/movementEffects';
+import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { enemyHealthBarStyle } from '../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
 import { GenericWeapon } from '../loadout/GenericWeapon';
@@ -118,6 +120,9 @@ export class EnemyEntity {
   /** Walking-Sheet dieser Gegnerart, oder `null` fuer eine statische Darstellung. */
   private readonly walkingSheet: WalkingSheet | null;
   private walkingRequested = false;
+  private movementRevision = 0;
+  /** Decaying teleport offset, separate from the normal interpolation lag while walking. */
+  private movementCorrectionRemaining = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -186,6 +191,8 @@ export class EnemyEntity {
   }
 
   setPosition(x: number, y: number): void {
+    this.movementRevision++;
+    this.movementCorrectionRemaining = 0;
     this.targetX = x;
     this.targetY = y;
     this.sprite.setPosition(x, y);
@@ -196,6 +203,11 @@ export class EnemyEntity {
   }
 
   setTargetPosition(x: number, y: number): void {
+    const correction = Math.hypot(x - this.targetX, y - this.targetY);
+    if (correction > this.config.size * 4) {
+      this.movementRevision++;
+      this.movementCorrectionRemaining = correction;
+    }
     this.targetX = x;
     this.targetY = y;
   }
@@ -248,6 +260,20 @@ export class EnemyEntity {
     this.syncWalkingAnimation();
   }
 
+  readMovementVisualSample(out: MovementVisualSample): void {
+    out.id = this.id;
+    out.x = this.sprite.x; out.y = this.sprite.y;
+    out.facing = this.getAimAngle();
+    out.size = this.config.size; out.pawCount = this.config.pawCount;
+    out.footprint = getEnemyFootprintVariant(this.kind);
+    out.player = false;
+    out.visible = this.sprite.visible && this.currentHp > 0 && !this.burrowed
+      && this.movementCorrectionRemaining < this.config.size * 0.3;
+    out.mode = this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
+      : this.walkingRequested ? 'walk' : 'idle';
+    out.revision = this.movementRevision;
+  }
+
   /**
    * Client-Ableitung der Laufanimation: Der Gegner laeuft, solange die Interpolation noch
    * spuerbar hinter der replizierten Zielposition liegt. Der Host setzt stattdessen direkt
@@ -268,6 +294,7 @@ export class EnemyEntity {
 
   lerpStep(factor: number): void {
     if (this.authoritative) return;
+    this.movementCorrectionRemaining *= Math.max(0, 1 - factor);
     this.sprite.x = Phaser.Math.Linear(this.sprite.x, this.targetX, factor);
     this.sprite.y = Phaser.Math.Linear(this.sprite.y, this.targetY, factor);
     const diff = Phaser.Math.Angle.Wrap(this.targetAimAngle - this.currentAimAngle);

@@ -1,8 +1,8 @@
 # Fragdachse – Adrenalin-Essenz Implementation Plan
 
-**Status:** Überarbeiteter Umsetzungsplan nach abgeschlossenem Designreview (GDD § 22.1). Keine Implementierungsfreigabe: Umsetzung erst mit gesondertem Folgeauftrag.
+**Status:** P1–P5 durch ausdrücklichen Folgeauftrag vollständig autorisiert und integriert; Sichtprüfung ausdrücklich ausgeschlossen. Der folgende Implementierungsstand trennt automatisierte Nachweise von offenen manuellen Nachweisen.
 
-**Fachliche Grundlage:** [Adrenalin-Essenz GDD](Fragdachse_Adrenalin_Essenz_GDD_v2_1.md), Dokumentversion 2.2
+**Fachliche Grundlage:** [Adrenalin-Essenz GDD](Fragdachse_Adrenalin_Essenz_GDD_v2_1.md), Dokumentversion 2.5 vom 08.09.2026
 
 **Architekturgrundlagen:** Combat Runtime, Gameplay Runtime und Projectile Runtime Architecture Core/Details im Repository
 
@@ -18,6 +18,76 @@
 
 ## 1. Ziel und Arbeitsweise
 
+### Umsetzungsstand vom 08.09.2026
+
+**Dreifachstreuung:** Die [autoritative Runtime](../../../src/adrenalineEssence/AdrenalineEssenceRuntime.ts) erzeugt pro berechtigtem Treffer standardmäßig drei getrennt sammelbare Beiträge. Seed-basierte Richtungen liegen ungefähr 120° auseinander, je Richtung höchstens ±10°, bei 30–45 px Radius. Erst nach der begrenzten Geometrieprüfung wird der vollständige Wert auf unterschiedliche gültige Punkte verteilt; der letzte Beitrag erhält den rechnerischen Rest. Teilweise fehlende Punkte verlieren keinen Wert. Reward-, Basis- und Attributionszähler bleiben einmalig; die vorhandenen Merge-, Ablauf- und Rückgaberegeln gelten für jeden Beitrag.
+
+**Flüssigkeitsmaterial und Licht:** [AdrenalineEssenceLiquidFrames](../../../src/adrenalineEssence/AdrenalineEssenceLiquidFrames.ts) erzeugt drei organische Körpervarianten mit je acht Phasen und einen Flüssigkeitsschwanz im gemeinsamen GPU-Atlas. Zwei gepoolte Body-/Glow-Layer zeigen kleine cyanblaue Perlen mit weichen Reflexen, Landungsimpuls, ruhiger Formbewegung und gestrecktem Magnetflug. [AdrenalineEssenceLighting](../../../src/adrenalineEssence/AdrenalineEssenceLighting.ts) bündelt deren tatsächliche Darstellungspositionen in 64-px-Zellen. High/Medium/Low besitzen einschließlich Ausblenden höchstens 12/8/4 Quellen, 64–80 px Radius und 0,2–0,4 Intensität; der bestehende Lichtpfad übernimmt Tageszeitdämpfung ohne eigene Schattenberechnung. Zugriffswechsel und Teardown entfernen auch ausblendende Quellen sofort. Ruhende Perlen aktualisieren Licht unabhängig von der GPU-Taktung.
+
+**Ressourcen- und Netzwerkvertrag:** Erfolgreiche Resource-Commits verbrauchen den vollständigen zugelassenen Transaktionsbetrag; Subtraktion gerundeter Gesamtsummen erzeugt keine zusätzlichen Resttropfen. Echte unbestätigte Kleinstwerte bleiben erhalten. Fragmente benutzen vorhandene Cluster-/Transferdaten mit unverändertem Essenz-Wire-Codec 2; zusätzliche Pickup-Anfragen oder Lichtdaten werden nicht übertragen. Der aktuelle Repository-Stand verwendet Peer-Protokoll 13. Die Essenz-Erweiterung benötigt selbst keine weitere Protokollanhebung.
+
+**Prüfstand dieses Folgeauftrags:** Gezielte Regressionen für Streuung, genaue Bruchteile, reale Glock-/Lobby-Pfade, Materialdaten und Licht-Lifetime wurden ergänzt. `npm run check` bestand mit 347 Core-Testdateien / 2978 Tests, 6 Architekturdateien / 33 Tests und Produktionsbuild. Zusätzlich bestanden die vollständigen Suiten für Integration (21 Dateien / 292 Tests), Assets (5 / 50), Balance Lab (15 / 96) und seriell ausgeführten Stress (10 / 48). Der abschließende Integrationslauf berücksichtigt auch zwischenzeitlich abgeschlossene parallele Änderungen am Waffenfeedback. Links, referenzierte Symbole und `git diff --check` wurden geprüft. Es wurde kein Browser gestartet und keine Sichtprüfung durchgeführt; die optische Wirkung bleibt bis zum nächsten Spieltest unbestätigt.
+
+**Aktueller Lastvergleich:** `npm run test:stress -- --maxWorkers=1 --no-file-parallelism` vergleicht einen Teilwert mit produktiver Dreifachstreuung bei identischen 6000 Reward-Fakten, zwölf Spielern, 20 simulierten Sekunden und Seeds 17/311/8191. Das synthetische Feld misst 1600 × 800 px, die Netzwerkrate beträgt 20 Hz. Die serielle Ausführung vermeidet konkurrierende Suite-Last; sie ist kein GPU- oder FPS-Nachweis.
+
+| Messgröße | Ein Teilwert | Drei Teilwerte |
+|---|---:|---:|
+| Domain-Update p95, ohne Rendering/Wire-Encoding | 1,922–2,014 ms | 5,488–6,700 ms |
+| Spitzenbestand Cluster | 1663–1721 | 4304–4438 |
+| `ae` pro Sekunde und Empfänger, dezimale MB | 0,529–0,570 | 1,383–1,481 |
+| Full-Snapshot, dezimale kB | 267,6–275,5 | 706,4–731,2 |
+
+Die Dreifachstreuung benötigt in diesem Extremprofil 2,57–2,61-mal so viele Wire-Bytes. Transport-Overhead ist nicht enthalten; Host-Gesamttraffic wächst zusätzlich mit der Empfängerzahl. Der kompakte Codec spart weiterhin 60,3–61,5 % gegenüber der lesbaren Projektion. Die hohe Bandbreitenanforderung bleibt ausdrücklich sichtbar; Gameplaywert oder Kernperlen werden nicht zur Lastsenkung verworfen.
+
+### Historischer Umsetzungsstand vom 07.09.2026
+
+**Nachbesserung nach Spieltest:** Gültige Glock-Treffer auf Gegner wurden durch einen falschen Scope-Vergleich im neutralen Reward-Guard verworfen. Gegner und Decoys besitzen private Target-Owner-Scopes, die nicht mit der World-Combat-Generation übereinstimmen müssen. Die Reward-Projektion prüft jetzt den eingefrorenen Source-Scope gegen den aktuellen Combat-Owner und die aktuelle Reward-Bindung; die Prüfung des bestätigten Target-Outcomes bleibt beim Target-Owner. Neue [Cutover-Integrationstests](../../../tests/integration/AdrenalineEssenceCombatCutover.test.ts) verwenden die tatsächlich geladene Glock, Player-Aktivierung, Projectile-Collision und reale Enemy-/Decoy-Owner mit abweichenden Kennungen. Der Gegnerfall wurde vor dem Fix mit erfolgreichem Schaden, aber fehlendem Reward reproduziert.
+
+Zusätzlich hat der Nutzer Essenz ausdrücklich für die begehbare Lobby-Testfläche bestätigt. [AdrenalineEssenceBinding](../../../src/adrenalineEssence/AdrenalineEssenceBinding.ts) wird dort nach der World-Gameplay-Komposition als Child der bestehenden Lobby-World eingerichtet, mit `activityRevision: null` und echter `worldRevision`. Das legt keine Activity an und verändert keine Match-/Score-/XP-Regeln. Der jeweilige Modus bestimmt den Zugriff; ein World-/Moduswechsel beendet den gesamten Bestand. Andere Worlds ohne Activity erhalten weiterhin keinen solchen Owner. Wire-Codec 2 und Peer-Protokoll 12 tragen diesen Scope ausdrücklich; alte Clients müssen denselben Build laden.
+
+Die frühere hohe Zahl bestandener Tests war kein ausreichender End-to-End-Nachweis: Einige Tests hatten fertige Reward-Intents oder künstlich gleiche Target-/Combat-Scopes eingesetzt. Ergänzt wurden deshalb Prüfungen über die Produktionsübergänge, das tatsächliche Lobby-Coordinator-Binding, echte Map-1-/DM-Geometrie und den installierten Phaser-Member-Encoder. Eine Sichtprüfung ist weiterhin nicht beauftragt.
+
+Der Implementierungsdurchlauf begann mit sauberem Arbeitsbaum bei `8b9b637202b58b34c854c0d47f8e8ef55f232ee1` (`HitFeedback V3`). Der ausdrückliche Folgeauftrag umfasst alle Phasen und untersagt die Sichtprüfung. Damit sind die ursprüngliche Beschränkung auf eine Phase und die Wartebedingung auf das manuelle Combat-Gate `M` für diesen Durchlauf aufgehoben. Die weiter unten beschriebenen fachlichen Invarianten und technischen Gates bleiben maßgeblich.
+
+| Phase | Implementierung |
+|---|---|
+| P1 | Neutraler [PrimaryHitReward-Vertrag](../../../src/combat/PrimaryHitReward.ts), getrennte Resolve-/Commit-Resource-Ports, Activity-Child-Lifetime in allen Modi und sichere Bodenpunktsuche. |
+| P2 | [Autoritative Runtime](../../../src/adrenalineEssence/AdrenalineEssenceRuntime.ts) mit räumlichen Indizes, festen Merge-Ankern, Ablauf pro Beitrag, Fraktionen, Reservierungen, parallelen Transfers, erneuter Arrival-Validierung und werttreuen Rückgaben. Alle bisherigen berechtigten Primärtrefferpfade sind umgestellt. |
+| P3 | Activity-/World-gebundene Snapshots, versionierter kompakter Wire-Codec, Delta-Revisionskette mit periodischen Full-Snapshots, passive Client-Replica und vom Resource-State unabhängige Receipts. Die damalige Peer-Protokollversion 12 verhinderte Mischbetrieb mit älteren Clients. |
+| P4 | Zwei gepoolte GPU-Layer aus dem vorhandenen Atlas; Ausstoß, Bodenperlen, Merge, beschleunigter Magnetflug, Rückgabe, Ablauf, Quality-/Dichteanpassung sowie explizites HUD-Feedback für Fraktionen und gebündelte Ankünfte. |
+| P5 | Lifecycle-/Reentranz-Härtung, Paketverlust-/Resync-Tests, Brutto-Reward-Messung im Balance Lab, Gameplay-/Netzwerk-/GPU-Diagnosen und reproduzierbare Headless-Stressmessung. |
+
+Der Activity-Slot besitzt im Match das [AdrenalineEssenceBinding](../../../src/adrenalineEssence/AdrenalineEssenceBinding.ts), im Testgelände besitzt es die Lobby-World; Scene und Coordinators verdrahten ausschließlich Ports und Taktung. Gameplay-Tuning liegt in [AdrenalineEssenceConfig](../../../src/adrenalineEssence/AdrenalineEssenceConfig.ts), visuelles Tuning in [AdrenalineEssencePresentation](../../../src/adrenalineEssence/AdrenalineEssencePresentation.ts). Ein Cluster besitzt auch bei reduzierter Qualität eine sichtbare Kernperle. Die Darstellung verwendet keine eigenen Physikkörper oder pro Tropfen angelegten GameObjects.
+
+**Netzwerkvertrag:** Deltas führen Upserts und Tombstones; eine fehlende Basisrevision wartet auf das nächste Full. Full-Snapshots erscheinen mindestens jede Sekunde und bei Bootstrap-Anforderung. Kurzlebige Receipts werden zur Verlusttoleranz wiederholt und dedupliziert. Ein neuer Empfänger setzt beim ersten Full eine historische Grenze; ein bereits aktiver Empfänger darf nach einem periodischen Full noch einen ungesehenen aktuellen Receipt empfangen. Resource-Revisionen werden sofort übernommen, kosmetische Bestätigungen warten höchstens innerhalb ihres kurzen Darstellungsfensters. Beträge werden nicht gerundet.
+
+**Cutover-Inventar:** Bisheriger Empfänger war der erzeugende Spieler (einzelne Projektilpfade verwendeten abweichend Allegiance); neu gilt die vollständige Reward-Attribution einschließlich Reflection. Keine Auszahlung wird aus einem bloß akzeptierten, aber wirkungslosen Treffer abgeleitet.
+
+| Pfad | Ziel / Komponenten | Behandlung |
+|---|---|---|
+| Projectile-Direkttreffer | Player, Enemy, Decoy; authored Primärtreffer-Gain | Essenz nach positivem HP-/Rüstungsschaden. |
+| Hitscan und authored Hitscan-Kette | Player, Enemy, Decoy; jeweiliger Primärtreffer-Gain pro gültigem Ziel | Essenz; Ketten tragen die Aktivierungsbasis weiter. |
+| Melee | Player, Enemy, Decoy; Basisreward, zusätzliche `hitAdrenaline`-Komponente nur in den dafür bisher berechtigten Player-/Enemy-Zweigen | Komponenten werden einmal zusammen aufgelöst und materialisiert. |
+| Hydra-Kinder / Reflection | Ererbter Reward-Anteil beziehungsweise neue zugerechnete Erzeugerbasis | Kein zweiter Parent-Reward; Reflection ersetzt die Gain-Basis. |
+| Utility-/sekundäre Chains, Plasma-Swarm und nicht berechtigte Support-Effekte | Kein expliziter berechtigter Primärtreffer-Intent | Keine neue Essenz durch Heuristiken zu Typ, Slot oder Farbe. |
+| Damage-taken-, Kill-, Weapon-Kill- und Detonation-Combo-Rewards | Unabhängige Ressourcenquellen | Weiterhin direkt über den Resource-Owner. |
+| Refunds und Kostenrückgaben | Rückzahlung einer Ausgabe | Bestehende Refund-Semantik; keine Essenz. |
+| Balance-/Headless-Modelle | Deterministische Waffen-Bruttobalance | Gross-Reward ausdrücklich von beobachtetem Resource-Gain getrennt; kein Produktionsbypass. |
+
+**Historischer Prüflauf der Erstimplementierung:** `npm run check` bestand mit 338 Testdateien / 2886 Tests, 6 Architekturdateien / 33 Tests und Produktionsbuild. Zusätzlich bestanden Integration 19 / 274, Assets 4 / 44, Stress 9 / 47 und Balance Lab 15 / 96. Diese Zahlen belegen nicht den damals übersehenen Gegnerpfad; maßgeblich für die Nachbesserung sind die oben genannten reproduzierenden Produktionsketten und der erneute Abschlusslauf. Die Netzwerk-Integration prüft Full, Auslassung, Delta-Tombstones und explizites Leeren durch die echte `NetworkBridge` mit dem vorhandenen Fake-Peer-Transport.
+
+**Historischer Abschlusslauf der Nachbesserung vom 07.09.2026:** `npm run check` einschließlich Produktionsbuild, `npm run test:integration`, `npm run test:stress` und `npm run test:balance-lab` bestanden erneut. Der [Lobby-Composition-Test](../../../tests/integration/CoopMissionCombatStartup.test.ts) führt die echte Coordinator-Anbindung mit Glock-Aktivierung, Projektilkollision, Essenzmaterialisierung, Sammlung, Ressourcengutschrift, HUD-Signal und World-Teardown aus; die Einhängung dieses Bindings in `buildWorld` wurde zusätzlich im Code geprüft. [Produktive Map-Geometrie](../../../tests/integration/AdrenalineEssenceWorldGeometry.test.ts) und der [installierte Phaser-GPU-Encoder](../../../tests/AdrenalineEssencePhaserGpuContract.test.ts) sichern Platzierung und technische Renderdaten ab. Zusätzliche fokussierte Tests sichern alte World-/Runtime-Intents sowie die [Lobby-Netzwerkstrecke](../../../tests/WorldChannelContracts.test.ts) mit echten Full-/Delta-Paketen, Paketverlust und Late Join ab. Diese Prüfungen erzeugen keine Bildabnahme.
+
+Das Balance Lab misst lokale Brutto-Reward-Fakten, Resource-Gains und Verbrauch getrennt. Seine zusätzliche, ausdrücklich Activity-weite Messfenster-Bilanz führt Materialisierung, tatsächliche Sammlung, Verfall, Platzierungsfehler und Lifecycle-Verluste mit. Ein Activity-Wechsel verwirft die Vergleichsbasis; Warmup und Settle werden nicht als neue Messfenster-Erträge gezählt.
+
+**Nachweisgrenze:** Es wurde kein Browser, Dev-Server oder Screenshot gestartet. Manuelles Combat-`M`, visuelle P4-/P5-Abnahme, tatsächliche GPU-/Framezeiten und ein optischer Vergleich bleiben ungeprüft. Headless-CPU-/Wire-Messungen ersetzen diese Nachweise nicht. Es wird keine nachträglich passend gewählte FPS- oder Netzwerkbudgetfreigabe behauptet.
+
+**Historische Lastmessung vor Dreifachstreuung:** [AdrenalineEssenceStress.test.ts](../../../tests/stress/AdrenalineEssenceStress.test.ts) verwendete zwölf Spieler, 300 verteilte Reward-Fakten/s, je 20 simulierte Sekunden für Seeds 17/311/8191 und die produktive Netzwerkrate von 20 Hz. Das synthetische Feld ist 1600 × 800 px groß und enthält streifenförmige Sichtbarrieren; es ist keine vermessene Gameplay-Map. Umgebung: Windows x64, Node 24.14.0, Ryzen 7 5800X, 16 logische CPUs, 32 GiB RAM. Im damaligen Stresslauf lagen Update-Median/p95 bei 1,16–1,53 / 2,15–2,87 ms, Spitzenbestand bei 1650–1737 Clustern und 79–101 Transfers. Dies misst den Domain-Update einschließlich Kandidatenwahl, ohne Rendering und Wire-Encoding; die Phasen-CPU-Zähler weisen Materialisierung separat aus.
+
+Der damalige `ae`-Slice benötigte in diesem Extremprofil 10,42–11,34 MB je 20 Sekunden und Empfänger (etwa 521–567 kB/s), ein Full 256–267 kB. Das kompakte Format sparte bei identischer Sendefolge 61,8–63,1 % gegenüber den lesbaren Domain-Objekten. Neue Receipts erscheinen weiterhin sofort beim nächsten Net-Tick, Wiederholungen höchstens alle 200 ms. Diese historischen Werte beschreiben nicht die Kosten der Dreifachstreuung. Host-Gesamttraffic wächst mit der Empfängerzahl; Werte, Kernperlen oder Fraktionen dürfen dafür nicht verworfen werden.
+
+### Ursprünglicher Phasenschnitt
+
 Die Adrenalin-Essenz wird nicht als kleiner Pickup-Patch umgesetzt, sondern als neue Activity-gebundene Gameplay-Domain zwischen bestätigtem Combat-Outcome und bestehender Player-Ressource.
 
 Die Umsetzung erfolgt in fünf aufeinander aufbauenden Phasen:
@@ -30,7 +100,7 @@ Die Umsetzung erfolgt in fünf aufeinander aufbauenden Phasen:
 
 P1–P3 dürfen kontrolliert unvollständige Zwischenstände erzeugen. Spätestens nach P3 muss die Mechanik funktional auf Host und Client darstellbar sein. **P4 hebt die Darstellung ausdrücklich auf Zielqualität. P5 ist kein Ersatz für fehlendes Visual Polish.**
 
-Ein Coding-Agent bearbeitet standardmäßig genau eine Phase. Vor einer Folgephase wird der Diff gegen GDD, diesen Plan und das Phasen-Gate geprüft. Architekturentscheidungen werden nicht während späterer Phasen still neu erfunden.
+Ein Coding-Agent bearbeitet ohne weitergehenden Auftrag standardmäßig genau eine Phase. Für den dokumentierten vollständigen Folgeauftrag gilt die Freigabe aller Phasen oben. Vor einer Folgephase wird der Diff gegen GDD, diesen Plan und das Phasen-Gate geprüft. Architekturentscheidungen werden nicht während späterer Phasen still neu erfunden.
 
 Die Phasen sind Arbeitsschnitte, keine unabhängig veröffentlichbaren Releases. P2 ohne P3 entfernt den sofortigen Gain, besitzt aber noch keine vollständige sichtbare Belohnungskette. Ein solcher Zwischenstand darf nicht als spielbares fertiges Feature veröffentlicht werden. Eine phasenweise Implementierung beginnt erst nach dem ausdrücklichen Folgeauftrag.
 
@@ -43,7 +113,7 @@ Diese Regeln gelten in jeder Phase:
 - Nur der Host materialisiert Essenz, wählt Sammler, reserviert Wert und bestätigt Ankunft.
 - Player-Adrenalin bleibt ausschließlich beim bestehenden Resource-Owner kanonisch.
 - `WorldCombatCore` besitzt keinen Essenz-State.
-- Der fachliche Essenz-State besitzt **Activity-Lifetime**, nicht Scene- oder World-Lifetime.
+- Der fachliche Essenz-State besitzt im Match **Activity-Lifetime**; ausschließlich im ausdrücklich unterstützten Lobby-Testgelände besitzt er die Lifetime der Lobby-World. Eine fehlende Activity allein aktiviert keine Essenz.
 - `activityRevision` und `worldRevision` sind Bestandteil jeder langlebigen oder replizierten Essenz-Identität.
 - Kein sichtbarer Tropfen besitzt ein eigenes Netzwerkobjekt oder einen Physikkörper.
 - Kein Renderer, HUD oder Client darf Gameplaywert mutieren.
@@ -145,7 +215,7 @@ Dies sind semantische Signaturskizzen, keine vorhandenen APIs. `AdrenalineGainBa
 
 `refundAdrenaline` bleibt ausschließlich Refund-Semantik.
 
-### 4.4 Activity-owned Essence Runtime
+### 4.4 Activity- beziehungsweise Lobby-World-owned Essence Runtime
 
 Bevorzugter fachlicher Owner:
 
@@ -153,7 +223,7 @@ Bevorzugter fachlicher Owner:
 AdrenalineEssenceRuntime
 ```
 
-Er besitzt ausschließlich innerhalb genau einer Activity:
+Er besitzt innerhalb genau eines berechtigten Owners (Match-Activity oder ausdrücklich unterstützte Lobby-World):
 
 - Reward-Beiträge / Expiry-Buckets;
 - Cluster;
@@ -172,7 +242,7 @@ Er konsumiert schmale Capabilities für:
 - Relationship/Mode-Policy;
 - Replikationsprojektion.
 
-Er wird bei Activity-Attach erzeugt bzw. tokenisiert gebunden und bei Activity-Detach **idempotent vollständig zerstört**. `HostUpdateCoordinator` und `ArenaLifecycleCoordinator` dürfen verdrahten/ticken, aber keinen fachlichen Essenz-State übernehmen.
+Er wird an diesen Owner gebunden und bei dessen Detach **idempotent vollständig zerstört**. `HostUpdateCoordinator` und `ArenaLifecycleCoordinator` dürfen verdrahten/ticken, aber keinen fachlichen Essenz-State übernehmen.
 
 ### 4.5 World-Geometrie
 
@@ -182,7 +252,7 @@ Semantische Anforderungen:
 
 - innerhalb World-Bounds;
 - Blocker beachten;
-- deterministischer Seed;
+- bereits vom Domain-Owner deterministisch gestreute Kandidaten;
 - nächster zulässiger Fallback;
 - kein Wertverlust im regulären Ablauf; bei unerwartet erfolgloser begrenzter Fallbacksuche Diagnose und bilanzierten Platzierungsfehler gemäß GDD § 7.3, keine Retry-Runtime;
 - kein Renderer-/Sprite-Zugriff.
@@ -245,7 +315,9 @@ Bevorzugt:
 - adaptive sichtbare Tropfenzahl aus Wert, Dichte und Quality;
 - gemeinsame Atlas-/Texture-Infrastruktur statt parallelem Ad-hoc-Atlas.
 
-Der Renderer besitzt keine Gameplayentscheidung.
+Die Körper verwenden drei eigene prozedurale Flüssigkeitsvarianten mit je acht Phasen im gemeinsamen Atlas. Kleine Teilwerte erhalten etwa 4–6 px Körperdurchmesser; höhere Qualität ergänzt weiche Formbewegung, Reflexe und wenige Nebentropfen.
+
+Der Renderer liefert seine tatsächlich dargestellten, bereits zugriffsgefilterten Boden-/Flugpositionen in jedem Frame an den lokalen Licht-Helper. Dieser bündelt in 64-px-Zellen, bevorzugt sichtbare nahe Quellen und verwaltet einschließlich Ausblenden höchstens 12/8/4 Lichtslots. Radius 64–80 px und Intensität 0,2–0,4 bleiben zentral in `LightingConfig`; `LightingSystem` übernimmt die Tageszeit ohne eigenen Schattenpfad. `releaseLight(key, { immediate: true })` entfernt bei Zugriffsverlust, Unterdrückung oder Owner-Ende auch ausblendende Quellen. Der Renderer besitzt keine Gameplayentscheidung.
 
 ### 4.9 HUD-Signale
 
@@ -295,7 +367,7 @@ Alle neuen Grenzen stehen sauber, sind testbar und Activity-sicher, ohne bereits
 
 #### P1.4 Activity Runtime Skeleton
 
-- Activity-gebundenen Essenz-Owner anlegen;
+- Essenz-Owner an die Match-Activity beziehungsweise die explizite Lobby-World binden;
 - Scope-Identity und idempotenten Teardown festlegen;
 - Kernmodelle für Contribution/Cluster/Transfer/AccessGroup;
 - deterministische IDs/Seeds;
@@ -331,7 +403,7 @@ P1 ist abgeschlossen, wenn:
 
 - Reward-Intent und Reward-Faktum unabhängig von Essenz-Rendering testbar sind;
 - `ResourceSystem` beide neuen Semantiken korrekt besitzt;
-- Essenz-State nachweislich Activity-gebunden und teardown-sicher ist;
+- Essenz-State nachweislich an die Match-Activity beziehungsweise Lobby-World gebunden und teardown-sicher ist;
 - sichere Bodenplatzierung ohne Rendererzugriff existiert;
 - keine bestehende Lifecycle-Reaktion überschrieben wurde;
 - keine neue globale God Class / Service-Locator-Abhängigkeit entstanden ist;
@@ -355,6 +427,8 @@ Die komplette GDD-Mechanik läuft host-autoritativ und werttreu. Nach P2 soll de
 - AccessGroup aus Mode/Attribution/Team bestimmen und einfrieren;
 - Reward-ID deduplizieren.
 
+Nach der gemeinsamen Wertauflösung standardmäßig drei Cluster anlegen; weder Gain-Basis noch Treffer-/Attributionszähler pro Fragment erneut auswerten.
+
 #### P2.2 Vollständiger Cutover
 
 Alle inventarisierten materialisierten Primärtrefferpfade umstellen:
@@ -375,14 +449,7 @@ Unabhängige Quellen bleiben unverändert direkt.
 
 #### P2.3 Ausstoß und Landung
 
-Host erzeugt pro Reward:
-
-- kanonischen Ursprung;
-- deterministischen Seed;
-- Landing-Dauer;
-- sichere Bodenposition;
-- Landing-Zeit;
-- Expiry ab Landung.
+Der Host erzeugt pro Reward drei Kandidaten mit gemeinsamem kanonischem Ursprung: ungefähr 120° Abstand, deterministische Variation höchstens ±10° je Richtung und 30–45 px Radius. Die World-Geometrie prüft diese gestreuten Punkte einschließlich begrenztem Fallback. Der vollständige Wert wird erst danach auf unterschiedliche gültige Punkte verteilt; der letzte Teilwert erhält den Rest. Nur vollständiges Platzierungsversagen zählt einmalig als Fehler. Jeder Beitrag besitzt eigene Landing-Zeit und Expiry ab Landung; vorhandene Merge-Regeln bleiben wirksam.
 
 Vor Landung nicht sammelbar.
 
@@ -563,9 +630,9 @@ Vermeiden:
 
 Optimieren:
 
-- kompakter gerichteter Burst vom tatsächlichen Treffer;
+- drei radiale Flugrichtungen vom tatsächlichen Treffer;
 - leichte Bogenbewegung statt linearer Explosion;
-- kurze gestreckte Tropfen;
+- rundlicher Kopf und kurzer weicher Flüssigkeitsschwanz;
 - Anfangsimpuls passend zur Trefferenergie, aber nicht fälschlich projektilphysikalisch;
 - klare cyan/blaue Identität;
 - Größenmix statt identischer Punkte;
@@ -578,11 +645,11 @@ Mehrfachtreffer derselben kurzen Salve dürfen visuell kohärent wirken, ohne Re
 Zielbild:
 
 - kleine kompakte Perlen;
-- heller Kern;
+- breite weiche Reflexe mit kleinen hellen Akzenten;
 - gesättigte Cyan-/Blautöne;
 - dunklerer blauer Rand/Nachhall;
 - weicher aggregierter Halo;
-- minimale lebendige Puls-/Waberbewegung;
+- kurzes Abflachen und gedämpftes Zurückfedern bei Landung, danach ruhige Formbewegung und wandernde Reflexe;
 - große Werte über Dichte, Größenmix, Satelliten und Halo statt über riesige Einzelkugeln.
 
 Die größten sichtbaren Perlen bleiben deutlich kleiner als eine Spielfigur.
@@ -620,7 +687,7 @@ Expiry:
 
 - letzte 1–1,5 s sichtbar ankündigen;
 - Glow sinkt;
-- leichtes Flackern/Verdunsten;
+- weiches Verdunsten ohne harte Blinksignale;
 - weiches Verschwinden;
 - keine abrupte Pop-Entfernung.
 

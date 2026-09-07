@@ -6,6 +6,7 @@ import {
   RAGE_MAX,
 } from '../config';
 import { resolveEffectiveAdrenalineCost } from './AdrenalineCost';
+import type { AdrenalineGainBasis } from '../combat/PrimaryHitReward';
 
 type PowerUpSystemType = { getRegenMultiplier(id: string): number };
 
@@ -135,6 +136,39 @@ export class ResourceSystem {
     for (const observer of this.adrenalineGainObservers) {
       observer(id, amount, gainedAmount);
     }
+  }
+
+  /** Capture only a registered player; this immutable basis survives death/disconnect. */
+  captureAdrenalineGainBasis(id: string): AdrenalineGainBasis | null {
+    if (!this.adrenaline.has(id)) return null;
+    const multiplier = this.adrenalineGainMultiplierResolver?.(id) ?? 1;
+    return Object.freeze({ playerId: id, multiplier: Number.isFinite(multiplier) ? Math.max(0, multiplier) : 0 });
+  }
+
+  /** Theoretical source gain: no resource read, cap or mutation, and no live modifier lookup. */
+  resolveAdrenalineGain(basis: AdrenalineGainBasis, authoredAmount: number): number {
+    if (!Number.isFinite(authoredAmount) || authoredAmount <= 0
+      || !Number.isFinite(basis.multiplier) || basis.multiplier < 0) return 0;
+    const resolved = authoredAmount * basis.multiplier;
+    return Number.isFinite(resolved) ? resolved : 0;
+  }
+
+  /** Atomically apply an already resolved gain; collector modifiers never apply a second time. */
+  commitResolvedAdrenalineGain(id: string, resolvedAmount: number): number {
+    if (!this.adrenaline.has(id) || !Number.isFinite(resolvedAmount) || resolvedAmount <= 0) return 0;
+    const previous = this.adrenaline.get(id)!;
+    const availableGain = Math.min(resolvedAmount, Math.max(0, this.getMaxAdrenaline(id) - previous));
+    const next = previous + availableGain;
+    // Consume the capped transaction amount once the stored resource increases. Re-subtracting
+    // rounded totals would manufacture tiny unpaid remainders after ordinary fractional gains.
+    // A genuinely unrepresentable increase still belongs to the source owner.
+    const gained = next > previous ? availableGain : 0;
+    this.writeAdrenaline(id, next);
+    for (const observer of this.adrenalineGainObservers) {
+      try { observer(id, resolvedAmount, gained); }
+      catch (error) { console.error('[ResourceSystem] Passive resolved gain observer failed', error); }
+    }
+    return gained;
   }
 
   /** Berechnet die tatsaechlichen Kosten inklusive spielerweiter Verbrauchsmodifikatoren. */

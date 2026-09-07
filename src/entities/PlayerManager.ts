@@ -312,6 +312,10 @@ export class PlayerManager implements OwnerVisualSource {
     return true;
   }
 
+  readOwnerHeldWeaponPose(ownerId: string, out: import('./OwnerVisualSource').OwnerHeldWeaponPose): boolean {
+    return this.players.get(ownerId)?.readHeldWeaponPose(out) ?? false;
+  }
+
   /**
    * Gibt eine zufällige freie Arena-Zelle zurück (relative Arena-Koordinaten).
    * Schließt blockierte Zellen (Fels, Trunk) und aktuell belegte Spieler-Zellen aus.

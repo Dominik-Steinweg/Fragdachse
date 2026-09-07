@@ -1,3 +1,4 @@
+import { createPrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
 import type {
   EnergyInjectorWeaponFireConfig,
   FlamethrowerWeaponFireConfig,
@@ -71,6 +72,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
           weaponSourceId: 'weapon.fireball_launcher',
           sourceSlot,
           sourceTurretId: params.options?.sourceTurretId,
+          primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:projectile`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, sourceSlot),
         }),
         interaction: {
           directHit: {
@@ -136,6 +138,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         weaponSourceId: config.id,
         sourceSlot,
         sourceTurretId: params.options?.sourceTurretId,
+        primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:projectile`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, sourceSlot),
       }),
       interaction: {
         directHit: {
@@ -189,6 +192,7 @@ export class SpecializedWeaponExecutionAdapter implements SpecializedWeaponExecu
         weaponSourceId: config.id,
         sourceSlot: resolveSourceSlot(params),
         sourceTurretId: params.options?.sourceTurretId,
+        primaryHitReward: createPrimaryHitRewardIntent(`${config.id}:projectile`, params.adrenalineGainBasis, config.adrenalinGain, 0, params.primaryHitRewardScope, params.primaryHitRewardOrigin ?? { x: params.x, y: params.y }, resolveSourceSlot(params)),
       }),
       interaction: {
         directHit: {

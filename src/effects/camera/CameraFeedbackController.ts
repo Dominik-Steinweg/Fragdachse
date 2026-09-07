@@ -59,6 +59,8 @@ export class CameraFeedbackController {
     this.model.release(id, this.scene.time.now, releaseMs);
   }
 
+  cancel(id: string): void { this.model.cancel(id); }
+
   /**
    * @param baseScrollX Kameraposition **ohne** Feedback. Der Aufrufer muss diesen Wert selbst
    *   führen; ein Rücklesen von `camera.scrollX` würde den Versatz in die Kameraverfolgung

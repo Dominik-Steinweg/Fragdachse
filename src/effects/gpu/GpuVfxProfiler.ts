@@ -94,15 +94,14 @@ export class GpuVfxProfiler {
     this.capacityDrops[effect] += 1;
   }
 
-  /** `activeMask` traegt ein Bit je Lane mit mindestens einem lebenden Member. */
-  recordFrame(activeMask: number): void {
+  /** One entry per lane; numeric bit operations alias lane 32 with lane 0. */
+  recordFrame(activeLanes: Uint8Array): void {
     this.frames += 1;
-    if (activeMask === 0) return;
     for (let a = 0; a < this.laneCount; a += 1) {
-      if ((activeMask & (1 << a)) === 0) continue;
+      if (!activeLanes[a]) continue;
       this.visibleFrames[a] += 1;
       for (let b = a; b < this.laneCount; b += 1) {
-        if ((activeMask & (1 << b)) === 0) continue;
+        if (!activeLanes[b]) continue;
         this.coVisible[a * this.laneCount + b] += 1;
         if (b !== a) this.coVisible[b * this.laneCount + a] += 1;
       }

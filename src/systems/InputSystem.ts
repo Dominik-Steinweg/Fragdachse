@@ -216,6 +216,7 @@ export class InputSystem {
   private localIsStunned  = false;
   private localIsBurrowed = false;
   private localBurrowPhase: BurrowPhase = 'idle';
+  private firingWeaponSlot: 'weapon1' | 'weapon2' | null = null;
   private inputEnabled    = true;
   private radialEnabled = false;
   private aimEnabled      = true;
@@ -1013,7 +1014,12 @@ export class InputSystem {
   }
 
   /** Jeden Frame: WASD + Dash + Burrow + Loadout lesen, RPCs senden. */
+  isWeaponTriggerHeld(slot: 'weapon1' | 'weapon2'): boolean {
+    return this.inputEnabled && this.firingWeaponSlot === slot;
+  }
+
   update(): void {
+    this.firingWeaponSlot = null;
     try {
     // Die Scene schaltet den lokalen Input zusaetzlich ab; dieser Rollencheck verhindert, dass
     // bereits gedrueckte Tasten oder Debug-/Placement-Hotkeys beim Spectator noch Aktionen
@@ -1397,6 +1403,7 @@ export class InputSystem {
     // Korrekte Host-Authority: RPCs jeden Frame senden, Host entscheidet über Cooldown.
     // Client-seitiger Cooldown würde bei variabler RPC-Latenz zu Schuss-Lücken führen.
     if (!weaponsBlocked && !primaryWeaponSuppressed && leftPointerDown) {
+      this.firingWeaponSlot = 'weapon1';
       this.onLoadoutUse('weapon1', angle, clampedTarget.x, clampedTarget.y, { inputStarted: leftInputStarted });
     } else if (!weaponsBlocked) {
       if (rightInputStartedForUse) this.pendingRightInputStarted = false;
@@ -1434,6 +1441,7 @@ export class InputSystem {
         }
       } else if (rightPointerDown) {
         // Normales Dauerfeuer für Nicht-Scope-Waffen
+        this.firingWeaponSlot = 'weapon2';
         this.onLoadoutUse('weapon2', angle, clampedTarget.x, clampedTarget.y, { inputStarted: rightInputStartedForUse });
       }
     }

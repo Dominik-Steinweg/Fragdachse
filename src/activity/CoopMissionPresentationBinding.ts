@@ -98,6 +98,7 @@ export interface CoopMissionPresentationUiPort {
     readonly syncMissionProgress: (
       config: ResolvedCoopDefenseMapMissionProgressConfig | undefined,
       state: CoopDefenseMissionProgressPresentationState | null,
+      elapsedMs: number,
     ) => void;
     readonly syncCarryZones: (
       snapshot: CoopDefenseSecondaryObjectivePresentationState | null,
@@ -221,6 +222,7 @@ export class CoopMissionPresentationBinding implements CoopMissionScopedBinding 
     this.ui.worldSpace.syncMissionProgress(
       resolveCoopDefenseMapMissionProgress(this.mapConfig),
       missionProgress,
+      elapsedMs,
     );
     this.ui.worldSpace.syncCarryZones(
       secondaryObjectivePresentation,

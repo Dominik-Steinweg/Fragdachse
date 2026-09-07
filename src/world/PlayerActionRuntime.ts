@@ -32,6 +32,7 @@ export interface PlayerWeaponActionRequest {
   readonly attemptId?: string;
   /** Execution/shot identity. It is deliberately not an attempt/prediction identity. */
   readonly shotId?: number;
+  readonly predictionId?: number;
   readonly params?: LoadoutUseParams;
   /** Legacy client-position compensation, resolved explicitly before activation. */
   readonly clientPosition?: PlayerActionPositionInput;
@@ -203,6 +204,7 @@ export class PlayerActionRuntime {
       targetY: request.targetY,
       nowMs: request.hostNowMs,
       shotId: request.shotId,
+      predictionId: request.predictionId,
       params: request.params,
     });
     if (result.ok) {
