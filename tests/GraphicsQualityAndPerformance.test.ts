@@ -460,10 +460,12 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
 
     profiler.startRecording();
     for (let frame = 0; frame < 4; frame += 1) {
+      profiler.record(sample());
       game.emit('prerender');
       game.emit('postrender');
     }
     // The next render polls the query submitted by frame four.
+    profiler.record(sample());
     game.emit('prerender');
     profiler.stopRecording();
 
@@ -471,6 +473,41 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     expect(report?.summaries.gpu.status).toBe('supported');
     expect(report?.summaries.gpu.samplesCompleted).toBe(1);
     expect(report?.series.gpuSamples[0]).toMatchObject({ durationMs: 1, renderFrame: 4 });
+  });
+
+  it('beendet eine aktive GPU-Abfrage beim Stoppen und startet die nächste Aufnahme mit eigener Kadenz', () => {
+    vi.spyOn(performance, 'now').mockReturnValue(100);
+    const gl = new FakeGlContext();
+    const begin = vi.spyOn(gl, 'beginQuery');
+    const end = vi.spyOn(gl, 'endQuery');
+    const game = fakeGame(gl);
+    const profiler = new ArenaRuntimeProfiler();
+    profiler.attachGame(game as never);
+    profiler.setLiveDiagnosticsEnabled(true);
+    profiler.startRecording();
+    for (let frame = 0; frame < 4; frame += 1) {
+      profiler.record(sample());
+      game.emit('prerender');
+      if (frame < 3) game.emit('postrender');
+    }
+    expect(begin).toHaveBeenCalledTimes(1);
+    profiler.stopRecording();
+    game.emit('postrender');
+    expect(end).toHaveBeenCalledTimes(1);
+    expect(gl.deletedQueries).toBe(1);
+
+    profiler.startRecording();
+    for (let frame = 0; frame < 5; frame += 1) {
+      profiler.record(sample());
+      game.emit('prerender');
+      game.emit('postrender');
+    }
+    profiler.stopRecording();
+    expect(begin).toHaveBeenCalledTimes(2);
+    expect(profiler.buildReport()?.series.gpuSamples).toEqual([
+      expect.objectContaining({ durationMs: 1, renderFrame: 4 }),
+    ]);
+    profiler.destroy();
   });
 
   it('lässt den GPU-Timer auf WebGL1 deaktiviert', () => {
@@ -499,6 +536,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
 
     profiler.startRecording();
     for (let frame = 0; frame < 4; frame += 1) {
+      profiler.record(sample());
       game.emit('prerender');
       game.emit('postrender');
     }
@@ -525,9 +563,18 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     };
     const renderer = game.renderer as unknown as {
       drawElements: () => void;
+      drawInstancedArrays: (count: number) => number;
       renderNodes: { _nodes: Record<string, typeof node>; getNode(name: string): typeof node };
     };
-    renderer.drawElements = vi.fn();
+    const originalDrawElements = vi.fn();
+    const rendererPrototype = {
+      drawInstancedArrays(this: unknown, count: number): number {
+        expect(this).toBe(renderer);
+        return count;
+      },
+    };
+    Object.setPrototypeOf(renderer, rendererPrototype);
+    renderer.drawElements = originalDrawElements;
     renderer.renderNodes = {
       _nodes: { BatchHandlerQuad: node },
       getNode: (name: string) => renderer.renderNodes._nodes[name],
@@ -537,6 +584,7 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
     profiler.startRecording();
     game.emit('prerender');
     renderer.drawElements();
+    expect(renderer.drawInstancedArrays(30)).toBe(30);
     node.run();
     game.emit('postrender');
     profiler.record(sample({ drawCallCount: profiler.takeLastDrawCallCount() }));
@@ -544,10 +592,13 @@ describe('ArenaRuntimeProfiler Companion collector', () => {
 
     const pipeline = profiler.buildReport()?.summaries.renderPipeline;
     expect(pipeline?.backend).toBe('webgl');
-    expect(pipeline?.drawCalls).toMatchObject({ avg: 1, p95: 1, p99: 1, peak: 1 });
+    expect(pipeline?.drawCalls).toMatchObject({ avg: 2, p95: 2, p99: 2, peak: 2 });
     expect(pipeline?.phaserBatchFlushes).toMatchObject({ avg: 1, p95: 1, p99: 1, peak: 1 });
     expect(pipeline?.pipelineChanges).toBe('unsupported');
     expect(pipeline?.textureBatchChanges).toBe('unsupported');
+    expect(renderer.drawElements).toBe(originalDrawElements);
+    expect(Object.hasOwn(renderer, 'drawInstancedArrays')).toBe(false);
+    expect(renderer.drawInstancedArrays).toBe(rendererPrototype.drawInstancedArrays);
   });
 
   it('lässt Live-HUD, Recording und destroy ohne schwere Hooks koexistieren', () => {

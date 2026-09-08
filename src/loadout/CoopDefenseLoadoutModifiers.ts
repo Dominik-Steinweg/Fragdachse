@@ -806,6 +806,88 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
   },
 });
 
+/**
+ * Statische, kanonisch sortierte Sicht der Modifier-Deskriptoren.
+ *
+ * Die Registry wird beim Modulaufbau validiert und aendert sich danach nicht. Eine Aufloesung
+ * darf deshalb nicht bei jedem Aufruf erneut `Object.entries(...).sort(...)` erzeugen. Die
+ * Gruppierung nach Kind/Slot reduziert zusaetzlich die Zahl der Descriptoren, die im Hotpath
+ * auf Item-ID und Slot geprueft werden muessen; die globale Sortierreihenfolge bleibt dabei
+ * unveraendert.
+ */
+interface PreparedConfigStatDescriptor {
+  readonly stat: string;
+  readonly descriptor: ConfigStatDescriptor;
+}
+
+const PREPARED_CONFIG_STAT_DESCRIPTORS: readonly PreparedConfigStatDescriptor[] = Object.freeze(
+  Object.entries(CONFIG_STAT_DESCRIPTORS)
+    .map(([stat, descriptor]) => Object.freeze({ stat, descriptor }))
+    .sort(({ stat: leftStat }, { stat: rightStat }) => getDescriptorStage(leftStat) - getDescriptorStage(rightStat)
+      || leftStat.localeCompare(rightStat)),
+);
+
+const PREPARED_CONFIG_STAT_DESCRIPTORS_BY_KIND_SLOT = new Map<string, readonly PreparedConfigStatDescriptor[]>(
+  (['weapon:weapon1', 'weapon:weapon2', 'utility:utility', 'ultimate:ultimate'] as const).map((key) => {
+    const [kind, slot] = key.split(':') as [ConfigKind, LoadoutSlot];
+    return [key, Object.freeze(PREPARED_CONFIG_STAT_DESCRIPTORS.filter(({ descriptor }) => (
+      descriptor.kind === kind && (!descriptor.slot || descriptor.slot === slot)
+    )))] as const;
+  }),
+);
+
+type ResolvedConfigsByBase = WeakMap<object, { id: string }>;
+
+// Runtime buckets are frozen by the canonical effect resolver. The outer WeakMap intentionally
+// keys on the two buckets rather than the small `{ additive, percentage }` wrapper: utility/HUD
+// consumers construct that wrapper at their boundary while sharing the same modifier read model.
+const RESOLVED_CONFIG_CACHE = new WeakMap<object, WeakMap<object, Map<string, ResolvedConfigsByBase>>>();
+
+function getPreparedConfigStatDescriptors(kind: ConfigKind, slot: LoadoutSlot): readonly PreparedConfigStatDescriptor[] {
+  return PREPARED_CONFIG_STAT_DESCRIPTORS_BY_KIND_SLOT.get(`${kind}:${slot}`) ?? [];
+}
+
+function canCacheResolvedConfig(baseConfig: object, totals: CoopDefenseEffectTotalsSource): boolean {
+  return Object.isFrozen(baseConfig)
+    && Object.isFrozen(totals.additive)
+    && Object.isFrozen(totals.percentage);
+}
+
+function resolveWithConfigCache<T extends { id: string }>(
+  baseConfig: T,
+  kind: ConfigKind,
+  slot: LoadoutSlot,
+  totals: CoopDefenseEffectTotalsSource,
+  resolver: () => T,
+): T {
+  if (!canCacheResolvedConfig(baseConfig, totals)) return resolver();
+
+  const additiveKey = totals.additive as object;
+  const percentageKey = totals.percentage as object;
+  let byPercentage = RESOLVED_CONFIG_CACHE.get(additiveKey);
+  if (!byPercentage) {
+    byPercentage = new WeakMap();
+    RESOLVED_CONFIG_CACHE.set(additiveKey, byPercentage);
+  }
+  let byKindSlot = byPercentage.get(percentageKey);
+  if (!byKindSlot) {
+    byKindSlot = new Map();
+    byPercentage.set(percentageKey, byKindSlot);
+  }
+  const cacheKey = `${kind}:${slot}`;
+  let byConfig = byKindSlot.get(cacheKey);
+  if (!byConfig) {
+    byConfig = new WeakMap();
+    byKindSlot.set(cacheKey, byConfig);
+  }
+  const cached = byConfig.get(baseConfig);
+  if (cached) return cached as T;
+
+  const value = resolver();
+  byConfig.set(baseConfig, value);
+  return value;
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -871,7 +953,7 @@ function getTargetContract(stat: string, target: PathTarget): ModifierTargetCont
 
 export function getLoadoutModifierTargetContracts(): Readonly<Record<string, readonly ModifierTargetContract[]>> {
   return Object.freeze(Object.fromEntries(
-    Object.entries(CONFIG_STAT_DESCRIPTORS).map(([stat, descriptor]) => [
+    PREPARED_CONFIG_STAT_DESCRIPTORS.map(({ stat, descriptor }) => [
       stat,
       Object.freeze(descriptor.targets.map((target) => Object.freeze(getTargetContract(stat, target)))),
     ]),
@@ -937,11 +1019,9 @@ function applyConfiguredStats<T extends { id: string }>(
 ): T {
   try {
     let nextConfig: Record<string, unknown> | null = null;
-    const descriptors = Object.entries(CONFIG_STAT_DESCRIPTORS)
-      .sort(([leftStat], [rightStat]) => getDescriptorStage(leftStat) - getDescriptorStage(rightStat)
-        || leftStat.localeCompare(rightStat));
+    const descriptors = getPreparedConfigStatDescriptors(kind, slot);
 
-    for (const [stat, descriptor] of descriptors) {
+    for (const { stat, descriptor } of descriptors) {
       if (!shouldApplyDescriptor(descriptor, kind, slot, config.id)) continue;
       const additive = totals.additive[stat] ?? 0;
       const percentage = totals.percentage[stat] ?? 0;
@@ -999,39 +1079,47 @@ export function applyCoopDefenseModifiersToWeaponConfig(
   totals: CoopDefenseEffectTotalsSource,
 ): WeaponConfig {
   const baseConfig = WEAPON_CONFIGS[config.id] ?? config;
-  const resolved = applyConfiguredStats(baseConfig, 'weapon', slot, totals);
-  if (
-    baseConfig.id !== 'FLAMETHROWER'
-    || baseConfig.fire.type !== 'flamethrower'
-    || resolved.fire.type !== 'flamethrower'
-    || (resolved.fire.fireball?.enabled ?? 0) <= 0
-    || baseConfig.cooldown <= 0
-  ) {
-    return resolved;
-  }
+  return resolveWithConfigCache(baseConfig, 'weapon', slot, totals, () => {
+    const resolved = applyConfiguredStats(baseConfig, 'weapon', slot, totals);
+    if (
+      baseConfig.id !== 'FLAMETHROWER'
+      || baseConfig.fire.type !== 'flamethrower'
+      || resolved.fire.type !== 'flamethrower'
+      || (resolved.fire.fireball?.enabled ?? 0) <= 0
+      || baseConfig.cooldown <= 0
+    ) {
+      return resolved;
+    }
 
-  // Der Feuerball feuert langsamer, soll bei Dauerfeuer aber denselben
-  // Adrenalinverbrauch pro Zeit haben. Den Faktor aus den effektiven und
-  // ursprünglichen Cooldowns ableiten, damit spätere Feuerratenänderungen
-  // automatisch mitgezogen werden.
-  return {
-    ...resolved,
-    adrenalinCost: resolved.adrenalinCost * (resolved.cooldown / baseConfig.cooldown),
-  };
+    // Der Feuerball feuert langsamer, soll bei Dauerfeuer aber denselben
+    // Adrenalinverbrauch pro Zeit haben. Den Faktor aus den effektiven und
+    // ursprünglichen Cooldowns ableiten, damit spätere Feuerratenänderungen
+    // automatisch mitgezogen werden.
+    return {
+      ...resolved,
+      adrenalinCost: resolved.adrenalinCost * (resolved.cooldown / baseConfig.cooldown),
+    };
+  });
 }
 
 export function applyCoopDefenseModifiersToUtilityConfig(
   config: UtilityConfig,
   totals: CoopDefenseEffectTotalsSource,
 ): UtilityConfig {
-  return applyConfiguredStats(UTILITY_CONFIGS[config.id] ?? config, 'utility', 'utility', totals);
+  const baseConfig = UTILITY_CONFIGS[config.id] ?? config;
+  return resolveWithConfigCache(baseConfig, 'utility', 'utility', totals, () => (
+    applyConfiguredStats(baseConfig, 'utility', 'utility', totals)
+  ));
 }
 
 export function applyCoopDefenseModifiersToUltimateConfig(
   config: UltimateConfig,
   totals: CoopDefenseEffectTotalsSource,
 ): UltimateConfig {
-  return applyConfiguredStats(ULTIMATE_CONFIGS[config.id] ?? config, 'ultimate', 'ultimate', totals);
+  const baseConfig = ULTIMATE_CONFIGS[config.id] ?? config;
+  return resolveWithConfigCache(baseConfig, 'ultimate', 'ultimate', totals, () => (
+    applyConfiguredStats(baseConfig, 'ultimate', 'ultimate', totals)
+  ));
 }
 
 export function applyCoopDefenseModifiersToLoadoutSelection(

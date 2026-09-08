@@ -316,6 +316,7 @@ function testCoordinator(
     getPlayerColor: () => 0xffffff,
     construction: {
       getCapacity: () => coordinator.getConstructionCapacity(playerId),
+      getBuildRevision: () => 0,
       getOwnership: () => 'host-persistent',
       resolveRestoreTools: () => coordinator.buildPersistentRestoreTools(playerId),
       materializeRestoreCandidate: (candidate, ownerId, ownerColor, ownership) => (

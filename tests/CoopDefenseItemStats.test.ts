@@ -142,6 +142,18 @@ describe('equipped items in the runtime stat pipeline', () => {
     expect(system.getMaxHp('p')).toBe(HP_MAX);
   });
 
+  it('keeps the runtime modifier identity for an unchanged build snapshot', () => {
+    const snapshot = commit({ equippedItems: [item({ baseValue: 30 })] });
+    const system = new CoopDefensePlayerModifierSystem();
+    expect(system.syncPlayer('p', snapshot)).toBe(true);
+    const initial = system.getModifiers('p');
+
+    expect(system.syncPlayer('p', snapshot)).toBe(false);
+    expect(system.getModifiers('p')).toBe(initial);
+    expect(system.syncPlayer('p', { ...snapshot })).toBe(false);
+    expect(system.getModifiers('p')).toBe(initial);
+  });
+
   it('resolves identically on the host and on the client path', () => {
     const profile = levelUpCoopDefenseUpgrade(
       buildDefaultCoopDefenseUpgradeProfile('dachs_of_steel'),

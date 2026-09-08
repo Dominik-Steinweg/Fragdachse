@@ -21,6 +21,7 @@ import {
 } from '../src/config';
 import { COOP_DEFENSE_CONSTRUCTIONS } from '../src/config/coopDefenseConstructions';
 import type { BaseManager } from '../src/entities/BaseManager';
+import type { BaseEntity } from '../src/entities/BaseEntity';
 import type { EnemyManager } from '../src/entities/EnemyManager';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import type { PlayerManager } from '../src/entities/PlayerManager';
@@ -91,6 +92,7 @@ interface TurretFixture {
   readonly projectileInteraction: Record<string, ReturnType<typeof vi.fn>>;
   readonly playerLoadout: LoadoutManager;
   readonly playerManager: PlayerManager;
+  readonly baseManager: BaseManager;
   readonly combatSystem: CombatSystem;
   readonly metrics: ReturnType<typeof resolveActiveArenaWorldMetrics>;
 }
@@ -118,6 +120,7 @@ function createFixture(options: {
   readonly rockTargets?: readonly { id?: number; index: number; active: boolean; x: number; y: number }[];
   readonly applyTeslaRockDamage?: (index: number, damage: number, ownerId: string) => void;
   readonly targetStatusSystem?: TargetStatusSystem | null;
+  readonly baseManager?: BaseManager;
 }): TurretFixture {
   const playerManager = {
     getAllPlayers: () => options.players as readonly PlayerEntity[] as PlayerEntity[],
@@ -144,7 +147,7 @@ function createFixture(options: {
     getEnemy: () => undefined,
     hasEnemy: () => false,
   } as unknown as EnemyManager;
-  const baseManager = methodBag({
+  const baseManager = options.baseManager ?? methodBag({
     getTurrets: () => options.baseTurrets ?? [],
     getBasesByFaction: () => [],
     getBase: () => undefined,
@@ -307,11 +310,51 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics };
+  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics, baseManager };
 }
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe('WorldCombatGameplayBinding projectile target geometry', () => {
+  it('rebuilds cached base bounds after a same-id base replacement revision', () => {
+    let generation = 0;
+    const makeBase = (left: number): BaseEntity => ({
+      id: 'base-same-id',
+      isInert: () => false,
+      getCellBodies: () => [{
+        getBounds: () => ({ left, top: 10, right: left + 20, bottom: 30 }),
+      }],
+    } as unknown as BaseEntity);
+    let bases: readonly BaseEntity[] = [makeBase(10)];
+    const baseManager = methodBag({
+      getBases: () => bases,
+      getObstacleGeneration: () => generation,
+      getTurrets: () => [],
+      getBasesByFaction: () => [],
+      getBase: () => undefined,
+      getObstacleRectangles: () => [],
+    }) as unknown as BaseManager;
+    const fixture = createFixture({ players: [], enemies: [], baseManager });
+    const query = vi.mocked(fixture.projectileInteraction.setProjectileCollisionTargetQueryPort)
+      .mock.calls.at(-1)![0]!;
+    const readBase = (): { x: number; y: number; left: number } => {
+      let target: { x: number; y: number; left: number } | undefined;
+      query.readCollisionTargets((kind, _id, _ownerId, x, y, _radius, left) => {
+        if (kind === 'base') target = { x, y, left };
+      });
+      if (!target) throw new Error('Expected active base target');
+      return target;
+    };
+
+    expect(readBase()).toEqual({ x: 20, y: 20, left: 10 });
+    const rebuilt = makeBase(110);
+    bases = [rebuilt];
+    generation += 1;
+    expect(readBase()).toEqual({ x: 120, y: 20, left: 110 });
+    fixture.binding.destroy();
+  });
 });
 
 describe('WorldCombatGameplayBinding turret fire wiring', () => {

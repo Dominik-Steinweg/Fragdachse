@@ -336,12 +336,13 @@ interface RendererCounterLike {
   gl?: WebGLRenderingContext;
   drawCount?: number;
   drawElements?: (...args: unknown[]) => unknown;
+  drawInstancedArrays?: (...args: unknown[]) => unknown;
   renderNodes?: RenderNodeManagerLike | null;
 }
 
 interface RenderCounterHooks {
   renderer: RendererCounterLike;
-  restoreDrawElements?: () => void;
+  restoreDrawMethods: (() => void)[];
   manager?: RenderNodeManagerLike;
   restoreGetNode?: () => void;
   wrappedNodes: Map<RenderNodeLike, { originalRun: (...args: unknown[]) => unknown; hadOwnRun: boolean }>;
@@ -749,11 +750,6 @@ export class ArenaRuntimeProfiler {
     this.pendingSnapshotBytesMax = 0;
     this.pendingFullSnapshotCount = 0;
     this.pendingDeltaSnapshotCount = 0;
-    this.renderFrame = 0;
-    this.frameDrawCallCounter = 0;
-    this.frameBatchFlushCounter = 0;
-    this.lastDrawCallCount = 0;
-    this.lastBatchFlushCount = 0;
     if (this.recording) {
       this.emitSessionSyncIfDue(now);
       if (now >= this.nextSeriesAtMs) this.flushSeries(now);
@@ -836,6 +832,13 @@ export class ArenaRuntimeProfiler {
     this.pendingSnapshotBytesMax = 0;
     this.pendingFullSnapshotCount = 0;
     this.pendingDeltaSnapshotCount = 0;
+    // Render cadence belongs to the recording, not to each scene sample. Resetting it
+    // in record() prevents the sparse GPU timer from ever reaching its query frame.
+    this.renderFrame = 0;
+    this.frameDrawCallCounter = 0;
+    this.frameBatchFlushCounter = 0;
+    this.lastDrawCallCount = 0;
+    this.lastBatchFlushCount = 0;
     this.gpuTimerWasEnabled = this.gpuTimer !== null;
     this.gpuTimerStatus = this.gpuTimer ? 'supported' : this.game ? 'unsupported' : 'unavailable';
     this.gpuTimerBackend = this.gpuTimer?.backend ?? (this.game ? 'unsupported' : 'unavailable');
@@ -1491,6 +1494,8 @@ export class ArenaRuntimeProfiler {
     const timer = this.gpuTimer;
     if (!timer) return;
     if (this.activeGpuQuery) {
+      if (timer.backend === 'webgl2_ext') timer.webgl2?.endQuery(timer.target);
+      else timer.webgl1Extension?.endQueryEXT(timer.target);
       this.pendingGpuQueriesDropped += 1;
       this.deleteGpuQuery(timer, this.activeGpuQuery.query);
     }
@@ -1510,22 +1515,27 @@ export class ArenaRuntimeProfiler {
     const renderer = this.game.renderer as unknown as RendererCounterLike;
     const hooks: RenderCounterHooks = {
       renderer,
+      restoreDrawMethods: [],
       wrappedNodes: new Map(),
       drawCallsSupported: false,
       batchFlushesSupported: false,
     };
 
-    if (typeof renderer.drawElements === 'function') {
-      const originalDrawElements = renderer.drawElements;
-      const hadOwnDrawElements = Object.prototype.hasOwnProperty.call(renderer, 'drawElements');
-      renderer.drawElements = (...args: unknown[]): unknown => {
+    // Phaser 4 submits both indexed geometry and instanced sprites/batches here.
+    for (const method of ['drawElements', 'drawInstancedArrays'] as const) {
+      const original = renderer[method];
+      if (typeof original !== 'function') continue;
+      const hadOwnMethod = Object.prototype.hasOwnProperty.call(renderer, method);
+      renderer[method] = (...args: unknown[]): unknown => {
         if (this.diagnosticsActive) this.frameDrawCallCounter += 1;
-        return originalDrawElements.apply(renderer, args);
+        return original.apply(renderer, args);
       };
-      hooks.restoreDrawElements = () => {
-        if (hadOwnDrawElements) renderer.drawElements = originalDrawElements;
-        else delete renderer.drawElements;
-      };
+      hooks.restoreDrawMethods.push(() => {
+        if (hadOwnMethod) renderer[method] = original;
+        else delete renderer[method];
+      });
+    }
+    if (hooks.restoreDrawMethods.length > 0) {
       hooks.drawCallsSupported = true;
       this.renderCounterBackend = 'webgl';
     } else if (typeof renderer.drawCount === 'number') {
@@ -1576,7 +1586,7 @@ export class ArenaRuntimeProfiler {
   private removeRenderCounters(): void {
     const hooks = this.renderCounterHooks;
     if (!hooks) return;
-    hooks.restoreDrawElements?.();
+    for (const restore of hooks.restoreDrawMethods) restore();
     hooks.restoreGetNode?.();
     for (const [node, patch] of hooks.wrappedNodes) {
       if (patch.hadOwnRun) node.run = patch.originalRun;

@@ -10,6 +10,7 @@ import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../loadout/CoopDefenseLoadoutModifiers';
 import type {
   CoopDefensePlayerModifierReadPort,
+  CoopDefensePlayerRuntimeModifiers,
 } from '../systems/CoopDefensePlayerModifierSystem';
 import type { PlayerGameplayTunnelPlacementPort } from './WorldPlayerGameplayRuntime';
 import type { GameAudioSystem } from '../audio/GameAudioSystem';
@@ -112,6 +113,12 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   private destroyed = false;
   private readonly readiness = new ConstructionReadinessRuntime();
   private readonly finalizedRuntimeIds = new Set<number>();
+  private readonly persistentBuildRevisionByPlayer = new Map<string, {
+    readonly mode: ReturnType<ConstructionWorldRuntimeOptions['getGameMode']>;
+    readonly loadoutKey: string;
+    readonly modifiers: CoopDefensePlayerRuntimeModifiers | null;
+    readonly revision: number;
+  }>();
 
   constructor(private readonly options: ConstructionWorldRuntimeOptions) {}
 
@@ -125,6 +132,34 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       classId: this.options.getCurrentLoadout(playerId)?.coopDefenseClassId,
       modifiers: this.options.modifierReadPort?.getNumericStat(playerId, COOP_DEFENSE_CONSTRUCTION_CAPACITY_STAT) ?? 0,
     });
+  }
+
+  /**
+   * Returns a cheap world-local revision for persistent restore tools. The primitive loadout key
+   * remains stable even when a lobby snapshot is freshly sanitized, while the modifier owner
+   * replaces its read model on a real build change. This lets PersistentBaseWorldMaterializer
+   * skip tool resolution entirely on unchanged frames while still observing either source.
+   */
+  getPersistentBaseBuildRevision(playerId: string): number {
+    const loadout = this.options.getCurrentLoadout(playerId);
+    const mode = this.options.getGameMode();
+    // Only these snapshot fields influence build restore access. Using their primitive values
+    // keeps a freshly sanitized lobby snapshot equivalent to the previous one.
+    const loadoutKey = loadout
+      ? [
+        loadout.utility,
+        loadout.coopDefenseClassId ?? '',
+        (loadout.tools ?? []).map((tool) => `${tool.kind}:${tool.id}`).join(','),
+      ].join('\u0000')
+      : 'none';
+    const modifiers = this.options.modifierReadPort?.getModifiers(playerId) ?? null;
+    const previous = this.persistentBuildRevisionByPlayer.get(playerId);
+    if (previous && previous.mode === mode && previous.loadoutKey === loadoutKey && previous.modifiers === modifiers) {
+      return previous.revision;
+    }
+    const revision = (previous?.revision ?? 0) + 1;
+    this.persistentBuildRevisionByPlayer.set(playerId, { mode, loadoutKey, modifiers, revision });
+    return revision;
   }
 
   getOwnership(playerId: string): ConstructionOwnership {
@@ -564,6 +599,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.persistentBuildRevisionByPlayer.clear();
     for (const removed of this.options.placementSystem.clearRuntimeRocks()) {
       this.finalizeRemovedRuntime(removed, 'teardown', false);
     }

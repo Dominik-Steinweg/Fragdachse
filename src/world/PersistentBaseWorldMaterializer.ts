@@ -54,6 +54,8 @@ export interface PersistentBaseWorldMaterializerOptions {
 /** Small bridge from PB materialization to the World-owned Construction runtime. */
 export interface PersistentBaseConstructionPort {
   readonly getCapacity: (playerId: string) => number;
+  /** Cheap revision marker for the build-dependent restore projection. */
+  readonly getBuildRevision: (playerId: string) => string | number;
   readonly getOwnership: (playerId: string) => ConstructionOwnership;
   readonly resolveRestoreTools: (playerId: string) => readonly PersistentRestoreToolDefinition[];
   readonly materializeRestoreCandidate: (
@@ -101,10 +103,8 @@ export class PersistentBaseWorldMaterializer {
     for (const ownerId of store.ownerIds) {
       const playerId = this.options.resolvePlayerIdForOwner(ownerId);
       if (!playerId) continue;
-      next.set(ownerId, JSON.stringify({
-        capacityMax: this.resolveCapacity(playerId),
-        tools: this.options.construction.resolveRestoreTools(playerId),
-      }));
+      // Revisions are player-local; reconnecting an owner through a different player must also refresh.
+      next.set(ownerId, `${playerId}:${this.options.construction.getBuildRevision(playerId)}`);
     }
     let changed = next.size !== signatures.size;
     if (!changed) {
@@ -115,9 +115,10 @@ export class PersistentBaseWorldMaterializer {
         }
       }
     }
+    if (!changed) return;
     signatures.clear();
     for (const [ownerId, signature] of next) signatures.set(ownerId, signature);
-    if (changed) this.reconcile();
+    this.reconcile();
   }
 
   materializeRewardPlacement(

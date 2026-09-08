@@ -189,6 +189,23 @@ describe('coop-defense loadout modifier reachability', () => {
     expect(WEAPON_CONFIGS.GLOCK.damage).toBe(base.damage);
   });
 
+  it('reuses immutable effective configs for the same build identity', () => {
+    const totals = Object.freeze({
+      additive: Object.freeze({}),
+      percentage: Object.freeze({ 'weapon1.damage': 0.25 }),
+    });
+    const first = applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.GLOCK, 'weapon1', totals);
+    const second = applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.GLOCK, 'weapon1', totals);
+    expect(second).toBe(first);
+
+    const changedTotals = Object.freeze({
+      additive: Object.freeze({}),
+      percentage: Object.freeze({ 'weapon1.damage': 0.5 }),
+    });
+    expect(applyCoopDefenseModifiersToWeaponConfig(WEAPON_CONFIGS.GLOCK, 'weapon1', changedTotals))
+      .not.toBe(first);
+  });
+
   it('throws in development for fractional integer targets', () => {
     expect(() => applyCoopDefenseModifiersToWeaponConfig(
       WEAPON_CONFIGS.P90,

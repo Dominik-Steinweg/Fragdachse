@@ -134,6 +134,17 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('does not materialize collision targets when the active projectile view is empty', () => {
+    const { runtime } = createRuntimeHarness();
+    const readCollisionTargets = vi.fn();
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets });
+
+    runtime.runHostInteractionStage(0);
+
+    expect(readCollisionTargets).not.toHaveBeenCalled();
+    runtime.destroy();
+  });
+
   it('waits for a post-contact physics confirmation before publishing a stale sprite as bounce travel', () => {
     let now = 0;
     const physics = createTechnicalPhysicsBinding();

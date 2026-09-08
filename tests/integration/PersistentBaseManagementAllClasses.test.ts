@@ -249,6 +249,7 @@ function createHarness(classId: string) {
     getPlayerColor: () => 0xffffff,
     construction: {
       getCapacity: () => 100,
+      getBuildRevision: () => 0,
       getOwnership: () => 'host-persistent',
       resolveRestoreTools: () => [],
       materializeRestoreCandidate: () => null,

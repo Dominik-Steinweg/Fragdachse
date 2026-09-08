@@ -1,4 +1,5 @@
 import type { BaseManager } from '../entities/BaseManager';
+import type { BaseEntity } from '../entities/BaseEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
@@ -267,11 +268,28 @@ export interface WorldCombatGameplayBindingOptions {
   readonly isHomingTargetValid?: (id: string, type: HomingTargetType, ownerId: string) => boolean;
 }
 
+interface CachedProjectileBaseGeometry {
+  readonly base: BaseEntity;
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+}
+
 /** Owns the World binding graph for combat, physics, projectile, turret and decoy systems. */
 export class WorldCombatGameplayBinding implements WorldScopedBinding {
   readonly systems: WorldCombatGameplaySystems | null;
   private destroyed = false;
   private activityGeneration = 0;
+  /**
+   * Base cell bounds are stable for a base lifetime. Keep the expensive cell traversal out of the
+   * projectile stage and invalidate this projection only at the existing base lifecycle boundary.
+   */
+  private readonly projectileBaseGeometry: CachedProjectileBaseGeometry[] = [];
+  private projectileBaseGeometryGeneration = -1;
   /** Only the current synchronous Base commit delays its Objective reward until its receipt. */
   private baseObjectiveCommit: { readonly baseId: string; complete?: () => void } | null = null;
 
@@ -353,6 +371,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     if (this.destroyed) return;
     this.clearActivityBindings();
     this.destroyed = true;
+    this.projectileBaseGeometry.length = 0;
+    this.projectileBaseGeometryGeneration = -1;
     this.options.bindPlayerShieldBuffPort?.(null);
     const { combatSystem, hostPhysics, decoySystem, baseManager } = this.options;
     this.options.playerManager.setSpawnContextProvider(null);
@@ -997,26 +1017,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
             x - half, y - half, x + half, y + half, rock.kind,
           );
         }
-        for (const base of o.baseManager?.getBases() ?? []) {
-          if (base.isInert()) continue;
-          const cells = base.getCellBodies();
-          if (cells.length === 0) continue;
-          let left = Number.POSITIVE_INFINITY;
-          let top = Number.POSITIVE_INFINITY;
-          let right = Number.NEGATIVE_INFINITY;
-          let bottom = Number.NEGATIVE_INFINITY;
-          for (const cell of cells) {
-            const bounds = cell.getBounds();
-            left = Math.min(left, bounds.left);
-            top = Math.min(top, bounds.top);
-            right = Math.max(right, bounds.right);
-            bottom = Math.max(bottom, bounds.bottom);
-          }
-          const x = (left + right) * 0.5;
-          const y = (top + bottom) * 0.5;
+        this.ensureProjectileBaseGeometry();
+        for (const base of this.projectileBaseGeometry) {
+          if (base.base.isInert()) continue;
           sink(
-            'base', base.id, '__world__', x, y, Math.hypot(right - left, bottom - top) * 0.5,
-            left, top, right, bottom,
+            'base', base.base.id, '__world__', base.x, base.y, base.radius,
+            base.left, base.top, base.right, base.bottom,
           );
         }
         const train = o.getWorldTrain();
@@ -1073,6 +1079,41 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const runtime = this.options.getWorldMutation();
     if (!runtime) throw new Error('[WorldCombatGameplayBinding] World mutation runtime is not bound');
     return runtime;
+  }
+
+  private ensureProjectileBaseGeometry(): void {
+    const baseManager = this.options.baseManager;
+    const generation = baseManager?.getObstacleGeneration() ?? 0;
+    if (this.projectileBaseGeometryGeneration === generation) return;
+    this.projectileBaseGeometry.length = 0;
+    for (const base of baseManager?.getBases() ?? []) {
+      const cells = base.getCellBodies();
+      if (cells.length === 0) continue;
+      let left = Number.POSITIVE_INFINITY;
+      let top = Number.POSITIVE_INFINITY;
+      let right = Number.NEGATIVE_INFINITY;
+      let bottom = Number.NEGATIVE_INFINITY;
+      for (const cell of cells) {
+        const bounds = cell.getBounds();
+        left = Math.min(left, bounds.left);
+        top = Math.min(top, bounds.top);
+        right = Math.max(right, bounds.right);
+        bottom = Math.max(bottom, bounds.bottom);
+      }
+      if (!Number.isFinite(left) || !Number.isFinite(top)
+        || !Number.isFinite(right) || !Number.isFinite(bottom)) continue;
+      this.projectileBaseGeometry.push({
+        base,
+        left,
+        top,
+        right,
+        bottom,
+        x: (left + right) * 0.5,
+        y: (top + bottom) * 0.5,
+        radius: Math.hypot(right - left, bottom - top) * 0.5,
+      });
+    }
+    this.projectileBaseGeometryGeneration = generation;
   }
 
   private bindBaseManager(): void {

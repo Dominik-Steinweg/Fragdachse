@@ -53,6 +53,8 @@ import { getWorldDefinitionForMap } from '../../src/config/authoring/authoredSce
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { bridge } from '../../src/network/bridge';
 import { ArenaScene } from '../../src/scenes/ArenaScene';
+import { ArenaLifecycleCoordinator } from '../../src/scenes/arena/ArenaLifecycleCoordinator';
+import { DEFAULT_LOADOUT, WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
 import { BootScreen } from '../../src/ui/BootScreen';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
@@ -243,6 +245,29 @@ describe('LobbyWorld – Eintritt und Austritt', () => {
 });
 
 describe('LobbyWorld – interaktives World-Gameplay ohne Activity', () => {
+  it('verwendet committed Host-Konfigurationen bis zur nächsten Auswahl oder zum Moduswechsel wieder', () => {
+    let mode = 'coop_defense';
+    let committed = {
+      weapon1: DEFAULT_LOADOUT.weapon1.id, weapon2: DEFAULT_LOADOUT.weapon2.id,
+      utility: DEFAULT_LOADOUT.utility.id, ultimate: DEFAULT_LOADOUT.ultimate.id,
+      coopDefenseClassId: null, coopDefenseProfile: null,
+    };
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.committedLoadoutSelections = new WeakMap();
+    coordinator.resolveConfiguredGameMode = () => mode;
+    vi.spyOn(bridge, 'getActivityDescriptor').mockReturnValue({ kind: 'pvp-match' } as any);
+    vi.spyOn(bridge, 'getPlayerCommittedLoadout').mockImplementation(() => committed);
+
+    const initial = coordinator.resolveCommittedLoadoutSelection('local');
+    expect(coordinator.resolveCommittedLoadoutSelection('local')).toBe(initial);
+    committed = { ...committed, weapon2: WEAPON_CONFIGS.P90.id };
+    const next = coordinator.resolveCommittedLoadoutSelection('local');
+    expect(next).not.toBe(initial);
+    expect(next.weapon2.id).toBe(WEAPON_CONFIGS.P90.id);
+    mode = 'deathmatch';
+    expect(coordinator.resolveCommittedLoadoutSelection('local')).not.toBe(next);
+  });
+
   it('gibt einem Teilnehmer die normalen World-Rechte, aber keine Missionsaktionen', () => {
     expect(capabilitiesFor('interactive')).toEqual({
       canMove: true,
@@ -647,6 +672,44 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
       expect(fade).toHaveBeenCalledOnce();
     },
   );
+
+  it('wartet bei sichtbarer World auf Shader-Warmup vor Reveal und replizierter Ladefreigabe', () => {
+    let warmupComplete = false;
+    let presentationRequired = true;
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype) as any;
+    coordinator.arenaBuilt = true;
+    coordinator.terrainSnapshotReady = true;
+    coordinator.worldRuntime = {
+      materialization: { arena: {} },
+      presentation: { layout: {} },
+      presentationFrame: { getWorldRenderWork: () => ({ pending: 0, resident: 1, renderReady: true }) },
+    };
+    coordinator.renderers = { gpuVfx: { isShaderWarmupComplete: () => warmupComplete } };
+    coordinator.getLocalWorldPresentation = () => ({ required: presentationRequired });
+    coordinator.syncAuthoritativeRoundStartAnchors = vi.fn();
+    coordinator.tryScheduleArenaStart = vi.fn();
+    vi.spyOn(bridge, 'isHost').mockReturnValue(true);
+    vi.spyOn(bridge, 'getWorldDescriptor').mockReturnValue({ worldRevision: 7 } as any);
+    const publishProgress = vi.spyOn(bridge, 'setLocalWorldLoadProgress').mockImplementation(() => {});
+    const publishReady = vi.spyOn(bridge, 'setLocalWorldLoadReady').mockImplementation(() => {});
+    const view = { x: 0, y: 0, width: 100, height: 100 };
+
+    expect(coordinator.getWorldRevealState(view).ready).toBe(false);
+    coordinator.syncArenaLoadReady(view);
+    expect(publishProgress).toHaveBeenLastCalledWith(7, expect.any(Number), 'rendering', false);
+
+    warmupComplete = true;
+    expect(coordinator.getWorldRevealState(view)).toEqual({ ready: true, progress: 100 });
+    coordinator.syncArenaLoadReady(view);
+    expect(publishProgress).toHaveBeenLastCalledWith(7, 100, 'ready', true);
+
+    // A host without local presentation does not wait for renderer preparation.
+    warmupComplete = false;
+    presentationRequired = false;
+    expect(coordinator.getWorldRevealState(null).ready).toBe(true);
+    coordinator.syncArenaLoadReady(null);
+    expect(publishReady).toHaveBeenLastCalledWith(7, true);
+  });
 
   it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');

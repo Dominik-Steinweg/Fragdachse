@@ -1725,7 +1725,12 @@ export class WorldProjectileRuntime implements
     try {
       this.runBarrierStage(nowMs);
       this.runDeflectionStage(nowMs);
-      this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+      // Barrier/deflection may have consumed the last projectile. Do not enter the collision
+      // target provider in that empty stage; same-stage projectile additions still use the live
+      // active Set when at least one record remains.
+      if (this.projectiles.activeCount > 0) {
+        this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+      }
       this.captureDebugFlightSteps('after-interaction');
     } finally {
       this.completedInteractionStages += 1;

@@ -207,6 +207,7 @@ export function composeWorldConstruction(
     getPlayerColor: (playerId) => bridge.getPlayerColor(playerId) ?? PLAYER_COLORS[0],
     construction: {
       getCapacity: (playerId) => constructionRuntime.getCapacity(playerId),
+      getBuildRevision: (playerId) => constructionRuntime.getPersistentBaseBuildRevision(playerId),
       getOwnership: (playerId) => constructionRuntime.getOwnership(playerId),
       resolveRestoreTools: (playerId) => constructionRuntime.buildRestoreTools(playerId),
       materializeRestoreCandidate: (candidate, playerId, ownerColor, ownership) => (

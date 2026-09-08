@@ -55,6 +55,16 @@ describe('utility cooldown item affix', () => {
     expect(totals.percentage['utility.cooldown']).toBeCloseTo(-0.12, 10);
   });
 
+  it('reuses the effective utility config across fresh totals wrappers', () => {
+    const totals = getCoopDefenseItemEffectTotals([helmetWithCooldownAffix(-0.2)]);
+    const first = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.HE_GRENADE, totals);
+    const second = applyCoopDefenseModifiersToUtilityConfig(UTILITY_CONFIGS.HE_GRENADE, {
+      additive: totals.additive,
+      percentage: totals.percentage,
+    });
+    expect(second).toBe(first);
+  });
+
   it('leaves per-item construction build cooldowns untouched', () => {
     // Konstruktionen laufen nicht ueber den Utility-Cooldown. Kein Item-Affix darf ihre
     // jeweils aus der Konstruktions-JSON gelesene Konfiguration verschieben.

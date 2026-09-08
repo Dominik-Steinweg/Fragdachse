@@ -78,6 +78,8 @@ export const createGpuVfxMemberHandle = (): GpuVfxMemberHandle => ({
   lane: -1, slot: -1, version: 0, generation: -1, lifeMs: 0, linear: true,
 });
 
+export type GpuVfxShaderWarmupState = 'inactive' | 'pending' | 'complete' | 'failed';
+
 /**
  * Gleichzeitig lebende Quellen ueber alle Effekte. Grosszuegig bemessen: Raketen sind mit Abstand
  * am zahlreichsten und teilen sich fuer den Rauch ohnehin eine Quelle.
@@ -97,6 +99,7 @@ interface GpuVfxLane {
 }
 
 export class GpuVfxSystem {
+  private readonly scene: Phaser.Scene;
   readonly flightRibbons: GpuFlightRibbonStore;
   private readonly ribbonLayer: Phaser.GameObjects.Image | null;
   private flightPeak = 0;
@@ -121,10 +124,62 @@ export class GpuVfxSystem {
   private suppressed = false;
   private readonly activeLanes = new Uint8Array(GPU_VFX_LANES.length);
   private generation = 0;
+  /**
+   * Pre-render cursor for the real SpriteGPULayer shader programs.  The cursor is deliberately
+   * kept here, next to the layer owner: constructing a layer only creates its RenderNode, while
+   * Phaser compiles the final feature combination on the first `run()`.
+   */
+  private shaderWarmupLane = 0;
+  private shaderWarmupActive = false;
+  private shaderWarmupState: GpuVfxShaderWarmupState = 'inactive';
+  private shaderWarmupWarningIssued = false;
+  private shaderWarmupShutdownRegistered = false;
+  private readonly stopShaderWarmupOnShutdown = (): void => { this.stopShaderWarmup(); };
+  private readonly runShaderWarmup = (): void => {
+    if (!this.shaderWarmupActive || this.shaderWarmupLane >= this.lanes.length) return;
+
+    const renderer = this.scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer;
+    if (!renderer.baseDrawingContext || !this.scene.cameras.main) {
+      this.failShaderWarmup('Renderer-Kontext oder Hauptkamera ist nicht mehr verfuegbar.');
+      return;
+    }
+
+    const lane = this.lanes[this.shaderWarmupLane];
+    // `getClone()` copies the base state. The next camera render obtains another clone from the
+    // untouched base context, so the probe's color mask/scissor cannot leak into the real frame.
+    const context = renderer.baseDrawingContext.getClone();
+    context.setCamera(this.scene.cameras.main);
+    context.setAutoClear(false, false, false);
+    // The draw must reach SubmitterSpriteGPULayer.run(), but must not alter the current frame.
+    // A 1x1 scissor also avoids rasterizing the primed (dead) member buffer at full size.
+    context.setColorWritemask(false, false, false, false);
+    context.setScissorEnable(true);
+    context.setScissorBox(0, 0, 1, 1);
+
+    try {
+      lane.layer.submitterNode.run(context);
+      // With KHR_parallel_shader_compile Phaser returns null while the link is pending. Keep
+      // this lane selected until its actual program suite is resident in the ProgramManager.
+      if (lane.layer.submitterNode.programManager.getCurrentProgramSuite()) {
+        this.shaderWarmupLane += 1;
+        if (this.shaderWarmupLane >= this.lanes.length) {
+          this.shaderWarmupState = 'complete';
+          this.stopShaderWarmup();
+        }
+      }
+    } catch (error) {
+      // Shader warmup is an optional presentation optimization. A renderer/platform that cannot
+      // execute the isolated probe must continue with the normal, authoritative render path.
+      this.failShaderWarmup(error);
+    } finally {
+      context.release();
+    }
+  };
   /** Invalidates not-yet-emitted commands when live effects are forcibly cleared. */
   get emissionGeneration(): number { return this.generation; }
 
   constructor(scene: Phaser.Scene) {
+    this.scene = scene;
     // Der Atlas muss vollstaendig sein, bevor die erste Lane entsteht: `frameDataTexture` wird im
     // Konstruktor des Layers gebaut, spaeter ergaenzte Frames existieren fuer den Shader nicht.
     buildGpuVfxAtlas(scene);
@@ -177,6 +232,56 @@ export class GpuVfxSystem {
       drop: effect => this.profiler.recordCapacityDrop(effect),
     }, [frames[0], frames[1]], flightLane.spec.capacity);
     this.ribbonLayer = createFlightRibbonLayer(scene, this.flightRibbons, flightLane.spec.depth, () => this.clockMs);
+
+    // Register after all lanes exist. Each PRE_RENDER pass probes one lane through its actual
+    // SpriteGPULayer submitter, moving first-use shader work out of the combat path.
+    this.startShaderWarmup();
+  }
+
+  private startShaderWarmup(): void {
+    const renderer = this.scene.renderer as Phaser.Renderer.WebGL.WebGLRenderer | undefined;
+    const events = this.scene.events;
+    if (!renderer || !('baseDrawingContext' in renderer) || !renderer.baseDrawingContext
+      || !this.scene.cameras.main || !events || typeof events.on !== 'function') return;
+    this.shaderWarmupLane = 0;
+    this.shaderWarmupActive = true;
+    this.shaderWarmupState = 'pending';
+    events.on(Phaser.Scenes.Events.PRE_RENDER, this.runShaderWarmup, this);
+    events.once(Phaser.Scenes.Events.SHUTDOWN, this.stopShaderWarmupOnShutdown, this);
+    this.shaderWarmupShutdownRegistered = true;
+  }
+
+  private stopShaderWarmup(): void {
+    if (this.shaderWarmupActive) {
+      this.shaderWarmupActive = false;
+      this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.runShaderWarmup, this);
+    }
+    if (this.shaderWarmupShutdownRegistered) {
+      this.shaderWarmupShutdownRegistered = false;
+      this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.stopShaderWarmupOnShutdown, this);
+    }
+  }
+
+  private failShaderWarmup(reason: unknown): void {
+    this.shaderWarmupState = 'failed';
+    if (!this.shaderWarmupWarningIssued) {
+      this.shaderWarmupWarningIssued = true;
+      console.warn(
+        '[GpuVfxSystem] SpriteGPU-Shader-Warmup fehlgeschlagen; erste Nutzung nutzt den normalen Renderpfad.',
+        reason,
+      );
+      this.diagnosticEventSink?.('gpu:vfx_shader_warmup_failed');
+    }
+    this.stopShaderWarmup();
+  }
+
+  /** No pending warmup work remains; failed warmup deliberately falls back to normal rendering. */
+  isShaderWarmupComplete(): boolean {
+    return this.shaderWarmupState !== 'pending';
+  }
+
+  getShaderWarmupState(): GpuVfxShaderWarmupState {
+    return this.shaderWarmupState;
   }
 
   createFlightRibbon(source: number, style: FlightRibbonStyle): FlightRibbonHandle | null {
@@ -457,6 +562,7 @@ export class GpuVfxSystem {
   }
 
   destroy(): void {
+    this.stopShaderWarmup();
     this.releaseAll();
     this.ribbonLayer?.destroy();
     this.quality.destroy();

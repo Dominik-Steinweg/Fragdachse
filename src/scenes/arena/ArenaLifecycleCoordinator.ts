@@ -209,6 +209,11 @@ export class ArenaLifecycleCoordinator {
   private isLocalReady      = false;
   private lastPhase: import('../../types').GamePhase = 'LOBBY';
   private trainDestroyedShown = false;
+  /** NetworkBridge replaces the committed snapshot at a new Ready commit. Old builds can be GC'd. */
+  private readonly committedLoadoutSelections = new WeakMap<LoadoutCommitSnapshot, {
+    mode: GameMode;
+    selection: LoadoutSelection;
+  }>();
 
   /**
    * Zaehlt ueber Runden hinweg hoch. Ein verspaetetes Worker-Ergebnis aus einer alten Arena traegt
@@ -1633,7 +1638,8 @@ export class ArenaLifecycleCoordinator {
     const work = this.collectWorldRenderWork(view);
     // Die replizierte Barriere wartet zusaetzlich auf den Terrain-Farb-Snapshot; der Boot-Reveal
     // tut das ausdruecklich nicht (siehe getWorldRevealState).
-    const localRenderReady = work.renderReady && this.terrainSnapshotReady;
+    const localRenderReady = work.renderReady && this.terrainSnapshotReady
+      && this.renderers.gpuVfx.isShaderWarmupComplete();
     const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, localRenderReady);
     bridge.setLocalWorldLoadProgress(
       worldRevision,
@@ -1672,7 +1678,9 @@ export class ArenaLifecycleCoordinator {
       return { ready: false, progress: 0 };
     }
     const work = this.collectWorldRenderWork(view);
-    const loadProgress = resolveWorldLoadProgress(work.pending, work.resident, work.renderReady);
+    const loadProgress = resolveWorldLoadProgress(
+      work.pending, work.resident, work.renderReady && this.renderers.gpuVfx.isShaderWarmupComplete(),
+    );
     return { ready: loadProgress.ready, progress: loadProgress.progress };
   }
 
@@ -3183,14 +3191,19 @@ export class ArenaLifecycleCoordinator {
         activity ? null : bridge.getPlayerCurrentLoadoutSnapshot(playerId),
       );
     }
-    return resolveEffectiveLoadoutSelection({
+    const mode = this.resolveConfiguredGameMode();
+    const cached = this.committedLoadoutSelections.get(committed);
+    if (cached?.mode === mode) return cached.selection;
+    const selection = resolveEffectiveLoadoutSelection({
       weapon1:  WEAPON_CONFIGS[committed.weapon1  as keyof typeof WEAPON_CONFIGS],
       weapon2:  committed.weapon2
         ? WEAPON_CONFIGS[committed.weapon2 as keyof typeof WEAPON_CONFIGS]
         : undefined,
       utility:  UTILITY_CONFIGS[committed.utility  as keyof typeof UTILITY_CONFIGS],
       ultimate: ULTIMATE_CONFIGS[committed.ultimate as keyof typeof ULTIMATE_CONFIGS],
-    }, this.resolveConfiguredGameMode(), committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
+    }, mode, committed.coopDefenseProfile, committed.coopDefenseClassId, committed.equippedItems);
+    this.committedLoadoutSelections.set(committed, { mode, selection });
+    return selection;
   }
 
   private resolveLoadoutSelection(

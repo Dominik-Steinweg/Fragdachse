@@ -95,6 +95,9 @@ export class CoopDefensePlayerModifierSystem {
     const signature = JSON.stringify(snapshot ?? null);
     const changed = this.sourceSignatures.get(playerId) !== signature;
     this.sourceSignatures.set(playerId, signature);
+    // A transport may hand us a fresh but semantically identical snapshot. Keep the current
+    // runtime object in that case; downstream caches are revision/identity based as well.
+    if (!changed) return false;
     const rawProfile = snapshot?.coopDefenseProfile;
     const classId = snapshot?.coopDefenseClassId ?? null;
     const items = snapshot?.equippedItems ?? EMPTY_ITEMS;

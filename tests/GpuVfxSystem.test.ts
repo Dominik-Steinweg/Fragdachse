@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   BlendModes: { NORMAL: 0, ADD: 1 },
+  Scenes: { Events: { PRE_RENDER: 'prerender', SHUTDOWN: 'shutdown' } },
   Math: { Linear: (a: number, b: number, t: number) => a + (b - a) * t },
 }));
 
@@ -22,6 +23,44 @@ import { GpuVfxSystem, admitGpuVfxSpawn } from '../src/effects/gpu/GpuVfxSystem'
 import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
 import { createGpuVfxMemberHandle } from '../src/effects/gpu/GpuVfxSystem';
 import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+
+function makeWarmupEvents() {
+  const listeners = new Map<string, Set<{ fn: (...args: never[]) => void; context?: object; once: boolean }>>();
+  const add = (event: string, fn: (...args: never[]) => void, context?: object, once = false) => {
+    const entries = listeners.get(event) ?? new Set();
+    entries.add({ fn, context, once });
+    listeners.set(event, entries);
+  };
+  return {
+    on(event: string, fn: (...args: never[]) => void, context?: object) { add(event, fn, context); },
+    once(event: string, fn: (...args: never[]) => void, context?: object) { add(event, fn, context, true); },
+    off(event: string, fn: (...args: never[]) => void, context?: object) {
+      const entries = listeners.get(event);
+      if (!entries) return;
+      for (const entry of entries) if (entry.fn === fn && entry.context === context) entries.delete(entry);
+    },
+    emit(event: string) {
+      const entries = [...(listeners.get(event) ?? [])];
+      for (const entry of entries) {
+        entry.fn.call(entry.context, ...([] as never[]));
+        if (entry.once) listeners.get(event)?.delete(entry);
+      }
+    },
+    count(event: string) { return listeners.get(event)?.size ?? 0; },
+  };
+}
+
+function makeWarmupContext() {
+  return {
+    releases: 0,
+    setCamera: vi.fn(),
+    setAutoClear: vi.fn(),
+    setColorWritemask: vi.fn(),
+    setScissorEnable: vi.fn(),
+    setScissorBox: vi.fn(),
+    release() { this.releases += 1; },
+  };
+}
 
 function setup() {
   const scene = makeFakeGpuVfxScene();
@@ -158,6 +197,81 @@ describe('gpu vfx system: lanes', () => {
   it('routes every lane through the shared atlas', () => {
     const { scene } = setup();
     expect(scene.layers.every((layer) => layer.key === '__gpu_vfx_atlas')).toBe(true);
+  });
+
+  it('settles the real SpriteGPU warmup lane by lane and removes its lifecycle listeners', () => {
+    const scene = makeFakeGpuVfxScene() as ReturnType<typeof makeFakeGpuVfxScene> & {
+      events: ReturnType<typeof makeWarmupEvents>;
+      cameras: { main: object };
+      renderer: { baseDrawingContext: { getClone: () => ReturnType<typeof makeWarmupContext> } };
+    };
+    const events = makeWarmupEvents();
+    const context = makeWarmupContext();
+    scene.events = events;
+    scene.cameras = { main: {} };
+    scene.renderer = { baseDrawingContext: { getClone: () => context } };
+    let programsReady = false;
+    const submitters: { run: ReturnType<typeof vi.fn>; programManager: { getCurrentProgramSuite: () => object | null } }[] = [];
+    const addLayer = scene.add.spriteGPULayer;
+    scene.add.spriteGPULayer = ((key: string, size: number) => {
+      const layer = addLayer(key, size) as ReturnType<typeof makeFakeGpuVfxScene>['layers'][number] & {
+        submitterNode: { run: ReturnType<typeof vi.fn>; programManager: { getCurrentProgramSuite: () => object | null } };
+      };
+      const submitter = { run: vi.fn(), programManager: { getCurrentProgramSuite: () => programsReady ? {} : null } };
+      layer.submitterNode = submitter;
+      submitters.push(submitter);
+      return layer;
+    }) as typeof scene.add.spriteGPULayer;
+
+    const system = new GpuVfxSystem(scene as never);
+    expect(system.isShaderWarmupComplete()).toBe(false);
+    expect(system.getShaderWarmupState()).toBe('pending');
+    events.emit('prerender');
+    expect(system.isShaderWarmupComplete()).toBe(false);
+    expect(submitters[1].run).not.toHaveBeenCalled();
+    programsReady = true;
+    for (let index = 0; index < GPU_VFX_LANES.length; index += 1) events.emit('prerender');
+    expect(system.isShaderWarmupComplete()).toBe(true);
+    expect(system.getShaderWarmupState()).toBe('complete');
+    expect(submitters).toHaveLength(GPU_VFX_LANES.length);
+    expect(submitters[0].run).toHaveBeenCalledTimes(2);
+    expect(submitters.slice(1).every((submitter) => submitter.run.mock.calls.length === 1)).toBe(true);
+    expect(context.releases).toBe(GPU_VFX_LANES.length + 1);
+    expect(context.setColorWritemask).toHaveBeenCalledWith(false, false, false, false);
+    expect(events.count('prerender')).toBe(0);
+    expect(events.count('shutdown')).toBe(0);
+    system.destroy();
+  });
+
+  it('falls back once when a warmup probe fails and still settles readiness', () => {
+    const scene = makeFakeGpuVfxScene() as ReturnType<typeof makeFakeGpuVfxScene> & {
+      events: ReturnType<typeof makeWarmupEvents>;
+      cameras: { main: object };
+      renderer: { baseDrawingContext: { getClone: () => ReturnType<typeof makeWarmupContext> } };
+    };
+    const events = makeWarmupEvents();
+    const context = makeWarmupContext();
+    scene.events = events;
+    scene.cameras = { main: {} };
+    scene.renderer = { baseDrawingContext: { getClone: () => context } };
+    const addLayer = scene.add.spriteGPULayer;
+    scene.add.spriteGPULayer = ((key: string, size: number) => {
+      const layer = addLayer(key, size) as ReturnType<typeof makeFakeGpuVfxScene>['layers'][number] & { submitterNode: object };
+      layer.submitterNode = {
+        run: () => { throw new Error('test warmup failure'); },
+        programManager: { getCurrentProgramSuite: () => ({}) },
+      };
+      return layer;
+    }) as typeof scene.add.spriteGPULayer;
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const system = new GpuVfxSystem(scene as never);
+    events.emit('prerender'); events.emit('prerender');
+    expect(system.getShaderWarmupState()).toBe('failed');
+    expect(system.isShaderWarmupComplete()).toBe(true);
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(events.count('prerender')).toBe(0);
+    expect(events.count('shutdown')).toBe(0);
+    system.destroy();
   });
 });
 
