@@ -84,6 +84,7 @@ export const PROJECTILE_BULLET_VISUAL_PRESETS = [
 
 export const PROJECTILE_GRENADE_VISUAL_PRESETS = [
   'he', 'smoke', 'molotov', 'time_bubble', 'fur_ball',
+  'he_cluster_shard', 'he_demolition_shard',
 ] as const satisfies readonly GrenadeVisualPreset[];
 
 export const PROJECTILE_ENERGY_BALL_VARIANTS = [

@@ -504,6 +504,7 @@ export interface PlaceableTunnelPlacementConfig {
 }
 
 export interface BaseUtilityConfig {
+  readonly charges?: { readonly maxCharges: number; readonly burstLockoutMs: number };
   readonly id: string;
   readonly type: UtilityType;
   readonly cooldown: number;        // ms
@@ -542,6 +543,9 @@ export interface BaseUtilityConfig {
 }
 
 export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
+  readonly impactFuseEnabled?: number;
+  readonly demolitionLevel?: number;
+  readonly fragmentation?: import('../systems/GrenadeFragmentConfig').GrenadeFragmentConfig;
   readonly type: 'explosive';
   readonly aoeRadius: number;       // px
   readonly aoeDamage: number;       // HP-Schaden im Radius

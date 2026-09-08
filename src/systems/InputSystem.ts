@@ -1,3 +1,5 @@
+import { UtilityChargePrediction } from '../loadout/UtilityChargePrediction';
+import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 import * as Phaser from 'phaser';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ConstructionId, LoadoutToolRef, LoadoutUseResult, PlacementPreviewNetState, PlayerInput, LoadoutSlot, LoadoutUseParams, TemporaryUtilityInstanceDescriptor, UltimateChargePreviewState, UtilityChargePreviewState, UtilityPlacementPreviewState, UtilityTargetingPreviewState } from '../types';
@@ -114,6 +116,8 @@ export class InputSystem {
   private getLocalUltimateConfig: (() => UltimateConfig | undefined) | null = null;
   private getLocalRage: (() => number) | null = null;
   /** Optimistic cooldowns keyed by the same stable identity used by the radial action model. */
+  private readonly utilityChargePrediction = new UtilityChargePrediction();
+  private chargePredictionWorldRevision: number | null = null;
   private readonly predictedUtilityCooldownUntil = new Map<string, number>();
   public onUtilityPressedDuringCooldown: (() => void) | null = null;
   public onUltimatePressedWithoutRage: (() => void) | null = null;
@@ -379,6 +383,29 @@ export class InputSystem {
     }
   }
 
+  getLocalUtilityChargeState(ref: RadialActionRef | null = this.selectedRadialAction): UtilityChargeState | null {
+    if (ref && ref.kind !== 'utility') return null;
+    const worldRevision = this.bridge.getWorldDescriptor?.()?.worldRevision ?? null;
+    if (worldRevision !== this.chargePredictionWorldRevision) {
+      this.utilityChargePrediction.clear();
+      this.chargePredictionWorldRevision = worldRevision;
+    }
+    const utilityId = ref?.utilityId ?? this.getLocalUtilityConfig?.()?.id;
+    if (!utilityId) return null;
+    const state = this.bridge.getPlayerUtilityChargeState?.(this.bridge.getLocalPlayerId(), utilityId);
+    if (!state) { this.utilityChargePrediction.forget(utilityId); return null; }
+    this.utilityChargePrediction.observe(state);
+    return this.utilityChargePrediction.project(utilityId, this.getCooldownNow());
+  }
+
+  handleUtilityChargeResult(attemptId: string | undefined, result: LoadoutUseResult | null): void {
+    if (!attemptId) return;
+    const worldRevision = this.bridge.getWorldDescriptor?.()?.worldRevision ?? null;
+    if (worldRevision !== this.chargePredictionWorldRevision) return;
+    if (result?.worldRevision !== undefined && result.worldRevision !== worldRevision) return;
+    this.utilityChargePrediction.acknowledge(attemptId, parseUtilityChargeState(result?.utilityChargeState) ?? undefined);
+  }
+
   /** Prediction-only view used by HUD projections; authoritative cooldown remains in the bridge. */
   getPredictedUtilityCooldownUntil(ref: RadialActionRef): number {
     return this.predictedUtilityCooldownUntil.get(radialActionKey(ref)) ?? 0;
@@ -412,6 +439,7 @@ export class InputSystem {
       ...capabilities,
       managementActions: this.radialGetManagementActions?.() ?? [],
       getCooldownUntil: (ref) => this.radialGetCooldownUntil?.(ref) ?? 0,
+      getUtilityChargeState: (utilityId) => this.getLocalUtilityChargeState({ kind: 'utility', utilityId }),
     });
     this.reconcilePredictedUtilityCooldowns(actions, now);
     this.reconcileTemporaryUtilitySelection(actions);
@@ -1804,7 +1832,12 @@ export class InputSystem {
       return;
     }
 
-    this.predictUtilityCooldown(chargeAction, this.getCooldownNow() + cfg.cooldown);
+    if (cfg.charges && chargeAction?.kind !== 'temporary-utility') {
+      this.getLocalUtilityChargeState(chargeAction);
+      this.utilityChargePrediction.predict(cfg.id, `utility-attempt:${actionId}`, this.getCooldownNow(), cfg.charges.burstLockoutMs);
+    } else {
+      this.predictUtilityCooldown(chargeAction, this.getCooldownNow() + cfg.cooldown);
+    }
 
     this.onLoadoutUse?.('utility', angle, targetX, targetY, {
       ...chargeParams,
@@ -1828,6 +1861,8 @@ export class InputSystem {
   }
 
   private getEffectiveUtilityCooldownUntil(now = this.getCooldownNow()): number {
+    const charges = this.getLocalUtilityChargeState();
+    if (charges) return getUtilityChargeReadyAt(charges);
     const authoritative = this.getLocalUtilityCooldownUntil?.() ?? 0;
     const key = this.getUtilityPredictionKey();
     const predicted = this.predictedUtilityCooldownUntil.get(key) ?? 0;

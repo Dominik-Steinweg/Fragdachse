@@ -581,7 +581,22 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
   'utility.HE_GRENADE.aoeDamage': {
     kind: 'utility',
     itemId: 'HE_GRENADE',
-    targets: [{ path: ['aoeDamage'], formula: 'scale' }],
+    targets: [
+      { path: ['aoeDamage'], formula: 'scale' },
+      { path: ['damageFalloff', 'minDamage'], formula: 'scale', optionalWhenMissing: true },
+    ],
+  },
+  'utility.HE_GRENADE.projectileSpeed': {
+    kind: 'utility', itemId: 'HE_GRENADE', targets: [{ path: ['projectileSpeed'], formula: 'scale' }],
+  },
+  'utility.HE_GRENADE.charges.maxCharges': {
+    kind: 'utility', itemId: 'HE_GRENADE', targets: [{ path: ['charges', 'maxCharges'], formula: 'add' }],
+  },
+  'utility.HE_GRENADE.impactFuseEnabled': {
+    kind: 'utility', itemId: 'HE_GRENADE', targets: [{ path: ['impactFuseEnabled'], formula: 'add' }],
+  },
+  'utility.HE_GRENADE.demolitionLevel': {
+    kind: 'utility', itemId: 'HE_GRENADE', targets: [{ path: ['demolitionLevel'], formula: 'add' }],
   },
   'utility.HE_GRENADE.cooldown': {
     kind: 'utility',

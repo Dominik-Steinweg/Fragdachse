@@ -971,6 +971,32 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     o.projectileHoming.setLineOfFireReadPort(lineOfFirePort);
     // Targetability-Familie: Beziehung und Homing-Gültigkeit kommen aus ihren kanonischen Ownern.
     o.projectileInteraction.setProjectileTargetabilityPort({
+      getGrenadeContactRole: (provenance, target) => {
+        const ownerId = provenance.allegiance.ownerId;
+        const sourceIsHostile = provenance.allegiance.factionId === 'hostile'
+          || ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID
+          || o.getEnemyManager()?.getEnemy(ownerId)?.faction === 'hostile';
+        if (target.kind === 'player' || target.kind === 'enemy') {
+          return String(target.id) !== ownerId && o.combatSystem.isAlive(String(target.id))
+            && o.combatSystem.canProjectileDamageTarget(provenance, String(target.id), false) ? 'character' : null;
+        }
+        if (target.kind === 'base') {
+          const base = o.baseManager?.getBase(String(target.id));
+          return base && !base.isInert() && base.getHp() > 0
+            && (base.faction === 'hostile') !== sourceIsHostile ? 'structure' : null;
+        }
+        if (target.kind === 'rock' || target.kind === 'construction') {
+          const construction = o.placementSystem.getRuntimeRock(Number(target.id));
+          if (!construction || construction.hp <= 0 || construction.ownerId === ownerId
+            || (construction.constructionId === undefined && construction.kind === 'rock')) return null;
+          const targetIsHostile = construction.ownerId === COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID
+            || o.getEnemyManager()?.getEnemy(construction.ownerId)?.faction === 'hostile';
+          if (targetIsHostile !== sourceIsHostile) return 'structure';
+          if (sourceIsHostile || construction.ownerId === COOP_DEFENSE_BASE_TURRET_OWNER_ID) return null;
+          return o.network.authority.isEnemyPair(ownerId, construction.ownerId) ? 'structure' : null;
+        }
+        return null;
+      },
       canDamage: (provenance, target, allowTeamDamage) => (
         // Köder sind reine Ablenkziele und kennen keine Beziehungsprüfung.
         target.kind === 'decoy'

@@ -1,3 +1,4 @@
+import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
 import * as Phaser from 'phaser';
 import { bridge }           from '../../network/bridge';
 import { EMPTY_FULL_PROJECTILE_SNAPSHOT } from '../../network/projectileSnapshotCodec';
@@ -422,7 +423,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.resolveProjectileExplosion(explosion);
     }
 
-    for (const grenade of grenadePayloads) this.resolveGrenadePayload(grenade);
+    for (const grenade of grenadePayloads) {
+      if (this.worldFramePort?.getProjectileRuntime?.() !== projectileRuntime) break;
+      this.resolveGrenadePayload(grenade);
+      projectileRuntime?.completeGrenadeDetonation(grenade.projectileId);
+    }
 
     if (metrics) {
       metrics.explosionsMs = performance.now() - phaseStartedAt;
@@ -845,6 +850,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         weapon1CooldownFrac:     playerFrame?.weapon1CooldownFrac ?? 0,
         weapon2CooldownFrac:     playerFrame?.weapon2CooldownFrac ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
+        utilityChargeState: this.ctx.inputSystem.getLocalUtilityChargeState?.(),
         utilityId,
         utilityAction:            managementAction ?? undefined,
         persistentBaseRewardId:   rewardId ?? undefined,
@@ -1201,6 +1207,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     x: number, y: number, radius: number, damage: number,
     rockMult: number, trainMult: number, attackerId: string,
     damageFalloff?: RadialDamageFalloffConfig,
+    source?: { slot: LoadoutSlot; id: string },
   ): void {
     const arenaResult = this.arenaResult;
 
@@ -1208,7 +1215,27 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       // Der Fels-Anteil läuft über den gemeinsamen Kern; die Lobby benutzt denselben Resolver
       // mit ihrem lokalen Bestand, damit Falloff und `rockDamageMult` identisch wirken.
       applyRadialEnvironmentDamage(
-        this.environmentRockSink,
+        source ? {
+          ...this.environmentRockSink,
+          forEachRockInRadius: (originX, originY, reach, visit) => {
+            this.forEachArenaRockInRadius(originX, originY, reach, (index, rock) => {
+              const placed = this.placementSystem?.getRuntimeRock(index);
+              if (placed?.constructionId || (placed && placed.kind !== 'rock')) {
+                const bounds = rock.getBounds();
+                visit(index, Math.max(bounds.left, Math.min(bounds.right, originX)),
+                  Math.max(bounds.top, Math.min(bounds.bottom, originY)));
+              } else visit(index, rock.x, rock.y);
+            });
+          },
+          resolveRockDamage: (index, amount, owner) => this.resolveObstacleDamage(index, amount, owner, source.slot),
+          applyRockDamage: (index, amount, owner) => {
+            const outcome = this.worldMutation?.applyResolvedDamage('rock', index, amount, owner, source.id, 'explosion');
+            if (!outcome || outcome.kind === 'rejected' || outcome.resultingState.kind !== 'integrity') return null;
+            return { actualDamage: outcome.kind === 'damage-applied' ? outcome.actualDamage : 0,
+              remainingIntegrity: outcome.resultingState.integrity,
+              becameDestroyed: outcome.kind === 'damage-applied' && outcome.transition.kind === 'destroyed' };
+          },
+        } : this.environmentRockSink,
         { x, y, radius, damage, rockDamageMult: rockMult, falloff: damageFalloff },
         attackerId,
         false,
@@ -1392,7 +1419,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const ownerId = request.provenance.allegiance.ownerId;
     const effect = request.effect;
     if (effect.type === 'damage') {
-      this.ctx.getWorldCombatCore()!.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
+      const combat = this.ctx.getWorldCombatCore();
+      const world = this.worldRuntime;
+      if (!combat || !world) return;
+      const sourceSlot = request.provenance.sourceSlot ?? 'utility';
+      const environmentMultiplier = combat.getPlayerRuntimeDamageMultiplier(ownerId, sourceSlot);
+      combat.applyAoeDamage(request.x, request.y, effect.radius, effect.damage, ownerId, false, {
         category: 'explosion',
         allowTeamDamage: effect.allowTeamDamage,
         sourceId: request.provenance.weaponSourceId ?? 'weapon.grenade',
@@ -1400,28 +1432,15 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         damageFalloff: effect.damageFalloff,
         baseDamageMult: effect.baseDamageMult,
       });
+      if (this.worldRuntime !== world || this.ctx.getWorldCombatCore() !== combat) return;
       this.applyAoeEnvironmentDamage(
-        request.x, request.y, effect.radius, effect.damage,
-        effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId, effect.damageFalloff,
+        request.x, request.y, effect.radius, effect.damage * environmentMultiplier,
+        effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId,
+        effect.damageFalloff ? { ...effect.damageFalloff, minDamage: effect.damageFalloff.minDamage * environmentMultiplier } : undefined,
+        { slot: sourceSlot, id: request.provenance.weaponSourceId ?? 'weapon.grenade' },
       );
+      if (this.worldRuntime !== world || this.ctx.getWorldCombatCore() !== combat) return;
       bridge.broadcastExplosionEffect(request.x, request.y, effect.radius, undefined, effect.visualStyle);
-      const clusterCount = Math.max(0, Math.floor(effect.clusterCount ?? 0));
-      for (let index = 0; index < clusterCount; index += 1) {
-        const angle = (Math.PI * 2 * index) / Math.max(1, clusterCount);
-        const radius = effect.radius * (effect.clusterRadiusFactor ?? 0);
-        const damage = effect.damage * (effect.clusterDamageFactor ?? 0);
-        const cx = request.x + Math.cos(angle) * effect.radius * 0.45;
-        const cy = request.y + Math.sin(angle) * effect.radius * 0.45;
-        this.ctx.getWorldCombatCore()!.applyAoeDamage(cx, cy, radius, damage, ownerId, false, {
-          category: 'explosion',
-          allowTeamDamage: effect.allowTeamDamage,
-          sourceId: 'weapon.cluster_charge',
-          sourceSlot: request.provenance.sourceSlot ?? 'utility',
-          baseDamageMult: effect.baseDamageMult,
-        });
-        this.applyAoeEnvironmentDamage(cx, cy, radius, damage, effect.rockDamageMult ?? 1, effect.trainDamageMult ?? 1, ownerId);
-        bridge.broadcastExplosionEffect(cx, cy, radius, undefined, effect.visualStyle);
-      }
       return;
     }
     if (effect.type === 'spawn_enemy') {
@@ -1764,7 +1783,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   };
 
   /** Alle autoritaeren Hindernis-/Konstruktpfade teilen denselben Zielstatus-Trichter. */
-  private resolveObstacleDamage(index: number, damage: number, attackerId: string): number {
+  private resolveObstacleDamage(index: number, damage: number, attackerId: string, sourceSlot?: LoadoutSlot): number {
     const runtimeRock = this.placementSystem?.getRuntimeRock(index);
     return this.ctx.getWorldCombatCore()!.resolveExternalTargetDamage(
       {
@@ -1773,6 +1792,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       },
       damage,
       attackerId,
+      sourceSlot,
     );
   }
 
@@ -2162,6 +2182,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   private getLocalUtilityCooldownFrac(): number {
+    const chargeState = this.ctx.inputSystem.getLocalUtilityChargeState?.();
+    if (chargeState) return getUtilityRechargeFraction(chargeState, bridge.getSynchronizedNow());
     const localId = bridge.getLocalPlayerId();
     const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'management' || radialAction?.kind === 'persistent-reward') return 0;

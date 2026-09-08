@@ -1,6 +1,7 @@
 import { getDomainCatalog, getDomainKeys, translate, translateSegments, type TranslationSegment } from './catalog';
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
+import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { getCoopDefenseUpgradeDefinition, type CoopDefenseUpgradeDefinition } from '../utils/coopDefenseUpgrades';
 import {
   COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS,
@@ -35,6 +36,21 @@ function getUpgradeParams(
       'unsigned',
     );
   });
+
+  const he = UTILITY_CONFIGS.HE_GRENADE;
+  if (definition.id.startsWith('he_grenade_') && he?.type === 'explosive' && he.fragmentation) {
+    const percent = (value: number) => formatNumber(value, locale, { style: 'percent', maximumFractionDigits: 1 });
+    const duration = (value: number) => `${formatNumber(value / 1000, locale)} s`;
+    const range = (values: readonly number[]) => values.map(duration).join('–');
+    params.heLockout = duration(he.charges?.burstLockoutMs ?? 0);
+    params.heClusterDamage = percent(he.clusterDamageFactor ?? 0);
+    params.heClusterRadius = percent(he.clusterRadiusFactor ?? 0);
+    params.heClusterFuse = range(he.fragmentation.fuseMs);
+    params.heDemolitionCount = formatNumber(he.fragmentation.demolition.count, locale);
+    params.heDemolitionDamage = he.fragmentation.demolition.damageFactors.map(percent).join(' / ');
+    params.heDemolitionRadius = percent(he.fragmentation.demolition.radiusFactor);
+    params.heDemolitionFuse = range(he.fragmentation.demolition.fuseMs);
+  }
 
   if (definition.id === 'inspector_construction_slots') {
     params.baseSlots = formatNumber(COOP_DEFENSE_CONSTRUCTION_BASE_SLOTS, locale, { useGrouping: false });

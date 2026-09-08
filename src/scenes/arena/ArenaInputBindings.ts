@@ -720,14 +720,15 @@ export class ArenaInputBindings {
       }
 
       const capabilities = actions.getPlayerCapabilities();
-      if (!capabilities.canInteract) return;
+      const rejectPendingCharge = () => inputSystem.handleUtilityChargeResult(params?.attemptId, null);
+      if (!capabilities.canInteract) { rejectPendingCharge(); return; }
       const dismantleAction = params?.dismantle === true || params?.globalDismantle === true;
       const constructionAction = params?.constructionId !== undefined
         || params?.toolRef?.kind === 'construction';
       if (dismantleAction ? !capabilities.canDismantle
         : constructionAction ? !capabilities.canPlace
-        : !capabilities.canUseCombat) return;
-      if (!actions.isLocalPlayerAlive() || actions.isLocalPlayerBurrowed()) return;
+        : !capabilities.canUseCombat) { rejectPendingCharge(); return; }
+      if (!actions.isLocalPlayerAlive() || actions.isLocalPlayerBurrowed()) { rejectPendingCharge(); return; }
 
       let shotId: number | undefined;
       let predictionId: number | undefined;
@@ -774,6 +775,7 @@ export class ArenaInputBindings {
           ? actions.getLocalUtilityCooldownUntil(params.temporaryUtilityInstanceId)
           : actions.getLocalUtilityCooldownUntil();
         if (utilityCooldownUntil > actions.getSynchronizedNow()) {
+          rejectPendingCharge();
           if (inputStarted) {
             const utilityShotAudio = actions.getLocalUtilityConfig()?.shotAudio;
             this.input.audioSystem.playLocalSound(utilityShotAudio?.failureKey);
@@ -812,7 +814,8 @@ export class ArenaInputBindings {
       const isToolUtilityAction = params?.toolRef?.kind === 'utility';
       const isTemporaryUtilityAction = params?.temporaryUtilityInstanceId !== undefined;
       const isDismantleAction = params?.dismantle === true;
-      const awaitResult = isUtilityPlacementAction
+      const isChargeUtilityAction = slot === 'utility' && !isTemporaryUtilityAction && !!utilityConfig?.charges;
+      const awaitResult = isChargeUtilityAction || isUtilityPlacementAction
         || isUltimatePlacementAction
         || isConstructionAction
         || isToolUtilityAction
@@ -841,6 +844,7 @@ export class ArenaInputBindings {
       }
       if (awaitResult) {
         void loadoutPromise.then((result) => {
+          if (isChargeUtilityAction) inputSystem.handleUtilityChargeResult(params?.attemptId, result);
           if (isGaussLifecycleAction) {
             inputSystem.handleGaussActionResult(params!, result);
             return;
@@ -862,6 +866,7 @@ export class ArenaInputBindings {
           }
           handleLocalLoadoutFailure(slot, result, inputStarted);
         }).catch(() => {
+          if (isChargeUtilityAction) rejectPendingCharge();
           if (isConstructionAction) {
             actions.feedback.showPlacementError(t('ui.errors.blocked'));
           } else if (isUtilityPlacementAction || isUltimatePlacementAction) {

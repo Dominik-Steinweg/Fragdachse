@@ -1455,9 +1455,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     options?: AoeDamageOptions,
   ): void {
     const derivedFrom = options?.derivedFrom;
-    const runtimeDamage = derivedFrom
-      ? damage
-      : damage * this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
+    const runtimeMultiplier = derivedFrom ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
+    const runtimeDamage = damage * runtimeMultiplier;
+    const runtimeFalloff = options?.damageFalloff
+      ? { ...options.damageFalloff, minDamage: options.damageFalloff.minDamage * runtimeMultiplier }
+      : undefined;
     for (const player of this.playerManager.getAllPlayers()) {
       if (options?.excludeTargetId === player.id) continue;
       if (!includeSelf && player.id === ownerId) continue;
@@ -1466,7 +1468,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const dist = Phaser.Math.Distance.Between(x, y, player.x, player.y);
       if (dist > radius) continue;
 
-      let appliedDamage = computeRadialDamage(dist, radius, runtimeDamage, options?.damageFalloff);
+      let appliedDamage = computeRadialDamage(dist, radius, runtimeDamage, runtimeFalloff);
       if (player.id === ownerId) {
         appliedDamage *= options?.selfDamageMult ?? 1;
       }
@@ -1506,7 +1508,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       const dist = Phaser.Math.Distance.Between(x, y, enemy.sprite.x, enemy.sprite.y);
       if (dist > radius) continue;
 
-      const roundedDamage = Math.round(computeRadialDamage(dist, radius, runtimeDamage, options?.damageFalloff));
+      const roundedDamage = Math.round(computeRadialDamage(dist, radius, runtimeDamage, runtimeFalloff));
       if (roundedDamage <= 0) continue;
       const derivedBasis = derivedFrom
         ? createDerivedDamageBasis(derivedFrom, roundedDamage / derivedFrom.actualDamage)

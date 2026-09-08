@@ -4803,73 +4803,180 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "he_grenade_damage",
-                                                "code":  "D-U1-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  110,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_he_grenade",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.HE_GRENADE.aoeDamage",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
+                                                "id": "he_grenade_cooldown",
+                                                "code": "D-U1-L1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 110,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_he_grenade",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.cooldown",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": -0.15
+                                                    },
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.projectileSpeed",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.15
+                                                    }
+                                                ]
                                             },
                                             {
-                                                "id":  "he_grenade_radius",
-                                                "code":  "D-U1-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  120,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "he_grenade_damage",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.HE_GRENADE.aoeRadius",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.5
-                                                                }
-                                                            ]
+                                                "id": "he_grenade_damage",
+                                                "code": "D-U1-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 115,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_he_grenade",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.aoeDamage",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.1
+                                                    },
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.aoeRadius",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.1
+                                                    }
+                                                ]
                                             },
                                             {
-                                                "id":  "he_grenade_cooldown",
-                                                "code":  "D-U1-3",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  125,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_he_grenade",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.HE_GRENADE.cooldown",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  -0.1
-                                                                }
-                                                            ]
+                                                "id": "he_grenade_charges",
+                                                "code": "D-U1-L2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 120,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "he_grenade_cooldown",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.charges.maxCharges",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "he_grenade_impact_fuse",
+                                                "code": "D-U1-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 125,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "he_grenade_damage",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.impactFuseEnabled",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "he_grenade_cluster",
+                                                "code": "D-U1-B",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 130,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "he_grenade_charges",
+                                                        "minLevel": 1
+                                                    },
+                                                    {
+                                                        "upgradeId": "he_grenade_impact_fuse",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.clusterCount",
+                                                        "mode": "add_per_level",
+                                                        "value": 5
+                                                    }
+                                                ],
+                                                "bossPointCostPerLevel": 1
+                                            },
+                                            {
+                                                "id": "he_grenade_cluster_mass",
+                                                "code": "D-U1-BL1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 135,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "he_grenade_cluster",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.clusterCount",
+                                                        "mode": "add_per_level",
+                                                        "value": 2
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "he_grenade_demolition_cluster",
+                                                "code": "D-U1-BR1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 140,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "he_grenade_cluster",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.HE_GRENADE.demolitionLevel",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
                                             },
                                             {
                                                 "id":  "unlock_time_bubble",
@@ -5408,38 +5515,7 @@
                                                                 }
                                                             ]
                                             },
-                                            {
-                                                "id":  "he_grenade_cluster",
-                                                "code":  "D-U1-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  127,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "he_grenade_radius",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.HE_GRENADE.clusterCount",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  3
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.HE_GRENADE.clusterRadiusFactor",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.5
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.HE_GRENADE.clusterDamageFactor",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.3
-                                                                }
-                                                            ]
-                                            },
+
                                             {
                                                 "id":  "molotov_wildfire",
                                                 "code":  "D-U4-C",

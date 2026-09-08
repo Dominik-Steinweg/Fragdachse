@@ -1,12 +1,15 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { GrenadeVisualPreset } from '../types';
+import { ensureExplosionChunkTexture, TEX_EXPLOSION_CHUNK } from './gpu/GpuVfxSourceTextures';
 import { configureAdditiveImage, createEmitter, destroyEmitter, ensureCanvasTexture } from './EffectUtils';
 
 const TEX_GRENADE_GLOW       = '__grenade_glow';
 const TEX_MOLOTOV_FIRE_PUFF  = '__grenade_fire_puff';
 
 const BODY_KEYS: Record<GrenadeVisualPreset, string> = {
+  he_cluster_shard: TEX_EXPLOSION_CHUNK,
+  he_demolition_shard: TEX_EXPLOSION_CHUNK,
   he:      '__grenade_body_he',
   smoke:   '__grenade_body_smoke',
   molotov: '__grenade_body_molotov',
@@ -14,7 +17,7 @@ const BODY_KEYS: Record<GrenadeVisualPreset, string> = {
   fur_ball: '__grenade_body_fur_ball',
 };
 
-const DETAIL_KEYS: Record<GrenadeVisualPreset, string> = {
+const DETAIL_KEYS: Partial<Record<GrenadeVisualPreset, string>> = {
   he:      '__grenade_detail_he',
   smoke:   '__grenade_detail_smoke',
   molotov: '__grenade_detail_molotov',
@@ -23,6 +26,8 @@ const DETAIL_KEYS: Record<GrenadeVisualPreset, string> = {
 };
 
 const SPARK_KEYS: Record<GrenadeVisualPreset, string> = {
+  he_cluster_shard: '__grenade_spark_he',
+  he_demolition_shard: '__grenade_spark_he',
   he:      '__grenade_spark_he',
   smoke:   '__grenade_spark_smoke',
   molotov: '__grenade_spark_molotov',
@@ -31,6 +36,7 @@ const SPARK_KEYS: Record<GrenadeVisualPreset, string> = {
 };
 
 interface GrenadePresetConfig {
+  fragmentSizePx?: number;
   bodyScale: number;
   glowAlpha: number;
   glowScale: number;
@@ -49,7 +55,7 @@ interface GrenadePresetConfig {
 interface GrenadeVisual {
   glow: Phaser.GameObjects.Image;
   body: Phaser.GameObjects.Image;
-  detail: Phaser.GameObjects.Image;
+  detail: Phaser.GameObjects.Image | null;
   trail: Phaser.GameObjects.Particles.ParticleEmitter;
   preset: GrenadeVisualPreset;
   lastFireX: number;
@@ -58,6 +64,16 @@ interface GrenadeVisual {
 }
 
 const PRESETS: Record<GrenadeVisualPreset, GrenadePresetConfig> = {
+  he_cluster_shard: {
+    fragmentSizePx: 8, bodyScale: 1, glowAlpha: 0.35, glowScale: 1.8, detailAlpha: 0,
+    trailAlpha: 0.55, trailFrequency: 30, trailLifespan: { min: 60, max: 140 },
+    trailScaleStart: 0.16, trailScaleEnd: 0, trailSpeed: 8, trailTints: [0xffd996, 0xff813b],
+  },
+  he_demolition_shard: {
+    fragmentSizePx: 6, bodyScale: 1, glowAlpha: 0.3, glowScale: 1.6, detailAlpha: 0,
+    trailAlpha: 0.55, trailFrequency: 24, trailLifespan: { min: 40, max: 90 },
+    trailScaleStart: 0.12, trailScaleEnd: 0, trailSpeed: 6, trailTints: [0xffedbb, 0xffb448],
+  },
   he: {
     bodyScale:       0.6,
     glowAlpha:       0.62,
@@ -160,6 +176,7 @@ export class GrenadeRenderer {
     });
 
     this.generateHeTextures(textures);
+    ensureExplosionChunkTexture(this.scene);
     this.generateSmokeTextures(textures);
     this.generateMolotovTextures(textures);
     this.generateTimeBubbleTextures(textures);
@@ -186,7 +203,9 @@ export class GrenadeRenderer {
       glowTint,
     );
     const body   = this.scene.add.image(x, y, BODY_KEYS[preset]).setDepth(DEPTH.PROJECTILES).setAlpha(0.98);
-    const detail = this.scene.add.image(x, y, DETAIL_KEYS[preset]).setDepth(DEPTH.PROJECTILES + 0.2).setAlpha(cfg.detailAlpha);
+    if (cfg.fragmentSizePx) body.setTint(cfg.trailTints[0]!);
+    const detailKey = DETAIL_KEYS[preset];
+    const detail = detailKey ? this.scene.add.image(x, y, detailKey).setDepth(DEPTH.PROJECTILES + 0.2).setAlpha(cfg.detailAlpha) : null;
 
     const trail = createEmitter(this.scene, x, y, SPARK_KEYS[preset], {
       lifespan:  cfg.trailLifespan,
@@ -213,7 +232,7 @@ export class GrenadeRenderer {
     const cfg       = PRESETS[visual.preset];
     const speed     = Math.max(Math.hypot(vx, vy), 1);
     const angle     = Math.atan2(vy, vx);
-    const baseScale = Math.max(size / 16, 0.8) * cfg.bodyScale;
+    const baseScale = cfg.fragmentSizePx ? cfg.fragmentSizePx / 16 : Math.max(size / 16, 0.8) * cfg.bodyScale;
     const spin      = this.scene.time.now * 0.009 + id * 0.3;
     const nx        = vx / speed;
     const ny        = vy / speed;
@@ -224,7 +243,7 @@ export class GrenadeRenderer {
 
     // All three grenade types tumble freely – bottles spin just like HE/Smoke.
     visual.body.setPosition(x, y).setScale(baseScale).setRotation(spin);
-    visual.detail.setPosition(x, y).setScale(baseScale).setRotation(spin);
+    visual.detail?.setPosition(x, y).setScale(baseScale).setRotation(spin);
 
     visual.trail.setPosition(tailX, tailY);
 
@@ -273,7 +292,7 @@ export class GrenadeRenderer {
     if (!visual) return;
     visual.glow.destroy();
     visual.body.destroy();
-    visual.detail.destroy();
+    visual.detail?.destroy();
     destroyEmitter(visual.trail);
     this.visuals.delete(id);
   }
@@ -321,7 +340,7 @@ export class GrenadeRenderer {
     });
 
     // Detail: horizontal segmentation bands + safety lever (spoon).
-    ensureCanvasTexture(textures, DETAIL_KEYS.he, 34, 34, (ctx) => {
+    ensureCanvasTexture(textures, DETAIL_KEYS.he!, 34, 34, (ctx) => {
       // Three segment grooves drawn as thin ellipses to follow the oval contour.
       ctx.strokeStyle = 'rgba(22,32,10,0.50)';
       ctx.lineWidth   = 1.1;
@@ -376,7 +395,7 @@ export class GrenadeRenderer {
     });
 
     // Detail: distinctive yellow identification band + emission holes.
-    ensureCanvasTexture(textures, DETAIL_KEYS.smoke, 34, 40, (ctx) => {
+    ensureCanvasTexture(textures, DETAIL_KEYS.smoke!, 34, 40, (ctx) => {
       // Yellow band (classic smoke grenade marker)
       ctx.fillStyle = 'rgba(238,216,92,0.92)';
       ctx.fillRect(8, 17, 18, 6);
@@ -445,7 +464,7 @@ export class GrenadeRenderer {
     });
 
     // Detail: glass highlights, liquid level line, burning wick with flame.
-    ensureCanvasTexture(textures, DETAIL_KEYS.molotov, 28, 46, (ctx) => {
+    ensureCanvasTexture(textures, DETAIL_KEYS.molotov!, 28, 46, (ctx) => {
       // Glass highlight on left side of bottle body
       ctx.fillStyle = 'rgba(224,182,118,0.28)';
       ctx.fillRect(6, 25, 3, 14);
@@ -503,7 +522,7 @@ export class GrenadeRenderer {
       ctx.fill();
     });
 
-    ensureCanvasTexture(textures, DETAIL_KEYS.time_bubble, 34, 34, (ctx) => {
+    ensureCanvasTexture(textures, DETAIL_KEYS.time_bubble!, 34, 34, (ctx) => {
       ctx.strokeStyle = 'rgba(255,255,255,0.58)';
       ctx.lineWidth = 1.4;
       ctx.beginPath();
@@ -565,7 +584,7 @@ export class GrenadeRenderer {
       ctx.fill();
     });
 
-    ensureCanvasTexture(textures, DETAIL_KEYS.fur_ball, 38, 38, (ctx) => {
+    ensureCanvasTexture(textures, DETAIL_KEYS.fur_ball!, 38, 38, (ctx) => {
       // Fellsträhnen: kurze, gebogene Striche in unterschiedlichen Tiefen. Gleich lange Striche
       // ab der Mitte würden als Sternmuster statt als Fell lesen.
       ctx.strokeStyle = 'rgba(70,44,22,0.42)';

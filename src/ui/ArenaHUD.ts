@@ -1,3 +1,4 @@
+import type { UtilityChargeState } from '../loadout/UtilityChargeState';
 /**
  * ArenaHUD – Premium left-sidebar HUD for the arena phase.
  *
@@ -259,6 +260,7 @@ export interface ArenaHUDData {
   weapon1CooldownFrac:      number;
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
+  utilityChargeState?: UtilityChargeState | null;
   utilityId?:               string;
   utilityAction?:           RadialManagementAction;
   persistentBaseRewardId?: PersistentBaseRewardId;
@@ -627,6 +629,9 @@ export class ArenaHUD {
         : '';
       const displayName = `${utilityName}${capacitySuffix}`;
       if (displayName !== this.currentUtilityName) this.onUtilityNameChanged(displayName);
+      const chargeSuffix = data.utilityChargeState
+        ? ` · ${data.utilityChargeState.availableCharges}/${data.utilityChargeState.maxCharges}` : '';
+      this.util.label.setText(`${t('ui.loadout.utility')}: ${displayName}${chargeSuffix}`);
     }
     this.updateTemporaryUtilityVisual(data.isTemporaryUtilitySelected ?? false);
     this.updatePersistentPowerUps(data);

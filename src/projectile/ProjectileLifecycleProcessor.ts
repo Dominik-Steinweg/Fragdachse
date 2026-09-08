@@ -7,6 +7,7 @@ import { projectExplosionCascadeAppearance } from './ProjectileExplosionProjecti
 
 /** Private collaborators of the one World owner; none owns a registry or a domain writer. */
 export interface ProjectileLifecycleDependencies {
+  prepareGrenadePayload?(projectile: ProjectileRuntimeRecord): ProjectileGrenadePayloadRequest;
   queueDestroy(projectile: ProjectileRuntimeRecord): void;
   release(projectile: ProjectileRuntimeRecord): void;
   isCurrent(projectile: ProjectileRuntimeRecord): boolean;
@@ -24,11 +25,13 @@ export interface ProjectileLifecycleDependencies {
  * Requests are buffered until the host's deferred domain stage; this processor never applies them.
  */
 export class ProjectileLifecycleProcessor {
+  private readonly pendingGrenadePayloads: ProjectileGrenadePayloadRequest[] = [];
   private readonly pendingProjectileExplosions: ProjectileExplosionRequest[] = [];
   private readonly finalizationRecords: ProjectileRuntimeRecord[] = [];
   constructor(private readonly deps: ProjectileLifecycleDependencies) {}
 
   reset(): void {
+    this.pendingGrenadePayloads.length = 0;
     this.pendingProjectileExplosions.length = 0;
     this.finalizationRecords.length = 0;
   }
@@ -40,6 +43,20 @@ export class ProjectileLifecycleProcessor {
     if (impactTargetKey) projectile.interaction.multiExplosionExcludedTargetKeys?.add(impactTargetKey);
     this.queueExplosion(projectile, true);
     return true;
+  }
+
+  triggerGrenadeExplosion(projectile: ProjectileRuntimeRecord): boolean {
+    if (projectile.pendingDestroy || !projectile.spec.interaction.grenadeEffect) return false;
+    this.pendingGrenadePayloads.push(this.createGrenadePayload(projectile));
+    this.deps.queueDestroy(projectile);
+    return true;
+  }
+
+  private createGrenadePayload(projectile: ProjectileRuntimeRecord): ProjectileGrenadePayloadRequest {
+    return this.deps.prepareGrenadePayload?.(projectile) ?? {
+      projectileId: projectile.id, x: projectile.physics.sprite.x, y: projectile.physics.sprite.y,
+      provenance: projectile.provenance, effect: projectile.spec.interaction.grenadeEffect!,
+    };
   }
 
   triggerEnemyImpactExplosion(projectile: ProjectileRuntimeRecord): boolean {
@@ -54,7 +71,7 @@ export class ProjectileLifecycleProcessor {
     // Requests queued by the preceding interaction stage resolve now. Requests raised during
     // finalization retain their established next-host-stage timing.
     const projectileExplosions = this.pendingProjectileExplosions.splice(0);
-    const grenadePayloads: ProjectileGrenadePayloadRequest[] = [];
+    const grenadePayloads = this.pendingGrenadePayloads.splice(0);
     for (const projectile of projectiles) {
       if ((projectile.spec.flight.isFlame || projectile.spec.interaction.impulse.leafBlowerMinKnockback !== undefined
         || projectile.spec.interaction.impulse.leafBlowerMaxKnockback !== undefined || projectile.spec.interaction.impulse.leafBlowerDeflectsProjectiles === true)
@@ -191,18 +208,14 @@ export class ProjectileLifecycleProcessor {
 
     if (proj.spec.flight.isGrenade) {
       if (coreStage.grenadeExpiredIds.has(proj.id) && proj.spec.interaction.grenadeEffect) {
-        grenadePayloads.push({
-          x: proj.physics.sprite.x,
-          y: proj.physics.sprite.y,
-          projectileId: proj.id,
-          provenance: proj.provenance,
-          effect: proj.spec.interaction.grenadeEffect,
-        });
+        grenadePayloads.push(this.createGrenadePayload(proj));
         this.deps.release(proj);
         return false;
       }
       proj.bounceProcessedThisStep = false;
       proj.velocityAfterFirstBounce = undefined;
+      proj.lastX = proj.physics.sprite.x;
+      proj.lastY = proj.physics.sprite.y;
       return true;
     }
 

@@ -1609,7 +1609,7 @@
       "description": {
         "silhouette": "Aufrechter breitschultriger Dachs mit seitlich versetzten waffenbereiten Händen, getrennten Beinen und hellem Süd-Schwanz.",
         "colors": "Gemalte schiefergraue Fellgruppen entlang der Arme, warme elfenbeinfarbene Kopfzeichnung und strukturierte anthrazitfarbene Gesichtsbänder; breite Werteflächen bleiben bei 32 Pixeln lesbar.",
-        "anatomy": "Schneller zweibeiniger Lauf am Ursprung: enger Stand, kräftig wippender Körper und Schultern, sanft zu stabilen Händen auslaufende Armbewegung; grimmiger Blick."
+        "anatomy": "Kompakter Kopf mit klaren Wangen-/Kronenflächen und breiten Gesichtsbändern. Große geschwungene weiße Augen ohne Pupillen liegen in weichen schwarzen Augenhöhlen unter Fellbrauen; rein matter Schwarz-Weiß-Kontrast ohne Emission. Schneller Lauf mit kräftigem Wippen und stabilen Waffenhänden; Kopf reicht nicht weiter nach Norden."
       },
       "requiredClips": [
         "move"
@@ -1622,6 +1622,8 @@
         "headSouthOffset": 0.04,
         "earSouthOffset": 0.055,
         "fierceEyes": true,
+        "combatFace": true,
+        "eyeSouthOffset": 0.025,
         "furBase": [0.035, 0.047, 0.057],
         "furTones": [[7, 11, 18], [20, 28, 35], [41, 51, 57], [88, 87, 79]],
         "paintedFur": true,
@@ -1647,8 +1649,8 @@
         }
       },
       "previousReference": {
-        "label": "Dachs V2-I · bisheriges Fell",
-        "path": "art/poc/pipeline-v2/runs/v2-i/badger/rich/sprite-128.png"
+        "label": "Dachs V2-O · Augen und glatte Gesichtsbänder",
+        "path": "art/poc/pipeline-v2/runs/v2-o/badger/rich/sprite-128.png"
       },
       "textures": {
         "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png"

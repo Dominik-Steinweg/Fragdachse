@@ -122,3 +122,14 @@ describe('Radial Action Model', () => {
     expect(isSameRadialActionRef(ref, { kind: 'construction', constructionId: 'flame_turret' })).toBe(false);
   });
 });
+
+it('shows stock and allows another HE charge during the recharge cooldown', () => {
+  const state = { utilityId: 'HE_GRENADE', availableCharges: 2, maxCharges: 4,
+    revision: 2, rechargeIntervalMs: 2000, nextChargeAt: 2500, lockoutUntil: 600 };
+  const input = { gameMode: 'coop_defense' as const, tools: [{ kind: 'utility' as const, id: 'HE_GRENADE' }],
+    persistentRewardIds: [], usedCapacity: 0, capacityMax: 100, now: 700,
+    canUseUtility: true, canPlace: true, canManage: true, getCooldownUntil: () => 2500, getUtilityChargeState: () => state };
+  expect(resolveRadialActions(input)[0]).toMatchObject({ available: true, charges: 2, maxCharges: 4, nextChargeAt: 2500, cooldownUntil: 600 });
+  expect(resolveRadialActions({ ...input, now: 550 })[0].available).toBe(false);
+  expect(resolveRadialActions({ ...input, getUtilityChargeState: () => ({ ...state, availableCharges: 0 }) })[0].available).toBe(false);
+});

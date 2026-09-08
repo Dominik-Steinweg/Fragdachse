@@ -345,7 +345,7 @@ export type ProjectilePathEffectKind = 'awp' | 'fireball';
 export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
-export type GrenadeVisualPreset = 'he' | 'smoke' | 'molotov' | 'time_bubble' | 'fur_ball';
+export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'time_bubble' | 'fur_ball';
 
 /** Visuelles Preset fuer Hitscan-Strahlen. */
 export type HitscanVisualPreset = 'default' | 'asmd_primary' | 'plasma_burner';
@@ -368,7 +368,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop';
+export type ExplosionVisualStyle = 'default' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -990,6 +990,7 @@ export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'inv
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
 
 export interface LoadoutUseResult {
+  utilityChargeState?: import('./loadout/UtilityChargeState').UtilityChargeState;
   ok: boolean;
   reason?: LoadoutUseFailureReason;
   resourceKind?: LoadoutUseResourceKind;
@@ -1219,6 +1220,12 @@ export interface ProjectileSpawnConfig {
 }
 
 export interface DamageGrenadeEffect {
+  role?: 'primary' | 'cluster' | 'demolition';
+  impactFuse?: boolean;
+  demolitionLevel?: number;
+  fragmentation?: import('./systems/GrenadeFragmentConfig').GrenadeFragmentConfig;
+  /** Resolved maximum throw speed, independent of the release strength. */
+  throwSpeed?: number;
   type: 'damage';
   radius: number;
   damage: number;

@@ -70,6 +70,9 @@ export function getUtilityConfigForMode(
 ): UtilityConfig | undefined {
   const id = typeof configOrId === 'string' ? configOrId : configOrId?.id;
   const resolvedId = id ? resolveUtilityIdForMode(id, mode) : undefined;
+  // Already resolved host selections carry upgrade/item values. Canonicalize an ID only
+  // when the mode actually changes its identity; otherwise retain the effective config.
+  if (configOrId && typeof configOrId !== 'string' && configOrId.id === resolvedId) return configOrId;
   return resolvedId ? UTILITY_CONFIGS[resolvedId] : undefined;
 }
 

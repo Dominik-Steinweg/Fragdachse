@@ -149,7 +149,7 @@ export class RadialActionMenu {
         detailY += 10;
       }
       if (entry.charges !== undefined) {
-        this.container.add(this.scene.add.text(labelX, detailY, `×${entry.charges}`, {
+        this.container.add(this.scene.add.text(labelX, detailY, entry.maxCharges === undefined ? `×${entry.charges}` : `${entry.charges}/${entry.maxCharges}`, {
           fontSize: '8px',
           fontFamily: 'monospace',
           fontStyle: 'bold',

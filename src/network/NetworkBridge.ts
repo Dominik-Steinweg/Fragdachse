@@ -1,4 +1,5 @@
 import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
+import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 /**
  * NetworkBridge – die Grenze zwischen Spiellogik und Netzwerk.
  * Kapselt alle Netzwerkoperationen hinter einer spiellogik-agnostischen API.
@@ -192,6 +193,7 @@ const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufender Live-Build {c: classId, p: profile, i: items, t: tool refs}
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
+const KEY_UTILITY_CHARGES = 'uch';
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
 const KEY_HELD_UTILITY_ID = 'hui'; // per-player: konkrete zuletzt erfolgreich verwendete Utility-ID
 const KEY_TEMPORARY_UTILITIES = 'tus'; // per-player reliable: TemporaryUtilityInstanceDescriptor[]
@@ -3164,7 +3166,8 @@ export class NetworkBridge {
       ? params
       : { ...params, activityRevision };
     if (isHost()) {
-      return this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY, predictionId) ?? { ok: false, reason: 'invalid' };
+      const result = this.loadoutUseHandler?.(slot, angle, targetX, targetY, myPlayer().id, shotId, requestParams, clientX, clientY, predictionId) ?? { ok: false, reason: 'invalid' };
+      return slot === 'utility' && params?.attemptId ? { ...result, worldRevision } : result;
     }
     const payload = {
       slot,
@@ -3224,8 +3227,9 @@ export class NetworkBridge {
         && Number.isSafeInteger(predictionId)
         && (predictionId as number) > 0
         && Number.isSafeInteger(wr);
+      const isUtilityAttempt = slot === 'utility' && prm?.attemptId !== undefined && Number.isSafeInteger(wr);
       const finish = (result: LoadoutUseResult): LoadoutUseResult => {
-        const withWorld = isWeapon2Prediction
+        const withWorld = isWeapon2Prediction || isUtilityAttempt
           ? { ...result, worldRevision: wr } satisfies LoadoutUseResult
           : result;
         if (!isWeapon2Prediction || !this.acceptsWorldRpc(data)) return withWorld;
@@ -3251,7 +3255,7 @@ export class NetworkBridge {
           weapon2PredictionAck: state.nextContiguousAck,
         };
       };
-      if (!this.acceptsWorldRpc(data)) return { ok: false, reason: 'blocked' };
+      if (!this.acceptsWorldRpc(data)) return finish({ ok: false, reason: 'blocked' });
       if (!['weapon1', 'weapon2', 'utility', 'ultimate'].includes(slot)
         || !isFiniteNumber(angle)
         || !isFiniteNumber(tx)
@@ -4187,10 +4191,29 @@ export class NetworkBridge {
 
   /** Liest den autoritativen Utility-Cooldown-Endzeitpunkt eines Spielers (0 = bereit). */
   getPlayerUtilityCooldownUntil(playerId: string, utilityId = '__default__'): number {
+    const charges = this.getPlayerUtilityChargeState(playerId, utilityId);
+    if (charges) return getUtilityChargeReadyAt(charges);
     const value = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CD_UNTIL);
     if (typeof value === 'number') return utilityId === '__default__' ? value : 0;
     if (!value || typeof value !== 'object') return 0;
     return (value as Record<string, number>)[utilityId] ?? 0;
+  }
+
+  publishUtilityChargeState(playerId: string, utilityId: string, state: UtilityChargeState | null): void {
+    if (!isHost()) return;
+    const player = this.playerStateMap.get(playerId);
+    if (!player) return;
+    const current = player.getState(KEY_UTILITY_CHARGES);
+    const states = current && typeof current === 'object' ? { ...current as Record<string, UtilityChargeState> } : {};
+    if (state) states[utilityId] = state;
+    else delete states[utilityId];
+    player.setState(KEY_UTILITY_CHARGES, states, true);
+  }
+
+  getPlayerUtilityChargeState(playerId: string, utilityId: string): UtilityChargeState | null {
+    const states = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CHARGES);
+    return states && typeof states === 'object'
+      ? parseUtilityChargeState((states as Record<string, unknown>)[utilityId]) : null;
   }
 
   /**

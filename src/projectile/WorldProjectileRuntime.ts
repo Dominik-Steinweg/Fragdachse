@@ -1,4 +1,5 @@
 import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
+import { createGrenadeFragments, isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
 import { usesRockSweep } from './ProjectileRockSweep';
 import { captureBounceContact, captureFlightStep, tracerBounceDebug } from './ProjectileBounceDiagnostics';
@@ -276,6 +277,7 @@ export class WorldProjectileRuntime implements
   private readonly onDestroy?: () => void;
   private projectileTimeFieldPort: ProjectileTimeFieldPort | null = null;
   private readonly pendingNextStageSpawns: PendingNextStageProjectileSpawn[] = [];
+  private readonly pendingGrenadeFragments = new Map<ProjectileId, readonly ProjectileSpawnRequest[]>();
   private completedInteractionStages = 0;
   private hasStartedInteractionStage = false;
   private hostFrameNowMs = 0;
@@ -294,6 +296,7 @@ export class WorldProjectileRuntime implements
     this.projectiles = new ProjectileStore(options.identityScope);
     const runtime = this;
     this.collisionDependencies = {
+      onGrenadeContact: (record, candidate) => this.resolveGrenadeContact(record, candidate),
       get targetQuery() { return runtime.collisionTargetQueryPort; },
       get targetability() { return runtime.targetabilityPort; },
       get worldBlocker() { return runtime.worldBlockerPort; },
@@ -304,6 +307,7 @@ export class WorldProjectileRuntime implements
       resolveWorldImpact: (record, candidate) => this.resolveWorldImpact(record, candidate),
     };
     const lifecycleDependencies: ProjectileLifecycleDependencies = {
+      prepareGrenadePayload: (projectile) => this.prepareGrenadePayload(projectile),
       queueDestroy: (projectile) => this.queueProjectileDestroy(projectile.id),
       release: (projectile) => this.releaseProjectile(projectile),
       isCurrent: (projectile) => this.projectiles.getById(projectile.id) === projectile,
@@ -880,6 +884,8 @@ export class WorldProjectileRuntime implements
     const contactKey = `${candidate.projectileId}:${projectileTargetPhysicalKey(candidate.target)}`;
     const previousResolution = this.resolvedWorldContacts.get(contactKey);
     if (previousResolution) return previousResolution;
+
+    this.resolveGrenadeContact(projectile, candidate);
 
     const impact = this.createImpactSource(projectile, candidate.x, candidate.y);
     let technicalContactConsumed = false;
@@ -1627,6 +1633,55 @@ export class WorldProjectileRuntime implements
     return stage;
   }
 
+  /** Domain has completed the primary AoE. Children remain owned by this live World runtime. */
+  completeGrenadeDetonation(projectileId: ProjectileId): void {
+    const fragments = this.pendingGrenadeFragments.get(projectileId);
+    this.pendingGrenadeFragments.delete(projectileId);
+    if (this.destroyed || !fragments) return;
+    for (const request of fragments) {
+      if (this.destroyed) break;
+      this.spawnProjectile(request);
+    }
+  }
+
+  private prepareGrenadePayload(projectile: ProjectileRuntimeRecord): ProjectileGrenadePayloadRequest {
+    const { x, y } = projectile.physics.sprite;
+    const effect = projectile.spec.interaction.grenadeEffect!;
+    if (effect.type === 'damage' && !isGrenadeFragment(effect)) {
+      this.pendingGrenadeFragments.set(projectile.id, createGrenadeFragments(effect,
+        this.grenadeFragmentOrigin(projectile, x, y), 'cluster', Math.random));
+    }
+    return { projectileId: projectile.id, x, y, provenance: projectile.provenance, effect };
+  }
+
+  private grenadeFragmentOrigin(projectile: ProjectileRuntimeRecord, x: number, y: number) {
+    const velocity = projectile.physics.body.velocity;
+    const speed = Math.hypot(velocity.x, velocity.y);
+    return { x, y, speed, provenance: projectile.provenance,
+      direction: speed > 0.001 ? Math.atan2(velocity.y, velocity.x) : projectile.grenadeLastDirection ?? 0 };
+  }
+
+  private resolveGrenadeContact(projectile: ProjectileRuntimeRecord, contact: ProjectileImpactCandidate): void {
+    const effect = projectile.spec.interaction.grenadeEffect;
+    if (projectile.pendingDestroy || effect?.type !== 'damage' || isGrenadeFragment(effect)) return;
+    const role = this.targetabilityPort?.getGrenadeContactRole?.(projectile.provenance, contact.target);
+    if (role === 'character' && effect.impactFuse) {
+      const velocity = projectile.physics.body.velocity;
+      if (Math.hypot(velocity.x, velocity.y) > 0.001) projectile.grenadeLastDirection = Math.atan2(velocity.y, velocity.x);
+      const vx = velocity.x, vy = velocity.y;
+      projectile.physics.body.reset(contact.x, contact.y);
+      projectile.physics.body.setVelocity(vx, vy);
+      this.lifecycleProcessor.triggerGrenadeExplosion(projectile);
+    } else if (role === 'structure' && (effect.demolitionLevel ?? 0) > 0 && !projectile.grenadeDemolitionTriggered) {
+      projectile.grenadeDemolitionTriggered = true;
+      const requests = createGrenadeFragments(effect, this.grenadeFragmentOrigin(projectile, contact.x, contact.y), 'demolition', Math.random);
+      for (const request of requests) {
+        if (this.destroyed) break;
+        this.spawnProjectile(request);
+      }
+    }
+  }
+
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
     this.projectileTimeFieldPort = port;
     this.flightProcessor.setTimeFieldPort(port);
@@ -1730,6 +1785,11 @@ export class WorldProjectileRuntime implements
       // active Set when at least one record remains.
       if (this.projectiles.activeCount > 0) {
         this.collisionProcessor.run(this.projectiles.activeRecords, nowMs, this.collisionDependencies);
+      }
+      // Characters are checked on the original travel segment, before a wall reflects velocity.
+      // Grenade world sweeps then preserve physical blocking even at upgraded throw speeds.
+      for (const record of this.projectiles.activeRecords) {
+        if (record.spec.flight.isGrenade && this.shouldSweepRocks(record)) this.sweepRocks(record);
       }
       this.captureDebugFlightSteps('after-interaction');
     } finally {
@@ -2055,6 +2115,7 @@ export class WorldProjectileRuntime implements
 
   /** World-Teardown: kein Record, kein Identity-Eintrag und kein Restzustand überlebt ihn. */
   destroy(): void {
+    this.pendingGrenadeFragments.clear();
     if (this.destroyed) return;
     this.destroyed = true;
     this.pendingNextStageSpawns.length = 0;
@@ -2162,6 +2223,7 @@ export class WorldProjectileRuntime implements
     });
     const record: ProjectileRuntimeRecord = {
       id,
+      grenadeLastDirection: cfg.isGrenade ? angle : undefined,
       lastX: resolvedSpawn.x,
       lastY: resolvedSpawn.y,
       pendingDestroy: false,

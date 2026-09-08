@@ -1,3 +1,4 @@
+import { getUtilityChargeReadyAt, type UtilityChargeState } from '../loadout/UtilityChargeState';
 import { COLORS } from '../config';
 import {
   COOP_DEFENSE_MANAGEMENT_COOLDOWN_MS,
@@ -52,6 +53,8 @@ export interface RadialActionState {
   readonly cooldownUntil: number;
   readonly cooldownDurationMs: number;
   readonly charges?: number;
+  readonly maxCharges?: number;
+  readonly nextChargeAt?: number | null;
   readonly capacityCost?: number;
 }
 
@@ -67,6 +70,7 @@ export interface ResolveRadialActionsInput {
   readonly canPlace: boolean;
   readonly canManage: boolean;
   readonly managementActions?: readonly RadialManagementAction[];
+  readonly getUtilityChargeState?: (utilityId: string) => UtilityChargeState | null;
   readonly getCooldownUntil?: (ref: RadialActionRef) => number;
 }
 
@@ -131,7 +135,8 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     const cooldownDurationMs = ref.kind === 'construction'
       ? getCoopDefenseConstructionDefinition(ref.constructionId).buildCooldownMs
       : getUtilityConfigForMode(ref.utilityId, input.gameMode)?.cooldown ?? 0;
-    const cooldownUntil = Math.max(0, input.getCooldownUntil?.(ref) ?? 0);
+    const chargeState = ref.kind === 'utility' ? input.getUtilityChargeState?.(ref.utilityId) : null;
+    const cooldownUntil = chargeState ? getUtilityChargeReadyAt(chargeState) : Math.max(0, input.getCooldownUntil?.(ref) ?? 0);
     const capabilityAllowed = ref.kind === 'construction' ? input.canPlace : input.canUseUtility;
     const hasCapacity = ref.kind !== 'construction' || capacityCost <= freeCapacity;
     const cooldownReady = cooldownUntil <= input.now;
@@ -152,7 +157,8 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
       available: disabledReason === undefined,
       ...(disabledReason ? { disabledReason } : {}),
       cooldownUntil,
-      cooldownDurationMs,
+      cooldownDurationMs: chargeState?.rechargeIntervalMs ?? cooldownDurationMs,
+      ...(chargeState ? { charges: chargeState.availableCharges, maxCharges: chargeState.maxCharges, nextChargeAt: chargeState.nextChargeAt } : {}),
       ...(capacityCost > 0 ? { capacityCost } : {}),
       sourceOrder,
     });

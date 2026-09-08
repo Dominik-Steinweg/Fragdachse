@@ -20,6 +20,9 @@ import type {
   UtilityConfig,
 } from '../loadout/LoadoutConfig';
 import { GenericUtility } from '../loadout/GenericUtility';
+import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
+import { RechargeableCharges } from '../systems/RechargeableCharges';
+import { getUtilityChargeReadyAt, type UtilityChargeState } from '../loadout/UtilityChargeState';
 import {
   TemporaryUtilityCollection,
   type TemporaryUtilityRuntimeInstance,
@@ -80,6 +83,7 @@ interface UtilityHeldActionPort {
 
 export interface PlayerUtilityActionNetworkPort {
   readonly loadout: {
+    publishUtilityChargeState?: (playerId: string, utilityId: string, state: UtilityChargeState | null) => void;
     publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
     publishTemporaryUtilityInstances: (playerId: string, descriptors: readonly TemporaryUtilityInstanceDescriptor[]) => void;
     publishHeldUtilityId: (playerId: string, utilityId: string) => void;
@@ -127,6 +131,15 @@ type ChargedUtilityConfig = UtilityConfig & {
 
 const MAX_RECENT_ATTEMPTS_PER_PLAYER = 64;
 
+interface UtilityChargeStock {
+  config: UtilityConfig;
+  stock: RechargeableCharges;
+  lockoutUntil: number;
+  revision: number;
+  lastCommittedAttemptId?: string;
+  published?: UtilityChargeState;
+}
+
 /**
  * World-owned semantic utility action boundary.
  *
@@ -135,6 +148,8 @@ const MAX_RECENT_ATTEMPTS_PER_PLAYER = 64;
  * Ability-specific systems only receive their narrow execution call.
  */
 export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
+  private readonly chargeStocks = new Map<string, Map<string, UtilityChargeStock>>();
+  private hostFrameNowMs = 0;
   private readonly temporaryUtilities = new TemporaryUtilityCollection();
   private readonly equippedUtilities = new Map<string, GenericUtility>();
   private readonly inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
@@ -154,6 +169,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
   syncEquippedUtility(playerId: string): void {
     const config = this.options.loadout.getEquippedUtilityConfig(playerId);
+    if (config?.charges) this.getChargeStock(playerId, config, this.hostFrameNowMs);
+    for (const toolConfig of Object.values(UTILITY_CONFIGS)) {
+      if (!toolConfig.charges || toolConfig.id === config?.id
+        || !this.options.isToolAuthorized?.(playerId, { kind: 'utility', id: toolConfig.id })) continue;
+      this.getChargeStock(playerId, this.options.loadout.resolveUtilityConfig(playerId, toolConfig), this.hostFrameNowMs);
+    }
     if (!config) {
       this.equippedUtilities.delete(playerId);
       this.publishTemporaryUtilities(playerId);
@@ -171,6 +192,10 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   removePlayer(playerId: string): void {
+    for (const id of this.chargeStocks.get(playerId)?.keys() ?? []) {
+      this.options.network.loadout.publishUtilityChargeState?.(playerId, id, null);
+    }
+    this.chargeStocks.delete(playerId);
     this.equippedUtilities.delete(playerId);
     this.inspectorUtilities.delete(playerId);
     this.temporaryUtilities.clearPlayer(playerId);
@@ -231,8 +256,13 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       || !this.options.actor.isAlive(playerId)
       || this.options.actor.isUtilityBlocked(playerId)) return false;
 
+    this.hostFrameNowMs = hostNowMs;
     const source = this.resolveSource(playerId, toolRef, temporaryUtilityInstanceId);
     if (!source || source.utility.config.activation.type !== kind) return false;
+    if (!source.temporary && source.utility.config.charges) {
+      const state = this.getChargeStock(playerId, source.utility.config, hostNowMs);
+      if (!state.stock.canConsume(hostNowMs) || state.lockoutUntil > hostNowMs) return false;
+    }
     const activation = source.utility.config.activation;
     if (activation.type !== 'charged_throw' && activation.type !== 'charged_gate') return false;
     const identity = this.identityFor(source.source);
@@ -270,10 +300,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       hostNowMs,
       params: { ...(params ?? {}), toolRef: tool },
       source: { kind: 'tool', toolRef: tool, config: effectiveConfig },
+      attemptId: params?.attemptId,
     }, true);
   }
 
   execute(request: PlayerUtilityActionRequest, inspector = false): LoadoutUseResult {
+    this.hostFrameNowMs = request.hostNowMs;
     if (this.destroyed) return { ok: false, reason: 'invalid' };
     if (!isValidPlayerActionAttemptId(request.attemptId)) {
       return { ok: false, reason: 'invalid' };
@@ -319,7 +351,14 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     if (source.temporary && (source.temporary.charges <= 0 || source.temporary.cooldownUntil > request.hostNowMs)) {
       return { ok: false, reason: source.temporary.cooldownUntil > request.hostNowMs ? 'cooldown' : 'invalid' };
     }
-    if (!source.temporary && utility.isOnCooldown(request.hostNowMs)) return { ok: false, reason: 'cooldown' };
+    const charges = !source.temporary && cfg.charges
+      ? this.getChargeStock(request.playerId, cfg, request.hostNowMs) : null;
+    if (charges ? !charges.stock.canConsume(request.hostNowMs) || charges.lockoutUntil > request.hostNowMs
+      : !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
+      return { ok: false, reason: 'cooldown', ...(charges ? {
+        utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
+      } : {}) };
+    }
 
     let authoritativeParams = request.params;
     if (this.isChargeable(cfg) && !this.isTranslocatorRecall(request.playerId, cfg)) {
@@ -364,6 +403,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     if (source.temporary) {
       this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs);
       this.publishTemporaryUtilities(request.playerId);
+    } else if (charges) {
+      charges.stock.consume(request.hostNowMs);
+      charges.lockoutUntil = request.hostNowMs + cfg.charges!.burstLockoutMs;
+      charges.lastCommittedAttemptId = request.attemptId;
+      this.publishChargeStock(request.playerId, charges, request.hostNowMs);
     } else if (!cfg.skipCooldownPublish) {
       utility.recordUse(request.hostNowMs);
       this.options.network.loadout.publishUtilityCooldownUntil(
@@ -382,7 +426,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       this.options.dropBeer(request.playerId);
       this.options.gameAudioSystem.playSound('sfx_place_decoy', player.x, player.y, request.playerId);
     }
-    const result: LoadoutUseResult = { ok: true };
+    const result: LoadoutUseResult = { ok: true, ...(charges ? {
+      utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
+    } : {}) };
     if (attemptKey) this.rememberCommittedAttempt(request.playerId, attemptKey, result);
     return result;
   }
@@ -407,10 +453,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   ): { source: PlayerUtilityActionSource; utility: GenericUtility; temporary?: TemporaryUtilityRuntimeInstance } | null {
     if (toolRef) {
       if (toolRef.kind !== 'utility' || (this.options.isToolAuthorized && !this.options.isToolAuthorized(playerId, toolRef))) return null;
-      const config = explicit?.kind === 'tool'
+      const baseConfig = explicit?.kind === 'tool'
         ? explicit.config
         : this.options.resolveToolUtilityConfig?.(toolRef);
-      if (!config) return null;
+      if (!baseConfig) return null;
+      const config = explicit?.kind === 'tool' ? baseConfig : this.options.loadout.resolveUtilityConfig(playerId, baseConfig);
       const utilities = this.inspectorUtilities.get(playerId) ?? new Map<string, GenericUtility>();
       this.inspectorUtilities.set(playerId, utilities);
       let utility = utilities.get(config.id);
@@ -504,7 +551,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   ): boolean {
     const clampedCharge = Math.max(0, Math.min(1, chargeFraction));
     const speed = cfg.activation.minThrowSpeed + (cfg.projectileSpeed - cfg.activation.minThrowSpeed) * clampedCharge;
-    this.options.projectileSpawn.spawnProjectile({
+    const projectileId = this.options.projectileSpawn.spawnProjectile({
       origin: { x, y, angle, gameplayMuzzleOrigin: muzzle },
       flight: {
         speed,
@@ -512,6 +559,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         lifetimeMs: cfg.fuseTime,
         maxBounces: cfg.maxBounces,
         isGrenade: true,
+        collisionMode: cfg.type === 'explosive' ? 'sweep' : undefined,
         fuseTimeMs: cfg.fuseTime,
         drag: {
           frictionDelayMs: cfg.frictionDelayMs,
@@ -522,6 +570,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       },
       provenance: createSingleOwnerProvenance(playerId, {
         weaponSourceId: cfg.id,
+        sourceSlot: 'utility',
         allowTeamDamage: cfg.allowTeamDamage,
       }),
       interaction: {
@@ -534,7 +583,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         shotAudioKey: cfg.shotAudio?.successKey,
       },
     });
-    return true;
+    return projectileId !== null;
   }
 
   private fireBfg(cfg: BfgUtilityConfig, x: number, y: number, angle: number, playerId: string, muzzle?: MuzzleOrigin): boolean {
@@ -623,7 +672,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
   private buildGrenadeEffect(cfg: UtilityConfig, playerColor?: number) {
     if (cfg.type === 'explosive') {
-      return { type: 'damage' as const, radius: cfg.aoeRadius, damage: cfg.aoeDamage, damageFalloff: cfg.damageFalloff, allowTeamDamage: cfg.allowTeamDamage, rockDamageMult: cfg.rockDamageMult, trainDamageMult: cfg.trainDamageMult, baseDamageMult: cfg.baseDamageMult, visualStyle: cfg.explosionVisualStyle, clusterCount: cfg.clusterCount, clusterRadiusFactor: cfg.clusterRadiusFactor, clusterDamageFactor: cfg.clusterDamageFactor };
+      return { type: 'damage' as const, role: 'primary' as const, radius: cfg.aoeRadius, damage: cfg.aoeDamage,
+        damageFalloff: cfg.damageFalloff, allowTeamDamage: cfg.allowTeamDamage, rockDamageMult: cfg.rockDamageMult,
+        trainDamageMult: cfg.trainDamageMult, baseDamageMult: cfg.baseDamageMult, visualStyle: cfg.explosionVisualStyle,
+        clusterCount: cfg.clusterCount, clusterRadiusFactor: cfg.clusterRadiusFactor, clusterDamageFactor: cfg.clusterDamageFactor,
+        impactFuse: (cfg.impactFuseEnabled ?? 0) > 0, demolitionLevel: cfg.demolitionLevel,
+        fragmentation: cfg.fragmentation, throwSpeed: cfg.projectileSpeed };
     }
     if (cfg.type === 'molotov') {
       return { type: 'fire' as const, radius: cfg.fireRadius, damagePerTick: cfg.fireDamagePerTick, lingerDuration: cfg.fireLingerDuration, allowTeamDamage: cfg.allowTeamDamage, rockDamageMult: cfg.rockDamageMult, trainDamageMult: cfg.trainDamageMult, baseDamageMult: cfg.baseDamageMult, burnDurationMs: cfg.fireBurnDurationMs, burnDamagePerTick: cfg.fireBurnDamagePerTick, wildfire: (cfg.wildfireEnabled ?? 0) > 0 ? { speedMultiplier: cfg.wildfirePanicSpeedMultiplier ?? 1.5, trailDurationMs: cfg.wildfireTrailDurationMs ?? 2000, trailDamagePerTick: cfg.wildfireTrailDamagePerTick ?? 2 } : undefined };
@@ -644,9 +698,56 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     );
   }
 
+  /** Called from the world player tick, including when the utility is not currently selected. */
+  update(now: number): void {
+    this.hostFrameNowMs = now;
+    for (const [playerId, stocks] of this.chargeStocks) {
+      for (const entry of stocks.values()) {
+        const base = UTILITY_CONFIGS[entry.config.id];
+        const config = base ? this.options.loadout.resolveUtilityConfig(playerId, base) : entry.config;
+        this.getChargeStock(playerId, config, now);
+      }
+    }
+  }
+
+  private getChargeStock(playerId: string, config: UtilityConfig, now: number): UtilityChargeStock {
+    const stocks = this.chargeStocks.get(playerId) ?? new Map<string, UtilityChargeStock>();
+    this.chargeStocks.set(playerId, stocks);
+    const chargeConfig = { maxCharges: config.charges!.maxCharges, rechargeIntervalMs: config.cooldown,
+      rechargeMode: 'preserve-progress' as const };
+    let entry = stocks.get(config.id);
+    if (!entry) {
+      entry = { config, stock: new RechargeableCharges(chargeConfig, now), lockoutUntil: 0, revision: 0 };
+      stocks.set(config.id, entry);
+    } else if (entry.config !== config) {
+      entry.stock.reconfigure(chargeConfig, now);
+      entry.config = config;
+    }
+    this.publishChargeStock(playerId, entry, now);
+    return entry;
+  }
+
+  private publishChargeStock(playerId: string, entry: UtilityChargeStock, now: number): UtilityChargeState {
+    const snapshot = entry.stock.getSnapshot(now);
+    const old = entry.published;
+    if (old && old.availableCharges === snapshot.availableCharges && old.maxCharges === snapshot.maxCharges
+      && old.nextChargeAt === snapshot.nextChargeAt && old.rechargeIntervalMs === snapshot.rechargeIntervalMs
+      && old.lockoutUntil === entry.lockoutUntil && old.lastCommittedAttemptId === entry.lastCommittedAttemptId) return old;
+    const state: UtilityChargeState = { ...snapshot, utilityId: entry.config.id, revision: ++entry.revision,
+      lockoutUntil: entry.lockoutUntil, lastCommittedAttemptId: entry.lastCommittedAttemptId };
+    entry.published = state;
+    this.options.network.loadout.publishUtilityChargeState?.(playerId, entry.config.id, state);
+    this.options.network.loadout.publishUtilityCooldownUntil(playerId, getUtilityChargeReadyAt(state), entry.config.id);
+    return state;
+  }
+
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    for (const [playerId, stocks] of this.chargeStocks) {
+      for (const id of stocks.keys()) this.options.network.loadout.publishUtilityChargeState?.(playerId, id, null);
+    }
+    this.chargeStocks.clear();
     for (const playerId of this.equippedUtilities.keys()) this.publishTemporaryUtilities(playerId);
     this.equippedUtilities.clear();
     this.inspectorUtilities.clear();

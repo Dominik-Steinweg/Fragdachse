@@ -122,6 +122,8 @@ export interface ProjectileWorldBlockerPort {
  * noch `NetworkBridge`.
  */
 export interface ProjectileTargetabilityPort {
+  /** Enemy-only contact semantics; friendly-fire settings do not make allies impact-fuse targets. */
+  getGrenadeContactRole?(provenance: ProjectileProvenance, target: ProjectileTargetRef): 'character' | 'structure' | null;
   canDamage(
     provenance: ProjectileProvenance,
     target: ProjectileTargetRef,

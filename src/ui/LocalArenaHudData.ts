@@ -1,3 +1,4 @@
+import type { UtilityChargeState } from '../loadout/UtilityChargeState';
 import { ADRENALINE_MAX, HP_MAX, RAGE_MAX } from '../config';
 import type { ArenaHUDData } from './ArenaHUD';
 import type { RadialManagementAction } from '../systems/RadialActionModel';
@@ -23,6 +24,7 @@ interface BuildLocalArenaHudDataParams {
   weapon1CooldownFrac: number;
   weapon2CooldownFrac: number;
   utilityCooldownFrac: number;
+  utilityChargeState?: UtilityChargeState | null;
   utilityId?: string;
   utilityAction?: RadialManagementAction;
   persistentBaseRewardId?: PersistentBaseRewardId;
@@ -67,6 +69,7 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     weapon1CooldownFrac: params.weapon1CooldownFrac,
     weapon2CooldownFrac: params.weapon2CooldownFrac,
     utilityCooldownFrac: params.utilityCooldownFrac,
+    utilityChargeState: params.utilityChargeState,
     utilityId: params.utilityId,
     utilityAction: params.utilityAction,
     persistentBaseRewardId: params.persistentBaseRewardId,

@@ -68,6 +68,10 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 }
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  he_grenade_charges: 'UPGRADE_HE_GRENADE_COOLDOWN',
+  he_grenade_impact_fuse: 'UPGRADE_HE_GRENADE_RADIUS',
+  he_grenade_cluster_mass: 'UPGRADE_HE_GRENADE_CLUSTER',
+  he_grenade_demolition_cluster: 'UPGRADE_HE_GRENADE_DAMAGE',
   critical_chance: 'UPGRADE_CRITICAL_CHANCE',
   critical_damage: 'UPGRADE_CRITICAL_DAMAGE',
   glock_stopping_power: 'UPGRADE_LAUBBLAESER_KNOCKBACK',

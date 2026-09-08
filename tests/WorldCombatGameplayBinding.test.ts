@@ -820,3 +820,32 @@ describe('TurretSystem missing fire handler', () => {
     expect(fire).toHaveBeenCalledOnce();
   });
 });
+
+describe('grenade contact classification', () => {
+  it('excludes own/allied/dead characters and terrain and admits hostile bases and constructions', () => {
+    const rocks = new Map([
+      [1, { hp: 100, kind: 'rock', ownerId: '__world__' }],
+      [2, { hp: 100, kind: 'turret', constructionId: 'rocket_turret', ownerId: 'p1' }],
+      [3, { hp: 100, kind: 'turret', constructionId: 'rocket_turret', ownerId: COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID }],
+      [4, { hp: 100, kind: 'turret', constructionId: 'rocket_turret', ownerId: COOP_DEFENSE_BASE_TURRET_OWNER_ID }],
+    ]);
+    const fixture = createFixture({ players: [{ id: 'p1', x: 0, y: 0, active: true }], enemies: [],
+      placementSystem: methodBag({ getRuntimeRock: (id: number) => rocks.get(id), getAllRuntimeRocks: () => [] }) as never,
+      baseManager: methodBag({ getBases: () => [], getBasesByFaction: () => [], getGeometryRevision: () => 1,
+        getBase: (id: string) => ({ faction: id === 'hostile' ? 'hostile' : 'friendly', isInert: () => false, getHp: () => 100 }),
+      }) as never,
+    });
+    vi.mocked(fixture.combatSystem.isAlive).mockImplementation(id => id !== 'dead');
+    vi.mocked(fixture.combatSystem.canProjectileDamageTarget).mockImplementation((_p, id) => id !== 'ally');
+    const classify = vi.mocked(fixture.projectileInteraction.setProjectileTargetabilityPort).mock.calls.at(-1)![0]!.getGrenadeContactRole!;
+    const source = { gameplaySourceId: 'p1', attributionId: 'p1', allegiance: { ownerId: 'p1' } };
+    for (const id of ['p1', 'ally', 'dead']) expect(classify(source, { kind: 'player', id })).toBeNull();
+    expect(classify(source, { kind: 'enemy', id: 'enemy' })).toBe('character');
+    expect(classify(source, { kind: 'decoy', id: 7 })).toBeNull();
+    expect(classify(source, { kind: 'base', id: 'hostile' })).toBe('structure');
+    expect(classify(source, { kind: 'base', id: 'friendly' })).toBeNull();
+    for (const id of [1, 2, 4]) expect(classify(source, { kind: 'rock', id })).toBeNull();
+    expect(classify(source, { kind: 'rock', id: 3 })).toBe('structure');
+    fixture.binding.destroy();
+  });
+});

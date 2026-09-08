@@ -102,6 +102,9 @@ def build(c, style=None):
             blend = min(1, (-y-.2)/.6)
             blend = blend*blend*(3-2*blend)
             v.co.y = (1-blend)*v.co.y - blend*abs(y)**.64
+    if style.get('combatFace'):
+        from badger_face_parts import sculpt_crown
+        sculpt_crown(head)
     # Curved face bands remain authored and independent of generated fur imagery.
     m = ivory.copy()
     m.name = 'Authored curved badger mask over fur'
@@ -122,11 +125,13 @@ def build(c, style=None):
                 l.new(second, node.inputs[1])
         return node.outputs[0]
     x = math_node('ABSOLUTE', math_node('SUBTRACT', sep.outputs['X'], .5))
-    width = math_node('ADD', math_node('MULTIPLY', math_node('SINE', math_node('MULTIPLY', sep.outputs['Y'], math.pi)), .62), .38)
+    combat = style.get('combatFace', False)
+    width = math_node('ADD', math_node('MULTIPLY', math_node('SINE', math_node('MULTIPLY', sep.outputs['Y'], math.pi)), .48 if combat else .62), .52 if combat else .38)
     coord = math_node('DIVIDE', x, width)
     mask = n.new('ShaderNodeValToRGB')
     mask.color_ramp.elements.remove(mask.color_ramp.elements[1])
-    for i, (pos, value) in enumerate([(0, 0), (.13, 0), (.18, 1), (.33, 1), (.40, 0)]):
+    band_edges = [(0, 0), (.115, 0), (.15, 1), (.355, 1), (.405, 0)] if combat else [(0, 0), (.13, 0), (.18, 1), (.33, 1), (.40, 0)]
+    for i, (pos, value) in enumerate(band_edges):
         e = mask.color_ramp.elements[0] if i == 0 else mask.color_ramp.elements.new(pos)
         e.position, e.color = pos, (value, value, value, 1)
     l.new(coord, mask.inputs[0])
@@ -137,13 +142,20 @@ def build(c, style=None):
     l.new(mix.outputs[0], bs.inputs['Base Color'])
     c.strengths.append(n['Surface detail strength'].inputs[0])
     c.box('Flat nose', (0, .601, 1.93), (.205, .095, .060), black, .029)
+    if combat:
+        from badger_face_parts import eye_sockets
+        eye_sockets(head, style.get('eyeSouthOffset', 0))
     for side in [-1, 1]:
         fierce = style.get('fierceEyes', False)
-        eye = c.ell('Eye', (side*.175, .345, 2.064), (.096, .050, .027) if fierce else (.075, .049, .027), black)
-        eye.rotation_euler.z = side*(-.18 if fierce else .27)
-        c.ell('Eye reflection', (side*.175-.008, .354 if fierce else .345, 2.09), (.022, .011, .007) if fierce else (.027, .016, .007), glint)
-        brow = c.ell('Forehead-side brow', (side*.175, .298 if fierce else .282, 2.105), (.103, .022, .014) if fierce else (.080, .020, .014), dark)
-        brow.rotation_euler.z = side*(-.38 if fierce else .27)
+        if combat:
+            from badger_face_parts import combat_eye
+            combat_eye(c, side, dark, head, style.get('eyeSouthOffset', 0))
+        else:
+            eye = c.ell('Eye', (side*.175, .345, 2.064), (.096, .050, .027) if fierce else (.075, .049, .027), black)
+            eye.rotation_euler.z = side*(-.18 if fierce else .27)
+            c.ell('Eye reflection', (side*.175-.008, .354 if fierce else .345, 2.09), (.022, .011, .007) if fierce else (.027, .016, .007), glint)
+            brow = c.ell('Forehead-side brow', (side*.175, .298 if fierce else .282, 2.105), (.103, .022, .014) if fierce else (.080, .020, .014), dark)
+            brow.rotation_euler.z = side*(-.38 if fierce else .27)
         ear_y = style.get('earSouthOffset', 0)
         ear = c.ell('Laid-back dark ear', (side*.29925, .025-ear_y, 2.044), (.060, .094, .030), dark)
         ear.rotation_euler.z = side*.30

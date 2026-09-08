@@ -1,5 +1,6 @@
 import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
+import { isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
 
 /** Core results consumed by the world owner's downstream lifecycle stage. */
@@ -77,8 +78,11 @@ export class ProjectileFlightProcessor {
     this.decrementRange(projectile);
 
     if (projectile.spec.flight.isGrenade) {
+      const velocity = projectile.physics.body.velocity;
+      if (Math.hypot(velocity.x, velocity.y) > 0.001) projectile.grenadeLastDirection = Math.atan2(velocity.y, velocity.x);
       const fuseExpired = realAgeMs >= (projectile.spec.flight.fuseTime ?? Number.POSITIVE_INFINITY);
-      const bouncedOut = projectile.maxBounces > 0 && projectile.bounceCount >= projectile.maxBounces;
+      const bouncedOut = !isGrenadeFragment(projectile.spec.interaction.grenadeEffect)
+        && projectile.maxBounces > 0 && projectile.bounceCount >= projectile.maxBounces;
       if (fuseExpired || bouncedOut) this.grenadeExpiredIds.add(projectile.id);
 
       this.emitCountdown(projectile, realAgeMs);

@@ -24,6 +24,14 @@ const STANDARD: ExplosionVisualProfile = {
  */
 export const EXPLOSION_VISUAL_PROFILES = {
   default: STANDARD,
+  he_cluster_shard: {
+    family: 'standard', countScale: 0.4, lifeScale: 0.55, bodyScale: 0.75,
+    smokeScale: 0.15, chunkScale: 0.25, upwardEmbers: false,
+  },
+  he_demolition_shard: {
+    family: 'standard', countScale: 0.3, lifeScale: 0.42, bodyScale: 0.65,
+    smokeScale: 0.08, chunkScale: 0.15, upwardEmbers: false,
+  },
   rocket: {
     family: 'standard', countScale: 1.15, lifeScale: 0.95, bodyScale: 1.05,
     smokeScale: 1, chunkScale: 1.1, upwardEmbers: false,
@@ -78,6 +86,8 @@ export function getCombatExplosionProfile(style: ExplosionVisualStyle): Explosio
 
 export function isThermalExplosionStyle(style: ExplosionVisualStyle): boolean {
   return style === 'default'
+    || style === 'he_cluster_shard'
+    || style === 'he_demolition_shard'
     || style === 'rocket'
     || style === 'mini_rocket'
     || style === 'mini_rocket_cascade'

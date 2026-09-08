@@ -132,6 +132,7 @@ export interface WorldPlayerGameplayNetworkPort {
     readonly broadcastMiniRocketDestructionEffect: (x: number, y: number, color: number) => void;
   };
   readonly loadout: {
+    readonly publishUtilityChargeState?: (playerId: string, utilityId: string, state: import('../loadout/UtilityChargeState').UtilityChargeState | null) => void;
     readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
     readonly publishTemporaryUtilityInstances: (playerId: string, descriptors: readonly TemporaryUtilityInstanceDescriptor[]) => void;
     readonly publishHeldUtilityId: (playerId: string, utilityId: string) => void;
@@ -897,6 +898,7 @@ export class WorldPlayerGameplayRuntime implements
     }
     systems.burrow.update(deltaMs, nowMs);
     systems.loadout.update(deltaMs, nowMs);
+    systems.utilityAction.update(nowMs);
     systems.weaponReaction.update();
     systems.ultimateBehavior.update(deltaMs, nowMs);
     systems.tunnel.update(nowMs);

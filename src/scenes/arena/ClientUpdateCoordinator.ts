@@ -1,3 +1,4 @@
+import { getUtilityRechargeFraction } from '../../loadout/UtilityChargeState';
 import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
 import type { GameState }  from '../../network/NetworkBridge';
@@ -637,6 +638,7 @@ export class ClientUpdateCoordinator {
         weapon1CooldownFrac:     this.getClientWeaponCooldownFrac('weapon1'),
         weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
+        utilityChargeState: this.ctx.inputSystem.getLocalUtilityChargeState?.(),
         utilityId:               baseUtilityId,
         utilityAction:            managementAction ?? undefined,
         persistentBaseRewardId:  rewardId ?? undefined,
@@ -1207,6 +1209,8 @@ export class ClientUpdateCoordinator {
   }
 
   getLocalUtilityCooldownFrac(): number {
+    const chargeState = this.ctx.inputSystem.getLocalUtilityChargeState?.();
+    if (chargeState) return getUtilityRechargeFraction(chargeState, bridge.getSynchronizedNow());
     const localId = bridge.getLocalPlayerId();
     const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'management' || radialAction?.kind === 'persistent-reward') return 0;

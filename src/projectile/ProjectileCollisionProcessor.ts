@@ -58,6 +58,7 @@ interface SweepCandidate {
 
 /** Was der Owner für die Kandidatenverarbeitung bereitstellt. */
 export interface ProjectileCollisionDependencies {
+  onGrenadeContact?(record: ProjectileRuntimeRecord, candidate: ProjectileImpactCandidate): void;
   readonly targetQuery: ProjectileCollisionTargetQueryPort | null;
   readonly targetability: ProjectileTargetabilityPort | null;
   readonly worldBlocker: ProjectileWorldBlockerPort | null;
@@ -88,6 +89,24 @@ export type ProjectileCollisionOutcome = 'ignored' | 'passed' | 'consumed';
 
 /** Unterhalb dieser Streckenlänge bleibt es beim Overlap-Test. */
 const MIN_SWEEP_TRAVEL_PX = 0.5;
+
+/** Inflated footprint sweep, returning the actual target surface as the contact anchor. */
+function grenadeRectangleContact(sx: number, sy: number, ex: number, ey: number,
+  slot: CollisionTargetSlot, radius: number): { x: number; y: number; distance: number } | null {
+  let enter = 0, leave = 1;
+  for (const [start, delta, min, max] of [
+    [sx, ex - sx, slot.left - radius, slot.right + radius],
+    [sy, ey - sy, slot.top - radius, slot.bottom + radius],
+  ]) {
+    if (Math.abs(delta) < 0.000001) { if (start < min || start > max) return null; continue; }
+    const a = (min - start) / delta, b = (max - start) / delta;
+    enter = Math.max(enter, Math.min(a, b)); leave = Math.min(leave, Math.max(a, b));
+    if (enter > leave) return null;
+  }
+  const x = sx + (ex - sx) * enter, y = sy + (ey - sy) * enter;
+  return { x: Math.max(slot.left, Math.min(slot.right, x)), y: Math.max(slot.top, Math.min(slot.bottom, y)),
+    distance: Math.hypot(ex - sx, ey - sy) * enter };
+}
 
 /**
  * Erzeugt und verarbeitet Trefferkandidaten eines Host-Frames.
@@ -156,7 +175,10 @@ export class ProjectileCollisionProcessor {
     for (const record of records) {
       if (record.pendingDestroy) continue;
       // Granaten wirken nur über ihre terminale Payload, nicht über Direkttreffer.
-      if (record.spec.flight.isGrenade) continue;
+      if (record.spec.flight.isGrenade) {
+        this.processGrenadeContacts(record, deps);
+        continue;
+      }
       if (record.miniRocket.deferredExplosion || record.miniRocket.spent) continue;
       this.processRecord(record, nowMs, deps);
     }
@@ -169,6 +191,40 @@ export class ProjectileCollisionProcessor {
     this.overlapCandidates.length = 0;
     this.sweepCandidates.length = 0;
     this.targetCount = 0;
+  }
+
+  private processGrenadeContacts(record: ProjectileRuntimeRecord, deps: ProjectileCollisionDependencies): void {
+    const effect = record.spec.interaction.grenadeEffect;
+    if (effect?.type !== 'damage' || effect.role === 'cluster' || effect.role === 'demolition'
+      || !effect.impactFuse) return;
+    const sx = record.lastX, sy = record.lastY;
+    const ex = record.physics.sprite.x, ey = record.physics.sprite.y;
+    const radius = record.hitboxSize! * 0.5;
+    let blocker = deps.worldBlocker?.getNearestBlockerDistance(sx, sy, ex, ey, false) ?? Infinity;
+    const candidates: Array<{ slot: CollisionTargetSlot; x: number; y: number; distance: number }> = [];
+    for (let i = 0; i < this.targetCount; i++) {
+      const slot = this.targetPool[i];
+      const character = slot.kind === 'player' || slot.kind === 'enemy';
+      if (slot.kind === 'decoy') continue;
+      const hit = character
+        ? resolveProjectileTargetImpact({ startX: sx, startY: sy, endX: ex, endY: ey,
+          targetX: slot.x, targetY: slot.y, radius: slot.radius + radius, ignoreStartingOverlap: false })
+        : grenadeRectangleContact(sx, sy, ex, ey, slot, radius);
+      if (!hit) continue;
+      // Base AABBs can contain empty cells. Their exact blockers come from World geometry;
+      // BR1 is admitted only by actual physical/cell-sweep contacts in the owner.
+      if (!character && (slot.kind === 'rock' || !deps.worldBlocker)) blocker = Math.min(blocker, hit.distance);
+      const role = deps.targetability?.getGrenadeContactRole?.(record.provenance, slot.ref);
+      if (role === 'character') {
+        candidates.push({ slot, x: hit.x, y: hit.y, distance: hit.distance });
+      }
+    }
+    candidates.sort((a, b) => a.distance - b.distance || compareTargetKeys(a.slot, b.slot));
+    for (const candidate of candidates) {
+      if (candidate.distance > blocker + 0.000001 || record.pendingDestroy) break;
+      deps.onGrenadeContact?.(record, { projectileId: record.id, target: candidate.slot.ref,
+        x: candidate.x, y: candidate.y, distanceAlongTravel: candidate.distance, source: 'sweep' });
+    }
   }
 
   private readTargets(port: ProjectileCollisionTargetQueryPort): void {

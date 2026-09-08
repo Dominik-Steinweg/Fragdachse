@@ -250,6 +250,40 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.charges !== undefined) {
+    const c = value.charges;
+    if (!isRecord(c) || !Number.isSafeInteger(c.maxCharges) || (c.maxCharges as number) < 1
+      || typeof c.burstLockoutMs !== 'number' || !Number.isFinite(c.burstLockoutMs) || c.burstLockoutMs < 0) {
+      issues.push('$.charges: positive integer capacity and nonnegative lockout required');
+    }
+  }
+  if (value.impactFuseEnabled !== undefined
+    && (!Number.isInteger(value.impactFuseEnabled) || (value.impactFuseEnabled !== 0 && value.impactFuseEnabled !== 1))) {
+    issues.push('$.impactFuseEnabled: expected zero or one');
+  }
+  if (value.fragmentation !== undefined) {
+    const f = value.fragmentation;
+    const range = (v: unknown): boolean => Array.isArray(v) && v.length === 2
+      && v.every(n => typeof n === 'number' && Number.isFinite(n) && n >= 0) && v[1] >= v[0];
+    const positive = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n > 0;
+    if (!isRecord(f) || !isRecord(f.demolition)) {
+      issues.push('$.fragmentation: flight and demolition config required');
+    } else {
+      const d = f.demolition;
+      if (![f.shortDistance, f.longDistance, f.fuseMs, d.distance, d.fuseMs].every(range)
+        || ![f.projectileSize, d.projectileSize, d.radiusFactor].every(positive)
+        || ![f.stationaryHalfAngleDeg, f.movingHalfAngleDeg].every(positive)
+        || typeof f.shortFraction !== 'number' || !Number.isFinite(f.shortFraction) || f.shortFraction < 0 || f.shortFraction > 1
+        || typeof f.speedDistanceBias !== 'number' || !Number.isFinite(f.speedDistanceBias) || f.speedDistanceBias < 0 || f.speedDistanceBias > 1
+        || !Number.isSafeInteger(d.count) || (d.count as number) < 1
+        || !Array.isArray(d.damageFactors) || d.damageFactors.length === 0 || !d.damageFactors.every(positive)) {
+        issues.push('$.fragmentation: invalid fragment tuning');
+      }
+      const level = value.demolitionLevel ?? 0;
+      if (!Number.isSafeInteger(level) || (level as number) < 0
+        || (Array.isArray(d.damageFactors) && (level as number) > d.damageFactors.length)) issues.push('$.demolitionLevel: invalid level');
+    }
+  }
   requireFields(value, [
     'type', 'cooldown', 'activation', 'projectileSpeed', 'projectileSize', 'fuseTime',
     'maxBounces', 'allowedSlots',

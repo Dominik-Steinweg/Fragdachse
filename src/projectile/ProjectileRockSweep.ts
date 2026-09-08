@@ -9,6 +9,6 @@ export function usesRockSweep(flight: {
   readonly isBfg?: boolean;
   readonly penetration?: { readonly penetratesRocks?: boolean };
 }): boolean {
-  return flight.collisionMode === 'sweep' && !flight.isGrenade && !flight.isFlame
+  return flight.collisionMode === 'sweep' && !flight.isFlame
     && !flight.isBfg && !flight.penetration?.penetratesRocks;
 }

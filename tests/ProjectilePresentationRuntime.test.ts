@@ -241,3 +241,13 @@ describe('ProjectilePresentationRuntime', () => {
     expect(renderers.playImpactSparks).toHaveBeenCalledWith(7, 123.25, 198.5, -120, 0, 0xffcc00);
   });
 });
+
+it.each(['he_cluster_shard', 'he_demolition_shard'] as const)('presents confirmed %s and cleans up', grenadeVisualPreset => {
+  const runtime = new ProjectilePresentationRuntime({} as never);
+  const renderer = { ...passiveRenderer(), has: () => false };
+  runtime.bindRenderers({ grenade: renderer } as never, null);
+  runtime.presentClientFrame(new ProjectileClientReplica().sync([projectile({ style: 'grenade', grenadeVisualPreset, suppressSpawnFx: true })], 1000));
+  expect(renderer.createVisual).toHaveBeenCalledWith(7, 100, 200, 12, grenadeVisualPreset, 0xffcc00);
+  runtime.releaseWorldPresentation();
+  expect(renderer.destroyAll).toHaveBeenCalledTimes(1);
+});

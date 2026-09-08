@@ -19,6 +19,9 @@ import type { ProjectilePhysicsHandle } from './ProjectilePhysicsBinding';
 
 /** Private authoritative state: never exported through a gameplay boundary. */
 export interface ProjectileRuntimeRecord {
+  /** Gameplay direction survives drag stopping the body; unrelated to visual spin. */
+  grenadeLastDirection?: number;
+  grenadeDemolitionTriggered?: boolean;
   readonly id: ProjectileId;
   lastX: number;
   lastY: number;

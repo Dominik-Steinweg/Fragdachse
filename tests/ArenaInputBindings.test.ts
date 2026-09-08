@@ -23,6 +23,7 @@ type HotkeyHandler = (event: KeyboardEvent) => void;
 
 function makeInput(): {
   binding: ArenaInputBindings;
+  actions: ArenaInputBindingsInput['actions'];
   inputSystem: Record<string, ReturnType<typeof vi.fn>>;
   keyboard: {
     addKey: ReturnType<typeof vi.fn>;
@@ -67,6 +68,7 @@ function makeInput(): {
     setupConstructionPlacementPreviewProvider: vi.fn(),
     setupTranslocatorRecallCheck: vi.fn(),
     setupLoadoutListener: vi.fn(),
+    handleUtilityChargeResult: vi.fn(),
     getSelectedRadialActionForHud: vi.fn(() => null),
     getSelectedUtilityCooldownUntil: vi.fn(() => 0),
     isUtilityPlacementActive: vi.fn(() => false),
@@ -186,6 +188,7 @@ function makeInput(): {
 
   return {
     binding: new ArenaInputBindings(input),
+    actions,
     inputSystem,
     keyboard,
     keys,
@@ -240,4 +243,20 @@ describe('ArenaInputBindings', () => {
     expect(binding.isArenaPanelHeld()).toBe(false);
   });
 
+});
+
+it('awaits and reconciles rechargeable HE uses in the normal utility slot', async () => {
+  const { binding, inputSystem, actions } = makeInput();
+  const { UTILITY_CONFIGS } = await import('../src/loadout/LoadoutConfig');
+  vi.mocked(actions.getLocalUtilityConfig).mockReturnValue(UTILITY_CONFIGS.HE_GRENADE);
+  vi.mocked(actions.getPlayerCapabilities).mockReturnValue({ canInteract: true, canUseCombat: true } as never);
+  vi.mocked(actions.isLocalPlayerAlive).mockReturnValue(true);
+  const reply = { ok: true };
+  vi.mocked(actions.sendLoadoutUse).mockResolvedValue(reply);
+  binding.setup();
+  inputSystem.setupLoadoutListener.mock.calls[0][0]('utility', 0, 100, 0, { attemptId: 'he-attempt', heldActionId: 'he-hold' });
+  await Promise.resolve();
+  expect(actions.sendLoadoutUse).toHaveBeenCalledWith('utility', 0, 100, 0, undefined,
+    { attemptId: 'he-attempt', heldActionId: 'he-hold' }, undefined, undefined, true, undefined);
+  expect(inputSystem.handleUtilityChargeResult).toHaveBeenCalledWith('he-attempt', reply);
 });
