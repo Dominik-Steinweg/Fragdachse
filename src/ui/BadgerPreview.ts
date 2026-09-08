@@ -2,13 +2,14 @@
  * BadgerPreview — reusable badger sprite with colored glow aura.
  *
  * Used in the lobby panel (color indicator) and potentially elsewhere.
- * Shows the 'badger' texture with a pulsing preFX glow in the given color.
+ * Shows the 'badger' texture with a pulsing outer glow in the given color.
  * Optionally tracks the mouse pointer for rotation.
  */
 import * as Phaser from 'phaser';
 import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../config';
 import { HeldItemVisual } from '../entities/HeldItemVisual';
-import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
+import { addPlayerGlow } from '../effects/PlayerGlow';
 
 const ROTATION_OFFSET = Math.PI / 2;
 
@@ -38,9 +39,7 @@ export class BadgerPreview {
     // Dieselbe Zuordnung wie in der Arena, nur mit der groesseren Vorschau-Kantenlaenge: die
     // Waffe skaliert damit automatisch mit, statt eine zweite Groessenpflege zu brauchen.
     this.heldItem = new HeldItemVisual(scene, 0, onHeldItemCreated);
-
-    setInternalFxPadding(this.sprite, 20);
-    this.glowFx = addInternalGlowLegacy(this.sprite, color, 4, 0, false, 0.1, 16);
+    this.glowFx = addPlayerGlow(this.sprite, color);
     if (this.glowFx) {
       this.glowTween = scene.tweens.add({
         targets:       this.glowFx,

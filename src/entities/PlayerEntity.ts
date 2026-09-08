@@ -20,7 +20,8 @@ import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController
 import { SpawnEffectRenderer } from '../effects/SpawnEffectRenderer';
 import { killAllAndResetParticlePositions, registerGraphicsObject, registerParticleEmitter } from '../effects/EffectUtils';
 import type { LightingSystem } from '../effects/LightingSystem';
-import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
+import { removeInternalFx, type GlowHandle } from '../utils/phaserFx';
+import { addPlayerGlow } from '../effects/PlayerGlow';
 import {
   PLAYER_SIZE, PLAYER_VISUAL_SIZE, DEPTH, COLORS, BURROW_WINDUP_DURATION_MS,
   toCssColor,
@@ -192,14 +193,8 @@ export class PlayerEntity {
       this.sprite.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
       this.sprite.setDepth(DEPTH.PLAYERS);
 
-      // Dieselbe bewährte Internal-Glow-Kette wie in BadgerPreview verwenden. Der Filter
-      // expandiert den Sprite korrekt über die Padding-Grenze hinaus und bleibt an der
-      // tatsächlichen Spielertextur ausgerichtet.
-      setInternalFxPadding(this.sprite, 20);
-      // Die Spieler-Silhouette bleibt bewusst auf der alten internen Phaser-Glow-Kette: Sie
-      // liefert die enge, gepaddete Kontur, die fuer die unmittelbare Lesbarkeit der Figur
-      // wichtiger ist als die letzte Reduktion eines einzelnen kritischen Filters.
-      this.glowFx = addInternalGlowLegacy(this.sprite, profile.colorHex, 4, 0, false, 0.1, 16, 'critical');
+      // Weicher Außen-Glow derselben animierten Silhouette wie in Vorschau und Köder.
+      this.glowFx = addPlayerGlow(this.sprite, profile.colorHex);
       this.startDefaultGlowTween();
 
       this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);
