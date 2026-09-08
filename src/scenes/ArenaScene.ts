@@ -1,3 +1,4 @@
+import { getPipelineAssetForTexture } from '../config/pipelineAssets';
 import * as Phaser from 'phaser';
 import { bridge }                from '../network/bridge';
 import { ArenaBuilder }          from '../arena/ArenaBuilder';
@@ -15,7 +16,7 @@ import { preloadGroundCoverAssets } from '../arena/GroundCoverConfig';
 import { preloadPersistentBaseGravelAssets } from '../arena/PersistentBaseGravelConfig';
 import { preloadRockMossAssets } from '../arena/RockMossConfig';
 import { preloadRockVegetationAssets } from '../arena/RockVegetationConfig';
-import { preloadTurretVisualAssets } from '../config/turretVisuals';
+import { preloadTurretVisualAssets, registerTurretAnimations } from '../config/turretVisuals';
 import { PlayerManager }         from '../entities/PlayerManager';
 import { InputSystem }           from '../systems/InputSystem';
 import { HostPhysicsSystem }     from '../systems/HostPhysicsSystem';
@@ -320,7 +321,7 @@ export class ArenaScene extends Phaser.Scene {
     this.load.image('mission_carry_delivery_zone', './assets/sprites/objectives/mission_carry_delivery_zone.png');
     // Die waffenlose Fassung der Figur. Die getragene Waffe ist seit `HeldItemVisual` ein eigenes
     // Bild; `32x32dachsweapon01.png` mit den braunen Platzhalterpixeln wird nicht mehr geladen.
-    this.load.image('badger',      './assets/sprites/32x32dachs.png');
+    this.load.image('badger',      getPipelineAssetForTexture('badger')!.idlePath);
     this.load.atlas('dachs_death', './assets/player/dachs_death_ani3.png', './assets/player/dachs_death_ani3.json');
     preloadBadgerAnimationAssets(this.load);
     preloadHeldItemAssets(this.load);
@@ -330,7 +331,7 @@ export class ArenaScene extends Phaser.Scene {
       Object.values(COOP_DEFENSE_ENEMY_CONFIGS).map((enemyConfig) => enemyConfig.imageKey),
     );
     for (const imageKey of enemyImageKeys) {
-      this.load.image(imageKey, `./assets/sprites/enemies/${imageKey}.png`);
+      this.load.image(imageKey, getPipelineAssetForTexture(imageKey)?.idlePath ?? `./assets/sprites/enemies/${imageKey}.png`);
     }
 
     // Katalogmetadaten bestimmen explizit Auswahlreihenfolge und vorhandene Icons.
@@ -478,6 +479,7 @@ export class ArenaScene extends Phaser.Scene {
       });
     }
     registerBadgerAnimations(this.anims);
+    registerTurretAnimations(this.anims);
 
     bridge.clearPlayerCallbacks();
 
@@ -865,6 +867,7 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers.lighting,
       null,
       this.renderers.healthBars,
+      this.renderers.turretAnimations,
     );
     const placementPreview = new PlacementPreviewRenderer(this, this.ctx);
     this.persistentBaseVisuals = new PersistentBaseVisuals(this);

@@ -2549,6 +2549,7 @@ export class ArenaLifecycleCoordinator {
     const worldRuntime = this.worldRuntime;
     if (!worldRuntime) throw new Error('[ArenaLifecycleCoordinator] WorldRuntime was not attached');
     const builtWorld = materializeWorldComposition({
+      turretAnimations: this.renderers.turretAnimations,
       scene: this.scene,
       runtime: worldRuntime,
       healthBars: this.renderers.healthBars,

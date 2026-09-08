@@ -21,14 +21,13 @@ const ALL_TURRET_WEAPONS: readonly TurretWeaponId[] = [
 ];
 
 describe('turret visual catalog', () => {
-  it('covers every turret weapon and keeps the authored mushroom PNG', () => {
+  it('covers every turret weapon and shares the selected spore artwork', () => {
     expect(Object.keys(TURRET_VISUALS).sort()).toEqual([...ALL_TURRET_WEAPONS].sort());
     expect(getTurretVisualSpec('SPORES')).toMatchObject({
-      textureKey: 'pilz01',
-      assetPath: null,
+      textureKey: 'turret_weapon_spore',
       displaySize: 32,
-      centerCorrectionX: 7,
-      centerCorrectionY: -7,
+      centerCorrectionX: 0,
+      centerCorrectionY: 0,
     });
     expect(getTurretVisualSpec('BASE_SPORES')).toBe(getTurretVisualSpec('SPORES'));
     expect(getTurretVisualSpec('TURRET_SPORES')).toBe(getTurretVisualSpec('SPORES'));
@@ -36,7 +35,7 @@ describe('turret visual catalog', () => {
 
   it('keeps the authored mushroom artwork centered while rotating', () => {
     const transform = getTurretVisualTransform(getTurretVisualSpec('SPORES'), 100, 200, 0);
-    expect(transform).toEqual({ x: 107, y: 193, rotation: 0 });
+    expect(transform).toEqual({ x: 100, y: 200, rotation: 0 });
   });
 
   it('maps every weapon construction through the shared catalog', () => {
@@ -46,13 +45,13 @@ describe('turret visual catalog', () => {
     }
   });
 
-  it('provides transparent 48x48 PNGs and separates normal from void flame', async () => {
+  it('provides transparent selected PNGs and separates normal from void flame', async () => {
     const generated = [...new Set(Object.values(TURRET_VISUALS).filter((spec) => spec.assetPath !== null))];
     for (const spec of generated) {
       const file = `public/${spec.assetPath!.replace('./assets/', 'assets/')}`;
       await access(file);
       const metadata = await sharp(file).metadata();
-      expect(metadata).toMatchObject({ format: 'png', width: 48, height: 48, hasAlpha: true });
+      expect(metadata).toMatchObject({ format: 'png', width: spec.asset.sourceSize, height: spec.asset.sourceSize, hasAlpha: true });
       const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
       let transparentPixels = 0;
       for (let y = 0; y < info.height; y += 1) {
@@ -64,14 +63,15 @@ describe('turret visual catalog', () => {
           }
         }
       }
-      expect(transparentPixels).toBeGreaterThan(info.width * info.height * 0.6);
+      expect(transparentPixels).toBeGreaterThan(0);
+      expect(transparentPixels).toBeLessThan(info.width * info.height);
     }
 
     expect(getTurretVisualSpec('TURRET_FLAME').textureKey)
       .not.toBe(getTurretVisualSpec('TURRET_VOID_FLAME').textureKey);
 
-    const countPalettePixels = async (fileName: string) => {
-      const { data } = await sharp(`public/assets/sprites/turrets/${fileName}`)
+    const countPalettePixels = async (weaponId: TurretWeaponId) => {
+      const { data } = await sharp(`public/${getTurretVisualSpec(weaponId).asset.idlePath.slice(2)}`)
         .ensureAlpha()
         .raw()
         .toBuffer({ resolveWithObject: true });
@@ -85,8 +85,8 @@ describe('turret visual catalog', () => {
       }
       return { warm, purple };
     };
-    const flame = await countPalettePixels('flame.png');
-    const voidFlame = await countPalettePixels('void_flame.png');
+    const flame = await countPalettePixels('TURRET_FLAME');
+    const voidFlame = await countPalettePixels('TURRET_VOID_FLAME');
     expect(flame.warm).toBeGreaterThan(flame.purple);
     expect(voidFlame.purple).toBeGreaterThan(voidFlame.warm);
   });

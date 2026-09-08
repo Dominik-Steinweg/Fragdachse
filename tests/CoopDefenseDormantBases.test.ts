@@ -150,6 +150,7 @@ function makeScene(): { scene: any; groupObjects: any[]; presentationCalls: Reco
   const scene: any = {
     add: {
       image: () => { presentationCalls.image += 1; return fakeGameObject(); },
+      sprite: () => { presentationCalls.image += 1; return fakeGameObject(); },
       rectangle: (_x: number, _y: number, width: number, height: number) => {
         presentationCalls.rectangle += 1;
         return fakeGameObject(width, height);

@@ -1,3 +1,4 @@
+import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
@@ -166,6 +167,7 @@ export interface MaterializeWorldCompositionInput {
   readonly lighting: LightingSystem;
   readonly createRockRegistry: boolean;
   readonly healthBars?: WorldHealthBarRenderer;
+  readonly turretAnimations?: TurretAnimationController;
 }
 
 export interface MaterializedWorldComposition {
@@ -259,6 +261,7 @@ export function materializeWorldComposition(
       presentationRequired,
       false,
       input.healthBars,
+      input.turretAnimations,
     )
     : null;
   materialization.setBases(baseManager);

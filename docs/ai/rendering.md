@@ -49,6 +49,22 @@ Die echte Entity-Entfernung bleibt beim Lifecycle-Owner. Die Consumer- und Hando
 sichern [WorldHealthBarConsumers.test.ts](../../tests/integration/WorldHealthBarConsumers.test.ts)
 und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresentationFrameLifetime.test.ts).
 
+## Figuren- und Turmassets
+
+Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets.json) und ihre PNGs unter
+`public/assets/sprites/pipeline-v2/` sind unabhängig von lokalen Blender-Quellen. Statische Bilder
+und animierte Sheets besitzen getrennte Texturschlüssel. Sheet-Geometrie und explizite Clipframes
+stammen aus der Auswahl; der Ruheframe ist kein Teil des Bewegungsloops. Anzeigegrößen bleiben
+bei den Gameplay-Konfigurationen. Arcade-Kreisradien werden in Quellpixeln gesetzt, damit die
+Sprite-Skalierung den konfigurierten Weltdurchmesser erhält; Spieler-Overlays übernehmen den
+aktuellen Texturframe und dessen Skalierung.
+
+Der [TurretAnimationController](../../src/effects/TurretAnimationController.ts) bindet Basis- und
+platzierbare Turmsprites an ihre bestehenden Turm-IDs. Bestätigte Projektilspawns treiben
+Schussanimationen; die erste Client-Übernahme bleibt stumm. Tesla folgt dem replizierten
+Kuppelzustand. Animationen schreiben keine Spielzustände zurück. Sprite-Zerstörung löst die
+Bindung, World-Teardown leert auch Aktivität und verbleibende Bindungen.
+
 ## Pfadgebundene Projectile-Präsentation
 
 [`WorldProjectileRuntime`](../../src/projectile/WorldProjectileRuntime.ts) besitzt den rendererfreien

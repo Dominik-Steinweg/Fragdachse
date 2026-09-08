@@ -1,3 +1,4 @@
+import type { TurretAnimationController } from './TurretAnimationController';
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
@@ -90,7 +91,7 @@ export class TeslaDomeRenderer {
   private lighting: LightingSystem | null = null;
   private novaRenderer: TeslaNovaRenderer | null = null;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene, private readonly turretAnimations?: TurretAnimationController) {}
 
   setAudioSystem(system: GameAudioSystem): void {
     this.audioSystem = system;
@@ -211,6 +212,7 @@ export class TeslaDomeRenderer {
   }
 
   syncVisuals(domes: SyncedTeslaDome[]): void {
+    this.turretAnimations?.syncTesla(domes);
     const activeIds = new Set(domes.map(dome => dome.ownerId));
 
     for (const [ownerId, visual] of this.visuals) {

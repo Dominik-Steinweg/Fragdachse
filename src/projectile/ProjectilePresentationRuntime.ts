@@ -1,3 +1,4 @@
+import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import { ProjectilePathCursor } from './ProjectileFlightPath';
 import { tracerBounceDebug } from '../effects/TracerBounceDebugSettings';
 import { TracerBounceDebugOverlay } from '../effects/TracerBounceDebugOverlay';
@@ -91,6 +92,7 @@ export interface ProjectilePresentationRenderers {
   readonly teslaBolt: TeslaBoltRenderer;
   readonly tracer: TracerRenderer;
   readonly muzzleFlash: MuzzleFlashRenderer;
+  readonly turretAnimations?: TurretAnimationController;
 }
 
 /**
@@ -100,6 +102,8 @@ export interface ProjectilePresentationRenderers {
  * erzeugt aber selbst keine Gameplay-Entscheidung und schreibt keinen Runtime-State zurück.
  */
 export class ProjectilePresentationRuntime {
+  private turretAnimations: TurretAnimationController | null = null;
+  private clientTurretBaselineReceived = false;
   private bounceDebugOverlay: TracerBounceDebugOverlay | null = null;
   private readonly flightPlayback = new ProjectileFlightPlayback();
   private readonly pathCursors = new Map<number, ProjectilePathCursor>();
@@ -161,6 +165,7 @@ export class ProjectilePresentationRuntime {
     this.teslaBoltRenderer = renderers.teslaBolt;
     this.tracerRenderer = renderers.tracer;
     this.muzzleFlashRenderer = renderers.muzzleFlash;
+    this.turretAnimations = renderers.turretAnimations ?? null;
     this.ownerPositionProvider = ownerPositionProvider;
   }
 
@@ -253,6 +258,7 @@ export class ProjectilePresentationRuntime {
       this.tracerRenderer?.createTracer(id, tracerX, tracerY, cfg.tracerConfig, cfg.color);
     }
     if (cfg.suppressSpawnFx) return;
+    if (cfg.sourceTurretId !== undefined) this.turretAnimations?.onShot(cfg.sourceTurretId);
     const muzzleOrigin = cfg.visualMuzzleOrigin ?? getTopDownMuzzleOrigin(muzzleX, muzzleY, angle);
     this.muzzleFlashRenderer?.playProjectileFlash(
       muzzleOrigin.x,
@@ -506,6 +512,18 @@ export class ProjectilePresentationRuntime {
   }
 
   presentClientFrame(frame: ProjectileClientReplicaFrame, localPlayerId?: string): void {
+    if (this.clientTurretBaselineReceived) {
+      const firingTurrets = new Set<string>();
+      for (const update of frame.updates) {
+        const projectile = update.projectile;
+        if (update.isNew && !projectile.suppressSpawnFx && !projectile.flightPath?.ended
+          && projectile.sourceTurretId !== undefined) {
+          firingTurrets.add(projectile.sourceTurretId);
+        }
+      }
+      for (const id of firingTurrets) this.turretAnimations?.onShot(id);
+    }
+    this.clientTurretBaselineReceived = true;
     this.clientPlayerId = localPlayerId;
     this.flightPlayback.sync(frame.projectiles, performance.now());
     const data = frame.projectiles.filter(p => !p.flightPath);
@@ -750,6 +768,8 @@ export class ProjectilePresentationRuntime {
   }
 
   releaseWorldPresentation(): void {
+    this.clientTurretBaselineReceived = false;
+    this.turretAnimations = null;
     this.bounceDebugOverlay?.destroy(); this.bounceDebugOverlay = null;
     this.flightPlayback.clear(); this.pathCursors.clear(); this.pathTimes.clear(); this.nonFlightFrame = null; this.clientPathHeads.clear();
     this.ownershipAppearance.clear();

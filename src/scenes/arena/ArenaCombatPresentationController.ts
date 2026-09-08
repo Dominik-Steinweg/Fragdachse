@@ -9,6 +9,7 @@ import type { RendererBundle } from './RendererBundle';
 import type { ArenaDiagnosticsFrame } from './ArenaDiagnosticsController';
 
 type CombatRenderers = Pick<RendererBundle,
+  | 'turretAnimations'
   | 'healthBars'
   | 'beer'
   | 'timeBubble'
@@ -75,6 +76,7 @@ export class ArenaCombatPresentationController {
     this.renderers.energyInjector.syncVisuals(frame.inArena ? this.sources.getEnergyInjectorEffects() : [], now);
     this.renderers.remoteControl.syncVisuals(frame.inArena ? this.sources.getRemoteControlTargets() : [], now);
     this.renderers.teslaDome.update(frame.delta);
+    this.renderers.turretAnimations.update(frame.delta);
     this.renderers.teslaNova.update();
     diagnosticsFrame?.begin('visualEnemy');
     const auraEnemies = frame.inArena ? this.sources.getEnemyVisuals() : [];

@@ -40,6 +40,33 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('animates confirmed turret shots but not baselines, refreshes or suppressed spawns', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never);
+    const replica = new ProjectileClientReplica();
+    const turretAnimations = { onShot: vi.fn() };
+    const renderer = { ...passiveRenderer(), sync: vi.fn(), retain: vi.fn() };
+    const renderers = { ...Object.fromEntries(['bullet', 'projectileBurn', 'flame', 'leafBlower', 'bfg',
+      'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
+      'translocatorPuck', 'teslaBolt', 'tracer'].map(key => [key, renderer])), turretAnimations };
+    runtime.bindRenderers(renderers as never, null);
+    const old = projectile({ sourceTurretId: 'base:rocket' });
+    runtime.presentClientFrame(replica.sync([old], 1000));
+    expect(turretAnimations.onShot).not.toHaveBeenCalled();
+    const fresh = projectile({ id: 8, sourceTurretId: 'base:rocket' });
+    const batch = [old, fresh, projectile({ id: 9, sourceTurretId: '7', suppressSpawnFx: true })];
+    runtime.presentClientFrame(replica.sync(batch, 1050));
+    runtime.presentClientFrame(replica.sync(batch, 1100));
+    expect(turretAnimations.onShot).toHaveBeenCalledExactlyOnceWith('base:rocket');
+    runtime.createSpawnFeedback(10, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', speed: 100 } as never);
+    expect(turretAnimations.onShot).toHaveBeenLastCalledWith('7');
+    runtime.createSpawnFeedback(11, 0, 0, 0, 0, 0, 'owner', { sourceTurretId: '7', suppressSpawnFx: true } as never);
+    expect(turretAnimations.onShot).toHaveBeenCalledTimes(2);
+    runtime.releaseWorldPresentation();
+    runtime.bindRenderers(renderers as never, null);
+    runtime.presentClientFrame(new ProjectileClientReplica().sync([fresh], 2000));
+    expect(turretAnimations.onShot).toHaveBeenCalledTimes(2);
+  });
+
   it('buffers heads and trails together and preserves the cursor when terminal history arrives late', () => {
     let now = 1000;
     const clock = vi.spyOn(performance, 'now').mockImplementation(() => now);

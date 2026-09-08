@@ -942,6 +942,7 @@ export class PlayerEntity {
       return;
     }
 
+    this.spawnShine.setTexture(this.sprite.texture.key, this.sprite.frame.name);
     const frameWidth = this.spawnShine.frame.cutWidth;
     const frameHeight = this.spawnShine.frame.cutHeight;
     const cropWidth = Math.max(6, Math.round(frameWidth * 0.26));
@@ -960,7 +961,7 @@ export class PlayerEntity {
       .setVisible(true)
       .setPosition(this.sprite.x, this.sprite.y)
       .setRotation(this.sprite.rotation)
-      .setScale(this.spriteScaleFactorX * 1.04, this.spriteScaleFactorY * 1.02)
+      .setScale(this.sprite.scaleX * 1.04, this.sprite.scaleY * 1.02)
       .setAlpha(this.spawnShineAlpha)
       .setCrop(cropX, 0, visibleWidth, frameHeight);
   }
@@ -1078,18 +1079,6 @@ export class PlayerEntity {
     this.sprite.setScale(this.spriteBaseScaleX * factorX, this.spriteBaseScaleY * factorY);
   }
 
-  /**
-   * Aktuelle Sprite-Skalierung als Faktor relativ zur Spielergroesse. Die Overlays liegen im
-   * 32-px-Raster und muessen den Feedback-Faktor uebernehmen, nicht die rohe Texturskalierung.
-   */
-  private get spriteScaleFactorX(): number {
-    return (this.sprite?.scaleX || this.spriteBaseScaleX) / this.spriteBaseScaleX;
-  }
-
-  private get spriteScaleFactorY(): number {
-    return (this.sprite?.scaleY || this.spriteBaseScaleY) / this.spriteBaseScaleY;
-  }
-
   private syncWalkingAnimation(): void {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
@@ -1115,8 +1104,10 @@ export class PlayerEntity {
     this.stealthScan.setVisible(visible);
     if (!visible) return;
 
-    const spriteScaleX = this.spriteScaleFactorX;
-    const spriteScaleY = this.spriteScaleFactorY;
+    this.stealthShell.setTexture(this.sprite.texture.key, this.sprite.frame.name);
+    this.stealthScan.setTexture(this.sprite.texture.key, this.sprite.frame.name);
+    const spriteScaleX = this.sprite.scaleX;
+    const spriteScaleY = this.sprite.scaleY;
     const spriteRotation = this.sprite.rotation;
 
     this.stealthShell

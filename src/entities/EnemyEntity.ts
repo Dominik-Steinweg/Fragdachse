@@ -176,7 +176,8 @@ export class EnemyEntity {
     if (authoritative) {
       scene.physics.add.existing(this.sprite);
       const body = this.body;
-      body.setCircle(this.config.size * 0.5);
+      // Arcade takes source pixels; display scaling supplies the authored world diameter.
+      body.setCircle(this.sprite.frame.realWidth * 0.5, 0, 0);
       body.setCollideWorldBounds(true);
       body.setBounce(0, 0);
       body.allowGravity = false;
@@ -497,7 +498,7 @@ export class EnemyEntity {
     const clamped = Phaser.Math.Clamp(scale, 0.1, 1);
     this.sprite.setDisplaySize(this.config.size * clamped, this.config.size * clamped);
     if (this.authoritative && this.sprite.body) {
-      this.body.setCircle(this.config.size * clamped * 0.5);
+      this.body.setCircle(this.sprite.frame.realWidth * 0.5, 0, 0);
     }
   }
 

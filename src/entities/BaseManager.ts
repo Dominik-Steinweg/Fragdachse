@@ -1,3 +1,4 @@
+import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import * as Phaser from 'phaser';
 import type { SyncedBaseState } from '../types';
@@ -72,13 +73,14 @@ export class BaseManager {
     presentation = true,
     damageable = false,
     healthBars: WorldHealthBarRenderer | null = null,
+    turretAnimations: TurretAnimationController | null = null,
   ) {
     this.presentation = presentation;
     this.worldMetrics = metrics;
     this.group = scene.physics.add.staticGroup();
     this.destructionRenderer = presentation ? new BaseDestructionRenderer(scene, destructionHooks) : null;
     for (const spec of baseSpecs) {
-      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars);
+      const entity = new BaseEntity(scene, spec, metrics, presentation, damageable, healthBars, turretAnimations);
       entity.setOnDestroyed(() => this.handleBaseDestroyed(entity));
       this.entities.push(entity);
       this.byId.set(entity.id, entity);

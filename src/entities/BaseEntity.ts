@@ -1,3 +1,4 @@
+import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { baseHealthBarStyle } from '../effects/health/healthBarStyles';
 import type { WorldMetrics } from '../world/WorldMetrics';
@@ -75,7 +76,7 @@ export class BaseEntity {
   private damageable: boolean;
   private readonly cellImages: Phaser.GameObjects.Image[] = [];
   private readonly cellBodies: Phaser.GameObjects.Rectangle[] = [];
-  private readonly turretImages = new Map<string, Phaser.GameObjects.Image>();
+  private readonly turretImages = new Map<string, Phaser.GameObjects.Sprite>();
   private readonly turretAngles = new Map<string, number>();
   private healthBar: HealthBarHandle | null = null;
   private readonly hpBarWidth: number;
@@ -105,6 +106,7 @@ export class BaseEntity {
     presentation = true,
     damageable = false,
     private readonly healthBars: WorldHealthBarRenderer | null = null,
+    private readonly turretAnimations: TurretAnimationController | null = null,
   ) {
     this.scene = scene;
     this.metrics = metrics;
@@ -163,10 +165,12 @@ export class BaseEntity {
     for (const turret of this.spec.turrets) {
       const visual = getTurretVisualSpec(turret.weaponId);
       const transform = getTurretVisualTransform(visual, turret.x, turret.y, turret.initialAngle);
-      const image = this.scene.add.image(transform.x, transform.y, visual.textureKey)
+      const image = this.scene.add.sprite(transform.x, transform.y, visual.textureKey)
         .setDisplaySize(visual.displaySize, visual.displaySize)
         .setRotation(transform.rotation)
         .setDepth(DEPTH.BASES + 3);
+      this.turretAnimations?.bind(turret.id, image, turret.weaponId);
+      image.setDisplaySize(visual.displaySize, visual.displaySize);
       this.turretImages.set(turret.id, image);
     }
 

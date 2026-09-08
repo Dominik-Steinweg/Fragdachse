@@ -159,6 +159,7 @@ function makeCombatController() {
     energyInjector: { syncVisuals: vi.fn() },
     remoteControl: { syncVisuals: vi.fn() },
     teslaDome: { update: vi.fn() },
+    turretAnimations: { update: vi.fn() },
     teslaNova: { update: vi.fn() },
     healingAura: { syncEnemies: vi.fn(), update: vi.fn() },
     miniTeslaDome: { syncEnemies: vi.fn(), update: vi.fn() },

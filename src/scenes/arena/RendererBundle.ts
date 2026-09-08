@@ -1,3 +1,4 @@
+import { TurretAnimationController } from '../../effects/TurretAnimationController';
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
 import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
@@ -81,6 +82,7 @@ export interface RendererBundle {
   hydra:               HydraRenderer;
   gauss:               GaussRenderer;
   energyShield:        EnergyShieldRenderer;
+  turretAnimations:   TurretAnimationController;
   teslaDome:           TeslaDomeRenderer;
   teslaNova:           TeslaNovaRenderer;
   teslaBolt:           TeslaBoltRenderer;
@@ -190,7 +192,8 @@ export function createRendererBundle(
   const energyShield = new EnergyShieldRenderer(scene);
   energyShield.generateTextures();
 
-  const teslaDome = new TeslaDomeRenderer(scene);
+  const turretAnimations = new TurretAnimationController();
+  const teslaDome = new TeslaDomeRenderer(scene, turretAnimations);
   teslaDome.generateTextures();
 
   // Blitznova und Gewitterprojektile sind eigene Effektfamilien, haengen aber am selben Feldpuls.
@@ -316,7 +319,7 @@ export function createRendererBundle(
   // `WorldProjectileRuntime.getLightSamples()` in `ArenaScene.syncProjectileLights()`.
 
   return {
-    bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
+    turretAnimations, bullet, asmdPrimary, plasmaBurner, bite, blackHole, zeusTaser, flame, leafBlower, bfg, energyBall, hydra, gauss, energyShield, teslaDome, teslaNova, teslaBolt, healingAura, guardianSpirit, repairDrone, slimeTrail, corpseMarker, flamethrowerUpgrades, projectileBurn, miniTeslaDome, timeBubble, reinforcementMatrix, energyInjector, holyGrenade,
     rocket, fireball, spore, grenade, muzzleFlash, tracer, translocatorPuck, beer,
     nuke, airstrike, encounterTelegraph, secondaryObjectiveMarkers, missionProgress, carryZones, ak47StrategicTargets, objectiveRepairDrones, meteor, rockDestruction, powerUp, shadow, lighting,
     remoteControl,
@@ -361,6 +364,7 @@ export function wireProjectileRenderers(
     teslaBolt: bundle.teslaBolt,
     tracer: bundle.tracer,
     muzzleFlash: bundle.muzzleFlash,
+    turretAnimations: bundle.turretAnimations,
   }, (ownerId) => owners.getOwnerVisualState(ownerId));
   bundle.energyShield.setOwnerPositionProvider((ownerId) => owners.getOwnerVisualState(ownerId));
 }

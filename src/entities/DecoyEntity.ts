@@ -62,7 +62,7 @@ export class DecoyEntity {
       scene.physics.add.existing(this.sprite);
       const body = this.body;
       if (body) {
-        body.setCircle(PLAYER_SIZE / 2);
+        body.setCircle(this.sprite.frame.realWidth / 2, 0, 0);
         body.setCollideWorldBounds(true);
         body.setAllowGravity(false);
       }

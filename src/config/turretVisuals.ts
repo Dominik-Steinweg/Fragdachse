@@ -1,8 +1,10 @@
+import { getPipelineAsset, pipelineAnimationKey, type PipelineAsset } from './pipelineAssets';
 import type * as Phaser from 'phaser';
 import type { TurretWeaponId } from '../types';
 
 export interface TurretVisualSpec {
   readonly textureKey: string;
+  readonly asset: PipelineAsset;
   readonly assetPath: string | null;
   readonly displaySize: number;
   /** Source sprites point east, matching Phaser's zero-radian aim direction. */
@@ -18,37 +20,27 @@ export interface TurretVisualTransform {
   readonly rotation: number;
 }
 
-const SPORE_VISUAL: TurretVisualSpec = Object.freeze({
-  textureKey: 'pilz01',
-  // Loaded by the shared arena-decal preloader from the existing hand-authored PNG.
-  assetPath: null,
-  displaySize: 32,
-  rotationOffset: 0,
-  // pilz01.png is a 16x16 ground decal whose visible pixels occupy x=1..7,
-  // y=8..14. At 32px display size the image pivot therefore needs +7/-7px.
-  centerCorrectionX: 7,
-  centerCorrectionY: -7,
-});
-
-function generated(textureKey: string, fileName: string): TurretVisualSpec {
+function selected(id: string): TurretVisualSpec {
+  const asset = getPipelineAsset(id);
   return Object.freeze({
-    textureKey,
-    assetPath: `./assets/sprites/turrets/${fileName}`,
-    displaySize: 40,
+    textureKey: asset.textureKey,
+    asset,
+    assetPath: asset.idlePath,
+    displaySize: id === 'spore' ? 32 : 40,
     rotationOffset: 0,
     centerCorrectionX: 0,
     centerCorrectionY: 0,
   });
 }
-
-const ROCKET_VISUAL = generated('turret_weapon_rocket', 'rocket.png');
-const MACHINE_GUN_VISUAL = generated('turret_weapon_machine_gun', 'machine_gun.png');
-const FLAME_VISUAL = generated('turret_weapon_flame', 'flame.png');
-const VOID_FLAME_VISUAL = generated('turret_weapon_void_flame', 'void_flame.png');
-const TESLA_VISUAL = generated('turret_weapon_tesla', 'tesla.png');
-const GRAVITY_VISUAL = generated('turret_weapon_gravity', 'gravity.png');
-const SLOW_BUBBLE_VISUAL = generated('turret_weapon_slow_bubble', 'slow_bubble.png');
-const PLASMA_VISUAL = generated('turret_weapon_plasma', 'plasma.png');
+const SPORE_VISUAL = selected('spore');
+const ROCKET_VISUAL = selected('rocket');
+const MACHINE_GUN_VISUAL = selected('machine-gun');
+const FLAME_VISUAL = selected('flame');
+const VOID_FLAME_VISUAL = selected('void-flame');
+const TESLA_VISUAL = selected('tesla');
+const GRAVITY_VISUAL = selected('gravity');
+const SLOW_BUBBLE_VISUAL = selected('slow-bubble');
+const PLASMA_VISUAL = selected('plasma');
 
 export const TURRET_VISUALS: Readonly<Record<TurretWeaponId, TurretVisualSpec>> = Object.freeze({
   SPORES: SPORE_VISUAL,
@@ -91,5 +83,26 @@ export function preloadTurretVisualAssets(loader: Phaser.Loader.LoaderPlugin): v
     if (!spec.assetPath || loaded.has(spec.textureKey)) continue;
     loaded.add(spec.textureKey);
     loader.image(spec.textureKey, spec.assetPath);
+    const { asset } = spec;
+    loader.spritesheet(asset.sheetTextureKey, asset.sheetPath, {
+      frameWidth: asset.layout.frameWidth,
+      frameHeight: asset.layout.frameHeight,
+      margin: asset.layout.margin,
+      spacing: asset.layout.spacing,
+      endFrame: asset.layout.frameCount - 1,
+    });
+  }
+}
+
+export function registerTurretAnimations(anims: Phaser.Animations.AnimationManager): void {
+  for (const spec of new Set(Object.values(TURRET_VISUALS))) {
+    for (const clip of spec.asset.clips) {
+      const key = pipelineAnimationKey(spec.asset, clip);
+      if (anims.exists(key)) continue;
+      anims.create({ key,
+        frames: anims.generateFrameNumbers(spec.asset.sheetTextureKey, { frames: clip.frames }),
+        frameRate: clip.frameRate, repeat: clip.loop ? -1 : 0,
+      });
+    }
   }
 }

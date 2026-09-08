@@ -9,6 +9,7 @@ import type { RendererBundle } from './RendererBundle';
  */
 export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): void {
   bundle.movement.clear();
+  bundle.turretAnimations.clear();
   bundle.burrowGpu.clearAllUnderground();
   bundle.burrowGpu.clear();
   bundle.timeBubble.destroyAll();

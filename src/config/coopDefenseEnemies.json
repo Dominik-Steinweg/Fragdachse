@@ -457,7 +457,6 @@
       "attackStopDurationMs": 120,
       "obstacleAttackDelayMs": 400,
       "imageKey": "enemy_void_hunter",
-      "spriteRotationOffsetDegrees": 180,
       "isBoss": true,
       "glow": {
         "color": 11219711,

@@ -112,6 +112,16 @@ Die Prüfung wählt die passende eingebettete Asset-Scene, auch wenn Blender das
 
 Für einen exemplarischen unabhängigen Render `--render-frame 1 --render-output <neuer-absoluter-Pfad.png>` anhängen. Der Index bezeichnet den exportierten Frame. Dieser Portabilitätscheck verwendet CPU und behält 1024er-Auflösung, Cycles 64 Samples, Seed 37, Kamera und Materialien unverändert. Bericht und PNG müssen neue Dateien sein. Das Skript speichert niemals eine Blend-Datei und verändert keine Produktionsquellen; für die endgültige Dokumentation werden Prüferskript und Berichte als zusätzliche Review-Quellen beigelegt.
 
+## Ausgewählte Assets ins Spiel übernehmen
+
+`node scripts/asset-pipeline/import-runtime.mjs v2-g` übernimmt die ausgewählten Ruhebilder und
+Sheets unverändert nach `public/assets/sprites/pipeline-v2/` und erzeugt die versionierte
+`src/config/pipelineAssets.json`. Der Import prüft die Dateien gegen die SHA-256-Werte der
+jeweiligen `selection.json`. Er rendert nichts und verändert keine Produktionsquelle.
+Runtime und Build benötigen nur diese versionierten Dateien; Blender, Quellenarchive und
+`art/poc/` bleiben lokale Authoring-Werkzeuge. Die Runtime-Bindung beschreibt
+[rendering.md](../../docs/ai/rendering.md#figuren--und-turmassets).
+
 ## V1-Kompatibilität und vorhandene statische Referenzen
 
 Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Ohne Versionsparameter zeigt der Viewer weiterhin V1. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
@@ -196,4 +206,4 @@ Tests schützen Alpha-Resampling, Kamera-/Drehpunktvertrag, Clipping, Texturbele
 
 Blend-Dateien enthalten gepackte Originaltexturen und eingebettete Erstellungsskripte. Die Szene kann unabhängig vom Repository geöffnet und gerendert werden; auf anderen Rechnern Ausgabepfad anpassen. Geometrie lässt sich aus gespeichertem Skriptstand mit denselben Originaltexturen neu erzeugen. Pixelidentische Exporte werden vom unveränderten Master geprüft; identische Blender-Render über verschiedene Blender-/GPU-Versionen sind nicht zugesichert.
 
-`art/poc/` bleibt komplett Git-ignoriert. Nur Skill, Skripte, Beschreibungen und Prompts werden versioniert. Runtime-Assets bleiben unverändert. V1 bleibt statisch; Rigging und Animationsexport sind oben als V2 beschrieben. Die Integration ins Spiel erfolgt separat.
+`art/poc/` bleibt komplett Git-ignoriert. Skill, Skripte, Beschreibungen, Prompts und die ausdrücklich importierte Runtime-Auswahl werden versioniert. V1 bleibt statisch; Rigging, Animationsexport und Runtime-Import sind oben als V2 beschrieben.

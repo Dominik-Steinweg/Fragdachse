@@ -1,3 +1,4 @@
+import type { TurretAnimationController } from '../../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../../effects/health/WorldHealthBarRenderer';
 import { TURRET_HEALTH_BAR_STYLE } from '../../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
@@ -30,7 +31,7 @@ export interface RockVisualWorldPort {
 }
 
 interface TurretVisualState {
-  image:     Phaser.GameObjects.Image;
+  image:     Phaser.GameObjects.Sprite;
   aura:      Phaser.GameObjects.Image;
   rangeCircle: Phaser.GameObjects.Graphics;
 
@@ -64,6 +65,7 @@ export class RockVisualHelper {
     private readonly lighting: LightingSystem | null,
     worldPort?: RockVisualWorldPort | null,
     private readonly healthBars: WorldHealthBarRenderer | null = null,
+    private readonly turretAnimations: TurretAnimationController | null = null,
   ) {
     this.worldPort = worldPort ?? null;
     this.ensureTurretTextures();
@@ -377,7 +379,7 @@ export class RockVisualHelper {
         .setAlpha(0.2)
         .setBlendMode(Phaser.BlendModes.ADD)
         .setDepth(DEPTH.ROCKS + 0.1);
-      const image = this.scene.add.image(world.x, world.y, visualSpec.textureKey)
+      const image = this.scene.add.sprite(world.x, world.y, visualSpec.textureKey)
         .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
         .setDepth(DEPTH.ROCKS + 0.2);
 
@@ -400,8 +402,9 @@ export class RockVisualHelper {
       : undefined;
     const indestructible = definition?.indestructible === true;
     const transform = getTurretVisualTransform(visualSpec, world.x, world.y, rock.angle);
+    this.turretAnimations?.bind(String(rock.id), visual.image, weaponId);
+    if (!this.turretAnimations) visual.image.setTexture(visualSpec.textureKey);
     visual.image
-      .setTexture(visualSpec.textureKey)
       .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
       .setPosition(transform.x, transform.y)
       .setRotation(transform.rotation);

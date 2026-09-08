@@ -27,11 +27,11 @@ describe('asset pipeline catalog contracts', () => {
         .filter(([, candidate]) => candidate.textureKey === visual.textureKey)
         .map(([id]) => id);
       expect(sorted(asset.gameIds)).toEqual(sorted(sharedIds));
-      if (visual.assetPath) expect(asset.reference).toBe(visual.assetPath.replace(/^\.\//, 'public/'));
-      else expect(path.basename(asset.reference)).toBe(`${visual.textureKey}.png`);
-      expect(asset.referenceTransform ?? { centerCorrectionX: 0, centerCorrectionY: 0, rotationOffset: 0 })
-        .toEqual({ centerCorrectionX: visual.centerCorrectionX, centerCorrectionY: visual.centerCorrectionY,
-          rotationOffset: visual.rotationOffset });
+      // Reference corrections apply only to the archived comparison artwork.
+      expect(visual.asset.id).toBe(asset.id);
+      expect(visual.centerCorrectionX).toBe(0);
+      expect(visual.centerCorrectionY).toBe(0);
+      expect(visual.rotationOffset).toBe(0);
     }
   });
 
@@ -44,7 +44,7 @@ describe('asset pipeline catalog contracts', () => {
       expect(asset.forward).toBe('north');
       expect(asset.requiredClips).toEqual(['move']);
       expect(asset.reference).toBe(`public/assets/sprites/enemies/${config.imageKey}.png`);
-      expect(asset.referenceTransform?.rotationOffset ?? 0).toBe((config.spriteRotationOffsetDegrees ?? 0) * Math.PI / 180);
+      expect(config.spriteRotationOffsetDegrees ?? 0).toBe(0);
     }
     const characters = assets.filter((asset) => asset.category === 'character');
     expect(characters).toHaveLength(1);

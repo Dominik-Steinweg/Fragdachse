@@ -1,0 +1,1304 @@
+{
+  "version": 2,
+  "revision": "v2-g",
+  "assets": [
+    {
+      "id": "rocket",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_ROCKET_BURST"
+      ],
+      "variant": "calm",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_rocket",
+      "sheetTextureKey": "turret_weapon_rocket_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/rocket/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/rocket/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 9,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "frameRate": 24,
+          "loop": false
+        }
+      ],
+      "hashes": {
+        "idle": "9aab7370261e1c5d24abeec44208d9e3130ef37fcb00864c2f7686cdbae73c56",
+        "sheet": "b7c660346a2b810392a24d1622e6fe3c53aeb76ec01d24b768c010402d86dc55"
+      }
+    },
+    {
+      "id": "tesla",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_TESLA"
+      ],
+      "variant": "calm",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_tesla",
+      "sheetTextureKey": "turret_weapon_tesla_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/tesla/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/tesla/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "e97674c0c59263e938f8b8ce33074527f0a2905e9d11a3e09a6afe4c1752b069",
+        "sheet": "6c5285955e6a9f4e2deab41f8877a65985e5ac953b5664a23f2366fcddd5172b"
+      }
+    },
+    {
+      "id": "spore",
+      "category": "turret",
+      "gameIds": [
+        "SPORES",
+        "BASE_SPORES",
+        "TURRET_SPORES"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "turret_weapon_spore",
+      "sheetTextureKey": "turret_weapon_spore_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/spore/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/spore/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 9,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "frameRate": 24,
+          "loop": false
+        }
+      ],
+      "hashes": {
+        "idle": "f1bc95189e678277aeeb8375d74617106339dd602616bb6c5455666c0e9d53b4",
+        "sheet": "e4a04eb38263cf05bbe6306f71bebfe8a2cfa4f119e96dcb64865c39851488ed"
+      }
+    },
+    {
+      "id": "plasma",
+      "category": "turret",
+      "gameIds": [
+        "SPORE_TURRET_PLASMA"
+      ],
+      "variant": "calm",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_plasma",
+      "sheetTextureKey": "turret_weapon_plasma_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/plasma/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/plasma/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 9,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "frameRate": 24,
+          "loop": false
+        }
+      ],
+      "hashes": {
+        "idle": "3a6b07d92daece60a7a31c80b0df2cdbdfd5def5dc9a7bc11b665e8c16a80815",
+        "sheet": "8dfb7cb8fbe58aa9c7e0402acff914b346ea02ec2d98b4116eb30b9996b5366e"
+      }
+    },
+    {
+      "id": "machine-gun",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_MG"
+      ],
+      "variant": "calm",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_machine_gun",
+      "sheetTextureKey": "turret_weapon_machine_gun_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/machine-gun/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/machine-gun/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 7,
+        "rows": 1,
+        "frameCount": 7,
+        "width": 1148,
+        "height": 164
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "frameRate": 30,
+          "loop": false
+        }
+      ],
+      "hashes": {
+        "idle": "82419442aad3ac4b07ffe9db08c0cb6b43c6a3a02c413f6da99d2f1edde09bab",
+        "sheet": "fddf0d21cbad9640c035908ebd77399035a0d34fd5125e1cc443c839053401ee"
+      }
+    },
+    {
+      "id": "flame",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_FLAME"
+      ],
+      "variant": "rich",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_flame",
+      "sheetTextureKey": "turret_weapon_flame_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/flame/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/flame/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "d8183e05b6bd5effe62c0e32c272e66be3926cd8cf077e37eba3ff920dcfd319",
+        "sheet": "3df4cc1558783d78d2f73925869ab699415a5aa9fc3e96f78ae0f81383333cda"
+      }
+    },
+    {
+      "id": "void-flame",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_VOID_FLAME"
+      ],
+      "variant": "rich",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_void_flame",
+      "sheetTextureKey": "turret_weapon_void_flame_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/void-flame/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/void-flame/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "09c91c3060028f7cd917dfd22a9a081d5d09f260896c7342cd16b141c6247c59",
+        "sheet": "55f75d688ee3c17895a8b2395b73d0a1690d9d4cde83a8c494ab23b7ae21485d"
+      }
+    },
+    {
+      "id": "gravity",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_GRAVITY"
+      ],
+      "variant": "calm",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_gravity",
+      "sheetTextureKey": "turret_weapon_gravity_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/gravity/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/gravity/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 11,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "frameRate": 20,
+          "loop": false
+        }
+      ],
+      "hashes": {
+        "idle": "6b3222af58451a073343e277734b67651405ffd5620acb1ec8d0f6737e21d8b2",
+        "sheet": "9f0ae0bb79c513c28f8d1e98058abf780ac21a61b6243f625099356a533ab2eb"
+      }
+    },
+    {
+      "id": "slow-bubble",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_SLOW_BUBBLE"
+      ],
+      "variant": "calm",
+      "sourceSize": 160,
+      "textureKey": "turret_weapon_slow_bubble",
+      "sheetTextureKey": "turret_weapon_slow_bubble_animated",
+      "idlePath": "./assets/sprites/pipeline-v2/slow-bubble/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/slow-bubble/sheet.png",
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 160,
+        "frameHeight": 160,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 9,
+        "width": 1312,
+        "height": 328
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "fire",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "frameRate": 24,
+          "loop": false
+        }
+      ],
+      "hashes": {
+        "idle": "01b691c5c131c90c7d21eda44a0cc991aba21a078c75313be5ecb76a6787ee1d",
+        "sheet": "be8c7fb31a22cdbc5e0e8d3a856cf9f563893ca92cfa9c7013ffda12c3fd443e"
+      }
+    },
+    {
+      "id": "zombie-badger",
+      "category": "enemy",
+      "gameIds": [
+        "zombie-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_zombie_badger",
+      "sheetTextureKey": "enemy_zombie_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/zombie-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/zombie-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 10,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "166786eaf5a4451f5722714ad55c7cae289edd97c8d8eeac5074134f3c356ce4",
+        "sheet": "cd6d7ff5b61d4d5eb14c56e9957e5a27de72bc539b9cc50ff213dd2e16096ece"
+      }
+    },
+    {
+      "id": "demon-badger",
+      "category": "enemy",
+      "gameIds": [
+        "demon-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_demon_badger",
+      "sheetTextureKey": "enemy_demon_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/demon-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/demon-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 16,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "800740a52e2e5d4e667d17dbfcf94d77a146304ca154e5d97dc898768599f700",
+        "sheet": "9427ef42aa217e7bf2333294363298eca330b86da7027c1351119c345302970c"
+      }
+    },
+    {
+      "id": "rabid-badger",
+      "category": "enemy",
+      "gameIds": [
+        "rabid-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_rabid_badger",
+      "sheetTextureKey": "enemy_rabid_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/rabid-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/rabid-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 18,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "a237aac16b6760ca885af870f807b38a48baa1eabe590804b6488c0c96fffb7d",
+        "sheet": "cc772e0fdf7a608083be67eac75dd26883d4d5459ef7a5ad7dc54216662e5816"
+      }
+    },
+    {
+      "id": "grave-titan",
+      "category": "enemy",
+      "gameIds": [
+        "grave-titan"
+      ],
+      "variant": "rich",
+      "sourceSize": 256,
+      "textureKey": "enemy_grave_titan",
+      "sheetTextureKey": "enemy_grave_titan_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/grave-titan/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/grave-titan/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 2080,
+        "height": 520
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 8,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "80d0400c1dd795c1dcef774e85f5b99aadfa2fac751199f2830b3c06519e1632",
+        "sheet": "3c86bc60eddb18e5e19e79d65bc505176d7013de4193fe1677a0506ae8e5e511"
+      }
+    },
+    {
+      "id": "spore-warden",
+      "category": "enemy",
+      "gameIds": [
+        "spore-warden"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_spore_warden",
+      "sheetTextureKey": "enemy_spore_warden_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/spore-warden/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/spore-warden/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 11,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "bc846e91176373b412f5266e862367870a8e9a0876bcc74fce875fe32d433d51",
+        "sheet": "83bcf6e85070ac6809aabd44ebbc48abf158c7822a07180d7cbbfcd25e0c05ef"
+      }
+    },
+    {
+      "id": "plague-medic",
+      "category": "enemy",
+      "gameIds": [
+        "plague-medic"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_plague_medic",
+      "sheetTextureKey": "enemy_plague_medic_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/plague-medic/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/plague-medic/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 10,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "2402aea16cfc1bed4009691319c87794eeab1b35dda8d0a878d28dc170409be2",
+        "sheet": "2ee765721259deedf2d1286c280b6d6d889546f72eb9e12523da2dc2f2d42c47"
+      }
+    },
+    {
+      "id": "void-stalker",
+      "category": "enemy",
+      "gameIds": [
+        "void-stalker"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_void_stalker",
+      "sheetTextureKey": "enemy_void_stalker_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/void-stalker/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/void-stalker/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 14,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "b2c4ee7b00683b46858a20c9cbc6efd20be0aa9bc6f42ea53667508e0801aaa0",
+        "sheet": "bf7df29c5ae23454690321d227cdf8f60ebb6ba882d47cb029832450439ed951"
+      }
+    },
+    {
+      "id": "stink-broodmother",
+      "category": "enemy",
+      "gameIds": [
+        "stink-broodmother"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_stink_broodmother",
+      "sheetTextureKey": "enemy_stink_broodmother_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/stink-broodmother/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/stink-broodmother/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 10,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "05983dea20bf00629ed061d8bdabaf65a0c93d8f6f23b812b0de0af8c8a75017",
+        "sheet": "92a9fa153caa726202213bac3bad83509fb9472b04d6cc67e6855852131ade1e"
+      }
+    },
+    {
+      "id": "alien-badger",
+      "category": "enemy",
+      "gameIds": [
+        "alien-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_alien_badger",
+      "sheetTextureKey": "enemy_alien_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/alien-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/alien-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 14,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "55065fc49f2a593a31b317033024f8f68001bf0de334a64bf96dcbb8f2e67554",
+        "sheet": "5e18381cd3023be29b58c9c974e6054780bf16adc9a22ac46f8081fc2650c091"
+      }
+    },
+    {
+      "id": "thrower-badger",
+      "category": "enemy",
+      "gameIds": [
+        "thrower-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_thrower_badger",
+      "sheetTextureKey": "enemy_thrower_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/thrower-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/thrower-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "2790dfd554da2699e7df4957b7d40056e26a968360cf7c9ab83fe350872564eb",
+        "sheet": "b5b260132c8068b9e11d570825fc15ec1742ecc1f07530af42459681057f5e32"
+      }
+    },
+    {
+      "id": "inferno-colossus",
+      "category": "enemy",
+      "gameIds": [
+        "inferno-colossus"
+      ],
+      "variant": "rich",
+      "sourceSize": 256,
+      "textureKey": "enemy_inferno_colossus",
+      "sheetTextureKey": "enemy_inferno_colossus_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/inferno-colossus/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/inferno-colossus/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 2080,
+        "height": 520
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "18fa1cf734b278ad35c62bb0de7301335f1a9796bce2a343a5fe65648d1b3fea",
+        "sheet": "2d321581a9f1ce317ac510208111105e1e18e8f976470d728fab656a6c3fa58c"
+      }
+    },
+    {
+      "id": "pyro-badger",
+      "category": "enemy",
+      "gameIds": [
+        "pyro-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_pyro_badger",
+      "sheetTextureKey": "enemy_pyro_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/pyro-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/pyro-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 15,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "c19784544852187f04d495f40661f3c361ab8feb20fcaf10edee55a80f7c114c",
+        "sheet": "454a1cd946e5eb40e68f8e4a3e3114fac1a2577e07283824a7367a90daf24f7b"
+      }
+    },
+    {
+      "id": "timebomb-badger",
+      "category": "enemy",
+      "gameIds": [
+        "timebomb-badger"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "enemy_timebomb_badger",
+      "sheetTextureKey": "enemy_timebomb_badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/timebomb-badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/timebomb-badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 17,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "1f86ed54c60e85cd525ef7aacabb04e156371f1512004d341fa6ccc6a3cd1b66",
+        "sheet": "c2524b0bd05ceeef45e61fcacd2b841021d4c771c000deff709fc0547248674b"
+      }
+    },
+    {
+      "id": "void-hunter",
+      "category": "enemy",
+      "gameIds": [
+        "void-hunter"
+      ],
+      "variant": "rich",
+      "sourceSize": 256,
+      "textureKey": "enemy_void_hunter",
+      "sheetTextureKey": "enemy_void_hunter_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/void-hunter/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/void-hunter/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 256,
+        "frameHeight": 256,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 2080,
+        "height": 520
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 11,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "116305a7446d32ece6512ab4a0b085df2ea30a1a4651e9be965d59c92b23fab8",
+        "sheet": "22db73bc644aed516255f581db29f5750da5b0d5ef6daecf5c8b3653d1e158d0"
+      }
+    },
+    {
+      "id": "badger",
+      "category": "character",
+      "gameIds": [
+        "player"
+      ],
+      "variant": "rich",
+      "sourceSize": 128,
+      "textureKey": "badger",
+      "sheetTextureKey": "badger_walking",
+      "idlePath": "./assets/sprites/pipeline-v2/badger/idle.png",
+      "sheetPath": "./assets/sprites/pipeline-v2/badger/sheet.png",
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "layout": {
+        "frameWidth": 128,
+        "frameHeight": 128,
+        "margin": 2,
+        "spacing": 4,
+        "columns": 8,
+        "rows": 2,
+        "frameCount": 13,
+        "width": 1056,
+        "height": 264
+      },
+      "idleFrame": 0,
+      "clips": [
+        {
+          "name": "move",
+          "frames": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12
+          ],
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "hashes": {
+        "idle": "99a6a3b7b6c0e85684dc4024feb0596ea3f371c1bc14c6755ae9dc6bfdbe5aa5",
+        "sheet": "6738323aeed3e846857aa8f673b5b00b41239ba805a2b9325d20c298865436a3"
+      }
+    }
+  ]
+}
