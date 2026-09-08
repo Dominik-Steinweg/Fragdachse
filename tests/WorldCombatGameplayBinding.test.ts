@@ -85,6 +85,8 @@ function createPlacement(playerManager: PlayerManager): PlacementSystem {
 
 interface TurretFixture {
   readonly binding: WorldCombatGameplayBinding;
+  readonly hostPhysics: HostPhysicsSystem;
+  readonly playerCombat: PlayerCombatIntegrationPort;
   readonly projectileSpawn: { spawnProjectile: ReturnType<typeof vi.fn> };
   readonly projectileInteraction: Record<string, ReturnType<typeof vi.fn>>;
   readonly playerLoadout: LoadoutManager;
@@ -176,6 +178,7 @@ function createFixture(options: {
   }
   const playerCombat: PlayerCombatIntegrationPort = {
     resource,
+    movement: { tryExitBurrowForDash: vi.fn(() => false) },
     modifier: methodBag() as never,
     item: methodBag({
       getRemoteControlDamageMultiplier: vi.fn(() => 1),
@@ -236,6 +239,7 @@ function createFixture(options: {
     effects: methodBag() as never,
   };
   const placement = options.placementSystem ?? createPlacement(playerManager);
+  const hostPhysics = methodBag() as unknown as HostPhysicsSystem;
   const binding = new WorldCombatGameplayBinding({
     playerManager,
     projectileSpawn,
@@ -246,7 +250,7 @@ function createFixture(options: {
     projectileSwarm,
     projectileInteraction,
     combatSystem,
-    hostPhysics: methodBag() as unknown as HostPhysicsSystem,
+    hostPhysics,
     decoySystem: methodBag() as unknown as DecoySystem,
     fireSystem: methodBag() as unknown as FireSystem,
     gameAudioSystem: methodBag() as unknown as GameAudioSystem,
@@ -303,7 +307,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics };
+  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics };
 }
 
 afterEach(() => {
@@ -311,6 +315,18 @@ afterEach(() => {
 });
 
 describe('WorldCombatGameplayBinding turret fire wiring', () => {
+  it('routes Burrow dash exits to the player movement owner and detaches the command on teardown', () => {
+    const f = createFixture({ players: [], enemies: [] });
+    const handler = vi.mocked(f.hostPhysics.setBurrowDashExitHandler).mock.calls.at(-1)![0]!;
+    const exit = vi.mocked(f.playerCombat.movement.tryExitBurrowForDash);
+    expect(handler('p1')).toBe(false);
+    exit.mockReturnValue(true);
+    expect(handler('p1')).toBe(true);
+    expect(exit).toHaveBeenLastCalledWith('p1');
+    f.binding.destroy();
+    expect(f.hostPhysics.setBurrowDashExitHandler).toHaveBeenLastCalledWith(null);
+  });
+
   it('fires a placed rocket turret through the world loadout and creates a projectile', () => {
     const player = { id: 'builder', x: 0, y: 0, active: true };
     const playerManager = {

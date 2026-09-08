@@ -11,9 +11,9 @@
   "collisionDiameter": 32,
   "materialVariants": {
     "calm": {"label": "Weich schattiert", "textureStrength": 0.22, "formShadowStrength": 0.55},
-    "rich": {"label": "Kräftig · dunkler", "textureStrength": 0.22, "formShadowStrength": 1.0}
+    "rich": {"label": "Kräftig · originalnah", "textureStrength": 0.22, "formShadowStrength": 1.0}
   },
-  "previousReference": {"label": "Dachs v1-d · kräftig", "path": "art/poc/pipeline-v1/runs/v1-d/badger/rich/sprite-128.png"},
+  "previousReference": {"label": "Dachs v1-e · kräftig", "path": "art/poc/pipeline-v1/runs/v1-e/badger/rich/sprite-128.png"},
   "textures": {"organic": "art/poc/pipeline-v1/textures/organic.png"},
   "reference": "public/assets/sprites/32x32dachs.png"
 }

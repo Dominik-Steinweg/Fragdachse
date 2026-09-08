@@ -1,5 +1,6 @@
 import type { WorldHealthBarRenderer } from '../effects/health/WorldHealthBarRenderer';
 import type { MovementEffectsRenderer } from '../effects/MovementEffectsRenderer';
+import type { BurrowGpuRenderer } from '../effects/BurrowGpuRenderer';
 import * as Phaser from 'phaser';
 import { ArenaBuilder, type ArenaBuilderResult } from '../arena/ArenaBuilder';
 import {
@@ -135,6 +136,7 @@ export interface WorldClientPresentationRenderers {
  */
 export interface WorldPresentationFrameBindingInput {
   readonly movementEffects?: MovementEffectsRenderer;
+  readonly burrowEffects?: BurrowGpuRenderer;
   readonly healthBars?: WorldHealthBarRenderer;
   readonly healthBarScope?: object;
   /** Die Scene, deren Hauptkamera diese World-Instanz waehrend ihrer Lebenszeit positioniert. */
@@ -205,6 +207,7 @@ export class WorldPresentationFrameBinding {
 
   constructor(private readonly input: WorldPresentationFrameBindingInput) {
     this.input.movementEffects?.openWorld(this);
+    this.input.burrowEffects?.openWorld(this, () => !this.destroyed && this.input.getLocalWorldPresentation().required);
     this.input.lighting.setDynamicOccluderSource(this.trainLightOccluders);
   }
 
@@ -528,6 +531,7 @@ export class WorldPresentationFrameBinding {
     this.destroyed = true;
     if (this.input.healthBarScope) this.input.healthBars?.closeWorld(this.input.healthBarScope);
     this.input.movementEffects?.closeWorld(this);
+    this.input.burrowEffects?.closeWorld(this);
     this.trainLightOccluders.clear();
     this.input.lighting.clearDynamicOccluderSource(this.trainLightOccluders);
   }

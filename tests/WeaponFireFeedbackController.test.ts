@@ -5,7 +5,7 @@ import type { WeaponFeedbackProfile } from '../src/config/weaponFeedback';
 import { isWeaponShotFeedbackEvent } from '../src/loadout/WeaponShotFeedbackEvent';
 
 function fixture() {
-  let now = 0, revision: number | null = 1, scale = 1, held = true;
+  let now = 0, revision: number | null = 1, held = true;
   function player() {
     const model = new HeldWeaponFeedbackModel();
     return {
@@ -20,12 +20,12 @@ function fixture() {
   const controller = new WeaponFireFeedbackController({
     getPlayer: id => id === 'local' ? local : id === 'remote' ? remote : undefined,
     getLocalPlayerId: () => 'local', getWorldRevision: () => revision,
-    isLocalTriggerHeld: () => held, getCameraScale: () => scale,
+    isLocalTriggerHeld: () => held,
     requestCamera: camera, cancelCamera: cancel,
   });
   return { controller, local, remote, camera, cancel,
     time: (n: number) => { now = n; }, world: (n: number | null) => { revision = n; },
-    scale: (n: number) => { scale = n; }, held: (v: boolean) => { held = v; } };
+    held: (v: boolean) => { held = v; } };
 }
 const shot = { shooterId: 'local', weaponId: 'GLOCK', slot: 'weapon1' as const, angle: Math.PI / 2, sequence: 1 };
 
@@ -51,7 +51,7 @@ describe('weapon fire presentation routing', () => {
     expect(f.local.playHeldWeaponShot).toHaveBeenCalledTimes(1);
   });
 
-  it('kicks only at stream start, releases locally, and disables camera motion independently', () => {
+  it('kicks only at stream start, releases locally, and kicks again for the next shot', () => {
     const f = fixture();
     f.controller.confirm({ ...shot, weaponId: 'FLAMETHROWER' });
     f.time(70);
@@ -59,10 +59,8 @@ describe('weapon fire presentation routing', () => {
     expect(f.camera).toHaveBeenCalledTimes(1);
     f.held(false); f.controller.update();
     expect(f.local.stopHeldWeaponSustain).toHaveBeenCalled();
-    f.scale(0); f.controller.update();
     f.controller.confirm({ ...shot, sequence: 3 });
-    expect(f.cancel).toHaveBeenCalled();
-    expect(f.camera).toHaveBeenCalledTimes(1);
+    expect(f.camera).toHaveBeenCalledTimes(2);
     expect(f.local.playHeldWeaponShot).toHaveBeenCalledTimes(3);
   });
 

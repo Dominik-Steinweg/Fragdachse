@@ -377,6 +377,7 @@ export class ArenaLifecycleCoordinator {
       // Handoff dieser World.
       this.worldRuntime.bindPresentationFrame(new WorldPresentationFrameBinding({
         movementEffects: this.renderers.movement,
+        burrowEffects: this.renderers.burrowGpu,
         healthBars: this.renderers.healthBars,
         healthBarScope: this.worldRuntime,
         scene: this.scene,
@@ -3054,6 +3055,7 @@ export class ArenaLifecycleCoordinator {
       timeoutTimer.remove(false);
       this.renderers.leafBlower.setTerrainColorSnapshot(snapshot);
       this.renderers.movement.setTerrainColorSnapshot(snapshot);
+      this.renderers.burrowGpu.setTerrainColorSnapshot(snapshot);
       this.terrainSnapshotReady = true;
     }).catch((error: unknown) => {
       if (settled || !isCurrent()) return;

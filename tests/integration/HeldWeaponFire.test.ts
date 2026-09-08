@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('phaser', () => {
+vi.mock('phaser', async () => {
+  const base = (await import('../fakeArenaRenderScene')).createFakePhaserModule() as any;
   class Line {
     constructor(public x1 = 0, public y1 = 0, public x2 = 0, public y2 = 0) {}
     setTo(x1: number, y1: number, x2: number, y2: number) {
@@ -15,6 +16,7 @@ vi.mock('phaser', () => {
     }
   }
   return {
+    ...base,
     BlendModes: { ADD: 1, NORMAL: 0 },
     Geom: { Line, Rectangle, Circle: class {
       setTo(x: number, y: number, radius: number) { Object.assign(this, { x, y, radius }); return this; }
@@ -43,6 +45,7 @@ vi.mock('phaser', () => {
       },
     } },
     Math: {
+      ...base.Math,
       Clamp: (n: number, min: number, max: number) => Math.max(min, Math.min(max, n)),
       Distance: { Between: (x: number, y: number, tx: number, ty: number) => Math.hypot(tx - x, ty - y) },
     },
@@ -73,6 +76,9 @@ import type { BaseWeapon } from '../../src/loadout/BaseWeapon';
 import { WEAPON_CONFIGS } from '../../src/loadout/LoadoutConfig';
 import { EffectSystem } from '../../src/effects/EffectSystem';
 import { fakeEntity } from '../fakeEntity';
+import { healthBarTestScene } from '../healthBarTestScene';
+import { PlayerEntity } from '../../src/entities/PlayerEntity';
+import { CameraFeedbackController } from '../../src/effects/camera/CameraFeedbackController';
 import type { SyncedHitscanTrace, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../../src/types';
 import { WeaponFireFeedbackController } from '../../src/effects/weapon/WeaponFireFeedbackController';
 import type { WeaponShotFeedbackEvent } from '../../src/loadout/WeaponShotFeedbackEvent';
@@ -109,17 +115,43 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
     });
     return effect as EffectSystem & { audioSystem: { playSound: ReturnType<typeof vi.fn>; playLocalSound: ReturnType<typeof vi.fn> } };
   }
-  const weaponView = () => ({ playHeldWeaponShot: vi.fn(() => 'started' as const),
-    resetHeldWeaponFeedback: vi.fn(), stopHeldWeaponSustain: vi.fn(), updateHeldWeaponFeedback: vi.fn() });
-  const localWeapon = weaponView(), remoteWeapon = weaponView();
-  const localKick = vi.fn(), remoteKick = vi.fn();
-  const feedback = (localId: string, view: ReturnType<typeof weaponView>, camera: ReturnType<typeof vi.fn>) => new WeaponFireFeedbackController({
-    getPlayer: id => id === 'shooter' ? view : undefined, getLocalPlayerId: () => localId,
-    getWorldRevision: () => 1, isLocalTriggerHeld: () => true, getCameraScale: () => 1,
-    requestCamera: camera, cancelCamera: vi.fn(),
+  function weaponView() {
+    const { scene } = healthBarTestScene();
+    Object.defineProperty(scene.time, 'now', { get: () => now });
+    const addImage = scene.add.image;
+    scene.add.image = (...args: unknown[]) => {
+      const image = addImage(...args);
+      Object.assign(image.frame, { cutWidth: 32, cutHeight: 32 });
+      const setSize = image.setDisplaySize.bind(image);
+      image.setDisplaySize = (w: number, h: number) => {
+        image.scaleX = w / image.frame.cutWidth;
+        image.scaleY = h / image.frame.cutHeight;
+        return setSize(w, h);
+      };
+      return image;
+    };
+    const player = new PlayerEntity(scene, { id: 'shooter', name: 'Shooter', colorHex: 0xffffff },
+      300, 200, false, null, { spawnEffect: false });
+    player.setRotation(0); // aim east; PlayerEntity applies the sprite's north-facing offset
+    player.setHeldItemId('GLOCK');
+    vi.spyOn(player, 'playHeldWeaponShot');
+    const camera = new CameraFeedbackController(scene, {
+      getListener: () => ({ x: player.x, y: player.y }), getMotionScale: () => 1,
+    });
+    const viewport = { scrollX: 0, scrollY: 0 };
+    const request = vi.fn(camera.request.bind(camera));
+    return { player, camera, viewport, request };
+  }
+  const localView = weaponView(), remoteView = weaponView();
+  const localWeapon = localView.player, remoteWeapon = remoteView.player;
+  const localKick = localView.request, remoteKick = remoteView.request;
+  const feedback = (localId: string, view: ReturnType<typeof weaponView>) => new WeaponFireFeedbackController({
+    getPlayer: id => id === 'shooter' ? view.player : undefined, getLocalPlayerId: () => localId,
+    getWorldRevision: () => 1, isLocalTriggerHeld: () => true,
+    requestCamera: view.request, cancelCamera: () => view.camera.cancel('weapon:local-shot'),
   });
-  const localFeedback = feedback('shooter', localWeapon, localKick);
-  const remoteFeedback = feedback('target', remoteWeapon, remoteKick);
+  const localFeedback = feedback('shooter', localView);
+  const remoteFeedback = feedback('target', remoteView);
   const shotEvents: WeaponShotFeedbackEvent[] = [];
   const projectiles: unknown[] = [];
   const localEffects = effects('shooter');
@@ -216,6 +248,19 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   return {
     config, item, commits, combat, traces, localEffects, remoteEffects, aim, hud, prediction, actions, replies,
     shotEvents, localWeapon, remoteWeapon, localKick, remoteKick, projectiles,
+    localViewport: localView.viewport, remoteViewport: remoteView.viewport,
+    present: (time: number) => {
+      now = time;
+      for (const [view, feedback] of [[localView, localFeedback], [remoteView, remoteFeedback]] as const) {
+        // Stationary-player syncs, including an older held-slot snapshot.
+        view.player.setVisible(true);
+        view.player.setBurrowPhase('idle', false);
+        view.player.setHeldItemId('GLOCK');
+        view.player.syncBar();
+        feedback.update();
+        view.camera.applyToCamera(view.viewport as never, 0, 0, 1000 / 60);
+      }
+    },
     setResourceCost: (cost: number) => { resourceCost = cost; },
     shoot: (time: number, delay: number, inputStarted = false, angle = 0, params?: LoadoutUseParams) => {
       now = time; processingDelay = delay;
@@ -227,6 +272,32 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('held weapon fire at the authoritative cooldown boundary', () => {
+  it.each([false, true])('moves the rendered weapon and local camera for a stationary shooter (client=%s)', (remote) => {
+    const f = fixture(remote, 'GLOCK');
+    const rest = { x: 0, y: 0, rotation: 0, itemId: '' };
+    expect(f.localWeapon.readHeldWeaponPose(rest)).toBe(true);
+    const body = { x: f.localWeapon.x, y: f.localWeapon.y, rotation: f.localWeapon.rotation };
+    f.shoot(1000, 0, true);
+    f.present(1000);
+    // The triggering frame must already carry camera feedback, even when firing every frame.
+    expect(f.localViewport.scrollX).toBeLessThan(0);
+    f.present(1000 + 1000 / 30);
+    const local = { ...rest }, observer = { ...rest };
+    expect(f.localWeapon.readHeldWeaponPose(local)).toBe(true);
+    expect(f.remoteWeapon.readHeldWeaponPose(observer)).toBe(true);
+    // Whole-pixel displacement at native player size: a subpixel pulse was imperceptible.
+    expect(rest.x - local.x).toBeGreaterThan(1);
+    expect(local.rotation).toBeGreaterThan(rest.rotation);
+    expect(observer).toEqual(local);
+    expect(-f.localViewport.scrollX).toBeGreaterThan(1);
+    expect(f.remoteViewport).toEqual({ scrollX: 0, scrollY: 0 });
+    expect({ x: f.localWeapon.x, y: f.localWeapon.y, rotation: f.localWeapon.rotation }).toEqual(body);
+    f.present(2000);
+    f.localWeapon.readHeldWeaponPose(local);
+    expect(local).toEqual(rest);
+    expect(f.localViewport).toEqual({ scrollX: 0, scrollY: 0 });
+  });
+
   it('presents one recoil for a confirmed predicted shot and one for an entire shotgun blast', async () => {
     const client = fixture(true);
     client.shoot(1000, 0, true);

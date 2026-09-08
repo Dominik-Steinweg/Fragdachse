@@ -24,7 +24,8 @@ afterEach(() => vi.restoreAllMocks());
 function setup() {
   const scene = makeFakeGpuVfxScene();
   const gpu = new GpuVfxSystem(scene as never);
-  const renderer = new MovementEffectsRenderer(gpu);
+  const burrow = { playDashTrail: vi.fn() };
+  const renderer = new MovementEffectsRenderer(gpu, burrow);
   const world = {};
   renderer.openWorld(world);
   const sample: MovementVisualSample = { ...createMovementVisualSample(), id: 'p', visible: true, mode: 'walk', player: true };
@@ -34,10 +35,43 @@ function setup() {
     sample.x += dx;
     renderer.captureFrame(delta, true, [source], [], view); gpu.update(delta);
   };
-  return { scene, gpu, renderer, world, sample, source, view, frame, lane: findFakeLane(scene, 'movement-ground') };
+  return { scene, gpu, renderer, burrow, world, sample, source, view, frame, lane: findFakeLane(scene, 'movement-ground') };
 }
 
 describe('movement GPU presentation', () => {
+  it('adds dirt only along a marked player dash and preserves the sampled direction and age', () => {
+    const h = setup();
+    h.sample.mode = 'dash'; h.frame(); h.frame(36);
+    expect(h.burrow.playDashTrail).not.toHaveBeenCalled();
+    h.sample.isBurrowDash = true; h.frame(36);
+    expect(h.burrow.playDashTrail).toHaveBeenCalled();
+    for (const [x, y, heading, size, age] of h.burrow.playDashTrail.mock.calls) {
+      expect(x).toBeGreaterThan(36); expect(x).toBeLessThanOrEqual(72);
+      expect(y).toBe(0); expect(heading).toBeCloseTo(0);
+      expect(size).toBe(h.sample.size); expect(age).toBeGreaterThanOrEqual(0); expect(age).toBeLessThanOrEqual(16);
+    }
+    h.burrow.playDashTrail.mockClear();
+    h.sample.mode = 'recovery'; h.frame(8);
+    expect(h.burrow.playDashTrail).not.toHaveBeenCalled();
+    h.sample.mode = 'dash'; h.sample.player = false; h.frame(36);
+    expect(h.burrow.playDashTrail).not.toHaveBeenCalled();
+    h.renderer.destroy(); h.gpu.destroy();
+  });
+
+  it('does not connect a Burrow dirt trail across hiding or a world reset', () => {
+    const h = setup(); h.sample.isBurrowDash = true; h.sample.mode = 'dash';
+    h.frame(); h.frame(24); expect(h.burrow.playDashTrail).toHaveBeenCalled();
+    h.burrow.playDashTrail.mockClear();
+    h.sample.visible = false; h.frame(48);
+    h.sample.visible = true; h.frame(48);
+    expect(h.burrow.playDashTrail).not.toHaveBeenCalled();
+    h.renderer.closeWorld(h.world); h.frame(48);
+    h.renderer.openWorld({}); h.frame(48);
+    expect(h.burrow.playDashTrail).not.toHaveBeenCalled();
+    h.frame(24); expect(h.burrow.playDashTrail).toHaveBeenCalled();
+    h.renderer.destroy(); h.gpu.destroy();
+  });
+
   it('points footprints at the look direction while dust follows the opposite travel direction', () => {
     const h = setup(); h.sample.facing = Math.PI; h.frame();
     for (let i = 0; i < 20; i++) h.frame(4);

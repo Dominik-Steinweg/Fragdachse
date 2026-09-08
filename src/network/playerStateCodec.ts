@@ -3,7 +3,7 @@
  *
  * Motivation: Der Spieler-State wird jeden Tick vollständig pro Spieler gesendet (~440 B). Der Großteil
  * sind wiederholte, lange Schlüssel (`decoyStealthRemainingFrac`, `ultimateChargeFraction`, …) und je
- * ein eigenes Feld pro Boolean. Hier werden die Schlüssel auf 1–2 Zeichen verkürzt und die sieben
+ * ein eigenes Feld pro Boolean. Hier werden die Schlüssel auf 1–2 Zeichen verkürzt und die acht
  * Booleans in ein einziges Bitfeld gefaltet – verlustfrei und ohne Delta-Logik (Direktheit bleibt voll
  * erhalten, da weiterhin jeder Tick der komplette Zustand übertragen wird). Bei 12 Spielern halbiert das
  * den konstanten Spieler-Anteil der Payload grob.
@@ -19,6 +19,7 @@ const FLAG_RAGING = 8;
 const FLAG_CHARGING_ULT = 16;
 const FLAG_DECOY_STEALTHED = 32;
 const FLAG_AIM_MOVING = 64;
+const FLAG_BURROW_DASH = 128;
 
 /** Kompakte Wire-Form eines Spielers. Schlüssel bewusst kurz; optionale Felder fehlen bei Default. */
 interface CompactPlayerState {
@@ -56,6 +57,7 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   if (state.isChargingUltimate) flags |= FLAG_CHARGING_ULT;
   if (state.isDecoyStealthed) flags |= FLAG_DECOY_STEALTHED;
   if (state.aim.isMoving) flags |= FLAG_AIM_MOVING;
+  if (state.isBurrowDash === true) flags |= FLAG_BURROW_DASH;
 
   const compact: CompactPlayerState = {
     x: state.x,
@@ -121,6 +123,7 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
     isDecoyStealthed: (flags & FLAG_DECOY_STEALTHED) !== 0,
     decoyStealthRemainingFrac: compact.sf ?? 0,
     dashPhase: compact.p as 0 | 1 | 2,
+    isBurrowDash: (flags & FLAG_BURROW_DASH) !== 0,
     flameRingRadius: compact.fr,
     aim,
   };

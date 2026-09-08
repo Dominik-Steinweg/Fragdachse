@@ -171,12 +171,6 @@ import {
 const BOOT_PRELOAD_PROGRESS_SHARE = 0.8;
 
 /**
- * Notausgang der Reveal-Barriere. Ein Client, dessen World-Descriptor ausbleibt, soll nicht
- * dauerhaft vor dem Bootscreen sitzen - nach dieser Zeit weicht er in jedem Fall.
- */
-const BOOT_REVEAL_TIMEOUT_MS = 2500;
-
-/**
  * Reine, immutable Frame-Signale fuer die Scene-Orchestrierung. Das Objekt traegt keine
  * Services oder Owner-Referenzen; fachliche Arbeit bleibt an den benannten Runtime-/Binding-
  * Schritten unten.
@@ -260,7 +254,6 @@ export class ArenaScene extends Phaser.Scene {
   private lastObservedGamePhase: GamePhase | null = null;
   /** Solange gesetzt, deckt der Bootscreen die Lobby noch ab (siehe `syncBootReveal`). */
   private bootRevealPending = true;
-  private bootRevealDeadlineMs = 0;
   private itemRewardOverlay: CoopDefenseItemRewardOverlay | null = null;
   private itemsOverlay: CoopDefenseItemsOverlay | null = null;
   private lastLobbySidebarSignature: string | null = null;
@@ -826,6 +819,7 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers?.explosionGpu.clearPending();
       this.renderers?.combatGoreGpu.destroy();
       this.renderers?.movement.destroy();
+      this.renderers?.burrowGpu.destroy();
       this.renderers?.gpuVfx.destroy();
     });
     this.diagnostics?.subscribeDiagnostics((enabled) => {
@@ -1244,10 +1238,11 @@ export class ArenaScene extends Phaser.Scene {
     this.meta?.applyDefaultCoopDefenseMapSelection();
     this.lastObservedGamePhase = bridge.getGamePhase();
 
-    // Der Bootscreen weicht nicht dem ersten Frame, sondern der fertigen Lobby; `syncBootReveal`
-    // entscheidet das am Frame-Ende. Die Frist ist nur der Notausgang.
-    this.bootRevealDeadlineMs = this.time.now + BOOT_REVEAL_TIMEOUT_MS;
+    // Erst nach dem Rendern pruefen: auch UI, Kamera und die in diesem Frame gebackenen
+    // Flaechen muessen bereits im fertigen Bild stehen, bevor der Bootscreen weicht.
+    this.game.events.on(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
       BootScreen.dismissImmediate();
     });
   }
@@ -1483,10 +1478,6 @@ export class ArenaScene extends Phaser.Scene {
     if (inGame && !terminated) {
       this.arenaRuntime.syncArenaLoadReady(getVisibleWorldView(this.cameras.main));
     }
-    // Ganz am Ende des Frames: die Barriere sieht damit eine vollstaendig aufgebaute Lobby
-    // inklusive ihres UI-Durchlaufs, nicht einen halb aufgebauten Zwischenstand.
-    if (this.bootRevealPending) this.syncBootReveal(phase);
-
     // Ganz am Frame-Ende: alle im Frame gesammelten ersetzbaren Zustaende (Snapshot, Input,
     // Ping) gehen gebuendelt raus, statt erst im naechsten Frame.
     diagnosticsFrame?.begin('networkFlush');
@@ -2483,16 +2474,16 @@ export class ArenaScene extends Phaser.Scene {
    * Beim ersten Frame existiert die LobbyWorld noch gar nicht - sie entsteht im ersten
    * `update()`-Tick, und ihre Flaechen backen danach ueber mehrere Frames nach. Wer den
    * Ladescreen schon vorher wegnimmt, zeigt eine Lobby, die sich vor den Augen des Spielers
-   * noch aufbaut. Erst wenn der sichtbare Ausschnitt vollstaendig steht, faellt der Bootscreen -
-   * und der Auftritt des Lobby-Panels beginnt danach, nicht in seinen Fade hinein.
+   * noch aufbaut. Welt und Lobby-UI werden deshalb hinter dem deckenden Bootscreen gerendert.
+   * Nur ein fertiger Ausschnitt oder ein expliziter Abbruch gibt ihn frei, keine Zeitfrist.
    */
-  private syncBootReveal(phase: GamePhase): void {
-    // Wer mitten in eine laufende Partie kommt, bekommt den eigenen Ladeschleier der Arena;
-    // die Lobby-Barriere hat dort nichts zu halten.
-    const reveal = phase === 'LOBBY'
+  private syncBootReveal(): void {
+    // Ein terminaler Lobby-Fehler muss auch ohne World sichtbar werden. Wer mitten in eine
+    // laufende Partie kommt, bekommt stattdessen den eigenen Ladeschleier der Arena.
+    const reveal = bridge.getGamePhase() === 'LOBBY' && !this.lobbyOverlay.hasTerminalFailure()
       ? this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main))
       : { ready: true, progress: 100 };
-    if (!reveal.ready && this.time.now < this.bootRevealDeadlineMs) {
+    if (!reveal.ready) {
       const share = Phaser.Math.Clamp((reveal.progress - 70) / 30, 0, 1);
       BootScreen.setProgress(
         BOOT_PRELOAD_PROGRESS_SHARE + (1 - BOOT_PRELOAD_PROGRESS_SHARE) * share,
@@ -2500,8 +2491,10 @@ export class ArenaScene extends Phaser.Scene {
       return;
     }
     this.bootRevealPending = false;
+    this.game.events.off(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this);
+    this.lobbyOverlay.completeBootReveal();
     BootScreen.setProgress(1);
-    void BootScreen.fadeOut().then(() => this.lobbyOverlay?.playEntrance());
+    void BootScreen.fadeOut();
   }
 
   /**

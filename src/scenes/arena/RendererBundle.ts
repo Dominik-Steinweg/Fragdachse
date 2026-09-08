@@ -1,5 +1,6 @@
 import { WorldHealthBarRenderer } from '../../effects/health/WorldHealthBarRenderer';
 import { MovementEffectsRenderer } from '../../effects/MovementEffectsRenderer';
+import { BurrowGpuRenderer } from '../../effects/BurrowGpuRenderer';
 import * as Phaser from 'phaser';
 import { BulletRenderer }      from '../../effects/BulletRenderer';
 import { AsmdPrimaryRenderer } from '../../effects/AsmdPrimaryRenderer';
@@ -100,6 +101,7 @@ export interface RendererBundle {
   /** Gemeinsame Klammer aller SpriteGPULayer-Partikeleffekte: Tick, Ablation, Diagnose. */
   gpuVfx:              GpuVfxSystem;
   movement:            MovementEffectsRenderer;
+  burrowGpu:           BurrowGpuRenderer;
   combatGoreGpu:      CombatGoreGpuRenderer;
   entityBurnGpu:       EntityBurnGpuController;
   explosionGpu:        ExplosionGpuRenderer;
@@ -137,6 +139,7 @@ export function createRendererBundle(
   // muss stehen, bevor ein Effekt sich anmeldet – Frames, die erst nach dem Layer entstehen,
   // existieren fuer dessen Shader nicht.
   const gpuVfx = new GpuVfxSystem(scene);
+  const burrowGpu = new BurrowGpuRenderer(gpuVfx);
   // Ein gemeinsamer Emissions-Tick fuer alle brennenden Entities. Die per-Entity-Renderer
   // melden sich hier an, statt je Brand eigene Emitter oder Callbacks zu erzeugen.
   const entityBurnGpu = new EntityBurnGpuController(gpuVfx);
@@ -319,7 +322,8 @@ export function createRendererBundle(
     remoteControl,
     healthBars: new WorldHealthBarRenderer(scene),
     gpuVfx,
-    movement: new MovementEffectsRenderer(gpuVfx),
+    movement: new MovementEffectsRenderer(gpuVfx, burrowGpu),
+    burrowGpu,
     combatGoreGpu,
     entityBurnGpu,
     explosionGpu,
@@ -373,6 +377,7 @@ export function wireRenderersToEffectSystem(bundle: RendererBundle, effectSystem
   bundle.airstrike.setEffectSystem(effectSystem);
   effectSystem.setLightingSystem(bundle.lighting);
   effectSystem.setExplosionGpuRenderer(bundle.explosionGpu);
+  effectSystem.setBurrowGpuRenderer(bundle.burrowGpu);
   effectSystem.setCombatGoreGpuRenderer(bundle.combatGoreGpu);
 }
 

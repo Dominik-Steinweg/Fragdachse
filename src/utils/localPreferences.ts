@@ -186,7 +186,6 @@ interface LocalPreferences {
   loadoutByClass: Partial<Record<CoopDefenseClassId, Partial<Record<LoadoutSlot, string>>>>;
   graphics: {
     quality: GraphicsQuality;
-    weaponCameraKick: number;
   };
   progression: {
     coopDefense: CoopDefenseProgressPreferences;
@@ -328,7 +327,6 @@ const DEFAULT_PREFERENCES: LocalPreferences = {
   loadoutByClass: {},
   graphics: {
     quality: 'high',
-    weaponCameraKick: 1,
   },
   progression: {
     coopDefense: {
@@ -706,7 +704,7 @@ function sanitizeSettingsDocument(raw: unknown): LocalSettingsDocumentV2 | null 
       effectsVolume: clampAudioVolume(effectsVolume as number),
       musicVolume: clampAudioVolume(musicVolume as number),
     },
-    graphics: { quality: raw.graphics.quality, weaponCameraKick: sanitizeWeaponCameraKick(raw.graphics.weaponCameraKick) },
+    graphics: { quality: raw.graphics.quality },
   };
 }
 
@@ -729,7 +727,7 @@ function readLegacySettings(raw: string | null): LocalSettingsDocumentV2 | null 
         musicVolume: typeof audio.musicVolume === 'number' && Number.isFinite(audio.musicVolume)
           ? clampAudioVolume(audio.musicVolume) : SOUND_MUSIC_VOLUME,
       },
-      graphics: { quality: isGraphicsQuality(graphics.quality) ? graphics.quality : 'high', weaponCameraKick: 1 },
+      graphics: { quality: isGraphicsQuality(graphics.quality) ? graphics.quality : 'high' },
     };
   } catch { return null; }
 }
@@ -2267,20 +2265,6 @@ export function claimStoredPendingCoopDefenseItemReward(
   return commit(items, salvagedXp, acquired, equippedItemIds);
 }
 
-function sanitizeWeaponCameraKick(value: unknown): number {
-  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 1;
-}
-
-export function getStoredWeaponCameraKick(): number {
-  return readPreferences().graphics.weaponCameraKick;
-}
-
-export function setStoredWeaponCameraKick(value: number): void {
-  updatePreferences((current) => ({
-    ...current, graphics: { ...current.graphics, weaponCameraKick: sanitizeWeaponCameraKick(value) },
-  }));
-}
-
 export function getStoredGraphicsQuality(): GraphicsQuality {
   return readPreferences().graphics.quality;
 }
@@ -2288,7 +2272,7 @@ export function getStoredGraphicsQuality(): GraphicsQuality {
 export function setStoredGraphicsQuality(quality: GraphicsQuality): void {
   updatePreferences((current) => ({
     ...current,
-    graphics: { ...current.graphics, quality },
+    graphics: { quality },
   }));
 }
 

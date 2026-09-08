@@ -264,7 +264,7 @@ export function toCssColor(color: number): `#${string}` {
 
 // ---- Player ----
 export const PLAYER_SIZE  = 32;
-export const PLAYER_SPEED = 200;
+export const PLAYER_SPEED = 240;
 export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
 export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
 
@@ -941,9 +941,15 @@ export const RAGE_PER_DAMAGE           = 1;    // Wut pro Schadenspunkt
 export const DASH_T1_S    = 0.5;    // Burst-Phase Dauer (s)
 export const DASH_T2_S    = 0.25;    // Recovery-Phase Dauer (s)
 export const DASH_F_MIN   = 0.25;   // Kriechgang-Faktor (25 % v_norm)
-// f_start = (3*t1 + 2*t2 - 2*f_min*(t1+t2)) / t1 = 3.25 — Strecken-Neutralität
-export const DASH_F_START =
+// Gegner behalten ihren quadratischen Burst und dessen streckenneutralen Startfaktor.
+export const ENEMY_DASH_F_START =
   (3 * DASH_T1_S + 2 * DASH_T2_S - 2 * DASH_F_MIN * (DASH_T1_S + DASH_T2_S)) / DASH_T1_S;
+export const PLAYER_DASH_BURST_EXPONENT = 3;
+// Integral: Burst = t1 * (f_min + impulse / (exponent + 1)), Recovery = t2 * (f_min + (1-f_min)/3).
+export const PLAYER_DASH_BURST_IMPULSE = (PLAYER_DASH_BURST_EXPONENT + 1)
+  * (DASH_T1_S + DASH_T2_S - DASH_F_MIN * DASH_T1_S
+    - DASH_T2_S * (DASH_F_MIN + (1 - DASH_F_MIN) / 3)) / DASH_T1_S;
+export const BURROW_DASH_IMPULSE_MULTIPLIER = 2;
 export const DASH_HOLD_MAX_DURATION_FACTOR = 2;
 export const DASH_GROUND_FIRE_BURN_DURATION_MS = 2000;
 export const DASH_GROUND_FIRE_DAMAGE_PER_TICK = 0.25;
@@ -952,7 +958,7 @@ export const DASH_GROUND_FIRE_DAMAGE_PER_TICK = 0.25;
 export const BURROW_MIN_ADRENALINE       = 15;
 export const BURROW_WINDUP_DURATION_MS   = 150;
 export const BURROW_WINDUP_SPEED_FACTOR  = 0.8;
-export const BURROW_UNDERGROUND_SPEED_FACTOR = 1.3;
+export const BURROW_UNDERGROUND_SPEED_FACTOR = 1.75;
 export const BURROW_DRAIN_AMOUNT_PER_TICK = 5;
 export const BURROW_DRAIN_INTERVAL_MS    = 60;
 export const BURROW_STUCK_DAMAGE_PER_SEC = 25;

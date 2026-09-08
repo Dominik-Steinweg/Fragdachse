@@ -64,6 +64,11 @@ export interface PlayerCombatStatePort {
   isWeaponBlocked(playerId: string): boolean;
 }
 
+/** Authoritative player movement commands, separate from the state read model. */
+export interface PlayerCombatMovementPort {
+  tryExitBurrowForDash(playerId: string): boolean;
+}
+
 /** Conditional item-derived combat/movement values consumed by the World combat binding. */
 export interface PlayerCombatItemPort {
   getConditionalDamageReduction(playerId: string): number;
@@ -152,6 +157,7 @@ export interface PlayerCombatIntegrationPort {
   readonly loadout: PlayerCombatLoadoutPort;
   readonly modifier: PlayerCombatModifierPort;
   readonly state: PlayerCombatStatePort;
+  readonly movement: PlayerCombatMovementPort;
   readonly item: PlayerCombatItemPort;
   readonly utility: PlayerCombatUtilityPort;
   readonly ak47: PlayerCombatAk47Port | null;

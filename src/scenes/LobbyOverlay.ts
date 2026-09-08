@@ -81,7 +81,7 @@ const CONTENT_L = PANEL_X + PAD;
 const CONTENT_R = PANEL_X + PANEL_W - PAD;
 const CONTENT_W = CONTENT_R - CONTENT_L;
 
-/** Startversatz des Panel-Auftritts; `show()` und `playEntrance()` teilen ihn sich. */
+/** Startversatz des Panel-Auftritts bei einer spaeteren Rueckkehr in die Lobby. */
 const ENTRANCE_OFFSET_Y = 18;
 
 // ── Kopfzeile ────────────────────────────────────────────────────────────────
@@ -265,11 +265,10 @@ export class LobbyOverlay {
   private fullscreenUnsubscribe: (() => void) | null = null;
   private entranceTween: Phaser.Tweens.Tween | null = null;
   /**
-   * Der allererste Auftritt gehoert zum Boot-Reveal, nicht zum Aufbau: bis `playEntrance()`
-   * ihn freigibt, wartet das Panel unsichtbar hinter dem Bootscreen. Danach bleibt der Halt
-   * dauerhaft geloest, jeder spaetere `show()` spielt den Auftritt wie bisher.
+   * Hinter dem Bootscreen stehen Panel und Spielerzeilen bereits in ihrem Endzustand.
+   * Erst spaetere Lobby-Auftritte und neue Spieler erhalten eine Eintrittsanimation.
    */
-  private entranceHeld = true;
+  private bootPreparing = true;
   private readyGlow: GlowHandle | null = null;
   private readyGlowTween: Phaser.Tweens.Tween | null = null;
   private coopBand: Phaser.GameObjects.Container | null = null;
@@ -794,9 +793,9 @@ export class LobbyOverlay {
     this.container?.setVisible(true);
     this.systemBar?.setVisible(true);
     this.updateWorldEntryButtons();
-    // Beim Start liegt das Panel hinter dem deckenden Bootscreen: es nimmt schon seine
-    // Auftrittsposition ein, laeuft aber erst los, wenn der Ladescreen ganz weg ist.
-    if (this.entranceHeld) this.container?.setAlpha(0).setY(ENTRANCE_OFFSET_Y);
+    // Alpha 0 wuerde das Panel vom Rendern ausschliessen. Beim Boot muss es bereits
+    // vollstaendig hinter dem deckenden DOM-Ladescreen stehen.
+    if (this.bootPreparing) this.container?.setAlpha(1).setY(0);
     else if (!wasVisible) this.playEntrance();
     this.updateReadyGlow();
   }
@@ -855,15 +854,21 @@ export class LobbyOverlay {
     return this.visible;
   }
 
+  /** Ein terminaler Fehlerbanner muss auch ohne fertig aufgebaute World sichtbar werden. */
+  hasTerminalFailure(): boolean {
+    return this.connectionEnded;
+  }
+
+  /** Gibt nur kuenftige Auftrittsanimationen frei; der fertig gerenderte Boot-Frame bleibt stehen. */
+  completeBootReveal(): void {
+    this.bootPreparing = false;
+  }
+
   /**
    * Auftritt des Panels. Bewusst nur `alpha` und `y`: die Kinder des Containers liegen auf
    * Bildschirmkoordinaten, ein `scale` zoege sie Richtung Bildschirmecke (0, 0).
-   *
-   * Oeffentlich, weil der erste Auftritt nicht zum Aufbau der Szene gehoert, sondern zum
-   * Reveal: die Scene loest ihn aus, sobald der Bootscreen vollstaendig ausgeblendet ist.
    */
-  playEntrance(): void {
-    this.entranceHeld = false;
+  private playEntrance(): void {
     if (!this.container) return;
     this.entranceTween?.remove();
     this.container.setAlpha(0).setY(ENTRANCE_OFFSET_Y);
@@ -1317,12 +1322,14 @@ export class LobbyOverlay {
     name.on('pointerup', handlePlayerPointerUp);
 
     this.container!.add([bg, name, badge, mark, loadoutFrame, loadout, ping]);
-    // Neue Zeilen gleiten herein, statt aufzuploppen.
-    for (const object of [bg, name, badge, mark, loadoutFrame, loadout, ping]) {
-      object.setAlpha(0);
-      this.scene.tweens.add({
-        targets: object, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out,
-      });
+    // Die initiale Spielerliste rendert sofort fertig hinter dem Bootscreen.
+    if (!this.bootPreparing) {
+      for (const object of [bg, name, badge, mark, loadoutFrame, loadout, ping]) {
+        object.setAlpha(0);
+        this.scene.tweens.add({
+          targets: object, alpha: 1, duration: MOTION.base, ease: MOTION.ease.out,
+        });
+      }
     }
     const row: PlayerRow = {
       bg, name, badge, mark, ping, loadoutFrame, loadout, loadoutSignature: null,

@@ -1,3 +1,11 @@
+import { DASH_F_MIN, PLAYER_DASH_BURST_EXPONENT, PLAYER_DASH_BURST_IMPULSE } from '../config';
+
+/** Only the front-loaded impulse is amplified; every player burst ends at the same speed. */
+export function getPlayerDashBurstSpeedFactor(progress: number, impulseMultiplier = 1): number {
+  const remaining = 1 - Math.max(0, Math.min(1, progress));
+  return DASH_F_MIN + PLAYER_DASH_BURST_IMPULSE * impulseMultiplier * remaining ** PLAYER_DASH_BURST_EXPONENT;
+}
+
 export interface DashBurstTiming {
   progress: number;
   shouldEnd: boolean;

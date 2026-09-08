@@ -49,7 +49,7 @@ import type { BaseSpec } from '../../src/arena/BaseRegistry';
 import type { PlayerProfile, ProjectileExplosionConfig, SyncedEnemyDeltaState, SyncedPlaceableRock } from '../../src/types';
 import type { CombatSource } from '../../src/combat/CombatScope';
 import { healthBarTestScene } from '../healthBarTestScene';
-import { BURN_TICK_INTERVAL_MS, ENEMY_HIT_STAGGER_BASE_MS } from '../../src/config';
+import { BURN_TICK_INTERVAL_MS, ENEMY_HIT_STAGGER_BASE_MS, BURROW_WINDUP_DURATION_MS } from '../../src/config';
 import { EnemyMovementStatusSystem } from '../../src/systems/EnemyMovementStatusSystem';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
@@ -98,6 +98,81 @@ const baseSpec: BaseSpec = {
 };
 
 describe('World HP consumer boundaries', () => {
+  it('digs head-first while keeping the runtime body stable and the entry pose intact across movement sync', () => {
+    const h = harness();
+    const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+      10, 20, true, null, { spawnEffect: false });
+    const sprite = player.displayObject!;
+    player.setRotation(Math.PI / 3);
+    player.setWalking(true);
+    sprite.texture.key = 'badger_walking';
+    Object.assign(sprite.frame, { name: '0', cutWidth: 64, cutHeight: 64 });
+    Object.assign(sprite.anims, { isPlaying: true, currentAnim: { key: 'badger_walk' } });
+    const stopWalk = vi.spyOn(sprite.anims, 'stop').mockImplementation(() => {
+      sprite.anims.isPlaying = false;
+      return sprite;
+    });
+    const play = vi.spyOn(sprite, 'play');
+    const crop = vi.spyOn(sprite, 'setCrop');
+    const tweenAdd = vi.spyOn(h.scene.tweens, 'add');
+    const radius = player.getCollisionRadius();
+    const rotation = player.rotation;
+    player.setBurrowPhase('windup', true);
+    const tween = tweenAdd.mock.calls[0][0] as {
+      targets: { progress: number }; duration: number; onUpdate(): void; onComplete(): void;
+    };
+    expect(tween.duration).toBe(BURROW_WINDUP_DURATION_MS);
+    let previousTop = 0;
+    for (const progress of [0.5, 0.75, 1]) {
+      tween.targets.progress = progress;
+      tween.onUpdate();
+      const [left, top, width, height] = crop.mock.calls.at(-1)! as number[];
+      expect(left).toBe(0);
+      expect(width).toBe(64);
+      expect(top).toBeGreaterThan(previousTop);
+      expect(top + height).toBeCloseTo(64);
+      previousTop = top;
+      const scale = [sprite.scaleX, sprite.scaleY];
+      player.setDashScale(1);
+      player.syncBar();
+      player.setBurrowPhase('windup', false);
+      player.setBurrowPhase('windup', true);
+      expect([sprite.scaleX, sprite.scaleY]).toEqual(scale);
+      expect([player.x, player.y, player.rotation, player.getCollisionRadius()]).toEqual([10, 20, rotation, radius]);
+    }
+    tween.onComplete();
+    expect(sprite.alpha).toBe(0);
+    expect(stopWalk).toHaveBeenCalledOnce();
+    expect(play).not.toHaveBeenCalled();
+    expect(tweenAdd).toHaveBeenCalledOnce();
+    player.destroy();
+  });
+
+  it.each(['underground', 'idle', 'recovery', 'death', 'spawn', 'destroy'] as const)(
+    'clears the digging crop and cancels its tween on %s', transition => {
+      const h = harness();
+      const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+        10, 20, true, null, { spawnEffect: false });
+      const sprite = player.displayObject!;
+      Object.assign(sprite.frame, { cutWidth: 64, cutHeight: 64 });
+      const crop = vi.spyOn(sprite, 'setCrop');
+      const stop = vi.fn();
+      const tweenAdd = vi.spyOn(h.scene.tweens, 'add').mockReturnValue({ stop });
+      player.setBurrowPhase('windup', true);
+      const tween = tweenAdd.mock.calls[0][0] as { targets: { progress: number }; onUpdate(): void };
+      tween.targets.progress = 0.8;
+      tween.onUpdate();
+      expect(crop.mock.calls.at(-1)!.length).toBe(4);
+      if (transition === 'death') player.setVisible(false);
+      else if (transition === 'spawn') player.playSpawnEffect();
+      else if (transition === 'destroy') player.destroy();
+      else player.setBurrowPhase(transition, true);
+      expect(stop).toHaveBeenCalled();
+      expect(crop.mock.calls.at(-1)).toEqual([]);
+      if (transition !== 'destroy') player.destroy();
+    },
+  );
+
   it('projects player movement from final pose, respecting anatomy, stealth, burrow and respawn', () => {
     const h = harness();
     const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
@@ -112,6 +187,15 @@ describe('World HP consumer boundaries', () => {
     player.setDecoyStealth(true); player.readMovementVisualSample(out); expect(out.visible).toBe(false);
     player.setDecoyStealth(false);
     player.setBurrowPhase('underground', false); player.readMovementVisualSample(out); expect(out.visible).toBe(false);
+    player.setMovementDashPhase(1, true);
+    player.setBurrowPhase('recovery', false); player.readMovementVisualSample(out);
+    expect(out).toMatchObject({ mode: 'dash', isBurrowDash: true, visible: true });
+    player.setMovementDashPhase(2, true); player.readMovementVisualSample(out);
+    expect(out).toMatchObject({ mode: 'recovery', isBurrowDash: true, visible: true });
+    player.setMovementDashPhase(0); player.readMovementVisualSample(out);
+    expect(out).toMatchObject({ isBurrowDash: false, visible: false });
+    player.setMovementDashPhase(1); player.setBurrowPhase('windup', false); player.readMovementVisualSample(out);
+    expect(out).toMatchObject({ isBurrowDash: false, visible: false });
     player.setBurrowPhase('idle', false);
     const revision = out.revision;
     player.setPosition(500, 600); player.readMovementVisualSample(out);

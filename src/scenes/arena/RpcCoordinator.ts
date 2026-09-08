@@ -495,22 +495,29 @@ export class RpcCoordinator {
   }
 
   private registerBurrowVisualHandler(): void {
-    bridge.registerBurrowVisualHandler((playerId, phase) => {
+    bridge.registerBurrowVisualHandler((playerId, phase, x, y) => {
       const entity = this.playerManager.getPlayer(playerId);
-      if (!entity) return;
       if (phase === 'windup' || phase === 'recovery') {
-        this.effectSystem.playBurrowPhaseEffect(entity.x, entity.y, phase);
+        // Coordinates belong to the accepted phase, even before a client entity is available.
+        // Older events without them retain the entity-position fallback.
+        const hasPosition = Number.isFinite(x) && Number.isFinite(y);
+        if (hasPosition || entity) {
+          this.effectSystem.playPlayerBurrowPhaseEffect(
+            hasPosition ? x! : entity!.x, hasPosition ? y! : entity!.y, phase, entity?.getAimAngle() ?? 0,
+          );
+        }
       }
+      if (!entity) return;
       entity.setBurrowPhase(phase, true);
-      if (entity.displayObject) this.effectSystem.syncBurrowState(playerId, phase, entity.displayObject);
-      // Keep client coordinator in sync so applyBurrowVisual() doesn't re-trigger
+      this.effectSystem.syncPlayerBurrowState(playerId, phase, entity.displayObject ?? undefined);
+      // Keep client phase/audio bookkeeping current before the next snapshot.
       this.clientUpdate.setBurrowPhase(playerId, phase);
     });
   }
 
   private registerShockwaveEffectHandler(): void {
-    bridge.registerShockwaveEffectHandler((x, y) => {
-      this.effectSystem.playShockwaveEffect(x, y);
+    bridge.registerShockwaveEffectHandler((x, y, radius) => {
+      this.effectSystem.playShockwaveEffect(x, y, radius);
     });
   }
 

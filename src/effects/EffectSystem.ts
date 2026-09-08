@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { t } from '../i18n';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { BurrowPhase, ExplosionVisualStyle, HitscanImpactKind, HitscanVisualPreset, SyncedCombatEffect, SyncedDeathEffect, SyncedHitEffect, SyncedHitscanTrace, SyncedMeleeSwing } from '../types';
-import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, SHOCKWAVE_RADIUS, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
+import { BLOOD_HIT_VFX, COLORS, DAMAGE_VIGNETTE_VFX, DEPTH, DEPTH_FX, DEPTH_TRACE, GAME_HEIGHT, GAME_WIDTH, PLAYER_SIZE, PLASMA_BURNER_COLOR, clipPointToArenaRay, getBeamPaletteForPlayerColor, isPointInsideArena, toCssColor } from '../config';
 import {
   TEX_BLOOD_EDGE_BOTTOM,
   TEX_BLOOD_EDGE_LEFT,
@@ -32,6 +32,7 @@ import type { CameraFeedbackController } from './camera/CameraFeedbackController
 import type { CameraPostFxController } from './postfx/CameraPostFxController';
 import type { NukeVariant } from './nuke/NukeChoreography';
 import type { CombatExplosionVisualStyle } from './ExplosionVisualProfiles';
+import type { BurrowGpuRenderer } from './BurrowGpuRenderer';
 
 /** Schmaler Ausschnitt der Regie fuer mehrphasige Explosionssequenzen. */
 interface ExplosionSequenceHost {
@@ -111,6 +112,7 @@ export class EffectSystem implements EnemyVisualSink {
   private spawnEffectRenderer: SpawnEffectRenderer | null = null;
   private audioSystem: GameAudioSystem | null = null;
   private explosionGpuRenderer: ExplosionGpuRenderer | null = null;
+  private burrowGpuRenderer: BurrowGpuRenderer | null = null;
   private combatGoreGpuRenderer: CombatGoreGpuRenderer | null = null;
   private playerDeathResolver: ((targetId: string) => boolean) | null = null;
   private readonly scheduleBloodStainSink: BloodStainSink = (...args) => {
@@ -189,6 +191,10 @@ export class EffectSystem implements EnemyVisualSink {
     this.explosionGpuRenderer = renderer;
   }
 
+  setBurrowGpuRenderer(renderer: BurrowGpuRenderer | null): void {
+    this.burrowGpuRenderer = renderer;
+  }
+
   setCombatGoreGpuRenderer(renderer: CombatGoreGpuRenderer | null): void {
     this.combatGoreGpuRenderer = renderer;
   }
@@ -203,6 +209,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   destroy(): void {
+    this.burrowGpuRenderer?.clearAllUnderground();
     this.damageVignetteTop?.destroy();
     this.damageVignetteBottom?.destroy();
     this.damageVignetteLeft?.destroy();
@@ -212,6 +219,7 @@ export class EffectSystem implements EnemyVisualSink {
     this.damageVignetteLeft   = null;
     this.damageVignetteRight  = null;
     this.combatGoreGpuRenderer = null;
+    this.burrowGpuRenderer = null;
     this.playerDeathResolver = null;
   }
 
@@ -447,83 +455,10 @@ export class EffectSystem implements EnemyVisualSink {
     });
   }
 
-  // ── Schockwellen-Effekt: expandierender Goldring (Unburrow) ─────────────
+  // ── Auftauch-Schockwelle: der Radius kommt von der Schadenssimulation ──
 
-  playShockwaveEffect(x: number, y: number): void {
-    this.ensureTextures();
-
-    const startRadius = 10;
-    const endScale = SHOCKWAVE_RADIUS / startRadius;
-
-    const coreFlash = this.scene.add.circle(x, y, 12, 0xe7c59a, 0.65);
-    registerGraphicsObject(this.scene, 'effectSystemGraphics', coreFlash);
-    coreFlash.setDepth(DEPTH_FX + 0.3);
-    makeAdditive(coreFlash);
-    this.scene.tweens.add({
-      targets:    coreFlash,
-      scaleX:     2.6,
-      scaleY:     2.6,
-      alpha:      0,
-      duration:   180,
-      ease:       'Cubic.easeOut',
-      onComplete: () => coreFlash.destroy(),
-    });
-
-    const innerRing = this.scene.add.circle(x, y, startRadius, 0, 0);
-    registerGraphicsObject(this.scene, 'effectSystemGraphics', innerRing);
-    innerRing.setDepth(DEPTH_FX + 0.2);
-    innerRing.setStrokeStyle(5, 0x8d5e3b, 0.85);
-    this.scene.tweens.add({
-      targets:    innerRing,
-      scaleX:     endScale,
-      scaleY:     endScale,
-      alpha:      0,
-      duration:   360,
-      ease:       'Cubic.easeOut',
-      onComplete: () => innerRing.destroy(),
-    });
-
-    const dustRing = this.scene.add.circle(x, y, startRadius * 0.9, 0, 0);
-    registerGraphicsObject(this.scene, 'effectSystemGraphics', dustRing);
-    dustRing.setDepth(DEPTH_FX + 0.1);
-    dustRing.setStrokeStyle(9, 0x3f342d, 0.42);
-    this.scene.tweens.add({
-      targets:    dustRing,
-      scaleX:     endScale * 1.08,
-      scaleY:     endScale * 1.08,
-      alpha:      0,
-      duration:   430,
-      ease:       'Quart.easeOut',
-      onComplete: () => dustRing.destroy(),
-    });
-
-    const dirtBurst = this.scene.add.particles(x, y, TEX_BURROW_DIRT, {
-      lifespan: { min: 280, max: 420 },
-      speed: { min: 70, max: 170 },
-      scale: { start: 0.8, end: 0.05 },
-      alpha: { start: 0.9, end: 0 },
-      rotate: { min: -120, max: 120 },
-      frequency: -1,
-      quantity: 22,
-      blendMode: Phaser.BlendModes.NORMAL,
-    });
-    dirtBurst.setDepth(DEPTH_FX + 0.25);
-    dirtBurst.addEmitZone(edgeZone(10, 22));
-    dirtBurst.explode(22);
-    this.scene.time.delayedCall(500, () => dirtBurst.destroy());
-
-    const dustBurst = this.scene.add.particles(x, y, TEX_BURROW_DUST, {
-      lifespan: { min: 320, max: 520 },
-      speed: { min: 28, max: 95 },
-      scale: { start: 1.3, end: 0.1 },
-      alpha: { start: 0.45, end: 0 },
-      quantity: 14,
-      frequency: -1,
-    });
-    dustBurst.setDepth(DEPTH_FX + 0.15);
-    dustBurst.addEmitZone(circleZone(10, 14));
-    dustBurst.explode(14);
-    this.scene.time.delayedCall(540, () => dustBurst.destroy());
+  playShockwaveEffect(x: number, y: number, radius: number): void {
+    this.burrowGpuRenderer?.playShockwave(x, y, radius);
   }
 
   // ── Funken-Effekt: Dachs buddelt unter dem Zug ───────────────────────────
@@ -644,6 +579,16 @@ export class EffectSystem implements EnemyVisualSink {
     this.scene.time.delayedCall(420, () => spark.destroy());
   }
 
+  /** Player phase reconciliation binds continuous GPU churn without replaying a discrete burst. */
+  syncPlayerBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {
+    if ((phase === 'underground' || phase === 'trapped') && sprite) {
+      this.burrowGpuRenderer?.syncUnderground(playerId, sprite);
+    } else {
+      this.burrowGpuRenderer?.clearUnderground(playerId);
+    }
+  }
+
+  /** Enemy presentation retains its existing emitter contract. */
   syncBurrowState(playerId: string, phase: BurrowPhase, sprite?: Phaser.GameObjects.Image): void {
     if ((phase === 'underground' || phase === 'trapped') && sprite) {
       this.ensureBurrowVisual(playerId, sprite);
@@ -656,6 +601,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   clearBurrowState(playerId: string): void {
+    this.burrowGpuRenderer?.clearUnderground(playerId);
     const visual = this.burrowVisuals.get(playerId);
     if (!visual) return;
 
@@ -669,6 +615,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   clearAllBurrowStates(): void {
+    this.burrowGpuRenderer?.clearAllUnderground();
     for (const playerId of [...this.burrowVisuals.keys()]) {
       this.clearBurrowState(playerId);
     }
@@ -708,6 +655,12 @@ export class EffectSystem implements EnemyVisualSink {
     dust.startFollow(sprite);
 
     this.burrowVisuals.set(playerId, { dirt, dust });
+  }
+
+  /** Discrete player events share GPU earth; enemies retain their existing phase effects. */
+  playPlayerBurrowPhaseEffect(x: number, y: number, phase: BurrowPhase, heading = 0): void {
+    if (phase === 'recovery') this.burrowGpuRenderer?.playExit(x, y);
+    else if (phase === 'windup') this.burrowGpuRenderer?.playEnter(x, y, heading);
   }
 
   playBurrowPhaseEffect(x: number, y: number, phase: BurrowPhase): void {

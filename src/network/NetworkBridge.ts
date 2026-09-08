@@ -78,6 +78,7 @@ import {
   TEAM_BLUE_COLOR,
   TEAM_RED_COLOR,
   ARENA_COUNTDOWN_SEC,
+  SHOCKWAVE_RADIUS,
 } from '../config';
 import { KEY_FAST_PING_PROBE, NetworkPingController } from './NetworkPingController';
 import { isCompleteGameStatePayload } from './FullGameStateBootstrap';
@@ -506,9 +507,9 @@ type HitscanTracerHandler = (
 ) => void;
 type DashHandler = (playerId: string, dx: number, dy: number) => void;
 type BurrowHandler = (playerId: string, wantsBurrowed: boolean) => void;
-type ShockwaveEffectHandler = (x: number, y: number) => void;
+type ShockwaveEffectHandler = (x: number, y: number, radius: number) => void;
 type TrainBurrowSparksHandler = (x: number, y: number) => void;
-type BurrowVisualHandler = (playerId: string, phase: BurrowPhase) => void;
+type BurrowVisualHandler = (playerId: string, phase: BurrowPhase, x?: number, y?: number) => void;
 type ColorRequestHandler = (requestedColor: number, requesterId: string) => void;
 type ColorAcceptedHandler = (requesterId: string, color: number) => void;
 type ColorDeniedHandler = (requesterId: string) => void;
@@ -3815,8 +3816,8 @@ export class NetworkBridge {
 
   // ── Schockwellen-Effekt: Host → Alle ─────────────────────────────────────
 
-  broadcastShockwaveEffect(x: number, y: number): void {
-    this.broadcastGameplayEvent('shockfx', { x, y });
+  broadcastShockwaveEffect(x: number, y: number, radius: number): void {
+    this.broadcastGameplayEvent('shockfx', { x, y, r: radius });
   }
 
   broadcastTrainBurrowSparks(x: number, y: number): void {
@@ -3834,13 +3835,13 @@ export class NetworkBridge {
     });
   }
 
-  registerShockwaveEffectHandler(cb: (x: number, y: number) => void): void {
+  registerShockwaveEffectHandler(cb: ShockwaveEffectHandler): void {
     this.shockwaveEffectHandler = cb;
     this.registerAllRpcHandler('shockfx', async (data: unknown): Promise<unknown> => {
       const shockwaveEffectHandler = this.shockwaveEffectHandler;
       if (!shockwaveEffectHandler) return undefined;
-      const { x, y } = data as { x: number; y: number };
-      shockwaveEffectHandler(x, y);
+      const { x, y, r } = data as { x: number; y: number; r?: number };
+      shockwaveEffectHandler(x, y, r ?? SHOCKWAVE_RADIUS);
       return undefined;
     });
   }
@@ -3900,17 +3901,18 @@ export class NetworkBridge {
 
   // ── Burrow-Visualisierung: Host → Alle ────────────────────────────────────
 
-  broadcastBurrowVisual(playerId: string, phase: BurrowPhase): void {
-    this.broadcastGameplayEvent('bfx', { id: playerId, p: phase });
+  broadcastBurrowVisual(playerId: string, phase: BurrowPhase, x?: number, y?: number): void {
+    this.broadcastGameplayEvent('bfx', { id: playerId, p: phase, x, y });
   }
 
-  registerBurrowVisualHandler(cb: (playerId: string, phase: BurrowPhase) => void): void {
+  registerBurrowVisualHandler(cb: BurrowVisualHandler): void {
     this.burrowVisualHandler = cb;
     this.registerAllRpcHandler('bfx', async (data: unknown): Promise<unknown> => {
       const burrowVisualHandler = this.burrowVisualHandler;
       if (!burrowVisualHandler) return undefined;
-      const { id, p } = data as { id: string; p: BurrowPhase };
-      burrowVisualHandler(id, p);
+      const { id, p, x, y } = data as { id: string; p: BurrowPhase; x?: number; y?: number };
+      const hasPosition = Number.isFinite(x) && Number.isFinite(y);
+      burrowVisualHandler(id, p, hasPosition ? x : undefined, hasPosition ? y : undefined);
       return undefined;
     });
   }

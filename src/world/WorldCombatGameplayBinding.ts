@@ -419,6 +419,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     hostPhysics.setDashGroundFireHandler(null);
     hostPhysics.setDashHoldEnabledResolver(null);
     hostPhysics.setBurrowSystem(null);
+    hostPhysics.setBurrowDashExitHandler(null);
     hostPhysics.setLoadoutManager(null);
     hostPhysics.setTimeBubbleSystem(null);
     hostPhysics.setEnemyManager(null);
@@ -826,6 +827,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       playerCombat.reactions.handleDirectAk47EnemyHit(projectile, enemyId, nowMs)
     ));
     o.hostPhysics.setBurrowSystem(playerCombat.state);
+    o.hostPhysics.setBurrowDashExitHandler((playerId) => playerCombat.movement.tryExitBurrowForDash(playerId));
     o.hostPhysics.setLoadoutManager(playerCombat.loadout);
     o.hostPhysics.setTimeBubbleSystem(timeBubble);
     playerCombat.sustainedWeapon.setTeslaDomeSystem(teslaDome);

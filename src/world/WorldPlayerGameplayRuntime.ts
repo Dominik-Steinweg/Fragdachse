@@ -104,7 +104,7 @@ import {
   COOP_DEFENSE_REPAIR_DRONE_UPGRADE_ID,
 } from '../config/coopDefenseConstructions';
 import { COOP_DEFENSE_AFFIX_RULES } from '../config/coopDefenseItems';
-import { SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../config';
+import { BURROW_UNDERGROUND_SPEED_FACTOR, SHOCKWAVE_DAMAGE, SHOCKWAVE_RADIUS } from '../config';
 
 export interface WorldPlayerGameplayNetworkPort {
   readonly input: {
@@ -727,6 +727,9 @@ export class WorldPlayerGameplayRuntime implements
         isDashBlocked: (playerId) => systems.burrow.isDashBlocked(playerId),
         getMovementSpeedFactor: (playerId) => systems.burrow.getMovementSpeedFactor(playerId),
         isWeaponBlocked: (playerId) => systems.burrow.isWeaponBlocked(playerId),
+      },
+      movement: {
+        tryExitBurrowForDash: (playerId) => systems.burrow.tryExitBurrowForDash(playerId),
       },
       item: systems.itemRuntime,
       utility: systems.utilityAction,
@@ -1430,7 +1433,7 @@ export class WorldPlayerGameplayRuntime implements
   }
 
   private configureBurrow(burrow: BurrowSystem, playerModifier: CoopDefensePlayerModifierSystem): void {
-    burrow.setUndergroundSpeedResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.burrowSpeed', 1.3));
+    burrow.setUndergroundSpeedResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.burrowSpeed', BURROW_UNDERGROUND_SPEED_FACTOR));
     burrow.setDrainMultiplierResolver((playerId) => 1 + playerModifier.getPercentageStat(playerId, 'player.burrowCost'));
     burrow.setShockwaveDamageResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.unburrowShockwaveDamage', SHOCKWAVE_DAMAGE));
     burrow.setShockwaveRadiusResolver((playerId) => playerModifier.getResolvedStat(playerId, 'player.unburrowShockwaveRadius', SHOCKWAVE_RADIUS));

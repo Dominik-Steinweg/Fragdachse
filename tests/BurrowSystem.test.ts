@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { BURROW_DRAIN_INTERVAL_MS, BURROW_WINDUP_DURATION_MS } from '../src/config';
+import { BURROW_DRAIN_INTERVAL_MS, BURROW_WINDUP_DURATION_MS, PLAYER_SIZE } from '../src/config';
 import type { ArenaObstacleIndex } from '../src/systems/ArenaObstacleIndex';
 import { BurrowSystem } from '../src/systems/BurrowSystem';
 import type { WorldMetrics } from '../src/world/WorldMetrics';
@@ -104,7 +104,7 @@ function createHarness(options: HarnessOptions = {}) {
 function enterUnderground(system: BurrowSystem): void {
   system.initPlayer(PLAYER_ID);
   system.handleBurrowRequest(PLAYER_ID, true);
-  vi.setSystemTime(BURROW_WINDUP_DURATION_MS);
+  vi.setSystemTime(Date.now() + BURROW_WINDUP_DURATION_MS);
   system.update(0);
   expect(system.getPhase(PLAYER_ID)).toBe('underground');
 }
@@ -133,6 +133,63 @@ describe('BurrowSystem Exit Assist', () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it('commits a safe dash exit with collision restoration and exactly one popout', () => {
+    const h = createHarness({ blocked: (x, y) => x === 20 && y === 48 });
+    enterUnderground(h.system);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(true);
+    expect(h.system.getPhase(PLAYER_ID)).toBe('recovery');
+    expect(h.system.isBurrowed(PLAYER_ID)).toBe(false);
+    expect(h.system.isWeaponBlocked(PLAYER_ID)).toBe(true);
+    expect(h.hostPhysics.setPlayerBurrowed).toHaveBeenLastCalledWith(PLAYER_ID, false);
+    expect(h.positionReset).toHaveBeenCalledOnce();
+    expect(h.bridge.broadcastShockwaveEffect).toHaveBeenCalledOnce();
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+    expect(h.bridge.broadcastShockwaveEffect).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a blocked dash underground and allows immediate retry at a free point', () => {
+    let blocked = true;
+    const h = createHarness({ blocked: () => blocked });
+    enterUnderground(h.system);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+    expect(h.system.getPhase(PLAYER_ID)).toBe('underground');
+    expect(h.hostPhysics.setPlayerBurrowed).not.toHaveBeenCalledWith(PLAYER_ID, false);
+    expect(h.bridge.broadcastShockwaveEffect).not.toHaveBeenCalled();
+    blocked = false;
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(true);
+  });
+
+  it('checks dash exits with the full surface radius, including without world metrics', () => {
+    for (const metrics of [worldMetrics(), null]) {
+      const h = createHarness({ metrics, blocked: (_x, _y, radius) => radius >= PLAYER_SIZE / 2 });
+      h.player.getCollisionRadius = () => PLAYER_SIZE / 4;
+      enterUnderground(h.system);
+      expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+      expect(h.system.isBurrowed(PLAYER_ID)).toBe(true);
+    }
+  });
+
+  it('rejects a dash exit without authoritative world geometry', () => {
+    const h = createHarness({ geometryQueries: false });
+    enterUnderground(h.system);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+  });
+
+  it('never uses a dash to cancel windup, tunnel transit or trapped state', () => {
+    const h = createHarness({ blocked: () => true, drainToZero: true });
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+    h.system.handleBurrowRequest(PLAYER_ID, true);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+    h.system.startTunnelTransit(PLAYER_ID);
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
+    expect(h.system.isTunnelTransit(PLAYER_ID)).toBe(true);
+    h.system.initPlayer(PLAYER_ID);
+    enterUnderground(h.system);
+    h.system.update(BURROW_DRAIN_INTERVAL_MS);
+    expect(h.system.getPhase(PLAYER_ID)).toBe('trapped');
+    expect(h.system.tryExitBurrowForDash(PLAYER_ID)).toBe(false);
   });
 
   it('snappt Manual auf die freie Rastermitte und setzt die Missionsposition zurück', () => {
@@ -222,6 +279,8 @@ describe('BurrowSystem Exit Assist', () => {
 
   it('erzeugt Shockwave und Knockback an der korrigierten Position', () => {
     const harness = createHarness({ blocked: (x, y) => x === 20 && y === 48 });
+    const radius = 175;
+    harness.system.setShockwaveRadiusResolver(() => radius);
     enterUnderground(harness.system);
 
     harness.system.handleBurrowRequest(PLAYER_ID, false);
@@ -229,13 +288,14 @@ describe('BurrowSystem Exit Assist', () => {
     expect(harness.hostPhysics.applyRadialImpulse).toHaveBeenCalledWith(
       16,
       48,
-      expect.any(Number),
+      radius,
       expect.any(Number),
       PLAYER_ID,
       0,
     );
     expect(harness.bridge.broadcastShockwaveEffect).toHaveBeenCalledTimes(1);
-    expect(harness.bridge.broadcastShockwaveEffect).toHaveBeenCalledWith(16, 48);
+    expect(harness.bridge.broadcastShockwaveEffect).toHaveBeenCalledWith(16, 48, radius);
+    expect(harness.bridge.broadcastBurrowVisual).toHaveBeenLastCalledWith(PLAYER_ID, 'recovery', 16, 48);
   });
 
   it('setzt bei bereits freier Position weder Position noch Missionshistorie zurück', () => {
@@ -247,6 +307,9 @@ describe('BurrowSystem Exit Assist', () => {
     expect(harness.setPosition).not.toHaveBeenCalled();
     expect(harness.positionReset).not.toHaveBeenCalled();
     expect(harness.system.getPhase(PLAYER_ID)).toBe('recovery');
+    expect(harness.bridge.broadcastBurrowVisual).toHaveBeenLastCalledWith(
+      PLAYER_ID, 'recovery', harness.player.x, harness.player.y,
+    );
   });
 
   it('lehnt den Exit bei aktiven WorldMetrics ohne GeometryQueries fail-closed ab', () => {
@@ -268,6 +331,10 @@ describe('BurrowSystem Exit Assist', () => {
     expect(harness.obstacleIndex.isCircleBlocked).not.toHaveBeenCalled();
     expect(harness.setPosition).not.toHaveBeenCalled();
     expect(harness.system.getPhase(PLAYER_ID)).toBe('recovery');
+    expect(harness.bridge.broadcastBurrowVisual).toHaveBeenLastCalledWith(
+      PLAYER_ID, 'recovery', harness.player.x, harness.player.y,
+    );
+    expect(harness.bridge.broadcastShockwaveEffect).not.toHaveBeenCalled();
   });
 
   it('prüft im defensiven requestExit-Tunnelpfad nur die aktuelle Kreisposition', () => {

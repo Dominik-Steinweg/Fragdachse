@@ -4,6 +4,7 @@ import math
 
 
 def build(c):
+    parts = {}
     armor = c.material('Petrol enamel', (.055, .20, .18), 'technical')
     edge = c.material('Brushed grey steel', (.19, .25, .255), 'technical')
     recess = c.material('Warm dark mechanism', (.018, .029, .031))
@@ -19,6 +20,7 @@ def build(c):
         a = math.tau * i / 8 + math.pi / 8
         c.cylinder('Mount fastener', (-.10 + math.cos(a) * .98, math.sin(a) * .98, .36), .048, .025, ivory, 6)
     for side in [-1, 1]:
+        before = set(c.scene.objects)
         y = side * .63
         c.box('Pod undercarriage', (.10, y, .59), (2.38, .65, .22), recess, .10)
         c.box('Painted pod armor', (.07, y, .77), (2.18, .62, .25), armor, .10)
@@ -42,6 +44,7 @@ def build(c):
         for x in [-.99, -.88, -.77]:
             c.box('Rear vent', (x, y, .927), (.038, .34, .019), recess, .005)
         c.box('Ivory pod recognition stripe', (.9, y, .963), (.07, .41, .012), ivory, .003)
+        parts['left_pod' if side == -1 else 'right_pod'] = [ob for ob in c.scene.objects if ob not in before]
     c.box('Central drive spine', (-.28, 0, .67), (1.40, .41, .35), armor, .09)
     c.box('Ochre service hatch', (-.55, 0, .86), (.33, .29, .045), amber, .04)
     for x in [-.64, -.54, -.44]:
@@ -50,3 +53,4 @@ def build(c):
     c.box('Optical sensor glass', (.62, 0, .811), (.16, .17, .024), light, .035)
     for y in [-1, 1]:
         c.box('Bearing position lamp', (-.15, y, .345), (.16, .055, .025), light, .014)
+    return parts

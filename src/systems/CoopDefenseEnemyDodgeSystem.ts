@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DASH_F_MIN, DASH_F_START, DASH_T1_S, DASH_T2_S, PLAYER_SIZE } from '../config';
+import { DASH_F_MIN, ENEMY_DASH_F_START, DASH_T1_S, DASH_T2_S, PLAYER_SIZE } from '../config';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyDodgeConfig,
@@ -15,7 +15,7 @@ import type { EnemyCirclePathResolver } from './EnemyFlowFieldService';
 /** Prüft, ob an einer Weltposition genug freier, erreichbarer Boden für den Gegner ist. */
 export type FreeGroundResolver = (x: number, y: number, radius: number) => boolean;
 
-/** Gesamtdauer eines Ausweichschritts – dieselbe Zweiphasen-Kurve wie beim Spieler-Dash. */
+/** Gesamtdauer eines Ausweichschritts mit der eigenen quadratischen Gegner-Kurve. */
 const DODGE_TOTAL_DURATION_MS = (DASH_T1_S + DASH_T2_S) * 1000;
 
 /**
@@ -24,7 +24,7 @@ const DODGE_TOTAL_DURATION_MS = (DASH_T1_S + DASH_T2_S) * 1000;
  * Zahl gehalten, damit die Landepunkt-Prüfung mit den Dash-Konstanten mitwandert.
  */
 const DASH_DISTANCE_PER_SPEED =
-  (DASH_F_START + (DASH_F_MIN - DASH_F_START) * (2 / 3)) * DASH_T1_S
+  (ENEMY_DASH_F_START + (DASH_F_MIN - ENEMY_DASH_F_START) * (2 / 3)) * DASH_T1_S
   + (DASH_F_MIN + (1 - DASH_F_MIN) / 3) * DASH_T2_S;
 
 /** Sicherheitsaufschlag auf den Trefferradius bei der Landepunkt-Prüfung. */
@@ -43,8 +43,8 @@ function projectileBucketKey(gridX: number, gridY: number): number {
  *  1. Ein Spieler-Projektil würde den Gegner treffen → Satz quer zur Flugbahn.
  *  2. Ein Spieler ist bereits in der Nähe → Satz nach vorne, um den Abstand zu schließen.
  *
- * Ausgeführt wird der Schritt vom {@link HostPhysicsSystem} als ganz normaler Dash – gleiche
- * Kurve, gleiche Hitbox-Verkleinerung, gleiche Darstellung und Sounds wie beim Spieler.
+ * Ausgeführt wird der Schritt vom {@link HostPhysicsSystem} mit eigener Geschwindigkeitskurve,
+ * bestehender Hitbox-Verkleinerung und Dash-Darstellung.
  *
  * Ein Schritt startet nur, wenn Sichtlinie *und* Landepunkt frei sind: der Gegner ist während
  * des Bursts halb so groß und könnte sonst in einer Felslücke landen, in der er beim

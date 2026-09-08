@@ -74,7 +74,7 @@ export function impactLight(options?: ImpactOptions): CameraFeedbackRequest {
   return impact(10, 180, CAMERA_FEEDBACK_PRIORITY.lightImpact, options);
 }
 
-/** Kurzer gerichteter Stoß, etwa Waffenrückstoß entgegen der Schussrichtung. */
+/** Sofortiger gerichteter Stoß mit Rücklauf; auch im Auslöseframe bereits sichtbar. */
 export function directionalKick(
   dirX: number,
   dirY: number,
@@ -82,7 +82,7 @@ export function directionalKick(
   durationMs: number,
   priority: number = CAMERA_FEEDBACK_PRIORITY.weaponRecoil,
 ): CameraFeedbackRequest {
-  return { channel: 'kick', amplitudePx, durationMs, priority, dirX, dirY, decay: 'impulse' };
+  return { channel: 'kick', amplitudePx, durationMs, priority, dirX, dirY, decay: 'expo' };
 }
 
 /**

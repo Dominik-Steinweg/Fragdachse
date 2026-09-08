@@ -395,6 +395,7 @@ export class ClientUpdateCoordinator {
         );
 
         const curPhase = ps.dashPhase ?? 0;
+        player.setMovementDashPhase(curPhase, ps.isBurrowDash === true);
         if (curPhase === 1 && (this.prevDashPhases.get(id) ?? 0) === 0) {
           this.ctx.gameAudioSystem.playSound('sfx_dash', player.x, player.y, id);
         }
@@ -540,7 +541,6 @@ export class ClientUpdateCoordinator {
     for (const player of this.ctx.playerManager.getAllPlayers()) {
       player.lerpStep(lerpFactor);
       const dashPhase = this.prevDashPhases.get(player.id) ?? 0;
-      player.setMovementDashPhase(dashPhase as 0 | 1 | 2);
       if (dashPhase !== 0) {
         this.applyDashVisual(player, player.id, dashPhase as 1 | 2);
       } else {
@@ -574,7 +574,7 @@ export class ClientUpdateCoordinator {
       : undefined;
     if (localState) {
       this.ctx.aimSystem?.setAuthoritativeState(localState.aim);
-      this.ctx.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase);
+      this.ctx.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase, localState.dashPhase);
 
       // Movement loop for local player
       const isMovingLocal = localState.aim.isMoving;
@@ -1429,11 +1429,9 @@ export class ClientUpdateCoordinator {
       if (handle) this.ctx.gameAudioSystem.updateLoopPosition(handle, player.x, player.y, player.id);
     }
 
-    if (shouldAnimate) {
-      this.ctx.effectSystem.playBurrowPhaseEffect(player.x, player.y, phase);
-    }
+    // Discrete player bursts come only from reliable bfx; snapshots reconcile presentation state.
     player.setBurrowPhase(phase, shouldAnimate);
-    if (player.displayObject) this.ctx.effectSystem.syncBurrowState(player.id, phase, player.displayObject);
+    this.ctx.effectSystem.syncPlayerBurrowState(player.id, phase, player.displayObject ?? undefined);
     this.prevBurrowPhases.set(player.id, phase);
   }
 

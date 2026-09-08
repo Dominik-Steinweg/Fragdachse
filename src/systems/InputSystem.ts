@@ -25,7 +25,7 @@ import { getUnshakenPointerWorldPoint } from '../graphics/cameraBaseScroll';
 import { maySendWorldInput } from '../world/WorldParticipation';
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 
-const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000; // 600ms Gesamtzyklusdauer
+const DASH_CYCLE_MS = (DASH_T1_S + DASH_T2_S) * 1000;
 import type {
   AirstrikeUltimateConfig,
   ChargedThrowUtilityActivationConfig,
@@ -102,6 +102,7 @@ export class InputSystem {
 
   // Lokaler Dash-Cooldown (nur für HUD-Visualisierung, kein Gameplay-Impact)
   private dashCooldownUntil = 0;  // ms-Timestamp
+  private localDashPhase: 0 | 1 | 2 = 0;
 
   // Debug Hotkey Callback
   private onDebugHotkey: ((type: DebugHotkeyType) => void) | null = null;
@@ -701,10 +702,16 @@ export class InputSystem {
    * Wird von ArenaScene jeden Frame mit dem aktuellen Spieler-Netzwerkstatus gesetzt,
    * damit Stun und Burrow-Zustand für Input-Gating berücksichtigt werden.
    */
-  setLocalState(isStunned: boolean, isBurrowed: boolean, burrowPhase: BurrowPhase): void {
+  setLocalState(isStunned: boolean, isBurrowed: boolean, burrowPhase: BurrowPhase, dashPhase: 0 | 1 | 2 = 0): void {
     this.localIsStunned  = isStunned;
     this.localIsBurrowed = isBurrowed;
     this.localBurrowPhase = burrowPhase;
+    // Only authoritative phase changes start HUD feedback; requests may be rejected by the host.
+    if (dashPhase !== this.localDashPhase) {
+      this.dashCooldownUntil = dashPhase === 0 ? 0
+        : Date.now() + (dashPhase === 1 ? DASH_CYCLE_MS : DASH_T2_S * 1000);
+    }
+    this.localDashPhase = dashPhase;
     if (isStunned || burrowPhase === 'windup' || burrowPhase === 'underground' || burrowPhase === 'trapped') {
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
@@ -737,6 +744,8 @@ export class InputSystem {
       this.consumedPointerButtons = this.scene.input.activePointer?.buttons ?? 0;
     }
     if (!enabled) {
+      this.localDashPhase = 0;
+      this.dashCooldownUntil = 0;
       this.predictedUtilityCooldownUntil.clear();
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
@@ -764,9 +773,10 @@ export class InputSystem {
    * Dash-Cooldown als Fraktion 0 (bereit) – 1 (gerade benutzt) für das HUD.
    */
   getDashCooldownFrac(): number {
+    if (this.localDashPhase === 0) return 0;
     const remaining = this.dashCooldownUntil - Date.now();
-    if (remaining <= 0) return 0;
-    return Math.min(1, remaining / DASH_CYCLE_MS);
+    // Overdrive and network delay may outlast the estimate; readiness still belongs to the host.
+    return Math.max(0.01, Math.min(1, remaining / DASH_CYCLE_MS));
   }
 
   /** Aktueller Aim-Winkel in Radiant (für Sprite-Rotation). */
@@ -1080,11 +1090,7 @@ export class InputSystem {
 
     // ── 4. Dash (Flanke, einmalig auslösen) ────────────────────────────────
     if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
-      const now = Date.now();
-      if (now >= this.dashCooldownUntil) {
-        this.bridge.sendDash(dx, dy);
-        this.dashCooldownUntil = now + DASH_CYCLE_MS;
-      }
+      this.bridge.sendDash(dx, dy);
     }
 
     // ── 5. Burrow-Toggle (Flanke) ───────────────────────────────────────────

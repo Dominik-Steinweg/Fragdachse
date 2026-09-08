@@ -698,14 +698,13 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       );
       player.syncBar();
       const dashPhase = this.ctx.hostPhysics.getDashPhase(player.id);
-      player.setMovementDashPhase(dashPhase);
+      player.setMovementDashPhase(dashPhase, this.ctx.hostPhysics.isBurrowDash(player.id));
       const prevDashPhase = this.prevDashPhases.get(player.id) ?? 0;
       if (dashPhase === 1 && prevDashPhase === 0) {
         this.audio?.playSound('sfx_dash', player.x, player.y, player.id);
       }
-      // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die Dash-Phase ist der
-      // einzige Zustand, den `HostPhysicsSystem` nach aussen meldet – ein eigener Callback dort
-      // waere fuer diese eine Flanke unnoetig.
+      // Flanke Erholung → kein Dash: der Nachbrenner setzt genau hier an. Die publizierte
+      // Dash-Phase bestimmt diese Flanke ohne einen zusätzlichen Gameplay-Callback.
       if (dashPhase === 0 && prevDashPhase === 2) {
         this.playerGameplayRuntime?.registerDashCompleted(player.id, now);
       }
@@ -785,6 +784,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         playerFrame?.isStunned ?? false,
         playerFrame?.isBurrowed ?? false,
         playerFrame?.burrowPhase ?? 'idle',
+        this.ctx.hostPhysics.getDashPhase(localId),
       );
       localPlayer.setRotation(this.ctx.inputSystem.getAimAngle());
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(localId);
@@ -1013,6 +1013,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         isDecoyStealthed,
         decoyStealthRemainingFrac,
         dashPhase: this.ctx.hostPhysics.getDashPhase(player.id),
+        isBurrowDash: this.ctx.hostPhysics.isBurrowDash(player.id),
         flameRingRadius: playerFrame?.flameRingRadius,
         aim: {
           revision:             aim.revision,
@@ -2135,11 +2136,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       if (handle) this.audio?.updateLoopPosition(handle, player.x, player.y, player.id);
     }
 
-    if (shouldAnimate) {
-      this.effects?.playBurrowPhaseEffect(player.x, player.y, phase);
-    }
+    // Discrete player bursts come only from reliable bfx; snapshots reconcile presentation state.
     player.setBurrowPhase(phase, shouldAnimate);
-    if (player.displayObject) this.effects?.syncBurrowState(player.id, phase, player.displayObject);
+    this.effects?.syncPlayerBurrowState(player.id, phase, player.displayObject ?? undefined);
     this.prevBurrowPhases.set(player.id, phase);
   }
 

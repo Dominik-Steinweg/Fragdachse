@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
   Math: {
@@ -17,7 +17,10 @@ import type { WorldCombatCore as CombatSystem } from '../src/combat/WorldCombatC
 import type { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import type { PlayerEntity } from '../src/entities/PlayerEntity';
 import { resolveActiveArenaWorldMetrics } from '../src/world/WorldMetrics';
-import { DASH_T1_S, DASH_T2_S } from '../src/config';
+import { BURROW_DASH_IMPULSE_MULTIPLIER, BURROW_UNDERGROUND_SPEED_FACTOR, BURROW_WINDUP_DURATION_MS,
+  DASH_F_MIN, DASH_T1_S, DASH_T2_S, ENEMY_DASH_F_START, PLAYER_SIZE, PLAYER_SPEED } from '../src/config';
+import { BurrowSystem } from '../src/systems/BurrowSystem';
+import { getPlayerDashBurstSpeedFactor } from '../src/utils/dashTiming';
 
 function createMockEnemy(id: string, x = 100, y = 100, vx = 50, vy = 60) {
   const setVelocity = vi.fn();
@@ -146,6 +149,171 @@ function createHarness() {
     getPlayerInput,
   };
 }
+
+function createBurrowDashHarness(blocked: () => boolean = () => false) {
+  const h = createHarness();
+  const player = createMockPlayer('player-1');
+  Object.assign(player, {
+    getCollisionRadius: () => PLAYER_SIZE / 2,
+    setPosition: (x: number, y: number) => { player.x = x; player.y = y; },
+  });
+  h.players.set(player.id, player);
+  const effects = { broadcastBurrowVisual: vi.fn(), broadcastShockwaveEffect: vi.fn() };
+  const burrow = new BurrowSystem(
+    { getAdrenaline: () => 30, drainAdrenaline: vi.fn() } as never,
+    h.playerManager, h.combatSystem, h.system,
+    { getPlayerInput: h.getPlayerInput, ...effects } as never,
+  );
+  burrow.setWorldGeometryQueries({ isCircleBlocked: blocked } as never);
+  h.system.setBurrowSystem(burrow);
+  h.system.setBurrowDashExitHandler(id => burrow.tryExitBurrowForDash(id));
+  h.system.setRockGroup({} as never, {} as never);
+  h.system.setBaseGroup({} as never);
+  h.system.update();
+  const colliders = vi.mocked(h.scene.physics.add.collider).mock.results.map(result => result.value);
+  const enter = () => {
+    burrow.handleBurrowRequest(player.id, true);
+    vi.advanceTimersByTime(BURROW_WINDUP_DURATION_MS);
+    burrow.update(0);
+    expect(burrow.getPhase(player.id)).toBe('underground');
+  };
+  return { ...h, player, burrow, effects, colliders, enter };
+}
+
+describe('host player dash and Burrow transition', () => {
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0); });
+  afterEach(() => vi.useRealTimers());
+
+  it('restores all obstacle colliders before a boosted surface dash and restores the full hitbox afterwards', () => {
+    const h = createBurrowDashHarness();
+    h.enter();
+    h.system.update();
+    expect(h.player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * BURROW_UNDERGROUND_SPEED_FACTOR, 0);
+    expect(h.colliders).toHaveLength(3);
+    expect(h.colliders.every(c => !c.active)).toBe(true);
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    expect(h.burrow.getPhase(h.player.id)).toBe('recovery');
+    expect(h.colliders.every(c => c.active)).toBe(true);
+    expect(h.system.isDashBurst(h.player.id)).toBe(true);
+    expect(h.system.isBurrowDash(h.player.id)).toBe(true);
+    h.system.update();
+    expect(h.player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * getPlayerDashBurstSpeedFactor(0, BURROW_DASH_IMPULSE_MULTIPLIER), 0);
+    expect(h.player.setCollisionRadius).toHaveBeenLastCalledWith(PLAYER_SIZE / 4);
+    expect(h.effects.broadcastShockwaveEffect).toHaveBeenCalledOnce();
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    expect(h.effects.broadcastShockwaveEffect).toHaveBeenCalledOnce();
+
+    vi.advanceTimersByTime(DASH_T1_S * 1000);
+    h.system.update();
+    expect(h.system.getDashPhase(h.player.id)).toBe(2);
+    expect(h.system.isBurrowDash(h.player.id)).toBe(true);
+    expect(h.system.isDashBurst(h.player.id)).toBe(false);
+    expect(h.player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * DASH_F_MIN, 0);
+    vi.advanceTimersByTime(DASH_T2_S * 1000);
+    h.burrow.update(0);
+    h.system.update();
+    expect(h.system.getDashPhase(h.player.id)).toBe(0);
+    expect(h.system.isBurrowDash(h.player.id)).toBe(false);
+    expect(h.player.setCollisionRadius).toHaveBeenLastCalledWith(PLAYER_SIZE / 2);
+    expect(h.player.setDashScale).toHaveBeenLastCalledWith(1);
+    expect(h.player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED, 0);
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    expect(h.system.isDashBurst(h.player.id)).toBe(true);
+    expect(h.system.isBurrowDash(h.player.id)).toBe(false);
+  });
+
+  it('does not pop out on invalid input, death, denied movement or an obstructed exit', () => {
+    let blocked = true;
+    const h = createBurrowDashHarness(() => blocked);
+    h.enter();
+    for (const [dx, dy] of [[0, 0], [NaN, 1], [Infinity, 0], [1, 0]]) {
+      h.system.handleDashRPC(h.player.id, dx, dy);
+      expect(h.burrow.isBurrowed(h.player.id)).toBe(true);
+      expect(h.system.getDashPhase(h.player.id)).toBe(0);
+      expect(h.system.isBurrowDash(h.player.id)).toBe(false);
+    }
+    blocked = false;
+    h.system.setCanMoveResolver(() => false);
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    expect(h.burrow.isBurrowed(h.player.id)).toBe(true);
+    h.system.setCanMoveResolver(() => true);
+    const alive = vi.spyOn(h.combatSystem, 'isAlive').mockReturnValue(false);
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    expect(h.burrow.isBurrowed(h.player.id)).toBe(true);
+    alive.mockReturnValue(true);
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    expect(h.system.isDashBurst(h.player.id)).toBe(true);
+  });
+
+  it('clears the special dash origin when its player or world is removed', () => {
+    for (const teardown of ['player', 'world'] as const) {
+      const h = createBurrowDashHarness();
+      h.enter(); h.system.handleDashRPC(h.player.id, 1, 0);
+      expect(h.system.isBurrowDash(h.player.id)).toBe(true);
+      if (teardown === 'player') h.system.removePlayer(h.player.id);
+      else h.system.setRockGroup(null, null);
+      expect(h.system.isBurrowDash(h.player.id)).toBe(false);
+    }
+  });
+
+  it.each([30, 60, 120])('keeps the base cycle distance-neutral within one update step at %i Hz', (hz) => {
+    const h = createBurrowDashHarness();
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    const stepMs = 1000 / hz;
+    const durationMs = (DASH_T1_S + DASH_T2_S) * 1000;
+    let distance = 0;
+    for (let time = 0; time < durationMs - 1e-6; time += stepMs) {
+      h.system.update(false, time);
+      const [vx] = h.player.setVelocity.mock.calls.at(-1)!;
+      distance += vx * Math.min(stepMs, durationMs - time) / 1000;
+    }
+    const walkingDistance = PLAYER_SPEED * durationMs / 1000;
+    const maximumStepDistance = PLAYER_SPEED * getPlayerDashBurstSpeedFactor(0) / hz;
+    expect(Math.abs(distance - walkingDistance)).toBeLessThanOrEqual(maximumStepDistance);
+  });
+
+  it('applies range, run speed, recovery, holding, impact and trail upgrades to Burrow dashes without underground speed stacking', () => {
+    const h = createBurrowDashHarness();
+    h.enter();
+    h.burrow.setUndergroundSpeedResolver(() => 99);
+    h.system.setRunSpeedResolver(() => PLAYER_SPEED * 1.15);
+    h.system.setDashRangeMultiplierResolver(() => 1.3);
+    h.system.setDashRecoveryDurationResolver(() => DASH_T2_S / 2);
+    h.system.setDashHoldEnabledResolver(() => true);
+    h.getPlayerInput.mockReturnValue({ dx: 1, dy: 0, dashHeld: true } as never);
+    h.system.setDashImpactDamageResolver(() => 7);
+    h.system.setDashGroundFireDurationResolver(() => 1000);
+    const trail = vi.fn();
+    h.system.setDashGroundFireHandler(trail);
+    h.enemies.set('enemy', createMockEnemy('enemy', h.player.x + PLAYER_SIZE / 2, h.player.y));
+    h.system.handleDashRPC(h.player.id, 1, 0);
+    h.system.update();
+    expect(h.player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * 1.15 * 1.3 * getPlayerDashBurstSpeedFactor(0, BURROW_DASH_IMPULSE_MULTIPLIER), 0);
+    h.system.update();
+    expect(h.combatSystem.applyDamage).toHaveBeenCalledOnce();
+    expect(trail).toHaveBeenCalled();
+    vi.advanceTimersByTime(DASH_T1_S * 1000);
+    h.system.update();
+    expect(h.system.getDashPhase(h.player.id)).toBe(1);
+    h.getPlayerInput.mockReturnValue({ dx: 1, dy: 0, dashHeld: false } as never);
+    h.system.update();
+    expect(h.system.getDashPhase(h.player.id)).toBe(2);
+    vi.advanceTimersByTime(DASH_T2_S * 500);
+    h.system.update();
+    expect(h.system.getDashPhase(h.player.id)).toBe(0);
+  });
+
+  it('retains the independent quadratic enemy curve', () => {
+    const h = createHarness();
+    const enemy = createMockEnemy('enemy');
+    h.enemies.set(enemy.id, enemy);
+    h.system.startEnemyDash(enemy.id, 1, 0);
+    h.system.update(false, 0);
+    expect(enemy.setVelocity).toHaveBeenLastCalledWith(enemy.getMoveSpeed() * ENEMY_DASH_F_START, 0);
+    h.system.update(false, DASH_T1_S * 500);
+    expect(enemy.setVelocity).toHaveBeenLastCalledWith(enemy.getMoveSpeed() * (DASH_F_MIN + (ENEMY_DASH_F_START - DASH_F_MIN) / 4), 0);
+  });
+});
 
 describe('HostPhysicsSystem Allocation Optimization', () => {
   it('uses forEachEnemy instead of getAllEnemies in update() per-frame enemy loop', () => {

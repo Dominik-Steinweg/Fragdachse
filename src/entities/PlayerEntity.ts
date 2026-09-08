@@ -1,5 +1,6 @@
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { PLAYER_MOVEMENT_VISUAL } from '../config/movementEffects';
+import { BURROW_FX } from '../config/burrowEffects';
 import type { MovementVisualSample } from '../effects/MovementStepSampler';
 import { playerHealthBarStyle } from '../effects/health/healthBarStyles';
 import * as Phaser from 'phaser';
@@ -21,7 +22,7 @@ import { killAllAndResetParticlePositions, registerGraphicsObject, registerParti
 import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
-  PLAYER_SIZE, DEPTH, COLORS,
+  PLAYER_SIZE, DEPTH, COLORS, BURROW_WINDUP_DURATION_MS,
   toCssColor,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
@@ -123,6 +124,7 @@ export class PlayerEntity {
   private baseVisible = true;
   private walkingRequested = false;
   private movementDashPhase: 0 | 1 | 2 = 0;
+  private movementBurrowDash = false;
   private movementRevision = 0;
   /** Decaying teleport offset, separate from the normal interpolation lag while walking. */
   private movementCorrectionRemaining = 0;
@@ -429,7 +431,10 @@ export class PlayerEntity {
     this.syncWalkingAnimation();
   }
 
-  setMovementDashPhase(phase: 0 | 1 | 2): void { this.movementDashPhase = phase; }
+  setMovementDashPhase(phase: 0 | 1 | 2, isBurrowDash = false): void {
+    this.movementDashPhase = phase;
+    this.movementBurrowDash = phase !== 0 && isBurrowDash;
+  }
 
   /** Project the final render pose without allocating or exposing the gameplay owner. */
   readMovementVisualSample(out: MovementVisualSample): void {
@@ -441,9 +446,11 @@ export class PlayerEntity {
     out.footprint = PLAYER_MOVEMENT_VISUAL.footprint;
     out.player = true;
     out.visible = !!this.sprite?.visible && this.isAliveVisual && !this.isDecoyStealthed
-      && this.burrowPhase === 'idle' && this.movementCorrectionRemaining < PLAYER_SIZE * 0.3;
+      && (this.burrowPhase === 'idle' || (this.burrowPhase === 'recovery' && this.movementDashPhase !== 0))
+      && this.movementCorrectionRemaining < PLAYER_SIZE * 0.3;
     out.mode = this.movementDashPhase === 1 ? 'dash' : this.movementDashPhase === 2 ? 'recovery'
       : this.walkingRequested ? 'walk' : 'idle';
+    out.isBurrowDash = this.movementBurrowDash;
     out.revision = this.movementRevision;
   }
 
@@ -637,6 +644,8 @@ export class PlayerEntity {
     this.applyDisplayVisibility();
 
     if (!visible && this.isAliveVisual) {
+      this.stopBurrowTween(true);
+      this.applySpriteScale(1);
       this.resetHeldWeaponFeedback();
       // Übergang alive → dead: der Death-Event enthält den bereits erfassten Sprite-Frame.
       this.isAliveVisual = false;
@@ -657,6 +666,7 @@ export class PlayerEntity {
   playSpawnEffect(): void {
     // Ohne Sprite gibt es keinen Materialisierungseffekt.
     if (!this.sprite) return;
+    this.stopBurrowTween(true);
     const scene = this.sprite.scene;
 
     // Sprite kurz auf Scale/Alpha 0 setzen und dann animiert einblenden
@@ -727,6 +737,8 @@ export class PlayerEntity {
 
   /** Visuelle Skalierung für Dash-Hitbox-Feedback (Client-Seite), 1 = normale Spielergroesse. */
   setDashScale(scale: number): void {
+    // The per-frame neutral dash scale must not flatten the digging pose.
+    if (this.burrowPhase === 'windup') return;
     this.applySpriteScale(scale);
     this.syncOverlays();
   }
@@ -743,7 +755,7 @@ export class PlayerEntity {
     this.burrowPhase = phase;
     if (phase !== 'idle') this.resetHeldWeaponFeedback();
 
-    if (changed && (phase === 'underground' || phase === 'trapped')) {
+    if (changed && phase !== 'windup') {
       this.stopBurrowTween(true);
       this.applySpriteScale(1, 1);
       this.burrowTweenAlpha = 1;
@@ -753,10 +765,6 @@ export class PlayerEntity {
       this.playWindUpTween();
     } else if (animate && phase === 'recovery' && (previousPhase === 'underground' || previousPhase === 'trapped')) {
       this.playPopOutTween();
-    } else if (changed && phase === 'idle') {
-      this.stopBurrowTween(true);
-      this.applySpriteScale(1, 1);
-      this.burrowTweenAlpha = 1;
     }
 
     this.resolveVisual();
@@ -918,7 +926,7 @@ export class PlayerEntity {
       this.sprite.y,
       this.sprite.rotation,
       this.sprite.displayWidth,
-      this.sprite.visible,
+      this.sprite.visible && this.burrowPhase !== 'windup',
       this.sprite.alpha,
     );
   }
@@ -928,7 +936,7 @@ export class PlayerEntity {
     if (!this.sprite) return;
     if (!this.spawnShine) return;
 
-    const visible = this.sprite.visible && this.spawnShineAlpha > 0.001;
+    const visible = this.sprite.visible && this.burrowPhase !== 'windup' && this.spawnShineAlpha > 0.001;
     if (!visible) {
       this.spawnShine.setVisible(false);
       return;
@@ -973,17 +981,28 @@ export class PlayerEntity {
     this.sprite.setVisible(this.baseVisible);
     this.applySpriteScale(1, 1);
     this.burrowTweenAlpha = 1;
-    const state = { scaleX: 1, scaleY: 1, alpha: 1 };
+    const state = { progress: 0 };
+    const pose = BURROW_FX.entryAnimation;
     this.burrowTween = this.sprite.scene.tweens.add({
       targets: state,
-      scaleX: 1.16,
-      scaleY: 0.66,
-      alpha: 0.72,
-      duration: 150,
-      ease: 'Cubic.easeIn',
+      progress: 1,
+      duration: BURROW_WINDUP_DURATION_MS,
+      ease: 'Linear',
       onUpdate: () => {
-        this.applySpriteScale(state.scaleX, state.scaleY);
-        this.burrowTweenAlpha = state.alpha;
+        const brace = Math.min(1, state.progress / pose.braceFraction);
+        const braceEase = 1 - (1 - brace) ** 2;
+        const sink = Math.max(0, (state.progress - pose.braceFraction) / (1 - pose.braceFraction));
+        const sinkEase = sink * sink;
+        this.applySpriteScale(
+          1 + (pose.braceWidth - 1) * braceEase + (pose.sinkWidth - pose.braceWidth) * sinkEase,
+          1 + (pose.braceLength - 1) * braceEase + (pose.sinkLength - pose.braceLength) * sinkEase,
+        );
+        this.burrowTweenAlpha = 1 - Math.max(0, (sink - pose.fadeStart) / (1 - pose.fadeStart));
+        // The north-authored head disappears first; cropping rotates with the sprite and
+        // leaves the canonical position and collision body completely untouched.
+        const width = this.sprite!.frame.cutWidth;
+        const height = this.sprite!.frame.cutHeight;
+        this.sprite!.setCrop(0, height * sinkEase, width, height * (1 - sinkEase));
         this.resolveVisual();
       },
       onComplete: () => {
@@ -1024,6 +1043,7 @@ export class PlayerEntity {
   private stopBurrowTween(resetAlpha: boolean): void {
     this.burrowTween?.stop();
     this.burrowTween = null;
+    this.sprite?.setCrop();
     if (resetAlpha) this.burrowTweenAlpha = 1;
   }
 
@@ -1042,8 +1062,8 @@ export class PlayerEntity {
     this.healthBars?.alpha(this.healthBar, alpha, alpha * 0.92);
     this.armorBarBg?.setAlpha(alpha * 0.92);
     this.armorBarFg?.setAlpha(alpha);
-    this.stealthShell?.setVisible(visible && this.isDecoyStealthed);
-    this.stealthScan?.setVisible(visible && this.isDecoyStealthed);
+    this.stealthShell?.setVisible(visible && this.burrowPhase !== 'windup' && this.isDecoyStealthed);
+    this.stealthScan?.setVisible(visible && this.burrowPhase !== 'windup' && this.isDecoyStealthed);
     this.syncWalkingAnimation();
     this.syncAttachedEffects();
   }
@@ -1080,6 +1100,7 @@ export class PlayerEntity {
         && this.baseVisible
         && this.sprite.visible
         && this.isAliveVisual
+        && this.burrowPhase !== 'windup'
         && !hiddenByBurrow,
     );
   }
@@ -1089,7 +1110,7 @@ export class PlayerEntity {
     if (!this.sprite) return;
     if (!this.stealthShell || !this.stealthScan) return;
 
-    const visible = this.sprite.visible && this.isDecoyStealthed;
+    const visible = this.sprite.visible && this.burrowPhase !== 'windup' && this.isDecoyStealthed;
     this.stealthShell.setVisible(visible);
     this.stealthScan.setVisible(visible);
     if (!visible) return;

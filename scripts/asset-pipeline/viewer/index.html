@@ -7,7 +7,7 @@
 </head>
 <body>
   <main>
-    <header><div><p class="eyebrow">FRAGDACHSE / ASSET PIPELINE V1</p><h1>Im Spielmaßstab.</h1><p>Form, Kontrast und Bewegung prüfen. Die Quelle darf groß sein – die Figur bleibt klein.</p></div><span id="renderer">Lädt …</span></header>
+    <header><div><p class="eyebrow" id="pipeline-version">FRAGDACHSE / ASSET PIPELINE V1</p><h1>Im Spielmaßstab.</h1><p>Form, Kontrast und Bewegung prüfen. Die Quelle darf groß sein – die Figur bleibt klein.</p></div><span id="renderer">Lädt …</span></header>
     <section class="controls" aria-label="Asset und Darstellung">
       <label>Asset<select id="asset"></select></label>
       <label>Untergrund<select id="background"><option value="grass">Gras</option><option value="earth">Erde</option><option value="steel">Dunkler Stahl</option><option value="light">Hell neutral</option></select></label>
@@ -16,14 +16,30 @@
     </section>
     <section class="comparison-controls"><label>A · Quelle<select id="source-a"></select></label><label>B · Quelle<select id="source-b"></select></label><div id="previous-heading" hidden><strong id="previous-title"></strong><p>Identische Anzeigegröße</p></div><div><strong>Original</strong><p>Identische Anzeigegröße</p></div></section>
     <section class="stage" aria-label="Phaser Vorschau"><div id="canvas"></div><div class="stage-labels"><span id="label-a"></span><span id="label-b"></span><span id="label-previous" hidden></span><span id="label-original"></span></div></section>
+    <section id="animation-controls" class="animation controls" aria-label="Animation" hidden>
+      <label>Animation<select id="clip"></select></label>
+      <div class="buttons"><button id="play" type="button">Abspielen</button><button id="idle" type="button">Ruhepose</button></div>
+      <label class="frame-control">Frame <output id="frame-value">0</output><input id="frame" type="range" min="0" max="0" step="1" value="0"></label>
+      <div class="buttons"><button id="frame-back" type="button" aria-label="Vorheriger Frame">−1</button><button id="frame-next" type="button" aria-label="Nächster Frame">+1</button></div>
+      <label>Tempo<select id="time-scale"><option value="0.25">0,25×</option><option value="0.5">0,5×</option><option value="1" selected>1×</option><option value="1.5">1,5×</option><option value="2">2×</option></select></label>
+      <button id="fire" type="button" hidden>Schuss neu starten</button>
+      <label id="sustain-control" class="check" hidden><input id="sustain" type="checkbox"> Dauerfeuer</label>
+      <p id="animation-info" aria-live="polite"></p>
+    </section>
     <section class="motion controls" aria-label="Bewegung und Rotation">
       <label class="angle">Winkel <output id="angle-value">0°</output><input id="angle" type="range" min="0" max="360" value="0"></label>
       <div class="buttons"><button data-angle="0">0°</button><button data-angle="45">45°</button><button data-angle="90">90°</button></div>
       <label class="check"><input id="rotate" type="checkbox"> Kontinuierlich drehen</label>
-      <label class="check"><input id="move" type="checkbox"> Langsam bewegen</label>
+      <label class="check"><input id="move" type="checkbox"> Langsam verschieben</label>
       <label class="check"><input id="collision" type="checkbox" checked> Kollisionskreis</label><span id="collision-info"></span>
+      <label id="mount-control" class="check" hidden><input id="mount" type="checkbox" checked> 32×32-Fels unter dem Turm</label><span id="mount-info"></span>
     </section>
     <section class="inspection"><div><p class="eyebrow">ERGÄNZENDE FORMANALYSE</p><h2>Master-Vergleich</h2><p>Diese Vergrößerung zeigt Material und Anatomie. Die Abnahme erfolgt oben.</p><p id="metrics"></p></div><figure><img id="master-a" alt="Master der Variante A"><figcaption>A</figcaption></figure><figure><img id="master-b" alt="Master der Variante B"><figcaption>B</figcaption></figure></section>
+    <section id="frame-overview" class="frame-overview" aria-labelledby="frame-overview-title" hidden>
+      <p class="eyebrow">ANIMATIONSFOLGE</p><h2 id="frame-overview-title">Alle Frames im Vergleich</h2>
+      <figure><div class="frame-overview-scroll"><img id="frame-overview-image" loading="lazy" alt=""></div><figcaption id="frame-overview-caption"></figcaption></figure>
+      <p><a id="frame-overview-link" target="_blank" rel="noopener">Frameübersicht separat öffnen</a></p>
+    </section>
     <footer>Lokale Vorschau ohne Spielsimulation. 1 Einheit = 1 CSS-Pixel bei Faktor 1; die Pixeldichte des Displays wird berücksichtigt. Browser-Zoom für reproduzierbare Vergleiche auf 100 % stellen. Keine Gameplay-FX oder Weltbeleuchtung.</footer>
     <p id="error" role="alert" hidden></p>
   </main><script type="module" src="./viewer.js"></script>

@@ -2,6 +2,7 @@ import type { TerrainColorSnapshot } from '../arena/TerrainColorSnapshot';
 import { MOVEMENT_FX } from '../config/movementEffects';
 import { mixColors } from './EffectUtils';
 import { MovementParticleBudget } from './MovementParticleBudget';
+import type { BurrowGpuRenderer } from './BurrowGpuRenderer';
 import {
   createMovementVisualSample, MovementStepSampler,
   type MovementContactSink, type MovementVisualSample, type MovementVisualSource,
@@ -71,7 +72,10 @@ export class MovementEffectsRenderer {
   /** Teleport FX can arrive before the position snapshot; discard that interpolation tail. */
   private readonly interruptions = new Map<string, number>();
 
-  constructor(private readonly gpu: GpuVfxSystem) {
+  constructor(
+    private readonly gpu: GpuVfxSystem,
+    private readonly burrow?: Pick<BurrowGpuRenderer, 'playDashTrail'>,
+  ) {
     this.footprint = gpu.createSpec(GpuVfxEffectId.MovementFootprint);
     this.walkDust = gpu.createSpec(GpuVfxEffectId.MovementWalkDust);
     this.dashDust = gpu.createSpec(GpuVfxEffectId.MovementDashDust);
@@ -185,6 +189,7 @@ export class MovementEffectsRenderer {
       return;
     }
     if (kind === 'dashTrail') {
+      if (s.player && s.isBurrowDash) this.burrow?.playDashTrail(x, y, heading, s.size, age);
       track.dashCarry += this.gpu.quality.getEmissionFactor(GpuVfxEffectId.MovementDashDust);
       if (track.dashCarry < 1) { this.gpu.recordQualityDrop(GpuVfxEffectId.MovementDashDust); return; }
       track.dashCarry -= 1;

@@ -1,5 +1,4 @@
 import { WeaponFireFeedbackController, type WeaponFeedbackPlayer } from './weapon/WeaponFireFeedbackController';
-import { getStoredWeaponCameraKick } from '../utils/localPreferences';
 import type { WeaponSlot } from '../types';
 import type * as Phaser from 'phaser';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
@@ -41,9 +40,9 @@ import {
 } from './HitFeedbackRenderer';
 
 export interface VisualFeedbackDeps {
-  readonly getWeaponPlayer?: (id: string) => WeaponFeedbackPlayer | undefined;
-  readonly getWorldRevision?: () => number | null;
-  readonly isWeaponTriggerHeld?: (slot: WeaponSlot) => boolean;
+  readonly getWeaponPlayer: (id: string) => WeaponFeedbackPlayer | undefined;
+  readonly getWorldRevision: () => number | null;
+  readonly isWeaponTriggerHeld: (slot: WeaponSlot) => boolean;
   /** Bezugspunkt der Distanzdämpfung – normalerweise der lokale Spieler. */
   readonly getListener: () => { x: number; y: number } | null;
   readonly getLocalPlayerId: () => string;
@@ -83,11 +82,10 @@ export class VisualFeedbackDirector {
       getMotionScale: () => getGraphicsQualityProfile(scene).cameraMotionScale,
     });
     this.weaponFire = new WeaponFireFeedbackController({
-      getPlayer: (id) => deps.getWeaponPlayer?.(id),
+      getPlayer: deps.getWeaponPlayer,
       getLocalPlayerId: deps.getLocalPlayerId,
-      getWorldRevision: () => deps.getWorldRevision?.() ?? null,
-      isLocalTriggerHeld: (slot) => deps.isWeaponTriggerHeld?.(slot) ?? false,
-      getCameraScale: getStoredWeaponCameraKick,
+      getWorldRevision: deps.getWorldRevision,
+      isLocalTriggerHeld: deps.isWeaponTriggerHeld,
       requestCamera: (request) => this.camera.request(request),
       cancelCamera: () => this.camera.cancel('weapon:local-shot'),
     });

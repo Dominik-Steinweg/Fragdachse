@@ -245,6 +245,8 @@ export interface PlayerNetState {
   isDecoyStealthed?: boolean;
   decoyStealthRemainingFrac?: number;
   dashPhase:  0 | 1 | 2; // 0 = kein Dash, 1 = Burst, 2 = Recovery
+  /** Authoritative origin of the active dash; missing in older snapshots means ordinary dash. */
+  isBurrowDash?: boolean;
   flameRingRadius?: number;
   aim:        PlayerAimNetState;
 }

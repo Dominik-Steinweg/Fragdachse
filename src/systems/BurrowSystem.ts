@@ -146,6 +146,14 @@ export class BurrowSystem {
 
   // ── RPC-Handler ───────────────────────────────────────────────────────────
 
+  /** Commit a safe, ordinary Burrow exit before physics starts the surface dash. */
+  tryExitBurrowForDash(id: string): boolean {
+    const state = this.states.get(id);
+    if (state?.phase !== 'underground' || state.isTunnelTransit) return false;
+    if (!this.combat.isAlive(id) || !this.playerMgr.getPlayer(id)) return false;
+    return this.tryFinalizeExit(id, PLAYER_SIZE / 2);
+  }
+
   /**
    * Wird aufgerufen wenn ein Client graben oder auftauchen möchte.
    */
@@ -242,7 +250,8 @@ export class BurrowSystem {
     });
     this.onBurrowStartCb?.(id);
     for (const observer of this.burrowStartObservers) observer(id);
-    this.bridge.broadcastBurrowVisual(id, 'windup');
+    const player = this.playerMgr.getPlayer(id);
+    this.bridge.broadcastBurrowVisual(id, 'windup', player?.x, player?.y);
   }
 
   private completeWindUp(id: string): void {
@@ -283,7 +292,7 @@ export class BurrowSystem {
     }
   }
 
-  private tryFinalizeExit(id: string): boolean {
+  private tryFinalizeExit(id: string, collisionRadius?: number): boolean {
     const player = this.playerMgr.getPlayer(id);
     if (!player) {
       // Preserve teardown-safe behavior: a missing player runtime was previously treated as
@@ -300,12 +309,12 @@ export class BurrowSystem {
           this.worldGeometryQueries,
           player.x,
           player.y,
-          player.getCollisionRadius(),
+          collisionRadius ?? player.getCollisionRadius(),
           input?.dx ?? 0,
           input?.dy ?? 0,
         )
         : null
-      : this.isCurrentPositionBlocked(id)
+      : this.isCurrentPositionBlocked(id, collisionRadius)
         ? null
         : { x: player.x, y: player.y };
     if (!resolved) return false;
@@ -326,7 +335,8 @@ export class BurrowSystem {
       drainElapsedMs: 0,
       stuckDamageAccum: 0,
     });
-    this.bridge.broadcastBurrowVisual(id, 'recovery');
+    const player = this.playerMgr.getPlayer(id);
+    this.bridge.broadcastBurrowVisual(id, 'recovery', player?.x, player?.y);
     this.applyShockwave(id);
   }
 
@@ -358,7 +368,8 @@ export class BurrowSystem {
       stuckDamageAccum: 0,
       isTunnelTransit: false,
     });
-    this.bridge.broadcastBurrowVisual(id, 'recovery');
+    const player = this.playerMgr.getPlayer(id);
+    this.bridge.broadcastBurrowVisual(id, 'recovery', player?.x, player?.y);
     this.onTunnelTransitEndedCb?.(id, nowMs);
   }
 
@@ -376,7 +387,7 @@ export class BurrowSystem {
   }
 
   /** Prüft nur die aktuelle Player-Kreisposition gegen den gemeinsamen Hindernis-Index. */
-  private isCurrentPositionBlocked(id: string): boolean {
+  private isCurrentPositionBlocked(id: string, collisionRadius?: number): boolean {
     const player = this.playerMgr.getPlayer(id);
     if (!player) return false;
     // An active World must provide the authoritative geometry query. Treat a missing binding as
@@ -385,7 +396,7 @@ export class BurrowSystem {
     return this.worldGeometryQueries?.isCircleBlocked(
       player.x,
       player.y,
-      player.getCollisionRadius(),
+      collisionRadius ?? player.getCollisionRadius(),
     ) ?? false;
   }
 
@@ -427,6 +438,6 @@ export class BurrowSystem {
     }
 
     // Visueller Effekt für alle Clients (inkl. Host)
-    this.bridge.broadcastShockwaveEffect(ox, oy);
+    this.bridge.broadcastShockwaveEffect(ox, oy, shockwaveRadius);
   }
 }

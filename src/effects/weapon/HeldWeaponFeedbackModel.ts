@@ -1,5 +1,5 @@
 import {
-  WEAPON_FEEDBACK_ATTACK_MS, WEAPON_FEEDBACK_MAX_STACK,
+  WEAPON_FEEDBACK_ATTACK_MS, WEAPON_FEEDBACK_HOLD_MS, WEAPON_FEEDBACK_MAX_STACK,
   WEAPON_FEEDBACK_STREAM_ATTACK_MS, WEAPON_FEEDBACK_STREAM_TIMEOUT_MS,
   type WeaponFeedbackProfile,
 } from '../../config/weaponFeedback';
@@ -52,7 +52,7 @@ export class HeldWeaponFeedbackModel {
     if (!this.profile) return false;
     const end = this.profile.mode === 'sustained'
       ? (this.releaseAt ?? this.sustainUntil) + this.profile.returnMs
-      : this.startedAt + WEAPON_FEEDBACK_ATTACK_MS + this.profile.returnMs;
+      : this.startedAt + WEAPON_FEEDBACK_ATTACK_MS + WEAPON_FEEDBACK_HOLD_MS + this.profile.returnMs;
     return now < end;
   }
 
@@ -82,7 +82,7 @@ export class HeldWeaponFeedbackModel {
       out.recoilPx = this.fromPx + (this.peakPx - this.fromPx) * gain;
       out.rotationRad = this.fromRad + (this.peakRad - this.fromRad) * gain;
     } else {
-      const gain = 1 - cubicOut((age - WEAPON_FEEDBACK_ATTACK_MS) / p.returnMs);
+      const gain = 1 - cubicOut((age - WEAPON_FEEDBACK_ATTACK_MS - WEAPON_FEEDBACK_HOLD_MS) / p.returnMs);
       out.recoilPx = this.peakPx * gain;
       out.rotationRad = this.peakRad * gain;
     }
@@ -90,4 +90,3 @@ export class HeldWeaponFeedbackModel {
 
   reset(): void { this.profile = null; this.releaseAt = null; }
 }
-

@@ -17,7 +17,6 @@ export interface WeaponFireFeedbackDeps {
   getLocalPlayerId(): string;
   getWorldRevision(): number | null;
   isLocalTriggerHeld(slot: WeaponSlot): boolean;
-  getCameraScale(): number;
   requestCamera(request: CameraFeedbackRequest): void;
   cancelCamera(): void;
 }
@@ -47,7 +46,6 @@ export class WeaponFireFeedbackController {
 
   update(): void {
     if (!this.ensureWorld()) return;
-    if (this.deps.getCameraScale() <= 0) this.deps.cancelCamera();
     for (const [id, binding] of this.active) {
       if (this.deps.getPlayer(id) !== binding.player) { this.active.delete(id); continue; }
       if (id === this.deps.getLocalPlayerId() && !this.deps.isLocalTriggerHeld(binding.slot)) {
@@ -81,10 +79,8 @@ export class WeaponFireFeedbackController {
     this.active.set(event.shooterId, { player, slot: event.slot });
     if (event.shooterId !== this.deps.getLocalPlayerId()
       || (profile.mode === 'sustained' && result === 'refreshed')) return;
-    const scale = this.deps.getCameraScale();
-    if (scale <= 0) return;
     this.deps.requestCamera({
-      ...directionalKick(-Math.cos(event.angle), -Math.sin(event.angle), profile.cameraPx * scale, profile.cameraMs),
+      ...directionalKick(-Math.cos(event.angle), -Math.sin(event.angle), profile.cameraPx, profile.cameraMs),
       id: 'weapon:local-shot',
     });
   }

@@ -5,27 +5,39 @@ from mathutils import Vector
 
 
 def build(c):
+    parts = {'left_leg': [], 'right_leg': [], 'upper': [], 'head': [], 'arms': []}
     fur = c.material('Cool grey grouped fur', (.19, .23, .24), 'organic', form_shading=True)
-    # Badger-specific value range: deeper flanks without dimming muscle crests.
+    # Badger-specific value range calibrated against the original at 32 pixels.
     # Shared material defaults (including the turret) remain unchanged.
     tones = fur.node_tree.nodes['Broad muscle values'].color_ramp.elements
     def linear_byte(value):
         value /= 255
         return value / 12.92 if value <= .04045 else ((value + .055) / 1.055)**2.4
-    for tone, rgb in zip(tones, [(7, 11, 17), (21, 31, 44), (61, 79, 96), (163, 179, 191)]):
+    for tone, rgb in zip(tones, [(5, 9, 13), (14, 23, 31), (39, 55, 67), (109, 127, 139)]):
         tone.color = (*[linear_byte(v) for v in rgb], 1)
     dark = c.material('Dark mask and ears', (.009, .012, .014), 'organic')
-    ivory = c.material('Warm pale fur', (.70, .73, .68), 'organic')
+    ivory = c.material('Pale head fur', (.98, .99, .96), 'organic')
+    # Keep the same texture and frequency, but remap broad fur values into off-white.
+    # The tail and facial bands have independent materials/value ranges.
+    for node in ivory.node_tree.nodes:
+        if node.type == 'MAP_RANGE' and node.inputs['Value'].is_linked:
+            if node.inputs['Value'].links[0].from_node.type == 'TEX_NOISE':
+                node.inputs['To Min'].default_value = .99
+                node.inputs['To Max'].default_value = 1.10
+    tail_fur = c.material('Independent pale tail fur', (.70, .73, .68), 'organic')
     black = c.material('Near-black eyes and nose', (.002, .003, .004))
     glint = c.material('Warm eye reflection', (.89, .9, .78))
     # Feet point north under the vertical body; no south-facing shoe shapes.
     for side in [-1, 1]:
-        c.ell('Forward foot', (side * .21, -.03, .12), (.14, .22, .11), dark)
-        c.ell('Upright hind leg', (side * .20, -.20, .48), (.15, .16, .39), fur)
+        limb = parts['left_leg' if side == -1 else 'right_leg']
+        limb.append(c.ell('Forward foot', (side * .21, -.03, .12), (.14, .22, .11), dark))
+        limb.append(c.ell('Upright hind leg', (side * .20, -.20, .48), (.15, .16, .39), fur))
     c.ell('Pelvis', (0, -.26, .87), (.47, .29, .26), fur)
-    c.ell('Standing torso', (0, -.15, 1.22), (.54, .36, .45), fur)
-    tail = c.ell('Small pale south tail', (0, -.60, .95), (.095, .17, .12), ivory)
-    arms = [c.ell('Shoulder mantle', (0, -.20, 1.5), (.68, .36, .19), fur)]
+    c.ell('Standing torso', (0, -.17, 1.22), (.54, .39, .45), fur)
+    c.ell('Small pale south tail', (0, -.60, .95), (.0855, .1496, .115), tail_fur)
+    arms = [c.ell('Shoulder mantle', (0, -.215, 1.5), (.68, .403, .22), fur)]
+    for side in [-1, 1]:
+        arms.append(c.ell('Broad rear torso muscle', (side*.22, -.41, 1.51), (.31, .18, .17), fur))
     for side in [-1, 1]:
         end_y = .76 if side == 1 else .85
         arms.append(c.ell('Deltoid', (side * .49, -.21, 1.44), (.23, .25, .20), fur))
@@ -48,6 +60,9 @@ def build(c):
             normal = tangent.cross(Vector((0, 0, 1))).normalized()
             binormal = tangent.cross(normal).normalized()
             radius = (.175 + .034*math.sin(math.pi*t)) if upper else (.175*u + .073*t + .037*math.sin(math.pi*t))
+            if not upper:
+                # Slim only the forearm belly, preserving elbow and wrist joins.
+                radius *= 1 - .06*math.sin(math.pi*t)**2
             for j in range(24):
                 angle = j * math.tau / 24
                 v = center + radius * (math.cos(angle)*normal + math.sin(angle)*binormal)
@@ -66,13 +81,19 @@ def build(c):
         arms.append(ob)
         hand = c.box('Weapon-ready grip', (side*.13, end_y+.035, 1.55), (.17, .18, .13), dark, .048)
         hand.rotation_euler.z = side*.20
-        c.ell('Folded thumb', (side*.065, end_y+.01, 1.585), (.037, .07, .035), fur)
-    c.union('Continuous mantle and arms', arms)
-    head = c.ell('Broad cheeked compact skull', (0, .12, 1.85), (.405, .48, .23), ivory)
+        parts['arms'].extend([hand, c.ell('Folded thumb', (side*.065, end_y+.01, 1.585), (.037, .07, .035), fur)])
+    parts['arms'].append(c.union('Continuous mantle and arms', arms))
+    before_head = set(c.scene.objects)
+    # Grow around the fixed north tip; rear rounding changes only on the south half.
+    head = c.ell('Broad cheeked compact skull', (0, .1056, 1.85), (.42525, .4944, .23), ivory)
     for v in head.data.vertices:
         x, y, z = v.co
         v.co.x = math.copysign(abs(x)**.87, x)*(1-.29*max(0, y))
         v.co.y = math.copysign(abs(y)**.92, y)
+        if y < -.2:
+            blend = min(1, (-y-.2)/.6)
+            blend = blend*blend*(3-2*blend)
+            v.co.y = (1-blend)*v.co.y - blend*abs(y)**.64
     # Curved face bands remain authored and independent of generated fur imagery.
     m = ivory.copy()
     m.name = 'Authored curved badger mask over fur'
@@ -113,10 +134,11 @@ def build(c):
         c.ell('Eye reflection', (side*.175-.008, .345, 2.09), (.027, .016, .007), glint)
         brow = c.ell('Forehead-side brow', (side*.175, .282, 2.105), (.080, .020, .014), dark)
         brow.rotation_euler.z = side*.27
-        ear = c.ell('Laid-back dark ear', (side*.285, .025, 2.044), (.060, .094, .030), dark)
+        ear = c.ell('Laid-back dark ear', (side*.29925, .025, 2.044), (.060, .094, .030), dark)
         ear.rotation_euler.z = side*.30
-        crease = c.ell('Ear crease', (side*.29, .035, 2.071), (.020, .048, .007), black)
+        crease = c.ell('Ear crease', (side*.30425, .035, 2.071), (.020, .048, .007), black)
         crease.rotation_euler.z = side*.30
+    parts['head'] = [ob for ob in c.scene.objects if ob not in before_head and ob.type == 'MESH']
     def mask(p):
         x, y = abs(p.x), p.y
         # Painted recess at the elbow and behind the skull, with broad irregular
@@ -132,3 +154,6 @@ def build(c):
     for ob in c.scene.objects:
         if ob.type == 'MESH':
             ob.location.y -= .10
+            if ob not in parts['left_leg'] and ob not in parts['right_leg']:
+                parts['upper'].append(ob)
+    return parts

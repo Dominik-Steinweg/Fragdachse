@@ -12,8 +12,6 @@ import {
   setStoredPersonalBaseContribution,
   getStoredCoopDefenseProgress,
   getStoredGraphicsQuality,
-  getStoredWeaponCameraKick,
-  setStoredWeaponCameraKick,
   getStoredMasterVolume,
   getStoredPlayerName,
   getStoredLocale,
@@ -89,22 +87,18 @@ describe('local progress generation', () => {
     expect(storage.getItem(LEGACY_LOCAL_PREFERENCES_KEY)).toBeNull();
   });
 
-  it('persists shot camera strength separately and defaults older settings without losing audio', () => {
+  it('discards obsolete graphics fields without losing audio or quality', () => {
     storage.setItem(LOCAL_SETTINGS_STORAGE_KEY, JSON.stringify({
       schemaVersion: 2, locale: 'de', audio: { masterVolume: 0.2, effectsVolume: 0.3, musicVolume: 0.4 },
-      graphics: { quality: 'low' },
+      graphics: { quality: 'low', weaponCameraKick: 0 },
     }));
-    expect(getStoredWeaponCameraKick()).toBe(1);
-    setStoredWeaponCameraKick(0);
+    expect(getStoredGraphicsQuality()).toBe('low');
+    expect(getStoredMasterVolume()).toBe(0.2);
+    expect(JSON.parse(storage.getItem(LOCAL_SETTINGS_STORAGE_KEY)!).graphics).toEqual({ quality: 'low' });
     setStoredGraphicsQuality('high');
     invalidateLocalStorageCache();
-    expect(getStoredWeaponCameraKick()).toBe(0);
     expect(getStoredGraphicsQuality()).toBe('high');
     expect(getStoredMasterVolume()).toBe(0.2);
-    setStoredWeaponCameraKick(3);
-    expect(getStoredWeaponCameraKick()).toBe(1);
-    setStoredWeaponCameraKick(NaN);
-    expect(getStoredWeaponCameraKick()).toBe(1);
   });
 
   it('loads a current schema document after cache invalidation', () => {

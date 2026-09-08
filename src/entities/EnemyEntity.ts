@@ -271,6 +271,7 @@ export class EnemyEntity {
       && this.movementCorrectionRemaining < this.config.size * 0.3;
     out.mode = this.dashPhase === 1 ? 'dash' : this.dashPhase === 2 ? 'recovery'
       : this.walkingRequested ? 'walk' : 'idle';
+    out.isBurrowDash = false;
     out.revision = this.movementRevision;
   }
 

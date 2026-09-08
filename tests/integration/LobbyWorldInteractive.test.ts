@@ -1,6 +1,48 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Die Boot-Barriere und die echten Overlay-Methoden laufen ohne GPU/DOM.
+vi.mock('phaser', () => ({
+  Scene: class {},
+  Core: { Events: { POST_RENDER: 'postrender' } },
+  GameObjects: {
+    Image: class {}, Sprite: class {}, Container: class {},
+    Particles: { ParticleProcessor: class {} },
+  },
+  Math: {
+    Vector2: class {},
+    Clamp: (value: number, min: number, max: number) => Math.min(max, Math.max(min, value)),
+    Linear: (a: number, b: number, t: number) => a + (b - a) * t,
+    Distance: { Between: (x1: number, y1: number, x2: number, y2: number) => Math.hypot(x2 - x1, y2 - y1) },
+  },
+  BlendModes: { ADD: 1, NORMAL: 0 },
+  Geom: {
+    Circle: class {},
+    Rectangle: class {
+      x = 0; y = 0; width = 0; height = 0;
+      constructor(x = 0, y = 0, width = 0, height = 0) { this.setTo(x, y, width, height); }
+      setTo(x: number, y: number, width: number, height: number) {
+        Object.assign(this, { x, y, width, height });
+        return this;
+      }
+      get left() { return this.x; }
+      get right() { return this.x + this.width; }
+      get top() { return this.y; }
+      get bottom() { return this.y + this.height; }
+    },
+    Line: class {
+      setTo(x1: number, y1: number, x2: number, y2: number) {
+        Object.assign(this, { x1, y1, x2, y2 });
+        return this;
+      }
+      static Length(line: { x1: number; y1: number; x2: number; y2: number }) {
+        return Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+      }
+    },
+  },
+  Filters: { ParallelFilters: class {}, Displacement: class {} },
+}));
 import { CELL_SIZE, getAuthoredWorldMetricsProfile, isGridCellInArenaRegion } from '../../src/config';
 import { buildLobbyWorldLayout, isLobbyUiReservedCell } from '../../src/arena/LobbyWorldLayout';
 import {
@@ -9,6 +51,10 @@ import {
 } from '../../src/config/authoring/lobbyWorld';
 import { getWorldDefinitionForMap } from '../../src/config/authoring/authoredScenarios';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
+import { bridge } from '../../src/network/bridge';
+import { ArenaScene } from '../../src/scenes/ArenaScene';
+import { LobbyOverlay } from '../../src/scenes/LobbyOverlay';
+import { BootScreen } from '../../src/ui/BootScreen';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { resolveInputPolicy } from '../../src/world/InputPolicy';
 import { resolvePlayerCapabilities } from '../../src/world/PlayerCapabilities';
@@ -459,19 +505,148 @@ describe('LobbyWorld – Teilnahme im Mehrspielerraum', () => {
 });
 
 describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
-  it('haelt den Ladescreen bis zum gebackenen Weltausschnitt statt bis zum ersten Frame', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  class DisplayObject {
+    alpha = 1;
+    y = 0;
+    visible = true;
+    children: DisplayObject[] = [];
+    setAlpha(alpha: number) { this.alpha = alpha; return this; }
+    setY(y: number) { this.y = y; return this; }
+    setVisible(visible: boolean) { this.visible = visible; return this; }
+    add(children: DisplayObject[]) { this.children.push(...children); return this; }
+    setScrollFactor() { return this; }
+    setOrigin() { return this; }
+    setText() { return this; }
+    setColor() { return this; }
+    setEnabled() { return this; }
+    setLabel() { return this; }
+    setStrokeStyle() { return this; }
+    setDisplaySize() { return this; }
+    on() { return this; }
+  }
+
+  function overlayFixture() {
+    const container = new DisplayObject();
+    const add = () => new DisplayObject();
+    const tweens = { add: vi.fn((_config: { targets: unknown; alpha?: number; y?: number }) => ({ remove: vi.fn() })) };
+    const scene = { add: { image: add, text: add, circle: add, container: add }, tweens };
+    const noop = () => {};
+    const overlay = new LobbyOverlay(
+      scene as any, { getLocalPlayerId: () => 'local' } as any,
+      noop, noop, noop, noop, noop, noop, noop, noop, noop, noop,
+    ) as any;
+    overlay.container = container;
+    // Texturen, Loadout-Controls und dekoratives Ready-Glow sind nicht Teil des Eintritts.
+    overlay.updateReadyGlow = vi.fn();
+    overlay.rowTexture = () => 'row';
+    overlay.readyMarkTexture = () => 'ready';
+    overlay.loadoutFrameTexture = () => 'loadout-frame';
+    overlay.refreshPlayerLoadout = vi.fn();
+    overlay.setPlayerRowInteractive = vi.fn();
+    return { overlay, container, tweens };
+  }
+
+  function bootFixture() {
+    vi.spyOn(bridge, 'getGamePhase').mockReturnValue('LOBBY');
+    const progress = vi.spyOn(BootScreen, 'setProgress').mockImplementation(() => {});
+    let finishFade!: () => void;
+    const fade = vi.spyOn(BootScreen, 'fadeOut').mockImplementation(() => new Promise<void>((resolve) => {
+      finishFade = resolve;
+    }));
+    const reveal = { ready: false, progress: 85 };
+    const overlay = overlayFixture();
+    overlay.overlay.show();
+    const scene = Object.create(ArenaScene.prototype) as any;
+    scene.bootRevealPending = true;
+    scene.time = { now: 0 };
+    scene.game = { events: { off: vi.fn() } };
+    scene.cameras = {
+      main: { width: 1280, height: 720, zoom: 2, originX: 0, originY: 0, scrollX: 90, scrollY: 120 },
+    };
+    scene.arenaRuntime = { getWorldRevealState: vi.fn(() => reveal) };
+    scene.lobbyOverlay = overlay.overlay;
+    return { scene, reveal, progress, fade, finishFade: () => finishFade(), ...overlay };
+  }
+
+  it('bindet die Reveal-Barriere an das fertige Renderbild und entfernt sie beim Shutdown', () => {
     const scene = read('src/scenes/ArenaScene.ts');
-    // Der erste Frame zeigt eine Lobby, deren World erst im ersten update()-Tick entsteht.
-    expect(scene.includes('Phaser.Core.Events.POST_RENDER')).toBe(false);
-    expect(scene).toContain('if (this.bootRevealPending) this.syncBootReveal(phase);');
-    expect(scene).toContain('this.arenaRuntime.getWorldRevealState(getVisibleWorldView(this.cameras.main))');
-    // Hinter einem deckenden Ladescreen darf das Backen dasselbe Budget nutzen wie in der Arena.
-    expect(scene).toContain(
-      'arenaLoading || this.bootRevealPending ? CHUNK_BAKE_STARTUP_FRAME_BUDGET_MS : undefined,',
+    // create() komponiert die gesamte Szene; nur die Render-Lifecycle-Grenze bleibt statisch.
+    const create = scene.slice(scene.indexOf('  create(): void {'), scene.indexOf('  update('));
+    expect(create).toContain('this.game.events.on(Phaser.Core.Events.POST_RENDER, this.syncBootReveal, this)');
+    expect(create).toMatch(
+      /this\.events\.once\(Phaser\.Scenes\.Events\.SHUTDOWN, \(\) => \{\s*this\.game\.events\.off\(Phaser\.Core\.Events\.POST_RENDER, this\.syncBootReveal, this\)/,
     );
-    // Und der Panel-Auftritt beginnt nach dem Fade, nicht in ihn hinein.
-    expect(scene).toContain('void BootScreen.fadeOut().then(() => this.lobbyOverlay?.playEntrance());');
+    const update = scene.slice(scene.indexOf('  update('), scene.indexOf('  private syncBootReveal('));
+    expect(update).not.toMatch(/this\.syncBootReveal\(/);
   });
+
+  it('haelt unfertige sichtbare World-Flaechen auch bei langsamem Start bedeckt', () => {
+    const { scene, progress, fade, reveal } = bootFixture();
+    for (const now of [0, 3000, 60000]) {
+      scene.time.now = now;
+      scene.syncBootReveal();
+      expect(scene.bootRevealPending).toBe(true);
+      expect(fade).not.toHaveBeenCalled();
+      expect(scene.game.events.off).not.toHaveBeenCalled();
+      expect(progress.mock.lastCall?.[0]).toBeLessThan(1);
+    }
+    expect(scene.arenaRuntime.getWorldRevealState).toHaveBeenCalledWith({
+      x: 90, y: 120, width: 640, height: 360, centerX: 410, centerY: 300,
+    });
+    reveal.ready = true;
+    scene.syncBootReveal();
+    expect(scene.bootRevealPending).toBe(false);
+    expect(progress).toHaveBeenLastCalledWith(1);
+    expect(fade).toHaveBeenCalledOnce();
+    expect(scene.game.events.off).toHaveBeenCalledWith('postrender', scene.syncBootReveal, scene);
+  });
+
+  it('zeigt beim Boot-Reveal sofort das vollstaendige Panel und startet nach dem Fade keine Animation', async () => {
+    const { scene, reveal, container, tweens, finishFade } = bootFixture();
+    expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
+    expect(tweens.add).not.toHaveBeenCalled();
+    reveal.ready = true;
+    scene.syncBootReveal();
+    expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
+    finishFade();
+    await Promise.resolve();
+    expect(tweens.add).not.toHaveBeenCalled();
+    expect(container).toMatchObject({ visible: true, alpha: 1, y: 0 });
+  });
+
+  it('haelt den Einstieg in eine laufende Arena nicht an der Lobby-World fest', () => {
+    const { scene, fade } = bootFixture();
+    vi.mocked(bridge.getGamePhase).mockReturnValue('ARENA');
+    scene.syncBootReveal();
+    expect(scene.arenaRuntime.getWorldRevealState).not.toHaveBeenCalled();
+    expect(scene.bootRevealPending).toBe(false);
+    expect(fade).toHaveBeenCalledOnce();
+  });
+
+  it.each(['showHostDisconnectedMessage', 'showArenaFailureMessage'] as const)(
+    'gibt einen terminalen Fehler aus %s auch ohne fertige World frei', (showFailure) => {
+      const { scene, overlay, reveal, fade, progress } = bootFixture();
+      overlay.statusText = new DisplayObject();
+      overlay.readyBtn = new DisplayObject();
+      overlay.updateRoomActionButtons = vi.fn();
+      overlay.lobbyAlertBanner = { showAlert: vi.fn() };
+      expect(overlay.hasTerminalFailure()).toBe(false);
+
+      overlay[showFailure]('Start fehlgeschlagen');
+      expect(overlay.hasTerminalFailure()).toBe(true);
+      expect(overlay.lobbyAlertBanner.showAlert).toHaveBeenCalledWith(expect.objectContaining({
+        severity: 'error', message: expect.stringContaining('Start fehlgeschlagen'),
+      }));
+      scene.syncBootReveal();
+      expect(reveal.ready).toBe(false);
+      expect(scene.arenaRuntime.getWorldRevealState).not.toHaveBeenCalled();
+      expect(scene.bootRevealPending).toBe(false);
+      expect(progress).toHaveBeenLastCalledWith(1);
+      expect(fade).toHaveBeenCalledOnce();
+    },
+  );
 
   it('laesst die Reveal-Abfrage nicht auf runden- oder netzseitige Bedingungen warten', () => {
     const lifecycle = read('src/scenes/arena/ArenaLifecycleCoordinator.ts');
@@ -487,11 +662,25 @@ describe('LobbyWorld – der Bootscreen weicht erst der fertigen Lobby', () => {
     expect(body).toContain('resolveWorldLoadProgress(');
   });
 
-  it('haelt den ersten Panel-Auftritt zurueck, bis der Reveal ihn ausloest', () => {
-    const overlay = read('src/scenes/LobbyOverlay.ts');
-    expect(overlay).toContain('private entranceHeld = true;');
-    expect(overlay).toContain('if (this.entranceHeld) this.container?.setAlpha(0).setY(ENTRANCE_OFFSET_Y);');
-    expect(overlay).toContain('  playEntrance(): void {');
+  it('bereitet die erste Spielerliste voll sichtbar vor und animiert erst spaetere Eintritte', () => {
+    const { overlay, container, tweens } = overlayFixture();
+    overlay.show();
+    overlay.addPlayerRow({ id: 'local', name: 'Host', colorHex: 0xffffff });
+    expect(container.children.length).toBeGreaterThan(0);
+    expect(container.children.every((object) => object.alpha === 1)).toBe(true);
+    expect(tweens.add).not.toHaveBeenCalled();
+
+    overlay.completeBootReveal();
+    overlay.show();
+    expect(tweens.add).not.toHaveBeenCalled();
+    overlay.addPlayerRow({ id: 'guest', name: 'Guest', colorHex: 0xffffff });
+    expect(tweens.add).toHaveBeenCalled();
+    tweens.add.mockClear();
+
+    overlay.hide();
+    overlay.show();
+    expect(tweens.add).toHaveBeenCalledOnce();
+    expect(tweens.add.mock.calls[0][0]).toMatchObject({ targets: container, alpha: 1, y: 0 });
   });
 });
 

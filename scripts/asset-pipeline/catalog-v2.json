@@ -1,0 +1,1671 @@
+{
+  "version": 2,
+  "assets": [
+    {
+      "id": "rocket",
+      "label": "Raketen-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_ROCKET_BURST"
+      ],
+      "reference": "public/assets/sprites/turrets/rocket.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Breiter runder Sockel mit zwei nach Osten gerichteten rechteckigen Raketenpods.",
+        "colors": "Anthrazit, gedämpftes Stahlgrau und kleine orange Warnflächen.",
+        "anatomy": "Stationärer Sockel, getrennt gelagerte Pods; kurzer linearer Rückstoß je Entladung."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "recipe": "rocket",
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "mechanical_fire",
+          "frameCount": 8,
+          "frameRate": 24,
+          "loop": false,
+          "parameters": {
+            "recoil": 0.12
+          }
+        }
+      ],
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      }
+    },
+    {
+      "id": "tesla",
+      "label": "Tesla-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_TESLA"
+      ],
+      "reference": "public/assets/sprites/turrets/tesla.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Kompakter runder Sockel mit zwei offenen Elektroden und zentraler Spule nach Osten.",
+        "colors": "Dunkler Stahl mit klar abgegrenzten cyanblauen Spulen und Kontaktflächen.",
+        "anatomy": "Spulen und Elektroden bewegen sich im Aktivitätsloop; Eigenleuchten bleibt lokal."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "recipe": "tesla",
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "sustained",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true
+        }
+      ],
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      }
+    },
+    {
+      "id": "spore",
+      "label": "Sporen-Turm",
+      "category": "turret",
+      "gameIds": [
+        "SPORES",
+        "BASE_SPORES",
+        "TURRET_SPORES"
+      ],
+      "reference": "public/assets/sprites/decals/pilz01.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Asymmetrischer organischer Pilzkörper mit breitem Hut, mehreren Lappen und einer gerichteten Ausstoßöffnung.",
+        "colors": "Gedämpftes Rost- und Kupferrot am Hut, gezielte helle Elfenbeinflecken sowie warme ockerbraune Stiel- und Hutkanten.",
+        "anatomy": "Fester Stiel und weiche Kammern: zusammenziehen, gerichteten Ausstoß zeigen, zur Ruhe entspannen."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "referenceTransform": {
+        "centerCorrectionX": 7,
+        "centerCorrectionY": -7,
+        "rotationOffset": 0
+      },
+      "recipe": "spore",
+      "model": {},
+      "orthoScale": 2.65,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "organic_pulse",
+          "frameCount": 8,
+          "frameRate": 24,
+          "loop": false
+        }
+      ],
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      }
+    },
+    {
+      "id": "plasma",
+      "label": "Plasma-Turm",
+      "category": "turret",
+      "gameIds": [
+        "SPORE_TURRET_PLASMA"
+      ],
+      "reference": "public/assets/sprites/turrets/plasma.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Runder gepanzerter Sockel mit kurzem, breitem Energieemitter nach Osten.",
+        "colors": "Dunkelblauer Stahl, cyanblaue Energiezelle und kleine helle Kontakte.",
+        "anatomy": "Fester Sockel, separat gelagerte Emitterhülse und Energiezelle; kurzer Schusspuls."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      },
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "recipe": "plasma",
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "energy_fire",
+          "frameCount": 8,
+          "frameRate": 24,
+          "loop": false,
+          "parameters": {
+            "recoil": 0.07,
+            "corePulse": 0.18,
+            "idleEmission": 0.25,
+            "activeEmission": 1.2
+          }
+        }
+      ]
+    },
+    {
+      "id": "machine-gun",
+      "label": "MG-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_MG"
+      ],
+      "reference": "public/assets/sprites/turrets/machine_gun.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Runder kompakter Geschützturm mit langem schlankem Lauf und seitlichem Gehäuse.",
+        "colors": "Dunkles Metall, stumpfes Messing und sparsame warme Markierungen.",
+        "anatomy": "Lauf und Verschluss bewegen sich je Schuss kurz rückwärts; Sockel bleibt fest."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      },
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "recipe": "machine-gun",
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "mechanical_fire",
+          "frameCount": 6,
+          "frameRate": 30,
+          "loop": false,
+          "parameters": {
+            "recoil": 0.075
+          }
+        }
+      ]
+    },
+    {
+      "id": "flame",
+      "label": "Flammen-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_FLAME"
+      ],
+      "reference": "public/assets/sprites/turrets/flame.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Breiter runder Sockel mit seitlichen Tanks und kurzer Düse nach Osten.",
+        "colors": "Anthrazit, braunes Metall, kleine orange Düsen- und Tankmarkierungen.",
+        "anatomy": "Starre Tanks, pulsierende Pumpeneinheit und Düse während Daueraktivität; Feuer bleibt Welt-FX."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      },
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "recipe": "flame",
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "sustained",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "rotorSwing": 0.34,
+            "corePulse": 0.1,
+            "idleEmission": 0.15,
+            "activeEmission": 0.65
+          }
+        }
+      ]
+    },
+    {
+      "id": "void-flame",
+      "label": "Leerenflammen-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_VOID_FLAME"
+      ],
+      "reference": "public/assets/sprites/turrets/void_flame.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Runder gepanzerter Sockel mit breitem langem Energiekanal und klarer Austrittsdüse.",
+        "colors": "Dunkles Violett und Anthrazit, gezielte purpurfarbene Energiefenster.",
+        "anatomy": "Energiekanal und Ringsegmente pulsieren während Daueraktivität; keine eingebauten Feuerpartikel."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      },
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "recipe": "void-flame",
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "sustained",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "rotorSwing": 0.17,
+            "corePulse": 0.07,
+            "idleEmission": 0.18,
+            "activeEmission": 0.95
+          }
+        }
+      ]
+    },
+    {
+      "id": "gravity",
+      "label": "Gravitations-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_GRAVITY"
+      ],
+      "reference": "public/assets/sprites/turrets/gravity.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Runder konzentrischer Ringkörper mit zentralem Energiekern und kleinem östlichem Emitter.",
+        "colors": "Dunkler Stahl mit violettem Kern und schmalen helleren Ringkanten.",
+        "anatomy": "Ringsegmente und Kern als getrennte Bauteile; zyklische mechanische Aktivität ohne Weltverzerrung."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      },
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "recipe": "gravity",
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "sustained",
+          "frameCount": 10,
+          "frameRate": 20,
+          "loop": false,
+          "parameters": {
+            "rotorSwing": 0.28,
+            "corePulse": 0.08,
+            "idleEmission": 0.12,
+            "activeEmission": 0.95
+          }
+        }
+      ]
+    },
+    {
+      "id": "slow-bubble",
+      "label": "Verlangsamungs-Turm",
+      "category": "turret",
+      "gameIds": [
+        "TURRET_SLOW_BUBBLE"
+      ],
+      "reference": "public/assets/sprites/turrets/slow_bubble.png",
+      "targetSize": 40,
+      "sourceSizes": [
+        80,
+        160
+      ],
+      "forward": "east",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Kleiner runder Kugelkern mit kurzer Düse und schmalem technischem Träger.",
+        "colors": "Cyan und blasses Eisblau im Kern, dunkler Stahl am Sockel.",
+        "anatomy": "Kernfassung und Düse liefern einen lesbaren Schusspuls; Blase und Wirkungsbereich bleiben Spieleffekte."
+      },
+      "requiredClips": [
+        "fire"
+      ],
+      "production": "reference",
+      "mount": {
+        "rockSize": 32,
+        "maxBaseDiameter": 27
+      },
+      "model": {},
+      "orthoScale": 2.8,
+      "textures": {
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / illustrativ",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Reich / detailliert",
+          "textureStrength": 0.68,
+          "formShadowStrength": 0
+        }
+      },
+      "recipe": "slow-bubble",
+      "clips": [
+        {
+          "name": "fire",
+          "motion": "energy_fire",
+          "frameCount": 8,
+          "frameRate": 24,
+          "loop": false,
+          "parameters": {
+            "recoil": 0.04,
+            "corePulse": 0.065,
+            "idleEmission": 0.18,
+            "activeEmission": 0.85
+          }
+        }
+      ]
+    },
+    {
+      "id": "zombie-badger",
+      "label": "Zombie-Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "zombie-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_zombie_badger.png",
+      "targetSize": 28,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Breiter gedrungener Dachskörper, spitze Nord-Schnauze und vier seitlich erkennbare Pfoten.",
+        "colors": "Fahles graubraunes Fell, helle Rücken-/Kopfzeichnung und kleine schmutzige Ockerstellen.",
+        "anatomy": "Vierbeiner mit schwerem Rumpf und schleppendem versetztem Gang; Kopfzeichnung bleibt lesbar."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "zombie-badger",
+      "model": {
+        "exposedRibs": 3
+      },
+      "orthoScale": 2.8,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 10,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.19,
+            "strideBack": 0.13,
+            "lift": 0.065,
+            "footRoll": 0.1,
+            "footYaw": 0.055,
+            "bodyYaw": 0.042,
+            "bodyBob": 0.025,
+            "bodyRoll": 0.035,
+            "bodyPitch": 0.025,
+            "bodyShift": 0.025,
+            "headYaw": -0.022,
+            "headBob": 0.012,
+            "tailYaw": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "id": "demon-badger",
+      "label": "Dämonen-Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "demon-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_demon_badger.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Schmaler spitz zulaufender Rücken, kräftige Vorderpfoten und hornartige Kopfkontur.",
+        "colors": "Schwarzbraun und kräftiges Dunkelrot mit wenigen orangefarbenen Rissen.",
+        "anatomy": "Vierbeiner mit klauenartigen Pfoten und aggressiv gebeugter Haltung; bewegte Gliedmaßen statt skalierter Zombieform."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "demon-badger",
+      "model": {
+        "hornSweep": 1
+      },
+      "orthoScale": 2.98,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 16,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.25,
+            "strideBack": 0.2,
+            "lift": 0.09,
+            "footRoll": 0.16,
+            "footYaw": 0.065,
+            "bodyYaw": 0.036,
+            "bodyBob": 0.039,
+            "bodyRoll": 0.028,
+            "bodyPitch": 0.048,
+            "bodyShift": 0.018,
+            "headYaw": -0.022,
+            "headBob": 0.017,
+            "tailYaw": 0.14
+          }
+        }
+      ]
+    },
+    {
+      "id": "rabid-badger",
+      "label": "Tollwütiger Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "rabid-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_rabid_badger.png",
+      "targetSize": 22,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Schlanker länglicher Rücken, seitlich vorgestreckte Krallen und kleine spitze Schnauze.",
+        "colors": "Gesättigtes Violett, schwarze Flanken und durchgehende helle Rückenzeichnung.",
+        "anatomy": "Kleiner flinker Vierbeiner mit starkem diagonalen Pfotenwechsel und leichtem Rückenbogen."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "rabid-badger",
+      "model": {
+        "spineLength": 0.84
+      },
+      "orthoScale": 2.88,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 18,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.29,
+            "strideBack": 0.23,
+            "lift": 0.12,
+            "footRoll": 0.22,
+            "footYaw": 0.08,
+            "bodyYaw": 0.07,
+            "bodyBob": 0.045,
+            "bodyRoll": 0.048,
+            "bodyPitch": 0.06,
+            "bodyShift": 0.028,
+            "headYaw": -0.04,
+            "headBob": 0.02,
+            "tailYaw": 0.24
+          }
+        }
+      ]
+    },
+    {
+      "id": "grave-titan",
+      "label": "Grufttitan",
+      "category": "enemy",
+      "gameIds": [
+        "grave-titan"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_grave_titan.png",
+      "targetSize": 56,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Sehr breiter schwerer Rückenpanzer mit großen Steinplatten und massigen Pfoten.",
+        "colors": "Dunkles Steingrau, gedecktes Moosgrün und helle Kopfzeichnung.",
+        "anatomy": "Vierbeiniger Boss mit langsamen Lastwechseln; große Rumpfmasse und Panzerplatten prägen den Gang."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "grave-titan",
+      "model": {
+        "mossSpread": 1
+      },
+      "orthoScale": 3.38,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 8,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.14,
+            "strideBack": 0.11,
+            "lift": 0.04,
+            "footRoll": 0.07,
+            "footYaw": 0.034,
+            "bodyYaw": 0.021,
+            "bodyBob": 0.018,
+            "bodyRoll": 0.019,
+            "bodyPitch": 0.014,
+            "bodyShift": 0.015,
+            "headYaw": -0.01,
+            "headBob": 0.008,
+            "tailYaw": 0.04
+          }
+        }
+      ]
+    },
+    {
+      "id": "spore-warden",
+      "label": "Sporenwächter",
+      "category": "enemy",
+      "gameIds": [
+        "spore-warden"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_spore_warden.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Breiter ovaler Panzerkörper mit zwei auffälligen seitlichen Sporenkammern.",
+        "colors": "Moosgrün, Ockerbraun, dunkle Plattenfugen und helle Schnauzenzeichnung.",
+        "anatomy": "Vierbeiner; organische Kammern folgen dem Körper leicht verzögert, die Pfoten bleiben separat lesbar."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "spore-warden",
+      "model": {
+        "capRadius": 0.31
+      },
+      "orthoScale": 2.92,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 11,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.19,
+            "strideBack": 0.145,
+            "lift": 0.072,
+            "footRoll": 0.1,
+            "footYaw": 0.045,
+            "bodyYaw": 0.042,
+            "bodyBob": 0.032,
+            "bodyRoll": 0.045,
+            "bodyPitch": 0.02,
+            "bodyShift": 0.027,
+            "headYaw": -0.025,
+            "headBob": 0.012,
+            "tailYaw": 0.12
+          }
+        }
+      ]
+    },
+    {
+      "id": "plague-medic",
+      "label": "Seuchenmedikus",
+      "category": "enemy",
+      "gameIds": [
+        "plague-medic"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_plague_medic.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Runder geschichteter Körper mit deutlich abgesetzter Maske und hellem zentralem Rückensymbol.",
+        "colors": "Dunkle Braun- und Olivtöne mit blassgrünem Kreuz-/Heilakzent.",
+        "anatomy": "Vierbeiner mit ruhigem tragendem Gang und fest angebrachtem medizinischem Rückengeschirr."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "plague-medic",
+      "model": {
+        "kitWidth": 0.83
+      },
+      "orthoScale": 2.84,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 10,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.18,
+            "strideBack": 0.13,
+            "lift": 0.06,
+            "footRoll": 0.09,
+            "footYaw": 0.037,
+            "bodyYaw": 0.035,
+            "bodyBob": 0.018,
+            "bodyRoll": 0.022,
+            "bodyPitch": 0.018,
+            "bodyShift": 0.015,
+            "headYaw": -0.017,
+            "headBob": 0.008,
+            "tailYaw": 0.09
+          }
+        }
+      ]
+    },
+    {
+      "id": "void-stalker",
+      "label": "Leerenschleicher",
+      "category": "enemy",
+      "gameIds": [
+        "void-stalker"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_void_stalker.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Runder gepanzerter Rumpf mit ringförmigem Rückenmotiv und vier markierten Gliedmaßen.",
+        "colors": "Tiefblau und Violett, cyanblaue Gelenke und helle Dachskopfzeichnung.",
+        "anatomy": "Vierbeiner mit niedriger schleichender Haltung; Gelenke und Rückenpanzer bleiben getrennte Formen."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "void-stalker",
+      "model": {
+        "coreRadius": 0.24
+      },
+      "orthoScale": 2.94,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhige Anatomie",
+          "textureStrength": 0.2,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Gealterte Materialflächen",
+          "textureStrength": 0.57,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 14,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.245,
+            "strideBack": 0.185,
+            "lift": 0.045,
+            "footRoll": 0.13,
+            "footYaw": 0.075,
+            "bodyYaw": 0.043,
+            "bodyBob": 0.013,
+            "bodyRoll": 0.029,
+            "bodyPitch": 0.015,
+            "bodyShift": 0.023,
+            "headYaw": -0.027,
+            "headBob": 0.006,
+            "tailYaw": 0.08
+          }
+        }
+      ]
+    },
+    {
+      "id": "stink-broodmother",
+      "label": "Stinkbrutmutter",
+      "category": "enemy",
+      "gameIds": [
+        "stink-broodmother"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_stink_broodmother.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Breiter segmentierter Hinterkörper mit großen seitlichen gelbgrünen Brutsäcken.",
+        "colors": "Braun, gedecktes Olivgelb, dunkle Segmentfugen und heller Kopfstreifen.",
+        "anatomy": "Vierbeiner mit wogendem Hinterleib und belasteten Pfoten; Säcke bewegen sich nur körpergebunden."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "stink-broodmother",
+      "model": {},
+      "orthoScale": 2.76,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 10,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.14,
+            "strideBack": 0.1,
+            "lift": 0.05,
+            "footRoll": 0.09,
+            "footYaw": 0.028,
+            "bodyYaw": 0.028,
+            "bodyBob": 0.021,
+            "bodyRoll": 0.023,
+            "bodyPitch": 0.013,
+            "bodyShift": 0.016,
+            "headYaw": 0.016,
+            "headBob": 0.012,
+            "tailYaw": 0.07,
+            "loadBob": 0.035
+          }
+        }
+      ]
+    },
+    {
+      "id": "alien-badger",
+      "label": "Alien-Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "alien-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_alien_badger.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Fremdartiger gepanzerter Dachsrumpf mit breiten Schultern, separaten Armen und schmalerem Becken.",
+        "colors": "Tiefes Blauviolett, cyanblaue Gelenke, heller Nord-Kopfstreifen und dunkler zentraler Rückenkern.",
+        "anatomy": "Zweibeiner mit eigener fremdartiger Anatomie, wechselnden Beinen und unabhängig gelagerten Armen."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "alien-badger",
+      "model": {},
+      "orthoScale": 2.76,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "biped",
+          "frameCount": 12,
+          "frameRate": 14,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.25,
+            "strideBack": 0.17,
+            "lift": 0.105,
+            "footRoll": 0.15,
+            "footYaw": 0.026,
+            "bodyYaw": 0.026,
+            "bodyBob": 0.032,
+            "bodyRoll": 0.018,
+            "bodyPitch": 0.012,
+            "bodyShift": 0.022,
+            "headYaw": 0.016,
+            "headBob": 0.011,
+            "tailYaw": 0.055,
+            "armSwing": 0.065,
+            "armBob": 0.018
+          }
+        }
+      ]
+    },
+    {
+      "id": "thrower-badger",
+      "label": "Werfer-Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "thrower-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_thrower_badger.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Segmentierter kräftiger Rücken und große seitliche organische Tragekammern.",
+        "colors": "Gedämpftes Braun und Olivgelb mit hellem Kopfstreifen und dunklen Gelenkfugen.",
+        "anatomy": "Vierbeiner mit tragender Haltung; Kammern und Schulterapparat unterscheiden ihn anatomisch von einer bloßen Farbvariante."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "thrower-badger",
+      "model": {},
+      "orthoScale": 2.72,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.18,
+            "strideBack": 0.12,
+            "lift": 0.065,
+            "footRoll": 0.11,
+            "footYaw": 0.022,
+            "bodyYaw": 0.032,
+            "bodyBob": 0.024,
+            "bodyRoll": 0.017,
+            "bodyPitch": 0.013,
+            "bodyShift": 0.018,
+            "headYaw": 0.018,
+            "headBob": 0.013,
+            "tailYaw": 0.06,
+            "loadBob": 0.032
+          }
+        }
+      ]
+    },
+    {
+      "id": "inferno-colossus",
+      "label": "Inferno-Koloss",
+      "category": "enemy",
+      "gameIds": [
+        "inferno-colossus"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_inferno_colossus.png",
+      "targetSize": 68,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Langer breiter Rücken mit gezackten Panzersegmenten und vier massigen gepanzerten Pfoten.",
+        "colors": "Schwarzes Basaltbraun, kupferorange Risse und kleine glühende Vertiefungen.",
+        "anatomy": "Vierbeiniger Boss mit schweren versetzten Schritten und gegliederter Rückenpanzerung; Weltfeuer separat."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "inferno-colossus",
+      "model": {},
+      "orthoScale": 3.78,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.22,
+            "strideBack": 0.17,
+            "lift": 0.1,
+            "footRoll": 0.12,
+            "footYaw": 0.018,
+            "bodyYaw": 0.02,
+            "bodyBob": 0.042,
+            "bodyRoll": 0.021,
+            "bodyPitch": 0.018,
+            "bodyShift": 0.023,
+            "headYaw": 0.012,
+            "headBob": 0.018,
+            "tailYaw": 0.035
+          }
+        }
+      ]
+    },
+    {
+      "id": "pyro-badger",
+      "label": "Pyro-Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "pyro-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_pyro_badger.png",
+      "targetSize": 30,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Breiter kantiger Schulterapparat über schmalerem Unterkörper mit zentralem Reaktorfeld.",
+        "colors": "Dunkles Violettbraun, kräftiger orangefarbener Kern und blasse Kopfzeichnung.",
+        "anatomy": "Zweibeiner mit stabiler bewaffneter Armhaltung und separat ausschwingenden Beinen."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "pyro-badger",
+      "model": {},
+      "orthoScale": 2.72,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "biped",
+          "frameCount": 12,
+          "frameRate": 15,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.25,
+            "strideBack": 0.16,
+            "lift": 0.105,
+            "footRoll": 0.15,
+            "footYaw": 0.024,
+            "bodyYaw": 0.022,
+            "bodyBob": 0.028,
+            "bodyRoll": 0.015,
+            "bodyPitch": 0.01,
+            "bodyShift": 0.018,
+            "headYaw": 0.012,
+            "headBob": 0.01,
+            "armSwing": 0.022,
+            "armBob": 0.01
+          }
+        }
+      ]
+    },
+    {
+      "id": "timebomb-badger",
+      "label": "Zeitbomben-Dachs",
+      "category": "enemy",
+      "gameIds": [
+        "timebomb-badger"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_timebomb_badger.png",
+      "targetSize": 24,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Kompakter runder Körper mit vorderem hellem Kopfstreifen und gut erkennbarem Bombengeschirr.",
+        "colors": "Dunkles Graubraun, schwach türkise Flanken und kleine rote Timeranzeige.",
+        "anatomy": "Vierbeiner mit schnellen kurzen Schritten; Geschirr bleibt befestigt, Zündung ist kein Teil des Laufclips."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "timebomb-badger",
+      "model": {},
+      "orthoScale": 2.3,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 17,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.19,
+            "strideBack": 0.14,
+            "lift": 0.07,
+            "footRoll": 0.12,
+            "footYaw": 0.03,
+            "bodyYaw": 0.032,
+            "bodyBob": 0.033,
+            "bodyRoll": 0.018,
+            "bodyPitch": 0.015,
+            "bodyShift": 0.018,
+            "headYaw": 0.023,
+            "headBob": 0.016,
+            "tailYaw": 0.09,
+            "loadBob": 0.009
+          }
+        }
+      ]
+    },
+    {
+      "id": "void-hunter",
+      "label": "Leerenjäger",
+      "category": "enemy",
+      "gameIds": [
+        "void-hunter"
+      ],
+      "reference": "public/assets/sprites/enemies/enemy_void_hunter.png",
+      "targetSize": 52,
+      "sourceSizes": [
+        128,
+        256
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Langer schmaler symmetrischer Jägerkörper mit spitzen Panzerenden und seitlichen Waffen-/Gliedmaßenformen.",
+        "colors": "Anthrazit, dunkles Violett und schmale leuchtend purpurfarbene Panzerlinien.",
+        "anatomy": "Vierbeiniger Boss mit langen kontrollierten Schritten; längliche Silhouette erhalten, Referenz zeigt abweichend nach Süden."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "referenceTransform": {
+        "centerCorrectionX": 0,
+        "centerCorrectionY": 0,
+        "rotationOffset": 3.141592653589793
+      },
+      "recipe": "void-hunter",
+      "model": {},
+      "orthoScale": 3.55,
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png",
+        "technical": "art/poc/pipeline-v1/textures/technical.png"
+      },
+      "materialVariants": {
+        "calm": {
+          "label": "Ruhig / matte Farbflächen",
+          "textureStrength": 0.18,
+          "formShadowStrength": 0
+        },
+        "rich": {
+          "label": "Texturiert / kontrollierte Details",
+          "textureStrength": 0.46,
+          "formShadowStrength": 0
+        }
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "quadruped",
+          "frameCount": 12,
+          "frameRate": 11,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.22,
+            "strideBack": 0.18,
+            "lift": 0.065,
+            "footRoll": 0.1,
+            "footYaw": 0.018,
+            "bodyYaw": 0.016,
+            "bodyBob": 0.016,
+            "bodyRoll": 0.008,
+            "bodyPitch": 0.008,
+            "bodyShift": 0.012,
+            "headYaw": 0.01,
+            "headBob": 0.006,
+            "tailYaw": 0.033
+          }
+        }
+      ]
+    },
+    {
+      "id": "badger",
+      "label": "Spielfiguren-Dachs",
+      "category": "character",
+      "gameIds": [
+        "player"
+      ],
+      "reference": "public/assets/sprites/32x32dachs.png",
+      "targetSize": 32,
+      "sourceSizes": [
+        64,
+        128
+      ],
+      "forward": "north",
+      "pivot": [
+        0.5,
+        0.5
+      ],
+      "description": {
+        "silhouette": "Aufrechter breitschultriger Dachs mit seitlich versetzten waffenbereiten Händen, getrennten Beinen und hellem Süd-Schwanz.",
+        "colors": "Dunkle graue Flanken, kontrolliert helle Muskelpartien, eigenständig heller Kopf mit dunklen Gesichtsbändern.",
+        "anatomy": "Zweibeiniger Lauf am Ursprung mit erhaltener Form; Körper, Kopf und Arme bewegen sich ausbalanciert, Füße greifen weiter vor und kürzer zurück."
+      },
+      "requiredClips": [
+        "move"
+      ],
+      "production": "reference",
+      "recipe": "badger",
+      "model": {
+        "footSouthOffset": 0.2,
+        "upperBodyMotion": "balanced"
+      },
+      "orthoScale": 2.02,
+      "collisionDiameter": 32,
+      "materialVariants": {
+        "calm": {
+          "label": "Weich schattiert",
+          "textureStrength": 0.22,
+          "formShadowStrength": 0.55
+        },
+        "rich": {
+          "label": "Kräftig · originalnah",
+          "textureStrength": 0.22,
+          "formShadowStrength": 1
+        }
+      },
+      "previousReference": {
+        "label": "Dachs V2-F · bisheriger Lauf",
+        "path": "art/poc/pipeline-v2/runs/v2-f/badger/rich/sprite-128.png"
+      },
+      "textures": {
+        "organic": "art/poc/pipeline-v1/textures/organic.png"
+      },
+      "clips": [
+        {
+          "name": "move",
+          "motion": "player_walk",
+          "frameCount": 12,
+          "frameRate": 12,
+          "loop": true,
+          "parameters": {
+            "strideForward": 0.24,
+            "strideBack": 0.1,
+            "lift": 0.055,
+            "footRoll": 0.1,
+            "footYaw": 0.025,
+            "bodyYaw": 0.028,
+            "bodyRoll": 0.018,
+            "bodyPitch": 0.012,
+            "bodyBob": 0.023,
+            "bodyShift": 0.009,
+            "headYaw": -0.012,
+            "headBob": -0.006,
+            "armSwing": -0.014,
+            "armBob": 0.018
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -32,6 +32,13 @@ function makePlayerState(burnVisualStyle: PlayerNetState['burnVisualStyle']): Pl
 }
 
 describe('player burn visual style codec', () => {
+  it('preserves the active dash origin and normalizes older snapshots to ordinary dash', () => {
+    const special = { ...makePlayerState('normal'), dashPhase: 1 as const, isBurrowDash: true };
+    const decoded = decodePlayerStates(encodePlayerStates({ special, old: makePlayerState(undefined) }));
+    expect(decoded.special).toMatchObject({ dashPhase: 1, isBurrowDash: true, alive: true });
+    expect(decoded.old.isBurrowDash).toBe(false);
+    expect(decodePlayerStates(encodePlayerStates({ normal: { ...special, isBurrowDash: false } })).normal.isBurrowDash).toBe(false);
+  });
   it('preserves fractional authoritative adrenaline through the compact wire format', () => {
     const source = { ...makePlayerState('normal'), adrenaline: 0.375 };
     expect(decodePlayerStates(encodePlayerStates({ p0: source })).p0.adrenaline).toBe(0.375);

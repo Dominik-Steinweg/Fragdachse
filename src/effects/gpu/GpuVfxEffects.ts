@@ -73,6 +73,11 @@ export const GpuVfxEffectId = {
   MovementFootprint: 59,
   MovementWalkDust: 60,
   MovementDashDust: 61,
+  BurrowClod: 62,
+  BurrowGrain: 63,
+  BurrowResidue: 64,
+  BurrowDust: 65,
+  BurrowShockwave: 66,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -567,4 +572,14 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.LeafBlowerDust, importance: 'decorative', release: 'linger' },
   { id: GpuVfxEffectId.MovementDashDust, label: 'movement.dash-dust', lane: GpuVfxLaneId.MovementGround,
     frame: GpuVfxFrameId.LeafBlowerDust, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.BurrowClod, label: 'burrow.clod', lane: GpuVfxLaneId.WorldDebris,
+    frame: GpuVfxFrameId.ExplosionChunk, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.BurrowGrain, label: 'burrow.grain', lane: GpuVfxLaneId.WorldDebris,
+    frame: GpuVfxFrameId.DeathDustMoteB, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.BurrowResidue, label: 'burrow.residue', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.ExplosionChunk, importance: 'standard', release: 'linger' },
+  { id: GpuVfxEffectId.BurrowDust, label: 'burrow.dust', lane: GpuVfxLaneId.MovementGround,
+    frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'linger' },
+  { id: GpuVfxEffectId.BurrowShockwave, label: 'burrow.shockwave', lane: GpuVfxLaneId.ExplosionAccent,
+    frame: GpuVfxFrameId.ExplosionRing, importance: 'critical', release: 'linger' },
 ];

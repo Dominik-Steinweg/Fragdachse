@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
 import sharp from 'sharp';
+import { archiveAssetV2, exportRunV2, selectVariantV2 } from './export-v2.mjs';
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const hash = data => createHash('sha256').update(data).digest('hex');
@@ -215,10 +216,18 @@ export async function selectVariant(assetFolder, variant, size, reason) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [command, folder, variant, size, ...reason] = process.argv.slice(2);
   try {
-    if (command === 'export' && folder) console.log(await exportRun(folder));
+    const v2Root = path.join(repoRoot, 'art/poc/pipeline-v2/runs');
+    const v2Relative = folder ? path.relative(v2Root, path.resolve(folder)) : '..';
+    const v2 = folder && v2Relative !== '..' && !v2Relative.startsWith('..' + path.sep) && !path.isAbsolute(v2Relative);
+    if (command === 'export' && folder) console.log(await (v2 ? exportRunV2(folder) : exportRun(folder)));
     else if (command === 'select' && folder) {
-      const safe = inside(path.join(repoRoot, 'art/poc/pipeline-v1/runs'), path.relative(path.join(repoRoot, 'art/poc/pipeline-v1/runs'), path.resolve(folder)));
-      await selectVariant(safe, variant, Number(size), reason.join(' '));
-    } else throw new Error('Usage: node scripts/asset-pipeline/export.mjs export <run-folder> | select <asset-folder> <calm|rich> <size> <reason>');
+      const root = v2 ? v2Root : path.join(repoRoot, 'art/poc/pipeline-v1/runs');
+      const safe = inside(root, path.relative(root, path.resolve(folder)));
+      await (v2 ? selectVariantV2 : selectVariant)(safe, variant, Number(size), reason.join(' '));
+    } else if (command === 'archive' && folder && v2) {
+      if (variant && variant !== '--python') throw new Error('Archive accepts optional --python <executable>');
+      if (variant === '--python' && !size) throw new Error('Supply Python executable');
+      console.log(await archiveAssetV2(inside(v2Root, v2Relative), size));
+    } else throw new Error('Usage: node scripts/asset-pipeline/export.mjs export <run-folder> | select <asset-folder> <calm|rich> <size> <reason> | archive <v2-asset-folder> [--python <executable>]');
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

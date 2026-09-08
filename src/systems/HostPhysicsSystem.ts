@@ -8,11 +8,12 @@ import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/Com
 import type { TimeBubbleSystem } from './TimeBubbleSystem';
 import {
   PLAYER_SPEED, PLAYER_SIZE,
-  DASH_T1_S, DASH_T2_S, DASH_F_MIN, DASH_F_START, DASH_HOLD_MAX_DURATION_FACTOR,
+  DASH_T1_S, DASH_T2_S, DASH_F_MIN, ENEMY_DASH_F_START, DASH_HOLD_MAX_DURATION_FACTOR,
+  BURROW_DASH_IMPULSE_MULTIPLIER,
 } from '../config';
 import { TRAIN } from '../train/TrainConfig';
 import { isVelocityMoving } from '../loadout/SpreadMath';
-import { getDashBurstTiming } from '../utils/dashTiming';
+import { getDashBurstTiming, getPlayerDashBurstSpeedFactor } from '../utils/dashTiming';
 import { maySendWorldInput } from '../world/WorldParticipation';
 import type { WorldMetrics } from '../world/WorldMetrics';
 import {
@@ -39,15 +40,16 @@ interface DashState {
   dirX:    number;   // normierter Startrichtungsvektor
   dirY:    number;
   vNorm:   number;   // v_norm zum Dash-Zeitpunkt (skaliert mit Buffs)
+  impulseMultiplier: number;
+  isBurrowDash: boolean;
   hitIds: Set<string>;
   lastGroundX: number;
   lastGroundY: number;
 }
 
 /**
- * Ausweichschritt eines Gegners. Nutzt dieselbe Zweiphasen-Kurve wie der Spieler-Dash
- * (Burst mit Quad.easeOut, danach zähes Aufrappeln), aber ohne Upgrade-Einflüsse, ohne
- * Air-Control und ohne Aufprallschaden – der Standard-Dash also.
+ * Gegner behalten ihren quadratischen Burst mit anschließender Erholung, ohne
+ * Spieler-Upgrades, Air-Control oder Burrow-Impuls.
  */
 interface EnemyDashState {
   phase:   1 | 2;
@@ -110,6 +112,7 @@ export class HostPhysicsSystem {
 
   // Optionale Referenzen
   private burrowSystem:   BurrowSystemType   | null = null;
+  private burrowDashExitHandler: ((playerId: string) => boolean) | null = null;
   private loadoutManager: LoadoutManagerType | null = null;
   private timeBubbleSystem: TimeBubbleSystem | null = null;
   private enemyManager: EnemyManager | null = null;
@@ -157,6 +160,7 @@ export class HostPhysicsSystem {
   // ── Referenz-Injection ────────────────────────────────────────────────────
 
   setBurrowSystem(bs: BurrowSystemType | null): void       { this.burrowSystem   = bs; }
+  setBurrowDashExitHandler(handler: ((playerId: string) => boolean) | null): void { this.burrowDashExitHandler = handler; }
   /** World binding; the returned lease cannot clear a later World's Combat port. */
   bindCombatCore(combatSystem: CombatActorStatePort & CombatDamageEffectPort): { destroy(): void } {
     this.combatSystem = combatSystem;
@@ -342,30 +346,39 @@ export class HostPhysicsSystem {
     return (this.dashStates.get(id)?.phase ?? 0) as 0 | 1 | 2;
   }
 
+  /** Origin belongs to the accepted dash and remains available through its recovery. */
+  isBurrowDash(id: string): boolean { return this.dashStates.get(id)?.isBurrowDash ?? false; }
+
   // ── Dash-Handler (aufgerufen von NetworkBridge-RPC) ───────────────────────
 
   /**
    * Verarbeitet einen Dash-RPC vom Client.
-   * Startet Phase 1 (Burst) mit Quad.easeOut Geschwindigkeitskurve.
+   * Startet den kubischen Spieler-Burst, gegebenenfalls nach sicherem Burrow-Ausstieg.
    * Kein Dash wenn: tot, gestunnt, bereits dashend, oder im Stand.
    */
   handleDashRPC(playerId: string, dx: number, dy: number): void {
     const now = Date.now();
+    if (!this.bridge.isHost()) return;
     if (!(this.canMoveResolver?.(playerId)
       ?? maySendWorldInput(this.bridge.getWorldParticipation(playerId)))) return;
     if (!this.combatSystem?.isAlive(playerId)) return;
-    if (this.burrowSystem?.isDashBlocked(playerId)) return;
+    if (this.burrowSystem?.isStunned(playerId)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
 
-    const len = Math.sqrt(dx * dx + dy * dy);
-    if (len === 0) return; // kein Dash im Stand
+    const len = Math.hypot(dx, dy);
+    if (!Number.isFinite(len) || len === 0) return; // kein Dash im Stand
+    const player = this.playerManager.getPlayer(playerId);
+    if (!player?.active || !player.physicsProxy.body) return;
 
-    const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(playerId) ?? 1;
+    const fromBurrow = this.burrowSystem?.isBurrowed(playerId) ?? false;
+    if (fromBurrow) {
+      if (!this.burrowDashExitHandler?.(playerId)) return;
+    } else if (this.burrowSystem?.isDashBlocked(playerId)) return;
+
     const speedMult = this.loadoutManager?.getSpeedMultiplier(playerId, now) ?? 1;
     const dashRangeMultiplier = Math.max(0, this.dashRangeMultiplierResolver?.(playerId) ?? 1);
-    const vNorm     = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * dashRangeMultiplier;
-    const player = this.playerManager.getPlayer(playerId);
-    if (!player) return;
+    // Surface speed is the baseline for both variants; underground speed never stacks here.
+    const vNorm = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * speedMult * dashRangeMultiplier;
 
     this.dashStates.set(playerId, {
       phase:   1,
@@ -373,6 +386,8 @@ export class HostPhysicsSystem {
       dirX:    dx / len,
       dirY:    dy / len,
       vNorm,
+      impulseMultiplier: fromBurrow ? BURROW_DASH_IMPULSE_MULTIPLIER : 1,
+      isBurrowDash: fromBurrow,
       hitIds: new Set(),
       lastGroundX: player.x,
       lastGroundY: player.y,
@@ -381,8 +396,8 @@ export class HostPhysicsSystem {
   }
 
   /**
-   * Startet einen Gegner-Ausweichschritt in Richtung (dx, dy). Identische Mechanik zum
-   * Spieler-Dash: Zweiphasen-Kurve, halbierte Trefferkugel während des Bursts. Liefert false,
+   * Startet einen Gegner-Ausweichschritt in Richtung (dx, dy): quadratische Zweiphasen-Kurve,
+   * halbierte Trefferkugel während des Bursts. Liefert false,
    * wenn bereits ein Schritt läuft oder die Richtung leer ist.
    */
   startEnemyDash(enemyId: string, dx: number, dy: number): boolean {
@@ -643,10 +658,7 @@ export class HostPhysicsSystem {
             input?.dashHeld === true,
             DASH_HOLD_MAX_DURATION_FACTOR,
           );
-          const t = timing.progress;
-          // Quad.easeOut: sofortiger Abfall von f_start auf f_min
-          const easeOut = 1 - (1 - t) * (1 - t);
-          speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
+          speedFactor = getPlayerDashBurstSpeedFactor(timing.progress, dash.impulseMultiplier);
 
           // Hitbox sofort auf 50 % Radius (25 % Fläche). setCollisionRadius arbeitet in
           // Display-Pixeln und kompensiert die Quelltextur-Skalierung des Spieler-Sprites.
@@ -840,8 +852,8 @@ export class HostPhysicsSystem {
    * Schreibt einen laufenden Gegner-Ausweichschritt fort und liefert dessen Wunschgeschwindigkeit;
    * null, wenn kein Schritt läuft (dann gilt die normale Wegfindung).
    *
-   * Bewusst identisch zum Spieler-Dash in {@link update}: Phase 1 fällt per Quad.easeOut von
-   * DASH_F_START auf DASH_F_MIN und halbiert die Trefferkugel, Phase 2 rappelt sich per
+   * Eigene Gegner-Kurve: Phase 1 fällt per Quad.easeOut von
+   * ENEMY_DASH_F_START auf DASH_F_MIN und halbiert die Trefferkugel, Phase 2 rappelt sich per
    * Quad.easeIn auf 1.0 zurück. Ohne Air-Control und ohne Upgrade-Resolver – Standard-Dash.
    */
   private advanceEnemyDash(enemy: EnemyEntity, now: number): { vx: number; vy: number } | null {
@@ -860,7 +872,7 @@ export class HostPhysicsSystem {
     if (dash.phase === 1) {
       const timing = getDashBurstTiming(elapsed, DASH_T1_S, false, false, DASH_HOLD_MAX_DURATION_FACTOR);
       const easeOut = 1 - (1 - timing.progress) * (1 - timing.progress);
-      speedFactor = DASH_F_START + (DASH_F_MIN - DASH_F_START) * easeOut;
+      speedFactor = ENEMY_DASH_F_START + (DASH_F_MIN - ENEMY_DASH_F_START) * easeOut;
       enemy.setDashScale(0.5);
 
       if (timing.shouldEnd) {

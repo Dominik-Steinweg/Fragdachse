@@ -1,21 +1,138 @@
-# FRAGDACHSE Asset-Pipeline V1
+# FRAGDACHSE Asset-Pipeline V2
+
+Codex steuert Blender über den vorhandenen MCP. Die Pipeline erzeugt orthografische Turm-, Gegner- und Figurensprites einschließlich Blender-Actions, transparenten Animationsframes und vollständigen Quellenpaketen. Der separate Phaser-Viewer prüft sie bei Spielgröße. Runtime-Integration bleibt ein eigener Auftrag.
+
+## V2-Katalog und Produktionsstand
+
+[catalog-v2.json](catalog-v2.json) ist der Bedarfskatalog: neun Turmgrafiken für elf Waffen-IDs, 14 Gegner und die Spielfigur. `gameIds`, `reference`, `targetSize` und optionale `referenceTransform` beziehen sich auf die bestehenden Spielverträge. Silhouette, Farbgruppen und Anatomie beziehungsweise Mechanik stehen in `description`; `requiredClips` nennt die Produktionsaufgabe. Assettests gleichen Abdeckung, gemeinsame Turmgrafiken, Anzeigegrößen und Referenzkorrekturen mit den aktuellen Spielregistries ab.
+
+- `production: "planned"` bedeutet ein vollständiges Briefing ohne ausführbare Rezeptur.
+- `production: "reference"` bedeutet eine unterstützte Referenzrezeptur. Erst ein vollständiger Build, Sichtprüfung, `selection.json` und Quellenarchiv belegen die tatsächlich produzierte Auswahl. Der Katalog allein behauptet keine Freigabe.
+
+| Referenz-ID | Anzeigegröße | Framequellen | Clip |
+| --- | ---: | --- | --- |
+| `rocket` | 40 | 80/160 | `fire`: einmaliger Podrückstoß, erneut auslösbar |
+| `tesla` | 40 | 80/160 | `fire`: Spulenbewegung und Eigenleuchten als Aktivitätsloop |
+| `spore` | 32 | 64/128 | `fire`: Zusammenziehen, Ausstoßbewegung, Entspannen |
+| `zombie-badger` | 28 | 64/128 | `move`: schwerfälliger Vierbeingang |
+| `alien-badger` | 30 | 64/128 | `move`: Zweibeingang mit eigener Anatomie |
+| `badger` | 32 | 64/128 | `move`: Lauf mit natürlich mitgeführter Waffenhaltung |
+
+Die Produktionsbibliothek erweitert diese ursprünglichen Referenzen auf sämtliche neun Turmgrafiken und 14 Gegner des Katalogs. Gemeinsame Anatomie- und Mechanikhelfer liefern Geometriewerkzeuge; Proportionen, Materialgruppen, Ausrüstung und Gangparameter bleiben in den einzelnen Rezepten gestaltet. Der aktuelle Spieler behält seine modellierte Form und verwendet einen ausbalancierten Lauf mit Körper-, Kopf- und Armbewegung. Seine Füße greifen weiter vor als zurück. Die V2-F-Archive bewahren den früheren Lauf mit festem Oberkörper.
+
+Türme erhalten `mount: {rockSize: 32, maxBaseDiameter: 27}` und liefern alle tatsächlich tragenden Unterbaumeshes in `parts.base_meshes`. Die Pipeline prüft pro Pose den um den Drehpunkt liegenden Umkreis in Anzeigeeinheiten. Damit passt der Unterbau auch gedreht innerhalb des 32×32-Felsens; Waffenläufe dürfen etwas überragen. `frame.baseDiameter` speichert den geprüften Wert. Der Viewer zeigt auf Wunsch den echten freistehenden Felsframe unter dem Turm, ohne den Fels in das exportierte Asset einzubauen.
+
+Quellauflösung und Anzeigegröße sind unabhängig. Neue Figuren schauen nach Norden (+Y), Türme nach Osten (+X); Weltursprung und Bildmitte bleiben der gemeinsame Drehpunkt. Die Original-Spore erhält im Vergleich ihre bestehende +7/-7-Pixel-Korrektur, der Original-Leerenjäger seine Drehung um π. Diese `referenceTransform` betrifft ausschließlich das alte Vergleichsbild; `rotationOffset` ist im Bogenmaß.
+
+## V2 bauen und erweitern
+
+1. Originalbild und aktuelle Spielkonfiguration prüfen. Für Serienassets den vorhandenen Katalogeintrag ausarbeiten; keine abweichenden Kopien von Spiel-IDs oder Anzeigegrößen anlegen.
+2. Unter `recipes_v2/` eine asseteigene Rezeptur ergänzen. `build(ctx, resolvedSpec)` liefert ein `AssetModel` als Dictionary mit `root`, `parts`, optionalem `rig` und `sockets`. `parts` und `sockets` enthalten direkt referenzierte Blender-Daten; keine nachträgliche Suche über automatisch nummerierte Objektnamen. Gemeinsame Hierarchien und explizite starre Knochengewichte stehen in [rigs_v2.py](rigs_v2.py).
+3. `model`, `recipe`, `orthoScale`, `textures`, `materialVariants` und `clips` im Katalog ergänzen und `production` auf `reference` setzen. `model` enthält nur die vom Rezept tatsächlich verwendeten Parameter. Die Lauf- und Schussbausteine stehen in [motions_v2.py](motions_v2.py): `mechanical_fire`, `energy_fire`, `organic_pulse`, `sustained`, `quadruped`, `biped`, `player_walk`. Numerische `clip.parameters` stimmen Vor-/Rückschritt, Fußheben, Rumpf-/Kopfbalance, Armbewegung sowie Rückstoß und Eigenleuchten ab. Die Bewegung addiert sich auf die erhaltene Ruhetransformation jedes direkt referenzierten Gelenks.
+4. Über Blender MCP / `execute_blender_code` eine neue Revision bauen:
+
+```python
+import importlib.util
+repo = 'C:/Fragdachse'  # an den Checkout anpassen
+module_spec = importlib.util.spec_from_file_location(
+    'fd_assets_v2', repo + '/scripts/asset-pipeline/blender_pipeline_v2.py')
+pipeline = importlib.util.module_from_spec(module_spec)
+module_spec.loader.exec_module(pipeline)
+result = pipeline.build(repo, 'badger', 'v2-a')
+```
+
+Der Build verwendet eine neue eigene Szene. Bestehende Szenen, V1-Ergebnisse und lokale Dachsänderungen bleiben erhalten. Der V2-Dachs übernimmt die aktuelle Schulter-/Armform der V1-Rezeptur und ergänzt getrennte bewegte Beine. Seine beiden Materialvarianten behalten identische Texturstärke und vergleichen die vorhandene Formschattierung.
+
+`build(..., device='CPU')` ist der portable Standard. `device='CUDA'` beziehungsweise `'OPTIX'` verwendet ein vorhandenes passendes Cycles-Gerät; fehlt es, schlägt der Auftrag ausdrücklich fehl. Die Gerätewahl gehört zum Input-Fingerprint und darf bei einer Wiederaufnahme nicht wechseln. Auf der Blender-Kommandozeile stehen `--device CPU|CUDA|OPTIX`, `--max-frames <Anzahl>` und `--asset references` für alle ausführbaren Referenzeinträge bereit; `references` ist eine CLI-Auswahl, keine Asset-ID für `build()`:
+
+```powershell
+blender --background --python scripts/asset-pipeline/blender_pipeline_v2.py -- --repo C:/Fragdachse --asset references --revision v2-a --device OPTIX
+```
+
+`blender` durch den vorhandenen absoluten Programm-Pfad ersetzen, falls es nicht im PATH steht. Unter Windows verwendet die Veröffentlichung bei einem vom Python-Dateisystem abgelehnten Verzeichnis-Rename den vorhandenen nativen Helfer `publish-v2.ps1`. Er prüft beide absoluten Pfade gegen das deklarierte Pipeline-Verzeichnis und verschiebt das fertige Verzeichnis ohne Überschreiben; kein Kopier- oder Löschersatz ist erforderlich.
+
+`max_frames` begrenzt bei Bedarf die Anzahl neuer Render eines Aufrufs. Derselbe Auftrag kann mit denselben Eingaben und Quellen fortgesetzt werden. Änderungen an Beschreibung, Pipeline, Rezepten, Bewegungsbausteinen oder Originaltexturen erfordern eine neue Revision; abgeschlossene Assetverzeichnisse sind unveränderlich. Noch unvollständige Builds liegen unter `art/poc/pipeline-v2/incomplete/<revision>/<id>` und werden nach Abschluss atomar nach `runs/<revision>/<id>` verschoben. Rezeptdateien tragen die wörtliche ID, etwa `recipes_v2/zombie-badger.py`; der Import erfolgt über Dateipfad.
+
+Jedes Asset hat einen Ruheframe. Clipdefinitionen enthalten `name`, `motion`, `frameCount`, `frameRate`, `loop` und optional `parameters`. Ausgangswerte sind zwölf Frames bei zwölf Bildern pro Sekunde für Bewegung und Daueraktivität sowie acht Frames bei 24 Bildern pro Sekunde für Einzelschüsse. Die Schlussphase eines Loops wird für eine geschlossene Action authoriert, aber nicht nochmals als identischer Pausenframe exportiert. Figuren laufen am Ursprung; Richtungsänderung erfolgt später durch Rotation. Der ausbalancierte Spieler-Lauf kennzeichnet `model.upperBodyMotion: "balanced"` und explizite Geometrierollen für Körper, Kopf, Arme und Beine. Einzelschüsse kehren zur Ruhe zurück und enthalten keine vollständige Salve.
+
+## Iterative Vorschauen vor der Produktion
+
+[preview-v2.py](preview-v2.py) erzeugt einige tatsächliche 1024er-Posen einer Rezeptur unter `art/poc/pipeline-v2/previews/<neues-Label>/<id>`. Sämtliche Posen des Clips werden zuvor geometrisch geprüft. Diese diagnostischen Vorschauen werden nicht als vollständige Produktionsrevision veröffentlicht oder ausgewählt:
+
+```powershell
+blender --background --factory-startup --python-exit-code 1 --python scripts/asset-pipeline/preview-v2.py -- --repo C:/Fragdachse --asset badger --label bewegung-a --indices all --device OPTIX
+node scripts/asset-pipeline/review-preview-v2.mjs art/poc/pipeline-v2/previews/bewegung-a/badger
+```
+
+Die Frameübersicht kombiniert klar beschriftete Vergrößerungen mit Nominalgröße und bei Türmen dem echten 32er-Fels. Für gezielte Posen `--indices 0,3,6,9` verwenden. Nach tatsächlicher Bildprüfung die Rezeptur oder Bewegung korrigieren und ein neues Vorschau-Label vergeben. Erst danach den vollständigen Build mit beiden Varianten erzeugen. Quellenpakete erfassen auch die gemeinsamen Python-Anatomie-/Mechanikhelfer; Änderungen in der Authoring-Bibliothek erfordern eine neue Revision.
+
+## V2 exportieren, prüfen und archivieren
+
+```powershell
+node scripts/asset-pipeline/export.mjs export art/poc/pipeline-v2/runs/v2-a
+npm run dev:browser
+```
+
+Nach HTTP 200 auf Port 8090 den **sichtbaren** Viewer mit [V2-Beispieladresse](http://127.0.0.1:8090/scripts/asset-pipeline/viewer/?version=2&run=v2-a) öffnen. Browserprüfung bleibt opt-in; ein ausdrücklich beauftragter Browser-/Viewer-Review autorisiert sie. Ohne Browserauftrag oder bei verborgenem Pane die Sichtprüfung als nicht verifiziert melden.
+
+Der Viewer lädt echte Animationsframes und synchronisiert A/B über Materialvarianten und Quellgrößen. Clipauswahl, Abspielen/Pause, Einzelbildsteuerung und Tempo sind getrennt von räumlicher Bewegung und Rotation. Schüsse lassen sich sofort neu auslösen; Daueraktivität lässt sich ein- und ausschalten. Der Einzelbildregler und die offline erzeugte Frameübersicht helfen beim Prüfen des Loopübergangs. Auswahlgründe erscheinen nach erneutem Export auch im Viewer.
+
+Bei Faktor 1 jedes produzierte Asset mit beiden Quellgrößen auf hellen/dunklen sowie Gras-/Stahl-Untergründen prüfen: 0/45/90 Grad, laufende Rotation, normale Geschwindigkeit und Zeitlupe. Abnahme verlangt erkennbare Bewegung bei Nominalgröße, beim Spieler eine natürlich mitgeführte Waffenhaltung mit abgestimmter Körper-, Kopf- und Armbewegung, geschlossene Loops, zuverlässige Rückkehr zur Ruhepose und keine flackernden oder abgeschnittenen Formen. Mechanik und lokales Eigenleuchten gehören zum Asset; Mündungsfeuer, Projektile, Blitze, ausgestoßene Partikel und Wirkungsbereiche bleiben separate Spieleffekte.
+
+```powershell
+node scripts/asset-pipeline/prepare-review-v2.mjs art/poc/pipeline-v2/runs/v2-a/badger art/poc/pipeline-v2/reviews/v2-a-badger.json
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v2/runs/v2-a/badger rich 128 "Der Pfotenwechsel ist bei 32 Einheiten klar; Rumpf, Kopf und Arme folgen dem Lauf natürlich."
+node scripts/asset-pipeline/export.mjs archive art/poc/pipeline-v2/runs/v2-a/badger
+node scripts/asset-pipeline/export.mjs export art/poc/pipeline-v2/runs/v2-a
+```
+
+Der Auswahlgrund muss die tatsächliche Sichtprüfung beschreiben. `archive` nutzt Python aus `FD_ASSET_PYTHON`, sonst `python`; alternativ `--python <absoluter-Pfad-zur-python.exe>` übergeben.
+
+Vor der Auswahl die tatsächlichen Prüfergebnisse als JSON-Objekt innerhalb des Repositorys festhalten und mit `prepare-review-v2.mjs` beilegen. Der separate Review-Schritt kopiert Original- und gegebenenfalls Vorgänger-PNG unter ihren Repositorypfaden nach `archive-source/`, erhält den Bericht unverändert als `review.json` am Asset und als Quellenkopie und archiviert seinen eigenen Skriptstand. `archive-source/review-inputs.json` belegt diese zusätzlichen Eingaben mit SHA-256; Render- und Exportmanifeste bleiben unverändert. Eine vorhandene Auswahl sperrt spätere Review-Änderungen. Ein identischer erneuter Aufruf ist vorher erlaubt; abweichende bereits archivierte Quelldateien werden nicht überschrieben.
+
+- Jeder transparente Masterframe hat 1024 × 1024 Pixel. Kamera, Licht, Canvas und Drehpunkt bleiben über alle Posen gleich. Ausgewertete Geometrie und Alpha-Bounds werden pro Frame auf Clipping geprüft; kein Autocrop oder automatisches Zentrieren.
+- Jede Framegröße wird direkt aus dem Master alpha-aware abgeleitet. Ein Spritesheet hat höchstens acht Spalten. Zwei transparente Pixel rund um jede Zelle ergeben `margin=2`, `spacing=4`; der Rand gehört nicht zur Frame- oder Anzeigegröße.
+- Pro Materialvariante entstehen `masters/frame-NNNN.png`, `asset.blend`, `render.json`, `export.json`, `sprite-<Größe>.png` als Ruhebild und `sheet-<Größe>.png`. Der Rendervertrag enthält Frames, Ruheframe, Clipzuordnung, Framerate, Loop, Ausrichtung, Drehpunkt, Anzeigegrößen und Quellenbelege; der Exportvertrag ergänzt Rasterbelegung, Pixelprüfungen und Hashes.
+- `review.png` zeigt sämtliche Frames beider Varianten; `catalog.json` auf Run-Ebene ist die abgeleitete Viewer-Liste. Unveränderte Master können identisch neu exportiert werden; beschädigte oder veränderte Quellen werden abgelehnt.
+- `selection.json` bindet das vollständige ausgewählte Assetpaket mit Ruhebild, Sheet, Clip-/Rastermetadaten und SHA-256-Dateiliste. V2 kopiert kein einzelnes `preferred.png`; Material und Auflösung sind eine gemeinsame unveränderliche Auswahl.
+- `source-bundle.zip` enthält die gewählte Variante mit Blend-Datei/Actions, Masterframes, Exporten und Prüfdaten sowie `build.json`, `selection.json`, Originaltexturen und sämtliche verwendeten Quellen unter `archive-source/`. `archive-manifest.json` belegt alle gepackten Dateien per SHA-256. Alternativen bleiben im Run erhalten. Auswahl und fertiges ZIP werden nicht überschrieben.
+- Eine archivierte Blend-Datei exemplarisch unabhängig von der Arbeitsszene öffnen, den gespeicherten Asset-Scene wählen und einen Frame rendern; den Ausgabepfad auf einen separaten Prüfpfad setzen. Gepackte Texturen und Actions müssen ohne die ursprüngliche Arbeitsszene funktionieren. Pixelidentität über unterschiedliche Blender-/GPU-Versionen ist nicht zugesichert.
+
+`art/poc/pipeline-v2/` bleibt lokal und Git-ignoriert. Skripte, Rezepte, Katalog und Prompts werden versioniert. Für die Abnahme `npm run test:assets`, `node scripts/asset-pipeline/check-viewer.mjs`, `npm run check` und `git diff --check` ausführen. Bei Skilländerungen zusätzlich `npm run ai:sync`. Der Viewer-Build ersetzt keinen sichtbaren Browserreview.
+
+## Gespeicherte V2-Animation in echtem Blender verifizieren
+
+[verify_asset_pipeline_v2.py](../../tests/assets/verify_asset_pipeline_v2.py) prüft eine gespeicherte Blend-Datei unabhängig von der Arbeitsszene. Es gehört zur gezielten Assetprüfung, benötigt Blender und läuft nicht als Vitest-Abhängigkeit. Neben der Blend-Datei werden `render.json` und die zugehörigen `archive-source/`-Dateien benötigt; das Layout bleibt auch nach dem Entpacken eines Quellenarchivs erhalten.
+
+```powershell
+blender --background art/poc/pipeline-v2/runs/v2-a/badger/rich/asset.blend --python-exit-code 1 --python tests/assets/verify_asset_pipeline_v2.py -- --manifest art/poc/pipeline-v2/runs/v2-a/badger/rich/render.json --report art/poc/pipeline-v2/verification/v2-a/badger.json
+```
+
+Die Prüfung wählt die passende eingebettete Asset-Scene, auch wenn Blender das Library-Blend zunächst mit einer leeren Startszene öffnet. Sie überprüft Originaltexturen und eingebettete Quellen, Actions, 24-fps-Timelines, sämtliche ausgewerteten Posen, festen Drehpunkt/Kamera/Licht, Clipping, Loop-Schluss und Rückkehr von Einzelschüssen zur Ruhe. Bei Figuren müssen riggesteuerte Gliedmaßen bewegt werden. Beim ausbalancierten Spieler müssen zusätzlich alle expliziten Körper-, Kopf- und Armrollen Bewegung zeigen; ältere Spielerclips behalten die Prüfung ihres festen Oberkörpers. Turmunterbauten werden gegen ihren maximalen Umkreisdurchmesser geprüft. Der JSON-Bericht nennt bestandene Prüfungen beziehungsweise den konkreten Fehler.
+
+Für einen exemplarischen unabhängigen Render `--render-frame 1 --render-output <neuer-absoluter-Pfad.png>` anhängen. Der Index bezeichnet den exportierten Frame. Dieser Portabilitätscheck verwendet CPU und behält 1024er-Auflösung, Cycles 64 Samples, Seed 37, Kamera und Materialien unverändert. Bericht und PNG müssen neue Dateien sein. Das Skript speichert niemals eine Blend-Datei und verändert keine Produktionsquellen; für die endgültige Dokumentation werden Prüferskript und Berichte als zusätzliche Review-Quellen beigelegt.
+
+## V1-Kompatibilität und vorhandene statische Referenzen
+
+Die folgenden V1-Befehle, Verzeichnisse und Materialhinweise bleiben gültig. Ohne Versionsparameter zeigt der Viewer weiterhin V1. Die gemeinsame Stil-/Materialbasis gilt auch für V2.
+
 
 Codex steuert Blender über den vorhandenen MCP. Bildgenerierung liefert Texturgrundlagen; diese Skripte vereinheitlichen Kamera, Material, Export und Prüfung. Keine Spielsimulation oder Runtime-Integration.
 
 ## Start
 
 ```powershell
-node scripts/asset-pipeline/export.mjs export art/poc/pipeline-v1/runs/v1-e
+node scripts/asset-pipeline/export.mjs export art/poc/pipeline-v1/runs/v1-f
 npm run dev:browser
 ```
 
 Nach HTTP 200 auf Port 8090 öffnen:
 
-`http://127.0.0.1:8090/scripts/asset-pipeline/viewer/?run=v1-e`
+`http://127.0.0.1:8090/scripts/asset-pipeline/viewer/?run=v1-f`
 
 Im Viewer zuerst bei Faktor 1 prüfen. A/B wählen unabhängig Materialvariante und Quellauflösung. Eine 128er Quelle bleibt beim Dachs 32 Einheiten groß. Faktoren 0,5/0,75/1/1,33/2 verändern die Anzeige. Gegnerprofile 22–30 und Bossprofile 52–68 überschreiben nur die Vorschaugröße. Der optionale Kollisionskreis zeigt den hinterlegten Durchmesser × Größenfaktor und folgt der Bewegung; ein Anzeigeprofil verändert diesen Referenzdurchmesser nicht. Die Master-Vergrößerung ergänzt die Formkontrolle.
 
-Aktueller Dachs: `art/poc/pipeline-v1/runs/v1-e/badger/`. Der direkte Vorgänger bleibt unter `runs/v1-d/`; der Turm unter `runs/v1-c/` (`?run=v1-c`). Jeweils `calm/` und `rich/` enthalten `master.png`, `asset.blend`, `render.json`, `export.json`, `sprite-<Größe>.png`. Eine Ebene darüber: `preferred.png`, `selection.json`, `review.png`. Frühere Durchgänge bleiben erhalten.
+Aktueller Dachs: `art/poc/pipeline-v1/runs/v1-f/badger/`. Der direkte Vorgänger bleibt unter `runs/v1-e/`; der Turm unter `runs/v1-c/` (`?run=v1-c`). Jeweils `calm/` und `rich/` enthalten `master.png`, `asset.blend`, `render.json`, `export.json`, `sprite-<Größe>.png`. Eine Ebene darüber: `preferred.png`, `selection.json`, `review.png`. Frühere Durchgänge bleiben erhalten.
 
 ## Neues Asset
 
@@ -30,7 +147,7 @@ spec = importlib.util.spec_from_file_location(
     'fd_assets', repo + '/scripts/asset-pipeline/blender_pipeline.py')
 pipeline = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pipeline)
-result = pipeline.build(repo, 'scripts/asset-pipeline/examples/badger.json', 'v1-f')
+result = pipeline.build(repo, 'scripts/asset-pipeline/examples/badger.json', 'v1-g')
 ```
 
 Für weitere Assets wiederholen. Vorhandene Asset-Verzeichnisse werden abgelehnt. Laufende Blender-Szenen bleiben erhalten. `pipeline.create_template(repo, 'template-v2.blend')` erzeugt eine leere Vorlage; die aktuelle liegt unter `art/poc/pipeline-v1/template-v1.blend`.
@@ -39,7 +156,7 @@ Für weitere Assets wiederholen. Vorhandene Asset-Verzeichnisse werden abgelehnt
 5. Nach Sichtprüfung eine Produktionsquelle auswählen:
 
 ```powershell
-node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v1/runs/v1-f/badger rich 128 "Dunkle Flanken und helle Muskelpartien bleiben bei 32 Einheiten erkennbar."
+node scripts/asset-pipeline/export.mjs select art/poc/pipeline-v1/runs/v1-g/badger rich 128 "Dunkle Flanken und helle Muskelpartien bleiben bei 32 Einheiten erkennbar."
 ```
 
 Bestehende Auswahlen werden nicht überschrieben. Unveränderte Master lassen sich identisch neu exportieren. Veränderte Master, Beschreibungen oder Texturdateien erfordern neue Revisionen; SHA-256 belegt ihre Identität.
@@ -51,7 +168,7 @@ Moderner, farbenfroher, texturierter, leicht stilisierter 2D-Look. Geometrie lie
 - XY ist die Bildebene, Z die Höhe. Orthografische Kamera exakt entlang -Z, Rotation null. +Y = Norden (Figuren), +X = Osten (Turmvertrag). Weltursprung ist der Drehpunkt. `pivot` ist dessen normierte Bildposition, Y von oben. Kein Autocrop. `orthoScale` legt den quadratischen Canvas fest; mindestens 2% Sicherheitsrand bleiben frei.
 - Cycles 64 Samples, Seed 37, Denoising; Standard-Farbmanagement, Exposure 0, Gamma 1. Roughness 0,92, schwacher Specular. Ambient plus zwei große weiche seitliche Flächenlichter; kein zusätzliches Oberlicht, Boden, Tiefenunschärfe oder Bloom. Kleine Emissives bleiben lokale Farbakzente.
 - `Authoring.material(name, rgb, family, emission, form_shading=False)` bietet `technical` und `organic`. RGB sind Blender-Linearwerte. Technisch: Lack, dunkles Metall, Warnfarben, sparsame Abnutzung. Organisch: breite Fellwerte und ruhige Variation. Ohne eigene Einstellungen bleiben `calm`/`rich` bei Texturstärke .22/.78 und Formschatten 0; Turmmaterialien bleiben unverändert.
-- `materialVariants.calm` und `.rich` dürfen `label`, `textureStrength` und `formShadowStrength` setzen (Stärken 0–1). Die IDs bleiben stabil, auch bei anderen Anzeigenamen. Der Dachs v1-e nutzt Textur .22 in beiden Varianten, Formschatten .55 („Weich schattiert“) bzw. 1 („Kräftig · dunkler“). Nur die Formschattierung unterscheidet sich. Seine Rezeptur setzt eine eigene dunklere Werteskala; die gemeinsame Materialbasis und die Turmdefaults bleiben erhalten.
+- `materialVariants.calm` und `.rich` dürfen `label`, `textureStrength` und `formShadowStrength` setzen (Stärken 0–1). Die IDs bleiben stabil, auch bei anderen Anzeigenamen. Der Dachs v1-f nutzt Textur .22 in beiden Varianten, Formschatten .55 („Weich schattiert“) bzw. 1 („Kräftig · originalnah“). Nur die Formschattierung unterscheidet sich. Seine Rezeptur setzt eine eigene dunklere Werteskala mit gedämpften Muskellichtern und ein unabhängiges helles Kopfmaterial; Schwanz und Gesichtsbänder bleiben separat kontrollierbar. Die gemeinsame Materialbasis und die Turmdefaults bleiben erhalten.
 - Für gezielte Formwerte organisches Material mit `form_shading=True` erzeugen und nach der Modellierung `paint_form_mask(mesh, sampler)` auf den verwendenden Meshes aufrufen. Das gespeicherte Punkt-Farbattribut `FD_FormMask` moduliert die Oberflächenausrichtung zur Z-Achse. Breite dunkle Einschnitte und begrenzte helle Muskelpartien gestalten; keine gleichmäßig schwarze Randlinie. Kopfmaterial und Augen bleiben unabhängig. Größere Körpermasse modellieren, ohne Kamera oder Kopf-/Handbreite mitzuziehen.
 - [Exakte Textur-Prompts](texture-prompts.json) liegen im Git. Die tatsächlich generierten Originalpixel liegen unter `art/poc/pipeline-v1/textures/`, werden per SHA-256 belegt und in jede finale Blend-Datei gepackt. Prompts allein sind keine exakt reproduzierbare Bildquelle.
 - Texturen nutzen lokale Generated-XY-Projektion ohne Wiederholung (`EXTEND`). Es gibt keine Kachelgrenze; Übergänge zusammengesetzter Formen trotzdem prüfen. Komplexe Modelle benötigen später gezielte UVs. Diese Basen sind keine freigegebenen nahtlosen Terrain-Tiles.
@@ -79,4 +196,4 @@ Tests schützen Alpha-Resampling, Kamera-/Drehpunktvertrag, Clipping, Texturbele
 
 Blend-Dateien enthalten gepackte Originaltexturen und eingebettete Erstellungsskripte. Die Szene kann unabhängig vom Repository geöffnet und gerendert werden; auf anderen Rechnern Ausgabepfad anpassen. Geometrie lässt sich aus gespeichertem Skriptstand mit denselben Originaltexturen neu erzeugen. Pixelidentische Exporte werden vom unveränderten Master geprüft; identische Blender-Render über verschiedene Blender-/GPU-Versionen sind nicht zugesichert.
 
-`art/poc/` bleibt komplett Git-ignoriert. Nur Skill, Skripte, Beschreibungen und Prompts werden versioniert. Runtime-Assets bleiben unverändert. Rigging, Laufanimationen und Integration folgen später.
+`art/poc/` bleibt komplett Git-ignoriert. Nur Skill, Skripte, Beschreibungen und Prompts werden versioniert. Runtime-Assets bleiben unverändert. V1 bleibt statisch; Rigging und Animationsexport sind oben als V2 beschrieben. Die Integration ins Spiel erfolgt separat.

@@ -7,6 +7,7 @@ import { GPU_VFX_EFFECTS } from '../src/effects/gpu/GpuVfxEffects';
 import { GpuVfxEase } from '../src/effects/gpu/GpuVfxEase';
 import { GPU_VFX_DEPTH_EPSILON, GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { DEPTH } from '../src/config';
+import { BURROW_FX } from '../src/config/burrowEffects';
 
 /** Die layerglobalen Eigenschaften – nur sie duerfen eine eigene Lane rechtfertigen. */
 function laneKey(lane: (typeof GPU_VFX_LANES)[number]): string {
@@ -109,7 +110,7 @@ describe('gpu vfx render lanes', () => {
     expect(lane.depth).toBeLessThan(DEPTH.FIRE + 0.1);
     expect(lane.blendMode).toBe(0);
     expect(lane.order).toBe('ordered');
-    expect(lane.capacity).toBe(2048);
+    expect(lane.capacity).toBeGreaterThan(BURROW_FX.flightCapacity);
     expect(lane.maxLifetimeMs).toBe(860);
     expect(effect.lane).toBe(GpuVfxLaneId.WorldDebris);
     expect(effect.frame).toBe(GpuVfxFrameId.LeafDebris);
@@ -118,6 +119,8 @@ describe('gpu vfx render lanes', () => {
     expect(dust.frame).toBe(GpuVfxFrameId.LeafBlowerDust);
     expect(dust.release).toBe('linger');
     expect(lane.capacityRationale).toContain('Staub');
+    expect(lane.eases).toContain(GpuVfxEase.QuadOut);
+    expect(GPU_VFX_EFFECTS.find(candidate => candidate.label === 'burrow.clod')?.lane).toBe(lane.id);
   });
 
   it('keeps all transient pedestal effects on one dedicated compact lane', () => {
