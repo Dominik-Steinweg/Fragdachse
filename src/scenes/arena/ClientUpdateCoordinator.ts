@@ -110,6 +110,7 @@ export interface ClientPlayerFramePort {
 
 /** Activity-owned reads needed by the client frame, absent outside an Activity. */
 export interface ClientActivityFramePort {
+  getEnemyPosition(id: string): { x: number; y: number } | null;
   getAdrenalineEssence?(): import('../../adrenalineEssence/AdrenalineEssenceBinding').AdrenalineEssenceBinding | null;
   getStep(): CoopMissionActivityStep | null;
 }
@@ -419,7 +420,9 @@ export class ClientUpdateCoordinator {
         projectileRuntime.presentClientProjectileFrame(projectileReplicaFrame, bridge.getLocalPlayerId());
       }
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
-      this.ctx.smokeSystem.syncVisuals(state.smokes);
+      this.ctx.smokeSystem.syncVisuals(state.smokes, bridge.getSynchronizedNow());
+      this.ctx.smokeSystem.syncTargetVisuals(state.smokeTargets ?? [], bridge.getSynchronizedNow(),
+        id => this.activityFramePort?.getEnemyPosition(id) ?? null);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
       if (this.performanceMetricsEnabled) projectilesEffectsMs = performance.now() - effectsStartedAt;

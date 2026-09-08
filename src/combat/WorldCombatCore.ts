@@ -387,6 +387,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private lastKillSource: Map<string, KillSourceContext> = new Map();
   private lastSource = new Map<string, CombatSource>();
   private attributionTargets = new Map<string, CombatTargetRef>();
+  private readonly enemyDamageCommittedObservers = new Set<(outcome: TargetDamageAppliedOutcome, x: number, y: number, now: number) => void>();
+  observeEnemyDamageCommitted(observer: (outcome: TargetDamageAppliedOutcome, x: number, y: number, now: number) => void): () => void {
+    this.enemyDamageCommittedObservers.add(observer);
+    return () => { this.enemyDamageCommittedObservers.delete(observer); };
+  }
   private reactionGeneration = 0;
 
   // Callback: (killerId, victimId, sourceId) – Host-only
@@ -3460,6 +3465,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     };
   }
 
+  hasVisibleSegmentFrom(cx: number, cy: number, ax: number, ay: number, bx: number, by: number): boolean {
+    return this.geometry.hasVisibleSegmentFrom(cx, cy, ax, ay, bx, by);
+  }
+
   // ── LoS-Check (für BFG-Laser) ──────────────────────────────────────────────
 
   /**
@@ -3878,6 +3887,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const creditedSource = this.lastSource.get(targetId);
     const killerId = creditedSource?.attribution.id;
     const killSourceId = creditedSource?.authoredSourceId ?? sourceId ?? 'source.unknown';
+    for (const observer of this.enemyDamageCommittedObservers) {
+      observer(outcome, x, y, this.hostFrameNowMs);
+      if (!current()) return outcome;
+    }
     // Facts are secured; end target status before any hook can create a successor.
     if (result.died) {
       this.movementStatus?.clearMovementStatus(target);

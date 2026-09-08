@@ -27,7 +27,7 @@ import type { CombatActorStatePort, CombatDamageEffectPort, CombatGeometryPort, 
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
-import type { EnemyAiTargetCatalog } from './EnemyAiTargetCatalog';
+import type { EnemyAiTargetCatalog, EnemyAiTargetKind } from './EnemyAiTargetCatalog';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -52,6 +52,14 @@ interface EnemyVoidMolotovState {
   throwAt: number;
   targetX: number;
   targetY: number;
+  targetRef?: ThrowTarget['targetRef'];
+}
+
+interface ThrowTarget {
+  x: number;
+  y: number;
+  distance: number;
+  targetRef: { kind: EnemyAiTargetKind | 'enemy'; id: string };
 }
 
 const ENEMY_TRANSLOCATOR_THROW_SPEED_MULTIPLIER = 2;
@@ -526,6 +534,7 @@ export class CoopDefenseEnemyAbilitySystem {
     state.throwAt = now + ability.windupMs;
     state.targetX = target.x;
     state.targetY = target.y;
+    state.targetRef = target.targetRef;
     this.updateVoidMolotovWindup(enemy, ability, state, now);
   }
 
@@ -537,7 +546,7 @@ export class CoopDefenseEnemyAbilitySystem {
   ): void {
     // Ein einmal angesetzter Wurf bleibt auf seinem Zielpunkt: Der Gegner holt sichtbar aus, das
     // Ziel kann ausweichen. Ein noch erreichbarer Spieler frischt den Punkt aber nach.
-    const refreshed = this.findThrowTarget(enemy, 0, ability.maxRange, 0);
+    const refreshed = this.findThrowTarget(enemy, 0, ability.maxRange, 0, state.targetRef);
     if (refreshed) {
       state.targetX = refreshed.x;
       state.targetY = refreshed.y;
@@ -640,11 +649,13 @@ export class CoopDefenseEnemyAbilitySystem {
     minRange: number,
     maxRange: number,
     pathClearance: number,
-  ): { x: number; y: number; distance: number } | null {
-    let best: { x: number; y: number; distance: number } | null = null;
+    lockedTarget?: ThrowTarget['targetRef'],
+  ): ThrowTarget | null {
+    let best: ThrowTarget | null = null;
 
     if (enemy.faction === 'allied') {
       for (const target of this.enemyManager.getHostileEnemies()) {
+        if (lockedTarget && (lockedTarget.kind !== 'enemy' || lockedTarget.id !== target.id)) continue;
         if (!target.sprite.active || !this.combatSystem.isAlive(target.id)) continue;
         if (!this.combatSystem.canDamageTarget(enemy.id, target.id)) continue;
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, target.sprite.x, target.sprite.y);
@@ -656,18 +667,20 @@ export class CoopDefenseEnemyAbilitySystem {
           target.sprite.y,
           { clearanceRadius: pathClearance },
         )) continue;
-        best = { x: target.sprite.x, y: target.sprite.y, distance };
+        best = { x: target.sprite.x, y: target.sprite.y, distance, targetRef: { kind: 'enemy', id: target.id } };
       }
       return best;
     }
 
-    if (this.targetCatalog) return this.findCatalogThrowTarget(enemy, minRange, maxRange, pathClearance);
+    if (this.targetCatalog) return this.findCatalogThrowTarget(enemy, minRange, maxRange, pathClearance, lockedTarget);
 
     for (const player of this.playerManager.getAllPlayers()) {
+      if (lockedTarget && (lockedTarget.kind !== 'player' || lockedTarget.id !== player.id)) continue;
       if (!player.active || !this.combatSystem.isAlive(player.id) || this.combatSystem.isBurrowed(player.id)) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
       if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) continue;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, maxRange)) continue;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -675,7 +688,7 @@ export class CoopDefenseEnemyAbilitySystem {
         player.y,
         { clearanceRadius: pathClearance },
       )) continue;
-      best = { x: player.x, y: player.y, distance };
+      best = { x: player.x, y: player.y, distance, targetRef: { kind: 'player', id: player.id } };
     }
 
     return best;
@@ -714,6 +727,7 @@ export class CoopDefenseEnemyAbilitySystem {
       if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
       if (distance < ability.minRange || distance > ability.maxRange || (best && distance >= best.distance)) continue;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, ability.maxRange)) continue;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -732,12 +746,15 @@ export class CoopDefenseEnemyAbilitySystem {
     minRange: number,
     maxRange: number,
     pathClearance: number,
-  ): { x: number; y: number; distance: number } | null {
-    let best: { x: number; y: number; distance: number } | null = null;
+    lockedTarget?: ThrowTarget['targetRef'],
+  ): ThrowTarget | null {
+    let best: ThrowTarget | null = null;
     this.targetCatalog?.forEachTarget('player-like', (target) => {
+      if (lockedTarget && (lockedTarget.kind !== target.kind || lockedTarget.id !== target.id)) return;
       const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
       if (distance < minRange || distance > maxRange || (best && distance >= best.distance)) return;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, maxRange)) return;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -745,7 +762,7 @@ export class CoopDefenseEnemyAbilitySystem {
         position.y,
         { clearanceRadius: pathClearance },
       )) return;
-      best = { x: position.x, y: position.y, distance };
+      best = { x: position.x, y: position.y, distance, targetRef: { kind: target.kind, id: target.id } };
     });
     return best;
   }

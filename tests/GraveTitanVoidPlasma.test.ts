@@ -102,6 +102,7 @@ function createAttackSystem(
   const system = new CoopDefenseEnemyAttackSystem(
     {
       getAllEnemies: () => [enemy],
+      canSeeThroughSmoke: () => true,
       getAlliedEnemies: () => [],
       getEnemy: () => undefined,
       hasEnemy: (id: string) => id === enemy.id,

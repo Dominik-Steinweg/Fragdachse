@@ -692,6 +692,7 @@ export class ArenaLifecycleCoordinator {
       getEnemyManager: () => this.coopMissionRuntime?.enemyManager ?? null,
     }) ?? null;
     this.coopMissionPorts = createArenaCoopMissionPorts({
+      getSmokePerception: () => this.worldGameplay?.support?.smoke.runtime ?? null,
       ctx,
       getWorldRuntime: () => this.worldRuntime,
       getBaseManager: () => this.worldRuntime?.materialization?.bases ?? null,
@@ -1299,6 +1300,7 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
+    this.worldGameplay?.support?.smoke.runtime.clearTargets();
     this.captureTheBeerPresentation?.detach();
     this.worldRuntime?.activity.detach();
   }
@@ -2749,6 +2751,7 @@ export class ArenaLifecycleCoordinator {
     // die nächste World ihre Beleuchtung selbst setzt.
     setEmissiveScale(1);
     // Die scene-langlebigen Effektsysteme behalten keinen Bestand der vergangenen World.
+    this.worldGameplay?.support?.smoke.runtime.clear();
     this.ctx.smokeSystem.destroyAll();
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();

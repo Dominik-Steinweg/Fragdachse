@@ -27,6 +27,7 @@ export interface WorldSupportGameplaySystems {
 }
 
 export interface WorldSupportGameplayRuntimeOptions {
+  readonly smoke: import('./WorldSmokeBinding').WorldSmokeBinding;
   readonly projectileExternalInteraction: ProjectileExternalInteractionPort;
   readonly playerManager: PlayerManager;
   readonly combatSystem: WorldSupportCombatBinding;
@@ -50,6 +51,7 @@ export interface WorldSupportGameplayRuntimeOptions {
 /** Owns world-scoped detonation and support-ultimate capabilities. */
 export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUltimateAirstrikeCapability {
   readonly systems: WorldSupportGameplaySystems;
+  get smoke() { return this.options.smoke; }
   private destroyed = false;
 
   constructor(private readonly options: WorldSupportGameplayRuntimeOptions) {
@@ -88,6 +90,7 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUl
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.options.smoke.destroy();
     this.options.combatSystem.setDetonationSystem(null);
     this.options.combatSystem.setStinkCloudSystem(null);
     this.options.setBurrowStinkCloudSystem(null);

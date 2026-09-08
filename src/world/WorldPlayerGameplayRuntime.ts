@@ -1,4 +1,5 @@
 import type { WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
+import { captureCoopDefenseOutgoingDamage } from '../utils/coopDefenseStats';
 import type { PrimaryHitRewardScopeReadPort } from '../combat/PrimaryHitReward';
 import type {
   CombatActivityPort,
@@ -482,6 +483,14 @@ export class WorldPlayerGameplayRuntime implements
       null,
     );
     const utilityAction = new PlayerUtilityActionRuntime({
+      captureSmokeDamage: (id, now) => {
+        const build = playerModifier.getModifiers(id);
+        return {
+          sourceDamageMultiplier: loadout.getDamageMultiplier(id, now) * (options.getPowerUpSystem()?.getDamageMultiplier(id) ?? 1),
+          sourceOutgoingDamage: captureCoopDefenseOutgoingDamage({ additive: build.additiveStats, percentage: build.percentageStats },
+            build.classId, itemRuntime.getConditionalOutgoingDamageBonus(id, 'utility', now)),
+        };
+      },
       projectileSpawn: options.projectileSpawn,
       combatSystem: options.combatSystem,
       actor: {

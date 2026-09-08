@@ -1,6 +1,7 @@
 import { getDomainCatalog, getDomainKeys, translate, translateSegments, type TranslationSegment } from './catalog';
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
+import { VULNERABILITY_INCOMING_DAMAGE_BONUS } from '../systems/TargetStatusSystem';
 import { UTILITY_CONFIGS } from '../loadout/LoadoutConfig';
 import { getCoopDefenseUpgradeDefinition, type CoopDefenseUpgradeDefinition } from '../utils/coopDefenseUpgrades';
 import {
@@ -37,6 +38,20 @@ function getUpgradeParams(
     );
   });
 
+  const smoke = UTILITY_CONFIGS.SMOKE_GRENADE;
+  if (definition.id.startsWith('smoke_grenade_') && smoke?.type === 'smoke') {
+    params.smokeVulnerability = formatNumber(VULNERABILITY_INCOMING_DAMAGE_BONUS, locale, { style: 'percent' });
+    params.smokeChargeSeconds = formatNumber(smoke.smokeBehavior.chargeDurationMs / 1000, locale);
+    params.smokeStormTick = formatNumber(smoke.smokeDotTickIntervalMs / 1000, locale);
+    params.smokeDischargeCooldown = formatNumber(smoke.smokeBehavior.dischargeCooldownMs / 1000, locale);
+    if (definition.id === 'smoke_grenade_disorientation') {
+      const stages = Array.from({ length: definition.maxLevel }, (_, i) => i + 1);
+      params.smokeConfusionStages = stages.map(level => formatNumber(smoke.smokeBehavior.confusionFraction + definition.effects[0].value * level, locale, { style: 'percent' })).join(' / ');
+      params.smokeAftereffectStages = stages.map(level => formatNumber((smoke.smokeBehavior.aftereffectMs + definition.effects[1].value * level) / 1000, locale)).join(' / ');
+    }
+    params.smokeGrowthSeconds = formatNumber(smoke.smokeBehavior.growthDurationMs / 1000, locale);
+    params.smokeGrowthRadius = formatNumber(smoke.smokeBehavior.growthRadiusFraction, locale, { style: 'percent' });
+  }
   const he = UTILITY_CONFIGS.HE_GRENADE;
   if (definition.id.startsWith('he_grenade_') && he?.type === 'explosive' && he.fragmentation) {
     const percent = (value: number) => formatNumber(value, locale, { style: 'percent', maximumFractionDigits: 1 });

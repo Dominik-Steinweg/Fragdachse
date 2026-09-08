@@ -5141,9 +5141,111 @@
                                                                 {
                                                                     "stat":  "utility.SMOKE_GRENADE.smokeLingerDuration",
                                                                     "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
+                                                                    "value":  0.15
                                                                 }
                                                             ]
+                                            },
+                                            {
+                                              "id": "smoke_grenade_disorientation",
+                                              "code": "D-U3-R1",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "refundable": true,
+                                              "sortOrder": 181,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "unlock_smoke_grenade",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "utility.SMOKE_GRENADE.confusionFraction",
+                                                  "mode": "add_per_level",
+                                                  "value": 0.1
+                                                },
+                                                {
+                                                  "stat": "utility.SMOKE_GRENADE.aftereffectMs",
+                                                  "mode": "add_per_level",
+                                                  "value": 500
+                                                },
+                                                {
+                                                  "stat": "utility.SMOKE_GRENADE.retentionBias",
+                                                  "mode": "add_per_level",
+                                                  "value": 0.25
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "smoke_grenade_vulnerability",
+                                              "code": "D-U3-R2",
+                                              "kind": "upgrade",
+                                              "maxLevel": 1,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "refundable": true,
+                                              "sortOrder": 182,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "smoke_grenade_disorientation",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "utility.SMOKE_GRENADE.vulnerabilityEnabled",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "smoke_grenade_discharge",
+                                              "code": "D-U3-BL1",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "refundable": true,
+                                              "sortOrder": 186,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "smoke_grenade_storm",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "utility.SMOKE_GRENADE.dischargeCount",
+                                                  "mode": "add_per_level",
+                                                  "value": 1
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "id": "smoke_grenade_growth",
+                                              "code": "D-U3-BL2",
+                                              "kind": "upgrade",
+                                              "maxLevel": 3,
+                                              "startingLevel": 0,
+                                              "costPerLevel": 1,
+                                              "refundable": true,
+                                              "sortOrder": 187,
+                                              "requires": [
+                                                {
+                                                  "upgradeId": "smoke_grenade_storm",
+                                                  "minLevel": 1
+                                                }
+                                              ],
+                                              "effects": [
+                                                {
+                                                  "stat": "utility.SMOKE_GRENADE.growthMaxProcs",
+                                                  "mode": "add_per_level",
+                                                  "value": 2
+                                                }
+                                              ]
                                             },
                                             {
                                                 "id":  "smoke_grenade_storm",
@@ -5157,7 +5259,11 @@
                                                 "sortOrder":  185,
                                                 "requires":  [
                                                                  {
-                                                                     "upgradeId":  "unlock_smoke_grenade",
+                                                                     "upgradeId":  "smoke_grenade_duration",
+                                                                     "minLevel":  1
+                                                                 },
+                                                                 {
+                                                                     "upgradeId": "smoke_grenade_vulnerability",
                                                                      "minLevel":  1
                                                                  }
                                                              ],

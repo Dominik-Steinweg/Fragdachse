@@ -176,6 +176,7 @@ export class CoopDefenseEnemyDodgeSystem {
         if (!bucket) continue;
         for (const projectile of bucket) {
           if (!this.isDodgeableProjectile(enemy, projectile, dodge)) continue;
+          if (!this.enemyManager.canSeeThroughSmoke(enemy.id, projectile.x, projectile.y, dodge.evadeScanRadiusPx)) continue;
 
           const velocityX = projectile.vx;
           const velocityY = projectile.vy;
@@ -239,6 +240,7 @@ export class CoopDefenseEnemyDodgeSystem {
       );
       if (distance < dodge.approachMinDistancePx || distance > dodge.approachMaxDistancePx) continue;
       if (distance >= bestDistance) continue;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, dodge.approachMaxDistancePx)) continue;
       if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, player.x, player.y)) continue;
 
       bestDistance = distance;

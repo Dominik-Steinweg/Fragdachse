@@ -68,6 +68,7 @@ describe('temporary utility collection lifecycle', () => {
   it('publishes the complete authoritative collection after add and clear', () => {
     const publishTemporaryUtilityInstances = vi.fn();
     const manager = new PlayerUtilityActionRuntime({
+    captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }),
       playerManager: {} as never,
       projectileSpawn: {} as never,
       combatSystem: {} as never,
@@ -116,6 +117,7 @@ describe('temporary utility collection lifecycle', () => {
     let config = UTILITY_CONFIGS.HE_GRENADE;
     const publishCooldown = vi.fn();
     const manager = new PlayerUtilityActionRuntime({
+    captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }),
       playerManager: {} as never,
       projectileSpawn: {} as never,
       combatSystem: {} as never,
@@ -158,6 +160,7 @@ describe('temporary utility collection lifecycle', () => {
     const publishTemporaryUtilityInstances = vi.fn();
     const config = UTILITY_CONFIGS.HE_GRENADE;
     const manager = new PlayerUtilityActionRuntime({
+    captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }),
       playerManager: {} as never,
       projectileSpawn: {} as never,
       combatSystem: {} as never,

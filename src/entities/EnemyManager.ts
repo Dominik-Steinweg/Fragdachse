@@ -11,7 +11,7 @@ import {
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import { resolveEnemySmokeConfusion, type EnemySmokeConfusionState } from '../systems/EnemySmokeConfusion';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
-import type { SmokeSystem } from '../effects/SmokeSystem';
+import type { SmokePerceptionPort } from '../systems/SmokeRules';
 import type { CoopDefenseEnemyTrainAwarenessSystem } from '../systems/CoopDefenseEnemyTrainAwarenessSystem';
 import type { BurrowPhase, SpawnFront, SyncedEnemyDeltaState, SyncedEnemySnapshot, SyncedEnemyState } from '../types';
 import {
@@ -184,6 +184,14 @@ export class EnemyManager {
   private forceFullNetSnapshot = false;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
+  private smokePerception: SmokePerceptionPort | null = null;
+  private smokeNow = 0;
+  setSmokePerception(port: SmokePerceptionPort | null, now: number): void { this.smokePerception = port; this.smokeNow = now; }
+  canSeeThroughSmoke(enemyId: string, x: number, y: number, range: number): boolean {
+    const enemy = this.enemies.get(enemyId);
+    if (!enemy || enemy.faction !== 'hostile' || !this.smokePerception) return true;
+    return this.smokePerception.canSee(enemyId, enemy.sprite.x, enemy.sprite.y, x, y, range, this.smokeNow);
+  }
   private readonly smokeConfusionStates = new Map<string, EnemySmokeConfusionState>();
   private readonly separationVector = { x: 0, y: 0 };
   // --- Persistent separation grid (recycled across frames to avoid per-frame Map/Array allocations) ---
@@ -359,7 +367,7 @@ export class EnemyManager {
     burrowSystem?: EnemyBurrowMovementSource | null,
     combatPositioningSystem?: EnemyCombatPositioningSource | null,
     specialMovementSource?: EnemySpecialMovementSource | null,
-    smokeSystem?: SmokeSystem | null,
+    smokeSystem?: SmokePerceptionPort | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
@@ -455,7 +463,7 @@ export class EnemyManager {
       // Nahkampf zu folgen. Die Vorgabe greift erst hinter der Angriffspause, damit ein Gegner
       // während seines Schusses stehen bleibt.
       const positioningOverride = combatPositioningSystem?.getMovementOverride(enemy.id) ?? null;
-      if (positioningOverride) {
+      if (positioningOverride && !smokeSystem?.getConfusion(enemy.id, now)) {
         const decision = activeTrainAwareness?.resolveMovement(
           enemy,
           positioningOverride.vx,
@@ -512,13 +520,14 @@ export class EnemyManager {
         continue;
       }
 
-      if (integrationValue <= 0) {
+      const confused = Boolean(smokeSystem?.getConfusion(enemy.id, now));
+      if (integrationValue <= 0 && !confused) {
         if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
         continue;
       }
 
       const vector = flowFieldService.getVectorAt(gridCell.gridX, gridCell.gridY);
-      if (vector.x === 0 && vector.y === 0) {
+      if (vector.x === 0 && vector.y === 0 && !confused) {
         enemy.setPathBlocked(true);
         if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
         continue;

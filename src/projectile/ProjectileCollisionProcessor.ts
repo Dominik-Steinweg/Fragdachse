@@ -444,6 +444,9 @@ export class ProjectileCollisionProcessor {
     overlapBounds?: { left: number; right: number; top: number; bottom: number },
   ): boolean {
     if (record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    const protection = record.spec.flight.collisionFilter.initialTargetProtection;
+    if (slot.kind === 'enemy' && protection?.targetId === slot.id
+      && (record.simulatedAgeMs ?? 0) < protection.durationMs) return false;
     // Rock and base cells share the rectangular body sweep. Their target circles
     // must not reset the projectile before that sweep resolves the exterior face.
     if ((slot.kind === 'rock' || slot.kind === 'base') && usesRockSweep(record.spec.flight)) return false;

@@ -144,6 +144,7 @@ function createAttackSystem(
 ) {
   const shots: FiredShot[] = [];
   const enemyManager = {
+    canSeeThroughSmoke: vi.fn(() => true),
     getAllEnemies: () => [enemy],
     getAlliedEnemies: () => [],
     getEnemy: () => undefined,
@@ -177,7 +178,7 @@ function createAttackSystem(
     targetCatalog,
   );
 
-  return { system, shots };
+  return { system, shots, enemyManager };
 }
 
 /** Laesst den Host-Takt so lange laufen, bis `untilMs` erreicht ist. */
@@ -193,6 +194,38 @@ function runAttackFrames(
 }
 
 describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
+  it('finishes an announced melee swing at its frozen point when smoke hides the target', () => {
+    const enemy = createColossus();
+    const bite = enemy.getAttackWeapons().find(w => w.weapon.config.fire.type === 'melee')!;
+    const windupMs = 200;
+    enemy.getAttackWeapons = () => [{ ...bite, targetMode: 'players', playerMeleeWindupMs: windupMs }];
+    const player = fakeEntity({ id: 'p1', x: 110, y: 100, active: true });
+    const { system, shots, enemyManager } = createAttackSystem(enemy, [player]);
+    system.hostUpdate(16, 1000);
+    expect(shots).toHaveLength(0);
+    vi.mocked(enemyManager.canSeeThroughSmoke).mockReturnValue(false);
+    player.x = 600;
+    system.hostUpdate(16, 1000 + windupMs);
+    expect(shots).toEqual([{ weaponId: bite.weapon.config.id, targetX: 110, targetY: 100 }]);
+  });
+  it('freezes a running salvo at the last visible point and refuses new hidden targets', () => {
+    const enemy = createColossus();
+    const player = fakeEntity({ id: 'p1', x: 800, y: 100, active: true }) as TestPlayer;
+    const f = createAttackSystem(enemy, [player]);
+    const visibility = vi.spyOn(f.enemyManager, 'canSeeThroughSmoke');
+    visibility.mockReturnValue(false);
+    f.system.hostUpdate(1000, false);
+    expect(f.shots).toHaveLength(0);
+    visibility.mockReturnValue(true);
+    runAttackFrames(f.system, 1000, 1200);
+    expect(f.shots.length).toBeGreaterThan(0);
+    const count = f.shots.length, last = f.shots[count - 1];
+    player.y = 200;
+    visibility.mockImplementation((_id, _x, y) => y !== 200);
+    runAttackFrames(f.system, 1200, 1200 + SALVO.intervalMs * SALVO.count);
+    expect(f.shots.length).toBeGreaterThan(count);
+    for (const shot of f.shots.slice(count)) expect(shot.targetY).toBe(last.targetY);
+  });
   it.each(['players', 'all'] as const)('waehlt einen Decoy auch im normalen %s-Angriff', (targetMode) => {
     const enemy = createColossus(100, 100, targetMode);
     const targetCatalog = new EnemyAiTargetCatalog();
@@ -305,6 +338,7 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
     const rock = { x: 140, y: 100, active: true } as unknown as Phaser.GameObjects.Image;
     const shots: FiredShot[] = [];
     const enemyManager = {
+      canSeeThroughSmoke: () => true,
       getAllEnemies: () => [enemy],
       getAlliedEnemies: () => [],
       getEnemy: () => undefined,
@@ -348,8 +382,10 @@ describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
 describe('Flammenkoloss – Void-Brandsatz', () => {
   function createAbilitySystem(enemy: TestColossus, players: readonly TestPlayer[]) {
     const spawnProjectile = vi.fn().mockReturnValue(1);
+    const canSeeThroughSmoke = vi.fn(() => true);
     const system = new CoopDefenseEnemyAbilitySystem(
       {
+        canSeeThroughSmoke,
         getAllEnemies: () => [enemy],
         getEnemy: () => enemy,
         getHostileEnemies: () => [],
@@ -368,8 +404,23 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
       { hostRefreshGroundCellsAlongSweptCircle: vi.fn() } as unknown as FireSystem,
       { broadcastTranslocatorFlash: vi.fn() },
     );
-    return { system, spawnProjectile };
+    return { system, spawnProjectile, canSeeThroughSmoke };
   }
+
+  it('keeps the announced throw point when its target enters smoke, even with another visible player', () => {
+    const enemy = createColossus();
+    const original = fakeEntity({ id: 'p1', x: 600, y: 100, active: true });
+    const other = fakeEntity({ id: 'p2', x: 100, y: 650, active: true });
+    const { system, spawnProjectile, canSeeThroughSmoke } = createAbilitySystem(enemy, [original, other]);
+    system.hostUpdate(1000);
+    const readyAt = 1000 + VOID_MOLOTOV.cooldownMs;
+    system.hostUpdate(readyAt);
+    original.y = 300;
+    canSeeThroughSmoke.mockImplementation((_id?: string, x?: number) => x !== original.x);
+    system.hostUpdate(readyAt + VOID_MOLOTOV.windupMs);
+    expect(spawnProjectile).toHaveBeenCalledTimes(1);
+    expect(spawnProjectile.mock.calls[0][0].origin.angle).toBeCloseTo(0);
+  });
 
   it('haelt den Boss fuer die Ausholzeit an und wirft danach lila Void-Feuer', () => {
     const enemy = createColossus();
@@ -505,7 +556,8 @@ describe('Flammenkoloss – Void-Brandsatz', () => {
     const spawnProjectile = vi.fn().mockReturnValue(1);
     const system = new CoopDefenseEnemyAbilitySystem(
       {
-        getAllEnemies: () => [enemy],
+        canSeeThroughSmoke: () => true,
+      getAllEnemies: () => [enemy],
         getEnemy: () => enemy,
         getHostileEnemies: () => [],
       } as unknown as EnemyManager,

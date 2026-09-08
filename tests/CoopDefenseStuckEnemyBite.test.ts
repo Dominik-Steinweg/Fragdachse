@@ -105,6 +105,7 @@ function createSystem(
   // Spieler in Glock-, aber weit außerhalb von Bissreichweite: der festhängende Gegner feuert
   // dadurch die ganze Zeit weiter und pausiert seine Bewegung nach jedem Schuss.
   const enemyManager = {
+    canSeeThroughSmoke: () => true,
     getAllEnemies: () => [enemy],
     getAlliedEnemies: () => [],
     getEnemy: () => undefined,

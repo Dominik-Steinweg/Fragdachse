@@ -556,6 +556,7 @@ export interface ExplosiveUtilityConfig extends BaseUtilityConfig {
 }
 
 export interface SmokeUtilityConfig extends BaseUtilityConfig {
+  readonly smokeBehavior: import('../systems/SmokeRules').SmokeBehaviorConfig;
   readonly type: 'smoke';
   readonly smokeRadius: number;             // px
   readonly smokeExpandDuration: number;     // ms

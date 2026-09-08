@@ -220,6 +220,7 @@ export class CoopDefenseVoidHunterSystem {
 
     const positions = this.playerManager.getAllPlayers()
       .filter((player) => player.active && this.combatSystem.isAlive(player.id))
+      .filter((player) => this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, Math.hypot(this.worldMetrics.widthPx, this.worldMetrics.heightPx)))
       .map((player) => ({ x: player.x, y: player.y }));
     const target = computeVoidHunterNukeTarget(positions, {
       x: enemy.sprite.x,
@@ -246,6 +247,7 @@ export class CoopDefenseVoidHunterSystem {
   private canStartGauss(enemy: EnemyEntity, config: CoopDefenseVoidHunterBossConfig): boolean {
     let hasTarget = false;
     const checkTarget = (x: number, y: number): boolean => {
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, x, y, VOID_HUNTER_GAUSS.range)) return false;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, x, y);
       if (distance <= config.shotgunRangePx) return true;
       if (distance <= VOID_HUNTER_GAUSS.range
@@ -269,6 +271,7 @@ export class CoopDefenseVoidHunterSystem {
     for (const ally of this.enemyManager.getAllEnemies()) {
       if (ally.faction !== 'allied' || !ally.sprite.active || ally.getHp() <= 0) continue;
       if (!this.combatSystem.canDamageTarget(enemy.id, ally.id)) continue;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, ally.sprite.x, ally.sprite.y, config.shotgunRangePx)) continue;
       if (Phaser.Math.Distance.Between(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -324,14 +327,14 @@ export class CoopDefenseVoidHunterSystem {
             ? { x: target.x, y: target.y }
             : null;
         })();
-      if (targetPosition) {
+      if (targetPosition && this.enemyManager.canSeeThroughSmoke(enemy.id, targetPosition.x, targetPosition.y, VOID_HUNTER_GAUSS.range)) {
         gauss.desiredAngle = Phaser.Math.Angle.Between(
           enemy.sprite.x,
           enemy.sprite.y,
           targetPosition.x,
           targetPosition.y,
         );
-      } else {
+      } else if (!targetPosition) {
         state.gauss = null;
         state.nextGaussAt = now + config.gauss.cooldownMs;
         enemy.setSpecialAction('none');
@@ -385,9 +388,11 @@ export class CoopDefenseVoidHunterSystem {
   ): void {
     state.armageddonActiveUntil = now + config.armageddonDurationMs;
     state.nextArmageddonAt = Number.POSITIVE_INFINITY;
+    let lastTarget: { x: number; y: number } = { x: enemy.sprite.x, y: enemy.sprite.y };
     this.armageddonSystem.activate(enemy.id, config.armageddon, () => {
       const target = this.findGaussTarget(enemy);
-      return target ? { x: target.x, y: target.y } : null;
+      if (target) lastTarget = { x: target.x, y: target.y };
+      return lastTarget;
     });
     enemy.setSpecialAction('armageddon', state.armageddonActiveUntil);
   }
@@ -398,6 +403,7 @@ export class CoopDefenseVoidHunterSystem {
       this.targetCatalog.forEachTarget('player-like', (target) => {
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
         const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
+        if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, VOID_HUNTER_GAUSS.range)) return;
         if (!best || distanceSq < best.distanceSq) {
           best = { ref: { kind: target.kind, id: target.id }, x: position.x, y: position.y, distanceSq };
         }
@@ -407,6 +413,7 @@ export class CoopDefenseVoidHunterSystem {
     for (const player of this.playerManager.getAllPlayers()) {
       if (!player.active || !this.combatSystem.isAlive(player.id) || !this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
       const distanceSq = Phaser.Math.Distance.Squared(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, VOID_HUNTER_GAUSS.range)) continue;
       if (!best || distanceSq < best.distanceSq) {
         best = { ref: { kind: 'player', id: player.id }, x: player.x, y: player.y, distanceSq };
       }

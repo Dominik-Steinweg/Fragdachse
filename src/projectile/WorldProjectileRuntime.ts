@@ -2073,6 +2073,7 @@ export class WorldProjectileRuntime implements
       },
       state: { lockedTargetId: null },
       excludedTargetKeys: projectile.interaction.multiExplosionExcludedTargetKeys,
+      initialTargetProtection: projectile.spec.flight.collisionFilter.initialTargetProtection,
     };
   }
 
@@ -2262,7 +2263,8 @@ export class WorldProjectileRuntime implements
           isBfg: cfg.isBfg,
           collisionFilter: {
             ignoreBaseCollisions: cfg.ignoreBaseCollisions,
-            ignoreRockIndex: cfg.ignoreRockIndex
+            ignoreRockIndex: cfg.ignoreRockIndex,
+            initialTargetProtection: cfg.initialTargetProtection
           },
           hitboxGrowth: {
             growRatePerSec: cfg.hitboxGrowRate,

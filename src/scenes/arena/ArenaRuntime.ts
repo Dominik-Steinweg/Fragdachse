@@ -269,6 +269,7 @@ export class ArenaRuntime {
       getPowerUpRuntime: () => this.flow.getWorldPowerUpRuntime(),
     });
     this.clientUpdate.setActivityFramePort({
+      getEnemyPosition: id => { const enemy = this.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(id); return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null; },
       getAdrenalineEssence: () => this.flow.getAdrenalineEssence(),
       getStep: () => this.flow.getActivityStep(),
     });

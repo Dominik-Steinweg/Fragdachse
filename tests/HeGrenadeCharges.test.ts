@@ -23,6 +23,7 @@ function fixture(realLoadout = false) {
     manager.setUtilityConfigModifierSource(() => getCoopDefenseResolvedEffectTotals(fullHeProfile, 'dachs_nukem'));
   }
   const runtime = new PlayerUtilityActionRuntime({
+    captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }),
     projectileSpawn: { spawnProjectile: spawn },
     combatSystem: {} as never,
     actor: { getPlayer: () => ({ x: 0, y: 0, color: 0xffffff }), canInteract: () => true,

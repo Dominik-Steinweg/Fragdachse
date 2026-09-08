@@ -77,19 +77,23 @@ export function resolveCoopDefenseStat(
  * Upgrade-Boni trotzdem. Krit-Chance und Krit-Schaden addieren sich auf die Klassenwerte, der
  * Schadensmultiplikator wird mit dem prozentualen Bucket multipliziert.
  */
-export function resolveCoopDefenseOutgoingDamage(
+export interface CoopDefenseOutgoingDamageProfile {
+  readonly damageMultiplier: number;
+  readonly criticalChance: number;
+  readonly criticalDamageMultiplier: number;
+}
+
+/** Captures build values without rolling a hit, for effects that retain their source build. */
+export function captureCoopDefenseOutgoingDamage(
   totals: CoopDefenseResolvedEffectTotals,
   classId: CoopDefenseClassId | null,
-  amount: number,
-  allowCritical: boolean,
-  random: () => number = Math.random,
   /**
    * Prozentualer Zuschlag aus bedingten Item-Affixen. Er addiert sich in denselben Bucket wie
    * Upgrades und Items – zehn Prozent von hier und fuenf aus dem Bucket ergeben x1.15, keine
    * multiplikative Verkettung.
    */
   bonusPercent = 0,
-): CoopDefenseOutgoingDamageResult {
+): CoopDefenseOutgoingDamageProfile {
   const classDefinition = classId ? getCoopDefenseClassDefinition(classId) : null;
   const damageMultiplier = (classDefinition?.outgoingDamageMultiplier ?? 1)
     * (1 + (totals.percentage[COOP_DEFENSE_PLAYER_STAT_OUTGOING_DAMAGE] ?? 0) + bonusPercent);
@@ -101,6 +105,19 @@ export function resolveCoopDefenseOutgoingDamage(
     COOP_DEFENSE_BASE_CRITICAL_DAMAGE_MULTIPLIER,
     classDefinition?.criticalDamageMultiplier ?? 1,
   ) + (totals.additive[COOP_DEFENSE_PLAYER_STAT_CRITICAL_DAMAGE] ?? 0);
+
+  return { damageMultiplier, criticalChance, criticalDamageMultiplier };
+}
+
+export function resolveCoopDefenseOutgoingDamage(
+  totals: CoopDefenseResolvedEffectTotals,
+  classId: CoopDefenseClassId | null,
+  amount: number,
+  allowCritical: boolean,
+  random: () => number = Math.random,
+  bonusPercent = 0,
+): CoopDefenseOutgoingDamageResult {
+  const { damageMultiplier, criticalChance, criticalDamageMultiplier } = captureCoopDefenseOutgoingDamage(totals, classId, bonusPercent);
 
   const isCritical = allowCritical && criticalChance > 0 && random() < criticalChance;
   return {

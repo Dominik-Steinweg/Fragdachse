@@ -54,6 +54,8 @@ export interface CombatAllegianceRef {
 }
 
 export interface CombatSourceLineage {
+  readonly smokeCloudId?: number;
+  readonly smokeKind?: 'storm' | 'discharge';
   readonly parentEffectId?: string;
   readonly parentProjectileId?: number;
   readonly reflected?: boolean;

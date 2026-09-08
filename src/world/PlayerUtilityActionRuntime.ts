@@ -95,6 +95,7 @@ export interface PlayerUtilityActionNetworkPort {
 }
 
 export interface PlayerUtilityActionRuntimeOptions {
+  readonly captureSmokeDamage: (playerId: string, now: number) => Pick<import('../types').SmokeGrenadeEffect, 'sourceDamageMultiplier' | 'sourceOutgoingDamage'>;
   readonly projectileSpawn: ProjectileSpawnPort;
   /** Immediate attacks use the same normalized capability as regular weapon execution. */
   readonly combatSystem: CombatImmediateAttackPort;
@@ -549,6 +550,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     chargeFraction: number,
     muzzle?: MuzzleOrigin,
   ): boolean {
+    const effect = structuredClone(this.buildGrenadeEffect(cfg, playerColor));
+    if (effect.type === 'smoke') Object.assign(effect, this.options.captureSmokeDamage(playerId, this.hostFrameNowMs));
     const clampedCharge = Math.max(0, Math.min(1, chargeFraction));
     const speed = cfg.activation.minThrowSpeed + (cfg.projectileSpeed - cfg.activation.minThrowSpeed) * clampedCharge;
     const projectileId = this.options.projectileSpawn.spawnProjectile({
@@ -574,7 +577,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         allowTeamDamage: cfg.allowTeamDamage,
       }),
       interaction: {
-        grenadeEffect: this.buildGrenadeEffect(cfg, playerColor),
+        grenadeEffect: effect,
       },
       presentation: {
         color: cfg.projectileColor ?? playerColor,
@@ -683,7 +686,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       return { type: 'fire' as const, radius: cfg.fireRadius, damagePerTick: cfg.fireDamagePerTick, lingerDuration: cfg.fireLingerDuration, allowTeamDamage: cfg.allowTeamDamage, rockDamageMult: cfg.rockDamageMult, trainDamageMult: cfg.trainDamageMult, baseDamageMult: cfg.baseDamageMult, burnDurationMs: cfg.fireBurnDurationMs, burnDamagePerTick: cfg.fireBurnDamagePerTick, wildfire: (cfg.wildfireEnabled ?? 0) > 0 ? { speedMultiplier: cfg.wildfirePanicSpeedMultiplier ?? 1.5, trailDurationMs: cfg.wildfireTrailDurationMs ?? 2000, trailDamagePerTick: cfg.wildfireTrailDamagePerTick ?? 2 } : undefined };
     }
     if (cfg.type === 'smoke') {
-      return { type: 'smoke' as const, radius: cfg.smokeRadius, spreadDuration: cfg.smokeExpandDuration, lingerDuration: cfg.smokeLingerDuration, dissipateDuration: cfg.smokeDissipateDuration, maxAlpha: cfg.smokeMaxAlpha, dotDamagePerTick: cfg.smokeDotDamagePerTick, dotTickIntervalMs: cfg.smokeDotTickIntervalMs };
+      return { type: 'smoke' as const, behavior: cfg.smokeBehavior, radius: cfg.smokeRadius, spreadDuration: cfg.smokeExpandDuration, lingerDuration: cfg.smokeLingerDuration, dissipateDuration: cfg.smokeDissipateDuration, maxAlpha: cfg.smokeMaxAlpha, dotDamagePerTick: cfg.smokeDotDamagePerTick, dotTickIntervalMs: cfg.smokeDotTickIntervalMs };
     }
     if (cfg.type === 'time_bubble') {
       return { type: 'time_bubble' as const, radius: cfg.bubbleRadius, duration: cfg.bubbleDuration, projectileSlowFactor: cfg.projectileSlowFactor, playerSlowFactor: cfg.playerSlowFactor, trainSlowFactor: cfg.trainSlowFactor, color: cfg.bubbleColor ?? cfg.projectileColor ?? playerColor, distortion: cfg.bubbleDistortion, friendlyImmunity: cfg.friendlyImmunity };

@@ -316,6 +316,7 @@ export interface GameState {
   remoteControlTurrets: SyncedRemoteControlTurret[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
+  smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
@@ -356,6 +357,7 @@ interface OutboundGameState {
   remoteControlTurrets: SyncedRemoteControlTurret[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
+  smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUpSnapshot | null;
   pedestals:    SyncedPowerUpPedestalSnapshot | null;
@@ -401,6 +403,19 @@ function decodeSlimeTrailSnapshot(raw: unknown): SyncedSlimeTrailSnapshot {
 }
 
 type EncodedTargetVulnerability = [string, string, number];
+
+function encodeSmokeTargets(entries: readonly import('../types').SyncedSmokeTargetStatus[]): [string, number, number][] {
+  return entries.map(entry => [entry.enemyId, entry.confusedUntil, entry.chargedUntil]);
+}
+
+function decodeSmokeTargets(raw: unknown): import('../types').SyncedSmokeTargetStatus[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap(entry => {
+    if (!Array.isArray(entry) || entry.length !== 3 || typeof entry[0] !== 'string'
+      || !Number.isFinite(entry[1]) || !Number.isFinite(entry[2])) return [];
+    return [{ enemyId: entry[0], confusedUntil: entry[1], chargedUntil: entry[2] }];
+  });
+}
 
 function encodeTargetVulnerabilities(entries: readonly SyncedTargetVulnerability[]): EncodedTargetVulnerability[] {
   return entries.map(entry => [entry.targetType, entry.targetId, entry.expiresAt]);
@@ -2698,6 +2713,7 @@ export class NetworkBridge {
     if (state.remoteControlTurrets.length > 0) payload.rc = state.remoteControlTurrets;
     if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
+    payload.sx = encodeSmokeTargets(state.smokeTargets ?? []);
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
     if (state.timeBubbles.length > 0)  payload.tb = state.timeBubbles;
@@ -2800,6 +2816,7 @@ export class NetworkBridge {
       rc: state.remoteControlTurrets,
       dc: state.decoys,
       s: state.smokes,
+      sx: encodeSmokeTargets(state.smokeTargets ?? []),
       f: state.fires,
       sc: state.stinkClouds,
       tb: state.timeBubbles,
@@ -2915,6 +2932,7 @@ export class NetworkBridge {
       remoteControlTurrets: (raw.rc as SyncedRemoteControlTurret[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
+      smokeTargets: decodeSmokeTargets(raw.sx),
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
       timeBubbles:   (raw.tb as SyncedTimeBubble[]   | undefined) ?? [],

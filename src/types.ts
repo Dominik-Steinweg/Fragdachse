@@ -1065,7 +1065,7 @@ export interface UtilityPlacementPreviewState {
 
 /** Source-owned factor that was already applied before a projectile entered its Runtime. */
 export interface ProjectileDamageSourceFactor {
-  readonly kind: 'automated-source' | 'runtime-power';
+  readonly kind: 'automated-source' | 'runtime-power' | 'outgoing-modifier' | 'critical';
   readonly multiplier: number;
   readonly resolvedAt: 'execution';
 }
@@ -1079,6 +1079,7 @@ export interface ProjectileSpawnConfig {
   ignoreBaseCollisions?: boolean;
   /** Placeable turret projectiles pass through the runtime rock they are mounted on. */
   ignoreRockIndex?: number;
+  initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
   speed:           number;
   size:            number;
   damage:          number;        // 0 bei Granaten (kein Direkttreffer-Schaden)
@@ -1242,6 +1243,10 @@ export interface DamageGrenadeEffect {
 }
 
 export interface SmokeGrenadeEffect {
+  /** Outgoing owner scaling captured at throw, independent of later loadout/lifetime changes. */
+  sourceDamageMultiplier?: number;
+  sourceOutgoingDamage?: import('./utils/coopDefenseStats').CoopDefenseOutgoingDamageProfile;
+  behavior: import('./systems/SmokeRules').SmokeBehaviorConfig;
   type: 'smoke';
   radius: number;
   spreadDuration: number;
@@ -1367,7 +1372,21 @@ export interface ChainLightningConfig {
   readonly thicknessFalloffPerJump?: number;  // visuelle Verschmälerung des Strahls je Sprung (Default 0.2)
 }
 
+export interface SyncedSmokeTargetStatus {
+  enemyId: string;
+  confusedUntil: number;
+  chargedUntil: number;
+}
+
 export interface SyncedSmokeCloud {
+  activeUntil?: number;
+  expiresAt?: number;
+  phase?: 'active' | 'dissipating';
+  growthSequence?: number;
+  growthFromRadius?: number;
+  growthTargetRadius?: number;
+  growthStartedAt?: number;
+  growthDurationMs?: number;
   id:      number;
   x:       number;
   y:       number;

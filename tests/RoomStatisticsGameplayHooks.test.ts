@@ -22,6 +22,7 @@ function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
   const recordUtilityUsed = vi.fn();
   const recordConstructionBuilt = vi.fn();
   const utility = new PlayerUtilityActionRuntime({
+    captureSmokeDamage: () => ({ sourceDamageMultiplier: 1 }),
     projectileSpawn: { spawnProjectile: vi.fn() } as any,
     combatSystem: { resolveImmediateAttack: vi.fn(() => ({ accepted: true })) } as any,
     actor: {

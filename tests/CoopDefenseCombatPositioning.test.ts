@@ -32,6 +32,7 @@ function createSystem(playerX: number, isFreeGround: () => boolean = () => true)
   const system = new CoopDefenseEnemyCombatPositioningSystem(
     {
       getAllEnemies: () => [enemy],
+      canSeeThroughSmoke: () => true,
       isEnemyPanicking: () => false,
     } as unknown as EnemyManager,
     {

@@ -93,7 +93,7 @@ describe('targeted AI versus untargeted effects', () => {
     };
 
     const system = new CoopDefenseVoidHunterSystem(
-      { getAllEnemies: () => [enemy], getEnemy: () => enemy } as never,
+      { getAllEnemies: () => [enemy], getEnemy: () => enemy, canSeeThroughSmoke: () => true } as never,
       playerManager as never,
       { isAlive: () => true } as never,
       {} as never,

@@ -38,6 +38,27 @@ const BASE_HOMING: ProjectileHomingConfig = {
 };
 
 describe('projectile homing against hostile bases', () => {
+  it('keeps smoke bolts ballistic until acquisition, favors forward targets and later permits the origin', () => {
+    const controller = new ProjectileHomingController();
+    let originOnly = false;
+    controller.setTargetQueryPort({ queryTargets: (_config, _owner, _x, _y, _r, emit) => {
+      emit('origin', 'enemies', 5, 0);
+      if (!originOnly) { emit('behind', 'enemies', -20, 0); emit('ahead', 'enemies', 150, 20); }
+    } });
+    controller.setLineOfFireReadPort({ hasClearLineOfFire: () => true });
+    const projectile = { ...makeProjectile({ ...BASE_HOMING, targetTypes: ['enemies'], acquireDelayMs: 200,
+      distanceWeight: 1, forwardWeight: 1.4, maxTurnDegreesPerStep: 4 }),
+      initialTargetProtection: { targetId: 'origin', durationMs: 300 } };
+    expect(controller.update(projectile, 199)).toBe(false);
+    expect(projectile.kinematics.velocityY).toBe(0);
+    expect(controller.update(projectile, 200)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('ahead');
+    expect(projectile.kinematics.velocityY).toBeGreaterThan(0);
+    originOnly = true;
+    expect(controller.update(projectile, 250, true)).toBe(false);
+    expect(controller.update(projectile, 300, true)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('origin');
+  });
   it('enables bases for the player-selectable homing weapons', () => {
     for (const weaponId of ['PLASMA', 'MINI_ROCKET_LAUNCHER', 'P90'] as const) {
       const weapon = WEAPON_CONFIGS[weaponId];

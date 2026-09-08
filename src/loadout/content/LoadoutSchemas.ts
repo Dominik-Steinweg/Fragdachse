@@ -97,7 +97,7 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   explosive: ['aoeRadius', 'aoeDamage'],
   smoke: [
     'smokeRadius', 'smokeExpandDuration', 'smokeLingerDuration', 'smokeDissipateDuration',
-    'smokeMaxAlpha', 'smokeDotDamagePerTick', 'smokeDotTickIntervalMs',
+    'smokeMaxAlpha', 'smokeDotDamagePerTick', 'smokeDotTickIntervalMs', 'smokeBehavior',
   ],
   molotov: ['fireRadius', 'fireDamagePerTick', 'fireLingerDuration'],
   time_bubble: ['bubbleRadius', 'bubbleDuration', 'projectileSlowFactor', 'playerSlowFactor', 'trainSlowFactor'],
@@ -250,6 +250,25 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.type === 'smoke') {
+    const b = value.smokeBehavior;
+    const fields = ["confusionFraction","aftereffectMs","directionMinMs","directionMaxMs","recoveryFadeMs","retentionBias","retentionEdgeFraction","nearSightPx","bossNearSightPx","bossConfusionFactor","bossAftereffectFactor","vulnerabilityEnabled","chargeDurationMs","dischargeCount","dischargeCooldownMs","dischargeDamage","dischargeSpeed","dischargeRange","dischargeSize","growthMaxProcs","growthDurationMs","growthRadiusFraction","growthTransitionMs"];
+    if (!isRecord(b) || fields.some(k => typeof b[k] !== 'number' || !Number.isFinite(b[k]) || (b[k] as number) < 0)
+      || !isRecord(b.dischargeHoming)) issues.push('$.smokeBehavior: complete nonnegative finite tuning required');
+    else {
+      for (const k of ['confusionFraction', 'retentionBias', 'retentionEdgeFraction', 'bossConfusionFactor', 'bossAftereffectFactor']) {
+        if ((b[k] as number) > 1) issues.push('$.smokeBehavior.' + k + ': expected fraction');
+      }
+      for (const k of ['dischargeCount', 'growthMaxProcs', 'vulnerabilityEnabled']) {
+        if (!Number.isSafeInteger(b[k])) issues.push('$.smokeBehavior.' + k + ': expected integer');
+      }
+      if ((b.directionMaxMs as number) < (b.directionMinMs as number) || (b.dischargeSpeed as number) <= 0) issues.push('$.smokeBehavior: invalid timing or speed');
+      for (const k of ['searchRadius', 'maxTurnDegreesPerStep', 'retargetIntervalMs', 'acquireDelayMs', 'distanceWeight', 'forwardWeight']) {
+        const n = b.dischargeHoming[k];
+        if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) issues.push('$.smokeBehavior.dischargeHoming.' + k + ': invalid value');
+      }
+    }
+  }
   if (value.charges !== undefined) {
     const c = value.charges;
     if (!isRecord(c) || !Number.isSafeInteger(c.maxCharges) || (c.maxCharges as number) < 1

@@ -5,8 +5,21 @@ import sharp from 'sharp';
 import manifest from '../../src/config/pipelineAssets.json';
 import catalog from '../../scripts/asset-pipeline/catalog-v2.json';
 import { COOP_DEFENSE_ENEMY_CONFIGS } from '../../src/config/coopDefenseEnemies';
+import { getCoopDefenseUpgradeTextureKey } from '../../src/utils/coopDefenseUpgrades';
 
 describe('selected runtime asset package', () => {
+  it('resolves every smoke upgrade alias to a shipped PNG', async () => {
+    const ids = ['smoke_grenade_radius', 'smoke_grenade_duration', 'smoke_grenade_storm',
+      'smoke_grenade_disorientation', 'smoke_grenade_vulnerability', 'smoke_grenade_discharge', 'smoke_grenade_growth'];
+    for (const id of ids) {
+      const key = getCoopDefenseUpgradeTextureKey(id);
+      expect(key).toBeTruthy();
+      const metadata = await sharp(`public/assets/sprites/Loadout/${key}.png`).metadata();
+      expect(metadata.format).toBe('png');
+      expect(metadata.width).toBeGreaterThan(0);
+      expect(metadata.height).toBeGreaterThan(0);
+    }
+  });
   it('covers the authored production catalog with unique runtime textures', () => {
     expect(manifest.assets.map(a => a.id).sort()).toEqual(catalog.assets.map(a => a.id).sort());
     expect(new Set(manifest.assets.flatMap(a => [a.textureKey, a.sheetTextureKey])).size).toBe(manifest.assets.length * 2);

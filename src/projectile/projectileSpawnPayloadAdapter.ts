@@ -32,6 +32,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
 
     ignoreBaseCollisions: flight.collisionFilter?.ignoreBaseCollisions,
     ignoreRockIndex:      flight.collisionFilter?.ignoreRockIndex,
+    initialTargetProtection: flight.collisionFilter?.initialTargetProtection,
     initialBounceCount:   flight.initialBounceCount,
     remainingRangePx:     flight.remainingRangePx,
     fuseTime:             flight.fuseTimeMs,

@@ -91,6 +91,7 @@ export interface ProjectilePenetrationSpec {
 
 /** Quellbezogene Kollisionsausnahmen einer montierten Feuerquelle. */
 export interface ProjectileCollisionFilterSpec {
+  readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
   readonly ignoreBaseCollisions?: boolean;
   readonly ignoreRockIndex?: number;
 }
@@ -173,6 +174,8 @@ export interface ProjectileAllegianceRef {
  * die Abstammung nur so weit fort, wie ein Consumer sie tatsächlich braucht.
  */
 export interface ProjectileLineage {
+  readonly smokeCloudId?: number;
+  readonly smokeKind?: 'storm' | 'discharge';
   /** Erzeugendes Projectile eines Kind-/Split-Spawns. */
   readonly parentProjectileId?: ProjectileId;
   /** Das Projectile wurde durch Reflection/Deflection übernommen. */

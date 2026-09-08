@@ -1,3 +1,4 @@
+import { WorldSmokeBinding } from '../../world/WorldSmokeBinding';
 import { bridge } from '../../network/bridge';
 import { CAPTURE_THE_BEER_MODE } from '../../gameModes';
 import { WorldGeometryBinding } from '../../world/WorldGeometryBinding';
@@ -161,6 +162,8 @@ export function composeWorldSupportGameplay(
   }
   
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
+    smoke: new WorldSmokeBinding(combatSystem, () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+      gameplay.targeting!.systems.targetStatus, gameplay.projectiles),
     playerManager: ctx.playerManager,
     projectileExternalInteraction: gameplay.projectiles,
     combatSystem,

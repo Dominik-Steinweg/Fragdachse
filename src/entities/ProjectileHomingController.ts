@@ -67,6 +67,7 @@ export interface ProjectileHomingRequest {
   readonly kinematics: ProjectileKinematics;
   readonly state: HomingRuntimeState;
   readonly excludedTargetKeys?: ReadonlySet<string>;
+  readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
 }
 
 const DEFAULT_HOMING_TARGET_TYPES: readonly HomingTargetType[] = ['players'];
@@ -136,7 +137,7 @@ export class ProjectileHomingController {
     }
     state.lastSearchAtSimulatedMs = simulatedAgeMs;
 
-    const target = this.selectTarget(request);
+    const target = this.selectTarget(request, simulatedAgeMs);
     if (!target) {
       state.lockedTargetId = null;
       state.lockedTargetType = undefined;
@@ -160,7 +161,7 @@ export class ProjectileHomingController {
   }
 
   /** Wählt das bestbewertete erreichbare Ziel ohne Allokationen im normalen Suchpfad. */
-  private selectTarget(request: ProjectileHomingRequest): HomingTargetCandidate | null {
+  private selectTarget(request: ProjectileHomingRequest, ageMs: number): HomingTargetCandidate | null {
     const { homing, ownerId, kinematics, state } = request;
     const targetQueryPort = this.targetQueryPort;
     if (!targetQueryPort) return null;
@@ -189,7 +190,9 @@ export class ProjectileHomingController {
       const candidate = this.candidatePool[i];
       const dx = candidate.x - originX;
       const dy = candidate.y - originY;
-      const ineligible = !targetTypes.includes(candidate.type)
+      const protection = request.initialTargetProtection;
+      const ineligible = (candidate.type === 'enemies' && protection?.targetId === candidate.id && ageMs < protection.durationMs)
+        || !targetTypes.includes(candidate.type)
         || (excludeOwner && candidate.id === ownerId)
         || dx * dx + dy * dy > searchRadiusSq
         || request.excludedTargetKeys?.has(`${candidate.type}:${candidate.id}`) === true

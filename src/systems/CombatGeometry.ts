@@ -160,6 +160,57 @@ export class CombatGeometry {
   }
 
   /**
+   * Does any part of a segment remain visible from an origin? Visibility can change only at
+   * obstacle silhouettes or segment/obstacle intersections. Partition at those boundaries,
+   * then use the canonical LOS rule on each interval; a shielded midpoint alone is insufficient.
+   */
+  hasVisibleSegmentFrom(cx: number, cy: number, ax: number, ay: number, bx: number, by: number): boolean {
+    const dx = bx - ax, dy = by - ay;
+    if (Math.hypot(dx, dy) < 0.000001) return this.hasLineOfSight(cx, cy, ax, ay);
+    const cuts = [0, 1];
+    const cut = (t: number) => { if (t > 0 && t < 1) cuts.push(t); };
+    const ray = (rx: number, ry: number) => {
+      const determinant = rx * dy - ry * dx;
+      if (Math.abs(determinant) < 0.000001) return;
+      const ox = ax - cx, oy = ay - cy;
+      const alongRay = (ox * dy - oy * dx) / determinant;
+      if (alongRay >= 0) cut((ox * ry - oy * rx) / determinant);
+    };
+    const edge = (x: number, y: number, ex: number, ey: number) => {
+      const determinant = dx * ey - dy * ex;
+      if (Math.abs(determinant) < 0.000001) return;
+      const ox = x - ax, oy = y - ay;
+      const u = (ox * dy - oy * dx) / determinant;
+      if (u >= 0 && u <= 1) cut((ox * ey - oy * ex) / determinant);
+    };
+    const radius = Math.max(Math.hypot(ax - cx, ay - cy), Math.hypot(bx - cx, by - cy));
+    this.obstacleIndex.querySegment(cx, cy, cx, cy, (_kind, _id, left, top, right, bottom) => {
+      for (const [x, y] of [[left, top], [right, top], [right, bottom], [left, bottom]]) ray(x - cx, y - cy);
+      edge(left, top, right - left, 0); edge(right, top, 0, bottom - top);
+      edge(left, bottom, right - left, 0); edge(left, top, 0, bottom - top);
+      return false;
+    }, (x, y, r) => {
+      const ox = x - cx, oy = y - cy, distance = Math.hypot(ox, oy);
+      if (distance > r) {
+        const angle = Math.atan2(oy, ox), offset = Math.asin(r / distance);
+        ray(Math.cos(angle - offset), Math.sin(angle - offset));
+        ray(Math.cos(angle + offset), Math.sin(angle + offset));
+      }
+      const qx = ax - x, qy = ay - y, lengthSq = dx * dx + dy * dy;
+      const dot = qx * dx + qy * dy, discriminant = dot * dot - lengthSq * (qx * qx + qy * qy - r * r);
+      if (discriminant >= 0) { cut((-dot - Math.sqrt(discriminant)) / lengthSq); cut((-dot + Math.sqrt(discriminant)) / lengthSq); }
+      return false;
+    }, radius);
+    cuts.sort((a, b) => a - b);
+    for (let i = 1; i < cuts.length; i++) {
+      if (cuts[i] - cuts[i - 1] < 0.000001) continue;
+      const t = (cuts[i] + cuts[i - 1]) / 2;
+      if (this.hasLineOfSight(cx, cy, ax + dx * t, ay + dy * t)) return true;
+    }
+    return false;
+  }
+
+  /**
    * Liegt ein Ziel im Trefferbogen einer Nahkampfattacke? `facingAngle` und die aus
    * `dx`/`dy` gebildete Zielrichtung sind Weltwinkel im Bogenmaß.
    */

@@ -52,6 +52,7 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
   };
   const players = playerPositions.map((position, index) => (fakeEntity({ id: `p${index + 1}`, ...position, active: true })));
   const enemyManager = {
+    canSeeThroughSmoke: vi.fn(() => true),
     getAllEnemies: () => [enemy],
     getEnemy: (id: string) => id === enemy.id ? enemy : undefined,
   };
@@ -93,10 +94,28 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     burrow as unknown as CoopDefenseEnemyBurrowSystem,
     fireChunks as unknown as FlamethrowerUpgradeSystem,
   );
-  return { system, enemy, players, playerManager, weaponExecution, fireGauss, power, armageddon, burrow, fireChunks, actions };
+  return { system, enemy, enemyManager, players, playerManager, weaponExecution, fireGauss, power, armageddon, burrow, fireChunks, actions };
 }
 
 describe('Leerenjäger', () => {
+  it('cannot start a hidden Gauss attack but finishes an announced shot without tracking hidden movement', () => {
+    const config = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
+    const distance = (config.shotgunRangePx + ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS.range) / 2;
+    const f = createFixture([{ x: 100 + distance, y: 100 }]);
+    f.system.hostUpdate(0);
+    f.enemyManager.canSeeThroughSmoke.mockReturnValue(false);
+    f.system.hostUpdate(config.gauss.initialDelayMs);
+    expect(f.system.blocksRegularAttacks(f.enemy.id)).toBe(false);
+    f.enemyManager.canSeeThroughSmoke.mockReturnValue(true);
+    const start = config.gauss.initialDelayMs + 1;
+    f.system.hostUpdate(start);
+    expect(f.system.blocksRegularAttacks(f.enemy.id)).toBe(true);
+    f.players[0].x = 100; f.players[0].y = 100 + distance;
+    f.enemyManager.canSeeThroughSmoke.mockReturnValue(false);
+    f.system.hostUpdate(start + config.gauss.chargeDurationMs);
+    expect(f.fireGauss).toHaveBeenCalledTimes(1);
+    expect(f.fireGauss.mock.calls[0][1].angle).toBeCloseTo(0);
+  });
   it('keeps boss-only loadout configs in their dedicated registries', () => {
     const shotgun = WEAPON_CONFIGS.VOID_HUNTER_SHOTGUN;
     const gauss = ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS;

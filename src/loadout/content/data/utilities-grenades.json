@@ -15,8 +15,8 @@
       "maxBounces": 3,
       "aoeRadius": 140,
       "aoeDamage": 60,
-      "baseDamageMult": 2.0,
-      "rockDamageMult": 3.0,
+      "baseDamageMult": 2,
+      "rockDamageMult": 3,
       "damageFalloff": {
         "minDamage": 10
       },
@@ -84,7 +84,7 @@
     "SMOKE_GRENADE": {
       "id": "SMOKE_GRENADE",
       "type": "smoke",
-      "cooldown": 6000,
+      "cooldown": 10000,
       "activation": {
         "type": "charged_throw",
         "minThrowSpeed": 50,
@@ -98,7 +98,7 @@
       "smokeExpandDuration": 500,
       "smokeLingerDuration": 9000,
       "smokeDissipateDuration": 2000,
-      "smokeMaxAlpha": 0.95,
+      "smokeMaxAlpha": 0.68,
       "smokeDotDamagePerTick": 0,
       "smokeDotTickIntervalMs": 250,
       "allowedSlots": [
@@ -114,6 +114,41 @@
       "shotAudio": {
         "successKey": "shot_throw",
         "failureKey": "shot_dry_trigger"
+      },
+      "smokeBehavior": {
+        "confusionFraction": 0.5,
+        "aftereffectMs": 1000,
+        "directionMinMs": 800,
+        "directionMaxMs": 1200,
+        "recoveryFadeMs": 350,
+        "retentionBias": 0,
+        "retentionEdgeFraction": 0.7,
+        "nearSightPx": 96,
+        "bossNearSightPx": 192,
+        "bossConfusionFactor": 0.5,
+        "bossAftereffectFactor": 0.5,
+        "vulnerabilityEnabled": 0,
+        "chargeDurationMs": 2000,
+        "dischargeCount": 0,
+        "dischargeCooldownMs": 400,
+        "dischargeDamage": 4,
+        "dischargeSpeed": 460,
+        "dischargeRange": 480,
+        "dischargeSize": 10,
+        "dischargeHoming": {
+          "searchRadius": 320,
+          "maxTurnDegreesPerStep": 4,
+          "retargetIntervalMs": 260,
+          "acquireDelayMs": 200,
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1.4
+        },
+        "growthMaxProcs": 0,
+        "growthDurationMs": 1000,
+        "growthRadiusFraction": 0.05,
+        "growthTransitionMs": 300
       }
     },
     "MOLOTOV_GRENADE": {

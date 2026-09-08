@@ -234,6 +234,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     return this.playerFramePort?.getPlayerGameplayRuntime() ?? null;
   }
   private get combatSystems() { return this.combatFramePort?.getCombatGameplayBinding()?.systems ?? null; }
+  private get smokeBinding() { return this.combatFramePort?.getSupportGameplayRuntime()?.smoke ?? null; }
   private get supportSystems() { return this.combatFramePort?.getSupportGameplayRuntime()?.systems ?? null; }
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
   private get trainManager() { return this.worldFramePort?.getTrainRuntime()?.getCurrentTrain() ?? null; }
@@ -354,6 +355,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // World: Koeder und Tarnung leben unabhaengig von jeder Activity und stehen deshalb vor dem
     // Missionsschritt, der sie als Ziele liest.
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
+    if (!countdownActive) this.smokeBinding?.refresh(now);
     // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
     // Activity; dieser Frame kennt nur den Schritt.
     if (coopMission) {
@@ -378,6 +380,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.targetingSystems?.energyInjector?.update(now);
       this.refreshMatrixVulnerabilities(now);
     }
+    if (!countdownActive) this.smokeBinding?.refresh(now);
     const decoys = countdownActive ? [] : this.ctx.decoySystem.createHostSnapshots();
     if (metrics) metrics.physicsMs = performance.now() - phaseStartedAt;
 
@@ -434,9 +437,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       metrics.explosionEventCount = detonations.length + projectileExplosions.length + deferredExplosions.length + grenadePayloads.length;
     }
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
-    const { synced: smokes, damageEvents: smokeDmg } = countdownActive
-      ? { synced: [], damageEvents: [] }
-      : this.ctx.smokeSystem.hostUpdate(now);
+    if (!countdownActive) this.smokeBinding?.refresh(now);
     const {
       synced: fires,
       ground: liveBurningGround,
@@ -590,13 +591,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       );
     }
 
-    for (const ev of smokeDmg) {
-      this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
-        category: 'damage_over_time',
-        sourceId: 'ultimate.thunderstorm',
-        sourceSlot: 'utility',
-      });
-    }
+    if (!countdownActive) this.smokeBinding?.step(now);
 
     // Airstrike-Strikes detonieren
     if (!countdownActive) {
@@ -736,6 +731,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const powerups    = this.powerUpSystem?.getWorldItemSnapshot() ?? [];
     const pedestals   = this.powerUpSystem?.getPedestalSnapshot()  ?? [];
     const nukes       = this.powerUpSystem?.getNukeSnapshot()      ?? [];
+    this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
+    this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,
+      id => { const enemy = this.coopMissionRuntime?.enemyManager?.getEnemy(id); return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null; });
     const airstrikes  = this.supportSystems?.airstrike?.getSnapshot()        ?? [];
     const meteors     = this.supportSystems?.armageddon?.getSnapshot()       ?? [];
     const train     = this.trainManager?.getNetSnapshot()        ?? null;
@@ -1061,7 +1059,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       energyInjectorFocus: this.targetingSystems?.energyInjector?.getNetFocusSnapshot(now) ?? [],
       remoteControlTurrets,
       decoys,
-      smokes,
+      smokes: countdownActive ? [] : this.smokeBinding?.runtime.getSnapshots(now) ?? [],
+      smokeTargets: countdownActive ? [] : this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [],
       fires,
       stinkClouds,
       timeBubbles,
@@ -1450,7 +1449,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     } else if (effect.type === 'time_bubble') {
       this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, effect);
     } else {
-      this.ctx.smokeSystem.hostCreateCloud(request.x, request.y, effect, ownerId);
+      this.smokeBinding?.createCloud(request, this.hostFrameNowMs);
     }
   }
 

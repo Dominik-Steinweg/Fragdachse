@@ -15,6 +15,7 @@ import type { WorldRuntime } from '../../world/WorldRuntime';
 import type { ArenaContext } from './ArenaContext';
 
 export interface ArenaCoopMissionPortsInput {
+  readonly getSmokePerception: () => import('../../systems/SmokeRules').SmokePerceptionPort | null;
   readonly ctx: ArenaContext;
   readonly getWorldRuntime: () => WorldRuntime | null;
   readonly getBaseManager: () => BaseManager | null;
@@ -139,7 +140,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       syncDormantBaseStates: () => { getWorldRuntime()?.materialization?.bases?.syncDormantStates(); },
       getActiveBurnSources: (enemyId, atMs) => ctx.getWorldCombatCore()!.getActiveBurnSources(enemyId, atMs),
       getFireSystem: () => ctx.fireSystem,
-      getSmokeSystem: () => ctx.smokeSystem,
+      getSmokeSystem: () => input.getSmokePerception(),
       publishEncounterPresentation: (state) => {
         bridge.publishCoopDefenseEncounterPresentationState(state);
       },

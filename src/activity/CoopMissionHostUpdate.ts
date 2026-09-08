@@ -2,7 +2,7 @@ import { ENEMY_FLOW_FIELD_IDS } from '../systems/flowfield/FlowFieldCoordinator'
 import { goalCellsToIndexes } from '../systems/flowfield/FlowFieldSources';
 import type { EnemyAiTargetCandidate } from '../systems/EnemyAiTargetCatalog';
 import type { FireSystem } from '../effects/FireSystem';
-import type { SmokeSystem } from '../effects/SmokeSystem';
+import type { SmokePerceptionPort } from '../systems/SmokeRules';
 import type {
   CoopDefenseEncounterPresentationState,
   CoopDefenseMapEventPresentationState,
@@ -68,7 +68,7 @@ export interface CoopMissionHostUpdatePort {
   readonly syncDormantBaseStates: () => void;
   readonly getActiveBurnSources: (enemyId: string, atMs: number) => ReadonlyArray<{ sourceId: string }>;
   readonly getFireSystem: () => FireSystem | null;
-  readonly getSmokeSystem: () => SmokeSystem | null;
+  readonly getSmokeSystem: () => SmokePerceptionPort | null;
   readonly publishEncounterPresentation: (state: CoopDefenseEncounterPresentationState | null) => void;
   readonly publishMapEventPresentation: (state: CoopDefenseMapEventPresentationState | null) => void;
   readonly publishSecondaryObjectivePresentation: (

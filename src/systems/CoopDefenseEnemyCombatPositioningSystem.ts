@@ -96,6 +96,7 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
       this.targetCatalog.forEachTarget('player-like', (target) => {
         const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
+        if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, positioning.preferredDistancePx + positioning.toleranceP)) return;
         if (best && distance >= best.distance) return;
         if (
           positioning.requireLineOfSight
@@ -109,6 +110,7 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
         if (this.combatSystem.isBurrowed(player.id)) continue;
         if (!this.combatSystem.canDamageTarget(enemy.id, player.id)) continue;
         const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
+        if (!this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, positioning.preferredDistancePx + positioning.toleranceP)) continue;
         if (best && distance >= best.distance) continue;
         if (
           positioning.requireLineOfSight

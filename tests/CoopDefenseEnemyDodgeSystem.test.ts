@@ -41,6 +41,7 @@ function buildSystem(projectileX: number) {
     {
       forEachEnemy: (visit: (candidate: EnemyEntity) => void) => visit(enemy),
       hasEnemy: () => false,
+      canSeeThroughSmoke: () => true,
       isEnemyPanicking: () => false,
     } as unknown as EnemyManager,
     { getAllPlayers: () => [] } as unknown as PlayerManager,

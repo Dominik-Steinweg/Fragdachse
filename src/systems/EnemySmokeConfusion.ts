@@ -1,4 +1,4 @@
-import type { SmokeSystem } from '../effects/SmokeSystem';
+import type { SmokePerceptionPort } from '../systems/SmokeRules';
 import { EnemyFlowFieldService } from './EnemyFlowFieldService';
 
 const CONFUSION_DIRECTION_DOT_CUTOFF = 0.5;
@@ -15,7 +15,7 @@ export function resolveEnemySmokeConfusion(
   enemyId: string,
   x: number,
   y: number,
-  smokeSystem: SmokeSystem | null,
+  smokeSystem: SmokePerceptionPort | null,
   flowField: Pick<EnemyFlowFieldService, 'forEachReachableNeighbor'>,
   gridX: number,
   gridY: number,
@@ -28,13 +28,21 @@ export function resolveEnemySmokeConfusion(
   }
 
   const current = states.get(enemyId);
-  const cloudId = smokeSystem.getActiveCloudIdAt(x, y, now, current?.cloudId);
-  if (cloudId === null) {
+  const influence = smokeSystem.getConfusion(enemyId, now);
+  if (!influence) {
     states.delete(enemyId);
     return null;
   }
-  if (current && current.cloudId === cloudId && current.expiresAt > now) {
-    return mixNavigationDirections(normalDirection, current.direction.x, current.direction.y);
+  const cloudId = influence.cloudId;
+  if (current && current.expiresAt > now) {
+    let reachable = false;
+    flowField.forEachReachableNeighbor(gridX, gridY, (_x, _y, index) => {
+      const [dx, dy] = EnemyFlowFieldService.NEIGHBOR_DIRECTIONS[index];
+      const length = Math.hypot(dx, dy);
+      if (dx / length * current.direction.x + dy / length * current.direction.y > 0.999) reachable = true;
+    });
+    // A cell transition or changed obstacle may invalidate the held direction before its timer.
+    if (reachable) return mixNavigationDirections(normalDirection, current.direction.x, current.direction.y, influence.fraction);
   }
 
   const seed = hashString(enemyId) ^ Math.imul(cloudId, 0x9e3779b9) ^ (current?.expiresAt ?? 0);
@@ -59,7 +67,10 @@ export function resolveEnemySmokeConfusion(
     const directionX = rawX / length;
     const directionY = rawY / length;
     const deviation = directionX * normalX + directionY * normalY;
-    const rank = mixDirectionSeed(seed, directionIndex);
+    const centerDistance = Math.hypot(influence.x - x, influence.y - y);
+    const inward = centerDistance > 0 ? (directionX * (influence.x - x) + directionY * (influence.y - y)) / centerDistance : 0;
+    const retention = centerDistance >= influence.radius * influence.edgeFraction ? influence.retentionBias : 0;
+    const rank = mixDirectionSeed(seed, directionIndex) * (1 - retention * Math.max(0, inward));
     const sameAsPrevious = current !== undefined
       && Math.abs(directionX - current.direction.x) < 0.0001
       && Math.abs(directionY - current.direction.y) < 0.0001;
@@ -102,22 +113,23 @@ export function resolveEnemySmokeConfusion(
   const confusionY = hasPreferredDirection
     ? (preferredNewDirection ? bestPreferredNewY : bestPreferredY)
     : (hasFallbackNewDirection ? bestFallbackNewY : bestFallbackY);
-  const duration = 500 + ((seed >>> 0) % 301);
+  const duration = influence.directionMinMs + ((seed >>> 0) % (1 + influence.directionMaxMs - influence.directionMinMs));
   states.set(enemyId, {
     cloudId,
     direction: { x: confusionX, y: confusionY },
     expiresAt: now + duration,
   });
-  return mixNavigationDirections(normalDirection, confusionX, confusionY);
+  return mixNavigationDirections(normalDirection, confusionX, confusionY, influence.fraction);
 }
 
 function mixNavigationDirections(
   normalDirection: { x: number; y: number },
   confusionX: number,
   confusionY: number,
+  fraction: number,
 ): { x: number; y: number } {
-  const x = normalDirection.x * 0.25 + confusionX * 0.75;
-  const y = normalDirection.y * 0.25 + confusionY * 0.75;
+  const x = normalDirection.x * (1 - fraction) + confusionX * fraction;
+  const y = normalDirection.y * (1 - fraction) + confusionY * fraction;
   const length = Math.hypot(x, y);
   return length > 0.001 ? { x: x / length, y: y / length } : normalDirection;
 }

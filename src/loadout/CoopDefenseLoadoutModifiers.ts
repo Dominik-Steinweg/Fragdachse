@@ -633,6 +633,30 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'SMOKE_GRENADE',
     targets: [{ path: ['smokeLingerDuration'], formula: 'scale' }],
   },
+  'utility.SMOKE_GRENADE.confusionFraction': {
+    kind: 'utility', itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeBehavior', 'confusionFraction'], formula: 'add' }],
+  },
+  'utility.SMOKE_GRENADE.aftereffectMs': {
+    kind: 'utility', itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeBehavior', 'aftereffectMs'], formula: 'add' }],
+  },
+  'utility.SMOKE_GRENADE.retentionBias': {
+    kind: 'utility', itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeBehavior', 'retentionBias'], formula: 'add' }],
+  },
+  'utility.SMOKE_GRENADE.vulnerabilityEnabled': {
+    kind: 'utility', itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeBehavior', 'vulnerabilityEnabled'], formula: 'add' }],
+  },
+  'utility.SMOKE_GRENADE.dischargeCount': {
+    kind: 'utility', itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeBehavior', 'dischargeCount'], formula: 'add' }],
+  },
+  'utility.SMOKE_GRENADE.growthMaxProcs': {
+    kind: 'utility', itemId: 'SMOKE_GRENADE',
+    targets: [{ path: ['smokeBehavior', 'growthMaxProcs'], formula: 'add' }],
+  },
   'utility.SMOKE_GRENADE.dotDamage': {
     kind: 'utility',
     itemId: 'SMOKE_GRENADE',

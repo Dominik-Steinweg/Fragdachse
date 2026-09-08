@@ -134,6 +134,25 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('preserves smoke provenance and protects only the origin during the initial flight', () => {
+    const { runtime } = createRuntimeHarness();
+    const hit = configureEnemyImpact(runtime);
+    const request = baseRequest();
+    const id = runtime.spawnProjectile({ ...request,
+      provenance: { ...request.provenance, lineage: { smokeCloudId: 7, smokeKind: 'discharge' } },
+      flight: { ...request.flight, collisionFilter: { initialTargetProtection: { targetId: 'enemy-1', durationMs: 200 } } },
+    })!;
+    runtime.runHostProjectileStage(199, 1199);
+    runtime.runHostInteractionStage(1199);
+    expect(hit).not.toHaveBeenCalled();
+    runtime.runHostProjectileStage(1, 1200);
+    runtime.runHostInteractionStage(1200);
+    expect(hit).toHaveBeenCalledTimes(1);
+    expect(hit.mock.calls[0][0]).toMatchObject({ projectileId: id, provenance: { lineage: { smokeCloudId: 7, smokeKind: 'discharge' } } });
+    runtime.runHostInteractionStage(1210);
+    expect(hit).toHaveBeenCalledTimes(1);
+    runtime.destroy();
+  });
   it('does not materialize collision targets when the active projectile view is empty', () => {
     const { runtime } = createRuntimeHarness();
     const readCollisionTargets = vi.fn();

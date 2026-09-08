@@ -43,6 +43,7 @@ interface PlayerTargetLockState {
 interface MeleeWindupState {
   readonly weaponId: string;
   readonly targetRef: EnemyAiTargetRef;
+  target: EnemyAttackCandidate;
   readonly aimAngle: number;
   readonly executeAt: number;
 }
@@ -68,6 +69,7 @@ interface EnemyObstacleContactState {
 /** Laufende Salve eines Gegners; pro Gegner kann nur eine Waffe gleichzeitig salvieren. */
 interface EnemySalvoState {
   readonly weaponId: string;
+  target: EnemyAttackCandidate;
   shotsFired: number;
   nextShotAt: number;
   /** Verfaellt die Salve ohne Nachschuss (Ziel weg, keine Sichtlinie), gilt sie als abgefeuert. */
@@ -99,6 +101,7 @@ export class CoopDefenseEnemyAttackSystem {
   private readonly meleeWindups = new Map<string, MeleeWindupState>();
   private readonly movementProgress = new Map<string, EnemyMovementProgressState>();
   private readonly obstacleContacts = new Map<string, EnemyObstacleContactState>();
+  private readonly lastAttackTargets = new Map<string, EnemyAttackCandidate>();
   private actionBlockedChecker: ((enemyId: string) => boolean) | null = null;
 
   constructor(
@@ -194,6 +197,7 @@ export class CoopDefenseEnemyAttackSystem {
     this.finishSalvo(enemy, now);
     this.sustainedAttacks.delete(enemy.id);
     this.playerTargetLocks.delete(enemy.id);
+    this.lastAttackTargets.delete(enemy.id);
     this.meleeWindups.delete(enemy.id);
     this.obstacleContacts.delete(enemy.id);
     this.resetMovementProgress(enemy);
@@ -227,7 +231,8 @@ export class CoopDefenseEnemyAttackSystem {
     // Ohne gueltiges Ziel gibt die Salve den Gegner frei, statt ihn zu blockieren: kommt ihm ein
     // Spieler unter die Mindestdistanz, soll er sofort auf den Hoellenwerfer wechseln duerfen.
     // Der Zaehler bleibt bis zur Verfallszeit stehen, damit sie nach kurzem Sichtverlust weiterlaeuft.
-    const target = this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
+    const obscured = this.isAttackTargetObscured(enemy, state.target, attackWeapon.weapon.config.range);
+    const target = obscured ? state.target : this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
     if (!target) return false;
 
     this.fireAttack(enemy, { attackWeapon, target }, now);
@@ -263,6 +268,7 @@ export class CoopDefenseEnemyAttackSystem {
     this.meleeWindups.set(enemy.id, {
       weaponId: attack.attackWeapon.weapon.config.id,
       targetRef,
+      target: attack.target,
       aimAngle,
       executeAt: now + attack.attackWeapon.playerMeleeWindupMs,
     });
@@ -276,7 +282,9 @@ export class CoopDefenseEnemyAttackSystem {
     if (!state) return;
 
     const attackWeapon = enemy.getAttackWeapons().find(candidate => candidate.weapon.config.id === state.weaponId);
-    const target = this.buildPlayerLikeTargetCandidate(enemy, state.targetRef, attackWeapon?.weapon.config.range ?? 0);
+    const range = attackWeapon?.weapon.config.range ?? 0;
+    const target = this.isAttackTargetObscured(enemy, state.target, range)
+      ? state.target : this.buildPlayerLikeTargetCandidate(enemy, state.targetRef, range);
     if (
       !attackWeapon
       || attackWeapon.weapon.config.fire.type !== 'melee'
@@ -287,6 +295,7 @@ export class CoopDefenseEnemyAttackSystem {
     }
 
     enemy.stopMovement();
+    state.target = target;
     enemy.faceAngle(state.aimAngle);
     if (now < state.executeAt) return;
 
@@ -341,6 +350,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);
     enemy.recordWeaponUse(weapon, now);
+    this.lastAttackTargets.set(enemy.id, { ...attack.target });
     this.advanceSalvo(enemy, attackWeapon, now);
     this.updateObstacleClearingState(enemy, target);
 
@@ -372,6 +382,7 @@ export class CoopDefenseEnemyAttackSystem {
     const current = this.salvoStates.get(enemy.id);
     const shotsFired = (current?.weaponId === weaponId ? current.shotsFired : 0) + 1;
     this.salvoStates.set(enemy.id, {
+      target: this.lastAttackTargets.get(enemy.id)!,
       weaponId,
       shotsFired,
       nextShotAt: now + salvo.intervalMs,
@@ -522,6 +533,10 @@ export class CoopDefenseEnemyAttackSystem {
       return { active: true, attack: null };
     }
 
+    const frozen = this.lastAttackTargets.get(enemy.id);
+    if (frozen && this.isAttackTargetObscured(enemy, frozen, attackWeapon.weapon.config.range)) {
+      return { active: true, attack: frozen ? { attackWeapon, target: { ...frozen, targetX: state.targetX, targetY: state.targetY } } : null };
+    }
     const playerTarget = state.targetRef
       ? this.buildPlayerLikeTargetCandidate(enemy, state.targetRef, attackWeapon.weapon.config.range)
       : null;
@@ -546,6 +561,23 @@ export class CoopDefenseEnemyAttackSystem {
         target: sustainedTarget,
       },
     };
+  }
+
+  /** Read the current position solely for visibility; never expose a hidden position to aiming. */
+  private isAttackTargetObscured(enemy: EnemyEntity, target: EnemyAttackCandidate, range: number): boolean {
+    let position = { x: target.targetX, y: target.targetY };
+    if (target.targetRef) {
+      const current = this.targetCatalog?.resolve(target.targetRef);
+      if (current) position = current.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? current;
+      else if (target.targetRef.kind === 'player' && !this.targetCatalog) {
+        const player = this.playerManager.getPlayer(String(target.targetRef.id));
+        if (player) position = player;
+      }
+    } else if (target.kind === 'ally' && target.targetId) {
+      const ally = this.enemyManager.getEnemy(target.targetId);
+      if (ally) position = ally.sprite;
+    }
+    return !this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, range);
   }
 
   private selectTarget(enemy: EnemyEntity, range: number, now: number): EnemyAttackCandidate | null {
@@ -591,7 +623,7 @@ export class CoopDefenseEnemyAttackSystem {
       const targetX = surface.x;
       const targetY = surface.y;
       const distance = surface.distance;
-      if (distance > range) continue;
+      if (distance > range || !this.enemyManager.canSeeThroughSmoke(enemy.id, targetX, targetY, range)) continue;
       if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, targetX, targetY)) continue;
 
       const candidate: EnemyAttackCandidate = {
@@ -619,6 +651,7 @@ export class CoopDefenseEnemyAttackSystem {
       if (!obstacle?.active) continue;
       const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
       if (distance > range) continue;
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, obstacle.x, obstacle.y, range)) continue;
       if (!this.combatSystem.hasClearLineOfFire(
         enemy.sprite.x,
         enemy.sprite.y,
@@ -684,6 +717,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y);
     if (distance > range) return null;
+    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, obstacle.x, obstacle.y, range)) return null;
     if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, obstacle.x, obstacle.y, { skipRockIndex: index })) return null;
 
     return {
@@ -795,6 +829,7 @@ export class CoopDefenseEnemyAttackSystem {
     const position = target.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? { x: target.x, y: target.y };
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, position.x, position.y);
     if (distance > range + (target.radius ?? PLAYER_SIZE * 0.5)) return null;
+    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, position.x, position.y, range)) return null;
     if (!this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, position.x, position.y)) return null;
     return {
       kind: target.kind,
@@ -816,7 +851,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (!this.combatSystem.canDamageTarget(enemy.id, ally.id)) return null;
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y);
-    if (distance > range || !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y)) {
+    if (distance > range || !this.enemyManager.canSeeThroughSmoke(enemy.id, ally.sprite.x, ally.sprite.y, range) || !this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, ally.sprite.x, ally.sprite.y)) {
       return null;
     }
 
@@ -840,7 +875,7 @@ export class CoopDefenseEnemyAttackSystem {
 
     const distance = Phaser.Math.Distance.Between(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
     if (distance > range + PLAYER_SIZE * 0.5) return false;
-    return this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
+    return this.enemyManager.canSeeThroughSmoke(enemy.id, player.x, player.y, range) && this.combatSystem.hasClearLineOfFire(enemy.sprite.x, enemy.sprite.y, player.x, player.y);
   }
 
   private findTrainTarget(enemy: EnemyEntity, range: number): EnemyAttackCandidate | null {
@@ -848,6 +883,7 @@ export class CoopDefenseEnemyAttackSystem {
     if (!target || target.distance > range) return null;
     // Bewusst die Sichtlinie: der Zug ist hier das Ziel und würde sich in der Schusslinie
     // selbst verdecken.
+    if (!this.enemyManager.canSeeThroughSmoke(enemy.id, target.x, target.y, range)) return null;
     if (!this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, target.x, target.y)) return null;
     return {
       kind: 'train',
@@ -915,6 +951,7 @@ export class CoopDefenseEnemyAttackSystem {
   }
 
   private cleanupInactiveEnemies(activeEnemyIds: ReadonlySet<string>): void {
+    this.deleteInactiveEntries(this.lastAttackTargets, activeEnemyIds);
     this.deleteInactiveEntries(this.sustainedAttacks, activeEnemyIds);
     this.deleteInactiveEntries(this.salvoStates, activeEnemyIds);
     this.deleteInactiveEntries(this.playerTargetLocks, activeEnemyIds);
