@@ -36,7 +36,11 @@ def build(c, style=None):
     # Feet point north under the vertical body; no south-facing shoe shapes.
     for side in [-1, 1]:
         limb = parts['left_leg' if side == -1 else 'right_leg']
-        limb.append(c.ell('Forward foot', (side * .21, -.03, .12), (.14, .22, .11), feet))
+        if style.get('clawedPaws'):
+            from badger_paw_parts import clawed_paw
+            limb.extend(clawed_paw(c, side, feet))
+        else:
+            limb.append(c.ell('Forward foot', (side * .21, -.03, .12), (.14, .22, .11), feet))
         limb.append(c.ell('Upright hind leg', (side * .20, -.20, .48), (.15, .16, .39), fur))
     c.ell('Pelvis', (0, -.26, .87), (.47, .29, .26), fur)
     c.ell('Standing torso', (0, -.17, 1.22), (.54, .39, .45), fur)
@@ -183,5 +187,14 @@ def build(c, style=None):
                 parts['upper'].append(ob)
     if style.get('paintedFur'):
         from badger_material_parts import painted_coat
-        painted_coat(c, parts, {'body': fur, 'dark': dark, 'head': m, 'tail': tail_fur, 'feet': feet}, style)
+        coat = {'body': fur, 'dark': dark, 'head': m, 'tail': tail_fur, 'feet': feet}
+        if 'bodyFur' in c.images:
+            # Ears share the old dark material: isolate grips before remapping fur.
+            hand_fur = dark.copy()
+            hand_fur.name = 'Independent dark grip fur'
+            for ob in parts['hands']:
+                for slot in ob.material_slots:
+                    if slot.material == dark: slot.material = hand_fur
+            coat['hands'] = hand_fur
+        painted_coat(c, parts, coat, style)
     return parts

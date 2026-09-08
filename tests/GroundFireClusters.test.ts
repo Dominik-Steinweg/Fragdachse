@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SyncedBurningGroundCell } from '../src/types';
-import { buildGroundFireClusterLayouts, groundFireCellsSignature } from '../src/effects/GroundFireClusters';
+import { buildGroundFireClusterLayouts, buildGroundFireEmissionLayouts, groundFireCellsSignature } from '../src/effects/GroundFireClusters';
 
 function cell(
   id: number,
@@ -41,5 +41,19 @@ describe('GroundFire cluster layouts', () => {
     const first = [cell(1, 2, 3), cell(2, 1, 3)];
     const second = [...first].reverse();
     expect(groundFireCellsSignature(first)).toBe(groundFireCellsSignature(second));
+  });
+
+  it('keeps emission region identities when their first cell expires or neighbours connect', () => {
+    const initial = buildGroundFireEmissionLayouts([cell(1, 0, 0), cell(2, 1, 0), cell(3, 3, 0)]);
+    const changed = buildGroundFireEmissionLayouts([cell(3, 3, 0), cell(2, 1, 0), cell(4, 2, 0)]);
+    expect(changed.map(region => [region.id, region.seed])).toEqual(initial.map(region => [region.id, region.seed]));
+  });
+
+  it('bounds emission regions in world space and separates styles across negative coordinates', () => {
+    const input = [cell(1, -1, 0), cell(2, 0, 0), cell(3, 8, 0), cell(4, 0, 0, 'void')];
+    const layouts = buildGroundFireEmissionLayouts(input);
+    expect(layouts).toHaveLength(4);
+    expect(buildGroundFireEmissionLayouts([...input].reverse())).toEqual(layouts);
+    expect(layouts.flatMap(region => region.cells)).toHaveLength(input.length);
   });
 });

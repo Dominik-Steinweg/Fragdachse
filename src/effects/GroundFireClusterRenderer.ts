@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import type { GroundFireVisualStyle, SyncedBurningGroundCell, SyncedBurningGroundSnapshot } from '../types';
 import {
-  buildGroundFireClusterLayouts,
+  buildGroundFireEmissionLayouts,
   groundFireCellsSignature,
   type GroundFireClusterLayout,
 } from './GroundFireClusters';
@@ -23,6 +23,7 @@ import { GpuVfxEffectId } from './gpu/GpuVfxEffects';
 import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
+import { GPU_VFX_LANES, GpuVfxLaneId } from './gpu/GpuVfxRenderLanes';
 
 const TWO_PI = Math.PI * 2;
 const CELL = GROUND_FIRE_CELL_SIZE;
@@ -110,19 +111,8 @@ const SPARK_MIN_LIVE = 3;
 const SPARK_ACCENT_MIN_LIVE = 1;
 const SMOKE_MIN_LIVE = 1;
 
-/**
- * Bis hierhin geht jede Zelle voll in die Dichte ein; darueber nur noch zur Haelfte, gedeckelt
- * bei `GROUND_FIRE_MAX_EFFECTIVE_CELLS`. Eine arenagrosse Brandflaeche ist ohnehin groesser als
- * der Bildausschnitt – dort kostet volle Dichte Slots fuer Partikel, die niemand sieht.
- */
-const GROUND_FIRE_FULL_DENSITY_CELLS = 140;
-export const GROUND_FIRE_MAX_EFFECTIVE_CELLS = 320;
-export const GROUND_FIRE_DENSITY_BUDGET_PER_CELL = BED_DENSITY_PER_CELL
-  + FIELD_DENSITY_PER_CELL
-  + CORE_DENSITY_PER_CELL
-  + EMBER_DENSITY_PER_CELL
-  + GROUND_FIRE_SPARK_DENSITY_PER_CELL
-  + GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL;
+/** Leave room for lifetime variance and impact sparks in the shared lane. */
+const GROUND_FIRE_LIVE_BUDGET = GPU_VFX_LANES[GpuVfxLaneId.GroundFire].capacity * 0.9;
 
 /** Deckel je Frame und Flow, als Anteil der Ziel-Lebendzahl. Faengt Frame-Spikes ab. */
 const GROUND_FIRE_FRAME_BURST_FRACTION = 0.3;
@@ -175,7 +165,7 @@ interface GroundFireCellField {
   y: number;
   /** 0 am Rand der Brandflaeche, 1 tief im Inneren. Traegt Temperatur und Zungenverteilung. */
   coreness: number;
-  /** Auf `maxIntensity` normierte Zellintensitaet. */
+  /** Grundhelligkeit bleibt voll; ueberlagerte Quellen bekommen einen kleinen lokalen Bonus. */
   intensity: number;
   /** Netz-Uhr; laesst einzelne Zellen ausgehen, statt die ganze Flaeche gleichzeitig zu loeschen. */
   expiresAt: number;
@@ -205,8 +195,6 @@ interface GroundFireCluster {
    * kleinen Cluster ist jede Zelle das Feuer und nicht sein kuehler Rand.
    */
   spread: number;
-  /** Gedaempfte Zellzahl; Basis aller Ziel-Lebendzahlen. */
-  effectiveCells: number;
   /** Unabhaengige, vollstaendige Permutationen verhindern Rasterlaeufe und Layer-Gleichlauf. */
   bedOrder: Int32Array;
   fieldOrder: Int32Array;
@@ -282,6 +270,14 @@ export class GroundFireClusterRenderer {
   private readonly activeLightKeys = new Set<string>();
   private readonly lightRanking: GroundFireLightRecord[] = [];
   private snapshotSignature = '';
+  private readonly knownCells = new Map<string, number>();
+  private readonly pendingIgnitions = new Set<string>();
+  private ignitionCells: readonly GroundFireCellField[] = [];
+  private ignitionOrder = new Int32Array(0);
+  private ignitionAgeFraction = 0;
+  private warming = false;
+  private ignitionCarry = new WeakMap<ParticleFlowScheduler, number>();
+  private densityScale = 1;
   private gpuVfx: GpuVfxSystem | null = null;
   private bedSpec: GpuVfxSpawnSpec | null = null;
   private fieldSpec: GpuVfxSpawnSpec | null = null;
@@ -377,17 +373,44 @@ export class GroundFireClusterRenderer {
     if (signature === this.snapshotSignature) return;
     this.snapshotSignature = signature;
 
-    const layouts = buildGroundFireClusterLayouts(snapshot.cells, CELL);
+    // Track spatial cells independently of cluster IDs: merges, splits and lifetime
+    // refreshes must not restart an already populated fire surface.
+    const nextCells = new Map<string, number>();
+    for (const cell of snapshot.cells) {
+      const key = `${cell.visualStyle}:${cell.gridX}:${cell.gridY}`;
+      if (cell.expiresAt > now && (this.knownCells.get(key) ?? 0) <= now)
+        this.pendingIgnitions.add(key);
+      nextCells.set(key, cell.expiresAt);
+    }
+    for (const key of this.pendingIgnitions) if (!nextCells.has(key)) this.pendingIgnitions.delete(key);
+    this.knownCells.clear();
+    for (const [key, expiresAt] of nextCells) this.knownCells.set(key, expiresAt);
+
+    const layouts = buildGroundFireEmissionLayouts(snapshot.cells, CELL);
     const nextClusters = new Map<string, GroundFireCluster>();
     for (const layout of layouts) {
       const existing = this.clusters.get(layout.id);
       const cluster = existing ?? this.createCluster(layout);
       this.applyLayout(cluster, layout);
+      if (!existing) this.primeClusterEmission(cluster);
       nextClusters.set(cluster.id, cluster);
     }
 
     this.clusters.clear();
     for (const [id, cluster] of nextClusters) this.clusters.set(id, cluster);
+    // Capacity protection follows total demand, never connectivity. At ordinary
+    // loads every region keeps its full density, including a newly growing trail.
+    let requestedLive = 0;
+    for (const layout of layouts) {
+      const count = layout.cells.length;
+      requestedLive += Math.max(BED_MIN_LIVE, count * BED_DENSITY_PER_CELL)
+        + Math.max(FIELD_MIN_LIVE, count * FIELD_DENSITY_PER_CELL)
+        + Math.max(CORE_MIN_LIVE, count * CORE_DENSITY_PER_CELL)
+        + Math.max(EMBER_MIN_LIVE, count * EMBER_DENSITY_PER_CELL)
+        + Math.max(SPARK_MIN_LIVE, count * GROUND_FIRE_SPARK_DENSITY_PER_CELL)
+        + Math.max(SPARK_ACCENT_MIN_LIVE, count * GROUND_FIRE_SPARK_ACCENT_DENSITY_PER_CELL);
+    }
+    this.densityScale = Math.min(1, GROUND_FIRE_LIVE_BUDGET / Math.max(1, requestedLive));
   }
 
   update(now: number): void {
@@ -430,6 +453,14 @@ export class GroundFireClusterRenderer {
   clear(): void {
     this.clusters.clear();
     this.snapshotSignature = '';
+    this.knownCells.clear();
+    this.pendingIgnitions.clear();
+    this.ignitionCells = [];
+    this.ignitionOrder = new Int32Array(0);
+    this.ignitionAgeFraction = 0;
+    this.warming = false;
+    this.ignitionCarry = new WeakMap();
+    this.densityScale = 1;
     this.synchronizedNow = 0;
     this.gpuVfx?.clearSource(this.source);
     this.resetQualityCarry();
@@ -462,7 +493,6 @@ export class GroundFireClusterRenderer {
       expiresAt: layout.expiresAt,
       bornAt: this.gpuVfx?.now() ?? 0,
       spread: 0,
-      effectiveCells: 1,
       bedOrder: new Int32Array(0),
       fieldOrder: new Int32Array(0),
       coreOrder: new Int32Array(0),
@@ -498,21 +528,17 @@ export class GroundFireClusterRenderer {
     cluster.totalIntensity = layout.totalIntensity;
     cluster.maxIntensity = layout.maxIntensity;
     cluster.expiresAt = layout.expiresAt;
-    cluster.effectiveCells = this.effectiveCellCount(layout.cells.length);
     cluster.spread = Phaser.Math.Clamp(
       (layout.cells.length - 1) / (GROUND_FIRE_SPREAD_CELLS - 1),
       0,
       1,
     );
 
-    // Die Ablaufzeiten wandern auch ohne Formaenderung weiter (eine nachgefuetterte Flaeche
-    // behaelt ihre Zellen), deshalb wird das Feld immer aufgefrischt und nur die teure
-    // Randdistanz an die Form gebunden.
-    this.refreshFieldValues(cluster);
+    // Lifetimes and neighbouring regions can change without changing this region's shape.
     if (shapeChanged || cluster.field.length !== layout.cells.length) {
       this.rebuildField(cluster);
-      if (shapeChanged) this.primeClusterEmission(cluster);
     }
+    this.refreshFieldValues(cluster);
   }
 
   /** Neue Feuerflaechen muessen im ersten GPU-Tick lesbar sein, statt auf die erste
@@ -530,46 +556,15 @@ export class GroundFireClusterRenderer {
   /**
    * Baut das Zellfeld neu: Weltmittelpunkte, Randdistanz und die schichtspezifischen Permutationen.
    *
-   * Die Randdistanz ist eine Vielquellen-BFS von aussen nach innen. Sie ersetzt die frueher
-   * benutzte Distanz zum Schwerpunkt: die machte aus jeder Form – auch aus einer langen
-   * Flammenwerferspur – einen Kreis mit heisser Mitte und liess breite Flaechen aussen erkalten.
+   * Die Randdistanz liest die gesamte Zellkarte, damit die Grenzen der Emissionsregionen
+   * keine sichtbaren kuehlen Naehte innerhalb einer zusammenhaengenden Brandflaeche erzeugen.
    */
   private rebuildField(cluster: GroundFireCluster): void {
     const cells = cluster.cells;
     const count = cells.length;
     const field = cluster.field;
+    const firstLayout = field.length === 0;
     field.length = 0;
-
-    const index = new Map<number, number>();
-    for (let i = 0; i < count; i += 1) index.set(this.gridKey(cells[i].gridX, cells[i].gridY), i);
-
-    const distance = new Int32Array(count);
-    const queue = new Int32Array(count);
-    let head = 0;
-    let tail = 0;
-    for (let i = 0; i < count; i += 1) {
-      const cell = cells[i];
-      const open = !index.has(this.gridKey(cell.gridX + 1, cell.gridY))
-        || !index.has(this.gridKey(cell.gridX - 1, cell.gridY))
-        || !index.has(this.gridKey(cell.gridX, cell.gridY + 1))
-        || !index.has(this.gridKey(cell.gridX, cell.gridY - 1));
-      if (!open) continue;
-      distance[i] = 1;
-      queue[tail++] = i;
-    }
-
-    while (head < tail) {
-      const current = queue[head++];
-      const cell = cells[current];
-      for (let n = 0; n < 4; n += 1) {
-        const dx = n === 0 ? 1 : n === 1 ? -1 : 0;
-        const dy = n === 2 ? 1 : n === 3 ? -1 : 0;
-        const neighbour = index.get(this.gridKey(cell.gridX + dx, cell.gridY + dy));
-        if (neighbour === undefined || distance[neighbour] !== 0) continue;
-        distance[neighbour] = distance[current] + 1;
-        queue[tail++] = neighbour;
-      }
-    }
 
     for (let i = 0; i < count; i += 1) {
       const cell = cells[i];
@@ -578,12 +573,10 @@ export class GroundFireClusterRenderer {
       field.push({
         x,
         y,
-        // Eine vollstaendig eingeschlossene Flaeche ohne Randzelle kann es nicht geben; ein
-        // `distance` von 0 waere trotzdem nur maximal kalt und nie ein Loch.
-        coreness: Phaser.Math.Clamp((distance[i] - 1) / CORE_DEPTH_CELLS, 0, 1),
+        coreness: 0,
         intensity: 1,
         expiresAt: cell.expiresAt,
-        seed: this.hashPosition(x, y) ^ Math.imul(cluster.seed, i + 11),
+        seed: this.hashPosition(x, y),
       });
     }
 
@@ -595,6 +588,7 @@ export class GroundFireClusterRenderer {
     cluster.sparkAccentOrder = buildGroundFireTraversal(count, cluster.seed, 89);
     cluster.smokeOrder = buildGroundFireTraversal(count, cluster.seed, 107);
 
+    if (!firstLayout) return;
     // Auch der erste Zugriff beginnt pro Schicht an einer anderen Stelle der Permutation.
     cluster.bedCursor = this.seededUnit(cluster.seed, 113) * count | 0;
     cluster.fieldCursor = this.seededUnit(cluster.seed, 127) * count | 0;
@@ -603,17 +597,30 @@ export class GroundFireClusterRenderer {
     cluster.sparkCursor = this.seededUnit(cluster.seed, 139) * count | 0;
     cluster.sparkAccentCursor = this.seededUnit(cluster.seed, 149) * count | 0;
     cluster.smokeCursor = this.seededUnit(cluster.seed, 151) * count | 0;
-    this.refreshFieldValues(cluster);
   }
 
   /** Intensitaet und Ablaufzeit je Zelle; billig genug fuer jeden Snapshot. */
   private refreshFieldValues(cluster: GroundFireCluster): void {
-    const scale = 1 / Math.max(1, cluster.maxIntensity);
     for (let i = 0; i < cluster.field.length && i < cluster.cells.length; i += 1) {
       const cell = cluster.cells[i];
-      cluster.field[i].intensity = Phaser.Math.Clamp(Math.max(1, cell.intensity) * scale, 0.35, 1);
+      // A neighbouring Molotov overlap must not dim an otherwise fully burning trail.
+      cluster.field[i].intensity = 1 + 0.15 * (1 - 1 / Math.max(1, cell.intensity));
       cluster.field[i].expiresAt = cell.expiresAt;
+      cluster.field[i].coreness = this.cellCoreness(cell);
     }
+  }
+
+  private cellCoreness(cell: SyncedBurningGroundCell): number {
+    for (let distance = 1; distance <= Math.ceil(CORE_DEPTH_CELLS); distance++) {
+      for (let dx = -distance; dx <= distance; dx++) {
+        const dy = distance - Math.abs(dx);
+        if (!this.knownCells.has(`${cell.visualStyle}:${cell.gridX + dx}:${cell.gridY + dy}`)
+          || !this.knownCells.has(`${cell.visualStyle}:${cell.gridX + dx}:${cell.gridY - dy}`)) {
+          return (distance - 1) / CORE_DEPTH_CELLS;
+        }
+      }
+    }
+    return 1;
   }
 
   // ── Emission ───────────────────────────────────────────────────────────────
@@ -626,6 +633,9 @@ export class GroundFireClusterRenderer {
       if (cluster.expiresAt <= this.synchronizedNow || cluster.field.length === 0) continue;
       const age = this.clusterAge(cluster, nowMs);
       const intensity = this.clusterIntensity(cluster) * (0.98 - age * 0.12);
+      this.ignitionCells = this.pendingIgnitions.size === 0 ? [] : cluster.field.filter(cell => this.pendingIgnitions.has(
+        `${cluster.visualStyle}:${Math.floor(cell.x / CELL)}:${Math.floor(cell.y / CELL)}`,
+      ));
 
       this.runFlow(
         cluster, cluster.bedFlow, deltaMs, GROUND_FIRE_BED_LIFESPAN, BED_DENSITY_PER_CELL,
@@ -658,6 +668,10 @@ export class GroundFireClusterRenderer {
           SMOKE_MIN_LIVE, GpuVfxEffectId.GroundFireSmoke, intensity, nowMs, this.spawnSmoke,
         );
       }
+      for (const cell of this.ignitionCells) this.pendingIgnitions.delete(
+        `${cluster.visualStyle}:${Math.floor(cell.x / CELL)}:${Math.floor(cell.y / CELL)}`,
+      );
+      this.ignitionCells = [];
     }
   }
 
@@ -684,7 +698,7 @@ export class GroundFireClusterRenderer {
     const system = this.gpuVfx;
     if (!system) return;
 
-    const targetLive = Math.max(minLive, cluster.effectiveCells * densityPerCell);
+    const targetLive = Math.max(minLive, cluster.cells.length * densityPerCell) * this.densityScale;
     const frequency = system.quality.scaleFrequency(this.averageLife(lifespan) / targetLive, effect);
     if (frequency <= 0) {
       system.recordQualityDrop(effect);
@@ -692,6 +706,25 @@ export class GroundFireClusterRenderer {
     }
 
     flow.setFrequency(frequency);
+    if (this.ignitionCells.length > 0) {
+      // Seed the steady population, not a flash of newborn particles. Distributed ages
+      // give the first frame the usual brightness and stagger subsequent retirement.
+      // Only the new share of the existing quality/density budget is populated.
+      const target = this.averageLife(lifespan) / frequency
+        * this.ignitionCells.length / cluster.field.length
+        + (this.ignitionCarry.get(flow) ?? 0);
+      const count = Math.floor(target);
+      this.ignitionCarry.set(flow, target - count);
+      this.ignitionOrder = buildGroundFireTraversal(this.ignitionCells.length, cluster.seed, effect);
+      this.warming = true;
+      for (let index = 0; index < count; index += 1) {
+        this.ignitionAgeFraction = (index + 0.5) / count;
+        spawn.call(this, cluster, intensity, nowMs);
+      }
+      this.warming = false;
+      this.ignitionAgeFraction = 0;
+      if (this.ignitionCells.length === cluster.field.length) flow.resetCountdown();
+    }
     const cap = Phaser.Math.Clamp(
       Math.ceil(targetLive * GROUND_FIRE_FRAME_BURST_FRACTION),
       1,
@@ -858,7 +891,7 @@ export class GroundFireClusterRenderer {
     spec.rotation = this.seededUnit(seed, 83) * TWO_PI;
     spec.alphaStart = 0.08 * intensity * fade;
     spec.tint = 0x75675d;
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   // ── Einzelne Spawns ────────────────────────────────────────────────────────
@@ -894,7 +927,7 @@ export class GroundFireClusterRenderer {
     spec.stretchEnd = 0.96;
     spec.alphaStart = BED_ALPHA * fade;
     spec.tint = this.pickHeatTint(style, heat, seed, 103);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   private spawnFieldAt(
@@ -928,7 +961,7 @@ export class GroundFireClusterRenderer {
     spec.stretchEnd = 0.96 + this.seededUnit(seed, 106) * 0.18;
     spec.alphaStart = FIELD_ALPHA * fade;
     spec.tint = this.pickHeatTint(style, heat, seed, 107);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   /** Das Heissfeld: dieselbe organische Motivfamilie wie das Flaechenfeld, kleiner und heller. */
@@ -961,7 +994,7 @@ export class GroundFireClusterRenderer {
     spec.stretchEnd = 0.96 + this.seededUnit(seed, 115) * 0.16;
     spec.alphaStart = CORE_ALPHA * fade;
     spec.tint = this.pickHeatTint(style, Math.max(heat, 0.5), seed, 127);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   /**
@@ -1002,7 +1035,7 @@ export class GroundFireClusterRenderer {
     spec.tintBlendStart = style === 'void' ? 0.82 : 0.62;
     spec.tintBlendEnd = 1;
     spec.tint = this.pickEmberTint(style, seed, 59);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   private spawnSparkAt(
@@ -1028,7 +1061,7 @@ export class GroundFireClusterRenderer {
     spec.angularVelocity = (this.seededUnit(seed, 139) - 0.5) * 0.8;
     spec.alphaStart = Phaser.Math.Clamp(0.78 + intensity * 0.3, 0.65, 1) * fade;
     spec.tint = this.pickEmberTint(style, seed, 149);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   private spawnAccentSparkAt(
@@ -1064,7 +1097,7 @@ export class GroundFireClusterRenderer {
     spec.stretchEnd = 0.45;
     spec.alphaStart = Phaser.Math.Clamp(0.88 + intensity * 0.18, 0.78, 1) * fade;
     spec.tint = this.pickEmberTint(style, seed, 193);
-    system.spawn(spec, this.source, nowMs);
+    system.spawn(spec, this.source, nowMs, spec.lifeMs * this.ignitionAgeFraction);
   }
 
   // ── Felder ─────────────────────────────────────────────────────────────────
@@ -1112,17 +1145,10 @@ export class GroundFireClusterRenderer {
     order: Int32Array,
     cursor: number,
   ): GroundFireCellField | null {
+    if (this.warming) return this.ignitionCells[this.ignitionOrder[cursor % this.ignitionOrder.length]] ?? null;
     const count = order.length;
     if (count === 0) return null;
     return cluster.field[order[cursor % count]] ?? null;
-  }
-
-  private effectiveCellCount(count: number): number {
-    if (count <= GROUND_FIRE_FULL_DENSITY_CELLS) return count;
-    return Math.min(
-      GROUND_FIRE_MAX_EFFECTIVE_CELLS,
-      GROUND_FIRE_FULL_DENSITY_CELLS + (count - GROUND_FIRE_FULL_DENSITY_CELLS) * 0.5,
-    );
   }
 
   private averageLife(lifespan: { min: number; max: number }): number {
@@ -1251,8 +1277,4 @@ export class GroundFireClusterRenderer {
     return Math.imul(Math.round(x) * 73856093, 1) ^ Math.imul(Math.round(y) * 19349663, 1);
   }
 
-  private gridKey(gridX: number, gridY: number): number {
-    // 16 Bit je Achse mit Vorzeichenversatz; Arenakoordinaten liegen weit innerhalb dieser Spanne.
-    return ((gridX + 32768) << 16) | (gridY + 32768);
-  }
 }

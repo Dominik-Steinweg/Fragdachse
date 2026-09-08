@@ -1609,7 +1609,7 @@
       "description": {
         "silhouette": "Aufrechter breitschultriger Dachs mit seitlich versetzten waffenbereiten Händen, getrennten Beinen und hellem Süd-Schwanz.",
         "colors": "Gemalte schiefergraue Fellgruppen entlang der Arme, warme elfenbeinfarbene Kopfzeichnung und strukturierte anthrazitfarbene Gesichtsbänder; breite Werteflächen bleiben bei 32 Pixeln lesbar.",
-        "anatomy": "Kompakter Kopf mit klaren Wangen-/Kronenflächen und breiten Gesichtsbändern. Große geschwungene weiße Augen ohne Pupillen liegen in weichen schwarzen Augenhöhlen unter Fellbrauen; rein matter Schwarz-Weiß-Kontrast ohne Emission. Schneller Lauf mit kräftigem Wippen und stabilen Waffenhänden; Kopf reicht nicht weiter nach Norden."
+        "anatomy": "Kompakter Kopf mit klaren Wangen-/Kronenflächen und felligen Gesichtsbändern. Kleine geschwungene Augenöffnungen mit flacher, vom oberen Lid angeschnittener dunkler Iris; matter Schwarz-Weiß-Kontrast ohne Emission. Gerichtetes dunkles Körperfell und enger geführte kompakte Pfoten mit kurzen Hornkrallen. Schneller Lauf mit kräftigem Wippen und stabilen Waffenhänden; Kopf reicht nicht weiter nach Norden."
       },
       "requiredClips": [
         "move"
@@ -1618,7 +1618,8 @@
       "recipe": "badger",
       "model": {
         "footSouthOffset": 0.04,
-        "footSpacing": 1.65,
+        "footSpacing": 1.24,
+        "clawedPaws": true,
         "headSouthOffset": 0.04,
         "earSouthOffset": 0.055,
         "fierceEyes": true,
@@ -1649,11 +1650,12 @@
         }
       },
       "previousReference": {
-        "label": "Dachs V2-O · Augen und glatte Gesichtsbänder",
-        "path": "art/poc/pipeline-v2/runs/v2-o/badger/rich/sprite-128.png"
+        "label": "Dachs V2-P · vorherige Augen, Körper und Füße",
+        "path": "art/poc/pipeline-v2/runs/v2-p/badger/rich/sprite-128.png"
       },
       "textures": {
-        "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png",
+        "bodyFur": "art/poc/pipeline-v2/textures/badger-body-fur-v2-q.png"
       },
       "clips": [
         {

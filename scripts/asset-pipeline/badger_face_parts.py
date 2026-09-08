@@ -113,13 +113,14 @@ def eye_sockets(head, south_offset=0):
     for element, position in zip(original_mask.color_ramp.elements, [0, .121, .143, .370, .396]):
         element.position = position
     original_mask.color_ramp.interpolation = 'EASE'
-    radius = scalar('ADD', scalar('POWER', scalar('DIVIDE', x, .162), 2),
-                    scalar('POWER', scalar('DIVIDE', y, .128), 2))
+    # A long, soft orbital recess flows into the cheek band, not an oval frame.
+    radius = scalar('ADD', scalar('POWER', scalar('DIVIDE', x, .156), 4),
+                    scalar('POWER', scalar('DIVIDE', y, .158), 2))
     radius = scalar('ADD', radius, scalar('MULTIPLY', fibers, 4))
     falloff = nodes.new('ShaderNodeValToRGB')
     falloff.name = 'Soft integrated eye hollows'
     falloff.color_ramp.interpolation = 'EASE'
-    falloff.color_ramp.elements[0].position = .62
+    falloff.color_ramp.elements[0].position = .34
     falloff.color_ramp.elements[0].color = (1, 1, 1, 1)
     falloff.color_ramp.elements[1].position = 1
     falloff.color_ramp.elements[1].color = (0, 0, 0, 1)
@@ -130,7 +131,7 @@ def eye_sockets(head, south_offset=0):
     socket.name = 'Painted black eye recesses'
     links.new(falloff.outputs[0], socket.inputs[0])
     links.new(original, socket.inputs[1])
-    socket.inputs[2].default_value = (.0008, .0010, .0013, 1)
+    socket.inputs[2].default_value = (.0020, .0026, .0032, 1)
     links.new(socket.outputs[0], bs.inputs['Base Color'])
 
 
@@ -151,21 +152,46 @@ def combat_eye(ctx, side, dark, head, south_offset=0):
     bs = white.node_tree.nodes.get('Principled BSDF')
     bs.inputs['Roughness'].default_value = 1
     bs.inputs['Specular IOR Level'].default_value = 0
-    # Pointed ends, a fuller curved north edge and a shallower asymmetric lower
-    # edge. No eyeball sphere, pupil, reflection dot, frame, emission or bloom.
+    # A rest-space iris is clipped by the aperture and its brow. Its forward
+    # placement avoids a round eye looking up at the camera; no extra eye volume.
+    nodes, links = white.node_tree.nodes, white.node_tree.links
+    coords = nodes.new('ShaderNodeAttribute')
+    coords.attribute_name = 'FD_EyeUV'
+    separate = nodes.new('ShaderNodeSeparateXYZ')
+    links.new(coords.outputs['Vector'], separate.inputs[0])
+    def iris_axis(socket, center, radius):
+        offset = nodes.new('ShaderNodeMath'); offset.operation = 'SUBTRACT'
+        links.new(socket, offset.inputs[0]); offset.inputs[1].default_value = center
+        scale = nodes.new('ShaderNodeMath'); scale.operation = 'DIVIDE'
+        links.new(offset.outputs[0], scale.inputs[0]); scale.inputs[1].default_value = radius
+        square = nodes.new('ShaderNodeMath'); square.operation = 'MULTIPLY'
+        links.new(scale.outputs[0], square.inputs[0]); links.new(scale.outputs[0], square.inputs[1])
+        return square.outputs[0]
+    radius = nodes.new('ShaderNodeMath'); radius.operation = 'ADD'
+    links.new(iris_axis(separate.outputs['X'], .48, .34), radius.inputs[0])
+    links.new(iris_axis(separate.outputs['Y'], .99, .48), radius.inputs[1])
+    iris = nodes.new('ShaderNodeValToRGB')
+    iris.name = 'North-facing near-black iris clipped by eyelids'
+    iris.color_ramp.elements[0].position = .95
+    iris.color_ramp.elements[0].color = (.0015, .0020, .0025, 1)
+    iris.color_ramp.elements[1].position = 1.04
+    iris.color_ramp.elements[1].color = (.96, .96, .96, 1)
+    links.new(radius.outputs[0], iris.inputs[0]); links.new(iris.outputs[0], bs.inputs['Base Color'])
     vertices, faces = [], []
+    eye_uv = []
     columns, rows = 40, 8
     for i in range(columns+1):
         t = i/columns
-        x = side*(.069 + .202*t)
+        x = side*(.07506 + .18988*t)
         # +Y is north: the outer corner must fall south (down in the image).
         # Steeper around the same midpoint, with a modestly smaller aperture.
-        center = .392 - .086*t
-        fullness = math.sin(math.pi*t)**.85
-        lower, upper = center+.023*fullness, center+.084*fullness
+        center = .38942 - .08084*t
+        fullness = math.sin(math.pi*t)**.75
+        lower, upper = center+.02605*fullness, center+.08095*fullness
         for j in range(rows+1):
             y = lower + (upper-lower)*j/rows - south_offset
             vertices.append((x, y, surface(x, y)+.003))
+            eye_uv.append((t, j/rows, 0))
     for i in range(columns):
         for j in range(rows):
             a = i*(rows+1)+j
@@ -174,12 +200,15 @@ def combat_eye(ctx, side, dark, head, south_offset=0):
     mesh = bpy.data.meshes.new('Curved white eye surface')
     mesh.from_pydata(vertices, [], faces)
     mesh.update()
+    uv = mesh.attributes.new('FD_EyeUV', 'FLOAT_VECTOR', 'POINT')
+    for item, coordinate in zip(uv.data, eye_uv): item.vector = coordinate
     eye = bpy.data.objects.new('Organic white eye aperture', mesh)
     ctx.scene.collection.objects.link(eye)
     mesh.materials.append(white)
     for polygon in mesh.polygons:
         polygon.use_smooth = True
     eye['facePart'] = 'eye-white'
+    eye['irisDirection'] = 'north'
 
     # The low, curved rear hood is rooted in the skull instead of floating on it.
     brow_material = dark.copy()
@@ -194,7 +223,7 @@ def combat_eye(ctx, side, dark, head, south_offset=0):
     for vertex in brow.data.vertices:
         x, y, z = vertex.co
         t = (x+1)/2
-        px = side*(.046 + .247*t)
-        py = .401 - .098*t + .020*math.sin(math.pi*t) - .026 + .025*y - south_offset
+        px = side*(.05341 + .23218*t)
+        py = .39806 - .09212*t + .020*math.sin(math.pi*t) - .026 + .025*y - south_offset
         vertex.co = (px, py, surface(px, py)+.012*z-.008)
     brow['facePart'] = 'eye-brow'

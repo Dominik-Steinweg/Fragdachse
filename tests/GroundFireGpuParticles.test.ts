@@ -16,12 +16,9 @@ vi.mock('../src/graphics/GraphicsQuality', () => ({
 }));
 
 import type { GroundFireVisualStyle, SyncedBurningGroundCell } from '../src/types';
-import {
-  GROUND_FIRE_DENSITY_BUDGET_PER_CELL,
-  GROUND_FIRE_MAX_EFFECTIVE_CELLS,
-  GroundFireClusterRenderer,
-} from '../src/effects/GroundFireClusterRenderer';
+import { GroundFireClusterRenderer } from '../src/effects/GroundFireClusterRenderer';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
+import { GpuVfxEffectId } from '../src/effects/gpu/GpuVfxEffects';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GPU_VFX_LANES, GpuVfxLaneId } from '../src/effects/gpu/GpuVfxRenderLanes';
 import { findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
@@ -61,13 +58,117 @@ afterEach(() => {
 });
 
 describe('GroundFire GPU particles', () => {
-  it('keeps the extreme spark budget inside the existing shared lane', () => {
-    const required = GROUND_FIRE_DENSITY_BUDGET_PER_CELL
-      * GROUND_FIRE_MAX_EFFECTIVE_CELLS
-      * 5;
-    expect(required).toBeCloseTo(5704, 5);
-    expect(required).toBeLessThan(GPU_VFX_LANES[GpuVfxLaneId.GroundFire].capacity);
-    expect(GPU_VFX_LANES[GpuVfxLaneId.GroundFire].capacity).toBe(6144);
+  it('starts a new surface at steady density with staggered particle ages', () => {
+    const { system, renderer, lane } = setup();
+    renderer.syncGround({ cells: cells(12, 8) }, 0);
+    system.update(16);
+    const initial = system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount;
+    const aged = lane.members.filter(member => member.creationTime < 0);
+    expect(aged.length).toBeGreaterThan(initial * 0.8);
+    expect(new Set(aged.map(member => member.creationTime)).size).toBeGreaterThan(10);
+    for (let frame = 0; frame < 240; frame++) system.update(16);
+    const steady = system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount;
+    expect(initial).toBeGreaterThan(steady * 0.8);
+    expect(initial).toBeLessThan(steady * 1.2);
+    expect(system.getLaneStats(GpuVfxLaneId.GroundFire)!.capacityDrops).toBe(0);
+  });
+
+  it('populates only new trail cells and never reheats refreshed or split surfaces', () => {
+    const { system, renderer } = setup();
+    const positions: number[] = [];
+    const originalSpawn = system.spawn.bind(system);
+    const spawn = vi.spyOn(system, 'spawn').mockImplementation((spec, source, now, age, out) => {
+      if ((age ?? 0) > 0) positions.push(spec.x);
+      return originalSpawn(spec, source, now, age, out);
+    });
+    const initial = cells(8, 4);
+    renderer.syncGround({ cells: initial }, 0);
+    system.update(16);
+    spawn.mockClear();
+    positions.length = 0;
+    const trail = cells(4, 1).map(cell => ({ ...cell, id: cell.id + 100, gridX: cell.gridX + 8 }));
+    renderer.syncGround({ cells: [...initial, ...trail] }, 16);
+    system.update(0);
+    const warmed = spawn.mock.calls.filter(call => (call[3] ?? 0) > 0);
+    expect(warmed.length).toBeGreaterThan(0);
+    expect(positions.every(x => x >= 8 * 16 - 16 && x <= 12 * 16 + 16)).toBe(true);
+    spawn.mockClear();
+    renderer.syncGround({ cells: [...initial, ...trail].map(cell => ({ ...cell, expiresAt: 110_000 })) }, 17);
+    system.update(0);
+    expect(spawn).not.toHaveBeenCalled();
+    renderer.syncGround({ cells: [...initial, ...trail.slice(1)] }, 18);
+    system.update(0);
+    expect(spawn.mock.calls.filter(call => (call[3] ?? 0) > 0)).toHaveLength(0);
+  });
+
+  it('keeps trail ground at full base alpha beside stronger overlapping fire', () => {
+    function capture(overlap: number) {
+      const { renderer, system } = setup();
+      const emitted: Array<{ x: number; alpha: number; frame: number }> = [];
+      const spawn = system.spawn.bind(system);
+      vi.spyOn(system, 'spawn').mockImplementation((spec, source, now, age, out) => {
+        if (spec.effect === GpuVfxEffectId.GroundFireHeatBody || spec.effect === GpuVfxEffectId.GroundFireOuter
+          || spec.effect === GpuVfxEffectId.GroundFireCore) {
+          emitted.push({ x: spec.x, alpha: spec.alphaStart, frame: spec.frame });
+        }
+        return spawn(spec, source, now, age, out);
+      });
+      renderer.syncGround({ cells: cells(12, 1).map(cell => ({ ...cell, intensity: cell.gridX === 0 ? overlap : 1 })) }, 0);
+      system.update(0);
+      return emitted.filter(member => member.x > 48);
+    }
+    const ordinary = capture(1);
+    resetGpuVfxAtlasForTests();
+    const overlapping = capture(8);
+    expect(overlapping.length).toBe(ordinary.length);
+    expect(ordinary.length).toBeGreaterThan(0);
+    expect(overlapping.map(member => member.alpha)).toEqual(ordinary.map(member => member.alpha));
+  });
+
+  it('scales the initial population with quality and clears queued ignition on teardown', () => {
+    const full = setup(); full.renderer.syncGround({ cells: cells(12, 8) }, 0); full.system.update(0);
+    const fullCount = full.system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount;
+    resetGpuVfxAtlasForTests(); qualityFactors.standard = 0.5;
+    const reduced = setup(); reduced.renderer.syncGround({ cells: cells(12, 8) }, 0); reduced.system.update(0);
+    expect(reduced.system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount).toBeLessThan(fullCount);
+    reduced.renderer.syncGround({ cells: cells(16, 8) }, 1);
+    reduced.renderer.clear(); reduced.system.update(0);
+    expect(reduced.system.getLaneStats(GpuVfxLaneId.GroundFire)!.liveCount).toBe(0);
+  });
+
+  it('preserves distant trail emission when its connection to a large fire expires', () => {
+    function capture(disconnect: boolean) {
+      const { renderer, system } = setup();
+      const area = cells(16, 16).map(cell => ({ ...cell, intensity: 2 }));
+      const trail = cells(32, 1).map(cell => ({ ...cell, id: cell.id + 1000, gridX: cell.gridX + 16 }));
+      const emitted: object[] = [];
+      const spawn = system.spawn.bind(system);
+      vi.spyOn(system, 'spawn').mockImplementation((spec, source, now, age, out) => {
+        if (spec.x > 33 * 16) emitted.push({ ...spec, now, age });
+        return spawn(spec, source, now, age, out);
+      });
+      renderer.syncGround({ cells: [...area, ...trail] }, 0);
+      for (let frame = 0; frame < 60; frame++) system.update(16);
+      emitted.length = 0;
+      renderer.syncGround({ cells: [...area, ...(disconnect ? trail.slice(1) : trail)] }, 960);
+      for (let frame = 0; frame < 120; frame++) system.update(16);
+      return emitted;
+    }
+    const connected = capture(false);
+    resetGpuVfxAtlasForTests();
+    const disconnected = capture(true);
+    expect(connected.length).toBeGreaterThan(0);
+    expect(disconnected).toEqual(connected);
+  });
+
+  it('keeps large surfaces inside the existing shared lane budget', () => {
+    const { renderer, system } = setup();
+    renderer.syncGround({ cells: cells(48, 40) }, 0);
+    for (let frame = 0; frame < 240; frame++) system.update(16);
+    const stats = system.getLaneStats(GpuVfxLaneId.GroundFire)!;
+    expect(stats.liveCount).toBeGreaterThan(0);
+    expect(stats.peakLive).toBeLessThan(GPU_VFX_LANES[GpuVfxLaneId.GroundFire].capacity);
+    expect(stats.capacityDrops).toBe(0);
   });
 
   it('emits a dense ambient spark rain plus rarer large outliers across the area', () => {

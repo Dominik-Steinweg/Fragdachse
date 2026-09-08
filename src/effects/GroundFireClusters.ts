@@ -100,6 +100,7 @@ export function buildGroundFireClusterLayouts(
 function createLayout(
   component: readonly SyncedBurningGroundCell[],
   cellSize: number,
+  stableId?: string,
 ): GroundFireClusterLayout {
   const first = component[0];
   let minGridX = first.gridX;
@@ -128,7 +129,7 @@ function createLayout(
   }
 
   const visualStyle = first.visualStyle;
-  const id = `groundfire:${visualStyle}:${minGridX}:${minGridY}`;
+  const id = stableId ?? `groundfire:${visualStyle}:${minGridX}:${minGridY}`;
   return {
     id,
     seed: hashClusterId(id),
@@ -147,6 +148,26 @@ function createLayout(
     maxIntensity,
     expiresAt,
   };
+}
+
+/** Fixed world-space emission regions: a remote bridge cannot change a trail's
+ * density, random seed, flow clocks or lighting owner when it burns out. */
+export function buildGroundFireEmissionLayouts(
+  cells: readonly SyncedBurningGroundCell[],
+  cellSize = 16,
+  regionCells = 8,
+): GroundFireClusterLayout[] {
+  const regions = new Map<string, Map<string, SyncedBurningGroundCell>>();
+  for (const cell of cells) {
+    const id = `groundfire-region:${cell.visualStyle}:${Math.floor(cell.gridX / regionCells)}:${Math.floor(cell.gridY / regionCells)}`;
+    let region = regions.get(id);
+    if (!region) { region = new Map(); regions.set(id, region); }
+    const key = cellKey(cell.visualStyle, cell.gridX, cell.gridY);
+    const previous = region.get(key);
+    if (!previous || cell.intensity > previous.intensity || cell.expiresAt > previous.expiresAt) region.set(key, cell);
+  }
+  return [...regions].map(([id, region]) => createLayout([...region.values()].sort(compareCells), cellSize, id))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function compareCells(left: SyncedBurningGroundCell, right: SyncedBurningGroundCell): number {
