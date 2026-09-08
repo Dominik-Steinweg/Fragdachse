@@ -1623,9 +1623,10 @@
         "earSouthOffset": 0.055,
         "fierceEyes": true,
         "furBase": [0.035, 0.047, 0.057],
-        "furTones": [[7, 11, 15], [20, 28, 35], [41, 53, 63], [85, 96, 104]],
+        "furTones": [[7, 11, 18], [20, 28, 35], [41, 51, 57], [88, 87, 79]],
         "paintedFur": true,
-        "furColorVariation": 0.6,
+        "contactAODistance": 0.65,
+        "contactAOStrength": 0.9,
         "headColor": [0.99, 0.97, 0.90],
         "tailColor": [0.73, 0.71, 0.64],
         "footColor": [0.055, 0.067, 0.075],
@@ -1635,22 +1636,22 @@
       "collisionDiameter": 32,
       "materialVariants": {
         "calm": {
-          "label": "Gemaltes Fell · ruhig",
+          "label": "Breite Fellzüge · ruhig",
           "textureStrength": 0.45,
           "formShadowStrength": 1
         },
         "rich": {
-          "label": "Gemaltes Fell · kräftig",
+          "label": "Breite Fellzüge · akzentuiert",
           "textureStrength": 0.70,
           "formShadowStrength": 1
         }
       },
       "previousReference": {
-        "label": "Dachs V2-H · bisheriges Fell",
-        "path": "art/poc/pipeline-v2/runs/v2-h/badger/rich/sprite-128.png"
+        "label": "Dachs V2-I · bisheriges Fell",
+        "path": "art/poc/pipeline-v2/runs/v2-i/badger/rich/sprite-128.png"
       },
       "textures": {
-        "organic": "art/poc/pipeline-v2/textures/badger-painted-fur-v2-i.png"
+        "organic": "art/poc/pipeline-v2/textures/badger-quiet-fur-v2-j.png"
       },
       "clips": [
         {

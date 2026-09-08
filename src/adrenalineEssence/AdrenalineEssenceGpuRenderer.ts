@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { DEPTH, PLAYER_SIZE } from '../config';
+import { DEPTH, PLAYER_VISUAL_SIZE } from '../config';
 import { buildGpuVfxAtlas, GPU_VFX_ATLAS_KEY } from '../effects/gpu/GpuVfxAtlas';
 import { setGpuVfxTint } from '../effects/gpu/GpuVfxMember';
 import { getGraphicsQualityProfile, type GraphicsQuality } from '../graphics/GraphicsQuality';
@@ -31,7 +31,7 @@ const GLOW_STRIDE = ESSENCE_VISUAL.maxDroplets + 1;
 const BODY_DEPTH = DEPTH.PLAYERS - 0.6;
 const GLOW_DEPTH = BODY_DEPTH - 0.01;
 const TWO_PI = Math.PI * 2;
-const RING_RADIUS = PLAYER_SIZE / 2 + 19;
+const RING_RADIUS = PLAYER_VISUAL_SIZE / 2 + 19;
 type Member = Partial<Phaser.Types.GameObjects.SpriteGPULayer.Member>;
 const DEAD_MEMBER: Member = { scaleX: 0, scaleY: 0, alpha: 0 };
 type VisualMode = 'live' | 'merge' | 'return' | 'arrival' | 'fade';

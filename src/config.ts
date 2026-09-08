@@ -264,6 +264,9 @@ export function toCssColor(color: number): `#${string}` {
 
 // ---- Player ----
 export const PLAYER_SIZE  = 32;
+/** Reiner Darstellungsfaktor; Kollisions- und Gameplay-Geometrie bleiben bei PLAYER_SIZE. */
+export const PLAYER_VISUAL_SCALE = 1.2;
+export const PLAYER_VISUAL_SIZE = PLAYER_SIZE * PLAYER_VISUAL_SCALE;
 export const PLAYER_SPEED = 240;
 export const MUZZLE_FORWARD_OFFSET = PLAYER_SIZE * 0.7;
 export const MUZZLE_PROJECTILE_FALLBACK_BACKTRACK = PLAYER_SIZE * 1.1;
@@ -525,10 +528,10 @@ export const HIT_FEEDBACK_VFX = {
 } as const;
 
 // ---- HP-Balken ----
-export const HP_BAR_WIDTH    = PLAYER_SIZE;     // gleiche Breite wie Spieler
+export const HP_BAR_WIDTH    = PLAYER_VISUAL_SIZE;
 export const HP_BAR_HEIGHT   = 5;
-export const HP_BAR_OFFSET_Y = 24;              // Pixel unter Sprite-Mittelpunkt
-export const ARMOR_BAR_WIDTH    = PLAYER_SIZE;
+export const HP_BAR_OFFSET_Y = 24 + (PLAYER_VISUAL_SIZE - PLAYER_SIZE) / 2;
+export const ARMOR_BAR_WIDTH    = PLAYER_VISUAL_SIZE;
 export const ARMOR_BAR_HEIGHT   = 3;
 export const ARMOR_BAR_OFFSET_Y = HP_BAR_OFFSET_Y + HP_BAR_HEIGHT + 1;
 

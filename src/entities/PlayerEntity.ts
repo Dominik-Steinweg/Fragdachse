@@ -22,7 +22,7 @@ import { killAllAndResetParticlePositions, registerGraphicsObject, registerParti
 import type { LightingSystem } from '../effects/LightingSystem';
 import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import {
-  PLAYER_SIZE, DEPTH, COLORS, BURROW_WINDUP_DURATION_MS,
+  PLAYER_SIZE, PLAYER_VISUAL_SIZE, DEPTH, COLORS, BURROW_WINDUP_DURATION_MS,
   toCssColor,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR, ARMOR_MAX,
@@ -130,14 +130,14 @@ export class PlayerEntity {
   private movementCorrectionRemaining = 0;
 
   /**
-   * Grundskalierung des Spielersprites: Die Walking-Textur ist in 64-px-Zellen authored, die
-   * Figur bleibt aber `PLAYER_SIZE` gross. Spawn-, Dash- und Burrow-Feedback sind Faktoren
+   * Grundskalierung des Spielersprites: Die Walking-Textur wird auf `PLAYER_VISUAL_SIZE`
+   * dargestellt; die Runtime bleibt `PLAYER_SIZE` gross. Spawn-, Dash- und Burrow-Feedback sind Faktoren
    * *relativ* zu dieser Grundgroesse und laufen deshalb ueber `applySpriteScale()`. Ein direktes
    * `setScale(1)` waere kein neutraler Wert mehr, sondern wuerde den Dachs auf Texturgroesse
    * aufblasen.
    */
-  private readonly spriteBaseScaleX = PLAYER_SIZE / BADGER_WALKING_FRAME_WIDTH;
-  private readonly spriteBaseScaleY = PLAYER_SIZE / BADGER_WALKING_FRAME_HEIGHT;
+  private readonly spriteBaseScaleX = PLAYER_VISUAL_SIZE / BADGER_WALKING_FRAME_WIDTH;
+  private readonly spriteBaseScaleY = PLAYER_VISUAL_SIZE / BADGER_WALKING_FRAME_HEIGHT;
 
   // Visuelle Zustände – kombiniert in resolveVisual()
   private burrowPhase: BurrowPhase = 'idle';
@@ -189,7 +189,7 @@ export class PlayerEntity {
       : null;
     if (this.sprite) {
       this.sprite.setOrigin(0.5, 0.5);
-      this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.sprite.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
       this.sprite.setDepth(DEPTH.PLAYERS);
 
       // Dieselbe bewährte Internal-Glow-Kette wie in BadgerPreview verwenden. Der Filter
@@ -205,7 +205,7 @@ export class PlayerEntity {
       this.heldItem = new HeldItemVisual(scene, DEPTH.PLAYERS + 0.02);
 
       this.spawnShine = scene.add.image(x, y, 'badger');
-      this.spawnShine.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.spawnShine.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
       this.spawnShine.setDepth(DEPTH.PLAYERS + 0.05);
       this.spawnShine.setTint(0xfff1bf);
       this.spawnShine.setBlendMode(Phaser.BlendModes.ADD);
@@ -215,14 +215,14 @@ export class PlayerEntity {
       if (options.spawnEffect ?? !this.presentation) this.playSpawnEffect();
 
       this.stealthShell = scene.add.image(x, y, 'badger');
-      this.stealthShell.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.stealthShell.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
       this.stealthShell.setDepth(DEPTH.PLAYERS + 0.03);
       this.stealthShell.setTint(profile.colorHex);
       this.stealthShell.setBlendMode(Phaser.BlendModes.ADD);
       this.stealthShell.setVisible(false);
 
       this.stealthScan = scene.add.image(x, y, 'badger');
-      this.stealthScan.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+      this.stealthScan.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
       this.stealthScan.setDepth(DEPTH.PLAYERS + 0.04);
       this.stealthScan.setTint(profile.colorHex);
       this.stealthScan.setBlendMode(Phaser.BlendModes.ADD);
@@ -279,7 +279,7 @@ export class PlayerEntity {
         this.armorBarFg.setVisible(false);
         registerGraphicsObject(scene, 'playerStatus', this.armorBarFg);
 
-        this.nameLabel = scene.add.text(x, y - PLAYER_SIZE * 0.72, this.displayName, {
+        this.nameLabel = scene.add.text(x, y - PLAYER_VISUAL_SIZE * 0.72, this.displayName, {
           fontSize: '12px',
           fontFamily: 'monospace',
           fontStyle: 'bold',
@@ -307,8 +307,8 @@ export class PlayerEntity {
       textureKey: this.sprite?.texture?.key,
       frame: this.sprite?.frame?.name,
       rotation: this.runtime.rotation,
-      displayWidth: this.sprite?.displayWidth ?? PLAYER_SIZE,
-      displayHeight: this.sprite?.displayHeight ?? PLAYER_SIZE,
+      displayWidth: this.sprite?.displayWidth ?? PLAYER_VISUAL_SIZE,
+      displayHeight: this.sprite?.displayHeight ?? PLAYER_VISUAL_SIZE,
       tint: this.sprite?.tint ?? 0xffffff,
     };
   }
@@ -549,7 +549,7 @@ export class PlayerEntity {
     this.healthBars?.position(this.healthBar, x, hpY);
     this.armorBarBg?.setPosition(x, armorY);
     this.armorBarFg?.setPosition(x - ARMOR_BAR_WIDTH / 2, armorY);
-    this.nameLabel?.setPosition(x, this.runtime.y - PLAYER_SIZE * 0.72);
+    this.nameLabel?.setPosition(x, this.runtime.y - PLAYER_VISUAL_SIZE * 0.72);
     this.syncAttachedEffects();
     this.syncOverlays();
     this.syncWalkingAnimation();
@@ -902,7 +902,6 @@ export class PlayerEntity {
     }
     this.applyDisplayVisibility();
     this.syncOverlays();
-    this.syncStealthOverlay();
     this.syncAttachedEffects();
   }
 
@@ -913,6 +912,7 @@ export class PlayerEntity {
    */
   private syncOverlays(): void {
     this.syncSpawnShine();
+    this.syncStealthOverlay();
     this.syncHeldItem();
   }
 
@@ -1161,12 +1161,12 @@ export class PlayerEntity {
     this.burnRenderer?.sync(
       this.sprite.x,
       this.sprite.y,
-      PLAYER_SIZE,
+      this.sprite.displayWidth,
       this.burnStacks,
       this.sprite.visible,
       this.burnVisualStyle,
     );
-    this.rageRenderer?.sync(this.sprite.x, this.sprite.y, PLAYER_SIZE, this.sprite.visible);
+    this.rageRenderer?.sync(this.sprite.x, this.sprite.y, this.sprite.displayWidth, this.sprite.visible);
   }
 
   destroy(): void {

@@ -82,6 +82,8 @@ import { CameraFeedbackController } from '../../src/effects/camera/CameraFeedbac
 import type { SyncedHitscanTrace, LoadoutUseParams, LoadoutUseResult, WeaponSlot } from '../../src/types';
 import { WeaponFireFeedbackController } from '../../src/effects/weapon/WeaponFireFeedbackController';
 import type { WeaponShotFeedbackEvent } from '../../src/loadout/WeaponShotFeedbackEvent';
+import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../../src/config';
+import { createArenaCoopMissionPorts } from '../../src/scenes/arena/ArenaCoopMissionPorts';
 
 // Compose the real input, prediction, RPC, activation, cooldown, combat and trace-dedupe paths.
 // Only renderer/audio and the transport delivery are headless ports.
@@ -248,6 +250,7 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
   return {
     config, item, commits, combat, traces, localEffects, remoteEffects, aim, hud, prediction, actions, replies,
     shotEvents, localWeapon, remoteWeapon, localKick, remoteKick, projectiles,
+    setShooterDisplaySize: (size: number) => { players[0].displayObject = { displayWidth: size }; },
     localViewport: localView.viewport, remoteViewport: remoteView.viewport,
     present: (time: number) => {
       now = time;
@@ -272,6 +275,48 @@ function fixture(remote = false, weaponId = 'ASMD_PRIM', pelletCount?: number) {
 afterEach(() => vi.restoreAllMocks());
 
 describe('held weapon fire at the authoritative cooldown boundary', () => {
+  it.each([false, true])('keeps hitscan geometry unchanged when the player visual grows (client=%s)', remote => {
+    const baseline = fixture(remote);
+    baseline.setShooterDisplaySize(PLAYER_SIZE);
+    baseline.shoot(1000, 0, true);
+    const enlarged = fixture(remote);
+    enlarged.setShooterDisplaySize(PLAYER_SIZE * PLAYER_VISUAL_SCALE);
+    enlarged.shoot(1000, 0, true);
+    const before = baseline.traces[0], after = enlarged.traces[0];
+    expect(before).toBeDefined();
+    expect(after).toMatchObject({ startX: before.startX, startY: before.startY,
+      endX: before.endX, endY: before.endY, impactKind: before.impactKind });
+    expect(after.visualStartY).not.toBe(before.visualStartY);
+    if (remote) {
+      const predictedBefore = vi.mocked(baseline.localEffects.playHitscanTracer).mock.calls[0];
+      const predictedAfter = vi.mocked(enlarged.localEffects.playHitscanTracer).mock.calls[0];
+      expect(predictedAfter.slice(2, 4)).toEqual(predictedBefore.slice(2, 4));
+    }
+  });
+
+  it('keeps the enlarged decoy silhouette out of hitscan, projectile and Coop target geometry', () => {
+    const sprite = fakeEntity({ x: 500, y: 200, active: true,
+      displayWidth: PLAYER_SIZE * PLAYER_VISUAL_SCALE, displayHeight: PLAYER_SIZE * PLAYER_VISUAL_SCALE });
+    const decoy = { id: 1, ownerId: 'owner', sprite, body: null };
+    const decoySystem = { getHostTargets: () => [decoy] };
+    const combat = new WorldCombatCore({ getAllPlayers: () => [] } as never, network as never);
+    combat.setDecoySystem(decoySystem as never);
+    const sink = vi.fn();
+    combat.readCollisionTargets(sink);
+    const radius = PLAYER_SIZE / 2;
+    expect(sink).toHaveBeenCalledExactlyOnceWith('decoy', decoy.id, decoy.ownerId, 500, 200, radius,
+      500 - radius, 200 - radius, 500 + radius, 200 + radius);
+    const ports = createArenaCoopMissionPorts({ ctx: { decoySystem } } as never);
+    expect(ports.hostUpdate.getDecoyTargets()[0].radius).toBe(radius);
+
+    const trace = (y: number) => combat.traceHitscan({ shooterId: 'shooter', startX: 300, startY: y,
+      angle: 0, range: 400, traceThickness: 0, applyFavorTheShooter: false });
+    expect(trace(200)).toMatchObject({ hitDecoyId: decoy.id, endX: 500 - radius });
+    // A ray through the extra visible rim must miss the unchanged collision circle.
+    const visibleRimY = 200 + radius * (1 + PLAYER_VISUAL_SCALE) / 2;
+    expect(trace(visibleRimY).hitDecoyId).toBeNull();
+  });
+
   it.each([false, true])('moves the rendered weapon and local camera for a stationary shooter (client=%s)', (remote) => {
     const f = fixture(remote, 'GLOCK');
     const rest = { x: 0, y: 0, rotation: 0, itemId: '' };

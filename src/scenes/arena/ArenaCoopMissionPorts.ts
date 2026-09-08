@@ -1,4 +1,5 @@
 import { bridge } from '../../network/bridge';
+import { PLAYER_SIZE } from '../../config';
 import type {
   CoopMissionArmedConstructionView,
   CoopMissionArmedOutpostView,
@@ -91,7 +92,7 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
         ownerId: decoy.ownerId,
         x: decoy.sprite.x,
         y: decoy.sprite.y,
-        radius: Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5,
+        radius: PLAYER_SIZE * 0.5,
       })),
       getDecoyPosition: (decoyId) => {
         const decoy = ctx.decoySystem.getHostTarget(decoyId);

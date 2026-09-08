@@ -356,7 +356,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       request.targetY,
       request.hostNowMs,
       player.color,
-      player.displaySize ?? PLAYER_SIZE,
+      PLAYER_SIZE,
       authoritativeParams,
     );
     if (!didUse) return { ok: false, reason: 'blocked' };

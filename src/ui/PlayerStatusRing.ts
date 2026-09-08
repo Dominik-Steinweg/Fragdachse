@@ -3,7 +3,7 @@ import {
   ARMOR_COLOR,
   COLORS,
   DEPTH,
-  PLAYER_SIZE,
+  PLAYER_VISUAL_SIZE,
 } from '../config';
 import { getGraphicsQualityController, getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { fillRadialGradientTexture, registerGraphicsObject } from '../effects/EffectUtils';
@@ -40,7 +40,7 @@ interface AngleSection {
 
 const RING_GAP_PX = 16;
 const RING_THICKNESS = 6;
-const RING_OUTER_RADIUS = PLAYER_SIZE / 2 + RING_GAP_PX + RING_THICKNESS;
+const RING_OUTER_RADIUS = PLAYER_VISUAL_SIZE / 2 + RING_GAP_PX + RING_THICKNESS;
 const RING_INNER_RADIUS = RING_OUTER_RADIUS - RING_THICKNESS;
 const ARMOR_RIM_THICKNESS = 3;
 const POLY_STEPS = 32;

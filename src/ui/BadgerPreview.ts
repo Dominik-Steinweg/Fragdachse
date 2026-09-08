@@ -6,7 +6,7 @@
  * Optionally tracks the mouse pointer for rotation.
  */
 import * as Phaser from 'phaser';
-import { PLAYER_SIZE } from '../config';
+import { PLAYER_SIZE, PLAYER_VISUAL_SCALE } from '../config';
 import { HeldItemVisual } from '../entities/HeldItemVisual';
 import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 
@@ -26,14 +26,14 @@ export class BadgerPreview {
     x: number,
     y: number,
     color: number,
-    private displaySize = PLAYER_SIZE,
+    displaySize = PLAYER_SIZE,
     /** Aufbaupfad-Arbeit fuer das erst spaet erzeugte Item-Bild, z.B. die Klarheitskamera. */
     onHeldItemCreated?: (image: Phaser.GameObjects.Image) => void,
   ) {
     this.colorHex = color;
 
     this.sprite = scene.add.image(x, y, 'badger');
-    this.sprite.setDisplaySize(displaySize, displaySize);
+    this.sprite.setDisplaySize(displaySize * PLAYER_VISUAL_SCALE, displaySize * PLAYER_VISUAL_SCALE);
 
     // Dieselbe Zuordnung wie in der Arena, nur mit der groesseren Vorschau-Kantenlaenge: die
     // Waffe skaliert damit automatisch mit, statt eine zweite Groessenpflege zu brauchen.
@@ -117,7 +117,7 @@ export class BadgerPreview {
       this.sprite.x,
       this.sprite.y,
       this.sprite.rotation,
-      this.displaySize,
+      this.sprite.displayWidth,
       this.heldItemVisible,
     );
   }

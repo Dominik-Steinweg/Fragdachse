@@ -303,7 +303,7 @@ interface HitscanTarget {
 }
 
 /**
- * Trefferziel eines noch sprite-gefuehrten Gegners oder Koeders.
+ * Trefferziel eines noch sprite-gefuehrten Gegners.
  *
  * Bewusst genau eine Stelle: solange Gegner ihren Radius aus dem Anzeigemass ableiten, steht
  * diese Ableitung hier und nicht verstreut an jedem Aufruf.
@@ -1726,12 +1726,12 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
       if (!decoy.sprite.active) continue;
-      const bounds = decoy.sprite.getBounds();
+      const { x, y } = decoy.sprite;
+      const radius = PLAYER_SIZE * 0.5;
       sink(
         'decoy', decoy.id, decoy.ownerId,
-        decoy.sprite.x, decoy.sprite.y,
-        Math.max(decoy.sprite.displayWidth, decoy.sprite.displayHeight) * 0.5,
-        bounds.left, bounds.top, bounds.right, bounds.bottom,
+        x, y, radius,
+        x - radius, y - radius, x + radius, y + radius,
       );
     }
   }
@@ -3432,7 +3432,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        toSpriteHitscanTarget(decoy.sprite),
+        { x: decoy.sprite.x, y: decoy.sprite.y, hitRadius: PLAYER_SIZE * 0.5, body: decoy.body },
         traceThickness,
         applyFavorTheShooter,
       );

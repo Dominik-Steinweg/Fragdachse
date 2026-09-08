@@ -13,7 +13,7 @@ import type {
   ProjectileWeaponFireConfig,
   WeaponConfig,
 } from '../loadout/LoadoutConfig';
-import { PLAYER_SIZE, type MuzzleOrigin } from '../config';
+import { PLAYER_SIZE, PLAYER_VISUAL_SIZE, type MuzzleOrigin } from '../config';
 import { isVelocityMoving } from '../loadout/SpreadMath';
 import { resolveShotPlan } from '../loadout/ShotPlanResolver';
 import {
@@ -393,7 +393,7 @@ export class PlayerWeaponActivationRuntime {
       player.x,
       player.y,
       player.rotation ?? 0,
-      player.displayObject?.displayWidth ?? PLAYER_SIZE,
+      player.displayObject?.displayWidth ?? PLAYER_VISUAL_SIZE,
     ) ?? undefined;
   }
 
@@ -411,7 +411,7 @@ export class PlayerWeaponActivationRuntime {
       gameplayX,
       gameplayY,
       angle,
-      player.displayObject?.displayWidth ?? PLAYER_SIZE,
+      PLAYER_SIZE,
     ) ?? undefined;
   }
 

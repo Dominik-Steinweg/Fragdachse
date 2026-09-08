@@ -2,7 +2,7 @@ import type Phaser from 'phaser';
 import { bridge }          from '../../network/bridge';
 import type { GameState }  from '../../network/NetworkBridge';
 import { dequantizeAngle } from '../../utils/angle';
-import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, PLAYER_SIZE, getTopDownMuzzleOrigin } from '../../config';
+import { NET_SMOOTH_TIME_MS, DASH_T2_S, PLAYER_COLORS, PLAYER_SIZE, PLAYER_VISUAL_SIZE, getTopDownMuzzleOrigin } from '../../config';
 import { isVelocityMoving } from '../../loadout/SpreadMath';
 import { getUtilityConfigForMode, WEAPON_CONFIGS, UTILITY_CONFIGS, ULTIMATE_CONFIGS } from '../../loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../../loadout/CoopDefenseLoadoutModifiers';
@@ -1514,7 +1514,7 @@ export class ClientUpdateCoordinator {
       localPlayer.x,
       localPlayer.y,
       angle,
-      localPlayer.displayObject?.displayWidth ?? PLAYER_SIZE,
+      PLAYER_SIZE,
     ) ?? getTopDownMuzzleOrigin(localPlayer.x, localPlayer.y, angle);
     const resolvedStart = this.ctx.getWorldCombatCore()!.resolveSafeHitscanStart(
       localPlayer.x,
@@ -1527,7 +1527,7 @@ export class ClientUpdateCoordinator {
       localPlayer.x,
       localPlayer.y,
       localPlayer.rotation,
-      localPlayer.displayObject?.displayWidth ?? PLAYER_SIZE,
+      localPlayer.displayObject?.displayWidth ?? PLAYER_VISUAL_SIZE,
     ) ?? desiredGameplayMuzzle;
     const trace  = this.ctx.getWorldCombatCore()!.traceHitscan({
       shooterId:  bridge.getLocalPlayerId(),

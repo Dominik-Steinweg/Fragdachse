@@ -342,7 +342,7 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
         x ?? 0,
         y ?? 0,
         request.angle,
-        player.displayObject?.displayWidth ?? PLAYER_SIZE,
+        PLAYER_SIZE,
       ) ?? undefined,
     })) {
       return { ok: false, reason: 'blocked' };

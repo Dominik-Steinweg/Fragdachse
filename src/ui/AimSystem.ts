@@ -8,6 +8,7 @@ import {
   ARENA_OFFSET_X, ARENA_OFFSET_Y,
   ARENA_WIDTH,    ARENA_HEIGHT,
   DEPTH_AIM,
+  PLAYER_SIZE,
   getTopDownMuzzleOrigin,
 } from '../config';
 import { getHeldWeaponGameplayMuzzleOrigin } from '../loadout/HeldItemVisuals';
@@ -199,7 +200,7 @@ export class AimSystem {
         sx,
         sy,
         aimAngle,
-        sprite.displayWidth,
+        PLAYER_SIZE,
       )
       : null;
     const beamOrigin = gameplayAimMuzzle ?? { x: sx, y: sy };

@@ -3,7 +3,7 @@ import { HeldItemVisual } from './HeldItemVisual';
 import { addInternalGlowLegacy, removeInternalFx, setInternalFxPadding, type GlowHandle } from '../utils/phaserFx';
 import { registerGraphicsObject } from '../effects/EffectUtils';
 import {
-  PLAYER_SIZE, DEPTH, COLORS,
+  PLAYER_SIZE, PLAYER_VISUAL_SIZE, DEPTH, COLORS,
   ARMOR_BAR_HEIGHT, ARMOR_BAR_OFFSET_Y, ARMOR_BAR_WIDTH,
   ARMOR_COLOR,
   HP_BAR_WIDTH, HP_BAR_HEIGHT, HP_BAR_OFFSET_Y,
@@ -56,13 +56,19 @@ export class DecoyEntity {
     this.targetY = y;
 
     this.sprite = scene.add.image(x, y, 'badger');
-    this.sprite.setDisplaySize(PLAYER_SIZE, PLAYER_SIZE);
+    this.sprite.setDisplaySize(PLAYER_VISUAL_SIZE, PLAYER_VISUAL_SIZE);
     this.sprite.setDepth(DEPTH.PLAYERS - 0.02);
     if (enablePhysics) {
       scene.physics.add.existing(this.sprite);
       const body = this.body;
       if (body) {
-        body.setCircle(this.sprite.frame.realWidth / 2, 0, 0);
+        // Arcade skaliert Quellpixel mit dem Sprite: den reinen Darstellungsfaktor
+        // herausrechnen und den unveraenderten Weltkreis im groesseren Bild zentrieren.
+        const radius = PLAYER_SIZE / (2 * this.sprite.scaleX);
+        body.setCircle(radius,
+          this.sprite.frame.realWidth / 2 - radius,
+          this.sprite.frame.realHeight / 2 - radius);
+        body.updateFromGameObject();
         body.setCollideWorldBounds(true);
         body.setAllowGravity(false);
       }

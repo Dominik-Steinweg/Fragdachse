@@ -54,8 +54,15 @@ und [WorldPresentationFrameLifetime.test.ts](../../tests/integration/WorldPresen
 Die versionierte [Runtime-Assetauswahl](../../src/config/pipelineAssets.json) und ihre PNGs unter
 `public/assets/sprites/pipeline-v2/` sind unabhängig von lokalen Blender-Quellen. Statische Bilder
 und animierte Sheets besitzen getrennte Texturschlüssel. Sheet-Geometrie und explizite Clipframes
-stammen aus der Auswahl; der Ruheframe ist kein Teil des Bewegungsloops. Anzeigegrößen bleiben
-bei den Gameplay-Konfigurationen. Arcade-Kreisradien werden in Quellpixeln gesetzt, damit die
+stammen aus der Auswahl; der Ruheframe ist kein Teil des Bewegungsloops. Anzeigegrößen werden
+aus den Figurenkonfigurationen abgeleitet. `PLAYER_VISUAL_SCALE` skaliert den Dachs in Arena,
+Lobby-Vorschau und Köder rein visuell; Waffen und Sprite-Overlays folgen der Renderpose.
+`PLAYER_SIZE` bleibt die Gameplay-Basis für Spieler- und Ködergeometrie sowie Gameplay-Mündungen.
+Beim spritegebundenen Köder wird der visuelle Maßstab für den Arcade-Kreis herausgerechnet;
+Hitscan-, Projektil- und Coop-Zielsichten verwenden ebenfalls die Gameplay-Größe.
+[FigureSpriteGeometry.test.ts](../../tests/integration/FigureSpriteGeometry.test.ts) und
+[HeldWeaponFire.test.ts](../../tests/integration/HeldWeaponFire.test.ts) sichern diese Trennung.
+Arcade-Kreisradien werden in Quellpixeln gesetzt, damit die
 Sprite-Skalierung den konfigurierten Weltdurchmesser erhält; Spieler-Overlays übernehmen den
 aktuellen Texturframe und dessen Skalierung.
 

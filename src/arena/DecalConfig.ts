@@ -103,7 +103,7 @@ export const ARENA_DECAL_CONFIG = {
       //{ fileName: 'decal02.png', frequencyPercent: 50 },
       { fileName: 'decal03.png', frequencyPercent: 100 },
       { fileName: 'decal04.png', frequencyPercent: 100 },
-      { fileName: 'decal05.png', frequencyPercent: 100 },
+      { fileName: 'decal05.png', frequencyPercent: 10 },
       { fileName: 'decal07.png', frequencyPercent: 100 },
       { fileName: 'Kiesel4.png', frequencyPercent: 100 },
       { fileName: 'Kiesel5.png', frequencyPercent: 100 },
