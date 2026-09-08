@@ -248,6 +248,7 @@ export interface PlayerGameplayActionPort {
     capability: NonNullable<import('./PlayerUtilityActionRuntime').PlayerUtilityActionRuntimeOptions['placeable']>['use'] | null,
   ): void;
   beginUtilityCooldown(playerId: string, utilityId: string, now: number): void;
+  refundUtilityCooldown(playerId: string, utilityId: string, amountMs: number, now: number): void;
 }
 
 /** Resource commands exposed to tooling without exposing the ResourceSystem owner. */
@@ -743,6 +744,7 @@ export class WorldPlayerGameplayRuntime implements
       },
       item: systems.itemRuntime,
       utility: systems.utilityAction,
+      fireChunks: this.getPlayerFireChunkPort(),
       ak47: systems.ak47Behavior,
       sustainedWeapon: systems.sustainedWeaponBehavior,
       slimeTrail: systems.slimeTrail,
@@ -1212,6 +1214,10 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.utilityAction.beginUtilityCooldown(playerId, utilityId, now);
   }
 
+  refundUtilityCooldown(playerId: string, utilityId: string, amountMs: number, now: number): void {
+    if (!this.destroyed) this.systems.utilityAction.refundUtilityCooldown(playerId, utilityId, amountMs, now);
+  }
+
   handleBurrowRequest(playerId: string, wantsBurrowed: boolean): void {
     if (this.destroyed) return;
     this.systems.burrow.handleBurrowRequest(playerId, wantsBurrowed);
@@ -1433,6 +1439,7 @@ export class WorldPlayerGameplayRuntime implements
     resource.setAdrenalineRegenRateResolver((playerId, nowMs) => {
       const base = playerModifier.getResolvedStat(playerId, 'player.adrenalineRegenRate', 10);
       return base
+        * this.options.decoySystem.getStealthAdrenalineMultiplier(playerId)
         * itemRuntime.getAdrenalineRegenMultiplier(playerId, nowMs)
         * (this.options.getTeamAdrenalineRegenMultiplier?.(playerId) ?? 1);
     });

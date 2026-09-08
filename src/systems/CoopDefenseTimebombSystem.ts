@@ -1,3 +1,4 @@
+import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyTimebombConfig,
@@ -63,6 +64,9 @@ export interface CoopDefenseTimebombHooks {
 
 /** Hostautoritative Dreiphasen-Logik des Zeitbombendachses. */
 export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
+  private decoyTargets: DecoyTargetPort | null = null;
+  setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
+  getCurrentTarget(enemyId: string): EnemyStrategicTargetRef | null { return this.states.get(enemyId)?.target ?? null; }
   private readonly states = new Map<string, TimebombState>();
 
   constructor(
@@ -104,7 +108,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     if (state.phase === 'fuse') return { vx: 0, vy: 0 };
 
     const targetPosition = state.target
-      ? this.strategicTargets.getPosition(state.target, enemy.sprite.x, enemy.sprite.y)
+      ? this.resolveTarget(state.target, enemy)
       : null;
     if (targetPosition) {
       state.lastTargetX = targetPosition.x;
@@ -117,6 +121,16 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     let steerY = targetY;
     const from = this.strategicFlowField.worldToGrid(enemy.sprite.x, enemy.sprite.y);
     const to = this.strategicFlowField.worldToGrid(targetX, targetY);
+    const shared = state.target?.kind === 'decoy' && this.decoyTargets?.getTarget(enemy.id)?.id === state.target.id
+      ? this.decoyTargets.getMovementField(enemy.id) : null;
+    if (shared && from) {
+      const point = shared.getNextCellWorldPosition(from.gridX, from.gridY);
+      if (!point) return { vx: 0, vy: 0 };
+      this.decoyTargets?.usedTarget(enemy.id, state.target!);
+      const distance = Math.hypot(point.x - enemy.sprite.x, point.y - enemy.sprite.y);
+      const speed = enemy.getMoveSpeed() * config.chaseSpeedMultiplier;
+      return distance > 0 ? { vx: (point.x - enemy.sprite.x) / distance * speed, vy: (point.y - enemy.sprite.y) / distance * speed } : { vx: 0, vy: 0 };
+    }
     const hasDirectPath = this.hasCachedDirectPath(enemy, state, targetX, targetY, from, to, now);
     if (hasDirectPath) {
       // Ein alter Umwegpunkt darf nicht wieder greifen, falls die direkte Linie am Rand eines
@@ -152,6 +166,11 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     if (length <= 0.001) return { vx: 0, vy: 0 };
     const speed = enemy.getMoveSpeed() * config.chaseSpeedMultiplier;
     return { vx: dx / length * speed, vy: dy / length * speed };
+  }
+
+  private resolveTarget(target: EnemyStrategicTargetRef, enemy: EnemyEntity): { x: number; y: number } | null {
+    if (target.kind === 'decoy') return this.decoySystem?.getHostTarget(Number(target.id)) ?? null;
+    return this.strategicTargets.getPosition(target, enemy.sprite.x, enemy.sprite.y);
   }
 
   blocksRegularBehavior(enemyId: string): boolean {
@@ -246,13 +265,15 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     // Sobald dieser Dachs eine gueltige Sichtpruefung begonnen hat, bleibt deren Ziel fuer die
     // volle Haltezeit gebunden. Aendert das gemeinsame Flow Field zwischenzeitlich seine konkrete
     // Praeferenz, setzt das nicht mehr den individuellen Aktivierungstimer zurueck.
-    const target = state.target
+    const decoy = this.decoyTargets?.getTarget(enemy.id);
+    if (decoy && (state.target?.kind !== 'decoy' || state.target.id !== decoy.id)) this.resetLineOfSight(state);
+    const target = decoy ?? state.target
       ?? this.strategicTargets.selectTarget('players-and-armed-constructs', enemy.sprite.x, enemy.sprite.y);
     if (!target) {
       this.resetLineOfSight(state);
       return;
     }
-    const targetPosition = this.strategicTargets.getPosition(target, enemy.sprite.x, enemy.sprite.y);
+    const targetPosition = this.resolveTarget(target, enemy);
     if (!targetPosition) {
       this.resetLineOfSight(state);
       return;
@@ -278,6 +299,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     if (now - state.lineOfSightSince < config.lineOfSightDurationMs) return;
 
     state.phase = 'chase';
+    this.decoyTargets?.usedTarget(enemy.id, target);
     state.target = { kind: target.kind, id: target.id };
     state.lastTargetX = targetPosition.x;
     state.lastTargetY = targetPosition.y;
@@ -293,7 +315,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
     now: number,
   ): void {
     const targetPosition = state.target
-      ? this.strategicTargets.getPosition(state.target, enemy.sprite.x, enemy.sprite.y)
+      ? this.resolveTarget(state.target, enemy)
       : null;
     if (targetPosition) {
       state.lastTargetX = targetPosition.x;
@@ -406,8 +428,7 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
   ): void {
     if (!this.decoySystem || maxDamage <= 0) return;
     for (const decoy of this.decoySystem.getHostTargets()) {
-      if (!decoy.sprite.active) continue;
-      const distance = Math.hypot(decoy.sprite.x - x, decoy.sprite.y - y);
+      const distance = Math.hypot(decoy.x - x, decoy.y - y);
       if (distance > radius) continue;
       const damage = Math.round(maxDamage * (0.2 + 0.8 * (1 - distance / radius)));
       this.decoySystem.applyDamage(decoy.id, damage, attackerId, sourceId, { sourceX: x, sourceY: y },

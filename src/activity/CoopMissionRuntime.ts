@@ -1,3 +1,4 @@
+import type { CoopDefenseDecoyTargetSystem } from '../systems/CoopDefenseDecoyTargetSystem';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { CoopDefenseBossSystem } from '../systems/CoopDefenseBossSystem';
 import type { CoopDefenseEnemyAbilitySystem } from '../systems/CoopDefenseEnemyAbilitySystem';
@@ -66,6 +67,7 @@ export interface CoopMissionEnemyBehaviourRuntime {
   readonly combatPositioning: CoopDefenseEnemyCombatPositioningSystem;
   readonly ability: CoopDefenseEnemyAbilitySystem;
   readonly attack: CoopDefenseEnemyAttackSystem;
+  readonly decoyTargets: CoopDefenseDecoyTargetSystem | null;
 }
 
 export interface CoopMissionEnemySpecialRuntime {
@@ -201,6 +203,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
     this.hostUpdateOwner = ports ? new CoopMissionHostUpdate(this, ports.hostUpdate) : null;
   }
 
+  get coopDefenseDecoyTargetSystem(): CoopDefenseDecoyTargetSystem | null { return this.enemyBehaviourOwner?.decoyTargets ?? null; }
   get enemyManager(): EnemyManager | null { return this.enemyOwner; }
   get flowFieldCoordinator(): FlowFieldCoordinator | null { return this.navigationOwner?.coordinator ?? null; }
   get enemyFlowFieldService(): EnemyFlowFieldService | null { return this.navigationOwner?.enemy ?? null; }
@@ -485,6 +488,7 @@ export class CoopMissionRuntime implements ActivityRuntime, CoopMissionActivityS
 
     this.enemySpecialOwner?.voidHunter?.clear();
     this.enemySpecialOwner?.timebomb?.clear();
+    this.enemyBehaviourOwner?.decoyTargets?.destroy();
     this.enemyBehaviourOwner?.ability.clear();
     this.enemyBehaviourOwner?.burrow.clear();
     this.enemyBehaviourOwner?.dodge.clear();

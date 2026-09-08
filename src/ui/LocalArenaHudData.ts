@@ -24,6 +24,7 @@ interface BuildLocalArenaHudDataParams {
   weapon1CooldownFrac: number;
   weapon2CooldownFrac: number;
   utilityCooldownFrac: number;
+  utilityBlocked?: boolean;
   utilityChargeState?: UtilityChargeState | null;
   utilityId?: string;
   utilityAction?: RadialManagementAction;
@@ -69,6 +70,7 @@ export function buildLocalArenaHudData(params: BuildLocalArenaHudDataParams): Lo
     weapon1CooldownFrac: params.weapon1CooldownFrac,
     weapon2CooldownFrac: params.weapon2CooldownFrac,
     utilityCooldownFrac: params.utilityCooldownFrac,
+    utilityBlocked: params.utilityBlocked ?? false,
     utilityChargeState: params.utilityChargeState,
     utilityId: params.utilityId,
     utilityAction: params.utilityAction,

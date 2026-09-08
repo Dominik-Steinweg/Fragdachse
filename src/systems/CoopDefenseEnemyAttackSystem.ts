@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyAttackWeapon, EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
@@ -77,6 +78,8 @@ interface EnemySalvoState {
 }
 
 export class CoopDefenseEnemyAttackSystem {
+  private decoyTargets: DecoyTargetPort | null = null;
+  setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
   private static readonly MOVEMENT_PROGRESS_DISTANCE_PX = 4;
   private static readonly OBSTACLE_CONTACT_FRESHNESS_MS = 150;
   /**
@@ -115,6 +118,14 @@ export class CoopDefenseEnemyAttackSystem {
     private readonly placementSystem: PlacementSystem | null = null,
     private readonly targetCatalog: EnemyAiTargetCatalog | null = null,
   ) {}
+
+  getCurrentTarget(enemyId: string, now = Date.now()): EnemyAiTargetRef | null {
+    return this.meleeWindups.get(enemyId)?.targetRef
+      ?? this.salvoStates.get(enemyId)?.target.targetRef
+      ?? this.sustainedAttacks.get(enemyId)?.targetRef
+      ?? ((this.playerTargetLocks.get(enemyId)?.lockedUntil ?? 0) >= now
+        ? this.playerTargetLocks.get(enemyId)?.targetRef ?? null : null);
+  }
 
   setActionBlockedChecker(checker: ((enemyId: string) => boolean) | null): void {
     this.actionBlockedChecker = checker;
@@ -232,7 +243,10 @@ export class CoopDefenseEnemyAttackSystem {
     // Spieler unter die Mindestdistanz, soll er sofort auf den Hoellenwerfer wechseln duerfen.
     // Der Zaehler bleibt bis zur Verfallszeit stehen, damit sie nach kurzem Sichtverlust weiterlaeuft.
     const obscured = this.isAttackTargetObscured(enemy, state.target, attackWeapon.weapon.config.range);
-    const target = obscured ? state.target : this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
+    const committed = this.decoyTargets?.getTarget(enemy.id) || state.target.targetRef?.kind === 'decoy';
+    const target = obscured ? state.target : committed
+      ? (state.target.targetRef ? this.buildPlayerLikeTargetCandidate(enemy, state.target.targetRef, attackWeapon.weapon.config.range) : null) ?? state.target
+      : this.resolveWeaponTarget(enemy, attackWeapon, now, state.shotsFired);
     if (!target) return false;
 
     this.fireAttack(enemy, { attackWeapon, target }, now);
@@ -272,6 +286,7 @@ export class CoopDefenseEnemyAttackSystem {
       aimAngle,
       executeAt: now + attack.attackWeapon.playerMeleeWindupMs,
     });
+    if (targetRef) this.decoyTargets?.usedTarget(enemy.id, targetRef);
     this.resetMovementProgress(enemy);
     enemy.stopMovement();
     enemy.faceAngle(aimAngle);
@@ -347,6 +362,7 @@ export class CoopDefenseEnemyAttackSystem {
       ownerColor: COLORS.RED_2,
     });
     if (!didFire) return;
+    if (target.targetRef) this.decoyTargets?.usedTarget(enemy.id, target.targetRef);
 
     enemy.pauseAttackMovement(now, attackWeapon.attackMovementSpeedFactor);
     enemy.recordWeaponUse(weapon, now);
@@ -414,6 +430,11 @@ export class CoopDefenseEnemyAttackSystem {
     salvoShotIndex?: number,
   ): EnemyAttackCandidate | null {
     const weapon = attackWeapon.weapon;
+    const decoy = this.decoyTargets?.getTarget(enemy.id);
+    if (decoy) {
+      const target = this.buildPlayerLikeTargetCandidate(enemy, decoy, weapon.config.range);
+      return target && this.isWithinWeaponMinDistance(enemy, attackWeapon, target) ? target : null;
+    }
     const distributesTargets = attackWeapon.targetMode === 'players'
       && attackWeapon.salvo?.targetDistribution === 'round_robin';
     let target = distributesTargets
@@ -567,6 +588,7 @@ export class CoopDefenseEnemyAttackSystem {
   private isAttackTargetObscured(enemy: EnemyEntity, target: EnemyAttackCandidate, range: number): boolean {
     let position = { x: target.targetX, y: target.targetY };
     if (target.targetRef) {
+      if (this.targetCatalog && !this.targetCatalog.isTargetValid(target.targetRef)) return true;
       const current = this.targetCatalog?.resolve(target.targetRef);
       if (current) position = current.resolvePosition?.(enemy.sprite.x, enemy.sprite.y) ?? current;
       else if (target.targetRef.kind === 'player' && !this.targetCatalog) {

@@ -366,6 +366,30 @@ describe('WorldPlayerGameplayRuntime – öffentliche Lifecycle-Grenze (2A)', ()
   });
 });
 
+describe('Decoy passive adrenaline integration', () => {
+  it('multiplies resolved class, item and team regeneration while preserving drain pauses and bonus expiry', () => {
+    const { runtime } = makeRuntime();
+    const resource = new ResourceSystem();
+    let stealthMultiplier = 1.3;
+    runtime.options = { decoySystem: { getStealthAdrenalineMultiplier: () => stealthMultiplier },
+      getTeamAdrenalineRegenMultiplier: () => 1.5 };
+    runtime.configureResource(resource, {
+      getResolvedStat: (_id: string, stat: string, fallback: number) => stat === 'player.adrenalineRegenRate' ? 20 : fallback,
+      getPercentageStat: () => 0, getNumericStat: () => 0,
+    }, { getAdrenalineRegenMultiplier: () => 2 });
+    resource.initPlayer('p1'); resource.setAdrenaline('p1', 50);
+    resource.drainAdrenaline('p1', 10, 1000);
+    resource.regenTick('p1', 1000, resource.getRegenPausedUntil('p1') - 1);
+    expect(resource.getAdrenaline('p1')).toBe(40);
+    resource.regenTick('p1', 100, resource.getRegenPausedUntil('p1'));
+    expect(resource.getAdrenaline('p1')).toBeCloseTo(47.8);
+    stealthMultiplier = 1;
+    resource.regenTick('p1', 100, 10000);
+    expect(resource.getAdrenaline('p1')).toBeCloseTo(53.8);
+    resource.regenTick('p1', 10000, 20000); expect(resource.getAdrenaline('p1')).toBe(100);
+  });
+});
+
 describe('WorldPlayerGameplayRuntime.reconcilePlayerBuildModifiers (2A)', () => {
   it('materialisiert die Item-Runtime nur für geänderte Spieler mit Build und stehender Figur', () => {
     const { runtime, systems } = makeRuntime();

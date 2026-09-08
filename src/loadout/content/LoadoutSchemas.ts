@@ -106,6 +106,8 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   stinkcloud: ['cloudRadius', 'cloudDuration', 'cloudDamagePerTick', 'cloudTickInterval'],
   taser: ['damage', 'range', 'hitArcDegrees', 'visualPreset'],
   decoy: [
+    'refundRadius', 'refundPerEnemyMs', 'lureRadius', 'stealthMoveSpeedBonus',
+    'stealthHpRegenPerSecond', 'stealthAdrenalineRegenBonus', 'fireTrailDurationMs', 'fireChunkBurst',
     'decoyLifetimeMs', 'stealthDurationMs', 'stealthAlphaMin', 'stealthAlphaMax',
     'stealthGlowOuterStrength', 'wobblePeriodMs', 'dissipateDustBurst',
   ],
@@ -250,6 +252,26 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.type === 'decoy') {
+    for (const key of ['refundRadius', 'refundPerEnemyMs', 'lureRadius', 'stealthMoveSpeedBonus',
+      'stealthHpRegenPerSecond', 'stealthAdrenalineRegenBonus', 'fireTrailDurationMs']) {
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || (value[key] as number) < 0)
+        issues.push('$.decoy.' + key + ': nonnegative finite number required');
+    }
+    const fire = value.fireChunkBurst;
+    if (!isRecord(fire)) issues.push('$.fireChunkBurst: complete fire profile required');
+    else {
+      for (const key of ['count', 'searchRadius', 'flightMs', 'durationMs', 'burnDurationMs', 'burnDamagePerTick']) {
+        if (typeof fire[key] !== 'number' || !Number.isFinite(fire[key]) || (fire[key] as number) < 0)
+          issues.push('$.fireChunkBurst.' + key + ': nonnegative finite number required');
+      }
+      if (!Number.isSafeInteger(fire.count) || typeof fire.igniteCenter !== 'boolean'
+        || typeof fire.sourceId !== 'string' || fire.sourceId.length === 0)
+        issues.push('$.fireChunkBurst: integer count, center flag and source identity required');
+    }
+    if (value.explosionMinDamage !== undefined && typeof value.explosionDamage === 'number' && (value.explosionMinDamage as number) > value.explosionDamage)
+      issues.push('$.explosionMinDamage: cannot exceed center damage');
+  }
   if (value.type === 'smoke') {
     const b = value.smokeBehavior;
     const fields = ["confusionFraction","aftereffectMs","directionMinMs","directionMaxMs","recoveryFadeMs","retentionBias","retentionEdgeFraction","nearSightPx","bossNearSightPx","bossConfusionFactor","bossAftereffectFactor","vulnerabilityEnabled","chargeDurationMs","dischargeCount","dischargeCooldownMs","dischargeDamage","dischargeSpeed","dischargeRange","dischargeSize","growthMaxProcs","growthDurationMs","growthRadiusFraction","growthTransitionMs"];

@@ -535,7 +535,6 @@ type KillEventHandler = (event: KillEvent) => void;
 type CoopDefenseXpPopupHandler = (x: number, y: number, xp: number) => void;
 type MeleeSwingHandler = (swing: SyncedMeleeSwing) => void;
 type PowerUpPickupHandler = (uid: number, playerId: string) => boolean;
-type DecoyStealthBreakHandler = (playerId: string) => void;
 type TrainDestroyedHandler = () => void;
 type TranslocatorFlashHandler = (
   x: number,
@@ -772,7 +771,6 @@ export class NetworkBridge {
   private meleeSwingHandler: MeleeSwingHandler | null = null;
   private powerUpPickupHandler: PowerUpPickupHandler | null = null;
   private worldParticipationRequestHandler: ((playerId: string, join: boolean) => boolean) | null = null;
-  private decoyStealthBreakHandler: DecoyStealthBreakHandler | null = null;
   private trainDestroyedHandler: TrainDestroyedHandler | null = null;
   private translocatorFlashHandler: TranslocatorFlashHandler | null = null;
   private captureTheBeerFxHandler: CaptureTheBeerFxHandler | null = null;
@@ -3326,24 +3324,6 @@ export class NetworkBridge {
       const { uid } = data as { uid: number; wr: number };
       if (!Number.isSafeInteger(uid) || uid < 0) return undefined;
       return cb(uid, caller.id);
-    });
-  }
-
-  sendDecoyStealthBreakRequest(): void {
-    if (this.getWorldActionRevision() === null) return;
-    if (isHost()) {
-      this.decoyStealthBreakHandler?.(myPlayer().id);
-      return;
-    }
-    this.sendWorldRpc('dbr', {});
-  }
-
-  registerDecoyStealthBreakHandler(handler: (playerId: string) => void): void {
-    this.decoyStealthBreakHandler = handler;
-    this.registerHostRpcHandler('dbr', async (data: unknown, caller: PlayerState): Promise<unknown> => {
-      if (!isHost() || !this.acceptsWorldRpc(data)) return undefined;
-      this.decoyStealthBreakHandler?.(caller.id);
-      return undefined;
     });
   }
 

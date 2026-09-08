@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import {
   VOID_FIRE_COLOR,
 } from '../config';
@@ -76,6 +77,9 @@ export function computeVoidHunterNukeTarget(
  * allgemeinen Coop-Systemen; nur die phasengebundene Orchestrierung lebt hier.
  */
 export class CoopDefenseVoidHunterSystem {
+  private decoyTargets: DecoyTargetPort | null = null;
+  setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
+  getCurrentTarget(enemyId: string): EnemyAiTargetRef | null { return this.states.get(enemyId)?.gauss?.targetRef ?? null; }
   private readonly states = new Map<string, VoidHunterState>();
   private readonly reachedPhases = new Set<number>();
 
@@ -321,7 +325,7 @@ export class CoopDefenseVoidHunterSystem {
     if (now >= gauss.nextAimUpdateAt) {
       const targetPosition = this.targetCatalog?.getPosition(gauss.targetRef, enemy.sprite.x, enemy.sprite.y)
         ?? (() => {
-          if (gauss.targetRef.kind !== 'player') return null;
+          if (this.targetCatalog || gauss.targetRef.kind !== 'player') return null;
           const target = this.playerManager.getPlayer(gauss.targetRef.id);
           return target?.active && this.combatSystem.isAlive(target.id)
             ? { x: target.x, y: target.y }
@@ -334,12 +338,8 @@ export class CoopDefenseVoidHunterSystem {
           targetPosition.x,
           targetPosition.y,
         );
-      } else if (!targetPosition) {
-        state.gauss = null;
-        state.nextGaussAt = now + config.gauss.cooldownMs;
-        enemy.setSpecialAction('none');
-        return;
       }
+      // A committed charge finishes at its last visible aim when the target hides or disappears.
       gauss.nextAimUpdateAt = now + config.gauss.aimUpdateIntervalMs;
     }
 
@@ -398,6 +398,13 @@ export class CoopDefenseVoidHunterSystem {
   }
 
   private findGaussTarget(enemy: EnemyEntity) {
+    const decoy = this.decoyTargets?.getTarget(enemy.id);
+    if (decoy) {
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, decoy.x, decoy.y, VOID_HUNTER_GAUSS.range)) return null;
+      this.decoyTargets?.usedTarget(enemy.id, decoy);
+      return { ref: decoy, x: decoy.x, y: decoy.y,
+        distanceSq: (decoy.x - enemy.sprite.x) ** 2 + (decoy.y - enemy.sprite.y) ** 2 };
+    }
     let best: { ref: EnemyAiTargetRef; x: number; y: number; distanceSq: number } | null = null;
     if (this.targetCatalog) {
       this.targetCatalog.forEachTarget('player-like', (target) => {

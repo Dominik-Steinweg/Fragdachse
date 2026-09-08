@@ -62,7 +62,7 @@ describe('SustainedWeaponBehaviorRuntime', () => {
 
     const gated = makeRuntime(0);
     gated.behavior.claimWeaponAction(PLAYER_ID, 'weapon2', 1_000, 0.5);
-    expect(gated.behavior.activateWeapon(request())).toEqual({ ok: true });
+    expect(gated.behavior.activateWeapon(request())).toEqual({ ok: false, reason: 'resource', resourceKind: 'adrenaline' });
     expect(gated.tesla.hostRefresh).not.toHaveBeenCalled();
     expect(gated.tesla.hostDeactivateForPlayer).toHaveBeenCalledWith(PLAYER_ID);
   });

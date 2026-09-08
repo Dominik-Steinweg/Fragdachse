@@ -260,6 +260,7 @@ export interface ArenaHUDData {
   weapon1CooldownFrac:      number;
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
+  utilityBlocked?: boolean;
   utilityChargeState?: UtilityChargeState | null;
   utilityId?:               string;
   utilityAction?:           RadialManagementAction;
@@ -614,6 +615,7 @@ export class ArenaHUD {
     this.updateCooldownBar(this.w1, data.weapon1CooldownFrac);
     this.updateCooldownBar(this.w2, data.weapon2CooldownFrac);
     this.updateCooldownBar(this.util, data.utilityCooldownFrac);
+    this.util.fgImg.setAlpha(data.utilityBlocked ? 0.45 : 1);
     if ((data.weapon2AdrenalineCost ?? 0) !== this.weapon2AdrCost) {
       this.setAdrenalinTickCost(data.weapon2AdrenalineCost ?? 0);
     }

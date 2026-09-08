@@ -2,7 +2,9 @@ import * as Phaser from 'phaser';
 import type { DecoyUtilityConfig } from '../loadout/LoadoutConfig';
 import type { NetworkBridge } from '../network/NetworkBridge';
 import type { SyncedActiveHudBuff, SyncedCombatEffect, SyncedDecoy, SyncedDeathEffect, SyncedHitEffect } from '../types';
-import { ARMOR_MAX, COLORS } from '../config';
+import { ARMOR_MAX, PLAYER_SIZE, PLAYER_VISUAL_SIZE } from '../config';
+import { PlayerBody } from '../entities/PlayerBody';
+import { DecoyRuntime, type DecoyState, type DecoyEnd, type DecoyEndReason } from './DecoyRuntime';
 import type { PlayerManager } from '../entities/PlayerManager';
 import { DecoyEntity } from '../entities/DecoyEntity';
 import type { WorldMetrics } from '../world/WorldMetrics';
@@ -18,62 +20,53 @@ type CombatStateReader = {
   isAlive(playerId: string): boolean;
 };
 
-interface HostDecoy {
-  id: number;
-  ownerId: string;
-  entity: DecoyEntity;
-  expiresAt: number;
-  hp: number;
-  armor: number;
-  maxHp: number;
-  maxArmor: number;
-  color: number;
-  rotation: number;
-  colliders: Phaser.Physics.Arcade.Collider[];
-  speed: number;
-  explosionRadius: number;
-  explosionDamage: number;
-  explosionKnockback: number;
-  entityGeneration: number;
-}
-
-interface StealthState {
-  playerId: string;
-  utilityId: string;
-  cooldown: number;
-  startedAt: number;
-  expiresAt: number;
-}
-
+type HostDecoy = Readonly<DecoyState>;
 export interface DecoyTargetSnapshot {
-  id: number;
-  ownerId: string;
-  sprite: Phaser.GameObjects.Image;
-  body: Phaser.Physics.Arcade.Body | null;
+  readonly id: number;
+  readonly ownerId: string;
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly body: Phaser.Physics.Arcade.Body | null;
+}
+export interface DecoyLifecyclePort {
+  beforeActivate(ownerId: string): void;
+  activated(decoy: HostDecoy): void;
+  /** Count actual living distractions before removing locks and before explosion damage. */
+  ended(event: DecoyEnd): number;
 }
 
 export class DecoySystem {
-  private readonly combatScope: CombatScope = Object.freeze({ worldRevision: 1, runtimeGeneration: 1 });
+  private combatScope: CombatScope = Object.freeze({ worldRevision: 1, runtimeGeneration: 1 });
+  private readonly replicatedActiveOwners = new Set<string>();
   private readonly entities = new Map<number, DecoyEntity>();
-  private readonly hostDecoys = new Map<number, HostDecoy>();
-  private readonly stealthStates = new Map<string, StealthState>();
-  private nextDecoyId = 1;
-  private nextDecoyGeneration = 1;
+  readonly runtime = new DecoyRuntime();
+  private readonly bodies = new Map<number, PlayerBody>();
+  private readonly colliders = new Map<number, Phaser.Physics.Arcade.Collider[]>();
+  private readonly trailPositions = new Map<number, { x: number; y: number }>();
+  private lifecycle: DecoyLifecyclePort | null = null;
+  private stealthBroken: ((playerId: string) => void) | null = null;
+  private hostNowMs = 0;
+  private refundCooldown: ((ownerId: string, utilityId: string, amountMs: number, now: number) => void) | null = null;
+  private endEffect: ((event: DecoyEnd, now: number) => void) | null = null;
+  private trail: ((decoy: HostDecoy, fromX: number, fromY: number, toX: number, toY: number, now: number) => void) | null = null;
   private mutationOutcomeSequence = 0;
   private effectSeedCounter = 1;
   private combatStateReader: CombatStateReader | null = null;
   private resolveRunSpeed: ((playerId: string) => number) | null = null;
-  private beginCooldown: ((playerId: string, utilityId: string, now: number) => void) | null = null;
   private rockGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private trunkGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
-  private explosionCallback: ((ownerId: string, x: number, y: number, radius: number, damage: number, knockback: number) => void) | null = null;
+  private baseGroup: Phaser.Physics.Arcade.StaticGroup | null = null;
   private worldMetrics: WorldMetrics | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly playerManager: PlayerManager,
     private readonly bridge: NetworkBridge,
+    private readonly presentationEnabled = true,
   ) {}
+
+  setCombatScope(scope: CombatScope): void { this.combatScope = Object.freeze({ ...scope }); }
 
   setCombatStateReader(reader: CombatStateReader | null): void {
     this.combatStateReader = reader;
@@ -83,118 +76,92 @@ export class DecoySystem {
     this.resolveRunSpeed = resolver;
   }
 
-  setCooldownStarter(cb: ((playerId: string, utilityId: string, now: number) => void) | null): void {
-    this.beginCooldown = cb;
-  }
-  setWorldMetrics(metrics: WorldMetrics | null): void {
-    this.worldMetrics = metrics;
-  }
-  setExplosionCallback(cb: ((ownerId: string, x: number, y: number, radius: number, damage: number, knockback: number) => void) | null): void { this.explosionCallback = cb; }
+  setCooldownRefund(cb: typeof this.refundCooldown): void { this.refundCooldown = cb; }
+  setEndEffectHandler(cb: typeof this.endEffect): void { this.endEffect = cb; }
+  setTrailHandler(cb: typeof this.trail): void { this.trail = cb; }
+  setLifecyclePort(port: DecoyLifecyclePort | null): void { this.lifecycle = port; }
+  setStealthBrokenHandler(handler: typeof this.stealthBroken): void { this.stealthBroken = handler; }
+  setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
 
   setObstacleGroups(
     rockGroup: Phaser.Physics.Arcade.StaticGroup | null,
     trunkGroup: Phaser.Physics.Arcade.StaticGroup | null,
+    baseGroup: Phaser.Physics.Arcade.StaticGroup | null,
   ): void {
     this.rockGroup = rockGroup;
     this.trunkGroup = trunkGroup;
+    this.baseGroup = baseGroup;
 
-    for (const decoy of this.hostDecoys.values()) {
-      for (const collider of decoy.colliders) collider.destroy();
-      decoy.colliders = this.createDecoyColliders(decoy.entity);
+    for (const [id, body] of this.bodies) {
+      for (const collider of this.colliders.get(id) ?? []) collider.destroy();
+      this.colliders.set(id, this.createDecoyColliders(body));
     }
   }
 
   activate(cfg: DecoyUtilityConfig, playerId: string, angle: number, playerColor: number, now: number): boolean {
-    if (!this.bridge.isHost()) return false;
-    if (!this.combatStateReader?.isAlive(playerId)) return false;
-    if (this.stealthStates.has(playerId)) return false;
-    if ([...this.hostDecoys.values()].some(decoy => decoy.ownerId === playerId)) return false;
-
+    if (!this.bridge.isHost() || !this.combatStateReader?.isAlive(playerId) || this.runtime.hasActive(playerId)) return false;
     const owner = this.playerManager.getPlayer(playerId);
     if (!owner) return false;
-
-    const id = this.nextDecoyId++;
-    const entity = new DecoyEntity(
-      this.scene,
-      id,
-      playerId,
-      owner.x,
-      owner.y,
-      playerColor,
-      this.bridge.isEnemyPair(this.bridge.getLocalPlayerId(), playerId),
-      true,
-    );
-    entity.setRotation(angle);
-
-    const hp = this.combatStateReader.getHP(playerId);
-  const maxHp = this.combatStateReader.getMaxHp(playerId);
-    const armor = this.combatStateReader.getArmor(playerId);
-  entity.updateVitals(hp, maxHp, armor, ARMOR_MAX);
-
-    const speed = this.resolveRunSpeed?.(playerId) ?? 0;
-    entity.body?.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-
-    const hostDecoy: HostDecoy = {
-      id,
-      ownerId: playerId,
-      entity,
-      expiresAt: now + cfg.decoyLifetimeMs,
-      hp,
-      armor,
-      maxHp,
-      maxArmor: ARMOR_MAX,
-      color: playerColor,
-      rotation: angle,
-      colliders: this.createDecoyColliders(entity),
-      speed,
-      explosionRadius: cfg.explosionRadius ?? 0,
-      explosionDamage: cfg.explosionDamage ?? 0,
-      explosionKnockback: cfg.explosionKnockback ?? 0,
-      entityGeneration: this.nextDecoyGeneration++,
-    };
-
-    this.entities.set(id, entity);
-    this.hostDecoys.set(id, hostDecoy);
-    this.stealthStates.set(playerId, {
-      playerId,
-      utilityId: cfg.id,
-      cooldown: cfg.cooldown,
-      startedAt: now,
-      expiresAt: now + cfg.stealthDurationMs,
+    this.hostNowMs = now;
+    this.lifecycle?.beforeActivate(playerId);
+    const body = new PlayerBody(this.scene, owner.x, owner.y, true);
+    const decoy = this.runtime.activate({
+      ownerId: playerId, position: body, config: cfg, now,
+      hp: this.combatStateReader.getHP(playerId), maxHp: this.combatStateReader.getMaxHp(playerId),
+      armor: this.combatStateReader.getArmor(playerId), maxArmor: ARMOR_MAX,
+      color: playerColor, rotation: angle, speed: this.resolveRunSpeed?.(playerId) ?? 0,
     });
-
+    if (!decoy) { body.destroy(); return false; }
+    this.bodies.set(decoy.id, body);
+    this.colliders.set(decoy.id, this.createDecoyColliders(body));
+    this.trailPositions.set(decoy.id, { x: body.x, y: body.y });
+    body.body.setVelocity(Math.cos(angle) * decoy.speed, Math.sin(angle) * decoy.speed);
+    if (this.presentationEnabled) {
+      const entity = new DecoyEntity(this.scene, decoy.id, playerId, body.x, body.y, playerColor,
+        this.bridge.isEnemyPair(this.bridge.getLocalPlayerId(), playerId));
+      entity.setRotation(angle);
+      entity.updateVitals(decoy.hp, decoy.maxHp, decoy.armor, decoy.maxArmor);
+      this.entities.set(decoy.id, entity);
+    }
+    this.lifecycle?.activated(decoy);
     return true;
   }
 
-  /** Updates AI-visible lifecycle state before target and flowfield refresh. */
+  /** Expiry is resolved before the Activity reads AI targets. */
   hostUpdateLifecycle(now: number): void {
     if (!this.bridge.isHost()) return;
-
-    for (const decoy of [...this.hostDecoys.values()]) {
-      if (now >= decoy.expiresAt) {
-        // Decoy expiry is deliberately independent from the owner's stealth state.
-        this.destroyDecoy(decoy.id, true);
-        continue;
-      }
-      decoy.entity.body?.setVelocity(
-        Math.cos(decoy.rotation) * decoy.speed,
-        Math.sin(decoy.rotation) * decoy.speed,
-      );
-      decoy.entity.syncBar();
+    this.hostNowMs = now;
+    for (const id of this.runtime.expired(now)) this.destroyDecoy(id, 'expired');
+    this.runtime.expireStealth(now);
+    for (const decoy of this.runtime.values()) {
+      this.bodies.get(decoy.id)?.body.setVelocity(
+        Math.cos(decoy.rotation) * decoy.speed, Math.sin(decoy.rotation) * decoy.speed);
     }
+  }
 
-    for (const stealth of [...this.stealthStates.values()]) {
-      if (now >= stealth.expiresAt) this.breakStealth(stealth.playerId, now);
+  /** Authoritative physical segments; interpolation and rendering cannot create fire. */
+  hostPostPhysics(now: number): void {
+    if (!this.bridge.isHost()) return;
+    this.hostNowMs = now;
+    for (const decoy of this.runtime.values()) {
+      const { x, y } = decoy.position;
+      const last = this.trailPositions.get(decoy.id)!;
+      // Visit each real segment (including slow turns); the fire port samples the shared grid.
+      if (Math.hypot(x - last.x, y - last.y) > 0.001) {
+        if (decoy.config.fireTrailDurationMs > 0) this.trail?.(decoy, last.x, last.y, x, y, now);
+        this.trailPositions.set(decoy.id, { x, y });
+      }
+      this.entities.get(decoy.id)?.setPosition(x, y);
     }
   }
 
   /** Creates the network view after host physics has produced the current decoy position. */
   createHostSnapshots(): SyncedDecoy[] {
-    return [...this.hostDecoys.values()].map((decoy) => ({
+    return [...this.runtime.values()].map((decoy) => ({
       id: decoy.id,
       ownerId: decoy.ownerId,
-      x: Math.round(decoy.entity.sprite.x),
-      y: Math.round(decoy.entity.sprite.y),
+      x: Math.round(decoy.position.x),
+      y: Math.round(decoy.position.y),
       rot: decoy.rotation,
       hp: decoy.hp,
       maxHp: decoy.maxHp,
@@ -205,6 +172,9 @@ export class DecoySystem {
   }
 
   syncSnapshots(snapshots: readonly SyncedDecoy[]): void {
+    this.replicatedActiveOwners.clear();
+    for (const snapshot of snapshots) this.replicatedActiveOwners.add(snapshot.ownerId);
+    if (!this.presentationEnabled) return;
     const activeIds = new Set<number>();
     const localPlayerId = this.bridge.getLocalPlayerId();
 
@@ -220,12 +190,11 @@ export class DecoySystem {
           snapshot.y,
           snapshot.color,
           this.bridge.isEnemyPair(localPlayerId, snapshot.ownerId),
-          false,
         );
         this.entities.set(snapshot.id, entity);
       }
 
-      if (!this.hostDecoys.has(snapshot.id)) {
+      if (!this.runtime.get(snapshot.id)) {
         entity.setTargetPosition(snapshot.x, snapshot.y);
         entity.setTargetRotation(snapshot.rot);
       }
@@ -235,7 +204,7 @@ export class DecoySystem {
     }
 
     for (const [id, entity] of [...this.entities]) {
-      if (activeIds.has(id) || this.hostDecoys.has(id)) continue;
+      if (activeIds.has(id) || this.runtime.get(id)) continue;
       entity.destroy();
       this.entities.delete(id);
     }
@@ -243,7 +212,7 @@ export class DecoySystem {
 
   updateVisuals(lerpFactor: number): void {
     for (const [id, entity] of this.entities) {
-      if (this.hostDecoys.has(id)) {
+      if (this.runtime.get(id)) {
         entity.syncBar();
       } else {
         entity.lerpStep(lerpFactor);
@@ -274,75 +243,55 @@ export class DecoySystem {
   }
 
   getStealthBuff(playerId: string, now: number): SyncedActiveHudBuff | null {
-    const state = this.stealthStates.get(playerId);
-    if (!state) return null;
-    const remaining = Math.max(0, state.expiresAt - now);
-    const duration = Math.max(1, state.expiresAt - state.startedAt);
-    return { defId: 'DECOY_STEALTH', remainingFrac: Phaser.Math.Clamp(remaining / duration, 0, 1) };
+    return this.runtime.getStealth(playerId)
+      ? { defId: 'DECOY_STEALTH', remainingFrac: this.getStealthRemainingFrac(playerId, now) } : null;
   }
 
-  isStealthed(playerId: string): boolean {
-    return this.stealthStates.has(playerId);
-  }
+  isStealthed(playerId: string): boolean { return this.runtime.getStealth(playerId) !== undefined; }
+  hasActiveDecoy(playerId: string): boolean { return this.runtime.hasActive(playerId) || this.replicatedActiveOwners.has(playerId); }
+  getStealthSpeedMultiplier(playerId: string): number { return this.runtime.getStealth(playerId)?.speedMultiplier ?? 1; }
+  getStealthAdrenalineMultiplier(playerId: string): number { return this.runtime.getStealth(playerId)?.adrenalineMultiplier ?? 1; }
+  getStealthHpRegen(playerId: string): number { return this.runtime.getStealth(playerId)?.hpPerSecond ?? 0; }
 
   getStealthRemainingFrac(playerId: string, now: number): number {
-    const state = this.stealthStates.get(playerId);
-    if (!state) return 0;
-    return Phaser.Math.Clamp((state.expiresAt - now) / Math.max(1, state.expiresAt - state.startedAt), 0, 1);
+    const state = this.runtime.getStealth(playerId);
+    return state ? Phaser.Math.Clamp((state.expiresAt - now) / Math.max(1, state.expiresAt - state.startedAt), 0, 1) : 0;
   }
 
-  breakStealth(playerId: string, now: number): boolean {
-    const state = this.stealthStates.get(playerId);
-    if (!state) return false;
-    this.stealthStates.delete(playerId);
-    this.beginCooldown?.(playerId, state.utilityId, now);
+  breakStealth(playerId: string, _now: number): boolean {
+    if (!this.runtime.breakStealth(playerId)) return false;
+    this.stealthBroken?.(playerId);
     return true;
   }
 
-  clearPlayer(playerId: string, suppressCooldown = true): void {
-    for (const decoy of [...this.hostDecoys.values()]) {
-      if (decoy.ownerId === playerId) {
-        this.destroyDecoy(decoy.id, false);
-      }
+  clearPlayer(playerId: string): void {
+    this.replicatedActiveOwners.delete(playerId);
+    for (const decoy of [...this.runtime.values()]) {
+      if (decoy.ownerId === playerId) this.destroyDecoy(decoy.id, 'cleanup');
     }
-
-    if (!suppressCooldown) {
-      this.breakStealth(playerId, Date.now());
-    } else {
-      this.stealthStates.delete(playerId);
-    }
+    this.runtime.breakStealth(playerId);
   }
 
   clearAll(): void {
-    for (const decoy of [...this.hostDecoys.values()]) {
-      this.destroyDecoy(decoy.id, false);
-    }
-    for (const entity of this.entities.values()) {
-      entity.destroy();
-    }
+    this.replicatedActiveOwners.clear();
+    for (const decoy of [...this.runtime.values()]) this.destroyDecoy(decoy.id, 'cleanup');
+    for (const entity of this.entities.values()) entity.destroy();
     this.entities.clear();
-    this.hostDecoys.clear();
-    this.stealthStates.clear();
+    this.runtime.clearStealth();
   }
 
   getHostTargets(): DecoyTargetSnapshot[] {
-    return [...this.hostDecoys.values()].map((decoy) => ({
-      id: decoy.id,
-      ownerId: decoy.ownerId,
-      sprite: decoy.entity.sprite,
-      body: decoy.entity.body,
-    }));
+    return [...this.runtime.values()].map(decoy => this.targetSnapshot(decoy));
   }
 
   getHostTarget(decoyId: number): DecoyTargetSnapshot | null {
-    const decoy = this.hostDecoys.get(decoyId);
-    if (!decoy) return null;
-    return {
-      id: decoy.id,
-      ownerId: decoy.ownerId,
-      sprite: decoy.entity.sprite,
-      body: decoy.entity.body,
-    };
+    const decoy = this.runtime.get(decoyId);
+    return decoy ? this.targetSnapshot(decoy) : null;
+  }
+
+  private targetSnapshot(decoy: HostDecoy): DecoyTargetSnapshot {
+    return { id: decoy.id, ownerId: decoy.ownerId, x: decoy.position.x, y: decoy.position.y,
+      radius: PLAYER_SIZE / 2, body: this.bodies.get(decoy.id)?.body ?? null };
   }
 
   applyDamage(
@@ -353,7 +302,7 @@ export class DecoySystem {
     visualContext?: { sourceX?: number; sourceY?: number; dirX?: number; dirY?: number },
     source?: CombatSource,
   ): CombatDamageMutationOutcome {
-    const decoy = this.hostDecoys.get(decoyId);
+    const decoy = this.runtime.get(decoyId);
     const target = this.getCombatTargetRef(decoyId) ?? Object.freeze({
       kind: 'decoy' as const,
       id: decoyId,
@@ -382,7 +331,7 @@ export class DecoySystem {
   }
 
   getCombatTargetRef(decoyId: number): CombatTargetRef | null {
-    const decoy = this.hostDecoys.get(decoyId);
+    const decoy = this.runtime.get(decoyId);
     if (!decoy) return null;
     return Object.freeze({
       kind: 'decoy' as const,
@@ -402,7 +351,7 @@ export class DecoySystem {
         source: request.source, reason: 'stale-scope',
       });
     }
-    const decoy = request.target.kind === 'decoy' ? this.hostDecoys.get(request.target.id) : undefined;
+    const decoy = request.target.kind === 'decoy' ? this.runtime.get(request.target.id) : undefined;
     const currentTarget = request.target.kind === 'decoy' ? this.getCombatTargetRef(request.target.id) : null;
     if (!decoy || !currentTarget) {
       return freezeTargetMutationOutcome({
@@ -430,15 +379,9 @@ export class DecoySystem {
       });
     }
 
-    const absorbedByArmor = Math.min(decoy.armor, amount);
-    const hpDamage = Math.max(0, amount - absorbedByArmor);
-    const armorLost = absorbedByArmor;
-    const hpLost = Math.min(decoy.hp, hpDamage);
+    const { armorLost, hpLost } = this.runtime.damage(decoy.id, amount)!;
     const totalDamage = armorLost + hpLost;
-
-    decoy.armor = Math.max(0, decoy.armor - absorbedByArmor);
-    decoy.hp = Math.max(0, decoy.hp - hpDamage);
-    decoy.entity.updateVitals(decoy.hp, decoy.maxHp, decoy.armor, decoy.maxArmor);
+    this.entities.get(decoy.id)?.updateVitals(decoy.hp, decoy.maxHp, decoy.armor, decoy.maxArmor);
 
     const hitEffect = totalDamage > 0
       ? this.buildHitEffect(
@@ -471,7 +414,7 @@ export class DecoySystem {
           kind: 'dead' as const,
           facts: {
             target: request.target,
-            position: { x: decoy.entity.sprite.x, y: decoy.entity.sprite.y },
+            position: { x: decoy.position.x, y: decoy.position.y },
             targetAllegiance: { ownerId: decoy.ownerId },
             targetCategory: 'decoy',
             rewardEligible: false,
@@ -481,7 +424,7 @@ export class DecoySystem {
       : freezeTargetMutationOutcome({ ...base, transition: { kind: 'none' as const }, rescueHealing: 0 });
 
     if (decoy.hp <= 0) {
-      this.destroyDecoy(decoy.id, true, () => {
+      this.destroyDecoy(decoy.id, 'killed', () => {
         if (hitEffect) this.bridge.broadcastEffect(hitEffect);
       });
     } else if (hitEffect) this.bridge.broadcastEffect(hitEffect);
@@ -489,46 +432,33 @@ export class DecoySystem {
     return outcome;
   }
 
-  private createDecoyColliders(entity: DecoyEntity): Phaser.Physics.Arcade.Collider[] {
-    if (!entity.body) return [];
-
+  private createDecoyColliders(body: PlayerBody): Phaser.Physics.Arcade.Collider[] {
     const colliders: Phaser.Physics.Arcade.Collider[] = [];
-    if (this.rockGroup) colliders.push(this.scene.physics.add.collider(entity.sprite, this.rockGroup));
-    if (this.trunkGroup) colliders.push(this.scene.physics.add.collider(entity.sprite, this.trunkGroup));
+    if (this.rockGroup) colliders.push(this.scene.physics.add.collider(body.proxy, this.rockGroup));
+    if (this.trunkGroup) colliders.push(this.scene.physics.add.collider(body.proxy, this.trunkGroup));
+    if (this.baseGroup) colliders.push(this.scene.physics.add.collider(body.proxy, this.baseGroup));
     return colliders;
   }
 
-  private destroyDecoy(decoyId: number, playEffect: boolean, afterRemoval?: () => void): void {
-    const decoy = this.hostDecoys.get(decoyId);
+  private destroyDecoy(decoyId: number, reason: DecoyEndReason, afterRemoval?: () => void): void {
+    const decoy = this.runtime.get(decoyId);
     if (!decoy) return;
-
-    const deathEffect = playEffect ? this.buildDeathEffect(decoy) : null;
-    const explosion = playEffect && decoy.explosionRadius > 0 && decoy.explosionDamage > 0
-      ? {
-        ownerId: decoy.ownerId,
-        x: decoy.entity.sprite.x,
-        y: decoy.entity.sprite.y,
-        radius: decoy.explosionRadius,
-        damage: decoy.explosionDamage,
-        knockback: decoy.explosionKnockback,
-      }
-      : null;
-    for (const collider of decoy.colliders) collider.destroy();
-    decoy.entity.destroy();
+    const deathEffect = reason !== 'cleanup' ? this.buildDeathEffect(decoy) : null;
+    const event = this.runtime.end(decoyId, reason);
+    if (!event) return;
+    const count = this.lifecycle?.ended(event) ?? 0;
+    for (const collider of this.colliders.get(decoyId) ?? []) collider.destroy();
+    this.colliders.delete(decoyId);
+    this.bodies.get(decoyId)?.destroy();
+    this.bodies.delete(decoyId);
+    this.entities.get(decoyId)?.destroy();
     this.entities.delete(decoyId);
-    this.hostDecoys.delete(decoyId);
+    this.trailPositions.delete(decoyId);
     afterRemoval?.();
+    if (reason === 'cleanup') return;
+    this.refundCooldown?.(decoy.ownerId, decoy.config.id, count * decoy.config.refundPerEnemyMs, this.hostNowMs);
     if (deathEffect) this.bridge.broadcastEffect(deathEffect);
-    if (explosion) {
-      this.explosionCallback?.(
-        explosion.ownerId,
-        explosion.x,
-        explosion.y,
-        explosion.radius,
-        explosion.damage,
-        explosion.knockback,
-      );
-    }
+    this.endEffect?.(event, this.hostNowMs);
   }
 
   private decoyVitals(decoy: HostDecoy) {
@@ -555,8 +485,8 @@ export class DecoySystem {
     const direction = this.resolveDamageDirection(decoy, attackerId, visualContext, seed);
     return {
       type: 'hit',
-      x: decoy.entity.sprite.x,
-      y: decoy.entity.sprite.y,
+      x: decoy.position.x,
+      y: decoy.position.y,
       targetId: `decoy_${decoy.id}`,
       shooterId: attackerId,
       targetColor: decoy.color,
@@ -571,23 +501,23 @@ export class DecoySystem {
   }
 
   private buildDeathEffect(decoy: HostDecoy): SyncedDeathEffect {
-    const sprite = decoy.entity.sprite;
-    const textureKey = sprite.texture?.key;
-    const frame = sprite.frame?.name;
+    const sprite = this.entities.get(decoy.id)?.sprite;
+    const textureKey = sprite?.texture?.key ?? 'badger';
+    const frame = sprite?.frame?.name ?? 0;
     return {
       type: 'death',
-      x: sprite.x,
-      y: sprite.y,
+      x: decoy.position.x,
+      y: decoy.position.y,
       targetId: `decoy_${decoy.id}`,
       targetColor: decoy.color,
-      rotation: sprite.rotation,
+      rotation: decoy.rotation + Math.PI / 2,
       seed: this.nextEffectSeed(),
       ...(textureKey && frame != null ? {
         textureKey,
         frame,
-        displayWidth: sprite.displayWidth,
-        displayHeight: sprite.displayHeight,
-        tint: sprite.tint,
+        displayWidth: sprite?.displayWidth ?? PLAYER_VISUAL_SIZE,
+        displayHeight: sprite?.displayHeight ?? PLAYER_VISUAL_SIZE,
+        tint: sprite?.tint ?? 0xffffff,
       } : {}),
     };
   }
@@ -602,15 +532,15 @@ export class DecoySystem {
     let dirY = visualContext?.dirY ?? 0;
 
     if (Math.hypot(dirX, dirY) <= 0.0001 && visualContext?.sourceX !== undefined && visualContext?.sourceY !== undefined) {
-      dirX = decoy.entity.sprite.x - visualContext.sourceX;
-      dirY = decoy.entity.sprite.y - visualContext.sourceY;
+      dirX = decoy.position.x - visualContext.sourceX;
+      dirY = decoy.position.y - visualContext.sourceY;
     }
 
     if (Math.hypot(dirX, dirY) <= 0.0001 && attackerId) {
       const attacker = this.playerManager.getPlayer(attackerId);
       if (attacker) {
-        dirX = decoy.entity.sprite.x - attacker.x;
-        dirY = decoy.entity.sprite.y - attacker.y;
+        dirX = decoy.position.x - attacker.x;
+        dirY = decoy.position.y - attacker.y;
       }
     }
 
@@ -625,7 +555,7 @@ export class DecoySystem {
     }
     const centerX = metrics.offsetX + metrics.widthPx / 2;
     const centerY = metrics.offsetY + metrics.heightPx / 2;
-    const angle = Math.atan2(decoy.entity.sprite.y - centerY, decoy.entity.sprite.x - centerX) + (((seed >>> 5) % 41) - 20) * (Math.PI / 180);
+    const angle = Math.atan2(decoy.position.y - centerY, decoy.position.x - centerX) + (((seed >>> 5) % 41) - 20) * (Math.PI / 180);
     return { dirX: Math.cos(angle), dirY: Math.sin(angle) };
   }
 

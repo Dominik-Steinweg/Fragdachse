@@ -13,6 +13,7 @@ vi.mock('phaser', () => ({
   },
 }));
 
+import { decoyInput } from './DecoyTestHelper';
 import { DecoySystem } from '../src/systems/DecoySystem';
 import type { SyncedDeathEffect } from '../src/types';
 import type { CombatSource } from '../src/combat/CombatScope';
@@ -23,6 +24,7 @@ describe('Decoy death visual snapshots', () => {
     const decoy = {
       id: 7,
       color: 0x55cc88,
+      position: { x: 480, y: 288 }, rotation: 0.5,
       entity: fakeEntity({ x: 480,
           y: 288,
           rotation: 0.5,
@@ -36,6 +38,7 @@ describe('Decoy death visual snapshots', () => {
       buildDeathEffect: (value: typeof decoy) => SyncedDeathEffect;
     };
 
+    (system as unknown as { entities: Map<number, unknown> }).entities.set(decoy.id, decoy.entity);
     const effect = internals.buildDeathEffect(decoy);
 
     expect(effect).toMatchObject({
@@ -67,28 +70,10 @@ describe('Decoy death visual snapshots', () => {
       updateVitals: vi.fn(),
       destroy: vi.fn(),
     });
-    const hostDecoy = {
-      id: 9,
-      ownerId: 'owner',
-      entity,
-      expiresAt: 1000,
-      hp: 10,
-      armor: 5,
-      maxHp: 10,
-      maxArmor: 5,
-      color: 0x55cc88,
-      rotation: 0.25,
-      colliders: [],
-      speed: 0,
-      explosionRadius: 40,
-      explosionDamage: 5,
-      explosionKnockback: 2,
-      entityGeneration: 3,
-    };
-    const internals = system as unknown as {
-      hostDecoys: Map<number, typeof hostDecoy>;
-    };
-    internals.hostDecoys.set(hostDecoy.id, hostDecoy);
+    const hostDecoy = system.runtime.activate(decoyInput({
+      ownerId: 'owner', position: { x: 48, y: 28 }, hp: 10, armor: 5, maxHp: 10,
+    }))!;
+    (system as unknown as { entities: Map<number, unknown> }).entities.set(hostDecoy.id, entity);
     const target = system.getCombatTargetRef(hostDecoy.id)!;
     const source: CombatSource = {
       gameplaySource: { kind: 'player', id: 'attacker' },
@@ -99,7 +84,7 @@ describe('Decoy death visual snapshots', () => {
     const callback = vi.fn(() => {
       expect(system.getCombatTargetRef(hostDecoy.id)).toBeNull();
     });
-    system.setExplosionCallback(callback);
+    system.setEndEffectHandler(callback);
 
     const outcome = system.commitDamage({
       outcomeId: 'decoy-lethal',

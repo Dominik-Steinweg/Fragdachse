@@ -5576,50 +5576,101 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "decoy_duration",
-                                                "code":  "D-U10-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  380,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_decoy",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.DECOY.decoyLifetimeMs",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
+                                                "id": "decoy_mass_distraction",
+                                                "code": "D-U10-L1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 380,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_decoy",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.refundRadius",
+                                                        "mode": "add_per_level",
+                                                        "value": 100
+                                                    }
+                                                ]
                                             },
                                             {
-                                                "id":  "decoy_stealth_duration",
-                                                "code":  "D-U10-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  390,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_decoy",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.DECOY.stealthDurationMs",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
+                                                "id": "decoy_irresistible_lure",
+                                                "code": "D-U10-L2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 381,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "decoy_mass_distraction",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.lureRadius",
+                                                        "mode": "add_per_level",
+                                                        "value": 100
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "decoy_shadow_runner",
+                                                "code": "D-U10-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 390,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_decoy",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.stealthMoveSpeedBonus",
+                                                        "mode": "add_per_level",
+                                                        "value": 0.1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "decoy_shadow_regeneration",
+                                                "code": "D-U10-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 391,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "decoy_shadow_runner",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.stealthAdrenalineRegenBonus",
+                                                        "mode": "add_per_level",
+                                                        "value": 0.1
+                                                    },
+                                                    {
+                                                        "stat": "utility.DECOY.stealthHpRegenPerSecond",
+                                                        "mode": "add_per_level",
+                                                        "value": 5
+                                                    }
+                                                ]
                                             },
 
                                             {
@@ -5760,36 +5811,91 @@
                                                             ]
                                             },
                                             {
-                                                "id":  "decoy_explosive_dummy",
-                                                "code":  "D-U10-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  395,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "decoy_duration",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.DECOY.explosionRadius",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  100
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.DECOY.explosionDamage",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  60
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.DECOY.explosionKnockback",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  500
-                                                                }
-                                                            ]
+                                                "id": "decoy_explosive_dummy",
+                                                "code": "D-U10-C",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "costPerLevel": 0,
+                                                "bossPointCostPerLevel": 1,
+                                                "sortOrder": 395,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "decoy_irresistible_lure",
+                                                        "minLevel": 1
+                                                    },
+                                                    {
+                                                        "upgradeId": "decoy_shadow_regeneration",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.explosionRadius",
+                                                        "mode": "add_per_level",
+                                                        "value": 150
+                                                    },
+                                                    {
+                                                        "stat": "utility.DECOY.explosionDamage",
+                                                        "mode": "add_per_level",
+                                                        "value": 100
+                                                    },
+                                                    {
+                                                        "stat": "utility.DECOY.explosionKnockback",
+                                                        "mode": "add_per_level",
+                                                        "value": 500
+                                                    },
+                                                    {
+                                                        "stat": "utility.DECOY.explosionMinDamage",
+                                                        "mode": "add_per_level",
+                                                        "value": 25
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "decoy_fire_chunks",
+                                                "code": "D-U10-BL1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 396,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "decoy_explosive_dummy",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.fireChunks",
+                                                        "mode": "add_per_level",
+                                                        "value": 3
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "decoy_fire_trail",
+                                                "code": "D-U10-BR2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 397,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "decoy_explosive_dummy",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.DECOY.fireTrailDurationMs",
+                                                        "mode": "add_per_level",
+                                                        "value": 2000
+                                                    }
+                                                ]
                                             }
                                         ]
                        },

@@ -48,10 +48,11 @@ export class SustainedWeaponBehaviorRuntime implements SustainedWeaponBehaviorPo
     if (config.fire.type === 'tesla_dome') {
       if (this.resourceSystem.getAdrenaline(request.playerId) <= 0) {
         this.teslaDomeSystem?.hostDeactivateForPlayer(request.playerId);
-        return { ok: true };
+        return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
       }
 
-      this.teslaDomeSystem?.hostRefresh(
+      if (!this.teslaDomeSystem) return { ok: false, reason: 'blocked' };
+      this.teslaDomeSystem.hostRefresh(
         request.playerId,
         request.x,
         request.y,
@@ -66,10 +67,11 @@ export class SustainedWeaponBehaviorRuntime implements SustainedWeaponBehaviorPo
     if (config.fire.type === 'energy_shield') {
       if (this.resourceSystem.getAdrenaline(request.playerId) <= 0) {
         this.energyShieldSystem?.hostDeactivateForPlayer(request.playerId);
-        return { ok: true };
+        return { ok: false, reason: 'resource', resourceKind: 'adrenaline' };
       }
 
-      this.energyShieldSystem?.hostRefresh(
+      if (!this.energyShieldSystem) return { ok: false, reason: 'blocked' };
+      this.energyShieldSystem.hostRefresh(
         request.playerId,
         request.nowMs,
         config as WeaponConfig & { fire: EnergyShieldWeaponFireConfig },

@@ -11,7 +11,6 @@ const bridgeMock = vi.hoisted(() => ({
   getPlayerCurrentLoadoutSnapshot: vi.fn(),
   registerLoadoutUseHandler: vi.fn(),
   registerHeldActionHandler: vi.fn(),
-  registerDecoyStealthBreakHandler: vi.fn(),
   registerPersistentBaseRewardPlacementHandler: vi.fn(),
   registerPersistentBaseMoveHandler: vi.fn(),
   registerWorldParticipationRequestHandler: vi.fn(),
@@ -426,15 +425,17 @@ describe('radial action RPC classification', () => {
     expect(fixture.consume).not.toHaveBeenCalled();
   });
 
-  it('uses the synchronized Host clock for decoy stealth breaks', () => {
+  it('reveals on successful placement using the host clock, but keeps rejected attempts hidden', () => {
     const fixture = createFixture();
     const coordinator = fixture.coordinator as unknown as Record<string, () => void>;
-    coordinator.registerDecoyStealthBreakHandler();
-
-    const breakStealth = bridgeMock.registerDecoyStealthBreakHandler.mock.calls.at(-1)?.[0];
-    breakStealth?.('p1');
-
-    expect(fixture.decoySystem.breakStealth).toHaveBeenCalledWith('p1', 424_242);
+    coordinator.registerPersistentBaseMoveHandler();
+    const move = bridgeMock.registerPersistentBaseMoveHandler.mock.calls.at(-1)?.[0];
+    fixture.persistentBase.moveObject.mockReturnValueOnce({ ok: false, reason: 'blocked' });
+    move?.('p1', { sourceRuntimeId: 'runtime-1' });
+    expect(fixture.decoySystem.breakStealth).not.toHaveBeenCalled();
+    fixture.persistentBase.moveObject.mockReturnValueOnce({ ok: true });
+    move?.('p1', { sourceRuntimeId: 'runtime-1' });
+    expect(fixture.decoySystem.breakStealth).toHaveBeenCalledExactlyOnceWith('p1', 424_242);
   });
 
   it('fails visibly when the synchronized Host clock is not finite', () => {

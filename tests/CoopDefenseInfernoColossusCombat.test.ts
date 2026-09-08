@@ -194,6 +194,44 @@ function runAttackFrames(
 }
 
 describe('Flammenkoloss – Waffenwahl nach Distanz', () => {
+  it('finishes a committed salvo at the frozen player position before using its Decoy lock', () => {
+    const enemy = createColossus(), catalog = new EnemyAiTargetCatalog();
+    let visible = true;
+    const player = fakeEntity({ id: 'p1', x: 800, y: 100, active: true });
+    catalog.updateTargets([{ kind: 'player', id: 'p1', x: 800, y: 100, isTargetable: () => visible,
+      resolvePosition: () => ({ x: player.x, y: player.y }) },
+      { kind: 'decoy', id: '7', x: 100, y: 800, isTargetable: () => !visible }]);
+    const f = createAttackSystem(enemy, [player], catalog);
+    f.system.hostUpdate(16, 1000); expect(f.shots).toHaveLength(1);
+    const used = vi.fn();
+    f.system.setDecoyTargets({ getTarget: () => ({ kind: 'decoy', id: '7', x: 100, y: 800 }),
+      getMovementField: () => null, usedTarget: used });
+    visible = false; player.x = 2500; player.y = 1500;
+    runAttackFrames(f.system, 1016, 1000 + SALVO.intervalMs * (SALVO.count + 1));
+    expect(f.shots.length).toBe(SALVO.count);
+    for (const shot of f.shots) expect(shot).toMatchObject({ targetX: 800, targetY: 100 });
+    expect(used.mock.calls.some(call => call[1]?.kind === 'decoy')).toBe(false);
+    runAttackFrames(f.system, 1000 + SALVO.intervalMs * (SALVO.count + 1),
+      1000 + SALVO.intervalMs * (SALVO.count + 1) + SALVO.cooldownMs + 1000);
+    expect(f.shots.slice(SALVO.count).some(shot => shot.targetX === 100 && shot.targetY === 800)).toBe(true);
+    expect(used).toHaveBeenCalledWith(enemy.id, expect.objectContaining({ kind: 'decoy', id: '7' }));
+  });
+
+  it('respects a protected special phase and smoke before starting a Decoy attack', () => {
+    const enemy = createColossus(), catalog = new EnemyAiTargetCatalog();
+    catalog.updateTargets([{ kind: 'decoy', id: '7', x: 800, y: 100 }]);
+    const f = createAttackSystem(enemy, [], catalog), used = vi.fn();
+    f.system.setDecoyTargets({ getTarget: () => ({ kind: 'decoy', id: '7', x: 800, y: 100 }),
+      getMovementField: () => null, usedTarget: used });
+    f.system.setActionBlockedChecker(() => true); f.system.hostUpdate(16, 1000);
+    expect(f.shots).toEqual([]); expect(used).not.toHaveBeenCalled();
+    f.system.setActionBlockedChecker(() => false);
+    vi.mocked(f.enemyManager.canSeeThroughSmoke).mockReturnValue(false); f.system.hostUpdate(16, 2000);
+    expect(f.shots).toEqual([]); expect(used).not.toHaveBeenCalled();
+    vi.mocked(f.enemyManager.canSeeThroughSmoke).mockReturnValue(true); f.system.hostUpdate(16, 3000);
+    expect(f.shots).toHaveLength(1); expect(used).toHaveBeenCalled();
+  });
+
   it('finishes an announced melee swing at its frozen point when smoke hides the target', () => {
     const enemy = createColossus();
     const bite = enemy.getAttackWeapons().find(w => w.weapon.config.fire.type === 'melee')!;

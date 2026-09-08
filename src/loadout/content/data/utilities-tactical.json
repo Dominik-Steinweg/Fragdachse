@@ -193,7 +193,24 @@
       "stealthGlowOuterStrength": 1.2,
       "wobblePeriodMs": 2400,
       "dissipateDustBurst": 18,
-      "skipCooldownPublish": true
+      "refundRadius": 0,
+      "refundPerEnemyMs": 1000,
+      "lureRadius": 0,
+      "stealthMoveSpeedBonus": 0,
+      "stealthHpRegenPerSecond": 0,
+      "stealthAdrenalineRegenBonus": 0,
+      "fireTrailDurationMs": 0,
+      "fireChunkBurst": {
+        "count": 0,
+        "searchRadius": 96,
+        "flightMs": 320,
+        "igniteCenter": false,
+        "durationMs": 2000,
+        "burnDurationMs": 2000,
+        "burnDamagePerTick": 0.25,
+        "sourceId": "ground_fire.decoy",
+        "visualStyle": "normal"
+      }
     }
   }
 }

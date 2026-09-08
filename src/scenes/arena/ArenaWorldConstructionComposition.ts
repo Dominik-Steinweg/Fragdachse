@@ -142,6 +142,7 @@ export function composeWorldConstruction(
     persistRewards: () => flow.persistCommittedPersistentBaseRewards(),
     publishRewardSessionState: () => flow.publishPersistentBaseRewardSessionState(),
     publishUtilityCooldown: (playerId, until, key) => bridge.publishUtilityCooldownUntil(playerId, until, key),
+    onPlacementExecuted: playerId => ctx.decoySystem.breakStealth(playerId, Date.now()),
     recordConstructionBuilt: (playerId) => bridge.recordConstructionBuilt(playerId),
     onConstructionDestroyed: (runtime, cause, attackerId) => {
       if (cause === 'damage' && runtime.kind === 'rock'

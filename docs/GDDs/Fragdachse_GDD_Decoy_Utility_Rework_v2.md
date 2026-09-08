@@ -1,569 +1,93 @@
 # GDD – Decoy-Utility-Überarbeitung
 
-## 1. Ziel
+Stand: 8. September 2026. Diese Fassung übernimmt die Entscheidungen des freigegebenen Implementierungsplans und ersetzt abweichende Vorgaben der ursprünglichen v2.
 
-Das Decoy ist primär eine **defensive Täuschungs- und Ablenkungs-Utility**.
+## Ziel und Umfang
 
-Die Baseline-Funktion soll bereits ohne Upgrades stark und taktisch relevant bleiben:
+Das Decoy ist ein defensives Täuschungswerkzeug für Flucht, Repositionierung und Entlastung. Erfolgreiche Ablenkung ermöglicht eine hohe Verfügbarkeit. Koop ist das primäre Designziel; gemeinsame Basismechaniken gelten auch im PvP. Sprengattrappe und zwei kombinierbare Feueräste ergänzen die Offensive.
 
-- Gegner werden vom Spieler weg auf das Decoy umgelenkt.
-- Der Spieler wird währenddessen unsichtbar und ist nicht mehr als reguläres Ziel erkennbar.
-- Das Decoy eignet sich für Flucht, Repositionierung und defensive Entlastung.
-- Im PvE kann es Gegner vom Spieler wegziehen.
-- Im PvP funktioniert es als Täuschungs- und Tarnwerkzeug.
+Umfang: Gameplay, entkoppelte Runtime und KI-Ziele, Upgradebaum, deutsche und englische Texte sowie automatisierte Prüfung. Bestehende Decoy-, Tarnungs-, Explosions- und Feuerdarstellung und vorhandene Icon-Aliase bleiben die visuelle Grundlage. Keine zusätzlichen Lock-Markierungen, Verbindungslinien oder Erstattungsanzeigen. Keine neuen Grafikassets, Altstand-Migration oder automatischen Profilresets.
 
-Die Upgrades bauen auf dieser defensiven Grundidentität auf.
+## Baseline, Tarnung und Aktionen
 
-Erst das Boss-Upgrade **Sprengattrappe** führt einen deutlichen offensiven Faktor ein. Die beiden Post-Boss-Upgrades entwickeln diesen offensiven Teil anschließend in zwei unterschiedliche Feuer-Richtungen weiter.
+- Cooldown **12 Sekunden ab erfolgreicher Aktivierung**; Attrappen-Lebensdauer **6 Sekunden**; Tarnung **6 Sekunden**.
+- Aktuelle HP, maximale HP und aktuelle Rüstung werden beim Erzeugen exakt kopiert. Spätere Heilung des Besitzers verändert die Attrappe nicht. Es gibt keine Mindest-HP-Garantie.
+- Die Attrappe läuft mit der beim Einsatz aufgelösten normalen Laufgeschwindigkeit geradeaus in die gewählte Zielrichtung. Kollisionen mit Felsen, Baumstämmen und Basisgebäuden sowie Weltgrenzen bleiben maßgeblich. R1 beschleunigt ausschließlich den getarnten Spieler beim Laufen.
+- Höchstens eine aktive Attrappe je Besitzer. Nach ihrem Ende darf bei bereitem Cooldown erneut aktiviert werden, auch während verbliebener Tarnung. Das erneuert die Tarnung mit voller Dauer.
+- Früher Attrappen-Tod beendet die Tarnung nicht.
+- Tatsächlicher HP- oder Rüstungsverlust beendet die Tarnung, auch durch periodischen Schaden. Vollständig absorbierter Schaden ohne Verlust enttarnt nicht.
+- Tatsächlich ausgeführte Angriffe, andere Utilities, Ultimates und Platzierungen enttarnen. Zielen, Vorschau, Waffenwechsel und abgelehnte Versuche enttarnen nicht. Bewegung und Dash erhalten die Tarnung.
+- Aufgeladene Waffen enttarnen bei tatsächlicher Auslösung; Dauerwaffen beim nächsten ausgeführten Schuss. Bereits entstandene Decoy-Explosionen und Feuerflächen enttarnen den Besitzer nicht nachträglich.
+- Keine manuelle Detonation und keine zusätzliche Wiederverwendungspause.
 
-Alle Zahlenwerte in diesem Dokument sind **initiale Balance-Basiswerte** und sollen später zentral anpassbar sein.
+## Upgradebaum
 
----
+| Knoten | Stufen | Wirkung | Voraussetzung |
+|---|---:|---|---|
+| L1 – Massenablenkung | 3 | Endradius 100/200/300 px; 1 s Cooldown-Erstattung je gültigem Gegner | Decoy |
+| L2 – Unwiderstehlicher Lockvogel | 3 | Fortlaufende Akquise weiterer Gegner in 100/200/300 px | L1 I |
+| R1 – Schattenläufer | 3 | Während Tarnung +10/20/30 % Laufgeschwindigkeit | Decoy |
+| R2 – Regeneration im Schatten | 3 | Während Tarnung +10/20/30 % passive Adrenalinregeneration und +5/10/15 HP/s | R1 I |
+| Sprengattrappe | 1 Boss-Stufe | Tod/Ablauf: 150 px Radius, linear 100 Schaden im Zentrum bis 25 am Rand, Rückstoß 500 | L2 I **und** R2 I |
+| BL1 – Brandbrocken | 3 | 3/6/9 generische Brandbrocken beim Explodieren | Sprengattrappe |
+| BR2 – Brennende Fährte | 3 | Bodenfeuer entlang tatsächlicher Bewegung, Feuerdauer 2/4/6 s | Sprengattrappe |
 
-## 2. Kernprinzipien der Baseline
+Ein normaler Punkt je regulärer Stufe beziehungsweise Freischaltung. Die Sprengattrappe kostet einen Boss-Punkt und keinen normalen Punkt. Beide Feueräste sind gleichzeitig bis III ausbaubar. Die bisherigen Dauer-Upgrades entfallen.
 
-### 2.1 Übernommene Lebenswerte
+## Ablenkung und Gegnerverhalten
 
-Das Decoy übernimmt beim Erzeugen weiterhin die aktuellen Werte seines Besitzers:
+Bereits ohne L2 übernimmt die Attrappe Gegner, deren aktuelles Bewegungs- oder Angriffsziel ihr Besitzer ist. Diese Übernahme wird vor der Entfernung des Besitzers aus der normalen Zielauswahl ermittelt.
 
-- aktuelle HP
-- maximale HP
-- aktuelle Armor
+L2 gewinnt zusätzlich andere feindliche KI-Gegner, einschließlich Basis- und strategischer Angreifer. Neue Akquise braucht Sichtkontakt und einen passierbaren Weg. Ein gültiger Lock bleibt außerhalb des Radius und nach späterem Sichtverlust erhalten. Tod, Entfernung oder bestätigte Unerreichbarkeit lösen ihn auf. Ein ausstehendes Worker-Ergebnis ist kein Nachweis der Unerreichbarkeit.
 
-Dieses Verhalten ist ein Kernprinzip des Decoys und bleibt unverändert.
+Der erste gültige Lock wird nicht gestohlen. Bei gleichzeitiger Erstakquise gewinnt die nähere Attrappe, bei Gleichstand ihre stabile ID. Bewegung, Kampfpositionierung, normale Angriffe und zielgerichtete Spezialfähigkeiten verwenden denselben Lock.
 
-Dadurch entstehen bewusst unterschiedliche taktische Einsatzformen:
+Bosse sind ablenkbar. Bereits laufende Spezialphasen, normale Angriffe und Salven bleiben bestehen. Ein inzwischen unsichtbares Ziel wird dabei nicht über seine verborgene Position weiterverfolgt. Bereits abgeschossene Projektile behalten Flug- und Homing-Regeln. Zielunabhängige Boss-Flächenmechaniken behalten ihre Auswahlregeln.
 
-- Ein Spieler mit wenig verbleibenden HP erzeugt ein entsprechend fragiles Decoy.
-- Ein Spieler mit hohen HP/Armor erzeugt einen langlebigeren Lockvogel.
-- Ein fragiles Decoy kann bei vorhandenem Boss-Upgrade bewusst als schneller Sprengkörper eingesetzt werden.
-- Ein robustes Decoy eignet sich stärker zum langfristigen Binden von Gegnern.
+Fernkämpfer behalten Wunschabstand und Kampfstil. Rauchverwirrung, Sichtregeln, Ausweichverhalten und geschützte Bewegungsphasen bleiben wirksam; danach wird die Decoy-Verfolgung fortgesetzt.
 
-Es wird kein fester eigener Decoy-HP-Wert eingeführt.
+## Erstattung und Regeneration
 
-### 2.2 Baseline-Werte
+L1 wertet beim Ende die letzte Attrappenposition aus. Jeder noch lebende, feindliche KI-Gegner im Radius zählt einmal, sofern er diese konkrete Attrappe tatsächlich als Bewegungs- oder Angriffsziel verwendet hat. Eine bloße Lock-Vormerkung zählt nicht.
 
-Initiale Ausgangswerte:
+Die Zählung erfolgt vor der eigenen Endexplosion. Die verbleibende Abklingzeit wird bis höchstens null reduziert. Es gibt keine Erstattungsobergrenze. Lückenlose Tarnungs- und Regenerationsketten sind ausdrücklich erlaubt.
 
-- Basis-Cooldown: **12 Sekunden**
-- Decoy-Lebensdauer: **6 Sekunden**
-- Tarnungsdauer: **6 Sekunden**
+R2 multipliziert die bereits aufgelöste passive Adrenalinregeneration. Bestehende Regenerationspausen gelten weiter. HP-Heilung ist zeitbasiert, endet mit der Tarnung und überschreitet die maximalen HP nicht.
 
-Diese Werte bilden den Ausgangspunkt für die Upgrade-Skalierung.
+## Explosion und Feuer
 
----
+Explosion und Rückstoß treffen ausschließlich feindliche Ziele. Bestehende Schadensmodifikatoren und Rückstoßresistenzen werden berücksichtigt. Der normale radiale Schadenspfad verwendet den Mindestschaden 25 am Rand.
 
-## 3. Zielstruktur des Upgradebaums
+Beide Feueräste verwenden vorhandenes Bodenfeuer, normale Brandstacks und Nachbrennen. Separate Decoy-Ziel-DPS entfallen.
 
-```text
-                     DECOY
-                    /     \
-                  L1       R1
-                  |        |
-                  L2       R2
-                    \     /
-                 SPRENGATTRAPPE
-                   /     \
-                 BL1     BR2
-```
+Generisches Brockenprofil: 96 px Auswurfradius, 320 ms Flugzeit, 2 s Bodenfeuer, 2 s Branddauer und 0,25 Schaden je normalem Brandtick. Alle Werte bleiben zentral konfigurierbar.
 
-Regeln:
+Die Fährte nutzt dasselbe Brandprofil und das vorhandene 16-px-Bodenraster. Ihre Breite bleibt über alle Stufen gleich. Tatsächliche Host-Bewegungssegmente werden nach der Physik im Raster abgetastet; Segmentfunktionen schließen Lücken auch bei großen Zeitschritten. Stillstand erzeugt keine weiteren Segmente. Stabile Quellschlüssel je Attrappe und Rasterzelle verhindern zusätzliche Quellen bei wiederholter Verarbeitung. Bestehendes Feuer läuft nach Attrappen-Ende normal aus.
 
-- L1, L2, R1, R2, BL1 und BR2 besitzen jeweils **3 Stufen**.
-- Das Boss-Upgrade besitzt **1 Boss-Stufe**.
-- Das Boss-Upgrade benötigt sowohl **L2 als auch R2**.
-- BL1 und BR2 benötigen das Boss-Upgrade.
+## Technische Verträge
 
----
+Die World verwaltet den von Phaser und Netzwerk unabhängigen `DecoyRuntime` über ihre bestehenden Bindings. Er besitzt Lebenswerte, Aktivierungsparameter, Tarnungszustände und Enderegeln. Nicht rendernde Physikkörper liefern Position und Kollision; `DecoyEntity` stellt den Zustand dar.
 
-## 4. Linker Hauptast – Verfügbarkeit und Lockvogel
+Die Endgründe `killed`, `expired` und `cleanup` sind getrennt. Nur Tod und Ablauf lösen Erstattung, Explosion und Brandbrocken aus. Endverarbeitung entfernt die Attrappe als gültiges Ziel und führt Folgeeffekte genau einmal aus. Spielerentfernung und World-Abbau erzeugen keine künstlichen Explosionen oder Erstattungen.
 
-### L1 – Massenablenkung
+Ein Activity-eigenes `CoopDefenseDecoyTargetSystem` besitzt Locks und tatsächlich erfolgte Ablenkung. Es erfasst die Zielzuordnung aktiver gewöhnlicher Flowfields und bestehende Angriffsziele. Zielzuordnung und berechnetes Feld werden atomar aktiviert. Je Attrappe und benötigtem Clearance-Profil teilen sich alle Verfolger ein Feld im vorhandenen `FlowFieldCoordinator`. Die Felder werden beim Ende freigegeben; bestehende Worker-, Tick- und Geometrieverträge gelten weiter.
 
-**3 Stufen**
+`PlayerUtilityActionRuntime` besitzt den Cooldown und veröffentlicht verkürzte Endzeitpunkte. Aktive Attrappe und Cooldown sind getrennte Bedingungen. Bestehende Decoy-Snapshots liefern auch bei Bootstrap und erneuter Synchronisierung den Aktivitätszustand an Client-Eingabe und HUD. KI-Locks benötigen keine Client-Simulation.
 
-L1 reduziert den verbleibenden Cooldown des Decoys **erst in dem Moment, in dem das aktive Decoy zerstört wird oder regulär ausläuft**.
+`DecoyUtilityConfig`, Validatoren, Stat-Resolver und Beschreibungsparameter führen die beschlossenen Werte. Deutsche und englische Texte verwenden diese Konfiguration. Die Runtime erhält schmale Combat-, Ressourcen-, Effekt- und Netzwerkports.
 
-Zu diesem Zeitpunkt werden gültige Gegner im L1-Radius um die letzte Position des Decoys gezählt.
+## Nachvollziehbare Änderungen gegenüber der ursprünglichen v2
 
-Pro Gegner innerhalb des Radius:
+- Cooldown beginnt bei erfolgreichem Einsatz; Tarnung und Attrappen-Lebensdauer sind unabhängig.
+- Enttarnung richtet sich nach tatsächlichem Ressourcenverlust beziehungsweise erfolgreicher Ausführung, nicht nach Eingabe oder Vorschau.
+- Ablenkung hat einen gemeinsamen, klebrigen Lock-Owner; Baseline-Übernahme und zusätzliche L2-Akquise sind getrennt.
+- L1 verlangt tatsächliche Zielverwendung, zählt vor der Explosion und besitzt keine Erstattungsgrenze.
+- R2 ist ein Multiplikator der aufgelösten passiven Regeneration; Tarnungsketten bleiben zulässig.
+- Separate Feuer-DPS werden durch das vorhandene generische Brandprofil ersetzt. Beide Feueräste sind kombinierbar.
+- Runtime, Physikkörper und Darstellung sind getrennt; Cleanup hat keine offensiven Folgeeffekte.
 
-- **-1 Sekunde verbleibender Cooldown**
+## Automatisierte Abnahme
 
-Der Radius steigt mit jeder Stufe:
+Die bestehenden Suites werden für Aktivierung/Ende, Cooldown, Aktionen, Schaden, Ressourcen, KI-Locks und geteilte Navigation, Feuer, Content, Replikation und Lifecycle erweitert. Ein Belastungsfall deckt zwölf Besitzer mit mehreren Attrappen, großen Gegnergruppen, begrenzter Feldanzahl und vollständigem Abbau ab. Konkrete Tuning-Parität gehört ins Balance-Lab.
 
-| L1-Stufe | Auswertungsradius beim Ende des Decoys |
-|---:|---:|
-| I | 100 px |
-| II | 200 px |
-| III | 300 px |
-
-Der Cooldown kann durch diesen Effekt höchstens bis auf **0 Sekunden Restzeit** reduziert werden.
-
-#### Aktivitätsregel
-
-Ein neues Decoy kann niemals erzeugt werden, solange das vorherige Decoy noch aktiv ist.
-
-L1 ermöglicht daher keinen Decoy-Spam während der Laufzeit. Die Belohnung wird bewusst erst beim Tod bzw. Ablauf des aktuellen Decoys verrechnet.
-
-#### Gameplay-Ziel
-
-L1 belohnt gut platzierte Decoys in großen Gegnergruppen.
-
-Ein Decoy, das nur wenige oder keine Gegner bindet, erhält kaum Cooldown-Rückerstattung. Ein Decoy, das mitten in einer großen Gegnergruppe erfolgreich eingesetzt wurde, verkürzt dagegen die Wartezeit bis zum nächsten Einsatz deutlich.
-
-Dadurch bleibt das Decoy:
-
-- selten und situationsabhängig einsetzbar,
-- während seiner Laufzeit nicht erneut verfügbar,
-- bei starkem Einsatz in Gegnermassen spürbar schneller wieder bereit.
-
-### L2 – Unwiderstehlicher Lockvogel
-
-**3 Stufen**
-
-Das Decoy erhält einen zusätzlichen aktiven Anziehungsradius.
-
-Gegner innerhalb dieses Radius können gezielt vom bisherigen Verhalten auf das Decoy umgelenkt werden.
-
-Das gilt ausdrücklich auch für Gegner, die aktuell:
-
-- keinen Spieler angreifen,
-- eine Basis angreifen,
-- ein anderes strategisches Ziel verfolgen.
-
-#### Initiale Radiuswerte
-
-| L2-Stufe | Akquise-Radius |
-|---:|---:|
-| I | 100 px |
-| II | 200 px |
-| III | 300 px |
-
-#### Target-Lock-Regel
-
-Der Radius entscheidet nur darüber, **welche Gegner neu angelockt werden können**.
-
-Sobald ein Gegner durch dieses Upgrade das Decoy als Ziel aufgenommen hat:
-
-- behält er dieses konkrete Decoy als Ziel,
-- auch wenn er anschließend den ursprünglichen Akquise-Radius wieder verlässt,
-- solange das Decoy lebt und grundsätzlich erreichbar bzw. als gültiges Ziel vorhanden ist.
-
-Das Ziel soll nicht ständig neu aufgrund der Distanz bewertet werden.
-
-#### Gameplay-Ziel
-
-L2 soll insbesondere ermöglichen:
-
-- Gegner von der eigenen Basis wegzulocken,
-- größere Gruppen umzulenken,
-- Gegner bewusst in gefährliche Bereiche zu ziehen,
-- spätere Boss- und Feuer-Upgrades vorzubereiten.
-
----
-
-## 5. Rechter Hauptast – defensive Tarnungsnutzung
-
-### R1 – Schattenläufer
-
-**3 Stufen**
-
-Während der Decoy-Tarnung erhält der Spieler:
-
-- **+10 % Bewegungsgeschwindigkeit pro Stufe**
-
-Damit ergeben sich:
-
-| R1-Stufe | Bewegungsbonus während Tarnung |
-|---:|---:|
-| I | +10 % |
-| II | +20 % |
-| III | +30 % |
-
-Der Bonus endet unmittelbar mit dem Ende der Tarnung.
-
-#### Gameplay-Ziel
-
-R1 unterstützt:
-
-- Flucht,
-- Repositionierung,
-- Abstand gewinnen,
-- taktisches Umgehen von Gegnergruppen,
-- schnelles Erreichen sicherer Positionen.
-
-### R2 – Regeneration im Schatten
-
-**3 Stufen**
-
-Während der Decoy-Tarnung erhält der Spieler zusätzliche defensive Regeneration.
-
-Pro Stufe:
-
-- **+10 % passive Adrenalinregeneration**
-- **+5 HP pro Sekunde**
-
-Damit ergeben sich:
-
-| R2-Stufe | Passive Adrenalinregeneration | HP-Regeneration |
-|---:|---:|---:|
-| I | +10 % | +5 HP/s |
-| II | +20 % | +10 HP/s |
-| III | +30 % | +15 HP/s |
-
-#### Adrenalin-Regel
-
-Der Bonus verstärkt die bereits aufgelöste **passive Adrenalinregeneration prozentual**.
-
-Es werden keine festen zusätzlichen Adrenalinpunkte pro Tick erzeugt.
-
-Dadurch bleibt das Upgrade mit anderen Regenerationsboni kompatibel.
-
-#### Heilungsregel
-
-Die HP-Regeneration:
-
-- wirkt nur während aktiver Tarnung,
-- endet beim Ende der Tarnung,
-- kann HP nicht über das normale Maximum hinaus erhöhen.
-
-#### Gameplay-Ziel
-
-R2 macht die Tarnphase zu einem taktischen Reset-Fenster:
-
-- Gegner verlieren den Spieler als Ziel,
-- der Spieler repositioniert sich,
-- HP werden regeneriert,
-- Adrenalin wird schneller wiederhergestellt.
-
----
-
-## 6. Boss-Upgrade – Sprengattrappe
-
-**1 Boss-Stufe**
-
-Voraussetzungen:
-
-- L2 erworben
-- R2 erworben
-
-Das Decoy explodiert:
-
-- bei tatsächlichem Tod,
-- oder beim Ablauf seiner normalen Lebensdauer.
-
-Die Explosion führt den ersten klar offensiven Effekt in den Decoy-Baum ein.
-
-### Initiale Balance-Basis
-
-Ausgangswerte:
-
-- Explosionsradius: **150 px**
-- Explosionsschaden: **100**
-- Knockback: **500**
-
-Diese Werte sind Balance-Basiswerte.
-
-### Gameplay-Ziel
-
-Die Sprengattrappe soll besonders Gegner bestrafen, die erfolgreich vom Lockvogel gesammelt wurden.
-
-Typischer Ablauf:
-
-```text
-Decoy erzeugen
--> Gegner werden angelockt
--> Gegner verfolgen und attackieren das Decoy
--> Gegner sammeln sich in seiner Nähe
--> Decoy stirbt oder läuft aus
--> Explosion trifft die gesammelte Gruppe
-```
-
-Ein Decoy mit niedrigen übernommenen HP darf bewusst schneller sterben und dadurch früher explodieren.
-
-Diese taktische Möglichkeit ist ausdrücklich gewünscht.
-
----
-
-## 7. BL1 – Brandbrocken
-
-**3 Stufen**
-
-Die Sprengattrappen-Explosion schleudert zusätzlich brennende Brocken aus dem Explosionszentrum.
-
-Dabei soll die bereits vorhandene generische **Fire-Chunk-/Brandbrocken-/Ground-Fire-Logik** verwendet werden.
-
-Es soll kein isolierter Decoy-spezifischer Feuerpfad entstehen.
-
-### Skalierung
-
-Pro Stufe:
-
-- **+3 Brandbrocken**
-
-Damit ergeben sich:
-
-| BL1-Stufe | Brandbrocken |
-|---:|---:|
-| I | 3 |
-| II | 6 |
-| III | 9 |
-
-### Verhalten
-
-Die Brandbrocken:
-
-- werden aus der Explosion herausgeschleudert,
-- fliegen in unterschiedliche Richtungen,
-- landen räumlich verteilt,
-- setzen den Boden in Brand,
-- erzeugen zusätzliche Gefahrenbereiche um den Explosionsort.
-
-Schaden, Flugweite, Bodenfeuerdauer und weitere Fire-Chunk-Parameter sollen möglichst über bereits bestehende generische Mechaniken und Balancewerte gesteuert werden.
-
-### Gameplay-Ziel
-
-BL1 ist besonders stark gegen:
-
-- schnelle Gegner,
-- Gegner, die das Decoy tatsächlich erreichen,
-- Gegnergruppen, die sich dicht um das Decoy sammeln.
-
-Der Boss verursacht den unmittelbaren Burst.
-
-BL1 verlängert die Gefahrenzone anschließend durch Feuer.
-
----
-
-## 8. BR2 – Brennende Fährte
-
-**3 Stufen**
-
-Das Decoy setzt während seiner Bewegung den Boden hinter sich in Brand.
-
-Die Feuerfährte nutzt die Tatsache, dass angelockte Gegner dem Decoy aktiv hinterherlaufen.
-
-Dadurch entsteht eine gezielte Gegenmechanik gegen langsamere Gegner, die das Decoy verfolgen, aber nicht rechtzeitig erreichen.
-
-### Grundverhalten
-
-Während das Decoy sich tatsächlich bewegt:
-
-- werden entlang seiner zurückgelegten Strecke Ground-Fire-Segmente erzeugt,
-- die Spur bleibt für kurze Zeit bestehen,
-- verfolgende Gegner laufen dadurch automatisch durch den brennenden Bereich.
-
-Die Spur entsteht bereits während der Lebensdauer des Decoys.
-
-Sie ist nicht an dessen Explosion gebunden.
-
-### Initiale Skalierung
-
-| BR2-Stufe | Feuerdauer je Spursegment | Ziel-DPS |
-|---:|---:|---:|
-| I | 2 s | ca. 8 DPS |
-| II | 3 s | ca. 12 DPS |
-| III | 4 s | ca. 16 DPS |
-
-Diese Werte sind initiale Balance-Basiswerte.
-
-Die Spurbreite bleibt über die Stufen grundsätzlich konstant.
-
-### Regeln zur Spur-Erzeugung
-
-Neue Feuersegmente entstehen nur bei **tatsächlicher räumlicher Bewegung** des Decoys.
-
-Daraus folgen:
-
-- Ein festhängendes oder stehendes Decoy erzeugt nicht permanent an derselben Stelle neue Feuersegmente.
-- Bereits vorhandene Segmente sollen nicht durch Stillstand unendlich gestapelt werden.
-- Die Spur folgt der realen Bewegungsbahn.
-- Nach Tod oder Ablauf des Decoys werden keine neuen Segmente mehr erzeugt.
-- Bereits vorhandene Feuersegmente brennen normal bis zum Ende ihrer eigenen Lebensdauer weiter.
-
-### Schadensregeln
-
-Die Feuerfährte folgt den normalen Ground-Fire-Regeln.
-
-Sie kann Gegner beschädigen unabhängig davon, ob diese:
-
-- auf das Decoy gelockt wurden,
-- zufällig durch die Spur laufen,
-- ein anderes Ziel verfolgen.
-
-Der Lockvogel-Effekt erzeugt lediglich die besonders starke natürliche Synergie, weil angelockte Gegner der Spur bewusst folgen.
-
-### Gameplay-Ziel
-
-BR2 ist besonders stark gegen:
-
-- langsame Gegner,
-- große Gegnergruppen mit geringer Bewegungsgeschwindigkeit,
-- Gegner, die das Decoy über längere Distanz verfolgen,
-- Gegner, die den eigentlichen Explosionsradius nie erreichen würden.
-
-Typischer Ablauf:
-
-```text
-Decoy läuft weg
--> langsame Gegner verfolgen es
--> Decoy zieht eine Feuerfährte
--> Verfolger laufen durch die brennende Route
--> langsame Gegner verlieren kontinuierlich HP
-```
-
----
-
-## 9. Post-Boss-Spezialisierung nach Gegnertempo
-
-Die beiden Post-Boss-Upgrades sollen bewusst unterschiedliche Verfolger bestrafen.
-
-### BL1 – schnelle Gegner
-
-Schnelle Gegner:
-
-- erreichen das Decoy,
-- sammeln sich in seiner Nähe,
-- werden von der Sprengattrappe getroffen,
-- werden anschließend durch Brandbrocken und Ground Fire weiter beschädigt.
-
-### BR2 – langsame Gegner
-
-Langsame Gegner:
-
-- verfolgen das Decoy,
-- erreichen es aber häufig nicht rechtzeitig,
-- laufen stattdessen über längere Strecken durch seine Feuerfährte.
-
-Damit ergänzen sich beide Upgrades statt denselben Effekt zu verstärken.
-
----
-
-## 10. Gesamtsynergie des Baums
-
-### Baseline
-
-- Gegner vom Spieler weglocken
-- Spieler unsichtbar machen
-- defensiven Reset ermöglichen
-
-### Linker Hauptast
-
-**L1 + L2**
-
-- bei erfolgreichem Einsatz in Gegnermassen verkürzte Wartezeit bis zum nächsten Decoy
-- gezieltes Weglocken auch von Basis- und anderen strategischen Zielen
-- persistente Verfolgung des Decoys
-
-### Rechter Hauptast
-
-**R1 + R2**
-
-- schneller repositionieren
-- HP regenerieren
-- Adrenalin regenerieren
-- Tarnphase maximal defensiv nutzen
-
-### Boss
-
-**Sprengattrappe**
-
-- angelockte Gegner offensiv bestrafen
-- bewussten Einsatz fragiler Decoys als Schnellzünder ermöglichen
-
-### BL1
-
-- Explosion mit Brandbrocken erweitern
-- starke Nahbereichs- und Gruppenkontrolle gegen schnelle Verfolger
-
-### BR2
-
-- Bewegungsbahn des Decoys in eine brennende Falle verwandeln
-- langsame Verfolger über Zeit bestrafen
-
----
-
-## 11. Gameplay-Identität
-
-Der Decoy-Baum soll eine klare Entwicklung besitzen.
-
-### Ohne Boss-Upgrade
-
-Das Decoy bleibt primär:
-
-- defensiv,
-- taktisch,
-- täuschend,
-- kontrollierend.
-
-### Mit Boss-Upgrade
-
-Das Decoy wird zusätzlich:
-
-- explosiv,
-- offensiv nutzbar,
-- zu einer Falle für angelockte Gegner.
-
-### Voll ausgebaut
-
-Der Spieler kann das Decoy situationsabhängig einsetzen:
-
-- als Fluchtwerkzeug,
-- als Regenerationsfenster,
-- als Basisverteidigungs-Lockvogel,
-- als kurzfristigen Schnellzünder,
-- als mobilen Feuerköder,
-- als Gruppensammelpunkt für eine starke Explosion.
-
----
-
-## 12. Lesbarkeit und Gamefeel
-
-Die wichtigsten Zustände müssen visuell klar verständlich sein:
-
-- Spieler ist durch Decoy getarnt
-- Gegner hat das Decoy als Lockziel übernommen
-- Sprengattrappe ist aktiv
-- Explosion des Decoys
-- Brandbrocken werden ausgeworfen
-- Brennende Fährte liegt hinter dem Decoy
-
-Besonders wichtig:
-
-- Die Feuerfährte muss eindeutig hinter der realen Laufbewegung des Decoys entstehen.
-- Brandbrocken und Feuerfährte sollen visuell aus derselben Feuerfamilie stammen, aber unterschiedliche räumliche Muster besitzen.
-- BL1 soll als radialer Explosions-Folgeeffekt lesbar sein.
-- BR2 soll als lineare bzw. kurvige Bewegungsfährte lesbar sein.
-
----
-
-## 13. Initiale Balance-Basiswerte
-
-| Parameter | Initialer Wert |
-|---|---:|
-| Basis-Cooldown | 12 s |
-| Basis-Decoy-Lebensdauer | 6 s |
-| Basis-Tarnungsdauer | 6 s |
-| L1 Cooldown-Rückerstattung | -1 s pro Gegner beim Ende des Decoys |
-| L1 Auswertungsradius I | 100 px |
-| L1 Auswertungsradius II | 200 px |
-| L1 Auswertungsradius III | 300 px |
-| L2 Akquise-Radius I | 100 px |
-| L2 Akquise-Radius II | 200 px |
-| L2 Akquise-Radius III | 300 px |
-| R1 Bewegung | +10 % pro Stufe |
-| R2 passive Adrenalinregeneration | +10 % pro Stufe |
-| R2 HP-Regeneration | +5 HP/s pro Stufe |
-| Boss Explosionsradius | 150 px |
-| Boss Explosionsschaden | 100 |
-| Boss Knockback | 500 |
-| BL1 Brandbrocken | +3 pro Stufe |
-| BR2 I Feuerdauer | 2 s |
-| BR2 II Feuerdauer | 3 s |
-| BR2 III Feuerdauer | 4 s |
-| BR2 I Ziel-DPS | ca. 8 |
-| BR2 II Ziel-DPS | ca. 12 |
-| BR2 III Ziel-DPS | ca. 16 |
-
-Diese Werte bilden den ersten spielbaren Balance-Stand und sind ausdrücklich keine dauerhaft festgeschriebenen Endwerte.
+Abschluss: `npm run check` sowie betroffene Integrations-, Stress-, Asset- und Balance-Lab-Suiten. Keine neue Testinfrastruktur. Browserprüfung ist ausgeschlossen; Spielgefühl und visuelle Wirkung sind dadurch nicht manuell abgenommen.

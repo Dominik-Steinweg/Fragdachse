@@ -47,7 +47,6 @@ function createSystem() {
     sendLoadoutUse: vi.fn(),
     sendHeldActionStart: vi.fn(),
     sendHeldActionCancel: vi.fn(),
-    sendDecoyStealthBreakRequest: vi.fn(),
     getLocalPlayerId: () => 'p1',
   };
   const scene = { input: { activePointer: pointer } };

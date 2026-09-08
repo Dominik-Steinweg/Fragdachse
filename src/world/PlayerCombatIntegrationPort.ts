@@ -10,6 +10,7 @@ import type { ProjectileAk47DirectImpact, ProjectileAk47HitContext } from '../pr
 import type { ProjectileFlameExpiryEvent, ProjectileLifecycleOutcome } from '../projectile/ProjectileGameplayPort';
 import type { WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CoopDefenseClassDefinition } from '../config/coopDefenseClasses';
+import type { FireChunkBurstPort } from '../systems/FlamethrowerUpgradeSystem';
 import type { ResourceSystem } from '../systems/ResourceSystem';
 
 /** The resource operations that the legacy WorldCombatCore and world effects actually require. */
@@ -95,6 +96,7 @@ export type PlayerCombatSustainedWeaponPort = Pick<
 >;
 
 export interface PlayerCombatUtilityPort {
+  refundUtilityCooldown(playerId: string, utilityId: string, amountMs: number, nowMs: number): void;
   beginUtilityCooldown(playerId: string, utilityId: string, nowMs: number): void;
 }
 
@@ -160,6 +162,7 @@ export interface PlayerCombatIntegrationPort {
   readonly movement: PlayerCombatMovementPort;
   readonly item: PlayerCombatItemPort;
   readonly utility: PlayerCombatUtilityPort;
+  readonly fireChunks: FireChunkBurstPort | null;
   readonly ak47: PlayerCombatAk47Port | null;
   readonly sustainedWeapon: PlayerCombatSustainedWeaponPort;
   readonly slimeTrail: PlayerCombatSlimeTrailPort | null;

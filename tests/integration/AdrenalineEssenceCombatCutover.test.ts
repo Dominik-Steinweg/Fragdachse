@@ -108,7 +108,6 @@ function glockEnemyFixture(origin = { x: 300, y: 100 }) {
       combat.setDecoySystem(decoys);
       owner.x = 500; owner.y = 500;
       const target = decoys.getHostTargets()[0];
-      Object.assign(target.sprite, { getBounds: () => ({ left: 284, top: 84, right: 316, bottom: 116 }) });
       return { target: decoys.getCombatTargetRef(target.id)!, hp: () => decoys!.createHostSnapshots()[0]?.hp ?? 0 };
     },
     fire() {

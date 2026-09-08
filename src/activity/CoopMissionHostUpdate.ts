@@ -122,6 +122,7 @@ export class CoopMissionHostUpdate {
       metrics.navFlowFieldMs = performance.now() - navStartedAt;
       metrics.navWorkerComputeMs = this.runtime.flowFieldCoordinator?.getDiagnostics().lastWorkerComputeMs ?? 0;
     }
+    this.runtime.coopDefenseDecoyTargetSystem?.updateLocks();
     this.runCombatPhase(deltaMs, nowMs, countdownActive, weaponBalanceLabActive);
   }
 
@@ -200,6 +201,7 @@ export class CoopMissionHostUpdate {
       this.runtime.coopDefenseEnemyCombatPositioningSystem,
       this.runtime.coopDefenseTimebombSystem,
       this.port.getSmokeSystem(),
+      this.runtime.coopDefenseDecoyTargetSystem,
     );
     if (!countdownActive) this.runtime.necromancySystem?.hostUpdate(nowMs, deltaMs);
     if (!countdownActive && !weaponBalanceLabActive) {
@@ -332,7 +334,7 @@ export class CoopMissionHostUpdate {
       if (strategicFlowFieldService && strategicTargetService && flowFieldCoordinator) {
         // Zielzuordnung und Zielmenge reisen als ein Paket: Der Coordinator uebernimmt die
         // Zuordnung erst in dem Moment, in dem er das daraus gerechnete Feld aktiviert.
-        const prepared = strategicTargetService.prepareTargets(targetCatalog.getStrategicCandidates());
+        const prepared = strategicTargetService.prepareTargets(targetCatalog.getStrategicCandidates().filter(target => target.kind !== 'decoy'));
         flowFieldCoordinator.setGoalCells(
           ENEMY_FLOW_FIELD_IDS.strategic,
           goalCellsToIndexes(prepared.goalCells, flowFieldCoordinator.metrics),
@@ -349,7 +351,7 @@ export class CoopMissionHostUpdate {
 
     const playerGoalCells: { gridX: number; gridY: number }[] = [];
     if (targetCatalog) {
-      targetCatalog.forEachTarget('player-like', (target) => {
+      targetCatalog.forEachTarget('players', (target) => {
         const position = target.resolvePosition?.(0, 0) ?? { x: target.x, y: target.y };
         const goalCell = playerFlowFieldService.worldToGrid(position.x, position.y);
         if (!goalCell) return;
@@ -372,6 +374,9 @@ export class CoopMissionHostUpdate {
     if (bossFlowFieldService) {
       flowFieldCoordinator.setGoalCells(ENEMY_FLOW_FIELD_IDS.boss, playerGoalIndexes);
     }
+
+    if (targetCatalog) this.runtime.coopDefenseDecoyTargetSystem?.prepareOrdinaryGoals(targetCatalog.getCandidates('players'));
+    this.runtime.coopDefenseDecoyTargetSystem?.prepareNavigation();
 
     // Die Nekromantie setzt ihr gemeinsames Besitzer-Flowfield selbst auf den
     // aktuellen Gegner oder, beim Leash-Rueckzug, auf den Besitzer. Ein zweites

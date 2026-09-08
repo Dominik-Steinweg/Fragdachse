@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', async () => (await import('../fakeArenaRenderScene')).createFakePhaserModule());
 
 import { EnemyEntity } from '../../src/entities/EnemyEntity';
+import { PlayerBody } from '../../src/entities/PlayerBody';
 import { DecoyEntity } from '../../src/entities/DecoyEntity';
 import { PlayerEntity } from '../../src/entities/PlayerEntity';
 import { BadgerPreview } from '../../src/ui/BadgerPreview';
@@ -104,15 +105,17 @@ describe('figure source resolution and Arcade geometry', () => {
   it.each([32, 64, getPipelineAssetForTexture('badger')!.sourceSize])(
     'enlarges the decoy at source size %s without enlarging or shifting its circle', sourceSize => {
     const { scene } = sceneWithArcadeBodies(sourceSize);
-    const decoy = new DecoyEntity(scene, 1, 'owner', 100, 200, 0xffffff, false, true);
+    const decoy = new DecoyEntity(scene, 1, 'owner', 100, 200, 0xffffff, false);
     expect(decoy.sprite.displayWidth).toBeCloseTo(PLAYER_SIZE * PLAYER_VISUAL_SCALE);
     expect(decoy.sprite.displayHeight).toBeCloseTo(PLAYER_SIZE * PLAYER_VISUAL_SCALE);
-    expect(decoy.body!.center.x).toBeCloseTo(100);
-    expect(decoy.body!.center.y).toBeCloseTo(200);
-    expectPlayerBody(decoy.body, 100, 200);
+    const physics = new PlayerBody(scene, 100, 200, true);
+    expect(decoy.sprite.body).toBeFalsy();
+    expectPlayerBody(physics.body, 100, 200);
     decoy.setRotation(1.2);
     decoy.setPosition(300, 400);
-    expectPlayerBody(decoy.body, 300, 400);
+    expectPlayerBody(physics.body, 100, 200);
+    physics.setPosition(300, 400);
+    expectPlayerBody(physics.body, 300, 400);
   });
 
   it.each([false, true])('keeps player collision independent of visual poses (presentation=%s)', presentation => {
@@ -162,7 +165,7 @@ describe('figure source resolution and Arcade geometry', () => {
     const { scene, images } = sceneWithArcadeBodies(BADGER_WALKING_FRAME_WIDTH);
     const player = new PlayerEntity(scene, { id: 'p', name: 'P', colorHex: 0xffffff },
       100, 200, false, null, { spawnEffect: false });
-    const decoy = new DecoyEntity(scene, 1, 'p', 100, 200, 0xffffff, false, false);
+    const decoy = new DecoyEntity(scene, 1, 'p', 100, 200, 0xffffff, false);
     const preview = new BadgerPreview(scene, 100, 200, 0xffffff);
     const largePreview = new BadgerPreview(scene, 100, 200, 0xffffff, 64);
     for (const [entity, size] of [[player, PLAYER_SIZE], [decoy, PLAYER_SIZE],
@@ -172,7 +175,7 @@ describe('figure source resolution and Arcade geometry', () => {
       const sprite = entity instanceof PlayerEntity ? entity.displayObject! : entity.sprite;
       expect(sprite.displayWidth).toBeCloseTo(size * PLAYER_VISUAL_SCALE);
       expect(weapon.scaleX).toBeCloseTo(sprite.displayWidth / HELD_ITEM_TEXTURE_SIZE);
-      expect(decoy.body).toBeNull();
+      expect(decoy.sprite.body).toBeFalsy();
     }
     player.setDashScale(0.5);
     const weapon = images.find(i => i.texture.key === getHeldItemSpriteSpec('GLOCK')!.textureKey);

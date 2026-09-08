@@ -118,6 +118,7 @@ export class InputSystem {
   /** Optimistic cooldowns keyed by the same stable identity used by the radial action model. */
   private readonly utilityChargePrediction = new UtilityChargePrediction();
   private chargePredictionWorldRevision: number | null = null;
+  private localDecoyActive = false;
   private readonly predictedUtilityCooldownUntil = new Map<string, number>();
   public onUtilityPressedDuringCooldown: (() => void) | null = null;
   public onUltimatePressedWithoutRage: (() => void) | null = null;
@@ -443,7 +444,11 @@ export class InputSystem {
     });
     this.reconcilePredictedUtilityCooldowns(actions, now);
     this.reconcileTemporaryUtilitySelection(actions);
-    return this.applyPredictedUtilityCooldowns(actions, now);
+    return this.applyPredictedUtilityCooldowns(actions, now).map(entry =>
+      this.localDecoyActive && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility')
+        && entry.ref.utilityId === 'DECOY'
+        ? { ...entry, available: false, disabledReason: 'unavailable' } : entry);
+
   }
 
   private reconcilePredictedUtilityCooldowns(
@@ -669,6 +674,16 @@ export class InputSystem {
     this.onLoadoutUse = cb;
   }
 
+  setLocalDecoyActive(active: boolean): void {
+    this.localDecoyActive = active;
+    // The host's active entity acknowledges the activation even if its cooldown was refunded.
+    if (active) this.predictedUtilityCooldownUntil.delete('utility:DECOY');
+  }
+
+  isSelectedDecoyActive(): boolean {
+    return this.localDecoyActive && this.getLocalUtilityConfig?.()?.type === 'decoy';
+  }
+
   setupUtilityConfigProvider(cb: () => UtilityConfig | undefined): void {
     this.getLocalUtilityConfig = cb;
   }
@@ -775,6 +790,7 @@ export class InputSystem {
       this.localDashPhase = 0;
       this.dashCooldownUntil = 0;
       this.predictedUtilityCooldownUntil.clear();
+      this.localDecoyActive = false;
       this.cancelUtilityInteraction();
       this.cancelUltimateCharge();
       this.cancelUltimatePlacement();
@@ -1541,7 +1557,6 @@ export class InputSystem {
       if (persistentRewardId) {
         this.cancelUtilityInteraction();
         this.persistentRewardPlacementActive = true;
-        this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
@@ -1549,10 +1564,10 @@ export class InputSystem {
       if (constructionTool?.kind === 'construction') {
         this.cancelUtilityInteraction();
         this.constructionPlacementActive = true;
-        this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getConstructionPlacementPreviewState());
         return;
       }
+      if (this.isSelectedDecoyActive()) return;
       const cooldownNow = this.getCooldownNow();
       if (this.getEffectiveUtilityCooldownUntil(cooldownNow) > cooldownNow) {
         this.onUtilityPressedDuringCooldown?.();
@@ -1614,7 +1629,6 @@ export class InputSystem {
       if (rage >= airstrikeCfg.rageCost) {
         this.cancelUtilityInteraction();
         this.ultimateTargetingActive = true;
-        this.bridge.sendDecoyStealthBreakRequest();
       } else {
         this.notifyUltimatePressedWithoutRage();
         // Keine Rage: Feedback an Host senden (zeigt "zu wenig Rage"-Meldung)
@@ -1628,7 +1642,6 @@ export class InputSystem {
         this.ultimateTargetingActive = false;
         this.ultimatePlacementActive = true;
         this.tunnelPlacementAnchor = null;
-        this.bridge.sendDecoyStealthBreakRequest();
         this.syncPlacementPreviewState(this.getUltimatePlacementPreviewState());
       } else {
         this.notifyUltimatePressedWithoutRage();
@@ -1721,7 +1734,6 @@ export class InputSystem {
     this.cancelUtilityCharge();
     this.cancelUtilityTargeting();
     this.utilityPlacementActive = true;
-    this.bridge.sendDecoyStealthBreakRequest();
     return true;
   }
 
@@ -1756,7 +1768,6 @@ export class InputSystem {
 
     this.cancelUtilityCharge();
     this.utilityTargetingActive = true;
-    this.bridge.sendDecoyStealthBreakRequest();
     return true;
   }
 
@@ -1776,7 +1787,6 @@ export class InputSystem {
     this.utilityChargeConfig = cfg;
     this.utilityChargeParams = this.getSelectedUtilityParams();
     this.maybeStartHeldUtilityCharge(now);
-    this.bridge.sendDecoyStealthBreakRequest();
     return true;
   }
 
@@ -1890,7 +1900,10 @@ export class InputSystem {
   }
 
   private predictCurrentUtilityCooldown(): void {
-    const cooldown = this.getLocalUtilityConfig?.()?.cooldown ?? 0;
+    const config = this.getLocalUtilityConfig?.();
+    // A refund can precede the first active-decoy snapshot; prediction would hide it.
+    if (config?.type === 'decoy') return;
+    const cooldown = config?.cooldown ?? 0;
     if (cooldown > 0) this.predictSelectedUtilityCooldown(this.getCooldownNow() + cooldown);
   }
 
@@ -2040,7 +2053,6 @@ export class InputSystem {
     this.gaussReleasePending = false;
     this.gaussChargeReady = false;
     this.chargeLoopHandle = this.audioSystem?.startLoop('sfx_gauss_charge') ?? null;
-    this.bridge.sendDecoyStealthBreakRequest();
     this.onLoadoutUse?.('ultimate', angle, targetX, targetY, {
       ultimateAction: 'press',
       gaussChargeId: this.gaussChargeId,

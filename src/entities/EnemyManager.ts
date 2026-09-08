@@ -8,6 +8,7 @@ import {
   ENEMY_NET_REMOVAL_RESEND_TICKS,
   ENEMY_NET_ROTATION_DELTA_RAD,
 } from '../config';
+import type { DecoyTargetPort } from '../systems/CoopDefenseDecoyTargetSystem';
 import { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 import { resolveEnemySmokeConfusion, type EnemySmokeConfusionState } from '../systems/EnemySmokeConfusion';
 import { GROUND_FIRE_CELL_SIZE, type FireSystem, type WildfireSourceInfo } from '../effects/FireSystem';
@@ -368,6 +369,7 @@ export class EnemyManager {
     combatPositioningSystem?: EnemyCombatPositioningSource | null,
     specialMovementSource?: EnemySpecialMovementSource | null,
     smokeSystem?: SmokePerceptionPort | null,
+    decoyTargets?: DecoyTargetPort | null,
   ): void {
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
@@ -388,7 +390,9 @@ export class EnemyManager {
       const burrowSpeedFactor = isBurrowed ? (burrowSystem?.getSpeedFactor(enemy.id) ?? 1) : 1;
       // Unter der Erde ist der Zug keine Gefahr – die Gleis-KI bleibt dann komplett aussen vor.
       const activeTrainAwareness = isBurrowed ? null : trainAwarenessSystem;
-      const primaryFlowFieldService = config.movementTarget === 'players-and-armed-constructs'
+      const decoyTarget = decoyTargets?.getTarget(enemy.id);
+      const primaryFlowFieldService = decoyTarget ? decoyTargets?.getMovementField(enemy.id) ?? null
+        : config.movementTarget === 'players-and-armed-constructs'
         ? strategicFlowFieldService ?? playerFlowFieldService ?? baseTargetFlowFieldService
         : config.isBoss
           ? bossFlowFieldService ?? baseTargetFlowFieldService
@@ -470,6 +474,7 @@ export class EnemyManager {
           positioningOverride.vy,
           now,
         );
+        if (!decision?.override && decoyTarget) decoyTargets?.usedTarget(enemy.id);
         enemy.setDesiredVelocity(
           decision?.override ? decision.vx : positioningOverride.vx * attackMovementFactor,
           decision?.override ? decision.vy : positioningOverride.vy * attackMovementFactor,
@@ -488,6 +493,7 @@ export class EnemyManager {
       let integrationValue = flowFieldService.getIntegrationValueAt(gridCell.gridX, gridCell.gridY);
       if (
         config.isBoss
+        && !decoyTarget
         && flowFieldService !== baseTargetFlowFieldService
         && baseTargetFlowFieldService
         && integrationValue >= EnemyFlowFieldService.INTEGRATION_INFINITY
@@ -522,7 +528,10 @@ export class EnemyManager {
 
       const confused = Boolean(smokeSystem?.getConfusion(enemy.id, now));
       if (integrationValue <= 0 && !confused) {
-        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) enemy.stopMovement();
+        if (!this.applyTrainAwarenessOverride(enemy, 0, 0, now, activeTrainAwareness)) {
+          if (decoyTarget) decoyTargets?.usedTarget(enemy.id);
+          enemy.stopMovement();
+        }
         continue;
       }
 
@@ -588,6 +597,7 @@ export class EnemyManager {
 
       const current = enemy.getDesiredVelocity();
       const decision = activeTrainAwareness?.resolveMovement(enemy, targetVx, targetVy, now);
+      if (decoyTarget && !decision?.override && navigationDirection === waypointDirection) decoyTargets?.usedTarget(enemy.id);
       if (decision?.override) {
         enemy.setDesiredVelocity(decision.vx, decision.vy);
       } else {

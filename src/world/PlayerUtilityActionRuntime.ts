@@ -149,6 +149,7 @@ interface UtilityChargeStock {
  * Ability-specific systems only receive their narrow execution call.
  */
 export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
+  private readonly decoyCooldowns = new Map<string, { utilityId: string; until: number }>();
   private readonly chargeStocks = new Map<string, Map<string, UtilityChargeStock>>();
   private hostFrameNowMs = 0;
   private readonly temporaryUtilities = new TemporaryUtilityCollection();
@@ -188,6 +189,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const next = new GenericUtility(config);
     this.equippedUtilities.set(playerId, next);
     this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, '__clear__');
+    const decoyCooldown = this.decoyCooldowns.get(playerId);
+    if (config.type === 'decoy' && decoyCooldown?.utilityId === config.id) {
+      next.setLastUsedAt(decoyCooldown.until - config.cooldown);
+      this.options.network.loadout.publishUtilityCooldownUntil(playerId, decoyCooldown.until, config.id);
+    }
     this.options.network.loadout.publishHeldUtilityId(playerId, '');
     this.publishTemporaryUtilities(playerId);
   }
@@ -199,6 +205,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     this.chargeStocks.delete(playerId);
     this.equippedUtilities.delete(playerId);
     this.inspectorUtilities.delete(playerId);
+    this.decoyCooldowns.delete(playerId);
     this.temporaryUtilities.clearPlayer(playerId);
     this.committedAttempts.delete(playerId);
     this.publishTemporaryUtilities(playerId);
@@ -237,6 +244,22 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     if (!utility || utility.config.id !== utilityId) return;
     utility.recordUse(now);
     this.options.network.loadout.publishUtilityCooldownUntil(playerId, now + utility.config.cooldown, utilityId);
+  }
+
+  refundUtilityCooldown(playerId: string, utilityId: string, amountMs: number, now: number): void {
+    const cooldown = this.decoyCooldowns.get(playerId);
+    if (this.destroyed || !cooldown || cooldown.utilityId !== utilityId || !Number.isFinite(amountMs) || amountMs <= 0) return;
+    cooldown.until = Math.max(now, cooldown.until - amountMs);
+    const utilities = [this.equippedUtilities.get(playerId), this.inspectorUtilities.get(playerId)?.get(utilityId)];
+    for (const utility of utilities) if (utility?.config.id === utilityId)
+      utility.setLastUsedAt(cooldown.until - utility.config.cooldown);
+    for (const descriptor of this.temporaryUtilities.getDescriptors(playerId)) {
+      if (descriptor.utilityId !== utilityId) continue;
+      const instance = this.temporaryUtilities.get(playerId, descriptor.instanceId)!;
+      instance.cooldownUntil = cooldown.until;
+    }
+    this.publishTemporaryUtilities(playerId);
+    this.options.network.loadout.publishUtilityCooldownUntil(playerId, cooldown.until, utilityId);
   }
 
   breakStealth(playerId: string, now: number): void {
@@ -348,14 +371,18 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
     const utility = source.utility;
     const cfg = utility.config;
-    if (cfg.type !== 'decoy') this.options.decoy?.breakStealth(request.playerId, request.hostNowMs);
+    if (cfg.type === 'decoy') {
+      if ((this.decoyCooldowns.get(request.playerId)?.until ?? 0) > request.hostNowMs)
+        return { ok: false, reason: 'cooldown' };
+      if (this.options.decoy?.hasActiveDecoy(request.playerId)) return { ok: false, reason: 'blocked' };
+    }
     if (source.temporary && (source.temporary.charges <= 0 || source.temporary.cooldownUntil > request.hostNowMs)) {
       return { ok: false, reason: source.temporary.cooldownUntil > request.hostNowMs ? 'cooldown' : 'invalid' };
     }
     const charges = !source.temporary && cfg.charges
       ? this.getChargeStock(request.playerId, cfg, request.hostNowMs) : null;
     if (charges ? !charges.stock.canConsume(request.hostNowMs) || charges.lockoutUntil > request.hostNowMs
-      : !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
+      : cfg.type !== 'decoy' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
       return { ok: false, reason: 'cooldown', ...(charges ? {
         utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
       } : {}) };
@@ -400,6 +427,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       authoritativeParams,
     );
     if (!didUse) return { ok: false, reason: 'blocked' };
+
+    if (cfg.type !== 'decoy') this.options.decoy?.breakStealth(request.playerId, request.hostNowMs);
+    else this.decoyCooldowns.set(request.playerId, { utilityId: cfg.id, until: request.hostNowMs + cfg.cooldown });
 
     if (source.temporary) {
       this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs);
@@ -590,7 +620,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   private fireBfg(cfg: BfgUtilityConfig, x: number, y: number, angle: number, playerId: string, muzzle?: MuzzleOrigin): boolean {
-    this.options.projectileSpawn.spawnProjectile({
+    return this.options.projectileSpawn.spawnProjectile({
       origin: { x, y, angle, gameplayMuzzleOrigin: muzzle },
       flight: {
         speed: cfg.projectileSpeed,
@@ -615,8 +645,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         style: 'bfg',
         shotAudioKey: cfg.shotAudio?.successKey,
       },
-    });
-    return true;
+    }) !== null;
   }
 
   private activateStinkCloud(cfg: StinkCloudUtilityConfig, playerId: string, now: number): boolean {
@@ -754,6 +783,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     for (const playerId of this.equippedUtilities.keys()) this.publishTemporaryUtilities(playerId);
     this.equippedUtilities.clear();
     this.inspectorUtilities.clear();
+    this.decoyCooldowns.clear();
     this.committedAttempts.clear();
   }
 }

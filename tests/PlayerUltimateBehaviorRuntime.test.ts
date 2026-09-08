@@ -117,6 +117,7 @@ describe('PlayerUltimateBehaviorRuntime – Buff-/Armageddon-Lifecycle', () => {
 });
 
 function makeActivationHarness(config: any, initialRage = 400) {
+  const reveal = vi.fn();
   const rage = new Map([['p1', initialRage]]);
   const scheduleStrike = vi.fn(() => true);
   const placeTunnel = vi.fn(() => true);
@@ -138,6 +139,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
     physics: { addRecoil: vi.fn() },
     gaussExecution: { fireGauss },
     canInteract,
+    breakStealth: reveal,
     isAlive: () => true,
     isUltimateBlocked: () => false,
     relationship: { isEnemyPair: () => false },
@@ -145,7 +147,7 @@ function makeActivationHarness(config: any, initialRage = 400) {
   });
   behavior.setAirstrikeCapability({ scheduleStrike });
   behavior.setTunnelPlacementCapability({ placeTunnel });
-  return { behavior, rage, scheduleStrike, placeTunnel, fireGauss, canInteract, recordUltimateUsed };
+  return { behavior, reveal, rage, scheduleStrike, placeTunnel, fireGauss, canInteract, recordUltimateUsed };
 }
 
 describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () => {
@@ -220,7 +222,7 @@ describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () =
   });
 
   it('berechnet Gauss-Vollladung ausschließlich aus Host-Zeit und hält Charge bei Execution-Reject', () => {
-    const { behavior, rage, fireGauss, recordUltimateUsed } = makeActivationHarness(ULTIMATE_CONFIGS.GAUSS_RIFLE);
+    const { behavior, reveal, rage, fireGauss, recordUltimateUsed } = makeActivationHarness(ULTIMATE_CONFIGS.GAUSS_RIFLE);
     fireGauss.mockReturnValueOnce(false);
     const press = {
       category: 'ultimate' as const,
@@ -232,11 +234,13 @@ describe('PlayerUltimateBehaviorRuntime – Airstrike/Tunnel/Gauss-Commit', () =
       params: { ultimateAction: 'press' as const, gaussChargeId: 'charge-a' },
     };
     expect(behavior.execute(press)).toEqual({ ok: true });
+    expect(reveal).not.toHaveBeenCalled();
     expect(behavior.getUltimateChargeFraction('p1', 1_000)).toBeCloseTo(0.6);
     expect(behavior.execute({ ...press, hostNowMs: 1_700, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } })).toEqual({ ok: false, reason: 'blocked' });
     expect(behavior.isUltimateCharging('p1')).toBe(true);
     expect(behavior.execute({ ...press, hostNowMs: 1_700, params: { ultimateAction: 'release', gaussChargeId: 'charge-a', attemptId: 'gauss-commit-a' } })).toEqual({ ok: true });
     expect(fireGauss).toHaveBeenCalledTimes(2);
+    expect(reveal).toHaveBeenCalledExactlyOnceWith('p1', 1700);
     expect(rage.get('p1')).toBe(200);
     expect(recordUltimateUsed).toHaveBeenCalledOnce();
   });

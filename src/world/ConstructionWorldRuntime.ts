@@ -93,6 +93,7 @@ export interface ConstructionWorldRuntimeOptions {
   readonly persistRewards: () => void;
   readonly publishRewardSessionState: () => void;
   readonly publishUtilityCooldown: (playerId: string, until: number, key: string) => void;
+  readonly onPlacementExecuted?: (playerId: string) => void;
   readonly recordConstructionBuilt: (playerId: string) => void;
   readonly onConstructionDestroyed?: (
     runtime: SyncedPlaceableRock,
@@ -338,6 +339,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
       runtime: construction,
     });
     this.options.recordConstructionBuilt(playerId);
+    this.options.onPlacementExecuted?.(playerId);
     return { ok: true };
   }
 
@@ -586,6 +588,7 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
     this.options.relocatePresentation(previous, relocated);
     this.options.gameAudioSystem.playSound('sfx_place_rock', targetWorld.x, targetWorld.y, playerId);
     this.options.reconcilePersistentBaseWorld();
+    this.options.onPlacementExecuted?.(playerId);
     return { ok: true };
   }
 

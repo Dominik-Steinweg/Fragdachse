@@ -162,8 +162,6 @@ export class PlayerActionRuntime {
     }
     if (this.actor.isDashBurst(request.playerId)) return { ok: false, reason: 'blocked' };
 
-    this.actor.breakStealth?.(request.playerId, request.hostNowMs);
-
     // Claim before readiness/resource resolution: switching away from a channel is immediate even
     // when the newly requested weapon is on cooldown or lacks adrenaline. Sustained behavior owns
     // the switch semantics; Loadout only records its generic held-item input observation.
@@ -188,6 +186,7 @@ export class PlayerActionRuntime {
     const sustainedResult = this.sustainedWeaponBehavior?.activateWeapon(sustainedRequest) ?? null;
     if (sustainedResult !== null) {
       if (sustainedResult.ok) {
+        this.actor.breakStealth?.(request.playerId, request.hostNowMs);
         this.weaponActivation.noteWeaponFired(request.playerId, request.slot, request.hostNowMs);
       }
       return sustainedResult;
@@ -208,6 +207,7 @@ export class PlayerActionRuntime {
       params: request.params,
     });
     if (result.ok) {
+      this.actor.breakStealth?.(request.playerId, request.hostNowMs);
       this.weaponActivation.noteWeaponFired(request.playerId, request.slot, request.hostNowMs);
     }
     return result;

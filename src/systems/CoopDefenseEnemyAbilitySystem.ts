@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import { PLAYER_SIZE, VOID_FIRE_COLOR } from '../config';
 import {
   getCoopDefenseEnemyConfig,
@@ -27,7 +28,7 @@ import type { CombatActorStatePort, CombatDamageEffectPort, CombatGeometryPort, 
 import type { EnergyShieldSystem } from './EnergyShieldSystem';
 import type { FireChunkBurstPort } from './FlamethrowerUpgradeSystem';
 import type { DecoySystem } from './DecoySystem';
-import type { EnemyAiTargetCatalog, EnemyAiTargetKind } from './EnemyAiTargetCatalog';
+import type { EnemyAiTargetCatalog, EnemyAiTargetKind, EnemyAiTargetRef } from './EnemyAiTargetCatalog';
 import type { TranslocatorProjectilePort } from '../projectile/ProjectileExternalInteractionPort';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
@@ -118,6 +119,13 @@ export interface CoopDefenseEnemyAbilityNetworkPort {
 }
 
 export class CoopDefenseEnemyAbilitySystem {
+  private decoyTargets: DecoyTargetPort | null = null;
+  setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
+  getCurrentTarget(enemyId: string): EnemyAiTargetRef | null {
+    const state = this.voidMolotovStates.get(enemyId);
+    const target = state && state.throwAt > 0 ? state.targetRef : undefined;
+    return target && target.kind !== 'enemy' ? target as EnemyAiTargetRef : null;
+  }
   private readonly lastHealingTickAt = new Map<string, number>();
   private readonly lastMiniDomeTickAt = new Map<string, number>();
   private readonly teleportStates = new Map<string, EnemyTeleportState>();
@@ -353,6 +361,10 @@ export class CoopDefenseEnemyAbilitySystem {
       bounceFrictionMultiplier: utility.bounceFrictionMultiplier,
       stopSpeedThreshold: utility.stopSpeedThreshold,
     });
+    if (state.puckId !== null) {
+      const decoy = this.decoyTargets?.getTarget(enemy.id);
+      if (decoy) this.decoyTargets?.usedTarget(enemy.id, decoy);
+    }
     state.teleportAt = now + ability.flightTimeMs;
   }
 
@@ -391,6 +403,7 @@ export class CoopDefenseEnemyAbilitySystem {
       ability.projectileSpeed * ENEMY_THROW_SPEED_MULTIPLIER,
     );
 
+    if (target.targetRef.kind === 'decoy') this.decoyTargets?.usedTarget(enemy.id, { kind: 'decoy', id: target.targetRef.id });
     const sourceId = `enemy.${enemy.kind}.spawn_throw`;
     this.projectileSpawn.spawnProjectile({
       origin: {
@@ -535,6 +548,7 @@ export class CoopDefenseEnemyAbilitySystem {
     state.targetX = target.x;
     state.targetY = target.y;
     state.targetRef = target.targetRef;
+    if (target.targetRef.kind === 'decoy') this.decoyTargets?.usedTarget(enemy.id, { kind: 'decoy', id: target.targetRef.id });
     this.updateVoidMolotovWindup(enemy, ability, state, now);
   }
 
@@ -593,6 +607,7 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.projectileSpeed * ENEMY_THROW_SPEED_MULTIPLIER,
     );
 
+    if (state.targetRef?.kind === 'decoy') this.decoyTargets?.usedTarget(enemy.id, { kind: 'decoy', id: state.targetRef.id });
     const sourceId = `enemy.${enemy.kind}.void_molotov`;
     this.projectileSpawn.spawnProjectile({
       origin: { x: spawnX, y: spawnY, angle },
@@ -651,6 +666,7 @@ export class CoopDefenseEnemyAbilitySystem {
     pathClearance: number,
     lockedTarget?: ThrowTarget['targetRef'],
   ): ThrowTarget | null {
+    lockedTarget ??= this.decoyTargets?.getTarget(enemy.id) ?? undefined;
     let best: ThrowTarget | null = null;
 
     if (enemy.faction === 'allied') {
@@ -719,7 +735,7 @@ export class CoopDefenseEnemyAbilitySystem {
     }
 
     if (this.targetCatalog) {
-      return this.findCatalogThrowTarget(enemy, ability.minRange, ability.maxRange, pathClearance);
+      return this.findCatalogThrowTarget(enemy, ability.minRange, ability.maxRange, pathClearance, this.decoyTargets?.getTarget(enemy.id) ?? undefined);
     }
 
     for (const player of this.playerManager.getAllPlayers()) {

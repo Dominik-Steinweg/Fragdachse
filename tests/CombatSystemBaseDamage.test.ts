@@ -548,6 +548,22 @@ describe('CombatSystem base damage routing', () => {
   });
 });
 
+describe('Decoy regeneration and friendly explosion boundaries', () => {
+  it('keeps allies and the owner unharmed, heals only while stealth is active and clamps HP', () => {
+    const { combat, players } = makeSupportCombatHarness();
+    players[2].x = 150; players[2].y = 0;
+    combat.applyAoeDamage(0, 0, 150, 100, 'shooter', false,
+      { allowTeamDamage: false, damageFalloff: { minDamage: 25 }, sourceSlot: 'utility' });
+    expect(combat.getHP('shooter')).toBe(100); expect(combat.getHP('ally')).toBe(100);
+    expect(combat.getHP('victim')).toBe(75);
+    let healing = 15;
+    combat.setPlayerHpRegenPerSecondResolver(() => healing);
+    combat.hpRegenTick('victim', 500); expect(combat.getHP('victim')).toBe(82.5);
+    healing = 0; combat.hpRegenTick('victim', 1000); expect(combat.getHP('victim')).toBe(82.5);
+    healing = 15; combat.hpRegenTick('victim', 10000); expect(combat.getHP('victim')).toBe(100);
+  });
+});
+
 describe('CombatSystem death visual snapshots', () => {
   function buildSnapshot(frame: string | number): SyncedDeathEffect {
     const player = fakeEntity({ id: 'player-1',
@@ -649,7 +665,7 @@ describe('CombatSystem actual damage callbacks', () => {
     expect(combat.getHP('victim')).toBe(100);
   });
 
-  it('keeps protected contact separate from damage rewards and preserves stealth reveal', () => {
+  it('keeps protected contact separate from damage rewards and preserves stealth', () => {
     const { combat } = makeSupportCombatHarness();
     const reveal = vi.fn(), damage = vi.fn(), dome = vi.fn(() => true);
     combat.bindHostExecutionSources({ nowMs: () => 1234, random: () => 0.25 });
@@ -658,7 +674,7 @@ describe('CombatSystem actual damage callbacks', () => {
     combat.setDamageDealtHandler(damage);
     const outcome = combat.applyDamage('victim', 10, false, 'shooter');
     expect(outcome).toMatchObject({ kind: 'accepted-no-effect', reason: 'blocked' });
-    expect(reveal).toHaveBeenCalledWith('victim', 1234);
+    expect(reveal).not.toHaveBeenCalled();
     expect(dome).toHaveBeenCalledOnce();
     expect(damage).not.toHaveBeenCalled();
   });

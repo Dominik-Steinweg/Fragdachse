@@ -104,6 +104,8 @@ export class CoopMissionEnemySupportComposition {
       )
       : null;
 
+    timebomb?.setDecoyTargets(runtime.coopDefenseDecoyTargetSystem);
+    voidHunter?.setDecoyTargets(runtime.coopDefenseDecoyTargetSystem);
     if (timebomb || voidHunter) {
       const specials: CoopMissionEnemySpecialRuntime = { timebomb, voidHunter };
       runtime.setEnemySpecials(specials);

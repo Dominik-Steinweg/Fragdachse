@@ -35,6 +35,14 @@ export interface ConfigStatDescriptor {
 }
 
 export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescriptor>> = Object.freeze({
+  'utility.DECOY.refundRadius': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['refundRadius'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.lureRadius': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['lureRadius'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.stealthMoveSpeedBonus': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['stealthMoveSpeedBonus'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.stealthHpRegenPerSecond': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['stealthHpRegenPerSecond'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.stealthAdrenalineRegenBonus': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['stealthAdrenalineRegenBonus'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.fireTrailDurationMs': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['fireTrailDurationMs'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.explosionMinDamage': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['explosionMinDamage'], formula: 'add', createIfMissing: true }] },
+  'utility.DECOY.fireChunks': { kind: 'utility', itemId: 'DECOY', targets: [{ path: ['fireChunkBurst', 'count'], formula: 'add' }] },
   ...EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS,
   'weapon1.adrenalinGain': {
     kind: 'weapon',

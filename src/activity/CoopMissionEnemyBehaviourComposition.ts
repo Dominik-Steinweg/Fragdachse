@@ -1,3 +1,6 @@
+import { CoopDefenseDecoyTargetSystem } from '../systems/CoopDefenseDecoyTargetSystem';
+import { getCoopDefenseEnemyConfig } from '../config/coopDefenseEnemies';
+import { ENEMY_FLOW_FIELD_IDS } from '../systems/flowfield/FlowFieldCoordinator';
 import type { BaseManager } from '../entities/BaseManager';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -123,6 +126,35 @@ export class CoopMissionEnemyBehaviourComposition {
       runtime.enemyAiTargetCatalog,
     );
 
+    const coordinator = runtime.flowFieldCoordinator;
+    const decoyTargets = coordinator && runtime.enemyStrategicTargetService ? new CoopDefenseDecoyTargetSystem({
+      coordinator,
+      strategicTargets: runtime.enemyStrategicTargetService,
+      getEnemies: () => enemyManager.getAllEnemies().map(enemy => {
+        const config = getCoopDefenseEnemyConfig(enemy.kind);
+        const movementFieldId = config.movementTarget === 'players-and-armed-constructs'
+          ? ENEMY_FLOW_FIELD_IDS.strategic : config.isBoss && runtime.enemyBossFlowFieldService
+            ? ENEMY_FLOW_FIELD_IDS.boss : config.movementTarget === 'players'
+              || runtime.enemyFlowFieldService?.hasGoalCells() === false
+              ? ENEMY_FLOW_FIELD_IDS.player : ENEMY_FLOW_FIELD_IDS.base;
+        return {
+          id: enemy.id, x: enemy.sprite.x, y: enemy.sprite.y,
+          alive: enemy.sprite.active && enemy.getHp() > 0, hostile: enemy.faction === 'hostile',
+          movementFieldId, clearanceCells: coordinator.getFieldClearanceCells(movementFieldId),
+        };
+      }),
+      getAttackTarget: enemyId => runtime.coopDefenseVoidHunterSystem?.getCurrentTarget(enemyId)
+        ?? runtime.coopDefenseTimebombSystem?.getCurrentTarget(enemyId)
+        ?? ability.getCurrentTarget(enemyId)
+        ?? attack.getCurrentTarget(enemyId),
+      isEnemyOfOwner: (enemyId, ownerId) => this.options.combatSystem.canDamageTarget(enemyId, ownerId),
+      canSee: (enemy, x, y, range) => enemyManager.canSeeThroughSmoke(enemy.id, x, y, range)
+        && this.options.combatSystem.hasLineOfSight(enemy.x, enemy.y, x, y),
+    }) : null;
+    attack.setDecoyTargets(decoyTargets);
+    combatPositioning.setDecoyTargets(decoyTargets);
+    ability.setDecoyTargets(decoyTargets);
+
     runtime.setEnemyBehaviour({
       trainAwareness,
       burrow,
@@ -130,9 +162,12 @@ export class CoopMissionEnemyBehaviourComposition {
       combatPositioning,
       ability,
       attack,
+      decoyTargets,
     });
     runtime.bind({
       attach: () => {
+        this.options.decoySystem?.setLifecyclePort(decoyTargets);
+        if (decoyTargets) for (const decoy of this.options.decoySystem?.runtime.values() ?? []) decoyTargets.activated(decoy);
         enemyManager.setEnemySpawnedCallback((enemy: EnemyEntity, options) => {
           burrow.notifyEnemySpawned(enemy, options);
         });
@@ -141,6 +176,7 @@ export class CoopMissionEnemyBehaviourComposition {
         });
       },
       detach: () => {
+        this.options.decoySystem?.setLifecyclePort(null);
         enemyManager.setEnemySpawnedCallback(null);
         this.options.hostPhysics.setEnemyRockContactCallback(null);
       },

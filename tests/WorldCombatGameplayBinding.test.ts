@@ -85,6 +85,8 @@ function createPlacement(playerManager: PlayerManager): PlacementSystem {
 }
 
 interface TurretFixture {
+  readonly decoySystem: DecoySystem;
+  readonly fireSystem: FireSystem;
   readonly binding: WorldCombatGameplayBinding;
   readonly hostPhysics: HostPhysicsSystem;
   readonly playerCombat: PlayerCombatIntegrationPort;
@@ -243,6 +245,8 @@ function createFixture(options: {
   };
   const placement = options.placementSystem ?? createPlacement(playerManager);
   const hostPhysics = methodBag() as unknown as HostPhysicsSystem;
+  const decoySystem = methodBag() as unknown as DecoySystem;
+  const fireSystem = methodBag() as unknown as FireSystem;
   const binding = new WorldCombatGameplayBinding({
     playerManager,
     projectileSpawn,
@@ -254,8 +258,8 @@ function createFixture(options: {
     projectileInteraction,
     combatSystem,
     hostPhysics,
-    decoySystem: methodBag() as unknown as DecoySystem,
-    fireSystem: methodBag() as unknown as FireSystem,
+    decoySystem,
+    fireSystem,
     gameAudioSystem: methodBag() as unknown as GameAudioSystem,
     placementSystem: placement,
     baseManager,
@@ -310,7 +314,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics, baseManager };
+  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics, baseManager, decoySystem, fireSystem };
 }
 
 afterEach(() => {
@@ -354,6 +358,37 @@ describe('WorldCombatGameplayBinding projectile target geometry', () => {
     generation += 1;
     expect(readBase()).toEqual({ x: 120, y: 20, left: 110 });
     fixture.binding.destroy();
+  });
+});
+
+describe('Decoy combat and fire ports', () => {
+  it('uses ordinary radial falloff, hostile impulse filtering and the generic chunk port', () => {
+    const f = createFixture({ players: [], enemies: [] });
+    const burst = vi.fn();
+    Object.assign(f.playerCombat, { fireChunks: { hostCreateFireChunkBurst: burst } });
+    const event = { decoy: { id: 7, ownerId: 'owner', config: { id: 'DECOY', explosionRadius: 150,
+      explosionDamage: 100, explosionMinDamage: 25, explosionKnockback: 500,
+      fireChunkBurst: { count: 3, searchRadius: 96, flightMs: 320, durationMs: 2000,
+        burnDurationMs: 2000, burnDamagePerTick: 0.25 } } }, x: 300, y: 320 };
+    const end = vi.mocked(f.decoySystem.setEndEffectHandler).mock.calls[0][0]!;
+    end(event as never, 1234);
+    expect(f.combatSystem.applyAoeDamage).toHaveBeenCalledExactlyOnceWith(300, 320, 150, 100, 'owner', false,
+      expect.objectContaining({ damageFalloff: { minDamage: 25 }, allowTeamDamage: false, sourceSlot: 'utility' }));
+    const impulse = vi.mocked(f.hostPhysics.applyRadialImpulse).mock.calls[0];
+    expect(impulse.slice(0, 6)).toEqual([300, 320, 150, 500, 'owner', 0]);
+    vi.mocked(f.combatSystem.canDamageTarget).mockImplementation((_owner, id) => id === 'hostile');
+    expect(impulse[7]!('ally')).toBe(false); expect(impulse[7]!('owner')).toBe(false);
+    expect(impulse[7]!('hostile')).toBe(true);
+    expect(burst).toHaveBeenCalledExactlyOnceWith('owner', 300, 320, event.decoy.config.fireChunkBurst, 'decoy:7', 1234);
+    const trail = vi.mocked(f.decoySystem.setTrailHandler).mock.calls[0][0]!;
+    Object.assign(event.decoy.config, { fireTrailDurationMs: 4000 });
+    trail(event.decoy as never, 300, 300, 364, 316, 1400);
+    expect(f.fireSystem.hostRefreshGroundCellsAlongSegment).toHaveBeenCalledExactlyOnceWith(300, 300, 364, 316,
+      expect.objectContaining({ sourceKey: 'decoy-trail:7', durationMs: 4000, visualStyle: 'normal',
+        burn: { durationMs: 2000, damagePerTick: 0.25 } }), 1400);
+    f.binding.destroy();
+    expect(f.decoySystem.setEndEffectHandler).toHaveBeenLastCalledWith(null);
+    expect(f.decoySystem.setTrailHandler).toHaveBeenLastCalledWith(null);
   });
 });
 

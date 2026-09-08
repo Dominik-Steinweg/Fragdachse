@@ -578,6 +578,7 @@ export class ClientUpdateCoordinator {
       : undefined;
     if (localState) {
       this.ctx.aimSystem?.setAuthoritativeState(localState.aim);
+      this.ctx.inputSystem.setLocalDecoyActive(this.ctx.decoySystem.hasActiveDecoy(bridge.getLocalPlayerId()));
       this.ctx.inputSystem.setLocalState(localState.isStunned, localState.isBurrowed, localState.burrowPhase, localState.dashPhase);
 
       // Movement loop for local player
@@ -641,6 +642,7 @@ export class ClientUpdateCoordinator {
         weapon1CooldownFrac:     this.getClientWeaponCooldownFrac('weapon1'),
         weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
+        utilityBlocked: this.ctx.inputSystem.isSelectedDecoyActive(),
         utilityChargeState: this.ctx.inputSystem.getLocalUtilityChargeState?.(),
         utilityId:               baseUtilityId,
         utilityAction:            managementAction ?? undefined,

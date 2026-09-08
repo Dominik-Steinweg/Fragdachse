@@ -1235,11 +1235,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       return worldCurrent() && life !== null && isSameCombatTargetInstance(life, target);
     };
     const outcome = applyCombatDamage(request, this.combatResolutionContext(), this.playerVitals);
-    // Eligible incoming damage reveals stealth even when a Dome/reduction absorbs the loss.
-    if (outcome.kind !== 'damage-applied') {
-      if (outcome.kind !== 'rejected' && amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
-      return outcome;
-    }
+    if (outcome.kind !== 'damage-applied') return outcome;
     if (!current()) return outcome;
     const damageKind = request.damageKind;
     const isCritical = outcome.damage.isCritical;
@@ -1283,7 +1279,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       this.onPlayerLifeEnded?.(target);
       if (!current()) return finish();
     }
-    if (amount > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
+    if (outcome.hpLost + outcome.armorLost > 0) this.decoySystem?.breakStealth(targetId, this.hostFrameNowMs);
     if (!current()) return finish();
 
     // Armor-Schaden zaehlt nur mit dem passenden Coop-Defense-Upgrade als Rage-Quelle.
@@ -1732,8 +1728,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       );
     }
     for (const decoy of this.decoySystem?.getHostTargets() ?? []) {
-      if (!decoy.sprite.active) continue;
-      const { x, y } = decoy.sprite;
+      const { x, y } = decoy;
       const radius = PLAYER_SIZE * 0.5;
       sink(
         'decoy', decoy.id, decoy.ownerId,
@@ -2838,8 +2833,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
             candidates.push({
               id: `decoy:${decoy.id}`,
               kind: 'decoy',
-              x: decoy.sprite.x,
-              y: decoy.sprite.y,
+              x: decoy.x,
+              y: decoy.y,
             });
           }
         }
@@ -3060,7 +3055,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         if (decoy.ownerId === shooterId) continue;
         selectSwingTarget({
           kind: 'decoy', id: decoy.id, key: `decoy:${decoy.id}`,
-          x: decoy.sprite.x, y: decoy.sprite.y, radius: PLAYER_SIZE * 0.5,
+          x: decoy.x, y: decoy.y, radius: PLAYER_SIZE * 0.5,
         });
       }
     }
@@ -3439,7 +3434,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const hitDistance = this.getHitscanTargetHitDistance(
         this.hitscanLine,
-        { x: decoy.sprite.x, y: decoy.sprite.y, hitRadius: PLAYER_SIZE * 0.5, body: decoy.body },
+        { x: decoy.x, y: decoy.y, hitRadius: PLAYER_SIZE * 0.5, body: decoy.body },
         traceThickness,
         applyFavorTheShooter,
       );

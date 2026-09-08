@@ -76,6 +76,11 @@ export class EnemyStrategicTargetService {
     worldY: number,
   ): EnemyStrategicTargetCandidate | null {
     if (strategicTarget !== 'players-and-armed-constructs') return null;
+    return this.selectFlowTarget(worldX, worldY);
+  }
+
+  /** Semantic owner of the goal reached by the currently active field. */
+  selectFlowTarget(worldX: number, worldY: number): EnemyStrategicTargetCandidate | null {
     const cell = this.flowField.worldToGrid(worldX, worldY);
     if (!cell) return null;
     const goal = this.flowField.getReachedGoalCellAt(cell.gridX, cell.gridY);

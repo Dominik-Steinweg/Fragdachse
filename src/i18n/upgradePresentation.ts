@@ -38,6 +38,11 @@ function getUpgradeParams(
     );
   });
 
+  const decoy = UTILITY_CONFIGS.DECOY;
+  if (definition.id.startsWith('decoy_') && decoy?.type === 'decoy') {
+    params.decoyRefundSeconds = formatNumber(decoy.refundPerEnemyMs / 1000, locale);
+    params.decoyChunkSeconds = formatNumber(decoy.fireChunkBurst.durationMs / 1000, locale);
+  }
   const smoke = UTILITY_CONFIGS.SMOKE_GRENADE;
   if (definition.id.startsWith('smoke_grenade_') && smoke?.type === 'smoke') {
     params.smokeVulnerability = formatNumber(VULNERABILITY_INCOMING_DAMAGE_BONUS, locale, { style: 'percent' });

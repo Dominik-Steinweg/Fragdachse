@@ -69,6 +69,20 @@ describe('CombatSystem & BurnStateMachine Parity', () => {
     return { cs, damageCalls, now: () => now, setNow: (value: number) => { now = value; } };
   }
 
+  it('reveals on periodic HP or armor loss, but not merely receiving a burn stack', () => {
+    const f = createTestSetup(), reveal = vi.fn();
+    f.cs.setDecoySystem({ breakStealth: reveal } as never);
+    f.cs.addArmor('p_target', 10);
+    f.cs.applyBurnHit('p_target', 'p1', 2000, 5, 'decoy-test', 'ground_fire.generic');
+    expect(reveal).not.toHaveBeenCalled();
+    f.cs.updateBurnEffects(1250);
+    expect(reveal).toHaveBeenCalledWith('p_target', expect.any(Number));
+    expect(f.cs.getArmor('p_target')).toBeLessThan(10);
+    reveal.mockClear(); f.cs.updateBurnEffects(2250);
+    expect(f.cs.getHP('p_target')).toBeLessThan(100);
+    expect(reveal).toHaveBeenCalled();
+  });
+
   it('1. Delegiert Brandtreffer, Schadensbeiträge und Abfragen 1:1 an die BurnStateMachine', () => {
     const { cs, damageCalls, now } = createTestSetup();
     const observedDamage = vi.fn();

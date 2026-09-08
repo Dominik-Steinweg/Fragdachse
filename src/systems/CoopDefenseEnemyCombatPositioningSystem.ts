@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import type { DecoyTargetPort } from './CoopDefenseDecoyTargetSystem';
 import {
   getCoopDefenseEnemyConfig,
   type CoopDefenseEnemyCombatPositioningConfig,
@@ -32,6 +33,8 @@ const RETREAT_PROBE_DISTANCE_PX = 40;
  * Config-Block, ohne Codeänderung.
  */
 export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPositioningSource {
+  private decoyTargets: DecoyTargetPort | null = null;
+  setDecoyTargets(port: DecoyTargetPort | null): void { this.decoyTargets = port; }
   private readonly overrides = new Map<string, { vx: number; vy: number }>();
 
   constructor(
@@ -90,6 +93,12 @@ export class CoopDefenseEnemyCombatPositioningSystem implements EnemyCombatPosit
     enemy: EnemyEntity,
     positioning: CoopDefenseEnemyCombatPositioningConfig,
   ): { x: number; y: number; distance: number } | null {
+    const decoy = this.decoyTargets?.getTarget(enemy.id);
+    if (decoy) {
+      if (!this.enemyManager.canSeeThroughSmoke(enemy.id, decoy.x, decoy.y, positioning.preferredDistancePx + positioning.toleranceP)
+        || (positioning.requireLineOfSight && !this.combatSystem.hasLineOfSight(enemy.sprite.x, enemy.sprite.y, decoy.x, decoy.y))) return null;
+      return { x: decoy.x, y: decoy.y, distance: Math.hypot(decoy.x - enemy.sprite.x, decoy.y - enemy.sprite.y) };
+    }
     let best: { x: number; y: number; distance: number } | null = null;
 
     if (this.targetCatalog) {

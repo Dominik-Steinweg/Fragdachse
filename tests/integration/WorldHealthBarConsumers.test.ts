@@ -32,6 +32,7 @@ import { CoopDefenseItemRuntimeSystem } from '../../src/systems/CoopDefenseItemR
 import { CoopDefenseSecondaryObjectiveSystem } from '../../src/systems/CoopDefenseSecondaryObjectiveSystem';
 import { TargetStatusSystem } from '../../src/systems/TargetStatusSystem';
 import { EnergyInjectorSystem } from '../../src/systems/EnergyInjectorSystem';
+import { decoyInput } from '../DecoyTestHelper';
 import { DecoySystem } from '../../src/systems/DecoySystem';
 import type { PlayerManager } from '../../src/entities/PlayerManager';
 import type { NetworkBridge } from '../../src/network/NetworkBridge';
@@ -723,13 +724,8 @@ describe('World HP consumer boundaries', () => {
     const f = projectileFixture();
     const system = new DecoySystem({} as never, { getPlayer: () => undefined } as never,
       { broadcastEffect: () => {} } as never);
-    const entity = fakeEntity({ x: 700, y: 100, active: true, updateVitals: () => {}, destroy: () => {},
-      getBounds: () => ({ left: 684, right: 716, top: 84, bottom: 116 }) });
-    const decoy = { id: 9, ownerId: 'p2', entity, expiresAt: 10000, hp: 1000, armor: 0, maxHp: 1000,
-      maxArmor: 100, entityGeneration: 1, colliders: [], color: 0xffffff, rotation: 0, speed: 0,
-      explosionRadius: 0, explosionDamage: 0, explosionKnockback: 0 };
-    // Baseline only; the real collision adapter and canonical writer perform every damage mutation.
-    (system as unknown as { hostDecoys: Map<number, typeof decoy> }).hostDecoys.set(decoy.id, decoy);
+    const decoy = system.runtime.activate(decoyInput({ ownerId: 'p2', position: { x: 700, y: 100 },
+      hp: 1000, maxHp: 1000, armor: 0 }))!;
     f.combat.setDecoySystem(system);
     f.combat.setLoadoutManager({ getDamageMultiplier: () => 2, getWeaponDamageMultiplier: () => 2 });
     f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3 } as never);

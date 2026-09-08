@@ -381,6 +381,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.refreshMatrixVulnerabilities(now);
     }
     if (!countdownActive) this.smokeBinding?.refresh(now);
+    if (!countdownActive) this.ctx.decoySystem.hostPostPhysics(now);
     const decoys = countdownActive ? [] : this.ctx.decoySystem.createHostSnapshots();
     if (metrics) metrics.physicsMs = performance.now() - phaseStartedAt;
 
@@ -783,6 +784,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const playerFrame = this.playerGameplayRuntime?.getHostPlayerFrameReadModel(localId, now, isMovingLocal);
       const aimLocal      = playerFrame?.aim ?? this.getDefaultAimState(isMovingLocal);
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);
+      this.ctx.inputSystem.setLocalDecoyActive(this.ctx.decoySystem.hasActiveDecoy(localId));
       this.ctx.inputSystem.setLocalState(
         playerFrame?.isStunned ?? false,
         playerFrame?.isBurrowed ?? false,
@@ -848,6 +850,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         weapon1CooldownFrac:     playerFrame?.weapon1CooldownFrac ?? 0,
         weapon2CooldownFrac:     playerFrame?.weapon2CooldownFrac ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
+        utilityBlocked: this.ctx.inputSystem.isSelectedDecoyActive(),
         utilityChargeState: this.ctx.inputSystem.getLocalUtilityChargeState?.(),
         utilityId,
         utilityAction:            managementAction ?? undefined,

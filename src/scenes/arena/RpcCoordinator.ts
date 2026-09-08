@@ -101,7 +101,6 @@ export class RpcCoordinator {
   registerAll(): void {
     this.registerDashHandler();
     this.registerBurrowRpcHandler();
-    this.registerDecoyStealthBreakHandler();
     this.registerHeldActionHandler();
     this.registerLoadoutUseHandler();
     this.registerPersistentBaseRewardPlacementHandler();
@@ -131,15 +130,20 @@ export class RpcCoordinator {
   }
 
   private registerPersistentBaseRewardPlacementHandler(): void {
-    bridge.registerPersistentBaseRewardPlacementHandler((playerId, request) => (
-      this.persistentBase.placeReward(playerId, request)
-    ));
+    bridge.registerPersistentBaseRewardPlacementHandler((playerId, request) => {
+      const result = this.persistentBase.placeReward(playerId, request);
+      if (result.ok) this.decoySystem.breakStealth(playerId, this.resolveHostActionTime());
+      return result;
+    });
   }
 
   private registerPersistentBaseMoveHandler(): void {
-    bridge.registerPersistentBaseMoveHandler((playerId, request) => (
-      this.persistentBase.moveObject(playerId, request, this.resolveHostActionTime())
-    ));
+    bridge.registerPersistentBaseMoveHandler((playerId, request) => {
+      const now = this.resolveHostActionTime();
+      const result = this.persistentBase.moveObject(playerId, request, now);
+      if (result.ok) this.decoySystem.breakStealth(playerId, now);
+      return result;
+    });
   }
 
   /**
@@ -167,16 +171,6 @@ export class RpcCoordinator {
       if (!this.capabilities.get(playerId).canMove) return;
       if (bridge.isArenaCountdownActive()) return;
       this.playerLoadout.handleBurrowRequest(playerId, wantsBurrowed);
-    });
-  }
-
-  private registerDecoyStealthBreakHandler(): void {
-    bridge.registerDecoyStealthBreakHandler((playerId) => {
-      if (!bridge.isHost()) return;
-      if (!this.capabilities.get(playerId).canUseCombat) return;
-      const player = this.playerManager.getPlayer(playerId);
-      if (player) this.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
-      this.decoySystem.breakStealth(playerId, this.resolveHostActionTime());
     });
   }
 

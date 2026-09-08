@@ -91,13 +91,13 @@ export function createArenaCoopMissionPorts(input: ArenaCoopMissionPortsInput): 
       getDecoyTargets: () => ctx.decoySystem.getHostTargets().map((decoy) => ({
         id: decoy.id,
         ownerId: decoy.ownerId,
-        x: decoy.sprite.x,
-        y: decoy.sprite.y,
+        x: decoy.x,
+        y: decoy.y,
         radius: PLAYER_SIZE * 0.5,
       })),
       getDecoyPosition: (decoyId) => {
         const decoy = ctx.decoySystem.getHostTarget(decoyId);
-        return decoy ? { x: decoy.sprite.x, y: decoy.sprite.y } : null;
+        return decoy ? { x: decoy.x, y: decoy.y } : null;
       },
       isDecoyTargetable: (decoyId) => ctx.decoySystem.getHostTarget(decoyId) !== null,
       getArmedConstructions: () => {

@@ -631,6 +631,14 @@ export interface DecoyUtilityConfig extends BaseUtilityConfig {
   readonly type: 'decoy';
   readonly decoyLifetimeMs: number;
   readonly stealthDurationMs: number;
+  readonly refundRadius: number;
+  readonly refundPerEnemyMs: number;
+  readonly lureRadius: number;
+  readonly stealthMoveSpeedBonus: number;
+  readonly stealthHpRegenPerSecond: number;
+  readonly stealthAdrenalineRegenBonus: number;
+  readonly fireTrailDurationMs: number;
+  readonly fireChunkBurst: FireChunkBurstConfig;
   readonly stealthAlphaMin: number;
   readonly stealthAlphaMax: number;
   readonly stealthGlowOuterStrength: number;
@@ -638,6 +646,7 @@ export interface DecoyUtilityConfig extends BaseUtilityConfig {
   readonly dissipateDustBurst: number;
   readonly explosionRadius?: number;
   readonly explosionDamage?: number;
+  readonly explosionMinDamage?: number;
   readonly explosionKnockback?: number;
 }
 

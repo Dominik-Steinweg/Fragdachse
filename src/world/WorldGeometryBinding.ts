@@ -116,7 +116,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
 
     projectileGeometry.setRockGroup(arena.rockGroup, arena.rockPhysicsProxies, arena.trunkGroup);
     projectileGeometry.setBaseGroup(baseManager?.getBaseGroup() ?? null);
-    decoySystem.setObstacleGroups(arena.rockGroup, arena.trunkGroup);
+    decoySystem.setObstacleGroups(arena.rockGroup, arena.trunkGroup, baseManager?.getBaseGroup() ?? null);
     combatSystem.setArenaObstacles(arena.rockPhysicsProxies, arena.trunkBodies);
     combatSystem.setBaseObstacles(baseManager?.getObstacleRectangles() ?? null);
     // The World binding owns the one live index; Combat and Projectile receive the same object.
@@ -240,7 +240,7 @@ export class WorldGeometryBinding implements WorldScopedBinding {
       projectileGeometry.setObstacleIndex(null);
       projectileGeometry.setBaseGroup(null);
       projectileGeometry.setRockGroup(null, null, null);
-      decoySystem.setObstacleGroups(null, null);
+      decoySystem.setObstacleGroups(null, null, null);
       decoySystem.setWorldMetrics(null);
       combatSystem.setBaseManager(null);
       combatSystem.setBaseObstacles(null);

@@ -116,6 +116,7 @@ export class HostPhysicsSystem {
   private loadoutManager: LoadoutManagerType | null = null;
   private timeBubbleSystem: TimeBubbleSystem | null = null;
   private enemyManager: EnemyManager | null = null;
+  private walkingSpeedMultiplierResolver: ((playerId: string) => number) | null = null;
   private runSpeedResolver: ((playerId: string) => number) | null = null;
   private dashRangeMultiplierResolver: ((playerId: string) => number) | null = null;
   private dashRecoveryDurationResolver: ((playerId: string) => number) | null = null;
@@ -176,6 +177,7 @@ export class HostPhysicsSystem {
   }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setCanMoveResolver(resolver: ((playerId: string) => boolean) | null): void { this.canMoveResolver = resolver; }
+  setWalkingSpeedMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.walkingSpeedMultiplierResolver = resolver; }
   setRunSpeedResolver(resolver: ((playerId: string) => number) | null): void { this.runSpeedResolver = resolver; }
   setDashRangeMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.dashRangeMultiplierResolver = resolver; }
   setDashRecoveryDurationResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryDurationResolver = resolver; }
@@ -249,8 +251,10 @@ export class HostPhysicsSystem {
     ownerId?: string,
     selfMultiplier = 1,
     durationMs = 260,
+    canAffect?: (targetId: string) => boolean,
   ): void {
     for (const player of this.playerManager.getAllPlayers()) {
+      if (canAffect && !canAffect(player.id)) continue;
       if (!this.combatSystem?.isAlive(player.id)) continue;
 
       const dx = player.x - x;
@@ -270,6 +274,7 @@ export class HostPhysicsSystem {
     }
 
     this.enemyManager?.forEachEnemy((enemy) => {
+      if (canAffect && !canAffect(enemy.id)) return;
       const dx = enemy.sprite.x - x;
       const dy = enemy.sprite.y - y;
       const dist = Math.sqrt(dx * dx + dy * dy);
@@ -758,7 +763,7 @@ export class HostPhysicsSystem {
 
       const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
       const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
-      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult;
+      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * (this.walkingSpeedMultiplierResolver?.(player.id) ?? 1);
 
       if (len > 0) {
         baseVx = (dx / len) * speed;

@@ -353,6 +353,11 @@ export class FlowFieldCoordinator {
     return this.fields.get(fieldId)?.view ?? null;
   }
 
+  /** Dynamic followers reuse the clearance profile of the ordinary navigation they replace. */
+  getFieldClearanceCells(fieldId: string): number {
+    return this.fields.get(fieldId)?.clearanceCells ?? 0;
+  }
+
   /**
    * Setzt die Zielzellen eines Feldes. Der optionale Payload wird gemeinsam mit dem daraus
    * gerechneten Feld aktiviert - so bleiben etwa strategische Zielzuordnung und `goalSourceField`

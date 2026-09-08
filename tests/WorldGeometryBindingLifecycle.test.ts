@@ -142,6 +142,7 @@ function createBinding(
   shared: SceneScoped,
   rockCell: { gridX: number; gridY: number } | null,
   onDestroy?: (binding: WorldGeometryBinding) => void,
+  baseGroup: unknown = null,
 ): WorldGeometryBinding {
   const rockBounds = rockCell
     ? {
@@ -173,7 +174,7 @@ function createBinding(
       },
     },
     placement: { getAllRuntimeRocks: () => [] },
-    baseManager: null,
+    baseManager: baseGroup ? { getBaseGroup: () => baseGroup, getBases: () => [], getObstacleRectangles: () => [] } : null,
     presentationRequired: true,
     playerManager: shared.playerManager,
     combatSystem: shared.combatSystem,
@@ -216,6 +217,20 @@ describe('WorldGeometryBinding – Lifetime-Symmetrie', () => {
     // Der Fels dieser World steht im Brandhindernisindex.
     expect(isFireCellBlocked(shared, 2, 2)).toBe(true);
     expect(shared.hostPhysics.movementBlockedResolver?.(2, 2)).toBe(true);
+  });
+
+  it('bindet Decoys an dieselben Basis-Kollisionskörper wie Spieler und entfernt die World-Referenz', () => {
+    const shared = createSceneScopedCollaborators();
+    const bases = {};
+    const binding = createBinding(shared, null, undefined, bases);
+    expect(shared.decoySystem.setObstacleGroups).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), bases);
+    expect(shared.hostPhysics.setBaseGroup).toHaveBeenLastCalledWith(bases);
+    binding.destroy();
+    expect(shared.decoySystem.setObstacleGroups).toHaveBeenLastCalledWith(null, null, null);
+    const nextBases = {};
+    const next = createBinding(shared, null, undefined, nextBases);
+    expect(shared.decoySystem.setObstacleGroups).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), nextBases);
+    next.destroy();
   });
 
   it('teilt den World-Index zwischen Combat und Projectile', () => {

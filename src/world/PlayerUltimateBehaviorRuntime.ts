@@ -171,20 +171,27 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
       || this.options.isUltimateBlocked(playerId)) {
       return { ok: false, reason: 'blocked' };
     }
-    this.options.breakStealth?.(playerId, request.hostNowMs);
-
+    let result: LoadoutUseResult;
     switch (config.type) {
       case 'buff':
-        return this.executeBuff(request, config, attemptKey);
+        result = this.executeBuff(request, config, attemptKey);
+        break;
       case 'airstrike':
-        return this.executeAirstrike(request, config, attemptKey);
+        result = this.executeAirstrike(request, config, attemptKey);
+        break;
       case 'tunnel':
-        return this.executeTunnel(request, config, attemptKey);
+        result = this.executeTunnel(request, config, attemptKey);
+        break;
       case 'gauss':
-        return this.executeGauss(request, config, attemptKey);
+        result = this.executeGauss(request, config, attemptKey);
+        break;
       default:
         return { ok: false, reason: 'invalid' };
     }
+    if (result.ok && (config.type !== 'gauss' || request.params?.ultimateAction === 'release')) {
+      this.options.breakStealth?.(playerId, request.hostNowMs);
+    }
+    return result;
   }
 
   private executeBuff(

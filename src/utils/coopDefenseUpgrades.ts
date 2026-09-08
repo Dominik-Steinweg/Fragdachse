@@ -68,6 +68,12 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 }
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  decoy_mass_distraction: 'UPGRADE_DECOY_DURATION',
+  decoy_irresistible_lure: 'UPGRADE_DECOY_DURATION',
+  decoy_shadow_runner: 'UPGRADE_DECOY_STEALTH_DURATION',
+  decoy_shadow_regeneration: 'UPGRADE_DECOY_STEALTH_DURATION',
+  decoy_fire_chunks: 'UPGRADE_DECOY_DURATION',
+  decoy_fire_trail: 'UPGRADE_DECOY_DURATION',
   smoke_grenade_disorientation: 'UPGRADE_SMOKE_GRENADE_DURATION',
   smoke_grenade_vulnerability: 'UPGRADE_CRITICAL_DAMAGE',
   smoke_grenade_discharge: 'UPGRADE_SMOKE_GRENADE_STORM',

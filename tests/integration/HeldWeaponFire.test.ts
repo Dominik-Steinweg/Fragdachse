@@ -297,7 +297,7 @@ describe('held weapon fire at the authoritative cooldown boundary', () => {
   it('keeps the enlarged decoy silhouette out of hitscan, projectile and Coop target geometry', () => {
     const sprite = fakeEntity({ x: 500, y: 200, active: true,
       displayWidth: PLAYER_SIZE * PLAYER_VISUAL_SCALE, displayHeight: PLAYER_SIZE * PLAYER_VISUAL_SCALE });
-    const decoy = { id: 1, ownerId: 'owner', sprite, body: null };
+    const decoy = { id: 1, ownerId: 'owner', x: sprite.x, y: sprite.y, radius: PLAYER_SIZE / 2, body: null };
     const decoySystem = { getHostTargets: () => [decoy] };
     const combat = new WorldCombatCore({ getAllPlayers: () => [] } as never, network as never);
     combat.setDecoySystem(decoySystem as never);

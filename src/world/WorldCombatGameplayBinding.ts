@@ -431,6 +431,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     hostPhysics.setEnemyMovementFactorResolver(null);
     hostPhysics.setEnemyHitStaggerResolver(null);
     hostPhysics.setRunSpeedResolver(null);
+    hostPhysics.setWalkingSpeedMultiplierResolver(null);
     hostPhysics.setDashRangeMultiplierResolver(null);
     hostPhysics.setDashRecoveryDurationResolver(null);
     hostPhysics.setDashImpactDamageResolver(null);
@@ -464,8 +465,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileInteraction.setProjectileMiniRocketStatePort(null);
     decoySystem.setCombatStateReader(null);
     decoySystem.setRunSpeedResolver(null);
-    decoySystem.setCooldownStarter(null);
-    decoySystem.setExplosionCallback(null);
+    decoySystem.setCooldownRefund(null);
+    decoySystem.setEndEffectHandler(null);
+    decoySystem.setTrailHandler(null);
+    decoySystem.setStealthBrokenHandler(null);
     decoySystem.clearAll();
     if (this.systems) {
       this.systems.timeBubble.destroyAll();
@@ -528,6 +531,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setPlayerHpRegenPerSecondResolver((playerId, nowMs) => {
       const p = o.getPlayerCombatIntegration();
       return (p?.modifier.getHpRegenPerSecond(playerId) ?? 0)
+        + o.decoySystem.getStealthHpRegen(playerId)
         + (o.getTeamHpRegenBonus?.(playerId, nowMs) ?? 0);
     });
     combat.setPlayerMaxArmorResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.maxArmor', 100) ?? 100);
@@ -859,8 +863,10 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const o = this.options;
     hostPhysics.setRunSpeedResolver((playerId) => {
       const p = o.getPlayerCombatIntegration();
-      return (p?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (p?.item.getRunSpeedMultiplier(playerId, Date.now()) ?? 1);
+      return (p?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED)
+        * (p?.item.getRunSpeedMultiplier(playerId, Date.now()) ?? 1);
     });
+    hostPhysics.setWalkingSpeedMultiplierResolver(playerId => o.decoySystem.getStealthSpeedMultiplier(playerId));
     hostPhysics.setDashRangeMultiplierResolver((playerId) => 1 + (o.getPlayerCombatIntegration()?.modifier.getPercentageStat(playerId, 'player.dashRange') ?? 0));
     hostPhysics.setDashRecoveryDurationResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S);
     hostPhysics.setDashImpactDamageResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashImpactDamage', 0) ?? 0);
@@ -872,13 +878,37 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindDecoy(): void {
     const o = this.options;
+    o.decoySystem.setStealthBrokenHandler(playerId => {
+      const player = o.playerManager.getPlayer(playerId);
+      if (player) o.gameAudioSystem.playSound('sfx_decoy_reveal', player.x, player.y, playerId);
+    });
+    o.decoySystem.setCombatScope(o.combatSystem.getCombatScope());
     o.decoySystem.setCombatStateReader(o.combatSystem);
-    o.decoySystem.setRunSpeedResolver((playerId) => (o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (o.getPlayerCombatIntegration()?.loadout.getSpeedMultiplier(playerId, Date.now()) ?? 1));
-    o.decoySystem.setCooldownStarter((playerId, utilityId, when) => o.getPlayerCombatIntegration()?.utility.beginUtilityCooldown(playerId, utilityId, when));
-    o.decoySystem.setExplosionCallback((ownerId, x, y, radius, damage, knockback) => {
-      o.combatSystem.applyAoeDamage(x, y, radius, damage, ownerId, false, { category: 'explosion', allowTeamDamage: false, sourceId: 'environment.decoy_explosion', sourceSlot: 'utility' });
-      o.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);
+    o.decoySystem.setRunSpeedResolver((playerId) => (o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED) * (o.getPlayerCombatIntegration()?.loadout.getSpeedMultiplier(playerId, Date.now()) ?? 1) * (o.getPlayerCombatIntegration()?.item.getRunSpeedMultiplier(playerId, Date.now()) ?? 1));
+    o.decoySystem.setCooldownRefund((playerId, utilityId, amountMs, when) =>
+      o.getPlayerCombatIntegration()?.utility.refundUtilityCooldown(playerId, utilityId, amountMs, when));
+    o.decoySystem.setEndEffectHandler(({ decoy, x, y }, now) => {
+      const cfg = decoy.config;
+      const radius = cfg.explosionRadius ?? 0;
+      if (radius <= 0 || (cfg.explosionDamage ?? 0) <= 0) return;
+      o.combatSystem.applyAoeDamage(x, y, radius, cfg.explosionDamage!, decoy.ownerId, false, {
+        category: 'explosion', allowTeamDamage: false, sourceId: 'environment.decoy_explosion', sourceSlot: 'utility',
+        damageFalloff: { minDamage: cfg.explosionMinDamage ?? 0 },
+      });
+      o.hostPhysics.applyRadialImpulse(x, y, radius, cfg.explosionKnockback ?? 0, decoy.ownerId, 0, 260,
+        targetId => o.combatSystem.canDamageTarget(decoy.ownerId, targetId));
       o.network.effects.broadcastExplosionEffect(x, y, radius);
+      o.getPlayerCombatIntegration()?.fireChunks?.hostCreateFireChunkBurst(
+        decoy.ownerId, x, y, cfg.fireChunkBurst, `decoy:${decoy.id}`, now);
+    });
+    o.decoySystem.setTrailHandler((decoy, fromX, fromY, toX, toY, now) => {
+      const fire = decoy.config.fireChunkBurst;
+      o.fireSystem.hostRefreshGroundCellsAlongSegment(fromX, fromY, toX, toY, {
+        sourceKey: `decoy-trail:${decoy.id}`, ownerId: decoy.ownerId,
+        durationMs: decoy.config.fireTrailDurationMs,
+        burn: { durationMs: fire.burnDurationMs, damagePerTick: fire.burnDamagePerTick },
+        sourceId: 'ground_fire.decoy_trail', visualStyle: 'normal',
+      }, now);
     });
   }
 
@@ -943,8 +973,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         if (config.targetTypes?.includes('decoys')) {
           for (const decoy of o.decoySystem.getHostTargets()) {
             if (decoy.ownerId === ownerId) continue;
-            if (!inRange(decoy.sprite.x, decoy.sprite.y)) continue;
-            emit(String(decoy.id), 'decoys', decoy.sprite.x, decoy.sprite.y);
+            if (!inRange(decoy.x, decoy.y)) continue;
+            emit(String(decoy.id), 'decoys', decoy.x, decoy.y);
           }
         }
         for (const enemy of o.getEnemyManager()?.getAllEnemies() ?? []) {

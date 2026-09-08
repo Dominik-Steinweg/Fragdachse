@@ -315,6 +315,33 @@ describe('host player dash and Burrow transition', () => {
   });
 });
 
+
+describe('Decoy physics boundaries', () => {
+  it('filters friendly impulses before applying existing resistance and leaves walk bonuses out of dashes', () => {
+    const h = createHarness();
+    const owner = createMockPlayer('owner', 100, 100), ally = createMockEnemy('ally', 120, 100),
+      hostile = createMockEnemy('hostile', 120, 100);
+    h.players.set('owner', owner); h.enemies.set('ally', ally); h.enemies.set('hostile', hostile);
+    const recoil = vi.spyOn(h.system, 'addRecoil');
+    h.system.applyRadialImpulse(100, 100, 150, 500, 'owner', 0, 260, id => id === 'hostile');
+    expect(recoil).toHaveBeenCalledTimes(1);
+    expect(recoil.mock.calls[0][0]).toBe('hostile');
+    h.system.setRunSpeedResolver(() => 100);
+    h.system.setWalkingSpeedMultiplierResolver(() => 1.3);
+    h.system.update(false, 1000);
+    expect(owner.setVelocity).toHaveBeenLastCalledWith(130, 0);
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      h.system.handleDashRPC('owner', 1, 0);
+      h.system.update(false, 1000);
+      const withBonus = owner.setVelocity.mock.calls.at(-1);
+      h.system.setWalkingSpeedMultiplierResolver(() => 1);
+      h.system.update(false, 1000);
+      expect(owner.setVelocity.mock.calls.at(-1)).toEqual(withBonus);
+      expect(withBonus![0]).toBeGreaterThan(100);
+    } finally { clock.mockRestore(); }
+  });
+});
 describe('HostPhysicsSystem Allocation Optimization', () => {
   it('uses forEachEnemy instead of getAllEnemies in update() per-frame enemy loop', () => {
     const { system, enemies, getAllEnemies, forEachEnemy } = createHarness();
