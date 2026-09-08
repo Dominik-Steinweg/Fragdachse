@@ -13,6 +13,8 @@ export class HealthTestObject {
   fillAlpha = 1;
   strokeWidth = 0;
   rotation = 0;
+  flipX = false;
+  flipY = false;
   scaleX = 1;
   scaleY = 1;
   displayWidth = 32;
@@ -35,11 +37,12 @@ export class HealthTestObject {
   setStrokeStyle(width = 0) { this.strokeWidth = width; return this; }
   setScale(x: number, y = x) { this.scaleX = x; this.scaleY = y; return this; }
   setRotation(v: number) { this.rotation = v; return this; }
+  setFlip(x: boolean, y: boolean) { this.flipX = x; this.flipY = y; return this; }
   setDisplaySize(w: number, h = w) { this.displayWidth = w; this.displayHeight = h; return this; }
   setScrollFactor() { return this; }
   setTint() { return this; }
   clearTint() { return this; }
-  setTexture(key: string) { this.texture.key = key; return this; }
+  setTexture(key: string, frame = '__BASE') { this.texture.key = key; this.frame.name = frame; return this; }
   setData() { return this; }
   setBlendMode() { return this; }
   setFrame() { return this; }

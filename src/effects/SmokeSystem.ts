@@ -2,183 +2,47 @@ import * as Phaser from 'phaser';
 import { getVisibleWorldView } from '../ui/HostileBaseIndicator';
 import { getGraphicsQualityProfile } from '../graphics/GraphicsQuality';
 import { smoothSmokeGrowth } from '../systems/SmokeRules';
-import { COLORS, DEPTH } from '../config';
-import { circleZone, createSeededRandom, edgeZone, ensureCanvasTexture, mixColors, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
+import { DEPTH } from '../config';
+import { createSeededRandom, ensureCanvasTexture, registerGraphicsObject } from './EffectUtils';
+import { SMOKE_SHADER_NAME, SMOKE_FRAGMENT_SOURCE, sampleSmokeWeather } from './smokeCloudShader';
+import { SmokeBodyEffect, type EntityStatusVisualTarget } from './SmokeBodyEffect';
 import type { SyncedSmokeCloud, SyncedSmokeTargetStatus } from '../types';
 import type { LightingSystem } from './LightingSystem';
 
 const TAU = Math.PI * 2;
-
 const TEX_BODY_A = '__smoke_body_a';
-const TEX_BODY_B = '__smoke_body_b';
 const TEX_WISP = '__smoke_wisp';
-const TEX_PARTICLE = '__smoke_micro_particle';
-const TEX_CONFUSION = '__smoke_confusion';
-const TEX_CHARGE = '__smoke_charge';
 const TEX_GROWTH = '__smoke_growth_ring';
-
 const BODY_TEXTURE_SIZE = 512;
 const WISP_TEXTURE_SIZE = 256;
-const PARTICLE_TEXTURE_SIZE = 128;
-
-/** Layer scale is expressed relative to this radius, so visuals scale linearly. */
-const REF_RADIUS = 100;
-
-const TEX_SIZE: Readonly<Record<string, number>> = {
-  [TEX_BODY_A]: BODY_TEXTURE_SIZE,
-  [TEX_BODY_B]: BODY_TEXTURE_SIZE,
-  [TEX_WISP]: WISP_TEXTURE_SIZE,
-};
-
-interface SmokeLayerTemplate {
-  /** Whether this layer fills the sight-blocking body before the shared opacity cap. */
-  occluder: boolean;
-  /** Visible radius of the layer as a fraction of the cloud radius. */
-  radiusFraction: number;
-  /** Offset of the layer center from the cloud center (fraction of radius). */
-  dist: number;
-  angle: number;
-  alpha: number;
-  drift: number;
-  tint: number;
-  texture: string;
-  rotationRate: number;
-  pulseRate: number;
-}
-
-/**
- * The cloud is built from two groups of layers:
- *   - occluder layers fill (almost) the whole radius and are near-opaque, so the
- *     sight-blocking silhouette matches the gameplay radius with only a soft rim.
- *   - wisp layers are smaller, lighter and livelier, riding on top of the body to
- *     give a modern, volumetric top-down read without thinning the occlusion.
- */
-const LAYER_TEMPLATES: readonly SmokeLayerTemplate[] = [
-  // ── Occluders (full-radius, near-opaque) ────────────────────────────────
-  {
-    occluder: true,
-    radiusFraction: 1.0,
-    dist: 0,
-    angle: 0,
-    alpha: 0.98,
-    drift: 3,
-    tint: mixColors(COLORS.GREY_8, COLORS.GREY_7, 0.55),
-    texture: TEX_BODY_A,
-    rotationRate: 0.016,
-    pulseRate: 0.3,
-  },
-  {
-    occluder: true,
-    radiusFraction: 0.99,
-    dist: 0.05,
-    angle: 1.7,
-    alpha: 0.82,
-    drift: 4,
-    tint: mixColors(COLORS.GREY_6, COLORS.GREY_7, 0.45),
-    texture: TEX_BODY_B,
-    rotationRate: -0.024,
-    pulseRate: 0.44,
-  },
-  {
-    occluder: true,
-    radiusFraction: 0.97,
-    dist: 0.07,
-    angle: 3.6,
-    alpha: 0.66,
-    drift: 5,
-    tint: mixColors(COLORS.GREY_7, COLORS.GREY_6, 0.4),
-    texture: TEX_BODY_A,
-    rotationRate: 0.03,
-    pulseRate: 0.52,
-  },
-  // ── Wisps (inner surface detail, lighter, livelier) ─────────────────────
-  {
-    occluder: false,
-    radiusFraction: 0.74,
-    dist: 0.1,
-    angle: 0.6,
-    alpha: 0.42,
-    drift: 9,
-    tint: mixColors(COLORS.GREY_5, COLORS.GREY_6, 0.4),
-    texture: TEX_WISP,
-    rotationRate: 0.05,
-    pulseRate: 0.72,
-  },
-  {
-    occluder: false,
-    radiusFraction: 0.62,
-    dist: 0.18,
-    angle: 2.5,
-    alpha: 0.34,
-    drift: 11,
-    tint: mixColors(COLORS.GREY_4, COLORS.GREY_5, 0.4),
-    texture: TEX_WISP,
-    rotationRate: -0.062,
-    pulseRate: 0.86,
-  },
-  {
-    occluder: false,
-    radiusFraction: 0.52,
-    dist: 0.24,
-    angle: -1.4,
-    alpha: 0.28,
-    drift: 12,
-    tint: mixColors(COLORS.GREY_5, COLORS.GREY_4, 0.3),
-    texture: TEX_WISP,
-    rotationRate: 0.074,
-    pulseRate: 1.02,
-  },
-];
-
-interface SmokeLayer {
-  image: Phaser.GameObjects.Image;
-  template: SmokeLayerTemplate;
-  texHalf: number;
-  phase: number;
-  phaseB: number;
-}
+// Procedural structure is limited by the composition surface, not the source
+// puff textures. Full resolution preserves detail on high without enlarging assets.
+const QUALITY = { high: { scale: 1, detail: 2 }, medium: { scale: 0.5, detail: 1 }, low: { scale: 0.25, detail: 0 } };
 
 interface SmokeCloudVisual {
-  container: Phaser.GameObjects.Container;
-  layers: SmokeLayer[];
-  rimEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  bodyEmitter: Phaser.GameObjects.Particles.ParticleEmitter;
-  rimZoneRadius: number;
-  bodyZoneRadius: number;
-  birthTime: number;
-  lastDensity: number;
-  lastRScale: number;
-  /** Gewitter-Blitze (nur wenn storm aktiv); sonst null. */
-  storm: StormVisual | null;
+  quad: Phaser.GameObjects.Shader;
+  lightKey: string;
+  uniforms: { time: number; seed: number; detail: number; pixels: number; opacity: number;
+    weather: ReturnType<typeof sampleSmokeWeather> };
 }
 
-/* ── Lightning overlay (storm variant) ── */
-interface StormVisual {
-  /** Über dem Rauch liegender Blitz-/Flash-Layer (depth > Rauch); zeichnet in Weltkoordinaten. */
-  gfx: Phaser.GameObjects.Graphics;
-  /** Sanftes Aufleuchten des gesamten Rauchs beim Einschlag. */
-  glow: Phaser.GameObjects.Image;
-  timer: Phaser.Time.TimerEvent;
-  x: number;
-  y: number;
-  radius: number;
-  /** Lifecycle-Alpha des Rauchs (dimmt Blitze beim Auflösen). */
-  lifeAlpha: number;
-}
-
+/** Presentation only: one bounded shader per visible cloud, one shared opacity cap. */
 export class SmokeSystem {
   private readonly visuals = new Map<number, SmokeCloudVisual>();
   private lighting: LightingSystem | null = null;
   private surface: Phaser.GameObjects.RenderTexture | null = null;
-  private readonly statusMarkers = new Map<string, { confusion: Phaser.GameObjects.Image; charge: Phaser.GameObjects.Image }>();
+  private readonly statusEffects = new Map<string, SmokeBodyEffect>();
   private readonly growthRings = new Map<number, Phaser.GameObjects.Image>();
   private clouds: SyncedSmokeCloud[] = [];
   private targetStates: readonly SyncedSmokeTargetStatus[] = [];
-  private resolveTarget: (id: string) => { x: number; y: number } | null = () => null;
+  private resolveTarget: (id: string) => EntityStatusVisualTarget | null = () => null;
   private receivedAt = 0;
   private hostNow = 0;
   private readonly growthSequences = new Map<number, number>();
   private readonly growthPulses = new Map<number, number>();
+  // Retained while a cloud is offscreen. Subtract the host epoch in JS (double
+  // precision), before sending animation time or lightning seeds to GPU floats.
+  private readonly animationOrigins = new Map<number, number>();
   private surfaceWidth = 0;
   private surfaceHeight = 0;
 
@@ -189,6 +53,8 @@ export class SmokeSystem {
   }
 
   setLightingSystem(lighting: LightingSystem | null): void {
+    if (this.lighting === lighting) return;
+    for (const visual of this.visuals.values()) this.lighting?.releaseLight(visual.lightKey, { immediate: true });
     this.lighting = lighting;
   }
 
@@ -196,47 +62,34 @@ export class SmokeSystem {
     this.clouds = clouds;
     this.hostNow = now;
     this.receivedAt = this.scene.time.now;
+    const activeIds = new Set(clouds.map(cloud => cloud.id));
     for (const cloud of clouds) {
+      if (!this.animationOrigins.has(cloud.id)) this.animationOrigins.set(cloud.id, now);
       const previous = this.growthSequences.get(cloud.id);
       if (previous !== undefined && (cloud.growthSequence ?? 0) > previous) this.growthPulses.set(cloud.id, this.scene.time.now);
       this.growthSequences.set(cloud.id, cloud.growthSequence ?? 0);
     }
-    const activeIds = new Set(clouds.map((cloud) => cloud.id));
-
-    for (const [id, visual] of this.visuals) {
-      if (activeIds.has(id)) continue;
-      this.destroyVisual(visual);
-      this.visuals.delete(id);
-      this.growthSequences.delete(id);
-      this.growthPulses.delete(id);
+    for (const id of this.growthSequences.keys()) if (!activeIds.has(id)) {
+      this.growthSequences.delete(id); this.growthPulses.delete(id);
+      this.animationOrigins.delete(id);
       this.growthRings.get(id)?.destroy(); this.growthRings.delete(id);
     }
-
-    for (const cloud of clouds) {
-      let visual = this.visuals.get(cloud.id);
-      if (!visual) {
-        visual = this.createVisual(cloud);
-        this.visuals.set(cloud.id, visual);
-      }
-      this.updateVisual(visual, cloud);
+    for (const [id, visual] of this.visuals) if (!activeIds.has(id)) {
+      this.destroyVisual(visual); this.visuals.delete(id);
     }
+    if (!clouds.length) this.destroySurface();
   }
 
   destroyAll(): void {
-    this.clouds = [];
+    this.syncVisuals([]);
     this.targetStates = [];
     this.resolveTarget = () => null;
-    this.growthSequences.clear(); this.growthPulses.clear();
-    this.surface?.destroy(); this.surface = null;
-    for (const marker of this.statusMarkers.values()) { marker.confusion.destroy(); marker.charge.destroy(); }
-    this.statusMarkers.clear();
-    for (const ring of this.growthRings.values()) ring.destroy();
-    this.growthRings.clear();
-    this.syncVisuals([]);
+    for (const effect of this.statusEffects.values()) effect.destroy();
+    this.statusEffects.clear();
   }
 
   syncTargetVisuals(states: readonly SyncedSmokeTargetStatus[], now: number,
-    resolve: (id: string) => { x: number; y: number } | null): void {
+    resolve: (id: string) => EntityStatusVisualTarget | null): void {
     this.targetStates = states; this.resolveTarget = resolve;
     this.hostNow = now; this.receivedAt = this.scene.time.now;
   }
@@ -244,67 +97,123 @@ export class SmokeSystem {
   private shutdown(): void {
     this.scene.events.off(Phaser.Scenes.Events.POST_UPDATE, this.renderFrame, this);
     this.destroyAll();
+    this.lighting = null;
+  }
+
+  private destroySurface(): void {
+    this.surface?.clear(); this.surface?.destroy(); this.surface = null;
+    this.surfaceWidth = this.surfaceHeight = 0;
   }
 
   private renderFrame(): void {
     const now = this.hostNow + this.scene.time.now - this.receivedAt;
-    const view = getVisibleWorldView(this.scene.cameras.main);
-    const scale = getGraphicsQualityProfile(this.scene).level === 'low' ? 0.25 : 0.5;
     const camera = this.scene.cameras.main;
-    const width = Math.max(1, Math.ceil(camera.width * scale)), height = Math.max(1, Math.ceil(camera.height * scale));
+    const view = getVisibleWorldView(camera);
+    const quality = QUALITY[getGraphicsQualityProfile(this.scene).level];
+    const width = Math.max(1, Math.ceil(camera.width * quality.scale));
+    const height = Math.max(1, Math.ceil(camera.height * quality.scale));
     const scaleX = width / view.width, scaleY = height / view.height;
-    if (this.clouds.length && (!this.surface || width !== this.surfaceWidth || height !== this.surfaceHeight)) {
-      this.surface?.destroy();
-      this.surface = this.scene.add.renderTexture(view.x, view.y, width, height).setOrigin(0, 0).setDepth(DEPTH.SMOKE);
-      this.surface.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-      this.surfaceWidth = width; this.surfaceHeight = height;
-    }
-    if (this.surface) {
-      this.surface.clear();
-      this.surface.setPosition(view.x, view.y).setDisplaySize(view.width, view.height)
-        .setAlpha(Math.min(0.72, Math.max(0, ...this.clouds.map(c => c.alpha))));
-      for (const snapshot of this.clouds) {
-        const visual = this.visuals.get(snapshot.id);
-        if (!visual) continue;
-        let radius = snapshot.radius;
-        if ((snapshot.growthSequence ?? 0) > 0 && snapshot.growthStartedAt !== undefined) {
-          radius = (snapshot.growthFromRadius ?? radius) + ((snapshot.growthTargetRadius ?? radius) - (snapshot.growthFromRadius ?? radius))
-            * smoothSmokeGrowth((now - snapshot.growthStartedAt) / Math.max(1, snapshot.growthDurationMs ?? 300));
-        }
-        const cloud = { ...snapshot, radius };
-        this.updateVisual(visual, cloud);
-        if (cloud.x + radius < view.x || cloud.y + radius < view.y || cloud.x - radius > view.x + view.width || cloud.y - radius > view.y + view.height) continue;
-        const overrides = { x: (cloud.x - view.x) * scaleX, y: (cloud.y - view.y) * scaleY, scaleX, scaleY, visible: true };
-        this.surface.capture(visual.container, overrides);
-        this.surface.capture(visual.rimEmitter, overrides);
-        this.surface.capture(visual.bodyEmitter, overrides);
+    // Normalize each cloud before compositing, then apply opacity exactly once. Even
+    // six overlapping opaque cores retain the configured view through the world.
+    const maxAlpha = Math.max(0, ...this.clouds.map(c => c.alpha));
+    const opacity = Math.min(0.99, maxAlpha);
+    const visible = new Set<number>();
+    for (const snapshot of this.clouds) {
+      let radius = snapshot.radius;
+      if ((snapshot.growthSequence ?? 0) > 0 && snapshot.growthStartedAt !== undefined) {
+        const from = snapshot.growthFromRadius ?? radius;
+        radius = from + ((snapshot.growthTargetRadius ?? radius) - from)
+          * smoothSmokeGrowth((now - snapshot.growthStartedAt) / Math.max(1, snapshot.growthDurationMs ?? 300));
       }
-      this.surface.render();
+      if (radius <= 0 || snapshot.alpha <= 0 || snapshot.x + radius < view.x || snapshot.y + radius < view.y
+        || snapshot.x - radius > view.x + view.width || snapshot.y - radius > view.y + view.height) continue;
+      visible.add(snapshot.id);
+      if (!this.surface || width !== this.surfaceWidth || height !== this.surfaceHeight) {
+        this.destroySurface();
+        this.surface = this.scene.add.renderTexture(view.x, view.y, width, height).setOrigin(0, 0).setDepth(DEPTH.SMOKE);
+        registerGraphicsObject(this.scene, 'smokeClouds', this.surface);
+        this.surface.texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
+        this.surfaceWidth = width; this.surfaceHeight = height;
+      }
+      if (visible.size === 1) {
+        this.surface.clear();
+        this.surface.setPosition(view.x, view.y).setDisplaySize(view.width, view.height).setAlpha(opacity);
+      }
+      let visual = this.visuals.get(snapshot.id);
+      if (!visual) { visual = this.createVisual(snapshot); this.visuals.set(snapshot.id, visual); }
+      const u = visual.uniforms;
+      u.time = Math.max(0, now - (this.animationOrigins.get(snapshot.id) ?? now)) * 0.001;
+      u.detail = quality.detail; u.pixels = radius * 2 * scaleX;
+      u.opacity = snapshot.alpha / Math.max(0.001, maxAlpha);
+      u.weather = sampleSmokeWeather(u.time, u.seed);
+      if (!snapshot.storm || snapshot.phase === 'dissipating') u.weather = { a: [0, 0, 0, 0], b: [0, 0, 0, 0], flash: 0, event: 0 };
+      // Shader uses Size, which does not refresh its cached display origin on resize.
+      visual.quad.setPosition(snapshot.x, snapshot.y).setSize(radius * 2, radius * 2).setOrigin(0.5);
+      const weather = u.weather.a;
+      if (weather[2] > 0.015) {
+        this.lighting?.setLight(visual.lightKey, 'electricArc', snapshot.x + weather[0] * radius, snapshot.y + weather[1] * radius,
+          { radiusPx: radius * 0.65, intensity: weather[2] * snapshot.alpha * 0.35 });
+      } else this.lighting?.releaseLight(visual.lightKey, { immediate: true });
+      const capture = { x: (snapshot.x - view.x) * scaleX, y: (snapshot.y - view.y) * scaleY, scaleX, scaleY, visible: true };
+      this.surface.capture(visual.quad, capture);
     }
-    this.updateStatusMarkers(now);
+    for (const [id, visual] of this.visuals) if (!visible.has(id)) {
+      this.destroyVisual(visual); this.visuals.delete(id);
+    }
+    if (visible.size) this.surface?.render(); else this.destroySurface();
+    this.updateStatusEffects(now);
   }
 
-  private updateStatusMarkers(now: number): void {
+  private createVisual(cloud: SyncedSmokeCloud): SmokeCloudVisual {
+    const seed = createSeededRandom((cloud.id + 1) * 0x9e3779b9)() * 997;
+    const uniforms = { time: 0, seed, detail: 2, pixels: 1, opacity: 1, weather: sampleSmokeWeather(0, seed) };
+    const quad = this.scene.add.shader({
+      name: SMOKE_SHADER_NAME, shaderName: SMOKE_SHADER_NAME, fragmentSource: SMOKE_FRAGMENT_SOURCE,
+      setupUniforms: (setUniform: (name: string, value: number | readonly number[]) => void) => {
+        setUniform('uBody', 0); setUniform('uWisp', 1);
+        setUniform('uTime', uniforms.time); setUniform('uSeed', uniforms.seed);
+        setUniform('uDetail', uniforms.detail); setUniform('uPixels', uniforms.pixels); setUniform('uOpacity', uniforms.opacity);
+        setUniform('uWeatherA', uniforms.weather.a); setUniform('uWeatherB', uniforms.weather.b);
+        setUniform('uFlash', uniforms.weather.flash); setUniform('uArcSeed', uniforms.weather.event);
+      },
+    }, cloud.x, cloud.y, cloud.radius * 2, cloud.radius * 2, [TEX_BODY_A, TEX_WISP]).setOrigin(0.5).setVisible(false);
+    registerGraphicsObject(this.scene, 'smokeClouds', quad, () => quad.active);
+    return { quad, uniforms, lightKey: 'smoke-weather-' + cloud.id };
+  }
+
+  private destroyVisual(visual: SmokeCloudVisual): void {
+    this.lighting?.releaseLight(visual.lightKey, { immediate: true });
+    visual.quad.destroy();
+  }
+
+  private updateStatusEffects(now: number): void {
     const live = new Set(this.targetStates.filter(s => s.confusedUntil > now || s.chargedUntil > now).map(s => s.enemyId));
-    for (const [id, marker] of this.statusMarkers) if (!live.has(id)) {
-      marker.confusion.destroy(); marker.charge.destroy(); this.statusMarkers.delete(id);
+    for (const [id, effect] of this.statusEffects) if (!live.has(id)) {
+      effect.destroy(); this.statusEffects.delete(id);
     }
-    const t = this.scene.time.now * 0.004;
+    const view = getVisibleWorldView(this.scene.cameras.main);
     for (const status of this.targetStates) {
       if (!live.has(status.enemyId)) continue;
-      const point = this.resolveTarget(status.enemyId);
-      let marker = this.statusMarkers.get(status.enemyId);
-      if (!point) { marker?.confusion.setVisible(false); marker?.charge.setVisible(false); continue; }
-      if (!marker) {
-        marker = {
-          confusion: this.scene.add.image(0, 0, TEX_CONFUSION).setDepth(DEPTH.SMOKE + 0.4).setDisplaySize(20, 20).setTint(0xe5dfaf),
-          charge: this.scene.add.image(0, 0, TEX_CHARGE).setDepth(DEPTH.SMOKE + 0.4).setDisplaySize(16, 16).setTint(0xa9edff),
-        };
-        this.statusMarkers.set(status.enemyId, marker);
+      const target = this.resolveTarget(status.enemyId);
+      let effect = this.statusEffects.get(status.enemyId);
+      const margin = (target?.bodySize ?? 0) * 2;
+      if (!target || !target.visible || !target.sprite.active || !target.sprite.visible
+        || target.sprite.x + margin < view.x || target.sprite.x - margin > view.x + view.width
+        || target.sprite.y + margin < view.y || target.sprite.y - margin > view.y + view.height) {
+        effect?.destroy(); this.statusEffects.delete(status.enemyId); continue;
       }
-      marker.confusion.setVisible(status.confusedUntil > now).setPosition(point.x, point.y - 22).setRotation(t).setAlpha(0.8);
-      marker.charge.setVisible(status.chargedUntil > now).setPosition(point.x + Math.cos(t * 1.7) * 16, point.y + Math.sin(t * 1.7) * 16)
-        .setRotation(Math.sin(t * 2) * 0.35).setAlpha(0.65 + Math.sin(t * 11) * 0.2);
+      if (effect && effect.sprite !== target.sprite) { effect.destroy(); effect = undefined; }
+      if (!effect) {
+        const seed = [...status.enemyId].reduce((hash, c) => ((hash * 31 + c.charCodeAt(0)) >>> 0), 7) % 997;
+        effect = new SmokeBodyEffect(this.scene, target, TEX_WISP, seed);
+        this.statusEffects.set(status.enemyId, effect);
+      }
+      let smokeCover = 0;
+      for (const cloud of this.clouds) {
+        const r = Math.hypot(target.sprite.x - cloud.x, target.sprite.y - cloud.y) / Math.max(1, cloud.radius);
+        smokeCover = Math.max(smokeCover, cloud.alpha * Math.max(0, Math.min(1, (1 - r) / .3)));
+      }
+      effect.update(target, status.confusedUntil, status.chargedUntil, now, smokeCover);
     }
     for (const [id, started] of this.growthPulses) {
       const age = this.scene.time.now - started;
@@ -318,299 +227,7 @@ export class SmokeSystem {
     }
   }
 
-  private createVisual(cloud: SyncedSmokeCloud): SmokeCloudVisual {
-    const container = this.scene.add.container(cloud.x, cloud.y).setDepth(DEPTH.SMOKE);
-    const rand = createSeededRandom((cloud.id + 1) * 0x9e3779b9);
-
-    const layers: SmokeLayer[] = LAYER_TEMPLATES.map((template) => {
-      const image = this.scene.add.image(0, 0, template.texture)
-        .setOrigin(0.5)
-        .setTint(template.tint)
-        .setBlendMode(Phaser.BlendModes.NORMAL);
-
-      container.add(image);
-
-      return {
-        image,
-        template,
-        texHalf: (TEX_SIZE[template.texture] ?? BODY_TEXTURE_SIZE) / 2,
-        phase: rand() * TAU,
-        phaseB: rand() * TAU,
-      };
-    });
-
-    const rimZoneRadius = Math.max(cloud.radius * 0.7, 12);
-    const rimEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_PARTICLE, {
-      lifespan: { min: 1600, max: 2600 },
-      frequency: 40,
-      quantity: 2,
-      angle: { min: 0, max: 360 },
-      speed: { min: 4, max: 14 },
-      scale: { start: 0.18, end: 0.62, ease: 'quad.out' },
-      alpha: { start: 0.14, end: 0, ease: 'quad.out' },
-      color: [COLORS.GREY_3, COLORS.GREY_4, COLORS.GREY_5],
-      rotate: { min: -34, max: 34 },
-      emitting: true,
-      blendMode: Phaser.BlendModes.NORMAL,
-    });
-    registerParticleEmitter(this.scene, 'smoke', rimEmitter);
-    rimEmitter.setDepth(DEPTH.SMOKE);
-    rimEmitter.addEmitZone(edgeZone(rimZoneRadius, 64));
-
-    const bodyZoneRadius = Math.max(cloud.radius * 0.5, 10);
-    const bodyEmitter = this.scene.add.particles(cloud.x, cloud.y, TEX_PARTICLE, {
-      lifespan: { min: 1400, max: 2400 },
-      frequency: 24,
-      quantity: 2,
-      angle: { min: 0, max: 360 },
-      speed: { min: 2, max: 8 },
-      scale: { start: 0.14, end: 0.5, ease: 'cubic.out' },
-      alpha: { start: 0.12, end: 0, ease: 'quad.out' },
-      color: [COLORS.GREY_4, COLORS.GREY_5, COLORS.GREY_6],
-      rotate: { min: -22, max: 22 },
-      emitting: true,
-      blendMode: Phaser.BlendModes.NORMAL,
-    });
-    registerParticleEmitter(this.scene, 'smoke', bodyEmitter);
-    bodyEmitter.setDepth(DEPTH.SMOKE);
-    bodyEmitter.addEmitZone(circleZone(bodyZoneRadius));
-
-    return {
-      container,
-      layers,
-      rimEmitter,
-      bodyEmitter,
-      rimZoneRadius,
-      bodyZoneRadius,
-      birthTime: this.scene.time.now,
-      lastDensity: -1,
-      lastRScale: -1,
-      storm: cloud.storm ? this.createStormVisual(cloud) : null,
-    };
-  }
-
-  private updateVisual(visual: SmokeCloudVisual, cloud: SyncedSmokeCloud): void {
-    const radius = Math.max(cloud.radius, 8);
-    const alpha = Phaser.Math.Clamp(cloud.alpha / Math.max(0.001, ...this.clouds.map(c => c.alpha)), 0, 1);
-    const density = Phaser.Math.Clamp(cloud.density, 0.15, 1);
-    const t = (this.scene.time.now - visual.birthTime) * 0.001;
-    const rScale = radius / REF_RADIUS;
-
-    visual.container.setPosition(cloud.x, cloud.y).setVisible(alpha > 0.01);
-
-    for (const layer of visual.layers) {
-      const { template, phase, phaseB, texHalf } = layer;
-      const orbit = template.angle + Math.sin(t * 0.2 + phaseB) * 0.12;
-      const dx = (
-        Math.sin(t * (0.5 + template.pulseRate * 0.25) + phase) +
-        Math.sin(t * 1.12 + phaseB) * 0.42
-      ) * template.drift * rScale;
-      const dy = (
-        Math.cos(t * (0.58 + template.pulseRate * 0.2) + phaseB) +
-        Math.cos(t * 1.02 + phase * 0.7) * 0.36
-      ) * template.drift * rScale;
-      const pulseX = 1 + Math.sin(t * template.pulseRate + phase) * 0.05;
-      const pulseY = 1 + Math.cos(t * (template.pulseRate * 0.88) + phaseB) * 0.045;
-
-      // Occluders track alpha tightly (so the cloud stays solid); wisps fade more
-      // with density so the lit surface detail comes and goes.
-      const layerAlpha = template.occluder
-        ? template.alpha * alpha * Phaser.Math.Linear(0.82, 1, density)
-        : template.alpha * alpha * density;
-
-      // Map the texture so its rim sits exactly at radiusFraction * radius. The
-      // texture's baked falloff then keeps the sight-blocking edge at the radius.
-      const visibleRadius = radius * template.radiusFraction;
-      const scale = visibleRadius / texHalf;
-
-      layer.image.setPosition(
-        Math.cos(orbit) * template.dist * radius + dx,
-        Math.sin(orbit) * template.dist * radius + dy,
-      );
-      layer.image.setScale(scale * pulseX, scale * pulseY);
-      layer.image.setAlpha(layerAlpha);
-      layer.image.setRotation(t * template.rotationRate + phase * 0.4 + Math.sin(t * 0.3 + phaseB) * 0.06);
-    }
-
-    visual.rimEmitter.setPosition(cloud.x, cloud.y);
-    visual.rimEmitter.setAlpha(Phaser.Math.Linear(0.05, 0.2, alpha * density));
-
-    visual.bodyEmitter.setPosition(cloud.x, cloud.y);
-    visual.bodyEmitter.setAlpha(Phaser.Math.Linear(0.04, 0.16, alpha * density));
-
-    if (density !== visual.lastDensity || rScale !== visual.lastRScale) {
-      visual.lastDensity = density;
-      visual.lastRScale = rScale;
-
-      visual.rimEmitter.setFrequency(
-        Math.floor(Phaser.Math.Linear(80, 28, density)),
-        Math.ceil(Phaser.Math.Linear(1, 2, density)),
-      );
-      visual.rimEmitter.setParticleScale(
-        Phaser.Math.Linear(0.1, 0.2, density) * rScale,
-        Phaser.Math.Linear(0.4, 0.7, density) * rScale,
-      );
-
-      visual.bodyEmitter.setFrequency(
-        Math.floor(Phaser.Math.Linear(48, 18, density)),
-        Math.ceil(Phaser.Math.Linear(1, 2, density)),
-      );
-      visual.bodyEmitter.setParticleScale(
-        Phaser.Math.Linear(0.08, 0.16, density) * rScale,
-        Phaser.Math.Linear(0.32, 0.56, density) * rScale,
-      );
-    }
-
-    const targetRimRadius = Math.max(radius * 0.7, 12);
-    if (Math.abs(targetRimRadius - visual.rimZoneRadius) >= 8) {
-      visual.rimEmitter.clearEmitZones();
-      visual.rimEmitter.addEmitZone(edgeZone(targetRimRadius, 64));
-      visual.rimZoneRadius = targetRimRadius;
-    }
-
-    const targetBodyRadius = Math.max(radius * 0.5, 10);
-    if (Math.abs(targetBodyRadius - visual.bodyZoneRadius) >= 6) {
-      visual.bodyEmitter.clearEmitZones();
-      visual.bodyEmitter.addEmitZone(circleZone(targetBodyRadius));
-      visual.bodyZoneRadius = targetBodyRadius;
-    }
-
-    visual.container.setVisible(false);
-    visual.rimEmitter.setVisible(false);
-    visual.bodyEmitter.setVisible(false);
-    if (!cloud.storm && visual.storm) {
-      visual.storm.timer.remove();
-      this.scene.tweens.killTweensOf(visual.storm.gfx); this.scene.tweens.killTweensOf(visual.storm.glow);
-      visual.storm.gfx.destroy(); visual.storm.glow.destroy(); visual.storm = null;
-    } else if (cloud.storm && !visual.storm) visual.storm = this.createStormVisual(cloud);
-    // Gewitter-Layer folgt Radius/Lifecycle des Rauchs. gfx zeichnet in
-    // Weltkoordinaten (keine Verschiebung); Alpha steuern die Flash-Tweens.
-    if (visual.storm) {
-      visual.storm.radius = radius;
-      visual.storm.lifeAlpha = alpha;
-    }
-  }
-
-  /**
-   * Baut den Gewitter-Blitz-Layer für elektrisierten Rauch. Liegt über dem Rauch
-   * (höhere Depth), damit die Blitze trotz dichtem Rauch sichtbar sind. Ein Timer
-   * löst in unregelmäßigen Abständen einzelne Blitze aus (wie in einem Sturm).
-   */
-  private createStormVisual(cloud: SyncedSmokeCloud): StormVisual {
-    const gfx = this.scene.add.graphics()
-      .setDepth(DEPTH.SMOKE + 0.2)
-      .setBlendMode(Phaser.BlendModes.ADD);
-    registerGraphicsObject(this.scene, 'smokeStorm', gfx);
-
-    // Sanftes Aufleuchten des gesamten Rauchs beim Einschlag (verkauft das Wetterleuchten).
-    const glow = this.scene.add.image(cloud.x, cloud.y, TEX_PARTICLE)
-      .setDepth(DEPTH.SMOKE + 0.15)
-      .setBlendMode(Phaser.BlendModes.ADD)
-      .setTint(0xbfe6ff)
-      .setAlpha(0);
-
-    const storm: StormVisual = {
-      gfx,
-      glow,
-      x: cloud.x,
-      y: cloud.y,
-      radius: Math.max(cloud.radius, 8),
-      lifeAlpha: 1,
-      // Blitz-Intervall = DoT-Schadensintervall (gleichmäßiger Abstand).
-      timer: this.scene.time.addEvent({
-        delay: cloud.stormTickMs ?? 250,
-        loop: true,
-        callback: () => this.flashLightning(storm),
-      }),
-    };
-    return storm;
-  }
-
-  /** Zeichnet einen kurzen Blitz innerhalb des Rauchs und lässt ihn ausfaden. */
-  private flashLightning(storm: StormVisual): void {
-    const { gfx, glow, x, y, radius, lifeAlpha } = storm;
-    if (lifeAlpha <= 0.02) return;
-    gfx.clear();
-
-    const bolts = Phaser.Math.Between(1, 2);
-    for (let b = 0; b < bolts; b++) {
-      // Kleiner, zentrumsnaher Blitz: Start im oberen mittleren Bereich, Ende nahe Zentrum.
-      const startAngle = Phaser.Math.FloatBetween(-Math.PI * 0.75, -Math.PI * 0.25);
-      const startR = radius * Phaser.Math.FloatBetween(0.32, 0.5);
-      const sx = x + Math.cos(startAngle) * startR;
-      const sy = y + Math.sin(startAngle) * startR;
-      const endAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const endR = radius * Phaser.Math.FloatBetween(0.04, 0.22);
-      const ex = x + Math.cos(endAngle) * endR;
-      const ey = y + Math.sin(endAngle) * endR;
-
-      const segments = 5;
-      const points: Array<{ x: number; y: number }> = [{ x: sx, y: sy }];
-      for (let s = 1; s < segments; s++) {
-        const frac = s / segments;
-        const jitter = radius * 0.07;
-        points.push({
-          x: Phaser.Math.Linear(sx, ex, frac) + Phaser.Math.FloatBetween(-jitter, jitter),
-          y: Phaser.Math.Linear(sy, ey, frac) + Phaser.Math.FloatBetween(-jitter, jitter),
-        });
-      }
-      points.push({ x: ex, y: ey });
-
-      gfx.lineStyle(3.0, 0x8fd0ff, 0.5);
-      gfx.beginPath();
-      gfx.moveTo(points[0].x, points[0].y);
-      for (let s = 1; s < points.length; s++) gfx.lineTo(points[s].x, points[s].y);
-      gfx.strokePath();
-
-      gfx.lineStyle(1.3, 0xffffff, 0.95);
-      gfx.beginPath();
-      gfx.moveTo(points[0].x, points[0].y);
-      for (let s = 1; s < points.length; s++) gfx.lineTo(points[s].x, points[s].y);
-      gfx.strokePath();
-    }
-
-    // Jeder Blitz wirft einen kurzen kalten Lichtimpuls – der Sturm zuckt so auch in der
-    // Lightmap auf, nicht nur in der Grafik. Intensität folgt dem Lifecycle-Alpha.
-    this.lighting?.pulse('electricArc', x, y, {
-      radiusPx: Math.max(radius * 1.15, 120),
-      intensity: Phaser.Math.Clamp(0.85 * lifeAlpha, 0, 1),
-    });
-
-    // Kurzer heller Flash + Blitz-Ausblendung (gedimmt mit Lifecycle-Alpha).
-    this.scene.tweens.killTweensOf(gfx);
-    gfx.setAlpha(lifeAlpha);
-    this.scene.tweens.add({ targets: gfx, alpha: 0, duration: 180, ease: 'Quad.easeOut' });
-
-    this.scene.tweens.killTweensOf(glow);
-    glow.setAlpha(0.28 * lifeAlpha).setScale((radius * 1.1) / (PARTICLE_TEXTURE_SIZE / 2));
-    this.scene.tweens.add({ targets: glow, alpha: 0, duration: 240, ease: 'Quad.easeOut' });
-  }
-
-  private destroyVisual(visual: SmokeCloudVisual): void {
-    visual.rimEmitter.stop();
-    visual.rimEmitter.destroy();
-    visual.bodyEmitter.stop();
-    visual.bodyEmitter.destroy();
-    if (visual.storm) {
-      visual.storm.timer.remove();
-      this.scene.tweens.killTweensOf(visual.storm.gfx);
-      this.scene.tweens.killTweensOf(visual.storm.glow);
-      visual.storm.gfx.destroy();
-      visual.storm.glow.destroy();
-    }
-    visual.container.destroy(true);
-  }
-
   private ensureSmokeTextures(): void {
-    ensureCanvasTexture(this.scene.textures, TEX_CONFUSION, 48, 48, ctx => {
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.arc(24, 24, 12, 0, Math.PI * 1.5); ctx.stroke();
-      ctx.beginPath(); ctx.arc(24, 24, 4, Math.PI, Math.PI * 2); ctx.stroke();
-    });
-    ensureCanvasTexture(this.scene.textures, TEX_CHARGE, 48, 48, ctx => {
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.lineJoin = 'round';
-      ctx.beginPath(); ctx.moveTo(17, 8); ctx.lineTo(30, 21); ctx.lineTo(18, 27); ctx.lineTo(31, 40); ctx.stroke();
-    });
     ensureCanvasTexture(this.scene.textures, TEX_GROWTH, 256, 256, ctx => {
       ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(128, 128, 126, 0, TAU); ctx.stroke();
@@ -621,14 +238,8 @@ export class SmokeSystem {
       baseAlpha: 0.96,
       lobeAlpha: [0.4, 0.72],
     });
-    this.generateBodyTexture(TEX_BODY_B, 0x9f1d4b73, {
-      lobeCount: 40,
-      plateau: 0.62,
-      baseAlpha: 0.58,
-      lobeAlpha: [0.28, 0.55],
-    });
     this.generateWispTexture();
-    this.generateParticleTexture();
+
   }
 
   /**
@@ -728,16 +339,4 @@ export class SmokeSystem {
     });
   }
 
-  private generateParticleTexture(): void {
-    ensureCanvasTexture(this.scene.textures, TEX_PARTICLE, PARTICLE_TEXTURE_SIZE, PARTICLE_TEXTURE_SIZE, (ctx) => {
-      const size = PARTICLE_TEXTURE_SIZE;
-      const center = size / 2;
-      const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
-      gradient.addColorStop(0, 'rgba(255,255,255,0.6)');
-      gradient.addColorStop(0.5, 'rgba(255,255,255,0.32)');
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, size, size);
-    });
-  }
 }

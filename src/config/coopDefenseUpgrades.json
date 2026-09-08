@@ -5271,7 +5271,7 @@
                                                                 {
                                                                     "stat":  "utility.SMOKE_GRENADE.dotDamage",
                                                                     "mode":  "add_per_level",
-                                                                    "value":  3
+                                                                    "value":  1
                                                                 }
                                                             ]
                                             },

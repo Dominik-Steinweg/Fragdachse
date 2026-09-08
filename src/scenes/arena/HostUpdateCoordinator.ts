@@ -734,7 +734,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const nukes       = this.powerUpSystem?.getNukeSnapshot()      ?? [];
     this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
     this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,
-      id => { const enemy = this.coopMissionRuntime?.enemyManager?.getEnemy(id); return enemy?.sprite.active ? { x: enemy.sprite.x, y: enemy.sprite.y } : null; });
+      id => this.coopMissionRuntime?.enemyManager?.getEnemy(id)?.getStatusVisualTarget() ?? null);
     const airstrikes  = this.supportSystems?.airstrike?.getSnapshot()        ?? [];
     const meteors     = this.supportSystems?.armageddon?.getSnapshot()       ?? [];
     const train     = this.trainManager?.getNetSnapshot()        ?? null;

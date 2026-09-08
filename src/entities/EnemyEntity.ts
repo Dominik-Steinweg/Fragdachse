@@ -23,6 +23,7 @@ import {
 } from '../config/coopDefenseEnemies';
 import type { GroundFireVisualStyle, SyncedEnemyState } from '../types';
 import { EntityBurnRenderer, MAX_VISUAL_BURN_STACKS } from '../effects/EntityBurnRenderer';
+import { VulnerableBodyEffect, type EntityStatusVisualTarget } from '../effects/SmokeBodyEffect';
 import type { EntityBurnGpuController } from '../effects/EntityBurnGpuController';
 import { PlasmaChargeRenderer, MAX_PLASMA_CHARGE_STACKS } from '../effects/PlasmaChargeRenderer';
 import type { LightingSystem } from '../effects/LightingSystem';
@@ -46,8 +47,6 @@ const TEX_ENEMY_GLOW = '_enemy_glow';
  * Groessenordnungen darueber, waehrend er im Stand gegen null faellt.
  */
 const WALKING_INTERPOLATION_EPSILON_PX = 0.5;
-/** Kuehles Violett – klar unterscheidbar von Brand (orange) und Void-Brand (lila-rot). */
-const VULNERABLE_MARKER_COLOR = 0xc86bff;
 
 export type EnemyFaction = 'hostile' | 'allied';
 
@@ -102,7 +101,7 @@ export class EnemyEntity {
   private burnRenderer: EntityBurnRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private plasmaChargeRenderer: PlasmaChargeRenderer | null = null;
-  private vulnerableRing: Phaser.GameObjects.Arc | null = null;
+  private vulnerableEffect: VulnerableBodyEffect | null = null;
   private ownerRing: Phaser.GameObjects.Ellipse | null = null;
   private burnStacks = 0;
   private plasmaChargeStacks = 0;
@@ -394,45 +393,20 @@ export class EnemyEntity {
     return `entityburn:enemy:${this.id}`;
   }
 
-  /**
-   * Verwundbarkeitsmarker (Item-Affix "Fokusfeuer").
-   *
-   * Bewusst sparsam: ein einzelner gestrichelter Ring statt eines eigenen Partikelsystems. Der
-   * Lifecycle folgt dem des Brandrenderers – erst bei Aktivierung erzeugt, bei Ablauf zerstoert,
-   * damit ein nicht markierter Gegner nichts kostet. Der Ring haengt an keiner Lichtquelle und
-   * kollidiert deshalb nicht mit dem Schluessel des Brandeffekts.
-   */
+  /** Unified body presentation for vulnerability from every gameplay source. */
   setVulnerable(active: boolean): void {
-    if (!active) {
-      this.vulnerableRing?.destroy();
-      this.vulnerableRing = null;
-      return;
-    }
-    if (this.vulnerableRing) return;
-
-    const radius = this.config.size * 0.62;
-    const ring = this.sprite.scene.add.circle(this.sprite.x, this.sprite.y, radius);
-    ring.setStrokeStyle(2, VULNERABLE_MARKER_COLOR, 0.85);
-    ring.setDepth(DEPTH.PLAYERS - 0.08);
-    makeAdditive(ring);
-    registerGraphicsObject(this.sprite.scene, 'enemyStatus', ring);
-    this.sprite.scene.tweens.add({
-      targets: ring,
-      scaleX: 1.14,
-      scaleY: 1.14,
-      alpha: 0.45,
-      duration: 520,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-    this.vulnerableRing = ring;
+    if (active && !this.vulnerableEffect) this.vulnerableEffect = new VulnerableBodyEffect(this.sprite.scene);
+    this.vulnerableEffect?.setActive(active);
+    this.syncVulnerableEffect();
   }
 
-  private syncVulnerableMarker(): void {
-    if (!this.vulnerableRing) return;
-    this.vulnerableRing.setPosition(this.sprite.x, this.sprite.y);
-    this.vulnerableRing.setVisible(!this.burrowed && this.currentHp > 0 && this.sprite.visible);
+  getStatusVisualTarget(): EntityStatusVisualTarget {
+    return { sprite: this.sprite, bodySize: this.config.size,
+      visible: !this.burrowed && this.currentHp > 0 && this.sprite.visible };
+  }
+
+  private syncVulnerableEffect(): void {
+    this.vulnerableEffect?.sync(this.getStatusVisualTarget());
   }
 
   getMoveSpeed(): number {
@@ -659,7 +633,7 @@ export class EnemyEntity {
     this.syncVoidMolotovWindupVisuals();
     this.syncBurnEffect();
     this.syncPlasmaChargeEffect();
-    this.syncVulnerableMarker();
+    this.syncVulnerableEffect();
     this.bindHealthBar();
     this.healthBars?.suppress(this.healthBar, this.burrowed || !this.sprite.visible);
     this.healthBars?.position(this.healthBar, this.sprite.x, this.sprite.y + this.getHpBarOffsetY());
@@ -696,8 +670,8 @@ export class EnemyEntity {
     this.burnRenderer = null;
     this.plasmaChargeRenderer?.destroy();
     this.plasmaChargeRenderer = null;
-    this.vulnerableRing?.destroy();
-    this.vulnerableRing = null;
+    this.vulnerableEffect?.destroy();
+    this.vulnerableEffect = null;
     this.ownerRing?.destroy();
     this.ownerRing = null;
     if (this.glowHalo) {

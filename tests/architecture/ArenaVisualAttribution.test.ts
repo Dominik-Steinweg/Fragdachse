@@ -318,7 +318,9 @@ describe('ArenaVisualAttributionCollector', () => {
       ['PowerUpRenderer', 'powerUpEffects', ['graphic']],
       ['ArenaVisualFactory', 'treeTrunks', ['trunk']],
       ['ProjectilePresentationRuntime', 'projectileShapes', ['sprite']],
-      ['EnemyEntity', 'enemyStatus', ['ring', 'this.voidMolotovWindupRing']],
+      ['EnemyEntity', 'enemyStatus', ['this.voidMolotovWindupRing']],
+      ['VulnerableBodyEffect', 'enemyStatus', ['this.image']],
+      ['SmokeBodyEffect', 'enemyStatus', ['object']],
     ] as const;
     for (const [sourceName, family, objects] of expected) {
       const source = sources.find((candidate) => sourceDeclaresClass(candidate, sourceName));
