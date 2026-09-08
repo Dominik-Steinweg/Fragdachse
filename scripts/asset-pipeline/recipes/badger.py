@@ -17,7 +17,7 @@ def build(c, style=None):
     for tone, rgb in zip(tones, style.get('furTones', [(5, 9, 13), (14, 23, 31), (39, 55, 67), (109, 127, 139)])):
         tone.color = (*[linear_byte(v) for v in rgb], 1)
     dark = c.material('Dark mask and ears', (.009, .012, .014), 'organic')
-    ivory = c.material('Pale head fur', (.98, .99, .96), 'organic')
+    ivory = c.material('Pale head fur', style.get('headColor', (.98, .99, .96)), 'organic')
     # Keep the same texture and frequency, but remap broad fur values into off-white.
     # The tail and facial bands have independent materials/value ranges.
     for node in ivory.node_tree.nodes:
@@ -25,8 +25,12 @@ def build(c, style=None):
             if node.inputs['Value'].links[0].from_node.type == 'TEX_NOISE':
                 node.inputs['To Min'].default_value = .99
                 node.inputs['To Max'].default_value = 1.10
-    tail_fur = c.material('Independent pale tail fur', (.70, .73, .68), 'organic')
+    tail_fur = c.material('Independent pale tail fur', style.get('tailColor', (.70, .73, .68)), 'organic')
     black = c.material('Near-black eyes and nose', (.002, .003, .004))
+    if style.get('paintedFur'):
+        satin = black.node_tree.nodes['Principled BSDF']
+        satin.inputs['Roughness'].default_value = .46
+        satin.inputs['Specular IOR Level'].default_value = .22
     glint = c.material('Warm eye reflection', (.89, .9, .78))
     feet = c.material('Soft grey foot fur', style['footColor'], 'organic') if 'footColor' in style else dark
     # Feet point north under the vertical body; no south-facing shoe shapes.
@@ -127,6 +131,7 @@ def build(c, style=None):
         e.position, e.color = pos, (value, value, value, 1)
     l.new(coord, mask.inputs[0])
     mix = n.new('ShaderNodeMixRGB')
+    mix.name = 'Authored facial band mix'
     l.new(mask.outputs[0], mix.inputs[0]); l.new(pale, mix.inputs[1])
     mix.inputs[2].default_value = (.008, .012, .015, 1)
     l.new(mix.outputs[0], bs.inputs['Base Color'])
@@ -164,4 +169,7 @@ def build(c, style=None):
             ob.location.y -= .10
             if ob not in parts['left_leg'] and ob not in parts['right_leg']:
                 parts['upper'].append(ob)
+    if style.get('paintedFur'):
+        from badger_material_parts import painted_coat
+        painted_coat(c, parts, {'body': fur, 'dark': dark, 'head': m, 'tail': tail_fur, 'feet': feet}, style)
     return parts

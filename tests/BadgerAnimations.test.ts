@@ -23,6 +23,9 @@ describe('selected figure animations', () => {
         margin: asset.layout.margin, spacing: asset.layout.spacing, endFrame: asset.layout.frameCount - 1,
       });
       expect(generateFrameNumbers).toHaveBeenCalledWith(sheet.textureKey, { frames: asset.clips[0].frames });
+      expect(create).toHaveBeenCalledWith(expect.objectContaining({
+        key: sheet.animationKey, frameRate: asset.clips[0].frameRate, repeat: -1,
+      }));
       expect(sheet.frames).not.toContain(asset.idleFrame);
     }
   });

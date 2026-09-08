@@ -41,7 +41,7 @@ module_spec.loader.exec_module(pipeline)
 result = pipeline.build(repo, 'badger', 'v2-a')
 ```
 
-Der Build verwendet eine neue eigene Szene. Bestehende Szenen, V1-Ergebnisse und lokale Dachsänderungen bleiben erhalten. Der V2-Dachs übernimmt die aktuelle Schulter-/Armform der V1-Rezeptur und ergänzt getrennte bewegte Beine. Seine beiden Materialvarianten behalten identische Texturstärke und vergleichen die vorhandene Formschattierung.
+Der Build verwendet eine neue eigene Szene. Bestehende Szenen, V1-Ergebnisse und lokale Dachsänderungen bleiben erhalten. Der V2-Dachs übernimmt die aktuelle Schulter-/Armform der V1-Rezeptur und ergänzt getrennte bewegte Beine. Seine beiden Materialvarianten vergleichen zurückhaltende und kräftigere gemalte Fellgruppen bei identischer Formschattierung. `badger_material_parts.py` richtet die gepackte Felltextur über gespeicherte Ruhekoordinaten entlang der Arme aus; die Koordinaten folgen der Hautverformung. Der versionierte Texturprompt steht als `badgerPaintedFurV2I` in `texture-prompts.json`.
 
 `build(..., device='CPU')` ist der portable Standard. `device='CUDA'` beziehungsweise `'OPTIX'` verwendet ein vorhandenes passendes Cycles-Gerät; fehlt es, schlägt der Auftrag ausdrücklich fehl. Die Gerätewahl gehört zum Input-Fingerprint und darf bei einer Wiederaufnahme nicht wechseln. Auf der Blender-Kommandozeile stehen `--device CPU|CUDA|OPTIX`, `--max-frames <Anzahl>` und `--asset references` für alle ausführbaren Referenzeinträge bereit; `references` ist eine CLI-Auswahl, keine Asset-ID für `build()`:
 
@@ -118,6 +118,10 @@ Für einen exemplarischen unabhängigen Render `--render-frame 1 --render-output
 Sheets unverändert nach `public/assets/sprites/pipeline-v2/` und erzeugt die versionierte
 `src/config/pipelineAssets.json`. Der Import prüft die Dateien gegen die SHA-256-Werte der
 jeweiligen `selection.json`. Er rendert nichts und verändert keine Produktionsquelle.
+Für einen gezielten Austausch `node scripts/asset-pipeline/import-runtime.mjs v2-h badger`
+verwenden; weitere Asset-IDs können folgen. Ein Einzelimport erhält die übrigen Runtime-Einträge
+und PNGs. Die Revision am Asset bezeichnet dessen Quelle; die Paketrevision bleibt die des
+letzten Vollimports und gilt für ältere Einträge ohne eigene Revision.
 Runtime und Build benötigen nur diese versionierten Dateien; Blender, Quellenarchive und
 `art/poc/` bleiben lokale Authoring-Werkzeuge. Die Runtime-Bindung beschreibt
 [rendering.md](../../docs/ai/rendering.md#figuren--und-turmassets).

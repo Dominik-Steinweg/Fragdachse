@@ -1251,6 +1251,7 @@
       "gameIds": [
         "player"
       ],
+      "revision": "v2-i",
       "variant": "rich",
       "sourceSize": 128,
       "textureKey": "badger",
@@ -1291,13 +1292,13 @@
             11,
             12
           ],
-          "frameRate": 12,
+          "frameRate": 24,
           "loop": true
         }
       ],
       "hashes": {
-        "idle": "99a6a3b7b6c0e85684dc4024feb0596ea3f371c1bc14c6755ae9dc6bfdbe5aa5",
-        "sheet": "6738323aeed3e846857aa8f673b5b00b41239ba805a2b9325d20c298865436a3"
+        "idle": "f6646908aa0d19a51ed24b3c63ddaae5bea94d18acc53b9f50f0568e9304626e",
+        "sheet": "6ed311e7d6f69a43e9bdd1633f91dbc13a3c452340cd89b2f3bb55bc635537d1"
       }
     }
   ]

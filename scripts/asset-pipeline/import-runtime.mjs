@@ -8,13 +8,22 @@ if (!/^v2-[a-z0-9-]+$/.test(revision)) throw new Error('Invalid revision');
 const readJson = async (file) => JSON.parse(await readFile(file, 'utf8'));
 const catalog = await readJson('scripts/asset-pipeline/catalog-v2.json');
 const enemies = (await readJson('src/config/coopDefenseEnemies.json')).enemies;
+const requestedIds = process.argv.slice(3);
+if (new Set(requestedIds).size !== requestedIds.length
+    || requestedIds.some(id => !catalog.assets.some(entry => entry.id === id))) {
+  throw new Error('Specify distinct catalog asset IDs for a partial import');
+}
+const previous = requestedIds.length ? await readJson('src/config/pipelineAssets.json') : null;
+if (previous && (previous.version !== 2 || requestedIds.some(id => !previous.assets.some(asset => asset.id === id)))) {
+  throw new Error('Partial import requires an existing V2 runtime package containing the requested assets');
+}
 const assets = [];
-for (const entry of catalog.assets) {
+const copies = [];
+for (const entry of catalog.assets.filter(entry => !requestedIds.length || requestedIds.includes(entry.id))) {
   const source = `art/poc/pipeline-v2/runs/${revision}/${entry.id}`;
   const selected = await readJson(`${source}/selection.json`);
   if (selected.id !== entry.id || selected.revision !== revision) throw new Error(`Selection mismatch: ${entry.id}`);
   const folder = `assets/sprites/pipeline-v2/${entry.id}`;
-  await mkdir(`public/${folder}`, { recursive: true });
   const hashes = {};
   for (const [field, name] of [['idle', 'idle.png'], ['sheet', 'sheet.png']]) {
     const relative = selected[field];
@@ -22,7 +31,7 @@ for (const entry of catalog.assets) {
     const file = `${source}/${relative}`;
     const hash = createHash('sha256').update(await readFile(file)).digest('hex');
     if (selected.files[relative] !== hash) throw new Error(`Selection hash mismatch: ${file}`);
-    await copyFile(file, `public/${folder}/${name}`);
+    copies.push({ file, destination: `public/${folder}/${name}` });
     hashes[field] = hash;
   }
   const textureKey = entry.category === 'turret'
@@ -30,7 +39,7 @@ for (const entry of catalog.assets) {
     : entry.id === 'badger' ? 'badger' : enemies.find((enemy) => entry.gameIds.includes(enemy.id))?.imageKey;
   if (!textureKey) throw new Error(`Missing game mapping: ${entry.id}`);
   assets.push({
-    id: entry.id, category: entry.category, gameIds: entry.gameIds,
+    id: entry.id, category: entry.category, gameIds: entry.gameIds, revision,
     variant: selected.variant, sourceSize: selected.size, textureKey,
     sheetTextureKey: `${textureKey}_${entry.category === 'turret' ? 'animated' : 'walking'}`,
     idlePath: `./${folder}/idle.png`, sheetPath: `./${folder}/sheet.png`,
@@ -40,5 +49,14 @@ for (const entry of catalog.assets) {
     hashes,
   });
 }
-await writeFile('src/config/pipelineAssets.json', JSON.stringify({ version: 2, revision, assets }, null, 2) + '\n');
+// Resolve and hash every selected input before modifying the runtime package.
+for (const { file, destination } of copies) {
+  await mkdir(path.dirname(destination), { recursive: true });
+  await copyFile(file, destination);
+}
+// The package revision records the last full import; individual revisions override it.
+const manifest = previous
+  ? { ...previous, assets: previous.assets.map(existing => assets.find(asset => asset.id === existing.id) ?? existing) }
+  : { version: 2, revision, assets };
+await writeFile('src/config/pipelineAssets.json', JSON.stringify(manifest, null, 2) + '\n');
 console.log(`Imported ${assets.length} selected assets from ${revision}`);
