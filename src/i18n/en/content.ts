@@ -168,6 +168,8 @@ export const enContent = {
   "source.ground_fire.player_death.name": "Burning Ground",
   "source.ground_fire.player_fire.name": "Burning Ground",
   "source.ground_fire.molotov.name": "Molotov Fire",
+  "source.ground_fire.molotov_chunks.name": "Burning Remains",
+  "source.ground_fire.molotov_firewalker.name": "Firewalker",
   "source.ground_fire.wildfire.name": "Wildfire",
   "source.weapon.unknown.name": "Weapon",
   "source.weapon.fireball_fire.name": "Fireball Burn",

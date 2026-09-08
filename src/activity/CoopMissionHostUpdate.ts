@@ -66,7 +66,7 @@ export interface CoopMissionHostUpdatePort {
   readonly getArmedOutposts: () => readonly CoopMissionArmedOutpostView[];
   /** Vorgebaute Missionsstrukturen der World uebernehmen den neuen Zielzustand. */
   readonly syncDormantBaseStates: () => void;
-  readonly getActiveBurnSources: (enemyId: string, atMs: number) => ReadonlyArray<{ sourceId: string }>;
+  readonly getActiveBurnSources: (enemyId: string, atMs: number) => ReadonlyArray<{ sourceKey: string }>;
   readonly getFireSystem: () => FireSystem | null;
   readonly getSmokeSystem: () => SmokePerceptionPort | null;
   readonly publishEncounterPresentation: (state: CoopDefenseEncounterPresentationState | null) => void;

@@ -99,7 +99,7 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
     'smokeRadius', 'smokeExpandDuration', 'smokeLingerDuration', 'smokeDissipateDuration',
     'smokeMaxAlpha', 'smokeDotDamagePerTick', 'smokeDotTickIntervalMs', 'smokeBehavior',
   ],
-  molotov: ['fireRadius', 'fireDamagePerTick', 'fireLingerDuration'],
+  molotov: ['fireRadius', 'fireDamagePerTick', 'fireLingerDuration', 'wildfireChunkCount', 'wildfireChunkRadius', 'wildfireChunkFlightMs', 'firewalkerDurationMs'],
   time_bubble: ['bubbleRadius', 'bubbleDuration', 'projectileSlowFactor', 'playerSlowFactor', 'trainSlowFactor'],
   bfg: ['range', 'directDamage', 'proximityPulse'],
   nuke: [],
@@ -252,6 +252,14 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.type === 'molotov') {
+    for (const key of ['wildfireChunkCount', 'wildfireChunkRadius', 'wildfireChunkFlightMs', 'firewalkerDurationMs']) {
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || (value[key] as number) < 0)
+        issues.push('$.molotov.' + key + ': nonnegative finite number required');
+    }
+    if (!Number.isSafeInteger(value.wildfireChunkCount))
+      issues.push('$.wildfireChunkCount: integer count required');
+  }
   if (value.type === 'decoy') {
     for (const key of ['refundRadius', 'refundPerEnemyMs', 'lureRadius', 'stealthMoveSpeedBonus',
       'stealthHpRegenPerSecond', 'stealthAdrenalineRegenBonus', 'fireTrailDurationMs']) {

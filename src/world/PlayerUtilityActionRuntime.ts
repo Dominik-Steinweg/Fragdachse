@@ -1,3 +1,4 @@
+import { resolveMolotovFireEffect } from '../loadout/resolveMolotovFireEffect';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
@@ -712,7 +713,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         fragmentation: cfg.fragmentation, throwSpeed: cfg.projectileSpeed };
     }
     if (cfg.type === 'molotov') {
-      return { type: 'fire' as const, radius: cfg.fireRadius, damagePerTick: cfg.fireDamagePerTick, lingerDuration: cfg.fireLingerDuration, allowTeamDamage: cfg.allowTeamDamage, rockDamageMult: cfg.rockDamageMult, trainDamageMult: cfg.trainDamageMult, baseDamageMult: cfg.baseDamageMult, burnDurationMs: cfg.fireBurnDurationMs, burnDamagePerTick: cfg.fireBurnDamagePerTick, wildfire: (cfg.wildfireEnabled ?? 0) > 0 ? { speedMultiplier: cfg.wildfirePanicSpeedMultiplier ?? 1.5, trailDurationMs: cfg.wildfireTrailDurationMs ?? 2000, trailDamagePerTick: cfg.wildfireTrailDamagePerTick ?? 2 } : undefined };
+      return resolveMolotovFireEffect(cfg);
     }
     if (cfg.type === 'smoke') {
       return { type: 'smoke' as const, behavior: cfg.smokeBehavior, radius: cfg.smokeRadius, spreadDuration: cfg.smokeExpandDuration, lingerDuration: cfg.smokeLingerDuration, dissipateDuration: cfg.smokeDissipateDuration, maxAlpha: cfg.smokeMaxAlpha, dotDamagePerTick: cfg.smokeDotDamagePerTick, dotTickIntervalMs: cfg.smokeDotTickIntervalMs };

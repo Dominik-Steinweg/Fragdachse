@@ -574,6 +574,10 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly fireLingerDuration: number;  // ms wie lange das Feuer brennt
   readonly fireBurnDurationMs?:     number;  // ms – Dauer eines Burn-Stacks pro Tick
   readonly fireBurnDamagePerTick?:  number;  // HP Schaden pro Burn-Tick
+  readonly wildfireChunkCount: number;
+  readonly wildfireChunkRadius: number;
+  readonly wildfireChunkFlightMs: number;
+  readonly firewalkerDurationMs: number;
   readonly wildfireEnabled?: number;
   readonly wildfirePanicSpeedMultiplier?: number;
   readonly wildfireTrailDurationMs?: number;

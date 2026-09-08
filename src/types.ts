@@ -248,6 +248,7 @@ export interface PlayerNetState {
   /** Authoritative origin of the active dash; missing in older snapshots means ordinary dash. */
   isBurrowDash?: boolean;
   flameRingRadius?: number;
+  isMolotovFirewalkerActive?: boolean;
   aim:        PlayerAimNetState;
 }
 
@@ -418,6 +419,21 @@ export interface FireChunkBurstConfig extends GroundFireCellEffect {
   readonly searchRadius: number;
   readonly flightMs: number;
   readonly igniteCenter: boolean;
+}
+
+/** Resolved at Molotov creation; inherited only by its enemy wildfire trail. */
+export interface MolotovFirewalkerEffect {
+  readonly durationMs: number;
+  readonly trailDurationMs: number;
+  readonly trailDamagePerTick: number;
+  readonly burn?: BurnOnHitConfig;
+}
+
+/** Gameplay facts retained before the panicking target is removed. */
+export interface MolotovWildfireDeath {
+  readonly sourceKey: string;
+  readonly ownerId: string;
+  readonly burst: FireChunkBurstConfig;
 }
 
 export interface FireChunkTarget {
@@ -1277,7 +1293,9 @@ export interface FireGrenadeEffect {
   visualStyle?: GroundFireVisualStyle;
   /** Entitaetsgruppe, die die Flaeche verletzen darf; ohne Wert trifft sie alle. */
   damageTarget?: GroundFireDamageTarget;
+  firewalker?: MolotovFirewalkerEffect;
   wildfire?: {
+    deathBurst?: FireChunkBurstConfig;
     speedMultiplier: number;
     trailDurationMs: number;
     trailDamagePerTick: number;

@@ -363,7 +363,7 @@ export class EnemyManager {
     now: number,
     deltaMs: number,
     fireSystem?: FireSystem | null,
-    activeBurnSourceResolver?: ((enemyId: string, now: number) => ReadonlyArray<{ sourceId: string }>) | null,
+    activeBurnSourceResolver?: ((enemyId: string, now: number) => ReadonlyArray<{ sourceKey: string }>) | null,
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
     burrowSystem?: EnemyBurrowMovementSource | null,
     combatPositioningSystem?: EnemyCombatPositioningSource | null,
@@ -610,6 +610,12 @@ export class EnemyManager {
   }
 
 
+  private captureWildfireDeath(enemyId: string): import('../types').MolotovWildfireDeath | undefined {
+    const state = this.wildfirePanicStates.get(enemyId);
+    if (!state?.deathBurst) return undefined;
+    return { sourceKey: state.sourceId, ownerId: state.ownerId, burst: { ...state.deathBurst } };
+  }
+
   isEnemyPanicking(enemyId: string): boolean {
     return this.wildfirePanicStates.has(enemyId);
   }
@@ -617,7 +623,7 @@ export class EnemyManager {
   private updateWildfirePanicState(
     enemy: EnemyEntity,
     fireSystem: FireSystem | null,
-    activeBurnSourceResolver: ((enemyId: string, now: number) => ReadonlyArray<{ sourceId: string }>) | null,
+    activeBurnSourceResolver: ((enemyId: string, now: number) => ReadonlyArray<{ sourceKey: string }>) | null,
     now: number,
   ): WildfirePanicState | null {
     if (!fireSystem || !activeBurnSourceResolver) {
@@ -626,7 +632,7 @@ export class EnemyManager {
     }
 
     const activeBurns = activeBurnSourceResolver(enemy.id, now);
-    const activeSourceIds = new Set(activeBurns.map(source => source.sourceId));
+    const activeSourceIds = new Set(activeBurns.map(source => source.sourceKey));
     let state = this.wildfirePanicStates.get(enemy.id) ?? null;
     if (state && !activeSourceIds.has(state.sourceId)) {
       this.wildfirePanicStates.delete(enemy.id);
@@ -689,6 +695,7 @@ export class EnemyManager {
           damagePerTick: state.trailDamagePerTick,
           burn: state.burn,
           sourceId: 'ground_fire.wildfire',
+          firewalker: state.firewalker,
         },
         now,
       );
@@ -1231,6 +1238,7 @@ export class EnemyManager {
           targetAllegiance: enemy.ownerId ? { ownerId: enemy.ownerId, factionId: enemy.faction } : undefined,
           targetCategory: enemy.kind,
           rewardEligible: enemy.faction === 'hostile',
+          molotovWildfire: this.captureWildfireDeath(id),
           presentation: { ...death },
         },
       },

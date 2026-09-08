@@ -33,6 +33,24 @@ vi.mock('phaser', () => ({
 import { FireSystem } from '../src/effects/FireSystem';
 
 describe('FireSystem visual styles and damage targets', () => {
+  it('copies and refreshes Firewalker metadata independently of ordinary ground fire', () => {
+    const fire = new FireSystem({} as Phaser.Scene);
+    const walker = { durationMs: 1000, trailDurationMs: 2000, trailDamagePerTick: 2,
+      burn: { durationMs: 500, damagePerTick: 1 } };
+    const options = { sourceKey: 'wildfire:owner', ownerId: 'owner', durationMs: 3000,
+      firewalker: walker };
+    fire.hostRefreshGroundCell(300, 300, options, 1000);
+    walker.burn.damagePerTick = 20;
+    const initial = fire.collectContacts(300, 300, 1, 1000)[0];
+    expect(initial.firewalker?.burn?.damagePerTick).toBe(1);
+    initial.firewalker!.burn!.damagePerTick = 40;
+    expect(fire.collectContacts(300, 300, 1, 1000)[0].firewalker?.burn?.damagePerTick).toBe(1);
+    fire.hostRefreshGroundCell(300, 300, options, 1100);
+    expect(fire.collectContacts(300, 300, 1, 1100)[0].firewalker?.burn?.damagePerTick).toBe(20);
+    fire.hostRefreshGroundCell(300, 300, { ...options, firewalker: undefined }, 1200);
+    expect(fire.collectContacts(300, 300, 1, 1200)[0].firewalker).toBeUndefined();
+  });
+
   it('revalidates an existing fire cell only after the obstacle revision changes', () => {
     const fireSystem = new FireSystem({} as Phaser.Scene);
     const isBlocked = vi.fn(() => false);

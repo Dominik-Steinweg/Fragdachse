@@ -20,6 +20,7 @@ const FLAG_CHARGING_ULT = 16;
 const FLAG_DECOY_STEALTHED = 32;
 const FLAG_AIM_MOVING = 64;
 const FLAG_BURROW_DASH = 128;
+const FLAG_MOLOTOV_FIREWALKER = 256;
 
 /** Kompakte Wire-Form eines Spielers. Schlüssel bewusst kurz; optionale Felder fehlen bei Default. */
 interface CompactPlayerState {
@@ -58,6 +59,7 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   if (state.isDecoyStealthed) flags |= FLAG_DECOY_STEALTHED;
   if (state.aim.isMoving) flags |= FLAG_AIM_MOVING;
   if (state.isBurrowDash === true) flags |= FLAG_BURROW_DASH;
+  if (state.isMolotovFirewalkerActive === true) flags |= FLAG_MOLOTOV_FIREWALKER;
 
   const compact: CompactPlayerState = {
     x: state.x,
@@ -125,6 +127,7 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
     dashPhase: compact.p as 0 | 1 | 2,
     isBurrowDash: (flags & FLAG_BURROW_DASH) !== 0,
     flameRingRadius: compact.fr,
+    isMolotovFirewalkerActive: (flags & FLAG_MOLOTOV_FIREWALKER) !== 0,
     aim,
   };
 }

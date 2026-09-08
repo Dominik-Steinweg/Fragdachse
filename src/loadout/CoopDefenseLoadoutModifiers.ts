@@ -705,6 +705,14 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'MOLOTOV_GRENADE',
     targets: [{ path: ['fireBurnDurationMs'], formula: 'scale' }],
   },
+  'utility.MOLOTOV_GRENADE.wildfireChunkCount': {
+    kind: 'utility', itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['wildfireChunkCount'], formula: 'add' }],
+  },
+  'utility.MOLOTOV_GRENADE.firewalkerDurationMs': {
+    kind: 'utility', itemId: 'MOLOTOV_GRENADE',
+    targets: [{ path: ['firewalkerDurationMs'], formula: 'add' }],
+  },
   'utility.MOLOTOV_GRENADE.wildfireEnabled': {
     kind: 'utility',
     itemId: 'MOLOTOV_GRENADE',

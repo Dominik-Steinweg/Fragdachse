@@ -2,6 +2,8 @@ import * as Phaser from 'phaser';
 import { BURN_TICK_INTERVAL_MS, isPointInsideArena } from '../config';
 import type {
   BurnOnHitConfig,
+  FireChunkBurstConfig,
+  MolotovFirewalkerEffect,
   FireGrenadeEffect,
   GroundFireDamageTarget,
   GroundFireVisualStyle,
@@ -33,6 +35,7 @@ export interface FireDamageEvent {
 }
 
 export interface GroundFireContact {
+  firewalker?: MolotovFirewalkerEffect;
   sourceKey: string;
   x: number;
   y: number;
@@ -57,6 +60,8 @@ export interface GroundFireOwner {
 }
 
 export interface WildfireSourceInfo {
+  deathBurst?: FireChunkBurstConfig;
+  firewalker?: MolotovFirewalkerEffect;
   sourceId: string;
   ownerId: string;
   speedMultiplier: number;
@@ -66,6 +71,7 @@ export interface WildfireSourceInfo {
 }
 
 export interface GroundFireCellOptions {
+  firewalker?: MolotovFirewalkerEffect;
   /** Stabiler logischer Schluessel; pro Rasterzelle wird daraus eine auffrischbare Quelle. */
   sourceKey: string;
   ownerId: string;
@@ -85,6 +91,7 @@ export interface GroundFireCellOptions {
 }
 
 interface ActiveGroundSource {
+  firewalker?: MolotovFirewalkerEffect;
   id: number;
   key: string;
   ownerId: string;
@@ -223,7 +230,8 @@ export class FireSystem {
       exposeAsZone: true,
       obstacleRevision: this.getObstacleRevision?.() ?? Number.NaN,
       cells: new Set(),
-      wildfire: config.wildfire ? { ...config.wildfire } : undefined,
+      firewalker: config.firewalker ? structuredClone(config.firewalker) : undefined,
+      wildfire: config.wildfire ? structuredClone(config.wildfire) : undefined,
       wildfireEscapeVectors: new Map(),
     };
 
@@ -285,6 +293,7 @@ export class FireSystem {
         visualStyle: options.visualStyle ?? 'normal',
         damageTarget: options.damageTarget ?? 'all',
         staticSource: options.static === true && options.permanent === true,
+        firewalker: options.firewalker ? structuredClone(options.firewalker) : undefined,
         exposeAsZone: false,
         obstacleRevision,
         cells: new Set(),
@@ -296,6 +305,7 @@ export class FireSystem {
     } else {
       source.obstacleRevision = obstacleRevision;
       source.expiresAt = expiresAt;
+      source.firewalker = options.firewalker ? structuredClone(options.firewalker) : undefined;
       source.damagePerTick = Math.max(0, options.damagePerTick ?? 0);
       source.burn = options.burn ? { ...options.burn } : undefined;
       source.igniteProjectiles = options.igniteProjectiles === true;
@@ -389,6 +399,8 @@ export class FireSystem {
     return {
       sourceId: source.key,
       ownerId: source.ownerId,
+      deathBurst: source.wildfire.deathBurst ? { ...source.wildfire.deathBurst } : undefined,
+      firewalker: source.firewalker ? structuredClone(source.firewalker) : undefined,
       speedMultiplier: Math.max(1, source.wildfire.speedMultiplier),
       trailDurationMs: Math.max(0, source.wildfire.trailDurationMs),
       trailDamagePerTick: Math.max(0, source.wildfire.trailDamagePerTick),
@@ -494,6 +506,7 @@ export class FireSystem {
           sourceId: source.sourceId,
           visualStyle: source.visualStyle,
           damageTarget: source.damageTarget,
+          firewalker: source.firewalker ? structuredClone(source.firewalker) : undefined,
         });
       }
     });

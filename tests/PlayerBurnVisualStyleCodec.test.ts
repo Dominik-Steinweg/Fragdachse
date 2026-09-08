@@ -32,6 +32,12 @@ function makePlayerState(burnVisualStyle: PlayerNetState['burnVisualStyle']): Pl
 }
 
 describe('player burn visual style codec', () => {
+  it('round-trips Firewalker independently of damaging burn and defaults old snapshots to inactive', () => {
+    const active = { ...makePlayerState('void'), isMolotovFirewalkerActive: true };
+    const result = decodePlayerStates(encodePlayerStates({ active, old: makePlayerState('normal') }));
+    expect(result.active).toMatchObject({ isMolotovFirewalkerActive: true, burnVisualStyle: 'void', burnStacks: active.burnStacks });
+    expect(result.old.isMolotovFirewalkerActive).toBe(false);
+  });
   it('preserves the active dash origin and normalizes older snapshots to ordinary dash', () => {
     const special = { ...makePlayerState('normal'), dashPhase: 1 as const, isBurrowDash: true };
     const decoded = decodePlayerStates(encodePlayerStates({ special, old: makePlayerState(undefined) }));

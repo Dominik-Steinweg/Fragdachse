@@ -1,3 +1,4 @@
+import { MolotovFirewalkerRenderer } from '../effects/MolotovFirewalkerRenderer';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { PLAYER_MOVEMENT_VISUAL } from '../config/movementEffects';
 import { BURROW_FX } from '../config/burrowEffects';
@@ -111,6 +112,7 @@ export class PlayerEntity {
   private stealthAmbientParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private stealthTrailParticles: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
   private burnRenderer: EntityBurnRenderer | null = null;
+  private firewalkerRenderer: MolotovFirewalkerRenderer | null = null;
   private burnGpu: EntityBurnGpuController | null = null;
   private rageRenderer: HoneyBadgerRageRenderer | null = null;
   /** Getragenes Loadout-Item; liegt knapp ueber der Figur, aber unter Spawn- und Stealth-Ebenen. */
@@ -355,6 +357,8 @@ export class PlayerEntity {
     return this.runtime.getCollisionRadius();
   }
 
+  get positionRevision(): number { return this.runtime.positionRevision; }
+
   getCollisionRadius(): number {
     return this.runtime.getCollisionRadius();
   }
@@ -594,6 +598,17 @@ export class PlayerEntity {
     const visible = this.sprite.visible && this.worldBarsVisible && this.currentArmor > 0;
     this.armorBarBg.setVisible(visible);
     this.armorBarFg.setVisible(visible);
+  }
+
+  updateMolotovFirewalker(active: boolean): void {
+    if (!active) {
+      this.firewalkerRenderer?.destroy();
+      this.firewalkerRenderer = null;
+      return;
+    }
+    if (!this.sprite) return;
+    this.firewalkerRenderer ??= new MolotovFirewalkerRenderer(this.sprite.scene);
+    this.syncAttachedEffects();
   }
 
   updateBurnStacks(stacks: number, visualStyle: GroundFireVisualStyle = 'normal'): void {
@@ -1153,6 +1168,7 @@ export class PlayerEntity {
   private syncAttachedEffects(): void {
     // Ohne Sprite gibt es keine Darstellung, die nachzufuehren waere.
     if (!this.sprite) return;
+    this.firewalkerRenderer?.sync(this.sprite.x, this.sprite.y, this.sprite.displayWidth, this.sprite.visible);
     this.burnRenderer?.sync(
       this.sprite.x,
       this.sprite.y,
@@ -1174,6 +1190,7 @@ export class PlayerEntity {
     this.stealthTrailParticles?.destroy();
     this.burnRenderer?.destroy();
     this.rageRenderer?.destroy();
+    this.firewalkerRenderer?.destroy();
     this.heldItem?.destroy();
     this.healthBars?.release(this.healthBar);
     this.healthBar = null;

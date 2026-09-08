@@ -5674,6 +5674,50 @@
                                             },
 
                                             {
+                                                "id": "molotov_wildfire_chunks",
+                                                "code": "D-U4-5",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "sortOrder": 226,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "molotov_wildfire",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.MOLOTOV_GRENADE.wildfireChunkCount",
+                                                        "mode": "add_per_level",
+                                                        "value": 2
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "molotov_firewalker",
+                                                "code": "D-U4-6",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "sortOrder": 227,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "molotov_wildfire",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.MOLOTOV_GRENADE.firewalkerDurationMs",
+                                                        "mode": "add_per_level",
+                                                        "value": 1000
+                                                    }
+                                                ]
+                                            },
+                                            {
                                                 "id":  "molotov_wildfire",
                                                 "code":  "D-U4-C",
                                                 "kind":  "upgrade",

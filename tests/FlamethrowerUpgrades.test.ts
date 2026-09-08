@@ -1,3 +1,5 @@
+import { resolvedMolotov } from './MolotovTestHelper';
+import { resolveMolotovFireEffect } from '../src/loadout/resolveMolotovFireEffect';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -32,6 +34,30 @@ function maxProfile(upgradeIds: readonly string[]): CoopDefenseUpgradeProfile {
 }
 
 describe('Flamethrower fireball coop-defense upgrade', () => {
+  it.each([false, true])('inherits the complete Molotov effect only with Napalm Mixture (%s)', inherit => {
+    const createZone = vi.fn();
+    const base = WEAPON_CONFIGS.FLAMETHROWER;
+    const config = resolvedMolotov();
+    const system = new FlamethrowerUpgradeSystem(
+      { getAllPlayers: () => [] } as never, null, { getTravelSamples: () => [] }, {} as never,
+      { isAlive: () => false } as never,
+      { getEquippedWeaponConfig: () => ({ ...base, fire: { ...base.fire,
+        kamikaze: { enabled: 1, inheritMolotovBonuses: inherit ? 1 : 0 } } }),
+        resolveUtilityConfig: () => config } as never,
+      { hostCreateZone: createZone } as never,
+      () => false, () => true, () => {}, (_id, _stat, value) => value, () => {},
+    );
+    system.handlePlayerDeath('owner', 100, 200);
+    expect(createZone).toHaveBeenCalledOnce();
+    const effect = createZone.mock.calls[0][2];
+    if (inherit) {
+      expect(effect.firewalker).toEqual(resolveMolotovFireEffect(config).firewalker);
+      expect(effect.wildfire).toEqual(resolveMolotovFireEffect(config).wildfire);
+    } else {
+      expect(effect.firewalker).toBeUndefined();
+      expect(effect.wildfire).toBeUndefined();
+    }
+  });
   it('keeps continuous-fire adrenaline consumption per time equal to the base weapon', () => {
     const base = WEAPON_CONFIGS.FLAMETHROWER;
     const upgradeIds = [

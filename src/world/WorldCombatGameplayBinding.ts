@@ -624,9 +624,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       combat.getEnemyMovementFactor(enemyId, now),
     ));
     hostPhysics.setEnemyHitStaggerResolver((enemyId, now) => combat.isEnemyHitStaggered(enemyId, now));
-    combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death) => {
+    combat.setEnemyDeathCallback((enemyId, x, y, burnSources, death, _target, wildfire) => {
       const generation = this.activityGeneration;
       const current = () => !this.destroyed && generation === this.activityGeneration;
+      if (wildfire) {
+        o.getPlayerCombatIntegration()?.reactions.handleMolotovWildfireDeath(
+          enemyId, x, y, burnSources, combat.getHostTime(), wildfire);
+        if (!current()) return true;
+      }
       const wasTimebomb = death ? (o.getTimebombSystem()?.handleKilled(death, combat.getHostTime()) ?? false) : false;
       if (!current()) return true;
       if (wasTimebomb) {

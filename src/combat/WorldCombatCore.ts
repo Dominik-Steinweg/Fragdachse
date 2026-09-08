@@ -1,3 +1,4 @@
+import type { MolotovWildfireDeath } from '../types';
 import * as Phaser from 'phaser';
 import type { PrimaryHitAdrenalineRewardFact, PrimaryHitAdrenalineRewardIntent, PrimaryHitRewardScope } from './PrimaryHitReward';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
@@ -397,7 +398,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   // Callback: (killerId, victimId, sourceId) – Host-only
   private onKillCb: ((killerId: string, victimId: string, sourceId: string, x: number, y: number, source?: KillSourceContext) => void) | null = null;
   private onDeathCb: ((playerId: string, x: number, y: number) => void) | null = null;
-  private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death: EnemyDeathInfo | undefined, target: CombatTargetRef) => boolean | void) | null = null;
+  private onEnemyDeathCb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death: EnemyDeathInfo | undefined, target: CombatTargetRef, wildfire?: MolotovWildfireDeath) => boolean | void) | null = null;
   private onAk47DirectEnemyHit: ((context: ProjectileAk47HitContext, enemyId: string, nowMs: number) => ProjectileAk47DirectImpact | null) | null = null;
 
   // Optionale Referenzen – werden nach Konstruktion gesetzt
@@ -1066,7 +1067,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.onDeathCb = cb;
   }
 
-  setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death: EnemyDeathInfo | undefined, target: CombatTargetRef) => boolean | void) | null): void {
+  setEnemyDeathCallback(cb: ((enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], death: EnemyDeathInfo | undefined, target: CombatTargetRef, wildfire?: MolotovWildfireDeath) => boolean | void) | null): void {
     this.onEnemyDeathCb = cb;
   }
 
@@ -3943,6 +3944,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         activeBurnSources,
         result.death,
         deadTarget,
+        outcome.transition.kind === 'dead' ? outcome.transition.facts.molotovWildfire : undefined,
       ) === true;
       if (!current()) return outcome;
       if (!suppressStandardDeathEffect) {

@@ -23,6 +23,8 @@ export type PlayerPhysicsProxy = Phaser.GameObjects.Zone;
  */
 export class PlayerBody {
   readonly proxy: PlayerPhysicsProxy;
+  /** Changes only on hard position resets, never on ordinary movement. */
+  positionRevision = 0;
 
   /** Kollisionsradius in Weltpixeln; die Zone selbst wird nie skaliert. */
   private collisionRadius = PLAYER_SIZE / 2;
@@ -57,6 +59,7 @@ export class PlayerBody {
   setPosition(x: number, y: number): void {
     this.proxy.setPosition(x, y);
     this.body.reset(x, y);
+    this.positionRevision += 1;
   }
 
   /** Bewegt die Figur ohne den Koerper zurueckzusetzen - Client-Interpolation. */

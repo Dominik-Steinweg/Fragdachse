@@ -1,4 +1,4 @@
-import type { CombatDamageKind } from '../types';
+import type { CombatDamageKind, MolotovWildfireDeath } from '../types';
 import type { CombatAllegianceRef, CombatSource, CombatTargetRef } from './CombatScope';
 
 export type CombatOutcomeId = string;
@@ -112,6 +112,7 @@ export interface TargetMutationNoEffect {
 
 /** Minimal immutable facts captured before terminal target removal. */
 export interface CombatTerminalFacts {
+  readonly molotovWildfire?: MolotovWildfireDeath;
   readonly target: CombatTargetRef;
   readonly position: { readonly x: number; readonly y: number };
   readonly targetAllegiance?: CombatAllegianceRef;

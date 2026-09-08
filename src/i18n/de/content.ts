@@ -168,6 +168,8 @@ export const deContent = {
   "source.ground_fire.player_death.name": "Brennender Boden",
   "source.ground_fire.player_fire.name": "Brennender Boden",
   "source.ground_fire.molotov.name": "Molotow-Brand",
+  "source.ground_fire.molotov_chunks.name": "Brandzerfall",
+  "source.ground_fire.molotov_firewalker.name": "Feuerläufer",
   "source.ground_fire.wildfire.name": "Lauffeuer",
   "source.weapon.unknown.name": "Waffe",
   "source.weapon.fireball_fire.name": "Feuerball-Brand",

@@ -994,6 +994,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         damageBonusPct: 0,
       });
 
+      player.updateMolotovFirewalker(playerFrame?.isMolotovFirewalkerActive ?? false);
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
         x: Math.round(player.x),
@@ -1022,6 +1023,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         dashPhase: this.ctx.hostPhysics.getDashPhase(player.id),
         isBurrowDash: this.ctx.hostPhysics.isBurrowDash(player.id),
         flameRingRadius: playerFrame?.flameRingRadius,
+        isMolotovFirewalkerActive: playerFrame?.isMolotovFirewalkerActive ?? false,
         aim: {
           revision:             aim.revision,
           isMoving:             aim.isMoving,

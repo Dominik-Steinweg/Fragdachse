@@ -1,3 +1,4 @@
+import { MolotovUpgradeSystem } from '../systems/MolotovUpgradeSystem';
 import type { WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
 import { captureCoopDefenseOutgoingDamage } from '../utils/coopDefenseStats';
 import type { PrimaryHitRewardScopeReadPort } from '../combat/PrimaryHitReward';
@@ -163,6 +164,7 @@ interface WorldPlayerGameplaySystems {
   readonly repairDrone: RepairDroneSystem | null;
   readonly slimeTrail: SlimeTrailSystem | null;
   readonly flamethrowerUpgrade: FlamethrowerUpgradeSystem | null;
+  readonly molotovUpgrade: MolotovUpgradeSystem | null;
   readonly weaponUpgrade: WeaponUpgradeSystem | null;
   readonly ak47Behavior: Ak47BehaviorRuntime | null;
   readonly negevBehavior: NegevBehaviorRuntime;
@@ -329,6 +331,7 @@ export interface PlayerGameplayHostFrameReadModel {
   readonly weapon2CooldownFrac: number;
   readonly weapon2AdrenalineCost: number;
   readonly flameRingRadius: number | undefined;
+  readonly isMolotovFirewalkerActive: boolean;
 }
 
 export interface PlayerGameplayPostProjectileStageResult {
@@ -577,6 +580,13 @@ export class WorldPlayerGameplayRuntime implements
         visualStyle,
       ),
     );
+    const molotovUpgrade = new MolotovUpgradeSystem(
+      () => options.playerManager.getAllPlayers(),
+      playerId => options.combatSystem.isAlive(playerId),
+      playerId => burrow.isBurrowed(playerId),
+      options.fireSystem,
+      flamethrowerUpgrade,
+    );
     const weaponUpgrade = new WeaponUpgradeSystem(
       options.projectileTravelReadPort,
       enemyManager,
@@ -674,6 +684,7 @@ export class WorldPlayerGameplayRuntime implements
       repairDrone,
       slimeTrail,
       flamethrowerUpgrade,
+      molotovUpgrade,
       weaponUpgrade,
       ak47Behavior,
       negevBehavior,
@@ -701,6 +712,7 @@ export class WorldPlayerGameplayRuntime implements
       this.systems.guardianSpirit?.clear();
       this.systems.slimeTrail?.clear();
       this.systems.flamethrowerUpgrade?.clear();
+      this.systems.molotovUpgrade?.clear();
       this.systems.weaponUpgrade?.clear();
       this.systems.ak47StrategicTarget?.clear();
     }
@@ -765,6 +777,9 @@ export class WorldPlayerGameplayRuntime implements
         handleNaturalFlameExpiry: (projectile, nowMs) => {
           systems.flamethrowerUpgrade?.handleNaturalFlameExpiry(projectile, nowMs);
         },
+        handleMolotovWildfireDeath: (enemyId, x, y, burnSources, nowMs, wildfire) => {
+          systems.molotovUpgrade?.handleEnemyDeath(enemyId, x, y, burnSources, nowMs, wildfire);
+        },
         handleEnemyDeath: (enemyId, x, y, burnSources, nowMs) => {
           systems.flamethrowerUpgrade?.handleEnemyDeath(x, y, burnSources, nowMs);
           const burst = systems.slimeTrail?.handleEnemyDeath(enemyId, x, y, nowMs) ?? null;
@@ -772,6 +787,7 @@ export class WorldPlayerGameplayRuntime implements
         },
         removeEnemy: (enemyId) => systems.itemRuntime.removeEnemy(enemyId),
         handlePlayerDeath: (playerId, x, y) => {
+          systems.molotovUpgrade?.removePlayer(playerId);
           systems.flamethrowerUpgrade?.handlePlayerDeath(playerId, x, y);
         },
         resolveProjectile: (outcome) => {
@@ -936,6 +952,7 @@ export class WorldPlayerGameplayRuntime implements
     const repairDrones = systems.repairDrone?.getSnapshot() ?? [];
     const slimeTrail = systems.slimeTrail?.hostUpdate(nowMs) ?? { cells: [], affectedEnemies: [] };
     systems.flamethrowerUpgrade?.hostUpdate(nowMs);
+    systems.molotovUpgrade?.hostUpdate(nowMs);
     return { guardianSpirits, repairDrones, slimeTrail };
   }
 
@@ -989,6 +1006,7 @@ export class WorldPlayerGameplayRuntime implements
         ? 0
         : systems.resource.resolveAdrenalineCost(playerId, weapon2Config?.adrenalinCost ?? 0),
       flameRingRadius: systems.flamethrowerUpgrade?.getActiveRingRadius(playerId),
+      isMolotovFirewalkerActive: systems.molotovUpgrade?.isActive(playerId, nowMs) ?? false,
     };
   }
 
@@ -1085,6 +1103,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.negevBehavior.resetPlayer(playerId);
     this.systems.sustainedWeaponBehavior.resetPlayer(playerId);
     this.systems.weaponReaction.resetPlayer(playerId);
+    this.systems.molotovUpgrade?.removePlayer(playerId);
     this.systems.loadout.assignDefaultLoadout(playerId, selection);
     this.shieldBuffPort?.resetPlayer(playerId);
     this.systems.utilityAction.syncEquippedUtility(playerId);
@@ -1096,6 +1115,7 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.negevBehavior.removePlayer(playerId);
     this.systems.sustainedWeaponBehavior.removePlayer(playerId);
     this.systems.weaponReaction.removePlayer(playerId);
+    this.systems.molotovUpgrade?.removePlayer(playerId);
     this.systems.utilityAction.removePlayer(playerId);
     this.systems.loadout.removePlayer(playerId);
     this.shieldBuffPort?.removePlayer(playerId);
@@ -1113,6 +1133,7 @@ export class WorldPlayerGameplayRuntime implements
       this.systems.negevBehavior.resetPlayer(playerId);
       this.systems.sustainedWeaponBehavior.resetPlayer(playerId);
       this.systems.weaponReaction.resetPlayer(playerId);
+      this.systems.molotovUpgrade?.removePlayer(playerId);
       this.shieldBuffPort?.resetPlayer(playerId);
     }
     this.systems.utilityAction.syncEquippedUtility(playerId);
@@ -1394,6 +1415,7 @@ export class WorldPlayerGameplayRuntime implements
     systems.repairDrone?.clear();
     systems.slimeTrail?.clear();
     systems.flamethrowerUpgrade?.clear();
+    systems.molotovUpgrade?.clear();
     systems.weaponUpgrade?.clear();
     systems.ak47StrategicTarget?.clear();
     systems.tunnel.clear();

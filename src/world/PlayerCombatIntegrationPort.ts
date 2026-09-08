@@ -1,3 +1,4 @@
+import type { MolotovWildfireDeath } from '../types';
 import type { CombatDamageKind } from '../types';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
 import type { SlimeDeathBurst } from '../systems/SlimeTrailSystem';
@@ -139,6 +140,7 @@ export interface PlayerCombatReactionPort {
   ): ProjectileAk47DirectImpact | null;
   handleNaturalFlameExpiry(projectile: ProjectileFlameExpiryEvent, nowMs: number): void;
   handleEnemyDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], nowMs: number): SlimeDeathBurst | null;
+  handleMolotovWildfireDeath(enemyId: string, x: number, y: number, burnSources: readonly ActiveBurnSource[], nowMs: number, wildfire: MolotovWildfireDeath): void;
   removeEnemy(enemyId: string): void;
   handlePlayerDeath(playerId: string, x: number, y: number): void;
   handleCoopDefenseItemKill(killerId: string, victimId: string, x: number, y: number, nowMs: number,
