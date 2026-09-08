@@ -1608,8 +1608,8 @@
       ],
       "description": {
         "silhouette": "Aufrechter breitschultriger Dachs mit seitlich versetzten waffenbereiten Händen, getrennten Beinen und hellem Süd-Schwanz.",
-        "colors": "Dunkle graue Flanken, kontrolliert helle Muskelpartien, eigenständig heller Kopf mit dunklen Gesichtsbändern.",
-        "anatomy": "Zweibeiniger Lauf am Ursprung mit erhaltener Form; Körper, Kopf und Arme bewegen sich ausbalanciert, Füße greifen weiter vor und kürzer zurück."
+        "colors": "Dunkles graues Fell mit weichen, reduzierten Muskelkontrasten, hellere Pfoten und eigenständig heller Kopf mit dunklen Gesichtsbändern.",
+        "anatomy": "Schneller zweibeiniger Lauf am Ursprung: enger Stand, kräftig wippender Körper und Schultern, sanft zu stabilen Händen auslaufende Armbewegung; grimmiger Blick."
       },
       "requiredClips": [
         "move"
@@ -1617,10 +1617,17 @@
       "production": "reference",
       "recipe": "badger",
       "model": {
-        "footSouthOffset": 0.2,
-        "upperBodyMotion": "balanced"
+        "footSouthOffset": 0.04,
+        "footSpacing": 1.65,
+        "headSouthOffset": 0.04,
+        "earSouthOffset": 0.055,
+        "fierceEyes": true,
+        "furBase": [0.035, 0.047, 0.057],
+        "furTones": [[12, 18, 23], [25, 34, 42], [47, 59, 68], [77, 92, 103]],
+        "footColor": [0.055, 0.067, 0.075],
+        "upperBodyMotion": "stable-grip"
       },
-      "orthoScale": 2.02,
+      "orthoScale": 2.1,
       "collisionDiameter": 32,
       "materialVariants": {
         "calm": {
@@ -1629,14 +1636,14 @@
           "formShadowStrength": 0.55
         },
         "rich": {
-          "label": "Kräftig · originalnah",
+          "label": "Dunkel · weich modelliert",
           "textureStrength": 0.22,
           "formShadowStrength": 1
         }
       },
       "previousReference": {
-        "label": "Dachs V2-F · bisheriger Lauf",
-        "path": "art/poc/pipeline-v2/runs/v2-f/badger/rich/sprite-128.png"
+        "label": "Dachs V2-G · bisheriger Lauf",
+        "path": "art/poc/pipeline-v2/runs/v2-g/badger/rich/sprite-128.png"
       },
       "textures": {
         "organic": "art/poc/pipeline-v1/textures/organic.png"
@@ -1646,23 +1653,22 @@
           "name": "move",
           "motion": "player_walk",
           "frameCount": 12,
-          "frameRate": 12,
+          "frameRate": 24,
           "loop": true,
           "parameters": {
-            "strideForward": 0.24,
-            "strideBack": 0.1,
-            "lift": 0.055,
-            "footRoll": 0.1,
+            "strideForward": 0.34,
+            "strideBack": 0.12,
+            "lift": 0.12,
+            "footRoll": 0.20,
             "footYaw": 0.025,
-            "bodyYaw": 0.028,
-            "bodyRoll": 0.018,
-            "bodyPitch": 0.012,
-            "bodyBob": 0.023,
-            "bodyShift": 0.009,
-            "headYaw": -0.012,
-            "headBob": -0.006,
-            "armSwing": -0.014,
-            "armBob": 0.018
+            "bodyYaw": 0.045,
+            "bodyRoll": 0.024,
+            "bodyPitch": 0.038,
+            "bodyBob": 0.14,
+            "bodySurge": -0.025,
+            "bodyShift": 0.018,
+            "headYaw": -0.022,
+            "headBob": -0.035
           }
         }
       ]

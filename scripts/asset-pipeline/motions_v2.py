@@ -102,7 +102,7 @@ def apply(asset, motion, phase, frame, idle=False, parameters=None, rests=None):
             key(bone, 'rotation_euler', (p.get('footRoll', .08) * cycle, 0, p.get('footYaw', .05) * cycle), frame)
         sway = 0 if idle else math.sin(angle)
         bob = 0 if idle else .5 - .5 * math.cos(2 * angle)
-        pose('body', location=(p.get('bodyShift', 0) * sway, 0, p.get('bodyBob', 0) * bob),
+        pose('body', location=(p.get('bodyShift', 0) * sway, p.get('bodySurge', 0) * bob, p.get('bodyBob', 0) * bob),
              rotation=(p.get('bodyPitch', 0) * bob, p.get('bodyRoll', 0) * sway, p.get('bodyYaw', .025) * sway))
         pose('head', location=(0, 0, p.get('headBob', 0) * bob), rotation=(0, 0, p.get('headYaw', 0) * sway))
         pose('tail', rotation=(0, 0, p.get('tailYaw', 0) * sway))

@@ -4,16 +4,17 @@ import bpy
 from mathutils import Vector
 
 
-def build(c):
-    parts = {'left_leg': [], 'right_leg': [], 'upper': [], 'head': [], 'arms': []}
-    fur = c.material('Cool grey grouped fur', (.19, .23, .24), 'organic', form_shading=True)
+def build(c, style=None):
+    style = style or {}
+    parts = {'left_leg': [], 'right_leg': [], 'upper': [], 'head': [], 'arms': [], 'hands': []}
+    fur = c.material('Cool grey grouped fur', style.get('furBase', (.19, .23, .24)), 'organic', form_shading=True)
     # Badger-specific value range calibrated against the original at 32 pixels.
     # Shared material defaults (including the turret) remain unchanged.
     tones = fur.node_tree.nodes['Broad muscle values'].color_ramp.elements
     def linear_byte(value):
         value /= 255
         return value / 12.92 if value <= .04045 else ((value + .055) / 1.055)**2.4
-    for tone, rgb in zip(tones, [(5, 9, 13), (14, 23, 31), (39, 55, 67), (109, 127, 139)]):
+    for tone, rgb in zip(tones, style.get('furTones', [(5, 9, 13), (14, 23, 31), (39, 55, 67), (109, 127, 139)])):
         tone.color = (*[linear_byte(v) for v in rgb], 1)
     dark = c.material('Dark mask and ears', (.009, .012, .014), 'organic')
     ivory = c.material('Pale head fur', (.98, .99, .96), 'organic')
@@ -27,10 +28,11 @@ def build(c):
     tail_fur = c.material('Independent pale tail fur', (.70, .73, .68), 'organic')
     black = c.material('Near-black eyes and nose', (.002, .003, .004))
     glint = c.material('Warm eye reflection', (.89, .9, .78))
+    feet = c.material('Soft grey foot fur', style['footColor'], 'organic') if 'footColor' in style else dark
     # Feet point north under the vertical body; no south-facing shoe shapes.
     for side in [-1, 1]:
         limb = parts['left_leg' if side == -1 else 'right_leg']
-        limb.append(c.ell('Forward foot', (side * .21, -.03, .12), (.14, .22, .11), dark))
+        limb.append(c.ell('Forward foot', (side * .21, -.03, .12), (.14, .22, .11), feet))
         limb.append(c.ell('Upright hind leg', (side * .20, -.20, .48), (.15, .16, .39), fur))
     c.ell('Pelvis', (0, -.26, .87), (.47, .29, .26), fur)
     c.ell('Standing torso', (0, -.17, 1.22), (.54, .39, .45), fur)
@@ -81,7 +83,9 @@ def build(c):
         arms.append(ob)
         hand = c.box('Weapon-ready grip', (side*.13, end_y+.035, 1.55), (.17, .18, .13), dark, .048)
         hand.rotation_euler.z = side*.20
-        parts['arms'].extend([hand, c.ell('Folded thumb', (side*.065, end_y+.01, 1.585), (.037, .07, .035), fur)])
+        hands = [hand, c.ell('Folded thumb', (side*.065, end_y+.01, 1.585), (.037, .07, .035), fur)]
+        parts['arms'].extend(hands)
+        parts['hands'].extend(hands)
     parts['arms'].append(c.union('Continuous mantle and arms', arms))
     before_head = set(c.scene.objects)
     # Grow around the fixed north tip; rear rounding changes only on the south half.
@@ -129,16 +133,20 @@ def build(c):
     c.strengths.append(n['Surface detail strength'].inputs[0])
     c.box('Flat nose', (0, .601, 1.93), (.205, .095, .060), black, .029)
     for side in [-1, 1]:
-        eye = c.ell('Eye', (side*.175, .345, 2.064), (.075, .049, .027), black)
-        eye.rotation_euler.z = side*.27
-        c.ell('Eye reflection', (side*.175-.008, .345, 2.09), (.027, .016, .007), glint)
-        brow = c.ell('Forehead-side brow', (side*.175, .282, 2.105), (.080, .020, .014), dark)
-        brow.rotation_euler.z = side*.27
-        ear = c.ell('Laid-back dark ear', (side*.29925, .025, 2.044), (.060, .094, .030), dark)
+        fierce = style.get('fierceEyes', False)
+        eye = c.ell('Eye', (side*.175, .345, 2.064), (.096, .050, .027) if fierce else (.075, .049, .027), black)
+        eye.rotation_euler.z = side*(-.18 if fierce else .27)
+        c.ell('Eye reflection', (side*.175-.008, .354 if fierce else .345, 2.09), (.022, .011, .007) if fierce else (.027, .016, .007), glint)
+        brow = c.ell('Forehead-side brow', (side*.175, .298 if fierce else .282, 2.105), (.103, .022, .014) if fierce else (.080, .020, .014), dark)
+        brow.rotation_euler.z = side*(-.38 if fierce else .27)
+        ear_y = style.get('earSouthOffset', 0)
+        ear = c.ell('Laid-back dark ear', (side*.29925, .025-ear_y, 2.044), (.060, .094, .030), dark)
         ear.rotation_euler.z = side*.30
-        crease = c.ell('Ear crease', (side*.30425, .035, 2.071), (.020, .048, .007), black)
+        crease = c.ell('Ear crease', (side*.30425, .035-ear_y, 2.071), (.020, .048, .007), black)
         crease.rotation_euler.z = side*.30
     parts['head'] = [ob for ob in c.scene.objects if ob not in before_head and ob.type == 'MESH']
+    for ob in parts['head']:
+        ob.location.y -= style.get('headSouthOffset', 0)
     def mask(p):
         x, y = abs(p.x), p.y
         # Painted recess at the elbow and behind the skull, with broad irregular

@@ -239,8 +239,12 @@ def verify(scene, manifest, report, source_folder):
     idle = snapshot(scene, meshes, rigs, owners)
     assert_geometry_bounds(scene, meshes, idle, 0)
     rigged = {ob.name for ob in meshes if any(mod.type == 'ARMATURE' and mod.object in rigs for mod in ob.modifiers)}
-    balanced_player = spec['category'] == 'character' and spec.get('model', {}).get('upperBodyMotion') == 'balanced'
-    stable_upper = {ob.name for ob in meshes} - rigged if spec['category'] == 'character' and not balanced_player else set()
+    stable_grip = spec['category'] == 'character' and spec.get('model', {}).get('upperBodyMotion') == 'stable-grip'
+    balanced_player = spec['category'] == 'character' and spec.get('model', {}).get('upperBodyMotion') in ('balanced', 'stable-grip')
+    stable_upper = ({ob.name for ob in meshes if ob.get('motionRole') == 'grip'} if stable_grip else
+                    {ob.name for ob in meshes} - rigged if spec['category'] == 'character' and not balanced_player else set())
+    if stable_grip:
+        require(bool(stable_upper), 'Stable-grip player needs explicit fixed hand geometry')
     roles = {role: {ob.name for ob in meshes if ob.get('motionRole') == role} for role in ('head', 'arms', 'body', 'left_leg', 'right_leg')}
     bases = [ob for ob in meshes if ob.get('assetBase')]
     if balanced_player:
@@ -305,7 +309,7 @@ def verify(scene, manifest, report, source_folder):
     if rigged:
         checks.append({'name': 'rigged_limbs_change', 'passed': True, 'meshes': len(rigged)})
     if stable_upper:
-        checks.append({'name': 'player_upper_body_stays_fixed', 'passed': True, 'meshes': len(stable_upper)})
+        checks.append({'name': 'player_weapon_grips_stay_fixed' if stable_grip else 'player_upper_body_stays_fixed', 'passed': True, 'meshes': len(stable_upper)})
     if balanced_player:
         require(all(names.issubset(moved_all) for names in roles.values()), 'Balanced player contains unanimated body/head/arm/leg geometry')
         checks.append({'name': 'balanced_player_whole_body_motion', 'passed': True, 'roles': {role: len(names) for role, names in roles.items()}})
