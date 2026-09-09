@@ -142,7 +142,6 @@ describe('Inspector support construction registry', () => {
         projectileSlowFactor: expect.any(Number),
         playerSlowFactor: expect.any(Number),
         trainSlowFactor: expect.any(Number),
-        friendlyImmunity: 0,
       },
     });
     expect(slow.grenadeVisualPreset).toBe('time_bubble');
@@ -337,7 +336,7 @@ describe('Inspector automated support turrets', () => {
 });
 
 describe('shared Time Bubble payload', () => {
-  it('slows friendly players, projectiles and the train when immunity is zero', () => {
+  it('exempts friendly player movement while slowing all projectiles and the train', () => {
     const system = new TimeBubbleSystem();
     system.setFriendlyResolver(() => true);
     system.hostCreateBubble('inspector', 100, 100, {
@@ -347,11 +346,10 @@ describe('shared Time Bubble payload', () => {
       projectileSlowFactor: 0.4,
       playerSlowFactor: 0.5,
       trainSlowFactor: 0.5,
-      friendlyImmunity: 0,
     }, 1000);
 
-    expect(system.getPlayerMovementFactorAt(100, 100, 1200, 'friendly')).toBe(0.5);
-    expect(system.getProjectileMovementFactorAt(100, 100, 1200, 'friendly')).toBe(0.4);
+    expect(system.getPlayerMovementFactorAt(100, 100, 1200, 'friendly')).toBe(1);
+    expect(system.getProjectileMovementFactorAt(100, 100, 1200)).toBe(0.4);
     expect(system.getTrainMovementFactorAt(100, [100], [20], 20, 1200)).toBe(0.5);
     expect(system.hostUpdate(4000)).toEqual([]);
   });

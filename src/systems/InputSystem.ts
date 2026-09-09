@@ -430,7 +430,7 @@ export class InputSystem {
 
   isSelectedTimeBubbleBlocked(): boolean {
     const state = this.getSelectedTimeBubbleState();
-    return state?.phase === 'flying' || (state?.phase === 'active' && !state.focusEnabled);
+    return state?.phase === 'flying';
   }
 
   private getSelectedRadialActionState(now = this.getCooldownNow()): RadialActionState | null {
@@ -1547,10 +1547,10 @@ export class InputSystem {
         return;
       }
       const bubble = this.getSelectedTimeBubbleState();
-      if (bubble?.phase === 'active' && bubble.focusEnabled) {
+      if (bubble?.phase === 'active') {
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, {
-          ...this.getSelectedUtilityParams(), timeBubbleFocusId: bubble.bubbleId,
-          attemptId: this.createHeldActionId('time-bubble-focus'),
+          ...this.getSelectedUtilityParams(), timeBubbleCollapseId: bubble.bubbleId,
+          attemptId: this.createHeldActionId('time-bubble-collapse'),
         });
         return;
       }

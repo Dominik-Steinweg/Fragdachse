@@ -980,7 +980,7 @@ export interface LoadoutCommitSnapshot {
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
   /** Explicit secondary action; a stale request must never turn into a new throw. */
-  timeBubbleFocusId?: number;
+  timeBubbleCollapseId?: number;
   /** Separate request/attempt identity for duplicate-safe action commits. */
   attemptId?: string;
   /** Activity-Identity fuer PB-Mutationen; fehlt bewusst in einer Activity-losen World. */
@@ -1315,7 +1315,6 @@ export interface FireGrenadeEffect {
 }
 
 export interface TimeBubblePrismEmitterConfig {
-  readonly enabled: number;
   readonly intervalMs: number;
   readonly rotationPeriodMs: number;
   readonly speed: number;
@@ -1337,7 +1336,7 @@ export interface TimeBubbleEffectConfig {
   trainSlowFactor: number;
   color?: number;
   distortion?: number;
-  friendlyImmunity?: number;
+  resonanceRegenPerDamage?: number;
   prismEmitter?: TimeBubblePrismEmitterConfig;
 }
 

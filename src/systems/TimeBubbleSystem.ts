@@ -28,7 +28,7 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
     if (!handler) this.pendingReleases.length = 0;
   }
 
-  /** Focus drains after redirection; natural expiry drains before the new snapshots. */
+  /** Manual collapse drains after redirection; natural expiry drains before the new snapshots. */
   flushReleases(now: number): void {
     if (this.pendingReleases.length === 0) return;
     for (const release of this.pendingReleases.splice(0)) this.releaseHandler?.(release, now);
@@ -78,7 +78,7 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
     }
   }
   private readonly activeBubbles: ActiveTimeBubble[] = [];
-  // Delayed focus requests and surviving prism shots must not bind to a rebuilt system's bubble.
+  // Delayed collapse requests and surviving prism shots must not bind to a rebuilt system's bubble.
   private static nextId = 0;
   private endListener: ((bubbleId: number, endedAt: number) => void) | null = null;
 
@@ -158,7 +158,7 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
         alpha: this.computeAlpha(elapsed, bubble.effect.duration),
         color: bubble.effect.color ?? 0x8edcff,
         distortion: bubble.effect.distortion ?? 0.75,
-        ...(bubble.effect.prismEmitter?.enabled ? { prismActive: true } : {}),
+        ...(bubble.effect.prismEmitter ? { prismActive: true } : {}),
         ...((bubble.effect.chargeCapacity ?? 0) > 0 ? { charge: bubble.charge, chargeCapacity: bubble.effect.chargeCapacity } : {}),
       });
     }
@@ -169,7 +169,7 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
 
   private emitPrismShots(bubble: ActiveTimeBubble, elapsed: number): void {
     const emitter = bubble.effect.prismEmitter;
-    if (!emitter?.enabled || !this.prismProjectileSpawner || elapsed < 0) return;
+    if (!emitter || !this.prismProjectileSpawner || elapsed < 0) return;
     const lastDueIndex = Math.floor(elapsed / emitter.intervalMs);
     // Keep the newest due angles without allowing a stalled frame to create an unbounded burst.
     const firstIndex = Math.max(bubble.nextShotIndex, lastDueIndex - MAX_CATCH_UP_SHOTS + 1);
@@ -207,8 +207,18 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
     return this.getFactorAt(x, y, now, 'player', playerId);
   }
 
-  getProjectileMovementFactorAt(x: number, y: number, now = Date.now(), ownerId?: string): number {
-    return this.getFactorAt(x, y, now, 'projectile', ownerId);
+  getProjectileMovementFactorAt(x: number, y: number, now = Date.now()): number {
+    return this.getFactorAt(x, y, now, 'projectile');
+  }
+
+  /** Passive regeneration only; ResourceSystem retains all pause, multiplier and cap rules. */
+  getOwnerAdrenalineRegenMultiplier(ownerId: string, now: number): number {
+    let multiplier = 1;
+    for (const bubble of this.activeBubbles) {
+      if (bubble.ownerId !== ownerId || now < bubble.createdAt || now >= bubble.createdAt + bubble.effect.duration) continue;
+      multiplier += bubble.charge * (bubble.effect.resonanceRegenPerDamage ?? 0);
+    }
+    return multiplier;
   }
 
   getTrainMovementFactorAt(
@@ -266,7 +276,8 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
     for (let index = this.activeBubbles.length - 1; index >= 0; index--) {
       const bubble = this.activeBubbles[index];
       if (now - bubble.createdAt >= bubble.effect.duration) continue;
-      if ((bubble.effect.friendlyImmunity ?? 0) > 0 && subjectId && this.friendlyResolver?.(bubble.ownerId, subjectId)) continue;
+      if (kind === 'player' && subjectId
+        && (subjectId === bubble.ownerId || this.friendlyResolver?.(bubble.ownerId, subjectId))) continue;
       const dx = x - bubble.x;
       const dy = y - bubble.y;
       if (dx * dx + dy * dy > bubble.effect.radius * bubble.effect.radius) continue;

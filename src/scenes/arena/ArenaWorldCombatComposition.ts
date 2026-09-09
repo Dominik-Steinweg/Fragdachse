@@ -313,7 +313,7 @@ export function composeWorldCombatGameplay(
       effects: {
         broadcastCoopDefenseXpPopup: (x, y, xp) => bridge.broadcastCoopDefenseXpPopup(x, y, xp),
         broadcastSlimeBloomEffect: (x, y, targets) => bridge.broadcastSlimeBloomEffect(x, y, targets),
-        broadcastExplosionEffect: (x, y, radius, color, style) => bridge.broadcastExplosionEffect(x, y, radius, color, style),
+        broadcastExplosionEffect: (...args) => bridge.broadcastExplosionEffect(...args),
         broadcastBfgLaserBatch: (lines, color, preset, projectileId) => bridge.broadcastBfgLaserBatch([...lines], color, preset, projectileId),
         broadcastMiniRocketCollectionEffect: (x, y, color) => bridge.broadcastMiniRocketCollectionEffect(x, y, color),
         broadcastMiniRocketDestructionEffect: (x, y, color) => bridge.broadcastMiniRocketDestructionEffect(x, y, color),

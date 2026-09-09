@@ -72,6 +72,7 @@ interface ParticleSetup {
   stretchStart?: number;
   stretchEnd?: number;
   alphaEnd?: number;
+  alphaEase?: typeof GpuVfxEase.Linear | typeof GpuVfxEase.CubicIn;
   tintBlendStart?: number;
   tintBlendEnd?: number;
 }
@@ -174,32 +175,59 @@ export class ExplosionGpuRenderer {
     const strength = resonanceReleaseStrength(request.chargeDamage);
     if (strength <= 0) return;
     const { x, y, radius } = request;
-    // The old shell briefly separates into light, then a hollow wave reaches the exact field radius.
+    // A brief, soft volume flash opens the shell; the hollow fronts remain readable after it fades.
     this.spawnBurst(GpuVfxEffectId.ExplosionShockwave, 2, (spec, index) => {
       this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
-        frame: GpuVfxFrameId.ExplosionRing, lifeMs: index ? 220 : 140,
-        scaleStart: radius / 32 * (index ? 0.06 : 1), scaleEnd: radius / 32,
-        scaleEase: GpuVfxEase.QuadOut, alphaStart: (index ? 0.35 : 0.2) + strength * 0.55,
-        tint: index ? 0xffab28 : 0xff4814,
+        frame: GpuVfxFrameId.ExplosionCore, lifeMs: index ? 260 : 140,
+        scaleStart: radius / 16 * (index ? 0.55 : 0.16), scaleEnd: radius / 16 * (index ? 1 : 0.65),
+        scaleEase: GpuVfxEase.QuadOut, alphaStart: (index ? 0.24 : 0.55) + strength * 0.35,
+        tint: index ? 0xff7418 : 0xffe9ae,
+      });
+    });
+    this.spawnBurst(GpuVfxEffectId.ExplosionShockwave, 3, (spec, index) => {
+      this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
+        frame: GpuVfxFrameId.ExplosionRing, lifeMs: index === 0 ? 180 : (index === 1 ? 340 : 480),
+        scaleStart: radius / 32 * (index === 0 ? 0.96 : 0.04), scaleEnd: radius / 32,
+        scaleEase: GpuVfxEase.QuadOut, alphaStart: (index === 2 ? 0.4 : 0.7) + strength * 0.28,
+        // Preserve the front's brightness during travel instead of fading most of it near the center.
+        alphaEase: index === 0 ? GpuVfxEase.Linear : GpuVfxEase.CubicIn,
+        tint: index === 1 ? 0xffd675 : 0xff4810,
+        tintBlendStart: index === 1 ? 0.45 : 1,
       });
     });
     this.spawnBurst(GpuVfxEffectId.ExplosionAccent, 1, spec => {
       this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
-        frame: GpuVfxFrameId.ExplosionRing, lifeMs: 600,
-        scaleStart: radius / 32 * 0.96, scaleEnd: radius / 32,
-        alphaStart: 0.1 + strength * 0.22, tint: 0xd72d0b,
+        frame: GpuVfxFrameId.ExplosionRing, lifeMs: 520,
+        scaleStart: radius / 32 * 0.9, scaleEnd: radius / 32,
+        alphaStart: 0.22 + strength * 0.3, tint: 0xd72d0b,
       });
     });
-    this.spawnBurst(GpuVfxEffectId.ExplosionSpark, Math.round(8 + strength * 32), (spec, index, count) => {
-      const angle = index / count * TWO_PI + Math.random() * 0.18;
-      const speed = 8 + strength * 22;
+    // Bright radial spokes connect the source to the front; ember slivers break off the old membrane.
+    this.spawnBurst(GpuVfxEffectId.ExplosionSpark, Math.round(16 + strength * 32), (spec, index, count) => {
+      const angle = index / count * TWO_PI + Math.random() * 0.12;
+      const lifeMs = 400 + Math.random() * 260;
+      const speed = radius * 0.7 / (lifeMs / 1000);
       this.configure(spec, {
-        x: x + Math.cos(angle) * radius * 0.88, y: y + Math.sin(angle) * radius * 0.88,
+        x: x + Math.cos(angle) * radius * 0.12, y: y + Math.sin(angle) * radius * 0.12,
         vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, gravityFactor: 0,
-        frame: GpuVfxFrameId.ExplosionStreak, lifeMs: 300 + Math.random() * 300,
-        scaleStart: 0.16 + strength * 0.25, scaleEnd: 0.02,
-        stretchStart: 1.5 + strength, stretchEnd: 0.4, rotation: angle,
-        alphaStart: 0.4 + strength * 0.45, tint: index % 3 ? 0xff5b16 : 0xffc237,
+        frame: GpuVfxFrameId.ExplosionStreak, lifeMs,
+        scaleStart: 0.4 + strength * 0.45, scaleEnd: 0.03,
+        stretchStart: 2.4 + strength * 1.4, stretchEnd: 0.7, rotation: angle,
+        alphaStart: 0.7 + strength * 0.25, tint: index % 3 ? 0xff931f : 0xffde81,
+        tintBlendStart: 0.55,
+      });
+    });
+    this.spawnBurst(GpuVfxEffectId.ExplosionSpark, Math.round(12 + strength * 24), (spec, index, count) => {
+      const angle = index / count * TWO_PI + Math.random() * 0.18;
+      const speed = radius * (0.08 + Math.random() * 0.08);
+      this.configure(spec, {
+        x: x + Math.cos(angle) * radius * 0.84, y: y + Math.sin(angle) * radius * 0.84,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, gravityFactor: 0,
+        frame: GpuVfxFrameId.ExplosionStreak, lifeMs: 550 + Math.random() * 400,
+        scaleStart: 0.35 + strength * 0.45, scaleEnd: 0.02,
+        stretchStart: 2 + strength, stretchEnd: 0.4, rotation: angle + Math.PI * 0.5,
+        angularVelocity: index % 2 ? 1.6 : -1.6,
+        alphaStart: 0.65 + strength * 0.3, tint: index % 3 ? 0xff5b16 : 0xffc237,
       });
     });
   }
@@ -702,7 +730,7 @@ export class ExplosionGpuRenderer {
     spec.stretchEnd = setup.stretchEnd ?? 1;
     spec.alphaStart = setup.alphaStart;
     spec.alphaEnd = setup.alphaEnd ?? 0;
-    spec.alphaEase = GpuVfxEase.Linear;
+    spec.alphaEase = setup.alphaEase ?? GpuVfxEase.Linear;
     spec.tint = setup.tint;
     spec.tintBlendStart = setup.tintBlendStart ?? 1;
     spec.tintBlendEnd = setup.tintBlendEnd ?? 1;

@@ -58,7 +58,7 @@ describe('ProjectileFlightProcessor', () => {
 
     processor.run([projectile], 100, 500);
 
-    expect(timeField).toHaveBeenCalledWith(0, 0, 500, expect.objectContaining({ allegiance: { ownerId: 'owner' } }));
+    expect(timeField).toHaveBeenCalledWith(0, 0, 500);
     expect(projectile.simulatedAgeMs).toBe(50);
     expect(projectile.timeBubbleFactor).toBe(0.5);
     expect(projectile.physics.body.setVelocity).toHaveBeenCalledWith(50, 0);

@@ -56,12 +56,22 @@ describe('explosion gpu renderer', () => {
     const empty = render(0);
     expect(findFakeLane(empty.scene, 'explosion-accent').edited).toHaveLength(0);
     const low = render(25), high = render(75);
-    const rings = findFakeLane(high.scene, 'explosion-accent').members;
+    const accents = findFakeLane(high.scene, 'explosion-accent').members;
+    const flashes = accents.filter(member => member.frame === 'explosion-core');
+    const rings = accents.filter(member => member.frame === 'explosion-ring');
+    expect(flashes.length).toBeGreaterThan(0);
     expect(rings.length).toBeGreaterThan(0);
     for (const ring of rings) {
       expect(ring.frame).toBe('explosion-ring');
       expect(evaluateFakeAnimation(ring.scaleX, 0.999999) * 32).toBeCloseTo(96, 2);
     }
+    const expandingFront = rings.find(ring => evaluateFakeAnimation(ring.scaleX, 0) < 1)!;
+    // The short flash fades first; travelling wave fronts retain their light until late in their life.
+    expect(Math.min(...flashes.map(flash => flash.alpha.duration))).toBeLessThan(expandingFront.alpha.duration);
+    const retainedAlpha = (member: typeof expandingFront) => (
+      evaluateFakeAnimation(member.alpha, 0.5) / evaluateFakeAnimation(member.alpha, 0)
+    );
+    expect(retainedAlpha(expandingFront)).toBeGreaterThan(retainedAlpha(flashes[0]));
     expect(findFakeLane(high.scene, 'explosion-spark').edited.length)
       .toBeGreaterThan(findFakeLane(low.scene, 'explosion-spark').edited.length);
     expect(high.renderer.getPendingStageCount()).toBe(0);

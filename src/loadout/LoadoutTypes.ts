@@ -584,6 +584,12 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
   readonly wildfireTrailDamagePerTick?: number;
 }
 
+/** Authored upgrade level; resolved to a fixed emission interval when the utility is thrown. */
+export interface TimeBubblePrismUpgradeConfig extends Omit<TimeBubblePrismEmitterConfig, 'intervalMs'> {
+  readonly level: number;
+  readonly intervalsMs: readonly number[];
+}
+
 export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
   readonly chargeCapacity?: number;
   readonly focusEnabled?: number;
@@ -595,8 +601,8 @@ export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
   readonly trainSlowFactor: number;
   readonly bubbleColor?: number;
   readonly bubbleDistortion?: number;
-  readonly friendlyImmunity?: number;
-  readonly prismEmitter?: TimeBubblePrismEmitterConfig;
+  readonly resonanceRegenPerDamage?: number;
+  readonly prismEmitter?: TimeBubblePrismUpgradeConfig;
 }
 
 export interface BfgUtilityConfig extends BaseUtilityConfig {

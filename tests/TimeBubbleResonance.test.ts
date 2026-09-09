@@ -5,7 +5,7 @@ import type { TimeBubbleEffectConfig } from '../src/types';
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { applyCoopDefenseModifiersToUtilityConfig } from '../src/loadout/CoopDefenseLoadoutModifiers';
 import { getCoopDefenseResolvedEffectTotals, getCoopDefenseUpgradeDefinition,
-  getSpentCoopDefenseBossPoints, sanitizeCoopDefenseUpgradeProfile } from '../src/utils/coopDefenseUpgrades';
+  getSpentCoopDefenseBossPoints, sanitizeCoopDefenseUpgradeProfile, levelDownCoopDefenseUpgrade, getSpentCoopDefenseUpgradePoints } from '../src/utils/coopDefenseUpgrades';
 import { validateResolvedUtility } from '../src/loadout/content/LoadoutSchemas';
 import { getUpgradeDescription } from '../src/i18n/upgradePresentation';
 
@@ -15,13 +15,13 @@ const effect = (overrides: Partial<TimeBubbleEffectConfig> = {}): TimeBubbleEffe
 });
 const profile = (levels: Record<string, number>) => ({ upgrades: Object.fromEntries(
   Object.entries(levels).map(([id, level]) => [id, { level, unlocked: level > 0 }])) });
-const prerequisites = { unlock_time_bubble: 1, time_bubble_radius: 1, time_bubble_duration: 1 };
+const prerequisites = { unlock_time_bubble: 1, time_bubble_cooldown: 1, time_bubble_radius: 1, time_bubble_focus: 1, time_bubble_prism_spiral: 1 };
 
 describe('Time Bubble resonance content', () => {
   it('resolves each capacity level, leaves defaults disabled and supplies translated tuning', () => {
     const node = getCoopDefenseUpgradeDefinition('time_bubble_resonance')!;
-    expect(node).toMatchObject({ costPerLevel: 1, bossPointCostPerLevel: 0, refundable: true,
-      requires: [{ upgradeId: 'time_bubble_duration', minLevel: 1 }] });
+    expect(node).toMatchObject({ costPerLevel: 0, bossPointCostPerLevel: 1, refundable: true,
+      requires: [{ upgradeId: 'time_bubble_radius', minLevel: 1 }, { upgradeId: 'time_bubble_prism_spiral', minLevel: 1 }] });
     const base = UTILITY_CONFIGS.TIME_BUBBLE;
     if (base.type !== 'time_bubble') throw Error('Expected TimeBubble');
     for (let level = 0; level <= node.maxLevel; level++) {
@@ -37,15 +37,48 @@ describe('Time Bubble resonance content', () => {
     for (const locale of ['de', 'en'] as const) expect(getUpgradeDescription(node.id, locale)).not.toMatch(/[{}⟦⟧]/);
   });
 
-  it('returns the old boss allocation and restores the dependent chain after the new first level', () => {
-    const levels = { ...prerequisites, time_bubble_prism_spiral: 1, time_bubble_focus: 1 };
-    const old = sanitizeCoopDefenseUpgradeProfile(profile(levels), 'dachs_nukem');
-    expect(old.upgrades.time_bubble_prism_spiral.level).toBe(0);
-    expect(old.upgrades.time_bubble_focus.level).toBe(0);
-    expect(getSpentCoopDefenseBossPoints(old, 'dachs_nukem')).toBe(0);
-    const next = sanitizeCoopDefenseUpgradeProfile(profile({ ...levels, time_bubble_resonance: 1 }), 'dachs_nukem');
-    expect(next.upgrades.time_bubble_prism_spiral.level).toBe(1);
-    expect(next.upgrades.time_bubble_focus.level).toBe(1);
+  it('refunds normal and boss points through the existing level-down path', () => {
+    const full = profile({ ...prerequisites, time_bubble_resonance: 1, time_bubble_overcharge: 1 });
+    expect(levelDownCoopDefenseUpgrade(full, 'time_bubble_resonance')).toBeNull();
+    const normalRefund = levelDownCoopDefenseUpgrade(full, 'time_bubble_overcharge')!;
+    expect(getSpentCoopDefenseUpgradePoints(full) - getSpentCoopDefenseUpgradePoints(normalRefund)).toBe(1);
+    const bossRefund = levelDownCoopDefenseUpgrade(normalRefund, 'time_bubble_resonance')!;
+    expect(getSpentCoopDefenseBossPoints(normalRefund) - getSpentCoopDefenseBossPoints(bossRefund)).toBe(1);
+  });
+
+  it('freezes flow coefficients per bubble, sums owner contributions and excludes expired or removed bubbles', () => {
+    const system = new TimeBubbleSystem();
+    const config = effect({ resonanceRegenPerDamage: 0.02 });
+    const first = system.hostCreateBubble('a', 0, 0, config, 100);
+    config.resonanceRegenPerDamage = 99;
+    system.hostCreateBubble('a', 0, 0, effect({ resonanceRegenPerDamage: 0.03 }), 200);
+    system.hostCreateBubble('b', 0, 0, effect({ resonanceRegenPerDamage: 3 }), 200);
+    system.observeProjectile(1, 0, 0, 10, 200);
+    expect(system.getOwnerAdrenalineRegenMultiplier('a', 99)).toBe(1);
+    expect(system.getOwnerAdrenalineRegenMultiplier('a', 200)).toBeCloseTo(1 + 10 * (0.02 + 0.03));
+    expect(system.getOwnerAdrenalineRegenMultiplier('missing', 200)).toBe(1);
+    system.removeBubble(first, 201, true);
+    expect(system.getOwnerAdrenalineRegenMultiplier('a', 201)).toBeCloseTo(1 + 10 * 0.03);
+    expect(system.getOwnerAdrenalineRegenMultiplier('a', 200 + effect().duration)).toBe(1);
+    system.destroyAll();
+    expect(system.getOwnerAdrenalineRegenMultiplier('b', 201)).toBe(1);
+  });
+
+  it('requires both branches for the boss and keeps its two children independent', () => {
+    const full = { ...prerequisites, time_bubble_resonance: 1, time_bubble_overcharge: 2, time_bubble_resonance_flow: 3 };
+    for (const missing of ['time_bubble_radius', 'time_bubble_prism_spiral']) {
+      const invalid = sanitizeCoopDefenseUpgradeProfile(profile({ ...full, [missing]: 0 }), 'dachs_nukem');
+      expect(invalid.upgrades.time_bubble_resonance.level).toBe(0);
+      expect(invalid.upgrades.time_bubble_overcharge.level).toBe(0);
+      expect(invalid.upgrades.time_bubble_resonance_flow.level).toBe(0);
+      expect(getSpentCoopDefenseBossPoints(invalid, 'dachs_nukem')).toBe(0);
+    }
+    for (const absent of ['time_bubble_overcharge', 'time_bubble_resonance_flow']) {
+      const valid = sanitizeCoopDefenseUpgradeProfile(profile({ ...full, [absent]: 0 }), 'dachs_nukem');
+      const sibling = absent === 'time_bubble_overcharge' ? 'time_bubble_resonance_flow' : 'time_bubble_overcharge';
+      expect(valid.upgrades[sibling].level).toBe(full[sibling]);
+      expect(getSpentCoopDefenseBossPoints(valid, 'dachs_nukem')).toBe(1);
+    }
   });
 });
 

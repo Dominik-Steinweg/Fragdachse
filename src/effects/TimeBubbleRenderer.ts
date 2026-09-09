@@ -153,13 +153,13 @@ export class TimeBubbleRenderer {
       for (let i = 0; i < 7; i++) {
         drawFeatheredRibbon(ctx, 160, {
           rx: 102 + (i % 3) * 18, ry: 138 - (i % 4) * 15, rotation: i * 0.86,
-          start: i * 0.62, end: i * 0.62 + 1.6, thickness: 7 - i * 0.35,
-          blur: 17, opacity: 0.7 - i * 0.045,
-          colors: ['rgba(255,72,8,0.0)', i % 2 ? 'rgba(255,62,12,1)' : 'rgba(255,174,24,1)', 'rgba(178,16,5,1)'],
+          start: i * 0.62, end: i * 0.62 + 1.75, thickness: 8.5 - i * 0.375,
+          blur: 14.5, opacity: 0.85 - i * 0.04,
+          colors: ['rgba(255,48,4,0.0)', i % 2 ? 'rgba(255,48,4,1)' : 'rgba(255,136,8,1)', 'rgba(194,12,2,1)'],
         });
       }
-      drawRadiusRing(ctx, 160, { radius: 146, innerFade: 25, outerFeather: 5,
-        opacity: 0.46, innerColor: 'rgba(218,30,6,1)', edgeColor: 'rgba(255,150,22,1)' });
+      drawRadiusRing(ctx, 160, { radius: 146, innerFade: 30, outerFeather: 6,
+        opacity: 0.68, innerColor: 'rgba(230,24,3,1)', edgeColor: 'rgba(255,166,20,1)' });
     });
     ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_MEMBRANE, 320, 320, (ctx) => {
       const center = 160;
@@ -396,24 +396,28 @@ export class TimeBubbleRenderer {
     if (fill <= 0) { this.destroyResonance(visual); return; }
     if (visual.chargeLayers.length === 0) {
       for (let i = 0; i < 2; i++) visual.chargeLayers.push(this.scene.add.image(bubble.x, bubble.y, TEX_TIME_BUBBLE_RESONANCE)
-        .setDepth(DEPTH.FIRE + 0.52 + i * 0.01).setBlendMode(Phaser.BlendModes.SCREEN));
+        .setDepth(DEPTH.FIRE + 0.52 + i * 0.01)
+        // The lower warm membrane preserves saturated reds against the bright rainbow field.
+        .setBlendMode(i ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL));
     }
     const full = fill >= 1;
-    const pulse = full ? 0.92 + 0.08 * Math.sin(now * Math.PI * 2 / 1000 + visual.seed) : 1;
+    const pulse = full ? 0.86 + 0.14 * Math.sin(now * Math.PI * 2 / 1000 + visual.seed) : 1;
+    const visibility = Math.pow(fill, 0.82);
     visual.chargeLayers.forEach((layer, i) => layer.setPosition(bubble.x, bubble.y)
-      .setScale(Math.max(0.24, bubble.radius / 160) * (i ? 0.97 : 1))
+      .setScale(Math.max(0.24, bubble.radius / 160) * (i ? 0.97 + (full ? pulse * 0.018 : 0) : 1))
       .setRotation(visual.seed + now * (i ? -0.00022 : 0.00014))
-      .setAlpha(bubble.alpha * fill * pulse * (i ? 0.6 : 0.95)));
+      .setAlpha(bubble.alpha * visibility * (i ? pulse * (full ? 0.78 : 0.6) : 0.9)));
     this.lighting?.setLight(`timebubble:charge:${bubble.id}`, 'arcaneField', bubble.x, bubble.y, {
-      radiusPx: bubble.radius * 1.2, color: 0xff801c, intensity: bubble.alpha * fill * pulse * 0.4,
+      radiusPx: bubble.radius * 1.25, color: 0xff7010,
+      intensity: bubble.alpha * visibility * pulse * (full ? 0.68 : 0.55),
     });
     if (full && !visual.chargeSparks) {
       visual.chargeSparks = createEmitter(this.scene, bubble.x, bubble.y, BULLET_GLOW_TEXTURE, {
-        emitZone: edgeZone(bubble.radius * 0.94), frequency: 100, quantity: 1,
-        lifespan: { min: 300, max: 600 }, speed: { min: 10, max: 28 },
-        scale: { start: 0.2, end: 0 }, alpha: { start: 0.8, end: 0 },
+        emitZone: edgeZone(bubble.radius * 0.94), frequency: 90, quantity: 2,
+        lifespan: { min: 375, max: 700 }, speed: { min: 13, max: 34 },
+        scale: { start: 0.26, end: 0 }, alpha: { start: 0.88, end: 0 },
         color: [0xffb528, 0xff4310, 0x960e06], blendMode: Phaser.BlendModes.ADD,
-        maxParticles: 16,
+        maxParticles: 26,
       }, DEPTH.FIRE + 0.56, 'decorative', 'timeBubble');
     } else if (!full && visual.chargeSparks) {
       visual.chargeSparks.destroy();

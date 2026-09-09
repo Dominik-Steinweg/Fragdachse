@@ -1,7 +1,7 @@
 export const deUi = {
   "ui.timeBubble.flying": "Unterwegs",
-  "ui.timeBubble.active": "Aktiv",
-  "ui.timeBubble.focus": "Aktiv · E: Auflösen",
+  "ui.timeBubble.active": "Aktiv · E: Auflösen",
+  "ui.timeBubble.focus": "Aktiv · E: Umlenken & Auflösen",
   "ui.common.empty": "Leer",
   "ui.common.unknown": "Unbekannt",
   "ui.common.close": "Schließen",

@@ -276,7 +276,7 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     const active = bubble.phase !== 'cooldown';
     const cooldownUntil = bubble.phase === 'cooldown' ? bubble.cooldownUntil : 0;
     const disabledReason: RadialActionDisabledReason | undefined = !input.canUseUtility ? 'player-blocked'
-      : active ? (bubble.phase === 'active' && bubble.focusEnabled ? undefined : 'unavailable')
+      : active ? (bubble.phase === 'active' ? undefined : 'unavailable')
       : cooldownUntil > input.now ? 'cooldown' : entry.disabledReason;
     return { ...entry, label: active ? `${entry.label} · ${getTimeBubbleStatusLabel(bubble)}` : entry.label,
       available: disabledReason === undefined, disabledReason, cooldownUntil, cooldownDurationMs: bubble.cooldownDurationMs };

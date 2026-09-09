@@ -69,7 +69,7 @@ export const deContent = {
   "construction.flame_turret.description": "Entzündet Gegner in kurzer Reichweite kontinuierlich.",
   "construction.tesla_turret.description": "Erzeugt bei nahen Gegnern eine kleine Teslakuppel mit kontinuierlichem Schaden.",
   "construction.gravity_turret.description": "Erzeugt am Einschlag ein schwarzes Loch, das Gegner anzieht.",
-  "construction.slow_bubble_turret.description": "Erzeugt am Einschlag eine Zeitblase, die alle Einheiten verlangsamt.",
+  "construction.slow_bubble_turret.description": "Erzeugt am Einschlag eine Zeitblase, die Gegner und alle Projektile verlangsamt. Eigene und verbündete Spieler bewegen sich frei.",
   "construction.medic_pedestal.description": "Stellt regelmäßig ein Medipack bereit.",
   "construction.armor_pedestal.description": "Stellt regelmäßig ein Rüstungs-Power-up bereit.",
   "powerup.HEALTH_PACK.name": "Medipack",

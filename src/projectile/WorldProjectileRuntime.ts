@@ -214,6 +214,9 @@ export class WorldProjectileRuntime implements
   private readonly flightContactPoints = new Map<number, { x: number; y: number }>();
   private readonly flightProcessor = new ProjectileFlightProcessor();
   private readonly homingController = new ProjectileHomingController();
+  /** Derived from living guidance locks, grouped by immutable origin bubble rather than allegiance. */
+  private readonly prismTargetClaims = new Map<number, Map<string, Set<ProjectileId>>>();
+  private readonly prismClaimByProjectile = new Map<ProjectileId, { group: number; key: string }>();
   private readonly detonableIds = new Set<ProjectileId>();
   private readonly detonatorIds = new Set<ProjectileId>();
   private readonly translocatorPuckIds = new Set<ProjectileId>();
@@ -1238,6 +1241,7 @@ export class WorldProjectileRuntime implements
     const record = this.projectiles.getById(id);
     if (!record || record.pendingDestroy) return;
     record.pendingDestroy = true;
+    this.removePrismTargetClaim(record.id);
     record.physics.body.setVelocity(0, 0);
     record.physics.body.enable = false;
     this.projectiles.deactivate(record);
@@ -1271,7 +1275,6 @@ export class WorldProjectileRuntime implements
         impactX,
         impactY,
         nowMs,
-        projectile.provenance,
       ) ?? projectile.timeBubbleFactor ?? 1,
     );
     const childBaseSpeed = outgoingSpeed / timeBubbleFactor;
@@ -1400,6 +1403,7 @@ export class WorldProjectileRuntime implements
   }
 
   private releaseProjectile(record: ProjectileRuntimeRecord): void {
+    this.removePrismTargetClaim(record.id);
     if (this.projectiles.getById(record.id) !== record) return;
     const handle = record.physics;
     if (!this.destroyed) {
@@ -2078,7 +2082,7 @@ export class WorldProjectileRuntime implements
     record.lastX = options.x;
     record.lastY = options.y;
     record.physics.body.setVelocity(Math.cos(options.angle) * options.speed, Math.sin(options.angle) * options.speed);
-    // Focus follows field removal and may also change friendly immunity. Keep intrinsic speed.
+    // Focus follows field removal. Re-evaluate remaining fields while preserving intrinsic speed.
     if (options.continuousTurn) this.flightProcessor.resolveMovementFactor(record, options.nowMs);
     this.flightPaths.redirect(record.id, options.x, options.y, record.physics.body.velocity.x,
       record.physics.body.velocity.y, options.nowMs, !options.continuousTurn);
@@ -2106,6 +2110,11 @@ export class WorldProjectileRuntime implements
     return projectile.interaction.guidance ??= {
       get ownerId() { return projectile.provenance.allegiance.ownerId; },
       homing: projectile.spec.flight.homing!,
+      isTargetClaimed: projectile.spec.flight.homingExcludedCircle?.bubbleId === undefined ? undefined : (id, type) => {
+        const group = projectile.spec.flight.homingExcludedCircle!.bubbleId!;
+        const claims = runtime.prismTargetClaims.get(group)?.get(`${type}:${id}`);
+        return claims !== undefined && claims.size > (claims.has(projectile.id) ? 1 : 0);
+      },
       get excludedCircle() {
         const circle = projectile.spec.flight.homingExcludedCircle;
         return circle?.bubbleId !== undefined
@@ -2126,6 +2135,7 @@ export class WorldProjectileRuntime implements
   }
 
   private resetHomingState(projectile: ProjectileRuntimeRecord): void {
+    this.removePrismTargetClaim(projectile.id);
     const state = projectile.interaction.guidance?.state;
     if (!state) return;
     state.lockedTargetId = null;
@@ -2151,7 +2161,39 @@ export class WorldProjectileRuntime implements
       forceSearch,
       this.hostFrameNowMs,
     );
+    this.updatePrismTargetClaim(projectile);
     return foundTarget;
+  }
+
+  private removePrismTargetClaim(id: ProjectileId): void {
+    const previous = this.prismClaimByProjectile.get(id);
+    if (!previous) return;
+    const group = this.prismTargetClaims.get(previous.group)!;
+    const claims = group.get(previous.key)!;
+    claims.delete(id);
+    if (claims.size === 0) group.delete(previous.key);
+    if (group.size === 0) this.prismTargetClaims.delete(previous.group);
+    this.prismClaimByProjectile.delete(id);
+  }
+
+  private updatePrismTargetClaim(projectile: ProjectileRuntimeRecord): void {
+    const groupId = projectile.spec.flight.homingExcludedCircle?.bubbleId;
+    const state = projectile.interaction.guidance?.state;
+    const key = state?.lockedTargetId != null && state.lockedTargetType
+      ? `${state.lockedTargetType}:${state.lockedTargetId}` : undefined;
+    if (groupId === undefined || key === undefined || projectile.pendingDestroy) {
+      this.removePrismTargetClaim(projectile.id);
+      return;
+    }
+    const previous = this.prismClaimByProjectile.get(projectile.id);
+    if (previous?.group === groupId && previous.key === key) return;
+    this.removePrismTargetClaim(projectile.id);
+    const group = this.prismTargetClaims.get(groupId) ?? new Map<string, Set<ProjectileId>>();
+    const claims = group.get(key) ?? new Set<ProjectileId>();
+    claims.add(projectile.id);
+    group.set(key, claims);
+    this.prismTargetClaims.set(groupId, group);
+    this.prismClaimByProjectile.set(projectile.id, { group: groupId, key });
   }
 
   setHostFrameTime(nowMs: number): void {
@@ -2188,6 +2230,8 @@ export class WorldProjectileRuntime implements
     this.travelSamples.length = 0;
     this.activeProjectilesByOwner.clear();
     this.flightProcessor.reset();
+    this.prismTargetClaims.clear();
+    this.prismClaimByProjectile.clear();
     this.homingController.setTargetQueryPort(null);
     this.homingController.setTargetabilityPort(null);
     this.homingController.setLineOfFireReadPort(null);
@@ -2259,7 +2303,7 @@ export class WorldProjectileRuntime implements
       )
       : { x, y };
     const timeFactor = clampProjectileTimeFactor(this.projectileTimeFieldPort?.getMovementFactor(
-      resolvedSpawn.x, resolvedSpawn.y, hostNowMs, provenance,
+      resolvedSpawn.x, resolvedSpawn.y, hostNowMs,
     ) ?? 1);
     const mechanics = resolvePhysicsMechanics(cfg);
     const handle = this.physicsBinding.createPhysicsHandle({

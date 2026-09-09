@@ -616,20 +616,10 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'TIME_BUBBLE',
     targets: [{ path: ['bubbleRadius'], formula: 'scale' }],
   },
-  'utility.TIME_BUBBLE.bubbleDuration': {
+  'utility.TIME_BUBBLE.cooldown': {
     kind: 'utility',
     itemId: 'TIME_BUBBLE',
-    targets: [{ path: ['bubbleDuration'], formula: 'scale' }],
-  },
-  'utility.TIME_BUBBLE.playerSlowFactor': {
-    kind: 'utility',
-    itemId: 'TIME_BUBBLE',
-    targets: [{ path: ['playerSlowFactor'], formula: 'scale' }],
-  },
-  'utility.TIME_BUBBLE.projectileSlowReduction': {
-    kind: 'utility',
-    itemId: 'TIME_BUBBLE',
-    targets: [{ path: ['projectileSlowFactor'], formula: 'add' }],
+    targets: [{ path: ['cooldown'], formula: 'scale' }],
   },
   'utility.SMOKE_GRENADE.smokeRadius': {
     kind: 'utility',

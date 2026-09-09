@@ -5,6 +5,7 @@
       "type": "time_bubble",
       "focusEnabled": 0,
       "chargeCapacity": 0,
+      "resonanceRegenPerDamage": 0,
       "cooldown": 5000,
       "activation": {
         "type": "charged_throw",
@@ -23,8 +24,8 @@
       "bubbleColor": "#8edcff",
       "bubbleDistortion": 0.75,
       "prismEmitter": {
-        "enabled": 0,
-        "intervalMs": 150,
+        "level": 0,
+        "intervalsMs": [225, 150, 100],
         "rotationPeriodMs": 3000,
         "speed": 1400,
         "size": 3,

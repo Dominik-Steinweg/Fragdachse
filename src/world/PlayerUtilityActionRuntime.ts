@@ -1,3 +1,4 @@
+import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { resolveMolotovFireEffect } from '../loadout/resolveMolotovFireEffect';
 import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 import type { TimeBubbleUtilityPort } from './TimeBubbleUtilityPort';
@@ -211,16 +212,16 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     return state.phase === 'cooldown' ? (state.cooldownUntil > now ? 'cooldown' : null) : 'blocked';
   }
 
-  private focusTimeBubble(request: PlayerUtilityActionRequest): LoadoutUseResult {
+  private collapseTimeBubble(request: PlayerUtilityActionRequest): LoadoutUseResult {
     const state = this.timeBubbleUses.get(request.playerId);
     const player = this.options.actor.getPlayer(request.playerId);
-    if (!player || !Number.isSafeInteger(request.params?.timeBubbleFocusId)
+    if (!player || !Number.isSafeInteger(request.params?.timeBubbleCollapseId)
       || !Number.isFinite(request.targetX) || !Number.isFinite(request.targetY)) return { ok: false, reason: 'invalid' };
     if (!this.options.actor.canInteract(request.playerId) || !this.options.actor.isAlive(request.playerId)
       || this.options.actor.isUtilityBlocked(request.playerId) || state?.phase !== 'active'
-      || !state.focusEnabled || state.bubbleId !== request.params?.timeBubbleFocusId) return { ok: false, reason: 'blocked' };
+      || state.bubbleId !== request.params?.timeBubbleCollapseId) return { ok: false, reason: 'blocked' };
     const ok = this.timeBubblePort?.collapse(state.bubbleId, { targetX: request.targetX, targetY: request.targetY,
-      ownerId: request.playerId, ownerColor: player.color, nowMs: request.hostNowMs }) ?? false;
+      ownerId: request.playerId, ownerColor: player.color, nowMs: request.hostNowMs, redirectProjectiles: state.focusEnabled }) ?? false;
     if (!ok) return { ok: false, reason: 'blocked' };
     this.options.heldAction.clearPlayer(request.playerId);
     this.options.decoy?.breakStealth(request.playerId, request.hostNowMs);
@@ -432,7 +433,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       if (previous) return previous;
     }
 
-    if (request.params?.timeBubbleFocusId !== undefined) return this.focusTimeBubble(request);
+    if (request.params?.timeBubbleCollapseId !== undefined) return this.collapseTimeBubble(request);
     const wireTemporaryId = request.params?.temporaryUtilityInstanceId;
     if (request.source?.kind === 'temporary'
       && wireTemporaryId !== undefined
@@ -826,8 +827,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       return { type: 'smoke' as const, behavior: cfg.smokeBehavior, radius: cfg.smokeRadius, spreadDuration: cfg.smokeExpandDuration, lingerDuration: cfg.smokeLingerDuration, dissipateDuration: cfg.smokeDissipateDuration, maxAlpha: cfg.smokeMaxAlpha, dotDamagePerTick: cfg.smokeDotDamagePerTick, dotTickIntervalMs: cfg.smokeDotTickIntervalMs };
     }
     if (cfg.type === 'time_bubble') {
-      return { type: 'time_bubble' as const, radius: cfg.bubbleRadius, duration: cfg.bubbleDuration, projectileSlowFactor: cfg.projectileSlowFactor, playerSlowFactor: cfg.playerSlowFactor, trainSlowFactor: cfg.trainSlowFactor, color: cfg.bubbleColor ?? cfg.projectileColor ?? playerColor, distortion: cfg.bubbleDistortion, friendlyImmunity: cfg.friendlyImmunity,
-        prismEmitter: cfg.prismEmitter?.enabled ? cfg.prismEmitter : undefined, chargeCapacity: cfg.chargeCapacity };
+      return { type: 'time_bubble' as const, radius: cfg.bubbleRadius, duration: cfg.bubbleDuration, projectileSlowFactor: cfg.projectileSlowFactor, playerSlowFactor: cfg.playerSlowFactor, trainSlowFactor: cfg.trainSlowFactor, color: cfg.bubbleColor ?? cfg.projectileColor ?? playerColor, distortion: cfg.bubbleDistortion, resonanceRegenPerDamage: cfg.resonanceRegenPerDamage,
+        prismEmitter: resolveTimeBubblePrismEmitter(cfg.prismEmitter), chargeCapacity: cfg.chargeCapacity };
     }
     return { type: 'damage' as const, radius: 0, damage: 0 };
   }

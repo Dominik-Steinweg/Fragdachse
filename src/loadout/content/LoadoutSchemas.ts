@@ -256,6 +256,11 @@ export function validateResolvedUtility(value: unknown): string[] {
     || !Number.isFinite(value.chargeCapacity) || value.chargeCapacity < 0)) {
     issues.push('$.chargeCapacity: TimeBubble capacity must be finite and nonnegative');
   }
+  if (value.resonanceRegenPerDamage !== undefined && (value.type !== 'time_bubble'
+    || typeof value.resonanceRegenPerDamage !== 'number' || !Number.isFinite(value.resonanceRegenPerDamage)
+    || value.resonanceRegenPerDamage < 0)) {
+    issues.push('$.resonanceRegenPerDamage: TimeBubble coefficient must be finite and nonnegative');
+  }
   if (value.focusEnabled !== undefined && (value.type !== 'time_bubble' || (value.focusEnabled !== 0 && value.focusEnabled !== 1))) {
     issues.push('$.focusEnabled: TimeBubble flag must be zero or one');
   }
@@ -266,8 +271,11 @@ export function validateResolvedUtility(value: unknown): string[] {
     if (!isRecord(e) || !isRecord(e.homing)) {
       issues.push('$.prismEmitter: complete emitter and homing config required');
     } else {
-      if (e.enabled !== 0 && e.enabled !== 1) issues.push('$.prismEmitter.enabled: expected zero or one');
-      for (const key of ['intervalMs', 'rotationPeriodMs', 'speed', 'size', 'rangePx', 'slowDurationMs']) {
+      if (!Number.isInteger(e.level) || (e.level as number) < 0 || (e.level as number) > 3)
+        issues.push('$.prismEmitter.level: expected an integer from zero to three');
+      if (!Array.isArray(e.intervalsMs) || e.intervalsMs.length !== 3 || !e.intervalsMs.every(positive))
+        issues.push('$.prismEmitter.intervalsMs: three positive emission intervals required');
+      for (const key of ['rotationPeriodMs', 'speed', 'size', 'rangePx', 'slowDurationMs']) {
         if (!positive(e[key])) issues.push('$.prismEmitter.' + key + ': positive finite number required');
       }
       if (!nonnegative(e.damage) || !nonnegative(e.slowFraction) || (e.slowFraction as number) > 0.95)

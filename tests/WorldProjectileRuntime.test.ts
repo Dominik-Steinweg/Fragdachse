@@ -1,3 +1,4 @@
+import { resolveTimeBubblePrismEmitter } from '../src/loadout/TimeBubbleConfig';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('phaser', () => ({
@@ -197,21 +198,72 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     expect(runtime.activeCount).toBe(0); runtime.destroy();
   });
 
-  it.each([0, 1])('re-evaluates remaining overlapping fields and friendly immunity %s after ownership transfer', (immunity) => {
+  it('re-evaluates remaining overlapping fields after ownership transfer without exempting friendly projectiles', () => {
     const { runtime, physics } = createRuntimeHarness();
     const bubbles = new TimeBubbleSystem();
     bubbles.setFriendlyResolver((a, b) => a === b);
     const effect = { type: 'time_bubble' as const, radius: 50, duration: 1000, playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
     const first = bubbles.hostCreateBubble('captor', 0, 0, effect, 1000);
-    bubbles.hostCreateBubble('captor', 0, 0, { ...effect, projectileSlowFactor: 0.4, friendlyImmunity: immunity }, 1000);
-    runtime.setProjectileTimeFieldPort({ getMovementFactor: (x, y, now, p) => bubbles.getProjectileMovementFactorAt(x, y, now, p.allegiance.ownerId) });
+    bubbles.hostCreateBubble('captor', 0, 0, { ...effect, projectileSlowFactor: 0.4 }, 1000);
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: (x, y, now) => bubbles.getProjectileMovementFactorAt(x, y, now) });
     const id = runtime.spawnProjectile(baseRequest({ speed: 300 }))!;
     expect(physics.handles.get(id)!.body.velocity.x).toBeCloseTo(300 * effect.projectileSlowFactor);
     bubbles.removeBubble(first, 1000);
     runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: effect.radius, targetX: 0, targetY: 100,
       ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1000 });
-    expect(physics.handles.get(id)!.body.velocity.y).toBeCloseTo(300 * (immunity ? 1 : 0.4));
+    expect(physics.handles.get(id)!.body.velocity.y).toBeCloseTo(300 * 0.4);
     runtime.destroy(); bubbles.destroyAll();
+  });
+
+  it('spreads living prism locks by origin bubble with stable locks, soft fallback and lifecycle cleanup', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const targets = [{ id: 'east', x: 120, y: 0 }, { id: 'south', x: 0, y: 160 }];
+    let blocked = false;
+    runtime.setProjectileTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => {
+      for (const t of targets) emit(t.id, 'enemies', t.x, t.y);
+    } });
+    runtime.setLineOfFireReadPort({ hasClearLineOfFire: (_x, _y, tx) => !(blocked && tx < 0) });
+    const spawn = (group?: number) => {
+      const request = baseRequest({ lifetime: 10000 });
+      return runtime.spawnProjectile({ ...request, flight: { ...request.flight,
+        homing: { acquireDelayMs: 0, searchRadius: 300, retargetIntervalMs: 50, maxTurnDegreesPerStep: 180,
+          targetTypes: ['enemies'], requireLineOfSight: true },
+        homingExcludedCircle: group === undefined ? undefined : { bubbleId: group, x: 0, y: 0, radius: 20, expiresAt: 1050 },
+      } })!;
+    };
+    const direction = (id: number) => {
+      const velocity = physics.handles.get(id)!.body.velocity;
+      return { x: Math.round(velocity.x), y: Math.round(velocity.y) };
+    };
+    const first = spawn(1), second = spawn(1), shared = spawn(1), otherBubble = spawn(2), ordinary = spawn();
+    runtime.runHostProjectileStage(50, 1050);
+    expect(direction(first)).toEqual({ x: 100, y: 0 });
+    expect(direction(second)).toEqual({ x: 0, y: 100 });
+    expect(direction(shared)).toEqual(direction(first)); // no unclaimed target: still homes
+    expect(direction(otherBubble)).toEqual(direction(first));
+    expect(direction(ordinary)).toEqual(direction(first));
+
+    targets.push({ id: 'west', x: -160, y: 0 });
+    blocked = true;
+    runtime.runHostProjectileStage(50, 1100);
+    expect(direction(first)).toEqual(direction(shared)); // unclaimed but occluded
+    blocked = false;
+    runtime.runHostProjectileStage(49, 1149);
+    expect(direction(first)).toEqual(direction(shared)); // wait for regular simulated search
+    runtime.runHostProjectileStage(1, 1150);
+    expect([direction(first).x, direction(shared).x].sort((a, b) => a - b)).toEqual([-100, 100]);
+    expect(direction(second)).toEqual({ x: 0, y: 100 }); // exclusively held valid lock is stable
+    runtime.destroyProjectile(second);
+    const replacement = spawn(1);
+    runtime.runHostProjectileStage(50, 1200);
+    expect(direction(replacement)).toEqual({ x: 0, y: 100 }); // despawn frees south
+
+    runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: 20, targetX: 120, targetY: 0,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1200 });
+    runtime.runHostProjectileStage(50, 1250);
+    const groupDirections = new Set([first, shared, replacement].map(id => JSON.stringify(direction(id))));
+    expect(groupDirections.size).toBe(3); // survives bubble expiry, capture and lock reset
+    runtime.destroy();
   });
 
   it('preserves a captured grenade fuse and payload instead of detonating or restarting it', () => {
@@ -283,11 +335,11 @@ describe('WorldProjectileRuntime – technical Physics boundary', () => {
     const bubble = new TimeBubbleSystem();
     const config = UTILITY_CONFIGS.TIME_BUBBLE;
     if (config.type !== 'time_bubble' || !config.prismEmitter) throw Error('Expected prism configuration');
-    const emitter = { ...config.prismEmitter, enabled: 1 };
+    const emitter = resolveTimeBubblePrismEmitter({ ...config.prismEmitter, level: 1 })!;
     const hit = configureEnemyImpact(runtime);
     bubble.setPrismProjectileSpawner(request => { runtime.spawnProjectile(request); });
-    runtime.setProjectileTimeFieldPort({ getMovementFactor: (x, y, now, provenance) =>
-      bubble.getProjectileMovementFactorAt(x, y, now, provenance.allegiance.ownerId) });
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: (x, y, now) =>
+      bubble.getProjectileMovementFactorAt(x, y, now) });
     bubble.hostCreateBubble('owner', 0, 0, {
       type: 'time_bubble', radius: config.bubbleRadius, duration: config.bubbleDuration,
       projectileSlowFactor: config.projectileSlowFactor, playerSlowFactor: config.playerSlowFactor,

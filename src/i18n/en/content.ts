@@ -69,7 +69,7 @@ export const enContent = {
   "construction.flame_turret.description": "Sets nearby enemies on fire continuously.",
   "construction.tesla_turret.description": "Creates a small Tesla dome that continuously shocks nearby enemies.",
   "construction.gravity_turret.description": "Creates a black hole on impact that pulls enemies in.",
-  "construction.slow_bubble_turret.description": "Creates a time bubble on impact that slows every unit.",
+  "construction.slow_bubble_turret.description": "Creates a time bubble on impact that slows enemies and all projectiles. You and allied players move freely.",
   "construction.medic_pedestal.description": "Regularly supplies a medkit.",
   "construction.armor_pedestal.description": "Regularly supplies an armor power-up.",
   "powerup.HEALTH_PACK.name": "Medkit",

@@ -228,13 +228,13 @@ function registerHeldActionHandler(coordinator: RpcCoordinator): HeldActionHandl
 describe('TimeBubble focus RPC', () => {
   it('routes an explicit focus with an exhausted temporary source to the authoritative action owner', () => {
     const f = createFixture(); const handle = registerLoadoutHandler(f.coordinator);
-    const params = { timeBubbleFocusId: 9, temporaryUtilityInstanceId: 'exhausted', attemptId: 'focus-9' };
+    const params = { timeBubbleCollapseId: 9, temporaryUtilityInstanceId: 'exhausted', attemptId: 'focus-9' };
     expect(handle('utility', 0, 45, 67, 'p1', undefined, params)).toEqual({ ok: true });
     expect(f.usePlayerAction).toHaveBeenCalledWith(expect.objectContaining({ category: 'utility', playerId: 'p1',
       targetX: 45, targetY: 67, params, attemptId: 'focus-9' }));
     expect(f.consume).not.toHaveBeenCalled();
     expect(handle('utility', 0, NaN, 67, 'p1', undefined, params).ok).toBe(false);
-    expect(handle('utility', 0, 45, 67, 'p1', undefined, { ...params, timeBubbleFocusId: -1 }).ok).toBe(false);
+    expect(handle('utility', 0, 45, 67, 'p1', undefined, { ...params, timeBubbleCollapseId: -1 }).ok).toBe(false);
     expect(f.usePlayerAction).toHaveBeenCalledTimes(1);
   });
 });

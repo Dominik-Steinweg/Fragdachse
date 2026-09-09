@@ -61,7 +61,8 @@ function fixture(focusEnabled = 1, useProjectileRuntime = false, chargeCapacity 
     collapse: (id, request) => {
       const circle = bubble.removeBubble(id, request.nowMs);
       if (!circle) return false;
-      focus({ ...circle, ...request }); return true;
+      if (request.redirectProjectiles) focus({ ...circle, ...request });
+      bubble.flushReleases(request.nowMs); return true;
     },
     remove: id => { bubble.removeBubble(id, 0, true); }, discardProjectile: discard,
   });
@@ -85,7 +86,7 @@ function fixture(focusEnabled = 1, useProjectileRuntime = false, chargeCapacity 
   };
   const collapse = (id: number, now: number, playerId = 'p1', attemptId = `focus-${id}`) => action.execute({
     category: 'utility', playerId, angle: 0, targetX: 210, targetY: -30, hostNowMs: now, attemptId,
-    params: { timeBubbleFocusId: id },
+    params: { timeBubbleCollapseId: id },
   });
   return { action, bubble, config, spawn, cast, detonate, collapse, focus, discard, cooldown, used, inventory, publishState, projectiles,
     stepProjectiles: (delta: number, at: number) => { now = at; return projectiles!.runHostProjectileStage(delta, at); },
@@ -118,7 +119,6 @@ describe('TimeBubble utility lifetime without an Activity', () => {
     expect(f.cast(1010)).toEqual({ ok: false, reason: 'blocked' });
     expect(f.action.startHeldAction('p1', 'extra', 'charged_throw', 1100)).toBe(false);
     const id = f.detonate(1200);
-    expect(f.collapse(id, 1250).ok).toBe(false);
     f.setAlive(false); f.bubble.hostUpdate(1300);
     expect(f.bubble.isBubbleActive(id, 1300)).toBe(true);
     f.setAlive(true);
@@ -128,6 +128,44 @@ describe('TimeBubble utility lifetime without an Activity', () => {
     expect(f.cast(end + f.config.cooldown - 1)).toEqual({ ok: false, reason: 'cooldown' });
     expect(f.cast(end + f.config.cooldown).ok).toBe(true);
     expect(f.focus).not.toHaveBeenCalled();
+    f.action.destroy();
+  });
+
+  it('freezes the resolved emitter, capacity, flow and focus for the entire cast', () => {
+    const f = fixture(1, false, 90);
+    f.config.prismEmitter = { ...f.config.prismEmitter!, level: 2 };
+    f.config.resonanceRegenPerDamage = 0.02;
+    const interval = f.config.prismEmitter.intervalsMs[1];
+    f.cast();
+    f.config.prismEmitter = { ...f.config.prismEmitter, level: 0 };
+    f.config.chargeCapacity = 0;
+    f.config.resonanceRegenPerDamage = 0;
+    f.config.focusEnabled = 0;
+    const spawned = vi.fn();
+    f.bubble.setPrismProjectileSpawner(spawned);
+    const id = f.detonate(1200);
+    f.bubble.observeProjectile(1, 30, 40, 30, 1200);
+    expect(f.bubble.hostUpdate(1200)[0]).toMatchObject({ chargeCapacity: 90, charge: 30, prismActive: true });
+    expect(f.bubble.getOwnerAdrenalineRegenMultiplier('p1', 1200)).toBeCloseTo(1 + 30 * 0.02);
+    f.bubble.hostUpdate(1200 + interval - 1);
+    expect(spawned).toHaveBeenCalledTimes(1);
+    f.bubble.hostUpdate(1200 + interval);
+    expect(spawned).toHaveBeenCalledTimes(2);
+    expect(f.collapse(id, 1200 + interval + 1).ok).toBe(true);
+    expect(f.focus).toHaveBeenCalledOnce();
+    f.action.destroy();
+  });
+
+  it('collapses without upgrades, ends the cooldown exactly once and does not redirect', () => {
+    const f = fixture(0); f.cast(); const id = f.detonate(1200);
+    expect(f.collapse(id, 1300).ok).toBe(true);
+    expect(f.bubble.isBubbleActive(id, 1300)).toBe(false);
+    expect(f.focus).not.toHaveBeenCalled();
+    expect(f.action.getTimeBubbleState('p1')).toMatchObject({ phase: 'cooldown', cooldownUntil: 1300 + f.config.cooldown });
+    const count = f.cooldown.mock.calls.length;
+    f.bubble.hostUpdate(2000);
+    expect(f.collapse(id, 2000, 'p1', 'retry').ok).toBe(false);
+    expect(f.cooldown).toHaveBeenCalledTimes(count);
     f.action.destroy();
   });
 
@@ -157,8 +195,8 @@ describe('TimeBubble utility lifetime without an Activity', () => {
     f.action.destroy(); expect(f.bubble.hostUpdate(1220)).toEqual([]);
   });
 
-  it('retains control after the last temporary charge and shares the lock across inventory and equipment', () => {
-    const f = fixture();
+  it.each([0, 1])('retains the last temporary charge control and shared lock, focus upgrade %s', focus => {
+    const f = fixture(focus);
     const first = f.action.addTemporaryUtility('p1', f.config, 1)!;
     const second = f.action.addTemporaryUtility('p1', f.config, 2)!;
     expect(f.cast(1000, 'p1', first).ok).toBe(true);

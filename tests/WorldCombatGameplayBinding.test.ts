@@ -326,7 +326,7 @@ afterEach(() => {
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {
-  it('binds focus to bubble removal before projectile mutation and detaches utility lifetime callbacks', () => {
+  it.each([false, true])('removes before optional focus (%s), releases once and detaches lifetime callbacks', redirectProjectiles => {
     const f = createFixture({ players: [], enemies: [] });
     const port = vi.mocked(f.playerCombat.utility.setTimeBubblePort!).mock.calls[0][0]!;
     const effect = { type: 'time_bubble' as const, chargeCapacity: 30, radius: 50, duration: 1000, playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
@@ -338,13 +338,13 @@ describe('WorldCombatGameplayBinding projectile target geometry', () => {
       expect(f.binding.systems!.timeBubble.getProjectileMovementFactorAt(0, 0, 1100)).toBe(1);
       return 1;
     });
-    expect(port.collapse(id, { targetX: 100, targetY: 200, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100 })).toBe(true);
+    expect(port.collapse(id, { targetX: 100, targetY: 200, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100, redirectProjectiles })).toBe(true);
     expect(f.playerCombat.utility.onTimeBubbleEnded).toHaveBeenCalledWith(id, 1100);
-    expect(f.projectileUtility.focusProjectilesInCircle).toHaveBeenCalledTimes(1);
+    expect(f.projectileUtility.focusProjectilesInCircle).toHaveBeenCalledTimes(redirectProjectiles ? 1 : 0);
     expect(f.combatSystem.applyAoeDamage).toHaveBeenCalledExactlyOnceWith(0, 0, effect.radius, 7, 'owner', false,
       expect.objectContaining({ sourceId: 'TIME_BUBBLE', sourceSlot: 'utility', allowCritical: false,
         damageBasis: expect.objectContaining({ kind: 'source-resolved', amount: 7 }) }));
-    expect(port.collapse(id, { targetX: 0, targetY: 0, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100 })).toBe(false);
+    expect(port.collapse(id, { targetX: 0, targetY: 0, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100, redirectProjectiles })).toBe(false);
     f.binding.destroy();
     expect(f.playerCombat.utility.setTimeBubblePort).toHaveBeenLastCalledWith(null);
     expect(f.projectileInteraction.setTimeBubbleChargePort).toHaveBeenLastCalledWith(null);

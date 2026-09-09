@@ -68,6 +68,8 @@ export interface ProjectileHomingRequest {
   readonly kinematics: ProjectileKinematics;
   readonly state: HomingRuntimeState;
   readonly excludedTargetKeys?: ReadonlySet<string>;
+  /** Soft preference supplied by the projectile owner; occupied targets remain valid fallbacks. */
+  readonly isTargetClaimed?: (id: string, type: HomingTargetType) => boolean;
   readonly excludedCircle?: ProjectileHomingExcludedCircle;
   readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
 }
@@ -208,6 +210,7 @@ export class ProjectileHomingController {
     }
     if (eligible === 0) return null;
 
+    let sharedLockedTarget: HomingTargetCandidate | null = null;
     // Gelocktes Ziel zuerst: bleibt es gültig, kostet die Suche genau eine Schusslinienprüfung.
     if (state.lockedTargetId) {
       for (let i = 0; i < count; i += 1) {
@@ -215,7 +218,9 @@ export class ProjectileHomingController {
         const candidate = this.candidatePool[i];
         if (candidate.id !== state.lockedTargetId || candidate.type !== state.lockedTargetType) continue;
         if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, candidate.x, candidate.y)) {
-          return candidate;
+          if (!request.isTargetClaimed?.(candidate.id, candidate.type)) return candidate;
+          sharedLockedTarget = candidate;
+          break;
         }
         this.rejected[i] = 1;
         eligible -= 1;
@@ -227,6 +232,7 @@ export class ProjectileHomingController {
     while (eligible > 0) {
       let bestIndex = -1;
       let bestScore = Number.NEGATIVE_INFINITY;
+      let bestClaimed = true;
 
       for (let i = 0; i < count; i += 1) {
         if (this.rejected[i]) continue;
@@ -242,13 +248,16 @@ export class ProjectileHomingController {
         }
 
         const score = distanceScore * distanceWeight + forwardScore * forwardWeight;
-        if (score > bestScore) {
+        const claimed = request.isTargetClaimed?.(candidate.id, candidate.type) ?? false;
+        if (bestIndex < 0 || (bestClaimed && !claimed) || (claimed === bestClaimed && score > bestScore)) {
+          bestClaimed = claimed;
           bestScore = score;
           bestIndex = i;
         }
       }
 
       if (bestIndex < 0) return null;
+      if (bestClaimed && sharedLockedTarget) return sharedLockedTarget;
       const best = this.candidatePool[bestIndex];
       if (!requireLineOfFire || this.lineOfFirePort!.hasClearLineOfFire(originX, originY, best.x, best.y)) return best;
       this.rejected[bestIndex] = 1;

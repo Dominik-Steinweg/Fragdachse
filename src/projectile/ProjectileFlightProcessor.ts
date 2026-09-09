@@ -131,7 +131,6 @@ export class ProjectileFlightProcessor {
       projectile.physics.sprite.x,
       projectile.physics.sprite.y,
       nowMs,
-      projectile.provenance,
     );
     const nextFactor = clamp(queried ?? projectile.timeBubbleFactor ?? 1, 0, 1);
     const previousFactor = clamp(projectile.timeBubbleFactor ?? 1, 0, 1);

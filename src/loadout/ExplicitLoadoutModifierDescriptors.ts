@@ -167,20 +167,20 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "STINK_CLOUD",
     targets: [{ path: ["afterCloudRadiusFactor"], formula: "add", createIfMissing: true }],
   },
-  "utility.TIME_BUBBLE.friendlyImmunity": {
+  "utility.TIME_BUBBLE.resonanceRegenPerDamage": {
     kind: "utility",
     itemId: "TIME_BUBBLE",
-    targets: [{ path: ["friendlyImmunity"], formula: "add", createIfMissing: true }],
+    targets: [{ path: ["resonanceRegenPerDamage"], formula: "add" }],
   },
   "utility.TIME_BUBBLE.chargeCapacity": {
     kind: "utility",
     itemId: "TIME_BUBBLE",
     targets: [{ path: ["chargeCapacity"], formula: "add" }],
   },
-  "utility.TIME_BUBBLE.prismEmitter.enabled": {
+  "utility.TIME_BUBBLE.prismEmitter.level": {
     kind: "utility",
     itemId: "TIME_BUBBLE",
-    targets: [{ path: ["prismEmitter", "enabled"], formula: "add" }],
+    targets: [{ path: ["prismEmitter", "level"], formula: "add" }],
   },
   "utility.TIME_BUBBLE.focusEnabled": {
     kind: "utility",

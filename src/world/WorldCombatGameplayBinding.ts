@@ -839,7 +839,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       collapse: (id, request) => {
         const circle = timeBubble.removeBubble(id, request.nowMs);
         if (!circle) { timeBubble.flushReleases(request.nowMs); return false; }
-        o.projectileUtility!.focusProjectilesInCircle({ ...request, ...circle });
+        if (request.redirectProjectiles) o.projectileUtility!.focusProjectilesInCircle({ ...request, ...circle });
         timeBubble.flushReleases(request.nowMs);
         return true;
       },
@@ -995,7 +995,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     });
     const timeFieldPort: ProjectileTimeFieldPort = {
       isBubbleActive: (id, now) => this.systems?.timeBubble.isBubbleActive(id, now) ?? false,
-      getMovementFactor: (x, y, now, provenance) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, provenance.allegiance.ownerId) ?? 1,
+      getMovementFactor: (x, y, now) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now) ?? 1,
     };
     o.projectileTimeField.setProjectileTimeFieldPort(timeFieldPort);
     const targetQueryPort: ProjectileTargetQueryPort = {

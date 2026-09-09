@@ -4993,136 +4993,176 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "time_bubble_radius",
-                                                "code":  "D-U2-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  140,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_time_bubble",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TIME_BUBBLE.bubbleRadius",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "time_bubble_duration",
-                                                "code":  "D-U2-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  150,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "time_bubble_radius",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TIME_BUBBLE.bubbleDuration",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.5
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "time_bubble_slow_strength",
-                                                "code":  "D-U2-3",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  155,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_time_bubble",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TIME_BUBBLE.playerSlowFactor",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  -0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "time_bubble_projectile_slow",
-                                                "code":  "D-U2-4",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  160,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "time_bubble_slow_strength",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TIME_BUBBLE.friendlyImmunity",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id": "time_bubble_resonance",
-                                                "code": "D-U2-7",
+                                                "id": "time_bubble_cooldown",
+                                                "code": "D-U2-L1",
                                                 "kind": "upgrade",
                                                 "maxLevel": 3,
                                                 "startingLevel": 0,
                                                 "costPerLevel": 1,
                                                 "bossPointCostPerLevel": 0,
                                                 "refundable": true,
-                                                "sortOrder": 160,
-                                                "requires": [{ "upgradeId": "time_bubble_duration", "minLevel": 1 }],
-                                                "effects": [{ "stat": "utility.TIME_BUBBLE.chargeCapacity", "mode": "add_per_level", "value": 50 }]
-                                            },
-                                            {
-                                                "id": "time_bubble_prism_spiral",
-                                                "code": "D-U2-5",
-                                                "kind": "upgrade",
-                                                "maxLevel": 1,
-                                                "startingLevel": 0,
-                                                "costPerLevel": 0,
-                                                "bossPointCostPerLevel": 1,
-                                                "refundable": true,
-                                                "sortOrder": 161,
-                                                "requires": [{ "upgradeId": "time_bubble_resonance", "minLevel": 1 }],
-                                                "effects": [{ "stat": "utility.TIME_BUBBLE.prismEmitter.enabled", "mode": "add_per_level", "value": 1 }]
+                                                "sortOrder": 140,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_time_bubble",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.cooldown",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": -0.25
+                                                    }
+                                                ]
                                             },
                                             {
                                                 "id": "time_bubble_focus",
-                                                "code": "D-U2-6",
+                                                "code": "D-U2-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 141,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_time_bubble",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.focusEnabled",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "time_bubble_radius",
+                                                "code": "D-U2-L2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 150,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "time_bubble_cooldown",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.bubbleRadius",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.15
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "time_bubble_prism_spiral",
+                                                "code": "D-U2-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 151,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "time_bubble_focus",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.prismEmitter.level",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "time_bubble_resonance",
+                                                "code": "D-U2-B",
                                                 "kind": "upgrade",
                                                 "maxLevel": 1,
                                                 "startingLevel": 0,
                                                 "costPerLevel": 0,
                                                 "bossPointCostPerLevel": 1,
                                                 "refundable": true,
+                                                "sortOrder": 160,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "time_bubble_radius",
+                                                        "minLevel": 1
+                                                    },
+                                                    {
+                                                        "upgradeId": "time_bubble_prism_spiral",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.chargeCapacity",
+                                                        "mode": "add_per_level",
+                                                        "value": 50
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "time_bubble_overcharge",
+                                                "code": "D-U2-BL1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 161,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "time_bubble_resonance",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.chargeCapacity",
+                                                        "mode": "add_per_level",
+                                                        "value": 50
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "time_bubble_resonance_flow",
+                                                "code": "D-U2-BL2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
                                                 "sortOrder": 162,
-                                                "requires": [{ "upgradeId": "time_bubble_prism_spiral", "minLevel": 1 }],
-                                                "effects": [{ "stat": "utility.TIME_BUBBLE.focusEnabled", "mode": "add_per_level", "value": 1 }]
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "time_bubble_resonance",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.TIME_BUBBLE.resonanceRegenPerDamage",
+                                                        "mode": "add_per_level",
+                                                        "value": 0.005
+                                                    }
+                                                ]
                                             },
                                             {
                                                 "id":  "unlock_smoke_grenade",

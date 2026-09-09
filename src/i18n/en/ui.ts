@@ -1,7 +1,7 @@
 export const enUi = {
   "ui.timeBubble.flying": "In flight",
-  "ui.timeBubble.active": "Active",
-  "ui.timeBubble.focus": "Active · E: Dissolve",
+  "ui.timeBubble.active": "Active · E: Dissolve",
+  "ui.timeBubble.focus": "Active · E: Redirect & dissolve",
   "ui.common.empty": "Empty",
   "ui.common.unknown": "Unknown",
   "ui.common.close": "Close",

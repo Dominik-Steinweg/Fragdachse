@@ -767,7 +767,7 @@ export class ArenaInputBindings {
         }
       }
       // Der Rueckbau nutzt zwar den Utility-Kanal, hat aber weder Config noch Cooldown.
-      if (slot === 'utility' && params?.timeBubbleFocusId === undefined && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
+      if (slot === 'utility' && params?.timeBubbleCollapseId === undefined && !params?.dismantle && params?.toolRef?.kind !== 'construction') {
         // The InputSystem has already checked keyed local prediction before dispatch. This
         // synchronous callback must only gate against the authoritative state; otherwise the
         // prediction created by this very request would reject the request itself.

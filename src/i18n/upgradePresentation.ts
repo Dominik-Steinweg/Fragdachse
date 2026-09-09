@@ -1,3 +1,4 @@
+import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { getDomainCatalog, getDomainKeys, translate, translateSegments, type TranslationSegment } from './catalog';
 import { formatNumber, formatUpgradeEffectValue } from './format';
 import type { Locale } from './types';
@@ -42,11 +43,21 @@ function getUpgradeParams(
   const timeBubble = UTILITY_CONFIGS.TIME_BUBBLE;
   if (definition.id === 'time_bubble_prism_spiral' && timeBubble?.type === 'time_bubble' && timeBubble.prismEmitter) {
     const prism = timeBubble.prismEmitter;
-    params.prismIntervalMs = formatNumber(prism.intervalMs, locale);
+    params.prismIntervalsMs = Array.from({ length: definition.maxLevel }, (_, index) =>
+      formatNumber(resolveTimeBubblePrismEmitter({ ...prism, level: index + 1 })!.intervalMs, locale)).join(' / ');
     params.prismRotationSeconds = formatNumber(prism.rotationPeriodMs / 1000, locale);
     params.prismDamage = formatNumber(prism.damage, locale);
     params.prismSlowPercent = formatNumber(prism.slowFraction, locale, { style: 'percent' });
     params.prismSlowSeconds = formatNumber(prism.slowDurationMs / 1000, locale);
+  }
+  if (definition.id === 'time_bubble_overcharge' && timeBubble?.type === 'time_bubble') {
+    const capacity = (timeBubble.chargeCapacity ?? 0)
+      + (getCoopDefenseUpgradeDefinition('time_bubble_resonance')?.effects[0].value ?? 0);
+    params.resonanceCapacities = Array.from({ length: definition.maxLevel }, (_, i) =>
+      formatNumber(capacity + definition.effects[0].value * (i + 1), locale)).join(' / ');
+  }
+  if (definition.id === 'time_bubble_resonance_flow') {
+    params.flowPercent = formatNumber(definition.effects[0].value, locale, { style: 'percent', maximumFractionDigits: 2 });
   }
   if (definition.id.startsWith('decoy_') && decoy?.type === 'decoy') {
     params.decoyRefundSeconds = formatNumber(decoy.refundPerEnemyMs / 1000, locale);

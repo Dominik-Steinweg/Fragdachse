@@ -1,3 +1,4 @@
+import { resolveTimeBubblePrismEmitter } from '../src/loadout/TimeBubbleConfig';
 import { describe, expect, it, vi } from 'vitest';
 import { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import type { TimeBubbleEffectConfig, TimeBubblePrismEmitterConfig } from '../src/types';
@@ -8,7 +9,7 @@ import { validateResolvedUtility } from '../src/loadout/content/LoadoutSchemas';
 import { getUpgradeDescription } from '../src/i18n/upgradePresentation';
 
 const emitter: TimeBubblePrismEmitterConfig = {
-  enabled: 1, intervalMs: 80, rotationPeriodMs: 800, speed: 900, size: 3,
+  intervalMs: 80, rotationPeriodMs: 800, speed: 900, size: 3,
   rangePx: 600, damage: 1, slowFraction: 0.5, slowDurationMs: 2000,
   homing: { acquireDelayMs: 100, searchRadius: 300, retargetIntervalMs: 40,
     maxTurnDegreesPerStep: 10, targetTypes: ['enemies'], requireLineOfSight: true,
@@ -76,7 +77,7 @@ describe('Time Bubble prism emission', () => {
     const config = effect({ prismEmitter: { ...emitter } });
     system.hostCreateBubble('a', 10, 0, config, 1000);
     config.radius = 999;
-    config.prismEmitter = { ...emitter, enabled: 0 };
+    config.prismEmitter = undefined;
     system.hostCreateBubble('b', 200, 0, effect(), 1000 + emitter.intervalMs / 2);
     system.hostUpdate(1000 + emitter.intervalMs);
     expect(spawn.mock.calls.map(([shot]) => [shot.provenance.attributionId, shot.origin.angle])).toEqual([
@@ -88,7 +89,6 @@ describe('Time Bubble prism emission', () => {
   it('does not emit for ordinary bubbles, after expiry, or after teardown', () => {
     const { system, spawn } = harness();
     system.hostCreateBubble('ordinary', 0, 0, effect({ prismEmitter: undefined }), 0);
-    system.hostCreateBubble('disabled', 0, 0, effect({ prismEmitter: { ...emitter, enabled: 0 } }), 0);
     expect(system.hostUpdate(0).every(bubble => bubble.prismActive === undefined)).toBe(true);
     expect(spawn).not.toHaveBeenCalled();
     system.hostCreateBubble('expired', 0, 0, effect({ duration: emitter.intervalMs }), 0);
@@ -104,71 +104,91 @@ describe('Time Bubble prism emission', () => {
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it('uses ordinary friendly immunity and the strongest overlapping time field', () => {
+  it.each(['coop', 'team', 'free-for-all'])('exempts only friendly player movement in %s', mode => {
     const { system } = harness();
-    system.setFriendlyResolver((owner, subject) => owner === subject || subject === 'ally');
+    system.setFriendlyResolver((owner, subject) => mode === 'coop'
+      || (mode === 'team' && owner === 'owner' && subject === 'ally'));
     system.hostCreateBubble('owner', 0, 0, effect(), 0);
-    expect(system.getProjectileMovementFactorAt(0, 0, 1, 'owner')).toBe(effect().projectileSlowFactor);
-    system.destroyAll();
-    system.hostCreateBubble('owner', 0, 0, effect({ friendlyImmunity: 1 }), 0);
-    expect(system.getProjectileMovementFactorAt(0, 0, 1, 'owner')).toBe(1);
-    expect(system.getProjectileMovementFactorAt(0, 0, 1, 'ally')).toBe(1);
-    system.hostCreateBubble('other', 0, 0, effect({ projectileSlowFactor: 0.2 }), 0);
-    expect(system.getProjectileMovementFactorAt(0, 0, 1, 'owner')).toBe(0.2);
+    expect(system.getPlayerMovementFactorAt(0, 0, 1, 'owner')).toBe(1);
+    expect(system.getPlayerMovementFactorAt(0, 0, 1, 'ally')).toBe(mode === 'free-for-all' ? effect().playerSlowFactor : 1);
+    expect(system.getPlayerMovementFactorAt(0, 0, 1)).toBe(effect().playerSlowFactor); // NPC
+    expect(system.getProjectileMovementFactorAt(0, 0, 1)).toBe(effect().projectileSlowFactor);
+    if (mode !== 'coop') {
+      system.hostCreateBubble('enemy', 0, 0, effect({ playerSlowFactor: 0.2, projectileSlowFactor: 0.01 }), 0);
+      expect(system.getPlayerMovementFactorAt(0, 0, 1, 'owner')).toBe(0.2);
+      expect(system.getProjectileMovementFactorAt(0, 0, 1)).toBe(0.01);
+    }
   });
 });
 
-describe('Prism Spiral upgrade content', () => {
-  it('unlocks focus after Prism Spiral and resolves it independently of Eigenzeit', () => {
-    const node = getCoopDefenseUpgradeDefinition('time_bubble_focus')!;
-    expect(node).toMatchObject({ maxLevel: 1, costPerLevel: 0, bossPointCostPerLevel: 1, refundable: true,
-      requires: [{ upgradeId: 'time_bubble_prism_spiral', minLevel: 1 }] });
+describe('Time Bubble upgrade tree', () => {
+  const profile = (levels: Record<string, number>) => ({ upgrades: Object.fromEntries(
+    Object.entries(levels).map(([id, level]) => [id, { unlocked: level > 0, level }])) });
+  const nodes = [
+    ['time_bubble_cooldown', 3, ['unlock_time_bubble']],
+    ['time_bubble_radius', 3, ['time_bubble_cooldown']],
+    ['time_bubble_focus', 1, ['unlock_time_bubble']],
+    ['time_bubble_prism_spiral', 3, ['time_bubble_focus']],
+    ['time_bubble_resonance', 1, ['time_bubble_radius', 'time_bubble_prism_spiral']],
+    ['time_bubble_overcharge', 3, ['time_bubble_resonance']],
+    ['time_bubble_resonance_flow', 3, ['time_bubble_resonance']],
+  ] as const;
+  it.each(nodes)('uses the common tree, costs, requirements and descriptions for %s', (id, maxLevel, requires) => {
+    const boss = id === 'time_bubble_resonance';
+    expect(getCoopDefenseUpgradeDefinition(id)).toMatchObject({ maxLevel, refundable: true,
+      costPerLevel: boss ? 0 : 1, bossPointCostPerLevel: boss ? 1 : 0,
+      requires: requires.map(upgradeId => ({ upgradeId, minLevel: 1 })) });
+    for (const locale of ['de', 'en'] as const) expect(getUpgradeDescription(id, locale)).not.toMatch(/[{}⟦⟧]/);
+  });
+
+  it('resolves all levels from authored tuning and leaves ordinary bubbles disabled', () => {
     const base = UTILITY_CONFIGS.TIME_BUBBLE;
     if (base.type !== 'time_bubble') throw Error('Expected TimeBubble');
+    expect(resolveTimeBubblePrismEmitter(base.prismEmitter)).toBeUndefined();
     expect(base.focusEnabled).toBe(0);
-    for (const immunity of [0, 1]) {
-      const levels = { unlock_time_bubble: 1, time_bubble_radius: 1, time_bubble_duration: 1,
-        time_bubble_resonance: 1, time_bubble_prism_spiral: 1, time_bubble_focus: 1, time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity };
-      const profile = { upgrades: Object.fromEntries(Object.entries(levels).map(([id, level]) => [id, { unlocked: level > 0, level }])) };
-      const resolved = applyCoopDefenseModifiersToUtilityConfig(base, getCoopDefenseResolvedEffectTotals(profile, 'dachs_nukem'));
-      expect(resolved).toMatchObject({ focusEnabled: 1, prismEmitter: { enabled: 1 } });
-      expect(resolved.type === 'time_bubble' && (resolved.friendlyImmunity ?? 0)).toBe(immunity);
-    }
-    expect(base.focusEnabled).toBe(0);
-    expect(validateResolvedUtility({ ...base, focusEnabled: 2 }).length).toBeGreaterThan(0);
-    for (const locale of ['de', 'en'] as const) expect(getUpgradeDescription(node.id, locale)).not.toMatch(/[{}⟦⟧]/);
-  });
-  it('resolves behind duration, independently from friendly immunity, without mutating authored defaults', () => {
-    const node = getCoopDefenseUpgradeDefinition('time_bubble_prism_spiral')!;
-    expect(node.requires).toEqual([{ upgradeId: 'time_bubble_resonance', minLevel: 1 }]);
-    expect(node).toMatchObject({ maxLevel: 1, costPerLevel: 0, bossPointCostPerLevel: 1, refundable: true });
-    const base = UTILITY_CONFIGS.TIME_BUBBLE;
-    if (base.type !== 'time_bubble') throw Error('Expected Time Bubble');
-    expect(base.prismEmitter?.enabled).toBe(0);
-    for (const immunity of [0, 1]) {
-      const levels = { unlock_time_bubble: 1, time_bubble_radius: 1, time_bubble_duration: 1,
-        time_bubble_resonance: 1, time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity, time_bubble_prism_spiral: 1 };
-      const profile = { upgrades: Object.fromEntries(Object.entries(levels).map(([id, level]) => [id, { unlocked: level > 0, level }])) };
-      const resolved = applyCoopDefenseModifiersToUtilityConfig(base, getCoopDefenseResolvedEffectTotals(profile, 'dachs_nukem'));
-      if (resolved.type !== 'time_bubble') throw Error('Expected Time Bubble');
-      expect(resolved.prismEmitter?.enabled).toBe(1);
-      expect(resolved.friendlyImmunity ?? 0).toBe(immunity);
+    const value = (id: string) => getCoopDefenseUpgradeDefinition(id)!.effects[0].value;
+    for (let level = 1; level <= getCoopDefenseUpgradeDefinition('time_bubble_prism_spiral')!.maxLevel; level++) {
+      const levels = Object.fromEntries(nodes.map(([id, max]) => [id, Math.min(level, max)]));
+      const resolved = applyCoopDefenseModifiersToUtilityConfig(base,
+        getCoopDefenseResolvedEffectTotals(profile({ unlock_time_bubble: 1, ...levels }), 'dachs_nukem'));
+      if (resolved.type !== 'time_bubble') throw Error('Expected TimeBubble');
+      expect(resolved.cooldown).toBeCloseTo(base.cooldown * (1 + value('time_bubble_cooldown') * level));
+      expect(resolved.bubbleRadius).toBeCloseTo(base.bubbleRadius * (1 + value('time_bubble_radius') * level));
+      expect(resolved.bubbleDuration).toBe(base.bubbleDuration);
+      expect(resolved.projectileSlowFactor).toBe(base.projectileSlowFactor);
+      expect(resolved.playerSlowFactor).toBe(base.playerSlowFactor);
+      expect(resolved.focusEnabled).toBe(1);
+      expect(resolved.chargeCapacity).toBe(value('time_bubble_resonance') + value('time_bubble_overcharge') * level);
+      expect(resolved.resonanceRegenPerDamage).toBe(value('time_bubble_resonance_flow') * level);
+      const emitter = resolveTimeBubblePrismEmitter(resolved.prismEmitter)!;
+      expect(emitter.intervalMs).toBe(base.prismEmitter!.intervalsMs[level - 1]);
+      expect(emitter).not.toHaveProperty('level');
+      const { system, spawn } = harness();
+      system.hostCreateBubble('owner', 0, 0, effect({ prismEmitter: emitter }), 0);
+      system.hostUpdate(0);
+      system.hostUpdate(emitter.intervalMs - 1);
+      expect(spawn).toHaveBeenCalledTimes(1);
+      system.hostUpdate(emitter.intervalMs);
+      expect(spawn).toHaveBeenCalledTimes(2);
       expect(validateResolvedUtility(resolved)).toEqual([]);
     }
-    expect(base.prismEmitter?.enabled).toBe(0);
+    expect(base.prismEmitter?.level).toBe(0);
+    expect(base.chargeCapacity).toBe(0);
+    expect(base.resonanceRegenPerDamage).toBe(0);
   });
 
-  it.each(['de', 'en'] as const)('formats the %s description from authored values', locale => {
-    expect(getUpgradeDescription('time_bubble_prism_spiral', locale)).not.toMatch(/[{}⟦⟧]/);
-  });
-
-  it('rejects malformed emitter and guidance settings', () => {
+  it('rejects invalid levels, interval tables, coefficients and homing', () => {
     const base = UTILITY_CONFIGS.TIME_BUBBLE;
-    for (const invalid of [{ enabled: 2 }, { intervalMs: 0 }, { rotationPeriodMs: -1 }, { speed: 0 },
-      { rangePx: Infinity }, { size: 0 }, { slowFraction: 1 }, { slowDurationMs: NaN },
+    if (base.type !== 'time_bubble') throw Error('Expected TimeBubble');
+    for (const invalid of [{ level: -1 }, { level: 4 }, { level: 1.5 }, { intervalsMs: [10, 20] },
+      { intervalsMs: [10, 0, 30] }, { rotationPeriodMs: -1 }, { speed: 0 }, { rangePx: Infinity },
+      { size: 0 }, { slowFraction: 1 }, { slowDurationMs: NaN },
       { homing: { ...emitter.homing, retargetIntervalMs: 0 } },
       { homing: { ...emitter.homing, targetTypes: ['players'] } }]) {
-      expect(validateResolvedUtility({ ...base, prismEmitter: { ...emitter, ...invalid } }).length).toBeGreaterThan(0);
+      expect(validateResolvedUtility({ ...base, prismEmitter: { ...base.prismEmitter, ...invalid } }).length).toBeGreaterThan(0);
     }
+    for (const resonanceRegenPerDamage of [-1, NaN, Infinity, '1'])
+      expect(validateResolvedUtility({ ...base, resonanceRegenPerDamage }).length).toBeGreaterThan(0);
+    expect(validateResolvedUtility({ ...base, focusEnabled: 2 }).length).toBeGreaterThan(0);
   });
 });

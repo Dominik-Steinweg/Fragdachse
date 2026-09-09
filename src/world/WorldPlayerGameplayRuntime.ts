@@ -395,6 +395,7 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly getPowerUpSystem: () => PowerUpSystem | null;
   readonly getPlayerCapabilities: (playerId: string) => PlayerCapabilities;
   readonly relationship: PlayerRelationshipPort;
+  readonly getTimeBubbleAdrenalineRegenMultiplier?: (playerId: string, nowMs: number) => number;
   readonly getTeamAdrenalineRegenMultiplier?: (playerId: string) => number;
   readonly resetPlayerPosition: (playerId: string, x: number, y: number) => void;
   readonly dropBeer: (playerId: string, x?: number, y?: number) => void;
@@ -1464,7 +1465,8 @@ export class WorldPlayerGameplayRuntime implements
       return base
         * this.options.decoySystem.getStealthAdrenalineMultiplier(playerId)
         * itemRuntime.getAdrenalineRegenMultiplier(playerId, nowMs)
-        * (this.options.getTeamAdrenalineRegenMultiplier?.(playerId) ?? 1);
+        * (this.options.getTeamAdrenalineRegenMultiplier?.(playerId) ?? 1)
+        * (this.options.getTimeBubbleAdrenalineRegenMultiplier?.(playerId, nowMs) ?? 1);
     });
     resource.setRageMaxResolver((playerId) => playerModifier.getResolvedStat(playerId, 'ultimate.maxRage', 600));
     resource.setRageGainMultiplierResolver((playerId) => 1 + playerModifier.getPercentageStat(playerId, 'ultimate.rageGainPerDamage'));

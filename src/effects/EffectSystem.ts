@@ -724,8 +724,8 @@ export class EffectSystem implements EnemyVisualSink {
     if (visualStyle === 'time_bubble_release') {
       const strength = resonanceReleaseStrength(chargeDamage);
       if (strength <= 0) return;
-      this.lighting?.pulse('explosion', x, y, { radiusPx: radius * 1.4, color: 0xffbe65,
-        intensity: 0.2 + strength * 0.7, durationMs: 500 });
+      this.lighting?.pulse('explosion', x, y, { radiusPx: radius * 1.65, color: 0xffbe65,
+        intensity: 0.45 + strength * 1.1, durationMs: 700 });
       this.spawnCombatExplosionGpu(x, y, radius, visualStyle, 0xff5b18, 0xffd75b, 0xff9020, chargeDamage);
       return;
     }

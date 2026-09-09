@@ -258,8 +258,8 @@ export class RpcCoordinator {
       const activeGameMode = bridge.getActiveGameMode();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       const authoritativeParams = params;
-      if (params?.timeBubbleFocusId !== undefined) {
-        if (slot !== 'utility' || !Number.isSafeInteger(params.timeBubbleFocusId) || params.timeBubbleFocusId < 0
+      if (params?.timeBubbleCollapseId !== undefined) {
+        if (slot !== 'utility' || !Number.isSafeInteger(params.timeBubbleCollapseId) || params.timeBubbleCollapseId < 0
           || !Number.isFinite(targetX) || !Number.isFinite(targetY)
           || params.dismantle || params.globalDismantle || params.constructionId !== undefined
           || (params.toolRef && (params.toolRef.kind !== 'utility' || params.toolRef.id !== 'TIME_BUBBLE'))) {

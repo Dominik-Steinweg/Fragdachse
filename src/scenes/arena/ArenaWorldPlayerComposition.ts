@@ -70,6 +70,8 @@ export function composeWorldPlayerGameplay(
     relationship: {
       isEnemyPair: (firstPlayerId, secondPlayerId) => bridge.isEnemyPair(firstPlayerId, secondPlayerId),
     },
+    getTimeBubbleAdrenalineRegenMultiplier: (playerId, now) =>
+      gameplay.combat?.systems?.timeBubble.getOwnerAdrenalineRegenMultiplier(playerId, now) ?? 1,
     getTeamAdrenalineRegenMultiplier: (playerId) => flow.getCoopMissionRuntime()?.coopDefenseTeamBuffSystem?.getAdrenalineRegenMultiplier(
       Date.now(),
       bridge.canPlayerReceiveRoundRewards(playerId),
