@@ -13,6 +13,7 @@ import type { EffectSystem } from '../../effects/EffectSystem';
 import type { VisualFeedbackDirector } from '../../effects/VisualFeedbackDirector';
 import type { GameAudioSystem } from '../../audio/GameAudioSystem';
 import type { ExplosionVisualStyle, LoadoutUseParams } from '../../types';
+import { resonanceReleaseStrength } from '../../effects/timeBubbleResonanceVisual';
 import { normalizeConstructionId } from '../../config/coopDefenseConstructions';
 import { isValidPlayerActionAttemptId } from '../../world/PlayerActionRuntime';
 import type {
@@ -32,8 +33,12 @@ import type {
 // (Phaser clamps finalVolume to [0, 1] anyway, so there is no clipping risk).
 const EXPLOSION_CLOSE_BOOST = 1 / 0.58; // ≈ 1.72
 
-function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle): { key: string; scale: number } | undefined {
+function resolveExplosionAudio(visualStyle?: ExplosionVisualStyle, chargeDamage?: number): { key: string; scale: number } | undefined {
   switch (visualStyle) {
+    case 'time_bubble_release': {
+      const strength = resonanceReleaseStrength(chargeDamage);
+      return strength > 0 ? { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST * (0.2 + strength * 0.45) } : undefined;
+    }
     case 'holy':        return { key: 'sfx_explosion_holy',           scale: EXPLOSION_CLOSE_BOOST };
     case 'energy':      return { key: 'sfx_explosion_asmd_secondary', scale: EXPLOSION_CLOSE_BOOST };
     case 'timebomb':    return { key: 'sfx_explosion_he', scale: EXPLOSION_CLOSE_BOOST };
@@ -410,9 +415,10 @@ export class RpcCoordinator {
   }
 
   private registerExplosionEffectHandler(): void {
-    bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle) => {
-      this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
-      const audio = resolveExplosionAudio(visualStyle);
+    bridge.registerExplosionEffectHandler((x, y, radius, color, visualStyle, chargeDamage) => {
+      if (chargeDamage === undefined) this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle);
+      else this.effectSystem.playExplosionEffect(x, y, radius, color, visualStyle, chargeDamage);
+      const audio = resolveExplosionAudio(visualStyle, chargeDamage);
       if (audio) this.gameAudioSystem.playSound(audio.key, x, y, undefined, audio.scale);
       // Die Nuke pulst nicht von hier: ihre Detonation ist Phase B der Choreografie, die das
       // Effektsystem startet. Ein Puls daneben liefe doppelt.

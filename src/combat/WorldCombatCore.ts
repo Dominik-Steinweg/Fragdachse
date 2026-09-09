@@ -1,4 +1,6 @@
 import type { MolotovWildfireDeath } from '../types';
+import { resolveProjectileExplosionFalloff } from '../utils/radialDamage';
+import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import * as Phaser from 'phaser';
 import type { PrimaryHitAdrenalineRewardFact, PrimaryHitAdrenalineRewardIntent, PrimaryHitRewardScope } from './PrimaryHitReward';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
@@ -136,6 +138,9 @@ type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlay
 type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
 
 interface AoeDamageOptions {
+  /** Explicit source resolution, e.g. a reservoir whose accumulated damage must not be amplified again. */
+  damageBasis?: Extract<CombatDamageBasis, { kind: 'source-resolved' }>;
+  allowCritical?: boolean;
   category?: ShieldBlockCategory;
   allowTeamDamage?: boolean;
   sourceId?: string;
@@ -233,6 +238,7 @@ function toDamageOptions(
   return {
     allowTeamDamage: options?.allowTeamDamage,
     sourceSlot: options?.sourceSlot,
+    allowCritical: options?.allowCritical,
     damageKind,
   };
 }
@@ -337,6 +343,11 @@ type MeleeSwingTargetCandidate =
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'decoy' }>, 'distance'>;
 
 export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAttackPort {
+  private bubbleChargePort: TimeBubbleChargePort | null = null;
+
+  setTimeBubbleChargePort(port: TimeBubbleChargePort | null): void {
+    this.bubbleChargePort = port;
+  }
   private playerVitals: PlayerVitalsOwner;
   private playerLife: PlayerLifeRuntime;
   private burnStatus = new CombatBurnStatusOwner();
@@ -1457,7 +1468,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     options?: AoeDamageOptions,
   ): void {
     const derivedFrom = options?.derivedFrom;
-    const runtimeMultiplier = derivedFrom ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
+    damage = options?.damageBasis?.amount ?? damage;
+    if (!options?.category || options.category === 'explosion') {
+      this.bubbleChargePort?.observeExplosion(x, y, radius, damage, this.hostFrameNowMs, options?.damageFalloff);
+    }
+    const runtimeMultiplier = derivedFrom || options?.damageBasis ? 1 : this.getPlayerRuntimeDamageMultiplier(ownerId, options?.sourceSlot);
     const runtimeDamage = damage * runtimeMultiplier;
     const runtimeFalloff = options?.damageFalloff
       ? { ...options.damageFalloff, minDamage: options.damageFalloff.minDamage * runtimeMultiplier }
@@ -1489,6 +1504,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         ...options?.killSource,
       }, {
         ...toDamageOptions(options, 'explosion'),
+        ...(options?.damageBasis ? { basis: { ...options.damageBasis, amount: roundedDamage } } : {}),
         ...(derivedBasis ? {
           basis: derivedBasis,
           source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: 'explosion' as const },
@@ -1498,7 +1514,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
     this.applyRadialHostileBaseDamage(
       x, y, radius, damage, ownerId, options?.damageFalloff, options?.sourceSlot,
-      options?.baseDamageMult, derivedFrom?.damage.sourceFactors,
+      options?.baseDamageMult, options?.damageBasis?.sourceFactors ?? derivedFrom?.damage.sourceFactors,
     );
 
     if (options?.skipEnemies) return;
@@ -1524,6 +1540,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         ...options?.killSource,
       }, {
         ...toDamageOptions(options, 'explosion'),
+        ...(options?.damageBasis ? { basis: { ...options.damageBasis, amount: roundedDamage } } : {}),
         ...(derivedBasis ? {
           basis: derivedBasis,
           source: { ...derivedFrom!.source, authoredSourceId: options?.sourceId, origin: 'explosion' as const },
@@ -1577,6 +1594,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     sourceId = 'environment.explosion',
     source?: CombatSource,
   ): string[] {
+    this.bubbleChargePort?.observeExplosion(x, y, effect.radius, effect.maxDamage,
+      this.hostFrameNowMs, resolveProjectileExplosionFalloff(effect));
     const damagedTargetKeys: string[] = [];
     const damagePlayers = effect.damageTarget === undefined
       || effect.damageTarget === 'all'
@@ -2505,6 +2524,19 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       applyFavorTheShooter: true,
       includeShooter: Boolean(supportEffect),
     });
+    if (this.bubbleChargePort) {
+      let chargeDamage = supportEffect?.damagePerHit ?? damage;
+      if (supportEffect) {
+        const healsPlayer = trace.hitPlayerId && this.relationshipForSource(
+          this.createLegacyMutationSource(shooterId, sourceId, 'support'), trace.hitPlayerId,
+        ).canSupport;
+        const baseId = trace.hitObstacleKind === 'base'
+          ? this.resolveHitscanBaseId(trace.endX, trace.endY, Math.cos(angle), Math.sin(angle)) : undefined;
+        if (healsPlayer || trace.hitObstacleKind === 'rock'
+          || (baseId && this.baseManager?.getBase(baseId)?.faction !== 'hostile')) chargeDamage = 0;
+      }
+      this.bubbleChargePort.observeHitscan(startX, startY, trace.endX, trace.endY, traceThickness, chargeDamage, this.hostFrameNowMs);
+    }
 
     this.queueHitscanTrace({
       startX: Math.round(startX),
@@ -3010,6 +3042,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     if (!this.bridge.isHost()) return false;
 
     const halfArcRad = (arcDegrees * Math.PI / 180) / 2;
+    this.bubbleChargePort?.observeMelee(x, y, angle, range, halfArcRad, damage, this.hostFrameNowMs,
+      (contactX, contactY) => {
+        this.meleeLine.setTo(x, y, contactX, contactY);
+        return this.isMeleePathBlocked(Math.hypot(contactX - x, contactY - y));
+      });
     let hitPlayer = false;
     let nearestHitDistance = Number.POSITIVE_INFINITY;
     let impactX: number | undefined;

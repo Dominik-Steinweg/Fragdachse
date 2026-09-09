@@ -136,6 +136,24 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('charges a bubble before an inner direct hit consumes the projectile, without modifying its payload', () => {
+    const { runtime } = createRuntimeHarness();
+    const bubble = new TimeBubbleSystem();
+    bubble.hostCreateBubble('owner', 0, 0, { type: 'time_bubble', radius: 30, duration: 500,
+      chargeCapacity: 40, playerSlowFactor: 0.1, projectileSlowFactor: 0.1, trainSlowFactor: 0.1 }, 1000);
+    runtime.setTimeBubbleChargePort(bubble);
+    const impact = configureEnemyImpact(runtime);
+    const request = baseRequest({ damage: 7 });
+    runtime.spawnProjectile(request);
+    runtime.runHostInteractionStage(1000);
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(request.interaction.directHit.damage);
+    expect(impact).toHaveBeenCalledOnce();
+    expect(impact.mock.calls[0][0].directHit.damage).toBe(request.interaction.directHit.damage);
+    expect(runtime.activeCount).toBe(0);
+    runtime.runHostInteractionStage(1001);
+    expect(bubble.hostUpdate(1001)[0].charge).toBe(request.interaction.directHit.damage);
+    runtime.destroy(); bubble.destroyAll();
+  });
   it('focuses all moving allegiances and flying utilities inside the inclusive circle without changing intrinsic speed', () => {
     const { runtime, physics } = createRuntimeHarness();
     let factor = 0.2;

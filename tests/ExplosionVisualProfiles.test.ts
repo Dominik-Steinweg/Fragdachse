@@ -12,6 +12,7 @@ describe('explosion visual profiles', () => {
       'default', 'holy', 'energy', 'lightning', 'nuke', 'void_nuke', 'rocket',
       'mini_rocket', 'mini_rocket_cascade', 'train', 'brood_hatch', 'regeneration',
       'timebomb', 'timebomb_pop', 'he_cluster_shard', 'he_demolition_shard',
+      'time_bubble_release',
     ];
     expect(Object.keys(EXPLOSION_VISUAL_PROFILES).sort()).toEqual([...styles].sort());
     for (const style of styles) {

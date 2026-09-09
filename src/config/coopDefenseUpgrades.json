@@ -5086,6 +5086,19 @@
                                                             ]
                                             },
                                             {
+                                                "id": "time_bubble_resonance",
+                                                "code": "D-U2-7",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "bossPointCostPerLevel": 0,
+                                                "refundable": true,
+                                                "sortOrder": 160,
+                                                "requires": [{ "upgradeId": "time_bubble_duration", "minLevel": 1 }],
+                                                "effects": [{ "stat": "utility.TIME_BUBBLE.chargeCapacity", "mode": "add_per_level", "value": 50 }]
+                                            },
+                                            {
                                                 "id": "time_bubble_prism_spiral",
                                                 "code": "D-U2-5",
                                                 "kind": "upgrade",
@@ -5095,7 +5108,7 @@
                                                 "bossPointCostPerLevel": 1,
                                                 "refundable": true,
                                                 "sortOrder": 161,
-                                                "requires": [{ "upgradeId": "time_bubble_duration", "minLevel": 1 }],
+                                                "requires": [{ "upgradeId": "time_bubble_resonance", "minLevel": 1 }],
                                                 "effects": [{ "stat": "utility.TIME_BUBBLE.prismEmitter.enabled", "mode": "add_per_level", "value": 1 }]
                                             },
                                             {

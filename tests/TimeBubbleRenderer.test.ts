@@ -5,6 +5,11 @@ vi.mock('phaser', () => ({ BlendModes: { ADD: 1, SCREEN: 2 }, Math: {
   Linear: (a: number, b: number, t: number) => a + (b - a) * t,
 } }));
 vi.mock('../src/utils/phaserFx', () => ({ addExternalGlow: () => null, removeExternalFx: vi.fn() }));
+vi.mock('../src/effects/EffectUtils', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/effects/EffectUtils')>(),
+  edgeZone: (radius: number) => ({ radius }),
+  createEmitter: (scene: any, x: number, y: number, texture: string, config: unknown) => scene.add.particles(x, y, texture, config),
+}));
 import { TimeBubbleRenderer } from '../src/effects/TimeBubbleRenderer';
 import { BULLET_GLOW_TEXTURE } from '../src/effects/BulletRenderer';
 import type { SyncedTimeBubble } from '../src/types';
@@ -22,6 +27,29 @@ function image(key: string) {
 }
 
 describe('Time Bubble prism presentation ownership', () => {
+  it('adds warm layers only with charge, reserves sparks and pulsing for full charge, and cleans every object', () => {
+    const images: ReturnType<typeof image>[] = [], emitters: ReturnType<typeof image>[] = [];
+    const scene = { time: { now: 1000 }, add: {
+      image: (_x: number, _y: number, key: string) => { const o = image(key); images.push(o); return o; },
+      particles: () => { const o = image('sparks'); emitters.push(o); return o; },
+    } };
+    const renderer = new TimeBubbleRenderer(scene as unknown as Phaser.Scene);
+    const bubble: SyncedTimeBubble = { id: 2, ownerId: 'owner', x: 200, y: 300, radius: 120,
+      alpha: 1, color: 0xffffff, distortion: 0.75, charge: 0, chargeCapacity: 80 };
+    renderer.syncVisuals([bubble]); const baseline = images.length;
+    renderer.syncVisuals([{ ...bubble, charge: 20 }]); const warm = images.slice(baseline);
+    expect(warm.length).toBeGreaterThan(0); const lowAlpha = warm[0].alpha;
+    renderer.syncVisuals([{ ...bubble, charge: 40 }]);
+    expect(warm[0].alpha).toBeGreaterThan(lowAlpha); expect(emitters).toHaveLength(0);
+    renderer.syncVisuals([{ ...bubble, charge: bubble.chargeCapacity }]);
+    expect(emitters).toHaveLength(1); const fullAlpha = warm[0].alpha;
+    scene.time.now += 250; renderer.update(250);
+    expect(warm[0].alpha).not.toBe(fullAlpha);
+    renderer.syncVisuals([{ ...bubble, charge: bubble.chargeCapacity, alpha: 0 }]);
+    expect(warm.every(o => o.alpha === 0)).toBe(true); expect(emitters[0].alpha).toBe(0);
+    renderer.syncVisuals([]); renderer.destroyAll();
+    for (const o of [...images, ...emitters]) expect(o.destroy).toHaveBeenCalledTimes(1);
+  });
   it('adds the source only for upgraded snapshots, reuses it and cleans it up on removal and teardown', () => {
     const images: ReturnType<typeof image>[] = [];
     const scene = { time: { now: 1000 }, add: { image: (_x: number, _y: number, key: string) => {

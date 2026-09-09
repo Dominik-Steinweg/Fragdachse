@@ -297,6 +297,19 @@ function makeSupportCombatHarness() {
 }
 
 describe('CombatSystem base damage routing', () => {
+  it('does not amplify a resolved bubble discharge against hostile bases', () => {
+    const { combat, baseDamage } = makeCombatHarness();
+    const outgoing = vi.fn(() => ({ amount: 999, isCritical: true }));
+    combat.setPlayerOutgoingDamageResolver(outgoing);
+    const damage = 13;
+    combat.applyAoeDamage(0, 0, 200, damage, 'player-1', false, { sourceId: 'TIME_BUBBLE', sourceSlot: 'utility',
+      allowCritical: false, damageBasis: { kind: 'source-resolved', amount: damage, sourceFactors: [
+        { kind: 'runtime-power', multiplier: 1, resolvedAt: 'execution' },
+        { kind: 'outgoing-modifier', multiplier: 1, resolvedAt: 'execution' },
+      ] } });
+    expect(baseDamage).toHaveBeenCalledExactlyOnceWith('hostile-base', damage, 'player-1', 'utility');
+    expect(outgoing).not.toHaveBeenCalled();
+  });
   it.each([false, true])('applies explosion P once at the base boundary (frozen: %s)', frozen => {
     const { combat, baseDamage } = makeCombatHarness();
     const authoredDamage = 14, runtimeP = 6;

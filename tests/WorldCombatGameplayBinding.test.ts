@@ -172,6 +172,7 @@ function createFixture(options: {
     setProjectileWorldBlockerPort: vi.fn(),
     setProjectileBarrierPort: vi.fn(),
     setProjectileCombatPort: vi.fn(),
+    setTimeBubbleChargePort: vi.fn(),
     setProjectileMiniRocketStatePort: vi.fn(),
   };
   const weaponExecution = new WorldWeaponExecutionRuntime({
@@ -328,18 +329,26 @@ describe('WorldCombatGameplayBinding projectile target geometry', () => {
   it('binds focus to bubble removal before projectile mutation and detaches utility lifetime callbacks', () => {
     const f = createFixture({ players: [], enemies: [] });
     const port = vi.mocked(f.playerCombat.utility.setTimeBubblePort!).mock.calls[0][0]!;
-    const effect = { type: 'time_bubble' as const, radius: 50, duration: 1000, playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
+    const effect = { type: 'time_bubble' as const, chargeCapacity: 30, radius: 50, duration: 1000, playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
     const id = port.create('owner', 0, 0, effect, 1000);
+    f.binding.systems!.timeBubble.observeProjectile(1, 0, 0, 7, 1001);
+    vi.mocked(f.combatSystem.runHostExecution).mockImplementation(work => work());
     f.projectileUtility.focusProjectilesInCircle.mockImplementation(() => {
+      expect(f.combatSystem.applyAoeDamage).not.toHaveBeenCalled();
       expect(f.binding.systems!.timeBubble.getProjectileMovementFactorAt(0, 0, 1100)).toBe(1);
       return 1;
     });
     expect(port.collapse(id, { targetX: 100, targetY: 200, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100 })).toBe(true);
     expect(f.playerCombat.utility.onTimeBubbleEnded).toHaveBeenCalledWith(id, 1100);
     expect(f.projectileUtility.focusProjectilesInCircle).toHaveBeenCalledTimes(1);
+    expect(f.combatSystem.applyAoeDamage).toHaveBeenCalledExactlyOnceWith(0, 0, effect.radius, 7, 'owner', false,
+      expect.objectContaining({ sourceId: 'TIME_BUBBLE', sourceSlot: 'utility', allowCritical: false,
+        damageBasis: expect.objectContaining({ kind: 'source-resolved', amount: 7 }) }));
     expect(port.collapse(id, { targetX: 0, targetY: 0, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100 })).toBe(false);
     f.binding.destroy();
     expect(f.playerCombat.utility.setTimeBubblePort).toHaveBeenLastCalledWith(null);
+    expect(f.projectileInteraction.setTimeBubbleChargePort).toHaveBeenLastCalledWith(null);
+    expect(f.combatSystem.setTimeBubbleChargePort).toHaveBeenLastCalledWith(null);
   });
   it('rebuilds cached base bounds after a same-id base replacement revision', () => {
     let generation = 0;

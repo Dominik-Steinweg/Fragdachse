@@ -1,5 +1,7 @@
 import type { SyncedTimeBubble, TimeBubbleEffectConfig } from '../types';
 import { createSingleOwnerProvenance, type ProjectileSpawnRequest } from '../projectile/ProjectileSpawnRequest';
+import { computeRadialDamage } from '../utils/radialDamage';
+import { closestSegmentPoint, meleeCircleContact, type TimeBubbleChargePort, type TimeBubbleRelease } from './TimeBubbleChargePort';
 
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 300;
@@ -13,9 +15,68 @@ interface ActiveTimeBubble {
   effect: TimeBubbleEffectConfig;
   createdAt: number;
   nextShotIndex: number;
+  charge: number;
+  chargedProjectiles: Set<number>;
 }
 
-export class TimeBubbleSystem {
+export class TimeBubbleSystem implements TimeBubbleChargePort {
+  private releaseHandler: ((release: TimeBubbleRelease, now: number) => void) | null = null;
+  private readonly pendingReleases: TimeBubbleRelease[] = [];
+
+  setReleaseHandler(handler: ((release: TimeBubbleRelease, now: number) => void) | null): void {
+    this.releaseHandler = handler;
+    if (!handler) this.pendingReleases.length = 0;
+  }
+
+  /** Focus drains after redirection; natural expiry drains before the new snapshots. */
+  flushReleases(now: number): void {
+    if (this.pendingReleases.length === 0) return;
+    for (const release of this.pendingReleases.splice(0)) this.releaseHandler?.(release, now);
+  }
+
+  private canCharge(bubble: ActiveTimeBubble, damage: number, now: number): boolean {
+    return Number.isFinite(damage) && damage > 0 && now >= bubble.createdAt
+      && now < bubble.createdAt + bubble.effect.duration && bubble.charge < (bubble.effect.chargeCapacity ?? 0);
+  }
+
+  private addCharge(bubble: ActiveTimeBubble, damage: number): void {
+    bubble.charge = Math.min(bubble.effect.chargeCapacity ?? 0, bubble.charge + damage);
+  }
+
+  observeProjectile(id: number, x: number, y: number, damage: number, now: number): void {
+    for (const bubble of this.activeBubbles) {
+      if (!this.canCharge(bubble, damage, now) || bubble.chargedProjectiles.has(id)) continue;
+      if (Math.hypot(x - bubble.x, y - bubble.y) > bubble.effect.radius) continue;
+      bubble.chargedProjectiles.add(id);
+      this.addCharge(bubble, damage);
+    }
+  }
+
+  observeHitscan(x: number, y: number, endX: number, endY: number, width: number, damage: number, now: number): void {
+    for (const bubble of this.activeBubbles) {
+      if (!this.canCharge(bubble, damage, now)) continue;
+      const p = closestSegmentPoint(bubble.x, bubble.y, x, y, endX, endY);
+      if (Math.hypot(p.x - bubble.x, p.y - bubble.y) <= bubble.effect.radius + Math.max(0, width) / 2) this.addCharge(bubble, damage);
+    }
+  }
+
+  observeMelee(x: number, y: number, angle: number, range: number, halfArc: number, damage: number,
+    now: number, isBlocked: (contactX: number, contactY: number) => boolean): void {
+    for (const bubble of this.activeBubbles) {
+      if (!this.canCharge(bubble, damage, now)) continue;
+      const contact = meleeCircleContact(x, y, angle, range, halfArc, bubble.x, bubble.y, bubble.effect.radius);
+      if (contact && !isBlocked(contact.x, contact.y)) this.addCharge(bubble, damage);
+    }
+  }
+
+  observeExplosion(x: number, y: number, radius: number, damage: number, now: number,
+    falloff?: import('../types').RadialDamageFalloffConfig): void {
+    for (const bubble of this.activeBubbles) {
+      if (!this.canCharge(bubble, damage, now) || radius <= 0) continue;
+      const distance = Math.max(0, Math.hypot(x - bubble.x, y - bubble.y) - bubble.effect.radius);
+      this.addCharge(bubble, computeRadialDamage(distance, radius, damage, falloff));
+    }
+  }
   private readonly activeBubbles: ActiveTimeBubble[] = [];
   // Delayed focus requests and surviving prism shots must not bind to a rebuilt system's bubble.
   private static nextId = 0;
@@ -35,6 +96,9 @@ export class TimeBubbleSystem {
     if (index < 0) return null;
     const [bubble] = this.activeBubbles.splice(index, 1);
     const expiresAt = bubble.createdAt + bubble.effect.duration;
+    if (!silent && bubble.charge > 0) this.pendingReleases.push(Object.freeze({
+      id, ownerId: bubble.ownerId, x: bubble.x, y: bubble.y, radius: bubble.effect.radius, charge: bubble.charge,
+    }));
     if (!silent) this.endListener?.(id, Math.min(now, expiresAt));
     return now < expiresAt ? { x: bubble.x, y: bubble.y, radius: bubble.effect.radius } : null;
   }
@@ -65,6 +129,8 @@ export class TimeBubbleSystem {
       effect: structuredClone(effect),
       createdAt: now,
       nextShotIndex: 0,
+      charge: 0,
+      chargedProjectiles: new Set(),
     });
     return id;
   }
@@ -72,13 +138,15 @@ export class TimeBubbleSystem {
   hostUpdate(now: number): SyncedTimeBubble[] {
     const synced: SyncedTimeBubble[] = [];
 
+    // Expiry membership is fixed before any discharge can charge a still-active neighbour.
+    for (const bubble of [...this.activeBubbles]) {
+      if (now >= bubble.createdAt + bubble.effect.duration) this.removeBubble(bubble.id, now);
+    }
+    this.flushReleases(now);
+
     for (let index = this.activeBubbles.length - 1; index >= 0; index--) {
       const bubble = this.activeBubbles[index];
       const elapsed = now - bubble.createdAt;
-      if (elapsed >= bubble.effect.duration) {
-        this.removeBubble(bubble.id, now);
-        continue;
-      }
 
       this.emitPrismShots(bubble, elapsed);
       synced.push({
@@ -91,6 +159,7 @@ export class TimeBubbleSystem {
         color: bubble.effect.color ?? 0x8edcff,
         distortion: bubble.effect.distortion ?? 0.75,
         ...(bubble.effect.prismEmitter?.enabled ? { prismActive: true } : {}),
+        ...((bubble.effect.chargeCapacity ?? 0) > 0 ? { charge: bubble.charge, chargeCapacity: bubble.effect.chargeCapacity } : {}),
       });
     }
 
@@ -182,6 +251,7 @@ export class TimeBubbleSystem {
 
   destroyAll(): void {
     this.activeBubbles.length = 0;
+    this.pendingReleases.length = 0;
   }
 
   private getFactorAt(

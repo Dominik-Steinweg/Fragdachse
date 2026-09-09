@@ -487,7 +487,7 @@ interface Weapon2PredictionState {
   finalResults: Map<number, LoadoutUseResult>;
 }
 
-type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void;
+type ExplosionEffectHandler = (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle, chargeDamage?: number) => void;
 type SlimeBloomEffectHandler = (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
 /** `lifetimeMs <= 0` bedeutet: Leiche verbraucht, Marker sofort entfernen. */
 type CorpseMarkerHandler = (
@@ -3331,17 +3331,18 @@ export class NetworkBridge {
 
   // ── Explosions-Effekt-RPC: Host → Alle ────────────────────────────────────
 
-  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle): void {
-    this.broadcastGameplayEvent('xfx', { x, y, r: radius, c: color, s: visualStyle });
+  broadcastExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle, chargeDamage?: number): void {
+    this.broadcastGameplayEvent('xfx', { x, y, r: radius, c: color, s: visualStyle, ...(chargeDamage !== undefined ? { q: chargeDamage } : {}) });
   }
 
-  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle) => void): void {
+  registerExplosionEffectHandler(handler: (x: number, y: number, radius: number, color?: number, visualStyle?: ExplosionVisualStyle, chargeDamage?: number) => void): void {
     this.explosionEffectHandler = handler;
     this.registerAllRpcHandler('xfx', async (data: unknown): Promise<unknown> => {
       const explosionEffectHandler = this.explosionEffectHandler;
       if (!explosionEffectHandler) return undefined;
-      const { x, y, r, c, s } = data as { x: number; y: number; r: number; c?: number; s?: ExplosionVisualStyle };
-      explosionEffectHandler(x, y, r, c, s);
+      const { x, y, r, c, s, q } = data as { x: number; y: number; r: number; c?: number; s?: ExplosionVisualStyle; q?: number };
+      if (q === undefined) explosionEffectHandler(x, y, r, c, s);
+      else explosionEffectHandler(x, y, r, c, s, q);
       return undefined;
     });
   }

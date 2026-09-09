@@ -827,7 +827,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     }
     if (cfg.type === 'time_bubble') {
       return { type: 'time_bubble' as const, radius: cfg.bubbleRadius, duration: cfg.bubbleDuration, projectileSlowFactor: cfg.projectileSlowFactor, playerSlowFactor: cfg.playerSlowFactor, trainSlowFactor: cfg.trainSlowFactor, color: cfg.bubbleColor ?? cfg.projectileColor ?? playerColor, distortion: cfg.bubbleDistortion, friendlyImmunity: cfg.friendlyImmunity,
-        prismEmitter: cfg.prismEmitter?.enabled ? cfg.prismEmitter : undefined };
+        prismEmitter: cfg.prismEmitter?.enabled ? cfg.prismEmitter : undefined, chargeCapacity: cfg.chargeCapacity };
     }
     return { type: 'damage' as const, radius: 0, damage: 0 };
   }

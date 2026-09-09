@@ -369,7 +369,7 @@ export type MeleeDamageTarget = 'players' | 'enemies' | 'decoys' | 'bases' | 'ro
 export type EnergyBallVariant = 'default' | 'plasma';
 
 /** Visueller Stil einer Explosion / Detonation. */
-export type ExplosionVisualStyle = 'default' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop';
+export type ExplosionVisualStyle = 'default' | 'he_cluster_shard' | 'he_demolition_shard' | 'holy' | 'energy' | 'lightning' | 'nuke' | 'void_nuke' | 'rocket' | 'mini_rocket' | 'mini_rocket_cascade' | 'train' | 'brood_hatch' | 'regeneration' | 'timebomb' | 'timebomb_pop' | 'time_bubble_release';
 
 /** Linearer radialer Schadensabfall: innen maxDamage, am Rand minDamage. */
 export interface RadialDamageFalloffConfig {
@@ -1328,6 +1328,7 @@ export interface TimeBubblePrismEmitterConfig {
 }
 
 export interface TimeBubbleEffectConfig {
+  chargeCapacity?: number;
   type: 'time_bubble';
   radius: number;
   duration: number;
@@ -1461,6 +1462,8 @@ export interface SyncedStinkCloud {
 }
 
 export interface SyncedTimeBubble {
+  charge?: number;
+  chargeCapacity?: number;
   id:         number;
   ownerId:    string;
   x:          number;

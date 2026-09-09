@@ -1,4 +1,5 @@
 import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
+import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import { createGrenadeFragments, isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
 import { usesRockSweep } from './ProjectileRockSweep';
@@ -1690,6 +1691,12 @@ export class WorldProjectileRuntime implements
     this.flightProcessor.setTimeFieldPort(port);
   }
 
+  private bubbleChargePort: Pick<TimeBubbleChargePort, 'observeProjectile'> | null = null;
+
+  setTimeBubbleChargePort(port: Pick<TimeBubbleChargePort, 'observeProjectile'> | null): void {
+    this.bubbleChargePort = port;
+  }
+
   setProjectileTargetQueryPort(port: ProjectileTargetQueryPort | null): void {
     this.homingController.setTargetQueryPort(port);
   }
@@ -1781,6 +1788,11 @@ export class WorldProjectileRuntime implements
     this.setHostFrameTime(nowMs);
     this.captureDebugFlightSteps('before-interaction');
     try {
+      if (this.bubbleChargePort) for (const record of this.projectiles.activeRecords) {
+        if (record.pendingDestroy) continue;
+        const { x, y } = record.physics.sprite;
+        this.bubbleChargePort.observeProjectile(record.id, x, y, record.damage, nowMs);
+      }
       this.runBarrierStage(nowMs);
       this.runDeflectionStage(nowMs);
       // Barrier/deflection may have consumed the last projectile. Do not enter the collision
@@ -2153,6 +2165,7 @@ export class WorldProjectileRuntime implements
 
   /** World-Teardown: kein Record, kein Identity-Eintrag und kein Restzustand überlebt ihn. */
   destroy(): void {
+    this.bubbleChargePort = null;
     this.pendingGrenadeFragments.clear();
     if (this.destroyed) return;
     this.destroyed = true;

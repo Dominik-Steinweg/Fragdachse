@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import type { ExplosionVisualStyle } from '../types';
+import { resonanceReleaseStrength } from './timeBubbleResonanceVisual';
 import { emissiveAlpha } from './EmissiveScale';
 import {
   getCombatExplosionProfile,
@@ -38,6 +39,7 @@ export interface ExplosionCombatPalette {
 }
 
 export interface ExplosionCombatVisualRequest {
+  readonly chargeDamage?: number;
   readonly x: number;
   readonly y: number;
   readonly radius: number;
@@ -121,6 +123,8 @@ export class ExplosionGpuRenderer {
     const profile = getCombatExplosionProfile(request.style);
     if (!this.gpuVfx || !profile || request.radius <= 0) return;
 
+    if (request.style === 'time_bubble_release') { this.spawnBubbleRelease(request); return; }
+
     this.spawnImpact(request, profile);
     if (profile.family === 'pop' || profile.family === 'lightning') return;
 
@@ -162,6 +166,40 @@ export class ExplosionGpuRenderer {
         alphaStart: 0.9,
         tint: pickGpuVfxTint([0xffffff, brightColor, color]),
         frame: GpuVfxFrameId.ExplosionSpark,
+      });
+    });
+  }
+
+  private spawnBubbleRelease(request: ExplosionCombatVisualRequest): void {
+    const strength = resonanceReleaseStrength(request.chargeDamage);
+    if (strength <= 0) return;
+    const { x, y, radius } = request;
+    // The old shell briefly separates into light, then a hollow wave reaches the exact field radius.
+    this.spawnBurst(GpuVfxEffectId.ExplosionShockwave, 2, (spec, index) => {
+      this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
+        frame: GpuVfxFrameId.ExplosionRing, lifeMs: index ? 220 : 140,
+        scaleStart: radius / 32 * (index ? 0.06 : 1), scaleEnd: radius / 32,
+        scaleEase: GpuVfxEase.QuadOut, alphaStart: (index ? 0.35 : 0.2) + strength * 0.55,
+        tint: index ? 0xffab28 : 0xff4814,
+      });
+    });
+    this.spawnBurst(GpuVfxEffectId.ExplosionAccent, 1, spec => {
+      this.configure(spec, { x, y, vx: 0, vy: 0, gravityFactor: 0,
+        frame: GpuVfxFrameId.ExplosionRing, lifeMs: 600,
+        scaleStart: radius / 32 * 0.96, scaleEnd: radius / 32,
+        alphaStart: 0.1 + strength * 0.22, tint: 0xd72d0b,
+      });
+    });
+    this.spawnBurst(GpuVfxEffectId.ExplosionSpark, Math.round(8 + strength * 32), (spec, index, count) => {
+      const angle = index / count * TWO_PI + Math.random() * 0.18;
+      const speed = 8 + strength * 22;
+      this.configure(spec, {
+        x: x + Math.cos(angle) * radius * 0.88, y: y + Math.sin(angle) * radius * 0.88,
+        vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, gravityFactor: 0,
+        frame: GpuVfxFrameId.ExplosionStreak, lifeMs: 300 + Math.random() * 300,
+        scaleStart: 0.16 + strength * 0.25, scaleEnd: 0.02,
+        stretchStart: 1.5 + strength, stretchEnd: 0.4, rotation: angle,
+        alphaStart: 0.4 + strength * 0.45, tint: index % 3 ? 0xff5b16 : 0xffc237,
       });
     });
   }

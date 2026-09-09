@@ -128,7 +128,7 @@ describe('Prism Spiral upgrade content', () => {
     expect(base.focusEnabled).toBe(0);
     for (const immunity of [0, 1]) {
       const levels = { unlock_time_bubble: 1, time_bubble_radius: 1, time_bubble_duration: 1,
-        time_bubble_prism_spiral: 1, time_bubble_focus: 1, time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity };
+        time_bubble_resonance: 1, time_bubble_prism_spiral: 1, time_bubble_focus: 1, time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity };
       const profile = { upgrades: Object.fromEntries(Object.entries(levels).map(([id, level]) => [id, { unlocked: level > 0, level }])) };
       const resolved = applyCoopDefenseModifiersToUtilityConfig(base, getCoopDefenseResolvedEffectTotals(profile, 'dachs_nukem'));
       expect(resolved).toMatchObject({ focusEnabled: 1, prismEmitter: { enabled: 1 } });
@@ -140,14 +140,14 @@ describe('Prism Spiral upgrade content', () => {
   });
   it('resolves behind duration, independently from friendly immunity, without mutating authored defaults', () => {
     const node = getCoopDefenseUpgradeDefinition('time_bubble_prism_spiral')!;
-    expect(node.requires).toEqual([{ upgradeId: 'time_bubble_duration', minLevel: 1 }]);
+    expect(node.requires).toEqual([{ upgradeId: 'time_bubble_resonance', minLevel: 1 }]);
     expect(node).toMatchObject({ maxLevel: 1, costPerLevel: 0, bossPointCostPerLevel: 1, refundable: true });
     const base = UTILITY_CONFIGS.TIME_BUBBLE;
     if (base.type !== 'time_bubble') throw Error('Expected Time Bubble');
     expect(base.prismEmitter?.enabled).toBe(0);
     for (const immunity of [0, 1]) {
       const levels = { unlock_time_bubble: 1, time_bubble_radius: 1, time_bubble_duration: 1,
-        time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity, time_bubble_prism_spiral: 1 };
+        time_bubble_resonance: 1, time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity, time_bubble_prism_spiral: 1 };
       const profile = { upgrades: Object.fromEntries(Object.entries(levels).map(([id, level]) => [id, { unlocked: level > 0, level }])) };
       const resolved = applyCoopDefenseModifiersToUtilityConfig(base, getCoopDefenseResolvedEffectTotals(profile, 'dachs_nukem'));
       if (resolved.type !== 'time_bubble') throw Error('Expected Time Bubble');

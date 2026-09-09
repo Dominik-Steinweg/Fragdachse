@@ -4,6 +4,7 @@
       "id": "TIME_BUBBLE",
       "type": "time_bubble",
       "focusEnabled": 0,
+      "chargeCapacity": 0,
       "cooldown": 5000,
       "activation": {
         "type": "charged_throw",

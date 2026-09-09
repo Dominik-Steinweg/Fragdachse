@@ -32,6 +32,7 @@ import type { CameraFeedbackController } from './camera/CameraFeedbackController
 import type { CameraPostFxController } from './postfx/CameraPostFxController';
 import type { NukeVariant } from './nuke/NukeChoreography';
 import type { CombatExplosionVisualStyle } from './ExplosionVisualProfiles';
+import { resonanceReleaseStrength } from './timeBubbleResonanceVisual';
 import type { BurrowGpuRenderer } from './BurrowGpuRenderer';
 
 /** Schmaler Ausschnitt der Regie fuer mehrphasige Explosionssequenzen. */
@@ -718,8 +719,16 @@ export class EffectSystem implements EnemyVisualSink {
    * @param color        Optionale Farbe (Default stilabhaengig)
    * @param visualStyle  Default | holy | energy
    */
-  playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default'): void {
+  playExplosionEffect(x: number, y: number, radius: number, color?: number, visualStyle: ExplosionVisualStyle = 'default', chargeDamage?: number): void {
     this.ensureTextures();
+    if (visualStyle === 'time_bubble_release') {
+      const strength = resonanceReleaseStrength(chargeDamage);
+      if (strength <= 0) return;
+      this.lighting?.pulse('explosion', x, y, { radiusPx: radius * 1.4, color: 0xffbe65,
+        intensity: 0.2 + strength * 0.7, durationMs: 500 });
+      this.spawnCombatExplosionGpu(x, y, radius, visualStyle, 0xff5b18, 0xffd75b, 0xff9020, chargeDamage);
+      return;
+    }
     this.emitExplosionLight(x, y, radius, color, visualStyle);
 
     if (visualStyle === 'train') {
@@ -978,6 +987,7 @@ export class EffectSystem implements EnemyVisualSink {
     bodyColor: number,
     coreColor: number,
     hotColor: number,
+    chargeDamage?: number,
   ): void {
     if (!this.explosionGpuRenderer || !isDestructiveExplosionStyle(style)) return;
 
@@ -997,8 +1007,8 @@ export class EffectSystem implements EnemyVisualSink {
         : this.mixColor(bodyColor, holyLike ? 0x7a4610 : (voidLike ? 0x160c22 : (energyLike ? 0x20345b : 0x61200d)), 0.62),
       smoke: this.mixColor(bodyColor, voidLike ? 0x130f1d : (energyLike ? 0x17223a : 0x282528), 0.82),
     };
-    this.explosionGpuRenderer.spawnCombatExplosion({ x, y, radius, style, palette });
-    this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: radius, style });
+    this.explosionGpuRenderer.spawnCombatExplosion({ x, y, radius, style, palette, ...(chargeDamage !== undefined ? { chargeDamage } : {}) });
+    if (style !== 'time_bubble_release') this.visualFeedback?.startExplosionShockwave({ x, y, radiusPx: radius, style });
   }
 
   /** Organisches Aufbrechen statt Kampfdetonation; bleibt bewusst ausserhalb der GPU-Profile. */

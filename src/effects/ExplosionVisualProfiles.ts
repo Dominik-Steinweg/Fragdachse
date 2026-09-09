@@ -56,6 +56,10 @@ export const EXPLOSION_VISUAL_PROFILES = {
     family: 'pop', countScale: 0.45, lifeScale: 0.45, bodyScale: 0.45,
     smokeScale: 0, chunkScale: 0, upwardEmbers: true,
   },
+  time_bubble_release: {
+    family: 'energy', countScale: 1, lifeScale: 1, bodyScale: 0,
+    smokeScale: 0, chunkScale: 0, upwardEmbers: false,
+  },
   holy: {
     family: 'holy', countScale: 1.15, lifeScale: 1.25, bodyScale: 1.15,
     smokeScale: 0, chunkScale: 0.65, upwardEmbers: true,

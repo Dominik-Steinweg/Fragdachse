@@ -252,6 +252,10 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.chargeCapacity !== undefined && (value.type !== 'time_bubble' || typeof value.chargeCapacity !== 'number'
+    || !Number.isFinite(value.chargeCapacity) || value.chargeCapacity < 0)) {
+    issues.push('$.chargeCapacity: TimeBubble capacity must be finite and nonnegative');
+  }
   if (value.focusEnabled !== undefined && (value.type !== 'time_bubble' || (value.focusEnabled !== 0 && value.focusEnabled !== 1))) {
     issues.push('$.focusEnabled: TimeBubble flag must be zero or one');
   }

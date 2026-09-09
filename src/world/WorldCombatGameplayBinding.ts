@@ -1,4 +1,5 @@
 import type { BaseManager } from '../entities/BaseManager';
+import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import type { BaseEntity } from '../entities/BaseEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
@@ -129,7 +130,7 @@ export interface WorldCombatNetworkPort {
   readonly effects: {
     readonly broadcastCoopDefenseXpPopup: (x: number, y: number, xp: number) => void;
     readonly broadcastSlimeBloomEffect: (x: number, y: number, targets: readonly SlimeBloomTarget[]) => void;
-    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, style?: ExplosionVisualStyle) => void;
+    readonly broadcastExplosionEffect: (x: number, y: number, radius: number, color?: number, style?: ExplosionVisualStyle, chargeDamage?: number) => void;
     readonly broadcastBfgLaserBatch: (
       lines: readonly { sx: number; sy: number; ex: number; ey: number }[],
       color: number,
@@ -182,6 +183,7 @@ export interface WorldCombatImpactPort {
 
 /** Die Setter des world-owned Projectile-Owners, die diese Bindung bedient. */
 export interface ProjectileInteractionBinding {
+  setTimeBubbleChargePort(port: Pick<TimeBubbleChargePort, 'observeProjectile'> | null): void;
   setProjectileTargetabilityPort(port: ProjectileTargetabilityPort | null): void;
   setProjectileCollisionTargetQueryPort(port: ProjectileCollisionTargetQueryPort | null): void;
   setProjectileWorldBlockerPort(port: ProjectileWorldBlockerPort | null): void;
@@ -467,6 +469,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     this.options.projectileInteraction.setProjectileBarrierPort(null);
     this.options.projectileInteraction.setProjectileCombatPort(null);
     this.options.projectileInteraction.setProjectileMiniRocketStatePort(null);
+    this.options.projectileInteraction.setTimeBubbleChargePort(null);
+    combatSystem.setTimeBubbleChargePort(null);
     decoySystem.setCombatStateReader(null);
     decoySystem.setRunSpeedResolver(null);
     decoySystem.setCooldownRefund(null);
@@ -477,6 +481,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     if (this.systems) {
       this.systems.timeBubble.setPrismProjectileSpawner(null);
       this.systems.timeBubble.setEndListener(null);
+      this.systems.timeBubble.setReleaseHandler(null);
       this.options.getPlayerCombatIntegration()?.utility.setTimeBubblePort?.(null);
       this.systems.timeBubble.destroyAll();
       for (const player of this.options.playerManager.getAllPlayers()) {
@@ -815,12 +820,27 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     );
     timeBubble.setPrismProjectileSpawner(request => { o.projectileSpawn.spawnProjectile(request); });
     timeBubble.setEndListener((id, now) => o.getPlayerCombatIntegration()?.utility.onTimeBubbleEnded?.(id, now));
+    o.projectileInteraction.setTimeBubbleChargePort(timeBubble);
+    o.combatSystem.setTimeBubbleChargePort(timeBubble);
+    timeBubble.setReleaseHandler((release, now) => {
+      o.combatSystem.runHostExecution(() => {
+        o.combatSystem.applyAoeDamage(release.x, release.y, release.radius, release.charge, release.ownerId, false, {
+          sourceId: 'TIME_BUBBLE', sourceSlot: 'utility', allowCritical: false,
+          damageBasis: { kind: 'source-resolved', amount: release.charge, sourceFactors: [
+            { kind: 'runtime-power', multiplier: 1, resolvedAt: 'execution' },
+            { kind: 'outgoing-modifier', multiplier: 1, resolvedAt: 'execution' },
+          ] },
+        });
+        o.network.effects.broadcastExplosionEffect(release.x, release.y, release.radius, 0xff5b18, 'time_bubble_release', release.charge);
+      }, now);
+    });
     if (o.projectileUtility) o.getPlayerCombatIntegration()?.utility.setTimeBubblePort?.({
       create: (ownerId, x, y, effect, now) => timeBubble.hostCreateBubble(ownerId, x, y, effect, now),
       collapse: (id, request) => {
         const circle = timeBubble.removeBubble(id, request.nowMs);
-        if (!circle) return false;
+        if (!circle) { timeBubble.flushReleases(request.nowMs); return false; }
         o.projectileUtility!.focusProjectilesInCircle({ ...request, ...circle });
+        timeBubble.flushReleases(request.nowMs);
         return true;
       },
       remove: id => { timeBubble.removeBubble(id, o.combatSystem.getHostTime(), true); },

@@ -223,7 +223,7 @@ describe('WorldPresentationFrameBinding – eigener Lifetime und reales Verhalte
       players: {},
       placeableRocks: [],
       timeBubbles: [{ id: 9, ownerId: 'owner', x: 100, y: 200, radius: 120,
-        alpha: 1, color: 0xffc4e3, distortion: 0.75, prismActive: true }],
+        alpha: 1, color: 0xffc4e3, distortion: 0.75, prismActive: true, charge: 32, chargeCapacity: 50 }],
       teslaDomes: [],
       energyShields: [],
       guardianSpirits: [],

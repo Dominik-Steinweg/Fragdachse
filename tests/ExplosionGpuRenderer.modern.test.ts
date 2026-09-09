@@ -17,7 +17,7 @@ import { ExplosionGpuRenderer, type ExplosionCombatPalette } from '../src/effect
 import type { CombatExplosionVisualStyle } from '../src/effects/ExplosionVisualProfiles';
 import { resetGpuVfxAtlasForTests } from '../src/effects/gpu/GpuVfxAtlas';
 import { GpuVfxSystem } from '../src/effects/gpu/GpuVfxSystem';
-import { findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
+import { evaluateFakeAnimation, findFakeLane, makeFakeGpuVfxScene } from './fakeGpuVfxScene';
 
 const PALETTE: ExplosionCombatPalette = {
   core: 0xffffff, hot: 0xffd272, body: 0xff5a20,
@@ -47,6 +47,30 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe('explosion gpu renderer', () => {
+  it('releases stored energy as bounded rings and sparks, with greater weight for greater absolute charge', () => {
+    const render = (chargeDamage: number) => {
+      const f = setup();
+      f.renderer.spawnCombatExplosion({ x: 100, y: 120, radius: 96, style: 'time_bubble_release', palette: PALETTE, chargeDamage });
+      return f;
+    };
+    const empty = render(0);
+    expect(findFakeLane(empty.scene, 'explosion-accent').edited).toHaveLength(0);
+    const low = render(25), high = render(75);
+    const rings = findFakeLane(high.scene, 'explosion-accent').members;
+    expect(rings.length).toBeGreaterThan(0);
+    for (const ring of rings) {
+      expect(ring.frame).toBe('explosion-ring');
+      expect(evaluateFakeAnimation(ring.scaleX, 0.999999) * 32).toBeCloseTo(96, 2);
+    }
+    expect(findFakeLane(high.scene, 'explosion-spark').edited.length)
+      .toBeGreaterThan(findFakeLane(low.scene, 'explosion-spark').edited.length);
+    expect(high.renderer.getPendingStageCount()).toBe(0);
+    expect(findFakeLane(high.scene, 'explosion-ember-down').edited).toHaveLength(0);
+    expect(findFakeLane(high.scene, 'explosion-smoke').edited).toHaveLength(0);
+    high.system.update(1000);
+    expect(Object.values(high.system.getStats()!).every(stat => stat.liveCount === 0)).toBe(true);
+    for (const f of [empty, low, high]) { f.renderer.clearPending(); f.system.destroy(); }
+  });
   it('builds the impact from structured frames and velocity-aligned streaks', () => {
     const { scene, renderer } = setup();
     spawn(renderer);

@@ -1,10 +1,51 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NetworkBridge } from '../../src/network/NetworkBridge';
 import { clearActiveSession, setActiveSession } from '../../src/network/peer/session';
 import { parseTimeBubbleUtilityState, type TimeBubbleUtilityState } from '../../src/loadout/TimeBubbleUtilityState';
-import { FakeNetwork, createHostRoom, addClientRoom, dropConnection } from '../fakePeerNetwork';
+import { FakeNetwork, createHostRoom, addClientRoom, dropConnection, type TestRoom } from '../fakePeerNetwork';
 
 describe('TimeBubble reliable utility state without an Activity', () => {
+  it('replicates charge, bootstraps late join, transmits explicit release strength and clears old World state', async () => {
+    const network = new FakeNetwork();
+    const hostRoom = await createHostRoom(network), clientRoom = await addClientRoom(network);
+    const use = (room: TestRoom) => setActiveSession({ room: room.room, transport: room.transport, roomCode: 'RESONANCE' });
+    const connect = (room: TestRoom) => { use(room); const b = new NetworkBridge(); b.activate(); return b; };
+    const host = connect(hostRoom);
+    const world = { worldRevision: 1, definitionId: 'world:lobby', seed: 1, generatorVersion: 3, layoutFingerprint: 'resonance' };
+    host.publishLobbySync(); host.publishWorldAndActivity(world, null);
+    const client = connect(clientRoom);
+    const released = vi.fn(); client.registerExplosionEffectHandler(released);
+    const bubble = { id: 1, ownerId: 'p1', x: 30, y: 40, radius: 90, alpha: 1,
+      color: 0xffffff, distortion: 0.75, charge: 13, chargeCapacity: 60 };
+    const base: Parameters<NetworkBridge['publishGameState']>[0] = {
+      roundStartTime: 0, players: {}, projectiles: null, enemies: null, rocks: null,
+      placeableRocks: [], reinforcementMatrices: [], energyInjectorEffects: [], energyInjectorFocus: [],
+      remoteControlTurrets: [], decoys: [], smokes: [], fires: [], powerups: null, pedestals: null,
+      nukes: [], airstrikes: [], meteors: [], tunnels: [], train: null, bases: [], captureTheBeer: null,
+      coopDefenseCarry: [], stinkClouds: [], timeBubbles: [bubble], teslaDomes: [], energyShields: [],
+      guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] },
+      targetVulnerabilities: [], ak47StrategicTargets: [], burningGround: { cells: [] },
+    };
+    const publish = (state = base, full = false) => { use(hostRoom); host.publishGameState(state, full); hostRoom.room.update(); use(clientRoom); };
+    try {
+      publish(base, true);
+      expect(client.getLatestGameState()!.timeBubbles).toEqual([bubble]);
+      bubble.charge = bubble.chargeCapacity;
+      publish(base, true);
+      expect(client.getLatestGameState()!.timeBubbles[0].charge).toBe(bubble.charge);
+      const late = connect(await addClientRoom(network));
+      expect(late.getLatestGameState()!.timeBubbles).toEqual([bubble]);
+      use(hostRoom); host.broadcastExplosionEffect(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge);
+      expect(released).toHaveBeenCalledExactlyOnceWith(bubble.x, bubble.y, bubble.radius, 0xff5b18, 'time_bubble_release', bubble.charge);
+      publish({ ...base, timeBubbles: [] });
+      expect(client.getLatestGameState()!.timeBubbles).toEqual([]);
+      expect(released).toHaveBeenCalledTimes(1);
+      use(hostRoom); host.broadcastExplosionEffect(0, 0, 10);
+      expect(released).toHaveBeenLastCalledWith(0, 0, 10, undefined, undefined);
+      host.publishWorldAndActivity({ ...world, worldRevision: 2 }, null);
+      use(clientRoom); expect(client.getLatestGameState()).toBeUndefined();
+    } finally { clearActiveSession(); }
+  });
   it('replicates flight, active control, cooldown, late join, resume and cleanup', async () => {
     const network = new FakeNetwork();
     const hostRoom = await createHostRoom(network);

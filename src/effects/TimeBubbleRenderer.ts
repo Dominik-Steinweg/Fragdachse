@@ -1,7 +1,8 @@
 import * as Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { SyncedTimeBubble } from '../types';
-import { ensureCanvasTexture, mixColors } from './EffectUtils';
+import { createEmitter, edgeZone, ensureCanvasTexture, mixColors } from './EffectUtils';
+import { resonanceFill } from './timeBubbleResonanceVisual';
 import type { LightingSystem } from './LightingSystem';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
@@ -11,6 +12,7 @@ import { PRISM_PALETTE } from './prismPalette';
 
 const TEX_TIME_BUBBLE_MEMBRANE = '__time_bubble_membrane';
 const TEX_TIME_BUBBLE_INTERFERENCE = '__time_bubble_interference';
+const TEX_TIME_BUBBLE_RESONANCE = '__time_bubble_resonance';
 
 interface TimeBubbleVisual {
   membrane: Phaser.GameObjects.Image;
@@ -21,6 +23,8 @@ interface TimeBubbleVisual {
   seed: number;
   prismCore: Phaser.GameObjects.Image | null;
   prismHalo: Phaser.GameObjects.Image[];
+  chargeLayers: Phaser.GameObjects.Image[];
+  chargeSparks: Phaser.GameObjects.Particles.ParticleEmitter | null;
 }
 
 interface FeatheredRibbon {
@@ -144,6 +148,19 @@ export class TimeBubbleRenderer {
   }
 
   generateTextures(): void {
+    ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_RESONANCE, 320, 320, ctx => {
+      ctx.globalCompositeOperation = 'screen';
+      for (let i = 0; i < 7; i++) {
+        drawFeatheredRibbon(ctx, 160, {
+          rx: 102 + (i % 3) * 18, ry: 138 - (i % 4) * 15, rotation: i * 0.86,
+          start: i * 0.62, end: i * 0.62 + 1.6, thickness: 7 - i * 0.35,
+          blur: 17, opacity: 0.7 - i * 0.045,
+          colors: ['rgba(255,72,8,0.0)', i % 2 ? 'rgba(255,62,12,1)' : 'rgba(255,174,24,1)', 'rgba(178,16,5,1)'],
+        });
+      }
+      drawRadiusRing(ctx, 160, { radius: 146, innerFade: 25, outerFeather: 5,
+        opacity: 0.46, innerColor: 'rgba(218,30,6,1)', edgeColor: 'rgba(255,150,22,1)' });
+    });
     ensureCanvasTexture(this.scene.textures, TEX_TIME_BUBBLE_MEMBRANE, 320, 320, (ctx) => {
       const center = 160;
       ctx.clearRect(0, 0, 320, 320);
@@ -271,12 +288,15 @@ export class TimeBubbleRenderer {
       seed: snapshot.id * 0.731,
       prismCore: null,
       prismHalo: [],
+      chargeLayers: [],
+      chargeSparks: null,
     };
   }
 
   private updateVisual(visual: TimeBubbleVisual, now: number): void {
     const bubble = visual.snapshot;
     this.updatePrismCenter(visual, now);
+    this.updateResonance(visual, now);
     const baseScale = Math.max(0.24, bubble.radius / 160);
     const time = now * 0.001;
     const pulse = 0.5 + 0.5 * Math.sin(time * (1.8 + bubble.distortion * 1.2) + visual.seed);
@@ -370,12 +390,53 @@ export class TimeBubbleRenderer {
     visual.prismHalo.length = 0;
   }
 
+  private updateResonance(visual: TimeBubbleVisual, now: number): void {
+    const bubble = visual.snapshot;
+    const fill = resonanceFill(bubble.charge, bubble.chargeCapacity);
+    if (fill <= 0) { this.destroyResonance(visual); return; }
+    if (visual.chargeLayers.length === 0) {
+      for (let i = 0; i < 2; i++) visual.chargeLayers.push(this.scene.add.image(bubble.x, bubble.y, TEX_TIME_BUBBLE_RESONANCE)
+        .setDepth(DEPTH.FIRE + 0.52 + i * 0.01).setBlendMode(Phaser.BlendModes.SCREEN));
+    }
+    const full = fill >= 1;
+    const pulse = full ? 0.92 + 0.08 * Math.sin(now * Math.PI * 2 / 1000 + visual.seed) : 1;
+    visual.chargeLayers.forEach((layer, i) => layer.setPosition(bubble.x, bubble.y)
+      .setScale(Math.max(0.24, bubble.radius / 160) * (i ? 0.97 : 1))
+      .setRotation(visual.seed + now * (i ? -0.00022 : 0.00014))
+      .setAlpha(bubble.alpha * fill * pulse * (i ? 0.6 : 0.95)));
+    this.lighting?.setLight(`timebubble:charge:${bubble.id}`, 'arcaneField', bubble.x, bubble.y, {
+      radiusPx: bubble.radius * 1.2, color: 0xff801c, intensity: bubble.alpha * fill * pulse * 0.4,
+    });
+    if (full && !visual.chargeSparks) {
+      visual.chargeSparks = createEmitter(this.scene, bubble.x, bubble.y, BULLET_GLOW_TEXTURE, {
+        emitZone: edgeZone(bubble.radius * 0.94), frequency: 100, quantity: 1,
+        lifespan: { min: 300, max: 600 }, speed: { min: 10, max: 28 },
+        scale: { start: 0.2, end: 0 }, alpha: { start: 0.8, end: 0 },
+        color: [0xffb528, 0xff4310, 0x960e06], blendMode: Phaser.BlendModes.ADD,
+        maxParticles: 16,
+      }, DEPTH.FIRE + 0.56, 'decorative', 'timeBubble');
+    } else if (!full && visual.chargeSparks) {
+      visual.chargeSparks.destroy();
+      visual.chargeSparks = null;
+    }
+    visual.chargeSparks?.setPosition(bubble.x, bubble.y).setAlpha(bubble.alpha);
+  }
+
+  private destroyResonance(visual: TimeBubbleVisual): void {
+    for (const layer of visual.chargeLayers) layer.destroy();
+    visual.chargeLayers.length = 0;
+    visual.chargeSparks?.destroy();
+    visual.chargeSparks = null;
+    this.lighting?.releaseLight(`timebubble:charge:${visual.snapshot.id}`);
+  }
+
   private destroyVisual(id: number): void {
     this.lighting?.releaseLight(lightKey(id));
     const visual = this.visuals.get(id);
     if (!visual) return;
 
     this.destroyPrismCenter(visual);
+    this.destroyResonance(visual);
     removeExternalFx(visual.membrane, visual.shellGlow);
     visual.membrane.destroy();
     visual.interferenceA.destroy();

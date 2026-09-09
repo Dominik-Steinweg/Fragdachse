@@ -17,10 +17,10 @@ import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRunt
 import { ProjectileIdentityScope } from '../../src/projectile/ProjectileIdentityScope';
 import { createTechnicalPhysicsBinding, createPresentation } from '../ProjectileRuntimeTestHelper';
 
-function fixture(focusEnabled = 1, useProjectileRuntime = false) {
+function fixture(focusEnabled = 1, useProjectileRuntime = false, chargeCapacity = 0) {
   const base = UTILITY_CONFIGS.TIME_BUBBLE;
   if (base.type !== 'time_bubble') throw Error('TimeBubble fixture');
-  const config = { ...base, cooldown: 370, bubbleDuration: 610, focusEnabled };
+  const config = { ...base, cooldown: 370, bubbleDuration: 610, focusEnabled, chargeCapacity };
   let equipped: UtilityConfig = config;
   let attempt = 0;
   let alive = true;
@@ -95,7 +95,7 @@ function fixture(focusEnabled = 1, useProjectileRuntime = false) {
 
 describe('TimeBubble utility lifetime without an Activity', () => {
   it('creates the bubble after the real projectile runtime releases the detonated grenade', () => {
-    const f = fixture(1, true);
+    const f = fixture(1, true, 37);
     expect(f.cast().ok).toBe(true);
     const detonationTime = 1000 + f.config.fuseTime;
     const result = f.stepProjectiles(f.config.fuseTime, detonationTime);
@@ -106,7 +106,8 @@ describe('TimeBubble utility lifetime without an Activity', () => {
     f.action.createTimeBubbleFromGrenade(result.grenadePayloads[0], detonationTime);
     const state = f.action.getTimeBubbleState('p1');
     expect(state?.phase).toBe('active');
-    expect(f.bubble.hostUpdate(detonationTime)).toEqual([expect.objectContaining({ ownerId: 'p1', radius: f.config.bubbleRadius })]);
+    expect(f.bubble.hostUpdate(detonationTime)).toEqual([expect.objectContaining({ ownerId: 'p1', radius: f.config.bubbleRadius,
+      chargeCapacity: f.config.chargeCapacity, charge: 0 })]);
     if (state?.phase !== 'active') throw Error('Expected bubble');
     expect(f.collapse(state.bubbleId, detonationTime + 1).ok).toBe(true);
     f.action.destroy(); f.projectiles!.destroy();

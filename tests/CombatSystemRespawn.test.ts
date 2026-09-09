@@ -50,6 +50,7 @@ import { SpecializedWeaponExecutionAdapter } from '../src/world/SpecializedWeapo
 import { WorldProjectileRuntime } from '../src/projectile/WorldProjectileRuntime';
 import { ProjectileIdentityScope } from '../src/projectile/ProjectileIdentityScope';
 import { LoadoutManager } from '../src/loadout/LoadoutManager';
+import { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
 import { createTechnicalPhysicsBinding, createPresentation } from './ProjectileRuntimeTestHelper';
 
 function lifecycleFixture() {
@@ -78,6 +79,75 @@ function lifecycleFixture() {
     hit: () => combat.applyDamage('p2', HP_MAX * 2, false, 'p1', 'test', undefined, { damageKind: 'direct', sourceSlot: 'weapon1' }),
   };
 }
+
+describe('Time Bubble Combat observations', () => {
+  function attach(combat: CombatSystem, x = 100, y = 100) {
+    const bubble = new TimeBubbleSystem();
+    bubble.hostCreateBubble('p1', x, y, { type: 'time_bubble', radius: 20, duration: 2000,
+      chargeCapacity: 80, playerSlowFactor: 0.1, projectileSlowFactor: 0.1, trainSlowFactor: 0.1 }, 0);
+    combat.setTimeBubbleChargePort(bubble);
+    return bubble;
+  }
+
+  it('keeps resolved discharge damage fixed while retaining incoming protection and excluding the owner', () => {
+    const f = lifecycleFixture();
+    f.players.get('p2')!.x = 150;
+    f.combat.setLoadoutManager({ getDamageMultiplier: () => 4, getWeaponDamageMultiplier: () => 4 });
+    f.combat.setPowerUpSystem({ getDamageMultiplier: () => 3, removePlayer() {} });
+    const outgoing = vi.fn((..._args: unknown[]) => ({ amount: 999, isCritical: true }));
+    f.combat.setPlayerOutgoingDamageResolver(outgoing);
+    f.combat.setTargetIncomingDamageMultiplierResolver(() => 0.5);
+    const damage = 12;
+    f.combat.applyAoeDamage(100, 100, 50, damage, 'p1', false, {
+      sourceId: 'TIME_BUBBLE', sourceSlot: 'utility', allowCritical: false,
+      damageBasis: { kind: 'source-resolved', amount: damage, sourceFactors: [
+        { kind: 'runtime-power', multiplier: 1, resolvedAt: 'execution' },
+        { kind: 'outgoing-modifier', multiplier: 1, resolvedAt: 'execution' },
+      ] },
+    });
+    expect(f.combat.getHP('p2')).toBe(HP_MAX - damage / 2);
+    expect(f.combat.getHP('p1')).toBe(HP_MAX);
+    expect(outgoing).not.toHaveBeenCalled();
+    f.world.destroy();
+  });
+
+  it('observes each explosion once, including misses, independently of its target count', () => {
+    const f = lifecycleFixture(); const bubble = attach(f.combat);
+    f.combat.applyAoeDamage(100, 100, 30, 7, 'p1');
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(7);
+    const effect = { radius: 30, maxDamage: 9, minDamage: 0, knockback: 0, selfDamageMult: 0 };
+    f.combat.resolveExplosionCombat({ x: 100, y: 100, effect, provenance: createSingleOwnerProvenance('p1') });
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(16);
+    for (const player of f.players.values()) { player.x = 500; player.y = 500; }
+    f.combat.applyExplosionDamage(100, 100, effect, 'p1');
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(25);
+    f.combat.applyDamage('p2', 4, false, 'p1', 'burn', undefined, { damageKind: 'burn' });
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(25);
+    f.combat.setTimeBubbleChargePort(null);
+    f.combat.applyAoeDamage(100, 100, 30, 7, 'p1');
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(25);
+    f.world.destroy();
+  });
+
+  it('observes clipped hitscan misses and melee contact without an actual target hit', () => {
+    const f = lifecycleFixture(); const bubble = attach(f.combat, 50, 0);
+    let endX = 25;
+    Object.assign(f.combat, { traceHitscan: () => ({ endX, endY: 0, hitPlayerId: null, hitEnemyId: null,
+      hitDecoyId: null, hitObstacle: false }) });
+    const common = { shooterId: 'p1', damage: 5, adrenalinGain: 0, sourceId: 'test', color: 0xffffff,
+      sourceSlot: 'weapon1' as const, rockDamageMult: 0, trainDamageMult: 0, baseDamageMult: 0 };
+    const fire = () => f.combat.resolveImmediateAttack({ kind: 'hitscan', origin: { x: 0, y: 0 }, aim: { x: 1, y: 0 }, range: 200,
+      payload: { ...common, startX: 0, startY: 0, angle: 0, range: 200, traceThickness: 1, visualPreset: 'default' } });
+    fire(); expect(bubble.hostUpdate(1000)[0].charge).toBe(0);
+    endX = 100; fire(); expect(bubble.hostUpdate(1000)[0].charge).toBe(common.damage);
+    f.combat.resolveImmediateAttack({ kind: 'melee', origin: { x: 0, y: 0 }, aim: { x: 1, y: 0 }, range: 100,
+      payload: { ...common, x: 0, y: 0, angle: 0, range: 100, arcDegrees: 90, visualPreset: 'default',
+        damageTargets: [], hitHeal: 0, hitAdrenaline: 0, bloodEffectMultiplier: 1 } });
+    expect(bubble.hostUpdate(1000)[0].charge).toBe(common.damage * 2);
+    expect(f.combat.getHP('p2')).toBe(HP_MAX);
+    f.world.destroy();
+  });
+});
 
 function primaryRewardFixture() {
   const f = lifecycleFixture();

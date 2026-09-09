@@ -49,6 +49,7 @@ export const CLASSIC_PARTICLE_FAMILIES = {
   teslaDome: ['TeslaDomeRenderer'],
   teslaNova: ['TeslaNovaRenderer'],
   timebombFuse: ['TimebombFuseRenderer'],
+  timeBubble: ['TimeBubbleRenderer'],
   tunnelEndpoint: ['TunnelEndpointVisual'],
   rockVisual: ['RockVisualHelper'],
   zeusTaser: ['ZeusTaserRenderer'],
