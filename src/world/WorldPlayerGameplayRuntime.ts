@@ -134,6 +134,7 @@ export interface WorldPlayerGameplayNetworkPort {
     readonly broadcastMiniRocketDestructionEffect: (x: number, y: number, color: number) => void;
   };
   readonly loadout: {
+    readonly publishTimeBubbleUtilityState?: (playerId: string, state: import('../loadout/TimeBubbleUtilityState').TimeBubbleUtilityState | null) => void;
     readonly publishUtilityChargeState?: (playerId: string, utilityId: string, state: import('../loadout/UtilityChargeState').UtilityChargeState | null) => void;
     readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
     readonly publishTemporaryUtilityInstances: (playerId: string, descriptors: readonly TemporaryUtilityInstanceDescriptor[]) => void;

@@ -261,6 +261,7 @@ export interface ArenaHUDData {
   weapon2CooldownFrac:      number;
   utilityCooldownFrac:      number;
   utilityBlocked?: boolean;
+  utilityStatusLabel?: string;
   utilityChargeState?: UtilityChargeState | null;
   utilityId?:               string;
   utilityAction?:           RadialManagementAction;
@@ -633,7 +634,7 @@ export class ArenaHUD {
       if (displayName !== this.currentUtilityName) this.onUtilityNameChanged(displayName);
       const chargeSuffix = data.utilityChargeState
         ? ` · ${data.utilityChargeState.availableCharges}/${data.utilityChargeState.maxCharges}` : '';
-      this.util.label.setText(`${t('ui.loadout.utility')}: ${displayName}${chargeSuffix}`);
+      this.util.label.setText(`${t('ui.loadout.utility')}: ${displayName}${chargeSuffix}${data.utilityStatusLabel ? ` · ${data.utilityStatusLabel}` : ''}`);
     }
     this.updateTemporaryUtilityVisual(data.isTemporaryUtilitySelected ?? false);
     this.updatePersistentPowerUps(data);

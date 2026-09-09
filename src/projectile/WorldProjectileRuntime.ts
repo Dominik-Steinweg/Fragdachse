@@ -138,6 +138,7 @@ interface ReflectedProjectileOptions {
   readonly ownerColor: number;
   /** Übernommene Granate: Granatensemantik und Restzündzeit bleiben erhalten. */
   readonly keepGrenade: boolean;
+  readonly continuousTurn?: boolean;
   readonly nowMs: number;
 }
 
@@ -1427,6 +1428,7 @@ export class WorldProjectileRuntime implements
           kind: 'resolved',
           projectileId: record.id,
           provenance: record.provenance,
+          ...(record.grenadePayloadPending ? { grenadePayloadPending: true } : {}),
           ...(record.provenance.correlation?.ak47ShotId === undefined ? {} : {
             reaction: {
               ak47: {
@@ -1645,6 +1647,7 @@ export class WorldProjectileRuntime implements
   }
 
   private prepareGrenadePayload(projectile: ProjectileRuntimeRecord): ProjectileGrenadePayloadRequest {
+    projectile.grenadePayloadPending = true;
     const { x, y } = projectile.physics.sprite;
     const effect = projectile.spec.interaction.grenadeEffect!;
     if (effect.type === 'damage' && !isGrenadeFragment(effect)) {
@@ -2016,6 +2019,31 @@ export class WorldProjectileRuntime implements
    * Attribution und Allegiance wechseln, Gameplay-Source und Abstammung bleiben unterscheidbar;
    * die Restwirkung des Ursprungs bleibt erhalten.
    */
+  focusProjectilesInCircle(request: import('./ProjectileExternalInteractionPort').ProjectileFocusRequest): number {
+    if (this.destroyed || ![request.x, request.y, request.radius, request.targetX, request.targetY, request.nowMs].every(Number.isFinite)
+      || request.radius < 0) return 0;
+    let count = 0;
+    for (const record of this.projectiles.activeRecords) {
+      if (record.pendingDestroy || record.pendingExplosion || record.miniRocket.spent || record.miniRocket.deferredExplosion) continue;
+      const { x, y } = record.physics.sprite;
+      if ((x - request.x) ** 2 + (y - request.y) ** 2 > request.radius ** 2) continue;
+      const velocity = record.physics.body.velocity;
+      const speed = Math.hypot(velocity.x, velocity.y);
+      if (speed <= 0.001) continue;
+      const angle = Math.hypot(request.targetX - x, request.targetY - y) > 0.001
+        ? Math.atan2(request.targetY - y, request.targetX - x) : Math.atan2(velocity.y, velocity.x);
+      this.redirectProjectile(record, {
+        x, y, angle, speed, damage: record.damage, ownerId: request.ownerId,
+        allegiance: { ownerId: request.ownerId, kind: 'player', allowTeamDamage: record.provenance.allegiance.allowTeamDamage },
+        color: record.presentation.color, ownerColor: request.ownerColor,
+        keepGrenade: true, continuousTurn: true, nowMs: request.nowMs,
+      });
+      if (record.spec.flight.isGrenade) record.grenadeLastDirection = angle;
+      count++;
+    }
+    return count;
+  }
+
   private redirectProjectile(
     record: ProjectileRuntimeRecord,
     options: ReflectedProjectileOptions,
@@ -2033,14 +2061,15 @@ export class WorldProjectileRuntime implements
     record.maxBounces = options.keepGrenade ? record.maxBounces : 0;
     record.bounceCount = options.keepGrenade ? record.bounceCount : 0;
     record.presentation = { ...record.presentation, color: options.color, ownerColor: options.ownerColor };
-    this.flightPaths.discardPending(record.id);
     this.flightContactPoints.delete(record.id);
-    this.flightPaths.append(record.id, options.x, options.y, Math.cos(options.angle) * options.speed,
-      Math.sin(options.angle) * options.speed, options.nowMs, true);
     record.physics.body.reset(options.x, options.y);
     record.lastX = options.x;
     record.lastY = options.y;
     record.physics.body.setVelocity(Math.cos(options.angle) * options.speed, Math.sin(options.angle) * options.speed);
+    // Focus follows field removal and may also change friendly immunity. Keep intrinsic speed.
+    if (options.continuousTurn) this.flightProcessor.resolveMovementFactor(record, options.nowMs);
+    this.flightPaths.redirect(record.id, options.x, options.y, record.physics.body.velocity.x,
+      record.physics.body.velocity.y, options.nowMs, !options.continuousTurn);
     this.resetHomingState(record);
   }
 
@@ -2061,10 +2090,16 @@ export class WorldProjectileRuntime implements
   }
 
   private createHomingRequest(projectile: ProjectileRuntimeRecord): ProjectileHomingRequest {
+    const runtime = this;
     return projectile.interaction.guidance ??= {
       get ownerId() { return projectile.provenance.allegiance.ownerId; },
       homing: projectile.spec.flight.homing!,
-      excludedCircle: projectile.spec.flight.homingExcludedCircle,
+      get excludedCircle() {
+        const circle = projectile.spec.flight.homingExcludedCircle;
+        return circle?.bubbleId !== undefined
+          && runtime.projectileTimeFieldPort?.isBubbleActive?.(circle.bubbleId, runtime.hostFrameNowMs) === false
+          ? undefined : circle;
+      },
       kinematics: {
         get x() { return projectile.physics.sprite.x; },
         get y() { return projectile.physics.sprite.y; },

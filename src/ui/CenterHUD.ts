@@ -1807,6 +1807,7 @@ export class CenterHUD {
       || data.persistentBaseRewardId !== undefined
       || data.utilityCooldownFrac > 0.001
       || data.utilityBlocked === true
+      || Boolean(data.utilityStatusLabel)
       || now < this.utilityRevealUntil
       || (data.isTemporaryUtilitySelected ?? false);
     const isUltimateReady = data.isUltimateActive || data.rage >= data.ultimateRequiredRage;
@@ -1834,7 +1835,8 @@ export class CenterHUD {
       this.showLowerSection(
         this.utilitySection,
         t('ui.hud.utility', {
-          name: getUtilityHudDisplayName(data.utilityId, data.utilityAction, data.persistentBaseRewardId),
+          name: getUtilityHudDisplayName(data.utilityId, data.utilityAction, data.persistentBaseRewardId)
+            + (data.utilityStatusLabel ? ` · ${data.utilityStatusLabel}` : ''),
         }),
         Phaser.Math.Clamp(1 - data.utilityCooldownFrac, 0, 1),
         CENTER_X,

@@ -33,6 +33,7 @@ export interface ProjectileDetonationOutcome extends ProjectileDetonationTarget 
 
 /** Schmale Runtime-Capability für externe Detonation/Consume-Interaktionen. */
 export interface ProjectileExternalInteractionPort {
+  focusProjectilesInCircle?(request: ProjectileFocusRequest): number;
   searchDetonableProjectiles(
     request: ProjectileDetonationSearchRequest,
   ): readonly ProjectileDetonationTarget[];
@@ -47,6 +48,18 @@ export interface ProjectileExternalInteractionPort {
     deflectorId: ProjectileId,
     nowMs: number,
   ): boolean;
+}
+
+/** One authoritative aim point for all moving projectiles in an inclusive circle. */
+export interface ProjectileFocusRequest {
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly targetX: number;
+  readonly targetY: number;
+  readonly ownerId: string;
+  readonly ownerColor: number;
+  readonly nowMs: number;
 }
 
 /** Schmale Puck-Capability für Player- und Enemy-Translocatoren. */

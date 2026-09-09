@@ -136,6 +136,130 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('focuses all moving allegiances and flying utilities inside the inclusive circle without changing intrinsic speed', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    let factor = 0.2;
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: () => factor });
+    const ids = ['owner', 'ally', 'enemy', 'grenade', 'translocator'].map((owner, i) => {
+      const request = baseRequest({ speed: 300, isGrenade: i >= 3, maxBounces: 3 }, { x: 0, y: i === 4 ? 50 : 0, angle: Math.PI });
+      return runtime.spawnProjectile({ ...request, provenance: { ...request.provenance, gameplaySourceId: owner,
+        attributionId: owner, allegiance: { ownerId: owner } } })!;
+    });
+    const outside = runtime.spawnProjectile(baseRequest({}, { x: 0, y: 50.01, angle: Math.PI }))!;
+    const stationary = runtime.spawnProjectile(baseRequest({ speed: 0 }))!;
+    factor = 1;
+    expect(runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: 50, targetX: 200, targetY: 0,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1000 })).toBe(ids.length);
+    for (const id of ids) {
+      const body = physics.handles.get(id)!.body;
+      expect(Math.hypot(body.velocity.x, body.velocity.y)).toBeCloseTo(300);
+      expect(body.velocity.x).toBeGreaterThan(0);
+    }
+    expect(physics.handles.get(outside)!.body.velocity.x).toBeLessThan(0);
+    expect(physics.handles.get(stationary)!.body.velocity.x).toBe(0);
+    const owners = new Map<number, string>();
+    runtime.readProjectileReplication(record => owners.set(record.id, record.static.ownerId));
+    for (const id of ids) expect(owners.get(id)).toBe('captor');
+    runtime.runHostProjectileStage(1, 1001);
+    expect(physics.handles.get(ids[0])!.body.velocity.x).toBeCloseTo(300); // no double unscale
+    runtime.destroy();
+  });
+
+  it('preserves damage and source, transfers hit credit, and consumes a focused projectile once', () => {
+    const { runtime } = createRuntimeHarness();
+    const hit = configureEnemyImpact(runtime);
+    const request = baseRequest({ damage: 17 });
+    runtime.spawnProjectile(request);
+    runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: 50, targetX: 0, targetY: 0,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1000 });
+    runtime.runHostInteractionStage(1000); runtime.runHostInteractionStage(1001);
+    expect(hit).toHaveBeenCalledTimes(1);
+    expect(hit.mock.calls[0][0]).toMatchObject({ provenance: { gameplaySourceId: request.provenance.gameplaySourceId,
+      attributionId: 'captor', allegiance: { ownerId: 'captor' } }, directHit: { damage: 17 } });
+    expect(runtime.activeCount).toBe(0); runtime.destroy();
+  });
+
+  it.each([0, 1])('re-evaluates remaining overlapping fields and friendly immunity %s after ownership transfer', (immunity) => {
+    const { runtime, physics } = createRuntimeHarness();
+    const bubbles = new TimeBubbleSystem();
+    bubbles.setFriendlyResolver((a, b) => a === b);
+    const effect = { type: 'time_bubble' as const, radius: 50, duration: 1000, playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
+    const first = bubbles.hostCreateBubble('captor', 0, 0, effect, 1000);
+    bubbles.hostCreateBubble('captor', 0, 0, { ...effect, projectileSlowFactor: 0.4, friendlyImmunity: immunity }, 1000);
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: (x, y, now, p) => bubbles.getProjectileMovementFactorAt(x, y, now, p.allegiance.ownerId) });
+    const id = runtime.spawnProjectile(baseRequest({ speed: 300 }))!;
+    expect(physics.handles.get(id)!.body.velocity.x).toBeCloseTo(300 * effect.projectileSlowFactor);
+    bubbles.removeBubble(first, 1000);
+    runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: effect.radius, targetX: 0, targetY: 100,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1000 });
+    expect(physics.handles.get(id)!.body.velocity.y).toBeCloseTo(300 * (immunity ? 1 : 0.4));
+    runtime.destroy(); bubbles.destroyAll();
+  });
+
+  it('preserves a captured grenade fuse and payload instead of detonating or restarting it', () => {
+    const { runtime } = createRuntimeHarness();
+    const request = baseRequest({ isGrenade: true });
+    const effect = { type: 'damage' as const, radius: 40, damage: 27 };
+    runtime.spawnProjectile({ ...request, flight: { ...request.flight, fuseTimeMs: 100 }, interaction: { grenadeEffect: effect } });
+    runtime.runHostProjectileStage(50, 1050);
+    runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: 50, targetX: 0, targetY: 100,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1050 });
+    expect(runtime.runHostProjectileStage(49, 1099).grenadePayloads).toHaveLength(0);
+    expect(runtime.runHostProjectileStage(1, 1100).grenadePayloads).toEqual([expect.objectContaining({ effect,
+      provenance: expect.objectContaining({ gameplaySourceId: request.provenance.gameplaySourceId, attributionId: 'captor' }) })]);
+    runtime.destroy();
+  });
+
+  it('releases the origin exclusion immediately even for a shot already outside and keeps homing active after focus', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    let active = true;
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: () => 1, isBubbleActive: () => active });
+    runtime.setProjectileTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => emit('inside', 'enemies', 0, 30) });
+    runtime.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true, isTargetCurrentlyValid: () => true });
+    const request = baseRequest({}, { x: 70, y: 0, angle: 0 });
+    const id = runtime.spawnProjectile({ ...request, flight: { ...request.flight,
+      homing: { acquireDelayMs: 0, searchRadius: 200, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90, targetTypes: ['enemies'] },
+      homingExcludedCircle: { bubbleId: 5, x: 0, y: 0, radius: 50, expiresAt: 5000 },
+    } })!;
+    runtime.runHostProjectileStage(1, 1001); expect(physics.handles.get(id)!.body.velocity.y).toBe(0);
+    active = false;
+    runtime.runHostProjectileStage(1, 1002); expect(physics.handles.get(id)!.body.velocity.y).toBeGreaterThan(0);
+    runtime.focusProjectilesInCircle({ x: 70, y: 0, radius: 10, targetX: 200, targetY: 0,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1002 });
+    expect(physics.handles.get(id)!.body.velocity.y).toBe(0);
+    runtime.runHostProjectileStage(1, 1003); expect(physics.handles.get(id)!.body.velocity.y).toBeGreaterThan(0);
+    runtime.destroy();
+  });
+
+  it('keeps remaining range and bounces through focus and publishes the confirmed turn', () => {
+    let now = 1000;
+    const physics = createTechnicalPhysicsBinding();
+    const runtime = new WorldProjectileRuntime({ physicsBinding: physics.binding, presentation: createPresentation(),
+      identityScope: new ProjectileIdentityScope(1), hostNowMs: () => now });
+    runtime.setProjectileReplicationAdapter(new ProjectileReplicationAdapter(runtime));
+    const id = runtime.spawnProjectile(baseRequest({ maxBounces: 1, remainingRangePx: 50, tracerConfig: { profile: 'prismatic' } }))!;
+    now = 1010;
+    physics.observe(id, 10, 0, 100, 0); Object.assign(physics.handles.get(id)!.sprite, { x: 10, y: 0 });
+    runtime.runHostProjectileStage(10, 1010);
+    runtime.getNetSnapshot(); // first publication contains the original owner
+    runtime.focusProjectilesInCircle({ x: 0, y: 0, radius: 50, targetX: 10, targetY: 100,
+      ownerId: 'captor', ownerColor: 0xffffff, nowMs: 1010 });
+    let path: any;
+    runtime.readProjectileReplication(record => { path = record.dynamic.flightPath; });
+    expect(path.points.at(-1)).toMatchObject({ x: 10, y: 0 });
+    expect(path.points.at(-1).vy).toBeGreaterThan(0);
+    const wire = runtime.getNetSnapshot();
+    expect(path.points.at(-1).breakBefore).not.toBe(true);
+    expect(decodeProjectileStatics(wire?.s ?? [])).toEqual([expect.objectContaining({ id, ownerId: 'captor' })]);
+    expect(decodeProjectileDynamics(wire?.u ?? [])[0].flightPath?.points).toEqual(path.points);
+    physics.emit({ projectileId: id, target: { kind: 'world-boundary' }, x: 10, y: 0, velocityX: 0, velocityY: -100, source: 'world-boundary' });
+    expect(runtime.activeCount).toBe(1);
+    now = 1020;
+    physics.observe(id, 10, -41, 0, -100); Object.assign(physics.handles.get(id)!.sprite, { x: 10, y: -41 });
+    runtime.runHostProjectileStage(10, 1020);
+    expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
   it('routes prism damage and slow through normal combat, permits interior hits and consumes the shot once', () => {
     const { runtime, physics } = createRuntimeHarness();
     const bubble = new TimeBubbleSystem();

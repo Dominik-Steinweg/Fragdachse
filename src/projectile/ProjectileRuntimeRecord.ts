@@ -22,6 +22,8 @@ export interface ProjectileRuntimeRecord {
   /** Gameplay direction survives drag stopping the body; unrelated to visual spin. */
   grenadeLastDirection?: number;
   grenadeDemolitionTriggered?: boolean;
+  /** The deferred domain stage will still consume this grenade's prepared payload after release. */
+  grenadePayloadPending?: boolean;
   readonly id: ProjectileId;
   lastX: number;
   lastY: number;

@@ -14,6 +14,7 @@ import type { GameAudioSystem } from '../audio/GameAudioSystem';
 import { RadialActionMenu } from '../ui/RadialActionMenu';
 import {
   cloneRadialActionRef,
+  getTimeBubbleStatusLabel,
   isSameRadialActionRef,
   radialActionKey,
   resolveRadialActions,
@@ -416,6 +417,22 @@ export class InputSystem {
     return this.getSelectedRadialActionState(this.getCooldownNow())?.cooldownUntil ?? 0;
   }
 
+  getSelectedTimeBubbleState(): import('../loadout/TimeBubbleUtilityState').TimeBubbleUtilityState | null {
+    const ref = this.selectedRadialAction;
+    if ((ref?.kind !== 'utility' && ref?.kind !== 'temporary-utility') || ref.utilityId !== 'TIME_BUBBLE') return null;
+    return this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()) ?? null;
+  }
+
+  getTimeBubbleStatusLabel(): string {
+    const state = this.getSelectedTimeBubbleState();
+    return state ? getTimeBubbleStatusLabel(state) : '';
+  }
+
+  isSelectedTimeBubbleBlocked(): boolean {
+    const state = this.getSelectedTimeBubbleState();
+    return state?.phase === 'flying' || (state?.phase === 'active' && !state.focusEnabled);
+  }
+
   private getSelectedRadialActionState(now = this.getCooldownNow()): RadialActionState | null {
     const actions = this.getRadialActionStates(now);
     this.ensureSelectedRadialAction(actions);
@@ -430,6 +447,7 @@ export class InputSystem {
       canManage: this.inputEnabled,
     };
     const actions = resolveRadialActions({
+      timeBubbleState: this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()),
       gameMode: this.bridge.getActiveGameMode(),
       tools: this.getRadialTools(),
       temporaryUtilities: this.radialGetTemporaryUtilities?.() ?? [],
@@ -1528,6 +1546,14 @@ export class InputSystem {
         if (selectedAction.disabledReason === 'cooldown') this.onUtilityPressedDuringCooldown?.();
         return;
       }
+      const bubble = this.getSelectedTimeBubbleState();
+      if (bubble?.phase === 'active' && bubble.focusEnabled) {
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, {
+          ...this.getSelectedUtilityParams(), timeBubbleFocusId: bubble.bubbleId,
+          attemptId: this.createHeldActionId('time-bubble-focus'),
+        });
+        return;
+      }
       if (selectedAction?.ref.kind === 'management'
         && selectedAction.ref.action === 'dismantle-own-all') {
         this.cancelUtilityInteraction();
@@ -1845,7 +1871,7 @@ export class InputSystem {
     if (cfg.charges && chargeAction?.kind !== 'temporary-utility') {
       this.getLocalUtilityChargeState(chargeAction);
       this.utilityChargePrediction.predict(cfg.id, `utility-attempt:${actionId}`, this.getCooldownNow(), cfg.charges.burstLockoutMs);
-    } else {
+    } else if (cfg.type !== 'time_bubble') {
       this.predictUtilityCooldown(chargeAction, this.getCooldownNow() + cfg.cooldown);
     }
 
@@ -1902,7 +1928,7 @@ export class InputSystem {
   private predictCurrentUtilityCooldown(): void {
     const config = this.getLocalUtilityConfig?.();
     // A refund can precede the first active-decoy snapshot; prediction would hide it.
-    if (config?.type === 'decoy') return;
+    if (config?.type === 'decoy' || config?.type === 'time_bubble') return;
     const cooldown = config?.cooldown ?? 0;
     if (cooldown > 0) this.predictSelectedUtilityCooldown(this.getCooldownNow() + cooldown);
   }

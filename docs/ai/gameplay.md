@@ -91,6 +91,10 @@ World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem 
 
 Temporäre Utilities sind keine Mutation des ausgerüsteten Utility-Slots. [TemporaryUtilityCollection.ts](../../src/loadout/TemporaryUtilityCollection.ts) besitzt hostseitig jede Aufnahme als eigene Instanz mit stabiler `instanceId`, Erwerbsreihenfolge, Charges und Cooldown. Auswahl, Use-RPC, Radialzustand und Objective-Placement referenzieren diese Instanzidentität; mehrere Instanzen desselben Utility-Typs bleiben deshalb unabhängig. Clients rekonstruieren daraus nur Präsentation und Auswahl und erzeugen weder beim Pickup-ACK noch beim lokalen Einsatz eigenen Bestand.
 
+Die TimeBubble ergänzt eine spielerweite Einsatz-Lifetime in [PlayerUtilityActionRuntime.ts](../../src/world/PlayerUtilityActionRuntime.ts): ausgerüstete, temporäre und Inspector-Quellen teilen die Sperre vom Wurf bis zum Ende des anschließenden Cooldowns. Ein aktiver Einsatz bleibt über seinen replizierten Zustand bedienbar, auch wenn seine letzte temporäre Ladung bereits verbraucht ist; der Radial-Eintrag rekonstruiert dabei keinen Bestand. Die Bedienungszuordnung folgt dem ursprünglichen Werfer (`gameplaySourceId`), unabhängig von einer später übertragenen Projektil-Trefferzurechnung.
+
+Ein Projectile-`resolved`-Outcome mit `grenadePayloadPending` bestätigt das Entfernen des Flugkörpers, während dessen vorbereitete Wirkung noch im nachgelagerten Host-Schritt aussteht. Ability-Lifetimes dürfen diesen Übergang nicht als fehlgeschlagene Wirkung abschließen. Der reale Übergang ist in [TimeBubbleLifecycle.test.ts](../../tests/integration/TimeBubbleLifecycle.test.ts) abgesichert.
+
 Für ein neues Eingabefeld oder eine neue Aktion zuerst festlegen:
 
 - Welcher Capability-Bereich ist betroffen?

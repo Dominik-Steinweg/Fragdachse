@@ -572,6 +572,7 @@ export interface ProjectileHomingConfig {
 
 /** Spawn-captured target exclusion; expiry uses host time, independently of projectile slow. */
 export interface ProjectileHomingExcludedCircle {
+  readonly bubbleId?: number;
   readonly x: number;
   readonly y: number;
   readonly radius: number;
@@ -978,6 +979,8 @@ export interface LoadoutCommitSnapshot {
 
 /** Zusätzliche Parameter für eine konkrete Loadout-Aktion. */
 export interface LoadoutUseParams {
+  /** Explicit secondary action; a stale request must never turn into a new throw. */
+  timeBubbleFocusId?: number;
   /** Separate request/attempt identity for duplicate-safe action commits. */
   attemptId?: string;
   /** Activity-Identity fuer PB-Mutationen; fehlt bewusst in einer Activity-losen World. */

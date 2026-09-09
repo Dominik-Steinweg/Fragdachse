@@ -1,4 +1,7 @@
 import { resolveMolotovFireEffect } from '../loadout/resolveMolotovFireEffect';
+import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
+import type { TimeBubbleUtilityPort } from './TimeBubbleUtilityPort';
+import type { ProjectileGrenadePayloadRequest } from '../projectile/ProjectileExplosionPort';
 import type { ProjectileSpawnPort } from '../projectile/ProjectileSpawnPort';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
 import type { StinkCloudSystem } from '../effects/StinkCloudSystem';
@@ -84,6 +87,7 @@ interface UtilityHeldActionPort {
 
 export interface PlayerUtilityActionNetworkPort {
   readonly loadout: {
+    publishTimeBubbleUtilityState?: (playerId: string, state: TimeBubbleUtilityState | null) => void;
     publishUtilityChargeState?: (playerId: string, utilityId: string, state: UtilityChargeState | null) => void;
     publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
     publishTemporaryUtilityInstances: (playerId: string, descriptors: readonly TemporaryUtilityInstanceDescriptor[]) => void;
@@ -150,6 +154,88 @@ interface UtilityChargeStock {
  * Ability-specific systems only receive their narrow execution call.
  */
 export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
+  private readonly timeBubbleUses = new Map<string, TimeBubbleUtilityState>();
+  private timeBubblePort: TimeBubbleUtilityPort | null = null;
+
+  setTimeBubblePort(port: TimeBubbleUtilityPort | null): void {
+    if (!port) for (const [playerId, state] of this.timeBubbleUses) {
+      if (state.phase !== 'cooldown') this.clearTimeBubbleUse(playerId);
+    }
+    this.timeBubblePort = port;
+  }
+
+  getTimeBubbleState(playerId: string): TimeBubbleUtilityState | null {
+    return this.timeBubbleUses.get(playerId) ?? null;
+  }
+
+  createTimeBubbleFromGrenade(request: ProjectileGrenadePayloadRequest, now: number): void {
+    const playerId = request.provenance.gameplaySourceId;
+    const state = this.timeBubbleUses.get(playerId);
+    if (this.destroyed || !this.timeBubblePort || request.effect.type !== 'time_bubble'
+      || state?.phase !== 'flying' || state.projectileId !== request.projectileId) return;
+    const bubbleId = this.timeBubblePort.create(request.provenance.allegiance.ownerId, request.x, request.y, request.effect, now);
+    this.timeBubbleUses.set(playerId, { utilityId: state.utilityId, cooldownDurationMs: state.cooldownDurationMs,
+      focusEnabled: state.focusEnabled, temporaryUtilityInstanceId: state.temporaryUtilityInstanceId, phase: 'active', bubbleId });
+    this.publishTimeBubbleState(playerId);
+  }
+
+  onTimeBubbleEnded(bubbleId: number, endedAt: number): void {
+    for (const [playerId, state] of this.timeBubbleUses) {
+      if (state.phase === 'active' && state.bubbleId === bubbleId) this.finishTimeBubbleUse(playerId, state, endedAt);
+    }
+  }
+
+  onUtilityProjectileResolved(projectileId: number, now: number, grenadePayloadPending = false): void {
+    if (grenadePayloadPending) return;
+    for (const [playerId, state] of this.timeBubbleUses) {
+      if (state.phase === 'flying' && state.projectileId === projectileId) this.finishTimeBubbleUse(playerId, state, now);
+    }
+  }
+
+  private finishTimeBubbleUse(playerId: string, state: TimeBubbleUtilityState, now: number): void {
+    if (this.destroyed) return;
+    const cooldownUntil = now + state.cooldownDurationMs;
+    this.timeBubbleUses.set(playerId, { utilityId: state.utilityId, cooldownDurationMs: state.cooldownDurationMs,
+      focusEnabled: state.focusEnabled, phase: 'cooldown', cooldownUntil });
+    this.options.network.loadout.publishUtilityCooldownUntil(playerId, cooldownUntil, state.utilityId);
+    this.publishTimeBubbleState(playerId);
+  }
+
+  private publishTimeBubbleState(playerId: string): void {
+    this.options.network.loadout.publishTimeBubbleUtilityState?.(playerId, this.getTimeBubbleState(playerId));
+  }
+
+  private timeBubbleBlocked(playerId: string, now: number): 'blocked' | 'cooldown' | null {
+    const state = this.timeBubbleUses.get(playerId);
+    if (!state) return null;
+    return state.phase === 'cooldown' ? (state.cooldownUntil > now ? 'cooldown' : null) : 'blocked';
+  }
+
+  private focusTimeBubble(request: PlayerUtilityActionRequest): LoadoutUseResult {
+    const state = this.timeBubbleUses.get(request.playerId);
+    const player = this.options.actor.getPlayer(request.playerId);
+    if (!player || !Number.isSafeInteger(request.params?.timeBubbleFocusId)
+      || !Number.isFinite(request.targetX) || !Number.isFinite(request.targetY)) return { ok: false, reason: 'invalid' };
+    if (!this.options.actor.canInteract(request.playerId) || !this.options.actor.isAlive(request.playerId)
+      || this.options.actor.isUtilityBlocked(request.playerId) || state?.phase !== 'active'
+      || !state.focusEnabled || state.bubbleId !== request.params?.timeBubbleFocusId) return { ok: false, reason: 'blocked' };
+    const ok = this.timeBubblePort?.collapse(state.bubbleId, { targetX: request.targetX, targetY: request.targetY,
+      ownerId: request.playerId, ownerColor: player.color, nowMs: request.hostNowMs }) ?? false;
+    if (!ok) return { ok: false, reason: 'blocked' };
+    this.options.heldAction.clearPlayer(request.playerId);
+    this.options.decoy?.breakStealth(request.playerId, request.hostNowMs);
+    const result = { ok: true };
+    if (request.attemptId) this.rememberCommittedAttempt(request.playerId, request.attemptId, result);
+    return result;
+  }
+
+  private clearTimeBubbleUse(playerId: string): void {
+    const state = this.timeBubbleUses.get(playerId);
+    this.timeBubbleUses.delete(playerId);
+    if (state?.phase === 'active') this.timeBubblePort?.remove(state.bubbleId);
+    if (state?.phase === 'flying') this.timeBubblePort?.discardProjectile(state.projectileId);
+    this.publishTimeBubbleState(playerId);
+  }
   private readonly decoyCooldowns = new Map<string, { utilityId: string; until: number }>();
   private readonly chargeStocks = new Map<string, Map<string, UtilityChargeStock>>();
   private hostFrameNowMs = 0;
@@ -190,6 +276,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const next = new GenericUtility(config);
     this.equippedUtilities.set(playerId, next);
     this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, '__clear__');
+    const timeBubble = this.timeBubbleUses.get(playerId);
+    if (timeBubble?.phase === 'cooldown')
+      this.options.network.loadout.publishUtilityCooldownUntil(playerId, timeBubble.cooldownUntil, timeBubble.utilityId);
     const decoyCooldown = this.decoyCooldowns.get(playerId);
     if (config.type === 'decoy' && decoyCooldown?.utilityId === config.id) {
       next.setLastUsedAt(decoyCooldown.until - config.cooldown);
@@ -200,6 +289,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   removePlayer(playerId: string): void {
+    this.clearTimeBubbleUse(playerId);
     for (const id of this.chargeStocks.get(playerId)?.keys() ?? []) {
       this.options.network.loadout.publishUtilityChargeState?.(playerId, id, null);
     }
@@ -284,6 +374,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     this.hostFrameNowMs = hostNowMs;
     const source = this.resolveSource(playerId, toolRef, temporaryUtilityInstanceId);
     if (!source || source.utility.config.activation.type !== kind) return false;
+    if (source.utility.config.type === 'time_bubble' && this.timeBubbleBlocked(playerId, hostNowMs)) return false;
     if (!source.temporary && source.utility.config.charges) {
       const state = this.getChargeStock(playerId, source.utility.config, hostNowMs);
       if (!state.stock.canConsume(hostNowMs) || state.lockoutUntil > hostNowMs) return false;
@@ -341,6 +432,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       if (previous) return previous;
     }
 
+    if (request.params?.timeBubbleFocusId !== undefined) return this.focusTimeBubble(request);
     const wireTemporaryId = request.params?.temporaryUtilityInstanceId;
     if (request.source?.kind === 'temporary'
       && wireTemporaryId !== undefined
@@ -372,6 +464,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
     const utility = source.utility;
     const cfg = utility.config;
+    if (cfg.type === 'time_bubble') {
+      const reason = this.timeBubbleBlocked(request.playerId, request.hostNowMs);
+      if (reason) return { ok: false, reason };
+      if (!this.timeBubblePort) return { ok: false, reason: 'blocked' };
+    }
     if (cfg.type === 'decoy') {
       if ((this.decoyCooldowns.get(request.playerId)?.until ?? 0) > request.hostNowMs)
         return { ok: false, reason: 'cooldown' };
@@ -383,7 +480,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const charges = !source.temporary && cfg.charges
       ? this.getChargeStock(request.playerId, cfg, request.hostNowMs) : null;
     if (charges ? !charges.stock.canConsume(request.hostNowMs) || charges.lockoutUntil > request.hostNowMs
-      : cfg.type !== 'decoy' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
+      : cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
       return { ok: false, reason: 'cooldown', ...(charges ? {
         utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
       } : {}) };
@@ -428,19 +525,24 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       authoritativeParams,
     );
     if (!didUse) return { ok: false, reason: 'blocked' };
+    if (cfg.type === 'time_bubble') {
+      const state = this.timeBubbleUses.get(request.playerId)!;
+      this.timeBubbleUses.set(request.playerId, { ...state, temporaryUtilityInstanceId: source.temporary?.instanceId });
+      this.publishTimeBubbleState(request.playerId);
+    }
 
     if (cfg.type !== 'decoy') this.options.decoy?.breakStealth(request.playerId, request.hostNowMs);
     else this.decoyCooldowns.set(request.playerId, { utilityId: cfg.id, until: request.hostNowMs + cfg.cooldown });
 
     if (source.temporary) {
-      this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs);
+      this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs, cfg.type !== 'time_bubble');
       this.publishTemporaryUtilities(request.playerId);
     } else if (charges) {
       charges.stock.consume(request.hostNowMs);
       charges.lockoutUntil = request.hostNowMs + cfg.charges!.burstLockoutMs;
       charges.lastCommittedAttemptId = request.attemptId;
       this.publishChargeStock(request.playerId, charges, request.hostNowMs);
-    } else if (!cfg.skipCooldownPublish) {
+    } else if (!cfg.skipCooldownPublish && cfg.type !== 'time_bubble') {
       utility.recordUse(request.hostNowMs);
       this.options.network.loadout.publishUtilityCooldownUntil(
         request.playerId,
@@ -617,6 +719,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         shotAudioKey: cfg.shotAudio?.successKey,
       },
     });
+    if (projectileId !== null && cfg.type === 'time_bubble') {
+      this.timeBubbleUses.set(playerId, { phase: 'flying', projectileId, utilityId: cfg.id,
+        cooldownDurationMs: cfg.cooldown, focusEnabled: (cfg.focusEnabled ?? 0) > 0 });
+      this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, cfg.id);
+    }
     return projectileId !== null;
   }
 
@@ -735,6 +842,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   /** Called from the world player tick, including when the utility is not currently selected. */
   update(now: number): void {
     this.hostFrameNowMs = now;
+    for (const [playerId, state] of this.timeBubbleUses) {
+      if (state.phase === 'cooldown' && state.cooldownUntil <= now) {
+        this.timeBubbleUses.delete(playerId);
+        this.publishTimeBubbleState(playerId);
+      }
+    }
     for (const [playerId, stocks] of this.chargeStocks) {
       for (const entry of stocks.values()) {
         const base = UTILITY_CONFIGS[entry.config.id];
@@ -778,6 +891,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    for (const playerId of this.timeBubbleUses.keys()) this.clearTimeBubbleUse(playerId);
+    this.timeBubblePort = null;
     for (const [playerId, stocks] of this.chargeStocks) {
       for (const id of stocks.keys()) this.options.network.loadout.publishUtilityChargeState?.(playerId, id, null);
     }

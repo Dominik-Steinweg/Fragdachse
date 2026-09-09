@@ -91,6 +91,7 @@ interface TurretFixture {
   readonly hostPhysics: HostPhysicsSystem;
   readonly playerCombat: PlayerCombatIntegrationPort;
   readonly projectileSpawn: { spawnProjectile: ReturnType<typeof vi.fn> };
+  readonly projectileUtility: { focusProjectilesInCircle: ReturnType<typeof vi.fn>; destroyProjectile: ReturnType<typeof vi.fn> };
   readonly projectileInteraction: Record<string, ReturnType<typeof vi.fn>>;
   readonly playerLoadout: LoadoutManager;
   readonly playerManager: PlayerManager;
@@ -246,10 +247,12 @@ function createFixture(options: {
   const placement = options.placementSystem ?? createPlacement(playerManager);
   const hostPhysics = methodBag() as unknown as HostPhysicsSystem;
   const decoySystem = methodBag() as unknown as DecoySystem;
+  const projectileUtility = { focusProjectilesInCircle: vi.fn(() => 1), destroyProjectile: vi.fn() };
   const fireSystem = methodBag() as unknown as FireSystem;
   const binding = new WorldCombatGameplayBinding({
     playerManager,
     projectileSpawn,
+    projectileUtility,
     projectileEvents,
     projectileTimeField,
     projectileHoming,
@@ -314,7 +317,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics, baseManager, decoySystem, fireSystem };
+  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileUtility, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics, baseManager, decoySystem, fireSystem };
 }
 
 afterEach(() => {
@@ -322,6 +325,22 @@ afterEach(() => {
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {
+  it('binds focus to bubble removal before projectile mutation and detaches utility lifetime callbacks', () => {
+    const f = createFixture({ players: [], enemies: [] });
+    const port = vi.mocked(f.playerCombat.utility.setTimeBubblePort!).mock.calls[0][0]!;
+    const effect = { type: 'time_bubble' as const, radius: 50, duration: 1000, playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
+    const id = port.create('owner', 0, 0, effect, 1000);
+    f.projectileUtility.focusProjectilesInCircle.mockImplementation(() => {
+      expect(f.binding.systems!.timeBubble.getProjectileMovementFactorAt(0, 0, 1100)).toBe(1);
+      return 1;
+    });
+    expect(port.collapse(id, { targetX: 100, targetY: 200, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100 })).toBe(true);
+    expect(f.playerCombat.utility.onTimeBubbleEnded).toHaveBeenCalledWith(id, 1100);
+    expect(f.projectileUtility.focusProjectilesInCircle).toHaveBeenCalledTimes(1);
+    expect(port.collapse(id, { targetX: 0, targetY: 0, ownerId: 'owner', ownerColor: 0xffffff, nowMs: 1100 })).toBe(false);
+    f.binding.destroy();
+    expect(f.playerCombat.utility.setTimeBubblePort).toHaveBeenLastCalledWith(null);
+  });
   it('rebuilds cached base bounds after a same-id base replacement revision', () => {
     let generation = 0;
     const makeBase = (left: number): BaseEntity => ({

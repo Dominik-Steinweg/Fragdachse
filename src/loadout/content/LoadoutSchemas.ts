@@ -252,6 +252,9 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.focusEnabled !== undefined && (value.type !== 'time_bubble' || (value.focusEnabled !== 0 && value.focusEnabled !== 1))) {
+    issues.push('$.focusEnabled: TimeBubble flag must be zero or one');
+  }
   if (value.type === 'time_bubble' && value.prismEmitter !== undefined) {
     const e = value.prismEmitter;
     const positive = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n > 0;

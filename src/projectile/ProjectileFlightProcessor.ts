@@ -126,7 +126,7 @@ export class ProjectileFlightProcessor {
     this.updateAntiTunnelingBody(projectile);
   }
 
-  private resolveMovementFactor(projectile: ProjectileRuntimeRecord, nowMs: number): number {
+  resolveMovementFactor(projectile: ProjectileRuntimeRecord, nowMs: number): number {
     const queried = this.timeFieldPort?.getMovementFactor(
       projectile.physics.sprite.x,
       projectile.physics.sprite.y,

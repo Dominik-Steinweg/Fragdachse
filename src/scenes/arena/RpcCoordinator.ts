@@ -253,6 +253,17 @@ export class RpcCoordinator {
       const activeGameMode = bridge.getActiveGameMode();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       const authoritativeParams = params;
+      if (params?.timeBubbleFocusId !== undefined) {
+        if (slot !== 'utility' || !Number.isSafeInteger(params.timeBubbleFocusId) || params.timeBubbleFocusId < 0
+          || !Number.isFinite(targetX) || !Number.isFinite(targetY)
+          || params.dismantle || params.globalDismantle || params.constructionId !== undefined
+          || (params.toolRef && (params.toolRef.kind !== 'utility' || params.toolRef.id !== 'TIME_BUBBLE'))) {
+          return { ok: false, reason: 'invalid' };
+        }
+        if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
+        return this.playerLoadout.usePlayerAction({ category: 'utility', playerId: senderId, angle, targetX, targetY,
+          hostNowMs, attemptId: params.attemptId, params });
+      }
       const temporaryUtilityInstanceId = params?.temporaryUtilityInstanceId;
       if (temporaryUtilityInstanceId !== undefined
         && (slot !== 'utility'

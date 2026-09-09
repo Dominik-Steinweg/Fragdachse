@@ -66,6 +66,7 @@ export function createTechnicalPhysicsBinding(): TechnicalPhysicsBindingFixture 
           x: spec.velocityX,
           y: spec.velocityY,
           length: () => Math.hypot(body.velocity.x, body.velocity.y),
+          lengthSq: () => body.velocity.x ** 2 + body.velocity.y ** 2,
         },
         x: spec.x,
         y: spec.y,

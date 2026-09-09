@@ -187,13 +187,13 @@ export class ProjectileHomingController {
     if (count === 0) return null;
 
     if (this.rejected.length < count) this.rejected = new Uint8Array(count);
+    const circle = request.excludedCircle;
     let eligible = 0;
     for (let i = 0; i < count; i += 1) {
       const candidate = this.candidatePool[i];
       const dx = candidate.x - originX;
       const dy = candidate.y - originY;
       const protection = request.initialTargetProtection;
-      const circle = request.excludedCircle;
       const insideExcludedCircle = circle !== undefined && hostNowMs < circle.expiresAt
         && (candidate.x - circle.x) ** 2 + (candidate.y - circle.y) ** 2 <= circle.radius ** 2;
       const ineligible = (candidate.type === 'enemies' && protection?.targetId === candidate.id && ageMs < protection.durationMs)

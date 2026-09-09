@@ -27,6 +27,17 @@ function harness() {
 }
 
 describe('Time Bubble prism emission', () => {
+  it('does not recycle bubble identities when a binding is rebuilt while old requests or shots survive', () => {
+    const original = new TimeBubbleSystem();
+    const oldId = original.hostCreateBubble('owner', 0, 0, effect(), 1000);
+    original.destroyAll();
+    const rebuilt = new TimeBubbleSystem();
+    const newId = rebuilt.hostCreateBubble('owner', 0, 0, effect(), 1001);
+    expect(newId).not.toBe(oldId);
+    expect(rebuilt.removeBubble(oldId, 1100)).toBeNull();
+    expect(rebuilt.isBubbleActive(newId, 1100)).toBe(true);
+    rebuilt.destroyAll();
+  });
   it('starts at the center and derives cadence and a full turn from host time', () => {
     const { system, spawn } = harness();
     system.hostCreateBubble('owner', 23, 45, effect(), 1000);
@@ -108,6 +119,25 @@ describe('Time Bubble prism emission', () => {
 });
 
 describe('Prism Spiral upgrade content', () => {
+  it('unlocks focus after Prism Spiral and resolves it independently of Eigenzeit', () => {
+    const node = getCoopDefenseUpgradeDefinition('time_bubble_focus')!;
+    expect(node).toMatchObject({ maxLevel: 1, costPerLevel: 0, bossPointCostPerLevel: 1, refundable: true,
+      requires: [{ upgradeId: 'time_bubble_prism_spiral', minLevel: 1 }] });
+    const base = UTILITY_CONFIGS.TIME_BUBBLE;
+    if (base.type !== 'time_bubble') throw Error('Expected TimeBubble');
+    expect(base.focusEnabled).toBe(0);
+    for (const immunity of [0, 1]) {
+      const levels = { unlock_time_bubble: 1, time_bubble_radius: 1, time_bubble_duration: 1,
+        time_bubble_prism_spiral: 1, time_bubble_focus: 1, time_bubble_slow_strength: 1, time_bubble_projectile_slow: immunity };
+      const profile = { upgrades: Object.fromEntries(Object.entries(levels).map(([id, level]) => [id, { unlocked: level > 0, level }])) };
+      const resolved = applyCoopDefenseModifiersToUtilityConfig(base, getCoopDefenseResolvedEffectTotals(profile, 'dachs_nukem'));
+      expect(resolved).toMatchObject({ focusEnabled: 1, prismEmitter: { enabled: 1 } });
+      expect(resolved.type === 'time_bubble' && (resolved.friendlyImmunity ?? 0)).toBe(immunity);
+    }
+    expect(base.focusEnabled).toBe(0);
+    expect(validateResolvedUtility({ ...base, focusEnabled: 2 }).length).toBeGreaterThan(0);
+    for (const locale of ['de', 'en'] as const) expect(getUpgradeDescription(node.id, locale)).not.toMatch(/[{}⟦⟧]/);
+  });
   it('resolves behind duration, independently from friendly immunity, without mutating authored defaults', () => {
     const node = getCoopDefenseUpgradeDefinition('time_bubble_prism_spiral')!;
     expect(node.requires).toEqual([{ upgradeId: 'time_bubble_duration', minLevel: 1 }]);

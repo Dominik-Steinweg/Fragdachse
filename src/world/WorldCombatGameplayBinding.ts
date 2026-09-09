@@ -192,6 +192,10 @@ export interface ProjectileInteractionBinding {
 }
 
 export interface WorldCombatGameplayBindingOptions {
+  readonly projectileUtility?: {
+    focusProjectilesInCircle(request: import('../projectile/ProjectileExternalInteractionPort').ProjectileFocusRequest): number;
+    destroyProjectile(projectileId: number): void;
+  };
   readonly playerManager: PlayerManager;
   /** Storm-Bolts sind eine World-Quelle und verlassen die Bindung ueber diesen Spawn-Port. */
   readonly projectileSpawn: ProjectileSpawnPort;
@@ -472,6 +476,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     decoySystem.clearAll();
     if (this.systems) {
       this.systems.timeBubble.setPrismProjectileSpawner(null);
+      this.systems.timeBubble.setEndListener(null);
+      this.options.getPlayerCombatIntegration()?.utility.setTimeBubblePort?.(null);
       this.systems.timeBubble.destroyAll();
       for (const player of this.options.playerManager.getAllPlayers()) {
         this.systems.energyShield.hostDeactivateForPlayer(player.id);
@@ -808,6 +814,18 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       ),
     );
     timeBubble.setPrismProjectileSpawner(request => { o.projectileSpawn.spawnProjectile(request); });
+    timeBubble.setEndListener((id, now) => o.getPlayerCombatIntegration()?.utility.onTimeBubbleEnded?.(id, now));
+    if (o.projectileUtility) o.getPlayerCombatIntegration()?.utility.setTimeBubblePort?.({
+      create: (ownerId, x, y, effect, now) => timeBubble.hostCreateBubble(ownerId, x, y, effect, now),
+      collapse: (id, request) => {
+        const circle = timeBubble.removeBubble(id, request.nowMs);
+        if (!circle) return false;
+        o.projectileUtility!.focusProjectilesInCircle({ ...request, ...circle });
+        return true;
+      },
+      remove: id => { timeBubble.removeBubble(id, o.combatSystem.getHostTime(), true); },
+      discardProjectile: id => o.projectileUtility!.destroyProjectile(id),
+    });
     teslaDome.setStormProjectileSpawner((request) => {
       const lifetime = request.speed > 0 ? request.rangePx / request.speed * 1000 : 0;
       o.projectileSpawn.spawnProjectile({
@@ -921,7 +939,12 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
 
   private bindProjectiles(): void {
     const o = this.options;
-    o.projectileEvents.setProjectileResolvedCallback((outcome: ProjectileLifecycleOutcome) => o.getPlayerCombatIntegration()?.reactions.resolveProjectile(outcome));
+    o.projectileEvents.setProjectileResolvedCallback((outcome: ProjectileLifecycleOutcome) => {
+      const player = o.getPlayerCombatIntegration();
+      player?.utility.onUtilityProjectileResolved?.(outcome.projectileId, o.combatSystem.getHostTime(),
+        outcome.kind === 'resolved' && outcome.grenadePayloadPending === true);
+      player?.reactions.resolveProjectile(outcome);
+    });
     o.projectileInteraction.setProjectileMiniRocketStatePort({
       getOwnerPosition: (ownerId) => {
         const owner = o.playerManager.getOwnerVisualState(ownerId);
@@ -951,6 +974,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       o.network.effects.broadcastBfgLaserBatch([...playerLines, ...pulse.lines], projectile.isBfg ? COLORS.GREEN_2 : projectile.color, projectile.isBfg ? undefined : 'asmd_primary', projectile.isBfg ? projectile.projectileId : undefined);
     });
     const timeFieldPort: ProjectileTimeFieldPort = {
+      isBubbleActive: (id, now) => this.systems?.timeBubble.isBubbleActive(id, now) ?? false,
       getMovementFactor: (x, y, now, provenance) => this.systems?.timeBubble.getProjectileMovementFactorAt(x, y, now, provenance.allegiance.ownerId) ?? 1,
     };
     o.projectileTimeField.setProjectileTimeFieldPort(timeFieldPort);

@@ -83,6 +83,13 @@ export class ProjectilePathRecorder {
     if (this.paths.has(id)) this.pending.set(id, []);
   }
 
+  /** A confirmed external turn supersedes a previous bounce's separation guard. */
+  redirect(id: number, x: number, y: number, vx: number, vy: number, timeMs: number, breakBefore: boolean): void {
+    this.discardPending(id);
+    this.bounceOrigins.delete(id);
+    this.append(id, x, y, vx, vy, timeMs, breakBefore);
+  }
+
   begin(id: number, x: number, y: number, vx: number, vy: number, timeMs: number): void {
     this.pending.delete(id);
     this.bounceOrigins.delete(id);

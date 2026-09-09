@@ -120,6 +120,7 @@ export function composeWorldPlayerGameplay(
       },
       loadout: {
         publishUtilityChargeState: (playerId, utilityId, state) => bridge.publishUtilityChargeState(playerId, utilityId, state),
+        publishTimeBubbleUtilityState: (playerId, state) => bridge.publishTimeBubbleUtilityState(playerId, state),
         publishUtilityCooldownUntil: (playerId, until, utilityId) => bridge.publishUtilityCooldownUntil(playerId, until, utilityId),
         publishTemporaryUtilityInstances: (playerId, descriptors) => bridge.publishTemporaryUtilityInstances(playerId, descriptors),
         publishHeldUtilityId: (playerId, utilityId) => bridge.publishHeldUtilityId(playerId, utilityId),

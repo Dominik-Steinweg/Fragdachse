@@ -643,9 +643,10 @@ export class ClientUpdateCoordinator {
         weapon1CooldownFrac:     this.getClientWeaponCooldownFrac('weapon1'),
         weapon2CooldownFrac:     this.getClientWeaponCooldownFrac('weapon2'),
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
-        utilityBlocked: this.ctx.inputSystem.isSelectedDecoyActive(),
+        utilityBlocked: this.ctx.inputSystem.isSelectedDecoyActive() || this.ctx.inputSystem.isSelectedTimeBubbleBlocked?.(),
+        utilityStatusLabel: this.ctx.inputSystem.getTimeBubbleStatusLabel?.(),
         utilityChargeState: this.ctx.inputSystem.getLocalUtilityChargeState?.(),
-        utilityId:               baseUtilityId,
+        utilityId: this.ctx.inputSystem.getSelectedTimeBubbleState?.()?.utilityId ?? baseUtilityId,
         utilityAction:            managementAction ?? undefined,
         persistentBaseRewardId:  rewardId ?? undefined,
         utilityCapacityCost:     constructionCapacityCost,
@@ -1215,6 +1216,9 @@ export class ClientUpdateCoordinator {
   }
 
   getLocalUtilityCooldownFrac(): number {
+    const bubble = this.ctx.inputSystem.getSelectedTimeBubbleState?.();
+    if (bubble) return bubble.phase === 'cooldown' && bubble.cooldownDurationMs > 0
+      ? Math.max(0, Math.min(1, (bubble.cooldownUntil - bridge.getSynchronizedNow()) / bubble.cooldownDurationMs)) : 0;
     const chargeState = this.ctx.inputSystem.getLocalUtilityChargeState?.();
     if (chargeState) return getUtilityRechargeFraction(chargeState, bridge.getSynchronizedNow());
     const localId = bridge.getLocalPlayerId();
@@ -1343,11 +1347,15 @@ export class ClientUpdateCoordinator {
   getLocalUtilityCooldownUntil(temporaryUtilityInstanceId?: string): number {
     const localId = bridge.getLocalPlayerId();
     if (temporaryUtilityInstanceId !== undefined) {
-      return this.getLocalTemporaryUtility(temporaryUtilityInstanceId)?.cooldownUntil ?? 0;
+      const instance = this.getLocalTemporaryUtility(temporaryUtilityInstanceId);
+      return instance?.utilityId === 'TIME_BUBBLE'
+        ? bridge.getPlayerUtilityCooldownUntil(localId, instance.utilityId) : instance?.cooldownUntil ?? 0;
     }
     const radialAction = this.ctx.inputSystem.getSelectedRadialActionForHud();
     if (radialAction?.kind === 'temporary-utility') {
-      return this.getLocalTemporaryUtility(radialAction.instanceId)?.cooldownUntil ?? 0;
+      return radialAction.utilityId === 'TIME_BUBBLE'
+        ? bridge.getPlayerUtilityCooldownUntil(localId, radialAction.utilityId)
+        : this.getLocalTemporaryUtility(radialAction.instanceId)?.cooldownUntil ?? 0;
     }
     return bridge.getPlayerUtilityCooldownUntil(localId, this.getLocalUtilityCooldownId());
   }

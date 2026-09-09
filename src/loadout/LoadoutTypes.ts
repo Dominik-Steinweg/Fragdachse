@@ -585,6 +585,7 @@ export interface MolotovUtilityConfig extends BaseUtilityConfig {
 }
 
 export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
+  readonly focusEnabled?: number;
   readonly type: 'time_bubble';
   readonly bubbleRadius: number;
   readonly bubbleDuration: number;

@@ -61,13 +61,15 @@ export class TemporaryUtilityCollection {
       .sort((left, right) => left.acquisitionOrder - right.acquisitionOrder);
   }
 
-  recordSuccessfulUse(playerId: string, instanceId: string, now: number): boolean {
+  recordSuccessfulUse(playerId: string, instanceId: string, now: number, startCooldown = true): boolean {
     const instances = this.byPlayer.get(playerId);
     const index = instances?.findIndex((instance) => instance.instanceId === instanceId) ?? -1;
     if (!instances || index < 0) return false;
     const instance = instances[index];
-    instance.utility.recordUse(now);
-    instance.cooldownUntil = now + Math.max(0, instance.utility.config.cooldown);
+    if (startCooldown) {
+      instance.utility.recordUse(now);
+      instance.cooldownUntil = now + Math.max(0, instance.utility.config.cooldown);
+    }
     instance.charges -= 1;
     if (instance.charges <= 0) instances.splice(index, 1);
     if (instances.length === 0) this.byPlayer.delete(playerId);

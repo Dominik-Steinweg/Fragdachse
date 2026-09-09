@@ -467,6 +467,8 @@ export const deUpgrades = {
   "upgrade.time_bubble_slow_strength.description": "Verringert die Verlangsamung für Gegner in der Zeitblase je Stufe um {value0Absolute}.",
   "upgrade.time_bubble_projectile_slow.name": "Eigenzeit",
   "upgrade.time_bubble_prism_spiral.name": "Prismenspirale",
+  "upgrade.time_bubble_focus.name": "Zeitfokus",
+  "upgrade.time_bubble_focus.description": "Drücke bei ausgewählter TimeBubble erneut E, um die aktive Zeitblase aufzulösen und alle fliegenden Projektile darin zum Mauszeiger umzulenken. Ihre Treffer werden dir zugerechnet; Zielsuche bleibt aktiv. Die Bedienung übernommener Utilities bleibt beim Werfer. Der Cooldown beginnt mit dem Ende der Zeitblase.",
   "upgrade.time_bubble_prism_spiral.description": "Die Zeitblase feuert alle {prismIntervalMs} ms kleine zielsuchende Regenbogengeschosse aus ihrem Zentrum. Die Abschussrichtung dreht sich in {prismRotationSeconds} s einmal rundum. Treffer verursachen {prismDamage} Grundschaden und verlangsamen Gegner um {prismSlowPercent} für {prismSlowSeconds} s. Die Zielsuche ignoriert Gegner innerhalb der Ursprungsblase, solange diese besteht. Es gelten die normalen Zeitblasen-Regeln einschließlich Eigenzeit.",
   "upgrade.time_bubble_projectile_slow.description": "Eigene und verbündete Spieler sowie Projektile werden nicht mehr verlangsamt.",
   "upgrade.unlock_smoke_grenade.name": "Smoke-Granate",

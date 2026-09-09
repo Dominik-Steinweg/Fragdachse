@@ -63,6 +63,29 @@ function createSystem() {
 }
 
 describe('Radial Menu V2 input', () => {
+  it('uses E as an immediate explicit focus action only while TimeBubble is selected', () => {
+    const { system, keys, bridge } = createSystem();
+    let state: any = { utilityId: 'TIME_BUBBLE', phase: 'active', bubbleId: 12, cooldownDurationMs: 300, focusEnabled: true };
+    Object.assign(bridge, { getPlayerTimeBubbleUtilityState: () => state });
+    system.setupRadialActionProviders({ getTools: () => [{ kind: 'utility', id: 'TIME_BUBBLE' }, { kind: 'utility', id: 'STINK_CLOUD' }],
+      getCooldownUntil: () => 0, getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }) });
+    system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.TIME_BUBBLE);
+    system.setupUtilityCooldownProvider(() => 0);
+    const uses = vi.fn(); system.setupLoadoutListener(uses);
+    Object.assign(system, { selectedRadialAction: { kind: 'utility', utilityId: 'TIME_BUBBLE' } });
+    keys.keyE.isDown = true; keys.keyE.justDown = true; system.update();
+    expect(uses).toHaveBeenCalledTimes(1);
+    expect(uses.mock.calls[0][4]).toMatchObject({ timeBubbleFocusId: 12 });
+    expect(bridge.sendHeldActionStart).not.toHaveBeenCalled();
+    expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'TIME_BUBBLE' })).toBe(0);
+    state = { ...state, phase: 'flying', projectileId: 1 }; uses.mockClear(); system.update();
+    expect(uses).not.toHaveBeenCalled(); expect(bridge.sendHeldActionStart).not.toHaveBeenCalled();
+    state = { ...state, phase: 'active' };
+    Object.assign(system, { selectedRadialAction: { kind: 'utility', utilityId: 'STINK_CLOUD' } });
+    system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD); system.update();
+    expect(uses).toHaveBeenCalledTimes(1);
+    expect(uses.mock.calls[0][4]?.timeBubbleFocusId).toBeUndefined();
+  });
   it.each(['dachs_nukem', 'dachs_of_steel', 'inspector_gadachs'] as const)(
     'opens the same action model with R for %s',
     (_classId) => {

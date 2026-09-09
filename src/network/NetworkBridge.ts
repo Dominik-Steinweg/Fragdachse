@@ -1,4 +1,5 @@
 import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
+import { parseTimeBubbleUtilityState, type TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 /**
  * NetworkBridge – die Grenze zwischen Spiellogik und Netzwerk.
@@ -192,6 +193,7 @@ const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufender Live-Build {c: classId, p: profile, i: items, t: tool refs}
+const KEY_TIME_BUBBLE_UTILITY = 'tbu';
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_UTILITY_CHARGES = 'uch';
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
@@ -4171,6 +4173,15 @@ export class NetworkBridge {
   }
 
   /** Host-only: Publiziert bis wann die Utility eines Spielers im Cooldown ist. */
+  publishTimeBubbleUtilityState(playerId: string, state: TimeBubbleUtilityState | null): void {
+    if (!isHost()) return;
+    this.playerStateMap.get(playerId)?.setState(KEY_TIME_BUBBLE_UTILITY, state, true);
+  }
+
+  getPlayerTimeBubbleUtilityState(playerId: string): TimeBubbleUtilityState | null {
+    return parseTimeBubbleUtilityState(this.playerStateMap.get(playerId)?.getState(KEY_TIME_BUBBLE_UTILITY));
+  }
+
   publishUtilityCooldownUntil(playerId: string, cooldownUntil: number, utilityId = '__default__'): void {
     if (!isHost()) return;
     const ps = this.playerStateMap.get(playerId);
@@ -4189,6 +4200,10 @@ export class NetworkBridge {
 
   /** Liest den autoritativen Utility-Cooldown-Endzeitpunkt eines Spielers (0 = bereit). */
   getPlayerUtilityCooldownUntil(playerId: string, utilityId = '__default__'): number {
+    if (utilityId === 'TIME_BUBBLE') {
+      const state = this.getPlayerTimeBubbleUtilityState(playerId);
+      if (state) return state.phase === 'cooldown' ? state.cooldownUntil : 0;
+    }
     const charges = this.getPlayerUtilityChargeState(playerId, utilityId);
     if (charges) return getUtilityChargeReadyAt(charges);
     const value = this.playerStateMap.get(playerId)?.getState(KEY_UTILITY_CD_UNTIL);

@@ -17,7 +17,27 @@ interface ActiveTimeBubble {
 
 export class TimeBubbleSystem {
   private readonly activeBubbles: ActiveTimeBubble[] = [];
-  private nextId = 0;
+  // Delayed focus requests and surviving prism shots must not bind to a rebuilt system's bubble.
+  private static nextId = 0;
+  private endListener: ((bubbleId: number, endedAt: number) => void) | null = null;
+
+  setEndListener(listener: ((bubbleId: number, endedAt: number) => void) | null): void {
+    this.endListener = listener;
+  }
+
+  isBubbleActive(id: number, now: number): boolean {
+    return this.activeBubbles.some(b => b.id === id && now < b.createdAt + b.effect.duration);
+  }
+
+  /** Removal precedes notification, so downstream projectiles see the remaining time fields. */
+  removeBubble(id: number, now: number, silent = false): { x: number; y: number; radius: number } | null {
+    const index = this.activeBubbles.findIndex(b => b.id === id);
+    if (index < 0) return null;
+    const [bubble] = this.activeBubbles.splice(index, 1);
+    const expiresAt = bubble.createdAt + bubble.effect.duration;
+    if (!silent) this.endListener?.(id, Math.min(now, expiresAt));
+    return now < expiresAt ? { x: bubble.x, y: bubble.y, radius: bubble.effect.radius } : null;
+  }
   private friendlyResolver: ((ownerId: string, subjectId: string) => boolean) | null = null;
   private prismProjectileSpawner: ((request: ProjectileSpawnRequest) => void) | null = null;
 
@@ -35,9 +55,10 @@ export class TimeBubbleSystem {
     y: number,
     effect: TimeBubbleEffectConfig,
     now = Date.now(),
-  ): void {
+  ): number {
+    const id = TimeBubbleSystem.nextId++;
     this.activeBubbles.push({
-      id: this.nextId++,
+      id,
       ownerId,
       x,
       y,
@@ -45,6 +66,7 @@ export class TimeBubbleSystem {
       createdAt: now,
       nextShotIndex: 0,
     });
+    return id;
   }
 
   hostUpdate(now: number): SyncedTimeBubble[] {
@@ -54,7 +76,7 @@ export class TimeBubbleSystem {
       const bubble = this.activeBubbles[index];
       const elapsed = now - bubble.createdAt;
       if (elapsed >= bubble.effect.duration) {
-        this.activeBubbles.splice(index, 1);
+        this.removeBubble(bubble.id, now);
         continue;
       }
 
@@ -93,6 +115,7 @@ export class TimeBubbleSystem {
           remainingRangePx: emitter.rangePx, maxBounces: 0, isGrenade: false,
           homing: emitter.homing,
           homingExcludedCircle: {
+            bubbleId: bubble.id,
             x: bubble.x, y: bubble.y, radius: bubble.effect.radius,
             expiresAt: bubble.createdAt + bubble.effect.duration,
           },

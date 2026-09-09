@@ -850,9 +850,10 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
         weapon1CooldownFrac:     playerFrame?.weapon1CooldownFrac ?? 0,
         weapon2CooldownFrac:     playerFrame?.weapon2CooldownFrac ?? 0,
         utilityCooldownFrac:     this.getLocalUtilityCooldownFrac(),
-        utilityBlocked: this.ctx.inputSystem.isSelectedDecoyActive(),
+        utilityBlocked: this.ctx.inputSystem.isSelectedDecoyActive() || this.ctx.inputSystem.isSelectedTimeBubbleBlocked?.(),
+        utilityStatusLabel: this.ctx.inputSystem.getTimeBubbleStatusLabel?.(),
         utilityChargeState: this.ctx.inputSystem.getLocalUtilityChargeState?.(),
-        utilityId,
+        utilityId: this.ctx.inputSystem.getSelectedTimeBubbleState?.()?.utilityId ?? utilityId,
         utilityAction:            managementAction ?? undefined,
         persistentBaseRewardId:   rewardId ?? undefined,
         utilityCapacityCost:     constructionCapacityCost,
@@ -1452,7 +1453,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     } else if (effect.type === 'fire') {
       this.ctx.fireSystem.hostCreateZone(request.x, request.y, effect, ownerId);
     } else if (effect.type === 'time_bubble') {
-      this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, effect);
+      if (request.provenance.sourceSlot === 'utility' && request.provenance.weaponSourceId === 'TIME_BUBBLE') {
+        this.playerGameplayRuntime?.getPlayerCombatIntegrationPort().utility.createTimeBubbleFromGrenade?.(request, this.hostFrameNowMs);
+      } else this.combatSystems?.timeBubble?.hostCreateBubble(ownerId, request.x, request.y, effect, this.hostFrameNowMs);
     } else {
       this.smokeBinding?.createCloud(request, this.hostFrameNowMs);
     }
@@ -2186,6 +2189,9 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
 
   private getLocalUtilityCooldownFrac(): number {
+    const bubble = this.ctx.inputSystem.getSelectedTimeBubbleState?.();
+    if (bubble) return bubble.phase === 'cooldown' && bubble.cooldownDurationMs > 0
+      ? Math.max(0, Math.min(1, (bubble.cooldownUntil - bridge.getSynchronizedNow()) / bubble.cooldownDurationMs)) : 0;
     const chargeState = this.ctx.inputSystem.getLocalUtilityChargeState?.();
     if (chargeState) return getUtilityRechargeFraction(chargeState, bridge.getSynchronizedNow());
     const localId = bridge.getLocalPlayerId();

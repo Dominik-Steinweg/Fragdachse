@@ -14,6 +14,7 @@ import { getPersistentBaseRewardDefinition } from '../persistentBase/PersistentB
 import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRewardTypes';
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ConstructionId, GameMode, LoadoutToolRef, TemporaryUtilityInstanceDescriptor } from '../types';
+import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 
 export type RadialActionCategory =
   | 'utility'
@@ -59,6 +60,7 @@ export interface RadialActionState {
 }
 
 export interface ResolveRadialActionsInput {
+  readonly timeBubbleState?: TimeBubbleUtilityState | null;
   readonly gameMode: GameMode;
   readonly tools: readonly LoadoutToolRef[];
   readonly temporaryUtilities?: readonly TemporaryUtilityInstanceDescriptor[];
@@ -255,6 +257,31 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     });
   }
 
+  const bubble = input.timeBubbleState;
+  if (bubble && bubble.phase !== 'cooldown') {
+    const ref: RadialActionRef = bubble.temporaryUtilityInstanceId
+      ? { kind: 'temporary-utility', instanceId: bubble.temporaryUtilityInstanceId, utilityId: bubble.utilityId }
+      : { kind: 'utility', utilityId: bubble.utilityId };
+    if (!entries.some(entry => isSameRadialActionRef(entry.ref, ref))) {
+      const presentation = describeLoadoutTool({ kind: 'utility', id: bubble.utilityId });
+      // An active cast is a control action, not reconstructed inventory or another charge.
+      entries.push({ ref, category: ref.kind === 'temporary-utility' ? 'temporaryUtility' : 'utility',
+        label: presentation.displayName, iconKey: presentation.textureKey, accentColor: presentation.accentColor,
+        visible: true, available: false, cooldownUntil: 0, cooldownDurationMs: bubble.cooldownDurationMs, sourceOrder: 0 });
+    }
+  }
+  const projected = entries.map(entry => {
+    if (!bubble || (entry.ref.kind !== 'utility' && entry.ref.kind !== 'temporary-utility')
+      || entry.ref.utilityId !== bubble.utilityId) return entry;
+    const active = bubble.phase !== 'cooldown';
+    const cooldownUntil = bubble.phase === 'cooldown' ? bubble.cooldownUntil : 0;
+    const disabledReason: RadialActionDisabledReason | undefined = !input.canUseUtility ? 'player-blocked'
+      : active ? (bubble.phase === 'active' && bubble.focusEnabled ? undefined : 'unavailable')
+      : cooldownUntil > input.now ? 'cooldown' : entry.disabledReason;
+    return { ...entry, label: active ? `${entry.label} · ${getTimeBubbleStatusLabel(bubble)}` : entry.label,
+      available: disabledReason === undefined, disabledReason, cooldownUntil, cooldownDurationMs: bubble.cooldownDurationMs };
+  });
+
   const categoryOrder: Readonly<Record<RadialActionCategory, number>> = {
     utility: 0,
     temporaryUtility: 1,
@@ -263,7 +290,7 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     managementAction: 4,
     specialPower: 5,
   };
-  return entries
+  return projected
     .filter((entry) => entry.visible)
     .sort((left, right) => (
       categoryOrder[left.category] - categoryOrder[right.category]
@@ -271,6 +298,11 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
       || radialActionKey(left.ref).localeCompare(radialActionKey(right.ref))
     ))
     .map(({ sourceOrder: _sourceOrder, ...entry }) => entry);
+}
+
+export function getTimeBubbleStatusLabel(state: TimeBubbleUtilityState): string {
+  return state.phase === 'flying' ? t('ui.timeBubble.flying')
+    : state.phase === 'active' ? t(state.focusEnabled ? 'ui.timeBubble.focus' : 'ui.timeBubble.active') : '';
 }
 
 function getManagementActionLabel(action: RadialManagementAction): string {

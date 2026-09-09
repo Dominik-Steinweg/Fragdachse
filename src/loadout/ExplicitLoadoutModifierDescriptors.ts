@@ -177,6 +177,11 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "TIME_BUBBLE",
     targets: [{ path: ["prismEmitter", "enabled"], formula: "add" }],
   },
+  "utility.TIME_BUBBLE.focusEnabled": {
+    kind: "utility",
+    itemId: "TIME_BUBBLE",
+    targets: [{ path: ["focusEnabled"], formula: "add" }],
+  },
   "utility.TRANSLOCATOR.telefragDamage": {
     kind: "utility",
     itemId: "TRANSLOCATOR",

@@ -71,6 +71,7 @@ export interface ProjectileResolvedOutcome {
   readonly kind: 'resolved';
   readonly projectileId: number;
   readonly provenance: ProjectileProvenance;
+  readonly grenadePayloadPending?: boolean;
   readonly reaction?: {
     readonly ak47?: {
       readonly shotId: number;
