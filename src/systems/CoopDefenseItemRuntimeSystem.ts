@@ -367,6 +367,12 @@ export class CoopDefenseItemRuntimeSystem {
     return glutwandererBursts;
   }
 
+  /** Position jumps retain earned charge but contribute no walked distance. */
+  resetMovementOrigin(playerId: string, x: number, y: number): void {
+    const state = this.movementCharges.get(playerId);
+    if (state) { state.lastX = x; state.lastY = y; state.hasPosition = true; }
+  }
+
   /** Fortschritt zur naechsten Ladung, 0..1 – Grundlage des HUD-Balkens. */
   getMovementChargeProgress(playerId: string): number {
     const state = this.movementCharges.get(playerId);

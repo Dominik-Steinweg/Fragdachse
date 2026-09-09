@@ -126,6 +126,30 @@ function makeCombatSystem(): CombatSystem {
 }
 
 describe('CombatSystem.hasClearLineOfFire', () => {
+  it.each([10, 70, 530])('segments hitscan before real blockers without tracing the portal gap (%s)', wall => {
+    const system = makeCombatSystem();
+    system.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 1000 }], isPortalFriendly: () => true });
+    vi.spyOn(system, 'traceHitscan').mockImplementation(options => {
+      const end = options.startX + options.range;
+      const hit = wall >= options.startX && wall <= end;
+      const endX = hit ? wall : end;
+      return { endX, endY: 0, distance: endX - options.startX, hitObstacle: hit,
+        hitPlayerId: null, hitEnemyId: null, hitDecoyId: null };
+    });
+    const path = system.traceHitscanPath({ shooterId: 'owner', startX: 0, startY: 0,
+      angle: 0, range: 100, traceThickness: 1 });
+    expect(path).toHaveLength(wall === 10 ? 1 : 2);
+    if (wall === 10) expect(path[0].trace.endX).toBe(10);
+    else {
+      expect(path.map(s => [s.startX, s.trace.endX])).toEqual([[0, 34], [484, wall === 70 ? 550 : 530]]);
+      expect(path[1].portalDamage).toEqual([{ pairId: 'pair', bonus: 0.6 }]);
+    }
+    expect(system.traceHitscanPath({ shooterId: 'owner', startX: 80, startY: 0,
+      angle: 0, range: 50, traceThickness: 1 })).toHaveLength(1);
+  });
+
   it('reports a clear line while no train is on the map', () => {
     const system = makeCombatSystem();
 

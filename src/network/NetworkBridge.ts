@@ -1,5 +1,7 @@
 import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
 import { parseTimeBubbleUtilityState, type TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
+import { parseTranslocatorUseState, type TranslocatorUseState } from '../loadout/TranslocatorUseState';
+import type { PortalPair } from '../systems/PortalTraversal';
 import { getUtilityChargeReadyAt, parseUtilityChargeState, type UtilityChargeState } from '../loadout/UtilityChargeState';
 /**
  * NetworkBridge – die Grenze zwischen Spiellogik und Netzwerk.
@@ -194,6 +196,7 @@ const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufender Live-Build {c: classId, p: profile, i: items, t: tool refs}
 const KEY_TIME_BUBBLE_UTILITY = 'tbu';
+const KEY_TRANSLOCATOR_USE = 'tlu';
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
 const KEY_UTILITY_CHARGES = 'uch';
 const KEY_HELD_SLOT    = 'hld';   // per-player: HeldItemSlot (welches Item die Figur sichtbar traegt)
@@ -4179,6 +4182,40 @@ export class NetworkBridge {
     this.playerStateMap.get(playerId)?.setState(KEY_TIME_BUBBLE_UTILITY, state, true);
   }
 
+  publishTranslocatorUseState(playerId: string, state: TranslocatorUseState | null): void {
+    if (!isHost()) return;
+    this.playerStateMap.get(playerId)?.setState(KEY_TRANSLOCATOR_USE, { wr: this.getCurrentWorldRevision(), state }, true);
+    this.publishUtilityCooldownUntil(playerId, state?.phase === 'cooldown' ? state.cooldownUntil : 0, 'TRANSLOCATOR');
+  }
+  getPlayerTranslocatorUseState(playerId: string): TranslocatorUseState | null {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_TRANSLOCATOR_USE) as {wr?: number; state?: unknown} | undefined;
+    return value?.wr === this.getCurrentWorldRevision() ? parseTranslocatorUseState(value.state) : null;
+  }
+  getTranslocatorPortalPairs(): PortalPair[] {
+    const pairs: PortalPair[] = [];
+    for (const id of this.playerStateMap.keys()) {
+      const state = this.getPlayerTranslocatorUseState(id);
+      if (state?.phase === 'portals') pairs.push(state.pair);
+    }
+    return pairs;
+  }
+  broadcastPortalCollapse(pair: PortalPair, radius: number): void {
+    this.broadcastGameplayEvent('tlcl', { id: pair.id, a: pair.a, b: pair.b, radius, wr: this.getCurrentWorldRevision() });
+  }
+  registerPortalCollapseHandler(handler: (a: {x: number; y: number}, b: {x: number; y: number}, radius: number) => void): void {
+    const seen = new Set<string>();
+    this.registerAllRpcHandler('tlcl', async (raw: unknown) => {
+      const e = raw as {wr?: number; id?: string; a?: {x: number; y: number}; b?: {x: number; y: number}; radius?: number};
+      const key = String(e?.wr) + ':' + e?.id;
+      if (!e || e.wr !== this.getCurrentWorldRevision() || typeof e.id !== 'string' || seen.has(key) || !e.a || !e.b
+        || ![e.a.x, e.a.y, e.b.x, e.b.y, e.radius].every(Number.isFinite) || e.radius! < 0) return undefined;
+      seen.add(key);
+      if (seen.size > 256) seen.delete(seen.values().next().value!);
+      handler(e.a, e.b, e.radius!);
+      return undefined;
+    });
+  }
+
   getPlayerTimeBubbleUtilityState(playerId: string): TimeBubbleUtilityState | null {
     return parseTimeBubbleUtilityState(this.playerStateMap.get(playerId)?.getState(KEY_TIME_BUBBLE_UTILITY));
   }
@@ -4201,6 +4238,10 @@ export class NetworkBridge {
 
   /** Liest den autoritativen Utility-Cooldown-Endzeitpunkt eines Spielers (0 = bereit). */
   getPlayerUtilityCooldownUntil(playerId: string, utilityId = '__default__'): number {
+    if (utilityId === 'TRANSLOCATOR') {
+      const state = this.getPlayerTranslocatorUseState(playerId);
+      return state?.phase === 'cooldown' ? state.cooldownUntil : 0;
+    }
     if (utilityId === 'TIME_BUBBLE') {
       const state = this.getPlayerTimeBubbleUtilityState(playerId);
       if (state) return state.phase === 'cooldown' ? state.cooldownUntil : 0;

@@ -15,6 +15,7 @@ import type { PersistentBaseRewardId } from '../persistentBase/PersistentBaseRew
 import { POWERUP_DEFS } from '../powerups/PowerUpConfig';
 import type { ConstructionId, GameMode, LoadoutToolRef, TemporaryUtilityInstanceDescriptor } from '../types';
 import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
+import type { TranslocatorUseState } from '../loadout/TranslocatorUseState';
 
 export type RadialActionCategory =
   | 'utility'
@@ -60,6 +61,7 @@ export interface RadialActionState {
 }
 
 export interface ResolveRadialActionsInput {
+  readonly translocatorState?: TranslocatorUseState | null;
   readonly timeBubbleState?: TimeBubbleUtilityState | null;
   readonly gameMode: GameMode;
   readonly tools: readonly LoadoutToolRef[];
@@ -270,7 +272,29 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
         visible: true, available: false, cooldownUntil: 0, cooldownDurationMs: bubble.cooldownDurationMs, sourceOrder: 0 });
     }
   }
+  const translocator = input.translocatorState;
+  if (translocator && translocator.phase !== 'cooldown') {
+    const ref: RadialActionRef = translocator.temporaryUtilityInstanceId
+      ? { kind: 'temporary-utility', instanceId: translocator.temporaryUtilityInstanceId, utilityId: translocator.utilityId }
+      : { kind: 'utility', utilityId: translocator.utilityId };
+    if (!entries.some(entry => isSameRadialActionRef(entry.ref, ref))) {
+      const presentation = describeLoadoutTool({ kind: 'utility', id: translocator.utilityId });
+      entries.push({ ref, category: ref.kind === 'temporary-utility' ? 'temporaryUtility' : 'utility',
+        label: presentation.displayName, iconKey: presentation.textureKey, accentColor: presentation.accentColor,
+        visible: true, available: input.canUseUtility, cooldownUntil: 0,
+        cooldownDurationMs: translocator.cooldownDurationMs, sourceOrder: 0 });
+    }
+  }
   const projected = entries.map(entry => {
+    if (translocator && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility')
+      && entry.ref.utilityId === translocator.utilityId) {
+      const cooldownUntil = translocator.phase === 'cooldown' ? translocator.cooldownUntil : 0;
+      const disabledReason: RadialActionDisabledReason | undefined = !input.canUseUtility ? 'player-blocked'
+        : cooldownUntil > input.now ? 'cooldown' : undefined;
+      return { ...entry, label: entry.label + ' · ' + getTranslocatorStatusLabel(translocator, input.now),
+        available: disabledReason === undefined, disabledReason, cooldownUntil,
+        cooldownDurationMs: translocator.cooldownDurationMs };
+    }
     if (!bubble || (entry.ref.kind !== 'utility' && entry.ref.kind !== 'temporary-utility')
       || entry.ref.utilityId !== bubble.utilityId) return entry;
     const active = bubble.phase !== 'cooldown';
@@ -303,6 +327,12 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
 export function getTimeBubbleStatusLabel(state: TimeBubbleUtilityState): string {
   return state.phase === 'flying' ? t('ui.timeBubble.flying')
     : state.phase === 'active' ? t(state.focusEnabled ? 'ui.timeBubble.focus' : 'ui.timeBubble.active') : '';
+}
+
+export function getTranslocatorStatusLabel(state: TranslocatorUseState, now: number): string {
+  return state.phase === 'puck' ? t('ui.translocator.puck') : state.phase === 'portals'
+    ? t('ui.translocator.portals') + ' ' + (Math.max(0, state.pair.expiresAt - now) / 1000).toFixed(1) + ' s'
+    : t('ui.translocator.cooldown');
 }
 
 function getManagementActionLabel(action: RadialManagementAction): string {

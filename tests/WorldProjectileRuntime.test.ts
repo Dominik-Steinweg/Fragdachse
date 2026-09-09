@@ -90,7 +90,7 @@ function baseRequest(
     },
     interaction: {
       directHit: { damage: cfg.damage, adrenalinGain: cfg.adrenalinGain },
-      explosion: cfg.explosion, detonable: cfg.detonable,
+      explosion: cfg.explosion, detonable: cfg.detonable, detonator: cfg.detonator,
       multiExplosion: { count: cfg.multiExplosionCount },
       burn: { canReceiveFireImbue: cfg.canReceiveFireImbue },
       pathEffect: { kind: cfg.pathEffectKind, awpCorridor: { halfWidth: cfg.awpCorridorHalfWidth, damage: cfg.awpCorridorDamage } },
@@ -137,6 +137,109 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('applies a travel-acquired burn before a hit that precedes a portal', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+    const impact = configureEnemyImpact(runtime);
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('enemy', 'enemy', 'enemy-owner', 25, 0, 4, 21, -4, 29, 4) });
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode: 'sweep', canReceiveFireImbue: true }))!;
+    physics.handles.get(id)!.sprite.x = 100;
+    runtime.runHostPortalStage(1000, sample => runtime.addBurnAugment(sample.projectileId,
+      { burn: { durationMs: 300, damagePerTick: 7 }, provenance: makeProvenance('fire') }));
+    expect(impact).toHaveBeenCalledOnce();
+    expect(impact.mock.calls[0][0].augments).toContainEqual(expect.objectContaining({
+      burn: { durationMs: 300, damagePerTick: 7 } }));
+    expect(impact.mock.calls[0][0].provenance.portalDamage).toBeUndefined();
+    runtime.destroy();
+  });
+
+  it.each([25, 300, 530])('detonates only on the real portal segments (%s)', targetX => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+    runtime.spawnProjectile(baseRequest({ speed: 0, detonable: { tag: 'asmd_ball', aoeDamage: 10,
+      aoeRadius: 20, allowCrossTeam: true } }, { x: targetX, y: 0, angle: 0 }));
+    const id = runtime.spawnProjectile(baseRequest({ detonator: { triggerTags: ['asmd_ball'] } }))!;
+    physics.handles.get(id)!.sprite.x = 100;
+    runtime.runHostPortalStage(1000);
+    expect(runtime.detonateOverlappingProjectiles()).toHaveLength(targetX === 300 ? 0 : 1);
+    expect(runtime.detonateOverlappingProjectiles()).toEqual([]);
+    runtime.destroy();
+  });
+
+  it('carries acquired contributions into Hydra children and adds the next pair without compounding', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    let pairs = [{ id: 'first', ownerId: 'owner', a: { x: 50, y: 0 }, b: { x: 500, y: 0 },
+      radius: 16, reentryDistance: 48, damageBonus: 0.6, createdAt: 0, expiresAt: 2000 }];
+    runtime.setPortalQueryPort({ getPortalPairs: () => pairs, isPortalFriendly: () => true });
+    const parent = runtime.spawnProjectile(baseRequest({ remainingRangePx: 1000, maxBounces: 2,
+      splitCount: 2, splitSpread: 0, splitFactor: 1, canReceiveFireImbue: true }))!;
+    physics.handles.get(parent)!.sprite.x = 100;
+    runtime.runHostPortalStage(1000);
+    physics.emit({ projectileId: parent, target: { kind: 'world-boundary' }, x: 550, y: 0,
+      velocityX: 100, velocityY: 0, source: 'world-boundary' });
+    runtime.runHostInteractionStage(1000); runtime.runHostInteractionStage(1016);
+    const children = runtime.getTravelSamples();
+    expect(children).toHaveLength(2);
+    expect(children.every(child => child.provenance.portalDamage?.[0].pairId === 'first')).toBe(true);
+    pairs = [{ ...pairs[0], id: 'second', a: { x: 600, y: 0 }, b: { x: 1000, y: 0 }, damageBonus: 0.2 }];
+    const impact = configureEnemyImpact(runtime);
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('enemy', 'enemy', 'enemy-owner', 1030, 0, 8, 1022, -8, 1038, 8) });
+    for (const child of children) physics.handles.get(child.projectileId)!.sprite.x = 650;
+    runtime.runHostPortalStage(1032); runtime.runHostInteractionStage(1032);
+    expect(impact).toHaveBeenCalledTimes(2);
+    for (const [request] of impact.mock.calls) {
+      expect(request.directHit.damage).toBeCloseTo(10 / 2 * (1 + 0.6 + 0.2));
+      expect(request.provenance.portalDamage).toHaveLength(2);
+    }
+    runtime.destroy();
+  });
+
+  it('continues the real remainder after a portal and keeps the jump out of range and trails', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const pair = { id: 'portal', ownerId: 'owner', a: { x: 50, y: 0 }, b: { x: 500, y: 0 },
+      radius: 16, reentryDistance: 48, damageBonus: 0.6, createdAt: 0, expiresAt: 2000 };
+    runtime.setPortalQueryPort({ getPortalPairs: () => [pair], isPortalFriendly: () => true });
+    const id = runtime.spawnProjectile(baseRequest({ remainingRangePx: 150, canReceiveFireImbue: true }))!;
+    const handle = physics.handles.get(id)!;
+    handle.sprite.x = 100;
+    runtime.runHostPortalStage(1000);
+    expect(handle.sprite.x).toBe(550);
+    expect(handle.body.velocity.x).toBe(100);
+    expect(runtime.getTravelSamples().map(s => [s.fromX, s.toX])).toEqual([[0, 34], [484, 550]]);
+    runtime.runHostProjectileStage(10, 1000);
+    expect(runtime.activeCount).toBe(1);
+    handle.sprite.x += 51;
+    runtime.runHostProjectileStage(10, 1010);
+    expect(runtime.activeCount).toBe(0);
+    runtime.destroy();
+  });
+
+  it.each([25, 300, 530])('resolves only real targets on either side of a portal (%s)', targetX => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'portal', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0.6, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+    const impact = configureEnemyImpact(runtime);
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink =>
+      sink('enemy', 'enemy', 'enemy-owner', targetX, 0, 8, targetX - 8, -8, targetX + 8, 8) });
+    const id = runtime.spawnProjectile(baseRequest({ collisionMode: 'sweep' }))!;
+    physics.handles.get(id)!.sprite.x = 100;
+    runtime.runHostPortalStage(1000);
+    runtime.runHostInteractionStage(1000);
+    if (targetX === 300) expect(impact).not.toHaveBeenCalled();
+    else {
+      expect(impact).toHaveBeenCalledOnce();
+      expect(impact.mock.calls[0][0].directHit.damage).toBe(targetX < 50 ? 10 : 16);
+    }
+    runtime.destroy();
+  });
+
   it('charges a bubble before an inner direct hit consumes the projectile, without modifying its payload', () => {
     const { runtime } = createRuntimeHarness();
     const bubble = new TimeBubbleSystem();

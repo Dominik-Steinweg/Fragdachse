@@ -1417,6 +1417,11 @@ export class EnemyManager {
 
   private buildDeltaState(previous: SyncedEnemyState, current: SyncedEnemyState): SyncedEnemyDeltaState | null {
     const delta: SyncedEnemyDeltaState = { id: current.id };
+    if (current.positionRevision !== previous.positionRevision) {
+      delta.positionRevision = current.positionRevision;
+      delta.x = current.x;
+      delta.y = current.y;
+    }
 
     if (current.kind !== previous.kind) {
       delta.kind = current.kind;
@@ -1544,7 +1549,7 @@ export class EnemyManager {
       );
     }
     if (remote.x !== undefined || remote.y !== undefined) {
-      enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y);
+      enemy.setTargetPosition(remote.x ?? enemy.sprite.x, remote.y ?? enemy.sprite.y, remote.positionRevision);
     }
     if (remote.rot !== undefined) {
       enemy.setTargetRotation(remote.rot);

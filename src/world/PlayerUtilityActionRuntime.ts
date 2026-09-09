@@ -88,6 +88,7 @@ interface UtilityHeldActionPort {
 
 export interface PlayerUtilityActionNetworkPort {
   readonly loadout: {
+    publishTranslocatorUseState?: (playerId: string, state: import('../loadout/TranslocatorUseState').TranslocatorUseState | null) => void;
     publishTimeBubbleUtilityState?: (playerId: string, state: TimeBubbleUtilityState | null) => void;
     publishUtilityChargeState?: (playerId: string, utilityId: string, state: UtilityChargeState | null) => void;
     publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
@@ -174,7 +175,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const state = this.timeBubbleUses.get(playerId);
     if (this.destroyed || !this.timeBubblePort || request.effect.type !== 'time_bubble'
       || state?.phase !== 'flying' || state.projectileId !== request.projectileId) return;
-    const bubbleId = this.timeBubblePort.create(request.provenance.allegiance.ownerId, request.x, request.y, request.effect, now);
+    const bubbleId = this.timeBubblePort.create(request.provenance.allegiance.ownerId, request.x, request.y,
+      request.effect, now, request.provenance);
     this.timeBubbleUses.set(playerId, { utilityId: state.utilityId, cooldownDurationMs: state.cooldownDurationMs,
       focusEnabled: state.focusEnabled, temporaryUtilityInstanceId: state.temporaryUtilityInstanceId, phase: 'active', bubbleId });
     this.publishTimeBubbleState(playerId);
@@ -433,6 +435,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       if (previous) return previous;
     }
 
+    if (request.params?.translocatorUseId !== undefined) return this.followupTranslocator(request);
     if (request.params?.timeBubbleCollapseId !== undefined) return this.collapseTimeBubble(request);
     const wireTemporaryId = request.params?.temporaryUtilityInstanceId;
     if (request.source?.kind === 'temporary'
@@ -465,6 +468,12 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
     const utility = source.utility;
     const cfg = utility.config;
+    if (cfg.type === 'translocator') {
+      const state = this.options.translocator?.getUseState(request.playerId);
+      if (state?.phase === 'cooldown' && state.cooldownUntil > request.hostNowMs) return { ok: false, reason: 'cooldown' };
+      if (state?.phase === 'puck' || state?.phase === 'portals') return this.followupTranslocator({ ...request,
+        params: { ...request.params, translocatorUseId: state.useId } });
+    }
     if (cfg.type === 'time_bubble') {
       const reason = this.timeBubbleBlocked(request.playerId, request.hostNowMs);
       if (reason) return { ok: false, reason };
@@ -481,13 +490,15 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const charges = !source.temporary && cfg.charges
       ? this.getChargeStock(request.playerId, cfg, request.hostNowMs) : null;
     if (charges ? !charges.stock.canConsume(request.hostNowMs) || charges.lockoutUntil > request.hostNowMs
-      : cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
+      : cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
       return { ok: false, reason: 'cooldown', ...(charges ? {
         utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
       } : {}) };
     }
 
-    let authoritativeParams = request.params;
+    let authoritativeParams = source.temporary
+      ? { ...request.params, temporaryUtilityInstanceId: source.temporary.instanceId }
+      : request.params;
     if (this.isChargeable(cfg) && !this.isTranslocatorRecall(request.playerId, cfg)) {
       const held = this.options.heldAction.consume(
         request.playerId,
@@ -501,7 +512,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         return { ok: false, reason: 'blocked' };
       }
       authoritativeParams = {
-        ...(request.params ?? {}),
+        ...authoritativeParams,
         utilityChargeFraction: held.chargeFraction,
       };
     } else if (this.isTranslocatorRecall(request.playerId, cfg)) {
@@ -536,14 +547,15 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     else this.decoyCooldowns.set(request.playerId, { utilityId: cfg.id, until: request.hostNowMs + cfg.cooldown });
 
     if (source.temporary) {
-      this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs, cfg.type !== 'time_bubble');
+      this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs,
+        cfg.type !== 'time_bubble' && cfg.type !== 'translocator');
       this.publishTemporaryUtilities(request.playerId);
     } else if (charges) {
       charges.stock.consume(request.hostNowMs);
       charges.lockoutUntil = request.hostNowMs + cfg.charges!.burstLockoutMs;
       charges.lastCommittedAttemptId = request.attemptId;
       this.publishChargeStock(request.playerId, charges, request.hostNowMs);
-    } else if (!cfg.skipCooldownPublish && cfg.type !== 'time_bubble') {
+    } else if (!cfg.skipCooldownPublish && cfg.type !== 'time_bubble' && cfg.type !== 'translocator') {
       utility.recordUse(request.hostNowMs);
       this.options.network.loadout.publishUtilityCooldownUntil(
         request.playerId,
@@ -578,6 +590,23 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       history.delete(oldest);
     }
     this.committedAttempts.set(playerId, history);
+  }
+
+  getTranslocatorMoveSpeedBonus(playerId: string, nowMs: number): number { return this.options.translocator?.getMoveSpeedBonus(playerId, nowMs) ?? 0; }
+  getTranslocatorHpRegen(playerId: string, nowMs: number): number { return this.options.translocator?.getHpRegen(playerId, nowMs) ?? 0; }
+
+  private followupTranslocator(request: PlayerUtilityActionRequest): LoadoutUseResult {
+    const useId = request.params?.translocatorUseId;
+    if (typeof useId !== 'string' || !useId.length || useId.length > 160) return { ok: false, reason: 'invalid' };
+    if (!this.options.actor.canInteract(request.playerId) || !this.options.actor.isAlive(request.playerId)
+      || this.options.actor.isUtilityBlocked(request.playerId)) return { ok: false, reason: 'blocked' };
+    const outcome = this.options.translocator?.followup(request.playerId, useId, request.hostNowMs);
+    if (!outcome || outcome === 'blocked') return { ok: false, reason: 'blocked' };
+    this.options.heldAction.clearPlayer(request.playerId);
+    this.options.decoy?.breakStealth(request.playerId, request.hostNowMs);
+    const result: LoadoutUseResult = { ok: true };
+    if (request.attemptId) this.rememberCommittedAttempt(request.playerId, request.attemptId, result);
+    return result;
   }
 
   private resolveSource(
@@ -646,7 +675,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     switch (cfg.activation.type) {
       case 'charged_throw':
         if (cfg.type === 'translocator') {
-          return this.options.translocator?.handleUse(playerId, angle, targetX, targetY, now, params, cfg as TranslocatorUtilityConfig) ?? false;
+          const outcome = this.options.translocator?.handleUse(playerId, angle, targetX, targetY, now, params, cfg as TranslocatorUtilityConfig);
+          return outcome !== undefined && outcome !== 'blocked';
         }
         return this.throwGrenade(
           cfg as UtilityConfig & { activation: ChargedThrowUtilityActivationConfig },

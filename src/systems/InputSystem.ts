@@ -15,6 +15,7 @@ import { RadialActionMenu } from '../ui/RadialActionMenu';
 import {
   cloneRadialActionRef,
   getTimeBubbleStatusLabel,
+  getTranslocatorStatusLabel,
   isSameRadialActionRef,
   radialActionKey,
   resolveRadialActions,
@@ -424,6 +425,8 @@ export class InputSystem {
   }
 
   getTimeBubbleStatusLabel(): string {
+    const translocator = this.getSelectedTranslocatorState();
+    if (translocator) return getTranslocatorStatusLabel(translocator, this.getCooldownNow());
     const state = this.getSelectedTimeBubbleState();
     return state ? getTimeBubbleStatusLabel(state) : '';
   }
@@ -431,6 +434,12 @@ export class InputSystem {
   isSelectedTimeBubbleBlocked(): boolean {
     const state = this.getSelectedTimeBubbleState();
     return state?.phase === 'flying';
+  }
+
+  getSelectedTranslocatorState(): import('../loadout/TranslocatorUseState').TranslocatorUseState | null {
+    const ref = this.selectedRadialAction;
+    if ((ref?.kind !== 'utility' && ref?.kind !== 'temporary-utility') || ref.utilityId !== 'TRANSLOCATOR') return null;
+    return this.bridge.getPlayerTranslocatorUseState?.(this.bridge.getLocalPlayerId()) ?? null;
   }
 
   private getSelectedRadialActionState(now = this.getCooldownNow()): RadialActionState | null {
@@ -447,6 +456,7 @@ export class InputSystem {
       canManage: this.inputEnabled,
     };
     const actions = resolveRadialActions({
+      translocatorState: this.bridge.getPlayerTranslocatorUseState?.(this.bridge.getLocalPlayerId()),
       timeBubbleState: this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()),
       gameMode: this.bridge.getActiveGameMode(),
       tools: this.getRadialTools(),
@@ -1547,6 +1557,14 @@ export class InputSystem {
         return;
       }
       const bubble = this.getSelectedTimeBubbleState();
+      const translocator = this.getSelectedTranslocatorState();
+      if (translocator && translocator.phase !== 'cooldown') {
+        this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, {
+          ...this.getSelectedUtilityParams(), translocatorUseId: translocator.useId,
+          attemptId: this.createHeldActionId('translocator-followup'),
+        });
+        return;
+      }
       if (bubble?.phase === 'active') {
         this.onLoadoutUse('utility', angle, clampedTarget.x, clampedTarget.y, {
           ...this.getSelectedUtilityParams(), timeBubbleCollapseId: bubble.bubbleId,
@@ -1871,7 +1889,7 @@ export class InputSystem {
     if (cfg.charges && chargeAction?.kind !== 'temporary-utility') {
       this.getLocalUtilityChargeState(chargeAction);
       this.utilityChargePrediction.predict(cfg.id, `utility-attempt:${actionId}`, this.getCooldownNow(), cfg.charges.burstLockoutMs);
-    } else if (cfg.type !== 'time_bubble') {
+    } else if (cfg.type !== 'time_bubble' && cfg.type !== 'translocator') {
       this.predictUtilityCooldown(chargeAction, this.getCooldownNow() + cfg.cooldown);
     }
 
@@ -1928,7 +1946,7 @@ export class InputSystem {
   private predictCurrentUtilityCooldown(): void {
     const config = this.getLocalUtilityConfig?.();
     // A refund can precede the first active-decoy snapshot; prediction would hide it.
-    if (config?.type === 'decoy' || config?.type === 'time_bubble') return;
+    if (config?.type === 'decoy' || config?.type === 'time_bubble' || config?.type === 'translocator') return;
     const cooldown = config?.cooldown ?? 0;
     if (cooldown > 0) this.predictSelectedUtilityCooldown(this.getCooldownNow() + cooldown);
   }

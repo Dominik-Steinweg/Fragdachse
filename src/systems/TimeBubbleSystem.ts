@@ -1,5 +1,6 @@
 import type { SyncedTimeBubble, TimeBubbleEffectConfig } from '../types';
-import { createSingleOwnerProvenance, type ProjectileSpawnRequest } from '../projectile/ProjectileSpawnRequest';
+import { createSingleOwnerProvenance, type ProjectileSpawnRequest, type ProjectileProvenance } from '../projectile/ProjectileSpawnRequest';
+import { portalDamageMultiplier } from './PortalTraversal';
 import { computeRadialDamage } from '../utils/radialDamage';
 import { closestSegmentPoint, meleeCircleContact, type TimeBubbleChargePort, type TimeBubbleRelease } from './TimeBubbleChargePort';
 
@@ -8,6 +9,7 @@ const FADE_OUT_MS = 300;
 const MAX_CATCH_UP_SHOTS = 4;
 
 interface ActiveTimeBubble {
+  provenance: ProjectileProvenance;
   id: number;
   ownerId: string;
   x: number;
@@ -97,7 +99,8 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
     const [bubble] = this.activeBubbles.splice(index, 1);
     const expiresAt = bubble.createdAt + bubble.effect.duration;
     if (!silent && bubble.charge > 0) this.pendingReleases.push(Object.freeze({
-      id, ownerId: bubble.ownerId, x: bubble.x, y: bubble.y, radius: bubble.effect.radius, charge: bubble.charge,
+      id, ownerId: bubble.ownerId, x: bubble.x, y: bubble.y, radius: bubble.effect.radius,
+      charge: bubble.charge * portalDamageMultiplier(bubble.provenance.portalDamage),
     }));
     if (!silent) this.endListener?.(id, Math.min(now, expiresAt));
     return now < expiresAt ? { x: bubble.x, y: bubble.y, radius: bubble.effect.radius } : null;
@@ -119,11 +122,15 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
     y: number,
     effect: TimeBubbleEffectConfig,
     now = Date.now(),
+    provenance?: ProjectileProvenance,
   ): number {
     const id = TimeBubbleSystem.nextId++;
     this.activeBubbles.push({
       id,
       ownerId,
+      provenance: provenance ? structuredClone(provenance) : createSingleOwnerProvenance(ownerId, {
+        weaponSourceId: 'TIME_BUBBLE', sourceSlot: 'utility',
+      }),
       x,
       y,
       effect: structuredClone(effect),
@@ -189,9 +196,7 @@ export class TimeBubbleSystem implements TimeBubbleChargePort {
             expiresAt: bubble.createdAt + bubble.effect.duration,
           },
         },
-        provenance: createSingleOwnerProvenance(bubble.ownerId, {
-          weaponSourceId: 'TIME_BUBBLE', sourceSlot: 'utility',
-        }),
+        provenance: bubble.provenance,
         interaction: { directHit: {
           damage: emitter.damage, slowFraction: emitter.slowFraction, slowDurationMs: emitter.slowDurationMs,
         } },

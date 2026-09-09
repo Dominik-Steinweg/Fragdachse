@@ -5535,51 +5535,176 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "translocator_projectile_speed",
-                                                "code":  "D-U6-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  260,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_translocator",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TRANSLOCATOR.projectileSpeed",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "translocator_bounces",
-                                                "code":  "D-U6-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  2,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  270,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_translocator",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TRANSLOCATOR.maxBounces",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  1
-                                                                }
-                                                            ]
-                                            },
+    "id": "translocator_cooldown",
+    "code": "D-U6-L1",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 260,
+    "requires": [
+        {
+            "upgradeId": "unlock_translocator",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.cooldown",
+            "mode": "add_percent_per_level",
+            "value": -0.2
+        }
+    ]
+},
+{
+    "id": "translocator_phase_boost",
+    "code": "D-U6-L2",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 261,
+    "requires": [
+        {
+            "upgradeId": "translocator_cooldown",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.phaseMoveSpeedBonus",
+            "mode": "add_per_level",
+            "value": 0.1
+        }
+    ]
+},
+{
+    "id": "translocator_phase_regeneration",
+    "code": "D-U6-R1",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 262,
+    "requires": [
+        {
+            "upgradeId": "unlock_translocator",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.phaseHpRegenPerSecond",
+            "mode": "add_per_level",
+            "value": 10
+        }
+    ]
+},
+{
+    "id": "translocator_telefrag_radius",
+    "code": "D-U6-R2",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 263,
+    "requires": [
+        {
+            "upgradeId": "translocator_phase_regeneration",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.telefragRadius",
+            "mode": "add_percent_per_level",
+            "value": 0.2
+        }
+    ]
+},
+{
+    "id": "translocator_portal_pair",
+    "code": "D-U6-C",
+    "kind": "upgrade",
+    "maxLevel": 1,
+    "startingLevel": 0,
+    "costPerLevel": 0,
+    "bossPointCostPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 264,
+    "requires": [
+        {
+            "upgradeId": "translocator_phase_boost",
+            "minLevel": 1
+        },
+        {
+            "upgradeId": "translocator_telefrag_radius",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.portalEnabled",
+            "mode": "add_per_level",
+            "value": 1
+        }
+    ]
+},
+{
+    "id": "translocator_rift_collapse",
+    "code": "D-U6-CL",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 265,
+    "requires": [
+        {
+            "upgradeId": "translocator_portal_pair",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.collapseRadius",
+            "mode": "add_per_level",
+            "value": 50
+        },
+        {
+            "stat": "utility.TRANSLOCATOR.collapseSlowFraction",
+            "mode": "add_per_level",
+            "value": 0.2
+        }
+    ]
+},
+{
+    "id": "translocator_portal_penetration",
+    "code": "D-U6-CR",
+    "kind": "upgrade",
+    "maxLevel": 3,
+    "startingLevel": 0,
+    "costPerLevel": 1,
+    "refundable": true,
+    "sortOrder": 266,
+    "requires": [
+        {
+            "upgradeId": "translocator_portal_pair",
+            "minLevel": 1
+        }
+    ],
+    "effects": [
+        {
+            "stat": "utility.TRANSLOCATOR.portalDamageBonus",
+            "mode": "add_per_level",
+            "value": 0.2
+        }
+    ]
+},
                                             {
                                                 "id":  "unlock_zeus_taser",
                                                 "code":  "D-U9",
@@ -5866,38 +5991,6 @@
                                                                     "stat":  "utility.STINK_CLOUD.afterCloudDamageFactor",
                                                                     "mode":  "add_per_level",
                                                                     "value":  0.5
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "translocator_telefrag",
-                                                "code":  "D-U6-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  285,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "translocator_projectile_speed",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.TRANSLOCATOR.telefragRadius",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  80
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.TRANSLOCATOR.telefragDamage",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  50
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.TRANSLOCATOR.telefragKnockback",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  650
                                                                 }
                                                             ]
                                             },

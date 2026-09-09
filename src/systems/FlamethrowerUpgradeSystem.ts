@@ -13,6 +13,7 @@ import type { BurnOnHitConfig, FireChunkBurstConfig, FireChunkTarget, FireGrenad
 import type { FireSystem } from '../effects/FireSystem';
 import { BURN_TICK_INTERVAL_MS } from '../config';
 import { createSingleOwnerProvenance } from '../projectile/ProjectileSpawnRequest';
+import { portalDamageMultiplier } from './PortalTraversal';
 import type {
   ProjectileEnvironmentInteractionPort,
   ProjectileTravelReadPort,
@@ -100,9 +101,9 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
   }
 
   /** Must run before WorldCombatCore.update so a swept projectile is imbued before a same-frame hit. */
-  prepareProjectileBurns(now: number): void {
+  prepareProjectileBurns(now: number, samples = this.projectileTravel.getTravelSamples()): void {
     const rings = this.getActiveRings();
-    for (const sample of this.projectileTravel.getTravelSamples()) {
+    for (const sample of samples) {
       if (!sample.capabilities.canReceiveFireImbue) continue;
       const ownerId = sample.provenance.allegiance.ownerId;
       const fromX = sample.fromX;
@@ -206,7 +207,8 @@ export class FlamethrowerUpgradeSystem implements FireChunkBurstPort {
     const owner = this.getEquippedFlameOwner(projectile.ownerId);
     if (!owner || (owner.fire.burningGround?.createOnFlameExpiry ?? 0) <= 0) return;
     if ((owner.fire.burningGround?.durationMs ?? 0) <= 0) return;
-    this.refreshGroundAt(projectile.x, projectile.y, owner, now);
+    this.refreshGroundAt(projectile.x, projectile.y, { ...owner, burn: { ...owner.burn,
+      damagePerTick: owner.burn.damagePerTick * portalDamageMultiplier(projectile.provenance.portalDamage) } }, now);
   }
 
   handlePlayerDeath(playerId: string, x: number, y: number): void {

@@ -7,6 +7,7 @@ import { applyCoopDefenseModifiersToUtilityConfig } from '../src/loadout/CoopDef
 import { getCoopDefenseResolvedEffectTotals, getCoopDefenseUpgradeDefinition } from '../src/utils/coopDefenseUpgrades';
 import { validateResolvedUtility } from '../src/loadout/content/LoadoutSchemas';
 import { getUpgradeDescription } from '../src/i18n/upgradePresentation';
+import { scalePortalDamagePayload } from '../src/combat/PortalDamagePayload';
 
 const emitter: TimeBubblePrismEmitterConfig = {
   intervalMs: 80, rotationPeriodMs: 800, speed: 900, size: 3,
@@ -28,6 +29,25 @@ function harness() {
 }
 
 describe('Time Bubble prism emission', () => {
+  it('inherits portal contributions through prism children and release without changing capacity or slow', () => {
+    const { system, spawn } = harness();
+    const portalDamage = [{ pairId: 'first', bonus: 0.6 }];
+    const config = scalePortalDamagePayload(effect({ chargeCapacity: 40 }), 1.6);
+    const released = vi.fn(); system.setReleaseHandler(released);
+    const id = system.hostCreateBubble('owner', 0, 0, config, 1000, {
+      gameplaySourceId: 'owner', attributionId: 'owner', allegiance: { ownerId: 'owner' }, portalDamage,
+    });
+    system.hostUpdate(1000);
+    expect(spawn.mock.lastCall![0]).toMatchObject({ provenance: { portalDamage }, interaction: { directHit: {
+      damage: emitter.damage * 1.6, slowFraction: emitter.slowFraction, slowDurationMs: emitter.slowDurationMs,
+    } } });
+    system.observeProjectile(7, 0, 0, 13, 1001);
+    expect(system.hostUpdate(1001)[0]).toMatchObject({ charge: 13, chargeCapacity: 40 });
+    system.removeBubble(id, 1002); system.flushReleases(1002);
+    expect(released.mock.lastCall![0].charge).toBeCloseTo(13 * 1.6);
+    system.destroyAll();
+  });
+
   it('does not recycle bubble identities when a binding is rebuilt while old requests or shots survive', () => {
     const original = new TimeBubbleSystem();
     const oldId = original.hostCreateBubble('owner', 0, 0, effect(), 1000);

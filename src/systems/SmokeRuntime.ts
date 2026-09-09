@@ -288,6 +288,7 @@ export class SmokeRuntime implements SmokePerceptionPort {
         homing: { ...b.dischargeHoming, targetTypes: ['enemies'], requireLineOfSight: true },
         collisionFilter: { initialTargetProtection: { targetId: String(origin.id), durationMs: b.dischargeHoming.acquireDelayMs } } },
       provenance: { gameplaySourceId: String(s.gameplaySource.id), gameplaySourceKind: s.gameplaySource.kind,
+        portalDamage: s.portalDamage,
         attributionId: s.attribution.id, attributionKind: s.attribution.kind, allegiance: { ...s.allegiance },
         weaponSourceId: 'utility.smoke_discharge', sourceSlot: 'utility', lineage: { smokeCloudId: cloud.id, smokeKind: 'discharge' } },
       interaction: { directHit: { damage: b.dischargeDamage * (cloud.config.sourceDamageMultiplier ?? 1) * (outgoing?.damageMultiplier ?? 1) * criticalMultiplier,

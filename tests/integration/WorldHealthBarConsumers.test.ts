@@ -246,6 +246,31 @@ describe('World HP consumer boundaries', () => {
     }
     player.destroy(); manager.destroy();
   });
+
+  it('snaps confirmed portal transfers and ignores stale position revisions for both actor types', () => {
+    const h = harness(), manager = enemies(h);
+    const player = new PlayerEntity(h.scene, { id: 'p', name: 'P', colorHex: 0x88ff88 } as PlayerProfile,
+      100, 100, true, null, { spawnEffect: false });
+    upsert(manager, { id: 'e1', kind, x: 100, y: 100, rot: 0, hp: 10, maxHp: 20 });
+    const out = createMovementVisualSample();
+    for (const actor of [player, manager.getEnemy('e1')!]) {
+      actor.setTargetPosition(100, 100, 1);
+      actor.readMovementVisualSample(out);
+      const revision = out.revision;
+      // Even a short transfer must not be treated as ordinary interpolation.
+      actor.setTargetPosition(140, 100, 2);
+      actor.lerpStep(0.1); actor.readMovementVisualSample(out);
+      expect(out.x).toBe(140);
+      expect(out.revision).toBeGreaterThan(revision);
+      actor.setTargetPosition(105, 100, 1);
+      actor.lerpStep(0.5); actor.readMovementVisualSample(out);
+      expect(out.x).toBe(140);
+      actor.setTargetPosition(150, 100, 2);
+      actor.lerpStep(0.5); actor.readMovementVisualSample(out);
+      expect(out.x).toBe(145);
+    }
+    player.destroy(); manager.destroy();
+  });
   function projectileFixture() {
     const h = harness(), manager = enemies(h);
     let hostNowMs = 1000;

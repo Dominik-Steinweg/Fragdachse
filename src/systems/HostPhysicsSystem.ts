@@ -189,6 +189,39 @@ export class HostPhysicsSystem {
   setEnemyMovementFactorResolver(resolver: ((enemyId: string, now: number) => number) | null): void { this.enemyMovementFactorResolver = resolver; }
   setEnemyHitStaggerResolver(resolver: ((enemyId: string, now: number) => boolean) | null): void { this.enemyHitStaggerResolver = resolver; }
   setWorldMetrics(metrics: WorldMetrics | null): void { this.worldMetrics = metrics; }
+  /** Landing validation reads the same static bodies that block ordinary movement. */
+  canOccupyCircle(x: number, y: number, radius: number): boolean {
+    const m = this.worldMetrics;
+    if (!m || ![x, y, radius].every(Number.isFinite) || radius < 0
+      || x - radius < m.offsetX || y - radius < m.offsetY || x + radius > m.maxX || y + radius > m.maxY) return false;
+    for (const group of [this.rockGroup, this.trunkGroup, this.baseGroup]) {
+      for (const child of group?.getChildren() ?? []) {
+        const body = (child as Phaser.GameObjects.GameObject & { body?: Phaser.Physics.Arcade.StaticBody }).body;
+        if (!body?.enable) continue;
+        const dx = x - Math.max(body.left, Math.min(x, body.right));
+        const dy = y - Math.max(body.top, Math.min(y, body.bottom));
+        if (dx * dx + dy * dy < radius * radius) return false;
+      }
+    }
+    return true;
+  }
+  /** A position discontinuity preserves dash/impulses but never emits a trail across the jump. */
+  resolvePortalExitMovement(from: {x: number; y: number}, to: {x: number; y: number}, radius: number): {x: number; y: number} {
+    const distance = Math.hypot(to.x - from.x, to.y - from.y);
+    const steps = Math.max(1, Math.ceil(distance / Math.max(1, radius * 0.5)));
+    let safe = from;
+    for (let step = 1; step <= steps; step++) {
+      const point = { x: from.x + (to.x - from.x) * step / steps, y: from.y + (to.y - from.y) * step / steps };
+      if (!this.canOccupyCircle(point.x, point.y, radius)) return safe;
+      safe = point;
+    }
+    return safe;
+  }
+
+  resetMovementOrigin(id: string, x: number, y: number): void {
+    const dash = this.dashStates.get(id);
+    if (dash) { dash.lastGroundX = x; dash.lastGroundY = y; }
+  }
   setMovementBlockedCellResolver(resolver: MovementBlockedCell | null): void {
     this.movementBlockedCellResolver = resolver;
   }

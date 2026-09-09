@@ -477,7 +477,16 @@ export class PlayerEntity {
    * Zielposition für client-seitige Interpolation setzen.
    * Nicht auf dem Host aufrufen – dort gilt setPosition().
    */
-  setTargetPosition(x: number, y: number): void {
+  private remotePositionRevision = -1;
+  setTargetPosition(x: number, y: number, revision?: number): void {
+    if (revision !== undefined) {
+      if (!Number.isSafeInteger(revision) || revision < this.remotePositionRevision) return;
+      if (revision !== this.remotePositionRevision) {
+        this.remotePositionRevision = revision;
+        this.setPosition(x, y);
+        return;
+      }
+    }
     const correction = Math.hypot(x - this.targetX, y - this.targetY);
     if (correction > PLAYER_SIZE * 4) {
       this.movementRevision++;

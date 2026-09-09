@@ -111,7 +111,10 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
     'decoyLifetimeMs', 'stealthDurationMs', 'stealthAlphaMin', 'stealthAlphaMax',
     'stealthGlowOuterStrength', 'wobblePeriodMs', 'dissipateDustBurst',
   ],
-  translocator: [],
+  translocator: ['telefragRadius', 'telefragDamage', 'phaseMoveSpeedBonus', 'phaseMoveDurationMs',
+    'phaseHpRegenPerSecond', 'phaseRegenDurationMs', 'portalEnabled', 'portalRadius', 'portalDurationMs',
+    'portalMinSeparation', 'portalReentryDistance', 'portalDamageBonus', 'collapseRadius',
+    'collapseSlowFraction', 'collapseSlowDurationMs', 'collapsePullDurationMs', 'collapsePullSpeed'],
   placeable_rock: ['placeable'],
   placeable_turret: ['placeable', 'weaponId'],
   placeable_pedestal: ['placeable', 'rewardObjectiveId', 'powerUpDefId'],
@@ -252,6 +255,20 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.type === 'translocator') {
+    for (const key of ['telefragRadius', 'telefragDamage', 'phaseMoveSpeedBonus', 'phaseMoveDurationMs',
+      'phaseHpRegenPerSecond', 'phaseRegenDurationMs', 'portalRadius', 'portalDurationMs', 'portalMinSeparation',
+      'portalReentryDistance', 'portalDamageBonus', 'collapseRadius', 'collapseSlowFraction',
+      'collapseSlowDurationMs', 'collapsePullDurationMs', 'collapsePullSpeed']) {
+      if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || (value[key] as number) < 0)
+        issues.push('$.translocator.' + key + ': nonnegative finite number required');
+    }
+    if (value.portalEnabled !== 0 && value.portalEnabled !== 1) issues.push('$.portalEnabled: zero or one required');
+    if (!(Number(value.portalRadius) > 0) || !(Number(value.portalDurationMs) > 0)
+      || Number(value.portalMinSeparation) < Number(value.portalRadius) * 2
+      || Number(value.portalReentryDistance) <= Number(value.portalRadius)) issues.push('$.translocator: invalid portal geometry or lifetime');
+    if (Number(value.collapseSlowFraction) > 0.95) issues.push('$.collapseSlowFraction: maximum slow is 0.95');
+  }
   if (value.chargeCapacity !== undefined && (value.type !== 'time_bubble' || typeof value.chargeCapacity !== 'number'
     || !Number.isFinite(value.chargeCapacity) || value.chargeCapacity < 0)) {
     issues.push('$.chargeCapacity: TimeBubble capacity must be finite and nonnegative');

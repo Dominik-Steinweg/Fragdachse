@@ -4,6 +4,7 @@ import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import { OBSTACLE_ROCK, OBSTACLE_BASE, type ArenaObstacleIndex } from '../systems/ArenaObstacleIndex';
 import { CombatGeometry } from '../systems/CombatGeometry';
 import { DEPTH } from '../config';
+import { portalCircleEntry } from '../systems/PortalTraversal';
 import type { ProjectilePhysicsContact, ProjectilePhysicsContactTarget } from './ProjectileTargetPort';
 import type { ProjectileId } from './ProjectileSpawnPort';
 
@@ -50,6 +51,7 @@ export interface ProjectileSafeMuzzleGeometry {
 }
 
 export interface ProjectileRockSweepHit {
+  readonly kind?: 'trunk' | 'train' | 'world-boundary';
   readonly rockIndex: number;
   /** Base cells use the same sweep, but retain their base damage identity. */
   readonly baseId?: string;
@@ -75,6 +77,9 @@ export type ProjectilePhysicsContactHandler = (contact: ProjectilePhysicsContact
 export type ProjectileMovementObserver = (id: number, x: number, y: number, vx: number, vy: number) => void;
 
 export interface ProjectilePhysicsBindingPort {
+  setContactFilter?(filter: ((id: number, endX: number, endY: number) => boolean) | null): void;
+  findNearestPortalWorldSweep?(startX: number, startY: number, endX: number, endY: number,
+    halfWidth: number, halfHeight: number, ignoreTrunks: boolean): ProjectileRockSweepHit | null;
   setMovementObserver?(observer: ProjectileMovementObserver | null): void;
   setRockGroup(
     group: Phaser.Physics.Arcade.StaticGroup | null,
@@ -107,6 +112,50 @@ export interface ProjectilePhysicsBindingPort {
  * Contact meaning and lifecycle decisions return to WorldProjectileRuntime as primitive contacts.
  */
 export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
+  private contactFilter: ((id: number, endX: number, endY: number) => boolean) | null = null;
+  setContactFilter(filter: ((id: number, endX: number, endY: number) => boolean) | null): void { this.contactFilter = filter; }
+
+  /** Technical geometry of surfaces which Arcade normally handles before the Scene update. */
+  findNearestPortalWorldSweep(sx: number, sy: number, ex: number, ey: number,
+    hw: number, hh: number, ignoreTrunks: boolean): ProjectileRockSweepHit | null {
+    let best: ProjectileRockSweepHit | null = null;
+    let nearest = Infinity;
+    const dx = ex - sx, dy = ey - sy;
+    const consider = (t: number, nx: number, ny: number, kind: NonNullable<ProjectileRockSweepHit['kind']>) => {
+      if (t < 0 || t > 1 || t >= nearest || dx * nx + dy * ny >= 0) return;
+      nearest = t;
+      best = { rockIndex: -1, kind, x: sx + dx * t, y: sy + dy * t,
+        centerX: sx + dx * t, centerY: sy + dy * t, normalX: nx, normalY: ny };
+    };
+    if (!ignoreTrunks) for (const child of this.trunkGroup?.getChildren() ?? []) {
+      const tree = child as Phaser.GameObjects.Shape;
+      const body = tree.body as Phaser.Physics.Arcade.StaticBody | null;
+      if (!tree.active || !body?.enable) continue;
+      const radius = Math.max(body.halfWidth, body.halfHeight) + Math.max(hw, hh);
+      const cx = body.x + body.halfWidth, cy = body.y + body.halfHeight;
+      const t = portalCircleEntry({ x: sx, y: sy }, { x: ex, y: ey }, { x: cx, y: cy }, radius);
+      if (t !== null) { const x = sx + dx * t - cx, y = sy + dy * t - cy, len = Math.hypot(x, y) || 1;
+        consider(t, x / len, y / len, 'trunk'); }
+    }
+    const train = this.getActiveTrainBounds();
+    if (train && !ignoreTrunks) {
+      const left = train.left - hw, right = train.right + hw, top = train.top - hh, bottom = train.bottom + hh;
+      if (dx) for (const [x, nx] of [[left, -1], [right, 1]]) {
+        const t = (x - sx) / dx, y = sy + t * dy;
+        if (y >= top && y <= bottom) consider(t, nx, 0, 'train');
+      }
+      if (dy) for (const [y, ny] of [[top, -1], [bottom, 1]]) {
+        const t = (y - sy) / dy, x = sx + t * dx;
+        if (x >= left && x <= right) consider(t, 0, ny, 'train');
+      }
+    }
+    const bounds = this.scene.physics.world.bounds;
+    if (dx < 0) consider((bounds.left + hw - sx) / dx, 1, 0, 'world-boundary');
+    if (dx > 0) consider((bounds.right - hw - sx) / dx, -1, 0, 'world-boundary');
+    if (dy < 0) consider((bounds.top + hh - sy) / dy, 0, 1, 'world-boundary');
+    if (dy > 0) consider((bounds.bottom - hh - sy) / dy, 0, -1, 'world-boundary');
+    return best;
+  }
   private movementObserver: ProjectileMovementObserver | null = null;
   private readonly observedHandles = new Map<number, ProjectilePhysicsHandle>();
   private readonly observeStep = (): void => {
@@ -334,6 +383,15 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
       body.onWorldBounds = true;
       if (spec.mechanics.bodyResponse === 'bounce') body.setBounce(1, 1);
       boundsListener = (hitBody) => {
+        if (hitBody === body && this.contactFilter && !this.contactFilter(spec.id,
+          sprite.x + body.prev.x - body.prevFrame.x + body.newVelocity.x,
+          sprite.y + body.prev.y - body.prevFrame.y + body.newVelocity.y)) {
+          // Restore the unbounded technical step; the owner will split it at the portal.
+          body.position.set(body.prev.x + body.newVelocity.x, body.prev.y + body.newVelocity.y);
+          const distance = body.newVelocity.length();
+          if (distance > 0) body.setVelocity(body.newVelocity.x / distance * body.speed, body.newVelocity.y / distance * body.speed);
+          return;
+        }
         if (hitBody === body && spec.mechanics.stopOnWorldBoundary) body.setVelocity(0, 0);
         if (hitBody === body) report({ kind: 'world-boundary' }, 'world-boundary');
       };
@@ -376,7 +434,9 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
         }
       };
       const process = (_projectile: unknown, targetObject: unknown): boolean => (
-        filter?.(targetObject as Phaser.GameObjects.GameObject) ?? true
+        (filter?.(targetObject as Phaser.GameObjects.GameObject) ?? true)
+        && (this.contactFilter?.(spec.id, sprite.x + body.x - body.prevFrame.x,
+          sprite.y + body.y - body.prevFrame.y) ?? true)
       );
       const collider = contactMode === 'overlap'
         ? this.scene.physics.add.overlap(sprite, group, callback, process)
@@ -410,6 +470,7 @@ export class ProjectilePhysicsBinding implements ProjectilePhysicsBindingPort {
   }
 
   releaseWorldState(): void {
+    this.contactFilter = null;
     this.setMovementObserver(null);
     this.observedHandles.clear();
     this.contactHandler = null;

@@ -202,7 +202,18 @@ export class EnemyEntity {
     this.syncBar();
   }
 
-  setTargetPosition(x: number, y: number): void {
+  get positionRevision(): number { return this.movementRevision; }
+
+  private remotePositionRevision = -1;
+  setTargetPosition(x: number, y: number, revision?: number): void {
+    if (revision !== undefined) {
+      if (!Number.isSafeInteger(revision) || revision < this.remotePositionRevision) return;
+      if (revision !== this.remotePositionRevision) {
+        this.remotePositionRevision = revision;
+        this.setPosition(x, y);
+        return;
+      }
+    }
     const correction = Math.hypot(x - this.targetX, y - this.targetY);
     if (correction > this.config.size * 4) {
       this.movementRevision++;
@@ -641,6 +652,7 @@ export class EnemyEntity {
 
   getNetSnapshot(): SyncedEnemyState {
     return {
+      positionRevision: this.movementRevision,
       id: this.id,
       kind: this.kind,
       x: this.sprite.x,

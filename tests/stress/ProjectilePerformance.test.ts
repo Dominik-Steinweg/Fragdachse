@@ -117,6 +117,37 @@ function spawnRequest(runtime: WorldProjectileRuntime, overrides: Parameters<typ
   return id;
 }
 describe('projectile performance paths', () => {
+  it('shares the target snapshot across many simultaneous portal crossings and preserves each real path', () => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const pairs = Array.from({ length: 8 }, (_, index) => ({ id: `pair-${index}`, ownerId: 'shooter',
+      a: { x: 50, y: index * 100 }, b: { x: 500, y: index * 100 },
+      radius: 16, reentryDistance: 48, damageBonus: 0.2, createdAt: 0, expiresAt: 2000 }));
+    runtime.setPortalQueryPort({ getPortalPairs: () => pairs, isPortalFriendly: () => true });
+    let reads = 0;
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      reads++;
+      for (let i = 0; i < 2000; i++) sink('enemy', `enemy-${i}`, 'enemy', i * 10, 10000,
+        8, i * 10 - 8, 9992, i * 10 + 8, 10008);
+    } });
+    const ids = Array.from({ length: 1000 }, (_, index) => {
+      const id = spawnRequest(runtime, { origin: { x: 0, y: index % pairs.length * 100 },
+        flight: { remainingRangePx: 150 }, interaction: { burn: { canReceiveFireImbue: true } } });
+      physics.handles.get(id)!.sprite.x = 100;
+      return id;
+    });
+    runtime.runHostPortalStage(1000);
+    expect(reads).toBe(1);
+    expect(runtime.activeCount).toBe(ids.length);
+    for (const id of ids) expect(physics.handles.get(id)!.sprite.x).toBe(550);
+    const samples = runtime.getTravelSamples();
+    expect(samples).toHaveLength(ids.length * 2);
+    expect(samples.every(sample => sample.toX - sample.fromX <= 100)).toBe(true);
+    expect(samples.filter(sample => sample.fromX > 100)
+      .every(sample => sample.provenance.portalDamage?.length === 1)).toBe(true);
+    runtime.destroy();
+    expect(runtime.getTravelSamples()).toEqual([]);
+  });
+
   it('bounds collision work with 4000 world targets and 1500 active projectiles regardless of provider order', async () => {
     const medians: number[] = [];
     for (const order of ['ascending', 'descending', 'shuffled'] as const) {

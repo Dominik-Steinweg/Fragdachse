@@ -124,6 +124,15 @@ export class ProjectileCollisionProcessor {
   private readonly overlapCandidates: CollisionTargetSlot[] = [];
   private readonly sweepCandidates: SweepCandidate[] = [];
   private targetCount = 0;
+  private batchingTargets = false;
+  private targetsRead = false;
+
+  /** Portal prefixes share one frame view; live targetability is still checked at impact. */
+  withTargetSnapshot(action: () => void): void {
+    this.batchingTargets = true;
+    this.targetsRead = false;
+    try { action(); } finally { this.batchingTargets = false; this.targetsRead = false; }
+  }
 
   private readonly emitTarget = (
     kind: CollisionTargetKind,
@@ -167,7 +176,10 @@ export class ProjectileCollisionProcessor {
     deps: ProjectileCollisionDependencies,
   ): void {
     if (!deps.targetQuery) return;
-    this.readTargets(deps.targetQuery);
+    if (!this.batchingTargets || !this.targetsRead) {
+      this.readTargets(deps.targetQuery);
+      this.targetsRead = true;
+    }
     if (this.targetCount === 0) return;
 
     // PROJECTILE_STAGE_SPAWN_CONTRACT.collisionInteractionSpawns is same-stage: live iteration

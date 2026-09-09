@@ -1,4 +1,6 @@
 import type { MolotovWildfireDeath } from '../types';
+import { acquirePortalDamage, findPortalCrossing, portalCircleEntry, portalDamageMultiplier, type PortalQueryPort } from '../systems/PortalTraversal';
+import { scalePortalDamagePayload } from './PortalDamagePayload';
 import { resolveProjectileExplosionFalloff } from '../utils/radialDamage';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import * as Phaser from 'phaser';
@@ -258,6 +260,13 @@ export interface HitscanTraceResult {
   readonly hitObstacleIndex?: number;
 }
 
+export interface HitscanPathSegment {
+  readonly startX: number;
+  readonly startY: number;
+  readonly trace: HitscanTraceResult;
+  readonly portalDamage?: import('../systems/PortalTraversal').PortalDamageContext;
+}
+
 export interface HitscanTraceOptions {
   readonly shooterId: string;
   readonly startX: number;
@@ -343,6 +352,8 @@ type MeleeSwingTargetCandidate =
   | Omit<Extract<MeleeSwingTarget, { readonly kind: 'decoy' }>, 'distance'>;
 
 export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAttackPort {
+  private portalQuery: PortalQueryPort | null = null;
+  setPortalQueryPort(port: PortalQueryPort | null): void { this.portalQuery = port; }
   private bubbleChargePort: TimeBubbleChargePort | null = null;
 
   setTimeBubbleChargePort(port: TimeBubbleChargePort | null): void {
@@ -1776,6 +1787,21 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
    * Sie entscheidet ausschließlich über Absorption, Reflexion und Übernahme; die Projectile-
    * Mutation bleibt beim Projectile-Owner.
    */
+  getProjectileBarrierContact(request: ProjectileBarrierRequest, startX: number, startY: number): { x: number; y: number; distance: number } | null {
+    let best: { x: number; y: number; distance: number } | null = null;
+    const from = { x: startX, y: startY }, to = { x: request.x, y: request.y };
+    for (const dome of this.energyShieldSystem?.getReflectDomes() ?? []) {
+      if (request.provenance.allegiance.ownerId === dome.ownerId
+        || !this.canDamageTarget(request.provenance.allegiance.ownerId, dome.ownerId, request.allowTeamDamage)) continue;
+      const t = portalCircleEntry(from, to, dome, dome.radius);
+      if (t === null) continue;
+      const x = startX + (request.x - startX) * t, y = startY + (request.y - startY) * t;
+      const distance = Math.hypot(x - startX, y - startY);
+      if (!best || distance < best.distance) best = { x, y, distance };
+    }
+    return best;
+  }
+
   resolveProjectileBarrier(request: ProjectileBarrierRequest): ProjectileBarrierResolution {
     const domes = this.energyShieldSystem?.getReflectDomes();
     if (!domes || domes.length === 0) return { kind: 'passed' };
@@ -1788,7 +1814,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       const dx = request.x - dome.x;
       const dy = request.y - dome.y;
-      if (dx * dx + dy * dy > dome.radius * dome.radius) continue;
+      if (dx * dx + dy * dy > dome.radius * dome.radius + 1e-7) continue;
 
       const blockedDamage = request.damage ?? 0;
       this.energyShieldSystem?.onDomeAbsorb(dome.ownerId, blockedDamage, request.nowMs);
@@ -2514,7 +2540,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   ): boolean {
     if (!this.bridge.isHost()) return false;
 
-    const trace = this.traceHitscan({
+    const segments = this.traceHitscanPath({
       shooterId,
       startX,
       startY,
@@ -2524,8 +2550,11 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       applyFavorTheShooter: true,
       includeShooter: Boolean(supportEffect),
     });
+    for (const [index, segment] of segments.entries()) {
+      const { trace, startX, startY } = segment;
+      const multiplier = portalDamageMultiplier(segment.portalDamage);
     if (this.bubbleChargePort) {
-      let chargeDamage = supportEffect?.damagePerHit ?? damage;
+      let chargeDamage = (supportEffect?.damagePerHit ?? damage) * multiplier;
       if (supportEffect) {
         const healsPlayer = trace.hitPlayerId && this.relationshipForSource(
           this.createLegacyMutationSource(shooterId, sourceId, 'support'), trace.hitPlayerId,
@@ -2549,9 +2578,9 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       visualPreset,
       shooterId,
       shotId,
-      shotAudioKey,
-      visualStartX: visualMuzzleOrigin?.x,
-      visualStartY: visualMuzzleOrigin?.y,
+      shotAudioKey: index === 0 ? shotAudioKey : undefined,
+      visualStartX: index === 0 ? visualMuzzleOrigin?.x : undefined,
+      visualStartY: index === 0 ? visualMuzzleOrigin?.y : undefined,
     });
 
     // Hitscan-Detonation prüfen (z.B. ASMD Primary zündet ASMD Secondary-Ball)
@@ -2561,6 +2590,15 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
         sourceSlot,
       );
     }
+
+    }
+    const final = segments[segments.length - 1];
+    const trace = final.trace;
+    startX = final.startX; startY = final.startY;
+    const damageMultiplier = portalDamageMultiplier(final.portalDamage);
+    damage *= damageMultiplier;
+    burnOnHit = scalePortalDamagePayload(burnOnHit, damageMultiplier);
+    if (supportEffect) supportEffect = { ...supportEffect, damagePerHit: supportEffect.damagePerHit * damageMultiplier };
 
     if (supportEffect) {
       this.resolveHitscanSupportImpact(
@@ -3411,6 +3449,36 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
 
     return { hit, distance: nearestDistance, impactX, impactY };
+  }
+
+  /** Each trace resolves blockers/targets before the next portal. Portal distance is free. */
+  traceHitscanPath(options: HitscanTraceOptions): readonly HitscanPathSegment[] {
+    const segments: HitscanPathSegment[] = [];
+    const visitedPairs = new Set<string>();
+    let from = { x: options.startX, y: options.startY };
+    let range = options.range;
+    let context: import('../systems/PortalTraversal').PortalDamageContext | undefined;
+    const pairs = this.portalQuery?.getPortalPairs() ?? [];
+    while (true) {
+      const trace = this.traceHitscan({ ...options, startX: from.x, startY: from.y, range });
+      const crossing = findPortalCrossing(pairs, from, { x: trace.endX, y: trace.endY }, { excludedPairs: visitedPairs });
+      const distance = crossing ? Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y) : Infinity;
+      const hit = trace.hitObstacle || trace.hitPlayerId !== null || trace.hitEnemyId !== null || trace.hitDecoyId !== null;
+      if (!crossing || (hit && distance >= trace.distance - 1e-8)) {
+        segments.push({ startX: from.x, startY: from.y, trace, portalDamage: context });
+        break;
+      }
+      segments.push({ startX: from.x, startY: from.y, portalDamage: context, trace: {
+        endX: crossing.entry.x, endY: crossing.entry.y, distance,
+        hitPlayerId: null, hitEnemyId: null, hitDecoyId: null, hitObstacle: false,
+      } });
+      visitedPairs.add(crossing.pair.id);
+      context = acquirePortalDamage(context, crossing.pair,
+        this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, options.shooterId));
+      range = Math.max(0, range - distance);
+      from = crossing.exit;
+    }
+    return segments;
   }
 
   traceHitscan(options: HitscanTraceOptions): HitscanTraceResult {

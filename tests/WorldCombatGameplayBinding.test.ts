@@ -85,6 +85,7 @@ function createPlacement(playerManager: PlayerManager): PlacementSystem {
 }
 
 interface TurretFixture {
+  readonly projectileEvents: Record<string, unknown>;
   readonly decoySystem: DecoySystem;
   readonly fireSystem: FireSystem;
   readonly binding: WorldCombatGameplayBinding;
@@ -318,7 +319,7 @@ function createFixture(options: {
     network,
     respawnPlayer: () => true,
   } satisfies WorldCombatGameplayBindingOptions);
-  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileUtility, projectileInteraction, playerLoadout, playerManager, combatSystem, metrics, baseManager, decoySystem, fireSystem };
+  return { binding, hostPhysics, playerCombat, projectileSpawn, projectileUtility, projectileInteraction, projectileEvents, playerLoadout, playerManager, combatSystem, metrics, baseManager, decoySystem, fireSystem };
 }
 
 afterEach(() => {
@@ -326,6 +327,24 @@ afterEach(() => {
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {
+  it('resolves a consumed utility projectile between host frames in a host clock scope', () => {
+    const f = createFixture({ players: [], enemies: [] });
+    let inHostExecution = false;
+    vi.mocked(f.combatSystem.runHostExecution).mockImplementation(work => {
+      inHostExecution = true;
+      try { return work(); } finally { inHostExecution = false; }
+    });
+    vi.mocked(f.combatSystem.getHostTime).mockImplementation(() => {
+      if (!inHostExecution) throw Error('Missing active Host execution context');
+      return 1234;
+    });
+    const callback = vi.mocked(f.projectileEvents.setProjectileResolvedCallback as (...args: any[]) => void).mock.calls[0][0];
+    expect(() => callback({ kind: 'resolved', projectileId: 7 })).not.toThrow();
+    expect(f.playerCombat.utility.onUtilityProjectileResolved).toHaveBeenCalledExactlyOnceWith(7, 1234, false);
+    expect(inHostExecution).toBe(false);
+    f.binding.destroy();
+  });
+
   it.each([false, true])('removes before optional focus (%s), releases once and detaches lifetime callbacks', redirectProjectiles => {
     const f = createFixture({ players: [], enemies: [] });
     const port = vi.mocked(f.playerCombat.utility.setTimeBubblePort!).mock.calls[0][0]!;

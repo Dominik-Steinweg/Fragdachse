@@ -112,6 +112,7 @@ export function composeWorldPlayerGameplay(
         getPlayerInput: (playerId) => bridge.getPlayerInput(playerId),
       },
       presentation: {
+        broadcastPortalCollapse: (pair, radius) => bridge.broadcastPortalCollapse(pair, radius),
         getPlayerColor: (playerId) => bridge.getPlayerColor(playerId),
         broadcastTranslocatorFlash: (x, y, color, phase, ownerId) => bridge.broadcastTranslocatorFlash(x, y, color, phase, ownerId),
         broadcastExplosionEffect: (x, y, radius, color, visualStyle) => bridge.broadcastExplosionEffect(x, y, radius, color, visualStyle),
@@ -121,6 +122,7 @@ export function composeWorldPlayerGameplay(
         broadcastMiniRocketDestructionEffect: (x, y, color) => bridge.broadcastMiniRocketDestructionEffect(x, y, color),
       },
       loadout: {
+        publishTranslocatorUseState: (playerId, state) => bridge.publishTranslocatorUseState(playerId, state),
         publishUtilityChargeState: (playerId, utilityId, state) => bridge.publishUtilityChargeState(playerId, utilityId, state),
         publishTimeBubbleUtilityState: (playerId, state) => bridge.publishTimeBubbleUtilityState(playerId, state),
         publishUtilityCooldownUntil: (playerId, until, utilityId) => bridge.publishUtilityCooldownUntil(playerId, until, utilityId),
@@ -136,6 +138,12 @@ export function composeWorldPlayerGameplay(
     },
   });
   gameplay.player = playerGameplayRuntime;
+  projectileSpawn.setPortalQueryPort(playerGameplayRuntime.getPortalQueryPort());
+  combatSystem.setPortalQueryPort(playerGameplayRuntime.getPortalQueryPort());
+  worldRuntime.bind({ destroy: () => {
+    projectileSpawn.setPortalQueryPort(null);
+    combatSystem.setPortalQueryPort(null);
+  } });
   playerGameplayRuntime.setWorldGeometryQueries(gameplay.geometry?.getQueries() ?? null);
   worldRuntime.bind(playerGameplayRuntime);
   flow.syncHostPlayerModifiers();

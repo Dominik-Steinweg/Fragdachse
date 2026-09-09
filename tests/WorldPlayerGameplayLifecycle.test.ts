@@ -100,6 +100,7 @@ function makeRuntime() {
     },
     translocator: {
       getActivePuckId: vi.fn((playerId: string) => (playerId === 'withPuck' ? 42 : undefined)),
+      clear: vi.fn(),
       removePlayer: vi.fn(),
     },
     heldAction: {
@@ -246,7 +247,8 @@ function makeDestroyRuntime() {
   ].map((name) => [name, vi.fn()]));
   const translocator = {
     setUseCallback: vi.fn(),
-    setRadialImpulseCallback: vi.fn(),
+    clear: vi.fn(),
+    bindWorld: vi.fn(),
     setPositionResetCallback: vi.fn(),
     removePlayer: vi.fn(),
   };
@@ -469,7 +471,7 @@ describe('WorldPlayerGameplayRuntime – Idempotenz-Gate (2A)', () => {
   it('macht spielerbezogenes Held-Action-Remove und Activity-Reset wiederholbar', () => {
     const heldAction = new HostHeldActionSystem();
     const runtime = Object.create(WorldPlayerGameplayRuntime.prototype) as AnyRuntime;
-    runtime.systems = { heldAction };
+    runtime.systems = { heldAction, translocator: { clear: vi.fn() } };
 
     expect(heldAction.start('p1', 'action-p1', 'charged_throw', 100, 0)).toBe(true);
     expect(heldAction.start('p2', 'action-p2', 'charged_throw', 100, 0)).toBe(true);

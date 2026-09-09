@@ -2,6 +2,13 @@ import type { ConfigStatDescriptor } from './CoopDefenseLoadoutModifiers';
 
 /** Explicit contracts for formerly convention-resolved upgrade paths. */
 export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
+  'utility.TRANSLOCATOR.cooldown': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['cooldown'], formula: 'scale' }] },
+  'utility.TRANSLOCATOR.phaseMoveSpeedBonus': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['phaseMoveSpeedBonus'], formula: 'add' }] },
+  'utility.TRANSLOCATOR.phaseHpRegenPerSecond': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['phaseHpRegenPerSecond'], formula: 'add' }] },
+  'utility.TRANSLOCATOR.portalEnabled': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['portalEnabled'], formula: 'add' }] },
+  'utility.TRANSLOCATOR.portalDamageBonus': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['portalDamageBonus'], formula: 'add' }] },
+  'utility.TRANSLOCATOR.collapseRadius': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['collapseRadius'], formula: 'add' }] },
+  'utility.TRANSLOCATOR.collapseSlowFraction': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['collapseSlowFraction'], formula: 'add' }] },
   "ultimate.AIRSTRIKE.carpetDamageFactor": {
     kind: "ultimate",
     itemId: "AIRSTRIKE",
@@ -187,20 +194,10 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "TIME_BUBBLE",
     targets: [{ path: ["focusEnabled"], formula: "add" }],
   },
-  "utility.TRANSLOCATOR.telefragDamage": {
-    kind: "utility",
-    itemId: "TRANSLOCATOR",
-    targets: [{ path: ["telefragDamage"], formula: "add", createIfMissing: true }],
-  },
-  "utility.TRANSLOCATOR.telefragKnockback": {
-    kind: "utility",
-    itemId: "TRANSLOCATOR",
-    targets: [{ path: ["telefragKnockback"], formula: "add", createIfMissing: true }],
-  },
   "utility.TRANSLOCATOR.telefragRadius": {
     kind: "utility",
     itemId: "TRANSLOCATOR",
-    targets: [{ path: ["telefragRadius"], formula: "add", createIfMissing: true }],
+    targets: [{ path: ["telefragRadius"], formula: "scale" }],
   },
   "utility.ZEUS_TASER.chainCount": {
     kind: "utility",

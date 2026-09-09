@@ -372,7 +372,7 @@ export class ClientUpdateCoordinator {
         }
         if (!countdownActive) this.prevAliveStates.set(id, ps.alive);
 
-        player.setTargetPosition(ps.x, ps.y);
+        player.setTargetPosition(ps.x, ps.y, ps.positionRevision);
         if (id !== localId) {
           player.setTargetRotation(dequantizeAngle(ps.rot));
         }

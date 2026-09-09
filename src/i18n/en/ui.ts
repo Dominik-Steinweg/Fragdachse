@@ -1,5 +1,8 @@
 export const enUi = {
   "ui.timeBubble.flying": "In flight",
+  "ui.translocator.puck": "Puck active · E teleports",
+  "ui.translocator.portals": "E closes · Portals",
+  "ui.translocator.cooldown": "Recalibrating",
   "ui.timeBubble.active": "Active · E: Dissolve",
   "ui.timeBubble.focus": "Active · E: Redirect & dissolve",
   "ui.common.empty": "Empty",

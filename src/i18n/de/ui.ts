@@ -1,5 +1,8 @@
 export const deUi = {
   "ui.timeBubble.flying": "Unterwegs",
+  "ui.translocator.puck": "Puck aktiv · E teleportiert",
+  "ui.translocator.portals": "E schließt · Portale",
+  "ui.translocator.cooldown": "Rekalibrierung",
   "ui.timeBubble.active": "Aktiv · E: Auflösen",
   "ui.timeBubble.focus": "Aktiv · E: Umlenken & Auflösen",
   "ui.common.empty": "Leer",

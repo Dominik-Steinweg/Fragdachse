@@ -8,6 +8,7 @@ import type { RendererBundle } from './RendererBundle';
  * selbst folgt getrennt ihrem Handoff.
  */
 export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): void {
+  bundle.translocatorTeleport?.destroy();
   bundle.movement.clear();
   bundle.turretAnimations.clear();
   bundle.burrowGpu.clearAllUnderground();

@@ -13,6 +13,7 @@ type CombatRenderers = Pick<RendererBundle,
   | 'healthBars'
   | 'beer'
   | 'timeBubble'
+  | 'translocatorTeleport'
   | 'blackHole'
   | 'bfg'
   | 'plasmaBurner'
@@ -32,6 +33,7 @@ type CombatRenderers = Pick<RendererBundle,
 >;
 
 export interface ArenaCombatPresentationSourcePort {
+  readonly getPortalPairs: () => readonly import('../../systems/PortalTraversal').PortalPair[];
   readonly getSynchronizedNow: () => number;
   readonly updateVisualFeedback: (delta: number) => void;
   readonly getReinforcementMatrices: () => readonly SyncedReinforcementMatrix[];
@@ -66,6 +68,7 @@ export class ArenaCombatPresentationController {
   sync(frame: ArenaCombatPresentationFrame, diagnosticsFrame: ArenaDiagnosticsFrame | null): void {
     if (this.destroyed) return;
     const now = this.sources.getSynchronizedNow();
+    this.renderers.translocatorTeleport?.syncPortals(this.sources.getPortalPairs(), now);
     this.renderers.beer.update(now, frame.delta);
     this.renderers.timeBubble.update(frame.delta);
     this.renderers.blackHole.update(frame.delta);

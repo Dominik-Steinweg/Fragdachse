@@ -104,6 +104,7 @@ export interface CombatGeometryPort {
 
 /** Explicit legacy damage facts used by migrated world/activity consumers. */
 export interface CombatDamageApplicationOptions {
+  readonly basis?: import('./CombatMutation').CombatDamageBasis;
   readonly allowTeamDamage?: boolean;
   readonly allowCritical?: boolean;
   readonly sourceSlot?: LoadoutSlot;

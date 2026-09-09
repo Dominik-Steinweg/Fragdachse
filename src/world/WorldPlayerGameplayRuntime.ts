@@ -31,7 +31,9 @@ import type { PlayerCapabilities } from './PlayerCapabilities';
 import type { PowerUpSystem } from '../powerups/PowerUpSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { BurrowSystem } from '../systems/BurrowSystem';
-import { TranslocatorSystem } from '../systems/TranslocatorSystem';
+import { TranslocatorSystem, type TranslocatorActor } from '../systems/TranslocatorSystem';
+import type { PortalQueryPort, PortalPair } from '../systems/PortalTraversal';
+import type { CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import { TunnelSystem } from '../systems/TunnelSystem';
 import {
   CoopDefensePlayerModifierSystem,
@@ -113,6 +115,7 @@ export interface WorldPlayerGameplayNetworkPort {
     readonly getPlayerInput: (playerId: string) => PlayerInput | undefined;
   };
   readonly presentation: {
+    readonly broadcastPortalCollapse?: (pair: PortalPair, radius: number) => void;
     readonly getPlayerColor: (playerId: string) => number | undefined;
     readonly broadcastTranslocatorFlash: (
       x: number,
@@ -134,6 +137,7 @@ export interface WorldPlayerGameplayNetworkPort {
     readonly broadcastMiniRocketDestructionEffect: (x: number, y: number, color: number) => void;
   };
   readonly loadout: {
+    readonly publishTranslocatorUseState?: (playerId: string, state: import('../loadout/TranslocatorUseState').TranslocatorUseState | null) => void;
     readonly publishTimeBubbleUtilityState?: (playerId: string, state: import('../loadout/TimeBubbleUtilityState').TimeBubbleUtilityState | null) => void;
     readonly publishUtilityChargeState?: (playerId: string, utilityId: string, state: import('../loadout/UtilityChargeState').UtilityChargeState | null) => void;
     readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;
@@ -380,6 +384,8 @@ export interface WorldPlayerGameplayRuntimeOptions {
   readonly projectileTravelReadPort: ProjectileTravelReadPort;
   readonly projectileEnvironmentInteractionPort: ProjectileEnvironmentInteractionPort;
   readonly combatSystem:
+    & CombatRelationshipQueryPort
+    & { applyEnemySlow(id: string, fraction: number, durationMs: number, now?: number): void }
     & CombatPlayerSupportPort
     & CombatDamageEffectPort
     & CombatActivityPort
@@ -483,11 +489,52 @@ export class WorldPlayerGameplayRuntime implements
       // zusammen; das System bekommt keinen breiteren Netzwerkzugriff als es braucht.
       {
         getPlayerColor: options.network.presentation.getPlayerColor,
+        publishTranslocatorUseState: options.network.loadout.publishTranslocatorUseState,
+        broadcastPortalCollapse: options.network.presentation.broadcastPortalCollapse,
         broadcastTranslocatorFlash: options.network.presentation.broadcastTranslocatorFlash,
         broadcastExplosionEffect: options.network.presentation.broadcastExplosionEffect,
       },
       null,
     );
+    translocator.bindWorld({
+      getActors: () => {
+        const actors: TranslocatorActor[] = options.playerManager.getAllPlayers().map(player => ({
+          id: player.id, kind: 'player', x: player.x, y: player.y, radius: player.getCollisionRadius(),
+          alive: options.combatSystem.isAlive(player.id) && options.getPlayerCapabilities(player.id).canInteract,
+          surface: !burrow.isBurrowed(player.id) && !burrow.isTunnelTransit(player.id), revision: player.positionRevision,
+        }));
+        for (const enemy of options.getEnemyManager()?.getAllEnemies() ?? []) actors.push({
+          id: enemy.id, kind: 'enemy', x: enemy.sprite.x, y: enemy.sprite.y, radius: enemy.getCollisionRadius(),
+          alive: options.combatSystem.isAlive(enemy.id), surface: true, revision: enemy.positionRevision,
+        });
+        return actors;
+      },
+      canOccupy: (actor, x, y) => options.hostPhysics.canOccupyCircle(x, y, actor.radius),
+      resolveExitMovement: (actor, from, to) => options.hostPhysics.resolvePortalExitMovement(from, to, actor.radius),
+      transferActor: (actor, x, y) => {
+        const entity = actor.kind === 'player' ? options.playerManager.getPlayer(actor.id) : options.getEnemyManager()?.getEnemy(actor.id);
+        if (!entity) return;
+        const { x: vx, y: vy } = entity.body.velocity;
+        entity.setPosition(x, y);
+        entity.body.setVelocity(vx, vy);
+        options.hostPhysics.resetMovementOrigin(actor.id, x, y);
+        if (actor.kind === 'player') itemRuntime.resetMovementOrigin(actor.id, x, y);
+      },
+      isFriendly: (owner, id) => {
+        const enemy = options.getEnemyManager()?.getEnemy(id);
+        return enemy ? enemy.faction === 'allied'
+          : Boolean(options.playerManager.getPlayer(id)) && !options.relationship.isEnemyPair(owner, id);
+      },
+      canDamage: (owner, id) => options.combatSystem.canDamageTarget(owner, id, false),
+      collapseEnemy: (actor, center, config, owner, now) => {
+        const dx = center.x - actor.x, dy = center.y - actor.y, distance = Math.hypot(dx, dy);
+        const resistance = options.getEnemyManager()?.getEnemy(actor.id)?.getKnockbackFactor() ?? 1;
+        const speed = Math.min(config.collapsePullSpeed, 3000 * distance / Math.max(1, config.collapsePullDurationMs)) / Math.max(1, resistance);
+        if (distance > 0 && speed > 0) options.hostPhysics.addRecoil(actor.id, dx / distance * speed,
+          dy / distance * speed, config.collapsePullDurationMs, owner);
+        options.combatSystem.applyEnemySlow(actor.id, config.collapseSlowFraction, config.collapseSlowDurationMs, now);
+      },
+    });
     const utilityAction = new PlayerUtilityActionRuntime({
       captureSmokeDamage: (id, now) => {
         const build = playerModifier.getModifiers(id);
@@ -892,6 +939,7 @@ export class WorldPlayerGameplayRuntime implements
       }
     }
 
+    systems.translocator.update(nowMs);
     systems.itemRuntime.hostUpdate(nowMs);
     systems.itemRuntime.updateSurroundedPlayers(
       players,
@@ -937,6 +985,17 @@ export class WorldPlayerGameplayRuntime implements
     if (this.destroyed || countdownActive) return;
     this.systems.flamethrowerUpgrade?.prepareProjectileBurns(nowMs);
     this.systems.weaponUpgrade?.hostUpdate(nowMs);
+  }
+
+  preparePortalTravel(sample: import('../projectile/ProjectileTravelPort').ProjectileTravelSample, nowMs: number): void {
+    if (!this.destroyed) this.systems.flamethrowerUpgrade?.prepareProjectileBurns(nowMs, [sample]);
+  }
+
+  getPortalQueryPort(): PortalQueryPort { return this.systems.translocator; }
+  runHostPortalStage(nowMs: number): void {
+    if (this.destroyed) return;
+    this.systems.translocator.update(nowMs);
+    this.systems.translocator.transferActors(nowMs);
   }
 
   runHostPostProjectileStage(
@@ -1175,6 +1234,7 @@ export class WorldPlayerGameplayRuntime implements
    */
   invalidateHeldActionsOnActivityEnd(): void {
     this.systems.heldAction.reset();
+    this.systems.translocator.clear();
   }
 
   /** Host-authoritative Phase-6A Player Action entry point for Weapon1/Weapon2. */
@@ -1422,7 +1482,8 @@ export class WorldPlayerGameplayRuntime implements
     systems.ak47StrategicTarget?.clear();
     systems.tunnel.clear();
     systems.translocator.setUseCallback(null);
-    systems.translocator.setRadialImpulseCallback(null);
+    systems.translocator.clear();
+    systems.translocator.bindWorld(null);
     systems.translocator.setPositionResetCallback(null);
     for (const player of this.options.playerManager.getAllPlayers()) {
       systems.utilityAction.removePlayer(player.id);
@@ -1498,9 +1559,6 @@ export class WorldPlayerGameplayRuntime implements
     });
     loadout.setUltimateModifierReadPort(this.systems.ultimateBehavior);
     translocator.setUseCallback((playerId) => this.options.dropBeer(playerId));
-    translocator.setRadialImpulseCallback((x, y, radius, knockback, ownerId) => {
-      this.options.hostPhysics.applyRadialImpulse(x, y, radius, knockback, ownerId, 0);
-    });
     translocator.setPositionResetCallback((playerId, x, y) => this.options.resetPlayerPosition(playerId, x, y));
     tunnel.setTunnelEnterCallback((playerId, x, y) => {
       this.options.dropBeer(playerId, x, y);

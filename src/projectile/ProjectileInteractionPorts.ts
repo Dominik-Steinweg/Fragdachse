@@ -79,5 +79,6 @@ export type ProjectileBarrierResolution =
  * seinen Zustand.
  */
 export interface ProjectileBarrierPort {
+  getNearestContact?(request: ProjectileBarrierRequest, startX: number, startY: number): { x: number; y: number; distance: number } | null;
   resolveBarrier(request: ProjectileBarrierRequest): ProjectileBarrierResolution;
 }

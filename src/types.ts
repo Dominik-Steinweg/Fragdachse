@@ -218,6 +218,8 @@ export interface SyncedActiveHudBuff {
 
 /** Spieler-Netzwerkzustand: Position + HP + Lebend-Status + Ressourcen + Mechaniken */
 export interface PlayerNetState {
+  /** Discontinuous movement revision; repeated until acknowledged by ordinary snapshots. */
+  positionRevision?: number;
   x:          number;
   y:          number;
   rot:        number;   // Blickrichtung quantisiert als uint8 (0-255 → 0-2π)
@@ -981,6 +983,8 @@ export interface LoadoutCommitSnapshot {
 export interface LoadoutUseParams {
   /** Explicit secondary action; a stale request must never turn into a new throw. */
   timeBubbleCollapseId?: number;
+  /** Identity of the host-owned translocator use, including depleted temporary sources. */
+  translocatorUseId?: string;
   /** Separate request/attempt identity for duplicate-safe action commits. */
   attemptId?: string;
   /** Activity-Identity fuer PB-Mutationen; fehlt bewusst in einer Activity-losen World. */
@@ -1825,6 +1829,7 @@ export interface SyncedBaseTurretState {
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
+  positionRevision?: number;
   id:     string;
   kind:   import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;
   x:      number;
@@ -1853,6 +1858,7 @@ export interface SyncedEnemyState {
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
+  positionRevision?: number;
   id:     string;
   kind?:  import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;
   x?:     number;

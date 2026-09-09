@@ -24,6 +24,7 @@ const FLAG_MOLOTOV_FIREWALKER = 256;
 
 /** Kompakte Wire-Form eines Spielers. Schlüssel bewusst kurz; optionale Felder fehlen bei Default. */
 interface CompactPlayerState {
+  pr?: number;
   x: number;
   y: number;
   r: number;   // rot (uint8)
@@ -62,6 +63,7 @@ function encodePlayerState(state: PlayerNetState): CompactPlayerState {
   if (state.isMolotovFirewalkerActive === true) flags |= FLAG_MOLOTOV_FIREWALKER;
 
   const compact: CompactPlayerState = {
+    pr: state.positionRevision,
     x: state.x,
     y: state.y,
     r: state.rot,
@@ -102,6 +104,7 @@ function decodePlayerState(compact: CompactPlayerState): PlayerNetState {
 
   return {
     x: compact.x,
+    ...(compact.pr === undefined ? {} : { positionRevision: compact.pr }),
     y: compact.y,
     rot: compact.r,
     hp: compact.h,

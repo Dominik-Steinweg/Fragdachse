@@ -41,6 +41,7 @@ export function adaptProjectileCombatSource(
       id: provenance.attributionId,
     },
     allegiance: { ...provenance.allegiance },
+    ...(provenance.portalDamage ? { portalDamage: provenance.portalDamage } : {}),
     authoredSourceId: provenance.weaponSourceId,
     sourceSlot: provenance.sourceSlot,
     origin: 'direct',

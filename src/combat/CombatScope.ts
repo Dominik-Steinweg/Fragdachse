@@ -71,6 +71,7 @@ export interface CombatSourceCorrelation {
 
 /** Immutable source facts retained even when the originating entity has despawned. */
 export interface CombatSource {
+  readonly portalDamage?: import('../systems/PortalTraversal').PortalDamageContext;
   readonly gameplaySource: CombatSourceEntityRef;
   readonly actor?: CombatSourceEntityRef;
   readonly attribution: CombatAttributionRef;

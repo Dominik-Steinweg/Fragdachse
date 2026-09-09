@@ -1,4 +1,7 @@
 import { scalePrimaryHitRewardIntent } from '../combat/PrimaryHitReward';
+import { scalePortalDamagePayload } from '../combat/PortalDamagePayload';
+import { acquirePortalDamage, findPortalCrossing, gatePortalExit, portalCircleEntry, portalDamageMultiplier, releasePortalGates,
+  type PortalQueryPort } from '../systems/PortalTraversal';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import { createGrenadeFragments, isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import { ProjectilePathRecorder } from './ProjectileFlightPath';
@@ -1488,16 +1491,38 @@ export class WorldProjectileRuntime implements
     return { ...target, detonatorOwnerId };
   }
 
+  private readonly portalDetonations: ProjectileDetonationOutcome[] = [];
+
   detonateOverlappingProjectiles(): readonly ProjectileDetonationOutcome[] {
+    const outcomes = this.portalDetonations.splice(0);
+    return outcomes.concat(this.resolveProjectileDetonations(this.projectiles.activeRecords));
+  }
+
+  private resolveProjectileDetonations(records: Iterable<ProjectileRuntimeRecord>): ProjectileDetonationOutcome[] {
     if (this.destroyed) return [];
     const outcomes: ProjectileDetonationOutcome[] = [];
-    for (const detonator of this.projectiles.activeRecords) {
+    for (const detonator of records) {
       if (!this.detonatorIds.has(detonator.id)) continue;
       for (const target of this.projectiles.activeRecords) {
         if (target.id === detonator.id || !this.detonableIds.has(target.id) || !target.spec.interaction.detonable) continue;
         if (!detonator.spec.interaction.detonator?.triggerTags.includes(target.spec.interaction.detonable.tag)) continue;
         if (!target.spec.interaction.detonable.allowCrossTeam && target.provenance.allegiance.ownerId !== detonator.provenance.allegiance.ownerId) continue;
-        if (!boundsOverlap(detonator.physics.sprite.getBounds(), target.physics.sprite.getBounds())) continue;
+        if (!boundsOverlap(detonator.physics.sprite.getBounds(), target.physics.sprite.getBounds())) {
+          const segments = [...(detonator.portalTravel ?? []), { fromX: detonator.lastX, fromY: detonator.lastY,
+            toX: detonator.physics.sprite.x, toY: detonator.physics.sprite.y }];
+          const radius = (detonator.physics.sprite.displayWidth + target.physics.sprite.displayWidth) * 0.5;
+          const intersects = segments.some(segment => {
+            const from = { x: segment.fromX, y: segment.fromY }, to = { x: segment.toX, y: segment.toY };
+            const t = portalCircleEntry(from, to, target.physics.sprite, radius);
+            if (t === null) return false;
+            const x = from.x + (to.x - from.x) * t, y = from.y + (to.y - from.y) * t;
+            const distance = Math.hypot(x - from.x, y - from.y);
+            const blocker = this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y, x, y,
+              detonator.spec.flight.penetration.penetratesRocks === true);
+            return blocker == null || blocker > distance;
+          });
+          if (!intersects) continue;
+        }
         const result = this.detonateProjectile(target.id, detonator.provenance.allegiance.ownerId);
         if (result) outcomes.push(result);
       }
@@ -1550,6 +1575,7 @@ export class WorldProjectileRuntime implements
       if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record) || !record.physics.sprite.active) continue;
 
       const pathEffect = createTravelPathEffect(record);
+      if (record.portalTravel) this.travelSamples.push(...record.portalTravel);
       this.travelSamples.push({
         projectileId: record.id,
         fromX: record.lastX,
@@ -1572,11 +1598,13 @@ export class WorldProjectileRuntime implements
     if (!record || record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return false;
     if (!record.spec.interaction.burn.canReceiveFireImbue || record.spec.flight.isGrenade || record.spec.flight.isFlame) return false;
 
+    const burn = scalePortalDamagePayload(augment.burn, portalDamageMultiplier(record.provenance.portalDamage));
     const current = record.interaction.burnAugment;
-    if (current && burnDps(augment.burn) <= burnDps(current.burn)) return false;
+    if (current && burnDps(burn) <= burnDps(current.burn)) return false;
     record.interaction.burnAugment = {
-      burn: { ...augment.burn },
-      provenance: this.resolveProvenance?.(augment.provenance) ?? augment.provenance,
+      burn,
+      provenance: { ...(this.resolveProvenance?.(augment.provenance) ?? augment.provenance),
+        portalDamage: record.provenance.portalDamage },
     };
     return true;
   }
@@ -1635,7 +1663,10 @@ export class WorldProjectileRuntime implements
     this.captureDebugFlightSteps('after-flight');
     if (this.destroyed) return emptyHostStageResult();
     this.runMiniRocketStateStage();
-    for (const record of this.projectiles.activeRecords) this.recordFlightPosition(record, nowMs);
+    for (const record of this.projectiles.activeRecords) {
+      this.recordFlightPosition(record, nowMs);
+      record.portalTravel = undefined;
+    }
     this.presentation.syncHostRenderers(this.presentationProjectiles);
     return stage;
   }
@@ -1693,6 +1724,135 @@ export class WorldProjectileRuntime implements
   setProjectileTimeFieldPort(port: ProjectileTimeFieldPort | null): void {
     this.projectileTimeFieldPort = port;
     this.flightProcessor.setTimeFieldPort(port);
+  }
+
+  private portalQuery: PortalQueryPort | null = null;
+
+  setPortalQueryPort(port: PortalQueryPort | null): void {
+    this.portalQuery = port;
+    this.physicsBinding.setContactFilter?.(port ? (id, x, y) => {
+      const record = this.projectiles.getById(id);
+      if (!record || record.pendingDestroy) return true;
+      const from = { x: record.lastX, y: record.lastY };
+      const crossing = findPortalCrossing(port.getPortalPairs(), from, { x, y }, { gates: record.portalGates });
+      if (!crossing) return true;
+      const distance = Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y);
+      if (record.remainingRangePx !== undefined && distance >= record.remainingRangePx) return true;
+      const blocker = this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y,
+        crossing.entry.x, crossing.entry.y, record.spec.flight.penetration.penetratesRocks === true);
+      if (blocker != null && blocker <= distance) return true;
+      if (!record.spec.flight.penetration.penetratesRocks && this.physicsBinding.findNearestRockSweep(
+        from.x, from.y, crossing.entry.x, crossing.entry.y,
+        record.spec.flight.collisionFilter.ignoreRockIndex, record.physics.body.halfWidth,
+        record.physics.body.halfHeight, record.id, !record.spec.flight.collisionFilter.ignoreBaseCollisions)) return true;
+      return this.physicsBinding.findNearestPortalWorldSweep?.(from.x, from.y,
+        crossing.entry.x, crossing.entry.y, record.physics.body.halfWidth, record.physics.body.halfHeight,
+        shouldPassThroughWorldTarget(record)) != null;
+    } : null);
+  }
+
+  private resolvePortalWorldContact(record: ProjectileRuntimeRecord,
+    hit: import('./ProjectilePhysicsBinding').ProjectileRockSweepHit, nowMs: number): void {
+    const body = record.physics.body;
+    const vx = body.velocity.x, vy = body.velocity.y;
+    body.reset(hit.x, hit.y); body.setVelocity(vx, vy);
+    this.collisionProcessor.run([record], nowMs, this.collisionDependencies);
+    if (record.pendingDestroy || !this.projectiles.activeRecords.has(record)) return;
+    const dot = vx * hit.normalX + vy * hit.normalY;
+    body.reset(hit.x + hit.normalX * 0.01, hit.y + hit.normalY * 0.01);
+    body.setVelocity(vx - 2 * dot * hit.normalX, vy - 2 * dot * hit.normalY);
+    this.reportPhysicsContact({ projectileId: record.id,
+      target: hit.kind === 'train' ? { kind: 'train', id: 'main' } : { kind: hit.kind! },
+      x: hit.x, y: hit.y, flightPosition: { x: record.physics.sprite.x, y: record.physics.sprite.y },
+      velocityX: body.velocity.x, velocityY: body.velocity.y,
+      source: hit.kind === 'world-boundary' ? 'world-boundary' : 'physics-collider' });
+    if (record.spec.flight.isGrenade && record.maxBounces === 0) body.setVelocity(0, 0);
+  }
+
+  /** Resolve real prefixes before any travel consumer sees the post-Physics movement. */
+  runHostPortalStage(nowMs: number, prepareTravel?: (sample: ProjectileTravelSample) => void): void {
+    this.collisionProcessor.withTargetSnapshot(() => this.resolveHostPortals(nowMs, prepareTravel));
+  }
+
+  private resolveHostPortals(nowMs: number, prepareTravel?: (sample: ProjectileTravelSample) => void): void {
+    if (this.destroyed) return;
+    const pairs = this.portalQuery?.getPortalPairs();
+    if (!pairs?.length) return;
+    this.setHostFrameTime(nowMs);
+    for (const record of this.projectiles.activeRecords) {
+      if (record.pendingDestroy || record.pendingExplosion || record.miniRocket.deferredExplosion) continue;
+      const gates = record.portalGates ??= new Map();
+      let from = { x: record.lastX, y: record.lastY };
+      let end = { x: record.physics.sprite.x, y: record.physics.sprite.y };
+      releasePortalGates(gates, from);
+      const zeroProgress = new Set<string>();
+      while (!record.pendingDestroy && this.projectiles.activeRecords.has(record)) {
+        const crossing = findPortalCrossing(pairs, from, end, { gates, excludedEndpoints: zeroProgress });
+        const worldHit = record.portalFlightPending ? this.physicsBinding.findNearestPortalWorldSweep?.(
+          from.x, from.y, end.x, end.y, record.physics.body.halfWidth, record.physics.body.halfHeight,
+          shouldPassThroughWorldTarget(record)) : null;
+        if (worldHit && (!crossing || Math.hypot(worldHit.x - from.x, worldHit.y - from.y)
+          <= Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y))) {
+          this.resolvePortalWorldContact(record, worldHit, nowMs);
+          break;
+        }
+        if (!crossing) break;
+        const prefixLength = Math.hypot(crossing.entry.x - from.x, crossing.entry.y - from.y);
+        if (record.remainingRangePx !== undefined && prefixLength >= record.remainingRangePx) break;
+        const blocker = this.worldBlockerPort?.getNearestBlockerDistance(from.x, from.y,
+          crossing.entry.x, crossing.entry.y, record.spec.flight.penetration.penetratesRocks === true);
+        if (blocker != null && blocker <= prefixLength) break;
+        if (this.shouldSweepRocks(record) && this.physicsBinding.findNearestRockSweep(from.x, from.y,
+          crossing.entry.x, crossing.entry.y, record.spec.flight.collisionFilter.ignoreRockIndex,
+          record.physics.body.halfWidth, record.physics.body.halfHeight, record.id,
+          !record.spec.flight.collisionFilter.ignoreBaseCollisions)) break;
+        const velocity = { x: record.physics.body.velocity.x, y: record.physics.body.velocity.y };
+        record.physics.body.reset(crossing.entry.x, crossing.entry.y);
+        record.physics.body.setVelocity(velocity.x, velocity.y);
+        const sample: ProjectileTravelSample = { projectileId: record.id,
+          fromX: from.x, fromY: from.y, toX: crossing.entry.x, toY: crossing.entry.y,
+          provenance: record.provenance, capabilities: {
+            canReceiveFireImbue: record.spec.interaction.burn.canReceiveFireImbue === true
+              && !record.spec.flight.isGrenade && !record.spec.flight.isFlame,
+            pathEffect: createTravelPathEffect(record),
+          } };
+        (record.portalTravel ??= []).push(sample);
+        prepareTravel?.(sample);
+        this.portalDetonations.push(...this.resolveProjectileDetonations([record]));
+        this.runBarrierStage(nowMs, [record]);
+        if (record.pendingDestroy || !this.projectiles.activeRecords.has(record)) break;
+        this.collisionProcessor.run([record], nowMs, this.collisionDependencies);
+        if (record.pendingDestroy || !this.projectiles.activeRecords.has(record)) break;
+        if (this.shouldSweepRocks(record)) this.sweepRocks(record);
+        if (record.pendingDestroy || record.bounceProcessedThisStep
+          || record.physics.body.velocity.x !== velocity.x || record.physics.body.velocity.y !== velocity.y) break;
+        if (record.remainingRangePx !== undefined) record.remainingRangePx -= prefixLength;
+        this.flightPaths.redirect(record.id, crossing.entry.x, crossing.entry.y, velocity.x, velocity.y, nowMs, false);
+        this.flightPaths.redirect(record.id, crossing.exit.x, crossing.exit.y, velocity.x, velocity.y, nowMs, true);
+        const context = acquirePortalDamage(record.provenance.portalDamage, crossing.pair,
+          this.portalQuery!.isPortalFriendly(crossing.pair.ownerId, record.provenance.allegiance.ownerId));
+        const ratio = portalDamageMultiplier(context) / portalDamageMultiplier(record.provenance.portalDamage);
+        if (ratio !== 1) {
+          record.damage *= ratio;
+          record.spec = { ...record.spec, interaction: scalePortalDamagePayload(record.spec.interaction, ratio) };
+          record.interaction = { ...record.interaction,
+            explosion: scalePortalDamagePayload(record.interaction.explosion, ratio),
+            burnAugment: record.interaction.burnAugment ? { ...record.interaction.burnAugment,
+              burn: scalePortalDamagePayload(record.interaction.burnAugment.burn, ratio) } : undefined };
+          record.provenance = { ...record.provenance, portalDamage: context };
+        }
+        if (prefixLength > 1e-6) zeroProgress.clear();
+        zeroProgress.add(crossing.sourceKey);
+        gatePortalExit(gates, crossing);
+        end = { x: crossing.exit.x + end.x - crossing.entry.x, y: crossing.exit.y + end.y - crossing.entry.y };
+        from = crossing.exit;
+        record.lastX = from.x; record.lastY = from.y;
+        record.physics.body.reset(end.x, end.y);
+        record.physics.body.setVelocity(velocity.x, velocity.y);
+        record.portalFlightPending = true;
+        releasePortalGates(gates, from);
+      }
+    }
   }
 
   private bubbleChargePort: Pick<TimeBubbleChargePort, 'observeProjectile'> | null = null;
@@ -1890,17 +2050,17 @@ export class WorldProjectileRuntime implements
    * Die Entscheidung trifft der Barrier-Owner hinter dem Port; Absorption und Reflexion mutieren
    * das Projectile ausschließlich hier.
    */
-  private runBarrierStage(nowMs: number): void {
+  private runBarrierStage(nowMs: number, records: Iterable<ProjectileRuntimeRecord> = this.projectiles.activeRecords): void {
     const port = this.barrierPort;
     if (!port) return;
-    for (const record of this.projectiles.activeRecords) {
+    for (const record of records) {
       if (record.pendingDestroy) continue;
       // Geworfene Utilities passieren; nur übernehmbare Wurfgeschosse hält die Barriere auf.
       const capturable = record.spec.interaction.grenadeEffect?.type === 'spawn_enemy';
       if (record.spec.flight.isGrenade && !capturable) continue;
       if (record.miniRocket.deferredExplosion || record.miniRocket.spent) continue;
 
-      const resolution = port.resolveBarrier({
+      const request = {
         projectileId: record.id,
         provenance: record.provenance,
         x: record.physics.sprite.x,
@@ -1912,7 +2072,25 @@ export class WorldProjectileRuntime implements
         allowTeamDamage: record.provenance.allegiance.allowTeamDamage === true,
         damage: record.damage,
         nowMs,
-      });
+      };
+      const contact = port.getNearestContact?.(request, record.lastX, record.lastY);
+      if (port.getNearestContact && !contact) continue;
+      if (contact) {
+        const blocker = this.worldBlockerPort?.getNearestBlockerDistance(record.lastX, record.lastY,
+          contact.x, contact.y, record.spec.flight.penetration.penetratesRocks === true);
+        if (blocker != null && blocker <= contact.distance) continue;
+        record.physics.body.reset(contact.x, contact.y);
+        record.physics.body.setVelocity(request.velocityX, request.velocityY);
+        this.collisionProcessor.run([record], nowMs, this.collisionDependencies);
+        if (record.pendingDestroy || !this.projectiles.activeRecords.has(record)) continue;
+        if (record.bounceProcessedThisStep || record.physics.body.velocity.x !== request.velocityX
+          || record.physics.body.velocity.y !== request.velocityY) continue;
+      }
+      const resolution = port.resolveBarrier(contact ? { ...request, x: contact.x, y: contact.y } : request);
+      if (resolution.kind === 'passed' && contact) {
+        record.physics.body.reset(request.x, request.y);
+        record.physics.body.setVelocity(request.velocityX, request.velocityY);
+      }
       if (resolution.kind === 'passed') continue;
       this.applyBarrierResolution(record, resolution, nowMs);
     }
@@ -2207,6 +2385,7 @@ export class WorldProjectileRuntime implements
 
   /** World-Teardown: kein Record, kein Identity-Eintrag und kein Restzustand überlebt ihn. */
   destroy(): void {
+    this.portalQuery = null;
     this.bubbleChargePort = null;
     this.pendingGrenadeFragments.clear();
     if (this.destroyed) return;
@@ -2246,6 +2425,7 @@ export class WorldProjectileRuntime implements
     this.miniRocketStatePort = null;
     this.projectileImpactEventCallback = null;
     this.naturalFlameExpiryCallback = null;
+    this.portalDetonations.length = 0;
     this.projectileResolvedCallback = null;
     this.miniRocketDestroyedCallback = null;
     this.standaloneExplosionRequestCallback = null;
@@ -2525,7 +2705,8 @@ export class WorldProjectileRuntime implements
       this.flightPaths.append(record.id, contact.x, contact.y, record.physics.body.velocity.x, record.physics.body.velocity.y, nowMs);
     } else {
       this.flightContactPoints.delete(record.id);
-      if (!this.flightPaths.commitThrough(record.id, record.physics.sprite.x, record.physics.sprite.y)) return;
+      if (!record.portalFlightPending && !this.flightPaths.commitThrough(record.id, record.physics.sprite.x, record.physics.sprite.y)) return;
+      record.portalFlightPending = false;
       this.flightPaths.append(record.id, record.physics.sprite.x, record.physics.sprite.y,
         record.physics.body.velocity.x, record.physics.body.velocity.y, nowMs);
     }

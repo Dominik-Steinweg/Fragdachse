@@ -543,6 +543,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     combat.setPlayerHpRegenPerSecondResolver((playerId, nowMs) => {
       const p = o.getPlayerCombatIntegration();
       return (p?.modifier.getHpRegenPerSecond(playerId) ?? 0)
+        + (p?.utility.getTranslocatorHpRegen?.(playerId, nowMs) ?? 0)
         + o.decoySystem.getStealthHpRegen(playerId)
         + (o.getTeamHpRegenBonus?.(playerId, nowMs) ?? 0);
     });
@@ -835,7 +836,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }, now);
     });
     if (o.projectileUtility) o.getPlayerCombatIntegration()?.utility.setTimeBubblePort?.({
-      create: (ownerId, x, y, effect, now) => timeBubble.hostCreateBubble(ownerId, x, y, effect, now),
+      create: (ownerId, x, y, effect, now, provenance) => timeBubble.hostCreateBubble(ownerId, x, y, effect, now, provenance),
       collapse: (id, request) => {
         const circle = timeBubble.removeBubble(id, request.nowMs);
         if (!circle) { timeBubble.flushReleases(request.nowMs); return false; }
@@ -911,7 +912,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       return (p?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED)
         * (p?.item.getRunSpeedMultiplier(playerId, Date.now()) ?? 1);
     });
-    hostPhysics.setWalkingSpeedMultiplierResolver(playerId => o.decoySystem.getStealthSpeedMultiplier(playerId));
+    hostPhysics.setWalkingSpeedMultiplierResolver(playerId => o.decoySystem.getStealthSpeedMultiplier(playerId)
+      * (1 + (o.getPlayerCombatIntegration()?.utility.getTranslocatorMoveSpeedBonus?.(playerId, Date.now()) ?? 0)));
     hostPhysics.setDashRangeMultiplierResolver((playerId) => 1 + (o.getPlayerCombatIntegration()?.modifier.getPercentageStat(playerId, 'player.dashRange') ?? 0));
     hostPhysics.setDashRecoveryDurationResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S);
     hostPhysics.setDashImpactDamageResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashImpactDamage', 0) ?? 0);
@@ -960,10 +962,14 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
   private bindProjectiles(): void {
     const o = this.options;
     o.projectileEvents.setProjectileResolvedCallback((outcome: ProjectileLifecycleOutcome) => {
-      const player = o.getPlayerCombatIntegration();
-      player?.utility.onUtilityProjectileResolved?.(outcome.projectileId, o.combatSystem.getHostTime(),
-        outcome.kind === 'resolved' && outcome.grenadePayloadPending === true);
-      player?.reactions.resolveProjectile(outcome);
+      // A utility action can consume its puck between simulation frames. Its lifecycle
+      // callbacks need the same host clock scope as projectile resolution during a frame.
+      o.combatSystem.runHostExecution(() => {
+        const player = o.getPlayerCombatIntegration();
+        player?.utility.onUtilityProjectileResolved?.(outcome.projectileId, o.combatSystem.getHostTime(),
+          outcome.kind === 'resolved' && outcome.grenadePayloadPending === true);
+        player?.reactions.resolveProjectile(outcome);
+      });
     });
     o.projectileInteraction.setProjectileMiniRocketStatePort({
       getOwnerPosition: (ownerId) => {
@@ -1161,6 +1167,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       ),
     });
     o.projectileInteraction.setProjectileBarrierPort({
+      getNearestContact: (request, startX, startY) => o.combatSystem.getProjectileBarrierContact(request, startX, startY),
       resolveBarrier: (request) => o.combatSystem.resolveProjectileBarrier(request),
     });
     o.projectileInteraction.setProjectileCombatPort(o.combatSystem);

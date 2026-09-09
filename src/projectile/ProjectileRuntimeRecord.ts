@@ -16,9 +16,15 @@ import type { ProjectileBurnAugment } from './ProjectileTravelPort';
 import type { ProjectileId } from './ProjectileSpawnPort';
 import type { ProjectileHomingRequest } from '../entities/ProjectileHomingController';
 import type { ProjectilePhysicsHandle } from './ProjectilePhysicsBinding';
+import type { PortalGates } from '../systems/PortalTraversal';
+import type { ProjectileTravelSample } from './ProjectileTravelPort';
 
 /** Private authoritative state: never exported through a gameplay boundary. */
 export interface ProjectileRuntimeRecord {
+  portalGates?: PortalGates;
+  portalFlightPending?: boolean;
+  /** Confirmed pre-transfer segments, retained until the flight stage completes. */
+  portalTravel?: ProjectileTravelSample[];
   /** Gameplay direction survives drag stopping the body; unrelated to visual spin. */
   grenadeLastDirection?: number;
   grenadeDemolitionTriggered?: boolean;
@@ -46,7 +52,7 @@ export interface ProjectileRuntimeRecord {
   velocityAfterFirstBounce?: { x: number; y: number };
   /** Sole handle; the binding owns its Phaser resources, never gameplay state. */
   readonly physics: ProjectilePhysicsHandle;
-  readonly spec: ProjectileResolvedSpec;
+  spec: ProjectileResolvedSpec;
   /** Opaque transport data: only projections and presentation consume these fields. */
   presentation: ProjectilePresentationMetadata;
   /** Latest host-authoritative presentation outcome, repeated in dynamic snapshots until despawn. */

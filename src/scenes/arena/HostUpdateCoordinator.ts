@@ -375,6 +375,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
     if (!countdownActive) this.activityStep()?.hostPrePhysicsStep(now);
     this.ctx.hostPhysics.update(countdownActive, now);
+    if (!countdownActive) this.playerGameplayRuntime?.runHostPortalStage(now);
     if (!countdownActive) {
       this.targetingSystems?.reinforcementMatrix?.update(now);
       this.targetingSystems?.energyInjector?.update(now);
@@ -387,6 +388,8 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;
     if (!countdownActive) {
+      this.worldFramePort?.getProjectileRuntime?.()?.runHostPortalStage(now,
+        sample => this.playerGameplayRuntime?.preparePortalTravel(sample, now));
       this.supportSystems?.detonation?.checkProjectileDetonations();
       this.playerGameplayRuntime?.runHostPreCombatStage(now, countdownActive);
       this.worldFramePort?.getProjectileRuntime?.()?.runHostInteractionStage(now);
@@ -998,6 +1001,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       player.updateMolotovFirewalker(playerFrame?.isMolotovFirewalkerActive ?? false);
       const playerInput = bridge.getPlayerInput(player.id);
       players[player.id] = {
+        positionRevision: player.positionRevision,
         x: Math.round(player.x),
         y: Math.round(player.y),
         rot: playerInput?.aim ?? 0,

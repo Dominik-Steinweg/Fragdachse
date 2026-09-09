@@ -129,7 +129,7 @@ function fixture() {
   const binding = new ProjectilePhysicsBinding(scene);
   const runtime = new WorldProjectileRuntime({ physicsBinding: binding, presentation: createPresentation(),
     identityScope: new ProjectileIdentityScope(1), hostNowMs: () => 0 });
-  return { binding, runtime, doubles, contacts, listeners };
+  return { binding, runtime, doubles, contacts, listeners, scene };
 }
 
 function request(): ProjectileSpawnRequest {
@@ -144,6 +144,30 @@ function rock(x: number): RockPhysicsProxy {
 }
 
 describe('technical Phaser boundary with the authoritative runtime', () => {
+  it('defers Arcade contacts behind an earlier portal and resolves the physical exit remainder', () => {
+    const { binding, runtime, doubles, contacts, scene } = fixture();
+    scene.physics.world.bounds.setTo(-100, -100, 1100, 200);
+    const trunk = { active: true, body: { enable: true, x: 520, y: -10, halfWidth: 10, halfHeight: 10 } };
+    binding.setRockGroup(null, null, { getChildren: () => [trunk] } as never);
+    runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner',
+      a: { x: 50, y: 0 }, b: { x: 500, y: 0 }, radius: 16, reentryDistance: 48,
+      damageBonus: 0, createdAt: 0, expiresAt: 2000 }], isPortalFriendly: () => true });
+    const id = runtime.spawnProjectile(request())!;
+    const handle = doubles.handles.get(0)!;
+    handle.body.x = 100;
+    expect(contacts[0].process!(undefined, trunk)).toBe(false);
+    runtime.setProjectileWorldBlockerPort({ getNearestBlockerDistance: () => 20 });
+    expect(contacts[0].process!(undefined, trunk)).toBe(true);
+    runtime.setProjectileWorldBlockerPort(null);
+    handle.sprite.x = 100;
+    runtime.runHostPortalStage(1000);
+    expect(handle.sprite.x + handle.body.halfWidth).toBeCloseTo(520 - 0.01);
+    expect(handle.body.velocity.x).toBeLessThan(0);
+    expect(runtime.activeCount).toBe(1);
+    expect(id).toBeGreaterThanOrEqual(0);
+    runtime.destroy();
+  });
+
   it('gives swept rock impacts one response owner, while physics projectiles retain their collider', () => {
     const { runtime, binding, contacts } = fixture();
     binding.setRockGroup({} as Phaser.Physics.Arcade.StaticGroup, [rock(50)], null);

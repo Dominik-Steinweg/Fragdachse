@@ -40,6 +40,17 @@ function getUpgradeParams(
   });
 
   const decoy = UTILITY_CONFIGS.DECOY;
+  const translocator = UTILITY_CONFIGS.TRANSLOCATOR;
+  if (definition.id.startsWith('translocator_') && translocator?.type === 'translocator') {
+    params.phaseMoveSeconds = formatNumber(translocator.phaseMoveDurationMs / 1000, locale);
+    params.phaseRegenSeconds = formatNumber(translocator.phaseRegenDurationMs / 1000, locale);
+    params.portalSeconds = formatNumber(translocator.portalDurationMs / 1000, locale);
+    params.collapseSeconds = formatNumber(translocator.collapseSlowDurationMs / 1000, locale);
+    if (definition.id === 'translocator_rift_collapse') {
+      params.collapseRadii = Array.from({ length: definition.maxLevel }, (_, index) =>
+        formatNumber(translocator.collapseRadius + definition.effects[0].value * (index + 1), locale)).join(' / ');
+    }
+  }
   const timeBubble = UTILITY_CONFIGS.TIME_BUBBLE;
   if (definition.id === 'time_bubble_prism_spiral' && timeBubble?.type === 'time_bubble' && timeBubble.prismEmitter) {
     const prism = timeBubble.prismEmitter;

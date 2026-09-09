@@ -12,7 +12,7 @@ vi.mock('../../src/world/WorldPlayerGameplayRuntime', async importOriginal => {
       // Omit unrelated graph construction; retain the real resource binding and host tick.
       return Object.assign(Object.create(actual.WorldPlayerGameplayRuntime.prototype), {
         options, heldActionUtilityIds: new Map(),
-        systems: { burrow: { setWorldGeometryQueries() {} } },
+        systems: { burrow: { setWorldGeometryQueries() {} }, translocator: { getPortalPairs: () => [], update() {} } },
       });
     }
   } };
@@ -38,7 +38,8 @@ describe('Resonance Flow through World composition and passive regeneration', ()
     if (config.type !== 'time_bubble') throw Error('Expected TimeBubble');
     const bubbles = new TimeBubbleSystem();
     const resource = new ResourceSystem();
-    const gameplay: any = { projectiles: {}, combatSystem: { isAlive: () => true, hpRegenTick() {}, armorRegenTick() {} }, combat: null };
+    const gameplay: any = { projectiles: { setPortalQueryPort() {} }, combatSystem: {
+      setPortalQueryPort() {}, isAlive: () => true, hpRegenTick() {}, armorRegenTick() {} }, combat: null };
     let burrowed = false;
     let otherMultiplier = 1;
     const player = { id: 'owner', active: true, x: 0, y: 0 };

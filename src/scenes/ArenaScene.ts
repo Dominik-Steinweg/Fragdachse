@@ -919,6 +919,7 @@ export class ArenaScene extends Phaser.Scene {
       this.renderers,
       {
         getSynchronizedNow: () => bridge.getSynchronizedNow(),
+        getPortalPairs: () => bridge.getTranslocatorPortalPairs(),
         updateVisualFeedback: (delta) => this.visualFeedback?.update(delta),
         getStrategicTargets: (now) => bridge.isHost()
           ? (this.arenaRuntime?.strategicTargetsPort.getHostSnapshot(now) ?? [])

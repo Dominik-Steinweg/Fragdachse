@@ -665,9 +665,23 @@ export interface DecoyUtilityConfig extends BaseUtilityConfig {
 
 export interface TranslocatorUtilityConfig extends BaseUtilityConfig {
   readonly type: 'translocator';
-  readonly telefragRadius?: number;
-  readonly telefragDamage?: number;
-  readonly telefragKnockback?: number;
+  readonly telefragRadius: number;
+  readonly telefragDamage: number;
+  readonly phaseMoveSpeedBonus: number;
+  readonly phaseMoveDurationMs: number;
+  readonly phaseHpRegenPerSecond: number;
+  readonly phaseRegenDurationMs: number;
+  readonly portalEnabled: number;
+  readonly portalRadius: number;
+  readonly portalDurationMs: number;
+  readonly portalMinSeparation: number;
+  readonly portalReentryDistance: number;
+  readonly portalDamageBonus: number;
+  readonly collapseRadius: number;
+  readonly collapseSlowFraction: number;
+  readonly collapseSlowDurationMs: number;
+  readonly collapsePullDurationMs: number;
+  readonly collapsePullSpeed: number;
 }
 
 export interface PlaceableRockUtilityConfig extends BaseUtilityConfig {

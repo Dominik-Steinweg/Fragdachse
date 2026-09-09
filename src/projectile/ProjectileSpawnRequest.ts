@@ -25,6 +25,7 @@ import type {
 } from '../types';
 import type { ProjectileId } from './ProjectileSpawnPort';
 import type { PrimaryHitAdrenalineRewardIntent } from '../combat/PrimaryHitReward';
+import type { PortalDamageContext } from '../systems/PortalTraversal';
 
 /**
  * Aufgelöster Spawn-Auftrag der oberen Execution-Grenze.
@@ -143,6 +144,8 @@ export interface ProjectileMiniRocketFlightSpec {
  * Zurechnung und Zugehörigkeit ändern kann, ohne Herkunft oder Abstammung zu verlieren.
  */
 export interface ProjectileProvenance {
+  /** Contributions already included in this attack's damage payload; inherited by children. */
+  readonly portalDamage?: PortalDamageContext;
   readonly primaryHitReward?: PrimaryHitAdrenalineRewardIntent;
   /** Entität, die das Projectile erzeugt hat. */
   readonly gameplaySourceId: string;

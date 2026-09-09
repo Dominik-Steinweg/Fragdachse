@@ -258,6 +258,18 @@ export class RpcCoordinator {
       const activeGameMode = bridge.getActiveGameMode();
       const currentLoadout = bridge.getPlayerCurrentLoadoutSnapshot(senderId);
       const authoritativeParams = params;
+      if (params?.translocatorUseId !== undefined) {
+        if (slot !== 'utility' || typeof params.translocatorUseId !== 'string'
+          || !params.translocatorUseId.length || params.translocatorUseId.length > 160
+          || !Number.isFinite(targetX) || !Number.isFinite(targetY)
+          || params.dismantle || params.globalDismantle || params.constructionId !== undefined
+          || (params.toolRef && (params.toolRef.kind !== 'utility' || params.toolRef.id !== 'TRANSLOCATOR'))) {
+          return { ok: false, reason: 'invalid' };
+        }
+        if (!capabilities.canUseCombat) return { ok: false, reason: 'blocked' };
+        return this.playerLoadout.usePlayerAction({ category: 'utility', playerId: senderId, angle, targetX, targetY,
+          hostNowMs, attemptId: params.attemptId, params });
+      }
       if (params?.timeBubbleCollapseId !== undefined) {
         if (slot !== 'utility' || !Number.isSafeInteger(params.timeBubbleCollapseId) || params.timeBubbleCollapseId < 0
           || !Number.isFinite(targetX) || !Number.isFinite(targetY)
@@ -543,6 +555,7 @@ export class RpcCoordinator {
   }
 
   private registerTranslocatorFlashHandler(): void {
+    bridge.registerPortalCollapseHandler((a, b, radius) => this.renderers.translocatorTeleport?.playCollapse(a, b, radius));
     bridge.registerTranslocatorFlashHandler((x, y, color, type, subjectId) => {
       if (subjectId) this.renderers.movement.interruptSource(subjectId);
       this.renderers.translocatorTeleport?.playFlash(x, y, color, type);

@@ -97,6 +97,8 @@ export type PlayerCombatSustainedWeaponPort = Pick<
 >;
 
 export interface PlayerCombatUtilityPort {
+  getTranslocatorMoveSpeedBonus?(playerId: string, nowMs: number): number;
+  getTranslocatorHpRegen?(playerId: string, nowMs: number): number;
   setTimeBubblePort?(port: import('./TimeBubbleUtilityPort').TimeBubbleUtilityPort | null): void;
   onTimeBubbleEnded?(bubbleId: number, endedAt: number): void;
   onUtilityProjectileResolved?(projectileId: number, now: number, grenadePayloadPending?: boolean): void;
