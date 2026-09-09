@@ -174,7 +174,7 @@
       "phaseRegenDurationMs": 3000,
       "portalEnabled": 0,
       "portalRadius": 16,
-      "portalDurationMs": 5000,
+      "portalDurationMs": 15000,
       "portalMinSeparation": 32,
       "portalReentryDistance": 48,
       "portalDamageBonus": 0,
