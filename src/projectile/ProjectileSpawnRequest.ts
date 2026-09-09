@@ -16,6 +16,7 @@ import type {
   ProjectileCollisionMode,
   ProjectileDamageSourceFactor,
   ProjectileHomingConfig,
+  ProjectileHomingExcludedCircle,
   ProjectileProximityPulseConfig,
   ProjectilePathEffectKind,
   ProjectileStyle,
@@ -67,6 +68,7 @@ export interface ProjectileFlightSpec {
   /** Reale Zündzeit einer Granate; sie folgt Host-Zeit und keiner simulierten Zeitdimension. */
   readonly fuseTimeMs?: number;
   readonly homing?: ProjectileHomingConfig;
+  readonly homingExcludedCircle?: ProjectileHomingExcludedCircle;
   /** Durchdringt logische Combat-Ziele, aber keine World-Blocker. */
   readonly piercesTargets?: boolean;
   readonly penetration?: ProjectilePenetrationSpec;

@@ -343,7 +343,7 @@ export type ProjectilePathEffectKind = 'awp' | 'fireball';
 /** Feineres data-driven Preset für kugelartige Projektil-Renderer. */
 // 'awp_charged'  = voll aufgeladener Schuss (Geduldiger Tod) ohne Schneisen-Upgrade
 // 'awp_corridor' = voll aufgeladener Schuss mit "Schneise der Zerstoerung" (inkl. Sturm-VFX)
-export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev';
+export type BulletVisualPreset = 'default' | 'glock' | 'xbow' | 'p90' | 'ak47' | 'shotgun' | 'awp' | 'awp_charged' | 'awp_corridor' | 'gauss' | 'negev' | 'time_prism';
 
 /** Data-driven Preset fuer klassische geworfene Granaten. */
 export type GrenadeVisualPreset = 'he' | 'he_cluster_shard' | 'he_demolition_shard' | 'smoke' | 'molotov' | 'time_bubble' | 'fur_ball';
@@ -568,6 +568,14 @@ export interface ProjectileHomingConfig {
   readonly excludeOwner?: boolean;
   readonly distanceWeight?: number;
   readonly forwardWeight?: number;
+}
+
+/** Spawn-captured target exclusion; expiry uses host time, independently of projectile slow. */
+export interface ProjectileHomingExcludedCircle {
+  readonly x: number;
+  readonly y: number;
+  readonly radius: number;
+  readonly expiresAt: number;
 }
 
 /**
@@ -1132,6 +1140,7 @@ export interface ProjectileSpawnConfig {
   /** Sporen-Projektilpalette, aus der Impact-Cloud-Variante abgeleitet. */
   sporeVisualVariant?: 'spore' | 'spore_void';
   homing?:         ProjectileHomingConfig;
+  homingExcludedCircle?: ProjectileHomingExcludedCircle;
   /** Passes through logical combat targets once each, but not through world blockers. */
   piercesTargets?: boolean;
   energyInjectorPayload?: ProjectileEnergyInjectorPayload;
@@ -1302,6 +1311,19 @@ export interface FireGrenadeEffect {
   };
 }
 
+export interface TimeBubblePrismEmitterConfig {
+  readonly enabled: number;
+  readonly intervalMs: number;
+  readonly rotationPeriodMs: number;
+  readonly speed: number;
+  readonly size: number;
+  readonly rangePx: number;
+  readonly damage: number;
+  readonly slowFraction: number;
+  readonly slowDurationMs: number;
+  readonly homing: ProjectileHomingConfig;
+}
+
 export interface TimeBubbleEffectConfig {
   type: 'time_bubble';
   radius: number;
@@ -1312,6 +1334,7 @@ export interface TimeBubbleEffectConfig {
   color?: number;
   distortion?: number;
   friendlyImmunity?: number;
+  prismEmitter?: TimeBubblePrismEmitterConfig;
 }
 
 /** @deprecated Verwende den allgemeinen TimeBubbleEffectConfig-Typ. */
@@ -1443,6 +1466,7 @@ export interface SyncedTimeBubble {
   alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
   color:      number;
   distortion: number; // 0-1, visuelle Intensitaet fuer Interferenz/Post-FX
+  prismActive?: boolean;
 }
 
 // ---- Prozedurales Arena-Layout ----

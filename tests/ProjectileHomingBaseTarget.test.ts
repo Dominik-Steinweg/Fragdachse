@@ -38,6 +38,39 @@ const BASE_HOMING: ProjectileHomingConfig = {
 };
 
 describe('projectile homing against hostile bases', () => {
+  it('excludes the origin circle including its edge, reacquires moving targets and expires in host time', () => {
+    const controller = new ProjectileHomingController();
+    let x = 150;
+    controller.setTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => {
+      emit('moving', 'enemies', x, 0);
+      emit('edge', 'enemies', 110, 0);
+      emit('inside', 'enemies', 10, 0);
+    } });
+    const projectile: ProjectileHomingRequest = {
+      ...makeProjectile({ ...BASE_HOMING, targetTypes: ['enemies'] }),
+      excludedCircle: { x: 10, y: 0, radius: 100, expiresAt: 1000 },
+    };
+    expect(controller.update(projectile, 100, true, 100)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('moving');
+    x = 50;
+    expect(controller.update(projectile, 101, true, 900)).toBe(false);
+    expect(projectile.state.lockedTargetId).toBeNull();
+    x = 110.01;
+    expect(controller.update(projectile, 102, true, 999)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('moving');
+    x = 400;
+    // Only host time advances: slowing a projectile cannot extend its bubble exclusion.
+    expect(controller.update(projectile, 102, true, 1000)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('inside');
+  });
+
+  it('does not apply a circle exclusion to ordinary homing projectiles', () => {
+    const controller = new ProjectileHomingController();
+    controller.setTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => emit('near', 'enemies', 5, 0) });
+    const projectile = makeProjectile({ ...BASE_HOMING, targetTypes: ['enemies'] });
+    expect(controller.update(projectile, 0, true, 100)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('near');
+  });
   it('keeps smoke bolts ballistic until acquisition, favors forward targets and later permits the origin', () => {
     const controller = new ProjectileHomingController();
     let originOnly = false;

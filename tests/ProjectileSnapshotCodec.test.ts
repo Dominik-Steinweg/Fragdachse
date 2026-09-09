@@ -32,6 +32,11 @@ function roundTripDynamic(entry: SyncedProjectileDynamic): SyncedProjectileDynam
 }
 
 describe('Projektil-Statik-Codec', () => {
+  it('preserves prism heads and path material for remote and late-joining players', () => {
+    const entry: SyncedProjectileStatic = { id: 77, ownerId: 'bubble-owner', style: 'bullet',
+      bulletVisualPreset: 'time_prism', tracer: { profile: 'prismatic' }, suppressSpawnFx: true };
+    expect(roundTripStatic(entry)).toEqual(entry);
+  });
   it('round-trips a fully populated static entry including every optional tracer field', () => {
     const entry: SyncedProjectileStatic = {
       id: 4711,

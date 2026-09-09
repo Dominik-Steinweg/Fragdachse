@@ -1,6 +1,6 @@
 import type {
   ProjectileProximityPulseConfig, ProjectileCollisionMode, ProjectileExplosionConfig,
-  ImpactCloudConfig, ProjectileHomingConfig, ProjectileEnergyInjectorPayload, GrenadeEffectConfig,
+  ImpactCloudConfig, ProjectileHomingConfig, ProjectileHomingExcludedCircle, ProjectileEnergyInjectorPayload, GrenadeEffectConfig,
   ProjectileStyle, BulletVisualPreset, GrenadeVisualPreset, EnergyBallVariant, TracerConfig,
   DetonableConfig, DetonatorConfig, GroundFireVisualStyle, GroundFireCellEffect,
   ProjectilePathEffectKind, ShotAudioKey, MiniRocketFlightPhase,
@@ -62,6 +62,7 @@ export interface ProjectileResolvedFlight extends Pick<ProjectileFlightSpec, 'li
   readonly collisionMode: ProjectileCollisionMode;
   readonly isTranslocatorPuck?: boolean;
   readonly homing?: ProjectileHomingConfig;
+  readonly homingExcludedCircle?: ProjectileHomingExcludedCircle;
   readonly piercesTargets?: boolean;
   readonly fuseTime?: number;
   readonly isFlame?: boolean;

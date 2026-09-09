@@ -6,6 +6,8 @@ import type { LightingSystem } from './LightingSystem';
 import { addExternalGlow, removeExternalFx, type GlowHandle } from '../utils/phaserFx';
 import type { LocalDistortionComposer } from './distortion/LocalDistortionComposer';
 import { DISTORTION_PRIORITY } from './distortion/distortionFramePlanner';
+import { BULLET_GLOW_TEXTURE } from './BulletRenderer';
+import { PRISM_PALETTE } from './prismPalette';
 
 const TEX_TIME_BUBBLE_MEMBRANE = '__time_bubble_membrane';
 const TEX_TIME_BUBBLE_INTERFERENCE = '__time_bubble_interference';
@@ -17,6 +19,8 @@ interface TimeBubbleVisual {
   shellGlow: GlowHandle | null;
   snapshot: SyncedTimeBubble;
   seed: number;
+  prismCore: Phaser.GameObjects.Image | null;
+  prismHalo: Phaser.GameObjects.Image[];
 }
 
 interface FeatheredRibbon {
@@ -265,11 +269,14 @@ export class TimeBubbleRenderer {
       shellGlow,
       snapshot,
       seed: snapshot.id * 0.731,
+      prismCore: null,
+      prismHalo: [],
     };
   }
 
   private updateVisual(visual: TimeBubbleVisual, now: number): void {
     const bubble = visual.snapshot;
+    this.updatePrismCenter(visual, now);
     const baseScale = Math.max(0.24, bubble.radius / 160);
     const time = now * 0.001;
     const pulse = 0.5 + 0.5 * Math.sin(time * (1.8 + bubble.distortion * 1.2) + visual.seed);
@@ -334,11 +341,41 @@ export class TimeBubbleRenderer {
     });
   }
 
+  private updatePrismCenter(visual: TimeBubbleVisual, now: number): void {
+    const bubble = visual.snapshot;
+    if (!bubble.prismActive) {
+      this.destroyPrismCenter(visual);
+      return;
+    }
+    if (!visual.prismCore) {
+      visual.prismHalo = PRISM_PALETTE.map(color => this.scene.add.image(bubble.x, bubble.y, BULLET_GLOW_TEXTURE)
+        .setDisplaySize(8, 8).setTint(color).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.PROJECTILES - 0.3));
+      visual.prismCore = this.scene.add.image(bubble.x, bubble.y, BULLET_GLOW_TEXTURE)
+        .setDisplaySize(8, 8).setTint(0xfffaff).setBlendMode(Phaser.BlendModes.ADD).setDepth(DEPTH.PROJECTILES - 0.1);
+    }
+    const phase = now * 0.002 + visual.seed;
+    const pulse = 0.88 + 0.12 * Math.sin(now * 0.006 + visual.seed);
+    visual.prismCore.setPosition(bubble.x, bubble.y).setAlpha(bubble.alpha * pulse);
+    visual.prismHalo.forEach((halo, index) => {
+      const angle = phase + index / PRISM_PALETTE.length * Math.PI * 2;
+      halo.setPosition(bubble.x + Math.cos(angle) * 1.8, bubble.y + Math.sin(angle) * 1.8)
+        .setAlpha(bubble.alpha * 0.56 * pulse);
+    });
+  }
+
+  private destroyPrismCenter(visual: TimeBubbleVisual): void {
+    visual.prismCore?.destroy();
+    visual.prismCore = null;
+    for (const halo of visual.prismHalo) halo.destroy();
+    visual.prismHalo.length = 0;
+  }
+
   private destroyVisual(id: number): void {
     this.lighting?.releaseLight(lightKey(id));
     const visual = this.visuals.get(id);
     if (!visual) return;
 
+    this.destroyPrismCenter(visual);
     removeExternalFx(visual.membrane, visual.shellGlow);
     visual.membrane.destroy();
     visual.interferenceA.destroy();

@@ -80,6 +80,7 @@ export const PROJECTILE_STYLES = [
 export const PROJECTILE_BULLET_VISUAL_PRESETS = [
   'default', 'glock', 'xbow', 'p90', 'ak47', 'shotgun',
   'awp', 'awp_charged', 'awp_corridor', 'gauss', 'negev',
+  'time_prism',
 ] as const satisfies readonly BulletVisualPreset[];
 
 export const PROJECTILE_GRENADE_VISUAL_PRESETS = [

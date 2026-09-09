@@ -172,6 +172,11 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     itemId: "TIME_BUBBLE",
     targets: [{ path: ["friendlyImmunity"], formula: "add", createIfMissing: true }],
   },
+  "utility.TIME_BUBBLE.prismEmitter.enabled": {
+    kind: "utility",
+    itemId: "TIME_BUBBLE",
+    targets: [{ path: ["prismEmitter", "enabled"], formula: "add" }],
+  },
   "utility.TRANSLOCATOR.telefragDamage": {
     kind: "utility",
     itemId: "TRANSLOCATOR",

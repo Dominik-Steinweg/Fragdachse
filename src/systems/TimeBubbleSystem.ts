@@ -1,7 +1,9 @@
 import type { SyncedTimeBubble, TimeBubbleEffectConfig } from '../types';
+import { createSingleOwnerProvenance, type ProjectileSpawnRequest } from '../projectile/ProjectileSpawnRequest';
 
 const FADE_IN_MS = 220;
 const FADE_OUT_MS = 300;
+const MAX_CATCH_UP_SHOTS = 4;
 
 interface ActiveTimeBubble {
   id: number;
@@ -10,12 +12,18 @@ interface ActiveTimeBubble {
   y: number;
   effect: TimeBubbleEffectConfig;
   createdAt: number;
+  nextShotIndex: number;
 }
 
 export class TimeBubbleSystem {
   private readonly activeBubbles: ActiveTimeBubble[] = [];
   private nextId = 0;
   private friendlyResolver: ((ownerId: string, subjectId: string) => boolean) | null = null;
+  private prismProjectileSpawner: ((request: ProjectileSpawnRequest) => void) | null = null;
+
+  setPrismProjectileSpawner(spawner: ((request: ProjectileSpawnRequest) => void) | null): void {
+    this.prismProjectileSpawner = spawner;
+  }
 
   setFriendlyResolver(resolver: ((ownerId: string, subjectId: string) => boolean) | null): void {
     this.friendlyResolver = resolver;
@@ -33,8 +41,9 @@ export class TimeBubbleSystem {
       ownerId,
       x,
       y,
-      effect,
+      effect: structuredClone(effect),
       createdAt: now,
+      nextShotIndex: 0,
     });
   }
 
@@ -49,6 +58,7 @@ export class TimeBubbleSystem {
         continue;
       }
 
+      this.emitPrismShots(bubble, elapsed);
       synced.push({
         id: bubble.id,
         ownerId: bubble.ownerId,
@@ -58,11 +68,47 @@ export class TimeBubbleSystem {
         alpha: this.computeAlpha(elapsed, bubble.effect.duration),
         color: bubble.effect.color ?? 0x8edcff,
         distortion: bubble.effect.distortion ?? 0.75,
+        ...(bubble.effect.prismEmitter?.enabled ? { prismActive: true } : {}),
       });
     }
 
     synced.sort((left, right) => left.id - right.id);
     return synced;
+  }
+
+  private emitPrismShots(bubble: ActiveTimeBubble, elapsed: number): void {
+    const emitter = bubble.effect.prismEmitter;
+    if (!emitter?.enabled || !this.prismProjectileSpawner || elapsed < 0) return;
+    const lastDueIndex = Math.floor(elapsed / emitter.intervalMs);
+    // Keep the newest due angles without allowing a stalled frame to create an unbounded burst.
+    const firstIndex = Math.max(bubble.nextShotIndex, lastDueIndex - MAX_CATCH_UP_SHOTS + 1);
+    bubble.nextShotIndex = Math.max(bubble.nextShotIndex, lastDueIndex + 1);
+    for (let index = firstIndex; index <= lastDueIndex; index++) {
+      const angle = (index * emitter.intervalMs % emitter.rotationPeriodMs) / emitter.rotationPeriodMs * Math.PI * 2;
+      this.prismProjectileSpawner({
+        origin: { x: bubble.x, y: bubble.y, angle },
+        flight: {
+          speed: emitter.speed, size: emitter.size,
+          lifetimeMs: emitter.rangePx / emitter.speed * 1000,
+          remainingRangePx: emitter.rangePx, maxBounces: 0, isGrenade: false,
+          homing: emitter.homing,
+          homingExcludedCircle: {
+            x: bubble.x, y: bubble.y, radius: bubble.effect.radius,
+            expiresAt: bubble.createdAt + bubble.effect.duration,
+          },
+        },
+        provenance: createSingleOwnerProvenance(bubble.ownerId, {
+          weaponSourceId: 'TIME_BUBBLE', sourceSlot: 'utility',
+        }),
+        interaction: { directHit: {
+          damage: emitter.damage, slowFraction: emitter.slowFraction, slowDurationMs: emitter.slowDurationMs,
+        } },
+        presentation: {
+          style: 'bullet', bulletPreset: 'time_prism', color: 0xffc4e3,
+          tracer: { profile: 'prismatic' }, suppressSpawnFx: true,
+        },
+      });
+    }
   }
 
   getPlayerMovementFactorAt(x: number, y: number, now = Date.now(), playerId?: string): number {

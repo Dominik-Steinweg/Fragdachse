@@ -3,6 +3,7 @@ import { tracerBounceDebug } from '../TracerBounceDebugSettings';
 import type { ProjectilePathPoint, ProjectileTrailSegment } from '../../projectile/ProjectileFlightPath';
 import type { GpuVfxPoolStats } from './GpuVfxPool';
 import { GpuVfxEffectId } from './GpuVfxEffects';
+import { PRISM_COLOR_PERIOD_MS, PRISM_PALETTE, prismColorAtTime } from '../prismPalette';
 
 export const FLIGHT_RIBBON_CAPACITY = 16384;
 export const FLIGHT_RIBBON_PAGE_SIZE = 2048;
@@ -19,6 +20,7 @@ export interface FlightRibbonStyle {
   readonly tuning: FlightSignatureTuning;
   readonly color: number;
   readonly emissive: number;
+  readonly prismatic?: boolean;
 }
 export interface FlightRibbonHandle { readonly id: number; readonly generation: number }
 type Vec = readonly [number, number];
@@ -172,8 +174,11 @@ export class GpuFlightRibbonStore {
     }
     // Refine only the short birth region, on the confirmed segment itself.
     const birthEnd = Math.max(start, Math.min(1, (BIRTH_DISTANCE - birthBase) / length));
-    const birthParts = Math.max(0, Math.ceil(length * (birthEnd - start) / 4));
-    const bodyParts = Math.max(0, Math.ceil(length * (1 - birthEnd) / 64));
+    // Sample the palette in path time as well as space, so slow flight retains its spectrum.
+    const colorStepMs = PRISM_COLOR_PERIOD_MS / (PRISM_PALETTE.length * 2);
+    const colorParts = flight.style.prismatic ? duration / colorStepMs : 0;
+    const birthParts = Math.max(0, Math.ceil(Math.max(length / 4, colorParts) * (birthEnd - start)));
+    const bodyParts = Math.max(0, Math.ceil(Math.max(length / 64, colorParts) * (1 - birthEnd)));
     const parts = Math.max(1, birthParts + bodyParts);
     const fraction = (index: number) => birthParts && index <= birthParts
       ? start + (birthEnd - start) * index / birthParts
@@ -195,9 +200,10 @@ export class GpuFlightRibbonStore {
       born: now - segment.ageMs - duration * (1 - u), life,
       width: response.width * (wake ? 1.3 : 1), spread: wake ? flight.style.tuning.wakeSpread * factor : 0,
       alpha: flight.style.emissive * (wake ? flight.style.tuning.wakeIntensity * factor : flight.style.tuning.coreIntensity * 0.95),
-      heat: wake ? 0.65 : 1 - flight.style.tuning.heatContrast,
+      // Rainbow wake keeps its hue from birth instead of mixing in the ballistic white-hot tint.
+      heat: wake ? (flight.style.prismatic ? 1 : 0.65) : 1 - flight.style.tuning.heatContrast,
       turbulence: wake ? flight.style.tuning.wakeTurbulence : 0,
-      color: flight.style.color,
+      color: flight.style.prismatic ? prismColorAtTime(segment.from.timeMs + duration * u) : flight.style.color,
       birthDistance: birthBase + length * u,
       bounce: (u === 0 && segment.from.bounceSequence !== undefined) || (u === 1 && segment.to.bounceSequence !== undefined),
     });

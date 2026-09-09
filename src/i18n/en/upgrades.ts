@@ -466,6 +466,8 @@ export const enUpgrades = {
   "upgrade.time_bubble_slow_strength.name": "Time Bubble Slow Strength",
   "upgrade.time_bubble_slow_strength.description": "Reduces the slow applied to enemies in the Time Bubble by {value0Absolute} per level.",
   "upgrade.time_bubble_projectile_slow.name": "Time Bubble Projectile Slow",
+  "upgrade.time_bubble_prism_spiral.name": "Prism Spiral",
+  "upgrade.time_bubble_prism_spiral.description": "The Time Bubble fires small homing rainbow projectiles from its center every {prismIntervalMs} ms, rotating through a full circle in {prismRotationSeconds} s. Hits deal {prismDamage} base damage and slow enemies by {prismSlowPercent} for {prismSlowSeconds} s. Homing ignores enemies inside the originating bubble while it exists. Normal Time Bubble rules, including friendly immunity, apply.",
   "upgrade.time_bubble_projectile_slow.description": "Your players, allied players, and projectiles are no longer slowed.",
   "upgrade.unlock_smoke_grenade.name": "Smoke Grenade",
   "upgrade.unlock_smoke_grenade.description": "Unlocks the Smoke Grenade for the Utility slot.",

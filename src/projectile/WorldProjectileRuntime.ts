@@ -2064,6 +2064,7 @@ export class WorldProjectileRuntime implements
     return projectile.interaction.guidance ??= {
       get ownerId() { return projectile.provenance.allegiance.ownerId; },
       homing: projectile.spec.flight.homing!,
+      excludedCircle: projectile.spec.flight.homingExcludedCircle,
       kinematics: {
         get x() { return projectile.physics.sprite.x; },
         get y() { return projectile.physics.sprite.y; },
@@ -2101,6 +2102,7 @@ export class WorldProjectileRuntime implements
       this.createHomingRequest(projectile),
       simulatedAgeMs,
       forceSearch,
+      this.hostFrameNowMs,
     );
     return foundTarget;
   }
@@ -2257,6 +2259,7 @@ export class WorldProjectileRuntime implements
           collisionMode: resolveProjectileCollisionMode(cfg),
           isTranslocatorPuck: cfg.isTranslocatorPuck,
           homing: cfg.homing,
+          homingExcludedCircle: cfg.homingExcludedCircle,
           piercesTargets: cfg.piercesTargets,
           fuseTime: cfg.fuseTime,
           isFlame: cfg.isFlame,

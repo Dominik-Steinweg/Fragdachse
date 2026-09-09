@@ -109,6 +109,7 @@ const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Obje
   molotov_grenade_radius: 'UPGRADE_MOLOTOV_GRENADE_RADIUS',
   molotov_wildfire_chunks: 'UPGRADE_FLAMETHROWER_FIREBALL_CHUNKS',
   molotov_firewalker: 'UPGRADE_DASH_FIRE_TRAIL',
+  time_bubble_prism_spiral: 'TIME_BUBBLE',
   mini_rocket_launcher_homing_turn: 'UPGRADE_MINI_ROCKET_LAUNCHER_HOMING_TURN',
   xbow_life_leech: 'UPGRADE_LIFE_LEECH',
   xbow_homing: 'UPGRADE_P90_HOMING_TURN',

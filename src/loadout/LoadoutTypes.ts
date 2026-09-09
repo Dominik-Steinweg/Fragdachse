@@ -1,5 +1,5 @@
 import type { WeaponFeedbackProfileId } from '../config/weaponFeedback';
-import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle } from '../types';
+import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle, TimeBubblePrismEmitterConfig } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityPulseConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
 
 // ── Item-Konfigurationstypen ──────────────────────────────────────────────────
@@ -594,6 +594,7 @@ export interface TimeBubbleUtilityConfig extends BaseUtilityConfig {
   readonly bubbleColor?: number;
   readonly bubbleDistortion?: number;
   readonly friendlyImmunity?: number;
+  readonly prismEmitter?: TimeBubblePrismEmitterConfig;
 }
 
 export interface BfgUtilityConfig extends BaseUtilityConfig {

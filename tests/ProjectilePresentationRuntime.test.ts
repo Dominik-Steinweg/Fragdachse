@@ -40,6 +40,25 @@ function passiveRenderer(): Record<string, unknown> {
 }
 
 describe('ProjectilePresentationRuntime', () => {
+  it('presents replicated prism heads and trails without a firing flash and releases them', () => {
+    const runtime = new ProjectilePresentationRuntime({} as never);
+    const replica = new ProjectileClientReplica();
+    const renderer = { ...passiveRenderer(), has: () => false, sync: vi.fn(), retain: vi.fn() };
+    const muzzleFlash = { playProjectileFlash: vi.fn(), clear: vi.fn() };
+    const renderers = { ...Object.fromEntries(['bullet', 'projectileBurn', 'flame', 'leafBlower', 'bfg',
+      'energyBall', 'hydra', 'gauss', 'holyGrenade', 'rocket', 'fireball', 'spore', 'grenade',
+      'translocatorPuck', 'teslaBolt', 'tracer'].map(key => [key, renderer])), muzzleFlash };
+    runtime.bindRenderers(renderers as never, null);
+    const shot = projectile({ size: 3, bulletVisualPreset: 'time_prism', tracer: { profile: 'prismatic' },
+      suppressSpawnFx: true, shotAudioKey: undefined });
+    runtime.presentClientFrame(replica.sync([shot], 1000));
+    expect(renderer.createVisual).toHaveBeenCalledWith(shot.id, shot.x, shot.y, shot.size,
+      shot.color, 'time_prism', shot.color);
+    expect(renderer.createTracer).toHaveBeenCalledWith(shot.id, shot.x, shot.y, shot.tracer, shot.color);
+    expect(muzzleFlash.playProjectileFlash).not.toHaveBeenCalled();
+    runtime.releaseWorldPresentation();
+    expect(renderer.destroyAll).toHaveBeenCalled();
+  });
   it('animates confirmed turret shots but not baselines, refreshes or suppressed spawns', () => {
     const runtime = new ProjectilePresentationRuntime({} as never);
     const replica = new ProjectileClientReplica();

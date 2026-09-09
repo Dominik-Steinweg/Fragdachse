@@ -5,7 +5,8 @@ import { configureAdditiveImage, destroyEmitter, ensureCanvasTexture, makeAdditi
 
 // ── Textur-Schlüssel (einmal erzeugt, global gecacht) ──────────────────────
 const TEX_TRAIL = '__bullet_trail';
-const TEX_GLOW  = '__bullet_glow';
+export const BULLET_GLOW_TEXTURE = '__bullet_glow';
+const TEX_GLOW = BULLET_GLOW_TEXTURE;
 const TEX_SPARK = '__bullet_spark';
 const TEX_AURA  = '__bullet_charge_aura';
 
@@ -73,6 +74,7 @@ export interface BulletStyleConfig {
 const DEFAULT_BULLET_VISUAL_PRESET: BulletVisualPreset = 'default';
 
 const BODY_TEXTURE_KEYS: Record<BulletVisualPreset, string> = {
+  time_prism: TEX_GLOW,
   default: '__bullet_body_default',
   glock: '__bullet_body_glock',
   xbow: '__bullet_body_xbow',
@@ -87,6 +89,7 @@ const BODY_TEXTURE_KEYS: Record<BulletVisualPreset, string> = {
 };
 
 const ACCENT_TEXTURE_KEYS: Record<BulletVisualPreset, string | undefined> = {
+  time_prism: undefined,
   default: '__bullet_accent_default',
   glock: '__bullet_accent_glock',
   xbow: '__bullet_accent_xbow',
@@ -101,6 +104,17 @@ const ACCENT_TEXTURE_KEYS: Record<BulletVisualPreset, string | undefined> = {
 };
 
 const BULLET_STYLE_PRESETS: Record<BulletVisualPreset, BulletStyleConfig> = {
+  time_prism: {
+    bodyTextureKey: TEX_GLOW, scaleBoost: 0.5,
+    bodyTint: 0xfff7ff, glowTint: 0xd8bfff,
+    trailLengthMult: 0, trailAlpha: 0, trailScaleYMult: 0,
+    glowScale: 1.25, glowAlpha: 0.24,
+    accentAlpha: 0, accentScaleX: 1, accentScaleY: 1,
+    sparkCount: 3, sparkLifespan: 110, sparkSpeedMin: 20, sparkSpeedMax: 65,
+    sparkSpreadDeg: 65, sparkGravityY: 0, sparkScaleStart: 0.5, sparkScaleEnd: 0,
+    sparkColors: [0xffb8df, 0xb8f2d3, 0xbaddff, 0xd8bfff],
+    impactFlashScale: 0.65, impactFlashAlpha: 0.25, impactFlashDuration: 55,
+  },
   default: {
     bodyTextureKey: BODY_TEXTURE_KEYS.default,
     accentTextureKey: ACCENT_TEXTURE_KEYS.default,
@@ -445,6 +459,7 @@ export class BulletRenderer {
   private createBodyTexture(texMgr: Phaser.Textures.TextureManager, preset: BulletVisualPreset): void {
     const key = BODY_TEXTURE_KEYS[preset];
     switch (preset) {
+      case 'time_prism': return; // Reuses the shared radial glow generated below.
       case 'glock':
         ensureCanvasTexture(texMgr, key, 12, 5, (ctx) => {
           ctx.fillStyle = '#ffffff';

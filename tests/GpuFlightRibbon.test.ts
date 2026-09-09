@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('phaser', () => ({ BlendModes: { NORMAL: 0, ADD: 1 } }));
 import { FLIGHT_SIGNATURE_PROFILES } from '../src/projectile/FlightSignature';
 import { tracerBounceDebug } from '../src/effects/TracerBounceDebugSettings';
+import { PRISM_COLOR_PERIOD_MS, prismColorAtTime } from '../src/effects/prismPalette';
 import { ProjectilePathCursor, ProjectilePathRecorder, type ProjectilePathPoint } from '../src/projectile/ProjectileFlightPath';
 import { FLIGHT_RIBBON_SLOT_WORDS, FLIGHT_RIBBON_VERTEX_WORDS, GpuFlightRibbonStore,
   type FlightRibbonSpan } from '../src/effects/gpu/GpuFlightRibbon';
@@ -32,6 +33,32 @@ function evaluate(v: number[], now: number) {
 }
 
 describe('GPU flight ribbon geometry and lifetime', () => {
+  it('keeps the prism spectrum on curved and slow paths and releases its residual material', () => {
+    const { store, append } = setup();
+    const handle = store.create(4, { tuning: FLIGHT_SIGNATURE_PROFILES.prismatic,
+      color: 0xffffff, emissive: 1, prismatic: true })!;
+    const half = PRISM_COLOR_PERIOD_MS / 2;
+    const a = { ...point(0, 0, 0), vx: 70, vy: 0 };
+    const b = { ...point(8, 0, half), vx: 70, vy: 0 };
+    const c = { ...point(8, 8, half * 2), vx: 0, vy: 70 };
+    for (const wake of [false, true]) {
+      append(a, b, half, wake, handle);
+      append(b, c, half * 2, wake, handle);
+      const spans = store.spans(handle, wake);
+      const knots = spans.flatMap(span => [span.from, span.to]);
+      expect(new Set(knots.map(knot => knot.color)).size).toBeGreaterThan(4);
+      for (const knot of knots) {
+        expect(knot.color).toBe(prismColorAtTime(knot.pathTime));
+        expect(knot.y === 0 || knot.x === 8).toBe(true);
+      }
+      const corner = spans.findIndex(span => span.to.x === b.x && span.to.y === b.y);
+      expect(spans[corner].to).toBe(spans[corner + 1].from);
+    }
+    store.end(handle);
+    store.retire(10000);
+    expect(store.spans(handle)).toHaveLength(0);
+    expect(store.liveCount).toBe(0);
+  });
   it('rejects a clipped sequence-one prefix during client interpolation, but recognizes launch', () => {
     for (const clipped of [false, true]) {
       const { store, handle } = setup();

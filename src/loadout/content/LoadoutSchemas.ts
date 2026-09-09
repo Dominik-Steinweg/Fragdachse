@@ -252,6 +252,28 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.type === 'time_bubble' && value.prismEmitter !== undefined) {
+    const e = value.prismEmitter;
+    const positive = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n > 0;
+    const nonnegative = (n: unknown): boolean => typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    if (!isRecord(e) || !isRecord(e.homing)) {
+      issues.push('$.prismEmitter: complete emitter and homing config required');
+    } else {
+      if (e.enabled !== 0 && e.enabled !== 1) issues.push('$.prismEmitter.enabled: expected zero or one');
+      for (const key of ['intervalMs', 'rotationPeriodMs', 'speed', 'size', 'rangePx', 'slowDurationMs']) {
+        if (!positive(e[key])) issues.push('$.prismEmitter.' + key + ': positive finite number required');
+      }
+      if (!nonnegative(e.damage) || !nonnegative(e.slowFraction) || (e.slowFraction as number) > 0.95)
+        issues.push('$.prismEmitter: invalid damage or slow fraction');
+      for (const key of ['acquireDelayMs', 'maxTurnDegreesPerStep', 'distanceWeight', 'forwardWeight']) {
+        if (!nonnegative(e.homing[key])) issues.push('$.prismEmitter.homing.' + key + ': nonnegative finite number required');
+      }
+      if (!positive(e.homing.searchRadius) || !positive(e.homing.retargetIntervalMs)
+        || !Array.isArray(e.homing.targetTypes) || e.homing.targetTypes.length !== 1 || e.homing.targetTypes[0] !== 'enemies'
+        || e.homing.requireLineOfSight !== true || e.homing.excludeOwner !== true)
+        issues.push('$.prismEmitter.homing: enemy targeting with line of sight and positive search timing required');
+    }
+  }
   if (value.type === 'molotov') {
     for (const key of ['wildfireChunkCount', 'wildfireChunkRadius', 'wildfireChunkFlightMs', 'firewalkerDurationMs']) {
       if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || (value[key] as number) < 0)

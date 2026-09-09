@@ -5086,6 +5086,19 @@
                                                             ]
                                             },
                                             {
+                                                "id": "time_bubble_prism_spiral",
+                                                "code": "D-U2-5",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 0,
+                                                "bossPointCostPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 161,
+                                                "requires": [{ "upgradeId": "time_bubble_duration", "minLevel": 1 }],
+                                                "effects": [{ "stat": "utility.TIME_BUBBLE.prismEmitter.enabled", "mode": "add_per_level", "value": 1 }]
+                                            },
+                                            {
                                                 "id":  "unlock_smoke_grenade",
                                                 "code":  "D-U3",
                                                 "kind":  "unlock",

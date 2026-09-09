@@ -719,7 +719,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       return { type: 'smoke' as const, behavior: cfg.smokeBehavior, radius: cfg.smokeRadius, spreadDuration: cfg.smokeExpandDuration, lingerDuration: cfg.smokeLingerDuration, dissipateDuration: cfg.smokeDissipateDuration, maxAlpha: cfg.smokeMaxAlpha, dotDamagePerTick: cfg.smokeDotDamagePerTick, dotTickIntervalMs: cfg.smokeDotTickIntervalMs };
     }
     if (cfg.type === 'time_bubble') {
-      return { type: 'time_bubble' as const, radius: cfg.bubbleRadius, duration: cfg.bubbleDuration, projectileSlowFactor: cfg.projectileSlowFactor, playerSlowFactor: cfg.playerSlowFactor, trainSlowFactor: cfg.trainSlowFactor, color: cfg.bubbleColor ?? cfg.projectileColor ?? playerColor, distortion: cfg.bubbleDistortion, friendlyImmunity: cfg.friendlyImmunity };
+      return { type: 'time_bubble' as const, radius: cfg.bubbleRadius, duration: cfg.bubbleDuration, projectileSlowFactor: cfg.projectileSlowFactor, playerSlowFactor: cfg.playerSlowFactor, trainSlowFactor: cfg.trainSlowFactor, color: cfg.bubbleColor ?? cfg.projectileColor ?? playerColor, distortion: cfg.bubbleDistortion, friendlyImmunity: cfg.friendlyImmunity,
+        prismEmitter: cfg.prismEmitter?.enabled ? cfg.prismEmitter : undefined };
     }
     return { type: 'damage' as const, radius: 0, damage: 0 };
   }

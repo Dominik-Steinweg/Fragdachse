@@ -20,6 +20,11 @@ export interface FlightSignatureTuning {
 // Tune each profile directly: compact cores, bright wakes and short residual lifetimes.
 // Lengths use the 1000 px/s reference; actual speed response and FX quality still apply.
 export const FLIGHT_SIGNATURE_PROFILES = {
+  prismatic: {
+    coreIntensity: 0.65, coreWidth: 0.8, coreLength: 140,
+    wakeIntensity: 0.4, wakePersistence: 180, wakeSpread: 0.7,
+    heatContrast: 0, wakeTurbulence: 0.04, moteAmount: 0, speedResponse: 0.3,
+  },
   // Light sidearms: crisp core with a broad, quickly dissipating wake.
   light: {
     coreIntensity: 0.94, coreWidth: 1.44, coreLength: 250,

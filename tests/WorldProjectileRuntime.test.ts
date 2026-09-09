@@ -40,6 +40,8 @@ import { ProjectileStore } from '../src/projectile/ProjectileStore';
 import { adaptProjectileDirectDamageRequest } from '../src/combat/ProjectileCombatContractAdapter';
 import { createPrimaryHitRewardIntent } from '../src/combat/PrimaryHitReward';
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
+import { TimeBubbleSystem } from '../src/systems/TimeBubbleSystem';
+import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import { AutomatedWeaponExecutionAdapter } from '../src/world/AutomatedWeaponExecutionAdapter';
 import { WorldWeaponExecutionRuntime } from '../src/world/WorldWeaponExecutionRuntime';
 import type { ProjectileDirectImpactRequest } from '../src/projectile/ProjectileCombatPort';
@@ -134,6 +136,52 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('routes prism damage and slow through normal combat, permits interior hits and consumes the shot once', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const bubble = new TimeBubbleSystem();
+    const config = UTILITY_CONFIGS.TIME_BUBBLE;
+    if (config.type !== 'time_bubble' || !config.prismEmitter) throw Error('Expected prism configuration');
+    const emitter = { ...config.prismEmitter, enabled: 1 };
+    const hit = configureEnemyImpact(runtime);
+    bubble.setPrismProjectileSpawner(request => { runtime.spawnProjectile(request); });
+    runtime.setProjectileTimeFieldPort({ getMovementFactor: (x, y, now, provenance) =>
+      bubble.getProjectileMovementFactorAt(x, y, now, provenance.allegiance.ownerId) });
+    bubble.hostCreateBubble('owner', 0, 0, {
+      type: 'time_bubble', radius: config.bubbleRadius, duration: config.bubbleDuration,
+      projectileSlowFactor: config.projectileSlowFactor, playerSlowFactor: config.playerSlowFactor,
+      trainSlowFactor: config.trainSlowFactor, prismEmitter: emitter,
+    }, 1000);
+    bubble.hostUpdate(1000);
+    expect(physics.specs[0].velocityX).toBeCloseTo(emitter.speed * config.projectileSlowFactor);
+    runtime.runHostInteractionStage(1000);
+    expect(hit).toHaveBeenCalledTimes(1);
+    expect(hit.mock.calls[0][0]).toMatchObject({
+      provenance: { attributionId: 'owner', weaponSourceId: 'TIME_BUBBLE', sourceSlot: 'utility' },
+      directHit: { damage: emitter.damage, slowFraction: emitter.slowFraction, slowDurationMs: emitter.slowDurationMs },
+    });
+    runtime.runHostInteractionStage(1010);
+    expect(hit).toHaveBeenCalledTimes(1);
+    expect(runtime.activeCount).toBe(0);
+    expect(physics.released).toHaveLength(1);
+    bubble.destroyAll();
+    runtime.destroy();
+  });
+
+  it('carries the circle through spawn and uses host time to stop excluding targets', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    runtime.setProjectileTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => emit('inside', 'enemies', 0, 30) });
+    runtime.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true, isTargetCurrentlyValid: () => true });
+    const request = baseRequest();
+    const id = runtime.spawnProjectile({ ...request, flight: { ...request.flight,
+      homing: { acquireDelayMs: 0, searchRadius: 200, retargetIntervalMs: 1, maxTurnDegreesPerStep: 90, targetTypes: ['enemies'] },
+      homingExcludedCircle: { x: 0, y: 0, radius: 50, expiresAt: 1200 },
+    } })!;
+    runtime.runHostProjectileStage(1, 1199);
+    expect(physics.handles.get(id)!.body.velocity.y).toBe(0);
+    runtime.runHostProjectileStage(1, 1200);
+    expect(physics.handles.get(id)!.body.velocity.y).toBeGreaterThan(0);
+    runtime.destroy();
+  });
   it('preserves smoke provenance and protects only the origin during the initial flight', () => {
     const { runtime } = createRuntimeHarness();
     const hit = configureEnemyImpact(runtime);

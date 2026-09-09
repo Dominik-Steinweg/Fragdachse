@@ -39,6 +39,15 @@ function getUpgradeParams(
   });
 
   const decoy = UTILITY_CONFIGS.DECOY;
+  const timeBubble = UTILITY_CONFIGS.TIME_BUBBLE;
+  if (definition.id === 'time_bubble_prism_spiral' && timeBubble?.type === 'time_bubble' && timeBubble.prismEmitter) {
+    const prism = timeBubble.prismEmitter;
+    params.prismIntervalMs = formatNumber(prism.intervalMs, locale);
+    params.prismRotationSeconds = formatNumber(prism.rotationPeriodMs / 1000, locale);
+    params.prismDamage = formatNumber(prism.damage, locale);
+    params.prismSlowPercent = formatNumber(prism.slowFraction, locale, { style: 'percent' });
+    params.prismSlowSeconds = formatNumber(prism.slowDurationMs / 1000, locale);
+  }
   if (definition.id.startsWith('decoy_') && decoy?.type === 'decoy') {
     params.decoyRefundSeconds = formatNumber(decoy.refundPerEnemyMs / 1000, locale);
     params.decoyChunkSeconds = formatNumber(decoy.fireChunkBurst.durationMs / 1000, locale);

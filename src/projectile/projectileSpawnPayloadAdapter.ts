@@ -37,6 +37,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     remainingRangePx:     flight.remainingRangePx,
     fuseTime:             flight.fuseTimeMs,
     homing:               flight.homing,
+    homingExcludedCircle: flight.homingExcludedCircle,
     piercesTargets:       flight.piercesTargets,
     penetrationCount:           flight.penetration?.count,
     penetrationDamageRetention: flight.penetration?.damageRetention,

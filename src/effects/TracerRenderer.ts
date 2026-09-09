@@ -11,6 +11,7 @@ import { emissiveAlpha } from './EmissiveScale';
 
 interface FlightVisual {
   tuning: FlightSignatureTuning; color: number; energy: boolean;
+  prismatic: boolean;
   pressureSampler: ProjectileTrailSampler; moteSampler: ProjectileTrailSampler;
   ribbon: FlightRibbonHandle | null; generation: number; closed: boolean; pending: number;
 }
@@ -42,6 +43,7 @@ export class TracerRenderer {
   createTracer(id: number, _x: number, _y: number, config: TracerConfig, color: number): void {
     if (this.visuals.has(id)) return;
     this.visuals.set(id, { tuning: resolveFlightSignature(config), color: config.color ?? color,
+      prismatic: config.profile === 'prismatic',
       energy: config.profile === 'highEnergy', pressureSampler: new ProjectileTrailSampler(),
       moteSampler: new ProjectileTrailSampler(), ribbon: null, generation: -1, closed: false, pending: 0 });
   }
@@ -93,6 +95,7 @@ export class TracerRenderer {
     }
     if (!v.ribbon) v.ribbon = system.createFlightRibbon(this.source, {
       tuning: v.tuning, color: v.color, emissive: emissiveAlpha(1),
+      prismatic: v.prismatic,
     });
     if (!v.ribbon) return;
     system.appendFlightRibbon(v.ribbon, { ...pending.segment,

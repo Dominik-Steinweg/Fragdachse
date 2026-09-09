@@ -20,6 +20,28 @@
       "trainSlowFactor": 0.1,
       "bubbleColor": "#8edcff",
       "bubbleDistortion": 0.75,
+      "prismEmitter": {
+        "enabled": 0,
+        "intervalMs": 150,
+        "rotationPeriodMs": 3000,
+        "speed": 1400,
+        "size": 3,
+        "rangePx": 800,
+        "damage": 1,
+        "slowFraction": 0.5,
+        "slowDurationMs": 2000,
+        "homing": {
+          "acquireDelayMs": 150,
+          "searchRadius": 500,
+          "retargetIntervalMs": 50,
+          "maxTurnDegreesPerStep": 12,
+          "targetTypes": ["enemies"],
+          "requireLineOfSight": true,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 0.5
+        }
+      },
       "allowedSlots": [
         "utility"
       ],

@@ -2,6 +2,7 @@ import type {
   HomingRuntimeState,
   HomingTargetType,
   ProjectileHomingConfig,
+  ProjectileHomingExcludedCircle,
 } from '../types';
 
 /** Ein vom Host gemeldetes mögliches Ziel für ein zielsuchendes Projektil. */
@@ -67,6 +68,7 @@ export interface ProjectileHomingRequest {
   readonly kinematics: ProjectileKinematics;
   readonly state: HomingRuntimeState;
   readonly excludedTargetKeys?: ReadonlySet<string>;
+  readonly excludedCircle?: ProjectileHomingExcludedCircle;
   readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
 }
 
@@ -115,7 +117,7 @@ export class ProjectileHomingController {
   }
 
   /** Lenkt ein zielsuchendes Projektil pro Host-Schritt Richtung seines (ggf. neu gewählten) Ziels. */
-  update(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false): boolean {
+  update(request: ProjectileHomingRequest, simulatedAgeMs: number, forceSearch = false, hostNowMs = 0): boolean {
     const { homing, ownerId, kinematics, state } = request;
     if (!this.targetQueryPort) return false;
 
@@ -137,7 +139,7 @@ export class ProjectileHomingController {
     }
     state.lastSearchAtSimulatedMs = simulatedAgeMs;
 
-    const target = this.selectTarget(request, simulatedAgeMs);
+    const target = this.selectTarget(request, simulatedAgeMs, hostNowMs);
     if (!target) {
       state.lockedTargetId = null;
       state.lockedTargetType = undefined;
@@ -161,7 +163,7 @@ export class ProjectileHomingController {
   }
 
   /** Wählt das bestbewertete erreichbare Ziel ohne Allokationen im normalen Suchpfad. */
-  private selectTarget(request: ProjectileHomingRequest, ageMs: number): HomingTargetCandidate | null {
+  private selectTarget(request: ProjectileHomingRequest, ageMs: number, hostNowMs: number): HomingTargetCandidate | null {
     const { homing, ownerId, kinematics, state } = request;
     const targetQueryPort = this.targetQueryPort;
     if (!targetQueryPort) return null;
@@ -191,7 +193,11 @@ export class ProjectileHomingController {
       const dx = candidate.x - originX;
       const dy = candidate.y - originY;
       const protection = request.initialTargetProtection;
+      const circle = request.excludedCircle;
+      const insideExcludedCircle = circle !== undefined && hostNowMs < circle.expiresAt
+        && (candidate.x - circle.x) ** 2 + (candidate.y - circle.y) ** 2 <= circle.radius ** 2;
       const ineligible = (candidate.type === 'enemies' && protection?.targetId === candidate.id && ageMs < protection.durationMs)
+        || insideExcludedCircle
         || !targetTypes.includes(candidate.type)
         || (excludeOwner && candidate.id === ownerId)
         || dx * dx + dy * dy > searchRadiusSq

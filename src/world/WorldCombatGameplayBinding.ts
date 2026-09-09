@@ -471,6 +471,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     decoySystem.setStealthBrokenHandler(null);
     decoySystem.clearAll();
     if (this.systems) {
+      this.systems.timeBubble.setPrismProjectileSpawner(null);
       this.systems.timeBubble.destroyAll();
       for (const player of this.options.playerManager.getAllPlayers()) {
         this.systems.energyShield.hostDeactivateForPlayer(player.id);
@@ -806,6 +807,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         'train', 'main', damage, ownerId, 'environment.tesla',
       ),
     );
+    timeBubble.setPrismProjectileSpawner(request => { o.projectileSpawn.spawnProjectile(request); });
     teslaDome.setStormProjectileSpawner((request) => {
       const lifetime = request.speed > 0 ? request.rangePx / request.speed * 1000 : 0;
       o.projectileSpawn.spawnProjectile({
