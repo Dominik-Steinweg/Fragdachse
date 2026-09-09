@@ -59,16 +59,43 @@ Der optionale Dachs-Face-Pass `model.combatFace` verwendet `badger_face_parts.py
 
 Die optionale Texturfamilie `bodyFur` ersetzt nur Körper-, Griff- und Pfotenfell; Kopf und Ohren behalten ihre ursprüngliche Textur. Gerichtete Fellgruppen modulieren die breiten Formwerte, ohne die Geometrie zu verändern. `model.clawedPaws` baut kompakte Pfoten und kurze matte Krallen über `badger_paw_parts.py`; sämtliche Teile gehören zur jeweiligen Beingeometrie und folgen den vorhandenen Beinsteuerungen. Der Standabstand und die Gelenkpunkte verwenden gemeinsam `model.footSpacing`.
 
-## Iterative Vorschauen vor der Produktion
+## V2-Authoring-Vorschauen
 
-[preview-v2.py](preview-v2.py) erzeugt einige tatsächliche 1024er-Posen einer Rezeptur unter `art/poc/pipeline-v2/previews/<neues-Label>/<id>`. Sämtliche Posen des Clips werden zuvor geometrisch geprüft. Diese diagnostischen Vorschauen werden nicht als vollständige Produktionsrevision veröffentlicht oder ausgewählt:
+[preview-v2.mjs](preview-v2.mjs) verbindet Blender-Render und Bildvergleich in einem Aufruf:
 
 ```powershell
-blender --background --factory-startup --python-exit-code 1 --python scripts/asset-pipeline/preview-v2.py -- --repo C:/Fragdachse --asset badger --label bewegung-a --indices all --device OPTIX
-node scripts/asset-pipeline/review-preview-v2.mjs art/poc/pipeline-v2/previews/bewegung-a/badger
+npm run assets:preview -- badger
 ```
 
-Die Frameübersicht kombiniert klar beschriftete Vergrößerungen mit Nominalgröße und bei Türmen dem echten 32er-Fels. Für gezielte Posen `--indices 0,3,6,9` verwenden. Nach tatsächlicher Bildprüfung die Rezeptur oder Bewegung korrigieren und ein neues Vorschau-Label vergeben. Erst danach den vollständigen Build mit beiden Varianten erzeugen. Quellenpakete erfassen auch die gemeinsamen Python-Anatomie-/Mechanikhelfer; Änderungen in der Authoring-Bibliothek erfordern eine neue Revision.
+Standardmäßig entstehen drei tatsächliche 1024er-Render: idle sowie die verfügbaren Posen bei ungefähr 25 % und 75 % des ersten Clips, Variante `rich`. Vor dem Rendern prüft [preview-v2.py](preview-v2.py) weiterhin die Geometrie aller Posen mit den bestehenden Kamera- und Größenverträgen. Ein neuer unsichtbarer Blender-Hintergrundprozess erhält die interaktive Szene. Das eindeutige Label entsteht automatisch; die Ergebnisse liegen unter `art/poc/pipeline-v2/previews/<Label>/<id>`.
+
+Blender wird in dieser Reihenfolge gesucht: `--blender`, Umgebungsvariable `BLENDER_PATH`, `PATH`. Falls Blender nicht im Suchpfad liegt, genügt beispielsweise:
+
+```powershell
+npm run assets:preview -- badger --blender "D:/Blender Foundation/Blender 5.2/blender.exe"
+```
+
+| Option | Wirkung |
+| --- | --- |
+| `--label bewegung-a` | Eigenes neues Label; bestehende Labels werden abgelehnt. |
+| `--variant calm` | Eine Materialvariante rendern; Standard `rich`. |
+| `--indices all` oder `--indices 0,3,6,9` | Alle bzw. bestimmte Posen; idle wird für den Vergleich immer ergänzt. |
+| `--device AUTO` | Standard: verfügbares OPTIX-, dann CUDA-Gerät, sonst CPU. Explizites `CPU`, `CUDA` oder `OPTIX` möglich; ein nicht verfügbares explizites GPU-Gerät führt zum Fehler. |
+| `--patch datei.json` | Bestehendes lokales Override-Format: Asset-ID auf flache Spec-Änderungen abbilden, optional unter `assets`; alternativ Asset-Liste. Der Katalog wird nicht geändert. |
+| `--compare bild.png` | Eigenes Vergleichsbild statt automatischer Vorgängerauswahl. |
+| `--review <Vorschauordner>` | Nur Bildübersichten neu erstellen, ohne Blender; kombinierbar mit `--compare`. |
+
+`comparison.png` zeigt bisherigen und neuen idle vergrößert und in echter Nominalgröße, darunter die ausgewählten neuen Bewegungsposen. `scale.png` zeigt den neuen idle bei 0°/45°/90° auf hellem, dunklem, Gras- und Stahluntergrund aus dem vorhandenen Viewer. Türme stehen zum Größenvergleich auf dem echten 32×32-Fels; der Fels dreht sich nicht mit dem Turm.
+
+Der bisherige Stand ist das aktuell importierte Asset mit seiner eigenen Revision und Variante: Wenn lokal vorhanden, wird der entsprechende Master verwendet, andernfalls das importierte Runtime-Bild mit Kennzeichnung der geringeren Quellauflösung. Ohne Import gilt die Katalogreferenz einschließlich ihrer bisherigen Positions-/Drehkorrektur. Fehlende Vergleiche werden im Bild ausdrücklich markiert. `preview.json` speichert tatsächlich gewählte Posen, Gerät, Renderdauer und Vergleichsquelle. Alte Vorschau-Manifeste bleiben lesbar; wenn ihnen idle fehlt, wird dies markiert.
+
+Die normale Ausgabe enthält nur Ergebnis und Bildpfade. Vollständige Blender-Ausgabe steht in `<Label>/blender.log`; bei Fehlern erscheinen Exitstatus, kurzer Logauszug und Logpfad. Vorhandene Übersichten lassen sich beliebig oft erneuern:
+
+```powershell
+npm run assets:preview -- --review art/poc/pipeline-v2/previews/bewegung-a/badger
+```
+
+[review-preview-v2.mjs](review-preview-v2.mjs) bleibt auch direkt mit einem Vorschauordner aufrufbar. Die neuen Übersichten ersetzen den bisherigen `review.png`-Aufbau. Nach tatsächlicher Bildprüfung die Rezeptur oder Bewegung korrigieren und eine neue Vorschau erzeugen. Statische Posen prüfen keine kontinuierliche Bewegung; dafür bleibt der vorhandene Viewer nach ausdrücklichem Browserauftrag zuständig. Erst danach den vollständigen Build mit beiden Varianten erzeugen. Produktionsrevisionen, Auswahl, Archive und Import bleiben von diesem Vorschauwerkzeug unberührt. Quellenpakete erfassen auch die gemeinsamen Python-Anatomie-/Mechanikhelfer; Änderungen in der Authoring-Bibliothek erfordern eine neue Revision.
 
 ## V2 exportieren, prüfen und archivieren
 

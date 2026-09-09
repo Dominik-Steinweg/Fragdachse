@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--indices', default='0,3,6,9')
     parser.add_argument('--variant', choices=['calm', 'rich'], default='rich')
     parser.add_argument('--patch')
-    parser.add_argument('--device', choices=['CPU', 'CUDA', 'OPTIX'], default='OPTIX')
+    parser.add_argument('--device', choices=['AUTO', 'CPU', 'CUDA', 'OPTIX'], default='AUTO')
     args = parser.parse_args(sys.argv[sys.argv.index('--')+1:])
     root = Path(args.repo).resolve()
     asset_id, label = pipeline.identifier(args.asset), pipeline.identifier(args.label)
@@ -35,20 +35,33 @@ def main():
         updates = patch.get('assets', patch) if isinstance(patch, dict) else patch
         update = updates[asset_id] if isinstance(updates, dict) else next(item for item in updates if item['id'] == asset_id)
         spec = spec | update
-    fingerprint, sources, textures = pipeline.inputs(root, spec, args.device)
+    # Probe in this disposable process; never change an interactive Blender session.
+    device = 'CPU'
+    prefs = bpy.context.preferences.addons['cycles'].preferences
+    for candidate in (['OPTIX', 'CUDA', 'CPU'] if args.device == 'AUTO' else [args.device]):
+        if candidate == 'CPU': break
+        try:
+            prefs.compute_device_type = candidate
+            prefs.refresh_devices()
+            if any(item.type == candidate for item in prefs.devices):
+                device = candidate
+                break
+        except (TypeError, RuntimeError):
+            pass
+    if args.device not in ('AUTO', 'CPU') and device == 'CPU':
+        raise ValueError(f'Requested GPU unavailable: {args.device}')
+    fingerprint, sources, textures = pipeline.inputs(root, spec, device)
     session = pipeline.prepare(root, spec, label, fingerprint, sources, textures)
     scene, ctx = session['scene'], session['ctx']
     bpy.context.window.scene = scene
-    if args.device != 'CPU':
+    if device != 'CPU':
         cache = root / 'art/poc/pipeline-v2/cache/optix'
         cache.mkdir(parents=True, exist_ok=True)
         os.environ['OPTIX_CACHE_PATH'] = str(cache)
-        prefs = bpy.context.preferences.addons['cycles'].preferences
-        prefs.compute_device_type = args.device
-        prefs.refresh_devices()
-        if not any(device.type == args.device for device in prefs.devices): raise ValueError('Requested GPU unavailable')
-        for device in prefs.devices: device.use = device.type == args.device
+        for item in prefs.devices: item.use = item.type == device
         scene.cycles.device = 'GPU'
+    else:
+        scene.cycles.device = 'CPU'
     settings = spec['materialVariants'][args.variant]
     for socket in ctx.strengths: socket.default_value = settings['textureStrength']
     for socket in ctx.form_strengths: socket.default_value = settings['formShadowStrength']
@@ -61,9 +74,19 @@ def main():
         bpy.ops.render.render(write_still=True)
     scene.frame_set(0)
     bpy.data.libraries.write(str(output / 'preview.blend'), {scene, *session['texts']}, fake_user=True)
+    poses = []
+    for index in indices:
+        pose = dict(session['samples'][index], clip='idle', phase=0)
+        for clip in session['clips']:
+            if index in clip['frames']:
+                position = clip['frames'].index(index)
+                divisor = len(clip['frames']) if clip['loop'] else max(1, len(clip['frames']) - 1)
+                pose.update(clip=clip['name'], phase=position / divisor)
+        poses.append(pose)
     pipeline.save_json(output / 'preview.json', dict(status='authoring-preview', id=asset_id, spec=spec,
                        indices=indices, variant=args.variant, inputHash=fingerprint, bounds=session['bounds'],
-                       baseDiameters=session['baseDiameters'], sources=sources))
+                       baseDiameters=session['baseDiameters'], sources=sources, device=device,
+                       poses=poses, clips=session['clips']))
     print(json.dumps({'preview': str(output), 'frames': indices}), flush=True)
 
 

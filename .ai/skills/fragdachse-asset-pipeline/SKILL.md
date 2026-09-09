@@ -5,7 +5,11 @@ description: Create or revise Fragdachse turret, enemy and character sprites and
 
 # Fragdachse Asset Pipeline
 
-Produce a useful sprite at its actual display size. Read [the pipeline guide](../../../scripts/asset-pipeline/README.md) for commands and [visual guidelines](../../../docs/ai/visual-guidelines.md) for project context. Use the existing Blender MCP; no new service is needed.
+Produce a useful sprite at its actual display size. Consult the relevant section of [the pipeline guide](../../../scripts/asset-pipeline/README.md) for advanced options and production steps, and [visual guidelines](../../../docs/ai/visual-guidelines.md) for art direction. Use the existing Blender installation or MCP.
+
+## Quick authoring loop
+
+After editing a recipe/material/motion, run `npm run assets:preview -- <catalog-id>`. It renders idle and two clip phases in a fresh background Blender process, chooses an available device, and prints paths to `comparison.png` and `scale.png`. Inspect those actual images before iterating. The comparison uses the imported asset when available; the manifest records its source. Use `--indices all` for every pose or `--review <preview-folder>` to regenerate sheets without rendering. Blender is resolved from `--blender`, `BLENDER_PATH`, then `PATH`; full output stays in the local log. Options and comparison overrides are documented in the guide's “V2-Authoring-Vorschauen” section. Static sheets do not verify continuous motion; use the existing viewer only with an explicit browser request. Full production build, verification, selection, archive and import remain separate.
 
 ## Workflow
 

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "ai:sync": "node scripts/sync-ai-skills.mjs",
+    "assets:preview": "node scripts/asset-pipeline/preview-v2.mjs",
     "audio:convert": "node scripts/convert-audio.mjs",
     "icons:generate": "node scripts/generate-upgrade-icons.mjs",
     "icons:generate-one": "node scripts/generate-upgrade-icons.mjs --id",
