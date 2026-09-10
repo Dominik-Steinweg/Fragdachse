@@ -78,7 +78,7 @@ export class StinkPlagueRuntime {
   constructor(private readonly ports: StinkPlaguePorts) {}
 
   applyDirect(target: PlagueTarget, application: PlagueApplication, now: number): void {
-    if (target.ref.kind !== 'enemy' || application.config.damagePerTick <= 0) return;
+    if (target.ref.kind !== 'enemy' || application.config.damagePerTick <= 0 || application.config.directDurationMs <= 0) return;
     const key = combatTargetInstanceKey(target.ref);
     let state = this.infected.get(key);
     // Finish an old application before a new one can revive its expired tick clock.
@@ -119,6 +119,19 @@ export class StinkPlagueRuntime {
     if (!state || state.target.boss || !this.sourcesAt(state, now).some(s => this.infectious(s))) return null;
     const destination = this.movementTargets.get(key);
     return destination && !this.isInfected(destination.ref, now) ? destination : null;
+  }
+
+  getPursuitMoveSpeedBonus(target: CombatTargetRef, now: number): number {
+    const state = this.infected.get(combatTargetInstanceKey(target));
+    return state ? Math.max(0, ...this.sourcesAt(state, now)
+      .filter(source => this.infectious(source)).map(source => source.config.pursuitMoveSpeedBonus)) : 0;
+  }
+
+  /** All Pandemic generations leave trails, with one stable, attributable slime owner. */
+  getSlimeTrailOwner(target: CombatTargetRef, now: number): string | null {
+    const state = this.infected.get(combatTargetInstanceKey(target));
+    return state ? this.strongest(this.sourcesAt(state, now).filter(source => source.config.pandemicEnabled > 0),
+      source => source.config.damagePerTick * source.damageMultiplier)?.ownerId ?? null : null;
   }
 
   /** Called before primary contacts/damage each frame, so expiries cannot be accidentally refreshed. */
@@ -194,8 +207,8 @@ export class StinkPlagueRuntime {
               if (distance > from.radius + to.radius + source.config.contactGap) continue;
               if (!next) pending.set(key, next = { target: to, sources: new Map(), from });
               const generation = (source.generation + 1) as 1 | 2;
-              const candidate: Contribution = { ...source, generation, expiresAt: now + (generation === 1
-                ? source.config.firstGenerationDurationMs : source.config.secondGenerationDurationMs) };
+              const candidate: Contribution = { ...source, generation,
+                expiresAt: now + source.config.directDurationMs * source.config.generationDurationFactor ** generation };
               const previous = next.sources.get(source.ownerId);
               if (!previous || candidate.generation < previous.generation
                 || (candidate.generation === previous.generation && candidate.config.damagePerTick * candidate.damageMultiplier

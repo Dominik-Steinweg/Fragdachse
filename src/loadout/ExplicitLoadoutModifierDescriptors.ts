@@ -2,7 +2,7 @@ import type { ConfigStatDescriptor } from './CoopDefenseLoadoutModifiers';
 
 /** Explicit contracts for formerly convention-resolved upgrade paths. */
 export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
-  'utility.STINK_CLOUD.plague.damagePerTick': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'damagePerTick'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.directDurationMs': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'directDurationMs'], formula: 'add' }] },
   'utility.STINK_CLOUD.plague.lifeLeechFraction': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'lifeLeechFraction'], formula: 'add' }] },
   'utility.STINK_CLOUD.plague.pandemicEnabled': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'pandemicEnabled'], formula: 'add' }] },
   'utility.STINK_CLOUD.plague.vulnerabilityEnabled': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'vulnerabilityEnabled'], formula: 'add' }] },

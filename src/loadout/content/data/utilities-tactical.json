@@ -105,13 +105,13 @@
     "STINK_CLOUD": {
       "id": "STINK_CLOUD",
       "plague": {
-        "damagePerTick": 0,
+        "damagePerTick": 1,
         "tickIntervalMs": 500,
-        "directDurationMs": 4000,
-        "firstGenerationDurationMs": 2000,
-        "secondGenerationDurationMs": 1000,
+        "directDurationMs": 0,
+        "generationDurationFactor": 0.5,
         "spreadIntervalMs": 100,
-        "searchRadius": 220,
+        "searchRadius": 1000,
+        "pursuitMoveSpeedBonus": 0.5,
         "contactGap": 40,
         "lifeLeechFraction": 0,
         "pandemicEnabled": 0,

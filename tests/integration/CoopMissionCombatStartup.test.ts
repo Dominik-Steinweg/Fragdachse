@@ -403,6 +403,34 @@ describe('Coop mission combat startup', () => {
     });
   });
 
+  it('detaches world targeting outside a host combat execution', () => {
+    const coordinator = Object.create(ArenaLifecycleCoordinator.prototype);
+    const removeOwner = vi.fn();
+    const removeTarget = vi.fn();
+    const removeInjectorOwner = vi.fn();
+    coordinator.worldGameplay = {
+      combatSystem: { getHostTime: () => { throw new Error('No active host execution'); } },
+      support: { plague: { removeOwner } },
+      targeting: { systems: {
+        targetStatus: { removeTarget },
+        energyInjector: { removeOwner: removeInjectorOwner },
+      } },
+    };
+    const runtime = coordinator.composePlayerRuntime();
+    runtime.attach({ profile: { id: 'leaving-player' }, reconnectAfterDeath: false, nowMs: 1000 }, {
+      entity: false, navigation: false, combat: false, combatResources: false,
+      loadoutTools: false, playerBuild: false, worldTargeting: true,
+    });
+    const beforeDetach = Date.now();
+    expect(() => runtime.detachAll()).not.toThrow();
+    expect(removeOwner).toHaveBeenCalledOnce();
+    expect(removeOwner.mock.calls[0][0]).toBe('leaving-player');
+    expect(removeOwner.mock.calls[0][1]).toBeGreaterThanOrEqual(beforeDetach);
+    expect(removeOwner.mock.calls[0][1]).toBeLessThanOrEqual(Date.now());
+    expect(removeTarget).toHaveBeenCalledWith({ targetType: 'player', targetId: 'leaving-player' });
+    expect(removeInjectorOwner).toHaveBeenCalledWith('leaving-player');
+  });
+
   it('attaches base overlays before combat exists and projects later changes into the current core', () => {
     let publish = () => {};
     const obstacles = [{ x: 10, y: 20, width: 30, height: 40 }];

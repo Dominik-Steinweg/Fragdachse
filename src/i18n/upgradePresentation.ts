@@ -47,11 +47,12 @@ function getUpgradeParams(
     params.cloudDamage = formatNumber(stink.cloudDamagePerTick, locale);
     params.cloudRadius = formatNumber(stink.cloudRadius, locale);
     params.cloudCooldown = formatNumber(stink.cooldown / 1000, locale);
-    params.plagueSeconds = formatNumber(p.directDurationMs / 1000, locale);
+    params.plagueDamage = formatNumber(p.damagePerTick, locale);
     params.plagueTick = formatNumber(p.tickIntervalMs / 1000, locale);
-    params.g1Seconds = formatNumber(p.firstGenerationDurationMs / 1000, locale);
-    params.g2Seconds = formatNumber(p.secondGenerationDurationMs / 1000, locale);
+    params.plagueGenerationDuration = formatNumber(p.generationDurationFactor, locale, { style: 'percent' });
     params.contactGap = formatNumber(p.contactGap, locale);
+    params.plagueSearchRadius = formatNumber(p.searchRadius, locale);
+    params.plaguePursuitSpeed = formatNumber(p.pursuitMoveSpeedBonus, locale, { style: 'percent' });
     params.plagueVulnerability = formatNumber(VULNERABILITY_INCOMING_DAMAGE_BONUS, locale, { style: 'percent' });
   }
   const decoy = UTILITY_CONFIGS.DECOY;

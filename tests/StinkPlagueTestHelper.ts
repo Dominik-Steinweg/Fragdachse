@@ -2,11 +2,14 @@ import { vi } from 'vitest';
 import { StinkPlagueRuntime, type PlagueApplication, type PlagueTarget } from '../src/systems/StinkPlagueRuntime';
 import { UTILITY_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { StinkPlagueConfig } from '../src/loadout/StinkPlagueConfig';
+import { getCoopDefenseUpgradeDefinition } from '../src/utils/coopDefenseUpgrades';
 
 export function plagueConfig(patch: Partial<StinkPlagueConfig> = {}): StinkPlagueConfig {
   const utility = UTILITY_CONFIGS.STINK_CLOUD;
   if (utility.type !== 'stinkcloud' || !utility.plague) throw Error('Missing authored plague');
-  return { ...utility.plague, damagePerTick: 2, ...patch };
+  const duration = getCoopDefenseUpgradeDefinition('stink_cloud_infection')!.effects
+    .find(effect => effect.stat === 'utility.STINK_CLOUD.plague.directDurationMs')!.value;
+  return { ...utility.plague, directDurationMs: duration, ...patch };
 }
 export function plagueSource(ownerId = 'p1', patch: Partial<StinkPlagueConfig> = {}, damageMultiplier = 1): PlagueApplication {
   return { ownerId, config: plagueConfig(patch), damageMultiplier };

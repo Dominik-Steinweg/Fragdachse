@@ -40,6 +40,17 @@ function fixture() {
 }
 
 describe('primary stink cloud lifetime', () => {
+  it('replicates owner-following independently from stationary cloud ownership', () => {
+    const f = fixture();
+    try {
+      f.cast(1000);
+      expect(f.step(1001).synced[0].followOwner).toBe(true);
+      f.cloud.hostCreateStationaryCloud('p1', 0xffffff, 300, 200, 80, 1000, 0, 250, 1, 1);
+      const stationary = f.step(1002).synced.find(cloud => !cloud.followOwner);
+      expect(stationary).toMatchObject({ x: 300, y: 200, followOwner: false });
+    } finally { f.destroy(); }
+  });
+
   it('cannot bypass the global lock with temporary inventory or inspector tools',()=> {
     const f=fixture();try {
       const first=f.action.addTemporaryUtility('p1',f.config,1)!;

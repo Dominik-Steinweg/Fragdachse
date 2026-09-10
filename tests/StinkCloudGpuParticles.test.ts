@@ -148,16 +148,11 @@ describe('stink cloud gpu particles', () => {
 
     // Beide Lanes teilen sich den Atlas und dasselbe Motiv.
     expect([normal, add].every((lane) => lane.key === '__gpu_vfx_atlas')).toBe(true);
-    expect([normal, add].every((lane) => lane.members.every((m) => m.frame === 'stink-puff'))).toBe(true);
+    expect([normal, add].every((lane) => lane.members.every((m) => m.frame === 'explosion-smoke'))).toBe(true);
   });
 
   it('keeps the depth band contract of the cloud visuals', () => {
-    // Im Band 16.8…17.2 liegt ausser der Stinkwolke nichts. Reihenfolge von unten nach oben:
-    //   16.88 groundGlow · 16.92 damageAura · 16.96 reactionPulse · 17.0 Container (Haze/Blobs)
-    //   17.02 stink-normal · 17.03 Spawn-Flash (ADD) · 17.04 stink-add
-    //   17.05 Spawn-Burst-Emitter (ADD) · 17.1 Fairness-Kreis (ADD)
-    // Beide GPU-Lanes liegen ueber dem Container; alles, was zwischen ihnen liegt, ist additiv
-    // und damit reihenfolgeunabhaengig.
+    // Both particle lanes sit above the gas body and below the readable radius marker.
     const { normal, add } = setup();
     expect(normal.blendMode).toBe(0);
     expect(add.blendMode).toBe(1);
@@ -166,7 +161,7 @@ describe('stink cloud gpu particles', () => {
     expect(normal.depth).toBeCloseTo(BASE_DEPTH + 0.02, 10);
     expect(add.depth).toBeCloseTo(BASE_DEPTH + 0.04, 10);
     expect(normal.depth).toBeLessThan(add.depth);
-    // Unter dem Spawn-Burst-Emitter (+0.05) und dem Fairness-Kreis (+0.1).
+    // The start burst shares the additive lane.
     expect(add.depth).toBeLessThan(BASE_DEPTH + 0.05);
 
     for (const lane of [normal, add]) {
@@ -175,32 +170,40 @@ describe('stink cloud gpu particles', () => {
     }
   });
 
-  it('emits nothing at 60 fps, exactly like the emitters it replaces', () => {
-    // `updateVisual()` ruft pro Frame `setFrequency()`, das Phasers Flow-Zaehler zurueckstellt.
-    // Bei Frequenzen von 18-92 ms erreicht er auf 16,7-ms-Frames nie null.
-    const { registry, particles, normal, add } = setup();
-    addCloud(particles, 1);
-
-    for (let f = 0; f < 120; f += 1) frame(particles, registry, 16.7);
-
-    expect(normal.edited).toEqual([]);
-    expect(add.edited).toEqual([]);
+  it('emits continuously with equivalent elapsed-time density at different frame rates', () => {
+    const counts = [40, 16, 8].map(delta => {
+      const { registry, particles, normal, add } = setup();
+      addCloud(particles, 1);
+      for (let elapsed = 0; elapsed < 2400; elapsed += delta) frame(particles, registry, delta);
+      expect(normal.visible).toBe(true); expect(add.visible).toBe(true);
+      const result = ['stink.inner', 'stink.plume', 'stink.accent', 'stink.edge'].map(label => spawnsOf(registry, label));
+      expect(result.every(count => count > 0)).toBe(true);
+      particles.releaseAll(); registry.destroy();
+      return result;
+    });
+    expect(counts[0]).toEqual(counts[1]); expect(counts[1]).toEqual(counts[2]);
   });
 
-  it('keeps both cloud lanes idle and hidden in that 60 fps state', () => {
-    // Sechs logische Pfade, die nichts emittieren, duerfen keine Instanzen kosten.
-    const { registry, particles, normal, add } = setup();
+  it('owns the queued GPU burst through cloud removal and variant replacement', () => {
+    const { scene, registry, particles, normal, add } = setup();
     addCloud(particles, 1);
-
-    for (let f = 0; f < 120; f += 1) frame(particles, registry, 16.7);
-
-    expect(normal.visible).toBe(false);
-    expect(add.visible).toBe(false);
-    expect(registry.getStats()?.['stink-normal'].liveCount).toBe(0);
+    particles.queueSpawnBurst(1);
+    frame(particles, registry, 1);
+    expect(add.edited.length).toBeGreaterThan(0);
+    expect(scene.emitters).toEqual([]);
+    const count = add.edited.length;
+    frame(particles, registry, 1);
+    expect(add.edited.length).toBe(count);
+    particles.registerCloud(1, 'electric', TINTS);
     expect(registry.getStats()?.['stink-add'].liveCount).toBe(0);
+    particles.queueSpawnBurst(1);
+    particles.releaseCloud(1);
+    registry.update(1);
+    expect(add.edited.length).toBe(count);
+    expect(normal.edited).toEqual([]);
   });
 
-  it('emits the same counts as the old flow once a frame outruns the frequency', () => {
+  it('routes elapsed-time flow into the expected blend lanes', () => {
     // Bei alpha 1 sind die Frequenzen inner 34, plume 42, accent 18, edge 24 ms. Ein 50-ms-Frame
     // ergibt daraus 1x2, 1x2, 2x1 und 2x3 Partikel.
     const { registry, particles, normal, add } = setup();
@@ -217,17 +220,14 @@ describe('stink cloud gpu particles', () => {
     expect(add.edited.length).toBe(8);
   });
 
-  it('follows the alpha ramp of the frequencies', () => {
-    // Bei alpha 0 sind die Frequenzen inner 74, plume 92, accent 54, edge 54 ms – ein 50-ms-Frame
-    // reicht dann fuer keine einzige Familie.
-    const { registry, particles, normal, add } = setup();
-    addCloud(particles, 1);
-
-    particles.syncCloud(1, 400, 300, 180, 0.02, 0, true);
-    registry.update(50);
-
-    expect(normal.edited).toEqual([]);
-    expect(add.edited).toEqual([]);
+  it('reduces emission density with cloud opacity without stalling the flow', () => {
+    const counts = [.1, 1].map(alpha => {
+      const { registry, particles } = setup(); addCloud(particles, 1);
+      for (let i = 0; i < 100; i++) frame(particles, registry, 16, 1, alpha);
+      const result = spawnsOf(registry, 'stink.inner');
+      particles.releaseAll(); registry.destroy(); return result;
+    });
+    expect(counts[0]).toBeGreaterThan(0); expect(counts[0]).toBeLessThan(counts[1]);
   });
 
   it('does not emit while the cloud is invisible', () => {
@@ -239,22 +239,17 @@ describe('stink cloud gpu particles', () => {
     expect(add.edited).toEqual([]);
   });
 
-  it('scales the flow density through the frequency only', () => {
-    // `applyEmitterProfile` streckte das Intervall ueber `particleFactors.standard`. Die Quantity
-    // bleibt unangetastet, sonst ginge der Faktor quadratisch ein: inner 34 -> round(34/0.5) = 68,
-    // ein 50-ms-Frame reicht dann nicht mehr.
-    qualityFactors.standard = 0.5;
-    const { registry, particles, normal } = setup();
-    addCloud(particles, 1);
-
-    frame(particles, registry, 50);
-    expect(normal.edited).toEqual([]);
-    expect(spawnsOf(registry, 'stink.inner')).toBe(0);
-    expect(spawnsOf(registry, 'stink.plume')).toBe(0);
-    // edge 24 -> 48; ein 50-ms-Frame ergibt genau eine Emission zu drei Partikeln.
-    expect(spawnsOf(registry, 'stink.edge')).toBe(3);
-    // accent 18 -> 36; genau eine Emission zu einem Partikel.
-    expect(spawnsOf(registry, 'stink.accent')).toBe(1);
+  it('scales elapsed-time emission density through quality', () => {
+    const counts = [1, .5].map(factor => {
+      qualityFactors.standard = factor;
+      const { registry, particles } = setup(); addCloud(particles, 1);
+      for (let i = 0; i < 100; i++) frame(particles, registry, 16);
+      const result = spawnsOf(registry, 'stink.inner');
+      particles.releaseAll(); registry.destroy(); return result;
+    });
+    expect(counts[1]).toBeGreaterThan(0);
+    expect(counts[1] / counts[0]).toBeGreaterThan(.4);
+    expect(counts[1] / counts[0]).toBeLessThan(.6);
   });
 
   it('emits nothing when the quality factor is zero', () => {
@@ -365,7 +360,11 @@ describe('stink cloud gpu particles', () => {
     registry.setSuppressed(false);
     frame(particles, registry, 50);
     // Genau ein Frame Emission, kein Nachholen der 40 unterdrueckten Frames.
-    expect(add.edited.length - before).toBe(8);
+    const control = setup(); addCloud(control.particles, 1);
+    frame(control.particles, control.registry, 50);
+    const controlBefore = control.add.edited.length;
+    frame(control.particles, control.registry, 50);
+    expect(add.edited.length - before).toBe(control.add.edited.length - controlBefore);
   });
 
   it('releases exactly the members of a removed cloud', () => {
@@ -387,7 +386,11 @@ describe('stink cloud gpu particles', () => {
     // Die entfernte Wolke emittiert nicht mehr.
     particles.syncCloud(2, 200, 200, 180, 1, 0, true);
     registry.update(50);
-    expect(add.edited.length).toBe(16 + 8);
+    const control = setup(); addCloud(control.particles, 2);
+    frame(control.particles, control.registry, 50, 2);
+    const controlBefore = control.add.edited.length;
+    frame(control.particles, control.registry, 50, 2);
+    expect(add.edited.length - 16).toBe(control.add.edited.length - controlBefore);
   });
 
   it('releases members left behind in the other blend lane after a variant switch', () => {

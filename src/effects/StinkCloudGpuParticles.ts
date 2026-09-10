@@ -7,33 +7,6 @@ import type { GpuVfxSpawnSpec } from './gpu/GpuVfxSpawnSpec';
 import { GPU_VFX_NO_SOURCE_HANDLE, type GpuVfxSystem } from './gpu/GpuVfxSystem';
 import { ParticleFlowScheduler } from './gpu/ParticleFlowScheduler';
 
-/**
- * Die vier kontinuierlichen Wolkenpartikel-Familien auf dem gemeinsamen GPU-VFX-Backend.
- *
- * Ersetzt die bisherigen vier `ParticleEmitter` *pro Wolke*. Die Wolkenbilder selbst (Haze,
- * Blobs, Ground/Glow/Pulse, Fairness-Kreis, Bolts, Licht) bleiben unveraendert auf der CPU – das
- * Hybridmodell ist Absicht und kein Zwischenstand.
- *
- * ## Warum die Emission an der Framerate haengt
- *
- * `StinkCloudSystem.updateVisual()` rief pro Frame `setFrequency()` auf jeden Emitter, und
- * Phasers `setFrequency()` setzt `flowCounter = frequency` zurueck. Die `UpdateList` laeuft auf
- * `SceneEvents.UPDATE` vor `scene.update()`, der Zaehler wurde also je Frame um genau ein Delta
- * verringert und danach wieder hochgesetzt. Bei Frequenzen von 18–92 ms erreicht er auf 60 fps
- * nie null: die vier Familien emittieren dort **gar nichts** und melden sich erst, wenn ein Frame
- * laenger dauert als die Frequenz.
- *
- * Diese Klasse bildet genau das nach – `resetCountdown()` pro Frame. Ob die Wolke bei 60 fps
- * wieder emittieren soll, ist ein eigener optischer Bugfix und haengt an genau dieser Zeile. Die
- * generische Infrastruktur kennt diesen Sonderfall bewusst nicht; sie bekommt nur fertige
- * Spawn-Auftraege.
- *
- * Ebenfalls Ist-Zustand: die `setParticleScale()`-Aufrufe pro Frame waren wirkungslos
- * (`scale: {start,end}` laedt Op-Methode 5, deren `onChange()` nur das Bookkeeping-Feld
- * schreibt), der Scale-Verlauf steht damit fest auf den Config-Werten und ist nicht
- * radiusabhaengig.
- */
-
 /** Familien in ihrer Tiefenreihenfolge. */
 export type StinkParticleFamily = 'inner' | 'plume' | 'accent' | 'edge';
 
@@ -104,6 +77,7 @@ interface StinkCloudEmission {
   readonly source: number;
   /** Laufender Index der Edge-Zone, wie Phasers `EdgeZone.counter`. */
   edgePoint: number;
+  burstPending: boolean;
   x: number;
   y: number;
   radius: number;
@@ -117,14 +91,21 @@ const SPAWN_POINT  = new Phaser.Math.Vector2(0, 0);
 
 const FAMILY_ORDER: readonly StinkParticleFamily[] = ['inner', 'plume', 'accent', 'edge'];
 
+/** GPU flow and spawn bursts share the cloud source and bounded VFX lanes. */
 export class StinkCloudGpuParticles {
   private readonly clouds = new Map<number, StinkCloudEmission>();
   /** Parallel zur Map, damit der Emissions-Tick ohne Iterator-Allokation laeuft. */
   private readonly activeClouds: StinkCloudEmission[] = [];
+  private readonly burstSpec: GpuVfxSpawnSpec;
   /** Ein Spawn-Spec je Familie; die Lane wird je Wolkenvariante umgeschrieben. */
   private readonly specs: Record<StinkParticleFamily, GpuVfxSpawnSpec>;
 
   constructor(private readonly system: GpuVfxSystem) {
+    this.burstSpec = system.createSpec(GpuVfxEffectId.StinkEdge);
+    // Preserve world sizes when replacing the 40px puff with the 56px smooth smoke frame.
+    this.burstSpec.scaleStart = .22 * 40 / 56;
+    this.burstSpec.scaleEnd = .78 * 40 / 56;
+    this.burstSpec.alphaEnd = 0;
     this.specs = {
       inner:  system.createSpec(FAMILY_SPECS.inner.effect),
       plume:  system.createSpec(FAMILY_SPECS.plume.effect),
@@ -133,8 +114,8 @@ export class StinkCloudGpuParticles {
     };
     for (const family of FAMILY_ORDER) {
       const spec = FAMILY_SPECS[family];
-      this.specs[family].scaleStart = spec.scaleStart;
-      this.specs[family].scaleEnd   = spec.scaleEnd;
+      this.specs[family].scaleStart = spec.scaleStart * 40 / 56;
+      this.specs[family].scaleEnd   = spec.scaleEnd * 40 / 56;
       this.specs[family].alphaEnd   = 0;
     }
 
@@ -150,13 +131,13 @@ export class StinkCloudGpuParticles {
       tints,
       additive: isAdditiveVariant(variant),
       flows: {
-        inner:  new ParticleFlowScheduler(FAMILY_SPECS.inner.freqIdle),
-        plume:  new ParticleFlowScheduler(FAMILY_SPECS.plume.freqIdle),
-        accent: new ParticleFlowScheduler(FAMILY_SPECS.accent.freqIdle),
-        edge:   new ParticleFlowScheduler(FAMILY_SPECS.edge.freqIdle),
+        inner:  new ParticleFlowScheduler(FAMILY_SPECS.inner.freqActive),
+        plume:  new ParticleFlowScheduler(FAMILY_SPECS.plume.freqActive),
+        accent: new ParticleFlowScheduler(FAMILY_SPECS.accent.freqActive),
+        edge:   new ParticleFlowScheduler(FAMILY_SPECS.edge.freqActive),
       },
       source: this.system.createSource(GpuVfxEffectId.StinkInner),
-      edgePoint: -1,
+      edgePoint: -1, burstPending: false,
       x: 0, y: 0, radius: 8, alpha: 0, pulseWave: 0, visible: false,
     };
     this.clouds.set(id, emission);
@@ -202,6 +183,12 @@ export class StinkCloudGpuParticles {
     if (emission.source !== GPU_VFX_NO_SOURCE_HANDLE) this.system.releaseSource(emission.source);
   }
 
+  /** Emitted by the backend after its retire sweep, never by a CPU ParticleEmitter. */
+  queueSpawnBurst(id: number): void {
+    const emission = this.clouds.get(id);
+    if (emission) emission.burstPending = true;
+  }
+
   releaseAll(): void {
     for (const emission of this.activeClouds) {
       if (emission.source !== GPU_VFX_NO_SOURCE_HANDLE) this.system.releaseSource(emission.source);
@@ -217,9 +204,31 @@ export class StinkCloudGpuParticles {
     for (let index = 0; index < this.activeClouds.length; index += 1) {
       const emission = this.activeClouds[index];
       if (!emission.visible) continue;
+      if (emission.burstPending) {
+        emission.burstPending = false;
+        this.emitBurst(emission, nowMs);
+      }
       for (let f = 0; f < FAMILY_ORDER.length; f += 1) {
         this.emitFamily(emission, FAMILY_ORDER[f], deltaMs, nowMs);
       }
+    }
+  }
+
+  private emitBurst(emission: StinkCloudEmission, nowMs: number): void {
+    const spec = this.burstSpec;
+    const count = this.system.quality.scaleDiscreteBurst(spec.effect, Math.min(96, Math.max(32, Math.round(emission.radius * .22))));
+    for (let i = 0; i < count; i++) {
+      const angle = i / count * Math.PI * 2;
+      spec.x = emission.x + Math.cos(angle) * emission.radius * .82;
+      spec.y = emission.y + Math.sin(angle) * emission.radius * .82;
+      spec.lifeMs = Phaser.Math.FloatBetween(700, 1800);
+      // A restrained initial exhale, without a long trail beyond the damage boundary.
+      spec.vx = Math.cos(angle) * emission.radius * .035;
+      spec.vy = Math.sin(angle) * emission.radius * .035;
+      spec.rotation = angle;
+      spec.alphaStart = .24 * emission.alpha;
+      spec.tint = pickGpuVfxTint(emission.tints.edge);
+      this.system.spawn(spec, emission.source, nowMs);
     }
   }
 
@@ -241,9 +250,6 @@ export class StinkCloudGpuParticles {
 
     const flow = emission.flows[family];
     flow.setFrequency(frequency);
-    // Ist-Zustand: `updateVisual()` rief pro Frame `setFrequency()`, das den Countdown
-    // zurueckstellt. Die Emission haengt damit allein an (frequency, delta).
-    flow.resetCountdown();
     const emissions = flow.tick(deltaMs);
     if (emissions === 0) return;
 

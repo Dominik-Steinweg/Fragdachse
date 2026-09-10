@@ -327,6 +327,27 @@ afterEach(() => {
 });
 
 describe('WorldCombatGameplayBinding projectile target geometry', () => {
+  it('silently removes a charged utility bubble outside host execution during teardown', () => {
+    const f = createFixture({ players: [], enemies: [] });
+    const port = vi.mocked(f.playerCombat.utility.setTimeBubblePort!).mock.calls[0][0]!;
+    const effect = { type: 'time_bubble' as const, chargeCapacity: 30, radius: 50, duration: 1000,
+      playerSlowFactor: 0.1, projectileSlowFactor: 0.2, trainSlowFactor: 0.1 };
+    const id = port.create('owner', 0, 0, effect, 1000);
+    const bubbles = f.binding.systems!.timeBubble;
+    bubbles.observeProjectile(1, 0, 0, 7, 1001);
+    vi.mocked(f.combatSystem.getHostTime).mockImplementation(() => {
+      throw Error('Missing active Host execution context');
+    });
+    expect(bubbles.isBubbleActive(id, 1100)).toBe(true);
+    expect(() => port.remove(id)).not.toThrow();
+    expect(bubbles.isBubbleActive(id, 1100)).toBe(false);
+    bubbles.flushReleases(1100);
+    expect(f.combatSystem.applyAoeDamage).not.toHaveBeenCalled();
+    expect(f.playerCombat.utility.onTimeBubbleEnded).not.toHaveBeenCalled();
+    expect(() => port.remove(id)).not.toThrow();
+    f.binding.destroy();
+  });
+
   it('resolves a consumed utility projectile between host frames in a host clock scope', () => {
     const f = createFixture({ players: [], enemies: [] });
     let inHostExecution = false;

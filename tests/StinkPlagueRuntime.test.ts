@@ -41,14 +41,15 @@ describe('plague shared status and generation contract', () => {
     expect(runtime.getSnapshot(0).targets.map(t => t.enemyId)).toEqual(['e0','e1']);
     runtime.spread(targets, p.spreadIntervalMs);
     const g2 = runtime.getSnapshot(p.spreadIntervalMs).targets.find(t => t.enemyId === 'e2')!;
-    expect(g2).toMatchObject({ infectiousUntil: 0, expiresAt: p.spreadIntervalMs + p.secondGenerationDurationMs });
+    expect(g2).toMatchObject({ infectiousUntil: 0, expiresAt: p.spreadIntervalMs + p.directDurationMs * p.generationDurationFactor ** 2 });
     runtime.spread(targets, p.spreadIntervalMs*2); expect(runtime.isInfected(targets[3].ref, p.spreadIntervalMs*2)).toBe(false);
     runtime.applyDirect(targets[2], source, p.spreadIntervalMs*2);
     runtime.spread(targets, p.spreadIntervalMs*3); expect(runtime.isInfected(targets[3].ref, p.spreadIntervalMs*3)).toBe(true);
-    runtime.advance(targets, p.firstGenerationDurationMs);
-    expect(runtime.isInfected(targets[1].ref, p.firstGenerationDurationMs)).toBe(false);
-    runtime.spread(targets, p.firstGenerationDurationMs);
-    expect(runtime.isInfected(targets[1].ref, p.firstGenerationDurationMs)).toBe(true);
+    const firstGenerationDuration = p.directDurationMs * p.generationDurationFactor;
+    runtime.advance(targets, firstGenerationDuration);
+    expect(runtime.isInfected(targets[1].ref, firstGenerationDuration)).toBe(false);
+    runtime.spread(targets, firstGenerationDuration);
+    expect(runtime.isInfected(targets[1].ref, firstGenerationDuration)).toBe(true);
   });
 
   it('uses body edges for contact, does not redirect bosses and respects separate route/visibility checks', () => {
@@ -64,6 +65,70 @@ describe('plague shared status and generation contract', () => {
     expect(runtime.getMovementTarget(near.ref, 200)).toBeNull();
     canReach.mockReturnValue(true); runtime.spread([boss,near,far], 300);
     expect(runtime.getMovementTarget(near.ref, 300)?.ref.id).toBe('far');
+  });
+
+  it('keeps each owner\'s captured duration through both generations after build changes', () => {
+    const { runtime } = plagueHarness();
+    const short = plagueSource('short', { pandemicEnabled: 1, lifeLeechFraction: .3 });
+    const originalDuration = short.config.directDurationMs;
+    const mutableConfig = { ...short.config };
+    const long = plagueSource('long', { pandemicEnabled: 1, directDurationMs: originalDuration * 3, lifeLeechFraction: .1 });
+    const targets = [0, 1, 2].map(i => plagueTarget('e' + i, i * 60));
+    runtime.applyDirect(targets[0], { ...short, config: mutableConfig }, 0);
+    runtime.applyDirect(targets[0], long, 0);
+    mutableConfig.directDurationMs *= 10;
+    const firstContact = originalDuration / 2, secondContact = firstContact + short.config.spreadIntervalMs;
+    runtime.spread(targets, firstContact);
+    runtime.spread(targets, secondContact);
+    const shortEnd = secondContact + originalDuration * short.config.generationDurationFactor ** 2;
+    expect(runtime.getLifeLeech(targets[2].ref, 'ally', shortEnd - 1)).toBe(short.config.lifeLeechFraction);
+    expect(runtime.getLifeLeech(targets[2].ref, 'ally', shortEnd)).toBe(long.config.lifeLeechFraction);
+    const longEnd = secondContact + long.config.directDurationMs * long.config.generationDurationFactor ** 2;
+    expect(runtime.getSnapshot(secondContact).targets.find(t => t.enemyId === 'e2')?.expiresAt).toBe(longEnd);
+    expect(runtime.getLifeLeech(targets[2].ref, 'ally', longEnd)).toBe(0);
+  });
+
+  it('searches up to the authored radius, discards unreachable goals and stops pursuit on infection or expiry', () => {
+    const { runtime, canReach } = plagueHarness();
+    const source = plagueSource('p', { pandemicEnabled: 1 });
+    const carrier = plagueTarget(), outside = plagueTarget('outside', source.config.searchRadius + 1);
+    const boundary = plagueTarget('boundary', source.config.searchRadius);
+    runtime.applyDirect(carrier, source, 0);
+    runtime.spread([carrier, outside], 0);
+    expect(runtime.getMovementTarget(carrier.ref, 0)).toBeNull();
+    const step = source.config.spreadIntervalMs;
+    runtime.spread([carrier, boundary, outside], step);
+    expect(runtime.getMovementTarget(carrier.ref, step)?.ref).toEqual(boundary.ref);
+    expect(runtime.isInfected(boundary.ref, step)).toBe(false); // Search range is not contact range.
+    expect(runtime.getPursuitMoveSpeedBonus(carrier.ref, step)).toBe(source.config.pursuitMoveSpeedBonus);
+    canReach.mockReturnValue(false);
+    runtime.spread([carrier, boundary], step * 2);
+    expect(runtime.getMovementTarget(carrier.ref, step * 2)).toBeNull();
+    canReach.mockReturnValue(true);
+    runtime.spread([carrier, boundary], step * 3);
+    runtime.applyDirect(boundary, source, step * 3);
+    expect(runtime.getMovementTarget(carrier.ref, step * 3)).toBeNull();
+    expect(runtime.getPursuitMoveSpeedBonus(carrier.ref, source.config.directDurationMs)).toBe(0);
+  });
+
+  it('selects one eligible slime owner across generations and clears it with its contribution', () => {
+    const { runtime } = plagueHarness();
+    const targets = [0, 1, 2].map(i => plagueTarget('e' + i, i * 60));
+    const a = plagueSource('a', { pandemicEnabled: 1 });
+    runtime.applyDirect(targets[0], plagueSource('non-pandemic', { damagePerTick: 100 }), 0);
+    expect(runtime.getSlimeTrailOwner(targets[0].ref, 0)).toBeNull();
+    runtime.applyDirect(targets[0], { ...a, ownerId: 'z' }, 0);
+    runtime.applyDirect(targets[0], a, 0);
+    expect(runtime.getSlimeTrailOwner(targets[0].ref, 0)).toBe('a');
+    runtime.spread(targets, 0);
+    runtime.spread(targets, a.config.spreadIntervalMs);
+    for (const target of targets) expect(runtime.getSlimeTrailOwner(target.ref, a.config.spreadIntervalMs)).toBe('a');
+    expect(runtime.getPursuitMoveSpeedBonus(targets[2].ref, a.config.spreadIntervalMs)).toBe(0);
+    runtime.removeOwner('a', a.config.spreadIntervalMs);
+    expect(runtime.getSlimeTrailOwner(targets[0].ref, a.config.spreadIntervalMs)).toBe('z');
+    expect(runtime.getSlimeTrailOwner(targets[2].ref, a.config.spreadIntervalMs + a.config.directDurationMs * a.config.generationDurationFactor ** 2)).toBeNull();
+    runtime.removeOwner('z', a.config.spreadIntervalMs);
+    expect(runtime.getSlimeTrailOwner(targets[0].ref, a.config.spreadIntervalMs)).toBeNull();
   });
 
   it('allows multiple contacts and has no result dependence on input order', () => {

@@ -844,7 +844,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         timeBubble.flushReleases(request.nowMs);
         return true;
       },
-      remove: id => { timeBubble.removeBubble(id, o.combatSystem.getHostTime(), true); },
+      // Silent removal also runs during player/world teardown, outside host combat execution.
+      remove: id => { timeBubble.removeBubble(id, Date.now(), true); },
       discardProjectile: id => o.projectileUtility!.destroyProjectile(id),
     });
     teslaDome.setStormProjectileSpawner((request) => {

@@ -4,7 +4,7 @@ import { combatTargetInstanceKey, isSameCombatTargetInstance } from '../combat/C
 import type { EnemyManager } from '../entities/EnemyManager';
 import type { TargetStatusSystem } from '../systems/TargetStatusSystem';
 import type { StinkCloudDamageEvent } from '../effects/StinkCloudSystem';
-import type { SlimeDeathBurst } from '../systems/SlimeTrailSystem';
+import type { SlimeDeathBurst, SlimeTrailSystem } from '../systems/SlimeTrailSystem';
 import type { EnemyFlowFieldService } from '../systems/EnemyFlowFieldService';
 
 export interface WorldStinkPlagueBindingOptions {
@@ -12,6 +12,7 @@ export interface WorldStinkPlagueBindingOptions {
   readonly getEnemies: () => EnemyManager | null;
   readonly getNavigation: () => EnemyFlowFieldService | null;
   readonly status: TargetStatusSystem;
+  readonly slimeTrail?: Pick<SlimeTrailSystem, 'setPlagueSource'> | null;
   readonly isPlayerPresent: (playerId: string) => boolean;
   readonly areAllies: (left: string, right: string) => boolean;
   readonly deathBurst: (enemyId: string, x: number, y: number, now: number, plague: PlagueDeathContribution) => SlimeDeathBurst | null;
@@ -43,6 +44,10 @@ export class WorldStinkPlagueBinding {
       canReach: (from, to) => options.getNavigation()?.hasWalkableCircleLine(from.x, from.y, to.x, to.y, from.radius) ?? false,
       canTransfer: (from, to) => combat.hasLineOfSight(from.x, from.y, to.x, to.y),
       areAllies: options.areAllies,
+    });
+    options.slimeTrail?.setPlagueSource({
+      getOwner: (target, now) => this.runtime.getSlimeTrailOwner(target, now),
+      isPursuing: (enemyId, now) => this.enemies?.isPursuingPlagueTarget(enemyId, now) ?? false,
     });
     combat.setTargetLifeLeechFractionResolver((attackerId, target, now) => this.runtime.getLifeLeech(target, attackerId, now));
     this.unsubscribe = combat.observeEnemyDamageCommitted((outcome, x, y, now) => {
@@ -87,6 +92,7 @@ export class WorldStinkPlagueBinding {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.options.slimeTrail?.setPlagueSource(null);
     this.enemies?.setPlagueMovementSource(null);
     this.unsubscribe(); this.options.combat.setTargetLifeLeechFractionResolver(null);
     this.runtime.clear(); this.owners.clear(); this.enemies = null;
@@ -103,8 +109,8 @@ export class WorldStinkPlagueBinding {
       const target = ref ? this.runtime.getMovementTarget(ref, now) : null;
       const currentRef = target ? manager.getCombatTargetRef(String(target.ref.id)) : null;
       const entity = currentRef ? manager.getEnemy(String(currentRef.id)) : null;
-      return target && currentRef && isSameCombatTargetInstance(target.ref, currentRef) && entity && entity.getHp() > 0
-        ? { x: entity.sprite.x, y: entity.sprite.y } : null;
+      return ref && target && currentRef && isSameCombatTargetInstance(target.ref, currentRef) && entity && entity.sprite.active && entity.getHp() > 0
+        ? { x: entity.sprite.x, y: entity.sprite.y, speedBonus: this.runtime.getPursuitMoveSpeedBonus(ref, now) } : null;
     } });
   }
 

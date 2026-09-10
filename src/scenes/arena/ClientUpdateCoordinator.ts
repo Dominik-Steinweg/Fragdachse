@@ -566,7 +566,11 @@ export class ClientUpdateCoordinator {
     this.ctx.decoySystem.updateVisuals(lerpFactor);
 
     this.ctx.getProjectileRuntime()?.clientExtrapolate();
-    this.ctx.stinkCloudSystem.clientUpdate(delta);
+    this.ctx.stinkCloudSystem.clientUpdate(delta, id => {
+      const player = this.ctx.playerManager.getPlayer(id);
+      if (player) return player;
+      return this.activityFramePort?.getEnemyStatusVisual(id)?.sprite ?? null;
+    });
 
     const localId2 = bridge.getLocalPlayerId();
     const localPlayerClient = this.ctx.playerManager.getPlayer(localId2);

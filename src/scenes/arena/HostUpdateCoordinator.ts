@@ -907,7 +907,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       }
     }
 
-    this.ctx.stinkCloudSystem.clientUpdate(delta);
+    this.ctx.stinkCloudSystem.clientUpdate(delta, id => {
+      const player = this.ctx.playerManager.getPlayer(id);
+      if (player) return player;
+      return this.enemyManager?.getEnemy(id)?.sprite ?? null;
+    });
     if (metrics) metrics.hudMs = performance.now() - phaseStartedAt;
 
     phaseStartedAt = this.performanceMetricsEnabled ? performance.now() : 0;

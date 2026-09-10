@@ -174,6 +174,7 @@ export function composeWorldSupportGameplay(
       combat: combatSystem, getEnemies: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
       getNavigation: () => flow.getCoopMissionRuntime()?.enemyFlowFieldService ?? null,
       status: gameplay.targeting!.systems.targetStatus,
+      slimeTrail: slime,
       isPlayerPresent: playerId => ctx.playerManager.getPlayer(playerId) !== undefined,
       areAllies: (left, right) => left === right || !bridge.isEnemyPair(left, right),
       deathBurst: (enemyId, x, y, now, contribution) => slime?.handleEnemyDeath(enemyId, x, y, now, contribution) ?? null,

@@ -5491,9 +5491,9 @@
                                                 ],
                                                 "effects": [
                                                     {
-                                                        "stat": "utility.STINK_CLOUD.plague.damagePerTick",
+                                                        "stat": "utility.STINK_CLOUD.plague.directDurationMs",
                                                         "mode": "add_per_level",
-                                                        "value": 1
+                                                        "value": 4000
                                                     }
                                                 ]
                                             },
@@ -5516,7 +5516,7 @@
                                                     {
                                                         "stat": "utility.STINK_CLOUD.plague.lifeLeechFraction",
                                                         "mode": "add_per_level",
-                                                        "value": 0.1
+                                                        "value": 0.05
                                                     }
                                                 ]
                                             },
@@ -5539,12 +5539,7 @@
                                                     {
                                                         "stat": "utility.STINK_CLOUD.cooldown",
                                                         "mode": "add_percent_per_level",
-                                                        "value": -0.15
-                                                    },
-                                                    {
-                                                        "stat": "utility.STINK_CLOUD.cloudRadius",
-                                                        "mode": "add_percent_per_level",
-                                                        "value": 0.1
+                                                        "value": -0.25
                                                     }
                                                 ]
                                             },

@@ -185,8 +185,17 @@ export class EnemyManager {
   private forceFullNetSnapshot = false;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
-  private plagueMovement: { getTarget(enemyId: string, now: number): { x: number; y: number } | null } | null = null;
-  setPlagueMovementSource(source: typeof this.plagueMovement): void { this.plagueMovement = source; }
+  private plagueMovement: { getTarget(enemyId: string, now: number): { x: number; y: number; speedBonus: number } | null } | null = null;
+  private readonly plaguePursuers = new Set<string>();
+  setPlagueMovementSource(source: typeof this.plagueMovement): void {
+    this.plagueMovement = source;
+    this.plaguePursuers.clear();
+  }
+  isPursuingPlagueTarget(enemyId: string, now: number): boolean {
+    const enemy = this.enemies.get(enemyId);
+    return this.plaguePursuers.has(enemyId) && !!enemy && enemy.sprite.active && enemy.getHp() > 0
+      && !enemy.isBurrowed() && enemy.getDashPhase() === 0 && !!this.plagueMovement?.getTarget(enemyId, now);
+  }
   private smokePerception: SmokePerceptionPort | null = null;
   private smokeNow = 0;
   setSmokePerception(port: SmokePerceptionPort | null, now: number): void { this.smokePerception = port; this.smokeNow = now; }
@@ -373,6 +382,7 @@ export class EnemyManager {
     smokeSystem?: SmokePerceptionPort | null,
     decoyTargets?: DecoyTargetPort | null,
   ): void {
+    this.plaguePursuers.clear();
     const lerpT = 1 - Math.exp(-STEER_RESPONSIVENESS * (deltaMs / 1000));
     const separationGrid = this.buildSeparationGrid();
     // Basislose Vorstoss-Karten haben kein gueltiges Basisziel. Basisorientierte Gegner folgen
@@ -468,7 +478,8 @@ export class EnemyManager {
       const infectionTarget = !config.isBoss && !decoyTarget && !smokeSystem?.getConfusion(enemy.id, now)
         ? this.plagueMovement?.getTarget(enemy.id, now) : null;
       if (infectionTarget) {
-        this.steerEnemyTowards(enemy, infectionTarget.x, infectionTarget.y, lerpT, now, activeTrainAwareness, attackMovementFactor);
+        if (this.steerEnemyTowards(enemy, infectionTarget.x, infectionTarget.y, lerpT, now, activeTrainAwareness,
+          attackMovementFactor * (1 + infectionTarget.speedBonus))) this.plaguePursuers.add(enemy.id);
         continue;
       }
 
@@ -723,7 +734,7 @@ export class EnemyManager {
     now: number,
     trainAwarenessSystem?: CoopDefenseEnemyTrainAwarenessSystem | null,
     speedFactor = 1,
-  ): void {
+  ): boolean {
     const direction = this.normalizeDirection(targetX - enemy.sprite.x, targetY - enemy.sprite.y);
     const speed = enemy.getMoveSpeed() * speedFactor;
     const targetVx = direction.x * speed;
@@ -731,13 +742,14 @@ export class EnemyManager {
     const decision = trainAwarenessSystem?.resolveMovement(enemy, targetVx, targetVy, now);
     if (decision?.override) {
       enemy.setDesiredVelocity(decision.vx, decision.vy);
-      return;
+      return false;
     }
     const current = enemy.getDesiredVelocity();
     enemy.setDesiredVelocity(
       Phaser.Math.Linear(current.vx, targetVx, lerpT),
       Phaser.Math.Linear(current.vy, targetVy, lerpT),
     );
+    return targetVx !== 0 || targetVy !== 0;
   }
 
   private applyTrainAwarenessOverride(
@@ -1316,6 +1328,7 @@ export class EnemyManager {
    * müssen sie vor dessen Zerstörung abgeräumt werden.
    */
   private destroyEnemyEntity(id: string, enemy: EnemyEntity): void {
+    this.plaguePursuers.delete(id);
     this.visualSink?.clearBurrowState(id);
     enemy.destroy();
     this.enemies.delete(id);
@@ -1367,6 +1380,8 @@ export class EnemyManager {
 
   destroy(): void {
     this.combatActive = false;
+    this.plagueMovement = null;
+    this.plaguePursuers.clear();
     for (const [id, enemy] of this.enemies) {
       this.visualSink?.clearBurrowState(id);
       enemy.destroy();

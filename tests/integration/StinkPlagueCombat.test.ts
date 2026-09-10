@@ -37,7 +37,7 @@ function fixture(boss = false) {
   slime.setValidCellChecker((x,y,size)=>x-size/2>=0 && y-size/2>=0 && x+size/2<=1000 && y+size/2<=1000);
   const burst=vi.fn();
   const binding=new WorldStinkPlagueBinding({ combat,getEnemies:()=>enemies,getNavigation:()=>({hasWalkableCircleLine:()=>true}) as never,
-    status,isPlayerPresent:()=>present,areAllies:()=>true,deathBurst:(id,x,y,time,p)=>slime.handleEnemyDeath(id,x,y,time,p),publishBurst:burst });
+    status,slimeTrail:slime,isPlayerPresent:()=>present,areAllies:()=>true,deathBurst:(id,x,y,time,p)=>slime.handleEnemyDeath(id,x,y,time,p),publishBurst:burst });
   combat.setEnemyDeathCallback((id,x,y)=> { const result=slime.handleEnemyDeath(id,x,y,now); if(result)burst(result); });
   const spawn=(x=300,y=100)=> {
     const enemy=enemies.hostSpawnAtWorld(x,y,kind);
@@ -57,20 +57,27 @@ describe('plague confirmed combat and slime integration',()=> {
   it('redirects normal movement while retaining attack phases and higher-priority controls',()=> {
     const f=fixture(); try {
       const carrier=f.spawn(300,300); f.spawn(450,300);
-      f.infect(carrier,plagueSource('p1',{pandemicEnabled:1}));
+      const source=plagueSource('p1',{pandemicEnabled:1});
+      f.infect(carrier,source);
       f.binding.spread(0);
       const flow={hasGoalCells:()=>true,worldToGrid:()=>null};
       const move=(locked=false,special:any=null,smoke:any=null,decoy:any=null)=>f.enemies.hostUpdateMovement(flow as never,null,null,null,
         locked,100,1000,null,null,null,null,null,special,smoke,decoy);
       carrier.pauseAttackMovement(0,.5,500);move();
       expect(carrier.getDesiredVelocity().vx).toBeGreaterThan(0);
-      expect(carrier.getDesiredVelocity().vx).toBeLessThanOrEqual(carrier.getMoveSpeed()*.5);
+      expect(carrier.getDesiredVelocity().vx/carrier.getMoveSpeed()).toBeCloseTo(.5*(1+source.config.pursuitMoveSpeedBonus),2);
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(true);
       expect(carrier.isAttackMovementPaused(100)).toBe(true);
       move(true);expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:0});
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
       move(false,{getMovementOverride:()=>({vx:0,vy:17})});expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:17});
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
       move(false,null,{getConfusion:()=>({fraction:.5})});expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:0});
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
       move(false,null,null,{getTarget:()=>({x:300,y:450}),getMovementField:()=>flow});expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:0});
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
       carrier.pauseAttackMovement(100,0,500);move();expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:0});
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
       f.binding.clearTargets();expect(f.binding.runtime.getSnapshot(100).targets).toEqual([]);
     } finally {f.destroy();}
   });
@@ -81,7 +88,100 @@ describe('plague confirmed combat and slime integration',()=> {
       const positioning={getMovementOverride:()=>({vx:0,vy:11})};
       f.enemies.hostUpdateMovement({hasGoalCells:()=>true} as never,null,null,null,false,100,1000,null,null,null,null,positioning);
       expect(carrier.getDesiredVelocity()).toEqual({vx:0,vy:11});
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
+      expect(f.slime.hostUpdate(100).cells).not.toHaveLength(0);
+      expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBeCloseTo(1-f.baseline.slowFraction);
     } finally {f.destroy();}
+  });
+
+  it('grants speed and clears slime damage/slow only while pursuing a healthy target',()=> {
+    const f=fixture();try {
+      const source=plagueSource('p1',{pandemicEnabled:1});
+      const carrier=f.spawn(100,300), target=f.spawn(100+source.config.searchRadius*.75,300);
+      f.infect(carrier,source);f.binding.spread(0);
+      // Before movement starts, the carrier can be affected by its own trail.
+      f.slime.hostUpdate(0);
+      expect(f.slime.getEnemyMovementFactor(carrier.id,0)).toBeCloseTo(1-f.baseline.slowFraction);
+      const flow={hasGoalCells:()=>true,worldToGrid:()=>null};
+      f.enemies.hostUpdateMovement(flow as never,null,null,null,false,100,1000);
+      expect(carrier.getDesiredVelocity().vx/carrier.getMoveSpeed()).toBeCloseTo(1+source.config.pursuitMoveSpeedBonus,2);
+      expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBe(1);
+      const hp=carrier.getHp(), tick=f.baseline.tickIntervalMs;
+      f.setNow(tick);
+      expect(f.slime.hostUpdate(tick).affectedEnemies.some(e=>e.enemyId===carrier.id)).toBe(false);
+      expect(carrier.getHp()).toBe(hp);
+
+      // A healthy goal becoming infected ends immunity immediately, before another AI step.
+      f.infect(target,source);
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,tick)).toBe(false);
+      expect(f.slime.hostUpdate(tick).affectedEnemies.some(e=>e.enemyId===carrier.id)).toBe(true);
+      expect(f.slime.getEnemyMovementFactor(carrier.id,tick)).toBeCloseTo(1-f.baseline.slowFraction);
+      const before=carrier.getHp();f.setNow(tick*2);f.slime.hostUpdate(tick*2);
+      expect(before-carrier.getHp()).toBeCloseTo(f.baseline.damagePerTick);
+    }finally{f.destroy();}
+  });
+
+  it('releases pursuit on target death, dash, movement lock and world cleanup',()=> {
+    const f=fixture();try {
+      const carrier=f.spawn(300,300), target=f.spawn(700,300);
+      f.infect(carrier,plagueSource('p1',{pandemicEnabled:1}));f.binding.spread(0);
+      const flow={hasGoalCells:()=>true,worldToGrid:()=>null};
+      const move=(locked=false)=>f.enemies.hostUpdateMovement(flow as never,null,null,null,locked,100,1000);
+      move();expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(true);
+      carrier.setDashPhase(1);expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
+      carrier.setDashPhase(0);move(true);expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
+      f.slime.hostUpdate(100);expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBeLessThan(1);
+      move();expect(f.slime.getEnemyMovementFactor(carrier.id,100)).toBe(1);
+      f.enemies.hostRemoveEnemy(target.id);
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
+      f.spawn(700,300);f.binding.spread(100);move();
+      expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(true);
+      f.binding.clearTargets();expect(f.enemies.isPursuingPlagueTarget(carrier.id,100)).toBe(false);
+      f.slime.clear();expect(f.slime.hostUpdate(100).cells).toEqual([]);
+    }finally{f.destroy();}
+  });
+
+  it('paints valid continuous trails only for Pandemic, without bridging teleports or expired infections',()=> {
+    const f=fixture();try {
+      const size=f.baseline.cellSize, x=size*2.5, y=size*2.5, carrier=f.spawn(x,y);
+      carrier.setHp(1000,1000,true);
+      f.infect(carrier);expect(f.slime.hostUpdate(0).cells).toEqual([]);
+      const source=plagueSource('p1',{pandemicEnabled:1});
+      f.infect(carrier,source);
+      expect(f.slime.hostUpdate(0).cells).toHaveLength(1);
+      // Simulated physics movement keeps positionRevision; explicit setPosition denotes a teleport.
+      carrier.sprite.x+=size*3;
+      f.slime.setValidCellChecker((cx,cy)=>cy===y && cx!==x+size);
+      const trail=f.slime.hostUpdate(1).cells;
+      expect(trail.map(cell=>cell.x).sort((a,b)=>a-b)).toEqual([x,x+size*2,x+size*3]);
+      carrier.setPosition(x+size*8,y);
+      expect(f.slime.hostUpdate(2).cells).toHaveLength(trail.length+1);
+      f.slime.hostUpdate(source.config.directDurationMs);
+      carrier.sprite.x=x+size*14;
+      f.setNow(source.config.directDurationMs+1);f.infect(carrier,source);
+      const resumed=f.slime.hostUpdate(source.config.directDurationMs+1).cells;
+      expect(resumed.some(cell=>cell.x>x+size*8&&cell.x<x+size*14)).toBe(false);
+      expect(resumed.some(cell=>cell.x===carrier.sprite.x)).toBe(true);
+      f.detach();f.binding.advance(source.config.directDurationMs+2);
+      f.slime.clear();expect(f.slime.hostUpdate(source.config.directDurationMs+2).cells).toEqual([]);
+    }finally{f.destroy();}
+  });
+
+  it('uses purchased slime values for Pandemic trails and only chains deaths with Slime Bloom',()=> {
+    const f=fixture();try {
+      const profile={...f.baseline,enabled:1,damagePerTick:f.baseline.damagePerTick*2,slowFraction:.7,deathBurstPatchCount:2};
+      f.slimeProfiles.set('p1',profile);
+      const carrier=f.spawn();f.infect(carrier,plagueSource('p1',{pandemicEnabled:1}));
+      const snapshot=f.slime.hostUpdate(0);
+      const victim=f.spawn(snapshot.cells[0].x,snapshot.cells[0].y);
+      f.slime.hostUpdate(0);
+      expect(f.slime.getEnemyMovementFactor(victim.id,0)).toBeCloseTo(1-profile.slowFraction);
+      const hp=victim.getHp();f.setNow(profile.tickIntervalMs);f.slime.hostUpdate(profile.tickIntervalMs);
+      expect(hp-victim.getHp()).toBeCloseTo(profile.damagePerTick);
+      f.combat.applyDamage(victim.id,victim.getHp()*100,false,'p1');
+      expect(f.burst).toHaveBeenCalledOnce();expect(f.burst.mock.calls[0][0].targets).toHaveLength(profile.deathBurstPatchCount);
+      expect(f.binding.runtime.getSnapshot(profile.tickIntervalMs).targets.map(t=>t.enemyId)).toEqual([carrier.id]);
+    }finally{f.destroy();}
   });
 
   it('adds slime bloom and plague bursts once, preserving source profiles and valid cells',()=> {

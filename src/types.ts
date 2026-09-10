@@ -1456,11 +1456,13 @@ export interface SyncedFireZone {
 export interface SyncedStinkCloud {
   id:         number;
   ownerId:    string;
+  /** Following auras use the rendered owner pose; omitted/false denotes a stationary cloud. */
+  followOwner?: boolean;
   x:          number;
   y:          number;
   radius:     number;
   alpha:      number; // 0-1, Lifecycle-Alpha (Fade-in/-out)
-  ownerColor: number; // Spielerfarbe für Fairness-Kreis
+  ownerColor: number;
   visualVariant?: DamageZoneVisualStyle;
 }
 

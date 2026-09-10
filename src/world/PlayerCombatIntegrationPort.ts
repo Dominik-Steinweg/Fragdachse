@@ -1,7 +1,7 @@
 import type { MolotovWildfireDeath } from '../types';
 import type { CombatDamageKind } from '../types';
 import type { RemoteControlSource } from '../systems/CoopDefenseItemRuntimeSystem';
-import type { SlimeDeathBurst } from '../systems/SlimeTrailSystem';
+import type { PlagueSlimeSource, SlimeDeathBurst } from '../systems/SlimeTrailSystem';
 import type { ActiveBurnSource } from '../combat/rules/BurnStateMachine';
 import type { Ak47BehaviorPort } from '../loadout/Ak47BehaviorPort';
 import type { WeaponKillReactionOutcome } from '../loadout/WeaponReactionPort';
@@ -111,6 +111,7 @@ export interface PlayerCombatUtilityPort {
 
 /** Enemy movement read owned by the player item/runtime behavior. */
 export interface PlayerCombatSlimeTrailPort {
+  setPlagueSource(source: PlagueSlimeSource | null): void;
   handleEnemyDeath(enemyId: string, x: number, y: number, nowMs: number, plague?: import('../systems/StinkPlagueRuntime').PlagueDeathContribution): SlimeDeathBurst | null;
   setValidCellChecker(checker: ((x: number, y: number, size: number) => boolean) | null): void;
   getEnemyMovementFactor(enemyId: string, nowMs: number): number;

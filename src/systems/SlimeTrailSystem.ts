@@ -6,6 +6,7 @@ import type { EnemyManager } from '../entities/EnemyManager';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { SlimeBloomTarget, SyncedSlimeTrailSnapshot } from '../types';
 import type { CombatActorStatePort, CombatDamageEffectPort } from '../combat/CombatCapabilities';
+import { combatTargetInstanceKey, type CombatTargetRef } from '../combat/CombatScope';
 
 const STAT_PREFIX = 'player.slimeTrail';
 const FADE_OUT_MS = 900;
@@ -13,6 +14,11 @@ const MAX_DAMAGE_TICKS_PER_UPDATE = 12;
 
 export type SlimeTrailStatResolver = (playerId: string, stat: string, baseValue: number) => number;
 export type SlimeTrailWalkingResolver = (playerId: string) => boolean;
+
+export interface PlagueSlimeSource {
+  getOwner(target: CombatTargetRef, now: number): string | null;
+  isPursuing(enemyId: string, now: number): boolean;
+}
 
 export interface SlimeDeathBurst {
   x: number;
@@ -72,6 +78,8 @@ export class SlimeTrailSystem {
   private readonly cellSizes = new Set<number>();
   private readonly affectedEnemies = new Map<string, SlimedEnemyState>();
   private readonly lastOwnerCells = new Map<string, LastOwnerCell>();
+  private readonly lastPlagueCells = new Map<string, LastOwnerCell & { ownerId: string; positionRevision: number }>();
+  private plagueSource: PlagueSlimeSource | null = null;
   private nextCellId = 1;
   private enemyManager: EnemyManager | null;
 
@@ -86,18 +94,26 @@ export class SlimeTrailSystem {
   }
 
   setEnemyManager(enemyManager: EnemyManager | null): void {
+    if (this.enemyManager !== enemyManager) this.lastPlagueCells.clear();
     this.enemyManager = enemyManager;
+  }
+
+  setPlagueSource(source: PlagueSlimeSource | null): void {
+    this.plagueSource = source;
+    this.lastPlagueCells.clear();
   }
 
   hostUpdate(now: number): SyncedSlimeTrailSnapshot {
     this.removeExpiredCells(now);
     this.updatePlayerTrails(now);
+    this.updatePlagueTrails(now);
     this.refreshEnemyContacts(now);
     this.updateAffectedEnemies(now);
     return this.getSnapshot(now);
   }
 
   getEnemyMovementFactor(enemyId: string, now: number): number {
+    if (this.isPlaguePursuer(enemyId, now)) return 1;
     const state = this.affectedEnemies.get(enemyId);
     if (!state || now > state.expiresAt) return 1;
     return 1 - Phaser.Math.Clamp(state.slowFraction, 0, 0.95);
@@ -139,6 +155,7 @@ export class SlimeTrailSystem {
     this.cellSizes.clear();
     this.affectedEnemies.clear();
     this.lastOwnerCells.clear();
+    this.lastPlagueCells.clear();
     this.nextCellId = 1;
   }
 
@@ -168,6 +185,38 @@ export class SlimeTrailSystem {
     }
   }
 
+  private updatePlagueTrails(now: number): void {
+    const present = new Set<string>();
+    const profiles = new Map<string, SlimeTrailConfig>();
+    if (this.plagueSource) for (const enemy of this.enemyManager?.getHostileEnemies() ?? []) {
+      if (!enemy.sprite.active || enemy.getHp() <= 0 || enemy.isBurrowed()) continue;
+      const ref = this.enemyManager!.getCombatTargetRef(enemy.id);
+      const ownerId = ref ? this.plagueSource.getOwner(ref, now) : null;
+      if (!ref || !ownerId) continue;
+      let config = profiles.get(ownerId);
+      if (!config) { config = this.resolveConfig(ownerId); profiles.set(ownerId, config); }
+      const key = combatTargetInstanceKey(ref);
+      present.add(key);
+      const gridX = Math.floor(enemy.sprite.x / config.cellSize);
+      const gridY = Math.floor(enemy.sprite.y / config.cellSize);
+      const previous = this.lastPlagueCells.get(key);
+      // Teleports, a new incarnation or owner/profile changes must not paint the intervening world.
+      const continuous = previous && previous.size === config.cellSize && previous.ownerId === ownerId
+        && previous.positionRevision === enemy.positionRevision;
+      this.stampGridLine(continuous ? previous.gridX : gridX, continuous ? previous.gridY : gridY,
+        gridX, gridY, ownerId, config, now, true);
+      this.lastPlagueCells.set(key, { gridX, gridY, size: config.cellSize, ownerId, positionRevision: enemy.positionRevision });
+    }
+    for (const key of this.lastPlagueCells.keys()) if (!present.has(key)) this.lastPlagueCells.delete(key);
+  }
+
+  /** Immunity also clears a lingering slime status acquired before pursuit began. */
+  private isPlaguePursuer(enemyId: string, now: number): boolean {
+    if (!this.plagueSource?.isPursuing(enemyId, now)) return false;
+    this.affectedEnemies.delete(enemyId);
+    return true;
+  }
+
   private stampGridLine(
     startX: number,
     startY: number,
@@ -176,6 +225,7 @@ export class SlimeTrailSystem {
     ownerId: string,
     config: SlimeTrailConfig,
     now: number,
+    validGroundOnly = false,
   ): void {
     let x = startX;
     let y = startY;
@@ -186,7 +236,9 @@ export class SlimeTrailSystem {
     let error = dx - dy;
 
     while (true) {
-      this.refreshCell(x, y, ownerId, config, now);
+      if (!validGroundOnly || !this.validCell || this.validCell((x + 0.5) * config.cellSize, (y + 0.5) * config.cellSize, config.cellSize)) {
+        this.refreshCell(x, y, ownerId, config, now);
+      }
       if (x === endX && y === endY) break;
       const doubledError = error * 2;
       if (doubledError > -dy) {
@@ -271,6 +323,7 @@ export class SlimeTrailSystem {
   private refreshEnemyContacts(now: number): void {
     for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
+      if (this.isPlaguePursuer(enemy.id, now)) continue;
       const cell = this.findTouchingCell(enemy);
       if (!cell) continue;
 
@@ -331,6 +384,7 @@ export class SlimeTrailSystem {
 
   private updateAffectedEnemies(now: number): void {
     for (const [enemyId, state] of this.affectedEnemies) {
+      if (this.isPlaguePursuer(enemyId, now)) continue;
       const enemy = this.enemyManager?.getEnemy(enemyId);
       if (!enemy || !enemy.sprite.active || enemy.getHp() <= 0) {
         this.affectedEnemies.delete(enemyId);

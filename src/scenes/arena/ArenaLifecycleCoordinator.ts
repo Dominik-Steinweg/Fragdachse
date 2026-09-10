@@ -597,7 +597,8 @@ export class ArenaLifecycleCoordinator {
         this.worldPowerUpRuntime?.system.removePlayer(playerId);
       },
       detachWorldTargeting: (playerId) => {
-        this.worldGameplay?.support?.plague?.removeOwner(playerId, this.getWorldCombatCore()?.getHostTime() ?? 0);
+        // Player-Detach laeuft auch ausserhalb einer aktiven Host-Combat-Ausfuehrung.
+        this.worldGameplay?.support?.plague?.removeOwner(playerId, Date.now());
         this.worldGameplay?.targeting?.systems.targetStatus.removeTarget({ targetType: 'player', targetId: playerId });
         this.worldGameplay?.targeting?.systems.energyInjector.removeOwner(playerId);
       },
