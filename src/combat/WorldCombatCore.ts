@@ -137,7 +137,7 @@ type LoadoutManagerType  = {
   getWeaponDamageMultiplier(id: string, slot: WeaponSlot, now: number): number;
 };
 type PowerUpSystemType   = { getDamageMultiplier(id: string): number; removePlayer(id: string): void };
-type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
+type StinkCloudSystemType = { hostDeactivateForPlayer(id: string, now?: number): void };
 
 interface AoeDamageOptions {
   /** Explicit source resolution, e.g. a reservoir whose accumulated damage must not be amplified again. */
@@ -459,6 +459,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   private playerMaxArmorResolver: ((playerId: string) => number) | null = null;
   private playerArmorGainMultiplierResolver: ((playerId: string) => number) | null = null;
   private playerArmorDamageGrantsRageResolver: ((playerId: string) => boolean) | null = null;
+  private targetLifeLeechFractionResolver: ((attackerId: string, target: CombatTargetRef, now: number) => number) | null = null;
+  setTargetLifeLeechFractionResolver(resolver: typeof this.targetLifeLeechFractionResolver): void { this.targetLifeLeechFractionResolver = resolver; }
   private playerLifeLeechFractionResolver: ((playerId: string) => number) | null = null;
   private playerArmorRegenPerSecondResolver: ((playerId: string) => number) | null = null;
   private playerOutgoingDamageResolver: ((
@@ -3954,6 +3956,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     const worldCurrent = this.captureReactionValidity();
     const activeBurnSources = this.burnStatus.getActiveSources(target, this.hostFrameNowMs);
     const request = this.createDamageRequest(target, amount, attackerId, sourceId, options);
+    const leechAttackerId = request.source.attribution.kind === 'player' ? request.source.attribution.id : undefined;
+    const targetLeechBonus = leechAttackerId ? this.targetLifeLeechFractionResolver?.(leechAttackerId, target, this.hostFrameNowMs) ?? 0 : 0;
     const outcome = applyCombatDamage(request, this.combatResolutionContext(), this.enemyManager);
     if (outcome.kind !== 'damage-applied') return outcome;
     // Terminal consequences and passive observation belong to the committed receipt.
@@ -4002,7 +4006,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     }
     const hitSeed = this.nextEffectSeed();
     const direction = this.resolveDamageDirection(targetId, attackerId, visualContext, hitSeed, x, y);
-    if (!options?.skipLifeLeech) this.applyLifeLeech(attackerId, targetId, hpLost);
+    if (!options?.skipLifeLeech) this.applyLifeLeech(leechAttackerId, targetId, hpLost, targetLeechBonus);
     if (!current()) return outcome;
 
     // Trefferabhaengige Primaerwaffen-Affixe. Erst hier, damit sie nur bei einem Treffer
@@ -4152,7 +4156,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.powerUpSystem?.removePlayer(playerId);
     if (!current()) return;
     // Stinkwolke beim Tod sofort deaktivieren
-    this.stinkCloudSystem?.hostDeactivateForPlayer(playerId);
+    this.stinkCloudSystem?.hostDeactivateForPlayer(playerId, this.hostFrameNowMs);
     if (!current()) return;
     this.decoySystem?.clearPlayer(playerId);
     if (!current()) return;
@@ -4203,10 +4207,10 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
   }
 
 
-  private applyLifeLeech(attackerId: string | undefined, targetId: string, actualDamage: number): void {
+  private applyLifeLeech(attackerId: string | undefined, targetId: string, actualDamage: number, targetBonus = 0): void {
     if (!attackerId || attackerId === targetId || actualDamage <= 0) return;
     if (!this.playerManager.getPlayer(attackerId)) return;
-    const fraction = Phaser.Math.Clamp(this.playerLifeLeechFractionResolver?.(attackerId) ?? 0, 0, 1);
+    const fraction = Phaser.Math.Clamp((this.playerLifeLeechFractionResolver?.(attackerId) ?? 0) + targetBonus, 0, 1);
     if (fraction <= 0) return;
     this.heal(attackerId, actualDamage * fraction);
   }

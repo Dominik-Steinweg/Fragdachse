@@ -597,6 +597,7 @@ export class ArenaLifecycleCoordinator {
         this.worldPowerUpRuntime?.system.removePlayer(playerId);
       },
       detachWorldTargeting: (playerId) => {
+        this.worldGameplay?.support?.plague?.removeOwner(playerId, this.getWorldCombatCore()?.getHostTime() ?? 0);
         this.worldGameplay?.targeting?.systems.targetStatus.removeTarget({ targetType: 'player', targetId: playerId });
         this.worldGameplay?.targeting?.systems.energyInjector.removeOwner(playerId);
       },
@@ -1300,6 +1301,8 @@ export class ArenaLifecycleCoordinator {
 
   /** Loest ausschliesslich die lokale Activity; World-Identitaet und World-Runtime bleiben stehen. */
   private detachActivityRuntime(): void {
+    this.worldGameplay?.support?.plague?.clearTargets();
+    this.ctx.stinkCloudSystem.clearPlagueVisuals();
     this.worldGameplay?.support?.smoke.runtime.clearTargets();
     this.captureTheBeerPresentation?.detach();
     this.worldRuntime?.activity.detach();

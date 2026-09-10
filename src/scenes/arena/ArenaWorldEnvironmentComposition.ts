@@ -1,3 +1,4 @@
+import { WorldStinkPlagueBinding } from '../../world/WorldStinkPlagueBinding';
 import { WorldSmokeBinding } from '../../world/WorldSmokeBinding';
 import { bridge } from '../../network/bridge';
 import { CAPTURE_THE_BEER_MODE } from '../../gameModes';
@@ -161,7 +162,23 @@ export function composeWorldSupportGameplay(
     throw new Error('[ArenaWorldComposition] Projectile runtime is missing on host');
   }
   
+  const slime = gameplay.player.getPlayerCombatIntegrationPort().slimeTrail;
+  slime?.setValidCellChecker((x, y, size) => {
+    const m = world.metrics;
+    return x - size / 2 >= m.offsetX && y - size / 2 >= m.offsetY
+      && x + size / 2 <= m.maxX && y + size / 2 <= m.maxY
+      && (flow.getCoopMissionRuntime()?.enemyFlowFieldService?.isCircleGroundFreeAt(x, y, size / 2) ?? false);
+  });
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
+    plague: new WorldStinkPlagueBinding({
+      combat: combatSystem, getEnemies: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+      getNavigation: () => flow.getCoopMissionRuntime()?.enemyFlowFieldService ?? null,
+      status: gameplay.targeting!.systems.targetStatus,
+      isPlayerPresent: playerId => ctx.playerManager.getPlayer(playerId) !== undefined,
+      areAllies: (left, right) => left === right || !bridge.isEnemyPair(left, right),
+      deathBurst: (enemyId, x, y, now, contribution) => slime?.handleEnemyDeath(enemyId, x, y, now, contribution) ?? null,
+      publishBurst: burst => bridge.broadcastSlimeBloomEffect(burst.x, burst.y, burst.targets),
+    }),
     smoke: new WorldSmokeBinding(combatSystem, () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
       gameplay.targeting!.systems.targetStatus, gameplay.projectiles),
     playerManager: ctx.playerManager,
@@ -178,6 +195,7 @@ export function composeWorldSupportGameplay(
       hostUpdate.applyAirstrikeEnvironmentDamage(x, y, radius, config, triggeredBy)
     ),
     onDestroy: () => {
+      slime?.setValidCellChecker(null);
       gameplay.player?.setArmageddonCapability(null);
       gameplay.player?.setAirstrikeCapability(null);
     },

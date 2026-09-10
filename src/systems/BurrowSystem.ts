@@ -28,7 +28,7 @@ interface BurrowStateData {
   isTunnelTransit?: boolean;
 }
 
-type StinkCloudSystemType = { hostDeactivateForPlayer(id: string): void };
+type StinkCloudSystemType = { hostDeactivateForPlayer(id: string, now?: number): void };
 
 export class BurrowSystem {
   private states = new Map<string, BurrowStateData>();
@@ -187,7 +187,7 @@ export class BurrowSystem {
       switch (state.phase) {
         case 'windup':
           if (now >= state.phaseEndsAt) {
-            this.completeWindUp(id);
+            this.completeWindUp(id, now);
           }
           break;
         case 'underground':
@@ -254,7 +254,7 @@ export class BurrowSystem {
     this.bridge.broadcastBurrowVisual(id, 'windup', player?.x, player?.y);
   }
 
-  private completeWindUp(id: string): void {
+  private completeWindUp(id: string, now: number): void {
     const state = this.states.get(id);
     if (!state || state.phase !== 'windup') return;
 
@@ -265,7 +265,7 @@ export class BurrowSystem {
       stuckDamageAccum: 0,
     });
     this.hostPhysics.setPlayerBurrowed(id, true);
-    this.stinkCloudSystem?.hostDeactivateForPlayer(id);
+    this.stinkCloudSystem?.hostDeactivateForPlayer(id, now);
     this.bridge.broadcastBurrowVisual(id, 'underground');
   }
 

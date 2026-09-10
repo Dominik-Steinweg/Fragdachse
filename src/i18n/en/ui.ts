@@ -1,4 +1,6 @@
 export const enUi = {
+  "ui.stinkCloud.active": "Active",
+  "ui.stinkCloud.cooldown": "Cooldown",
   "ui.timeBubble.flying": "In flight",
   "ui.translocator.puck": "Puck active · E teleports",
   "ui.translocator.portals": "E closes · Portals",

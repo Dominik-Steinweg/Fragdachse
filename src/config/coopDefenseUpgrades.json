@@ -5475,51 +5475,183 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "stink_cloud_radius",
-                                                "code":  "D-U5-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  230,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_stink_cloud",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.STINK_CLOUD.cloudRadius",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
+                                                "id": "stink_cloud_infection",
+                                                "code": "D-U5-L1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 230,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_stink_cloud",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.damagePerTick",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
                                             },
                                             {
-                                                "id":  "stink_cloud_damage",
-                                                "code":  "D-U5-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  240,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_stink_cloud",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.STINK_CLOUD.cloudDamagePerTick",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
+                                                "id": "stink_cloud_life_leech",
+                                                "code": "D-U5-L2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 231,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "stink_cloud_infection",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.lifeLeechFraction",
+                                                        "mode": "add_per_level",
+                                                        "value": 0.1
+                                                    }
+                                                ]
                                             },
+                                            {
+                                                "id": "stink_cloud_spread",
+                                                "code": "D-U5-R1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 240,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "unlock_stink_cloud",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.cooldown",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": -0.15
+                                                    },
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.cloudRadius",
+                                                        "mode": "add_percent_per_level",
+                                                        "value": 0.1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "stink_cloud_combat_mode",
+                                                "code": "D-U5-R2",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 241,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "stink_cloud_spread",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.combatMoveSpeedBonus",
+                                                        "mode": "add_per_level",
+                                                        "value": 0.1
+                                                    },
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.combatDamageReduction",
+                                                        "mode": "add_per_level",
+                                                        "value": 0.1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "stink_cloud_pandemic",
+                                                "code": "D-U5-C",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 0,
+                                                "bossPointCostPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 255,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "stink_cloud_life_leech",
+                                                        "minLevel": 1
+                                                    },
+                                                    {
+                                                        "upgradeId": "stink_cloud_combat_mode",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.pandemicEnabled",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "stink_cloud_septic_shock",
+                                                "code": "D-U5-BL1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 1,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 256,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "stink_cloud_pandemic",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.vulnerabilityEnabled",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+                                            {
+                                                "id": "stink_cloud_slime_plague",
+                                                "code": "D-U5-BR1",
+                                                "kind": "upgrade",
+                                                "maxLevel": 3,
+                                                "startingLevel": 0,
+                                                "costPerLevel": 1,
+                                                "refundable": true,
+                                                "sortOrder": 257,
+                                                "requires": [
+                                                    {
+                                                        "upgradeId": "stink_cloud_pandemic",
+                                                        "minLevel": 1
+                                                    }
+                                                ],
+                                                "effects": [
+                                                    {
+                                                        "stat": "utility.STINK_CLOUD.plague.deathChunkCount",
+                                                        "mode": "add_per_level",
+                                                        "value": 1
+                                                    }
+                                                ]
+                                            },
+
+
                                             {
                                                 "id":  "unlock_translocator",
                                                 "code":  "D-U6",
@@ -5962,38 +6094,7 @@
                                                                 }
                                                             ]
                                             },
-                                            {
-                                                "id":  "stink_cloud_aftercloud",
-                                                "code":  "D-U5-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  255,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "stink_cloud_damage",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.STINK_CLOUD.afterCloudDurationMs",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  3000
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.STINK_CLOUD.afterCloudRadiusFactor",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.7
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.STINK_CLOUD.afterCloudDamageFactor",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.5
-                                                                }
-                                                            ]
-                                            },
+
                                             {
                                                 "id":  "zeus_chain_lightning",
                                                 "code":  "D-U9-C",

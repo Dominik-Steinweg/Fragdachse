@@ -62,6 +62,7 @@ export interface RadialActionState {
 
 export interface ResolveRadialActionsInput {
   readonly translocatorState?: TranslocatorUseState | null;
+  readonly stinkCloudState?: import('../loadout/StinkCloudUtilityState').StinkCloudUtilityState | null;
   readonly timeBubbleState?: TimeBubbleUtilityState | null;
   readonly gameMode: GameMode;
   readonly tools: readonly LoadoutToolRef[];
@@ -259,6 +260,18 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     });
   }
 
+  const stink = input.stinkCloudState;
+  if (stink?.phase === 'active') {
+    const ref: RadialActionRef = stink.temporaryUtilityInstanceId
+      ? { kind: 'temporary-utility', instanceId: stink.temporaryUtilityInstanceId, utilityId: stink.utilityId }
+      : { kind: 'utility', utilityId: stink.utilityId };
+    if (!entries.some(entry => isSameRadialActionRef(entry.ref, ref))) {
+      const presentation = describeLoadoutTool({ kind: 'utility', id: stink.utilityId });
+      entries.push({ ref, category: ref.kind === 'temporary-utility' ? 'temporaryUtility' : 'utility',
+        label: presentation.displayName, iconKey: presentation.textureKey, accentColor: presentation.accentColor,
+        visible: true, available: false, cooldownUntil: 0, cooldownDurationMs: stink.cooldownDurationMs, sourceOrder: 0 });
+    }
+  }
   const bubble = input.timeBubbleState;
   if (bubble && bubble.phase !== 'cooldown') {
     const ref: RadialActionRef = bubble.temporaryUtilityInstanceId
@@ -286,6 +299,13 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
     }
   }
   const projected = entries.map(entry => {
+    if (stink && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility') && entry.ref.utilityId === stink.utilityId) {
+      const cooldownUntil = stink.phase === 'cooldown' ? stink.cooldownUntil : 0;
+      const disabledReason: RadialActionDisabledReason | undefined = !input.canUseUtility ? 'player-blocked'
+        : stink.phase === 'active' ? 'unavailable' : cooldownUntil > input.now ? 'cooldown' : entry.disabledReason;
+      return { ...entry, label: entry.label + ' · ' + getStinkCloudStatusLabel(stink, input.now),
+        available: disabledReason === undefined, disabledReason, cooldownUntil, cooldownDurationMs: stink.cooldownDurationMs };
+    }
     if (translocator && (entry.ref.kind === 'utility' || entry.ref.kind === 'temporary-utility')
       && entry.ref.utilityId === translocator.utilityId) {
       const cooldownUntil = translocator.phase === 'cooldown' ? translocator.cooldownUntil : 0;
@@ -322,6 +342,11 @@ export function resolveRadialActions(input: ResolveRadialActionsInput): RadialAc
       || radialActionKey(left.ref).localeCompare(radialActionKey(right.ref))
     ))
     .map(({ sourceOrder: _sourceOrder, ...entry }) => entry);
+}
+
+export function getStinkCloudStatusLabel(state: import('../loadout/StinkCloudUtilityState').StinkCloudUtilityState, now: number): string {
+  return state.phase === 'active' ? t('ui.stinkCloud.active') + ' ' + (Math.max(0, state.activeUntil - now) / 1000).toFixed(1) + ' s'
+    : state.cooldownUntil > now ? t('ui.stinkCloud.cooldown') : '';
 }
 
 export function getTimeBubbleStatusLabel(state: TimeBubbleUtilityState): string {

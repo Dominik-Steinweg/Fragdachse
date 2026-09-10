@@ -202,6 +202,7 @@ export const enContent = {
   "source.weapon.leaf_blower_deflect.name": "Headwind",
   "source.weapon.grenade.name": "Grenade",
   "source.weapon.cluster_charge.name": "Cluster Charge",
+  "source.weapon.stink_plague.name": "Plague",
   "source.weapon.stink_cloud.name": "Stink Cloud",
   "source.ultimate.thunderstorm.name": "Thunderstorm",
   "source.weapon.ak47.explosive.name": "Explosive Targeting",

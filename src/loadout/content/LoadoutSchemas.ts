@@ -1,3 +1,4 @@
+import { validateStinkPlagueConfig } from '../StinkPlagueConfig';
 import { isWeaponFeedbackProfileId } from '../../config/weaponFeedback';
 import * as v from 'valibot';
 import { validateFlightSignature } from '../../projectile/FlightSignature';
@@ -333,6 +334,9 @@ export function validateResolvedUtility(value: unknown): string[] {
     }
     if (value.explosionMinDamage !== undefined && typeof value.explosionDamage === 'number' && (value.explosionMinDamage as number) > value.explosionDamage)
       issues.push('$.explosionMinDamage: cannot exceed center damage');
+  }
+  if (value.type === 'stinkcloud' && (value.id === 'STINK_CLOUD' || value.plague !== undefined)) {
+    issues.push(...validateStinkPlagueConfig(value.plague));
   }
   if (value.type === 'smoke') {
     const b = value.smokeBehavior;

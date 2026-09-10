@@ -138,6 +138,7 @@ export interface WorldPlayerGameplayNetworkPort {
   };
   readonly loadout: {
     readonly publishTranslocatorUseState?: (playerId: string, state: import('../loadout/TranslocatorUseState').TranslocatorUseState | null) => void;
+    readonly publishStinkCloudUtilityState?: (playerId: string, state: import('../loadout/StinkCloudUtilityState').StinkCloudUtilityState | null) => void;
     readonly publishTimeBubbleUtilityState?: (playerId: string, state: import('../loadout/TimeBubbleUtilityState').TimeBubbleUtilityState | null) => void;
     readonly publishUtilityChargeState?: (playerId: string, utilityId: string, state: import('../loadout/UtilityChargeState').UtilityChargeState | null) => void;
     readonly publishUtilityCooldownUntil: (playerId: string, until: number, utilityId: string) => void;

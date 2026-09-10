@@ -509,6 +509,9 @@ export class RockVisualHelper {
       cloud.tickInterval,
       cloud.rockDamageMult ?? 1,
       cloud.trainDamageMult ?? 1,
+      cloud.baseDamageMult ?? 1,
+      cloud.visualVariant ?? 'spore',
+      this.ctx.getWorldCombatCore()!.getHostTime(),
     );
   }
 

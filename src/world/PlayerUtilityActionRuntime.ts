@@ -1,3 +1,4 @@
+import type { StinkCloudUtilityState } from '../loadout/StinkCloudUtilityState';
 import { resolveTimeBubblePrismEmitter } from '../loadout/TimeBubbleConfig';
 import { resolveMolotovFireEffect } from '../loadout/resolveMolotovFireEffect';
 import type { TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
@@ -88,6 +89,7 @@ interface UtilityHeldActionPort {
 
 export interface PlayerUtilityActionNetworkPort {
   readonly loadout: {
+    publishStinkCloudUtilityState?: (playerId: string, state: StinkCloudUtilityState | null) => void;
     publishTranslocatorUseState?: (playerId: string, state: import('../loadout/TranslocatorUseState').TranslocatorUseState | null) => void;
     publishTimeBubbleUtilityState?: (playerId: string, state: TimeBubbleUtilityState | null) => void;
     publishUtilityChargeState?: (playerId: string, utilityId: string, state: UtilityChargeState | null) => void;
@@ -156,6 +158,39 @@ interface UtilityChargeStock {
  * Ability-specific systems only receive their narrow execution call.
  */
 export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
+  private readonly stinkCloudUses = new Map<string, StinkCloudUtilityState>();
+
+  getStinkCloudState(playerId: string): StinkCloudUtilityState | null { return this.stinkCloudUses.get(playerId) ?? null; }
+
+  getStinkMoveSpeedBonus(playerId: string, now: number): number {
+    const s = this.stinkCloudUses.get(playerId);
+    return s?.phase === 'active' && now < s.activeUntil ? s.moveSpeedBonus : 0;
+  }
+
+  getStinkDamageReduction(playerId: string, now: number): number {
+    const s = this.stinkCloudUses.get(playerId);
+    return s?.phase === 'active' && now < s.activeUntil ? s.damageReduction : 0;
+  }
+
+  private stinkCloudBlocked(playerId: string, now: number): 'blocked' | 'cooldown' | null {
+    const s = this.stinkCloudUses.get(playerId);
+    return !s ? null : s.phase === 'active' ? 'blocked' : s.cooldownUntil > now ? 'cooldown' : null;
+  }
+
+  private publishStinkCloudState(playerId: string): void {
+    this.options.network.loadout.publishStinkCloudUtilityState?.(playerId, this.getStinkCloudState(playerId));
+  }
+
+  private onStinkCloudEnded(cloudId: number, playerId: string, endedAt: number): void {
+    const s = this.stinkCloudUses.get(playerId);
+    if (this.destroyed || s?.phase !== 'active' || s.cloudId !== cloudId) return;
+    const cooldownUntil = endedAt + s.cooldownDurationMs;
+    this.stinkCloudUses.set(playerId, { utilityId: 'STINK_CLOUD', phase: 'cooldown',
+      cooldownDurationMs: s.cooldownDurationMs, cooldownUntil, temporaryUtilityInstanceId: s.temporaryUtilityInstanceId });
+    this.options.network.loadout.publishUtilityCooldownUntil(playerId, cooldownUntil, 'STINK_CLOUD');
+    this.publishStinkCloudState(playerId);
+  }
+
   private readonly timeBubbleUses = new Map<string, TimeBubbleUtilityState>();
   private timeBubblePort: TimeBubbleUtilityPort | null = null;
 
@@ -251,6 +286,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
   constructor(private readonly options: PlayerUtilityActionRuntimeOptions) {
     this.placeableCapability = options.placeable;
+    options.stinkCloud?.setPrimaryCloudEndHandler((cloudId, playerId, endedAt) => this.onStinkCloudEnded(cloudId, playerId, endedAt));
   }
 
   setPlacementCapability(
@@ -279,6 +315,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const next = new GenericUtility(config);
     this.equippedUtilities.set(playerId, next);
     this.options.network.loadout.publishUtilityCooldownUntil(playerId, 0, '__clear__');
+    const stinkCloud = this.stinkCloudUses.get(playerId);
+    if (stinkCloud?.phase === 'cooldown') this.options.network.loadout.publishUtilityCooldownUntil(playerId, stinkCloud.cooldownUntil, 'STINK_CLOUD');
     const timeBubble = this.timeBubbleUses.get(playerId);
     if (timeBubble?.phase === 'cooldown')
       this.options.network.loadout.publishUtilityCooldownUntil(playerId, timeBubble.cooldownUntil, timeBubble.utilityId);
@@ -292,6 +330,9 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   removePlayer(playerId: string): void {
+    this.stinkCloudUses.delete(playerId);
+    this.options.stinkCloud?.hostDeactivateForPlayer(playerId, this.hostFrameNowMs);
+    this.publishStinkCloudState(playerId);
     this.clearTimeBubbleUse(playerId);
     for (const id of this.chargeStocks.get(playerId)?.keys() ?? []) {
       this.options.network.loadout.publishUtilityChargeState?.(playerId, id, null);
@@ -474,6 +515,10 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       if (state?.phase === 'puck' || state?.phase === 'portals') return this.followupTranslocator({ ...request,
         params: { ...request.params, translocatorUseId: state.useId } });
     }
+    if (cfg.id === 'STINK_CLOUD') {
+      const reason = this.stinkCloudBlocked(request.playerId, request.hostNowMs);
+      if (reason) return { ok: false, reason };
+    }
     if (cfg.type === 'time_bubble') {
       const reason = this.timeBubbleBlocked(request.playerId, request.hostNowMs);
       if (reason) return { ok: false, reason };
@@ -490,7 +535,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const charges = !source.temporary && cfg.charges
       ? this.getChargeStock(request.playerId, cfg, request.hostNowMs) : null;
     if (charges ? !charges.stock.canConsume(request.hostNowMs) || charges.lockoutUntil > request.hostNowMs
-      : cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
+      : cfg.id !== 'STINK_CLOUD' && cfg.type !== 'decoy' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator' && !source.temporary && utility.isOnCooldown(request.hostNowMs)) {
       return { ok: false, reason: 'cooldown', ...(charges ? {
         utilityChargeState: this.publishChargeStock(request.playerId, charges, request.hostNowMs),
       } : {}) };
@@ -537,6 +582,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       authoritativeParams,
     );
     if (!didUse) return { ok: false, reason: 'blocked' };
+    if (cfg.id === 'STINK_CLOUD') {
+      const state = this.stinkCloudUses.get(request.playerId)!;
+      this.stinkCloudUses.set(request.playerId, { ...state, temporaryUtilityInstanceId: source.temporary?.instanceId });
+      this.publishStinkCloudState(request.playerId);
+    }
     if (cfg.type === 'time_bubble') {
       const state = this.timeBubbleUses.get(request.playerId)!;
       this.timeBubbleUses.set(request.playerId, { ...state, temporaryUtilityInstanceId: source.temporary?.instanceId });
@@ -548,14 +598,14 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
     if (source.temporary) {
       this.temporaryUtilities.recordSuccessfulUse(request.playerId, source.temporary.instanceId, request.hostNowMs,
-        cfg.type !== 'time_bubble' && cfg.type !== 'translocator');
+        cfg.id !== 'STINK_CLOUD' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator');
       this.publishTemporaryUtilities(request.playerId);
     } else if (charges) {
       charges.stock.consume(request.hostNowMs);
       charges.lockoutUntil = request.hostNowMs + cfg.charges!.burstLockoutMs;
       charges.lastCommittedAttemptId = request.attemptId;
       this.publishChargeStock(request.playerId, charges, request.hostNowMs);
-    } else if (!cfg.skipCooldownPublish && cfg.type !== 'time_bubble' && cfg.type !== 'translocator') {
+    } else if (!cfg.skipCooldownPublish && cfg.id !== 'STINK_CLOUD' && cfg.type !== 'time_bubble' && cfg.type !== 'translocator') {
       utility.recordUse(request.hostNowMs);
       this.options.network.loadout.publishUtilityCooldownUntil(
         request.playerId,
@@ -789,7 +839,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
 
   private activateStinkCloud(cfg: StinkCloudUtilityConfig, playerId: string, now: number): boolean {
     if (!this.options.stinkCloud) return false;
-    this.options.stinkCloud.hostActivate(
+    const capture = cfg.plague ? this.options.captureSmokeDamage(playerId, now) : null;
+    const cloudId = this.options.stinkCloud.hostActivate(
       playerId,
       cfg.cloudRadius,
       cfg.cloudDuration,
@@ -803,7 +854,15 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       cfg.afterCloudDamageFactor ?? 0,
       cfg.visualVariant ?? 'stink',
       now,
+      cfg.plague ? { ownerId: playerId, config: { ...cfg.plague },
+        damageMultiplier: (capture?.sourceDamageMultiplier ?? 1) * (capture?.sourceOutgoingDamage?.damageMultiplier ?? 1) } : undefined,
+      cfg.id === 'STINK_CLOUD' ? 'player-primary' : 'enemy-aura',
     );
+    if (cfg.id === 'STINK_CLOUD') {
+      this.stinkCloudUses.set(playerId, { utilityId: 'STINK_CLOUD', phase: 'active', cloudId,
+        activeUntil: now + cfg.cloudDuration, cooldownDurationMs: cfg.cooldown,
+        moveSpeedBonus: cfg.plague?.combatMoveSpeedBonus ?? 0, damageReduction: cfg.plague?.combatDamageReduction ?? 0 });
+    }
     return true;
   }
 
@@ -873,6 +932,10 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   /** Called from the world player tick, including when the utility is not currently selected. */
   update(now: number): void {
     this.hostFrameNowMs = now;
+    for (const [playerId, state] of this.stinkCloudUses) {
+      if (state.phase === 'active' && !this.options.actor.isAlive(playerId)) this.options.stinkCloud?.hostDeactivateForPlayer(playerId, now);
+      if (state.phase === 'cooldown' && state.cooldownUntil <= now) { this.stinkCloudUses.delete(playerId); this.publishStinkCloudState(playerId); }
+    }
     for (const [playerId, state] of this.timeBubbleUses) {
       if (state.phase === 'cooldown' && state.cooldownUntil <= now) {
         this.timeBubbleUses.delete(playerId);
@@ -922,6 +985,11 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.options.stinkCloud?.setPrimaryCloudEndHandler(null);
+    for (const playerId of this.stinkCloudUses.keys()) {
+      this.options.stinkCloud?.hostDeactivateForPlayer(playerId, this.hostFrameNowMs);
+      this.stinkCloudUses.delete(playerId); this.publishStinkCloudState(playerId);
+    }
     for (const playerId of this.timeBubbleUses.keys()) this.clearTimeBubbleUse(playerId);
     this.timeBubblePort = null;
     for (const [playerId, stocks] of this.chargeStocks) {

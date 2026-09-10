@@ -1,4 +1,6 @@
 export const deUi = {
+  "ui.stinkCloud.active": "Aktiv",
+  "ui.stinkCloud.cooldown": "Abklingzeit",
   "ui.timeBubble.flying": "Unterwegs",
   "ui.translocator.puck": "Puck aktiv · E teleportiert",
   "ui.translocator.portals": "E schließt · Portale",

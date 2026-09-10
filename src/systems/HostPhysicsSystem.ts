@@ -116,7 +116,7 @@ export class HostPhysicsSystem {
   private loadoutManager: LoadoutManagerType | null = null;
   private timeBubbleSystem: TimeBubbleSystem | null = null;
   private enemyManager: EnemyManager | null = null;
-  private walkingSpeedMultiplierResolver: ((playerId: string) => number) | null = null;
+  private walkingSpeedMultiplierResolver: ((playerId: string, now: number) => number) | null = null;
   private runSpeedResolver: ((playerId: string) => number) | null = null;
   private dashRangeMultiplierResolver: ((playerId: string) => number) | null = null;
   private dashRecoveryDurationResolver: ((playerId: string) => number) | null = null;
@@ -177,7 +177,7 @@ export class HostPhysicsSystem {
   }
   setEnemyManager(manager: EnemyManager | null): void { this.enemyManager = manager; }
   setCanMoveResolver(resolver: ((playerId: string) => boolean) | null): void { this.canMoveResolver = resolver; }
-  setWalkingSpeedMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.walkingSpeedMultiplierResolver = resolver; }
+  setWalkingSpeedMultiplierResolver(resolver: ((playerId: string, now: number) => number) | null): void { this.walkingSpeedMultiplierResolver = resolver; }
   setRunSpeedResolver(resolver: ((playerId: string) => number) | null): void { this.runSpeedResolver = resolver; }
   setDashRangeMultiplierResolver(resolver: ((playerId: string) => number) | null): void { this.dashRangeMultiplierResolver = resolver; }
   setDashRecoveryDurationResolver(resolver: ((playerId: string) => number) | null): void { this.dashRecoveryDurationResolver = resolver; }
@@ -796,7 +796,7 @@ export class HostPhysicsSystem {
 
       const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
       const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
-      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * (this.walkingSpeedMultiplierResolver?.(player.id) ?? 1);
+      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * (this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1);
 
       if (len > 0) {
         baseVx = (dx / len) * speed;

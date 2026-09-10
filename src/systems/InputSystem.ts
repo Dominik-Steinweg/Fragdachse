@@ -15,6 +15,7 @@ import { RadialActionMenu } from '../ui/RadialActionMenu';
 import {
   cloneRadialActionRef,
   getTimeBubbleStatusLabel,
+  getStinkCloudStatusLabel,
   getTranslocatorStatusLabel,
   isSameRadialActionRef,
   radialActionKey,
@@ -425,6 +426,11 @@ export class InputSystem {
   }
 
   getTimeBubbleStatusLabel(): string {
+    const ref = this.selectedRadialAction;
+    if ((ref?.kind === 'utility' || ref?.kind === 'temporary-utility') && ref.utilityId === 'STINK_CLOUD') {
+      const stink = this.bridge.getPlayerStinkCloudUtilityState?.(this.bridge.getLocalPlayerId());
+      if (stink) return getStinkCloudStatusLabel(stink, this.getCooldownNow());
+    }
     const translocator = this.getSelectedTranslocatorState();
     if (translocator) return getTranslocatorStatusLabel(translocator, this.getCooldownNow());
     const state = this.getSelectedTimeBubbleState();
@@ -457,6 +463,7 @@ export class InputSystem {
     };
     const actions = resolveRadialActions({
       translocatorState: this.bridge.getPlayerTranslocatorUseState?.(this.bridge.getLocalPlayerId()),
+      stinkCloudState: this.bridge.getPlayerStinkCloudUtilityState?.(this.bridge.getLocalPlayerId()),
       timeBubbleState: this.bridge.getPlayerTimeBubbleUtilityState?.(this.bridge.getLocalPlayerId()),
       gameMode: this.bridge.getActiveGameMode(),
       tools: this.getRadialTools(),
@@ -1946,7 +1953,7 @@ export class InputSystem {
   private predictCurrentUtilityCooldown(): void {
     const config = this.getLocalUtilityConfig?.();
     // A refund can precede the first active-decoy snapshot; prediction would hide it.
-    if (config?.type === 'decoy' || config?.type === 'time_bubble' || config?.type === 'translocator') return;
+    if (config?.type === 'stinkcloud' || config?.type === 'decoy' || config?.type === 'time_bubble' || config?.type === 'translocator') return;
     const cooldown = config?.cooldown ?? 0;
     if (cooldown > 0) this.predictSelectedUtilityCooldown(this.getCooldownNow() + cooldown);
   }

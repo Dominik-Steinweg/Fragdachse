@@ -375,5 +375,6 @@ function spawnImpactCloudFromProjectile(
     proj.impactCloud.trainDamageMult ?? 1,
     proj.impactCloud.baseDamageMult ?? 1,
     proj.impactCloud.visualVariant,
+    ctx.getWorldCombatCore()!.getHostTime(),
   );
 }

@@ -618,6 +618,7 @@ export interface NukeUtilityConfig extends BaseUtilityConfig {
 
 export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
   readonly type: 'stinkcloud';
+  readonly plague?: import('./StinkPlagueConfig').StinkPlagueConfig;
   readonly visualVariant?: DamageZoneVisualStyle;
   readonly cloudRadius: number;          // px – Schadensradius der Gaswolke
   readonly cloudDuration: number;        // ms – Gesamtdauer der Wolke

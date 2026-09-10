@@ -27,6 +27,7 @@ export interface WorldSupportGameplaySystems {
 }
 
 export interface WorldSupportGameplayRuntimeOptions {
+  readonly plague?: import('./WorldStinkPlagueBinding').WorldStinkPlagueBinding;
   readonly smoke: import('./WorldSmokeBinding').WorldSmokeBinding;
   readonly projectileExternalInteraction: ProjectileExternalInteractionPort;
   readonly playerManager: PlayerManager;
@@ -52,6 +53,7 @@ export interface WorldSupportGameplayRuntimeOptions {
 export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUltimateAirstrikeCapability {
   readonly systems: WorldSupportGameplaySystems;
   get smoke() { return this.options.smoke; }
+  get plague() { return this.options.plague ?? null; }
   private destroyed = false;
 
   constructor(private readonly options: WorldSupportGameplayRuntimeOptions) {
@@ -91,6 +93,7 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUl
     if (this.destroyed) return;
     this.destroyed = true;
     this.options.smoke.destroy();
+    this.options.plague?.destroy();
     this.options.combatSystem.setDetonationSystem(null);
     this.options.combatSystem.setStinkCloudSystem(null);
     this.options.setBurrowStinkCloudSystem(null);

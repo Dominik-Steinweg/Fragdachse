@@ -185,6 +185,8 @@ export class EnemyManager {
   private forceFullNetSnapshot = false;
   private refreshCursor = 0;
   private readonly wildfirePanicStates = new Map<string, WildfirePanicState>();
+  private plagueMovement: { getTarget(enemyId: string, now: number): { x: number; y: number } | null } | null = null;
+  setPlagueMovementSource(source: typeof this.plagueMovement): void { this.plagueMovement = source; }
   private smokePerception: SmokePerceptionPort | null = null;
   private smokeNow = 0;
   setSmokePerception(port: SmokePerceptionPort | null, now: number): void { this.smokePerception = port; this.smokeNow = now; }
@@ -460,6 +462,13 @@ export class EnemyManager {
         } else {
           enemy.stopMovement();
         }
+        continue;
+      }
+
+      const infectionTarget = !config.isBoss && !decoyTarget && !smokeSystem?.getConfusion(enemy.id, now)
+        ? this.plagueMovement?.getTarget(enemy.id, now) : null;
+      if (infectionTarget) {
+        this.steerEnemyTowards(enemy, infectionTarget.x, infectionTarget.y, lerpT, now, activeTrainAwareness, attackMovementFactor);
         continue;
       }
 
@@ -1400,6 +1409,7 @@ export class EnemyManager {
     const snapshot = enemy.getNetSnapshot();
     return {
       ...snapshot,
+      entityGeneration: this.enemyGenerations.get(enemy.id),
       x: Math.round(snapshot.x),
       y: Math.round(snapshot.y),
       rot: Math.round(snapshot.rot * 100) / 100,
@@ -1417,6 +1427,7 @@ export class EnemyManager {
 
   private buildDeltaState(previous: SyncedEnemyState, current: SyncedEnemyState): SyncedEnemyDeltaState | null {
     const delta: SyncedEnemyDeltaState = { id: current.id };
+    if (current.entityGeneration !== previous.entityGeneration) delta.entityGeneration = current.entityGeneration;
     if (current.positionRevision !== previous.positionRevision) {
       delta.positionRevision = current.positionRevision;
       delta.x = current.x;
@@ -1484,6 +1495,9 @@ export class EnemyManager {
 
   private applyRemoteSnapshot(remote: SyncedEnemyDeltaState): void {
     let enemy = this.enemies.get(remote.id);
+    if (enemy && remote.entityGeneration !== undefined && remote.entityGeneration !== this.enemyGenerations.get(remote.id)) {
+      this.destroyEnemyEntity(remote.id, enemy); enemy = undefined;
+    }
     if (!enemy) {
       if (remote.kind === undefined || remote.x === undefined || remote.y === undefined) return;
       enemy = new EnemyEntity(
@@ -1515,7 +1529,7 @@ export class EnemyManager {
         remote.gaussAimAngle ?? rotation,
       );
       this.enemies.set(remote.id, enemy);
-      this.enemyGenerations.set(remote.id, this.nextEnemyGeneration++);
+      this.enemyGenerations.set(remote.id, remote.entityGeneration ?? this.nextEnemyGeneration++);
       if (this.remoteSnapshotSeen && !remote.burrowed) this.playSpawnEffect(enemy, {});
       // Nach dem Registrieren, damit die Buddel-Visuals den Gegner bereits finden.
       if (remote.burrowed) this.setEnemyBurrowed(remote.id, true);

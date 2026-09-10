@@ -1,3 +1,5 @@
+import { getSlimeTrailBaseline, type SlimeTrailConfig } from '../loadout/SlimeTrailConfig';
+import type { PlagueDeathContribution } from './StinkPlagueRuntime';
 import * as Phaser from 'phaser';
 import type { EnemyEntity } from '../entities/EnemyEntity';
 import type { EnemyManager } from '../entities/EnemyManager';
@@ -17,18 +19,6 @@ export interface SlimeDeathBurst {
   y: number;
   targets: SlimeBloomTarget[];
   ownerId: string;
-}
-
-interface SlimeTrailConfig {
-  enabled: boolean;
-  cellSize: number;
-  lingerDurationMs: number;
-  effectDurationMs: number;
-  tickIntervalMs: number;
-  damagePerTick: number;
-  slowFraction: number;
-  deathBurstSearchRadius: number;
-  deathBurstPatchCount: number;
 }
 
 interface ActiveSlimeCell {
@@ -74,6 +64,10 @@ interface LastOwnerCell {
  * nur einmal; erneutes Betreten erneuert Zustand und Ablaufzeit, ohne zu stacken.
  */
 export class SlimeTrailSystem {
+  private readonly baseline = getSlimeTrailBaseline();
+  private validCell: ((x: number, y: number, size: number) => boolean) | null = null;
+  setValidCellChecker(checker: typeof this.validCell): void { this.validCell = checker; }
+
   private readonly cells = new Map<string, ActiveSlimeCell>();
   private readonly cellSizes = new Set<number>();
   private readonly affectedEnemies = new Map<string, SlimedEnemyState>();
@@ -109,39 +103,35 @@ export class SlimeTrailSystem {
     return 1 - Phaser.Math.Clamp(state.slowFraction, 0, 0.95);
   }
 
-  handleEnemyDeath(enemyId: string, x: number, y: number, now: number): SlimeDeathBurst | null {
+  handleEnemyDeath(enemyId: string, x: number, y: number, now: number, plague?: PlagueDeathContribution): SlimeDeathBurst | null {
     const state = this.affectedEnemies.get(enemyId);
-    if (!state || state.deathBurstSearchRadius <= 0 || state.deathBurstPatchCount <= 0) return null;
     this.affectedEnemies.delete(enemyId);
-
-    const config: SlimeTrailConfig = {
-      enabled: true,
-      cellSize: state.cellSize,
-      lingerDurationMs: state.lingerDurationMs,
-      effectDurationMs: state.effectDurationMs,
-      tickIntervalMs: state.tickIntervalMs,
-      damagePerTick: state.damagePerTick,
-      slowFraction: state.slowFraction,
-      deathBurstSearchRadius: state.deathBurstSearchRadius,
-      deathBurstPatchCount: state.deathBurstPatchCount,
-    };
-    const targets = this.selectRandomBloomCells(
-      x,
-      y,
-      state.deathBurstSearchRadius,
-      state.deathBurstPatchCount,
-      state.cellSize,
-    );
-    for (const target of targets) {
-      this.refreshCell(
-        Math.floor(target.x / state.cellSize),
-        Math.floor(target.y / state.cellSize),
-        state.ownerId,
-        config,
-        now,
-      );
+    const contributions: { ownerId: string; count: number; config: SlimeTrailConfig }[] = [];
+    if (state && state.expiresAt >= now && state.deathBurstSearchRadius > 0 && state.deathBurstPatchCount > 0) {
+      contributions.push({ ownerId: state.ownerId, count: state.deathBurstPatchCount, config: {
+        enabled: true, cellSize: state.cellSize, lingerDurationMs: state.lingerDurationMs,
+        effectDurationMs: state.effectDurationMs, tickIntervalMs: state.tickIntervalMs, damagePerTick: state.damagePerTick,
+        slowFraction: state.slowFraction, deathBurstSearchRadius: state.deathBurstSearchRadius,
+        deathBurstPatchCount: state.deathBurstPatchCount,
+      } });
     }
-    return targets.length > 0 ? { x, y, targets, ownerId: state.ownerId } : null;
+    if (plague && plague.count > 0) {
+      const config = this.resolveConfig(plague.ownerId);
+      contributions.push({ ownerId: plague.ownerId, count: plague.count,
+        config: { ...config, deathBurstSearchRadius: config.deathBurstSearchRadius || this.baseline.deathBurstSearchRadius } });
+    }
+    const targets: SlimeBloomTarget[] = [];
+    const used = new Set<string>();
+    for (const contribution of contributions) {
+      const config = contribution.config;
+      const selected = this.selectRandomBloomCells(x, y, config.deathBurstSearchRadius, contribution.count, config.cellSize, used);
+      for (const target of selected) {
+        this.refreshCell(Math.floor(target.x / config.cellSize), Math.floor(target.y / config.cellSize), contribution.ownerId, config, now);
+        used.add(target.x + ':' + target.y);
+        targets.push(target);
+      }
+    }
+    return targets.length ? { x, y, targets, ownerId: contributions[0].ownerId } : null;
   }
 
   clear(): void {
@@ -216,6 +206,7 @@ export class SlimeTrailSystem {
     radius: number,
     count: number,
     cellSize: number,
+    used: ReadonlySet<string> = new Set(),
   ): SlimeBloomTarget[] {
     const candidates: SlimeBloomTarget[] = [];
     const minGridX = Math.floor((centerX - radius) / cellSize);
@@ -228,6 +219,7 @@ export class SlimeTrailSystem {
         const cellX = gridX * cellSize + cellSize * 0.5;
         const cellY = gridY * cellSize + cellSize * 0.5;
         if (Phaser.Math.Distance.Squared(centerX, centerY, cellX, cellY) > radiusSquared) continue;
+        if (used.has(cellX + ':' + cellY) || (this.validCell && !this.validCell(cellX, cellY, cellSize))) continue;
         candidates.push({ x: cellX, y: cellY });
       }
     }
@@ -364,6 +356,7 @@ export class SlimeTrailSystem {
   }
 
   private resolveConfig(playerId: string): SlimeTrailConfig {
+    if (this.resolveStat(playerId, `${STAT_PREFIX}.enabled`, 0) < 0.5) return this.baseline;
     return {
       enabled: this.resolveStat(playerId, `${STAT_PREFIX}.enabled`, 0) >= 0.5,
       cellSize: Math.max(8, Math.round(this.resolveStat(playerId, `${STAT_PREFIX}.cellSize`, 0))),

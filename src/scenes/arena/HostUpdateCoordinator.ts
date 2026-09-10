@@ -234,6 +234,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     return this.playerFramePort?.getPlayerGameplayRuntime() ?? null;
   }
   private get combatSystems() { return this.combatFramePort?.getCombatGameplayBinding()?.systems ?? null; }
+  private get plagueBinding() { return this.combatFramePort?.getSupportGameplayRuntime()?.plague ?? null; }
   private get smokeBinding() { return this.combatFramePort?.getSupportGameplayRuntime()?.smoke ?? null; }
   private get supportSystems() { return this.combatFramePort?.getSupportGameplayRuntime()?.systems ?? null; }
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
@@ -354,6 +355,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     // World: Koeder und Tarnung leben unabhaengig von jeder Activity und stehen deshalb vor dem
     // Missionsschritt, der sie als Ziele liest.
+    if (!countdownActive) this.plagueBinding?.advance(now);
     if (!countdownActive) this.ctx.decoySystem.hostUpdateLifecycle(now);
     if (!countdownActive) this.smokeBinding?.refresh(now);
     // Activity: Missionsfortschritt, Navigation und Gegner. Die Reihenfolge darin gehoert der
@@ -583,6 +585,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     }
 
     for (const ev of stinkDmg) {
+      this.plagueBinding?.applyPrimaryContact(ev, now);
       this.ctx.getWorldCombatCore()!.applyAoeDamage(ev.x, ev.y, ev.radius, ev.damage, ev.ownerId, false, {
         category: 'damage_over_time',
         sourceId: 'weapon.stink_cloud',
@@ -595,6 +598,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       );
     }
 
+    if (!countdownActive) this.plagueBinding?.spread(now);
     if (!countdownActive) this.smokeBinding?.step(now);
 
     // Airstrike-Strikes detonieren
@@ -738,6 +742,12 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
     this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,
       id => this.coopMissionRuntime?.enemyManager?.getEnemy(id)?.getStatusVisualTarget() ?? null);
+    this.ctx.stinkCloudSystem.syncPlagueVisuals(this.plagueBinding?.runtime.getSnapshot(now)
+      ?? { targets: [], transfers: [], transferSequence: 0 }, now, id => {
+      const manager = this.coopMissionRuntime?.enemyManager;
+      const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
+      return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
+    });
     const airstrikes  = this.supportSystems?.airstrike?.getSnapshot()        ?? [];
     const meteors     = this.supportSystems?.armageddon?.getSnapshot()       ?? [];
     const train     = this.trainManager?.getNetSnapshot()        ?? null;
@@ -1073,6 +1083,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       smokeTargets: countdownActive ? [] : this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [],
       fires,
       stinkClouds,
+      stinkPlague: this.plagueBinding?.runtime.getSnapshot(now),
       timeBubbles,
       teslaDomes,
       energyShields,
@@ -1292,6 +1303,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       dot.rockDamageMult ?? 1, dot.trainDamageMult ?? 1,
       dot.baseDamageMult ?? 1,
       dot.style,
+      this.ctx.getWorldCombatCore()!.getHostTime(),
     );
   }
 

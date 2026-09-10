@@ -202,6 +202,7 @@ export const deContent = {
   "source.weapon.leaf_blower_deflect.name": "Gegenwind",
   "source.weapon.grenade.name": "Granate",
   "source.weapon.cluster_charge.name": "Clusterladung",
+  "source.weapon.stink_plague.name": "Seuche",
   "source.weapon.stink_cloud.name": "Stinkwolke",
   "source.ultimate.thunderstorm.name": "Gewittersturm",
   "source.weapon.ak47.explosive.name": "Explosive Zielerfassung",

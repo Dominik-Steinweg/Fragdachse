@@ -538,7 +538,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         field => !o.network.authority.isEnemyPair(field.ownerId, playerId),
         nowMs,
       ) ?? 0) : 0;
-      return fromWeapon + fromItems + conditional + matrix;
+      return fromWeapon + fromItems + conditional + matrix + (playerCombat?.utility.getStinkDamageReduction?.(playerId, nowMs) ?? 0);
     });
     combat.setPlayerHpRegenPerSecondResolver((playerId, nowMs) => {
       const p = o.getPlayerCombatIntegration();
@@ -912,8 +912,9 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       return (p?.modifier.getResolvedStat(playerId, 'player.runSpeed', PLAYER_SPEED) ?? PLAYER_SPEED)
         * (p?.item.getRunSpeedMultiplier(playerId, Date.now()) ?? 1);
     });
-    hostPhysics.setWalkingSpeedMultiplierResolver(playerId => o.decoySystem.getStealthSpeedMultiplier(playerId)
-      * (1 + (o.getPlayerCombatIntegration()?.utility.getTranslocatorMoveSpeedBonus?.(playerId, Date.now()) ?? 0)));
+    hostPhysics.setWalkingSpeedMultiplierResolver((playerId, nowMs) => o.decoySystem.getStealthSpeedMultiplier(playerId)
+      * (1 + (o.getPlayerCombatIntegration()?.utility.getTranslocatorMoveSpeedBonus?.(playerId, nowMs) ?? 0))
+      * (1 + (o.getPlayerCombatIntegration()?.utility.getStinkMoveSpeedBonus?.(playerId, nowMs) ?? 0)));
     hostPhysics.setDashRangeMultiplierResolver((playerId) => 1 + (o.getPlayerCombatIntegration()?.modifier.getPercentageStat(playerId, 'player.dashRange') ?? 0));
     hostPhysics.setDashRecoveryDurationResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashRecovery', DASH_T2_S) ?? DASH_T2_S);
     hostPhysics.setDashImpactDamageResolver((playerId) => o.getPlayerCombatIntegration()?.modifier.getResolvedStat(playerId, 'player.dashImpactDamage', 0) ?? 0);

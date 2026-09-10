@@ -4,6 +4,7 @@ import { fillRadialGradientTexture, makeAdditive, registerGraphicsObject } from 
 import { emissiveAlpha } from './EmissiveScale';
 
 export interface EntityStatusVisualTarget {
+  readonly entityGeneration?: number;
   readonly sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
   readonly bodySize: number;
   readonly visible: boolean;

@@ -236,10 +236,10 @@ describe('Radial Menu V2 input', () => {
     try {
       const { system, keys, bridge } = createSystem();
       bridge.getSynchronizedNow = () => 100_000;
-      const utilityConfig = { ...UTILITY_CONFIGS.STINK_CLOUD, cooldown: 8_000 };
+      const utilityConfig = { ...({ ...UTILITY_CONFIGS.NUKE, activation: { type: 'instant' as const } }), cooldown: 8_000 };
       const uses = vi.fn();
       system.setupRadialActionProviders({
-        getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+        getTools: () => [{ kind: 'utility', id: 'NUKE' }],
         getCooldownUntil: () => 0,
         getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
       });
@@ -252,7 +252,7 @@ describe('Radial Menu V2 input', () => {
       system.update();
 
       expect(uses).toHaveBeenCalledTimes(1);
-      expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'STINK_CLOUD' }))
+      expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'NUKE' }))
         .toBe(108_000);
     } finally {
       vi.useRealTimers();
@@ -264,11 +264,11 @@ describe('Radial Menu V2 input', () => {
     let authoritativeCooldown = 0;
     const dispatches = vi.fn();
     system.setupRadialActionProviders({
-      getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+      getTools: () => [{ kind: 'utility', id: 'NUKE' }],
       getCooldownUntil: () => authoritativeCooldown,
       getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
     });
-    system.setupUtilityConfigProvider(() => UTILITY_CONFIGS.STINK_CLOUD);
+    system.setupUtilityConfigProvider(() => ({ ...UTILITY_CONFIGS.NUKE, cooldown: 8000, activation: { type: 'instant' as const } }));
     system.setupUtilityCooldownProvider(() => authoritativeCooldown);
     // Mirrors ArenaScene's synchronous request gate: only authoritative state decides whether
     // this already-admitted request reaches the transport.
@@ -284,7 +284,7 @@ describe('Radial Menu V2 input', () => {
 
     expect(dispatches).toHaveBeenCalledTimes(1);
     expect(bridge.sendLoadoutUse).toHaveBeenCalledTimes(1);
-    expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'STINK_CLOUD' }))
+    expect(system.getPredictedUtilityCooldownUntil({ kind: 'utility', utilityId: 'NUKE' }))
       .toBeGreaterThan(Date.now());
 
     // The prediction now blocks a second InputSystem dispatch even though the host snapshot is
@@ -338,20 +338,20 @@ describe('Radial Menu V2 input', () => {
     try {
       const { system, keys, bridge } = createSystem();
       bridge.getSynchronizedNow = () => 100_000;
-      const utilityConfig = { ...UTILITY_CONFIGS.STINK_CLOUD, cooldown: 8_000 };
+      const utilityConfig = { ...({ ...UTILITY_CONFIGS.NUKE, activation: { type: 'instant' as const } }), cooldown: 8_000 };
       const temporaryUtilities = [
         {
-          kind: 'utility' as const, instanceId: 'temp-a', utilityId: 'STINK_CLOUD', charges: 2,
+          kind: 'utility' as const, instanceId: 'temp-a', utilityId: 'NUKE', charges: 2,
           cooldownUntil: 0, cooldownDurationMs: 8_000, acquisitionOrder: 0,
         },
         {
-          kind: 'utility' as const, instanceId: 'temp-b', utilityId: 'STINK_CLOUD', charges: 1,
+          kind: 'utility' as const, instanceId: 'temp-b', utilityId: 'NUKE', charges: 1,
           cooldownUntil: 0, cooldownDurationMs: 8_000, acquisitionOrder: 1,
         },
       ];
       const dispatches = vi.fn();
       system.setupRadialActionProviders({
-        getTools: () => [{ kind: 'utility', id: 'STINK_CLOUD' }],
+        getTools: () => [{ kind: 'utility', id: 'NUKE' }],
         getCooldownUntil: () => 0,
         getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }),
       });
@@ -361,8 +361,8 @@ describe('Radial Menu V2 input', () => {
       system.setupLoadoutListener((_slot, _angle, _targetX, _targetY, params) => {
         if (params?.temporaryUtilityInstanceId) dispatches(params.temporaryUtilityInstanceId);
       });
-      const actionA = { kind: 'temporary-utility' as const, instanceId: 'temp-a', utilityId: 'STINK_CLOUD' };
-      const actionB = { kind: 'temporary-utility' as const, instanceId: 'temp-b', utilityId: 'STINK_CLOUD' };
+      const actionA = { kind: 'temporary-utility' as const, instanceId: 'temp-a', utilityId: 'NUKE' };
+      const actionB = { kind: 'temporary-utility' as const, instanceId: 'temp-b', utilityId: 'NUKE' };
       system.getSelectedRadialActionForHud();
       (system as any).applyRadialSelection(actionA);
 

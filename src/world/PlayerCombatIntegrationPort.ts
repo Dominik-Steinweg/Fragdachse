@@ -97,6 +97,8 @@ export type PlayerCombatSustainedWeaponPort = Pick<
 >;
 
 export interface PlayerCombatUtilityPort {
+  getStinkMoveSpeedBonus?(playerId: string, nowMs: number): number;
+  getStinkDamageReduction?(playerId: string, nowMs: number): number;
   getTranslocatorMoveSpeedBonus?(playerId: string, nowMs: number): number;
   getTranslocatorHpRegen?(playerId: string, nowMs: number): number;
   setTimeBubblePort?(port: import('./TimeBubbleUtilityPort').TimeBubbleUtilityPort | null): void;
@@ -109,6 +111,8 @@ export interface PlayerCombatUtilityPort {
 
 /** Enemy movement read owned by the player item/runtime behavior. */
 export interface PlayerCombatSlimeTrailPort {
+  handleEnemyDeath(enemyId: string, x: number, y: number, nowMs: number, plague?: import('../systems/StinkPlagueRuntime').PlagueDeathContribution): SlimeDeathBurst | null;
+  setValidCellChecker(checker: ((x: number, y: number, size: number) => boolean) | null): void;
   getEnemyMovementFactor(enemyId: string, nowMs: number): number;
 }
 

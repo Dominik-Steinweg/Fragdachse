@@ -104,6 +104,22 @@
     },
     "STINK_CLOUD": {
       "id": "STINK_CLOUD",
+      "plague": {
+        "damagePerTick": 0,
+        "tickIntervalMs": 500,
+        "directDurationMs": 4000,
+        "firstGenerationDurationMs": 2000,
+        "secondGenerationDurationMs": 1000,
+        "spreadIntervalMs": 100,
+        "searchRadius": 220,
+        "contactGap": 40,
+        "lifeLeechFraction": 0,
+        "pandemicEnabled": 0,
+        "vulnerabilityEnabled": 0,
+        "deathChunkCount": 0,
+        "combatMoveSpeedBonus": 0,
+        "combatDamageReduction": 0
+      },
       "type": "stinkcloud",
       "cooldown": 8000,
       "activation": {

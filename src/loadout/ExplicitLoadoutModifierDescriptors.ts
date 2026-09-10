@@ -2,6 +2,14 @@ import type { ConfigStatDescriptor } from './CoopDefenseLoadoutModifiers';
 
 /** Explicit contracts for formerly convention-resolved upgrade paths. */
 export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
+  'utility.STINK_CLOUD.plague.damagePerTick': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'damagePerTick'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.lifeLeechFraction': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'lifeLeechFraction'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.pandemicEnabled': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'pandemicEnabled'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.vulnerabilityEnabled': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'vulnerabilityEnabled'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.deathChunkCount': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'deathChunkCount'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.combatMoveSpeedBonus': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'combatMoveSpeedBonus'], formula: 'add' }] },
+  'utility.STINK_CLOUD.plague.combatDamageReduction': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'combatDamageReduction'], formula: 'add' }] },
+  'utility.STINK_CLOUD.cooldown': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['cooldown'], formula: 'scale' }] },
   'utility.TRANSLOCATOR.cooldown': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['cooldown'], formula: 'scale' }] },
   'utility.TRANSLOCATOR.phaseMoveSpeedBonus': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['phaseMoveSpeedBonus'], formula: 'add' }] },
   'utility.TRANSLOCATOR.phaseHpRegenPerSecond': { kind: 'utility', itemId: 'TRANSLOCATOR', targets: [{ path: ['phaseHpRegenPerSecond'], formula: 'add' }] },
@@ -158,21 +166,6 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     kind: "utility",
     itemId: "HE_GRENADE",
     targets: [{ path: ["clusterRadiusFactor"], formula: "add", createIfMissing: true }],
-  },
-  "utility.STINK_CLOUD.afterCloudDamageFactor": {
-    kind: "utility",
-    itemId: "STINK_CLOUD",
-    targets: [{ path: ["afterCloudDamageFactor"], formula: "add", createIfMissing: true }],
-  },
-  "utility.STINK_CLOUD.afterCloudDurationMs": {
-    kind: "utility",
-    itemId: "STINK_CLOUD",
-    targets: [{ path: ["afterCloudDurationMs"], formula: "add", createIfMissing: true }],
-  },
-  "utility.STINK_CLOUD.afterCloudRadiusFactor": {
-    kind: "utility",
-    itemId: "STINK_CLOUD",
-    targets: [{ path: ["afterCloudRadiusFactor"], formula: "add", createIfMissing: true }],
   },
   "utility.TIME_BUBBLE.resonanceRegenPerDamage": {
     kind: "utility",

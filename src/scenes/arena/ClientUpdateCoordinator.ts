@@ -426,6 +426,8 @@ export class ClientUpdateCoordinator {
         id => this.activityFramePort?.getEnemyStatusVisual(id) ?? null);
       this.ctx.fireSystem.syncVisuals(state.fires ?? []);
       this.ctx.stinkCloudSystem.syncVisuals(state.stinkClouds ?? []);
+      this.ctx.stinkCloudSystem.syncPlagueVisuals(state.stinkPlague ?? { targets: [], transfers: [], transferSequence: 0 },
+        bridge.getSynchronizedNow(), id => this.activityFramePort?.getEnemyStatusVisual(id) ?? null);
       if (this.performanceMetricsEnabled) projectilesEffectsMs = performance.now() - effectsStartedAt;
 
       // Generic World visual projection (including the Tesla dome) is handled by the

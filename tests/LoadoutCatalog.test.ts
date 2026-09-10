@@ -154,9 +154,9 @@ describe('loadout catalog', () => {
       .toBe('UPGRADE_FLIEGENPILZ_DOUBLE_SPORE');
     expect(getCoopDefenseUpgradeTextureKey('spore_turret_plasma_gun'))
       .toBe('UPGRADE_FLIEGENPILZ_PLASMA_GUN');
-    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_radius')).toBe('UPGRADE_STINKDRUESEN_RADIUS');
-    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_damage')).toBe('UPGRADE_STINKDRUESEN_DAMAGE');
-    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_aftercloud')).toBe('UPGRADE_STINKDRUESEN_AFTERCLOUD');
+    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_spread')).toBe('UPGRADE_STINKDRUESEN_RADIUS');
+    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_infection')).toBe('UPGRADE_STINKDRUESEN_DAMAGE');
+    expect(getCoopDefenseUpgradeTextureKey('stink_cloud_pandemic')).toBe('UPGRADE_STINKDRUESEN_AFTERCLOUD');
     expect(getCoopDefenseUpgradeTextureKey('flamethrower_adrenalin_efficiency')).toBe(
       'UPGRADE_FLAMETHROWER_ADRENALIN_EFFICIENCY',
     );

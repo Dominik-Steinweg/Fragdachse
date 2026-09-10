@@ -1,3 +1,5 @@
+import { StinkPlagueRenderer } from './StinkPlagueRenderer';
+import type { PlagueApplication } from '../systems/StinkPlagueRuntime';
 import * as Phaser from 'phaser';
 import { DEPTH, NET_SMOOTH_TIME_MS, VOID_FIRE_COLOR } from '../config';
 import { edgeZone, ensureCanvasTexture, recordGraphicsWork, recordParticleSpawn, registerGraphicsObject, registerParticleEmitter } from './EffectUtils';
@@ -127,6 +129,10 @@ const BLOB_TEMPLATES: readonly BlobTemplate[] = [
 
 /* ── Damage event (returned to host for WorldCombatCore processing) ── */
 export interface StinkCloudDamageEvent {
+  readonly cloudId: number;
+  readonly kind: 'player-primary' | 'enemy-aura' | 'stationary';
+  readonly plague?: PlagueApplication;
+  readonly tickAt: number;
   x:              number;
   y:              number;
   radius:         number;
@@ -140,6 +146,8 @@ export interface StinkCloudDamageEvent {
 
 /* ── Host-side active cloud tracking ── */
 interface ActiveStinkCloud {
+  kind: 'player-primary' | 'enemy-aura' | 'stationary';
+  plague?: PlagueApplication;
   id:             number;
   ownerId:        string;
   ownerColor:     number;
@@ -257,6 +265,16 @@ const PARTICLE_TINTS: Readonly<Record<DamageZoneVisualStyle, StinkCloudParticleT
 };
 
 export class StinkCloudSystem {
+  private readonly plagueRenderer: StinkPlagueRenderer;
+  clearPlagueVisuals(): void { this.plagueRenderer.clear(); }
+  syncPlagueVisuals(snapshot: import('../systems/StinkPlagueRuntime').StinkPlagueSnapshot, now: number,
+    lookup: (id: string) => import('./SmokeBodyEffect').EntityStatusVisualTarget | null): void {
+    this.plagueRenderer.sync(snapshot, now, lookup);
+  }
+  private hostNow = 0;
+  private primaryCloudEnd: ((cloudId: number, ownerId: string, endedAt: number) => void) | null = null;
+
+  setPrimaryCloudEndHandler(handler: typeof this.primaryCloudEnd): void { this.primaryCloudEnd = handler; }
   private readonly activeZones: ActiveStinkCloud[] = [];
   private readonly visuals = new Map<number, StinkCloudVisual>();
   private nextId = 0;
@@ -265,6 +283,7 @@ export class StinkCloudSystem {
 
   constructor(private readonly scene: Phaser.Scene) {
     this.ensureTextures();
+    this.plagueRenderer = new StinkPlagueRenderer(scene);
   }
 
   setLightingSystem(lighting: LightingSystem | null): void {
@@ -297,10 +316,16 @@ export class StinkCloudSystem {
     afterCloudRadiusFactor = 0,
     afterCloudDamageFactor = 0,
     visualVariant: DamageZoneVisualStyle = 'stink',
-    now = Date.now(),
-  ): void {
+    now = this.hostNow,
+    plague?: PlagueApplication,
+    kind: 'player-primary' | 'enemy-aura' = 'enemy-aura',
+  ): number {
+    this.hostNow = now;
+    const id = this.nextId++;
     this.activeZones.push({
-      id: this.nextId++,
+      kind,
+      plague,
+      id,
       ownerId,
       ownerColor: 0xffffff,
       radius,
@@ -315,11 +340,12 @@ export class StinkCloudSystem {
       x: 0,
       y: 0,
       createdAt:  now,
-      lastTickAt: now,
+      lastTickAt: kind === 'player-primary' ? now - tickInterval : now,
       afterCloudDurationMs,
       afterCloudRadiusFactor,
       afterCloudDamageFactor,
     });
+    return id;
   }
 
   hostCreateStationaryCloud(
@@ -335,9 +361,11 @@ export class StinkCloudSystem {
     trainDamageMult: number,
     baseDamageMult = 1,
     visualVariant: DamageZoneVisualStyle = 'spore',
+    now = this.hostNow,
   ): void {
-    const now = Date.now();
+    this.hostNow = now;
     this.activeZones.push({
+      kind: 'stationary',
       id: this.nextId++,
       ownerId,
       ownerColor,
@@ -369,6 +397,7 @@ export class StinkCloudSystem {
     now: number,
     ownerLookup: (id: string) => StinkCloudPlayerInfo | null,
   ): { synced: SyncedStinkCloud[]; damageEvents: StinkCloudDamageEvent[] } {
+    this.hostNow = now;
     const synced:       SyncedStinkCloud[]       = [];
     const damageEvents: StinkCloudDamageEvent[]  = [];
 
@@ -379,7 +408,7 @@ export class StinkCloudSystem {
       if (zone.followOwner) {
         // Deaktivierung: Spieler tot, eingebuddelt, oder nicht mehr vorhanden
         if (!info || !info.alive || info.burrowed) {
-          this.endZoneAt(i, 'owner_inactive');
+          this.endZoneAt(i, 'owner_inactive', now);
           continue;
         }
         zone.x = info.x;
@@ -387,17 +416,14 @@ export class StinkCloudSystem {
         zone.ownerColor = info.color;
       }
 
-      // Duration abgelaufen
       const elapsed = now - zone.createdAt;
-      if (elapsed >= zone.duration) {
-        this.endZoneAt(i, 'natural');
-        continue;
-      }
 
       // Damage-Tick
-      if (now - zone.lastTickAt >= zone.tickInterval) {
+      while (now - zone.lastTickAt >= zone.tickInterval
+        && zone.lastTickAt + zone.tickInterval < zone.createdAt + zone.duration) {
         zone.lastTickAt += zone.tickInterval;
         damageEvents.push({
+          cloudId: zone.id, kind: zone.kind, plague: zone.plague, tickAt: zone.lastTickAt,
           x:               zone.x,
           y:               zone.y,
           radius:          zone.radius,
@@ -410,6 +436,10 @@ export class StinkCloudSystem {
         });
       }
 
+      if (elapsed >= zone.duration) {
+        this.endZoneAt(i, 'natural', zone.createdAt + zone.duration);
+        continue;
+      }
       // Snapshot für Netzwerk
       synced.push({
         id:         zone.id,
@@ -429,10 +459,10 @@ export class StinkCloudSystem {
   }
 
   /** Host-only: Deaktiviert sofort alle Wolken eines Spielers. */
-  hostDeactivateForPlayer(playerId: string): void {
+  hostDeactivateForPlayer(playerId: string, now = this.hostNow): void {
     for (let i = this.activeZones.length - 1; i >= 0; i--) {
       if (this.activeZones[i].ownerId === playerId) {
-        this.endZoneAt(i, 'cleanup');
+        this.endZoneAt(i, 'owner_inactive', now);
       }
     }
   }
@@ -475,6 +505,7 @@ export class StinkCloudSystem {
    * re-renders each active cloud. Call this every game frame.
    */
   clientUpdate(delta: number): void {
+    this.plagueRenderer.update(delta);
     const factor = 1 - Math.exp(-delta / NET_SMOOTH_TIME_MS);
     for (const visual of this.visuals.values()) {
       visual.displayX = Phaser.Math.Linear(visual.displayX, visual.targetX, factor);
@@ -484,14 +515,16 @@ export class StinkCloudSystem {
   }
 
   destroyAll(): void {
+    this.plagueRenderer.clear();
     for (let i = this.activeZones.length - 1; i >= 0; i--) {
       this.endZoneAt(i, 'cleanup');
     }
     this.syncVisuals([]);
   }
 
-  private endZoneAt(index: number, reason: StinkCloudEndReason): void {
+  private endZoneAt(index: number, reason: StinkCloudEndReason, endedAt = this.hostNow): void {
     const [zone] = this.activeZones.splice(index, 1);
+    if (zone?.kind === 'player-primary' && reason !== 'cleanup') this.primaryCloudEnd?.(zone.id, zone.ownerId, endedAt);
     if (!zone || reason !== 'natural' || !zone.followOwner || zone.afterCloudDurationMs <= 0) return;
     this.hostCreateStationaryCloud(
       zone.ownerId,

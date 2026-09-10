@@ -39,6 +39,21 @@ function getUpgradeParams(
     );
   });
 
+  const stink = UTILITY_CONFIGS.STINK_CLOUD;
+  if ((definition.id.startsWith('stink_cloud_') || definition.id === 'unlock_stink_cloud') && stink?.type === 'stinkcloud' && stink.plague) {
+    const p = stink.plague;
+    params.cloudSeconds = formatNumber(stink.cloudDuration / 1000, locale);
+    params.cloudTick = formatNumber(stink.cloudTickInterval / 1000, locale);
+    params.cloudDamage = formatNumber(stink.cloudDamagePerTick, locale);
+    params.cloudRadius = formatNumber(stink.cloudRadius, locale);
+    params.cloudCooldown = formatNumber(stink.cooldown / 1000, locale);
+    params.plagueSeconds = formatNumber(p.directDurationMs / 1000, locale);
+    params.plagueTick = formatNumber(p.tickIntervalMs / 1000, locale);
+    params.g1Seconds = formatNumber(p.firstGenerationDurationMs / 1000, locale);
+    params.g2Seconds = formatNumber(p.secondGenerationDurationMs / 1000, locale);
+    params.contactGap = formatNumber(p.contactGap, locale);
+    params.plagueVulnerability = formatNumber(VULNERABILITY_INCOMING_DAMAGE_BONUS, locale, { style: 'percent' });
+  }
   const decoy = UTILITY_CONFIGS.DECOY;
   const translocator = UTILITY_CONFIGS.TRANSLOCATOR;
   if (definition.id.startsWith('translocator_') && translocator?.type === 'translocator') {

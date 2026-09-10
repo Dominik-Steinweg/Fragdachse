@@ -269,7 +269,11 @@ export class ArenaRuntime {
       getPowerUpRuntime: () => this.flow.getWorldPowerUpRuntime(),
     });
     this.clientUpdate.setActivityFramePort({
-      getEnemyStatusVisual: id => this.flow.getCoopMissionRuntime()?.enemyManager?.getEnemy(id)?.getStatusVisualTarget() ?? null,
+      getEnemyStatusVisual: id => {
+        const manager = this.flow.getCoopMissionRuntime()?.enemyManager;
+        const visual = manager?.getEnemy(id)?.getStatusVisualTarget();
+        return visual ? { ...visual, entityGeneration: manager?.getCombatTargetRef(id)?.instance.entityGeneration } : null;
+      },
       getAdrenalineEssence: () => this.flow.getAdrenalineEssence(),
       getStep: () => this.flow.getActivityStep(),
     });

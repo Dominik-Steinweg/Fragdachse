@@ -175,7 +175,7 @@ export class CoopDefenseEnemyAbilitySystem {
 
       const stinkAura = getCoopDefenseEnemyConfig(enemy.kind).stinkAura;
       if (stinkAura && !this.activeStinkAuraEnemyIds.has(enemy.id)) {
-        this.activateStinkAura(enemy, stinkAura.utilityId);
+        this.activateStinkAura(enemy, stinkAura.utilityId, now);
       }
 
       const translocator = getCoopDefenseEnemyConfig(enemy.kind).translocator;
@@ -219,7 +219,7 @@ export class CoopDefenseEnemyAbilitySystem {
     this.activeStinkAuraEnemyIds.clear();
   }
 
-  private activateStinkAura(enemy: EnemyEntity, utilityId: string): void {
+  private activateStinkAura(enemy: EnemyEntity, utilityId: string, now: number): void {
     const utility = UTILITY_CONFIGS[utilityId as keyof typeof UTILITY_CONFIGS] as StinkCloudUtilityConfig | undefined;
     if (!utility || utility.type !== 'stinkcloud') return;
 
@@ -236,6 +236,7 @@ export class CoopDefenseEnemyAbilitySystem {
       utility.afterCloudRadiusFactor ?? 0,
       utility.afterCloudDamageFactor ?? 0,
       utility.visualVariant ?? 'stink',
+      now,
     );
     this.activeStinkAuraEnemyIds.add(enemy.id);
   }

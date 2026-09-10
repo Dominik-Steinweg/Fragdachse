@@ -1829,6 +1829,7 @@ export interface SyncedBaseTurretState {
 
 /** Per-Frame Zustand eines Coop-Defense-Gegners (Host → Clients, unreliable). */
 export interface SyncedEnemyState {
+  entityGeneration?: number;
   positionRevision?: number;
   id:     string;
   kind:   import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;
@@ -1858,6 +1859,7 @@ export interface SyncedEnemyState {
 
 /** Delta-Update eines Coop-Defense-Gegners; fehlende Felder bleiben clientseitig unverändert. */
 export interface SyncedEnemyDeltaState {
+  entityGeneration?: number;
   positionRevision?: number;
   id:     string;
   kind?:  import('./config/coopDefenseEnemies').CoopDefenseEnemyKind;

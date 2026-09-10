@@ -124,6 +124,7 @@ export function composeWorldPlayerGameplay(
       loadout: {
         publishTranslocatorUseState: (playerId, state) => bridge.publishTranslocatorUseState(playerId, state),
         publishUtilityChargeState: (playerId, utilityId, state) => bridge.publishUtilityChargeState(playerId, utilityId, state),
+        publishStinkCloudUtilityState: (playerId, state) => bridge.publishStinkCloudUtilityState(playerId, state),
         publishTimeBubbleUtilityState: (playerId, state) => bridge.publishTimeBubbleUtilityState(playerId, state),
         publishUtilityCooldownUntil: (playerId, until, utilityId) => bridge.publishUtilityCooldownUntil(playerId, until, utilityId),
         publishTemporaryUtilityInstances: (playerId, descriptors) => bridge.publishTemporaryUtilityInstances(playerId, descriptors),

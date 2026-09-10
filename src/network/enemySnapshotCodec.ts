@@ -8,7 +8,7 @@
  * Update-Frequenz oder Interpolation (Direktheit bleibt unverändert).
  *
  * Stromformat von `u` (Einträge hintereinander, variable Länge):
- *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?
+ *   idNum, mask, [x, y]?, [rotQuant]?, [hp, maxHp]?, [kindIndex]?, [burnStacks]?, [faction, ownerId, ownerColor]?, [burrowed]?, [dashPhase]?, [specialAction...]?, [plasmaChargeStacks]?, [entityGeneration]?
  * Reihenfolge der optionalen Felder ist fix; `mask` gibt an, welche vorhanden sind.
  */
 import {
@@ -17,6 +17,7 @@ import {
 } from '../config/coopDefenseEnemies';
 import type { SyncedEnemyDeltaState } from '../types';
 
+const FIELD_GENERATION = 1024;
 const FIELD_POS = 1;   // x + y
 const FIELD_ROT = 2;   // rot (quantisiert × ROT_QUANT)
 const FIELD_HP = 4;    // hp + maxHp
@@ -45,6 +46,7 @@ export function enemyNumToId(num: number): string {
 /** Hängt einen (vollständigen oder Delta-)Upsert an den flachen Zahlenstrom an. */
 export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnemyDeltaState): void {
   let mask = 0;
+  if (entry.entityGeneration !== undefined) mask |= FIELD_GENERATION;
   if (entry.x !== undefined && entry.y !== undefined) mask |= FIELD_POS;
   if (entry.rot !== undefined) mask |= FIELD_ROT;
   if (entry.hp !== undefined && entry.maxHp !== undefined) mask |= FIELD_HP;
@@ -91,6 +93,7 @@ export function encodeEnemyUpsert(out: Array<number | string>, entry: SyncedEnem
     );
   }
   if (mask & FIELD_PLASMA_CHARGE) out.push(entry.plasmaChargeStacks as number);
+  if (mask & FIELD_GENERATION) out.push(entry.entityGeneration as number);
 }
 
 /** Dekodiert den flachen Zahlenstrom zurück in Delta-Objekte für die clientseitige Anwendung. */
@@ -138,6 +141,10 @@ export function decodeEnemyUpserts(stream: readonly (number | string)[]): Synced
       entry.gaussAimAngle = (stream[i++] as number) / ROT_QUANT;
     }
     if (mask & FIELD_PLASMA_CHARGE) entry.plasmaChargeStacks = stream[i++] as number;
+    if (mask & FIELD_GENERATION) {
+      const generation = stream[i++] as number;
+      if (Number.isSafeInteger(generation) && generation >= 0) entry.entityGeneration = generation;
+    }
     result.push(entry);
   }
   return result;

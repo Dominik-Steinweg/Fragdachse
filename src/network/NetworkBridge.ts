@@ -1,3 +1,5 @@
+import { parseStinkCloudUtilityState, type StinkCloudUtilityState } from '../loadout/StinkCloudUtilityState';
+import { decodeStinkPlague, encodeStinkPlague, emptyStinkPlagueSnapshot } from './stinkPlagueCodec';
 import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
 import { parseTimeBubbleUtilityState, type TimeBubbleUtilityState } from '../loadout/TimeBubbleUtilityState';
 import { parseTranslocatorUseState, type TranslocatorUseState } from '../loadout/TranslocatorUseState';
@@ -195,6 +197,7 @@ const KEY_LOADOUT_UT   = 'lut';   // per-player: string (utility item ID)
 const KEY_LOADOUT_UL   = 'lul';   // per-player: string (ultimate item ID)
 const KEY_LOADOUT_COMMITTED = 'lcm'; // per-player: verbindlicher LoadoutCommitSnapshot fuer Ready-Spieler
 const KEY_LOBBY_LOADOUT_PREVIEW = 'llp'; // per-player: laufender Live-Build {c: classId, p: profile, i: items, t: tool refs}
+const KEY_STINK_CLOUD_UTILITY = 'scu';
 const KEY_TIME_BUBBLE_UTILITY = 'tbu';
 const KEY_TRANSLOCATOR_USE = 'tlu';
 const KEY_UTILITY_CD_UNTIL = 'ucd'; // per-player: Record<utilityId, number> (legacy number wird als __default__ gelesen)
@@ -322,6 +325,7 @@ export interface GameState {
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
+  stinkPlague?: import('../systems/StinkPlagueRuntime').StinkPlagueSnapshot;
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUp[];  // Power-Ups auf dem Boden
   pedestals:    SyncedPowerUpPedestal[]; // feste Power-Up-Podeste
@@ -363,6 +367,7 @@ interface OutboundGameState {
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
   smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
+  stinkPlague?: import('../systems/StinkPlagueRuntime').StinkPlagueSnapshot;
   fires:        SyncedFireZone[];
   powerups:     SyncedPowerUpSnapshot | null;
   pedestals:    SyncedPowerUpPedestalSnapshot | null;
@@ -2717,6 +2722,7 @@ export class NetworkBridge {
     if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
     payload.sx = encodeSmokeTargets(state.smokeTargets ?? []);
+    payload.pl = encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot());
     if (state.fires.length > 0)        payload.f = state.fires;
     if (state.stinkClouds.length > 0)  payload.sc = state.stinkClouds;
     if (state.timeBubbles.length > 0)  payload.tb = state.timeBubbles;
@@ -2820,6 +2826,7 @@ export class NetworkBridge {
       dc: state.decoys,
       s: state.smokes,
       sx: encodeSmokeTargets(state.smokeTargets ?? []),
+      pl: encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot()),
       f: state.fires,
       sc: state.stinkClouds,
       tb: state.timeBubbles,
@@ -2936,6 +2943,7 @@ export class NetworkBridge {
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
       smokeTargets: decodeSmokeTargets(raw.sx),
+      stinkPlague: decodeStinkPlague(raw.pl),
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
       stinkClouds:   (raw.sc as SyncedStinkCloud[]   | undefined) ?? [],
       timeBubbles:   (raw.tb as SyncedTimeBubble[]   | undefined) ?? [],
@@ -4177,6 +4185,16 @@ export class NetworkBridge {
   }
 
   /** Host-only: Publiziert bis wann die Utility eines Spielers im Cooldown ist. */
+  publishStinkCloudUtilityState(playerId: string, state: StinkCloudUtilityState | null): void {
+    if (!isHost()) return;
+    this.playerStateMap.get(playerId)?.setState(KEY_STINK_CLOUD_UTILITY, { wr: this.getCurrentWorldRevision(), state }, true);
+  }
+
+  getPlayerStinkCloudUtilityState(playerId: string): StinkCloudUtilityState | null {
+    const value = this.playerStateMap.get(playerId)?.getState(KEY_STINK_CLOUD_UTILITY) as { wr?: number; state?: unknown } | undefined;
+    return value?.wr === this.getCurrentWorldRevision() ? parseStinkCloudUtilityState(value.state) : null;
+  }
+
   publishTimeBubbleUtilityState(playerId: string, state: TimeBubbleUtilityState | null): void {
     if (!isHost()) return;
     this.playerStateMap.get(playerId)?.setState(KEY_TIME_BUBBLE_UTILITY, state, true);
@@ -4240,6 +4258,10 @@ export class NetworkBridge {
   getPlayerUtilityCooldownUntil(playerId: string, utilityId = '__default__'): number {
     if (utilityId === 'TRANSLOCATOR') {
       const state = this.getPlayerTranslocatorUseState(playerId);
+      return state?.phase === 'cooldown' ? state.cooldownUntil : 0;
+    }
+    if (utilityId === 'STINK_CLOUD') {
+      const state = this.getPlayerStinkCloudUtilityState(playerId);
       return state?.phase === 'cooldown' ? state.cooldownUntil : 0;
     }
     if (utilityId === 'TIME_BUBBLE') {
