@@ -93,7 +93,7 @@ function makeSystem(bases: readonly TestBase[] = []) {
   // Deterministischer Zufall: die Salve wird dadurch reproduzierbar prüfbar.
   system.setRandomSource(() => 0.5);
 
-  return { system, damageHandler, lineOfSight, owner, enemies, combatSystem };
+  return { system, damageHandler, lineOfSight, owner, enemies, combatSystem, resourceSystem };
 }
 
 /** Hält die Kuppel wie im Spiel gedrückt und zieht den Host-Frame auf `now`. */
@@ -121,6 +121,22 @@ function spreadEnemies(
     });
   }
 }
+
+describe('Tesla dome adrenaline drain', () => {
+  it.each([undefined, 0.4])('applies idle factor %s only without current primary targets', (idleAdrenalineDrainFactor) => {
+    const { system, enemies, lineOfSight, resourceSystem } = makeSystem();
+    const config = makeConfig(['enemies'], { adrenalineDrainPerSecond: 20, idleAdrenalineDrainFactor });
+    advance(system, config, 0);
+    advance(system, config, 100);
+    expect(resourceSystem.drainAdrenaline).toHaveBeenLastCalledWith('player-1', 2 * (idleAdrenalineDrainFactor ?? 1), 100);
+    enemies.push({ id: 'enemy', x: 50, y: 0 });
+    advance(system, config, 200);
+    expect(resourceSystem.drainAdrenaline).toHaveBeenLastCalledWith('player-1', 2, 200);
+    lineOfSight.mockReturnValue(false);
+    advance(system, config, 300);
+    expect(resourceSystem.drainAdrenaline).toHaveBeenLastCalledWith('player-1', 2 * (idleAdrenalineDrainFactor ?? 1), 300);
+  });
+});
 
 describe('Tesla dome base targets', () => {
   it('damages an active hostile base through the ordinary Tesla tick path', () => {
@@ -405,6 +421,8 @@ describe('Tesla dome boss effects', () => {
     const expectedRange = config.fire.radius * chargeFactor * (config.fire.stormProjectileRangeFactor ?? 1);
     expect(requests).toHaveLength(expectedCount);
     expect(requests[0].rangePx).toBeCloseTo(expectedRange, 5);
+    expect(requests[0].speed).toBe(config.fire.stormProjectileSpeed);
+    expect(requests[0].size).toBe(config.fire.stormProjectileSize);
     expect(requests[0].damage).toBe(config.fire.stormProjectileDamage);
     expect(requests[0].homing?.maxTurnDegreesPerStep).toBe(
       config.fire.stormProjectileHoming?.maxTurnDegreesPerStep,

@@ -3992,9 +3992,9 @@
                                                              ],
                                                 "effects":  [
                                                                 {
-                                                                    "stat":  "weapon.TESLA_DOME.adrenalineDrain",
+                                                                    "stat":  "weapon.TESLA_DOME.idleAdrenalineDrain",
                                                                     "mode":  "add_percent_per_level",
-                                                                    "value":  -0.1
+                                                                    "value":  -0.25
                                                                 }
                                                             ]
                                             },

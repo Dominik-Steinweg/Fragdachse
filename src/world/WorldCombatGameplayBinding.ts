@@ -854,6 +854,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
         origin: { x: request.x, y: request.y, angle: request.angle },
         flight: {
           speed: request.speed,
+          speedVariation: 'charged_bolt',
           size: request.size,
           lifetimeMs: lifetime,
           maxBounces: 0,

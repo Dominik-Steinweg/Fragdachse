@@ -99,6 +99,8 @@ export interface TeslaDomeWeaponFireConfig {
   readonly damagePerTick: number;
   readonly tickInterval: number;
   readonly adrenalineDrainPerSecond: number;
+  /** Drain multiplier while no primary targets are locked; defaults to 1. */
+  readonly idleAdrenalineDrainFactor?: number;
   readonly movementSlowFactor: number;
   readonly requireLineOfSight: boolean;
   readonly targetTypes: readonly TeslaDomeTargetType[];

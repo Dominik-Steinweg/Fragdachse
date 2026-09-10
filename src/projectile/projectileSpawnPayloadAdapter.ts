@@ -16,6 +16,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
 
   return {
     speed:  flight.speed,
+    speedVariation: flight.speedVariation,
     size:   flight.size,
     damage: directHit?.damage ?? 0,
     appliedSourceDamageFactors: directHit?.appliedSourceDamageFactors,

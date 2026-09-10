@@ -18,6 +18,7 @@ import type { ProjectileHomingRequest } from '../entities/ProjectileHomingContro
 import type { ProjectilePhysicsHandle } from './ProjectilePhysicsBinding';
 import type { PortalGates } from '../systems/PortalTraversal';
 import type { ProjectileTravelSample } from './ProjectileTravelPort';
+import type { ProjectileSpeedVariationState } from './ProjectileSpeedVariation';
 
 /** Private authoritative state: never exported through a gameplay boundary. */
 export interface ProjectileRuntimeRecord {
@@ -45,6 +46,7 @@ export interface ProjectileRuntimeRecord {
   lastCountdownEmitted?: number | null;
   frictionActivated?: boolean;
   simulatedAgeMs?: number;
+  speedVariation?: ProjectileSpeedVariationState;
   appliedAirFrictionDecay?: number;
   timeBubbleFactor?: number;
   remainingRangePx?: number;
@@ -65,7 +67,7 @@ export interface ProjectileResolvedSpec {
   readonly flight: ProjectileResolvedFlight;
   readonly interaction: ProjectileResolvedInteraction;
 }
-export interface ProjectileResolvedFlight extends Pick<ProjectileFlightSpec, 'lifetimeMs' | 'speed' | 'isGrenade'> {
+export interface ProjectileResolvedFlight extends Pick<ProjectileFlightSpec, 'lifetimeMs' | 'speed' | 'speedVariation' | 'isGrenade'> {
   readonly originalBodySize?: number;
   readonly collisionMode: ProjectileCollisionMode;
   readonly isTranslocatorPuck?: boolean;

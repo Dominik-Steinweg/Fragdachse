@@ -2522,6 +2522,7 @@ export class WorldProjectileRuntime implements
           lifetimeMs: cfg.lifetime,
           isGrenade: cfg.isGrenade,
           speed: cfg.speed,
+          speedVariation: cfg.speedVariation,
           originalBodySize: cfg.size < MIN_BODY_LEN
             && cfg.isFlame !== true
             && !hasLeafBlowerCapability(cfg)

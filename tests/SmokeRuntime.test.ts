@@ -88,6 +88,13 @@ describe('smoke electric combos', () => {
     runtime.updateExposure([target], 600); runtime.onDamage(hit, 0, 0, 600);
     expect(spawn).toHaveBeenCalledTimes(config.behavior.dischargeCount);
     expect(spawn.mock.calls[0][0]).toMatchObject({ provenance: { attributionId: 'departed-owner' },
+      flight: {
+        speed: config.behavior.dischargeSpeed,
+        speedVariation: 'charged_bolt',
+        size: config.behavior.dischargeSize,
+        remainingRangePx: config.behavior.dischargeRange,
+        lifetimeMs: config.behavior.dischargeRange / config.behavior.dischargeSpeed * 1000,
+      },
       interaction: { directHit: { damage: config.behavior.dischargeDamage * 2 * 1.2 * 2 } } });
     expect(spawn.mock.calls[0][0].interaction.directHit.appliedSourceDamageFactors).toContainEqual({ kind: 'critical', multiplier: 2, resolvedAt: 'execution' });
   });

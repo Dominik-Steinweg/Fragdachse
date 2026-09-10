@@ -132,9 +132,9 @@
         "dischargeCount": 0,
         "dischargeCooldownMs": 400,
         "dischargeDamage": 4,
-        "dischargeSpeed": 260,
+        "dischargeSpeed": 250,
         "dischargeRange": 280,
-        "dischargeSize": 6,
+        "dischargeSize": 32,
         "dischargeHoming": {
           "searchRadius": 320,
           "maxTurnDegreesPerStep": 4,

@@ -571,10 +571,10 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'TESLA_DOME',
     targets: [{ path: ['fire', 'movementSlowFactor'], formula: 'add' }],
   },
-  'weapon.TESLA_DOME.adrenalineDrain': {
+  'weapon.TESLA_DOME.idleAdrenalineDrain': {
     kind: 'weapon',
     itemId: 'TESLA_DOME',
-    targets: [{ path: ['fire', 'adrenalineDrainPerSecond'], formula: 'scale' }],
+    targets: [{ path: ['fire', 'idleAdrenalineDrainFactor'], formula: 'scale' }],
   },
   'utility.cooldown': {
     kind: 'utility',

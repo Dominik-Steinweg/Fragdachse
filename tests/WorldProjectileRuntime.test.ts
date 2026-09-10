@@ -137,6 +137,23 @@ function configureEnemyImpact(runtime: WorldProjectileRuntime, combat = vi.fn(()
 }
 
 describe('WorldProjectileRuntime – technical Physics boundary', () => {
+  it('carries opt-in random tempo through the spawn boundary independently for each projectile', () => {
+    const { runtime, physics } = createRuntimeHarness();
+    const request = baseRequest({ speed: 250 });
+    const varying = { ...request, flight: { ...request.flight, speedVariation: 'charged_bolt' as const } };
+    const first = runtime.spawnProjectile(varying)!;
+    const second = runtime.spawnProjectile(varying)!;
+    const ordinary = runtime.spawnProjectile(request)!;
+    runtime.runHostProjectileStage(150, 1150);
+    const firstSpeed = physics.handles.get(first)!.body.velocity.x;
+    const secondSpeed = physics.handles.get(second)!.body.velocity.x;
+    expect(firstSpeed).not.toBeCloseTo(250, 5);
+    expect(secondSpeed).not.toBeCloseTo(firstSpeed, 5);
+    expect(physics.handles.get(ordinary)!.body.velocity.x).toBe(250);
+    expect(runtime.activeCount).toBe(3);
+    runtime.destroy();
+  });
+
   it('applies a travel-acquired burn before a hit that precedes a portal', () => {
     const { runtime, physics } = createRuntimeHarness();
     runtime.setPortalQueryPort({ getPortalPairs: () => [{ id: 'pair', ownerId: 'owner',

@@ -1103,6 +1103,7 @@ export interface ProjectileDamageSourceFactor {
 
 /** Konfiguration für ein gespawntes Projektil (wird von der World-Runtime aufgelöst) */
 export interface ProjectileSpawnConfig {
+  speedVariation?: 'charged_bolt';
   proximityPulse?: ProjectileProximityPulseConfig;
   /** Authoritative collision candidate mode; presentation style is never used for this choice. */
   collisionMode?: ProjectileCollisionMode;

@@ -322,6 +322,7 @@
         "damagePerTick": 6,
         "tickInterval": 200,
         "adrenalineDrainPerSecond": 16,
+        "idleAdrenalineDrainFactor": 1,
         "movementSlowFactor": 0.3,
         "requireLineOfSight": true,
         "targetTypes": [
@@ -355,8 +356,8 @@
         "stormEnabled": 0,
         "stormProjectileBaseCount": 6,
         "stormProjectileDamage": 4,
-        "stormProjectileSpeed": 460,
-        "stormProjectileSize": 10,
+        "stormProjectileSpeed": 250,
+        "stormProjectileSize": 32,
         "stormProjectileRangeFactor": 2,
         "stormProjectileAngleJitterDegrees": 5,
         "stormProjectileSpreadDegrees": 30,

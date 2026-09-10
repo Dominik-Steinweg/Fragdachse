@@ -284,6 +284,7 @@ export class SmokeRuntime implements SmokePerceptionPort {
     this.ports.spawnProjectile({
       origin: { x, y, angle: (this.ports.random?.() ?? Math.random()) * Math.PI * 2 },
       flight: { speed: b.dischargeSpeed, size: b.dischargeSize, lifetimeMs: b.dischargeRange / b.dischargeSpeed * 1000,
+        speedVariation: 'charged_bolt',
         maxBounces: 0, isGrenade: false, remainingRangePx: b.dischargeRange,
         homing: { ...b.dischargeHoming, targetTypes: ['enemies'], requireLineOfSight: true },
         collisionFilter: { initialTargetProtection: { targetId: String(origin.id), durationMs: b.dischargeHoming.acquireDelayMs } } },

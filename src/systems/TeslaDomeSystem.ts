@@ -330,9 +330,15 @@ export class TeslaDomeSystem {
         continue;
       }
 
+      // Refresh primary targets before determining this frame's drain.
+      this.refreshLocks(dome);
+
       const elapsedDrainMs = Math.max(0, now - dome.lastDrainAt);
       if (elapsedDrainMs > 0) {
-        const drainAmount = dome.config.fire.adrenalineDrainPerSecond * (elapsedDrainMs / 1000);
+        const drainFactor = dome.locks.length === 0
+          ? Math.max(0, dome.config.fire.idleAdrenalineDrainFactor ?? 1)
+          : 1;
+        const drainAmount = dome.config.fire.adrenalineDrainPerSecond * drainFactor * (elapsedDrainMs / 1000);
         if (drainAmount > 0) {
           this.resourceSystem.drainAdrenaline(ownerId, drainAmount, now);
         }
@@ -343,9 +349,6 @@ export class TeslaDomeSystem {
         this.activeDomes.delete(ownerId);
         continue;
       }
-
-      // Nachbesetzung läuft kontinuierlich und nicht nur beim Puls.
-      this.refreshLocks(dome);
 
       const tickInterval = Math.max(1, dome.config.fire.tickInterval);
       while (now - dome.lastTickAt >= tickInterval) {

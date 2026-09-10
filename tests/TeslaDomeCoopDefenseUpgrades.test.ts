@@ -130,9 +130,10 @@ describe('Tesla dome coop-defense upgrade tree', () => {
       10,
     );
 
-    const expectedDrain = baseFire.adrenalineDrainPerSecond
-      * (1 + (totals.percentage['weapon.TESLA_DOME.adrenalineDrain'] ?? 0));
-    expect(fire.adrenalineDrainPerSecond).toBeCloseTo(expectedDrain, 10);
+    expect(fire.adrenalineDrainPerSecond).toBe(baseFire.adrenalineDrainPerSecond);
+    const expectedIdleFactor = (baseFire.idleAdrenalineDrainFactor ?? 1)
+      * (1 + (totals.percentage['weapon.TESLA_DOME.idleAdrenalineDrain'] ?? 0));
+    expect(fire.idleAdrenalineDrainFactor).toBeCloseTo(expectedIdleFactor, 10);
 
     const expectedChargeInterval = (baseFire.chargeIntervalMs ?? 0)
       + (totals.additive['weapon.TESLA_DOME.fire.chargeIntervalMs'] ?? 0);

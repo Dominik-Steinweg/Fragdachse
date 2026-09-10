@@ -370,7 +370,7 @@ export const deUpgrades = {
   "upgrade.tesla_dome_focused_conductivity.name": "Fokussierte Leitfähigkeit",
   "upgrade.tesla_dome_focused_conductivity.description": "Jeder freie Strahl verstärkt die aktiven Primärstrahlen je Stufe um {value0}.",
   "upgrade.tesla_dome_energy_efficiency.name": "Energieeffizienz",
-  "upgrade.tesla_dome_energy_efficiency.description": "Verringert den Adrenalinverbrauch der Tesla-Kuppel je Stufe um {value0Absolute}.",
+  "upgrade.tesla_dome_energy_efficiency.description": "Verringert den Adrenalinverbrauch der Tesla-Kuppel je Stufe um {value0Absolute}, solange keine Primärziele anvisiert werden.",
   "upgrade.tesla_dome_field_charge.name": "Feldaufladung",
   "upgrade.tesla_dome_field_charge.description": "Die gehaltene Kuppel pulst im Sekundentakt und lädt sich dabei bis auf {value0Unsigned} Stufen auf. Jede Stufe erweitert den Radius um {value1Absolute}.",
   "upgrade.tesla_dome_field_stabilization.name": "Feldstabilisierung",

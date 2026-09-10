@@ -2,6 +2,7 @@ import type { ProjectileRuntimeRecord } from './ProjectileRuntimeRecord';
 import { MIN_PROJECTILE_BODY_LENGTH } from './ProjectileFlightConstants';
 import { isGrenadeFragment } from '../systems/GrenadeFragmentRules';
 import type { ProjectileTimeFieldPort } from './ProjectileTimeFieldPort';
+import { advanceSpeedVariation, createSpeedVariation } from './ProjectileSpeedVariation';
 
 /** Core results consumed by the world owner's downstream lifecycle stage. */
 export interface ProjectileCoreStageResult {
@@ -76,6 +77,15 @@ export class ProjectileFlightProcessor {
     const realAgeMs = nowMs - projectile.createdAt;
 
     this.decrementRange(projectile);
+    if (projectile.spec.flight.speedVariation === 'charged_bolt') {
+      const state = projectile.speedVariation ??= createSpeedVariation(projectile.id);
+      const factor = advanceSpeedVariation(state, simulatedDeltaMs);
+      // Relative scaling preserves homing/deflection direction and external speed modifiers.
+      const ratio = factor / state.appliedFactor;
+      const velocity = projectile.physics.body.velocity;
+      projectile.physics.body.setVelocity(velocity.x * ratio, velocity.y * ratio);
+      state.appliedFactor = factor;
+    }
 
     if (projectile.spec.flight.isGrenade) {
       const velocity = projectile.physics.body.velocity;

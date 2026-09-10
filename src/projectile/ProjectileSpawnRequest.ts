@@ -56,6 +56,8 @@ export interface ProjectileSpawnOrigin {
 /** Flug-, Lebenszeit- und Kollisionsverhalten ohne Wirkungssemantik. */
 export interface ProjectileFlightSpec {
   readonly speed: number;
+  /** Opt-in host motion; independent of presentation style. */
+  readonly speedVariation?: 'charged_bolt';
   /** Kantenlänge/Durchmesser der Gameplay-Hitbox. */
   readonly size: number;
   readonly lifetimeMs: number;

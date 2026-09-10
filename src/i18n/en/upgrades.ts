@@ -370,7 +370,7 @@ export const enUpgrades = {
   "upgrade.tesla_dome_focused_conductivity.name": "Focused Conductivity",
   "upgrade.tesla_dome_focused_conductivity.description": "Every free beam strengthens the active primary beams by {value0} per level.",
   "upgrade.tesla_dome_energy_efficiency.name": "Energy Efficiency",
-  "upgrade.tesla_dome_energy_efficiency.description": "Reduces Tesla Dome adrenaline drain by {value0Absolute} per level.",
+  "upgrade.tesla_dome_energy_efficiency.description": "Reduces Tesla Dome adrenaline drain by {value0Absolute} per level while no primary targets are targeted.",
   "upgrade.tesla_dome_field_charge.name": "Field Charge",
   "upgrade.tesla_dome_field_charge.description": "The held dome pulses once per second and charges up to {value0Unsigned} levels. Each level widens the radius by {value1Absolute}.",
   "upgrade.tesla_dome_field_stabilization.name": "Field Stabilization",
