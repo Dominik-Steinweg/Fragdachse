@@ -1,3 +1,4 @@
+import type { TurretAimConfig } from './config/turretAim';
 import type Phaser from 'phaser';
 import type { MuzzleOrigin } from './config';
 import type { PersistentBaseRewardId } from './persistentBase/PersistentBaseRewardTypes';
@@ -1676,7 +1677,7 @@ export interface SyncedRockSnapshot {
   removals: number[];
 }
 
-export interface SyncedPlaceableRock {
+export interface SyncedPlaceableRock extends TurretAimConfig {
   id: number;
   kind: PlaceableKind;
   gridX: number;

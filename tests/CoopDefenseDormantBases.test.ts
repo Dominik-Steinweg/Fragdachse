@@ -182,6 +182,20 @@ function makeScene(): { scene: any; groupObjects: any[]; presentationCalls: Reco
 }
 
 describe('Coop-Defense dormant mission structures', () => {
+  it('keeps base aim configuration and authoritative angles independent of presentation', () => {
+    const { scene } = makeScene();
+    const original = makeBaseSpec('aim-base', { turret: true });
+    const spec = { ...original, turrets: original.turrets.map(t => ({ ...t, rotationSpeedDegPerSec: 90, aimToleranceDeg: 2 })) };
+    const host = new BaseManager(scene, [spec], TEST_WORLD_METRICS, {}, false, true);
+    const client = new BaseManager(makeScene().scene, [spec], TEST_WORLD_METRICS, {}, false, true);
+    expect(host.getTurrets()[0]).toMatchObject({ rotationSpeedDegPerSec: 90, aimToleranceDeg: 2, angle: 0 });
+    host.setTurretAngle(spec.turrets[0].id, 1.2);
+    client.applySnapshot(host.getNetSnapshot());
+    expect(client.getTurrets()[0]).toMatchObject({ rotationSpeedDegPerSec: 90, aimToleranceDeg: 2, angle: 1.2 });
+    expect(client.getNetSnapshot()).toEqual(host.getNetSnapshot());
+    host.destroy(); client.destroy();
+  });
+
   it('keeps an activity-free World base physical without creating Base presentation', () => {
     const { scene, groupObjects, presentationCalls } = makeScene();
     const worldBase: BaseSpec = {

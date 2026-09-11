@@ -404,10 +404,11 @@ export class RockVisualHelper {
     const transform = getTurretVisualTransform(visualSpec, world.x, world.y, rock.angle);
     this.turretAnimations?.bind(String(rock.id), visual.image, weaponId);
     if (!this.turretAnimations) visual.image.setTexture(visualSpec.textureKey);
-    visual.image
-      .setDisplaySize(visualSpec.displaySize, visualSpec.displaySize)
-      .setPosition(transform.x, transform.y)
-      .setRotation(transform.rotation);
+    visual.image.setDisplaySize(visualSpec.displaySize, visualSpec.displaySize);
+    if (this.turretAnimations) {
+      this.turretAnimations.syncPose(String(rock.id), world.x, world.y, rock.angle,
+        !bridge.isHost() && rock.rotationSpeedDegPerSec !== undefined && weaponId !== 'TURRET_TESLA');
+    } else visual.image.setPosition(transform.x, transform.y).setRotation(transform.rotation);
     visual.aura
       .setPosition(world.x, world.y)
       .setTint(rock.ownerColor)
@@ -441,6 +442,10 @@ export class RockVisualHelper {
     if (!rock || rock.kind !== 'turret' || !visual) return;
 
     const world = this.gridToWorld(rock.gridX, rock.gridY);
+    if (this.turretAnimations) {
+      this.turretAnimations.syncPose(String(rock.id), world.x, world.y, angle, false);
+      return;
+    }
     const visualSpec = getTurretVisualSpec(rock.turretWeaponId ?? 'SPORES');
     const transform = getTurretVisualTransform(visualSpec, world.x, world.y, angle);
     visual.image

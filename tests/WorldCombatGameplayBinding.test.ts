@@ -384,7 +384,10 @@ describe('personal MG profile and World lifetime', () => {
     expect(baseRead.targetRange).toBe(independent.targetRange); expect(baseRead.cooldownMs).toBeUndefined();
     const before = f.projectileSpawn.spawnProjectile.mock.calls.length;
     fire(1); expect(f.projectileSpawn.spawnProjectile).toHaveBeenCalledTimes(before);
-    fire(baseline.cooldownMs); expect(f.projectileSpawn.spawnProjectile).toHaveBeenCalledTimes(before + 1);
+    fire(baseline.cooldownMs);
+    const shotsFor = (id: number) => f.projectileSpawn.spawnProjectile.mock.calls.filter(([r]) => r.provenance.sourceTurretId === String(id));
+    expect(shotsFor(personal.id)).toHaveLength(2);
+    expect(shotsFor(independent.id)).toHaveLength(baseline.cooldownMs >= WEAPON_CONFIGS.TURRET_MG.cooldown ? 2 : 1);
     f.binding.destroy();
   });
   it('keeps lobby networks without a built MG, excludes observers and retains progress when participants change', () => {
@@ -978,7 +981,7 @@ describe('WorldCombatGameplayBinding lifecycle hardening', () => {
   });
 });
 
-describe('TurretSystem missing fire handler', () => {
+describe('TurretSystem readiness and projectile pose', () => {
   it('does not consume a cooldown or burst when the fire handler is absent', () => {
     const system = new TurretSystem(
       { getAllPlayers: () => [] } as unknown as PlayerManager,
@@ -1001,6 +1004,33 @@ describe('TurretSystem missing fire handler', () => {
     system.setFireHandler(fire);
     system.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES);
     expect(fire).toHaveBeenCalledOnce();
+  });
+
+  it('carries the runtime angle through limited aiming, world execution and projectile spawn', () => {
+    const placement = createPlacement({ getAllPlayers: () => [] } as unknown as PlayerManager);
+    const definition = COOP_DEFENSE_CONSTRUCTIONS.rocket_turret;
+    const placed = placement.materializePersistentPlaceable(definition, 10, 10, -Math.PI / 2, 'builder', 1)!;
+    const metrics = resolveActiveArenaWorldMetrics();
+    const x = metrics.offsetX + placed.gridX * CELL_SIZE + CELL_SIZE / 2;
+    const y = metrics.offsetY + placed.gridY * CELL_SIZE + CELL_SIZE / 2;
+    const fixture = createFixture({ placementSystem: placement, players: [],
+      enemies: [{ id: 'enemy', x: x + 100, y, active: true }] });
+    const system = fixture.binding.systems!.turret;
+    expect(system.getTurrets()[0]).toMatchObject({ angle: placed.angle,
+      rotationSpeedDegPerSec: definition.rotationSpeedDegPerSec, aimToleranceDeg: definition.aimToleranceDeg });
+    system.hostUpdate(0, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES, 0);
+    expect(fixture.projectileSpawn.spawnProjectile).not.toHaveBeenCalled();
+    const residualDegrees = definition.aimToleranceDeg / 2;
+    const delta = (90 - residualDegrees) / definition.rotationSpeedDegPerSec * 1000;
+    system.hostUpdate(delta, UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig, WEAPON_CONFIGS.SPORES, delta);
+    expect(fixture.projectileSpawn.spawnProjectile).toHaveBeenCalledOnce();
+    const request = fixture.projectileSpawn.spawnProjectile.mock.calls[0][0];
+    const angle = placement.getRuntimeRock(placed.id)!.angle;
+    expect(angle).toBeCloseTo(-residualDegrees * Math.PI / 180);
+    expect(request.origin.angle).toBeCloseTo(angle);
+    expect(request.origin.x).toBeCloseTo(x + Math.cos(angle) * definition.muzzleOffset);
+    expect(request.origin.y).toBeCloseTo(y + Math.sin(angle) * definition.muzzleOffset);
+    fixture.binding.destroy();
   });
 });
 

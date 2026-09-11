@@ -1,3 +1,4 @@
+import { turretAimConfig, validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import { COOP_DEFENSE_MAP_REGISTRY } from './coopDefenseMaps/index';
 import rawWeaponBalanceLabMap from './coopDefenseMaps/weapon-balance-lab.internal.json';
 import {
@@ -81,7 +82,7 @@ export type CoopBaseTurretWeaponId =
   | 'TURRET_VOID_FLAME'
   | 'TURRET_SPORES';
 
-export interface CoopBaseTurretConfig {
+export interface CoopBaseTurretConfig extends TurretAimConfig {
   readonly id: string;
   readonly cellOffset: CoopBaseCellOffset;
   readonly mountSide: CoopBaseTurretMountSide;
@@ -3669,6 +3670,8 @@ function normalizeBasePowerUpPedestalConfig(
 }
 
 function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig): CoopBaseTurretConfig {
+  const aimIssues = validateTurretAimConfig(turret);
+  if (aimIssues.length) throw new Error(`[coopDefenseMaps:${baseId}:${turret.id}] ${aimIssues.join('; ')}`);
   if (
     turret.mountSide !== 'front'
     && turret.mountSide !== 'rear'
@@ -3698,6 +3701,7 @@ function normalizeBaseTurretConfig(baseId: string, turret: CoopBaseTurretConfig)
     },
     mountSide: turret.mountSide,
     weaponId: turret.weaponId,
+    ...turretAimConfig(turret),
   };
 }
 

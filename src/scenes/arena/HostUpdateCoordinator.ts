@@ -496,7 +496,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     if (!countdownActive) {
       const turretCfg    = UTILITY_CONFIGS.SPORE_TURRET as PlaceableTurretUtilityConfig;
       const turretWeapon = WEAPON_CONFIGS[turretCfg.weaponId as keyof typeof WEAPON_CONFIGS];
-      this.combatSystems?.turret?.hostUpdate(now, turretCfg, turretWeapon);
+      this.combatSystems?.turret?.hostUpdate(now, turretCfg, turretWeapon, delta);
     }
 
     const teslaDomes = countdownActive ? [] : (this.combatSystems?.teslaDome?.hostUpdate(now) ?? []);

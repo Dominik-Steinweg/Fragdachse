@@ -1,3 +1,4 @@
+import { turretAimConfig, type TurretAimConfig } from '../config/turretAim';
 import {
   CELL_SIZE,
   isGridCellInArenaRegion,
@@ -29,7 +30,7 @@ import type { WorldBaseDefinition, WorldDefinition } from '../config/authoring/W
 import { toWorldDefinition } from '../config/authoring/coopDefenseAuthoringAdapter';
 import type { ArenaGenerationMapConfig } from './ArenaGenerator';
 
-export interface BaseTurretSpec {
+export interface BaseTurretSpec extends TurretAimConfig {
   readonly id: string;
   readonly baseId: string;
   readonly x: number;
@@ -330,13 +331,13 @@ function resolveBaseTurretSpec(
 
   switch (config.mountSide) {
     case 'front':
-      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: Math.PI, weaponId: config.weaponId };
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: Math.PI, weaponId: config.weaponId, ...turretAimConfig(config) };
     case 'rear':
-      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: 0, weaponId: config.weaponId };
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: 0, weaponId: config.weaponId, ...turretAimConfig(config) };
     case 'top':
-      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: -Math.PI / 2, weaponId: config.weaponId };
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: -Math.PI / 2, weaponId: config.weaponId, ...turretAimConfig(config) };
     case 'bottom':
-      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: Math.PI / 2, weaponId: config.weaponId };
+      return { id: `${baseId}:${config.id}`, baseId, x: cellCenterX, y: cellCenterY, initialAngle: Math.PI / 2, weaponId: config.weaponId, ...turretAimConfig(config) };
   }
 }
 

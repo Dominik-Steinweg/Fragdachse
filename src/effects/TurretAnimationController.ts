@@ -1,6 +1,7 @@
 import type * as Phaser from 'phaser';
 import { NET_TICK_INTERVAL_MS } from '../config';
-import { getTurretVisualSpec } from '../config/turretVisuals';
+import { getTurretVisualSpec, getTurretVisualTransform } from '../config/turretVisuals';
+import { turretAngleDifference } from '../utils/turretAngle';
 import { pipelineAnimationKey, type PipelineAsset, type PipelineClip } from '../config/pipelineAssets';
 import { WEAPON_CONFIGS } from '../loadout/LoadoutConfig';
 import type { SyncedTeslaDome, TurretWeaponId } from '../types';
@@ -12,6 +13,7 @@ interface Binding {
   clip: PipelineClip;
   activeUntil: number;
   dispose: () => void;
+  pose?: { x: number; y: number; angle: number; from: number; target: number; elapsed: number };
 }
 
 /** Scene-owned presentation bindings; every binding ends with its world sprite. */
@@ -41,6 +43,28 @@ export class TurretAnimationController {
     if (binding.sprite.active && !binding.sprite.isDestroyed) this.idle(binding);
   }
 
+  /** Only presentation state: confirmed angles never flow back to simulation. */
+  syncPose(id: string, x: number, y: number, angle: number, interpolate: boolean): void {
+    const binding = this.bindings.get(id);
+    if (!binding || !Number.isFinite(angle)) return;
+    const pose = binding.pose;
+    if (!interpolate || !pose || pose.x !== x || pose.y !== y) {
+      binding.pose = { x, y, angle, from: angle, target: angle, elapsed: NET_TICK_INTERVAL_MS };
+    } else if (pose.target !== angle) {
+      pose.from = pose.angle;
+      pose.target = angle;
+      pose.elapsed = 0;
+    }
+    this.applyPose(binding);
+  }
+
+  private applyPose(binding: Binding): void {
+    const pose = binding.pose;
+    if (!pose) return;
+    const transform = getTurretVisualTransform(getTurretVisualSpec(binding.weaponId), pose.x, pose.y, pose.angle);
+    binding.sprite.setPosition(transform.x, transform.y).setRotation(transform.rotation);
+  }
+
   /** Called only for a confirmed spawn, never for a snapshot refresh or baseline. */
   onShot(id: string): void {
     const binding = this.bindings.get(id);
@@ -66,6 +90,12 @@ export class TurretAnimationController {
     this.now += Math.max(0, delta);
     for (const [id, binding] of this.bindings) {
       if (!binding.sprite.active) continue;
+      const pose = binding.pose;
+      if (pose && pose.elapsed < NET_TICK_INTERVAL_MS) {
+        pose.elapsed = Math.min(NET_TICK_INTERVAL_MS, pose.elapsed + Math.max(0, delta));
+        pose.angle = pose.from + turretAngleDifference(pose.from, pose.target) * pose.elapsed / NET_TICK_INTERVAL_MS;
+        this.applyPose(binding);
+      }
       if (binding.weaponId === 'TURRET_TESLA') {
         if (this.activeTesla.has(id)) {
           binding.sprite.play(pipelineAnimationKey(binding.asset, binding.clip), true);

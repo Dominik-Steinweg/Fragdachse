@@ -1,3 +1,4 @@
+import { validateTurretAimConfig, type TurretAimConfig } from './turretAim';
 import rawCoopDefenseConstructionCooldowns from './coopDefenseConstructions.json';
 import type { ConstructionId, ConstructionOwnership, CoopDefenseClassId, EnergyInjectorConstructionEffect, GameMode, PlaceableKind, TurretWeaponId } from '../types';
 
@@ -30,7 +31,7 @@ export interface CoopDefenseBarrierConstructionDefinition extends CoopDefenseCon
   readonly indestructible?: false;
 }
 
-export interface CoopDefenseWeaponConstructionDefinition extends CoopDefenseConstructionBaseDefinition {
+export interface CoopDefenseWeaponConstructionDefinition extends CoopDefenseConstructionBaseDefinition, TurretAimConfig {
   readonly kind: 'turret';
   readonly weaponId: TurretWeaponId;
   readonly targetRange: number;
@@ -215,6 +216,8 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       id: 'rocket_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.rocket_turret,
       weaponId: 'TURRET_ROCKET_BURST',
+      rotationSpeedDegPerSec: 90,
+      aimToleranceDeg: 12,
       iconKey: null,
       unlockUpgradeId: 'unlock_rocket_turret',
       maxHp: 250,
@@ -231,6 +234,8 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       id: 'machine_gun_turret',
       buildCooldownMs: COOP_DEFENSE_CONSTRUCTION_BUILD_COOLDOWNS.machine_gun_turret,
       weaponId: 'TURRET_MG',
+      rotationSpeedDegPerSec: 120,
+      aimToleranceDeg: 6,
       iconKey: null,
       unlockUpgradeId: 'unlock_machine_gun_turret',
       maxHp: 180,
@@ -337,6 +342,12 @@ export const COOP_DEFENSE_CONSTRUCTIONS: Readonly<Record<ConstructionId, CoopDef
       indestructible: true,
     },
   });
+
+for (const definition of Object.values(COOP_DEFENSE_CONSTRUCTIONS)) {
+  if (definition.kind !== 'turret') continue;
+  const issues = validateTurretAimConfig(definition);
+  if (issues.length) throw new Error(`[constructions:${definition.id}] ${issues.join('; ')}`);
+}
 
 /** @deprecated Compatibility view for presentation code; values are derived from the shared registry. */
 export const COOP_DEFENSE_UTILITY_CAPACITY_COSTS: Readonly<Record<string, number>> = Object.freeze({

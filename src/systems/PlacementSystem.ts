@@ -1,3 +1,4 @@
+import { turretAimConfig } from '../config/turretAim';
 import * as Phaser from 'phaser';
 import { AutoTiler, ROCK_AUTOTILE } from '../arena/AutoTiler';
 import { isCoopDefenseBaseCell, type BaseSpec } from '../arena/BaseRegistry';
@@ -401,6 +402,7 @@ export class PlacementSystem {
       toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
       turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
+      ...(cfg.kind === 'turret' ? turretAimConfig(cfg) : {}),
       energyInjectorEffect: cfg.energyInjectorEffect,
     };
     this.runtimeRocks.set(rock.id, rock);
@@ -445,6 +447,7 @@ export class PlacementSystem {
         ownership,
         targetRange: cfg.kind === 'turret' ? cfg.targetRange : undefined,
         turretWeaponId: cfg.kind === 'turret' ? cfg.weaponId : undefined,
+        ...(cfg.kind === 'turret' ? turretAimConfig(cfg) : {}),
         energyInjectorEffect: cfg.energyInjectorEffect,
         toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       }
@@ -473,6 +476,7 @@ export class PlacementSystem {
         secondProjectileDamageFactor: cfg.placeable.kind === 'turret'
           ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
         targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
+        ...(cfg.placeable.kind === 'turret' ? turretAimConfig(cfg.placeable) : {}),
         turretWeaponId: cfg.placeable.kind === 'turret'
           ? (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
             ? 'SPORE_TURRET_PLASMA'
@@ -504,6 +508,7 @@ export class PlacementSystem {
         secondProjectileDamageFactor: cfg.placeable.kind === 'turret'
           ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
         targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
+        ...(cfg.placeable.kind === 'turret' ? turretAimConfig(cfg.placeable) : {}),
         turretWeaponId: cfg.placeable.kind === 'turret'
           && (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
           ? 'SPORE_TURRET_PLASMA' : undefined,
@@ -571,6 +576,7 @@ export class PlacementSystem {
       indestructible: true,
       targetRange: cfg.targetRange,
       turretWeaponId: cfg.weaponId,
+      ...turretAimConfig(cfg),
       toolRef: { kind: 'construction', id: cfg.id } satisfies LoadoutToolRef,
       energyInjectorEffect: undefined,
     };
@@ -743,6 +749,7 @@ export class PlacementSystem {
       enemyDestroyedExplosionKnockback: cfg.placeable.kind === 'rock' ? (cfg.placeable.enemyDestroyedExplosionKnockback ?? 0) : 0,
       secondProjectileDamageFactor: cfg.placeable.kind === 'turret' ? (cfg.placeable.secondProjectileDamageFactor ?? 0) : 0,
       targetRange: cfg.placeable.kind === 'turret' ? cfg.placeable.targetRange : undefined,
+      ...(cfg.placeable.kind === 'turret' ? turretAimConfig(cfg.placeable) : {}),
       turretWeaponId: cfg.placeable.kind === 'turret'
         ? (cfg.placeable.plasmaWeaponEnabled ?? 0) > 0
           ? 'SPORE_TURRET_PLASMA'
@@ -806,6 +813,8 @@ export class PlacementSystem {
         || current.toolRef?.id !== incoming.toolRef?.id
         || current.turretWeaponId !== incoming.turretWeaponId
         || current.targetRange !== incoming.targetRange
+        || current.rotationSpeedDegPerSec !== incoming.rotationSpeedDegPerSec
+        || current.aimToleranceDeg !== incoming.aimToleranceDeg
       ) {
         const previous = { ...current };
         this.runtimeRocks.set(incoming.id, { ...incoming });

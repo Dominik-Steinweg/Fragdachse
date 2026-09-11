@@ -5,6 +5,7 @@ import {
   COOP_DEFENSE_MAP_CONFIGS,
   WEAPON_BALANCE_LAB_MAP_ID,
   getCoopDefenseMapConfig,
+  normalizeCoopDefenseMapConfig,
 } from '../src/config/coopDefenseMaps';
 import type { AuthoredScenario } from '../src/config/authoring/AuthoredScenario';
 import {
@@ -34,6 +35,26 @@ import {
   getWorldDefinitionForMap,
 } from '../src/config/authoring/authoredScenarios';
 import { resolveWorldPersistentBaseAnchorBase } from '../src/config/authoring/WorldDefinition';
+import { resolveCoopDefenseBases } from '../src/arena/BaseRegistry';
+
+it('preserves authored base aiming through normalization, world round-trip and runtime resolution', () => {
+  const makeMap = (speed: number | undefined = 85) => ({
+    mapId: 'aim-test', displayName: 'Aim test', arenaWidthCells: 60, arenaHeightCells: 34,
+    balanceReferenceDurationSec: 60, objective: 'survive' as const, surviveDurationSec: 60, respawnsPerPlayer: 0,
+    bases: [{ id: 'base', hpMax: 100, anchor: { kind: 'right-center' as const, edgeInsetCells: 0 },
+      shape: { kind: 'rectangle' as const, widthCells: 1, heightCells: 1 },
+      turrets: [{ id: 'gun', cellOffset: { gridX: 0, gridY: 0 }, mountSide: 'front' as const,
+        weaponId: 'TURRET_MG' as const, rotationSpeedDegPerSec: speed, aimToleranceDeg: 4 }] }], powerUps: [],
+  });
+  const normalized = normalizeCoopDefenseMapConfig(makeMap());
+  const scenario = toAuthoredScenario(normalized);
+  const restored = toCoopDefenseMapConfig(scenario);
+  expect(restored.bases[0].turrets).toEqual(normalized.bases[0].turrets);
+  expect(resolveCoopDefenseBases(restored)[0].turrets[0]).toMatchObject({ rotationSpeedDegPerSec: 85, aimToleranceDeg: 4, initialAngle: Math.PI });
+  expect(() => normalizeCoopDefenseMapConfig(makeMap(0))).toThrow('rotationSpeedDegPerSec');
+  const invalid = makeMap(); invalid.bases[0].turrets[0].aimToleranceDeg = 181;
+  expect(() => normalizeCoopDefenseMapConfig(invalid)).toThrow('aimToleranceDeg');
+});
 
 /**
  * Authoring-Vertraege aus dem Runtime-Refactoring: WorldDefinition und ActivityDefinition sind

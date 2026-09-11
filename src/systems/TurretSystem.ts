@@ -3,6 +3,8 @@ import type { PlayerManager } from '../entities/PlayerManager';
 import { WEAPON_CONFIGS, type PlaceableTurretUtilityConfig, type WeaponConfig } from '../loadout/LoadoutConfig';
 import type { CombatActorStatePort, CombatRelationshipQueryPort } from '../combat/CombatCapabilities';
 import type { TurretDamageBuff } from '../types';
+import { DEFAULT_TURRET_AIM_TOLERANCE_DEG, type TurretAimConfig } from '../config/turretAim';
+import { stepTurretAngle, turretAngleDifference } from '../utils/turretAngle';
 
 /**
  * Schusslinienprüfung des Turrets. Bewusst die Schuss- und nicht die Sichtlinie: ein Turret,
@@ -18,7 +20,8 @@ type LineOfFireChecker = (
 ) => boolean;
 export type AutomatedTurretId = number | string;
 export type AutomatedTurretTargetMode = 'players' | 'enemies';
-export interface AutomatedTurret {
+export interface AutomatedTurret extends TurretAimConfig {
+  readonly angle?: number;
   readonly id: AutomatedTurretId;
   readonly x: number;
   readonly y: number;
@@ -145,6 +148,7 @@ export class TurretSystem {
     now: number,
     config: PlaceableTurretUtilityConfig,
     _weaponConfig: WeaponConfig,
+    deltaMs = 0,
   ): void {
     const turrets = this.turretProvider?.() ?? [];
     const activeIds = new Set<AutomatedTurretId>();
@@ -170,15 +174,17 @@ export class TurretSystem {
 
       const pendingBurst = this.pendingBursts.get(turret.id);
       if (pendingBurst) {
-        if (now < pendingBurst.nextShotAt) continue;
-        if (!this.fireHandler) continue;
-        const burstAngle = Phaser.Math.Angle.Between(
+        // Legacy bursts only update their pose when due; limited turrets track between shots.
+        if (turret.rotationSpeedDegPerSec === undefined && (now < pendingBurst.nextShotAt || !this.fireHandler)) continue;
+        const desiredAngle = Phaser.Math.Angle.Between(
           turretX,
           turretY,
           pendingBurst.targetX,
           pendingBurst.targetY,
         );
-        this.turretAngleUpdater?.(turret.id, burstAngle);
+        const burstAngle = this.updateAim(turret, desiredAngle, deltaMs);
+        if (now < pendingBurst.nextShotAt || !this.fireHandler) continue;
+        if (!this.canFireAtAngle(turret, burstAngle, pendingBurst.targetX, pendingBurst.targetY, muzzleOffset)) continue;
         const muzzleX = turretX + Math.cos(burstAngle) * muzzleOffset;
         const muzzleY = turretY + Math.sin(burstAngle) * muzzleOffset;
         this.fireHandler?.(
@@ -215,10 +221,10 @@ export class TurretSystem {
       );
       if (!target) continue;
 
-      const angle = Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y);
-      this.turretAngleUpdater?.(turret.id, angle);
+      const angle = this.updateAim(turret, Phaser.Math.Angle.Between(turretX, turretY, target.x, target.y), deltaMs);
 
       if (now < (this.nextFireAt.get(turret.id) ?? 0)) continue;
+      if (!this.canFireAtAngle(turret, angle, target.x, target.y, muzzleOffset)) continue;
       const buff = this.turretDamageBuffProvider?.(turretX, turretY) ?? null;
       const damageMultiplier = (buff?.damageMultiplier ?? 1)
         * (turret.damage === undefined ? 1 : turret.damage / turretWeaponConfig.damage)
@@ -268,7 +274,9 @@ export class TurretSystem {
           target,
         );
         if (secondTarget) {
-          const secondAngle = Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y);
+          const secondAngle = turret.rotationSpeedDegPerSec === undefined
+            ? Phaser.Math.Angle.Between(turretX, turretY, secondTarget.x, secondTarget.y) : angle;
+          if (!this.canFireAtAngle(turret, secondAngle, secondTarget.x, secondTarget.y, muzzleOffset)) continue;
           this.fireHandler?.(
             turret.ownerId,
             turret.ownerColor,
@@ -293,6 +301,29 @@ export class TurretSystem {
     for (const id of [...this.pendingBursts.keys()]) {
       if (!activeIds.has(id)) this.pendingBursts.delete(id);
     }
+  }
+
+  private updateAim(turret: AutomatedTurret, desiredAngle: number, deltaMs: number): number {
+    const angle = turret.rotationSpeedDegPerSec === undefined ? desiredAngle
+      : stepTurretAngle(turret.angle ?? 0, desiredAngle, turret.rotationSpeedDegPerSec, deltaMs);
+    this.turretAngleUpdater?.(turret.id, angle);
+    return angle;
+  }
+
+  private canFireAtAngle(turret: AutomatedTurret, angle: number, targetX: number, targetY: number, muzzleOffset: number): boolean {
+    if (turret.rotationSpeedDegPerSec === undefined) return true;
+    const desiredAngle = Math.atan2(targetY - turret.y, targetX - turret.x);
+    const tolerance = (turret.aimToleranceDeg ?? DEFAULT_TURRET_AIM_TOLERANCE_DEG) * Math.PI / 180;
+    if (Math.abs(turretAngleDifference(angle, desiredAngle)) > tolerance + 1e-10) return false;
+    if (!this.lineOfFireChecker) return true;
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const distance = Math.max(muzzleOffset, Math.hypot(targetX - turret.x, targetY - turret.y));
+    return this.lineOfFireChecker(
+      turret.x + dx * muzzleOffset, turret.y + dy * muzzleOffset,
+      turret.x + dx * distance, turret.y + dy * distance,
+      turret.skipRockIndex, turret.ignoreBaseObstacles,
+    );
   }
 
   private findNearestTarget(

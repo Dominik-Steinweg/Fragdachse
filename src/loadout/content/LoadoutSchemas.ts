@@ -1,4 +1,5 @@
 import { validateStinkPlagueConfig } from '../StinkPlagueConfig';
+import { validateTurretAimConfig } from '../../config/turretAim';
 import { isWeaponFeedbackProfileId } from '../../config/weaponFeedback';
 import * as v from 'valibot';
 import { validateFlightSignature } from '../../projectile/FlightSignature';
@@ -257,6 +258,9 @@ export function validateResolvedUtility(value: unknown): string[] {
   const issues: string[] = [];
   if (!isRecord(value)) return ['$: UtilityConfig muss ein Objekt sein'];
   validateCommonConfig(value, issues);
+  if (value.type === 'placeable_turret' && isRecord(value.placeable)) {
+    issues.push(...validateTurretAimConfig(value.placeable).map(issue => '$.placeable.' + issue));
+  }
   if (value.type === 'translocator') {
     for (const key of ['telefragRadius', 'telefragDamage', 'phaseMoveSpeedBonus', 'phaseMoveDurationMs',
       'phaseHpRegenPerSecond', 'phaseRegenDurationMs', 'portalRadius', 'portalDurationMs', 'portalMinSeparation',

@@ -1,3 +1,4 @@
+import type { TurretAimConfig } from '../config/turretAim';
 import type { WeaponFeedbackProfileId } from '../config/weaponFeedback';
 import type { DamageZoneVisualStyle, EnergyInjectorConstructionEffect, GroundFireVisualStyle, TimeBubblePrismEmitterConfig } from '../types';
 import type { BulletVisualPreset, BurnOnHitConfig, ChainLightningConfig, DamageOverTimeAreaConfig, FireChunkBurstConfig, GameMode, GrenadeVisualPreset, HitscanSupportEffect, HitscanVisualPreset, ImpactCloudConfig, LoadoutSlot, DetonableConfig, DetonatorConfig, EnergyBallVariant, ExplosionVisualStyle, LoadoutShotAudioConfig, MeleeDamageTarget, MeleeVisualPreset, PlaceableFootprintCell, ProjectileExplosionConfig, ProjectileHomingConfig, ProjectileProximityPulseConfig, ProjectileStyle, RadialDamageFalloffConfig, ShieldBlockCategory, TeslaDomeTargetType, TracerConfig } from '../types';
@@ -492,7 +493,7 @@ export interface PlaceableRockPlacementConfig extends PlaceablePlacementConfig {
   readonly enemyDestroyedExplosionKnockback?: number;
 }
 
-export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig {
+export interface PlaceableTurretPlacementConfig extends PlaceablePlacementConfig, TurretAimConfig {
   readonly kind: 'turret';
   readonly targetRange: number;
   readonly muzzleOffset: number;

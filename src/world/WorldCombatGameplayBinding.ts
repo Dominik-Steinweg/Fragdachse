@@ -1,3 +1,4 @@
+import { turretAimConfig } from '../config/turretAim';
 import type { BaseManager } from '../entities/BaseManager';
 import type { TimeBubbleChargePort } from '../systems/TimeBubbleChargePort';
 import type { BaseEntity } from '../entities/BaseEntity';
@@ -1362,6 +1363,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
           stat => modifier.getNumericStat(rock.ownerId, stat), stat => modifier.getPercentageStat(rock.ownerId, stat)) : null;
         return ({
         id: rock.id,
+        angle: rock.angle,
+        ...turretAimConfig(rock),
         x: o.worldMetrics.offsetX + rock.gridX * CELL_SIZE + CELL_SIZE / 2,
         y: o.worldMetrics.offsetY + rock.gridY * CELL_SIZE + CELL_SIZE / 2,
         ownerId: rock.ownership === 'base-owned' ? COOP_DEFENSE_BASE_TURRET_OWNER_ID : rock.ownerId,
@@ -1378,6 +1381,8 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       }); });
     const bases = (o.baseManager?.getTurrets() ?? []).map(turret => ({
       id: turret.id,
+      angle: turret.angle,
+      ...turretAimConfig(turret),
       x: turret.x,
       y: turret.y,
       ownerId: turret.faction === 'hostile' ? COOP_DEFENSE_HOSTILE_BASE_TURRET_OWNER_ID : COOP_DEFENSE_BASE_TURRET_OWNER_ID,

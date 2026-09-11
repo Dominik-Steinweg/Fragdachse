@@ -67,6 +67,38 @@ function createPlacement(bases: readonly BaseSpec[] = []): PlacementSystem {
   return new PlacementSystem(layout, new RockGridIndex(layout.rocks), noPlayers, resolveActiveArenaWorldMetrics(), bases);
 }
 
+describe('turret aim configuration in placement snapshots', () => {
+  it.each(['machine_gun_turret', 'rocket_turret'] as const)('preserves %s tuning across placement, restore and client sync', id => {
+    const definition = COOP_DEFENSE_CONSTRUCTIONS[id];
+    const host = createPlacement();
+    const origin = world(9, 10), target = world(10, 10);
+    const placed = host.tryPlaceConstruction(definition, definition.maxHp, 'owner', 0xffffff,
+      origin.x, origin.y, target.x, target.y)!;
+    const expected = { rotationSpeedDegPerSec: definition.rotationSpeedDegPerSec, aimToleranceDeg: definition.aimToleranceDeg };
+    expect(placed).toMatchObject(expected);
+    const restored = host.materializePersistentPlaceable(definition, 12, 10, 1, 'owner', 0xffffff)!;
+    expect(restored).toMatchObject({ ...expected, angle: 1 });
+    const client = createPlacement();
+    client.syncFromSnapshot(host.getNetSnapshot());
+    expect(client.getRuntimeRock(restored.id)).toMatchObject(expected);
+    const changed = { ...restored, rotationSpeedDegPerSec: 77, aimToleranceDeg: 4 };
+    expect(client.syncFromSnapshot([placed, changed]).updated).toEqual([changed]);
+    const { rotationSpeedDegPerSec: _speed, aimToleranceDeg: _tolerance, ...legacy } = changed;
+    client.syncFromSnapshot([placed, legacy]);
+    expect(client.getRuntimeRock(restored.id)?.rotationSpeedDegPerSec).toBeUndefined();
+  });
+
+  it('freezes a utility profile when restored and leaves legacy utility fields absent', () => {
+    const host = createPlacement();
+    const utility = getUtilityConfigForMode('SPORE_TURRET', 'coop-defense');
+    if (utility.type !== 'placeable_turret') throw new Error('expected turret');
+    const configured = { ...utility, placeable: { ...utility.placeable, rotationSpeedDegPerSec: 70, aimToleranceDeg: 2 } };
+    expect(host.materializePersistentPlaceable(configured, 10, 10, 0.5, 'owner', 1))
+      .toMatchObject({ rotationSpeedDegPerSec: 70, aimToleranceDeg: 2, angle: 0.5 });
+    expect(host.materializePersistentPlaceable(utility, 12, 10, 0.5, 'owner', 1)?.rotationSpeedDegPerSec).toBeUndefined();
+  });
+});
+
 function createPlacementOnGrid(rockGrid: RockGridIndex): PlacementSystem {
   return new PlacementSystem(layout, rockGrid, noPlayers, resolveActiveArenaWorldMetrics());
 }

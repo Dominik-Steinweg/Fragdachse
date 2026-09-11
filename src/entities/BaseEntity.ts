@@ -1,3 +1,4 @@
+import { turretAimConfig, type TurretAimConfig } from '../config/turretAim';
 import type { TurretAnimationController } from '../effects/TurretAnimationController';
 import type { WorldHealthBarRenderer, HealthBarHandle } from '../effects/health/WorldHealthBarRenderer';
 import { baseHealthBarStyle } from '../effects/health/healthBarStyles';
@@ -31,7 +32,7 @@ import {
 const EMPTY_LIGHT_SPOTS: readonly { x: number; y: number; radius: number }[] = [];
 const VULNERABLE_MARKER_COLOR = 0xc86bff;
 
-export interface BaseTurretRuntimeState {
+export interface BaseTurretRuntimeState extends TurretAimConfig {
   readonly id: string;
   readonly baseId: string;
   readonly x: number;
@@ -358,6 +359,7 @@ export class BaseEntity {
       y: turret.y,
       angle: this.turretAngles.get(turret.id) ?? turret.initialAngle,
       weaponId: turret.weaponId,
+      ...turretAimConfig(turret),
       faction: this.faction,
     }));
   }
@@ -366,19 +368,24 @@ export class BaseEntity {
     return this.getTurrets().map((turret) => ({ id: turret.id, angle: turret.angle }));
   }
 
-  setTurretAngle(turretId: string, angle: number): void {
+  setTurretAngle(turretId: string, angle: number, interpolate = false): void {
     if (this.isInert() || !Number.isFinite(angle) || !this.turretAngles.has(turretId)) return;
     this.turretAngles.set(turretId, angle);
     const turret = this.spec.turrets.find((candidate) => candidate.id === turretId);
     const image = this.turretImages.get(turretId);
     if (!turret || !image) return;
+    if (this.turretAnimations) {
+      this.turretAnimations.syncPose(turretId, turret.x, turret.y, angle,
+        interpolate && turret.rotationSpeedDegPerSec !== undefined);
+      return;
+    }
     const visual = getTurretVisualSpec(turret.weaponId);
     const transform = getTurretVisualTransform(visual, turret.x, turret.y, angle);
     image.setPosition(transform.x, transform.y).setRotation(transform.rotation);
   }
 
   applyTurretSnapshot(turrets: readonly SyncedBaseTurretState[]): void {
-    for (const turret of turrets) this.setTurretAngle(turret.id, turret.angle);
+    for (const turret of turrets) this.setTurretAngle(turret.id, turret.angle, true);
   }
 
   isDestroyed(): boolean {

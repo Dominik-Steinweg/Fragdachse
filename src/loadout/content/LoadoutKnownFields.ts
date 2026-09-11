@@ -22,7 +22,7 @@ export const LOADOUT_ALLOWED_KEYS_BY_PATH: Readonly<Record<string, ReadonlySet<s
   "utility.fragmentation.demolition": new Set(["count", "distance", "radiusFactor", "damageFactors", "fuseMs", "projectileSize"]),
   "utility.activation": new Set(["fullChargeDuration","minThrowSpeed","type"]),
   "utility.damageFalloff": new Set(["minDamage"]),
-  "utility.placeable": new Set(["deathCloudRadius","energyInjectorEffect","footprint","kind","lifetimeMs","maxHp","muzzleOffset","ownerTintStrength","previewAlpha","range","spawnShakeDuration","spawnShakeIntensity","targetRange","warningPulseMs"]),
+  "utility.placeable": new Set(["rotationSpeedDegPerSec","aimToleranceDeg","deathCloudRadius","energyInjectorEffect","footprint","kind","lifetimeMs","maxHp","muzzleOffset","ownerTintStrength","previewAlpha","range","spawnShakeDuration","spawnShakeIntensity","targetRange","warningPulseMs"]),
   "utility.placeable.energyInjectorEffect": new Set(["damageMultiplier","pullStrengthMultiplier","respawnTimeMultiplier","slowStrengthMultiplier","type"]),
   "utility.placeable.footprint[]": new Set(["dx","dy"]),
   "utility.shotAudio": new Set(["failureKey","successKey"]),

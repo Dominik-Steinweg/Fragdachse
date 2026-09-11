@@ -16,6 +16,9 @@ function sprite() {
       stop: vi.fn(() => { view.anims.isPlaying = false; }) },
     setTexture(key: string, frame: number) { this.texture.key = key; this.frame.name = frame; return this; },
     setOrigin() { return this; },
+    x: 0, y: 0, rotation: 0,
+    setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
+    setRotation(angle: number) { this.rotation = angle; return this; },
     setFrame(frame: number) { this.frame.name = frame; return this; },
     play: vi.fn((key: string, ignoreIfPlaying = false) => {
       if (ignoreIfPlaying && view.anims.isPlaying && view.anims.currentAnim?.key === key) return view;
@@ -29,6 +32,48 @@ function sprite() {
 }
 
 describe('turret animation lifecycle', () => {
+  it.each(['7', 'base:turret'])('interpolates confirmed poses across wrap and holds on packet loss (%s)', id => {
+    const controller = new TurretAnimationController();
+    const { view, phaser } = sprite();
+    controller.bind(id, phaser, 'TURRET_MG');
+    const start = 179 * Math.PI / 180;
+    controller.syncPose(id, 10, 20, start, true);
+    expect(view.rotation).toBeCloseTo(start);
+    controller.syncPose(id, 10, 20, -179 * Math.PI / 180, true);
+    expect(view.rotation).toBeCloseTo(start);
+    controller.update(NET_TICK_INTERVAL_MS / 2);
+    expect(view.rotation).toBeCloseTo(Math.PI);
+    // Repeated snapshots do not restart an in-flight interpolation.
+    controller.syncPose(id, 10, 20, -179 * Math.PI / 180, true);
+    controller.update(NET_TICK_INTERVAL_MS / 2);
+    expect(view.rotation).toBeCloseTo(181 * Math.PI / 180);
+    controller.update(1000);
+    expect(view.rotation).toBeCloseTo(181 * Math.PI / 180);
+    controller.syncPose(id, 30, 40, 1, true);
+    expect(view.rotation).toBe(1);
+    expect([view.x, view.y]).toEqual([30, 40]);
+  });
+
+  it('sets immediate host/legacy poses and clears interpolation with the sprite lifetime', () => {
+    const controller = new TurretAnimationController();
+    const { view, phaser } = sprite();
+    controller.bind('7', phaser, 'TURRET_MG');
+    controller.syncPose('7', 0, 0, 0, false);
+    controller.syncPose('7', 0, 0, 2, false);
+    expect(view.rotation).toBe(2);
+    controller.syncPose('7', 0, 0, 1, true);
+    view.emit('destroy');
+    controller.update(NET_TICK_INTERVAL_MS);
+    expect(view.rotation).toBe(2);
+    controller.bind('7', phaser, 'TURRET_MG');
+    controller.syncPose('7', 0, 0, -1, true);
+    expect(view.rotation).toBe(-1);
+    controller.syncPose('7', 0, 0, 0, true);
+    controller.clear();
+    controller.update(1000);
+    expect(view.rotation).toBe(-1);
+  });
+
   it('restarts discrete recoil, preserves it through a repeated binding and returns to idle', () => {
     const controller = new TurretAnimationController();
     const { view, phaser } = sprite();
