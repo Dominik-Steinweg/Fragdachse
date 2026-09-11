@@ -1,3 +1,4 @@
+import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
 import { encodeMgAttrition, decodeMgAttrition } from './mgAttritionCodec';
 import { emptyMgAttritionSnapshot, type MgAttritionSnapshot } from '../systems/MgAttritionRuntime';
 import { EMPTY_ZEUS_SNAPSHOT, type ZeusSnapshot } from '../systems/ZeusRuntime';
@@ -1611,18 +1612,16 @@ export class NetworkBridge {
     const coopDefenseClassId = isCoopDefenseClassId(raw.coopDefenseClassId)
       ? raw.coopDefenseClassId
       : null;
+    const profile = raw.coopDefenseProfile == null ? null
+      : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId ?? undefined);
     return {
       weapon1: raw.weapon1,
       weapon2: raw.weapon2,
-      utility: raw.utility,
+      utility: profile ? getLoadoutUtilityId(profile.toolLoadout ?? []) : raw.utility,
       ultimate: raw.ultimate,
       coopDefenseClassId,
-      coopDefenseProfile: raw.coopDefenseProfile == null
-        ? null
-        : sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId ?? undefined),
-      tools: coopDefenseClassId === 'inspector_gadachs'
-        ? sanitizeCoopDefenseUpgradeProfile(raw.coopDefenseProfile, coopDefenseClassId).toolLoadout?.map((tool) => ({ ...tool }))
-        : undefined,
+      coopDefenseProfile: profile,
+      tools: profile?.toolLoadout?.map((tool) => ({ ...tool })),
       // Ausruestung wird an derselben Stelle validiert wie die Utility-Slots: unbekannte Items
       // und Eigenschaften fallen weg, Werte werden auf ihren Wurfbereich geklemmt.
       equippedItems: sanitizeCoopDefenseEquippedItems(raw.equippedItems),
@@ -4114,9 +4113,7 @@ export class NetworkBridge {
     const profile = preview.coopDefenseProfile != null
       ? sanitizeCoopDefenseUpgradeProfile(preview.coopDefenseProfile, classId ?? undefined)
       : null;
-    const tools = classId === 'inspector_gadachs'
-      ? this.sanitizeLobbyLoadoutTools(preview.tools)
-      : [];
+    const tools = profile?.toolLoadout?.map(tool => ({ ...tool })) ?? this.sanitizeLobbyLoadoutTools(preview.tools);
     const equippedItems = sanitizeCoopDefenseEquippedItems(preview.equippedItems);
     const next = { c: classId, p: profile, i: equippedItems, t: tools };
     const current = myPlayer().getState(KEY_LOBBY_LOADOUT_PREVIEW);
@@ -4133,11 +4130,9 @@ export class NetworkBridge {
     const profile = value.p != null
       ? sanitizeCoopDefenseUpgradeProfile(value.p, classId ?? undefined)
       : null;
-    // `t` ist der kanonische aktive Tool-Slot. Das Profil bleibt die Rueckfallquelle fuer bereits
-    // verbundene Peers, die nur die fruehere Inspector-Vorschau kennen.
-    const tools = classId === 'inspector_gadachs'
-      ? this.sanitizeLobbyLoadoutTools(value.t ?? profile?.toolLoadout)
-      : [];
+    // Das Profil besitzt die Auswahl; `t` ist eine abgeleitete Wire-Projektion.
+    // Nur alte Vorschauen ohne Profil werden noch direkt gelesen.
+    const tools = profile?.toolLoadout?.map(tool => ({ ...tool })) ?? this.sanitizeLobbyLoadoutTools(value.t);
     return {
       coopDefenseClassId: classId,
       coopDefenseProfile: profile,
@@ -4158,7 +4153,7 @@ export class NetworkBridge {
     const mode = this.getGameMode();
     const weapon1 = this.getPlayerLoadoutSlot(playerId, 'weapon1') ?? DEFAULT_LOADOUT.weapon1.id;
     const weapon2 = this.getPlayerLoadoutSlot(playerId, 'weapon2') ?? DEFAULT_LOADOUT.weapon2.id;
-    const utility = this.getPlayerLoadoutSlot(playerId, 'utility') ?? DEFAULT_LOADOUT.utility.id;
+    const utility = isCoopDefenseMode(mode) && preview ? getLoadoutUtilityId(preview.tools) : this.getPlayerLoadoutSlot(playerId, 'utility') ?? DEFAULT_LOADOUT.utility.id;
     const ultimate = this.getPlayerLoadoutSlot(playerId, 'ultimate') ?? DEFAULT_LOADOUT.ultimate.id;
     const coopDefenseClassId = isCoopDefenseMode(mode) ? preview?.coopDefenseClassId ?? null : null;
     return {
@@ -4168,7 +4163,7 @@ export class NetworkBridge {
       ultimate,
       coopDefenseClassId,
       coopDefenseProfile: isCoopDefenseMode(mode) ? preview?.coopDefenseProfile ?? null : null,
-      tools: coopDefenseClassId === 'inspector_gadachs' ? preview?.tools.map((tool) => ({ ...tool })) : undefined,
+      tools: isCoopDefenseMode(mode) ? preview?.tools.map((tool) => ({ ...tool })) : undefined,
       equippedItems: isCoopDefenseMode(mode) ? preview?.equippedItems ?? [] : [],
     };
   }

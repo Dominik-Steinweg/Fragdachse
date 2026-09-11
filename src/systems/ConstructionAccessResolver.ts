@@ -1,6 +1,5 @@
 import {
   COOP_DEFENSE_CONSTRUCTIONS,
-  getConstructionIdForUtility,
   normalizeConstructionId,
   type CoopDefenseConstructionDefinition,
 } from '../config/coopDefenseConstructions';
@@ -13,7 +12,7 @@ import type {
 } from '../types';
 import {
   getCoopDefenseUpgradeState,
-  isCoopDefenseLoadoutItemUnlocked,
+  isCoopDefenseUpgradeAvailableForClass,
 } from '../utils/coopDefenseUpgrades';
 
 export type ConstructionAccessDormantReason =
@@ -59,21 +58,15 @@ export function resolveConstructionAccess(
   };
 
   const definition = COOP_DEFENSE_CONSTRUCTIONS[constructionId];
-  const isSharedUtility = constructionId === 'rock_barrier' || constructionId === 'spore_turret';
-  if (context.gameMode === 'coop_defense' && !isSharedUtility && context.classId !== 'inspector_gadachs') {
-    return { constructionId, definition, allowed: false, unlocked: false, active: false, reason: 'class-not-allowed' };
-  }
-  if (context.gameMode !== 'coop_defense' && !isSharedUtility) {
+  if (!definition.allowedModes.includes(context.gameMode)) {
     return { constructionId, definition, allowed: false, unlocked: false, active: false, reason: 'mode-not-allowed' };
   }
-
-  const profile = context.profile;
-  const utilityId = constructionId === 'rock_barrier' ? 'ROCK_BARRIER' : 'SPORE_TURRET';
-  const unlocked = context.gameMode === 'coop_defense'
-    ? !!profile && (isSharedUtility
-      ? isCoopDefenseLoadoutItemUnlocked(profile, 'utility', utilityId, context.classId ?? undefined)
-      : getCoopDefenseUpgradeState(profile, definition.unlockUpgradeId, context.classId ?? undefined).level > 0)
-    : true;
+  if (context.gameMode === 'coop_defense'
+    && !isCoopDefenseUpgradeAvailableForClass(definition.unlockUpgradeId, context.classId ?? undefined)) {
+    return { constructionId, definition, allowed: false, unlocked: false, active: false, reason: 'class-not-allowed' };
+  }
+  const unlocked = context.gameMode !== 'coop_defense' || (!!context.profile
+    && getCoopDefenseUpgradeState(context.profile, definition.unlockUpgradeId, context.classId ?? undefined).level > 0);
   if (!unlocked) return { constructionId, definition, allowed: false, unlocked: false, active: false, reason: 'locked' };
 
   const active = isConstructionActiveInLoadout(constructionId, context.loadout);
@@ -90,15 +83,7 @@ export function getAccessibleConstructionIds(context: ConstructionAccessContext)
 
 /** Returns only construction tools that are both unlocked and currently equipped. */
 export function getActiveConstructionToolRefs(context: ConstructionAccessContext): readonly LoadoutToolRef[] {
-  const tools = context.classId === 'inspector_gadachs'
-    ? ((context.loadout?.tools?.length ?? 0) > 0
-      ? context.loadout!.tools!
-      : context.loadout?.utility
-        ? [{ kind: 'utility', id: context.loadout.utility } satisfies LoadoutToolRef]
-        : [])
-    : context.loadout?.utility
-      ? [{ kind: 'utility', id: context.loadout.utility } satisfies LoadoutToolRef]
-      : [];
+  const tools = context.loadout?.tools ?? (context.loadout?.utility ? [{ kind: 'utility', id: context.loadout.utility } satisfies LoadoutToolRef] : []);
   const result: LoadoutToolRef[] = [];
   const seen = new Set<ConstructionId>();
   for (const tool of tools) {
@@ -118,8 +103,8 @@ export function isConstructionActiveInLoadout(
   loadout: Pick<LoadoutCommitSnapshot, 'utility' | 'tools'> | null | undefined,
 ): boolean {
   if (!loadout) return false;
-  if (loadout.tools?.some((tool) => normalizeConstructionId(tool.id) === constructionId)) return true;
-  return getConstructionIdForUtility(loadout.utility) === constructionId;
+  const tools = loadout.tools ?? [{ kind: 'utility', id: loadout.utility }];
+  return tools.some(tool => normalizeConstructionId(tool.id) === constructionId);
 }
 
 /** Lightweight helper for callers that already hold a committed snapshot. */

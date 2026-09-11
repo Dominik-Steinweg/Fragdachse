@@ -66,7 +66,7 @@ describe('coop-defense class loadout persistence', () => {
     expect(getStoredCoopDefenseProgress().selectedClassId).toBe('inspector_gadachs');
     expect(getStoredCoopDefenseLoadout('dachs_nukem')).toMatchObject({
       weapon1: 'AK47',
-      utility: 'FELSEN',
+      utility: 'HE_GRENADE',
     });
     expect(getStoredCoopDefenseLoadout('inspector_gadachs')).toMatchObject({
       weapon1: 'GLOCK',
@@ -79,6 +79,9 @@ describe('coop-defense class loadout persistence', () => {
     setStoredCoopDefenseClassesUnlocked(true);
 
     expect(getStoredCoopDefenseLoadoutSlot('dachs_nukem', 'weapon1')).toBe('AK47');
+    expect(getStoredCoopDefenseProgress().profilesByClass.inspector_gadachs.toolLoadout).toEqual([
+      { kind: 'construction', id: 'rocket_turret' }, { kind: 'utility', id: 'HE_GRENADE' },
+    ]);
   });
 
   it('clears class loadouts with the character reset', () => {

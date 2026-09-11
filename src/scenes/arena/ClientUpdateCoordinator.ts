@@ -1343,8 +1343,6 @@ export class ClientUpdateCoordinator {
 
   getLocalInspectorTools(): readonly LoadoutToolRef[] {
     const localId = bridge.getLocalPlayerId();
-    const classId = this.getLocalCoopDefenseClassId();
-    if (classId !== 'inspector_gadachs') return [];
     const current = bridge.getActivityDescriptor() !== null
       ? bridge.getPlayerCurrentLoadoutSnapshot(localId)
       : bridge.getPlayerLobbyLoadoutPreview(localId);

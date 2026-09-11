@@ -1,3 +1,4 @@
+import { getLoadoutUtilityId } from './LoadoutTools';
 /**
  * Gemeinsamer Katalog fuer die Darstellung und Auswahl von Loadout-Items.
  *
@@ -8,7 +9,7 @@
 import { COLORS } from '../config';
 import { getLocale } from '../i18n';
 import { getConstructionName, getLoadoutItemName } from '../i18n/contentPresentation';
-import { getCoopDefenseConstructionDefinition } from '../config/coopDefenseConstructions';
+import { getCoopDefenseConstructionDefinition, normalizeConstructionId } from '../config/coopDefenseConstructions';
 import { isCoopDefenseMode } from '../gameModes';
 import type {
   CoopDefenseClassId,
@@ -18,6 +19,7 @@ import type {
   LoadoutToolRef,
 } from '../types';
 import {
+  getUnlockedLoadoutToolRefs,
   getCoopDefenseUpgradeTextureKey,
   hasCoopDefenseDedicatedUpgradeIcon,
   isCoopDefenseLoadoutItemSelectable,
@@ -117,6 +119,12 @@ export function getSelectableLoadoutItems(
 ): readonly LoadoutItemRef[] {
   const base = getLoadoutSlotItems(slot, mode);
   if (!isCoopDefenseMode(mode) || !profile) return base;
+  if (slot === 'utility') {
+    return getUnlockedLoadoutToolRefs(profile, classId).map(tool => ({
+      id: getLoadoutUtilityId([tool]),
+      displayName: describeLoadoutTool(tool).displayName,
+    }));
+  }
 
   const filtered = base.filter((item) => isCoopDefenseLoadoutItemSelectable(profile, slot, item.id, classId));
   if (filtered.length > 0) return filtered;
@@ -144,6 +152,8 @@ const SLOT_ACCENT_COLORS: Record<LoadoutSlot, number> = {
 
 export function describeLoadoutItem(slot: LoadoutSlot, itemId: string): LoadoutItemPresentation {
   const metadata = LOADOUT_CATALOG_ENTRIES.find((entry) => entry.slot === slot && entry.id === itemId);
+  const constructionId = slot === 'utility' && !metadata ? normalizeConstructionId(itemId) : null;
+  if (constructionId) return describeLoadoutTool({ kind: 'construction', id: constructionId });
   const dedicatedUnlockId = slot === 'ultimate'
     ? COOP_DEFENSE_ULTIMATE_UNLOCK_BY_ITEM_ID[itemId]
     : slot === 'weapon2'

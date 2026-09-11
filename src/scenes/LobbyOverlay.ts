@@ -1,3 +1,5 @@
+import { getLoadoutUtilityId } from '../loadout/LoadoutTools';
+import { getCoopDefenseToolCapacity } from '../utils/coopDefenseUpgrades';
 /**
  * LobbyOverlay – kein Phaser-Scene, sondern eine Helferklasse.
  * Verwaltet das semi-transparente Lobby-UI innerhalb der ArenaScene.
@@ -1341,25 +1343,33 @@ export class LobbyOverlay {
 
   /** Loadout-IDs bleiben die vorhandenen per-Spieler-States; fehlende Legacy-States fallen auf Defaults. */
   private getLobbyLoadoutItemId(playerId: string, slot: LoadoutSlot): string | null {
+    if (slot === 'utility' && isCoopDefenseMode(this.bridge.getGameMode())) {
+      const preview = this.bridge.getPlayerLobbyLoadoutPreview(playerId);
+      if (preview) return getLoadoutUtilityId(preview.tools) || null;
+    }
     return this.bridge.getPlayerLoadoutSlot(playerId, slot) ?? DEFAULT_LOADOUT[slot]?.id ?? null;
   }
 
-  private getInspectorLobbyTools(playerId: string): readonly LoadoutToolRef[] {
-    return this.isInspectorLobbyPreview(playerId)
+  private getLobbyTools(playerId: string): readonly LoadoutToolRef[] {
+    return this.usesLobbyTools(playerId)
       ? this.bridge.getPlayerLobbyLoadoutPreview(playerId)?.tools ?? []
       : [];
   }
 
-  private isInspectorLobbyPreview(playerId: string): boolean {
-    return isCoopDefenseMode(this.bridge.getGameMode())
-      && this.bridge.getPlayerLobbyLoadoutPreview(playerId)?.coopDefenseClassId === 'inspector_gadachs';
+  private usesLobbyTools(playerId: string): boolean {
+    if (!isCoopDefenseMode(this.bridge.getGameMode())) return false;
+    const preview = this.bridge.getPlayerLobbyLoadoutPreview(playerId);
+    return preview !== null && getCoopDefenseToolCapacity(
+      preview.coopDefenseProfile ?? { upgrades: {} },
+      preview.coopDefenseClassId ?? 'dachs_nukem',
+    ) > 1;
   }
 
   private getLobbyLoadoutPresentation(
     playerId: string,
     slot: LoadoutSlot,
   ): LoadoutItemPresentation | null {
-    if (slot === 'utility' && this.isInspectorLobbyPreview(playerId)) {
+    if (slot === 'utility' && this.usesLobbyTools(playerId)) {
       return {
         displayName: t('ui.loadout.utilityWheel'),
         textureKey: ensureIconTexture(this.scene, 'utility-rad', 56, COLORS.GOLD_2),
@@ -1372,11 +1382,11 @@ export class LobbyOverlay {
 
   /** Baut nur die vier kompakten Slot-Controls neu, nicht die Rosterzeile selbst. */
   private refreshPlayerLoadout(playerId: string, row: PlayerRow): void {
-    const inspector = this.isInspectorLobbyPreview(playerId);
-    const tools = inspector ? this.getInspectorLobbyTools(playerId) : [];
+    const multipleTools = this.usesLobbyTools(playerId);
+    const tools = multipleTools ? this.getLobbyTools(playerId) : [];
     const presentations = LOADOUT_SLOTS.map((slot) => this.getLobbyLoadoutPresentation(playerId, slot));
     const signature = JSON.stringify([
-      inspector,
+      multipleTools,
       ...LOADOUT_SLOTS.map((slot, index) => [
         slot,
         this.getLobbyLoadoutItemId(playerId, slot),
@@ -1412,7 +1422,7 @@ export class LobbyOverlay {
         onClick: () => undefined,
         onPointerOver: (pointer) => {
           this.playerNameTooltip?.hide();
-          this.showLoadoutTooltip(slot, presentation, pointer, inspector ? tools : []);
+          this.showLoadoutTooltip(slot, presentation, pointer, multipleTools ? tools : []);
         },
         onPointerMove: (pointer) => this.loadoutTooltip?.move(pointer),
         onPointerOut: (pointer) => {
@@ -1434,9 +1444,9 @@ export class LobbyOverlay {
     if (!this.loadoutTooltip) return;
     if (this.container && this.loadoutTooltipRoot) this.container.bringToTop(this.loadoutTooltipRoot);
 
-    const isInspectorRadial = slot === 'utility'
+    const isUtilityRadial = slot === 'utility'
       && presentation.displayName === t('ui.loadout.utilityWheel');
-    const lines = isInspectorRadial
+    const lines = isUtilityRadial
       ? tools.length > 0
         ? tools.map((tool) => {
           const toolPresentation = describeLoadoutTool(tool);
@@ -1455,7 +1465,7 @@ export class LobbyOverlay {
         textureKey: presentation.textureKey,
       }];
     this.loadoutTooltip.show(
-      isInspectorRadial ? t('ui.loadout.utilityWheel') : t(`ui.loadout.${slot}`),
+      isUtilityRadial ? t('ui.loadout.utilityWheel') : t(`ui.loadout.${slot}`),
       presentation.accentColor,
       lines,
       pointer,

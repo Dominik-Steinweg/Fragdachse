@@ -1,3 +1,4 @@
+import { getLoadoutUtilityId, loadoutToolFromId } from '../../loadout/LoadoutTools';
 import { COOP_DEFENSE_CLASS_IDS, DEFAULT_COOP_DEFENSE_CLASS_ID } from '../../config/coopDefenseClasses';
 import { COOP_DEFENSE_ITEMS_UNLOCK_AFTER_MAP_ID } from '../../config/coopDefenseItems';
 import { getCoopDefenseMapConfig } from '../../config/coopDefenseMaps';
@@ -378,6 +379,10 @@ export class ArenaMetaController {
     const profile = stored.profilesByClass[classId];
     const nextLoadout: Partial<Record<LoadoutSlot, string>> = {};
     for (const slot of LOADOUT_SLOTS) {
+      if (slot === 'utility') {
+        nextLoadout.utility = getLoadoutUtilityId(profile.toolLoadout ?? []);
+        continue;
+      }
       const selectable = getSelectableLoadoutItems(
         slot,
         this.input.session.getGameMode(),
@@ -428,7 +433,7 @@ export class ArenaMetaController {
     this.input.progressStore.setUpgradeProfile(nextProfile, activeClassId);
 
     const loadoutSelection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
-    if (loadoutSelection && activeClassId !== 'inspector_gadachs') {
+    if (loadoutSelection && loadoutSelection.slot !== 'utility' && activeClassId !== 'inspector_gadachs') {
       this.input.session.setLocalLoadoutSlot(loadoutSelection.slot, loadoutSelection.itemId);
       if (stored.classesUnlocked) {
         this.input.progressStore.setClassLoadoutSlot(
@@ -469,44 +474,46 @@ export class ArenaMetaController {
   toggleLoadoutTool(tool: LoadoutToolRef): boolean {
     if (this.destroyed) return false;
     const stored = this.getStoredProgress();
-    if (stored.selectedClassId !== 'inspector_gadachs') return false;
+    const classId = stored.classesUnlocked ? stored.selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID;
 
-    const profile = stored.profilesByClass.inspector_gadachs;
+    const profile = stored.classesUnlocked ? stored.profilesByClass[classId] : stored.defaultProfile;
     const current = [...(profile.toolLoadout ?? [])];
     const index = current.findIndex((entry) => entry.kind === tool.kind && entry.id === tool.id);
     if (index >= 0) {
       current.splice(index, 1);
     } else {
-      if (current.length >= getCoopDefenseToolCapacity(profile)) return false;
-      if (!getUnlockedLoadoutToolRefs(profile).some((entry) => (
+      const capacity = getCoopDefenseToolCapacity(profile, classId);
+      if (capacity === 1) current.length = 0;
+      else if (current.length >= capacity) return false;
+      if (!getUnlockedLoadoutToolRefs(profile, classId).some((entry) => (
         entry.kind === tool.kind && entry.id === tool.id
       ))) return false;
       current.push({ ...tool });
     }
 
-    const nextProfile = setLoadoutToolSlots(profile, current);
+    const nextProfile = setLoadoutToolSlots(profile, current, classId);
     this.setLocalReady(false);
-    this.input.progressStore.setUpgradeProfile(nextProfile, 'inspector_gadachs');
-    this.refreshAfterMutation(this.replaceLiveProfile(stored, 'inspector_gadachs', nextProfile));
+    this.input.progressStore.setUpgradeProfile(nextProfile, classId);
+    this.refreshAfterMutation(this.replaceLiveProfile(stored, classId, nextProfile));
     return true;
   }
 
   setLoadoutTools(tools: readonly LoadoutToolRef[]): boolean {
     if (this.destroyed) return false;
     const stored = this.getStoredProgress();
-    if (stored.selectedClassId !== 'inspector_gadachs') return false;
+    const classId = stored.classesUnlocked ? stored.selectedClassId : DEFAULT_COOP_DEFENSE_CLASS_ID;
 
-    const profile = stored.profilesByClass.inspector_gadachs;
-    if (tools.length > getCoopDefenseToolCapacity(profile)) return false;
-    const unlocked = getUnlockedLoadoutToolRefs(profile);
+    const profile = stored.classesUnlocked ? stored.profilesByClass[classId] : stored.defaultProfile;
+    if (tools.length > getCoopDefenseToolCapacity(profile, classId)) return false;
+    const unlocked = getUnlockedLoadoutToolRefs(profile, classId);
     if (!tools.every((tool) => unlocked.some((entry) => (
       entry.kind === tool.kind && entry.id === tool.id
     )))) return false;
 
-    const nextProfile = setLoadoutToolSlots(profile, tools.map((tool) => ({ ...tool })));
-    this.input.progressStore.setUpgradeProfile(nextProfile, 'inspector_gadachs');
+    const nextProfile = setLoadoutToolSlots(profile, tools.map((tool) => ({ ...tool })), classId);
+    this.input.progressStore.setUpgradeProfile(nextProfile, classId);
     this.setLocalReady(false);
-    this.refreshAfterMutation(this.replaceLiveProfile(stored, 'inspector_gadachs', nextProfile));
+    this.refreshAfterMutation(this.replaceLiveProfile(stored, classId, nextProfile));
     return true;
   }
 
@@ -527,6 +534,8 @@ export class ArenaMetaController {
     if (this.destroyed) return false;
     if (this.input.session.getGamePhase() !== 'LOBBY'
       || !isCoopDefenseMode(this.input.session.getGameMode())) return false;
+
+    if (slot === 'utility') return this.setLoadoutTools([loadoutToolFromId(itemId)]);
 
     const localId = this.input.session.getLocalPlayerId();
     if (this.input.session.getPlayerLoadoutSlot(localId, slot) === itemId) return false;
@@ -1024,6 +1033,14 @@ export class ArenaMetaController {
     const localId = this.input.session.getLocalPlayerId();
     let changed = false;
     for (const slot of LOADOUT_SLOTS) {
+      if (slot === 'utility') {
+        const utility = getLoadoutUtilityId(profile.toolLoadout ?? []);
+        if (this.input.session.getPlayerLoadoutSlot(localId, slot) !== utility) {
+          this.input.session.setLocalLoadoutSlot(slot, utility);
+          changed = true;
+        }
+        continue;
+      }
       const selectable = getSelectableLoadoutItems(
         slot,
         this.input.session.getGameMode(),

@@ -1,3 +1,5 @@
+import { getLoadoutUtilityId, loadoutToolFromId } from '../loadout/LoadoutTools';
+import { setLoadoutToolSlots } from './coopDefenseUpgrades';
 import { SOUND_MASTER_VOLUME, SOUND_MUSIC_VOLUME, SOUND_SFX_VOLUME } from '../config';
 import {
   COOP_DEFENSE_CLASS_IDS,
@@ -359,7 +361,7 @@ function mirrorDefaultProfileToClasses(
     COOP_DEFENSE_CLASS_IDS.map((classId) => [
       classId,
       constrainCoopDefenseUpgradeProfileToBossPoints(
-        sanitizeCoopDefenseUpgradeProfile(defaultProfile, classId),
+        sanitizeCoopDefenseUpgradeProfile(classId === 'inspector_gadachs' ? { ...defaultProfile, toolLoadout: undefined } : defaultProfile, classId),
         earnedBossPoints,
         classId,
       ),
@@ -819,7 +821,9 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
       upgrades: Object.fromEntries(Object.entries(compact.levels ?? {}).map(([id, level]) => [
         id, { level, unlocked: false },
       ])),
-      toolLoadout: compact.toolLoadout,
+      toolLoadout: compact.toolLoadout ?? (classId !== 'inspector_gadachs'
+        ? [loadoutToolFromId(sanitizeStoredLoadout(isRecord(coop.loadoutsByClass) ? coop.loadoutsByClass[classId] : undefined).utility ?? loadout.utility ?? 'HE_GRENADE')]
+        : undefined),
     };
     return constrainCoopDefenseUpgradeProfileToBossPoints(
       sanitizeCoopDefenseUpgradeProfile(rawProfile, classId), bossPoints, classId,
@@ -843,7 +847,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
     profilesByClass[classId] = classesUnlocked
       ? hydrateProfile(compact, classId)
       : constrainCoopDefenseUpgradeProfileToBossPoints(
-        sanitizeCoopDefenseUpgradeProfile(defaultProfile, classId), bossPoints, classId,
+        sanitizeCoopDefenseUpgradeProfile(classId === 'inspector_gadachs' ? { ...defaultProfile, toolLoadout: undefined } : defaultProfile, classId), bossPoints, classId,
       );
   }
   if (isRecord(coop.loadoutsByClass) && Object.entries(coop.loadoutsByClass).some(([classId, classLoadout]) => (
@@ -851,6 +855,7 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   ))) return null;
   const loadoutByClass = classesUnlocked ? sanitizeStoredLoadoutsByClass(coop.loadoutsByClass) : {};
   if (coop.loadoutsByClass !== undefined && !isRecord(coop.loadoutsByClass)) return null;
+  for (const classLoadout of Object.values(loadoutByClass)) delete classLoadout.utility;
 
   if (Object.entries(coop.equippedItemIds).some(([slot, uid]) => (
     !ITEM_SLOTS.includes(slot as CoopDefenseItemSlot)
@@ -912,10 +917,6 @@ function decodeProgressDocument(raw: unknown): Pick<LocalPreferences, 'profile' 
   };
 }
 
-function toolKey(tool: LoadoutToolRef | null | undefined): string {
-  return tool ? `${tool.kind}:${tool.id}` : '';
-}
-
 function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefenseClassId): CompactUpgradeProfile | undefined {
   const safe = sanitizeCoopDefenseUpgradeProfile(profile, classId);
   const defaults = buildDefaultCoopDefenseUpgradeProfile(classId);
@@ -926,10 +927,8 @@ function compactProfile(profile: CoopDefenseUpgradeProfile, classId: CoopDefense
   const result: CompactUpgradeProfile = {};
   if (Object.keys(levels).length > 0) result.levels = levels;
   const tools = safe.toolLoadout ?? [];
-  const defaultTools = defaults.toolLoadout ?? [];
-  if (tools.map(toolKey).join('|') !== defaultTools.map(toolKey).join('|')) {
-    result.toolLoadout = tools.map((tool) => ({ ...tool }));
-  }
+  // Always write the canonical selection, including empty/default slots, to close legacy migration.
+  result.toolLoadout = tools.map((tool) => ({ ...tool }));
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
@@ -1277,6 +1276,7 @@ export function getStoredCoopDefenseLoadoutSlot(
   classId: CoopDefenseClassId,
   slot: LoadoutSlot,
 ): string | null {
+  if (slot === 'utility') return getLoadoutUtilityId(getStoredCoopDefenseUpgradeProfile(classId).toolLoadout ?? []);
   return readPreferences().loadoutByClass[classId]?.[slot] ?? null;
 }
 
@@ -1284,7 +1284,7 @@ export function getStoredCoopDefenseLoadoutSlot(
 export function getStoredCoopDefenseLoadout(
   classId: CoopDefenseClassId,
 ): Partial<Record<LoadoutSlot, string>> {
-  return { ...(readPreferences().loadoutByClass[classId] ?? {}) };
+  return { ...(readPreferences().loadoutByClass[classId] ?? {}), utility: getStoredCoopDefenseLoadoutSlot(classId, 'utility') ?? '' };
 }
 
 /** Speichert einen Coop-Defense-Loadout-Slot getrennt vom Profil jeder anderen Klasse. */
@@ -1293,6 +1293,10 @@ export function setStoredCoopDefenseLoadoutSlot(
   slot: LoadoutSlot,
   itemId: string,
 ): void {
+  if (slot === 'utility') {
+    setStoredCoopDefenseUpgradeProfile(setLoadoutToolSlots(getStoredCoopDefenseUpgradeProfile(classId), [loadoutToolFromId(itemId)], classId), classId);
+    return;
+  }
   updatePreferences((current) => ({
     ...current,
     loadoutByClass: {
@@ -1316,6 +1320,10 @@ export function switchStoredCoopDefenseClassLoadout(
   previousLoadout: Partial<Record<LoadoutSlot, string>>,
   nextLoadout: Partial<Record<LoadoutSlot, string>>,
 ): void {
+  previousLoadout = { ...previousLoadout };
+  nextLoadout = { ...nextLoadout };
+  delete previousLoadout.utility;
+  delete nextLoadout.utility;
   updatePreferences((current) => {
     const storedProgress = current.progression.coopDefense;
     if (storedProgress.unlockedClassIds.length === 0) return current;
@@ -1349,6 +1357,10 @@ export function clearStoredCoopDefenseLoadoutSlot(
   classId: CoopDefenseClassId,
   slot: LoadoutSlot,
 ): void {
+  if (slot === 'utility') {
+    setStoredCoopDefenseUpgradeProfile(setLoadoutToolSlots(getStoredCoopDefenseUpgradeProfile(classId), [], classId), classId);
+    return;
+  }
   updatePreferences((current) => {
     const nextClassLoadout = { ...(current.loadoutByClass[classId] ?? {}) };
     delete nextClassLoadout[slot];
@@ -1686,7 +1698,7 @@ export function setStoredCoopDefenseClassesUnlocked(unlocked: boolean): boolean 
   const loadoutByClass = unlocked && !current.loadoutByClass[DEFAULT_COOP_DEFENSE_CLASS_ID]
     ? {
       ...current.loadoutByClass,
-      [DEFAULT_COOP_DEFENSE_CLASS_ID]: { ...current.loadout },
+      [DEFAULT_COOP_DEFENSE_CLASS_ID]: Object.fromEntries(Object.entries(current.loadout).filter(([slot]) => slot !== 'utility')),
     }
     : current.loadoutByClass;
   writePreferences({

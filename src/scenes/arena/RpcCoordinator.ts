@@ -322,7 +322,7 @@ export class RpcCoordinator {
           params?.activityRevision,
         );
       }
-      if (activeGameMode === 'coop_defense' && currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+      if (activeGameMode === 'coop_defense' && currentLoadout?.tools !== undefined
         && slot === 'utility' && !params?.toolRef && !params?.temporaryUtilityInstanceId) {
         return { ok: false, reason: 'blocked' };
       }

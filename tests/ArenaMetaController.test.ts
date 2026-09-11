@@ -4,6 +4,7 @@ import {
   type ArenaMetaControllerInput,
 } from '../src/scenes/arena/ArenaMetaController';
 import { getStoredCoopDefenseProgress } from '../src/utils/localPreferences';
+import { levelUpCoopDefenseUpgrade } from '../src/utils/coopDefenseUpgrades';
 
 function makeInput(): {
   controller: ArenaMetaController;
@@ -106,6 +107,22 @@ describe('ArenaMetaController', () => {
     expect(session.setLocalLoadoutSlot).toHaveBeenCalled();
     expect(presentation.setCoopDefenseProgress).toHaveBeenCalledWith(controller.getProgress());
     expect(presentation.refreshUpgradeOverlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the single tool selection authoritative across refresh and respec', () => {
+    const { controller, store, session } = makeInput();
+    const stored = getStoredCoopDefenseProgress();
+    stored.defaultProfile = levelUpCoopDefenseUpgrade(stored.defaultProfile, 'unlock_rock_barrier', 100, 0, 'dachs_nukem')!;
+    vi.mocked(store.getProgress).mockReturnValue(stored);
+    controller.refresh();
+    expect(controller.getProgress().toolLoadout).toEqual([{ kind: 'construction', id: 'rock_barrier' }]);
+    expect(session.getPlayerLoadoutSlot('local', 'utility')).toBe('ROCK_BARRIER');
+    expect(store.setSharedLoadoutSlot).not.toHaveBeenCalledWith('utility', expect.anything());
+    expect(controller.setLoadoutTools([{ kind: 'construction', id: 'machine_gun_turret' }])).toBe(false);
+    expect(controller.setLoadoutTools([{ kind: 'utility', id: 'HE_GRENADE' }])).toBe(true);
+    expect(controller.getProgress().toolLoadout).toEqual([{ kind: 'utility', id: 'HE_GRENADE' }]);
+    expect(controller.categoryRespec('utility')).toBe(true);
+    expect(controller.getProgress().toolLoadout).not.toContainEqual({ kind: 'construction', id: 'rock_barrier' });
   });
 
   it('ist nach idempotentem Teardown inert', () => {

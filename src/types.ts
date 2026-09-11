@@ -937,7 +937,7 @@ export type ConstructionId =
 
 /**
  * Eintrag in den gemeinsamen Utility-Slots eines Loadouts. Konstruktionen und Utilities
- * sind hier gleichwertig; nur der Inspector besitzt derzeit solche Slots.
+ * sind hier gleichwertig; die Klassen legen die verfuegbare Slotanzahl fest.
  */
 export type LoadoutToolRef =
   | { kind: 'construction'; id: ConstructionId }
@@ -971,7 +971,7 @@ export interface LoadoutCommitSnapshot {
   ultimate: string;
   coopDefenseClassId: CoopDefenseClassId | null;
   coopDefenseProfile: CoopDefenseUpgradeProfile | null;
-  /** Autoritativ ausgeruestete Utility-Slots (derzeit nur Inspector). */
+  /** Aus dem Coop-Profil abgeleitete, autoritativ ausgeruestete Utility-Slots. */
   tools?: LoadoutToolRef[];
   /**
    * Beim Klick auf "Bereit" eingefrorene Ausruestung. Reist im bestehenden Commit-Snapshot mit,

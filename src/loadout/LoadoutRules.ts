@@ -1,3 +1,4 @@
+import { getLoadoutUtilityId } from './LoadoutTools';
 import { DEFAULT_COOP_DEFENSE_CLASS_ID } from '../config/coopDefenseClasses';
 import type { CoopDefenseClassId, CoopDefenseItem, CoopDefenseUpgradeProfile, GameMode, LoadoutCommitSnapshot } from '../types';
 import { isCoopDefenseMode } from '../gameModes';
@@ -88,7 +89,10 @@ export function resolveEffectiveLoadoutSelection(
   coopDefenseClassId: CoopDefenseClassId | null = null,
   equippedItems: readonly CoopDefenseItem[] = [],
 ): ResolvedLoadoutSelection {
-  const sanitized = sanitizeLoadoutSelectionForMode(selection, mode);
+  const canonicalSelection = isCoopDefenseMode(mode) && coopDefenseProfile?.toolLoadout !== undefined
+    ? { ...selection, utility: UTILITY_CONFIGS[getLoadoutUtilityId(coopDefenseProfile.toolLoadout)] }
+    : selection;
+  const sanitized = sanitizeLoadoutSelectionForMode(canonicalSelection, mode);
   if (!isCoopDefenseMode(mode) || (!coopDefenseProfile && equippedItems.length === 0)) return sanitized;
   return applyCoopDefenseModifiersToLoadoutSelection(
     sanitized,
@@ -126,13 +130,11 @@ export function resolveLoadoutSelectionIds(
   return {
     weapon1: sanitized.weapon1.id,
     weapon2: committedWeapon2.id,
-    utility: sanitized.utility.id,
+    utility: committedCoopDefenseProfile ? getLoadoutUtilityId(committedCoopDefenseProfile.toolLoadout ?? []) : sanitized.utility.id,
     ultimate: sanitized.ultimate.id,
     coopDefenseClassId: isCoopDefenseMode(mode) ? coopDefenseClassId : null,
     coopDefenseProfile: committedCoopDefenseProfile,
-    tools: coopDefenseClassId === 'inspector_gadachs'
-      ? committedCoopDefenseProfile?.toolLoadout?.map((tool) => ({ ...tool }))
-      : undefined,
+    tools: committedCoopDefenseProfile?.toolLoadout?.map((tool) => ({ ...tool })),
   };
 }
 

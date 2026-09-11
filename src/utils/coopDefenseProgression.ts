@@ -163,8 +163,8 @@ export function getCoopDefenseProgressSnapshot(
     hpUpgradeMaxLevel,
     upgradeCategories,
     unlockedItemsBySlot: buildUnlockedItemsBySlot(safeProfile, classId),
-    toolSlotCapacity: classId === 'inspector_gadachs' ? getCoopDefenseToolCapacity(safeProfile) : 0,
-    toolLoadout: classId === 'inspector_gadachs' ? (safeProfile.toolLoadout ?? []) : [],
+    toolSlotCapacity: getCoopDefenseToolCapacity(safeProfile, classId),
+    toolLoadout: (safeProfile.toolLoadout ?? []),
   };
 }
 
@@ -229,9 +229,7 @@ function buildUpgradeNodeSnapshot(
     canLevelDown: canLevelDownCoopDefenseUpgrade(profile, definition.id, classId),
     requires: definition.requires.map((requirement) => buildRequirementSnapshot(profile, classId, requirement)),
     loadoutUnlock: definition.loadoutUnlock ?? null,
-    toolRef: classId === 'inspector_gadachs'
-      ? getLoadoutToolRefForUpgrade(definition.id)
-      : null,
+    toolRef: getLoadoutToolRefForUpgrade(definition.id),
   };
 }
 

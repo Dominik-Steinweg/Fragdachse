@@ -345,14 +345,14 @@ describe('Neue Positions-Affixe', () => {
     }]);
   });
 
-  it('macht Fernsteuerung ohne Inspector-Klasse oder ohne Affix wirkungslos', () => {
+  it('wendet ein aufgeloestes Fernsteuerungs-Affix unabhaengig vom Klassennamen an', () => {
     const source = { id: 1, x: 0, y: 0, ownerId: 'p', ownerColor: 0xffffff };
-    const wrongClass = build({
+    const owner = build({
       affixes: { remote_control: 0.15 },
       positions: { p: { x: 0, y: 0 } },
       classIds: { p: 'dachs_of_steel' },
     });
-    expect(wrongClass.getRemoteControlTarget('p', [source])).toBeNull();
+    expect(owner.getRemoteControlTarget('p', [source])).toEqual(source);
 
     const noAffix = build({
       positions: { p: { x: 0, y: 0 } },

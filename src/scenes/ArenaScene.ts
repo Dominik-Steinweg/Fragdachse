@@ -2092,9 +2092,7 @@ export class ArenaScene extends Phaser.Scene {
       coopDefenseClassId: classId,
       coopDefenseProfile: profile,
       equippedItems,
-      tools: classId === 'inspector_gadachs'
-        ? (profile?.toolLoadout ?? []).map((tool) => ({ ...tool }))
-        : [],
+      tools: (profile?.toolLoadout ?? []).map((tool) => ({ ...tool })),
     };
   }
 

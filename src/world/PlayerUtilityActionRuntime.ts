@@ -170,7 +170,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     };
     const equipped = this.equippedUtilities.get(playerId);
     if (equipped) { const until = reduce(equipped); if (until !== null) this.options.network.loadout.publishUtilityCooldownUntil(playerId, until, equipped.config.id); }
-    for (const utility of this.inspectorUtilities.get(playerId)?.values() ?? []) {
+    for (const utility of this.toolUtilities.get(playerId)?.values() ?? []) {
       const until = reduce(utility);
       if (until !== null) this.options.network.loadout.publishUtilityCooldownUntil(playerId, until, utility.config.id);
     }
@@ -303,7 +303,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   private hostFrameNowMs = 0;
   private readonly temporaryUtilities = new TemporaryUtilityCollection();
   private readonly equippedUtilities = new Map<string, GenericUtility>();
-  private readonly inspectorUtilities = new Map<string, Map<string, GenericUtility>>();
+  private readonly toolUtilities = new Map<string, Map<string, GenericUtility>>();
   private readonly committedAttempts = new Map<string, Map<string, LoadoutUseResult>>();
   private placeableCapability: PlayerUtilityActionRuntimeOptions['placeable'];
   private destroyed = false;
@@ -364,7 +364,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     }
     this.chargeStocks.delete(playerId);
     this.equippedUtilities.delete(playerId);
-    this.inspectorUtilities.delete(playerId);
+    this.toolUtilities.delete(playerId);
     this.decoyCooldowns.delete(playerId);
     this.temporaryUtilities.clearPlayer(playerId);
     this.committedAttempts.delete(playerId);
@@ -410,7 +410,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     const cooldown = this.decoyCooldowns.get(playerId);
     if (this.destroyed || !cooldown || cooldown.utilityId !== utilityId || !Number.isFinite(amountMs) || amountMs <= 0) return;
     cooldown.until = Math.max(now, cooldown.until - amountMs);
-    const utilities = [this.equippedUtilities.get(playerId), this.inspectorUtilities.get(playerId)?.get(utilityId)];
+    const utilities = [this.equippedUtilities.get(playerId), this.toolUtilities.get(playerId)?.get(utilityId)];
     for (const utility of utilities) if (utility?.config.id === utilityId)
       utility.setLastUsedAt(cooldown.until - utility.config.cooldown);
     for (const descriptor of this.temporaryUtilities.getDescriptors(playerId)) {
@@ -489,7 +489,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     }, true);
   }
 
-  execute(request: PlayerUtilityActionRequest, inspector = false): LoadoutUseResult {
+  execute(request: PlayerUtilityActionRequest, useAuthoritativePosition = false): LoadoutUseResult {
     this.hostFrameNowMs = request.hostNowMs;
     if (this.destroyed) return { ok: false, reason: 'invalid' };
     if (!isValidPlayerActionAttemptId(request.attemptId)) {
@@ -589,7 +589,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       this.options.heldAction.clearPlayer(request.playerId);
     }
 
-    const position = inspector ? { x: player.x, y: player.y } : {
+    const position = useAuthoritativePosition ? { x: player.x, y: player.y } : {
       x: request.clientPosition?.x ?? player.x,
       y: request.clientPosition?.y ?? player.y,
     };
@@ -697,8 +697,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
         : this.options.resolveToolUtilityConfig?.(toolRef);
       if (!baseConfig) return null;
       const config = explicit?.kind === 'tool' ? baseConfig : this.options.loadout.resolveUtilityConfig(playerId, baseConfig);
-      const utilities = this.inspectorUtilities.get(playerId) ?? new Map<string, GenericUtility>();
-      this.inspectorUtilities.set(playerId, utilities);
+      const utilities = this.toolUtilities.get(playerId) ?? new Map<string, GenericUtility>();
+      this.toolUtilities.set(playerId, utilities);
       let utility = utilities.get(config.id);
       if (!utility || utility.config !== config) {
         const previousLastUsedAt = utility?.getLastUsedAt() ?? -Infinity;
@@ -1025,7 +1025,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     this.chargeStocks.clear();
     for (const playerId of this.equippedUtilities.keys()) this.publishTemporaryUtilities(playerId);
     this.equippedUtilities.clear();
-    this.inspectorUtilities.clear();
+    this.toolUtilities.clear();
     this.decoyCooldowns.clear();
     this.committedAttempts.clear();
   }

@@ -1,3 +1,4 @@
+import { isCoopDefenseLoadoutItemUnlocked } from '../../utils/coopDefenseUpgrades';
 import { bridge } from '../../network/bridge';
 import { BurrowSystem } from '../../systems/BurrowSystem';
 import { LoadoutManager } from '../../loadout/LoadoutManager';
@@ -89,8 +90,9 @@ export function composeWorldPlayerGameplay(
     isUtilityToolAuthorized: (playerId, toolRef) => {
       const current = bridge.getPlayerCurrentLoadoutSnapshot(playerId);
       return toolRef.kind === 'utility'
-        && current?.coopDefenseClassId === 'inspector_gadachs'
-        && (current.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id);
+        && !!current?.coopDefenseProfile
+        && isCoopDefenseLoadoutItemUnlocked(current.coopDefenseProfile, 'utility', toolRef.id, current.coopDefenseClassId ?? undefined)
+        && (current?.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === toolRef.id);
     },
     createLoadoutManager: (resourceSystem) => new LoadoutManager(resourceSystem, {
       getGameMode: () => bridge.getGameMode(),

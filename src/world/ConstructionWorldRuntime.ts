@@ -1,3 +1,4 @@
+import { isCoopDefenseLoadoutItemUnlocked } from '../utils/coopDefenseUpgrades';
 import * as Phaser from 'phaser';
 import type { PlayerManager } from '../entities/PlayerManager';
 import type { CombatActorStatePort } from '../combat/CombatCapabilities';
@@ -364,8 +365,9 @@ export class ConstructionWorldRuntime implements WorldScopedBinding, Constructio
   ): LoadoutUseResult {
     if (!this.options.isHost() || tool.kind !== 'utility') return { ok: false, reason: 'invalid' };
     const loadout = this.options.getCurrentLoadout(playerId);
-    if (!loadout || loadout.coopDefenseClassId !== 'inspector_gadachs') return { ok: false, reason: 'blocked' };
-    if (!(loadout.tools ?? []).some((entry) => entry.kind === 'utility' && (entry.id === tool.id || normalizeConstructionId(entry.id) === normalizeConstructionId(tool.id)))) return { ok: false, reason: 'blocked' };
+    if (!loadout) return { ok: false, reason: 'blocked' };
+    if (!(loadout.tools ?? []).some((entry) => entry.kind === 'utility' && entry.id === tool.id)) return { ok: false, reason: 'blocked' };
+    if (this.options.getGameMode() === 'coop_defense' && (!loadout.coopDefenseProfile || !isCoopDefenseLoadoutItemUnlocked(loadout.coopDefenseProfile, 'utility', tool.id, loadout.coopDefenseClassId ?? undefined))) return { ok: false, reason: 'blocked' };
     const config = getUtilityConfigForMode(tool.id, this.options.getGameMode()) as UtilityConfig | undefined;
     if (!config) return { ok: false, reason: 'invalid' };
     const constructionId = getConstructionIdForUtility(tool.id);

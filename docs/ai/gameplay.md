@@ -87,6 +87,20 @@ zusaetzliche Reflexionsachse. Dies prueft
 
 ## Eingaben und Aktionen
 
+Im Coop-Loadout ist `CoopDefenseUpgradeProfile.toolLoadout` die maßgebliche Utility-Auswahl für
+alle Klassen. `LoadoutToolRef` unterscheidet die Ausführung normaler Utilities und Konstrukte;
+die einzelnen Utility-Felder und Netzwerk-Toollisten werden daraus abgeleitet. Die Speichergrenze
+in [localPreferences.ts](../../src/utils/localPreferences.ts) migriert alte Utility-Auswahlen einmalig.
+Klassenfreigaben stehen als `availableClasses` am Upgrade-Freischaltknoten in
+[coopDefenseUpgrades.json](../../src/config/coopDefenseUpgrades.json); ohne Liste gelten alle Klassen.
+Folgeknoten erben Ausschlüsse über ihre Voraussetzungen. Bildschirmkategorien sind keine
+Berechtigungsgrenze. Klassenfreigabe, investierte Freischaltung, Ausrüstung und Modusfreigabe
+bleiben getrennte Prüfungen; für Konstrukte bündelt sie
+[ConstructionAccessResolver.ts](../../src/systems/ConstructionAccessResolver.ts), auch für die
+persistente Wiederherstellung. Der Vertrag wird einschließlich einer ausschließlich im Test
+erweiterten Klassenfreigabe in
+[SharedToolClassAvailability.test.ts](../../tests/integration/SharedToolClassAvailability.test.ts) geprüft.
+
 World-scoped Aktionen werden an die aktuelle worldRevision gebunden und vor dem Handler zentral geprüft. Activity- oder Round-Aktionen erhalten zusätzlich die fachlich nötige Activity-/Round-Identität. Ein alter Client kann so weder nach einem World-Wechsel noch nach einem Activity-Wechsel veraltete Aktionen ausführen.
 
 Temporäre Utilities sind keine Mutation des ausgerüsteten Utility-Slots. [TemporaryUtilityCollection.ts](../../src/loadout/TemporaryUtilityCollection.ts) besitzt hostseitig jede Aufnahme als eigene Instanz mit stabiler `instanceId`, Erwerbsreihenfolge, Charges und Cooldown. Auswahl, Use-RPC, Radialzustand und Objective-Placement referenzieren diese Instanzidentität; mehrere Instanzen desselben Utility-Typs bleiben deshalb unabhängig. Clients rekonstruieren daraus nur Präsentation und Auswahl und erzeugen weder beim Pickup-ACK noch beim lokalen Einsatz eigenen Bestand.

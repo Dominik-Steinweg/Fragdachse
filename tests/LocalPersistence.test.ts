@@ -101,6 +101,24 @@ describe('local progress generation', () => {
     expect(getStoredMasterVolume()).toBe(0.2);
   });
 
+  it('migrates a legacy utility once and preserves an explicit empty tool selection', () => {
+    setStoredCoopDefenseTotalXp(77);
+    const document = JSON.parse(storage.getItem(LOCAL_PROGRESS_STORAGE_KEY)!);
+    document.loadout = { utility: 'ROCK_BARRIER' };
+    document.coopDefense.defaultProfile = { levels: { unlock_rock_barrier: 1 } };
+    storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(document));
+    invalidateLocalStorageCache();
+    const migrated = getStoredCoopDefenseProgress().defaultProfile;
+    expect(migrated.toolLoadout).toEqual([{ kind: 'construction', id: 'rock_barrier' }]);
+    document.loadout.utility = 'SMOKE_GRENADE'; // Not unlocked in this legacy save.
+    storage.setItem(LOCAL_PROGRESS_STORAGE_KEY, JSON.stringify(document));
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().defaultProfile.toolLoadout).toEqual([{ kind: 'utility', id: 'HE_GRENADE' }]);
+    setStoredCoopDefenseUpgradeProfile({ ...migrated, toolLoadout: [] }, 'dachs_nukem');
+    invalidateLocalStorageCache();
+    expect(getStoredCoopDefenseProgress().defaultProfile.toolLoadout).toEqual([]);
+  });
+
   it('loads a current schema document after cache invalidation', () => {
     setStoredCoopDefenseTotalXp(77);
     const raw = storage.getItem(LOCAL_PROGRESS_STORAGE_KEY);

@@ -450,7 +450,7 @@ export class ArenaInputBindings {
         const localId = actions.getLocalPlayerId();
         const currentLoadout = actions.getPlayerCurrentLoadoutSnapshot(localId);
         return isCoopDefenseMode(actions.getActiveGameMode())
-          && currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
+
           ? actions.getLocalInspectorTools()
           : currentLoadout?.utility
             ? [{ kind: 'utility' as const, id: currentLoadout.utility }]
@@ -513,8 +513,7 @@ export class ArenaInputBindings {
         : []),
       utilityUsesToolRef: (utilityId: string) => {
         const currentLoadout = actions.getPlayerCurrentLoadoutSnapshot(actions.getLocalPlayerId());
-        return currentLoadout?.coopDefenseClassId === 'inspector_gadachs'
-          && (currentLoadout.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === utilityId);
+        return (currentLoadout?.tools ?? []).some((tool) => tool.kind === 'utility' && tool.id === utilityId);
       },
     });
     inputSystem.setupTemporaryUtilityProvider(

@@ -394,7 +394,7 @@ describe('personal MG profile and World lifetime', () => {
     let participants = ['b']; const observers = new Set<string>(['spectator']);
     const f = createFixture({ coop: true, activity: () => false, participants: () => participants, observer: id => observers.has(id),
       players: [], enemies: [{ id: 'enemy', x: 300, y: 100, active: true }] });
-    vi.mocked(f.playerCombat.modifier.getClassDefinition).mockReturnValue({ id: 'inspector_gadachs' } as never);
+    vi.mocked(f.playerCombat.modifier.getClassDefinition).mockReturnValue({ id: 'dachs_of_steel' } as never);
     vi.mocked(f.playerCombat.modifier.getNumericStat).mockImplementation((_id, stat) => stat.endsWith('.network') ? 1 : stat.endsWith('.perHitPercent') ? 2 : 0);
     const mg = f.binding.mgTurret!, target = mgTarget('enemy', 300);
     f.binding.advanceMgTurrets(0); mg.runtime.hit('b', 'removed', target, 0);

@@ -577,8 +577,7 @@ export class CoopDefenseItemRuntimeSystem {
   }
 
   private isRemoteControlActive(playerId: string): boolean {
-    return this.deps.getPlayerClassId?.(playerId) === 'inspector_gadachs'
-      && this.deps.getAffixValue(playerId, 'remote_control') > 0;
+    return this.deps.getAffixValue(playerId, 'remote_control') > 0;
   }
 
   // ── Primaerwaffen-Treffereffekte ───────────────────────────────────────────

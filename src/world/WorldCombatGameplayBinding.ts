@@ -1332,8 +1332,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
     const claimedGroups = new Set<string>();
     const participants = [...o.network.authority.getConnectedPlayers()].filter(profile =>
       o.getWorldParticipation(profile.id) === 'interactive'
-      && (!o.isActivityActive() || o.network.round.canPlayerReceiveRoundRewards(profile.id))
-      && playerCombat.modifier.getClassDefinition(profile.id)?.id === 'inspector_gadachs')
+      && (!o.isActivityActive() || o.network.round.canPlayerReceiveRoundRewards(profile.id)))
       .sort((a, b) => a.id.localeCompare(b.id));
     for (const profile of participants) {
       const ally = owners.find(owner => !o.network.authority.isEnemyPair(owner.id, profile.id));

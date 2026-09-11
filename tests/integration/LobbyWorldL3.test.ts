@@ -459,7 +459,7 @@ describe('LobbyWorld L3 – PvP und keine Match-Konsequenzen', () => {
     const livePreview: LobbyLoadoutPreviewState = {
       coopDefenseClassId: 'inspector_gadachs',
       coopDefenseProfile: {
-        upgrades: { hp: { unlocked: true, level: 2 } },
+        upgrades: { hp: { unlocked: true, level: 2 }, unlock_rock_barrier: { unlocked: true, level: 1 } },
         toolLoadout: [{ kind: 'construction', id: 'rock_barrier' }],
       },
       equippedItems: [{

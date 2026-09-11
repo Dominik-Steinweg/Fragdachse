@@ -6307,6 +6307,7 @@
                            "upgrades":  [
                                             {
                                                 "id":  "unlock_rocket_turret",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K1",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6317,6 +6318,7 @@
                                             },
                                             {
                                                 "id":  "unlock_machine_gun_turret",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K2",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6497,6 +6499,7 @@
                                             },
                                             {
                                                 "id":  "unlock_flame_turret",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K3",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6505,6 +6508,7 @@
                                             },
                                             {
                                                 "id":  "unlock_tesla_turret",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K6",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6515,6 +6519,7 @@
                                             },
                                             {
                                                 "id":  "unlock_gravity_turret",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K7",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6525,6 +6530,7 @@
                                             },
                                             {
                                                 "id":  "unlock_slow_bubble_turret",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K8",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6535,6 +6541,7 @@
                                             },
                                             {
                                                 "id":  "unlock_medic_pedestal",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K9",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,
@@ -6545,6 +6552,7 @@
                                             },
                                             {
                                                 "id":  "unlock_armor_pedestal",
+                                                "availableClasses": ["inspector_gadachs"],
                                                 "code":  "E-K10",
                                                 "kind":  "unlock",
                                                 "maxLevel":  1,

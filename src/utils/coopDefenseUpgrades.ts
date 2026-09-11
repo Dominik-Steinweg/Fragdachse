@@ -1,5 +1,6 @@
 import rawCoopDefenseUpgrades from '../config/coopDefenseUpgrades.json';
 import {
+  COOP_DEFENSE_CLASS_IDS,
   DEFAULT_COOP_DEFENSE_CLASS_ID,
   getCoopDefenseClassDefinition,
 } from '../config/coopDefenseClasses';
@@ -9,7 +10,6 @@ import {
   COOP_DEFENSE_CONSTRUCTION_MAX_SLOTS,
   COOP_DEFENSE_CONSTRUCTION_SLOT_UPGRADE_ID,
   COOP_DEFENSE_CONSTRUCTIONS,
-  getUtilityIdForConstruction,
   normalizeConstructionId,
 } from '../config/coopDefenseConstructions';
 import {
@@ -200,6 +200,8 @@ export interface CoopDefenseUpgradeDefinition {
   requires: readonly CoopDefenseUpgradeRequirementDefinition[];
   effects: readonly CoopDefenseUpgradeEffectDefinition[];
   loadoutUnlock?: CoopDefenseLoadoutUnlockDefinition;
+  /** Omitted means all classes; dependent upgrades inherit exclusions. */
+  availableClasses?: readonly CoopDefenseClassId[];
 }
 
 export interface CoopDefenseUpgradeCategoryDefinition {
@@ -226,6 +228,7 @@ interface RawCoopDefenseUpgradeDefinition {
   requires?: readonly unknown[];
   effects?: readonly unknown[];
   loadoutUnlock?: unknown;
+  availableClasses?: unknown;
 }
 
 interface RawCoopDefenseUpgradeCategoryDefinition {
@@ -267,18 +270,14 @@ const COOP_DEFENSE_UPGRADE_DEPENDENTS = buildDependentMap(COOP_DEFENSE_UPGRADE_R
 const COOP_DEFENSE_UPGRADES_BY_CATEGORY = new Map<CoopDefenseUpgradeCategoryId, readonly CoopDefenseUpgradeDefinition[]>(
   COOP_DEFENSE_UPGRADE_CATEGORIES.map((category) => [category.id, category.upgrades]),
 );
-const SHARED_CONSTRUCTION_UPGRADE_IDS = collectUpgradeAndDependentIds([
-  COOP_DEFENSE_CONSTRUCTIONS.rock_barrier.unlockUpgradeId,
-  COOP_DEFENSE_CONSTRUCTIONS.spore_turret.unlockUpgradeId,
-]);
 const COOP_DEFENSE_LOADOUT_UNLOCKS = new Map<string, string>();
-const INSPECTOR_CONSTRUCTION_BY_UNLOCK_UPGRADE_ID = new Map<string, ConstructionId>(
+const CONSTRUCTION_BY_UNLOCK_UPGRADE_ID = new Map<string, ConstructionId>(
   COOP_DEFENSE_CONSTRUCTION_IDS.map((id) => [COOP_DEFENSE_CONSTRUCTIONS[id].unlockUpgradeId, id]),
 );
 /**
  * Nur-Inspector-Knoten ausserhalb der Kategorie `construction`. Das sind die passiven
  * Klassen-Upgrades in `general` und die Adrenalinwaffen-Kette in `weapon2`; die gesamte
- * Kategorie `construction` kommt in `getUnavailableUpgradeIds` ohnehin hinzu.
+ * Konstrukte deklarieren ihre Klassen dagegen am jeweiligen Freischaltknoten.
  */
 const INSPECTOR_UPGRADE_ROOT_IDS: readonly string[] = [
   'inspector_construction_slots',
@@ -357,41 +356,33 @@ function collectUpgradeAndDependentIds(rootIds: readonly string[]): Set<string> 
   return result;
 }
 
-/**
- * Klassenfilter des Upgrade-Baums.
- *
- * Der Inspector besitzt die gesamte Kategorie `construction` und in `weapon2` nur seine
- * Adrenalinfaehigkeiten; die anderen Klassen genau umgekehrt. Beides wird aus den
- * Wurzelknoten abgeleitet, damit neue Folgeknoten automatisch mitwandern.
- */
-function getUnavailableUpgradeIds(classId: CoopDefenseClassId): ReadonlySet<string> {
-  if (classId !== 'inspector_gadachs') {
-    const excluded = collectUpgradeAndDependentIds(INSPECTOR_UPGRADE_ROOT_IDS);
-    for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
-      if (definition.categoryId === 'construction' && !SHARED_CONSTRUCTION_UPGRADE_IDS.has(definition.id)) {
-        excluded.add(definition.id);
-      }
-    }
-    return excluded;
-  }
+const unavailableUpgradeIdsByClass = new Map<CoopDefenseClassId, ReadonlySet<string>>();
 
-  const inspectorOnlyIds = collectUpgradeAndDependentIds(INSPECTOR_UPGRADE_ROOT_IDS);
-  const excluded = collectUpgradeAndDependentIds(
-    getCoopDefenseClassDefinition(classId).excludedGeneralUpgradeIds,
-  );
-  for (const definition of COOP_DEFENSE_UPGRADE_ORDER) {
-    if (definition.categoryId === 'weapon2' && !inspectorOnlyIds.has(definition.id)) {
-      excluded.add(definition.id);
-    }
+/** Class permissions follow unlock dependencies, independently of screen categories. */
+function getUnavailableUpgradeIds(classId: CoopDefenseClassId): ReadonlySet<string> {
+  const cached = unavailableUpgradeIdsByClass.get(classId);
+  if (cached) return cached;
+  const roots = COOP_DEFENSE_UPGRADE_ORDER
+    .filter(definition => definition.availableClasses && !definition.availableClasses.includes(classId))
+    .map(definition => definition.id);
+  if (classId !== 'inspector_gadachs') roots.push(...INSPECTOR_UPGRADE_ROOT_IDS);
+  else {
+    roots.push(...getCoopDefenseClassDefinition(classId).excludedGeneralUpgradeIds);
+    const inspectorOnlyIds = collectUpgradeAndDependentIds(INSPECTOR_UPGRADE_ROOT_IDS);
+    roots.push(...COOP_DEFENSE_UPGRADE_ORDER
+      .filter(definition => definition.categoryId === 'weapon2' && !inspectorOnlyIds.has(definition.id))
+      .map(definition => definition.id));
   }
-  return excluded;
+  const result = collectUpgradeAndDependentIds(roots);
+  unavailableUpgradeIdsByClass.set(classId, result);
+  return result;
 }
 
 export function isCoopDefenseUpgradeAvailableForClass(
   upgradeId: string,
   classId: CoopDefenseClassId = DEFAULT_COOP_DEFENSE_CLASS_ID,
 ): boolean {
-  return !getUnavailableUpgradeIds(classId).has(upgradeId);
+  return !!COOP_DEFENSE_UPGRADE_DEFINITIONS[upgradeId] && !getUnavailableUpgradeIds(classId).has(upgradeId);
 }
 
 function getConstructionSlotCapacity(levels: Readonly<Record<string, number>>): number {
@@ -420,9 +411,9 @@ function getToolUnlockUpgradeId(tool: LoadoutToolRef): string | undefined {
     : COOP_DEFENSE_LOADOUT_UNLOCKS.get(getLoadoutUnlockKey('utility', tool.id));
 }
 
-/** Maps both Inspector construction and utility unlock nodes to the shared tool model. */
+/** Maps construction and utility unlock nodes to the shared tool model. */
 export function getLoadoutToolRefForUpgrade(upgradeId: string): LoadoutToolRef | null {
-  const constructionId = INSPECTOR_CONSTRUCTION_BY_UNLOCK_UPGRADE_ID.get(upgradeId);
+  const constructionId = CONSTRUCTION_BY_UNLOCK_UPGRADE_ID.get(upgradeId);
   if (constructionId) return { kind: 'construction', id: constructionId };
 
   const loadoutUnlock = getCoopDefenseUpgradeDefinition(upgradeId)?.loadoutUnlock;
@@ -478,7 +469,10 @@ function sanitizeToolLoadout(
   }
   // Neue Freischaltungen werden deterministisch bis zur freien Kapazitaet angehaengt.
   for (const tool of autoEquipTools ?? (rawTools === undefined ? unlocked : [])) append(tool);
-  if (result.length === 0 && rawTools === undefined) {
+  // Losing a single-slot unlock (respec or legacy restore) retains the starting utility.
+  // An explicitly cleared selection stays empty.
+  if (result.length === 0 && (rawTools === undefined
+    || (capacity === 1 && Array.isArray(rawTools) && rawTools.length > 0))) {
     for (const tool of getDefaultToolLoadout()) append(tool);
   }
   return result;
@@ -521,9 +515,7 @@ function buildProfileFromRequestedLevels(
     };
   }
 
-  if (classId !== 'inspector_gadachs') return { upgrades };
-
-  const capacity = getConstructionSlotCapacity(resolvedLevels);
+  const capacity = classId === 'inspector_gadachs' ? getConstructionSlotCapacity(resolvedLevels) : 1;
   const toolLoadout = sanitizeToolLoadout(rawToolLoadout, resolvedLevels, capacity, autoEquipTools);
   return { upgrades, toolLoadout };
 }
@@ -562,7 +554,6 @@ export function getCoopDefenseUpgradeCategories(
     .map((category) => {
       const shared = classId !== 'inspector_gadachs' && category.id === 'utility'
         ? (COOP_DEFENSE_UPGRADES_BY_CATEGORY.get('construction') ?? [])
-          .filter((definition) => SHARED_CONSTRUCTION_UPGRADE_IDS.has(definition.id))
         : [];
       return {
         ...category,
@@ -579,9 +570,9 @@ export function getCoopDefenseUpgradeCategories(
  */
 export function isCoopDefenseToolCategory(
   categoryId: CoopDefenseUpgradeCategoryId,
-  classId: CoopDefenseClassId,
+  _classId: CoopDefenseClassId,
 ): boolean {
-  return classId === 'inspector_gadachs' && (categoryId === 'construction' || categoryId === 'utility');
+  return categoryId === 'construction' || categoryId === 'utility';
 }
 
 export function getCoopDefenseUpgradeDefinitionsForCategory(
@@ -591,7 +582,6 @@ export function getCoopDefenseUpgradeDefinitionsForCategory(
   if (classId !== 'inspector_gadachs' && categoryId === 'construction') return [];
   const shared = classId !== 'inspector_gadachs' && categoryId === 'utility'
     ? (COOP_DEFENSE_UPGRADES_BY_CATEGORY.get('construction') ?? [])
-      .filter((definition) => SHARED_CONSTRUCTION_UPGRADE_IDS.has(definition.id))
     : [];
   return [...(COOP_DEFENSE_UPGRADES_BY_CATEGORY.get(categoryId) ?? []), ...shared].filter((definition) => (
     isCoopDefenseUpgradeAvailableForClass(definition.id, classId)
@@ -627,11 +617,9 @@ export function getCoopDefenseUpgradeLoadoutSelection(
 }
 
 export function getCoopDefenseLoadoutUnlockUpgradeId(slot: LoadoutSlot, itemId: string): string | null {
-  const constructionId = normalizeConstructionId(itemId);
-  const canonicalItemId = constructionId
-    ? getUtilityIdForConstruction(constructionId) ?? itemId
-    : itemId;
-  return COOP_DEFENSE_LOADOUT_UNLOCKS.get(getLoadoutUnlockKey(slot, canonicalItemId)) ?? null;
+  const constructionId = slot === 'utility' ? normalizeConstructionId(itemId) : null;
+  if (constructionId) return COOP_DEFENSE_CONSTRUCTIONS[constructionId].unlockUpgradeId;
+  return COOP_DEFENSE_LOADOUT_UNLOCKS.get(getLoadoutUnlockKey(slot, itemId)) ?? null;
 }
 
 export function isCoopDefenseLoadoutItemUnlocked(
@@ -992,14 +980,19 @@ export function levelUpCoopDefenseUpgrade(
   const previousLevels = Object.fromEntries(
     COOP_DEFENSE_UPGRADE_ORDER.map((entry) => [entry.id, getResolvedUpgradeLevel(safeProfile, entry.id)]),
   ) as Record<string, number>;
-  const autoEquipTools = classId === 'inspector_gadachs'
-    ? getUnlockedToolsByLevels(nextRequestedLevels).filter((tool) => !isToolUnlockedByLevels(tool, previousLevels))
-    : undefined;
+  const newTools = getUnlockedToolsByLevels(nextRequestedLevels)
+    .filter(tool => !isToolUnlockedByLevels(tool, previousLevels));
+  const capacity = getCoopDefenseToolCapacity(safeProfile, classId);
+  const selection = getCoopDefenseUpgradeLoadoutSelection(upgradeId);
+  const selectedTool = selection?.slot === 'utility'
+    ? getLoadoutToolRefForUpgrade(getCoopDefenseLoadoutUnlockUpgradeId('utility', selection.itemId) ?? '')
+    : getLoadoutToolRefForUpgrade(upgradeId);
+  // A single slot selects the purchased branch; multiple slots append newly unlocked tools.
   return buildProfileFromRequestedLevels(
     nextRequestedLevels,
     classId,
-    safeProfile.toolLoadout,
-    autoEquipTools,
+    capacity === 1 && selectedTool ? [selectedTool] : safeProfile.toolLoadout,
+    capacity > 1 ? newTools : [],
   );
 }
 
@@ -1059,33 +1052,38 @@ export function getCoopDefenseConstructionSlotCapacity(
   return getConstructionSlotCapacity(levels);
 }
 
-export const getCoopDefenseToolCapacity = getCoopDefenseConstructionSlotCapacity;
+export function getCoopDefenseToolCapacity(profile: CoopDefenseUpgradeProfile, classId: CoopDefenseClassId = 'inspector_gadachs'): number {
+  return classId === 'inspector_gadachs' ? getCoopDefenseConstructionSlotCapacity(profile) : 1;
+}
 
 export function getLoadoutToolSlots(
   profile: CoopDefenseUpgradeProfile,
+  classId: CoopDefenseClassId = 'inspector_gadachs',
 ): readonly LoadoutToolRef[] {
-  return sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs').toolLoadout ?? [];
+  return sanitizeCoopDefenseUpgradeProfile(profile, classId).toolLoadout ?? [];
 }
 
 export function setLoadoutToolSlots(
   profile: CoopDefenseUpgradeProfile,
   tools: readonly LoadoutToolRef[],
+  classId: CoopDefenseClassId = 'inspector_gadachs',
 ): CoopDefenseUpgradeProfile {
-  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs');
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, classId);
   const levels = Object.fromEntries(
     Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level]),
   ) as Record<string, number>;
   return buildProfileFromRequestedLevels(
     levels,
-    'inspector_gadachs',
+    classId,
     tools,
   );
 }
 
 export function getUnlockedLoadoutToolRefs(
   profile: CoopDefenseUpgradeProfile,
+  classId: CoopDefenseClassId = 'inspector_gadachs',
 ): readonly LoadoutToolRef[] {
-  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs');
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, classId);
   const levels = Object.fromEntries(
     Object.entries(safeProfile.upgrades).map(([id, value]) => [id, value.level]),
   ) as Record<string, number>;
@@ -1094,8 +1092,9 @@ export function getUnlockedLoadoutToolRefs(
 
 export function getUnlockedCoopDefenseConstructionIds(
   profile: CoopDefenseUpgradeProfile,
+  classId: CoopDefenseClassId = 'inspector_gadachs',
 ): readonly ConstructionId[] {
-  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, 'inspector_gadachs');
+  const safeProfile = sanitizeCoopDefenseUpgradeProfile(profile, classId);
   return COOP_DEFENSE_CONSTRUCTION_IDS.filter((constructionId) => (
     (safeProfile.upgrades[COOP_DEFENSE_CONSTRUCTIONS[constructionId].unlockUpgradeId]?.level ?? 0) > 0
   ));
@@ -1175,8 +1174,14 @@ function normalizeUpgradeDefinition(
   const effects = normalizeUpgradeEffects(rawDefinition.effects, id);
   const loadoutUnlock = normalizeLoadoutUnlock(rawDefinition.loadoutUnlock, id);
 
+  const availableClasses = rawDefinition.availableClasses;
+  if (availableClasses !== undefined && (!Array.isArray(availableClasses)
+    || availableClasses.some(value => !COOP_DEFENSE_CLASS_IDS.includes(value)))) {
+    throw new Error(`[coopDefenseUpgrades] Invalid availableClasses on ${id}`);
+  }
   return {
     id,
+    availableClasses: availableClasses as CoopDefenseClassId[] | undefined,
     code: sanitizeOptionalString(rawDefinition.code),
     categoryId,
     kind,
