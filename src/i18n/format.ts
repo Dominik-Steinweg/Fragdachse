@@ -106,7 +106,7 @@ function getUpgradeValueUnit(
   if (/(fraction|multiplier|chance|reduction|retention|factor|bonus|slow|threshold)/.test(normalized)) {
     return 'percent';
   }
-  if (/(duration|cooldown|interval|delay|lifetime|linger|warmup).*ms$/.test(normalized)) {
+  if (/(duration|cooldown|interval|delay|lifetime|linger|warmup|refund).*ms$/.test(normalized)) {
     return 'seconds';
   }
   if (/(duration|cooldown|interval|delay|lifetime|linger)$/.test(normalized)) {

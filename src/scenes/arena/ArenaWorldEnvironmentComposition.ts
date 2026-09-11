@@ -1,3 +1,4 @@
+import { WorldZeusBinding } from '../../world/WorldZeusBinding';
 import { WorldStinkPlagueBinding } from '../../world/WorldStinkPlagueBinding';
 import { WorldSmokeBinding } from '../../world/WorldSmokeBinding';
 import { bridge } from '../../network/bridge';
@@ -170,6 +171,8 @@ export function composeWorldSupportGameplay(
       && (flow.getCoopMissionRuntime()?.enemyFlowFieldService?.isCircleGroundFreeAt(x, y, size / 2) ?? false);
   });
   const supportGameplayRuntime = new WorldSupportGameplayRuntime({
+    zeus: new WorldZeusBinding(combatSystem, ctx.playerManager, () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
+      ctx.hostPhysics, gameplay.projectiles, gameplay.player.getPlayerCombatIntegrationPort().utility),
     plague: new WorldStinkPlagueBinding({
       combat: combatSystem, getEnemies: () => flow.getCoopMissionRuntime()?.enemyManager ?? null,
       getNavigation: () => flow.getCoopMissionRuntime()?.enemyFlowFieldService ?? null,

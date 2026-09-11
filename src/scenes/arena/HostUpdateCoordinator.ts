@@ -235,6 +235,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
   }
   private get combatSystems() { return this.combatFramePort?.getCombatGameplayBinding()?.systems ?? null; }
   private get plagueBinding() { return this.combatFramePort?.getSupportGameplayRuntime()?.plague ?? null; }
+  private get zeusBinding() { return this.combatFramePort?.getSupportGameplayRuntime()?.zeus ?? null; }
   private get smokeBinding() { return this.combatFramePort?.getSupportGameplayRuntime()?.smoke ?? null; }
   private get supportSystems() { return this.combatFramePort?.getSupportGameplayRuntime()?.systems ?? null; }
   private get powerUpSystem() { return this.playerFramePort?.getPowerUpRuntime()?.system ?? null; }
@@ -376,6 +377,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     // Letzter Schritt vor der Physik: ein laufender Ausweichschritt überschreibt die
     // Wunschgeschwindigkeit aus Wegfindung und Angriffspause.
     if (!countdownActive) this.activityStep()?.hostPrePhysicsStep(now);
+    if (!countdownActive) this.zeusBinding?.prepareMovement(now);
     this.ctx.hostPhysics.update(countdownActive, now);
     if (!countdownActive) this.playerGameplayRuntime?.runHostPortalStage(now);
     if (!countdownActive) {
@@ -600,6 +602,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
 
     if (!countdownActive) this.plagueBinding?.spread(now);
     if (!countdownActive) this.smokeBinding?.step(now);
+    if (!countdownActive) this.zeusBinding?.step(now);
 
     // Airstrike-Strikes detonieren
     if (!countdownActive) {
@@ -739,6 +742,11 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
     const powerups    = this.powerUpSystem?.getWorldItemSnapshot() ?? [];
     const pedestals   = this.powerUpSystem?.getPedestalSnapshot()  ?? [];
     const nukes       = this.powerUpSystem?.getNukeSnapshot()      ?? [];
+    this.effects?.syncZeusUpgrades(this.zeusBinding?.snapshot(now) ?? { balls: [], ground: [], stuns: [] }, now, (id, kind) => {
+      if (kind === 'player') { const p = this.ctx.playerManager.getPlayer(id); return p?.active ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null; }
+      const e = this.coopMissionRuntime?.enemyManager?.getEnemy(id);
+      return e?.sprite.active && e.getHp() > 0 && !e.isBurrowed() ? { x: e.sprite.x, y: e.sprite.y, radius: e.getCollisionRadius() } : null;
+    });
     this.ctx.smokeSystem.syncVisuals(this.smokeBinding?.runtime.getSnapshots(now) ?? [], now);
     this.ctx.smokeSystem.syncTargetVisuals(this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [], now,
       id => this.coopMissionRuntime?.enemyManager?.getEnemy(id)?.getStatusVisualTarget() ?? null);
@@ -799,7 +807,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       this.ctx.aimSystem?.setAuthoritativeState(aimLocal);
       this.ctx.inputSystem.setLocalDecoyActive(this.ctx.decoySystem.hasActiveDecoy(localId));
       this.ctx.inputSystem.setLocalState(
-        playerFrame?.isStunned ?? false,
+        (playerFrame?.isStunned ?? false) || (this.ctx.getWorldCombatCore()?.isStunned(localId, now) ?? false),
         playerFrame?.isBurrowed ?? false,
         playerFrame?.burrowPhase ?? 'idle',
         this.ctx.hostPhysics.getDashPhase(localId),
@@ -982,7 +990,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       const adrenaline = playerFrame?.adrenaline ?? 0;
       const rage = playerFrame?.rage ?? 0;
       const isBurrowed = playerFrame?.isBurrowed ?? false;
-      const isStunned = playerFrame?.isStunned ?? false;
+      const isStunned = (playerFrame?.isStunned ?? false) || (this.ctx.getWorldCombatCore()?.isStunned(player.id, now) ?? false);
       const burrowPhase = playerFrame?.burrowPhase ?? 'idle';
       const isRaging = playerFrame?.isUltimateActive ?? false;
       const activeUltimateId = playerFrame?.activeUltimateId ?? undefined;
@@ -1084,6 +1092,7 @@ export class HostUpdateCoordinator implements ProjectileExplosionResolutionPort 
       remoteControlTurrets,
       decoys,
       smokes: countdownActive ? [] : this.smokeBinding?.runtime.getSnapshots(now) ?? [],
+      zeus: countdownActive ? undefined : this.zeusBinding?.snapshot(now),
       smokeTargets: countdownActive ? [] : this.smokeBinding?.runtime.getTargetSnapshots(now) ?? [],
       fires,
       stinkClouds,

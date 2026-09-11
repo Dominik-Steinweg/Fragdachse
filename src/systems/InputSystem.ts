@@ -35,6 +35,7 @@ import type {
   AirstrikeUltimateConfig,
   ChargedThrowUtilityActivationConfig,
   ChargedGateUtilityActivationConfig,
+  ChargedAlternateUtilityActivationConfig,
   GaussUltimateConfig,
   PlacementModeUtilityActivationConfig,
   ScopeModeConfig,
@@ -47,7 +48,7 @@ import type {
 import { getUtilityConfigForMode } from '../loadout/LoadoutConfig';
 
 /** Gemeinsamer Nenner für alle aufladbaren Utility-Aktivierungen. */
-type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig;
+type ChargeableActivation = ChargedThrowUtilityActivationConfig | ChargedGateUtilityActivationConfig | ChargedAlternateUtilityActivationConfig;
 type ChargeableUtilityConfig = UtilityConfig & { activation: ChargeableActivation };
 type TargetedActivation = TargetedClickUtilityActivationConfig;
 type PlacementActivation = PlacementModeUtilityActivationConfig;
@@ -1027,7 +1028,7 @@ export class InputSystem {
 
     const now = Date.now();
     const startedAt = this.utilityChargeStartedAt;
-    const isGate = cfg.activation.type === 'charged_gate';
+    const isGate = cfg.activation.type !== 'charged_throw';
 
     const pointer = this.scene.input.activePointer;
     const pointerWorld = this.getPointerWorldPoint(pointer);
@@ -1655,6 +1656,13 @@ export class InputSystem {
       }
     }
 
+    const chargeCfg = this.utilityChargeConfig;
+    if (this.utilityHoldActive && this.utilityChargeStartedAt !== null
+      && chargeCfg?.activation.type === 'charged_alternate'
+      && this.computeUtilityChargeFraction(this.utilityChargeStartedAt, chargeCfg.activation, now) >= 1) {
+      this.releaseChargedUtility(angle, clampedTarget.x, clampedTarget.y, now);
+    }
+
     const releasedUtility = Phaser.Input.Keyboard.JustUp(this.keyE);
     if (releasedUtility && this.utilityChargeStartedAt !== null) {
       this.releaseChargedUtility(angle, clampedTarget.x, clampedTarget.y, now);
@@ -1761,7 +1769,7 @@ export class InputSystem {
 
   private getChargeableUtilityConfig(): ChargeableUtilityConfig | undefined {
     const cfg = this.getLocalUtilityConfig?.();
-    if (!cfg || (cfg.activation.type !== 'charged_throw' && cfg.activation.type !== 'charged_gate')) return undefined;
+    if (!cfg || (cfg.activation.type !== 'charged_throw' && cfg.activation.type !== 'charged_gate' && cfg.activation.type !== 'charged_alternate')) return undefined;
     return cfg as UtilityConfig & { activation: ChargeableActivation };
   }
 

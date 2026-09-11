@@ -1,3 +1,4 @@
+import type { ZeusMovement } from './ZeusRuntime';
 import * as Phaser from 'phaser';
 import type { RockPhysicsProxy } from '../arena/rocks/RockPhysicsProxy';
 import type { EnemyEntity } from '../entities/EnemyEntity';
@@ -35,6 +36,7 @@ type LoadoutManagerType = {
 };
 
 interface DashState {
+  readonly id: number;
   phase:   1 | 2;
   startMs: number;   // Zeitstempel Phasenbeginn
   dirX:    number;   // normierter Startrichtungsvektor
@@ -89,6 +91,29 @@ interface ForcedMovement {
 }
 
 export class HostPhysicsSystem {
+  private dashSequence = 0;
+  private dashObserver: {
+    start(id: string, now: number): void;
+    move(step: ZeusMovement & { readonly dashId: number }, now: number): void;
+    end(id: string, dashId?: number): void;
+    /** A body-contact attack may defer the wider impact until its own contact has resolved. */
+    canApplyImpact?(id: string, targetId: string): boolean;
+  } | null = null;
+  private stunChecker: ((id: string, now: number) => boolean) | null = null;
+  private zeusMoveBonus: ((id: string, now: number) => number) | null = null;
+  setDashObserver(observer: HostPhysicsSystem['dashObserver']): void { this.dashObserver = observer; }
+  setStunChecker(checker: HostPhysicsSystem['stunChecker']): void { this.stunChecker = checker; }
+  setZeusMoveBonus(resolver: HostPhysicsSystem['zeusMoveBonus']): void { this.zeusMoveBonus = resolver; }
+  getDashMovement(id: string): (ZeusMovement & { readonly dashId: number }) | null {
+    const dash = this.dashStates.get(id), p = this.playerManager.getPlayer(id);
+    return dash && p ? { playerId: id, dashId: dash.id, x: p.x, y: p.y,
+      radius: p.getCollisionRadius(), positionRevision: p.positionRevision } : null;
+  }
+  private publishDashMovement(id: string, now: number): void {
+    if (!this.dashObserver) return;
+    const step = this.getDashMovement(id); if (step) this.dashObserver?.move(step, now);
+  }
+
   private scene:         Phaser.Scene;
   private playerManager: PlayerManager;
   private bridge:        NetworkBridge;
@@ -400,7 +425,7 @@ export class HostPhysicsSystem {
     if (!(this.canMoveResolver?.(playerId)
       ?? maySendWorldInput(this.bridge.getWorldParticipation(playerId)))) return;
     if (!this.combatSystem?.isAlive(playerId)) return;
-    if (this.burrowSystem?.isStunned(playerId)) return;
+    if (this.burrowSystem?.isStunned(playerId) || this.stunChecker?.(playerId, now)) return;
     if (this.dashStates.has(playerId)) return; // läuft noch → kein Spam
 
     const len = Math.hypot(dx, dy);
@@ -419,6 +444,7 @@ export class HostPhysicsSystem {
     const vNorm = (this.runSpeedResolver?.(playerId) ?? PLAYER_SPEED) * speedMult * dashRangeMultiplier;
 
     this.dashStates.set(playerId, {
+      id: ++this.dashSequence,
       phase:   1,
       startMs: now,
       dirX:    dx / len,
@@ -431,6 +457,9 @@ export class HostPhysicsSystem {
       lastGroundY: player.y,
     });
     this.dashBurstPlayers.add(playerId);
+    player.setDashScale(0.5);
+    player.setCollisionRadius(PLAYER_SIZE * 0.25);
+    this.dashObserver?.start(playerId, now);
   }
 
   /**
@@ -439,6 +468,7 @@ export class HostPhysicsSystem {
    * wenn bereits ein Schritt läuft oder die Richtung leer ist.
    */
   startEnemyDash(enemyId: string, dx: number, dy: number): boolean {
+    if (this.stunChecker?.(enemyId, Date.now())) return false;
     if (this.enemyDashStates.has(enemyId)) return false;
     const enemy = this.enemyManager?.getEnemy(enemyId);
     if (!enemy?.sprite.active || !this.combatSystem?.isAlive(enemyId)) return false;
@@ -520,7 +550,8 @@ export class HostPhysicsSystem {
       this.enemyBaseCollidersSetup.clear();
       this.burrowedPlayers.clear();
       this.burrowedEnemies.clear();
-      this.dashStates.clear();
+      for (const id of this.dashStates.keys()) this.dashObserver?.end(id);
+    this.dashStates.clear();
       this.dashBurstPlayers.clear();
       this.enemyDashStates.clear();
       this.pendingRecoils.clear();
@@ -557,6 +588,7 @@ export class HostPhysicsSystem {
     this.trunkCollidersSetup.delete(id);
     this.baseCollidersSetup.delete(id);
     this.burrowedPlayers.delete(id);
+    this.dashObserver?.end(id);
     this.dashStates.delete(id);
     this.dashBurstPlayers.delete(id);
     this.pendingRecoils.delete(id);
@@ -631,7 +663,10 @@ export class HostPhysicsSystem {
       }
 
       // Tote Spieler überspringen (body.enable = false durch WorldCombatCore)
-      if (!this.combatSystem?.isAlive(player.id)) continue;
+      if (!this.combatSystem?.isAlive(player.id) || this.stunChecker?.(player.id, now)) {
+        this.dashObserver?.end(player.id); this.dashStates.delete(player.id); this.dashBurstPlayers.delete(player.id);
+        player.setDashScale(1); player.setCollisionRadius(PLAYER_SIZE / 2); playerBody.setVelocity(0, 0); continue;
+      }
 
       const impulse = this.consumeImpulseVelocity(player.id, now);
       const forcedMovement = this.forcedMovement.get(player.id);
@@ -717,12 +752,14 @@ export class HostPhysicsSystem {
             dash.lastGroundX = player.x;
             dash.lastGroundY = player.y;
           }
+          this.publishDashMovement(player.id, now);
           const impactDamage = this.dashImpactDamageResolver?.(player.id) ?? 0;
           const impactKnockback = this.dashImpactKnockbackResolver?.(player.id) ?? 0;
           if (impactDamage > 0) {
             for (const enemy of this.enemyManager?.getAllEnemies() ?? []) {
               if (dash.hitIds.has(enemy.id) || !enemy.sprite.active) continue;
               if (Phaser.Math.Distance.Between(player.x, player.y, enemy.sprite.x, enemy.sprite.y) > PLAYER_SIZE) continue;
+              if (this.dashObserver?.canApplyImpact?.(player.id, enemy.id) === false) continue;
               dash.hitIds.add(enemy.id);
               this.combatSystem?.applyDamage(enemy.id, impactDamage, false, player.id, 'Dash-Aufprall', { sourceX: player.x, sourceY: player.y });
               this.addRecoil(enemy.id, dirX * impactKnockback, dirY * impactKnockback, 180, player.id);
@@ -744,10 +781,12 @@ export class HostPhysicsSystem {
           const scale = 0.5 + 0.5 * easeIn;
           player.setDashScale(scale);
           player.setCollisionRadius(PLAYER_SIZE * scale / 2);
+          this.publishDashMovement(player.id, now);
 
           if (elapsed >= recoveryDuration) {
             done = true;
             this.dashStates.delete(player.id);
+            this.dashObserver?.end(player.id);
             player.setDashScale(1.0);
             player.setCollisionRadius(PLAYER_SIZE / 2);
           }
@@ -796,7 +835,7 @@ export class HostPhysicsSystem {
 
       const burrowSpeedFactor = this.burrowSystem?.getMovementSpeedFactor(player.id) ?? 1;
       const speedMult  = this.loadoutManager?.getSpeedMultiplier(player.id, now) ?? 1;
-      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * (this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1);
+      const speed      = (this.runSpeedResolver?.(player.id) ?? PLAYER_SPEED) * burrowSpeedFactor * speedMult * ((this.walkingSpeedMultiplierResolver?.(player.id, now) ?? 1) * (1 + (this.zeusMoveBonus?.(player.id, now) ?? 0)));
 
       if (len > 0) {
         baseVx = (dx / len) * speed;
@@ -862,6 +901,7 @@ export class HostPhysicsSystem {
       const dashVelocity = this.advanceEnemyDash(enemy, now);
       const desiredVelocity = dashVelocity ?? enemy.getDesiredVelocity();
       // The dash clock keeps running; stagger suppresses propulsion, never external impulses.
+      if (this.stunChecker?.(enemy.id, now)) { this.endEnemyDash(enemy); enemyBody.setVelocity(0, 0); enemy.setWalking(false); return; }
       const hitStaggerFactor = this.enemyHitStaggerResolver?.(enemy.id, now) ? 0 : 1;
       const worldFactor = this.getWorldMovementFactor(
         enemy.sprite.x,

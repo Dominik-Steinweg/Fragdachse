@@ -1,3 +1,4 @@
+import { EMPTY_ZEUS_SNAPSHOT, type ZeusSnapshot } from '../systems/ZeusRuntime';
 import { parseStinkCloudUtilityState, type StinkCloudUtilityState } from '../loadout/StinkCloudUtilityState';
 import { decodeStinkPlague, encodeStinkPlague, emptyStinkPlagueSnapshot } from './stinkPlagueCodec';
 import { isWeaponShotFeedbackEvent, type WeaponShotFeedbackEvent } from '../loadout/WeaponShotFeedbackEvent';
@@ -324,6 +325,7 @@ export interface GameState {
   remoteControlTurrets: SyncedRemoteControlTurret[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
+  zeus?: ZeusSnapshot;
   smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
   stinkPlague?: import('../systems/StinkPlagueRuntime').StinkPlagueSnapshot;
   fires:        SyncedFireZone[];
@@ -366,6 +368,7 @@ interface OutboundGameState {
   remoteControlTurrets: SyncedRemoteControlTurret[];
   decoys:       SyncedDecoy[];
   smokes:       SyncedSmokeCloud[];
+  zeus?: ZeusSnapshot;
   smokeTargets?: import('../types').SyncedSmokeTargetStatus[];
   stinkPlague?: import('../systems/StinkPlagueRuntime').StinkPlagueSnapshot;
   fires:        SyncedFireZone[];
@@ -2721,6 +2724,7 @@ export class NetworkBridge {
     if (state.remoteControlTurrets.length > 0) payload.rc = state.remoteControlTurrets;
     if (state.decoys.length > 0)       payload.dc = state.decoys;
     if (state.smokes.length > 0)       payload.s = state.smokes;
+    payload.zs = state.zeus ?? EMPTY_ZEUS_SNAPSHOT;
     payload.sx = encodeSmokeTargets(state.smokeTargets ?? []);
     payload.pl = encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot());
     if (state.fires.length > 0)        payload.f = state.fires;
@@ -2825,6 +2829,7 @@ export class NetworkBridge {
       rc: state.remoteControlTurrets,
       dc: state.decoys,
       s: state.smokes,
+      zs: state.zeus ?? EMPTY_ZEUS_SNAPSHOT,
       sx: encodeSmokeTargets(state.smokeTargets ?? []),
       pl: encodeStinkPlague(state.stinkPlague ?? emptyStinkPlagueSnapshot()),
       f: state.fires,
@@ -2942,6 +2947,7 @@ export class NetworkBridge {
       remoteControlTurrets: (raw.rc as SyncedRemoteControlTurret[] | undefined) ?? [],
       decoys:        (raw.dc as SyncedDecoy[]       | undefined) ?? [],
       smokes:        (raw.s as SyncedSmokeCloud[]   | undefined) ?? [],
+      zeus: (raw.zs as ZeusSnapshot | undefined) ?? this.cachedGameState?.zeus ?? EMPTY_ZEUS_SNAPSHOT,
       smokeTargets: decodeSmokeTargets(raw.sx),
       stinkPlague: decodeStinkPlague(raw.pl),
       fires:         (raw.f as SyncedFireZone[]      | undefined) ?? [],
@@ -3151,7 +3157,7 @@ export class NetworkBridge {
       if ((op !== 'start' && op !== 'cancel')
         || typeof aid !== 'string' || aid.length === 0 || aid.length > 80 || aid.trim() !== aid) return false;
       if (op === 'cancel') return this.heldActionHandler?.(caller.id, op, aid) === true;
-      if ((kind !== 'charged_throw' && kind !== 'charged_gate' && kind !== 'global_dismantle')
+      if ((kind !== 'charged_throw' && kind !== 'charged_gate' && kind !== 'charged_alternate' && kind !== 'global_dismantle')
         || !isFiniteNumber(dur) || dur <= 0 || dur > 30_000) return false;
       if (rawToolRef !== undefined
         && (!isRecord(rawToolRef) || rawToolRef.kind !== 'utility' || typeof rawToolRef.id !== 'string')) {

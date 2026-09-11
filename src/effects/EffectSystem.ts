@@ -182,6 +182,21 @@ export class EffectSystem implements EnemyVisualSink {
 
   setZeusTaserRenderer(renderer: ZeusTaserRenderer | null): void {
     this.zeusTaserRenderer = renderer;
+    if (!renderer) this.zeusAudioUses.clear();
+  }
+
+  private readonly zeusAudioUses = new Map<string, number>();
+  clearZeusUpgrades(): void {
+    this.zeusAudioUses.clear();
+    this.zeusTaserRenderer?.clearUpgrades();
+  }
+  syncZeusUpgrades(...args: Parameters<ZeusTaserRenderer['syncUpgrades']>): void {
+    this.zeusTaserRenderer?.syncUpgrades(...args);
+    for (const ball of args[0].balls) {
+      if ((this.zeusAudioUses.get(ball.playerId) ?? 0) >= ball.useId) continue;
+      this.zeusAudioUses.set(ball.playerId, ball.useId);
+      this.audioSystem?.playSound('shot_zeus', ball.x, ball.y, ball.playerId);
+    }
   }
 
   setAudioSystem(system: GameAudioSystem | null): void {
@@ -210,6 +225,7 @@ export class EffectSystem implements EnemyVisualSink {
   }
 
   destroy(): void {
+    this.clearZeusUpgrades();
     this.burrowGpuRenderer?.clearAllUnderground();
     this.damageVignetteTop?.destroy();
     this.damageVignetteBottom?.destroy();

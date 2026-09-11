@@ -136,7 +136,7 @@ export interface PlayerUtilityActionRuntimeOptions {
 }
 
 type ChargedUtilityConfig = UtilityConfig & {
-  activation: Extract<UtilityConfig['activation'], { type: 'charged_throw' | 'charged_gate' }>;
+  activation: Extract<UtilityConfig['activation'], { type: 'charged_throw' | 'charged_gate' | 'charged_alternate' }>;
 };
 
 const MAX_RECENT_ATTEMPTS_PER_PLAYER = 64;
@@ -158,6 +158,30 @@ interface UtilityChargeStock {
  * Ability-specific systems only receive their narrow execution call.
  */
 export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
+  private zeusPort: import('./ZeusUtilityPort').ZeusUtilityPort | null = null;
+  setZeusPort(port: import('./ZeusUtilityPort').ZeusUtilityPort | null): void { this.zeusPort = port; }
+  onZeusDashStarted(playerId: string, now: number): void {
+    const reduce = (utility: GenericUtility) => {
+      const config = this.options.loadout.resolveUtilityConfig(playerId, utility.config);
+      if (config.type !== 'taser' || config.zeus.dynamoRefundMs <= 0 || !utility.isOnCooldown(now)) return null;
+      const until = Math.max(now, utility.getLastUsedAt() + utility.config.cooldown - config.zeus.dynamoRefundMs);
+      utility.setLastUsedAt(until - utility.config.cooldown);
+      return until;
+    };
+    const equipped = this.equippedUtilities.get(playerId);
+    if (equipped) { const until = reduce(equipped); if (until !== null) this.options.network.loadout.publishUtilityCooldownUntil(playerId, until, equipped.config.id); }
+    for (const utility of this.inspectorUtilities.get(playerId)?.values() ?? []) {
+      const until = reduce(utility);
+      if (until !== null) this.options.network.loadout.publishUtilityCooldownUntil(playerId, until, utility.config.id);
+    }
+    let changed = false;
+    for (const d of this.temporaryUtilities.getDescriptors(playerId)) {
+      const instance = this.temporaryUtilities.get(playerId, d.instanceId)!;
+      const until = reduce(instance.utility);
+      if (until !== null) { instance.cooldownUntil = until; changed = true; }
+    }
+    if (changed) this.publishTemporaryUtilities(playerId);
+  }
   private readonly stinkCloudUses = new Map<string, StinkCloudUtilityState>();
 
   getStinkCloudState(playerId: string): StinkCloudUtilityState | null { return this.stinkCloudUses.get(playerId) ?? null; }
@@ -330,6 +354,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   removePlayer(playerId: string): void {
+    this.zeusPort?.removePlayer(playerId);
     this.stinkCloudUses.delete(playerId);
     this.options.stinkCloud?.hostDeactivateForPlayer(playerId, this.hostFrameNowMs);
     this.publishStinkCloudState(playerId);
@@ -424,7 +449,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       if (!state.stock.canConsume(hostNowMs) || state.lockoutUntil > hostNowMs) return false;
     }
     const activation = source.utility.config.activation;
-    if (activation.type !== 'charged_throw' && activation.type !== 'charged_gate') return false;
+    if (activation.type !== 'charged_throw' && activation.type !== 'charged_gate' && activation.type !== 'charged_alternate') return false;
     const identity = this.identityFor(source.source);
     return this.options.heldAction.start(
       playerId,
@@ -701,7 +726,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   private isChargeable(config: UtilityConfig): config is ChargedUtilityConfig {
-    return config.activation.type === 'charged_throw' || config.activation.type === 'charged_gate';
+    return config.activation.type === 'charged_throw' || config.activation.type === 'charged_gate' || config.activation.type === 'charged_alternate';
   }
 
   private isTranslocatorRecall(playerId: string, config: UtilityConfig): boolean {
@@ -738,6 +763,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
           params?.utilityChargeFraction ?? 0,
           muzzle,
         );
+      case 'charged_alternate':
+        return cfg.type === 'taser' && this.activateTaser(cfg, playerId, x, y, angle, playerColor, (params?.utilityChargeFraction ?? 0) >= 1);
       case 'charged_gate':
         if ((params?.utilityChargeFraction ?? 0) < 1 || cfg.type !== 'bfg') return false;
         return this.fireBfg(cfg as BfgUtilityConfig, x, y, angle, playerId, muzzle);
@@ -866,7 +893,8 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
     return true;
   }
 
-  private activateTaser(cfg: TaserUtilityConfig, playerId: string, x: number, y: number, angle: number, playerColor: number): boolean {
+  private activateTaser(cfg: TaserUtilityConfig, playerId: string, x: number, y: number, angle: number, playerColor: number, charged = false): boolean {
+    if (this.zeusPort) return this.zeusPort.activate(cfg, playerId, x, y, angle, playerColor, this.hostFrameNowMs, charged);
     const request: MeleeSwingRequest = {
       shooterId: playerId,
       x,
@@ -877,6 +905,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       damage: cfg.damage,
       adrenalinGain: 0,
       sourceId: cfg.id,
+      sourceSlot: 'utility',
       color: playerColor,
       rockDamageMult: cfg.rockDamageMult ?? 1,
       trainDamageMult: cfg.trainDamageMult ?? 1,
@@ -887,9 +916,6 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
       hitAdrenaline: 0,
       bloodEffectMultiplier: 1,
       damageTargets: undefined,
-      chain: (cfg.chainCount ?? 0) > 0
-        ? { count: cfg.chainCount ?? 0, radius: cfg.chainRadius ?? 0, damageFactor: cfg.chainDamageFactor ?? 0 }
-        : undefined,
     };
     return this.options.combatSystem.resolveImmediateAttack({
       kind: 'melee',
@@ -983,6 +1009,7 @@ export class PlayerUtilityActionRuntime implements TemporaryUtilityPort {
   }
 
   destroy(): void {
+    this.zeusPort = null;
     if (this.destroyed) return;
     this.destroyed = true;
     this.options.stinkCloud?.setPrimaryCloudEndHandler(null);

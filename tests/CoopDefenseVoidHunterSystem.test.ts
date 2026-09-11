@@ -61,6 +61,7 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     getPlayer: vi.fn((id: string) => players.find((player) => player.id === id)),
   };
   const combat = {
+    isStunned: vi.fn(() => false),
     isAlive: () => true,
     canDamageTarget: () => true,
     hasLineOfSight: () => true,
@@ -94,10 +95,29 @@ function createFixture(playerPositions = [{ x: 700, y: 100 }]) {
     burrow as unknown as CoopDefenseEnemyBurrowSystem,
     fireChunks as unknown as FlamethrowerUpgradeSystem,
   );
-  return { system, enemy, enemyManager, players, playerManager, weaponExecution, fireGauss, power, armageddon, burrow, fireChunks, actions };
+  return { system, combat, enemy, enemyManager, players, playerManager, weaponExecution, fireGauss, power, armageddon, burrow, fireChunks, actions };
 }
 
 describe('Leerenjäger', () => {
+  it('cancels a charged boss attack during stun and requires a new windup after the normal cooldown', () => {
+    const c = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
+    const f = createFixture([{ x: 100 + (c.shotgunRangePx + ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS.range) / 2, y: 100 }]);
+    f.system.hostUpdate(0);
+    f.system.hostUpdate(c.gauss.initialDelayMs);
+    expect(f.system.blocksRegularAttacks(f.enemy.id)).toBe(true);
+    const interrupted = c.gauss.initialDelayMs + 1;
+    f.combat.isStunned.mockReturnValue(true);
+    f.system.hostUpdate(interrupted);
+    f.system.hostUpdate(interrupted + c.gauss.chargeDurationMs);
+    expect(f.fireGauss).not.toHaveBeenCalled();
+    f.combat.isStunned.mockReturnValue(false);
+    const restart = interrupted + c.gauss.cooldownMs;
+    f.system.hostUpdate(restart);
+    expect(f.fireGauss).not.toHaveBeenCalled();
+    f.system.hostUpdate(restart + c.gauss.chargeDurationMs);
+    expect(f.fireGauss).toHaveBeenCalledOnce();
+  });
+
   it('cannot start a hidden Gauss attack but finishes an announced shot without tracking hidden movement', () => {
     const config = getCoopDefenseEnemyConfig('void-hunter').voidHunterBoss!;
     const distance = (config.shotgunRangePx + ULTIMATE_CONFIGS.VOID_HUNTER_GAUSS.range) / 2;

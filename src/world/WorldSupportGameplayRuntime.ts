@@ -27,6 +27,7 @@ export interface WorldSupportGameplaySystems {
 }
 
 export interface WorldSupportGameplayRuntimeOptions {
+  readonly zeus?: import('./WorldZeusBinding').WorldZeusBinding;
   readonly plague?: import('./WorldStinkPlagueBinding').WorldStinkPlagueBinding;
   readonly smoke: import('./WorldSmokeBinding').WorldSmokeBinding;
   readonly projectileExternalInteraction: ProjectileExternalInteractionPort;
@@ -52,6 +53,7 @@ export interface WorldSupportGameplayRuntimeOptions {
 /** Owns world-scoped detonation and support-ultimate capabilities. */
 export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUltimateAirstrikeCapability {
   readonly systems: WorldSupportGameplaySystems;
+  get zeus() { return this.options.zeus ?? null; }
   get smoke() { return this.options.smoke; }
   get plague() { return this.options.plague ?? null; }
   private destroyed = false;
@@ -92,6 +94,7 @@ export class WorldSupportGameplayRuntime implements WorldScopedBinding, PlayerUl
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.options.zeus?.destroy();
     this.options.smoke.destroy();
     this.options.plague?.destroy();
     this.options.combatSystem.setDetonationSystem(null);

@@ -1015,7 +1015,7 @@ export interface LoadoutUseParams {
   globalDismantle?: boolean;
 }
 
-export type HostHeldActionKind = 'charged_throw' | 'charged_gate' | 'global_dismantle';
+export type HostHeldActionKind = 'charged_throw' | 'charged_gate' | 'charged_alternate' | 'global_dismantle';
 
 export type LoadoutUseFailureReason = 'cooldown' | 'resource' | 'blocked' | 'invalid' | 'capacity' | 'placement';
 export type LoadoutUseResourceKind = 'adrenaline' | 'rage';
@@ -1111,6 +1111,7 @@ export interface ProjectileSpawnConfig {
   ignoreBaseCollisions?: boolean;
   /** Placeable turret projectiles pass through the runtime rock they are mounted on. */
   ignoreRockIndex?: number;
+  excludedTarget?: import('./combat/CombatScope').CombatTargetRef;
   initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
   speed:           number;
   size:            number;
@@ -1242,6 +1243,7 @@ export interface ProjectileSpawnConfig {
   hitSlowFraction?: number;
   hitSlowDurationMs?: number;
   hitVulnerabilityDurationMs?: number;
+  hitStunDurationMs?: number;
   hitKnockback?: number;
   hitKnockbackDurationMs?: number;
   fireTrailHalfWidthCells?: number;

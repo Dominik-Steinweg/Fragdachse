@@ -39,6 +39,10 @@ function getUpgradeParams(
     );
   });
 
+  const zeus = UTILITY_CONFIGS.ZEUS_TASER;
+  if (definition.id.startsWith('zeus_') && zeus.activation.type === 'charged_alternate') {
+    params.zeusChargeSeconds = formatNumber(zeus.activation.fullChargeDuration / 1000, locale);
+  }
   const stink = UTILITY_CONFIGS.STINK_CLOUD;
   if ((definition.id.startsWith('stink_cloud_') || definition.id === 'unlock_stink_cloud') && stink?.type === 'stinkcloud' && stink.plague) {
     const p = stink.plague;

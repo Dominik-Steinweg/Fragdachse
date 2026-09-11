@@ -208,11 +208,41 @@
     "ZEUS_TASER": {
       "id": "ZEUS_TASER",
       "type": "taser",
-      "cooldown": 4000,
+      "cooldown": 10000,
       "activation": {
-        "type": "instant"
+        "type": "charged_alternate",
+        "fullChargeDuration": 350
       },
       "damage": 200,
+      "zeus": {
+        "dynamoRefundMs": 0,
+        "stunDurationMs": 0,
+        "ballDurationMs": 0,
+        "groundEnabled": 0,
+        "stormEnabled": 0,
+        "extraBolts": 0,
+        "killRangeBonus": 0,
+        "groundDurationMs": 3000,
+        "groundDamagePerSecond": 5,
+        "groundMoveBonus": 0.2,
+        "groundMoveDurationMs": 2000,
+        "boltCount": 8,
+        "boltDamage": 10,
+        "boltSpeed": 250,
+        "boltSize": 32,
+        "boltRange": 250,
+        "boltJitterDegrees": 5,
+        "boltHoming": {
+          "searchRadius": 320,
+          "maxTurnDegreesPerStep": 4,
+          "retargetIntervalMs": 25,
+          "acquireDelayMs": 0,
+          "requireLineOfSight": false,
+          "excludeOwner": true,
+          "distanceWeight": 1,
+          "forwardWeight": 1.4
+        }
+      },
       "range": 80,
       "hitArcDegrees": 70,
       "visualPreset": "zeus_taser",

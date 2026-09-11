@@ -1,4 +1,8 @@
 import * as Phaser from 'phaser';
+import type { GpuVfxSystem } from './gpu/GpuVfxSystem';
+import { ZeusUpgradesGpuRenderer } from './ZeusUpgradesGpuRenderer';
+import type { ZeusSnapshot } from '../systems/ZeusRuntime';
+import type { CombatTargetRef } from '../combat/CombatScope';
 import { COLORS, DEPTH_TRACE, getBeamPaletteForPlayerColor, isPointInsideArena } from '../config';
 import { createEmitter, destroyEmitter, ensureCanvasTexture, fillRadialGradientTexture, makeAdditive, mixColors, registerGraphicsObject } from './EffectUtils';
 
@@ -9,7 +13,40 @@ const TEX_ZEUS_SPARK = '__zeus_taser_spark';
 const ZEUS_LINGER_MULT = 1.35;
 
 export class ZeusTaserRenderer {
+  private statusLayer: Phaser.GameObjects.Graphics | null = null;
+  private upgradesGpu: ZeusUpgradesGpuRenderer | null = null;
   constructor(private readonly scene: Phaser.Scene) {}
+
+  registerGpuVfx(gpu: GpuVfxSystem): void {
+    this.upgradesGpu ??= new ZeusUpgradesGpuRenderer(gpu);
+  }
+
+  syncUpgrades(state: ZeusSnapshot, now: number,
+    target: (id: string, kind: CombatTargetRef['kind']) => { x: number; y: number; radius: number; entityGeneration?: number } | null): void {
+    this.upgradesGpu?.sync(state, now, id => target(id, 'player'));
+    if (!state.stuns.length) { this.statusLayer?.clear(); return; }
+    if (!this.statusLayer) {
+      this.statusLayer = this.scene.add.graphics().setDepth(DEPTH_TRACE + 0.3).setBlendMode(Phaser.BlendModes.ADD);
+      registerGraphicsObject(this.scene, 'zeusTaserEffects', this.statusLayer);
+    }
+    const body = this.statusLayer.clear(), phase = now / 90;
+    for (const stun of state.stuns) {
+      if (stun.expiresAt <= now) continue;
+      const p = target(String(stun.target.id), stun.target.kind); if (!p) continue;
+      if (p.entityGeneration !== undefined && p.entityGeneration !== stun.target.instance.entityGeneration) continue;
+      body.lineStyle(1.6, 0xe0f7ff, Math.min(1, (stun.expiresAt - now) / 80));
+      for (let i = 0; i < 3; i++) {
+        const a = phase * 0.15 + i * Math.PI * 2 / 3, r = p.radius + 3;
+        const x = p.x + Math.cos(a) * r, y = p.y + Math.sin(a) * r;
+        body.beginPath(); body.moveTo(x - 2, y - 5); body.lineTo(x + 2, y - 1);
+        body.lineTo(x - 1, y + 1); body.lineTo(x + 2, y + 5); body.strokePath();
+      }
+    }
+  }
+
+  clearUpgrades(): void {
+    this.upgradesGpu?.clear(); this.statusLayer?.destroy(); this.statusLayer = null;
+  }
 
   generateTextures(): void {
     fillRadialGradientTexture(this.scene.textures, TEX_ZEUS_HAZE, 96, [

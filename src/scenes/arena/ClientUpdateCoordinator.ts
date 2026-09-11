@@ -421,6 +421,15 @@ export class ClientUpdateCoordinator {
         projectileRuntime.presentClientProjectileFrame(projectileReplicaFrame, bridge.getLocalPlayerId());
       }
       this.ctx.decoySystem.syncSnapshots(state.decoys ?? []);
+      this.ctx.effectSystem.syncZeusUpgrades(state.zeus ?? { balls: [], ground: [], stuns: [] }, bridge.getSynchronizedNow(), (id, kind) => {
+        if (kind === 'player') {
+          const p = this.ctx.playerManager.getPlayer(id);
+          return p?.active ? { x: p.x, y: p.y, radius: p.getCollisionRadius() } : null;
+        }
+        const e = this.activityFramePort?.getEnemyStatusVisual(id);
+        return e?.visible && e.sprite.active
+          ? { x: e.sprite.x, y: e.sprite.y, radius: e.bodySize / 2, entityGeneration: e.entityGeneration } : null;
+      });
       this.ctx.smokeSystem.syncVisuals(state.smokes, bridge.getSynchronizedNow());
       this.ctx.smokeSystem.syncTargetVisuals(state.smokeTargets ?? [], bridge.getSynchronizedNow(),
         id => this.activityFramePort?.getEnemyStatusVisual(id) ?? null);

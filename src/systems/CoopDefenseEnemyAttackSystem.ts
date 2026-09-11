@@ -145,7 +145,7 @@ export class CoopDefenseEnemyAttackSystem {
       enemy.decayWeaponSpread(delta, now);
       this.expireStaleSalvo(enemy, now);
 
-      if (this.actionBlockedChecker?.(enemy.id)) {
+      if (this.combatSystem.isStunned?.(enemy.id, now) || this.actionBlockedChecker?.(enemy.id)) {
         this.abortCombat(enemy, now);
         // Die Sperre gehoert ausschliesslich dem Angriffssystem. Exklusive Spezialbewegungen
         // (etwa die Jagd des Zeitbombendachses) wurden bereits vom EnemyManager gesetzt und

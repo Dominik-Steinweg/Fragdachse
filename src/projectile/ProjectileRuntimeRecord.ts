@@ -116,6 +116,7 @@ export interface ProjectileResolvedInteraction {
     readonly hitSlowFraction?: number;
     readonly hitSlowDurationMs?: number;
     readonly hitVulnerabilityDurationMs?: number;
+    readonly hitStunDurationMs?: number;
     readonly hitKnockback?: number;
     readonly hitKnockbackDurationMs?: number;
   };

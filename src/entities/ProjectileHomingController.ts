@@ -42,7 +42,7 @@ export type { ProjectileTargetabilityPort } from '../projectile/ProjectileTarget
 
 type HomingTargetabilityView = Pick<
   import('../projectile/ProjectileTargetPort').ProjectileTargetabilityPort,
-  'isTargetCurrentlyValid'
+  'isTargetCurrentlyValid' | 'isCurrentTargetInstance'
 >;
 
 /** Prüft die tatsächliche Projectile-Schusslinie, nicht bloß Sichtbarkeit. */
@@ -71,6 +71,7 @@ export interface ProjectileHomingRequest {
   /** Soft preference supplied by the projectile owner; occupied targets remain valid fallbacks. */
   readonly isTargetClaimed?: (id: string, type: HomingTargetType) => boolean;
   readonly excludedCircle?: ProjectileHomingExcludedCircle;
+  readonly excludedTarget?: import('../combat/CombatScope').CombatTargetRef;
   readonly initialTargetProtection?: { readonly targetId: string; readonly durationMs: number };
 }
 
@@ -198,7 +199,9 @@ export class ProjectileHomingController {
       const protection = request.initialTargetProtection;
       const insideExcludedCircle = circle !== undefined && hostNowMs < circle.expiresAt
         && (candidate.x - circle.x) ** 2 + (candidate.y - circle.y) ** 2 <= circle.radius ** 2;
-      const ineligible = (candidate.type === 'enemies' && protection?.targetId === candidate.id && ageMs < protection.durationMs)
+      const ineligible = (request.excludedTarget?.id === candidate.id && request.excludedTarget.kind === (candidate.type === 'enemies' ? 'enemy' : 'player')
+        && (this.targetabilityPort?.isCurrentTargetInstance?.(request.excludedTarget) ?? true))
+        || (candidate.type === 'enemies' && protection?.targetId === candidate.id && ageMs < protection.durationMs)
         || insideExcludedCircle
         || !targetTypes.includes(candidate.type)
         || (excludeOwner && candidate.id === ownerId)

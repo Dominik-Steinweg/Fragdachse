@@ -1,3 +1,4 @@
+import type { CombatStunStatusSystem } from '../systems/CombatStunStatusSystem';
 import type { MolotovWildfireDeath } from '../types';
 import { acquirePortalDamage, findPortalCrossing, portalCircleEntry, portalDamageMultiplier, type PortalQueryPort } from '../systems/PortalTraversal';
 import { scalePortalDamagePayload } from './PortalDamagePayload';
@@ -2177,6 +2178,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     this.registerAk47Hit(createAk47Context(request));
     if (this.isCurrentCombatantTarget(target)) this.applyProjectileBurnAugments(playerId, request);
     const mutation = this.commitProjectileCombatantDamage(request, target, adapted);
+    if (mutation?.kind === 'damage-applied' && mutation.actualDamage > 0 && mutation.transition.kind === 'none')
+      this.applyStun(mutation.target, request.directHit.stunDurationMs ?? 0, this.hostFrameNowMs);
     const outcome = projectileMutationOutcome(mutation);
     if (!outcome.accepted) return { accepted: false, reaction: createReactionMetadata(request) };
     const dealt = outcome.actualDamage;
@@ -2237,6 +2240,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       this.applyProjectileBurnAugments(enemyId, request);
     }
     const mutation = this.commitProjectileCombatantDamage(request, target, adapted);
+    if (mutation?.kind === 'damage-applied' && mutation.actualDamage > 0 && mutation.transition.kind === 'none')
+      this.applyStun(mutation.target, request.directHit.stunDurationMs ?? 0, this.hostFrameNowMs);
     const outcome = projectileMutationOutcome(mutation);
     if (!outcome.accepted) {
       return { accepted: false, reaction: createReactionMetadata(request, ak47Impact, plasmaSwarm) };
@@ -2291,6 +2296,8 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
       source: adapted.source,
       damage,
     }, impactSource) ?? null;
+    if (mutation?.kind === 'damage-applied' && mutation.actualDamage > 0 && mutation.transition.kind === 'none')
+      this.applyStun(mutation.target, request.directHit.stunDurationMs ?? 0, this.hostFrameNowMs);
     const outcome = projectileMutationOutcome(mutation);
     if (!outcome.accepted) return { accepted: false, reaction: createReactionMetadata(request) };
     const appliedDamage = outcome.actualDamage;
@@ -3065,7 +3072,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     _adrenalinGain: number,
     sourceId:    string,
     playerColor:   number,
-    sourceSlot?:   WeaponSlot,
+    sourceSlot?:   LoadoutSlot,
     rockDamageMult  = 1,
     trainDamageMult = 1,
     visualPreset: MeleeVisualPreset = 'default',
@@ -3151,7 +3158,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
       // Keep source-side factors at the immediate impact, matching the prior per-target
       // resolution point and avoiding a hidden second scaling stage in the mutation writer.
-      const loadoutMult = sourceSlot
+      const loadoutMult = sourceSlot === 'weapon1' || sourceSlot === 'weapon2'
         ? (this.loadoutManager?.getWeaponDamageMultiplier(shooterId, sourceSlot, this.hostFrameNowMs) ?? 1)
         : (this.loadoutManager?.getDamageMultiplier(shooterId, this.hostFrameNowMs) ?? 1);
       const powerUpMult = this.powerUpSystem?.getDamageMultiplier(shooterId) ?? 1;
@@ -3399,7 +3406,7 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
     damage: number,
     shooterId: string,
     sourceId: string,
-    sourceSlot?: WeaponSlot,
+    sourceSlot?: LoadoutSlot,
     baseDamageMult = 1,
   ): { hit: boolean; distance: number; impactX?: number; impactY?: number } {
     let hit = false;
@@ -4480,6 +4487,33 @@ export class WorldCombatCore implements ProjectileCombatPort, CombatImmediateAtt
 
   private clearBurnByAttacker(attackerId: string): void {
     this.burnStatus.clearSource(attackerId);
+  }
+
+  private stunStatus: CombatStunStatusSystem | null = null;
+  setStunStatus(status: CombatStunStatusSystem | null): void { this.stunStatus = status; }
+  isStunned(id: string, now: number): boolean {
+    const target = this.resolveCurrentCombatantTarget(id);
+    return !!target && (this.stunStatus?.isStunned(target, now) ?? false);
+  }
+  applyStun(target: CombatTargetRef, durationMs: number, now: number): void {
+    if (this.isCurrentCombatantTarget(target) && this.isAlive(String(target.id))) this.stunStatus?.apply(target, durationMs, now);
+  }
+  getZeusTarget(id: string): CombatTargetRef | null { return this.resolveCurrentCombatantTarget(id); }
+  captureZeusDamageMultiplier(ownerId: string, now: number): number {
+    return (this.loadoutManager?.getDamageMultiplier(ownerId, now) ?? 1) * (this.powerUpSystem?.getDamageMultiplier(ownerId) ?? 1);
+  }
+  resolveZeusContact(target: CombatTargetRef, ownerId: string, amount: number, multiplier: number,
+    x: number, y: number, ground: boolean, now: number, zeusUseId?: number): CombatDamageMutationOutcome | null {
+    return this.runHostExecution(() => {
+      if (!this.isCurrentCombatantTarget(target) || !this.canDamageTarget(ownerId, String(target.id))) return null;
+      const damage = amount * multiplier;
+      if (!ground && this.shouldBlockWithShield(String(target.id), 'melee', damage, x, y, now)) return null;
+      const source = this.createLegacyMutationSource(ownerId, 'ZEUS_TASER', ground ? 'ground' : 'direct');
+      return this.applyDamage(String(target.id), damage, false, ownerId, 'ZEUS_TASER',
+        { sourceX: x, sourceY: y }, { target, source: { ...source, sourceSlot: 'utility', lineage: { zeusUseId, zeusRole: ground ? 'ground' : 'ball' } }, damageKind: ground ? 'ground' : 'direct', sourceSlot: 'utility',
+          allowCritical: !ground, basis: { kind: 'source-resolved', amount: damage,
+            sourceFactors: [{ kind: 'runtime-power', multiplier, resolvedAt: 'execution' }] } });
+    }, now);
   }
 
   private resolveCurrentCombatantTarget(id: string): CombatTargetRef | null {

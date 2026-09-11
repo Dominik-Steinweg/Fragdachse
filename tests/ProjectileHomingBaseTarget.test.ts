@@ -4,6 +4,7 @@ import { ProjectileHomingController } from '../src/entities/ProjectileHomingCont
 import { WEAPON_CONFIGS } from '../src/loadout/LoadoutConfig';
 import type { ProjectileHomingConfig, HomingRuntimeState } from '../src/types';
 import type { ProjectileHomingRequest } from '../src/entities/ProjectileHomingController';
+import { zeusRef } from './ZeusTestHelper';
 
 function makeProjectile(config: ProjectileHomingConfig): ProjectileHomingRequest {
   const velocity = {
@@ -38,6 +39,19 @@ const BASE_HOMING: ProjectileHomingConfig = {
 };
 
 describe('projectile homing against hostile bases', () => {
+  it('permanently excludes the origin incarnation, but permits a successor with the same id', () => {
+    const controller = new ProjectileHomingController();
+    let original = true;
+    controller.setTargetabilityPort({ isTargetCurrentlyValid: () => true, isCurrentTargetInstance: () => original });
+    controller.setTargetQueryPort({ queryTargets: (_c, _owner, _x, _y, _r, emit) => emit('origin', 'enemies', 50, 0) });
+    const projectile = { ...makeProjectile({ ...BASE_HOMING, requireLineOfSight: false, targetTypes: ['enemies'] }),
+      excludedTarget: zeusRef('origin') };
+    expect(controller.update(projectile, 0, true, 0)).toBe(false);
+    expect(controller.update(projectile, 10_000, true, 10_000)).toBe(false);
+    original = false;
+    expect(controller.update(projectile, 10_001, true, 10_001)).toBe(true);
+    expect(projectile.state.lockedTargetId).toBe('origin');
+  });
   it('excludes the origin circle including its edge, reacquires moving targets and expires in host time', () => {
     const controller = new ProjectileHomingController();
     let x = 150;

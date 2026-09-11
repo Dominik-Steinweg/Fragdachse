@@ -105,7 +105,7 @@ export class HostHeldActionSystem {
 }
 
 export function isHeldActionKind(value: unknown): value is HostHeldActionKind {
-  return value === 'charged_throw' || value === 'charged_gate' || value === 'global_dismantle';
+  return value === 'charged_throw' || value === 'charged_gate' || value === 'charged_alternate' || value === 'global_dismantle';
 }
 
 function isValidActionId(value: unknown): value is string {

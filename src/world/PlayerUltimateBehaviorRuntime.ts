@@ -484,6 +484,13 @@ export class PlayerUltimateBehaviorRuntime implements UltimateModifierReadPort {
     return config?.type === 'gauss' ? config.range : 0;
   }
 
+  interruptCombat(playerId: string, nowMs: number): void {
+    const charge = this.gaussCharges.get(playerId);
+    if (charge) this.endGaussCharge(playerId, charge.chargeId, 'cancelled');
+    const state = this.states.get(playerId);
+    if (state?.active) this.finishState(playerId, state, nowMs);
+  }
+
   resetPlayer(playerId: string): void {
     const state = this.states.get(playerId);
     if (state?.config.armageddon) this.armageddon?.deactivate(playerId);

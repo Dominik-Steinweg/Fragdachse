@@ -52,6 +52,7 @@ import type { ProjectileSpawnRequest } from '../src/projectile/ProjectileSpawnRe
 import { createSingleOwnerProvenance } from '../src/projectile/ProjectileSpawnRequest';
 import type { ProjectileInteractionSpec } from '../src/projectile/ProjectileSpawnRequest';
 import type { ProjectileCollisionTargetQueryPort } from '../src/projectile/ProjectileTargetPort';
+import { zeusRef } from './ZeusTestHelper';
 
 function request(overrides: {
   ownerId?: string;
@@ -77,6 +78,26 @@ function spawn(runtime: ReturnType<typeof createProjectileRuntimeTestWorld>['run
 }
 
 describe('provider-independent collision order', () => {
+  it.each([true, false])('excludes only the original target incarnation and carries stun on a confirmed bolt (original=%s)', original => {
+    const { runtime, physics } = createProjectileRuntimeTestWorld();
+    const hit = vi.fn(() => ({ accepted: true }));
+    runtime.setProjectileCombatPort({ resolveDirectImpact: hit, resolveExplosionCombat: () => ({ damagedTargetKeys: [] }) });
+    runtime.setProjectileTargetabilityPort({ canDamage: () => true, canDamageOwner: () => true,
+      isTargetCurrentlyValid: () => true, isCurrentTargetInstance: () => original });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      sink('enemy', 'origin', 'enemy-owner', 20, 0, 3, 17, -3, 23, 3);
+      sink('enemy', 'other', 'enemy-owner', 50, 0, 3, 47, -3, 53, 3);
+    } });
+    const id = spawn(runtime, request({ flight: { collisionFilter: { excludedTarget: zeusRef('origin') } },
+      interaction: { directHit: { damage: 7, stunDurationMs: 123 } } }));
+    runtime.runHostInteractionStage(0);
+    physics.handles.get(id)!.sprite.x = 70;
+    runtime.runHostInteractionStage(16);
+    expect(hit).toHaveBeenCalledOnce();
+    expect(hit.mock.calls[0][0]).toMatchObject({ target: { id: original ? 'other' : 'origin' }, directHit: { stunDurationMs: 123 } });
+    expect(physics.released).toContain(id);
+    runtime.destroy();
+  });
   const permutations = [[0, 1, 2, 3, 4], [4, 3, 2, 1, 0], [2, 0, 4, 1, 3]];
   for (const collisionMode of ['sweep', 'overlap'] as const) {
     it.each([true, false])(`${collisionMode} preserves distance, key and epsilon-chain order (piercing=%s)`, piercesTargets => {

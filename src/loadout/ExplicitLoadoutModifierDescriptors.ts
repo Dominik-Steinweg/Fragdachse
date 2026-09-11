@@ -2,6 +2,13 @@ import type { ConfigStatDescriptor } from './CoopDefenseLoadoutModifiers';
 
 /** Explicit contracts for formerly convention-resolved upgrade paths. */
 export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
+  'utility.ZEUS_TASER.zeus.dynamoRefundMs': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'dynamoRefundMs'], formula: 'add' }] },
+  'utility.ZEUS_TASER.zeus.stunDurationMs': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'stunDurationMs'], formula: 'add' }] },
+  'utility.ZEUS_TASER.zeus.ballDurationMs': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'ballDurationMs'], formula: 'add' }] },
+  'utility.ZEUS_TASER.zeus.groundEnabled': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'groundEnabled'], formula: 'add' }] },
+  'utility.ZEUS_TASER.zeus.stormEnabled': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'stormEnabled'], formula: 'add' }] },
+  'utility.ZEUS_TASER.zeus.extraBolts': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'extraBolts'], formula: 'add' }] },
+  'utility.ZEUS_TASER.zeus.killRangeBonus': { kind: 'utility', itemId: 'ZEUS_TASER', targets: [{ path: ['zeus', 'killRangeBonus'], formula: 'add' }] },
   'utility.STINK_CLOUD.plague.directDurationMs': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'directDurationMs'], formula: 'add' }] },
   'utility.STINK_CLOUD.plague.lifeLeechFraction': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'lifeLeechFraction'], formula: 'add' }] },
   'utility.STINK_CLOUD.plague.pandemicEnabled': { kind: 'utility', itemId: 'STINK_CLOUD', targets: [{ path: ['plague', 'pandemicEnabled'], formula: 'add' }] },
@@ -191,21 +198,6 @@ export const EXPLICIT_LOADOUT_MODIFIER_DESCRIPTORS = {
     kind: "utility",
     itemId: "TRANSLOCATOR",
     targets: [{ path: ["telefragRadius"], formula: "scale" }],
-  },
-  "utility.ZEUS_TASER.chainCount": {
-    kind: "utility",
-    itemId: "ZEUS_TASER",
-    targets: [{ path: ["chainCount"], formula: "add", createIfMissing: true }],
-  },
-  "utility.ZEUS_TASER.chainDamageFactor": {
-    kind: "utility",
-    itemId: "ZEUS_TASER",
-    targets: [{ path: ["chainDamageFactor"], formula: "add", createIfMissing: true }],
-  },
-  "utility.ZEUS_TASER.chainRadius": {
-    kind: "utility",
-    itemId: "ZEUS_TASER",
-    targets: [{ path: ["chainRadius"], formula: "add", createIfMissing: true }],
   },
   "weapon.AK47.ak47Focus.damagePerStack": {
     kind: "weapon",

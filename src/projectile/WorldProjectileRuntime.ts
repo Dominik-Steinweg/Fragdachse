@@ -2309,6 +2309,7 @@ export class WorldProjectileRuntime implements
       state: { lockedTargetId: null },
       excludedTargetKeys: projectile.interaction.multiExplosionExcludedTargetKeys,
       initialTargetProtection: projectile.spec.flight.collisionFilter.initialTargetProtection,
+      excludedTarget: projectile.spec.flight.collisionFilter.excludedTarget,
     };
   }
 
@@ -2540,6 +2541,7 @@ export class WorldProjectileRuntime implements
           collisionFilter: {
             ignoreBaseCollisions: cfg.ignoreBaseCollisions,
             ignoreRockIndex: cfg.ignoreRockIndex,
+            excludedTarget: cfg.excludedTarget,
             initialTargetProtection: cfg.initialTargetProtection
           },
           hitboxGrowth: {
@@ -2607,6 +2609,7 @@ export class WorldProjectileRuntime implements
             hitSlowFraction: cfg.hitSlowFraction,
             hitSlowDurationMs: cfg.hitSlowDurationMs,
             hitVulnerabilityDurationMs: cfg.hitVulnerabilityDurationMs,
+            hitStunDurationMs: cfg.hitStunDurationMs,
             hitKnockback: cfg.hitKnockback,
             hitKnockbackDurationMs: cfg.hitKnockbackDurationMs
           },
@@ -2913,6 +2916,7 @@ function createInheritedProjectilePayload(
     hitSlowFraction:      record.spec.interaction.directHit.hitSlowFraction,
     hitSlowDurationMs:    record.spec.interaction.directHit.hitSlowDurationMs,
     hitVulnerabilityDurationMs: record.spec.interaction.directHit.hitVulnerabilityDurationMs,
+    hitStunDurationMs: record.spec.interaction.directHit.hitStunDurationMs,
     hitKnockback:         record.spec.interaction.directHit.hitKnockback,
     hitKnockbackDurationMs: record.spec.interaction.directHit.hitKnockbackDurationMs,
   };

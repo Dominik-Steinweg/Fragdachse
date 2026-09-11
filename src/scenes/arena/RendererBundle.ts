@@ -167,6 +167,7 @@ export function createRendererBundle(
   blackHole.generateTextures();
 
   const zeusTaser = new ZeusTaserRenderer(scene);
+  zeusTaser.registerGpuVfx(gpuVfx);
   zeusTaser.generateTextures();
 
   const flame = new FlameRenderer(scene);

@@ -71,6 +71,7 @@ export interface CombatLineQueryPort {
  * consumers must not depend on the concrete WorldCombatCore implementation.
  */
 export interface CombatActorStatePort {
+  isStunned?(id: string, now: number): boolean;
   isAlive(id: string): boolean;
   isBurrowed(id: string): boolean;
 }

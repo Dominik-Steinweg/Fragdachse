@@ -184,6 +184,56 @@ describe('host player dash and Burrow transition', () => {
   beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(0); });
   afterEach(() => vi.useRealTimers());
 
+  it('publishes one accepted start, stable identity through recovery and contacts before dash impact', () => {
+    const h = createHarness(), player = createMockPlayer('p');
+    let radius = PLAYER_SIZE / 2;
+    Object.assign(player, { positionRevision: 0, getCollisionRadius: () => radius,
+      setCollisionRadius: (value: number) => { radius = value; } });
+    h.players.set('p', player);
+    h.enemies.set('e', createMockEnemy('e', player.x, player.y));
+    const order: string[] = [];
+    const observer = { start: vi.fn(), move: vi.fn(() => order.push('zeus')), end: vi.fn() };
+    h.system.setDashObserver(observer);
+    h.system.setDashImpactDamageResolver(() => 1);
+    vi.mocked(h.combatSystem.applyDamage).mockImplementation(() => { order.push('impact'); return undefined as never; });
+    h.system.handleDashRPC('p', 0, 0);
+    expect(observer.start).not.toHaveBeenCalled();
+    h.system.handleDashRPC('p', 1, 0);
+    const id = h.system.getDashMovement('p')!.dashId;
+    h.system.handleDashRPC('p', 0, 1);
+    h.system.update();
+    expect(order.slice(0, 2)).toEqual(['zeus', 'impact']);
+    vi.advanceTimersByTime(DASH_T1_S * 1000 + 1);
+    h.system.update();
+    expect(h.system.getDashMovement('p')!.dashId).toBe(id);
+    vi.advanceTimersByTime(DASH_T2_S * 500);
+    h.system.update();
+    expect(h.system.getDashMovement('p')!.radius).toBeGreaterThan(PLAYER_SIZE / 4);
+    expect(observer.start).toHaveBeenCalledOnce();
+    vi.advanceTimersByTime(DASH_T2_S * 1000);
+    h.system.update();
+    expect(h.system.getDashMovement('p')).toBeNull();
+    expect(observer.end).toHaveBeenCalledOnce();
+  });
+
+  it('cancels active player and enemy dashes during stun and keeps the ground bonus out of dash speed', () => {
+    const h = createHarness(), player = createMockPlayer('p');
+    h.players.set('p', player); h.enemies.set('e', createMockEnemy('e'));
+    let stunned = false;
+    h.system.setStunChecker(() => stunned);
+    h.system.setZeusMoveBonus(() => 0.5);
+    h.system.update();
+    expect(player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * 1.5, 0);
+    h.system.handleDashRPC('p', 1, 0); h.system.startEnemyDash('e', 1, 0);
+    h.system.update();
+    expect(player.setVelocity).toHaveBeenLastCalledWith(PLAYER_SPEED * getPlayerDashBurstSpeedFactor(0), 0);
+    stunned = true; h.system.update();
+    expect(player.setVelocity).toHaveBeenLastCalledWith(0, 0);
+    expect(h.system.getDashPhase('p')).toBe(0);
+    expect(h.system.isEnemyDashing('e')).toBe(false);
+    expect(h.system.startEnemyDash('e', 1, 0)).toBe(false);
+  });
+
   it('restores all obstacle colliders before a boosted surface dash and restores the full hitbox afterwards', () => {
     const h = createBurrowDashHarness();
     h.enter();

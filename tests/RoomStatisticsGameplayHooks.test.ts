@@ -14,9 +14,11 @@ import { POWERUP_DEFS } from '../src/powerups/PowerUpConfig';
 import { PowerUpSystem } from '../src/powerups/PowerUpSystem';
 import type { PlayerManager } from '../src/entities/PlayerManager';
 import { PlayerUtilityActionRuntime } from '../src/world/PlayerUtilityActionRuntime';
+import { HostHeldActionSystem } from '../src/systems/HostHeldActionSystem';
 import { PlayerUltimateBehaviorRuntime } from '../src/world/PlayerUltimateBehaviorRuntime';
 
-function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
+function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true), heldAction?: HostHeldActionSystem) {
+  const cooldown = vi.fn();
   const player = { x: 10, y: 10, color: 0xffffff, displaySize: 32 };
   const noteUtilityUsed = vi.fn();
   const recordUtilityUsed = vi.fn();
@@ -36,7 +38,7 @@ function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
       resolveUtilityConfig: vi.fn((_playerId: string, value: any) => value),
       noteUtilityUsed,
     },
-    heldAction: {
+    heldAction: heldAction ?? {
       start: vi.fn(() => true),
       consume: vi.fn(() => ({ elapsedMs: 0, chargeFraction: 1 })),
       clearPlayer: vi.fn(),
@@ -47,7 +49,7 @@ function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
     gameAudioSystem: { playSound: vi.fn() } as any,
     network: {
       loadout: {
-        publishUtilityCooldownUntil: vi.fn(),
+        publishUtilityCooldownUntil: cooldown,
         publishTemporaryUtilityInstances: vi.fn(),
         publishHeldUtilityId: vi.fn(),
       },
@@ -57,10 +59,64 @@ function makeUtilityRuntime(config: any, placeableUse = vi.fn(() => true)) {
     nukeStrike: vi.fn(() => true),
     placeable: { use: placeableUse },
   });
-  return { utility, noteUtilityUsed, recordUtilityUsed, recordConstructionBuilt, placeableUse };
+  return { utility, cooldown, noteUtilityUsed, recordUtilityUsed, recordConstructionBuilt, placeableUse };
 }
 
 describe('room-statistics gameplay hooks', () => {
+  it.each([0.5, 1])('selects the Zeus form from host charge time, not the client fraction (%s)', fraction => {
+    const cfg = UTILITY_CONFIGS.ZEUS_TASER;
+    if (cfg.activation.type !== 'charged_alternate') throw new Error('Zeus activation');
+    const held = new HostHeldActionSystem();
+    const { utility, cooldown } = makeUtilityRuntime(cfg, undefined, held);
+    const activate = vi.fn(() => true);
+    utility.setZeusPort({ activate, removePlayer: vi.fn() });
+    const request = { category: 'utility' as const, playerId: 'p1', angle: 0, targetX: 0, targetY: 0,
+      hostNowMs: 100 + cfg.activation.fullChargeDuration * fraction,
+      params: { heldActionId: 'charge', utilityChargeFraction: fraction < 1 ? 1 : 0, attemptId: 'commit' } };
+    expect(utility.execute(request).ok).toBe(false);
+    expect(activate).not.toHaveBeenCalled();
+    expect(utility.startHeldAction('p1', 'charge', 'charged_alternate', 100)).toBe(true);
+    expect(utility.execute(request).ok).toBe(true);
+    expect(activate.mock.calls[0].at(-1)).toBe(fraction >= 1);
+    expect(cooldown).toHaveBeenLastCalledWith('p1', request.hostNowMs + cfg.cooldown, cfg.id);
+    utility.execute(request);
+    expect(activate).toHaveBeenCalledOnce();
+    utility.destroy();
+  });
+  it('refunds only a running Zeus cooldown, clamps at ready and publishes the new deadline', () => {
+    const base = UTILITY_CONFIGS.ZEUS_TASER;
+    if (base.type !== 'taser') throw new Error('Zeus config');
+    const config = { ...base, cooldown: 1000, zeus: { ...base.zeus, dynamoRefundMs: 300 } };
+    const { utility, cooldown } = makeUtilityRuntime(config);
+    const activate = vi.fn(() => true);
+    utility.setZeusPort({ activate, removePlayer: vi.fn() });
+    const use = (now: number) => utility.execute({ category: 'utility', playerId: 'p1', angle: 0, targetX: 10, targetY: 10, hostNowMs: now });
+    utility.onZeusDashStarted('p1', 10); // Nothing is banked before the first use.
+    expect(use(100).ok).toBe(true);
+    expect(cooldown).toHaveBeenLastCalledWith('p1', 1100, config.id);
+    utility.onZeusDashStarted('p1', 200);
+    expect(cooldown).toHaveBeenLastCalledWith('p1', 800, config.id);
+    expect(use(799)).toEqual({ ok: false, reason: 'cooldown' });
+    expect(activate).toHaveBeenCalledOnce();
+    utility.onZeusDashStarted('p1', 750);
+    expect(cooldown).toHaveBeenLastCalledWith('p1', 750, config.id);
+    utility.onZeusDashStarted('p1', 751);
+    expect(use(752).ok).toBe(true);
+    expect(cooldown).toHaveBeenLastCalledWith('p1', 1752, config.id);
+  });
+
+  it('does not commit a rejected Zeus activation or consume its cooldown', () => {
+    const { utility, cooldown, noteUtilityUsed } = makeUtilityRuntime(UTILITY_CONFIGS.ZEUS_TASER);
+    const activate = vi.fn(() => false);
+    utility.setZeusPort({ activate, removePlayer: vi.fn() });
+    const request = { category: 'utility' as const, playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 100 };
+    expect(utility.execute(request).ok).toBe(false);
+    expect(cooldown.mock.calls.every(call => call[1] === 0)).toBe(true); // Initial equipment sync may clear the old HUD.
+    expect(noteUtilityUsed).not.toHaveBeenCalled();
+    activate.mockReturnValue(true);
+    expect(utility.execute(request).ok).toBe(true);
+  });
+
   it('records successful utilities once at the semantic utility boundary and ignores cooldown use', () => {
     const { utility, noteUtilityUsed, recordUtilityUsed } = makeUtilityRuntime(UTILITY_CONFIGS.ZEUS_TASER);
 

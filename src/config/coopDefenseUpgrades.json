@@ -5847,51 +5847,172 @@
                                                                   }
                                             },
                                             {
-                                                "id":  "zeus_taser_range",
-                                                "code":  "D-U9-1",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  350,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_zeus_taser",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.ZEUS_TASER.range",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
-                                            },
-                                            {
-                                                "id":  "zeus_taser_arc",
-                                                "code":  "D-U9-2",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  3,
-                                                "startingLevel":  0,
-                                                "costPerLevel":  1,
-                                                "refundable":  true,
-                                                "sortOrder":  360,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "unlock_zeus_taser",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.ZEUS_TASER.hitArcDegrees",
-                                                                    "mode":  "add_percent_per_level",
-                                                                    "value":  0.1
-                                                                }
-                                                            ]
-                                            },
+  "id": "zeus_dynamo",
+  "code": "D-U9-L1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 350,
+  "requires": [
+    {
+      "upgradeId": "unlock_zeus_taser",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.dynamoRefundMs",
+      "mode": "add_per_level",
+      "value": 500
+    }
+  ]
+},
+{
+  "id": "zeus_nerve_shock",
+  "code": "D-U9-L2",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 351,
+  "requires": [
+    {
+      "upgradeId": "zeus_dynamo",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.stunDurationMs",
+      "mode": "add_per_level",
+      "value": 200
+    }
+  ]
+},
+{
+  "id": "zeus_ball_lightning",
+  "code": "D-U9-R1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 352,
+  "requires": [
+    {
+      "upgradeId": "unlock_zeus_taser",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.ballDurationMs",
+      "mode": "add_per_level",
+      "value": 1500
+    }
+  ]
+},
+{
+  "id": "zeus_electric_ground",
+  "code": "D-U9-R2",
+  "kind": "upgrade",
+  "maxLevel": 1,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 353,
+  "requires": [
+    {
+      "upgradeId": "zeus_ball_lightning",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.groundEnabled",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ]
+},
+{
+  "id": "zeus_thunderfront",
+  "code": "D-U9-C",
+  "kind": "upgrade",
+  "maxLevel": 1,
+  "startingLevel": 0,
+  "costPerLevel": 0,
+  "refundable": true,
+  "sortOrder": 354,
+  "requires": [
+    {
+      "upgradeId": "zeus_nerve_shock",
+      "minLevel": 1
+    },
+    {
+      "upgradeId": "zeus_electric_ground",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.stormEnabled",
+      "mode": "add_per_level",
+      "value": 1
+    }
+  ],
+  "bossPointCostPerLevel": 1
+},
+{
+  "id": "zeus_lightning_flood",
+  "code": "D-U9-BL1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 355,
+  "requires": [
+    {
+      "upgradeId": "zeus_thunderfront",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.extraBolts",
+      "mode": "add_per_level",
+      "value": 4
+    }
+  ]
+},
+{
+  "id": "zeus_breakthrough",
+  "code": "D-U9-BR1",
+  "kind": "upgrade",
+  "maxLevel": 3,
+  "startingLevel": 0,
+  "costPerLevel": 1,
+  "refundable": true,
+  "sortOrder": 356,
+  "requires": [
+    {
+      "upgradeId": "zeus_thunderfront",
+      "minLevel": 1
+    }
+  ],
+  "effects": [
+    {
+      "stat": "utility.ZEUS_TASER.zeus.killRangeBonus",
+      "mode": "add_per_level",
+      "value": 0.25
+    }
+  ]
+},
+
                                             {
                                                 "id":  "unlock_decoy",
                                                 "code":  "D-U10",
@@ -6090,38 +6211,7 @@
                                                             ]
                                             },
 
-                                            {
-                                                "id":  "zeus_chain_lightning",
-                                                "code":  "D-U9-C",
-                                                "kind":  "upgrade",
-                                                "maxLevel":  1,
-                                                "costPerLevel":  0,
-                                                "bossPointCostPerLevel":  1,
-                                                "sortOrder":  375,
-                                                "requires":  [
-                                                                 {
-                                                                     "upgradeId":  "zeus_taser_arc",
-                                                                     "minLevel":  1
-                                                                 }
-                                                             ],
-                                                "effects":  [
-                                                                {
-                                                                    "stat":  "utility.ZEUS_TASER.chainCount",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  2
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.ZEUS_TASER.chainRadius",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  120
-                                                                },
-                                                                {
-                                                                    "stat":  "utility.ZEUS_TASER.chainDamageFactor",
-                                                                    "mode":  "add_per_level",
-                                                                    "value":  0.5
-                                                                }
-                                                            ]
-                                            },
+
                                             {
                                                 "id": "decoy_explosive_dummy",
                                                 "code": "D-U10-C",

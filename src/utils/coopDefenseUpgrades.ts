@@ -68,6 +68,14 @@ export function hasCoopDefenseDedicatedUpgradeIcon(upgradeId: string): boolean {
 }
 
 const COOP_DEFENSE_UPGRADE_ICON_ALIASES: Readonly<Record<string, string>> = Object.freeze({
+  zeus_dynamo: 'UPGRADE_ZEUS_TASER_RANGE',
+  zeus_nerve_shock: 'UPGRADE_ZEUS_TASER_RANGE',
+  zeus_ball_lightning: 'UPGRADE_ZEUS_TASER_RANGE',
+  zeus_electric_ground: 'UPGRADE_ZEUS_TASER_RANGE',
+  zeus_thunderfront: 'UPGRADE_ZEUS_CHAIN_LIGHTNING',
+  zeus_lightning_flood: 'UPGRADE_ZEUS_CHAIN_LIGHTNING',
+  zeus_breakthrough: 'UPGRADE_ZEUS_CHAIN_LIGHTNING',
+
   decoy_mass_distraction: 'UPGRADE_DECOY_DURATION',
   decoy_irresistible_lure: 'UPGRADE_DECOY_DURATION',
   decoy_shadow_runner: 'UPGRADE_DECOY_STEALTH_DURATION',

@@ -89,7 +89,7 @@ export interface MeleeSwingRequest {
   adrenalinGain:         number;
   sourceId:            string;
   color:                 number;
-  sourceSlot?:           WeaponSlot;
+  sourceSlot?:           LoadoutSlot;
   rockDamageMult:        number;
   trainDamageMult:       number;
   baseDamageMult:        number;

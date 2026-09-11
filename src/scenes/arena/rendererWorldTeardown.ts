@@ -22,6 +22,7 @@ export function resetRenderersForWorldGameplayTeardown(bundle: RendererBundle): 
   bundle.teslaDome.destroyAll();
   bundle.teslaNova.destroyAll();
   bundle.teslaBolt.destroyAll();
+  bundle.zeusTaser.clearUpgrades();
   bundle.healingAura.destroyAll();
   bundle.miniTeslaDome.destroyAll();
   bundle.energyShield.destroyAll();

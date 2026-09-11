@@ -54,6 +54,8 @@ export interface CombatAllegianceRef {
 }
 
 export interface CombatSourceLineage {
+  readonly zeusUseId?: number;
+  readonly zeusRole?: 'direct' | 'ball' | 'bolt' | 'ground';
   readonly smokeCloudId?: number;
   readonly smokeKind?: 'storm' | 'discharge';
   readonly parentEffectId?: string;

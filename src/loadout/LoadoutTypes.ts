@@ -439,6 +439,12 @@ export interface ChargedThrowUtilityActivationConfig {
   readonly fullChargeDuration: number; // ms bis Maximalgeschwindigkeit
 }
 
+/** Short release uses the primary action; a full hold commits the alternate action. */
+export interface ChargedAlternateUtilityActivationConfig {
+  readonly type: 'charged_alternate';
+  readonly fullChargeDuration: number;
+}
+
 export interface ChargedGateUtilityActivationConfig {
   readonly type: 'charged_gate';
   readonly fullChargeDuration: number; // ms – muss voll aufgeladen werden um zu feuern
@@ -460,6 +466,7 @@ export type UtilityActivationConfig =
   | InstantUtilityActivationConfig
   | ChargedThrowUtilityActivationConfig
   | ChargedGateUtilityActivationConfig
+  | ChargedAlternateUtilityActivationConfig
   | TargetedClickUtilityActivationConfig
   | PlacementModeUtilityActivationConfig;
 
@@ -633,14 +640,12 @@ export interface StinkCloudUtilityConfig extends BaseUtilityConfig {
 }
 
 export interface TaserUtilityConfig extends BaseUtilityConfig {
+  readonly zeus: import('../systems/ZeusRuntime').ZeusConfig;
   readonly type: 'taser';
   readonly damage: number;
   readonly range: number;
   readonly hitArcDegrees: number;
   readonly visualPreset: MeleeVisualPreset;
-  readonly chainCount?: number;
-  readonly chainRadius?: number;
-  readonly chainDamageFactor?: number;
 }
 
 export interface DecoyUtilityConfig extends BaseUtilityConfig {

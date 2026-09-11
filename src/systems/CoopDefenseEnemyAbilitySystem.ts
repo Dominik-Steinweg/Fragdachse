@@ -156,6 +156,21 @@ export class CoopDefenseEnemyAbilitySystem {
     for (const enemy of this.enemyManager.getAllEnemies()) {
       if (!enemy.sprite.active || enemy.getHp() <= 0) continue;
       activeEnemyIds.add(enemy.id);
+      if (this.combatSystem.isStunned?.(enemy.id, now)) {
+        this.lastHealingTickAt.set(enemy.id, now); this.lastMiniDomeTickAt.set(enemy.id, now);
+        this.voidFireTrailStates.delete(enemy.id);
+        const windup = this.voidMolotovStates.get(enemy.id);
+        if (windup && windup.throwAt > 0) {
+          windup.readyAt = now + (getCoopDefenseEnemyConfig(enemy.kind).voidMolotov?.cooldownMs ?? 0);
+          this.cancelVoidMolotovWindup(enemy);
+        }
+        const teleport = this.teleportStates.get(enemy.id);
+        if (teleport?.teleportAt !== undefined) {
+          // A thrown puck keeps its normal projectile lifetime, but cannot teleport its stunned owner.
+          this.resetTeleportState(teleport, now + (getCoopDefenseEnemyConfig(enemy.kind).translocator?.cooldownMs ?? 0));
+        }
+        continue;
+      }
       // Eingebuddelte Gegner setzen – wie eingebuddelte Spieler – keine Faehigkeiten ein.
       if (enemy.isBurrowed()) {
         this.voidFireTrailStates.delete(enemy.id);

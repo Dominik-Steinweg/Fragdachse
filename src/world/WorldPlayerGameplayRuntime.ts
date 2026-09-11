@@ -477,7 +477,7 @@ export class WorldPlayerGameplayRuntime implements
       gaussExecution: options.gaussExecution,
       canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
       isAlive: (playerId) => options.combatSystem.isAlive(playerId),
-      isUltimateBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
+      isUltimateBlocked: (playerId) => burrow.isUtilityBlocked(playerId) || (this.options.combatSystem.isStunned?.(playerId, Date.now()) ?? false),
       breakStealth: (playerId, nowMs) => options.decoySystem.breakStealth(playerId, nowMs),
       relationship: options.relationship,
       roundStats: options.network.roundStats,
@@ -556,7 +556,7 @@ export class WorldPlayerGameplayRuntime implements
         },
         canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
         isAlive: (playerId) => options.combatSystem.isAlive(playerId),
-        isUtilityBlocked: (playerId) => burrow.isUtilityBlocked(playerId),
+        isUtilityBlocked: (playerId) => burrow.isUtilityBlocked(playerId) || (this.options.combatSystem.isStunned?.(playerId, Date.now()) ?? false),
       },
       loadout,
       heldAction,
@@ -708,7 +708,7 @@ export class WorldPlayerGameplayRuntime implements
         },
         canInteract: (playerId) => options.getPlayerCapabilities(playerId).canInteract,
         isAlive: (playerId) => options.combatSystem.isAlive(playerId),
-        isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId),
+        isWeaponBlocked: (playerId) => burrow.isWeaponBlocked(playerId) || (this.options.combatSystem.isStunned?.(playerId, Date.now()) ?? false),
         isDashBurst: (playerId) => options.hostPhysics.isDashBurst(playerId),
         breakStealth: (playerId, now) => options.decoySystem.breakStealth(playerId, now),
       },
@@ -799,7 +799,7 @@ export class WorldPlayerGameplayRuntime implements
         isStunned: (playerId) => systems.burrow.isStunned(playerId),
         isDashBlocked: (playerId) => systems.burrow.isDashBlocked(playerId),
         getMovementSpeedFactor: (playerId) => systems.burrow.getMovementSpeedFactor(playerId),
-        isWeaponBlocked: (playerId) => systems.burrow.isWeaponBlocked(playerId),
+        isWeaponBlocked: (playerId) => systems.burrow.isWeaponBlocked(playerId) || (this.options.combatSystem.isStunned?.(playerId, Date.now()) ?? false),
       },
       movement: {
         tryExitBurrowForDash: (playerId) => systems.burrow.tryExitBurrowForDash(playerId),
@@ -910,8 +910,18 @@ export class WorldPlayerGameplayRuntime implements
     this.systems.burrow.setStinkCloudSystem(system);
   }
 
+  private interruptStunnedActions(nowMs: number): void {
+    for (const player of this.options.playerManager.getAllPlayers()) {
+      if (!this.options.combatSystem.isStunned?.(player.id, nowMs)) continue;
+      this.systems.heldAction.clearPlayer(player.id);
+      this.systems.sustainedWeaponBehavior.interruptCombat(player.id);
+      this.systems.ultimateBehavior.interruptCombat(player.id, nowMs);
+    }
+  }
+
   runHostPrePhysicsStage(deltaMs: number, nowMs: number, countdownActive: boolean): void {
     if (this.destroyed) return;
+    this.interruptStunnedActions(nowMs);
     const { systems } = this;
     systems.heldAction.clearExpired(nowMs);
     if (countdownActive) {
@@ -984,6 +994,7 @@ export class WorldPlayerGameplayRuntime implements
 
   runHostPreCombatStage(nowMs: number, countdownActive: boolean): void {
     if (this.destroyed || countdownActive) return;
+    this.interruptStunnedActions(nowMs);
     this.systems.flamethrowerUpgrade?.prepareProjectileBurns(nowMs);
     this.systems.weaponUpgrade?.hostUpdate(nowMs);
   }
@@ -1008,6 +1019,7 @@ export class WorldPlayerGameplayRuntime implements
       return { guardianSpirits: [], repairDrones: [], slimeTrail: { cells: [], affectedEnemies: [] } };
     }
     const { systems } = this;
+    this.interruptStunnedActions(nowMs);
     systems.ak47StrategicTarget?.hostUpdate(nowMs);
     const guardianSpirits = systems.guardianSpirit?.hostUpdate(nowMs, deltaMs) ?? [];
     systems.repairDrone?.update(deltaMs);

@@ -4,6 +4,7 @@ import { GpuVfxEase } from './GpuVfxEase';
 import { MUZZLE_MAX_LIFETIME } from '../muzzleFlashModel';
 import { MOVEMENT_FX } from '../../config/movementEffects';
 import { BURROW_FX } from '../../config/burrowEffects';
+import { ZEUS_FX } from '../../config/zeusEffects';
 import {
   GpuVfxFrameAnimationId,
   type GpuVfxFrameAnimationId as GpuVfxFrameAnimationIdType,
@@ -89,6 +90,8 @@ export const GpuVfxLaneId = {
   MuzzleFlash:           30,
   FlightSignature:       31,
   MovementGround:        32,
+  ElectricGround:        33,
+  ElectricBody:          34,
 } as const;
 
 export type GpuVfxLaneId = (typeof GpuVfxLaneId)[keyof typeof GpuVfxLaneId];
@@ -718,5 +721,21 @@ export const GPU_VFX_LANES: readonly GpuVfxLaneSpec[] = [
     maxLifetimeMs: MOVEMENT_FX.footprintLifeMaxMs, order: 'ordered', reserveCritical: 0,
     rationale: 'Ground contacts must cover terrain decals but remain below rocks, actors and combat signals. Existing NORMAL lanes are all above these obstacles.',
     capacityRationale: 'The movement renderer admits at most 3072 four-second prints (768/s sustained) and 1024 short dust particles, with player reserves inside both budgets. Burrow separately admits at most 2048 short-lived ground clods and dust members.',
+  },
+  {
+    id: GpuVfxLaneId.ElectricGround, label: 'electric-ground',
+    depth: DEPTH.DECALS + 0.2, blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear], capacity: ZEUS_FX.groundCapacity, maxLifetimeMs: ZEUS_FX.bedLifeMs,
+    order: 'add-over-opaque', reserveCritical: ZEUS_FX.coreReserve,
+    rationale: 'The connected electrical footprint stays below rocks and actors. It cannot share the above-rock fire band.',
+    capacityRationale: 'Up to 1024 arc-length samples with three overlapping strand generations plus diffuse beds; critical cores have a separate admission reserve.',
+  },
+  {
+    id: GpuVfxLaneId.ElectricBody, label: 'electric-body',
+    depth: DEPTH.PLAYERS + 0.3, blendMode: Phaser.BlendModes.ADD,
+    eases: [GpuVfxEase.Linear], capacity: ZEUS_FX.bodyCapacity, maxLifetimeMs: ZEUS_FX.bedLifeMs,
+    order: 'add-over-opaque', reserveCritical: 1024,
+    rationale: 'Electrical shells follow player bodies above their silhouettes; the floor remains a separate depth band.',
+    capacityRationale: 'Twelve owners with overlapping shell/branch generations; body cores retain reserved capacity under decorative load.',
   },
 ];

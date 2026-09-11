@@ -101,6 +101,8 @@ export interface PlayerCombatUtilityPort {
   getStinkDamageReduction?(playerId: string, nowMs: number): number;
   getTranslocatorMoveSpeedBonus?(playerId: string, nowMs: number): number;
   getTranslocatorHpRegen?(playerId: string, nowMs: number): number;
+  setZeusPort?(port: import('./ZeusUtilityPort').ZeusUtilityPort | null): void;
+  onZeusDashStarted?(playerId: string, now: number): void;
   setTimeBubblePort?(port: import('./TimeBubbleUtilityPort').TimeBubbleUtilityPort | null): void;
   onTimeBubbleEnded?(bubbleId: number, endedAt: number): void;
   onUtilityProjectileResolved?(projectileId: number, now: number, grenadePayloadPending?: boolean): void;

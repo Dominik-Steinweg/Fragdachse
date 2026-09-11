@@ -115,6 +115,12 @@ export class SustainedWeaponBehaviorRuntime implements SustainedWeaponBehaviorPo
     this.energyShieldSystem = system;
   }
 
+  interruptCombat(playerId: string): void {
+    const held = this.heldWeapons.get(playerId);
+    if (held) this.deactivateNonAutonomousWeaponEffect(playerId, held.slot);
+    this.heldWeapons.delete(playerId);
+  }
+
   resetPlayer(playerId: string): void {
     if (this.destroyed) return;
     this.stopPlayerEffect(playerId);

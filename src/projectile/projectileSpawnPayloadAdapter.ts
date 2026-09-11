@@ -33,6 +33,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
 
     ignoreBaseCollisions: flight.collisionFilter?.ignoreBaseCollisions,
     ignoreRockIndex:      flight.collisionFilter?.ignoreRockIndex,
+    excludedTarget: flight.collisionFilter?.excludedTarget,
     initialTargetProtection: flight.collisionFilter?.initialTargetProtection,
     initialBounceCount:   flight.initialBounceCount,
     remainingRangePx:     flight.remainingRangePx,
@@ -72,6 +73,7 @@ export function toProjectileSpawnConfig(request: ProjectileSpawnRequest): Projec
     baseDamageMult:  directHit?.baseDamageMult,
     hitSlowFraction:            directHit?.slowFraction,
     hitSlowDurationMs:          directHit?.slowDurationMs,
+    hitStunDurationMs: directHit?.stunDurationMs,
     hitVulnerabilityDurationMs: directHit?.vulnerabilityDurationMs,
     hitKnockback:               directHit?.knockback,
     hitKnockbackDurationMs:     directHit?.knockbackDurationMs,

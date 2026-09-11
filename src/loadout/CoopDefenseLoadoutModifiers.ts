@@ -763,16 +763,6 @@ export const CONFIG_STAT_DESCRIPTORS: Readonly<Record<string, ConfigStatDescript
     itemId: 'SPORE_TURRET',
     targets: [{ path: ['placeable', 'targetRange'], formula: 'scale' }],
   },
-  'utility.ZEUS_TASER.range': {
-    kind: 'utility',
-    itemId: 'ZEUS_TASER',
-    targets: [{ path: ['range'], formula: 'scale' }],
-  },
-  'utility.ZEUS_TASER.hitArcDegrees': {
-    kind: 'utility',
-    itemId: 'ZEUS_TASER',
-    targets: [{ path: ['hitArcDegrees'], formula: 'scale' }],
-  },
   'utility.DECOY.decoyLifetimeMs': {
     kind: 'utility',
     itemId: 'DECOY',

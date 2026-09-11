@@ -78,6 +78,10 @@ export const GpuVfxEffectId = {
   BurrowResidue: 64,
   BurrowDust: 65,
   BurrowShockwave: 66,
+  ElectricGroundCore: 67,
+  ElectricGroundGlow: 68,
+  ElectricBodyCore: 69,
+  ElectricBodyGlow: 70,
 } as const;
 
 export type GpuVfxEffectId = (typeof GpuVfxEffectId)[keyof typeof GpuVfxEffectId];
@@ -582,4 +586,12 @@ export const GPU_VFX_EFFECTS: readonly GpuVfxEffectSpec[] = [
     frame: GpuVfxFrameId.ExplosionSmoke, importance: 'decorative', release: 'linger' },
   { id: GpuVfxEffectId.BurrowShockwave, label: 'burrow.shockwave', lane: GpuVfxLaneId.ExplosionAccent,
     frame: GpuVfxFrameId.ExplosionRing, importance: 'critical', release: 'linger' },
+  { id: GpuVfxEffectId.ElectricGroundCore, label: 'zeus.ground-core', lane: GpuVfxLaneId.ElectricGround,
+    frame: GpuVfxFrameId.FlightCoreStrip, importance: 'critical', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.ElectricGroundGlow, label: 'zeus.ground-glow', lane: GpuVfxLaneId.ElectricGround,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.ElectricBodyCore, label: 'zeus.body-core', lane: GpuVfxLaneId.ElectricBody,
+    frame: GpuVfxFrameId.FlightCoreStrip, importance: 'critical', release: 'kill-with-source' },
+  { id: GpuVfxEffectId.ElectricBodyGlow, label: 'zeus.body-glow', lane: GpuVfxLaneId.ElectricBody,
+    frame: GpuVfxFrameId.DeathGlow, importance: 'standard', release: 'kill-with-source' },
 ];

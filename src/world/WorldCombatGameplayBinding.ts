@@ -1102,6 +1102,7 @@ export class WorldCombatGameplayBinding implements WorldScopedBinding {
       canDamageOwner: (provenance, otherOwnerId, allowTeamDamage) => (
         o.combatSystem.canProjectileDamageTarget(provenance, otherOwnerId, allowTeamDamage)
       ),
+      isCurrentTargetInstance: target => o.combatSystem.isCurrentCombatantTarget(target),
       isTargetCurrentlyValid: (id, type, ownerId) => o.isHomingTargetValid?.(id, type, ownerId) ?? true,
     });
     o.projectileInteraction.setProjectileCollisionTargetQueryPort({

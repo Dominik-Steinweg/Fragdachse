@@ -105,6 +105,16 @@ export class CoopDefenseVoidHunterSystem {
       active.add(enemy.id);
       const state = this.states.get(enemy.id) ?? this.createState(enemy, config, now);
 
+      if (this.combatSystem.isStunned?.(enemy.id, now)) {
+        if (state.gauss) { state.gauss = null; state.nextGaussAt = now + config.gauss.cooldownMs; }
+        if (state.armageddonActiveUntil > 0) {
+          this.armageddonSystem.deactivate(enemy.id); state.armageddonActiveUntil = 0;
+          state.nextArmageddonAt = now + config.armageddonCooldownMs;
+        }
+        state.armageddonPending = false;
+        enemy.stopMovement(); enemy.setSpecialAction('none');
+        continue;
+      }
       if (!state.phaseTwo && enemy.getHp() / enemy.getMaxHp() <= config.phaseTwoHpRatio) {
         this.startPhaseTwo(enemy, state, config, now);
       }

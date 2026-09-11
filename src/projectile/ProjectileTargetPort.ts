@@ -122,6 +122,8 @@ export interface ProjectileWorldBlockerPort {
  * noch `NetworkBridge`.
  */
 export interface ProjectileTargetabilityPort {
+  /** Checks a frozen Combat identity, so a successor reusing its ID is not excluded. */
+  isCurrentTargetInstance?(target: import('../combat/CombatScope').CombatTargetRef): boolean;
   /** Enemy-only contact semantics; friendly-fire settings do not make allies impact-fuse targets. */
   getGrenadeContactRole?(provenance: ProjectileProvenance, target: ProjectileTargetRef): 'character' | 'structure' | null;
   canDamage(

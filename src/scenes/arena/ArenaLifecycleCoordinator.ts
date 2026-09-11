@@ -2760,6 +2760,7 @@ export class ArenaLifecycleCoordinator {
     this.ctx.fireSystem.destroyAll();
     this.ctx.stinkCloudSystem.destroyAll();
     this.ctx.effectSystem.clearAllBurrowStates();
+    this.ctx.effectSystem.clearZeusUpgrades();
     // Die Effektdarstellung der vergangenen World raeumt ihr eigener Owner ab.
     resetRenderersForWorldGameplayTeardown(this.renderers);
     // Laufende Kameraquellen und Trefferkopien dürfen nicht in die Lobby überlaufen.

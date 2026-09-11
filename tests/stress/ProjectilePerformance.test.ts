@@ -95,6 +95,7 @@ import type { ProjectileSpawnRequest } from '../../src/projectile/ProjectileSpaw
 import { createSingleOwnerProvenance } from '../../src/projectile/ProjectileSpawnRequest';
 import type { ProjectileInteractionSpec } from '../../src/projectile/ProjectileSpawnRequest';
 import { WorldProjectileRuntime } from '../../src/projectile/WorldProjectileRuntime';
+import { zeusFixture, zeusRef } from '../ZeusTestHelper';
 function makeRequest(overrides: {
   origin?: Partial<ProjectileSpawnRequest['origin']>;
   flight?: Partial<ProjectileSpawnRequest['flight']>;
@@ -117,6 +118,39 @@ function spawnRequest(runtime: WorldProjectileRuntime, overrides: Parameters<typ
   return id;
 }
 describe('projectile performance paths', () => {
+  it.each([200, 400])('resolves and releases %i simultaneous Zeus bolts from multiple owners', count => {
+    const { runtime, physics, setHostNowMs } = createProjectileRuntimeTestWorld();
+    const c = zeusFixture().config;
+    const hit = vi.fn(() => ({ accepted: true }));
+    runtime.setProjectileCombatPort({ resolveDirectImpact: hit, resolveExplosionCombat: () => ({ damagedTargetKeys: [] }) });
+    runtime.setProjectileCollisionTargetQueryPort({ readCollisionTargets: sink => {
+      sink('enemy', 'target', 'enemy-owner', 80, 0, 8, 72, -8, 88, 8);
+    } });
+    const begin = performance.now();
+    const ids = Array.from({ length: count }, (_, i) => spawnRequest(runtime, {
+      ownerId: `owner-${i % 4}`, origin: { x: 0, y: i % 2 ? 100 : 0 },
+      flight: { speed: c.boltSpeed, size: c.boltSize, remainingRangePx: c.boltRange,
+        lifetimeMs: 1000, speedVariation: 'charged_bolt', homing: c.boltHoming,
+        collisionFilter: { excludedTarget: zeusRef('origin') } },
+      interaction: { directHit: { damage: c.boltDamage, stunDurationMs: 100 } }, presentation: { style: 'tesla_bolt' },
+    }));
+    runtime.runHostInteractionStage(0);
+    for (const id of ids) physics.handles.get(id)!.sprite.x = 120;
+    setHostNowMs(80); runtime.runHostInteractionStage(80);
+    expect(hit).toHaveBeenCalledTimes(count / 2);
+    expect(runtime.activeCount).toBe(count / 2);
+    for (const id of ids) if (physics.handles.get(id)!.sprite.active) {
+      physics.observe(id, c.boltRange + 10, 100, c.boltSpeed, 0);
+      physics.handles.get(id)!.sprite.x = c.boltRange + 10;
+    }
+    setHostNowMs(300); runtime.runHostProjectileStage(300, 300);
+    expect(runtime.activeCount).toBe(0);
+    expect(new Set(physics.released).size).toBe(count);
+    console.info(`Zeus ${count} bolts: spawn, collision and expiry ${(performance.now() - begin).toFixed(2)} ms (headless)`);
+    runtime.destroy();
+    expect(runtime.getNetSnapshot()).toBeNull();
+    expect(physics.releaseWorldState).toHaveBeenCalledOnce();
+  });
   it('shares the target snapshot across many simultaneous portal crossings and preserves each real path', () => {
     const { runtime, physics } = createProjectileRuntimeTestWorld();
     const pairs = Array.from({ length: 8 }, (_, index) => ({ id: `pair-${index}`, ownerId: 'shooter',

@@ -105,7 +105,7 @@ const UTILITY_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   bfg: ['range', 'directDamage', 'proximityPulse'],
   nuke: [],
   stinkcloud: ['cloudRadius', 'cloudDuration', 'cloudDamagePerTick', 'cloudTickInterval'],
-  taser: ['damage', 'range', 'hitArcDegrees', 'visualPreset'],
+  taser: ['damage', 'range', 'hitArcDegrees', 'visualPreset', 'zeus'],
   decoy: [
     'refundRadius', 'refundPerEnemyMs', 'lureRadius', 'stealthMoveSpeedBonus',
     'stealthHpRegenPerSecond', 'stealthAdrenalineRegenBonus', 'fireTrailDurationMs', 'fireChunkBurst',
@@ -142,6 +142,7 @@ const ACTIVATION_REQUIRED: Readonly<Record<string, readonly string[]>> = {
   instant: [],
   charged_throw: ['minThrowSpeed', 'fullChargeDuration'],
   charged_gate: ['fullChargeDuration'],
+  charged_alternate: ['fullChargeDuration'],
   targeted_click: [],
   placement_mode: [],
 };
@@ -337,6 +338,28 @@ export function validateResolvedUtility(value: unknown): string[] {
   }
   if (value.type === 'stinkcloud' && (value.id === 'STINK_CLOUD' || value.plague !== undefined)) {
     issues.push(...validateStinkPlagueConfig(value.plague));
+  }
+  if (value.type === 'taser') {
+    const z = value.zeus;
+    const fields = ['dynamoRefundMs', 'stunDurationMs', 'ballDurationMs', 'groundEnabled', 'stormEnabled',
+      'extraBolts', 'killRangeBonus', 'groundDurationMs', 'groundDamagePerSecond', 'groundMoveBonus',
+      'groundMoveDurationMs', 'boltCount', 'boltDamage', 'boltSpeed', 'boltSize', 'boltRange', 'boltJitterDegrees'];
+    if (!isRecord(z) || fields.some(k => typeof z[k] !== 'number' || !Number.isFinite(z[k]) || (z[k] as number) < 0)
+      || !isRecord(z.boltHoming)) issues.push('$.zeus: complete nonnegative finite tuning required');
+    else if ((z.boltSpeed as number) <= 0 || (z.boltSize as number) <= 0 || (z.boltRange as number) <= 0)
+      issues.push('$.zeus: positive projectile speed, size and range required');
+    else {
+      for (const k of ['boltCount', 'extraBolts', 'groundEnabled', 'stormEnabled']) {
+        if (!Number.isSafeInteger(z[k])) issues.push('$.zeus.' + k + ': expected integer');
+      }
+      for (const k of ['groundEnabled', 'stormEnabled']) {
+        if ((z[k] as number) > 1) issues.push('$.zeus.' + k + ': expected zero or one');
+      }
+      for (const k of ['searchRadius', 'maxTurnDegreesPerStep', 'retargetIntervalMs', 'acquireDelayMs', 'distanceWeight', 'forwardWeight']) {
+        const n = z.boltHoming[k];
+        if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) issues.push('$.zeus.boltHoming.' + k + ': invalid value');
+      }
+    }
   }
   if (value.type === 'smoke') {
     const b = value.smokeBehavior;

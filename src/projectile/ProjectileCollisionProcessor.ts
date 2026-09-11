@@ -456,6 +456,9 @@ export class ProjectileCollisionProcessor {
     overlapBounds?: { left: number; right: number; top: number; bottom: number },
   ): boolean {
     if (record.provenance.allegiance.ownerId === slot.ownerId) return false;
+    const excluded = record.spec.flight.collisionFilter.excludedTarget;
+    if (excluded && excluded.id === slot.id && excluded.kind === slot.kind
+      && (deps.targetability?.isCurrentTargetInstance?.(excluded) ?? true)) return false;
     const protection = record.spec.flight.collisionFilter.initialTargetProtection;
     if (slot.kind === 'enemy' && protection?.targetId === slot.id
       && (record.simulatedAgeMs ?? 0) < protection.durationMs) return false;
@@ -587,6 +590,7 @@ function createDirectImpactRequest(
       slowFraction: record.spec.interaction.directHit.hitSlowFraction,
       slowDurationMs: record.spec.interaction.directHit.hitSlowDurationMs,
       vulnerabilityDurationMs: record.spec.interaction.directHit.hitVulnerabilityDurationMs,
+      stunDurationMs: record.spec.interaction.directHit.hitStunDurationMs,
       knockback: record.spec.interaction.directHit.hitKnockback,
       knockbackDurationMs: record.spec.interaction.directHit.hitKnockbackDurationMs,
       shotgun: record.spec.interaction.directHit.shotgunOriginX === undefined || record.spec.interaction.directHit.shotgunOriginY === undefined

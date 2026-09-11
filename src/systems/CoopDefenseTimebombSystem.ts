@@ -91,6 +91,10 @@ export class CoopDefenseTimebombSystem implements EnemySpecialMovementSource {
       const state = this.states.get(enemy.id) ?? this.createState(enemy);
       this.states.set(enemy.id, state);
 
+      if (this.combatSystem.isStunned?.(enemy.id, now)) {
+        this.states.set(enemy.id, this.createState(enemy)); enemy.stopMovement(); enemy.setSpecialAction('none');
+        continue;
+      }
       if (state.phase === 'approach') this.updateApproach(enemy, state, config, now);
       else if (state.phase === 'chase') this.updateChase(enemy, state, config, now);
       else this.updateFuse(enemy, state, config, now);

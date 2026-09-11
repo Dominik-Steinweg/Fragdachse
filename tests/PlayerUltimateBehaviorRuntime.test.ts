@@ -56,6 +56,17 @@ function makeHarness() {
 }
 
 describe('PlayerUltimateBehaviorRuntime – Buff-/Armageddon-Lifecycle', () => {
+  it('interrupts active combat without generating catch-up effects after the stun', () => {
+    const f = makeHarness();
+    f.behavior.execute({ category: 'ultimate', playerId: 'p1', angle: 0, targetX: 0, targetY: 0, hostNowMs: 1000 });
+    f.behavior.interruptCombat('p1', 1100);
+    f.behavior.update(1000, 2100);
+    expect(f.behavior.isUltimateActive('p1')).toBe(false);
+    expect(f.armageddon.deactivate).toHaveBeenCalledOnce();
+    expect(f.combatSystem.applyAoeDamage).not.toHaveBeenCalled();
+    expect(f.combatSystem.addArmor).not.toHaveBeenCalled();
+  });
+
   it('aktiviert Buff und Armageddon genau einmal bei einem retried Commit', () => {
     const { behavior, config, armageddon, recordUltimateUsed } = makeHarness();
     const request = {

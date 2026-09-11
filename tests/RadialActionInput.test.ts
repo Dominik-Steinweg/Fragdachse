@@ -63,6 +63,35 @@ function createSystem() {
 }
 
 describe('Radial Menu V2 input', () => {
+  it.each([false, true])('uses Zeus on short release or automatically at full charge exactly once (full=%s)', full => {
+    vi.useFakeTimers(); vi.setSystemTime(1000);
+    try {
+      const { system, keys, bridge } = createSystem();
+      const cfg = UTILITY_CONFIGS.ZEUS_TASER;
+      if (cfg.activation.type !== 'charged_alternate') throw new Error('Zeus activation');
+      const uses = vi.fn();
+      system.setupRadialActionProviders({ getTools: () => [{ kind: 'utility', id: cfg.id }],
+        getCooldownUntil: () => 0, getCapabilities: () => ({ canUseUtility: true, canPlace: true, canManage: true }) });
+      system.setupUtilityConfigProvider(() => cfg);
+      system.setupUtilityCooldownProvider(() => 0);
+      system.setupLoadoutListener(uses);
+      keys.keyE.isDown = true; keys.keyE.justDown = true; system.update();
+      expect(uses).not.toHaveBeenCalled();
+      expect(bridge.sendHeldActionStart).toHaveBeenCalledOnce();
+      keys.keyE.justDown = false;
+      vi.setSystemTime(1000 + cfg.activation.fullChargeDuration / 2); system.update();
+      expect(system.getUtilityChargePreviewState()).toMatchObject({ chargeFraction: 0.5, isGateCharge: true });
+      if (full) {
+        vi.setSystemTime(1000 + cfg.activation.fullChargeDuration); system.update();
+        expect(uses).toHaveBeenCalledOnce();
+        system.update(); // Continued hold must not start another charge.
+      }
+      keys.keyE.isDown = false; keys.keyE.justUp = true; system.update();
+      expect(uses).toHaveBeenCalledOnce();
+      expect(uses.mock.calls[0][4]).toMatchObject({ utilityChargeFraction: full ? 1 : 0.5, heldActionId: expect.any(String) });
+      expect(system.getUtilityChargePreviewState()).toBeUndefined();
+    } finally { vi.useRealTimers(); }
+  });
   it.each([false, true])('uses E to collapse only the selected active TimeBubble, focus upgrade %s', focusEnabled => {
     const { system, keys, bridge } = createSystem();
     let state: any = { utilityId: 'TIME_BUBBLE', phase: 'active', bubbleId: 12, cooldownDurationMs: 300, focusEnabled };
